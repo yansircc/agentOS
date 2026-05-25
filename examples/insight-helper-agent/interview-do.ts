@@ -49,10 +49,16 @@ import {
   AgentDOBase,
   type AgentDOEnv,
   type LedgerEventRpc,
+  type LlmRoute,
+  type ProviderRegistryConfig,
 } from "@agent-os/core";
 
 import { INTERVIEW_TOOL_NAME, interviewTool } from "./interview-tool";
 import { makeSystemPrompt } from "./system-prompt";
+
+interface Env extends AgentDOEnv {
+  readonly OPENROUTER_KEY: string;
+}
 
 interface StartPayload {
   readonly topic: string;
@@ -68,30 +74,38 @@ interface PriorTurn {
   readonly answers: AnswerPayload["answers"];
 }
 
-/** v0 dogfood model selection: gpt-oss-120b is the only Workers AI model
- *  validated to return OpenAI Chat Completions response shape AND support
- *  tool calling. llama-3.3 returns Workers AI native shape (`{response:
- *  ...}`) which our LlmResponseSchema currently rejects (a known substrate
- *  limitation; see notes/structured-output-exploration.md).
+/** v0.2.12 route: OpenRouter + gpt-4.1 via `openai-chat-compatible`
+ *  adapter. The full Chinese SYSTEM_PROMPT requires a model with
+ *  strong tool-calling under heavy Chinese prompts; CF Workers AI's
+ *  gpt-oss-120b reasoned-but-emitted-nothing in the v0 dogfood
+ *  (see ./README.md). gpt-4.1 via OpenRouter satisfies the contract
+ *  via the new openai-chat-compatible adapter.
  *
- *  Empirical finding from this v0 dogfood: gpt-oss-120b is a reasoning
- *  model and produces empty `content` + zero `tool_calls` when the prompt
- *  is large or heavily Chinese — 256 completion tokens went to
- *  reasoning_content with nothing surfacing in `choices[0].message`. We
- *  trimmed SYSTEM_PROMPT to a short English+Chinese hybrid focused on the
- *  tool call to make the wire work. Full prompt fidelity (the original
- *  ~4000-char Chinese SYSTEM_PROMPT) is a model-capability concern, not a
- *  substrate concern — apps wanting full fidelity need a stronger model
- *  (claude / gpt-4 class via @cf/anthropic or AI Gateway). */
-const MODEL = { provider: "@cf/openai", model: "gpt-oss-120b" } as const;
+ *  `credentialRef` resolves to env.OPENROUTER_KEY through the
+ *  registry that InterviewDO provides via `provideRegistry()`. The
+ *  secret never enters the ledger; routeFingerprint hashes the
+ *  refs, not the values. */
+const ROUTE: LlmRoute = {
+  kind: "openai-chat-compatible",
+  endpointRef: "openrouter",
+  credentialRef: "OPENROUTER_KEY",
+  modelId: "openai/gpt-4.1",
+};
 
 /** Per-turn budget. maxTurns=2 keeps the loop tight: turn 1 = LLM calls
  *  interview (or emits final markdown), turn 2 = LLM acknowledges the tool
  *  result with empty/short text → deliver fires. */
 const BUDGET = { tokens: 16_000, maxTurns: 2, toolRetries: 0 } as const;
 
-export class InterviewDO extends AgentDOBase<AgentDOEnv> {
-  constructor(ctx: DurableObjectState, env: AgentDOEnv) {
+export class InterviewDO extends AgentDOBase<Env> {
+  protected override provideRegistry(): ProviderRegistryConfig {
+    return {
+      endpoints: { openrouter: "https://openrouter.ai/api/v1" },
+      credentials: { OPENROUTER_KEY: this.env.OPENROUTER_KEY },
+    };
+  }
+
+  constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
 
     this.on("interview.start", async () => {
@@ -135,7 +149,7 @@ export class InterviewDO extends AgentDOBase<AgentDOEnv> {
         topic: start.topic,
         priorTurns,
       },
-      agent: MODEL,
+      route: ROUTE,
       tools: { [INTERVIEW_TOOL_NAME]: interviewTool },
       budget: BUDGET,
       deliver: { event: "interview.turn.delivered" },
