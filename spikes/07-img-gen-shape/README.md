@@ -25,17 +25,19 @@ bash ./test.sh
 Last live smoke: 2026-05-26, `PASS: 6  FAIL: 0`.
 
 The planning step uses `openai-chat-compatible` route
-`openrouter/openai/gpt-4.1`. Image generation itself is intentionally a local
-shim because C5 is the object under audit.
+`openrouter/openai/gpt-4.1`. Image generation uses `generateImage` with
+`openai-chat-compatible-image` route
+`openrouter/google/gemini-2.5-flash-image`; R2 materialization remains app
+carrier code.
 
 ## Candidate verdict
 
 | Candidate | Verdict | Note |
 |---|---|---|
-| C1 cross-DO durable delivery | confirmed | spike needs direct DO RPC from session -> user, user -> session, session -> consumer, consumer -> session |
-| C2 durable outbox | disguised duplicate | same generator as C1; sender ledger needs outbound intent + drain, receiver needs idempotent ingest |
-| C3 quota refund/release | confirmed | reserve/consume/release is a business resource protocol, not expressible by current `withQuota` |
+| C1 cross-DO durable delivery | resolved by P1 | spike uses `dispatchToScope` for session -> user, user -> session, session -> consumer, consumer -> session |
+| C2 durable outbox | collapsed into C1 | `dispatch_outbox` is the sender pending buffer behind `dispatchToScope`, not a separate primitive |
+| C3 quota refund/release | resolved by P2 | user scope owns `grantResource` / `reserveResource` / `consumeResource`; session only dispatches requests |
 | C4 R2 blob carrier | not a gap | app can implement INV-9 carrier: R2 stores bytes; ledger stores refs |
-| C5 image-output route | confirmed | image generation is provider route capability, not a Tool |
+| C5 image-output route | resolved by P3 | consumer uses `generateImage`; R2 materialization remains app carrier code |
 
 See [GAPS.md](./GAPS.md) for source citations and primitive sketches.

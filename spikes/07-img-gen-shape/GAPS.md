@@ -6,7 +6,8 @@ same forge.
 
 ## C1 / C2 — Cross-DO Durable Delivery
 
-Verdict: **confirmed gap; C2 collapses into C1 implementation detail**.
+Verdict: **resolved by P1 `dispatchToScope`; C2 collapsed into C1
+implementation detail**.
 
 Shape:
 - §1 #2 hand-rolled compensation / outbox around non-atomic delivery.
@@ -18,11 +19,18 @@ img-gen evidence:
 - `/Users/yansir/code/52/img-gen/src/worker/index.ts:54` owns the separate Queue consumer entry.
 - `/Users/yansir/code/52/img-gen/README.md:522` states D1 is truth, Queue is a delivery hint, and `queue_outbox` bridges D1 commit and Queue delivery.
 
-spike evidence:
-- `worker.ts:181` session -> user credit reserve is direct DO RPC, not ledger-owned dispatch.
-- `worker.ts:202` session -> consumer job dispatch is direct DO RPC, not durable outbox.
-- `worker.ts:269` user -> session credit reservation acknowledgement repeats the same forge.
-- `worker.ts:330` consumer -> session completion delivery repeats the same forge.
+original spike evidence:
+- session -> user credit reserve was direct DO RPC, not ledger-owned dispatch.
+- session -> consumer job dispatch was direct DO RPC, not durable outbox.
+- user -> session credit reservation acknowledgement repeated the same forge.
+- consumer -> session completion delivery repeated the same forge.
+
+current spike state:
+- `worker.ts:188` session -> user uses `dispatchToScope`.
+- `worker.ts:207` session -> consumer uses `dispatchToScope`.
+- `worker.ts:280` user -> session uses `dispatchToScope`.
+- `worker.ts:345` consumer -> session uses `dispatchToScope`.
+- `worker.ts` has no `GAP-C1` / `GAP-C2` markers.
 
 Minimal primitive:
 
@@ -41,7 +49,7 @@ intent; receiver `AgentDOBase` idempotently ingests into its ledger and fires
 
 ## C3 — Resource Reservation / Release
 
-Verdict: **confirmed gap**.
+Verdict: **resolved by P2 `Resources`**.
 
 Shape:
 - §1 #2 resource transition needs reserve now, consume later, release on failure.
@@ -56,16 +64,24 @@ img-gen evidence:
 - `/Users/yansir/code/52/img-gen/src/worker/image-jobs.ts:865` constructs consume statements.
 - `/Users/yansir/code/52/img-gen/src/worker/image-jobs.ts:904` constructs release statements.
 
-spike evidence:
-- `worker.ts:257` user scope hand-rolls `credit.reserved`.
-- `worker.ts:223` session scope hand-rolls settlement dispatch.
+original spike evidence:
+- user scope hand-rolled `credit.reserved`.
+- session scope hand-rolled settlement dispatch.
+
+current spike state:
+- `worker.ts:266` seeds a user-scope `resource.granted` fact through
+  `grantResource`.
+- `worker.ts:274` reserves credits through `reserveResource`.
+- `worker.ts:298` consumes the reservation through `consumeResource`.
+- `worker.ts` has no `GAP-C3` marker.
 
 Minimal primitive:
 
 ```ts
-reserveResource({ key, amount, ref }): Promise<{ reservationId }>
-consumeReservation({ reservationId, ref }): Promise<void>
-releaseReservation({ reservationId, ref }): Promise<void>
+grantResource({ key, amount, ref }): Promise<{ eventId }>
+reserveResource({ key, amount, ref, idempotencyKey }): Promise<{ reservationId }>
+consumeResource({ reservationId, ref }): Promise<void>
+releaseResource({ reservationId, ref }): Promise<void>
 ```
 
 Open design question: this may belong in generalized quota, or in a separate
@@ -90,7 +106,7 @@ cleanup policy; ledger stores refs, not bytes. No second SSoT is required.
 
 ## C5 — Image-Output Route
 
-Verdict: **confirmed gap**.
+Verdict: **resolved by P3 `generateImage`**.
 
 Shape:
 - §1 #4 capability route is currently app-owned provider config and parser.
@@ -101,20 +117,26 @@ img-gen evidence:
 - `/Users/yansir/code/52/img-gen/src/worker/image-jobs.ts:1007` calls `/images/generations`.
 - `/Users/yansir/code/52/img-gen/src/worker/image-jobs.ts:1123` decodes provider response into bytes.
 
-spike evidence:
-- `worker.ts:306` uses a local image-provider shim because agentOS route
-  adapters are chat / structured-output only.
+original spike evidence:
+- `worker.ts` used a local image-provider shim because agentOS route adapters
+  were chat / structured-output only.
+
+current spike state:
+- `worker.ts:36` declares an `openai-chat-compatible-image` route.
+- `worker.ts:336` calls `generateImage`.
+- `worker.ts:411` materializes the returned `ImageArtifact` into bytes before
+  writing R2; this remains app/carrier-owned.
+- `worker.ts` has no `GAP-C5` marker.
 
 Minimal primitive:
 
 ```ts
-type AiRoute =
-  | LlmChatRoute
-  | StructuredOutputRoute
-  | { kind: "image-output"; endpointRef: string; credentialRef: string; modelId: string };
+type ImageRoute =
+  | { kind: "openai-chat-compatible-image"; endpointRef: string; credentialRef: string; modelId: string }
+  | { kind: "cf-ai-binding-image"; modelId: string; gatewayRef?: string };
 
-generateImage(route, request): Promise<{ artifact: Uint8Array | R2Ref; usage?: Usage }>
+generateImage({ route, prompt, aspectRatio? }): Promise<ImageResult>
 ```
 
-Naming note: `LlmRoute` may be too narrow once image-output lands. The
-generator is route capability evidence, not Tool execution.
+Naming note: P3 did not rename `LlmRoute`; image generation is a parallel
+route family with its own public `generateImage` method.

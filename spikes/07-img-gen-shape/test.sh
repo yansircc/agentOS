@@ -63,16 +63,16 @@ else
   err "artifact ref missing"
 fi
 
-if curl -sS "$BASE/events/user/$USER_ID" | jq -e '[.[] | select(.kind == "credit.reserved")] | length == 1' >/dev/null; then
-  ok "user ledger has credit.reserved"
+if curl -sS "$BASE/events/user/$USER_ID" | jq -e '[.[] | select(.kind == "resource.reserved")] | length == 1' >/dev/null; then
+  ok "user ledger has resource.reserved"
 else
-  err "user ledger missing credit.reserved"
+  err "user ledger missing resource.reserved"
 fi
 
-if curl -sS "$BASE/events/user/$USER_ID" | jq -e '[.[] | select(.kind == "credit.consumed")] | length == 1' >/dev/null; then
-  ok "user ledger has credit.consumed"
+if curl -sS "$BASE/events/user/$USER_ID" | jq -e '[.[] | select(.kind == "resource.consumed")] | length == 1' >/dev/null; then
+  ok "user ledger has resource.consumed"
 else
-  err "user ledger missing credit.consumed"
+  err "user ledger missing resource.consumed"
 fi
 
 JOB_ID="${JOB_SCOPE#job/}"
