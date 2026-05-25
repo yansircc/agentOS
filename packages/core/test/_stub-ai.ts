@@ -101,17 +101,5 @@ export const stubAi = (responses: ReadonlyArray<LlmRawResponse>): Ai => {
   } as Ai;
 };
 
-/** Convenience: assert that the stub was fully drained after the test. */
-export const expectStubDrained = (
-  ai: Ai,
-  expected: number,
-): void => {
-  // The stub stores i on the closure; we can't read it directly from outside.
-  // Expose via a marker symbol if needed in future; for now this helper is
-  // a placeholder. Re-export the counter shape if tests need it.
-  void ai;
-  void expected;
-};
-
 /** Re-export LlmResponse type so test files can build typed assertions if needed. */
 export type { LlmResponse };
