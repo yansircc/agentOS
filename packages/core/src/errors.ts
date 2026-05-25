@@ -48,6 +48,12 @@ export class ScopeMissingError extends Data.TaggedError(
   "agent_os.scope_missing",
 )<{}> {}
 
+export class InvalidScheduleAt extends Data.TaggedError(
+  "agent_os.invalid_schedule_at",
+)<{
+  readonly at: unknown;
+}> {}
+
 export class UpstreamFailure extends Data.TaggedError(
   ABORT.UPSTREAM_FAILURE,
 )<{

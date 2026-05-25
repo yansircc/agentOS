@@ -37,6 +37,7 @@ export {
   SqlError,
   JsonStringifyError,
   ScopeMissingError,
+  InvalidScheduleAt,
   UpstreamFailure,
   ToolError,
 } from "./errors";

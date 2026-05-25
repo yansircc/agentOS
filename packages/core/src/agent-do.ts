@@ -18,7 +18,11 @@
 
 import { Clock, Effect, Layer, ManagedRuntime } from "effect";
 import { DurableObject } from "cloudflare:workers";
-import { ScopeMissingError, SqlError } from "./errors";
+import {
+  InvalidScheduleAt,
+  ScopeMissingError,
+  SqlError,
+} from "./errors";
 import type {
   EventHandler,
   LedgerEventRpc,
@@ -133,27 +137,41 @@ export abstract class AgentDOBase<
     );
   }
 
-  /** Schedule a future ledger event. Scope is implicit (= this DO). */
+  /** Schedule a future ledger event. Scope is implicit (= this DO).
+   *
+   *  Order: setAlarm BEFORE INSERT, so setAlarm failure leaves no orphan
+   *  pending row. If INSERT fails after setAlarm succeeded, alarm fires at
+   *  the target time, fireDue sees no new pending, and the alarm naturally
+   *  reverts (next = whatever was there before, or null).
+   */
   scheduleEvent(spec: ScheduledEventSpec): Promise<{ id: number }> {
     const scope = this.ctx.id.name;
     if (scope === undefined) {
       return Promise.reject(new ScopeMissingError());
     }
+    if (!Number.isFinite(spec.at)) {
+      return Promise.reject(new InvalidScheduleAt({ at: spec.at }));
+    }
     const ctx = this.ctx;
     return this.runtimeFor(scope).runPromise(
       Effect.gen(function* () {
         const scheduler = yield* Scheduler;
-        const { id, nextAlarmAt } = yield* scheduler.schedule(
+        const existingNext = yield* scheduler.findNextPending();
+        const target =
+          existingNext === null
+            ? spec.at
+            : Math.min(existingNext, spec.at);
+        // Arm alarm BEFORE the row is inserted. If setAlarm rejects, no
+        // pending row gets created — no orphan possible.
+        yield* Effect.tryPromise({
+          try: () => ctx.storage.setAlarm(target),
+          catch: (cause) => new SqlError({ cause }),
+        });
+        const { id } = yield* scheduler.schedule(
           spec.at,
           spec.event,
           spec.data,
         );
-        if (nextAlarmAt !== null) {
-          yield* Effect.tryPromise({
-            try: () => ctx.storage.setAlarm(nextAlarmAt),
-            catch: (cause) => new SqlError({ cause }),
-          });
-        }
         return { id };
       }),
     );
