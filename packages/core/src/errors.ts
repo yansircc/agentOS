@@ -60,6 +60,46 @@ export class ReservedEventKindError extends Data.TaggedError(
   readonly event: string;
 }> {}
 
+export class DispatchTargetNotFound extends Data.TaggedError(
+  "agent_os.dispatch_target_not_found",
+)<{
+  readonly bindingRef: string;
+}> {}
+
+export class DispatchScopeMismatch extends Data.TaggedError(
+  "agent_os.dispatch_scope_mismatch",
+)<{
+  readonly expected: string;
+  readonly actual: string;
+}> {}
+
+export class InvalidResourceAmount extends Data.TaggedError(
+  "agent_os.invalid_resource_amount",
+)<{
+  readonly amount: number;
+}> {}
+
+export class ResourceInsufficient extends Data.TaggedError(
+  "agent_os.resource_insufficient",
+)<{
+  readonly key: string;
+  readonly requested: number;
+  readonly available: number;
+}> {}
+
+export class ResourceReservationNotFound extends Data.TaggedError(
+  "agent_os.resource_reservation_not_found",
+)<{
+  readonly reservationId: string;
+}> {}
+
+export class ResourceReservationClosed extends Data.TaggedError(
+  "agent_os.resource_reservation_closed",
+)<{
+  readonly reservationId: string;
+  readonly status: "consumed" | "released";
+}> {}
+
 /** Event kind prefixes owned by core. Apps cannot write to these via
  *  submitSpec.deliver.event or scheduleEvent.event — keeps quota / abort /
  *  llm / tool / chat / dispatch event facts trustworthy. */
@@ -70,6 +110,7 @@ export const CORE_RESERVED_PREFIXES = [
   "llm.",
   "tool.",
   "quota.",
+  "resource.",
 ] as const;
 
 export const isReservedEventKind = (event: string): boolean =>

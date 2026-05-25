@@ -78,6 +78,7 @@ describe("emitEvent — substrate now-write primitive", () => {
       "llm.response",
       "tool.executed",
       "quota.exceeded",
+      "resource.granted",
     ];
 
     await runInDurableObject(stub, async (instance) => {

@@ -16,13 +16,21 @@
       {
         "name": "EMIT_DO",
         "class_name": "EmitTestDO"
+      },
+      {
+        "name": "DISPATCH_DO",
+        "class_name": "DispatchTestDO"
       }
     ]
   },
   "migrations": [
     {
       "tag": "v1",
-      "new_sqlite_classes": ["TestAgentDO", "EmitTestDO"]
+      "new_sqlite_classes": [
+        "TestAgentDO",
+        "EmitTestDO",
+        "DispatchTestDO"
+      ]
     }
   ]
 }

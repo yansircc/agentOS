@@ -32,3 +32,45 @@ export interface ScheduledEventSpec {
   readonly event: string;
   readonly data: unknown;
 }
+
+export interface DispatchTargetSpec {
+  readonly bindingRef: string;
+  readonly scope: string;
+}
+
+export interface DispatchToScopeSpec {
+  readonly target: DispatchTargetSpec;
+  readonly event: string;
+  readonly data: unknown;
+  readonly idempotencyKey: string;
+}
+
+export interface DispatchToScopeResult {
+  readonly outboundEventId: number;
+}
+
+export interface ResourceGrantSpec {
+  readonly key: string;
+  readonly amount: number;
+  readonly ref: string;
+}
+
+export interface ResourceReserveSpec {
+  readonly key: string;
+  readonly amount: number;
+  readonly ref: string;
+  readonly idempotencyKey: string;
+}
+
+export interface ResourceReservationSpec {
+  readonly reservationId: string;
+  readonly ref: string;
+}
+
+export interface ResourceGrantResult {
+  readonly eventId: number;
+}
+
+export interface ResourceReserveResult {
+  readonly reservationId: string;
+}

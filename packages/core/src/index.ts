@@ -21,12 +21,37 @@ export type {
   LedgerEventRpc,
   EventHandler,
   ScheduledEventSpec,
+  DispatchTargetSpec,
+  DispatchToScopeSpec,
+  DispatchToScopeResult,
+  ResourceGrantSpec,
+  ResourceReserveSpec,
+  ResourceReservationSpec,
+  ResourceGrantResult,
+  ResourceReserveResult,
 } from "./types";
+export type {
+  DispatchEnvelope,
+  DispatchTargetNamespace,
+  DispatchTargetRegistry,
+} from "./dispatch";
 
 export type { SubmitSpec, SubmitResult } from "./submit-agent";
 
 export type { Tool } from "./tools";
 export type { ToolDefinition } from "./llm";
+export type {
+  ImageRoute,
+  ImageArtifact,
+  ImageResult,
+  GenerateImageSpec,
+  ImageRequest,
+} from "./image";
+export {
+  imageProtocolAdapters,
+  openaiChatCompatibleImageAdapter,
+  cfAiBindingImageAdapter,
+} from "./image";
 export { withQuota, type QuotaSpec } from "./quota";
 
 // ===== Abort taxonomy =====
@@ -40,6 +65,12 @@ export {
   ScopeMissingError,
   InvalidScheduleAt,
   ReservedEventKindError,
+  DispatchTargetNotFound,
+  DispatchScopeMismatch,
+  InvalidResourceAmount,
+  ResourceInsufficient,
+  ResourceReservationNotFound,
+  ResourceReservationClosed,
   UpstreamFailure,
   ToolError,
 } from "./errors";

@@ -9,6 +9,7 @@
  *   submit(spec)         resolves SubmitResult; rejects on infra
  *   events()             resolves LedgerEventRpc[]; rejects on SQL read fail
  *   emitEvent(spec)      resolves {id}; rejects on infra / reserved kind
+ *   dispatchToScope(spec) resolves {outboundEventId}; rejects on infra / config
  *   scheduleEvent(spec)  resolves {id}; rejects on infra
  *   alarm()              auto-invoked by CF DO runtime
  *
@@ -29,7 +30,10 @@
 import { Clock, Effect, Layer, ManagedRuntime } from "effect";
 import { DurableObject } from "cloudflare:workers";
 import {
+  DispatchScopeMismatch,
+  DispatchTargetNotFound,
   InvalidScheduleAt,
+  InvalidResourceAmount,
   isReservedEventKind,
   ReservedEventKindError,
   ScopeMissingError,
@@ -37,12 +41,31 @@ import {
 } from "./errors";
 import type {
   EventHandler,
+  DispatchToScopeResult,
+  DispatchToScopeSpec,
   LedgerEventRpc,
+  ResourceGrantResult,
+  ResourceGrantSpec,
+  ResourceReservationSpec,
+  ResourceReserveResult,
+  ResourceReserveSpec,
   ScheduledEventSpec,
 } from "./types";
+import {
+  Dispatch,
+  DispatchLive,
+  type DispatchEnvelope,
+  type DispatchTargetRegistry,
+} from "./dispatch";
 import { EventBusLive } from "./event-bus";
 import { Ledger, LedgerLive } from "./ledger";
 import { Scheduler, SchedulerLive } from "./scheduler";
+import { Resources, ResourcesLive } from "./resources";
+import {
+  generateImageEffect,
+  type GenerateImageSpec,
+  type ImageResult,
+} from "./image";
 import { Quota, QuotaLive } from "./quota-service";
 import { AiBinding } from "./llm";
 import { Admission, AdmissionLive } from "./admission";
@@ -66,6 +89,8 @@ type CoreServices =
   | Ledger
   | AiBinding
   | Scheduler
+  | Dispatch
+  | Resources
   | Quota
   | Admission
   | ProviderRegistry;
@@ -76,11 +101,18 @@ const makeAgentRuntime = (
   ai: Ai,
   handlers: Map<string, Set<EventHandler>>,
   registry: ProviderRegistryConfig,
+  dispatchTargets: DispatchTargetRegistry,
 ): ManagedRuntime.ManagedRuntime<CoreServices, SqlError> => {
   const sql = ctx.storage.sql;
   const eventBusLayer = EventBusLive(handlers);
   const ledgerLayer = LedgerLive(sql).pipe(Layer.provide(eventBusLayer));
   const schedulerLayer = SchedulerLive(ctx, scope).pipe(
+    Layer.provide(eventBusLayer),
+  );
+  const dispatchLayer = DispatchLive(ctx, scope, dispatchTargets).pipe(
+    Layer.provide(eventBusLayer),
+  );
+  const resourcesLayer = ResourcesLive(ctx).pipe(
     Layer.provide(eventBusLayer),
   );
   const quotaLayer = QuotaLive(ctx).pipe(Layer.provide(eventBusLayer));
@@ -93,6 +125,8 @@ const makeAgentRuntime = (
     Layer.mergeAll(
       ledgerLayer,
       schedulerLayer,
+      dispatchLayer,
+      resourcesLayer,
       quotaLayer,
       aiLayer,
       admissionLayer,
@@ -117,6 +151,7 @@ export abstract class AgentDOBase<
         this.env.AI,
         this._handlers,
         this.provideRegistry(),
+        this.provideDispatchTargets(),
       );
     }
     return this._runtime;
@@ -141,6 +176,16 @@ export abstract class AgentDOBase<
    *  to the ledger (only the symbolic refs are). */
   protected provideRegistry(): ProviderRegistryConfig {
     return { endpoints: {}, credentials: {} };
+  }
+
+  /** Hook for subclass to provide cross-scope dispatch targets.
+   *
+   *  `bindingRef` on dispatchToScope resolves through this map to a runtime
+   *  DurableObjectNamespace. The ledger stores only the symbolic ref and
+   *  target scope; the namespace object is never serialized.
+   */
+  protected provideDispatchTargets(): DispatchTargetRegistry {
+    return {};
   }
 
   /** Register a handler fired whenever a ledger event of `kind` is written.
@@ -233,6 +278,144 @@ export abstract class AgentDOBase<
     );
   }
 
+  /** Dispatch an app event to another AgentDOBase scope.
+   *
+   *  Delivery truth is split across the two ledgers:
+   *  - sender records dispatch.outbound.requested and a dispatch_outbox row
+   *    in one transactionSync;
+   *  - receiver records dispatch.inbound.accepted + the requested app event
+   *    in one transactionSync;
+   *  - receiver dedupe is (sourceScope, idempotencyKey), not outboundEventId.
+   */
+  dispatchToScope(
+    spec: DispatchToScopeSpec,
+  ): Promise<DispatchToScopeResult> {
+    const scope = this.ctx.id.name;
+    if (scope === undefined) {
+      return Promise.reject(new ScopeMissingError());
+    }
+    if (isReservedEventKind(spec.event)) {
+      return Promise.reject(new ReservedEventKindError({ event: spec.event }));
+    }
+    if (this.provideDispatchTargets()[spec.target.bindingRef] === undefined) {
+      return Promise.reject(
+        new DispatchTargetNotFound({
+          bindingRef: spec.target.bindingRef,
+        }),
+      );
+    }
+    return this.runtimeFor(scope).runPromise(
+      Effect.gen(function* () {
+        const dispatch = yield* Dispatch;
+        return yield* dispatch.dispatchToScope(spec);
+      }),
+    );
+  }
+
+  grantResource(spec: ResourceGrantSpec): Promise<ResourceGrantResult> {
+    const scope = this.ctx.id.name;
+    if (scope === undefined) {
+      return Promise.reject(new ScopeMissingError());
+    }
+    if (!Number.isFinite(spec.amount) || spec.amount <= 0) {
+      return Promise.reject(new InvalidResourceAmount({ amount: spec.amount }));
+    }
+    return this.runtimeFor(scope).runPromise(
+      Effect.gen(function* () {
+        const resources = yield* Resources;
+        return yield* resources.grant(scope, spec);
+      }),
+    );
+  }
+
+  reserveResource(
+    spec: ResourceReserveSpec,
+  ): Promise<ResourceReserveResult> {
+    const scope = this.ctx.id.name;
+    if (scope === undefined) {
+      return Promise.reject(new ScopeMissingError());
+    }
+    if (!Number.isFinite(spec.amount) || spec.amount <= 0) {
+      return Promise.reject(new InvalidResourceAmount({ amount: spec.amount }));
+    }
+    return this.runtimeFor(scope).runPromise(
+      Effect.gen(function* () {
+        const resources = yield* Resources;
+        return yield* resources.reserve(scope, spec).pipe(Effect.either);
+      }),
+    ).then((result) => {
+      if (result._tag === "Left") {
+        return Promise.reject(result.left);
+      }
+      return result.right;
+    });
+  }
+
+  consumeResource(spec: ResourceReservationSpec): Promise<void> {
+    const scope = this.ctx.id.name;
+    if (scope === undefined) {
+      return Promise.reject(new ScopeMissingError());
+    }
+    return this.runtimeFor(scope).runPromise(
+      Effect.gen(function* () {
+        const resources = yield* Resources;
+        return yield* resources.consume(scope, spec).pipe(Effect.either);
+      }),
+    ).then((result) => {
+      if (result._tag === "Left") {
+        return Promise.reject(result.left);
+      }
+    });
+  }
+
+  releaseResource(spec: ResourceReservationSpec): Promise<void> {
+    const scope = this.ctx.id.name;
+    if (scope === undefined) {
+      return Promise.reject(new ScopeMissingError());
+    }
+    return this.runtimeFor(scope).runPromise(
+      Effect.gen(function* () {
+        const resources = yield* Resources;
+        return yield* resources.release(scope, spec).pipe(Effect.either);
+      }),
+    ).then((result) => {
+      if (result._tag === "Left") {
+        return Promise.reject(result.left);
+      }
+    });
+  }
+
+  /** Internal RPC target for DispatchLive. Public only because DO RPC can
+   *  invoke public methods; app code should use dispatchToScope instead.
+   */
+  __agentosReceiveDispatch(
+    envelope: DispatchEnvelope,
+  ): Promise<{ deliveredEventId: number }> {
+    const scope = this.ctx.id.name;
+    if (scope === undefined) {
+      return Promise.reject(new ScopeMissingError());
+    }
+    if (envelope.targetScope !== scope) {
+      return Promise.reject(
+        new DispatchScopeMismatch({
+          expected: scope,
+          actual: envelope.targetScope,
+        }),
+      );
+    }
+    if (isReservedEventKind(envelope.event)) {
+      return Promise.reject(
+        new ReservedEventKindError({ event: envelope.event }),
+      );
+    }
+    return this.runtimeFor(scope).runPromise(
+      Effect.gen(function* () {
+        const dispatch = yield* Dispatch;
+        return yield* dispatch.receive(envelope);
+      }),
+    );
+  }
+
   /** Schedule a future ledger event. Scope is implicit (= this DO).
    *
    *  Order: setAlarm BEFORE INSERT, so setAlarm failure leaves no orphan
@@ -278,6 +461,14 @@ export abstract class AgentDOBase<
     );
   }
 
+  generateImage(spec: GenerateImageSpec): Promise<ImageResult> {
+    const scope = this.ctx.id.name;
+    if (scope === undefined) {
+      return Promise.reject(new ScopeMissingError());
+    }
+    return this.runtimeFor(scope).runPromise(generateImageEffect(spec));
+  }
+
   /** DO alarm handler — invoked automatically by the CF runtime. */
   alarm(): Promise<void> {
     const scope = this.ctx.id.name;
@@ -288,8 +479,15 @@ export abstract class AgentDOBase<
     return this.runtimeFor(scope).runPromise(
       Effect.gen(function* () {
         const scheduler = yield* Scheduler;
+        const dispatch = yield* Dispatch;
         const now = yield* Clock.currentTimeMillis;
-        const { next } = yield* scheduler.fireDue(now);
+        const scheduled = yield* scheduler.fireDue(now);
+        const outbound = yield* dispatch.drainDue(now);
+        const nextValues = [scheduled.next, outbound.next].filter(
+          (value): value is number => value !== null,
+        );
+        const next =
+          nextValues.length === 0 ? null : Math.min(...nextValues);
         if (next !== null) {
           yield* Effect.tryPromise({
             try: () => ctx.storage.setAlarm(next),
