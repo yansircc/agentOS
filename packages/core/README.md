@@ -1,4 +1,4 @@
-# @agent-os/core (v0.2.1)
+# @agent-os/core (v0.2.4)
 
 Minimum Effect-compliant agent-OS substrate for Cloudflare Workers.
 
@@ -13,13 +13,12 @@ Minimum Effect-compliant agent-OS substrate for Cloudflare Workers.
 | `AgentDOBase` — extendable DurableObject base | ✅ |
 | `submit(spec)` — declarative agent loop (LLM + tools) | ✅ |
 | `events()` — query ledger for this DO's scope | ✅ |
-| Ledger primitive (`log`, `events`) on DO SQLite | ✅ |
-| LLM dispatch carrier (`env.AI.run`) | ✅ |
-| `Tool<A, R>` interface (plain-Promise API) | ✅ |
-| Standard `Data.TaggedError` vocabulary | ✅ (subset) |
 | `on(kind, handler)` reactive subscribe (composable) | ✅ (v0.2.1) |
 | `off(kind, handler)` reactive unsubscribe | ✅ (v0.2.1) |
-| `scheduleEvent({ at, event, data })` delayed events | ⏳ v0.2 Phase 2 |
+| `scheduleEvent({ at, event, data })` delayed events | ✅ (v0.2.3) |
+| `alarm()` DO alarm handler (auto-invoked by CF runtime) | ✅ (v0.2.3) |
+| Standard `Data.TaggedError` vocabulary | ✅ (subset) |
+| `Tool<A, R>` interface (plain-Promise API) | ✅ |
 | `withQuota` middleware | ⏳ v0.2 Phase 3 |
 | `withStructuredOutput` middleware | ⏳ v0.2 Phase 3 |
 | `view.reflective.*` agent self-introspection | ⏳ v0.2 Phase 4 |
@@ -37,25 +36,31 @@ AgentDOBase.submit(spec)  Promise:
 AgentDOBase.events()      Promise:
   resolves -> LedgerEventRpc[]                     possibly empty (empty ledger)
   rejects  -> SqlError | ScopeMissingError         read failure vs empty: distinguished
+
+AgentDOBase.scheduleEvent(spec)  Promise:
+  resolves -> { id: number }                       inserted scheduled_events.id
+  rejects  -> SqlError | JsonStringifyError | ScopeMissingError
 ```
 
-**Scope is SSoT-owned by the DO instance.** `SubmitSpec.deliver.scope` does not
-exist; the scope is derived from `this.ctx.id.name` (the name supplied to
-`idFromName`). DOs created via `newUniqueId` reject all calls with
-`ScopeMissingError`.
+**Scope is SSoT-owned by the DO instance** — derived from `this.ctx.id.name`.
+Service Tags (Ledger / EventBus / Scheduler / AiBinding) and Layers are
+**module-private**. There is no Effect escape hatch on the public surface.
+
+**Scheduler exactly-once-by-construction:** `fireDue` pre-checks the pending
+row inside `ctx.storage.transactionSync` BEFORE inserting any ledger row. If
+guard false (already fired), the transaction commits zero writes. No duplicate
+ledger events possible under at-least-once alarm retries.
 
 ## Effect compliance
 
-Implementation follows `effect-ecosystem` skill rules (EFF001-EFF032):
+Implementation follows `effect-ecosystem` skill rules:
 - `Effect.gen(function* () { yield* ... })` instead of `async/await`
 - `Data.TaggedError` instead of `throw new Error`
 - `Clock.currentTimeMillis` instead of `Date.now()`
 - `Effect.try / Effect.tryPromise` instead of `try/catch`
 - `Layer` + `ManagedRuntime` for dependency injection
 
-The **public API** is plain TS Promise-typed; apps don't import Effect unless
-they want to. There is no Effect escape hatch on the public surface — internal
-`submitAgentEffect` is module-private.
+The **public API** is plain TS Promise-typed; apps don't import Effect.
 
 ## Usage
 
@@ -74,32 +79,20 @@ interface Env extends AgentDOEnv {
 }
 
 const myTool: Tool<{ key: string }, { value: string }> = {
-  definition: {
-    type: "function",
-    function: {
-      name: "lookup",
-      description: "Lookup a value by key.",
-      parameters: {
-        type: "object",
-        properties: { key: { type: "string" } },
-        required: ["key"],
-      },
-    },
-  },
+  definition: { /* OpenAI function tool spec */ },
   execute: async (args) => ({ value: `value for ${args.key}` }),
 };
 
 export class AgentDO extends AgentDOBase<Env> {
   constructor(state: DurableObjectState, env: Env) {
     super(state, env);
-    // Reactive subscribe — fires when ledger.log writes "agent.delivered"
     this.on("agent.delivered", async (event) => {
-      // handler logic; max 5s before timeout
+      // reactive callback; bounded by 5s timeout
     });
   }
 }
 
-// In your fetch handler:
+// Submit an agent run
 const stub = env.AGENT_DO.get(env.AGENT_DO.idFromName(scope));
 const result = await stub.submit({
   intent: "help the user with X",
@@ -109,6 +102,14 @@ const result = await stub.submit({
   budget: { tokens: 10_000, maxTurns: 5, toolRetries: 2 },
   deliver: { event: "agent.delivered" }, // scope is implicit
 });
+
+// Schedule a future event
+await stub.scheduleEvent({
+  at: Date.now() + 5_000,
+  event: "follow_up",
+  data: { ... },
+});
 ```
 
 See `../../examples/spike-01-effect/` for a runnable end-to-end example.
+
