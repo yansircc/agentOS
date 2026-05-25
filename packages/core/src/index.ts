@@ -29,6 +29,7 @@ export type {
   ResourceReservationSpec,
   ResourceGrantResult,
   ResourceReserveResult,
+  TraceContext,
 } from "./types";
 export type {
   DispatchEnvelope,
