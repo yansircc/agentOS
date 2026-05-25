@@ -1,4 +1,4 @@
-# @agent-os/core (v0.2.4)
+# @agent-os/core (v0.2.6)
 
 Minimum Effect-compliant agent-OS substrate for Cloudflare Workers.
 
@@ -112,4 +112,15 @@ await stub.scheduleEvent({
 ```
 
 See `../../examples/spike-01-effect/` for a runnable end-to-end example.
+
+## Migration notes
+
+### v0.2.3 → v0.2.4+
+
+`scheduled_events` table no longer stores a `scope` column. `CREATE TABLE
+IF NOT EXISTS` won't rewrite an existing table, so DO storage produced by
+v0.2.3 has a `scope TEXT NOT NULL` column that conflicts with v0.2.4+
+inserts. For local dev: delete `.wrangler/` to drop the old SQLite. For
+production: explicit migration required (pre-1.0 data is disposable, so
+this case is unlikely to arise).
 

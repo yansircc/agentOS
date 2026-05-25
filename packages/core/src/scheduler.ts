@@ -25,14 +25,12 @@ import { EventBus } from "./event-bus";
 export class Scheduler extends Context.Tag("@agent-os/Scheduler")<
   Scheduler,
   {
+    readonly findNextPending: () => Effect.Effect<number | null, SqlError>;
     readonly schedule: (
       at: number,
       eventKind: string,
       data: unknown,
-    ) => Effect.Effect<
-      { id: number; nextAlarmAt: number | null },
-      SqlError | JsonStringifyError
-    >;
+    ) => Effect.Effect<{ id: number }, SqlError | JsonStringifyError>;
     readonly fireDue: (
       now: number,
     ) => Effect.Effect<
@@ -95,6 +93,8 @@ export const SchedulerLive = (
       const bus = yield* EventBus;
 
       return {
+        findNextPending: () => findNextPending(sql),
+
         schedule: (at, eventKind, data) =>
           Effect.gen(function* () {
             const dataStr = yield* safeStringify(data);
@@ -110,8 +110,7 @@ export const SchedulerLive = (
               },
               catch: (cause) => new SqlError({ cause }),
             });
-            const nextAlarmAt = yield* findNextPending(sql);
-            return { id, nextAlarmAt };
+            return { id };
           }),
 
         fireDue: (now) =>
