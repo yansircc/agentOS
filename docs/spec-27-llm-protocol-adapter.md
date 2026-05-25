@@ -134,6 +134,25 @@ interface LlmProtocolAdapter<K extends LlmRoute["kind"]> {
 }
 ```
 
+### 3.0.1 `classify` runtime scope — interface vs callers
+
+`classify` is interface-shared (one function on the adapter, callable
+from either half). **In v0 the only runtime consumer is
+`attemptStructured`** — its `outcome` lands in evidence and drives lease
+projection.
+
+`callLlm` (free-text turn) does **not** invoke `classify` in v0.
+Dispatch failures surface as raw `UpstreamFailure { cause }`, which
+`submit-agent` already funnels through its `agent.aborted.upstream_failure`
+abort taxonomy. There is no `FailureClass`-aware retry on the turn path;
+transient HTTP errors become upstream aborts.
+
+This is a scope decision, not an interface gap. The function lives on
+the adapter so per-wire classification is available; the runtime gates
+which half consumes it. See §11 OQ 6 for the future typed-turn-failure
+design that would route turn errors through `classify` to drive
+adaptive retry.
+
 ### 3.1 Per-kind `ProviderRequestBodyFor<K>`
 
 `ProviderRequestBody` is **per-wire**, not a single shared shape. The
@@ -184,7 +203,7 @@ semantics:
 | Strictness | permissive: zero tool calls in response is valid (assistant chose to text-respond, or text + tool mix) | strict: forced tool call MUST be present and exactly one; missing / extra / wrong name = `BehaviorFailed` |
 | Output shape | `LlmResponse { text, toolCalls[], usage }` — unified across wires | `{ ok, decoded } | { ok: false, outcome }` |
 | `tool_choice` value | optional; supplied by caller | always set by the adapter to force the synthesized `_submit_structured` tool |
-| `classify` consumption | yes (HTTP error → caller sees `UpstreamFailure`) | yes (HTTP error → outcome row in ledger) |
+| `classify` consumption | **v0: not invoked.** dispatch errors propagate as raw `UpstreamFailure`; `submit-agent`'s abort taxonomy handles them. See §3.0.1 + §11 OQ 6. | yes (HTTP error → outcome row in ledger) |
 | `adapterVersion` governance | shared; bump signals turn decode rule change | shared; bump invalidates structured lease per §5 |
 
 **Strictness asymmetry is the only semantic divergence.** Everything else
@@ -580,6 +599,19 @@ cf-ai-binding stays `"1.0.0"` since behavior is identical (per §5.1
    `x-goog-api-key` header. If an aggregator only supports `?key=`,
    register a separate `kind` or extend the route with a `authStyle`
    field. Defer.
+
+6. **Typed turn-failure projection via `classify`.** v0 `callLlm`
+   propagates dispatch failures as raw `UpstreamFailure { cause }` and
+   does NOT invoke `adapter.classify`. submit-agent's existing abort
+   taxonomy handles them. A future expansion would route turn errors
+   through `classify` to drive adaptive retry (e.g. retry on
+   `TransientError`, fast-fail on `AuthError`) without writing
+   lease-bearing evidence. This needs a new turn-side abort kind
+   carrying the `FailureClass`, plus a retry policy in submit-agent
+   that consumes it. Out of scope until an app shows the existing
+   "single upstream abort" surface is inadequate. Codex flagged this
+   as spec/impl drift on 2026-05-25; §3.0.1 + §4 table now record the
+   v0 scope so the spec matches the implementation.
 
 ---
 

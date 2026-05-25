@@ -399,6 +399,91 @@ describe("gemini adapter — classify", () => {
 });
 
 // ============================================================
+// P2 regression (Codex 2026-05-25): adapter purity
+//   `synthesizeGeminiToolCallId` previously used module-mutable state +
+//   `Date.now()`, breaking the spec-27 §3 "no IO, no clock" rule. The
+//   fix derives ids from candidate/part position when upstream elides
+//   `functionCall.id`. Same input → same output, regardless of when or
+//   how often decodeTurn is called.
+// ============================================================
+
+describe("gemini adapter — P2 purity", () => {
+  const rawWithoutUpstreamId = {
+    candidates: [
+      {
+        content: {
+          role: "model",
+          parts: [
+            { functionCall: { name: "lookup", args: { q: "X" } } },
+          ],
+        },
+      },
+    ],
+    usageMetadata: {
+      promptTokenCount: 5,
+      candidatesTokenCount: 5,
+      totalTokenCount: 10,
+    },
+  };
+
+  it("synthesized id is deterministic across multiple decodeTurn calls on the same response", () => {
+    const a = geminiGenerateContentAdapter.decodeTurn(rawWithoutUpstreamId);
+    const b = geminiGenerateContentAdapter.decodeTurn(rawWithoutUpstreamId);
+    const c = geminiGenerateContentAdapter.decodeTurn(rawWithoutUpstreamId);
+    expect(a.toolCalls[0].id).toBe(b.toolCalls[0].id);
+    expect(b.toolCalls[0].id).toBe(c.toolCalls[0].id);
+  });
+
+  it("synthesized id is positional (encodes candidate + part index)", () => {
+    const r = geminiGenerateContentAdapter.decodeTurn(rawWithoutUpstreamId);
+    // Single candidate (idx 0), single part (idx 0).
+    expect(r.toolCalls[0].id).toBe("gemini-cand0-part0");
+  });
+
+  it("two functionCalls in the same content yield distinct positional ids", () => {
+    const raw = {
+      candidates: [
+        {
+          content: {
+            role: "model",
+            parts: [
+              { text: "thinking..." },
+              { functionCall: { name: "a", args: {} } },
+              { functionCall: { name: "b", args: {} } },
+            ],
+          },
+        },
+      ],
+    };
+    const r = geminiGenerateContentAdapter.decodeTurn(raw);
+    expect(r.toolCalls).toHaveLength(2);
+    // text occupies part idx 0; functionCalls land at 1 and 2.
+    expect(r.toolCalls[0].id).toBe("gemini-cand0-part1");
+    expect(r.toolCalls[1].id).toBe("gemini-cand0-part2");
+    expect(r.toolCalls[0].id).not.toBe(r.toolCalls[1].id);
+  });
+
+  it("upstream-provided functionCall.id is preferred over positional id", () => {
+    const raw = {
+      candidates: [
+        {
+          content: {
+            role: "model",
+            parts: [
+              {
+                functionCall: { name: "lookup", args: {}, id: "TAeN4yyC" },
+              },
+            ],
+          },
+        },
+      ],
+    };
+    const r = geminiGenerateContentAdapter.decodeTurn(raw);
+    expect(r.toolCalls[0].id).toBe("TAeN4yyC");
+  });
+});
+
+// ============================================================
 // Layer 4 — adapter identity invariants (spec-27 C-1)
 // ============================================================
 

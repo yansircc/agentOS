@@ -132,7 +132,12 @@ export type DecodeStructuredResult =
  *
  *  Shared:
  *    - `classify` maps transport / HTTP / protocol errors into the closed
- *      `FailureClass` set; consumed by both halves.
+ *      `FailureClass` set. **v0 runtime scope (spec-27 §3.0.1):** the
+ *      only consumer is `attemptStructured` (structured path). `callLlm`
+ *      does NOT invoke classify — dispatch errors propagate as raw
+ *      `UpstreamFailure` to submit-agent's abort taxonomy. The function
+ *      lives on the adapter so future adapters / a typed-turn-failure
+ *      design (§11 OQ 6) can consume it without an interface change.
  *    - `version` governs both halves; any change to wire behavior on
  *      either half requires a major bump.
  */
@@ -335,15 +340,32 @@ const decodeChatCompletionsStructured = (
     }>;
     usage?: { total_tokens?: number };
   };
-  const tc = raw.choices?.[0]?.message?.tool_calls?.[0]?.function;
+  const toolCalls = raw.choices?.[0]?.message?.tool_calls ?? [];
+  // spec-27 §4 strictness: structured path MUST observe exactly one
+  // forced tool call with the synthesized name. Anthropic/Gemini already
+  // enforce this; this branch closes the gap on Chat-Completions wires.
+  // Without it a provider that emits `_submit_structured` + extra calls
+  // would write a false Supported evidence row.
   if (
-    !tc ||
-    tc.name !== CHAT_COMPLETIONS_FORCED_TOOL_NAME ||
-    !tc.arguments
+    toolCalls.length !== 1 ||
+    toolCalls[0].function?.name !== CHAT_COMPLETIONS_FORCED_TOOL_NAME
   ) {
     return {
       ok: false,
-      outcome: { class: "BehaviorFailed", sampleDigest: "no-tool-call" },
+      outcome: {
+        class: "BehaviorFailed",
+        sampleDigest:
+          toolCalls.length === 0
+            ? "no-tool-call"
+            : `unexpected-tool-calls:${toolCalls.length}:${toolCalls[0].function?.name ?? "?"}`,
+      },
+    };
+  }
+  const tc = toolCalls[0].function;
+  if (!tc.arguments) {
+    return {
+      ok: false,
+      outcome: { class: "BehaviorFailed", sampleDigest: "no-tool-call-args" },
     };
   }
   let parsed: unknown;
@@ -770,9 +792,15 @@ export const anthropicMessagesAdapter: LlmProtocolAdapter<"anthropic-messages"> 
 //     totalTokenCount}`
 // ============================================================
 
-let geminiToolCallIdSeed = 0;
-const synthesizeGeminiToolCallId = (): string =>
-  `gemini-call-${(++geminiToolCallIdSeed).toString(36)}-${Date.now().toString(36)}`;
+/** Build a stable id when Gemini elides `functionCall.id`. Derived from
+ *  candidate + part position so the same response always yields the
+ *  same id (no IO, no clock). The interface in §C requires adapters to
+ *  be pure — using `Date.now()` here would break that and lose
+ *  reproducibility of decoded turn rows in the ledger. */
+const positionalGeminiToolCallId = (
+  candidateIdx: number,
+  partIdx: number,
+): string => `gemini-cand${candidateIdx}-part${partIdx}`;
 
 const buildGeminiContents = (
   messages: ReadonlyArray<LlmMessage>,
@@ -957,17 +985,21 @@ interface GeminiRawResponse {
 
 const foldGeminiParts = (
   parts: ReadonlyArray<GeminiPart> | undefined,
+  candidateIdx: number,
 ): { text: string; toolCalls: LlmToolCall[] } => {
   const textBits: string[] = [];
   const toolCalls: LlmToolCall[] = [];
-  for (const p of parts ?? []) {
+  const list = parts ?? [];
+  for (let partIdx = 0; partIdx < list.length; partIdx++) {
+    const p = list[partIdx];
     if ("text" in p && typeof p.text === "string") {
       textBits.push(p.text);
     } else if ("functionCall" in p) {
       // Gemini returns its own opaque `id` on functionCall. Prefer it
       // when present so the assistant→tool→assistant round-trip matches
-      // the wire's identity. Fall back to a synthesized id only when
-      // Gemini elides it (older models or non-thinking responses).
+      // the wire's identity. Fall back to a positional id when Gemini
+      // elides it (older models or non-thinking responses) — positional
+      // keeps the adapter pure (no clock, no mutable state).
       const fc = p.functionCall as {
         name: string;
         args: unknown;
@@ -981,7 +1013,10 @@ const foldGeminiParts = (
         metadata.thoughtSignature = p.thoughtSignature;
       }
       toolCalls.push({
-        id: typeof fc.id === "string" ? fc.id : synthesizeGeminiToolCallId(),
+        id:
+          typeof fc.id === "string"
+            ? fc.id
+            : positionalGeminiToolCallId(candidateIdx, partIdx),
         type: "function",
         function: {
           name: fc.name,
@@ -998,7 +1033,7 @@ const foldGeminiParts = (
 const decodeGeminiTurn = (raw: unknown): TurnResponse => {
   const r = raw as GeminiRawResponse;
   const cand = r.candidates?.[0];
-  const { text, toolCalls } = foldGeminiParts(cand?.content?.parts);
+  const { text, toolCalls } = foldGeminiParts(cand?.content?.parts, 0);
   const promptTokens = r.usageMetadata?.promptTokenCount ?? 0;
   const completionTokens = r.usageMetadata?.candidatesTokenCount ?? 0;
   const totalTokens =

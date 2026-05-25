@@ -1,7 +1,7 @@
 # spike-06 — gemini-generate-content adapter (Google direct)
 
-> **Verdict**: All 7 algebra claims pass.  
-> A6 reliability: **5/5 Supported** on `gemini-3.1-flash-lite`.  
+> **Verdict**: All 7 algebra claims pass.
+> A6 reliability: **5/5 Supported** on `gemini-3.1-flash-lite`.
 > Three Gemini-specific wire quirks were discovered live and fixed in the adapter so the class of failure each represents cannot recur by construction.
 
 This spike exercises the `gemini-generate-content` LlmProtocolAdapter
