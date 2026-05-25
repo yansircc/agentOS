@@ -59,6 +59,26 @@ the question is marked **[Open]** and waits for spike or N+1 evidence.
 There is no "transient state". CF Workflows persists all `step.do` inputs/outputs into SQLite,
 which means even mid-step state is technically ledger. Three categories above are exhaustive.
 
+### 3.1 SSoT discipline (derived from Symphony comparison)
+
+The only table that is **ledger truth is `events`**. The DO carries other
+tables but they are NOT ledger:
+
+| Table | Role | SSoT? |
+|---|---|---|
+| `events` | append-only ledger | **yes** |
+| `scheduled_events` | pending intent buffer between `scheduleEvent()` and alarm fire; fires INTO `events` then is observable only as the resulting event | no |
+
+Counters like quota consumption are **not stored**. They are projected over
+`events WHERE kind='dispatch.consumed'` inside the same `transactionSync` as
+the consume write, so quota read-modify-write is atomic by construction
+(no separate quota table to race with the ledger).
+
+`view.reflective.*` (§5.1) is similarly projection — no backing storage.
+
+This rules out the most common substrate failure: a second writer to a
+derived counter that drifts from the ledger.
+
 ---
 
 ## 4. Agent capability boundary
@@ -105,6 +125,23 @@ view.reflective.{agentRuns,currentBudget,currentQuotaState}  // agent self-intro
 
 Cross-scope `on()` is not supported in v1 (DO isolation boundary). App must forward
 via queue or Service Binding.
+
+### 5.1.1 Lifecycle vocabulary
+
+Inside one `submitAgent` invocation the substrate distinguishes four nested terms:
+
+| Term | Definition | Spans |
+|---|---|---|
+| `AgentRun` | one `submit()` invocation | 1..N `LlmTurn` until budget / retries exhaust or LLM stops emitting tool calls |
+| `LlmTurn` | one provider call | emits 0..N `ToolCall` |
+| `ToolCall` | one carrier dispatch within an `LlmTurn` | carries `attempt: number` field for retries |
+| `Continuation` | subsequent input on the same `AgentRun` after suspend/resume (spike-2: `step.waitForEvent`) | — |
+
+`LiveSession` (the long-lived agent subprocess concept from Symphony) is
+**absent by construction**: CF Workers has no long-running process.
+INV-7's CF Agents framework Session API handles cross-turn state
+(history compaction, hibernation) without exposing a process lifetime.
+The four terms above are exhaustive for v1.
 
 ### 5.2 `submitAgent` — the declarative entry
 
@@ -331,6 +368,25 @@ to know the future query pattern at write time — bad ergonomics.
 
 Each extension target ≤ 100 lines of glue. Heavier than that = sign of CF service
 being under-used.
+
+### 11.1 Stateful carrier safety constraints
+
+INV-9 establishes that **stateful carriers** (sandbox, workspace, browser, and
+any future state-holding dispatch carrier) keep their state inside the carrier
+addressed by scope id — not in the ledger. Concretely, a carrier package such
+as `@agent-os/cf-tools` MUST satisfy these constraints; the agent loop and
+shared utilities MAY rely on them:
+
+| # | Constraint | Failure if violated |
+|---|---|---|
+| C1 | **Declare a state root** keyed by scope id (e.g. `/sandbox/{scope}/`, `workspace://${scope}`). The root is the carrier's promise that state outside it is not its concern. | Two carriers can collide on the same physical resource; cleanup ambiguous. |
+| C2 | **Validate path containment** on every path-taking operation: the resolved absolute path MUST be within the declared root, with symlinks resolved. Reject otherwise. | Path traversal (`../../etc/passwd`) escapes the scope boundary; one tenant reads another. |
+| C3 | **Publish a cleanup primitive** keyed by scope id (e.g. `releaseScope(scope)`), invoked when the owning DO is deleted or the carrier is retired. | Deleted scopes leak carrier state; long-term cost growth + privacy risk. |
+| C4 | **Do not expose carrier-internal filesystem / session shape to shared logic.** Shared code MAY pass paths and scope ids into the carrier; it MUST NOT branch on whether the carrier's state is filesystem-backed, object-store-backed, or in-memory. | Boundary leak — the carrier becomes a hidden coupling point; replacing one carrier breaks unrelated code. |
+
+These constraints are conditions on **carrier implementations**, not on the
+§5 core algebra. Each shipped carrier in `@agent-os/cf-tools` includes a
+conformance check exercising C1–C4 against its own primitives.
 
 ---
 
