@@ -1,17 +1,59 @@
 /**
- * LLM carrier — module-private wrapper around env.AI.run.
+ * LLM carrier — module-private.
  *
- * Decodes the upstream response via effect/Schema; malformed responses
- * become UpstreamFailure (no silent fallback to text="").
+ * `callLlm` dispatches on `LlmRoute.kind`:
+ *
+ *   - `cf-ai-binding`         → env.AI.run via the AiBinding service Tag
+ *   - `openai-chat-compatible` → fetch the route's endpoint with Bearer
+ *                                auth resolved via ProviderRegistry
+ *
+ * Both adapters decode the same `LlmResponseSchema` (OpenAI Chat
+ * Completions shape). Workers-AI-native shape models (Llama, etc.)
+ * cannot use either adapter today; a third adapter for that shape is
+ * a separate spec-25 follow-up if and when an app needs it.
+ *
+ * Why the indirection (vs. the previous `agent: {provider, model}`
+ * shape): see spec-24 INV-8 revision and spec-25 §3. Capability is
+ * evidence on `(route, schemaContract, strategy, adapterVersion)`, not
+ * a model-id property. The route taxonomy is what makes admission's
+ * fingerprint stable across credential rotation.
  */
 
 import { Context, Effect, Schema } from "effect";
 import { UpstreamFailure } from "./errors";
+import {
+  CredentialNotFound,
+  EndpointNotFound,
+  ProviderRegistry,
+} from "./provider-registry";
 
 export class AiBinding extends Context.Tag("@agent-os/AiBinding")<
   AiBinding,
   Ai
 >() {}
+
+// ============================================================
+//   LlmRoute — tagged union of transport protocols (spec-25 §3)
+// ============================================================
+
+export interface CfAiBindingRoute {
+  readonly kind: "cf-ai-binding";
+  readonly modelId: string;
+  readonly gatewayRef?: string;
+}
+
+export interface OpenAIChatCompatibleRoute {
+  readonly kind: "openai-chat-compatible";
+  readonly endpointRef: string;
+  readonly credentialRef: string;
+  readonly modelId: string;
+}
+
+export type LlmRoute = CfAiBindingRoute | OpenAIChatCompatibleRoute;
+
+// ============================================================
+//   Response schemas (Chat Completions shape — shared by both adapters)
+// ============================================================
 
 const LlmToolCallSchema = Schema.Struct({
   id: Schema.String,
@@ -71,7 +113,7 @@ export interface ToolDefinition {
 }
 
 export interface LlmRequest {
-  readonly model: string;
+  readonly route: LlmRoute;
   readonly messages: ReadonlyArray<LlmMessage>;
   readonly tools?: ReadonlyArray<ToolDefinition>;
   /** Forces the model to call the named function (OpenAI / Workers AI
@@ -83,37 +125,25 @@ export interface LlmRequest {
   };
 }
 
-export const callLlm = (
-  request: LlmRequest,
-): Effect.Effect<LlmResponse, UpstreamFailure, AiBinding> =>
-  Effect.gen(function* () {
-    const ai = yield* AiBinding;
-    const raw = yield* Effect.tryPromise({
-      try: () =>
-        (ai as { run: (m: string, p: unknown) => Promise<unknown> }).run(
-          request.model,
-          {
-            messages: request.messages,
-            tools: request.tools,
-            tool_choice: request.tool_choice,
-          },
-        ),
-      catch: (cause) => new UpstreamFailure({ cause }),
-    });
+// ============================================================
+//   Adapter dispatch
+// ============================================================
 
+const decodeResponse = (
+  raw: unknown,
+): Effect.Effect<LlmResponse, UpstreamFailure> =>
+  Effect.gen(function* () {
     const decoded = yield* Schema.decodeUnknown(LlmResponseSchema)(raw).pipe(
       Effect.mapError(
         (parseError) => new UpstreamFailure({ cause: parseError }),
       ),
     );
-
     const firstChoice = decoded.choices[0];
     if (firstChoice === undefined) {
       return yield* new UpstreamFailure({
         cause: "empty choices array in upstream response",
       });
     }
-
     const text = firstChoice.message.content ?? "";
     const toolCalls = firstChoice.message.tool_calls ?? [];
     const usage = {
@@ -123,3 +153,83 @@ export const callLlm = (
     };
     return { text, toolCalls, usage } satisfies LlmResponse;
   });
+
+const callViaCfAiBinding = (
+  route: CfAiBindingRoute,
+  request: LlmRequest,
+): Effect.Effect<LlmResponse, UpstreamFailure, AiBinding> =>
+  Effect.gen(function* () {
+    const ai = yield* AiBinding;
+    const raw = yield* Effect.tryPromise({
+      try: () =>
+        (ai as { run: (m: string, p: unknown) => Promise<unknown> }).run(
+          route.modelId,
+          {
+            messages: request.messages,
+            tools: request.tools,
+            tool_choice: request.tool_choice,
+          },
+        ),
+      catch: (cause) => new UpstreamFailure({ cause }),
+    });
+    return yield* decodeResponse(raw);
+  });
+
+const callViaOpenAIChatCompatible = (
+  route: OpenAIChatCompatibleRoute,
+  request: LlmRequest,
+): Effect.Effect<
+  LlmResponse,
+  UpstreamFailure | EndpointNotFound | CredentialNotFound,
+  ProviderRegistry
+> =>
+  Effect.gen(function* () {
+    const registry = yield* ProviderRegistry;
+    const endpoint = yield* registry.resolveEndpoint(route.endpointRef);
+    const apiKey = yield* registry.resolveCredential(route.credentialRef);
+
+    const url = `${endpoint.replace(/\/$/, "")}/chat/completions`;
+    const body = {
+      model: route.modelId,
+      messages: request.messages,
+      tools: request.tools,
+      tool_choice: request.tool_choice,
+    };
+
+    const raw = yield* Effect.tryPromise({
+      try: async () => {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          const text = await res.text().catch(() => "");
+          throw new Error(
+            `HTTP ${res.status} ${res.statusText}: ${text.slice(0, 500)}`,
+          );
+        }
+        return (await res.json()) as unknown;
+      },
+      catch: (cause) => new UpstreamFailure({ cause }),
+    });
+    return yield* decodeResponse(raw);
+  });
+
+export const callLlm = (
+  request: LlmRequest,
+): Effect.Effect<
+  LlmResponse,
+  UpstreamFailure | EndpointNotFound | CredentialNotFound,
+  AiBinding | ProviderRegistry
+> => {
+  switch (request.route.kind) {
+    case "cf-ai-binding":
+      return callViaCfAiBinding(request.route, request);
+    case "openai-chat-compatible":
+      return callViaOpenAIChatCompatible(request.route, request);
+  }
+};

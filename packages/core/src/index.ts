@@ -59,3 +59,13 @@ export type {
   AttemptKey,
   AdmissionImpact,
 } from "./admission";
+
+// ===== v0.2.12 provider registry — apps with external LLM routes
+//        (openai-chat-compatible, etc.) provide endpoints + credentials
+//        via AgentDOBase.provideRegistry() override. Tagged errors
+//        EndpointNotFound / CredentialNotFound surface on misconfig. =====
+export type { ProviderRegistryConfig } from "./provider-registry";
+export {
+  EndpointNotFound,
+  CredentialNotFound,
+} from "./provider-registry";

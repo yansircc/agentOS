@@ -16,11 +16,12 @@ import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
+import { AdmissionLive } from "../src/admission";
 import { EventBusLive } from "../src/event-bus";
 import { Ledger, LedgerLive } from "../src/ledger";
 import { AiBinding } from "../src/llm";
+import { ProviderRegistryLive } from "../src/provider-registry";
 import { QuotaLive } from "../src/quota-service";
-import { AdmissionLive } from "../src/admission";
 import { withQuota } from "../src/quota";
 import {
   type InternalSubmitSpec,
@@ -55,7 +56,7 @@ const makeQuotaTool = (limit: number): Tool =>
 const makeSpec = (scope: string, limit: number): InternalSubmitSpec => ({
   intent: "what time is it",
   context: {},
-  agent: { provider: "@cf/stub", model: "test" },
+  route: { kind: "cf-ai-binding", modelId: "@cf/stub/test" } as const,
   tools: { get_current_time: makeQuotaTool(limit) },
   budget: { maxTurns: 3 },
   deliver: { event: "test.delivered", scope },
@@ -71,8 +72,9 @@ const buildRuntime = (state: DurableObjectState, ai: Ai) => {
     Layer.provide(eventBus),
     Layer.provide(aiLayer),
   );
+  const registry = ProviderRegistryLive({ endpoints: {}, credentials: {} });
   return ManagedRuntime.make(
-    Layer.mergeAll(ledger, quota, aiLayer, admission),
+    Layer.mergeAll(ledger, quota, aiLayer, admission, registry),
   );
 };
 

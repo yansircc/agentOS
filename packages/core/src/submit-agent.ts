@@ -27,14 +27,18 @@ import {
   ToolError,
   UpstreamFailure,
 } from "./errors";
-import { AiBinding, callLlm, type LlmMessage, type ToolDefinition } from "./llm";
+import { AiBinding, callLlm, type LlmMessage, type LlmRoute, type ToolDefinition } from "./llm";
 import { Ledger } from "./ledger";
+import {
+  CredentialNotFound,
+  EndpointNotFound,
+  ProviderRegistry,
+} from "./provider-registry";
 import { Quota } from "./quota-service";
 import { executeTool, parseToolCall, type Tool } from "./tools";
 import {
   Admission,
   type JsonSchemaObject,
-  type LlmRoute,
   makeSchemaContract,
 } from "./admission";
 
@@ -55,7 +59,12 @@ export interface SubmitSpec {
    *    intent  = task input       (variable)
    *    context = facts            (variable) */
   readonly system?: string;
-  readonly agent: { readonly provider: string; readonly model: string };
+  /** LLM transport route. Tagged union over protocol kinds (spec-25 §3,
+   *  spec-24 INV-8 revision). Replaces the v0.2.11 `agent: {provider,
+   *  model}` shape, which assumed a single cf-ai-binding transport.
+   *  Apps choose their route per submit; capability is evidence on
+   *  (route, schemaContract, strategy, adapterVersion), not on modelId. */
+  readonly route: LlmRoute;
   readonly tools: Record<string, Tool>;
   readonly budget?: {
     readonly tokens?: number;
@@ -132,8 +141,8 @@ export const submitAgentEffect = (
   spec: InternalSubmitSpec,
 ): Effect.Effect<
   SubmitResult,
-  SqlError | JsonStringifyError,
-  Ledger | AiBinding | Quota | Admission
+  SqlError | JsonStringifyError | EndpointNotFound | CredentialNotFound,
+  Ledger | AiBinding | Quota | Admission | ProviderRegistry
 > =>
   Effect.gen(function* () {
     const ledger = yield* Ledger;
@@ -178,10 +187,7 @@ export const submitAgentEffect = (
 
       const admission = yield* Admission;
       const schemaContract = yield* makeSchemaContract(spec.outputSchema);
-      const route: LlmRoute = {
-        kind: "cf-ai-binding",
-        modelId: `${spec.agent.provider}/${spec.agent.model}`,
-      };
+      const route: LlmRoute = spec.route;
 
       const ctxStr = yield* safeStringifyPretty(spec.context);
       const userText = `${spec.intent}\n\nContext:\n${ctxStr}`;
@@ -259,8 +265,10 @@ export const submitAgentEffect = (
       | SqlError
       | JsonStringifyError
       | UpstreamFailure
-      | ToolError,
-      Ledger | AiBinding | Quota
+      | ToolError
+      | EndpointNotFound
+      | CredentialNotFound,
+      Ledger | AiBinding | Quota | ProviderRegistry
     > = Effect.gen(function* () {
       const messages: LlmMessage[] = [...initialMessages];
       const toolDefs = toolDefinitionsOf(spec.tools);
@@ -281,7 +289,7 @@ export const submitAgentEffect = (
         }
 
         const resp = yield* callLlm({
-          model: `${spec.agent.provider}/${spec.agent.model}`,
+          route: spec.route,
           messages,
           tools: toolDefs.length > 0 ? toolDefs : undefined,
         });
