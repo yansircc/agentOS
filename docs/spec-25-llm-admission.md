@@ -78,8 +78,14 @@ type LlmRoute =
   call time); it is **not** a raw URL. Two endpoints with identical URLs but
   different protocol semantics MUST resolve to different `EndpointRef`.
 - `kind` enumerates **protocols**. Protocols are finite. Models are not.
-- `routeFingerprint = hash({ kind, endpointRef, modelId, gatewayRef? })`.
-  Used as part of the evidence key.
+- `routeFingerprint = "route-json-v1:" + canonicalJson({ kind, endpointRef, modelId, gatewayRef? })`.
+  A canonical-JSON string, **not** a hash. Hashing was attempted with
+  32-bit FNV-1a in the v0.2.10 first implementation and rejected after
+  Codex P1 review surfaced a real collision
+  (`@cf/3hwlz7pq9l` vs `@cf/x3qxkshczh`). The SSoT key for capability
+  cannot be probabilistic — distinct routes MUST yield distinct keys
+  by construction. Canonical JSON is collision-free, and routes are
+  small enough (~80 chars) that the size cost is negligible.
 
 Runtime enablement (which `kind` values are wired to a live adapter) is a
 separate concern — see §11.
@@ -92,17 +98,42 @@ A `SchemaContract` is the structural specification an output must satisfy:
 
 ```ts
 type SchemaContract = {
-  schema:      Schema.Schema<unknown>;   // effect/Schema
-  decoder:     (raw: unknown) => Effect.Effect<DecodedOutput, BehaviorFailed>;
-  fingerprint: string;                   // see §4.1
+  schema:      JsonSchemaObject;   // closed dialect; public RPC boundary
+  fingerprint: string;             // see §4.1
 };
 ```
+
+`JsonSchemaObject` is a narrow dialect of JSON Schema:
+`{ type: "object", properties, required?, additionalProperties? }` with
+primitives `string` (optional `enum`), `number`, `boolean`, nested
+`object`, and `array` (with `items`). See `packages/core/src/admission.ts`
+for the exact type.
+
+Rationale for keeping the public type at JSON Schema, not
+`effect/Schema`:
+
+- spec-24 §14.2 forbids leaking Effect TS into the substrate's public
+  surface. `Schema.Schema<O>` on `SubmitSpec` would push EFF rules into
+  app-side type bounds.
+- Apps that want typed `Schema.Type<O>` work convert at the boundary:
+  use `JSONSchema.make(EffectSchema)` to produce the
+  `JsonSchemaObject` for `submit.outputSchema`, then decode the deliver
+  event payload through the same Effect Schema in the `on()` handler.
+- An earlier draft of this spec exposed
+  `schema: Schema.Schema<unknown>` and a `decoder` field on
+  `SchemaContract`. That design was **rejected** by Codex P3 review
+  during v0.2.10 integration — it would mislead the next implementer
+  into reintroducing Effect at the RPC boundary. Recorded here so the
+  decision is durable.
 
 ### 4.1 Canonical fingerprint algorithm
 
 `fingerprint` MUST be deterministic across equivalent schemas. The algorithm:
 
-1. Lower the schema to JSON Schema via `Schema.JSONSchema.make`.
+1. Treat the input as the JSON Schema tree directly (no Effect Schema
+   lowering at the substrate boundary). Apps that want effect/Schema
+   typing call `Schema.JSONSchema.make(EffectSchema)` on their side
+   before passing the result into `submit.outputSchema`.
 2. Canonicalize the JSON tree:
    a. Sort object keys lexicographically (recursive).
    b. Inline `$ref` (no remote refs allowed; reject at compile time).

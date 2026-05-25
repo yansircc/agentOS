@@ -12,7 +12,7 @@
  *   4. End-to-end through `submitAgentEffect` with `outputSchema`.
  */
 
-import { Effect, Exit, Layer, ManagedRuntime } from "effect";
+import { Cause, Effect, Exit, Layer, ManagedRuntime, Option } from "effect";
 import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
@@ -130,11 +130,20 @@ describe("admission — canonical fingerprint (spec-25 §4.1, spike-04 A1/A2)", 
     expect(fS1.fingerprint).not.toBe(fS2.fingerprint);
   });
 
-  it("routeFingerprint is deterministic and prefix-tagged", () => {
+  it("routeFingerprint is deterministic, prefix-tagged, and collision-free for distinct routes", () => {
     const r = routeFingerprint({ kind: "cf-ai-binding", modelId: "@cf/x/y" });
-    expect(r.startsWith("fnv1a:")).toBe(true);
+    expect(r.startsWith("route-json-v1:")).toBe(true);
     const r2 = routeFingerprint({ kind: "cf-ai-binding", modelId: "@cf/x/y" });
     expect(r).toBe(r2);
+    // Codex P1 regression guard: two different modelIds must produce two
+    // different route keys. The previous 32-bit FNV implementation aliased
+    // distinct routes onto the same hash (e.g. `@cf/3hwlz7pq9l` and
+    // `@cf/x3qxkshczh` collided), letting a model's unsupported lease
+    // short-circuit another model. The canonical-JSON key is collision-free
+    // by construction.
+    const a = routeFingerprint({ kind: "cf-ai-binding", modelId: "@cf/3hwlz7pq9l" });
+    const b = routeFingerprint({ kind: "cf-ai-binding", modelId: "@cf/x3qxkshczh" });
+    expect(a).not.toBe(b);
   });
 });
 
@@ -713,6 +722,122 @@ describe("admission — submitAgent outputSchema path (spec-25 §12.1)", () => {
       if (aborted) {
         const p = aborted.payload as { reason?: string };
         expect(p.reason).toBe("output_schema_excludes_tools_in_v0_2_10");
+      }
+
+      await runtime.dispose();
+    });
+  });
+});
+
+// ============================================================
+// Codex P2 regression guard: malformed admission payload → SqlError,
+// NOT a raw `TypeError: undefined is not an object` defect leaking out
+// of projectLease. Mirrors quota's malformed-payload defense.
+// ============================================================
+
+describe("admission — malformed payload → SqlError (Codex P2)", () => {
+  it("evidence row missing `key` field → SqlError escapes Promise", async () => {
+    const scope = "admission-malformed-evidence";
+    const id = testEnv.AGENT_DO.idFromName(scope);
+    const stub = testEnv.AGENT_DO.get(id);
+
+    await runInDurableObject(stub, async (_inst, state) => {
+      const ai = stubAi([]);
+      const runtime = makeRuntime(state, ai);
+      const schemaContract = await runtime.runPromise(makeSchemaContract(SCHEMA));
+
+      state.storage.sql.exec(
+        "INSERT INTO events (ts, kind, scope, payload) VALUES (?, ?, ?, ?)",
+        Date.now(),
+        "llm.structured.evidence",
+        scope,
+        JSON.stringify({
+          stimulusKind: "live",
+          outcome: { class: "Supported", tokensUsed: 10 },
+          admissionImpact: "lease-bearing",
+        }),
+      );
+
+      const exit = await runtime.runPromiseExit(
+        Effect.gen(function* () {
+          const admission = yield* Admission;
+          return yield* admission.attemptStructured<{ summary: string }>({
+            scope,
+            route: { kind: "cf-ai-binding", modelId: "@cf/test/model" },
+            schemaContract,
+            strategy: "forced-tool-call",
+            stimulus: {
+              kind: "live",
+              userInput: { userText: "x" },
+              deliver: (d) => ({ event: "structured.done", payload: d }),
+            },
+          });
+        }),
+      );
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        const failure = Cause.failureOption(exit.cause);
+        expect(Option.isSome(failure)).toBe(true);
+        if (Option.isSome(failure)) {
+          expect((failure.value as { _tag: string })._tag).toBe(
+            "agent_os.sql_error",
+          );
+        }
+      }
+
+      await runtime.dispose();
+    });
+  });
+
+  it("invalidate row with non-object `key` → SqlError escapes Promise", async () => {
+    const scope = "admission-malformed-invalidate";
+    const id = testEnv.AGENT_DO.idFromName(scope);
+    const stub = testEnv.AGENT_DO.get(id);
+
+    await runInDurableObject(stub, async (_inst, state) => {
+      const ai = stubAi([]);
+      const runtime = makeRuntime(state, ai);
+      const schemaContract = await runtime.runPromise(makeSchemaContract(SCHEMA));
+
+      state.storage.sql.exec(
+        "INSERT INTO events (ts, kind, scope, payload) VALUES (?, ?, ?, ?)",
+        Date.now(),
+        "llm.structured.invalidate",
+        scope,
+        JSON.stringify({
+          key: "not-an-object",
+          reason: "test",
+          by: "test",
+        }),
+      );
+
+      const exit = await runtime.runPromiseExit(
+        Effect.gen(function* () {
+          const admission = yield* Admission;
+          return yield* admission.attemptStructured<{ summary: string }>({
+            scope,
+            route: { kind: "cf-ai-binding", modelId: "@cf/test/model" },
+            schemaContract,
+            strategy: "forced-tool-call",
+            stimulus: {
+              kind: "live",
+              userInput: { userText: "x" },
+              deliver: (d) => ({ event: "structured.done", payload: d }),
+            },
+          });
+        }),
+      );
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        const failure = Cause.failureOption(exit.cause);
+        expect(Option.isSome(failure)).toBe(true);
+        if (Option.isSome(failure)) {
+          expect((failure.value as { _tag: string })._tag).toBe(
+            "agent_os.sql_error",
+          );
+        }
       }
 
       await runtime.dispose();

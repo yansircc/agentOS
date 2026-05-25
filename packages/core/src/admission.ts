@@ -25,7 +25,7 @@
  * Spike: spikes/04-llm-admission/
  */
 
-import { Clock, Context, Effect, Layer } from "effect";
+import { Clock, Context, Effect, Layer, Schema } from "effect";
 import { EventBus } from "./event-bus";
 import { JsonStringifyError, SqlError, safeStringify } from "./errors";
 import { AiBinding } from "./llm";
@@ -211,21 +211,24 @@ export const makeSchemaContract = (
     };
   });
 
-/** Route fingerprint. Synchronous FNV-1a is enough — routes are small and
- *  collision probability is not a security boundary; we just need a stable
- *  key for projection lookup. */
+/** Route key is the canonical JSON of the route, prefixed with an algorithm
+ *  version tag. We deliberately do NOT hash it.
+ *
+ *  Earlier this used a 32-bit FNV-1a hash — Codex caught a real collision
+ *  (`@cf/3hwlz7pq9l` and `@cf/x3qxkshczh` both mapping to `fnv1a:b307092e`),
+ *  which would alias an unsupported lease for one model onto another model.
+ *  The hash space is large in absolute terms but the SSoT key cannot be a
+ *  probabilistic identity. Canonical JSON is determinstic, collision-free
+ *  by construction, and only ~80 chars in practice. The `route-json-v1:`
+ *  prefix lets a future canonicalization change auto-invalidate stored
+ *  keys without an adapter version bump. */
 export const routeFingerprint = (route: LlmRoute): string => {
   const canon = canonicalJsonString({
     kind: route.kind,
     modelId: route.modelId,
     gatewayRef: route.gatewayRef ?? null,
   });
-  let hash = 2166136261;
-  for (let i = 0; i < canon.length; i++) {
-    hash ^= canon.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return `fnv1a:${(hash >>> 0).toString(16).padStart(8, "0")}`;
+  return `route-json-v1:${canon}`;
 };
 
 // ============================================================
@@ -655,6 +658,63 @@ const reconstructOutcomeFromLease = (
   }
 };
 
+/** Owned payload schemas (Codex P2). admission events are written exclusively
+ *  by this module, so any shape mismatch read back is infra corruption —
+ *  same failure path as quota's malformed-payload defense
+ *  (quota-service.ts:97). Schema.decodeUnknownSync throws → Effect.try wraps
+ *  as SqlError; no silent `undefined.x` defect leaks through projectLease.
+ */
+const AttemptKeySchema = Schema.Struct({
+  routeFingerprint: Schema.String,
+  schemaFingerprint: Schema.String,
+  strategy: Schema.Literal("forced-tool-call"),
+  adapterVersion: Schema.String,
+});
+
+const OutcomeSchema = Schema.Union(
+  Schema.Struct({ class: Schema.Literal("Supported"), tokensUsed: Schema.Number }),
+  Schema.Struct({
+    class: Schema.Literal("ProviderRejected"),
+    status: Schema.Number,
+    body: Schema.String,
+  }),
+  Schema.Struct({ class: Schema.Literal("SchemaUnsupported"), reason: Schema.String }),
+  Schema.Struct({ class: Schema.Literal("BehaviorFailed"), sampleDigest: Schema.String }),
+  Schema.Struct({ class: Schema.Literal("AuthError"), status: Schema.Number }),
+  Schema.Struct({
+    class: Schema.Literal("RateLimited"),
+    retryAfterMs: Schema.optional(Schema.Number),
+  }),
+  Schema.Struct({ class: Schema.Literal("TransientError"), cause: Schema.String }),
+  Schema.Struct({ class: Schema.Literal("ConfigError"), reason: Schema.String }),
+);
+
+const EvidencePayloadSchema = Schema.Struct({
+  key: AttemptKeySchema,
+  stimulusKind: Schema.Literal("probe", "live"),
+  outcome: OutcomeSchema,
+  admissionImpact: Schema.Literal("lease-bearing", "reinforcement"),
+  // adapterId is metadata; ignored by projection. Optional for forward-compat.
+  adapterId: Schema.optional(Schema.String),
+});
+const decodeEvidencePayloadSync = Schema.decodeUnknownSync(EvidencePayloadSchema);
+
+const InvalidatePayloadSchema = Schema.Struct({
+  // Barriers carry a Partial<AttemptKey> (wildcarded keys allowed per §8.1),
+  // so every field of the inner key is optional.
+  key: Schema.Struct({
+    routeFingerprint: Schema.optional(Schema.String),
+    schemaFingerprint: Schema.optional(Schema.String),
+    strategy: Schema.optional(Schema.Literal("forced-tool-call")),
+    adapterVersion: Schema.optional(Schema.String),
+  }),
+  reason: Schema.String,
+  by: Schema.String,
+});
+const decodeInvalidatePayloadSync = Schema.decodeUnknownSync(
+  InvalidatePayloadSchema,
+);
+
 const loadAdmissionRows = (
   sql: SqlStorage,
   scope: string,
@@ -672,23 +732,25 @@ const loadAdmissionRows = (
         const id = Number(r.id);
         const ts = Number(r.ts);
         const kind = String(r.kind);
-        const payload = JSON.parse(String(r.payload)) as Record<string, unknown>;
+        const parsed = JSON.parse(String(r.payload)) as unknown;
         if (kind === "llm.structured.evidence") {
+          const ev = decodeEvidencePayloadSync(parsed);
           out.push({
             id,
             ts,
             kind: "llm.structured.evidence",
-            key: payload.key as AttemptKey,
-            stimulusKind: payload.stimulusKind as "probe" | "live",
-            outcome: payload.outcome as Outcome,
-            admissionImpact: payload.admissionImpact as AdmissionImpact,
+            key: ev.key,
+            stimulusKind: ev.stimulusKind,
+            outcome: ev.outcome as Outcome,
+            admissionImpact: ev.admissionImpact,
           });
         } else if (kind === "llm.structured.invalidate") {
+          const inv = decodeInvalidatePayloadSync(parsed);
           out.push({
             id,
             ts,
             kind: "llm.structured.invalidate",
-            key: (payload.key ?? {}) as Partial<AttemptKey>,
+            key: inv.key,
           });
         }
       }
