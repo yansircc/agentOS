@@ -14,12 +14,21 @@
  *                  side-effect is itself an emitEvent — proving handler →
  *                  handler chaining via the ledger.
  *
+ *   DispatchTestDO — extends AgentDOBase. dispatch contract tests use it
+ *                    on both sender and receiver sides to validate
+ *                    cross-scope delivery without app-level RPC.
+ *
  * The fetch handler exists only to satisfy the Workers runtime
  * requirement that a worker has a default export.
  */
 
 import { DurableObject } from "cloudflare:workers";
-import { AgentDOBase, type AgentDOEnv } from "../src";
+import {
+  AgentDOBase,
+  type AgentDOEnv,
+  type DispatchTargetNamespace,
+  type DispatchTargetRegistry,
+} from "../src";
 
 export class TestAgentDO extends DurableObject {}
 
@@ -35,6 +44,44 @@ export class EmitTestDO extends AgentDOBase<AgentDOEnv> {
         data: { sourceId: event.id, sourcePayload: event.payload },
       });
     });
+  }
+}
+
+interface DispatchEnv extends AgentDOEnv {
+  readonly DISPATCH_DO: DurableObjectNamespace<DispatchTestDO>;
+}
+
+const DEAD_TARGET: DispatchTargetNamespace = {
+  idFromName: (_name) => ({}) as DurableObjectId,
+  get: (_id) => ({
+    __agentosReceiveDispatch: async () => {
+      throw new Error("dead dispatch target");
+    },
+  }),
+};
+
+export class DispatchTestDO extends AgentDOBase<DispatchEnv> {
+  constructor(ctx: DurableObjectState, env: DispatchEnv) {
+    super(ctx, env);
+    this.on("dispatch.inbound.accepted", async () => {
+      await this.emitEvent({
+        event: "dispatch.inbound.handler_fired",
+        data: {},
+      });
+    });
+    this.on("test.delivered", async (event) => {
+      await this.emitEvent({
+        event: "test.followup",
+        data: { sourceId: event.id, sourcePayload: event.payload },
+      });
+    });
+  }
+
+  protected override provideDispatchTargets(): DispatchTargetRegistry {
+    return {
+      peer: this.env.DISPATCH_DO,
+      dead: DEAD_TARGET,
+    };
   }
 }
 
