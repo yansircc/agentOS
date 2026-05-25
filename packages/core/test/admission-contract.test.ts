@@ -296,11 +296,10 @@ const makeRuntime = (state: DurableObjectState, ai: Ai) => {
   const ledger = LedgerLive(state.storage.sql).pipe(Layer.provide(eventBus));
   const quota = QuotaLive(state).pipe(Layer.provide(eventBus));
   const aiLayer = Layer.succeed(AiBinding, ai);
+  const registry = ProviderRegistryLive({ endpoints: {}, credentials: {} });
   const admission = AdmissionLive(state).pipe(
     Layer.provide(eventBus),
-    Layer.provide(aiLayer),
   );
-  const registry = ProviderRegistryLive({ endpoints: {}, credentials: {} });
   return ManagedRuntime.make(
     Layer.mergeAll(ledger, quota, aiLayer, admission, registry),
   );
@@ -844,5 +843,224 @@ describe("admission — malformed payload → SqlError (Codex P2)", () => {
 
       await runtime.dispose();
     });
+  });
+});
+
+// ============================================================
+// Cross-route structured-output dispatch (v0.2.13)
+//
+// Invariant: structured output must dispatch on `route.kind` exactly like
+// free-text submit does (no parallel transport in admission). Without
+// this, evidence rows would be tagged with one route while a different
+// transport actually served the call — SSoT corruption.
+// ============================================================
+
+const SENTINEL_AI: Ai = {
+  run: (() => {
+    throw new Error(
+      "SENTINEL_AI: admission should NOT touch AiBinding when route is openai-chat-compatible",
+    );
+  }) as Ai["run"],
+} as Ai;
+
+const makeRuntimeWithRegistry = (
+  state: DurableObjectState,
+  ai: Ai,
+  endpoints: Record<string, string>,
+  credentials: Record<string, string>,
+) => {
+  const handlers = new Map<string, Set<EventHandler>>();
+  const eventBus = EventBusLive(handlers);
+  const ledger = LedgerLive(state.storage.sql).pipe(Layer.provide(eventBus));
+  const quota = QuotaLive(state).pipe(Layer.provide(eventBus));
+  const aiLayer = Layer.succeed(AiBinding, ai);
+  const registry = ProviderRegistryLive({ endpoints, credentials });
+  const admission = AdmissionLive(state).pipe(Layer.provide(eventBus));
+  return ManagedRuntime.make(
+    Layer.mergeAll(ledger, quota, aiLayer, admission, registry),
+  );
+};
+
+describe("admission — cross-route structured output (v0.2.13)", () => {
+  it("openai-chat-compatible route MUST NOT touch AiBinding; evidence is tagged with the route's adapter", async () => {
+    const scope = "cross-route-openai-compat";
+    const id = testEnv.AGENT_DO.idFromName(scope);
+    const stub = testEnv.AGENT_DO.get(id);
+
+    // Capture the fetch call to assert URL, auth header, body shape.
+    const fetchCalls: Array<{
+      readonly url: string;
+      readonly init: RequestInit;
+    }> = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (
+      input: RequestInfo | URL,
+      init?: RequestInit,
+    ) => {
+      fetchCalls.push({ url: String(input), init: init ?? {} });
+      // Return a Chat Completions shaped response with the expected
+      // _submit_structured tool call.
+      const body = {
+        choices: [
+          {
+            message: {
+              tool_calls: [
+                {
+                  id: "c1",
+                  type: "function",
+                  function: {
+                    name: "_submit_structured",
+                    arguments: JSON.stringify({ summary: "via-openrouter" }),
+                  },
+                },
+              ],
+            },
+          },
+        ],
+        usage: { total_tokens: 42 },
+      };
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof globalThis.fetch;
+
+    try {
+      await runInDurableObject(stub, async (_inst, state) => {
+        // AiBinding is the SENTINEL that throws on any call. ProviderRegistry
+        // resolves to a stub endpoint + credential.
+        const runtime = makeRuntimeWithRegistry(
+          state,
+          SENTINEL_AI,
+          { openrouter: "https://stub.openrouter.test/api/v1" },
+          { OPENROUTER_KEY: "stub-key-not-real" },
+        );
+
+        const spec: InternalSubmitSpec = {
+          intent: "summarize",
+          context: {},
+          route: {
+            kind: "openai-chat-compatible",
+            endpointRef: "openrouter",
+            credentialRef: "OPENROUTER_KEY",
+            modelId: "openai/gpt-4.1",
+          },
+          tools: {},
+          outputSchema: SCHEMA,
+          deliver: { scope, event: "structured.done" },
+        };
+
+        const r = await runtime.runPromise(submitAgentEffect(spec));
+
+        // Success
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+          expect(JSON.parse(r.final)).toEqual({ summary: "via-openrouter" });
+        }
+
+        // Fetch was called exactly once, with the right URL + auth.
+        expect(fetchCalls).toHaveLength(1);
+        expect(fetchCalls[0]?.url).toBe(
+          "https://stub.openrouter.test/api/v1/chat/completions",
+        );
+        const headers = fetchCalls[0]?.init.headers as
+          | Record<string, string>
+          | undefined;
+        expect(headers?.Authorization).toBe("Bearer stub-key-not-real");
+
+        // AiBinding sentinel was NEVER called (if it had been, SENTINEL_AI
+        // would have thrown a string containing "SENTINEL_AI").
+
+        // Evidence row tags the chosen adapter (openai-chat-compatible),
+        // NOT cf-ai-binding. routeFingerprint reflects the variant fields.
+        const events = await runtime.runPromise(
+          Effect.gen(function* () {
+            const l = yield* Ledger;
+            return yield* l.events(scope);
+          }),
+        );
+        const evidence = events.find(
+          (e) => e.kind === "llm.structured.evidence",
+        );
+        expect(evidence).toBeDefined();
+        const ep = evidence?.payload as {
+          adapterId?: string;
+          key?: { routeFingerprint?: string };
+        };
+        expect(ep.adapterId?.startsWith("openai-chat-compatible@")).toBe(true);
+        expect(ep.key?.routeFingerprint).toContain('"openai-chat-compatible"');
+        expect(ep.key?.routeFingerprint).toContain('"OPENROUTER_KEY"');
+        expect(ep.key?.routeFingerprint).toContain('"openrouter"');
+
+        // adapterVersion in the AttemptKey reflects the chosen adapter's version.
+        const adapterKey = (
+          ep as unknown as { key: { adapterVersion?: string } }
+        ).key;
+        expect(adapterKey.adapterVersion).toBe(ADAPTER_VERSION);
+
+        await runtime.dispose();
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("cf-ai-binding route still goes through AiBinding (regression guard)", async () => {
+    const scope = "cross-route-cf-ai-binding";
+    const id = testEnv.AGENT_DO.idFromName(scope);
+    const stub = testEnv.AGENT_DO.get(id);
+
+    // Sentinel fetch: any HTTP call here is a bug.
+    const originalFetch = globalThis.fetch;
+    let fetchTouched = false;
+    globalThis.fetch = (async () => {
+      fetchTouched = true;
+      throw new Error(
+        "SENTINEL_FETCH: cf-ai-binding route should NOT hit fetch",
+      );
+    }) as typeof globalThis.fetch;
+
+    try {
+      await runInDurableObject(stub, async (_inst, state) => {
+        const ai = stubAi([
+          submitStructuredResp('{"summary":"via-cf-ai"}', "c1"),
+        ]);
+        const runtime = makeRuntimeWithRegistry(
+          state,
+          ai,
+          { openrouter: "https://stub.test/v1" },
+          { OPENROUTER_KEY: "stub" },
+        );
+
+        const spec: InternalSubmitSpec = {
+          intent: "summarize",
+          context: {},
+          route: { kind: "cf-ai-binding", modelId: "@cf/test/model" } as const,
+          tools: {},
+          outputSchema: SCHEMA,
+          deliver: { scope, event: "structured.done" },
+        };
+
+        const r = await runtime.runPromise(submitAgentEffect(spec));
+        expect(r.ok).toBe(true);
+        expect(fetchTouched).toBe(false);
+
+        const events = await runtime.runPromise(
+          Effect.gen(function* () {
+            const l = yield* Ledger;
+            return yield* l.events(scope);
+          }),
+        );
+        const evidence = events.find(
+          (e) => e.kind === "llm.structured.evidence",
+        );
+        const ep = evidence?.payload as { adapterId?: string };
+        expect(ep.adapterId?.startsWith("cf-ai-binding@")).toBe(true);
+
+        await runtime.dispose();
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

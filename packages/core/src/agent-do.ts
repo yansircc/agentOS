@@ -88,7 +88,6 @@ const makeAgentRuntime = (
   const registryLayer = ProviderRegistryLive(registry);
   const admissionLayer = AdmissionLive(ctx).pipe(
     Layer.provide(eventBusLayer),
-    Layer.provide(aiLayer),
   );
   return ManagedRuntime.make(
     Layer.mergeAll(

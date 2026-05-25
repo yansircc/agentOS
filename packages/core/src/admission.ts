@@ -27,8 +27,14 @@
 
 import { Clock, Context, Effect, Layer, Schema } from "effect";
 import { EventBus } from "./event-bus";
+import { ProviderRegistry } from "./provider-registry";
 import { JsonStringifyError, SqlError, safeStringify } from "./errors";
-import { AiBinding, type LlmRoute } from "./llm";
+import {
+  AiBinding,
+  dispatchProvider,
+  type LlmRoute,
+  type ProviderRequestBody,
+} from "./llm";
 import type { LedgerEvent } from "./types";
 
 // ============================================================
@@ -234,17 +240,9 @@ export const routeFingerprint = (route: LlmRoute): string => {
 };
 
 // ============================================================
-// SECTION C — Adapter law (spec-25 §6) for cf-ai-binding
+// SECTION C — Structured-output adapters (spec-25 §6) — see below.
 // ============================================================
 
-export const ADAPTER_VERSION = "1.0.0";
-
-export type AdapterMode = "production" | "test-decode-mismatch";
-
-type ProviderRequest = {
-  readonly model: string;
-  readonly body: Record<string, unknown>;
-};
 
 type DecodeResult =
   | { readonly ok: true; readonly decoded: DecodedOutput }
@@ -300,122 +298,181 @@ const validateAgainstSchema = (
   return violations;
 };
 
-export const cfAiBindingAdapter = {
-  kind: "cf-ai-binding" as const,
-  version: ADAPTER_VERSION,
+// ============================================================
+// SECTION C — Structured-output adapters (spec-25 §6).
+//
+// In v0.2.13 admission goes through `LlmRoute` via dispatchProvider —
+// same transport seam free-text submit uses. Both adapters speak OpenAI
+// Chat Completions wire (encode + decode + classify are identical), so
+// they share an implementation; only `kind` (and therefore `adapterId`)
+// differ, ensuring evidence rows are tagged with the route that
+// actually served the call.
+//
+// When a future protocol's adapter differs in encode/decode (e.g.
+// anthropic-messages requires a different tool_use response shape), it
+// will get a distinct implementation in this section.
+// ============================================================
 
+export const ADAPTER_VERSION = "1.0.0";
+
+export type AdapterMode = "production" | "test-decode-mismatch";
+
+export interface StructuredOutputAdapter {
+  readonly kind: LlmRoute["kind"];
+  readonly version: string;
   encode(
-    route: LlmRoute,
     schema: SchemaContract,
-    stimulus: { kind: "probe"; synthetic: ProbeInput } | { kind: "live"; userInput: LiveInput },
-    _strategy: Strategy,
-  ): ProviderRequest {
-    // `Strategy` is a closed union with a single value ("forced-tool-call")
-    // exhausted by the type system. No runtime check needed — adding a new
-    // strategy is a TS-level breaking change that surfaces on the
-    // tool_choice construction site below.
-    const userText =
-      stimulus.kind === "live"
-        ? stimulus.userInput.userText
-        : String(stimulus.synthetic.synthetic);
-    return {
-      model: route.modelId,
-      body: {
-        messages: [
-          {
-            role: "system",
-            content:
-              "Return strictly structured output by calling the submit tool. Do not respond in free text.",
-          },
-          { role: "user", content: userText },
-        ],
-        max_tokens: 2048,
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "_submit_structured",
-              description:
-                "Submit the structured result. Args ARE the result.",
-              parameters: schema.schema,
-            },
-          },
-        ],
-        tool_choice: {
-          type: "function",
-          function: { name: "_submit_structured" },
-        },
-      },
-    };
-  },
-
+    stimulus:
+      | { kind: "probe"; synthetic: ProbeInput }
+      | { kind: "live"; userInput: LiveInput },
+    strategy: Strategy,
+  ): ProviderRequestBody;
   decode(
     response: { readonly raw: unknown },
     schema: SchemaContract,
-    _strategy: Strategy,
-    mode: AdapterMode = "production",
-  ): DecodeResult {
-    if (mode === "test-decode-mismatch") {
-      return {
-        ok: false,
-        outcome: {
-          class: "BehaviorFailed",
-          sampleDigest: "synthetic-test-decode-mismatch",
-        },
-      };
-    }
-    const raw = response.raw as {
-      choices?: Array<{
-        message?: {
-          tool_calls?: Array<{
-            function?: { name?: string; arguments?: string };
-          }>;
-        };
-      }>;
-    };
-    const tc = raw.choices?.[0]?.message?.tool_calls?.[0]?.function;
-    if (!tc || tc.name !== "_submit_structured" || !tc.arguments) {
-      return {
-        ok: false,
-        outcome: { class: "BehaviorFailed", sampleDigest: "no-tool-call" },
-      };
-    }
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(tc.arguments);
-    } catch (e) {
-      return {
-        ok: false,
-        outcome: {
-          class: "BehaviorFailed",
-          sampleDigest: `args-parse-failed:${String(e).slice(0, 40)}`,
-        },
-      };
-    }
-    const violations = validateAgainstSchema(parsed, schema.schema);
-    if (violations.length > 0) {
-      return {
-        ok: false,
-        outcome: {
-          class: "BehaviorFailed",
-          sampleDigest: `violations:${violations.join(",")}`.slice(0, 120),
-        },
-      };
-    }
-    return { ok: true, decoded: parsed as DecodedOutput };
-  },
+    strategy: Strategy,
+    mode?: AdapterMode,
+  ): DecodeResult;
+  classify(error: unknown): Outcome;
+}
 
-  classify(error: unknown): Outcome {
-    const msg = error instanceof Error ? error.message : String(error);
-    const lower = msg.toLowerCase();
-    if (lower.includes("401") || lower.includes("unauthor"))
-      return { class: "AuthError", status: 401 };
-    if (lower.includes("429") || lower.includes("rate"))
-      return { class: "RateLimited" };
-    if (lower.includes("timeout") || lower.includes("network"))
-      return { class: "TransientError", cause: msg };
-    return { class: "ProviderRejected", status: 0, body: msg };
-  },
+/** Shared encode for any Chat Completions-shape route. The route's
+ *  `modelId` is inserted by `dispatchProvider` — this function returns
+ *  the body without the model field. */
+const encodeChatCompletionsForced = (
+  schema: SchemaContract,
+  stimulus:
+    | { kind: "probe"; synthetic: ProbeInput }
+    | { kind: "live"; userInput: LiveInput },
+  _strategy: Strategy,
+): ProviderRequestBody => {
+  // `Strategy` is a closed union with a single value ("forced-tool-call")
+  // exhausted by the type system. No runtime check needed — adding a new
+  // strategy is a TS-level breaking change that surfaces on the
+  // tool_choice construction site below.
+  const userText =
+    stimulus.kind === "live"
+      ? stimulus.userInput.userText
+      : String(stimulus.synthetic.synthetic);
+  return {
+    messages: [
+      {
+        role: "system",
+        content:
+          "Return strictly structured output by calling the submit tool. Do not respond in free text.",
+        tool_calls: undefined,
+      },
+      { role: "user", content: userText, tool_calls: undefined },
+    ],
+    max_tokens: 2048,
+    tools: [
+      {
+        type: "function",
+        function: {
+          name: "_submit_structured",
+          description: "Submit the structured result. Args ARE the result.",
+          parameters: schema.schema,
+        },
+      },
+    ],
+    tool_choice: {
+      type: "function",
+      function: { name: "_submit_structured" },
+    },
+  };
+};
+
+const decodeChatCompletionsForced = (
+  response: { readonly raw: unknown },
+  schema: SchemaContract,
+  _strategy: Strategy,
+  mode: AdapterMode = "production",
+): DecodeResult => {
+  if (mode === "test-decode-mismatch") {
+    return {
+      ok: false,
+      outcome: {
+        class: "BehaviorFailed",
+        sampleDigest: "synthetic-test-decode-mismatch",
+      },
+    };
+  }
+  const raw = response.raw as {
+    choices?: Array<{
+      message?: {
+        tool_calls?: Array<{
+          function?: { name?: string; arguments?: string };
+        }>;
+      };
+    }>;
+  };
+  const tc = raw.choices?.[0]?.message?.tool_calls?.[0]?.function;
+  if (!tc || tc.name !== "_submit_structured" || !tc.arguments) {
+    return {
+      ok: false,
+      outcome: { class: "BehaviorFailed", sampleDigest: "no-tool-call" },
+    };
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(tc.arguments);
+  } catch (e) {
+    return {
+      ok: false,
+      outcome: {
+        class: "BehaviorFailed",
+        sampleDigest: `args-parse-failed:${String(e).slice(0, 40)}`,
+      },
+    };
+  }
+  const violations = validateAgainstSchema(parsed, schema.schema);
+  if (violations.length > 0) {
+    return {
+      ok: false,
+      outcome: {
+        class: "BehaviorFailed",
+        sampleDigest: `violations:${violations.join(",")}`.slice(0, 120),
+      },
+    };
+  }
+  return { ok: true, decoded: parsed as DecodedOutput };
+};
+
+const classifyChatCompletionsError = (error: unknown): Outcome => {
+  const msg = error instanceof Error ? error.message : String(error);
+  const lower = msg.toLowerCase();
+  if (lower.includes("401") || lower.includes("unauthor"))
+    return { class: "AuthError", status: 401 };
+  if (lower.includes("429") || lower.includes("rate"))
+    return { class: "RateLimited" };
+  if (lower.includes("timeout") || lower.includes("network"))
+    return { class: "TransientError", cause: msg };
+  return { class: "ProviderRejected", status: 0, body: msg };
+};
+
+export const cfAiBindingAdapter: StructuredOutputAdapter = {
+  kind: "cf-ai-binding",
+  version: ADAPTER_VERSION,
+  encode: encodeChatCompletionsForced,
+  decode: decodeChatCompletionsForced,
+  classify: classifyChatCompletionsError,
+};
+
+export const openaiChatCompatibleAdapter: StructuredOutputAdapter = {
+  kind: "openai-chat-compatible",
+  version: ADAPTER_VERSION,
+  encode: encodeChatCompletionsForced,
+  decode: decodeChatCompletionsForced,
+  classify: classifyChatCompletionsError,
+};
+
+/** Adapter registry keyed by route kind. Future routes register here. */
+export const structuredOutputAdapters: Record<
+  LlmRoute["kind"],
+  StructuredOutputAdapter
+> = {
+  "cf-ai-binding": cfAiBindingAdapter,
+  "openai-chat-compatible": openaiChatCompatibleAdapter,
 };
 
 // ============================================================
@@ -632,7 +689,11 @@ export class Admission extends Context.Tag("@agent-os/Admission")<
   {
     readonly attemptStructured: <O>(
       spec: AttemptSpec<O>,
-    ) => Effect.Effect<AttemptResult<O>, SqlError | JsonStringifyError>;
+    ) => Effect.Effect<
+      AttemptResult<O>,
+      SqlError | JsonStringifyError,
+      AiBinding | ProviderRegistry
+    >;
     readonly invalidate: (
       spec: InvalidateSpec,
     ) => Effect.Effect<{ readonly barrierId: number }, SqlError | JsonStringifyError>;
@@ -763,17 +824,28 @@ const loadAdmissionRows = (
 
 export const AdmissionLive = (
   ctx: DurableObjectState,
-): Layer.Layer<Admission, never, EventBus | AiBinding> =>
+): Layer.Layer<Admission, never, EventBus> =>
   Layer.scoped(
     Admission,
     Effect.gen(function* () {
       const sql = ctx.storage.sql;
       const bus = yield* EventBus;
-      const ai = yield* AiBinding;
+
+      // Note on R: AdmissionLive itself only requires EventBus. The
+      // attemptStructured method returns an Effect that requires
+      // `AiBinding | ProviderRegistry` — those are resolved by the
+      // RUNTIME at call time, not provided to this layer. This matches
+      // how submitAgentEffect uses ledger/quota/admission: services are
+      // composed at the runtime boundary (makeAgentRuntime in agent-do
+      // / buildRuntime in tests), not as transitive layer dependencies.
 
       const attemptStructured = <O>(
         spec: AttemptSpec<O>,
-      ): Effect.Effect<AttemptResult<O>, SqlError | JsonStringifyError> =>
+      ): Effect.Effect<
+        AttemptResult<O>,
+        SqlError | JsonStringifyError,
+        AiBinding | ProviderRegistry
+      > =>
         Effect.gen(function* () {
           const adapterMode = spec.adapterMode ?? "production";
           const now = yield* Clock.currentTimeMillis;
@@ -781,7 +853,7 @@ export const AdmissionLive = (
             routeFingerprint: routeFingerprint(spec.route),
             schemaFingerprint: spec.schemaContract.fingerprint,
             strategy: spec.strategy,
-            adapterVersion: cfAiBindingAdapter.version,
+            adapterVersion: structuredOutputAdapters[spec.route.kind].version,
           };
 
           // Step 2: project lease.
@@ -811,8 +883,14 @@ export const AdmissionLive = (
             spec.stimulus.kind === "live"
               ? { kind: "live" as const, userInput: spec.stimulus.userInput }
               : { kind: "probe" as const, synthetic: spec.stimulus.synthetic };
-          const req = cfAiBindingAdapter.encode(
-            spec.route,
+
+          // v0.2.13: pick adapter by route.kind, dispatch transport via
+          // dispatchProvider. evidence is tagged with the chosen
+          // adapter's identity (cf-ai-binding@X vs openai-chat-compatible@X),
+          // so routeFingerprint and adapterId always agree on which
+          // protocol actually served the call.
+          const adapter = structuredOutputAdapters[spec.route.kind];
+          const body = adapter.encode(
             spec.schemaContract,
             adapterStim,
             spec.strategy,
@@ -820,22 +898,16 @@ export const AdmissionLive = (
 
           // Step 5-6: call provider + decode (or classify error).
           const rawEither = yield* Effect.either(
-            Effect.tryPromise({
-              try: () =>
-                (
-                  ai as { run: (m: string, p: unknown) => Promise<unknown> }
-                ).run(req.model, req.body),
-              catch: (cause) => cause,
-            }),
+            dispatchProvider(spec.route, body),
           );
 
           let outcome: Outcome;
           let decoded: DecodedOutput | undefined;
 
           if (rawEither._tag === "Left") {
-            outcome = cfAiBindingAdapter.classify(rawEither.left);
+            outcome = adapter.classify(rawEither.left);
           } else {
-            const d = cfAiBindingAdapter.decode(
+            const d = adapter.decode(
               { raw: rawEither.right },
               spec.schemaContract,
               spec.strategy,
@@ -864,7 +936,7 @@ export const AdmissionLive = (
             stimulusKind: spec.stimulus.kind,
             outcome,
             admissionImpact,
-            adapterId: `cf-ai-binding@${cfAiBindingAdapter.version}`,
+            adapterId: `${adapter.kind}@${adapter.version}`,
           };
           const evidenceStr = yield* safeStringify(evidencePayload);
 
