@@ -91,6 +91,43 @@
         "wrangler": "^4.0.0",
       },
     },
+    "spikes/05-anthropic-messages": {
+      "name": "agent-os-spike-05-anthropic-messages",
+      "dependencies": {
+        "@agent-os/core": "workspace:*",
+        "effect": "^3.18.0",
+      },
+      "devDependencies": {
+        "@cloudflare/workers-types": "^4.20251201.0",
+        "typescript": "^5.7.2",
+        "wrangler": "^4.0.0",
+      },
+    },
+    "spikes/05-img-gen-shape": {
+      "name": "agent-os-spike-05-img-gen-shape",
+      "version": "0.0.1",
+      "dependencies": {
+        "@agent-os/core": "workspace:*",
+        "effect": "^3.18.0",
+      },
+      "devDependencies": {
+        "@cloudflare/workers-types": "^4.20251201.0",
+        "typescript": "^5.7.2",
+        "wrangler": "^4.0.0",
+      },
+    },
+    "spikes/06-gemini-generate-content": {
+      "name": "agent-os-spike-06-gemini-generate-content",
+      "dependencies": {
+        "@agent-os/core": "workspace:*",
+        "effect": "^3.18.0",
+      },
+      "devDependencies": {
+        "@cloudflare/workers-types": "^4.20251201.0",
+        "typescript": "^5.7.2",
+        "wrangler": "^4.0.0",
+      },
+    },
   },
   "packages": {
     "@agent-os/core": ["@agent-os/core@workspace:packages/core"],
@@ -312,6 +349,12 @@
     "agent-os-spike-04-llm-admission": ["agent-os-spike-04-llm-admission@workspace:spikes/04-llm-admission"],
 
     "agent-os-spike-04-structured-submit": ["agent-os-spike-04-structured-submit@workspace:spikes/04-structured-submit"],
+
+    "agent-os-spike-05-anthropic-messages": ["agent-os-spike-05-anthropic-messages@workspace:spikes/05-anthropic-messages"],
+
+    "agent-os-spike-05-img-gen-shape": ["agent-os-spike-05-img-gen-shape@workspace:spikes/05-img-gen-shape"],
+
+    "agent-os-spike-06-gemini-generate-content": ["agent-os-spike-06-gemini-generate-content@workspace:spikes/06-gemini-generate-content"],
 
     "assertion-error": ["assertion-error@2.0.1", "", {}, "sha512-Izi8RQcffqCeNVgFigKli1ssklIbpHnCYc6AknXGYoB6grJqyeby7jv12JUQgmTAnIDnbck1uxksT4dzN3PWBA=="],
 
