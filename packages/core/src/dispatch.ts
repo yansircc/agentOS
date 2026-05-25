@@ -28,6 +28,7 @@ import type {
   DispatchToScopeResult,
   DispatchToScopeSpec,
   LedgerEvent,
+  TraceContext,
 } from "./types";
 
 export interface DispatchEnvelope {
@@ -37,6 +38,7 @@ export interface DispatchEnvelope {
   readonly event: string;
   readonly data: unknown;
   readonly idempotencyKey: string;
+  readonly traceContext?: TraceContext;
 }
 
 export interface DispatchReceiver {
@@ -59,6 +61,7 @@ interface DispatchRequestedPayload {
   readonly event: string;
   readonly data: unknown;
   readonly idempotencyKey: string;
+  readonly traceContext?: TraceContext;
 }
 
 interface DispatchOutboxRow {
@@ -73,6 +76,7 @@ interface InboundAcceptedPayload {
   readonly outboundEventId: number;
   readonly idempotencyKey: string;
   readonly deliveredEventId: number;
+  readonly traceContext?: TraceContext;
 }
 
 const DISPATCH_OUTBOUND_REQUESTED = "dispatch.outbound.requested";
@@ -145,6 +149,39 @@ const ensureSchema = (sql: SqlStorage): Effect.Effect<void, SqlError> =>
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+const copyTraceContext = (
+  traceContext: TraceContext | undefined,
+): TraceContext | undefined => {
+  if (traceContext === undefined) return undefined;
+  return {
+    ...(traceContext.traceparent === undefined
+      ? {}
+      : { traceparent: traceContext.traceparent }),
+    ...(traceContext.tracestate === undefined
+      ? {}
+      : { tracestate: traceContext.tracestate }),
+  };
+};
+
+const parseTraceContext = (value: unknown): TraceContext | undefined => {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) {
+    throw new TypeError("traceContext must be object");
+  }
+  const traceparent = value.traceparent;
+  const tracestate = value.tracestate;
+  if (
+    (traceparent !== undefined && typeof traceparent !== "string") ||
+    (tracestate !== undefined && typeof tracestate !== "string")
+  ) {
+    throw new TypeError("traceContext fields must be strings");
+  }
+  return copyTraceContext({
+    ...(traceparent === undefined ? {} : { traceparent }),
+    ...(tracestate === undefined ? {} : { tracestate }),
+  });
+};
+
 const parseRequestedPayload = (raw: string): DispatchRequestedPayload => {
   const value = JSON.parse(raw) as unknown;
   if (!isRecord(value)) {
@@ -162,11 +199,13 @@ const parseRequestedPayload = (raw: string): DispatchRequestedPayload => {
   ) {
     throw new TypeError("dispatch.outbound.requested payload malformed");
   }
+  const traceContext = parseTraceContext(value.traceContext);
   return {
     target: { bindingRef: target.bindingRef, scope: target.scope },
     event: value.event,
     data: value.data,
     idempotencyKey: value.idempotencyKey,
+    ...(traceContext === undefined ? {} : { traceContext }),
   };
 };
 
@@ -185,11 +224,13 @@ const parseInboundAcceptedPayload = (
   ) {
     throw new TypeError("dispatch.inbound.accepted payload malformed");
   }
+  const traceContext = parseTraceContext(value.traceContext);
   return {
     sourceScope: value.sourceScope,
     outboundEventId: value.outboundEventId,
     idempotencyKey: value.idempotencyKey,
     deliveredEventId: value.deliveredEventId,
+    ...(traceContext === undefined ? {} : { traceContext }),
   };
 };
 
@@ -315,6 +356,9 @@ export const DispatchLive = (
             idempotencyKey: requested.idempotencyKey,
             deliveredEventId,
             attempt,
+            ...(requested.traceContext === undefined
+              ? {}
+              : { traceContext: requested.traceContext }),
           });
           yield* Effect.try({
             try: () =>
@@ -362,6 +406,9 @@ export const DispatchLive = (
             attempt,
             nextAttemptAt,
             error,
+            ...(requested.traceContext === undefined
+              ? {}
+              : { traceContext: requested.traceContext }),
           });
           yield* Effect.try({
             try: () =>
@@ -425,6 +472,9 @@ export const DispatchLive = (
             event: requested.event,
             data: requested.data,
             idempotencyKey: requested.idempotencyKey,
+            ...(requested.traceContext === undefined
+              ? {}
+              : { traceContext: requested.traceContext }),
           };
 
           const delivered = yield* Effect.tryPromise({
@@ -490,11 +540,13 @@ export const DispatchLive = (
             }
 
             const now = yield* Clock.currentTimeMillis;
+            const traceContext = copyTraceContext(spec.traceContext);
             const requestedPayload: DispatchRequestedPayload = {
               target: spec.target,
               event: spec.event,
               data: spec.data,
               idempotencyKey: spec.idempotencyKey,
+              ...(traceContext === undefined ? {} : { traceContext }),
             };
             const requestedPayloadStr = yield* safeStringify(requestedPayload);
 
@@ -582,11 +634,13 @@ export const DispatchLive = (
                     appPayloadStr,
                   );
                   const deliveredEventId = Number(appCursor.one().id);
+                  const traceContext = copyTraceContext(envelope.traceContext);
                   const inboundPayload = JSON.stringify({
                     sourceScope: envelope.sourceScope,
                     outboundEventId: envelope.outboundEventId,
                     idempotencyKey: envelope.idempotencyKey,
                     deliveredEventId,
+                    ...(traceContext === undefined ? {} : { traceContext }),
                   } satisfies InboundAcceptedPayload);
                   sql.exec(
                     "UPDATE events SET payload = ? WHERE id = ?",

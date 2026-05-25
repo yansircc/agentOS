@@ -173,6 +173,51 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
     });
   });
 
+  it("carries traceContext verbatim on outbound and inbound metadata rows", async () => {
+    const sender = stubFor("dispatch-sender-trace");
+    const receiver = stubFor("dispatch-receiver-trace");
+    const traceContext = {
+      traceparent:
+        "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+      tracestate: "vendor=value",
+    };
+
+    const { outboundEventId } = await sender.dispatchToScope({
+      target: { bindingRef: "peer", scope: "dispatch-receiver-trace" },
+      event: "test.delivered",
+      data: { message: "trace" },
+      idempotencyKey: "trace-intent",
+      traceContext,
+    });
+
+    await runInDurableObject(sender, async (_instance, state) => {
+      const rows = state.storage.sql
+        .exec(
+          "SELECT payload FROM events WHERE kind = 'dispatch.outbound.requested'",
+        )
+        .toArray();
+      expect(rows).toHaveLength(1);
+      const payload = JSON.parse(String(rows[0]?.payload)) as {
+        readonly traceContext?: unknown;
+      };
+      expect(payload.traceContext).toEqual(traceContext);
+    });
+
+    const receiverEvents: LedgerEventRpc[] = await receiver.events();
+    const delivered = receiverEvents.find((e) => e.kind === "test.delivered");
+    const inbound = receiverEvents.find(
+      (e) => e.kind === "dispatch.inbound.accepted",
+    );
+    expect(delivered?.payload).toEqual({ message: "trace" });
+    expect(inbound?.payload).toEqual({
+      sourceScope: "dispatch-sender-trace",
+      outboundEventId,
+      idempotencyKey: "trace-intent",
+      deliveredEventId: delivered?.id,
+      traceContext,
+    });
+  });
+
   it("fires receiver on() after commit for app event only", async () => {
     const sender = stubFor("dispatch-sender-fire");
     const receiver = stubFor("dispatch-receiver-fire");

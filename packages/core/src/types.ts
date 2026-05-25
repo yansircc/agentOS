@@ -38,11 +38,17 @@ export interface DispatchTargetSpec {
   readonly scope: string;
 }
 
+export interface TraceContext {
+  readonly traceparent?: string;
+  readonly tracestate?: string;
+}
+
 export interface DispatchToScopeSpec {
   readonly target: DispatchTargetSpec;
   readonly event: string;
   readonly data: unknown;
   readonly idempotencyKey: string;
+  readonly traceContext?: TraceContext;
 }
 
 export interface DispatchToScopeResult {
