@@ -1,7 +1,7 @@
 # Spec 26: img-gen substrate audit
 
-> **Status**: Audit spike implemented (drafted 2026-05-25, framing v2;
-> spike-07 implemented 2026-05-26; live smoke pending route credential)
+> **Status**: Audit accepted (drafted 2026-05-25, framing v2;
+> spike-07 implemented 2026-05-26; live smoke passed 2026-05-26)
 > **NOT refactor**. The goal is to identify 0-N real substrate gaps that
 > arise when expressing img-gen's pipeline shape, NOT to land img-gen on
 > agent-OS.
@@ -259,9 +259,12 @@ Current status:
 1. Candidate classification is resolved in §4.1 and
    `spikes/07-img-gen-shape/GAPS.md`.
 2. The spike is typecheckable with the current substrate.
-3. Live happy-path smoke requires an OpenRouter credential for the planning
-   route. In the current workspace, `OPENROUTER_KEY` is not present, so live
-   smoke is explicitly pending rather than claimed.
+3. Live happy-path smoke passed against `spikes/07-img-gen-shape/.dev.vars`
+   OpenRouter credential:
+   - `POST /request` accepted
+   - session ledger emitted `image.delivered`
+   - user ledger emitted `credit.reserved` and `credit.consumed`
+   - consumer ledger emitted `image.artifact.written`
+   - `PASS: 6  FAIL: 0`
 
-The audit should be considered ready for review, not yet fully accepted under
-§5's live-smoke criterion.
+The audit is accepted under §5's live-smoke criterion.

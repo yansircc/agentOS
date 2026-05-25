@@ -15,11 +15,14 @@ The implementation uses only public `@agent-os/core` surface. Places marked
 
 ```bash
 cd /Users/yansir/code/52/agentOS/spikes/07-img-gen-shape
+# .dev.vars must contain OPENROUTER_KEY=...
 bunx wrangler dev
 
 # second terminal
-OPENROUTER_KEY=... bash ./test.sh
+bash ./test.sh
 ```
+
+Last live smoke: 2026-05-26, `PASS: 6  FAIL: 0`.
 
 The planning step uses `openai-chat-compatible` route
 `openrouter/openai/gpt-4.1`. Image generation itself is intentionally a local
