@@ -16,6 +16,7 @@ import {
   type LedgerEventRpc,
   type SubmitSpec,
   type Tool,
+  withQuota,
 } from "@agent-os/core";
 
 interface Env extends AgentDOEnv {
@@ -23,7 +24,7 @@ interface Env extends AgentDOEnv {
   AGENT_DO: DurableObjectNamespace<AgentDO>;
 }
 
-const getCurrentTime: Tool<Record<string, never>, { iso: string }> = {
+const baseGetCurrentTime: Tool<Record<string, never>, { iso: string }> = {
   definition: {
     type: "function",
     function: {
@@ -34,6 +35,15 @@ const getCurrentTime: Tool<Record<string, never>, { iso: string }> = {
   },
   execute: async () => ({ iso: new Date().toISOString() }),
 };
+
+// v0.2.7 demo: wrap with quota — max 2 calls per 60-second window per DO scope.
+// Existing tests do at most 2 submits per scope (= 2 calls), so they still pass.
+// New quota test does 3 submits per scope; the 3rd hits the limit.
+const getCurrentTime = withQuota(baseGetCurrentTime, {
+  key: "time",
+  windowMs: 60_000,
+  limit: 2,
+});
 
 export class AgentDO extends AgentDOBase<Env> {
   private deliveredCount = 0;

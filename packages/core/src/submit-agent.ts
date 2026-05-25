@@ -15,7 +15,7 @@
  * which injects scope from ctx.id.name (SSoT) and runs this effect.
  */
 
-import { Clock, Effect, Ref, Schedule } from "effect";
+import { Clock, Context, Effect, Ref, Schedule } from "effect";
 import {
   ABORT,
   type AbortKind,
@@ -73,6 +73,30 @@ const toolDefinitionsOf = (
   tools: Record<string, Tool>,
 ): ReadonlyArray<ToolDefinition> =>
   Object.values(tools).map((t) => t.definition);
+
+/** Sum dispatch.consumed events for a {key} within window. v0 simple scan. */
+const sumConsumed = (
+  ledger: Context.Tag.Service<typeof Ledger>,
+  scope: string,
+  key: string,
+  windowStartMs: number,
+): Effect.Effect<number, SqlError> =>
+  Effect.gen(function* () {
+    const events = yield* ledger.events(scope);
+    let sum = 0;
+    for (const e of events) {
+      if (e.kind !== "dispatch.consumed") continue;
+      if (e.ts < windowStartMs) continue;
+      const p = e.payload as
+        | { key?: string; measure?: number }
+        | null
+        | undefined;
+      if (p && p.key === key) {
+        sum += Number(p.measure ?? 0);
+      }
+    }
+    return sum;
+  });
 
 /** The single termination funnel. All recoverable aborts route through here.
  *  Logs an agent.aborted.* ledger event then constructs SubmitResult.fail. */
@@ -212,9 +236,59 @@ export const submitAgentEffect = (
         }
 
         for (const call of resp.toolCalls) {
+          const tool = spec.tools[call.function.name];
+          // ── Quota pre-check ─────────────────────────────────────
+          if (tool !== undefined && tool.quota !== undefined) {
+            const quota = tool.quota;
+            const key = quota.key ?? call.function.name;
+            const nowQ = yield* Clock.currentTimeMillis;
+            const windowStart =
+              quota.windowMs === Number.POSITIVE_INFINITY
+                ? 0
+                : nowQ - quota.windowMs;
+            const consumed = yield* sumConsumed(ledger, scope, key, windowStart);
+            if (consumed >= quota.limit) {
+              yield* ledger.log(
+                "dispatch.rate_limited",
+                {
+                  key,
+                  consumed,
+                  limit: quota.limit,
+                  windowMs: quota.windowMs,
+                  toolName: call.function.name,
+                },
+                scope,
+              );
+              return yield* new ToolError({
+                toolName: call.function.name,
+                cause: {
+                  reason: "rate_limited",
+                  key,
+                  consumed,
+                  limit: quota.limit,
+                },
+              });
+            }
+          }
+
           const result = yield* dispatchTool(spec.tools, call).pipe(
             Effect.retry(Schedule.recurs(toolRetries)),
           );
+
+          // ── Quota post-consume ──────────────────────────────────
+          if (tool !== undefined && tool.quota !== undefined) {
+            const quota = tool.quota;
+            const key = quota.key ?? call.function.name;
+            const measure = quota.measure
+              ? quota.measure(result)
+              : 1;
+            yield* ledger.log(
+              "dispatch.consumed",
+              { key, measure, toolName: call.function.name },
+              scope,
+            );
+          }
+
           const resultStr = yield* safeStringify(result);
           yield* ledger.log(
             "tool.executed",

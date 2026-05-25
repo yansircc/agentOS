@@ -68,13 +68,34 @@ SCHED_FIRED_COUNT=$(curl -s "$BASE/scheduled-fired-count/$SCOPE_ENC" | jq -r .co
 # idempotency test; the UPDATE ... AND fired_event_id IS NULL guard
 # guarantees it by construction.
 
+# ====================== Test 3: withQuota rate-limit ======================
+echo
+echo "==> Quota test (limit=2 per 60s, 3 submits should hit limit on 3rd)"
+QSCOPE="quota-$(date +%s)"
+QSCOPE_ENC=$(uri_escape "$QSCOPE")
+for i in 1 2 3; do
+  R=$(curl -s -X POST "$BASE/submit" -H 'content-type: application/json' \
+    -d "$(printf '{"scope":"%s","prompt":"What time is it now? Use the get_current_time tool."}' "$QSCOPE")")
+  OK=$(echo "$R" | jq -r .ok)
+  REASON=$(echo "$R" | jq -r '.reason // "n/a"')
+  echo "submit $i: ok=$OK reason=$REASON"
+done
+
+QEVENTS=$(curl -s "$BASE/events/$QSCOPE_ENC")
+QCONSUMED=$(echo "$QEVENTS" | jq -r '[.[] | select(.kind == "dispatch.consumed")] | length')
+QRATELIMITED=$(echo "$QEVENTS" | jq -r '[.[] | select(.kind == "dispatch.rate_limited")] | length')
+QABORTED=$(echo "$QEVENTS" | jq -r '[.[] | select(.kind == "agent.aborted.tool_error")] | length')
+
 echo
 echo "============== ASSERTIONS =============="
-assert_eq "submit ok=true"                                  "true"  "$OK_VAL"
-assert_ge "ledger event count after submit"                 3       "$EVT_COUNT"
-assert_eq "on('agent.delivered') after 1st submit"          "1"     "$HANDLER_COUNT_1"
-assert_ge "scheduled event landed in ledger"                1       "$SCHEDULED_IN_LEDGER"
-assert_eq "on('test.scheduled') fired exactly 1 time"       "1"     "$SCHED_FIRED_COUNT"
+assert_eq "submit ok=true"                          "true"  "$OK_VAL"
+assert_ge "ledger event count after submit"         3       "$EVT_COUNT"
+assert_eq "on('agent.delivered') after 1st submit"  "1"     "$HANDLER_COUNT_1"
+assert_ge "scheduled event landed in ledger"        1       "$SCHEDULED_IN_LEDGER"
+assert_eq "on('test.scheduled') fired exactly 1 time" "1"   "$SCHED_FIRED_COUNT"
+assert_eq "Quota: dispatch.consumed = 2"            "2"     "$QCONSUMED"
+assert_eq "Quota: dispatch.rate_limited = 1"        "1"     "$QRATELIMITED"
+assert_eq "Quota: agent.aborted.tool_error = 1"     "1"     "$QABORTED"
 echo "==============================="
 echo "PASS: $PASS    FAIL: $FAIL"
 
