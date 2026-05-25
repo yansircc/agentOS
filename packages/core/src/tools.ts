@@ -2,12 +2,15 @@
  * Tool interface — public app-facing type.
  *
  * `Tool<A, R>` has plain Promise execute; apps never touch Effect.
+ * Optional `quota?: QuotaSpec` (added via withQuota helper) lets the
+ * agent loop pre-check + consume against ledger before/after execute.
  * dispatchTool wraps the Promise into Effect with ToolError taxonomy.
  */
 
 import { Effect } from "effect";
 import { ToolError } from "./errors";
 import type { LlmToolCall, ToolDefinition } from "./llm";
+import type { QuotaSpec } from "./quota";
 
 export interface Tool<
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -17,6 +20,7 @@ export interface Tool<
 > {
   readonly definition: ToolDefinition;
   readonly execute: (args: A) => Promise<R>;
+  readonly quota?: QuotaSpec;
 }
 
 export const dispatchTool = (

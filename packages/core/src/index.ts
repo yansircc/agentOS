@@ -27,6 +27,7 @@ export type { SubmitSpec, SubmitResult } from "./submit-agent";
 
 export type { Tool } from "./tools";
 export type { ToolDefinition } from "./llm";
+export { withQuota, type QuotaSpec } from "./quota";
 
 // ===== Abort taxonomy =====
 export { ABORT, type AbortKind } from "./errors";

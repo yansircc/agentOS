@@ -1,4 +1,4 @@
-# @agent-os/core (v0.2.6)
+# @agent-os/core (v0.2.7)
 
 Minimum Effect-compliant agent-OS substrate for Cloudflare Workers.
 
@@ -17,10 +17,8 @@ Minimum Effect-compliant agent-OS substrate for Cloudflare Workers.
 | `off(kind, handler)` reactive unsubscribe | ✅ (v0.2.1) |
 | `scheduleEvent({ at, event, data })` delayed events | ✅ (v0.2.3) |
 | `alarm()` DO alarm handler (auto-invoked by CF runtime) | ✅ (v0.2.3) |
-| Standard `Data.TaggedError` vocabulary | ✅ (subset) |
-| `Tool<A, R>` interface (plain-Promise API) | ✅ |
-| `withQuota` middleware | ⏳ v0.2 Phase 3 |
-| `withStructuredOutput` middleware | ⏳ v0.2 Phase 3 |
+| `withQuota(tool, spec)` rate-limit / budget middleware | ✅ (v0.2.7) |
+| `withStructuredOutput` middleware | ⏳ deferred |
 | `view.reflective.*` agent self-introspection | ⏳ v0.2 Phase 4 |
 | view source plurality (Hyperdrive, AutoRAG, AE, …) | ⏳ v0.2+ |
 | CF Agents framework integration (`extends Agent`) | ⏳ v0.2 Phase 4 |
