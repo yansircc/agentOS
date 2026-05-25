@@ -574,6 +574,38 @@ to keep the substrate's surface free of HTTP semantics.
 
 ---
 
+## 11. Implementation sequence
+
+Recommended commits:
+
+1. `spec-29: ledger stream implementation sequence`
+   - spec update only.
+   - freezes the implementation split below.
+
+2. `core: ledger event stream primitive`
+   - `EventBus.subscribe` internal sink primitive.
+   - `events(opts)` cursor/filter/limit snapshot API, keeping empty-call
+     compatibility.
+   - `streamEvents(opts)` SSE response using the canonical
+     single-subscription + mutable-mode handoff from §3.
+   - contract tests for race-free handoff, cursor, filter, heartbeat, SSE
+     wire shape, snapshot reads, and stream sink isolation from app `on()`.
+
+3. `test: worker Last-Event-ID integration`
+   - Worker-layer test/example that parses `Last-Event-ID` and passes
+     `afterId` into `streamEvents`.
+   - no HTTP header parsing inside core / DO contract.
+
+Global gates after implementation commits:
+
+```bash
+bun run typecheck
+cd packages/core && bun run test
+git diff --check
+```
+
+---
+
 ## Appendix A: vibe-coding-web pressure evidence
 
 Files this primitive replaces (substrate-side):
