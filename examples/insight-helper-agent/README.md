@@ -95,12 +95,18 @@ GET /events/:sessionId
 
 **Substrate findings surfaced by this dogfood:**
 
-1. `SubmitSpec` has no `system` field. `intent` becomes BOTH the
-   `Goal: …` line in the system message AND the user message
-   verbatim. Harmless for short directive intents; adds duplication
-   noise for long behavior protocols. Not a blocking gap today; would
-   become one if a real app needs the full prompt with a tool-capable
-   model where prompt duplication degrades behavior.
+1. ~~`SubmitSpec` has no `system` field~~ **FIXED in v0.2.11
+   ([2b2c588](../../packages/core/src/submit-agent.ts)).** The current
+   `interview-do.ts` now uses `submit({system: SYSTEM_PROMPT, intent:
+   "Start the interview now…", context: {...}})` — the three-axis duality
+   (system / intent / context) is properly separated.
+
+   Empirical follow-up: with the field properly used, prompt tokens
+   dropped from ~3460 (duplicated) to ~1933 (system only). LLM behavior
+   on `gpt-oss-120b` was UNCHANGED — still 256 reasoning tokens with
+   empty content + zero tool_calls. **Prompt-duplication was not the
+   bottleneck**; model capability is. Recorded so future contributors
+   don't relitigate.
 
 2. `callLlm` / `LlmResponseSchema` only accepts OpenAI Chat
    Completions response shape (`{choices: [...]}`). Workers AI native
@@ -108,14 +114,17 @@ GET /events/:sessionId
    `{response: ...}` and are rejected as `agent.aborted.upstream_failure`.
    Documented in
    [notes/structured-output-exploration.md](../../docs/notes/structured-output-exploration.md);
-   not addressed in v0.2.10. A future llm adapter (parallel to spec-25
-   structured-output adapters) is the right place to fix this.
+   **slated for v0.2.12** as the LLM protocol adapter — parallel to
+   spec-25's structured-output adapters — which generalizes callLlm to
+   route → encode/decode/classify. First useful adapter target = the
+   strong model that unlocks the full SYSTEM_PROMPT path.
 
 3. Tool calling under heavy Chinese / long nested-schema prompts on
-   `gpt-oss-120b` is unreliable even when the wire works. This is an
-   upstream model concern. Production path: route to a stronger model
-   (claude / gpt-4 class) via `@cf/anthropic` (once Cloudflare ships
-   it) or AI Gateway with BYOK.
+   `gpt-oss-120b` is unreliable even when the wire and message shapes
+   are correct. This is an upstream model concern, confirmed by the
+   v0.2.11 follow-up test above. Production path: route to a stronger
+   model (claude / gpt-4 class) via `@cf/anthropic` (once Cloudflare
+   ships it) or AI Gateway with BYOK.
 
 ## How to run
 

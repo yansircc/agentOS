@@ -52,6 +52,7 @@ import {
 } from "@agent-os/core";
 
 import { INTERVIEW_TOOL_NAME, interviewTool } from "./interview-tool";
+import { makeSystemPrompt } from "./system-prompt";
 
 interface StartPayload {
   readonly topic: string;
@@ -119,22 +120,19 @@ export class InterviewDO extends AgentDOBase<AgentDOEnv> {
     // buried in context. v0 dogfood note: first attempt embedded the
     // protocol in context.interviewProtocol and the LLM returned empty
     // text + no tool call — the prompt-as-data framing was hostile.
-    // v0 dogfood finding: gpt-oss-120b on Workers AI needs DIRECT intent
-    // ("Call the tool now ...") not indirect ("Follow the protocol below").
-    // We split the intent by turn so the model knows whether to ask a new
-    // batch or finalize. Topic + prior answers come through context (model
-    // reads context.topic / context.priorTurns) so the intent stays short
-    // and generic.
+    // v0.2.11+: use SubmitSpec.system for the behavior program (the full
+    // Chinese SYSTEM_PROMPT). intent stays short and per-turn directive.
+    // context carries only the runtime facts.
     const intent =
       priorTurns.length === 0
-        ? "Call the `interview` tool NOW to ask the user 1-3 multiple-choice questions in Chinese. Topic is in context.topic. Focus on EEAT (Experience and Expertise). The first question MUST establish the author's relation to the topic (e.g. 你和 X 的关系是什么？). Each question has 2-5 options; mark the most informative option as recommended:true. Use multiSelect:true for facts that can be simultaneously true (customer types, misconceptions). Do not produce free-form text. Only call the tool."
-        : "Read context.priorTurns to see what the user has answered so far. EITHER call the `interview` tool again with the next 1-3 Chinese multi-choice questions to deepen the EEAT brief (cover unasked dimensions: customer types, real misconceptions, case strength, expertise boundary, writing purpose), OR if 3+ turns have happened or the user appears to be repeating, output the FINAL brief in English Markdown starting with '### Insight for Writer' (sections: Author profile, Core thesis, Key insights 3-4, EEAT angle, Audience, Writing guardrails). Do not do both — either tool call OR final brief.";
+        ? "Start the interview now. Call the `interview` tool with the first batch of 1-3 Chinese multi-choice questions following the protocol above."
+        : "Continue the interview. Read context.priorTurns to see what the user answered. EITHER call the `interview` tool again with the next questions, OR if the protocol's stop condition is met, output the final brief starting with '### Insight for Writer'.";
 
     await this.submit({
+      system: makeSystemPrompt(start.businessContext),
       intent,
       context: {
         topic: start.topic,
-        businessContext: start.businessContext ?? "",
         priorTurns,
       },
       agent: MODEL,
