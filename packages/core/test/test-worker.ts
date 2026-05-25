@@ -18,6 +18,10 @@
  *                    on both sender and receiver sides to validate
  *                    cross-scope delivery without app-level RPC.
  *
+ *   StreamTestDO — extends AgentDOBase. event-stream contract tests use it
+ *                  to validate streamEvents, events(opts), and worker-layer
+ *                  Last-Event-ID parsing.
+ *
  * The fetch handler exists only to satisfy the Workers runtime
  * requirement that a worker has a default export.
  */
@@ -85,8 +89,36 @@ export class DispatchTestDO extends AgentDOBase<DispatchEnv> {
   }
 }
 
+export class StreamTestDO extends AgentDOBase<AgentDOEnv> {
+  constructor(ctx: DurableObjectState, env: AgentDOEnv) {
+    super(ctx, env);
+    this.on("stream.slow", async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+    });
+  }
+}
+
+interface WorkerEnv extends AgentDOEnv {
+  readonly STREAM_DO: DurableObjectNamespace<StreamTestDO>;
+}
+
+const parseLastEventId = (value: string | null): number => {
+  if (value === null) return 0;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : 0;
+};
+
 export default {
-  async fetch(): Promise<Response> {
+  async fetch(req: Request, env: WorkerEnv): Promise<Response> {
+    const url = new URL(req.url);
+    const match = url.pathname.match(/^\/stream\/([^/]+)$/);
+    if (match !== null) {
+      const scope = decodeURIComponent(match[1] ?? "");
+      const stub = env.STREAM_DO.get(env.STREAM_DO.idFromName(scope));
+      return stub.streamEvents({
+        afterId: parseLastEventId(req.headers.get("Last-Event-ID")),
+      });
+    }
     return new Response("@agent-os/core test worker (not for direct use)");
   },
 };

@@ -27,6 +27,18 @@ export interface LedgerEventRpc {
 
 export type EventHandler = (event: LedgerEventRpc) => Promise<void>;
 
+export interface EventQueryOptions {
+  readonly afterId?: number;
+  readonly limit?: number;
+  readonly kinds?: ReadonlyArray<string>;
+}
+
+export interface StreamEventsOptions {
+  readonly afterId?: number;
+  readonly kinds?: ReadonlyArray<string>;
+  readonly heartbeatMs?: number;
+}
+
 export interface ScheduledEventSpec {
   readonly at: number;
   readonly event: string;
