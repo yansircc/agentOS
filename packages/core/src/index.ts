@@ -39,6 +39,7 @@ export {
   JsonStringifyError,
   ScopeMissingError,
   InvalidScheduleAt,
+  ReservedEventKindError,
   UpstreamFailure,
   ToolError,
 } from "./errors";

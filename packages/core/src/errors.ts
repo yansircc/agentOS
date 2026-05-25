@@ -54,6 +54,27 @@ export class InvalidScheduleAt extends Data.TaggedError(
   readonly at: unknown;
 }> {}
 
+export class ReservedEventKindError extends Data.TaggedError(
+  "agent_os.reserved_event_kind",
+)<{
+  readonly event: string;
+}> {}
+
+/** Event kind prefixes owned by core. Apps cannot write to these via
+ *  submitSpec.deliver.event or scheduleEvent.event — keeps quota / abort /
+ *  llm / tool / chat / dispatch event facts trustworthy. */
+export const CORE_RESERVED_PREFIXES = [
+  "agent.aborted.",
+  "chat.",
+  "dispatch.",
+  "llm.",
+  "tool.",
+  "quota.",
+] as const;
+
+export const isReservedEventKind = (event: string): boolean =>
+  CORE_RESERVED_PREFIXES.some((p) => event.startsWith(p));
+
 export class UpstreamFailure extends Data.TaggedError(
   ABORT.UPSTREAM_FAILURE,
 )<{
