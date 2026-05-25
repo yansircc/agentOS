@@ -93,10 +93,10 @@ may speak different protocols; the URL cannot determine carrier shape.
 type LlmRoute =
   | { kind: "cf-ai-binding";          modelId: string;     gatewayRef?: string }
   | { kind: "openai-chat-compatible"; endpointRef: string; credentialRef: string; modelId: string }
-  // future adapter slots (not implemented in v0.2.13):
-  | { kind: "openai-responses";       endpointRef: string; credentialRef: string; modelId: string }
-  | { kind: "anthropic-messages";     endpointRef: string; credentialRef: string; modelId: string }
-  | { kind: "gemini-generate-content";endpointRef: string; credentialRef: string; modelId: string };
+  | { kind: "anthropic-messages";     endpointRef: string; credentialRef: string; modelId: string; anthropicVersion?: string }
+  | { kind: "gemini-generate-content";endpointRef: string; credentialRef: string; modelId: string }
+  // future adapter slot (not implemented in v0.2.14):
+  | { kind: "openai-responses";       endpointRef: string; credentialRef: string; modelId: string };
 ```
 
 - **`endpointRef`** is a stable symbolic id (resolved from app / wrangler
@@ -110,16 +110,15 @@ type LlmRoute =
   capability evidence — same ref, new value behind it. See
   [spec-24 INV-8](./spec-24-invariants-and-surface.md#2-invariants-10)
   for the boundary rationale.
-  different protocol semantics MUST resolve to different `EndpointRef`.
 - `kind` enumerates **protocols**. Protocols are finite. Models are not.
 - `routeFingerprint = "route-json-v1:" + canonicalJson(normalizeRouteForFingerprint(route))`.
   A canonical-JSON string, **not** a hash. Hashing was attempted with
   32-bit FNV-1a in the v0.2.10 first implementation and rejected after
   Codex P1 review surfaced a real collision
   (`@cf/3hwlz7pq9l` vs `@cf/x3qxkshczh`). The SSoT key for capability
-  cannot be probabilistic — distinct routes MUST yield distinct keys
-  by construction. Canonical JSON is collision-free, and routes are
-  small enough (~80 chars) that the size cost is negligible.
+  cannot be probabilistic — distinct effective routes MUST yield
+  distinct keys by construction. Canonical JSON is collision-free, and
+  routes are small enough that the size cost is negligible.
 
   **Normalization rule (spec-27 §7, Codex 2026-05-26).**
   `normalizeRouteForFingerprint` injects per-kind transport defaults

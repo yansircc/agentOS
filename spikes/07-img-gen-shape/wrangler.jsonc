@@ -1,0 +1,41 @@
+{
+  "$schema": "https://unpkg.com/wrangler@latest/config-schema.json",
+  "name": "agent-os-spike-07-img-gen-shape",
+  "main": "worker.ts",
+  "compatibility_date": "2026-04-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "ai": {
+    "binding": "AI"
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "SESSION_DO",
+        "class_name": "SessionDO"
+      },
+      {
+        "name": "USER_DO",
+        "class_name": "UserDO"
+      },
+      {
+        "name": "CONSUMER_DO",
+        "class_name": "ConsumerDO"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["SessionDO", "UserDO", "ConsumerDO"]
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "ARTIFACTS",
+      "bucket_name": "agent-os-spike-07-img-gen-artifacts"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}
