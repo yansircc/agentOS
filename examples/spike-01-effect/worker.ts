@@ -90,7 +90,7 @@ async function handleSubmit(req: Request, env: Env): Promise<Response> {
         ? { timeMs: body.budget.timeMs }
         : {}),
     },
-    deliver: { scope: body.scope, event: "agent.delivered" },
+    deliver: { event: "agent.delivered" },
   };
   const stub = env.AGENT_DO.get(env.AGENT_DO.idFromName(body.scope));
   const result = await stub.submit(spec);
@@ -99,7 +99,7 @@ async function handleSubmit(req: Request, env: Env): Promise<Response> {
 
 async function handleEvents(scope: string, env: Env): Promise<Response> {
   const stub = env.AGENT_DO.get(env.AGENT_DO.idFromName(scope));
-  const events: LedgerEventRpc[] = await stub.events(scope);
+  const events: LedgerEventRpc[] = await stub.events();
   return Response.json(events);
 }
 

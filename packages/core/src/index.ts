@@ -1,17 +1,19 @@
 /**
- * @agent-os/core v0.2.0
+ * @agent-os/core v0.2.1
  *
- * v0.2.0 additions (reactive Phase 1):
+ * v0.2.1 (codex review fixes):
+ *   - Scope is SSoT-owned by the DO instance. SubmitSpec.deliver no longer
+ *     carries a scope field; AgentDOBase injects scope from ctx.id.name.
+ *     events() now takes no argument. Mismatch is structurally impossible.
+ *   - on(kind, handler) is composable: Map<kind, Set<handler>>, multiple
+ *     handlers per kind, all fired sequentially, each isolated.
+ *   - Each handler is bounded by Effect.timeout("5 seconds"); hangs no longer
+ *     block submit. (Note: timeout bounds OUR wait, not the handler's own
+ *     execution — handler may continue to run side-effects in background.)
+ *
+ * v0.2.0 (reactive Phase 1):
  *   - on(kind, handler) — AgentDOBase exposes reactive subscribe
  *   - EventBus service: Ledger.log fires handler when matching kind written
- *   - handler is plain Promise (no Effect exposure); throws are caught + logged
- *     but don't break the agent loop
- *
- * Pending v0.2 (deferred to next phases):
- *   - scheduleEvent({at, event, data}) via DO alarm
- *   - withQuota + withStructuredOutput middlewares
- *   - view.reflective.* (agentRuns / currentBudget / currentQuotaState)
- *   - CF Agents framework migration (extends Agent)
  */
 
 import {
@@ -57,6 +59,10 @@ export class JsonStringifyError extends Data.TaggedError(
 )<{
   readonly cause: unknown;
 }> {}
+
+export class ScopeMissingError extends Data.TaggedError(
+  "agent_os.scope_missing",
+)<{}> {}
 
 export class UpstreamFailure extends Data.TaggedError(
   ABORT.UPSTREAM_FAILURE,
@@ -127,12 +133,15 @@ export class EventBus extends Context.Tag("@agent-os/EventBus")<
 >() {}
 
 const EventBusLive = (
-  handlers: Map<string, EventHandler>,
+  handlers: Map<string, Set<EventHandler>>,
 ): Layer.Layer<EventBus> =>
   Layer.succeed(EventBus, {
     fire: (event) => {
-      const handler = handlers.get(event.kind);
-      if (handler === undefined) return Effect.void;
+      const handlerSet = handlers.get(event.kind);
+      if (handlerSet === undefined || handlerSet.size === 0) {
+        return Effect.void;
+      }
+      const list = Array.from(handlerSet);
       const rpcEvent: LedgerEventRpc = {
         id: event.id,
         ts: event.ts,
@@ -140,18 +149,26 @@ const EventBusLive = (
         scope: event.scope,
         payload: event.payload,
       };
-      return Effect.tryPromise({
-        try: () => handler(rpcEvent),
-        catch: (cause) => cause,
-      }).pipe(
-        Effect.catchAll((cause) =>
-          Effect.sync(() => {
-            console.error(
-              `[agent-os] handler for "${event.kind}" threw:`,
-              cause,
-            );
-          }),
-        ),
+      // Sequential dispatch; each handler isolated by timeout + catchAll.
+      // Timeout bounds OUR wait, not the handler's own continued execution.
+      return Effect.forEach(
+        list,
+        (handler) =>
+          Effect.tryPromise({
+            try: () => handler(rpcEvent),
+            catch: (cause) => cause,
+          }).pipe(
+            Effect.timeout("5 seconds"),
+            Effect.catchAll((cause) =>
+              Effect.sync(() => {
+                console.error(
+                  `[agent-os] handler for "${event.kind}" failed/timed:`,
+                  cause,
+                );
+              }),
+            ),
+          ),
+        { concurrency: 1, discard: true },
       );
     },
   });
@@ -409,6 +426,13 @@ export interface SubmitSpec {
     readonly maxTurns?: number;
     readonly toolRetries?: number;
   };
+  /** Only the event name. The scope is structurally owned by the DO instance
+   *  (derived from ctx.id.name in AgentDOBase). */
+  readonly deliver: { readonly event: string };
+}
+
+/** Internal SubmitSpec with scope filled in by AgentDOBase. */
+interface InternalSubmitSpec extends Omit<SubmitSpec, "deliver"> {
   readonly deliver: { readonly scope: string; readonly event: string };
 }
 
@@ -458,7 +482,7 @@ const finalAbort = (
   });
 
 export const submitAgentEffect = (
-  spec: SubmitSpec,
+  spec: InternalSubmitSpec,
 ): Effect.Effect<
   SubmitResult,
   SqlError | JsonStringifyError,
@@ -641,7 +665,7 @@ type CoreServices = Ledger | AiBinding;
 const makeAgentRuntime = (
   sql: SqlStorage,
   ai: Ai,
-  handlers: Map<string, EventHandler>,
+  handlers: Map<string, Set<EventHandler>>,
 ): ManagedRuntime.ManagedRuntime<CoreServices, SqlError> => {
   const eventBusLayer = EventBusLive(handlers);
   const ledgerLayer = LedgerLive(sql).pipe(Layer.provide(eventBusLayer));
@@ -652,15 +676,19 @@ const makeAgentRuntime = (
 /**
  * AgentDO base class.
  *
- * v0.2 additions:
- *   - `on(kind, handler)` registers a Promise-typed callback fired whenever
- *     `ledger.log` writes an event of that kind. Same-scope only (the DO is
- *     scoped to one scope key via idFromName).
+ * Scope is SSoT-owned by the DO instance — derived from `this.ctx.id.name`.
+ * SubmitSpec.deliver carries only the event name. Apps must address the DO
+ * via `idFromName(scope)`; `newUniqueId()` is rejected with ScopeMissingError.
+ *
+ * Reactive subscribe:
+ *   - `on(kind, handler)` registers a Promise-typed callback fired sequentially
+ *     when `ledger.log` writes that kind. Multiple handlers per kind supported
+ *     (Set semantics). Each handler bounded by 5s timeout; failures isolated.
  */
 export abstract class AgentDOBase<
   Env extends AgentDOEnv,
 > extends DurableObject<Env> {
-  private readonly _handlers: Map<string, EventHandler> = new Map();
+  private readonly _handlers: Map<string, Set<EventHandler>> = new Map();
   private _runtime?: ManagedRuntime.ManagedRuntime<CoreServices, SqlError>;
 
   protected get runtime(): ManagedRuntime.ManagedRuntime<
@@ -678,17 +706,42 @@ export abstract class AgentDOBase<
   }
 
   /** Register a handler fired whenever a ledger event of `kind` is written.
-   *  Handler is plain Promise; throws are caught + console.error'd, never
-   *  propagate to the main agent loop. */
+   *  Multiple handlers per kind compose (Set semantics). */
   protected on(kind: string, handler: EventHandler): void {
-    this._handlers.set(kind, handler);
+    let set = this._handlers.get(kind);
+    if (set === undefined) {
+      set = new Set<EventHandler>();
+      this._handlers.set(kind, set);
+    }
+    set.add(handler);
+  }
+
+  /** Unregister a handler previously added via `on`. */
+  protected off(kind: string, handler: EventHandler): void {
+    const set = this._handlers.get(kind);
+    if (set !== undefined) {
+      set.delete(handler);
+    }
   }
 
   submit(spec: SubmitSpec): Promise<SubmitResult> {
-    return this.runtime.runPromise(submitAgentEffect(spec));
+    const scope = this.ctx.id.name;
+    if (scope === undefined) {
+      return Promise.reject(new ScopeMissingError());
+    }
+    const internalSpec: InternalSubmitSpec = {
+      ...spec,
+      deliver: { event: spec.deliver.event, scope },
+    };
+    return this.runtime.runPromise(submitAgentEffect(internalSpec));
   }
 
-  events(scope: string): Promise<LedgerEventRpc[]> {
+  /** Query ledger events for this DO's scope. */
+  events(): Promise<LedgerEventRpc[]> {
+    const scope = this.ctx.id.name;
+    if (scope === undefined) {
+      return Promise.reject(new ScopeMissingError());
+    }
     return this.runtime.runPromise(
       Effect.gen(function* () {
         const ledger = yield* Ledger;
