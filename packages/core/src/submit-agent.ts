@@ -449,6 +449,7 @@ export const submitAgentEffect = (
           messages.push({
             role: "tool",
             tool_call_id: call.id,
+            name: call.function.name,
             content: resultStr,
           });
         }
