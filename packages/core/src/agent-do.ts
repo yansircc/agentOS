@@ -47,6 +47,11 @@ import { Quota, QuotaLive } from "./quota-service";
 import { AiBinding } from "./llm";
 import { Admission, AdmissionLive } from "./admission";
 import {
+  ProviderRegistry,
+  ProviderRegistryLive,
+  type ProviderRegistryConfig,
+} from "./provider-registry";
+import {
   type InternalSubmitSpec,
   submitAgentEffect,
   type SubmitResult,
@@ -57,13 +62,20 @@ export interface AgentDOEnv {
   readonly AI: Ai;
 }
 
-type CoreServices = Ledger | AiBinding | Scheduler | Quota | Admission;
+type CoreServices =
+  | Ledger
+  | AiBinding
+  | Scheduler
+  | Quota
+  | Admission
+  | ProviderRegistry;
 
 const makeAgentRuntime = (
   ctx: DurableObjectState,
   scope: string,
   ai: Ai,
   handlers: Map<string, Set<EventHandler>>,
+  registry: ProviderRegistryConfig,
 ): ManagedRuntime.ManagedRuntime<CoreServices, SqlError> => {
   const sql = ctx.storage.sql;
   const eventBusLayer = EventBusLive(handlers);
@@ -73,6 +85,7 @@ const makeAgentRuntime = (
   );
   const quotaLayer = QuotaLive(ctx).pipe(Layer.provide(eventBusLayer));
   const aiLayer = Layer.succeed(AiBinding, ai);
+  const registryLayer = ProviderRegistryLive(registry);
   const admissionLayer = AdmissionLive(ctx).pipe(
     Layer.provide(eventBusLayer),
     Layer.provide(aiLayer),
@@ -84,6 +97,7 @@ const makeAgentRuntime = (
       quotaLayer,
       aiLayer,
       admissionLayer,
+      registryLayer,
     ),
   );
 };
@@ -103,9 +117,31 @@ export abstract class AgentDOBase<
         scope,
         this.env.AI,
         this._handlers,
+        this.provideRegistry(),
       );
     }
     return this._runtime;
+  }
+
+  /** Hook for subclass to provide endpoints/credentials registry resolved
+   *  at DO construction. Used by `LlmRoute.kind === "openai-chat-compatible"`
+   *  (and future external-route variants) — `endpointRef` and `credentialRef`
+   *  on the route are looked up through this map by `callLlm`.
+   *
+   *  Default = empty registry. Apps using only `cf-ai-binding` don't need
+   *  to override. Apps with external routes override like:
+   *
+   *      protected provideRegistry() {
+   *        return {
+   *          endpoints:   { openrouter: "https://openrouter.ai/api/v1" },
+   *          credentials: { OPENROUTER_KEY: this.env.OPENROUTER_KEY },
+   *        };
+   *      }
+   *
+   *  Secrets are read from wrangler env at DO construction, NOT logged
+   *  to the ledger (only the symbolic refs are). */
+  protected provideRegistry(): ProviderRegistryConfig {
+    return { endpoints: {}, credentials: {} };
   }
 
   /** Register a handler fired whenever a ledger event of `kind` is written.

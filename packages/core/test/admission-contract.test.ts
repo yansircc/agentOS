@@ -20,6 +20,7 @@ import { describe, expect, it } from "vitest";
 import { EventBusLive } from "../src/event-bus";
 import { Ledger, LedgerLive } from "../src/ledger";
 import { AiBinding } from "../src/llm";
+import { ProviderRegistryLive } from "../src/provider-registry";
 import { QuotaLive } from "../src/quota-service";
 import {
   ADAPTER_VERSION,
@@ -299,8 +300,9 @@ const makeRuntime = (state: DurableObjectState, ai: Ai) => {
     Layer.provide(eventBus),
     Layer.provide(aiLayer),
   );
+  const registry = ProviderRegistryLive({ endpoints: {}, credentials: {} });
   return ManagedRuntime.make(
-    Layer.mergeAll(ledger, quota, aiLayer, admission),
+    Layer.mergeAll(ledger, quota, aiLayer, admission, registry),
   );
 };
 
@@ -641,7 +643,7 @@ describe("admission — submitAgent outputSchema path (spec-25 §12.1)", () => {
       const spec: InternalSubmitSpec = {
         intent: "summarize",
         context: {},
-        agent: { provider: "@cf", model: "test/model" },
+        route: { kind: "cf-ai-binding", modelId: "@cf/test/model" } as const,
         tools: {},
         outputSchema: SCHEMA,
         deliver: { scope, event: "structured.done" },
@@ -681,7 +683,7 @@ describe("admission — submitAgent outputSchema path (spec-25 §12.1)", () => {
       const spec: InternalSubmitSpec = {
         intent: "x",
         context: {},
-        agent: { provider: "@cf", model: "test/model" },
+        route: { kind: "cf-ai-binding", modelId: "@cf/test/model" } as const,
         tools: {
           someTool: {
             definition: {

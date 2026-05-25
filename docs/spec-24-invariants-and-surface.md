@@ -40,9 +40,9 @@ the question is marked **[Open]** and waits for spike or N+1 evidence.
 | **INV-3** | "Pre-grant + consume" patterns unify into **Quota**. Reactive face = `on / scheduleEvent / view.reflective`. | billing / rate-limit / token-budget all have identical algebra; unify or rebuild. |
 | **INV-4** | What CF ships, we do not rewrite. Thin unifying naming is allowed when 4+ CF surfaces serve the same role. | Reactive wrapping (`on`) and LLM-carrier wrapping (`submitAgent` over Responses API) are the only two unifications. |
 | **INV-5** | State ownership and agent boundary are invariants (see §3, §4). | These are not implementation details; they define what "agent" means. |
-| **INV-6** | v1 supports only **CF AI** (`env.AI.run` + AI Gateway). No BYOK. | Locks dependency surface, gets unified billing + cache + retry free. v2 may relax. |
+| **INV-6** | v1 supports **CF AI** (`env.AI.run` + AI Gateway) AND any **OpenAI-Chat-Completions-compatible endpoint** addressed by `LlmRoute` (see §6.3). The set of routes is finite (one adapter per protocol kind); the set of models is not. | Locks dependency surface to a small adapter family; gets cross-provider compatibility without maintaining a model whitelist. v0.2.12 revised from "CF AI only" to admit the openai-chat-compatible adapter after Insight Helper dogfood proved CF Workers AI's models can't carry full-fidelity Chinese system prompts. |
 | **INV-7** | Built on the **CF Agents framework** (`extends Agent`, Session API). | Bets on CF Agents lifecycle, hibernation, naming, SQLite. Accept experimental risk. |
-| **INV-8** | No BYOK third-party API keys. | Reduces credential surface; lock-in cost accepted. |
+| **INV-8** | **Core has no ambient BYOK.** User-provided credentials are explicit `LlmRoute` dependencies, stored outside the ledger and addressed only by `credentialRef`. The actual secret lives in the deploy environment (wrangler secrets / `.dev.vars`), resolved at call time by `ProviderRegistry`. Routes are stable identity; credential rotation does NOT invalidate evidence. | Reduces ambient credential surface (no global `process.env.OPENAI_KEY` style coupling); makes capability evidence rotation-stable. Same boundary class as `carrier` (INV-9) and `env binding` — credential is a route dependency, not free-floating state. v0.2.12 revision; original "No BYOK" had become a capability bottleneck once dogfood needed a stronger model. |
 | **INV-9** | `sandbox / workspace / browser` are **stateful dispatch carriers**, addressed by scope id. Their state lives in the carrier, not the ledger. | Carrier ≠ ledger. Stateful carriers must explicitly publish their scope id. |
 | **INV-10** | Serves **agent modules only**. Non-agent parts use plain CF Workers. Two parts collaborate via **Service Bindings**. Multi-worker is the default deployment topology. | Embedded mode is rejected; "agent + CRUD in one worker" is an anti-pattern. |
 
@@ -311,6 +311,53 @@ one that does not require pre-declared model lists.
 
 **`withFallback` and `withIdempotency` are NOT shipped** — CF AI Gateway provides
 fallback natively; CF Workflows `step.do` provides idempotency natively.
+
+### 6.3 `LlmRoute` taxonomy (v0.2.12)
+
+`SubmitSpec.route` is a tagged union (one variant per transport protocol).
+Apps choose their route per submit; capability is evidence on
+`(route, schemaContract, strategy, adapterVersion)`, not on `modelId` (see
+[spec-25 §1](./spec-25-llm-admission.md)).
+
+```ts
+type LlmRoute =
+  | { kind: "cf-ai-binding";          modelId: string;  gatewayRef?: string }
+  | { kind: "openai-chat-compatible"; endpointRef: string; credentialRef: string; modelId: string };
+```
+
+- **`cf-ai-binding`** — calls `env.AI.run(modelId, ...)`. Use for any
+  Cloudflare-hosted model that returns OpenAI Chat Completions response
+  shape (e.g. `@cf/openai/gpt-oss-120b`). Workers-AI-native shape models
+  (Llama, etc.) are NOT supported by this adapter today.
+- **`openai-chat-compatible`** — `fetch(endpoint + "/chat/completions",
+  { Authorization: \`Bearer ${credential}\` })`. The `endpointRef` and
+  `credentialRef` are symbolic; their values come from the
+  `ProviderRegistry` populated by the DO subclass via
+  `protected provideRegistry()` (see §5.3). Use for OpenRouter, official
+  OpenAI, Anthropic-via-compat, and any other endpoint that speaks the
+  OpenAI Chat Completions HTTP shape.
+
+The ref-not-value indirection is load-bearing (INV-8):
+
+- **Ledger never carries secrets.** `llm.structured.evidence` events
+  hash the route's `credentialRef` (e.g. `"OPENROUTER_KEY"`) — never
+  the actual API key. Rotating the secret value does NOT invalidate
+  capability evidence; the fingerprint stays stable.
+- **Apps wire their own provider mapping.** `provideRegistry()` is the
+  single substrate hook; secrets come in via `this.env.<KEY>` (wrangler
+  secret) and stay there. No global ambient credential store.
+
+Future adapter slots (not yet implemented; would each add one
+`LlmRoute` variant + one decoder branch):
+
+- `anthropic-messages` — native Anthropic Messages API shape
+- `gemini-generate-content` — native Gemini API shape
+- (Workers AI native `{response: ...}` shape — may or may not appear;
+  Llama-3.3 doesn't support tool calling, so unblocking it is low value
+  for current dogfood)
+
+Each adapter ships with end-to-end validation (one reference app or
+contract test producing tool calls + final text under the route).
 
 ---
 

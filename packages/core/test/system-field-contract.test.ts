@@ -24,6 +24,7 @@ import { AdmissionLive } from "../src/admission";
 import { EventBusLive } from "../src/event-bus";
 import { LedgerLive } from "../src/ledger";
 import { AiBinding } from "../src/llm";
+import { ProviderRegistryLive } from "../src/provider-registry";
 import { QuotaLive } from "../src/quota-service";
 import {
   type InternalSubmitSpec,
@@ -83,13 +84,16 @@ function buildRuntime(state: DurableObjectState, ai: Ai) {
     Layer.provide(eventBus),
     Layer.provide(aiLayer),
   );
-  return ManagedRuntime.make(Layer.mergeAll(ledger, quota, aiLayer, admission));
+  const registry = ProviderRegistryLive({ endpoints: {}, credentials: {} });
+  return ManagedRuntime.make(
+    Layer.mergeAll(ledger, quota, aiLayer, admission, registry),
+  );
 }
 
 const baseSpec = (scope: string): InternalSubmitSpec => ({
   intent: "Conduct one interview turn.",
   context: { topic: "ROVs", priorTurns: [] },
-  agent: { provider: "@cf/stub", model: "test" },
+  route: { kind: "cf-ai-binding", modelId: "@cf/stub/test" } as const,
   tools: {},
   budget: { maxTurns: 1 },
   deliver: { event: "test.delivered", scope },

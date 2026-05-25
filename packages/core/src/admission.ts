@@ -28,18 +28,18 @@
 import { Clock, Context, Effect, Layer, Schema } from "effect";
 import { EventBus } from "./event-bus";
 import { JsonStringifyError, SqlError, safeStringify } from "./errors";
-import { AiBinding } from "./llm";
+import { AiBinding, type LlmRoute } from "./llm";
 import type { LedgerEvent } from "./types";
 
 // ============================================================
 // SECTION A — Types (spec-25 §3 §4 §5 §7 §8)
 // ============================================================
 
-export type LlmRoute = {
-  readonly kind: "cf-ai-binding";
-  readonly modelId: string;
-  readonly gatewayRef?: string;
-};
+// LlmRoute moved to llm.ts (canonical location alongside callLlm). The
+// tagged union now includes `openai-chat-compatible` as of v0.2.12 —
+// admission's routeFingerprint handles both variants via canonical-JSON
+// serialization of the public route shape (kind + all fields).
+export type { LlmRoute } from "./llm";
 
 export type Strategy = "forced-tool-call";
 
@@ -223,11 +223,13 @@ export const makeSchemaContract = (
  *  prefix lets a future canonicalization change auto-invalidate stored
  *  keys without an adapter version bump. */
 export const routeFingerprint = (route: LlmRoute): string => {
-  const canon = canonicalJsonString({
-    kind: route.kind,
-    modelId: route.modelId,
-    gatewayRef: route.gatewayRef ?? null,
-  });
+  // Serialize the entire route (all variant-specific fields). For
+  // cf-ai-binding that's kind+modelId+gatewayRef?; for
+  // openai-chat-compatible that's kind+endpointRef+credentialRef+modelId.
+  // canonicalize sorts keys deterministically; absent optional fields
+  // produce different fingerprints from explicit-null fields by design
+  // (a route with gatewayRef set is a different capability surface).
+  const canon = canonicalJsonString(route as unknown);
   return `route-json-v1:${canon}`;
 };
 
