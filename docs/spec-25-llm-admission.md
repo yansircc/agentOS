@@ -112,7 +112,7 @@ type LlmRoute =
   for the boundary rationale.
   different protocol semantics MUST resolve to different `EndpointRef`.
 - `kind` enumerates **protocols**. Protocols are finite. Models are not.
-- `routeFingerprint = "route-json-v1:" + canonicalJson({ kind, endpointRef, modelId, gatewayRef? })`.
+- `routeFingerprint = "route-json-v1:" + canonicalJson(normalizeRouteForFingerprint(route))`.
   A canonical-JSON string, **not** a hash. Hashing was attempted with
   32-bit FNV-1a in the v0.2.10 first implementation and rejected after
   Codex P1 review surfaced a real collision
@@ -120,6 +120,24 @@ type LlmRoute =
   cannot be probabilistic — distinct routes MUST yield distinct keys
   by construction. Canonical JSON is collision-free, and routes are
   small enough (~80 chars) that the size cost is negligible.
+
+  **Normalization rule (spec-27 §7, Codex 2026-05-26).**
+  `normalizeRouteForFingerprint` injects per-kind transport defaults
+  into the route object BEFORE canonical JSON. Any optional field that
+  has a substrate-applied default at transport time (today:
+  `anthropic-messages.anthropicVersion`) is effective wire surface and
+  MUST enter the fingerprint with its effective value. An unpinned
+  route and a route that explicitly pins the current default must
+  produce the same fingerprint; bumping the substrate's default
+  changes the canonical JSON for all unpinned routes and invalidates
+  their existing lease evidence by construction.
+
+  This corrects an earlier draft of this section that listed only
+  `{kind, endpointRef, modelId, gatewayRef?}` — that wording forgot the
+  Anthropic version field, and the "pool unpinned routes across default
+  bumps" reading violated the wire-keyed-evidence invariant in §1.
+  Future fields added to a route variant with a transport-time default
+  MUST be added to `normalizeRouteForFingerprint`.
 
 Runtime enablement (which `kind` values are wired to a live adapter) is a
 separate concern — see §11.
