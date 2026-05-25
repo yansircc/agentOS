@@ -33,9 +33,20 @@ import {
   AiBinding,
   dispatchProvider,
   type LlmRoute,
-  type ProviderRequestBody,
 } from "./llm";
+import {
+  type AdapterMode,
+  getProtocolAdapter,
+  llmProtocolAdapters,
+} from "./protocol-adapter";
 import type { LedgerEvent } from "./types";
+
+// Re-exports — admission was the historical owner of these symbols
+// (v0.2.13 — moved to protocol-adapter.ts as part of spec-27 LlmProtocol
+// Adapter elevation). Tests and apps import from "./admission" through
+// the public barrel; the re-export keeps that surface stable.
+export { ADAPTER_VERSION } from "./protocol-adapter";
+export type { AdapterMode } from "./protocol-adapter";
 
 // ============================================================
 // SECTION A — Types (spec-25 §3 §4 §5 §7 §8)
@@ -240,240 +251,16 @@ export const routeFingerprint = (route: LlmRoute): string => {
 };
 
 // ============================================================
-// SECTION C — Structured-output adapters (spec-25 §6) — see below.
-// ============================================================
-
-
-type DecodeResult =
-  | { readonly ok: true; readonly decoded: DecodedOutput }
-  | { readonly ok: false; readonly outcome: Outcome };
-
-/** Validator for the small JSON Schema dialect we accept. Sufficient for
- *  spec-25 §4 contract; not a full draft-2020-12 implementation.
- *  Enforces: type, required, properties walk, array items, string enum,
- *            additionalProperties:false (closed object).
- */
-const validateAgainstSchema = (
-  value: unknown,
-  schema: JsonSchemaNode,
-): string[] => {
-  const violations: string[] = [];
-  const walk = (v: unknown, s: JsonSchemaNode, path: string): void => {
-    if (s.type === "object") {
-      if (typeof v !== "object" || v === null || Array.isArray(v)) {
-        violations.push(`${path}:not-object`);
-        return;
-      }
-      const obj = v as Record<string, unknown>;
-      for (const req of s.required ?? []) {
-        if (!(req in obj)) violations.push(`${path}.${req}:missing`);
-      }
-      if (s.additionalProperties === false) {
-        for (const k of Object.keys(obj)) {
-          if (!(k in s.properties)) {
-            violations.push(`${path}.${k}:unknown-property`);
-          }
-        }
-      }
-      for (const [k, sub] of Object.entries(s.properties)) {
-        if (k in obj) walk(obj[k], sub, `${path}.${k}`);
-      }
-    } else if (s.type === "array") {
-      if (!Array.isArray(v)) {
-        violations.push(`${path}:not-array`);
-        return;
-      }
-      v.forEach((item, i) => walk(item, s.items, `${path}[${i}]`));
-    } else if (s.type === "string") {
-      if (typeof v !== "string") violations.push(`${path}:not-string`);
-      else if (s.enum && !s.enum.includes(v))
-        violations.push(`${path}:not-in-enum`);
-    } else if (s.type === "number") {
-      if (typeof v !== "number") violations.push(`${path}:not-number`);
-    } else if (s.type === "boolean") {
-      if (typeof v !== "boolean") violations.push(`${path}:not-boolean`);
-    }
-  };
-  walk(value, schema, "$");
-  return violations;
-};
-
-// ============================================================
-// SECTION C — Structured-output adapters (spec-25 §6).
+// SECTION C — Structured-output adapters
 //
-// In v0.2.13 admission goes through `LlmRoute` via dispatchProvider —
-// same transport seam free-text submit uses. Both adapters speak OpenAI
-// Chat Completions wire (encode + decode + classify are identical), so
-// they share an implementation; only `kind` (and therefore `adapterId`)
-// differ, ensuring evidence rows are tagged with the route that
-// actually served the call.
-//
-// When a future protocol's adapter differs in encode/decode (e.g.
-// anthropic-messages requires a different tool_use response shape), it
-// will get a distinct implementation in this section.
+// (Moved to protocol-adapter.ts as part of spec-27 LlmProtocolAdapter
+// elevation. Both turn and structured paths now share a single per-wire
+// adapter; the registry is `llmProtocolAdapters` and is consumed below
+// via `getProtocolAdapter(route.kind)`. SchemaContract construction
+// lives here; the per-protocol encode/decode/classify lives there.)
 // ============================================================
 
-export const ADAPTER_VERSION = "1.0.0";
 
-export type AdapterMode = "production" | "test-decode-mismatch";
-
-export interface StructuredOutputAdapter {
-  readonly kind: LlmRoute["kind"];
-  readonly version: string;
-  encode(
-    schema: SchemaContract,
-    stimulus:
-      | { kind: "probe"; synthetic: ProbeInput }
-      | { kind: "live"; userInput: LiveInput },
-    strategy: Strategy,
-  ): ProviderRequestBody;
-  decode(
-    response: { readonly raw: unknown },
-    schema: SchemaContract,
-    strategy: Strategy,
-    mode?: AdapterMode,
-  ): DecodeResult;
-  classify(error: unknown): Outcome;
-}
-
-/** Shared encode for any Chat Completions-shape route. The route's
- *  `modelId` is inserted by `dispatchProvider` — this function returns
- *  the body without the model field. */
-const encodeChatCompletionsForced = (
-  schema: SchemaContract,
-  stimulus:
-    | { kind: "probe"; synthetic: ProbeInput }
-    | { kind: "live"; userInput: LiveInput },
-  _strategy: Strategy,
-): ProviderRequestBody => {
-  // `Strategy` is a closed union with a single value ("forced-tool-call")
-  // exhausted by the type system. No runtime check needed — adding a new
-  // strategy is a TS-level breaking change that surfaces on the
-  // tool_choice construction site below.
-  const userText =
-    stimulus.kind === "live"
-      ? stimulus.userInput.userText
-      : String(stimulus.synthetic.synthetic);
-  return {
-    messages: [
-      {
-        role: "system",
-        content:
-          "Return strictly structured output by calling the submit tool. Do not respond in free text.",
-        tool_calls: undefined,
-      },
-      { role: "user", content: userText, tool_calls: undefined },
-    ],
-    max_tokens: 2048,
-    tools: [
-      {
-        type: "function",
-        function: {
-          name: "_submit_structured",
-          description: "Submit the structured result. Args ARE the result.",
-          parameters: schema.schema,
-        },
-      },
-    ],
-    tool_choice: {
-      type: "function",
-      function: { name: "_submit_structured" },
-    },
-  };
-};
-
-const decodeChatCompletionsForced = (
-  response: { readonly raw: unknown },
-  schema: SchemaContract,
-  _strategy: Strategy,
-  mode: AdapterMode = "production",
-): DecodeResult => {
-  if (mode === "test-decode-mismatch") {
-    return {
-      ok: false,
-      outcome: {
-        class: "BehaviorFailed",
-        sampleDigest: "synthetic-test-decode-mismatch",
-      },
-    };
-  }
-  const raw = response.raw as {
-    choices?: Array<{
-      message?: {
-        tool_calls?: Array<{
-          function?: { name?: string; arguments?: string };
-        }>;
-      };
-    }>;
-  };
-  const tc = raw.choices?.[0]?.message?.tool_calls?.[0]?.function;
-  if (!tc || tc.name !== "_submit_structured" || !tc.arguments) {
-    return {
-      ok: false,
-      outcome: { class: "BehaviorFailed", sampleDigest: "no-tool-call" },
-    };
-  }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(tc.arguments);
-  } catch (e) {
-    return {
-      ok: false,
-      outcome: {
-        class: "BehaviorFailed",
-        sampleDigest: `args-parse-failed:${String(e).slice(0, 40)}`,
-      },
-    };
-  }
-  const violations = validateAgainstSchema(parsed, schema.schema);
-  if (violations.length > 0) {
-    return {
-      ok: false,
-      outcome: {
-        class: "BehaviorFailed",
-        sampleDigest: `violations:${violations.join(",")}`.slice(0, 120),
-      },
-    };
-  }
-  return { ok: true, decoded: parsed as DecodedOutput };
-};
-
-const classifyChatCompletionsError = (error: unknown): Outcome => {
-  const msg = error instanceof Error ? error.message : String(error);
-  const lower = msg.toLowerCase();
-  if (lower.includes("401") || lower.includes("unauthor"))
-    return { class: "AuthError", status: 401 };
-  if (lower.includes("429") || lower.includes("rate"))
-    return { class: "RateLimited" };
-  if (lower.includes("timeout") || lower.includes("network"))
-    return { class: "TransientError", cause: msg };
-  return { class: "ProviderRejected", status: 0, body: msg };
-};
-
-export const cfAiBindingAdapter: StructuredOutputAdapter = {
-  kind: "cf-ai-binding",
-  version: ADAPTER_VERSION,
-  encode: encodeChatCompletionsForced,
-  decode: decodeChatCompletionsForced,
-  classify: classifyChatCompletionsError,
-};
-
-export const openaiChatCompatibleAdapter: StructuredOutputAdapter = {
-  kind: "openai-chat-compatible",
-  version: ADAPTER_VERSION,
-  encode: encodeChatCompletionsForced,
-  decode: decodeChatCompletionsForced,
-  classify: classifyChatCompletionsError,
-};
-
-/** Adapter registry keyed by route kind. Future routes register here. */
-export const structuredOutputAdapters: Record<
-  LlmRoute["kind"],
-  StructuredOutputAdapter
-> = {
-  "cf-ai-binding": cfAiBindingAdapter,
-  "openai-chat-compatible": openaiChatCompatibleAdapter,
-};
 
 // ============================================================
 // SECTION D — decideTier (spec-25 §10, spike-04 §A5)
@@ -853,7 +640,7 @@ export const AdmissionLive = (
             routeFingerprint: routeFingerprint(spec.route),
             schemaFingerprint: spec.schemaContract.fingerprint,
             strategy: spec.strategy,
-            adapterVersion: structuredOutputAdapters[spec.route.kind].version,
+            adapterVersion: llmProtocolAdapters[spec.route.kind].version,
           };
 
           // Step 2: project lease.
@@ -889,8 +676,9 @@ export const AdmissionLive = (
           // adapter's identity (cf-ai-binding@X vs openai-chat-compatible@X),
           // so routeFingerprint and adapterId always agree on which
           // protocol actually served the call.
-          const adapter = structuredOutputAdapters[spec.route.kind];
-          const body = adapter.encode(
+          const adapter = getProtocolAdapter(spec.route.kind);
+          const body = adapter.encodeStructured(
+            spec.route as never,
             spec.schemaContract,
             adapterStim,
             spec.strategy,
@@ -907,7 +695,7 @@ export const AdmissionLive = (
           if (rawEither._tag === "Left") {
             outcome = adapter.classify(rawEither.left);
           } else {
-            const d = adapter.decode(
+            const d = adapter.decodeStructured(
               { raw: rawEither.right },
               spec.schemaContract,
               spec.strategy,
@@ -915,8 +703,7 @@ export const AdmissionLive = (
             );
             if (d.ok) {
               decoded = d.decoded;
-              const usage = (rawEither.right as { usage?: { total_tokens?: number } }).usage;
-              outcome = { class: "Supported", tokensUsed: usage?.total_tokens ?? 0 };
+              outcome = { class: "Supported", tokensUsed: d.tokensUsed };
             } else {
               outcome = d.outcome;
             }
