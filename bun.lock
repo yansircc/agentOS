@@ -8,6 +8,19 @@
         "typescript": "^5.7.2",
       },
     },
+    "examples/insight-helper-agent": {
+      "name": "agent-os-example-insight-helper-agent",
+      "version": "0.0.1",
+      "dependencies": {
+        "@agent-os/core": "workspace:*",
+        "effect": "^3.18.0",
+      },
+      "devDependencies": {
+        "@cloudflare/workers-types": "^4.20251201.0",
+        "typescript": "^5.7.2",
+        "wrangler": "^4.0.0",
+      },
+    },
     "examples/spike-01-effect": {
       "name": "agent-os-example-spike-01-effect",
       "version": "0.0.1",
@@ -285,6 +298,8 @@
     "@vitest/spy": ["@vitest/spy@4.1.7", "", {}, "sha512-kbkI5LMWakyuTIvs6fUJ5qdIVb1XVKsYJAT4OJ938cHMROYMSfmoQdZy0aaAnjbbc8F61vkoTqz/Az+/HiIu5Q=="],
 
     "@vitest/utils": ["@vitest/utils@4.1.7", "", { "dependencies": { "@vitest/pretty-format": "4.1.7", "convert-source-map": "^2.0.0", "tinyrainbow": "^3.1.0" } }, "sha512-T532WBu791cBxJlCl6SO+J14l81DQx6uQHm1bQbmCDY7nqlEIgkza/UFnSBNaUtSf41unldDFjdOBYEQC4b5Hw=="],
+
+    "agent-os-example-insight-helper-agent": ["agent-os-example-insight-helper-agent@workspace:examples/insight-helper-agent"],
 
     "agent-os-example-spike-01-effect": ["agent-os-example-spike-01-effect@workspace:examples/spike-01-effect"],
 
