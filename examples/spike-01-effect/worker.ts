@@ -37,6 +37,7 @@ const getCurrentTime: Tool<Record<string, never>, { iso: string }> = {
 
 export class AgentDO extends AgentDOBase<Env> {
   private deliveredCount = 0;
+  private scheduledFiredCount = 0;
 
   constructor(state: DurableObjectState, env: Env) {
     super(state, env);
@@ -46,11 +47,20 @@ export class AgentDO extends AgentDOBase<Env> {
         `[on('agent.delivered')] fired scope=${event.scope} runCount=${this.deliveredCount}`,
       );
     });
+    this.on("test.scheduled", async (event: LedgerEventRpc) => {
+      this.scheduledFiredCount += 1;
+      console.log(
+        `[on('test.scheduled')] fired scope=${event.scope} payload=${JSON.stringify(event.payload).slice(0, 80)}`,
+      );
+    });
   }
 
-  /** RPC: how many times the agent.delivered handler has fired. */
   getHandlerCount(): Promise<number> {
     return Promise.resolve(this.deliveredCount);
+  }
+
+  getScheduledFiredCount(): Promise<number> {
+    return Promise.resolve(this.scheduledFiredCount);
   }
 }
 
@@ -109,6 +119,40 @@ async function handleHandlerCount(scope: string, env: Env): Promise<Response> {
   return Response.json({ count });
 }
 
+interface ScheduleBody {
+  scope: string;
+  delayMs: number;
+  event: string;
+  data: unknown;
+}
+
+async function handleSchedule(req: Request, env: Env): Promise<Response> {
+  const body = await req.json<ScheduleBody>();
+  if (!body.scope || !body.event || typeof body.delayMs !== "number") {
+    return Response.json(
+      { error: "scope, event, delayMs required" },
+      { status: 400 },
+    );
+  }
+  const at = Date.now() + body.delayMs;
+  const stub = env.AGENT_DO.get(env.AGENT_DO.idFromName(body.scope));
+  const result = await stub.scheduleEvent({
+    at,
+    event: body.event,
+    data: body.data,
+  });
+  return Response.json({ ...result, scheduledFireAt: at });
+}
+
+async function handleScheduledFiredCount(
+  scope: string,
+  env: Env,
+): Promise<Response> {
+  const stub = env.AGENT_DO.get(env.AGENT_DO.idFromName(scope));
+  const count: number = await stub.getScheduledFiredCount();
+  return Response.json({ count });
+}
+
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url);
@@ -129,15 +173,29 @@ export default {
       return handleHandlerCount(scope, env);
     }
 
+    if (req.method === "POST" && url.pathname === "/schedule") {
+      return handleSchedule(req, env);
+    }
+
+    if (
+      req.method === "GET" &&
+      url.pathname.startsWith("/scheduled-fired-count/")
+    ) {
+      const scope = decodeURIComponent(
+        url.pathname.slice("/scheduled-fired-count/".length),
+      );
+      return handleScheduledFiredCount(scope, env);
+    }
+
     return new Response(
       [
-        "agent-os example: spike-01-effect (v0.2 on() demo)",
+        "agent-os example: spike-01-effect (v0.2 reactive + scheduler demo)",
         "",
-        "POST /submit            { scope, prompt, model?, budget? }",
+        "POST /submit                       { scope, prompt, model?, budget? }",
         "GET  /events/:scope",
-        "GET  /handler-count/:scope",
-        "",
-        "AgentDO registers on('agent.delivered') in constructor → counter++.",
+        "GET  /handler-count/:scope         (agent.delivered)",
+        "POST /schedule                     { scope, delayMs, event, data }",
+        "GET  /scheduled-fired-count/:scope (test.scheduled)",
       ].join("\n"),
       { headers: { "content-type": "text/plain" } },
     );

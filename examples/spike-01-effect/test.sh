@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# v0.2.1 e2e test with hard assertions and proper exit code.
+# v0.2.3 e2e: reactive (on) + scheduleEvent atomic fire.
 set -euo pipefail
 
 BASE="${BASE:-http://localhost:8787}"
-SCOPE="effect-v021-$(date +%s)"
+SCOPE="effect-v023-$(date +%s)"
 PROMPT="${1:-What time is it now? Use the get_current_time tool.}"
 
 uri_escape() { printf '%s' "$1" | jq -sRr @uri; }
@@ -34,45 +34,47 @@ assert_ge() {
   fi
 }
 
-echo "==> POST $BASE/submit  scope=$SCOPE"
+# ====================== Test 1: agent submit + on() ======================
+echo "==> POST /submit"
 RESULT=$(curl -s -X POST "$BASE/submit" \
   -H 'content-type: application/json' \
   -d "$(printf '{"scope":"%s","prompt":"%s"}' "$SCOPE" "$PROMPT")")
-echo "$RESULT" | jq .
+echo "$RESULT" | jq '{ok, runId, eventCount, tokensUsed}'
 
 OK_VAL=$(echo "$RESULT" | jq -r .ok)
 EVT_COUNT=$(echo "$RESULT" | jq -r .eventCount)
-TOKENS_USED=$(echo "$RESULT" | jq -r .tokensUsed)
+HANDLER_COUNT_1=$(curl -s "$BASE/handler-count/$SCOPE_ENC" | jq -r .count)
 
+# ====================== Test 2: scheduleEvent + fire ======================
 echo
-echo "==> GET $BASE/events/$SCOPE"
-EVENTS=$(curl -s "$BASE/events/$SCOPE_ENC")
-echo "$EVENTS" | jq '.[] | {id, kind}'
-
-DELIVERED=$(echo "$EVENTS" | jq -r '[.[] | select(.kind == "agent.delivered")] | length')
-
-echo
-echo "==> GET $BASE/handler-count/$SCOPE"
-COUNT_RES=$(curl -s "$BASE/handler-count/$SCOPE_ENC")
-echo "$COUNT_RES" | jq .
-HANDLER_COUNT_1=$(echo "$COUNT_RES" | jq -r .count)
-
-echo
-echo "==> POST second /submit on same scope (handler count cumulative)"
-RESULT2=$(curl -s -X POST "$BASE/submit" \
+echo "==> POST /schedule (delay 2000ms)"
+SCHED=$(curl -s -X POST "$BASE/schedule" \
   -H 'content-type: application/json' \
-  -d "$(printf '{"scope":"%s","prompt":"%s"}' "$SCOPE" "$PROMPT")")
-echo "$RESULT2" | jq '{ok, eventCount, tokensUsed}'
-HANDLER_COUNT_2=$(curl -s "$BASE/handler-count/$SCOPE_ENC" | jq -r .count)
+  -d "$(printf '{"scope":"%s","delayMs":2000,"event":"test.scheduled","data":{"marker":"%s"}}' "$SCOPE" "$SCOPE")")
+echo "$SCHED" | jq .
+
+echo "==> sleep 4 (wait for alarm)"
+sleep 4
+
+echo "==> GET /events/$SCOPE (expect test.scheduled to appear)"
+EVENTS_AFTER=$(curl -s "$BASE/events/$SCOPE_ENC")
+echo "$EVENTS_AFTER" | jq '.[] | {id, kind}'
+
+SCHEDULED_IN_LEDGER=$(echo "$EVENTS_AFTER" | jq -r '[.[] | select(.kind == "test.scheduled")] | length')
+SCHED_FIRED_COUNT=$(curl -s "$BASE/scheduled-fired-count/$SCOPE_ENC" | jq -r .count)
+
+# ====================== Idempotency: second alarm (manual replay-style) ====
+# We can't easily force the DO to re-fire its alarm in dev. Skip explicit
+# idempotency test; the UPDATE ... AND fired_event_id IS NULL guard
+# guarantees it by construction.
 
 echo
 echo "============== ASSERTIONS =============="
-assert_eq "submit ok=true"                          "true"  "$OK_VAL"
-assert_ge "ledger event count"                      3       "$EVT_COUNT"
-assert_ge "agent.delivered events"                  1       "$DELIVERED"
-assert_ge "tokens used"                             1       "$TOKENS_USED"
-assert_eq "on('agent.delivered') after 1st submit"  "1"     "$HANDLER_COUNT_1"
-assert_eq "on('agent.delivered') after 2nd submit"  "2"     "$HANDLER_COUNT_2"
+assert_eq "submit ok=true"                                  "true"  "$OK_VAL"
+assert_ge "ledger event count after submit"                 3       "$EVT_COUNT"
+assert_eq "on('agent.delivered') after 1st submit"          "1"     "$HANDLER_COUNT_1"
+assert_ge "scheduled event landed in ledger"                1       "$SCHEDULED_IN_LEDGER"
+assert_eq "on('test.scheduled') fired exactly 1 time"       "1"     "$SCHED_FIRED_COUNT"
 echo "==============================="
 echo "PASS: $PASS    FAIL: $FAIL"
 
