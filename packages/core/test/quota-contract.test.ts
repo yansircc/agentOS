@@ -20,6 +20,7 @@ import { EventBusLive } from "../src/event-bus";
 import { Ledger, LedgerLive } from "../src/ledger";
 import { AiBinding } from "../src/llm";
 import { QuotaLive } from "../src/quota-service";
+import { AdmissionLive } from "../src/admission";
 import { withQuota } from "../src/quota";
 import {
   type InternalSubmitSpec,
@@ -66,7 +67,13 @@ const buildRuntime = (state: DurableObjectState, ai: Ai) => {
   const ledger = LedgerLive(state.storage.sql).pipe(Layer.provide(eventBus));
   const quota = QuotaLive(state).pipe(Layer.provide(eventBus));
   const aiLayer = Layer.succeed(AiBinding, ai);
-  return ManagedRuntime.make(Layer.mergeAll(ledger, quota, aiLayer));
+  const admission = AdmissionLive(state).pipe(
+    Layer.provide(eventBus),
+    Layer.provide(aiLayer),
+  );
+  return ManagedRuntime.make(
+    Layer.mergeAll(ledger, quota, aiLayer, admission),
+  );
 };
 
 describe("quota state machine — deterministic", () => {
