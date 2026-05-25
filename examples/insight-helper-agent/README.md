@@ -58,13 +58,12 @@ GET /events/:sessionId
 
 ## Status & limitations
 
-**What's validated:**
+**What's validated (v0.2.12 — full fidelity):**
 
 - ✅ Substrate wire end-to-end. `emitEvent` writes the ledger row AND fires
   the in-process `on()` handler synchronously. The handler's `submit()`
   call drives the agent loop. Tool dispatch logs `tool.executed` with the
   LLM's questions in `payload.args`. Loop terminates and `deliver` fires.
-  All observable in `GET /events/:sessionId` after one `POST /start`.
 
 - ✅ Scope isolation (each session = one DO instance, ledger never
   crosses scopes — same SSoT discipline as spike-01-effect).
@@ -72,65 +71,46 @@ GET /events/:sessionId
 - ✅ Multi-turn shape. `on("interview.answer")` projects prior turns
   from the ledger and feeds them back as `context.priorTurns`.
 
-**What's NOT validated, and why:**
+- ✅ **Full Chinese SYSTEM_PROMPT, 0 directive intent**. With
+  `route: { kind: "openai-chat-compatible", endpointRef: "openrouter",
+  credentialRef: "OPENROUTER_KEY", modelId: "openai/gpt-4.1" }` and the
+  v0.2.11 `system` field, the v0 dogfood produces valid Chinese
+  multi-choice questions per the protocol's §必问路径 chain:
 
-- ❌ End-to-end interview fidelity using the original Chinese
-  `SYSTEM_PROMPT`. Workers AI `@cf/openai/gpt-oss-120b` (the only
-  Workers AI model that returns OpenAI Chat Completions response shape
-  AND supports tool calling) is a reasoning model. Given the full
-  ~4000-char Chinese protocol it emits 256 reasoning tokens with
-  empty `choices[0].message.content` and zero `tool_calls`. The model
-  is the bottleneck; the substrate is correct (proven by reducing to a
-  directive intent — tool call fires every time).
+  - turn 1 → Experience identity question (你和 ROV 的关系…)
+  - turn 2 (after mock answer) → customer/audience types question
 
-  The current `interview-do.ts` uses a directive intent ("Call the
-  `interview` tool NOW with N questions in Chinese …") that gpt-oss-120b
-  handles correctly. This is degraded fidelity vs the original prompt
-  but proves substrate-carries-pattern.
+  Exactly matches the original Vercel-AI-SDK Next.js app behavior, with
+  ledger-as-SSoT replacing Vercel KV.
 
-- ❌ Final-brief generation across N turns. Not exercised here because
-  the smaller-prompt path doesn't carry the EEAT discipline of the
-  full prompt — measuring brief quality would be measuring the wrong
-  thing on the wrong model.
+**Substrate findings surfaced (now ALL resolved):**
 
-**Substrate findings surfaced by this dogfood:**
-
-1. ~~`SubmitSpec` has no `system` field~~ **FIXED in v0.2.11
-   ([2b2c588](../../packages/core/src/submit-agent.ts)).** The current
-   `interview-do.ts` now uses `submit({system: SYSTEM_PROMPT, intent:
-   "Start the interview now…", context: {...}})` — the three-axis duality
+1. ~~`SubmitSpec` has no `system` field~~ **FIXED in v0.2.11 ([2b2c588]
+   (../../packages/core/src/submit-agent.ts)).** Three-axis duality
    (system / intent / context) is properly separated.
 
-   Empirical follow-up: with the field properly used, prompt tokens
-   dropped from ~3460 (duplicated) to ~1933 (system only). LLM behavior
-   on `gpt-oss-120b` was UNCHANGED — still 256 reasoning tokens with
-   empty content + zero tool_calls. **Prompt-duplication was not the
-   bottleneck**; model capability is. Recorded so future contributors
-   don't relitigate.
+2. ~~`callLlm` / `LlmResponseSchema` only accepts OpenAI Chat
+   Completions response shape~~ **FIXED in v0.2.12 ([d0838b7](../../packages/core/src/llm.ts)).**
+   `LlmRoute` is now a tagged union — `cf-ai-binding` plus
+   `openai-chat-compatible` (BYOK via `ProviderRegistry` indirection).
+   INV-8 revised: no ambient BYOK, but credentials are explicit route
+   dependencies. Documented in spec-24 §6.3.
 
-2. `callLlm` / `LlmResponseSchema` only accepts OpenAI Chat
-   Completions response shape (`{choices: [...]}`). Workers AI native
-   models (e.g. `@cf/meta/llama-3.3-70b-instruct-fp8-fast`) return
-   `{response: ...}` and are rejected as `agent.aborted.upstream_failure`.
-   Documented in
-   [notes/structured-output-exploration.md](../../docs/notes/structured-output-exploration.md);
-   **slated for v0.2.12** as the LLM protocol adapter — parallel to
-   spec-25's structured-output adapters — which generalizes callLlm to
-   route → encode/decode/classify. First useful adapter target = the
-   strong model that unlocks the full SYSTEM_PROMPT path.
-
-3. Tool calling under heavy Chinese / long nested-schema prompts on
-   `gpt-oss-120b` is unreliable even when the wire and message shapes
-   are correct. This is an upstream model concern, confirmed by the
-   v0.2.11 follow-up test above. Production path: route to a stronger
-   model (claude / gpt-4 class) via `@cf/anthropic` (once Cloudflare
-   ships it) or AI Gateway with BYOK.
+3. ~~Tool calling under heavy Chinese / long nested-schema prompts on
+   gpt-oss-120b is unreliable~~ **Bypassed in v0.2.12** by routing to a
+   stronger model (OpenRouter gpt-4.1) via the new adapter. The
+   substrate makes this route swap a one-field change to
+   `interview-do.ts`'s `ROUTE` constant — no app code restructure.
 
 ## How to run
 
 ```bash
-# Terminal 1: start the worker
+# Prerequisite: write your OpenRouter API key into .dev.vars (gitignored).
+# Get one at https://openrouter.ai/keys
 cd /Users/yansir/code/52/agentOS/examples/insight-helper-agent
+echo "OPENROUTER_KEY=sk-or-..." > .dev.vars
+
+# Terminal 1: start the worker
 bunx wrangler dev
 
 # Terminal 2: send a start event

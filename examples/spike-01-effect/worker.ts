@@ -97,9 +97,9 @@ async function handleSubmit(req: Request, env: Env): Promise<Response> {
   const spec: SubmitSpec = {
     intent: body.prompt,
     context: {},
-    agent: {
-      provider: "@cf",
-      model: body.model ?? "openai/gpt-oss-120b",
+    route: {
+      kind: "cf-ai-binding",
+      modelId: `@cf/${body.model ?? "openai/gpt-oss-120b"}`,
     },
     tools: { get_current_time: getCurrentTime },
     budget: {
