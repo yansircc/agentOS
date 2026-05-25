@@ -2,6 +2,7 @@
 
 > **Status**: Audit accepted (drafted 2026-05-25, framing v2;
 > spike-07 implemented 2026-05-26; live smoke passed 2026-05-26)
+> **Next**: [spec-28-img-gen-gap-implementation-plan.md](./spec-28-img-gen-gap-implementation-plan.md)
 > **NOT refactor**. The goal is to identify 0-N real substrate gaps that
 > arise when expressing img-gen's pipeline shape, NOT to land img-gen on
 > agent-OS.
@@ -267,4 +268,6 @@ Current status:
    - consumer ledger emitted `image.artifact.written`
    - `PASS: 6  FAIL: 0`
 
-The audit is accepted under §5's live-smoke criterion.
+The audit is accepted under §5's live-smoke criterion. Implementation order
+and per-gap acceptance are owned by
+[spec-28](./spec-28-img-gen-gap-implementation-plan.md).
