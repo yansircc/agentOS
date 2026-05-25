@@ -187,8 +187,8 @@ DO RPC is **not** HTTP, so this is NOT a header — it is an explicit
 structured field on the typed envelope. The W3C strings are the
 serialization format, the field name is the carrier.
 
-Apps with no tracing leave the field undefined; core writes
-`traceContext: undefined` (omitted in canonical JSON) on the ledger and
+Apps with no tracing leave the field undefined; when absent, the field
+is omitted from the dispatch envelope and from both ledger payloads, and
 the propagation is a no-op. Adding tracing later is additive: app
 populates the field, ledger payload schema accepts it, no version bump.
 

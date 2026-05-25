@@ -31,23 +31,30 @@ This spec defines that primitive. Nothing more.
 ## 1. Invariant
 
 > **The wire is the ledger. `streamEvents` emits `LedgerEventRpc` rows
-> ordered by `(ts, id)`, identified by `id`. Any richer event vocabulary
-> (UI deltas, tool trees, run status pills) is an app-side projection
-> over this stream — not a substrate concern.**
+> ordered by ledger `id ASC`, identified by `id`. Any richer event
+> vocabulary (UI deltas, tool trees, run status pills) is an app-side
+> projection over this stream — not a substrate concern.**
 
 Corollaries:
 
 - **C-1.** Stream items carry `id` (SQLite INTEGER PRIMARY KEY
-  AUTOINCREMENT). The id is the cursor. Timestamps are not unique within
-  a millisecond (same problem as spec-25 §7.2 projectLease); `(ts, id)`
-  total ordering is the only correct cursor.
-- **C-2.** No event is lost and no event is duplicated for a connection
-  that supplies a valid `afterId`. This is by-construction (§3.2), not
-  best-effort.
+  AUTOINCREMENT). The id is the cursor. Timestamps are NOT a cursor:
+  two rows can share a millisecond `ts`, and only `id` is unique within
+  a scope. spec-25 §7.2 carries `(ts, id)` because it does TTL math
+  against wall-clock; this stream does no time math, only ordering, so
+  `id ASC` alone is the complete ordering rule.
+- **C-2.** **Server-side handoff invariant.** Between the snapshot
+  SELECT and the live-tail switchover, no committed row with
+  `id > afterId` is missed, and no row is emitted twice from the
+  server. The substrate makes no end-to-end network-delivery guarantee:
+  if the connection drops mid-frame, recovery is the client's reconnect
+  using the last id it actually received (§2.3), not a server-side
+  replay queue.
 - **C-3.** Reconnect after disconnect is a normal case, not a special
   case. The client resumes from the last `id` it saw. SSE's
-  `Last-Event-ID` header is the transport for this; the substrate
-  reads it as `afterId`.
+  `Last-Event-ID` header is the transport for this at the Worker fetch
+  boundary; the substrate `streamEvents` method takes only
+  `afterId: number`.
 - **C-4.** Filtering happens server-side by `kind` set. Anything richer
   (regex, payload predicates, scope hierarchy) is app-side. The wire
   primitive must stay narrow or it grows into a query language.
@@ -71,10 +78,15 @@ class AgentDOBase {
 
   /** Live tail. Returns an HTTP Response object with SSE body. Caller
    *  forwards it from a Worker fetch handler. The DO holds the
-   *  connection for the lifetime of the stream; closing is normal. */
+   *  connection for the lifetime of the stream; closing is normal.
+   *
+   *  `afterId` is the only cursor input. The substrate does NOT read
+   *  HTTP headers — that crosses a transport boundary that does not
+   *  belong inside the DO. The Worker fetch handler is responsible
+   *  for parsing `Last-Event-ID` off the request and passing it as
+   *  `afterId` (see §2.3 and §6 for the integration shape). */
   streamEvents(opts?: {
-    afterId?: number;        // default: read from request Last-Event-ID
-                             // header at the call site, else 0
+    afterId?: number;        // default 0 (from the beginning)
     kinds?: ReadonlyArray<string>;
     heartbeatMs?: number;    // default 15000; keep middleboxes from
                              // idle-closing the connection
@@ -144,17 +156,29 @@ on the wire: `ledger`.
 
 ### 2.3 Reconnect
 
-`Last-Event-ID` request header → `afterId`. SSE's native semantics; no
-custom protocol. Sequence:
+SSE's native semantics: when an `EventSource` connection drops, the
+browser automatically reopens it with `Last-Event-ID: <id>` set to the
+last id it received. This is what makes resume cheap and protocol-free.
 
-1. Browser `EventSource` opens connection.
-2. Server reads `Last-Event-ID` from request headers; if present and
-   parses to integer, use as `afterId`. Else use `afterId` from method
-   call options. Else 0.
-3. Stream proceeds per §3.
+The substrate does NOT participate in HTTP header parsing — DO method
+calls have no `Request` object, and pushing header semantics into the
+DO surface would leak transport concerns into the ledger primitive.
+Instead, the boundary is:
 
-If the connection drops, `EventSource` automatically reopens with
-`Last-Event-ID` set to the last id it received. No app code required.
+- **Worker fetch handler** (app code): read `Last-Event-ID` from
+  request headers, parse as integer, pass as `afterId` to
+  `stub.streamEvents({ afterId })`.
+- **DO `streamEvents` method** (substrate): accepts only the typed
+  `afterId: number` cursor; runs the §3 algorithm.
+
+This split is the same shape as the rest of `AgentDOBase`: HTTP
+request/response handling is the Worker's job, the DO sees only
+already-decoded structured values. §6 shows the exact integration in
+~5 lines.
+
+If `afterId` is omitted, the stream starts from the beginning (id > 0).
+This is the correct default for a "fresh open with no resume token"
+case — the browser sends no `Last-Event-ID` on first connect.
 
 ---
 
@@ -165,16 +189,56 @@ window where events fire between snapshot SELECT and subscription
 attach, dropping them. The reverse ("subscribe first, then read
 snapshot") double-delivers everything that landed during the SELECT.
 
-Correct algorithm uses **subscribe-first plus id-watermark dedup**:
+`streamEvents` MUST use a **stream-internal subscriber**, not the
+app-facing `AgentDOBase.on()` reaction handler. `on()` is bound to
+the app side (single-kind subscription, set semantics, per-handler
+timeout / catch wrapping for misbehaving reactions). A stream tail
+needs different semantics:
+
+- multi-kind / all-kinds delivery in a single subscription,
+- no per-event timeout (the sink is just a push into an in-memory
+  queue or a SSE controller — fast and infallible),
+- explicit lifetime tied to the stream open/close, not to DO instance
+  lifetime.
+
+For this we expose an internal `EventBus.subscribe` primitive:
+
+```ts
+// EventBus internal API — NOT exported from @agent-os/core
+interface EventBus {
+  fire(event: LedgerEvent): Effect<void, never>;
+  // existing app-facing fanout — see event-bus.ts
+  // ... existing per-kind handler registration ...
+
+  /** Stream-internal sink. Receives every fired event in commit order;
+   *  filter is matched against `event.kind`. Unsubscribe is the only
+   *  way to detach. The sink runs synchronously inside fire(); it is
+   *  expected to be O(1) and infallible (push into a ReadableStream
+   *  controller, push into an in-memory queue). It is NOT wrapped in
+   *  the app handler timeout/catch path. */
+  subscribe(opts: {
+    kinds?: ReadonlyArray<string>;     // omitted = all kinds
+    sink: (event: LedgerEvent) => void;
+  }): { unsubscribe(): void };
+}
+```
+
+`AgentDOBase.on()` / `off()` remain unchanged. Apps continue using them
+for reactive handlers. `subscribe` is reachable only from inside the
+substrate (`streamEvents` uses it; nothing else does in v0).
+
+Algorithm:
 
 ```
 streamEvents(afterId, filter):
   watermark = afterId
   liveQueue = []                                        # in-memory buffer
 
-  # ── step 1: register the subscriber BEFORE any read ──
-  handler = (event) => liveQueue.push(event)
-  on(handler, kinds=filter)
+  # ── step 1: register the stream-internal subscriber BEFORE any read ──
+  sub = eventBus.subscribe({
+    kinds: filter,
+    sink: (event) => liveQueue.push(event),
+  })
 
   # ── step 2: snapshot what's already committed ──
   snapshot = SELECT id, ts, kind, scope, payload
@@ -196,20 +260,39 @@ streamEvents(afterId, filter):
       emit_sse(ev)
       watermark = ev.id
 
-  # ── step 5: switch to live; same dedup guard ──
-  handler := (event) =>
-    if event.id > watermark:
-      emit_sse(event)
-      watermark = event.id
+  # ── step 5: switch sink to live emit; same watermark guard ──
+  sub.unsubscribe()
+  sub = eventBus.subscribe({
+    kinds: filter,
+    sink: (event) => {
+      if (event.id > watermark) {
+        emit_sse(event)
+        watermark = event.id
+      }
+    },
+  })
 
   # ── plus a heartbeat timer ──
   setInterval(() => emit_keepalive(), heartbeatMs)
+
+  # ── on AbortSignal from the request ──
+  signal.onabort = () => {
+    sub.unsubscribe()
+    clearInterval(heartbeatHandle)
+    controller.close()
+  }
 ```
+
+The two-phase subscription (queue sink during snapshot, then unsubscribe
+and resubscribe with the live emit sink) is the simplest way to keep
+the body free of per-call mode flags. An equivalent implementation
+keeps a single `subscribe` with a mutable `sink` field; both are
+correct so long as the watermark invariant holds.
 
 ### 3.1 Why this works
 
 Invariant: **every committed row with `id > afterId` is emitted exactly
-once.**
+once from the server.**
 
 Three windows during stream startup:
 
@@ -222,21 +305,36 @@ Three windows during stream startup:
 The id watermark monotonically increases. `id` is unique per DO (SQLite
 INTEGER PRIMARY KEY AUTOINCREMENT) and totally ordered by INSERT
 sequence. Two rows can share a `ts` but never an `id`. This is the same
-total-ordering invariant spec-25 §7.2 already relies on.
+total-ordering invariant spec-25 §7.2 already relies on for capability
+projection, here reused for stream sequencing.
+
+The guarantee is server-side (C-2). Once `emit_sse` writes a frame to
+the `ReadableStream` controller, downstream delivery is HTTP / SSE /
+client responsibility. A dropped connection mid-frame is recovered by
+the client's next `EventSource` reopen with `Last-Event-ID` set to the
+last id its `onmessage` actually received — re-entering the algorithm
+at step 0 with a new `afterId`.
 
 ### 3.2 What this rules out
 
-- **Lost events.** Subscribing AFTER reading the snapshot would miss
-  events that committed in between. We subscribe first.
-- **Duplicate events.** Emitting both snapshot and queue without dedup
-  would deliver the overlap twice. The watermark check skips dups.
+- **Lost events** (server side). Subscribing AFTER reading the
+  snapshot would miss events that committed in between. We subscribe
+  first.
+- **Duplicate events** (server side). Emitting both snapshot and queue
+  without dedup would deliver the overlap twice. The watermark check
+  skips dups.
 - **Reordering across the snapshot→live boundary.** Both halves emit in
   ascending id; the watermark prevents going backward.
+- **App-handler contamination.** The stream sink runs OUTSIDE the
+  `AgentDOBase.on()` reaction pipeline. App handlers misbehaving (slow
+  / throwing) cannot block or corrupt the stream.
 
 ### 3.3 Implementation notes (non-normative)
 
-- `on()` is already in `AgentDOBase`; the only addition is letting the
-  handler push into a per-stream queue rather than fire app handlers.
+- `EventBus.subscribe` is a new internal method; `event-bus.ts` grows
+  one Set per-stream-sink alongside its existing per-kind handler map.
+  `fire()` iterates BOTH (existing app handlers + stream sinks) inside
+  the same call; sinks run synchronously and have no timeout wrapper.
 - The SSE Response uses a `ReadableStream` controller; close on caller
   disconnect (detect via `AbortSignal` on the request).
 - Heartbeat is a `setInterval` that writes `: keepalive\n\n` to the
@@ -258,8 +356,9 @@ Server-side filter pushes through to:
 
 - SQL `WHERE kind IN (?, ?, ...)` in `events()` and the snapshot
   SELECT;
-- The `on()` registration filter at the DO scope (it already supports
-  per-kind subscription).
+- `EventBus.subscribe({ kinds })` for the stream-internal subscriber
+  (§3); the bus checks `event.kind` against the set before invoking
+  the sink.
 
 Empty / undefined `kinds` = no filter, every kind is delivered.
 
@@ -425,8 +524,11 @@ Contract tests in `packages/core/test/event-stream-contract.test.ts`:
 | Decision | Origin |
 |---|---|
 | Wire = `LedgerEventRpc`, not app vocabulary | spec-29 review 2026-05-26: vibe-coding-web's `AgentStreamEvent` schema is what the substrate is replacing, not extending |
-| Cursor = ledger `id`, not timestamp | spec-25 §7.2 already established `(ts, id)` total ordering; reusing `id` keeps the algebra coherent |
+| Cursor = ledger `id ASC`, not `(ts, id)` | This stream does no time math, only ordering; `id` is unique per DO so `id ASC` is the complete rule. `(ts, id)` is spec-25 §7.2's projection-cutoff rule and stays there |
 | Subscribe-first + dedup, not subscribe-after | Codex 2026-05-26: subscribe-after has an unavoidable lost-events window |
+| Stream uses internal `EventBus.subscribe`, not `AgentDOBase.on()` | Codex 2026-05-26: app `on()` carries per-handler timeout/catch semantics for reactive handlers; stream sinks need synchronous push with stream-scoped lifetime. Reusing `on()` would either contaminate the stream with app handler semantics or change `on()`'s contract for apps |
+| `streamEvents` takes only `afterId`, no HTTP header parsing in the DO | Codex 2026-05-26: DO methods have no `Request`; pushing header semantics into the substrate leaks transport across the layer boundary. Worker fetch handler owns `Last-Event-ID` parsing |
+| C-2 is server-side handoff, not end-to-end delivery | Codex 2026-05-26: substrate cannot guarantee bytes leaving the socket reach the client app; client recovers via reconnect with its actually-received last id |
 | SSE not WebSocket | Half-duplex matches the tail shape exactly; no app forge for WS today |
 | Per-DO scope only | spec-24 INV's "one scope, one writer" boundary already governs reads |
 | `events()` snapshot AND `streamEvents()` tail as separate methods | Pure projection vs IO-bearing live tail are different effect types; merging them hides the distinction |
