@@ -32,6 +32,7 @@ import { JsonStringifyError, SqlError, safeStringify } from "./errors";
 import {
   AiBinding,
   dispatchProvider,
+  DEFAULTS as LLM_DEFAULTS,
   type LlmRoute,
 } from "./llm";
 import {
@@ -228,6 +229,39 @@ export const makeSchemaContract = (
     };
   });
 
+/** Per-kind route normalizer applied BEFORE canonical JSON. Fills in
+ *  the substrate's current defaults so the fingerprint reflects the
+ *  effective wire surface, not just the literal route object.
+ *
+ *  Why this matters (spec-27 §7, Codex finding 2026-05-26): a route
+ *  field like `anthropicVersion` that has a transport-time default
+ *  must enter the fingerprint via its effective value. Otherwise
+ *  unpinned routes get a fingerprint that doesn't change when the
+ *  substrate later bumps its default — and old lease evidence would
+ *  silently project forward onto a different wire surface
+ *  (different feature set, different error semantics). That violates
+ *  spec-25's "capability evidence is keyed by the actual wire" rule.
+ *
+ *  Pinned values are unchanged; only `undefined` fields get filled.
+ *  Bumping `LLM_DEFAULTS.anthropicVersion` in code → unpinned-route
+ *  fingerprints change → existing leases no longer match → routes
+ *  re-admit against the new wire by construction.
+ */
+const normalizeRouteForFingerprint = (route: LlmRoute): LlmRoute => {
+  switch (route.kind) {
+    case "anthropic-messages":
+      return {
+        ...route,
+        anthropicVersion:
+          route.anthropicVersion ?? LLM_DEFAULTS.anthropicVersion,
+      };
+    case "cf-ai-binding":
+    case "openai-chat-compatible":
+    case "gemini-generate-content":
+      return route;
+  }
+};
+
 /** Route key is the canonical JSON of the route, prefixed with an algorithm
  *  version tag. We deliberately do NOT hash it.
  *
@@ -240,13 +274,12 @@ export const makeSchemaContract = (
  *  prefix lets a future canonicalization change auto-invalidate stored
  *  keys without an adapter version bump. */
 export const routeFingerprint = (route: LlmRoute): string => {
-  // Serialize the entire route (all variant-specific fields). For
-  // cf-ai-binding that's kind+modelId+gatewayRef?; for
-  // openai-chat-compatible that's kind+endpointRef+credentialRef+modelId.
-  // canonicalize sorts keys deterministically; absent optional fields
-  // produce different fingerprints from explicit-null fields by design
-  // (a route with gatewayRef set is a different capability surface).
-  const canon = canonicalJsonString(route as unknown);
+  // normalize first so per-kind transport defaults (e.g.
+  // anthropicVersion) enter the canonical key — see
+  // `normalizeRouteForFingerprint` above for the invariant.
+  const canon = canonicalJsonString(
+    normalizeRouteForFingerprint(route) as unknown,
+  );
   return `route-json-v1:${canon}`;
 };
 

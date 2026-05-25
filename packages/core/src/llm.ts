@@ -296,6 +296,18 @@ export type ProviderRequestBody = ProviderRequestBodyMap[LlmRoute["kind"]];
 
 const DEFAULT_ANTHROPIC_VERSION = "2023-06-01";
 
+/** Default headers per wire. Exported for admission's
+ *  `normalizeRouteForFingerprint` (admission.ts) so unpinned routes
+ *  enter the canonical fingerprint with the substrate's CURRENT default
+ *  baked in. Bumping this constant invalidates existing unpinned-route
+ *  leases by construction — that is the intended behavior: a different
+ *  Anthropic API version is a different wire surface, and lease
+ *  evidence collected against the old version must NOT roll forward to
+ *  the new one. See spec-27 §7. */
+export const DEFAULTS = {
+  anthropicVersion: DEFAULT_ANTHROPIC_VERSION,
+} as const;
+
 export const dispatchProvider = (
   route: LlmRoute,
   body: ProviderRequestBody,
