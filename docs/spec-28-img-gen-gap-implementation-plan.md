@@ -74,6 +74,20 @@ protected provideDispatchTargets(): Record<string, DurableObjectNamespace>;
 `bindingRef` is symbolic, like `endpointRef` / `credentialRef`. The ledger
 stores the ref, not a runtime namespace object.
 
+`provideDispatchTargets()` is intentionally separate from
+`provideProviderRegistry()`: both are symbolic-ref resolvers, but the resolved
+values are different boundary objects. Provider registry values are
+serializable endpoint/credential references; dispatch targets resolve to
+runtime `DurableObjectNamespace` objects and must not be stored or merged into
+provider route config.
+
+Deduplication SSoT:
+- receiver dedupe is `(sourceScope, idempotencyKey)`.
+- `idempotencyKey` is supplied by the app because only the app knows whether
+  two calls represent the same business intent.
+- `outboundEventId` is trace metadata only. It must never participate in
+  receiver dedupe decisions.
+
 ### 2.2 SSoT placement
 
 Sender ledger events:
@@ -89,13 +103,19 @@ Receiver ledger events, written in one transaction:
 The app event's payload must not be wrapped or augmented. Dispatch metadata is
 substrate bookkeeping, not app fact shape.
 
+`dispatch.inbound.*` kinds are reserved substrate bookkeeping. App handlers
+must not subscribe to them. Receiver `on()` fires only for the requested app
+event, exactly once, after the transaction commits. The inbound metadata row is
+inserted before the app event for audit ordering, but it is not an application
+reaction trigger.
+
 Pending buffer:
 - internal `dispatch_outbox` table, keyed by `outboundEventId`.
 - it is not SSoT; it is a delivery buffer derived from
   `dispatch.outbound.requested`, same category as `scheduled_events`.
 
 Receiver idempotency:
-- receiver must ignore duplicate `(sourceScope, outboundEventId)` attempts by
+- receiver must ignore duplicate `(sourceScope, idempotencyKey)` attempts by
   reading `dispatch.inbound.accepted`.
 - duplicate delivery returns the existing `deliveredEventId` and does not fire
   handlers twice.
@@ -116,7 +136,8 @@ public primitive.
 ### 2.4 Acceptance
 
 Contract tests:
-- sender write and outbox insert are atomic.
+- sender `dispatch.outbound.requested` event row and `dispatch_outbox` row are
+  inserted in one DO SQLite `transactionSync`.
 - receiver writes exactly one app event for repeated delivery attempts.
 - receiver preserves app payload exactly; dispatch metadata lives only in
   `dispatch.inbound.accepted`.
@@ -149,6 +170,15 @@ Current app forge:
 
 Do not overload `Quota`. Quota is dispatch consumption/rate limiting.
 Resource reservation is a different state machine over ledger facts.
+
+Resource namespace:
+- `key` is a resource-kind label inside the reserving DO scope. It is not a
+  global name and not a user/session namespace by itself.
+- `reservationId` is an opaque reference issued by the reserving DO scope.
+  Only that same scope may consume or release it.
+- cross-scope callers must route follow-up consume/release back to the
+  reserving scope through `dispatchToScope`; they must not interpret the
+  reservation event stream locally.
 
 Substrate service:
 
@@ -209,6 +239,28 @@ P1 dependency:
 - if resource reservation lives in a user scope and request lives in a session
   scope, the app uses `dispatchToScope` to ask the user scope to reserve.
 
+Cross-scope sequence:
+
+```text
+SessionDO
+  dispatchToScope(UserDO, "resource.reserve.requested",
+    { key: "credit", amount, ref, idempotencyKey })
+
+UserDO
+  on("resource.reserve.requested")
+    Resources.reserve({ key, amount, ref, idempotencyKey })
+    emit/dispatch "resource.reserve.accepted" or "resource.reserve_rejected"
+
+SessionDO
+  stores no resource balance.
+  Later consume/release is another dispatchToScope(UserDO, ...)
+  carrying the opaque reservationId issued by UserDO.
+```
+
+The extra round trip is the cost of preserving a single resource ledger owner.
+If an app wants same-scope resources, it may call `Resources` directly inside
+that DO; cross-scope resource mutation always returns to the owning scope.
+
 ### 3.4 Acceptance
 
 Contract tests:
@@ -245,14 +297,19 @@ Image generation has no turn loop. Do not force it into `decodeTurn`.
 Route taxonomy:
 
 ```ts
-type AiRoute =
-  | { family: "llm"; route: LlmRoute }
-  | { family: "image"; route: ImageRoute };
-
 type ImageRoute =
-  | { kind: "openai-images-compatible"; endpointRef: string; credentialRef: string; modelId: string }
+  | {
+      kind: "openai-chat-compatible-image";
+      endpointRef: string;
+      credentialRef: string;
+      modelId: string;
+    }
   | { kind: "cf-ai-binding-image"; modelId: string; gatewayRef?: string };
 ```
+
+`AiRoute` is not a public API in v0. It may become useful later, but P3 does
+not rename `LlmRoute` repo-wide and does not route image generation through
+`submitAgent`.
 
 Adapter algebra:
 
@@ -265,15 +322,50 @@ interface ImageProtocolAdapter<K extends ImageRoute["kind"]> {
   classify(error: unknown): Outcome;
 }
 
+type ImageArtifact =
+  | { kind: "data-url"; dataUrl: string; contentType?: string }
+  | { kind: "url"; url: string; contentType?: string }
+  | { kind: "bytes"; bytes: Uint8Array; contentType: string };
+
 type ImageResult = {
-  bytes: Uint8Array;
-  contentType: string;
-  usage?: { units?: number; tokens?: number };
+  artifacts: ReadonlyArray<ImageArtifact>;
+  usage?: unknown;
 };
 ```
 
-Core returns bytes and metadata. R2 storage remains app/carrier-owned unless a
-future spike proves otherwise.
+Core returns provider artifacts and metadata. It must not force every provider
+response into bytes: OpenRouter may return `data:image/...;base64,...`, while
+Cloudflare `google/nano-banana` returns an image URI. Materialization into R2
+remains app/carrier-owned unless a future spike proves otherwise.
+
+Wire shapes in scope for P3:
+- `openai-chat-compatible-image`: POST `/chat/completions` with
+  `modalities: ["text", "image"]`; decode
+  `choices[0].message.images[].image_url.url` into `data-url` or `url`.
+- `cf-ai-binding-image`: call
+  `env.AI.run(route.modelId, { prompt, aspect_ratio }, { gateway })`; decode
+  the provider image URI into `url`. `gatewayRef` is symbolic; the adapter maps
+  it to `{ gateway: { id: gatewayRef } }`.
+
+Out of scope for P3 v0:
+- `/images/generations` OpenAI-compatible route. It is a future adapter unless
+  spike-07 still needs it after the two in-scope routes above.
+
+Public surface:
+
+```ts
+class AgentDOBase {
+  generateImage(spec: {
+    route: ImageRoute;
+    prompt: string;
+    aspectRatio?: string;
+  }): Promise<ImageResult>;
+}
+```
+
+`generateImage` is a direct Promise method, not a `submitAgent` branch. Image
+generation has no turn loop, no tool call loop, and no structured-output lease
+in v0.
 
 ### 4.2 Evidence boundary
 
@@ -283,27 +375,30 @@ v0 does not need a lease table. It needs route/protocol ownership:
 - no model whitelist in app code.
 
 If image providers show schema/capability flake similar to structured output,
-add `image.generate.evidence` as a later admission-style subsystem. Do not
-pre-build it without a falsifying spike.
+add `image.generate.evidence` as a later admission-style subsystem. Trigger:
+when any image adapter's `classify(error)` returns `BehaviorFailed` for the
+same route/protocol in real provider runs at least three times, open spec-29.
+Do not pre-build admission without that falsifying signal.
 
 ### 4.3 Minimal implementation boundary
 
 Core files expected:
 - `packages/core/src/image.ts`.
-- possible `packages/core/src/ai-route.ts` if `AiRoute` umbrella becomes useful.
 - `packages/core/test/image-adapter-contract.test.ts`.
 
-Do not rename `LlmRoute` repo-wide unless the implementation actually needs
-the umbrella type at public boundaries. A narrow additive `ImageRoute` is the
-first move.
+Do not rename `LlmRoute` repo-wide. A narrow additive `ImageRoute` plus
+`generateImage` is the first move.
 
 ### 4.4 Acceptance
 
 Contract tests:
-- openai-images-compatible transport uses endpoint + credential refs.
+- openai-chat-compatible-image transport uses endpoint + credential refs.
+- openai-chat-compatible-image decodes `message.images[].image_url.url`.
 - cf-ai-binding-image uses `env.AI.run`, not fetch.
+- cf-ai-binding-image passes `gatewayRef` as Workers AI gateway option.
+- cf-ai-binding-image decodes provider image URI.
 - invalid credentials classify as `AuthError`.
-- provider binary/base64 JSON response decodes to `ImageResult`.
+- provider data URL / URL / binary response decodes to `ImageResult`.
 - no route stores raw credential in ledger or result.
 
 Spike update:
