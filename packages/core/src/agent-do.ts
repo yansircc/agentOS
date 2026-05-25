@@ -43,6 +43,8 @@ import type {
   EventHandler,
   DispatchToScopeResult,
   DispatchToScopeSpec,
+  EventQueryOptions,
+  LedgerEvent,
   LedgerEventRpc,
   ResourceGrantResult,
   ResourceGrantSpec,
@@ -50,6 +52,7 @@ import type {
   ResourceReserveResult,
   ResourceReserveSpec,
   ScheduledEventSpec,
+  StreamEventsOptions,
 } from "./types";
 import {
   Dispatch,
@@ -57,7 +60,7 @@ import {
   type DispatchEnvelope,
   type DispatchTargetRegistry,
 } from "./dispatch";
-import { EventBusLive } from "./event-bus";
+import { EventBus, EventBusLive } from "./event-bus";
 import { Ledger, LedgerLive } from "./ledger";
 import { Scheduler, SchedulerLive } from "./scheduler";
 import { Resources, ResourcesLive } from "./resources";
@@ -87,6 +90,7 @@ export interface AgentDOEnv {
 
 type CoreServices =
   | Ledger
+  | EventBus
   | AiBinding
   | Scheduler
   | Dispatch
@@ -123,6 +127,7 @@ const makeAgentRuntime = (
   );
   return ManagedRuntime.make(
     Layer.mergeAll(
+      eventBusLayer,
       ledgerLayer,
       schedulerLayer,
       dispatchLayer,
@@ -134,6 +139,51 @@ const makeAgentRuntime = (
     ),
   );
 };
+
+const DEFAULT_STREAM_HEARTBEAT_MS = 15_000;
+
+const normalizePositiveInteger = (
+  value: number | undefined,
+  fallback: number,
+): number =>
+  value === undefined || !Number.isFinite(value)
+    ? fallback
+    : Math.max(0, Math.floor(value));
+
+const normalizeKinds = (
+  kinds: ReadonlyArray<string> | undefined,
+): ReadonlyArray<string> | undefined => {
+  if (kinds === undefined) return undefined;
+  const normalized = Array.from(new Set(kinds)).filter(
+    (kind) => kind.length > 0,
+  );
+  return normalized.length === 0 ? undefined : normalized;
+};
+
+const eventToRpc = (event: LedgerEvent): LedgerEventRpc => ({
+  id: event.id,
+  ts: event.ts,
+  kind: event.kind,
+  scope: event.scope,
+  payload: event.payload,
+});
+
+const encodeSseEvent = (
+  encoder: TextEncoder,
+  event: LedgerEvent,
+): Uint8Array =>
+  encoder.encode(
+    [
+      `id: ${event.id}`,
+      "event: ledger",
+      `data: ${JSON.stringify(eventToRpc(event))}`,
+      "",
+      "",
+    ].join("\n"),
+  );
+
+const encodeSseHeartbeat = (encoder: TextEncoder): Uint8Array =>
+  encoder.encode(": keepalive\n\n");
 
 export abstract class AgentDOBase<
   Env extends AgentDOEnv,
@@ -225,7 +275,7 @@ export abstract class AgentDOBase<
   }
 
   /** Query ledger events for this DO's scope. */
-  events(): Promise<LedgerEventRpc[]> {
+  events(opts?: EventQueryOptions): Promise<LedgerEventRpc[]> {
     const scope = this.ctx.id.name;
     if (scope === undefined) {
       return Promise.reject(new ScopeMissingError());
@@ -233,18 +283,134 @@ export abstract class AgentDOBase<
     return this.runtimeFor(scope).runPromise(
       Effect.gen(function* () {
         const ledger = yield* Ledger;
-        const rows = yield* ledger.events(scope);
-        return rows.map(
-          (e): LedgerEventRpc => ({
-            id: e.id,
-            ts: e.ts,
-            kind: e.kind,
-            scope: e.scope,
-            payload: e.payload,
-          }),
-        );
+        const rows = yield* ledger.events(scope, opts);
+        return rows.map(eventToRpc);
       }),
     );
+  }
+
+  /** Stream ledger rows for this DO's scope as Server-Sent Events.
+   *
+   *  Wire is closed: `event: ledger`, `id: <ledger.id>`,
+   *  `data: LedgerEventRpc`. Reconnect cursor is `afterId`; HTTP
+   *  `Last-Event-ID` parsing belongs to the Worker fetch handler.
+   */
+  streamEvents(opts: StreamEventsOptions = {}): Response {
+    const scope = this.ctx.id.name;
+    if (scope === undefined) {
+      throw new ScopeMissingError();
+    }
+
+    const afterId = normalizePositiveInteger(opts.afterId, 0);
+    const heartbeatMs = Math.max(
+      1,
+      normalizePositiveInteger(opts.heartbeatMs, DEFAULT_STREAM_HEARTBEAT_MS),
+    );
+    const kinds = normalizeKinds(opts.kinds);
+    const runtime = this.runtimeFor(scope);
+    const encoder = new TextEncoder();
+
+    let closed = false;
+    let cleanup: (() => void) | undefined;
+    let heartbeatHandle: ReturnType<typeof setInterval> | undefined;
+
+    const stream = new ReadableStream<Uint8Array>({
+      start: (controller) => {
+        const close = (): void => {
+          if (closed) return;
+          closed = true;
+          cleanup?.();
+          if (heartbeatHandle !== undefined) {
+            clearInterval(heartbeatHandle);
+          }
+          try {
+            controller.close();
+          } catch {
+            // The client may have already cancelled the stream.
+          }
+        };
+
+        const enqueue = (chunk: Uint8Array): void => {
+          if (closed) return;
+          try {
+            controller.enqueue(chunk);
+          } catch {
+            close();
+          }
+        };
+
+        try {
+          runtime.runSync(
+            Effect.gen(function* () {
+              const bus = yield* EventBus;
+              const ledger = yield* Ledger;
+              let watermark = afterId;
+              const liveQueue: LedgerEvent[] = [];
+              let mode: "buffering" | "live" = "buffering";
+
+              const subscription = bus.subscribe({
+                kinds,
+                sink: (event) => {
+                  if (event.scope !== scope) return;
+                  if (mode === "buffering") {
+                    liveQueue.push(event);
+                    return;
+                  }
+                  if (event.id > watermark) {
+                    enqueue(encodeSseEvent(encoder, event));
+                    watermark = event.id;
+                  }
+                },
+              });
+              cleanup = () => subscription.unsubscribe();
+
+              const snapshot = yield* ledger.streamSnapshot(scope, {
+                afterId,
+                kinds,
+              });
+              for (const event of snapshot) {
+                enqueue(encodeSseEvent(encoder, event));
+                watermark = Math.max(watermark, event.id);
+              }
+
+              for (const event of liveQueue) {
+                if (event.id > watermark) {
+                  enqueue(encodeSseEvent(encoder, event));
+                  watermark = event.id;
+                }
+              }
+              liveQueue.length = 0;
+              mode = "live";
+            }),
+          );
+          heartbeatHandle = setInterval(() => {
+            enqueue(encodeSseHeartbeat(encoder));
+          }, heartbeatMs);
+        } catch (cause) {
+          cleanup?.();
+          if (heartbeatHandle !== undefined) {
+            clearInterval(heartbeatHandle);
+          }
+          closed = true;
+          controller.error(cause);
+        }
+      },
+      cancel: () => {
+        closed = true;
+        cleanup?.();
+        if (heartbeatHandle !== undefined) {
+          clearInterval(heartbeatHandle);
+        }
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+      },
+    });
   }
 
   /** Emit a ledger event NOW for this DO's scope.

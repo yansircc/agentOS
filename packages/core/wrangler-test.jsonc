@@ -20,6 +20,10 @@
       {
         "name": "DISPATCH_DO",
         "class_name": "DispatchTestDO"
+      },
+      {
+        "name": "STREAM_DO",
+        "class_name": "StreamTestDO"
       }
     ]
   },
@@ -29,7 +33,8 @@
       "new_sqlite_classes": [
         "TestAgentDO",
         "EmitTestDO",
-        "DispatchTestDO"
+        "DispatchTestDO",
+        "StreamTestDO"
       ]
     }
   ]

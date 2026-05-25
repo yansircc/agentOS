@@ -20,6 +20,8 @@ export { AgentDOBase, type AgentDOEnv } from "./agent-do";
 export type {
   LedgerEventRpc,
   EventHandler,
+  EventQueryOptions,
+  StreamEventsOptions,
   ScheduledEventSpec,
   DispatchTargetSpec,
   DispatchToScopeSpec,
