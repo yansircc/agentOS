@@ -4,18 +4,25 @@
   "main": "./test/test-worker.ts",
   "compatibility_date": "2026-04-15",
   "compatibility_flags": ["nodejs_compat"],
+  "ai": {
+    "binding": "AI"
+  },
   "durable_objects": {
     "bindings": [
       {
         "name": "AGENT_DO",
         "class_name": "TestAgentDO"
+      },
+      {
+        "name": "EMIT_DO",
+        "class_name": "EmitTestDO"
       }
     ]
   },
   "migrations": [
     {
       "tag": "v1",
-      "new_sqlite_classes": ["TestAgentDO"]
+      "new_sqlite_classes": ["TestAgentDO", "EmitTestDO"]
     }
   ]
 }

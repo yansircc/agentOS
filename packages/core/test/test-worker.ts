@@ -1,20 +1,42 @@
 /**
- * Minimal test worker entry.
+ * Test worker entry — exposes two DO classes:
  *
- * The DO binding in wrangler-test.jsonc points here. TestAgentDO extends the
- * raw `DurableObject` (NOT AgentDOBase) so contract tests can compose the
- * substrate's internal Layers manually inside runInDurableObject(stub,
- * (instance, state) => { ... }) and bypass AgentDOBase.submit. This gives
- * tests full control over which AiBinding implementation is provided —
- * a stub — without polluting the production substrate API.
+ *   TestAgentDO  — raw DurableObject. Quota contract tests bypass
+ *                  AgentDOBase entirely and compose Layers manually inside
+ *                  runInDurableObject(stub, (instance, state) => { ... })
+ *                  so they can stub the AiBinding deterministically.
  *
- * The default fetch handler exists only to satisfy the Workers runtime
- * requirement that a worker has a default export; tests never call it.
+ *   EmitTestDO   — extends AgentDOBase. emitEvent contract tests exercise
+ *                  the public surface directly (stub.emitEvent(...)) and
+ *                  verify the reactive triad: now-write commits a ledger
+ *                  row AND fires registered on() handlers in the same DO
+ *                  invocation. The constructor wires one handler whose
+ *                  side-effect is itself an emitEvent — proving handler →
+ *                  handler chaining via the ledger.
+ *
+ * The fetch handler exists only to satisfy the Workers runtime
+ * requirement that a worker has a default export.
  */
 
 import { DurableObject } from "cloudflare:workers";
+import { AgentDOBase, type AgentDOEnv } from "../src";
 
 export class TestAgentDO extends DurableObject {}
+
+export class EmitTestDO extends AgentDOBase<AgentDOEnv> {
+  constructor(ctx: DurableObjectState, env: AgentDOEnv) {
+    super(ctx, env);
+    // Chain validation: emitting "interview.answer" triggers a handler
+    // that emits "interview.followup". The contract test asserts both
+    // rows appear in the ledger after one external emitEvent call.
+    this.on("interview.answer", async (event) => {
+      await this.emitEvent({
+        event: "interview.followup",
+        data: { sourceId: event.id, sourcePayload: event.payload },
+      });
+    });
+  }
+}
 
 export default {
   async fetch(): Promise<Response> {
