@@ -1,19 +1,25 @@
 /**
- * @agent-os/core v0.2.1
+ * @agent-os/core v0.2.4
  *
- * v0.2.1 (codex review fixes):
- *   - Scope is SSoT-owned by the DO instance. SubmitSpec.deliver no longer
- *     carries a scope field; AgentDOBase injects scope from ctx.id.name.
- *     events() now takes no argument. Mismatch is structurally impossible.
- *   - on(kind, handler) is composable: Map<kind, Set<handler>>, multiple
- *     handlers per kind, all fired sequentially, each isolated.
- *   - Each handler is bounded by Effect.timeout("5 seconds"); hangs no longer
- *     block submit. (Note: timeout bounds OUR wait, not the handler's own
- *     execution — handler may continue to run side-effects in background.)
+ * v0.2.4 (codex review fixes for scheduler):
+ *   - fireDue transaction order fixed: pre-check guard INSIDE transaction
+ *     BEFORE inserting ledger row. Guard false → no SQL writes. Exactly-once
+ *     is now by construction, not by guarded UPDATE.
+ *   - Scope SSoT inside Scheduler: scope captured at Layer build via
+ *     SchedulerLive(ctx, scope); Scheduler.schedule(at, event, data) does
+ *     not accept scope; scheduled_events table no longer stores a scope
+ *     column.
+ *   - Service Tags + Layers (Ledger / EventBus / Scheduler / AiBinding) and
+ *     associated internal types are module-private. The only public surface
+ *     is AgentDOBase + plain types. No Effect escape hatch.
  *
- * v0.2.0 (reactive Phase 1):
- *   - on(kind, handler) — AgentDOBase exposes reactive subscribe
- *   - EventBus service: Ledger.log fires handler when matching kind written
+ * v0.2.3 (reactive Phase 2):
+ *   - AgentDOBase.scheduleEvent({at, event, data}) — strict SSoT, no scope arg
+ *   - AgentDOBase.alarm() — DO alarm handler; fireDue + reschedule
+ *
+ * v0.2.1 (codex review fixes for reactive phase 1):
+ *   - SubmitSpec.deliver: { event } only; scope SSoT via DO ctx.id.name
+ *   - on() composable (Map<kind, Set<handler>>); each handler bounded by 5s timeout
  */
 
 import {
@@ -125,7 +131,7 @@ export type EventHandler = (event: LedgerEventRpc) => Promise<void>;
 // EventBus is internal: only Ledger and AgentDOBase touch it.
 // Public surface is `AgentDOBase.on(kind, handler)`.
 
-export class EventBus extends Context.Tag("@agent-os/EventBus")<
+class EventBus extends Context.Tag("@agent-os/EventBus")<
   EventBus,
   {
     readonly fire: (event: LedgerEvent) => Effect.Effect<void>;
@@ -181,7 +187,8 @@ const EventBusLive = (
 // the same Effect chain; throws are absorbed by EventBus (logged, not
 // propagated).
 
-export class Ledger extends Context.Tag("@agent-os/Ledger")<
+/** Module-private Service Tag. Apps access ledger only via AgentDOBase methods. */
+class Ledger extends Context.Tag("@agent-os/Ledger")<
   Ledger,
   {
     readonly log: (
@@ -210,7 +217,7 @@ const ensureSchema = (sql: SqlStorage): Effect.Effect<void, SqlError> =>
     catch: (cause) => new SqlError({ cause }),
   }).pipe(Effect.asVoid);
 
-export const LedgerLive = (
+const LedgerLive = (
   sql: SqlStorage,
 ): Layer.Layer<Ledger, SqlError, EventBus> =>
   Layer.scoped(
@@ -278,23 +285,20 @@ export interface ScheduledEventSpec {
   readonly data: unknown;
 }
 
-export class Scheduler extends Context.Tag("@agent-os/Scheduler")<
+class Scheduler extends Context.Tag("@agent-os/Scheduler")<
   Scheduler,
   {
-    /** Insert a pending row. Returns the inserted id and the new earliest
-     *  pending fire_at (so AgentDOBase can call setAlarm). */
+    /** Insert a pending row. Scope is captured by SchedulerLive — not a param. */
     readonly schedule: (
       at: number,
       eventKind: string,
       data: unknown,
-      scope: string,
     ) => Effect.Effect<
       { id: number; nextAlarmAt: number | null },
       SqlError | JsonStringifyError
     >;
 
-    /** Process all due pending rows atomically. Returns next earliest
-     *  pending fire_at or null. */
+    /** Process all due pending rows atomically. */
     readonly fireDue: (
       now: number,
     ) => Effect.Effect<
@@ -315,7 +319,6 @@ const ensureSchedulerSchema = (
           fire_at INTEGER NOT NULL,
           event_kind TEXT NOT NULL,
           data TEXT NOT NULL,
-          scope TEXT NOT NULL,
           fired_event_id INTEGER REFERENCES events(id)
         )
       `);
@@ -346,8 +349,9 @@ const findNextPending = (
     catch: (cause) => new SqlError({ cause }),
   });
 
-export const SchedulerLive = (
+const SchedulerLive = (
   ctx: DurableObjectState,
+  scope: string,
 ): Layer.Layer<Scheduler, SqlError, EventBus> => {
   const sql = ctx.storage.sql;
   return Layer.scoped(
@@ -357,17 +361,16 @@ export const SchedulerLive = (
       const bus = yield* EventBus;
 
       return {
-        schedule: (at, eventKind, data, scope) =>
+        schedule: (at, eventKind, data) =>
           Effect.gen(function* () {
             const dataStr = yield* safeStringify(data);
             const id = yield* Effect.try({
               try: () => {
                 const cursor = sql.exec(
-                  "INSERT INTO scheduled_events (fire_at, event_kind, data, scope) VALUES (?, ?, ?, ?) RETURNING id",
+                  "INSERT INTO scheduled_events (fire_at, event_kind, data) VALUES (?, ?, ?) RETURNING id",
                   at,
                   eventKind,
                   dataStr,
-                  scope,
                 );
                 return Number(cursor.one().id);
               },
@@ -383,7 +386,7 @@ export const SchedulerLive = (
               try: () =>
                 sql
                   .exec(
-                    "SELECT id, fire_at, event_kind, data, scope FROM scheduled_events WHERE fired_event_id IS NULL AND fire_at <= ? ORDER BY fire_at, id",
+                    "SELECT id, fire_at, event_kind, data FROM scheduled_events WHERE fired_event_id IS NULL AND fire_at <= ? ORDER BY fire_at, id",
                     now,
                   )
                   .toArray(),
@@ -394,7 +397,6 @@ export const SchedulerLive = (
             for (const row of pending) {
               const schedId = Number(row.id);
               const kind = String(row.event_kind);
-              const scope = String(row.scope);
               const dataStr = String(row.data);
 
               const dataValue = yield* Effect.try({
@@ -404,14 +406,23 @@ export const SchedulerLive = (
 
               const ts = yield* Clock.currentTimeMillis;
 
-              // Atomic INSERT events + UPDATE scheduled_events.fired_event_id.
-              // ctx.storage.transactionSync handles BEGIN/COMMIT/ROLLBACK.
-              // Idempotency: UPDATE has `AND fired_event_id IS NULL` guard;
-              // if a previous (partial) fire already marked it, the UPDATE
-              // affects 0 rows and we skip.
+              // Exactly-once by construction: pre-check guard INSIDE the
+              // transaction, BEFORE INSERT events. If the row is already
+              // fired, return null and the transaction commits zero writes.
               const eventOrNull = yield* Effect.try({
                 try: () =>
                   ctx.storage.transactionSync(() => {
+                    // Pre-check: row still pending?
+                    const stillPending = sql
+                      .exec(
+                        "SELECT id FROM scheduled_events WHERE id = ? AND fired_event_id IS NULL",
+                        schedId,
+                      )
+                      .toArray();
+                    if (stillPending.length === 0) {
+                      return null; // already fired — no writes happen
+                    }
+                    // Now safe to INSERT ledger event.
                     const insertCursor = sql.exec(
                       "INSERT INTO events (ts, kind, scope, payload) VALUES (?, ?, ?, ?) RETURNING id",
                       ts,
@@ -420,16 +431,11 @@ export const SchedulerLive = (
                       dataStr,
                     );
                     const eventId = Number(insertCursor.one().id);
-                    const updateCursor = sql.exec(
-                      "UPDATE scheduled_events SET fired_event_id = ? WHERE id = ? AND fired_event_id IS NULL RETURNING id",
+                    sql.exec(
+                      "UPDATE scheduled_events SET fired_event_id = ? WHERE id = ?",
                       eventId,
                       schedId,
                     );
-                    const updatedRows = updateCursor.toArray();
-                    if (updatedRows.length === 0) {
-                      // Already fired in a previous attempt — discard.
-                      return null;
-                    }
                     return {
                       id: eventId,
                       ts,
@@ -459,7 +465,7 @@ export const SchedulerLive = (
 //                     LLM CARRIER + SCHEMA
 // ============================================================
 
-export class AiBinding extends Context.Tag("@agent-os/AiBinding")<
+class AiBinding extends Context.Tag("@agent-os/AiBinding")<
   AiBinding,
   Ai
 >() {}
@@ -857,13 +863,14 @@ type CoreServices = Ledger | AiBinding | Scheduler;
 
 const makeAgentRuntime = (
   ctx: DurableObjectState,
+  scope: string,
   ai: Ai,
   handlers: Map<string, Set<EventHandler>>,
 ): ManagedRuntime.ManagedRuntime<CoreServices, SqlError> => {
   const sql = ctx.storage.sql;
   const eventBusLayer = EventBusLive(handlers);
   const ledgerLayer = LedgerLive(sql).pipe(Layer.provide(eventBusLayer));
-  const schedulerLayer = SchedulerLive(ctx).pipe(
+  const schedulerLayer = SchedulerLive(ctx, scope).pipe(
     Layer.provide(eventBusLayer),
   );
   const aiLayer = Layer.succeed(AiBinding, ai);
@@ -890,13 +897,13 @@ export abstract class AgentDOBase<
   private readonly _handlers: Map<string, Set<EventHandler>> = new Map();
   private _runtime?: ManagedRuntime.ManagedRuntime<CoreServices, SqlError>;
 
-  protected get runtime(): ManagedRuntime.ManagedRuntime<
-    CoreServices,
-    SqlError
-  > {
+  private runtimeFor(
+    scope: string,
+  ): ManagedRuntime.ManagedRuntime<CoreServices, SqlError> {
     if (this._runtime === undefined) {
       this._runtime = makeAgentRuntime(
         this.ctx,
+        scope,
         this.env.AI,
         this._handlers,
       );
@@ -932,7 +939,7 @@ export abstract class AgentDOBase<
       ...spec,
       deliver: { event: spec.deliver.event, scope },
     };
-    return this.runtime.runPromise(submitAgentEffect(internalSpec));
+    return this.runtimeFor(scope).runPromise(submitAgentEffect(internalSpec));
   }
 
   /** Query ledger events for this DO's scope. */
@@ -941,7 +948,7 @@ export abstract class AgentDOBase<
     if (scope === undefined) {
       return Promise.reject(new ScopeMissingError());
     }
-    return this.runtime.runPromise(
+    return this.runtimeFor(scope).runPromise(
       Effect.gen(function* () {
         const ledger = yield* Ledger;
         const rows = yield* ledger.events(scope);
@@ -967,14 +974,13 @@ export abstract class AgentDOBase<
       return Promise.reject(new ScopeMissingError());
     }
     const ctx = this.ctx;
-    return this.runtime.runPromise(
+    return this.runtimeFor(scope).runPromise(
       Effect.gen(function* () {
         const scheduler = yield* Scheduler;
         const { id, nextAlarmAt } = yield* scheduler.schedule(
           spec.at,
           spec.event,
           spec.data,
-          scope,
         );
         if (nextAlarmAt !== null) {
           yield* Effect.tryPromise({
@@ -991,8 +997,12 @@ export abstract class AgentDOBase<
    *  earliest scheduled fire_at is reached. Fires all due events, reschedules
    *  next alarm. Idempotent under at-least-once delivery. */
   alarm(): Promise<void> {
+    const scope = this.ctx.id.name;
+    if (scope === undefined) {
+      return Promise.reject(new ScopeMissingError());
+    }
     const ctx = this.ctx;
-    return this.runtime.runPromise(
+    return this.runtimeFor(scope).runPromise(
       Effect.gen(function* () {
         const scheduler = yield* Scheduler;
         const now = yield* Clock.currentTimeMillis;
