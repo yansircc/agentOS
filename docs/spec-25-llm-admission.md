@@ -670,7 +670,7 @@ This preserves the spec-24 invariant that `submitAgent` is
 fire-and-track, not request-response — and avoids divergent return
 shapes when `outputSchema` is/isn't supplied.
 
-### 12.2 Direct admission API (advanced)
+### 12.2 Direct admission API (advanced) — **[Future, not in v0.2.10 public surface]**
 
 ```ts
 agentOS.llm.probe(
@@ -680,9 +680,16 @@ agentOS.llm.probe(
 ): Promise<StructuredEvidence>
 ```
 
-For CI matrix warmup and operator-driven validation. Internally calls
-`attemptStructured` with `stimulus.kind = "probe"` and discards
+For CI matrix warmup and operator-driven validation. Internally would
+call `attemptStructured` with `stimulus.kind = "probe"` and discard
 `DecodedOutput`.
+
+**Not implemented in v0.2.10.** `attemptStructured` is module-private to
+`@agent-os/core`; the probe surface is reserved for a later admission
+ops package once a real CI/warmup need surfaces. Until then, structured
+capability is exercised exclusively via `submit({outputSchema})` from
+app code, with the resulting evidence ledger entries as the only
+external observable.
 
 ---
 
@@ -694,8 +701,8 @@ For CI matrix warmup and operator-driven validation. Internally calls
 | `packages/core/src/llm.ts` `callLlm` | Retained as the transport primitive consumed by `attemptStructured` internally. Not exposed in public API. |
 | `withStructuredOutput` middleware (spec-24 §6.2) | Remains deferred; replaced by `submit.outputSchema` per this spec. |
 | Ledger schema | Adds `llm.structured.evidence` event kind. No migration needed (events table is open-schema). |
-| `view.reflective.*` | New view: `view.reflective.structuredCapability(key)` returns `CapabilityLease`. Not in §5.1 of spec-24; additive. |
-| Examples in spec-24 §16 | Img-Gen (§16.3) currently uses `withStructuredOutput(llmCarrier, PlanSchema)`. Should be rewritten to `submitAgent({ ..., outputSchema: PlanSchema })` once spec-25 lands. |
+| `view.reflective.*` | **[Future, not in v0.2.10]** A `view.reflective.structuredCapability(key) → CapabilityLease` projection will be added when an admission-ops UI / agent self-introspection use case appears. For now, apps observe capability state by reading the raw `llm.structured.evidence` events through `events()`. |
+| Examples in spec-24 §16 | **Done in v0.2.10 (commit a1cf28b).** §16.3 Img-Gen sketch now references `submit({outputSchema: PlanSchema})` instead of the `withStructuredOutput(llmCarrier, PlanSchema)` middleware. No further rewrite needed. |
 | Dependencies | No new runtime deps. Canonical-JSON for fingerprint is implementable in ~50 LOC. |
 
 No breaking change to current dogfood code. The change is purely additive
