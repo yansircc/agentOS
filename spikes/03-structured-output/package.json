@@ -1,0 +1,14 @@
+{
+  "name": "agent-os-spike-03-structured-output",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20251201.0",
+    "typescript": "^5.7.2",
+    "wrangler": "^4.0.0"
+  }
+}

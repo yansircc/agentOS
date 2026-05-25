@@ -23,7 +23,7 @@
     },
     "packages/core": {
       "name": "@agent-os/core",
-      "version": "0.1.0",
+      "version": "0.2.7",
       "devDependencies": {
         "@cloudflare/workers-types": "^4.20251201.0",
         "effect": "^3.18.0",
@@ -43,6 +43,14 @@
     },
     "spikes/02-suspendable-agent": {
       "name": "agent-os-spike-02-suspendable-agent",
+      "devDependencies": {
+        "@cloudflare/workers-types": "^4.20251201.0",
+        "typescript": "^5.7.2",
+        "wrangler": "^4.0.0",
+      },
+    },
+    "spikes/03-structured-output": {
+      "name": "agent-os-spike-03-structured-output",
       "devDependencies": {
         "@cloudflare/workers-types": "^4.20251201.0",
         "typescript": "^5.7.2",
@@ -198,6 +206,8 @@
     "agent-os-spike-01-minimum-loop": ["agent-os-spike-01-minimum-loop@workspace:spikes/01-minimum-loop"],
 
     "agent-os-spike-02-suspendable-agent": ["agent-os-spike-02-suspendable-agent@workspace:spikes/02-suspendable-agent"],
+
+    "agent-os-spike-03-structured-output": ["agent-os-spike-03-structured-output@workspace:spikes/03-structured-output"],
 
     "blake3-wasm": ["blake3-wasm@2.1.5", "", {}, "sha512-F1+K8EbfOZE49dtoPtmxUQrpXaBIl3ICvasLh+nJta0xkz+9kF/7uet9fLnwKqhDrmj6g+6K3Tw9yQPUg2ka5g=="],
 
