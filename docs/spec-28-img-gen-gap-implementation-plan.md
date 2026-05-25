@@ -61,6 +61,14 @@ class AgentDOBase {
     event: string;
     data: unknown;
     idempotencyKey: string;
+    /** Optional W3C trace-context propagation across the DO RPC boundary.
+     *  See §2.5 — substrate carries the strings unchanged; OTEL export
+     *  (if any) is an app concern. Omitted when the caller has no
+     *  active span. */
+    traceContext?: {
+      traceparent?: string;
+      tracestate?: string;
+    };
   }): Promise<{ outboundEventId: number }>;
 }
 ```
@@ -97,7 +105,7 @@ Sender ledger events:
 
 Receiver ledger events, written in one transaction:
 - `dispatch.inbound.accepted` with dispatch metadata:
-  `{ sourceScope, outboundEventId, idempotencyKey, deliveredEventId }`
+  `{ sourceScope, outboundEventId, idempotencyKey, deliveredEventId, traceContext? }`
 - the requested app event with payload unchanged.
 
 The app event's payload must not be wrapped or augmented. Dispatch metadata is
@@ -155,6 +163,40 @@ Spike update:
 Done means direct cross-ledger RPC is no longer required by any app to express
 durable delivery between `AgentDOBase` scopes.
 
+### 2.5 Trace context propagation (W3C)
+
+`dispatchToScope` is a substrate boundary between two independent
+ledgers. Without an explicit propagation field, every cross-DO causal
+chain breaks at the dispatch seam — UI / ops would see two disconnected
+spans and have to correlate by `(sourceScope, outboundEventId)` after
+the fact.
+
+Carrying trace context is a substrate concern, not an OTEL one:
+- core only **carries** the W3C trace-context strings
+  (`traceparent`, `tracestate`) verbatim through three places:
+  1. the `dispatchToScope` envelope on the wire,
+  2. `dispatch.outbound.requested.payload.traceContext` on the sender ledger,
+  3. `dispatch.inbound.accepted.payload.traceContext` on the receiver ledger.
+- core never parses, generates, signs, or exports them.
+- OTEL bridges, span emission, and exporter configuration remain app
+  concerns. Apps that already run an OTEL layer (e.g. via
+  `@effect/opentelemetry`) read the strings from the inbound event and
+  continue their span chain.
+
+DO RPC is **not** HTTP, so this is NOT a header — it is an explicit
+structured field on the typed envelope. The W3C strings are the
+serialization format, the field name is the carrier.
+
+Apps with no tracing leave the field undefined; core writes
+`traceContext: undefined` (omitted in canonical JSON) on the ledger and
+the propagation is a no-op. Adding tracing later is additive: app
+populates the field, ledger payload schema accepts it, no version bump.
+
+Why on P1 and not later: dispatch envelope schema is a versioned wire.
+Adding `traceContext` after P1 ships requires a payload schema migration
+on `dispatch.outbound.requested` / `dispatch.inbound.accepted`. Cost is
+non-linear vs adding the field at design time.
+
 ---
 
 ## 3. P2 — C3 resource reservation/release
@@ -210,6 +252,30 @@ class Resources {
 ```
 
 Public `AgentDOBase` methods may wrap this service after the algebra is stable.
+P2 makes that wrap explicit:
+
+```ts
+class AgentDOBase {
+  grantResource(spec: { key: string; amount: number; ref: string }): Promise<{ eventId: number }>;
+  reserveResource(spec: { key: string; amount: number; ref: string; idempotencyKey: string }): Promise<{ reservationId: string }>;
+  consumeResource(spec: { reservationId: string; ref: string }): Promise<void>;
+  releaseResource(spec: { reservationId: string; ref: string }): Promise<void>;
+}
+```
+
+Scope is implicit: all four methods mutate only the current DO scope.
+`resource.*` event kinds are core-reserved. Apps request resource changes via
+methods, not `emitEvent`.
+
+Failure semantics:
+- non-positive / non-finite `amount` rejects before writing.
+- insufficient reserve writes `resource.reserve_rejected` for audit, then
+  rejects with `ResourceInsufficient`.
+- missing reservation rejects with `ResourceReservationNotFound`.
+- consume-after-release and release-after-consume reject with
+  `ResourceReservationClosed`.
+- duplicate consume and duplicate release for the same terminal state are
+  idempotent no-ops and write no second terminal event.
 
 ### 3.2 SSoT placement
 
@@ -268,7 +334,7 @@ Contract tests:
 - reserve rejects without writing `resource.reserved` when insufficient.
 - same `idempotencyKey` returns same reservation.
 - consume and release are mutually exclusive.
-- duplicate consume/release is idempotent or explicitly rejected by class.
+- duplicate consume/release for the same terminal state is idempotent.
 - projection reconstructs balance from events only.
 
 Spike update:
@@ -377,8 +443,10 @@ v0 does not need a lease table. It needs route/protocol ownership:
 If image providers show schema/capability flake similar to structured output,
 add `image.generate.evidence` as a later admission-style subsystem. Trigger:
 when any image adapter's `classify(error)` returns `BehaviorFailed` for the
-same route/protocol in real provider runs at least three times, open spec-29.
-Do not pre-build admission without that falsifying signal.
+same route/protocol in real provider runs at least three times, open a
+dedicated image-admission spec (slot reserved at spec-31; spec-29 is the
+ledger event stream and spec-30 is the long-running / handoff cookbook). Do
+not pre-build admission without that falsifying signal.
 
 ### 4.3 Minimal implementation boundary
 
@@ -438,10 +506,13 @@ Recommended commits:
 1. `spec-28: dispatchToScope design`
    - spec update only.
    - resolves open questions: outbox table shape, receiver idempotency key,
-     bindingRef registry.
+     bindingRef registry, W3C trace context propagation (§2.5).
 
 2. `core: cross-scope dispatch primitive`
    - P1 implementation + contract tests.
+   - includes `traceContext` envelope field carried verbatim on
+     `dispatch.outbound.requested` / `dispatch.inbound.accepted`. Core
+     does not parse, generate, or export trace context.
    - spike-07 C1/C2 marker removal.
 
 3. `spec-28: resource ledger design`
