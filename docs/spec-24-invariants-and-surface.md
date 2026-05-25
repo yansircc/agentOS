@@ -185,7 +185,10 @@ GET  /__ops/api/cost?scope=&model=    AI Gateway cost rollup
 
 ## 6. Carrier middleware
 
-Two middlewares ship in core. Both are dispatch decorators.
+One middleware ships in core (`withQuota`). `withStructuredOutput` was
+prototyped against Workers AI JSON Mode and reverted before v0.2.9 —
+see [notes/structured-output-exploration.md](./notes/structured-output-exploration.md)
+for design + spike-03 evidence + resume conditions.
 
 ### 6.1 `withQuota(carrier, spec)` — unified pre-grant + consume
 
@@ -211,21 +214,16 @@ All "pre-grant + consume" patterns are Quota instances:
 Hit → `log("dispatch.rate_limited" | "quota.exceeded")` + reject.
 Queue is **not** built in; app composes with `scheduleEvent` if needed (orthogonality).
 
-### 6.2 `withStructuredOutput(carrier, schema)` — schema-typed LLM return
+### 6.2 `withStructuredOutput(carrier, schema)` — **[Deferred from v1 MVP]**
 
-```ts
-const planImage = withStructuredOutput(
-  llmCarrier,
-  Schema.struct({
-    images: Schema.array(Schema.struct({
-      prompt: Schema.string, width: Schema.number, height: Schema.number,
-    })),
-  }),
-);
-```
+Explored and reverted before v0.2.9. Workers AI JSON Mode is best-effort
+(model may fabricate fields, schema not contractually enforced), and no
+current reference app needs typed LLM output. Design + spike-03 evidence
+preserved in [notes/structured-output-exploration.md](./notes/structured-output-exploration.md).
 
-Internally translates to OpenAI Responses API `response_format: { type: "json_schema", schema }`.
-Zero hand-rolled validation.
+Resume condition: first reference app surfaces a real structured-output
+need, OR Cloudflare ships a Workers AI model with contractual JSON Schema
+enforcement.
 
 **`withFallback` and `withIdempotency` are NOT shipped** — CF AI Gateway provides
 fallback natively; CF Workflows `step.do` provides idempotency natively.
@@ -540,7 +538,7 @@ on("image.requested", (event) =>
     },
     agent: { provider: "openai", model: "gpt-image-2" },
     tools: {
-      planImage:     withStructuredOutput(llmCarrier, PlanSchema),
+      planImage:     llmCarrier,                       // [Deferred] would use withStructuredOutput when v2 ships
       generateImage: withQuota(genImageCarrier, {
         key: event.user_id, window: "∞",
         measure: (e) => e.cost_cents,
