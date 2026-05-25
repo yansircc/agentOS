@@ -1,15 +1,13 @@
 /**
- * agent-OS example: Effect-compliant rewrite of spike-01.
+ * agent-OS example: Effect-compliant rewrite of spike-01, extended with v0.2 on().
  *
- * Mirrors spike-01's behavior end-to-end but uses @agent-os/core.
- * App-side code is plain TypeScript (async/await/Promise) — zero Effect imports.
+ * v0.2 additions:
+ *   - AgentDO constructor registers on("agent.delivered", ...) handler
+ *   - Handler increments an in-memory counter
+ *   - GET /handler-count/:scope exposes the counter
  *
- * Validates that the Effect internals + Promise boundary translation
- * produce the same observable behavior as the vanilla DO spike.
- *
- * NOTE: examples are exempt from EFF rules (like spikes). Production app
- * code that imports @agent-os/core may freely use async/await; the EFF
- * discipline applies only to packages/core internals.
+ * Validates that ledger.log inside submitAgent fires registered handlers,
+ * implementing spec 24 §5.1 reactive face.
  */
 
 import {
@@ -20,19 +18,10 @@ import {
   type Tool,
 } from "@agent-os/core";
 
-// ============================================================
-//                          ENV
-// ============================================================
-
 interface Env extends AgentDOEnv {
   AI: Ai;
   AGENT_DO: DurableObjectNamespace<AgentDO>;
 }
-
-// ============================================================
-//                     APP-DEFINED TOOL
-// ============================================================
-// Plain TS — Tool<args, result> is just an object with execute returning Promise.
 
 const getCurrentTime: Tool<Record<string, never>, { iso: string }> = {
   definition: {
@@ -46,16 +35,24 @@ const getCurrentTime: Tool<Record<string, never>, { iso: string }> = {
   execute: async () => ({ iso: new Date().toISOString() }),
 };
 
-// ============================================================
-//                     APP-DEFINED AGENT DO
-// ============================================================
-// Subclass AgentDOBase — gets submit() + events() for free.
+export class AgentDO extends AgentDOBase<Env> {
+  private deliveredCount = 0;
 
-export class AgentDO extends AgentDOBase<Env> {}
+  constructor(state: DurableObjectState, env: Env) {
+    super(state, env);
+    this.on("agent.delivered", async (event: LedgerEventRpc) => {
+      this.deliveredCount += 1;
+      console.log(
+        `[on('agent.delivered')] fired scope=${event.scope} runCount=${this.deliveredCount}`,
+      );
+    });
+  }
 
-// ============================================================
-//                     WORKER ENTRY
-// ============================================================
+  /** RPC: how many times the agent.delivered handler has fired. */
+  getHandlerCount(): Promise<number> {
+    return Promise.resolve(this.deliveredCount);
+  }
+}
 
 interface SubmitBody {
   scope: string;
@@ -106,6 +103,12 @@ async function handleEvents(scope: string, env: Env): Promise<Response> {
   return Response.json(events);
 }
 
+async function handleHandlerCount(scope: string, env: Env): Promise<Response> {
+  const stub = env.AGENT_DO.get(env.AGENT_DO.idFromName(scope));
+  const count: number = await stub.getHandlerCount();
+  return Response.json({ count });
+}
+
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url);
@@ -119,14 +122,22 @@ export default {
       return handleEvents(scope, env);
     }
 
+    if (req.method === "GET" && url.pathname.startsWith("/handler-count/")) {
+      const scope = decodeURIComponent(
+        url.pathname.slice("/handler-count/".length),
+      );
+      return handleHandlerCount(scope, env);
+    }
+
     return new Response(
       [
-        "agent-os example: spike-01-effect (Effect-rewritten)",
+        "agent-os example: spike-01-effect (v0.2 on() demo)",
         "",
-        "POST /submit  { scope, prompt, model? }",
+        "POST /submit            { scope, prompt, model?, budget? }",
         "GET  /events/:scope",
+        "GET  /handler-count/:scope",
         "",
-        "uses @agent-os/core@workspace, model default: @cf/openai/gpt-oss-120b",
+        "AgentDO registers on('agent.delivered') in constructor → counter++.",
       ].join("\n"),
       { headers: { "content-type": "text/plain" } },
     );

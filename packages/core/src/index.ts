@@ -1,24 +1,17 @@
 /**
- * @agent-os/core v0.1.1
+ * @agent-os/core v0.2.0
  *
- * Effect-compliant agent substrate. Boundary translation to Promise at
- * AgentDOBase.submit / events.
+ * v0.2.0 additions (reactive Phase 1):
+ *   - on(kind, handler) — AgentDOBase exposes reactive subscribe
+ *   - EventBus service: Ledger.log fires handler when matching kind written
+ *   - handler is plain Promise (no Effect exposure); throws are caught + logged
+ *     but don't break the agent loop
  *
- * Changes vs v0.1 (Codex review fixes):
- *   FP-1 Termination is sacred:
- *     - all recoverable failures funnel through ledger BEFORE Promise boundary
- *     - only SqlError | JsonStringifyError escape (irrecoverable infra failures)
- *     - events() no longer silently masks SqlError as []
- *   FP-2 Budget semantics:
- *     - split into maxTurns (LLM loop cap) + toolRetries (per-tool retry)
- *     - token budget checked AFTER each LLM call (not just before)
- *     - tool dispatch retried via Effect.retry + Schedule.recurs
- *   FP-3 Failure vocabulary single source of truth:
- *     - ABORT const drives both Data.TaggedError tags AND ledger event kinds
- *     - SubmitResult.reason derived from kind (no string duplication)
- *   FP-1 derived:
- *     - LLM upstream response decoded via effect/Schema; malformed -> UpstreamFailure
- *     - all JSON.stringify wrapped via safeStringify with JsonStringifyError
+ * Pending v0.2 (deferred to next phases):
+ *   - scheduleEvent({at, event, data}) via DO alarm
+ *   - withQuota + withStructuredOutput middlewares
+ *   - view.reflective.* (agentRuns / currentBudget / currentQuotaState)
+ *   - CF Agents framework migration (extends Agent)
  */
 
 import {
@@ -37,8 +30,6 @@ import { DurableObject } from "cloudflare:workers";
 // ============================================================
 //          ABORT TAXONOMY (single source of truth — FP-3)
 // ============================================================
-// Each abort kind drives BOTH the ledger event name AND the TaggedError tag.
-// SubmitResult.reason is mechanically derived: kind minus the "agent.aborted." prefix.
 
 export const ABORT = {
   BUDGET_TOKENS: "agent.aborted.budget_tokens",
@@ -56,14 +47,6 @@ const reasonOf = (kind: AbortKind): string =>
 // ============================================================
 //                     TAGGED ERRORS
 // ============================================================
-// Irrecoverable (escape the Promise boundary as rejection):
-//   - SqlError            (ledger storage broken)
-//   - JsonStringifyError  (cannot even serialize for ledger)
-//
-// Recoverable (caught inside submitAgentEffect, logged to ledger, converted
-// to SubmitResult{ok:false}):
-//   - UpstreamFailure
-//   - ToolError
 
 export class SqlError extends Data.TaggedError("agent_os.sql_error")<{
   readonly cause: unknown;
@@ -107,7 +90,7 @@ const safeStringifyPretty = (
   });
 
 // ============================================================
-//                     LEDGER PRIMITIVES
+//                     LEDGER + EVENTBUS TYPES
 // ============================================================
 
 export interface LedgerEvent {
@@ -118,10 +101,7 @@ export interface LedgerEvent {
   readonly payload: unknown;
 }
 
-/** RPC-friendly variant of LedgerEvent (mutable + `payload: any`).
- *  Used as return type of AgentDOBase.events so DurableObjectStub typing
- *  stays inhabited under workers-types RpcSerializable constraints.
- */
+/** RPC-friendly variant of LedgerEvent — also the shape passed to user handlers. */
 export interface LedgerEventRpc {
   id: number;
   ts: number;
@@ -130,6 +110,59 @@ export interface LedgerEventRpc {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   payload: any;
 }
+
+export type EventHandler = (event: LedgerEventRpc) => Promise<void>;
+
+// ============================================================
+//                     EVENTBUS SERVICE  (v0.2 new)
+// ============================================================
+// EventBus is internal: only Ledger and AgentDOBase touch it.
+// Public surface is `AgentDOBase.on(kind, handler)`.
+
+export class EventBus extends Context.Tag("@agent-os/EventBus")<
+  EventBus,
+  {
+    readonly fire: (event: LedgerEvent) => Effect.Effect<void>;
+  }
+>() {}
+
+const EventBusLive = (
+  handlers: Map<string, EventHandler>,
+): Layer.Layer<EventBus> =>
+  Layer.succeed(EventBus, {
+    fire: (event) => {
+      const handler = handlers.get(event.kind);
+      if (handler === undefined) return Effect.void;
+      const rpcEvent: LedgerEventRpc = {
+        id: event.id,
+        ts: event.ts,
+        kind: event.kind,
+        scope: event.scope,
+        payload: event.payload,
+      };
+      return Effect.tryPromise({
+        try: () => handler(rpcEvent),
+        catch: (cause) => cause,
+      }).pipe(
+        Effect.catchAll((cause) =>
+          Effect.sync(() => {
+            console.error(
+              `[agent-os] handler for "${event.kind}" threw:`,
+              cause,
+            );
+          }),
+        ),
+      );
+    },
+  });
+
+// ============================================================
+//                     LEDGER SERVICE
+// ============================================================
+// LedgerLive now depends on EventBus: log() fires handler for matching kind
+// AFTER the event row is committed to SQLite. Handler runs synchronously in
+// the same Effect chain; throws are absorbed by EventBus (logged, not
+// propagated).
 
 export class Ledger extends Context.Tag("@agent-os/Ledger")<
   Ledger,
@@ -160,11 +193,14 @@ const ensureSchema = (sql: SqlStorage): Effect.Effect<void, SqlError> =>
     catch: (cause) => new SqlError({ cause }),
   }).pipe(Effect.asVoid);
 
-export const LedgerLive = (sql: SqlStorage): Layer.Layer<Ledger, SqlError> =>
+export const LedgerLive = (
+  sql: SqlStorage,
+): Layer.Layer<Ledger, SqlError, EventBus> =>
   Layer.scoped(
     Ledger,
     Effect.gen(function* () {
       yield* ensureSchema(sql);
+      const bus = yield* EventBus;
 
       return {
         log: (kind, payload, scope) =>
@@ -183,7 +219,9 @@ export const LedgerLive = (sql: SqlStorage): Layer.Layer<Ledger, SqlError> =>
               catch: (cause) => new SqlError({ cause }),
             });
             const id = Number(cursor.one().id);
-            return { id, ts, kind, scope, payload } satisfies LedgerEvent;
+            const event: LedgerEvent = { id, ts, kind, scope, payload };
+            yield* bus.fire(event);
+            return event;
           }),
         events: (scope) =>
           Effect.try({
@@ -217,9 +255,6 @@ export class AiBinding extends Context.Tag("@agent-os/AiBinding")<
   AiBinding,
   Ai
 >() {}
-
-// Schema for OpenAI Chat Completions response (used by CF env.AI.run).
-// Malformed responses -> UpstreamFailure (no silent fallback to text="").
 
 const LlmToolCallSchema = Schema.Struct({
   id: Schema.String,
@@ -371,9 +406,7 @@ export interface SubmitSpec {
   readonly budget?: {
     readonly tokens?: number;
     readonly timeMs?: number;
-    /** LLM loop iteration cap. Hitting this -> RETRIES abort. Default 5. */
     readonly maxTurns?: number;
-    /** Per-tool retry attempts (total = retries + 1). Default 2 (so 3 attempts). */
     readonly toolRetries?: number;
   };
   readonly deliver: { readonly scope: string; readonly event: string };
@@ -400,9 +433,6 @@ const toolDefinitionsOf = (
 ): ReadonlyArray<ToolDefinition> =>
   Object.values(tools).map((t) => t.definition);
 
-/** The SINGLE termination funnel. All aborts route through here.
- *  Only SqlError | JsonStringifyError escape (true infra failures).
- */
 const finalAbort = (
   kind: AbortKind,
   payload: object,
@@ -505,7 +535,6 @@ export const submitAgentEffect = (
           scope,
         );
 
-        // FP-2: token budget check AFTER LLM call returns
         if (newTokens > budgetTokens) {
           return yield* finalAbort(
             ABORT.BUDGET_TOKENS,
@@ -524,7 +553,6 @@ export const submitAgentEffect = (
         });
 
         if (resp.toolCalls.length === 0) {
-          // Natural stop -> deliver
           yield* ledger.log(
             spec.deliver.event,
             { final: resp.text },
@@ -540,7 +568,6 @@ export const submitAgentEffect = (
           } as const;
         }
 
-        // Dispatch tool calls with per-tool retry (FP-2)
         for (const call of resp.toolCalls) {
           const result = yield* dispatchTool(spec.tools, call).pipe(
             Effect.retry(Schedule.recurs(toolRetries)),
@@ -563,8 +590,6 @@ export const submitAgentEffect = (
         }
       }
 
-      // Max turns exhausted -> RETRIES abort (a deliberate naming choice;
-      // spec §7 lists "agent.aborted.retries" as the canonical kind for this).
       const tokensUsed = yield* Ref.get(tokensUsedRef);
       return yield* finalAbort(
         ABORT.RETRIES,
@@ -575,9 +600,6 @@ export const submitAgentEffect = (
       );
     });
 
-    // FP-1: single termination funnel — catch recoverable failures and
-    // funnel them through finalAbort (which logs the ledger event).
-    // SqlError | JsonStringifyError remain and propagate to Promise reject.
     return yield* loop.pipe(
       Effect.catchTags({
         [ABORT.UPSTREAM_FAILURE]: (e) =>
@@ -619,26 +641,26 @@ type CoreServices = Ledger | AiBinding;
 const makeAgentRuntime = (
   sql: SqlStorage,
   ai: Ai,
-): ManagedRuntime.ManagedRuntime<CoreServices, SqlError> =>
-  ManagedRuntime.make(
-    Layer.merge(LedgerLive(sql), Layer.succeed(AiBinding, ai)),
-  );
+  handlers: Map<string, EventHandler>,
+): ManagedRuntime.ManagedRuntime<CoreServices, SqlError> => {
+  const eventBusLayer = EventBusLive(handlers);
+  const ledgerLayer = LedgerLive(sql).pipe(Layer.provide(eventBusLayer));
+  const aiLayer = Layer.succeed(AiBinding, ai);
+  return ManagedRuntime.make(Layer.merge(ledgerLayer, aiLayer));
+};
 
 /**
- * AgentDO base class. Apps subclass this for RPC entry points.
+ * AgentDO base class.
  *
- * Boundary translation: each public method calls runtime.runPromise(eff)
- * once. Apps see plain Promise; never import Effect.
- *
- * Promise rejection contract:
- *   - rejects on SqlError | JsonStringifyError (infra failures — cannot
- *     even log to ledger)
- *   - resolves with SubmitResult{ok:false, reason} on all logical aborts
- *     (budget / tool / upstream / retries) — these are pre-logged in ledger
+ * v0.2 additions:
+ *   - `on(kind, handler)` registers a Promise-typed callback fired whenever
+ *     `ledger.log` writes an event of that kind. Same-scope only (the DO is
+ *     scoped to one scope key via idFromName).
  */
 export abstract class AgentDOBase<
   Env extends AgentDOEnv,
 > extends DurableObject<Env> {
+  private readonly _handlers: Map<string, EventHandler> = new Map();
   private _runtime?: ManagedRuntime.ManagedRuntime<CoreServices, SqlError>;
 
   protected get runtime(): ManagedRuntime.ManagedRuntime<
@@ -646,19 +668,26 @@ export abstract class AgentDOBase<
     SqlError
   > {
     if (this._runtime === undefined) {
-      this._runtime = makeAgentRuntime(this.ctx.storage.sql, this.env.AI);
+      this._runtime = makeAgentRuntime(
+        this.ctx.storage.sql,
+        this.env.AI,
+        this._handlers,
+      );
     }
     return this._runtime;
   }
 
-  /** Submit an agent run. Resolves with SubmitResult; rejects only on infra. */
+  /** Register a handler fired whenever a ledger event of `kind` is written.
+   *  Handler is plain Promise; throws are caught + console.error'd, never
+   *  propagate to the main agent loop. */
+  protected on(kind: string, handler: EventHandler): void {
+    this._handlers.set(kind, handler);
+  }
+
   submit(spec: SubmitSpec): Promise<SubmitResult> {
     return this.runtime.runPromise(submitAgentEffect(spec));
   }
 
-  /** Query the ledger for a given scope.
-   *  Rejects on SqlError — caller distinguishes empty-ledger from read failure.
-   */
   events(scope: string): Promise<LedgerEventRpc[]> {
     return this.runtime.runPromise(
       Effect.gen(function* () {
