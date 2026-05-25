@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
-# v0.2.3 e2e: reactive (on) + scheduleEvent atomic fire.
+# spike-01-effect e2e: wire-level smoke tests only.
+#
+# Quota state machine is validated deterministically in
+# packages/core/test/quota-contract.test.ts (no LLM dependence).
+# This script validates the production wire: submit → ledger →
+# on-handler → scheduleEvent → alarm → fired event.
 set -euo pipefail
 
 BASE="${BASE:-http://localhost:8787}"
@@ -69,22 +74,13 @@ SCHED_FIRED_COUNT=$(curl -s "$BASE/scheduled-fired-count/$SCOPE_ENC" | jq -r .co
 # guarantees it by construction.
 
 # ====================== Test 3: withQuota rate-limit ======================
-echo
-echo "==> Quota test (limit=2 per 60s, 3 submits should hit limit on 3rd)"
-QSCOPE="quota-$(date +%s)"
-QSCOPE_ENC=$(uri_escape "$QSCOPE")
-for i in 1 2 3; do
-  R=$(curl -s -X POST "$BASE/submit" -H 'content-type: application/json' \
-    -d "$(printf '{"scope":"%s","prompt":"What time is it now? Use the get_current_time tool."}' "$QSCOPE")")
-  OK=$(echo "$R" | jq -r .ok)
-  REASON=$(echo "$R" | jq -r '.reason // "n/a"')
-  echo "submit $i: ok=$OK reason=$REASON"
-done
-
-QEVENTS=$(curl -s "$BASE/events/$QSCOPE_ENC")
-QCONSUMED=$(echo "$QEVENTS" | jq -r '[.[] | select(.kind == "dispatch.consumed")] | length')
-QRATELIMITED=$(echo "$QEVENTS" | jq -r '[.[] | select(.kind == "dispatch.rate_limited")] | length')
-QABORTED=$(echo "$QEVENTS" | jq -r '[.[] | select(.kind == "agent.aborted.tool_error")] | length')
+# REMOVED — was LLM-dependent (3 submits assumed the LLM would call
+# get_current_time each time; reviewer's 2026-05-25 run hit 6/8 because
+# submit 1 returned plain text). The quota state machine is now validated
+# deterministically by packages/core/test/quota-contract.test.ts using
+# a stubbed AiBinding Layer. This e2e keeps only the LLM-independent
+# wire-level smoke tests (submit ok / events written / on-handler fired /
+# scheduleEvent atomic fire).
 
 echo
 echo "============== ASSERTIONS =============="
@@ -93,9 +89,6 @@ assert_ge "ledger event count after submit"         3       "$EVT_COUNT"
 assert_eq "on('agent.delivered') after 1st submit"  "1"     "$HANDLER_COUNT_1"
 assert_ge "scheduled event landed in ledger"        1       "$SCHEDULED_IN_LEDGER"
 assert_eq "on('test.scheduled') fired exactly 1 time" "1"   "$SCHED_FIRED_COUNT"
-assert_eq "Quota: dispatch.consumed = 2"            "2"     "$QCONSUMED"
-assert_eq "Quota: dispatch.rate_limited = 1"        "1"     "$QRATELIMITED"
-assert_eq "Quota: agent.aborted.tool_error = 1"     "1"     "$QABORTED"
 echo "==============================="
 echo "PASS: $PASS    FAIL: $FAIL"
 
