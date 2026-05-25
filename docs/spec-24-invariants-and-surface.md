@@ -118,10 +118,13 @@ function submitAgent<C, O>(spec: {
     tokens?:   number;                            // hard cap
     cost?:     Quota;                             // pre-grant via Quota
     time?:     Duration;                          // hard cap
-    retries?:  number;                            // default 3
+    maxTurns?: number;                            // LLM loop iteration cap
+    toolRetries?: number;                         // per-tool retry attempts
   };
   composer?: (intent, ctx, tools) => Message[];   // optional prompt override
-  deliver:   { scope: ScopeKey; event: EventName }; // result drops here
+  deliver:   { event: EventName };                // scope is structurally
+                                                  // owned by the DO instance
+                                                  // (derived from ctx.id.name)
 }): Promise<{ run_id: string }>;
 ```
 
@@ -494,7 +497,7 @@ on("interview.start", (event) =>
     agent: { provider: "anthropic", model: "claude-sonnet-4-6" },
     tools: { askUser: askUserCarrier, finalize: finalizeCarrier },
     budget: { tokens: 16_000 },
-    deliver: { scope: event.sessionId, event: "interview.done" },
+    deliver: { event: "interview.done" }, // scope = DO instance (= sessionId)
   })
 );
 ```
@@ -520,7 +523,7 @@ on("wa.message.in", (msg, env) =>
       transferToHuman: handoffCarrier,
     },
     budget: { tokens: 16_000, cost: quota(msg.from_phone, "1day", "$0.50"), time: "30s" },
-    deliver: { scope: msg.from_phone, event: "wa.agent.completed" },
+    deliver: { event: "wa.agent.completed" }, // scope = DO instance (= from_phone)
   })
 );
 ```
@@ -547,7 +550,7 @@ on("image.requested", (event) =>
       storeArtifact: r2PutCarrier,
     },
     budget: { tokens: 4_000, time: "5min" },
-    deliver: { scope: event.conv_id, event: "image.delivered" },
+    deliver: { event: "image.delivered" }, // scope = DO instance (= conv_id)
   })
 );
 ```
@@ -565,7 +568,7 @@ on("user.request_changes", (event) =>
     agent: { provider: "anthropic", model: "claude-opus-4-7" },
     tools: { createWpCandidate: wpCandidateCarrier },
     budget: { tokens: 100_000, time: "10min" },
-    deliver: { scope: event.site_id, event: "wp_candidate.proposed" },
+    deliver: { event: "wp_candidate.proposed" }, // scope = DO instance (= site_id)
   })
 );
 ```

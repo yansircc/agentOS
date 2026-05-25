@@ -481,7 +481,9 @@ const finalAbort = (
     } as const;
   });
 
-export const submitAgentEffect = (
+/** Internal — not exported. Apps must go through AgentDOBase.submit so that
+ *  scope is structurally derived from ctx.id.name (SSoT). */
+const submitAgentEffect = (
   spec: InternalSubmitSpec,
 ): Effect.Effect<
   SubmitResult,
