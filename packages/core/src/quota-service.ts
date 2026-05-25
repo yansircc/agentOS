@@ -14,7 +14,7 @@
  * commit, so `on(kind, handler)` subscribers still see the event.
  */
 
-import { Clock, Context, Effect, Layer } from "effect";
+import { Clock, Context, Effect, Layer, Schema } from "effect";
 import { EventBus } from "./event-bus";
 import { JsonStringifyError, SqlError, safeStringify } from "./errors";
 import type { LedgerEvent } from "./types";
@@ -24,6 +24,20 @@ export interface GrantResult {
   readonly consumed: number;
   readonly limit: number;
 }
+
+/** Owned schema for events.kind = 'dispatch.consumed' payload. We are the
+ *  sole writer (consumedPayload below), so any shape mismatch read back is
+ *  infra corruption — let Schema.decodeUnknownSync throw, transactionSync
+ *  rolls back, and Effect.try wraps it as SqlError. This is the same
+ *  failure path as JSON.parse failure, by construction. */
+const ConsumedPayloadSchema = Schema.Struct({
+  key: Schema.String,
+  amount: Schema.Number.pipe(Schema.finite()),
+  toolName: Schema.String,
+});
+const decodeConsumedPayloadSync = Schema.decodeUnknownSync(
+  ConsumedPayloadSchema,
+);
 
 export class Quota extends Context.Tag("@agent-os/Quota")<
   Quota,
@@ -76,16 +90,15 @@ export const QuotaLive = (
                     .toArray();
                   let consumed = 0;
                   for (const r of rows) {
-                    // We are the sole writer of dispatch.consumed (line below).
-                    // Parse failure here means infra corruption, not a domain
-                    // case — let it throw, transactionSync rolls back, and
-                    // Effect.try wraps it as SqlError.
-                    const p = JSON.parse(String(r.payload)) as {
-                      key?: string;
-                      amount?: number;
-                    };
+                    // Decode through owned schema. JSON.parse failure OR
+                    // shape mismatch both throw → tx rolls back → Effect.try
+                    // wraps as SqlError. Single owned failure path; no
+                    // silent skip, no NaN propagation, no undercount.
+                    const p = decodeConsumedPayloadSync(
+                      JSON.parse(String(r.payload)),
+                    );
                     if (p.key === key) {
-                      consumed += Number(p.amount ?? 0);
+                      consumed += p.amount;
                     }
                   }
 
