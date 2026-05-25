@@ -8,8 +8,18 @@
  * Boundary contract:
  *   submit(spec)         resolves SubmitResult; rejects on infra
  *   events()             resolves LedgerEventRpc[]; rejects on SQL read fail
+ *   emitEvent(spec)      resolves {id}; rejects on infra / reserved kind
  *   scheduleEvent(spec)  resolves {id}; rejects on infra
  *   alarm()              auto-invoked by CF DO runtime
+ *
+ * Reactive surface — full reactive triad (now-write × future-write × react):
+ *   emitEvent      now-write (this method)
+ *   scheduleEvent  future-write
+ *   on / off       react (subscribe)
+ *
+ * submit() is a composite (now-write × dispatch loop × deliver-event log),
+ * not the primitive for "app writes a fact". emitEvent is the primitive;
+ * use submit only when an agent run is the right shape.
  *
  * Reactive subscribe:
  *   protected on(kind, handler)  composable Set, sequential dispatch, 5s timeout per handler
@@ -153,6 +163,37 @@ export abstract class AgentDOBase<
             payload: e.payload,
           }),
         );
+      }),
+    );
+  }
+
+  /** Emit a ledger event NOW for this DO's scope.
+   *
+   *  The "app writes a fact" primitive — closes the now-write corner of the
+   *  reactive surface (the algebra's left-upper that submit and scheduleEvent
+   *  do NOT cover). Apps route external inputs (e.g. HTTP POST /answer) into
+   *  the ledger via this method; on() handlers fire synchronously after the
+   *  row commits.
+   *
+   *  Distinction from scheduleEvent({at: Date.now()}): scheduleEvent passes
+   *  through the scheduler's pending intent buffer + alarm fire, which is
+   *  asynchronous and write-amplified. emitEvent is a direct Ledger.log:
+   *  the row is committed and on() handlers are invoked before this Promise
+   *  resolves. They are NOT degenerate cases of each other.
+   */
+  emitEvent(spec: { event: string; data: unknown }): Promise<{ id: number }> {
+    const scope = this.ctx.id.name;
+    if (scope === undefined) {
+      return Promise.reject(new ScopeMissingError());
+    }
+    if (isReservedEventKind(spec.event)) {
+      return Promise.reject(new ReservedEventKindError({ event: spec.event }));
+    }
+    return this.runtimeFor(scope).runPromise(
+      Effect.gen(function* () {
+        const ledger = yield* Ledger;
+        const ev = yield* ledger.log(spec.event, spec.data, scope);
+        return { id: ev.id };
       }),
     );
   }
