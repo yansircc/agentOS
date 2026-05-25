@@ -20,6 +20,8 @@ import { Clock, Effect, Layer, ManagedRuntime } from "effect";
 import { DurableObject } from "cloudflare:workers";
 import {
   InvalidScheduleAt,
+  isReservedEventKind,
+  ReservedEventKindError,
   ScopeMissingError,
   SqlError,
 } from "./errors";
@@ -31,6 +33,7 @@ import type {
 import { EventBusLive } from "./event-bus";
 import { Ledger, LedgerLive } from "./ledger";
 import { Scheduler, SchedulerLive } from "./scheduler";
+import { Quota, QuotaLive } from "./quota-service";
 import { AiBinding } from "./llm";
 import {
   type InternalSubmitSpec,
@@ -43,7 +46,7 @@ export interface AgentDOEnv {
   readonly AI: Ai;
 }
 
-type CoreServices = Ledger | AiBinding | Scheduler;
+type CoreServices = Ledger | AiBinding | Scheduler | Quota;
 
 const makeAgentRuntime = (
   ctx: DurableObjectState,
@@ -57,9 +60,10 @@ const makeAgentRuntime = (
   const schedulerLayer = SchedulerLive(ctx, scope).pipe(
     Layer.provide(eventBusLayer),
   );
+  const quotaLayer = QuotaLive(ctx).pipe(Layer.provide(eventBusLayer));
   const aiLayer = Layer.succeed(AiBinding, ai);
   return ManagedRuntime.make(
-    Layer.mergeAll(ledgerLayer, schedulerLayer, aiLayer),
+    Layer.mergeAll(ledgerLayer, schedulerLayer, quotaLayer, aiLayer),
   );
 };
 
@@ -107,6 +111,11 @@ export abstract class AgentDOBase<
     if (scope === undefined) {
       return Promise.reject(new ScopeMissingError());
     }
+    if (isReservedEventKind(spec.deliver.event)) {
+      return Promise.reject(
+        new ReservedEventKindError({ event: spec.deliver.event }),
+      );
+    }
     const internalSpec: InternalSubmitSpec = {
       ...spec,
       deliver: { event: spec.deliver.event, scope },
@@ -151,6 +160,11 @@ export abstract class AgentDOBase<
     }
     if (!Number.isFinite(spec.at)) {
       return Promise.reject(new InvalidScheduleAt({ at: spec.at }));
+    }
+    if (isReservedEventKind(spec.event)) {
+      return Promise.reject(
+        new ReservedEventKindError({ event: spec.event }),
+      );
     }
     const ctx = this.ctx;
     return this.runtimeFor(scope).runPromise(

@@ -1,19 +1,21 @@
 /**
  * Quota — pre-grant + consume guard for tool dispatch.
  *
- * v0.2.7 minimal cut:
- *   - Per-tool quota, attached via withQuota(tool, spec)
- *   - Key defaults to the tool's function name (within DO scope)
- *   - Pre-check: sum prior dispatch.consumed events for {key, windowMs};
- *     if sum >= limit, log dispatch.rate_limited and raise ToolError
- *     (caught by submitAgentEffect → finalAbort → SubmitResult.fail)
- *   - Post: log dispatch.consumed with measure(result)
+ * v0.2.8 semantics (per codex review):
+ *   - amount is STATIC (or function of args — not result). Default 1.
+ *   - Pre-grant is atomic with consume: a single ctx.storage.transactionSync
+ *     reads consumed-in-window and writes EITHER dispatch.consumed (grant)
+ *     OR dispatch.rate_limited (deny). No await window between read and
+ *     write — concurrent submits cannot both observe the same stale state.
+ *   - Per-attempt: grant happens inside the retry loop, so each retry
+ *     consumes a slot. Carrier rate-limit semantics, not "successful
+ *     completion" semantics.
  *
  * Deferred to later versions:
  *   - Dynamic key (function of intent / args)
  *   - Dynamic limit (computed from project view, e.g. credit balance)
- *   - Refund on failure
- *   - Rate-limit recovery within a single agent run (graceful continuation)
+ *   - Result-dependent measure + settle/refund (billing semantics)
+ *   - Cross-scope quota (currently DO scope is the partition key)
  */
 
 import type { Tool } from "./tools";
@@ -23,10 +25,11 @@ export interface QuotaSpec {
   readonly key?: string;
   /** Window duration in ms. Use Number.POSITIVE_INFINITY for unbounded (billing). */
   readonly windowMs: number;
-  /** Max measure in window. */
+  /** Max sum of amounts allowed in window. Must be finite non-negative. */
   readonly limit: number;
-  /** Measure per call. Default: () => 1 (count). */
-  readonly measure?: (result: unknown) => number;
+  /** Amount consumed per call. Default 1. Must be finite non-negative.
+   *  v0.2.8 only supports static amount — result-dependent measure deferred. */
+  readonly amount?: number;
 }
 
 /** Attach a QuotaSpec to a tool. Returns a new Tool with `quota` metadata. */
