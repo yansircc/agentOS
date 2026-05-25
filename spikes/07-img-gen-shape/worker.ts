@@ -8,7 +8,10 @@
 
 import {
   AgentDOBase,
+  type DispatchTargetRegistry,
   type AgentDOEnv,
+  type ImageArtifact,
+  type ImageRoute,
   type LedgerEventRpc,
   type LlmRoute,
   type ProviderRegistryConfig,
@@ -28,6 +31,13 @@ const PLAN_ROUTE: LlmRoute = {
   endpointRef: "openrouter",
   credentialRef: "OPENROUTER_KEY",
   modelId: "openai/gpt-4.1",
+};
+
+const IMAGE_ROUTE: ImageRoute = {
+  kind: "openai-chat-compatible-image",
+  endpointRef: "openrouter",
+  credentialRef: "OPENROUTER_KEY",
+  modelId: "google/gemini-2.5-flash-image",
 };
 
 const json = (body: unknown, init: ResponseInit = {}): Response =>
@@ -123,6 +133,13 @@ interface CreditReserved {
   readonly jobs: ReadonlyArray<PlanJob>;
 }
 
+interface CreditReserveRequested {
+  readonly sessionScope: string;
+  readonly userScope: string;
+  readonly jobs: ReadonlyArray<PlanJob>;
+  readonly idempotencyKey: string;
+}
+
 interface JobQueued {
   readonly sessionScope: string;
   readonly userScope: string;
@@ -147,6 +164,13 @@ export class SessionDO extends AgentDOBase<Env> {
     return {
       endpoints: { openrouter: "https://openrouter.ai/api/v1" },
       credentials: { OPENROUTER_KEY: this.env.OPENROUTER_KEY },
+    };
+  }
+
+  protected override provideDispatchTargets(): DispatchTargetRegistry {
+    return {
+      user: this.env.USER_DO,
+      consumer: this.env.CONSUMER_DO,
     };
   }
 
@@ -175,20 +199,17 @@ export class SessionDO extends AgentDOBase<Env> {
     const request = findRequest(await this.events());
     if (request === null) return;
     const plan = event.payload as ImagePlan;
-    const reservationId = crypto.randomUUID();
-    const user = this.env.USER_DO.get(this.env.USER_DO.idFromName(request.userScope));
 
-    // GAP-C1/C2: no dispatchToScope primitive. This remote DO call is not
-    // atomic with this session ledger's image.plan.ready row and has no
-    // sender-owned durable outbox / receiver-owned idempotent ingest contract.
-    await user.emitEvent({
+    await this.dispatchToScope({
+      target: { bindingRef: "user", scope: request.userScope },
       event: "credit.reserve.requested",
       data: {
         sessionScope: this.scopeName(),
         userScope: request.userScope,
-        reservationId,
         jobs: plan.jobs,
-      },
+        idempotencyKey: `reserve:${event.id}`,
+      } satisfies CreditReserveRequested,
+      idempotencyKey: `reserve:${event.id}`,
     });
   }
 
@@ -197,12 +218,9 @@ export class SessionDO extends AgentDOBase<Env> {
     await Promise.all(
       payload.jobs.map(async (job, jobIndex) => {
         const jobScope = `job/${payload.reservationId}-${jobIndex}`;
-        const consumer = this.env.CONSUMER_DO.get(this.env.CONSUMER_DO.idFromName(jobScope));
 
-        // GAP-C1/C2: this is the same cross-ledger forge as credit reserve,
-        // now for session -> consumer job dispatch. It is not a substrate
-        // durable delivery fact; it is app glue over a DO namespace.
-        await consumer.emitEvent({
+        await this.dispatchToScope({
+          target: { bindingRef: "consumer", scope: jobScope },
           event: "image.job.queued",
           data: {
             sessionScope: this.scopeName(),
@@ -211,6 +229,7 @@ export class SessionDO extends AgentDOBase<Env> {
             jobIndex,
             job,
           } satisfies JobQueued,
+          idempotencyKey: `job:${payload.reservationId}:${jobIndex}`,
         });
       }),
     );
@@ -218,18 +237,16 @@ export class SessionDO extends AgentDOBase<Env> {
 
   private async consumeCredit(event: LedgerEventRpc): Promise<void> {
     const delivered = event.payload as ImageDelivered;
-    const user = this.env.USER_DO.get(this.env.USER_DO.idFromName(delivered.userScope));
 
-    // GAP-C1/C3: settlement is a cross-scope business resource transition.
-    // agentOS Quota supports pre-consume for tool dispatch only; no public
-    // reserve/consume/release primitive exists for app resources.
-    await user.emitEvent({
+    await this.dispatchToScope({
+      target: { bindingRef: "user", scope: delivered.userScope },
       event: "credit.consume.requested",
       data: {
         sessionScope: this.scopeName(),
         reservationId: delivered.reservationId,
         jobScope: delivered.jobScope,
       },
+      idempotencyKey: `consume:${delivered.reservationId}:${delivered.jobScope}`,
     });
   }
 
@@ -239,6 +256,12 @@ export class SessionDO extends AgentDOBase<Env> {
 }
 
 export class UserDO extends AgentDOBase<Env> {
+  protected override provideDispatchTargets(): DispatchTargetRegistry {
+    return {
+      session: this.env.SESSION_DO,
+    };
+  }
+
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.on("credit.reserve.requested", async (event) => this.reserve(event));
@@ -246,36 +269,33 @@ export class UserDO extends AgentDOBase<Env> {
   }
 
   private async reserve(event: LedgerEventRpc): Promise<void> {
-    const payload = event.payload as {
-      readonly sessionScope: string;
-      readonly userScope: string;
-      readonly reservationId: string;
-      readonly jobs: ReadonlyArray<PlanJob>;
-    };
+    const payload = event.payload as CreditReserveRequested;
     const credits = payload.jobs.reduce((sum, job) => sum + job.credits, 0);
 
-    // GAP-C3: reservation is a hand-rolled ledger protocol. Existing
-    // withQuota cannot express reserve-now, consume-later, release-on-failure
-    // for a business resource in this user scope.
-    await this.emitEvent({
-      event: "credit.reserved",
-      data: {
-        reservationId: payload.reservationId,
-        credits,
-        jobs: payload.jobs,
-      },
+    if (!hasResourceGrant(await this.events(), "credit")) {
+      await this.grantResource({
+        key: "credit",
+        amount: 100,
+        ref: "spike-seed",
+      });
+    }
+
+    const { reservationId } = await this.reserveResource({
+      key: "credit",
+      amount: credits,
+      ref: payload.idempotencyKey,
+      idempotencyKey: payload.idempotencyKey,
     });
 
-    const session = this.env.SESSION_DO.get(this.env.SESSION_DO.idFromName(payload.sessionScope));
-    // GAP-C1/C2: reverse delivery to the session ledger is app-level RPC,
-    // not a substrate dispatch fact.
-    await session.emitEvent({
+    await this.dispatchToScope({
+      target: { bindingRef: "session", scope: payload.sessionScope },
       event: "image.credit.reserved",
       data: {
         userScope: payload.userScope,
-        reservationId: payload.reservationId,
+        reservationId,
         jobs: payload.jobs,
       } satisfies CreditReserved,
+      idempotencyKey: `reserved:${reservationId}`,
     });
   }
 
@@ -284,17 +304,27 @@ export class UserDO extends AgentDOBase<Env> {
       readonly reservationId: string;
       readonly jobScope: string;
     };
-    await this.emitEvent({
-      event: "credit.consumed",
-      data: {
-        reservationId: payload.reservationId,
-        jobScope: payload.jobScope,
-      },
+    await this.consumeResource({
+      reservationId: payload.reservationId,
+      ref: payload.jobScope,
     });
   }
 }
 
 export class ConsumerDO extends AgentDOBase<Env> {
+  protected override provideRegistry(): ProviderRegistryConfig {
+    return {
+      endpoints: { openrouter: "https://openrouter.ai/api/v1" },
+      credentials: { OPENROUTER_KEY: this.env.OPENROUTER_KEY },
+    };
+  }
+
+  protected override provideDispatchTargets(): DispatchTargetRegistry {
+    return {
+      session: this.env.SESSION_DO,
+    };
+  }
+
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.on("image.job.queued", async (event) => this.runJob(event));
@@ -303,10 +333,12 @@ export class ConsumerDO extends AgentDOBase<Env> {
   private async runJob(event: LedgerEventRpc): Promise<void> {
     const payload = event.payload as JobQueued;
 
-    // GAP-C5: image generation is a route capability, but agentOS currently
-    // has only chat-compatible LlmRoute variants. The spike must call a
-    // local image-provider shim instead of dispatching through route evidence.
-    const image = fakeImageProvider(payload.job.prompt);
+    const generated = await this.generateImage({
+      route: IMAGE_ROUTE,
+      prompt: payload.job.prompt,
+      aspectRatio: "1:1",
+    });
+    const image = await materializeArtifact(generated.artifacts[0]);
     const key = `spike-07/${this.scopeName()}/output-${payload.jobIndex}.png`;
 
     // C4 resolved as not-a-gap in this spike: R2 is a carrier. The app can
@@ -326,10 +358,8 @@ export class ConsumerDO extends AgentDOBase<Env> {
       data: { artifactRef, prompt: payload.job.prompt },
     });
 
-    const session = this.env.SESSION_DO.get(this.env.SESSION_DO.idFromName(payload.sessionScope));
-    // GAP-C1/C2: consumer -> session completion delivery repeats the same
-    // missing cross-ledger durable delivery primitive.
-    await session.emitEvent({
+    await this.dispatchToScope({
+      target: { bindingRef: "session", scope: payload.sessionScope },
       event: "image.delivered",
       data: {
         userScope: payload.userScope,
@@ -337,6 +367,7 @@ export class ConsumerDO extends AgentDOBase<Env> {
         jobScope: this.scopeName(),
         artifactRef,
       } satisfies ImageDelivered,
+      idempotencyKey: `delivered:${payload.reservationId}:${this.scopeName()}`,
     });
   }
 
@@ -365,7 +396,44 @@ function findRequest(events: ReadonlyArray<LedgerEventRpc>): RequestCreated | nu
   return null;
 }
 
-function fakeImageProvider(prompt: string): ArrayBuffer {
-  const bytes = new TextEncoder().encode(`not-a-real-png:${prompt}`);
-  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+function hasResourceGrant(
+  events: ReadonlyArray<LedgerEventRpc>,
+  key: string,
+): boolean {
+  return events.some((event) => {
+    if (event.kind !== "resource.granted") return false;
+    const payload = event.payload as Partial<{ key: string }>;
+    return payload.key === key;
+  });
+}
+
+async function materializeArtifact(
+  artifact: ImageArtifact | undefined,
+): Promise<ArrayBuffer> {
+  if (artifact === undefined) {
+    throw new Error("generateImage returned no artifacts");
+  }
+  if (artifact.kind === "bytes") {
+    const copy = new Uint8Array(artifact.bytes.byteLength);
+    copy.set(artifact.bytes);
+    return copy.buffer;
+  }
+  if (artifact.kind === "data-url") {
+    const comma = artifact.dataUrl.indexOf(",");
+    if (comma < 0) {
+      throw new Error("invalid image data URL");
+    }
+    const encoded = artifact.dataUrl.slice(comma + 1);
+    const binary = atob(encoded);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes.buffer;
+  }
+  const response = await fetch(artifact.url);
+  if (!response.ok) {
+    throw new Error(`image artifact fetch failed: ${response.status}`);
+  }
+  return await response.arrayBuffer();
 }
