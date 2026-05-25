@@ -482,6 +482,13 @@ These constraints are conditions on **carrier implementations**, not on the
 §5 core algebra. Each shipped carrier in `@agent-os/cf-tools` includes a
 conformance check exercising C1–C4 against its own primitives.
 
+R2 artifact storage is an INV-9 carrier, not a core ledger primitive. The
+carrier owns bytes, key containment, retention, public URL policy, and cleanup;
+the ledger stores only artifact refs such as `{key, contentType, byteSize}`.
+Do not add `R2Carrier` to core unless a future app proves that this carrier
+boundary creates duplicated truth or hand-rolled compensation outside the
+carrier.
+
 ---
 
 ## 12. CF services mapping
