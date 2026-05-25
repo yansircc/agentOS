@@ -380,18 +380,25 @@ type LlmRoute =
 
 Notes:
 
-- `anthropicVersion` is optional. If supplied, included in
-  `routeFingerprint` (via spec-25 §3 canonical JSON), so version-pinned
-  routes produce isolated evidence streams. Default `"2023-06-01"` is
-  applied at transport time only and does NOT enter the fingerprint —
-  routes that don't pin a version are pooled.
+- `anthropicVersion` is optional on the public route shape. The
+  **effective** value (pinned route value, or the substrate's current
+  default if omitted) is injected into `routeFingerprint` BEFORE
+  canonical JSON via `normalizeRouteForFingerprint`. Pinned routes and
+  unpinned routes against the same current default share the same
+  fingerprint; unpinned routes against different default values do
+  NOT.
 
-  Rationale for "default not in fingerprint": if a future agent-OS
-  release bumps the default Anthropic version, existing un-pinned routes
-  should NOT have their lease evidence invalidated by that bump — they
-  asked for "whatever the substrate currently uses", which is exactly
-  what the new default delivers. Routes that need version stability
-  pin it explicitly.
+  Rationale (corrected by Codex 2026-05-26): a different Anthropic API
+  version is a different wire surface (different feature set, different
+  error semantics). Capability evidence collected under version V must
+  NOT roll forward to version V+1 — that would project a lease across a
+  capability boundary. The earlier draft argued "default bumps should
+  not invalidate unpinned routes because they asked for 'whatever
+  current is'"; that reading violated the spec-25 invariant. The fix is
+  normalization at the fingerprint boundary: bumping
+  `LLM_DEFAULTS.anthropicVersion` in core invalidates all unpinned
+  anthropic-messages leases by construction, forcing re-admission
+  against the new wire.
 
 - `openai-responses` from spec-25 §3 is **not** registered in this spec.
   Its decode shape differs from Chat Completions (Responses API has its
@@ -682,14 +689,16 @@ export class MyAgent extends AgentDOBase<Env> {
 await agent.submit({
   intent:  "plan a trip",
   context: { ... },
-  agent:   {
-    route: {
-      kind:          "anthropic-messages",
-      endpointRef:   "anthropic-aihubmix",
-      credentialRef: "ANTHROPIC_KEY_AIHUBMIX",
-      modelId:       "claude-sonnet-4-6",
-    },
+  route: {
+    kind:          "anthropic-messages",
+    endpointRef:   "anthropic-aihubmix",
+    credentialRef: "ANTHROPIC_KEY_AIHUBMIX",
+    modelId:       "claude-sonnet-4-6",
+    // `anthropicVersion` is optional; omit to pool with the substrate's
+    // current default (which IS part of the fingerprint via
+    // normalization — bumping it invalidates this route's lease).
   },
+  tools:        {},
   outputSchema: TripPlanSchema,
   deliver:      { event: "trip.planned" },
 });

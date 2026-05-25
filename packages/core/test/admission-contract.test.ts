@@ -146,6 +146,67 @@ describe("admission — canonical fingerprint (spec-25 §4.1, spike-04 A1/A2)", 
     const b = routeFingerprint({ kind: "cf-ai-binding", modelId: "@cf/x3qxkshczh" });
     expect(a).not.toBe(b);
   });
+
+  // ── Codex regression 2026-05-26: anthropic-messages route default
+  //    must enter the fingerprint. `anthropicVersion` is part of the
+  //    wire surface (different version = different feature set + error
+  //    semantics), so capability evidence keyed without it would roll
+  //    forward incorrectly when the substrate later bumps its default.
+  //    Normalization injects the current default before canonical JSON,
+  //    making bumps invalidate unpinned-route leases by construction.
+  it("anthropic route: unpinned routeFingerprint matches explicit current default", () => {
+    const unpinned = routeFingerprint({
+      kind: "anthropic-messages",
+      endpointRef: "test",
+      credentialRef: "K",
+      modelId: "claude-sonnet-4-6",
+    });
+    const explicitDefault = routeFingerprint({
+      kind: "anthropic-messages",
+      endpointRef: "test",
+      credentialRef: "K",
+      modelId: "claude-sonnet-4-6",
+      anthropicVersion: "2023-06-01",
+    });
+    expect(unpinned).toBe(explicitDefault);
+    // and the canonical JSON actually contains the version field
+    expect(unpinned).toContain('"anthropicVersion":"2023-06-01"');
+  });
+
+  it("anthropic route: pinned version yields a fingerprint distinct from default", () => {
+    const unpinned = routeFingerprint({
+      kind: "anthropic-messages",
+      endpointRef: "test",
+      credentialRef: "K",
+      modelId: "claude-sonnet-4-6",
+    });
+    const pinnedFuture = routeFingerprint({
+      kind: "anthropic-messages",
+      endpointRef: "test",
+      credentialRef: "K",
+      modelId: "claude-sonnet-4-6",
+      anthropicVersion: "2099-01-01",
+    });
+    expect(unpinned).not.toBe(pinnedFuture);
+  });
+
+  it("anthropic route: same pinned version yields equal fingerprint regardless of construction order", () => {
+    const a = routeFingerprint({
+      anthropicVersion: "2024-08-01",
+      kind: "anthropic-messages",
+      endpointRef: "x",
+      credentialRef: "Y",
+      modelId: "claude-haiku",
+    });
+    const b = routeFingerprint({
+      kind: "anthropic-messages",
+      modelId: "claude-haiku",
+      endpointRef: "x",
+      credentialRef: "Y",
+      anthropicVersion: "2024-08-01",
+    });
+    expect(a).toBe(b);
+  });
 });
 
 describe("admission — projectLease pure projection (spec-25 §7.2)", () => {
