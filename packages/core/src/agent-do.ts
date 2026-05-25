@@ -35,6 +35,7 @@ import { Ledger, LedgerLive } from "./ledger";
 import { Scheduler, SchedulerLive } from "./scheduler";
 import { Quota, QuotaLive } from "./quota-service";
 import { AiBinding } from "./llm";
+import { Admission, AdmissionLive } from "./admission";
 import {
   type InternalSubmitSpec,
   submitAgentEffect,
@@ -46,7 +47,7 @@ export interface AgentDOEnv {
   readonly AI: Ai;
 }
 
-type CoreServices = Ledger | AiBinding | Scheduler | Quota;
+type CoreServices = Ledger | AiBinding | Scheduler | Quota | Admission;
 
 const makeAgentRuntime = (
   ctx: DurableObjectState,
@@ -62,8 +63,18 @@ const makeAgentRuntime = (
   );
   const quotaLayer = QuotaLive(ctx).pipe(Layer.provide(eventBusLayer));
   const aiLayer = Layer.succeed(AiBinding, ai);
+  const admissionLayer = AdmissionLive(ctx).pipe(
+    Layer.provide(eventBusLayer),
+    Layer.provide(aiLayer),
+  );
   return ManagedRuntime.make(
-    Layer.mergeAll(ledgerLayer, schedulerLayer, quotaLayer, aiLayer),
+    Layer.mergeAll(
+      ledgerLayer,
+      schedulerLayer,
+      quotaLayer,
+      aiLayer,
+      admissionLayer,
+    ),
   );
 };
 

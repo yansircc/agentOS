@@ -31,6 +31,12 @@ import { AiBinding, callLlm, type LlmMessage, type ToolDefinition } from "./llm"
 import { Ledger } from "./ledger";
 import { Quota } from "./quota-service";
 import { executeTool, parseToolCall, type Tool } from "./tools";
+import {
+  Admission,
+  type JsonSchemaObject,
+  type LlmRoute,
+  makeSchemaContract,
+} from "./admission";
 
 export interface SubmitSpec {
   readonly intent: string;
@@ -45,6 +51,13 @@ export interface SubmitSpec {
     /** Per-tool retry attempts (total = retries + 1). Default 2 (so 3 attempts). */
     readonly toolRetries?: number;
   };
+  /** Spec-25: optional structured output schema. When present, the agent
+   *  loop is bypassed; a single `attemptStructured` call is made under the
+   *  evidence-derived admission lease. The decoded output is written via
+   *  the deliver event payload atomically with the evidence row. In
+   *  v0.2.10, `outputSchema` and a non-empty `tools` are mutually
+   *  exclusive (one-shot structured output, no tool-using turns). */
+  readonly outputSchema?: JsonSchemaObject;
   /** Only the event name. Scope is structurally owned by the DO instance. */
   readonly deliver: { readonly event: string };
 }
@@ -106,7 +119,7 @@ export const submitAgentEffect = (
 ): Effect.Effect<
   SubmitResult,
   SqlError | JsonStringifyError,
-  Ledger | AiBinding | Quota
+  Ledger | AiBinding | Quota | Admission
 > =>
   Effect.gen(function* () {
     const ledger = yield* Ledger;
@@ -124,6 +137,95 @@ export const submitAgentEffect = (
     );
 
     const tokensUsedRef = yield* Ref.make(0);
+
+    // ====================================================================
+    // Spec-25 short path: structured-output submit (one-shot, no loop).
+    //
+    // outputSchema present → bypass the multi-turn tool loop entirely.
+    // attemptStructured handles the admission gate (lease cache), provider
+    // call, decode, evidence emission, and deliver event in one
+    // transactionSync. v0.2.10 requires tools to be empty when
+    // outputSchema is supplied; mixing the two is deferred until a real
+    // app needs it.
+    // ====================================================================
+    if (spec.outputSchema !== undefined) {
+      if (Object.keys(spec.tools).length > 0) {
+        return yield* finalAbort(
+          ABORT.UPSTREAM_FAILURE,
+          {
+            reason: "output_schema_excludes_tools_in_v0_2_10",
+            toolCount: Object.keys(spec.tools).length,
+          },
+          scope,
+          ingest.id,
+          0,
+        );
+      }
+
+      const admission = yield* Admission;
+      const schemaContract = yield* makeSchemaContract(spec.outputSchema);
+      const route: LlmRoute = {
+        kind: "cf-ai-binding",
+        modelId: `${spec.agent.provider}/${spec.agent.model}`,
+      };
+
+      const ctxStr = yield* safeStringifyPretty(spec.context);
+      const userText = `${spec.intent}\n\nContext:\n${ctxStr}`;
+      const deliverEventName = spec.deliver.event;
+
+      const result = yield* admission.attemptStructured<unknown>({
+        scope,
+        route,
+        schemaContract,
+        strategy: "forced-tool-call",
+        stimulus: {
+          kind: "live",
+          userInput: { userText },
+          deliver: (decoded) => ({
+            event: deliverEventName,
+            payload: decoded,
+          }),
+        },
+      });
+
+      if (result.ok) {
+        const tokens =
+          result.outcome.class === "Supported"
+            ? result.outcome.tokensUsed
+            : 0;
+        yield* Ref.set(tokensUsedRef, tokens);
+        const events = yield* ledger.events(scope);
+        const finalStr = yield* safeStringify(result.decoded);
+        return {
+          ok: true,
+          runId: ingest.id,
+          final: finalStr,
+          eventCount: events.length,
+          tokensUsed: tokens,
+        } as const;
+      }
+
+      // attemptStructured returned a non-Supported outcome. Funnel
+      // through finalAbort so the abort taxonomy stays stable (no new
+      // ABORT kind for v0.2.10).
+      return yield* finalAbort(
+        ABORT.UPSTREAM_FAILURE,
+        {
+          reason: "structured_output_failed",
+          outcomeClass: result.outcome.class,
+          shortCircuited: result.shortCircuited,
+          admissionImpact: result.admissionImpact,
+          lease: result.lease,
+        },
+        scope,
+        ingest.id,
+        0,
+      );
+    }
+
+    // ====================================================================
+    // Spec-24 standard path: multi-turn tool loop.
+    // ====================================================================
 
     const ctxStr = yield* safeStringifyPretty(spec.context);
     const initialMessages: LlmMessage[] = [

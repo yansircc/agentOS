@@ -74,6 +74,13 @@ export interface LlmRequest {
   readonly model: string;
   readonly messages: ReadonlyArray<LlmMessage>;
   readonly tools?: ReadonlyArray<ToolDefinition>;
+  /** Forces the model to call the named function (OpenAI / Workers AI
+   *  forced-tool-call). Used by admission's structured-output strategy
+   *  (spec-25 §6). Free-text agent loops leave this undefined. */
+  readonly tool_choice?: {
+    readonly type: "function";
+    readonly function: { readonly name: string };
+  };
 }
 
 export const callLlm = (
@@ -85,7 +92,11 @@ export const callLlm = (
       try: () =>
         (ai as { run: (m: string, p: unknown) => Promise<unknown> }).run(
           request.model,
-          { messages: request.messages, tools: request.tools },
+          {
+            messages: request.messages,
+            tools: request.tools,
+            tool_choice: request.tool_choice,
+          },
         ),
       catch: (cause) => new UpstreamFailure({ cause }),
     });

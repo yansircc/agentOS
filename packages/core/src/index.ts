@@ -43,3 +43,19 @@ export {
   UpstreamFailure,
   ToolError,
 } from "./errors";
+
+// ===== Spec-25 structured-output types (apps may inspect lease / outcome
+//        via on('llm.structured.evidence') handlers, and may build a
+//        JsonSchemaObject to pass as submitSpec.outputSchema). =====
+export type {
+  LlmRoute,
+  Strategy,
+  JsonSchemaObject,
+  JsonSchemaNode,
+  SchemaContract,
+  Outcome,
+  OutcomeClass,
+  CapabilityLease,
+  AttemptKey,
+  AdmissionImpact,
+} from "./admission";
