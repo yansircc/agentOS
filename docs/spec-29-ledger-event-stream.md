@@ -227,17 +227,27 @@ interface EventBus {
 for reactive handlers. `subscribe` is reachable only from inside the
 substrate (`streamEvents` uses it; nothing else does in v0).
 
-Algorithm:
+Algorithm (canonical form — single subscription + mutable mode):
 
 ```
 streamEvents(afterId, filter):
   watermark = afterId
-  liveQueue = []                                        # in-memory buffer
+  liveQueue = []
+  mode = "buffering"                                    # mutable
 
-  # ── step 1: register the stream-internal subscriber BEFORE any read ──
+  # ── step 1: register ONE subscriber whose sink reads `mode` ──
   sub = eventBus.subscribe({
     kinds: filter,
-    sink: (event) => liveQueue.push(event),
+    sink: (event) => {
+      if (mode === "buffering") {
+        liveQueue.push(event)
+      } else {  # mode === "live"
+        if (event.id > watermark) {
+          emit_sse(event)
+          watermark = event.id
+        }
+      }
+    },
   })
 
   # ── step 2: snapshot what's already committed ──
@@ -253,27 +263,19 @@ streamEvents(afterId, filter):
     emit_sse(ev)
     watermark = max(watermark, ev.id)
 
-  # ── step 4: drain liveQueue, dedup against the snapshot ──
-  while liveQueue:
-    ev = liveQueue.shift()
-    if ev.id > watermark:
-      emit_sse(ev)
-      watermark = ev.id
-
-  # ── step 5: switch sink to live emit; same watermark guard ──
-  sub.unsubscribe()
-  sub = eventBus.subscribe({
-    kinds: filter,
-    sink: (event) => {
-      if (event.id > watermark) {
-        emit_sse(event)
-        watermark = event.id
-      }
-    },
-  })
-
-  # ── plus a heartbeat timer ──
-  setInterval(() => emit_keepalive(), heartbeatMs)
+  # ── step 4: ATOMIC drain + mode flip                         ──
+  # ── MUST run as a single uninterrupted synchronous block:    ──
+  # ──   no await, no yield*, no Promise.then between the loop  ──
+  # ──   exit and the `mode = "live"` assignment. Any yield here ──
+  # ──   re-introduces the lost-event window this algorithm     ──
+  # ──   exists to close.                                       ──
+  ATOMIC:
+    for ev in liveQueue:
+      if ev.id > watermark:
+        emit_sse(ev)
+        watermark = ev.id
+    liveQueue.length = 0
+    mode = "live"
 
   # ── on AbortSignal from the request ──
   signal.onabort = () => {
@@ -281,13 +283,29 @@ streamEvents(afterId, filter):
     clearInterval(heartbeatHandle)
     controller.close()
   }
+
+  # ── heartbeat timer ──
+  setInterval(() => emit_keepalive(), heartbeatMs)
 ```
 
-The two-phase subscription (queue sink during snapshot, then unsubscribe
-and resubscribe with the live emit sink) is the simplest way to keep
-the body free of per-call mode flags. An equivalent implementation
-keeps a single `subscribe` with a mutable `sink` field; both are
-correct so long as the watermark invariant holds.
+The mutable `mode` field is the canonical mechanism. The sink is
+registered ONCE and stays registered for the stream lifetime; only its
+behavior flips via the mode read. There is no unsubscribe/resubscribe
+during the steady-state path.
+
+An equivalent unsubscribe/resubscribe implementation IS permissible
+only if it can prove the entire "unsubscribe → resubscribe" sequence
+runs without yielding to the event loop (no `await`, no microtask
+boundary, no `yield*` between the two calls). If that proof is hard
+to write, use the canonical mutable-mode form. The canonical form is
+the spec; resubscribe-style is an equivalent implementation only.
+
+`emit_sse(ev)` writes synchronously into the `ReadableStream`
+controller (`controller.enqueue` is sync in the WHATWG Streams API).
+The mode read in the sink is a single property load, also sync. So as
+long as step 4 has no explicit yield, the sink cannot observe an
+intermediate state where the queue is drained but mode is still
+`"buffering"`.
 
 ### 3.1 Why this works
 
@@ -300,7 +318,7 @@ Three windows during stream startup:
 |---|---|---|
 | Before subscription | snapshot SELECT (sees committed state) | step 3 |
 | Between subscribe and snapshot | BOTH liveQueue AND snapshot | step 3 emits; step 4 dedups |
-| After snapshot completes | liveQueue only | step 4 / step 5 |
+| After snapshot completes | liveQueue only (`mode === "buffering"`) → atomic drain in step 4 → live emit (`mode === "live"`) | step 4 atomic block, then sink direct-emit |
 
 The id watermark monotonically increases. `id` is unique per DO (SQLite
 INTEGER PRIMARY KEY AUTOINCREMENT) and totally ordered by INSERT
@@ -445,13 +463,32 @@ Contract tests in `packages/core/test/event-stream-contract.test.ts`:
 - emit events DURING the snapshot SELECT (simulate by an artificial
   delay); verify they arrive once after the snapshot drain.
 
-### 7.2 Cursor + reconnect
+### 7.2 Cursor (core contract — DO method)
+
+These tests target `AgentDOBase.streamEvents` directly and MUST NOT
+exercise HTTP header parsing. The DO method's only cursor input is
+`afterId: number`.
 
 - open stream with `afterId: 5`; expect only events with id > 5.
-- open stream with no `afterId` and Last-Event-ID header = "5"; same
-  result.
-- close stream after N events, reopen with Last-Event-ID = N; expect
-  resume from id N+1, no overlap.
+- open stream with no `afterId`; expect every committed event from
+  id 1 onward.
+- close stream after N events, reopen with `afterId: N`; expect resume
+  from id N+1, no overlap (server-side handoff invariant per C-2).
+
+### 7.2.1 Reconnect (Worker integration — outside core contract)
+
+Tests at the Worker fetch handler layer. Verifies that the integration
+shape in §6 wires `Last-Event-ID` into `afterId` correctly. These are
+NOT core contract tests; they belong in app or integration test suites
+to keep the substrate's surface free of HTTP semantics.
+
+- Worker fetch handler reads `Last-Event-ID: 5` from the request,
+  parses to integer 5, calls `stub.streamEvents({ afterId: 5 })`.
+  End-to-end result is identical to the corresponding `afterId: 5`
+  core-contract case.
+- Missing or unparseable `Last-Event-ID` ⇒ Worker passes
+  `afterId: 0` (or omits the option). Stream starts from the
+  beginning.
 
 ### 7.3 Filter
 
@@ -526,6 +563,7 @@ Contract tests in `packages/core/test/event-stream-contract.test.ts`:
 | Wire = `LedgerEventRpc`, not app vocabulary | spec-29 review 2026-05-26: vibe-coding-web's `AgentStreamEvent` schema is what the substrate is replacing, not extending |
 | Cursor = ledger `id ASC`, not `(ts, id)` | This stream does no time math, only ordering; `id` is unique per DO so `id ASC` is the complete rule. `(ts, id)` is spec-25 §7.2's projection-cutoff rule and stays there |
 | Subscribe-first + dedup, not subscribe-after | Codex 2026-05-26: subscribe-after has an unavoidable lost-events window |
+| Single subscription + mutable `mode`, NOT unsubscribe/resubscribe | Codex 2026-05-26 round 2: any gap between `sub.unsubscribe()` and the next `subscribe()` re-introduces a lost-event window across the snapshot→live handoff. The mutable-mode form is yield-free by construction; resubscribe-style is only correct as an equivalent implementation if the gap can be proved to have no async yield |
 | Stream uses internal `EventBus.subscribe`, not `AgentDOBase.on()` | Codex 2026-05-26: app `on()` carries per-handler timeout/catch semantics for reactive handlers; stream sinks need synchronous push with stream-scoped lifetime. Reusing `on()` would either contaminate the stream with app handler semantics or change `on()`'s contract for apps |
 | `streamEvents` takes only `afterId`, no HTTP header parsing in the DO | Codex 2026-05-26: DO methods have no `Request`; pushing header semantics into the substrate leaks transport across the layer boundary. Worker fetch handler owns `Last-Event-ID` parsing |
 | C-2 is server-side handoff, not end-to-end delivery | Codex 2026-05-26: substrate cannot guarantee bytes leaving the socket reach the client app; client recovers via reconnect with its actually-received last id |
