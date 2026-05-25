@@ -91,15 +91,25 @@ may speak different protocols; the URL cannot determine carrier shape.
 
 ```ts
 type LlmRoute =
-  | { kind: "cf-ai-binding";          modelId: string; gateway?: GatewayRef }
-  | { kind: "openai-chat-compatible"; endpointRef: EndpointRef; modelId: string }
-  | { kind: "openai-responses";       endpointRef: EndpointRef; modelId: string }
-  | { kind: "anthropic-messages";     endpointRef: EndpointRef; modelId: string }
-  | { kind: "gemini-generate-content";endpointRef: EndpointRef; modelId: string };
+  | { kind: "cf-ai-binding";          modelId: string;     gatewayRef?: string }
+  | { kind: "openai-chat-compatible"; endpointRef: string; credentialRef: string; modelId: string }
+  // future adapter slots (not implemented in v0.2.13):
+  | { kind: "openai-responses";       endpointRef: string; credentialRef: string; modelId: string }
+  | { kind: "anthropic-messages";     endpointRef: string; credentialRef: string; modelId: string }
+  | { kind: "gemini-generate-content";endpointRef: string; credentialRef: string; modelId: string };
 ```
 
-- `EndpointRef` is a stable symbolic id (resolved from config / secrets at
-  call time); it is **not** a raw URL. Two endpoints with identical URLs but
+- **`endpointRef`** is a stable symbolic id (resolved from app / wrangler
+  env at call time via `ProviderRegistry`); it is **not** a raw URL. Two
+  endpoints with identical URLs but
+  different protocol semantics MUST resolve to different refs.
+- **`credentialRef`** is the symbolic name of the credential in
+  `ProviderRegistry`; the secret value is resolved at call time and
+  NEVER persisted in evidence (only the ref is hashed into
+  `routeFingerprint`). Credential rotation does not invalidate
+  capability evidence — same ref, new value behind it. See
+  [spec-24 INV-8](./spec-24-invariants-and-surface.md#2-invariants-10)
+  for the boundary rationale.
   different protocol semantics MUST resolve to different `EndpointRef`.
 - `kind` enumerates **protocols**. Protocols are finite. Models are not.
 - `routeFingerprint = "route-json-v1:" + canonicalJson({ kind, endpointRef, modelId, gatewayRef? })`.
@@ -560,28 +570,32 @@ sink reads; no further spec change is needed when wiring the sink.
 initially registers exactly one:
 
 ```ts
-adapters = new Map<LlmRoute["kind"], Adapter<any>>([
-  ["cf-ai-binding", cfAiBindingAdapter],
-  // openai-chat-compatible:  pending (custom endpoint + secret + BYOK boundary)
-  // openai-responses:        pending
+adapters: Record<LlmRoute["kind"], StructuredOutputAdapter> = {
+  "cf-ai-binding":           cfAiBindingAdapter,           // v0.2.10
+  "openai-chat-compatible":  openaiChatCompatibleAdapter,  // v0.2.13
+  // openai-responses:        pending (Responses API has a different
+  //                                   response shape than Chat Completions)
   // anthropic-messages:      pending
   // gemini-generate-content: pending
-]);
+};
 ```
 
-`attemptStructured` on an unregistered `kind` fails at entry with
-`ConfigError({ reason: "transport_not_enabled" })`. The algebra remains
-total; only the adapter table is partial.
+`attemptStructured` on an unregistered `kind` is a TS-level error (the
+registry is `Record<LlmRoute["kind"], ...>`); the algebra remains total.
 
-Adding the second transport (likely `openai-chat-compatible` for
-OpenRouter / self-hosted / AI Gateway BYOK) requires a separate PR that
-also defines:
-- `EndpointRef` resolution from secrets
-- Quota ownership per endpoint
-- Cost / billing attribution
-- Per-endpoint audit policy
+The v0.2.13 `openai-chat-compatible` adapter shares the encode/decode/
+classify implementation with `cf-ai-binding` — both speak Chat
+Completions wire. They differ in `kind` (so `adapterId` reflects which
+transport actually served the call, preventing evidence row corruption)
+and in transport dispatch via `dispatchProvider` in `llm.ts`:
 
-This PR is **out of scope** for spec-25 v0. See §15.
+- `cf-ai-binding` → `env.AI.run(modelId, body)`
+- `openai-chat-compatible` → `fetch(endpoint + "/chat/completions", {
+   Authorization: Bearer ${credential}, body: { model: modelId, ...body } })`
+
+A protocol that needs different encode/decode (e.g. `anthropic-messages`
+with its `content[].type === "tool_use"` response shape) will get a
+distinct adapter implementation when added.
 
 ---
 

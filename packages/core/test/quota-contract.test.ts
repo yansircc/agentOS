@@ -68,11 +68,10 @@ const buildRuntime = (state: DurableObjectState, ai: Ai) => {
   const ledger = LedgerLive(state.storage.sql).pipe(Layer.provide(eventBus));
   const quota = QuotaLive(state).pipe(Layer.provide(eventBus));
   const aiLayer = Layer.succeed(AiBinding, ai);
+  const registry = ProviderRegistryLive({ endpoints: {}, credentials: {} });
   const admission = AdmissionLive(state).pipe(
     Layer.provide(eventBus),
-    Layer.provide(aiLayer),
   );
-  const registry = ProviderRegistryLive({ endpoints: {}, credentials: {} });
   return ManagedRuntime.make(
     Layer.mergeAll(ledger, quota, aiLayer, admission, registry),
   );

@@ -128,6 +128,86 @@ export interface LlmRequest {
 // ============================================================
 //   Adapter dispatch
 // ============================================================
+//   Transport — raw provider IO, returned WITHOUT decoding.
+//
+//   `dispatchProvider` is the single transport seam: encode-shape goes in,
+//   raw upstream response comes out. Both `callLlm` (free-text agent loop,
+//   wraps in LlmResponseSchema decode) AND admission's `attemptStructured`
+//   (does its own adapter decode against tool_call args) consume it.
+//
+//   Sharing this is load-bearing: it guarantees a route always uses the
+//   transport its routeFingerprint claims, so capability evidence in
+//   `llm.structured.evidence` cannot lie about which endpoint actually
+//   served the request.
+// ============================================================
+
+/** Adapter-shape request body: encode-side picks `messages` / `tools` /
+ *  `tool_choice`. The route variant decides where the body goes (env.AI.run
+ *  vs fetch). `modelId` is on `route`, not on the body — the dispatcher
+ *  inserts it where the protocol requires. */
+export interface ProviderRequestBody {
+  readonly messages: ReadonlyArray<LlmMessage>;
+  readonly tools?: ReadonlyArray<ToolDefinition>;
+  readonly tool_choice?: LlmRequest["tool_choice"];
+  readonly max_tokens?: number;
+}
+
+export const dispatchProvider = (
+  route: LlmRoute,
+  body: ProviderRequestBody,
+): Effect.Effect<
+  unknown,
+  UpstreamFailure | EndpointNotFound | CredentialNotFound,
+  AiBinding | ProviderRegistry
+> => {
+  switch (route.kind) {
+    case "cf-ai-binding":
+      return Effect.gen(function* () {
+        const ai = yield* AiBinding;
+        return yield* Effect.tryPromise({
+          try: () =>
+            (ai as { run: (m: string, p: unknown) => Promise<unknown> }).run(
+              route.modelId,
+              body,
+            ),
+          catch: (cause) => new UpstreamFailure({ cause }),
+        });
+      });
+    case "openai-chat-compatible":
+      return Effect.gen(function* () {
+        const registry = yield* ProviderRegistry;
+        const endpoint = yield* registry.resolveEndpoint(route.endpointRef);
+        const apiKey = yield* registry.resolveCredential(route.credentialRef);
+        const url = `${endpoint.replace(/\/$/, "")}/chat/completions`;
+        const fullBody = { model: route.modelId, ...body };
+        return yield* Effect.tryPromise({
+          try: async () => {
+            const res = await fetch(url, {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${apiKey}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(fullBody),
+            });
+            if (!res.ok) {
+              const text = await res.text().catch(() => "");
+              throw new Error(
+                `HTTP ${res.status} ${res.statusText}: ${text.slice(0, 500)}`,
+              );
+            }
+            return (await res.json()) as unknown;
+          },
+          catch: (cause) => new UpstreamFailure({ cause }),
+        });
+      });
+  }
+};
+
+// ============================================================
+//   callLlm — free-text path. Dispatches transport via dispatchProvider,
+//   decodes through LlmResponseSchema.
+// ============================================================
 
 const decodeResponse = (
   raw: unknown,
@@ -154,82 +234,18 @@ const decodeResponse = (
     return { text, toolCalls, usage } satisfies LlmResponse;
   });
 
-const callViaCfAiBinding = (
-  route: CfAiBindingRoute,
-  request: LlmRequest,
-): Effect.Effect<LlmResponse, UpstreamFailure, AiBinding> =>
-  Effect.gen(function* () {
-    const ai = yield* AiBinding;
-    const raw = yield* Effect.tryPromise({
-      try: () =>
-        (ai as { run: (m: string, p: unknown) => Promise<unknown> }).run(
-          route.modelId,
-          {
-            messages: request.messages,
-            tools: request.tools,
-            tool_choice: request.tool_choice,
-          },
-        ),
-      catch: (cause) => new UpstreamFailure({ cause }),
-    });
-    return yield* decodeResponse(raw);
-  });
-
-const callViaOpenAIChatCompatible = (
-  route: OpenAIChatCompatibleRoute,
-  request: LlmRequest,
-): Effect.Effect<
-  LlmResponse,
-  UpstreamFailure | EndpointNotFound | CredentialNotFound,
-  ProviderRegistry
-> =>
-  Effect.gen(function* () {
-    const registry = yield* ProviderRegistry;
-    const endpoint = yield* registry.resolveEndpoint(route.endpointRef);
-    const apiKey = yield* registry.resolveCredential(route.credentialRef);
-
-    const url = `${endpoint.replace(/\/$/, "")}/chat/completions`;
-    const body = {
-      model: route.modelId,
-      messages: request.messages,
-      tools: request.tools,
-      tool_choice: request.tool_choice,
-    };
-
-    const raw = yield* Effect.tryPromise({
-      try: async () => {
-        const res = await fetch(url, {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${apiKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(body),
-        });
-        if (!res.ok) {
-          const text = await res.text().catch(() => "");
-          throw new Error(
-            `HTTP ${res.status} ${res.statusText}: ${text.slice(0, 500)}`,
-          );
-        }
-        return (await res.json()) as unknown;
-      },
-      catch: (cause) => new UpstreamFailure({ cause }),
-    });
-    return yield* decodeResponse(raw);
-  });
-
 export const callLlm = (
   request: LlmRequest,
 ): Effect.Effect<
   LlmResponse,
   UpstreamFailure | EndpointNotFound | CredentialNotFound,
   AiBinding | ProviderRegistry
-> => {
-  switch (request.route.kind) {
-    case "cf-ai-binding":
-      return callViaCfAiBinding(request.route, request);
-    case "openai-chat-compatible":
-      return callViaOpenAIChatCompatible(request.route, request);
-  }
-};
+> =>
+  Effect.gen(function* () {
+    const raw = yield* dispatchProvider(request.route, {
+      messages: request.messages,
+      tools: request.tools,
+      tool_choice: request.tool_choice,
+    });
+    return yield* decodeResponse(raw);
+  });
