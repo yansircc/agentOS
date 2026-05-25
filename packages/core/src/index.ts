@@ -265,6 +265,197 @@ export const LedgerLive = (
   );
 
 // ============================================================
+//          SCHEDULER SERVICE  (v0.2 Phase 2 — new)
+// ============================================================
+// Scheduled events are pending intents, NOT ledger truth.
+// A row only becomes truth when fireDue commits the ledger event AND
+// marks scheduled_events.fired_event_id in one SQLite transaction.
+// Alarm at-least-once retries see fired_event_id != NULL and skip.
+
+export interface ScheduledEventSpec {
+  readonly at: number;
+  readonly event: string;
+  readonly data: unknown;
+}
+
+export class Scheduler extends Context.Tag("@agent-os/Scheduler")<
+  Scheduler,
+  {
+    /** Insert a pending row. Returns the inserted id and the new earliest
+     *  pending fire_at (so AgentDOBase can call setAlarm). */
+    readonly schedule: (
+      at: number,
+      eventKind: string,
+      data: unknown,
+      scope: string,
+    ) => Effect.Effect<
+      { id: number; nextAlarmAt: number | null },
+      SqlError | JsonStringifyError
+    >;
+
+    /** Process all due pending rows atomically. Returns next earliest
+     *  pending fire_at or null. */
+    readonly fireDue: (
+      now: number,
+    ) => Effect.Effect<
+      { next: number | null; fired: number },
+      SqlError | JsonStringifyError
+    >;
+  }
+>() {}
+
+const ensureSchedulerSchema = (
+  sql: SqlStorage,
+): Effect.Effect<void, SqlError> =>
+  Effect.try({
+    try: () => {
+      sql.exec(`
+        CREATE TABLE IF NOT EXISTS scheduled_events (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          fire_at INTEGER NOT NULL,
+          event_kind TEXT NOT NULL,
+          data TEXT NOT NULL,
+          scope TEXT NOT NULL,
+          fired_event_id INTEGER REFERENCES events(id)
+        )
+      `);
+      sql.exec(`
+        CREATE INDEX IF NOT EXISTS idx_scheduled_pending
+          ON scheduled_events (fire_at)
+          WHERE fired_event_id IS NULL
+      `);
+    },
+    catch: (cause) => new SqlError({ cause }),
+  }).pipe(Effect.asVoid);
+
+const findNextPending = (
+  sql: SqlStorage,
+): Effect.Effect<number | null, SqlError> =>
+  Effect.try({
+    try: () => {
+      const rows = sql
+        .exec(
+          "SELECT MIN(fire_at) AS m FROM scheduled_events WHERE fired_event_id IS NULL",
+        )
+        .toArray();
+      const row = rows[0];
+      if (row === undefined) return null;
+      const m = row.m;
+      return m === null || m === undefined ? null : Number(m);
+    },
+    catch: (cause) => new SqlError({ cause }),
+  });
+
+export const SchedulerLive = (
+  ctx: DurableObjectState,
+): Layer.Layer<Scheduler, SqlError, EventBus> => {
+  const sql = ctx.storage.sql;
+  return Layer.scoped(
+    Scheduler,
+    Effect.gen(function* () {
+      yield* ensureSchedulerSchema(sql);
+      const bus = yield* EventBus;
+
+      return {
+        schedule: (at, eventKind, data, scope) =>
+          Effect.gen(function* () {
+            const dataStr = yield* safeStringify(data);
+            const id = yield* Effect.try({
+              try: () => {
+                const cursor = sql.exec(
+                  "INSERT INTO scheduled_events (fire_at, event_kind, data, scope) VALUES (?, ?, ?, ?) RETURNING id",
+                  at,
+                  eventKind,
+                  dataStr,
+                  scope,
+                );
+                return Number(cursor.one().id);
+              },
+              catch: (cause) => new SqlError({ cause }),
+            });
+            const nextAlarmAt = yield* findNextPending(sql);
+            return { id, nextAlarmAt };
+          }),
+
+        fireDue: (now) =>
+          Effect.gen(function* () {
+            const pending = yield* Effect.try({
+              try: () =>
+                sql
+                  .exec(
+                    "SELECT id, fire_at, event_kind, data, scope FROM scheduled_events WHERE fired_event_id IS NULL AND fire_at <= ? ORDER BY fire_at, id",
+                    now,
+                  )
+                  .toArray(),
+              catch: (cause) => new SqlError({ cause }),
+            });
+
+            let fired = 0;
+            for (const row of pending) {
+              const schedId = Number(row.id);
+              const kind = String(row.event_kind);
+              const scope = String(row.scope);
+              const dataStr = String(row.data);
+
+              const dataValue = yield* Effect.try({
+                try: () => JSON.parse(dataStr) as unknown,
+                catch: (cause) => new SqlError({ cause }),
+              });
+
+              const ts = yield* Clock.currentTimeMillis;
+
+              // Atomic INSERT events + UPDATE scheduled_events.fired_event_id.
+              // ctx.storage.transactionSync handles BEGIN/COMMIT/ROLLBACK.
+              // Idempotency: UPDATE has `AND fired_event_id IS NULL` guard;
+              // if a previous (partial) fire already marked it, the UPDATE
+              // affects 0 rows and we skip.
+              const eventOrNull = yield* Effect.try({
+                try: () =>
+                  ctx.storage.transactionSync(() => {
+                    const insertCursor = sql.exec(
+                      "INSERT INTO events (ts, kind, scope, payload) VALUES (?, ?, ?, ?) RETURNING id",
+                      ts,
+                      kind,
+                      scope,
+                      dataStr,
+                    );
+                    const eventId = Number(insertCursor.one().id);
+                    const updateCursor = sql.exec(
+                      "UPDATE scheduled_events SET fired_event_id = ? WHERE id = ? AND fired_event_id IS NULL RETURNING id",
+                      eventId,
+                      schedId,
+                    );
+                    const updatedRows = updateCursor.toArray();
+                    if (updatedRows.length === 0) {
+                      // Already fired in a previous attempt — discard.
+                      return null;
+                    }
+                    return {
+                      id: eventId,
+                      ts,
+                      kind,
+                      scope,
+                      payload: dataValue,
+                    } satisfies LedgerEvent;
+                  }),
+                catch: (cause) => new SqlError({ cause }),
+              });
+
+              if (eventOrNull !== null) {
+                yield* bus.fire(eventOrNull);
+                fired += 1;
+              }
+            }
+
+            const next = yield* findNextPending(sql);
+            return { next, fired };
+          }),
+      };
+    }),
+  );
+};
+
+// ============================================================
 //                     LLM CARRIER + SCHEMA
 // ============================================================
 
@@ -662,17 +853,23 @@ export interface AgentDOEnv {
   readonly AI: Ai;
 }
 
-type CoreServices = Ledger | AiBinding;
+type CoreServices = Ledger | AiBinding | Scheduler;
 
 const makeAgentRuntime = (
-  sql: SqlStorage,
+  ctx: DurableObjectState,
   ai: Ai,
   handlers: Map<string, Set<EventHandler>>,
 ): ManagedRuntime.ManagedRuntime<CoreServices, SqlError> => {
+  const sql = ctx.storage.sql;
   const eventBusLayer = EventBusLive(handlers);
   const ledgerLayer = LedgerLive(sql).pipe(Layer.provide(eventBusLayer));
+  const schedulerLayer = SchedulerLive(ctx).pipe(
+    Layer.provide(eventBusLayer),
+  );
   const aiLayer = Layer.succeed(AiBinding, ai);
-  return ManagedRuntime.make(Layer.merge(ledgerLayer, aiLayer));
+  return ManagedRuntime.make(
+    Layer.mergeAll(ledgerLayer, schedulerLayer, aiLayer),
+  );
 };
 
 /**
@@ -699,7 +896,7 @@ export abstract class AgentDOBase<
   > {
     if (this._runtime === undefined) {
       this._runtime = makeAgentRuntime(
-        this.ctx.storage.sql,
+        this.ctx,
         this.env.AI,
         this._handlers,
       );
@@ -758,6 +955,55 @@ export abstract class AgentDOBase<
           }),
         );
       }),
+    );
+  }
+
+  /** Schedule a future ledger event. Scope is implicit (= this DO).
+   *  Returns the inserted row id (for future cancel API).
+   *  At firing time, the event is appended to ledger + on() handlers fire. */
+  scheduleEvent(spec: ScheduledEventSpec): Promise<{ id: number }> {
+    const scope = this.ctx.id.name;
+    if (scope === undefined) {
+      return Promise.reject(new ScopeMissingError());
+    }
+    const ctx = this.ctx;
+    return this.runtime.runPromise(
+      Effect.gen(function* () {
+        const scheduler = yield* Scheduler;
+        const { id, nextAlarmAt } = yield* scheduler.schedule(
+          spec.at,
+          spec.event,
+          spec.data,
+          scope,
+        );
+        if (nextAlarmAt !== null) {
+          yield* Effect.tryPromise({
+            try: () => ctx.storage.setAlarm(nextAlarmAt),
+            catch: (cause) => new SqlError({ cause }),
+          });
+        }
+        return { id };
+      }),
+    );
+  }
+
+  /** DO alarm handler — invoked automatically by the CF runtime when the
+   *  earliest scheduled fire_at is reached. Fires all due events, reschedules
+   *  next alarm. Idempotent under at-least-once delivery. */
+  alarm(): Promise<void> {
+    const ctx = this.ctx;
+    return this.runtime.runPromise(
+      Effect.gen(function* () {
+        const scheduler = yield* Scheduler;
+        const now = yield* Clock.currentTimeMillis;
+        const { next } = yield* scheduler.fireDue(now);
+        if (next !== null) {
+          yield* Effect.tryPromise({
+            try: () => ctx.storage.setAlarm(next),
+            catch: (cause) => new SqlError({ cause }),
+          });
+        }
+      }).pipe(Effect.asVoid),
     );
   }
 }
