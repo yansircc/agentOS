@@ -30,7 +30,7 @@ import {
 import { AiBinding, callLlm, type LlmMessage, type ToolDefinition } from "./llm";
 import { Ledger } from "./ledger";
 import { Quota } from "./quota-service";
-import { dispatchTool, type Tool } from "./tools";
+import { executeTool, parseToolCall, type Tool } from "./tools";
 
 export interface SubmitSpec {
   readonly intent: string;
@@ -214,29 +214,58 @@ export const submitAgentEffect = (
         }
 
         for (const call of resp.toolCalls) {
-          const tool = spec.tools[call.function.name];
+          // Parse OUTSIDE the retry block. unknown_tool / invalid_args are
+          // non-recoverable: retrying the same args won't make them valid,
+          // AND parsing before any quota grant means invalid LLM-emitted
+          // args never consume quota.
+          const parsed = yield* parseToolCall(spec.tools, call);
+          const { tool, args } = parsed;
 
-          // Per-attempt grant + dispatch (inside Effect.retry).
+          // Per-attempt grant + execute (inside Effect.retry).
           // Each retry independently grants → retries count toward quota.
           const attemptOnce: Effect.Effect<
             unknown,
             ToolError | SqlError | JsonStringifyError
           > = Effect.gen(function* () {
-            if (tool !== undefined && tool.quota !== undefined) {
-              const amount = tool.quota.amount ?? 1;
+            if (tool.quota !== undefined) {
+              const q = tool.quota;
+              const amount = q.amount ?? 1;
               if (!Number.isFinite(amount) || amount < 0) {
                 return yield* new ToolError({
                   toolName: call.function.name,
                   cause: { reason: "invalid_quota_amount", amount },
                 });
               }
-              const key = tool.quota.key ?? call.function.name;
+              if (!Number.isFinite(q.limit) || q.limit < 0) {
+                return yield* new ToolError({
+                  toolName: call.function.name,
+                  cause: { reason: "invalid_quota_limit", limit: q.limit },
+                });
+              }
+              // windowMs accepts POSITIVE_INFINITY (unbounded billing
+              // window) but not NaN or negative.
+              const windowOk =
+                q.windowMs === Number.POSITIVE_INFINITY ||
+                (Number.isFinite(q.windowMs) && q.windowMs >= 0);
+              if (!windowOk) {
+                return yield* new ToolError({
+                  toolName: call.function.name,
+                  cause: { reason: "invalid_quota_window", windowMs: q.windowMs },
+                });
+              }
+              if (q.key !== undefined && q.key.length === 0) {
+                return yield* new ToolError({
+                  toolName: call.function.name,
+                  cause: { reason: "invalid_quota_key", key: q.key },
+                });
+              }
+              const key = q.key ?? call.function.name;
               const grant = yield* quotaService.tryGrant(
                 scope,
                 key,
                 amount,
-                tool.quota.windowMs,
-                tool.quota.limit,
+                q.windowMs,
+                q.limit,
                 call.function.name,
               );
               if (!grant.granted) {
@@ -251,7 +280,7 @@ export const submitAgentEffect = (
                 });
               }
             }
-            return yield* dispatchTool(spec.tools, call);
+            return yield* executeTool(tool, args, call.function.name);
           });
 
           const result = yield* attemptOnce.pipe(
@@ -259,14 +288,19 @@ export const submitAgentEffect = (
               times: toolRetries,
               while: (err) => {
                 // Don't retry rate_limited — quota state doesn't change
-                // between immediate retries, retrying is pointless and
-                // pollutes the ledger with multiple dispatch.rate_limited.
+                // between immediate retries.
+                // Don't retry invalid_quota_* — config error, not transient.
                 if (err._tag === ABORT.TOOL_ERROR) {
                   const cause = (err as ToolError).cause;
                   if (typeof cause === "object" && cause !== null) {
                     const reason = (cause as { reason?: unknown }).reason;
                     if (reason === "rate_limited") return false;
-                    if (reason === "invalid_quota_amount") return false;
+                    if (
+                      typeof reason === "string" &&
+                      reason.startsWith("invalid_quota_")
+                    ) {
+                      return false;
+                    }
                   }
                 }
                 return true;

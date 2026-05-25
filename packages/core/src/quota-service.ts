@@ -76,17 +76,16 @@ export const QuotaLive = (
                     .toArray();
                   let consumed = 0;
                   for (const r of rows) {
-                    try {
-                      const p = JSON.parse(String(r.payload)) as {
-                        key?: string;
-                        amount?: number;
-                      } | null;
-                      if (p && p.key === key) {
-                        consumed += Number(p.amount ?? 0);
-                      }
-                    } catch {
-                      // Skip malformed rows (defense; ledger writes are
-                      // well-formed in practice).
+                    // We are the sole writer of dispatch.consumed (line below).
+                    // Parse failure here means infra corruption, not a domain
+                    // case — let it throw, transactionSync rolls back, and
+                    // Effect.try wraps it as SqlError.
+                    const p = JSON.parse(String(r.payload)) as {
+                      key?: string;
+                      amount?: number;
+                    };
+                    if (p.key === key) {
+                      consumed += Number(p.amount ?? 0);
                     }
                   }
 
