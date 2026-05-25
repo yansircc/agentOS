@@ -39,8 +39,22 @@ import {
 } from "./admission";
 
 export interface SubmitSpec {
+  /** Task input — what this specific invocation is for. Becomes the
+   *  user message. Short, runtime-varying. */
   readonly intent: string;
+  /** Runtime facts the agent needs for THIS invocation. Stringified into
+   *  the system message under "Context available:". Variable axis. */
   readonly context: Record<string, unknown>;
+  /** Behavior program — who the agent is, how it operates, what rules
+   *  govern it. When provided, becomes the system message verbatim
+   *  (with the Context block appended). When absent, the substrate
+   *  generates a generic system from intent. Stable axis.
+   *
+   *  The three axes are intentionally distinct (see spec-24 §5.1.1):
+   *    system  = behavior program (stable)
+   *    intent  = task input       (variable)
+   *    context = facts            (variable) */
+  readonly system?: string;
   readonly agent: { readonly provider: string; readonly model: string };
   readonly tools: Record<string, Tool>;
   readonly budget?: {
@@ -228,11 +242,15 @@ export const submitAgentEffect = (
     // ====================================================================
 
     const ctxStr = yield* safeStringifyPretty(spec.context);
+    // System message: caller-supplied program (stable axis) when present,
+    // generic wrapper derived from intent when absent. The Context block
+    // appends to either. Intent always becomes the user message.
+    const systemContent =
+      spec.system !== undefined
+        ? `${spec.system}\n\nContext available:\n${ctxStr}`
+        : `You are an agent. Goal: ${spec.intent}\n\nContext available:\n${ctxStr}\n\nUse the provided tools when needed. Reply with a final natural-language answer when you have enough information.`;
     const initialMessages: LlmMessage[] = [
-      {
-        role: "system",
-        content: `You are an agent. Goal: ${spec.intent}\n\nContext available:\n${ctxStr}\n\nUse the provided tools when needed. Reply with a final natural-language answer when you have enough information.`,
-      },
+      { role: "system", content: systemContent },
       { role: "user", content: spec.intent },
     ];
 

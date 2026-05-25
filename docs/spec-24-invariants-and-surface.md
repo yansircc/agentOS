@@ -158,12 +158,35 @@ INV-7's CF Agents framework Session API handles cross-turn state
 (history compaction, hibernation) without exposing a process lifetime.
 The four terms above are exhaustive for v1.
 
+### 5.1.2 Three-axis duality on SubmitSpec
+
+Each `submit()` invocation separates three orthogonal axes — confusing
+them is a real-world failure mode (early agentOS drafts collapsed
+`system` into `intent`, producing prompt-duplication noise and
+degraded LLM behavior). Apps SHOULD use the axes as follows:
+
+| Field    | Axis                | Variability    | Becomes                              |
+|----------|---------------------|----------------|--------------------------------------|
+| `system` | behavior program    | **stable**     | system message verbatim (when set)   |
+| `intent` | task input          | variable       | user message verbatim                |
+| `context`| facts               | variable       | system message "Context:" block      |
+
+The stable / variable axis matters: `system` defines who the agent IS
+(rarely changes between invocations); `intent` and `context` describe
+what THIS invocation is about (vary per call). When `system` is omitted,
+the substrate generates a generic wrapper from `intent` for backward
+compatibility — apps with non-trivial behavior contracts should always
+supply `system` to avoid the wrapper's "You are an agent. Goal: …"
+preamble.
+
 ### 5.2 `submitAgent` — the declarative entry
 
 ```ts
 function submitAgent<C, O>(spec: {
-  intent:    string;                              // human-readable goal
-  context:   Record<string, View>;                // one-shot snapshot projection
+  intent:    string;                              // user message (task input)
+  system?:   string;                              // system message (behavior program); when omitted,
+                                                  //   substrate generates a generic wrapper from intent
+  context:   Record<string, View>;                // one-shot snapshot projection (facts)
   agent:     { provider: ProviderId; model: ModelId };
   tools:     Record<string, Carrier>;             // schema auto-translated for LLM
   budget: {
@@ -173,7 +196,7 @@ function submitAgent<C, O>(spec: {
     maxTurns?: number;                            // LLM loop iteration cap
     toolRetries?: number;                         // per-tool retry attempts
   };
-  composer?: (intent, ctx, tools) => Message[];   // optional prompt override
+  outputSchema?: JsonSchemaObject;                // spec-25: structured output via admission
   deliver:   { event: EventName };                // scope is structurally
                                                   // owned by the DO instance
                                                   // (derived from ctx.id.name)
