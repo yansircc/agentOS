@@ -11,7 +11,7 @@
  * examples/spike-01-effect/test.sh (reviewer's 2026-05-25 P1 finding).
  */
 
-import { Effect, Layer, ManagedRuntime } from "effect";
+import { Cause, Effect, Exit, Layer, ManagedRuntime, Option } from "effect";
 import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
@@ -115,6 +115,67 @@ describe("quota state machine — deterministic", () => {
       expect(counts["dispatch.consumed"]).toBe(2);
       expect(counts["dispatch.rate_limited"]).toBe(1);
       expect(counts["agent.aborted.tool_error"]).toBe(1);
+
+      await runtime.dispose();
+    });
+  });
+
+  it("malformed dispatch.consumed payload → SqlError escapes Promise (validates a304601 P2 fix)", async () => {
+    const scope = "quota-malformed-payload";
+    const id = testEnv.AGENT_DO.idFromName(scope);
+    const stub = testEnv.AGENT_DO.get(id);
+
+    await runInDurableObject(stub, async (_inst, state) => {
+      // One stub response is enough — the submit aborts during the first
+      // tryGrant call when it reads the corrupted row.
+      const ai = stubAi([toolCallResp("get_current_time", "{}", "c1")]);
+
+      const runtime = buildRuntime(state, ai);
+
+      // Touch Ledger to trigger ensureSchema (creates events table).
+      await runtime.runPromise(
+        Effect.gen(function* () {
+          const l = yield* Ledger;
+          yield* l.events("__init__");
+        }),
+      );
+
+      // Inject a malformed dispatch.consumed row directly. Payload is
+      // valid JSON but fails ConsumedPayloadSchema:
+      //   - amount is "x" (not a finite number)
+      //   - matches the key the tool will look up
+      // Without the v0.2.9 P2 fix, this row would silently be parsed as
+      // `consumed += NaN`, polluting the running total. With the fix,
+      // Schema.decodeUnknownSync throws → tx rollback → SqlError escapes.
+      state.storage.sql.exec(
+        "INSERT INTO events (ts, kind, scope, payload) VALUES (?, ?, ?, ?)",
+        Date.now(),
+        "dispatch.consumed",
+        scope,
+        JSON.stringify({
+          key: "get_current_time",
+          amount: "x",
+          toolName: "get_current_time",
+        }),
+      );
+
+      // Now run a submit that consumes quota. The Quota.tryGrant
+      // transactionSync will SELECT the malformed row, decode fails,
+      // transactionSync rolls back, Effect.try wraps the throw as
+      // SqlError. SqlError is NOT caught by submitAgentEffect.catchTags
+      // → surfaces as a Cause.Fail in the Exit.
+      const exit = await runtime.runPromiseExit(
+        submitAgentEffect(makeSpec(scope, 2)),
+      );
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        const failure = Cause.failureOption(exit.cause);
+        expect(Option.isSome(failure)).toBe(true);
+        if (Option.isSome(failure)) {
+          expect(failure.value._tag).toBe("agent_os.sql_error");
+        }
+      }
 
       await runtime.dispose();
     });
