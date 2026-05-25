@@ -93,7 +93,13 @@ CAN:
   - propose dispatch intent
 
 CANNOT:
-  - write ledger directly  (must go through dispatch carrier or ingest channel)
+  - write ledger directly. Writes happen through two channels:
+      • dispatch carrier (when a tool completes, log() inside the substrate)
+      • `AgentDOBase.emitEvent` (the app-side ingest channel — used by
+        HTTP/route handlers to land external facts in the ledger;
+        e.g., POST /answer → emitEvent({event: "interview.answer", data}))
+    The agent reasoning loop never calls emitEvent. That separation
+    keeps the LLM from authoring ledger facts unilaterally.
   - hold cross-invocation in-memory state  (memory ∈ ledger, else lost on workflow restart)
   - read external world directly  (must dispatch a read_tool, ingest result, then project)
   - execute side effects directly  (only dispatch carrier executes)
@@ -117,11 +123,20 @@ dispatch(carrier, intent)  → effect + log(event)
 log(event, scope, tier?)   → ledger
 project(view, source?)     → readonly
 
-// Reactive face (time-axis observability + scheduling)
-on(eventKind, handler)              // ledger subscribe (same-scope only in v1)
-scheduleEvent({ at, event, data })  // delayed log
+// Reactive face — write × time × subscribe triad over the ledger
+emitEvent({ event, data })          // now-write   (app fact entering ledger;
+                                    //              synchronous Ledger.log,
+                                    //              fires on() handlers before
+                                    //              promise resolves)
+scheduleEvent({ at, event, data })  // future-write (delayed log via alarm)
+on(eventKind, handler)              // subscribe    (same-scope only in v1)
 view.reflective.{agentRuns,currentBudget,currentQuotaState}  // agent self-introspection
 ```
+
+emitEvent and scheduleEvent are duals across the time axis; they are NOT
+degenerate cases of each other. scheduleEvent({at: Date.now()}) goes
+through the `scheduled_events` intent buffer + alarm fire, which is
+asynchronous and write-amplified; emitEvent is direct Ledger.log.
 
 Cross-scope `on()` is not supported in v1 (DO isolation boundary). App must forward
 via queue or Service Binding.
@@ -177,17 +192,22 @@ Business validation is the app's responsibility — it subscribes via
 **Context is snapshot, not reactive.** Captured at submit time, frozen for the whole loop.
 This guarantees `agent.run` replayability.
 
-### 5.3 `AgentDO` — the base class
+### 5.3 `AgentDOBase` — the base class
 
-Every agent-OS app uses one DO class derived from CF Agents' base:
+Every agent-OS app uses one DO class derived from `AgentDOBase`:
 
 ```ts
-export class AgentDO extends Agent<Env, State> {
-  // ledger primitives (private)
-  // submitAgent loop
-  // on() handler registry
-  // scheduleEvent via this.schedule()
-  // Session API integration for LLM history compaction
+export class AgentDO extends AgentDOBase<Env> {
+  // public methods (DO RPC boundary):
+  //   submit(spec)         — agent loop (composite: ingest + dispatch + deliver)
+  //   submit({outputSchema}) — spec-25 one-shot structured output
+  //   emitEvent(spec)      — now-write primitive (app fact → ledger)
+  //   scheduleEvent(spec)  — future-write primitive (delayed log via alarm)
+  //   events()             — ledger projection
+  //   alarm()              — auto-invoked by CF DO runtime
+  //
+  // protected (subclass extension):
+  //   on(kind, handler) / off(kind, handler) — reactive subscribe
 }
 ```
 
@@ -222,10 +242,9 @@ GET  /__ops/api/cost?scope=&model=    AI Gateway cost rollup
 
 ## 6. Carrier middleware
 
-One middleware ships in core (`withQuota`). `withStructuredOutput` was
-prototyped against Workers AI JSON Mode and reverted before v0.2.9 —
-see [notes/structured-output-exploration.md](./notes/structured-output-exploration.md)
-for design + spike-03 evidence + resume conditions.
+One middleware ships in core (`withQuota`). Structured output, originally
+proposed as a second middleware (`withStructuredOutput`), is now first-class
+on `submit({outputSchema})` via spec-25 admission — see §6.2.
 
 ### 6.1 `withQuota(carrier, spec)` — unified pre-grant + consume
 
@@ -251,16 +270,21 @@ All "pre-grant + consume" patterns are Quota instances:
 Hit → `log("dispatch.rate_limited" | "quota.exceeded")` + reject.
 Queue is **not** built in; app composes with `scheduleEvent` if needed (orthogonality).
 
-### 6.2 `withStructuredOutput(carrier, schema)` — **[Deferred from v1 MVP]**
+### 6.2 Structured output — see [spec-25](./spec-25-llm-admission.md)
 
-Explored and reverted before v0.2.9. Workers AI JSON Mode is best-effort
-(model may fabricate fields, schema not contractually enforced), and no
-current reference app needs typed LLM output. Design + spike-03 evidence
-preserved in [notes/structured-output-exploration.md](./notes/structured-output-exploration.md).
+The v0.2.9 deferral has been **superseded by spec-25** (v0.2.10). Structured
+output now ships as `submit({ outputSchema })`. Capability is treated as
+evidence (a ledger fact), not configuration: each call goes through an
+admission gate that derives a `CapabilityLease` projection from
+`llm.structured.evidence` events keyed by `(route, schemaContract,
+strategy, adapterVersion)`. No middleware, no model whitelist in core,
+no second writer for capability state.
 
-Resume condition: first reference app surfaces a real structured-output
-need, OR Cloudflare ships a Workers AI model with contractual JSON Schema
-enforcement.
+Background: the original `withStructuredOutput(carrier, schema)` design
+was reverted (see [notes/structured-output-exploration.md](./notes/structured-output-exploration.md))
+because spike-03 falsified `response_format: json_schema` reliability on
+Workers AI. Spec-25's evidence-derived approach replaces that design with
+one that does not require pre-declared model lists.
 
 **`withFallback` and `withIdempotency` are NOT shipped** — CF AI Gateway provides
 fallback natively; CF Workflows `step.do` provides idempotency natively.
@@ -594,7 +618,9 @@ on("image.requested", (event) =>
     },
     agent: { provider: "openai", model: "gpt-image-2" },
     tools: {
-      planImage:     llmCarrier,                       // [Deferred] would use withStructuredOutput when v2 ships
+      // planImage moved out of tools — spec-25 ships structured output
+      // as submit({outputSchema}) instead of a tool middleware:
+      //   const plan = await this.submit({ outputSchema: PlanSchema, ... });
       generateImage: withQuota(genImageCarrier, {
         key: event.user_id, window: "∞",
         measure: (e) => e.cost_cents,

@@ -41,6 +41,30 @@ Corollaries:
   not a governance afterthought. The admission decision is **derived** from
   evidence, not stored alongside it.
 
+### 1.1 Scope boundary — what admission does NOT cover
+
+Admission gates **LLM-produced structured claims**. It does NOT gate:
+
+- `AgentDOBase.emitEvent(spec)` — the now-write primitive added in
+  v0.2.10. emitEvent writes app-observed facts directly to the ledger
+  (e.g., HTTP POST /answer → `emitEvent("interview.answer")`). These are
+  **not LLM outputs** and have no schema contract, no provider, no
+  capability question. Admission has nothing to gate.
+- `submit(spec)` without `outputSchema` — the free-text agent loop.
+  Tool calls inside that loop go through quota (spec-24 §6.1), not
+  admission. Admission only activates when `submit({outputSchema})` is
+  the requested shape.
+
+emitEvent and admission are different generators with different
+invariants. emitEvent reads as: "I (the app) observed this fact, record
+it." `submit({outputSchema})` reads as: "I (the LLM) claim this typed
+object is a valid response; admission decides whether the route is
+trusted to produce it."
+
+Conflating them would either (a) force every external HTTP POST through
+a capability gate it doesn't need, or (b) let the LLM author untyped
+facts that bypass admission. The boundary is structural, not stylistic.
+
 ---
 
 ## 2. SSoT placement
