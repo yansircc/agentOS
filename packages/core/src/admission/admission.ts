@@ -33,7 +33,7 @@ import {
   type AdapterMode,
   getProtocolAdapter,
   llmProtocolAdapters,
-} from "../protocol/protocol-adapter";
+} from "../llm/protocol/protocol-adapter";
 import type { LedgerEvent } from "../types";
 
 import type { SchemaContract } from "./json-schema";
@@ -51,8 +51,8 @@ import { loadAdmissionRows } from "./payload";
 // Note: these symbols were historically owned by admission.ts. They now
 // live in protocol/protocol-adapter.ts (spec-27 elevation). Re-exported
 // here so callers that import from "./admission" keep working.
-export { ADAPTER_VERSION } from "../protocol/protocol-adapter";
-export type { AdapterMode } from "../protocol/protocol-adapter";
+export { ADAPTER_VERSION } from "../llm/protocol/protocol-adapter";
+export type { AdapterMode } from "../llm/protocol/protocol-adapter";
 
 // ============================================================
 // Stimulus / spec / result shapes

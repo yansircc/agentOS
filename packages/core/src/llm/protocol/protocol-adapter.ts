@@ -34,7 +34,7 @@ import type {
   ProbeInput,
   SchemaContract,
   Strategy,
-} from "../admission";
+} from "../../admission";
 
 import { cfAiBindingAdapter, openaiChatCompatibleAdapter } from "./openai-chat";
 import { anthropicMessagesAdapter } from "./anthropic-messages";

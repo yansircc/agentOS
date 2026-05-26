@@ -23,7 +23,7 @@ import type {
   LlmToolCall,
   ToolDefinition,
 } from "../llm";
-import type { SchemaContract, Strategy } from "../admission";
+import type { SchemaContract, Strategy } from "../../admission";
 import type {
   AdapterMode,
   AdapterStimulus,
@@ -39,7 +39,7 @@ import {
   parseHttpStatus,
   unwrapErrorMessage,
 } from "./shared";
-import { validateAgainstSchema } from "../admission/json-schema";
+import { validateAgainstSchema } from "../../admission/json-schema";
 
 /** Build a stable id when Gemini elides `functionCall.id`. Derived from
  *  candidate + part position so the same response always yields the

@@ -22,7 +22,7 @@ import type {
   LlmToolCall,
   ToolDefinition,
 } from "../llm";
-import type { SchemaContract, Strategy } from "../admission";
+import type { SchemaContract, Strategy } from "../../admission";
 import type {
   AdapterMode,
   AdapterStimulus,
@@ -38,7 +38,7 @@ import {
   parseHttpStatus,
   unwrapErrorMessage,
 } from "./shared";
-import { validateAgainstSchema } from "../admission/json-schema";
+import { validateAgainstSchema } from "../../admission/json-schema";
 
 const ANTHROPIC_DEFAULT_MAX_TOKENS = 4096;
 
