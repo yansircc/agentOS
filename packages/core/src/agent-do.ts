@@ -318,7 +318,7 @@ export abstract class AgentDOBase<
       Effect.gen(function* () {
         const ledger = yield* Ledger;
         const rows = yield* ledger.streamSnapshot(scope, {
-          kinds: ["dispatch.consumed", "dispatch.rate_limited"],
+          kinds: ["dispatch.consumed"],
         });
         const now = yield* Clock.currentTimeMillis;
         return yield* Effect.try({
