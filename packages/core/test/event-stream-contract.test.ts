@@ -8,7 +8,7 @@
  *   - Last-Event-ID parsing stays in Worker fetch integration.
  */
 
-import { SELF } from "cloudflare:test";
+import { SELF, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 
@@ -47,6 +47,16 @@ const stubFor = (scope: string): StreamRpc =>
   testEnv.STREAM_DO.get(
     testEnv.STREAM_DO.idFromName(scope),
   ) as unknown as StreamRpc;
+
+const withStreamDO = <A>(
+  scope: string,
+  f: (instance: StreamRpc) => Promise<A>,
+): Promise<A> => {
+  const stub = testEnv.STREAM_DO.get(testEnv.STREAM_DO.idFromName(scope));
+  return runInDurableObject(stub, (instance) =>
+    f(instance as unknown as StreamRpc),
+  );
+};
 
 const parseFrame = (raw: string): SseFrame => {
   let id: string | undefined;
@@ -122,153 +132,164 @@ const readLedgerRows = async (
 
 describe("ledger event stream — spec-29", () => {
   it("events(opts) snapshots by cursor, limit, and exact kind set", async () => {
-    const stub = stubFor("stream-events-snapshot");
-    const first = await stub.emitEvent({ event: "A", data: { n: 1 } });
-    await stub.emitEvent({ event: "B", data: { n: 2 } });
-    await stub.emitEvent({ event: "C", data: { n: 3 } });
+    await withStreamDO("stream-events-snapshot", async (stub) => {
+      const first = await stub.emitEvent({ event: "A", data: { n: 1 } });
+      await stub.emitEvent({ event: "B", data: { n: 2 } });
+      await stub.emitEvent({ event: "C", data: { n: 3 } });
 
-    const allKinds: string[] = (await stub.events()).map((e) => e.kind);
-    const afterFirstKinds: string[] = (
-      await stub.events({ afterId: first.id })
-    ).map((e) => e.kind);
-    const limitedKinds: string[] = (await stub.events({ limit: 2 })).map(
-      (e) => e.kind,
-    );
-    const filteredKinds: string[] = (
-      await stub.events({ kinds: ["A", "C"] })
-    ).map((e) => e.kind);
+      const allKinds: string[] = (await stub.events()).map((e) => e.kind);
+      const afterFirstKinds: string[] = (
+        await stub.events({ afterId: first.id })
+      ).map((e) => e.kind);
+      const limitedKinds: string[] = (await stub.events({ limit: 2 })).map(
+        (e) => e.kind,
+      );
+      const filteredKinds: string[] = (
+        await stub.events({ kinds: ["A", "C"] })
+      ).map((e) => e.kind);
 
-    expect(allKinds).toEqual(["A", "B", "C"]);
-    expect(afterFirstKinds).toEqual(["B", "C"]);
-    expect(limitedKinds).toEqual(["A", "B"]);
-    expect(filteredKinds).toEqual(["A", "C"]);
+      expect(allKinds).toEqual(["A", "B", "C"]);
+      expect(afterFirstKinds).toEqual(["B", "C"]);
+      expect(limitedKinds).toEqual(["A", "B"]);
+      expect(filteredKinds).toEqual(["A", "C"]);
+    });
   });
 
   it("streams existing snapshot rows as closed LedgerEventRpc SSE wire", async () => {
-    const stub = stubFor("stream-snapshot-wire");
-    const first = await stub.emitEvent({
-      event: "snapshot.one",
-      data: { value: 1 },
-    });
-    const second = await stub.emitEvent({
-      event: "snapshot.two",
-      data: { value: 2 },
-    });
+    await withStreamDO("stream-snapshot-wire", async (stub) => {
+      const first = await stub.emitEvent({
+        event: "snapshot.one",
+        data: { value: 1 },
+      });
+      const second = await stub.emitEvent({
+        event: "snapshot.two",
+        data: { value: 2 },
+      });
 
-    const response = await stub.streamEvents({ afterId: 0, heartbeatMs: 1_000 });
-    expect(response.headers.get("content-type")).toContain("text/event-stream");
-    const frames = await readFrames(
-      response,
-      (frame) => frame.event === "ledger",
-      2,
-    );
-    expect(frames.map((frame) => frame.id)).toEqual([
-      String(first.id),
-      String(second.id),
-    ]);
-    expect(frames.map((frame) => frame.event)).toEqual(["ledger", "ledger"]);
-    expect(frames.map((frame) => JSON.parse(frame.data ?? "{}"))).toEqual([
-      {
-        id: first.id,
-        ts: expect.any(Number),
-        kind: "snapshot.one",
-        scope: "stream-snapshot-wire",
-        payload: { value: 1 },
-      },
-      {
-        id: second.id,
-        ts: expect.any(Number),
-        kind: "snapshot.two",
-        scope: "stream-snapshot-wire",
-        payload: { value: 2 },
-      },
-    ]);
+      const response = await stub.streamEvents({
+        afterId: 0,
+        heartbeatMs: 1_000,
+      });
+      expect(response.headers.get("content-type")).toContain("text/event-stream");
+      const frames = await readFrames(
+        response,
+        (frame) => frame.event === "ledger",
+        2,
+      );
+      expect(frames.map((frame) => frame.id)).toEqual([
+        String(first.id),
+        String(second.id),
+      ]);
+      expect(frames.map((frame) => frame.event)).toEqual(["ledger", "ledger"]);
+      expect(frames.map((frame) => JSON.parse(frame.data ?? "{}"))).toEqual([
+        {
+          id: first.id,
+          ts: expect.any(Number),
+          kind: "snapshot.one",
+          scope: "stream-snapshot-wire",
+          payload: { value: 1 },
+        },
+        {
+          id: second.id,
+          ts: expect.any(Number),
+          kind: "snapshot.two",
+          scope: "stream-snapshot-wire",
+          payload: { value: 2 },
+        },
+      ]);
+    });
   });
 
   it("resumes from afterId without overlap", async () => {
-    const stub = stubFor("stream-cursor");
-    await stub.emitEvent({ event: "cursor.one", data: {} });
-    const second = await stub.emitEvent({ event: "cursor.two", data: {} });
-    await stub.emitEvent({ event: "cursor.three", data: {} });
+    await withStreamDO("stream-cursor", async (stub) => {
+      await stub.emitEvent({ event: "cursor.one", data: {} });
+      const second = await stub.emitEvent({ event: "cursor.two", data: {} });
+      await stub.emitEvent({ event: "cursor.three", data: {} });
 
-    const rows = await readLedgerRows(
-      await stub.streamEvents({ afterId: second.id }),
-      1,
-    );
-    expect(rows.map((row) => row.kind)).toEqual(["cursor.three"]);
+      const rows = await readLedgerRows(
+        await stub.streamEvents({ afterId: second.id }),
+        1,
+      );
+      expect(rows.map((row) => row.kind)).toEqual(["cursor.three"]);
+    });
   });
 
   it("live-tails rows emitted after stream open", async () => {
-    const stub = stubFor("stream-live-tail");
-    const response = await stub.streamEvents({ heartbeatMs: 1_000 });
+    await withStreamDO("stream-live-tail", async (stub) => {
+      const response = await stub.streamEvents({ heartbeatMs: 1_000 });
 
-    await stub.emitEvent({ event: "live.one", data: { n: 1 } });
-    await stub.emitEvent({ event: "live.two", data: { n: 2 } });
-    await stub.emitEvent({ event: "live.three", data: { n: 3 } });
+      await stub.emitEvent({ event: "live.one", data: { n: 1 } });
+      await stub.emitEvent({ event: "live.two", data: { n: 2 } });
+      await stub.emitEvent({ event: "live.three", data: { n: 3 } });
 
-    const rows = await readLedgerRows(response, 3);
-    expect(rows.map((row) => row.kind)).toEqual([
-      "live.one",
-      "live.two",
-      "live.three",
-    ]);
+      const rows = await readLedgerRows(response, 3);
+      expect(rows.map((row) => row.kind)).toEqual([
+        "live.one",
+        "live.two",
+        "live.three",
+      ]);
+    });
   });
 
   it("hands off from snapshot to live tail without duplicate rows", async () => {
-    const stub = stubFor("stream-snapshot-live-handoff");
-    await stub.emitEvent({ event: "handoff.snapshot", data: {} });
-    const response = await stub.streamEvents({ heartbeatMs: 1_000 });
+    await withStreamDO("stream-snapshot-live-handoff", async (stub) => {
+      await stub.emitEvent({ event: "handoff.snapshot", data: {} });
+      const response = await stub.streamEvents({ heartbeatMs: 1_000 });
 
-    await stub.emitEvent({ event: "handoff.live", data: {} });
+      await stub.emitEvent({ event: "handoff.live", data: {} });
 
-    const rows = await readLedgerRows(response, 2);
-    expect(rows.map((row) => row.kind)).toEqual([
-      "handoff.snapshot",
-      "handoff.live",
-    ]);
+      const rows = await readLedgerRows(response, 2);
+      expect(rows.map((row) => row.kind)).toEqual([
+        "handoff.snapshot",
+        "handoff.live",
+      ]);
+    });
   });
 
   it("filters stream rows by exact kind set; empty kinds means all kinds", async () => {
-    const stub = stubFor("stream-filter");
-    await stub.emitEvent({ event: "A", data: {} });
-    await stub.emitEvent({ event: "B", data: {} });
-    await stub.emitEvent({ event: "C", data: {} });
+    await withStreamDO("stream-filter", async (stub) => {
+      await stub.emitEvent({ event: "A", data: {} });
+      await stub.emitEvent({ event: "B", data: {} });
+      await stub.emitEvent({ event: "C", data: {} });
 
-    const filtered = await readLedgerRows(
-      await stub.streamEvents({ kinds: ["A", "C"] }),
-      2,
-    );
-    expect(filtered.map((row) => row.kind)).toEqual(["A", "C"]);
+      const filtered = await readLedgerRows(
+        await stub.streamEvents({ kinds: ["A", "C"] }),
+        2,
+      );
+      expect(filtered.map((row) => row.kind)).toEqual(["A", "C"]);
 
-    const all = await readLedgerRows(
-      await stub.streamEvents({ kinds: [] }),
-      3,
-    );
-    expect(all.map((row) => row.kind)).toEqual(["A", "B", "C"]);
+      const all = await readLedgerRows(
+        await stub.streamEvents({ kinds: [] }),
+        3,
+      );
+      expect(all.map((row) => row.kind)).toEqual(["A", "B", "C"]);
+    });
   });
 
   it("emits heartbeat comment frames", async () => {
-    const stub = stubFor("stream-heartbeat");
-    const frames = await readFrames(
-      await stub.streamEvents({ heartbeatMs: 30 }),
-      (frame) => frame.raw.startsWith(":"),
-      3,
-      500,
-    );
-    expect(frames.every((frame) => frame.raw === ": keepalive")).toBe(true);
+    await withStreamDO("stream-heartbeat", async (stub) => {
+      const frames = await readFrames(
+        await stub.streamEvents({ heartbeatMs: 30 }),
+        (frame) => frame.raw.startsWith(":"),
+        3,
+        500,
+      );
+      expect(frames.every((frame) => frame.raw === ": keepalive")).toBe(true);
+    });
   });
 
   it("stream sink runs outside app on() handler delay", async () => {
-    const stub = stubFor("stream-outside-app-handler");
-    const response = await stub.streamEvents({ heartbeatMs: 1_000 });
-    const pendingEmit = stub.emitEvent({
-      event: "stream.slow",
-      data: { value: "visible-before-handler-finishes" },
-    });
+    await withStreamDO("stream-outside-app-handler", async (stub) => {
+      const response = await stub.streamEvents({ heartbeatMs: 1_000 });
+      const pendingEmit = stub.emitEvent({
+        event: "stream.slow",
+        data: { value: "visible-before-handler-finishes" },
+      });
 
-    const rows = await readLedgerRows(response, 1, 300);
-    expect(rows[0]?.kind).toBe("stream.slow");
-    await pendingEmit;
+      const rows = await readLedgerRows(response, 1, 300);
+      expect(rows[0]?.kind).toBe("stream.slow");
+      await pendingEmit;
+    });
   });
 
   it("Worker fetch integration parses Last-Event-ID into afterId", async () => {
