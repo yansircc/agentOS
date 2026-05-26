@@ -22,6 +22,7 @@ Check:
 
 ```sh
 echo "$AGENT_ID $TEST_RUN_ID $PORT_BASE"
+test "$(pwd)" = "$PARALLEL_WORKTREE" || { echo "wrong worktree: $(pwd)"; exit 1; }
 git branch --show-current
 ```
 
@@ -53,6 +54,12 @@ Root `.dev.vars` is ignored by git and should contain these names:
 ## Agent Rules
 
 - Write the intended write-set into `task.md` before editing.
+- Before writing files, run:
+
+  ```sh
+  test "$(pwd)" = "$PARALLEL_WORKTREE" || { echo "wrong worktree: $(pwd)"; exit 1; }
+  ```
+
 - Use `$PORT_BASE` through `$((PORT_BASE + 9))`; do not auto-pick random ports.
 - Prefix all scopes, R2 keys, queue names, and test fixtures with
   `$SCOPE_PREFIX`.
@@ -60,3 +67,18 @@ Root `.dev.vars` is ignored by git and should contain these names:
 - Do not run global cleanup commands.
 - Do not modify single-writer files unless assigned: `bun.lock`, root
   `package.json`, public barrels, migrations, generated source.
+
+## Spike Vitest
+
+Ignored spikes should not grow their own dependency installation just to run a
+small test. Use the core-owned Vitest binary:
+
+```sh
+scripts/parallel-dev/run-spike-vitest.sh spikes/_active/a04-approval-race/vitest.config.ts
+```
+
+The argument is a config path. Extra arguments are forwarded to Vitest.
+
+Fresh worktrees may receive `node_modules` symlinks from the source checkout.
+Treat dependency directories as shared read-only inputs; do not run
+`bun install` unless the task explicitly assigns dependency ownership.
