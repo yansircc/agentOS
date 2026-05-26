@@ -9,24 +9,24 @@ import type {
 } from "./events";
 
 export interface DeployPreviewRequest {
-  readonly changeId: string;
+  readonly subjectRef: string;
   readonly artifactRef: string;
   readonly targetRef: string;
 }
 
 export interface DeployPromoteRequest {
-  readonly changeId: string;
+  readonly subjectRef: string;
   readonly artifactRef: string;
   readonly productionTargetRef: string;
 }
 
 export interface DeployReadbackRequest {
-  readonly changeId: string;
+  readonly subjectRef: string;
   readonly productionRef: string;
 }
 
 export interface DeployRollbackRequest {
-  readonly changeId: string;
+  readonly subjectRef: string;
   readonly rollbackRef: string;
 }
 

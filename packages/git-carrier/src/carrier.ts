@@ -9,31 +9,31 @@ import type {
 } from "./events";
 
 export interface GitWorkspaceRequest {
-  readonly changeId: string;
+  readonly subjectRef: string;
   readonly sourceRef: string;
   readonly baseRef: string;
 }
 
 export interface GitCommitRequest {
-  readonly changeId: string;
+  readonly subjectRef: string;
   readonly workspaceRef: string;
   readonly message: string;
 }
 
 export interface GitMergeRequest {
-  readonly changeId: string;
+  readonly subjectRef: string;
   readonly workspaceRef: string;
   readonly targetRef: string;
 }
 
 export interface GitRevertRequest {
-  readonly changeId: string;
+  readonly subjectRef: string;
   readonly targetRef: string;
   readonly revertedRef: string;
 }
 
 export interface GitCleanupRequest {
-  readonly changeId: string;
+  readonly subjectRef: string;
   readonly workspaceRef: string;
 }
 

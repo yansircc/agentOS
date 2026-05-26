@@ -11,33 +11,33 @@ export const GIT_EVENTS = {
 export type GitEventKind = (typeof GIT_EVENTS)[keyof typeof GIT_EVENTS];
 
 export interface GitWorkspaceCreatedPayload {
-  readonly changeId: string;
+  readonly subjectRef: string;
   readonly workspaceRef: string;
   readonly baseRef: string;
   readonly branchRef: string;
 }
 
 export interface GitCommitRecordedPayload {
-  readonly changeId: string;
+  readonly subjectRef: string;
   readonly commitRef: string;
   readonly parentRef: string;
   readonly diffRef: string;
 }
 
 export interface GitMergeRecordedPayload {
-  readonly changeId: string;
+  readonly subjectRef: string;
   readonly mergeCommitRef: string;
   readonly targetRef: string;
 }
 
 export interface GitRevertRecordedPayload {
-  readonly changeId: string;
+  readonly subjectRef: string;
   readonly revertCommitRef: string;
   readonly revertedRef: string;
 }
 
 export interface GitWorkspaceCleanedPayload {
-  readonly changeId: string;
+  readonly subjectRef: string;
   readonly workspaceRef: string;
 }
 
@@ -47,8 +47,8 @@ export interface GitLedgerEvent {
   readonly payload: unknown;
 }
 
-export interface GitChangeProjection {
-  readonly changeId: string;
+export interface GitSubjectProjection {
+  readonly subjectRef: string;
   readonly workspaceRef?: string;
   readonly baseRef?: string;
   readonly branchRef?: string;
@@ -67,10 +67,10 @@ const stringField = (
 ): string | undefined =>
   typeof payload[key] === "string" ? payload[key] : undefined;
 
-export const projectGitChange = (
+export const projectGitSubject = (
   events: Iterable<GitLedgerEvent>,
-  changeId: string,
-): GitChangeProjection => {
+  subjectRef: string,
+): GitSubjectProjection => {
   let workspaceRef: string | undefined;
   let baseRef: string | undefined;
   let branchRef: string | undefined;
@@ -81,7 +81,7 @@ export const projectGitChange = (
 
   for (const event of events) {
     if (!isRecord(event.payload)) continue;
-    if (event.payload.changeId !== changeId) continue;
+    if (event.payload.subjectRef !== subjectRef) continue;
     switch (event.kind) {
       case GIT_EVENTS.WORKSPACE_CREATED:
         workspaceRef = stringField(event.payload, "workspaceRef");
@@ -107,7 +107,7 @@ export const projectGitChange = (
   }
 
   return {
-    changeId,
+    subjectRef,
     workspaceRef,
     baseRef,
     branchRef,

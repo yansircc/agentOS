@@ -1,7 +1,7 @@
 import {
   GIT_EVENTS,
   gitCarrierExtensionPackage,
-  projectGitChange,
+  projectGitSubject,
 } from "../src";
 
 describe("@agent-os/git-carrier", () => {
@@ -13,13 +13,13 @@ describe("@agent-os/git-carrier", () => {
     });
   });
 
-  it("projects workspace, commits, merge, and cleanup by change id", () => {
+  it("projects workspace, commits, merge, and cleanup by subject ref", () => {
     const events = [
       {
         id: 1,
         kind: GIT_EVENTS.WORKSPACE_CREATED,
         payload: {
-          changeId: "ch-1",
+          subjectRef: "ch-1",
           workspaceRef: "worktree://ch-1",
           baseRef: "main@abc",
           branchRef: "change/ch-1",
@@ -29,7 +29,7 @@ describe("@agent-os/git-carrier", () => {
         id: 2,
         kind: GIT_EVENTS.COMMIT_RECORDED,
         payload: {
-          changeId: "ch-1",
+          subjectRef: "ch-1",
           commitRef: "commit://def",
           parentRef: "main@abc",
           diffRef: "diff://def",
@@ -39,7 +39,7 @@ describe("@agent-os/git-carrier", () => {
         id: 3,
         kind: GIT_EVENTS.MERGE_RECORDED,
         payload: {
-          changeId: "ch-1",
+          subjectRef: "ch-1",
           mergeCommitRef: "commit://merge",
           targetRef: "main",
         },
@@ -48,14 +48,14 @@ describe("@agent-os/git-carrier", () => {
         id: 4,
         kind: GIT_EVENTS.WORKSPACE_CLEANED,
         payload: {
-          changeId: "ch-1",
+          subjectRef: "ch-1",
           workspaceRef: "worktree://ch-1",
         },
       },
     ] as const;
 
-    expect(projectGitChange(events, "ch-1")).toMatchObject({
-      changeId: "ch-1",
+    expect(projectGitSubject(events, "ch-1")).toMatchObject({
+      subjectRef: "ch-1",
       workspaceRef: "worktree://ch-1",
       baseRef: "main@abc",
       branchRef: "change/ch-1",

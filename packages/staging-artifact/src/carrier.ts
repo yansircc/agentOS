@@ -6,13 +6,13 @@ import type {
 } from "./events";
 
 export interface StagingPublishRequest {
-  readonly changeId: string;
+  readonly subjectRef: string;
   readonly artifactSourceRef: string;
   readonly routeKey: string;
 }
 
 export interface StagingReapRequest {
-  readonly changeId: string;
+  readonly subjectRef: string;
   readonly artifactRef: string;
   readonly reason: StagingArtifactReapedPayload["reason"];
 }
