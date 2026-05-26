@@ -38,8 +38,8 @@ import {
   CHAT_COMPLETIONS_FORCED_TOOL_NAME,
   parseHttpStatus,
   unwrapErrorMessage,
-  validateAgainstSchema,
 } from "./shared";
+import { validateAgainstSchema } from "../admission/json-schema";
 
 /** Build a stable id when Gemini elides `functionCall.id`. Derived from
  *  candidate + part position so the same response always yields the
