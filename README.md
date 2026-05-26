@@ -16,6 +16,7 @@ docs/
 packages/
   core/                  @agent-os/core implementation and contract tests
   image/                 optional image algebra
+  dynamic-worker/        optional stateless Worker-compatible code carrier
   sandbox/               optional bounded stateless sandbox algebra
   sandbox-cloudflare/    optional Cloudflare Sandbox backend
   git-carrier/           optional Git proof/projection carrier algebra
@@ -54,6 +55,7 @@ resource availability, and views are pending buffers or projections.
 - [Spec 32](docs/specs/spec-32-image-package-boundary.md): image package boundary
 - [Spec 33](docs/specs/spec-33-sandbox-carrier.md): sandbox carrier boundary
 - [Spec 34](docs/specs/spec-34-authorized-commit-calculus.md): authorized commit calculus
+- [Spec 35](docs/specs/spec-35-dynamic-worker-carrier.md): dynamic worker carrier boundary
 
 Cookbooks are not runnable examples. They are short app-shape records:
 
@@ -66,6 +68,7 @@ Cookbooks are not runnable examples. They are short app-shape records:
 - [Parallel Dev MVP](docs/cookbooks/parallel-dev-mvp.md)
 - [Parallel Agent Startup](docs/cookbooks/parallel-agent-startup.md)
 - [Happy Project Batch](docs/cookbooks/happy-project-batch.md)
+- [Vibe Strangler](docs/cookbooks/vibe-strangler.md)
 
 ## Verification
 
