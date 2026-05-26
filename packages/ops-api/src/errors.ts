@@ -10,8 +10,7 @@ export type OpsErrorCode =
   | "run_not_found"
   | "not_introspectable"
   | "method_not_allowed"
-  | "upstream_failure"
-  | "stream_capacity";
+  | "upstream_failure";
 
 const STATUS: Record<OpsErrorCode, number> = {
   bad_request: 400,
@@ -22,7 +21,6 @@ const STATUS: Record<OpsErrorCode, number> = {
   not_introspectable: 501,
   method_not_allowed: 405,
   upstream_failure: 502,
-  stream_capacity: 503,
 };
 
 export interface OpsErrorBody {
