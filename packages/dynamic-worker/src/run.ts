@@ -1,4 +1,5 @@
 import { Clock, Duration, Effect } from "effect";
+import { resolveRuntimeScope } from "@agent-os/core/runtime-scope";
 
 import { validateDynamicWorkerRequest } from "./policy";
 import {
@@ -20,7 +21,14 @@ export const runDynamicWorker = (
 > =>
   Effect.gen(function* () {
     yield* validateDynamicWorkerRequest(request);
-    yield* policy({ request });
+    const runtimeScope =
+      request.scopeRef === undefined
+        ? undefined
+        : resolveRuntimeScope(request.scopeRef);
+    yield* policy({
+      request,
+      ...(runtimeScope === undefined ? {} : { runtimeScope }),
+    });
     const started = yield* Clock.currentTimeMillis;
     const result = yield* backend.run(request).pipe(
       Effect.timeoutFail({

@@ -15,6 +15,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
+  "dependencies": {
+    "@agent-os/core": "workspace:*"
+  },
   "peerDependencies": {
     "effect": "^3.21.0"
   },

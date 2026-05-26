@@ -9,6 +9,10 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "isolatedModules": true,
+    "paths": {
+      "@agent-os/core/effect-claim": ["../core/src/effect-claim.ts"],
+      "@agent-os/core/runtime-scope": ["../core/src/runtime-scope.ts"]
+    },
     "exactOptionalPropertyTypes": false,
     "noUncheckedIndexedAccess": false
   },

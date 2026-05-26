@@ -25,6 +25,14 @@
     "./tools": {
       "types": "./src/tools.ts",
       "default": "./src/tools.ts"
+    },
+    "./effect-claim": {
+      "types": "./src/effect-claim.ts",
+      "default": "./src/effect-claim.ts"
+    },
+    "./runtime-scope": {
+      "types": "./src/runtime-scope.ts",
+      "default": "./src/runtime-scope.ts"
     }
   },
   "scripts": {

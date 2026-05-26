@@ -1,4 +1,6 @@
 import { Data, Effect } from "effect";
+import type { ScopeRef } from "@agent-os/core/effect-claim";
+import type { RuntimeScopeResolution } from "@agent-os/core/runtime-scope";
 
 export const DYNAMIC_WORKER_MAX_TIMEOUT_MS = 10_000;
 export const DEFAULT_MAX_BODY_BYTES = 16_384;
@@ -37,6 +39,7 @@ export interface DynamicWorkerLimits {
 }
 
 export interface DynamicWorkerRunRequest {
+  readonly scopeRef?: ScopeRef;
   readonly code: string;
   readonly codeRef?: string;
   readonly compatibilityDate?: string;
@@ -87,6 +90,7 @@ export class DynamicWorkerPolicyDenied extends Data.TaggedError(
 
 export interface DynamicWorkerPolicyRequest {
   readonly request: DynamicWorkerRunRequest;
+  readonly runtimeScope?: RuntimeScopeResolution;
 }
 
 export type DynamicWorkerPolicy = (
