@@ -79,7 +79,7 @@ export interface SandboxRunSuccess extends SandboxRawResult {
   readonly durationMs: number;
 }
 
-export interface SandboxLedgerFields {
+export interface SandboxResultFields {
   readonly exitCode?: number;
   readonly stdoutHead: string;
   readonly stderrHead: string;
@@ -93,8 +93,8 @@ export interface SandboxLedgerFields {
 }
 
 export type SandboxToolResult =
-  | (SandboxLedgerFields & { readonly ok: true; readonly exitCode: number })
-  | (SandboxLedgerFields & {
+  | (SandboxResultFields & { readonly ok: true; readonly exitCode: number })
+  | (SandboxResultFields & {
       readonly ok: false;
       readonly failureCode: SandboxFailureCode;
       readonly reason: string;
@@ -180,6 +180,8 @@ const validateRequest = (
   request: SandboxRunRequest,
 ): Effect.Effect<void, SandboxPolicyDenied> =>
   Effect.gen(function* () {
+    // Tool callers need one closed failure channel; malformed requests surface
+    // as PolicyDenied rather than expanding the tool result error algebra.
     if (request.command.trim().length === 0) {
       return yield* new SandboxPolicyDenied({ reason: "command must be non-empty" });
     }

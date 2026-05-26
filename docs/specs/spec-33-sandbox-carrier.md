@@ -1,4 +1,4 @@
-# Spec 32: Sandbox Carrier
+# Spec 33: Sandbox Carrier
 
 Status: v0 implementation target
 
@@ -28,6 +28,9 @@ Required constraints:
 
 - One call is one bounded run.
 - Hard timeout is finite and capped by the package.
+- Algebra timeout returns typed `Timeout`; backends wrapping cancellable
+  provider calls must wire Effect interruption into the provider cancellation
+  surface. For Cloudflare this means passing `AbortSignal` to `exec`.
 - The caller must provide every file required for that run.
 - Sandbox filesystem state is not durable truth.
 - Backend reuse is an implementation detail; apps cannot observe or depend on
@@ -48,7 +51,7 @@ type SandboxPolicy =
     Effect.Effect<void, SandboxPolicyDenied>
 ```
 
-Record helpers such as `staticPolicy({ allowedHosts })` are sugar that produce
+Record helpers such as `staticPolicy({ allowNetwork })` are sugar that produce
 the function. The function is the public contract because real policy often
 depends on scope, user role, quota, or environment.
 
@@ -113,7 +116,18 @@ type ArtifactSource =
 The tool result contains only `ArtifactRef[]`. v0 does not include an
 `ArtifactStore`; apps decide whether to write R2, S3, local files, or discard.
 
-## 6. Explicitly Not In v0
+## 6. Backend Classifier Fragility
+
+Cloudflare v0 eviction classification is string-based because the current SDK
+surface used by this package does not expose stable typed errors for sandbox
+eviction / missing-session failures.
+
+The classifier may inspect substrings such as `not found`, `404`, `evict`, or
+`destroy`. This proves only the normalized package behavior for known observed
+messages, not semantic stability of future SDK wording. When the SDK exposes
+typed errors, backend instance checks must be added before string matching.
+
+## 7. Explicitly Not In v0
 
 - Dynamic Workers / Code Mode
 - long-running sandbox jobs
@@ -127,15 +141,17 @@ The tool result contains only `ArtifactRef[]`. v0 does not include an
 - new core event prefixes such as `sandbox.*`
 - new core error classes
 
-## 7. Verification Matrix
+## 8. Verification Matrix
 
 Contract tests must cover:
 
 - `exec("ls")` minimal round trip.
 - provider eviction becomes `SandboxEvicted`.
 - policy denial becomes `PolicyDenied`.
+- allowlist policy rejects a non-allowed host.
+- backend non-completion before `timeoutMs` becomes typed `Timeout`.
+- Cloudflare backend passes cancellation signal to provider `exec`.
 - huge stdout/stderr are byte-capped with explicit byte counts and
   `truncated:true`.
 - retry/freshness is app/tool-loop policy; the sandbox package exposes one run
   per call and keeps no durable session state.
-
