@@ -20,6 +20,7 @@ export interface CloudflareSandboxExecOptions {
   readonly args?: ReadonlyArray<string>;
   readonly cwd?: string;
   readonly timeoutMs?: number;
+  readonly signal?: AbortSignal;
 }
 
 export interface CloudflareSandboxExecResult {
@@ -75,6 +76,10 @@ const classifyCloudflareFailure = (
   cause: unknown,
   sandboxId?: string,
 ): SandboxFailure => {
+  // v0 classification is necessarily string-based because the Cloudflare
+  // sandbox SDK surface does not currently provide stable typed errors here.
+  // When typed SDK errors exist, instance checks must be added before this
+  // message classifier.
   const reason = messageOf(cause);
   const lower = reason.toLowerCase();
   if (
@@ -155,11 +160,12 @@ export const makeCloudflareSandboxBackend = (
       }
 
       const raw = yield* Effect.tryPromise({
-        try: () =>
+        try: (signal) =>
           client.exec(request.command, {
             args: request.args,
             cwd: request.cwd,
             timeoutMs: request.timeoutMs,
+            signal,
           }),
         catch: (cause: unknown): SandboxFailure =>
           classifyCloudflareFailure(cause, sandboxId),

@@ -26,6 +26,7 @@ docs/
 
 packages/
   core/                  substrate package
+  image/                 optional image algebra
   sandbox/               optional bounded stateless sandbox algebra
   sandbox-cloudflare/    optional Cloudflare Sandbox backend
 
@@ -47,6 +48,8 @@ Read the minimum set:
 - Event stream: `docs/specs/spec-29-ledger-event-stream.md`
 - Boundary/cookbook decisions: `docs/specs/spec-30-substrate-boundary-cookbook.md`
 - Text streaming: `docs/specs/spec-31-text-streaming-capability.md`
+- Image package boundary: `docs/specs/spec-32-image-package-boundary.md`
+- Sandbox carrier: `docs/specs/spec-33-sandbox-carrier.md`
 - Parallel agent startup: `docs/cookbooks/parallel-agent-startup.md`
 - Parallel isolation rules: `docs/cookbooks/parallel-dev-mvp.md`
 

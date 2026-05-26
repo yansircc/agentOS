@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Effect } from "effect";
+import { Effect, Fiber, TestClock } from "effect";
 
 import {
   makeSandboxRunTool,
@@ -58,6 +58,52 @@ describe("@agent-os/sandbox v0 contract", () => {
       if (result._tag === "Left") {
         expect(result.left._tag).toBe("agent_os.sandbox_policy_denied");
         expect(result.left.reason).toBe("network is disabled");
+      }
+    }),
+  );
+
+  it.effect("allowlist policy rejects hosts outside the allowed set", () =>
+    Effect.gen(function* () {
+      const result = yield* runSandbox(
+        backend(() =>
+          Effect.succeed({
+            exitCode: 0,
+            stdout: "",
+            stderr: "",
+            artifacts: [],
+            sandboxId: "never",
+          }),
+        ),
+        staticPolicy({ allowNetwork: ["allowed.com"] }),
+        {
+          command: "curl",
+          timeoutMs: 1_000,
+          network: { mode: "allowlist", hosts: ["blocked.com"] },
+        },
+      ).pipe(Effect.either);
+
+      expect(result._tag).toBe("Left");
+      if (result._tag === "Left") {
+        expect(result.left._tag).toBe("agent_os.sandbox_policy_denied");
+        expect(result.left.reason).toContain("blocked.com");
+      }
+    }),
+  );
+
+  it.effect("times out when the backend does not complete before timeoutMs", () =>
+    Effect.gen(function* () {
+      const fiber = yield* runSandbox(
+        backend(() => Effect.never),
+        staticPolicy(),
+        { command: "sleep", timeoutMs: 10 },
+      ).pipe(Effect.either, Effect.fork);
+      yield* TestClock.adjust("11 millis");
+      const result = yield* Fiber.join(fiber);
+
+      expect(result._tag).toBe("Left");
+      if (result._tag === "Left" && result.left._tag === "agent_os.sandbox_failure") {
+        expect(result.left.code).toBe("Timeout");
+        expect(result.left.reason).toContain("10ms");
       }
     }),
   );
@@ -143,4 +189,3 @@ describe("@agent-os/sandbox v0 contract", () => {
     }),
   );
 });
-

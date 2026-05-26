@@ -1,16 +1,21 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Effect } from "effect";
+import { Effect, Fiber, TestClock } from "effect";
 
 import { runSandbox, staticPolicy } from "@agent-os/sandbox";
 import {
   makeCloudflareSandboxBackend,
   type CloudflareSandboxClient,
+  type CloudflareSandboxExecOptions,
+  type CloudflareSandboxExecResult,
 } from "../src/index";
 
 describe("@agent-os/sandbox-cloudflare backend", () => {
   it.effect("executes via the supplied Cloudflare-compatible sandbox client", () =>
     Effect.gen(function* () {
-      const calls: unknown[] = [];
+      const calls: Array<{
+        readonly command: string;
+        readonly options: CloudflareSandboxExecOptions | undefined;
+      }> = [];
       const client: CloudflareSandboxClient = {
         id: "cf-1",
         exec: (command, options) => {
@@ -39,12 +44,14 @@ describe("@agent-os/sandbox-cloudflare backend", () => {
         stderr: "",
         sandboxId: "cf-1",
       });
-      expect(calls).toEqual([
-        {
-          command: "ls",
-          options: { args: ["-la"], cwd: "/workspace", timeoutMs: 1_000 },
-        },
-      ]);
+      expect(calls).toHaveLength(1);
+      expect(calls[0]?.command).toBe("ls");
+      expect(calls[0]?.options).toMatchObject({
+        args: ["-la"],
+        cwd: "/workspace",
+        timeoutMs: 1_000,
+      });
+      expect(calls[0]?.options?.signal).toBeInstanceOf(AbortSignal);
     }),
   );
 
@@ -99,6 +106,40 @@ describe("@agent-os/sandbox-cloudflare backend", () => {
     }),
   );
 
+  it.effect("aborts the provider exec signal when algebra timeout fires", () =>
+    Effect.gen(function* () {
+      let signal: AbortSignal | undefined;
+      let aborted = false;
+      const client: CloudflareSandboxClient = {
+        id: "cf-timeout",
+        exec: (_command, options) => {
+          signal = options?.signal;
+          signal?.addEventListener("abort", () => {
+            aborted = true;
+          });
+          return new Promise<CloudflareSandboxExecResult>(() => undefined);
+        },
+      };
+      const backend = makeCloudflareSandboxBackend({
+        getSandbox: () => client,
+      });
+
+      const fiber = yield* runSandbox(backend, staticPolicy(), {
+        command: "sleep",
+        timeoutMs: 10,
+      }).pipe(Effect.either, Effect.fork);
+      yield* TestClock.adjust("11 millis");
+      const result = yield* Fiber.join(fiber);
+
+      expect(result._tag).toBe("Left");
+      if (result._tag === "Left" && result.left._tag === "agent_os.sandbox_failure") {
+        expect(result.left.code).toBe("Timeout");
+      }
+      expect(signal).toBeInstanceOf(AbortSignal);
+      expect(aborted).toBe(true);
+    }),
+  );
+
   it.effect("fails explicitly when files are requested but writeFile is absent", () =>
     Effect.gen(function* () {
       const client: CloudflareSandboxClient = {
@@ -123,4 +164,3 @@ describe("@agent-os/sandbox-cloudflare backend", () => {
     }),
   );
 });
-
