@@ -7,8 +7,8 @@
  * function surface.
  */
 
-import { describe, expect, it } from "vitest";
-import { Layer, ManagedRuntime } from "effect";
+import { describe, expect, it } from "@effect/vitest";
+import { Chunk, Effect, Layer, ManagedRuntime, Stream } from "effect";
 
 import {
   cfAiBindingAdapter,
@@ -31,6 +31,17 @@ const SCHEMA_CONTRACT = {
   schema: SCHEMA,
   fingerprint: "test-fingerprint",
 };
+
+const collectFramesEffect = <A, E>(
+  stream: Stream.Stream<A, E>,
+): Effect.Effect<ReadonlyArray<A>, E> =>
+  Stream.runCollect(stream).pipe(
+    Effect.map((chunk) => Chunk.toReadonlyArray(chunk)),
+  );
+
+const collectFramesEitherEffect = <A, E>(
+  stream: Stream.Stream<A, E>,
+) => collectFramesEffect(stream).pipe(Effect.either);
 
 // ============================================================
 // P1 regression — Codex 2026-05-25:
@@ -251,47 +262,46 @@ describe("textStream capability — spec-31", () => {
     });
   });
 
-  it("decodes token, usage, and terminal frames", async () => {
-    const capability = openaiChatCompatibleAdapter.textStream;
-    if (capability.supported === false) {
-      throw new Error("expected textStream support");
-    }
-    const encoder = new TextEncoder();
-    const stream = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(
-          encoder.encode(
-            [
-              'data: {"choices":[{"delta":{"content":"Hel"}}]}',
-              "",
-              'data: {"choices":[{"delta":{"content":"lo"}}]}',
-              "",
-              'data: {"choices":[],"usage":{"prompt_tokens":2,"completion_tokens":3,"total_tokens":5}}',
-              "",
-              "data: [DONE]",
-              "",
-            ].join("\n"),
-          ),
-        );
-        controller.close();
-      },
-    });
+  it.effect("decodes token, usage, and terminal frames", () =>
+    Effect.gen(function* () {
+      const capability = openaiChatCompatibleAdapter.textStream;
+      if (capability.supported === false) {
+        throw new Error("expected textStream support");
+      }
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(
+            encoder.encode(
+              [
+                'data: {"choices":[{"delta":{"content":"Hel"}}]}',
+                "",
+                'data: {"choices":[{"delta":{"content":"lo"}}]}',
+                "",
+                'data: {"choices":[],"usage":{"prompt_tokens":2,"completion_tokens":3,"total_tokens":5}}',
+                "",
+                "data: [DONE]",
+                "",
+              ].join("\n"),
+            ),
+          );
+          controller.close();
+        },
+      });
 
-    const frames = [];
-    for await (const frame of capability.decodeFrames(stream)) {
-      frames.push(frame);
-    }
+      const frames = yield* collectFramesEffect(capability.decodeFrames(stream));
 
-    expect(frames).toEqual([
-      { type: "token", delta: "Hel" },
-      { type: "token", delta: "lo" },
-      {
-        type: "usage",
-        usage: { promptTokens: 2, completionTokens: 3, totalTokens: 5 },
-      },
-      { type: "done" },
-    ]);
-  });
+      expect(frames).toEqual([
+        { type: "token", delta: "Hel" },
+        { type: "token", delta: "lo" },
+        {
+          type: "usage",
+          usage: { promptTokens: 2, completionTokens: 3, totalTokens: 5 },
+        },
+        { type: "done" },
+      ]);
+    }),
+  );
 
   it("cf-ai-binding dispatch stream uses env.AI.run and returns the provider stream", async () => {
     const encoder = new TextEncoder();
@@ -350,27 +360,31 @@ describe("textStream capability — spec-31", () => {
     await runtime.dispose();
   });
 
-  it("fails decode when the stream never terminates with [DONE]", async () => {
-    const capability = openaiChatCompatibleAdapter.textStream;
-    if (capability.supported === false) {
-      throw new Error("expected textStream support");
-    }
-    const encoder = new TextEncoder();
-    const stream = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(
-          encoder.encode(
-            'data: {"choices":[{"delta":{"content":"partial"}}]}\n\n',
-          ),
-        );
-        controller.close();
-      },
-    });
-
-    await expect((async () => {
-      for await (const _frame of capability.decodeFrames(stream)) {
-        // drain
+  it.effect("fails decode when the stream never terminates with [DONE]", () =>
+    Effect.gen(function* () {
+      const capability = openaiChatCompatibleAdapter.textStream;
+      if (capability.supported === false) {
+        throw new Error("expected textStream support");
       }
-    })()).rejects.toThrow("stream ended before [DONE]");
-  });
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(
+            encoder.encode(
+              'data: {"choices":[{"delta":{"content":"partial"}}]}\n\n',
+            ),
+          );
+          controller.close();
+        },
+      });
+
+      const result = yield* collectFramesEitherEffect(
+        capability.decodeFrames(stream),
+      );
+      expect(result._tag).toBe("Left");
+      if (result._tag === "Left") {
+        expect(result.left.cause).toBe("stream ended before [DONE]");
+      }
+    }),
+  );
 });

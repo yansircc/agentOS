@@ -8,7 +8,7 @@
  * Spec: docs/specs/spec-31-text-streaming-capability.md
  */
 
-import { Effect } from "effect";
+import { Effect, Stream } from "effect";
 import {
   ABORT,
   JsonStringifyError,
@@ -180,26 +180,34 @@ export const submitTextStreamEffect = (
     let text = "";
     let usage = zeroUsage;
 
-    const result = yield* Effect.tryPromise({
-      try: async () => {
-        for await (const frame of textStream.decodeFrames(stream)) {
-          if (signal.aborted) {
-            throw new UpstreamFailure({ cause: "client_disconnect" });
-          }
-          if (frame.type === "token") {
-            text += frame.delta;
-            emit({ event: "token", data: { delta: frame.delta } });
-          } else if (frame.type === "usage") {
-            usage = frame.usage;
-            emit({ event: "usage", data: frame.usage });
-          } else {
-            return "done" as const;
-          }
-        }
-        throw new Error("text stream ended without done frame");
-      },
-      catch: (cause) => new UpstreamFailure({ cause }),
-    }).pipe(Effect.either);
+    let sawDone = false;
+    const result = yield* textStream.decodeFrames(stream).pipe(
+      Stream.runForEach((frame) =>
+        signal.aborted
+          ? Effect.fail(new UpstreamFailure({ cause: "client_disconnect" }))
+          : Effect.sync(() => {
+              if (frame.type === "token") {
+                text += frame.delta;
+                emit({ event: "token", data: { delta: frame.delta } });
+              } else if (frame.type === "usage") {
+                usage = frame.usage;
+                emit({ event: "usage", data: frame.usage });
+              } else {
+                sawDone = true;
+              }
+            }),
+      ),
+      Effect.flatMap(() =>
+        sawDone
+          ? Effect.void
+          : Effect.fail(
+              new UpstreamFailure({
+                cause: "text stream ended without done frame",
+              }),
+            ),
+      ),
+      Effect.either,
+    );
 
     if (result._tag === "Left") {
       if (signal.aborted) {

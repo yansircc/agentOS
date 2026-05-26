@@ -157,23 +157,25 @@ export class TextStreamTestDO extends AgentDOBase<TextStreamEnv> {
     });
   }
 
-  async cancelTextAfterFirstChunkForTest(): Promise<LedgerEventRpc[]> {
+  cancelTextAfterFirstChunkForTest(): Promise<LedgerEventRpc[]> {
     const response = this.submitText();
-    if (response.body === null) throw new Error("missing stream body");
+    if (response.body === null) return this.events();
     const reader = response.body.getReader();
-    await reader.read();
-    await reader.cancel();
+    const poll = (remaining: number): Promise<LedgerEventRpc[]> =>
+      this.events().then((rows) => {
+        if (
+          remaining <= 0 ||
+          rows.some((row) => row.kind === "agent.aborted.client_disconnect")
+        ) {
+          return rows;
+        }
+        return scheduler.wait(20).then(() => poll(remaining - 1));
+      });
 
-    const deadline = Date.now() + 1_000;
-    let rows: LedgerEventRpc[] = [];
-    while (Date.now() < deadline) {
-      rows = await this.events();
-      if (rows.some((row) => row.kind === "agent.aborted.client_disconnect")) {
-        return rows;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 20));
-    }
-    return rows;
+    return reader
+      .read()
+      .then(() => reader.cancel())
+      .then(() => poll(50));
   }
 }
 

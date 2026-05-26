@@ -88,20 +88,6 @@ const readFrames = async (
   throw new Error("timed out waiting for SSE frame");
 };
 
-const waitForKind = async (
-  stub: TextStreamRpc,
-  kind: string,
-): Promise<LedgerEventRpc[]> => {
-  const deadline = Date.now() + 1_000;
-  let rows: LedgerEventRpc[] = [];
-  while (Date.now() < deadline) {
-    rows = await stub.events();
-    if (rows.some((row) => row.kind === kind)) return rows;
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
-  throw new Error(`timed out waiting for ${kind}`);
-};
-
 const originalFetch = globalThis.fetch;
 
 afterEach(() => {
@@ -350,9 +336,7 @@ describe("submitTextStream — spec-31", () => {
       )) as typeof globalThis.fetch;
 
     const stub = stubFor("text-stream-client-disconnect");
-    const rows = await stub
-      .cancelTextAfterFirstChunkForTest()
-      .then(async () => waitForKind(stub, "agent.aborted.client_disconnect"));
+    const rows = await stub.cancelTextAfterFirstChunkForTest();
     expect(rows.map((row) => row.kind)).toEqual([
       "chat.ingested",
       "agent.aborted.client_disconnect",

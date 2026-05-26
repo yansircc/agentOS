@@ -12,6 +12,7 @@
  *    totalTokenCount}`
  */
 
+import { Effect, Stream } from "effect";
 import type {
   GeminiContent,
   GeminiFunctionDeclaration,
@@ -23,6 +24,7 @@ import type {
   LlmToolCall,
   ToolDefinition,
 } from "../llm";
+import { UpstreamFailure } from "../../errors";
 import type { SchemaContract, Strategy } from "../../admission";
 import type {
   AdapterMode,
@@ -38,7 +40,8 @@ import type {
 import {
   ADAPTER_VERSION,
   CHAT_COMPLETIONS_FORCED_TOOL_NAME,
-  decodeSseData,
+  decodeSseEvents,
+  parseSseJson,
   parseHttpStatus,
   type Outcome,
   unwrapErrorMessage,
@@ -241,46 +244,63 @@ interface GeminiRawResponse {
   };
 }
 
-async function* decodeGeminiTextStream(
+const decodeGeminiTextStream = (
   stream: ReadableStream<Uint8Array>,
-): AsyncIterable<TextStreamFrame> {
+): Stream.Stream<TextStreamFrame, UpstreamFailure> => {
   let sawChunk = false;
-
-  for await (const data of decodeSseData(stream)) {
-    sawChunk = true;
-    const parsed = JSON.parse(data) as GeminiRawResponse;
-    const cand = parsed.candidates?.[0];
-    const text = (cand?.content?.parts ?? [])
-      .filter((part): part is Extract<GeminiPart, { text: string }> =>
-        "text" in part && typeof part.text === "string",
-      )
-      .map((part) => part.text)
-      .join("");
-    if (text.length > 0) {
-      yield { type: "token", delta: text };
-    }
-
-    const usageMetadata = parsed.usageMetadata;
-    if (usageMetadata !== undefined) {
-      const promptTokens = usageMetadata.promptTokenCount ?? 0;
-      const completionTokens = usageMetadata.candidatesTokenCount ?? 0;
-      yield {
-        type: "usage",
-        usage: {
-          promptTokens,
-          completionTokens,
-          totalTokens:
-            usageMetadata.totalTokenCount ?? promptTokens + completionTokens,
-        },
-      };
-    }
-  }
-
-  if (!sawChunk) {
-    throw new Error("stream ended before any Gemini chunk");
-  }
-  yield { type: "done" };
-}
+  let done = false;
+  return decodeSseEvents(stream).pipe(
+    Stream.mapEffect((event) => {
+      if (event.kind === "end") {
+        if (!sawChunk) {
+          return Effect.fail(
+            new UpstreamFailure({
+              cause: "stream ended before any Gemini chunk",
+            }),
+          );
+        }
+        done = true;
+        return Effect.succeed([{ type: "done" as const }]);
+      }
+      if (done) {
+        return Effect.succeed([]);
+      }
+      return parseSseJson<GeminiRawResponse>(event.data).pipe(
+        Effect.map((parsed): TextStreamFrame[] => {
+          sawChunk = true;
+          const frames: TextStreamFrame[] = [];
+          const cand = parsed.candidates?.[0];
+          const text = (cand?.content?.parts ?? [])
+            .filter((part): part is Extract<GeminiPart, { text: string }> =>
+              "text" in part && typeof part.text === "string",
+            )
+            .map((part) => part.text)
+            .join("");
+          if (text.length > 0) {
+            frames.push({ type: "token", delta: text });
+          }
+          const usageMetadata = parsed.usageMetadata;
+          if (usageMetadata !== undefined) {
+            const promptTokens = usageMetadata.promptTokenCount ?? 0;
+            const completionTokens = usageMetadata.candidatesTokenCount ?? 0;
+            frames.push({
+              type: "usage",
+              usage: {
+                promptTokens,
+                completionTokens,
+                totalTokens:
+                  usageMetadata.totalTokenCount ??
+                  promptTokens + completionTokens,
+              },
+            });
+          }
+          return frames;
+        }),
+      );
+    }),
+    Stream.mapConcat((frames) => frames),
+  );
+};
 
 const foldGeminiParts = (
   parts: ReadonlyArray<GeminiPart> | undefined,
