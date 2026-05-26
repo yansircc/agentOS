@@ -17,7 +17,7 @@ import { runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
 import { AdmissionLive } from "../src/admission";
-import { EventBusLive } from "../src/event-bus";
+import { EventBusLive } from "../src/ledger";
 import { Ledger, LedgerLive } from "../src/ledger";
 import { AiBinding } from "../src/llm";
 import { ProviderRegistryLive } from "../src/provider-registry";

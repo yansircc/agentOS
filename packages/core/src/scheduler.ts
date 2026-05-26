@@ -20,7 +20,7 @@ import {
   safeStringify,
 } from "./errors";
 import type { LedgerEvent } from "./types";
-import { EventBus } from "./event-bus";
+import { EventBus } from "./ledger";
 
 export class Scheduler extends Context.Tag("@agent-os/Scheduler")<
   Scheduler,

@@ -12,8 +12,8 @@ import {
   JsonStringifyError,
   SqlError,
   safeStringify,
-} from "./errors";
-import type { EventQueryOptions, LedgerEvent } from "./types";
+} from "../errors";
+import type { EventQueryOptions, LedgerEvent } from "../types";
 import { EventBus } from "./event-bus";
 
 const DEFAULT_EVENT_LIMIT = 1000;
@@ -157,3 +157,17 @@ export const LedgerLive = (
       };
     }),
   );
+
+/** Pure helper shared by `AgentDOBase.events()` and the SSE stream
+ *  encoder: project a stored LedgerEvent into the RPC-safe shape. Lives
+ *  here so both façade callers and `./stream.ts` reach the same
+ *  serialization without re-deriving it. */
+export const eventToRpc = (
+  event: LedgerEvent,
+): import("../types").LedgerEventRpc => ({
+  id: event.id,
+  ts: event.ts,
+  kind: event.kind,
+  scope: event.scope,
+  payload: event.payload,
+});

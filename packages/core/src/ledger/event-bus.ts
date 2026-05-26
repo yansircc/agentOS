@@ -10,7 +10,7 @@
  */
 
 import { Context, Effect, Layer } from "effect";
-import type { EventHandler, LedgerEvent, LedgerEventRpc } from "./types";
+import type { EventHandler, LedgerEvent, LedgerEventRpc } from "../types";
 
 export interface EventBusSubscription {
   readonly unsubscribe: () => void;

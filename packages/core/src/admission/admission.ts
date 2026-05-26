@@ -21,7 +21,7 @@
  */
 
 import { Clock, Context, Effect, Layer, Schema } from "effect";
-import { EventBus } from "../event-bus";
+import { EventBus } from "../ledger";
 import { ProviderRegistry } from "../provider-registry";
 import { JsonStringifyError, SqlError, safeStringify } from "../errors";
 import {
