@@ -50,5 +50,5 @@ if [[ ! -x "$vitest_bin" ]]; then
   exit 1
 fi
 
-cd "$repo_root"
+cd "$repo_root/packages/core"
 exec "$vitest_bin" run --config "$config_abs" "$@"

@@ -155,16 +155,17 @@ export const DispatchLive = (
                   )
                   .toArray();
                 if (pending.length === 0) return;
-                sql.exec(
-                  "INSERT INTO events (ts, kind, scope, payload) VALUES (?, ?, ?, ?)",
+                const deliveredCursor = sql.exec(
+                  "INSERT INTO events (ts, kind, scope, payload) VALUES (?, ?, ?, ?) RETURNING id",
                   now,
                   DISPATCH_OUTBOUND_DELIVERED,
                   scope,
                   payloadStr,
                 );
+                const localDeliveredEventId = Number(deliveredCursor.one().id);
                 sql.exec(
                   "UPDATE dispatch_outbox SET delivered_event_id = ?, attempts = ?, last_error = NULL WHERE outbound_event_id = ?",
-                  deliveredEventId,
+                  localDeliveredEventId,
                   attempt,
                   outboundEventId,
                 );
