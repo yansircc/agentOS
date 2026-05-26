@@ -11,6 +11,25 @@ export interface ExtensionPackage {
   readonly version: string;
 }
 
+export interface ExtensionCommitSpec {
+  readonly event: string;
+  readonly data: unknown;
+}
+
+export interface ExtensionTimeSpec extends ExtensionCommitSpec {
+  readonly at: number;
+}
+
+export interface ExtensionCapability {
+  readonly packageId: string;
+  readonly kindPrefixes: ReadonlyArray<string>;
+  readonly version: string;
+  readonly commit: (
+    spec: ExtensionCommitSpec,
+  ) => Promise<{ readonly id: number }>;
+  readonly time: (spec: ExtensionTimeSpec) => Promise<{ readonly id: number }>;
+}
+
 export class ExtensionCapabilityConflict extends Data.TaggedError(
   "agent_os.extension_capability_conflict",
 )<{
@@ -23,7 +42,11 @@ const prefixesOverlap = (a: string, b: string): boolean =>
   a.startsWith(b) || b.startsWith(a);
 
 export type ExtensionValidation =
-  | { readonly ok: true; readonly prefixes: ReadonlyArray<string> }
+  | {
+      readonly ok: true;
+      readonly prefixes: ReadonlyArray<string>;
+      readonly packages: ReadonlyArray<ExtensionPackage>;
+    }
   | { readonly ok: false; readonly error: ExtensionCapabilityConflict };
 
 export const validateExtensionPackages = (
@@ -34,9 +57,22 @@ export const validateExtensionPackages = (
       owner: "@agent-os/core",
       prefix,
     }));
+  const packageIds = new Set<string>();
   const out: string[] = [];
 
   for (const pkg of packages) {
+    if (packageIds.has(pkg.packageId)) {
+      return {
+        ok: false,
+        error: new ExtensionCapabilityConflict({
+          packageId: pkg.packageId,
+          kindPrefix: "*",
+          claimedBy: pkg.packageId,
+        }),
+      };
+    }
+    packageIds.add(pkg.packageId);
+
     for (const prefix of pkg.kindPrefixes) {
       if (prefix.length === 0) {
         return {
@@ -64,7 +100,7 @@ export const validateExtensionPackages = (
     }
   }
 
-  return { ok: true, prefixes: out };
+  return { ok: true, prefixes: out, packages };
 };
 
 export const rejectClaimedAppEvent = (
@@ -79,3 +115,8 @@ export const rejectClaimedAppEvent = (
   }
   return null;
 };
+
+export const extensionOwnsEvent = (
+  pkg: ExtensionPackage,
+  event: string,
+): boolean => pkg.kindPrefixes.some((prefix) => event.startsWith(prefix));

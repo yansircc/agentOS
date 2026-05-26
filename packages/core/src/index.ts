@@ -49,7 +49,12 @@ export type { SubmitSpec, SubmitResult, TurnRef } from "./submit-agent";
 export type { Tool } from "./tools";
 export type { ToolDefinition, LlmUsage } from "./llm";
 export { withQuota, type QuotaSpec } from "./quota";
-export type { ExtensionPackage } from "./extensions";
+export type {
+  ExtensionPackage,
+  ExtensionCapability,
+  ExtensionCommitSpec,
+  ExtensionTimeSpec,
+} from "./extensions";
 export { ExtensionCapabilityConflict } from "./extensions";
 export type { RefResolver } from "./ref-resolver";
 export { RefResolutionFailed } from "./ref-resolver";

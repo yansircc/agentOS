@@ -1,8 +1,10 @@
 import {
   GIT_EVENTS,
+  commitGitCommitRecorded,
   gitCarrierExtensionPackage,
   projectGitSubject,
 } from "../src";
+import type { ExtensionCapability } from "@agent-os/core/extensions";
 
 describe("@agent-os/git-carrier", () => {
   it("declares git.* as an extension-owned prefix", () => {
@@ -63,5 +65,43 @@ describe("@agent-os/git-carrier", () => {
       mergeCommitRef: "commit://merge",
       cleaned: true,
     });
+  });
+
+  it("settles git.* facts through ExtensionCapability", async () => {
+    const committed: Array<{ event: string; data: unknown }> = [];
+    const cap: ExtensionCapability = {
+      packageId: "@agent-os/git-carrier",
+      kindPrefixes: ["git."],
+      version: "0.1.0",
+      commit: async (spec) => {
+        committed.push(spec);
+        return { id: committed.length };
+      },
+      time: async (spec) => {
+        committed.push(spec);
+        return { id: committed.length };
+      },
+    };
+
+    await expect(
+      commitGitCommitRecorded(cap, {
+        subjectRef: "session:1",
+        commitRef: "commit://def",
+        parentRef: "main@abc",
+        diffRef: "diff://def",
+      }),
+    ).resolves.toEqual({ id: 1 });
+
+    expect(committed).toEqual([
+      {
+        event: GIT_EVENTS.COMMIT_RECORDED,
+        data: {
+          subjectRef: "session:1",
+          commitRef: "commit://def",
+          parentRef: "main@abc",
+          diffRef: "diff://def",
+        },
+      },
+    ]);
   });
 });

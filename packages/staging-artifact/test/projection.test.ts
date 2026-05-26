@@ -1,8 +1,10 @@
 import {
   STAGING_EVENTS,
+  deferStagingArtifactReap,
   projectStagingArtifact,
   stagingArtifactExtensionPackage,
 } from "../src";
+import type { ExtensionCapability } from "@agent-os/core/extensions";
 
 describe("@agent-os/staging-artifact", () => {
   it("declares staging.* as an extension-owned prefix", () => {
@@ -44,5 +46,42 @@ describe("@agent-os/staging-artifact", () => {
       status: "reaped",
       reapedReason: "published",
     });
+  });
+
+  it("defers staging.* facts through ExtensionCapability time()", async () => {
+    const deferred: Array<{ event: string; data: unknown; at?: number }> = [];
+    const cap: ExtensionCapability = {
+      packageId: "@agent-os/staging-artifact",
+      kindPrefixes: ["staging."],
+      version: "0.1.0",
+      commit: async (spec) => {
+        deferred.push(spec);
+        return { id: deferred.length };
+      },
+      time: async (spec) => {
+        deferred.push(spec);
+        return { id: deferred.length };
+      },
+    };
+
+    await expect(
+      deferStagingArtifactReap(cap, 42, {
+        subjectRef: "session:1",
+        artifactRef: "r2://staging/session-1",
+        reason: "expired",
+      }),
+    ).resolves.toEqual({ id: 1 });
+
+    expect(deferred).toEqual([
+      {
+        at: 42,
+        event: STAGING_EVENTS.ARTIFACT_REAPED,
+        data: {
+          subjectRef: "session:1",
+          artifactRef: "r2://staging/session-1",
+          reason: "expired",
+        },
+      },
+    ]);
   });
 });
