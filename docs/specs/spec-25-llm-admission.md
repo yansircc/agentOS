@@ -100,11 +100,11 @@ type LlmRoute =
 ```
 
 - **`endpointRef`** is a stable symbolic id (resolved from app / wrangler
-  env at call time via `ProviderRegistry`); it is **not** a raw URL. Two
+  env at call time via `RefResolver`); it is **not** a raw URL. Two
   endpoints with identical URLs but
   different protocol semantics MUST resolve to different refs.
 - **`credentialRef`** is the symbolic name of the credential in
-  `ProviderRegistry`; the secret value is resolved at call time and
+  `RefResolver`; the secret value is resolved at call time and
   NEVER persisted in evidence (only the ref is hashed into
   `routeFingerprint`). Credential rotation does not invalidate
   capability evidence — same ref, new value behind it. See

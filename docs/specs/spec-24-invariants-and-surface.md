@@ -37,12 +37,12 @@ the question is marked **[Open]** and waits for spike or N+1 evidence.
 |---|---|---|
 | **INV-1** | No business UI. May ship optional **infrastructure observability UI** (must be opt-out). | Business UI ≠ infrastructure UI. Boundary criterion: does the UI reference app-specific concepts? |
 | **INV-2** | Serves the "agent reasoning closed loop" only. | Anything outside `project(ledger) → propose dispatch intent` is out of scope. |
-| **INV-3** | "Pre-grant + consume" patterns unify into **Quota**. Reactive face = `on / scheduleEvent / view.reflective`. | billing / rate-limit / token-budget all have identical algebra; unify or rebuild. |
+| **INV-3** | Linear accounting lives in core but has two ergonomics: **Quota** for pre-grant + implicit consume through dispatch middleware, and **Resource** for explicit reservation lifecycle. Reactive face = `on / scheduleEvent / standard projections`. | Quota cannot express reserve N -> partial consume M <= N -> refund N-M; resource reservation stays core-owned because its transaction/idempotency boundary is the DO authority boundary. Superseded by spec-34. |
 | **INV-4** | What CF ships, we do not rewrite. Thin unifying naming is allowed when 4+ CF surfaces serve the same role. | Reactive wrapping (`on`) and LLM-carrier wrapping (`submitAgent` over Responses API) are the only two unifications. |
 | **INV-5** | State ownership and agent boundary are invariants (see §3, §4). | These are not implementation details; they define what "agent" means. |
 | **INV-6** | v1 supports **CF AI** (`env.AI.run` + AI Gateway) AND any **OpenAI-Chat-Completions-compatible endpoint** addressed by `LlmRoute` (see §6.3). The set of routes is finite (one adapter per protocol kind); the set of models is not. | Locks dependency surface to a small adapter family; gets cross-provider compatibility without maintaining a model whitelist. v0.2.12 revised from "CF AI only" to admit the openai-chat-compatible adapter after Insight Helper dogfood proved CF Workers AI's models can't carry full-fidelity Chinese system prompts. |
 | **INV-7** | Built on the **CF Agents framework** (`extends Agent`, Session API). | Bets on CF Agents lifecycle, hibernation, naming, SQLite. Accept experimental risk. |
-| **INV-8** | **Core has no ambient BYOK.** User-provided credentials are explicit `LlmRoute` dependencies, stored outside the ledger and addressed only by `credentialRef`. The actual secret lives in the deploy environment (wrangler secrets / `.dev.vars`), resolved at call time by `ProviderRegistry`. Routes are stable identity; credential rotation does NOT invalidate evidence. | Reduces ambient credential surface (no global `process.env.OPENAI_KEY` style coupling); makes capability evidence rotation-stable. Same boundary class as `carrier` (INV-9) and `env binding` — credential is a route dependency, not free-floating state. v0.2.12 revision; original "No BYOK" had become a capability bottleneck once dogfood needed a stronger model. |
+| **INV-8** | **Core has no ambient BYOK.** User-provided credentials are explicit `LlmRoute` dependencies, stored outside the ledger and addressed only by `credentialRef`. The actual secret lives in the deploy environment (wrangler secrets / `.dev.vars`), resolved at call time by `RefResolver`. Routes are stable identity; credential rotation does NOT invalidate evidence. | Reduces ambient credential surface (no global `process.env.OPENAI_KEY` style coupling); makes capability evidence rotation-stable. Same boundary class as `carrier` (INV-9) and `env binding` — credential is a route dependency, not free-floating state. v0.3/spec-34 replaces LLM-only `ProviderRegistry` with carrier-neutral `RefResolver`. |
 | **INV-9** | `sandbox / workspace / browser` are **stateful dispatch carriers**, addressed by scope id. Their state lives in the carrier, not the ledger. | Carrier ≠ ledger. Stateful carriers must explicitly publish their scope id. |
 | **INV-10** | Serves **agent modules only**. Non-agent parts use plain CF Workers. Two parts collaborate via **Service Bindings**. Multi-worker is the default deployment topology. | Embedded mode is rejected; "agent + CRUD in one worker" is an anti-pattern. |
 
@@ -247,10 +247,12 @@ export class AgentDO extends AgentDOBase<Env> {
   // public methods (DO RPC boundary):
   //   submit(spec)         — agent loop (composite: ingest + dispatch + deliver)
   //   submit({outputSchema}) — spec-25 one-shot structured output
-  //   submitTextStream(spec) — spec-31 text-only token SSE; final truth still ledger
   //   emitEvent(spec)      — now-write primitive (app fact → ledger)
   //   scheduleEvent(spec)  — future-write primitive (delayed log via alarm)
-  //   events()             — ledger projection
+  //   streamEvents(opts)   — ledger SSE wire
+  //   events()             — raw ledger projection
+  //   runTrace / runStatus / quotaState / resourceState / admissionLease
+  //                         — standard projections
   //   alarm()              — auto-invoked by CF DO runtime
   //
   // protected (subclass extension):
@@ -356,8 +358,8 @@ type LlmRoute =
 - **`openai-chat-compatible`** — `fetch(endpoint + "/chat/completions",
   { Authorization: \`Bearer ${credential}\` })`. The `endpointRef` and
   `credentialRef` are symbolic; their values come from the
-  `ProviderRegistry` populated by the DO subclass via
-  `protected provideRegistry()` (see §5.3). Use for OpenRouter, official
+  `RefResolver` populated by the DO subclass via
+  `protected provideRefResolver()` (see §5.3). Use for OpenRouter, official
   OpenAI, Anthropic-via-compat, and any other endpoint that speaks the
   OpenAI Chat Completions HTTP shape.
 
@@ -367,9 +369,9 @@ The ref-not-value indirection is load-bearing (INV-8):
   hash the route's `credentialRef` (e.g. `"OPENROUTER_KEY"`) — never
   the actual API key. Rotating the secret value does NOT invalidate
   capability evidence; the fingerprint stays stable.
-- **Apps wire their own provider mapping.** `provideRegistry()` is the
-  single substrate hook; secrets come in via `this.env.<KEY>` (wrangler
-  secret) and stay there. No global ambient credential store.
+- **Apps wire their own ref mapping.** `provideRefResolver()` is the
+  single substrate hook; endpoints and secrets come in via deploy env
+  bindings and stay there. No global ambient credential store.
 
 Future adapter slots (not yet implemented; would each add one
 `LlmRoute` variant + one decoder branch):
@@ -722,10 +724,10 @@ on("img.request.created", (event) =>
     },
     agent: { provider: "openai", model: "gpt-image-2" },
     tools: {
-      // planImage moved out of tools — spec-25 ships structured output
-      // as submit({outputSchema}) instead of a tool middleware:
+      // planImage moved out of core — spec-25 ships structured output
+      // as submit({outputSchema}) and modality carriers live in packages:
       //   const plan = await this.submit({ outputSchema: PlanSchema, ... });
-      generateImage: withQuota(genImageCarrier, {
+      generateImage: withQuota(imagePackageTool, {
         key: event.user_id, window: "∞",
         measure: (e) => e.cost_cents,
         limit: () => view.creditBalance(event.user_id),

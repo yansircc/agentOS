@@ -527,7 +527,7 @@ describe("admission — cross-route structured output (v0.2.13)", () => {
 
     try {
       await runInDurableObject(stub, async (_inst, state) => {
-        // AiBinding is the SENTINEL that throws on any call. ProviderRegistry
+        // AiBinding is the SENTINEL that throws on any call. RefResolver
         // resolves to a stub endpoint + credential.
         const runtime = makeRuntimeWithRegistry(
           state,

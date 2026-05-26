@@ -8,7 +8,7 @@
  * Boundary contract:
  *   submit(spec)         resolves SubmitResult; rejects on infra
  *   events()             resolves LedgerEventRpc[]; rejects on SQL read fail
- *   emitEvent(spec)      resolves {id}; rejects on infra / reserved kind
+ *   emitEvent(spec)      resolves {id}; rejects on infra / capability
  *   dispatchToScope(spec) resolves {outboundEventId}; rejects on infra / config
  *   scheduleEvent(spec)  resolves {id}; rejects on infra
  *   alarm()              auto-invoked by CF DO runtime
@@ -23,22 +23,20 @@
  * use submit only when an agent run is the right shape.
  *
  * Reactive subscribe:
- *   protected on(kind, handler)  composable Set, sequential dispatch, 5s timeout per handler
+ *   protected on(kind, handler)  composable Set, sequential dispatch
  *   protected off(kind, handler) unregister
  */
 
 import { Clock, Effect, Layer, ManagedRuntime } from "effect";
 import { DurableObject } from "cloudflare:workers";
 import {
+  CapabilityRejected,
   DispatchScopeMismatch,
   DispatchTargetNotFound,
   InvalidScheduleAt,
   InvalidResourceAmount,
-  isReservedEventKind,
-  ReservedEventKindError,
   ScopeMissingError,
   SqlError,
-  UpstreamFailure,
 } from "./errors";
 import type {
   EventHandler,
@@ -46,11 +44,16 @@ import type {
   DispatchToScopeSpec,
   EventQueryOptions,
   LedgerEventRpc,
+  QuotaState,
+  QuotaStateSpec,
   ResourceGrantResult,
   ResourceGrantSpec,
   ResourceReservationSpec,
   ResourceReserveResult,
   ResourceReserveSpec,
+  ResourceState,
+  RunStatus,
+  RunTrace,
   ScheduledEventSpec,
   StreamEventsOptions,
 } from "./types";
@@ -70,28 +73,26 @@ import {
 } from "./ledger";
 import { Scheduler, SchedulerLive } from "./scheduler";
 import { Resources, ResourcesLive } from "./resources";
-import {
-  generateImageEffect,
-  ImageAiBinding,
-  ImageCredentialNotFound,
-  ImageEndpointNotFound,
-  ImageProviderRegistry,
-  ImageProviderRegistryLive,
-  ImageUpstreamFailure,
-  type GenerateImageSpec,
-  type ImageAi,
-  type ImageResult,
-} from "@agent-os/image";
 import { Quota, QuotaLive } from "./quota";
 import { AiBinding } from "./llm";
-import { Admission, AdmissionLive } from "./admission";
 import {
-  CredentialNotFound,
-  EndpointNotFound,
-  ProviderRegistry,
-  ProviderRegistryLive,
-  type ProviderRegistryConfig,
-} from "./provider-registry";
+  Admission,
+  AdmissionLive,
+  type AttemptKey,
+  type CapabilityLease,
+} from "./admission";
+import {
+  RefResolverLive,
+  RefResolverService,
+  type RefResolver,
+} from "./ref-resolver";
+import {
+  type ExtensionPackage,
+  type ExtensionValidation,
+  ExtensionCapabilityConflict,
+  rejectClaimedAppEvent,
+  validateExtensionPackages,
+} from "./extensions";
 import {
   type InternalSubmitSpec,
   submitAgentEffect,
@@ -99,12 +100,12 @@ import {
   type SubmitSpec,
 } from "./submit-agent";
 import {
-  logTextStreamClientDisconnectEffect,
-  submitTextStreamEffect,
-  type InternalSubmitTextStreamSpec,
-  type SubmitTextStreamFrame,
-  type SubmitTextStreamSpec,
-} from "./submit-text-stream";
+  projectAdmissionLease,
+  projectQuotaState,
+  projectResourceState,
+  projectRunStatus,
+  projectRunTrace,
+} from "./projections";
 
 export interface AgentDOEnv {
   readonly AI: Ai;
@@ -119,16 +120,14 @@ type CoreServices =
   | Resources
   | Quota
   | Admission
-  | ProviderRegistry
-  | ImageAiBinding
-  | ImageProviderRegistry;
+  | RefResolverService;
 
 const makeAgentRuntime = (
   ctx: DurableObjectState,
   scope: string,
   ai: Ai,
   handlers: Map<string, Set<EventHandler>>,
-  registry: ProviderRegistryConfig,
+  refs: RefResolver,
   dispatchTargets: DispatchTargetRegistry,
 ): ManagedRuntime.ManagedRuntime<CoreServices, SqlError> => {
   const sql = ctx.storage.sql;
@@ -145,11 +144,7 @@ const makeAgentRuntime = (
   );
   const quotaLayer = QuotaLive(ctx).pipe(Layer.provide(eventBusLayer));
   const aiLayer = Layer.succeed(AiBinding, ai);
-  const registryLayer = ProviderRegistryLive(registry);
-  // Same env.AI binding, narrowed to the minimal run() port @agent-os/image
-  // consumes. Core stays responsible for supplying the runtime service.
-  const imageAiLayer = Layer.succeed(ImageAiBinding, ai as ImageAi);
-  const imageRegistryLayer = ImageProviderRegistryLive(registry);
+  const refResolverLayer = RefResolverLive(refs);
   const admissionLayer = AdmissionLive(ctx).pipe(
     Layer.provide(eventBusLayer),
   );
@@ -163,31 +158,9 @@ const makeAgentRuntime = (
       quotaLayer,
       aiLayer,
       admissionLayer,
-      registryLayer,
-      imageAiLayer,
-      imageRegistryLayer,
+      refResolverLayer,
     ),
   );
-};
-
-const encodeSseFrame = (frame: SubmitTextStreamFrame): Uint8Array =>
-  new TextEncoder().encode(
-    `event: ${frame.event}\ndata: ${JSON.stringify(frame.data)}\n\n`,
-  );
-
-const mapImageError = (
-  error:
-    | ImageUpstreamFailure
-    | ImageEndpointNotFound
-    | ImageCredentialNotFound,
-): UpstreamFailure | EndpointNotFound | CredentialNotFound => {
-  if (error instanceof ImageEndpointNotFound) {
-    return new EndpointNotFound({ ref: error.ref });
-  }
-  if (error instanceof ImageCredentialNotFound) {
-    return new CredentialNotFound({ ref: error.ref });
-  }
-  return new UpstreamFailure({ cause: error.cause });
 };
 
 export abstract class AgentDOBase<
@@ -195,6 +168,7 @@ export abstract class AgentDOBase<
 > extends DurableObject<Env> {
   private readonly _handlers: Map<string, Set<EventHandler>> = new Map();
   private _runtime?: ManagedRuntime.ManagedRuntime<CoreServices, SqlError>;
+  private _extensionValidation?: ExtensionValidation;
 
   private runtimeFor(
     scope: string,
@@ -205,32 +179,46 @@ export abstract class AgentDOBase<
         scope,
         this.env.AI,
         this._handlers,
-        this.provideRegistry(),
+        this.provideRefResolver(),
         this.provideDispatchTargets(),
       );
     }
     return this._runtime;
   }
 
-  /** Hook for subclass to provide endpoints/credentials registry resolved
-   *  at DO construction. Used by `LlmRoute.kind === "openai-chat-compatible"`
-   *  (and future external-route variants) — `endpointRef` and `credentialRef`
-   *  on the route are looked up through this map by `callLlm`.
-   *
-   *  Default = empty registry. Apps using only `cf-ai-binding` don't need
-   *  to override. Apps with external routes override like:
-   *
-   *      protected provideRegistry() {
-   *        return {
-   *          endpoints:   { openrouter: "https://openrouter.ai/api/v1" },
-   *          credentials: { OPENROUTER_KEY: this.env.OPENROUTER_KEY },
-   *        };
-   *      }
-   *
-   *  Secrets are read from wrangler env at DO construction, NOT logged
-   *  to the ledger (only the symbolic refs are). */
-  protected provideRegistry(): ProviderRegistryConfig {
-    return { endpoints: {}, credentials: {} };
+  private extensionValidation(): ExtensionValidation {
+    if (this._extensionValidation === undefined) {
+      this._extensionValidation = validateExtensionPackages(
+        this.registerExtensions(),
+      );
+    }
+    return this._extensionValidation;
+  }
+
+  private appCommitRejection(
+    event: string,
+  ): CapabilityRejected | ExtensionCapabilityConflict | null {
+    const validation = this.extensionValidation();
+    if (!validation.ok) return validation.error;
+    return rejectClaimedAppEvent(event, validation.prefixes);
+  }
+
+  /** Hook for subclass to resolve symbolic endpoint / credential refs.
+   *  Default = empty resolver. Apps using only `cf-ai-binding` do not
+   *  override. External routes return concrete deploy-env values here;
+   *  only refs are ledger-visible. */
+  protected provideRefResolver(): RefResolver {
+    return {
+      endpoint: () => null,
+      credential: () => null,
+    };
+  }
+
+  /** Extension packages declare non-core namespaces here. App-facing
+   *  commit paths reject these prefixes; package-owned commit helpers
+   *  are intentionally not public app surface. */
+  protected registerExtensions(): ReadonlyArray<ExtensionPackage> {
+    return [];
   }
 
   /** Hook for subclass to provide cross-scope dispatch targets.
@@ -267,105 +255,15 @@ export abstract class AgentDOBase<
     if (scope === undefined) {
       return Promise.reject(new ScopeMissingError());
     }
-    if (isReservedEventKind(spec.deliver.event)) {
-      return Promise.reject(
-        new ReservedEventKindError({ event: spec.deliver.event }),
-      );
+    const rejected = this.appCommitRejection(spec.deliver.event);
+    if (rejected !== null) {
+      return Promise.reject(rejected);
     }
     const internalSpec: InternalSubmitSpec = {
       ...spec,
       deliver: { event: spec.deliver.event, scope },
     };
     return this.runtimeFor(scope).runPromise(submitAgentEffect(internalSpec));
-  }
-
-  /** Text-only streaming submit.
-   *
-   *  Token deltas are SSE frames and are NOT written to the ledger.
-   *  On normal completion, the final facts are committed as:
-   *  chat.ingested -> llm.response -> deliver.event.
-   *
-   *  v0 does not support tools or outputSchema. Use submit() for those.
-   */
-  submitTextStream(spec: SubmitTextStreamSpec): Response {
-    const scope = this.ctx.id.name;
-    if (scope === undefined) {
-      throw new ScopeMissingError();
-    }
-    if (isReservedEventKind(spec.deliver.event)) {
-      throw new ReservedEventKindError({ event: spec.deliver.event });
-    }
-
-    const internalSpec: InternalSubmitTextStreamSpec = {
-      ...spec,
-      deliver: { event: spec.deliver.event, scope },
-    };
-    const runtime = this.runtimeFor(scope);
-    const abort = new AbortController();
-    let settled = false;
-    let terminalSent = false;
-    let turnId: number | undefined;
-    let disconnectLogged = false;
-
-    const logClientDisconnect = (): void => {
-      if (turnId === undefined || disconnectLogged || terminalSent) return;
-      disconnectLogged = true;
-      void runtime.runPromise(
-        logTextStreamClientDisconnectEffect(
-          scope,
-          turnId,
-          "client disconnected before stream completion",
-        ),
-      ).catch(() => undefined);
-    };
-
-    const stream = new ReadableStream<Uint8Array>({
-      start: (controller) => {
-        const emit = (frame: SubmitTextStreamFrame): void => {
-          if (frame.event === "done" || frame.event === "aborted") {
-            terminalSent = true;
-          }
-          if (!abort.signal.aborted) {
-            controller.enqueue(encodeSseFrame(frame));
-          }
-        };
-
-        void runtime
-          .runPromise(
-            submitTextStreamEffect(
-              internalSpec,
-              abort.signal,
-              emit,
-              (id) => {
-                turnId = id;
-                if (abort.signal.aborted) logClientDisconnect();
-              },
-            ),
-          )
-          .then(() => {
-            settled = true;
-            if (!abort.signal.aborted) controller.close();
-          })
-          .catch((cause) => {
-            settled = true;
-            if (!abort.signal.aborted) controller.error(cause);
-          });
-      },
-      cancel: () => {
-        if (!settled) {
-          abort.abort();
-          logClientDisconnect();
-        }
-      },
-    });
-
-    return new Response(stream, {
-      headers: {
-        "Content-Type": "text/event-stream; charset=utf-8",
-        "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
-      },
-    });
   }
 
   /** Query ledger events for this DO's scope. */
@@ -379,6 +277,93 @@ export abstract class AgentDOBase<
         const ledger = yield* Ledger;
         const rows = yield* ledger.events(scope, opts);
         return rows.map(eventToRpc);
+      }),
+    );
+  }
+
+  runTrace(runId: number | string): Promise<RunTrace> {
+    const scope = this.ctx.id.name;
+    if (scope === undefined) {
+      return Promise.reject(new ScopeMissingError());
+    }
+    return this.runtimeFor(scope).runPromise(
+      Effect.gen(function* () {
+        const ledger = yield* Ledger;
+        const rows = yield* ledger.streamSnapshot(scope);
+        return projectRunTrace(rows, runId);
+      }),
+    );
+  }
+
+  runStatus(runId: number | string): Promise<RunStatus> {
+    const scope = this.ctx.id.name;
+    if (scope === undefined) {
+      return Promise.reject(new ScopeMissingError());
+    }
+    return this.runtimeFor(scope).runPromise(
+      Effect.gen(function* () {
+        const ledger = yield* Ledger;
+        const rows = yield* ledger.streamSnapshot(scope);
+        return projectRunStatus(rows, runId);
+      }),
+    );
+  }
+
+  quotaState(spec: QuotaStateSpec): Promise<QuotaState> {
+    const scope = this.ctx.id.name;
+    if (scope === undefined) {
+      return Promise.reject(new ScopeMissingError());
+    }
+    return this.runtimeFor(scope).runPromise(
+      Effect.gen(function* () {
+        const ledger = yield* Ledger;
+        const rows = yield* ledger.streamSnapshot(scope, {
+          kinds: ["dispatch.consumed", "dispatch.rate_limited"],
+        });
+        const now = yield* Clock.currentTimeMillis;
+        return yield* Effect.try({
+          try: () => projectQuotaState(rows, spec, now),
+          catch: (cause) => new SqlError({ cause }),
+        });
+      }),
+    );
+  }
+
+  resourceState(key: string): Promise<ResourceState> {
+    const scope = this.ctx.id.name;
+    if (scope === undefined) {
+      return Promise.reject(new ScopeMissingError());
+    }
+    return this.runtimeFor(scope).runPromise(
+      Effect.gen(function* () {
+        const ledger = yield* Ledger;
+        const rows = yield* ledger.streamSnapshot(scope, {
+          kinds: [
+            "resource.granted",
+            "resource.reserved",
+            "resource.reserve_rejected",
+            "resource.consumed",
+            "resource.released",
+          ],
+        });
+        return yield* Effect.try({
+          try: () => projectResourceState(rows, key),
+          catch: (cause) => new SqlError({ cause }),
+        });
+      }),
+    );
+  }
+
+  admissionLease(key: AttemptKey): Promise<CapabilityLease | null> {
+    const scope = this.ctx.id.name;
+    if (scope === undefined) {
+      return Promise.reject(new ScopeMissingError());
+    }
+    const sql = this.ctx.storage.sql;
+    return this.runtimeFor(scope).runPromise(
+      Effect.gen(function* () {
+        const now = yield* Clock.currentTimeMillis;
+        return yield* projectAdmissionLease(sql, scope, key, now);
       }),
     );
   }
@@ -419,8 +404,9 @@ export abstract class AgentDOBase<
     if (scope === undefined) {
       return Promise.reject(new ScopeMissingError());
     }
-    if (isReservedEventKind(spec.event)) {
-      return Promise.reject(new ReservedEventKindError({ event: spec.event }));
+    const rejected = this.appCommitRejection(spec.event);
+    if (rejected !== null) {
+      return Promise.reject(rejected);
     }
     return this.runtimeFor(scope).runPromise(
       Effect.gen(function* () {
@@ -447,8 +433,9 @@ export abstract class AgentDOBase<
     if (scope === undefined) {
       return Promise.reject(new ScopeMissingError());
     }
-    if (isReservedEventKind(spec.event)) {
-      return Promise.reject(new ReservedEventKindError({ event: spec.event }));
+    const rejected = this.appCommitRejection(spec.event);
+    if (rejected !== null) {
+      return Promise.reject(rejected);
     }
     if (this.provideDispatchTargets()[spec.target.bindingRef] === undefined) {
       return Promise.reject(
@@ -556,10 +543,9 @@ export abstract class AgentDOBase<
         }),
       );
     }
-    if (isReservedEventKind(envelope.event)) {
-      return Promise.reject(
-        new ReservedEventKindError({ event: envelope.event }),
-      );
+    const rejected = this.appCommitRejection(envelope.event);
+    if (rejected !== null) {
+      return Promise.reject(rejected);
     }
     return this.runtimeFor(scope).runPromise(
       Effect.gen(function* () {
@@ -584,10 +570,9 @@ export abstract class AgentDOBase<
     if (!Number.isFinite(spec.at)) {
       return Promise.reject(new InvalidScheduleAt({ at: spec.at }));
     }
-    if (isReservedEventKind(spec.event)) {
-      return Promise.reject(
-        new ReservedEventKindError({ event: spec.event }),
-      );
+    const rejected = this.appCommitRejection(spec.event);
+    if (rejected !== null) {
+      return Promise.reject(rejected);
     }
     const ctx = this.ctx;
     return this.runtimeFor(scope).runPromise(
@@ -611,16 +596,6 @@ export abstract class AgentDOBase<
         );
         return { id };
       }),
-    );
-  }
-
-  generateImage(spec: GenerateImageSpec): Promise<ImageResult> {
-    const scope = this.ctx.id.name;
-    if (scope === undefined) {
-      return Promise.reject(new ScopeMissingError());
-    }
-    return this.runtimeFor(scope).runPromise(
-      generateImageEffect(spec).pipe(Effect.mapError(mapImageError)),
     );
   }
 

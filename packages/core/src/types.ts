@@ -92,3 +92,74 @@ export interface ResourceGrantResult {
 export interface ResourceReserveResult {
   readonly reservationId: string;
 }
+
+export interface RunTurn {
+  readonly id: number;
+  readonly index: number;
+  readonly at: number;
+  readonly text: string;
+  readonly usage?: unknown;
+}
+
+export interface RunToolCall {
+  readonly at: number;
+  readonly name: string;
+  readonly args: unknown;
+  readonly result: unknown;
+}
+
+export interface RunTerminal {
+  readonly kind: "delivered" | "aborted";
+  readonly at: number;
+  readonly event: string;
+  readonly payload: unknown;
+}
+
+export interface RunTrace {
+  readonly runId: number;
+  readonly startedAt: number;
+  readonly turns: ReadonlyArray<RunTurn>;
+  readonly toolCalls: ReadonlyArray<RunToolCall>;
+  readonly terminal: RunTerminal | null;
+}
+
+export type RunStatus =
+  | { readonly kind: "delivered"; readonly at: number; readonly event: string }
+  | {
+      readonly kind: "aborted";
+      readonly at: number;
+      readonly abortKind: string;
+    }
+  | { readonly kind: "open_without_terminal"; readonly startedAt: number }
+  | {
+      readonly kind: "orphaned";
+      readonly startedAt: number;
+      readonly evidence: string;
+    };
+
+export interface QuotaStateSpec {
+  readonly key: string;
+  readonly windowMs: number;
+  readonly limit: number;
+}
+
+export interface QuotaState {
+  readonly consumed: number;
+  readonly limit: number;
+  readonly remaining: number;
+  readonly refundable: 0;
+  readonly windowStart?: number;
+}
+
+export interface ResourceReservationView {
+  readonly id: string;
+  readonly amount: number;
+}
+
+export interface ResourceState {
+  readonly granted: number;
+  readonly reserved: number;
+  readonly consumed: number;
+  readonly available: number;
+  readonly reservations: ReadonlyArray<ResourceReservationView>;
+}

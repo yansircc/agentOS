@@ -1,6 +1,9 @@
 # Spec 28: img-gen gap implementation plan
 
 > **Status**: Implementation roadmap (drafted 2026-05-26)
+> **v0.3 note**: superseded where it places image carrier API on
+> `AgentDOBase`; spec-34 moves modality carriers out of core and keeps only
+> dispatch/resource/extension authority in core.
 > **Depends on**: [spec-26-img-gen-substrate-survey.md](./spec-26-img-gen-substrate-survey.md)
 > **Does not implement**: img-gen product behavior. This document only orders
 > confirmed substrate gaps and defines the minimal acceptance surface for each.
@@ -83,7 +86,7 @@ protected provideDispatchTargets(): Record<string, DurableObjectNamespace>;
 stores the ref, not a runtime namespace object.
 
 `provideDispatchTargets()` is intentionally separate from
-`provideProviderRegistry()`: both are symbolic-ref resolvers, but the resolved
+`provideRefResolver()`: both are symbolic-ref resolvers, but the resolved
 values are different boundary objects. Provider registry values are
 serializable endpoint/credential references; dispatch targets resolve to
 runtime `DurableObjectNamespace` objects and must not be stored or merged into
@@ -422,7 +425,7 @@ Out of scope for P3 v0:
 - `/images/generations` OpenAI-compatible route. It is a future adapter unless
   a new app proves the two in-scope routes are insufficient.
 
-Public surface:
+Historical P3 public surface, superseded by spec-34:
 
 ```ts
 class AgentDOBase {
@@ -434,15 +437,14 @@ class AgentDOBase {
 }
 ```
 
-`generateImage` is a direct Promise method, not a `submitAgent` branch. Image
-generation has no turn loop, no tool call loop, and no structured-output lease
-in v0.
+`generateImage` is no longer a core method in v0.3. Image generation has no
+turn loop, no tool call loop, and no structured-output lease in core.
 
 ### 4.2 Evidence boundary
 
 v0 does not need a lease table. It needs route/protocol ownership:
 - finite image protocol adapters.
-- symbolic endpoint/credential refs via `ProviderRegistry`.
+- symbolic endpoint/credential refs via `RefResolver`.
 - no model whitelist in app code.
 
 If image providers show schema/capability flake similar to structured output,
@@ -458,11 +460,10 @@ not pre-build admission without that falsifying signal.
 Package files expected:
 - `packages/image/src/index.ts` public barrel plus image-owned source modules.
 - `packages/image/test/adapter-contract.test.ts`.
-- `packages/core/src/agent-do.ts` keeps `AgentDOBase.generateImage` as a thin
-  wrapper.
+- v0.3: `packages/core/src/agent-do.ts` does not expose image methods.
 
-Do not rename `LlmRoute` repo-wide. A narrow additive `ImageRoute` plus
-`generateImage` is the first move.
+Do not rename `LlmRoute` repo-wide. A narrow additive `ImageRoute` belongs in
+the image package, not the core base class.
 
 ### 4.4 Acceptance
 

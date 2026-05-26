@@ -12,13 +12,12 @@
  * Supported evidence rows.
  */
 
-import { Effect, Stream } from "effect";
+import { Effect } from "effect";
 import type {
   ChatCompletionsBody,
   LlmRoute,
   LlmToolCall,
 } from "../llm";
-import { UpstreamFailure } from "../../errors";
 import type { SchemaContract, Strategy } from "../../admission";
 import type {
   AdapterMode,
@@ -26,16 +25,12 @@ import type {
   DecodeStructuredResult,
   DecodedOutput,
   LlmProtocolAdapter,
-  TextStreamFrame,
-  TextStreamRequest,
   TurnRequest,
   TurnResponse,
 } from "./protocol-adapter";
 import {
   ADAPTER_VERSION,
   CHAT_COMPLETIONS_FORCED_TOOL_NAME,
-  decodeSseEvents,
-  parseSseJson,
   type Outcome,
   unwrapErrorMessage,
 } from "./shared";
@@ -51,15 +46,6 @@ const encodeChatCompletionsTurn = (
   messages: request.messages,
   tools: request.tools,
   tool_choice: request.tool_choice,
-});
-
-const encodeChatCompletionsTextStream = (
-  _route: LlmRoute,
-  request: TextStreamRequest,
-): ChatCompletionsBody => ({
-  messages: request.messages,
-  stream: true,
-  stream_options: { include_usage: true },
 });
 
 const decodeChatCompletionsTurn = (raw: unknown): TurnResponse => {
@@ -91,65 +77,6 @@ const decodeChatCompletionsTurn = (raw: unknown): TurnResponse => {
       totalTokens: r.usage?.total_tokens ?? 0,
     },
   };
-};
-
-const decodeChatCompletionsTextStream = (
-  stream: ReadableStream<Uint8Array>,
-): Stream.Stream<TextStreamFrame, UpstreamFailure> => {
-  let sawDone = false;
-  return decodeSseEvents(stream).pipe(
-    Stream.mapEffect((event) => {
-      if (event.kind === "end") {
-        return sawDone
-          ? Effect.succeed([])
-          : Effect.fail(
-              new UpstreamFailure({
-                cause: "stream ended before [DONE]",
-              }),
-            );
-      }
-      if (sawDone) {
-        return Effect.succeed([]);
-      }
-      if (event.data === "[DONE]") {
-        sawDone = true;
-        return Effect.succeed([{ type: "done" as const }]);
-      }
-      return parseSseJson<{
-        choices?: ReadonlyArray<{
-          delta?: { content?: string | null };
-        }>;
-        usage?: {
-          prompt_tokens?: number;
-          completion_tokens?: number;
-          total_tokens?: number;
-        } | null;
-      }>(event.data).pipe(
-        Effect.map((parsed): TextStreamFrame[] => {
-          const frames: TextStreamFrame[] = [];
-          const usage = parsed.usage;
-          if (usage !== undefined && usage !== null) {
-            frames.push({
-              type: "usage",
-              usage: {
-                promptTokens: usage.prompt_tokens ?? 0,
-                completionTokens: usage.completion_tokens ?? 0,
-                totalTokens:
-                  usage.total_tokens ??
-                  (usage.prompt_tokens ?? 0) + (usage.completion_tokens ?? 0),
-              },
-            });
-          }
-          const delta = parsed.choices?.[0]?.delta?.content;
-          if (typeof delta === "string" && delta.length > 0) {
-            frames.push({ type: "token", delta });
-          }
-          return frames;
-        }),
-      );
-    }),
-    Stream.mapConcat((frames) => frames),
-  );
 };
 
 /** Encode a structured-output request into Chat Completions body using
@@ -299,11 +226,6 @@ export const cfAiBindingAdapter: LlmProtocolAdapter<"cf-ai-binding"> = {
   version: ADAPTER_VERSION,
   encodeTurn: encodeChatCompletionsTurn,
   decodeTurn: decodeChatCompletionsTurn,
-  textStream: {
-    supported: true,
-    encode: encodeChatCompletionsTextStream,
-    decodeFrames: decodeChatCompletionsTextStream,
-  },
   encodeStructured: encodeChatCompletionsStructured,
   decodeStructured: decodeChatCompletionsStructured,
   classify: classifyChatCompletionsError,
@@ -315,11 +237,6 @@ export const openaiChatCompatibleAdapter: LlmProtocolAdapter<"openai-chat-compat
     version: ADAPTER_VERSION,
     encodeTurn: encodeChatCompletionsTurn,
     decodeTurn: decodeChatCompletionsTurn,
-    textStream: {
-      supported: true,
-      encode: encodeChatCompletionsTextStream,
-      decodeFrames: decodeChatCompletionsTextStream,
-    },
     encodeStructured: encodeChatCompletionsStructured,
     decodeStructured: decodeChatCompletionsStructured,
     classify: classifyChatCompletionsError,

@@ -41,8 +41,6 @@ import type {
   SchemaContract,
   Strategy,
 } from "../../admission";
-import type { UpstreamFailure } from "../../errors";
-import type { Stream } from "effect";
 
 import { cfAiBindingAdapter, openaiChatCompatibleAdapter } from "./openai-chat";
 import { anthropicMessagesAdapter } from "./anthropic-messages";
@@ -86,12 +84,6 @@ export interface TurnResponse {
   readonly usage: LlmUsage;
 }
 
-/** Input to textStream. v0 is text-only: no tools, no outputSchema, no
- *  tool_choice. */
-export interface TextStreamRequest {
-  readonly messages: ReadonlyArray<LlmMessage>;
-}
-
 /** Stimulus shape passed to encodeStructured. Variant `live` carries the
  *  user text only — the deliver function lives on `attemptStructured`'s
  *  spec, not the adapter (the adapter does not write to the ledger). */
@@ -115,27 +107,6 @@ export type DecodeStructuredResult =
     }
   | { readonly ok: false; readonly outcome: Outcome };
 
-export type TextStreamFrame =
-  | { readonly type: "token"; readonly delta: string }
-  | { readonly type: "usage"; readonly usage: LlmUsage }
-  | { readonly type: "done" };
-
-export type TextStreamCapability<K extends LlmRoute["kind"]> =
-  | {
-      readonly supported: true;
-      encode(
-        route: Extract<LlmRoute, { kind: K }>,
-        request: TextStreamRequest,
-      ): ProviderRequestBodyFor<K>;
-      decodeFrames(
-        stream: ReadableStream<Uint8Array>,
-      ): Stream.Stream<TextStreamFrame, UpstreamFailure>;
-    }
-  | {
-      readonly supported: false;
-      readonly reason: string;
-    };
-
 // ============================================================
 // Section C — LlmProtocolAdapter<K> interface
 // ============================================================
@@ -143,7 +114,7 @@ export type TextStreamCapability<K extends LlmRoute["kind"]> =
 /** The per-wire protocol algebra. One per `LlmRoute["kind"]`. Pure
  *  functions only — no IO, no clock, no secrets. Transport lives in
  *  `dispatchProvider` (llm.ts); secrets are resolved there from
- *  `ProviderRegistry`. The adapter never sees credential values.
+ *  `RefResolver`. The adapter never sees credential values.
  *
  *  Asymmetry (spec-27 §4):
  *    - `decodeTurn` is permissive: zero tool calls in the response is
@@ -174,9 +145,6 @@ export interface LlmProtocolAdapter<K extends LlmRoute["kind"]> {
   ): ProviderRequestBodyFor<K>;
 
   decodeTurn(raw: unknown): TurnResponse;
-
-  // ── Text streaming (ephemeral token channel) ──────────────
-  readonly textStream: TextStreamCapability<K>;
 
   // ── Structured-output admission ───────────────────────────
   encodeStructured(

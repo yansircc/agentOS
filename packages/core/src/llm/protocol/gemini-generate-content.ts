@@ -12,7 +12,7 @@
  *    totalTokenCount}`
  */
 
-import { Effect, Stream } from "effect";
+import { Effect } from "effect";
 import type {
   GeminiContent,
   GeminiFunctionDeclaration,
@@ -24,7 +24,6 @@ import type {
   LlmToolCall,
   ToolDefinition,
 } from "../llm";
-import { UpstreamFailure } from "../../errors";
 import type { SchemaContract, Strategy } from "../../admission";
 import type {
   AdapterMode,
@@ -32,16 +31,12 @@ import type {
   DecodeStructuredResult,
   DecodedOutput,
   LlmProtocolAdapter,
-  TextStreamFrame,
-  TextStreamRequest,
   TurnRequest,
   TurnResponse,
 } from "./protocol-adapter";
 import {
   ADAPTER_VERSION,
   CHAT_COMPLETIONS_FORCED_TOOL_NAME,
-  decodeSseEvents,
-  parseSseJson,
   parseHttpStatus,
   type Outcome,
   unwrapErrorMessage,
@@ -224,11 +219,6 @@ const encodeGeminiTurn = (
   };
 };
 
-const encodeGeminiTextStream = (
-  route: Extract<LlmRoute, { kind: "gemini-generate-content" }>,
-  request: TextStreamRequest,
-): GeminiGenerateContentBody => encodeGeminiTurn(route, request);
-
 interface GeminiRawResponse {
   readonly candidates?: ReadonlyArray<{
     readonly content?: {
@@ -243,64 +233,6 @@ interface GeminiRawResponse {
     readonly totalTokenCount?: number;
   };
 }
-
-const decodeGeminiTextStream = (
-  stream: ReadableStream<Uint8Array>,
-): Stream.Stream<TextStreamFrame, UpstreamFailure> => {
-  let sawChunk = false;
-  let done = false;
-  return decodeSseEvents(stream).pipe(
-    Stream.mapEffect((event) => {
-      if (event.kind === "end") {
-        if (!sawChunk) {
-          return Effect.fail(
-            new UpstreamFailure({
-              cause: "stream ended before any Gemini chunk",
-            }),
-          );
-        }
-        done = true;
-        return Effect.succeed([{ type: "done" as const }]);
-      }
-      if (done) {
-        return Effect.succeed([]);
-      }
-      return parseSseJson<GeminiRawResponse>(event.data).pipe(
-        Effect.map((parsed): TextStreamFrame[] => {
-          sawChunk = true;
-          const frames: TextStreamFrame[] = [];
-          const cand = parsed.candidates?.[0];
-          const text = (cand?.content?.parts ?? [])
-            .filter((part): part is Extract<GeminiPart, { text: string }> =>
-              "text" in part && typeof part.text === "string",
-            )
-            .map((part) => part.text)
-            .join("");
-          if (text.length > 0) {
-            frames.push({ type: "token", delta: text });
-          }
-          const usageMetadata = parsed.usageMetadata;
-          if (usageMetadata !== undefined) {
-            const promptTokens = usageMetadata.promptTokenCount ?? 0;
-            const completionTokens = usageMetadata.candidatesTokenCount ?? 0;
-            frames.push({
-              type: "usage",
-              usage: {
-                promptTokens,
-                completionTokens,
-                totalTokens:
-                  usageMetadata.totalTokenCount ??
-                  promptTokens + completionTokens,
-              },
-            });
-          }
-          return frames;
-        }),
-      );
-    }),
-    Stream.mapConcat((frames) => frames),
-  );
-};
 
 const foldGeminiParts = (
   parts: ReadonlyArray<GeminiPart> | undefined,
@@ -531,11 +463,6 @@ export const geminiGenerateContentAdapter: LlmProtocolAdapter<"gemini-generate-c
     version: ADAPTER_VERSION,
     encodeTurn: encodeGeminiTurn,
     decodeTurn: decodeGeminiTurn,
-    textStream: {
-      supported: true,
-      encode: encodeGeminiTextStream,
-      decodeFrames: decodeGeminiTextStream,
-    },
     encodeStructured: encodeGeminiStructured,
     decodeStructured: decodeGeminiStructured,
     classify: classifyGeminiError,

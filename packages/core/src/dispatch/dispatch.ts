@@ -11,13 +11,13 @@
 
 import { Clock, Context, Effect, Layer } from "effect";
 import {
+  CapabilityRejected,
   DispatchScopeMismatch,
   DispatchTargetNotFound,
   JsonStringifyError,
-  ReservedEventKindError,
   ScopeMissingError,
   SqlError,
-  isReservedEventKind,
+  isCoreClaimedEventKind,
   safeStringify,
 } from "../errors";
 import { EventBus } from "../ledger";
@@ -91,7 +91,7 @@ export class Dispatch extends Context.Tag("@agent-os/Dispatch")<
       | SqlError
       | JsonStringifyError
       | DispatchTargetNotFound
-      | ReservedEventKindError
+      | CapabilityRejected
     >;
     readonly receive: (
       envelope: DispatchEnvelope,
@@ -99,7 +99,7 @@ export class Dispatch extends Context.Tag("@agent-os/Dispatch")<
       { deliveredEventId: number },
       | SqlError
       | JsonStringifyError
-      | ReservedEventKindError
+      | CapabilityRejected
       | ScopeMissingError
       | DispatchScopeMismatch
     >;
@@ -311,9 +311,12 @@ export const DispatchLive = (
       return {
         dispatchToScope: (spec) =>
           Effect.gen(function* () {
-            if (isReservedEventKind(spec.event)) {
+            if (isCoreClaimedEventKind(spec.event)) {
               return yield* Effect.fail(
-                new ReservedEventKindError({ event: spec.event }),
+                new CapabilityRejected({
+                  event: spec.event,
+                  capability: "cap_app",
+                }),
               );
             }
             const targetNs = targets[spec.target.bindingRef];
@@ -377,9 +380,12 @@ export const DispatchLive = (
                 }),
               );
             }
-            if (isReservedEventKind(envelope.event)) {
+            if (isCoreClaimedEventKind(envelope.event)) {
               return yield* Effect.fail(
-                new ReservedEventKindError({ event: envelope.event }),
+                new CapabilityRejected({
+                  event: envelope.event,
+                  capability: "cap_app",
+                }),
               );
             }
 

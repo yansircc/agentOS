@@ -27,13 +27,15 @@ import {
   ToolError,
   UpstreamFailure,
 } from "./errors";
-import { AiBinding, callLlm, type LlmMessage, type LlmRoute, type ToolDefinition } from "./llm";
-import { Ledger } from "./ledger";
 import {
-  CredentialNotFound,
-  EndpointNotFound,
-  ProviderRegistry,
-} from "./provider-registry";
+  AiBinding,
+  callLlm,
+  type LlmMessage,
+  type LlmRoute,
+  type ToolDefinition,
+} from "./llm";
+import { Ledger } from "./ledger";
+import { RefResolutionFailed, RefResolverService } from "./ref-resolver";
 import { Quota } from "./quota";
 import { executeTool, parseToolCall, type Tool } from "./tools";
 import {
@@ -151,7 +153,7 @@ const finalAbort = (
 > =>
   Effect.gen(function* () {
     const ledger = yield* Ledger;
-    yield* ledger.log(kind, payload, scope);
+    yield* ledger.log(kind, { runId, ...payload }, scope);
     const events = yield* ledger.events(scope);
     return {
       ok: false,
@@ -166,8 +168,8 @@ export const submitAgentEffect = (
   spec: InternalSubmitSpec,
 ): Effect.Effect<
   SubmitResult,
-  SqlError | JsonStringifyError | EndpointNotFound | CredentialNotFound,
-  Ledger | AiBinding | Quota | Admission | ProviderRegistry
+  SqlError | JsonStringifyError | RefResolutionFailed,
+  Ledger | AiBinding | Quota | Admission | RefResolverService
 > =>
   Effect.gen(function* () {
     const ledger = yield* Ledger;
@@ -178,9 +180,14 @@ export const submitAgentEffect = (
     const toolRetries = Math.max(0, spec.budget?.toolRetries ?? 2);
     const scope = spec.deliver.scope;
 
-    const ingest = yield* ledger.log(
+    const started = yield* ledger.log(
+      "agent.run.started",
+      { intent: spec.intent },
+      scope,
+    );
+    yield* ledger.log(
       "chat.ingested",
-      { intent: spec.intent, context: spec.context },
+      { runId: started.id, intent: spec.intent, context: spec.context },
       scope,
     );
 
@@ -205,7 +212,7 @@ export const submitAgentEffect = (
             toolCount: Object.keys(spec.tools).length,
           },
           scope,
-          ingest.id,
+          started.id,
           0,
         );
       }
@@ -239,11 +246,16 @@ export const submitAgentEffect = (
             ? result.outcome.tokensUsed
             : 0;
         yield* Ref.set(tokensUsedRef, tokens);
-        const events = yield* ledger.events(scope);
         const finalStr = yield* safeStringify(result.decoded);
+        yield* ledger.log(
+          "agent.run.completed",
+          { runId: started.id, event: deliverEventName },
+          scope,
+        );
+        const events = yield* ledger.events(scope);
         return {
           ok: true,
-          runId: ingest.id,
+          runId: started.id,
           final: finalStr,
           eventCount: events.length,
           tokensUsed: tokens,
@@ -263,7 +275,7 @@ export const submitAgentEffect = (
           lease: result.lease,
         },
         scope,
-        ingest.id,
+        started.id,
         0,
       );
     }
@@ -280,9 +292,8 @@ export const submitAgentEffect = (
       | JsonStringifyError
       | UpstreamFailure
       | ToolError
-      | EndpointNotFound
-      | CredentialNotFound,
-      Ledger | AiBinding | Quota | ProviderRegistry
+      | RefResolutionFailed,
+      Ledger | AiBinding | Quota | RefResolverService
     > = Effect.gen(function* () {
       const messages: LlmMessage[] = [...initialMessages];
       const toolDefs = toolDefinitionsOf(spec.tools);
@@ -297,7 +308,7 @@ export const submitAgentEffect = (
             ABORT.BUDGET_TIME,
             { elapsedMs: now - startTime, maxMs: budgetTimeMs },
             scope,
-            ingest.id,
+            started.id,
             tokensBeforeCall,
           );
         }
@@ -314,7 +325,7 @@ export const submitAgentEffect = (
         yield* ledger.log(
           "llm.response",
           {
-            turn: turnRefOf(ingest.id, turn),
+            turn: turnRefOf(started.id, turn),
             text: resp.text,
             toolCalls: resp.toolCalls,
             usage: resp.usage,
@@ -327,7 +338,7 @@ export const submitAgentEffect = (
             ABORT.BUDGET_TOKENS,
             { tokensUsed: newTokens, tokensMax: budgetTokens },
             scope,
-            ingest.id,
+            started.id,
             newTokens,
           );
         }
@@ -342,13 +353,18 @@ export const submitAgentEffect = (
         if (resp.toolCalls.length === 0) {
           yield* ledger.log(
             spec.deliver.event,
-            { final: resp.text, turn: turnRefOf(ingest.id, turn) },
+            { final: resp.text, turn: turnRefOf(started.id, turn) },
+            scope,
+          );
+          yield* ledger.log(
+            "agent.run.completed",
+            { runId: started.id, event: spec.deliver.event },
             scope,
           );
           const events = yield* ledger.events(scope);
           return {
             ok: true,
-            runId: ingest.id,
+            runId: started.id,
             final: resp.text,
             eventCount: events.length,
             tokensUsed: newTokens,
@@ -454,6 +470,7 @@ export const submitAgentEffect = (
           yield* ledger.log(
             "tool.executed",
             {
+              runId: started.id,
               name: call.function.name,
               args: call.function.arguments,
               result,
@@ -474,7 +491,7 @@ export const submitAgentEffect = (
         ABORT.RETRIES,
         { maxTurns },
         scope,
-        ingest.id,
+        started.id,
         tokensUsed,
       );
     });
@@ -488,7 +505,7 @@ export const submitAgentEffect = (
               ABORT.UPSTREAM_FAILURE,
               { cause: String(e.cause) },
               scope,
-              ingest.id,
+              started.id,
               tokensUsed,
             );
           }),
@@ -499,7 +516,7 @@ export const submitAgentEffect = (
               ABORT.TOOL_ERROR,
               { toolName: e.toolName, cause: String(e.cause) },
               scope,
-              ingest.id,
+              started.id,
               tokensUsed,
             );
           }),

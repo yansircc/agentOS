@@ -20,10 +20,9 @@ Effect-compliant agentOS substrate for Cloudflare Workers.
 | `alarm()` DO alarm handler (auto-invoked by CF runtime) | ✅ (v0.2.3) |
 | `dispatchToScope(spec)` cross-DO ledger delivery | ✅ |
 | `grantResource` / `reserveResource` / `consumeResource` / `releaseResource` | ✅ |
-| `generateImage(spec)` image route dispatch | ✅ |
 | `withQuota(tool, spec)` rate-limit / budget middleware | ✅ (v0.2.8 atomic) |
 | `submit({ outputSchema })` structured output via admission | ✅ |
-| `view.reflective.*` agent self-introspection | ⏳ v0.2 Phase 4 |
+| `runTrace` / `runStatus` / `quotaState` / `resourceState` / `admissionLease` | ✅ |
 | view source plurality (Hyperdrive, AutoRAG, AE, …) | ⏳ v0.2+ |
 | CF Agents framework integration (`extends Agent`) | ⏳ v0.2 Phase 4 |
 
@@ -34,6 +33,8 @@ AgentDOBase.submit(spec)  Promise:
   resolves -> SubmitResult { ok:true|false }       all logical aborts
   rejects  -> SqlError | JsonStringifyError        irrecoverable infra failures
               | ScopeMissingError                  DO addressed via newUniqueId
+              | CapabilityRejected                 deliver.event not cap_app
+              | RefResolutionFailed                external route misconfigured
 
 AgentDOBase.events()      Promise:
   resolves -> LedgerEventRpc[]                     possibly empty (empty ledger)
@@ -42,6 +43,7 @@ AgentDOBase.events()      Promise:
 AgentDOBase.scheduleEvent(spec)  Promise:
   resolves -> { id: number }                       inserted scheduled_events.id
   rejects  -> SqlError | JsonStringifyError | ScopeMissingError
+              | CapabilityRejected
 
 AgentDOBase.streamEvents(opts)  Response:
   emits    -> SSE rows with id: <ledger.id>, event: ledger,
@@ -92,10 +94,12 @@ const myTool: Tool<{ key: string }, { value: string }> = {
 };
 
 export class AgentDO extends AgentDOBase<Env> {
-  protected provideRegistry() {
+  protected provideRefResolver() {
     return {
-      endpoints: { openrouter: "https://openrouter.ai/api/v1" },
-      credentials: { OPENROUTER_KEY: this.env.OPENROUTER_KEY },
+      endpoint: (ref: string) =>
+        ref === "openrouter" ? "https://openrouter.ai/api/v1" : null,
+      credential: (ref: string) =>
+        ref === "OPENROUTER_KEY" ? this.env.OPENROUTER_KEY : null,
     };
   }
 

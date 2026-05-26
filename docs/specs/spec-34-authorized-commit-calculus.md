@@ -1,0 +1,681 @@
+# Spec 34: Authorized Commit Calculus — Core v0.3 Refactor
+
+> **Status**: Draft v0
+> **Date**: 2026-05-26
+> **Triggers**: Rebuild `@agent-os/core` public surface as v0.3.0 (breaking).
+> **Supersedes (on adoption)**: see §11.
+> **Pressure evidence**: convergence dialogue derived from spec-24 §5.1 (4-op
+> presentation), spec-32 §1 (modality-named reserved prefix), spec-25 §7
+> (admission internals leaked to barrel), spec-31 (submitTextStream as
+> kernel-rank method on AgentDOBase).
+
+---
+
+## 0. Purpose
+
+Three failures co-exist in core v0.2.17:
+
+1. **The 4-op presentation hides authority.** spec-24 §5.1 lists
+   `ingest / dispatch / log / project` as one tier. The actual invariant is
+   not "events can be appended" but "**only the right capability can append a
+   given kind**". Forging `dispatch.consumed` collapses quota; forging
+   `llm.structured.evidence` collapses admission; forging `resource.reserved`
+   double-spends reservations.
+2. **Modality leaks to the base class.** `AgentDOBase.generateImage` and
+   spec-32's `image.*` reservation burn one specific carrier name into the
+   kernel vocabulary. The same shape lurks for any future modality
+   (audio/video/web/voice).
+3. **Submit internals leak to the top-level barrel.** `CapabilityLease /
+   AttemptKey / Outcome / Strategy` and `ProviderRegistryConfig` are
+   submit-private machinery. Their public exposure makes `@agent-os/core`
+   look like an LLM SDK rather than an event calculus.
+
+v0.3 collapses the three through one move: **make `commit(cap, event)` the
+public algebra and define how capabilities are owned**. Once authority is
+first-class, modality carriers and submit internals fall out of core by
+construction.
+
+---
+
+## 1. Invariant
+
+> **core = authorized commit calculus. Every write into the ledger is
+> `commit(cap, event)` where `cap.kindPrefix ⊇ event.kind`. Capability
+> ownership is the SSoT discipline, not just blacklist enforcement.**
+
+Corollaries:
+
+- **C-1.** A capability is the unit of write authority. There is no global
+  "anyone can append" gate. The v0.2 `emitEvent` blacklist
+  (`ReservedEventKindError`) was only a projection of this invariant under
+  the old transport, not the invariant itself.
+- **C-2.** SSoT discipline is preserved iff every event kind has exactly one
+  capability owner. Two owners on the same kind = duplicated truth = INV-5
+  violation.
+- **C-3.** Composite operations may commit caller-delegated app facts, but only
+  when the event kind is still owned by `cap_app` and the composite's public
+  spec names that delegation explicitly. This is how `submit.deliver.event`
+  and `dispatchToScope.event` land application facts without making submit or
+  dispatch the owner of the app namespace.
+- **C-4.** Reading does not require capability. `project` and `react` are
+  ungated.
+- **C-5.** Modalities do not appear in the kernel vocabulary. An image / audio
+  / web package obtains its own capability via §7's protocol; core does not
+  reserve their namespaces.
+
+---
+
+## 2. Kernel — 5-op authorized commit calculus
+
+Five operations. Non-degenerate: each is a distinct sub-machine.
+
+```ts
+// Writes — distinguished by side-effect surface and time axis.
+
+commit(cap, event)              // atomic ledger write; no external effect
+effect(cap, intent) => result   // external side-effect, idempotent settlement,
+                                //   result settles via commit(cap, result_event)
+time(cap, event, at)            // deferred commit; intent buffered now,
+                                //   commit performed at `at` via alarm
+
+// Reads — ungated.
+
+project(view, source?)          // bounded query over committed past
+react(kind, handler)            // forward subscription over future commits;
+                                //   same-scope in v1 (DO isolation)
+```
+
+Why not 2 (append + read), why not 4 (the spec-24 inflation):
+
+| Pair                 | Collapsible? | Reason                                                          |
+|----------------------|--------------|-----------------------------------------------------------------|
+| commit / effect      | no           | effect binds idempotency/outbox sub-machine; commit does not   |
+| commit / time        | no           | time writes `scheduled_events` (intent buffer) before commit; different table, different sub-machine |
+| project / react      | parameterizable | window axis; v1 keeps two names because react has same-scope transport constraint |
+| ingest / dispatch    | yes (internal)  | both are `commit(cap, event)` with different cause; the cause is encoded in the capability holder, not as a kernel parameter |
+
+`ingest` and `dispatch` from spec-24 §5.1 are **internal causation patterns
+of `commit`**, not separate kernel ops. They survive as named composites in
+§4 (`emitEvent`, `dispatchToScope`) because their authority shape differs.
+
+---
+
+## 3. Capability owners
+
+Six capabilities, four substrate-owned + one app-owned + one higher-order:
+
+| Capability       | Owner                | Write namespace                                            |
+|------------------|----------------------|------------------------------------------------------------|
+| `cap_dispatch`   | dispatch machinery   | `dispatch.*` (`dispatch.outbound.*`, `dispatch.inbound.*`, `dispatch.consumed`, `dispatch.rate_limited`) |
+| `cap_resource`   | resource state       | `resource.*` (`resource.granted`, `resource.reserved`, `resource.reserve_rejected`, `resource.consumed`, `resource.released`) |
+| `cap_submit`     | submit lifecycle     | submit-owned run facts: `chat.ingested`, `llm.response`, `tool.executed`, `agent.run.*`, `agent.aborted.*` |
+| `cap_admission`  | admission gate       | `llm.structured.*` (`llm.structured.evidence`, `llm.structured.invalidate`) |
+| `cap_app`        | app code             | **all kinds not claimed by a substrate or extension cap**  |
+| `cap_scheduler`  | scheduler (h-order)  | no own namespace; carries `defer(cap_X, event)` and later promotes via `cap_X`'s authority |
+
+Rules:
+
+- **C-1.** `cap_app` is **negatively defined**: any kind not claimed by another
+  capability. Apps name their events naturally (`interview.answer`,
+  `wa.message.in`, `approval.decided`) — substrate does not impose an
+  `app.*` prefix.
+- **C-2.** `cap_scheduler` is **higher-order**:
+  `cap_scheduler = (cap_X) -> defer(cap_X, event, at)`. It writes
+  `scheduled_events` (an internal table, not the ledger) and promotes the
+  buffered fact via `cap_X` at fire time. The scheduler holds no ledger
+  vocabulary of its own.
+- **C-3.** Capabilities are **disjoint by kindPrefix**. Two capabilities
+  claiming the same kind = boundary failure, must be rejected at
+  registration time.
+- **C-4.** Capabilities are **scoped to a DO instance**. Cross-scope writes
+  go through `dispatchToScope` (§4), which holds `cap_dispatch` on both
+  sides.
+- **C-5.** Delegated app-fact commits are not ownership transfer. A composite
+  may accept a public `event` field and later commit that event only if
+  `event ∈ cap_app`. The composite writes its bookkeeping under its own cap
+  and writes the delegated app fact under `cap_app` authority carried in the
+  public call. This is the only way a substrate composite may write a
+  non-substrate event kind.
+- **C-6.** `quota.*` is not a v0.3 vocabulary. Quota settlement is owned by
+  `cap_dispatch` through `dispatch.consumed` and `dispatch.rate_limited`.
+  Adding a `quota.*` event later requires a spec that assigns it to exactly
+  one capability.
+
+The v0.3 enforcement surface is `CapabilityRejected`. `ReservedEventKindError`
+is removed with the rest of the v0.2 reserved-prefix vocabulary; there is no
+compatibility shim.
+
+---
+
+## 4. Shipped composites
+
+Five composites. Each is a named composition of kernel ops with a fixed
+capability binding. Apps call composites; kernel ops are internal.
+
+```ts
+// emitEvent : app-fact commit
+emitEvent(event, data)
+  = commit(cap_app, { kind: event, data, ts, scope })
+
+// dispatchToScope : cross-scope effect, idempotent
+dispatchToScope(targetScope, intent)
+  = effect(cap_dispatch, intent)
+    where settlement commits dispatch.* on both sender and receiver scopes
+    and receiver commits the requested app event via delegated cap_app
+
+// scheduleEvent : deferred app-fact commit
+scheduleEvent(event, data, at)
+  = time(cap_app, { kind: event, data }, at)
+    = cap_scheduler(cap_app)(event, data, at)
+
+// submit : bounded LLM closed loop
+submit(spec)
+  = commit(cap_submit, agent.run.started)
+    ; commit(cap_submit, chat.ingested)
+    ; loop {
+        effect(cap_submit, LLM call)         // settles llm.response
+        for each tool_call:
+          effect(cap_dispatch, tool intent)  // settles dispatch.* quota/outcome commits
+          commit(cap_submit, tool.executed)
+      } bounded by spec.budget, gated by admission lease projection
+    ; commit(cap_app, spec.deliver.event) via delegated app-fact authority
+      OR commit(cap_submit, agent.aborted.*)
+
+// streamEvents : live tail wire (spec-29)
+streamEvents(opts)
+  = project(events, after = opts.afterId) ++ react(any kind, forward)
+    with cursor (id ASC), SSE transport
+```
+
+Notes:
+
+- `submitTextStream` is **not a core composite in v0.3**. It moves to
+  `@agent-os/streaming`. If that package is not ready, v0.3 ships without a
+  public token-streaming API instead of keeping a base-class fallback.
+- `dispatchToScope` requires `__agentosReceiveDispatch` on the receiver DO,
+  which itself is a `cap_dispatch` settlement — this stays internal RPC.
+
+---
+
+## 5. Standard projections
+
+First-class projections. Each is SSoT-shaped: one fact, one location, no
+app-side reconstruction.
+
+```ts
+// On AgentDOBase (RPC-callable):
+
+runTrace(runId): Promise<RunTrace>
+  // submit lifecycle reconstruction from submit-owned run facts
+  // (`chat.ingested`, `llm.response`, `tool.executed`, `agent.*`)
+  // plus the delegated deliver event.
+  // Returns: { runId, startedAt, turns: LlmTurn[], toolCalls: ToolCall[],
+  //            terminal: { kind, at, payload } | null }
+
+runStatus(runId): Promise<RunStatus>
+  // RunStatus =
+  //   | { kind: "delivered",   at: number, event: string }
+  //   | { kind: "aborted",     at: number, abortKind: AbortKind }
+  //   | { kind: "open_without_terminal", startedAt: number }
+  //   | { kind: "orphaned",    startedAt: number, evidence: string }
+  // Honesty: "open" vs "orphaned" requires heartbeat or CF Workflow
+  // instance status evidence. Without that evidence, returns
+  // open_without_terminal, never "in-flight".
+
+quotaState(spec): Promise<QuotaState>
+  // spec = { quotaKey, window, specRef }
+  // QuotaState = { consumed, limit, remaining, refundable, windowStart? }
+
+resourceState(resourceKey): Promise<ResourceState>
+  // ResourceState = { granted, reserved, consumed, available,
+  //                   reservations: { id, amount }[] }
+
+admissionLease(attemptKey): Promise<CapabilityLease | null>
+  // attemptKey = { route, schemaContract, strategy, adapterVersion }
+  // (spec-25 §7 full key — not the truncated (route, sc) form.)
+
+events(opts): Promise<ReadonlyArray<LedgerEventRpc>>
+  // Raw cursor query. Existing; retained as the lowest-level projection.
+```
+
+Notes:
+
+- All projections are pure functions of committed events. No backing
+  tables for derived state (spec-24 §3.1 preserved).
+- `simulate(view, deltas)` (hypothetical projection used internally by
+  quota pre-grant) is **not exposed**. Internal-only until N+1 evidence
+  proves an app needs it.
+
+---
+
+## 6. Standard vocabularies
+
+Three vocabularies retained from prior specs, namespaced by capability:
+
+| Vocabulary             | Owner          | Reference            |
+|------------------------|----------------|----------------------|
+| Abort kinds            | `cap_submit`   | spec-24 §7           |
+| Run lifecycle terms    | `cap_submit`   | spec-24 §5.1.1       |
+| Structured evidence    | `cap_admission`| spec-25 §3, §7       |
+
+Submit, dispatch, and resource event kinds are owned by their respective
+capabilities but were not formalized as "vocabularies" in v0.2; this spec
+promotes them:
+
+| Vocabulary             | Owner          | Kinds                                                              |
+|------------------------|----------------|--------------------------------------------------------------------|
+| Submit turn facts      | `cap_submit`   | `chat.ingested`, `llm.response`, `tool.executed`, `agent.run.started`, `agent.aborted.*` |
+| Dispatch outcomes      | `cap_dispatch` | `dispatch.outbound.requested`, `dispatch.outbound.delivered`, `dispatch.outbound.failed`, `dispatch.inbound.accepted`, `dispatch.consumed`, `dispatch.rate_limited` |
+| Resource transitions   | `cap_resource` | `resource.granted`, `resource.reserved`, `resource.reserve_rejected`, `resource.consumed`, `resource.released` |
+
+Unsupported vocabulary:
+
+- `dispatch.tool_error` and `dispatch.upstream_failure` are not v0.3 event
+  kinds. Tool and upstream failures remain `agent.aborted.*` facts until a
+  dispatch-failure spec assigns a different owner.
+- `resource.expired` is not a v0.3 event kind. Reservation TTL/expiry requires
+  a resource-expiry spec before it can appear in the vocabulary.
+- `quota.*` is not a v0.3 event namespace; quota state is projected from
+  `dispatch.consumed` / `dispatch.rate_limited`.
+
+---
+
+## 7. Extension capability protocol
+
+The mechanism that lets a non-core package legally commit ledger facts under
+its own namespace.
+
+```ts
+// Internal v0.3 — public later only when N+1 third-party packages need it.
+
+interface ExtensionPackage {
+  packageId: string                    // "@agent-os/image"
+  kindPrefixes: ReadonlyArray<string>  // ["image."]
+  version: string                      // package semver, captured in events
+}
+
+// AgentDOBase.registerExtension(pkg): ExtensionCapability
+//   - validates kindPrefixes disjoint from substrate caps and any
+//     previously-registered extensions in this DO class
+//   - returns cap_pkg = { write: pkg.kindPrefixes }
+//   - cap_pkg.commit(event)  : authorized commit
+//   - cap_pkg.effect(intent) : authorized effect (results commit under cap_pkg)
+//   - cap_pkg.time(event, at): authorized deferred commit (via cap_scheduler)
+
+class AgentDOBase {
+  protected registerExtensions(): ReadonlyArray<ExtensionPackage> { return [] }
+  // subclass override; called once during construction.
+}
+```
+
+Consequences:
+
+- **`image.*` reservation in spec-32 §1 is removed only because runtime
+  extension registration is mandatory in v0.3.** `@agent-os/image`
+  registers itself with `kindPrefixes: ["image."]` before any image fact can
+  be committed. Core knows the extension declaration, not image semantics.
+- **Same path applies to** audio / video / web / browser / sandbox / any
+  future modality.
+- **Same path applies to** any future streaming package-owned ledger facts
+  (for example `stream.*`). Token deltas remain ephemeral unless that package
+  writes a dedicated spec that promotes them to ledger facts. Extension
+  packages do not get to write `agent.*`; that namespace stays `cap_submit`.
+- **No global mutable registry.** Extension registration is per-DO-class,
+  declared by `registerExtensions()` override, validated at DO
+  construction.
+- **No type-only authority gap.** If runtime extension registration is not
+  implemented, v0.3 must not remove modality prefixes from core reservation.
+  The adopted v0.3 target is the stronger path: runtime registration ships in
+  the same PR series as any modality namespace unreservation.
+
+v0.3 ships the type, validation, and the minimal runtime commit gate needed
+for registered packages. It ships no public app-facing extension helper.
+Package code may use the internal capability; apps may not forge package
+events through `emitEvent`, `submit.deliver.event`, or `dispatchToScope.event`.
+
+---
+
+## 8. Public surface (final)
+
+### 8.1 `AgentDOBase` method set
+
+```ts
+class AgentDOBase<Env> {
+  // ----- composites (RPC) -----
+  submit(spec: SubmitSpec): Promise<SubmitResult>
+  emitEvent(spec: { event: string; data: unknown }): Promise<{ id: number }>
+  scheduleEvent(spec: ScheduledEventSpec): Promise<{ id: number }>
+  dispatchToScope(spec: DispatchToScopeSpec): Promise<DispatchToScopeResult>
+  streamEvents(opts?: StreamEventsOptions): Response
+
+  // ----- projections (RPC) -----
+  events(opts?: EventQueryOptions): Promise<ReadonlyArray<LedgerEventRpc>>
+  runTrace(runId: string): Promise<RunTrace>
+  runStatus(runId: string): Promise<RunStatus>
+  quotaState(spec: QuotaStateSpec): Promise<QuotaState>
+  resourceState(key: string): Promise<ResourceState>
+  admissionLease(key: AttemptKey): Promise<CapabilityLease | null>
+
+  // ----- resource composites (RPC) -----
+  grantResource(spec: ResourceGrantSpec): Promise<ResourceGrantResult>
+  reserveResource(spec: ResourceReserveSpec): Promise<ResourceReserveResult>
+  consumeResource(spec: ResourceReservationSpec): Promise<void>
+  releaseResource(spec: ResourceReservationSpec): Promise<void>
+
+  // ----- CF runtime hook -----
+  alarm(): Promise<void>
+
+  // ----- subclass extension surface (protected) -----
+  protected on(kind: string, handler: EventHandler): void
+  protected off(kind: string, handler: EventHandler): void
+  protected provideDispatchTargets(): DispatchTargetRegistry
+  protected provideRefResolver(): RefResolver
+  protected registerExtensions(): ReadonlyArray<ExtensionPackage>
+  // provideRegistry() removed — replaced by provideRefResolver().
+}
+```
+
+Removed from `AgentDOBase`:
+
+- `generateImage(spec)` — moves to `@agent-os/image`.
+- `submitTextStream(spec)` — moves to `@agent-os/streaming`; if that package is
+  not ready, v0.3 has no public token-streaming API.
+- `provideRegistry()` — replaced by `provideRefResolver()` (see §10.3).
+- `__agentosReceiveDispatch` — stays internal (it always was; the underscore
+  marks it as private RPC, not public surface).
+
+### 8.2 Barrel exports (`@agent-os/core` v0.3)
+
+```ts
+// AgentDOBase + env
+export { AgentDOBase, type AgentDOEnv }
+
+// Composite spec types
+export type {
+  SubmitSpec, SubmitResult, TurnRef,
+  ScheduledEventSpec,
+  DispatchToScopeSpec, DispatchToScopeResult,
+  EventQueryOptions, StreamEventsOptions,
+}
+
+// Projection result types
+export type {
+  RunTrace, RunStatus,
+  QuotaStateSpec, QuotaState,
+  ResourceState,
+  LedgerEventRpc, EventHandler, TraceContext,
+}
+
+// Resource composite types
+export type {
+  ResourceGrantSpec, ResourceReserveSpec, ResourceReservationSpec,
+  ResourceGrantResult, ResourceReserveResult,
+}
+
+// Tools + quota middleware
+export type { Tool, ToolDefinition, LlmUsage }
+export { withQuota, type QuotaSpec }
+
+// Dispatch target registry (for provideDispatchTargets())
+export type { DispatchTargetNamespace, DispatchTargetRegistry }
+
+// Abort taxonomy
+export { ABORT, type AbortKind }
+
+// Tagged errors
+export {
+  SqlError, JsonStringifyError,
+  ScopeMissingError, InvalidScheduleAt,
+  DispatchTargetNotFound, DispatchScopeMismatch,
+  InvalidResourceAmount, ResourceInsufficient,
+  ResourceReservationNotFound, ResourceReservationClosed,
+  UpstreamFailure, ToolError,
+  RefResolutionFailed,
+  CapabilityRejected,
+}
+
+// Admission public surface (narrow)
+export type { JsonSchemaObject, JsonSchemaNode }     // for submit({outputSchema})
+export type { LlmRoute }                              // for SubmitSpec
+export type { CapabilityLease, AttemptKey }           // for admissionLease() return
+//   Strategy / Outcome / OutcomeClass / SchemaContract / AdmissionImpact
+//   are submit-internal — NOT exported at barrel.
+
+// Ref resolution and extension capability protocol
+export type { RefResolver, ExtensionPackage, ExtensionCapability }
+```
+
+Removed from barrel:
+
+- `ImageRoute / ImageArtifact / ImageResult / GenerateImageSpec / ImageRequest`
+  — re-exported from `@agent-os/image` instead of core.
+- `ProviderRegistryConfig / EndpointNotFound / CredentialNotFound` — replaced
+  by `RefResolver` and `RefResolutionFailed`.
+- `SubmitTextStreamSpec / SubmitTextStreamFrame` — see §10.
+- `Strategy / Outcome / OutcomeClass / SchemaContract / AdmissionImpact` —
+  submit-internal.
+- `DispatchEnvelope` — receiver RPC envelope is internal, not a tool-author
+  surface.
+
+---
+
+## 9. Honesty revisions
+
+### 9.1 Replay
+
+spec-24 §4 corollary currently reads:
+
+> Corollary: `agent.run` is a pure function of the ledger snapshot.
+> Replayable + sandboxable + auditable for free.
+
+Revised:
+
+> Corollary: `agent.run` is **trace-projectable and auditable** from the
+> ledger snapshot via `runTrace(runId)`. Deterministic replay (i.e.
+> re-executing a run and obtaining bit-identical outputs) is **not a v1
+> guarantee**. CF Workflow `step.do` capture is the candidate substrate for
+> deterministic replay; a spike must validate whether `step.do` I/O is
+> reproducible across DO/Workflow restarts before any `replay(runId)`
+> primitive is added.
+
+### 9.2 Quota / Resource — INV-3 split
+
+spec-24 INV-3 currently reads:
+
+> Pre-grant + consume patterns unify into **Quota**.
+
+Revised:
+
+> Pre-grant + consume patterns share a **linear accounting algebra** but
+> split into two ergonomics:
+>
+> - **Quota** — immediate-consume. Pre-check + atomic consume in one
+>   dispatch step. Refund-on-failure is supported but the reservation is
+>   never observable as a distinct state.
+> - **Resource** — delayed-finalize. Explicit `reserve → consume | release`
+>   lifecycle with the reservation as a first-class object (TTL, partial
+>   consume, partial release).
+>
+> Both are owned by core under their respective capabilities
+> (`cap_dispatch` for quota's consume events, `cap_resource` for the
+> reservation lifecycle). Apps choose by need: rate-limit / token-budget /
+> simple billing → Quota; multi-stage settlement / refundable holds → Resource.
+
+This makes spec-32 §1's reference to "unify into Quota" obsolete; both
+remain core-owned but separately surfaced.
+
+### 9.3 Reserved-prefix language
+
+spec-32 §1 currently establishes `image.` as a core-reserved event prefix
+on the grounds that "image job vocabulary is substrate-owned". v0.3
+replaces this with:
+
+> Image job vocabulary is **package-owned** via §7's extension capability
+> protocol. Core does not reserve modality-named namespaces after runtime
+> extension registration is available. The `@agent-os/image` package registers
+> `image.` as its kindPrefix and holds `cap_image` for commits. If that
+> registration is absent, `image.*` facts are not writable by anyone in v0.3.
+
+---
+
+## 10. Removed surface
+
+Concrete delta against core v0.2.17. All removals are breaking.
+
+### 10.1 Moved out of core
+
+| Item                              | Destination                       | Mechanism                              |
+|-----------------------------------|-----------------------------------|----------------------------------------|
+| `AgentDOBase.generateImage`       | `@agent-os/image`                 | carrier exposed via tools or direct call |
+| `ImageRoute / ImageArtifact / ImageResult / GenerateImageSpec / ImageRequest` types in barrel | `@agent-os/image` barrel | re-export from package, not core |
+| `image.*` core reserved prefix (spec-32 §1) | extension capability protocol (§7) | `@agent-os/image` registers `image.` and holds `cap_image`; without registration, image facts are unsupported |
+| `submitTextStream` method + `SubmitTextStreamSpec` / `SubmitTextStreamFrame` types | `@agent-os/streaming` (new) | moved out; if package is absent, v0.3 has no public token streaming |
+| `ProviderRegistryConfig` + `EndpointNotFound` / `CredentialNotFound` errors | generalized `RefResolver` | see §10.3 |
+
+### 10.2 Narrowed / hidden
+
+| Item                                            | New location                                 |
+|-------------------------------------------------|----------------------------------------------|
+| `Strategy / Outcome / OutcomeClass / SchemaContract / AdmissionImpact` types | submit-internal; not in barrel |
+| `provideRegistry()` protected hook              | replaced by `RefResolver` mechanism (§10.3) |
+
+### 10.3 RefResolver
+
+v0.3 chooses the general mechanism. `ProviderRegistry` is deleted as an
+LLM-only special case and replaced by a capability-neutral resolver:
+
+```ts
+interface RefResolver {
+  endpoint(ref: string): string | null
+  credential(ref: string): string | null
+}
+```
+
+Any core composite or extension carrier that needs
+`(endpointRef, credentialRef) -> (endpoint, credential)` uses the same
+resolver. Missing refs fail fast with `RefResolutionFailed`; there is no
+submit-specific fallback registry. Secret values still never enter the ledger.
+
+---
+
+## 11. Spec amendments / supersessions
+
+| Spec     | Section(s)         | Action                                                                 |
+|----------|--------------------|------------------------------------------------------------------------|
+| spec-24  | §3 SSoT discipline | **Amend**: prepend "commit authority + capability owners (see spec-34 §3)" as the primary frame; existing table preserved as a runtime consequence. |
+| spec-24  | §4 corollary        | **Amend**: replace "replayable" wording per spec-34 §9.1.              |
+| spec-24  | §5.1 four algebra ops | **Supersede**: replaced by spec-34 §2 five-op kernel. `ingest` / `dispatch` documented as internal causation patterns of `commit`. |
+| spec-24  | §5.1 reactive face   | **Amend**: reframe `emitEvent` / `scheduleEvent` / `on` as composites under capability ownership (spec-34 §4). |
+| spec-24  | §6 carrier middleware | **Amend**: add cross-reference to spec-34 §5 standard projections.   |
+| spec-24  | INV-3                 | **Amend**: split per spec-34 §9.2.                                    |
+| spec-24  | §7 failure events     | **Amend**: add capability owner column (spec-34 §6).                  |
+| spec-25  | §7 admission key     | **Preserve**: `attemptKey = (route, schemaContract, strategy, adapterVersion)` is the canonical projection key (spec-34 §5).  |
+| spec-31  | text streaming       | **Supersede**: `submitTextStream` leaves `AgentDOBase`; future public surface belongs to `@agent-os/streaming` via §7 protocol. |
+| spec-32  | §1 reserved prefix   | **Supersede**: extension capability protocol (spec-34 §7) replaces modality-named reservation. |
+| spec-32  | §2 package direction | **Supersede**: `AgentDOBase.generateImage` leaves core. `@agent-os/image` owns public image API and obtains package commit authority through §7. |
+
+---
+
+## 12. Open questions
+
+1. **[Open] When does the extension capability protocol become public API?**
+   v0.3 ships runtime registration for repo-owned packages, but no public
+   app-facing helper. The trigger to expose a stable helper is N>=2
+   third-party packages needing to commit their own kinds. Image is one
+   repo-owned package; the second independent third-party package is
+   unidentified.
+
+2. **[Open] Deterministic replay primitive.** §9.1 demoted the claim. The
+   open question is whether CF Workflow `step.do` capture is sufficient
+   for bit-identical replay across restarts. Resolution requires a spike;
+   resolution determines whether `replay(runId)` is ever a v2 primitive.
+
+3. **[Open] `simulate(view, deltas)`.** Used internally by quota pre-grant.
+   Could become public if admission / resource also need it. Not exposed
+   until N≥2 internal users prove the case.
+
+4. **[Open] cross-scope `react`.** v1 same-scope-only. Promoting to
+   cross-scope requires a queue-mediated transport; out of scope for v0.3.
+
+---
+
+## 13. Validation
+
+This spec is a refactor target, not a code change. Validation is the
+implementation PR, which must show:
+
+- All barrel exports listed in §8.2 exist; all items in §10.1 / §10.2 are
+  gone from the barrel.
+- `runTrace / runStatus / quotaState / resourceState / admissionLease`
+  methods exist on `AgentDOBase` and return §5's types.
+- `CapabilityRejected` error is reachable via every write path that
+  previously raised `ReservedEventKindError`; `ReservedEventKindError` is
+  removed from the barrel.
+- `ExtensionPackage` / `ExtensionCapability` types exist and runtime
+  registration rejects overlapping prefixes. Registered extension facts are
+  writable only by package capability, not by app-facing `emitEvent`,
+  `submit.deliver.event`, or `dispatchToScope.event`.
+- `AgentDOBase.generateImage` and `AgentDOBase.submitTextStream` are absent.
+  Their types are absent from `@agent-os/core` barrel.
+- `ProviderRegistryConfig`, `EndpointNotFound`, and `CredentialNotFound` are
+  absent; `RefResolver` and `RefResolutionFailed` are the only ref-resolution
+  surface.
+- spec-24 / spec-25 / spec-31 / spec-32 amendments per §11 land in the
+  same PR series.
+- Insight Helper / WhatsApp / Img-Gen / zeroY reference apps in spec-24
+  §16 compile and pass contract tests under the new surface (or skeletons
+  updated when the surface mandates it).
+
+Retained composites should keep their ledger behavior. The public surface is
+intentionally breaking: modality and token-streaming APIs leave `AgentDOBase`,
+capability failures use `CapabilityRejected`, and ref resolution is generalized.
+
+---
+
+## Appendix A: Naming rationale
+
+- **`commit` over `log` / `append`**: emphasizes the authority gate.
+  "log" reads as observability; "append" reads as anyone-can-write.
+- **`effect` over `dispatch`**: `dispatch` survives at the composite layer
+  (`dispatchToScope`) and as a vocabulary owner (`cap_dispatch`). The
+  kernel op name is upgraded because "dispatch" conflated `effect with
+  idempotent settlement` with `cross-scope routing`.
+- **`time` over `schedule`**: `scheduleEvent` survives at the composite
+  layer. The kernel op is named for the axis it embodies (deferred-commit
+  time-machine), not the user-facing verb.
+- **`react` over `on`**: `on` / `off` survive as the subclass extension
+  surface. The kernel read-forward op is named for what it is (a reactive
+  read), not for the imperative call shape.
+
+These naming choices keep the user-visible composites stable (apps still
+call `emitEvent / scheduleEvent / on / submit`) while clarifying the
+kernel-level vocabulary.
+
+---
+
+## Appendix B: Diff against spec-24 §5.1 (visual)
+
+```
+spec-24 §5.1 (v0.2):
+
+   ingest(channel, payload)   → log(event)
+   dispatch(carrier, intent)  → effect + log(event)
+   log(event, scope, tier?)   → ledger
+   project(view, source?)     → readonly
+
+   + reactive face: emitEvent / scheduleEvent / on
+   + view.reflective.{agentRuns, currentBudget, currentQuotaState}
+
+spec-34 §2 (v0.3):
+
+   commit(cap, event)                  authorized write, no side-effect
+   effect(cap, intent) -> result       external side-effect + idempotent commit
+   time(cap, event, at)                deferred commit
+   project(view, source?)              bounded read of past
+   react(kind, handler)                forward read of future commits
+
+   composites (§4):     emitEvent / scheduleEvent / dispatchToScope / submit / streamEvents
+   projections (§5):    runTrace / runStatus / quotaState / resourceState / admissionLease / events
+   capabilities (§3):   cap_dispatch / cap_resource / cap_submit / cap_admission / cap_app / cap_scheduler
+   extensions (§7):     ExtensionPackage / ExtensionCapability protocol
+```

@@ -332,8 +332,8 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
     });
   });
 
-  it("rejects reserved event kinds before writing sender facts", async () => {
-    const sender = stubFor("dispatch-sender-reserved");
+  it("rejects claimed event kinds before writing sender facts", async () => {
+    const sender = stubFor("dispatch-sender-claimed");
 
     await runInDurableObject(sender, async (instance, state) => {
       const rpc = instance as unknown as DispatchRpc;
@@ -341,16 +341,16 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
       try {
         await rpc.dispatchToScope({
           target: { bindingRef: "peer", scope: "any" },
-          event: "image.job.requested",
+          event: "llm.response",
           data: {},
-          idempotencyKey: "reserved-intent",
+          idempotencyKey: "claimed-intent",
         });
       } catch (e) {
         caught = e as { _tag?: string; event?: string };
       }
 
-      expect(caught?._tag).toBe("agent_os.reserved_event_kind");
-      expect(caught?.event).toBe("image.job.requested");
+      expect(caught?._tag).toBe("agent_os.capability_rejected");
+      expect(caught?.event).toBe("llm.response");
 
       const events = rowsOrEmpty(state, "SELECT * FROM events");
       const outbox = rowsOrEmpty(state, "SELECT * FROM dispatch_outbox");
