@@ -4,7 +4,24 @@ import {
   projectStagingArtifact,
   stagingArtifactExtensionPackage,
 } from "../src";
+import {
+  makePreClaim,
+  settleLivedClaim,
+} from "@agent-os/core/effect-claim";
 import type { ExtensionCapability } from "@agent-os/core/extensions";
+
+const stagingClaim = makePreClaim({
+  operationRef: "staging:session-1:reap",
+  scopeRef: { kind: "artifact", scopeId: "artifact/session-1" },
+  authorityRef: {
+    authorityId: "@agent-os/staging-artifact.reap",
+    authorityClass: "effect",
+  },
+  originRef: {
+    originId: "@agent-os/staging-artifact",
+    originKind: "extension_package",
+  },
+});
 
 describe("@agent-os/staging-artifact", () => {
   it("declares staging.* as an extension-owned prefix", () => {
@@ -69,6 +86,11 @@ describe("@agent-os/staging-artifact", () => {
         subjectRef: "session:1",
         artifactRef: "r2://staging/session-1",
         reason: "expired",
+        claim: settleLivedClaim(stagingClaim, {
+          anchorId: "r2://staging/session-1",
+          anchorKind: "carrier_proof",
+          carrierRef: "staging-artifact",
+        }),
       }),
     ).resolves.toEqual({ id: 1 });
 
@@ -80,6 +102,24 @@ describe("@agent-os/staging-artifact", () => {
           subjectRef: "session:1",
           artifactRef: "r2://staging/session-1",
           reason: "expired",
+          claim: {
+            phase: "lived",
+            operationRef: "staging:session-1:reap",
+            scopeRef: { kind: "artifact", scopeId: "artifact/session-1" },
+            authorityRef: {
+              authorityId: "@agent-os/staging-artifact.reap",
+              authorityClass: "effect",
+            },
+            originRef: {
+              originId: "@agent-os/staging-artifact",
+              originKind: "extension_package",
+            },
+            anchorRef: {
+              anchorId: "r2://staging/session-1",
+              anchorKind: "carrier_proof",
+              carrierRef: "staging-artifact",
+            },
+          },
         },
       },
     ]);

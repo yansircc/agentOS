@@ -4,7 +4,24 @@ import {
   gitCarrierExtensionPackage,
   projectGitSubject,
 } from "../src";
+import {
+  makePreClaim,
+  settleLivedClaim,
+} from "@agent-os/core/effect-claim";
 import type { ExtensionCapability } from "@agent-os/core/extensions";
+
+const gitClaim = makePreClaim({
+  operationRef: "git:session-1:commit",
+  scopeRef: { kind: "session", scopeId: "session/1" },
+  authorityRef: {
+    authorityId: "@agent-os/git-carrier.commit",
+    authorityClass: "write",
+  },
+  originRef: {
+    originId: "@agent-os/git-carrier",
+    originKind: "extension_package",
+  },
+});
 
 describe("@agent-os/git-carrier", () => {
   it("declares git.* as an extension-owned prefix", () => {
@@ -89,6 +106,11 @@ describe("@agent-os/git-carrier", () => {
         commitRef: "commit://def",
         parentRef: "main@abc",
         diffRef: "diff://def",
+        claim: settleLivedClaim(gitClaim, {
+          anchorId: "commit://def",
+          anchorKind: "carrier_proof",
+          carrierRef: "git",
+        }),
       }),
     ).resolves.toEqual({ id: 1 });
 
@@ -100,6 +122,24 @@ describe("@agent-os/git-carrier", () => {
           commitRef: "commit://def",
           parentRef: "main@abc",
           diffRef: "diff://def",
+          claim: {
+            phase: "lived",
+            operationRef: "git:session-1:commit",
+            scopeRef: { kind: "session", scopeId: "session/1" },
+            authorityRef: {
+              authorityId: "@agent-os/git-carrier.commit",
+              authorityClass: "write",
+            },
+            originRef: {
+              originId: "@agent-os/git-carrier",
+              originKind: "extension_package",
+            },
+            anchorRef: {
+              anchorId: "commit://def",
+              anchorKind: "carrier_proof",
+              carrierRef: "git",
+            },
+          },
         },
       },
     ]);

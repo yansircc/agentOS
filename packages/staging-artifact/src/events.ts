@@ -1,3 +1,4 @@
+import type { LivedClaim } from "@agent-os/core/effect-claim";
 import { STAGING_EVENT_PREFIX } from "./extension";
 
 export const STAGING_EVENTS = {
@@ -13,12 +14,14 @@ export interface StagingArtifactPublishedPayload {
   readonly artifactRef: string;
   readonly routeRef: string;
   readonly digest: string;
+  readonly claim?: LivedClaim;
 }
 
 export interface StagingArtifactReapedPayload {
   readonly subjectRef: string;
   readonly artifactRef: string;
   readonly reason: "published" | "discarded" | "expired";
+  readonly claim?: LivedClaim;
 }
 
 export interface StagingLedgerEvent {

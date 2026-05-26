@@ -1,4 +1,8 @@
 import type { Effect } from "effect";
+import type {
+  PreClaim,
+  RejectedClaim,
+} from "@agent-os/core/effect-claim";
 
 import type {
   DeployFailedPayload,
@@ -9,23 +13,27 @@ import type {
 } from "./events";
 
 export interface DeployPreviewRequest {
+  readonly claim?: PreClaim;
   readonly subjectRef: string;
   readonly artifactRef: string;
   readonly targetRef: string;
 }
 
 export interface DeployPromoteRequest {
+  readonly claim?: PreClaim;
   readonly subjectRef: string;
   readonly artifactRef: string;
   readonly productionTargetRef: string;
 }
 
 export interface DeployReadbackRequest {
+  readonly claim?: PreClaim;
   readonly subjectRef: string;
   readonly productionRef: string;
 }
 
 export interface DeployRollbackRequest {
+  readonly claim?: PreClaim;
   readonly subjectRef: string;
   readonly rollbackRef: string;
 }
@@ -39,6 +47,7 @@ export interface DeployCloudflareFailure {
     | "ProviderFailure";
   readonly reason: string;
   readonly proofRef?: string;
+  readonly claim?: RejectedClaim;
 }
 
 export interface DeployCloudflareCarrier {
