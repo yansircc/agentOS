@@ -6,11 +6,12 @@
  * resources such as img-gen credits.
  *
  * SSoT: only `events.kind = resource.*`. There is no account table and no
- * reservation table. Projection rebuilds balance from ledger rows inside the
- * same `transactionSync` that writes the next resource event.
+ * reservation table. Projection (`./projection.ts`) rebuilds balance from
+ * ledger rows inside the same `transactionSync` that writes the next
+ * resource event.
  */
 
-import { Clock, Context, Effect, Layer, Schema } from "effect";
+import { Clock, Context, Effect, Layer } from "effect";
 import {
   InvalidResourceAmount,
   JsonStringifyError,
@@ -19,8 +20,8 @@ import {
   ResourceReservationNotFound,
   SqlError,
   safeStringify,
-} from "./errors";
-import { EventBus } from "./ledger";
+} from "../errors";
+import { EventBus } from "../ledger";
 import type {
   LedgerEvent,
   ResourceGrantResult,
@@ -28,70 +29,17 @@ import type {
   ResourceReservationSpec,
   ResourceReserveResult,
   ResourceReserveSpec,
-} from "./types";
+} from "../types";
 
-export interface ResourceProjection {
-  readonly available: number;
-  readonly reserved: number;
-  readonly consumed: number;
-}
+import {
+  emptyProjection,
+  loadState,
+  type ResourceProjection,
+} from "./projection";
 
-type TerminalStatus = "active" | "consumed" | "released";
-
-interface ReservationState {
-  readonly reservationId: string;
-  readonly key: string;
-  readonly amount: number;
-  readonly ref: string;
-  readonly idempotencyKey: string;
-  readonly status: TerminalStatus;
-}
-
-interface ProjectedState {
-  readonly byId: Map<string, ReservationState>;
-  readonly byIdempotencyKey: Map<string, ReservationState>;
-  readonly byKey: Map<string, ResourceProjection>;
-}
-
-interface ResourceEventRow {
-  readonly kind: unknown;
-  readonly payload: unknown;
-}
-
-const GrantPayloadSchema = Schema.Struct({
-  key: Schema.String,
-  amount: Schema.Number.pipe(Schema.finite()),
-  ref: Schema.String,
-});
-const ReservePayloadSchema = Schema.Struct({
-  key: Schema.String,
-  amount: Schema.Number.pipe(Schema.finite()),
-  ref: Schema.String,
-  idempotencyKey: Schema.String,
-  reservationId: Schema.String,
-});
-const ReserveRejectedPayloadSchema = Schema.Struct({
-  key: Schema.String,
-  amount: Schema.Number.pipe(Schema.finite()),
-  ref: Schema.String,
-  idempotencyKey: Schema.String,
-  available: Schema.Number.pipe(Schema.finite()),
-});
-const TerminalPayloadSchema = Schema.Struct({
-  reservationId: Schema.String,
-  ref: Schema.String,
-});
-
-const decodeGrantPayloadSync = Schema.decodeUnknownSync(GrantPayloadSchema);
-const decodeReservePayloadSync = Schema.decodeUnknownSync(
-  ReservePayloadSchema,
-);
-const decodeReserveRejectedPayloadSync = Schema.decodeUnknownSync(
-  ReserveRejectedPayloadSchema,
-);
-const decodeTerminalPayloadSync = Schema.decodeUnknownSync(
-  TerminalPayloadSchema,
-);
+// Re-export the projection shape so callers that historically imported
+// it from "./resources" keep working.
+export type { ResourceProjection } from "./projection";
 
 export class Resources extends Context.Tag("@agent-os/Resources")<
   Resources,
@@ -161,110 +109,6 @@ const assertPositiveAmount = (
   Number.isFinite(amount) && amount > 0
     ? Effect.void
     : Effect.fail(new InvalidResourceAmount({ amount }));
-
-const emptyProjection = (): ResourceProjection => ({
-  available: 0,
-  reserved: 0,
-  consumed: 0,
-});
-
-const addProjection = (
-  map: Map<string, ResourceProjection>,
-  key: string,
-  delta: Partial<ResourceProjection>,
-): void => {
-  const current = map.get(key) ?? emptyProjection();
-  map.set(key, {
-    available: current.available + (delta.available ?? 0),
-    reserved: current.reserved + (delta.reserved ?? 0),
-    consumed: current.consumed + (delta.consumed ?? 0),
-  });
-};
-
-const projectRows = (
-  rows: ReadonlyArray<ResourceEventRow>,
-): ProjectedState => {
-  const grants: Array<{ key: string; amount: number }> = [];
-  const reservations = new Map<string, ReservationState>();
-  const byIdempotencyKey = new Map<string, ReservationState>();
-
-  for (const row of rows) {
-    const kind = String(row.kind);
-    const payload = JSON.parse(String(row.payload));
-    switch (kind) {
-      case "resource.granted": {
-        const p = decodeGrantPayloadSync(payload);
-        grants.push({ key: p.key, amount: p.amount });
-        break;
-      }
-      case "resource.reserved": {
-        const p = decodeReservePayloadSync(payload);
-        const reservation: ReservationState = {
-          reservationId: p.reservationId,
-          key: p.key,
-          amount: p.amount,
-          ref: p.ref,
-          idempotencyKey: p.idempotencyKey,
-          status: "active",
-        };
-        reservations.set(p.reservationId, reservation);
-        byIdempotencyKey.set(p.idempotencyKey, reservation);
-        break;
-      }
-      case "resource.reserve_rejected": {
-        decodeReserveRejectedPayloadSync(payload);
-        break;
-      }
-      case "resource.consumed":
-      case "resource.released": {
-        const p = decodeTerminalPayloadSync(payload);
-        const existing = reservations.get(p.reservationId);
-        if (existing !== undefined) {
-          const status = kind === "resource.consumed" ? "consumed" : "released";
-          const next = { ...existing, status } satisfies ReservationState;
-          reservations.set(p.reservationId, next);
-          byIdempotencyKey.set(next.idempotencyKey, next);
-        }
-        break;
-      }
-      default:
-        break;
-    }
-  }
-
-  const byKey = new Map<string, ResourceProjection>();
-  for (const grant of grants) {
-    addProjection(byKey, grant.key, { available: grant.amount });
-  }
-  for (const reservation of reservations.values()) {
-    if (reservation.status === "active") {
-      addProjection(byKey, reservation.key, {
-        available: -reservation.amount,
-        reserved: reservation.amount,
-      });
-    } else if (reservation.status === "consumed") {
-      addProjection(byKey, reservation.key, {
-        available: -reservation.amount,
-        consumed: reservation.amount,
-      });
-    }
-  }
-
-  return { byId: reservations, byIdempotencyKey, byKey };
-};
-
-const loadState = (
-  sql: SqlStorage,
-  scope: string,
-): ProjectedState => {
-  const rows = sql
-    .exec(
-      "SELECT kind, payload FROM events WHERE scope = ? AND kind LIKE 'resource.%' ORDER BY id",
-      scope,
-    )
-        .toArray() as unknown as ResourceEventRow[];
-  return projectRows(rows);
-};
 
 export const ResourcesLive = (
   ctx: DurableObjectState,
