@@ -1,9 +1,9 @@
 # Spec 35: ops-api Boundary and Contract
 
-> **Status**: Draft v0
+> **Status**: Draft v0.1
 > **Date**: 2026-05-27
 > **Triggers**: ship `@agent-os/ops-api` v0.1.0 as the infrastructure projection HTTP layer.
-> **Depends on**: spec-24 §1/§5.4 (invariant + ops-api endpoint family), spec-25 §7 (AttemptKey), spec-29 (event stream wire), spec-34 §5 (standard projections), spec-34 §8.1 (`AgentDOBase` RPC surface).
+> **Depends on**: spec-24 §1/§5.4 (invariant + ops-api endpoint family), spec-25 §7 (AttemptKey), spec-29 (event stream wire), spec-34 §5 (standard projections — adds `runs(spec)`), spec-34 §8.1 (`AgentDOBase` RPC surface).
 > **Pressure evidence**: dialogue + mockup `docs/notes/spec-35-ops-ui-mockup.html` derived from substrate-only ops console requirements (no app nouns, no business UI, no operator actions).
 
 ---
@@ -55,7 +55,7 @@ GET /__ops/api/scopes/:scope/admission
 
 ### 2.1 `GET /__ops/api/scopes`
 
-Lists all scopes known to the resolver.
+Lists all scopes the principal can introspect.
 
 Query: `?prefix=...&limit=N`. Default limit 100, max 1000.
 
@@ -63,9 +63,16 @@ Response:
 ```ts
 {
   scopes: ReadonlyArray<ScopeSummary>
-  nextCursor: string | null   // opaque resolver-defined cursor; absent if no more
 }
 ```
+
+**v0 has no pagination cursor.** The resolver returns the full
+candidate set (up to `limit`); ops-api filters by `authorize(read)`
+per scope. Resolver-level cursor pagination is incompatible with
+authorize-after-fetch — authorized scopes can hide behind an
+unauthorized prefix on a later page. Apps with very large scope
+counts should pre-filter by principal inside their resolver. See
+§9 open question.
 
 ### 2.2 `GET /__ops/api/scopes/:scope/events`
 
@@ -91,23 +98,26 @@ Reconnect: client sends `Last-Event-ID: N` → server resumes at `afterId = N`. 
 
 ### 2.4 `GET /__ops/api/scopes/:scope/runs`
 
-**New in v0.** List runs for the scope, projected from `agent.run.*` + `agent.aborted.*`.
+List runs for the scope. **1:1 RPC** mapping to
+[spec-34 §5 `runs(spec)`](./spec-34-authorized-commit-calculus.md#5-standard-projections).
 
-Query: `?status=delivered|aborted|open_without_terminal|orphaned&afterRunId=N&limit=M`. Default limit 50, max 500. `status` accepts multiple values via comma (`?status=aborted,open_without_terminal`).
+Query: `?status=delivered|aborted|open_without_terminal|orphaned&afterRunId=N&limit=M`.
+Default limit 50, max 500. `status` accepts multiple values via comma
+(`?status=aborted,open_without_terminal`).
 
-Response:
-```ts
-{
-  runs: ReadonlyArray<RunSummary>
-  nextCursor: number | null   // next afterRunId; absent if no more
-}
-```
+Response: `RunListPage` (spec-34 §5).
 
-`RunSummary` is lightweight — turn/tool detail belongs to `/runs/:runId/trace`. See §3.4.
+`RunSummary` is lightweight — turn/tool detail belongs to `/runs/:runId/trace`.
 
 `404` / `501` same as §2.2.
 
-Implementation note: ops-api MAY fetch via `events({ kinds: ["agent.run.started", "agent.run.completed", ...] })` and project client-side WITHIN the ops-api Worker (server-side, before HTTP response). It does NOT push raw `agent.*` rows to clients and let them re-project; the projection is the response.
+**Implementation discipline**: ops-api MUST call `stub.runs(spec)` and
+return the result directly. ops-api MUST NOT synthesize this list
+from `events()` filtered by run-bearing kinds: event-level cursor
+pagination over an unbounded scope truncates the newest runs (the
+ASC cursor starts from the oldest end). The projection lives on the
+DO side where the full scope ledger is accessible without artificial
+batch caps. See spec-34 §5.
 
 ### 2.5 `GET /__ops/api/scopes/:scope/runs/:runId/trace`
 
@@ -133,9 +143,17 @@ Quota projection (spec-34 §5 `quotaState`).
 
 Query: `?key=...&windowMs=N&limit=M`. All three required.
 
+- `windowMs`: positive integer milliseconds, OR literal string `Infinity`
+  (unbounded window). Zero / negative finite values are rejected.
+- `limit`: integer ≥ 1.
+
 Response: `QuotaState` (spec-34 §5).
 
-`400` if any required query param missing or not parseable.
+`400` if any required query param is missing, if `windowMs` is finite and
+not a positive integer, if `windowMs` is `Infinity` mixed with another non-
+integer literal, or if `limit < 1`. Negative `windowMs` would compute
+`now - windowMs > now`, producing a future cutoff and a misleading
+zero-consumption projection — ops-api rejects fast.
 
 ### 2.8 `GET /__ops/api/scopes/:scope/resource`
 
@@ -159,11 +177,17 @@ Query: `?key=<base64url JSON AttemptKey>`. Required.
 2. Encode as base64url (RFC 4648 §5, no padding).
 3. Pass as single `?key=` query param.
 
-ops-api decodes, validates the four fields are present and strings (or correct Strategy enum), and calls `agentDO.admissionLease(decoded)`.
+ops-api decodes, validates the four fields are present, all are non-empty
+strings, and calls `agentDO.admissionLease(decoded)`. **`strategy` is
+opaque to ops-api**: the implementation accepts any non-empty string and
+lets the DO's `admissionLease()` reject unknown strategies upstream.
+This avoids ops-api drift when core's `Strategy` union grows (spec-25
+expects it to). Apps that need strict client-side enum validation
+should validate before constructing the URL.
 
 Response: `CapabilityLease | null`.
 
-`400` if `key` missing, malformed base64url, malformed JSON, or fails AttemptKey shape validation.
+`400` if `key` missing, malformed base64url, malformed JSON, or fails AttemptKey shape validation (non-string or empty field).
 
 ---
 
@@ -175,13 +199,11 @@ App-provided. ops-api has no fallback.
 
 ```ts
 interface ScopeResolver {
-  list(filter: { prefix?: string; limit?: number }): Promise<ScopeListPage>
+  list(filter: {
+    prefix?: string;
+    limit?: number;
+  }): Promise<ReadonlyArray<ScopeSummary>>
   resolve(scope: string): Promise<ResolvedScope | null>
-}
-
-interface ScopeListPage {
-  readonly scopes: ReadonlyArray<ScopeSummary>
-  readonly nextCursor: string | null
 }
 
 interface ScopeSummary {
@@ -192,7 +214,7 @@ interface ScopeSummary {
 interface ResolvedScope {
   readonly scope: string
   readonly surface: ScopeSurface
-  readonly namespace: DurableObjectNamespace   // only present for introspectable scopes
+  readonly namespace?: DurableObjectNamespace   // only present for introspectable scopes
 }
 
 type ScopeSurface = "agent-do/v0.3" | "opaque"
@@ -236,7 +258,6 @@ Discipline:
 interface MountOpsApiOptions {
   readonly scopeResolver: ScopeResolver
   readonly auth: OpsAuth
-  readonly maxStreamSeconds?: number   // default 600; long-running SSE cap for shared Workers
 }
 
 function mountOpsApi(opts: MountOpsApiOptions): (request: Request) => Promise<Response>
@@ -301,7 +322,6 @@ Status codes:
 | 404    | `run_not_found`            | runId has no `agent.run.started` in scope      |
 | 501    | `not_introspectable`       | scope is opaque                                |
 | 502    | `upstream_failure`         | DO fetch threw / SqlError surfaced             |
-| 503    | `stream_capacity`          | concurrent streams cap reached (impl-defined)  |
 
 No silent fallback. No "200 with empty body" for any unknown state.
 
@@ -386,11 +406,24 @@ These are not deferred-to-soon items. They are **excluded by design** until pres
 
 1. **[Open] When does `ops-react` become a thing?** Trigger = N≥2 deploying apps want a default ops UI. zeroY3 and vibe-coding-web both have workbench UIs, but those are **app workbenches**, not ops-react. ops-react ships when an actual ops persona (not a product user) needs a default substrate dashboard.
 
-2. **[Open] Per-tenant rate limiting on ops-api itself.** If a single ops principal hammers `/stream` across 1000 scopes, ops-api Worker can choke. v0 says "503 stream_capacity" when impl-defined cap is hit. Setting that cap and exposing tuning is deferred.
+2. **[Open] Per-tenant rate limiting and stream timeout on ops-api itself.**
+   If a single ops principal hammers `/stream` across many scopes, ops-api
+   Worker can exhaust its concurrent-connection budget. v0 ships no timeout
+   or cap; the previously sketched `maxStreamSeconds` option was removed
+   because the implementation never enforced it (false operational guarantee).
+   Setting a real timeout and a stream-capacity error code is deferred
+   until first deployment hits the limit.
 
-3. **[Open] OpenTelemetry / tracing emission from ops-api.** ops-api itself is a Worker; its own request traces could go through `cap_dispatch` of an `ops` scope. v0 does not implement this; v0.x may.
+3. **[Open] Large-scope `/scopes` pagination + auth-scoped listing.** v0
+   has no cursor on `/scopes` because filter-after-fetch hides authorized
+   scopes behind unauthorized pages. The graduation path is making the
+   resolver take the principal and pre-filter (`list(principal, filter)`),
+   which trivially supports cursor pagination once `authorize` is folded
+   into the resolver. Trigger when N scopes per tenant exceeds ~1000.
 
-4. **[Open] Bulk scope authorization optimization.** If `scopeResolver.list()` returns N=10k scopes and authorize is one-per-scope, `/scopes` is O(N) authorize calls. Apps with this scale will need a `OpsAuth.authorizeMany(principal, scopes, action)` extension. v0 does not add it.
+4. **[Open] OpenTelemetry / tracing emission from ops-api.** ops-api itself is a Worker; its own request traces could go through `cap_dispatch` of an `ops` scope. v0 does not implement this; v0.x may.
+
+5. **[Open] Bulk scope authorization optimization.** If `scopeResolver.list()` returns N=10k scopes and authorize is one-per-scope, `/scopes` is O(N) authorize calls. Apps with this scale will need a `OpsAuth.authorizeMany(principal, scopes, action)` extension. v0 does not add it.
 
 ---
 
@@ -402,4 +435,10 @@ ops-api v0 takes no dependency on:
 
 - spec-34 §7.2 positive ExtensionCapability (ops-api writes nothing).
 - spec-30 cross-scope fan-in (intentionally absent).
-- any new core API. The whole package is HTTP over existing `AgentDOBase` RPC.
+
+ops-api v0 **adds** one method to AgentDOBase's standard projection
+surface: `runs(spec): Promise<RunListPage>` (spec-34 §5). This is not a
+new substrate capability; it is the SSoT-correct location of the run-list
+projection that v0 ops-api requires. Synthesizing the list inside ops-api
+from `events()` does not work — the event-level cursor truncates the
+newest runs first under any reasonable batch cap.

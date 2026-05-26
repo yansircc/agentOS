@@ -12,20 +12,18 @@ export { mountOpsApi, type AgentDOIntrospection, type MountOpsApiOptions } from 
 export type {
   ScopeResolver,
   ScopeSummary,
-  ScopeListPage,
   ResolvedScope,
   ScopeSurface,
   OpsAuth,
   OpsAction,
   OpsPrincipal,
-  RunSummary,
-  RunListPage,
   AttemptKey,
   RunStatus,
+  RunListSpec,
+  RunListPage,
+  RunSummary,
 } from "./types";
 
 export { encodeAttemptKey, decodeAttemptKey } from "./encoding";
 
 export type { OpsErrorBody, OpsErrorCode } from "./errors";
-
-export { RUN_KINDS, projectRuns } from "./runs";

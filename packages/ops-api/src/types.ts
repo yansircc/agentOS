@@ -9,7 +9,10 @@
 
 import type {
   AttemptKey,
+  RunListPage,
+  RunListSpec,
   RunStatus,
+  RunSummary,
 } from "@agent-os/core";
 
 // ============================================================
@@ -31,16 +34,18 @@ export interface ResolvedScope {
   readonly namespace?: DurableObjectNamespace;
 }
 
-export interface ScopeListPage {
-  readonly scopes: ReadonlyArray<ScopeSummary>;
-  readonly nextCursor: string | null;
-}
-
+/**
+ * Resolver returns the full set of scopes the principal can see in one call.
+ * v0 has no cursor: filtering by auth runs in ops-api after resolution, so
+ * a resolver page that returns mixed authorized/unauthorized rows would let
+ * unreachable allowed scopes hide behind the page boundary. If a deployment
+ * needs scale-out, the resolver should accept the principal and pre-filter.
+ */
 export interface ScopeResolver {
   list(filter: {
     prefix?: string;
     limit?: number;
-  }): Promise<ScopeListPage>;
+  }): Promise<ReadonlyArray<ScopeSummary>>;
   resolve(scope: string): Promise<ResolvedScope | null>;
 }
 
@@ -66,21 +71,9 @@ export interface OpsAuth {
 }
 
 // ============================================================
-// Run summary (spec-35 §3.4)
-//   Lightweight projection over agent.run.* + agent.aborted.*.
-//   Detail (turns / tool calls / tokens) requires /runs/:runId/trace.
+// Run summary / list — re-exported from @agent-os/core so apps
+// using ops-api type the response correctly without two imports.
 // ============================================================
 
-export interface RunSummary {
-  readonly runId: number;
-  readonly startedAt: number;
-  readonly status: RunStatus;
-  readonly durationMs?: number;
-}
+export type { AttemptKey, RunStatus, RunSummary, RunListSpec, RunListPage };
 
-export interface RunListPage {
-  readonly runs: ReadonlyArray<RunSummary>;
-  readonly nextCursor: number | null;
-}
-
-export type { AttemptKey, RunStatus };

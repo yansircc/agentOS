@@ -10,6 +10,8 @@ import {
   type OpsAuth,
   type OpsPrincipal,
   type ResolvedScope,
+  type RunListPage,
+  type RunListSpec,
   type ScopeResolver,
   type ScopeSummary,
   decodeAttemptKey,
@@ -63,6 +65,87 @@ class FakeAgentDO implements AgentDOIntrospection {
         "x-ops-test-resumed-from": String(afterId),
       },
     });
+  }
+
+  runs(spec: RunListSpec): Promise<RunListPage> {
+    // Mock the core RPC by reusing the fake events() with run-bearing
+    // kinds and applying the same projection contract.
+    const RUN_KINDS = [
+      "agent.run.started",
+      "agent.run.completed",
+      "agent.aborted.budget_tokens",
+      "agent.aborted.budget_time",
+      "agent.aborted.tool_error",
+      "agent.aborted.upstream_failure",
+      "agent.aborted.retries",
+      "agent.aborted.client_disconnect",
+    ];
+    const ABORT_SET = new Set(RUN_KINDS.slice(2));
+    type Acc = {
+      runId: number;
+      startedAt: number;
+      terminal?: { kind: "delivered" | "aborted"; at: number; event: string };
+    };
+    const byRun = new Map<number, Acc>();
+    for (const ev of this.rows) {
+      if (!RUN_KINDS.includes(ev.kind)) continue;
+      if (ev.kind === "agent.run.started") {
+        if (!byRun.has(ev.id)) byRun.set(ev.id, { runId: ev.id, startedAt: ev.ts });
+        continue;
+      }
+      const p = (ev.payload ?? {}) as { runId?: number; event?: string };
+      const runId = typeof p.runId === "number" ? p.runId : undefined;
+      if (runId === undefined) continue;
+      const acc = byRun.get(runId);
+      if (acc === undefined || acc.terminal !== undefined) continue;
+      if (ev.kind === "agent.run.completed") {
+        acc.terminal = {
+          kind: "delivered",
+          at: ev.ts,
+          event: typeof p.event === "string" ? p.event : ev.kind,
+        };
+      } else if (ABORT_SET.has(ev.kind)) {
+        acc.terminal = { kind: "aborted", at: ev.ts, event: ev.kind };
+      }
+    }
+    const statusSet =
+      spec.statuses !== undefined && spec.statuses.length > 0
+        ? new Set(spec.statuses)
+        : undefined;
+    const all: Array<{
+      runId: number;
+      startedAt: number;
+      status: RunStatus;
+      durationMs?: number;
+    }> = [];
+    for (const acc of byRun.values()) {
+      const status: RunStatus =
+        acc.terminal === undefined
+          ? { kind: "open_without_terminal", startedAt: acc.startedAt }
+          : acc.terminal.kind === "delivered"
+            ? { kind: "delivered", at: acc.terminal.at, event: acc.terminal.event }
+            : { kind: "aborted", at: acc.terminal.at, abortKind: acc.terminal.event };
+      if (statusSet !== undefined && !statusSet.has(status.kind)) continue;
+      all.push({
+        runId: acc.runId,
+        startedAt: acc.startedAt,
+        status,
+        ...(acc.terminal !== undefined
+          ? { durationMs: Math.max(0, acc.terminal.at - acc.startedAt) }
+          : {}),
+      });
+    }
+    all.sort((a, b) => b.runId - a.runId);
+    const afterFiltered =
+      spec.afterRunId === undefined
+        ? all
+        : all.filter((r) => r.runId < spec.afterRunId!);
+    const page = afterFiltered.slice(0, spec.limit);
+    const nextCursor =
+      afterFiltered.length > spec.limit && page.length > 0
+        ? page[page.length - 1]!.runId
+        : null;
+    return Promise.resolve({ runs: page, nextCursor });
   }
 
   runTrace(runId: number | string): Promise<RunTrace> {
@@ -146,10 +229,7 @@ class FakeResolver implements ScopeResolver {
   list(filter: {
     prefix?: string;
     limit?: number;
-  }): Promise<{
-    scopes: ReadonlyArray<ScopeSummary>;
-    nextCursor: string | null;
-  }> {
+  }): Promise<ReadonlyArray<ScopeSummary>> {
     const all = Array.from(this.entries.keys());
     const matched = all
       .filter((s) =>
@@ -160,8 +240,7 @@ class FakeResolver implements ScopeResolver {
           ? { scope: s, surface: "opaque" as const }
           : summary(s),
       );
-    const limited = matched.slice(0, filter.limit ?? matched.length);
-    return Promise.resolve({ scopes: limited, nextCursor: null });
+    return Promise.resolve(matched.slice(0, filter.limit ?? matched.length));
   }
 
   resolve(scope: string): Promise<ResolvedScope | null> {
@@ -268,7 +347,129 @@ const get = (
 };
 
 // ============================================================
-// Acceptance §6.1 — no app noun
+// Findings remediation
+// ============================================================
+
+describe("review fixes — /runs delegates to core projection (no local fetch+project)", () => {
+  it("does NOT call events() when /runs is requested", async () => {
+    let eventsCalls = 0;
+    let runsCalls = 0;
+    const fakeDO = new FakeAgentDO(ROWS);
+    const origEvents = fakeDO.events.bind(fakeDO);
+    fakeDO.events = (opts) => {
+      eventsCalls += 1;
+      return origEvents(opts);
+    };
+    const origRuns = fakeDO.runs.bind(fakeDO);
+    fakeDO.runs = (spec) => {
+      runsCalls += 1;
+      return origRuns(spec);
+    };
+    const handler = mountOpsApi({
+      scopeResolver: new FakeResolver(
+        new Map([[SCOPE, { scope: SCOPE, surface: "agent-do/v0.3" }]]),
+      ),
+      auth: new FakeAuth([{ subject: "x", scopes: new Set([SCOPE]) }]),
+      stubFor: () => fakeDO,
+    });
+    const res = await get(
+      handler,
+      `/__ops/api/scopes/${encodeURIComponent(SCOPE)}/runs?limit=10`,
+      { principal: "x" },
+    );
+    expect(res.status).toBe(200);
+    expect(runsCalls).toBe(1);
+    expect(eventsCalls).toBe(0);
+  });
+
+  it("/runs returns newest first even when N >> page size", async () => {
+    // Synthesize 200 runs in id order; assert page=10 returns ids 200..191 DESC.
+    const rows: LedgerEventRpc[] = [];
+    let id = 1;
+    let ts = 1000;
+    for (let i = 0; i < 200; i++) {
+      rows.push({
+        id: id++,
+        ts: ts++,
+        kind: "agent.run.started",
+        scope: SCOPE,
+        payload: { intent: `r${i}` },
+      });
+    }
+    const handler = makeHandler({ rows });
+    const res = await get(
+      handler,
+      `/__ops/api/scopes/${encodeURIComponent(SCOPE)}/runs?limit=10`,
+      { principal: "ops@team" },
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { runs: { runId: number }[] };
+    const ids = body.runs.map((r) => r.runId);
+    // Expect newest 10 first (in DESC), not the oldest 10.
+    expect(ids[0]).toBe(200);
+    expect(ids[9]).toBe(191);
+  });
+});
+
+describe("review fixes — /scopes drops pagination (v0)", () => {
+  it("response has no nextCursor field", async () => {
+    const handler = makeHandler({
+      extraScopes: ["thread/extra-1", "thread/extra-2"],
+      rules: [
+        {
+          subject: "x",
+          scopes: new Set([SCOPE, "thread/extra-1", "thread/extra-2"]),
+        },
+      ],
+    });
+    const res = await get(handler, "/__ops/api/scopes", { principal: "x" });
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body).toHaveProperty("scopes");
+    expect(body).not.toHaveProperty("nextCursor");
+  });
+});
+
+describe("review fixes — /quota rejects bogus windowMs/limit", () => {
+  it("rejects windowMs=0 with 400", async () => {
+    const handler = makeHandler();
+    const res = await get(
+      handler,
+      `/__ops/api/scopes/${encodeURIComponent(SCOPE)}/quota?key=k&windowMs=0&limit=10`,
+      { principal: "ops@team" },
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects negative windowMs with 400", async () => {
+    const handler = makeHandler();
+    const res = await get(
+      handler,
+      `/__ops/api/scopes/${encodeURIComponent(SCOPE)}/quota?key=k&windowMs=-1000&limit=10`,
+      { principal: "ops@team" },
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects limit=0 with 400", async () => {
+    const handler = makeHandler();
+    const res = await get(
+      handler,
+      `/__ops/api/scopes/${encodeURIComponent(SCOPE)}/quota?key=k&windowMs=1000&limit=0`,
+      { principal: "ops@team" },
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("accepts windowMs=Infinity", async () => {
+    const handler = makeHandler();
+    const res = await get(
+      handler,
+      `/__ops/api/scopes/${encodeURIComponent(SCOPE)}/quota?key=k&windowMs=Infinity&limit=10`,
+      { principal: "ops@team" },
+    );
+    expect(res.status).toBe(200);
+  });
+});
 // (Grep is the source-tree assertion; we encode it as a structural test
 // over the package barrel + its declared exports.)
 // ============================================================

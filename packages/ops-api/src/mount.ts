@@ -16,20 +16,21 @@ import type {
   LedgerEventRpc,
   QuotaState,
   ResourceState,
+  RunListPage,
+  RunListSpec,
   RunStatus,
+  RunStatusKind,
   RunTrace,
   StreamEventsOptions,
 } from "@agent-os/core";
 
 import { decodeAttemptKey } from "./encoding";
 import { jsonOk, opsError } from "./errors";
-import { RUN_KINDS, projectRuns } from "./runs";
 import type {
   OpsAction,
   OpsAuth,
   OpsPrincipal,
   ResolvedScope,
-  RunSummary,
   ScopeResolver,
   ScopeSummary,
 } from "./types";
@@ -43,6 +44,7 @@ import type {
 export interface AgentDOIntrospection {
   events(opts?: EventQueryOptions): Promise<LedgerEventRpc[]>;
   streamEvents(opts: StreamEventsOptions): Response | Promise<Response>;
+  runs(spec: RunListSpec): Promise<RunListPage>;
   runTrace(runId: number | string): Promise<RunTrace>;
   runStatus(runId: number | string): Promise<RunStatus>;
   quotaState(spec: {
@@ -65,7 +67,6 @@ export interface MountOpsApiOptions {
    *  Default: `namespace.get(namespace.idFromName(scope))` cast.
    *  Test runners override with an in-memory factory. */
   readonly stubFor?: (resolved: ResolvedScope) => AgentDOIntrospection | null;
-  readonly maxStreamSeconds?: number;
 }
 
 const requireOptions = (opts: MountOpsApiOptions): void => {
@@ -162,20 +163,23 @@ const handleScopesIndex = async (
     return opsError("bad_request", "limit must be a positive integer");
   }
 
-  const page = await opts.scopeResolver.list({
+  // v0: no cursor. Resolver returns the full set the principal could
+  // possibly see (up to limit); ops-api filters by per-scope authorize(read).
+  // If a deployment grows past one page, the resolver should accept the
+  // principal and pre-filter — see spec-35 §9 open question.
+  const scopes = await opts.scopeResolver.list({
     ...(prefix !== undefined ? { prefix } : {}),
     limit,
   });
 
-  // Filter by per-scope authorize(read).
   const filtered: ScopeSummary[] = [];
-  for (const summary of page.scopes) {
+  for (const summary of scopes) {
     if (await opts.auth.authorize(principal, summary.scope, "read")) {
       filtered.push(summary);
     }
   }
 
-  return jsonOk({ scopes: filtered, nextCursor: page.nextCursor });
+  return jsonOk({ scopes: filtered });
 };
 
 // ============================================================
@@ -318,14 +322,13 @@ const onRunsList = async (
   stub: AgentDOIntrospection,
 ): Promise<Response> => {
   const statusRaw = url.searchParams.get("status");
-  const statuses =
-    statusRaw === null
-      ? undefined
-      : new Set(
-          statusRaw.split(",").map((s) => s.trim()).filter((s) => s.length > 0),
-        );
-  if (statuses !== undefined) {
-    for (const s of statuses) {
+  let statuses: ReadonlyArray<RunStatusKind> | undefined;
+  if (statusRaw !== null) {
+    const parts = statusRaw
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    for (const s of parts) {
       if (
         s !== "delivered" &&
         s !== "aborted" &&
@@ -335,6 +338,7 @@ const onRunsList = async (
         return opsError("bad_request", `unknown status: ${s}`);
       }
     }
+    statuses = parts as ReadonlyArray<RunStatusKind>;
   }
 
   const afterRunId = parseOptionalNonNegInt(
@@ -351,20 +355,15 @@ const onRunsList = async (
     return opsError("bad_request", "limit must be a positive integer");
   }
 
+  // /runs is a 1:1 RPC mapping to AgentDOBase.runs — projection lives in core.
+  // ops-api does no local fetch+project; the DO walks its own ledger.
+  const spec: RunListSpec = {
+    limit,
+    ...(statuses !== undefined ? { statuses } : {}),
+    ...(afterRunId !== undefined ? { afterRunId: afterRunId as number } : {}),
+  };
   try {
-    // Fetch with run-bearing kinds filter (server-side narrowed).
-    // events() returns ASC by id; projectRuns groups + sorts DESC.
-    const rows = await stub.events({
-      kinds: RUN_KINDS,
-      limit: 10000,
-    });
-    const page = projectRuns(rows, {
-      ...(statuses !== undefined
-        ? { statuses: statuses as ReadonlySet<RunSummary["status"]["kind"]> }
-        : {}),
-      ...(afterRunId !== undefined ? { afterRunId: afterRunId as number } : {}),
-      limit,
-    });
+    const page = await stub.runs(spec);
     return jsonOk(page);
   } catch (e) {
     return opsError("upstream_failure", String((e as Error)?.message ?? e));
@@ -421,11 +420,16 @@ const onQuota = async (
       ? Number.POSITIVE_INFINITY
       : parseInt(windowMsRaw, 10);
   const limit = parseInt(limitRaw, 10);
-  if (
-    !(Number.isInteger(limit) && limit >= 0) ||
-    !(windowMs === Number.POSITIVE_INFINITY || Number.isInteger(windowMs))
-  ) {
-    return opsError("bad_request", "windowMs/limit must be integers");
+  if (!Number.isInteger(limit) || limit < 1) {
+    return opsError("bad_request", "limit must be an integer >= 1");
+  }
+  if (windowMs !== Number.POSITIVE_INFINITY) {
+    if (!Number.isInteger(windowMs) || windowMs <= 0) {
+      return opsError(
+        "bad_request",
+        "windowMs must be a positive integer or 'Infinity'",
+      );
+    }
   }
   try {
     const state = await stub.quotaState({ key, windowMs, limit });
