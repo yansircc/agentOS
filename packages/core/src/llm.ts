@@ -12,7 +12,7 @@
  *      `adapter.encodeTurn → dispatchProvider → adapter.decodeTurn`.
  *
  * All wire-shape knowledge (encode body / decode response / classify
- * errors) lives in `protocol-adapter.ts`. `callLlm` and
+ * errors) lives in `protocol/`. `callLlm` and
  * `attemptStructured` (admission.ts) share that registry so a route's
  * turn behavior and structured behavior are evidence about the SAME
  * wire (spec-27 §1 C-2).
@@ -31,7 +31,7 @@ import {
   EndpointNotFound,
   ProviderRegistry,
 } from "./provider-registry";
-import { getProtocolAdapter } from "./protocol-adapter";
+import { getProtocolAdapter } from "./protocol/protocol-adapter";
 
 export class AiBinding extends Context.Tag("@agent-os/AiBinding")<
   AiBinding,
