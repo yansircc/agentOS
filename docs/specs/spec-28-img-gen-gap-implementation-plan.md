@@ -456,8 +456,8 @@ not pre-build admission without that falsifying signal.
 ### 4.3 Minimal implementation boundary
 
 Package files expected:
-- `packages/image/src/index.ts`.
-- `packages/image/test/image-adapter-contract.test.ts`.
+- `packages/image/src/index.ts` public barrel plus image-owned source modules.
+- `packages/image/test/adapter-contract.test.ts`.
 - `packages/core/src/agent-do.ts` keeps `AgentDOBase.generateImage` as a thin
   wrapper.
 

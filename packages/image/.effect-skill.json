@@ -2,13 +2,25 @@
   "shape": ["library"],
   "allowedAdapters": [
     {
-      "path": "src/index.ts",
+      "path": "src/adapters/openai-chat-compatible.ts",
       "owner": "@agent-os/image/provider-adapters",
-      "reason": "image protocol decoders are finite wire adapters; malformed upstream wire shape is caught by generateImageEffect and reified as ImageUpstreamFailure",
+      "reason": "OpenAI-compatible image protocol decoder is a finite wire adapter; malformed upstream wire shape is caught by generateImageEffect and reified as ImageUpstreamFailure",
       "rules": ["EFF024", "EFF025"]
     },
     {
-      "path": "test/image-adapter-contract.test.ts",
+      "path": "src/adapters/cf-ai-binding.ts",
+      "owner": "@agent-os/image/provider-adapters",
+      "reason": "CF AI image protocol decoder is a finite wire adapter; malformed upstream wire shape is caught by generateImageEffect and reified as ImageUpstreamFailure",
+      "rules": ["EFF024", "EFF025"]
+    },
+    {
+      "path": "src/provider.ts",
+      "owner": "@agent-os/image/provider-transport",
+      "reason": "provider.ts is the terminal image transport adapter; non-OK HTTP responses are raised inside Effect.tryPromise and reified as ImageUpstreamFailure",
+      "rules": ["EFF024", "EFF025"]
+    },
+    {
+      "path": "test/adapter-contract.test.ts",
       "owner": "@agent-os/image/test-provider",
       "reason": "test provider stub constructs terminal HTTP Response objects and sentinel Errors to model provider transport boundaries",
       "rules": ["EFF024", "EFF402"]
