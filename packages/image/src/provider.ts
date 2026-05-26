@@ -1,10 +1,9 @@
 import { Effect } from "effect";
+import { RefResolutionFailed } from "@agent-os/core/ref-resolver";
 import { getImageProtocolAdapter } from "./adapters/registry";
 import {
   ImageAiBinding,
-  ImageCredentialNotFound,
-  ImageEndpointNotFound,
-  ImageProviderRegistry,
+  ImageRefResolver,
   ImageUpstreamFailure,
 } from "./services";
 import type {
@@ -21,15 +20,15 @@ const dispatchImageProvider = (
   body: ImageProviderBody<ImageRoute["kind"]>,
 ): Effect.Effect<
   unknown,
-  ImageUpstreamFailure | ImageEndpointNotFound | ImageCredentialNotFound,
-  ImageAiBinding | ImageProviderRegistry
+  ImageUpstreamFailure | RefResolutionFailed,
+  ImageAiBinding | ImageRefResolver
 > => {
   switch (route.kind) {
     case "openai-chat-compatible-image":
       return Effect.gen(function* () {
-        const registry = yield* ImageProviderRegistry;
-        const endpoint = yield* registry.resolveEndpoint(route.endpointRef);
-        const apiKey = yield* registry.resolveCredential(route.credentialRef);
+        const refs = yield* ImageRefResolver;
+        const endpoint = yield* refs.endpoint(route.endpointRef);
+        const apiKey = yield* refs.credential(route.credentialRef);
         const url = `${endpoint.replace(/\/$/, "")}/chat/completions`;
         const fullBody = {
           model: route.modelId,
@@ -76,8 +75,8 @@ export const generateImageEffect = (
   spec: GenerateImageSpec,
 ): Effect.Effect<
   ImageResult,
-  ImageUpstreamFailure | ImageEndpointNotFound | ImageCredentialNotFound,
-  ImageAiBinding | ImageProviderRegistry
+  ImageUpstreamFailure | RefResolutionFailed,
+  ImageAiBinding | ImageRefResolver
 > =>
   Effect.gen(function* () {
     const adapter = getImageProtocolAdapter(spec.route.kind);

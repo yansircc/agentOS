@@ -108,14 +108,14 @@ Expected comfort level: medium-high. Main friction likely projection ergonomics.
 
 ## H5 — Image Prompt Bot
 
-**Surface**: `generateImage`, image route, carrier boundary.
+**Surface**: `@agent-os/image` `generateImageEffect`, image route, carrier boundary.
 
 Flow:
 
 ```text
 POST /image { prompt }
   -> emitEvent("img.request.created")
-  -> generateImage({ route, prompt })
+  -> generateImageEffect({ route, prompt })
   -> app stores artifact ref
   -> img.ready
 ```

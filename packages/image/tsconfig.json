@@ -9,6 +9,10 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "isolatedModules": true,
+    "paths": {
+      "@agent-os/core/extensions": ["../core/src/extensions.ts"],
+      "@agent-os/core/ref-resolver": ["../core/src/ref-resolver.ts"]
+    },
     "exactOptionalPropertyTypes": false,
     "noUncheckedIndexedAccess": false
   },

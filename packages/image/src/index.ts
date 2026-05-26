@@ -22,6 +22,7 @@ export * from "./services";
 export * from "./adapters/openai-chat-compatible";
 export * from "./adapters/cf-ai-binding";
 export { generateImageEffect } from "./provider";
+export * from "./extension";
 export * from "./events";
 export * from "./idempotency";
 export * from "./settlement";

@@ -35,10 +35,12 @@ GET /events/:sessionId
 
 ```ts
 class InterviewDO extends AgentDOBase<Env> {
-  protected provideRegistry() {
+  protected provideRefResolver() {
     return {
-      endpoints: { openrouter: "https://openrouter.ai/api/v1" },
-      credentials: { OPENROUTER_KEY: this.env.OPENROUTER_KEY },
+      endpoint: (ref: string) =>
+        ref === "openrouter" ? "https://openrouter.ai/api/v1" : null,
+      credential: (ref: string) =>
+        ref === "OPENROUTER_KEY" ? this.env.OPENROUTER_KEY : null,
     };
   }
 
@@ -74,7 +76,7 @@ class InterviewDO extends AgentDOBase<Env> {
 |---|---|
 | `emitEvent` + `on` + `submit` carries a multi-turn interview without substrate changes | The reactive triad is sufficient for app-side conversational state machines. |
 | `SubmitSpec.system` is a distinct behavior-program axis | Do not duplicate system prompt into `intent`; `system`, `intent`, and `context` stay separate. |
-| `openai-chat-compatible` route via explicit `ProviderRegistry` works for BYOK routes | INV-8 means no ambient credentials; credentials are explicit route dependencies via `credentialRef`. |
+| `openai-chat-compatible` route via explicit `RefResolver` works for BYOK routes | INV-8 means no ambient credentials; credentials are explicit route dependencies via `credentialRef`. |
 | Full Chinese prompt succeeded on a stronger route after gpt-oss flake | Model choice is a route concern, not app control-flow logic. |
 
 ## Boundary

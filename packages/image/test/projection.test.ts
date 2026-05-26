@@ -1,8 +1,21 @@
 import { describe, expect, it } from "@effect/vitest";
 
-import { IMAGE_EVENTS, projectImageJobs } from "../src";
+import {
+  IMAGE_EVENT_PREFIX,
+  IMAGE_EVENTS,
+  imageExtensionPackage,
+  projectImageJobs,
+} from "../src";
 
 describe("image job projection", () => {
+  it("declares image.* as an extension-owned prefix, not core vocabulary", () => {
+    expect(imageExtensionPackage("0.1.0")).toEqual({
+      packageId: "@agent-os/image",
+      kindPrefixes: [IMAGE_EVENT_PREFIX],
+      version: "0.1.0",
+    });
+  });
+
   it("projects image job events without owning a second job store", () => {
     const projection = projectImageJobs([
       {

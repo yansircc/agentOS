@@ -41,7 +41,7 @@ session.on("credit.reserved")
      })
 
 consumer.on("img.job.requested")
-  -> generateImage({ route: imageRoute, prompt, aspectRatio })
+  -> @agent-os/image generateImageEffect({ route: imageRoute, prompt, aspectRatio })
   -> R2.put(bytes)
   -> dispatchToScope(sessionScope, "img.delivered", { artifactRef })
 
@@ -60,7 +60,7 @@ user.on("credit.consume.requested")
 | C2 transactional outbox | collapsed into C1 | `dispatch_outbox` is the sender pending buffer behind `dispatchToScope`, not a public primitive. |
 | C3 quota refund/release | resolved | `grantResource`, `reserveResource`, `consumeResource`, `releaseResource` model business resources without conflating them with carrier quota. |
 | C4 R2 blob carrier | not a gap | R2 is an INV-9 carrier. The app owns key containment and cleanup; the ledger stores artifact refs. |
-| C5 image-output route | resolved | `generateImage` uses image route adapters; binary materialization remains app/carrier code. |
+| C5 image-output route | resolved | `@agent-os/image` uses image route adapters; binary materialization remains app/carrier code. |
 
 ## Public Surface Used
 
@@ -90,24 +90,28 @@ const reservation = await user.reserveResource({
   idempotencyKey,
 });
 
-const image = await consumer.generateImage({
-  route: {
-    kind: "openai-chat-compatible-image",
-    endpointRef: "openrouter",
-    credentialRef: "OPENROUTER_KEY",
-    modelId: "google/gemini-2.5-flash-image",
-  },
-  prompt,
-  aspectRatio: "16:9",
-});
+// imageRuntime is app-owned and provides ImageAiBinding + ImageRefResolverLive.
+const image = await imageRuntime.runPromise(
+  generateImageEffect({
+    route: {
+      kind: "openai-chat-compatible-image",
+      endpointRef: "openrouter",
+      credentialRef: "OPENROUTER_KEY",
+      modelId: "google/gemini-2.5-flash-image",
+    },
+    prompt,
+    aspectRatio: "16:9",
+  }),
+);
 ```
 
 ## Boundary
 
-`generateImage` returns image artifacts. Writing bytes to R2 and constructing
-public URLs stay app-owned because the bucket, key policy, retention, and CDN
-rules are carrier-specific.
+`generateImageEffect` returns image artifacts. Writing bytes to R2 and
+constructing public URLs stay app-owned because the bucket, key policy,
+retention, and CDN rules are carrier-specific.
 
-`image.*` is reserved for the image package vocabulary. App-visible workflow
-facts in this cookbook use `img.*` to avoid forging substrate-owned image job
-projections.
+`image.*` is package-owned, not core-reserved. A DO that wants the negative
+write gate returns `imageExtensionPackage(version)` from `registerExtensions()`;
+app-visible workflow facts in this cookbook use `img.*` to avoid forging image
+job projections.

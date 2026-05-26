@@ -145,7 +145,7 @@ Pressure point: spec-29 race-free handoff and app/core HTTP boundary.
 
 ## M6 — Image Job With Credit Reservation
 
-**Surface**: `dispatchToScope`, Resources, `generateImage`, artifact refs,
+**Surface**: `dispatchToScope`, Resources, `@agent-os/image`, artifact refs,
 `events`.
 
 Flow:
@@ -154,7 +154,7 @@ Flow:
 session -> user: credit.reserve.requested
 user reserves image credit
 session emits img.job.requested
-consumer generates image through stub ImageRoute
+consumer generates image through stub ImageRoute + generateImageEffect
 consumer stores artifact ref, not bytes
 session -> user: credit.consume.requested
 session emits img.job.completed
