@@ -94,7 +94,6 @@ export interface ResourceReserveResult {
 }
 
 export interface RunTurn {
-  readonly id: number;
   readonly index: number;
   readonly at: number;
   readonly text: string;
@@ -147,7 +146,8 @@ export interface QuotaState {
   readonly consumed: number;
   readonly limit: number;
   readonly remaining: number;
-  readonly refundable: 0;
+  /** v0.3 quota has no refund lifecycle; resource reservations own refunds. */
+  readonly refundable: number;
   readonly windowStart?: number;
 }
 

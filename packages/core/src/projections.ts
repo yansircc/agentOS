@@ -110,7 +110,6 @@ export const projectRunTrace = (
       const p = payloadObject(event.payload);
       const turn = payloadObject(p.turn);
       return {
-        id: runId,
         index: typeof turn.index === "number" ? turn.index : 0,
         at: event.ts,
         text: typeof p.text === "string" ? p.text : "",

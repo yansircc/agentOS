@@ -50,7 +50,6 @@ describe("standard projections — spec-34", () => {
       startedAt: 10,
       turns: [
         {
-          id: 1,
           index: 0,
           at: 30,
           text: "use tool",

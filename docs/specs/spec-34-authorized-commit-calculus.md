@@ -113,6 +113,11 @@ Six capabilities, four substrate-owned + one app-owned + one higher-order:
 | `cap_app`        | app code             | **all kinds not claimed by a substrate or extension cap**  |
 | `cap_scheduler`  | scheduler (h-order)  | no own namespace; carries `defer(cap_X, event)` and later promotes via `cap_X`'s authority |
 
+`llm.*` is a shared core prefix with non-overlapping sub-owners:
+`cap_submit` owns `llm.response`; `cap_admission` owns `llm.structured.*`.
+The runtime claim is intentionally wider than either sub-owner so app writes
+cannot forge future `llm.*` facts before a spec assigns the sub-prefix.
+
 Rules:
 
 - **C-1.** `cap_app` is **negatively defined**: any kind not claimed by another
@@ -140,6 +145,9 @@ Rules:
   `cap_dispatch` through `dispatch.consumed` and `dispatch.rate_limited`.
   Adding a `quota.*` event later requires a spec that assigns it to exactly
   one capability.
+- **C-7.** `quota.*` is nevertheless a claimed prefix in v0.3. This is
+  `claimed-but-unassigned`: app code cannot write it, and substrate code also
+  must not write it until a later spec assigns a real owner.
 
 The v0.3 enforcement surface is `CapabilityRejected`. `ReservedEventKindError`
 is removed with the rest of the v0.2 reserved-prefix vocabulary; there is no
@@ -223,8 +231,9 @@ runStatus(runId): Promise<RunStatus>
   // open_without_terminal, never "in-flight".
 
 quotaState(spec): Promise<QuotaState>
-  // spec = { quotaKey, window, specRef }
+  // spec = { key, windowMs, limit }
   // QuotaState = { consumed, limit, remaining, refundable, windowStart? }
+  // v0.3 refundable is always 0; refunds belong to resource reservations.
 
 resourceState(resourceKey): Promise<ResourceState>
   // ResourceState = { granted, reserved, consumed, available,
@@ -276,44 +285,41 @@ Unsupported vocabulary:
 - `resource.expired` is not a v0.3 event kind. Reservation TTL/expiry requires
   a resource-expiry spec before it can appear in the vocabulary.
 - `quota.*` is not a v0.3 event namespace; quota state is projected from
-  `dispatch.consumed` / `dispatch.rate_limited`.
+  `dispatch.consumed`. `dispatch.rate_limited` is an observation, not state.
 
 ---
 
-## 7. Extension capability protocol
+## 7. Extension package claims
 
-The mechanism that lets a non-core package legally commit ledger facts under
-its own namespace.
+The v0.3 mechanism that lets a non-core package claim a namespace so app code
+cannot forge package facts.
 
 ```ts
-// Internal v0.3 — public later only when N+1 third-party packages need it.
-
 interface ExtensionPackage {
   packageId: string                    // "@agent-os/image"
   kindPrefixes: ReadonlyArray<string>  // ["image."]
-  version: string                      // package semver, captured in events
+  version: string                      // package semver
 }
 
-// AgentDOBase.registerExtension(pkg): ExtensionCapability
+// AgentDOBase.registerExtensions()
 //   - validates kindPrefixes disjoint from substrate caps and any
 //     previously-registered extensions in this DO class
-//   - returns cap_pkg = { write: pkg.kindPrefixes }
-//   - cap_pkg.commit(event)  : authorized commit
-//   - cap_pkg.effect(intent) : authorized effect (results commit under cap_pkg)
-//   - cap_pkg.time(event, at): authorized deferred commit (via cap_scheduler)
+//   - extends the app-facing negative gate:
+//     emitEvent / submit.deliver / scheduleEvent / dispatchToScope.event
+//     reject matching package prefixes with CapabilityRejected
 
 class AgentDOBase {
   protected registerExtensions(): ReadonlyArray<ExtensionPackage> { return [] }
-  // subclass override; called once during construction.
+  // subclass override; validated lazily once per DO instance.
 }
 ```
 
 Consequences:
 
-- **`image.*` reservation in spec-32 §1 is removed only because runtime
-  extension registration is mandatory in v0.3.** `@agent-os/image`
-  registers itself with `kindPrefixes: ["image."]` before any image fact can
-  be committed. Core knows the extension declaration, not image semantics.
+- **`image.*` reservation in spec-32 §1 is removed from core vocabulary.**
+  `@agent-os/image` may register itself with `kindPrefixes: ["image."]` so
+  app-facing core write paths cannot forge image package facts. Core knows
+  the extension declaration, not image semantics.
 - **Same path applies to** audio / video / web / browser / sandbox / any
   future modality.
 - **Same path applies to** any future streaming package-owned ledger facts
@@ -323,15 +329,15 @@ Consequences:
 - **No global mutable registry.** Extension registration is per-DO-class,
   declared by `registerExtensions()` override, validated at DO
   construction.
-- **No type-only authority gap.** If runtime extension registration is not
-  implemented, v0.3 must not remove modality prefixes from core reservation.
-  The adopted v0.3 target is the stronger path: runtime registration ships in
-  the same PR series as any modality namespace unreservation.
+- **No positive package write API in v0.3.** There is no
+  `ExtensionCapability.commit/effect/time` handle yet. A package that needs
+  to write its own package facts still needs a later positive capability API
+  (`v0.3.x` / `v0.4`) or a repo-internal integration point. This spec only
+  prevents app forgery of registered package namespaces.
 
-v0.3 ships the type, validation, and the minimal runtime commit gate needed
-for registered packages. It ships no public app-facing extension helper.
-Package code may use the internal capability; apps may not forge package
-events through `emitEvent`, `submit.deliver.event`, or `dispatchToScope.event`.
+v0.3 ships `ExtensionPackage`, disjoint-prefix validation, and the negative
+runtime commit gate. It ships no public app-facing extension helper and no
+positive package commit handle.
 
 ---
 
@@ -441,8 +447,8 @@ export type { CapabilityLease, AttemptKey }           // for admissionLease() re
 //   Strategy / Outcome / OutcomeClass / SchemaContract / AdmissionImpact
 //   are submit-internal — NOT exported at barrel.
 
-// Ref resolution and extension capability protocol
-export type { RefResolver, ExtensionPackage, ExtensionCapability }
+// Ref resolution and extension package claims
+export type { RefResolver, ExtensionPackage }
 ```
 
 Removed from barrel:
@@ -510,11 +516,11 @@ spec-32 §1 currently establishes `image.` as a core-reserved event prefix
 on the grounds that "image job vocabulary is substrate-owned". v0.3
 replaces this with:
 
-> Image job vocabulary is **package-owned** via §7's extension capability
-> protocol. Core does not reserve modality-named namespaces after runtime
-> extension registration is available. The `@agent-os/image` package registers
-> `image.` as its kindPrefix and holds `cap_image` for commits. If that
-> registration is absent, `image.*` facts are not writable by anyone in v0.3.
+> Image job vocabulary is **package-owned** via §7's extension package
+> claim. Core does not reserve modality-named namespaces. The
+> `@agent-os/image` package may register `image.` as its kindPrefix so
+> app-facing core write paths reject `image.*`; positive package commits are
+> deferred until a package capability API exists.
 
 ---
 
@@ -528,7 +534,7 @@ Concrete delta against core v0.2.17. All removals are breaking.
 |-----------------------------------|-----------------------------------|----------------------------------------|
 | `AgentDOBase.generateImage`       | `@agent-os/image`                 | carrier exposed via tools or direct call |
 | `ImageRoute / ImageArtifact / ImageResult / GenerateImageSpec / ImageRequest` types in barrel | `@agent-os/image` barrel | re-export from package, not core |
-| `image.*` core reserved prefix (spec-32 §1) | extension capability protocol (§7) | `@agent-os/image` registers `image.` and holds `cap_image`; without registration, image facts are unsupported |
+| `image.*` core reserved prefix (spec-32 §1) | extension package claim (§7) | `@agent-os/image` may register `image.` so app-facing core writes cannot forge image facts; positive package writes are deferred |
 | `submitTextStream` method + `SubmitTextStreamSpec` / `SubmitTextStreamFrame` types | `@agent-os/streaming` (new) | moved out; if package is absent, v0.3 has no public token streaming |
 | `ProviderRegistryConfig` + `EndpointNotFound` / `CredentialNotFound` errors | generalized `RefResolver` | see §10.3 |
 
@@ -570,20 +576,20 @@ submit-specific fallback registry. Secret values still never enter the ledger.
 | spec-24  | INV-3                 | **Amend**: split per spec-34 §9.2.                                    |
 | spec-24  | §7 failure events     | **Amend**: add capability owner column (spec-34 §6).                  |
 | spec-25  | §7 admission key     | **Preserve**: `attemptKey = (route, schemaContract, strategy, adapterVersion)` is the canonical projection key (spec-34 §5).  |
-| spec-31  | text streaming       | **Supersede**: `submitTextStream` leaves `AgentDOBase`; future public surface belongs to `@agent-os/streaming` via §7 protocol. |
-| spec-32  | §1 reserved prefix   | **Supersede**: extension capability protocol (spec-34 §7) replaces modality-named reservation. |
-| spec-32  | §2 package direction | **Supersede**: `AgentDOBase.generateImage` leaves core. `@agent-os/image` owns public image API and obtains package commit authority through §7. |
+| spec-31  | text streaming       | **Supersede**: `submitTextStream` leaves `AgentDOBase`; future public surface belongs to `@agent-os/streaming`, with positive package writes deferred. |
+| spec-32  | §1 reserved prefix   | **Supersede**: extension package claims (spec-34 §7) replace modality-named reservation. |
+| spec-32  | §2 package direction | **Supersede**: `AgentDOBase.generateImage` leaves core. `@agent-os/image` owns public image API; positive package commit authority is deferred. |
 
 ---
 
 ## 12. Open questions
 
-1. **[Open] When does the extension capability protocol become public API?**
-   v0.3 ships runtime registration for repo-owned packages, but no public
-   app-facing helper. The trigger to expose a stable helper is N>=2
-   third-party packages needing to commit their own kinds. Image is one
-   repo-owned package; the second independent third-party package is
-   unidentified.
+1. **[Open] When does the positive extension capability API ship?**
+   v0.3 ships package declarations, disjoint-prefix validation, and the
+   negative app-facing gate, but no `ExtensionCapability.commit/effect/time`
+   handle. The trigger to expose a stable positive helper is N>=2 packages
+   needing to commit their own kinds. Image is one repo-owned package; the
+   second independent package is unidentified.
 
 2. **[Open] Deterministic replay primitive.** §9.1 demoted the claim. The
    open question is whether CF Workflow `step.do` capture is sufficient
@@ -611,10 +617,9 @@ implementation PR, which must show:
 - `CapabilityRejected` error is reachable via every write path that
   previously raised `ReservedEventKindError`; `ReservedEventKindError` is
   removed from the barrel.
-- `ExtensionPackage` / `ExtensionCapability` types exist and runtime
-  registration rejects overlapping prefixes. Registered extension facts are
-  writable only by package capability, not by app-facing `emitEvent`,
-  `submit.deliver.event`, or `dispatchToScope.event`.
+- `ExtensionPackage` type exists and runtime registration rejects overlapping
+  prefixes. Registered extension facts are not writable by app-facing
+  `emitEvent`, `submit.deliver.event`, or `dispatchToScope.event`.
 - `AgentDOBase.generateImage` and `AgentDOBase.submitTextStream` are absent.
   Their types are absent from `@agent-os/core` barrel.
 - `ProviderRegistryConfig`, `EndpointNotFound`, and `CredentialNotFound` are
@@ -677,5 +682,5 @@ spec-34 §2 (v0.3):
    composites (§4):     emitEvent / scheduleEvent / dispatchToScope / submit / streamEvents
    projections (§5):    runTrace / runStatus / quotaState / resourceState / admissionLease / events
    capabilities (§3):   cap_dispatch / cap_resource / cap_submit / cap_admission / cap_app / cap_scheduler
-   extensions (§7):     ExtensionPackage / ExtensionCapability protocol
+   extensions (§7):     ExtensionPackage declarations + negative gate
 ```
