@@ -17,6 +17,10 @@
     "./ref-resolver": {
       "types": "./src/ref-resolver.ts",
       "default": "./src/ref-resolver.ts"
+    },
+    "./abort": {
+      "types": "./src/abort.ts",
+      "default": "./src/abort.ts"
     }
   },
   "scripts": {

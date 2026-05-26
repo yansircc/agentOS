@@ -12,24 +12,15 @@
  */
 
 import { Data, Effect } from "effect";
+import { ABORT } from "./abort";
 
 // ============================================================
-//          ABORT TAXONOMY (single source of truth)
+//          ABORT TAXONOMY (re-exported from ./abort)
+//          SSoT lives in ./abort.ts so ops-api / ops-react can
+//          import the vocabulary without pulling DurableObject.
 // ============================================================
 
-export const ABORT = {
-  BUDGET_TOKENS: "agent.aborted.budget_tokens",
-  BUDGET_TIME: "agent.aborted.budget_time",
-  TOOL_ERROR: "agent.aborted.tool_error",
-  UPSTREAM_FAILURE: "agent.aborted.upstream_failure",
-  RETRIES: "agent.aborted.retries",
-  CLIENT_DISCONNECT: "agent.aborted.client_disconnect",
-} as const;
-
-export type AbortKind = (typeof ABORT)[keyof typeof ABORT];
-
-export const reasonOf = (kind: AbortKind): string =>
-  kind.replace(/^agent\.aborted\./, "");
+export { ABORT, type AbortKind, reasonOf } from "./abort";
 
 // ============================================================
 //                     TAGGED ERRORS
