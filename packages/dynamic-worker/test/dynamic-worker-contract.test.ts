@@ -187,4 +187,42 @@ describe("@agent-os/dynamic-worker", () => {
       { owner: "backend", limits },
     ]);
   });
+
+  it("resolves typed ScopeRef for policy without declaring stateful roots", async () => {
+    const seen: unknown[] = [];
+    const backend: DynamicWorkerBackend = {
+      run: () =>
+        Effect.succeed({
+          status: 200,
+          body: "ok",
+          workerId: "dw-scope",
+        }),
+    };
+
+    await expect(
+      Effect.runPromise(
+        runDynamicWorker(
+          backend,
+          ({ runtimeScope }) =>
+            Effect.sync(() => {
+              seen.push(runtimeScope);
+            }),
+          {
+            scopeRef: { kind: "conversation", scopeId: "thread/t1" },
+            code: "export default { fetch: () => new Response('ok') }",
+            request: { url: "https://example.test/" },
+            timeoutMs: 1000,
+          },
+        ),
+      ),
+    ).resolves.toMatchObject({ workerId: "dw-scope" });
+
+    expect(seen).toEqual([
+      {
+        scopeRef: { kind: "conversation", scopeId: "thread/t1" },
+        scopeKey: "conversation:thread%2Ft1",
+        ownerKind: "conversation",
+      },
+    ]);
+  });
 });
