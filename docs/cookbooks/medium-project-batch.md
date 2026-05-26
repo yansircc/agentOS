@@ -76,10 +76,10 @@ Pressure point: projection ergonomics without a cross-scope index.
 Flow:
 
 ```text
-session -> user: resource.reserve.requested
+session -> user: credit.reserve.requested
 user reserves credit
 session simulates provider failure
-session -> user: resource.release.requested
+session -> user: credit.release.requested
 user releases reservation
 retry path reserves again and consumes on success
 ```
@@ -90,6 +90,8 @@ Acceptance:
 - duplicate release is idempotent
 - later success consumes exactly one reservation
 - reservation ids remain opaque refs owned by the reserving DO scope
+- app request/ack events use app-owned prefixes such as `credit.*`, never the
+  core-reserved `resource.*` ledger fact namespace
 
 Pressure point: compensation path for resources, not just happy consume.
 

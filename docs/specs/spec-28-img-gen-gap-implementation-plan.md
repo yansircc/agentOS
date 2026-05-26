@@ -121,6 +121,9 @@ Pending buffer:
 - internal `dispatch_outbox` table, keyed by `outboundEventId`.
 - it is not SSoT; it is a delivery buffer derived from
   `dispatch.outbound.requested`, same category as `scheduled_events`.
+- any delivered marker in the outbox points to the sender-local
+  `dispatch.outbound.delivered` row. Receiver ledger ids are remote metadata
+  and live only in the sender `dispatch.outbound.delivered` payload.
 
 Receiver idempotency:
 - receiver must ignore duplicate `(sourceScope, idempotencyKey)` attempts by
@@ -308,13 +311,13 @@ Cross-scope sequence:
 
 ```text
 SessionDO
-  dispatchToScope(UserDO, "resource.reserve.requested",
+  dispatchToScope(UserDO, "credit.reserve.requested",
     { key: "credit", amount, ref, idempotencyKey })
 
 UserDO
-  on("resource.reserve.requested")
+  on("credit.reserve.requested")
     Resources.reserve({ key, amount, ref, idempotencyKey })
-    emit/dispatch "resource.reserve.accepted" or "resource.reserve_rejected"
+    emit/dispatch "credit.reserved" or "credit.reserve_rejected"
 
 SessionDO
   stores no resource balance.
@@ -325,6 +328,9 @@ SessionDO
 The extra round trip is the cost of preserving a single resource ledger owner.
 If an app wants same-scope resources, it may call `Resources` directly inside
 that DO; cross-scope resource mutation always returns to the owning scope.
+The request/ack channel is app-owned (`credit.*` here). The core-reserved
+`resource.*` namespace is only for resource ledger facts written by the
+resource service.
 
 ### 3.4 Acceptance
 

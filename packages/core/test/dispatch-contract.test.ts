@@ -30,6 +30,10 @@ interface DispatchRpc {
   readonly dispatchToScope: (
     spec: DispatchToScopeSpec,
   ) => Promise<DispatchToScopeResult>;
+  readonly emitEvent: (spec: {
+    event: string;
+    data: unknown;
+  }) => Promise<{ id: number }>;
   readonly events: () => Promise<LedgerEventRpc[]>;
 }
 
@@ -82,14 +86,22 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
           "SELECT outbound_event_id, delivered_event_id FROM dispatch_outbox",
         )
         .toArray();
+      const outboundDelivered = state.storage.sql
+        .exec(
+          "SELECT id, payload FROM events WHERE kind = 'dispatch.outbound.delivered'",
+        )
+        .toArray();
 
       expect(outbound).toHaveLength(1);
       expect(outbox).toHaveLength(1);
+      expect(outboundDelivered).toHaveLength(1);
       expect(Number(outbound[0]?.id)).toBe(result.outboundEventId);
       expect(Number(outbox[0]?.outbound_event_id)).toBe(
         result.outboundEventId,
       );
-      expect(Number(outbox[0]?.delivered_event_id)).toBeGreaterThanOrEqual(1);
+      expect(Number(outbox[0]?.delivered_event_id)).toBe(
+        Number(outboundDelivered[0]?.id),
+      );
       expect(JSON.parse(String(outbound[0]?.payload))).toEqual({
         target: { bindingRef: "peer", scope: "dispatch-receiver-atomic" },
         event: "test.delivered",
@@ -100,6 +112,56 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
 
     const receiverEvents: LedgerEventRpc[] = await receiver.events();
     expect(receiverEvents.some((e) => e.kind === "test.delivered")).toBe(true);
+  });
+
+  it("keeps outbox delivered FK local when receiver ledger ids diverge", async () => {
+    const sender = stubFor("dispatch-sender-diverged-ledger");
+    const receiver = stubFor("dispatch-receiver-diverged-ledger");
+
+    await receiver.emitEvent({
+      event: "test.seed",
+      data: { purpose: "make receiver ids diverge" },
+    });
+
+    const result = await sender.dispatchToScope({
+      target: { bindingRef: "peer", scope: "dispatch-receiver-diverged-ledger" },
+      event: "test.delivered",
+      data: { message: "cross-ledger" },
+      idempotencyKey: "diverged-intent",
+    });
+
+    const receiverEvents: LedgerEventRpc[] = await receiver.events();
+    const receiverDelivered = receiverEvents.find(
+      (e) => e.kind === "test.delivered",
+    );
+
+    await runInDurableObject(sender, async (_instance, state) => {
+      const senderDelivered = state.storage.sql
+        .exec(
+          "SELECT id, payload FROM events WHERE kind = 'dispatch.outbound.delivered'",
+        )
+        .toArray();
+      const outbox = state.storage.sql
+        .exec(
+          "SELECT outbound_event_id, delivered_event_id FROM dispatch_outbox",
+        )
+        .toArray();
+
+      expect(senderDelivered).toHaveLength(1);
+      expect(outbox).toHaveLength(1);
+      expect(Number(outbox[0]?.outbound_event_id)).toBe(
+        result.outboundEventId,
+      );
+      expect(Number(outbox[0]?.delivered_event_id)).toBe(
+        Number(senderDelivered[0]?.id),
+      );
+
+      const payload = JSON.parse(String(senderDelivered[0]?.payload)) as {
+        readonly deliveredEventId: number;
+      };
+      expect(payload.deliveredEventId).toBe(receiverDelivered?.id);
+      expect(payload.deliveredEventId).not.toBe(Number(senderDelivered[0]?.id));
+    });
   });
 
   it("receiver dedupes by (sourceScope, idempotencyKey), not outboundEventId", async () => {
