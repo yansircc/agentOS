@@ -42,6 +42,7 @@ name="${agent_id}-${slug}"
 branch="parallel/${name}"
 worktree="${repo_root}/.parallel/worktrees/${name}"
 agent_dir="${repo_root}/.parallel/runs/${run_id}/agents/${agent_id}"
+secrets_file="${repo_root}/.dev.vars"
 
 if [[ -e "$worktree" ]]; then
   echo "worktree already exists: $worktree" >&2
@@ -89,6 +90,16 @@ export XDG_CACHE_HOME="$agent_dir/cache"
 export TMPDIR="$agent_dir/tmp"
 export PARALLEL_AGENT_DIR="$agent_dir"
 export PARALLEL_WORKTREE="$worktree"
+export PARALLEL_SECRETS_FILE="$secrets_file"
+
+if [ -f "\$PARALLEL_SECRETS_FILE" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  . "\$PARALLEL_SECRETS_FILE"
+  set +a
+else
+  echo "warning: \$PARALLEL_SECRETS_FILE not found; provider live tests should stay disabled" >&2
+fi
 EOF
 
 cat > "$agent_dir/manifest.json" <<JSON
@@ -101,7 +112,8 @@ cat > "$agent_dir/manifest.json" <<JSON
   "agentDir": "$agent_dir",
   "testRunId": "$test_run_id",
   "scopePrefix": "$scope_prefix",
-  "portBase": $port_base
+  "portBase": $port_base,
+  "secretsFile": "$secrets_file"
 }
 JSON
 
@@ -128,6 +140,53 @@ cat > "$agent_dir/task.md" <<EOF
 
 EOF
 
+cat > "$agent_dir/startup.md" <<EOF
+# Startup: $name
+
+1. Enter your isolated worktree.
+
+   \`\`\`sh
+   cd "$worktree"
+   source "$agent_dir/env.sh"
+   \`\`\`
+
+2. Confirm isolation.
+
+   \`\`\`sh
+   echo "\$AGENT_ID \$TEST_RUN_ID \$PORT_BASE"
+   pwd
+   git branch --show-current
+   \`\`\`
+
+3. Before editing, fill \`$agent_dir/task.md\`:
+   - invariant
+   - allowed write-set
+   - expected verification commands
+
+4. Use only your assigned mutable surfaces:
+   - worktree: \`$worktree\`
+   - ports: \`$port_base\` through \`$((port_base + 9))\`
+   - local home/cache/tmp from \`env.sh\`
+   - scopes and keys prefixed with \`$scope_prefix\`
+
+5. Provider secrets come from \`$secrets_file\`.
+   Do not copy secrets into commits, task files, logs, or ledger payloads.
+
+6. Live provider tests stay disabled unless the task explicitly says otherwise:
+
+   \`\`\`sh
+   test "\${LIVE_LLM:-0}" = "1" || echo "live LLM tests disabled"
+   \`\`\`
+
+7. Record owned background process ids in:
+
+   \`\`\`text
+   $agent_dir/pids.txt
+   \`\`\`
+
+   Only stop PIDs listed there.
+EOF
+
 : > "$agent_dir/pids.txt"
 
 cat <<EOF
@@ -138,8 +197,10 @@ branch:    $branch
 worktree:  $worktree
 agent dir: $agent_dir
 port base: $port_base
+secrets:   $secrets_file
 
 next:
   cd "$worktree"
   source "$agent_dir/env.sh"
+  open "$agent_dir/startup.md"
 EOF
