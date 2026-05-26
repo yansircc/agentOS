@@ -299,8 +299,8 @@ Extension support has two halves:
    commit its own protected facts without reaching into core internals.
 
 The namespace claim is the v0.3 baseline already required by image/sandbox
-package extraction. The positive capability is the v0.4 packageization target;
-its final algebra is specified here, but implementation may ship in phases.
+package extraction. P1 positive `commit/time` is the packageization boundary
+for proof/projection carriers. P2 positive `effect` remains future work.
 
 ### 7.1 Namespace claim
 
@@ -330,8 +330,8 @@ Consequences:
   `@agent-os/image` may register itself with `kindPrefixes: ["image."]` so
   app-facing core write paths cannot forge image package facts. Core knows
   the extension declaration, not image semantics.
-- **Same path applies to** audio / video / web / browser / sandbox / any
-  future modality.
+- **Same path applies to** audio / video / web / browser / dynamic-worker /
+  sandbox / any future modality.
 - **Same path applies to** any future streaming package-owned ledger facts
   (for example `stream.*`). Token deltas remain ephemeral unless that package
   writes a dedicated spec that promotes them to ledger facts. Extension
@@ -348,8 +348,7 @@ runtime commit gate.
 
 ### 7.2 Positive package capability
 
-When the positive phase ships, core mints an unforgeable scoped handle for a
-registered package:
+Core mints an unforgeable scoped handle for a registered package:
 
 ```ts
 type ExtensionEventSpec = {
@@ -364,11 +363,13 @@ type ExtensionEffectOutcome<R> =
 interface ExtensionCapability {
   readonly packageId: string
   readonly kindPrefixes: ReadonlyArray<string>
+  readonly version: string
 
   commit(spec: ExtensionEventSpec): Promise<{ id: number }>
 
   time(spec: ExtensionEventSpec & { at: number }): Promise<{ id: number }>
 
+  // P2, not P1:
   effect<I, R>(spec: {
     idempotencyKey: string
     intent: I
@@ -393,9 +394,10 @@ Rules:
 - **P-3.** The handle is scope-bound to the current DO instance. It is not an
   RPC argument, not serializable, and not a bearer token that can be moved
   across scopes.
-- **P-4.** `time` is `cap_scheduler(cap_ext)`; the pending row records enough
-  owner identity for the later alarm to promote the same package-owned event,
-  not an app fact.
+- **P-4.** `time` is `cap_scheduler(cap_ext)`; the pending row stores a
+  package-owned event kind, and the only public creation path for that prefix
+  is the scoped package capability. Alarm promotion commits the same
+  package-owned event, not an app fact.
 - **P-5.** `effect` is the positive form of the kernel effect op:
   external side-effect plus exactly-one ledger settlement by idempotency key.
   `settle` must return one package-owned event. Large logs, files, build
@@ -452,7 +454,7 @@ vocabularies. This prevents zeroY-specific nouns from being frozen as
 
 ### 8.1 `AgentDOBase` method set
 
-This is the P0/v0.3 baseline surface. P1 adds
+This is the P0/v0.3 baseline surface plus P1
 `protected extensionCapability(packageId)` from §7.2; it is not RPC-callable
 and must not appear in app-facing composites.
 
@@ -561,8 +563,7 @@ export type { CapabilityLease, AttemptKey }           // for admissionLease() re
 //   are submit-internal — NOT exported at barrel.
 
 // Ref resolution and extension package claims
-export type { RefResolver, ExtensionPackage }
-// P1 also exports type { ExtensionCapability } from "@agent-os/core/extensions"
+export type { RefResolver, ExtensionPackage, ExtensionCapability }
 ```
 
 Carrier packages that need only these contracts import narrow subpaths instead

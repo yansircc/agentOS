@@ -88,8 +88,10 @@ import {
 } from "./ref-resolver";
 import {
   type ExtensionPackage,
+  type ExtensionCapability,
   type ExtensionValidation,
   ExtensionCapabilityConflict,
+  extensionOwnsEvent,
   rejectClaimedAppEvent,
   validateExtensionPackages,
 } from "./extensions";
@@ -203,6 +205,89 @@ export abstract class AgentDOBase<
     return rejectClaimedAppEvent(event, validation.prefixes);
   }
 
+  private registeredExtension(
+    packageId: string,
+  ): ExtensionPackage | CapabilityRejected | ExtensionCapabilityConflict {
+    const validation = this.extensionValidation();
+    if (!validation.ok) return validation.error;
+    const pkg = validation.packages.find(
+      (candidate) => candidate.packageId === packageId,
+    );
+    return (
+      pkg ??
+      new CapabilityRejected({
+        event: "*",
+        capability: `extension:${packageId}`,
+      })
+    );
+  }
+
+  private extensionCommit(
+    pkg: ExtensionPackage,
+    event: string,
+    data: unknown,
+  ): Promise<{ id: number }> {
+    const scope = this.ctx.id.name;
+    if (scope === undefined) {
+      return Promise.reject(new ScopeMissingError());
+    }
+    if (!extensionOwnsEvent(pkg, event)) {
+      return Promise.reject(
+        new CapabilityRejected({
+          event,
+          capability: `extension:${pkg.packageId}`,
+        }),
+      );
+    }
+    return this.runtimeFor(scope).runPromise(
+      Effect.gen(function* () {
+        const ledger = yield* Ledger;
+        const ev = yield* ledger.log(event, data, scope);
+        return { id: ev.id };
+      }),
+    );
+  }
+
+  private extensionTime(
+    pkg: ExtensionPackage,
+    at: number,
+    event: string,
+    data: unknown,
+  ): Promise<{ id: number }> {
+    const scope = this.ctx.id.name;
+    if (scope === undefined) {
+      return Promise.reject(new ScopeMissingError());
+    }
+    if (!Number.isFinite(at)) {
+      return Promise.reject(new InvalidScheduleAt({ at }));
+    }
+    if (!extensionOwnsEvent(pkg, event)) {
+      return Promise.reject(
+        new CapabilityRejected({
+          event,
+          capability: `extension:${pkg.packageId}`,
+        }),
+      );
+    }
+    const ctx = this.ctx;
+    return this.runtimeFor(scope).runPromise(
+      Effect.gen(function* () {
+        const scheduler = yield* Scheduler;
+        const existingNext = yield* scheduler.findNextPending();
+        const target =
+          existingNext === null
+            ? at
+            : Math.min(existingNext, at);
+        yield* Effect.tryPromise({
+          try: () => ctx.storage.setAlarm(target),
+          catch: (cause) => new SqlError({ cause }),
+        });
+        const { id } = yield* scheduler.schedule(at, event, data);
+        return { id };
+      }),
+    );
+  }
+
   /** Hook for subclass to resolve symbolic endpoint / credential refs.
    *  Default = empty resolver. Apps using only `cf-ai-binding` do not
    *  override. External routes return concrete deploy-env values here;
@@ -219,6 +304,29 @@ export abstract class AgentDOBase<
    *  are intentionally not public app surface. */
   protected registerExtensions(): ReadonlyArray<ExtensionPackage> {
     return [];
+  }
+
+  /** Mint a scoped P1 capability for a registered extension package.
+   *
+   *  The handle can commit or defer only events under the package's declared
+   *  prefixes. App-facing write paths still reject those prefixes, so a
+   *  package-owned vocabulary has exactly one positive write path.
+   */
+  protected extensionCapability(packageId: string): ExtensionCapability {
+    const pkg = this.registeredExtension(packageId);
+    if (pkg instanceof CapabilityRejected) {
+      throw pkg;
+    }
+    if (pkg instanceof ExtensionCapabilityConflict) {
+      throw pkg;
+    }
+    return {
+      packageId: pkg.packageId,
+      kindPrefixes: pkg.kindPrefixes,
+      version: pkg.version,
+      commit: (spec) => this.extensionCommit(pkg, spec.event, spec.data),
+      time: (spec) => this.extensionTime(pkg, spec.at, spec.event, spec.data),
+    };
   }
 
   /** Hook for subclass to provide cross-scope dispatch targets.
