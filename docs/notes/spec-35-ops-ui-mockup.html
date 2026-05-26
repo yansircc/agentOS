@@ -1,0 +1,1180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>@agent-os/ops-api — UI mockup (spec-35)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-0: #ffffff;
+    --bg-1: #f8fafc;
+    --bg-2: #f1f5f9;
+    --bg-hover: #e2e8f0;
+    --border: #cbd5e1;
+    --border-muted: #e2e8f0;
+    --fg-0: #0f172a;
+    --fg-1: #334155;
+    --fg-2: #64748b;
+    --fg-3: #94a3b8;
+
+    --accent: #2563eb;
+    --accent-bg: #eff6ff;
+
+    --green: #16a34a;
+    --green-bg: #f0fdf4;
+    --green-border: #bbf7d0;
+
+    --red: #dc2626;
+    --red-bg: #fef2f2;
+    --red-border: #fca5a5;
+
+    --amber: #d97706;
+    --amber-bg: #fffbeb;
+    --amber-border: #fde68a;
+
+    --gray: #4b5563;
+    --gray-bg: #f3f4f6;
+    --gray-border: #e5e7eb;
+
+    --purple: #7c3aed;
+    --purple-bg: #f5f3ff;
+    --purple-border: #ddd6fe;
+
+    --cyan: #0891b2;
+    --cyan-bg: #ecfeff;
+    --cyan-border: #cffafe;
+
+    --pink: #db2777;
+    --pink-bg: #fdf2f8;
+    --pink-border: #fbcfe8;
+
+    --yellow: #ca8a04;
+    --yellow-bg: #fef9c3;
+    --yellow-border: #fef08a;
+
+    --sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg-0);
+    color: var(--fg-1);
+    font-family: var(--sans);
+    font-size: 12px;
+    line-height: 1.5;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  code, .mono { font-family: var(--mono); }
+
+  /* custom scrollbars */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); }
+  ::-webkit-scrollbar-thumb:hover { background: var(--fg-2); }
+
+  /* layout */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 20px; background: var(--bg-0);
+    border-bottom: 1px solid var(--border);
+    height: 44px;
+    flex-shrink: 0;
+  }
+  .topbar .brand { font-weight: 700; color: var(--fg-0); font-size: 13px; }
+  .topbar .brand .ver { color: var(--fg-2); font-weight: normal; margin-left: 8px; font-family: var(--mono); font-size: 11px; }
+  .topbar .topbar-actions { display: flex; align-items: center; gap: 16px; }
+  .topbar .meta { color: var(--fg-2); display: flex; gap: 20px; font-family: var(--mono); font-size: 11px; }
+  .topbar .meta b { color: var(--fg-0); font-weight: 600; }
+
+  .topbar-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; background: var(--bg-1); border: 1px solid var(--border);
+    font-family: var(--sans); font-size: 11px; font-weight: 600; color: var(--fg-1);
+    cursor: pointer; transition: all 0.15s ease;
+  }
+  .topbar-btn:hover { background: var(--bg-2); color: var(--fg-0); border-color: var(--fg-2); }
+
+  /* 3-column layout structure (Gold Standard IDE view) */
+  .layout {
+    display: grid;
+    grid-template-columns: 220px 250px 1fr;
+    height: calc(100vh - 44px);
+    overflow: hidden;
+  }
+
+  /* columns common styles */
+  .column {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    border-right: 1px solid var(--border);
+  }
+
+  /* COLUMN 1: SCOPES SIDEBAR */
+  .scopes-column {
+    background: var(--bg-1);
+  }
+  .scopes-column .endpoint {
+    padding: 12px 16px; font-family: var(--mono); font-size: 10px;
+    color: var(--fg-2); background: var(--bg-2); border-bottom: 1px solid var(--border);
+    font-weight: 600;
+  }
+  .scopes-column h3 {
+    margin: 16px 16px 8px; font-size: 10px; text-transform: uppercase;
+    color: var(--fg-2); font-weight: 700; letter-spacing: .05em;
+  }
+  .scopes-list { flex: 1; overflow-y: auto; }
+  .scopes-column .scope-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 16px; cursor: pointer; border-bottom: 1px solid var(--border-muted);
+    font-family: var(--mono); font-size: 11px; color: var(--fg-1);
+    border-left: 3px solid transparent;
+  }
+  .scopes-column .scope-row:hover { background: var(--bg-hover); }
+  .scopes-column .scope-row.active { background: var(--bg-0); color: var(--accent); font-weight: 600; border-left-color: var(--accent); }
+  .scopes-column .scope-row .surface { font-size: 9px; color: var(--fg-2); background: var(--bg-2); padding: 1px 4px; border: 1px solid var(--border-muted); }
+  .scopes-column .scope-row.opaque .surface { color: var(--fg-3); background: transparent; }
+  .scopes-column .filter-container { padding: 12px 16px 16px; border-top: 1px solid var(--border); background: var(--bg-1); }
+  .scopes-column .filter-input {
+    width: 100%; padding: 6px 10px; background: var(--bg-0); border: 1px solid var(--border);
+    color: var(--fg-0); font-family: var(--mono); font-size: 11px; outline: none;
+  }
+  .scopes-column .filter-input:focus { border-color: var(--accent); }
+
+  /* COLUMN 2: RUNS DIRECTORY (Redesigned as vertical list to scale to dozens/hundreds of runs) */
+  .runs-column {
+    background: var(--bg-1);
+  }
+  .runs-column .header-desc {
+    padding: 12px 16px; font-size: 10px; color: var(--fg-2);
+    border-bottom: 1px solid var(--border); background: var(--bg-2);
+    font-family: var(--sans); line-height: 1.4;
+  }
+  .runs-column h3 {
+    margin: 16px 16px 8px; font-size: 10px; text-transform: uppercase;
+    color: var(--fg-2); font-weight: 700; letter-spacing: .05em;
+  }
+  .runs-list { flex: 1; overflow-y: auto; }
+
+  .run-list-item {
+    display: flex; flex-direction: column; gap: 4px;
+    padding: 10px 16px; cursor: pointer; border-bottom: 1px solid var(--border-muted);
+    background: var(--bg-0); border-left: 3px solid transparent;
+    transition: background 0.15s ease;
+  }
+  .run-list-item:hover { background: var(--bg-1); }
+  .run-list-item.active { background: var(--bg-2); border-left-color: var(--accent); }
+
+  .run-list-item .run-top { display: flex; justify-content: space-between; align-items: center; }
+  .run-list-item .runId { font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--fg-1); }
+  .run-list-item.active .runId { color: var(--accent); }
+  .run-list-item .run-time { font-size: 9px; color: var(--fg-2); font-family: var(--mono); margin-top: 2px; }
+  .run-list-item .status { margin-top: 4px; }
+
+  .runs-column .filter-container { padding: 12px 16px 16px; border-top: 1px solid var(--border); background: var(--bg-1); }
+  .runs-column .filter-input {
+    width: 100%; padding: 6px 10px; background: var(--bg-0); border: 1px solid var(--border);
+    color: var(--fg-0); font-family: var(--mono); font-size: 11px; outline: none;
+  }
+  .runs-column .filter-input:focus { border-color: var(--accent); }
+
+  /* COLUMN 3: INSPECTION WORKSPACE */
+  .workspace {
+    flex: 1; overflow-y: auto; border-right: none;
+    padding: 20px 24px; background: var(--bg-0);
+  }
+
+  /* scope header details */
+  .scope-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-bottom: 12px; border-bottom: 1px solid var(--border); margin-bottom: 16px;
+  }
+  .scope-header h2 {
+    margin: 0; font-family: var(--mono); font-size: 15px; color: var(--fg-0); font-weight: 700;
+  }
+  .scope-header .scope-meta { font-size: 11px; color: var(--fg-2); display: flex; gap: 12px; align-items: center; }
+  .scope-header .scope-meta .surface-badge {
+    background: var(--bg-2); border: 1px solid var(--border); padding: 2px 6px;
+    font-family: var(--mono); font-size: 10px; color: var(--fg-1);
+    font-weight: 500;
+  }
+
+  /* interactive master view tabs control */
+  .view-tabs {
+    display: flex; gap: 8px; border-bottom: 1px solid var(--border);
+    margin-bottom: 16px; background: var(--bg-0);
+  }
+  .view-tab-btn {
+    padding: 8px 16px; border: 1px solid transparent; border-bottom: none;
+    font-family: var(--sans); font-size: 12px; font-weight: 600; color: var(--fg-2);
+    cursor: pointer; background: transparent; transition: all 0.15s ease;
+    margin-bottom: -1px;
+  }
+  .view-tab-btn:hover { color: var(--fg-0); }
+  .view-tab-btn.active {
+    color: var(--accent); background: var(--bg-0);
+    border-color: var(--border) var(--border) var(--bg-0);
+  }
+
+  /* tab content panel views */
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* section container */
+  .section {
+    background: var(--bg-0); border: 1px solid var(--border);
+    margin-bottom: 16px; display: flex; flex-direction: column;
+  }
+  .section header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 12px; border-bottom: 1px solid var(--border); background: var(--bg-1);
+  }
+  .section header h3 {
+    margin: 0; font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--fg-0); font-weight: 700;
+  }
+  .section header .endpoint-tag {
+    font-family: var(--mono); font-size: 9px; color: var(--fg-2);
+    background: var(--bg-2); padding: 1px 6px; border: 1px solid var(--border-muted);
+  }
+  .section-body { padding: 16px; }
+
+  /* status badges */
+  .badge {
+    display: inline-block; padding: 2px 6px;
+    font-family: var(--mono); font-size: 10px; font-weight: 600; line-height: 1.2;
+    border-radius: 0px; border: none;
+  }
+  .badge.delivered { color: #166534; background: #f0fdf4; }
+  .badge.aborted { color: #991b1b; background: #fef2f2; }
+  .badge.open { color: #9a3412; background: #fff7ed; }
+  .badge.orphaned { color: #374151; background: #f3f4f6; }
+  .badge.supported { color: #166534; background: #f0fdf4; }
+  .badge.unsupported { color: #991b1b; background: #fef2f2; }
+  .badge.unknown { color: #374151; background: #f3f4f6; }
+  .badge.active { color: #9a3412; background: #fff7ed; }
+  .badge.consumed { color: #374151; background: #f3f4f6; }
+
+  /* capability chips */
+  .cap {
+    display: inline-flex; align-items: center;
+    font-family: var(--mono); font-size: 10px; font-weight: 600; line-height: 1.2;
+    padding: 2px 6px; border-radius: 0px; border: none;
+  }
+  .cap.submit { color: #1e40af; background: #eff6ff; }
+  .cap.dispatch { color: #0e7490; background: #ecfeff; }
+  .cap.resource { color: #6d28d9; background: #f5f3ff; }
+  .cap.admission { color: #a16207; background: #fef9c3; }
+  .cap.app { color: #374151; background: #f3f4f6; }
+  .cap.scheduler { color: #9d174d; background: #fdf2f8; }
+
+  /* events table style */
+  .events-header {
+    display: flex; gap: 12px; align-items: center; margin-bottom: 12px;
+    flex-wrap: wrap; font-size: 11px;
+  }
+  .events-header .cursor { font-family: var(--mono); color: var(--fg-2); }
+  .events-header .cursor b { color: var(--fg-0); }
+  .events-header .filter {
+    background: var(--bg-2); border: 1px solid var(--border);
+    padding: 2px 6px; font-family: var(--mono); font-size: 10px; color: var(--fg-1);
+  }
+  .events-header .live-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--green);
+    display: inline-block; animation: pulse 1.4s infinite;
+  }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+  .events-header .live-label { font-size: 11px; color: var(--green); font-family: var(--mono); font-weight: 600; }
+
+  table.events { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 11px; }
+  table.events th, table.events td {
+    text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border-muted);
+    vertical-align: middle;
+  }
+  table.events th { background: var(--bg-1); color: var(--fg-2); font-weight: 700; font-size: 10px; text-transform: uppercase; border-bottom: 1px solid var(--border); }
+  table.events td.id { color: var(--fg-3); width: 50px; }
+  table.events td.ts { color: var(--fg-2); width: 90px; }
+  table.events td.kind { color: var(--fg-0); font-weight: 600; }
+  table.events td.cap { width: 115px; }
+  table.events td.payload { color: var(--accent); cursor: pointer; text-decoration: underline; font-weight: 500; }
+  table.events tr.recent td { background: var(--green-bg); }
+  table.events tr:hover td { background: var(--bg-hover); }
+
+  /* interactive inline json expander row */
+  .payload-detail-row { background: var(--bg-1) !important; display: none; }
+  .payload-detail-row td { padding: 12px 16px !important; border-bottom: 1px solid var(--border) !important; }
+  .payload-detail-row pre { margin: 0; font-family: var(--mono); font-size: 11px; color: var(--fg-0); overflow-x: auto; background: var(--bg-0); border: 1px solid var(--border); padding: 12px; }
+
+  /* trace detail list timeline style */
+  .trace-container {
+    border: 1px solid var(--border);
+    background: var(--bg-0);
+    padding: 16px 20px;
+  }
+  .trace-list {
+    position: relative;
+    padding-left: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .trace-list::before {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 6px;
+    bottom: 6px;
+    width: 1px;
+    background: var(--border);
+  }
+  .trace-line {
+    position: relative;
+    display: grid;
+    grid-template-columns: 80px 60px 140px 1fr;
+    gap: 12px;
+    font-family: var(--mono);
+    font-size: 11px;
+    align-items: baseline;
+  }
+  .trace-line::before {
+    content: '';
+    position: absolute;
+    left: -19px;
+    top: 5px;
+    width: 7px;
+    height: 7px;
+    background: var(--fg-3);
+    border: 1.5px solid var(--bg-0);
+  }
+  .trace-line.terminal::before {
+    background: var(--green);
+    width: 9px;
+    height: 9px;
+    left: -20px;
+    top: 4px;
+    box-shadow: 0 0 0 2px var(--green-border);
+  }
+  .trace-line.terminal-aborted::before {
+    background: var(--red);
+    width: 9px;
+    height: 9px;
+    left: -20px;
+    top: 4px;
+    box-shadow: 0 0 0 2px var(--red-border);
+  }
+  .trace-line .ts { color: var(--fg-2); }
+  .trace-line .turn-num { color: var(--fg-2); font-size: 9px; font-weight: 700; text-transform: uppercase; }
+  .trace-line .label { color: var(--fg-0); font-weight: 600; }
+  .trace-line .detail { color: var(--fg-1); }
+  .trace-line.terminal .detail { font-weight: 500; }
+
+  /* kv layout */
+  .kv { display: grid; grid-template-columns: 120px 1fr; gap: 4px 12px;
+        font-family: var(--mono); font-size: 11px; padding: 4px 0; }
+  .kv .k { color: var(--fg-2); }
+  .kv .v { color: var(--fg-0); }
+  .kv .v.dim { color: var(--fg-2); }
+
+  /* reservations list */
+  .reservation-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 6px 0; border-top: 1px dashed var(--border);
+    font-family: var(--mono); font-size: 11px;
+  }
+  .reservation-row:first-of-type { border-top: none; }
+  .reservation-row .resv-id { color: var(--fg-2); width: 30px; }
+  .reservation-row .resv-amt { color: var(--fg-0); width: 45px; font-weight: 600; }
+
+  /* quota progress bars */
+  .quota-bar {
+    width: 100%; height: 5px; background: var(--bg-2);
+    position: relative; overflow: hidden; border: 1px solid var(--border-muted);
+    margin: 4px 0 8px;
+  }
+  .quota-bar .fill { height: 100%; background: var(--green); }
+  .quota-bar.warn .fill { background: var(--amber); }
+  .quota-bar.over .fill { background: var(--red); }
+
+  /* grid split projections in Telemetry tab */
+  .telemetry-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+
+  /* Sliding Side Drawer for Deferred Constraints (Anti-features) */
+  .drawer-backdrop {
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(15, 23, 42, 0.15); backdrop-filter: blur(2px);
+    z-index: 999; display: none; opacity: 0; transition: opacity 0.2s ease;
+  }
+  .drawer-backdrop.open { display: block; opacity: 1; }
+
+  .drawer {
+    position: fixed; top: 0; right: -420px; width: 420px; height: 100vh;
+    background: var(--bg-0); border-left: 1px solid var(--border);
+    z-index: 1000; transition: right 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex; flex-direction: column;
+  }
+  .drawer.open { right: 0; }
+  .drawer-header {
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+    background: var(--bg-1);
+  }
+  .drawer-header h3 { margin: 0; font-size: 12px; text-transform: uppercase; font-weight: 700; color: var(--fg-0); letter-spacing: 0.05em; }
+  .drawer-close {
+    cursor: pointer; background: transparent; border: none; font-size: 16px;
+    color: var(--fg-2); display: flex; align-items: center; justify-content: center;
+  }
+  .drawer-close:hover { color: var(--fg-0); }
+  .drawer-body { padding: 20px; overflow-y: auto; flex: 1; }
+  .drawer-body ul { margin: 0; padding-left: 20px; }
+  .drawer-body li { padding: 5px 0; font-size: 11px; color: var(--fg-1); line-height: 1.6; }
+  .drawer-body code { background: var(--bg-2); padding: 1px 4px; font-family: var(--mono); font-size: 11px; color: var(--fg-0); border: 1px solid var(--border-muted); }
+</style>
+</head>
+<body>
+
+<!-- =================== TOP BAR =================== -->
+<div class="topbar">
+  <div class="brand">@agent-os/ops-api <span class="ver">v0.1.0 · spec-35</span></div>
+  <div class="meta">
+    <span>principal: <b>ops@team</b></span>
+    <span>tenant: <b>acme</b></span>
+    <span>auth: <b>OpsAuth.authorize() · read+stream</b></span>
+  </div>
+  <div class="topbar-actions">
+    <button class="topbar-btn" onclick="toggleDrawer(true)">
+      <svg style="width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2.2;" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+      </svg>
+      <span>Deferred Exclusions</span>
+    </button>
+  </div>
+</div>
+
+<div class="layout">
+
+  <!-- =================== COLUMN 1: SCOPES SIDEBAR =================== -->
+  <aside class="column scopes-column">
+    <div class="endpoint">GET /__ops/api/scopes</div>
+
+    <div class="scopes-list">
+      <h3>scopes (12)</h3>
+      <div class="scope-row active">
+        <span>thread/inq-26-05-7f3a</span>
+        <span class="surface">v0.3</span>
+      </div>
+      <div class="scope-row">
+        <span>thread/inq-26-05-441b</span>
+        <span class="surface">v0.3</span>
+      </div>
+      <div class="scope-row">
+        <span>user/u-1042</span>
+        <span class="surface">v0.3</span>
+      </div>
+      <div class="scope-row">
+        <span>user/u-9981</span>
+        <span class="surface">v0.3</span>
+      </div>
+      <div class="scope-row">
+        <span>session/s-22-aug</span>
+        <span class="surface">v0.3</span>
+      </div>
+      <div class="scope-row">
+        <span>wp/zy@acme.com</span>
+        <span class="surface">v0.3</span>
+      </div>
+      <div class="scope-row opaque">
+        <span>artifact-blob/0xab12</span>
+        <span class="surface">opaque</span>
+      </div>
+      <div class="scope-row opaque">
+        <span>sandbox/sbx-117</span>
+        <span class="surface">opaque</span>
+      </div>
+    </div>
+
+    <div class="filter-container">
+      <h3 style="margin: 0 0 8px; padding: 0;">filter</h3>
+      <input class="filter-input" placeholder="prefix..." value="thread/" />
+    </div>
+  </aside>
+
+  <!-- =================== COLUMN 2: RUNS DIRECTORY (Scales beautifully vertically) =================== -->
+  <aside class="column runs-column">
+    <div class="header-desc">
+      runs derived from <b>agent.run.*</b> projection over <b>events()</b>
+    </div>
+
+    <div class="runs-list">
+      <h3>runs history (8)</h3>
+
+      <div class="run-list-item active" onclick="selectRun(this)">
+        <div class="run-top">
+          <span class="runId">run <b>#142</b></span>
+          <span class="badge delivered">delivered</span>
+        </div>
+        <div class="run-time">12:04:31 → 12:04:48 (17s)</div>
+      </div>
+
+      <div class="run-list-item" onclick="selectRun(this)">
+        <div class="run-top">
+          <span class="runId">run <b>#141</b></span>
+          <span class="badge aborted">aborted</span>
+        </div>
+        <div class="run-time">11:58:02 → 11:58:14 (12s)</div>
+      </div>
+
+      <div class="run-list-item" onclick="selectRun(this)">
+        <div class="run-top">
+          <span class="runId">run <b>#140</b></span>
+          <span class="badge open">open</span>
+        </div>
+        <div class="run-time">11:54:11 → —</div>
+      </div>
+
+      <div class="run-list-item" onclick="selectRun(this)">
+        <div class="run-top">
+          <span class="runId">run <b>#139</b></span>
+          <span class="badge orphaned">orphaned</span>
+        </div>
+        <div class="run-time">11:48:50 → —</div>
+      </div>
+
+      <div class="run-list-item" onclick="selectRun(this)">
+        <div class="run-top">
+          <span class="runId">run <b>#138</b></span>
+          <span class="badge delivered">delivered</span>
+        </div>
+        <div class="run-time">11:42:09 → 11:42:21 (12s)</div>
+      </div>
+
+      <div class="run-list-item" onclick="selectRun(this)">
+        <div class="run-top">
+          <span class="runId">run <b>#137</b></span>
+          <span class="badge delivered">delivered</span>
+        </div>
+        <div class="run-time">11:30:15 → 11:30:35 (20s)</div>
+      </div>
+
+      <div class="run-list-item" onclick="selectRun(this)">
+        <div class="run-top">
+          <span class="runId">run <b>#136</b></span>
+          <span class="badge aborted">aborted</span>
+        </div>
+        <div class="run-time">11:21:40 → 11:21:52 (12s)</div>
+      </div>
+
+      <div class="run-list-item" onclick="selectRun(this)">
+        <div class="run-top">
+          <span class="runId">run <b>#135</b></span>
+          <span class="badge delivered">delivered</span>
+        </div>
+        <div class="run-time">11:10:02 → 11:10:24 (22s)</div>
+      </div>
+    </div>
+
+    <div class="filter-container">
+      <h3 style="margin: 0 0 8px; padding: 0;">search runs</h3>
+      <input class="filter-input" placeholder="filter by id, status..." />
+    </div>
+  </aside>
+
+  <!-- =================== COLUMN 3: INSPECTION WORKSPACE =================== -->
+  <main class="column workspace">
+
+    <!-- scope header -->
+    <div class="scope-header">
+      <h2>thread/inq-26-05-7f3a</h2>
+      <div class="scope-meta">
+        <span class="surface-badge">agent-do/v0.3</span>
+        <span class="mono">12:04:48</span>
+        <span class="mono">rows:4218</span>
+      </div>
+    </div>
+
+    <!-- Dual-Perspective Inspection Deck (Tabs) -->
+    <nav class="view-tabs">
+      <button class="view-tab-btn active" onclick="switchView('trace-view')">🔍 Execution Trace</button>
+      <button class="view-tab-btn" onclick="switchView('events-view')">📋 Raw Event Stream</button>
+      <button class="view-tab-btn" onclick="switchView('telemetry-view')">⚡ Telemetry & Budgets</button>
+    </nav>
+
+    <!-- TAB 1: EXECUTION TRACE -->
+    <div id="trace-view" class="tab-content active">
+      <div class="section">
+        <header>
+          <h3>run #142 · trace</h3>
+          <span class="endpoint-tag">GET /scopes/:scope/runs/142/trace &nbsp;·&nbsp; /runs/142/status</span>
+        </header>
+        <div class="section-body">
+          <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 16px;">
+            <span class="badge delivered">delivered</span>
+            <span class="mono" style="font-size: 11px; color: var(--fg-2);">
+              12:04:38.001 · 10.2s · turns:2 · toolCalls:1 · tokens:510
+            </span>
+          </div>
+
+          <div class="trace-container">
+            <div class="trace-list">
+              <div class="trace-line">
+                <span class="ts">12:04:38.001</span>
+                <span class="turn-num">init</span>
+                <span class="label">run.started</span>
+                <span class="detail">intent="what is the lead time…"</span>
+              </div>
+              <div class="trace-line">
+                <span class="ts">12:04:38.004</span>
+                <span class="turn-num">init</span>
+                <span class="label">chat.ingested</span>
+                <span class="detail">context: { topic, customerProfile }</span>
+              </div>
+              <div class="trace-line">
+                <span class="ts">12:04:43.882</span>
+                <span class="turn-num">turn 0</span>
+                <span class="label">llm.response</span>
+                <span class="detail">312 tok · proposed tool_call lookup({sku: "X-22"})</span>
+              </div>
+              <div class="trace-line">
+                <span class="ts">12:04:44.103</span>
+                <span class="turn-num">turn 0</span>
+                <span class="label">dispatch.consumed</span>
+                <span class="detail">quota key=lookup · amount=1</span>
+              </div>
+              <div class="trace-line">
+                <span class="ts">12:04:44.512</span>
+                <span class="turn-num">turn 0</span>
+                <span class="label">tool.executed</span>
+                <span class="detail">lookup → { ok: true, lead: "21d" }</span>
+              </div>
+              <div class="trace-line">
+                <span class="ts">12:04:46.901</span>
+                <span class="turn-num">turn 1</span>
+                <span class="label">llm.response</span>
+                <span class="detail">198 tok · final text</span>
+              </div>
+              <div class="trace-line terminal">
+                <span class="ts">12:04:48.213</span>
+                <span class="turn-num">terminal</span>
+                <span class="label">deliver → answer.ready</span>
+                <span class="detail">(cap_app via delegated commit)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: RAW EVENT STREAM -->
+    <div id="events-view" class="tab-content">
+      <div class="section">
+        <header>
+          <h3>events (live tail)</h3>
+          <span class="endpoint-tag">GET /scopes/:scope/stream &nbsp;·&nbsp; GET /scopes/:scope/events</span>
+        </header>
+        <div class="section-body">
+          <div class="events-header">
+            <span class="cursor">cursor afterId = <b>4218</b></span>
+            <span class="filter">kinds: <b>—</b> all</span>
+            <span class="filter">limit: <b>50</b></span>
+            <span style="flex: 1;"></span>
+            <span class="live-dot"></span>
+            <span class="live-label">live · 2.1 kB/s</span>
+          </div>
+
+          <table class="events">
+            <thead>
+              <tr>
+                <th>id</th><th>ts</th><th>kind</th><th>cap</th><th>payload</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="recent" onclick="togglePayload('p1')">
+                <td class="id">4218</td>
+                <td class="ts">12:04:48.213</td>
+                <td class="kind">agent.run.completed</td>
+                <td class="cap"><span class="cap submit">cap_submit</span></td>
+                <td class="payload">Click to expand JSON</td>
+              </tr>
+              <tr id="p1" class="payload-detail-row">
+                <td colspan="5">
+                  <pre>{
+  "id": 4218,
+  "timestamp": "12:04:48.213",
+  "kind": "agent.run.completed",
+  "runId": 142,
+  "payload": {
+    "event": "answer.ready",
+    "deliveryScope": "client-stream"
+  }
+}</pre>
+                </td>
+              </tr>
+              <tr class="recent" onclick="togglePayload('p2')">
+                <td class="id">4217</td>
+                <td class="ts">12:04:48.207</td>
+                <td class="kind">answer.ready</td>
+                <td class="cap"><span class="cap app">cap_app</span></td>
+                <td class="payload">Click to expand JSON</td>
+              </tr>
+              <tr id="p2" class="payload-detail-row">
+                <td colspan="5">
+                  <pre>{
+  "id": 4217,
+  "timestamp": "12:04:48.207",
+  "kind": "answer.ready",
+  "payload": {
+    "final": "Yes…",
+    "turn": {
+      "id": 142,
+      "index": 1
+    }
+  }
+}</pre>
+                </td>
+              </tr>
+              <tr onclick="togglePayload('p3')">
+                <td class="id">4216</td>
+                <td class="ts">12:04:46.901</td>
+                <td class="kind">llm.response</td>
+                <td class="cap"><span class="cap submit">cap_submit</span></td>
+                <td class="payload">Click to expand JSON</td>
+              </tr>
+              <tr id="p3" class="payload-detail-row">
+                <td colspan="5">
+                  <pre>{
+  "id": 4216,
+  "timestamp": "12:04:46.901",
+  "kind": "llm.response",
+  "payload": {
+    "turn": {
+      "id": 142,
+      "index": 1
+    },
+    "usage": {
+      "prompt_tokens": 120,
+      "completion_tokens": 78,
+      "total_tokens": 198
+    }
+  }
+}</pre>
+                </td>
+              </tr>
+              <tr onclick="togglePayload('p4')">
+                <td class="id">4215</td>
+                <td class="ts">12:04:44.512</td>
+                <td class="kind">tool.executed</td>
+                <td class="cap"><span class="cap submit">cap_submit</span></td>
+                <td class="payload">Click to expand JSON</td>
+              </tr>
+              <tr id="p4" class="payload-detail-row">
+                <td colspan="5">
+                  <pre>{
+  "id": 4215,
+  "timestamp": "12:04:44.512",
+  "kind": "tool.executed",
+  "payload": {
+    "runId": 142,
+    "name": "lookup",
+    "result": {
+      "ok": true,
+      "leadTime": "21d"
+    }
+  }
+}</pre>
+                </td>
+              </tr>
+              <tr onclick="togglePayload('p5')">
+                <td class="id">4214</td>
+                <td class="ts">12:04:44.103</td>
+                <td class="kind">dispatch.consumed</td>
+                <td class="cap"><span class="cap dispatch">cap_dispatch</span></td>
+                <td class="payload">Click to expand JSON</td>
+              </tr>
+              <tr id="p5" class="payload-detail-row">
+                <td colspan="5">
+                  <pre>{
+  "id": 4214,
+  "timestamp": "12:04:44.103",
+  "kind": "dispatch.consumed",
+  "payload": {
+    "key": "lookup",
+    "amount": 1,
+    "toolName": "lookup"
+  }
+}</pre>
+                </td>
+              </tr>
+              <tr onclick="togglePayload('p6')">
+                <td class="id">4213</td>
+                <td class="ts">12:04:43.882</td>
+                <td class="kind">llm.response</td>
+                <td class="cap"><span class="cap submit">cap_submit</span></td>
+                <td class="payload">Click to expand JSON</td>
+              </tr>
+              <tr id="p6" class="payload-detail-row">
+                <td colspan="5">
+                  <pre>{
+  "id": 4213,
+  "timestamp": "12:04:43.882",
+  "kind": "llm.response",
+  "payload": {
+    "turn": {
+      "id": 142,
+      "index": 0
+    },
+    "usage": {
+      "prompt_tokens": 204,
+      "completion_tokens": 108,
+      "total_tokens": 312
+    }
+  }
+}</pre>
+                </td>
+              </tr>
+              <tr onclick="togglePayload('p7')">
+                <td class="id">4212</td>
+                <td class="ts">12:04:41.219</td>
+                <td class="kind">llm.structured.evidence</td>
+                <td class="cap"><span class="cap admission">cap_admission</span></td>
+                <td class="payload">Click to expand JSON</td>
+              </tr>
+              <tr id="p7" class="payload-detail-row">
+                <td colspan="5">
+                  <pre>{
+  "id": 4212,
+  "timestamp": "12:04:41.219",
+  "kind": "llm.structured.evidence",
+  "payload": {
+    "route": "openai-chat:gpt-5-turbo:a1f2",
+    "schema": "order_v3",
+    "outcome": "schemaOk",
+    "strategy": "json_schema"
+  }
+}</pre>
+                </td>
+              </tr>
+              <tr onclick="togglePayload('p8')">
+                <td class="id">4211</td>
+                <td class="ts">12:04:38.004</td>
+                <td class="kind">chat.ingested</td>
+                <td class="cap"><span class="cap submit">cap_submit</span></td>
+                <td class="payload">Click to expand JSON</td>
+              </tr>
+              <tr id="p8" class="payload-detail-row">
+                <td colspan="5">
+                  <pre>{
+  "id": 4211,
+  "timestamp": "12:04:38.004",
+  "kind": "chat.ingested",
+  "payload": {
+    "runId": 142,
+    "intent": "what is the lead time…"
+  }
+}</pre>
+                </td>
+              </tr>
+              <tr onclick="togglePayload('p9')">
+                <td class="id">4210</td>
+                <td class="ts">12:04:38.001</td>
+                <td class="kind">agent.run.started</td>
+                <td class="cap"><span class="cap submit">cap_submit</span></td>
+                <td class="payload">Click to expand JSON</td>
+              </tr>
+              <tr id="p9" class="payload-detail-row">
+                <td colspan="5">
+                  <pre>{
+  "id": 4210,
+  "timestamp": "12:04:38.001",
+  "kind": "agent.run.started",
+  "payload": {
+    "intent": "what is the lead time…"
+  }
+}</pre>
+                </td>
+              </tr>
+              <tr onclick="togglePayload('p10')">
+                <td class="id">4209</td>
+                <td class="ts">12:04:37.882</td>
+                <td class="kind">interview.answer</td>
+                <td class="cap"><span class="cap app">cap_app</span></td>
+                <td class="payload">Click to expand JSON</td>
+              </tr>
+              <tr id="p10" class="payload-detail-row">
+                <td colspan="5">
+                  <pre>{
+  "id": 4209,
+  "timestamp": "12:04:37.882",
+  "kind": "interview.answer",
+  "payload": {
+    "q": "buyer-region",
+    "a": "DE"
+  }
+}</pre>
+                </td>
+              </tr>
+              <tr onclick="togglePayload('p11')">
+                <td class="id">4208</td>
+                <td class="ts">12:00:14.227</td>
+                <td class="kind">resource.released</td>
+                <td class="cap"><span class="cap resource">cap_resource</span></td>
+                <td class="payload">Click to expand JSON</td>
+              </tr>
+              <tr id="p11" class="payload-detail-row">
+                <td colspan="5">
+                  <pre>{
+  "id": 4208,
+  "timestamp": "12:00:14.227",
+  "kind": "resource.released",
+  "payload": {
+    "reservationId": "r-89",
+    "key": "gpu"
+  }
+}</pre>
+                </td>
+              </tr>
+              <tr onclick="togglePayload('p12')">
+                <td class="id">4207</td>
+                <td class="ts">11:58:14.561</td>
+                <td class="kind">agent.aborted.tool_error</td>
+                <td class="cap"><span class="cap submit">cap_submit</span></td>
+                <td class="payload">Click to expand JSON</td>
+              </tr>
+              <tr id="p12" class="payload-detail-row">
+                <td colspan="5">
+                  <pre>{
+  "id": 4207,
+  "timestamp": "11:58:14.561",
+  "kind": "agent.aborted.tool_error",
+  "payload": {
+    "runId": 141,
+    "toolName": "lookup",
+    "cause": "Timeout"
+  }
+}</pre>
+                </td>
+              </tr>
+              <tr onclick="togglePayload('p13')">
+                <td class="id">4206</td>
+                <td class="ts">11:58:14.501</td>
+                <td class="kind">dispatch.outbound.failed</td>
+                <td class="cap"><span class="cap dispatch">cap_dispatch</span></td>
+                <td class="payload">Click to expand JSON</td>
+              </tr>
+              <tr id="p13" class="payload-detail-row">
+                <td colspan="5">
+                  <pre>{
+  "id": 4206,
+  "timestamp": "11:58:14.501",
+  "kind": "dispatch.outbound.failed",
+  "payload": {
+    "idempotencyKey": "xyz-110",
+    "reason": "upstream_5xx"
+  }
+}</pre>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: TELEMETRY & ALLOCATIONS -->
+    <div id="telemetry-view" class="tab-content">
+      <div class="telemetry-grid">
+
+        <!-- quota panel -->
+        <div class="section">
+          <header>
+            <h3>quota</h3>
+            <span class="endpoint-tag">GET /quota?key=</span>
+          </header>
+          <div class="section-body">
+            <div class="kv">
+              <div class="k">key</div><div class="v">lookup</div>
+              <div class="k">window</div><div class="v">300000 <span class="dim">(5m)</span></div>
+              <div class="k">limit</div><div class="v">100</div>
+              <div class="k">consumed</div><div class="v">3</div>
+              <div class="k">remaining</div><div class="v">97</div>
+              <div class="k">windowStart</div><div class="v dim">11:59:48</div>
+            </div>
+            <div class="quota-bar">
+              <div class="fill" style="width: 3%;"></div>
+            </div>
+
+            <div style="margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border-muted);">
+              <div class="kv">
+                <div class="k">key</div><div class="v">tokens-budget</div>
+                <div class="k">consumed</div><div class="v">82.4k / 100k</div>
+              </div>
+              <div class="quota-bar warn"><div class="fill" style="width: 82%;"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- resources panel -->
+        <div class="section">
+          <header>
+            <h3>resources</h3>
+            <span class="endpoint-tag">GET /resource?key=</span>
+          </header>
+          <div class="section-body">
+            <div class="kv">
+              <div class="k">key</div><div class="v">gpu</div>
+              <div class="k">granted</div><div class="v">10</div>
+              <div class="k">available</div><div class="v">3</div>
+              <div class="k">reserved</div><div class="v">4</div>
+              <div class="k">consumed</div><div class="v">3</div>
+            </div>
+
+            <div style="margin-top: 14px;">
+              <div style="font-size: 9px; color: var(--fg-2); padding: 4px 0; text-transform: uppercase; font-weight: 700; border-bottom: 1px solid var(--border-muted); margin-bottom: 4px;">active reservations</div>
+              <div class="reservation-row">
+                <span class="resv-id">r1</span>
+                <span class="resv-amt">4g</span>
+                <span class="badge active">active</span>
+                <span style="color: var(--fg-2); font-size: 10px; margin-left: auto;">11:54:11</span>
+              </div>
+              <div class="reservation-row">
+                <span class="resv-id">r2</span>
+                <span class="resv-amt">3g</span>
+                <span class="badge consumed">consumed</span>
+                <span style="color: var(--fg-2); font-size: 10px; margin-left: auto;">11:58:14</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- admission lease panel -->
+        <div class="section">
+          <header>
+            <h3>admission lease</h3>
+            <span class="endpoint-tag">GET /admission</span>
+          </header>
+          <div class="section-body">
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <div class="kv" style="border-bottom: 1px dashed var(--border-muted); padding-bottom: 8px;">
+                <div class="k">route</div><div class="v">openai-chat:gpt-5-turbo:a1f2</div>
+                <div class="k">schema</div><div class="v">order_v3:b8c4</div>
+                <div class="k">strategy</div><div class="v">json_schema</div>
+                <div class="k">adapter</div><div class="v">1.2.0</div>
+              </div>
+              <div class="kv">
+                <div class="k">status</div><div class="v"><span class="badge supported">supported</span></div>
+                <div class="k">decidedAt</div><div class="v">12:04:41</div>
+                <div class="k">expiresAt</div><div class="v">23h 14m</div>
+                <div class="k">evidence</div><div class="v">#4212 llm.structured.evidence</div>
+              </div>
+            </div>
+
+            <div style="margin-top: 14px; padding-top: 8px; border-top: 1px dashed var(--border-muted);">
+              <div style="font-size: 9px; color: var(--fg-2); padding: 4px 0; text-transform: uppercase; font-weight: 700; border-bottom: 1px solid var(--border-muted); margin-bottom: 4px;">other leases this scope</div>
+              <div class="reservation-row">
+                <span style="font-family: var(--mono); flex: 1;">openai-chat:gpt-4-mini:79e1 / strict_user_v1:33ab</span>
+                <span class="badge unsupported">unsupported</span>
+                <span style="color: var(--fg-2); font-size: 10px; margin-left: 8px;">retry 47m</span>
+              </div>
+              <div class="reservation-row">
+                <span style="font-family: var(--mono); flex: 1;">cf-ai-binding:gpt-oss-120b:cc01 / order_v3:b8c4</span>
+                <span class="badge unknown">unknown</span>
+                <span style="color: var(--fg-2); font-size: 10px; margin-left: 8px;">no evidence</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </main>
+
+</div>
+
+<!-- =================== DRAWER BACKDROP =================== -->
+<div id="drawer-backdrop" class="drawer-backdrop" onclick="toggleDrawer(false)"></div>
+
+<!-- =================== SLIDING DRAWER: DEFERRED CONSTRAINTS =================== -->
+<aside id="constraints-drawer" class="drawer">
+  <div class="drawer-header">
+    <h3>Deferred Exclusions (spec-35)</h3>
+    <button class="drawer-close" onclick="toggleDrawer(false)">
+      <svg style="width: 16px; height: 16px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path>
+      </svg>
+    </button>
+  </div>
+  <div class="drawer-body">
+    <p style="font-size: 11px; color: var(--fg-2); margin-top: 0; margin-bottom: 16px; line-height: 1.5;">
+      The following components are explicitly omitted from this substrate operator console dashboard, as per operator scope guidelines.
+    </p>
+    <ul>
+      <li>no <code>approve</code> / <code>publish</code> / <code>discard</code> action — operator decisions are app saga, not ops-api</li>
+      <li>no app-noun columns (<code>change</code>, <code>lead</code>, <code>site</code>, <code>schema</code>, <code>conversation</code>)</li>
+      <li>no cost rollup — needs explicit cost projection; quota is not cost</li>
+      <li>no cross-scope fan-in view — spec-30 watchlist until O(10) connection pressure</li>
+      <li>no business charts (deals / inquiries / customers)</li>
+      <li>no mutable state surface — every value here is <code>project(events)</code></li>
+      <li>opaque scopes (<code>artifact-blob/…</code>, <code>sandbox/…</code>) are listed but <code>runTrace/runStatus/quota/...</code> return <code>501 not_introspectable</code></li>
+    </ul>
+  </div>
+</aside>
+
+<!-- =================== INTERACTIVE SCRIPTS =================== -->
+<script>
+  // Tab switcher logic
+  function switchView(viewId) {
+    document.querySelectorAll('.tab-content').forEach(el => {
+      el.classList.remove('active');
+    });
+    document.querySelectorAll('.view-tab-btn').forEach(btn => {
+      btn.classList.remove('active');
+    });
+
+    document.getElementById(viewId).classList.add('active');
+    event.target.classList.add('active');
+  }
+
+  // Vertical runs sidebar list select
+  function selectRun(runItem) {
+    document.querySelectorAll('.run-list-item').forEach(el => {
+      el.classList.remove('active');
+    });
+    runItem.classList.add('active');
+  }
+
+  // Row expander in event logs table
+  function togglePayload(rowId) {
+    const detailRow = document.getElementById(rowId);
+    if (detailRow.style.display === 'table-row') {
+      detailRow.style.display = 'none';
+      event.currentTarget.querySelector('.payload').innerText = 'Click to expand JSON';
+    } else {
+      detailRow.style.display = 'table-row';
+      event.currentTarget.querySelector('.payload').innerText = 'Click to collapse';
+    }
+  }
+
+  // Sliding Drawer toggle
+  function toggleDrawer(isOpen) {
+    const drawer = document.getElementById('constraints-drawer');
+    const backdrop = document.getElementById('drawer-backdrop');
+
+    if (isOpen) {
+      backdrop.classList.add('open');
+      drawer.classList.add('open');
+    } else {
+      backdrop.classList.remove('open');
+      drawer.classList.remove('open');
+    }
+  }
+</script>
+
+</body>
+</html>
