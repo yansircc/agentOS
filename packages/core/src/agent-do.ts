@@ -74,7 +74,7 @@ import {
   type GenerateImageSpec,
   type ImageResult,
 } from "./image";
-import { Quota, QuotaLive } from "./quota-service";
+import { Quota, QuotaLive } from "./quota";
 import { AiBinding } from "./llm";
 import { Admission, AdmissionLive } from "./admission";
 import {

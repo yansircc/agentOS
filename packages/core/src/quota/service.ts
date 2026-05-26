@@ -15,9 +15,9 @@
  */
 
 import { Clock, Context, Effect, Layer, Schema } from "effect";
-import { EventBus } from "./ledger";
-import { JsonStringifyError, SqlError, safeStringify } from "./errors";
-import type { LedgerEvent } from "./types";
+import { EventBus } from "../ledger";
+import { JsonStringifyError, SqlError, safeStringify } from "../errors";
+import type { LedgerEvent } from "../types";
 
 export interface GrantResult {
   readonly granted: boolean;
