@@ -31,8 +31,8 @@ import {
   ADAPTER_VERSION,
   CHAT_COMPLETIONS_FORCED_TOOL_NAME,
   unwrapErrorMessage,
-  validateAgainstSchema,
 } from "./shared";
+import { validateAgainstSchema } from "../admission/json-schema";
 
 /** Encode a free-text turn into Chat Completions body. dispatchProvider
  *  injects `model` (cf-ai-binding via env.AI.run argument, openai-chat-

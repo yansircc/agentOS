@@ -1,0 +1,407 @@
+/**
+ * Admission orchestration — spec-25 attemptStructured + invalidate.
+ *
+ * Algebra:
+ *   attemptStructured(scope, route, schema, strategy, stimulus)
+ *     → 1. project lease (read events, no writes)
+ *     → 2. gate: if cached unsupported and not expired → short-circuit
+ *     → 3. adapter.encode → ai.run → adapter.decode | adapter.classify
+ *     → 4. decideTier(preLease, outcome, stimulusKind, latestBarrierTs)
+ *     → 5. transactionSync(evidence row + optional deliver row)
+ *     → 6. fire EventBus
+ *
+ * State ownership (spec-25 §2 + spec-24 §3.1):
+ *   `events.kind = 'llm.structured.evidence'`   sole admission evidence writer
+ *   `events.kind = 'llm.structured.invalidate'` sole barrier writer
+ *   CapabilityLease, latestBarrierTs            pure projection over events
+ *
+ * No separate `leases` table. No KV cache. No second writer.
+ *
+ * Spec: docs/specs/spec-25-llm-admission.md
+ */
+
+import { Clock, Context, Effect, Layer, Schema } from "effect";
+import { EventBus } from "../event-bus";
+import { ProviderRegistry } from "../provider-registry";
+import { JsonStringifyError, SqlError, safeStringify } from "../errors";
+import {
+  AiBinding,
+  dispatchProvider,
+  type LlmRoute,
+} from "../llm";
+import {
+  type AdapterMode,
+  getProtocolAdapter,
+  llmProtocolAdapters,
+} from "../protocol/protocol-adapter";
+import type { LedgerEvent } from "../types";
+
+import type { SchemaContract } from "./json-schema";
+import type {
+  AdmissionImpact,
+  AttemptKey,
+  CapabilityLease,
+  Outcome,
+  Strategy,
+} from "./lease";
+import { decideTier, projectLease } from "./lease";
+import { routeFingerprint } from "./fingerprint";
+import { loadAdmissionRows } from "./payload";
+
+// Note: these symbols were historically owned by admission.ts. They now
+// live in protocol/protocol-adapter.ts (spec-27 elevation). Re-exported
+// here so callers that import from "./admission" keep working.
+export { ADAPTER_VERSION } from "../protocol/protocol-adapter";
+export type { AdapterMode } from "../protocol/protocol-adapter";
+
+// ============================================================
+// Stimulus / spec / result shapes
+// ============================================================
+
+export type ProbeInput = { readonly synthetic: unknown };
+export type LiveInput = { readonly userText: string };
+export type DeliverSpec = {
+  readonly event: string;
+  readonly payload: unknown;
+};
+
+export type Stimulus<O> =
+  | { readonly kind: "probe"; readonly synthetic: ProbeInput }
+  | {
+      readonly kind: "live";
+      readonly userInput: LiveInput;
+      // §5: pure function returning data; NEVER an Effect.
+      readonly deliver: (decoded: O) => DeliverSpec;
+    };
+
+export type DecodedOutput = Record<string, unknown>;
+
+export type AttemptSpec<O> = {
+  readonly scope: string;
+  readonly route: LlmRoute;
+  readonly schemaContract: SchemaContract;
+  readonly strategy: Strategy;
+  readonly stimulus: Stimulus<O>;
+  /** Test-only: lets contract tests force decode failures deterministically.
+   *  Production callers leave this undefined / "production". */
+  readonly adapterMode?: AdapterMode;
+};
+
+export type AttemptResult<O> =
+  | {
+      readonly ok: true;
+      readonly decoded: O;
+      readonly outcome: Outcome;
+      readonly lease: CapabilityLease;
+      readonly admissionImpact: AdmissionImpact;
+      readonly shortCircuited: false;
+    }
+  | {
+      readonly ok: false;
+      readonly outcome: Outcome;
+      readonly lease: CapabilityLease;
+      readonly admissionImpact: AdmissionImpact;
+      readonly shortCircuited: boolean;
+    };
+
+export type InvalidateSpec = {
+  readonly scope: string;
+  readonly key: Partial<AttemptKey>;
+  readonly reason: string;
+  readonly by: string;
+};
+
+export class Admission extends Context.Tag("@agent-os/Admission")<
+  Admission,
+  {
+    readonly attemptStructured: <O>(
+      spec: AttemptSpec<O>,
+    ) => Effect.Effect<
+      AttemptResult<O>,
+      SqlError | JsonStringifyError,
+      AiBinding | ProviderRegistry
+    >;
+    readonly invalidate: (
+      spec: InvalidateSpec,
+    ) => Effect.Effect<
+      { readonly barrierId: number },
+      SqlError | JsonStringifyError
+    >;
+  }
+>() {}
+
+const reconstructOutcomeFromLease = (
+  lease: CapabilityLease & { status: "unsupported" },
+): Outcome => {
+  switch (lease.failureClass) {
+    case "BehaviorFailed":
+      return { class: "BehaviorFailed", sampleDigest: "cached-short-circuit" };
+    case "ProviderRejected":
+      return { class: "ProviderRejected", status: 0, body: "cached-short-circuit" };
+    case "SchemaUnsupported":
+      return { class: "SchemaUnsupported", reason: "cached-short-circuit" };
+    case "AuthError":
+      return { class: "AuthError", status: 401 };
+    case "RateLimited":
+      return { class: "RateLimited" };
+    case "TransientError":
+      return { class: "TransientError", cause: "cached-short-circuit" };
+    case "ConfigError":
+      return { class: "ConfigError", reason: "cached-short-circuit" };
+  }
+};
+
+// Schema unused — silence the unused-import warning while keeping the
+// import statement so a future refactor that needs a Schema-derived
+// type lights up at compile time instead of needing a stray edit. The
+// pattern matches admission/payload.ts which owns the Schema surface.
+void Schema;
+
+export const AdmissionLive = (
+  ctx: DurableObjectState,
+): Layer.Layer<Admission, never, EventBus> =>
+  Layer.scoped(
+    Admission,
+    Effect.gen(function* () {
+      const sql = ctx.storage.sql;
+      const bus = yield* EventBus;
+
+      // Note on R: AdmissionLive itself only requires EventBus. The
+      // attemptStructured method returns an Effect that requires
+      // `AiBinding | ProviderRegistry` — those are resolved by the
+      // RUNTIME at call time, not provided to this layer. This matches
+      // how submitAgentEffect uses ledger/quota/admission: services are
+      // composed at the runtime boundary (makeAgentRuntime in agent-do
+      // / buildRuntime in tests), not as transitive layer dependencies.
+
+      const attemptStructured = <O>(
+        spec: AttemptSpec<O>,
+      ): Effect.Effect<
+        AttemptResult<O>,
+        SqlError | JsonStringifyError,
+        AiBinding | ProviderRegistry
+      > =>
+        Effect.gen(function* () {
+          const adapterMode = spec.adapterMode ?? "production";
+          const now = yield* Clock.currentTimeMillis;
+          const key: AttemptKey = {
+            routeFingerprint: routeFingerprint(spec.route),
+            schemaFingerprint: spec.schemaContract.fingerprint,
+            strategy: spec.strategy,
+            adapterVersion: llmProtocolAdapters[spec.route.kind].version,
+          };
+
+          // Step 2: project lease.
+          const rows = yield* loadAdmissionRows(sql, spec.scope);
+          const { lease: preLease, latestBarrierTs } = projectLease(
+            rows,
+            key,
+            now,
+          );
+
+          // Step 3: gate.
+          if (
+            preLease.status === "unsupported" &&
+            now < preLease.retryAfter
+          ) {
+            return {
+              ok: false,
+              outcome: reconstructOutcomeFromLease(preLease),
+              lease: preLease,
+              admissionImpact: "lease-bearing" as const,
+              shortCircuited: true,
+            };
+          }
+
+          // Step 4: encode (pure).
+          const adapterStim =
+            spec.stimulus.kind === "live"
+              ? { kind: "live" as const, userInput: spec.stimulus.userInput }
+              : { kind: "probe" as const, synthetic: spec.stimulus.synthetic };
+
+          // v0.2.13: pick adapter by route.kind, dispatch transport via
+          // dispatchProvider. evidence is tagged with the chosen
+          // adapter's identity (cf-ai-binding@X vs openai-chat-compatible@X),
+          // so routeFingerprint and adapterId always agree on which
+          // protocol actually served the call.
+          const adapter = getProtocolAdapter(spec.route.kind);
+          const body = adapter.encodeStructured(
+            spec.route as never,
+            spec.schemaContract,
+            adapterStim,
+            spec.strategy,
+          );
+
+          // Step 5-6: call provider + decode (or classify error).
+          const rawEither = yield* Effect.either(
+            dispatchProvider(spec.route, body),
+          );
+
+          let outcome: Outcome;
+          let decoded: DecodedOutput | undefined;
+
+          if (rawEither._tag === "Left") {
+            outcome = adapter.classify(rawEither.left);
+          } else {
+            const d = adapter.decodeStructured(
+              { raw: rawEither.right },
+              spec.schemaContract,
+              spec.strategy,
+              adapterMode,
+            );
+            if (d.ok) {
+              decoded = d.decoded;
+              outcome = { class: "Supported", tokensUsed: d.tokensUsed };
+            } else {
+              outcome = d.outcome;
+            }
+          }
+
+          // Step 7: admission impact from pre-call inputs only.
+          const admissionImpact = decideTier(
+            preLease,
+            outcome,
+            spec.stimulus.kind,
+            latestBarrierTs,
+          );
+
+          // Step 8: pre-stringify payloads outside the transaction.
+          const evidencePayload = {
+            key,
+            stimulusKind: spec.stimulus.kind,
+            outcome,
+            admissionImpact,
+            adapterId: `${adapter.kind}@${adapter.version}`,
+          };
+          const evidenceStr = yield* safeStringify(evidencePayload);
+
+          let deliverSpec: DeliverSpec | null = null;
+          let deliverStr: string | null = null;
+          if (
+            outcome.class === "Supported" &&
+            spec.stimulus.kind === "live" &&
+            decoded !== undefined
+          ) {
+            deliverSpec = spec.stimulus.deliver(decoded as O);
+            deliverStr = yield* safeStringify(deliverSpec.payload);
+          }
+
+          // Step 8b: transactionSync(evidence + optional deliver).
+          const txResult = yield* Effect.try({
+            try: () =>
+              ctx.storage.transactionSync(() => {
+                const c1 = sql.exec(
+                  "INSERT INTO events (ts, kind, scope, payload) VALUES (?, ?, ?, ?) RETURNING id",
+                  now,
+                  "llm.structured.evidence",
+                  spec.scope,
+                  evidenceStr,
+                );
+                const evidenceId = Number(c1.one().id);
+
+                let deliverId: number | undefined;
+                if (deliverSpec !== null && deliverStr !== null) {
+                  const c2 = sql.exec(
+                    "INSERT INTO events (ts, kind, scope, payload) VALUES (?, ?, ?, ?) RETURNING id",
+                    now,
+                    deliverSpec.event,
+                    spec.scope,
+                    deliverStr,
+                  );
+                  deliverId = Number(c2.one().id);
+                }
+                return { evidenceId, deliverId };
+              }),
+            catch: (cause) => new SqlError({ cause }),
+          });
+
+          // Step 9: fire events after commit.
+          const evidenceEvent: LedgerEvent = {
+            id: txResult.evidenceId,
+            ts: now,
+            kind: "llm.structured.evidence",
+            scope: spec.scope,
+            payload: evidencePayload,
+          };
+          yield* bus.fire(evidenceEvent);
+
+          if (
+            deliverSpec !== null &&
+            txResult.deliverId !== undefined &&
+            deliverStr !== null
+          ) {
+            yield* bus.fire({
+              id: txResult.deliverId,
+              ts: now,
+              kind: deliverSpec.event,
+              scope: spec.scope,
+              payload: deliverSpec.payload,
+            });
+          }
+
+          // Post-projection (read-only, for the return value's lease shape).
+          const postRows = yield* loadAdmissionRows(sql, spec.scope);
+          const { lease: postLease } = projectLease(postRows, key, now);
+
+          if (outcome.class === "Supported" && decoded !== undefined) {
+            return {
+              ok: true,
+              decoded: decoded as O,
+              outcome,
+              lease: postLease,
+              admissionImpact,
+              shortCircuited: false,
+            };
+          }
+          return {
+            ok: false,
+            outcome,
+            lease: postLease,
+            admissionImpact,
+            shortCircuited: false,
+          };
+        });
+
+      const invalidate = (
+        spec: InvalidateSpec,
+      ): Effect.Effect<
+        { readonly barrierId: number },
+        SqlError | JsonStringifyError
+      > =>
+        Effect.gen(function* () {
+          const now = yield* Clock.currentTimeMillis;
+          const payload = {
+            key: spec.key,
+            reason: spec.reason,
+            by: spec.by,
+          };
+          const payloadStr = yield* safeStringify(payload);
+
+          const id = yield* Effect.try({
+            try: () => {
+              const cursor = sql.exec(
+                "INSERT INTO events (ts, kind, scope, payload) VALUES (?, ?, ?, ?) RETURNING id",
+                now,
+                "llm.structured.invalidate",
+                spec.scope,
+                payloadStr,
+              );
+              return Number(cursor.one().id);
+            },
+            catch: (cause) => new SqlError({ cause }),
+          });
+
+          yield* bus.fire({
+            id,
+            ts: now,
+            kind: "llm.structured.invalidate",
+            scope: spec.scope,
+            payload,
+          });
+
+          return { barrierId: id };
+        });
+
+      return { attemptStructured, invalidate };
+    }),
+  );

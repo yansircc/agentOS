@@ -37,8 +37,8 @@ import {
   CHAT_COMPLETIONS_FORCED_TOOL_NAME,
   parseHttpStatus,
   unwrapErrorMessage,
-  validateAgainstSchema,
 } from "./shared";
+import { validateAgainstSchema } from "../admission/json-schema";
 
 const ANTHROPIC_DEFAULT_MAX_TOKENS = 4096;
 
