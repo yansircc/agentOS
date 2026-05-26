@@ -13,13 +13,13 @@ describe("@agent-os/staging-artifact", () => {
     });
   });
 
-  it("projects publish and reap state by change id", () => {
+  it("projects publish and reap state by subject ref", () => {
     const events = [
       {
         id: 1,
         kind: STAGING_EVENTS.ARTIFACT_PUBLISHED,
         payload: {
-          changeId: "ch-1",
+          subjectRef: "ch-1",
           artifactRef: "r2://staging/ch-1",
           routeRef: "https://ch-1.staging.example",
           digest: "sha256:abc",
@@ -29,7 +29,7 @@ describe("@agent-os/staging-artifact", () => {
         id: 2,
         kind: STAGING_EVENTS.ARTIFACT_REAPED,
         payload: {
-          changeId: "ch-1",
+          subjectRef: "ch-1",
           artifactRef: "r2://staging/ch-1",
           reason: "published",
         },
@@ -37,7 +37,7 @@ describe("@agent-os/staging-artifact", () => {
     ] as const;
 
     expect(projectStagingArtifact(events, "ch-1")).toEqual({
-      changeId: "ch-1",
+      subjectRef: "ch-1",
       artifactRef: "r2://staging/ch-1",
       routeRef: "https://ch-1.staging.example",
       digest: "sha256:abc",

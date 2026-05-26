@@ -11,33 +11,33 @@ export const DEPLOY_EVENTS = {
 export type DeployEventKind = (typeof DEPLOY_EVENTS)[keyof typeof DEPLOY_EVENTS];
 
 export interface DeployPreviewRecordedPayload {
-  readonly changeId: string;
+  readonly subjectRef: string;
   readonly previewRef: string;
   readonly artifactRef: string;
 }
 
 export interface DeployProductionPromotedPayload {
-  readonly changeId: string;
+  readonly subjectRef: string;
   readonly deployRef: string;
   readonly productionRef: string;
   readonly rollbackRef?: string;
 }
 
 export interface DeployProductionReadbackPayload {
-  readonly changeId: string;
+  readonly subjectRef: string;
   readonly productionRef: string;
   readonly readbackRef: string;
   readonly status: "passed" | "failed";
 }
 
 export interface DeployRollbackRecordedPayload {
-  readonly changeId: string;
+  readonly subjectRef: string;
   readonly rollbackRef: string;
   readonly restoredDeployRef: string;
 }
 
 export interface DeployFailedPayload {
-  readonly changeId: string;
+  readonly subjectRef: string;
   readonly step: "preview" | "promote" | "readback" | "rollback";
   readonly proofRef: string;
   readonly reason: string;
@@ -50,7 +50,7 @@ export interface DeployLedgerEvent {
 }
 
 export interface DeployProjection {
-  readonly changeId: string;
+  readonly subjectRef: string;
   readonly previewRef?: string;
   readonly artifactRef?: string;
   readonly deployRef?: string;
@@ -79,11 +79,15 @@ const stringField = (
 const failureFrom = (
   payload: Record<string, unknown>,
 ): DeployFailedPayload | undefined => {
-  const changeId = stringField(payload, "changeId");
+  const subjectRef = stringField(payload, "subjectRef");
   const proofRef = stringField(payload, "proofRef");
   const reason = stringField(payload, "reason");
   const step = payload.step;
-  if (changeId === undefined || proofRef === undefined || reason === undefined) {
+  if (
+    subjectRef === undefined ||
+    proofRef === undefined ||
+    reason === undefined
+  ) {
     return undefined;
   }
   if (
@@ -94,12 +98,12 @@ const failureFrom = (
   ) {
     return undefined;
   }
-  return { changeId, step, proofRef, reason };
+  return { subjectRef, step, proofRef, reason };
 };
 
 export const projectDeploy = (
   events: Iterable<DeployLedgerEvent>,
-  changeId: string,
+  subjectRef: string,
 ): DeployProjection => {
   let previewRef: string | undefined;
   let artifactRef: string | undefined;
@@ -112,7 +116,7 @@ export const projectDeploy = (
 
   for (const event of events) {
     if (!isRecord(event.payload)) continue;
-    if (event.payload.changeId !== changeId) continue;
+    if (event.payload.subjectRef !== subjectRef) continue;
     switch (event.kind) {
       case DEPLOY_EVENTS.PREVIEW_RECORDED:
         previewRef = stringField(event.payload, "previewRef");
@@ -146,7 +150,7 @@ export const projectDeploy = (
   }
 
   return {
-    changeId,
+    subjectRef,
     previewRef,
     artifactRef,
     deployRef,

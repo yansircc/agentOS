@@ -9,14 +9,14 @@ export type StagingEventKind =
   (typeof STAGING_EVENTS)[keyof typeof STAGING_EVENTS];
 
 export interface StagingArtifactPublishedPayload {
-  readonly changeId: string;
+  readonly subjectRef: string;
   readonly artifactRef: string;
   readonly routeRef: string;
   readonly digest: string;
 }
 
 export interface StagingArtifactReapedPayload {
-  readonly changeId: string;
+  readonly subjectRef: string;
   readonly artifactRef: string;
   readonly reason: "published" | "discarded" | "expired";
 }
@@ -28,7 +28,7 @@ export interface StagingLedgerEvent {
 }
 
 export interface StagingArtifactProjection {
-  readonly changeId: string;
+  readonly subjectRef: string;
   readonly artifactRef?: string;
   readonly routeRef?: string;
   readonly digest?: string;
@@ -54,7 +54,7 @@ const reapReasonFrom = (
 
 export const projectStagingArtifact = (
   events: Iterable<StagingLedgerEvent>,
-  changeId: string,
+  subjectRef: string,
 ): StagingArtifactProjection => {
   let artifactRef: string | undefined;
   let routeRef: string | undefined;
@@ -64,7 +64,7 @@ export const projectStagingArtifact = (
 
   for (const event of events) {
     if (!isRecord(event.payload)) continue;
-    if (event.payload.changeId !== changeId) continue;
+    if (event.payload.subjectRef !== subjectRef) continue;
     switch (event.kind) {
       case STAGING_EVENTS.ARTIFACT_PUBLISHED:
         artifactRef = stringField(event.payload, "artifactRef");
@@ -81,5 +81,5 @@ export const projectStagingArtifact = (
     }
   }
 
-  return { changeId, artifactRef, routeRef, digest, status, reapedReason };
+  return { subjectRef, artifactRef, routeRef, digest, status, reapedReason };
 };
