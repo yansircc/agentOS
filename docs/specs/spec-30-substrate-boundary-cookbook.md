@@ -178,6 +178,42 @@ generator.
 
 ---
 
+### 2.3 [`gated-effect-chain.md`](../cookbooks/gated-effect-chain.md) — verify/review/publish as one saga shape
+
+**Generator**: a candidate artifact becomes live only after gates pass,
+review is available, an app/operator decision lands, and the publish
+side-effects are proven by readback.
+
+**App pressure**: zeroY3's review flow requires `verify -> preview ->
+review -> approve -> publish`, with failure staying non-live and success
+defined by a user-visible production artifact. The pressure spike models
+this using app-owned `change.*` facts before extracting carrier package
+vocabularies.
+
+**Pattern**:
+
+```text
+carrier tool -> tool.executed.result(proof refs)
+host app     -> change.gate.recorded / change.ready_for_review
+operator     -> change.approval.decided
+host app     -> change.publish.started / change.publish.step_recorded
+host app     -> change.published | change.publish_failed
+```
+
+The cookbook requires every publish handler to re-project the current
+ledger before mutating: latest gates still pass, approval winner is
+approve, no terminal publish/failure already exists, and production
+readback is present before `change.published`.
+
+**Why cookbook not primitive**: gate taxonomy, approval policy, publish
+steps, compensation, and visible terminal state are app policy. Core
+already has the needed primitives (`emitEvent`, `events`, tools, optional
+resource locks). Package-owned `git.*`, `verification.*`, `deploy.*`,
+and `staging.*` facts require spec-34 positive extension capability, but
+that is package vocabulary protection, not a new core saga primitive.
+
+---
+
 ## 3. Watchlist — patterns under observation, NOT slated for write
 
 These have appeared in **one** app's pressure evidence. Cookbook write
@@ -185,7 +221,7 @@ is deferred until a second independent app shows the same shape.
 
 | Pattern | Origin | Graduation trigger |
 |---|---|---|
-| `saga-as-data` — pipeline + compensation declared as static catalog | zeroY `packages/workflows/src/index.ts:167` step + `:243` compensation plan | second app needs static pipeline catalog (img-gen multi-step? vibe deploy pipeline?). If triggered, decide: cookbook recipe OR `@agent-os/patterns` package OR new core spec (depends on whether the catalog is just app data or needs substrate-enforced sequencing) |
+| `saga-as-data` — pipeline + compensation declared as static catalog | zeroY `packages/workflows/src/index.ts:167` step + `:243` compensation plan | second app needs static pipeline catalog (img-gen multi-step? vibe deploy pipeline?). `gated-effect-chain` covers the runtime proof discipline; it does not confirm a reusable static saga catalog. If triggered, decide: cookbook recipe OR `@agent-os/patterns` package OR new core spec (depends on whether the catalog is just app data or needs substrate-enforced sequencing) |
 | `multi-tenant collaboration` — multiple users mutate the same agent state | none observed yet | a third app where one DO scope is shared by multiple identities (e.g., team-edit-same-doc). Today scope is per-user-per-session; shared scope = different scope-naming algebra. Could break or stretch INV-9 |
 | `cross-scope fan-in` — admin dashboard watches N DO scopes | none observed yet | second app needs to multiplex `streamEvents` across many DOs. Today: open N EventSource connections from client. Substrate-side fan-in primitive only if N grows past O(10) per client |
 | `view materialization across many scopes` — query like "all sessions for user X" | none observed yet | scope-per-session means cross-scope SQL is impossible inside one DO. Apps using D1 for index today (see spec-26 §4 C4-style carrier). If second app forges same index pattern, document as carrier index recipe |
@@ -295,9 +331,11 @@ Order:
    landed, so the cookbook can show ledger-order winner projection.
 5. **spec-30 cookbook §2.2 `carrier-mutation`** — written after spec-28
    P3, using image/R2 as one concrete carrier boundary.
-6. **spec-28 P3 implementation** (image route + `generateImage`).
-7. **spec-28 P4** (R2 docs note — already merged).
-8. **spec-31** (image admission, if triggered by 3+ BehaviorFailed
+6. **spec-30 cookbook §2.3 `gated-effect-chain`** — written from zeroY3
+   pressure after spec-34 clarified package-owned vocabulary authority.
+7. **spec-28 P3 implementation** (`@agent-os/image` route + `generateImageEffect`).
+8. **spec-28 P4** (R2 docs note — already merged).
+9. **spec-31** (image admission, if triggered by 3+ BehaviorFailed
    per spec-28 §4.2 trigger condition). Not scheduled.
 
 Watchlist items in §3 require no work today. Re-evaluate when N=2
@@ -340,7 +378,7 @@ trigger fires per item.
 |---|---|
 | Cookbook is meta, not new core primitives | post-28/29 scans of VCW and zeroY both returned "0 confirmed core gaps". Pressure evidence is for boundary discipline, not algebra extension |
 | N=2 independent apps before graduation | spec-26 §4 falsification rule applied one level up |
-| Two confirmed entries (approval-race, carrier-mutation) | zeroY single-app evidence for both, but each represents a *class* of forge (suspended process / non-ledger state) that has shown up in other audits informally |
+| Three confirmed entries (approval-race, carrier-mutation, gated-effect-chain) | zeroY/zeroY3 evidence for each, but each represents a *class* of forge (suspended process / non-ledger state / live-effect settlement) that has shown up in other audits informally |
 | Watchlist saga-as-data NOT confirmed | zeroY is N=1 for declarative pipeline-with-compensation. Wait for second app |
 | Cookbook entries don't depend on specific specs to merge | otherwise spec churn cascades into cookbook churn; cookbook is optional reading |
 | Three graduation tiers (cookbook → patterns pkg → core spec) | matches the actual escalation chain. Skipping tiers (cookbook directly to spec) is allowed when the algebra gap is clearly visible from N=1; should be rare |
