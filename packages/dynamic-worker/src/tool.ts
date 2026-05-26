@@ -6,6 +6,7 @@ import {
   DEFAULT_MAX_BODY_BYTES,
   type DynamicWorkerEgress,
   type DynamicWorkerHttpRequest,
+  type DynamicWorkerLimits,
   type DynamicWorkerRunRequest,
   type DynamicWorkerToolLike,
   type MakeDynamicWorkerToolOptions,
@@ -47,7 +48,10 @@ const coerceToolArgs = (
   value: unknown,
   defaults: Required<
     Pick<MakeDynamicWorkerToolOptions, "timeoutMs" | "maxBodyBytes">
-  > & { readonly egress: DynamicWorkerEgress },
+  > & {
+    readonly egress: DynamicWorkerEgress;
+    readonly limits?: DynamicWorkerLimits;
+  },
 ): DynamicWorkerRunRequest => {
   const input = record(value);
   const request: DynamicWorkerHttpRequest = {
@@ -63,6 +67,7 @@ const coerceToolArgs = (
     timeoutMs: defaults.timeoutMs,
     maxBodyBytes: defaults.maxBodyBytes,
     egress: defaults.egress,
+    ...(defaults.limits === undefined ? {} : { limits: defaults.limits }),
   };
 };
 
@@ -72,6 +77,7 @@ export const makeDynamicWorkerTool = (
   const timeoutMs = options.timeoutMs ?? 3_000;
   const maxBodyBytes = options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES;
   const egress = options.egress ?? { mode: "none" as const };
+  const limits = options.limits;
   return {
     definition: {
       type: "function",
@@ -88,6 +94,7 @@ export const makeDynamicWorkerTool = (
         timeoutMs,
         maxBodyBytes,
         egress,
+        limits,
       });
       const program = Effect.gen(function* () {
         const started = yield* Clock.currentTimeMillis;

@@ -3,6 +3,7 @@ import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 
 import type { LedgerEventRpc } from "../src";
+import { validateExtensionPackages } from "../src/extensions";
 import type { ExtensionTestDO } from "./test-worker";
 
 interface TestEnv {
@@ -88,5 +89,30 @@ describe("extension capability P1", () => {
       expect(caught?.capability).toBe("extension:@agent-os/missing");
     });
     await expect(stub.events()).resolves.toHaveLength(0);
+  });
+
+  it("rejects duplicate package ids before claiming extension prefixes", () => {
+    const validation = validateExtensionPackages([
+      {
+        packageId: "@agent-os/proof",
+        kindPrefixes: ["git."],
+        version: "0.1.0",
+      },
+      {
+        packageId: "@agent-os/proof",
+        kindPrefixes: ["deploy."],
+        version: "0.1.0",
+      },
+    ]);
+
+    expect(validation).toMatchObject({
+      ok: false,
+      error: {
+        _tag: "agent_os.extension_capability_conflict",
+        packageId: "@agent-os/proof",
+        kindPrefix: "*",
+        claimedBy: "@agent-os/proof",
+      },
+    });
   });
 });
