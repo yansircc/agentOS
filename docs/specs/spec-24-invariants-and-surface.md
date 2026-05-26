@@ -713,7 +713,7 @@ on("wa.message.in", (msg, env) =>
 ### 16.3 Img-Gen (~9k LOC, -53% from 19.3k)
 
 ```ts
-on("image.requested", (event) =>
+on("img.request.created", (event) =>
   submitAgent({
     intent: "generate image from prompt + conversation context",
     context: {
@@ -734,7 +734,7 @@ on("image.requested", (event) =>
       storeArtifact: r2PutCarrier,
     },
     budget: { tokens: 4_000, time: "5min" },
-    deliver: { event: "image.delivered" }, // scope = DO instance (= conv_id)
+    deliver: { event: "img.delivered" }, // scope = DO instance (= conv_id)
   })
 );
 ```

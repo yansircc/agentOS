@@ -114,10 +114,10 @@ Flow:
 
 ```text
 POST /image { prompt }
-  -> emitEvent("image.requested")
+  -> emitEvent("img.request.created")
   -> generateImage({ route, prompt })
   -> app stores artifact ref
-  -> image.ready
+  -> img.ready
 ```
 
 Acceptance:

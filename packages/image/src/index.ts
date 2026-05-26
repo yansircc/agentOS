@@ -1,21 +1,12 @@
 /**
- * Image generation route adapters.
+ * @agent-os/image — image protocol algebra.
  *
- * P3 / C5 from spec-28: image generation is provider route capability, not a
- * Tool and not a submitAgent turn. Core owns finite protocol adapters and
- * provider envelope decoding; apps own artifact materialization (R2, URLs,
- * retention policy).
+ * This package owns image provider route encoding/decoding and image-specific
+ * pure helpers. It does not own ledger writes, resource ledgers, blob storage,
+ * R2 key policy, retention, public URLs, or provider fallback.
  */
 
-import { Effect } from "effect";
-import { UpstreamFailure } from "./errors";
-import { AiBinding } from "./llm";
-import {
-  CredentialNotFound,
-  EndpointNotFound,
-  ProviderRegistry,
-} from "./provider-registry";
-import type { Outcome } from "./admission";
+import { Context, Data, Effect, Layer } from "effect";
 
 export interface OpenAIChatCompatibleImageRoute {
   readonly kind: "openai-chat-compatible-image";
@@ -40,9 +31,17 @@ export interface ImageRequest {
 }
 
 export type ImageArtifact =
-  | { readonly kind: "data-url"; readonly dataUrl: string; readonly contentType?: string }
+  | {
+      readonly kind: "data-url";
+      readonly dataUrl: string;
+      readonly contentType?: string;
+    }
   | { readonly kind: "url"; readonly url: string; readonly contentType?: string }
-  | { readonly kind: "bytes"; readonly bytes: Uint8Array; readonly contentType: string };
+  | {
+      readonly kind: "bytes";
+      readonly bytes: Uint8Array;
+      readonly contentType: string;
+    };
 
 export interface ImageResult {
   readonly artifacts: ReadonlyArray<ImageArtifact>;
@@ -53,11 +52,24 @@ export interface GenerateImageSpec extends ImageRequest {
   readonly route: ImageRoute;
 }
 
+export type ImageOutcome =
+  | { readonly class: "AuthError"; readonly status: 401 | 403 }
+  | { readonly class: "RateLimited" }
+  | {
+      readonly class: "ProviderRejected";
+      readonly status?: number;
+      readonly body?: unknown;
+    }
+  | { readonly class: "TransientError"; readonly cause: unknown };
+
 interface OpenAIChatCompatibleImageBody {
   readonly modalities: ReadonlyArray<"text" | "image">;
   readonly messages: ReadonlyArray<{
     readonly role: "user";
-    readonly content: ReadonlyArray<{ readonly type: "text"; readonly text: string }>;
+    readonly content: ReadonlyArray<{
+      readonly type: "text";
+      readonly text: string;
+    }>;
   }>;
   readonly aspect_ratio?: string;
 }
@@ -83,8 +95,77 @@ export interface ImageProtocolAdapter<K extends ImageRoute["kind"]> {
     request: ImageRequest,
   ) => ImageProviderBody<K>;
   readonly decodeImage: (raw: unknown) => ImageResult;
-  readonly classify: (error: unknown) => Outcome;
+  readonly classify: (error: unknown) => ImageOutcome;
 }
+
+export interface ImageAi {
+  readonly run: (
+    model: string,
+    input: unknown,
+    options?: unknown,
+  ) => Promise<unknown>;
+}
+
+export class ImageAiBinding extends Context.Tag(
+  "@agent-os/image/ImageAiBinding",
+)<ImageAiBinding, ImageAi>() {}
+
+export class ImageEndpointNotFound extends Data.TaggedError(
+  "agent_os.image_endpoint_not_found",
+)<{
+  readonly ref: string;
+}> {}
+
+export class ImageCredentialNotFound extends Data.TaggedError(
+  "agent_os.image_credential_not_found",
+)<{
+  readonly ref: string;
+}> {}
+
+export class ImageUpstreamFailure extends Data.TaggedError(
+  "agent_os.image_upstream_failure",
+)<{
+  readonly cause: unknown;
+}> {}
+
+export class ImageProviderRegistry extends Context.Tag(
+  "@agent-os/image/ImageProviderRegistry",
+)<
+  ImageProviderRegistry,
+  {
+    readonly resolveEndpoint: (
+      ref: string,
+    ) => Effect.Effect<string, ImageEndpointNotFound>;
+    readonly resolveCredential: (
+      ref: string,
+    ) => Effect.Effect<string, ImageCredentialNotFound>;
+  }
+>() {}
+
+export interface ImageProviderRegistryConfig {
+  readonly endpoints: Readonly<Record<string, string>>;
+  readonly credentials: Readonly<Record<string, string>>;
+}
+
+export const ImageProviderRegistryLive = (
+  config: ImageProviderRegistryConfig,
+): Layer.Layer<ImageProviderRegistry> =>
+  Layer.succeed(ImageProviderRegistry, {
+    resolveEndpoint: (ref) => {
+      const value = config.endpoints[ref];
+      if (value === undefined) {
+        return Effect.fail(new ImageEndpointNotFound({ ref }));
+      }
+      return Effect.succeed(value);
+    },
+    resolveCredential: (ref) => {
+      const value = config.credentials[ref];
+      if (value === undefined) {
+        return Effect.fail(new ImageCredentialNotFound({ ref }));
+      }
+      return Effect.succeed(value);
+    },
+  });
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -95,7 +176,7 @@ const errorMessage = (error: unknown): string => {
   return String(error);
 };
 
-const classifyHttpish = (error: unknown): Outcome => {
+const classifyHttpish = (error: unknown): ImageOutcome => {
   const message = errorMessage(error);
   if (
     /\b401\b/.test(message) ||
@@ -239,12 +320,12 @@ export type ImageProtocolAdapterRegistry = {
   readonly [K in ImageRoute["kind"]]: ImageProtocolAdapter<K>;
 };
 
-export const imageProtocolAdapters: ImageProtocolAdapterRegistry = {
+const imageProtocolAdapters: ImageProtocolAdapterRegistry = {
   "openai-chat-compatible-image": openaiChatCompatibleImageAdapter,
   "cf-ai-binding-image": cfAiBindingImageAdapter,
 };
 
-export const getImageProtocolAdapter = <K extends ImageRoute["kind"]>(
+const getImageProtocolAdapter = <K extends ImageRoute["kind"]>(
   kind: K,
 ): ImageProtocolAdapter<K> => imageProtocolAdapters[kind];
 
@@ -253,13 +334,13 @@ const dispatchImageProvider = (
   body: ImageProviderBody<ImageRoute["kind"]>,
 ): Effect.Effect<
   unknown,
-  UpstreamFailure | EndpointNotFound | CredentialNotFound,
-  AiBinding | ProviderRegistry
+  ImageUpstreamFailure | ImageEndpointNotFound | ImageCredentialNotFound,
+  ImageAiBinding | ImageProviderRegistry
 > => {
   switch (route.kind) {
     case "openai-chat-compatible-image":
       return Effect.gen(function* () {
-        const registry = yield* ProviderRegistry;
+        const registry = yield* ImageProviderRegistry;
         const endpoint = yield* registry.resolveEndpoint(route.endpointRef);
         const apiKey = yield* registry.resolveCredential(route.credentialRef);
         const url = `${endpoint.replace(/\/$/, "")}/chat/completions`;
@@ -285,28 +366,20 @@ const dispatchImageProvider = (
             }
             return (await res.json()) as unknown;
           },
-          catch: (cause) => new UpstreamFailure({ cause }),
+          catch: (cause) => new ImageUpstreamFailure({ cause }),
         });
       });
     case "cf-ai-binding-image":
       return Effect.gen(function* () {
-        const ai = yield* AiBinding;
+        const ai = yield* ImageAiBinding;
         const options =
           route.gatewayRef === undefined
             ? undefined
             : { gateway: { id: route.gatewayRef } };
         return yield* Effect.tryPromise({
           try: () =>
-            (
-              ai as {
-                run: (
-                  model: string,
-                  input: unknown,
-                  options?: unknown,
-                ) => Promise<unknown>;
-              }
-            ).run(route.modelId, body as CfAiBindingImageBody, options),
-          catch: (cause) => new UpstreamFailure({ cause }),
+            ai.run(route.modelId, body as CfAiBindingImageBody, options),
+          catch: (cause) => new ImageUpstreamFailure({ cause }),
         });
       });
   }
@@ -316,8 +389,8 @@ export const generateImageEffect = (
   spec: GenerateImageSpec,
 ): Effect.Effect<
   ImageResult,
-  UpstreamFailure | EndpointNotFound | CredentialNotFound,
-  AiBinding | ProviderRegistry
+  ImageUpstreamFailure | ImageEndpointNotFound | ImageCredentialNotFound,
+  ImageAiBinding | ImageProviderRegistry
 > =>
   Effect.gen(function* () {
     const adapter = getImageProtocolAdapter(spec.route.kind);
@@ -328,6 +401,142 @@ export const generateImageEffect = (
     const raw = yield* dispatchImageProvider(spec.route, body);
     return yield* Effect.try({
       try: () => adapter.decodeImage(raw),
-      catch: (cause) => new UpstreamFailure({ cause }),
+      catch: (cause) => new ImageUpstreamFailure({ cause }),
     });
+  });
+
+export const IMAGE_EVENTS = {
+  JOB_REQUESTED: "image.job.requested",
+  PROVIDER_COMPLETED: "image.provider.completed",
+  ARTIFACT_MATERIALIZED: "image.artifact.materialized",
+  JOB_FAILED: "image.job.failed",
+  JOB_CANCELLED: "image.job.cancelled",
+} as const;
+
+export type ImageEventKind = (typeof IMAGE_EVENTS)[keyof typeof IMAGE_EVENTS];
+
+export interface ImageLedgerEvent {
+  readonly kind: string;
+  readonly payload: unknown;
+}
+
+export type ImageJobStatus =
+  | "requested"
+  | "provider_completed"
+  | "materialized"
+  | "failed"
+  | "cancelled";
+
+export interface ImageJobProjection {
+  readonly jobId: string;
+  readonly status: ImageJobStatus;
+  readonly artifacts: ReadonlyArray<unknown>;
+  readonly failure?: unknown;
+}
+
+const jobIdFromPayload = (payload: unknown): string | undefined => {
+  if (!isRecord(payload)) return undefined;
+  return typeof payload.jobId === "string" ? payload.jobId : undefined;
+};
+
+export const projectImageJobs = (
+  events: Iterable<ImageLedgerEvent>,
+): ReadonlyMap<string, ImageJobProjection> => {
+  const jobs = new Map<string, ImageJobProjection>();
+  for (const event of events) {
+    const jobId = jobIdFromPayload(event.payload);
+    if (jobId === undefined) continue;
+    const current = jobs.get(jobId) ?? {
+      jobId,
+      status: "requested" as ImageJobStatus,
+      artifacts: [],
+    };
+    switch (event.kind) {
+      case IMAGE_EVENTS.JOB_REQUESTED:
+        jobs.set(jobId, { ...current, status: "requested" });
+        break;
+      case IMAGE_EVENTS.PROVIDER_COMPLETED:
+        jobs.set(jobId, { ...current, status: "provider_completed" });
+        break;
+      case IMAGE_EVENTS.ARTIFACT_MATERIALIZED: {
+        const artifacts = isRecord(event.payload) && "artifactRef" in event.payload
+          ? [...current.artifacts, event.payload.artifactRef]
+          : current.artifacts;
+        jobs.set(jobId, { ...current, status: "materialized", artifacts });
+        break;
+      }
+      case IMAGE_EVENTS.JOB_FAILED:
+        jobs.set(jobId, {
+          ...current,
+          status: "failed",
+          failure: isRecord(event.payload) ? event.payload.failure : undefined,
+        });
+        break;
+      case IMAGE_EVENTS.JOB_CANCELLED:
+        jobs.set(jobId, { ...current, status: "cancelled" });
+        break;
+    }
+  }
+  return jobs;
+};
+
+type StableJson =
+  | null
+  | boolean
+  | number
+  | string
+  | ReadonlyArray<StableJson>
+  | { readonly [key: string]: StableJson | undefined };
+
+const stableStringify = (value: StableJson): string => {
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(",")}]`;
+  }
+  const entries = Object.entries(value)
+    .filter((entry): entry is [string, StableJson] => entry[1] !== undefined)
+    .sort(([a], [b]) => a.localeCompare(b));
+  return `{${entries
+    .map(([key, entryValue]) => `${JSON.stringify(key)}:${stableStringify(entryValue)}`)
+    .join(",")}}`;
+};
+
+const fnv1a64 = (text: string): string => {
+  let hash = 0xcbf29ce484222325n;
+  const prime = 0x100000001b3n;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= BigInt(text.charCodeAt(i));
+    hash = BigInt.asUintN(64, hash * prime);
+  }
+  return hash.toString(16).padStart(16, "0");
+};
+
+export interface ImageJobIdentity {
+  readonly sourceScope: string;
+  readonly intentId: string;
+  readonly route: ImageRoute;
+  readonly prompt: string;
+  readonly aspectRatio?: string;
+  readonly seed?: string | number;
+}
+
+export const imageJobIdempotencyKey = (
+  identity: ImageJobIdentity,
+): string =>
+  `image.job.${fnv1a64(stableStringify(identity as unknown as StableJson))}`;
+
+export const withImageResourceSettlement = <A, E, R, CE, CR, RE, RR>(
+  effect: Effect.Effect<A, E, R>,
+  settlement: {
+    readonly consume: (value: A) => Effect.Effect<void, CE, CR>;
+    readonly release: (error: E) => Effect.Effect<void, RE, RR>;
+  },
+): Effect.Effect<A, E | CE | RE, R | CR | RR> =>
+  Effect.matchEffect(effect, {
+    onFailure: (error) =>
+      settlement.release(error).pipe(Effect.zipRight(Effect.fail(error))),
+    onSuccess: (value) =>
+      settlement.consume(value).pipe(Effect.as(value)),
   });

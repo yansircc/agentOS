@@ -12,6 +12,7 @@
       "name": "@agent-os/core",
       "version": "0.2.8",
       "dependencies": {
+        "@agent-os/image": "workspace:*",
         "@effect/experimental": "^0.60.0",
         "@effect/platform": "^0.96.0",
         "@effect/sql": "^0.51.0",
@@ -31,12 +32,28 @@
         "effect": "^3.21.0",
       },
     },
+    "packages/image": {
+      "name": "@agent-os/image",
+      "version": "0.1.0",
+      "devDependencies": {
+        "@effect/language-service": "^0.86.2",
+        "@effect/vitest": "^0.29.0",
+        "effect": "^3.21.0",
+        "typescript": "^5.7.2",
+        "vitest": "^4.1.0",
+      },
+      "peerDependencies": {
+        "effect": "^3.21.0",
+      },
+    },
   },
   "patchedDependencies": {
     "@effect/vitest@0.29.0": "patches/@effect%2Fvitest@0.29.0.patch",
   },
   "packages": {
     "@agent-os/core": ["@agent-os/core@workspace:packages/core"],
+
+    "@agent-os/image": ["@agent-os/image@workspace:packages/image"],
 
     "@cloudflare/kv-asset-handler": ["@cloudflare/kv-asset-handler@0.5.0", "", {}, "sha512-jxQYkj8dSIzc0cD6cMMNdOc1UVjqSqu8BZdor5s8cGjW2I8BjODt/kWPVdY+u9zj3ms75Q5qaZgnxUad83+eAg=="],
 

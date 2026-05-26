@@ -341,7 +341,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
       try {
         await rpc.dispatchToScope({
           target: { bindingRef: "peer", scope: "any" },
-          event: "dispatch.consumed",
+          event: "image.job.requested",
           data: {},
           idempotencyKey: "reserved-intent",
         });
@@ -350,7 +350,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
       }
 
       expect(caught?._tag).toBe("agent_os.reserved_event_kind");
-      expect(caught?.event).toBe("dispatch.consumed");
+      expect(caught?.event).toBe("image.job.requested");
 
       const events = rowsOrEmpty(state, "SELECT * FROM events");
       const outbox = rowsOrEmpty(state, "SELECT * FROM dispatch_outbox");

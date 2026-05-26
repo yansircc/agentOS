@@ -20,12 +20,6 @@
       "rules": ["EFF025"]
     },
     {
-      "path": "src/image.ts",
-      "owner": "@agent-os/core/provider-adapters",
-      "reason": "image protocol decoders are finite wire adapters; decode exceptions are caught by generateImageEffect and reified as UpstreamFailure",
-      "rules": ["EFF024", "EFF025"]
-    },
-    {
       "path": "src/ledger/stream.ts",
       "owner": "@agent-os/core/http-stream",
       "reason": "terminal SSE adapter constructs the Response boundary for ledger streamEvents",
@@ -62,9 +56,9 @@
       "rules": ["EFF402"]
     },
     {
-      "path": "test/image-adapter-contract.test.ts",
+      "path": "test/generate-image-wrapper.test.ts",
       "owner": "@agent-os/core/test-provider",
-      "reason": "test provider stub constructs terminal HTTP Response objects to model upstream image transport",
+      "reason": "test provider stub constructs terminal HTTP Response objects to prove AgentDOBase.generateImage delegates to @agent-os/image without touching ledger rows",
       "rules": ["EFF402"]
     },
     {

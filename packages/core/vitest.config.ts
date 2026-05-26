@@ -14,6 +14,11 @@ import { cloudflareTest } from "@cloudflare/vitest-pool-workers";
  * DurableObjectState).
  */
 export default defineConfig({
+  resolve: {
+    alias: {
+      "@agent-os/image": "../image/src/index.ts",
+    },
+  },
   test: {
     fileParallelism: false,
   },

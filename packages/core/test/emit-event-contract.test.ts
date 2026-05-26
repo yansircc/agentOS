@@ -75,6 +75,7 @@ describe("emitEvent — substrate now-write primitive", () => {
       "agent.aborted.app_test",
       "chat.ingested",
       "dispatch.consumed",
+      "image.job.requested",
       "llm.response",
       "tool.executed",
       "quota.exceeded",

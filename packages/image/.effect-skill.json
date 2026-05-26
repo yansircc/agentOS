@@ -1,0 +1,17 @@
+{
+  "shape": ["library"],
+  "allowedAdapters": [
+    {
+      "path": "src/index.ts",
+      "owner": "@agent-os/image/provider-adapters",
+      "reason": "image protocol decoders are finite wire adapters; malformed upstream wire shape is caught by generateImageEffect and reified as ImageUpstreamFailure",
+      "rules": ["EFF024", "EFF025"]
+    },
+    {
+      "path": "test/image-adapter-contract.test.ts",
+      "owner": "@agent-os/image/test-provider",
+      "reason": "test provider stub constructs terminal HTTP Response objects and sentinel Errors to model provider transport boundaries",
+      "rules": ["EFF024", "EFF402"]
+    }
+  ]
+}
