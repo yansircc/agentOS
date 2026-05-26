@@ -20,7 +20,7 @@ import {
   SqlError,
   safeStringify,
 } from "./errors";
-import { EventBus } from "./event-bus";
+import { EventBus } from "./ledger";
 import type {
   LedgerEvent,
   ResourceGrantResult,

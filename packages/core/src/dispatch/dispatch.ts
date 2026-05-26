@@ -20,7 +20,7 @@ import {
   isReservedEventKind,
   safeStringify,
 } from "../errors";
-import { EventBus } from "../event-bus";
+import { EventBus } from "../ledger";
 import type { LedgerEvent } from "../types";
 import type {
   DispatchToScopeResult,

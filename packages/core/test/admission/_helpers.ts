@@ -12,8 +12,7 @@
 
 import { Layer, ManagedRuntime } from "effect";
 
-import { EventBusLive } from "../../src/event-bus";
-import { LedgerLive } from "../../src/ledger";
+import { EventBusLive, LedgerLive } from "../../src/ledger";
 import { AiBinding } from "../../src/llm";
 import { ProviderRegistryLive } from "../../src/provider-registry";
 import { QuotaLive } from "../../src/quota-service";
