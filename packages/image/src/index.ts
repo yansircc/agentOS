@@ -98,6 +98,7 @@ export interface ImageProtocolAdapter<K extends ImageRoute["kind"]> {
   readonly classify: (error: unknown) => ImageOutcome;
 }
 
+/** Minimal `env.AI.run` shape consumed by the CF AI image adapter. */
 export interface ImageAi {
   readonly run: (
     model: string,
@@ -405,6 +406,12 @@ export const generateImageEffect = (
     });
   });
 
+/**
+ * Reserved substrate vocabulary. v0 has no public writer for these events:
+ * passing one to AgentDOBase.emitEvent / scheduleEvent / dispatchToScope will
+ * fail with ReservedEventKindError. Use these constants only for read-side
+ * projection of substrate-emitted facts when a future image job writer ships.
+ */
 export const IMAGE_EVENTS = {
   JOB_REQUESTED: "image.job.requested",
   PROVIDER_COMPLETED: "image.provider.completed",
