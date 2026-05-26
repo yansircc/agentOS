@@ -1,0 +1,141 @@
+# Spec 32: Sandbox Carrier
+
+Status: v0 implementation target
+
+## 1. Boundary
+
+Sandbox is a carrier package, not a core primitive.
+
+Core owns ledger, dispatch, scheduling, resources, LLM routes, tool loop,
+stream finality, and abort taxonomy. Sandbox owns bounded external execution:
+processes, files, stdout/stderr, backend sandbox ids, and backend-specific
+eviction/error classification.
+
+The v0 package shape is:
+
+```text
+packages/sandbox             provider-neutral algebra
+packages/sandbox-cloudflare  Cloudflare Sandbox SDK-compatible backend
+```
+
+`packages/core` is unchanged. Apps attach sandbox through a normal Tool.
+
+## 2. v0 Contract
+
+v0 is **bounded stateless synchronous exec**.
+
+Required constraints:
+
+- One call is one bounded run.
+- Hard timeout is finite and capped by the package.
+- The caller must provide every file required for that run.
+- Sandbox filesystem state is not durable truth.
+- Backend reuse is an implementation detail; apps cannot observe or depend on
+  reuse.
+- If eviction happens before user code starts, a backend may rebuild and run.
+- If eviction happens after user code starts, the result is typed
+  `SandboxEvicted`.
+- The package never writes the ledger.
+- The package never receives ambient secrets automatically.
+
+## 3. Policy
+
+Policy is a function, not a record:
+
+```ts
+type SandboxPolicy =
+  (request: SandboxPolicyRequest) =>
+    Effect.Effect<void, SandboxPolicyDenied>
+```
+
+Record helpers such as `staticPolicy({ allowedHosts })` are sugar that produce
+the function. The function is the public contract because real policy often
+depends on scope, user role, quota, or environment.
+
+## 4. Tool Result Shape
+
+The tool helper returns a closed ledger-safe result shape. It does not throw on
+sandbox execution failure because current core stringifies `ToolError.cause` in
+the abort event; a returned failure result preserves structured `failureCode`
+inside `tool.executed.payload.result`.
+
+```ts
+type SandboxToolResult =
+  | {
+      ok: true
+      exitCode: number
+      stdoutHead: string
+      stderrHead: string
+      stdoutBytes: number
+      stderrBytes: number
+      stdoutTruncated: boolean
+      stderrTruncated: boolean
+      artifacts: ArtifactRef[]
+      durationMs: number
+      sandboxId: string
+    }
+  | {
+      ok: false
+      failureCode:
+        | "SandboxEvicted"
+        | "PolicyDenied"
+        | "Timeout"
+        | "OOM"
+        | "NetworkBlocked"
+        | "ProviderFailure"
+      reason: string
+      stdoutHead: string
+      stderrHead: string
+      stdoutBytes: number
+      stderrBytes: number
+      stdoutTruncated: boolean
+      stderrTruncated: boolean
+      artifacts: ArtifactRef[]
+      durationMs: number
+      sandboxId: string
+    }
+```
+
+`stdoutHead` / `stderrHead` are byte-capped. Bytes never enter the ledger as
+artifacts. Apps materialize artifact bytes/streams elsewhere, then write refs.
+
+## 5. Artifacts
+
+Sandbox providers may return `ArtifactSource` values:
+
+```ts
+type ArtifactSource =
+  | { kind: "url"; url: string; contentType?: string; name?: string }
+  | { kind: "data"; bytes: Uint8Array; contentType: string; name?: string }
+  | { kind: "stream"; stream: ReadableStream<Uint8Array>; contentType?: string; name?: string }
+```
+
+The tool result contains only `ArtifactRef[]`. v0 does not include an
+`ArtifactStore`; apps decide whether to write R2, S3, local files, or discard.
+
+## 6. Explicitly Not In v0
+
+- Dynamic Workers / Code Mode
+- long-running sandbox jobs
+- background processes or services
+- persistent sandbox sessions
+- sandbox filesystem as durable state
+- `ArtifactStore`
+- multi-tenant sandbox sharing
+- automatic secret injection
+- automatic retry / re-warm for stateful sessions
+- new core event prefixes such as `sandbox.*`
+- new core error classes
+
+## 7. Verification Matrix
+
+Contract tests must cover:
+
+- `exec("ls")` minimal round trip.
+- provider eviction becomes `SandboxEvicted`.
+- policy denial becomes `PolicyDenied`.
+- huge stdout/stderr are byte-capped with explicit byte counts and
+  `truncated:true`.
+- retry/freshness is app/tool-loop policy; the sandbox package exposes one run
+  per call and keeps no durable session state.
+
