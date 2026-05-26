@@ -52,7 +52,7 @@ Implementation touched:
 - submit-agent.ts: outputSchema field; two-stage finalizer; finalAbort + catchTag for STRUCTURED_OUTPUT
 - agent-do.ts: supportsNativeStructuredOutput check before runtime is built
 
-## Spike-03 raw findings (kept; see spikes/03-structured-output/)
+## Spike-03 raw findings (retained here; runnable spike retired)
 
 | Configuration | Pass rate | Notes |
 |---|---|---|
@@ -93,6 +93,7 @@ Open questions to re-decide:
 - Codex review correspondence (2026-05-25 conversation): defines the
   "structured submit finalizer" mental model and the "native-only" narrow
   cut.
-- spike-03 (`spikes/03-structured-output/`): the empirical comparison
-  between `response_format: json_schema` and `tool_choice`-forced submit
-  tool patterns. test.sh + worker.ts both retained.
+- The retired spike-03 implementation compared `response_format:
+  json_schema` with `tool_choice`-forced submit tool patterns. The durable
+  findings are retained in this note; runnable spike code is no longer a
+  tracked repo surface.

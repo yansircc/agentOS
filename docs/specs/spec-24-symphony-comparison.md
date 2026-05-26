@@ -97,7 +97,7 @@ Four spec edits. **All four landed** (v0.2.9 hygiene chain).
 |---|---|---|---|
 | **PR0** | ✅ done | Add SSoT discipline to §3: `events` is the sole ledger truth; `scheduled_events` is pending intent buffer; quota counters are projection (not stored); `view.reflective.*` is projection. | [spec-24 §3.1](./spec-24-invariants-and-surface.md#31-ssot-discipline-derived-from-symphony-comparison) |
 | **PR1** | ✅ done | Add `AgentRun / LlmTurn / ToolCall / Continuation` lifecycle vocabulary. Document `LiveSession` absent by construction (CF Workers has no long-running process; INV-7 Session API handles cross-turn state without exposing process lifetime). | [spec-24 §5.1.1](./spec-24-invariants-and-surface.md#511-lifecycle-vocabulary) |
-| **PR2** | ✅ done | Mark §6.2 `withStructuredOutput` as **deferred from v1 MVP**. Spike-03 falsified `response_format: json_schema` (Workers AI JSON Mode is best-effort, not contractual). The synthetic-tool + forced-`tool_choice` design was prototyped in v0.2.9 and reverted because no current reference app needs typed LLM output — see [notes/structured-output-exploration.md](./notes/structured-output-exploration.md). Resume condition: first app surfaces real need, OR CF ships strict-schema model. | [spec-24 §6.2](./spec-24-invariants-and-surface.md#62-withstructuredoutputcarrier-schema--deferred-from-v1-mvp) |
+| **PR2** | ✅ done | Mark §6.2 `withStructuredOutput` as **deferred from v1 MVP**. Spike-03 falsified `response_format: json_schema` (Workers AI JSON Mode is best-effort, not contractual). The synthetic-tool + forced-`tool_choice` design was prototyped in v0.2.9 and reverted because no current reference app needs typed LLM output — see [structured-output-exploration.md](../notes/structured-output-exploration.md). Resume condition: first app surfaces real need, OR CF ships strict-schema model. | [spec-24 §6.2](./spec-24-invariants-and-surface.md#62-withstructuredoutputcarrier-schema--deferred-from-v1-mvp) |
 | **PR3** | ✅ done | Stateful carrier safety constraints C1–C4: declare state root keyed by scope; validate path containment; publish cleanup primitive; do not expose carrier-internal shape to shared logic. Conditions on carrier implementations, not on §5 core algebra. | [spec-24 §11.1](./spec-24-invariants-and-surface.md#111-stateful-carrier-safety-constraints) |
 
 ---
@@ -134,6 +134,6 @@ We deliberately do **not** adopt the following from Symphony:
 
 - Symphony state ownership: SPEC.md §"Orchestration State Machine" and
   §"Partial State Recovery (Restart)" — `https://raw.githubusercontent.com/openai/symphony/main/SPEC.md`
-- agentOS quota-as-projection: [packages/core/src/quota.ts](../packages/core/src/quota.ts)
-- agentOS scheduled-intent-buffer: [packages/core/src/scheduler.ts](../packages/core/src/scheduler.ts)
-- spike-03 verdict (falsifies §6.2 as currently written): [spikes/03-structured-output/README.md](../spikes/03-structured-output/README.md)
+- agentOS quota-as-projection: [packages/core/src/quota.ts](../../packages/core/src/quota.ts)
+- agentOS scheduled-intent-buffer: [packages/core/src/scheduler.ts](../../packages/core/src/scheduler.ts)
+- structured-output exploration note: [structured-output-exploration.md](../notes/structured-output-exploration.md)

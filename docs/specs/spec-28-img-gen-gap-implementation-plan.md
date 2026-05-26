@@ -35,9 +35,9 @@ Change axis:
 | P3 | C5 image-output route | yes | It extends protocol capability algebra after route/admission work is stable. It should not be blocked by resource ledger design. |
 | P4 | C4 R2 blob carrier | no | spec-26 proved it fits INV-9: bytes in R2, refs in ledger. No substrate primitive now. |
 
-Do not start P2 or P3 by patching spike-07 workarounds. Each phase first
-defines the algebra, then implements core, then removes the corresponding
-`GAP-Cn` marker from the spike.
+Do not start P2 or P3 by patching the retired img-gen audit workaround. Each
+phase first defines the algebra, then implements core, then updates the
+retained cookbook verdict for the corresponding `GAP-Cn`.
 
 ---
 
@@ -49,8 +49,8 @@ Current app forge:
 - sender scope writes a fact, then directly calls another DO via namespace RPC.
 - if the call fails after the sender fact commits, delivery truth is outside
   the ledger.
-- img-gen solves this with `queue_outbox`; spike-07 exposes the same forge via
-  direct `emitEvent` RPC.
+- img-gen solves this with `queue_outbox`; the img-gen audit exposed the same
+  forge via direct `emitEvent` RPC.
 
 Substrate primitive:
 
@@ -154,11 +154,10 @@ Contract tests:
 - reserved event kinds cannot be dispatched.
 - failed first delivery leaves retryable sender state.
 
-Spike update:
-- replace spike-07 direct session -> user, user -> session, session ->
-  consumer, consumer -> session RPC with `dispatchToScope`.
-- remove C1/C2 markers from `worker.ts`.
-- keep `GAPS.md` history, but mark C1/C2 resolved by P1 commit.
+Cookbook update:
+- record that session -> user, user -> session, session -> consumer, and
+  consumer -> session use `dispatchToScope`.
+- mark C1/C2 resolved by P1.
 
 Done means direct cross-ledger RPC is no longer required by any app to express
 durable delivery between `AgentDOBase` scopes.
@@ -337,10 +336,10 @@ Contract tests:
 - duplicate consume/release for the same terminal state is idempotent.
 - projection reconstructs balance from events only.
 
-Spike update:
-- replace spike-07 hand-rolled `credit.reserved` / `credit.consumed` protocol
-  with `Resources`.
-- remove C3 markers from `worker.ts`.
+Cookbook update:
+- record that the hand-rolled `credit.reserved` / `credit.consumed` protocol is
+  replaced by `Resources`.
+- mark C3 resolved by P2.
 
 Done means apps no longer need mutable account/reservation tables to express
 reserve-now, consume-or-release-later resources.
@@ -415,7 +414,7 @@ Wire shapes in scope for P3:
 
 Out of scope for P3 v0:
 - `/images/generations` OpenAI-compatible route. It is a future adapter unless
-  spike-07 still needs it after the two in-scope routes above.
+  a new app proves the two in-scope routes are insufficient.
 
 Public surface:
 
@@ -469,10 +468,10 @@ Contract tests:
 - provider data URL / URL / binary response decodes to `ImageResult`.
 - no route stores raw credential in ledger or result.
 
-Spike update:
-- replace spike-07 `fakeImageProvider` with `generateImage`.
+Cookbook update:
+- record that the local image-provider shim is replaced by `generateImage`.
 - keep R2 put in the app.
-- remove C5 marker from `worker.ts`.
+- mark C5 resolved by P3.
 
 Done means apps no longer need provider-specific image route selection and
 response parsing just to call an image model.
@@ -484,7 +483,7 @@ response parsing just to call an image model.
 No substrate implementation.
 
 Reason:
-- spec-26 and spike-07 show the clean ownership shape: R2 stores bytes;
+- spec-26 and the img-gen audit show the clean ownership shape: R2 stores bytes;
   ledger stores refs.
 - key containment, retention, deletion policy, and public URL policy are app
   concerns unless repeated apps show the same invariant failure.
@@ -513,21 +512,21 @@ Recommended commits:
    - includes `traceContext` envelope field carried verbatim on
      `dispatch.outbound.requested` / `dispatch.inbound.accepted`. Core
      does not parse, generate, or export trace context.
-   - spike-07 C1/C2 marker removal.
+   - cookbook verdict update for C1/C2.
 
 3. `spec-28: resource ledger design`
    - finalize Resource vs Quota separation.
 
 4. `core: resource reservation ledger`
    - P2 implementation + contract tests.
-   - spike-07 C3 marker removal.
+   - cookbook verdict update for C3.
 
 5. `spec-28: image route adapter design`
    - finalize route names and first image protocols.
 
 6. `core: image-output route adapter`
    - P3 implementation + contract tests.
-   - spike-07 C5 marker removal.
+   - cookbook verdict update for C5.
 
 7. `docs: record C4 no-op carrier boundary`
    - optional spec-24 note only, if useful.
@@ -544,9 +543,10 @@ cd packages/core && bun run test
 git diff --check
 ```
 
-Each phase also needs a spike-07 smoke update. If the smoke uses a real
-provider credential, the credential must live in `.dev.vars` and never enter
-the ledger, docs, or test output.
+Each phase also needs a contract test proving the primitive removes the
+corresponding forge. If a follow-up live smoke uses a real provider credential,
+the credential must live in `.dev.vars` and never enter the ledger, docs, or
+test output.
 
 ---
 

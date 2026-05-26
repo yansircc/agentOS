@@ -7,8 +7,8 @@
  * substrate algorithm from any LLM behavior — every test result is
  * structurally determined by the canned response queue.
  *
- * Replaces the LLM-dependent quota assertions previously in
- * examples/spike-01-effect/test.sh (reviewer's 2026-05-25 P1 finding).
+ * Replaces the retired LLM-dependent spike quota assertions (reviewer's
+ * 2026-05-25 P1 finding).
  */
 
 import { Cause, Effect, Exit, Layer, ManagedRuntime, Option } from "effect";

@@ -76,11 +76,11 @@ What this rules out:
 
 ## 2. Confirmed entries
 
-These are slated for write under this charter, with pressure evidence
-from the post-spec-28/29 app scans. Each entry is a separate file in
-`docs/cookbooks/`; this section is the index.
+These entries are written under this charter, with pressure evidence from the
+post-spec-28/29 app scans. Each entry is a separate file in `docs/cookbooks/`;
+this section is the index.
 
-### 2.1 `approval-race.md` — wait for external decision OR timeout
+### 2.1 [`approval-race.md`](../cookbooks/approval-race.md) — wait for external decision OR timeout
 
 **Generator**: agent's control flow leaves itself; resumes when fact F
 arrives by its kind/predicate, OR when time T elapses, whichever first.
@@ -130,7 +130,7 @@ verbosity pain, lift to `@agent-os/patterns` package.
 
 ---
 
-### 2.2 `carrier-mutation.md` — round-trip state changes through non-ledger carriers
+### 2.2 [`carrier-mutation.md`](../cookbooks/carrier-mutation.md) — round-trip state changes through non-ledger carriers
 
 **Generator**: tool touches an external state root (filesystem, WP
 plugin, R2, external API). The mutation can succeed, fail, or
@@ -291,13 +291,10 @@ Order:
    spec-30 directly, but the `approval-race` cookbook entry will be
    easier to write once apps can actually observe the race resolution
    live.
-4. **spec-30 cookbook §2.1 `approval-race`** — write after spec-29
-   lands (so the cookbook can show working streamEvents-based
-   observability of the winner).
-5. **spec-30 cookbook §2.2 `carrier-mutation`** — write after spec-28
-   P3 (image route) lands, since the image adapter is itself an
-   example of carrier-style state external to the ledger (image
-   bytes in R2, refs in evidence).
+4. **spec-30 cookbook §2.1 `approval-race`** — written after spec-29
+   landed, so the cookbook can show ledger-order winner projection.
+5. **spec-30 cookbook §2.2 `carrier-mutation`** — written after spec-28
+   P3, using image/R2 as one concrete carrier boundary.
 6. **spec-28 P3 implementation** (image route + `generateImage`).
 7. **spec-28 P4** (R2 docs note — already merged).
 8. **spec-31** (image admission, if triggered by 3+ BehaviorFailed
