@@ -1,10 +1,9 @@
-# @agent-os/core (v0.2.8)
+# @agent-os/core
 
-Minimum Effect-compliant agent-OS substrate for Cloudflare Workers.
+Effect-compliant agentOS substrate for Cloudflare Workers.
 
-> See `../../docs/spec-24-invariants-and-surface.md` for the full design.
-> See `../../spikes/01-minimum-loop/` for vanilla-TS proof; this package is
-> the Effect-compliant production rewrite of that loop.
+> See `../../docs/specs/spec-24-invariants-and-surface.md` for the full
+> design and `../../docs/cookbooks/` for app-shape pseudocode.
 
 ## Public surface
 
@@ -12,13 +11,18 @@ Minimum Effect-compliant agent-OS substrate for Cloudflare Workers.
 |---|---|
 | `AgentDOBase` — extendable DurableObject base | ✅ |
 | `submit(spec)` — declarative agent loop (LLM + tools) | ✅ |
-| `events()` — query ledger for this DO's scope | ✅ |
+| `emitEvent({ event, data })` — app-direct now-write | ✅ |
+| `events(opts?)` — query ledger for this DO's scope | ✅ |
+| `streamEvents(opts?)` — SSE ledger stream | ✅ |
 | `on(kind, handler)` reactive subscribe (composable) | ✅ (v0.2.1) |
 | `off(kind, handler)` reactive unsubscribe | ✅ (v0.2.1) |
 | `scheduleEvent({ at, event, data })` delayed events | ✅ (v0.2.3) |
 | `alarm()` DO alarm handler (auto-invoked by CF runtime) | ✅ (v0.2.3) |
+| `dispatchToScope(spec)` cross-DO ledger delivery | ✅ |
+| `grantResource` / `reserveResource` / `consumeResource` / `releaseResource` | ✅ |
+| `generateImage(spec)` image route dispatch | ✅ |
 | `withQuota(tool, spec)` rate-limit / budget middleware | ✅ (v0.2.8 atomic) |
-| `withStructuredOutput` middleware | ⏳ deferred |
+| `submit({ outputSchema })` structured output via admission | ✅ |
 | `view.reflective.*` agent self-introspection | ⏳ v0.2 Phase 4 |
 | view source plurality (Hyperdrive, AutoRAG, AE, …) | ⏳ v0.2+ |
 | CF Agents framework integration (`extends Agent`) | ⏳ v0.2 Phase 4 |
@@ -38,6 +42,11 @@ AgentDOBase.events()      Promise:
 AgentDOBase.scheduleEvent(spec)  Promise:
   resolves -> { id: number }                       inserted scheduled_events.id
   rejects  -> SqlError | JsonStringifyError | ScopeMissingError
+
+AgentDOBase.streamEvents(opts)  Response:
+  emits    -> SSE rows with id: <ledger.id>, event: ledger,
+              data: LedgerEventRpc
+  rejects  -> ScopeMissingError synchronously if DO id has no name
 ```
 
 **Scope is SSoT-owned by the DO instance** — derived from `this.ctx.id.name`.
@@ -74,6 +83,7 @@ import {
 interface Env extends AgentDOEnv {
   AI: Ai;
   AGENT_DO: DurableObjectNamespace<AgentDO>;
+  OPENROUTER_KEY: string;
 }
 
 const myTool: Tool<{ key: string }, { value: string }> = {
@@ -82,6 +92,13 @@ const myTool: Tool<{ key: string }, { value: string }> = {
 };
 
 export class AgentDO extends AgentDOBase<Env> {
+  protected provideRegistry() {
+    return {
+      endpoints: { openrouter: "https://openrouter.ai/api/v1" },
+      credentials: { OPENROUTER_KEY: this.env.OPENROUTER_KEY },
+    };
+  }
+
   constructor(state: DurableObjectState, env: Env) {
     super(state, env);
     this.on("agent.delivered", async (event) => {
@@ -94,8 +111,14 @@ export class AgentDO extends AgentDOBase<Env> {
 const stub = env.AGENT_DO.get(env.AGENT_DO.idFromName(scope));
 const result = await stub.submit({
   intent: "help the user with X",
+  system: "You are a focused assistant.",
   context: { /* ... */ },
-  agent: { provider: "@cf", model: "openai/gpt-oss-120b" },
+  route: {
+    kind: "openai-chat-compatible",
+    endpointRef: "openrouter",
+    credentialRef: "OPENROUTER_KEY",
+    modelId: "openai/gpt-4.1",
+  },
   tools: { lookup: myTool },
   budget: { tokens: 10_000, maxTurns: 5, toolRetries: 2 },
   deliver: { event: "agent.delivered" }, // scope is implicit
@@ -109,7 +132,7 @@ await stub.scheduleEvent({
 });
 ```
 
-See `../../examples/spike-01-effect/` for a runnable end-to-end example.
+See `../../docs/cookbooks/` for app-shape pseudocode.
 
 ## Migration notes
 
@@ -121,4 +144,3 @@ v0.2.3 has a `scope TEXT NOT NULL` column that conflicts with v0.2.4+
 inserts. For local dev: delete `.wrangler/` to drop the old SQLite. For
 production: explicit migration required (pre-1.0 data is disposable, so
 this case is unlikely to arise).
-

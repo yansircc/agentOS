@@ -1,84 +1,60 @@
 # agentOS
 
-Minimum declarative agent substrate on Cloudflare.
+Cloudflare Durable Object substrate for ledger-owned agent control flow.
 
-> Goal: let N dev projects skip reinventing agent infrastructure.
-> Build on CF Workers / Agents framework / AI Gateway / Workflows / Sandbox / DO.
-> Surface = 4 algebra ops + declarative `submitAgent` + tiny middleware set.
+The repo keeps durable decisions and production core code. Historical runnable
+spikes are retired after their conclusions land in specs, tests, or cookbooks.
 
-## Invariants
+## Layout
 
-```
-INV-1   No business UI. Optional infrastructure observability UI.
-INV-2   Serves the "agent reasoning closed loop" only.
-INV-3   "Pre-grant + consume" → Quota. Reactive face = on/scheduleEvent/view.reflective.
-INV-4   What CF ships, we don't rewrite. Thin unifying naming is allowed.
-INV-5   State ownership + agent boundary are invariants.
-INV-6   v1 supports CF AI only (env.AI.run + AI Gateway), no BYOK.
-INV-7   Built on CF Agents framework (Agent base + Session API).
-INV-8   No BYOK.
-INV-9   sandbox / workspace / browser are stateful dispatch carriers, addressed by scope id.
-INV-10  Serves agent modules only. Non-agent parts use plain CF Workers; collaborate via Service Bindings.
-```
+```text
+docs/
+  specs/       frozen or active design records
+  cookbooks/   pseudocode shapes derived from dogfood and spikes
+  notes/       retained exploration notes that are not public surface
 
-## Surface (frozen after N=4 repo derivation)
+packages/
+  core/        @agent-os/core implementation and contract tests
 
-```
-CORE (~400-500 lines TS):
-  4 algebra ops:
-    ingest(channel, payload) -> log
-    dispatch(carrier, intent) -> effect + log
-    log(event, scope) -> ledger
-    project(view, source) -> readonly      ← source pluggable
-    on(eventKind, handler)                 ← reactive
-    scheduleEvent({ at, event, data })     ← reactive
-  AgentDO + submitAgent
-  Admin Query HTTP API (/__ops/api/*)
-  Standard view library:
-    view.agentRuns / view.currentBudget / view.currentQuotaState
-
-CARRIER MIDDLEWARE (2):
-  withQuota
-  withStructuredOutput
-
-EXTENSIONS (thin wrappers):
-  @agent-os/cf-tools         (sandbox / workspace / browser)
-  @agent-os/kb-autorag
-  @agent-os/http-channel
-  @agent-os/audit-export
-  @agent-os/view-{hyperdrive,vectorize,analytics-engine}
-  @agent-os/identity / envelope / approval-inbox / billing-*
-
-OPS LAYER (opt-in):
-  @agent-os/ops-api / ops-client / ops-react
-
-CF used directly (zero wrapping):
-  Workflows / AI Gateway / Sandbox SDK / Browser Run / Workspace
-  Agents framework / Session API / DO / D1 / R2 / Queue / Cron / WfP
+spikes/
+  _active/     ignored local throwaway work only
 ```
 
-## Meta-rule (decision filter)
+## Core Surface
 
-> Symmetric duals, sharp boundaries, conservative defaults, orthogonal composition.
-> When duality vs minimalism conflicts: **duality wins at the algebra layer, minimalism wins at the feature layer.**
+`AgentDOBase` is the public boundary. Apps extend it and use:
 
-## Status
+- ledger write/read: `emitEvent`, `events`, `streamEvents`
+- reactive control: `on`, `off`, `scheduleEvent`, `alarm`
+- agent loop: `submit`
+- cross-scope delivery: `dispatchToScope`
+- business resources: `grantResource`, `reserveResource`, `consumeResource`, `releaseResource`
+- image generation: `generateImage`
+- provider route injection: `provideRegistry`, `provideDispatchTargets`
 
-- [x] Surface frozen (4 repo dogfood validation: Insight Helper / WhatsApp CS / Img-Gen / zeroY2)
-- [ ] Spike 1: end-to-end minimum loop (current)
-- [ ] Spike 2: workflow + waitForEvent suspendable agent
-- [ ] Spec 24: invariants & surface (after spike 1+2)
-- [ ] First reference app: Insight Helper rewrite
+The ledger is the source of truth. Schedules, dispatch outboxes, leases,
+resource availability, and views are pending buffers or projections.
 
-## Spike order
+## Documents
 
+- [Spec 24](docs/specs/spec-24-invariants-and-surface.md): invariants and public surface
+- [Spec 25](docs/specs/spec-25-llm-admission.md): structured-output admission
+- [Spec 27](docs/specs/spec-27-llm-protocol-adapter.md): protocol adapter algebra
+- [Spec 28](docs/specs/spec-28-img-gen-gap-implementation-plan.md): img-gen gap implementation plan
+- [Spec 29](docs/specs/spec-29-ledger-event-stream.md): ledger event stream
+
+Cookbooks are not runnable examples. They are short app-shape records:
+
+- [Reactive Interview](docs/cookbooks/reactive-interview.md)
+- [Img-Gen Pipeline](docs/cookbooks/img-gen-pipeline.md)
+- [Protocol Adapter Live-Wire Notes](docs/cookbooks/protocol-adapter-live-wire.md)
+- [Approval Race](docs/cookbooks/approval-race.md)
+- [Carrier Mutation](docs/cookbooks/carrier-mutation.md)
+
+## Verification
+
+```sh
+bun run typecheck
+cd packages/core && bun run test
+git diff --check
 ```
-spike-1  end-to-end minimum loop          ← current, single point penetration
-spike-2  workflow + step.waitForEvent     ← validates suspendable agent
-spike-3  sandbox carrier                  ← validates INV-9 stateful carrier
-spike-4  anthropic-via-openai-compat      ← validates LLM carrier unified endpoint
-spike-5  Session API compaction           ← validates INV-7 bet
-spike-6  AutoRAG per-tenant cost/perf     ← validates KB abstraction
-```
-
-spike-3 through spike-6 are demand-triggered during first reference app, not pre-validated.

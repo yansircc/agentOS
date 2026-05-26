@@ -522,15 +522,15 @@ is filtered by `projectLease` (per spec-25 §9). Add anthropic/gemini
 adapters with `version: "1.0.0"` — their evidence is isolated by
 `(routeFingerprint, adapterVersion)`; cf bump does not affect them.
 
-### 9.4 Real-provider spike per wire
+### 9.4 Real-provider validation per wire
 
-- **spike-05**: `anthropic-messages` against aihubmix. Validates §6.3 row
+- **Anthropic Messages**: `anthropic-messages` against aihubmix. Validates §6.3 row
   by row on a live wire. Includes turn-loop tool call + structured
   outputSchema in one test app.
-- **spike-06**: `gemini-generate-content` against official Google. Same
+- **Gemini Generate Content**: `gemini-generate-content` against official Google. Same
   validation for §6.4.
 
-Both spikes follow the spike-04 falsification surface convention
+Both validations follow the spec-25 falsification surface convention
 (A1–A7-style algebra checks). Secrets in untracked `.dev.vars`.
 
 ---
@@ -563,10 +563,10 @@ Non-breaking sequence (all internal; no public RPC change):
    confined to internal call sites.
 
 4. **Add `anthropic-messages` adapter** + dispatch branch. Adapter contract
-   tests (§9.1). spike-05.
+   tests (§9.1) plus live-wire validation.
 
 5. **Add `gemini-generate-content` adapter** + dispatch branch. Adapter
-   contract tests. spike-06.
+   contract tests plus live-wire validation.
 
 Each step is its own commit. `adapterVersion` for the migrated
 cf-ai-binding stays `"1.0.0"` since behavior is identical (per §5.1

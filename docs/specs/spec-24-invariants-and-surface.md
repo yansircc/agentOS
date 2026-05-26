@@ -304,7 +304,7 @@ strategy, adapterVersion)`. No middleware, no model whitelist in core,
 no second writer for capability state.
 
 Background: the original `withStructuredOutput(carrier, schema)` design
-was reverted (see [notes/structured-output-exploration.md](./notes/structured-output-exploration.md))
+was reverted (see [structured-output-exploration.md](../notes/structured-output-exploration.md))
 because spike-03 falsified `response_format: json_schema` reliability on
 Workers AI. Spec-25's evidence-derived approach replaces that design with
 one that does not require pre-declared model lists.
@@ -602,11 +602,13 @@ export const submitAgent = (spec: SubmitSpec): Promise<{ run_id: string }> =>
 `agentOSRuntime` is a singleton `ManagedRuntime` created at worker startup with
 all required Layers (Ledger / LLMCarrier / Quota / etc).
 
-### 14.3 Spike code is exempt
+### 14.3 Active spike code is local throwaway
 
-Spike code under `spikes/**` is exempt from EFF rules. Spikes validate substrate
-assumptions in throwaway form; production-grade Effect ceremony slows that down.
-Implementation code under `packages/core` and `packages/*` **must** comply.
+Tracked code under `packages/core` and `packages/*` **must** comply with the EFF
+rules. Active spikes, when needed, live under ignored `spikes/_active/` and are
+not maintained as repo surface. Once a spike validates or falsifies a substrate
+claim, its conclusion must be absorbed into a spec, contract test, cookbook, or
+note before the runnable spike is retired.
 
 ### 14.4 Future `@agent-os/effect` extension
 
@@ -616,19 +618,20 @@ over Promise. Not in v1.
 
 ---
 
-## 15. Spike validation status
+## 15. Validation status
 
-| spike | result | what it proved |
+| validation | result | what it proved |
 |---|---|---|
-| spike-01 minimum loop | ✅ pass | env.AI.run + DO SQLite + DO RPC + reactive on() all work |
-| spike-02 suspendable agent | ✅ pass | step.waitForEvent suspends; sendEvent resumes; workflow can call AI + cross-DO RPC; instance id = app-controlled scope |
-| spike-03 sandbox carrier | [pending] | triggered when first agent app needs file/code execution |
-| spike-04 anthropic-via-openai-compat | [pending] | medium priority — determines LLM carrier single-endpoint sufficiency |
-| spike-05 Session API compaction | [pending] | triggered during Insight Helper multi-turn dialog |
-| spike-06 AutoRAG per-tenant cost | [pending] | triggered when first KB use case appears |
+| minimum loop | ✅ pass | env.AI.run + DO SQLite + DO RPC + reactive on() all work |
+| suspendable loop | ✅ pass | step.waitForEvent suspends; sendEvent resumes; workflow can call AI + cross-DO RPC; instance id = app-controlled scope |
+| structured-output admission | ✅ pass | capability is evidence-derived lease, not model whitelist |
+| protocol adapters | ✅ pass | route.kind isolates wire semantics across CF, OpenAI-compatible, Anthropic, and Gemini shapes |
+| img-gen shape audit | ✅ pass | cross-scope dispatch, resources, image route, and R2 carrier boundary are classified |
+| sandbox carrier | pending | triggered when first agent app needs file/code execution |
+| AutoRAG per-tenant cost | pending | triggered when first KB use case appears |
 
-Two spikes confirm both fundamental loop assumptions hold. Spec 24 is built on
-confirmed substrate, not speculative.
+Runnable validation code is not retained as long-term repo surface. Durable
+outcomes live in specs, contract tests, cookbooks, or notes.
 
 ---
 
@@ -791,7 +794,16 @@ Each invariant traces back to:
 
 ---
 
-## Appendix B: Spike-1 + Spike-2 raw outputs
+## Appendix B: Retired spike evidence
 
-(See `spikes/01-minimum-loop/` and `spikes/02-suspendable-agent/`. Each spike's
-test.sh + README documents the validation evidence.)
+Historical runnable spikes were removed from the tracked repo after their
+claims landed in specs, contract tests, or cookbooks:
+
+- minimum loop / suspendable loop: superseded by `packages/core` contract tests
+  and §5 reactive surface;
+- structured-output exploration: retained as
+  [structured-output-exploration.md](../notes/structured-output-exploration.md);
+- protocol adapter live-wire results: retained as
+  [protocol-adapter-live-wire.md](../cookbooks/protocol-adapter-live-wire.md);
+- img-gen shape audit: retained as
+  [img-gen-pipeline.md](../cookbooks/img-gen-pipeline.md) and spec-28.

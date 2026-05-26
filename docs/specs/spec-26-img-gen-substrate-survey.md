@@ -1,7 +1,7 @@
 # Spec 26: img-gen substrate audit
 
 > **Status**: Audit accepted (drafted 2026-05-25, framing v2;
-> spike-07 implemented 2026-05-26; live smoke passed 2026-05-26)
+> img-gen audit implemented 2026-05-26; live smoke passed 2026-05-26)
 > **Next**: [spec-28-img-gen-gap-implementation-plan.md](./spec-28-img-gen-gap-implementation-plan.md)
 > **NOT refactor**. The goal is to identify 0-N real substrate gaps that
 > arise when expressing img-gen's pipeline shape, NOT to land img-gen on
@@ -118,12 +118,12 @@ Three possible outcomes per candidate after spike:
 
 ---
 
-## 5. Spike — `spikes/07-img-gen-shape/`
+## 5. Audit — retained as cookbook
 
 **Goal**: implement the happy path of img-gen using ONLY agent-OS public
 surface. Where a primitive is missing, mark it `// GAP-Cn: <description>`
 and continue with the smallest workaround. Do NOT route around — leave
-the workaround visible so the spike code IS the audit report.
+the workaround visible so the audit code is the report.
 
 The spike's workaround line is not enough by itself. Every confirmed gap
 must cite both:
@@ -167,10 +167,10 @@ no UI):
        ↳ candidate gap C3 (refund/release)
 ```
 
-**Spike files**:
+**Original local audit file shape** (ignored, not retained):
 
 ```
-spikes/07-img-gen-shape/
+spikes/_active/07-img-gen-shape/
 ├── README.md             — gap counters, audit notes per stage
 ├── package.json
 ├── tsconfig.json
@@ -253,14 +253,16 @@ to falsify.
 
 ## 8. Audit status
 
-The spike implementation exists at `spikes/07-img-gen-shape/`.
+The runnable audit was retired from the tracked repo after its conclusions
+landed in [img-gen-pipeline.md](../cookbooks/img-gen-pipeline.md), spec-28, and
+core contract tests.
 
 Current status:
 
 1. Candidate classification is resolved in §4.1 and
-   `spikes/07-img-gen-shape/GAPS.md`.
-2. The spike is typecheckable with the current substrate.
-3. Live happy-path smoke passed against `spikes/07-img-gen-shape/.dev.vars`
+   [img-gen-pipeline.md](../cookbooks/img-gen-pipeline.md).
+2. The audit was typecheckable with the current substrate at acceptance time.
+3. Live happy-path smoke passed against a local ignored `.dev.vars`
    OpenRouter credential:
    - `POST /request` accepted
    - session ledger emitted `image.delivered`

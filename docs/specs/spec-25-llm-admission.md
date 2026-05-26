@@ -3,7 +3,7 @@
 > **Status**: Draft v0 (drafted 2026-05-25)
 > **Relates to**: [spec-24-invariants-and-surface.md](./spec-24-invariants-and-surface.md), [spec-24-symphony-comparison.md](./spec-24-symphony-comparison.md)
 > **Supersedes**: spec-24 §6.2 (`withStructuredOutput`, deferred from v1 MVP)
-> **Falsified prior design**: [spikes/03-structured-output/README.md](../spikes/03-structured-output/README.md) — `response_format: json_schema` is not contractually honored by Workers AI
+> **Falsified prior design**: [structured-output-exploration.md](../notes/structured-output-exploration.md) — `response_format: json_schema` is not contractually honored by Workers AI
 
 ---
 
@@ -196,7 +196,8 @@ Rationale for keeping the public type at JSON Schema, not
       sorted lexicographically before serialization. The closed set of
       such fields is `{"required", "enum"}`. Adding a new entry to this
       set is a fingerprint algorithm version bump (§16). Discovered during
-      spike-04 — see [spikes/04-llm-admission/README.md](../spikes/04-llm-admission/README.md#verdict).
+      structured-output admission validation and retained in
+      [protocol-adapter-live-wire.md](../cookbooks/protocol-adapter-live-wire.md).
    d. Strip non-semantic annotations (`title`, `description`, `examples`,
       vendor `x-*`).
 3. Serialize via deterministic JSON (canonical-json-rs equivalent).
