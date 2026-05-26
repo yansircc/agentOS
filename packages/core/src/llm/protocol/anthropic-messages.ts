@@ -12,6 +12,7 @@
  *    a Strategy variant when an app needs it)
  */
 
+import { Effect, Stream } from "effect";
 import type {
   AnthropicContentBlock,
   AnthropicMessage,
@@ -22,6 +23,7 @@ import type {
   LlmToolCall,
   ToolDefinition,
 } from "../llm";
+import { UpstreamFailure } from "../../errors";
 import type { SchemaContract, Strategy } from "../../admission";
 import type {
   AdapterMode,
@@ -37,7 +39,8 @@ import type {
 import {
   ADAPTER_VERSION,
   CHAT_COMPLETIONS_FORCED_TOOL_NAME,
-  decodeSseData,
+  decodeSseEvents,
+  parseSseJson,
   parseHttpStatus,
   type Outcome,
   unwrapErrorMessage,
@@ -176,80 +179,90 @@ interface AnthropicRawResponse {
   readonly stop_reason?: string;
 }
 
-async function* decodeAnthropicTextStream(
+const decodeAnthropicTextStream = (
   stream: ReadableStream<Uint8Array>,
-): AsyncIterable<TextStreamFrame> {
+): Stream.Stream<TextStreamFrame, UpstreamFailure> => {
   let sawStop = false;
   let promptTokens = 0;
   let completionTokens = 0;
-
-  for await (const data of decodeSseData(stream)) {
-    const parsed = JSON.parse(data) as {
-      type?: string;
-      message?: {
+  return decodeSseEvents(stream).pipe(
+    Stream.mapEffect((event) => {
+      if (event.kind === "end") {
+        return sawStop
+          ? Effect.succeed([])
+          : Effect.fail(
+              new UpstreamFailure({
+                cause: "stream ended before message_stop",
+              }),
+            );
+      }
+      if (sawStop) {
+        return Effect.succeed([]);
+      }
+      return parseSseJson<{
+        type?: string;
+        message?: {
+          usage?: {
+            input_tokens?: number;
+            output_tokens?: number;
+          };
+        };
+        delta?: {
+          type?: string;
+          text?: string;
+        };
         usage?: {
-          input_tokens?: number;
           output_tokens?: number;
         };
-      };
-      delta?: {
-        type?: string;
-        text?: string;
-      };
-      usage?: {
-        output_tokens?: number;
-      };
-    };
-
-    if (parsed.type === "message_start") {
-      promptTokens = parsed.message?.usage?.input_tokens ?? promptTokens;
-      completionTokens =
-        parsed.message?.usage?.output_tokens ?? completionTokens;
-      yield {
-        type: "usage",
-        usage: {
-          promptTokens,
-          completionTokens,
-          totalTokens: promptTokens + completionTokens,
-        },
-      };
-      continue;
-    }
-
-    if (
-      parsed.type === "content_block_delta" &&
-      parsed.delta?.type === "text_delta" &&
-      typeof parsed.delta.text === "string" &&
-      parsed.delta.text.length > 0
-    ) {
-      yield { type: "token", delta: parsed.delta.text };
-      continue;
-    }
-
-    if (parsed.type === "message_delta") {
-      completionTokens = parsed.usage?.output_tokens ?? completionTokens;
-      yield {
-        type: "usage",
-        usage: {
-          promptTokens,
-          completionTokens,
-          totalTokens: promptTokens + completionTokens,
-        },
-      };
-      continue;
-    }
-
-    if (parsed.type === "message_stop") {
-      sawStop = true;
-      yield { type: "done" };
-      break;
-    }
-  }
-
-  if (!sawStop) {
-    throw new Error("stream ended before message_stop");
-  }
-}
+      }>(event.data).pipe(
+        Effect.map((parsed): TextStreamFrame[] => {
+          if (parsed.type === "message_start") {
+            promptTokens = parsed.message?.usage?.input_tokens ?? promptTokens;
+            completionTokens =
+              parsed.message?.usage?.output_tokens ?? completionTokens;
+            return [
+              {
+                type: "usage",
+                usage: {
+                  promptTokens,
+                  completionTokens,
+                  totalTokens: promptTokens + completionTokens,
+                },
+              },
+            ];
+          }
+          if (
+            parsed.type === "content_block_delta" &&
+            parsed.delta?.type === "text_delta" &&
+            typeof parsed.delta.text === "string" &&
+            parsed.delta.text.length > 0
+          ) {
+            return [{ type: "token", delta: parsed.delta.text }];
+          }
+          if (parsed.type === "message_delta") {
+            completionTokens = parsed.usage?.output_tokens ?? completionTokens;
+            return [
+              {
+                type: "usage",
+                usage: {
+                  promptTokens,
+                  completionTokens,
+                  totalTokens: promptTokens + completionTokens,
+                },
+              },
+            ];
+          }
+          if (parsed.type === "message_stop") {
+            sawStop = true;
+            return [{ type: "done" }];
+          }
+          return [];
+        }),
+      );
+    }),
+    Stream.mapConcat((frames) => frames),
+  );
+};
 
 const foldAnthropicBlocks = (
   blocks: ReadonlyArray<AnthropicContentBlock> | undefined,

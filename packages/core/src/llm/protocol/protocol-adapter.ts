@@ -41,6 +41,8 @@ import type {
   SchemaContract,
   Strategy,
 } from "../../admission";
+import type { UpstreamFailure } from "../../errors";
+import type { Stream } from "effect";
 
 import { cfAiBindingAdapter, openaiChatCompatibleAdapter } from "./openai-chat";
 import { anthropicMessagesAdapter } from "./anthropic-messages";
@@ -127,7 +129,7 @@ export type TextStreamCapability<K extends LlmRoute["kind"]> =
       ): ProviderRequestBodyFor<K>;
       decodeFrames(
         stream: ReadableStream<Uint8Array>,
-      ): AsyncIterable<TextStreamFrame>;
+      ): Stream.Stream<TextStreamFrame, UpstreamFailure>;
     }
   | {
       readonly supported: false;

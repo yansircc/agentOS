@@ -1,0 +1,77 @@
+{
+  "shape": ["library"],
+  "allowedAdapters": [
+    {
+      "path": "src/agent-do.ts",
+      "owner": "@agent-os/core/cf-do",
+      "reason": "AgentDOBase is the terminal Durable Object HTTP facade for streamEvents and submitTextStream; missing named scope is a runtime invariant violation with no Effect return channel",
+      "rules": ["EFF025", "EFF402"]
+    },
+    {
+      "path": "src/dispatch/payload.ts",
+      "owner": "@agent-os/core/dispatch",
+      "reason": "dispatch outbox payload parsing is sync ledger-wire validation caught at the Effect boundary and mapped to SqlError",
+      "rules": ["EFF025"]
+    },
+    {
+      "path": "src/dispatch/receiver.ts",
+      "owner": "@agent-os/core/dispatch",
+      "reason": "dispatch inbound projection parsing runs inside synchronous transactionSync and must fail the transaction on malformed ledger wire data",
+      "rules": ["EFF025"]
+    },
+    {
+      "path": "src/image.ts",
+      "owner": "@agent-os/core/provider-adapters",
+      "reason": "image protocol decoders are finite wire adapters; decode exceptions are caught by generateImageEffect and reified as UpstreamFailure",
+      "rules": ["EFF024", "EFF025"]
+    },
+    {
+      "path": "src/ledger/stream.ts",
+      "owner": "@agent-os/core/http-stream",
+      "reason": "terminal SSE adapter constructs the Response boundary for ledger streamEvents",
+      "rules": ["EFF402"]
+    },
+    {
+      "path": "src/llm/protocol/anthropic-messages.ts",
+      "owner": "@agent-os/core/provider-adapters",
+      "reason": "Anthropic tool-use adapter preserves malformed assistant tool arguments as raw wire data by design",
+      "rules": ["EFF001"]
+    },
+    {
+      "path": "src/llm/protocol/openai-chat.ts",
+      "owner": "@agent-os/core/provider-adapters",
+      "reason": "Chat Completions turn decoder is a finite wire adapter; malformed upstream turn shape is caught and reified as UpstreamFailure",
+      "rules": ["EFF024", "EFF025"]
+    },
+    {
+      "path": "test/_in-memory-do.ts",
+      "owner": "@agent-os/core/test-runtime",
+      "reason": "test-only DO SQLite subset intentionally models transactionSync rollback and fail-fast unsupported SQL using synchronous exceptions",
+      "rules": ["EFF001", "EFF025"]
+    },
+    {
+      "path": "test/test-worker.ts",
+      "owner": "@agent-os/core/test-worker",
+      "reason": "Cloudflare test Worker entry is the terminal HTTP adapter for worker-pool contract tests",
+      "rules": ["EFF402"]
+    },
+    {
+      "path": "test/admission/attempt-structured.test.ts",
+      "owner": "@agent-os/core/test-provider",
+      "reason": "test provider stub constructs terminal HTTP Response objects to model upstream transport",
+      "rules": ["EFF402"]
+    },
+    {
+      "path": "test/image-adapter-contract.test.ts",
+      "owner": "@agent-os/core/test-provider",
+      "reason": "test provider stub constructs terminal HTTP Response objects to model upstream image transport",
+      "rules": ["EFF402"]
+    },
+    {
+      "path": "test/text-stream-contract.test.ts",
+      "owner": "@agent-os/core/test-provider",
+      "reason": "test provider stub constructs terminal HTTP Response objects to model upstream streaming transport",
+      "rules": ["EFF402"]
+    }
+  ]
+}
