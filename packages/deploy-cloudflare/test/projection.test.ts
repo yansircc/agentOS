@@ -1,8 +1,10 @@
 import {
   DEPLOY_EVENTS,
+  commitDeployFailed,
   deployCloudflareExtensionPackage,
   projectDeploy,
 } from "../src";
+import type { ExtensionCapability } from "@agent-os/core/extensions";
 
 describe("@agent-os/deploy-cloudflare", () => {
   it("declares deploy.* as an extension-owned prefix", () => {
@@ -57,5 +59,43 @@ describe("@agent-os/deploy-cloudflare", () => {
       status: "live_verified",
       failure: undefined,
     });
+  });
+
+  it("settles deploy.* facts through ExtensionCapability", async () => {
+    const committed: Array<{ event: string; data: unknown }> = [];
+    const cap: ExtensionCapability = {
+      packageId: "@agent-os/deploy-cloudflare",
+      kindPrefixes: ["deploy."],
+      version: "0.1.0",
+      commit: async (spec) => {
+        committed.push(spec);
+        return { id: committed.length };
+      },
+      time: async (spec) => {
+        committed.push(spec);
+        return { id: committed.length };
+      },
+    };
+
+    await expect(
+      commitDeployFailed(cap, {
+        subjectRef: "session:1",
+        step: "promote",
+        proofRef: "proof://deploy/1",
+        reason: "readback failed",
+      }),
+    ).resolves.toEqual({ id: 1 });
+
+    expect(committed).toEqual([
+      {
+        event: DEPLOY_EVENTS.FAILED,
+        data: {
+          subjectRef: "session:1",
+          step: "promote",
+          proofRef: "proof://deploy/1",
+          reason: "readback failed",
+        },
+      },
+    ]);
   });
 });

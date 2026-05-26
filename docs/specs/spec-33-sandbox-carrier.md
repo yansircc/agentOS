@@ -22,7 +22,14 @@ packages/sandbox-cloudflare  Cloudflare Sandbox SDK-compatible backend
 
 ## 2. v0 Contract
 
-v0 is **bounded stateless synchronous exec**.
+v0 is **bounded synchronous process exec**.
+
+This package is not the default carrier for Worker-compatible generated code.
+Stateless code-as-function belongs to
+[spec-35 Dynamic Worker Carrier](./spec-35-dynamic-worker-carrier.md). Sandbox
+exists when the job needs Linux process semantics: command execution,
+filesystem materialization, dependency install/build/test, large file IO,
+background service preview, or provider snapshot/restore.
 
 Required constraints:
 
@@ -31,7 +38,8 @@ Required constraints:
 - Algebra timeout returns typed `Timeout`; backends wrapping cancellable
   provider calls must wire Effect interruption into the provider cancellation
   surface. For Cloudflare this means passing `AbortSignal` to `exec`.
-- The caller must provide every file required for that run.
+- The caller must provide every file required for that run, unless a future
+  stateful workspace-session carrier owns the file tree explicitly.
 - Sandbox filesystem state is not durable truth.
 - Backend reuse is an implementation detail; apps cannot observe or depend on
   reuse.
@@ -129,7 +137,7 @@ typed errors, backend instance checks must be added before string matching.
 
 ## 7. Explicitly Not In v0
 
-- Dynamic Workers / Code Mode
+- Dynamic Workers / Code Mode (see spec-35)
 - long-running sandbox jobs
 - background processes or services
 - persistent sandbox sessions
