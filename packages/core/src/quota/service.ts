@@ -14,10 +14,11 @@
  * commit, so `on(kind, handler)` subscribers still see the event.
  */
 
-import { Clock, Context, Effect, Layer, Schema } from "effect";
+import { Clock, Context, Effect, Layer } from "effect";
 import { EventBus } from "../ledger";
 import { JsonStringifyError, SqlError, safeStringify } from "../errors";
 import type { LedgerEvent } from "../types";
+import { decodeConsumedPayloadSync } from "./payload";
 
 export interface GrantResult {
   readonly granted: boolean;
@@ -30,15 +31,6 @@ export interface GrantResult {
  *  infra corruption — let Schema.decodeUnknownSync throw, transactionSync
  *  rolls back, and Effect.try wraps it as SqlError. This is the same
  *  failure path as JSON.parse failure, by construction. */
-const ConsumedPayloadSchema = Schema.Struct({
-  key: Schema.String,
-  amount: Schema.Number.pipe(Schema.finite()),
-  toolName: Schema.String,
-});
-const decodeConsumedPayloadSync = Schema.decodeUnknownSync(
-  ConsumedPayloadSchema,
-);
-
 export class Quota extends Context.Tag("@agent-os/Quota")<
   Quota,
   {

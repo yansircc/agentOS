@@ -32,9 +32,7 @@ import {
   type AgentDOEnv,
   type DispatchTargetNamespace,
   type DispatchTargetRegistry,
-  type LedgerEventRpc,
-  type LlmRoute,
-  type ProviderRegistryConfig,
+  type ExtensionPackage,
 } from "../src";
 
 export class TestAgentDO extends DurableObject {}
@@ -97,91 +95,21 @@ export class StreamTestDO extends AgentDOBase<AgentDOEnv> {
   }
 }
 
-interface TextStreamEnv extends AgentDOEnv {
-  readonly TEXT_STREAM_KEY?: string;
-}
-
-const openAiTextStreamRoute = {
-  kind: "openai-chat-compatible",
-  endpointRef: "openai-text-stream-endpoint",
-  credentialRef: "TEXT_STREAM_KEY",
-  modelId: "text-stream-model",
-} satisfies LlmRoute;
-
-export class TextStreamTestDO extends AgentDOBase<TextStreamEnv> {
-  protected override provideRegistry(): ProviderRegistryConfig {
-    return {
-      endpoints: {
-        "openai-text-stream-endpoint": "https://text-stream.test/v1",
-        "anthropic-text-stream-endpoint": "https://anthropic-stream.test",
-        "gemini-text-stream-endpoint": "https://gemini-stream.test",
+export class ExtensionTestDO extends AgentDOBase<AgentDOEnv> {
+  protected override registerExtensions(): ReadonlyArray<ExtensionPackage> {
+    return [
+      {
+        packageId: "@agent-os/image",
+        kindPrefixes: ["image."],
+        version: "0.3.0",
       },
-      credentials: { TEXT_STREAM_KEY: this.env.TEXT_STREAM_KEY ?? "test-key" },
-    };
-  }
-
-  submitText(): Response {
-    return this.submitTextStream({
-      intent: "Stream a greeting.",
-      context: { source: "contract" },
-      route: openAiTextStreamRoute,
-      deliver: { event: "text.done" },
-    });
-  }
-
-  submitAnthropicText(): Response {
-    return this.submitTextStream({
-      intent: "Stream a greeting through Anthropic.",
-      context: { source: "contract" },
-      route: {
-        kind: "anthropic-messages",
-        endpointRef: "anthropic-text-stream-endpoint",
-        credentialRef: "TEXT_STREAM_KEY",
-        modelId: "claude-test",
-      },
-      deliver: { event: "text.done" },
-    });
-  }
-
-  submitGeminiText(): Response {
-    return this.submitTextStream({
-      intent: "Stream a greeting through Gemini.",
-      context: { source: "contract" },
-      route: {
-        kind: "gemini-generate-content",
-        endpointRef: "gemini-text-stream-endpoint",
-        credentialRef: "TEXT_STREAM_KEY",
-        modelId: "gemini-test",
-      },
-      deliver: { event: "text.done" },
-    });
-  }
-
-  cancelTextAfterFirstChunkForTest(): Promise<LedgerEventRpc[]> {
-    const response = this.submitText();
-    if (response.body === null) return this.events();
-    const reader = response.body.getReader();
-    const poll = (remaining: number): Promise<LedgerEventRpc[]> =>
-      this.events().then((rows) => {
-        if (
-          remaining <= 0 ||
-          rows.some((row) => row.kind === "agent.aborted.client_disconnect")
-        ) {
-          return rows;
-        }
-        return scheduler.wait(20).then(() => poll(remaining - 1));
-      });
-
-    return reader
-      .read()
-      .then(() => reader.cancel())
-      .then(() => poll(50));
+    ];
   }
 }
 
 interface WorkerEnv extends AgentDOEnv {
   readonly STREAM_DO: DurableObjectNamespace<StreamTestDO>;
-  readonly TEXT_STREAM_DO: DurableObjectNamespace<TextStreamTestDO>;
+  readonly EXTENSION_DO: DurableObjectNamespace<ExtensionTestDO>;
 }
 
 const parseLastEventId = (value: string | null): number => {
@@ -200,14 +128,6 @@ export default {
       return stub.streamEvents({
         afterId: parseLastEventId(req.headers.get("Last-Event-ID")),
       });
-    }
-    const textStreamMatch = url.pathname.match(/^\/text-stream\/([^/]+)$/);
-    if (textStreamMatch !== null) {
-      const scope = decodeURIComponent(textStreamMatch[1] ?? "");
-      const stub = env.TEXT_STREAM_DO.get(
-        env.TEXT_STREAM_DO.idFromName(scope),
-      );
-      return stub.submitText();
     }
     return new Response("@agent-os/core test worker (not for direct use)");
   },

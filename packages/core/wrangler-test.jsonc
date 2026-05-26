@@ -23,8 +23,8 @@
         "class_name": "StreamTestDO"
       },
       {
-        "name": "TEXT_STREAM_DO",
-        "class_name": "TextStreamTestDO"
+        "name": "EXTENSION_DO",
+        "class_name": "ExtensionTestDO"
       }
     ]
   },
@@ -36,7 +36,7 @@
         "EmitTestDO",
         "DispatchTestDO",
         "StreamTestDO",
-        "TextStreamTestDO"
+        "ExtensionTestDO"
       ]
     }
   ]

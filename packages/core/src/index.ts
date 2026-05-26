@@ -31,30 +31,24 @@ export type {
   ResourceReservationSpec,
   ResourceGrantResult,
   ResourceReserveResult,
+  QuotaStateSpec,
+  QuotaState,
+  ResourceState,
+  RunTrace,
+  RunStatus,
   TraceContext,
 } from "./types";
-export type {
-  DispatchEnvelope,
-  DispatchTargetNamespace,
-  DispatchTargetRegistry,
-} from "./dispatch";
+export type { DispatchTargetNamespace, DispatchTargetRegistry } from "./dispatch";
 
 export type { SubmitSpec, SubmitResult, TurnRef } from "./submit-agent";
-export type {
-  SubmitTextStreamSpec,
-  SubmitTextStreamFrame,
-} from "./submit-text-stream";
 
 export type { Tool } from "./tools";
 export type { ToolDefinition, LlmUsage } from "./llm";
-export type {
-  ImageRoute,
-  ImageArtifact,
-  ImageResult,
-  GenerateImageSpec,
-  ImageRequest,
-} from "@agent-os/image";
 export { withQuota, type QuotaSpec } from "./quota";
+export type { ExtensionPackage } from "./extensions";
+export { ExtensionCapabilityConflict } from "./extensions";
+export type { RefResolver } from "./ref-resolver";
+export { RefResolutionFailed } from "./ref-resolver";
 
 // ===== Abort taxonomy =====
 export { ABORT, type AbortKind } from "./errors";
@@ -66,7 +60,7 @@ export {
   JsonStringifyError,
   ScopeMissingError,
   InvalidScheduleAt,
-  ReservedEventKindError,
+  CapabilityRejected,
   DispatchTargetNotFound,
   DispatchScopeMismatch,
   InvalidResourceAmount,
@@ -82,23 +76,9 @@ export {
 //        JsonSchemaObject to pass as submitSpec.outputSchema). =====
 export type {
   LlmRoute,
-  Strategy,
   JsonSchemaObject,
   JsonSchemaNode,
   SchemaContract,
-  Outcome,
-  OutcomeClass,
   CapabilityLease,
   AttemptKey,
-  AdmissionImpact,
 } from "./admission";
-
-// ===== v0.2.12 provider registry — apps with external LLM routes
-//        (openai-chat-compatible, etc.) provide endpoints + credentials
-//        via AgentDOBase.provideRegistry() override. Tagged errors
-//        EndpointNotFound / CredentialNotFound surface on misconfig. =====
-export type { ProviderRegistryConfig } from "./provider-registry";
-export {
-  EndpointNotFound,
-  CredentialNotFound,
-} from "./provider-registry";

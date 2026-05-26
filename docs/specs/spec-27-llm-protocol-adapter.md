@@ -179,7 +179,7 @@ propagation) and nothing else.
 
 Adapters are pure. They have no IO, no clock, no secret resolution. Secrets
 (via `credentialRef`) are resolved by `dispatchProvider` from
-`ProviderRegistry`. The adapter does not see the secret value.
+`RefResolver`. The adapter does not see the secret value.
 
 `encodeTurn` / `encodeStructured` are total functions: route + request →
 body. `decodeTurn` / `decodeStructured` accept the raw `unknown` upstream
@@ -419,8 +419,8 @@ const dispatchProvider = <K extends LlmRoute["kind"]>(
   body:  ProviderRequestBodyFor<K>,
 ): Effect.Effect<
   unknown,                                                // raw upstream response
-  UpstreamFailure | EndpointNotFound | CredentialNotFound,
-  AiBinding | ProviderRegistry
+  UpstreamFailure | RefResolutionFailed,
+  AiBinding | RefResolverService
 > => {
   switch (route.kind) {
     case "cf-ai-binding":             return env.AI.run(route.modelId, body);
@@ -583,10 +583,9 @@ cf-ai-binding stays `"1.0.0"` since behavior is identical (per §5.1
    `LlmResponse`, add `LlmResponse.thinking?: string` and concat blocks.
    Not in scope for spec-27 v0.
 
-2. **Streaming**. Basic text-only streaming is specified separately in
-   spec-31. It adds a `textStream` capability to `LlmProtocolAdapter`
-   and a separate `dispatchProviderStream` seam. Tools and structured
-   output remain non-streaming in v0.
+2. **Streaming**. Superseded by spec-34. v0.3 removes `textStream` and
+   `dispatchProviderStream` from core; future token streaming belongs to
+   an extension package.
 
 3. **Multi-tool-call response in structured path.** Anthropic and Gemini
    can emit multiple `tool_use` / `functionCall` blocks in one response.
@@ -671,16 +670,18 @@ Rejected:
 ```ts
 // app worker
 export class MyAgent extends AgentDOBase<Env> {
-  protected provideRegistry() {
+  protected provideRefResolver() {
+    const endpoints = {
+      "anthropic-aihubmix": "https://aihubmix.com",
+      "gemini-google": "https://generativelanguage.googleapis.com",
+    } as const;
+    const credentials = {
+      ANTHROPIC_KEY_AIHUBMIX: this.env.ANTHROPIC_KEY_AIHUBMIX,
+      GEMINI_KEY: this.env.GEMINI_KEY,
+    } as const;
     return {
-      endpoints: {
-        "anthropic-aihubmix": "https://aihubmix.com",
-        "gemini-google":       "https://generativelanguage.googleapis.com",
-      },
-      credentials: {
-        ANTHROPIC_KEY_AIHUBMIX: this.env.ANTHROPIC_KEY_AIHUBMIX,
-        GEMINI_KEY:             this.env.GEMINI_KEY,
-      },
+      endpoint: (ref: string) => endpoints[ref] ?? null,
+      credential: (ref: string) => credentials[ref] ?? null,
     };
   }
 }

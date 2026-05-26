@@ -12,7 +12,7 @@
  *    a Strategy variant when an app needs it)
  */
 
-import { Effect, Stream } from "effect";
+import { Effect } from "effect";
 import type {
   AnthropicContentBlock,
   AnthropicMessage,
@@ -23,7 +23,6 @@ import type {
   LlmToolCall,
   ToolDefinition,
 } from "../llm";
-import { UpstreamFailure } from "../../errors";
 import type { SchemaContract, Strategy } from "../../admission";
 import type {
   AdapterMode,
@@ -31,16 +30,12 @@ import type {
   DecodeStructuredResult,
   DecodedOutput,
   LlmProtocolAdapter,
-  TextStreamFrame,
-  TextStreamRequest,
   TurnRequest,
   TurnResponse,
 } from "./protocol-adapter";
 import {
   ADAPTER_VERSION,
   CHAT_COMPLETIONS_FORCED_TOOL_NAME,
-  decodeSseEvents,
-  parseSseJson,
   parseHttpStatus,
   type Outcome,
   unwrapErrorMessage,
@@ -162,14 +157,6 @@ const encodeAnthropicTurn = (
   };
 };
 
-const encodeAnthropicTextStream = (
-  route: Extract<LlmRoute, { kind: "anthropic-messages" }>,
-  request: TextStreamRequest,
-): AnthropicMessagesBody => ({
-  ...encodeAnthropicTurn(route, request),
-  stream: true,
-});
-
 interface AnthropicRawResponse {
   readonly content?: ReadonlyArray<AnthropicContentBlock>;
   readonly usage?: {
@@ -179,116 +166,26 @@ interface AnthropicRawResponse {
   readonly stop_reason?: string;
 }
 
-const decodeAnthropicTextStream = (
-  stream: ReadableStream<Uint8Array>,
-): Stream.Stream<TextStreamFrame, UpstreamFailure> => {
-  let sawStop = false;
-  let promptTokens = 0;
-  let completionTokens = 0;
-  return decodeSseEvents(stream).pipe(
-    Stream.mapEffect((event) => {
-      if (event.kind === "end") {
-        return sawStop
-          ? Effect.succeed([])
-          : Effect.fail(
-              new UpstreamFailure({
-                cause: "stream ended before message_stop",
-              }),
-            );
-      }
-      if (sawStop) {
-        return Effect.succeed([]);
-      }
-      return parseSseJson<{
-        type?: string;
-        message?: {
-          usage?: {
-            input_tokens?: number;
-            output_tokens?: number;
-          };
-        };
-        delta?: {
-          type?: string;
-          text?: string;
-        };
-        usage?: {
-          output_tokens?: number;
-        };
-      }>(event.data).pipe(
-        Effect.map((parsed): TextStreamFrame[] => {
-          if (parsed.type === "message_start") {
-            promptTokens = parsed.message?.usage?.input_tokens ?? promptTokens;
-            completionTokens =
-              parsed.message?.usage?.output_tokens ?? completionTokens;
-            return [
-              {
-                type: "usage",
-                usage: {
-                  promptTokens,
-                  completionTokens,
-                  totalTokens: promptTokens + completionTokens,
-                },
-              },
-            ];
-          }
-          if (
-            parsed.type === "content_block_delta" &&
-            parsed.delta?.type === "text_delta" &&
-            typeof parsed.delta.text === "string" &&
-            parsed.delta.text.length > 0
-          ) {
-            return [{ type: "token", delta: parsed.delta.text }];
-          }
-          if (parsed.type === "message_delta") {
-            completionTokens = parsed.usage?.output_tokens ?? completionTokens;
-            return [
-              {
-                type: "usage",
-                usage: {
-                  promptTokens,
-                  completionTokens,
-                  totalTokens: promptTokens + completionTokens,
-                },
-              },
-            ];
-          }
-          if (parsed.type === "message_stop") {
-            sawStop = true;
-            return [{ type: "done" }];
-          }
-          return [];
-        }),
-      );
-    }),
-    Stream.mapConcat((frames) => frames),
-  );
-};
-
 const foldAnthropicBlocks = (
   blocks: ReadonlyArray<AnthropicContentBlock> | undefined,
-): { text: string; toolCalls: LlmToolCall[] } => {
-  const textParts: string[] = [];
+): { readonly text: string; readonly toolCalls: ReadonlyArray<LlmToolCall> } => {
+  const textBits: string[] = [];
   const toolCalls: LlmToolCall[] = [];
-  for (const b of blocks ?? []) {
-    if (b.type === "text") {
-      textParts.push(b.text);
-    } else if (b.type === "tool_use") {
+  for (const block of blocks ?? []) {
+    if (block.type === "text") {
+      textBits.push(block.text);
+    } else if (block.type === "tool_use") {
       toolCalls.push({
-        id: b.id,
+        id: block.id,
         type: "function",
         function: {
-          name: b.name,
-          // Re-stringify to match the unified LlmToolCall shape (which
-          // carries arguments as a JSON string for cross-protocol
-          // compatibility with submit-agent's tool-loop logic).
-          arguments: JSON.stringify(b.input ?? {}),
+          name: block.name,
+          arguments: JSON.stringify(block.input),
         },
       });
     }
-    // tool_result blocks should not appear in upstream RESPONSE content;
-    // they are request-side. Ignore if present.
   }
-  return { text: textParts.join(""), toolCalls };
+  return { text: textBits.join(""), toolCalls };
 };
 
 const decodeAnthropicTurn = (raw: unknown): TurnResponse => {
@@ -447,11 +344,6 @@ export const anthropicMessagesAdapter: LlmProtocolAdapter<"anthropic-messages"> 
     version: ADAPTER_VERSION,
     encodeTurn: encodeAnthropicTurn,
     decodeTurn: decodeAnthropicTurn,
-    textStream: {
-      supported: true,
-      encode: encodeAnthropicTextStream,
-      decodeFrames: decodeAnthropicTextStream,
-    },
     encodeStructured: encodeAnthropicStructured,
     decodeStructured: decodeAnthropicStructured,
     classify: classifyAnthropicError,

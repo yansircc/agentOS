@@ -55,10 +55,11 @@ export class InvalidScheduleAt extends Data.TaggedError(
   readonly at: unknown;
 }> {}
 
-export class ReservedEventKindError extends Data.TaggedError(
-  "agent_os.reserved_event_kind",
+export class CapabilityRejected extends Data.TaggedError(
+  "agent_os.capability_rejected",
 )<{
   readonly event: string;
+  readonly capability: string;
 }> {}
 
 export class DispatchTargetNotFound extends Data.TaggedError(
@@ -101,22 +102,28 @@ export class ResourceReservationClosed extends Data.TaggedError(
   readonly status: "consumed" | "released";
 }> {}
 
-/** Event kind prefixes owned by core. Apps cannot write to these via
- *  submitSpec.deliver.event or scheduleEvent.event — keeps quota / abort /
- *  llm / tool / chat / dispatch / image event facts trustworthy. */
-export const CORE_RESERVED_PREFIXES = [
-  "agent.aborted.",
+/** Event kind prefixes owned by substrate capabilities. App-facing write
+ *  paths (`emitEvent`, `scheduleEvent`, `submit.deliver.event`,
+ *  `dispatchToScope.event`) cannot write to these. */
+export const CORE_CLAIMED_PREFIXES = [
+  "agent.",
   "chat.",
   "dispatch.",
-  "image.",
   "llm.",
   "tool.",
   "quota.",
   "resource.",
 ] as const;
 
-export const isReservedEventKind = (event: string): boolean =>
-  CORE_RESERVED_PREFIXES.some((p) => event.startsWith(p));
+export const isCoreClaimedEventKind = (event: string): boolean =>
+  CORE_CLAIMED_PREFIXES.some((p) => event.startsWith(p));
+
+export const isClaimedEventKind = (
+  event: string,
+  extensionPrefixes: ReadonlyArray<string> = [],
+): boolean =>
+  isCoreClaimedEventKind(event) ||
+  extensionPrefixes.some((p) => event.startsWith(p));
 
 export class UpstreamFailure extends Data.TaggedError(
   ABORT.UPSTREAM_FAILURE,

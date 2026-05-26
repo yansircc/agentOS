@@ -22,8 +22,8 @@
 
 import { Clock, Context, Effect, Layer, Schema } from "effect";
 import { EventBus } from "../ledger";
-import { ProviderRegistry } from "../provider-registry";
 import { JsonStringifyError, SqlError, safeStringify } from "../errors";
+import { RefResolutionFailed, RefResolverService } from "../ref-resolver";
 import {
   AiBinding,
   dispatchProvider,
@@ -119,7 +119,7 @@ export class Admission extends Context.Tag("@agent-os/Admission")<
     ) => Effect.Effect<
       AttemptResult<O>,
       SqlError | JsonStringifyError,
-      AiBinding | ProviderRegistry
+      AiBinding | RefResolverService
     >;
     readonly invalidate: (
       spec: InvalidateSpec,
@@ -168,7 +168,7 @@ export const AdmissionLive = (
 
       // Note on R: AdmissionLive itself only requires EventBus. The
       // attemptStructured method returns an Effect that requires
-      // `AiBinding | ProviderRegistry` — those are resolved by the
+      // `AiBinding | RefResolverService` — those are resolved by the
       // RUNTIME at call time, not provided to this layer. This matches
       // how submitAgentEffect uses ledger/quota/admission: services are
       // composed at the runtime boundary (makeAgentRuntime in agent-do
@@ -179,7 +179,7 @@ export const AdmissionLive = (
       ): Effect.Effect<
         AttemptResult<O>,
         SqlError | JsonStringifyError,
-        AiBinding | ProviderRegistry
+        AiBinding | RefResolverService
       > =>
         Effect.gen(function* () {
           const adapterMode = spec.adapterMode ?? "production";
@@ -241,7 +241,14 @@ export const AdmissionLive = (
           let decoded: DecodedOutput | undefined;
 
           if (rawEither._tag === "Left") {
-            outcome = adapter.classify(rawEither.left);
+            if (rawEither.left instanceof RefResolutionFailed) {
+              outcome = {
+                class: "ConfigError",
+                reason: `${rawEither.left.kind}:${rawEither.left.ref}`,
+              };
+            } else {
+              outcome = adapter.classify(rawEither.left);
+            }
           } else {
             const d = adapter.decodeStructured(
               { raw: rawEither.right },

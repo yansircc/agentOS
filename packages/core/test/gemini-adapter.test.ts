@@ -3,7 +3,6 @@
  */
 
 import { describe, expect, it } from "@effect/vitest";
-import { Chunk, Effect, Stream } from "effect";
 
 import { geminiGenerateContentAdapter } from "../src/llm/protocol/gemini-generate-content";
 import type { JsonSchemaObject } from "../src/admission";
@@ -31,16 +30,6 @@ const SCHEMA_CONTRACT = {
   schema: SUMMARY_SCHEMA,
   fingerprint: "test-fingerprint",
 };
-
-const collectFramesEffect = <A, E>(
-  stream: Stream.Stream<A, E>,
-): Effect.Effect<ReadonlyArray<A>, E> =>
-  Stream.runCollect(stream).pipe(
-    Effect.map((chunk) => Chunk.toReadonlyArray(chunk)),
-  );
-
-const collectFramesEitherEffect = <A, E>(stream: Stream.Stream<A, E>) =>
-  collectFramesEffect(stream).pipe(Effect.either);
 
 // ============================================================
 // Layer 1 — encode shape
@@ -494,88 +483,7 @@ describe("gemini adapter — P2 purity", () => {
   });
 });
 
-// ============================================================
-// Layer 4 — text streaming capability (spec-31)
-// ============================================================
-
-describe("gemini adapter — textStream", () => {
-  it("encodes native streamGenerateContent request body", () => {
-    const capability = geminiGenerateContentAdapter.textStream;
-    expect(capability.supported).toBe(true);
-    if (capability.supported === false) throw new Error("expected support");
-
-    const body = capability.encode(ROUTE, {
-      messages: [
-        { role: "system", content: "Be terse." },
-        { role: "user", content: "hello" },
-      ],
-    });
-
-    expect(body).toEqual({
-      systemInstruction: { parts: [{ text: "Be terse." }] },
-      contents: [{ role: "user", parts: [{ text: "hello" }] }],
-      tools: undefined,
-      toolConfig: undefined,
-    });
-  });
-
-  it.effect("decodes Gemini streamGenerateContent SSE chunks", () =>
-    Effect.gen(function* () {
-      const capability = geminiGenerateContentAdapter.textStream;
-      if (capability.supported === false) throw new Error("expected support");
-
-      const encoder = new TextEncoder();
-      const stream = new ReadableStream<Uint8Array>({
-        start(controller) {
-          controller.enqueue(
-            encoder.encode(
-              [
-                'data: {"candidates":[{"content":{"parts":[{"text":"Hel"}]}}]}',
-                "",
-                'data: {"candidates":[{"content":{"parts":[{"text":"lo"}]}}],"usageMetadata":{"promptTokenCount":7,"candidatesTokenCount":2,"totalTokenCount":9}}',
-                "",
-              ].join("\n"),
-            ),
-          );
-          controller.close();
-        },
-      });
-
-      const frames = yield* collectFramesEffect(capability.decodeFrames(stream));
-
-      expect(frames).toEqual([
-        { type: "token", delta: "Hel" },
-        { type: "token", delta: "lo" },
-        {
-          type: "usage",
-          usage: { promptTokens: 7, completionTokens: 2, totalTokens: 9 },
-        },
-        { type: "done" },
-      ]);
-    }),
-  );
-
-  it.effect("fails decode when stream contains no Gemini chunks", () =>
-    Effect.gen(function* () {
-      const capability = geminiGenerateContentAdapter.textStream;
-      if (capability.supported === false) throw new Error("expected support");
-
-      const stream = new ReadableStream<Uint8Array>({
-        start(controller) {
-          controller.close();
-        },
-      });
-
-      const result = yield* collectFramesEitherEffect(
-        capability.decodeFrames(stream),
-      );
-      expect(result._tag).toBe("Left");
-      if (result._tag === "Left") {
-        expect(result.left.cause).toBe("stream ended before any Gemini chunk");
-      }
-    }),
-  );
-});
+// Layer 4 — text streaming moved out of core (spec-34).
 
 // ============================================================
 // Layer 5 — adapter identity invariants (spec-27 C-1)

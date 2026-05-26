@@ -13,7 +13,7 @@
  *                         (admission) and the free-text turn path
  *                         (callLlm) consume the same adapter per route.
  *
- * `provider-registry.ts` deliberately stays at the src/ root: it's a
+ * `ref-resolver.ts` deliberately stays at the src/ root: it's a
  * cross-cutting endpoint+credential lookup, not LLM-specific — image
  * and any future external-provider services consume the same surface.
  */

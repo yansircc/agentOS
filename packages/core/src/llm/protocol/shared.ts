@@ -13,8 +13,6 @@
  * the registry cycle.
  */
 
-import { Effect, Stream } from "effect";
-import { UpstreamFailure } from "../../errors";
 import type { Outcome } from "../../admission/lease";
 
 /** Single coherence dial for an adapter's complete behavior. Bumping the
@@ -49,99 +47,6 @@ export const parseHttpStatus = (msg: string): number | undefined => {
   const m = /HTTP\s+(\d{3})\b/.exec(msg);
   return m ? Number(m[1]) : undefined;
 };
-
-export type SseEvent =
-  | { readonly kind: "data"; readonly data: string }
-  | { readonly kind: "end" };
-
-type SseInput =
-  | { readonly kind: "chunk"; readonly value: Uint8Array }
-  | { readonly kind: "end" };
-
-interface SseState {
-  readonly buffer: string;
-  readonly decoder: TextDecoder;
-}
-
-const dataOf = (raw: string): string | undefined => {
-  const data = raw
-    .split(/\r?\n/)
-    .filter((line) => line.startsWith("data:"))
-    .map((line) => line.slice(5).trimStart())
-    .join("\n");
-  return data.length > 0 ? data : undefined;
-};
-
-const drainCompleteEvents = (
-  buffer: string,
-): { readonly buffer: string; readonly events: ReadonlyArray<SseEvent> } => {
-  let rest = buffer;
-  const events: SseEvent[] = [];
-  let boundary = rest.indexOf("\n\n");
-  while (boundary >= 0) {
-    const data = dataOf(rest.slice(0, boundary));
-    if (data !== undefined) {
-      events.push({ kind: "data", data });
-    }
-    rest = rest.slice(boundary + 2);
-    boundary = rest.indexOf("\n\n");
-  }
-  return { buffer: rest, events };
-};
-
-/** Decode Server-Sent Events into non-empty `data:` payload events.
- *
- * OpenAI Chat Completions, Anthropic Messages, and Gemini
- * streamGenerateContent all use SSE framing but differ in the JSON
- * payload. Keep frame splitting here so each wire adapter owns only
- * its protocol JSON algebra.
- */
-export const decodeSseEvents = (
-  stream: ReadableStream<Uint8Array>,
-): Stream.Stream<SseEvent, UpstreamFailure> => {
-  const initial: SseState = { buffer: "", decoder: new TextDecoder() };
-  return Stream.fromReadableStream(
-    () => stream,
-    (cause) => new UpstreamFailure({ cause }),
-  ).pipe(
-    Stream.map((value): SseInput => ({ kind: "chunk", value })),
-    Stream.concat(Stream.succeed({ kind: "end" as const })),
-    Stream.mapAccum(initial, (state, input) => {
-      if (input.kind === "end") {
-        const flushed = state.decoder.decode().replace(/\r\n/g, "\n");
-        const drained = drainCompleteEvents(state.buffer + flushed);
-        const tail = drained.buffer.trim();
-        const tailData = tail.length > 0 ? dataOf(tail) : undefined;
-        return [
-          { ...state, buffer: "" },
-          [
-            ...drained.events,
-            ...(tailData === undefined
-              ? []
-              : [{ kind: "data" as const, data: tailData }]),
-            { kind: "end" as const },
-          ],
-        ] as const;
-      }
-      const nextBuffer =
-        state.buffer +
-        state.decoder
-          .decode(input.value, { stream: true })
-          .replace(/\r\n/g, "\n");
-      const drained = drainCompleteEvents(nextBuffer);
-      return [{ ...state, buffer: drained.buffer }, drained.events] as const;
-    }),
-    Stream.mapConcat((events) => events),
-  );
-};
-
-export const parseSseJson = <A>(
-  data: string,
-): Effect.Effect<A, UpstreamFailure> =>
-  Effect.try({
-    try: () => JSON.parse(data) as A,
-    catch: (cause) => new UpstreamFailure({ cause }),
-  });
 
 // Re-export Outcome (sourced from admission/lease.ts — leaf, no cycle)
 // so wire files can name it without a second import statement.

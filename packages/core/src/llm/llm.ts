@@ -27,10 +27,9 @@
 import { Context, Effect } from "effect";
 import { UpstreamFailure } from "../errors";
 import {
-  CredentialNotFound,
-  EndpointNotFound,
-  ProviderRegistry,
-} from "../provider-registry";
+  RefResolutionFailed,
+  RefResolverService,
+} from "../ref-resolver";
 import { getProtocolAdapter } from "./protocol/protocol-adapter";
 
 export class AiBinding extends Context.Tag("@agent-os/AiBinding")<
@@ -318,8 +317,8 @@ export const dispatchProvider = (
   body: ProviderRequestBody,
 ): Effect.Effect<
   unknown,
-  UpstreamFailure | EndpointNotFound | CredentialNotFound,
-  AiBinding | ProviderRegistry
+  UpstreamFailure | RefResolutionFailed,
+  AiBinding | RefResolverService
 > => {
   switch (route.kind) {
     case "cf-ai-binding":
@@ -345,9 +344,9 @@ export const dispatchProvider = (
       });
     case "openai-chat-compatible":
       return Effect.gen(function* () {
-        const registry = yield* ProviderRegistry;
-        const endpoint = yield* registry.resolveEndpoint(route.endpointRef);
-        const apiKey = yield* registry.resolveCredential(route.credentialRef);
+        const refs = yield* RefResolverService;
+        const endpoint = yield* refs.endpoint(route.endpointRef);
+        const apiKey = yield* refs.credential(route.credentialRef);
         const url = `${endpoint.replace(/\/$/, "")}/chat/completions`;
         const fullBody = {
           model: route.modelId,
@@ -376,9 +375,9 @@ export const dispatchProvider = (
       });
     case "anthropic-messages":
       return Effect.gen(function* () {
-        const registry = yield* ProviderRegistry;
-        const endpoint = yield* registry.resolveEndpoint(route.endpointRef);
-        const apiKey = yield* registry.resolveCredential(route.credentialRef);
+        const refs = yield* RefResolverService;
+        const endpoint = yield* refs.endpoint(route.endpointRef);
+        const apiKey = yield* refs.credential(route.credentialRef);
         const url = `${endpoint.replace(/\/$/, "")}/v1/messages`;
         const fullBody = {
           model: route.modelId,
@@ -409,9 +408,9 @@ export const dispatchProvider = (
       });
     case "gemini-generate-content":
       return Effect.gen(function* () {
-        const registry = yield* ProviderRegistry;
-        const endpoint = yield* registry.resolveEndpoint(route.endpointRef);
-        const apiKey = yield* registry.resolveCredential(route.credentialRef);
+        const refs = yield* RefResolverService;
+        const endpoint = yield* refs.endpoint(route.endpointRef);
+        const apiKey = yield* refs.credential(route.credentialRef);
         const url = `${endpoint.replace(/\/$/, "")}/v1beta/models/${route.modelId}:generateContent`;
         return yield* Effect.tryPromise({
           try: async () => {
@@ -437,148 +436,6 @@ export const dispatchProvider = (
   }
 };
 
-export const dispatchProviderStream = (
-  route: LlmRoute,
-  body: ProviderRequestBody,
-  signal: AbortSignal,
-): Effect.Effect<
-  ReadableStream<Uint8Array>,
-  UpstreamFailure | EndpointNotFound | CredentialNotFound,
-  AiBinding | ProviderRegistry
-> => {
-  switch (route.kind) {
-    case "cf-ai-binding":
-      return Effect.gen(function* () {
-        const ai = yield* AiBinding;
-        const options =
-          route.gatewayRef === undefined
-            ? undefined
-            : { gateway: { id: route.gatewayRef } };
-        return yield* Effect.tryPromise({
-          try: async () => {
-            const result = await (
-              ai as {
-                run: (
-                  m: string,
-                  p: unknown,
-                  o?: unknown,
-                ) => Promise<unknown>;
-              }
-            ).run(route.modelId, body as ChatCompletionsBody, options);
-            if (result instanceof ReadableStream) {
-              return result as ReadableStream<Uint8Array>;
-            }
-            throw new Error("cf-ai-binding streaming provider returned no body");
-          },
-          catch: (cause) => new UpstreamFailure({ cause }),
-        });
-      });
-    case "openai-chat-compatible":
-      return Effect.gen(function* () {
-        const registry = yield* ProviderRegistry;
-        const endpoint = yield* registry.resolveEndpoint(route.endpointRef);
-        const apiKey = yield* registry.resolveCredential(route.credentialRef);
-        const url = `${endpoint.replace(/\/$/, "")}/chat/completions`;
-        const fullBody = {
-          model: route.modelId,
-          ...(body as ChatCompletionsBody),
-        };
-        return yield* Effect.tryPromise({
-          try: async () => {
-            const res = await fetch(url, {
-              method: "POST",
-              headers: {
-                "Authorization": `Bearer ${apiKey}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify(fullBody),
-              signal,
-            });
-            if (!res.ok) {
-              const text = await res.text().catch(() => "");
-              throw new Error(
-                `HTTP ${res.status} ${res.statusText}: ${text.slice(0, 500)}`,
-              );
-            }
-            if (res.body === null) {
-              throw new Error("streaming provider returned no body");
-            }
-            return res.body;
-          },
-          catch: (cause) => new UpstreamFailure({ cause }),
-        });
-      });
-    case "anthropic-messages":
-      return Effect.gen(function* () {
-        const registry = yield* ProviderRegistry;
-        const endpoint = yield* registry.resolveEndpoint(route.endpointRef);
-        const apiKey = yield* registry.resolveCredential(route.credentialRef);
-        const url = `${endpoint.replace(/\/$/, "")}/v1/messages`;
-        const fullBody = {
-          model: route.modelId,
-          ...(body as AnthropicMessagesBody),
-        };
-        const versionHeader = route.anthropicVersion ?? DEFAULT_ANTHROPIC_VERSION;
-        return yield* Effect.tryPromise({
-          try: async () => {
-            const res = await fetch(url, {
-              method: "POST",
-              headers: {
-                "x-api-key": apiKey,
-                "anthropic-version": versionHeader,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify(fullBody),
-              signal,
-            });
-            if (!res.ok) {
-              const text = await res.text().catch(() => "");
-              throw new Error(
-                `HTTP ${res.status} ${res.statusText}: ${text.slice(0, 500)}`,
-              );
-            }
-            if (res.body === null) {
-              throw new Error("streaming provider returned no body");
-            }
-            return res.body;
-          },
-          catch: (cause) => new UpstreamFailure({ cause }),
-        });
-      });
-    case "gemini-generate-content":
-      return Effect.gen(function* () {
-        const registry = yield* ProviderRegistry;
-        const endpoint = yield* registry.resolveEndpoint(route.endpointRef);
-        const apiKey = yield* registry.resolveCredential(route.credentialRef);
-        const url = `${endpoint.replace(/\/$/, "")}/v1beta/models/${route.modelId}:streamGenerateContent?alt=sse`;
-        return yield* Effect.tryPromise({
-          try: async () => {
-            const res = await fetch(url, {
-              method: "POST",
-              headers: {
-                "x-goog-api-key": apiKey,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify(body as GeminiGenerateContentBody),
-              signal,
-            });
-            if (!res.ok) {
-              const text = await res.text().catch(() => "");
-              throw new Error(
-                `HTTP ${res.status} ${res.statusText}: ${text.slice(0, 500)}`,
-              );
-            }
-            if (res.body === null) {
-              throw new Error("streaming provider returned no body");
-            }
-            return res.body;
-          },
-          catch: (cause) => new UpstreamFailure({ cause }),
-        });
-      });
-  }
-};
-
 // ============================================================
 //   callLlm — free-text agent turn
 // ============================================================
@@ -591,8 +448,8 @@ export const callLlm = (
   request: LlmRequest,
 ): Effect.Effect<
   LlmResponse,
-  UpstreamFailure | EndpointNotFound | CredentialNotFound,
-  AiBinding | ProviderRegistry
+  UpstreamFailure | RefResolutionFailed,
+  AiBinding | RefResolverService
 > =>
   Effect.gen(function* () {
     const adapter = getProtocolAdapter(request.route.kind);

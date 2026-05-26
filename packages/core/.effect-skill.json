@@ -4,7 +4,7 @@
     {
       "path": "src/agent-do.ts",
       "owner": "@agent-os/core/cf-do",
-      "reason": "AgentDOBase is the terminal Durable Object HTTP facade for streamEvents and submitTextStream; missing named scope is a runtime invariant violation with no Effect return channel",
+      "reason": "AgentDOBase is the terminal Durable Object HTTP facade for streamEvents; missing named scope is a runtime invariant violation with no Effect return channel",
       "rules": ["EFF025", "EFF402"]
     },
     {
@@ -53,18 +53,6 @@
       "path": "test/admission/attempt-structured.test.ts",
       "owner": "@agent-os/core/test-provider",
       "reason": "test provider stub constructs terminal HTTP Response objects to model upstream transport",
-      "rules": ["EFF402"]
-    },
-    {
-      "path": "test/generate-image-wrapper.test.ts",
-      "owner": "@agent-os/core/test-provider",
-      "reason": "test provider stub constructs terminal HTTP Response objects to prove AgentDOBase.generateImage delegates to @agent-os/image without touching ledger rows",
-      "rules": ["EFF402"]
-    },
-    {
-      "path": "test/text-stream-contract.test.ts",
-      "owner": "@agent-os/core/test-provider",
-      "reason": "test provider stub constructs terminal HTTP Response objects to model upstream streaming transport",
       "rules": ["EFF402"]
     }
   ]

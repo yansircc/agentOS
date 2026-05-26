@@ -24,10 +24,11 @@ import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 
 import type { LedgerEventRpc } from "../src";
-import type { EmitTestDO } from "./test-worker";
+import type { EmitTestDO, ExtensionTestDO } from "./test-worker";
 
 interface TestEnv {
   readonly EMIT_DO: DurableObjectNamespace<EmitTestDO>;
+  readonly EXTENSION_DO: DurableObjectNamespace<ExtensionTestDO>;
 }
 
 const testEnv = env as unknown as TestEnv;
@@ -65,17 +66,15 @@ describe("emitEvent — substrate now-write primitive", () => {
     });
   });
 
-  it("rejects reserved event kinds with ReservedEventKindError", async () => {
-    const scope = "emit-reserved-1";
+  it("rejects claimed event kinds with CapabilityRejected", async () => {
+    const scope = "emit-claimed-1";
     const stub = testEnv.EMIT_DO.get(testEnv.EMIT_DO.idFromName(scope));
 
-    // Any prefix from CORE_RESERVED_PREFIXES — pick one per category to
-    // confirm the namespace guard is shared with submit / scheduleEvent.
-    const reserved = [
+    // Any substrate-owned prefix must be unavailable to cap_app writes.
+    const claimed = [
       "agent.aborted.app_test",
       "chat.ingested",
       "dispatch.consumed",
-      "image.job.requested",
       "llm.response",
       "tool.executed",
       "quota.exceeded",
@@ -83,25 +82,54 @@ describe("emitEvent — substrate now-write primitive", () => {
     ];
 
     await runInDurableObject(stub, async (instance) => {
-      for (const event of reserved) {
+      for (const event of claimed) {
         let caught: { _tag?: string; event?: string } | undefined = undefined;
         try {
           await instance.emitEvent({ event, data: {} });
         } catch (e) {
           caught = e as { _tag?: string; event?: string };
         }
-        expect(caught, `should reject reserved kind: ${event}`).toBeDefined();
+        expect(caught, `should reject claimed kind: ${event}`).toBeDefined();
         // In-process access — full TaggedError instance survives.
-        expect(caught?._tag).toBe("agent_os.reserved_event_kind");
+        expect(caught?._tag).toBe("agent_os.capability_rejected");
         expect(caught?.event).toBe(event);
       }
     });
 
-    // After all reserved attempts, ledger MUST be empty — emitEvent
+    // After all claimed attempts, ledger MUST be empty — emitEvent
     // rejected before any row was written. (Read via stub to validate the
     // ledger is also empty from the outside, not just inside.)
     const events: LedgerEventRpc[] = await stub.events();
     expect(events).toHaveLength(0);
+  });
+
+  it("rejects extension-owned event kinds only when the DO registers that extension", async () => {
+    const defaultStub = testEnv.EMIT_DO.get(
+      testEnv.EMIT_DO.idFromName("emit-image-app-fact"),
+    );
+    await defaultStub.emitEvent({
+      event: "image.job.requested",
+      data: { appOwned: true },
+    });
+    await expect(defaultStub.events()).resolves.toHaveLength(1);
+
+    const extensionStub = testEnv.EXTENSION_DO.get(
+      testEnv.EXTENSION_DO.idFromName("emit-image-extension-owned"),
+    );
+    await runInDurableObject(extensionStub, async (instance) => {
+      let caught: { _tag?: string; event?: string } | undefined;
+      try {
+        await instance.emitEvent({
+          event: "image.job.requested",
+          data: { appOwned: false },
+        });
+      } catch (e) {
+        caught = e as { _tag?: string; event?: string };
+      }
+      expect(caught?._tag).toBe("agent_os.capability_rejected");
+      expect(caught?.event).toBe("image.job.requested");
+    });
+    await expect(extensionStub.events()).resolves.toHaveLength(0);
   });
 
   it("rejects unnamed DOs (newUniqueId) with ScopeMissingError", async () => {

@@ -14,7 +14,7 @@ import { Layer, ManagedRuntime } from "effect";
 
 import { EventBusLive, LedgerLive } from "../../src/ledger";
 import { AiBinding } from "../../src/llm";
-import { ProviderRegistryLive } from "../../src/provider-registry";
+import { RefResolverLive } from "../../src/ref-resolver";
 import { QuotaLive } from "../../src/quota";
 import { AdmissionLive } from "../../src/admission";
 import type { JsonSchemaObject } from "../../src/admission";
@@ -34,10 +34,13 @@ export const makeRuntime = (state: DurableObjectState, ai: Ai) => {
   const ledger = LedgerLive(state.storage.sql).pipe(Layer.provide(eventBus));
   const quota = QuotaLive(state).pipe(Layer.provide(eventBus));
   const aiLayer = Layer.succeed(AiBinding, ai);
-  const registry = ProviderRegistryLive({ endpoints: {}, credentials: {} });
+  const refs = RefResolverLive({
+    endpoint: () => null,
+    credential: () => null,
+  });
   const admission = AdmissionLive(state).pipe(Layer.provide(eventBus));
   return ManagedRuntime.make(
-    Layer.mergeAll(ledger, quota, aiLayer, admission, registry),
+    Layer.mergeAll(ledger, quota, aiLayer, admission, refs),
   );
 };
 
@@ -52,10 +55,13 @@ export const makeRuntimeWithRegistry = (
   const ledger = LedgerLive(state.storage.sql).pipe(Layer.provide(eventBus));
   const quota = QuotaLive(state).pipe(Layer.provide(eventBus));
   const aiLayer = Layer.succeed(AiBinding, ai);
-  const registry = ProviderRegistryLive({ endpoints, credentials });
+  const refs = RefResolverLive({
+    endpoint: (ref) => endpoints[ref] ?? null,
+    credential: (ref) => credentials[ref] ?? null,
+  });
   const admission = AdmissionLive(state).pipe(Layer.provide(eventBus));
   return ManagedRuntime.make(
-    Layer.mergeAll(ledger, quota, aiLayer, admission, registry),
+    Layer.mergeAll(ledger, quota, aiLayer, admission, refs),
   );
 };
 
