@@ -12,12 +12,17 @@ import type {
   DispatchTargetSpec,
   TraceContext,
 } from "../types";
+import {
+  validateEffectClaim,
+  type PreClaim,
+} from "../effect-claim";
 
 export interface DispatchRequestedPayload {
   readonly target: DispatchTargetSpec;
   readonly event: string;
   readonly data: unknown;
   readonly idempotencyKey: string;
+  readonly claim?: PreClaim;
   readonly traceContext?: TraceContext;
 }
 
@@ -75,11 +80,21 @@ export const parseRequestedPayload = (raw: string): DispatchRequestedPayload => 
     throw new TypeError("dispatch.outbound.requested payload malformed");
   }
   const traceContext = parseTraceContext(value.traceContext);
+  const parsedClaim =
+    value.claim === undefined ? undefined : validateEffectClaim(value.claim);
+  let claim: PreClaim | undefined;
+  if (parsedClaim !== undefined) {
+    if (!parsedClaim.ok || parsedClaim.claim.phase !== "pre") {
+      throw new TypeError("dispatch claim must be a PreClaim");
+    }
+    claim = parsedClaim.claim;
+  }
   return {
     target: { bindingRef: target.bindingRef, scope: target.scope },
     event: value.event,
     data: value.data,
     idempotencyKey: value.idempotencyKey,
+    ...(claim === undefined ? {} : { claim }),
     ...(traceContext === undefined ? {} : { traceContext }),
   };
 };

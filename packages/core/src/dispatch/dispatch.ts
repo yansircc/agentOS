@@ -26,6 +26,13 @@ import type {
   DispatchToScopeResult,
   DispatchToScopeSpec,
 } from "../types";
+import {
+  makeOperationRef,
+  makePreClaim,
+  scopeRefFromLegacyScope,
+  settleLivedClaim,
+  type PreClaim,
+} from "../effect-claim";
 
 import {
   copyTraceContext,
@@ -59,6 +66,7 @@ export interface DispatchEnvelope {
   readonly event: string;
   readonly data: unknown;
   readonly idempotencyKey: string;
+  readonly claim?: PreClaim;
   readonly traceContext?: TraceContext;
 }
 
@@ -141,6 +149,15 @@ export const DispatchLive = (
             idempotencyKey: requested.idempotencyKey,
             deliveredEventId,
             attempt,
+            ...(requested.claim === undefined
+              ? {}
+              : {
+                  claim: settleLivedClaim(requested.claim, {
+                    anchorId: `${requested.target.scope}:${deliveredEventId}`,
+                    anchorKind: "ledger_event",
+                    carrierRef: `dispatch:${requested.target.bindingRef}`,
+                  }),
+                }),
             ...(requested.traceContext === undefined
               ? {}
               : { traceContext: requested.traceContext }),
@@ -258,6 +275,7 @@ export const DispatchLive = (
             event: requested.event,
             data: requested.data,
             idempotencyKey: requested.idempotencyKey,
+            ...(requested.claim === undefined ? {} : { claim: requested.claim }),
             ...(requested.traceContext === undefined
               ? {}
               : { traceContext: requested.traceContext }),
@@ -330,11 +348,29 @@ export const DispatchLive = (
 
             const now = yield* Clock.currentTimeMillis;
             const traceContext = copyTraceContext(spec.traceContext);
+            const claim = makePreClaim({
+              operationRef: makeOperationRef("dispatch", [
+                scope,
+                spec.target.bindingRef,
+                spec.target.scope,
+                spec.idempotencyKey,
+              ]),
+              scopeRef: scopeRefFromLegacyScope(spec.target.scope),
+              authorityRef: {
+                authorityId: "cap_dispatch",
+                authorityClass: "effect",
+              },
+              originRef: {
+                originId: scope,
+                originKind: "agent_do",
+              },
+            });
             const requestedPayload: DispatchRequestedPayload = {
               target: spec.target,
               event: spec.event,
               data: spec.data,
               idempotencyKey: spec.idempotencyKey,
+              claim,
               ...(traceContext === undefined ? {} : { traceContext }),
             };
             const requestedPayloadStr = yield* safeStringify(requestedPayload);
@@ -427,11 +463,20 @@ export const DispatchLive = (
                   );
                   const deliveredEventId = Number(appCursor.one().id);
                   const traceContext = copyTraceContext(envelope.traceContext);
+                  const claim =
+                    envelope.claim === undefined
+                      ? undefined
+                      : settleLivedClaim(envelope.claim, {
+                          anchorId: `${scope}:${deliveredEventId}`,
+                          anchorKind: "ledger_event",
+                          carrierRef: `dispatch:${envelope.sourceScope}`,
+                        });
                   const inboundPayload = JSON.stringify({
                     sourceScope: envelope.sourceScope,
                     outboundEventId: envelope.outboundEventId,
                     idempotencyKey: envelope.idempotencyKey,
                     deliveredEventId,
+                    ...(claim === undefined ? {} : { claim }),
                     ...(traceContext === undefined ? {} : { traceContext }),
                   } satisfies InboundAcceptedPayload);
                   sql.exec(

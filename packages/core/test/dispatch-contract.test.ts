@@ -18,6 +18,7 @@ import type {
   DispatchToScopeSpec,
   LedgerEventRpc,
 } from "../src";
+import { validateEffectClaim } from "../src/effect-claim";
 import type { DispatchTestDO } from "./test-worker";
 
 interface TestEnv {
@@ -102,12 +103,30 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
       expect(Number(outbox[0]?.delivered_event_id)).toBe(
         Number(outboundDelivered[0]?.id),
       );
-      expect(JSON.parse(String(outbound[0]?.payload))).toEqual({
+      const payload = JSON.parse(String(outbound[0]?.payload)) as {
+        readonly claim?: unknown;
+      };
+      expect(payload).toEqual({
         target: { bindingRef: "peer", scope: "dispatch-receiver-atomic" },
         event: "test.delivered",
         data: { message: "hello" },
         idempotencyKey: "intent-1",
+        claim: expect.objectContaining({
+          phase: "pre",
+          operationRef:
+            "dispatch:dispatch-sender-atomic:peer:dispatch-receiver-atomic:intent-1",
+          scopeRef: { kind: "realm", scopeId: "dispatch-receiver-atomic" },
+          authorityRef: {
+            authorityId: "cap_dispatch",
+            authorityClass: "effect",
+          },
+          originRef: {
+            originId: "dispatch-sender-atomic",
+            originKind: "agent_do",
+          },
+        }),
       });
+      expect(validateEffectClaim(payload.claim).ok).toBe(true);
     });
 
     const receiverEvents: LedgerEventRpc[] = await receiver.events();
@@ -222,6 +241,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
       readonly outboundEventId: number;
       readonly idempotencyKey: string;
       readonly deliveredEventId: number;
+      readonly claim?: unknown;
     }>(events, "dispatch.inbound.accepted");
 
     expect(deliveredPayload).toEqual(data);
@@ -232,7 +252,16 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
       outboundEventId,
       idempotencyKey: "payload-intent",
       deliveredEventId: events.find((e) => e.kind === "test.delivered")?.id,
+      claim: expect.objectContaining({
+        phase: "lived",
+        operationRef:
+          "dispatch:dispatch-sender-payload:peer:dispatch-receiver-payload:payload-intent",
+        anchorRef: expect.objectContaining({
+          anchorKind: "ledger_event",
+        }),
+      }),
     });
+    expect(validateEffectClaim(inboundPayload.claim).ok).toBe(true);
   });
 
   it("carries traceContext verbatim on outbound and inbound metadata rows", async () => {
@@ -276,6 +305,11 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
       outboundEventId,
       idempotencyKey: "trace-intent",
       deliveredEventId: delivered?.id,
+      claim: expect.objectContaining({
+        phase: "lived",
+        operationRef:
+          "dispatch:dispatch-sender-trace:peer:dispatch-receiver-trace:trace-intent",
+      }),
       traceContext,
     });
   });
