@@ -4,7 +4,7 @@
  * Validates:
  *   - token deltas are SSE-only;
  *   - final facts match submit()'s llm.response / deliver shape;
- *   - unsupported adapters fail before provider dispatch;
+ *   - native OpenAI-compatible / Anthropic / Gemini wires share the public surface;
  *   - client disconnect writes abort, not deliver.
  */
 
@@ -20,7 +20,8 @@ interface TestEnv {
 
 interface TextStreamRpc {
   readonly submitText: () => Promise<Response>;
-  readonly submitUnsupportedText: () => Promise<Response>;
+  readonly submitAnthropicText: () => Promise<Response>;
+  readonly submitGeminiText: () => Promise<Response>;
   readonly cancelTextAfterFirstChunkForTest: () => Promise<LedgerEventRpc[]>;
   readonly events: () => Promise<LedgerEventRpc[]>;
 }
@@ -187,30 +188,146 @@ describe("submitTextStream — spec-31", () => {
     });
   });
 
-  it("unsupported adapter returns typed SSE abort and does not call provider", async () => {
-    let fetchCalls = 0;
-    globalThis.fetch = (async () => {
-      fetchCalls += 1;
-      throw new Error("provider should not be called");
+  it("streams native Anthropic Messages SSE through the same public surface", async () => {
+    const fetchCalls: Array<{
+      readonly url: string;
+      readonly headers: Headers;
+      readonly body: unknown;
+    }> = [];
+    const encoder = new TextEncoder();
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      fetchCalls.push({
+        url: String(input),
+        headers: new Headers(init?.headers),
+        body: JSON.parse(String(init?.body ?? "{}")) as unknown,
+      });
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(
+              encoder.encode(
+                [
+                  'event: message_start\ndata: {"type":"message_start","message":{"usage":{"input_tokens":5,"output_tokens":0}}}',
+                  "",
+                  'event: content_block_delta\ndata: {"type":"content_block_delta","delta":{"type":"text_delta","text":"Bon"}}',
+                  "",
+                  'event: content_block_delta\ndata: {"type":"content_block_delta","delta":{"type":"text_delta","text":"jour"}}',
+                  "",
+                  'event: message_delta\ndata: {"type":"message_delta","usage":{"output_tokens":2}}',
+                  "",
+                  'event: message_stop\ndata: {"type":"message_stop"}',
+                  "",
+                ].join("\n"),
+              ),
+            );
+            controller.close();
+          },
+        }),
+        { status: 200 },
+      );
     }) as typeof globalThis.fetch;
 
-    const stub = stubFor("text-stream-unsupported");
+    const stub = stubFor("text-stream-anthropic");
     const frames = await readFrames(
-      await stub.submitUnsupportedText(),
-      (frame) => frame.event === "aborted",
+      await stub.submitAnthropicText(),
+      (frame) => frame.event === "done",
     );
 
-    expect(fetchCalls).toBe(0);
-    expect(JSON.parse(frames[0]?.data ?? "{}")).toMatchObject({
-      turnId: 1,
-      code: "unsupported",
+    expect(fetchCalls).toHaveLength(1);
+    expect(fetchCalls[0]?.url).toBe("https://anthropic-stream.test/v1/messages");
+    expect(fetchCalls[0]?.headers.get("x-api-key")).toBe("test-key");
+    expect(fetchCalls[0]?.headers.get("anthropic-version")).toBe("2023-06-01");
+    expect(fetchCalls[0]?.body).toMatchObject({
+      model: "claude-test",
+      stream: true,
+      max_tokens: expect.any(Number),
     });
+    expect(frames.map((frame) => frame.event)).toEqual([
+      "usage",
+      "token",
+      "token",
+      "usage",
+      "done",
+    ]);
+
     const rows = await stub.events();
     expect(rows.map((row) => row.kind)).toEqual([
       "chat.ingested",
-      "agent.aborted.upstream_failure",
+      "llm.response",
+      "text.done",
     ]);
-    expect(JSON.stringify(rows)).not.toContain("text.done");
+    expect(rows[1]?.payload).toMatchObject({
+      text: "Bonjour",
+      toolCalls: [],
+      usage: { promptTokens: 5, completionTokens: 2, totalTokens: 7 },
+    });
+  });
+
+  it("streams native Gemini SSE through the same public surface", async () => {
+    const fetchCalls: Array<{
+      readonly url: string;
+      readonly headers: Headers;
+      readonly body: unknown;
+    }> = [];
+    const encoder = new TextEncoder();
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      fetchCalls.push({
+        url: String(input),
+        headers: new Headers(init?.headers),
+        body: JSON.parse(String(init?.body ?? "{}")) as unknown,
+      });
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(
+              encoder.encode(
+                [
+                  'data: {"candidates":[{"content":{"parts":[{"text":"Ni"}]}}]}',
+                  "",
+                  'data: {"candidates":[{"content":{"parts":[{"text":"hao"}]}}],"usageMetadata":{"promptTokenCount":6,"candidatesTokenCount":2,"totalTokenCount":8}}',
+                  "",
+                ].join("\n"),
+              ),
+            );
+            controller.close();
+          },
+        }),
+        { status: 200 },
+      );
+    }) as typeof globalThis.fetch;
+
+    const stub = stubFor("text-stream-gemini");
+    const frames = await readFrames(
+      await stub.submitGeminiText(),
+      (frame) => frame.event === "done",
+    );
+
+    expect(fetchCalls).toHaveLength(1);
+    expect(fetchCalls[0]?.url).toBe(
+      "https://gemini-stream.test/v1beta/models/gemini-test:streamGenerateContent?alt=sse",
+    );
+    expect(fetchCalls[0]?.headers.get("x-goog-api-key")).toBe("test-key");
+    expect(fetchCalls[0]?.body).toMatchObject({
+      contents: expect.any(Array),
+    });
+    expect(frames.map((frame) => frame.event)).toEqual([
+      "token",
+      "token",
+      "usage",
+      "done",
+    ]);
+
+    const rows = await stub.events();
+    expect(rows.map((row) => row.kind)).toEqual([
+      "chat.ingested",
+      "llm.response",
+      "text.done",
+    ]);
+    expect(rows[1]?.payload).toMatchObject({
+      text: "Nihao",
+      toolCalls: [],
+      usage: { promptTokens: 6, completionTokens: 2, totalTokens: 8 },
+    });
   });
 
   it("client disconnect writes abort without llm.response or deliver", async () => {

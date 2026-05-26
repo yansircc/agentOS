@@ -48,6 +48,54 @@ export const parseHttpStatus = (msg: string): number | undefined => {
   return m ? Number(m[1]) : undefined;
 };
 
+/** Decode Server-Sent Events into non-empty `data:` payloads.
+ *
+ * OpenAI Chat Completions, Anthropic Messages, and Gemini
+ * streamGenerateContent all use SSE framing but differ in the JSON
+ * payload. Keep frame splitting here so each wire adapter owns only
+ * its protocol JSON algebra.
+ */
+export async function* decodeSseData(
+  stream: ReadableStream<Uint8Array>,
+): AsyncIterable<string> {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    while (true) {
+      const read = await reader.read();
+      if (read.done) break;
+      buffer += decoder
+        .decode(read.value, { stream: true })
+        .replace(/\r\n/g, "\n");
+      let boundary = buffer.indexOf("\n\n");
+      while (boundary >= 0) {
+        const raw = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + 2);
+        const data = raw
+          .split(/\r?\n/)
+          .filter((line) => line.startsWith("data:"))
+          .map((line) => line.slice(5).trimStart())
+          .join("\n");
+        if (data.length > 0) yield data;
+        boundary = buffer.indexOf("\n\n");
+      }
+    }
+    const tail = buffer.trim();
+    if (tail.length > 0) {
+      const data = tail
+        .split(/\r?\n/)
+        .filter((line) => line.startsWith("data:"))
+        .map((line) => line.slice(5).trimStart())
+        .join("\n");
+      if (data.length > 0) yield data;
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 // Re-export Outcome (sourced from admission/lease.ts — leaf, no cycle)
 // so wire files can name it without a second import statement.
 export type { Outcome };

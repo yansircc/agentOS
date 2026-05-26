@@ -101,9 +101,9 @@ interface TextStreamEnv extends AgentDOEnv {
   readonly TEXT_STREAM_KEY?: string;
 }
 
-const textStreamRoute = {
+const openAiTextStreamRoute = {
   kind: "openai-chat-compatible",
-  endpointRef: "text-stream-endpoint",
+  endpointRef: "openai-text-stream-endpoint",
   credentialRef: "TEXT_STREAM_KEY",
   modelId: "text-stream-model",
 } satisfies LlmRoute;
@@ -111,7 +111,11 @@ const textStreamRoute = {
 export class TextStreamTestDO extends AgentDOBase<TextStreamEnv> {
   protected override provideRegistry(): ProviderRegistryConfig {
     return {
-      endpoints: { "text-stream-endpoint": "https://text-stream.test/v1" },
+      endpoints: {
+        "openai-text-stream-endpoint": "https://text-stream.test/v1",
+        "anthropic-text-stream-endpoint": "https://anthropic-stream.test",
+        "gemini-text-stream-endpoint": "https://gemini-stream.test",
+      },
       credentials: { TEXT_STREAM_KEY: this.env.TEXT_STREAM_KEY ?? "test-key" },
     };
   }
@@ -120,20 +124,34 @@ export class TextStreamTestDO extends AgentDOBase<TextStreamEnv> {
     return this.submitTextStream({
       intent: "Stream a greeting.",
       context: { source: "contract" },
-      route: textStreamRoute,
+      route: openAiTextStreamRoute,
       deliver: { event: "text.done" },
     });
   }
 
-  submitUnsupportedText(): Response {
+  submitAnthropicText(): Response {
     return this.submitTextStream({
-      intent: "Stream through unsupported route.",
-      context: {},
+      intent: "Stream a greeting through Anthropic.",
+      context: { source: "contract" },
       route: {
         kind: "anthropic-messages",
-        endpointRef: "text-stream-endpoint",
+        endpointRef: "anthropic-text-stream-endpoint",
         credentialRef: "TEXT_STREAM_KEY",
-        modelId: "unsupported",
+        modelId: "claude-test",
+      },
+      deliver: { event: "text.done" },
+    });
+  }
+
+  submitGeminiText(): Response {
+    return this.submitTextStream({
+      intent: "Stream a greeting through Gemini.",
+      context: { source: "contract" },
+      route: {
+        kind: "gemini-generate-content",
+        endpointRef: "gemini-text-stream-endpoint",
+        credentialRef: "TEXT_STREAM_KEY",
+        modelId: "gemini-test",
       },
       deliver: { event: "text.done" },
     });

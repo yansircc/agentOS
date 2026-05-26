@@ -42,6 +42,7 @@ data: {"turnId":1,"llmResponseId":2,"deliveredId":3}
 - Token deltas are not ledger rows.
 - Client disconnect writes `agent.aborted.client_disconnect` and does not write
   `llm.response` or the deliver event.
-- Adapter support is a capability. In v0 only `openai-chat-compatible` declares
-  `textStream.supported === true`.
-
+- Adapter support is a capability. Current text LLM route kinds all declare
+  `textStream.supported === true`: `cf-ai-binding`,
+  `openai-chat-compatible`, `anthropic-messages`, and
+  `gemini-generate-content`.

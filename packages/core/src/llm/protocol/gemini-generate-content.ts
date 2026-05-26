@@ -30,12 +30,15 @@ import type {
   DecodeStructuredResult,
   DecodedOutput,
   LlmProtocolAdapter,
+  TextStreamFrame,
+  TextStreamRequest,
   TurnRequest,
   TurnResponse,
 } from "./protocol-adapter";
 import {
   ADAPTER_VERSION,
   CHAT_COMPLETIONS_FORCED_TOOL_NAME,
+  decodeSseData,
   parseHttpStatus,
   type Outcome,
   unwrapErrorMessage,
@@ -218,6 +221,11 @@ const encodeGeminiTurn = (
   };
 };
 
+const encodeGeminiTextStream = (
+  route: Extract<LlmRoute, { kind: "gemini-generate-content" }>,
+  request: TextStreamRequest,
+): GeminiGenerateContentBody => encodeGeminiTurn(route, request);
+
 interface GeminiRawResponse {
   readonly candidates?: ReadonlyArray<{
     readonly content?: {
@@ -231,6 +239,47 @@ interface GeminiRawResponse {
     readonly candidatesTokenCount?: number;
     readonly totalTokenCount?: number;
   };
+}
+
+async function* decodeGeminiTextStream(
+  stream: ReadableStream<Uint8Array>,
+): AsyncIterable<TextStreamFrame> {
+  let sawChunk = false;
+
+  for await (const data of decodeSseData(stream)) {
+    sawChunk = true;
+    const parsed = JSON.parse(data) as GeminiRawResponse;
+    const cand = parsed.candidates?.[0];
+    const text = (cand?.content?.parts ?? [])
+      .filter((part): part is Extract<GeminiPart, { text: string }> =>
+        "text" in part && typeof part.text === "string",
+      )
+      .map((part) => part.text)
+      .join("");
+    if (text.length > 0) {
+      yield { type: "token", delta: text };
+    }
+
+    const usageMetadata = parsed.usageMetadata;
+    if (usageMetadata !== undefined) {
+      const promptTokens = usageMetadata.promptTokenCount ?? 0;
+      const completionTokens = usageMetadata.candidatesTokenCount ?? 0;
+      yield {
+        type: "usage",
+        usage: {
+          promptTokens,
+          completionTokens,
+          totalTokens:
+            usageMetadata.totalTokenCount ?? promptTokens + completionTokens,
+        },
+      };
+    }
+  }
+
+  if (!sawChunk) {
+    throw new Error("stream ended before any Gemini chunk");
+  }
+  yield { type: "done" };
 }
 
 const foldGeminiParts = (
@@ -463,8 +512,9 @@ export const geminiGenerateContentAdapter: LlmProtocolAdapter<"gemini-generate-c
     encodeTurn: encodeGeminiTurn,
     decodeTurn: decodeGeminiTurn,
     textStream: {
-      supported: false,
-      reason: "gemini-generate-content text streaming is not implemented in v0",
+      supported: true,
+      encode: encodeGeminiTextStream,
+      decodeFrames: decodeGeminiTextStream,
     },
     encodeStructured: encodeGeminiStructured,
     decodeStructured: decodeGeminiStructured,
