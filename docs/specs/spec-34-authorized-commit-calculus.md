@@ -1,6 +1,6 @@
 # Spec 34: Authorized Commit Calculus — Core v0.3 Refactor
 
-> **Status**: Draft v0
+> **Status**: Draft v1
 > **Date**: 2026-05-26
 > **Triggers**: Rebuild `@agent-os/core` public surface as v0.3.0 (breaking).
 > **Supersedes (on adoption)**: see §11.
@@ -289,10 +289,20 @@ Unsupported vocabulary:
 
 ---
 
-## 7. Extension package claims
+## 7. Extension package capabilities
 
-The v0.3 mechanism that lets a non-core package claim a namespace so app code
-cannot forge package facts.
+Extension support has two halves:
+
+1. **namespace claim** — a package declares the event prefixes it owns, so
+   app-facing write paths cannot forge those facts;
+2. **positive capability** — core mints a scoped handle that lets that package
+   commit its own protected facts without reaching into core internals.
+
+The namespace claim is the v0.3 baseline already required by image/sandbox
+package extraction. The positive capability is the v0.4 packageization target;
+its final algebra is specified here, but implementation may ship in phases.
+
+### 7.1 Namespace claim
 
 ```ts
 interface ExtensionPackage {
@@ -329,21 +339,122 @@ Consequences:
 - **No global mutable registry.** Extension registration is per-DO-class,
   declared by `registerExtensions()` override, validated at DO
   construction.
-- **No positive package write API in v0.3.** There is no
-  `ExtensionCapability.commit/effect/time` handle yet. A package that needs
-  to write its own package facts still needs a later positive capability API
-  (`v0.3.x` / `v0.4`) or a repo-internal integration point. This spec only
-  prevents app forgery of registered package namespaces.
+- **The claim is not a write handle.** It only removes the prefix from
+  `cap_app`. The package still needs §7.2 before it can commit package-owned
+  facts.
 
 v0.3 ships `ExtensionPackage`, disjoint-prefix validation, and the negative
-runtime commit gate. It ships no public app-facing extension helper and no
-positive package commit handle.
+runtime commit gate.
+
+### 7.2 Positive package capability
+
+When the positive phase ships, core mints an unforgeable scoped handle for a
+registered package:
+
+```ts
+type ExtensionEventSpec = {
+  event: string
+  data: unknown
+}
+
+type ExtensionEffectOutcome<R> =
+  | { ok: true; result: R }
+  | { ok: false; cause: unknown }
+
+interface ExtensionCapability {
+  readonly packageId: string
+  readonly kindPrefixes: ReadonlyArray<string>
+
+  commit(spec: ExtensionEventSpec): Promise<{ id: number }>
+
+  time(spec: ExtensionEventSpec & { at: number }): Promise<{ id: number }>
+
+  effect<I, R>(spec: {
+    idempotencyKey: string
+    intent: I
+    run: (intent: I, signal: AbortSignal) => Promise<R>
+    settle: (outcome: ExtensionEffectOutcome<R>) => ExtensionEventSpec
+  }): Promise<{ eventId: number; outcome: ExtensionEffectOutcome<R> }>
+}
+
+class AgentDOBase {
+  protected extensionCapability(packageId: string): ExtensionCapability
+}
+```
+
+Rules:
+
+- **P-1.** The handle can be minted only for a package returned by
+  `registerExtensions()` in the current DO class. Missing package id =
+  unavailable capability, not fallback to `cap_app`.
+- **P-2.** `commit` and `time` accept only event kinds covered by that
+  package's registered prefixes. Package A cannot write package B, core, or
+  app facts.
+- **P-3.** The handle is scope-bound to the current DO instance. It is not an
+  RPC argument, not serializable, and not a bearer token that can be moved
+  across scopes.
+- **P-4.** `time` is `cap_scheduler(cap_ext)`; the pending row records enough
+  owner identity for the later alarm to promote the same package-owned event,
+  not an app fact.
+- **P-5.** `effect` is the positive form of the kernel effect op:
+  external side-effect plus exactly-one ledger settlement by idempotency key.
+  `settle` must return one package-owned event. Large logs, files, build
+  outputs, deploy manifests, and rollback material remain carrier refs.
+- **P-6.** Positive extension authority does not include delegated app-fact
+  authority. If a package result should also advance an app saga, the host app
+  commits that app fact separately under `cap_app`.
+- **P-7.** Extension packages never receive `cap_submit`, `cap_dispatch`,
+  `cap_resource`, or `cap_admission`. They may call public composites/tools,
+  but cannot write those vocabularies directly.
+
+This is the missing piece for reusable package-owned vocabularies such as
+`git.*`, `verification.*`, `deploy.*`, and `staging.*`. Without it, those
+packages must either avoid package-owned events or improperly reach into core.
+
+### 7.3 Implementation stages
+
+The implementation can land without forcing zeroY-style app pressure to wait
+for package extraction:
+
+| Stage | Ships | Does not claim |
+|-------|-------|----------------|
+| P0 — v0.3 baseline | `ExtensionPackage` declaration + negative app gate | package-owned writes |
+| P1 — positive commit/time | `ExtensionCapability.commit`, `ExtensionCapability.time`, prefix owner validation, package-only tests | core-owned external-effect outbox semantics |
+| P2 — positive effect | `ExtensionCapability.effect` with idempotent side-effect settlement | generic rollback engine or carrier byte store |
+
+P1 is enough for a package to record proof facts after a carrier operation whose
+idempotency is already handled by the carrier/provider. P2 is required when
+agentOS itself claims the idempotency boundary for package-owned live effects.
+
+### 7.4 Pressure rule
+
+Positive capability blocks **package-owned protected vocabularies**, not
+app-scoped MVP composition.
+
+Before extracting reusable carrier packages, pressure apps should use ordinary
+tools plus app-owned facts:
+
+```text
+carrier tool -> tool.executed.result(proof refs)
+host app     -> change.gate.recorded / change.ready_for_review
+host app     -> change.approval.decided
+host app     -> change.publish.started / change.publish.step_recorded
+host app     -> change.published | change.publish_failed
+```
+
+Only facts that remain stable across pressure apps graduate into package-owned
+vocabularies. This prevents zeroY-specific nouns from being frozen as
+`git.*`, `verification.*`, `deploy.*`, or `staging.*` too early.
 
 ---
 
 ## 8. Public surface (final)
 
 ### 8.1 `AgentDOBase` method set
+
+This is the P0/v0.3 baseline surface. P1 adds
+`protected extensionCapability(packageId)` from §7.2; it is not RPC-callable
+and must not appear in app-facing composites.
 
 ```ts
 class AgentDOBase<Env> {
@@ -377,6 +488,8 @@ class AgentDOBase<Env> {
   protected provideDispatchTargets(): DispatchTargetRegistry
   protected provideRefResolver(): RefResolver
   protected registerExtensions(): ReadonlyArray<ExtensionPackage>
+  // P1 positive package surface:
+  protected extensionCapability(packageId: string): ExtensionCapability
   // provideRegistry() removed — replaced by provideRefResolver().
 }
 ```
@@ -449,6 +562,16 @@ export type { CapabilityLease, AttemptKey }           // for admissionLease() re
 
 // Ref resolution and extension package claims
 export type { RefResolver, ExtensionPackage }
+// P1 also exports type { ExtensionCapability } from "@agent-os/core/extensions"
+```
+
+Carrier packages that need only these contracts import narrow subpaths instead
+of the `@agent-os/core` barrel, so modality packages do not pull the
+Cloudflare Durable Object type surface:
+
+```ts
+import type { ExtensionCapability, ExtensionPackage } from "@agent-os/core/extensions"
+import { RefResolutionFailed, type RefResolver } from "@agent-os/core/ref-resolver"
 ```
 
 Removed from barrel:
@@ -519,8 +642,9 @@ replaces this with:
 > Image job vocabulary is **package-owned** via §7's extension package
 > claim. Core does not reserve modality-named namespaces. The
 > `@agent-os/image` package may register `image.` as its kindPrefix so
-> app-facing core write paths reject `image.*`; positive package commits are
-> deferred until a package capability API exists.
+> app-facing core write paths reject `image.*`; package-owned writes use the
+> staged positive capability in §7.2 / §7.3 when that implementation phase is
+> enabled.
 
 ---
 
@@ -534,7 +658,7 @@ Concrete delta against core v0.2.17. All removals are breaking.
 |-----------------------------------|-----------------------------------|----------------------------------------|
 | `AgentDOBase.generateImage`       | `@agent-os/image`                 | carrier exposed via tools or direct call |
 | `ImageRoute / ImageArtifact / ImageResult / GenerateImageSpec / ImageRequest` types in barrel | `@agent-os/image` barrel | re-export from package, not core |
-| `image.*` core reserved prefix (spec-32 §1) | extension package claim (§7) | `@agent-os/image` may register `image.` so app-facing core writes cannot forge image facts; positive package writes are deferred |
+| `image.*` core reserved prefix (spec-32 §1) | extension package claim (§7) | `@agent-os/image` may register `image.` so app-facing core writes cannot forge image facts; package-owned writes use staged positive capability |
 | `submitTextStream` method + `SubmitTextStreamSpec` / `SubmitTextStreamFrame` types | `@agent-os/streaming` (new) | moved out; if package is absent, v0.3 has no public token streaming |
 | `ProviderRegistryConfig` + `EndpointNotFound` / `CredentialNotFound` errors | generalized `RefResolver` | see §10.3 |
 
@@ -576,20 +700,19 @@ submit-specific fallback registry. Secret values still never enter the ledger.
 | spec-24  | INV-3                 | **Amend**: split per spec-34 §9.2.                                    |
 | spec-24  | §7 failure events     | **Amend**: add capability owner column (spec-34 §6).                  |
 | spec-25  | §7 admission key     | **Preserve**: `attemptKey = (route, schemaContract, strategy, adapterVersion)` is the canonical projection key (spec-34 §5).  |
-| spec-31  | text streaming       | **Supersede**: `submitTextStream` leaves `AgentDOBase`; future public surface belongs to `@agent-os/streaming`, with positive package writes deferred. |
+| spec-31  | text streaming       | **Supersede**: `submitTextStream` leaves `AgentDOBase`; future public surface belongs to `@agent-os/streaming`, with package-owned writes gated by §7.2. |
 | spec-32  | §1 reserved prefix   | **Supersede**: extension package claims (spec-34 §7) replace modality-named reservation. |
-| spec-32  | §2 package direction | **Supersede**: `AgentDOBase.generateImage` leaves core. `@agent-os/image` owns public image API; positive package commit authority is deferred. |
+| spec-32  | §2 package direction | **Supersede**: `AgentDOBase.generateImage` leaves core. `@agent-os/image` owns public image API; package commit authority follows §7.2 / §7.3. |
 
 ---
 
 ## 12. Open questions
 
-1. **[Open] When does the positive extension capability API ship?**
-   v0.3 ships package declarations, disjoint-prefix validation, and the
-   negative app-facing gate, but no `ExtensionCapability.commit/effect/time`
-   handle. The trigger to expose a stable positive helper is N>=2 packages
-   needing to commit their own kinds. Image is one repo-owned package; the
-   second independent package is unidentified.
+1. **[Open] What is the first package that requires P2
+   `ExtensionCapability.effect`?** P1 commit/time is enough for package proof
+   facts after carrier-owned idempotent operations. P2 should wait until a
+   package needs agentOS-owned idempotent side-effect settlement rather than a
+   provider/carrier idempotency key.
 
 2. **[Open] Deterministic replay primitive.** §9.1 demoted the claim. The
    open question is whether CF Workflow `step.do` capture is sufficient
@@ -617,9 +740,16 @@ implementation PR, which must show:
 - `CapabilityRejected` error is reachable via every write path that
   previously raised `ReservedEventKindError`; `ReservedEventKindError` is
   removed from the barrel.
-- `ExtensionPackage` type exists and runtime registration rejects overlapping
-  prefixes. Registered extension facts are not writable by app-facing
-  `emitEvent`, `submit.deliver.event`, or `dispatchToScope.event`.
+- P0 validation: `ExtensionPackage` type exists and runtime registration
+  rejects overlapping prefixes. Registered extension facts are not writable by
+  app-facing `emitEvent`, `submit.deliver.event`, `scheduleEvent`, or
+  `dispatchToScope.event`.
+- P1 validation: `ExtensionCapability.commit/time` can be minted only for a
+  registered package id; it can write only that package's prefixes; app code
+  still cannot forge those prefixes.
+- P2 validation: `ExtensionCapability.effect` settles exactly one
+  package-owned event per idempotency key and does not store carrier bytes in
+  the ledger.
 - `AgentDOBase.generateImage` and `AgentDOBase.submitTextStream` are absent.
   Their types are absent from `@agent-os/core` barrel.
 - `ProviderRegistryConfig`, `EndpointNotFound`, and `CredentialNotFound` are
@@ -682,5 +812,5 @@ spec-34 §2 (v0.3):
    composites (§4):     emitEvent / scheduleEvent / dispatchToScope / submit / streamEvents
    projections (§5):    runTrace / runStatus / quotaState / resourceState / admissionLease / events
    capabilities (§3):   cap_dispatch / cap_resource / cap_submit / cap_admission / cap_app / cap_scheduler
-   extensions (§7):     ExtensionPackage declarations + negative gate
+   extensions (§7):     ExtensionPackage declarations + negative gate + staged positive cap
 ```
