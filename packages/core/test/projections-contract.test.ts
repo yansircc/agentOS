@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  projectClaimTrace,
+  projectFailurePlane,
   projectQuotaState,
   projectResourceState,
   projectRunStatus,
   projectRunTrace,
 } from "../src/projections";
+import type { EffectClaim } from "../src/effect-claim";
 import type { LedgerEvent } from "../src/types";
 
 const event = (
@@ -21,7 +24,156 @@ const event = (
   payload,
 });
 
+const preClaim: EffectClaim = {
+  phase: "pre",
+  operationRef: "dispatch:source:binding:target:idem-1",
+  scopeRef: { kind: "conversation", scopeId: "thread/target" },
+  authorityRef: {
+    authorityId: "cap_dispatch",
+    authorityClass: "effect",
+  },
+  originRef: {
+    originId: "thread/source",
+    originKind: "agent_do",
+  },
+};
+
+const livedClaim: EffectClaim = {
+  ...preClaim,
+  phase: "lived",
+  anchorRef: {
+    anchorId: "thread/target:42",
+    anchorKind: "ledger_event",
+    carrierRef: "dispatch:binding",
+  },
+};
+
+const rejectedClaim: EffectClaim = {
+  phase: "rejected",
+  operationRef: "verify:subject-1",
+  scopeRef: { kind: "artifact", scopeId: "artifact/subject-1" },
+  authorityRef: {
+    authorityId: "verification.policy.default",
+    authorityClass: "effect",
+  },
+  originRef: {
+    originId: "@agent-os/verification",
+    originKind: "extension_package",
+  },
+  rejectionRef: {
+    rejectionId: "verification:proof-1",
+    rejectionKind: "policy_denied",
+    reason: "gate failed",
+  },
+};
+
 describe("standard projections — spec-34", () => {
+  it("projects claim trace from ledger claims without a second fact source", () => {
+    const rows = [
+      event(1, "dispatch.outbound.requested", { claim: preClaim }),
+      event(2, "noise.with.invalid.claim", {
+        claim: { ...preClaim, phase: "lived" },
+      }),
+      event(3, "dispatch.inbound.accepted", { claim: livedClaim }),
+      event(4, "tool.executed", {
+        claim: {
+          ...livedClaim,
+          operationRef: "tool:projection-scope:1:0:call-1",
+        },
+      }),
+    ];
+
+    expect(projectClaimTrace(rows)).toEqual([
+      {
+        eventId: 1,
+        eventKind: "dispatch.outbound.requested",
+        scope: "projection-scope",
+        ts: 10,
+        phase: "pre",
+        operationRef: preClaim.operationRef,
+        scopeRef: preClaim.scopeRef,
+        authorityRef: preClaim.authorityRef,
+        originRef: preClaim.originRef,
+      },
+      {
+        eventId: 3,
+        eventKind: "dispatch.inbound.accepted",
+        scope: "projection-scope",
+        ts: 30,
+        phase: "lived",
+        operationRef: livedClaim.operationRef,
+        scopeRef: livedClaim.scopeRef,
+        authorityRef: livedClaim.authorityRef,
+        originRef: livedClaim.originRef,
+        anchorRef: livedClaim.anchorRef,
+      },
+      {
+        eventId: 4,
+        eventKind: "tool.executed",
+        scope: "projection-scope",
+        ts: 40,
+        phase: "lived",
+        operationRef: "tool:projection-scope:1:0:call-1",
+        scopeRef: livedClaim.scopeRef,
+        authorityRef: livedClaim.authorityRef,
+        originRef: livedClaim.originRef,
+        anchorRef: livedClaim.anchorRef,
+      },
+    ]);
+
+    expect(
+      projectClaimTrace(rows, {
+        operationRef: livedClaim.operationRef,
+        phases: ["lived"],
+      }),
+    ).toEqual([
+      {
+        eventId: 3,
+        eventKind: "dispatch.inbound.accepted",
+        scope: "projection-scope",
+        ts: 30,
+        phase: "lived",
+        operationRef: livedClaim.operationRef,
+        scopeRef: livedClaim.scopeRef,
+        authorityRef: livedClaim.authorityRef,
+        originRef: livedClaim.originRef,
+        anchorRef: livedClaim.anchorRef,
+      },
+    ]);
+  });
+
+  it("projects failure plane from rejected claims and abort facts only", () => {
+    const rows = [
+      event(1, "verification.gate.rejected", { claim: rejectedClaim }),
+      event(2, "dispatch.outbound.failed", { error: "temporary" }),
+      event(3, "agent.aborted.tool_error", {
+        runId: 99,
+        reason: "tool failed",
+      }),
+    ];
+
+    expect(projectFailurePlane(rows)).toEqual([
+      {
+        eventId: 1,
+        eventKind: "verification.gate.rejected",
+        scope: "projection-scope",
+        ts: 10,
+        plane: "claim_rejected",
+        operationRef: rejectedClaim.operationRef,
+        rejectionRef: rejectedClaim.rejectionRef,
+        reason: "gate failed",
+      },
+      {
+        eventId: 3,
+        eventKind: "agent.aborted.tool_error",
+        scope: "projection-scope",
+        ts: 30,
+        plane: "run_aborted",
+        reason: "tool failed",
+      },
+    ]);
+  });
+
   it("projects run trace and delivered status from run-owned facts", () => {
     const rows = [
       event(1, "agent.run.started", { intent: "x" }),
