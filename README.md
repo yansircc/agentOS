@@ -51,6 +51,7 @@ Cookbooks are not runnable examples. They are short app-shape records:
 - [Approval Race](docs/cookbooks/approval-race.md)
 - [Carrier Mutation](docs/cookbooks/carrier-mutation.md)
 - [Parallel Dev MVP](docs/cookbooks/parallel-dev-mvp.md)
+- [Parallel Agent Startup](docs/cookbooks/parallel-agent-startup.md)
 
 ## Verification
 

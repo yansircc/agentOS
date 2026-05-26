@@ -35,6 +35,7 @@ This creates:
     env.sh
     ports.json
     pids.txt
+    startup.md
     task.md
   worktrees/a01-chatbot/
 ```
@@ -43,11 +44,15 @@ Agent instructions:
 
 ```sh
 cd .parallel/worktrees/a01-chatbot
-source ../runs/<runId>/agents/a01/env.sh
+source ../../runs/<runId>/agents/a01/env.sh
 ```
 
 Use `$PORT_BASE` for local servers and `$TEST_RUN_ID` / `$SCOPE_PREFIX` for
 all scopes, R2 keys, queue names, and test fixtures.
+
+Provider secrets are loaded from the repo root `.dev.vars` by `env.sh`. See
+[Parallel Agent Startup](./parallel-agent-startup.md) for the expected
+variable names and per-agent startup checklist.
 
 ## Write-Set Rule
 
