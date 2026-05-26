@@ -105,6 +105,38 @@ export class ExtensionTestDO extends AgentDOBase<AgentDOEnv> {
       },
     ];
   }
+
+  commitImageFact(data: unknown): Promise<{ id: number }> {
+    return this.extensionCapability("@agent-os/image").commit({
+      event: "image.job.recorded",
+      data,
+    });
+  }
+
+  commitWrongPrefix(data: unknown): Promise<{ id: number }> {
+    return this.extensionCapability("@agent-os/image").commit({
+      event: "git.commit.recorded",
+      data,
+    });
+  }
+
+  commitMissingExtension(data: unknown): Promise<{ id: number }> {
+    return this.extensionCapability("@agent-os/missing").commit({
+      event: "missing.fact",
+      data,
+    });
+  }
+
+  scheduleImageFact(
+    at: number,
+    data: unknown,
+  ): Promise<{ id: number }> {
+    return this.extensionCapability("@agent-os/image").time({
+      at,
+      event: "image.job.deferred",
+      data,
+    });
+  }
 }
 
 interface WorkerEnv extends AgentDOEnv {
