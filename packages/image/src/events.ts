@@ -1,17 +1,19 @@
 import { isRecord } from "./shared";
+import { IMAGE_EVENT_PREFIX } from "./extension";
 
 /**
- * Reserved substrate vocabulary. v0 has no public writer for these events:
- * passing one to AgentDOBase.emitEvent / scheduleEvent / dispatchToScope will
- * fail with ReservedEventKindError. Use these constants only for read-side
- * projection of substrate-emitted facts when a future image job writer ships.
+ * Package-owned vocabulary. Core does not reserve modality prefixes globally:
+ * a DO protects these facts by returning `imageExtensionPackage(version)` from
+ * registerExtensions(), which makes app-facing core write paths reject image.*.
+ * v0 ships projection names and the negative gate declaration only; positive
+ * package commits remain deferred by spec-34.
  */
 export const IMAGE_EVENTS = {
-  JOB_REQUESTED: "image.job.requested",
-  PROVIDER_COMPLETED: "image.provider.completed",
-  ARTIFACT_MATERIALIZED: "image.artifact.materialized",
-  JOB_FAILED: "image.job.failed",
-  JOB_CANCELLED: "image.job.cancelled",
+  JOB_REQUESTED: `${IMAGE_EVENT_PREFIX}job.requested`,
+  PROVIDER_COMPLETED: `${IMAGE_EVENT_PREFIX}provider.completed`,
+  ARTIFACT_MATERIALIZED: `${IMAGE_EVENT_PREFIX}artifact.materialized`,
+  JOB_FAILED: `${IMAGE_EVENT_PREFIX}job.failed`,
+  JOB_CANCELLED: `${IMAGE_EVENT_PREFIX}job.cancelled`,
 } as const;
 
 export type ImageEventKind = (typeof IMAGE_EVENTS)[keyof typeof IMAGE_EVENTS];

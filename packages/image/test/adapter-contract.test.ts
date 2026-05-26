@@ -4,14 +4,14 @@
  * Validates P3 / C5 from spec-28 without touching real providers.
  */
 
-import { Layer, ManagedRuntime } from "effect";
+import { Effect, Layer, ManagedRuntime } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 
 import {
   cfAiBindingImageAdapter,
   generateImageEffect,
   ImageAiBinding,
-  ImageProviderRegistryLive,
+  ImageRefResolverLive,
   openaiChatCompatibleImageAdapter,
 } from "../src";
 
@@ -29,7 +29,10 @@ const runtimeFor = (
   ManagedRuntime.make(
     Layer.mergeAll(
       Layer.succeed(ImageAiBinding, ai),
-      ImageProviderRegistryLive({ endpoints, credentials }),
+      ImageRefResolverLive({
+        endpoint: (ref) => endpoints[ref] ?? null,
+        credential: (ref) => credentials[ref] ?? null,
+      }),
     ),
   );
 
@@ -176,6 +179,34 @@ describe("image route adapters — P3 C5", () => {
         new Error("HTTP 400 Bad Request: API_KEY_INVALID"),
       ),
     ).toEqual({ class: "AuthError", status: 401 });
+  });
+
+  it("fails fast through core RefResolver when endpoint refs are missing", async () => {
+    const runtime = runtimeFor(SENTINEL_AI, {}, {});
+    try {
+      const result = await runtime.runPromise(
+        generateImageEffect({
+          route: {
+            kind: "openai-chat-compatible-image",
+            endpointRef: "missing-endpoint",
+            credentialRef: "OPENROUTER_KEY",
+            modelId: "google/gemini-2.5-flash-image",
+          },
+          prompt: "rainy neon street",
+        }).pipe(Effect.either),
+      );
+
+      expect(result._tag).toBe("Left");
+      if (result._tag === "Left") {
+        expect(result.left._tag).toBe("agent_os.ref_resolution_failed");
+        expect(result.left).toMatchObject({
+          kind: "endpoint",
+          ref: "missing-endpoint",
+        });
+      }
+    } finally {
+      await runtime.dispose();
+    }
   });
 
   it("decodes data URL, URL, and binary provider artifacts", () => {

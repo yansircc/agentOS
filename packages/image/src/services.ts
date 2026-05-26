@@ -1,4 +1,8 @@
 import { Context, Data, Effect, Layer } from "effect";
+import {
+  RefResolutionFailed,
+  type RefResolver,
+} from "@agent-os/core/ref-resolver";
 
 /** Minimal `env.AI.run` shape consumed by the CF AI image adapter. */
 export interface ImageAi {
@@ -13,58 +17,41 @@ export class ImageAiBinding extends Context.Tag(
   "@agent-os/image/ImageAiBinding",
 )<ImageAiBinding, ImageAi>() {}
 
-export class ImageEndpointNotFound extends Data.TaggedError(
-  "agent_os.image_endpoint_not_found",
-)<{
-  readonly ref: string;
-}> {}
-
-export class ImageCredentialNotFound extends Data.TaggedError(
-  "agent_os.image_credential_not_found",
-)<{
-  readonly ref: string;
-}> {}
-
 export class ImageUpstreamFailure extends Data.TaggedError(
   "agent_os.image_upstream_failure",
 )<{
   readonly cause: unknown;
 }> {}
 
-export class ImageProviderRegistry extends Context.Tag(
-  "@agent-os/image/ImageProviderRegistry",
+export class ImageRefResolver extends Context.Tag(
+  "@agent-os/image/ImageRefResolver",
 )<
-  ImageProviderRegistry,
+  ImageRefResolver,
   {
-    readonly resolveEndpoint: (
+    readonly endpoint: (
       ref: string,
-    ) => Effect.Effect<string, ImageEndpointNotFound>;
-    readonly resolveCredential: (
+    ) => Effect.Effect<string, RefResolutionFailed>;
+    readonly credential: (
       ref: string,
-    ) => Effect.Effect<string, ImageCredentialNotFound>;
+    ) => Effect.Effect<string, RefResolutionFailed>;
   }
 >() {}
 
-export interface ImageProviderRegistryConfig {
-  readonly endpoints: Readonly<Record<string, string>>;
-  readonly credentials: Readonly<Record<string, string>>;
-}
-
-export const ImageProviderRegistryLive = (
-  config: ImageProviderRegistryConfig,
-): Layer.Layer<ImageProviderRegistry> =>
-  Layer.succeed(ImageProviderRegistry, {
-    resolveEndpoint: (ref) => {
-      const value = config.endpoints[ref];
-      if (value === undefined) {
-        return Effect.fail(new ImageEndpointNotFound({ ref }));
+export const ImageRefResolverLive = (
+  resolver: RefResolver,
+): Layer.Layer<ImageRefResolver> =>
+  Layer.succeed(ImageRefResolver, {
+    endpoint: (ref) => {
+      const value = resolver.endpoint(ref);
+      if (value === null) {
+        return Effect.fail(new RefResolutionFailed({ kind: "endpoint", ref }));
       }
       return Effect.succeed(value);
     },
-    resolveCredential: (ref) => {
-      const value = config.credentials[ref];
-      if (value === undefined) {
-        return Effect.fail(new ImageCredentialNotFound({ ref }));
+    credential: (ref) => {
+      const value = resolver.credential(ref);
+      if (value === null) {
+        return Effect.fail(new RefResolutionFailed({ kind: "credential", ref }));
       }
       return Effect.succeed(value);
     },
