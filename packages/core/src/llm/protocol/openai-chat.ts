@@ -30,6 +30,7 @@ import type {
 import {
   ADAPTER_VERSION,
   CHAT_COMPLETIONS_FORCED_TOOL_NAME,
+  type Outcome,
   unwrapErrorMessage,
 } from "./shared";
 import { validateAgainstSchema } from "../../admission/json-schema";
@@ -207,9 +208,7 @@ const decodeChatCompletionsStructured = (
   };
 };
 
-const classifyChatCompletionsError = (
-  error: unknown,
-): import("./shared").Outcome => {
+const classifyChatCompletionsError = (error: unknown): Outcome => {
   const msg = unwrapErrorMessage(error);
   const lower = msg.toLowerCase();
   if (lower.includes("401") || lower.includes("unauthor"))

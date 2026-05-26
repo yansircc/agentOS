@@ -12,7 +12,7 @@
 import { Effect, Exit } from "effect";
 import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "@effect/vitest";
 
 import { Ledger } from "../../src/ledger";
 import {

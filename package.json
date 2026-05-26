@@ -10,5 +10,8 @@
   },
   "devDependencies": {
     "typescript": "^5.7.2"
+  },
+  "patchedDependencies": {
+    "@effect/vitest@0.29.0": "patches/@effect%2Fvitest@0.29.0.patch"
   }
 }

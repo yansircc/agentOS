@@ -36,6 +36,7 @@ import {
   ADAPTER_VERSION,
   CHAT_COMPLETIONS_FORCED_TOOL_NAME,
   parseHttpStatus,
+  type Outcome,
   unwrapErrorMessage,
 } from "./shared";
 import { validateAgainstSchema } from "../../admission/json-schema";
@@ -301,9 +302,7 @@ const decodeAnthropicStructured = (
   };
 };
 
-const classifyAnthropicError = (
-  error: unknown,
-): import("./shared").Outcome => {
+const classifyAnthropicError = (error: unknown): Outcome => {
   const msg = unwrapErrorMessage(error);
   const status = parseHttpStatus(msg);
   const lower = msg.toLowerCase();

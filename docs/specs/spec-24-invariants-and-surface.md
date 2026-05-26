@@ -79,6 +79,29 @@ the consume write, so quota read-modify-write is atomic by construction
 This rules out the most common substrate failure: a second writer to a
 derived counter that drifts from the ledger.
 
+### 3.2 Runtime boundary for v1
+
+v1 is a **Cloudflare agent substrate kernel**, not a generic Node/Postgres
+runtime. Production core may depend on Cloudflare Durable Object identity,
+DO SQLite, `transactionSync`, alarms, Service Bindings, and Workers bindings.
+
+In-memory implementations are permitted only as **model-test harnesses** for
+projection/property tests. They are not public runtime support, not an app
+deployment target, and not a portability guarantee. Any in-memory model must
+preserve the DO subset it claims to model, especially synchronous
+read-decide-write transaction semantics.
+
+`@effect/sql-sqlite-do` is permitted as an internal Cloudflare-only SQL
+read/migration facade over DO SQLite. It must not own or wrap the critical
+read-decide-write paths that currently depend on
+`DurableObjectState.transactionSync`; those paths remain repo-owned
+transaction boundaries.
+
+Postgres / Node runtime support is a v2 research boundary. It cannot be
+introduced by hiding async transactions behind the v1 synchronous transaction
+contract; doing so would make `attemptStructured`, resource reservation, and
+dispatch idempotency look atomic while depending on weaker semantics.
+
 ---
 
 ## 4. Agent capability boundary

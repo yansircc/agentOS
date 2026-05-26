@@ -13,7 +13,7 @@ import {
   SqlError,
   safeStringify,
 } from "../errors";
-import type { EventQueryOptions, LedgerEvent } from "../types";
+import type { EventQueryOptions, LedgerEvent, LedgerEventRpc } from "../types";
 import { EventBus } from "./event-bus";
 
 const DEFAULT_EVENT_LIMIT = 1000;
@@ -164,7 +164,7 @@ export const LedgerLive = (
  *  serialization without re-deriving it. */
 export const eventToRpc = (
   event: LedgerEvent,
-): import("../types").LedgerEventRpc => ({
+): LedgerEventRpc => ({
   id: event.id,
   ts: event.ts,
   kind: event.kind,
