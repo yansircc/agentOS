@@ -1,0 +1,17 @@
+import { defineConfig } from "vitest/config";
+
+export default defineConfig({
+  resolve: {
+    alias: {
+      "@agent-os/core": new URL("../core/src/index.ts", import.meta.url).pathname,
+      "@agent-os/ops-api": new URL(
+        "../ops-api/src/index.ts",
+        import.meta.url,
+      ).pathname,
+    },
+  },
+  test: {
+    fileParallelism: false,
+    globals: true,
+  },
+});
