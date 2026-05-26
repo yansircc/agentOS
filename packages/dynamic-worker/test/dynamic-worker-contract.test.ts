@@ -6,7 +6,9 @@ import {
   makeDynamicWorkerTool,
   runDynamicWorker,
   staticPolicy,
+  truncateUtf8,
   type DynamicWorkerBackend,
+  type DynamicWorkerLimits,
 } from "../src";
 
 describe("@agent-os/dynamic-worker", () => {
@@ -129,5 +131,60 @@ describe("@agent-os/dynamic-worker", () => {
       durationMs: expect.any(Number),
       workerId: "dw-tool",
     });
+  });
+
+  it("keeps bodyHead within the UTF-8 byte cap", () => {
+    const accented = truncateUtf8("é", 1);
+    expect(accented).toEqual({
+      head: "",
+      bytes: 2,
+      truncated: true,
+    });
+
+    const mixed = truncateUtf8("é汉🙂z", 6);
+    expect(mixed).toEqual({
+      head: "é汉",
+      bytes: 10,
+      truncated: true,
+    });
+    expect(new TextEncoder().encode(mixed.head).length).toBeLessThanOrEqual(6);
+  });
+
+  it("forwards configured limits to policy and backend", async () => {
+    const limits: DynamicWorkerLimits = { cpuMs: 7, subrequests: 2 };
+    const seen: Array<{
+      readonly owner: "policy" | "backend";
+      readonly limits?: DynamicWorkerLimits;
+    }> = [];
+    const backend: DynamicWorkerBackend = {
+      run: (request) =>
+        Effect.sync(() => {
+          seen.push({ owner: "backend", limits: request.limits });
+          return {
+            status: 200,
+            body: "ok",
+            workerId: "dw-limits",
+          };
+        }),
+    };
+    const tool = makeDynamicWorkerTool({
+      backend,
+      policy: ({ request }) =>
+        Effect.sync(() => {
+          seen.push({ owner: "policy", limits: request.limits });
+        }),
+      limits,
+    });
+
+    await expect(
+      tool.execute({
+        code: "export default { fetch: () => new Response('ok') }",
+        url: "https://example.test/",
+      }),
+    ).resolves.toMatchObject({ ok: true, workerId: "dw-limits" });
+    expect(seen).toEqual([
+      { owner: "policy", limits },
+      { owner: "backend", limits },
+    ]);
   });
 });

@@ -57,9 +57,22 @@ export const validateExtensionPackages = (
       owner: "@agent-os/core",
       prefix,
     }));
+  const packageIds = new Set<string>();
   const out: string[] = [];
 
   for (const pkg of packages) {
+    if (packageIds.has(pkg.packageId)) {
+      return {
+        ok: false,
+        error: new ExtensionCapabilityConflict({
+          packageId: pkg.packageId,
+          kindPrefix: "*",
+          claimedBy: pkg.packageId,
+        }),
+      };
+    }
+    packageIds.add(pkg.packageId);
+
     for (const prefix of pkg.kindPrefixes) {
       if (prefix.length === 0) {
         return {

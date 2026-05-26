@@ -6,7 +6,7 @@
     "packages/*"
   ],
   "scripts": {
-    "typecheck": "bun run --filter '@agent-os/core' typecheck"
+    "typecheck": "bun run --filter '@agent-os/*' typecheck"
   },
   "devDependencies": {
     "typescript": "^5.7.2"
