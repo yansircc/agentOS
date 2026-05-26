@@ -3,9 +3,7 @@
   "private": true,
   "type": "module",
   "workspaces": [
-    "packages/*",
-    "examples/*",
-    "spikes/*"
+    "packages/*"
   ],
   "scripts": {
     "typecheck": "bun run --filter '*' typecheck"
