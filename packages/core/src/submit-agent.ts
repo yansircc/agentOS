@@ -37,12 +37,23 @@ import {
 import { Ledger } from "./ledger";
 import { RefResolutionFailed, RefResolverService } from "./ref-resolver";
 import { Quota } from "./quota";
-import { executeTool, parseToolCall, type Tool } from "./tools";
+import {
+  executeTool,
+  parseToolCall,
+  validateToolRegistry,
+  type Tool,
+} from "./tools";
 import {
   Admission,
   type JsonSchemaObject,
   makeSchemaContract,
 } from "./admission";
+import {
+  makeOperationRef,
+  makePreClaim,
+  scopeRefFromLegacyScope,
+  settleLivedClaim,
+} from "./effect-claim";
 
 export interface SubmitSpec {
   /** Task input — what this specific invocation is for. Becomes the
@@ -192,7 +203,6 @@ export const submitAgentEffect = (
     );
 
     const tokensUsedRef = yield* Ref.make(0);
-
     // ====================================================================
     // Spec-25 short path: structured-output submit (one-shot, no loop).
     //
@@ -283,6 +293,20 @@ export const submitAgentEffect = (
     // ====================================================================
     // Spec-24 standard path: multi-turn tool loop.
     // ====================================================================
+
+    const registry = validateToolRegistry(spec.tools);
+    if (!registry.ok) {
+      return yield* finalAbort(
+        ABORT.TOOL_ERROR,
+        {
+          reason: "invalid_tool_registry",
+          issues: registry.issues,
+        },
+        scope,
+        started.id,
+        0,
+      );
+    }
 
     const initialMessages = yield* buildInitialMessages(spec);
 
@@ -378,6 +402,27 @@ export const submitAgentEffect = (
           // args never consume quota.
           const parsed = yield* parseToolCall(spec.tools, call);
           const { tool, args } = parsed;
+          const contract = tool.contract;
+          if (contract === undefined) {
+            return yield* new ToolError({
+              toolName: call.function.name,
+              cause: { reason: "missing_tool_contract" },
+            });
+          }
+          const claim = makePreClaim({
+            operationRef: makeOperationRef("tool", [
+              scope,
+              started.id,
+              turn,
+              call.id,
+            ]),
+            scopeRef: scopeRefFromLegacyScope(scope),
+            authorityRef: contract.authorityRef,
+            originRef: contract.originRef ?? {
+              originId: `run:${started.id}`,
+              originKind: "submit",
+            },
+          });
 
           // Per-attempt grant + execute (inside Effect.retry).
           // Each retry independently grants → retries count toward quota.
@@ -474,6 +519,11 @@ export const submitAgentEffect = (
               name: call.function.name,
               args: call.function.arguments,
               result,
+              claim: settleLivedClaim(claim, {
+                anchorId: claim.operationRef,
+                anchorKind: "carrier_proof",
+                carrierRef: `tool:${contract.toolId}`,
+              }),
             },
             scope,
           );
