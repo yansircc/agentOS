@@ -34,8 +34,12 @@ export type {
   QuotaStateSpec,
   QuotaState,
   ResourceState,
-  RunTrace,
+  RunListPage,
+  RunListSpec,
   RunStatus,
+  RunStatusKind,
+  RunSummary,
+  RunTrace,
   TraceContext,
 } from "./types";
 export type { DispatchTargetNamespace, DispatchTargetRegistry } from "./dispatch";

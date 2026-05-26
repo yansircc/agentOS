@@ -52,6 +52,8 @@ import type {
   ResourceReserveResult,
   ResourceReserveSpec,
   ResourceState,
+  RunListPage,
+  RunListSpec,
   RunStatus,
   RunTrace,
   ScheduledEventSpec,
@@ -103,8 +105,10 @@ import {
   projectAdmissionLease,
   projectQuotaState,
   projectResourceState,
+  projectRunsPage,
   projectRunStatus,
   projectRunTrace,
+  RUN_BEARING_KINDS,
 } from "./projections";
 
 export interface AgentDOEnv {
@@ -305,6 +309,25 @@ export abstract class AgentDOBase<
         const ledger = yield* Ledger;
         const rows = yield* ledger.streamSnapshot(scope);
         return projectRunStatus(rows, runId);
+      }),
+    );
+  }
+
+  /** spec-34 §5 standard projection — list runs scoped to this DO,
+   *  sorted runId DESC (newest first). Cursor-paginated via afterRunId.
+   *  Caller is responsible for bounding spec.limit. */
+  runs(spec: RunListSpec): Promise<RunListPage> {
+    const scope = this.ctx.id.name;
+    if (scope === undefined) {
+      return Promise.reject(new ScopeMissingError());
+    }
+    return this.runtimeFor(scope).runPromise(
+      Effect.gen(function* () {
+        const ledger = yield* Ledger;
+        const rows = yield* ledger.streamSnapshot(scope, {
+          kinds: RUN_BEARING_KINDS,
+        });
+        return projectRunsPage(rows, spec);
       }),
     );
   }

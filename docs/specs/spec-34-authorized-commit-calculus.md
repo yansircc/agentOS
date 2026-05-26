@@ -245,6 +245,20 @@ admissionLease(attemptKey): Promise<CapabilityLease | null>
 
 events(opts): Promise<ReadonlyArray<LedgerEventRpc>>
   // Raw cursor query. Existing; retained as the lowest-level projection.
+
+runs(spec): Promise<RunListPage>
+  // spec = { statuses?: ReadonlyArray<RunStatus["kind"]>;
+  //          afterRunId?: number;
+  //          limit: number }
+  // RunListPage = { runs: ReadonlyArray<RunSummary>; nextCursor: number | null }
+  // RunSummary = { runId; startedAt; status: RunStatus; durationMs? }
+  // Sorted runId DESC (newest first). Cursor is runId-keyed (afterRunId =
+  // strictly older than). Projection walks the scope's run-bearing kinds
+  // (`agent.run.started / .completed`, every `agent.aborted.*`) and applies
+  // the optional status filter in-memory after grouping; callers must NOT
+  // synthesize this list client-side from events() because event-level cursor
+  // pagination would truncate the newest runs first under any reasonable
+  // batch cap.
 ```
 
 Notes:

@@ -5,7 +5,11 @@ import type {
   QuotaState,
   QuotaStateSpec,
   ResourceState,
+  RunListPage,
+  RunListSpec,
   RunStatus,
+  RunStatusKind,
+  RunSummary,
   RunTerminal,
   RunTrace,
   RunTurn,
@@ -238,3 +242,117 @@ export const projectAdmissionLease = (
     const { lease } = projectLease(rows, key, now);
     return lease.status === "unknown" ? null : lease;
   });
+
+// ============================================================
+// projectRunsPage — list runs scoped to this DO (spec-34 §5).
+//
+//   Source: agent.run.started + agent.run.completed + every ABORT.* kind.
+//   Cursor: runId DESC; afterRunId means "strictly older than this id".
+//   Filter: optional status subset (delivered | aborted | open_without_terminal | orphaned).
+//
+// Input MUST be ordered by ledger id ASC (streamSnapshot's contract).
+// ============================================================
+
+export const RUN_BEARING_KINDS: ReadonlyArray<string> = [
+  "agent.run.started",
+  "agent.run.completed",
+  ...Object.values(ABORT),
+];
+
+const RUN_STARTED = "agent.run.started";
+const RUN_COMPLETED = "agent.run.completed";
+
+type TerminalAcc = {
+  readonly kind: "delivered" | "aborted";
+  readonly at: number;
+  readonly event: string;
+};
+
+const summarizeStatus = (
+  startedAt: number,
+  terminal: TerminalAcc | undefined,
+): RunStatus => {
+  if (terminal === undefined) {
+    return { kind: "open_without_terminal", startedAt };
+  }
+  if (terminal.kind === "delivered") {
+    return { kind: "delivered", at: terminal.at, event: terminal.event };
+  }
+  return { kind: "aborted", at: terminal.at, abortKind: terminal.event };
+};
+
+export const projectRunsPage = (
+  events: ReadonlyArray<LedgerEvent>,
+  spec: RunListSpec,
+): RunListPage => {
+  type Acc = {
+    runId: number;
+    startedAt: number;
+    terminal: TerminalAcc | undefined;
+  };
+
+  const byRun = new Map<number, Acc>();
+
+  for (const ev of events) {
+    if (ev.kind === RUN_STARTED) {
+      if (!byRun.has(ev.id)) {
+        byRun.set(ev.id, { runId: ev.id, startedAt: ev.ts, terminal: undefined });
+      }
+      continue;
+    }
+    const runId = numericPayloadRunId(ev);
+    if (runId === undefined) continue;
+    const acc = byRun.get(runId);
+    if (acc === undefined) continue;
+    if (acc.terminal !== undefined) continue;
+    if (ev.kind === RUN_COMPLETED) {
+      const eventName = payloadObject(ev.payload).event;
+      acc.terminal = {
+        kind: "delivered",
+        at: ev.ts,
+        event: typeof eventName === "string" ? eventName : RUN_COMPLETED,
+      };
+      continue;
+    }
+    if (abortKinds.has(ev.kind)) {
+      acc.terminal = { kind: "aborted", at: ev.ts, event: ev.kind };
+    }
+  }
+
+  const statusSet =
+    spec.statuses !== undefined && spec.statuses.length > 0
+      ? new Set<RunStatusKind>(spec.statuses)
+      : undefined;
+
+  const summaries: RunSummary[] = [];
+  for (const acc of byRun.values()) {
+    const status = summarizeStatus(acc.startedAt, acc.terminal);
+    if (statusSet !== undefined && !statusSet.has(status.kind)) continue;
+    const summary: RunSummary = {
+      runId: acc.runId,
+      startedAt: acc.startedAt,
+      status,
+      ...(acc.terminal !== undefined
+        ? { durationMs: Math.max(0, acc.terminal.at - acc.startedAt) }
+        : {}),
+    };
+    summaries.push(summary);
+  }
+
+  // DESC sort by runId; pagination cursor is runId-keyed.
+  summaries.sort((a, b) => b.runId - a.runId);
+
+  const afterFiltered =
+    spec.afterRunId === undefined
+      ? summaries
+      : summaries.filter((s) => s.runId < spec.afterRunId!);
+
+  const limit = Math.max(0, spec.limit);
+  const page = afterFiltered.slice(0, limit);
+  const nextCursor =
+    afterFiltered.length > limit && page.length > 0
+      ? page[page.length - 1]!.runId
+      : null;
+
+  return { runs: page, nextCursor };
+};

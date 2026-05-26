@@ -136,6 +136,32 @@ export type RunStatus =
       readonly evidence: string;
     };
 
+export type RunStatusKind = RunStatus["kind"];
+
+export interface RunSummary {
+  readonly runId: number;
+  readonly startedAt: number;
+  readonly status: RunStatus;
+  /** Only present when status.kind ∈ {delivered, aborted}. */
+  readonly durationMs?: number;
+}
+
+export interface RunListSpec {
+  /** Filter to a non-empty subset of RunStatus kinds. Empty/undefined = all. */
+  readonly statuses?: ReadonlyArray<RunStatusKind>;
+  /** Cursor: return runs strictly older than this runId (DESC pagination). */
+  readonly afterRunId?: number;
+  /** Page size cap. Caller enforces sane upper bound. */
+  readonly limit: number;
+}
+
+export interface RunListPage {
+  /** Sorted runId DESC (newest first). */
+  readonly runs: ReadonlyArray<RunSummary>;
+  /** Next afterRunId for continued paging; null when no more pages. */
+  readonly nextCursor: number | null;
+}
+
 export interface QuotaStateSpec {
   readonly key: string;
   readonly windowMs: number;
