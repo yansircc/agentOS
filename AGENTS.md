@@ -25,7 +25,9 @@ docs/
   notes/       retained exploration notes
 
 packages/
-  core/        only production package
+  core/                  substrate package
+  sandbox/               optional bounded stateless sandbox algebra
+  sandbox-cloudflare/    optional Cloudflare Sandbox backend
 
 spikes/
   _active/     ignored local throwaway only

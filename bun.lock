@@ -46,6 +46,37 @@
         "effect": "^3.21.0",
       },
     },
+    "packages/sandbox": {
+      "name": "@agent-os/sandbox",
+      "version": "0.1.0",
+      "devDependencies": {
+        "@effect/language-service": "^0.86.2",
+        "@effect/vitest": "^0.29.0",
+        "effect": "^3.21.0",
+        "typescript": "^5.7.2",
+        "vitest": "^4.1.0",
+      },
+      "peerDependencies": {
+        "effect": "^3.21.0",
+      },
+    },
+    "packages/sandbox-cloudflare": {
+      "name": "@agent-os/sandbox-cloudflare",
+      "version": "0.1.0",
+      "dependencies": {
+        "@agent-os/sandbox": "workspace:*",
+      },
+      "devDependencies": {
+        "@effect/language-service": "^0.86.2",
+        "@effect/vitest": "^0.29.0",
+        "effect": "^3.21.0",
+        "typescript": "^5.7.2",
+        "vitest": "^4.1.0",
+      },
+      "peerDependencies": {
+        "effect": "^3.21.0",
+      },
+    },
   },
   "patchedDependencies": {
     "@effect/vitest@0.29.0": "patches/@effect%2Fvitest@0.29.0.patch",
@@ -54,6 +85,10 @@
     "@agent-os/core": ["@agent-os/core@workspace:packages/core"],
 
     "@agent-os/image": ["@agent-os/image@workspace:packages/image"],
+
+    "@agent-os/sandbox": ["@agent-os/sandbox@workspace:packages/sandbox"],
+
+    "@agent-os/sandbox-cloudflare": ["@agent-os/sandbox-cloudflare@workspace:packages/sandbox-cloudflare"],
 
     "@cloudflare/kv-asset-handler": ["@cloudflare/kv-asset-handler@0.5.0", "", {}, "sha512-jxQYkj8dSIzc0cD6cMMNdOc1UVjqSqu8BZdor5s8cGjW2I8BjODt/kWPVdY+u9zj3ms75Q5qaZgnxUad83+eAg=="],
 
