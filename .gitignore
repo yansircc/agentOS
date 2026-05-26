@@ -4,6 +4,7 @@ node_modules/
 *.log
 dist/
 .DS_Store
+.parallel/
 spikes/**
 !spikes/
 !spikes/_active/
