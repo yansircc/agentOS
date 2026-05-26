@@ -206,10 +206,15 @@ Package-owned facts require spec-34 positive extension capability. Until then,
 the reusable package boundary is tool result shape plus proof refs, not
 protected ledger vocabulary.
 
-The first package cut should be proof/projection only: prefix declaration,
-event constants, payload types, carrier backend interfaces, and projection
-helpers. Real provider mutation and positive package commits are separate
-implementation phases.
+Reusable package payloads use `subjectRef` instead of app nouns such as
+`changeId`. A zeroY change, a vibe session/run, or another app attempt can all
+project into `subjectRef` without freezing one product's vocabulary into the
+carrier.
+
+The first package cut is proof/projection only: prefix declaration, event
+constants, payload types, carrier backend interfaces, projection helpers, and
+P1 settlement helpers that accept `ExtensionCapability`. Real provider mutation
+and positive `effect` settlement are separate implementation phases.
 
 ## Verification
 
