@@ -46,6 +46,20 @@
         "effect": "^3.21.0",
       },
     },
+    "packages/dynamic-worker": {
+      "name": "@agent-os/dynamic-worker",
+      "version": "0.1.0",
+      "devDependencies": {
+        "@effect/language-service": "^0.86.2",
+        "@effect/vitest": "^0.29.0",
+        "effect": "^3.21.0",
+        "typescript": "^5.7.2",
+        "vitest": "^4.1.0",
+      },
+      "peerDependencies": {
+        "effect": "^3.21.0",
+      },
+    },
     "packages/git-carrier": {
       "name": "@agent-os/git-carrier",
       "version": "0.1.0",
@@ -159,6 +173,8 @@
     "@agent-os/core": ["@agent-os/core@workspace:packages/core"],
 
     "@agent-os/deploy-cloudflare": ["@agent-os/deploy-cloudflare@workspace:packages/deploy-cloudflare"],
+
+    "@agent-os/dynamic-worker": ["@agent-os/dynamic-worker@workspace:packages/dynamic-worker"],
 
     "@agent-os/git-carrier": ["@agent-os/git-carrier@workspace:packages/git-carrier"],
 
