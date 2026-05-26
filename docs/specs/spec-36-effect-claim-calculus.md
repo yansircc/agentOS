@@ -370,14 +370,111 @@ Incorrect placements:
 
 ---
 
-## 10. Implementation Stages
+## 10. Completion Fixed Points
+
+There are two completion criteria. They must not be collapsed into one status
+column.
+
+```text
+substrate complete = the effect boundary calculus is closed
+runtime complete   = the calculus has at least one materialization for the
+                     product's required runtime roles
+```
+
+This spec targets substrate completion. A vibe-like product can still need
+runtime packages after this spec is accepted. That is not a contradiction:
+missing runtime materialization is a package/product gap, while a missing
+effect-boundary type is a substrate gap.
+
+Substrate acceptance:
+
+> A new app may add generators, resolvers, and readers, but must not add a new
+> effect-boundary type, nullable phase field, side-channel policy field, or
+> second fact source to describe an external effect.
+
+Runtime acceptance is product-local. It is satisfied only when that product has
+materialized the generators, resolvers, and readers it needs over this
+calculus.
+
+---
+
+## 11. Role Algebra
+
+`EffectClaim` has three runtime roles around it:
+
+| Role | Responsibility | Must not do |
+|---|---|---|
+| generator | mint a `PreClaim` at an effect boundary, or reject before execution | resolve provider resources as an untyped side channel |
+| resolver | turn `*Ref` values into concrete carrier resources, leases, cleanup roots, or dispatch targets | mint claims unless it is also explicitly a generator |
+| reader | project claim/ledger streams into trace, audit, workbench, or failure-plane views | write durable facts that duplicate the ledger |
+
+Package names are not substrate ontology. A package is an implementation of one
+or more roles on a concrete substrate. The role count should stay stable even
+as packages multiply.
+
+Rules:
+
+- **M-1.** A generator owns the boundary where authority is checked and
+  `operationRef` is minted or canonicalized.
+- **M-2.** A resolver owns the mapping from typed refs to carrier resources.
+  Provider-specific behavior belongs here, not in shared substrate logic.
+- **M-3.** A reader is derived data. Trace locators, failure planes, and
+  workbench views read claim/ledger state; they do not become another source
+  of truth.
+- **M-4.** One package may implement multiple roles only if the roles are
+  named separately in its contract.
+
+---
+
+## 12. Materialization Plan
+
+The previous six "app runtime gaps" collapse into role materializations over
+this calculus.
+
+| Materialization | Role | Boundary decision |
+|---|---|---|
+| tool registry | generator | tool identity and turn authority are one boundary schema; do not split `ToolProvider` and `TurnContract` into separate gates |
+| runtime scope | resolver | `ScopeRef` resolves to resource keys, leases, and cleanup roots; provider cases stay outside core |
+| workspace session | resolver, possible generator | `kind: "session"` resolves workspace/sandbox/preview state; session start/restore/backup may itself be a claim |
+| dynamic worker | generator or carrier materializer | bounded stateless Worker execution; not a substitute for session/workspace state |
+| git/deploy/staging/verification carriers | generator/resolver as needed | adopt claim settlement and proof anchors without app-specific nouns such as `changeId` |
+| Cloudflare resource/control plane | resolver/materializer for `external` | account/site/Worker/resource operations fail closed and anchor proofs in carrier-owned vocabulary |
+| trace locator/failure plane | reader | ledger projection only; no parallel observability facts |
+
+This table is a planning matrix, not a package list. A future package should
+state which role it materializes and which `EffectClaim` fields it owns.
+
+Workspace-session blank:
+
+```text
+ScopeRef(session) -> workspace root / sandbox / preview port / cleanup
+```
+
+is clearly a resolver. The unresolved question is whether:
+
+```text
+PreClaim(start session) -> LivedClaim(anchor=sessionRef)
+```
+
+is also the canonical way to create a session. If vibe-style lifecycle pressure
+shows that session creation, restore, backup, and preview port allocation are
+auditable effects, workspace-session becomes a self-resolving claim pattern:
+the claim creates the scope that later resolves resources. Until then,
+`workspace` remains a carrier class under `kind: "session"`, not a new
+`ScopeRef.kind`.
+
+---
+
+## 13. Implementation Stages
 
 | Stage | Ships | Does not claim |
 |---|---|---|
-| P0 - spec | this document | runtime enforcement |
+| P0 - spec | this document, including substrate/runtime completion criteria and role algebra | runtime enforcement |
 | P1 - private helpers | non-barrel core/internal types and claim validators used by one call path | public package API stability |
-| P2 - tool registry | tool identity + authority class as one boundary schema | universal carrier migration |
-| P3 - carrier adoption | dynamic-worker/git/deploy/staging/workspace claims and proofs | app domain approval policy |
+| P2 - generator materialization | tool registry as the first named generator for tool identity + authority | universal carrier migration |
+| P3 - resolver materialization | runtime-scope and at least one carrier adopting typed `ScopeRef` resolution | full workspace/session lifecycle |
+| P4 - reader materialization | trace locator/failure-plane projection over claim/ledger state | second observability store |
+| P5 - carrier migration | dynamic-worker/git/deploy/staging/verification/workspace claims and proofs | app domain approval policy |
 
 Do not add a public barrel export before at least one call path uses the type
 as an invariant-enforcing boundary. A public unused type would be vocabulary,
@@ -390,7 +487,7 @@ rather than add another nullable or provider-specific field.
 
 ---
 
-## 11. Verification Matrix
+## 14. Verification Matrix
 
 Spec-level checks:
 
@@ -404,6 +501,10 @@ Spec-level checks:
 - session/workspace pressure maps to `kind: "session"` without a nullable
   session field.
 - dry-run success maps to `LivedClaim` with dry-run proof.
+- substrate completion is defined separately from runtime completion.
+- new apps may add role materializations but not a new effect-boundary type.
+- package planning is expressed as generator/resolver/reader roles, not a
+  fixed list of product capabilities.
 
 Implementation checks for a future P1/P2:
 
@@ -414,3 +515,5 @@ Implementation checks for a future P1/P2:
 - unsupported carrier shape settles as `RejectedClaim`, never fallback success;
 - trace projections can locate operation/anchor/rejection without owning a
   second source of truth.
+- role implementations declare whether they are generators, resolvers, readers,
+  or an explicit combination.
