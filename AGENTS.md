@@ -58,6 +58,7 @@ isolated worktree:
 scripts/parallel-dev/create-agent.sh a01 chatbot HEAD
 cd .parallel/worktrees/a01-chatbot
 source <printed-agent-dir>/env.sh
+test "$(pwd)" = "$PARALLEL_WORKTREE" || { echo "wrong worktree: $(pwd)"; exit 1; }
 ```
 
 The env gives you:
@@ -73,6 +74,13 @@ The env gives you:
 
 Use `$PORT_BASE` through `$((PORT_BASE + 9))`. Prefix all scopes, R2 keys,
 queue names, and test fixtures with `$SCOPE_PREFIX`.
+
+Before writing files, verify that the current directory is the assigned
+worktree:
+
+```sh
+test "$(pwd)" = "$PARALLEL_WORKTREE" || { echo "wrong worktree: $(pwd)"; exit 1; }
+```
 
 ## Secrets
 
@@ -136,6 +144,17 @@ git diff --check
 
 For happy projects, run the narrow local smoke first. Full repo gates are
 required only if you touched tracked source.
+
+For ignored spike tests, prefer the repo helper over ad hoc dependency
+installation:
+
+```sh
+scripts/parallel-dev/run-spike-vitest.sh <path-to-vitest.config.ts>
+```
+
+Worktrees may contain `node_modules` symlinks back to the source checkout.
+Treat dependency directories as shared read-only inputs. Do not run
+`bun install` unless dependency ownership is assigned.
 
 When running a server:
 

@@ -67,6 +67,14 @@ mkdir -p "$agent_dir/home" "$agent_dir/cache" "$agent_dir/tmp"
 git worktree add -b "$branch" "$worktree" "$base_ref" >/dev/null
 mkdir -p "$worktree/.wrangler"
 
+if [[ -d "$repo_root/node_modules" && ! -e "$worktree/node_modules" ]]; then
+  ln -s "$repo_root/node_modules" "$worktree/node_modules"
+fi
+
+if [[ -d "$repo_root/packages/core/node_modules" && ! -e "$worktree/packages/core/node_modules" ]]; then
+  ln -s "$repo_root/packages/core/node_modules" "$worktree/packages/core/node_modules"
+fi
+
 cat > "$agent_dir/ports.json" <<JSON
 {
   "agentId": "$agent_id",
@@ -90,6 +98,7 @@ export XDG_CACHE_HOME="$agent_dir/cache"
 export TMPDIR="$agent_dir/tmp"
 export PARALLEL_AGENT_DIR="$agent_dir"
 export PARALLEL_WORKTREE="$worktree"
+export PARALLEL_SOURCE_ROOT="$repo_root"
 export PARALLEL_SECRETS_FILE="$secrets_file"
 
 if [ -f "\$PARALLEL_SECRETS_FILE" ]; then
@@ -109,6 +118,7 @@ cat > "$agent_dir/manifest.json" <<JSON
   "baseRef": "$base_ref",
   "branch": "$branch",
   "worktree": "$worktree",
+  "sourceRoot": "$repo_root",
   "agentDir": "$agent_dir",
   "testRunId": "$test_run_id",
   "scopePrefix": "$scope_prefix",
@@ -154,7 +164,7 @@ cat > "$agent_dir/startup.md" <<EOF
 
    \`\`\`sh
    echo "\$AGENT_ID \$TEST_RUN_ID \$PORT_BASE"
-   pwd
+   test "\$(pwd)" = "\$PARALLEL_WORKTREE" || { echo "wrong worktree: \$(pwd)"; exit 1; }
    git branch --show-current
    \`\`\`
 
@@ -163,22 +173,38 @@ cat > "$agent_dir/startup.md" <<EOF
    - allowed write-set
    - expected verification commands
 
-4. Use only your assigned mutable surfaces:
+4. Before writing files, keep this check green:
+
+   \`\`\`sh
+   test "\$(pwd)" = "\$PARALLEL_WORKTREE" || { echo "wrong worktree: \$(pwd)"; exit 1; }
+   \`\`\`
+
+5. Use only your assigned mutable surfaces:
    - worktree: \`$worktree\`
    - ports: \`$port_base\` through \`$((port_base + 9))\`
    - local home/cache/tmp from \`env.sh\`
    - scopes and keys prefixed with \`$scope_prefix\`
 
-5. Provider secrets come from \`$secrets_file\`.
+6. Provider secrets come from \`$secrets_file\`.
    Do not copy secrets into commits, task files, logs, or ledger payloads.
 
-6. Live provider tests stay disabled unless the task explicitly says otherwise:
+7. Live provider tests stay disabled unless the task explicitly says otherwise:
 
    \`\`\`sh
    test "\${LIVE_LLM:-0}" = "1" || echo "live LLM tests disabled"
    \`\`\`
 
-7. Record owned background process ids in:
+8. Ignored spike tests should use the core-owned Vitest binary:
+
+   \`\`\`sh
+   scripts/parallel-dev/run-spike-vitest.sh spikes/_active/<agent-id>-<case>/vitest.config.ts
+   \`\`\`
+
+   Dependency directories may be symlinked from \`$repo_root\`; treat them as
+   shared read-only inputs. Do not run \`bun install\` unless the task assigns
+   dependency ownership.
+
+9. Record owned background process ids in:
 
    \`\`\`text
    $agent_dir/pids.txt

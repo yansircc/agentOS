@@ -25,10 +25,10 @@ Flow:
 
 ```text
 POST /message
-  -> emitEvent("chat.message.received")
-  -> on("chat.message.received")
+  -> emitEvent("support.message.received")
+  -> on("support.message.received")
   -> submit({ system, intent, context, tools, route, deliver })
-  -> chat.message.delivered
+  -> support.message.delivered
 GET /events
   -> streamEvents()
 ```
@@ -38,6 +38,7 @@ Acceptance:
 - one user message produces one delivered assistant event
 - tool execution, if used, appears as `tool.executed`
 - SSE stream emits `event: ledger`
+- app events do not use reserved substrate prefixes such as `chat.*`
 
 Expected comfort level: very high.
 
