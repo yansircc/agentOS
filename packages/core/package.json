@@ -16,13 +16,22 @@
     "test": "vitest run"
   },
   "peerDependencies": {
-    "effect": "^3.18.0"
+    "effect": "^3.21.0"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.16.9",
     "@cloudflare/workers-types": "^4.20251201.0",
-    "effect": "^3.18.0",
+    "@effect/language-service": "^0.86.2",
+    "@effect/vitest": "^0.29.0",
+    "effect": "^3.21.0",
+    "fast-check": "^4.8.0",
     "typescript": "^5.7.2",
     "vitest": "^4.1.0"
+  },
+  "dependencies": {
+    "@effect/experimental": "^0.60.0",
+    "@effect/platform": "^0.96.0",
+    "@effect/sql": "^0.51.0",
+    "@effect/sql-sqlite-do": "^0.29.0"
   }
 }

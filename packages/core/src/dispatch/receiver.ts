@@ -51,6 +51,23 @@ export const parseInboundAcceptedPayload = (
   };
 };
 
+export const findAcceptedInRows = (
+  rows: ReadonlyArray<{ readonly payload: unknown }>,
+  sourceScope: string,
+  idempotencyKey: string,
+): InboundAcceptedPayload | null => {
+  for (const row of rows) {
+    const payload = parseInboundAcceptedPayload(String(row.payload));
+    if (
+      payload.sourceScope === sourceScope &&
+      payload.idempotencyKey === idempotencyKey
+    ) {
+      return payload;
+    }
+  }
+  return null;
+};
+
 export const findAccepted = (
   sql: SqlStorage,
   scope: string,
@@ -64,14 +81,9 @@ export const findAccepted = (
       DISPATCH_INBOUND_ACCEPTED,
     )
     .toArray();
-  for (const row of rows) {
-    const payload = parseInboundAcceptedPayload(String(row.payload));
-    if (
-      payload.sourceScope === sourceScope &&
-      payload.idempotencyKey === idempotencyKey
-    ) {
-      return payload;
-    }
-  }
-  return null;
+  return findAcceptedInRows(
+    rows as unknown as ReadonlyArray<{ readonly payload: unknown }>,
+    sourceScope,
+    idempotencyKey,
+  );
 };

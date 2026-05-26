@@ -180,4 +180,12 @@ describe("admission — projectLease pure projection (spec-25 §7.2)", () => {
     const { lease } = projectLease(rows, key, 2000);
     expect(lease.status).toBe("unknown");
   });
+
+  it("same adapter major with different minor remains valid (§9)", () => {
+    const rows = [
+      ev(1, 1000, { class: "Supported", tokensUsed: 5 }, { adapter: "1.2.3" }),
+    ];
+    const { lease } = projectLease(rows, key, 2000);
+    expect(lease.status).toBe("supported");
+  });
 });

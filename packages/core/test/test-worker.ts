@@ -42,12 +42,12 @@ export class EmitTestDO extends AgentDOBase<AgentDOEnv> {
     // Chain validation: emitting "interview.answer" triggers a handler
     // that emits "interview.followup". The contract test asserts both
     // rows appear in the ledger after one external emitEvent call.
-    this.on("interview.answer", async (event) => {
-      await this.emitEvent({
+    this.on("interview.answer", (event) =>
+      this.emitEvent({
         event: "interview.followup",
         data: { sourceId: event.id, sourcePayload: event.payload },
-      });
-    });
+      }).then(() => undefined),
+    );
   }
 }
 
@@ -58,27 +58,25 @@ interface DispatchEnv extends AgentDOEnv {
 const DEAD_TARGET: DispatchTargetNamespace = {
   idFromName: (_name) => ({}) as DurableObjectId,
   get: (_id) => ({
-    __agentosReceiveDispatch: async () => {
-      throw new Error("dead dispatch target");
-    },
+    __agentosReceiveDispatch: () => Promise.reject("dead dispatch target"),
   }),
 };
 
 export class DispatchTestDO extends AgentDOBase<DispatchEnv> {
   constructor(ctx: DurableObjectState, env: DispatchEnv) {
     super(ctx, env);
-    this.on("dispatch.inbound.accepted", async () => {
-      await this.emitEvent({
+    this.on("dispatch.inbound.accepted", () =>
+      this.emitEvent({
         event: "dispatch.inbound.handler_fired",
         data: {},
-      });
-    });
-    this.on("test.delivered", async (event) => {
-      await this.emitEvent({
+      }).then(() => undefined),
+    );
+    this.on("test.delivered", (event) =>
+      this.emitEvent({
         event: "test.followup",
         data: { sourceId: event.id, sourcePayload: event.payload },
-      });
-    });
+      }).then(() => undefined),
+    );
   }
 
   protected override provideDispatchTargets(): DispatchTargetRegistry {
@@ -92,9 +90,7 @@ export class DispatchTestDO extends AgentDOBase<DispatchEnv> {
 export class StreamTestDO extends AgentDOBase<AgentDOEnv> {
   constructor(ctx: DurableObjectState, env: AgentDOEnv) {
     super(ctx, env);
-    this.on("stream.slow", async () => {
-      await new Promise((resolve) => setTimeout(resolve, 1_000));
-    });
+    this.on("stream.slow", () => scheduler.wait(1_000));
   }
 }
 

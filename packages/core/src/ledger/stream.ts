@@ -71,6 +71,29 @@ const encodeSseEvent = (
 const encodeSseHeartbeat = (encoder: TextEncoder): Uint8Array =>
   encoder.encode(": keepalive\n\n");
 
+export const selectHandoffEvents = (
+  afterId: number,
+  snapshot: ReadonlyArray<LedgerEvent>,
+  liveQueue: ReadonlyArray<LedgerEvent>,
+): {
+  readonly events: ReadonlyArray<LedgerEvent>;
+  readonly watermark: number;
+} => {
+  let watermark = afterId;
+  const events: LedgerEvent[] = [];
+  for (const event of snapshot) {
+    events.push(event);
+    watermark = Math.max(watermark, event.id);
+  }
+  for (const event of liveQueue) {
+    if (event.id > watermark) {
+      events.push(event);
+      watermark = event.id;
+    }
+  }
+  return { events, watermark };
+};
+
 /** Build the SSE Response for a streamEvents call.
  *
  *  `runtime` must provide Ledger + EventBus. Any runtime whose service
@@ -157,16 +180,14 @@ export const createEventStreamResponse = <R, E>(
               afterId,
               kinds,
             });
-            for (const event of snapshot) {
+            const handoff = selectHandoffEvents(
+              watermark,
+              snapshot,
+              liveQueue,
+            );
+            for (const event of handoff.events) {
               enqueue(encodeSseEvent(encoder, event));
-              watermark = Math.max(watermark, event.id);
-            }
-
-            for (const event of liveQueue) {
-              if (event.id > watermark) {
-                enqueue(encodeSseEvent(encoder, event));
-                watermark = event.id;
-              }
+              watermark = event.id;
             }
             liveQueue.length = 0;
             mode = "live";

@@ -146,18 +146,50 @@ const unsupportedTtlMs = (cls: Exclude<OutcomeClass, "Supported">): number => {
   }
 };
 
-const keysMatch = (a: AttemptKey, b: Partial<AttemptKey>): boolean => {
-  if (b.routeFingerprint !== undefined && a.routeFingerprint !== b.routeFingerprint)
-    return false;
-  if (b.schemaFingerprint !== undefined && a.schemaFingerprint !== b.schemaFingerprint)
-    return false;
-  if (b.strategy !== undefined && a.strategy !== b.strategy) return false;
-  if (b.adapterVersion !== undefined && a.adapterVersion !== b.adapterVersion)
-    return false;
-  return true;
+const majorOf = (semver: string): string => semver.split(".")[0] ?? "0";
+
+const nonVersionKeysMatch = (
+  a: AttemptKey,
+  b: Pick<AttemptKey, "routeFingerprint" | "schemaFingerprint" | "strategy">,
+): boolean =>
+  a.routeFingerprint === b.routeFingerprint &&
+  a.schemaFingerprint === b.schemaFingerprint &&
+  a.strategy === b.strategy;
+
+const evidenceKeyMatches = (current: AttemptKey, evidence: AttemptKey): boolean =>
+  nonVersionKeysMatch(current, evidence) &&
+  majorOf(current.adapterVersion) === majorOf(evidence.adapterVersion);
+
+const barrierAdapterVersionMatches = (
+  current: string,
+  barrier: string | undefined,
+): boolean => {
+  if (barrier === undefined) return true;
+  if (barrier.endsWith(".x")) return majorOf(current) === barrier.slice(0, -2);
+  return current === barrier;
 };
 
-const majorOf = (semver: string): string => semver.split(".")[0] ?? "0";
+const barrierKeyMatches = (
+  current: AttemptKey,
+  barrier: Partial<AttemptKey>,
+): boolean => {
+  if (
+    barrier.routeFingerprint !== undefined &&
+    current.routeFingerprint !== barrier.routeFingerprint
+  )
+    return false;
+  if (
+    barrier.schemaFingerprint !== undefined &&
+    current.schemaFingerprint !== barrier.schemaFingerprint
+  )
+    return false;
+  if (barrier.strategy !== undefined && current.strategy !== barrier.strategy)
+    return false;
+  return barrierAdapterVersionMatches(
+    current.adapterVersion,
+    barrier.adapterVersion,
+  );
+};
 
 /** Project the latest lease for `key` from the given event list at time `now`.
  *
@@ -189,7 +221,7 @@ export const projectLease = (
   let latestBarrierTs = 0;
   let latestBarrierId = 0;
   for (const r of rows) {
-    if (r.kind === "llm.structured.invalidate" && keysMatch(key, r.key)) {
+    if (r.kind === "llm.structured.invalidate" && barrierKeyMatches(key, r.key)) {
       if (
         r.ts > latestBarrierTs ||
         (r.ts === latestBarrierTs && r.id > latestBarrierId)
@@ -209,7 +241,7 @@ export const projectLease = (
   const eligible: EvidenceRow[] = [];
   for (const r of rows) {
     if (r.kind !== "llm.structured.evidence") continue;
-    if (!keysMatch(key, r.key)) continue;
+    if (!evidenceKeyMatches(key, r.key)) continue;
     if (r.admissionImpact !== "lease-bearing") continue;
     if (!afterBarrier(r)) continue;
     if (majorOf(r.key.adapterVersion) !== curMajor) continue;

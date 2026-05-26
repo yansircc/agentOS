@@ -52,12 +52,15 @@ const canonicalize = (node: unknown, parentKey?: string): unknown => {
 const canonicalJsonString = (node: unknown): string =>
   JSON.stringify(canonicalize(node));
 
-const sha256Hex = async (input: string): Promise<string> => {
+const sha256Hex = (input: string): Effect.Effect<string> => {
   const bytes = new TextEncoder().encode(input);
-  const buf = await crypto.subtle.digest("SHA-256", bytes);
-  return Array.from(new Uint8Array(buf))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  return Effect.promise(() => crypto.subtle.digest("SHA-256", bytes)).pipe(
+    Effect.map((buf) =>
+      Array.from(new Uint8Array(buf))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join(""),
+    ),
+  );
 };
 
 /** Build a SchemaContract from a JSON Schema object.
@@ -71,7 +74,7 @@ export const makeSchemaContract = (
 ): Effect.Effect<SchemaContract> =>
   Effect.gen(function* () {
     const canon = canonicalJsonString(schema);
-    const hex = yield* Effect.promise(() => sha256Hex(canon));
+    const hex = yield* sha256Hex(canon);
     return {
       schema,
       fingerprint: `${FINGERPRINT_ALGO_VERSION}:sha256:${hex}`,
