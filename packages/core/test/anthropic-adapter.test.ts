@@ -19,7 +19,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   anthropicMessagesAdapter,
-} from "../src/protocol-adapter";
+} from "../src/protocol/anthropic-messages";
 import type { JsonSchemaObject } from "../src/admission";
 import type {
   AnthropicMessagesRoute,

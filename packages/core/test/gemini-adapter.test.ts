@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { geminiGenerateContentAdapter } from "../src/protocol-adapter";
+import { geminiGenerateContentAdapter } from "../src/protocol/gemini-generate-content";
 import type { JsonSchemaObject } from "../src/admission";
 import type {
   GeminiGenerateContentRoute,

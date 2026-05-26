@@ -21,8 +21,7 @@
  *
  * No separate `leases` table. No KV cache. No second writer.
  *
- * Spec: docs/spec-25-llm-admission.md
- * Spike: spikes/04-llm-admission/
+ * Spec: docs/specs/spec-25-llm-admission.md
  */
 
 import { Clock, Context, Effect, Layer, Schema } from "effect";
@@ -39,15 +38,15 @@ import {
   type AdapterMode,
   getProtocolAdapter,
   llmProtocolAdapters,
-} from "./protocol-adapter";
+} from "./protocol/protocol-adapter";
 import type { LedgerEvent } from "./types";
 
 // Re-exports — admission was the historical owner of these symbols
-// (v0.2.13 — moved to protocol-adapter.ts as part of spec-27 LlmProtocol
+// (v0.2.13 — moved to protocol/ as part of spec-27 LlmProtocol
 // Adapter elevation). Tests and apps import from "./admission" through
 // the public barrel; the re-export keeps that surface stable.
-export { ADAPTER_VERSION } from "./protocol-adapter";
-export type { AdapterMode } from "./protocol-adapter";
+export { ADAPTER_VERSION } from "./protocol/protocol-adapter";
+export type { AdapterMode } from "./protocol/protocol-adapter";
 
 // ============================================================
 // SECTION A — Types (spec-25 §3 §4 §5 §7 §8)
@@ -169,7 +168,7 @@ export type AdmissionRow = EvidenceRow | BarrierRow;
 // SECTION B — Canonical fingerprint (spec-25 §4.1)
 //   - rule a: sort object keys recursively
 //   - rule c': sort set-semantics arrays (`required`, `enum`)
-//     (discovered in spike-04 — see docs/spec-25 §4.1)
+//     (discovered during admission validation — see spec-25 §4.1)
 //   - rule d: strip non-semantic annotations
 // ============================================================
 
@@ -296,7 +295,7 @@ export const routeFingerprint = (route: LlmRoute): string => {
 
 
 // ============================================================
-// SECTION D — decideTier (spec-25 §10, spike-04 §A5)
+// SECTION D — decideTier (spec-25 §10)
 //   Pure function; NO IO, NO clock; depends only on pre-call inputs.
 // ============================================================
 
