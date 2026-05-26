@@ -13,7 +13,7 @@
  * the registry cycle.
  */
 
-import type { Outcome } from "../admission/lease";
+import type { Outcome } from "../../admission/lease";
 
 /** Single coherence dial for an adapter's complete behavior. Bumping the
  *  major invalidates structured-output lease evidence (spec-25 §9). Any

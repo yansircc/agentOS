@@ -25,12 +25,12 @@
  */
 
 import { Context, Effect } from "effect";
-import { UpstreamFailure } from "./errors";
+import { UpstreamFailure } from "../errors";
 import {
   CredentialNotFound,
   EndpointNotFound,
   ProviderRegistry,
-} from "./provider-registry";
+} from "../provider-registry";
 import { getProtocolAdapter } from "./protocol/protocol-adapter";
 
 export class AiBinding extends Context.Tag("@agent-os/AiBinding")<

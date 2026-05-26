@@ -17,7 +17,7 @@ import type {
   LlmRoute,
   LlmToolCall,
 } from "../llm";
-import type { SchemaContract, Strategy } from "../admission";
+import type { SchemaContract, Strategy } from "../../admission";
 import type {
   AdapterMode,
   AdapterStimulus,
@@ -32,7 +32,7 @@ import {
   CHAT_COMPLETIONS_FORCED_TOOL_NAME,
   unwrapErrorMessage,
 } from "./shared";
-import { validateAgainstSchema } from "../admission/json-schema";
+import { validateAgainstSchema } from "../../admission/json-schema";
 
 /** Encode a free-text turn into Chat Completions body. dispatchProvider
  *  injects `model` (cf-ai-binding via env.AI.run argument, openai-chat-

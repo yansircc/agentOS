@@ -12,7 +12,7 @@ import { describe, expect, it } from "vitest";
 import {
   cfAiBindingAdapter,
   openaiChatCompatibleAdapter,
-} from "../src/protocol/openai-chat";
+} from "../src/llm/protocol/openai-chat";
 import type { JsonSchemaObject } from "../src/admission";
 
 const SCHEMA: JsonSchemaObject = {
