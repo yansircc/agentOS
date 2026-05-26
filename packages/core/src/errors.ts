@@ -23,6 +23,7 @@ export const ABORT = {
   TOOL_ERROR: "agent.aborted.tool_error",
   UPSTREAM_FAILURE: "agent.aborted.upstream_failure",
   RETRIES: "agent.aborted.retries",
+  CLIENT_DISCONNECT: "agent.aborted.client_disconnect",
 } as const;
 
 export type AbortKind = (typeof ABORT)[keyof typeof ABORT];

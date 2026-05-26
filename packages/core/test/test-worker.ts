@@ -32,6 +32,9 @@ import {
   type AgentDOEnv,
   type DispatchTargetNamespace,
   type DispatchTargetRegistry,
+  type LedgerEventRpc,
+  type LlmRoute,
+  type ProviderRegistryConfig,
 } from "../src";
 
 export class TestAgentDO extends DurableObject {}
@@ -94,8 +97,71 @@ export class StreamTestDO extends AgentDOBase<AgentDOEnv> {
   }
 }
 
+interface TextStreamEnv extends AgentDOEnv {
+  readonly TEXT_STREAM_KEY?: string;
+}
+
+const textStreamRoute = {
+  kind: "openai-chat-compatible",
+  endpointRef: "text-stream-endpoint",
+  credentialRef: "TEXT_STREAM_KEY",
+  modelId: "text-stream-model",
+} satisfies LlmRoute;
+
+export class TextStreamTestDO extends AgentDOBase<TextStreamEnv> {
+  protected override provideRegistry(): ProviderRegistryConfig {
+    return {
+      endpoints: { "text-stream-endpoint": "https://text-stream.test/v1" },
+      credentials: { TEXT_STREAM_KEY: this.env.TEXT_STREAM_KEY ?? "test-key" },
+    };
+  }
+
+  submitText(): Response {
+    return this.submitTextStream({
+      intent: "Stream a greeting.",
+      context: { source: "contract" },
+      route: textStreamRoute,
+      deliver: { event: "text.done" },
+    });
+  }
+
+  submitUnsupportedText(): Response {
+    return this.submitTextStream({
+      intent: "Stream through unsupported route.",
+      context: {},
+      route: {
+        kind: "anthropic-messages",
+        endpointRef: "text-stream-endpoint",
+        credentialRef: "TEXT_STREAM_KEY",
+        modelId: "unsupported",
+      },
+      deliver: { event: "text.done" },
+    });
+  }
+
+  async cancelTextAfterFirstChunkForTest(): Promise<LedgerEventRpc[]> {
+    const response = this.submitText();
+    if (response.body === null) throw new Error("missing stream body");
+    const reader = response.body.getReader();
+    await reader.read();
+    await reader.cancel();
+
+    const deadline = Date.now() + 1_000;
+    let rows: LedgerEventRpc[] = [];
+    while (Date.now() < deadline) {
+      rows = await this.events();
+      if (rows.some((row) => row.kind === "agent.aborted.client_disconnect")) {
+        return rows;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    return rows;
+  }
+}
+
 interface WorkerEnv extends AgentDOEnv {
   readonly STREAM_DO: DurableObjectNamespace<StreamTestDO>;
+  readonly TEXT_STREAM_DO: DurableObjectNamespace<TextStreamTestDO>;
 }
 
 const parseLastEventId = (value: string | null): number => {
@@ -114,6 +180,14 @@ export default {
       return stub.streamEvents({
         afterId: parseLastEventId(req.headers.get("Last-Event-ID")),
       });
+    }
+    const textStreamMatch = url.pathname.match(/^\/text-stream\/([^/]+)$/);
+    if (textStreamMatch !== null) {
+      const scope = decodeURIComponent(textStreamMatch[1] ?? "");
+      const stub = env.TEXT_STREAM_DO.get(
+        env.TEXT_STREAM_DO.idFromName(scope),
+      );
+      return stub.submitText();
     }
     return new Response("@agent-os/core test worker (not for direct use)");
   },

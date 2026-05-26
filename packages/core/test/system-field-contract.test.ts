@@ -135,6 +135,22 @@ describe("SubmitSpec.system field — behavior-program axis", () => {
       expect(userMsg?.role).toBe("user");
       expect(userMsg?.content).toBe("Conduct one interview turn.");
 
+      const events = state.storage.sql
+        .exec("SELECT id, kind, payload FROM events ORDER BY id ASC")
+        .toArray();
+      const llmResponse = events.find((row) => row.kind === "llm.response");
+      const delivered = events.find((row) => row.kind === "test.delivered");
+      expect(JSON.parse(String(llmResponse?.payload))).toEqual({
+        turn: { id: Number(events[0]?.id), index: 0 },
+        text: "done",
+        toolCalls: [],
+        usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+      });
+      expect(JSON.parse(String(delivered?.payload))).toEqual({
+        final: "done",
+        turn: { id: Number(events[0]?.id), index: 0 },
+      });
+
       await runtime.dispose();
     });
   });

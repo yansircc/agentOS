@@ -39,10 +39,14 @@ export type {
   DispatchTargetRegistry,
 } from "./dispatch";
 
-export type { SubmitSpec, SubmitResult } from "./submit-agent";
+export type { SubmitSpec, SubmitResult, TurnRef } from "./submit-agent";
+export type {
+  SubmitTextStreamSpec,
+  SubmitTextStreamFrame,
+} from "./submit-text-stream";
 
 export type { Tool } from "./tools";
-export type { ToolDefinition } from "./llm";
+export type { ToolDefinition, LlmUsage } from "./llm";
 export type {
   ImageRoute,
   ImageArtifact,

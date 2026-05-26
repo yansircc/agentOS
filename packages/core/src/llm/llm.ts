@@ -118,11 +118,13 @@ export interface LlmMessage {
 export interface LlmResponse {
   readonly text: string;
   readonly toolCalls: ReadonlyArray<LlmToolCall>;
-  readonly usage: {
-    readonly promptTokens: number;
-    readonly completionTokens: number;
-    readonly totalTokens: number;
-  };
+  readonly usage: LlmUsage;
+}
+
+export interface LlmUsage {
+  readonly promptTokens: number;
+  readonly completionTokens: number;
+  readonly totalTokens: number;
 }
 
 export interface ToolDefinition {
@@ -168,6 +170,8 @@ export interface ChatCompletionsBody {
   readonly tools?: ReadonlyArray<ToolDefinition>;
   readonly tool_choice?: LlmRequest["tool_choice"];
   readonly max_tokens?: number;
+  readonly stream?: boolean;
+  readonly stream_options?: { readonly include_usage: boolean };
 }
 
 /** Anthropic Messages API body. Differs from Chat Completions in:
@@ -420,6 +424,62 @@ export const dispatchProvider = (
           catch: (cause) => new UpstreamFailure({ cause }),
         });
       });
+  }
+};
+
+export const dispatchProviderStream = (
+  route: LlmRoute,
+  body: ProviderRequestBody,
+  signal: AbortSignal,
+): Effect.Effect<
+  ReadableStream<Uint8Array>,
+  UpstreamFailure | EndpointNotFound | CredentialNotFound,
+  AiBinding | ProviderRegistry
+> => {
+  switch (route.kind) {
+    case "openai-chat-compatible":
+      return Effect.gen(function* () {
+        const registry = yield* ProviderRegistry;
+        const endpoint = yield* registry.resolveEndpoint(route.endpointRef);
+        const apiKey = yield* registry.resolveCredential(route.credentialRef);
+        const url = `${endpoint.replace(/\/$/, "")}/chat/completions`;
+        const fullBody = {
+          model: route.modelId,
+          ...(body as ChatCompletionsBody),
+        };
+        return yield* Effect.tryPromise({
+          try: async () => {
+            const res = await fetch(url, {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${apiKey}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(fullBody),
+              signal,
+            });
+            if (!res.ok) {
+              const text = await res.text().catch(() => "");
+              throw new Error(
+                `HTTP ${res.status} ${res.statusText}: ${text.slice(0, 500)}`,
+              );
+            }
+            if (res.body === null) {
+              throw new Error("streaming provider returned no body");
+            }
+            return res.body;
+          },
+          catch: (cause) => new UpstreamFailure({ cause }),
+        });
+      });
+    case "cf-ai-binding":
+    case "anthropic-messages":
+    case "gemini-generate-content":
+      return Effect.fail(
+        new UpstreamFailure({
+          cause: `text streaming unsupported for route kind ${route.kind}`,
+        }),
+      );
   }
 };
 

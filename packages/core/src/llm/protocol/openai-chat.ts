@@ -24,6 +24,8 @@ import type {
   DecodeStructuredResult,
   DecodedOutput,
   LlmProtocolAdapter,
+  TextStreamFrame,
+  TextStreamRequest,
   TurnRequest,
   TurnResponse,
 } from "./protocol-adapter";
@@ -45,6 +47,15 @@ const encodeChatCompletionsTurn = (
   messages: request.messages,
   tools: request.tools,
   tool_choice: request.tool_choice,
+});
+
+const encodeChatCompletionsTextStream = (
+  _route: LlmRoute,
+  request: TextStreamRequest,
+): ChatCompletionsBody => ({
+  messages: request.messages,
+  stream: true,
+  stream_options: { include_usage: true },
 });
 
 const decodeChatCompletionsTurn = (raw: unknown): TurnResponse => {
@@ -77,6 +88,95 @@ const decodeChatCompletionsTurn = (raw: unknown): TurnResponse => {
     },
   };
 };
+
+async function* decodeSseData(
+  stream: ReadableStream<Uint8Array>,
+): AsyncIterable<string> {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    while (true) {
+      const read = await reader.read();
+      if (read.done) break;
+      buffer += decoder
+        .decode(read.value, { stream: true })
+        .replace(/\r\n/g, "\n");
+      let boundary = buffer.indexOf("\n\n");
+      while (boundary >= 0) {
+        const raw = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + 2);
+        const data = raw
+          .split(/\r?\n/)
+          .filter((line) => line.startsWith("data:"))
+          .map((line) => line.slice(5).trimStart())
+          .join("\n");
+        if (data.length > 0) yield data;
+        boundary = buffer.indexOf("\n\n");
+      }
+    }
+    const tail = buffer.trim();
+    if (tail.length > 0) {
+      const data = tail
+        .split(/\r?\n/)
+        .filter((line) => line.startsWith("data:"))
+        .map((line) => line.slice(5).trimStart())
+        .join("\n");
+      if (data.length > 0) yield data;
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+async function* decodeChatCompletionsTextStream(
+  stream: ReadableStream<Uint8Array>,
+): AsyncIterable<TextStreamFrame> {
+  let sawDone = false;
+
+  for await (const data of decodeSseData(stream)) {
+    if (data === "[DONE]") {
+      sawDone = true;
+      yield { type: "done" };
+      break;
+    }
+
+    const parsed = JSON.parse(data) as {
+      choices?: ReadonlyArray<{
+        delta?: { content?: string | null };
+      }>;
+      usage?: {
+        prompt_tokens?: number;
+        completion_tokens?: number;
+        total_tokens?: number;
+      } | null;
+    };
+
+    const usage = parsed.usage;
+    if (usage !== undefined && usage !== null) {
+      yield {
+        type: "usage",
+        usage: {
+          promptTokens: usage.prompt_tokens ?? 0,
+          completionTokens: usage.completion_tokens ?? 0,
+          totalTokens:
+            usage.total_tokens ??
+            (usage.prompt_tokens ?? 0) + (usage.completion_tokens ?? 0),
+        },
+      };
+    }
+
+    const delta = parsed.choices?.[0]?.delta?.content;
+    if (typeof delta === "string" && delta.length > 0) {
+      yield { type: "token", delta };
+    }
+  }
+
+  if (!sawDone) {
+    throw new Error("stream ended before [DONE]");
+  }
+}
 
 /** Encode a structured-output request into Chat Completions body using
  *  forced-tool-call: synthesize a single `_submit_structured` tool whose
@@ -225,6 +325,10 @@ export const cfAiBindingAdapter: LlmProtocolAdapter<"cf-ai-binding"> = {
   version: ADAPTER_VERSION,
   encodeTurn: encodeChatCompletionsTurn,
   decodeTurn: decodeChatCompletionsTurn,
+  textStream: {
+    supported: false,
+    reason: "cf-ai-binding text streaming is not defined in v0",
+  },
   encodeStructured: encodeChatCompletionsStructured,
   decodeStructured: decodeChatCompletionsStructured,
   classify: classifyChatCompletionsError,
@@ -236,6 +340,11 @@ export const openaiChatCompatibleAdapter: LlmProtocolAdapter<"openai-chat-compat
     version: ADAPTER_VERSION,
     encodeTurn: encodeChatCompletionsTurn,
     decodeTurn: decodeChatCompletionsTurn,
+    textStream: {
+      supported: true,
+      encode: encodeChatCompletionsTextStream,
+      decodeFrames: decodeChatCompletionsTextStream,
+    },
     encodeStructured: encodeChatCompletionsStructured,
     decodeStructured: decodeChatCompletionsStructured,
     classify: classifyChatCompletionsError,

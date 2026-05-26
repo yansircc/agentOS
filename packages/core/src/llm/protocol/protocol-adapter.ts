@@ -27,7 +27,13 @@
  * at module init). All IO is in `dispatchProvider` (llm.ts).
  */
 
-import type { LlmRoute, ProviderRequestBodyFor, LlmToolCall, LlmMessage } from "../llm";
+import type {
+  LlmRoute,
+  LlmUsage,
+  ProviderRequestBodyFor,
+  LlmToolCall,
+  LlmMessage,
+} from "../llm";
 import type {
   LiveInput,
   Outcome,
@@ -75,11 +81,13 @@ export interface TurnRequest {
 export interface TurnResponse {
   readonly text: string;
   readonly toolCalls: ReadonlyArray<LlmToolCall>;
-  readonly usage: {
-    readonly promptTokens: number;
-    readonly completionTokens: number;
-    readonly totalTokens: number;
-  };
+  readonly usage: LlmUsage;
+}
+
+/** Input to textStream. v0 is text-only: no tools, no outputSchema, no
+ *  tool_choice. */
+export interface TextStreamRequest {
+  readonly messages: ReadonlyArray<LlmMessage>;
 }
 
 /** Stimulus shape passed to encodeStructured. Variant `live` carries the
@@ -104,6 +112,27 @@ export type DecodeStructuredResult =
       readonly tokensUsed: number;
     }
   | { readonly ok: false; readonly outcome: Outcome };
+
+export type TextStreamFrame =
+  | { readonly type: "token"; readonly delta: string }
+  | { readonly type: "usage"; readonly usage: LlmUsage }
+  | { readonly type: "done" };
+
+export type TextStreamCapability<K extends LlmRoute["kind"]> =
+  | {
+      readonly supported: true;
+      encode(
+        route: Extract<LlmRoute, { kind: K }>,
+        request: TextStreamRequest,
+      ): ProviderRequestBodyFor<K>;
+      decodeFrames(
+        stream: ReadableStream<Uint8Array>,
+      ): AsyncIterable<TextStreamFrame>;
+    }
+  | {
+      readonly supported: false;
+      readonly reason: string;
+    };
 
 // ============================================================
 // Section C — LlmProtocolAdapter<K> interface
@@ -143,6 +172,9 @@ export interface LlmProtocolAdapter<K extends LlmRoute["kind"]> {
   ): ProviderRequestBodyFor<K>;
 
   decodeTurn(raw: unknown): TurnResponse;
+
+  // ── Text streaming (ephemeral token channel) ──────────────
+  readonly textStream: TextStreamCapability<K>;
 
   // ── Structured-output admission ───────────────────────────
   encodeStructured(
