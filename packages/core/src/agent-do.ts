@@ -88,6 +88,13 @@ import {
   type SubmitResult,
   type SubmitSpec,
 } from "./submit-agent";
+import {
+  logTextStreamClientDisconnectEffect,
+  submitTextStreamEffect,
+  type InternalSubmitTextStreamSpec,
+  type SubmitTextStreamFrame,
+  type SubmitTextStreamSpec,
+} from "./submit-text-stream";
 
 export interface AgentDOEnv {
   readonly AI: Ai;
@@ -144,6 +151,11 @@ const makeAgentRuntime = (
     ),
   );
 };
+
+const encodeSseFrame = (frame: SubmitTextStreamFrame): Uint8Array =>
+  new TextEncoder().encode(
+    `event: ${frame.event}\ndata: ${JSON.stringify(frame.data)}\n\n`,
+  );
 
 
 export abstract class AgentDOBase<
@@ -233,6 +245,95 @@ export abstract class AgentDOBase<
       deliver: { event: spec.deliver.event, scope },
     };
     return this.runtimeFor(scope).runPromise(submitAgentEffect(internalSpec));
+  }
+
+  /** Text-only streaming submit.
+   *
+   *  Token deltas are SSE frames and are NOT written to the ledger.
+   *  On normal completion, the final facts are committed as:
+   *  chat.ingested -> llm.response -> deliver.event.
+   *
+   *  v0 does not support tools or outputSchema. Use submit() for those.
+   */
+  submitTextStream(spec: SubmitTextStreamSpec): Response {
+    const scope = this.ctx.id.name;
+    if (scope === undefined) {
+      throw new ScopeMissingError();
+    }
+    if (isReservedEventKind(spec.deliver.event)) {
+      throw new ReservedEventKindError({ event: spec.deliver.event });
+    }
+
+    const internalSpec: InternalSubmitTextStreamSpec = {
+      ...spec,
+      deliver: { event: spec.deliver.event, scope },
+    };
+    const runtime = this.runtimeFor(scope);
+    const abort = new AbortController();
+    let settled = false;
+    let terminalSent = false;
+    let turnId: number | undefined;
+    let disconnectLogged = false;
+
+    const logClientDisconnect = (): void => {
+      if (turnId === undefined || disconnectLogged || terminalSent) return;
+      disconnectLogged = true;
+      void runtime.runPromise(
+        logTextStreamClientDisconnectEffect(
+          scope,
+          turnId,
+          "client disconnected before stream completion",
+        ),
+      ).catch(() => undefined);
+    };
+
+    const stream = new ReadableStream<Uint8Array>({
+      start: (controller) => {
+        const emit = (frame: SubmitTextStreamFrame): void => {
+          if (frame.event === "done" || frame.event === "aborted") {
+            terminalSent = true;
+          }
+          if (!abort.signal.aborted) {
+            controller.enqueue(encodeSseFrame(frame));
+          }
+        };
+
+        void runtime
+          .runPromise(
+            submitTextStreamEffect(
+              internalSpec,
+              abort.signal,
+              emit,
+              (id) => {
+                turnId = id;
+                if (abort.signal.aborted) logClientDisconnect();
+              },
+            ),
+          )
+          .then(() => {
+            settled = true;
+            if (!abort.signal.aborted) controller.close();
+          })
+          .catch((cause) => {
+            settled = true;
+            if (!abort.signal.aborted) controller.error(cause);
+          });
+      },
+      cancel: () => {
+        if (!settled) {
+          abort.abort();
+          logClientDisconnect();
+        }
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+      },
+    });
   }
 
   /** Query ledger events for this DO's scope. */

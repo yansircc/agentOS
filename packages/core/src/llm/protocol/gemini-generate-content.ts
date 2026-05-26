@@ -462,6 +462,10 @@ export const geminiGenerateContentAdapter: LlmProtocolAdapter<"gemini-generate-c
     version: ADAPTER_VERSION,
     encodeTurn: encodeGeminiTurn,
     decodeTurn: decodeGeminiTurn,
+    textStream: {
+      supported: false,
+      reason: "gemini-generate-content text streaming is not implemented in v0",
+    },
     encodeStructured: encodeGeminiStructured,
     decodeStructured: decodeGeminiStructured,
     classify: classifyGeminiError,

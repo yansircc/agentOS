@@ -247,6 +247,7 @@ export class AgentDO extends AgentDOBase<Env> {
   // public methods (DO RPC boundary):
   //   submit(spec)         — agent loop (composite: ingest + dispatch + deliver)
   //   submit({outputSchema}) — spec-25 one-shot structured output
+  //   submitTextStream(spec) — spec-31 text-only token SSE; final truth still ledger
   //   emitEvent(spec)      — now-write primitive (app fact → ledger)
   //   scheduleEvent(spec)  — future-write primitive (delayed log via alarm)
   //   events()             — ledger projection

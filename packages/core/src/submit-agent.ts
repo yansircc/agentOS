@@ -106,10 +106,35 @@ export type SubmitResult =
       readonly tokensUsed: number;
     };
 
+export interface TurnRef {
+  readonly id: number;
+  readonly index: number;
+}
+
+export const turnRefOf = (runId: number, index: number): TurnRef => ({
+  id: runId,
+  index,
+});
+
 const toolDefinitionsOf = (
   tools: Record<string, Tool>,
 ): ReadonlyArray<ToolDefinition> =>
   Object.values(tools).map((t) => t.definition);
+
+export const buildInitialMessages = (
+  spec: Pick<InternalSubmitSpec, "system" | "intent" | "context">,
+): Effect.Effect<ReadonlyArray<LlmMessage>, JsonStringifyError> =>
+  Effect.gen(function* () {
+    const ctxStr = yield* safeStringifyPretty(spec.context);
+    const systemContent =
+      spec.system !== undefined
+        ? `${spec.system}\n\nContext available:\n${ctxStr}`
+        : `You are an agent. Goal: ${spec.intent}\n\nContext available:\n${ctxStr}\n\nUse the provided tools when needed. Reply with a final natural-language answer when you have enough information.`;
+    return [
+      { role: "system", content: systemContent },
+      { role: "user", content: spec.intent },
+    ] satisfies ReadonlyArray<LlmMessage>;
+  });
 
 /** The single termination funnel. All recoverable aborts route through here.
  *  Logs an agent.aborted.* ledger event then constructs SubmitResult.fail. */
@@ -247,18 +272,7 @@ export const submitAgentEffect = (
     // Spec-24 standard path: multi-turn tool loop.
     // ====================================================================
 
-    const ctxStr = yield* safeStringifyPretty(spec.context);
-    // System message: caller-supplied program (stable axis) when present,
-    // generic wrapper derived from intent when absent. The Context block
-    // appends to either. Intent always becomes the user message.
-    const systemContent =
-      spec.system !== undefined
-        ? `${spec.system}\n\nContext available:\n${ctxStr}`
-        : `You are an agent. Goal: ${spec.intent}\n\nContext available:\n${ctxStr}\n\nUse the provided tools when needed. Reply with a final natural-language answer when you have enough information.`;
-    const initialMessages: LlmMessage[] = [
-      { role: "system", content: systemContent },
-      { role: "user", content: spec.intent },
-    ];
+    const initialMessages = yield* buildInitialMessages(spec);
 
     const loop: Effect.Effect<
       SubmitResult,
@@ -300,7 +314,7 @@ export const submitAgentEffect = (
         yield* ledger.log(
           "llm.response",
           {
-            turn,
+            turn: turnRefOf(ingest.id, turn),
             text: resp.text,
             toolCalls: resp.toolCalls,
             usage: resp.usage,
@@ -328,7 +342,7 @@ export const submitAgentEffect = (
         if (resp.toolCalls.length === 0) {
           yield* ledger.log(
             spec.deliver.event,
-            { final: resp.text },
+            { final: resp.text, turn: turnRefOf(ingest.id, turn) },
             scope,
           );
           const events = yield* ledger.events(scope);

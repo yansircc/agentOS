@@ -14,6 +14,9 @@ import { cloudflareTest } from "@cloudflare/vitest-pool-workers";
  * DurableObjectState).
  */
 export default defineConfig({
+  test: {
+    fileParallelism: false,
+  },
   plugins: [
     cloudflareTest({
       wrangler: { configPath: "./wrangler-test.jsonc" },

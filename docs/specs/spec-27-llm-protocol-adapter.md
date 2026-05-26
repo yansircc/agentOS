@@ -583,10 +583,10 @@ cf-ai-binding stays `"1.0.0"` since behavior is identical (per §5.1
    `LlmResponse`, add `LlmResponse.thinking?: string` and concat blocks.
    Not in scope for spec-27 v0.
 
-2. **Streaming**. None of turn / structured paths stream today. Adding
-   streaming requires a separate `streamTurn` method on
-   `LlmProtocolAdapter` and a streaming-aware `dispatchProvider` variant.
-   Deferred until an app needs partial-token UI.
+2. **Streaming**. Basic text-only streaming is specified separately in
+   spec-31. It adds a `textStream` capability to `LlmProtocolAdapter`
+   and a separate `dispatchProviderStream` seam. Tools and structured
+   output remain non-streaming in v0.
 
 3. **Multi-tool-call response in structured path.** Anthropic and Gemini
    can emit multiple `tool_use` / `functionCall` blocks in one response.

@@ -348,6 +348,10 @@ export const anthropicMessagesAdapter: LlmProtocolAdapter<"anthropic-messages"> 
     version: ADAPTER_VERSION,
     encodeTurn: encodeAnthropicTurn,
     decodeTurn: decodeAnthropicTurn,
+    textStream: {
+      supported: false,
+      reason: "anthropic-messages text streaming is not implemented in v0",
+    },
     encodeStructured: encodeAnthropicStructured,
     decodeStructured: decodeAnthropicStructured,
     classify: classifyAnthropicError,

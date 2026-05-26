@@ -44,6 +44,7 @@ Read the minimum set:
 - Cross-scope dispatch / resources / image route: `docs/specs/spec-28-img-gen-gap-implementation-plan.md`
 - Event stream: `docs/specs/spec-29-ledger-event-stream.md`
 - Boundary/cookbook decisions: `docs/specs/spec-30-substrate-boundary-cookbook.md`
+- Text streaming: `docs/specs/spec-31-text-streaming-capability.md`
 - Parallel agent startup: `docs/cookbooks/parallel-agent-startup.md`
 - Parallel isolation rules: `docs/cookbooks/parallel-dev-mvp.md`
 
