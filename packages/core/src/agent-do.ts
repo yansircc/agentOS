@@ -146,6 +146,8 @@ const makeAgentRuntime = (
   const quotaLayer = QuotaLive(ctx).pipe(Layer.provide(eventBusLayer));
   const aiLayer = Layer.succeed(AiBinding, ai);
   const registryLayer = ProviderRegistryLive(registry);
+  // Same env.AI binding, narrowed to the minimal run() port @agent-os/image
+  // consumes. Core stays responsible for supplying the runtime service.
   const imageAiLayer = Layer.succeed(ImageAiBinding, ai as ImageAi);
   const imageRegistryLayer = ImageProviderRegistryLive(registry);
   const admissionLayer = AdmissionLive(ctx).pipe(

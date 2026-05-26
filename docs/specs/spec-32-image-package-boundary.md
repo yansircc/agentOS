@@ -49,6 +49,21 @@ Rejected for v0:
 - fully decoupled service assembly in apps: violates the current app-facing
   invariant that core hides Effect runtime wiring.
 
+## 2.1 Effect-Typed Surface
+
+`generateImageEffect`, `ImageAiBinding`, `ImageProviderRegistry`, and
+`Image*Error` are substrate-internal Effect-typed surfaces.
+
+Apps must use `AgentDOBase.generateImage`. The core wrapper maps image package
+errors back into the core Promise taxonomy:
+- `ImageUpstreamFailure` -> `UpstreamFailure`
+- `ImageEndpointNotFound` -> `EndpointNotFound`
+- `ImageCredentialNotFound` -> `CredentialNotFound`
+
+Direct app assembly of `generateImageEffect` is not a supported boundary in v0.
+Doing so exposes package-local service tags and package-local error classes
+that core deliberately hides.
+
 ## 3. v0 Surface
 
 `@agent-os/image` owns:

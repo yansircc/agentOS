@@ -40,6 +40,10 @@ credit.reserved
 artifact.delivered
 ```
 
+The names above are illustrative. Production apps should namespace app facts
+under their own product prefix, such as `<app>.img.request.created`, so future
+substrate-reserved prefixes do not collide with app-owned ledgers.
+
 Reserved substrate facts:
 
 ```text

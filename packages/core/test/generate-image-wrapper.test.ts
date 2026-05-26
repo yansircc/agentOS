@@ -60,6 +60,8 @@ describe("AgentDOBase.generateImage wrapper", () => {
             contentType: "image/png",
           },
         ]);
+        // If generateImage intentionally starts writing ledger rows, update
+        // spec-32 §3 before changing this regression.
         expect(await instance.events()).toHaveLength(0);
       });
     } finally {
