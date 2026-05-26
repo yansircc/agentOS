@@ -53,12 +53,7 @@ export type {
   ImageResult,
   GenerateImageSpec,
   ImageRequest,
-} from "./image";
-export {
-  imageProtocolAdapters,
-  openaiChatCompatibleImageAdapter,
-  cfAiBindingImageAdapter,
-} from "./image";
+} from "@agent-os/image";
 export { withQuota, type QuotaSpec } from "./quota";
 
 // ===== Abort taxonomy =====

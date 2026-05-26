@@ -103,11 +103,12 @@ export class ResourceReservationClosed extends Data.TaggedError(
 
 /** Event kind prefixes owned by core. Apps cannot write to these via
  *  submitSpec.deliver.event or scheduleEvent.event — keeps quota / abort /
- *  llm / tool / chat / dispatch event facts trustworthy. */
+ *  llm / tool / chat / dispatch / image event facts trustworthy. */
 export const CORE_RESERVED_PREFIXES = [
   "agent.aborted.",
   "chat.",
   "dispatch.",
+  "image.",
   "llm.",
   "tool.",
   "quota.",

@@ -133,6 +133,9 @@ must cite both:
 **Stages to express** (happy path only — no error compensation, no auth,
 no UI):
 
+Event names in this retained audit are historical. After spec-32, `image.*`
+is substrate-reserved and current app recipes use `img.*` app facts.
+
 ```
 1. POST /request {prompt, nImages}
      → sessionDO.emitEvent("image.request.created", {prompt, nImages})

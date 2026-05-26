@@ -38,6 +38,7 @@ import {
   ReservedEventKindError,
   ScopeMissingError,
   SqlError,
+  UpstreamFailure,
 } from "./errors";
 import type {
   EventHandler,
@@ -71,13 +72,22 @@ import { Scheduler, SchedulerLive } from "./scheduler";
 import { Resources, ResourcesLive } from "./resources";
 import {
   generateImageEffect,
+  ImageAiBinding,
+  ImageCredentialNotFound,
+  ImageEndpointNotFound,
+  ImageProviderRegistry,
+  ImageProviderRegistryLive,
+  ImageUpstreamFailure,
   type GenerateImageSpec,
+  type ImageAi,
   type ImageResult,
-} from "./image";
+} from "@agent-os/image";
 import { Quota, QuotaLive } from "./quota";
 import { AiBinding } from "./llm";
 import { Admission, AdmissionLive } from "./admission";
 import {
+  CredentialNotFound,
+  EndpointNotFound,
   ProviderRegistry,
   ProviderRegistryLive,
   type ProviderRegistryConfig,
@@ -109,7 +119,9 @@ type CoreServices =
   | Resources
   | Quota
   | Admission
-  | ProviderRegistry;
+  | ProviderRegistry
+  | ImageAiBinding
+  | ImageProviderRegistry;
 
 const makeAgentRuntime = (
   ctx: DurableObjectState,
@@ -134,6 +146,8 @@ const makeAgentRuntime = (
   const quotaLayer = QuotaLive(ctx).pipe(Layer.provide(eventBusLayer));
   const aiLayer = Layer.succeed(AiBinding, ai);
   const registryLayer = ProviderRegistryLive(registry);
+  const imageAiLayer = Layer.succeed(ImageAiBinding, ai as ImageAi);
+  const imageRegistryLayer = ImageProviderRegistryLive(registry);
   const admissionLayer = AdmissionLive(ctx).pipe(
     Layer.provide(eventBusLayer),
   );
@@ -148,6 +162,8 @@ const makeAgentRuntime = (
       aiLayer,
       admissionLayer,
       registryLayer,
+      imageAiLayer,
+      imageRegistryLayer,
     ),
   );
 };
@@ -157,6 +173,20 @@ const encodeSseFrame = (frame: SubmitTextStreamFrame): Uint8Array =>
     `event: ${frame.event}\ndata: ${JSON.stringify(frame.data)}\n\n`,
   );
 
+const mapImageError = (
+  error:
+    | ImageUpstreamFailure
+    | ImageEndpointNotFound
+    | ImageCredentialNotFound,
+): UpstreamFailure | EndpointNotFound | CredentialNotFound => {
+  if (error instanceof ImageEndpointNotFound) {
+    return new EndpointNotFound({ ref: error.ref });
+  }
+  if (error instanceof ImageCredentialNotFound) {
+    return new CredentialNotFound({ ref: error.ref });
+  }
+  return new UpstreamFailure({ cause: error.cause });
+};
 
 export abstract class AgentDOBase<
   Env extends AgentDOEnv,
@@ -587,7 +617,9 @@ export abstract class AgentDOBase<
     if (scope === undefined) {
       return Promise.reject(new ScopeMissingError());
     }
-    return this.runtimeFor(scope).runPromise(generateImageEffect(spec));
+    return this.runtimeFor(scope).runPromise(
+      generateImageEffect(spec).pipe(Effect.mapError(mapImageError)),
+    );
   }
 
   /** DO alarm handler — invoked automatically by the CF runtime. */

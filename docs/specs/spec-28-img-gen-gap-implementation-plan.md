@@ -455,9 +455,11 @@ not pre-build admission without that falsifying signal.
 
 ### 4.3 Minimal implementation boundary
 
-Core files expected:
-- `packages/core/src/image.ts`.
-- `packages/core/test/image-adapter-contract.test.ts`.
+Package files expected:
+- `packages/image/src/index.ts`.
+- `packages/image/test/image-adapter-contract.test.ts`.
+- `packages/core/src/agent-do.ts` keeps `AgentDOBase.generateImage` as a thin
+  wrapper.
 
 Do not rename `LlmRoute` repo-wide. A narrow additive `ImageRoute` plus
 `generateImage` is the first move.

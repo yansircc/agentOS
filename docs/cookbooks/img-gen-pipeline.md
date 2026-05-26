@@ -17,13 +17,13 @@ Each durable state transition has one owner:
 
 ```text
 POST /request
-  -> session.emitEvent("image.request.created", { prompt, nImages })
+  -> session.emitEvent("img.request.created", { prompt, nImages })
 
-session.on("image.request.created")
+session.on("img.request.created")
   -> submit({ outputSchema: PlanSchema, route: textRoute, tools: {} })
-  -> image.plan.ready
+  -> img.plan.ready
 
-session.on("image.plan.ready")
+session.on("img.plan.ready")
   -> dispatchToScope(userScope, "credit.reserve.requested", {
        key: "image-credit",
        amount,
@@ -35,17 +35,17 @@ user.on("credit.reserve.requested")
   -> dispatchToScope(sessionScope, "credit.reserved", { reservationId })
 
 session.on("credit.reserved")
-  -> dispatchToScope(consumerScope, "image.job.requested", {
+  -> dispatchToScope(consumerScope, "img.job.requested", {
        prompt,
        reservationId,
      })
 
-consumer.on("image.job.requested")
+consumer.on("img.job.requested")
   -> generateImage({ route: imageRoute, prompt, aspectRatio })
   -> R2.put(bytes)
-  -> dispatchToScope(sessionScope, "image.delivered", { artifactRef })
+  -> dispatchToScope(sessionScope, "img.delivered", { artifactRef })
 
-session.on("image.delivered")
+session.on("img.delivered")
   -> dispatchToScope(userScope, "credit.consume.requested", { reservationId })
 
 user.on("credit.consume.requested")
@@ -65,13 +65,13 @@ user.on("credit.consume.requested")
 ## Public Surface Used
 
 ```ts
-await session.emitEvent({ event: "image.request.created", data });
+await session.emitEvent({ event: "img.request.created", data });
 
 await session.submit({
   outputSchema: PlanSchema,
   route: textRoute,
   tools: {},
-  deliver: { event: "image.plan.ready" },
+  deliver: { event: "img.plan.ready" },
   // system / intent / context / budget omitted here
 });
 
@@ -107,3 +107,7 @@ const image = await consumer.generateImage({
 `generateImage` returns image artifacts. Writing bytes to R2 and constructing
 public URLs stay app-owned because the bucket, key policy, retention, and CDN
 rules are carrier-specific.
+
+`image.*` is reserved for the image package vocabulary. App-visible workflow
+facts in this cookbook use `img.*` to avoid forging substrate-owned image job
+projections.

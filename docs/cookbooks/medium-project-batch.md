@@ -153,11 +153,11 @@ Flow:
 ```text
 session -> user: credit.reserve.requested
 user reserves image credit
-session emits image.job.requested
+session emits img.job.requested
 consumer generates image through stub ImageRoute
 consumer stores artifact ref, not bytes
 session -> user: credit.consume.requested
-session emits image.job.completed
+session emits img.job.completed
 ```
 
 Acceptance:

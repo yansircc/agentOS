@@ -4,32 +4,36 @@
  * Validates P3 / C5 from spec-28 without touching real providers.
  */
 
-import { Layer, ManagedRuntime } from "effect";
+import { Effect, Layer, ManagedRuntime } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 
-import { AiBinding } from "../src/llm";
-import { ProviderRegistryLive } from "../src/provider-registry";
 import {
   cfAiBindingImageAdapter,
   generateImageEffect,
+  IMAGE_EVENTS,
+  ImageAiBinding,
+  imageJobIdempotencyKey,
+  ImageProviderRegistryLive,
   openaiChatCompatibleImageAdapter,
-} from "../src/image";
+  projectImageJobs,
+  withImageResourceSettlement,
+} from "../src";
 
-const SENTINEL_AI: Ai = {
+const SENTINEL_AI = {
   run: (() => {
     throw new Error("SENTINEL_AI: openai image route must not touch AiBinding");
-  }) as Ai["run"],
-} as Ai;
+  }) as (model: string, input: unknown, options?: unknown) => Promise<unknown>,
+};
 
 const runtimeFor = (
-  ai: Ai,
+  ai: typeof SENTINEL_AI,
   endpoints: Record<string, string>,
   credentials: Record<string, string>,
 ) =>
   ManagedRuntime.make(
     Layer.mergeAll(
-      Layer.succeed(AiBinding, ai),
-      ProviderRegistryLive({ endpoints, credentials }),
+      Layer.succeed(ImageAiBinding, ai),
+      ImageProviderRegistryLive({ endpoints, credentials }),
     ),
   );
 
@@ -125,8 +129,8 @@ describe("image route adapters — P3 C5", () => {
           image: "https://imagedelivery.example/nano-banana.png",
           usage: { image_tokens: 99 },
         });
-      }) as Ai["run"],
-    } as Ai;
+      }) as (model: string, input: unknown, options?: unknown) => Promise<unknown>,
+    };
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (() => {
       throw new Error("SENTINEL_FETCH: cf-ai-binding-image must not fetch");
@@ -210,4 +214,83 @@ describe("image route adapters — P3 C5", () => {
       },
     ]);
   });
+
+  it("projects image job events without owning a second job store", () => {
+    const projection = projectImageJobs([
+      {
+        kind: IMAGE_EVENTS.JOB_REQUESTED,
+        payload: { jobId: "job-1" },
+      },
+      {
+        kind: IMAGE_EVENTS.PROVIDER_COMPLETED,
+        payload: { jobId: "job-1" },
+      },
+      {
+        kind: IMAGE_EVENTS.ARTIFACT_MATERIALIZED,
+        payload: { jobId: "job-1", artifactRef: { carrier: "r2", key: "a" } },
+      },
+    ]);
+
+    expect(projection.get("job-1")).toEqual({
+      jobId: "job-1",
+      status: "materialized",
+      artifacts: [{ carrier: "r2", key: "a" }],
+    });
+  });
+
+  it("builds stable image idempotency keys without storing dedup state", () => {
+    const left = imageJobIdempotencyKey({
+      sourceScope: "session-1",
+      intentId: "intent-1",
+      route: {
+        kind: "openai-chat-compatible-image",
+        endpointRef: "openrouter",
+        credentialRef: "OPENROUTER_KEY",
+        modelId: "google/gemini-2.5-flash-image",
+      },
+      prompt: "rainy neon street",
+      aspectRatio: "16:9",
+    });
+    const right = imageJobIdempotencyKey({
+      aspectRatio: "16:9",
+      sourceScope: "session-1",
+      intentId: "intent-1",
+      prompt: "rainy neon street",
+      route: {
+        modelId: "google/gemini-2.5-flash-image",
+        credentialRef: "OPENROUTER_KEY",
+        endpointRef: "openrouter",
+        kind: "openai-chat-compatible-image",
+      },
+    });
+
+    expect(left).toBe(right);
+    expect(left).toMatch(/^image\.job\.[0-9a-f]{16}$/);
+  });
+
+  it.effect("settles reservations by consuming success and releasing failure", () =>
+    Effect.gen(function* () {
+    const successMarks: string[] = [];
+    const success = yield* withImageResourceSettlement(
+      Effect.succeed("ok"),
+      {
+        consume: (value) => Effect.sync(() => successMarks.push(`consume:${value}`)),
+        release: (error) => Effect.sync(() => successMarks.push(`release:${String(error)}`)),
+      },
+    );
+
+    expect(success).toBe("ok");
+    expect(successMarks).toEqual(["consume:ok"]);
+
+    const failureMarks: string[] = [];
+    const failure = yield* Effect.flip(
+      withImageResourceSettlement(Effect.fail("bad"), {
+        consume: (value) => Effect.sync(() => failureMarks.push(`consume:${value}`)),
+        release: (error) => Effect.sync(() => failureMarks.push(`release:${error}`)),
+      }),
+    );
+    expect(failure).toBe("bad");
+    expect(failureMarks).toEqual(["release:bad"]);
+    }),
+  );
 });
