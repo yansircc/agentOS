@@ -27,7 +27,7 @@ import {
   type InternalSubmitSpec,
   submitAgentEffect,
 } from "../src/submit-agent";
-import type { Tool } from "../src/tools";
+import { defineRegisteredTool, type Tool } from "../src/tools";
 import type { EventHandler } from "../src/types";
 import { finalTextResp, stubAi, toolCallResp } from "./_stub-ai";
 
@@ -39,7 +39,7 @@ const testEnv = env as unknown as TestEnv;
 
 const makeQuotaTool = (limit: number): Tool =>
   withQuota(
-    {
+    defineRegisteredTool({
       definition: {
         type: "function",
         function: {
@@ -49,7 +49,8 @@ const makeQuotaTool = (limit: number): Tool =>
         },
       },
       execute: async () => "2026-05-25T00:00:00Z",
-    },
+      authorityClass: "read",
+    }),
     { windowMs: 60_000, limit, amount: 1 },
   );
 

@@ -21,6 +21,10 @@
     "./abort": {
       "types": "./src/abort.ts",
       "default": "./src/abort.ts"
+    },
+    "./tools": {
+      "types": "./src/tools.ts",
+      "default": "./src/tools.ts"
     }
   },
   "scripts": {
