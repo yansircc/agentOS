@@ -1,4 +1,5 @@
 import { Effect } from "effect";
+import { makePreClaim } from "@agent-os/core/effect-claim";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -10,6 +11,19 @@ import {
   type DynamicWorkerBackend,
   type DynamicWorkerLimits,
 } from "../src";
+
+const claim = makePreClaim({
+  operationRef: "dynamic-worker:session-1:run-1",
+  scopeRef: { kind: "session", scopeId: "session/1" },
+  authorityRef: {
+    authorityId: "dynamic-worker.run",
+    authorityClass: "effect",
+  },
+  originRef: {
+    originId: "@agent-os/dynamic-worker",
+    originKind: "carrier",
+  },
+});
 
 describe("@agent-os/dynamic-worker", () => {
   it("runs one bounded stateless Worker-compatible request", async () => {
@@ -224,5 +238,121 @@ describe("@agent-os/dynamic-worker", () => {
         ownerKind: "conversation",
       },
     ]);
+  });
+
+  it("settles run claims as carrier proofs or policy rejections", async () => {
+    const claimScopes: unknown[] = [];
+    const backend: DynamicWorkerBackend = {
+      run: () =>
+        Effect.succeed({
+          status: 200,
+          body: "ok",
+          workerId: "dw-claim",
+        }),
+    };
+
+    await expect(
+      Effect.runPromise(
+        runDynamicWorker(
+          backend,
+          ({ runtimeScope }) =>
+            Effect.sync(() => {
+              claimScopes.push(runtimeScope);
+            }),
+          {
+            claim,
+            code: "export default { fetch: () => new Response('ok') }",
+            request: { url: "https://example.test/" },
+            timeoutMs: 1000,
+          },
+        ),
+      ),
+    ).resolves.toMatchObject({
+      workerId: "dw-claim",
+      claim: {
+        phase: "lived",
+        operationRef: claim.operationRef,
+        anchorRef: {
+          anchorId: "dw-claim",
+          anchorKind: "carrier_proof",
+          carrierRef: "dynamic-worker",
+        },
+      },
+    });
+    expect(claimScopes).toEqual([
+      {
+        scopeRef: claim.scopeRef,
+        scopeKey: "session:session%2F1",
+        ownerKind: "session",
+      },
+    ]);
+
+    const denied = await Effect.runPromise(
+      Effect.either(
+        runDynamicWorker(backend, staticPolicy(), {
+          claim,
+          code: "",
+          request: { url: "https://example.test/" },
+          timeoutMs: 1000,
+        }),
+      ),
+    );
+
+    expect(denied).toMatchObject({
+      _tag: "Left",
+      left: {
+        _tag: "agent_os.dynamic_worker_policy_denied",
+        reason: "code must be non-empty",
+        claim: {
+          phase: "rejected",
+          operationRef: claim.operationRef,
+          rejectionRef: {
+            rejectionId: claim.operationRef,
+            rejectionKind: "policy_denied",
+            reason: "code must be non-empty",
+          },
+        },
+      },
+    });
+
+    const failed = await Effect.runPromise(
+      Effect.either(
+        runDynamicWorker(
+          {
+            run: () =>
+              Effect.fail(
+                new DynamicWorkerFailure({
+                  code: "ProviderFailure",
+                  reason: "provider rejected execution",
+                }),
+              ),
+          },
+          staticPolicy(),
+          {
+            claim,
+            code: "export default { fetch: () => new Response('ok') }",
+            request: { url: "https://example.test/" },
+            timeoutMs: 1000,
+          },
+        ),
+      ),
+    );
+
+    expect(failed).toMatchObject({
+      _tag: "Left",
+      left: {
+        _tag: "agent_os.dynamic_worker_failure",
+        code: "ProviderFailure",
+        claim: {
+          phase: "rejected",
+          operationRef: claim.operationRef,
+          rejectionRef: {
+            rejectionId: claim.operationRef,
+            rejectionKind: "provider_rejected",
+            reason: "provider rejected execution",
+          },
+        },
+      },
+    });
   });
 });

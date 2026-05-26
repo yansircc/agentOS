@@ -1,3 +1,4 @@
+import type { LivedClaim } from "@agent-os/core/effect-claim";
 import { GIT_EVENT_PREFIX } from "./extension";
 
 export const GIT_EVENTS = {
@@ -15,6 +16,7 @@ export interface GitWorkspaceCreatedPayload {
   readonly workspaceRef: string;
   readonly baseRef: string;
   readonly branchRef: string;
+  readonly claim?: LivedClaim;
 }
 
 export interface GitCommitRecordedPayload {
@@ -22,23 +24,27 @@ export interface GitCommitRecordedPayload {
   readonly commitRef: string;
   readonly parentRef: string;
   readonly diffRef: string;
+  readonly claim?: LivedClaim;
 }
 
 export interface GitMergeRecordedPayload {
   readonly subjectRef: string;
   readonly mergeCommitRef: string;
   readonly targetRef: string;
+  readonly claim?: LivedClaim;
 }
 
 export interface GitRevertRecordedPayload {
   readonly subjectRef: string;
   readonly revertCommitRef: string;
   readonly revertedRef: string;
+  readonly claim?: LivedClaim;
 }
 
 export interface GitWorkspaceCleanedPayload {
   readonly subjectRef: string;
   readonly workspaceRef: string;
+  readonly claim?: LivedClaim;
 }
 
 export interface GitLedgerEvent {

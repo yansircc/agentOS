@@ -4,7 +4,24 @@ import {
   deployCloudflareExtensionPackage,
   projectDeploy,
 } from "../src";
+import {
+  makePreClaim,
+  settleRejectedClaim,
+} from "@agent-os/core/effect-claim";
 import type { ExtensionCapability } from "@agent-os/core/extensions";
+
+const deployClaim = makePreClaim({
+  operationRef: "deploy:session-1:promote",
+  scopeRef: { kind: "external", scopeId: "site/acme", systemRef: "cloudflare" },
+  authorityRef: {
+    authorityId: "@agent-os/deploy-cloudflare.promote",
+    authorityClass: "deploy",
+  },
+  originRef: {
+    originId: "@agent-os/deploy-cloudflare",
+    originKind: "extension_package",
+  },
+});
 
 describe("@agent-os/deploy-cloudflare", () => {
   it("declares deploy.* as an extension-owned prefix", () => {
@@ -83,6 +100,11 @@ describe("@agent-os/deploy-cloudflare", () => {
         step: "promote",
         proofRef: "proof://deploy/1",
         reason: "readback failed",
+        claim: settleRejectedClaim(deployClaim, {
+          rejectionId: "proof://deploy/1",
+          rejectionKind: "provider_rejected",
+          reason: "readback failed",
+        }),
       }),
     ).resolves.toEqual({ id: 1 });
 
@@ -94,6 +116,28 @@ describe("@agent-os/deploy-cloudflare", () => {
           step: "promote",
           proofRef: "proof://deploy/1",
           reason: "readback failed",
+          claim: {
+            phase: "rejected",
+            operationRef: "deploy:session-1:promote",
+            scopeRef: {
+              kind: "external",
+              scopeId: "site/acme",
+              systemRef: "cloudflare",
+            },
+            authorityRef: {
+              authorityId: "@agent-os/deploy-cloudflare.promote",
+              authorityClass: "deploy",
+            },
+            originRef: {
+              originId: "@agent-os/deploy-cloudflare",
+              originKind: "extension_package",
+            },
+            rejectionRef: {
+              rejectionId: "proof://deploy/1",
+              rejectionKind: "provider_rejected",
+              reason: "readback failed",
+            },
+          },
         },
       },
     ]);

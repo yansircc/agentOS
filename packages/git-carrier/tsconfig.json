@@ -11,6 +11,7 @@
     "isolatedModules": true,
     "types": ["vitest/globals"],
     "paths": {
+      "@agent-os/core/effect-claim": ["../core/src/effect-claim.ts"],
       "@agent-os/core/extensions": ["../core/src/extensions.ts"]
     },
     "exactOptionalPropertyTypes": false,

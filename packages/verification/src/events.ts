@@ -1,3 +1,4 @@
+import type { LivedClaim } from "@agent-os/core/effect-claim";
 import { VERIFICATION_EVENT_PREFIX } from "./extension";
 
 export const VERIFICATION_EVENTS = {
@@ -16,6 +17,7 @@ export interface VerificationGateRecordedPayload {
   readonly proofRef: string;
   readonly fingerprint: string;
   readonly summary?: string;
+  readonly claim?: LivedClaim;
 }
 
 export interface VerificationLedgerEvent {

@@ -1,5 +1,10 @@
 import { Data, Effect } from "effect";
-import type { ScopeRef } from "@agent-os/core/effect-claim";
+import type {
+  LivedClaim,
+  PreClaim,
+  RejectedClaim,
+  ScopeRef,
+} from "@agent-os/core/effect-claim";
 import type { RuntimeScopeResolution } from "@agent-os/core/runtime-scope";
 
 export const DYNAMIC_WORKER_MAX_TIMEOUT_MS = 10_000;
@@ -38,8 +43,7 @@ export interface DynamicWorkerLimits {
   readonly subrequests?: number;
 }
 
-export interface DynamicWorkerRunRequest {
-  readonly scopeRef?: ScopeRef;
+interface DynamicWorkerRunRequestBase {
   readonly code: string;
   readonly codeRef?: string;
   readonly compatibilityDate?: string;
@@ -50,6 +54,16 @@ export interface DynamicWorkerRunRequest {
   readonly timeoutMs: number;
   readonly maxBodyBytes?: number;
 }
+
+export type DynamicWorkerRunRequest =
+  | (DynamicWorkerRunRequestBase & {
+      readonly claim: PreClaim;
+      readonly scopeRef?: never;
+    })
+  | (DynamicWorkerRunRequestBase & {
+      readonly claim?: undefined;
+      readonly scopeRef?: ScopeRef;
+    });
 
 export type DynamicWorkerFailureCode =
   | "PolicyDenied"
@@ -70,6 +84,7 @@ export interface DynamicWorkerRawResult {
 
 export interface DynamicWorkerRunSuccess extends DynamicWorkerRawResult {
   readonly durationMs: number;
+  readonly claim?: LivedClaim;
 }
 
 export class DynamicWorkerFailure extends Data.TaggedError(
@@ -80,12 +95,14 @@ export class DynamicWorkerFailure extends Data.TaggedError(
   readonly status?: number;
   readonly body?: string;
   readonly workerId?: string;
+  readonly claim?: RejectedClaim;
 }> {}
 
 export class DynamicWorkerPolicyDenied extends Data.TaggedError(
   "agent_os.dynamic_worker_policy_denied",
 )<{
   readonly reason: string;
+  readonly claim?: RejectedClaim;
 }> {}
 
 export interface DynamicWorkerPolicyRequest {

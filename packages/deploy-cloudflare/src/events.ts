@@ -1,3 +1,7 @@
+import type {
+  LivedClaim,
+  RejectedClaim,
+} from "@agent-os/core/effect-claim";
 import { DEPLOY_EVENT_PREFIX } from "./extension";
 
 export const DEPLOY_EVENTS = {
@@ -14,6 +18,7 @@ export interface DeployPreviewRecordedPayload {
   readonly subjectRef: string;
   readonly previewRef: string;
   readonly artifactRef: string;
+  readonly claim?: LivedClaim;
 }
 
 export interface DeployProductionPromotedPayload {
@@ -21,6 +26,7 @@ export interface DeployProductionPromotedPayload {
   readonly deployRef: string;
   readonly productionRef: string;
   readonly rollbackRef?: string;
+  readonly claim?: LivedClaim;
 }
 
 export interface DeployProductionReadbackPayload {
@@ -28,12 +34,14 @@ export interface DeployProductionReadbackPayload {
   readonly productionRef: string;
   readonly readbackRef: string;
   readonly status: "passed" | "failed";
+  readonly claim?: LivedClaim;
 }
 
 export interface DeployRollbackRecordedPayload {
   readonly subjectRef: string;
   readonly rollbackRef: string;
   readonly restoredDeployRef: string;
+  readonly claim?: LivedClaim;
 }
 
 export interface DeployFailedPayload {
@@ -41,6 +49,7 @@ export interface DeployFailedPayload {
   readonly step: "preview" | "promote" | "readback" | "rollback";
   readonly proofRef: string;
   readonly reason: string;
+  readonly claim?: RejectedClaim;
 }
 
 export interface DeployLedgerEvent {
