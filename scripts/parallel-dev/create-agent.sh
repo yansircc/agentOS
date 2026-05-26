@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat >&2 <<'USAGE'
+usage: scripts/parallel-dev/create-agent.sh <agent-id> <slug> [base-ref]
+
+Creates one isolated git worktree plus per-agent env files:
+  .parallel/worktrees/<agent-id>-<slug>
+  .parallel/runs/<run-id>/agents/<agent-id>/
+
+agent-id: lowercase letters/numbers/dash, e.g. a01
+slug:     lowercase letters/numbers/dash, e.g. chatbot
+base-ref: git ref to branch from, defaults to HEAD
+USAGE
+}
+
+if [[ $# -lt 2 || $# -gt 3 ]]; then
+  usage
+  exit 2
+fi
+
+agent_id="$1"
+slug="$2"
+base_ref="${3:-HEAD}"
+
+if [[ ! "$agent_id" =~ ^[a-z0-9-]+$ ]]; then
+  echo "invalid agent-id: $agent_id" >&2
+  exit 2
+fi
+
+if [[ ! "$slug" =~ ^[a-z0-9-]+$ ]]; then
+  echo "invalid slug: $slug" >&2
+  exit 2
+fi
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+run_id="$(date -u +%Y%m%dT%H%M%SZ)-$$"
+name="${agent_id}-${slug}"
+branch="parallel/${name}"
+worktree="${repo_root}/.parallel/worktrees/${name}"
+agent_dir="${repo_root}/.parallel/runs/${run_id}/agents/${agent_id}"
+
+if [[ -e "$worktree" ]]; then
+  echo "worktree already exists: $worktree" >&2
+  exit 1
+fi
+
+if git rev-parse --verify --quiet "refs/heads/${branch}" >/dev/null; then
+  echo "branch already exists: $branch" >&2
+  exit 1
+fi
+
+digits="$(printf '%s' "$agent_id" | tr -cd '0-9')"
+if [[ -z "$digits" ]]; then
+  digits="0"
+fi
+agent_num=$((10#$digits))
+port_base=$((8800 + agent_num * 10))
+test_run_id="${agent_id}-${run_id}"
+scope_prefix="${test_run_id}/"
+
+mkdir -p "$agent_dir/home" "$agent_dir/cache" "$agent_dir/tmp"
+git worktree add -b "$branch" "$worktree" "$base_ref" >/dev/null
+mkdir -p "$worktree/.wrangler"
+
+cat > "$agent_dir/ports.json" <<JSON
+{
+  "agentId": "$agent_id",
+  "portBase": $port_base,
+  "ports": {
+    "dev": $port_base,
+    "test": $((port_base + 1)),
+    "preview": $((port_base + 2))
+  }
+}
+JSON
+
+cat > "$agent_dir/env.sh" <<EOF
+export AGENT_ID="$agent_id"
+export PARALLEL_RUN_ID="$run_id"
+export TEST_RUN_ID="$test_run_id"
+export SCOPE_PREFIX="$scope_prefix"
+export PORT_BASE="$port_base"
+export HOME="$agent_dir/home"
+export XDG_CACHE_HOME="$agent_dir/cache"
+export TMPDIR="$agent_dir/tmp"
+export PARALLEL_AGENT_DIR="$agent_dir"
+export PARALLEL_WORKTREE="$worktree"
+EOF
+
+cat > "$agent_dir/manifest.json" <<JSON
+{
+  "agentId": "$agent_id",
+  "runId": "$run_id",
+  "baseRef": "$base_ref",
+  "branch": "$branch",
+  "worktree": "$worktree",
+  "agentDir": "$agent_dir",
+  "testRunId": "$test_run_id",
+  "scopePrefix": "$scope_prefix",
+  "portBase": $port_base
+}
+JSON
+
+cat > "$agent_dir/task.md" <<EOF
+# Task: $name
+
+## Invariant
+
+## Allowed write-set
+
+- TBD
+
+## Forbidden shared surfaces
+
+- bun.lock unless explicitly assigned
+- root package.json unless explicitly assigned
+- public barrel files unless explicitly assigned
+- schema migrations unless explicitly assigned
+- generated source unless explicitly assigned
+
+## Commands run
+
+## Result
+
+EOF
+
+: > "$agent_dir/pids.txt"
+
+cat <<EOF
+created parallel agent workspace
+
+agent:     $agent_id
+branch:    $branch
+worktree:  $worktree
+agent dir: $agent_dir
+port base: $port_base
+
+next:
+  cd "$worktree"
+  source "$agent_dir/env.sh"
+EOF
