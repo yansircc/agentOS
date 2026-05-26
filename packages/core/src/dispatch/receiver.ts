@@ -14,6 +14,10 @@
  */
 
 import type { TraceContext } from "../types";
+import {
+  validateEffectClaim,
+  type LivedClaim,
+} from "../effect-claim";
 import { isRecord, parseTraceContext } from "./payload";
 
 export interface InboundAcceptedPayload {
@@ -21,6 +25,7 @@ export interface InboundAcceptedPayload {
   readonly outboundEventId: number;
   readonly idempotencyKey: string;
   readonly deliveredEventId: number;
+  readonly claim?: LivedClaim;
   readonly traceContext?: TraceContext;
 }
 
@@ -42,11 +47,21 @@ export const parseInboundAcceptedPayload = (
     throw new TypeError("dispatch.inbound.accepted payload malformed");
   }
   const traceContext = parseTraceContext(value.traceContext);
+  const parsedClaim =
+    value.claim === undefined ? undefined : validateEffectClaim(value.claim);
+  let claim: LivedClaim | undefined;
+  if (parsedClaim !== undefined) {
+    if (!parsedClaim.ok || parsedClaim.claim.phase !== "lived") {
+      throw new TypeError("dispatch.inbound.accepted claim must be LivedClaim");
+    }
+    claim = parsedClaim.claim;
+  }
   return {
     sourceScope: value.sourceScope,
     outboundEventId: value.outboundEventId,
     idempotencyKey: value.idempotencyKey,
     deliveredEventId: value.deliveredEventId,
+    ...(claim === undefined ? {} : { claim }),
     ...(traceContext === undefined ? {} : { traceContext }),
   };
 };
