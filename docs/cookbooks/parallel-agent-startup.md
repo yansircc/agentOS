@@ -34,6 +34,7 @@ Root `.dev.vars` is ignored by git and should contain these names:
 | `CLOUDFLARE_ACCOUNT_ID` | Wrangler / Cloudflare remote operations |
 | `CLOUDFLARE_API_TOKEN` | Wrangler / Cloudflare API auth |
 | `CF_AI_GATEWAY_ID` | optional `gatewayRef`, usually `default` |
+| `CF_AI_DEFAULT_TEXT_MODEL` | default Cloudflare AI text model, usually `openai/gpt-5.4-mini` |
 | `OPENROUTER_KEY` | OpenAI-compatible text/image route via OpenRouter |
 | `OPENROUTER_ENDPOINT` | usually `https://openrouter.ai/api/v1` |
 | `OPENROUTER_DEFAULT_TEXT_MODEL` | default strong text model |
