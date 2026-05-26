@@ -32,6 +32,7 @@ import type {
 import {
   ADAPTER_VERSION,
   CHAT_COMPLETIONS_FORCED_TOOL_NAME,
+  decodeSseData,
   type Outcome,
   unwrapErrorMessage,
 } from "./shared";
@@ -88,47 +89,6 @@ const decodeChatCompletionsTurn = (raw: unknown): TurnResponse => {
     },
   };
 };
-
-async function* decodeSseData(
-  stream: ReadableStream<Uint8Array>,
-): AsyncIterable<string> {
-  const reader = stream.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-
-  try {
-    while (true) {
-      const read = await reader.read();
-      if (read.done) break;
-      buffer += decoder
-        .decode(read.value, { stream: true })
-        .replace(/\r\n/g, "\n");
-      let boundary = buffer.indexOf("\n\n");
-      while (boundary >= 0) {
-        const raw = buffer.slice(0, boundary);
-        buffer = buffer.slice(boundary + 2);
-        const data = raw
-          .split(/\r?\n/)
-          .filter((line) => line.startsWith("data:"))
-          .map((line) => line.slice(5).trimStart())
-          .join("\n");
-        if (data.length > 0) yield data;
-        boundary = buffer.indexOf("\n\n");
-      }
-    }
-    const tail = buffer.trim();
-    if (tail.length > 0) {
-      const data = tail
-        .split(/\r?\n/)
-        .filter((line) => line.startsWith("data:"))
-        .map((line) => line.slice(5).trimStart())
-        .join("\n");
-      if (data.length > 0) yield data;
-    }
-  } finally {
-    reader.releaseLock();
-  }
-}
 
 async function* decodeChatCompletionsTextStream(
   stream: ReadableStream<Uint8Array>,
@@ -326,8 +286,9 @@ export const cfAiBindingAdapter: LlmProtocolAdapter<"cf-ai-binding"> = {
   encodeTurn: encodeChatCompletionsTurn,
   decodeTurn: decodeChatCompletionsTurn,
   textStream: {
-    supported: false,
-    reason: "cf-ai-binding text streaming is not defined in v0",
+    supported: true,
+    encode: encodeChatCompletionsTextStream,
+    decodeFrames: decodeChatCompletionsTextStream,
   },
   encodeStructured: encodeChatCompletionsStructured,
   decodeStructured: decodeChatCompletionsStructured,

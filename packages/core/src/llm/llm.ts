@@ -215,6 +215,7 @@ export interface AnthropicMessagesBody {
   readonly tools?: ReadonlyArray<AnthropicTool>;
   readonly tool_choice?: { readonly type: "tool"; readonly name: string };
   readonly max_tokens: number;
+  readonly stream?: boolean;
 }
 
 /** Google Gemini `generateContent` body. Differs from both Chat
@@ -324,12 +325,21 @@ export const dispatchProvider = (
     case "cf-ai-binding":
       return Effect.gen(function* () {
         const ai = yield* AiBinding;
+        const options =
+          route.gatewayRef === undefined
+            ? undefined
+            : { gateway: { id: route.gatewayRef } };
         return yield* Effect.tryPromise({
           try: () =>
-            (ai as { run: (m: string, p: unknown) => Promise<unknown> }).run(
-              route.modelId,
-              body as ChatCompletionsBody,
-            ),
+            (
+              ai as {
+                run: (
+                  m: string,
+                  p: unknown,
+                  o?: unknown,
+                ) => Promise<unknown>;
+              }
+            ).run(route.modelId, body as ChatCompletionsBody, options),
           catch: (cause) => new UpstreamFailure({ cause }),
         });
       });
@@ -437,6 +447,32 @@ export const dispatchProviderStream = (
   AiBinding | ProviderRegistry
 > => {
   switch (route.kind) {
+    case "cf-ai-binding":
+      return Effect.gen(function* () {
+        const ai = yield* AiBinding;
+        const options =
+          route.gatewayRef === undefined
+            ? undefined
+            : { gateway: { id: route.gatewayRef } };
+        return yield* Effect.tryPromise({
+          try: async () => {
+            const result = await (
+              ai as {
+                run: (
+                  m: string,
+                  p: unknown,
+                  o?: unknown,
+                ) => Promise<unknown>;
+              }
+            ).run(route.modelId, body as ChatCompletionsBody, options);
+            if (result instanceof ReadableStream) {
+              return result as ReadableStream<Uint8Array>;
+            }
+            throw new Error("cf-ai-binding streaming provider returned no body");
+          },
+          catch: (cause) => new UpstreamFailure({ cause }),
+        });
+      });
     case "openai-chat-compatible":
       return Effect.gen(function* () {
         const registry = yield* ProviderRegistry;
@@ -472,14 +508,74 @@ export const dispatchProviderStream = (
           catch: (cause) => new UpstreamFailure({ cause }),
         });
       });
-    case "cf-ai-binding":
     case "anthropic-messages":
+      return Effect.gen(function* () {
+        const registry = yield* ProviderRegistry;
+        const endpoint = yield* registry.resolveEndpoint(route.endpointRef);
+        const apiKey = yield* registry.resolveCredential(route.credentialRef);
+        const url = `${endpoint.replace(/\/$/, "")}/v1/messages`;
+        const fullBody = {
+          model: route.modelId,
+          ...(body as AnthropicMessagesBody),
+        };
+        const versionHeader = route.anthropicVersion ?? DEFAULT_ANTHROPIC_VERSION;
+        return yield* Effect.tryPromise({
+          try: async () => {
+            const res = await fetch(url, {
+              method: "POST",
+              headers: {
+                "x-api-key": apiKey,
+                "anthropic-version": versionHeader,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(fullBody),
+              signal,
+            });
+            if (!res.ok) {
+              const text = await res.text().catch(() => "");
+              throw new Error(
+                `HTTP ${res.status} ${res.statusText}: ${text.slice(0, 500)}`,
+              );
+            }
+            if (res.body === null) {
+              throw new Error("streaming provider returned no body");
+            }
+            return res.body;
+          },
+          catch: (cause) => new UpstreamFailure({ cause }),
+        });
+      });
     case "gemini-generate-content":
-      return Effect.fail(
-        new UpstreamFailure({
-          cause: `text streaming unsupported for route kind ${route.kind}`,
-        }),
-      );
+      return Effect.gen(function* () {
+        const registry = yield* ProviderRegistry;
+        const endpoint = yield* registry.resolveEndpoint(route.endpointRef);
+        const apiKey = yield* registry.resolveCredential(route.credentialRef);
+        const url = `${endpoint.replace(/\/$/, "")}/v1beta/models/${route.modelId}:streamGenerateContent?alt=sse`;
+        return yield* Effect.tryPromise({
+          try: async () => {
+            const res = await fetch(url, {
+              method: "POST",
+              headers: {
+                "x-goog-api-key": apiKey,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(body as GeminiGenerateContentBody),
+              signal,
+            });
+            if (!res.ok) {
+              const text = await res.text().catch(() => "");
+              throw new Error(
+                `HTTP ${res.status} ${res.statusText}: ${text.slice(0, 500)}`,
+              );
+            }
+            if (res.body === null) {
+              throw new Error("streaming provider returned no body");
+            }
+            return res.body;
+          },
+          catch: (cause) => new UpstreamFailure({ cause }),
+        });
+      });
   }
 };
 

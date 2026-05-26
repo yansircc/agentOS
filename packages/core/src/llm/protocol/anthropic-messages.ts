@@ -29,12 +29,15 @@ import type {
   DecodeStructuredResult,
   DecodedOutput,
   LlmProtocolAdapter,
+  TextStreamFrame,
+  TextStreamRequest,
   TurnRequest,
   TurnResponse,
 } from "./protocol-adapter";
 import {
   ADAPTER_VERSION,
   CHAT_COMPLETIONS_FORCED_TOOL_NAME,
+  decodeSseData,
   parseHttpStatus,
   type Outcome,
   unwrapErrorMessage,
@@ -156,6 +159,14 @@ const encodeAnthropicTurn = (
   };
 };
 
+const encodeAnthropicTextStream = (
+  route: Extract<LlmRoute, { kind: "anthropic-messages" }>,
+  request: TextStreamRequest,
+): AnthropicMessagesBody => ({
+  ...encodeAnthropicTurn(route, request),
+  stream: true,
+});
+
 interface AnthropicRawResponse {
   readonly content?: ReadonlyArray<AnthropicContentBlock>;
   readonly usage?: {
@@ -163,6 +174,81 @@ interface AnthropicRawResponse {
     readonly output_tokens?: number;
   };
   readonly stop_reason?: string;
+}
+
+async function* decodeAnthropicTextStream(
+  stream: ReadableStream<Uint8Array>,
+): AsyncIterable<TextStreamFrame> {
+  let sawStop = false;
+  let promptTokens = 0;
+  let completionTokens = 0;
+
+  for await (const data of decodeSseData(stream)) {
+    const parsed = JSON.parse(data) as {
+      type?: string;
+      message?: {
+        usage?: {
+          input_tokens?: number;
+          output_tokens?: number;
+        };
+      };
+      delta?: {
+        type?: string;
+        text?: string;
+      };
+      usage?: {
+        output_tokens?: number;
+      };
+    };
+
+    if (parsed.type === "message_start") {
+      promptTokens = parsed.message?.usage?.input_tokens ?? promptTokens;
+      completionTokens =
+        parsed.message?.usage?.output_tokens ?? completionTokens;
+      yield {
+        type: "usage",
+        usage: {
+          promptTokens,
+          completionTokens,
+          totalTokens: promptTokens + completionTokens,
+        },
+      };
+      continue;
+    }
+
+    if (
+      parsed.type === "content_block_delta" &&
+      parsed.delta?.type === "text_delta" &&
+      typeof parsed.delta.text === "string" &&
+      parsed.delta.text.length > 0
+    ) {
+      yield { type: "token", delta: parsed.delta.text };
+      continue;
+    }
+
+    if (parsed.type === "message_delta") {
+      completionTokens = parsed.usage?.output_tokens ?? completionTokens;
+      yield {
+        type: "usage",
+        usage: {
+          promptTokens,
+          completionTokens,
+          totalTokens: promptTokens + completionTokens,
+        },
+      };
+      continue;
+    }
+
+    if (parsed.type === "message_stop") {
+      sawStop = true;
+      yield { type: "done" };
+      break;
+    }
+  }
+
+  if (!sawStop) {
+    throw new Error("stream ended before message_stop");
+  }
 }
 
 const foldAnthropicBlocks = (
@@ -349,8 +435,9 @@ export const anthropicMessagesAdapter: LlmProtocolAdapter<"anthropic-messages"> 
     encodeTurn: encodeAnthropicTurn,
     decodeTurn: decodeAnthropicTurn,
     textStream: {
-      supported: false,
-      reason: "anthropic-messages text streaming is not implemented in v0",
+      supported: true,
+      encode: encodeAnthropicTextStream,
+      decodeFrames: decodeAnthropicTextStream,
     },
     encodeStructured: encodeAnthropicStructured,
     decodeStructured: decodeAnthropicStructured,

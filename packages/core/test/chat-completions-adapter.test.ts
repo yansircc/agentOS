@@ -8,6 +8,7 @@
  */
 
 import { describe, expect, it } from "vitest";
+import { Layer, ManagedRuntime } from "effect";
 
 import {
   cfAiBindingAdapter,
@@ -16,6 +17,8 @@ import {
 import { anthropicMessagesAdapter } from "../src/llm/protocol/anthropic-messages";
 import { geminiGenerateContentAdapter } from "../src/llm/protocol/gemini-generate-content";
 import type { JsonSchemaObject } from "../src/admission";
+import { AiBinding, dispatchProviderStream } from "../src/llm";
+import { ProviderRegistryEmpty } from "../src/provider-registry";
 
 const SCHEMA: JsonSchemaObject = {
   type: "object",
@@ -226,11 +229,11 @@ describe("textStream capability — spec-31", () => {
     modelId: "test-model",
   } as const;
 
-  it("is explicitly supported only by openai-chat-compatible in v0", () => {
+  it("supports Chat Completions text streaming on both Chat wires", () => {
     expect(openaiChatCompatibleAdapter.textStream.supported).toBe(true);
-    expect(cfAiBindingAdapter.textStream.supported).toBe(false);
-    expect(anthropicMessagesAdapter.textStream.supported).toBe(false);
-    expect(geminiGenerateContentAdapter.textStream.supported).toBe(false);
+    expect(cfAiBindingAdapter.textStream.supported).toBe(true);
+    expect(anthropicMessagesAdapter.textStream.supported).toBe(true);
+    expect(geminiGenerateContentAdapter.textStream.supported).toBe(true);
   });
 
   it("encodes stream=true and include_usage for OpenAI-compatible routes", () => {
@@ -288,6 +291,63 @@ describe("textStream capability — spec-31", () => {
       },
       { type: "done" },
     ]);
+  });
+
+  it("cf-ai-binding dispatch stream uses env.AI.run and returns the provider stream", async () => {
+    const encoder = new TextEncoder();
+    const providerStream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        controller.close();
+      },
+    });
+    const calls: Array<{
+      readonly model: string;
+      readonly body: unknown;
+      readonly options: unknown;
+    }> = [];
+    const ai = {
+      run: ((model: string, body: unknown, options: unknown) => {
+        calls.push({ model, body, options });
+        return Promise.resolve(providerStream);
+      }) as Ai["run"],
+    } as Ai;
+    const runtime = ManagedRuntime.make(
+      Layer.mergeAll(
+        Layer.succeed(AiBinding, ai),
+        ProviderRegistryEmpty,
+      ),
+    );
+
+    const result = await runtime.runPromise(
+      dispatchProviderStream(
+        {
+          kind: "cf-ai-binding",
+          modelId: "@cf/test/stream",
+          gatewayRef: "default",
+        },
+        {
+          messages: [{ role: "user", content: "hello" }],
+          stream: true,
+          stream_options: { include_usage: true },
+        },
+        new AbortController().signal,
+      ),
+    );
+
+    expect(result).toBe(providerStream);
+    expect(calls).toEqual([
+      {
+        model: "@cf/test/stream",
+        body: {
+          messages: [{ role: "user", content: "hello" }],
+          stream: true,
+          stream_options: { include_usage: true },
+        },
+        options: { gateway: { id: "default" } },
+      },
+    ]);
+    await runtime.dispose();
   });
 
   it("fails decode when the stream never terminates with [DONE]", async () => {

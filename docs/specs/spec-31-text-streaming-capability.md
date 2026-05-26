@@ -36,9 +36,13 @@ textStream:
 ```
 
 Public code never checks `route.kind === "openai-chat-compatible"` to decide
-whether streaming works. It asks the adapter. In v0 only the
-`openai-chat-compatible` adapter declares `supported: true`; all other
-adapters explicitly declare unsupported.
+whether streaming works. It asks the adapter. All current text LLM route kinds
+declare `supported: true`:
+
+- `cf-ai-binding`
+- `openai-chat-compatible`
+- `anthropic-messages`
+- `gemini-generate-content`
 
 ### I2. Separate transport seam
 
@@ -138,13 +142,28 @@ the ledger abort fact is the durable proof.
 
 ---
 
-## 4. OpenAI-Compatible v0
+## 4. Native Wire Support
 
-The `openai-chat-compatible` adapter implements:
+The `cf-ai-binding` and `openai-chat-compatible` adapters implement Chat
+Completions streaming:
 
 - request body with `stream: true`
 - `stream_options: { include_usage: true }`
 - SSE frame decoder for Chat Completions chunks
+
+The `anthropic-messages` adapter implements Anthropic Messages streaming:
+
+- request body with `stream: true`
+- SSE `content_block_delta` / `text_delta` → token frame
+- SSE `message_start` / `message_delta.usage` → usage frame
+- SSE `message_stop` → done frame
+
+The `gemini-generate-content` adapter implements Gemini native streaming:
+
+- transport endpoint `:streamGenerateContent?alt=sse`
+- chunk `candidates[].content.parts[].text` → token frame
+- chunk `usageMetadata` → usage frame
+- stream close after at least one chunk → done frame
 
 The adapter emits typed frames:
 
@@ -165,5 +184,3 @@ Malformed stream frames are upstream failures. They must not write deliver.
 - token deltas in the ledger
 - provider-side stream retry
 - EventSource browser reconnection policy
-- Anthropic / Gemini streaming adapters
-

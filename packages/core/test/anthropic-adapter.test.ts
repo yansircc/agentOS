@@ -465,7 +465,103 @@ describe("anthropic adapter — classify", () => {
 });
 
 // ============================================================
-// Layer 4 — adapter identity invariants (spec-27 C-1)
+// Layer 4 — text streaming capability (spec-31)
+// ============================================================
+
+describe("anthropic adapter — textStream", () => {
+  it("encodes native Messages stream=true request", () => {
+    const capability = anthropicMessagesAdapter.textStream;
+    expect(capability.supported).toBe(true);
+    if (capability.supported === false) throw new Error("expected support");
+
+    const body = capability.encode(ROUTE, {
+      messages: [
+        { role: "system", content: "Be terse." },
+        { role: "user", content: "hello" },
+      ],
+    });
+
+    expect(body).toMatchObject({
+      system: "Be terse.",
+      messages: [{ role: "user", content: "hello" }],
+      max_tokens: expect.any(Number),
+      stream: true,
+    });
+  });
+
+  it("decodes Anthropic SSE text_delta, usage, and message_stop", async () => {
+    const capability = anthropicMessagesAdapter.textStream;
+    if (capability.supported === false) throw new Error("expected support");
+
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          encoder.encode(
+            [
+              'event: message_start\ndata: {"type":"message_start","message":{"usage":{"input_tokens":11,"output_tokens":0}}}',
+              "",
+              'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hel"}}',
+              "",
+              'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"lo"}}',
+              "",
+              'event: message_delta\ndata: {"type":"message_delta","usage":{"output_tokens":2}}',
+              "",
+              'event: message_stop\ndata: {"type":"message_stop"}',
+              "",
+            ].join("\n"),
+          ),
+        );
+        controller.close();
+      },
+    });
+
+    const frames = [];
+    for await (const frame of capability.decodeFrames(stream)) {
+      frames.push(frame);
+    }
+
+    expect(frames).toEqual([
+      {
+        type: "usage",
+        usage: { promptTokens: 11, completionTokens: 0, totalTokens: 11 },
+      },
+      { type: "token", delta: "Hel" },
+      { type: "token", delta: "lo" },
+      {
+        type: "usage",
+        usage: { promptTokens: 11, completionTokens: 2, totalTokens: 13 },
+      },
+      { type: "done" },
+    ]);
+  });
+
+  it("fails decode when stream ends before message_stop", async () => {
+    const capability = anthropicMessagesAdapter.textStream;
+    if (capability.supported === false) throw new Error("expected support");
+
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          encoder.encode(
+            'event: content_block_delta\ndata: {"type":"content_block_delta","delta":{"type":"text_delta","text":"partial"}}\n\n',
+          ),
+        );
+        controller.close();
+      },
+    });
+
+    await expect((async () => {
+      for await (const _frame of capability.decodeFrames(stream)) {
+        // drain
+      }
+    })()).rejects.toThrow("stream ended before message_stop");
+  });
+});
+
+// ============================================================
+// Layer 5 — adapter identity invariants (spec-27 C-1)
 // ============================================================
 
 describe("anthropic adapter — identity invariants", () => {
