@@ -21,7 +21,7 @@ import { EventBusLive } from "../src/ledger";
 import { Ledger, LedgerLive } from "../src/ledger";
 import { AiBinding } from "../src/llm";
 import { ProviderRegistryLive } from "../src/provider-registry";
-import { QuotaLive } from "../src/quota-service";
+import { QuotaLive } from "../src/quota";
 import { withQuota } from "../src/quota";
 import {
   type InternalSubmitSpec,

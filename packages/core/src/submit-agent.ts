@@ -34,7 +34,7 @@ import {
   EndpointNotFound,
   ProviderRegistry,
 } from "./provider-registry";
-import { Quota } from "./quota-service";
+import { Quota } from "./quota";
 import { executeTool, parseToolCall, type Tool } from "./tools";
 import {
   Admission,

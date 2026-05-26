@@ -15,7 +15,7 @@ import { Layer, ManagedRuntime } from "effect";
 import { EventBusLive, LedgerLive } from "../../src/ledger";
 import { AiBinding } from "../../src/llm";
 import { ProviderRegistryLive } from "../../src/provider-registry";
-import { QuotaLive } from "../../src/quota-service";
+import { QuotaLive } from "../../src/quota";
 import { AdmissionLive } from "../../src/admission";
 import type { JsonSchemaObject } from "../../src/admission";
 import type { EventHandler } from "../../src/types";
