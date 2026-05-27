@@ -23,6 +23,7 @@ export interface CloudflareResourceProvisionRequest {
   readonly resourceName: string;
   readonly credentialRef: CredentialMaterialRef;
   readonly accountRef: ExternalResourceMaterialRef;
+  readonly resourceRef?: ExternalResourceMaterialRef;
   readonly bindingRef?: BindingMaterialRef;
 }
 
@@ -41,6 +42,7 @@ export interface CloudflareResourceMutationRequest {
   readonly credentialRef: CredentialMaterialRef;
   readonly accountRef: ExternalResourceMaterialRef;
   readonly resourceRef: MaterialRef;
+  readonly bindingRef: BindingMaterialRef;
   readonly mutationKind: string;
   readonly inputRef: string;
   readonly fingerprint?: string;
@@ -63,7 +65,8 @@ export interface CloudflareResourceFailure {
     | "BindingFailed"
     | "MutationFailed"
     | "DestroyFailed"
-    | "ProviderFailure";
+    | "ProviderFailure"
+    | "UnsupportedResource";
   readonly step: CloudflareResourceLifecycleStep;
   readonly reason: string;
   readonly proofRef?: string;

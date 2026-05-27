@@ -1,6 +1,26 @@
 # @agent-os/cloudflare-resource
 
-Cloudflare resource carrier facts and live D1 provider.
+Cloudflare resource carrier facts and live Cloudflare resource providers.
+
+## Resource Core
+
+The package exposes one lifecycle algebra across D1, KV namespace, R2 bucket,
+Queue, and Workflow:
+
+- `provision`
+- `bind`
+- `mutate`
+- `destroy`
+
+Resolved Cloudflare account/resource/binding material comes only from
+`RefResolver.material(MaterialRef)`. Missing material and unsupported
+resource/mutation kinds fail closed; there is no fallback to env, wrangler, or
+dashboard state.
+
+Carrier payloads are symbolic only: `MaterialRef`, `proofRef`, `mutationRef`,
+and `fingerprint`. Resolved token, provider response body, SQL, object bytes,
+queue message body, workflow payload, account id, database id, and live handles
+stay outside ledger-visible payloads and claims.
 
 ## D1 Live Smoke
 
@@ -25,9 +45,10 @@ bun packages/cloudflare-resource/test/d1-live-smoke.mjs
 ```
 
 The smoke uses `makeCloudflareD1ResourceCarrier`, not direct provider calls. It
-provisions D1, emits a symbolic bind proof, executes one D1 mutation from an
+provisions D1, records the created database id only in the external material
+resolver map, emits a symbolic bind proof, executes one D1 mutation from an
 `inputRef`, destroys the database, projects the resulting facts, and scans the
-events/projection for resolved token or SQL leakage.
+events/projection for resolved token, account id, database id, or SQL leakage.
 
 Missing environment is a fast failure. The script does not fallback to ambient
 credentials or unprefixed resource names.

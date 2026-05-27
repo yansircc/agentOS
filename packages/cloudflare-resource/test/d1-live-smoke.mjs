@@ -6,6 +6,7 @@ import {
   bindingMaterialRef,
   credentialMaterialRef,
   externalResourceMaterialRef,
+  materialRefKey,
 } from "@agent-os/core/material-ref";
 import {
   CLOUDFLARE_RESOURCE_AUTHORITIES,
@@ -46,7 +47,13 @@ const credentialRef = credentialMaterialRef("cloudflare-api-token", {
 const accountRef = externalResourceMaterialRef({
   provider: "cloudflare",
   resourceKind: "account",
-  ref: accountId,
+  ref: `live/${testRunId}/account`,
+});
+
+const resourceRef = externalResourceMaterialRef({
+  provider: "cloudflare",
+  resourceKind: "d1",
+  ref: `live/${testRunId}/d1/${resourceName}`,
 });
 
 const bindingRef = bindingMaterialRef({
@@ -55,10 +62,15 @@ const bindingRef = bindingMaterialRef({
   ref: `${safeName(scopePrefix).replaceAll("-", "_").toUpperCase()}_D1_SMOKE`,
 });
 
+const materials = new Map([
+  [materialRefKey(credentialRef), apiToken],
+  [materialRefKey(accountRef), { accountId }],
+  [materialRefKey(bindingRef), { bindingName: bindingRef.ref }],
+]);
+
 const resolver = {
   material: (ref) => {
-    if (ref.kind === "credential" && ref.ref === credentialRef.ref) return apiToken;
-    return null;
+    return materials.get(materialRefKey(ref)) ?? null;
   },
 };
 
@@ -75,6 +87,9 @@ const carrier = makeCloudflareD1ResourceCarrier({
   fetch,
   resolver,
   resolveMutationInput: async (inputRef) => mutationInputs.get(inputRef) ?? null,
+  recordMaterial: (ref, material) => {
+    materials.set(materialRefKey(ref), material);
+  },
   carrierRef: "cloudflare-d1-live-smoke",
 });
 
@@ -105,13 +120,24 @@ const redactionScan = (label, value) => {
   if (serialized.includes(apiToken)) {
     throw new Error(`${label} leaked resolved credential material`);
   }
+  if (serialized.includes(accountId)) {
+    throw new Error(`${label} leaked resolved account material`);
+  }
   if (serialized.includes("CREATE TABLE")) {
     throw new Error(`${label} leaked resolved mutation SQL`);
+  }
+  const databaseMaterial = materials.get(materialRefKey(resourceRef));
+  if (
+    databaseMaterial &&
+    typeof databaseMaterial.databaseId === "string" &&
+    serialized.includes(databaseMaterial.databaseId)
+  ) {
+    throw new Error(`${label} leaked resolved D1 database material`);
   }
 };
 
 const run = async () => {
-  let resourceRef;
+  let provisionedResourceRef;
   const events = [];
 
   try {
@@ -123,10 +149,11 @@ const run = async () => {
         resourceName,
         credentialRef,
         accountRef,
+        resourceRef,
         bindingRef,
       }),
     );
-    resourceRef = provisioned.resourceRef;
+    provisionedResourceRef = provisioned.resourceRef;
     events.push({
       id: events.length + 1,
       kind: "cf_resource.resource.provisioned",
@@ -139,7 +166,7 @@ const run = async () => {
         subjectRef: resourceName,
         credentialRef,
         accountRef,
-        resourceRef,
+        resourceRef: provisionedResourceRef,
         bindingRef,
       }),
     );
@@ -152,7 +179,8 @@ const run = async () => {
         subjectRef: resourceName,
         credentialRef,
         accountRef,
-        resourceRef,
+        resourceRef: provisionedResourceRef,
+        bindingRef,
         mutationKind: "d1.exec",
         inputRef: mutationRef,
         fingerprint: `sha256:${resourceName}`,
@@ -170,7 +198,7 @@ const run = async () => {
         subjectRef: resourceName,
         credentialRef,
         accountRef,
-        resourceRef,
+        resourceRef: provisionedResourceRef,
         reason: "manual",
       }),
     );
@@ -202,8 +230,9 @@ const run = async () => {
       ),
     );
   } catch (cause) {
-    if (resourceRef !== undefined) {
-      await cleanupD1(resourceRef.ref);
+    const databaseMaterial = materials.get(materialRefKey(resourceRef));
+    if (databaseMaterial && typeof databaseMaterial.databaseId === "string") {
+      await cleanupD1(databaseMaterial.databaseId);
     }
     throw cause;
   }
