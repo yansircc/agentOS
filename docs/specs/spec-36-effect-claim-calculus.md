@@ -82,6 +82,46 @@ Corollaries:
   denial, policy denial, and unsupported carrier shape settle as
   `RejectedClaim`; they are not represented by absent proof.
 
+### 1.1 Placement Law
+
+Layer placement is determined by the lowest layer that must know an
+information item to maintain its invariants:
+
+```text
+layer(X) = lowest layer where X is necessary to maintain writer,
+           resolver, and reader correctness
+```
+
+The operational test is not "will several apps use this?" The test is:
+
+- **writer guard** - without `X`, a durable fact namespace can acquire a
+  second positive writer or an app can forge a package-owned fact;
+- **resolver guard** - without `X`, a typed ref cannot be resolved into
+  carrier resources, leases, cleanup roots, or dispatch targets without
+  provider-specific parsing;
+- **reader guard** - without `X`, trace/audit/workbench projections must write
+  shadow facts instead of deriving views from ledger and proof anchors.
+
+Placement follows from the first guard that fails:
+
+| Placement | Necessary information |
+|---|---|
+| core | universal to all effect boundaries because writer, resolver, or reader invariants fail without it |
+| carrier package | universal to all products using one substrate/provider boundary |
+| experimental package | universal to N>=2 products but not yet proven as a stable carrier API |
+| cookbook/app | per-product policy, vocabulary, ranking, UI, or role semantics |
+
+Writer and generator are deliberately separate concepts:
+
+- **writer** is the spec-34 positive commit authority for a durable fact
+  namespace. It protects vocabulary ownership.
+- **generator** is the spec-36 role that mints or rejects a `PreClaim`. It
+  protects effect identity.
+
+A package may be both, but only by naming both responsibilities. Conflating
+them hides whether the system is protecting fact ownership, effect identity,
+or both.
+
 ---
 
 ## 2. Claim Types
@@ -400,7 +440,8 @@ calculus.
 
 ## 11. Role Algebra
 
-`EffectClaim` has three runtime roles around it:
+`EffectClaim` has three runtime roles around it. These roles do not replace
+spec-34's writer capability; they sit around the pre/post effect boundary.
 
 | Role | Responsibility | Must not do |
 |---|---|---|
@@ -414,6 +455,9 @@ as packages multiply.
 
 Rules:
 
+- **M-0.** A writer is not a generator. A writer owns durable vocabulary via
+  spec-34 `ExtensionCapability`; a generator owns claim identity via
+  `operationRef`, `authorityRef`, `originRef`, and `scopeRef`.
 - **M-1.** A generator owns the boundary where authority is checked and
   `operationRef` is minted or canonicalized.
 - **M-2.** A resolver owns the mapping from typed refs to carrier resources.
@@ -423,6 +467,10 @@ Rules:
   of truth.
 - **M-4.** One package may implement multiple roles only if the roles are
   named separately in its contract.
+- **M-5.** Universality is tested by the writer/resolver/reader guards in
+  section 1.1. If an app-specific rule is not required to maintain those
+  guards, it remains app-owned even when several apps happen to use the same
+  product policy.
 
 ---
 
@@ -435,7 +483,7 @@ this calculus.
 |---|---|---|
 | tool registry | generator | tool identity and turn authority are one boundary schema; do not split `ToolProvider` and `TurnContract` into separate gates |
 | runtime scope | resolver | `ScopeRef` resolves to resource keys, leases, and cleanup roots; provider cases stay outside core |
-| workspace session | resolver, possible generator | `kind: "session"` resolves workspace/sandbox/preview state; session start/restore/backup may itself be a claim |
+| workspace session | core claim shape + carrier resolver | `kind: "session"` is the core ownership/lifecycle class; session start/restore/backup/preview allocation settle claims when they are auditable effects; sandbox/workspace/preview/backup resolution stays carrier-specific |
 | dynamic worker | generator or carrier materializer | bounded stateless Worker execution; not a substitute for session/workspace state |
 | git/deploy/staging/verification carriers | generator/resolver as needed | adopt claim settlement and proof anchors without app-specific nouns such as `changeId` |
 | Cloudflare resource/control plane | resolver/materializer for `external` | account/site/Worker/resource operations fail closed and anchor proofs in carrier-owned vocabulary |
@@ -444,24 +492,25 @@ this calculus.
 This table is a planning matrix, not a package list. A future package should
 state which role it materializes and which `EffectClaim` fields it owns.
 
-Workspace-session blank:
+Workspace-session split:
 
 ```text
-ScopeRef(session) -> workspace root / sandbox / preview port / cleanup
+core:
+  PreClaim(start session | restore session | backup session | destroy session)
+  -> LivedClaim(anchorRef=sessionRef | backupRef | cleanupRef)
+
+carrier:
+  ScopeRef(session) -> workspace root / sandbox / preview port / backup handle
+                       / cleanup root
 ```
 
-is clearly a resolver. The unresolved question is whether:
-
-```text
-PreClaim(start session) -> LivedClaim(anchor=sessionRef)
-```
-
-is also the canonical way to create a session. If vibe-style lifecycle pressure
-shows that session creation, restore, backup, and preview port allocation are
-auditable effects, workspace-session becomes a self-resolving claim pattern:
-the claim creates the scope that later resolves resources. Until then,
-`workspace` remains a carrier class under `kind: "session"`, not a new
-`ScopeRef.kind`.
+The self-resolving claim shape is now accepted: session lifecycle operations
+are effects when they allocate, restore, back up, or destroy stateful carrier
+resources. The carrier still owns the concrete resource mapping. `workspace`
+remains a carrier class under `kind: "session"`, not a new `ScopeRef.kind`.
+`ephemeral` and `persistent` remain retention/lease policy, not kinds, because
+the same session resolver can support both policies and a session may move
+from ephemeral to persistent without changing ownership class.
 
 ---
 
@@ -500,6 +549,10 @@ Spec-level checks:
   excluded as v0 scope kinds.
 - session/workspace pressure maps to `kind: "session"` without a nullable
   session field.
+- workspace-session is split into core session claim shape and carrier
+  resolution.
+- writer and generator are different guards; package code must not rely on
+  claim generation as durable namespace authority.
 - dry-run success maps to `LivedClaim` with dry-run proof.
 - substrate completion is defined separately from runtime completion.
 - new apps may add role materializations but not a new effect-boundary type.
