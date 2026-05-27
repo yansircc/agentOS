@@ -1,4 +1,4 @@
-# Spec 36: ops-htmx Boundary
+# Spec 36: ops-htmx Tooling Contract
 
 > **Status**: Draft v0.1
 > **Date**: 2026-05-27

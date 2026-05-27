@@ -10,15 +10,9 @@ import {
   type MaterialRef,
 } from "@agent-os/core/material-ref";
 
-import { CLOUDFLARE_RESOURCE_EVENT_PREFIX } from "./extension";
+import { CLOUDFLARE_RESOURCE_EVENT_VOCABULARY } from "./extension";
 
-export const CLOUDFLARE_RESOURCE_EVENTS = {
-  RESOURCE_PROVISIONED: `${CLOUDFLARE_RESOURCE_EVENT_PREFIX}resource.provisioned`,
-  RESOURCE_BOUND: `${CLOUDFLARE_RESOURCE_EVENT_PREFIX}resource.bound`,
-  MUTATION_RECORDED: `${CLOUDFLARE_RESOURCE_EVENT_PREFIX}mutation.recorded`,
-  RESOURCE_DESTROYED: `${CLOUDFLARE_RESOURCE_EVENT_PREFIX}resource.destroyed`,
-  FAILED: `${CLOUDFLARE_RESOURCE_EVENT_PREFIX}failed`,
-} as const;
+export const CLOUDFLARE_RESOURCE_EVENTS = CLOUDFLARE_RESOURCE_EVENT_VOCABULARY;
 
 export type CloudflareResourceEventKind =
   (typeof CLOUDFLARE_RESOURCE_EVENTS)[keyof typeof CLOUDFLARE_RESOURCE_EVENTS];

@@ -1,9 +1,7 @@
 import { validateEffectClaim, type LivedClaim } from "@agent-os/core/effect-claim";
-import { VERIFICATION_EVENT_PREFIX } from "./extension";
+import { VERIFICATION_EVENT_VOCABULARY } from "./extension";
 
-export const VERIFICATION_EVENTS = {
-  GATE_RECORDED: `${VERIFICATION_EVENT_PREFIX}gate.recorded`,
-} as const;
+export const VERIFICATION_EVENTS = VERIFICATION_EVENT_VOCABULARY;
 
 export type VerificationEventKind = (typeof VERIFICATION_EVENTS)[keyof typeof VERIFICATION_EVENTS];
 

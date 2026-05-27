@@ -2,7 +2,8 @@
   "name": "agent-os-monorepo",
   "private": true,
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "tooling/*"
   ],
   "type": "module",
   "scripts": {

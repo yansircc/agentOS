@@ -1,4 +1,6 @@
-import { buildContextPack, type ContextFact } from "../src";
+import { describe, expect, it } from "vite-plus/test";
+
+import { buildContextPack, type ContextFact } from "../src/context";
 
 const facts: ReadonlyArray<ContextFact> = [
   {
@@ -25,7 +27,7 @@ const facts: ReadonlyArray<ContextFact> = [
   },
 ];
 
-describe("@agent-os/context-pack", () => {
+describe("@agent-os/core/context", () => {
   it("packs facts deterministically by priority and records included refs", () => {
     expect(buildContextPack(facts).text).toBe(
       "run delivered\n\napi key [redacted:secret] should not leak\n\nlarge artifact",

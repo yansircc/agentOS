@@ -7,12 +7,6 @@
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
     },
     {
-      "path": "packages/context-pack",
-      "shape": ["library"],
-      "dependencyOwner": "workspace-root",
-      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-    },
-    {
       "path": "packages/core",
       "shape": ["library"],
       "dependencyOwner": "package-local"
@@ -24,7 +18,7 @@
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
     },
     {
-      "path": "packages/deploy-cloudflare",
+      "path": "packages/deploy",
       "shape": ["library"],
       "dependencyOwner": "workspace-root",
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
@@ -48,13 +42,13 @@
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
     },
     {
-      "path": "packages/ops-api",
+      "path": "tooling/ops-api",
       "shape": ["library"],
       "dependencyOwner": "workspace-root",
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
     },
     {
-      "path": "packages/ops-htmx",
+      "path": "tooling/ops-htmx",
       "shape": ["library"],
       "dependencyOwner": "workspace-root",
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"

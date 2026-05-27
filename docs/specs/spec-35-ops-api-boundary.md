@@ -1,4 +1,4 @@
-# Spec 35: ops-api Boundary and Contract
+# Spec 35: ops-api Tooling Contract
 
 > **Status**: Draft v0.1
 > **Date**: 2026-05-27
@@ -354,7 +354,7 @@ Implementation MAY batch authorize calls if the OpsAuth supports it, but the con
 
 The implementation PR must demonstrate:
 
-1. **No app noun anywhere in the package surface.** Greps for `change|lead|site|schema|conversation|workflow|customer|order|product` in `packages/ops-api/src/**` return zero hits (besides incidental matches in import paths from `@agent-os/core`, none of which are app nouns).
+1. **No app noun anywhere in the tooling surface.** Greps for `change|lead|site|schema|conversation|workflow|customer|order|product` in `tooling/ops-api/src/**` return zero hits (besides incidental matches in import paths from `@agent-os/core`, none of which are app nouns).
 2. **All 9 endpoints map 1:1 to AgentDOBase RPC or ScopeResolver.** No server-side cross-scope join. No multi-RPC composition.
 3. **`OpsAuth` is mandatory.** `mountOpsApi({})` (missing fields) fails fast at construction. Auth missing on a request → 401, never 200.
 4. **Scope unknown → 404, opaque scope → 501 not_introspectable.** Both checked per endpoint; no silent fallback to empty body.

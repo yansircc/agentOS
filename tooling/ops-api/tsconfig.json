@@ -11,8 +11,8 @@
     "isolatedModules": true,
     "types": ["@cloudflare/workers-types", "vitest/globals"],
     "paths": {
-      "@agent-os/core": ["../core/src/index.ts"],
-      "@agent-os/ops-api": ["../ops-api/src/index.ts"]
+      "@agent-os/core": ["../../packages/core/src/index.ts"],
+      "@agent-os/core/abort": ["../../packages/core/src/abort.ts"]
     },
     "exactOptionalPropertyTypes": false,
     "noUncheckedIndexedAccess": false

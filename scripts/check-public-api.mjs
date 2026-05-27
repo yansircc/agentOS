@@ -8,7 +8,6 @@ const targets = [
   "core",
   "workspace-session",
   "cloudflare-resource",
-  "context-pack",
   "decision-gate",
   "turn-stream",
   "run-stream",

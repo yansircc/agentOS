@@ -6,13 +6,9 @@ import {
   type RejectionRef,
 } from "@agent-os/core/effect-claim";
 
-import { DECISION_GATE_EVENT_PREFIX } from "./extension";
+import { DECISION_GATE_EVENT_VOCABULARY } from "./extension";
 
-export const DECISION_GATE_EVENTS = {
-  REQUESTED: `${DECISION_GATE_EVENT_PREFIX}requested`,
-  DECIDED: `${DECISION_GATE_EVENT_PREFIX}decided`,
-  CONSUMED: `${DECISION_GATE_EVENT_PREFIX}consumed`,
-} as const;
+export const DECISION_GATE_EVENTS = DECISION_GATE_EVENT_VOCABULARY;
 
 export type DecisionGateEventKind =
   (typeof DECISION_GATE_EVENTS)[keyof typeof DECISION_GATE_EVENTS];

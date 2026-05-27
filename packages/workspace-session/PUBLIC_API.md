@@ -6,6 +6,7 @@ Status: 1.0 target.
 
 - `.:WORKSPACE_SESSION_EVENTS`
 - `.:WORKSPACE_SESSION_EVENT_PREFIX`
+- `.:WORKSPACE_SESSION_EVENT_VOCABULARY`
 - `.:WorkspaceSessionBackedUpPayload`
 - `.:WorkspaceSessionBackupRef`
 - `.:WorkspaceSessionBackupRequest`
@@ -38,6 +39,7 @@ Status: 1.0 target.
 - `.:resolveWorkspaceSession`
 - `.:settleWorkspaceSessionRejected`
 - `.:workspaceSessionExtensionPackage`
+- `.:workspaceSessionBoundaryContract`
 - `.:workspaceSessionFailedPayload`
 - `.:workspaceSessionRejectionKind`
 

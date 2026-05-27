@@ -38,7 +38,7 @@ Use or extract carriers:
 - `@agent-os/dynamic-worker` for stateless Worker-compatible generated code;
 - `@agent-os/sandbox` only for Linux/process/filesystem/build/test work;
 - `@agent-os/git-carrier` for Git proof/projection facts;
-- `@agent-os/deploy-cloudflare` for preview/promote/readback/rollback proofs;
+- `@agent-os/deploy` for preview/promote/readback/rollback proofs;
 - `@agent-os/staging-artifact` for staged refs and reap facts.
 
 Keep these in vibe until a second pressure app proves the same shape:
@@ -79,7 +79,7 @@ second mutable run table.
 Worker-compatible pure request       -> dynamic-worker
 file tree / git / build / test       -> sandbox or workspace-session
 preview service / background server  -> sandbox-stateful
-deploy to Cloudflare                 -> deploy-cloudflare
+deploy to Cloudflare                 -> deploy
 stage inspectable artifact           -> staging-artifact
 ```
 

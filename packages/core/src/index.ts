@@ -86,6 +86,28 @@ export {
   materialRefKey,
   materialRequirement,
 } from "./material-ref";
+export type {
+  BoundaryContract,
+  BoundaryContractIssue,
+  BoundaryContractValidation,
+  BoundaryProjectionContract,
+  BoundaryProofContract,
+} from "./boundary-contract";
+export {
+  boundaryExtensionPackage,
+  defineBoundaryContract,
+  validateBoundaryContract,
+} from "./boundary-contract";
+export type {
+  ContextFact,
+  ContextOmitReason,
+  ContextOmittedRef,
+  ContextPack,
+  ContextPackItem,
+  ContextPackOptions,
+  ContextRedactionSpan,
+} from "./context";
+export { buildContextPack } from "./context";
 
 // ===== Abort taxonomy =====
 export { ABORT, type AbortKind } from "./errors";
