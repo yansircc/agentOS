@@ -63,7 +63,7 @@ Substrate primitive:
 ```ts
 class AgentDOBase {
   dispatchToScope(spec: {
-    target: { bindingRef: string; scope: string };
+    target: { bindingRef: BindingMaterialRef; scope: string };
     event: string;
     data: unknown;
     idempotencyKey: string;
@@ -82,12 +82,13 @@ class AgentDOBase {
 App hook:
 
 ```ts
-protected provideDispatchTargets(): Record<string, DurableObjectNamespace>;
+protected provideDispatchTargets(): DispatchTargetRegistry;
 ```
 
-`bindingRef` is symbolic, like `endpointRef` / `credentialRef`. All three are
-execution material refs under spec-37. The ledger stores symbolic refs, not a
-runtime namespace object, secret, or provider handle.
+`bindingRef` is a symbolic `BindingMaterialRef`. The dispatch target registry
+is keyed by `materialRefKey(bindingRef)` because runtime objects cannot be
+object keys. The ledger stores symbolic refs, not a runtime namespace object,
+secret, or provider handle.
 
 `provideDispatchTargets()` predates spec-37 and is intentionally a dispatch
 target registry, not a general material resolver. Provider endpoints,
@@ -167,7 +168,7 @@ Contract tests:
 - receiver preserves app payload exactly; dispatch metadata lives only in
   `dispatch.inbound.accepted`.
 - receiver `on()` fires after commit.
-- missing `bindingRef` is a config error, not silent fallback.
+- missing registered `bindingRef` is a config error, not silent fallback.
 - reserved event kinds cannot be dispatched.
 - failed first delivery leaves retryable sender state.
 
@@ -548,7 +549,7 @@ Recommended commits:
 1. `spec-28: dispatchToScope design`
    - spec update only.
    - resolves open questions: outbox table shape, receiver idempotency key,
-     bindingRef registry, W3C trace context propagation (§2.5).
+     BindingMaterialRef registry, W3C trace context propagation (§2.5).
 
 2. `core: cross-scope dispatch primitive`
    - P1 implementation + contract tests.

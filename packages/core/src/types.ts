@@ -9,6 +9,7 @@
  */
 
 import type { ScopeRef } from "./effect-claim";
+import type { BindingMaterialRef } from "./material-ref";
 
 export interface LedgerEvent {
   readonly id: number;
@@ -48,7 +49,7 @@ export interface ScheduledEventSpec {
 }
 
 export interface DispatchTargetSpec {
-  readonly bindingRef: string;
+  readonly bindingRef: BindingMaterialRef;
   readonly scope: string;
   readonly scopeRef?: ScopeRef;
 }

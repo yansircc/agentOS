@@ -183,14 +183,14 @@ Resolver rules:
 
 ## 5. Existing Mapping
 
-| Current shape                       | MaterialRef mapping                                                                                 |
-| ----------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `LlmRoute.endpointRef`              | `{ kind: "endpoint", ref: endpointRef, protocol: route.kind }`                                      |
-| `LlmRoute.credentialRef`            | `{ kind: "credential", ref: credentialRef, provider: route.kind, purpose: "llm_transport" }`        |
-| `dispatch.target.bindingRef`        | `{ kind: "binding", provider: "cloudflare", bindingKind: "durable_object", ref: bindingRef }` in CF |
-| Cloudflare D1/R2/KV/Queue/Workflows | `{ kind: "binding", provider: "cloudflare", bindingKind, ref }`                                     |
-| Cloudflare account/site/project     | `{ kind: "external_resource", provider: "cloudflare", resourceKind, ref }`                          |
-| WordPress site/plugin scope         | `ScopeRef.external` for ownership; material only if a carrier must acquire a WP client/token        |
+| Current shape                       | MaterialRef mapping                                                                                                       |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `LlmRoute.endpointRef`              | `{ kind: "endpoint", ref: endpointRef, protocol: route.kind }`                                                            |
+| `LlmRoute.credentialRef`            | `{ kind: "credential", ref: credentialRef, provider: route.kind, purpose: "llm_transport" }`                              |
+| `dispatch.target.bindingRef`        | `BindingMaterialRef`; CF DO targets use `{ kind: "binding", provider: "cloudflare", bindingKind: "durable_object", ref }` |
+| Cloudflare D1/R2/KV/Queue/Workflows | `{ kind: "binding", provider: "cloudflare", bindingKind, ref }`                                                           |
+| Cloudflare account/site/project     | `{ kind: "external_resource", provider: "cloudflare", resourceKind, ref }`                                                |
+| WordPress site/plugin scope         | `ScopeRef.external` for ownership; material only if a carrier must acquire a WP client/token                              |
 
 `runtime-scope` cleanup roots are intentionally absent from the table. They are
 release-side refs. A future `LeaseRef` may relate acquire and release, but v0

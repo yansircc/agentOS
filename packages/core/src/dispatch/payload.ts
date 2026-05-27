@@ -10,6 +10,7 @@
 
 import type { DispatchTargetSpec, TraceContext } from "../types";
 import { isScopeRef, validateEffectClaim, type PreClaim } from "../effect-claim";
+import { isMaterialRef, type BindingMaterialRef } from "../material-ref";
 
 export interface DispatchRequestedPayload {
   readonly target: DispatchTargetSpec;
@@ -52,6 +53,13 @@ export const parseTraceContext = (value: unknown): TraceContext | undefined => {
   });
 };
 
+export const parseDispatchBindingRef = (value: unknown): BindingMaterialRef => {
+  if (!isMaterialRef(value) || value.kind !== "binding") {
+    throw new TypeError("dispatch target bindingRef must be a BindingMaterialRef");
+  }
+  return value;
+};
+
 export const parseRequestedPayload = (raw: string): DispatchRequestedPayload => {
   const value = JSON.parse(raw) as unknown;
   if (!isRecord(value)) {
@@ -62,13 +70,13 @@ export const parseRequestedPayload = (raw: string): DispatchRequestedPayload => 
     throw new TypeError("dispatch target must be object");
   }
   if (
-    typeof target.bindingRef !== "string" ||
     typeof target.scope !== "string" ||
     typeof value.event !== "string" ||
     typeof value.idempotencyKey !== "string"
   ) {
     throw new TypeError("dispatch.outbound.requested payload malformed");
   }
+  const bindingRef = parseDispatchBindingRef(target.bindingRef);
   const scopeRef = target.scopeRef;
   if (scopeRef !== undefined && !isScopeRef(scopeRef)) {
     throw new TypeError("dispatch target scopeRef malformed");
@@ -84,7 +92,7 @@ export const parseRequestedPayload = (raw: string): DispatchRequestedPayload => 
   }
   return {
     target: {
-      bindingRef: target.bindingRef,
+      bindingRef,
       scope: target.scope,
       ...(scopeRef === undefined ? {} : { scopeRef }),
     },

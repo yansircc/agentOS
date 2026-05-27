@@ -34,6 +34,7 @@ import {
   type DispatchTargetRegistry,
   type ExtensionPackage,
 } from "../src";
+import { bindingMaterialRef, materialRefKey } from "../src/material-ref";
 
 export class TestAgentDO extends DurableObject {}
 
@@ -63,6 +64,15 @@ const DEAD_TARGET: DispatchTargetNamespace = {
   }),
 };
 
+const dispatchBindingKey = (ref: string): string =>
+  materialRefKey(
+    bindingMaterialRef({
+      provider: "cloudflare",
+      bindingKind: "durable_object",
+      ref,
+    }),
+  );
+
 export class DispatchTestDO extends AgentDOBase<DispatchEnv> {
   constructor(ctx: DurableObjectState, env: DispatchEnv) {
     super(ctx, env);
@@ -82,8 +92,8 @@ export class DispatchTestDO extends AgentDOBase<DispatchEnv> {
 
   protected override provideDispatchTargets(): DispatchTargetRegistry {
     return {
-      peer: this.env.DISPATCH_DO,
-      dead: DEAD_TARGET,
+      [dispatchBindingKey("peer")]: this.env.DISPATCH_DO,
+      [dispatchBindingKey("dead")]: DEAD_TARGET,
     };
   }
 }

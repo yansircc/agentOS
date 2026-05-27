@@ -562,7 +562,8 @@ export type {
 export type { Tool, ToolDefinition, LlmUsage };
 export { withQuota, type QuotaSpec };
 
-// Dispatch target registry (for provideDispatchTargets())
+// Dispatch target registry (for provideDispatchTargets()).
+// Keys are materialRefKey(BindingMaterialRef); values are runtime DO namespaces.
 export type { DispatchTargetNamespace, DispatchTargetRegistry };
 
 // Abort taxonomy
@@ -574,6 +575,7 @@ export {
   JsonStringifyError,
   ScopeMissingError,
   InvalidScheduleAt,
+  DispatchBindingRefMalformed,
   DispatchTargetNotFound,
   DispatchScopeMismatch,
   InvalidResourceAmount,

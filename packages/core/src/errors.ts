@@ -54,6 +54,12 @@ export class DispatchTargetNotFound extends Data.TaggedError("agent_os.dispatch_
   readonly bindingRef: string;
 }> {}
 
+export class DispatchBindingRefMalformed extends Data.TaggedError(
+  "agent_os.dispatch_binding_ref_malformed",
+)<{
+  readonly position: "target";
+}> {}
+
 export class DispatchScopeMismatch extends Data.TaggedError("agent_os.dispatch_scope_mismatch")<{
   readonly expected: string;
   readonly actual: string;

@@ -15,6 +15,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import type { DispatchToScopeResult, DispatchToScopeSpec, LedgerEventRpc } from "../src";
 import { validateEffectClaim } from "../src/effect-claim";
+import { bindingMaterialRef, materialRefKey, type BindingMaterialRef } from "../src/material-ref";
 import { sqlText } from "../src/storage/sql-row";
 import type { DispatchTestDO } from "./test-worker";
 
@@ -35,11 +36,24 @@ const stubFor = (scope: string): DurableObjectStub<DispatchTestDO> & DispatchRpc
     testEnv.DISPATCH_DO.idFromName(scope),
   ) as DurableObjectStub<DispatchTestDO> & DispatchRpc;
 
-const targetFor = (scope: string, bindingRef = "peer") => ({
+const dispatchBindingRef = (ref: string): BindingMaterialRef =>
+  bindingMaterialRef({
+    provider: "cloudflare",
+    bindingKind: "durable_object",
+    ref,
+  });
+
+const peerBindingRef = dispatchBindingRef("peer");
+const peerBindingKey = materialRefKey(peerBindingRef);
+
+const targetFor = (scope: string, bindingRef = peerBindingRef) => ({
   bindingRef,
   scope,
   scopeRef: { kind: "conversation" as const, scopeId: scope },
 });
+
+const dispatchOperationRef = (source: string, bindingKey: string, target: string, intent: string) =>
+  `dispatch:${source}:${encodeURIComponent(bindingKey)}:${target}:${intent}`;
 
 const payloadOf = <T>(events: ReadonlyArray<LedgerEventRpc>, kind: string): T =>
   events.find((e) => e.kind === kind)?.payload as T;
@@ -99,7 +113,12 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
         idempotencyKey: "intent-1",
         claim: expect.objectContaining({
           phase: "pre",
-          operationRef: "dispatch:dispatch-sender-atomic:peer:dispatch-receiver-atomic:intent-1",
+          operationRef: dispatchOperationRef(
+            "dispatch-sender-atomic",
+            peerBindingKey,
+            "dispatch-receiver-atomic",
+            "intent-1",
+          ),
           scopeRef: {
             kind: "conversation",
             scopeId: "dispatch-receiver-atomic",
@@ -232,8 +251,12 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
       deliveredEventId: events.find((e) => e.kind === "test.delivered")?.id,
       claim: expect.objectContaining({
         phase: "lived",
-        operationRef:
-          "dispatch:dispatch-sender-payload:peer:dispatch-receiver-payload:payload-intent",
+        operationRef: dispatchOperationRef(
+          "dispatch-sender-payload",
+          peerBindingKey,
+          "dispatch-receiver-payload",
+          "payload-intent",
+        ),
         anchorRef: expect.objectContaining({
           anchorKind: "ledger_event",
         }),
@@ -280,7 +303,12 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
       deliveredEventId: delivered?.id,
       claim: expect.objectContaining({
         phase: "lived",
-        operationRef: "dispatch:dispatch-sender-trace:peer:dispatch-receiver-trace:trace-intent",
+        operationRef: dispatchOperationRef(
+          "dispatch-sender-trace",
+          peerBindingKey,
+          "dispatch-receiver-trace",
+          "trace-intent",
+        ),
       }),
       traceContext,
     });
@@ -311,13 +339,15 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
 
   it("rejects missing bindingRef as config error before writing sender facts", async () => {
     const sender = stubFor("dispatch-sender-missing-binding");
+    const missingBindingRef = dispatchBindingRef("missing");
+    const missingBindingKey = materialRefKey(missingBindingRef);
 
     await runInDurableObject(sender, async (instance, state) => {
       const rpc = instance as unknown as DispatchRpc;
       let caught: { _tag?: string; bindingRef?: string } | undefined;
       try {
         await rpc.dispatchToScope({
-          target: { bindingRef: "missing", scope: "irrelevant" },
+          target: { bindingRef: missingBindingRef, scope: "irrelevant" },
           event: "test.delivered",
           data: {},
           idempotencyKey: "missing-intent",
@@ -327,7 +357,36 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
       }
 
       expect(caught?._tag).toBe("agent_os.dispatch_target_not_found");
-      expect(caught?.bindingRef).toBe("missing");
+      expect(caught?.bindingRef).toBe(missingBindingKey);
+
+      const events = rowsOrEmpty(state, "SELECT * FROM events");
+      const outbox = rowsOrEmpty(state, "SELECT * FROM dispatch_outbox");
+      expect(events).toHaveLength(0);
+      expect(outbox).toHaveLength(0);
+    });
+  });
+
+  it("rejects malformed bindingRef before writing sender facts", async () => {
+    const sender = stubFor("dispatch-sender-malformed-binding");
+
+    await runInDurableObject(sender, async (instance, state) => {
+      const rpc = instance as unknown as DispatchRpc;
+      let caught: { _tag?: string; position?: string } | undefined;
+      try {
+        await rpc.dispatchToScope({
+          target: { bindingRef: "peer", scope: "irrelevant" },
+          event: "test.delivered",
+          data: {},
+          idempotencyKey: "malformed-intent",
+        } as unknown as DispatchToScopeSpec);
+      } catch (e) {
+        caught = e as { _tag?: string; position?: string };
+      }
+
+      expect(caught).toMatchObject({
+        _tag: "agent_os.dispatch_binding_ref_malformed",
+        position: "target",
+      });
 
       const events = rowsOrEmpty(state, "SELECT * FROM events");
       const outbox = rowsOrEmpty(state, "SELECT * FROM dispatch_outbox");
@@ -344,7 +403,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
       let caught: { _tag?: string; scopeId?: string; position?: string } | undefined;
       try {
         await rpc.dispatchToScope({
-          target: { bindingRef: "peer", scope: "agent/name/item" },
+          target: { bindingRef: peerBindingRef, scope: "agent/name/item" },
           event: "test.delivered",
           data: {},
           idempotencyKey: "unsupported-scope",
@@ -378,7 +437,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
       let caught: { _tag?: string; event?: string } | undefined;
       try {
         await rpc.dispatchToScope({
-          target: { bindingRef: "peer", scope: "any" },
+          target: { bindingRef: peerBindingRef, scope: "any" },
           event: "llm.response",
           data: {},
           idempotencyKey: "claimed-intent",
@@ -401,7 +460,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
     const sender = stubFor("dispatch-sender-failed");
 
     const { outboundEventId } = await sender.dispatchToScope({
-      target: targetFor("dispatch-dead-target", "dead"),
+      target: targetFor("dispatch-dead-target", dispatchBindingRef("dead")),
       event: "test.delivered",
       data: { message: "will fail" },
       idempotencyKey: "dead-intent",
