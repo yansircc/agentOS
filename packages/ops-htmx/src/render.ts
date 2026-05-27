@@ -219,23 +219,25 @@ const renderTraceBody = (trace: RunTrace, status: RunStatus): string => {
 export const renderEventsWorkspace = (
   opts: NormalizedOpsHtmxOptions,
   scope: string,
+  runId: number | undefined,
   result: ApiResult<ReadonlyArray<LedgerEventRpc>>,
   query: { readonly afterId?: number; readonly limit: number; readonly kinds?: string },
 ): string => `<div class="scope-header">
     <h2>${escapeHtml(scope)}</h2>
     <div class="scope-meta"><span class="surface-badge">events</span></div>
   </div>
-  ${renderTabs(opts, scope, undefined, "events")}
+  ${renderTabs(opts, scope, runId, "events")}
   <section class="section">
     <header><h3>event stream</h3><span class="endpoint-tag">GET /scopes/:scope/events</span></header>
     <div class="section-body">
-      ${!result.ok ? errorBlock(result) : renderEventsTable(opts, scope, result.value, query)}
+      ${!result.ok ? errorBlock(result) : renderEventsTable(opts, scope, runId, result.value, query)}
     </div>
   </section>`;
 
 const renderEventsTable = (
   opts: NormalizedOpsHtmxOptions,
   scope: string,
+  runId: number | undefined,
   rows: ReadonlyArray<LedgerEventRpc>,
   query: { readonly afterId?: number; readonly limit: number; readonly kinds?: string },
 ): string => {
@@ -245,7 +247,7 @@ const renderEventsTable = (
         <td class="id">${escapeHtml(event.id)}</td>
         <td class="ts">${escapeHtml(fmtTime(event.ts))}</td>
         <td class="kind">${escapeHtml(event.kind)}</td>
-        <td class="payload"><pre>${escapeHtml(prettyJson(event.payload))}</pre></td>
+        <td class="payload"><details><summary>payload</summary><pre>${escapeHtml(prettyJson(event.payload))}</pre></details></td>
       </tr>`,
     )
     .join("");
@@ -253,9 +255,10 @@ const renderEventsTable = (
   const next =
     last === undefined || rows.length < query.limit
       ? ""
-      : `<a class="pager" hx-get="${escapeAttr(uiPath(opts, "fragments/events", { scope, afterId: last, limit: query.limit, kinds: query.kinds }))}" hx-target="#workspace-panel" hx-swap="innerHTML">after #${escapeHtml(last)}</a>`;
+      : `<a class="pager" hx-get="${escapeAttr(uiPath(opts, "fragments/events", { scope, runId, afterId: last, limit: query.limit, kinds: query.kinds }))}" hx-target="#workspace-panel" hx-swap="innerHTML">after #${escapeHtml(last)}</a>`;
   return `<form class="events-header" hx-get="${escapeAttr(uiPath(opts, "fragments/events"))}" hx-target="#workspace-panel" hx-swap="innerHTML">
       <input type="hidden" name="scope" value="${escapeAttr(scope)}">
+      ${runId === undefined ? "" : `<input type="hidden" name="runId" value="${escapeAttr(runId)}">`}
       <span class="cursor">afterId <b>${escapeHtml(query.afterId ?? 0)}</b></span>
       <input class="filter-input compact" name="kinds" placeholder="kinds" value="${escapeAttr(query.kinds ?? "")}">
       <input class="filter-input mini" name="limit" value="${escapeAttr(query.limit)}">
@@ -267,6 +270,7 @@ const renderEventsTable = (
 export const renderTelemetryWorkspace = (
   opts: NormalizedOpsHtmxOptions,
   scope: string,
+  runId: number | undefined,
   results: {
     readonly quota?: ApiResult<QuotaState>;
     readonly resource?: ApiResult<ResourceState>;
@@ -283,17 +287,17 @@ export const renderTelemetryWorkspace = (
     <h2>${escapeHtml(scope)}</h2>
     <div class="scope-meta"><span class="surface-badge">telemetry</span></div>
   </div>
-  ${renderTabs(opts, scope, undefined, "telemetry")}
+  ${renderTabs(opts, scope, runId, "telemetry")}
   <div class="telemetry-grid">
-    ${projectionSection(opts, scope, "quota", "GET /scopes/:scope/quota", [
+    ${projectionSection(opts, scope, runId, "quota", "GET /scopes/:scope/quota", [
       ["quotaKey", "key", values.quotaKey ?? ""],
       ["windowMs", "windowMs", values.windowMs ?? "Infinity"],
       ["quotaLimit", "limit", values.quotaLimit ?? "1"],
     ], results.quota)}
-    ${projectionSection(opts, scope, "resource", "GET /scopes/:scope/resource", [
+    ${projectionSection(opts, scope, runId, "resource", "GET /scopes/:scope/resource", [
       ["resourceKey", "key", values.resourceKey ?? ""],
     ], results.resource)}
-    ${projectionSection(opts, scope, "admission", "GET /scopes/:scope/admission", [
+    ${projectionSection(opts, scope, runId, "admission", "GET /scopes/:scope/admission", [
       ["admissionKey", "key", values.admissionKey ?? ""],
     ], results.admission)}
   </div>`;
@@ -301,6 +305,7 @@ export const renderTelemetryWorkspace = (
 const projectionSection = (
   opts: NormalizedOpsHtmxOptions,
   scope: string,
+  runId: number | undefined,
   title: string,
   endpoint: string,
   fields: ReadonlyArray<readonly [string, string, string]>,
@@ -310,6 +315,7 @@ const projectionSection = (
   <div class="section-body">
     <form class="projection-form" hx-get="${escapeAttr(uiPath(opts, "fragments/telemetry"))}" hx-target="#workspace-panel" hx-swap="innerHTML">
       <input type="hidden" name="scope" value="${escapeAttr(scope)}">
+      ${runId === undefined ? "" : `<input type="hidden" name="runId" value="${escapeAttr(runId)}">`}
       ${fields.map(([name, label, value]) => `<label><span>${escapeHtml(label)}</span><input name="${escapeAttr(name)}" value="${escapeAttr(value)}"></label>`).join("")}
     </form>
     ${result === undefined ? "" : result.ok ? jsonBlock(result.value) : errorBlock(result)}
@@ -323,8 +329,8 @@ const renderTabs = (
   active: "overview" | "trace" | "events" | "telemetry",
 ): string => `<nav class="view-tabs">
   ${runId === undefined ? "" : tab(opts, "trace", active, "Trace", uiPath(opts, "fragments/select-run", { scope, runId }), "#oob-target")}
-  ${tab(opts, "events", active, "Events", uiPath(opts, "fragments/events", { scope, limit: opts.eventLimit }), "#workspace-panel")}
-  ${tab(opts, "telemetry", active, "Telemetry", uiPath(opts, "fragments/telemetry", { scope }), "#workspace-panel")}
+  ${tab(opts, "events", active, "Events", uiPath(opts, "fragments/events", { scope, runId, limit: opts.eventLimit }), "#workspace-panel")}
+  ${tab(opts, "telemetry", active, "Telemetry", uiPath(opts, "fragments/telemetry", { scope, runId }), "#workspace-panel")}
 </nav>`;
 
 const tab = (
@@ -407,7 +413,7 @@ h3{margin:16px 16px 8px;font-size:10px;text-transform:uppercase;color:var(--fg-2
 .badge{display:inline-block;padding:2px 6px;font-family:var(--mono);font-size:10px;font-weight:600;line-height:1.2}.badge.delivered{color:#166534;background:#f0fdf4}.badge.aborted{color:#991b1b;background:#fef2f2}.badge.open{color:#9a3412;background:#fff7ed}.badge.orphaned{color:#374151;background:#f3f4f6}
 .state{margin:16px;padding:16px;border:1px solid var(--border);background:var(--bg-1);display:flex;gap:8px;align-items:baseline;font-family:var(--mono)}.state-error{border-color:#fca5a5;background:#fef2f2;color:#991b1b}.state small{color:var(--fg-2)}
 .events-header{display:flex;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap;font-size:11px}.cursor{font-family:var(--mono);color:var(--fg-2)}.cursor b{color:var(--fg-0)}
-table.events{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px}table.events th,table.events td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border-muted);vertical-align:top}table.events th{background:var(--bg-1);color:var(--fg-2);font-weight:700;font-size:10px;text-transform:uppercase;border-bottom:1px solid var(--border)}td.id{color:var(--fg-3);width:50px}td.ts{color:var(--fg-2);width:160px}td.kind{color:var(--fg-0);font-weight:600;width:210px}td.payload pre,.json{margin:0;font-family:var(--mono);font-size:11px;color:var(--fg-0);white-space:pre-wrap;overflow-x:auto;background:var(--bg-1);border:1px solid var(--border-muted);padding:8px}
+table.events{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px}table.events th,table.events td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border-muted);vertical-align:top}table.events th{background:var(--bg-1);color:var(--fg-2);font-weight:700;font-size:10px;text-transform:uppercase;border-bottom:1px solid var(--border)}td.id{color:var(--fg-3);width:50px}td.ts{color:var(--fg-2);width:160px}td.kind{color:var(--fg-0);font-weight:600;width:210px}td.payload details{min-width:180px}td.payload summary{cursor:pointer;color:var(--accent);font-weight:600;list-style:none}td.payload summary::-webkit-details-marker{display:none}td.payload summary:before{content:"+";display:inline-block;width:14px;color:var(--fg-2)}td.payload details[open] summary{margin-bottom:8px}td.payload details[open] summary:before{content:"-"}td.payload pre,.json{margin:0;font-family:var(--mono);font-size:11px;color:var(--fg-0);white-space:pre-wrap;overflow-x:auto;background:var(--bg-1);border:1px solid var(--border-muted);padding:8px}
 .trace-container{border:1px solid var(--border);background:var(--bg-0);padding:16px 20px}.trace-list{position:relative;padding-left:20px;display:flex;flex-direction:column;gap:14px}.trace-list:before{content:"";position:absolute;left:4px;top:6px;bottom:6px;width:1px;background:var(--border)}.trace-line{position:relative;display:grid;grid-template-columns:155px 60px 160px 1fr;gap:12px;font-family:var(--mono);font-size:11px;align-items:baseline}.trace-line:before{content:"";position:absolute;left:-19px;top:5px;width:7px;height:7px;background:var(--fg-3);border:1.5px solid var(--bg-0)}.trace-line.terminal-delivered:before{background:var(--green);width:9px;height:9px;left:-20px;top:4px}.trace-line.terminal-aborted:before{background:var(--red);width:9px;height:9px;left:-20px;top:4px}.ts{color:var(--fg-2)}.turn-num{color:var(--fg-2);font-size:9px;font-weight:700;text-transform:uppercase}.label{color:var(--fg-0);font-weight:600}.detail{color:var(--fg-1)}
 .kv{display:grid;grid-template-columns:120px 1fr;gap:4px 12px;font-family:var(--mono);font-size:11px;padding:4px 0}.k{color:var(--fg-2)}.v{color:var(--fg-0)}.run-summary{display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
 .telemetry-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px}.projection-form{display:grid;gap:8px;margin-bottom:12px}.projection-form label{display:grid;grid-template-columns:75px 1fr;gap:8px;align-items:center;font-family:var(--mono);font-size:11px}.projection-form input{padding:6px 8px;border:1px solid var(--border);font-family:var(--mono);font-size:11px}.pager{display:block;margin:12px 16px;font-family:var(--mono);font-size:11px;color:var(--accent)}
