@@ -73,6 +73,10 @@ export interface RejectedClaim extends Omit<PreClaim, "phase"> {
 
 export type EffectClaim = PreClaim | LivedClaim | RejectedClaim;
 
+/**
+ * Runtime roles around EffectClaim. Writer authority is intentionally not a
+ * ClaimRole; durable namespace ownership remains spec-34 ExtensionCapability.
+ */
 export type ClaimRole = "generator" | "resolver" | "reader";
 
 export type ClaimValidationIssue =

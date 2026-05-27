@@ -128,4 +128,35 @@ describe("EffectClaim calculus", () => {
       issues: ["scope_ref_invalid"],
     });
   });
+
+  it("rejects retention policy as ScopeRef kind or inline scope state", () => {
+    for (const kind of ["ephemeral", "persistent"]) {
+      expect(
+        validateEffectClaim({
+          ...pre,
+          scopeRef: {
+            kind,
+            scopeId: "session/s1",
+          },
+        }),
+      ).toEqual({
+        ok: false,
+        issues: ["scope_ref_invalid"],
+      });
+    }
+
+    expect(
+      validateEffectClaim({
+        ...pre,
+        scopeRef: {
+          kind: "session",
+          scopeId: "session/s1",
+          retention: "persistent",
+        },
+      }),
+    ).toEqual({
+      ok: false,
+      issues: ["scope_ref_invalid"],
+    });
+  });
 });
