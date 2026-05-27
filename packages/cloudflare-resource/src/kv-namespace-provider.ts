@@ -81,7 +81,15 @@ const kvNamespaceSpec: CloudflareResourceSpec<
     mutationKind === "kv_namespace.bulk_put"
       ? {
           method: "PUT",
-          path: ["accounts", accountId, "storage", "kv", "namespaces", material.namespaceId, "bulk"],
+          path: [
+            "accounts",
+            accountId,
+            "storage",
+            "kv",
+            "namespaces",
+            material.namespaceId,
+            "bulk",
+          ],
           json: "body" in input ? input.body : [],
         }
       : {

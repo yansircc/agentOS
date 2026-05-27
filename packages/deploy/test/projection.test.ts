@@ -1,9 +1,4 @@
-import {
-  DEPLOY_EVENTS,
-  commitDeployFailed,
-  deployExtensionPackage,
-  projectDeploy,
-} from "../src";
+import { DEPLOY_EVENTS, commitDeployFailed, deployExtensionPackage, projectDeploy } from "../src";
 import { makePreClaim, settleLivedClaim, settleRejectedClaim } from "@agent-os/core/effect-claim";
 import type { ExtensionCapability } from "@agent-os/core/extensions";
 

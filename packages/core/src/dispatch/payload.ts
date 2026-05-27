@@ -43,9 +43,7 @@ export type DispatchPayloadParseResult<T> =
   | { readonly ok: true; readonly value: T }
   | { readonly ok: false; readonly failure: DispatchPayloadParseFailure };
 
-export const dispatchPayloadParseFailure = (
-  reason: string,
-): DispatchPayloadParseFailure => ({
+export const dispatchPayloadParseFailure = (reason: string): DispatchPayloadParseFailure => ({
   _tag: "agent_os.dispatch_payload_parse_failure",
   reason,
 });

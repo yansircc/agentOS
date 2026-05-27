@@ -1,8 +1,5 @@
 import type { ExtensionPackage } from "./extensions";
-import {
-  isAuthorityContract,
-  type AuthorityContract,
-} from "./material-ref";
+import { isAuthorityContract, type AuthorityContract } from "./material-ref";
 import type { AnchorRef, ClaimRole, EffectClaim } from "./effect-claim";
 
 export interface BoundaryProofContract {
@@ -64,10 +61,7 @@ const nonEmptyString = (value: unknown): value is string =>
 const nonEmptyStringArray = (value: unknown): value is ReadonlyArray<string> =>
   Array.isArray(value) && value.length > 0 && value.every(nonEmptyString);
 
-const nonEmptyArrayOf = <T>(
-  value: unknown,
-  allowed: ReadonlySet<T>,
-): value is ReadonlyArray<T> =>
+const nonEmptyArrayOf = <T>(value: unknown, allowed: ReadonlySet<T>): value is ReadonlyArray<T> =>
   Array.isArray(value) && value.length > 0 && value.every((item) => allowed.has(item as T));
 
 const vocabularyValues = (value: unknown): ReadonlyArray<string> | null => {

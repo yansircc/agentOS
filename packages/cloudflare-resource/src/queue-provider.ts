@@ -6,11 +6,7 @@ import type {
   CloudflareResourceFetchResponse,
   CloudflareResourceSpec,
 } from "./provider-core";
-import {
-  makeCloudflareResourceCarrier,
-  materialHelpers,
-  queueMaterialFrom,
-} from "./provider-core";
+import { makeCloudflareResourceCarrier, materialHelpers, queueMaterialFrom } from "./provider-core";
 
 const { isRecord, nonEmptyString } = materialHelpers;
 
@@ -105,5 +101,6 @@ const queueSpec: CloudflareResourceSpec<CloudflareQueueMaterial, CloudflareQueue
         },
 };
 
-export const makeCloudflareQueueResourceCarrier = (options: CloudflareQueueResourceCarrierOptions) =>
-  makeCloudflareResourceCarrier(queueSpec, options);
+export const makeCloudflareQueueResourceCarrier = (
+  options: CloudflareQueueResourceCarrierOptions,
+) => makeCloudflareResourceCarrier(queueSpec, options);

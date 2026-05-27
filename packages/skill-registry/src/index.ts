@@ -31,7 +31,11 @@ export type SkillRegistryIssue =
   | { readonly kind: "invalid_tool_definition"; readonly skillId?: string; readonly index: number }
   | { readonly kind: "duplicate_tool_id"; readonly skillId?: string; readonly toolId: string }
   | { readonly kind: "invalid_authority_class"; readonly skillId?: string; readonly toolId: string }
-  | { readonly kind: "invalid_required_material"; readonly skillId?: string; readonly toolId: string }
+  | {
+      readonly kind: "invalid_required_material";
+      readonly skillId?: string;
+      readonly toolId: string;
+    }
   | { readonly kind: "invalid_admitter"; readonly skillId?: string; readonly toolId: string }
   | { readonly kind: "invalid_execute"; readonly skillId?: string; readonly toolId: string }
   | { readonly kind: "tool_not_registered"; readonly skillId: string; readonly toolId: string };
@@ -111,7 +115,11 @@ const validateManifest = (manifest: SkillManifest): ReadonlyArray<SkillRegistryI
       return;
     }
     if (seen.has(toolId)) {
-      issues.push({ kind: "duplicate_tool_id", ...(skillId === undefined ? {} : { skillId }), toolId });
+      issues.push({
+        kind: "duplicate_tool_id",
+        ...(skillId === undefined ? {} : { skillId }),
+        toolId,
+      });
     }
     seen.add(toolId);
 
@@ -134,10 +142,18 @@ const validateManifest = (manifest: SkillManifest): ReadonlyArray<SkillRegistryI
       });
     }
     if (typeof tool.admit !== "function") {
-      issues.push({ kind: "invalid_admitter", ...(skillId === undefined ? {} : { skillId }), toolId });
+      issues.push({
+        kind: "invalid_admitter",
+        ...(skillId === undefined ? {} : { skillId }),
+        toolId,
+      });
     }
     if (typeof tool.execute !== "function") {
-      issues.push({ kind: "invalid_execute", ...(skillId === undefined ? {} : { skillId }), toolId });
+      issues.push({
+        kind: "invalid_execute",
+        ...(skillId === undefined ? {} : { skillId }),
+        toolId,
+      });
     }
   });
 
@@ -159,7 +175,9 @@ export const registerSkill = (manifest: SkillManifest): RegisterSkillResult => {
       execute: tool.execute,
       authorityClass: tool.authorityClass,
       ...(tool.authorityId === undefined ? {} : { authorityId: tool.authorityId }),
-      ...(tool.requiredMaterials === undefined ? {} : { requiredMaterials: tool.requiredMaterials }),
+      ...(tool.requiredMaterials === undefined
+        ? {}
+        : { requiredMaterials: tool.requiredMaterials }),
       originRef: manifest.originRef,
       admit: tool.admit,
     });
@@ -182,11 +200,13 @@ export const unregisterSkill = (
 ): UnregisterSkillResult => {
   const issues = registration.toolIds
     .filter((toolId) => registry[toolId] === undefined)
-    .map((toolId): SkillRegistryIssue => ({
-      kind: "tool_not_registered",
-      skillId: registration.skillId,
-      toolId,
-    }));
+    .map(
+      (toolId): SkillRegistryIssue => ({
+        kind: "tool_not_registered",
+        skillId: registration.skillId,
+        toolId,
+      }),
+    );
   if (issues.length > 0) return { ok: false, issues };
 
   const next: Record<string, Tool> = { ...registry };

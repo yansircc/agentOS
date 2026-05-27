@@ -26,10 +26,17 @@ const resolver = (materials: Readonly<Record<string, string>>): RefResolver => (
   material: (ref) => materials[`${ref.kind}:${ref.ref}`] ?? null,
 });
 
-const collect = async (frames: AsyncIterable<TurnStreamFrame>): Promise<ReadonlyArray<TurnStreamFrame>> => {
+const collect = async (
+  frames: AsyncIterable<TurnStreamFrame>,
+): Promise<ReadonlyArray<TurnStreamFrame>> => {
   const out: TurnStreamFrame[] = [];
   for await (const frame of frames) out.push(frame);
   return out;
+};
+
+const parseJsonBody = (body: BodyInit | null | undefined): unknown => {
+  expect(typeof body).toBe("string");
+  return JSON.parse(typeof body === "string" ? body : "null");
 };
 
 const textStream = (text: string): ReadableStream<Uint8Array> =>
@@ -102,7 +109,7 @@ describe("@agent-os/llm-transport-http", () => {
       Accept: "text/event-stream",
       "Content-Type": "application/json",
     });
-    expect(JSON.parse(String(seen[0]?.init.body))).toMatchObject({
+    expect(parseJsonBody(seen[0]?.init.body)).toMatchObject({
       model: "gpt-test",
       messages,
       tools: [weatherTool],
@@ -229,7 +236,7 @@ describe("@agent-os/llm-transport-http", () => {
       "x-api-key": "anthropic-secret",
       "anthropic-version": "2023-06-01",
     });
-    expect(JSON.parse(String(seen[0]?.body))).toMatchObject({
+    expect(parseJsonBody(seen[0]?.body)).toMatchObject({
       model: "claude-test",
       system: "be direct",
       messages: [{ role: "user", content: "hello" }],
@@ -276,7 +283,15 @@ describe("@agent-os/llm-transport-http", () => {
     expect(seen[0]?.input).toBe(
       "https://generativelanguage.example/v1beta/models/gemini-test:streamGenerateContent?alt=sse",
     );
-    const body = JSON.parse(String(seen[0]?.init.body));
+    const body = parseJsonBody(seen[0]?.init.body) as {
+      readonly systemInstruction?: unknown;
+      readonly contents?: unknown;
+      readonly tools: ReadonlyArray<{
+        readonly functionDeclarations: ReadonlyArray<{
+          readonly parameters: { readonly additionalProperties?: unknown };
+        }>;
+      }>;
+    };
     expect(body.systemInstruction).toEqual({ parts: [{ text: "be direct" }] });
     expect(body.contents).toEqual([{ role: "user", parts: [{ text: "hello" }] }]);
     expect(body.tools[0].functionDeclarations[0].parameters.additionalProperties).toBeUndefined();

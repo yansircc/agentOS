@@ -152,9 +152,7 @@ export interface CloudflareWorkspaceSandboxExposePortResult {
 }
 
 export interface CloudflareWorkspaceSandboxClient {
-  readonly createSession?: (
-    options: CloudflareWorkspaceSandboxSessionOptions,
-  ) => Promise<unknown>;
+  readonly createSession?: (options: CloudflareWorkspaceSandboxSessionOptions) => Promise<unknown>;
   readonly createBackup?: (
     options: CloudflareWorkspaceSandboxBackupOptions,
   ) => Promise<CloudflareWorkspaceSandboxBackupHandle>;
@@ -195,7 +193,9 @@ export interface CloudflareWorkspaceSessionBackupOptions {
   readonly useGitignore?:
     | boolean
     | ((request: WorkspaceSessionBackupRequest) => boolean | undefined);
-  readonly localBucket?: boolean | ((request: WorkspaceSessionBackupRequest) => boolean | undefined);
+  readonly localBucket?:
+    | boolean
+    | ((request: WorkspaceSessionBackupRequest) => boolean | undefined);
 }
 
 export interface CloudflareWorkspaceSessionPreviewOptions {
@@ -505,9 +505,7 @@ const numberOrUndefined = <Request>(
 const backupOptions = (
   options: CloudflareWorkspaceSessionSandboxProviderOptions,
   request: WorkspaceSessionBackupRequest,
-):
-  | CloudflareWorkspaceSandboxBackupOptions
-  | CloudflareWorkspaceSessionRequiredProviderFailure => {
+): CloudflareWorkspaceSandboxBackupOptions | CloudflareWorkspaceSessionRequiredProviderFailure => {
   const config = options.backup;
   const out: {
     dir: string;
@@ -816,7 +814,8 @@ export const makeCloudflareWorkspaceSessionLiveProvider = (
     const sessionId = requiredOptionString(options.sessionId(request), "sessionId", "start");
     if (isProviderFailure(sessionId)) return providerRejected(sessionId.reason, sessionId.code);
     const workspaceDir = requiredOptionString(options.workspaceDir, "workspaceDir", "start");
-    if (isProviderFailure(workspaceDir)) return providerRejected(workspaceDir.reason, workspaceDir.code);
+    if (isProviderFailure(workspaceDir))
+      return providerRejected(workspaceDir.reason, workspaceDir.code);
     const client = await sandboxClient(options, request, sandboxId, "start");
     const createSession = requireMethod<
       (sessionOptions: CloudflareWorkspaceSandboxSessionOptions) => Promise<unknown>
@@ -855,7 +854,8 @@ export const makeCloudflareWorkspaceSessionLiveProvider = (
     const restoredId = requiredOptionString(restored.id, "restoreBackup.id", "restore");
     if (isProviderFailure(restoredId)) return providerRejected(restoredId.reason, restoredId.code);
     const restoredDir = requiredOptionString(restored.dir, "restoreBackup.dir", "restore");
-    if (isProviderFailure(restoredDir)) return providerRejected(restoredDir.reason, restoredDir.code);
+    if (isProviderFailure(restoredDir))
+      return providerRejected(restoredDir.reason, restoredDir.code);
     const idMismatch = ensureSameString(restoredId, backup.id, "backup id", "restore");
     if (idMismatch !== null) return providerRejected(idMismatch.reason, idMismatch.code);
     const dirMismatch = ensureSameString(restoredDir, backup.dir, "backup dir", "restore");

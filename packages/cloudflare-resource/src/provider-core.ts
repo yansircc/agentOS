@@ -186,21 +186,24 @@ const materialUnavailable = (
   resourceKind: CloudflareResourceKind,
   step: CloudflareResourceLifecycleStep,
   reason: string,
-): CloudflareResourceFailure => providerFailure(claim, resourceKind, step, "MaterialUnavailable", reason);
+): CloudflareResourceFailure =>
+  providerFailure(claim, resourceKind, step, "MaterialUnavailable", reason);
 
 const unsupportedResource = (
   claim: PreClaim,
   resourceKind: CloudflareResourceKind,
   step: CloudflareResourceLifecycleStep,
   reason: string,
-): CloudflareResourceFailure => providerFailure(claim, resourceKind, step, "UnsupportedResource", reason);
+): CloudflareResourceFailure =>
+  providerFailure(claim, resourceKind, step, "UnsupportedResource", reason);
 
 const providerRejected = (
   claim: PreClaim,
   resourceKind: CloudflareResourceKind,
   step: CloudflareResourceLifecycleStep,
   reason: string,
-): CloudflareResourceFailure => providerFailure(claim, resourceKind, step, "ProviderFailure", reason);
+): CloudflareResourceFailure =>
+  providerFailure(claim, resourceKind, step, "ProviderFailure", reason);
 
 const proofRef = (
   resourceKind: CloudflareResourceKind,
@@ -276,7 +279,12 @@ const requireCloudflareAccount = <Material, MutationInput>(
   Effect.gen(function* () {
     if (accountRef.provider !== "cloudflare" || accountRef.resourceKind !== "account") {
       return yield* Effect.fail(
-        materialUnavailable(claim, spec.resourceKind, step, "cloudflare account material is required"),
+        materialUnavailable(
+          claim,
+          spec.resourceKind,
+          step,
+          "cloudflare account material is required",
+        ),
       );
     }
     const material = yield* Effect.try({
@@ -436,7 +444,7 @@ const cloudflareJson = <Material, MutationInput>(
     const headers: Record<string, string> = {
       Authorization: `Bearer ${token}`,
       ...(request.json === undefined ? {} : { "Content-Type": "application/json" }),
-      ...(request.headers ?? {}),
+      ...request.headers,
     };
     const response = yield* Effect.tryPromise({
       try: () =>
@@ -453,7 +461,12 @@ const cloudflareJson = <Material, MutationInput>(
               }),
         }),
       catch: () =>
-        providerRejected(claim, spec.resourceKind, step, `cloudflare_${spec.resourceKind}_fetch_failed`),
+        providerRejected(
+          claim,
+          spec.resourceKind,
+          step,
+          `cloudflare_${spec.resourceKind}_fetch_failed`,
+        ),
     });
     if (!response.ok) {
       return yield* Effect.fail(
@@ -716,7 +729,13 @@ export const makeCloudflareResourceCarrier = <Material, MutationInput>(
           "bind",
           request.accountRef,
         );
-        const material = yield* requireResourceMaterial(options, spec, request.claim, "bind", resourceRef);
+        const material = yield* requireResourceMaterial(
+          options,
+          spec,
+          request.claim,
+          "bind",
+          resourceRef,
+        );
         yield* requireBindingMaterial(options, spec, request.claim, "bind", bindingRef);
         const body = yield* cloudflareJson(
           options,

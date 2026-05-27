@@ -21,7 +21,7 @@ export const cloudflareResourceRejectionKind = (
       ? "resource_denied"
       : code === "PolicyDenied"
         ? "policy_denied"
-      : "provider_rejected";
+        : "provider_rejected";
 
 export const settleCloudflareResourceRejected = (
   claim: PreClaim,

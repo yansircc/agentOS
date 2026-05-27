@@ -56,9 +56,10 @@ describe("dispatch receiver idempotency properties", () => {
         fc.constantFrom(...sourceScopes),
         fc.constantFrom(...idempotencyKeys),
         (payloads, sourceScope, idempotencyKey) => {
-          expect(findAcceptedInRows(payloads.map(rowOf), sourceScope, idempotencyKey)).toEqual(
-            { ok: true, value: oracle(payloads, sourceScope, idempotencyKey) },
-          );
+          expect(findAcceptedInRows(payloads.map(rowOf), sourceScope, idempotencyKey)).toEqual({
+            ok: true,
+            value: oracle(payloads, sourceScope, idempotencyKey),
+          });
         },
       ),
       { numRuns: 1000 },
