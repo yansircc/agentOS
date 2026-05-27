@@ -231,6 +231,9 @@ Rules:
 
 - **S-1.** `scopeId` stays opaque. The kind is the type-level branch; parsing
   prefixes such as `thread/` or `session/` is compatibility only.
+- **S-1a.** Compatibility parsing must fail closed on unknown prefixes. It must
+  not default an unknown scope to `realm`; callers with app-defined scope names
+  must pass a typed `ScopeRef`.
 - **S-2.** Only `session` implies that a stateful execution carrier may declare
   a runtime/workspace root for the scope. Artifact storage can still be
   carrier-backed, but artifact bytes are not a resumable execution session.
@@ -399,6 +402,14 @@ Correct placements:
 - tool registry entries that combine tool identity and authority class;
 - carrier contracts that need pre-effect dedupe and post-effect proof;
 - ledger projections that locate anchors/rejections from committed events.
+
+Canonical envelope:
+
+- **E-1.** When a ledger event carries a claim, it lives at `payload.claim`.
+  Readers must look there. Carriers and core generators must write it there.
+- **E-2.** If a request accepts both a full `PreClaim` and a legacy standalone
+  `scopeRef`, the type must make them mutually exclusive. With a claim present,
+  `claim.scopeRef` is the only scope source.
 
 Incorrect placements:
 

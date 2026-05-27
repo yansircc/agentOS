@@ -81,6 +81,7 @@ import {
   type SubmitSpec,
   type Tool,
 } from "@agent-os/core";
+import { defineRegisteredTool } from "@agent-os/core/tools";
 
 interface Env extends AgentDOEnv {
   AI: Ai;
@@ -88,10 +89,11 @@ interface Env extends AgentDOEnv {
   OPENROUTER_KEY: string;
 }
 
-const myTool: Tool<{ key: string }, { value: string }> = {
+const myTool: Tool<{ key: string }, { value: string }> = defineRegisteredTool({
   definition: { /* OpenAI function tool spec */ },
   execute: async (args) => ({ value: `value for ${args.key}` }),
-};
+  authorityClass: "read",
+});
 
 export class AgentDO extends AgentDOBase<Env> {
   protected provideRefResolver() {

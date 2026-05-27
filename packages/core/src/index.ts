@@ -68,6 +68,7 @@ export {
   SqlError,
   JsonStringifyError,
   ScopeMissingError,
+  UnsupportedScopeRef,
   InvalidScheduleAt,
   CapabilityRejected,
   DispatchTargetNotFound,

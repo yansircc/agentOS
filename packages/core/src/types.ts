@@ -8,6 +8,8 @@
  * ScheduledEventSpec — argument to AgentDOBase.scheduleEvent.
  */
 
+import type { ScopeRef } from "./effect-claim";
+
 export interface LedgerEvent {
   readonly id: number;
   readonly ts: number;
@@ -48,6 +50,7 @@ export interface ScheduledEventSpec {
 export interface DispatchTargetSpec {
   readonly bindingRef: string;
   readonly scope: string;
+  readonly scopeRef?: ScopeRef;
 }
 
 export interface TraceContext {

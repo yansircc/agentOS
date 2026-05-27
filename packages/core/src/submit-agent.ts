@@ -51,8 +51,10 @@ import {
 import {
   makeOperationRef,
   makePreClaim,
-  scopeRefFromLegacyScope,
   settleLivedClaim,
+  settleRejectedClaim,
+  type RejectionRef,
+  type ScopeRef,
 } from "./effect-claim";
 
 export interface SubmitSpec {
@@ -100,7 +102,11 @@ export interface SubmitSpec {
 
 /** Internal SubmitSpec with scope filled in by AgentDOBase. */
 export interface InternalSubmitSpec extends Omit<SubmitSpec, "deliver"> {
-  readonly deliver: { readonly scope: string; readonly event: string };
+  readonly deliver: {
+    readonly scope: string;
+    readonly scopeRef: ScopeRef;
+    readonly event: string;
+  };
 }
 
 export type SubmitResult =
@@ -133,6 +139,20 @@ const toolDefinitionsOf = (
   tools: Record<string, Tool>,
 ): ReadonlyArray<ToolDefinition> =>
   Object.values(tools).map((t) => t.definition);
+
+const toolErrorReason = (error: ToolError): string => {
+  const cause = error.cause;
+  if (typeof cause === "object" && cause !== null) {
+    const reason = (cause as { readonly reason?: unknown }).reason;
+    if (typeof reason === "string" && reason.length > 0) return reason;
+  }
+  return String(cause);
+};
+
+const toolRejectionKind = (reason: string): RejectionRef["rejectionKind"] =>
+  reason === "rate_limited" || reason.startsWith("invalid_quota_")
+    ? "resource_denied"
+    : "provider_rejected";
 
 export const buildInitialMessages = (
   spec: Pick<InternalSubmitSpec, "system" | "intent" | "context">,
@@ -190,6 +210,7 @@ export const submitAgentEffect = (
     const maxTurns = spec.budget?.maxTurns ?? 5;
     const toolRetries = Math.max(0, spec.budget?.toolRetries ?? 2);
     const scope = spec.deliver.scope;
+    const scopeRef = spec.deliver.scopeRef;
 
     const started = yield* ledger.log(
       "agent.run.started",
@@ -403,12 +424,8 @@ export const submitAgentEffect = (
           const parsed = yield* parseToolCall(spec.tools, call);
           const { tool, args } = parsed;
           const contract = tool.contract;
-          if (contract === undefined) {
-            return yield* new ToolError({
-              toolName: call.function.name,
-              cause: { reason: "missing_tool_contract" },
-            });
-          }
+          // O-2: LLM-emitted tool arguments are not reproducible idempotency
+          // material; this concrete call attempt is the semantic effect.
           const claim = makePreClaim({
             operationRef: makeOperationRef("tool", [
               scope,
@@ -416,7 +433,7 @@ export const submitAgentEffect = (
               turn,
               call.id,
             ]),
-            scopeRef: scopeRefFromLegacyScope(scope),
+            scopeRef,
             authorityRef: contract.authorityRef,
             originRef: contract.originRef ?? {
               originId: `run:${started.id}`,
@@ -508,6 +525,27 @@ export const submitAgentEffect = (
                 }
                 return true;
               },
+            }),
+            Effect.catchTags({
+              [ABORT.TOOL_ERROR]: (error) =>
+                Effect.gen(function* () {
+                  const reason = toolErrorReason(error);
+                  yield* ledger.log(
+                    "tool.rejected",
+                    {
+                      runId: started.id,
+                      name: call.function.name,
+                      args: call.function.arguments,
+                      claim: settleRejectedClaim(claim, {
+                        rejectionId: claim.operationRef,
+                        rejectionKind: toolRejectionKind(reason),
+                        reason,
+                      }),
+                    },
+                    scope,
+                  );
+                  return yield* error;
+                }),
             }),
           );
 

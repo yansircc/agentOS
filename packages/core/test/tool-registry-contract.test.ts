@@ -51,7 +51,11 @@ const makeSpec = (scope: string, tool: Tool): InternalSubmitSpec => ({
   route: { kind: "cf-ai-binding", modelId: "@cf/stub/test" } as const,
   tools: { lookup: tool },
   budget: { maxTurns: 3 },
-  deliver: { event: "test.delivered", scope },
+  deliver: {
+    event: "test.delivered",
+    scope,
+    scopeRef: { kind: "conversation", scopeId: scope },
+  },
 });
 
 const buildRuntime = (state: DurableObjectState, ai: Ai) => {
@@ -90,7 +94,7 @@ describe("tool registry generator", () => {
   });
 
   it("rejects tools without a single authority contract before execution", () => {
-    const bareTool: Tool = {
+    const bareTool = {
       definition: {
         type: "function",
         function: {
@@ -100,7 +104,7 @@ describe("tool registry generator", () => {
         },
       },
       execute: async () => ({ value: 42 }),
-    };
+    } as unknown as Tool;
 
     expect(validateToolRegistry({ lookup: bareTool })).toEqual({
       ok: false,
@@ -160,6 +164,63 @@ describe("tool registry generator", () => {
           }),
         }),
       );
+
+      await runtime.dispose();
+    });
+  });
+
+  it("settles tool failures as rejected claims before run abort", async () => {
+    const scope = "tool-registry-rejected";
+    const id = testEnv.AGENT_DO.idFromName(scope);
+    const stub = testEnv.AGENT_DO.get(id);
+    const failingTool = defineRegisteredTool({
+      definition: {
+        type: "function",
+        function: {
+          name: "lookup",
+          description: "Lookup a value",
+          parameters: { type: "object", properties: {}, required: [] },
+        },
+      },
+      execute: async () => {
+        throw new Error("upstream down");
+      },
+      authorityClass: "read",
+    });
+
+    await runInDurableObject(stub, async (_inst, state) => {
+      const ai = stubAi([toolCallResp("lookup", "{}", "call-1")]);
+      const runtime = buildRuntime(state, ai);
+
+      const result = await runtime.runPromise(
+        submitAgentEffect(makeSpec(scope, failingTool)),
+      );
+      expect(result.ok).toBe(false);
+
+      const events = await runtime.runPromise(
+        Effect.gen(function* () {
+          const l = yield* Ledger;
+          return yield* l.events(scope);
+        }),
+      );
+      const rejected = events.find((event) => event.kind === "tool.rejected");
+      expect(rejected?.payload).toEqual(
+        expect.objectContaining({
+          runId: 1,
+          name: "lookup",
+          claim: expect.objectContaining({
+            phase: "rejected",
+            operationRef: "tool:tool-registry-rejected:1:0:call-1",
+            rejectionRef: {
+              rejectionId: "tool:tool-registry-rejected:1:0:call-1",
+              rejectionKind: "provider_rejected",
+              reason: "Error: upstream down",
+            },
+          }),
+        }),
+      );
+      expect(events.some((event) => event.kind === "agent.aborted.tool_error"))
+        .toBe(true);
 
       await runtime.dispose();
     });

@@ -45,6 +45,12 @@ const stubFor = (
     testEnv.DISPATCH_DO.idFromName(scope),
   ) as DurableObjectStub<DispatchTestDO> & DispatchRpc;
 
+const targetFor = (scope: string, bindingRef = "peer") => ({
+  bindingRef,
+  scope,
+  scopeRef: { kind: "conversation" as const, scopeId: scope },
+});
+
 const payloadOf = <T>(events: ReadonlyArray<LedgerEventRpc>, kind: string): T =>
   events.find((e) => e.kind === kind)?.payload as T;
 
@@ -68,7 +74,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
     const receiver = stubFor("dispatch-receiver-atomic");
 
     const result = await sender.dispatchToScope({
-      target: { bindingRef: "peer", scope: "dispatch-receiver-atomic" },
+      target: targetFor("dispatch-receiver-atomic"),
       event: "test.delivered",
       data: { message: "hello" },
       idempotencyKey: "intent-1",
@@ -107,7 +113,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
         readonly claim?: unknown;
       };
       expect(payload).toEqual({
-        target: { bindingRef: "peer", scope: "dispatch-receiver-atomic" },
+        target: targetFor("dispatch-receiver-atomic"),
         event: "test.delivered",
         data: { message: "hello" },
         idempotencyKey: "intent-1",
@@ -115,7 +121,10 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
           phase: "pre",
           operationRef:
             "dispatch:dispatch-sender-atomic:peer:dispatch-receiver-atomic:intent-1",
-          scopeRef: { kind: "realm", scopeId: "dispatch-receiver-atomic" },
+          scopeRef: {
+            kind: "conversation",
+            scopeId: "dispatch-receiver-atomic",
+          },
           authorityRef: {
             authorityId: "cap_dispatch",
             authorityClass: "effect",
@@ -143,7 +152,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
     });
 
     const result = await sender.dispatchToScope({
-      target: { bindingRef: "peer", scope: "dispatch-receiver-diverged-ledger" },
+      target: targetFor("dispatch-receiver-diverged-ledger"),
       event: "test.delivered",
       data: { message: "cross-ledger" },
       idempotencyKey: "diverged-intent",
@@ -188,13 +197,13 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
     const receiver = stubFor("dispatch-receiver-dedupe");
 
     const first = await sender.dispatchToScope({
-      target: { bindingRef: "peer", scope: "dispatch-receiver-dedupe" },
+      target: targetFor("dispatch-receiver-dedupe"),
       event: "test.delivered",
       data: { value: 1 },
       idempotencyKey: "same-intent",
     });
     const second = await sender.dispatchToScope({
-      target: { bindingRef: "peer", scope: "dispatch-receiver-dedupe" },
+      target: targetFor("dispatch-receiver-dedupe"),
       event: "test.delivered",
       data: { value: 999 },
       idempotencyKey: "same-intent",
@@ -228,7 +237,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
     const data = { nested: { a: 1 }, list: ["x", "y"] };
 
     const { outboundEventId } = await sender.dispatchToScope({
-      target: { bindingRef: "peer", scope: "dispatch-receiver-payload" },
+      target: targetFor("dispatch-receiver-payload"),
       event: "test.delivered",
       data,
       idempotencyKey: "payload-intent",
@@ -274,7 +283,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
     };
 
     const { outboundEventId } = await sender.dispatchToScope({
-      target: { bindingRef: "peer", scope: "dispatch-receiver-trace" },
+      target: targetFor("dispatch-receiver-trace"),
       event: "test.delivered",
       data: { message: "trace" },
       idempotencyKey: "trace-intent",
@@ -319,7 +328,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
     const receiver = stubFor("dispatch-receiver-fire");
 
     await sender.dispatchToScope({
-      target: { bindingRef: "peer", scope: "dispatch-receiver-fire" },
+      target: targetFor("dispatch-receiver-fire"),
       event: "test.delivered",
       data: { message: "react" },
       idempotencyKey: "fire-intent",
@@ -366,6 +375,40 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
     });
   });
 
+  it("rejects unsupported target scope shape instead of defaulting to realm", async () => {
+    const sender = stubFor("dispatch-sender-unsupported-scope");
+
+    await runInDurableObject(sender, async (instance, state) => {
+      const rpc = instance as unknown as DispatchRpc;
+      let caught: { _tag?: string; scopeId?: string; position?: string } | undefined;
+      try {
+        await rpc.dispatchToScope({
+          target: { bindingRef: "peer", scope: "agent/name/item" },
+          event: "test.delivered",
+          data: {},
+          idempotencyKey: "unsupported-scope",
+        });
+      } catch (e) {
+        caught = e as {
+          _tag?: string;
+          scopeId?: string;
+          position?: string;
+        };
+      }
+
+      expect(caught).toMatchObject({
+        _tag: "agent_os.unsupported_scope_ref",
+        scopeId: "agent/name/item",
+        position: "target",
+      });
+
+      const events = rowsOrEmpty(state, "SELECT * FROM events");
+      const outbox = rowsOrEmpty(state, "SELECT * FROM dispatch_outbox");
+      expect(events).toHaveLength(0);
+      expect(outbox).toHaveLength(0);
+    });
+  });
+
   it("rejects claimed event kinds before writing sender facts", async () => {
     const sender = stubFor("dispatch-sender-claimed");
 
@@ -397,7 +440,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
     const sender = stubFor("dispatch-sender-failed");
 
     const { outboundEventId } = await sender.dispatchToScope({
-      target: { bindingRef: "dead", scope: "dispatch-dead-target" },
+      target: targetFor("dispatch-dead-target", "dead"),
       event: "test.delivered",
       data: { message: "will fail" },
       idempotencyKey: "dead-intent",

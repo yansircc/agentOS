@@ -37,6 +37,7 @@ import {
   InvalidResourceAmount,
   ScopeMissingError,
   SqlError,
+  UnsupportedScopeRef,
 } from "./errors";
 import type {
   EventHandler,
@@ -97,6 +98,10 @@ import {
   rejectClaimedAppEvent,
   validateExtensionPackages,
 } from "./extensions";
+import {
+  scopeRefFromLegacyScope,
+  type ScopeRef,
+} from "./effect-claim";
 import {
   type InternalSubmitSpec,
   submitAgentEffect,
@@ -343,6 +348,16 @@ export abstract class AgentDOBase<
     return {};
   }
 
+  /** Compatibility mapper for existing string-named DO scopes.
+   *
+   *  New app code should override this when scope names are not one of the
+   *  spec-24 conventional prefixes. Returning null is a hard unsupported
+   *  state, not a `realm` fallback.
+   */
+  protected scopeRefForScope(scope: string): ScopeRef | null {
+    return scopeRefFromLegacyScope(scope);
+  }
+
   /** Register a handler fired whenever a ledger event of `kind` is written.
    *  Multiple handlers per kind compose (Set semantics). */
   protected on(kind: string, handler: EventHandler): void {
@@ -367,13 +382,19 @@ export abstract class AgentDOBase<
     if (scope === undefined) {
       return Promise.reject(new ScopeMissingError());
     }
+    const scopeRef = this.scopeRefForScope(scope);
+    if (scopeRef === null) {
+      return Promise.reject(
+        new UnsupportedScopeRef({ scopeId: scope, position: "source" }),
+      );
+    }
     const rejected = this.appCommitRejection(spec.deliver.event);
     if (rejected !== null) {
       return Promise.reject(rejected);
     }
     const internalSpec: InternalSubmitSpec = {
       ...spec,
-      deliver: { event: spec.deliver.event, scope },
+      deliver: { event: spec.deliver.event, scope, scopeRef },
     };
     return this.runtimeFor(scope).runPromise(submitAgentEffect(internalSpec));
   }
@@ -575,10 +596,24 @@ export abstract class AgentDOBase<
         }),
       );
     }
+    const targetScopeRef =
+      spec.target.scopeRef ?? this.scopeRefForScope(spec.target.scope);
+    if (targetScopeRef === null) {
+      return Promise.reject(
+        new UnsupportedScopeRef({
+          scopeId: spec.target.scope,
+          position: "target",
+        }),
+      );
+    }
+    const resolvedSpec: DispatchToScopeSpec = {
+      ...spec,
+      target: { ...spec.target, scopeRef: targetScopeRef },
+    };
     return this.runtimeFor(scope).runPromise(
       Effect.gen(function* () {
         const dispatch = yield* Dispatch;
-        return yield* dispatch.dispatchToScope(spec);
+        return yield* dispatch.dispatchToScope(resolvedSpec);
       }),
     );
   }

@@ -98,7 +98,11 @@ const baseSpec = (scope: string): InternalSubmitSpec => ({
   route: { kind: "cf-ai-binding", modelId: "@cf/stub/test" } as const,
   tools: {},
   budget: { maxTurns: 1 },
-  deliver: { event: "test.delivered", scope },
+  deliver: {
+    event: "test.delivered",
+    scope,
+    scopeRef: { kind: "conversation", scopeId: scope },
+  },
 });
 
 describe("SubmitSpec.system field — behavior-program axis", () => {
