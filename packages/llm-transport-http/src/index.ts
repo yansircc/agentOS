@@ -89,6 +89,16 @@ interface AnthropicMessage {
   readonly content: string | ReadonlyArray<AnthropicContentBlock>;
 }
 
+type AnthropicMessagesResult =
+  | {
+      readonly ok: true;
+      readonly value: {
+        readonly system?: string;
+        readonly messages: ReadonlyArray<AnthropicMessage>;
+      };
+    }
+  | { readonly ok: false; readonly error: ProviderError };
+
 interface GeminiPartText {
   readonly text: string;
 }
@@ -114,6 +124,16 @@ interface GeminiContent {
   readonly role: "user" | "model";
   readonly parts: ReadonlyArray<GeminiPart>;
 }
+
+type GeminiContentsResult =
+  | {
+      readonly ok: true;
+      readonly value: {
+        readonly systemText?: string;
+        readonly contents: ReadonlyArray<GeminiContent>;
+      };
+    }
+  | { readonly ok: false; readonly error: ProviderError };
 
 const ANTHROPIC_DEFAULT_VERSION = "2023-06-01";
 const ANTHROPIC_DEFAULT_MAX_TOKENS = 4096;
@@ -161,20 +181,39 @@ const credentialFor = (
 
 const withoutTrailingSlash = (value: string): string => value.replace(/\/$/, "");
 
-const parseJsonWithFallback = (value: string, fallback: unknown): unknown =>
+type JsonParseResult =
+  | { readonly ok: true; readonly value: unknown }
+  | { readonly ok: false; readonly reason: string };
+
+const parseJson = (value: string, reason: string): JsonParseResult =>
   pipe(
     Either.try({
       try: () => JSON.parse(value) as unknown,
-      catch: () => fallback,
+      catch: () => reason,
     }),
     Either.match({
-      onLeft: (left) => left,
-      onRight: (right) => right,
+      onLeft: (failure) => ({ ok: false, reason: failure }),
+      onRight: (parsed) => ({ ok: true, value: parsed }),
     }),
   );
 
-const parseJsonOrString = (value: string): unknown => {
-  return parseJsonWithFallback(value, value);
+const parseJsonForRequest = (
+  value: string,
+  reason: string,
+):
+  | { readonly ok: true; readonly value: unknown }
+  | { readonly ok: false; readonly error: ProviderError } => {
+  const parsed = parseJson(value, reason);
+  return parsed.ok
+    ? { ok: true, value: parsed.value }
+    : { ok: false, error: { reason: parsed.reason } };
+};
+
+const parseJsonChunk = (
+  data: string,
+): JsonParseResult | { readonly ok: true; readonly value: "[DONE]" } => {
+  if (data === "[DONE]") return { ok: true, value: data };
+  return parseJson(data, "llm_transport_http_chunk_json_invalid");
 };
 
 const encodeBody = (body: unknown): string | ProviderError => {
@@ -191,11 +230,6 @@ const encodeBody = (body: unknown): string | ProviderError => {
   return typeof encoded === "string"
     ? encoded
     : { reason: "llm_transport_http_request_encode_failed" };
-};
-
-const jsonChunk = (data: string): unknown => {
-  if (data === "[DONE]") return data;
-  return parseJsonWithFallback(data, data);
 };
 
 const buildOpenAiRequest = (
@@ -246,7 +280,7 @@ const toolsToAnthropic = (tools: ReadonlyArray<ToolDefinition> | undefined): unk
 
 const buildAnthropicMessages = (
   messages: ReadonlyArray<LlmTransportMessage>,
-): { readonly system?: string; readonly messages: ReadonlyArray<AnthropicMessage> } => {
+): AnthropicMessagesResult => {
   const system: string[] = [];
   const out: AnthropicMessage[] = [];
   let index = 0;
@@ -271,11 +305,16 @@ const buildAnthropicMessages = (
         blocks.push({ type: "text", text: message.content });
       }
       for (const call of message.tool_calls ?? []) {
+        const input = parseJsonForRequest(
+          call.function.arguments,
+          "llm_transport_http_tool_arguments_json_invalid",
+        );
+        if (!input.ok) return { ok: false, error: input.error };
         blocks.push({
           type: "tool_use",
           id: call.id,
           name: call.function.name,
-          input: parseJsonOrString(call.function.arguments),
+          input: input.value,
         });
       }
       out.push({ role: "assistant", content: blocks.length > 0 ? blocks : "" });
@@ -297,8 +336,11 @@ const buildAnthropicMessages = (
   }
 
   return {
-    ...(system.length === 0 ? {} : { system: system.join("\n\n") }),
-    messages: out,
+    ok: true,
+    value: {
+      ...(system.length === 0 ? {} : { system: system.join("\n\n") }),
+      messages: out,
+    },
   };
 };
 
@@ -312,9 +354,10 @@ const buildAnthropicRequest = (
   if (typeof credential !== "string") return { ok: false, error: credential };
 
   const messages = buildAnthropicMessages(spec.messages);
+  if (!messages.ok) return { ok: false, error: messages.error };
   const body = encodeBody({
     model: route.modelId,
-    ...messages,
+    ...messages.value,
     tools: toolsToAnthropic(spec.tools),
     max_tokens: ANTHROPIC_DEFAULT_MAX_TOKENS,
     stream: true,
@@ -371,7 +414,7 @@ const toolsToGemini = (tools: ReadonlyArray<ToolDefinition> | undefined): unknow
 
 const buildGeminiContents = (
   messages: ReadonlyArray<LlmTransportMessage>,
-): { readonly systemText?: string; readonly contents: ReadonlyArray<GeminiContent> } => {
+): GeminiContentsResult => {
   const system: string[] = [];
   const contents: GeminiContent[] = [];
   let index = 0;
@@ -396,6 +439,11 @@ const buildGeminiContents = (
         parts.push({ text: message.content });
       }
       for (const call of message.tool_calls ?? []) {
+        const args = parseJsonForRequest(
+          call.function.arguments,
+          "llm_transport_http_tool_arguments_json_invalid",
+        );
+        if (!args.ok) return { ok: false, error: args.error };
         const signature =
           call.metadata !== undefined && typeof call.metadata.thoughtSignature === "string"
             ? call.metadata.thoughtSignature
@@ -403,7 +451,7 @@ const buildGeminiContents = (
         parts.push({
           functionCall: {
             name: call.function.name,
-            args: parseJsonOrString(call.function.arguments),
+            args: args.value,
           },
           ...(signature === undefined ? {} : { thoughtSignature: signature }),
         });
@@ -419,7 +467,7 @@ const buildGeminiContents = (
       parts.push({
         functionResponse: {
           name: toolMessage.name ?? toolMessage.tool_call_id ?? "tool",
-          response: { content: parseJsonOrString(toolMessage.content ?? "") },
+          response: { content: toolMessage.content ?? "" },
         },
       });
       index += 1;
@@ -428,8 +476,11 @@ const buildGeminiContents = (
   }
 
   return {
-    ...(system.length === 0 ? {} : { systemText: system.join("\n\n") }),
-    contents,
+    ok: true,
+    value: {
+      ...(system.length === 0 ? {} : { systemText: system.join("\n\n") }),
+      contents,
+    },
   };
 };
 
@@ -442,7 +493,9 @@ const buildGeminiRequest = (
   const credential = credentialFor(spec.resolver, route);
   if (typeof credential !== "string") return { ok: false, error: credential };
 
-  const { systemText, contents } = buildGeminiContents(spec.messages);
+  const geminiMessages = buildGeminiContents(spec.messages);
+  if (!geminiMessages.ok) return { ok: false, error: geminiMessages.error };
+  const { systemText, contents } = geminiMessages.value;
   const body = encodeBody({
     ...(systemText === undefined ? {} : { systemInstruction: { parts: [{ text: systemText }] } }),
     contents,
@@ -620,7 +673,12 @@ async function* streamSseFrames(
       const data = next.value.data.join("\n");
       if (data.length === 0) continue;
 
-      const frames = adaptProviderChunk(request.provider, turnRef, seq, jsonChunk(data));
+      const chunk = parseJsonChunk(data);
+      if (!chunk.ok) {
+        yield errorFrame(turnRef, seq, chunk.reason);
+        return;
+      }
+      const frames = adaptProviderChunk(request.provider, turnRef, seq, chunk.value);
       for (const frame of frames) yield frame;
       seq = nextSeq(seq, frames);
       if (hasTerminal(frames)) return;
@@ -633,7 +691,12 @@ async function* streamSseFrames(
     const event = parseSseEvent(buffer);
     const data = event.data.join("\n");
     if (data.length > 0) {
-      const frames = adaptProviderChunk(request.provider, turnRef, seq, jsonChunk(data));
+      const chunk = parseJsonChunk(data);
+      if (!chunk.ok) {
+        yield errorFrame(turnRef, seq, chunk.reason);
+        return;
+      }
+      const frames = adaptProviderChunk(request.provider, turnRef, seq, chunk.value);
       for (const frame of frames) yield frame;
       if (hasTerminal(frames)) return;
       seq = nextSeq(seq, frames);

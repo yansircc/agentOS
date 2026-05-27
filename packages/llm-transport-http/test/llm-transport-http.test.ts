@@ -329,7 +329,52 @@ describe("@agent-os/llm-transport-http", () => {
         kind: "error",
         turnRef: "turn-6",
         seq: 0,
-        reason: "openai_compatible_malformed_chunk",
+        reason: "llm_transport_http_chunk_json_invalid",
+      },
+    ]);
+  });
+
+  it("fast-fails malformed tool-call arguments before provider fetch", async () => {
+    const fetch = vi.fn<LlmTransportFetch>();
+    const frames = await collect(
+      streamLlmTurn({
+        route: {
+          kind: "anthropic-messages",
+          endpointRef: "anthropic",
+          credentialRef: "anthropic-key",
+          modelId: "claude-test",
+        },
+        resolver: resolver({
+          "endpoint:anthropic": "https://anthropic.example",
+          "credential:anthropic-key": "anthropic-secret",
+        }),
+        messages: [
+          {
+            role: "assistant",
+            content: null,
+            tool_calls: [
+              {
+                id: "call-1",
+                type: "function",
+                function: { name: "weather", arguments: "{bad json" },
+              },
+            ],
+          },
+        ],
+        turnRef: "turn-7",
+        fetch,
+      }),
+    );
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(JSON.stringify(frames)).not.toContain("{bad json");
+    expect(JSON.stringify(frames)).not.toContain("anthropic-secret");
+    expect(frames).toEqual([
+      {
+        kind: "error",
+        turnRef: "turn-7",
+        seq: 0,
+        reason: "llm_transport_http_tool_arguments_json_invalid",
       },
     ]);
   });
