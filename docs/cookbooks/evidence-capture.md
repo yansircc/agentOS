@@ -1,10 +1,17 @@
 # Evidence Capture
 
+> **Status**: **Proposed agentOS convention**, not yet cross-product-validated.
+> Motivated by zeroY's `release_canary` and `browser_evidence` workflow
+> step definitions, but zeroY at HEAD `b0f2d5d` only declares those steps
+> in its workflow catalog — live execution is explicitly pending
+> (`packages/workflows/src/index.ts:497`) and produces synthetic refs via
+> `evidenceForStep`. No product has actually run post-condition validation
+> under this shape yet. Reviewers should treat this cookbook as a *proposal*
+> for what verification claims should look like when a product wires them.
+>
 > **Pattern**: after an external effect settles to LivedClaim, run one or
 > more validations that the effect actually achieved its intended
 > observable state, and record the validation as its own EffectClaim chain.
-> **Pressure evidence**: zeroY's `release_canary` + `browser_evidence`
-> steps post-`locwp_apply`.
 > **Uses**: `EffectClaim`, ledger, verification carrier or app-named
 > validator.
 > **Does NOT introduce**: a fifth `anchorKind`, a sixth EffectClaim phase,
@@ -164,10 +171,12 @@ dashboard without inventing a join table.
 - It does not define a `verification.*` event vocabulary. Carriers may use
   carrier-owned vocabularies (`verify.browser_evidence.captured`,
   `verify.canary.passed`, etc.) under spec-34 capability rules.
-- It does not require a specific verifier package. zeroY uses
-  `release_canary` + `browser_evidence` workflow steps backed by a custom
-  browser runner. A different product may use a different verifier;
-  the cookbook only constrains the claim shape, not the implementation.
+- It does not require a specific verifier package. zeroY *declares*
+  `release_canary` + `browser_evidence` workflow steps that are intended to
+  run a browser-side verifier when live execution is wired (currently still
+  pending; see `packages/workflows/src/index.ts:497`). A different product
+  may use a different verifier; the cookbook only proposes the claim
+  shape, not the implementation.
 - It does not change the primary effect's settlement. Verification runs
   after the primary LivedClaim is in the ledger.
 
