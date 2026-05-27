@@ -12,16 +12,37 @@ import {
   type WorkspaceSessionStartRequest,
 } from "@agent-os/workspace-session";
 
+export interface CloudflareWorkspaceSessionClient {
+  readonly id: string;
+  readonly workspaceRootRef: string;
+  readonly cleanupRef: string;
+  readonly backup: (request: WorkspaceSessionBackupRequest) => Promise<{ readonly id: string }>;
+  readonly preview: (
+    request: WorkspaceSessionPreviewRequest,
+  ) => Promise<{ readonly id: string; readonly url?: string }>;
+  readonly destroy: (request: WorkspaceSessionDestroyRequest) => Promise<{ readonly id: string }>;
+}
+
+export interface CloudflareWorkspaceSessionNamespace {
+  readonly start: (
+    request: WorkspaceSessionStartRequest,
+  ) => Promise<CloudflareWorkspaceSessionClient>;
+  readonly restore: (
+    request: WorkspaceSessionRestoreRequest,
+  ) => Promise<CloudflareWorkspaceSessionClient>;
+  readonly get: (sessionRef: string) => Promise<CloudflareWorkspaceSessionClient>;
+}
+
 export interface CloudflareWorkspaceSessionStartResult {
-  readonly sessionRef?: string;
-  readonly workspaceRootRef?: string;
-  readonly cleanupRef?: string;
+  readonly sessionRef: string;
+  readonly workspaceRootRef: string;
+  readonly cleanupRef: string;
 }
 
 export interface CloudflareWorkspaceSessionRestoreResult {
-  readonly sessionRef?: string;
-  readonly workspaceRootRef?: string;
-  readonly cleanupRef?: string;
+  readonly sessionRef: string;
+  readonly workspaceRootRef: string;
+  readonly cleanupRef: string;
 }
 
 export interface CloudflareWorkspaceSessionBackupResult {
@@ -34,7 +55,7 @@ export interface CloudflareWorkspaceSessionPreviewResult {
 }
 
 export interface CloudflareWorkspaceSessionDestroyResult {
-  readonly proofRef?: string;
+  readonly proofRef: string;
 }
 
 export interface CloudflareWorkspaceSessionProvider {
@@ -60,6 +81,10 @@ export interface CloudflareWorkspaceSessionCarrierOptions {
   readonly carrierRef?: string;
 }
 
+export interface CloudflareWorkspaceSessionLiveProviderOptions {
+  readonly namespace: CloudflareWorkspaceSessionNamespace;
+}
+
 export interface CloudflareWorkspaceSessionProviderFailure {
   readonly code?: WorkspaceSessionFailure["code"];
   readonly reason?: string;
@@ -72,13 +97,9 @@ const messageOf = (cause: unknown): string => {
   if (cause instanceof Error) return cause.message;
   if (typeof cause === "object" && cause !== null && "message" in cause) {
     const message = (cause as { readonly message: unknown }).message;
-    return typeof message === "string" ? message : JSON.stringify(message);
+    return typeof message === "string" ? message : "provider failure";
   }
-  try {
-    return JSON.stringify(cause);
-  } catch {
-    return String(cause);
-  }
+  return typeof cause === "string" ? cause : "provider failure";
 };
 
 const providerFailure = (
@@ -155,12 +176,65 @@ const scopeFailure = (
 ): WorkspaceSessionFailure =>
   providerFailure(claim, step, "ScopeNotSession", "workspace session claim scope is not session");
 
-const requiredRef = (
-  claim: PreClaim,
-  step: WorkspaceSessionFailure["step"],
-  label: string,
-): WorkspaceSessionFailure =>
-  providerFailure(claim, step, "ProviderFailure", `Cloudflare workspace session missing ${label}`);
+const requiredString = (result: Record<string, unknown>, key: string): string | undefined =>
+  typeof result[key] === "string" && result[key].length > 0 ? result[key] : undefined;
+
+const clientMethod = <K extends "backup" | "preview" | "destroy">(
+  client: CloudflareWorkspaceSessionClient,
+  key: K,
+): CloudflareWorkspaceSessionClient[K] | null => {
+  const method = client[key];
+  if (typeof method !== "function") {
+    return null;
+  }
+  return method;
+};
+
+const missingClientMethod = (key: "backup" | "preview" | "destroy"): Promise<never> =>
+  Promise.reject({
+    code: "ProviderFailure",
+    reason: `Cloudflare workspace session client missing ${key}`,
+  } satisfies CloudflareWorkspaceSessionProviderFailure);
+
+export const makeCloudflareWorkspaceSessionProvider = (
+  options: CloudflareWorkspaceSessionLiveProviderOptions,
+): CloudflareWorkspaceSessionProvider => ({
+  start: async (request) => {
+    const client = await options.namespace.start(request);
+    return {
+      sessionRef: client.id,
+      workspaceRootRef: client.workspaceRootRef,
+      cleanupRef: client.cleanupRef,
+    };
+  },
+  restore: async (request) => {
+    const client = await options.namespace.restore(request);
+    return {
+      sessionRef: client.id,
+      workspaceRootRef: client.workspaceRootRef,
+      cleanupRef: client.cleanupRef,
+    };
+  },
+  backup: async (request) => {
+    const client = await options.namespace.get(request.sessionRef);
+    const backup = clientMethod(client, "backup");
+    if (backup === null) return missingClientMethod("backup");
+    return { backupRef: (await backup(request)).id };
+  },
+  preview: async (request) => {
+    const client = await options.namespace.get(request.sessionRef);
+    const preview = clientMethod(client, "preview");
+    if (preview === null) return missingClientMethod("preview");
+    const result = await preview(request);
+    return { previewRef: result.id, ...(result.url === undefined ? {} : { url: result.url }) };
+  },
+  destroy: async (request) => {
+    const client = await options.namespace.get(request.sessionRef);
+    const destroy = clientMethod(client, "destroy");
+    if (destroy === null) return missingClientMethod("destroy");
+    return { proofRef: (await destroy(request)).id };
+  },
+});
 
 export const makeCloudflareWorkspaceSessionCarrier = (
   options: CloudflareWorkspaceSessionCarrierOptions,
@@ -178,12 +252,37 @@ export const makeCloudflareWorkspaceSessionCarrier = (
           try: () => options.provider.start(request),
           catch: (cause): WorkspaceSessionFailure => failureFrom(request.claim, "start", cause),
         });
-        const sessionRef = result.sessionRef ?? resolution.sessionRootRef;
+        const sessionRef = requiredString(
+          result as unknown as Record<string, unknown>,
+          "sessionRef",
+        );
+        const workspaceRootRef = requiredString(
+          result as unknown as Record<string, unknown>,
+          "workspaceRootRef",
+        );
+        const cleanupRef = requiredString(
+          result as unknown as Record<string, unknown>,
+          "cleanupRef",
+        );
+        if (
+          sessionRef === undefined ||
+          workspaceRootRef === undefined ||
+          cleanupRef === undefined
+        ) {
+          return yield* Effect.fail(
+            providerFailure(
+              request.claim,
+              "start",
+              "ProviderFailure",
+              "Cloudflare workspace session start missing required refs",
+            ),
+          );
+        }
         return {
           subjectRef: request.subjectRef,
           sessionRef,
-          workspaceRootRef: result.workspaceRootRef ?? resolution.workspaceRootRef,
-          cleanupRef: result.cleanupRef ?? resolution.cleanupRef,
+          workspaceRootRef,
+          cleanupRef,
           ...(request.retention === undefined ? {} : { retention: request.retention }),
           claim: settleLivedClaim(request.claim, {
             anchorId: sessionRef,
@@ -203,13 +302,38 @@ export const makeCloudflareWorkspaceSessionCarrier = (
           try: () => options.provider.restore(request),
           catch: (cause): WorkspaceSessionFailure => failureFrom(request.claim, "restore", cause),
         });
-        const sessionRef = result.sessionRef ?? resolution.sessionRootRef;
+        const sessionRef = requiredString(
+          result as unknown as Record<string, unknown>,
+          "sessionRef",
+        );
+        const workspaceRootRef = requiredString(
+          result as unknown as Record<string, unknown>,
+          "workspaceRootRef",
+        );
+        const cleanupRef = requiredString(
+          result as unknown as Record<string, unknown>,
+          "cleanupRef",
+        );
+        if (
+          sessionRef === undefined ||
+          workspaceRootRef === undefined ||
+          cleanupRef === undefined
+        ) {
+          return yield* Effect.fail(
+            providerFailure(
+              request.claim,
+              "restore",
+              "ProviderFailure",
+              "Cloudflare workspace session restore missing required refs",
+            ),
+          );
+        }
         return {
           subjectRef: request.subjectRef,
           sessionRef,
           backupRef: request.backupRef,
-          workspaceRootRef: result.workspaceRootRef ?? resolution.workspaceRootRef,
-          cleanupRef: result.cleanupRef ?? resolution.cleanupRef,
+          workspaceRootRef,
+          cleanupRef,
           ...(request.retention === undefined ? {} : { retention: request.retention }),
           claim: settleLivedClaim(request.claim, {
             anchorId: sessionRef,
@@ -226,7 +350,14 @@ export const makeCloudflareWorkspaceSessionCarrier = (
           catch: (cause): WorkspaceSessionFailure => failureFrom(request.claim, "backup", cause),
         });
         if (result.backupRef === undefined) {
-          return yield* Effect.fail(requiredRef(request.claim, "backup", "backupRef"));
+          return yield* Effect.fail(
+            providerFailure(
+              request.claim,
+              "backup",
+              "ProviderFailure",
+              "Cloudflare workspace session backup missing backupRef",
+            ),
+          );
         }
         return {
           subjectRef: request.subjectRef,
@@ -248,7 +379,14 @@ export const makeCloudflareWorkspaceSessionCarrier = (
           catch: (cause): WorkspaceSessionFailure => failureFrom(request.claim, "preview", cause),
         });
         if (result.previewRef === undefined) {
-          return yield* Effect.fail(requiredRef(request.claim, "preview", "previewRef"));
+          return yield* Effect.fail(
+            providerFailure(
+              request.claim,
+              "preview",
+              "ProviderFailure",
+              "Cloudflare workspace session preview missing previewRef",
+            ),
+          );
         }
         return {
           subjectRef: request.subjectRef,
@@ -270,12 +408,23 @@ export const makeCloudflareWorkspaceSessionCarrier = (
           try: () => options.provider.destroy(request),
           catch: (cause): WorkspaceSessionFailure => failureFrom(request.claim, "destroy", cause),
         });
+        const proofRef = requiredString(result as unknown as Record<string, unknown>, "proofRef");
+        if (proofRef === undefined) {
+          return yield* Effect.fail(
+            providerFailure(
+              request.claim,
+              "destroy",
+              "ProviderFailure",
+              "Cloudflare workspace session destroy missing proofRef",
+            ),
+          );
+        }
         return {
           subjectRef: request.subjectRef,
           sessionRef: request.sessionRef,
           reason: request.reason,
           claim: settleLivedClaim(request.claim, {
-            anchorId: result.proofRef ?? request.sessionRef,
+            anchorId: proofRef,
             anchorKind: "carrier_proof",
             carrierRef,
           }),

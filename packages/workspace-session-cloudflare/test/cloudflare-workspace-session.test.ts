@@ -1,7 +1,10 @@
 import { Cause, Effect, Exit, Option } from "effect";
 import { makePreClaim } from "@agent-os/core/effect-claim";
 import {
+  makeCloudflareWorkspaceSessionProvider,
   makeCloudflareWorkspaceSessionCarrier,
+  type CloudflareWorkspaceSessionClient,
+  type CloudflareWorkspaceSessionNamespace,
   type CloudflareWorkspaceSessionProvider,
 } from "../src";
 
@@ -45,8 +48,16 @@ const artifactClaim = makePreClaim({
 
 const provider = (overrides: Partial<CloudflareWorkspaceSessionProvider> = {}) =>
   ({
-    start: async () => ({ sessionRef: "cf-session-1" }),
-    restore: async () => ({ sessionRef: "cf-session-restore" }),
+    start: async () => ({
+      sessionRef: "cf-session-1",
+      workspaceRootRef: "cf-workspace-1",
+      cleanupRef: "cf-cleanup-1",
+    }),
+    restore: async () => ({
+      sessionRef: "cf-session-restore",
+      workspaceRootRef: "cf-workspace-restored",
+      cleanupRef: "cf-cleanup-restored",
+    }),
     backup: async () => ({ backupRef: "cf-backup-1" }),
     preview: async () => ({ previewRef: "cf-preview-1", url: "https://preview.example" }),
     destroy: async () => ({ proofRef: "cf-destroy-1" }),
@@ -68,8 +79,8 @@ describe("@agent-os/workspace-session-cloudflare", () => {
     ).resolves.toEqual({
       subjectRef: "run-1",
       sessionRef: "cf-session-1",
-      workspaceRootRef: "agentos://session/session%2Frun-1/cloudflare-sandbox/workspace",
-      cleanupRef: "cleanup://session/session%2Frun-1/cloudflare-sandbox",
+      workspaceRootRef: "cf-workspace-1",
+      cleanupRef: "cf-cleanup-1",
       retention: { mode: "persistent", leaseRef: "lease/run-1" },
       claim: {
         phase: "lived",
@@ -154,7 +165,11 @@ describe("@agent-os/workspace-session-cloudflare", () => {
       provider: provider({
         start: async () => {
           called = true;
-          return {};
+          return {
+            sessionRef: "should-not-be-used",
+            workspaceRootRef: "should-not-be-used",
+            cleanupRef: "should-not-be-used",
+          };
         },
       }),
     });
@@ -209,6 +224,139 @@ describe("@agent-os/workspace-session-cloudflare", () => {
         rejectionRef: {
           rejectionKind: "policy_denied",
           reason: "preview denied by policy",
+        },
+      },
+    });
+  });
+
+  it("maps a structural Cloudflare namespace into the provider contract", async () => {
+    const calls: string[] = [];
+    const client = (id: string): CloudflareWorkspaceSessionClient => ({
+      id,
+      workspaceRootRef: `workspace://${id}`,
+      cleanupRef: `cleanup://${id}`,
+      backup: async () => {
+        calls.push(`backup:${id}`);
+        return { id: `backup://${id}` };
+      },
+      preview: async () => {
+        calls.push(`preview:${id}`);
+        return { id: `preview://${id}`, url: `https://${id}.example` };
+      },
+      destroy: async () => {
+        calls.push(`destroy:${id}`);
+        return { id: `destroy://${id}` };
+      },
+    });
+    const namespace: CloudflareWorkspaceSessionNamespace = {
+      start: async () => {
+        calls.push("start");
+        return client("session-started");
+      },
+      restore: async () => {
+        calls.push("restore");
+        return client("session-restored");
+      },
+      get: async (sessionRef) => {
+        calls.push(`get:${sessionRef}`);
+        return client(sessionRef);
+      },
+    };
+    const liveProvider = makeCloudflareWorkspaceSessionProvider({ namespace });
+
+    await expect(liveProvider.start({ claim: sessionClaim, subjectRef: "run-1" })).resolves.toEqual(
+      {
+        sessionRef: "session-started",
+        workspaceRootRef: "workspace://session-started",
+        cleanupRef: "cleanup://session-started",
+      },
+    );
+    await expect(
+      liveProvider.restore({ claim: sessionClaim, subjectRef: "run-1", backupRef: "backup://1" }),
+    ).resolves.toEqual({
+      sessionRef: "session-restored",
+      workspaceRootRef: "workspace://session-restored",
+      cleanupRef: "cleanup://session-restored",
+    });
+    await expect(
+      liveProvider.backup({
+        claim: sessionClaim,
+        subjectRef: "run-1",
+        sessionRef: "session-live",
+      }),
+    ).resolves.toEqual({ backupRef: "backup://session-live" });
+    await expect(
+      liveProvider.preview({
+        claim: sessionClaim,
+        subjectRef: "run-1",
+        sessionRef: "session-live",
+        port: 8787,
+      }),
+    ).resolves.toEqual({
+      previewRef: "preview://session-live",
+      url: "https://session-live.example",
+    });
+    await expect(
+      liveProvider.destroy({
+        claim: sessionClaim,
+        subjectRef: "run-1",
+        sessionRef: "session-live",
+        reason: "completed",
+      }),
+    ).resolves.toEqual({ proofRef: "destroy://session-live" });
+    expect(calls).toEqual([
+      "start",
+      "restore",
+      "get:session-live",
+      "backup:session-live",
+      "get:session-live",
+      "preview:session-live",
+      "get:session-live",
+      "destroy:session-live",
+    ]);
+  });
+
+  it("fails closed when live provider structural refs are missing", async () => {
+    const carrier = makeCloudflareWorkspaceSessionCarrier({
+      provider: makeCloudflareWorkspaceSessionProvider({
+        namespace: {
+          start: async () =>
+            ({
+              id: "",
+              workspaceRootRef: "workspace://missing",
+              cleanupRef: "cleanup://missing",
+              backup: async () => ({ id: "backup://unused" }),
+              preview: async () => ({ id: "preview://unused" }),
+              destroy: async () => ({ id: "destroy://unused" }),
+            }) satisfies CloudflareWorkspaceSessionClient,
+          restore: async () => {
+            throw new Error("unused");
+          },
+          get: async () => {
+            throw new Error("unused");
+          },
+        },
+      }),
+    });
+
+    const failure = expectFailure(
+      await Effect.runPromiseExit(
+        carrier.start({
+          claim: sessionClaim,
+          subjectRef: "run-1",
+        }),
+      ),
+    );
+
+    expect(failure).toMatchObject({
+      code: "ProviderFailure",
+      step: "start",
+      reason: "Cloudflare workspace session start missing required refs",
+      claim: {
+        phase: "rejected",
+        rejectionRef: {
+          rejectionKind: "provider_rejected",
+          reason: "Cloudflare workspace session start missing required refs",
         },
       },
     });
