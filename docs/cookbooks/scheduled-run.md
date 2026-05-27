@@ -6,7 +6,7 @@
 > projection.
 > **Pressure evidence**: vibe's Cloudflare Workflow + D1 + ledger pipeline
 > and zeroY's `@effect/workflow` step graph + CST as task truth. The
-> *scheduler ≠ truth* principle holds in both, but zeroY uses CST as its
+> _scheduler ≠ truth_ principle holds in both, but zeroY uses CST as its
 > truth store rather than the agentOS ledger; this cookbook treats CST as
 > an analogue and the cross-product evidence is "analogous N=1", not
 > equivalent N=2. See `docs/notes/zeroY-n2-stability-audit.md` for the
@@ -66,7 +66,7 @@ The scheduler's responsibility is **only** ordering, retries, and waits. It
 must not store the values produced by the effects beyond what it needs for
 its own next step. The ledger is where those values become durable.
 
-## Two Tier truth
+## Three Tier Truth
 
 ```text
 Tier 1 (truth):   ledger events committed by carriers
@@ -212,6 +212,38 @@ runId / operationRef / scope / phase / anchor or rejection / ts
 If the index falls behind, queries against it return stale data; queries
 against the ledger always return current data. The product chooses which
 endpoint to expose to which consumer.
+
+## Consumer stream boundary
+
+A scheduled workflow may expose a consumer-facing stream, but the stream is
+still a composition over ledger facts and terminal results. It must not become
+a workflow state table.
+
+The current `@agent-os/run-stream` submit bridge is batched:
+
+```text
+submit completes
+read post-baseline ledger rows
+emit run-stream frames + terminal SubmitResult
+```
+
+It is useful for terminal delivery and replay-friendly UI handoff. It is not
+live progress. Realtime UI needs a separate non-durable turn-frame source, and
+those turn frames remain progress data rather than durable truth.
+
+## vibe replacement path
+
+For a vibe-style `workflowRunLedger.ts`, the strangler path is:
+
+```text
+Workflow/D1 run table -> SchedulerIntent + derived index
+agent loop status     -> submit result + run-stream projection
+step state            -> ledger projection
+trace lookup          -> ledger refs + derived index
+```
+
+This cookbook does not prescribe vibe's product policy. It only fixes the
+ownership boundary: scheduling outside, truth inside the agentOS ledger.
 
 ## Why this is one cookbook, not two
 

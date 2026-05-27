@@ -68,16 +68,16 @@ boundary matches, even though the backend is not Cloudflare Sandbox.
 
 ## Patterns now N=2 (equivalent invariants)
 
-These rows are validated under the *same* invariants in both products.
+These rows are validated under the _same_ invariants in both products.
 
-| Pattern                              | vibe surface                             | zeroY surface                                                                                          |
-| ------------------------------------ | ---------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| LLM transport (OpenAI-compatible)    | `providerTransports*`                    | `ZeroyRuntimeLlmProviderService`                                                                       |
-| Tool registry / capability dispatch  | `turnContract.ts` + `toolRegistry.ts`    | `ZeroyAgentSdkCapabilityService` + workflow step `agent_apply`                                         |
-| Trace / artifact projection          | `traceLocator.ts`                        | `artifact-projections.ts`                                                                              |
-| Credential carried as state-only ref | `tenantCredentialCrypto`                 | `ZeroyRuntimeCloudflareService` + `secretState(value)` presence-only redaction                         |
-| **DecisionGate** (approval gate)     | front-door approval flow                 | `wait_for_approval` workflow step driven by `ApplyCandidateApproval`                                   |
-| Context packing                      | `sessionContext.ts`                      | `wordpress-context-contracts.ts` + surface program snapshot (different domain, same packing shape)     |
+| Pattern                              | vibe surface                          | zeroY surface                                                                                      |
+| ------------------------------------ | ------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| LLM transport (OpenAI-compatible)    | `providerTransports*`                 | `ZeroyRuntimeLlmProviderService`                                                                   |
+| Tool registry / capability dispatch  | `turnContract.ts` + `toolRegistry.ts` | `ZeroyAgentSdkCapabilityService` + workflow step `agent_apply`                                     |
+| Trace / artifact projection          | `traceLocator.ts`                     | `artifact-projections.ts`                                                                          |
+| Credential carried as state-only ref | `tenantCredentialCrypto`              | `ZeroyRuntimeCloudflareService` + `secretState(value)` presence-only redaction                     |
+| **DecisionGate** (approval gate)     | front-door approval flow              | `wait_for_approval` workflow step driven by `ApplyCandidateApproval`                               |
+| Context packing                      | `sessionContext.ts`                   | `wordpress-context-contracts.ts` + surface program snapshot (different domain, same packing shape) |
 
 `DecisionGate` was explicitly gated on N=2 in spec-36 §12. It graduates.
 The others were already in use but had only one product reference; they
@@ -90,21 +90,21 @@ These rows have similar pattern in both products but differ on the fact
 store or invariant detail enough that they should not be cited as
 equivalent N=2 evidence.
 
-| Pattern                          | vibe                                                  | zeroY                                                                                                          | Why analogous, not equivalent                                                                                                                                                       |
-| -------------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Scheduled-run composition        | Cloudflare Workflow + D1 + ledger truth + index       | `@effect/workflow` step graph + CST as task truth + workflow runtime evidence as separate typed runtime truth | zeroY explicitly keeps "CST remains task truth; workflow execution evidence is separate typed runtime truth" (`packages/workflows/src/index.ts:269`). This is the same *scheduler ≠ truth* principle but a different *truth store*. Cookbook treats CST as the ledger analogue; whether that satisfies spec-36 §1.1 is interpretive. |
-| Cloudflare resource control      | vibe `cloudflareApi.ts` + per-resource service files  | `ZeroyRuntimeCloudflareService` (account/token carrier only; no D1/KV/R2/Queue/Workflow lifecycle ops in repo) | vibe has actual resource lifecycle (provision, mutate, destroy across resource kinds); zeroY currently carries only the credential surface and a D1 binding. The credential-carrying axis matches (and is already counted N=2 above); resource lifecycle is N=1 (vibe only) until zeroY adds CF resource lifecycle ops. |
+| Pattern                     | vibe                                                 | zeroY                                                                                                          | Why analogous, not equivalent                                                                                                                                                                                                                                                                                                        |
+| --------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Scheduled-run composition   | Cloudflare Workflow + D1 + ledger truth + index      | `@effect/workflow` step graph + CST as task truth + workflow runtime evidence as separate typed runtime truth  | zeroY explicitly keeps "CST remains task truth; workflow execution evidence is separate typed runtime truth" (`packages/workflows/src/index.ts:269`). This is the same _scheduler ≠ truth_ principle but a different _truth store_. Cookbook treats CST as the ledger analogue; whether that satisfies spec-36 §1.1 is interpretive. |
+| Cloudflare resource control | vibe `cloudflareApi.ts` + per-resource service files | `ZeroyRuntimeCloudflareService` (account/token carrier only; no D1/KV/R2/Queue/Workflow lifecycle ops in repo) | vibe has actual resource lifecycle (provision, mutate, destroy across resource kinds); zeroY currently carries only the credential surface and a D1 binding. The credential-carrying axis matches (and is already counted N=2 above); resource lifecycle is N=1 (vibe only) until zeroY adds CF resource lifecycle ops.              |
 
 ---
 
 ## Patterns still N=1
 
-| Pattern                                 | Validated by | Held back because                                                            |
-| --------------------------------------- | ------------ | ---------------------------------------------------------------------------- |
-| `workspace-session-cloudflare` backend  | vibe only    | zeroY uses local locwp:10002, not CF Sandbox. The algebra may still apply, but a port-based local sandbox has not been spike-tested under the same start/restore/backup/preview/destroy invariants. |
-| `@agent-os/run-stream` (SSE)            | vibe only    | zeroY uses polling (`editor-agent-status-flow.ts`). The frame algebra is not pressured by a second consumer. |
-| skill / MCP registry                    | vibe only    | zeroY has no dynamic capability extension layer.                             |
-| Explicit `RuntimeScope` resolver use    | (agentOS)    | zeroY does not expose a scope resolver per se. The pattern is in core but unconfirmed by product code. |
+| Pattern                                | Validated by | Held back because                                                                                                                                                                                   |
+| -------------------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `workspace-session-cloudflare` backend | vibe only    | zeroY uses local locwp:10002, not CF Sandbox. The algebra may still apply, but a port-based local sandbox has not been spike-tested under the same start/restore/backup/preview/destroy invariants. |
+| `@agent-os/run-stream` (SSE)           | vibe only    | zeroY uses polling (`editor-agent-status-flow.ts`). The frame algebra is not pressured by a second consumer.                                                                                        |
+| skill / MCP registry                   | vibe only    | zeroY has no dynamic capability extension layer.                                                                                                                                                    |
+| Explicit `RuntimeScope` resolver use   | (agentOS)    | zeroY does not expose a scope resolver per se. The pattern is in core but unconfirmed by product code.                                                                                              |
 
 These remain experimental in spec-36 §12. They are not refuted; they are
 under-pressured.
@@ -139,7 +139,7 @@ and anchorRef.
 
 Placement: this stays a saga composition pattern. It does not change
 EffectClaim's 3-phase shape. RejectedClaim remains terminal. The compensation
-step is a *new* PreClaim with a proposed agentOS-side convention linking
+step is a _new_ PreClaim with a proposed agentOS-side convention linking
 `compensation.operationRef → primary.operationRef` via `originRef` or trace
 metadata. The convention is motivated by the single zeroY edge; a third
 product that compensates would either confirm or refute it. Until then, the
@@ -157,16 +157,16 @@ browser_evidence   (capability: "browser_evidence", after: ["release_canary"])
 ```
 
 See `packages/workflows/src/index.ts` lines 215-228 (step definitions) and
-575+ (`evidenceForStep` produces *synthetic* evidence refs for current
+575+ (`evidenceForStep` produces _synthetic_ evidence refs for current
 contract-probe mode). Live execution is explicitly **not implemented yet**:
 `packages/workflows/src/index.ts:497` throws when `executionMode === "live"`
 with the message "live execution must be wired to runtime services before it
-can run". So at HEAD `b0f2d5d`, zeroY exhibits the *intent* to run
+can run". So at HEAD `b0f2d5d`, zeroY exhibits the _intent_ to run
 post-condition validation but does not actually execute or settle claims for
 verification effects.
 
-Placement: this audit treats post-condition validation as a *proposed
-agentOS convention motivated by zeroY's step shapes*, not as
+Placement: this audit treats post-condition validation as a _proposed
+agentOS convention motivated by zeroY's step shapes_, not as
 zeroY-validated EffectClaim wiring. The proposed shape, recorded in
 `docs/cookbooks/evidence-capture.md`, is:
 
@@ -205,20 +205,20 @@ belong in zeroY domain, not in any agentOS package.
 
 The materialization plan annotates each row with evidence:
 
-| Row                       | Evidence                                                                                |
-| ------------------------- | --------------------------------------------------------------------------------------- |
-| tool registry             | N≥2 (vibe, zeroY)                                                                       |
-| DecisionGate              | N≥2 (vibe, zeroY) → graduate                                                            |
-| material ref (credential) | N≥2 (vibe, zeroY) on the symbolic-ref + presence-only redaction axis                    |
-| context pack              | N≥2 (vibe, zeroY) — different domains, same packing shape                               |
-| trace/failure plane       | N≥2 (vibe, zeroY)                                                                       |
-| scheduled-run             | N=1 (vibe) + analogous pressure (zeroY) — different truth store (CST vs ledger)         |
-| Cloudflare resource lifecycle | N=1 (vibe) — zeroY only carries credentials, no resource lifecycle ops              |
-| compensation              | N=1 (zeroY, single `locwp_apply` edge) → cookbook section                               |
-| evidence-capture          | N=0 validated; proposed convention motivated by zeroY step definitions only             |
-| workspace-session-cf      | N=1 (vibe)                                                                              |
-| run-stream                | N=1 (vibe)                                                                              |
-| skill registry            | N=0                                                                                     |
+| Row                           | Evidence                                                                        |
+| ----------------------------- | ------------------------------------------------------------------------------- |
+| tool registry                 | N≥2 (vibe, zeroY)                                                               |
+| DecisionGate                  | N≥2 (vibe, zeroY) → graduate                                                    |
+| material ref (credential)     | N≥2 (vibe, zeroY) on the symbolic-ref + presence-only redaction axis            |
+| context pack                  | N≥2 (vibe, zeroY) — different domains, same packing shape                       |
+| trace/failure plane           | N≥2 (vibe, zeroY)                                                               |
+| scheduled-run                 | N=1 (vibe) + analogous pressure (zeroY) — different truth store (CST vs ledger) |
+| Cloudflare resource lifecycle | N=1 (vibe) — zeroY only carries credentials, no resource lifecycle ops          |
+| compensation                  | N=1 (zeroY, single `locwp_apply` edge) → cookbook section                       |
+| evidence-capture              | N=0 validated; proposed convention motivated by zeroY step definitions only     |
+| workspace-session-cf          | N=1 (vibe)                                                                      |
+| run-stream                    | N=1 (vibe)                                                                      |
+| skill registry                | N=0                                                                             |
 
 This is a planning matrix, not a guarantee. Graduation means the cookbook
 or package is published with a stability declaration; it does not freeze the

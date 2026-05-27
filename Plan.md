@@ -35,13 +35,13 @@ were explicitly gated on a second product. The second product arrived.
 
 ## What changes
 
-| Change                                              | Surface             | Risk        |
-| --------------------------------------------------- | ------------------- | ----------- |
-| Add `docs/notes/zeroY-n2-stability-audit.md`        | docs only           | none        |
-| Add `docs/cookbooks/scheduled-run.md`               | docs only           | none        |
-| Add `docs/cookbooks/evidence-capture.md`            | docs only           | none        |
-| Edit spec-36 §12 to add Evidence column and §12.1   | spec doc            | low         |
-| Add `packages/decision-gate/README.md`              | package doc only    | none        |
+| Change                                               | Surface          | Risk |
+| ---------------------------------------------------- | ---------------- | ---- |
+| Add `docs/notes/zeroY-n2-stability-audit.md`         | docs only        | none |
+| Add `docs/cookbooks/scheduled-run.md`                | docs only        | none |
+| Add `docs/cookbooks/evidence-capture.md`             | docs only        | none |
+| Edit spec-36 §12/§13 to add Evidence on top of Class | spec doc         | low  |
+| Add `packages/decision-gate/README.md`               | package doc only | none |
 
 No source files, no `package.json` versions, no schemas, no migrations, no
 test additions. The package's TypeScript surface, exported events, and
@@ -93,7 +93,8 @@ Five originally-shipped commits plus one review fix-up commit:
    adds `docs/cookbooks/evidence-capture.md`.
 
 4. `docs(spec-36): record n=2 evidence; reference composition cookbooks`
-   edits spec-36 §12 to add Evidence column and §12.1 composition table.
+   edits spec-36 §12/§13 to add Evidence on top of the composition Class
+   split from a16.
 
 5. `docs(decision-gate): declare n=2 stable in package readme`
    adds `packages/decision-gate/README.md`.
@@ -195,6 +196,9 @@ convention adjustment; packages do not.
 
 ## After LGTM
 
-Merge `parallel/a07-n2-stability` into `main`. No follow-up branches
-required; downstream integration work (`zeroY-side` or `vibe-side`
-strangler steps) lives in product repos, not in agentOS.
+Merge `parallel/a07-n2-stability` into `main` after `parallel/a16-composition-frontier`.
+The a07 rebase must keep one scheduled-run cookbook by folding a16's
+consumer-stream boundary into `docs/cookbooks/scheduled-run.md` and deleting
+`docs/cookbooks/scheduled-run-composition.md`. No follow-up branches are
+required; downstream integration work (`zeroY-side` or `vibe-side` strangler
+steps) lives in product repos, not in agentOS.

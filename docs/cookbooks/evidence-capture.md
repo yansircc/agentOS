@@ -6,7 +6,7 @@
 > in its workflow catalog — live execution is explicitly pending
 > (`packages/workflows/src/index.ts:497`) and produces synthetic refs via
 > `evidenceForStep`. No product has actually run post-condition validation
-> under this shape yet. Reviewers should treat this cookbook as a *proposal*
+> under this shape yet. Reviewers should treat this cookbook as a _proposal_
 > for what verification claims should look like when a product wires them.
 >
 > **Pattern**: after an external effect settles to LivedClaim, run one or
@@ -171,7 +171,7 @@ dashboard without inventing a join table.
 - It does not define a `verification.*` event vocabulary. Carriers may use
   carrier-owned vocabularies (`verify.browser_evidence.captured`,
   `verify.canary.passed`, etc.) under spec-34 capability rules.
-- It does not require a specific verifier package. zeroY *declares*
+- It does not require a specific verifier package. zeroY _declares_
   `release_canary` + `browser_evidence` workflow steps that are intended to
   run a browser-side verifier when live execution is wired (currently still
   pending; see `packages/workflows/src/index.ts:497`). A different product
