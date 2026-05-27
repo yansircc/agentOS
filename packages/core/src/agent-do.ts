@@ -29,6 +29,7 @@
 
 import { Clock, Effect, Layer, ManagedRuntime } from "effect";
 import { DurableObject } from "cloudflare:workers";
+import { encodeRunStreamSse, type RunStreamFrame } from "@agent-os/run-stream";
 import {
   CapabilityRejected,
   DispatchBindingRefMalformed,
@@ -94,6 +95,7 @@ import {
 import { scopeRefFromLegacyScope, type ScopeRef } from "./effect-claim";
 import {
   type InternalSubmitSpec,
+  type SubmitRunStreamSpec,
   submitAgentEffect,
   type SubmitResult,
   type SubmitSpec,
@@ -368,6 +370,77 @@ export abstract class AgentDOBase<Env extends AgentDOEnv> extends DurableObject<
       deliver: { event: spec.deliver.event, scope, scopeRef },
     };
     return this.runtimeFor(scope).runPromise(submitAgentEffect(internalSpec));
+  }
+
+  submitRunStream(spec: SubmitRunStreamSpec): Response {
+    const scope = this.ctx.id.name;
+    if (scope === undefined) {
+      throw new ScopeMissingError();
+    }
+
+    const encoder = new TextEncoder();
+    let seq = 0;
+    let closed = false;
+
+    const stream = new ReadableStream<Uint8Array>({
+      start: (controller) => {
+        const enqueue = (frame: RunStreamFrame): void => {
+          if (closed) return;
+          try {
+            controller.enqueue(encoder.encode(encodeRunStreamSse(frame)));
+          } catch {
+            closed = true;
+          }
+        };
+
+        const close = (): void => {
+          if (closed) return;
+          closed = true;
+          try {
+            controller.close();
+          } catch {
+            // The client may have already cancelled the stream.
+          }
+        };
+
+        void (async () => {
+          try {
+            const { afterId, ...submitSpec } = spec;
+            const baseline =
+              afterId ??
+              (await this.events()).reduce(
+                (max, event) => Math.max(max, event.id),
+                0,
+              );
+            const result = await this.submit(submitSpec);
+            const events = await this.events({ afterId: baseline });
+            for (const event of events) {
+              enqueue({ kind: "ledger_event", seq, event });
+              seq += 1;
+            }
+            enqueue({ kind: "submit_result", seq, result });
+            seq += 1;
+            close();
+          } catch (cause) {
+            const reason = cause instanceof Error ? cause.message : String(cause);
+            enqueue({ kind: "stream_error", seq, reason });
+            seq += 1;
+            close();
+          }
+        })();
+      },
+      cancel: () => {
+        closed = true;
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      },
+    });
   }
 
   /** Query ledger events for this DO's scope. */

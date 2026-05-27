@@ -17,6 +17,8 @@ export default defineConfig({
   resolve: {
     alias: {
       "@agent-os/image": "../image/src/index.ts",
+      "@agent-os/run-stream": "../run-stream/src/index.ts",
+      "@agent-os/turn-stream": "../turn-stream/src/index.ts",
     },
   },
   test: {

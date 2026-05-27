@@ -44,7 +44,7 @@ export type {
 } from "./types";
 export type { DispatchTargetNamespace, DispatchTargetRegistry } from "./dispatch";
 
-export type { SubmitSpec, SubmitResult, TurnRef } from "./submit-agent";
+export type { SubmitRunStreamSpec, SubmitSpec, SubmitResult, TurnRef } from "./submit-agent";
 
 export type { Tool } from "./tools";
 export type { ToolDefinition, LlmUsage } from "./llm";
