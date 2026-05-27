@@ -53,8 +53,8 @@ export const failureToToolResult = (
   maxOutputBytes: number,
 ): SandboxToolResult => {
   const isPolicy = failure._tag === "agent_os.sandbox_policy_denied";
-  const stdout = truncateUtf8(isPolicy ? "" : failure.stdout ?? "", maxOutputBytes);
-  const stderr = truncateUtf8(isPolicy ? "" : failure.stderr ?? "", maxOutputBytes);
+  const stdout = truncateUtf8(isPolicy ? "" : (failure.stdout ?? ""), maxOutputBytes);
+  const stderr = truncateUtf8(isPolicy ? "" : (failure.stderr ?? ""), maxOutputBytes);
   return {
     ok: false,
     failureCode: isPolicy ? "PolicyDenied" : failure.code,
@@ -67,7 +67,7 @@ export const failureToToolResult = (
     stderrTruncated: stderr.truncated,
     artifacts: [],
     durationMs,
-    sandboxId: isPolicy ? "policy" : failure.sandboxId ?? "unknown",
+    sandboxId: isPolicy ? "policy" : (failure.sandboxId ?? "unknown"),
   };
 };
 

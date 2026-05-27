@@ -160,19 +160,13 @@ const evidenceKeyMatches = (current: AttemptKey, evidence: AttemptKey): boolean 
   nonVersionKeysMatch(current, evidence) &&
   majorOf(current.adapterVersion) === majorOf(evidence.adapterVersion);
 
-const barrierAdapterVersionMatches = (
-  current: string,
-  barrier: string | undefined,
-): boolean => {
+const barrierAdapterVersionMatches = (current: string, barrier: string | undefined): boolean => {
   if (barrier === undefined) return true;
   if (barrier.endsWith(".x")) return majorOf(current) === barrier.slice(0, -2);
   return current === barrier;
 };
 
-const barrierKeyMatches = (
-  current: AttemptKey,
-  barrier: Partial<AttemptKey>,
-): boolean => {
+const barrierKeyMatches = (current: AttemptKey, barrier: Partial<AttemptKey>): boolean => {
   if (
     barrier.routeFingerprint !== undefined &&
     current.routeFingerprint !== barrier.routeFingerprint
@@ -183,12 +177,8 @@ const barrierKeyMatches = (
     current.schemaFingerprint !== barrier.schemaFingerprint
   )
     return false;
-  if (barrier.strategy !== undefined && current.strategy !== barrier.strategy)
-    return false;
-  return barrierAdapterVersionMatches(
-    current.adapterVersion,
-    barrier.adapterVersion,
-  );
+  if (barrier.strategy !== undefined && current.strategy !== barrier.strategy) return false;
+  return barrierAdapterVersionMatches(current.adapterVersion, barrier.adapterVersion);
 };
 
 /** Project the latest lease for `key` from the given event list at time `now`.
@@ -222,10 +212,7 @@ export const projectLease = (
   let latestBarrierId = 0;
   for (const r of rows) {
     if (r.kind === "llm.structured.invalidate" && barrierKeyMatches(key, r.key)) {
-      if (
-        r.ts > latestBarrierTs ||
-        (r.ts === latestBarrierTs && r.id > latestBarrierId)
-      ) {
+      if (r.ts > latestBarrierTs || (r.ts === latestBarrierTs && r.id > latestBarrierId)) {
         latestBarrierTs = r.ts;
         latestBarrierId = r.id;
       }
@@ -235,8 +222,7 @@ export const projectLease = (
   // An evidence row counts as "after the barrier" iff
   //   (ev.ts, ev.id) > (barrier.ts, barrier.id)   lexicographic.
   const afterBarrier = (ev: EvidenceRow): boolean =>
-    ev.ts > latestBarrierTs ||
-    (ev.ts === latestBarrierTs && ev.id > latestBarrierId);
+    ev.ts > latestBarrierTs || (ev.ts === latestBarrierTs && ev.id > latestBarrierId);
 
   const eligible: EvidenceRow[] = [];
   for (const r of rows) {

@@ -21,6 +21,14 @@ const SENTINEL_AI = {
   }) as (model: string, input: unknown, options?: unknown) => Promise<unknown>,
 };
 
+const requestUrl = (input: RequestInfo | URL): string =>
+  typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+
+const requestBodyText = (body: BodyInit | null | undefined): string => {
+  if (typeof body === "string") return body;
+  throw new TypeError("expected string request body");
+};
+
 const runtimeFor = (
   ai: typeof SENTINEL_AI,
   endpoints: Record<string, string>,
@@ -41,7 +49,7 @@ describe("image route adapters — P3 C5", () => {
     const calls: Array<{ readonly url: string; readonly init: RequestInit }> = [];
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-      calls.push({ url: String(input), init: init ?? {} });
+      calls.push({ url: requestUrl(input), init: init ?? {} });
       return new Response(
         JSON.stringify({
           choices: [
@@ -87,7 +95,7 @@ describe("image route adapters — P3 C5", () => {
       expect(calls[0]?.url).toBe("https://stub.openrouter.test/api/v1/chat/completions");
       const headers = calls[0]?.init.headers as Record<string, string>;
       expect(headers.Authorization).toBe("Bearer secret-not-in-result");
-      const body = JSON.parse(String(calls[0]?.init.body)) as {
+      const body = JSON.parse(requestBodyText(calls[0]?.init.body)) as {
         readonly model?: string;
         readonly modalities?: ReadonlyArray<string>;
         readonly aspect_ratio?: string;

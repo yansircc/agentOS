@@ -31,6 +31,9 @@ import { stubAi } from "../_stub-ai";
 
 import { SCHEMA, makeRuntime, makeRuntimeWithRegistry, submitStructuredResp } from "./_helpers";
 
+const requestUrl = (input: RequestInfo | URL): string =>
+  typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+
 interface TestEnv {
   readonly AGENT_DO: DurableObjectNamespace;
 }
@@ -477,7 +480,7 @@ describe("admission — cross-route structured output (v0.2.13)", () => {
     }> = [];
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-      fetchCalls.push({ url: String(input), init: init ?? {} });
+      fetchCalls.push({ url: requestUrl(input), init: init ?? {} });
       // Return a Chat Completions shaped response with the expected
       // _submit_structured tool call.
       const body = {

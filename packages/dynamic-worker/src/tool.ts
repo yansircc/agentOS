@@ -34,9 +34,7 @@ const record = (value: unknown): Record<string, unknown> =>
     ? (value as Record<string, unknown>)
     : {};
 
-const stringRecord = (
-  value: unknown,
-): Readonly<Record<string, string>> | undefined => {
+const stringRecord = (value: unknown): Readonly<Record<string, string>> | undefined => {
   const input = record(value);
   const entries = Object.entries(input).filter(
     (entry): entry is [string, string] => typeof entry[1] === "string",
@@ -46,9 +44,7 @@ const stringRecord = (
 
 const coerceToolArgs = (
   value: unknown,
-  defaults: Required<
-    Pick<MakeDynamicWorkerToolOptions, "timeoutMs" | "maxBodyBytes">
-  > & {
+  defaults: Required<Pick<MakeDynamicWorkerToolOptions, "timeoutMs" | "maxBodyBytes">> & {
     readonly egress: DynamicWorkerEgress;
     readonly limits?: DynamicWorkerLimits;
   },
@@ -84,8 +80,7 @@ export const makeDynamicWorkerTool = (
       function: {
         name: options.name ?? "dynamic_worker_run",
         description:
-          options.description ??
-          "Run one bounded stateless Worker-compatible code request.",
+          options.description ?? "Run one bounded stateless Worker-compatible code request.",
         parameters: toolParameters,
       },
     },
@@ -98,11 +93,9 @@ export const makeDynamicWorkerTool = (
       });
       const program = Effect.gen(function* () {
         const started = yield* Clock.currentTimeMillis;
-        const result = yield* runDynamicWorker(
-          options.backend,
-          options.policy,
-          request,
-        ).pipe(Effect.either);
+        const result = yield* runDynamicWorker(options.backend, options.policy, request).pipe(
+          Effect.either,
+        );
         const ended = yield* Clock.currentTimeMillis;
         if (result._tag === "Left") {
           return failureToToolResult(result.left, ended - started, maxBodyBytes);

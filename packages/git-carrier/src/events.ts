@@ -67,10 +67,7 @@ export interface GitSubjectProjection {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const stringField = (
-  payload: Record<string, unknown>,
-  key: string,
-): string | undefined =>
+const stringField = (payload: Record<string, unknown>, key: string): string | undefined =>
   typeof payload[key] === "string" ? payload[key] : undefined;
 
 export const projectGitSubject = (

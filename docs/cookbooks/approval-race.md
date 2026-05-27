@@ -34,13 +34,12 @@ async function requestApproval(do_: AgentDOBase<Env>, runId: string) {
   });
 }
 
-async function projectApprovalWinner(
-  do_: AgentDOBase<Env>,
-  runId: string,
-) {
-  const candidates = (await do_.events({
-    kinds: ["approval.decided", "approval.timeout"],
-  }))
+async function projectApprovalWinner(do_: AgentDOBase<Env>, runId: string) {
+  const candidates = (
+    await do_.events({
+      kinds: ["approval.decided", "approval.timeout"],
+    })
+  )
     .filter((event) => event.payload.runId === runId)
     .sort((a, b) => a.id - b.id);
 

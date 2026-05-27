@@ -7,24 +7,24 @@ Effect-compliant agentOS substrate for Cloudflare Workers.
 
 ## Public surface
 
-| Surface | Status |
-|---|---|
-| `AgentDOBase` — extendable DurableObject base | ✅ |
-| `submit(spec)` — declarative agent loop (LLM + tools) | ✅ |
-| `emitEvent({ event, data })` — app-direct now-write | ✅ |
-| `events(opts?)` — query ledger for this DO's scope | ✅ |
-| `streamEvents(opts?)` — SSE ledger stream | ✅ |
-| `on(kind, handler)` reactive subscribe (composable) | ✅ (v0.2.1) |
-| `off(kind, handler)` reactive unsubscribe | ✅ (v0.2.1) |
-| `scheduleEvent({ at, event, data })` delayed events | ✅ (v0.2.3) |
-| `alarm()` DO alarm handler (auto-invoked by CF runtime) | ✅ (v0.2.3) |
-| `dispatchToScope(spec)` cross-DO ledger delivery | ✅ |
-| `grantResource` / `reserveResource` / `consumeResource` / `releaseResource` | ✅ |
-| `withQuota(tool, spec)` rate-limit / budget middleware | ✅ (v0.2.8 atomic) |
-| `submit({ outputSchema })` structured output via admission | ✅ |
-| `runTrace` / `runStatus` / `quotaState` / `resourceState` / `admissionLease` | ✅ |
-| view source plurality (Hyperdrive, AutoRAG, AE, …) | ⏳ v0.2+ |
-| CF Agents framework integration (`extends Agent`) | ⏳ v0.2 Phase 4 |
+| Surface                                                                      | Status             |
+| ---------------------------------------------------------------------------- | ------------------ |
+| `AgentDOBase` — extendable DurableObject base                                | ✅                 |
+| `submit(spec)` — declarative agent loop (LLM + tools)                        | ✅                 |
+| `emitEvent({ event, data })` — app-direct now-write                          | ✅                 |
+| `events(opts?)` — query ledger for this DO's scope                           | ✅                 |
+| `streamEvents(opts?)` — SSE ledger stream                                    | ✅                 |
+| `on(kind, handler)` reactive subscribe (composable)                          | ✅ (v0.2.1)        |
+| `off(kind, handler)` reactive unsubscribe                                    | ✅ (v0.2.1)        |
+| `scheduleEvent({ at, event, data })` delayed events                          | ✅ (v0.2.3)        |
+| `alarm()` DO alarm handler (auto-invoked by CF runtime)                      | ✅ (v0.2.3)        |
+| `dispatchToScope(spec)` cross-DO ledger delivery                             | ✅                 |
+| `grantResource` / `reserveResource` / `consumeResource` / `releaseResource`  | ✅                 |
+| `withQuota(tool, spec)` rate-limit / budget middleware                       | ✅ (v0.2.8 atomic) |
+| `submit({ outputSchema })` structured output via admission                   | ✅                 |
+| `runTrace` / `runStatus` / `quotaState` / `resourceState` / `admissionLease` | ✅                 |
+| view source plurality (Hyperdrive, AutoRAG, AE, …)                           | ⏳ v0.2+           |
+| CF Agents framework integration (`extends Agent`)                            | ⏳ v0.2 Phase 4    |
 
 ## Boundary contract
 
@@ -63,6 +63,7 @@ ledger events possible under at-least-once alarm retries.
 ## Effect compliance
 
 Implementation follows `effect-ecosystem` skill rules:
+
 - `Effect.gen(function* () { yield* ... })` instead of `async/await`
 - `Data.TaggedError` instead of `throw new Error`
 - `Clock.currentTimeMillis` instead of `Date.now()`

@@ -1,10 +1,5 @@
 import { Data, Effect } from "effect";
-import type {
-  LivedClaim,
-  PreClaim,
-  RejectedClaim,
-  ScopeRef,
-} from "@agent-os/core/effect-claim";
+import type { LivedClaim, PreClaim, RejectedClaim, ScopeRef } from "@agent-os/core/effect-claim";
 import type { RuntimeScopeResolution } from "@agent-os/core/runtime-scope";
 
 export const DYNAMIC_WORKER_MAX_TIMEOUT_MS = 10_000;
@@ -87,9 +82,7 @@ export interface DynamicWorkerRunSuccess extends DynamicWorkerRawResult {
   readonly claim?: LivedClaim;
 }
 
-export class DynamicWorkerFailure extends Data.TaggedError(
-  "agent_os.dynamic_worker_failure",
-)<{
+export class DynamicWorkerFailure extends Data.TaggedError("agent_os.dynamic_worker_failure")<{
   readonly code: Exclude<DynamicWorkerFailureCode, "PolicyDenied">;
   readonly reason: string;
   readonly status?: number;

@@ -62,9 +62,10 @@ export const projectImageJobs = (
         jobs.set(jobId, { ...current, status: "provider_completed" });
         break;
       case IMAGE_EVENTS.ARTIFACT_MATERIALIZED: {
-        const artifacts = isRecord(event.payload) && "artifactRef" in event.payload
-          ? [...current.artifacts, event.payload.artifactRef]
-          : current.artifacts;
+        const artifacts =
+          isRecord(event.payload) && "artifactRef" in event.payload
+            ? [...current.artifacts, event.payload.artifactRef]
+            : current.artifacts;
         jobs.set(jobId, { ...current, status: "materialized", artifacts });
         break;
       }

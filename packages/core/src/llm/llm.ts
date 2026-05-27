@@ -26,16 +26,10 @@
 
 import { Context, Effect } from "effect";
 import { UpstreamFailure } from "../errors";
-import {
-  RefResolutionFailed,
-  RefResolverService,
-} from "../ref-resolver";
+import { RefResolutionFailed, RefResolverService } from "../ref-resolver";
 import { getProtocolAdapter } from "./protocol/protocol-adapter";
 
-export class AiBinding extends Context.Tag("@agent-os/AiBinding")<
-  AiBinding,
-  Ai
->() {}
+export class AiBinding extends Context.Tag("@agent-os/AiBinding")<AiBinding, Ai>() {}
 
 // ============================================================
 //   LlmRoute — tagged union of transport protocols (spec-25 §3)
@@ -90,7 +84,7 @@ export interface LlmToolCall {
   readonly type: "function";
   readonly function: {
     readonly name: string;
-    readonly arguments: string;     // JSON-stringified args, unified across wires
+    readonly arguments: string; // JSON-stringified args, unified across wires
   };
   /** Protocol-opaque metadata round-tripped between decodeTurn → message
    *  accumulation in submit-agent.ts → encodeTurn. Gemini requires
@@ -290,8 +284,7 @@ export type ProviderRequestBodyMap = {
   readonly "gemini-generate-content": GeminiGenerateContentBody;
 };
 
-export type ProviderRequestBodyFor<K extends LlmRoute["kind"]> =
-  ProviderRequestBodyMap[K];
+export type ProviderRequestBodyFor<K extends LlmRoute["kind"]> = ProviderRequestBodyMap[K];
 
 /** Union of all per-kind bodies. `dispatchProvider` and `attemptStructured`
  *  receive this; the per-kind narrowing happens at the switch on
@@ -325,18 +318,12 @@ export const dispatchProvider = (
       return Effect.gen(function* () {
         const ai = yield* AiBinding;
         const options =
-          route.gatewayRef === undefined
-            ? undefined
-            : { gateway: { id: route.gatewayRef } };
+          route.gatewayRef === undefined ? undefined : { gateway: { id: route.gatewayRef } };
         return yield* Effect.tryPromise({
           try: () =>
             (
               ai as {
-                run: (
-                  m: string,
-                  p: unknown,
-                  o?: unknown,
-                ) => Promise<unknown>;
+                run: (m: string, p: unknown, o?: unknown) => Promise<unknown>;
               }
             ).run(route.modelId, body as ChatCompletionsBody, options),
           catch: (cause) => new UpstreamFailure({ cause }),
@@ -357,16 +344,14 @@ export const dispatchProvider = (
             const res = await fetch(url, {
               method: "POST",
               headers: {
-                "Authorization": `Bearer ${apiKey}`,
+                Authorization: `Bearer ${apiKey}`,
                 "Content-Type": "application/json",
               },
               body: JSON.stringify(fullBody),
             });
             if (!res.ok) {
               const text = await res.text().catch(() => "");
-              throw new Error(
-                `HTTP ${res.status} ${res.statusText}: ${text.slice(0, 500)}`,
-              );
+              throw new Error(`HTTP ${res.status} ${res.statusText}: ${text.slice(0, 500)}`);
             }
             return (await res.json()) as unknown;
           },
@@ -397,9 +382,7 @@ export const dispatchProvider = (
             });
             if (!res.ok) {
               const text = await res.text().catch(() => "");
-              throw new Error(
-                `HTTP ${res.status} ${res.statusText}: ${text.slice(0, 500)}`,
-              );
+              throw new Error(`HTTP ${res.status} ${res.statusText}: ${text.slice(0, 500)}`);
             }
             return (await res.json()) as unknown;
           },
@@ -424,9 +407,7 @@ export const dispatchProvider = (
             });
             if (!res.ok) {
               const text = await res.text().catch(() => "");
-              throw new Error(
-                `HTTP ${res.status} ${res.statusText}: ${text.slice(0, 500)}`,
-              );
+              throw new Error(`HTTP ${res.status} ${res.statusText}: ${text.slice(0, 500)}`);
             }
             return (await res.json()) as unknown;
           },

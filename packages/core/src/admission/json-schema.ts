@@ -41,10 +41,7 @@ export type SchemaContract = {
  *  stripping when ENCODING (e.g. Gemini strips `additionalProperties`),
  *  but DECODING validates the FULL schema locally so apps still get the
  *  contract they declared. */
-export const validateAgainstSchema = (
-  value: unknown,
-  schema: JsonSchemaNode,
-): string[] => {
+export const validateAgainstSchema = (value: unknown, schema: JsonSchemaNode): string[] => {
   const violations: string[] = [];
   const walk = (v: unknown, s: JsonSchemaNode, path: string): void => {
     if (s.type === "object") {
@@ -74,8 +71,7 @@ export const validateAgainstSchema = (
       v.forEach((item, i) => walk(item, s.items, `${path}[${i}]`));
     } else if (s.type === "string") {
       if (typeof v !== "string") violations.push(`${path}:not-string`);
-      else if (s.enum && !s.enum.includes(v))
-        violations.push(`${path}:not-in-enum`);
+      else if (s.enum && !s.enum.includes(v)) violations.push(`${path}:not-in-enum`);
     } else if (s.type === "number") {
       if (typeof v !== "number") violations.push(`${path}:not-number`);
     } else if (s.type === "boolean") {

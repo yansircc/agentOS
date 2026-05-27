@@ -71,8 +71,8 @@ class AgentDOBase {
    *  table. Returns rows with id > afterId, oldest first, up to limit.
    *  No live tail; for that see streamEvents below. */
   events(opts?: {
-    afterId?: number;        // default 0 (from the beginning)
-    limit?: number;          // default 1000; cap implementation-defined
+    afterId?: number; // default 0 (from the beginning)
+    limit?: number; // default 1000; cap implementation-defined
     kinds?: ReadonlyArray<string>;
   }): Promise<ReadonlyArray<LedgerEventRpc>>;
 
@@ -86,10 +86,10 @@ class AgentDOBase {
    *  for parsing `Last-Event-ID` off the request and passing it as
    *  `afterId` (see §2.3 and §6 for the integration shape). */
   streamEvents(opts?: {
-    afterId?: number;        // default 0 (from the beginning)
+    afterId?: number; // default 0 (from the beginning)
     kinds?: ReadonlyArray<string>;
-    heartbeatMs?: number;    // default 15000; keep middleboxes from
-                             // idle-closing the connection
+    heartbeatMs?: number; // default 15000; keep middleboxes from
+    // idle-closing the connection
   }): Response;
 }
 ```
@@ -137,7 +137,13 @@ data: <JSON of LedgerEventRpc>
 Where `LedgerEventRpc` (defined in `packages/core/src/types.ts`) is:
 
 ```ts
-{ id: number; ts: number; kind: string; scope: string; payload: unknown }
+{
+  id: number;
+  ts: number;
+  kind: string;
+  scope: string;
+  payload: unknown;
+}
 ```
 
 Heartbeat frames between live events:
@@ -217,7 +223,7 @@ interface EventBus {
    *  controller, push into an in-memory queue). It is NOT wrapped in
    *  the app handler timeout/catch path. */
   subscribe(opts: {
-    kinds?: ReadonlyArray<string>;     // omitted = all kinds
+    kinds?: ReadonlyArray<string>; // omitted = all kinds
     sink: (event: LedgerEvent) => void;
   }): { unsubscribe(): void };
 }
@@ -314,11 +320,11 @@ once from the server.**
 
 Three windows during stream startup:
 
-| Window | Where the event lands | Where it's emitted from |
-|---|---|---|
-| Before subscription | snapshot SELECT (sees committed state) | step 3 |
-| Between subscribe and snapshot | BOTH liveQueue AND snapshot | step 3 emits; step 4 dedups |
-| After snapshot completes | liveQueue only (`mode === "buffering"`) → atomic drain in step 4 → live emit (`mode === "live"`) | step 4 atomic block, then sink direct-emit |
+| Window                         | Where the event lands                                                                            | Where it's emitted from                    |
+| ------------------------------ | ------------------------------------------------------------------------------------------------ | ------------------------------------------ |
+| Before subscription            | snapshot SELECT (sees committed state)                                                           | step 3                                     |
+| Between subscribe and snapshot | BOTH liveQueue AND snapshot                                                                      | step 3 emits; step 4 dedups                |
+| After snapshot completes       | liveQueue only (`mode === "buffering"`) → atomic drain in step 4 → live emit (`mode === "live"`) | step 4 atomic block, then sink direct-emit |
 
 The id watermark monotonically increases. `id` is unique per DO (SQLite
 INTEGER PRIMARY KEY AUTOINCREMENT) and totally ordered by INSERT
@@ -558,19 +564,19 @@ to keep the substrate's surface free of HTTP semantics.
 
 ## 10. Decision provenance
 
-| Decision | Origin |
-|---|---|
-| Wire = `LedgerEventRpc`, not app vocabulary | spec-29 review 2026-05-26: vibe-coding-web's `AgentStreamEvent` schema is what the substrate is replacing, not extending |
-| Cursor = ledger `id ASC`, not `(ts, id)` | This stream does no time math, only ordering; `id` is unique per DO so `id ASC` is the complete rule. `(ts, id)` is spec-25 §7.2's projection-cutoff rule and stays there |
-| Subscribe-first + dedup, not subscribe-after | Codex 2026-05-26: subscribe-after has an unavoidable lost-events window |
-| Single subscription + mutable `mode`, NOT unsubscribe/resubscribe | Codex 2026-05-26 round 2: any gap between `sub.unsubscribe()` and the next `subscribe()` re-introduces a lost-event window across the snapshot→live handoff. The mutable-mode form is yield-free by construction; resubscribe-style is only correct as an equivalent implementation if the gap can be proved to have no async yield |
-| Stream uses internal `EventBus.subscribe`, not `AgentDOBase.on()` | Codex 2026-05-26: app `on()` carries per-handler timeout/catch semantics for reactive handlers; stream sinks need synchronous push with stream-scoped lifetime. Reusing `on()` would either contaminate the stream with app handler semantics or change `on()`'s contract for apps |
-| `streamEvents` takes only `afterId`, no HTTP header parsing in the DO | Codex 2026-05-26: DO methods have no `Request`; pushing header semantics into the substrate leaks transport across the layer boundary. Worker fetch handler owns `Last-Event-ID` parsing |
-| C-2 is server-side handoff, not end-to-end delivery | Codex 2026-05-26: substrate cannot guarantee bytes leaving the socket reach the client app; client recovers via reconnect with its actually-received last id |
-| SSE not WebSocket | Half-duplex matches the tail shape exactly; no app forge for WS today |
-| Per-DO scope only | spec-24 INV's "one scope, one writer" boundary already governs reads |
-| `events()` snapshot AND `streamEvents()` tail as separate methods | Pure projection vs IO-bearing live tail are different effect types; merging them hides the distinction |
-| `Last-Event-ID` reconnect, no custom protocol | SSE native; one less protocol for apps to learn |
+| Decision                                                              | Origin                                                                                                                                                                                                                                                                                                                              |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Wire = `LedgerEventRpc`, not app vocabulary                           | spec-29 review 2026-05-26: vibe-coding-web's `AgentStreamEvent` schema is what the substrate is replacing, not extending                                                                                                                                                                                                            |
+| Cursor = ledger `id ASC`, not `(ts, id)`                              | This stream does no time math, only ordering; `id` is unique per DO so `id ASC` is the complete rule. `(ts, id)` is spec-25 §7.2's projection-cutoff rule and stays there                                                                                                                                                           |
+| Subscribe-first + dedup, not subscribe-after                          | Codex 2026-05-26: subscribe-after has an unavoidable lost-events window                                                                                                                                                                                                                                                             |
+| Single subscription + mutable `mode`, NOT unsubscribe/resubscribe     | Codex 2026-05-26 round 2: any gap between `sub.unsubscribe()` and the next `subscribe()` re-introduces a lost-event window across the snapshot→live handoff. The mutable-mode form is yield-free by construction; resubscribe-style is only correct as an equivalent implementation if the gap can be proved to have no async yield |
+| Stream uses internal `EventBus.subscribe`, not `AgentDOBase.on()`     | Codex 2026-05-26: app `on()` carries per-handler timeout/catch semantics for reactive handlers; stream sinks need synchronous push with stream-scoped lifetime. Reusing `on()` would either contaminate the stream with app handler semantics or change `on()`'s contract for apps                                                  |
+| `streamEvents` takes only `afterId`, no HTTP header parsing in the DO | Codex 2026-05-26: DO methods have no `Request`; pushing header semantics into the substrate leaks transport across the layer boundary. Worker fetch handler owns `Last-Event-ID` parsing                                                                                                                                            |
+| C-2 is server-side handoff, not end-to-end delivery                   | Codex 2026-05-26: substrate cannot guarantee bytes leaving the socket reach the client app; client recovers via reconnect with its actually-received last id                                                                                                                                                                        |
+| SSE not WebSocket                                                     | Half-duplex matches the tail shape exactly; no app forge for WS today                                                                                                                                                                                                                                                               |
+| Per-DO scope only                                                     | spec-24 INV's "one scope, one writer" boundary already governs reads                                                                                                                                                                                                                                                                |
+| `events()` snapshot AND `streamEvents()` tail as separate methods     | Pure projection vs IO-bearing live tail are different effect types; merging them hides the distinction                                                                                                                                                                                                                              |
+| `Last-Event-ID` reconnect, no custom protocol                         | SSE native; one less protocol for apps to learn                                                                                                                                                                                                                                                                                     |
 
 ---
 
@@ -611,7 +617,7 @@ git diff --check
 Files this primitive replaces (substrate-side):
 
 - `packages/runtime/src/lib/sse.ts` — manual `Response` + ReadableStream
-  + heartbeat builder. Equivalent to §2.2 wire format.
+  - heartbeat builder. Equivalent to §2.2 wire format.
 - `apps/default/src/agent-runs/consumeAgentStream.ts:39–51` — manual
   frame splitting and frontend hydration. With this spec, becomes a
   ≤5-line `EventSource` plus a `row.kind` switch.

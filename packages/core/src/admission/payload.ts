@@ -12,6 +12,7 @@
 
 import { Effect, Schema } from "effect";
 import { SqlError } from "../errors";
+import { sqlText } from "../storage/sql-row";
 import type { AdmissionRow, AttemptKey, Outcome } from "./lease";
 
 const AttemptKeySchema = Schema.Struct({
@@ -61,9 +62,7 @@ export const InvalidatePayloadSchema = Schema.Struct({
   reason: Schema.String,
   by: Schema.String,
 });
-const decodeInvalidatePayloadSync = Schema.decodeUnknownSync(
-  InvalidatePayloadSchema,
-);
+const decodeInvalidatePayloadSync = Schema.decodeUnknownSync(InvalidatePayloadSchema);
 
 export const loadAdmissionRows = (
   sql: SqlStorage,
@@ -81,8 +80,8 @@ export const loadAdmissionRows = (
       for (const r of raw) {
         const id = Number(r.id);
         const ts = Number(r.ts);
-        const kind = String(r.kind);
-        const parsed = JSON.parse(String(r.payload)) as unknown;
+        const kind = sqlText(r.kind, "events.kind");
+        const parsed = JSON.parse(sqlText(r.payload, "events.payload")) as unknown;
         if (kind === "llm.structured.evidence") {
           const ev = decodeEvidencePayloadSync(parsed);
           out.push({

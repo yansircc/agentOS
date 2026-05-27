@@ -36,40 +36,25 @@ import { Ledger, eventToRpc } from "./ledger";
 
 const DEFAULT_STREAM_HEARTBEAT_MS = 15_000;
 
-const normalizePositiveInteger = (
-  value: number | undefined,
-  fallback: number,
-): number =>
-  value === undefined || !Number.isFinite(value)
-    ? fallback
-    : Math.max(0, Math.floor(value));
+const normalizePositiveInteger = (value: number | undefined, fallback: number): number =>
+  value === undefined || !Number.isFinite(value) ? fallback : Math.max(0, Math.floor(value));
 
 const normalizeKinds = (
   kinds: ReadonlyArray<string> | undefined,
 ): ReadonlyArray<string> | undefined => {
   if (kinds === undefined) return undefined;
-  const normalized = Array.from(new Set(kinds)).filter(
-    (kind) => kind.length > 0,
-  );
+  const normalized = Array.from(new Set(kinds)).filter((kind) => kind.length > 0);
   return normalized.length === 0 ? undefined : normalized;
 };
 
-const encodeSseEvent = (
-  encoder: TextEncoder,
-  event: LedgerEvent,
-): Uint8Array =>
+const encodeSseEvent = (encoder: TextEncoder, event: LedgerEvent): Uint8Array =>
   encoder.encode(
-    [
-      `id: ${event.id}`,
-      "event: ledger",
-      `data: ${JSON.stringify(eventToRpc(event))}`,
-      "",
-      "",
-    ].join("\n"),
+    [`id: ${event.id}`, "event: ledger", `data: ${JSON.stringify(eventToRpc(event))}`, "", ""].join(
+      "\n",
+    ),
   );
 
-const encodeSseHeartbeat = (encoder: TextEncoder): Uint8Array =>
-  encoder.encode(": keepalive\n\n");
+const encodeSseHeartbeat = (encoder: TextEncoder): Uint8Array => encoder.encode(": keepalive\n\n");
 
 export const selectHandoffEvents = (
   afterId: number,
@@ -180,11 +165,7 @@ export const createEventStreamResponse = <R, E>(
               afterId,
               kinds,
             });
-            const handoff = selectHandoffEvents(
-              watermark,
-              snapshot,
-              liveQueue,
-            );
+            const handoff = selectHandoffEvents(watermark, snapshot, liveQueue);
             for (const event of handoff.events) {
               enqueue(encodeSseEvent(encoder, event));
               watermark = event.id;
@@ -218,7 +199,7 @@ export const createEventStreamResponse = <R, E>(
     headers: {
       "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-cache",
-      "Connection": "keep-alive",
+      Connection: "keep-alive",
     },
   });
 };

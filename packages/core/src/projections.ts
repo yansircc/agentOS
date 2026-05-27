@@ -17,11 +17,7 @@ import type {
 } from "./types";
 import { decodeConsumedPayloadSync } from "./quota/payload";
 import { projectRows } from "./resources/projection";
-import {
-  type AttemptKey,
-  type CapabilityLease,
-  projectLease,
-} from "./admission";
+import { type AttemptKey, type CapabilityLease, projectLease } from "./admission";
 import { loadAdmissionRows } from "./admission/payload";
 import {
   validateEffectClaim,
@@ -44,9 +40,7 @@ const normalizeRunId = (runId: number | string): number => {
 };
 
 const payloadObject = (payload: unknown): Record<string, unknown> =>
-  payload !== null && typeof payload === "object"
-    ? (payload as Record<string, unknown>)
-    : {};
+  payload !== null && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
 
 export interface ClaimTraceSpec {
   readonly operationRef?: string;
@@ -78,10 +72,7 @@ export interface RejectedClaimTraceEntry extends ClaimTraceBase {
   readonly rejectionRef: RejectionRef;
 }
 
-export type ClaimTraceEntry =
-  | PreClaimTraceEntry
-  | LivedClaimTraceEntry
-  | RejectedClaimTraceEntry;
+export type ClaimTraceEntry = PreClaimTraceEntry | LivedClaimTraceEntry | RejectedClaimTraceEntry;
 
 interface FailurePlaneBase {
   readonly eventId: number;
@@ -102,9 +93,7 @@ export interface RunAbortedFailurePlaneEntry extends FailurePlaneBase {
   readonly reason?: string;
 }
 
-export type FailurePlaneEntry =
-  | ClaimRejectedFailurePlaneEntry
-  | RunAbortedFailurePlaneEntry;
+export type FailurePlaneEntry = ClaimRejectedFailurePlaneEntry | RunAbortedFailurePlaneEntry;
 
 const claimFromEvent = (event: LedgerEvent): EffectClaim | null => {
   const raw = payloadObject(event.payload).claim;
@@ -112,10 +101,7 @@ const claimFromEvent = (event: LedgerEvent): EffectClaim | null => {
   return validation.ok ? validation.claim : null;
 };
 
-const claimTraceBase = (
-  event: LedgerEvent,
-  claim: EffectClaim,
-): ClaimTraceBase => ({
+const claimTraceBase = (event: LedgerEvent, claim: EffectClaim): ClaimTraceBase => ({
   eventId: event.id,
   eventKind: event.kind,
   scope: event.scope,
@@ -126,10 +112,7 @@ const claimTraceBase = (
   originRef: claim.originRef,
 });
 
-const claimTraceEntry = (
-  event: LedgerEvent,
-  claim: EffectClaim,
-): ClaimTraceEntry => {
+const claimTraceEntry = (event: LedgerEvent, claim: EffectClaim): ClaimTraceEntry => {
   const base = claimTraceBase(event, claim);
   switch (claim.phase) {
     case "pre":
@@ -158,10 +141,7 @@ export const projectClaimTrace = (
   for (const event of events) {
     const claim = claimFromEvent(event);
     if (claim === null) continue;
-    if (
-      spec.operationRef !== undefined &&
-      claim.operationRef !== spec.operationRef
-    ) {
+    if (spec.operationRef !== undefined && claim.operationRef !== spec.operationRef) {
       continue;
     }
     if (phases !== undefined && !phases.has(claim.phase)) continue;
@@ -206,33 +186,22 @@ export const projectFailurePlane = (
 
 const numericPayloadRunId = (event: LedgerEvent): number | undefined => {
   const value = payloadObject(event.payload).runId;
-  return typeof value === "number" && Number.isInteger(value)
-    ? value
-    : undefined;
+  return typeof value === "number" && Number.isInteger(value) ? value : undefined;
 };
 
 const turnRunId = (event: LedgerEvent): number | undefined => {
   const turn = payloadObject(event.payload).turn;
   if (turn === null || typeof turn !== "object") return undefined;
   const value = (turn as { readonly id?: unknown }).id;
-  return typeof value === "number" && Number.isInteger(value)
-    ? value
-    : undefined;
+  return typeof value === "number" && Number.isInteger(value) ? value : undefined;
 };
 
-const startFor = (
-  events: ReadonlyArray<LedgerEvent>,
-  runId: number,
-): LedgerEvent | undefined =>
+const startFor = (events: ReadonlyArray<LedgerEvent>, runId: number): LedgerEvent | undefined =>
   events.find((event) => event.id === runId && event.kind === "agent.run.started");
 
-const runTerminal = (
-  events: ReadonlyArray<LedgerEvent>,
-  runId: number,
-): RunTerminal | null => {
+const runTerminal = (events: ReadonlyArray<LedgerEvent>, runId: number): RunTerminal | null => {
   const completed = events.find(
-    (event) =>
-      event.kind === "agent.run.completed" && numericPayloadRunId(event) === runId,
+    (event) => event.kind === "agent.run.completed" && numericPayloadRunId(event) === runId,
   );
   if (completed !== undefined) {
     const eventName = payloadObject(completed.payload).event;
@@ -245,8 +214,7 @@ const runTerminal = (
   }
 
   const aborted = events.find(
-    (event) =>
-      abortKinds.has(event.kind) && numericPayloadRunId(event) === runId,
+    (event) => abortKinds.has(event.kind) && numericPayloadRunId(event) === runId,
   );
   if (aborted !== undefined) {
     return {
@@ -290,10 +258,7 @@ export const projectRunTrace = (
     });
 
   const toolCalls: RunToolCall[] = events
-    .filter(
-      (event) =>
-        event.kind === "tool.executed" && numericPayloadRunId(event) === runId,
-    )
+    .filter((event) => event.kind === "tool.executed" && numericPayloadRunId(event) === runId)
     .map((event) => {
       const p = payloadObject(event.payload);
       return {
@@ -347,8 +312,7 @@ export const projectQuotaState = (
   spec: QuotaStateSpec,
   now: number,
 ): QuotaState => {
-  const windowStart =
-    spec.windowMs === Number.POSITIVE_INFINITY ? 0 : now - spec.windowMs;
+  const windowStart = spec.windowMs === Number.POSITIVE_INFINITY ? 0 : now - spec.windowMs;
   let consumed = 0;
   for (const event of events) {
     if (event.kind !== "dispatch.consumed") continue;
@@ -436,10 +400,7 @@ type TerminalAcc = {
   readonly event: string;
 };
 
-const summarizeStatus = (
-  startedAt: number,
-  terminal: TerminalAcc | undefined,
-): RunStatus => {
+const summarizeStatus = (startedAt: number, terminal: TerminalAcc | undefined): RunStatus => {
   if (terminal === undefined) {
     return { kind: "open_without_terminal", startedAt };
   }
@@ -511,16 +472,12 @@ export const projectRunsPage = (
   summaries.sort((a, b) => b.runId - a.runId);
 
   const afterFiltered =
-    spec.afterRunId === undefined
-      ? summaries
-      : summaries.filter((s) => s.runId < spec.afterRunId!);
+    spec.afterRunId === undefined ? summaries : summaries.filter((s) => s.runId < spec.afterRunId!);
 
   const limit = Math.max(0, spec.limit);
   const page = afterFiltered.slice(0, limit);
   const nextCursor =
-    afterFiltered.length > limit && page.length > 0
-      ? page[page.length - 1]!.runId
-      : null;
+    afterFiltered.length > limit && page.length > 0 ? page[page.length - 1]!.runId : null;
 
   return { runs: page, nextCursor };
 };

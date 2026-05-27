@@ -33,9 +33,6 @@ export interface QuotaSpec {
 }
 
 /** Attach a QuotaSpec to a tool. Returns a new Tool with `quota` metadata. */
-export function withQuota<A, R>(
-  tool: Tool<A, R>,
-  spec: QuotaSpec,
-): Tool<A, R> {
+export function withQuota<A, R>(tool: Tool<A, R>, spec: QuotaSpec): Tool<A, R> {
   return { ...tool, quota: spec };
 }

@@ -12,13 +12,13 @@ Every shared mutable surface is either isolated per agent or single-writer.
 
 MVP scope covers the common failure classes:
 
-| Surface | Rule |
-|---|---|
-| source writes | one git worktree and branch per agent |
-| ports | controller assigns a deterministic port range per agent |
+| Surface             | Rule                                                                    |
+| ------------------- | ----------------------------------------------------------------------- |
+| source writes       | one git worktree and branch per agent                                   |
+| ports               | controller assigns a deterministic port range per agent                 |
 | local runtime state | per-agent `HOME`, `XDG_CACHE_HOME`, `TMPDIR`, `.wrangler`, scope prefix |
-| test data | every scope/key starts with `TEST_RUN_ID` |
-| cleanup | agent records owned PIDs; no global `pkill` / cache cleanup |
+| test data           | every scope/key starts with `TEST_RUN_ID`                               |
+| cleanup             | agent records owned PIDs; no global `pkill` / cache cleanup             |
 
 ## Start One Agent
 

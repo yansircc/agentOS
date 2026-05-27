@@ -18,20 +18,20 @@ capability leases just because the model name or prompt looks similar.
 
 ## Live-Wire Verdicts
 
-| Wire | Route kind | Model / provider | Verdict |
-|---|---|---|---|
-| Cloudflare AI binding | `cf-ai-binding` | `@cf/openai/gpt-oss-120b` | Admission algebra passed; forced-tool-call reliability was model-flaky. |
-| Anthropic Messages via aihubmix | `anthropic-messages` | `claude-sonnet-4-6` | 5/5 structured reliability on the small live-wire sample. |
-| Google Gemini Generate Content | `gemini-generate-content` | `gemini-3.1-flash-lite` | 5/5 structured reliability on the small live-wire sample. |
+| Wire                            | Route kind                | Model / provider          | Verdict                                                                 |
+| ------------------------------- | ------------------------- | ------------------------- | ----------------------------------------------------------------------- |
+| Cloudflare AI binding           | `cf-ai-binding`           | `@cf/openai/gpt-oss-120b` | Admission algebra passed; forced-tool-call reliability was model-flaky. |
+| Anthropic Messages via aihubmix | `anthropic-messages`      | `claude-sonnet-4-6`       | 5/5 structured reliability on the small live-wire sample.               |
+| Google Gemini Generate Content  | `gemini-generate-content` | `gemini-3.1-flash-lite`   | 5/5 structured reliability on the small live-wire sample.               |
 
 ## Class-Eliminating Fixes
 
-| Finding | Fix |
-|---|---|
-| Transport errors are wrapped in `UpstreamFailure`, so `classify` saw the wrapper instead of the HTTP cause | Shared `unwrapErrorMessage` helper reads the wrapped cause before provider-specific classification. |
-| Gemini 3.1+ requires `thoughtSignature` to round-trip across tool calls | `LlmToolCall.metadata` carries opaque adapter metadata; Gemini captures and re-emits the signature. |
+| Finding                                                                                                        | Fix                                                                                                                        |
+| -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Transport errors are wrapped in `UpstreamFailure`, so `classify` saw the wrapper instead of the HTTP cause     | Shared `unwrapErrorMessage` helper reads the wrapped cause before provider-specific classification.                        |
+| Gemini 3.1+ requires `thoughtSignature` to round-trip across tool calls                                        | `LlmToolCall.metadata` carries opaque adapter metadata; Gemini captures and re-emits the signature.                        |
 | Gemini rejects JSON Schema fields accepted by the substrate (`additionalProperties`, `$schema`, `$id`, `$ref`) | Gemini adapter sanitizes only the wire copy; the original schema remains the SSoT for fingerprinting and local validation. |
-| Gemini can report credential failures as HTTP 400 with `API_KEY_INVALID` / `PERMISSION_DENIED` | Gemini classifier maps those bodies to `AuthError` before generic 400 handling. |
+| Gemini can report credential failures as HTTP 400 with `API_KEY_INVALID` / `PERMISSION_DENIED`                 | Gemini classifier maps those bodies to `AuthError` before generic 400 handling.                                            |
 
 ## Structured Path
 

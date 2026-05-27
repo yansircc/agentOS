@@ -32,9 +32,7 @@ export class EventBus extends Context.Tag("@agent-os/EventBus")<
   }
 >() {}
 
-export const EventBusLive = (
-  handlers: Map<string, Set<EventHandler>>,
-): Layer.Layer<EventBus> => {
+export const EventBusLive = (handlers: Map<string, Set<EventHandler>>): Layer.Layer<EventBus> => {
   const sinks = new Set<EventBusSink>();
   return Layer.succeed(EventBus, {
     subscribe: (opts) => {
@@ -56,10 +54,7 @@ export const EventBusLive = (
       const fireSinks = Effect.sync(() => {
         const streamSinks = Array.from(sinks);
         for (const subscription of streamSinks) {
-          if (
-            subscription.kinds === undefined ||
-            subscription.kinds.has(event.kind)
-          ) {
+          if (subscription.kinds === undefined || subscription.kinds.has(event.kind)) {
             subscription.sink(event);
           }
         }
@@ -89,10 +84,7 @@ export const EventBusLive = (
                 Effect.timeout("5 seconds"),
                 Effect.catchAll((cause) =>
                   Effect.sync(() => {
-                    console.error(
-                      `[agent-os] handler for "${event.kind}" failed/timed:`,
-                      cause,
-                    );
+                    console.error(`[agent-os] handler for "${event.kind}" failed/timed:`, cause);
                   }),
                 ),
               ),

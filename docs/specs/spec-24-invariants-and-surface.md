@@ -23,6 +23,7 @@ agent-OS captures only the algebra of that recurring infrastructure. Business lo
 > **Symmetric duals. Sharp boundaries. Conservative defaults. Orthogonal composition.**
 >
 > Conflict resolution:
+>
 > - at the **algebra layer**, duality wins (a missing dual is a bug)
 > - at the **feature layer**, minimalism wins (avoid shipping until N apps need it)
 
@@ -33,28 +34,28 @@ the question is marked **[Open]** and waits for spike or N+1 evidence.
 
 ## 2. Invariants (10)
 
-| # | Invariant | Rationale |
-|---|---|---|
-| **INV-1** | No business UI. May ship optional **infrastructure observability UI** (must be opt-out). | Business UI ≠ infrastructure UI. Boundary criterion: does the UI reference app-specific concepts? |
-| **INV-2** | Serves the "agent reasoning closed loop" only. | Anything outside `project(ledger) → propose dispatch intent` is out of scope. |
-| **INV-3** | Linear accounting lives in core but has two ergonomics: **Quota** for pre-grant + implicit consume through dispatch middleware, and **Resource** for explicit reservation lifecycle. Reactive face = `on / scheduleEvent / standard projections`. | Quota cannot express reserve N -> partial consume M <= N -> refund N-M; resource reservation stays core-owned because its transaction/idempotency boundary is the DO authority boundary. Superseded by spec-34. |
-| **INV-4** | What CF ships, we do not rewrite. Thin unifying naming is allowed when 4+ CF surfaces serve the same role. | Reactive wrapping (`on`) and LLM-carrier wrapping (`submitAgent` over Responses API) are the only two unifications. |
-| **INV-5** | State ownership and agent boundary are invariants (see §3, §4). | These are not implementation details; they define what "agent" means. |
-| **INV-6** | v1 supports **CF AI** (`env.AI.run` + AI Gateway) AND any **OpenAI-Chat-Completions-compatible endpoint** addressed by `LlmRoute` (see §6.3). The set of routes is finite (one adapter per protocol kind); the set of models is not. | Locks dependency surface to a small adapter family; gets cross-provider compatibility without maintaining a model whitelist. v0.2.12 revised from "CF AI only" to admit the openai-chat-compatible adapter after Insight Helper dogfood proved CF Workers AI's models can't carry full-fidelity Chinese system prompts. |
-| **INV-7** | Built on the **CF Agents framework** (`extends Agent`, Session API). | Bets on CF Agents lifecycle, hibernation, naming, SQLite. Accept experimental risk. |
-| **INV-8** | **Core has no ambient BYOK.** User-provided credentials are explicit `LlmRoute` dependencies, stored outside the ledger and addressed only by `credentialRef`. The actual secret lives in the deploy environment (wrangler secrets / `.dev.vars`), resolved at call time by `RefResolver`. Routes are stable identity; credential rotation does NOT invalidate evidence. | Reduces ambient credential surface (no global `process.env.OPENAI_KEY` style coupling); makes capability evidence rotation-stable. Same boundary class as `carrier` (INV-9) and `env binding` — credential is a route dependency, not free-floating state. v0.3/spec-34 replaces LLM-only `ProviderRegistry` with carrier-neutral `RefResolver`. |
-| **INV-9** | `sandbox / workspace / browser` are **stateful dispatch carriers**, addressed by scope id. Their state lives in the carrier, not the ledger. | Carrier ≠ ledger. Stateful carriers must explicitly publish their scope id. |
-| **INV-10** | Serves **agent modules only**. Non-agent parts use plain CF Workers. Two parts collaborate via **Service Bindings**. Multi-worker is the default deployment topology. | Embedded mode is rejected; "agent + CRUD in one worker" is an anti-pattern. |
+| #          | Invariant                                                                                                                                                                                                                                                                                                                                                                | Rationale                                                                                                                                                                                                                                                                                                                                        |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **INV-1**  | No business UI. May ship optional **infrastructure observability UI** (must be opt-out).                                                                                                                                                                                                                                                                                 | Business UI ≠ infrastructure UI. Boundary criterion: does the UI reference app-specific concepts?                                                                                                                                                                                                                                                |
+| **INV-2**  | Serves the "agent reasoning closed loop" only.                                                                                                                                                                                                                                                                                                                           | Anything outside `project(ledger) → propose dispatch intent` is out of scope.                                                                                                                                                                                                                                                                    |
+| **INV-3**  | Linear accounting lives in core but has two ergonomics: **Quota** for pre-grant + implicit consume through dispatch middleware, and **Resource** for explicit reservation lifecycle. Reactive face = `on / scheduleEvent / standard projections`.                                                                                                                        | Quota cannot express reserve N -> partial consume M <= N -> refund N-M; resource reservation stays core-owned because its transaction/idempotency boundary is the DO authority boundary. Superseded by spec-34.                                                                                                                                  |
+| **INV-4**  | What CF ships, we do not rewrite. Thin unifying naming is allowed when 4+ CF surfaces serve the same role.                                                                                                                                                                                                                                                               | Reactive wrapping (`on`) and LLM-carrier wrapping (`submitAgent` over Responses API) are the only two unifications.                                                                                                                                                                                                                              |
+| **INV-5**  | State ownership and agent boundary are invariants (see §3, §4).                                                                                                                                                                                                                                                                                                          | These are not implementation details; they define what "agent" means.                                                                                                                                                                                                                                                                            |
+| **INV-6**  | v1 supports **CF AI** (`env.AI.run` + AI Gateway) AND any **OpenAI-Chat-Completions-compatible endpoint** addressed by `LlmRoute` (see §6.3). The set of routes is finite (one adapter per protocol kind); the set of models is not.                                                                                                                                     | Locks dependency surface to a small adapter family; gets cross-provider compatibility without maintaining a model whitelist. v0.2.12 revised from "CF AI only" to admit the openai-chat-compatible adapter after Insight Helper dogfood proved CF Workers AI's models can't carry full-fidelity Chinese system prompts.                          |
+| **INV-7**  | Built on the **CF Agents framework** (`extends Agent`, Session API).                                                                                                                                                                                                                                                                                                     | Bets on CF Agents lifecycle, hibernation, naming, SQLite. Accept experimental risk.                                                                                                                                                                                                                                                              |
+| **INV-8**  | **Core has no ambient BYOK.** User-provided credentials are explicit `LlmRoute` dependencies, stored outside the ledger and addressed only by `credentialRef`. The actual secret lives in the deploy environment (wrangler secrets / `.dev.vars`), resolved at call time by `RefResolver`. Routes are stable identity; credential rotation does NOT invalidate evidence. | Reduces ambient credential surface (no global `process.env.OPENAI_KEY` style coupling); makes capability evidence rotation-stable. Same boundary class as `carrier` (INV-9) and `env binding` — credential is a route dependency, not free-floating state. v0.3/spec-34 replaces LLM-only `ProviderRegistry` with carrier-neutral `RefResolver`. |
+| **INV-9**  | `sandbox / workspace / browser` are **stateful dispatch carriers**, addressed by scope id. Their state lives in the carrier, not the ledger.                                                                                                                                                                                                                             | Carrier ≠ ledger. Stateful carriers must explicitly publish their scope id.                                                                                                                                                                                                                                                                      |
+| **INV-10** | Serves **agent modules only**. Non-agent parts use plain CF Workers. Two parts collaborate via **Service Bindings**. Multi-worker is the default deployment topology.                                                                                                                                                                                                    | Embedded mode is rejected; "agent + CRUD in one worker" is an anti-pattern.                                                                                                                                                                                                                                                                      |
 
 ---
 
 ## 3. State ownership
 
-| Type | Owner | Backing |
-|---|---|---|
-| **ledger state** (append-only events of truth) | agent-OS ledger primitive | DO SQLite, optionally D1 |
-| **derived state** (`project()` output) | nobody — recomputed | pure function over ledger |
-| **external state** (WP / Stripe / customer ERP) | app | cached into ledger via `RemoteView` carrier |
+| Type                                            | Owner                     | Backing                                     |
+| ----------------------------------------------- | ------------------------- | ------------------------------------------- |
+| **ledger state** (append-only events of truth)  | agent-OS ledger primitive | DO SQLite, optionally D1                    |
+| **derived state** (`project()` output)          | nobody — recomputed       | pure function over ledger                   |
+| **external state** (WP / Stripe / customer ERP) | app                       | cached into ledger via `RemoteView` carrier |
 
 There is no "transient state". CF Workflows persists all `step.do` inputs/outputs into SQLite,
 which means even mid-step state is technically ledger. Three categories above are exhaustive.
@@ -64,10 +65,10 @@ which means even mid-step state is technically ledger. Three categories above ar
 The only table that is **ledger truth is `events`**. The DO carries other
 tables but they are NOT ledger:
 
-| Table | Role | SSoT? |
-|---|---|---|
-| `events` | append-only ledger | **yes** |
-| `scheduled_events` | pending intent buffer between `scheduleEvent()` and alarm fire; fires INTO `events` then is observable only as the resulting event | no |
+| Table              | Role                                                                                                                               | SSoT?   |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| `events`           | append-only ledger                                                                                                                 | **yes** |
+| `scheduled_events` | pending intent buffer between `scheduleEvent()` and alarm fire; fires INTO `events` then is observable only as the resulting event | no      |
 
 Counters like quota consumption are **not stored**. They are projected over
 `events WHERE kind='dispatch.consumed'` inside the same `transactionSync` as
@@ -168,12 +169,12 @@ via queue or Service Binding.
 
 Inside one `submitAgent` invocation the substrate distinguishes four nested terms:
 
-| Term | Definition | Spans |
-|---|---|---|
-| `AgentRun` | one `submit()` invocation | 1..N `LlmTurn` until budget / retries exhaust or LLM stops emitting tool calls |
-| `LlmTurn` | one provider call | emits 0..N `ToolCall` |
-| `ToolCall` | one carrier dispatch within an `LlmTurn` | carries `attempt: number` field for retries |
-| `Continuation` | subsequent input on the same `AgentRun` after suspend/resume (spike-2: `step.waitForEvent`) | — |
+| Term           | Definition                                                                                  | Spans                                                                          |
+| -------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `AgentRun`     | one `submit()` invocation                                                                   | 1..N `LlmTurn` until budget / retries exhaust or LLM stops emitting tool calls |
+| `LlmTurn`      | one provider call                                                                           | emits 0..N `ToolCall`                                                          |
+| `ToolCall`     | one carrier dispatch within an `LlmTurn`                                                    | carries `attempt: number` field for retries                                    |
+| `Continuation` | subsequent input on the same `AgentRun` after suspend/resume (spike-2: `step.waitForEvent`) | —                                                                              |
 
 `LiveSession` (the long-lived agent subprocess concept from Symphony) is
 **absent by construction**: CF Workers has no long-running process.
@@ -188,11 +189,11 @@ them is a real-world failure mode (early agentOS drafts collapsed
 `system` into `intent`, producing prompt-duplication noise and
 degraded LLM behavior). Apps SHOULD use the axes as follows:
 
-| Field    | Axis                | Variability    | Becomes                              |
-|----------|---------------------|----------------|--------------------------------------|
-| `system` | behavior program    | **stable**     | system message verbatim (when set)   |
-| `intent` | task input          | variable       | user message verbatim                |
-| `context`| facts               | variable       | system message "Context:" block      |
+| Field     | Axis             | Variability | Becomes                            |
+| --------- | ---------------- | ----------- | ---------------------------------- |
+| `system`  | behavior program | **stable**  | system message verbatim (when set) |
+| `intent`  | task input       | variable    | user message verbatim              |
+| `context` | facts            | variable    | system message "Context:" block    |
 
 The stable / variable axis matters: `system` defines who the agent IS
 (rarely changes between invocations); `intent` and `context` describe
@@ -206,23 +207,23 @@ preamble.
 
 ```ts
 function submitAgent<C, O>(spec: {
-  intent:    string;                              // user message (task input)
-  system?:   string;                              // system message (behavior program); when omitted,
-                                                  //   substrate generates a generic wrapper from intent
-  context:   Record<string, View>;                // one-shot snapshot projection (facts)
-  agent:     { provider: ProviderId; model: ModelId };
-  tools:     Record<string, Carrier>;             // schema auto-translated for LLM
+  intent: string; // user message (task input)
+  system?: string; // system message (behavior program); when omitted,
+  //   substrate generates a generic wrapper from intent
+  context: Record<string, View>; // one-shot snapshot projection (facts)
+  agent: { provider: ProviderId; model: ModelId };
+  tools: Record<string, Carrier>; // schema auto-translated for LLM
   budget: {
-    tokens?:   number;                            // hard cap
-    cost?:     Quota;                             // pre-grant via Quota
-    time?:     Duration;                          // hard cap
-    maxTurns?: number;                            // LLM loop iteration cap
-    toolRetries?: number;                         // per-tool retry attempts
+    tokens?: number; // hard cap
+    cost?: Quota; // pre-grant via Quota
+    time?: Duration; // hard cap
+    maxTurns?: number; // LLM loop iteration cap
+    toolRetries?: number; // per-tool retry attempts
   };
-  outputSchema?: JsonSchemaObject;                // spec-25: structured output via admission
-  deliver:   { event: EventName };                // scope is structurally
-                                                  // owned by the DO instance
-                                                  // (derived from ctx.id.name)
+  outputSchema?: JsonSchemaObject; // spec-25: structured output via admission
+  deliver: { event: EventName }; // scope is structurally
+  // owned by the DO instance
+  // (derived from ctx.id.name)
 }): Promise<{ run_id: string }>;
 ```
 
@@ -265,7 +266,7 @@ App-side wrangler binding:
 ```jsonc
 {
   "durable_objects": { "bindings": [{ "name": "AGENT_DO", "class_name": "AgentDO" }] },
-  "migrations":      [{ "tag": "v1", "new_sqlite_classes": ["AgentDO"] }]
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AgentDO"] }],
 }
 ```
 
@@ -299,22 +300,22 @@ on `submit({outputSchema})` via spec-25 admission — see §6.2.
 
 ```ts
 type Quota<K, M> = {
-  key:        (intent) => K;                       // user_id | scope | channel_instance
-  window:     "∞" | { duration: ms };              // ∞ = billing; duration = rate-limit
-  measure:    (effect) => M;                       // count=1 | bytes | tokens | cost_cents
-  limit:      M | (() => M);                       // constant OR dynamic (e.g. balance from project)
-  refundable: boolean;                             // billing yes, rate-limit no
+  key: (intent) => K; // user_id | scope | channel_instance
+  window: "∞" | { duration: ms }; // ∞ = billing; duration = rate-limit
+  measure: (effect) => M; // count=1 | bytes | tokens | cost_cents
+  limit: M | (() => M); // constant OR dynamic (e.g. balance from project)
+  refundable: boolean; // billing yes, rate-limit no
 };
 ```
 
 All "pre-grant + consume" patterns are Quota instances:
 
-| Pattern | Quota instance |
-|---|---|
-| Credit billing | `Quota<user_id, ∞, cost_cents>`, dynamic limit |
-| Per-user rate limit | `Quota<user_id, 60s, count>` |
-| Per-conversation token budget | `Quota<conv_id, ∞, tokens>` |
-| WhatsApp API rate | `Quota<channel_instance, 1s, count>` |
+| Pattern                       | Quota instance                                 |
+| ----------------------------- | ---------------------------------------------- |
+| Credit billing                | `Quota<user_id, ∞, cost_cents>`, dynamic limit |
+| Per-user rate limit           | `Quota<user_id, 60s, count>`                   |
+| Per-conversation token budget | `Quota<conv_id, ∞, tokens>`                    |
+| WhatsApp API rate             | `Quota<channel_instance, 1s, count>`           |
 
 Hit → `log("dispatch.rate_limited" | "quota.exceeded")` + reject.
 Queue is **not** built in; app composes with `scheduleEvent` if needed (orthogonality).
@@ -347,7 +348,7 @@ Apps choose their route per submit; capability is evidence on
 
 ```ts
 type LlmRoute =
-  | { kind: "cf-ai-binding";          modelId: string;  gatewayRef?: string }
+  | { kind: "cf-ai-binding"; modelId: string; gatewayRef?: string }
   | { kind: "openai-chat-compatible"; endpointRef: string; credentialRef: string; modelId: string };
 ```
 
@@ -356,10 +357,7 @@ type LlmRoute =
   shape (e.g. `@cf/openai/gpt-oss-120b`). Workers-AI-native shape models
   (Llama, etc.) are NOT supported by this adapter today.
 - **`openai-chat-compatible`** — `fetch(endpoint + "/chat/completions",
-  { Authorization: \`Bearer ${credential}\` })`. The `endpointRef` and
-  `credentialRef` are symbolic; their values come from the
-  `RefResolver` populated by the DO subclass via
-  `protected provideRefResolver()` (see §5.3). Use for OpenRouter, official
+{ Authorization: \`Bearer ${credential}\` })`. The `endpointRef`and`credentialRef`are symbolic; their values come from the`RefResolver`populated by the DO subclass via`protected provideRefResolver()` (see §5.3). Use for OpenRouter, official
   OpenAI, Anthropic-via-compat, and any other endpoint that speaks the
   OpenAI Chat Completions HTTP shape.
 
@@ -405,7 +403,7 @@ quota.exceeded                    Quota unbounded reject (insufficient balance)
 agent.aborted.app.{...}           app-defined namespace
 ```
 
-These are ledger events (kind strings), not exceptions. Loop termination *always*
+These are ledger events (kind strings), not exceptions. Loop termination _always_
 results in one of these or a deliver event. Never silent.
 
 ---
@@ -434,25 +432,25 @@ totally ordered by SQLite insert order.
 The `project(view, source)` source is pluggable. agent-OS recognizes these built-in
 sources; each adds zero new algebra, just a thin adapter:
 
-| Source | Use | Package |
-|---|---|---|
-| `do-sqlite` (default) | business state, ledger | core |
-| `analytics-engine` | high-volume low-value trace / metric / audit | core (via `log` tier hint) |
-| `d1` | app's business schema | `@agent-os/view-d1` |
-| `kv` | cached views | `@agent-os/view-kv` |
-| `r2` | blob metadata / listing | `@agent-os/view-r2` |
-| `hyperdrive` | external Postgres (customer ERP) | `@agent-os/view-hyperdrive` |
-| `autorag` | semantic retrieval | `@agent-os/kb-autorag` |
-| `vectorize` | vector retrieval | `@agent-os/view-vectorize` |
-| `http` | arbitrary remote API | `@agent-os/view-http` |
+| Source                | Use                                          | Package                     |
+| --------------------- | -------------------------------------------- | --------------------------- |
+| `do-sqlite` (default) | business state, ledger                       | core                        |
+| `analytics-engine`    | high-volume low-value trace / metric / audit | core (via `log` tier hint)  |
+| `d1`                  | app's business schema                        | `@agent-os/view-d1`         |
+| `kv`                  | cached views                                 | `@agent-os/view-kv`         |
+| `r2`                  | blob metadata / listing                      | `@agent-os/view-r2`         |
+| `hyperdrive`          | external Postgres (customer ERP)             | `@agent-os/view-hyperdrive` |
+| `autorag`             | semantic retrieval                           | `@agent-os/kb-autorag`      |
+| `vectorize`           | vector retrieval                             | `@agent-os/view-vectorize`  |
+| `http`                | arbitrary remote API                         | `@agent-os/view-http`       |
 
 ---
 
 ## 10. Log tier (hint, not invariant)
 
 ```ts
-log(kind, payload, scope);                      // default → DO SQLite
-log(kind, payload, scope, { tier: "metric" });  // → Analytics Engine
+log(kind, payload, scope); // default → DO SQLite
+log(kind, payload, scope, { tier: "metric" }); // → Analytics Engine
 ```
 
 DO SQLite is OLTP (ACID, fast small writes). Analytics Engine is OLAP (write-heavy,
@@ -497,12 +495,12 @@ addressed by scope id — not in the ledger. Concretely, a carrier package such
 as `@agent-os/cf-tools` MUST satisfy these constraints; the agent loop and
 shared utilities MAY rely on them:
 
-| # | Constraint | Failure if violated |
-|---|---|---|
-| C1 | **Declare a state root** keyed by scope id (e.g. `/sandbox/{scope}/`, `workspace://${scope}`). The root is the carrier's promise that state outside it is not its concern. | Two carriers can collide on the same physical resource; cleanup ambiguous. |
-| C2 | **Validate path containment** on every path-taking operation: the resolved absolute path MUST be within the declared root, with symlinks resolved. Reject otherwise. | Path traversal (`../../etc/passwd`) escapes the scope boundary; one tenant reads another. |
-| C3 | **Publish a cleanup primitive** keyed by scope id (e.g. `releaseScope(scope)`), invoked when the owning DO is deleted or the carrier is retired. | Deleted scopes leak carrier state; long-term cost growth + privacy risk. |
-| C4 | **Do not expose carrier-internal filesystem / session shape to shared logic.** Shared code MAY pass paths and scope ids into the carrier; it MUST NOT branch on whether the carrier's state is filesystem-backed, object-store-backed, or in-memory. | Boundary leak — the carrier becomes a hidden coupling point; replacing one carrier breaks unrelated code. |
+| #   | Constraint                                                                                                                                                                                                                                           | Failure if violated                                                                                       |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| C1  | **Declare a state root** keyed by scope id (e.g. `/sandbox/{scope}/`, `workspace://${scope}`). The root is the carrier's promise that state outside it is not its concern.                                                                           | Two carriers can collide on the same physical resource; cleanup ambiguous.                                |
+| C2  | **Validate path containment** on every path-taking operation: the resolved absolute path MUST be within the declared root, with symlinks resolved. Reject otherwise.                                                                                 | Path traversal (`../../etc/passwd`) escapes the scope boundary; one tenant reads another.                 |
+| C3  | **Publish a cleanup primitive** keyed by scope id (e.g. `releaseScope(scope)`), invoked when the owning DO is deleted or the carrier is retired.                                                                                                     | Deleted scopes leak carrier state; long-term cost growth + privacy risk.                                  |
+| C4  | **Do not expose carrier-internal filesystem / session shape to shared logic.** Shared code MAY pass paths and scope ids into the carrier; it MUST NOT branch on whether the carrier's state is filesystem-backed, object-store-backed, or in-memory. | Boundary leak — the carrier becomes a hidden coupling point; replacing one carrier breaks unrelated code. |
 
 These constraints are conditions on **carrier implementations**, not on the
 §5 core algebra. Each shipped carrier in `@agent-os/cf-tools` includes a
@@ -519,24 +517,24 @@ carrier.
 
 ## 12. CF services mapping
 
-| Use directly (zero wrapping) | Why |
-|---|---|
-| CF Workflows + step.do/sleep/waitForEvent | suspendable agent loops, outbox guarantee |
-| CF AI Gateway | LLM routing + cache + retry + fallback + cost |
-| Workers AI (env.AI.run) | unified binding to 70+ models |
-| AI Search / AutoRAG | KB retrieval |
-| Vectorize | vector retrieval |
-| CF Agents framework (Agent base, Session API) | DO addressing + hibernation + history compaction |
-| Sandbox SDK (@cloudflare/sandbox) | exec / runCode / fs / snapshots / outbound policy |
-| Workspace (@cloudflare/shell) | durable virtual filesystem |
-| Browser Run | headless Chromium for agents |
-| Workers Subscriptions / Better Auth | identity (out of scope for agent-OS) |
-| Outbound Worker | sandbox egress policy |
-| Hyperdrive | external Postgres pool |
-| Analytics Engine | high-volume audit/metric ledger tier |
-| Service Bindings + typed RPC | multi-worker collaboration |
-| Queue / Cron / DO / D1 / R2 / KV | direct bindings, no abstraction |
-| WfP dispatch namespace | tenant isolation (v2 third-party apps) |
+| Use directly (zero wrapping)                  | Why                                               |
+| --------------------------------------------- | ------------------------------------------------- |
+| CF Workflows + step.do/sleep/waitForEvent     | suspendable agent loops, outbox guarantee         |
+| CF AI Gateway                                 | LLM routing + cache + retry + fallback + cost     |
+| Workers AI (env.AI.run)                       | unified binding to 70+ models                     |
+| AI Search / AutoRAG                           | KB retrieval                                      |
+| Vectorize                                     | vector retrieval                                  |
+| CF Agents framework (Agent base, Session API) | DO addressing + hibernation + history compaction  |
+| Sandbox SDK (@cloudflare/sandbox)             | exec / runCode / fs / snapshots / outbound policy |
+| Workspace (@cloudflare/shell)                 | durable virtual filesystem                        |
+| Browser Run                                   | headless Chromium for agents                      |
+| Workers Subscriptions / Better Auth           | identity (out of scope for agent-OS)              |
+| Outbound Worker                               | sandbox egress policy                             |
+| Hyperdrive                                    | external Postgres pool                            |
+| Analytics Engine                              | high-volume audit/metric ledger tier              |
+| Service Bindings + typed RPC                  | multi-worker collaboration                        |
+| Queue / Cron / DO / D1 / R2 / KV              | direct bindings, no abstraction                   |
+| WfP dispatch namespace                        | tenant isolation (v2 third-party apps)            |
 
 agent-OS never reimplements any of the above.
 
@@ -590,17 +588,17 @@ Internal code **must comply with all EFF001–EFF032** rules
 (see `agent-skills/plugins/agent-skills/skills/effect-ecosystem/`).
 Key consequences for agent-OS core:
 
-| Rule | Implication for agent-OS core |
-|---|---|
-| **EFF002/003/004** | No `async function`, no `await`. Use `Effect.gen(function* () { yield* ... })` everywhere. |
-| **EFF001/024/025** | No `try/catch`, no `throw new Error`. Use `Effect.try / Effect.tryPromise` + `Data.TaggedError` subclasses. |
-| **EFF005** | No `Promise.all / Promise.race`. Use `Effect.all({ concurrency })` / `Effect.race` / `Effect.partition`. |
-| **EFF007** | No zod. Use `effect/Schema` for all envelope / structured-output validation. |
-| **EFF013** | No `ts-pattern`. Use `effect/Match`. |
-| **EFF022/023/028** | No `setTimeout / setInterval / node-cron`. Use `Effect.sleep`, `Effect.repeat + Schedule.spaced`, `Schedule.cron`. |
-| **EFF026/032** | No `Date.now()` / `new Date()` in business code. Use `Clock.currentTimeMillis`. Persist time as `number` / ISO string. |
-| **EFF027** | No `process.env` direct reads. Use `Config.string / Config.redacted` + `Layer` injection. |
-| **EFF030** | No prisma / drizzle for ledger persistence. Use `@effect/sql-d1` adapter (D1) or DO SQLite directly with Schema-typed rows. |
+| Rule               | Implication for agent-OS core                                                                                               |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| **EFF002/003/004** | No `async function`, no `await`. Use `Effect.gen(function* () { yield* ... })` everywhere.                                  |
+| **EFF001/024/025** | No `try/catch`, no `throw new Error`. Use `Effect.try / Effect.tryPromise` + `Data.TaggedError` subclasses.                 |
+| **EFF005**         | No `Promise.all / Promise.race`. Use `Effect.all({ concurrency })` / `Effect.race` / `Effect.partition`.                    |
+| **EFF007**         | No zod. Use `effect/Schema` for all envelope / structured-output validation.                                                |
+| **EFF013**         | No `ts-pattern`. Use `effect/Match`.                                                                                        |
+| **EFF022/023/028** | No `setTimeout / setInterval / node-cron`. Use `Effect.sleep`, `Effect.repeat + Schedule.spaced`, `Schedule.cron`.          |
+| **EFF026/032**     | No `Date.now()` / `new Date()` in business code. Use `Clock.currentTimeMillis`. Persist time as `number` / ISO string.      |
+| **EFF027**         | No `process.env` direct reads. Use `Config.string / Config.redacted` + `Layer` injection.                                   |
+| **EFF030**         | No prisma / drizzle for ledger persistence. Use `@effect/sql-d1` adapter (D1) or DO SQLite directly with Schema-typed rows. |
 
 Failure vocabulary (§7) is implemented as `Data.TaggedError` subclasses, one per
 failure kind. Loop termination yields tagged errors into the ledger event stream.
@@ -646,15 +644,15 @@ over Promise. Not in v1.
 
 ## 15. Validation status
 
-| validation | result | what it proved |
-|---|---|---|
-| minimum loop | ✅ pass | env.AI.run + DO SQLite + DO RPC + reactive on() all work |
-| suspendable loop | ✅ pass | step.waitForEvent suspends; sendEvent resumes; workflow can call AI + cross-DO RPC; instance id = app-controlled scope |
-| structured-output admission | ✅ pass | capability is evidence-derived lease, not model whitelist |
-| protocol adapters | ✅ pass | route.kind isolates wire semantics across CF, OpenAI-compatible, Anthropic, and Gemini shapes |
-| img-gen shape audit | ✅ pass | cross-scope dispatch, resources, image route, and R2 carrier boundary are classified |
-| sandbox carrier | pending | triggered when first agent app needs file/code execution |
-| AutoRAG per-tenant cost | pending | triggered when first KB use case appears |
+| validation                  | result  | what it proved                                                                                                         |
+| --------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------- |
+| minimum loop                | ✅ pass | env.AI.run + DO SQLite + DO RPC + reactive on() all work                                                               |
+| suspendable loop            | ✅ pass | step.waitForEvent suspends; sendEvent resumes; workflow can call AI + cross-DO RPC; instance id = app-controlled scope |
+| structured-output admission | ✅ pass | capability is evidence-derived lease, not model whitelist                                                              |
+| protocol adapters           | ✅ pass | route.kind isolates wire semantics across CF, OpenAI-compatible, Anthropic, and Gemini shapes                          |
+| img-gen shape audit         | ✅ pass | cross-scope dispatch, resources, image route, and R2 carrier boundary are classified                                   |
+| sandbox carrier             | pending | triggered when first agent app needs file/code execution                                                               |
+| AutoRAG per-tenant cost     | pending | triggered when first KB use case appears                                                                               |
 
 Runnable validation code is not retained as long-term repo surface. Durable
 outcomes live in specs, contract tests, cookbooks, or notes.
@@ -674,15 +672,15 @@ on("interview.start", (event) =>
   submitAgent({
     intent: "interview user to extract EEAT insights for writing brief",
     context: {
-      topic:    view.eventLast("topic.set", { scope: event.sessionId }),
-      biz:      view.eventLast("settings.business_context"),
+      topic: view.eventLast("topic.set", { scope: event.sessionId }),
+      biz: view.eventLast("settings.business_context"),
       answered: view.eventsAll("interview.answer", { scope: event.sessionId }),
     },
     agent: { provider: "anthropic", model: "claude-sonnet-4-6" },
     tools: { askUser: askUserCarrier, finalize: finalizeCarrier },
     budget: { tokens: 16_000 },
     deliver: { event: "interview.done" }, // scope = DO instance (= sessionId)
-  })
+  }),
 );
 ```
 
@@ -694,21 +692,27 @@ on("wa.message.in", (msg, env) =>
     intent: "respond to customer; parse files if attached; price if BOM detected",
     context: {
       thread: view.thread(msg.from_phone).last(15),
-      kb:     view.kbRetrieve("products", msg.text),
+      kb: view.kbRetrieve("products", msg.text),
       profile: view.customerProfile(msg.from_phone),
     },
     agent: { provider: "anthropic", model: "claude-sonnet-4-6" },
     tools: {
       parseExcel: sandboxRunCode(`${msg.from_phone}.${msg.id}`, "python"),
-      parseCAD:   sandboxRunCode(`${msg.from_phone}.${msg.id}`, "python"),
-      calcPrice:  withQuota(pricingCarrier, { key: msg.from_phone, window: "1day", measure: () => 1, limit: 100, refundable: false }),
-      sendText:   waSendText,
-      sendVoice:  ttsCarrier,
+      parseCAD: sandboxRunCode(`${msg.from_phone}.${msg.id}`, "python"),
+      calcPrice: withQuota(pricingCarrier, {
+        key: msg.from_phone,
+        window: "1day",
+        measure: () => 1,
+        limit: 100,
+        refundable: false,
+      }),
+      sendText: waSendText,
+      sendVoice: ttsCarrier,
       transferToHuman: handoffCarrier,
     },
     budget: { tokens: 16_000, cost: quota(msg.from_phone, "1day", "$0.50"), time: "30s" },
     deliver: { event: "wa.agent.completed" }, // scope = DO instance (= from_phone)
-  })
+  }),
 );
 ```
 
@@ -728,7 +732,8 @@ on("img.request.created", (event) =>
       // as submit({outputSchema}) and modality carriers live in packages:
       //   const plan = await this.submit({ outputSchema: PlanSchema, ... });
       generateImage: withQuota(imagePackageTool, {
-        key: event.user_id, window: "∞",
+        key: event.user_id,
+        window: "∞",
         measure: (e) => e.cost_cents,
         limit: () => view.creditBalance(event.user_id),
         refundable: true,
@@ -737,7 +742,7 @@ on("img.request.created", (event) =>
     },
     budget: { tokens: 4_000, time: "5min" },
     deliver: { event: "img.delivered" }, // scope = DO instance (= conv_id)
-  })
+  }),
 );
 ```
 
@@ -748,14 +753,14 @@ on("user.request_changes", (event) =>
   submitAgent({
     intent: "propose WordPress visible-text changes (no direct apply)",
     context: {
-      site:    view.remote("wp-plugin", `/context?site=${event.site_id}`),
+      site: view.remote("wp-plugin", `/context?site=${event.site_id}`),
       history: view.conv_history(event.conv_id),
     },
     agent: { provider: "anthropic", model: "claude-opus-4-7" },
     tools: { createWpCandidate: wpCandidateCarrier },
     budget: { tokens: 100_000, time: "10min" },
     deliver: { event: "wp_candidate.proposed" }, // scope = DO instance (= site_id)
-  })
+  }),
 );
 ```
 
@@ -805,18 +810,18 @@ These survived the meta-rule and need spike or N+1 evidence to resolve.
 
 Each invariant traces back to:
 
-| INV | Triggered by |
-|---|---|
-| INV-1 | zeroY2 + zeroy-www (ops UI rewritten N times) — refined into "infrastructure UI ok, business UI no" |
-| INV-2 | All 4 repos — agent loop is the only commonly-repeated concept |
-| INV-3 | img-gen credit reservation + WhatsApp rate limit + zeroY token budget all isomorphic |
-| INV-4 | CF Sandbox SDK / Workflows / Agents framework all GA in 2026; rewriting them is regressive |
-| INV-5 | zeroY2 hand-rolled agent runtime conflated state ownership; replayability suffered |
-| INV-6 | YAGNI for v1 — third-party LLM keys add support burden, give up unified billing |
-| INV-7 | CF Agents framework provides what zeroY2's `runtimeGateway.ts` (494 LOC) hand-rolled |
-| INV-8 | corollary of INV-6 |
-| INV-9 | zeroY2's `sandboxCf.ts` + `runtimeFiles.ts` etc. — stateful carriers are not new algebra |
-| INV-10 | zeroy-www's 17-module SaaS exposed "embedded mode" trap; rejection cleaner than support |
+| INV    | Triggered by                                                                                        |
+| ------ | --------------------------------------------------------------------------------------------------- |
+| INV-1  | zeroY2 + zeroy-www (ops UI rewritten N times) — refined into "infrastructure UI ok, business UI no" |
+| INV-2  | All 4 repos — agent loop is the only commonly-repeated concept                                      |
+| INV-3  | img-gen credit reservation + WhatsApp rate limit + zeroY token budget all isomorphic                |
+| INV-4  | CF Sandbox SDK / Workflows / Agents framework all GA in 2026; rewriting them is regressive          |
+| INV-5  | zeroY2 hand-rolled agent runtime conflated state ownership; replayability suffered                  |
+| INV-6  | YAGNI for v1 — third-party LLM keys add support burden, give up unified billing                     |
+| INV-7  | CF Agents framework provides what zeroY2's `runtimeGateway.ts` (494 LOC) hand-rolled                |
+| INV-8  | corollary of INV-6                                                                                  |
+| INV-9  | zeroY2's `sandboxCf.ts` + `runtimeFiles.ts` etc. — stateful carriers are not new algebra            |
+| INV-10 | zeroy-www's 17-module SaaS exposed "embedded mode" trap; rejection cleaner than support             |
 
 ---
 

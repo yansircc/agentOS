@@ -14,13 +14,10 @@
  */
 
 import { Clock, Context, Effect, Layer } from "effect";
-import {
-  JsonStringifyError,
-  SqlError,
-  safeStringify,
-} from "./errors";
+import { JsonStringifyError, SqlError, safeStringify } from "./errors";
 import type { LedgerEvent } from "./types";
 import { EventBus } from "./ledger";
+import { sqlText } from "./storage/sql-row";
 
 export class Scheduler extends Context.Tag("@agent-os/Scheduler")<
   Scheduler,
@@ -33,16 +30,11 @@ export class Scheduler extends Context.Tag("@agent-os/Scheduler")<
     ) => Effect.Effect<{ id: number }, SqlError | JsonStringifyError>;
     readonly fireDue: (
       now: number,
-    ) => Effect.Effect<
-      { next: number | null; fired: number },
-      SqlError | JsonStringifyError
-    >;
+    ) => Effect.Effect<{ next: number | null; fired: number }, SqlError | JsonStringifyError>;
   }
 >() {}
 
-const ensureSchedulerSchema = (
-  sql: SqlStorage,
-): Effect.Effect<void, SqlError> =>
+const ensureSchedulerSchema = (sql: SqlStorage): Effect.Effect<void, SqlError> =>
   Effect.try({
     try: () => {
       sql.exec(`
@@ -63,15 +55,11 @@ const ensureSchedulerSchema = (
     catch: (cause) => new SqlError({ cause }),
   }).pipe(Effect.asVoid);
 
-const findNextPending = (
-  sql: SqlStorage,
-): Effect.Effect<number | null, SqlError> =>
+const findNextPending = (sql: SqlStorage): Effect.Effect<number | null, SqlError> =>
   Effect.try({
     try: () => {
       const rows = sql
-        .exec(
-          "SELECT MIN(fire_at) AS m FROM scheduled_events WHERE fired_event_id IS NULL",
-        )
+        .exec("SELECT MIN(fire_at) AS m FROM scheduled_events WHERE fired_event_id IS NULL")
         .toArray();
       const row = rows[0];
       if (row === undefined) return null;
@@ -129,8 +117,8 @@ export const SchedulerLive = (
             let fired = 0;
             for (const row of pending) {
               const schedId = Number(row.id);
-              const kind = String(row.event_kind);
-              const dataStr = String(row.data);
+              const kind = sqlText(row.event_kind, "scheduled_events.event_kind");
+              const dataStr = sqlText(row.data, "scheduled_events.data");
 
               const dataValue = yield* Effect.try({
                 try: () => JSON.parse(dataStr) as unknown,

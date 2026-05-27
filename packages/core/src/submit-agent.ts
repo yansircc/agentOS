@@ -27,27 +27,12 @@ import {
   ToolError,
   UpstreamFailure,
 } from "./errors";
-import {
-  AiBinding,
-  callLlm,
-  type LlmMessage,
-  type LlmRoute,
-  type ToolDefinition,
-} from "./llm";
+import { AiBinding, callLlm, type LlmMessage, type LlmRoute, type ToolDefinition } from "./llm";
 import { Ledger } from "./ledger";
 import { RefResolutionFailed, RefResolverService } from "./ref-resolver";
 import { Quota } from "./quota";
-import {
-  executeTool,
-  parseToolCall,
-  validateToolRegistry,
-  type Tool,
-} from "./tools";
-import {
-  Admission,
-  type JsonSchemaObject,
-  makeSchemaContract,
-} from "./admission";
+import { executeTool, parseToolCall, validateToolRegistry, type Tool } from "./tools";
+import { Admission, type JsonSchemaObject, makeSchemaContract } from "./admission";
 import {
   makeOperationRef,
   makePreClaim,
@@ -135,9 +120,7 @@ export const turnRefOf = (runId: number, index: number): TurnRef => ({
   index,
 });
 
-const toolDefinitionsOf = (
-  tools: Record<string, Tool>,
-): ReadonlyArray<ToolDefinition> =>
+const toolDefinitionsOf = (tools: Record<string, Tool>): ReadonlyArray<ToolDefinition> =>
   Object.values(tools).map((t) => t.definition);
 
 const toolErrorReason = (error: ToolError): string => {
@@ -177,11 +160,7 @@ const finalAbort = (
   scope: string,
   runId: number,
   tokensUsed: number,
-): Effect.Effect<
-  SubmitResult,
-  SqlError | JsonStringifyError,
-  Ledger
-> =>
+): Effect.Effect<SubmitResult, SqlError | JsonStringifyError, Ledger> =>
   Effect.gen(function* () {
     const ledger = yield* Ledger;
     yield* ledger.log(kind, { runId, ...payload }, scope);
@@ -212,11 +191,7 @@ export const submitAgentEffect = (
     const scope = spec.deliver.scope;
     const scopeRef = spec.deliver.scopeRef;
 
-    const started = yield* ledger.log(
-      "agent.run.started",
-      { intent: spec.intent },
-      scope,
-    );
+    const started = yield* ledger.log("agent.run.started", { intent: spec.intent }, scope);
     yield* ledger.log(
       "chat.ingested",
       { runId: started.id, intent: spec.intent, context: spec.context },
@@ -272,10 +247,7 @@ export const submitAgentEffect = (
       });
 
       if (result.ok) {
-        const tokens =
-          result.outcome.class === "Supported"
-            ? result.outcome.tokensUsed
-            : 0;
+        const tokens = result.outcome.class === "Supported" ? result.outcome.tokensUsed : 0;
         yield* Ref.set(tokensUsedRef, tokens);
         const finalStr = yield* safeStringify(result.decoded);
         yield* ledger.log(
@@ -333,11 +305,7 @@ export const submitAgentEffect = (
 
     const loop: Effect.Effect<
       SubmitResult,
-      | SqlError
-      | JsonStringifyError
-      | UpstreamFailure
-      | ToolError
-      | RefResolutionFailed,
+      SqlError | JsonStringifyError | UpstreamFailure | ToolError | RefResolutionFailed,
       Ledger | AiBinding | Quota | RefResolverService
     > = Effect.gen(function* () {
       const messages: LlmMessage[] = [...initialMessages];
@@ -391,8 +359,7 @@ export const submitAgentEffect = (
         messages.push({
           role: "assistant",
           content: resp.text,
-          tool_calls:
-            resp.toolCalls.length > 0 ? resp.toolCalls : undefined,
+          tool_calls: resp.toolCalls.length > 0 ? resp.toolCalls : undefined,
         });
 
         if (resp.toolCalls.length === 0) {
@@ -427,12 +394,7 @@ export const submitAgentEffect = (
           // O-2: LLM-emitted tool arguments are not reproducible idempotency
           // material; this concrete call attempt is the semantic effect.
           const claim = makePreClaim({
-            operationRef: makeOperationRef("tool", [
-              scope,
-              started.id,
-              turn,
-              call.id,
-            ]),
+            operationRef: makeOperationRef("tool", [scope, started.id, turn, call.id]),
             scopeRef,
             authorityRef: contract.authorityRef,
             originRef: contract.originRef ?? {
@@ -443,65 +405,63 @@ export const submitAgentEffect = (
 
           // Per-attempt grant + execute (inside Effect.retry).
           // Each retry independently grants → retries count toward quota.
-          const attemptOnce: Effect.Effect<
-            unknown,
-            ToolError | SqlError | JsonStringifyError
-          > = Effect.gen(function* () {
-            if (tool.quota !== undefined) {
-              const q = tool.quota;
-              const amount = q.amount ?? 1;
-              if (!Number.isFinite(amount) || amount < 0) {
-                return yield* new ToolError({
-                  toolName: call.function.name,
-                  cause: { reason: "invalid_quota_amount", amount },
-                });
+          const attemptOnce: Effect.Effect<unknown, ToolError | SqlError | JsonStringifyError> =
+            Effect.gen(function* () {
+              if (tool.quota !== undefined) {
+                const q = tool.quota;
+                const amount = q.amount ?? 1;
+                if (!Number.isFinite(amount) || amount < 0) {
+                  return yield* new ToolError({
+                    toolName: call.function.name,
+                    cause: { reason: "invalid_quota_amount", amount },
+                  });
+                }
+                if (!Number.isFinite(q.limit) || q.limit < 0) {
+                  return yield* new ToolError({
+                    toolName: call.function.name,
+                    cause: { reason: "invalid_quota_limit", limit: q.limit },
+                  });
+                }
+                // windowMs accepts POSITIVE_INFINITY (unbounded billing
+                // window) but not NaN or negative.
+                const windowOk =
+                  q.windowMs === Number.POSITIVE_INFINITY ||
+                  (Number.isFinite(q.windowMs) && q.windowMs >= 0);
+                if (!windowOk) {
+                  return yield* new ToolError({
+                    toolName: call.function.name,
+                    cause: { reason: "invalid_quota_window", windowMs: q.windowMs },
+                  });
+                }
+                if (q.key !== undefined && q.key.length === 0) {
+                  return yield* new ToolError({
+                    toolName: call.function.name,
+                    cause: { reason: "invalid_quota_key", key: q.key },
+                  });
+                }
+                const key = q.key ?? call.function.name;
+                const grant = yield* quotaService.tryGrant(
+                  scope,
+                  key,
+                  amount,
+                  q.windowMs,
+                  q.limit,
+                  call.function.name,
+                );
+                if (!grant.granted) {
+                  return yield* new ToolError({
+                    toolName: call.function.name,
+                    cause: {
+                      reason: "rate_limited",
+                      key,
+                      consumed: grant.consumed,
+                      limit: grant.limit,
+                    },
+                  });
+                }
               }
-              if (!Number.isFinite(q.limit) || q.limit < 0) {
-                return yield* new ToolError({
-                  toolName: call.function.name,
-                  cause: { reason: "invalid_quota_limit", limit: q.limit },
-                });
-              }
-              // windowMs accepts POSITIVE_INFINITY (unbounded billing
-              // window) but not NaN or negative.
-              const windowOk =
-                q.windowMs === Number.POSITIVE_INFINITY ||
-                (Number.isFinite(q.windowMs) && q.windowMs >= 0);
-              if (!windowOk) {
-                return yield* new ToolError({
-                  toolName: call.function.name,
-                  cause: { reason: "invalid_quota_window", windowMs: q.windowMs },
-                });
-              }
-              if (q.key !== undefined && q.key.length === 0) {
-                return yield* new ToolError({
-                  toolName: call.function.name,
-                  cause: { reason: "invalid_quota_key", key: q.key },
-                });
-              }
-              const key = q.key ?? call.function.name;
-              const grant = yield* quotaService.tryGrant(
-                scope,
-                key,
-                amount,
-                q.windowMs,
-                q.limit,
-                call.function.name,
-              );
-              if (!grant.granted) {
-                return yield* new ToolError({
-                  toolName: call.function.name,
-                  cause: {
-                    reason: "rate_limited",
-                    key,
-                    consumed: grant.consumed,
-                    limit: grant.limit,
-                  },
-                });
-              }
-            }
-            return yield* executeTool(tool, args, call.function.name);
-          });
+              return yield* executeTool(tool, args, call.function.name);
+            });
 
           const result = yield* attemptOnce.pipe(
             Effect.retry({
@@ -515,10 +475,7 @@ export const submitAgentEffect = (
                   if (typeof cause === "object" && cause !== null) {
                     const reason = (cause as { reason?: unknown }).reason;
                     if (reason === "rate_limited") return false;
-                    if (
-                      typeof reason === "string" &&
-                      reason.startsWith("invalid_quota_")
-                    ) {
+                    if (typeof reason === "string" && reason.startsWith("invalid_quota_")) {
                       return false;
                     }
                   }
@@ -575,13 +532,7 @@ export const submitAgentEffect = (
       }
 
       const tokensUsed = yield* Ref.get(tokensUsedRef);
-      return yield* finalAbort(
-        ABORT.RETRIES,
-        { maxTurns },
-        scope,
-        started.id,
-        tokensUsed,
-      );
+      return yield* finalAbort(ABORT.RETRIES, { maxTurns }, scope, started.id, tokensUsed);
     });
 
     return yield* loop.pipe(

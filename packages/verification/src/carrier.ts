@@ -1,8 +1,5 @@
 import type { Effect } from "effect";
-import type {
-  PreClaim,
-  RejectedClaim,
-} from "@agent-os/core/effect-claim";
+import type { PreClaim, RejectedClaim } from "@agent-os/core/effect-claim";
 
 import type { VerificationGateRecordedPayload } from "./events";
 
@@ -15,11 +12,7 @@ export interface VerificationGateRequest {
 }
 
 export interface VerificationCarrierFailure {
-  readonly code:
-    | "GateUnavailable"
-    | "GateTimedOut"
-    | "GateFailedToRun"
-    | "ProviderFailure";
+  readonly code: "GateUnavailable" | "GateTimedOut" | "GateFailedToRun" | "ProviderFailure";
   readonly reason: string;
   readonly proofRef?: string;
   readonly claim?: RejectedClaim;
@@ -28,8 +21,5 @@ export interface VerificationCarrierFailure {
 export interface VerificationCarrier {
   readonly runGate: (
     request: VerificationGateRequest,
-  ) => Effect.Effect<
-    VerificationGateRecordedPayload,
-    VerificationCarrierFailure
-  >;
+  ) => Effect.Effect<VerificationGateRecordedPayload, VerificationCarrierFailure>;
 }

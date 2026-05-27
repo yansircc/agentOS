@@ -4,10 +4,7 @@ import {
   projectStagingArtifact,
   stagingArtifactExtensionPackage,
 } from "../src";
-import {
-  makePreClaim,
-  settleLivedClaim,
-} from "@agent-os/core/effect-claim";
+import { makePreClaim, settleLivedClaim } from "@agent-os/core/effect-claim";
 import type { ExtensionCapability } from "@agent-os/core/extensions";
 
 const stagingClaim = makePreClaim({

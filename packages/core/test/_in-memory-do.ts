@@ -101,10 +101,7 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
   }
 
   setAlarm(scheduledTime: number | Date): Promise<void> {
-    this.alarm =
-      scheduledTime instanceof Date
-        ? scheduledTime.getTime()
-        : Number(scheduledTime);
+    this.alarm = scheduledTime instanceof Date ? scheduledTime.getTime() : Number(scheduledTime);
     return Promise.resolve();
   }
 
@@ -116,9 +113,7 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
   private exec(sql: string, args: readonly unknown[]): InMemorySqlCursor {
     const normalized = normalizeSql(sql);
     if (/^CREATE (TABLE|INDEX) IF NOT EXISTS /i.test(normalized)) {
-      const tableMatch = /^CREATE TABLE IF NOT EXISTS ([a-z_]+)/i.exec(
-        normalized,
-      );
+      const tableMatch = /^CREATE TABLE IF NOT EXISTS ([a-z_]+)/i.exec(normalized);
       if (tableMatch !== null) this.table(tableMatch[1]!);
       return new InMemorySqlCursor([]);
     }
@@ -166,9 +161,7 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
       table.nextId += 1;
     }
     table.rows.push(row);
-    return new InMemorySqlCursor(
-      match[4] === undefined ? [] : [{ id: row.id }],
-    );
+    return new InMemorySqlCursor(match[4] === undefined ? [] : [{ id: row.id }]);
   }
 
   private update(sql: string, args: readonly unknown[]): InMemorySqlCursor {
@@ -208,14 +201,11 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
       const values = rows
         .map((row) => row[column])
         .filter((value): value is number => typeof value === "number");
-      return new InMemorySqlCursor([
-        { [alias]: values.length === 0 ? null : Math.min(...values) },
-      ]);
+      return new InMemorySqlCursor([{ [alias]: values.length === 0 ? null : Math.min(...values) }]);
     }
 
-    const match = /^SELECT (.+?) FROM ([a-z_]+)(?: WHERE (.*?))?(?: ORDER BY (.*?))?(?: LIMIT \?)?$/i.exec(
-      sql,
-    );
+    const match =
+      /^SELECT (.+?) FROM ([a-z_]+)(?: WHERE (.*?))?(?: ORDER BY (.*?))?(?: LIMIT \?)?$/i.exec(sql);
     if (match === null) {
       throw new TypeError(`unsupported in-memory select: ${sql}`);
     }
@@ -225,9 +215,7 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
     const rows = this.filteredRows(match[2]!, match[3], whereArgs);
     const ordered = orderRows(rows, match[4]);
     const limited = limit === undefined ? ordered : ordered.slice(0, limit);
-    return new InMemorySqlCursor(
-      limited.map((row) => projectColumns(row, match[1]!)),
-    );
+    return new InMemorySqlCursor(limited.map((row) => projectColumns(row, match[1]!)));
   }
 
   private filteredRows(
@@ -235,8 +223,7 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
     where: string | undefined,
     args: readonly unknown[],
   ): Row[] {
-    const predicate =
-      where === undefined ? () => true : compileWhere(where, args);
+    const predicate = where === undefined ? () => true : compileWhere(where, args);
     return this.table(tableName).rows.filter(predicate).map(cloneRow);
   }
 
@@ -252,12 +239,7 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
   }
 
   private snapshot(): Map<string, Table> {
-    return new Map(
-      Array.from(this.tables.entries(), ([name, table]) => [
-        name,
-        cloneTable(table),
-      ]),
-    );
+    return new Map(Array.from(this.tables.entries(), ([name, table]) => [name, cloneTable(table)]));
   }
 
   private restore(snapshot: Map<string, Table>): void {
@@ -282,10 +264,7 @@ const isPromiseLike = (value: unknown): value is PromiseLike<unknown> =>
   "then" in value &&
   typeof (value as { readonly then?: unknown }).then === "function";
 
-const compileWhere = (
-  where: string,
-  args: readonly unknown[],
-): ((row: Row) => boolean) => {
+const compileWhere = (where: string, args: readonly unknown[]): ((row: Row) => boolean) => {
   let argIndex = 0;
   const predicates = where
     .split(/\s+AND\s+/i)
@@ -387,10 +366,7 @@ const stripParens = (value: string): string => {
   return out;
 };
 
-const orderRows = (
-  rows: ReadonlyArray<Row>,
-  orderBy: string | undefined,
-): Row[] => {
+const orderRows = (rows: ReadonlyArray<Row>, orderBy: string | undefined): Row[] => {
   const out = rows.map(cloneRow);
   if (orderBy === undefined) return out;
   const clauses = splitComma(orderBy).map((clause) => {

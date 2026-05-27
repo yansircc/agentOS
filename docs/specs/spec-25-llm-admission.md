@@ -71,12 +71,12 @@ facts that bypass admission. The boundary is structural, not stylistic.
 
 Same discipline as quota (spec-24 §3.1):
 
-| Concept | Placement | SSoT? |
-|---|---|---|
+| Concept                                | Placement                                                  | SSoT?   |
+| -------------------------------------- | ---------------------------------------------------------- | ------- |
 | `llm.structured.evidence` ledger event | DO SQLite `events` table (admission impact tagged per §10) | **yes** |
-| `CapabilityLease` | pure projection over `events` | no |
-| In-memory lease cache | optional memoization; reconstructable from events | no |
-| Per-route counters / SLO stats | projection | no |
+| `CapabilityLease`                      | pure projection over `events`                              | no      |
+| In-memory lease cache                  | optional memoization; reconstructable from events          | no      |
+| Per-route counters / SLO stats         | projection                                                 | no      |
 
 A second writer for capability state is a spec violation. Adding a `leases`
 table, KV namespace, or Durable Object property that holds capability truth
@@ -91,12 +91,18 @@ may speak different protocols; the URL cannot determine carrier shape.
 
 ```ts
 type LlmRoute =
-  | { kind: "cf-ai-binding";          modelId: string;     gatewayRef?: string }
+  | { kind: "cf-ai-binding"; modelId: string; gatewayRef?: string }
   | { kind: "openai-chat-compatible"; endpointRef: string; credentialRef: string; modelId: string }
-  | { kind: "anthropic-messages";     endpointRef: string; credentialRef: string; modelId: string; anthropicVersion?: string }
-  | { kind: "gemini-generate-content";endpointRef: string; credentialRef: string; modelId: string }
+  | {
+      kind: "anthropic-messages";
+      endpointRef: string;
+      credentialRef: string;
+      modelId: string;
+      anthropicVersion?: string;
+    }
+  | { kind: "gemini-generate-content"; endpointRef: string; credentialRef: string; modelId: string }
   // future adapter slot (not implemented in v0.2.14):
-  | { kind: "openai-responses";       endpointRef: string; credentialRef: string; modelId: string };
+  | { kind: "openai-responses"; endpointRef: string; credentialRef: string; modelId: string };
 ```
 
 - **`endpointRef`** is a stable symbolic id (resolved from app / wrangler
@@ -149,8 +155,8 @@ A `SchemaContract` is the structural specification an output must satisfy:
 
 ```ts
 type SchemaContract = {
-  schema:      JsonSchemaObject;   // closed dialect; public RPC boundary
-  fingerprint: string;             // see §4.1
+  schema: JsonSchemaObject; // closed dialect; public RPC boundary
+  fingerprint: string; // see §4.1
 };
 ```
 
@@ -189,17 +195,17 @@ Rationale for keeping the public type at JSON Schema, not
    a. Sort object keys lexicographically (recursive).
    b. Inline `$ref` (no remote refs allowed; reject at compile time).
    c. Normalize `nullable` / `optional` / union representations to a single
-      canonical form (concrete form defined by the implementing adapter
-      package, but must be deterministic).
+   canonical form (concrete form defined by the implementing adapter
+   package, but must be deterministic).
    c'. **Sort set-semantics arrays.** JSON Schema fields whose value is an
-      array semantically representing a set (no ordering meaning) MUST be
-      sorted lexicographically before serialization. The closed set of
-      such fields is `{"required", "enum"}`. Adding a new entry to this
-      set is a fingerprint algorithm version bump (§16). Discovered during
-      structured-output admission validation and retained in
-      [protocol-adapter-live-wire.md](../cookbooks/protocol-adapter-live-wire.md).
+   array semantically representing a set (no ordering meaning) MUST be
+   sorted lexicographically before serialization. The closed set of
+   such fields is `{"required", "enum"}`. Adding a new entry to this
+   set is a fingerprint algorithm version bump (§16). Discovered during
+   structured-output admission validation and retained in
+   [protocol-adapter-live-wire.md](../cookbooks/protocol-adapter-live-wire.md).
    d. Strip non-semantic annotations (`title`, `description`, `examples`,
-      vendor `x-*`).
+   vendor `x-*`).
 3. Serialize via deterministic JSON (canonical-json-rs equivalent).
 4. `fingerprint = "<algoVersion>:sha256:" + sha256(canonicalJson)`
    where `algoVersion` is a string identifying the canonicalization
@@ -208,10 +214,11 @@ Rationale for keeping the public type at JSON Schema, not
 
 Embedding the algorithm version inside the fingerprint string means that
 a canonicalization change (§16) automatically yields fingerprints that
-do not collide with prior evidence — the version bump *is* the eviction
+do not collide with prior evidence — the version bump _is_ the eviction
 mechanism, no separate `canonicalVersion` field is needed in the key.
 
 Implementations MUST ship a fingerprint compatibility test covering:
+
 - key reordering invariance
 - optional/nullable equivalence
 - nested array / union edge cases
@@ -238,13 +245,13 @@ weight probe evidence (systematic, low-volume) vs live evidence
 
 ```ts
 type DeliverSpec = {
-  event:   EventName;     // ledger event kind
-  payload: unknown;       // payload to append alongside the evidence event
+  event: EventName; // ledger event kind
+  payload: unknown; // payload to append alongside the evidence event
 };
 
 type Stimulus =
   | { kind: "probe"; synthetic: ProbeInput }
-  | { kind: "live";  userInput: LiveInput; deliver: (out: DecodedOutput) => DeliverSpec };
+  | { kind: "live"; userInput: LiveInput; deliver: (out: DecodedOutput) => DeliverSpec };
 ```
 
 - `probe`: synthetic input designed to exercise the schema. The
@@ -273,25 +280,23 @@ not in the adapter; IO is in `attemptStructured`.
 
 ```ts
 interface Adapter<K extends LlmRoute["kind"]> {
-  readonly kind:           K;
-  readonly version:        SemverString;            // §9
+  readonly kind: K;
+  readonly version: SemverString; // §9
 
   encode(
-    route:         Extract<LlmRoute, { kind: K }>,
-    schema:        SchemaContract,
-    stimulus:      Stimulus,
-    strategy:      Strategy,
+    route: Extract<LlmRoute, { kind: K }>,
+    schema: SchemaContract,
+    stimulus: Stimulus,
+    strategy: Strategy,
   ): ProviderRequest;
 
   decode(
-    response:      ProviderResponse,
-    schema:        SchemaContract,
-    strategy:      Strategy,
+    response: ProviderResponse,
+    schema: SchemaContract,
+    strategy: Strategy,
   ): Effect.Effect<DecodedOutput, BehaviorFailed | SchemaUnsupported>;
 
-  classify(
-    error:         unknown,
-  ): FailureClass;
+  classify(error: unknown): FailureClass;
 }
 ```
 
@@ -445,27 +450,29 @@ result of `projectLease` in memory is permitted; persisting it is not.
 
 ## 8. FailureClass and TTL table
 
-| Class              | Caches as lease? | TTL on cache | Notes |
-|---|---|---|---|
-| `Supported`        | yes (supported) | soft 24h refresh, hard 7d | hard expiry forces front-stage re-admission |
-| `ProviderRejected` | yes (unsupported) | min(7d, until adapter/route/schema change) | provider explicitly says "not supported" |
-| `SchemaUnsupported`| yes (unsupported) | min(7d, until schema/adapter change)       | adapter can't `encode` this schema shape |
-| `BehaviorFailed`   | yes (unsupported) | start 24h, exponential backoff up to 30d cap, user-invalidate-able | model output didn't conform; behavior is deterministic, short retries are wasted |
-| `AuthError`        | **no**           | n/a — fast-fail to operator | not a capability fact |
-| `RateLimited`      | **no**           | n/a — handled by transport retry/backoff | not a capability fact |
-| `TransientError`   | **no**           | n/a — transport retries | not a capability fact |
-| `ConfigError`      | **no**           | n/a — fast-fail to operator | not a capability fact |
+| Class               | Caches as lease?  | TTL on cache                                                       | Notes                                                                            |
+| ------------------- | ----------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| `Supported`         | yes (supported)   | soft 24h refresh, hard 7d                                          | hard expiry forces front-stage re-admission                                      |
+| `ProviderRejected`  | yes (unsupported) | min(7d, until adapter/route/schema change)                         | provider explicitly says "not supported"                                         |
+| `SchemaUnsupported` | yes (unsupported) | min(7d, until schema/adapter change)                               | adapter can't `encode` this schema shape                                         |
+| `BehaviorFailed`    | yes (unsupported) | start 24h, exponential backoff up to 30d cap, user-invalidate-able | model output didn't conform; behavior is deterministic, short retries are wasted |
+| `AuthError`         | **no**            | n/a — fast-fail to operator                                        | not a capability fact                                                            |
+| `RateLimited`       | **no**            | n/a — handled by transport retry/backoff                           | not a capability fact                                                            |
+| `TransientError`    | **no**            | n/a — transport retries                                            | not a capability fact                                                            |
+| `ConfigError`       | **no**            | n/a — fast-fail to operator                                        | not a capability fact                                                            |
 
 The four non-caching classes are explicitly **not** evidence for lease
 projection. They still produce `llm.structured.evidence` events for audit
 and ops dashboards, but `projectLease` ignores them.
 
 Soft/hard expiry on `Supported`:
+
 - **Soft (24h)**: background re-probe scheduled via `scheduleEvent`; current
   lease stays valid until probe completes.
 - **Hard (7d)**: front-stage admission required; cached lease ignored.
 
 Invalidation:
+
 - `attemptStructured` is the only writer of `llm.structured.evidence`
   events. Operators do not modify or forge evidence.
 - Operators bump lease projection by appending a distinct event kind
@@ -480,11 +487,11 @@ A separate ledger event kind dedicated to lease invalidation:
 
 ```ts
 type InvalidateBarrier = {
-  kind:   "llm.structured.invalidate";
-  key:    Partial<AttemptKey>;   // omit fields to invalidate broader scope
+  kind: "llm.structured.invalidate";
+  key: Partial<AttemptKey>; // omit fields to invalidate broader scope
   reason: string;
-  ts:     number;
-  by:     string;                // operator id / admin token tag
+  ts: number;
+  by: string; // operator id / admin token tag
 };
 ```
 
@@ -538,14 +545,14 @@ classification is **not** a storage routing decision (v0 has no AE sink —
 all rows live in DO SQLite). It is a **lease-impact label** that
 `projectLease` reads to decide which rows participate in admission:
 
-| Condition | `admissionImpact` | Rationale |
-|---|---|---|
-| Outcome is non-Supported AND is a lease-bearing class (§8) | `lease-bearing` | Lease projection must read it; required for admission decisions. |
-| Outcome is `Supported` AND prior lease for `key` was `unknown` / hard-expired / barrier-invalidated | `lease-bearing` | This is the admission-forming evidence. |
-| Outcome is `Supported` AND prior lease was already `supported` (within hard expiry, no intervening barrier) | `reinforcement` | High-volume confirmation; ignored by `projectLease`. |
-| Outcome class is `AuthError` / `RateLimited` / `TransientError` / `ConfigError` | `lease-bearing` | Required for ops dashboards even though not lease-bearing for projection. |
-| Stimulus is `probe` | `lease-bearing` (regardless of outcome) | Systematic, low volume, canonical input to `projectLease`. |
-| `llm.structured.invalidate` barrier events (§8.1) | n/a | Barriers have no `admissionImpact` field; always lease-bearing by construction. |
+| Condition                                                                                                   | `admissionImpact`                       | Rationale                                                                       |
+| ----------------------------------------------------------------------------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------- |
+| Outcome is non-Supported AND is a lease-bearing class (§8)                                                  | `lease-bearing`                         | Lease projection must read it; required for admission decisions.                |
+| Outcome is `Supported` AND prior lease for `key` was `unknown` / hard-expired / barrier-invalidated         | `lease-bearing`                         | This is the admission-forming evidence.                                         |
+| Outcome is `Supported` AND prior lease was already `supported` (within hard expiry, no intervening barrier) | `reinforcement`                         | High-volume confirmation; ignored by `projectLease`.                            |
+| Outcome class is `AuthError` / `RateLimited` / `TransientError` / `ConfigError`                             | `lease-bearing`                         | Required for ops dashboards even though not lease-bearing for projection.       |
+| Stimulus is `probe`                                                                                         | `lease-bearing` (regardless of outcome) | Systematic, low volume, canonical input to `projectLease`.                      |
+| `llm.structured.invalidate` barrier events (§8.1)                                                           | n/a                                     | Barriers have no `admissionImpact` field; always lease-bearing by construction. |
 
 Principle: **any evidence that can change `projectLease` output is tagged
 `lease-bearing`**. Reinforcement rows are still appended to the ledger
@@ -589,8 +596,8 @@ initially registers exactly one:
 
 ```ts
 adapters: Record<LlmRoute["kind"], StructuredOutputAdapter> = {
-  "cf-ai-binding":           cfAiBindingAdapter,           // v0.2.10
-  "openai-chat-compatible":  openaiChatCompatibleAdapter,  // v0.2.13
+  "cf-ai-binding": cfAiBindingAdapter, // v0.2.10
+  "openai-chat-compatible": openaiChatCompatibleAdapter, // v0.2.13
   // openai-responses:        pending (Responses API has a different
   //                                   response shape than Chat Completions)
   // anthropic-messages:      pending
@@ -609,7 +616,7 @@ and in transport dispatch via `dispatchProvider` in `llm.ts`:
 
 - `cf-ai-binding` → `env.AI.run(modelId, body)`
 - `openai-chat-compatible` → `fetch(endpoint + "/chat/completions", {
-   Authorization: Bearer ${credential}, body: { model: modelId, ...body } })`
+Authorization: Bearer ${credential}, body: { model: modelId, ...body } })`
 
 A protocol that needs different encode/decode (e.g. `anthropic-messages`
 with its `content[].type === "tool_use"` response shape) will get a
@@ -689,7 +696,7 @@ On the `outputSchema` path:
   decoded output, for backward compatibility with the free-text path
   where `final` is the LLM's text).
 - The structured/typed payload is delivered through the `on(deliver.event,
-  handler)` callback whose `payload` argument is the raw decoded object
+handler)` callback whose `payload` argument is the raw decoded object
   (already validated against the JSON Schema during decode). Apps that
   need a typed view convert via their own Effect Schema decoder as shown
   above.
@@ -727,15 +734,15 @@ external observable.
 
 ## 13. Impact on existing product
 
-| Surface | Impact |
-|---|---|
-| Free-text `submitAgent` (no `outputSchema`) | **None.** Existing loop path unchanged. |
-| `packages/core/src/llm.ts` `callLlm` | Retained as the transport primitive consumed by `attemptStructured` internally. Not exposed in public API. |
-| `withStructuredOutput` middleware (spec-24 §6.2) | Remains deferred; replaced by `submit.outputSchema` per this spec. |
-| Ledger schema | Adds `llm.structured.evidence` event kind. No migration needed (events table is open-schema). |
-| `view.reflective.*` | **[Future, not in v0.2.10]** A `view.reflective.structuredCapability(key) → CapabilityLease` projection will be added when an admission-ops UI / agent self-introspection use case appears. For now, apps observe capability state by reading the raw `llm.structured.evidence` events through `events()`. |
-| Examples in spec-24 §16 | **Done in v0.2.10 (commit a1cf28b).** §16.3 Img-Gen sketch now references `submit({outputSchema: PlanSchema})` instead of the `withStructuredOutput(llmCarrier, PlanSchema)` middleware. No further rewrite needed. |
-| Dependencies | No new runtime deps. Canonical-JSON for fingerprint is implementable in ~50 LOC. |
+| Surface                                          | Impact                                                                                                                                                                                                                                                                                                     |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Free-text `submitAgent` (no `outputSchema`)      | **None.** Existing loop path unchanged.                                                                                                                                                                                                                                                                    |
+| `packages/core/src/llm.ts` `callLlm`             | Retained as the transport primitive consumed by `attemptStructured` internally. Not exposed in public API.                                                                                                                                                                                                 |
+| `withStructuredOutput` middleware (spec-24 §6.2) | Remains deferred; replaced by `submit.outputSchema` per this spec.                                                                                                                                                                                                                                         |
+| Ledger schema                                    | Adds `llm.structured.evidence` event kind. No migration needed (events table is open-schema).                                                                                                                                                                                                              |
+| `view.reflective.*`                              | **[Future, not in v0.2.10]** A `view.reflective.structuredCapability(key) → CapabilityLease` projection will be added when an admission-ops UI / agent self-introspection use case appears. For now, apps observe capability state by reading the raw `llm.structured.evidence` events through `events()`. |
+| Examples in spec-24 §16                          | **Done in v0.2.10 (commit a1cf28b).** §16.3 Img-Gen sketch now references `submit({outputSchema: PlanSchema})` instead of the `withStructuredOutput(llmCarrier, PlanSchema)` middleware. No further rewrite needed.                                                                                        |
+| Dependencies                                     | No new runtime deps. Canonical-JSON for fingerprint is implementable in ~50 LOC.                                                                                                                                                                                                                           |
 
 No breaking change to current dogfood code. The change is purely additive
 until §12.1 example rewrites land.
@@ -746,11 +753,11 @@ until §12.1 example rewrites land.
 
 spec-24 §15 spike-04 was "anthropic-via-openai-compat". This spec changes it:
 
-| Spike | Old definition | New definition |
-|---|---|---|
-| spike-04 | anthropic-via-openai-compat (transport unification feasibility) | **lease registry on `cf-ai-binding`** — validates §7 + §8 + canonical fingerprint stability over real traffic |
-| spike-04b (new) | n/a | anthropic-messages adapter — exercises §6 adapter law on a non-OpenAI-shaped protocol; validates that `encode/decode/classify` are sufficient |
-| spike-04c (new, deferred) | n/a | gemini-generate-content adapter — same goal, third protocol shape |
+| Spike                     | Old definition                                                  | New definition                                                                                                                                |
+| ------------------------- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| spike-04                  | anthropic-via-openai-compat (transport unification feasibility) | **lease registry on `cf-ai-binding`** — validates §7 + §8 + canonical fingerprint stability over real traffic                                 |
+| spike-04b (new)           | n/a                                                             | anthropic-messages adapter — exercises §6 adapter law on a non-OpenAI-shaped protocol; validates that `encode/decode/classify` are sufficient |
+| spike-04c (new, deferred) | n/a                                                             | gemini-generate-content adapter — same goal, third protocol shape                                                                             |
 
 spike-05 (Session API compaction) and spike-06 (AutoRAG) are unchanged.
 
@@ -805,7 +812,7 @@ spike-05 (Session API compaction) and spike-06 (AutoRAG) are unchanged.
      "stochastic";
    - introduce a probabilistic lease (e.g. "supported with confidence
      X%") — but this drifts from the boolean lease invariant.
-   No change in v0; revisit when an app's metrics warrant.
+     No change in v0; revisit when an app's metrics warrant.
 
 ---
 
@@ -822,29 +829,29 @@ spike-05 (Session API compaction) and spike-06 (AutoRAG) are unchanged.
 
 ## Appendix A: Decision provenance
 
-| Decision | Origin |
-|---|---|
-| Evidence as SSoT, lease as projection | spec-24 §3.1 SSoT discipline applied to a new domain |
-| Route as tagged union (5 protocols, not URL) | endpoint URL cannot determine carrier protocol — falsifies "endpoint + model = route" |
-| Adapter as pure encode/decode/classify | IO is in `attemptStructured`; adapter is unit-testable in isolation |
-| Single algebra op `attemptStructured` + Stimulus | probe and execute are the same op under different stimulus, not two ops |
-| `forced-tool-call` as the only v0 strategy on `cf-ai-binding` | spike-03 verdict: `response_format: json_schema` is not honored |
-| TTL by failure class, not uniform | `BehaviorFailed` is deterministic; short retry is wasted. `AuthError`/`RateLimited` are not capability facts. |
-| Adapter Semver major-only invalidation | decouples adapter polish from lease churn |
+| Decision                                                         | Origin                                                                                                                                                 |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Evidence as SSoT, lease as projection                            | spec-24 §3.1 SSoT discipline applied to a new domain                                                                                                   |
+| Route as tagged union (5 protocols, not URL)                     | endpoint URL cannot determine carrier protocol — falsifies "endpoint + model = route"                                                                  |
+| Adapter as pure encode/decode/classify                           | IO is in `attemptStructured`; adapter is unit-testable in isolation                                                                                    |
+| Single algebra op `attemptStructured` + Stimulus                 | probe and execute are the same op under different stimulus, not two ops                                                                                |
+| `forced-tool-call` as the only v0 strategy on `cf-ai-binding`    | spike-03 verdict: `response_format: json_schema` is not honored                                                                                        |
+| TTL by failure class, not uniform                                | `BehaviorFailed` is deterministic; short retry is wasted. `AuthError`/`RateLimited` are not capability facts.                                          |
+| Adapter Semver major-only invalidation                           | decouples adapter polish from lease churn                                                                                                              |
 | Evidence admission-impact split (lease-bearing vs reinforcement) | admission must read fresh non-success evidence; high-volume Supported reinforcement filters out by projection; future v1 may route reinforcement to AE |
-| Initial registry = `cf-ai-binding` only | INV-6 (v1 CF AI only). Custom endpoint / BYOK is a separate spec. |
+| Initial registry = `cf-ai-binding` only                          | INV-6 (v1 CF AI only). Custom endpoint / BYOK is a separate spec.                                                                                      |
 
 ---
 
 ## Appendix B: Anti-patterns explicitly rejected
 
-| Anti-pattern | Reason rejected |
-|---|---|
-| Maintain a model whitelist table | Models are infinite; protocols are finite. Whitelist = perpetual maintenance burden. |
-| Treat `endpoint URL` as route identifier | URL does not determine protocol. Two URLs may speak different shapes; one URL may switch. |
-| Persist `CapabilityLease` in KV / D1 / DO property | Second writer of capability truth. Violates C-1. |
-| Probe and execute as separate algebra ops | Concept duplication; both are evidence-producing attempts under different stimulus. |
-| Uniform unsupported TTL (e.g. "1 month") | Ignores failure-class semantics. `AuthError` is not a capability fact; `BehaviorFailed` is deterministic. |
-| Short retry on `BehaviorFailed` | Model behavior is deterministic at fixed weights; sub-day retry wastes calls and pollutes evidence stream. |
-| Adapter performs IO directly | Defeats unit testability; mixes protocol translation with transport, secret resolution, and clock. |
+| Anti-pattern                                             | Reason rejected                                                                                                       |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Maintain a model whitelist table                         | Models are infinite; protocols are finite. Whitelist = perpetual maintenance burden.                                  |
+| Treat `endpoint URL` as route identifier                 | URL does not determine protocol. Two URLs may speak different shapes; one URL may switch.                             |
+| Persist `CapabilityLease` in KV / D1 / DO property       | Second writer of capability truth. Violates C-1.                                                                      |
+| Probe and execute as separate algebra ops                | Concept duplication; both are evidence-producing attempts under different stimulus.                                   |
+| Uniform unsupported TTL (e.g. "1 month")                 | Ignores failure-class semantics. `AuthError` is not a capability fact; `BehaviorFailed` is deterministic.             |
+| Short retry on `BehaviorFailed`                          | Model behavior is deterministic at fixed weights; sub-day retry wastes calls and pollutes evidence stream.            |
+| Adapter performs IO directly                             | Defeats unit testability; mixes protocol translation with transport, secret resolution, and clock.                    |
 | Add `custom endpoint` + BYOK in the same PR as admission | Couples credential storage, quota ownership, billing, and audit into the admission spec. Must be a separate boundary. |

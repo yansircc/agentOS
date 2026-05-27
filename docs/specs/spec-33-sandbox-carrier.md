@@ -54,9 +54,7 @@ Required constraints:
 Policy is a function, not a record:
 
 ```ts
-type SandboxPolicy =
-  (request: SandboxPolicyRequest) =>
-    Effect.Effect<void, SandboxPolicyDenied>
+type SandboxPolicy = (request: SandboxPolicyRequest) => Effect.Effect<void, SandboxPolicyDenied>;
 ```
 
 Record helpers such as `staticPolicy({ allowNetwork })` are sugar that produce
@@ -73,38 +71,38 @@ inside `tool.executed.payload.result`.
 ```ts
 type SandboxToolResult =
   | {
-      ok: true
-      exitCode: number
-      stdoutHead: string
-      stderrHead: string
-      stdoutBytes: number
-      stderrBytes: number
-      stdoutTruncated: boolean
-      stderrTruncated: boolean
-      artifacts: ArtifactRef[]
-      durationMs: number
-      sandboxId: string
+      ok: true;
+      exitCode: number;
+      stdoutHead: string;
+      stderrHead: string;
+      stdoutBytes: number;
+      stderrBytes: number;
+      stdoutTruncated: boolean;
+      stderrTruncated: boolean;
+      artifacts: ArtifactRef[];
+      durationMs: number;
+      sandboxId: string;
     }
   | {
-      ok: false
+      ok: false;
       failureCode:
         | "SandboxEvicted"
         | "PolicyDenied"
         | "Timeout"
         | "OOM"
         | "NetworkBlocked"
-        | "ProviderFailure"
-      reason: string
-      stdoutHead: string
-      stderrHead: string
-      stdoutBytes: number
-      stderrBytes: number
-      stdoutTruncated: boolean
-      stderrTruncated: boolean
-      artifacts: ArtifactRef[]
-      durationMs: number
-      sandboxId: string
-    }
+        | "ProviderFailure";
+      reason: string;
+      stdoutHead: string;
+      stderrHead: string;
+      stdoutBytes: number;
+      stderrBytes: number;
+      stdoutTruncated: boolean;
+      stderrTruncated: boolean;
+      artifacts: ArtifactRef[];
+      durationMs: number;
+      sandboxId: string;
+    };
 ```
 
 `stdoutHead` / `stderrHead` are byte-capped. Bytes never enter the ledger as
@@ -118,7 +116,7 @@ Sandbox providers may return `ArtifactSource` values:
 type ArtifactSource =
   | { kind: "url"; url: string; contentType?: string; name?: string }
   | { kind: "data"; bytes: Uint8Array; contentType: string; name?: string }
-  | { kind: "stream"; stream: ReadableStream<Uint8Array>; contentType?: string; name?: string }
+  | { kind: "stream"; stream: ReadableStream<Uint8Array>; contentType?: string; name?: string };
 ```
 
 The tool result contains only `ArtifactRef[]`. v0 does not include an

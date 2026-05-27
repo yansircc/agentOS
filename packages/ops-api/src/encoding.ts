@@ -17,10 +17,7 @@ const base64urlEncode = (str: string): string => {
   const utf8 = new TextEncoder().encode(str);
   let binary = "";
   for (const byte of utf8) binary += String.fromCharCode(byte);
-  return btoa(binary)
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 };
 
 const base64urlDecode = (input: string): string => {
@@ -32,8 +29,7 @@ const base64urlDecode = (input: string): string => {
   return new TextDecoder().decode(bytes);
 };
 
-export const encodeAttemptKey = (key: AttemptKey): string =>
-  base64urlEncode(JSON.stringify(key));
+export const encodeAttemptKey = (key: AttemptKey): string => base64urlEncode(JSON.stringify(key));
 
 export type DecodeResult =
   | { readonly ok: true; readonly key: AttemptKey }

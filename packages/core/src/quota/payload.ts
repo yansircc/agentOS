@@ -6,6 +6,4 @@ export const ConsumedPayloadSchema = Schema.Struct({
   toolName: Schema.String,
 });
 
-export const decodeConsumedPayloadSync = Schema.decodeUnknownSync(
-  ConsumedPayloadSchema,
-);
+export const decodeConsumedPayloadSync = Schema.decodeUnknownSync(ConsumedPayloadSchema);

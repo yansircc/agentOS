@@ -49,8 +49,7 @@ const canonicalize = (node: unknown, parentKey?: string): unknown => {
   return out;
 };
 
-const canonicalJsonString = (node: unknown): string =>
-  JSON.stringify(canonicalize(node));
+const canonicalJsonString = (node: unknown): string => JSON.stringify(canonicalize(node));
 
 const sha256Hex = (input: string): Effect.Effect<string> => {
   const bytes = new TextEncoder().encode(input);
@@ -69,9 +68,7 @@ const sha256Hex = (input: string): Effect.Effect<string> => {
  *  byte-equal canonical JSON, then SHA-256, then identical fingerprint string.
  *  Algorithm version is embedded in the fingerprint prefix so future
  *  canonicalization changes auto-invalidate old leases. */
-export const makeSchemaContract = (
-  schema: JsonSchemaObject,
-): Effect.Effect<SchemaContract> =>
+export const makeSchemaContract = (schema: JsonSchemaObject): Effect.Effect<SchemaContract> =>
   Effect.gen(function* () {
     const canon = canonicalJsonString(schema);
     const hex = yield* sha256Hex(canon);
@@ -104,8 +101,7 @@ const normalizeRouteForFingerprint = (route: LlmRoute): LlmRoute => {
     case "anthropic-messages":
       return {
         ...route,
-        anthropicVersion:
-          route.anthropicVersion ?? LLM_DEFAULTS.anthropicVersion,
+        anthropicVersion: route.anthropicVersion ?? LLM_DEFAULTS.anthropicVersion,
       };
     case "cf-ai-binding":
     case "openai-chat-compatible":
@@ -126,8 +122,6 @@ const normalizeRouteForFingerprint = (route: LlmRoute): LlmRoute => {
  *  prefix lets a future canonicalization change auto-invalidate stored
  *  keys without an adapter version bump. */
 export const routeFingerprint = (route: LlmRoute): string => {
-  const canon = canonicalJsonString(
-    normalizeRouteForFingerprint(route) as unknown,
-  );
+  const canon = canonicalJsonString(normalizeRouteForFingerprint(route) as unknown);
   return `route-json-v1:${canon}`;
 };

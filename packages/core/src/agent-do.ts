@@ -78,17 +78,8 @@ import { Scheduler, SchedulerLive } from "./scheduler";
 import { Resources, ResourcesLive } from "./resources";
 import { Quota, QuotaLive } from "./quota";
 import { AiBinding } from "./llm";
-import {
-  Admission,
-  AdmissionLive,
-  type AttemptKey,
-  type CapabilityLease,
-} from "./admission";
-import {
-  RefResolverLive,
-  RefResolverService,
-  type RefResolver,
-} from "./ref-resolver";
+import { Admission, AdmissionLive, type AttemptKey, type CapabilityLease } from "./admission";
+import { RefResolverLive, RefResolverService, type RefResolver } from "./ref-resolver";
 import {
   type ExtensionPackage,
   type ExtensionCapability,
@@ -98,10 +89,7 @@ import {
   rejectClaimedAppEvent,
   validateExtensionPackages,
 } from "./extensions";
-import {
-  scopeRefFromLegacyScope,
-  type ScopeRef,
-} from "./effect-claim";
+import { scopeRefFromLegacyScope, type ScopeRef } from "./effect-claim";
 import {
   type InternalSubmitSpec,
   submitAgentEffect,
@@ -144,21 +132,15 @@ const makeAgentRuntime = (
   const sql = ctx.storage.sql;
   const eventBusLayer = EventBusLive(handlers);
   const ledgerLayer = LedgerLive(sql).pipe(Layer.provide(eventBusLayer));
-  const schedulerLayer = SchedulerLive(ctx, scope).pipe(
-    Layer.provide(eventBusLayer),
-  );
+  const schedulerLayer = SchedulerLive(ctx, scope).pipe(Layer.provide(eventBusLayer));
   const dispatchLayer = DispatchLive(ctx, scope, dispatchTargets).pipe(
     Layer.provide(eventBusLayer),
   );
-  const resourcesLayer = ResourcesLive(ctx).pipe(
-    Layer.provide(eventBusLayer),
-  );
+  const resourcesLayer = ResourcesLive(ctx).pipe(Layer.provide(eventBusLayer));
   const quotaLayer = QuotaLive(ctx).pipe(Layer.provide(eventBusLayer));
   const aiLayer = Layer.succeed(AiBinding, ai);
   const refResolverLayer = RefResolverLive(refs);
-  const admissionLayer = AdmissionLive(ctx).pipe(
-    Layer.provide(eventBusLayer),
-  );
+  const admissionLayer = AdmissionLive(ctx).pipe(Layer.provide(eventBusLayer));
   return ManagedRuntime.make(
     Layer.mergeAll(
       eventBusLayer,
@@ -174,16 +156,12 @@ const makeAgentRuntime = (
   );
 };
 
-export abstract class AgentDOBase<
-  Env extends AgentDOEnv,
-> extends DurableObject<Env> {
+export abstract class AgentDOBase<Env extends AgentDOEnv> extends DurableObject<Env> {
   private readonly _handlers: Map<string, Set<EventHandler>> = new Map();
   private _runtime?: ManagedRuntime.ManagedRuntime<CoreServices, SqlError>;
   private _extensionValidation?: ExtensionValidation;
 
-  private runtimeFor(
-    scope: string,
-  ): ManagedRuntime.ManagedRuntime<CoreServices, SqlError> {
+  private runtimeFor(scope: string): ManagedRuntime.ManagedRuntime<CoreServices, SqlError> {
     if (this._runtime === undefined) {
       this._runtime = makeAgentRuntime(
         this.ctx,
@@ -199,9 +177,7 @@ export abstract class AgentDOBase<
 
   private extensionValidation(): ExtensionValidation {
     if (this._extensionValidation === undefined) {
-      this._extensionValidation = validateExtensionPackages(
-        this.registerExtensions(),
-      );
+      this._extensionValidation = validateExtensionPackages(this.registerExtensions());
     }
     return this._extensionValidation;
   }
@@ -219,9 +195,7 @@ export abstract class AgentDOBase<
   ): ExtensionPackage | CapabilityRejected | ExtensionCapabilityConflict {
     const validation = this.extensionValidation();
     if (!validation.ok) return validation.error;
-    const pkg = validation.packages.find(
-      (candidate) => candidate.packageId === packageId,
-    );
+    const pkg = validation.packages.find((candidate) => candidate.packageId === packageId);
     return (
       pkg ??
       new CapabilityRejected({
@@ -283,10 +257,7 @@ export abstract class AgentDOBase<
       Effect.gen(function* () {
         const scheduler = yield* Scheduler;
         const existingNext = yield* scheduler.findNextPending();
-        const target =
-          existingNext === null
-            ? at
-            : Math.min(existingNext, at);
+        const target = existingNext === null ? at : Math.min(existingNext, at);
         yield* Effect.tryPromise({
           try: () => ctx.storage.setAlarm(target),
           catch: (cause) => new SqlError({ cause }),
@@ -384,9 +355,7 @@ export abstract class AgentDOBase<
     }
     const scopeRef = this.scopeRefForScope(scope);
     if (scopeRef === null) {
-      return Promise.reject(
-        new UnsupportedScopeRef({ scopeId: scope, position: "source" }),
-      );
+      return Promise.reject(new UnsupportedScopeRef({ scopeId: scope, position: "source" }));
     }
     const rejected = this.appCommitRejection(spec.deliver.event);
     if (rejected !== null) {
@@ -578,9 +547,7 @@ export abstract class AgentDOBase<
    *    in one transactionSync;
    *  - receiver dedupe is (sourceScope, idempotencyKey), not outboundEventId.
    */
-  dispatchToScope(
-    spec: DispatchToScopeSpec,
-  ): Promise<DispatchToScopeResult> {
+  dispatchToScope(spec: DispatchToScopeSpec): Promise<DispatchToScopeResult> {
     const scope = this.ctx.id.name;
     if (scope === undefined) {
       return Promise.reject(new ScopeMissingError());
@@ -596,8 +563,7 @@ export abstract class AgentDOBase<
         }),
       );
     }
-    const targetScopeRef =
-      spec.target.scopeRef ?? this.scopeRefForScope(spec.target.scope);
+    const targetScopeRef = spec.target.scopeRef ?? this.scopeRefForScope(spec.target.scope);
     if (targetScopeRef === null) {
       return Promise.reject(
         new UnsupportedScopeRef({
@@ -634,9 +600,7 @@ export abstract class AgentDOBase<
     );
   }
 
-  reserveResource(
-    spec: ResourceReserveSpec,
-  ): Promise<ResourceReserveResult> {
+  reserveResource(spec: ResourceReserveSpec): Promise<ResourceReserveResult> {
     const scope = this.ctx.id.name;
     if (scope === undefined) {
       return Promise.reject(new ScopeMissingError());
@@ -644,17 +608,19 @@ export abstract class AgentDOBase<
     if (!Number.isFinite(spec.amount) || spec.amount <= 0) {
       return Promise.reject(new InvalidResourceAmount({ amount: spec.amount }));
     }
-    return this.runtimeFor(scope).runPromise(
-      Effect.gen(function* () {
-        const resources = yield* Resources;
-        return yield* resources.reserve(scope, spec).pipe(Effect.either);
-      }),
-    ).then((result) => {
-      if (result._tag === "Left") {
-        return Promise.reject(result.left);
-      }
-      return result.right;
-    });
+    return this.runtimeFor(scope)
+      .runPromise(
+        Effect.gen(function* () {
+          const resources = yield* Resources;
+          return yield* resources.reserve(scope, spec).pipe(Effect.either);
+        }),
+      )
+      .then((result) => {
+        if (result._tag === "Left") {
+          return Promise.reject(result.left);
+        }
+        return result.right;
+      });
   }
 
   consumeResource(spec: ResourceReservationSpec): Promise<void> {
@@ -662,16 +628,18 @@ export abstract class AgentDOBase<
     if (scope === undefined) {
       return Promise.reject(new ScopeMissingError());
     }
-    return this.runtimeFor(scope).runPromise(
-      Effect.gen(function* () {
-        const resources = yield* Resources;
-        return yield* resources.consume(scope, spec).pipe(Effect.either);
-      }),
-    ).then((result) => {
-      if (result._tag === "Left") {
-        return Promise.reject(result.left);
-      }
-    });
+    return this.runtimeFor(scope)
+      .runPromise(
+        Effect.gen(function* () {
+          const resources = yield* Resources;
+          return yield* resources.consume(scope, spec).pipe(Effect.either);
+        }),
+      )
+      .then((result) => {
+        if (result._tag === "Left") {
+          return Promise.reject(result.left);
+        }
+      });
   }
 
   releaseResource(spec: ResourceReservationSpec): Promise<void> {
@@ -679,24 +647,24 @@ export abstract class AgentDOBase<
     if (scope === undefined) {
       return Promise.reject(new ScopeMissingError());
     }
-    return this.runtimeFor(scope).runPromise(
-      Effect.gen(function* () {
-        const resources = yield* Resources;
-        return yield* resources.release(scope, spec).pipe(Effect.either);
-      }),
-    ).then((result) => {
-      if (result._tag === "Left") {
-        return Promise.reject(result.left);
-      }
-    });
+    return this.runtimeFor(scope)
+      .runPromise(
+        Effect.gen(function* () {
+          const resources = yield* Resources;
+          return yield* resources.release(scope, spec).pipe(Effect.either);
+        }),
+      )
+      .then((result) => {
+        if (result._tag === "Left") {
+          return Promise.reject(result.left);
+        }
+      });
   }
 
   /** Internal RPC target for DispatchLive. Public only because DO RPC can
    *  invoke public methods; app code should use dispatchToScope instead.
    */
-  __agentosReceiveDispatch(
-    envelope: DispatchEnvelope,
-  ): Promise<{ deliveredEventId: number }> {
+  __agentosReceiveDispatch(envelope: DispatchEnvelope): Promise<{ deliveredEventId: number }> {
     const scope = this.ctx.id.name;
     if (scope === undefined) {
       return Promise.reject(new ScopeMissingError());
@@ -745,21 +713,14 @@ export abstract class AgentDOBase<
       Effect.gen(function* () {
         const scheduler = yield* Scheduler;
         const existingNext = yield* scheduler.findNextPending();
-        const target =
-          existingNext === null
-            ? spec.at
-            : Math.min(existingNext, spec.at);
+        const target = existingNext === null ? spec.at : Math.min(existingNext, spec.at);
         // Arm alarm BEFORE the row is inserted. If setAlarm rejects, no
         // pending row gets created — no orphan possible.
         yield* Effect.tryPromise({
           try: () => ctx.storage.setAlarm(target),
           catch: (cause) => new SqlError({ cause }),
         });
-        const { id } = yield* scheduler.schedule(
-          spec.at,
-          spec.event,
-          spec.data,
-        );
+        const { id } = yield* scheduler.schedule(spec.at, spec.event, spec.data);
         return { id };
       }),
     );
@@ -782,8 +743,7 @@ export abstract class AgentDOBase<
         const nextValues = [scheduled.next, outbound.next].filter(
           (value): value is number => value !== null,
         );
-        const next =
-          nextValues.length === 0 ? null : Math.min(...nextValues);
+        const next = nextValues.length === 0 ? null : Math.min(...nextValues);
         if (next !== null) {
           yield* Effect.tryPromise({
             try: () => ctx.storage.setAlarm(next),

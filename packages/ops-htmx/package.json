@@ -20,8 +20,8 @@
     "@agent-os/ops-api": "workspace:*"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20251201.0",
-    "typescript": "^5.7.2",
+    "@cloudflare/workers-types": "catalog:",
+    "typescript": "catalog:",
     "vite-plus": "catalog:",
     "vitest": "catalog:"
   }

@@ -1,8 +1,5 @@
 import { Clock, Duration, Effect } from "effect";
-import {
-  settleLivedClaim,
-  settleRejectedClaim,
-} from "@agent-os/core/effect-claim";
+import { settleLivedClaim, settleRejectedClaim } from "@agent-os/core/effect-claim";
 import { resolveRuntimeScope } from "@agent-os/core/runtime-scope";
 
 import { validateDynamicWorkerRequest } from "./policy";
@@ -19,14 +16,9 @@ export const runDynamicWorker = (
   backend: DynamicWorkerBackend,
   policy: DynamicWorkerPolicy,
   request: DynamicWorkerRunRequest,
-): Effect.Effect<
-  DynamicWorkerRunSuccess,
-  DynamicWorkerFailure | DynamicWorkerPolicyDenied
-> =>
+): Effect.Effect<DynamicWorkerRunSuccess, DynamicWorkerFailure | DynamicWorkerPolicyDenied> =>
   Effect.gen(function* () {
-    const rejectPolicy = (
-      denied: DynamicWorkerPolicyDenied,
-    ): DynamicWorkerPolicyDenied =>
+    const rejectPolicy = (denied: DynamicWorkerPolicyDenied): DynamicWorkerPolicyDenied =>
       request.claim === undefined
         ? denied
         : new DynamicWorkerPolicyDenied({
@@ -45,27 +37,18 @@ export const runDynamicWorker = (
             reason: failure.reason,
             ...(failure.status === undefined ? {} : { status: failure.status }),
             ...(failure.body === undefined ? {} : { body: failure.body }),
-            ...(failure.workerId === undefined
-              ? {}
-              : { workerId: failure.workerId }),
+            ...(failure.workerId === undefined ? {} : { workerId: failure.workerId }),
             claim: settleRejectedClaim(request.claim, {
               rejectionId: request.claim.operationRef,
               rejectionKind:
-                failure.code === "ResourceLimitExceeded"
-                  ? "resource_denied"
-                  : "provider_rejected",
+                failure.code === "ResourceLimitExceeded" ? "resource_denied" : "provider_rejected",
               reason: failure.reason,
             }),
           });
 
-    yield* validateDynamicWorkerRequest(request).pipe(
-      Effect.mapError(rejectPolicy),
-    );
+    yield* validateDynamicWorkerRequest(request).pipe(Effect.mapError(rejectPolicy));
     const scopeRef = request.claim?.scopeRef ?? request.scopeRef;
-    const runtimeScope =
-      scopeRef === undefined
-        ? undefined
-        : resolveRuntimeScope(scopeRef);
+    const runtimeScope = scopeRef === undefined ? undefined : resolveRuntimeScope(scopeRef);
     yield* policy({
       request,
       ...(runtimeScope === undefined ? {} : { runtimeScope }),

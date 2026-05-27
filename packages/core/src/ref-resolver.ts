@@ -13,30 +13,20 @@ export interface RefResolver {
   readonly credential: (ref: string) => string | null;
 }
 
-export class RefResolutionFailed extends Data.TaggedError(
-  "agent_os.ref_resolution_failed",
-)<{
+export class RefResolutionFailed extends Data.TaggedError("agent_os.ref_resolution_failed")<{
   readonly kind: "endpoint" | "credential";
   readonly ref: string;
 }> {}
 
-export class RefResolverService extends Context.Tag(
-  "@agent-os/RefResolver",
-)<
+export class RefResolverService extends Context.Tag("@agent-os/RefResolver")<
   RefResolverService,
   {
-    readonly endpoint: (
-      ref: string,
-    ) => Effect.Effect<string, RefResolutionFailed>;
-    readonly credential: (
-      ref: string,
-    ) => Effect.Effect<string, RefResolutionFailed>;
+    readonly endpoint: (ref: string) => Effect.Effect<string, RefResolutionFailed>;
+    readonly credential: (ref: string) => Effect.Effect<string, RefResolutionFailed>;
   }
 >() {}
 
-export const RefResolverLive = (
-  resolver: RefResolver,
-): Layer.Layer<RefResolverService> =>
+export const RefResolverLive = (resolver: RefResolver): Layer.Layer<RefResolverService> =>
   Layer.succeed(RefResolverService, {
     endpoint: (ref) => {
       const value = resolver.endpoint(ref);

@@ -1,9 +1,5 @@
 import { artifactFromUrl, classifyHttpish, isRecord } from "../shared";
-import type {
-  ImageArtifact,
-  ImageProtocolAdapter,
-  ImageResult,
-} from "../types";
+import type { ImageArtifact, ImageProtocolAdapter, ImageResult } from "../types";
 
 const decodeOpenAIChatCompatibleImage = (raw: unknown): ImageResult => {
   if (!isRecord(raw) || !Array.isArray(raw.choices)) {
@@ -28,8 +24,8 @@ const decodeOpenAIChatCompatibleImage = (raw: unknown): ImageResult => {
   return { artifacts, usage: raw.usage };
 };
 
-export const openaiChatCompatibleImageAdapter:
-  ImageProtocolAdapter<"openai-chat-compatible-image"> = {
+export const openaiChatCompatibleImageAdapter: ImageProtocolAdapter<"openai-chat-compatible-image"> =
+  {
     kind: "openai-chat-compatible-image",
     version: "1.0.0",
     encodeImage: (_route, request) => ({
@@ -40,9 +36,7 @@ export const openaiChatCompatibleImageAdapter:
           content: [{ type: "text", text: request.prompt }],
         },
       ],
-      ...(request.aspectRatio === undefined
-        ? {}
-        : { aspect_ratio: request.aspectRatio }),
+      ...(request.aspectRatio === undefined ? {} : { aspect_ratio: request.aspectRatio }),
     }),
     decodeImage: decodeOpenAIChatCompatibleImage,
     classify: classifyHttpish,

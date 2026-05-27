@@ -17,6 +17,7 @@
 import { Clock, Context, Effect, Layer } from "effect";
 import { EventBus } from "../ledger";
 import { JsonStringifyError, SqlError, safeStringify } from "../errors";
+import { sqlText } from "../storage/sql-row";
 import type { LedgerEvent } from "../types";
 import { decodeConsumedPayloadSync } from "./payload";
 
@@ -45,9 +46,7 @@ export class Quota extends Context.Tag("@agent-os/Quota")<
   }
 >() {}
 
-export const QuotaLive = (
-  ctx: DurableObjectState,
-): Layer.Layer<Quota, never, EventBus> =>
+export const QuotaLive = (ctx: DurableObjectState): Layer.Layer<Quota, never, EventBus> =>
   Layer.scoped(
     Quota,
     Effect.gen(function* () {
@@ -58,8 +57,7 @@ export const QuotaLive = (
         tryGrant: (scope, key, amount, windowMs, limit, toolName) =>
           Effect.gen(function* () {
             const now = yield* Clock.currentTimeMillis;
-            const windowStart =
-              windowMs === Number.POSITIVE_INFINITY ? 0 : now - windowMs;
+            const windowStart = windowMs === Number.POSITIVE_INFINITY ? 0 : now - windowMs;
 
             // Pre-stringify payloads outside transaction (transactionSync
             // callback is synchronous; we can't yield* inside).
@@ -87,7 +85,7 @@ export const QuotaLive = (
                     // wraps as SqlError. Single owned failure path; no
                     // silent skip, no NaN propagation, no undercount.
                     const p = decodeConsumedPayloadSync(
-                      JSON.parse(String(r.payload)),
+                      JSON.parse(sqlText(r.payload, "events.payload")),
                     );
                     if (p.key === key) {
                       consumed += p.amount;

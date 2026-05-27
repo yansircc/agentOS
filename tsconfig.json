@@ -1,8 +1,5 @@
 {
   "files": [],
-  "references": [
-    { "path": "./packages/image" },
-    { "path": "./packages/core" }
-  ],
+  "references": [{ "path": "./packages/image" }, { "path": "./packages/core" }],
   "include": []
 }

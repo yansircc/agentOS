@@ -7,9 +7,6 @@
  * no scope resolver, no AgentDOBase access, and no mutation routes.
  */
 
-export {
-  isOpsHtmxPath,
-  mountOpsHtmx,
-} from "./mount";
+export { isOpsHtmxPath, mountOpsHtmx } from "./mount";
 
 export type { MountOpsHtmxOptions, OpsApiFetch } from "./types";

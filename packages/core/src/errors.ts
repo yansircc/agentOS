@@ -30,58 +30,40 @@ export class SqlError extends Data.TaggedError("agent_os.sql_error")<{
   readonly cause: unknown;
 }> {}
 
-export class JsonStringifyError extends Data.TaggedError(
-  "agent_os.json_stringify_error",
-)<{
+export class JsonStringifyError extends Data.TaggedError("agent_os.json_stringify_error")<{
   readonly cause: unknown;
 }> {}
 
-export class ScopeMissingError extends Data.TaggedError(
-  "agent_os.scope_missing",
-)<{}> {}
+export class ScopeMissingError extends Data.TaggedError("agent_os.scope_missing")<{}> {}
 
-export class UnsupportedScopeRef extends Data.TaggedError(
-  "agent_os.unsupported_scope_ref",
-)<{
+export class UnsupportedScopeRef extends Data.TaggedError("agent_os.unsupported_scope_ref")<{
   readonly scopeId: string;
   readonly position: "source" | "target";
 }> {}
 
-export class InvalidScheduleAt extends Data.TaggedError(
-  "agent_os.invalid_schedule_at",
-)<{
+export class InvalidScheduleAt extends Data.TaggedError("agent_os.invalid_schedule_at")<{
   readonly at: unknown;
 }> {}
 
-export class CapabilityRejected extends Data.TaggedError(
-  "agent_os.capability_rejected",
-)<{
+export class CapabilityRejected extends Data.TaggedError("agent_os.capability_rejected")<{
   readonly event: string;
   readonly capability: string;
 }> {}
 
-export class DispatchTargetNotFound extends Data.TaggedError(
-  "agent_os.dispatch_target_not_found",
-)<{
+export class DispatchTargetNotFound extends Data.TaggedError("agent_os.dispatch_target_not_found")<{
   readonly bindingRef: string;
 }> {}
 
-export class DispatchScopeMismatch extends Data.TaggedError(
-  "agent_os.dispatch_scope_mismatch",
-)<{
+export class DispatchScopeMismatch extends Data.TaggedError("agent_os.dispatch_scope_mismatch")<{
   readonly expected: string;
   readonly actual: string;
 }> {}
 
-export class InvalidResourceAmount extends Data.TaggedError(
-  "agent_os.invalid_resource_amount",
-)<{
+export class InvalidResourceAmount extends Data.TaggedError("agent_os.invalid_resource_amount")<{
   readonly amount: number;
 }> {}
 
-export class ResourceInsufficient extends Data.TaggedError(
-  "agent_os.resource_insufficient",
-)<{
+export class ResourceInsufficient extends Data.TaggedError("agent_os.resource_insufficient")<{
   readonly key: string;
   readonly requested: number;
   readonly available: number;
@@ -119,13 +101,9 @@ export const isCoreClaimedEventKind = (event: string): boolean =>
 export const isClaimedEventKind = (
   event: string,
   extensionPrefixes: ReadonlyArray<string> = [],
-): boolean =>
-  isCoreClaimedEventKind(event) ||
-  extensionPrefixes.some((p) => event.startsWith(p));
+): boolean => isCoreClaimedEventKind(event) || extensionPrefixes.some((p) => event.startsWith(p));
 
-export class UpstreamFailure extends Data.TaggedError(
-  ABORT.UPSTREAM_FAILURE,
-)<{
+export class UpstreamFailure extends Data.TaggedError(ABORT.UPSTREAM_FAILURE)<{
   readonly cause: unknown;
 }> {}
 
@@ -138,17 +116,13 @@ export class ToolError extends Data.TaggedError(ABORT.TOOL_ERROR)<{
 //                     JSON SAFE-STRINGIFY
 // ============================================================
 
-export const safeStringify = (
-  value: unknown,
-): Effect.Effect<string, JsonStringifyError> =>
+export const safeStringify = (value: unknown): Effect.Effect<string, JsonStringifyError> =>
   Effect.try({
     try: () => JSON.stringify(value),
     catch: (cause) => new JsonStringifyError({ cause }),
   });
 
-export const safeStringifyPretty = (
-  value: unknown,
-): Effect.Effect<string, JsonStringifyError> =>
+export const safeStringifyPretty = (value: unknown): Effect.Effect<string, JsonStringifyError> =>
   Effect.try({
     try: () => JSON.stringify(value, null, 2),
     catch: (cause) => new JsonStringifyError({ cause }),

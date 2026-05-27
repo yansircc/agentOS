@@ -26,6 +26,7 @@ import { LedgerLive } from "../src/ledger";
 import { AiBinding } from "../src/llm";
 import { RefResolverLive } from "../src/ref-resolver";
 import { QuotaLive } from "../src/quota";
+import { sqlText } from "../src/storage/sql-row";
 import { type InternalSubmitSpec, submitAgentEffect } from "../src/submit-agent";
 import type { EventHandler } from "../src/types";
 import { finalTextResp } from "./_stub-ai";
@@ -138,13 +139,13 @@ describe("SubmitSpec.system field — behavior-program axis", () => {
         .toArray();
       const llmResponse = events.find((row) => row.kind === "llm.response");
       const delivered = events.find((row) => row.kind === "test.delivered");
-      expect(JSON.parse(String(llmResponse?.payload))).toEqual({
+      expect(JSON.parse(sqlText(llmResponse?.payload, "events.payload"))).toEqual({
         turn: { id: Number(events[0]?.id), index: 0 },
         text: "done",
         toolCalls: [],
         usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
       });
-      expect(JSON.parse(String(delivered?.payload))).toEqual({
+      expect(JSON.parse(sqlText(delivered?.payload, "events.payload"))).toEqual({
         final: "done",
         turn: { id: Number(events[0]?.id), index: 0 },
       });

@@ -39,9 +39,7 @@ export const makeRuntime = (state: DurableObjectState, ai: Ai) => {
     credential: () => null,
   });
   const admission = AdmissionLive(state).pipe(Layer.provide(eventBus));
-  return ManagedRuntime.make(
-    Layer.mergeAll(ledger, quota, aiLayer, admission, refs),
-  );
+  return ManagedRuntime.make(Layer.mergeAll(ledger, quota, aiLayer, admission, refs));
 };
 
 export const makeRuntimeWithRegistry = (
@@ -60,9 +58,7 @@ export const makeRuntimeWithRegistry = (
     credential: (ref) => credentials[ref] ?? null,
   });
   const admission = AdmissionLive(state).pipe(Layer.provide(eventBus));
-  return ManagedRuntime.make(
-    Layer.mergeAll(ledger, quota, aiLayer, admission, refs),
-  );
+  return ManagedRuntime.make(Layer.mergeAll(ledger, quota, aiLayer, admission, refs));
 };
 
 export const submitStructuredResp = (json: string, id = "c1") => ({

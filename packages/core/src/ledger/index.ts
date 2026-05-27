@@ -9,9 +9,5 @@
  */
 
 export { Ledger, LedgerLive, eventToRpc } from "./ledger";
-export {
-  EventBus,
-  EventBusLive,
-  type EventBusSubscription,
-} from "./event-bus";
+export { EventBus, EventBusLive, type EventBusSubscription } from "./event-bus";
 export { createEventStreamResponse } from "./stream";

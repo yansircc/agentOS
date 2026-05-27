@@ -58,20 +58,20 @@ Required constraints:
 
 ```ts
 interface DynamicWorkerRunRequest {
-  code: string
-  codeRef?: string
-  compatibilityDate?: string
+  code: string;
+  codeRef?: string;
+  compatibilityDate?: string;
   request: {
-    method?: string
-    url: string
-    headers?: Record<string, string>
-    body?: string | Uint8Array
-  }
-  bindings?: DynamicWorkerBinding[]
-  egress?: { mode: "none" } | { mode: "allowlist"; hosts: string[] }
-  limits?: { cpuMs?: number; subrequests?: number }
-  timeoutMs: number
-  maxBodyBytes?: number
+    method?: string;
+    url: string;
+    headers?: Record<string, string>;
+    body?: string | Uint8Array;
+  };
+  bindings?: DynamicWorkerBinding[];
+  egress?: { mode: "none" } | { mode: "allowlist"; hosts: string[] };
+  limits?: { cpuMs?: number; subrequests?: number };
+  timeoutMs: number;
+  maxBodyBytes?: number;
 }
 ```
 
@@ -84,14 +84,14 @@ The tool helper returns a closed ledger-safe result:
 
 ```ts
 type DynamicWorkerToolResult = {
-  ok: boolean
-  status?: number
-  headers?: Record<string, string>
-  bodyHead: string
-  bodyBytes: number
-  bodyTruncated: boolean
-  durationMs: number
-  workerId: string
+  ok: boolean;
+  status?: number;
+  headers?: Record<string, string>;
+  bodyHead: string;
+  bodyBytes: number;
+  bodyTruncated: boolean;
+  durationMs: number;
+  workerId: string;
   failureCode?:
     | "PolicyDenied"
     | "Timeout"
@@ -99,9 +99,9 @@ type DynamicWorkerToolResult = {
     | "RuntimeError"
     | "ResourceLimitExceeded"
     | "NetworkBlocked"
-    | "ProviderFailure"
-  reason?: string
-}
+    | "ProviderFailure";
+  reason?: string;
+};
 ```
 
 Full response bodies do not enter the ledger. Apps materialize large outputs

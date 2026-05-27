@@ -36,15 +36,9 @@ export const TerminalPayloadSchema = Schema.Struct({
   ref: Schema.String,
 });
 
-export const decodeGrantPayloadSync = Schema.decodeUnknownSync(
-  GrantPayloadSchema,
-);
-export const decodeReservePayloadSync = Schema.decodeUnknownSync(
-  ReservePayloadSchema,
-);
+export const decodeGrantPayloadSync = Schema.decodeUnknownSync(GrantPayloadSchema);
+export const decodeReservePayloadSync = Schema.decodeUnknownSync(ReservePayloadSchema);
 export const decodeReserveRejectedPayloadSync = Schema.decodeUnknownSync(
   ReserveRejectedPayloadSchema,
 );
-export const decodeTerminalPayloadSync = Schema.decodeUnknownSync(
-  TerminalPayloadSchema,
-);
+export const decodeTerminalPayloadSync = Schema.decodeUnknownSync(TerminalPayloadSchema);

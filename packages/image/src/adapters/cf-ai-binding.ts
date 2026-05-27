@@ -49,16 +49,13 @@ const decodeCfAiBindingImage = (raw: unknown): ImageResult => {
   throw new Error("cf-ai-binding-image response contained no image artifact");
 };
 
-export const cfAiBindingImageAdapter:
-  ImageProtocolAdapter<"cf-ai-binding-image"> = {
-    kind: "cf-ai-binding-image",
-    version: "1.0.0",
-    encodeImage: (_route, request) => ({
-      prompt: request.prompt,
-      ...(request.aspectRatio === undefined
-        ? {}
-        : { aspect_ratio: request.aspectRatio }),
-    }),
-    decodeImage: decodeCfAiBindingImage,
-    classify: classifyHttpish,
-  };
+export const cfAiBindingImageAdapter: ImageProtocolAdapter<"cf-ai-binding-image"> = {
+  kind: "cf-ai-binding-image",
+  version: "1.0.0",
+  encodeImage: (_route, request) => ({
+    prompt: request.prompt,
+    ...(request.aspectRatio === undefined ? {} : { aspect_ratio: request.aspectRatio }),
+  }),
+  decodeImage: decodeCfAiBindingImage,
+  classify: classifyHttpish,
+};

@@ -8,11 +8,21 @@
   "scripts": {
     "typecheck": "vp run -r typecheck",
     "test": "vp run -r test",
-    "check": "vp run typecheck && vp run test"
+    "check": "vp check && vp run typecheck && vp run test"
   },
   "devDependencies": {
-    "typescript": "^5.7.2",
-    "vite-plus": "catalog:"
+    "@cloudflare/vitest-pool-workers": "catalog:",
+    "@cloudflare/workers-types": "catalog:",
+    "@effect/experimental": "catalog:",
+    "@effect/language-service": "catalog:",
+    "@effect/platform": "catalog:",
+    "@effect/sql": "catalog:",
+    "@effect/sql-sqlite-do": "catalog:",
+    "effect": "catalog:",
+    "fast-check": "catalog:",
+    "typescript": "catalog:",
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
   },
   "overrides": {
     "vite": "catalog:",
@@ -20,6 +30,16 @@
   },
   "packageManager": "bun@1.3.14",
   "catalog": {
+    "@cloudflare/vitest-pool-workers": "^0.16.9",
+    "@cloudflare/workers-types": "^4.20251201.0",
+    "@effect/experimental": "^0.60.0",
+    "@effect/language-service": "^0.86.2",
+    "@effect/platform": "^0.96.0",
+    "@effect/sql": "^0.51.0",
+    "@effect/sql-sqlite-do": "^0.29.0",
+    "effect": "^3.21.0",
+    "fast-check": "^4.8.0",
+    "typescript": "^5.7.2",
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
     "vite-plus": "latest"

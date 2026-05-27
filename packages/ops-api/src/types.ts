@@ -7,13 +7,7 @@
  * ops-api ships no default implementation.
  */
 
-import type {
-  AttemptKey,
-  RunListPage,
-  RunListSpec,
-  RunStatus,
-  RunSummary,
-} from "@agent-os/core";
+import type { AttemptKey, RunListPage, RunListSpec, RunStatus, RunSummary } from "@agent-os/core";
 
 // ============================================================
 // Scope resolution
@@ -42,10 +36,7 @@ export interface ResolvedScope {
  * needs scale-out, the resolver should accept the principal and pre-filter.
  */
 export interface ScopeResolver {
-  list(filter: {
-    prefix?: string;
-    limit?: number;
-  }): Promise<ReadonlyArray<ScopeSummary>>;
+  list(filter: { prefix?: string; limit?: number }): Promise<ReadonlyArray<ScopeSummary>>;
   resolve(scope: string): Promise<ResolvedScope | null>;
 }
 
@@ -63,11 +54,7 @@ export interface OpsPrincipal {
 
 export interface OpsAuth {
   authenticate(req: Request): Promise<OpsPrincipal | null>;
-  authorize(
-    principal: OpsPrincipal,
-    scope: string,
-    action: OpsAction,
-  ): Promise<boolean>;
+  authorize(principal: OpsPrincipal, scope: string, action: OpsAction): Promise<boolean>;
 }
 
 // ============================================================

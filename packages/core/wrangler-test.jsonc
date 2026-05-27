@@ -8,25 +8,25 @@
     "bindings": [
       {
         "name": "AGENT_DO",
-        "class_name": "TestAgentDO"
+        "class_name": "TestAgentDO",
       },
       {
         "name": "EMIT_DO",
-        "class_name": "EmitTestDO"
+        "class_name": "EmitTestDO",
       },
       {
         "name": "DISPATCH_DO",
-        "class_name": "DispatchTestDO"
+        "class_name": "DispatchTestDO",
       },
       {
         "name": "STREAM_DO",
-        "class_name": "StreamTestDO"
+        "class_name": "StreamTestDO",
       },
       {
         "name": "EXTENSION_DO",
-        "class_name": "ExtensionTestDO"
-      }
-    ]
+        "class_name": "ExtensionTestDO",
+      },
+    ],
   },
   "migrations": [
     {
@@ -36,8 +36,8 @@
         "EmitTestDO",
         "DispatchTestDO",
         "StreamTestDO",
-        "ExtensionTestDO"
-      ]
-    }
-  ]
+        "ExtensionTestDO",
+      ],
+    },
+  ],
 }

@@ -92,9 +92,7 @@ export type SandboxToolResult =
       readonly reason: string;
     });
 
-export class SandboxFailure extends Data.TaggedError(
-  "agent_os.sandbox_failure",
-)<{
+export class SandboxFailure extends Data.TaggedError("agent_os.sandbox_failure")<{
   readonly code: SandboxFailureCode;
   readonly reason: string;
   readonly stdout?: string;
@@ -102,9 +100,7 @@ export class SandboxFailure extends Data.TaggedError(
   readonly sandboxId?: string;
 }> {}
 
-export class SandboxPolicyDenied extends Data.TaggedError(
-  "agent_os.sandbox_policy_denied",
-)<{
+export class SandboxPolicyDenied extends Data.TaggedError("agent_os.sandbox_policy_denied")<{
   readonly reason: string;
 }> {}
 
@@ -122,9 +118,7 @@ export interface StaticPolicyOptions {
 }
 
 export interface SandboxBackend {
-  readonly run: (
-    request: SandboxRunRequest,
-  ) => Effect.Effect<SandboxRawResult, SandboxFailure>;
+  readonly run: (request: SandboxRunRequest) => Effect.Effect<SandboxRawResult, SandboxFailure>;
 }
 
 export interface SandboxToolDefinition {

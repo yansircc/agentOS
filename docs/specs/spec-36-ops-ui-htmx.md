@@ -47,11 +47,11 @@ Corollaries:
 
 ```ts
 interface MountOpsHtmxOptions {
-  readonly apiFetch: (request: Request) => Promise<Response>
-  readonly uiBase?: string      // default "/__ops"
-  readonly apiBase?: string     // default "/__ops/api"
-  readonly title?: string       // default "@agent-os/ops"
-  readonly htmxScriptSrc?: string | null
+  readonly apiFetch: (request: Request) => Promise<Response>;
+  readonly uiBase?: string; // default "/__ops"
+  readonly apiBase?: string; // default "/__ops/api"
+  readonly title?: string; // default "@agent-os/ops"
+  readonly htmxScriptSrc?: string | null;
 }
 ```
 

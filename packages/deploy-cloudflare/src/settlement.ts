@@ -36,5 +36,4 @@ export const commitDeployRollbackRecorded = (
 export const commitDeployFailed = (
   cap: ExtensionCapability,
   payload: DeployFailedPayload,
-): Promise<{ readonly id: number }> =>
-  cap.commit({ event: DEPLOY_EVENTS.FAILED, data: payload });
+): Promise<{ readonly id: number }> => cap.commit({ event: DEPLOY_EVENTS.FAILED, data: payload });

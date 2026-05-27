@@ -1,11 +1,7 @@
 import { Effect } from "effect";
 import { RefResolutionFailed } from "@agent-os/core/ref-resolver";
 import { getImageProtocolAdapter } from "./adapters/registry";
-import {
-  ImageAiBinding,
-  ImageRefResolver,
-  ImageUpstreamFailure,
-} from "./services";
+import { ImageAiBinding, ImageRefResolver, ImageUpstreamFailure } from "./services";
 import type {
   CfAiBindingImageBody,
   GenerateImageSpec,
@@ -39,16 +35,14 @@ const dispatchImageProvider = (
             const res = await fetch(url, {
               method: "POST",
               headers: {
-                "Authorization": `Bearer ${apiKey}`,
+                Authorization: `Bearer ${apiKey}`,
                 "Content-Type": "application/json",
               },
               body: JSON.stringify(fullBody),
             });
             if (!res.ok) {
               const text = await res.text().catch(() => "");
-              throw new Error(
-                `HTTP ${res.status} ${res.statusText}: ${text.slice(0, 500)}`,
-              );
+              throw new Error(`HTTP ${res.status} ${res.statusText}: ${text.slice(0, 500)}`);
             }
             return (await res.json()) as unknown;
           },
@@ -59,12 +53,9 @@ const dispatchImageProvider = (
       return Effect.gen(function* () {
         const ai = yield* ImageAiBinding;
         const options =
-          route.gatewayRef === undefined
-            ? undefined
-            : { gateway: { id: route.gatewayRef } };
+          route.gatewayRef === undefined ? undefined : { gateway: { id: route.gatewayRef } };
         return yield* Effect.tryPromise({
-          try: () =>
-            ai.run(route.modelId, body as CfAiBindingImageBody, options),
+          try: () => ai.run(route.modelId, body as CfAiBindingImageBody, options),
           catch: (cause) => new ImageUpstreamFailure({ cause }),
         });
       });
@@ -80,10 +71,10 @@ export const generateImageEffect = (
 > =>
   Effect.gen(function* () {
     const adapter = getImageProtocolAdapter(spec.route.kind);
-    const body = adapter.encodeImage(
-      spec.route as never,
-      { prompt: spec.prompt, aspectRatio: spec.aspectRatio },
-    );
+    const body = adapter.encodeImage(spec.route as never, {
+      prompt: spec.prompt,
+      aspectRatio: spec.aspectRatio,
+    });
     const raw = yield* dispatchImageProvider(spec.route, body);
     return yield* Effect.try({
       try: () => adapter.decodeImage(raw),
