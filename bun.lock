@@ -19,6 +19,31 @@
         "vitest": "catalog:",
       },
     },
+    "packages/cloudflare-resource": {
+      "name": "@agent-os/cloudflare-resource",
+      "version": "0.1.0",
+      "dependencies": {
+        "@agent-os/core": "workspace:*",
+      },
+      "devDependencies": {
+        "effect": "catalog:",
+        "typescript": "catalog:",
+        "vite-plus": "catalog:",
+        "vitest": "catalog:",
+      },
+      "peerDependencies": {
+        "effect": "^3.21.0",
+      },
+    },
+    "packages/context-pack": {
+      "name": "@agent-os/context-pack",
+      "version": "0.1.0",
+      "devDependencies": {
+        "typescript": "catalog:",
+        "vite-plus": "catalog:",
+        "vitest": "catalog:",
+      },
+    },
     "packages/core": {
       "name": "@agent-os/core",
       "version": "0.2.8",
@@ -34,6 +59,22 @@
         "@effect/language-service": "catalog:",
         "effect": "catalog:",
         "fast-check": "catalog:",
+        "typescript": "catalog:",
+        "vite-plus": "catalog:",
+        "vitest": "catalog:",
+      },
+      "peerDependencies": {
+        "effect": "^3.21.0",
+      },
+    },
+    "packages/decision-gate": {
+      "name": "@agent-os/decision-gate",
+      "version": "0.1.0",
+      "dependencies": {
+        "@agent-os/core": "workspace:*",
+      },
+      "devDependencies": {
+        "effect": "catalog:",
         "typescript": "catalog:",
         "vite-plus": "catalog:",
         "vitest": "catalog:",
@@ -135,6 +176,20 @@
         "vitest": "catalog:",
       },
     },
+    "packages/run-stream": {
+      "name": "@agent-os/run-stream",
+      "version": "0.1.0",
+      "dependencies": {
+        "@agent-os/core": "workspace:*",
+        "@agent-os/turn-stream": "workspace:*",
+      },
+      "devDependencies": {
+        "@cloudflare/workers-types": "catalog:",
+        "typescript": "catalog:",
+        "vite-plus": "catalog:",
+        "vitest": "catalog:",
+      },
+    },
     "packages/sandbox": {
       "name": "@agent-os/sandbox",
       "version": "0.1.0",
@@ -182,11 +237,54 @@
         "effect": "^3.21.0",
       },
     },
+    "packages/turn-stream": {
+      "name": "@agent-os/turn-stream",
+      "version": "0.1.0",
+      "devDependencies": {
+        "typescript": "catalog:",
+        "vite-plus": "catalog:",
+        "vitest": "catalog:",
+      },
+    },
     "packages/verification": {
       "name": "@agent-os/verification",
       "version": "0.1.0",
       "dependencies": {
         "@agent-os/core": "workspace:*",
+      },
+      "devDependencies": {
+        "effect": "catalog:",
+        "typescript": "catalog:",
+        "vite-plus": "catalog:",
+        "vitest": "catalog:",
+      },
+      "peerDependencies": {
+        "effect": "^3.21.0",
+      },
+    },
+    "packages/workspace-session": {
+      "name": "@agent-os/workspace-session",
+      "version": "0.1.0",
+      "dependencies": {
+        "@agent-os/core": "workspace:*",
+      },
+      "devDependencies": {
+        "@effect/language-service": "catalog:",
+        "effect": "catalog:",
+        "typescript": "catalog:",
+        "vite-plus": "catalog:",
+        "vitest": "catalog:",
+      },
+      "peerDependencies": {
+        "effect": "^3.21.0",
+      },
+    },
+    "packages/workspace-session-cloudflare": {
+      "name": "@agent-os/workspace-session-cloudflare",
+      "version": "0.1.0",
+      "dependencies": {
+        "@agent-os/core": "workspace:*",
+        "@agent-os/workspace-session": "workspace:*",
       },
       "devDependencies": {
         "effect": "catalog:",
@@ -219,7 +317,13 @@
     "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
   },
   "packages": {
+    "@agent-os/cloudflare-resource": ["@agent-os/cloudflare-resource@workspace:packages/cloudflare-resource"],
+
+    "@agent-os/context-pack": ["@agent-os/context-pack@workspace:packages/context-pack"],
+
     "@agent-os/core": ["@agent-os/core@workspace:packages/core"],
+
+    "@agent-os/decision-gate": ["@agent-os/decision-gate@workspace:packages/decision-gate"],
 
     "@agent-os/deploy-cloudflare": ["@agent-os/deploy-cloudflare@workspace:packages/deploy-cloudflare"],
 
@@ -233,13 +337,21 @@
 
     "@agent-os/ops-htmx": ["@agent-os/ops-htmx@workspace:packages/ops-htmx"],
 
+    "@agent-os/run-stream": ["@agent-os/run-stream@workspace:packages/run-stream"],
+
     "@agent-os/sandbox": ["@agent-os/sandbox@workspace:packages/sandbox"],
 
     "@agent-os/sandbox-cloudflare": ["@agent-os/sandbox-cloudflare@workspace:packages/sandbox-cloudflare"],
 
     "@agent-os/staging-artifact": ["@agent-os/staging-artifact@workspace:packages/staging-artifact"],
 
+    "@agent-os/turn-stream": ["@agent-os/turn-stream@workspace:packages/turn-stream"],
+
     "@agent-os/verification": ["@agent-os/verification@workspace:packages/verification"],
+
+    "@agent-os/workspace-session": ["@agent-os/workspace-session@workspace:packages/workspace-session"],
+
+    "@agent-os/workspace-session-cloudflare": ["@agent-os/workspace-session-cloudflare@workspace:packages/workspace-session-cloudflare"],
 
     "@cloudflare/kv-asset-handler": ["@cloudflare/kv-asset-handler@0.5.0", "", {}, "sha512-jxQYkj8dSIzc0cD6cMMNdOc1UVjqSqu8BZdor5s8cGjW2I8BjODt/kWPVdY+u9zj3ms75Q5qaZgnxUad83+eAg=="],
 

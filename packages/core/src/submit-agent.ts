@@ -87,10 +87,6 @@ export interface SubmitSpec {
   readonly deliver: { readonly event: string };
 }
 
-export interface SubmitRunStreamSpec extends SubmitSpec {
-  readonly afterId?: number;
-}
-
 /** Internal SubmitSpec with scope filled in by AgentDOBase. */
 export interface InternalSubmitSpec extends Omit<SubmitSpec, "deliver"> {
   readonly deliver: {

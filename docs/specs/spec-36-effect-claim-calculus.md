@@ -531,12 +531,12 @@ Stable compositions may graduate to packages when their wiring is invariant
 across products. Volatile compositions remain cookbooks or app code when their
 policy changes by product.
 
-| Composition   | Class       | Boundary decision                                                                                                                                                                |
-| ------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| run-stream    | package     | `submit` + `turn-stream` + claim settlement + ledger projection become one consumer stream; ledger rows remain durable truth and turn frames remain non-durable UI/progress data |
-| scheduled-run | cookbook    | Workflow/alarm may schedule or resume work, but agentOS ledger remains run truth and D1 mirrors are indexes/projections                                                          |
-| decision-saga | cookbook    | DecisionGate records requested/decided/consumed facts; product approval policy decides who can approve and when a continuation submit starts                                     |
-| context-pack  | package/app | `@agent-os/context-pack` owns deterministic fact packing and redaction spans; product context selection and summarization strategy remain app-owned                              |
+| Composition   | Class       | Boundary decision                                                                                                                                                                                                                                                            |
+| ------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| run-stream    | package     | `@agent-os/run-stream` composes post-baseline ledger rows, optional `turn-stream` frames, and the terminal `submit` result into consumer frames; the shipped submit bridge is batched, ledger rows remain durable truth, and turn frames remain non-durable UI/progress data |
+| scheduled-run | cookbook    | Workflow/alarm may schedule or resume work, but agentOS ledger remains run truth and D1 mirrors are indexes/projections                                                                                                                                                      |
+| decision-saga | cookbook    | DecisionGate records requested/decided/consumed facts; product approval policy decides who can approve and when a continuation submit starts                                                                                                                                 |
+| context-pack  | package/app | `@agent-os/context-pack` owns deterministic fact packing and redaction spans; product context selection and summarization strategy remain app-owned                                                                                                                          |
 
 ---
 

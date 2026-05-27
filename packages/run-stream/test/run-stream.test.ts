@@ -1,11 +1,13 @@
 import {
+  composeBatchedSubmitRunStream,
   composeRunStream,
+  createBatchedSubmitRunStreamResponse,
   decodeRunStreamData,
   encodeRunStreamSse,
   projectRunStream,
   type RunStreamFrame,
 } from "../src";
-import type { LedgerEventRpc, SubmitResult } from "../src";
+import type { LedgerEventRpc, SubmitResult, SubmitSpec } from "../src";
 import type { TurnStreamFrame } from "@agent-os/turn-stream";
 
 const ledgerEvent = (id: number, kind = "agent.started"): LedgerEventRpc => ({
@@ -31,6 +33,29 @@ const failedResult: SubmitResult = {
   eventCount: 3,
   tokensUsed: 4,
 };
+
+const submitSpec: SubmitSpec = {
+  intent: "Return a final answer.",
+  context: { source: "run-stream-test" },
+  route: { kind: "cf-ai-binding", modelId: "@cf/stub/test" },
+  tools: {},
+  budget: { maxTurns: 1 },
+  deliver: { event: "stream.done" },
+};
+
+const frameDataFromSse = (text: string): ReadonlyArray<RunStreamFrame> =>
+  text
+    .split("\n\n")
+    .filter((raw) => raw.length > 0)
+    .map((raw) => {
+      const data = raw
+        .split("\n")
+        .find((line) => line.startsWith("data: "))
+        ?.slice(6);
+      const frame = data === undefined ? null : decodeRunStreamData(data);
+      expect(frame).not.toBeNull();
+      return frame as RunStreamFrame;
+    });
 
 describe("@agent-os/run-stream", () => {
   it("projects ordered ledger and turn frames into one run view", () => {
@@ -133,5 +158,104 @@ describe("@agent-os/run-stream", () => {
     );
     expect(decodeRunStreamData(JSON.stringify(frame))).toEqual(frame);
     expect(decodeRunStreamData('{"kind":"ledger_event","seq":0}')).toBeNull();
+  });
+
+  it("composes a batched submit stream from post-baseline ledger rows and terminal result", async () => {
+    const operations: string[] = [];
+    const frames = await composeBatchedSubmitRunStream({
+      submitSpec,
+      events: async (options) => {
+        operations.push(options?.afterId === undefined ? "events:baseline" : "events:after=5");
+        return options?.afterId === undefined
+          ? [ledgerEvent(5, "seed.before")]
+          : [ledgerEvent(6, "agent.run.started"), ledgerEvent(7, "agent.run.completed")];
+      },
+      submit: async (spec) => {
+        operations.push(`submit:${spec.deliver.event}`);
+        return okResult;
+      },
+    });
+
+    expect(operations).toEqual(["events:baseline", "submit:stream.done", "events:after=5"]);
+    expect(projectRunStream(frames)).toEqual({
+      status: "succeeded",
+      lastSeq: 2,
+      ledgerEvents: [ledgerEvent(6, "agent.run.started"), ledgerEvent(7, "agent.run.completed")],
+      turnStreams: {},
+      result: okResult,
+      omittedFrames: [],
+    });
+  });
+
+  it("uses explicit afterId without a baseline read", async () => {
+    const operations: string[] = [];
+    const frames = await composeBatchedSubmitRunStream({
+      submitSpec,
+      afterId: 41,
+      events: async (options) => {
+        operations.push(`events:after=${options?.afterId ?? "none"}`);
+        return [ledgerEvent(42, "agent.run.completed")];
+      },
+      submit: async () => {
+        operations.push("submit");
+        return okResult;
+      },
+    });
+
+    expect(operations).toEqual(["submit", "events:after=41"]);
+    expect(projectRunStream(frames).ledgerEvents).toEqual([ledgerEvent(42, "agent.run.completed")]);
+  });
+
+  it("emits failed submit results as terminal submit_result frames", async () => {
+    const frames = await composeBatchedSubmitRunStream({
+      submitSpec,
+      afterId: 0,
+      events: async () => [ledgerEvent(1, "agent.aborted.upstream_failure")],
+      submit: async () => failedResult,
+    });
+
+    expect(projectRunStream(frames)).toEqual({
+      status: "failed",
+      lastSeq: 1,
+      ledgerEvents: [ledgerEvent(1, "agent.aborted.upstream_failure")],
+      turnStreams: {},
+      result: failedResult,
+      omittedFrames: [],
+    });
+  });
+
+  it("maps bridge transport failures to stream_error frames", async () => {
+    const frames = await composeBatchedSubmitRunStream({
+      submitSpec,
+      afterId: 0,
+      events: async () => [],
+      submit: async () => {
+        throw new Error("submit transport failed");
+      },
+    });
+
+    expect(projectRunStream(frames)).toEqual({
+      status: "error",
+      lastSeq: 0,
+      ledgerEvents: [],
+      turnStreams: {},
+      errorReason: "submit transport failed",
+      omittedFrames: [],
+    });
+  });
+
+  it("creates a batched SSE response without requiring token deltas", async () => {
+    const response = await createBatchedSubmitRunStreamResponse({
+      submitSpec,
+      afterId: 0,
+      events: async () => [ledgerEvent(1, "agent.run.completed")],
+      submit: async () => okResult,
+    });
+
+    expect(response.headers.get("content-type")).toContain("text/event-stream");
+    const projection = projectRunStream(frameDataFromSse(await response.text()));
+    expect(projection.turnStreams).toEqual({});
+    expect(projection.status).toBe("succeeded");
+    expect(projection.result).toEqual(okResult);
   });
 });
