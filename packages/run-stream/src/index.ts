@@ -4,31 +4,9 @@ import {
   type TurnStreamFrame,
   type TurnStreamProjection,
 } from "@agent-os/turn-stream";
+import type { EventQueryOptions, LedgerEventRpc, SubmitResult, SubmitSpec } from "@agent-os/core";
 
-export interface LedgerEventRpc {
-  id: number;
-  ts: number;
-  kind: string;
-  scope: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  payload: any;
-}
-
-export type SubmitResult =
-  | {
-      readonly ok: true;
-      readonly runId: number;
-      readonly final: string;
-      readonly eventCount: number;
-      readonly tokensUsed: number;
-    }
-  | {
-      readonly ok: false;
-      readonly runId: number;
-      readonly reason: string;
-      readonly eventCount: number;
-      readonly tokensUsed: number;
-    };
+export type { LedgerEventRpc, SubmitResult, SubmitSpec } from "@agent-os/core";
 
 export interface RunStreamLedgerEventFrame {
   readonly kind: "ledger_event";
@@ -81,6 +59,13 @@ export interface ComposeRunStreamSpec {
   readonly submit: SubmitResult;
   readonly ledgerEvents: ReadonlyArray<LedgerEventRpc>;
   readonly turnFrames?: ReadonlyArray<TurnStreamFrame>;
+}
+
+export interface ComposeBatchedSubmitRunStreamSpec {
+  readonly submitSpec: SubmitSpec;
+  readonly afterId?: number;
+  readonly submit: (spec: SubmitSpec) => Promise<SubmitResult>;
+  readonly events: (options?: EventQueryOptions) => Promise<ReadonlyArray<LedgerEventRpc>>;
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -210,3 +195,41 @@ export const composeRunStream = (spec: ComposeRunStreamSpec): ReadonlyArray<RunS
   frames.push({ kind: "submit_result", seq, result: spec.submit });
   return frames;
 };
+
+const maxLedgerEventId = (events: ReadonlyArray<LedgerEventRpc>): number =>
+  events.reduce((max, event) => Math.max(max, event.id), 0);
+
+const errorReason = (cause: unknown): string =>
+  cause instanceof Error ? cause.message : String(cause);
+
+/** Batched bridge: submit completes before post-baseline ledger rows are read. */
+export const composeBatchedSubmitRunStream = async (
+  spec: ComposeBatchedSubmitRunStreamSpec,
+): Promise<ReadonlyArray<RunStreamFrame>> => {
+  const frames: RunStreamFrame[] = [];
+  let seq = 0;
+
+  try {
+    const baseline = spec.afterId ?? maxLedgerEventId(await spec.events());
+    const result = await spec.submit(spec.submitSpec);
+    for (const event of await spec.events({ afterId: baseline })) {
+      frames.push({ kind: "ledger_event", seq, event });
+      seq += 1;
+    }
+    frames.push({ kind: "submit_result", seq, result });
+  } catch (cause) {
+    frames.push({ kind: "stream_error", seq, reason: errorReason(cause) });
+  }
+
+  return frames;
+};
+
+export const createBatchedSubmitRunStreamResponse = async (
+  spec: ComposeBatchedSubmitRunStreamSpec,
+): Promise<Response> =>
+  new Response((await composeBatchedSubmitRunStream(spec)).map(encodeRunStreamSse).join(""), {
+    headers: {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache",
+    },
+  });

@@ -12,9 +12,7 @@
     "types": ["@cloudflare/workers-types", "vitest/globals"],
     "paths": {
       "@agent-os/core": ["../core/src/index.ts"],
-      "@agent-os/core/abort": ["../core/src/abort.ts"],
-      "@agent-os/run-stream": ["../run-stream/src/index.ts"],
-      "@agent-os/turn-stream": ["../turn-stream/src/index.ts"]
+      "@agent-os/core/abort": ["../core/src/abort.ts"]
     },
     "exactOptionalPropertyTypes": false,
     "noUncheckedIndexedAccess": false

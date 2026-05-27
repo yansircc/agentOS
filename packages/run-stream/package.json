@@ -16,9 +16,11 @@
     "test": "vp test run"
   },
   "dependencies": {
+    "@agent-os/core": "workspace:*",
     "@agent-os/turn-stream": "workspace:*"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "catalog:",
     "typescript": "catalog:",
     "vite-plus": "catalog:",
     "vitest": "catalog:"

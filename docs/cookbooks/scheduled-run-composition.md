@@ -4,7 +4,7 @@
 > agentOS ledger remains the run truth.
 > **Pressure evidence**: vibe-class long-running runs where provider work can
 > outlive one HTTP request.
-> **Uses**: `submit`, `submitRunStream`, `events`, optional `scheduleEvent`,
+> **Uses**: `submit`, `@agent-os/run-stream`, `events`, optional `scheduleEvent`,
 > optional derived D1 index.
 > **Does NOT introduce**: cross-DO global truth, workflow-owned run status,
 > long-running claim phase, or a second run ledger.
@@ -122,9 +122,11 @@ publish success
 ```
 
 Those are facts or projections in agentOS/app ledgers. A Workflow step may
-invoke `submitRunStream` for product-facing progress, but the stream is still
-composition over ledger rows plus a final `SubmitResult`; it is not a workflow
-state table.
+invoke `submit` and wrap post-baseline ledger rows plus the final `SubmitResult`
+with `@agent-os/run-stream` for consumer-facing terminal delivery. The current
+submit bridge is batched, not live progress; realtime UI requires a separate
+non-durable turn-frame source. Either way, the stream is not a workflow state
+table.
 
 ## vibe Replacement Path
 
@@ -132,7 +134,7 @@ For a vibe-style `workflowRunLedger.ts`, the strangler path is:
 
 ```text
 Workflow/D1 run table -> SchedulerIntent + derived index
-agent loop status     -> submit / submitRunStream result
+agent loop status     -> submit result + run-stream projection
 step state            -> ledger projection
 trace lookup          -> ledger refs + derived index
 ```
