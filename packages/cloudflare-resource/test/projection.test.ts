@@ -59,8 +59,8 @@ const rejectedCloudflareResourceClaim = settleRejectedClaim(cloudflareResourceCl
   reason: "D1 rejected statement",
 });
 
-const legacyCloudflareResourceClaim = makePreClaim({
-  operationRef: "cf-resource:legacy:mutate",
+const unsettledPreCloudflareResourceClaim = makePreClaim({
+  operationRef: "cf-resource:unsettled-pre:mutate",
   scopeRef: { kind: "external", scopeId: "cf/account/acme/d1/main", systemRef: "cloudflare" },
   authorityRef: CLOUDFLARE_RESOURCE_AUTHORITIES.MUTATE,
   originRef: {
@@ -306,7 +306,7 @@ describe("@agent-os/cloudflare-resource", () => {
           mutationKind: "d1.exec",
           mutationRef: "mutation://d1/preclaim",
           proofRef: "proof://cf/d1/preclaim",
-          claim: legacyCloudflareResourceClaim,
+          claim: unsettledPreCloudflareResourceClaim,
         },
       },
     ] as const;

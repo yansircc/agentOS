@@ -1,6 +1,7 @@
 import type { Effect } from "effect";
 import type { PreClaim, RejectedClaim } from "@agent-os/core/effect-claim";
 import type {
+  CredentialMaterialRef,
   BindingMaterialRef,
   ExternalResourceMaterialRef,
   MaterialRef,
@@ -19,13 +20,17 @@ export interface CloudflareResourceProvisionRequest {
   readonly claim: PreClaim;
   readonly subjectRef: string;
   readonly resourceKind: string;
-  readonly accountRef?: ExternalResourceMaterialRef;
+  readonly resourceName: string;
+  readonly credentialRef: CredentialMaterialRef;
+  readonly accountRef: ExternalResourceMaterialRef;
   readonly bindingRef?: BindingMaterialRef;
 }
 
 export interface CloudflareResourceBindRequest {
   readonly claim: PreClaim;
   readonly subjectRef: string;
+  readonly credentialRef: CredentialMaterialRef;
+  readonly accountRef: ExternalResourceMaterialRef;
   readonly resourceRef: ExternalResourceMaterialRef;
   readonly bindingRef: BindingMaterialRef;
 }
@@ -33,15 +38,19 @@ export interface CloudflareResourceBindRequest {
 export interface CloudflareResourceMutationRequest {
   readonly claim: PreClaim;
   readonly subjectRef: string;
+  readonly credentialRef: CredentialMaterialRef;
+  readonly accountRef: ExternalResourceMaterialRef;
   readonly resourceRef: MaterialRef;
   readonly mutationKind: string;
-  readonly inputRef?: string;
+  readonly inputRef: string;
   readonly fingerprint?: string;
 }
 
 export interface CloudflareResourceDestroyRequest {
   readonly claim: PreClaim;
   readonly subjectRef: string;
+  readonly credentialRef: CredentialMaterialRef;
+  readonly accountRef: ExternalResourceMaterialRef;
   readonly resourceRef: MaterialRef;
   readonly reason: CloudflareResourceDestroyedPayload["reason"];
 }
