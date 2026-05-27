@@ -12,13 +12,10 @@
 import { Effect, Exit } from "effect";
 import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
-import { describe, expect, it } from "@effect/vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { Ledger } from "../../src/ledger";
-import {
-  type InternalSubmitSpec,
-  submitAgentEffect,
-} from "../../src/submit-agent";
+import { type InternalSubmitSpec, submitAgentEffect } from "../../src/submit-agent";
 import { defineRegisteredTool } from "../../src/tools";
 import { stubAi } from "../_stub-ai";
 
@@ -36,9 +33,7 @@ describe("admission — submitAgent outputSchema path (spec-25 §12.1)", () => {
     const stub = testEnv.AGENT_DO.get(id);
 
     await runInDurableObject(stub, async (_inst, state) => {
-      const ai = stubAi([
-        submitStructuredResp('{"summary":"from-submit"}', "c1"),
-      ]);
+      const ai = stubAi([submitStructuredResp('{"summary":"from-submit"}', "c1")]);
       const runtime = makeRuntime(state, ai);
 
       const spec: InternalSubmitSpec = {
@@ -127,9 +122,7 @@ describe("admission — submitAgent outputSchema path (spec-25 §12.1)", () => {
           return yield* l.events(scope);
         }),
       );
-      const aborted = events.find(
-        (e) => e.kind === "agent.aborted.upstream_failure",
-      );
+      const aborted = events.find((e) => e.kind === "agent.aborted.upstream_failure");
       expect(aborted).toBeDefined();
       if (aborted) {
         const p = aborted.payload as { reason?: string };

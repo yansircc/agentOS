@@ -5,7 +5,7 @@
  */
 
 import { Effect, Layer, ManagedRuntime } from "effect";
-import { describe, expect, it } from "@effect/vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import {
   cfAiBindingImageAdapter,
@@ -40,10 +40,7 @@ describe("image route adapters — P3 C5", () => {
   it("openai-chat-compatible-image uses endpoint + credential refs and decodes message.images data URL", async () => {
     const calls: Array<{ readonly url: string; readonly init: RequestInit }> = [];
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = (async (
-      input: RequestInfo | URL,
-      init?: RequestInit,
-    ) => {
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       calls.push({ url: String(input), init: init ?? {} });
       return new Response(
         JSON.stringify({
@@ -87,9 +84,7 @@ describe("image route adapters — P3 C5", () => {
       );
 
       expect(calls).toHaveLength(1);
-      expect(calls[0]?.url).toBe(
-        "https://stub.openrouter.test/api/v1/chat/completions",
-      );
+      expect(calls[0]?.url).toBe("https://stub.openrouter.test/api/v1/chat/completions");
       const headers = calls[0]?.init.headers as Record<string, string>;
       expect(headers.Authorization).toBe("Bearer secret-not-in-result");
       const body = JSON.parse(String(calls[0]?.init.body)) as {
@@ -175,9 +170,7 @@ describe("image route adapters — P3 C5", () => {
       ),
     ).toEqual({ class: "AuthError", status: 401 });
     expect(
-      cfAiBindingImageAdapter.classify(
-        new Error("HTTP 400 Bad Request: API_KEY_INVALID"),
-      ),
+      cfAiBindingImageAdapter.classify(new Error("HTTP 400 Bad Request: API_KEY_INVALID")),
     ).toEqual({ class: "AuthError", status: 401 });
   });
 

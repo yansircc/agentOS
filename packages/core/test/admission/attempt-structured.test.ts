@@ -16,7 +16,7 @@
 import { Cause, Effect, Exit, Option } from "effect";
 import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
-import { describe, expect, it } from "@effect/vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { Ledger } from "../../src/ledger";
 import {
@@ -26,18 +26,10 @@ import {
   makeSchemaContract,
   routeFingerprint,
 } from "../../src/admission";
-import {
-  type InternalSubmitSpec,
-  submitAgentEffect,
-} from "../../src/submit-agent";
+import { type InternalSubmitSpec, submitAgentEffect } from "../../src/submit-agent";
 import { stubAi } from "../_stub-ai";
 
-import {
-  SCHEMA,
-  makeRuntime,
-  makeRuntimeWithRegistry,
-  submitStructuredResp,
-} from "./_helpers";
+import { SCHEMA, makeRuntime, makeRuntimeWithRegistry, submitStructuredResp } from "./_helpers";
 
 interface TestEnv {
   readonly AGENT_DO: DurableObjectNamespace;
@@ -59,10 +51,7 @@ describe("admission — IO contract: attemptStructured", () => {
       // additionalProperties:false the decoder MUST reject this as
       // BehaviorFailed (Codex P1: prior implementation silently passed).
       const ai = stubAi([
-        submitStructuredResp(
-          JSON.stringify({ summary: "ok", extra: "should-be-rejected" }),
-          "c1",
-        ),
+        submitStructuredResp(JSON.stringify({ summary: "ok", extra: "should-be-rejected" }), "c1"),
       ]);
       const runtime = makeRuntime(state, ai);
 
@@ -204,9 +193,7 @@ describe("admission — IO contract: attemptStructured", () => {
       // Only ONE stub response. If the second attemptStructured call
       // calls ai.run again, the queue throws → SqlError-equivalent test
       // failure. The lease short-circuit must prevent that call.
-      const ai = stubAi([
-        submitStructuredResp('{"summary":"first-and-only"}', "c1"),
-      ]);
+      const ai = stubAi([submitStructuredResp('{"summary":"first-and-only"}', "c1")]);
       const runtime = makeRuntime(state, ai);
 
       const schemaContract = await runtime.runPromise(makeSchemaContract(SCHEMA));
@@ -399,9 +386,7 @@ describe("admission — malformed payload → SqlError (Codex P2)", () => {
         const failure = Cause.failureOption(exit.cause);
         expect(Option.isSome(failure)).toBe(true);
         if (Option.isSome(failure)) {
-          expect((failure.value as { _tag: string })._tag).toBe(
-            "agent_os.sql_error",
-          );
+          expect((failure.value as { _tag: string })._tag).toBe("agent_os.sql_error");
         }
       }
 
@@ -453,9 +438,7 @@ describe("admission — malformed payload → SqlError (Codex P2)", () => {
         const failure = Cause.failureOption(exit.cause);
         expect(Option.isSome(failure)).toBe(true);
         if (Option.isSome(failure)) {
-          expect((failure.value as { _tag: string })._tag).toBe(
-            "agent_os.sql_error",
-          );
+          expect((failure.value as { _tag: string })._tag).toBe("agent_os.sql_error");
         }
       }
 
@@ -493,10 +476,7 @@ describe("admission — cross-route structured output (v0.2.13)", () => {
       readonly init: RequestInit;
     }> = [];
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = (async (
-      input: RequestInfo | URL,
-      init?: RequestInit,
-    ) => {
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       fetchCalls.push({ url: String(input), init: init ?? {} });
       // Return a Chat Completions shaped response with the expected
       // _submit_structured tool call.
@@ -564,12 +544,8 @@ describe("admission — cross-route structured output (v0.2.13)", () => {
 
         // Fetch was called exactly once, with the right URL + auth.
         expect(fetchCalls).toHaveLength(1);
-        expect(fetchCalls[0]?.url).toBe(
-          "https://stub.openrouter.test/api/v1/chat/completions",
-        );
-        const headers = fetchCalls[0]?.init.headers as
-          | Record<string, string>
-          | undefined;
+        expect(fetchCalls[0]?.url).toBe("https://stub.openrouter.test/api/v1/chat/completions");
+        const headers = fetchCalls[0]?.init.headers as Record<string, string> | undefined;
         expect(headers?.Authorization).toBe("Bearer stub-key-not-real");
 
         // AiBinding sentinel was NEVER called (if it had been, SENTINEL_AI
@@ -583,9 +559,7 @@ describe("admission — cross-route structured output (v0.2.13)", () => {
             return yield* l.events(scope);
           }),
         );
-        const evidence = events.find(
-          (e) => e.kind === "llm.structured.evidence",
-        );
+        const evidence = events.find((e) => e.kind === "llm.structured.evidence");
         expect(evidence).toBeDefined();
         const ep = evidence?.payload as {
           adapterId?: string;
@@ -597,9 +571,7 @@ describe("admission — cross-route structured output (v0.2.13)", () => {
         expect(ep.key?.routeFingerprint).toContain('"openrouter"');
 
         // adapterVersion in the AttemptKey reflects the chosen adapter's version.
-        const adapterKey = (
-          ep as unknown as { key: { adapterVersion?: string } }
-        ).key;
+        const adapterKey = (ep as unknown as { key: { adapterVersion?: string } }).key;
         expect(adapterKey.adapterVersion).toBe(ADAPTER_VERSION);
 
         await runtime.dispose();
@@ -619,16 +591,12 @@ describe("admission — cross-route structured output (v0.2.13)", () => {
     let fetchTouched = false;
     globalThis.fetch = (async () => {
       fetchTouched = true;
-      throw new Error(
-        "SENTINEL_FETCH: cf-ai-binding route should NOT hit fetch",
-      );
+      throw new Error("SENTINEL_FETCH: cf-ai-binding route should NOT hit fetch");
     }) as typeof globalThis.fetch;
 
     try {
       await runInDurableObject(stub, async (_inst, state) => {
-        const ai = stubAi([
-          submitStructuredResp('{"summary":"via-cf-ai"}', "c1"),
-        ]);
+        const ai = stubAi([submitStructuredResp('{"summary":"via-cf-ai"}', "c1")]);
         const runtime = makeRuntimeWithRegistry(
           state,
           ai,
@@ -659,9 +627,7 @@ describe("admission — cross-route structured output (v0.2.13)", () => {
             return yield* l.events(scope);
           }),
         );
-        const evidence = events.find(
-          (e) => e.kind === "llm.structured.evidence",
-        );
+        const evidence = events.find((e) => e.kind === "llm.structured.evidence");
         const ep = evidence?.payload as { adapterId?: string };
         expect(ep.adapterId?.startsWith("cf-ai-binding@")).toBe(true);
 

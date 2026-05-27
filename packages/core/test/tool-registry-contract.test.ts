@@ -1,7 +1,7 @@
 import { Effect, Layer, ManagedRuntime } from "effect";
 import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
-import { describe, expect, it } from "@effect/vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { AdmissionLive } from "../src/admission";
 import { EventBusLive } from "../src/ledger";
@@ -9,15 +9,8 @@ import { Ledger, LedgerLive } from "../src/ledger";
 import { AiBinding } from "../src/llm";
 import { QuotaLive } from "../src/quota";
 import { RefResolverLive } from "../src/ref-resolver";
-import {
-  type InternalSubmitSpec,
-  submitAgentEffect,
-} from "../src/submit-agent";
-import {
-  defineRegisteredTool,
-  validateToolRegistry,
-  type Tool,
-} from "../src/tools";
+import { type InternalSubmitSpec, submitAgentEffect } from "../src/submit-agent";
+import { defineRegisteredTool, validateToolRegistry, type Tool } from "../src/tools";
 import type { EventHandler } from "../src/types";
 import { finalTextResp, stubAi, toolCallResp } from "./_stub-ai";
 
@@ -69,9 +62,7 @@ const buildRuntime = (state: DurableObjectState, ai: Ai) => {
     credential: () => null,
   });
   const admission = AdmissionLive(state).pipe(Layer.provide(eventBus));
-  return ManagedRuntime.make(
-    Layer.mergeAll(ledger, quota, aiLayer, admission, refs),
-  );
+  return ManagedRuntime.make(Layer.mergeAll(ledger, quota, aiLayer, admission, refs));
 };
 
 describe("tool registry generator", () => {
@@ -124,15 +115,10 @@ describe("tool registry generator", () => {
     const stub = testEnv.AGENT_DO.get(id);
 
     await runInDurableObject(stub, async (_inst, state) => {
-      const ai = stubAi([
-        toolCallResp("lookup", "{}", "call-1"),
-        finalTextResp("done"),
-      ]);
+      const ai = stubAi([toolCallResp("lookup", "{}", "call-1"), finalTextResp("done")]);
       const runtime = buildRuntime(state, ai);
 
-      const result = await runtime.runPromise(
-        submitAgentEffect(makeSpec(scope, makeTool())),
-      );
+      const result = await runtime.runPromise(submitAgentEffect(makeSpec(scope, makeTool())));
       expect(result.ok).toBe(true);
 
       const events = await runtime.runPromise(
@@ -192,9 +178,7 @@ describe("tool registry generator", () => {
       const ai = stubAi([toolCallResp("lookup", "{}", "call-1")]);
       const runtime = buildRuntime(state, ai);
 
-      const result = await runtime.runPromise(
-        submitAgentEffect(makeSpec(scope, failingTool)),
-      );
+      const result = await runtime.runPromise(submitAgentEffect(makeSpec(scope, failingTool)));
       expect(result.ok).toBe(false);
 
       const events = await runtime.runPromise(
@@ -219,8 +203,7 @@ describe("tool registry generator", () => {
           }),
         }),
       );
-      expect(events.some((event) => event.kind === "agent.aborted.tool_error"))
-        .toBe(true);
+      expect(events.some((event) => event.kind === "agent.aborted.tool_error")).toBe(true);
 
       await runtime.dispose();
     });

@@ -22,7 +22,6 @@
         "@cloudflare/vitest-pool-workers": "^0.16.9",
         "@cloudflare/workers-types": "^4.20251201.0",
         "@effect/language-service": "^0.86.2",
-        "@effect/vitest": "^0.29.0",
         "effect": "^3.21.0",
         "fast-check": "^4.8.0",
         "typescript": "^5.7.2",
@@ -57,7 +56,6 @@
       },
       "devDependencies": {
         "@effect/language-service": "^0.86.2",
-        "@effect/vitest": "^0.29.0",
         "effect": "^3.21.0",
         "typescript": "^5.7.2",
         "vite-plus": "catalog:",
@@ -91,7 +89,6 @@
       },
       "devDependencies": {
         "@effect/language-service": "^0.86.2",
-        "@effect/vitest": "^0.29.0",
         "effect": "^3.21.0",
         "typescript": "^5.7.2",
         "vite-plus": "catalog:",
@@ -133,7 +130,6 @@
       "version": "0.1.0",
       "devDependencies": {
         "@effect/language-service": "^0.86.2",
-        "@effect/vitest": "^0.29.0",
         "effect": "^3.21.0",
         "typescript": "^5.7.2",
         "vite-plus": "catalog:",
@@ -151,7 +147,6 @@
       },
       "devDependencies": {
         "@effect/language-service": "^0.86.2",
-        "@effect/vitest": "^0.29.0",
         "effect": "^3.21.0",
         "typescript": "^5.7.2",
         "vite-plus": "catalog:",
@@ -193,9 +188,6 @@
         "effect": "^3.21.0",
       },
     },
-  },
-  "patchedDependencies": {
-    "@effect/vitest@0.29.0": "patches/@effect%2Fvitest@0.29.0.patch",
   },
   "overrides": {
     "vite": "catalog:",
@@ -258,8 +250,6 @@
     "@effect/sql": ["@effect/sql@0.51.0", "", { "dependencies": { "uuid": "^11.0.3" }, "peerDependencies": { "@effect/experimental": "^0.60.0", "@effect/platform": "^0.96.0", "effect": "^3.21.0" } }, "sha512-e7hWe46QD15eMCr4kNBMVdItIVK/WLHJG+d8DLL1FjVf5Ra82k2mwUYIXplJewVbHjt3my6GSKPPd1ZrQjVd5A=="],
 
     "@effect/sql-sqlite-do": ["@effect/sql-sqlite-do@0.29.0", "", { "peerDependencies": { "@effect/experimental": "^0.60.0", "@effect/sql": "^0.51.0", "effect": "^3.21.0" } }, "sha512-2JNBVIXPgnwfJGDJ+Ks5VgVejjbInmqi63ALQEiyrGijVJ4ojIYpFZ6TaUaAGXmyZCXTVptgplfpw9PbGufZsA=="],
-
-    "@effect/vitest": ["@effect/vitest@0.29.0", "", { "peerDependencies": { "effect": "^3.21.0", "vitest": "^3.2.0" } }, "sha512-DvWr1aeEcaZ8mtu8hNVb4e3rEYvGEwQSr7wsNrW53t6nKYjkmjRICcvVEsXUhjoCblRHSxRsRV0TOt0+UmcvaQ=="],
 
     "@emnapi/runtime": ["@emnapi/runtime@1.10.0", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-ewvYlk86xUoGI0zQRNq/mC+16R1QeDlKQy21Ki3oSYXNgLb45GV1P6A0M+/s6nyCuNDqe5VpaY84BzXGwVbwFA=="],
 

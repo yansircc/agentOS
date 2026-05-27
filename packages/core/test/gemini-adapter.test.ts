@@ -2,15 +2,11 @@
  * gemini-generate-content protocol adapter — contract tests (spec-27 §9.1).
  */
 
-import { describe, expect, it } from "@effect/vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { geminiGenerateContentAdapter } from "../src/llm/protocol/gemini-generate-content";
 import type { JsonSchemaObject } from "../src/admission";
-import type {
-  GeminiGenerateContentRoute,
-  LlmMessage,
-  ToolDefinition,
-} from "../src/llm";
+import type { GeminiGenerateContentRoute, LlmMessage, ToolDefinition } from "../src/llm";
 
 const ROUTE: GeminiGenerateContentRoute = {
   kind: "gemini-generate-content",
@@ -45,9 +41,7 @@ describe("gemini adapter — encodeTurn", () => {
     expect(body.systemInstruction).toEqual({
       parts: [{ text: "You are a research agent." }],
     });
-    expect(body.contents).toEqual([
-      { role: "user", parts: [{ text: "Find facts." }] },
-    ]);
+    expect(body.contents).toEqual([{ role: "user", parts: [{ text: "Find facts." }] }]);
   });
 
   it("maps assistant role to 'model' (NOT 'assistant')", () => {
@@ -134,9 +128,7 @@ describe("gemini adapter — encodeStructured", () => {
       "forced-tool-call",
     );
     expect(body.systemInstruction?.parts?.[0]?.text).toContain("structured");
-    expect(body.contents).toEqual([
-      { role: "user", parts: [{ text: "what is X?" }] },
-    ]);
+    expect(body.contents).toEqual([{ role: "user", parts: [{ text: "what is X?" }] }]);
     expect(body.tools).toHaveLength(1);
     expect(body.tools?.[0].functionDeclarations).toHaveLength(1);
     const decl = body.tools?.[0].functionDeclarations[0];
@@ -172,10 +164,7 @@ describe("gemini adapter — decodeTurn", () => {
         {
           content: {
             role: "model",
-            parts: [
-              { text: "calling..." },
-              { functionCall: { name: "lookup", args: { q: "X" } } },
-            ],
+            parts: [{ text: "calling..." }, { functionCall: { name: "lookup", args: { q: "X" } } }],
           },
           finishReason: "STOP",
         },
@@ -202,9 +191,7 @@ describe("gemini adapter — decodeTurn", () => {
 
   it("text-only response (no functionCall)", () => {
     const raw = {
-      candidates: [
-        { content: { role: "model", parts: [{ text: "Just text." }] } },
-      ],
+      candidates: [{ content: { role: "model", parts: [{ text: "Just text." }] } }],
       usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 5, totalTokenCount: 10 },
     };
     const resp = geminiGenerateContentAdapter.decodeTurn(raw);
@@ -345,16 +332,12 @@ describe("gemini adapter — classify", () => {
     const e = new Error(
       'HTTP 400 Bad Request: {"error":{"status":"INVALID_ARGUMENT","message":"Invalid schema for function parameter"}}',
     );
-    expect(geminiGenerateContentAdapter.classify(e).class).toBe(
-      "SchemaUnsupported",
-    );
+    expect(geminiGenerateContentAdapter.classify(e).class).toBe("SchemaUnsupported");
   });
 
   it("400 without schema-related text → ProviderRejected", () => {
     const e = new Error('HTTP 400 Bad Request: {"error":{"message":"Bad request"}}');
-    expect(geminiGenerateContentAdapter.classify(e).class).toBe(
-      "ProviderRejected",
-    );
+    expect(geminiGenerateContentAdapter.classify(e).class).toBe("ProviderRejected");
   });
 
   it("503 UNAVAILABLE → TransientError", () => {
@@ -372,9 +355,7 @@ describe("gemini adapter — classify", () => {
       _tag: "UpstreamFailure",
       cause: new Error("HTTP 401 Unauthorized: API key invalid"),
     };
-    expect(geminiGenerateContentAdapter.classify(wrapped).class).toBe(
-      "AuthError",
-    );
+    expect(geminiGenerateContentAdapter.classify(wrapped).class).toBe("AuthError");
   });
 
   // ── F-2 regression (spike-06): Gemini returns bad-credential as
@@ -391,9 +372,7 @@ describe("gemini adapter — classify", () => {
   });
 
   it("F-2: 400 + PERMISSION_DENIED → AuthError", () => {
-    const e = new Error(
-      'HTTP 400 Bad Request: {"error":{"status":"PERMISSION_DENIED"}}',
-    );
+    const e = new Error('HTTP 400 Bad Request: {"error":{"status":"PERMISSION_DENIED"}}');
     expect(geminiGenerateContentAdapter.classify(e).class).toBe("AuthError");
   });
 });
@@ -413,9 +392,7 @@ describe("gemini adapter — P2 purity", () => {
       {
         content: {
           role: "model",
-          parts: [
-            { functionCall: { name: "lookup", args: { q: "X" } } },
-          ],
+          parts: [{ functionCall: { name: "lookup", args: { q: "X" } } }],
         },
       },
     ],

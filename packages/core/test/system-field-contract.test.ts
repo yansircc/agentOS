@@ -18,7 +18,7 @@
 import { Exit, Layer, ManagedRuntime } from "effect";
 import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
-import { describe, expect, it } from "@effect/vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { AdmissionLive } from "../src/admission";
 import { EventBusLive } from "../src/ledger";
@@ -26,10 +26,7 @@ import { LedgerLive } from "../src/ledger";
 import { AiBinding } from "../src/llm";
 import { RefResolverLive } from "../src/ref-resolver";
 import { QuotaLive } from "../src/quota";
-import {
-  type InternalSubmitSpec,
-  submitAgentEffect,
-} from "../src/submit-agent";
+import { type InternalSubmitSpec, submitAgentEffect } from "../src/submit-agent";
 import type { EventHandler } from "../src/types";
 import { finalTextResp } from "./_stub-ai";
 
@@ -84,12 +81,8 @@ function buildRuntime(state: DurableObjectState, ai: Ai) {
     endpoint: () => null,
     credential: () => null,
   });
-  const admission = AdmissionLive(state).pipe(
-    Layer.provide(eventBus),
-  );
-  return ManagedRuntime.make(
-    Layer.mergeAll(ledger, quota, aiLayer, admission, refs),
-  );
+  const admission = AdmissionLive(state).pipe(Layer.provide(eventBus));
+  return ManagedRuntime.make(Layer.mergeAll(ledger, quota, aiLayer, admission, refs));
 }
 
 const baseSpec = (scope: string): InternalSubmitSpec => ({
@@ -132,9 +125,7 @@ describe("SubmitSpec.system field — behavior-program axis", () => {
       // System message content STARTS with the caller's program — no
       // "You are an agent. Goal: …" prefix.
       expect(systemMsg?.content?.startsWith(customSystem)).toBe(true);
-      expect(systemMsg?.content?.includes("You are an agent. Goal:")).toBe(
-        false,
-      );
+      expect(systemMsg?.content?.includes("You are an agent. Goal:")).toBe(false);
       // Context block still appended.
       expect(systemMsg?.content?.includes("Context available:")).toBe(true);
 
@@ -179,9 +170,7 @@ describe("SubmitSpec.system field — behavior-program axis", () => {
 
       expect(systemMsg?.role).toBe("system");
       expect(
-        systemMsg?.content?.startsWith(
-          "You are an agent. Goal: Conduct one interview turn.",
-        ),
+        systemMsg?.content?.startsWith("You are an agent. Goal: Conduct one interview turn."),
       ).toBe(true);
       expect(systemMsg?.content?.includes("Use the provided tools")).toBe(true);
 
@@ -217,9 +206,7 @@ describe("SubmitSpec.system field — behavior-program axis", () => {
       const scope2 = "system-field-user-msg-invariant-2";
       const stub2 = testEnv.AGENT_DO.get(testEnv.AGENT_DO.idFromName(scope2));
       await runInDurableObject(stub2, async (_inst2, state2) => {
-        const { ai: ai2, calls: calls2 } = recordingStubAi([
-          finalTextResp("ok"),
-        ]);
+        const { ai: ai2, calls: calls2 } = recordingStubAi([finalTextResp("ok")]);
         const runtime2 = buildRuntime(state2, ai2);
         const exit2 = await runtime2.runPromiseExit(
           submitAgentEffect({ ...baseSpec(scope2), intent }),

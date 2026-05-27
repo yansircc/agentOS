@@ -7,12 +7,9 @@
  * function surface.
  */
 
-import { describe, expect, it } from "@effect/vitest";
+import { describe, expect, it } from "vite-plus/test";
 
-import {
-  cfAiBindingAdapter,
-  openaiChatCompatibleAdapter,
-} from "../src/llm/protocol/openai-chat";
+import { cfAiBindingAdapter, openaiChatCompatibleAdapter } from "../src/llm/protocol/openai-chat";
 import type { JsonSchemaObject } from "../src/admission";
 
 const SCHEMA: JsonSchemaObject = {
@@ -38,11 +35,7 @@ describe("chat-completions decodeStructured — P1 strictness", () => {
       choices: [{ message: { content: "I refuse.", tool_calls: [] } }],
       usage: { total_tokens: 10 },
     };
-    const r = cfAiBindingAdapter.decodeStructured(
-      { raw },
-      SCHEMA_CONTRACT,
-      "forced-tool-call",
-    );
+    const r = cfAiBindingAdapter.decodeStructured({ raw }, SCHEMA_CONTRACT, "forced-tool-call");
     expect(r.ok).toBe(false);
     if (!r.ok && r.outcome.class === "BehaviorFailed") {
       expect(r.outcome.sampleDigest).toContain("no-tool-call");
@@ -67,11 +60,7 @@ describe("chat-completions decodeStructured — P1 strictness", () => {
       ],
       usage: { total_tokens: 42 },
     };
-    const r = cfAiBindingAdapter.decodeStructured(
-      { raw },
-      SCHEMA_CONTRACT,
-      "forced-tool-call",
-    );
+    const r = cfAiBindingAdapter.decodeStructured({ raw }, SCHEMA_CONTRACT, "forced-tool-call");
     expect(r.ok).toBe(true);
     if (r.ok) {
       expect(r.decoded).toEqual({ summary: "ok" });
@@ -104,11 +93,7 @@ describe("chat-completions decodeStructured — P1 strictness", () => {
         },
       ],
     };
-    const r = cfAiBindingAdapter.decodeStructured(
-      { raw },
-      SCHEMA_CONTRACT,
-      "forced-tool-call",
-    );
+    const r = cfAiBindingAdapter.decodeStructured({ raw }, SCHEMA_CONTRACT, "forced-tool-call");
     expect(r.ok).toBe(false);
     if (!r.ok && r.outcome.class === "BehaviorFailed") {
       expect(r.outcome.sampleDigest).toContain("unexpected-tool-calls:2");
@@ -120,18 +105,12 @@ describe("chat-completions decodeStructured — P1 strictness", () => {
       choices: [
         {
           message: {
-            tool_calls: [
-              { function: { name: "other", arguments: "{}" } },
-            ],
+            tool_calls: [{ function: { name: "other", arguments: "{}" } }],
           },
         },
       ],
     };
-    const r = cfAiBindingAdapter.decodeStructured(
-      { raw },
-      SCHEMA_CONTRACT,
-      "forced-tool-call",
-    );
+    const r = cfAiBindingAdapter.decodeStructured({ raw }, SCHEMA_CONTRACT, "forced-tool-call");
     expect(r.ok).toBe(false);
     if (!r.ok && r.outcome.class === "BehaviorFailed") {
       expect(r.outcome.sampleDigest).toContain("unexpected-tool-calls:1:other");
@@ -155,11 +134,7 @@ describe("chat-completions decodeStructured — P1 strictness", () => {
         },
       ],
     };
-    const r = cfAiBindingAdapter.decodeStructured(
-      { raw },
-      SCHEMA_CONTRACT,
-      "forced-tool-call",
-    );
+    const r = cfAiBindingAdapter.decodeStructured({ raw }, SCHEMA_CONTRACT, "forced-tool-call");
     expect(r.ok).toBe(false);
     if (!r.ok && r.outcome.class === "BehaviorFailed") {
       expect(r.outcome.sampleDigest).toContain("violations");
@@ -202,9 +177,7 @@ describe("chat-completions classify — F-1 unwrap", () => {
       cause: new Error("HTTP 401 Unauthorized: ..."),
     };
     expect(cfAiBindingAdapter.classify(wrapped).class).toBe("AuthError");
-    expect(openaiChatCompatibleAdapter.classify(wrapped).class).toBe(
-      "AuthError",
-    );
+    expect(openaiChatCompatibleAdapter.classify(wrapped).class).toBe("AuthError");
   });
 
   it("falls through to ProviderRejected when no HTTP signal in cause", () => {
