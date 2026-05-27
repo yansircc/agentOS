@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM"],
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "types": [
+      "vitest/globals",
+      "@cloudflare/workers-types",
+      "@cloudflare/vitest-pool-workers",
+      "@cloudflare/vitest-pool-workers/types"
+    ],
+    "paths": {
+      "@agent-os/core/effect-claim": ["../core/src/effect-claim.ts"],
+      "@agent-os/core/material-ref": ["../core/src/material-ref.ts"],
+      "@agent-os/core/tools": ["../core/src/tools.ts"]
+    },
+    "exactOptionalPropertyTypes": false,
+    "noUncheckedIndexedAccess": false
+  },
+  "include": ["src/**/*", "test/**/*", "vitest.config.ts"]
+}
