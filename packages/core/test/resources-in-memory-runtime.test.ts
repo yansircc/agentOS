@@ -8,7 +8,7 @@
 
 import * as fc from "fast-check";
 import { Cause, Exit, Layer, ManagedRuntime, Option } from "effect";
-import { describe, expect, it } from "@effect/vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { EventBusLive, Ledger, LedgerLive } from "../src/ledger";
 import { Resources, ResourcesLive } from "../src/resources";
@@ -78,8 +78,7 @@ const makeRuntime = () => {
   return ManagedRuntime.make(Layer.mergeAll(ledger, resources));
 };
 
-const sumGranted = (grants: ReadonlyMap<Key, number>, key: Key): number =>
-  grants.get(key) ?? 0;
+const sumGranted = (grants: ReadonlyMap<Key, number>, key: Key): number => grants.get(key) ?? 0;
 
 const projectModel = (
   grants: ReadonlyMap<Key, number>,
@@ -104,9 +103,7 @@ const projectModel = (
   };
 };
 
-const activeReservationIds = (
-  reservations: ReadonlyMap<string, ModelReservation>,
-): string[] =>
+const activeReservationIds = (reservations: ReadonlyMap<string, ModelReservation>): string[] =>
   Array.from(reservations.entries())
     .filter(([, reservation]) => reservation.status === "active")
     .map(([reservationId]) => reservationId);
@@ -139,101 +136,85 @@ describe("in-memory DO subset", () => {
 
     expect(
       state.storage.sql
-        .exec(
-          "SELECT * FROM events WHERE scope = ? AND id > ? ORDER BY id ASC",
-          "scope-a",
-          0,
-        )
+        .exec("SELECT * FROM events WHERE scope = ? AND id > ? ORDER BY id ASC", "scope-a", 0)
         .toArray(),
     ).toEqual([]);
   });
 
   it("runs resource reservation histories without Wrangler", async () => {
     await fc.assert(
-      fc.asyncProperty(
-        fc.array(historyStepArb, { maxLength: 80 }),
-        async (steps) => {
-          const scope = `in-memory-resource-${crypto.randomUUID()}`;
-          const runtime = makeRuntime();
-          try {
-            const resources = await runtime.runPromise(Resources);
-            const ledger = await runtime.runPromise(Ledger);
-            const grants = new Map<Key, number>();
-            const reservations = new Map<string, ModelReservation>();
-            let nextIdempotency = 0;
+      fc.asyncProperty(fc.array(historyStepArb, { maxLength: 80 }), async (steps) => {
+        const scope = `in-memory-resource-${crypto.randomUUID()}`;
+        const runtime = makeRuntime();
+        try {
+          const resources = await runtime.runPromise(Resources);
+          const ledger = await runtime.runPromise(Ledger);
+          const grants = new Map<Key, number>();
+          const reservations = new Map<string, ModelReservation>();
+          let nextIdempotency = 0;
 
-            for (const step of steps) {
-              if (step.kind === "grant") {
-                await runtime.runPromise(resources.grant(scope, step));
-                grants.set(
-                  step.key,
-                  (grants.get(step.key) ?? 0) + step.amount,
-                );
-                continue;
-              }
+          for (const step of steps) {
+            if (step.kind === "grant") {
+              await runtime.runPromise(resources.grant(scope, step));
+              grants.set(step.key, (grants.get(step.key) ?? 0) + step.amount);
+              continue;
+            }
 
-              if (step.kind === "reserve") {
-                const projected = projectModel(grants, reservations, step.key);
-                const idempotencyKey = `idem-${nextIdempotency++}`;
-                if (projected.available < step.amount) {
-                  const exit = await runtime.runPromiseExit(
-                    resources.reserve(scope, { ...step, idempotencyKey }),
-                  );
-                  expect(Exit.isFailure(exit)).toBe(true);
-                  if (Exit.isFailure(exit)) {
-                    const failure = Cause.failureOption(exit.cause);
-                    expect(Option.isSome(failure)).toBe(true);
-                    if (Option.isSome(failure)) {
-                      expect(failure.value._tag).toBe(
-                        "agent_os.resource_insufficient",
-                      );
-                    }
-                  }
-                  continue;
-                }
-
-                const { reservationId } = await runtime.runPromise(
+            if (step.kind === "reserve") {
+              const projected = projectModel(grants, reservations, step.key);
+              const idempotencyKey = `idem-${nextIdempotency++}`;
+              if (projected.available < step.amount) {
+                const exit = await runtime.runPromiseExit(
                   resources.reserve(scope, { ...step, idempotencyKey }),
                 );
-                reservations.set(reservationId, {
-                  key: step.key,
-                  amount: step.amount,
-                  status: "active",
-                });
+                expect(Exit.isFailure(exit)).toBe(true);
+                if (Exit.isFailure(exit)) {
+                  const failure = Cause.failureOption(exit.cause);
+                  expect(Option.isSome(failure)).toBe(true);
+                  if (Option.isSome(failure)) {
+                    expect(failure.value._tag).toBe("agent_os.resource_insufficient");
+                  }
+                }
                 continue;
               }
 
-              const activeIds = activeReservationIds(reservations);
-              if (activeIds.length === 0) continue;
-              const reservationId = activeIds[step.pick % activeIds.length]!;
-              const reservation = reservations.get(reservationId)!;
-              if (step.terminalKind === "consume") {
-                await runtime.runPromise(
-                  resources.consume(scope, { reservationId, ref: step.ref }),
-                );
-                reservation.status = "consumed";
-              } else {
-                await runtime.runPromise(
-                  resources.release(scope, { reservationId, ref: step.ref }),
-                );
-                reservation.status = "released";
-              }
+              const { reservationId } = await runtime.runPromise(
+                resources.reserve(scope, { ...step, idempotencyKey }),
+              );
+              reservations.set(reservationId, {
+                key: step.key,
+                amount: step.amount,
+                status: "active",
+              });
+              continue;
             }
 
-            const events = await runtime.runPromise(ledger.events(scope));
-            expect(events.map((event) => event.id)).toEqual(
-              events.map((event) => event.id).sort((a, b) => a - b),
-            );
-            for (const key of keys) {
-              await expect(
-                runtime.runPromise(resources.project(scope, key)),
-              ).resolves.toEqual(projectModel(grants, reservations, key));
+            const activeIds = activeReservationIds(reservations);
+            if (activeIds.length === 0) continue;
+            const reservationId = activeIds[step.pick % activeIds.length]!;
+            const reservation = reservations.get(reservationId)!;
+            if (step.terminalKind === "consume") {
+              await runtime.runPromise(resources.consume(scope, { reservationId, ref: step.ref }));
+              reservation.status = "consumed";
+            } else {
+              await runtime.runPromise(resources.release(scope, { reservationId, ref: step.ref }));
+              reservation.status = "released";
             }
-          } finally {
-            await runtime.dispose();
           }
-        },
-      ),
+
+          const events = await runtime.runPromise(ledger.events(scope));
+          expect(events.map((event) => event.id)).toEqual(
+            events.map((event) => event.id).sort((a, b) => a - b),
+          );
+          for (const key of keys) {
+            await expect(runtime.runPromise(resources.project(scope, key))).resolves.toEqual(
+              projectModel(grants, reservations, key),
+            );
+          }
+        } finally {
+          await runtime.dispose();
+        }
+      }),
       { numRuns: 200 },
     );
   });

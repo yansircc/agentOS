@@ -15,17 +15,11 @@
  *                       network → TransientError
  */
 
-import { describe, expect, it } from "@effect/vitest";
+import { describe, expect, it } from "vite-plus/test";
 
-import {
-  anthropicMessagesAdapter,
-} from "../src/llm/protocol/anthropic-messages";
+import { anthropicMessagesAdapter } from "../src/llm/protocol/anthropic-messages";
 import type { JsonSchemaObject } from "../src/admission";
-import type {
-  AnthropicMessagesRoute,
-  LlmMessage,
-  ToolDefinition,
-} from "../src/llm";
+import type { AnthropicMessagesRoute, LlmMessage, ToolDefinition } from "../src/llm";
 
 const ROUTE: AnthropicMessagesRoute = {
   kind: "anthropic-messages",
@@ -58,9 +52,7 @@ describe("anthropic adapter — encodeTurn", () => {
     ];
     const body = anthropicMessagesAdapter.encodeTurn(ROUTE, { messages });
     expect(body.system).toBe("You are a research agent.");
-    expect(body.messages).toEqual([
-      { role: "user", content: "Find facts about X." },
-    ]);
+    expect(body.messages).toEqual([{ role: "user", content: "Find facts about X." }]);
     expect(body.max_tokens).toBeGreaterThan(0);
   });
 
@@ -173,9 +165,7 @@ describe("anthropic adapter — encodeStructured", () => {
     );
     expect(body.system).toBeDefined();
     expect(body.system).toContain("structured");
-    expect(body.messages).toEqual([
-      { role: "user", content: "what is X?" },
-    ]);
+    expect(body.messages).toEqual([{ role: "user", content: "what is X?" }]);
     expect(body.tools).toHaveLength(1);
     expect(body.tools?.[0]).toEqual({
       name: "_submit_structured",
@@ -247,9 +237,7 @@ describe("anthropic adapter — decodeTurn", () => {
 
   it("handles tool-use-only response (no text)", () => {
     const raw = {
-      content: [
-        { type: "tool_use", id: "tu_1", name: "x", input: {} },
-      ],
+      content: [{ type: "tool_use", id: "tu_1", name: "x", input: {} }],
       usage: { input_tokens: 5, output_tokens: 3 },
     };
     const resp = anthropicMessagesAdapter.decodeTurn(raw);
@@ -314,9 +302,7 @@ describe("anthropic adapter — decodeStructured", () => {
 
   it("BehaviorFailed when tool_use name mismatches forced name", () => {
     const raw = {
-      content: [
-        { type: "tool_use", id: "x", name: "other_tool", input: {} },
-      ],
+      content: [{ type: "tool_use", id: "x", name: "other_tool", input: {} }],
     };
     const r = anthropicMessagesAdapter.decodeStructured(
       { raw },

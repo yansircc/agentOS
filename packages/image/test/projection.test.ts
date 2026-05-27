@@ -1,11 +1,6 @@
-import { describe, expect, it } from "@effect/vitest";
+import { describe, expect, it } from "vite-plus/test";
 
-import {
-  IMAGE_EVENT_PREFIX,
-  IMAGE_EVENTS,
-  imageExtensionPackage,
-  projectImageJobs,
-} from "../src";
+import { IMAGE_EVENT_PREFIX, IMAGE_EVENTS, imageExtensionPackage, projectImageJobs } from "../src";
 
 describe("image job projection", () => {
   it("declares image.* as an extension-owned prefix, not core vocabulary", () => {
