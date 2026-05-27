@@ -36,6 +36,11 @@ scope ref, provider method, or authority contract fails fast.
 | runtime-proven     | A real provider path has exercised the algebra without adding a second source of truth             | Provider implementation may evolve behind the same public contract                         |
 | composition-honest | A package/cookbook composes primitives while preserving ledger/projection ownership and durability | Realtime/progress data must stay non-durable unless promoted by a separate schema decision |
 
+`public-experimental` is not a separate stability level. It is the public
+surface listed under a package manifest's `Experimental exports` section. Those
+exports are intentionally reachable for internal/product integration, but may
+change or be removed before promotion to `Frozen exports`.
+
 ---
 
 ## 2. Public API Manifests
@@ -53,18 +58,29 @@ listed as internal must not be reachable from a package `exports` entry.
 Unlisted exports are not public API. Before 1.0, they must be removed from
 public barrels, listed as experimental, or listed as frozen.
 
-1.0 target packages:
+Frozen 1.0 target packages:
 
 - `@agent-os/core`;
 - `@agent-os/workspace-session`;
 - `@agent-os/cloudflare-resource`;
 - `@agent-os/decision-gate`;
 - `@agent-os/turn-stream`;
-- `@agent-os/run-stream`.
+- `@agent-os/run-stream`;
+- `@agent-os/tenant-material`.
+
+Tracked public-experimental packages:
+
+- `@agent-os/llm-transport-http`;
+- `@agent-os/skill-registry`.
 
 `@agent-os/core/context` is part of the core manifest. The former standalone
 context-pack package is absorbed because deterministic context packing is pure
 reader algebra with no external boundary.
+
+`@agent-os/skill-registry` is install-time identity only. Runtime submit,
+admission, and ledger readers see the registered `ToolContract`s, not a skill
+runtime entity. The package must not export ledger, event, or projection
+vocabulary.
 
 ---
 
@@ -77,6 +93,7 @@ Allowed:
 
 - live backend behind an existing carrier contract;
 - material resolver behind `MaterialRef` / `RefResolver`;
+- provider HTTP streaming adapters behind `MaterialRef` / `RefResolver`;
 - realtime composition over existing ledger, submit, and turn-stream frames.
 
 Forbidden:
@@ -86,7 +103,9 @@ Forbidden:
 - writing a second truth table for trace, run, workflow, or resource state;
 - baking product approval, routing, or recommendation policy into core;
 - falling back to ambient credentials, inferred scopes, or compatibility
-  payloads.
+  payloads;
+- promoting MCP discovery/install policy without a second product sharing the
+  same discovery, install, authority, and material contract.
 
 Each N=1 materialization must name:
 
