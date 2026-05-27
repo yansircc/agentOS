@@ -73,7 +73,14 @@ export type EffectClaim = PreClaim | LivedClaim | RejectedClaim;
  * Runtime roles around EffectClaim. Writer authority is intentionally not a
  * ClaimRole; durable namespace ownership remains spec-34 ExtensionCapability.
  */
-export type ClaimRole = "generator" | "resolver" | "reader";
+export type ClaimRole = "generator" | "admitter" | "resolver" | "reader";
+
+export type AdmitVerdict =
+  | { readonly ok: true }
+  | {
+      readonly ok: false;
+      readonly rejectionRef: RejectionRef;
+    };
 
 export type ClaimValidationIssue =
   | "claim_must_be_object"

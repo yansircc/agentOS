@@ -15,11 +15,13 @@
 import { Effect } from "effect";
 import { ToolError } from "./errors";
 import {
+  type AdmitVerdict,
   isAuthorityRef,
   isOriginRef,
   type AuthorityRef,
   type ClaimRole,
   type OriginRef,
+  type PreClaim,
 } from "./effect-claim";
 import type { LlmToolCall, ToolDefinition } from "./llm";
 import type { QuotaSpec } from "./quota";
@@ -28,8 +30,19 @@ export interface ToolContract {
   readonly toolId: string;
   readonly authorityRef: AuthorityRef;
   readonly originRef?: OriginRef;
-  readonly roles: ReadonlyArray<Extract<ClaimRole, "generator">>;
+  readonly roles: ReadonlyArray<Extract<ClaimRole, "generator" | "admitter">>;
 }
+
+export interface ToolAdmitInput<A = unknown> {
+  readonly claim: PreClaim;
+  readonly args: A;
+  readonly contract: ToolContract;
+  readonly toolName: string;
+}
+
+export type ToolAdmitter<A = unknown> = (
+  input: ToolAdmitInput<A>,
+) => AdmitVerdict | Promise<AdmitVerdict>;
 
 export interface Tool<
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -39,6 +52,7 @@ export interface Tool<
 > {
   readonly definition: ToolDefinition;
   readonly execute: (args: A) => Promise<R>;
+  readonly admit: ToolAdmitter<A>;
   readonly quota?: QuotaSpec;
   readonly contract: ToolContract;
 }
@@ -51,13 +65,28 @@ export interface RegisteredToolSpec<A, R> {
   readonly authorityId?: string;
   readonly authorityVersion?: string;
   readonly originRef?: OriginRef;
+  readonly admit?: ToolAdmitter<A>;
 }
 
 export const defineRegisteredTool = <A, R>(spec: RegisteredToolSpec<A, R>): Tool<A, R> => {
   const toolId = spec.definition.function.name;
+  const admit: ToolAdmitter<A> =
+    spec.admit ??
+    (({ claim }) =>
+      spec.authorityClass === "read"
+        ? { ok: true }
+        : {
+            ok: false,
+            rejectionRef: {
+              rejectionId: claim.operationRef,
+              rejectionKind: "capability_denied",
+              reason: `authorityClass=${spec.authorityClass} requires explicit admitter`,
+            },
+          });
   return {
     definition: spec.definition,
     execute: spec.execute,
+    admit,
     ...(spec.quota === undefined ? {} : { quota: spec.quota }),
     contract: {
       toolId,
@@ -67,7 +96,7 @@ export const defineRegisteredTool = <A, R>(spec: RegisteredToolSpec<A, R>): Tool
         ...(spec.authorityVersion === undefined ? {} : { version: spec.authorityVersion }),
       },
       ...(spec.originRef === undefined ? {} : { originRef: spec.originRef }),
-      roles: ["generator"],
+      roles: ["generator", "admitter"],
     },
   };
 };
@@ -103,6 +132,14 @@ export type ToolRegistryIssue =
     }
   | {
       readonly kind: "missing_generator_role";
+      readonly toolId: string;
+    }
+  | {
+      readonly kind: "missing_admitter";
+      readonly toolId: string;
+    }
+  | {
+      readonly kind: "missing_admitter_role";
       readonly toolId: string;
     };
 
@@ -149,6 +186,12 @@ export const validateToolRegistry = (tools: Record<string, Tool>): ToolRegistryV
     }
     if (!contract.roles.includes("generator")) {
       issues.push({ kind: "missing_generator_role", toolId: contract.toolId });
+    }
+    if (typeof tool.admit !== "function") {
+      issues.push({ kind: "missing_admitter", toolId: contract.toolId });
+    }
+    if (!contract.roles.includes("admitter")) {
+      issues.push({ kind: "missing_admitter_role", toolId: contract.toolId });
     }
   }
 
