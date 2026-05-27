@@ -24,6 +24,7 @@ import {
   type PreClaim,
 } from "./effect-claim";
 import type { LlmToolCall, ToolDefinition } from "./llm";
+import { isMaterialRequirement, type MaterialRequirement } from "./material-ref";
 import type { QuotaSpec } from "./quota";
 
 const TOOL_CONTRACT_BRAND = Symbol("@agent-os/core/ToolContract");
@@ -31,6 +32,7 @@ const TOOL_CONTRACT_BRAND = Symbol("@agent-os/core/ToolContract");
 interface ToolContractShape {
   readonly toolId: string;
   readonly authorityRef: AuthorityRef;
+  readonly requiredMaterials: ReadonlyArray<MaterialRequirement>;
   readonly originRef?: OriginRef;
   readonly roles: ReadonlyArray<Extract<ClaimRole, "generator" | "admitter">>;
 }
@@ -50,9 +52,9 @@ export type ToolAdmitter<A = unknown> = (
   input: ToolAdmitInput<A>,
 ) => AdmitVerdict | Promise<AdmitVerdict>;
 
-export const permissiveToolAdmitter = <A>(
-  _input: ToolAdmitInput<A>,
-): AdmitVerdict => ({ ok: true });
+export const permissiveToolAdmitter = <A>(_input: ToolAdmitInput<A>): AdmitVerdict => ({
+  ok: true,
+});
 
 export interface Tool<
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -74,6 +76,7 @@ export interface RegisteredToolSpec<A, R> {
   readonly authorityClass: string;
   readonly authorityId?: string;
   readonly authorityVersion?: string;
+  readonly requiredMaterials?: ReadonlyArray<MaterialRequirement>;
   readonly originRef?: OriginRef;
   readonly admit?: ToolAdmitter<A>;
 }
@@ -87,9 +90,7 @@ const makeToolContract = (shape: ToolContractShape): ToolContract =>
 const hasToolContractBrand = (contract: ToolContract): boolean =>
   contract[TOOL_CONTRACT_BRAND] === true;
 
-const explicitAdmitterRequired = <A>(
-  input: ToolAdmitInput<A>,
-): AdmitVerdict => ({
+const explicitAdmitterRequired = <A>(input: ToolAdmitInput<A>): AdmitVerdict => ({
   ok: false,
   rejectionRef: {
     rejectionId: input.claim.operationRef,
@@ -98,9 +99,7 @@ const explicitAdmitterRequired = <A>(
   },
 });
 
-export const defineRegisteredTool = <A, R>(
-  spec: RegisteredToolSpec<A, R>,
-): Tool<A, R> => {
+export const defineRegisteredTool = <A, R>(spec: RegisteredToolSpec<A, R>): Tool<A, R> => {
   const toolId = spec.definition.function.name;
   const admit: ToolAdmitter<A> = spec.admit ?? explicitAdmitterRequired;
   return {
@@ -113,10 +112,9 @@ export const defineRegisteredTool = <A, R>(
       authorityRef: {
         authorityId: spec.authorityId ?? `tool:${toolId}`,
         authorityClass: spec.authorityClass,
-        ...(spec.authorityVersion === undefined
-          ? {}
-          : { version: spec.authorityVersion }),
+        ...(spec.authorityVersion === undefined ? {} : { version: spec.authorityVersion }),
       },
+      requiredMaterials: spec.requiredMaterials ?? [],
       ...(spec.originRef === undefined ? {} : { originRef: spec.originRef }),
       roles: ["generator", "admitter"],
     }),
@@ -149,6 +147,10 @@ export type ToolRegistryIssue =
       readonly toolId: string;
     }
   | {
+      readonly kind: "invalid_required_material";
+      readonly toolId: string;
+    }
+  | {
       readonly kind: "invalid_origin_ref";
       readonly toolId: string;
     }
@@ -176,9 +178,7 @@ export type ToolRegistryValidation =
       readonly issues: ReadonlyArray<ToolRegistryIssue>;
     };
 
-export const validateToolRegistry = (
-  tools: Record<string, Tool>,
-): ToolRegistryValidation => {
+export const validateToolRegistry = (tools: Record<string, Tool>): ToolRegistryValidation => {
   const issues: ToolRegistryIssue[] = [];
   const toolIds = new Set<string>();
 
@@ -210,9 +210,12 @@ export const validateToolRegistry = (
       issues.push({ kind: "invalid_authority_ref", toolId: contract.toolId });
     }
     if (
-      contract.originRef !== undefined &&
-      !isOriginRef(contract.originRef)
+      !Array.isArray(contract.requiredMaterials) ||
+      !contract.requiredMaterials.every(isMaterialRequirement)
     ) {
+      issues.push({ kind: "invalid_required_material", toolId: contract.toolId });
+    }
+    if (contract.originRef !== undefined && !isOriginRef(contract.originRef)) {
       issues.push({ kind: "invalid_origin_ref", toolId: contract.toolId });
     }
     if (!hasToolContractBrand(contract)) {

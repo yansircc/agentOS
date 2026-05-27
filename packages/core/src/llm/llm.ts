@@ -26,7 +26,8 @@
 
 import { Context, Effect } from "effect";
 import { UpstreamFailure } from "../errors";
-import { RefResolutionFailed, RefResolverService } from "../ref-resolver";
+import { credentialMaterialRef, endpointMaterialRef, type MaterialRef } from "../material-ref";
+import { RefResolutionFailed, RefResolverService, resolveStringMaterial } from "../ref-resolver";
 import { getProtocolAdapter } from "./protocol/protocol-adapter";
 
 export class AiBinding extends Context.Tag("@agent-os/AiBinding")<AiBinding, Ai>() {}
@@ -73,6 +74,23 @@ export type LlmRoute =
   | OpenAIChatCompatibleRoute
   | AnthropicMessagesRoute
   | GeminiGenerateContentRoute;
+
+export const llmRouteMaterialRefs = (route: LlmRoute): ReadonlyArray<MaterialRef> => {
+  switch (route.kind) {
+    case "cf-ai-binding":
+      return [];
+    case "openai-chat-compatible":
+    case "anthropic-messages":
+    case "gemini-generate-content":
+      return [
+        endpointMaterialRef(route.endpointRef, { protocol: route.kind }),
+        credentialMaterialRef(route.credentialRef, {
+          provider: route.kind,
+          purpose: "llm_transport",
+        }),
+      ];
+  }
+};
 
 // ============================================================
 //   Unified message / tool-call / response types
@@ -332,8 +350,17 @@ export const dispatchProvider = (
     case "openai-chat-compatible":
       return Effect.gen(function* () {
         const refs = yield* RefResolverService;
-        const endpoint = yield* refs.endpoint(route.endpointRef);
-        const apiKey = yield* refs.credential(route.credentialRef);
+        const endpoint = yield* resolveStringMaterial(
+          refs,
+          endpointMaterialRef(route.endpointRef, { protocol: route.kind }),
+        );
+        const apiKey = yield* resolveStringMaterial(
+          refs,
+          credentialMaterialRef(route.credentialRef, {
+            provider: route.kind,
+            purpose: "llm_transport",
+          }),
+        );
         const url = `${endpoint.replace(/\/$/, "")}/chat/completions`;
         const fullBody = {
           model: route.modelId,
@@ -361,8 +388,17 @@ export const dispatchProvider = (
     case "anthropic-messages":
       return Effect.gen(function* () {
         const refs = yield* RefResolverService;
-        const endpoint = yield* refs.endpoint(route.endpointRef);
-        const apiKey = yield* refs.credential(route.credentialRef);
+        const endpoint = yield* resolveStringMaterial(
+          refs,
+          endpointMaterialRef(route.endpointRef, { protocol: route.kind }),
+        );
+        const apiKey = yield* resolveStringMaterial(
+          refs,
+          credentialMaterialRef(route.credentialRef, {
+            provider: route.kind,
+            purpose: "llm_transport",
+          }),
+        );
         const url = `${endpoint.replace(/\/$/, "")}/v1/messages`;
         const fullBody = {
           model: route.modelId,
@@ -392,8 +428,17 @@ export const dispatchProvider = (
     case "gemini-generate-content":
       return Effect.gen(function* () {
         const refs = yield* RefResolverService;
-        const endpoint = yield* refs.endpoint(route.endpointRef);
-        const apiKey = yield* refs.credential(route.credentialRef);
+        const endpoint = yield* resolveStringMaterial(
+          refs,
+          endpointMaterialRef(route.endpointRef, { protocol: route.kind }),
+        );
+        const apiKey = yield* resolveStringMaterial(
+          refs,
+          credentialMaterialRef(route.credentialRef, {
+            provider: route.kind,
+            purpose: "llm_transport",
+          }),
+        );
         const url = `${endpoint.replace(/\/$/, "")}/v1beta/models/${route.modelId}:generateContent`;
         return yield* Effect.tryPromise({
           try: async () => {

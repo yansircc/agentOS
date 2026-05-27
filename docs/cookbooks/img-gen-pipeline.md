@@ -90,7 +90,7 @@ const reservation = await user.reserveResource({
   idempotencyKey,
 });
 
-// imageRuntime is app-owned and provides ImageAiBinding + ImageRefResolverLive.
+// imageRuntime is app-owned and provides ImageAiBinding + RefResolverLive.
 const image = await imageRuntime.runPromise(
   generateImageEffect({
     route: {

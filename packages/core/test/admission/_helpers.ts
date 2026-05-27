@@ -35,8 +35,7 @@ export const makeRuntime = (state: DurableObjectState, ai: Ai) => {
   const quota = QuotaLive(state).pipe(Layer.provide(eventBus));
   const aiLayer = Layer.succeed(AiBinding, ai);
   const refs = RefResolverLive({
-    endpoint: () => null,
-    credential: () => null,
+    material: () => null,
   });
   const admission = AdmissionLive(state).pipe(Layer.provide(eventBus));
   return ManagedRuntime.make(Layer.mergeAll(ledger, quota, aiLayer, admission, refs));
@@ -54,8 +53,16 @@ export const makeRuntimeWithRegistry = (
   const quota = QuotaLive(state).pipe(Layer.provide(eventBus));
   const aiLayer = Layer.succeed(AiBinding, ai);
   const refs = RefResolverLive({
-    endpoint: (ref) => endpoints[ref] ?? null,
-    credential: (ref) => credentials[ref] ?? null,
+    material: (ref) => {
+      switch (ref.kind) {
+        case "endpoint":
+          return endpoints[ref.ref] ?? null;
+        case "credential":
+          return credentials[ref.ref] ?? null;
+        default:
+          return null;
+      }
+    },
   });
   const admission = AdmissionLive(state).pipe(Layer.provide(eventBus));
   return ManagedRuntime.make(Layer.mergeAll(ledger, quota, aiLayer, admission, refs));

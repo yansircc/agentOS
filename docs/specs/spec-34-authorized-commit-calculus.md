@@ -708,15 +708,16 @@ LLM-only special case and replaced by a capability-neutral resolver:
 
 ```ts
 interface RefResolver {
-  endpoint(ref: string): string | null;
-  credential(ref: string): string | null;
+  material(ref: MaterialRef): ResolvedMaterial | null;
 }
 ```
 
-Any core composite or extension carrier that needs
-`(endpointRef, credentialRef) -> (endpoint, credential)` uses the same
-resolver. Missing refs fail fast with `RefResolutionFailed`; there is no
-submit-specific fallback registry. Secret values still never enter the ledger.
+Any core composite or extension carrier that needs execution-time material uses
+the same resolver. LLM `(endpointRef, credentialRef)` pairs are projected into
+`MaterialRef` before resolution; non-secret bindings and external resources use
+the same axis. Missing refs fail fast with `RefResolutionFailed`; there is no
+submit-specific fallback registry. Secret values and live handles still never
+enter the ledger.
 
 ---
 
@@ -784,9 +785,10 @@ implementation PR, which must show:
   the ledger.
 - `AgentDOBase.generateImage` and `AgentDOBase.submitTextStream` are absent.
   Their types are absent from `@agent-os/core` barrel.
-- `ProviderRegistryConfig`, `EndpointNotFound`, and `CredentialNotFound` are
-  absent; `RefResolver` and `RefResolutionFailed` are the only ref-resolution
-  surface.
+- `ProviderRegistryConfig`, `EndpointNotFound`, `CredentialNotFound`, and
+  endpoint/credential-specific resolver methods are absent; `MaterialRef`,
+  `RefResolver.material`, and `RefResolutionFailed` are the only
+  ref-resolution surface.
 - spec-24 / spec-25 / spec-31 / spec-32 amendments per §11 land in the
   same PR series.
 - Insight Helper / WhatsApp / Img-Gen / zeroY reference apps in spec-24

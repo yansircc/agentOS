@@ -11,6 +11,7 @@
     "isolatedModules": true,
     "paths": {
       "@agent-os/core/extensions": ["../core/src/extensions.ts"],
+      "@agent-os/core/material-ref": ["../core/src/material-ref.ts"],
       "@agent-os/core/ref-resolver": ["../core/src/ref-resolver.ts"]
     },
     "exactOptionalPropertyTypes": false,

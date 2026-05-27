@@ -274,8 +274,7 @@ export abstract class AgentDOBase<Env extends AgentDOEnv> extends DurableObject<
    *  only refs are ledger-visible. */
   protected provideRefResolver(): RefResolver {
     return {
-      endpoint: () => null,
-      credential: () => null,
+      material: () => null,
     };
   }
 

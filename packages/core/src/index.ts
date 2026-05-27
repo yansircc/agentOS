@@ -48,6 +48,7 @@ export type { SubmitSpec, SubmitResult, TurnRef } from "./submit-agent";
 
 export type { Tool } from "./tools";
 export type { ToolDefinition, LlmUsage } from "./llm";
+export { llmRouteMaterialRefs } from "./llm";
 export { withQuota, type QuotaSpec } from "./quota";
 export type {
   ExtensionPackage,
@@ -56,8 +57,35 @@ export type {
   ExtensionTimeSpec,
 } from "./extensions";
 export { ExtensionCapabilityConflict } from "./extensions";
-export type { RefResolver } from "./ref-resolver";
-export { RefResolutionFailed } from "./ref-resolver";
+export type { MaterialResolverService, RefResolver, ResolvedMaterial } from "./ref-resolver";
+export { RefResolutionFailed, resolveStringMaterial } from "./ref-resolver";
+export type {
+  AuthorityContract,
+  BindingMaterialRef,
+  BindingMaterialRequirement,
+  CredentialMaterialRef,
+  CredentialMaterialRequirement,
+  EndpointMaterialRef,
+  EndpointMaterialRequirement,
+  ExternalResourceMaterialRef,
+  ExternalResourceMaterialRequirement,
+  MaterialKind,
+  MaterialRef,
+  MaterialRequirement,
+  MaterialRequirementInput,
+  MaterialValidationIssue,
+} from "./material-ref";
+export {
+  bindingMaterialRef,
+  credentialMaterialRef,
+  endpointMaterialRef,
+  externalResourceMaterialRef,
+  isAuthorityContract,
+  isMaterialRef,
+  isMaterialRequirement,
+  materialRefKey,
+  materialRequirement,
+} from "./material-ref";
 
 // ===== Abort taxonomy =====
 export { ABORT, type AbortKind } from "./errors";

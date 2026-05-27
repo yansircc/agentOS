@@ -76,10 +76,7 @@ export interface WorkspaceSessionCarrier {
   ) => Effect.Effect<WorkspaceSessionBackedUpPayload, WorkspaceSessionFailure>;
   readonly allocatePreview: (
     request: WorkspaceSessionPreviewRequest,
-  ) => Effect.Effect<
-    WorkspaceSessionPreviewAllocatedPayload,
-    WorkspaceSessionFailure
-  >;
+  ) => Effect.Effect<WorkspaceSessionPreviewAllocatedPayload, WorkspaceSessionFailure>;
   readonly destroy: (
     request: WorkspaceSessionDestroyRequest,
   ) => Effect.Effect<WorkspaceSessionDestroyedPayload, WorkspaceSessionFailure>;

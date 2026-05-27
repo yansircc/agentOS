@@ -79,8 +79,7 @@ function buildRuntime(state: DurableObjectState, ai: Ai) {
   const quota = QuotaLive(state).pipe(Layer.provide(eventBus));
   const aiLayer = Layer.succeed(AiBinding, ai);
   const refs = RefResolverLive({
-    endpoint: () => null,
-    credential: () => null,
+    material: () => null,
   });
   const admission = AdmissionLive(state).pipe(Layer.provide(eventBus));
   return ManagedRuntime.make(Layer.mergeAll(ledger, quota, aiLayer, admission, refs));
