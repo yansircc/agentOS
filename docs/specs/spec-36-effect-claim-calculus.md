@@ -525,6 +525,11 @@ claim settlement. Cloudflare Sandbox backup handles, preview routing, local
 worktree paths, and restore algorithms are backend packages or app-owned
 carrier implementations.
 
+Resolved workspace-session refs may use URI-like strings such as
+`agentos://...` or `cleanup://...`, but those schemes are package-owned
+conventions. Cross-carrier readers MUST treat resolved refs as opaque strings
+and MUST NOT parse scheme or path segments for substrate behavior.
+
 ---
 
 ## 13. Implementation Stages

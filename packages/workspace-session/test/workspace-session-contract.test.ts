@@ -150,6 +150,104 @@ describe("@agent-os/workspace-session", () => {
     });
   });
 
+  it("resets lifecycle refs on restarted or restored sessions", () => {
+    const claimFor = (anchorId: string) =>
+      settleLivedClaim(sessionClaim, {
+        anchorId,
+        anchorKind: "carrier_proof",
+        carrierRef: "workspace-session",
+      });
+    const events = [
+      {
+        id: 1,
+        kind: WORKSPACE_SESSION_EVENTS.STARTED,
+        payload: {
+          subjectRef: "run-reused",
+          sessionRef: "session://old",
+          workspaceRootRef: "workspace://old",
+          cleanupRef: "cleanup://old",
+          claim: claimFor("session://old"),
+        },
+      },
+      {
+        id: 2,
+        kind: WORKSPACE_SESSION_EVENTS.BACKED_UP,
+        payload: {
+          subjectRef: "run-reused",
+          sessionRef: "session://old",
+          backupRef: "backup://old",
+          claim: claimFor("backup://old"),
+        },
+      },
+      {
+        id: 3,
+        kind: WORKSPACE_SESSION_EVENTS.PREVIEW_ALLOCATED,
+        payload: {
+          subjectRef: "run-reused",
+          sessionRef: "session://old",
+          previewRef: "preview://old",
+          port: 5173,
+          claim: claimFor("preview://old"),
+        },
+      },
+      {
+        id: 4,
+        kind: WORKSPACE_SESSION_EVENTS.STARTED,
+        payload: {
+          subjectRef: "run-reused",
+          sessionRef: "session://new",
+          workspaceRootRef: "workspace://new",
+          cleanupRef: "cleanup://new",
+          claim: claimFor("session://new"),
+        },
+      },
+    ] as const;
+
+    expect(projectWorkspaceSession(events, "run-reused")).toMatchObject({
+      status: "active",
+      sessionRef: "session://new",
+      workspaceRootRef: "workspace://new",
+      cleanupRef: "cleanup://new",
+      backups: [],
+      previews: [],
+    });
+
+    const restoredEvents = [
+      ...events,
+      {
+        id: 5,
+        kind: WORKSPACE_SESSION_EVENTS.BACKED_UP,
+        payload: {
+          subjectRef: "run-reused",
+          sessionRef: "session://new",
+          backupRef: "backup://new",
+          claim: claimFor("backup://new"),
+        },
+      },
+      {
+        id: 6,
+        kind: WORKSPACE_SESSION_EVENTS.RESTORED,
+        payload: {
+          subjectRef: "run-reused",
+          sessionRef: "session://restored",
+          backupRef: "backup://new",
+          workspaceRootRef: "workspace://restored",
+          cleanupRef: "cleanup://restored",
+          claim: claimFor("session://restored"),
+        },
+      },
+    ] as const;
+
+    expect(projectWorkspaceSession(restoredEvents, "run-reused")).toMatchObject({
+      status: "active",
+      sessionRef: "session://restored",
+      workspaceRootRef: "workspace://restored",
+      cleanupRef: "cleanup://restored",
+      backups: [],
+      previews: [],
+    });
+  });
+
   it("settles failure claims and projects workspace_session.failed", async () => {
     const rejected = settleWorkspaceSessionRejected(sessionClaim, {
       code: "ScopeNotSession",
@@ -218,6 +316,24 @@ describe("@agent-os/workspace-session", () => {
     expect(committed[0]?.data).toMatchObject({
       subjectRef: "run-2",
       claim: { phase: "rejected" },
+    });
+  });
+
+  it("lets backends override rejectionKind while preserving claim settlement", () => {
+    const rejected = settleWorkspaceSessionRejected(sessionClaim, {
+      code: "BackupFailed",
+      reason: "backup quota exhausted",
+      proofRef: "proof://quota",
+      rejectionKind: "resource_denied",
+    });
+
+    expect(rejected).toMatchObject({
+      phase: "rejected",
+      rejectionRef: {
+        rejectionId: "proof://quota",
+        rejectionKind: "resource_denied",
+        reason: "backup quota exhausted",
+      },
     });
   });
 
