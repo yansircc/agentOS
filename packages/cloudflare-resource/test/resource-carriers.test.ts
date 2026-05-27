@@ -58,6 +58,11 @@ interface ResourceCase {
   readonly rawMaterialNeedle: string;
   readonly mutationInput: unknown;
   readonly inputNeedle: string;
+  readonly expectedRequest: {
+    readonly method: string;
+    readonly path: string;
+    readonly body?: unknown;
+  };
   readonly makeCarrier: (options: TestCarrierOptions) => CloudflareResourceCarrier;
 }
 
@@ -77,6 +82,11 @@ const cases: ReadonlyArray<ResourceCase> = [
     rawMaterialNeedle: "raw-db-id",
     mutationInput: { sql: "select raw_sql_secret" },
     inputNeedle: "raw_sql_secret",
+    expectedRequest: {
+      method: "POST",
+      path: "/accounts/raw-account-id/d1/database/raw-db-id/query",
+      body: { sql: "select raw_sql_secret" },
+    },
     makeCarrier: (options) =>
       makeCloudflareD1ResourceCarrier({
         ...options,
@@ -92,6 +102,11 @@ const cases: ReadonlyArray<ResourceCase> = [
     rawMaterialNeedle: "raw-kv-namespace-id",
     mutationInput: { body: [{ key: "private-key", value: "raw_kv_value_secret" }] },
     inputNeedle: "raw_kv_value_secret",
+    expectedRequest: {
+      method: "PUT",
+      path: "/accounts/raw-account-id/storage/kv/namespaces/raw-kv-namespace-id/bulk",
+      body: [{ key: "private-key", value: "raw_kv_value_secret" }],
+    },
     makeCarrier: (options) =>
       makeCloudflareKVNamespaceResourceCarrier({
         ...options,
@@ -107,6 +122,11 @@ const cases: ReadonlyArray<ResourceCase> = [
     rawMaterialNeedle: "raw-r2-bucket-name",
     mutationInput: { objectKey: "private-object", body: "raw_r2_object_secret" },
     inputNeedle: "raw_r2_object_secret",
+    expectedRequest: {
+      method: "PUT",
+      path: "/accounts/raw-account-id/r2/buckets/raw-r2-bucket-name/objects/private-object",
+      body: "raw_r2_object_secret",
+    },
     makeCarrier: (options) =>
       makeCloudflareR2BucketResourceCarrier({
         ...options,
@@ -122,6 +142,11 @@ const cases: ReadonlyArray<ResourceCase> = [
     rawMaterialNeedle: "raw-queue-id",
     mutationInput: { body: { secret: "raw_queue_message_secret" } },
     inputNeedle: "raw_queue_message_secret",
+    expectedRequest: {
+      method: "POST",
+      path: "/accounts/raw-account-id/queues/raw-queue-id/messages",
+      body: { body: { secret: "raw_queue_message_secret" } },
+    },
     makeCarrier: (options) =>
       makeCloudflareQueueResourceCarrier({
         ...options,
@@ -141,6 +166,11 @@ const cases: ReadonlyArray<ResourceCase> = [
     rawMaterialNeedle: "raw-workflow-name",
     mutationInput: { instanceId: "private-instance", payload: { secret: "raw_workflow_payload" } },
     inputNeedle: "raw_workflow_payload",
+    expectedRequest: {
+      method: "POST",
+      path: "/accounts/raw-account-id/workflows/raw-workflow-name/instances",
+      body: { instance_id: "private-instance", params: { secret: "raw_workflow_payload" } },
+    },
     makeCarrier: (options) =>
       makeCloudflareWorkflowResourceCarrier({
         ...options,
@@ -339,8 +369,9 @@ const assertNegativeContract = (testCase: ResourceCase) => {
     it.effect("uses symbolic mutation records after executing with resolved material", () =>
       Effect.gen(function* () {
       const { resourceRef, bindingRef } = refsFor(testCase);
+      const fetch = vi.fn<CloudflareD1Fetch>(async () => successResponse);
       const carrier = testCase.makeCarrier({
-        fetch: async () => successResponse,
+        fetch,
         resolver: resolverFor([
           [credentialRef, "secret-token"],
           [accountRef, { accountId: "raw-account-id" }],
@@ -382,6 +413,18 @@ const assertNegativeContract = (testCase: ResourceCase) => {
       expect(serialized).not.toContain("RAW_BINDING");
       expect(serialized).not.toContain(testCase.rawMaterialNeedle);
       expect(serialized).not.toContain(testCase.inputNeedle);
+
+      const call = fetch.mock.calls[0];
+      expect(call).toBeDefined();
+      if (call === undefined) return;
+      const [url, init] = call;
+      expect(url).toContain(testCase.expectedRequest.path);
+      expect(init.method).toBe(testCase.expectedRequest.method);
+      if (testCase.expectedRequest.body !== undefined) {
+        const actualBody =
+          testCase.resourceKind === "r2_bucket" ? init.body : JSON.parse(String(init.body));
+        expect(actualBody).toEqual(testCase.expectedRequest.body);
+      }
       }),
     );
   });
