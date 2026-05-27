@@ -415,8 +415,7 @@ export const submitAgentEffect = (
                   toolName: call.function.name,
                 }),
               ),
-            catch: (cause): RejectionRef =>
-              admitterErrorRejectionRef(claim, cause),
+            catch: (cause): RejectionRef => admitterErrorRejectionRef(claim, cause),
           }).pipe(
             Effect.catchAll((rejectionRef) =>
               Effect.succeed({
@@ -424,18 +423,14 @@ export const submitAgentEffect = (
                 rejectionRef: {
                   rejectionId: rejectionRef.rejectionId,
                   rejectionKind: rejectionRef.rejectionKind,
-                  ...(rejectionRef.reason === undefined
-                    ? {}
-                    : { reason: rejectionRef.reason }),
+                  ...(rejectionRef.reason === undefined ? {} : { reason: rejectionRef.reason }),
                 },
               }),
             ),
           );
           const normalizedAdmission = normalizeAdmitVerdict(claim, admission);
           const rejectedAdmission =
-            normalizedAdmission.ok === false
-              ? normalizedAdmission.rejectionRef
-              : null;
+            normalizedAdmission.ok === false ? normalizedAdmission.rejectionRef : null;
           if (rejectedAdmission !== null) {
             yield* ledger.log(
               "tool.rejected",
@@ -450,9 +445,7 @@ export const submitAgentEffect = (
             return yield* new ToolError({
               toolName: call.function.name,
               cause: {
-                reason:
-                  rejectedAdmission.reason ??
-                  rejectedAdmission.rejectionKind,
+                reason: rejectedAdmission.reason ?? rejectedAdmission.rejectionKind,
                 rejectionKind: rejectedAdmission.rejectionKind,
               },
             });

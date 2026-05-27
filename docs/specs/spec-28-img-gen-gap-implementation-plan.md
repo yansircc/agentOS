@@ -85,13 +85,14 @@ App hook:
 protected provideDispatchTargets(): Record<string, DurableObjectNamespace>;
 ```
 
-`bindingRef` is symbolic, like `endpointRef` / `credentialRef`. The ledger
-stores the ref, not a runtime namespace object.
+`bindingRef` is symbolic, like `endpointRef` / `credentialRef`. All three are
+execution material refs under spec-37. The ledger stores symbolic refs, not a
+runtime namespace object, secret, or provider handle.
 
-`provideDispatchTargets()` is intentionally separate from
-`provideRefResolver()`: both are symbolic-ref resolvers, but the resolved
-values are different boundary objects. Provider registry values are
-serializable endpoint/credential references; dispatch targets resolve to
+`provideDispatchTargets()` predates spec-37 and is intentionally a dispatch
+target registry, not a general material resolver. Provider endpoints,
+credentials, bindings, and external resources resolve through
+`provideRefResolver().material`; dispatch targets resolve to
 runtime `DurableObjectNamespace` objects and must not be stored or merged into
 provider route config.
 
@@ -471,7 +472,7 @@ turn loop, no tool call loop, and no structured-output lease in core.
 v0 does not need a lease table. It needs route/protocol ownership:
 
 - finite image protocol adapters.
-- symbolic endpoint/credential refs via `RefResolver`.
+- symbolic endpoint/credential refs via `MaterialRef` and `RefResolver.material`.
 - no model whitelist in app code.
 
 If image providers show schema/capability flake similar to structured output,

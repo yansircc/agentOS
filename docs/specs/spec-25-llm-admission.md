@@ -105,12 +105,12 @@ type LlmRoute =
   | { kind: "openai-responses"; endpointRef: string; credentialRef: string; modelId: string };
 ```
 
-- **`endpointRef`** is a stable symbolic id (resolved from app / wrangler
-  env at call time via `RefResolver`); it is **not** a raw URL. Two
-  endpoints with identical URLs but
+- **`endpointRef`** is a stable symbolic id (projected to `MaterialRef` and
+  resolved from app / wrangler env at call time via `RefResolver.material`);
+  it is **not** a raw URL. Two endpoints with identical URLs but
   different protocol semantics MUST resolve to different refs.
-- **`credentialRef`** is the symbolic name of the credential in
-  `RefResolver`; the secret value is resolved at call time and
+- **`credentialRef`** is the symbolic credential material name. The secret
+  value is resolved at call time through `RefResolver.material` and
   NEVER persisted in evidence (only the ref is hashed into
   `routeFingerprint`). Credential rotation does not invalidate
   capability evidence — same ref, new value behind it. See

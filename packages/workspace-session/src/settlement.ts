@@ -1,8 +1,4 @@
-import {
-  settleRejectedClaim,
-  type PreClaim,
-  type RejectionRef,
-} from "@agent-os/core/effect-claim";
+import { settleRejectedClaim, type PreClaim, type RejectionRef } from "@agent-os/core/effect-claim";
 import type { ExtensionCapability } from "@agent-os/core/extensions";
 
 import type { WorkspaceSessionFailure } from "./carrier";
@@ -36,8 +32,7 @@ export const settleWorkspaceSessionRejected = (
 ): WorkspaceSessionFailure["claim"] =>
   settleRejectedClaim(claim, {
     rejectionId: spec.proofRef ?? `${claim.operationRef}:rejected`,
-    rejectionKind:
-      spec.rejectionKind ?? workspaceSessionRejectionKind(spec.code),
+    rejectionKind: spec.rejectionKind ?? workspaceSessionRejectionKind(spec.code),
     reason: spec.reason,
   });
 

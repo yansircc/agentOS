@@ -11,9 +11,9 @@ import {
   cfAiBindingImageAdapter,
   generateImageEffect,
   ImageAiBinding,
-  ImageRefResolverLive,
   openaiChatCompatibleImageAdapter,
 } from "../src";
+import { RefResolverLive } from "@agent-os/core/ref-resolver";
 
 const SENTINEL_AI = {
   run: (() => {
@@ -37,9 +37,17 @@ const runtimeFor = (
   ManagedRuntime.make(
     Layer.mergeAll(
       Layer.succeed(ImageAiBinding, ai),
-      ImageRefResolverLive({
-        endpoint: (ref) => endpoints[ref] ?? null,
-        credential: (ref) => credentials[ref] ?? null,
+      RefResolverLive({
+        material: (ref) => {
+          switch (ref.kind) {
+            case "endpoint":
+              return endpoints[ref.ref] ?? null;
+            case "credential":
+              return credentials[ref.ref] ?? null;
+            default:
+              return null;
+          }
+        },
       }),
     ),
   );
@@ -202,7 +210,7 @@ describe("image route adapters — P3 C5", () => {
         expect(result.left._tag).toBe("agent_os.ref_resolution_failed");
         expect(result.left).toMatchObject({
           kind: "endpoint",
-          ref: "missing-endpoint",
+          ref: "endpoint:openai-chat-compatible-image:missing-endpoint",
         });
       }
     } finally {

@@ -18,6 +18,10 @@
       "types": "./src/ref-resolver.ts",
       "default": "./src/ref-resolver.ts"
     },
+    "./material-ref": {
+      "types": "./src/material-ref.ts",
+      "default": "./src/material-ref.ts"
+    },
     "./abort": {
       "types": "./src/abort.ts",
       "default": "./src/abort.ts"

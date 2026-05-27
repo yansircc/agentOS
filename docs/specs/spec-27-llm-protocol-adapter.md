@@ -176,8 +176,9 @@ propagation) and nothing else.
 ### 3.2 Adapter purity
 
 Adapters are pure. They have no IO, no clock, no secret resolution. Secrets
-(via `credentialRef`) are resolved by `dispatchProvider` from
-`RefResolver`. The adapter does not see the secret value.
+(via `credentialRef`) are projected into `MaterialRef` and resolved by
+`dispatchProvider` from `RefResolver.material`. The adapter does not see the
+secret value.
 
 `encodeTurn` / `encodeStructured` are total functions: route + request →
 body. `decodeTurn` / `decodeStructured` accept the raw `unknown` upstream
@@ -695,8 +696,11 @@ export class MyAgent extends AgentDOBase<Env> {
       GEMINI_KEY: this.env.GEMINI_KEY,
     } as const;
     return {
-      endpoint: (ref: string) => endpoints[ref] ?? null,
-      credential: (ref: string) => credentials[ref] ?? null,
+      material: (ref) => {
+        if (ref.kind === "endpoint") return endpoints[ref.ref] ?? null;
+        if (ref.kind === "credential") return credentials[ref.ref] ?? null;
+        return null;
+      },
     };
   }
 }

@@ -7,7 +7,7 @@
 > **Depends on**: spec-24 section 8 / section 11.1 (scope key conventions +
 > stateful carrier safety), spec-28 section 2 (dispatch idempotency), spec-34
 > section 1 / section 7 (authorized commit calculus + extension capability),
-> spec-35 dynamic-worker boundary.
+> spec-35 dynamic-worker boundary, spec-37 material-ref algebra.
 
 ---
 
@@ -81,6 +81,10 @@ Corollaries:
 - **C-6.** Rejection is a first-class settlement. Gate denial, validation
   denial, policy denial, and unsupported carrier shape settle as
   `RejectedClaim`; they are not represented by absent proof.
+- **C-7.** Execution material is mechanism, not effect identity.
+  `PreClaim` keeps the four refs above. Material such as credentials,
+  endpoints, bindings, buckets, or queue producers belongs to resolver or
+  admitter input via spec-37 `MaterialRef`, not to `operationRef`.
 
 ### 1.1 Placement Law
 
@@ -296,6 +300,9 @@ Rules:
 - **A-5.** Package-owned event vocabulary still follows spec-34 section 7. A
   package claim may have an `authorityRef`, but the positive writer remains the
   scoped `ExtensionCapability`.
+- **A-6.** Authority contracts may declare required material kinds, but
+  material rotation does not change authority identity. The right is
+  `AuthorityRef`; the means is `MaterialRef`.
 
 ---
 
@@ -344,6 +351,10 @@ Rules:
 - **P-2.** Large bytes, full logs, manifests, and responses stay in carriers.
   `anchorRef` stores a ref, not the bytes.
 - **P-3.** A dry run uses `anchorKind: "dry_run_proof"` and is still lived.
+- **P-4.** `anchorRef`, `payload.claim`, and claim projections must never carry
+  resolved execution material: no secret values, live handles, response bytes,
+  bucket objects, namespace objects, or provider clients. They may carry only
+  symbolic refs, proof ids, fingerprints, or carrier receipts.
 
 `RejectionRef` is proof that the effect did not execute under the requested
 authority/scope/operation.
@@ -459,12 +470,12 @@ this calculus.
 `EffectClaim` has four runtime roles around it. These roles do not replace
 spec-34's writer capability; they sit around the pre/post effect boundary.
 
-| Role      | Responsibility                                                                                 | Must not do                                           |
-| --------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| generator | mint or canonicalize a `PreClaim` at an effect boundary                                        | decide policy by reading unrelated side-channel state |
-| admitter  | consume a `PreClaim` and return an admit/reject verdict before execution                       | write ledger facts or change claim identity           |
-| resolver  | turn `*Ref` values into concrete carrier resources, leases, cleanup roots, or dispatch targets | mint claims unless it is also explicitly a generator  |
-| reader    | project claim/ledger streams into trace, audit, workbench, or failure-plane views              | write durable facts that duplicate the ledger         |
+| Role      | Responsibility                                                                                                   | Must not do                                           |
+| --------- | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| generator | mint or canonicalize a `PreClaim` at an effect boundary                                                          | decide policy by reading unrelated side-channel state |
+| admitter  | consume a `PreClaim` and return an admit/reject verdict before execution                                         | write ledger facts or change claim identity           |
+| resolver  | turn `*Ref` values into concrete carrier resources, material handles, leases, cleanup roots, or dispatch targets | mint claims unless it is also explicitly a generator  |
+| reader    | project claim/ledger streams into trace, audit, workbench, or failure-plane views                                | write durable facts that duplicate the ledger         |
 
 Package names are not substrate ontology. A package is an implementation of one
 or more roles on a concrete substrate. The role count should stay stable even
@@ -487,6 +498,11 @@ Rules:
   `provider_rejected`; policy decisions are `policy_denied`.
 - **M-3.** A resolver owns the mapping from typed refs to carrier resources.
   Provider-specific behavior belongs here, not in shared substrate logic.
+- **M-3a.** Acquire-side execution material and release-side cleanup are
+  separate axes. `MaterialRef` names what a carrier must acquire to execute;
+  cleanup roots name how an allocated resource is later released. They may
+  later share a lease abstraction, but v0 must not treat cleanup roots as
+  material.
 - **M-4.** A reader is derived data. Trace locators, failure planes, and
   workbench views read claim/ledger state; they do not become another source
   of truth.
@@ -504,19 +520,37 @@ Rules:
 The previous six "app runtime gaps" collapse into role materializations over
 this calculus.
 
-| Materialization                          | Role                                 | Boundary decision                                                                                                                                                                                                          |
-| ---------------------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| tool registry                            | generator + admitter                 | tool identity and turn authority are one boundary schema; contracts are constructed by the registry, and default admission fails closed                                                                                     |
-| DecisionGate                             | admitter + reader                    | app/durable package materialization for cross-actor or cross-time approval; core baseline stays synchronous and write-free                                                                                                  |
-| runtime scope                            | resolver                             | `ScopeRef` resolves to resource keys, leases, and cleanup roots; provider cases stay outside core                                                                                                                          |
+| Materialization                          | Role                                 | Boundary decision                                                                                                                                                                                                                  |
+| ---------------------------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| tool registry                            | generator + admitter                 | tool identity and turn authority are one boundary schema; contracts are constructed by the registry, and default admission fails closed                                                                                            |
+| DecisionGate                             | admitter + reader                    | app/durable package materialization for cross-actor or cross-time approval; core baseline stays synchronous and write-free                                                                                                         |
+| runtime scope                            | resolver                             | `ScopeRef` resolves to resource keys, leases, and cleanup roots; provider cases stay outside core                                                                                                                                  |
 | workspace session                        | core claim shape + carrier resolver  | `kind: "session"` is the core ownership/lifecycle class; `@agent-os/workspace-session` owns provider-neutral lifecycle facts, projection, and claim settlement; sandbox/workspace/preview/backup resolution stays carrier-specific |
-| dynamic worker                           | generator or carrier materializer    | bounded stateless Worker execution; not a substitute for session/workspace state                                                                                                                                           |
-| git/deploy/staging/verification carriers | generator/resolver as needed         | adopt claim settlement and proof anchors without app-specific nouns such as `changeId`                                                                                                                                     |
-| Cloudflare resource/control plane        | resolver/materializer for `external` | account/site/Worker/resource operations fail closed and anchor proofs in carrier-owned vocabulary                                                                                                                          |
-| trace locator/failure plane              | reader                               | ledger projection only; no parallel observability facts                                                                                                                                                                    |
+| material ref                             | resolver + admitter input            | carrier-neutral symbolic refs for execution-time material; never a fifth `PreClaim` field and never a resolved handle in ledger payloads                                                                                           |
+| dynamic worker                           | generator or carrier materializer    | bounded stateless Worker execution; not a substitute for session/workspace state                                                                                                                                                   |
+| git/deploy/staging/verification carriers | generator/resolver as needed         | adopt claim settlement and proof anchors without app-specific nouns such as `changeId`                                                                                                                                             |
+| Cloudflare resource/control plane        | resolver/materializer for `external` | account/site/Worker/resource operations fail closed and anchor proofs in carrier-owned vocabulary                                                                                                                                  |
+| trace locator/failure plane              | reader                               | ledger projection only; no parallel observability facts                                                                                                                                                                            |
 
 This table is a planning matrix, not a package list. A future package should
 state which role it materializes and which `EffectClaim` fields it owns.
+
+MaterialRef split:
+
+```text
+intent:
+  operationRef + scopeRef + authorityRef + originRef
+
+mechanism:
+  AuthorityContract.requiredMaterials -> MaterialRef -> MaterialResolver
+```
+
+The intent side defines idempotent effect identity. The mechanism side defines
+which symbolic execution materials a resolver/admitter must acquire or check
+before the carrier can run. Credential rotation, endpoint migration, binding
+renames, and BYOK changes must not mutate `operationRef` unless the intended
+effect itself changes. See spec-37 for the `MaterialRef` contract and redaction
+rules.
 
 Workspace-session split:
 
@@ -553,14 +587,14 @@ and MUST NOT parse scheme or path segments for substrate behavior.
 
 ## 13. Implementation Stages
 
-| Stage                                 | Ships                                                                                                  | Does not claim                   |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------- |
-| P0 - spec                             | this document, including substrate/runtime completion criteria and role algebra                        | runtime enforcement              |
-| P1 - private helpers                  | non-barrel core/internal types and claim validators used by one call path                              | public package API stability     |
+| Stage                                   | Ships                                                                                                 | Does not claim                   |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------- | -------------------------------- |
+| P0 - spec                               | this document, including substrate/runtime completion criteria and role algebra                       | runtime enforcement              |
+| P1 - private helpers                    | non-barrel core/internal types and claim validators used by one call path                             | public package API stability     |
 | P2 - generator/admitter materialization | tool registry as the first named generator for tool identity and admitter for pre-execution authority | universal carrier migration      |
-| P3 - resolver materialization         | runtime-scope and at least one carrier adopting typed `ScopeRef` resolution                            | full workspace/session lifecycle |
-| P4 - reader materialization           | trace locator/failure-plane projection over claim/ledger state                                         | second observability store       |
-| P5 - carrier migration                | dynamic-worker/git/deploy/staging/verification/workspace claims and proofs                             | app domain approval policy       |
+| P3 - resolver materialization           | runtime-scope and at least one carrier adopting typed `ScopeRef` resolution                           | full workspace/session lifecycle |
+| P4 - reader materialization             | trace locator/failure-plane projection over claim/ledger state                                        | second observability store       |
+| P5 - carrier migration                  | dynamic-worker/git/deploy/staging/verification/workspace claims and proofs                            | app domain approval policy       |
 
 Do not add a public barrel export before at least one call path uses the type
 as an invariant-enforcing boundary. A public unused type would be vocabulary,
@@ -613,3 +647,6 @@ Implementation checks for a future P1/P2:
   second source of truth.
 - role implementations declare whether they are generators, admitters,
   resolvers, readers, or an explicit combination.
+- material refs are resolver/admitter input, not claim fields.
+- authority contracts declare required material kinds without leaking resolved
+  material into claim payloads, anchors, or projections.

@@ -18,12 +18,7 @@ export const WORKSPACE_SESSION_EVENTS = {
 export type WorkspaceSessionEventKind =
   (typeof WORKSPACE_SESSION_EVENTS)[keyof typeof WORKSPACE_SESSION_EVENTS];
 
-export type WorkspaceSessionLifecycleStep =
-  | "start"
-  | "restore"
-  | "backup"
-  | "preview"
-  | "destroy";
+export type WorkspaceSessionLifecycleStep = "start" | "restore" | "backup" | "preview" | "destroy";
 
 export type WorkspaceSessionRetention =
   | {
@@ -121,23 +116,13 @@ export interface WorkspaceSessionProjection {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const stringField = (
-  payload: Record<string, unknown>,
-  key: string,
-): string | undefined =>
+const stringField = (payload: Record<string, unknown>, key: string): string | undefined =>
   typeof payload[key] === "string" ? payload[key] : undefined;
 
-const numberField = (
-  payload: Record<string, unknown>,
-  key: string,
-): number | undefined =>
-  typeof payload[key] === "number" && Number.isFinite(payload[key])
-    ? payload[key]
-    : undefined;
+const numberField = (payload: Record<string, unknown>, key: string): number | undefined =>
+  typeof payload[key] === "number" && Number.isFinite(payload[key]) ? payload[key] : undefined;
 
-const retentionFrom = (
-  value: unknown,
-): WorkspaceSessionRetention | undefined => {
+const retentionFrom = (value: unknown): WorkspaceSessionRetention | undefined => {
   if (!isRecord(value)) return undefined;
   if (value.mode !== "ephemeral" && value.mode !== "persistent") {
     return undefined;
@@ -154,16 +139,12 @@ const retentionFrom = (
 
 const livedClaimFrom = (value: unknown): LivedClaim | undefined => {
   const result = validateEffectClaim(value);
-  return result.ok && result.claim.phase === "lived"
-    ? result.claim
-    : undefined;
+  return result.ok && result.claim.phase === "lived" ? result.claim : undefined;
 };
 
 const rejectedClaimFrom = (value: unknown): RejectedClaim | undefined => {
   const result = validateEffectClaim(value);
-  return result.ok && result.claim.phase === "rejected"
-    ? result.claim
-    : undefined;
+  return result.ok && result.claim.phase === "rejected" ? result.claim : undefined;
 };
 
 const failedPayloadFrom = (
@@ -173,11 +154,7 @@ const failedPayloadFrom = (
   const reason = stringField(payload, "reason");
   const claim = rejectedClaimFrom(payload.claim);
   const step = payload.step;
-  if (
-    subjectRef === undefined ||
-    reason === undefined ||
-    claim === undefined
-  ) {
+  if (subjectRef === undefined || reason === undefined || claim === undefined) {
     return undefined;
   }
   if (
@@ -194,9 +171,7 @@ const failedPayloadFrom = (
     step,
     reason,
     claim,
-    ...(typeof payload.proofRef === "string"
-      ? { proofRef: payload.proofRef }
-      : {}),
+    ...(typeof payload.proofRef === "string" ? { proofRef: payload.proofRef } : {}),
   };
 };
 
@@ -205,9 +180,7 @@ const pushBackup = (
   backupRef: string,
   expiresAt?: string,
 ): void => {
-  backups.push(
-    expiresAt === undefined ? { backupRef } : { backupRef, expiresAt },
-  );
+  backups.push(expiresAt === undefined ? { backupRef } : { backupRef, expiresAt });
 };
 
 const pushPreview = (
@@ -216,9 +189,7 @@ const pushPreview = (
   port: number,
   url?: string,
 ): void => {
-  previews.push(
-    url === undefined ? { previewRef, port } : { previewRef, port, url },
-  );
+  previews.push(url === undefined ? { previewRef, port } : { previewRef, port, url });
 };
 
 const resetLifecycleRefs = (

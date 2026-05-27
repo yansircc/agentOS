@@ -1,3 +1,5 @@
+import { describe, expect, it } from "vite-plus/test";
+
 import {
   WORKSPACE_SESSION_EVENTS,
   commitWorkspaceSessionFailed,
@@ -7,10 +9,7 @@ import {
   settleWorkspaceSessionRejected,
   workspaceSessionExtensionPackage,
 } from "../src";
-import {
-  makePreClaim,
-  settleLivedClaim,
-} from "@agent-os/core/effect-claim";
+import { makePreClaim, settleLivedClaim } from "@agent-os/core/effect-claim";
 import type { ExtensionCapability } from "@agent-os/core/extensions";
 
 const sessionClaim = makePreClaim({
