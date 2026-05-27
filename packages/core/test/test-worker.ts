@@ -22,6 +22,10 @@
  *                  to validate streamEvents, events(opts), and worker-layer
  *                  Last-Event-ID parsing.
  *
+ *   SubmitStreamTestDO — extends AgentDOBase with a deterministic AI stub.
+ *                        submitRunStream contract tests exercise the public
+ *                        composition bridge without a live provider binding.
+ *
  * The fetch handler exists only to satisfy the Workers runtime
  * requirement that a worker has a default export.
  */
@@ -35,6 +39,7 @@ import {
   type ExtensionPackage,
 } from "../src";
 import { bindingMaterialRef, materialRefKey } from "../src/material-ref";
+import { finalTextResp, stubAi } from "./_stub-ai";
 
 export class TestAgentDO extends DurableObject {}
 
@@ -105,6 +110,17 @@ export class StreamTestDO extends AgentDOBase<AgentDOEnv> {
   }
 }
 
+const submitStreamEnv = (env: AgentDOEnv): AgentDOEnv => ({
+  ...env,
+  AI: stubAi([finalTextResp("stream done")]),
+});
+
+export class SubmitStreamTestDO extends AgentDOBase<AgentDOEnv> {
+  constructor(ctx: DurableObjectState, env: AgentDOEnv) {
+    super(ctx, submitStreamEnv(env));
+  }
+}
+
 export class ExtensionTestDO extends AgentDOBase<AgentDOEnv> {
   protected override registerExtensions(): ReadonlyArray<ExtensionPackage> {
     return [
@@ -148,6 +164,7 @@ export class ExtensionTestDO extends AgentDOBase<AgentDOEnv> {
 
 interface WorkerEnv extends AgentDOEnv {
   readonly STREAM_DO: DurableObjectNamespace<StreamTestDO>;
+  readonly SUBMIT_STREAM_DO: DurableObjectNamespace<SubmitStreamTestDO>;
   readonly EXTENSION_DO: DurableObjectNamespace<ExtensionTestDO>;
 }
 

@@ -23,6 +23,10 @@
         "class_name": "StreamTestDO",
       },
       {
+        "name": "SUBMIT_STREAM_DO",
+        "class_name": "SubmitStreamTestDO",
+      },
+      {
         "name": "EXTENSION_DO",
         "class_name": "ExtensionTestDO",
       },
@@ -36,6 +40,7 @@
         "EmitTestDO",
         "DispatchTestDO",
         "StreamTestDO",
+        "SubmitStreamTestDO",
         "ExtensionTestDO",
       ],
     },

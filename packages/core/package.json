@@ -44,6 +44,7 @@
     "test": "vp test run"
   },
   "dependencies": {
+    "@agent-os/run-stream": "workspace:*",
     "@effect/experimental": "catalog:",
     "@effect/platform": "catalog:",
     "@effect/sql": "catalog:",
