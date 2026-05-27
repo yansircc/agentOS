@@ -18,7 +18,7 @@ at claim time and arrives later as a ledger fact.
 `N≥2` per the universality test in spec-36 §1.1.
 
 - vibe front-door / handoff approval flow exhibits the `requested → decided
-  → consumed` shape with policy refs and operator decision facts.
+→ consumed` shape with policy refs and operator decision facts.
 - zeroY `wait_for_approval` workflow step over `ApplyCandidateApproval`
   exhibits the same shape with the same role boundaries.
 
