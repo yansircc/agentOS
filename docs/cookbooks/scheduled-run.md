@@ -231,6 +231,11 @@ It is useful for terminal delivery and replay-friendly UI handoff. It is not
 live progress. Realtime UI needs a separate non-durable turn-frame source, and
 those turn frames remain progress data rather than durable truth.
 
+The realtime `@agent-os/run-stream` composer is different from the batched
+bridge: it consumes a live ledger subscription, an optional live turn-frame
+source, and a terminal `SubmitResult` promise. The scheduler still does not
+own run truth; it only supplies or resumes the sources.
+
 ## vibe replacement path
 
 For a vibe-style `workflowRunLedger.ts`, the strangler path is:
