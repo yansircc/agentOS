@@ -7,11 +7,7 @@
 
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vite-plus/test";
-import {
-  decodeRunStreamData,
-  projectRunStream,
-  type RunStreamFrame,
-} from "@agent-os/run-stream";
+import { decodeRunStreamData, projectRunStream, type RunStreamFrame } from "@agent-os/run-stream";
 
 import type { LedgerEventRpc, SubmitRunStreamSpec } from "../src";
 import { defineRegisteredTool, permissiveToolAdmitter } from "../src/tools";

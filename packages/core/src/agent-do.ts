@@ -407,11 +407,7 @@ export abstract class AgentDOBase<Env extends AgentDOEnv> extends DurableObject<
           try {
             const { afterId, ...submitSpec } = spec;
             const baseline =
-              afterId ??
-              (await this.events()).reduce(
-                (max, event) => Math.max(max, event.id),
-                0,
-              );
+              afterId ?? (await this.events()).reduce((max, event) => Math.max(max, event.id), 0);
             const result = await this.submit(submitSpec);
             const events = await this.events({ afterId: baseline });
             for (const event of events) {
