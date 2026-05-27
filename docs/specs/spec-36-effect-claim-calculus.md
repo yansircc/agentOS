@@ -89,13 +89,16 @@ information item to maintain its invariants:
 
 ```text
 layer(X) = lowest layer where X is necessary to maintain writer,
-           resolver, and reader correctness
+           admitter, resolver, and reader correctness
 ```
 
 The operational test is not "will several apps use this?" The test is:
 
 - **writer guard** - without `X`, a durable fact namespace can acquire a
   second positive writer or an app can forge a package-owned fact;
+- **admitter guard** - without `X`, a pre-effect authority, policy, or
+  resource decision cannot be made against the same intended effect identity
+  that will later be settled;
 - **resolver guard** - without `X`, a typed ref cannot be resolved into
   carrier resources, leases, cleanup roots, or dispatch targets without
   provider-specific parsing;
@@ -104,19 +107,22 @@ The operational test is not "will several apps use this?" The test is:
 
 Placement follows from the first guard that fails:
 
-| Placement            | Necessary information                                                                             |
-| -------------------- | ------------------------------------------------------------------------------------------------- |
-| core                 | universal to all effect boundaries because writer, resolver, or reader invariants fail without it |
-| carrier package      | universal to all products using one substrate/provider boundary                                   |
-| experimental package | universal to N>=2 products but not yet proven as a stable carrier API                             |
-| cookbook/app         | per-product policy, vocabulary, ranking, UI, or role semantics                                    |
+| Placement            | Necessary information                                                                                       |
+| -------------------- | ----------------------------------------------------------------------------------------------------------- |
+| core                 | universal to all effect boundaries because writer, admitter, resolver, or reader invariants fail without it |
+| carrier package      | universal to all products using one substrate/provider boundary                                             |
+| experimental package | universal to N>=2 products but not yet proven as a stable carrier API                                       |
+| cookbook/app         | per-product policy, vocabulary, ranking, UI, or role semantics                                              |
 
 Writer and generator are deliberately separate concepts:
 
 - **writer** is the spec-34 positive commit authority for a durable fact
   namespace. It protects vocabulary ownership.
-- **generator** is the spec-36 role that mints or rejects a `PreClaim`. It
-  protects effect identity.
+- **generator** is the spec-36 role that mints or canonicalizes a `PreClaim`.
+  It protects effect identity.
+- **admitter** is the spec-36 role that consumes a `PreClaim` and returns
+  `admitted` or `rejected(RejectionRef)` before execution. It protects
+  pre-effect authority and policy.
 
 A package may be both, but only by naming both responsibilities. Conflating
 them hides whether the system is protecting fact ownership, effect identity,
@@ -435,24 +441,25 @@ effect-boundary type is a substrate gap.
 
 Substrate acceptance:
 
-> A new app may add generators, resolvers, and readers, but must not add a new
-> effect-boundary type, nullable phase field, side-channel policy field, or
-> second fact source to describe an external effect.
+> A new app may add generators, admitters, resolvers, and readers, but must
+> not add a new effect-boundary type, nullable phase field, side-channel policy
+> field, or second fact source to describe an external effect.
 
 Runtime acceptance is product-local. It is satisfied only when that product has
-materialized the generators, resolvers, and readers it needs over this
-calculus.
+materialized the generators, admitters, resolvers, and readers it needs over
+this calculus.
 
 ---
 
 ## 11. Role Algebra
 
-`EffectClaim` has three runtime roles around it. These roles do not replace
+`EffectClaim` has four runtime roles around it. These roles do not replace
 spec-34's writer capability; they sit around the pre/post effect boundary.
 
 | Role      | Responsibility                                                                                 | Must not do                                           |
 | --------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| generator | mint a `PreClaim` at an effect boundary, or reject before execution                            | resolve provider resources as an untyped side channel |
+| generator | mint or canonicalize a `PreClaim` at an effect boundary                                        | decide policy by reading unrelated side-channel state |
+| admitter  | consume a `PreClaim` and return an admit/reject verdict before execution                       | write ledger facts or change claim identity           |
 | resolver  | turn `*Ref` values into concrete carrier resources, leases, cleanup roots, or dispatch targets | mint claims unless it is also explicitly a generator  |
 | reader    | project claim/ledger streams into trace, audit, workbench, or failure-plane views              | write durable facts that duplicate the ledger         |
 
@@ -465,16 +472,21 @@ Rules:
 - **M-0.** A writer is not a generator. A writer owns durable vocabulary via
   spec-34 `ExtensionCapability`; a generator owns claim identity via
   `operationRef`, `authorityRef`, `originRef`, and `scopeRef`.
-- **M-1.** A generator owns the boundary where authority is checked and
-  `operationRef` is minted or canonicalized.
-- **M-2.** A resolver owns the mapping from typed refs to carrier resources.
+- **M-1.** A generator owns the boundary where `operationRef` is minted or
+  canonicalized.
+- **M-2.** An admitter owns the pre-effect decision over an already-minted
+  claim. The baseline admitter is synchronous and write-free: it returns a
+  verdict, and the caller/carrier settles `RejectedClaim` or `LivedClaim`.
+  Durable multi-actor gates are admitter materializations, not a new core run
+  status.
+- **M-3.** A resolver owns the mapping from typed refs to carrier resources.
   Provider-specific behavior belongs here, not in shared substrate logic.
-- **M-3.** A reader is derived data. Trace locators, failure planes, and
+- **M-4.** A reader is derived data. Trace locators, failure planes, and
   workbench views read claim/ledger state; they do not become another source
   of truth.
-- **M-4.** One package may implement multiple roles only if the roles are
+- **M-5.** One package may implement multiple roles only if the roles are
   named separately in its contract.
-- **M-5.** Universality is tested by the writer/resolver/reader guards in
+- **M-6.** Universality is tested by the writer/admitter/resolver/reader guards in
   section 1.1. If an app-specific rule is not required to maintain those
   guards, it remains app-owned even when several apps happen to use the same
   product policy.
@@ -488,7 +500,8 @@ this calculus.
 
 | Materialization                          | Role                                 | Boundary decision                                                                                                                                                                                                          |
 | ---------------------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| tool registry                            | generator                            | tool identity and turn authority are one boundary schema; do not split `ToolProvider` and `TurnContract` into separate gates                                                                                               |
+| tool registry                            | generator + admitter                 | tool identity and turn authority are one boundary schema; do not split `ToolProvider` and `TurnContract` into unrelated gates                                                                                              |
+| DecisionGate                             | admitter + reader                    | app/durable package materialization for cross-actor or cross-time approval; core baseline stays synchronous and write-free                                                                                                  |
 | runtime scope                            | resolver                             | `ScopeRef` resolves to resource keys, leases, and cleanup roots; provider cases stay outside core                                                                                                                          |
 | workspace session                        | core claim shape + carrier resolver  | `kind: "session"` is the core ownership/lifecycle class; `@agent-os/workspace-session` owns provider-neutral lifecycle facts, projection, and claim settlement; sandbox/workspace/preview/backup resolution stays carrier-specific |
 | dynamic worker                           | generator or carrier materializer    | bounded stateless Worker execution; not a substitute for session/workspace state                                                                                                                                           |
@@ -534,14 +547,14 @@ and MUST NOT parse scheme or path segments for substrate behavior.
 
 ## 13. Implementation Stages
 
-| Stage                          | Ships                                                                           | Does not claim                   |
-| ------------------------------ | ------------------------------------------------------------------------------- | -------------------------------- |
-| P0 - spec                      | this document, including substrate/runtime completion criteria and role algebra | runtime enforcement              |
-| P1 - private helpers           | non-barrel core/internal types and claim validators used by one call path       | public package API stability     |
-| P2 - generator materialization | tool registry as the first named generator for tool identity + authority        | universal carrier migration      |
-| P3 - resolver materialization  | runtime-scope and at least one carrier adopting typed `ScopeRef` resolution     | full workspace/session lifecycle |
-| P4 - reader materialization    | trace locator/failure-plane projection over claim/ledger state                  | second observability store       |
-| P5 - carrier migration         | dynamic-worker/git/deploy/staging/verification/workspace claims and proofs      | app domain approval policy       |
+| Stage                                 | Ships                                                                                                  | Does not claim                   |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------- |
+| P0 - spec                             | this document, including substrate/runtime completion criteria and role algebra                        | runtime enforcement              |
+| P1 - private helpers                  | non-barrel core/internal types and claim validators used by one call path                              | public package API stability     |
+| P2 - generator/admitter materialization | tool registry as the first named generator for tool identity and admitter for pre-execution authority | universal carrier migration      |
+| P3 - resolver materialization         | runtime-scope and at least one carrier adopting typed `ScopeRef` resolution                            | full workspace/session lifecycle |
+| P4 - reader materialization           | trace locator/failure-plane projection over claim/ledger state                                         | second observability store       |
+| P5 - carrier migration                | dynamic-worker/git/deploy/staging/verification/workspace claims and proofs                             | app domain approval policy       |
 
 Do not add a public barrel export before at least one call path uses the type
 as an invariant-enforcing boundary. A public unused type would be vocabulary,
@@ -571,10 +584,12 @@ Spec-level checks:
   resolution.
 - writer and generator are different guards; package code must not rely on
   claim generation as durable namespace authority.
+- generator and admitter are different guards; package code must not decide
+  policy before an intended effect has a canonical `PreClaim`.
 - dry-run success maps to `LivedClaim` with dry-run proof.
 - substrate completion is defined separately from runtime completion.
 - new apps may add role materializations but not a new effect-boundary type.
-- package planning is expressed as generator/resolver/reader roles, not a
+- package planning is expressed as generator/admitter/resolver/reader roles, not a
   fixed list of product capabilities.
 
 Implementation checks for a future P1/P2:
@@ -582,9 +597,11 @@ Implementation checks for a future P1/P2:
 - duplicate `operationRef` returns the same terminal settlement for the same
   intended effect;
 - malformed scope kind rejects before carrier execution;
+- malformed admitter verdict settles as `RejectedClaim`, never as an
+  unhandled post-mint exception;
 - non-session scopes cannot declare a runtime/workspace root;
 - unsupported carrier shape settles as `RejectedClaim`, never fallback success;
 - trace projections can locate operation/anchor/rejection without owning a
   second source of truth.
-- role implementations declare whether they are generators, resolvers, readers,
-  or an explicit combination.
+- role implementations declare whether they are generators, admitters,
+  resolvers, readers, or an explicit combination.

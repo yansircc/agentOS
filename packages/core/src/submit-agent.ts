@@ -36,9 +36,11 @@ import { Admission, type JsonSchemaObject, makeSchemaContract } from "./admissio
 import {
   makeOperationRef,
   makePreClaim,
+  isRejectionRef,
   settleLivedClaim,
   settleRejectedClaim,
   type RejectionRef,
+  type PreClaim,
   type ScopeRef,
 } from "./effect-claim";
 
@@ -136,6 +138,39 @@ const toolRejectionKind = (reason: string): RejectionRef["rejectionKind"] =>
   reason === "rate_limited" || reason.startsWith("invalid_quota_")
     ? "resource_denied"
     : "provider_rejected";
+
+const admitterErrorReason = (cause: unknown): string =>
+  `admitter_error: ${String(cause)}`;
+
+const normalizeAdmitRejection = (
+  claim: PreClaim,
+  value: unknown,
+): RejectionRef =>
+  isRejectionRef(value)
+    ? value
+    : {
+        rejectionId: claim.operationRef,
+        rejectionKind: "policy_denied",
+        reason: "invalid_admitter_rejection_ref",
+      };
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const admitRejectionFromVerdict = (
+  claim: PreClaim,
+  verdict: unknown,
+): RejectionRef | null => {
+  if (isRecord(verdict) && verdict.ok === true) return null;
+  if (isRecord(verdict) && verdict.ok === false) {
+    return normalizeAdmitRejection(claim, verdict.rejectionRef);
+  }
+  return {
+    rejectionId: claim.operationRef,
+    rejectionKind: "policy_denied",
+    reason: "invalid_admitter_verdict",
+  };
+};
 
 export const buildInitialMessages = (
   spec: Pick<InternalSubmitSpec, "system" | "intent" | "context">,
@@ -402,6 +437,61 @@ export const submitAgentEffect = (
               originKind: "submit",
             },
           });
+
+          const admission = yield* Effect.tryPromise({
+            try: () =>
+              Promise.resolve(
+                tool.admit({
+                  claim,
+                  args,
+                  contract,
+                  toolName: call.function.name,
+                }),
+              ),
+            catch: (cause): RejectionRef => ({
+              rejectionId: claim.operationRef,
+              rejectionKind: "policy_denied",
+              reason: admitterErrorReason(cause),
+            }),
+          }).pipe(
+            Effect.catchAll((rejectionRef) =>
+              Effect.succeed({
+                ok: false as const,
+                rejectionRef: {
+                  rejectionId: rejectionRef.rejectionId,
+                  rejectionKind: rejectionRef.rejectionKind,
+                  ...(rejectionRef.reason === undefined
+                    ? {}
+                    : { reason: rejectionRef.reason }),
+                },
+              }),
+            ),
+          );
+          const rejectedAdmission = admitRejectionFromVerdict(
+            claim,
+            admission,
+          );
+          if (rejectedAdmission !== null) {
+            yield* ledger.log(
+              "tool.rejected",
+              {
+                runId: started.id,
+                name: call.function.name,
+                args: call.function.arguments,
+                claim: settleRejectedClaim(claim, rejectedAdmission),
+              },
+              scope,
+            );
+            return yield* new ToolError({
+              toolName: call.function.name,
+              cause: {
+                reason:
+                  rejectedAdmission.reason ??
+                  rejectedAdmission.rejectionKind,
+                rejectionKind: rejectedAdmission.rejectionKind,
+              },
+            });
+          }
 
           // Per-attempt grant + execute (inside Effect.retry).
           // Each retry independently grants → retries count toward quota.
