@@ -12,7 +12,15 @@ Status: 1.0 target for frame algebra. Provider delta adapters added before 1.0 m
 - `.:TurnStreamOmittedFrame`
 - `.:TurnStreamProjection`
 - `.:TurnStreamStatus`
+- `.:TurnStreamDeltaAdapterInput`
 - `.:TurnTextDeltaFrame`
+- `.:OpenAiCompatibleDeltaChoice`
+- `.:OpenAiCompatibleDeltaChunk`
+- `.:AnthropicDeltaChunk`
+- `.:GeminiDeltaChunk`
+- `.:adaptOpenAiCompatibleDeltaChunk`
+- `.:adaptAnthropicDeltaChunk`
+- `.:adaptGeminiDeltaChunk`
 - `.:decodeTurnStreamData`
 - `.:encodeTurnStreamSse`
 - `.:isTurnStreamFrame`

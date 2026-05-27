@@ -80,9 +80,7 @@ const collectRunFrames = async (
   return collected;
 };
 
-async function* emptyLedgerEvents(): AsyncGenerator<LedgerEventRpc> {
-  return;
-}
+const emptyLedgerEvents = (): Promise<ReadonlyArray<LedgerEventRpc>> => Promise.resolve([]);
 
 describe("@agent-os/run-stream", () => {
   it("projects ordered ledger and turn frames into one run view", () => {
@@ -340,14 +338,10 @@ describe("@agent-os/run-stream", () => {
   });
 
   it("maps realtime source and submit transport failures to stream_error", async () => {
-    async function* failingLedgerEvents(): AsyncGenerator<LedgerEventRpc> {
-      throw new Error("ledger transport failed");
-    }
-
     expect(
       await collectRunFrames(
         composeRealtimeRunStream({
-          ledgerEvents: failingLedgerEvents(),
+          ledgerEvents: Promise.reject(new Error("ledger transport failed")),
           submitResult: new Promise<SubmitResult>(() => undefined),
         }),
       ),

@@ -245,7 +245,7 @@ describe("@agent-os/tenant-material", () => {
     const plaintexts = [
       "sk-live-secret-000000",
       "Bearer resolved-secret-token",
-      "{\"apiKey\":\"resolved-json-secret\"}",
+      '{"apiKey":"resolved-json-secret"}',
       "</script><script>alert('resolved-secret')</script>",
       "line1\\nresolved-secret=line2\\nline3",
       ...deterministicPlaintexts(24),

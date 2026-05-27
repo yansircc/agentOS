@@ -125,11 +125,9 @@ const errorFrame = (
 const providerErrorReason = (provider: ProviderDeltaAdapter): string =>
   `${provider}_provider_error`;
 
-const malformedReason = (provider: ProviderDeltaAdapter): string =>
-  `${provider}_malformed_chunk`;
+const malformedReason = (provider: ProviderDeltaAdapter): string => `${provider}_malformed_chunk`;
 
-const unknownReason = (provider: ProviderDeltaAdapter): string =>
-  `${provider}_unknown_chunk`;
+const unknownReason = (provider: ProviderDeltaAdapter): string => `${provider}_unknown_chunk`;
 
 const unsupportedReason = (provider: ProviderDeltaAdapter): string =>
   `${provider}_unsupported_chunk`;
@@ -225,7 +223,7 @@ export const isTurnStreamFrame = (value: unknown): value is TurnStreamFrame => {
  *   events, and Gemini empty text parts.
  */
 export const adaptOpenAiCompatibleDeltaChunk = (
-  input: TurnStreamDeltaAdapterInput<OpenAiCompatibleDeltaChunk | "[DONE]" | unknown>,
+  input: TurnStreamDeltaAdapterInput<unknown>,
 ): ReadonlyArray<TurnStreamFrame> => {
   const provider: ProviderDeltaAdapter = "openai_compatible";
   if (input.chunk === "[DONE]") {
@@ -323,7 +321,7 @@ export const adaptOpenAiCompatibleDeltaChunk = (
 };
 
 export const adaptAnthropicDeltaChunk = (
-  input: TurnStreamDeltaAdapterInput<AnthropicDeltaChunk | unknown>,
+  input: TurnStreamDeltaAdapterInput<unknown>,
 ): ReadonlyArray<TurnStreamFrame> => {
   const provider: ProviderDeltaAdapter = "anthropic";
   if (!isRecord(input.chunk)) {
@@ -391,7 +389,7 @@ export const adaptAnthropicDeltaChunk = (
 };
 
 export const adaptGeminiDeltaChunk = (
-  input: TurnStreamDeltaAdapterInput<GeminiDeltaChunk | unknown>,
+  input: TurnStreamDeltaAdapterInput<unknown>,
 ): ReadonlyArray<TurnStreamFrame> => {
   const provider: ProviderDeltaAdapter = "gemini";
   if (!isRecord(input.chunk)) {
