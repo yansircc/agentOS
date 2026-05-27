@@ -6,11 +6,7 @@ import type {
   CloudflareResourceFetchResponse,
   CloudflareResourceSpec,
 } from "./provider-core";
-import {
-  d1MaterialFrom,
-  makeCloudflareResourceCarrier,
-  materialHelpers,
-} from "./provider-core";
+import { d1MaterialFrom, makeCloudflareResourceCarrier, materialHelpers } from "./provider-core";
 
 const { isRecord, nonEmptyString } = materialHelpers;
 
@@ -72,7 +68,8 @@ const d1Spec: CloudflareResourceSpec<CloudflareD1Material, CloudflareD1MutationI
   mutationRequest: (accountId, material, _mutationKind, input) => ({
     method: "POST",
     path: ["accounts", accountId, "d1", "database", material.databaseId, "query"],
-    json: input.params === undefined ? { sql: input.sql } : { sql: input.sql, params: input.params },
+    json:
+      input.params === undefined ? { sql: input.sql } : { sql: input.sql, params: input.params },
   }),
   validateResponse: (step, body) =>
     step === "mutate" && !querySucceeded(body) ? "cloudflare_d1_query_not_successful" : null,

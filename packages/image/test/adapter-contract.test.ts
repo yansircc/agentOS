@@ -233,23 +233,23 @@ describe("image route adapters — P3 C5", () => {
         ],
       });
       expect(openai.artifacts).toEqual([
-      {
-        kind: "data-url",
-        dataUrl: "data:image/webp;base64,BBBB",
-        contentType: "image/webp",
-      },
-      { kind: "url", url: "https://cdn.example/image.png" },
-    ]);
+        {
+          kind: "data-url",
+          dataUrl: "data:image/webp;base64,BBBB",
+          contentType: "image/webp",
+        },
+        { kind: "url", url: "https://cdn.example/image.png" },
+      ]);
 
-    const bytes = new Uint8Array([1, 2, 3]);
-    const cfAi = yield* cfAiBindingImageAdapter.decodeImage(bytes);
-    expect(cfAi.artifacts).toEqual([
-      {
-        kind: "bytes",
-        bytes,
-        contentType: "application/octet-stream",
-      },
-    ]);
+      const bytes = new Uint8Array([1, 2, 3]);
+      const cfAi = yield* cfAiBindingImageAdapter.decodeImage(bytes);
+      expect(cfAi.artifacts).toEqual([
+        {
+          kind: "bytes",
+          bytes,
+          contentType: "application/octet-stream",
+        },
+      ]);
     }),
   );
 });

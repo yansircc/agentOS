@@ -1,7 +1,4 @@
-import {
-  boundaryExtensionPackage,
-  defineBoundaryContract,
-} from "@agent-os/core/boundary-contract";
+import { boundaryExtensionPackage, defineBoundaryContract } from "@agent-os/core/boundary-contract";
 
 export const GIT_EVENT_PREFIX = "git.";
 

@@ -1,7 +1,4 @@
-import {
-  boundaryExtensionPackage,
-  defineBoundaryContract,
-} from "@agent-os/core/boundary-contract";
+import { boundaryExtensionPackage, defineBoundaryContract } from "@agent-os/core/boundary-contract";
 import { materialRequirement, type AuthorityContract } from "@agent-os/core/material-ref";
 
 export const CLOUDFLARE_RESOURCE_EVENT_PREFIX = "cf_resource.";

@@ -69,7 +69,7 @@ interface ResourceCase {
 interface TestCarrierOptions {
   readonly fetch: CloudflareD1Fetch;
   readonly resolver: RefResolver;
-  readonly resolveMutationInput: (inputRef: string) => Promise<unknown | null>;
+  readonly resolveMutationInput: (inputRef: string) => Promise<unknown>;
   readonly carrierRef?: string;
 }
 
@@ -111,7 +111,9 @@ const cases: ReadonlyArray<ResourceCase> = [
       makeCloudflareKVNamespaceResourceCarrier({
         ...options,
         resolveMutationInput: (inputRef) =>
-          options.resolveMutationInput(inputRef) as Promise<CloudflareKVNamespaceMutationInput | null>,
+          options.resolveMutationInput(
+            inputRef,
+          ) as Promise<CloudflareKVNamespaceMutationInput | null>,
       }),
   },
   {
@@ -228,161 +230,166 @@ const successResponse = {
   json: async () => ({ success: true, result: {} }),
 };
 
+const parseJsonBody = (body: BodyInit | undefined): unknown => {
+  expect(typeof body).toBe("string");
+  return JSON.parse(typeof body === "string" ? body : "null");
+};
+
 const assertNegativeContract = (testCase: ResourceCase) => {
   describe(testCase.resourceKind, () => {
     it.effect("fast-fails unsupported mutation before material resolution or fetch", () =>
       Effect.gen(function* () {
-      let resolved = false;
-      const fetch = vi.fn<CloudflareD1Fetch>();
-      const { resourceRef, bindingRef } = refsFor(testCase);
-      const carrier = testCase.makeCarrier({
-        fetch,
-        resolver: {
-          material: () => {
-            resolved = true;
-            return "should-not-resolve";
+        let resolved = false;
+        const fetch = vi.fn<CloudflareD1Fetch>();
+        const { resourceRef, bindingRef } = refsFor(testCase);
+        const carrier = testCase.makeCarrier({
+          fetch,
+          resolver: {
+            material: () => {
+              resolved = true;
+              return "should-not-resolve";
+            },
           },
-        },
-        resolveMutationInput: async () => null,
-      });
+          resolveMutationInput: async () => null,
+        });
 
-      const failure = expectFailure(
-        yield* Effect.exit(
-          carrier.mutate({
-            claim: claimFor(testCase.resourceKind, "mutate"),
-            subjectRef: `subject-${testCase.resourceKind}`,
-            credentialRef,
-            accountRef,
-            resourceRef,
-            bindingRef,
-            mutationKind: `${testCase.resourceKind}.unsupported`,
-            inputRef: "mutation://unsupported",
-          }),
-        ),
-      );
+        const failure = expectFailure(
+          yield* Effect.exit(
+            carrier.mutate({
+              claim: claimFor(testCase.resourceKind, "mutate"),
+              subjectRef: `subject-${testCase.resourceKind}`,
+              credentialRef,
+              accountRef,
+              resourceRef,
+              bindingRef,
+              mutationKind: `${testCase.resourceKind}.unsupported`,
+              inputRef: "mutation://unsupported",
+            }),
+          ),
+        );
 
-      expect(resolved).toBe(false);
-      expect(fetch).not.toHaveBeenCalled();
-      expect(failure).toMatchObject({
-        code: "UnsupportedResource",
-        step: "mutate",
-        claim: {
-          phase: "rejected",
-          rejectionRef: {
-            rejectionKind: "unsupported",
+        expect(resolved).toBe(false);
+        expect(fetch).not.toHaveBeenCalled();
+        expect(failure).toMatchObject({
+          code: "UnsupportedResource",
+          step: "mutate",
+          claim: {
+            phase: "rejected",
+            rejectionRef: {
+              rejectionKind: "unsupported",
+            },
           },
-        },
-      });
+        });
       }),
     );
 
     it.effect("fast-fails missing resolved resource material before provider fetch", () =>
       Effect.gen(function* () {
-      const fetch = vi.fn<CloudflareD1Fetch>();
-      const { resourceRef, bindingRef } = refsFor(testCase);
-      const carrier = testCase.makeCarrier({
-        fetch,
-        resolver: resolverFor([
-          [credentialRef, "secret-token"],
-          [accountRef, { accountId: "raw-account-id" }],
-          [bindingRef, { bindingName: "BINDING" }],
-        ]),
-        resolveMutationInput: async () => testCase.mutationInput,
-      });
+        const fetch = vi.fn<CloudflareD1Fetch>();
+        const { resourceRef, bindingRef } = refsFor(testCase);
+        const carrier = testCase.makeCarrier({
+          fetch,
+          resolver: resolverFor([
+            [credentialRef, "secret-token"],
+            [accountRef, { accountId: "raw-account-id" }],
+            [bindingRef, { bindingName: "BINDING" }],
+          ]),
+          resolveMutationInput: async () => testCase.mutationInput,
+        });
 
-      const failure = expectFailure(
-        yield* Effect.exit(
-          carrier.mutate({
-            claim: claimFor(testCase.resourceKind, "mutate"),
-            subjectRef: `subject-${testCase.resourceKind}`,
-            credentialRef,
-            accountRef,
-            resourceRef,
-            bindingRef,
-            mutationKind: testCase.mutationKind,
-            inputRef: "mutation://input",
-          }),
-        ),
-      );
+        const failure = expectFailure(
+          yield* Effect.exit(
+            carrier.mutate({
+              claim: claimFor(testCase.resourceKind, "mutate"),
+              subjectRef: `subject-${testCase.resourceKind}`,
+              credentialRef,
+              accountRef,
+              resourceRef,
+              bindingRef,
+              mutationKind: testCase.mutationKind,
+              inputRef: "mutation://input",
+            }),
+          ),
+        );
 
-      expect(fetch).not.toHaveBeenCalled();
-      expect(failure).toMatchObject({
-        code: "MaterialUnavailable",
-        step: "mutate",
-      });
+        expect(fetch).not.toHaveBeenCalled();
+        expect(failure).toMatchObject({
+          code: "MaterialUnavailable",
+          step: "mutate",
+        });
       }),
     );
 
     it.effect("redacts resolved material, provider body, and data-plane input from failures", () =>
       Effect.gen(function* () {
-      const { resourceRef, bindingRef } = refsFor(testCase);
-      const fetch: CloudflareD1Fetch = async () => ({
-        ok: false,
-        status: 500,
-        json: async () => ({
-          success: false,
-          errors: [{ message: "raw_provider_body_secret" }],
-        }),
-      });
-      const carrier = testCase.makeCarrier({
-        fetch,
-        resolver: resolverFor([
-          [credentialRef, "secret-token"],
-          [accountRef, { accountId: "raw-account-id" }],
-          [resourceRef, testCase.resourceMaterial],
-          [bindingRef, { bindingName: "RAW_BINDING" }],
-        ]),
-        resolveMutationInput: async () => testCase.mutationInput,
-      });
-
-      const failure = expectFailure(
-        yield* Effect.exit(
-          carrier.mutate({
-            claim: claimFor(testCase.resourceKind, "mutate"),
-            subjectRef: `subject-${testCase.resourceKind}`,
-            credentialRef,
-            accountRef,
-            resourceRef,
-            bindingRef,
-            mutationKind: testCase.mutationKind,
-            inputRef: "mutation://input",
+        const { resourceRef, bindingRef } = refsFor(testCase);
+        const fetch: CloudflareD1Fetch = async () => ({
+          ok: false,
+          status: 500,
+          json: async () => ({
+            success: false,
+            errors: [{ message: "raw_provider_body_secret" }],
           }),
-        ),
-      );
+        });
+        const carrier = testCase.makeCarrier({
+          fetch,
+          resolver: resolverFor([
+            [credentialRef, "secret-token"],
+            [accountRef, { accountId: "raw-account-id" }],
+            [resourceRef, testCase.resourceMaterial],
+            [bindingRef, { bindingName: "RAW_BINDING" }],
+          ]),
+          resolveMutationInput: async () => testCase.mutationInput,
+        });
 
-      const serialized = JSON.stringify(failure);
-      expect(serialized).not.toContain("secret-token");
-      expect(serialized).not.toContain("raw-account-id");
-      expect(serialized).not.toContain("RAW_BINDING");
-      expect(serialized).not.toContain(testCase.rawMaterialNeedle);
-      expect(serialized).not.toContain(testCase.inputNeedle);
-      expect(serialized).not.toContain("raw_provider_body_secret");
-      expect(failure.proofRef).not.toContain("raw-account-id");
-      expect(failure.proofRef).not.toContain(testCase.rawMaterialNeedle);
-      expect(failure).toMatchObject({
-        code: "MutationFailed",
-        step: "mutate",
-      });
+        const failure = expectFailure(
+          yield* Effect.exit(
+            carrier.mutate({
+              claim: claimFor(testCase.resourceKind, "mutate"),
+              subjectRef: `subject-${testCase.resourceKind}`,
+              credentialRef,
+              accountRef,
+              resourceRef,
+              bindingRef,
+              mutationKind: testCase.mutationKind,
+              inputRef: "mutation://input",
+            }),
+          ),
+        );
+
+        const serialized = JSON.stringify(failure);
+        expect(serialized).not.toContain("secret-token");
+        expect(serialized).not.toContain("raw-account-id");
+        expect(serialized).not.toContain("RAW_BINDING");
+        expect(serialized).not.toContain(testCase.rawMaterialNeedle);
+        expect(serialized).not.toContain(testCase.inputNeedle);
+        expect(serialized).not.toContain("raw_provider_body_secret");
+        expect(failure.proofRef).not.toContain("raw-account-id");
+        expect(failure.proofRef).not.toContain(testCase.rawMaterialNeedle);
+        expect(failure).toMatchObject({
+          code: "MutationFailed",
+          step: "mutate",
+        });
       }),
     );
 
     it.effect("uses symbolic mutation records after executing with resolved material", () =>
       Effect.gen(function* () {
-      const { resourceRef, bindingRef } = refsFor(testCase);
-      const fetch = vi.fn<CloudflareD1Fetch>(async () => successResponse);
-      const carrier = testCase.makeCarrier({
-        fetch,
-        resolver: resolverFor([
-          [credentialRef, "secret-token"],
-          [accountRef, { accountId: "raw-account-id" }],
-          [resourceRef, testCase.resourceMaterial],
-          [bindingRef, { bindingName: "RAW_BINDING" }],
-        ]),
-        resolveMutationInput: async () => testCase.mutationInput,
-        carrierRef: `carrier-${testCase.resourceKind}`,
-      });
+        const { resourceRef, bindingRef } = refsFor(testCase);
+        const fetch = vi.fn<CloudflareD1Fetch>(async () => successResponse);
+        const carrier = testCase.makeCarrier({
+          fetch,
+          resolver: resolverFor([
+            [credentialRef, "secret-token"],
+            [accountRef, { accountId: "raw-account-id" }],
+            [resourceRef, testCase.resourceMaterial],
+            [bindingRef, { bindingName: "RAW_BINDING" }],
+          ]),
+          resolveMutationInput: async () => testCase.mutationInput,
+          carrierRef: `carrier-${testCase.resourceKind}`,
+        });
 
-      const mutation = yield* carrier.mutate({
+        const mutation = yield* carrier.mutate({
           claim: claimFor(testCase.resourceKind, "mutate"),
           subjectRef: `subject-${testCase.resourceKind}`,
           credentialRef,
@@ -394,37 +401,37 @@ const assertNegativeContract = (testCase: ResourceCase) => {
           fingerprint: `sha256:${testCase.resourceKind}`,
         });
 
-      const serialized = JSON.stringify(mutation);
-      expect(mutation).toMatchObject({
-        subjectRef: `subject-${testCase.resourceKind}`,
-        resourceRef,
-        mutationKind: testCase.mutationKind,
-        mutationRef: "mutation://input",
-        fingerprint: `sha256:${testCase.resourceKind}`,
-        claim: {
-          phase: "lived",
-          anchorRef: {
-            carrierRef: `carrier-${testCase.resourceKind}`,
+        const serialized = JSON.stringify(mutation);
+        expect(mutation).toMatchObject({
+          subjectRef: `subject-${testCase.resourceKind}`,
+          resourceRef,
+          mutationKind: testCase.mutationKind,
+          mutationRef: "mutation://input",
+          fingerprint: `sha256:${testCase.resourceKind}`,
+          claim: {
+            phase: "lived",
+            anchorRef: {
+              carrierRef: `carrier-${testCase.resourceKind}`,
+            },
           },
-        },
-      });
-      expect(serialized).not.toContain("secret-token");
-      expect(serialized).not.toContain("raw-account-id");
-      expect(serialized).not.toContain("RAW_BINDING");
-      expect(serialized).not.toContain(testCase.rawMaterialNeedle);
-      expect(serialized).not.toContain(testCase.inputNeedle);
+        });
+        expect(serialized).not.toContain("secret-token");
+        expect(serialized).not.toContain("raw-account-id");
+        expect(serialized).not.toContain("RAW_BINDING");
+        expect(serialized).not.toContain(testCase.rawMaterialNeedle);
+        expect(serialized).not.toContain(testCase.inputNeedle);
 
-      const call = fetch.mock.calls[0];
-      expect(call).toBeDefined();
-      if (call === undefined) return;
-      const [url, init] = call;
-      expect(url).toContain(testCase.expectedRequest.path);
-      expect(init.method).toBe(testCase.expectedRequest.method);
-      if (testCase.expectedRequest.body !== undefined) {
-        const actualBody =
-          testCase.resourceKind === "r2_bucket" ? init.body : JSON.parse(String(init.body));
-        expect(actualBody).toEqual(testCase.expectedRequest.body);
-      }
+        const call = fetch.mock.calls[0];
+        expect(call).toBeDefined();
+        if (call === undefined) return;
+        const [url, init] = call;
+        expect(url).toContain(testCase.expectedRequest.path);
+        expect(init.method).toBe(testCase.expectedRequest.method);
+        if (testCase.expectedRequest.body !== undefined) {
+          const actualBody =
+            testCase.resourceKind === "r2_bucket" ? init.body : parseJsonBody(init.body);
+          expect(actualBody).toEqual(testCase.expectedRequest.body);
+        }
       }),
     );
   });

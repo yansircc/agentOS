@@ -444,9 +444,7 @@ const buildGeminiRequest = (
 
   const { systemText, contents } = buildGeminiContents(spec.messages);
   const body = encodeBody({
-    ...(systemText === undefined
-      ? {}
-      : { systemInstruction: { parts: [{ text: systemText }] } }),
+    ...(systemText === undefined ? {} : { systemInstruction: { parts: [{ text: systemText }] } }),
     contents,
     tools: toolsToGemini(spec.tools),
   });
@@ -491,7 +489,9 @@ interface SseEvent {
   readonly data: ReadonlyArray<string>;
 }
 
-const findSseBoundary = (buffer: string): { readonly start: number; readonly end: number } | null => {
+const findSseBoundary = (
+  buffer: string,
+): { readonly start: number; readonly end: number } | null => {
   const lf = buffer.indexOf("\n\n");
   const crlf = buffer.indexOf("\r\n\r\n");
   if (lf === -1 && crlf === -1) return null;

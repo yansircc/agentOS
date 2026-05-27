@@ -56,10 +56,7 @@ export interface DeployCarrier {
   ) => Effect.Effect<DeployProductionPromotedPayload, DeployFailure>;
   readonly readback: (
     request: DeployReadbackRequest,
-  ) => Effect.Effect<
-    DeployProductionReadbackPayload | DeployFailedPayload,
-    DeployFailure
-  >;
+  ) => Effect.Effect<DeployProductionReadbackPayload | DeployFailedPayload, DeployFailure>;
   readonly rollback: (
     request: DeployRollbackRequest,
   ) => Effect.Effect<DeployRollbackRecordedPayload, DeployFailure>;
