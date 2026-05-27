@@ -490,7 +490,7 @@ this calculus.
 | ---------------------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | tool registry                            | generator                            | tool identity and turn authority are one boundary schema; do not split `ToolProvider` and `TurnContract` into separate gates                                                                                               |
 | runtime scope                            | resolver                             | `ScopeRef` resolves to resource keys, leases, and cleanup roots; provider cases stay outside core                                                                                                                          |
-| workspace session                        | core claim shape + carrier resolver  | `kind: "session"` is the core ownership/lifecycle class; session start/restore/backup/preview allocation settle claims when they are auditable effects; sandbox/workspace/preview/backup resolution stays carrier-specific |
+| workspace session                        | core claim shape + carrier resolver  | `kind: "session"` is the core ownership/lifecycle class; `@agent-os/workspace-session` owns provider-neutral lifecycle facts, projection, and claim settlement; sandbox/workspace/preview/backup resolution stays carrier-specific |
 | dynamic worker                           | generator or carrier materializer    | bounded stateless Worker execution; not a substitute for session/workspace state                                                                                                                                           |
 | git/deploy/staging/verification carriers | generator/resolver as needed         | adopt claim settlement and proof anchors without app-specific nouns such as `changeId`                                                                                                                                     |
 | Cloudflare resource/control plane        | resolver/materializer for `external` | account/site/Worker/resource operations fail closed and anchor proofs in carrier-owned vocabulary                                                                                                                          |
@@ -518,6 +518,12 @@ remains a carrier class under `kind: "session"`, not a new `ScopeRef.kind`.
 `ephemeral` and `persistent` remain retention/lease policy, not kinds, because
 the same session resolver can support both policies and a session may move
 from ephemeral to persistent without changing ownership class.
+
+The v0 package boundary is provider-neutral: `@agent-os/workspace-session`
+defines `workspace_session.*` facts, `ScopeRef(session)` resolution, and
+claim settlement. Cloudflare Sandbox backup handles, preview routing, local
+worktree paths, and restore algorithms are backend packages or app-owned
+carrier implementations.
 
 ---
 
