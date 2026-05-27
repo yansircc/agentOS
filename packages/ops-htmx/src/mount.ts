@@ -25,7 +25,10 @@ import type {
   RunStatus,
   RunTrace,
   ScopeListBody,
+  ScopeSummary,
 } from "./types";
+
+type WorkspaceTab = "overview" | "trace" | "events" | "telemetry";
 
 const DEFAULT_HTMX = "https://unpkg.com/htmx.org@2.0.4";
 
@@ -146,10 +149,15 @@ const shell = async (
       : null;
   const selectedRun =
     runs?.ok === true ? chooseInitialRun(runs.value, url.searchParams.get("runId")) : undefined;
-  const workspace =
-    selected !== undefined && selected.surface === "agent-do/v0.3" && selectedRun !== undefined
-      ? await traceWorkspace(opts, req, selected.scope, selectedRun.runId)
-      : renderScopeWorkspace(opts, selected?.scope, selected);
+  const tab = parseWorkspaceTab(url.searchParams.get("tab"));
+  const workspace = await workspaceForSelection(
+    opts,
+    req,
+    selected,
+    selectedRun?.runId,
+    tab,
+    url,
+  );
   return renderShell(opts, {
     scopes: renderScopesPanel(opts, scopes, selected?.scope),
     runs: renderRunsPanel(opts, selected?.scope, runs, selectedRun?.runId),
@@ -246,6 +254,38 @@ const traceWorkspace = async (
   return renderTraceWorkspace(opts, scope, runId, trace, status);
 };
 
+const workspaceForSelection = async (
+  opts: NormalizedOpsHtmxOptions,
+  req: Request,
+  selected: ScopeSummary | undefined,
+  runId: number | undefined,
+  tab: WorkspaceTab | undefined,
+  url: URL,
+): Promise<string> => {
+  if (selected === undefined || selected.surface !== "agent-do/v0.3") {
+    return renderScopeWorkspace(opts, selected?.scope, selected);
+  }
+  const active = tab ?? (runId === undefined ? "overview" : "trace");
+  if (active === "events") {
+    return eventsWorkspace(opts, req, url, selected.scope, runId);
+  }
+  if (active === "telemetry") {
+    return telemetryWorkspace(opts, req, url, selected.scope, runId);
+  }
+  if (runId !== undefined) {
+    return traceWorkspace(opts, req, selected.scope, runId);
+  }
+  return renderScopeWorkspace(opts, selected.scope, selected);
+};
+
+const parseWorkspaceTab = (raw: string | null): WorkspaceTab | undefined =>
+  raw === "overview" ||
+  raw === "trace" ||
+  raw === "events" ||
+  raw === "telemetry"
+    ? raw
+    : undefined;
+
 const eventsFragment = async (
   opts: NormalizedOpsHtmxOptions,
   req: Request,
@@ -253,6 +293,16 @@ const eventsFragment = async (
 ): Promise<string> => {
   const scope = url.searchParams.get("scope") ?? "";
   const runId = positiveInt(url.searchParams.get("runId"), 0);
+  return eventsWorkspace(opts, req, url, scope, runId === 0 ? undefined : runId);
+};
+
+const eventsWorkspace = async (
+  opts: NormalizedOpsHtmxOptions,
+  req: Request,
+  url: URL,
+  scope: string,
+  runId: number | undefined,
+): Promise<string> => {
   const limit = positiveInt(url.searchParams.get("limit"), opts.eventLimit);
   const afterId = nonNegativeInt(url.searchParams.get("afterId"));
   const kinds = url.searchParams.get("kinds") ?? undefined;
@@ -269,7 +319,7 @@ const eventsFragment = async (
   return renderEventsWorkspace(
     opts,
     scope,
-    runId === 0 ? undefined : runId,
+    runId,
     result,
     {
       limit,
@@ -286,6 +336,22 @@ const telemetryFragment = async (
 ): Promise<string> => {
   const scope = url.searchParams.get("scope") ?? "";
   const runId = positiveInt(url.searchParams.get("runId"), 0);
+  return telemetryWorkspace(
+    opts,
+    req,
+    url,
+    scope,
+    runId === 0 ? undefined : runId,
+  );
+};
+
+const telemetryWorkspace = async (
+  opts: NormalizedOpsHtmxOptions,
+  req: Request,
+  url: URL,
+  scope: string,
+  runId: number | undefined,
+): Promise<string> => {
   const quotaKey = url.searchParams.get("quotaKey") ?? undefined;
   const windowMs = url.searchParams.get("windowMs") ?? undefined;
   const quotaLimit = url.searchParams.get("quotaLimit") ?? undefined;
@@ -318,7 +384,7 @@ const telemetryFragment = async (
   return renderTelemetryWorkspace(
     opts,
     scope,
-    runId === 0 ? undefined : runId,
+    runId,
     { quota, resource, admission },
     { quotaKey, windowMs, quotaLimit, resourceKey, admissionKey },
   );

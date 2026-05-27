@@ -165,7 +165,7 @@ describe("@agent-os/ops-htmx", () => {
     const api = makeApi();
     const handler = mountOpsHtmx({ apiFetch: api.fetchApi });
     const res = await handler(
-      new Request("https://ops.test/__ops?scope=thread/a&runId=42", {
+      new Request("https://ops.test/__ops?scope=thread/a&runId=42&tab=trace", {
         headers: { cookie: "sid=abc" },
       }),
     );
@@ -176,6 +176,9 @@ describe("@agent-os/ops-htmx", () => {
     expect(html).toContain("https://unpkg.com/htmx.org@2.0.4");
     expect(html).toContain("thread/a");
     expect(html).toContain("run <b>#42</b>");
+    expect(html).toContain('href="/__ops?scope=thread%2Fa&amp;runId=42&amp;tab=events"');
+    expect(html).toContain('hx-get="/__ops/fragments/events?scope=thread%2Fa&amp;runId=42&amp;limit=100"');
+    expect(html).toContain('hx-push-url="/__ops?scope=thread%2Fa&amp;runId=42&amp;tab=events"');
     expect(html).toContain("hello &lt;b&gt;operator&lt;/b&gt;");
     expect(html).not.toContain("<script>alert(1)</script>");
     expect(html.toLowerCase()).not.toMatch(
@@ -189,6 +192,32 @@ describe("@agent-os/ops-htmx", () => {
     ]);
     expect(api.seen.every((r) => r.method === "GET")).toBe(true);
     expect(api.seen.every((r) => r.cookie === "sid=abc")).toBe(true);
+  });
+
+  it("deep-links shell tab state without using the URL as data truth", async () => {
+    const api = makeApi();
+    const handler = mountOpsHtmx({ apiFetch: api.fetchApi });
+    const res = await handler(
+      new Request(
+        "https://ops.test/__ops?scope=thread/a&runId=42&tab=events&afterId=5&limit=2&kinds=agent.run.started,tool.executed",
+      ),
+    );
+    const html = await res.text();
+
+    expect(res.status).toBe(200);
+    expect(html).toContain("event stream");
+    expect(html).toContain('href="/__ops?scope=thread%2Fa&amp;runId=42&amp;tab=trace"');
+    expect(html).toContain('hx-get="/__ops/fragments/select-run?scope=thread%2Fa&amp;runId=42"');
+    expect(html).toContain('hx-push-url="/__ops?scope=thread%2Fa&amp;runId=42&amp;tab=trace"');
+    expect(html).toContain('<details><summary>payload</summary><pre>');
+    expect(api.seen.map((r) => r.pathname)).toEqual([
+      "/__ops/api/scopes",
+      "/__ops/api/scopes/thread%2Fa/runs",
+      "/__ops/api/scopes/thread%2Fa/events",
+    ]);
+    expect(api.seen.at(-1)?.search).toBe(
+      "?limit=2&afterId=5&kinds=agent.run.started%2Ctool.executed",
+    );
   });
 
   it("rejects non-GET UI routes", async () => {
@@ -212,6 +241,7 @@ describe("@agent-os/ops-htmx", () => {
     );
     const html = await res.text();
     expect(html).toContain("hx-get=");
+    expect(html).toContain('hx-push-url="/__ops?scope=thread%2Fa&amp;tab=trace"');
     expect(html).toContain("thread/&lt;unsafe&gt;");
     expect(html).not.toContain("thread/<unsafe>");
   });
@@ -225,7 +255,9 @@ describe("@agent-os/ops-htmx", () => {
     );
     const html = await res.text();
     expect(html).toContain("GET /scopes/:scope/events");
-    expect(html).toContain('href="/__ops/fragments/select-run?scope=thread%2Fa&amp;runId=42"');
+    expect(html).toContain('href="/__ops?scope=thread%2Fa&amp;runId=42&amp;tab=trace"');
+    expect(html).toContain('hx-get="/__ops/fragments/select-run?scope=thread%2Fa&amp;runId=42"');
+    expect(html).toContain('hx-push-url="/__ops?scope=thread%2Fa&amp;runId=42&amp;tab=trace"');
     expect(html).toContain('<details><summary>payload</summary><pre>');
     expect(html).not.toContain("<details open>");
     expect(html).toContain('name="runId" value="42"');
@@ -252,6 +284,8 @@ describe("@agent-os/ops-htmx", () => {
       new Request("https://ops.test/__ops/fragments/select-run?scope=thread/a&runId=42"),
     );
     const html = await res.text();
+    expect(html).toContain('href="/__ops?scope=thread%2Fa&amp;runId=42&amp;tab=trace"');
+    expect(html).toContain('hx-push-url="/__ops?scope=thread%2Fa&amp;runId=42&amp;tab=trace"');
     expect(html).toContain('id="runs-panel" hx-swap-oob="innerHTML"');
     expect(html).toContain('id="workspace-panel" hx-swap-oob="innerHTML"');
     expect(api.seen.map((r) => r.pathname)).toEqual([
@@ -270,7 +304,9 @@ describe("@agent-os/ops-htmx", () => {
       ),
     );
     const html = await res.text();
-    expect(html).toContain('href="/__ops/fragments/select-run?scope=thread%2Fa&amp;runId=42"');
+    expect(html).toContain('href="/__ops?scope=thread%2Fa&amp;runId=42&amp;tab=trace"');
+    expect(html).toContain('hx-get="/__ops/fragments/select-run?scope=thread%2Fa&amp;runId=42"');
+    expect(html).toContain('hx-push-url="/__ops?scope=thread%2Fa&amp;runId=42&amp;tab=trace"');
     expect(html).toContain('name="runId" value="42"');
     expect(html).toContain("GET /scopes/:scope/quota");
     expect(html).toContain("GET /scopes/:scope/resource");

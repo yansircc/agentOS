@@ -72,7 +72,7 @@ The UI forwards the incoming request headers to ops-api GET requests so that
 All routes are under `uiBase`.
 
 ```text
-GET /__ops
+GET /__ops?scope=...&runId=...&tab=trace|events|telemetry|overview
 GET /__ops/fragments/scopes
 GET /__ops/fragments/select-scope?scope=...
 GET /__ops/fragments/select-run?scope=...&runId=...
@@ -83,9 +83,18 @@ GET /__ops/fragments/telemetry?scope=...&runId=&quotaKey=&windowMs=&quotaLimit=&
 `select-scope` and `select-run` return HTMX out-of-band fragments for the
 affected columns. They do not mutate server state.
 
-`runId` on `events` and `telemetry` is UI navigation context only. It preserves
-the selected Trace tab link across workspace fragments and is not forwarded to
-ops-api projection endpoints.
+The shell URL is the canonical presentation state:
+
+```text
+/__ops?scope=thread%2Fa&runId=42&tab=trace
+/__ops?scope=thread%2Fa&runId=42&tab=events
+/__ops?scope=thread%2Fa&runId=42&tab=telemetry
+```
+
+HTMX links request fragment URLs but push canonical shell URLs into browser
+history. `scope`, `runId`, and `tab` are UI selection state only. `runId` on
+`events` and `telemetry` preserves the selected Trace tab link across workspace
+fragments and is not forwarded to ops-api projection endpoints.
 
 ---
 
@@ -104,3 +113,5 @@ ops-api projection endpoints.
    second data request.
 10. Switching from Trace to Events or Telemetry preserves the selected run's
     Trace tab without adding shadow run state.
+11. Deep links to `/__ops?scope=&runId=&tab=` render the selected workspace from
+    ops-api GET responses and do not use the URL as fact truth.

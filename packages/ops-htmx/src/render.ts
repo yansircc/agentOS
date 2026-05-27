@@ -19,6 +19,8 @@ import type {
   ScopeSummary,
 } from "./types";
 
+type WorkspaceTab = "overview" | "trace" | "events" | "telemetry";
+
 const statusClass = (status: RunStatus | string): string => {
   const kind = typeof status === "string" ? status : status.kind;
   return kind === "open_without_terminal" ? "open" : kind;
@@ -90,7 +92,17 @@ export const renderScopesPanel = (
       const active = scope.scope === selectedScope ? " active" : "";
       const opaque = scope.surface === "opaque" ? " opaque" : "";
       const surface = scope.surface === "agent-do/v0.3" ? "v0.3" : "opaque";
-      return `<a class="scope-row${active}${opaque}" href="${escapeAttr(uiPath(opts, "", { scope: scope.scope }))}" hx-get="${escapeAttr(uiPath(opts, "fragments/select-scope", { scope: scope.scope, prefix }))}" hx-target="#oob-target" hx-swap="innerHTML">
+      const shellPath = canonicalShellPath(
+        opts,
+        scope.scope,
+        undefined,
+        scope.surface === "agent-do/v0.3" ? "trace" : "overview",
+      );
+      const fragmentPath = uiPath(opts, "fragments/select-scope", {
+        scope: scope.scope,
+        prefix,
+      });
+      return `<a class="scope-row${active}${opaque}" href="${escapeAttr(shellPath)}" hx-get="${escapeAttr(fragmentPath)}" hx-target="#oob-target" hx-swap="innerHTML" hx-push-url="${escapeAttr(shellPath)}">
         <span>${escapeHtml(scope.scope)}</span>
         <span class="surface">${escapeHtml(surface)}</span>
       </a>`;
@@ -154,7 +166,12 @@ const renderRunRow = (
   selectedRunId?: number,
 ): string => {
   const active = run.runId === selectedRunId ? " active" : "";
-  return `<a class="run-list-item${active}" href="${escapeAttr(uiPath(opts, "", { scope, runId: run.runId }))}" hx-get="${escapeAttr(uiPath(opts, "fragments/select-run", { scope, runId: run.runId }))}" hx-target="#oob-target" hx-swap="innerHTML">
+  const shellPath = canonicalShellPath(opts, scope, run.runId, "trace");
+  const fragmentPath = uiPath(opts, "fragments/select-run", {
+    scope,
+    runId: run.runId,
+  });
+  return `<a class="run-list-item${active}" href="${escapeAttr(shellPath)}" hx-get="${escapeAttr(fragmentPath)}" hx-target="#oob-target" hx-swap="innerHTML" hx-push-url="${escapeAttr(shellPath)}">
     <div class="run-top">
       <span class="runId">run <b>#${escapeHtml(run.runId)}</b></span>
       <span class="badge ${escapeAttr(statusClass(run.status))}">${escapeHtml(statusLabel(run.status))}</span>
@@ -326,21 +343,38 @@ const renderTabs = (
   opts: NormalizedOpsHtmxOptions,
   scope: string,
   runId: number | undefined,
-  active: "overview" | "trace" | "events" | "telemetry",
+  active: WorkspaceTab,
 ): string => `<nav class="view-tabs">
-  ${runId === undefined ? "" : tab(opts, "trace", active, "Trace", uiPath(opts, "fragments/select-run", { scope, runId }), "#oob-target")}
-  ${tab(opts, "events", active, "Events", uiPath(opts, "fragments/events", { scope, runId, limit: opts.eventLimit }), "#workspace-panel")}
-  ${tab(opts, "telemetry", active, "Telemetry", uiPath(opts, "fragments/telemetry", { scope, runId }), "#workspace-panel")}
+  ${runId === undefined ? "" : tab(opts, scope, runId, "trace", active, "Trace", uiPath(opts, "fragments/select-run", { scope, runId }), "#oob-target")}
+  ${tab(opts, scope, runId, "events", active, "Events", uiPath(opts, "fragments/events", { scope, runId, limit: opts.eventLimit }), "#workspace-panel")}
+  ${tab(opts, scope, runId, "telemetry", active, "Telemetry", uiPath(opts, "fragments/telemetry", { scope, runId }), "#workspace-panel")}
 </nav>`;
 
 const tab = (
-  _opts: NormalizedOpsHtmxOptions,
-  key: string,
-  active: string,
+  opts: NormalizedOpsHtmxOptions,
+  scope: string,
+  runId: number | undefined,
+  key: WorkspaceTab,
+  active: WorkspaceTab,
   label: string,
-  path: string,
+  fragmentPath: string,
   target: string,
-): string => `<a class="view-tab-btn${active === key ? " active" : ""}" href="${escapeAttr(path)}" hx-get="${escapeAttr(path)}" hx-target="${escapeAttr(target)}" hx-swap="innerHTML">${escapeHtml(label)}</a>`;
+): string => {
+  const shellPath = canonicalShellPath(opts, scope, runId, key);
+  return `<a class="view-tab-btn${active === key ? " active" : ""}" href="${escapeAttr(shellPath)}" hx-get="${escapeAttr(fragmentPath)}" hx-target="${escapeAttr(target)}" hx-swap="innerHTML" hx-push-url="${escapeAttr(shellPath)}">${escapeHtml(label)}</a>`;
+};
+
+const canonicalShellPath = (
+  opts: NormalizedOpsHtmxOptions,
+  scope: string,
+  runId: number | undefined,
+  tabName: WorkspaceTab,
+): string =>
+  uiPath(opts, "", {
+    scope,
+    runId,
+    tab: tabName,
+  });
 
 export const renderSelectScopeOob = (parts: {
   readonly scopes: string;
