@@ -17,27 +17,26 @@ composition complete = product-facing flow wires primitives without second truth
 
 ## Verified State
 
-| Area                            | Current agentOS state                                                                                                                                                                 | Gap                                                                                                                                                                                          |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `workspace-session-cloudflare`  | Carrier adapter shape exists. It accepts a `CloudflareWorkspaceSessionProvider` and settles workspace-session claims through `@agent-os/workspace-session`. Tests use stub providers. | Live Cloudflare Sandbox SDK provider is not implemented here. Start/restore/backup/preview/destroy remain provider-owned until that backend lands.                                           |
-| `cloudflare-resource`           | Proof algebra, extension prefix, authority material requirements, payloads, failure settlement, and projections exist for `cf_resource.*`.                                            | Live D1/KV/R2/Queue/Workflow/Vectorize/Browser Rendering/Schedule API backend is not implemented. Provider calls must be added behind the carrier interface.                                 |
-| LLM transport + tenant material | `MaterialRef`, `RefResolver`, and `llmRouteMaterialRefs` exist. Core HTTP transports resolve symbolic endpoint and credential refs at execution time.                                 | Tenant credential storage/rotation and provider-specific streaming adapter packages are not materialized. Apps still own encrypted tenant credential stores and per-provider policy.         |
-| Skill / MCP registry            | Tool registry and admitter cover tool identity, authority, and required materials.                                                                                                    | Skill/MCP discovery, zip install policy, and front-door product routing are still experimental/product-owned. Do not graduate them to core without N>=2 pressure on the same registry shape. |
+| Area                            | Current agentOS state                                                                                                                                                                                                                                        | Gap                                                                                                                                                                                          |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `workspace-session-cloudflare`  | Structural Cloudflare Sandbox-compatible provider exists. `start`/`restore`/`backup`/`preview`/`destroy` settle workspace-session claims and fail closed when provider refs are missing.                                                                     | Default tests use structural namespace/client stubs. A real Cloudflare Sandbox smoke still requires an app-supplied namespace binding and prefixed live test resources.                      |
+| `cloudflare-resource`           | Proof algebra, extension prefix, authority material requirements, payloads, failure settlement, projections, and live D1 carrier exist. D1 provision/mutate/destroy call Cloudflare's API through injected `fetch`; bind is a symbolic Worker-binding proof. | KV/R2/Queue/Workflow/Vectorize/Browser Rendering/Schedule live backends are not implemented. D1 live smoke still requires credentials and a prefixed test account.                           |
+| LLM transport + tenant material | `MaterialRef`, `RefResolver`, `llmRouteMaterialRefs`, tenant credential resolver, and provider token-delta adapters exist. Resolved credentials stay execution-time material.                                                                                | Provider-specific HTTP streaming transports that combine tenant credentials, model routes, and turn-stream frames remain adapter work.                                                       |
+| Skill / MCP registry            | Tool registry and admitter cover tool identity, authority, and required materials.                                                                                                                                                                           | Skill/MCP discovery, zip install policy, and front-door product routing are still experimental/product-owned. Do not graduate them to core without N>=2 pressure on the same registry shape. |
 
 ## Placement
 
 Backend gaps:
 
 ```text
-workspace-session-cloudflare live provider
-cloudflare-resource live provider
+workspace-session-cloudflare live smoke evidence
+cloudflare-resource non-D1 live providers
 ```
 
 Adapter gaps:
 
 ```text
-tenant credential resolver
-provider token-delta transports
+provider HTTP streaming transports
 ```
 
 Experimental/app-owned:
@@ -50,15 +49,15 @@ Cloudflare product recommendation policy
 
 ## Removal Conditions
 
-- `workspace-session-cloudflare` becomes backend-complete when a live provider
-  implements the existing provider interface with Cloudflare Sandbox SDK calls
-  and proves start/restore/backup/preview/destroy against prefixed test scopes.
-- `cloudflare-resource` becomes backend-complete when live Cloudflare resource
-  providers implement provision/bind/mutate/destroy for the first supported
-  resource set and write only symbolic refs plus proof refs.
-- LLM tenant material becomes adapter-complete when a package maps tenant-owned
-  encrypted credential records into `MaterialRef` resolution without exposing
-  resolved secrets to ledger payloads or traces.
+- `workspace-session-cloudflare` becomes runtime-proven when the structural
+  provider is exercised against a real Cloudflare Sandbox namespace with
+  `TEST_RUN_ID` / `SCOPE_PREFIX` resources.
+- `cloudflare-resource` D1 becomes runtime-proven when the D1 carrier is
+  exercised against a real Cloudflare account with prefixed databases. Other
+  resource kinds become backend-complete in separate slices.
+- LLM transport becomes adapter-complete when provider HTTP streams resolve
+  tenant credentials through `MaterialRef` and emit only `TurnStreamFrame`
+  deltas plus terminal submit/ledger truth.
 - Skill/MCP registry graduates only when two products need the same discovery,
   install, authority, and material contract. Until then, it stays app/cookbook
   code over the existing tool registry.
