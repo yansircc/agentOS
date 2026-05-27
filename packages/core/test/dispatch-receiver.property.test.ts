@@ -9,15 +9,26 @@ import * as fc from "fast-check";
 import { describe, expect, it } from "vite-plus/test";
 
 import { type InboundAcceptedPayload, findAcceptedInRows } from "../src/dispatch/receiver";
+import { makePreClaim, settleLivedClaim } from "../src/effect-claim";
 
 const sourceScopes = ["source-a", "source-b", "source-c"] as const;
 const idempotencyKeys = ["idem-a", "idem-b", "idem-c"] as const;
+const livedClaim = settleLivedClaim(
+  makePreClaim({
+    operationRef: "dispatch:source:target:intent",
+    scopeRef: { kind: "conversation", scopeId: "target" },
+    authorityRef: { authorityId: "cap_dispatch", authorityClass: "effect" },
+    originRef: { originId: "source", originKind: "agent_do" },
+  }),
+  { anchorId: "target:1", anchorKind: "ledger_event" },
+);
 
 const payloadArb: fc.Arbitrary<InboundAcceptedPayload> = fc.record({
   sourceScope: fc.constantFrom(...sourceScopes),
   outboundEventId: fc.integer({ min: 1, max: 1000 }),
   idempotencyKey: fc.constantFrom(...idempotencyKeys),
   deliveredEventId: fc.integer({ min: 1, max: 1000 }),
+  claim: fc.constant(livedClaim),
 });
 
 const rowOf = (payload: InboundAcceptedPayload): { readonly payload: string } => ({

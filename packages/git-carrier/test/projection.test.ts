@@ -19,6 +19,12 @@ const gitClaim = makePreClaim({
     originKind: "extension_package",
   },
 });
+const livedGitClaim = (anchorId: string) =>
+  settleLivedClaim(gitClaim, {
+    anchorId,
+    anchorKind: "carrier_proof",
+    carrierRef: "git",
+  });
 
 describe("@agent-os/git-carrier", () => {
   it("declares git.* as an extension-owned prefix", () => {
@@ -39,6 +45,7 @@ describe("@agent-os/git-carrier", () => {
           workspaceRef: "worktree://ch-1",
           baseRef: "main@abc",
           branchRef: "change/ch-1",
+          claim: livedGitClaim("worktree://ch-1"),
         },
       },
       {
@@ -49,6 +56,7 @@ describe("@agent-os/git-carrier", () => {
           commitRef: "commit://def",
           parentRef: "main@abc",
           diffRef: "diff://def",
+          claim: livedGitClaim("commit://def"),
         },
       },
       {
@@ -58,6 +66,7 @@ describe("@agent-os/git-carrier", () => {
           subjectRef: "ch-1",
           mergeCommitRef: "commit://merge",
           targetRef: "main",
+          claim: livedGitClaim("commit://merge"),
         },
       },
       {
@@ -66,6 +75,7 @@ describe("@agent-os/git-carrier", () => {
         payload: {
           subjectRef: "ch-1",
           workspaceRef: "worktree://ch-1",
+          claim: livedGitClaim("worktree://ch-1:cleaned"),
         },
       },
     ] as const;

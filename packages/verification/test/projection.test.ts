@@ -19,6 +19,12 @@ const verificationClaim = makePreClaim({
     originKind: "extension_package",
   },
 });
+const livedVerificationClaim = (anchorId: string) =>
+  settleLivedClaim(verificationClaim, {
+    anchorId,
+    anchorKind: "carrier_proof",
+    carrierRef: "verification",
+  });
 
 describe("@agent-os/verification", () => {
   it("declares verification.* as an extension-owned prefix", () => {
@@ -40,6 +46,7 @@ describe("@agent-os/verification", () => {
           status: "passed",
           proofRef: "proof://build/1",
           fingerprint: "build/v1",
+          claim: livedVerificationClaim("proof://build/1"),
         },
       },
       {
@@ -51,6 +58,7 @@ describe("@agent-os/verification", () => {
           status: "failed",
           proofRef: "proof://typecheck/1",
           fingerprint: "typecheck/v1",
+          claim: livedVerificationClaim("proof://typecheck/1"),
         },
       },
       {
@@ -62,6 +70,7 @@ describe("@agent-os/verification", () => {
           status: "passed",
           proofRef: "proof://typecheck/2",
           fingerprint: "typecheck/v2",
+          claim: livedVerificationClaim("proof://typecheck/2"),
         },
       },
     ] as const;

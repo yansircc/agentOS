@@ -104,7 +104,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
       expect(Number(outbox[0]?.outbound_event_id)).toBe(result.outboundEventId);
       expect(Number(outbox[0]?.delivered_event_id)).toBe(Number(outboundDelivered[0]?.id));
       const payload = JSON.parse(sqlText(outbound[0]?.payload, "events.payload")) as {
-        readonly claim?: unknown;
+        readonly claim: unknown;
       };
       expect(payload).toEqual({
         target: targetFor("dispatch-receiver-atomic"),
@@ -238,7 +238,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
       readonly outboundEventId: number;
       readonly idempotencyKey: string;
       readonly deliveredEventId: number;
-      readonly claim?: unknown;
+      readonly claim: unknown;
     }>(events, "dispatch.inbound.accepted");
 
     expect(deliveredPayload).toEqual(data);
@@ -347,7 +347,11 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
       let caught: { _tag?: string; bindingRef?: string } | undefined;
       try {
         await rpc.dispatchToScope({
-          target: { bindingRef: missingBindingRef, scope: "irrelevant" },
+          target: {
+            bindingRef: missingBindingRef,
+            scope: "irrelevant",
+            scopeRef: { kind: "conversation", scopeId: "irrelevant" },
+          },
           event: "test.delivered",
           data: {},
           idempotencyKey: "missing-intent",
@@ -374,7 +378,11 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
       let caught: { _tag?: string; position?: string } | undefined;
       try {
         await rpc.dispatchToScope({
-          target: { bindingRef: "peer", scope: "irrelevant" },
+          target: {
+            bindingRef: "peer",
+            scope: "irrelevant",
+            scopeRef: { kind: "conversation", scopeId: "irrelevant" },
+          },
           event: "test.delivered",
           data: {},
           idempotencyKey: "malformed-intent",
@@ -395,7 +403,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
     });
   });
 
-  it("rejects unsupported target scope shape instead of defaulting to realm", async () => {
+  it("rejects missing target scopeRef instead of inferring from legacy scope strings", async () => {
     const sender = stubFor("dispatch-sender-unsupported-scope");
 
     await runInDurableObject(sender, async (instance, state) => {
@@ -407,7 +415,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
           event: "test.delivered",
           data: {},
           idempotencyKey: "unsupported-scope",
-        });
+        } as unknown as DispatchToScopeSpec);
       } catch (e) {
         caught = e as {
           _tag?: string;
@@ -437,7 +445,11 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
       let caught: { _tag?: string; event?: string } | undefined;
       try {
         await rpc.dispatchToScope({
-          target: { bindingRef: peerBindingRef, scope: "any" },
+          target: {
+            bindingRef: peerBindingRef,
+            scope: "any",
+            scopeRef: { kind: "conversation", scopeId: "any" },
+          },
           event: "llm.response",
           data: {},
           idempotencyKey: "claimed-intent",

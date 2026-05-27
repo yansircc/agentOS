@@ -19,6 +19,12 @@ const stagingClaim = makePreClaim({
     originKind: "extension_package",
   },
 });
+const livedStagingClaim = (anchorId: string) =>
+  settleLivedClaim(stagingClaim, {
+    anchorId,
+    anchorKind: "carrier_proof",
+    carrierRef: "staging-artifact",
+  });
 
 describe("@agent-os/staging-artifact", () => {
   it("declares staging.* as an extension-owned prefix", () => {
@@ -39,6 +45,7 @@ describe("@agent-os/staging-artifact", () => {
           artifactRef: "r2://staging/ch-1",
           routeRef: "https://ch-1.staging.example",
           digest: "sha256:abc",
+          claim: livedStagingClaim("r2://staging/ch-1"),
         },
       },
       {
@@ -48,6 +55,7 @@ describe("@agent-os/staging-artifact", () => {
           subjectRef: "ch-1",
           artifactRef: "r2://staging/ch-1",
           reason: "published",
+          claim: livedStagingClaim("r2://staging/ch-1:reaped"),
         },
       },
     ] as const;

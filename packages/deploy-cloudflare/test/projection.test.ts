@@ -4,7 +4,7 @@ import {
   deployCloudflareExtensionPackage,
   projectDeploy,
 } from "../src";
-import { makePreClaim, settleRejectedClaim } from "@agent-os/core/effect-claim";
+import { makePreClaim, settleLivedClaim, settleRejectedClaim } from "@agent-os/core/effect-claim";
 import type { ExtensionCapability } from "@agent-os/core/extensions";
 
 const deployClaim = makePreClaim({
@@ -19,6 +19,12 @@ const deployClaim = makePreClaim({
     originKind: "extension_package",
   },
 });
+const livedDeployClaim = (anchorId: string) =>
+  settleLivedClaim(deployClaim, {
+    anchorId,
+    anchorKind: "carrier_proof",
+    carrierRef: "deploy-cloudflare",
+  });
 
 describe("@agent-os/deploy-cloudflare", () => {
   it("declares deploy.* as an extension-owned prefix", () => {
@@ -38,6 +44,7 @@ describe("@agent-os/deploy-cloudflare", () => {
           subjectRef: "ch-1",
           previewRef: "https://ch-1.staging.example",
           artifactRef: "r2://staging/ch-1",
+          claim: livedDeployClaim("https://ch-1.staging.example"),
         },
       },
       {
@@ -48,6 +55,7 @@ describe("@agent-os/deploy-cloudflare", () => {
           deployRef: "cf-deploy://v2",
           productionRef: "https://site.example",
           rollbackRef: "cf-deploy://v1",
+          claim: livedDeployClaim("cf-deploy://v2"),
         },
       },
       {
@@ -58,6 +66,7 @@ describe("@agent-os/deploy-cloudflare", () => {
           productionRef: "https://site.example",
           readbackRef: "proof://readback/v2",
           status: "passed",
+          claim: livedDeployClaim("proof://readback/v2"),
         },
       },
     ] as const;

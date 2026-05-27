@@ -17,7 +17,7 @@ export interface DispatchRequestedPayload {
   readonly event: string;
   readonly data: unknown;
   readonly idempotencyKey: string;
-  readonly claim?: PreClaim;
+  readonly claim: PreClaim;
   readonly traceContext?: TraceContext;
 }
 
@@ -78,28 +78,24 @@ export const parseRequestedPayload = (raw: string): DispatchRequestedPayload => 
   }
   const bindingRef = parseDispatchBindingRef(target.bindingRef);
   const scopeRef = target.scopeRef;
-  if (scopeRef !== undefined && !isScopeRef(scopeRef)) {
+  if (!isScopeRef(scopeRef)) {
     throw new TypeError("dispatch target scopeRef malformed");
   }
   const traceContext = parseTraceContext(value.traceContext);
-  const parsedClaim = value.claim === undefined ? undefined : validateEffectClaim(value.claim);
-  let claim: PreClaim | undefined;
-  if (parsedClaim !== undefined) {
-    if (!parsedClaim.ok || parsedClaim.claim.phase !== "pre") {
-      throw new TypeError("dispatch claim must be a PreClaim");
-    }
-    claim = parsedClaim.claim;
+  const parsedClaim = validateEffectClaim(value.claim);
+  if (!parsedClaim.ok || parsedClaim.claim.phase !== "pre") {
+    throw new TypeError("dispatch claim must be a PreClaim");
   }
   return {
     target: {
       bindingRef,
       scope: target.scope,
-      ...(scopeRef === undefined ? {} : { scopeRef }),
+      scopeRef,
     },
     event: value.event,
     data: value.data,
     idempotencyKey: value.idempotencyKey,
-    ...(claim === undefined ? {} : { claim }),
+    claim: parsedClaim.claim,
     ...(traceContext === undefined ? {} : { traceContext }),
   };
 };

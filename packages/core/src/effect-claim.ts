@@ -128,22 +128,6 @@ export const makeOperationRef = (
   parts: ReadonlyArray<string | number>,
 ): OperationRef => [namespace, ...parts.map((part) => encodeURIComponent(String(part)))].join(":");
 
-export const scopeRefFromLegacyScope = (scopeId: string): ScopeRef | null => {
-  if (scopeId.startsWith("user/") || scopeId.startsWith("org/")) {
-    return { kind: "realm", scopeId };
-  }
-  if (scopeId.startsWith("thread/")) {
-    return { kind: "conversation", scopeId };
-  }
-  if (scopeId.startsWith("session/")) {
-    return { kind: "session", scopeId };
-  }
-  if (scopeId.startsWith("wp/")) {
-    return { kind: "external", scopeId, systemRef: "wordpress" };
-  }
-  return null;
-};
-
 export const makePreClaim = (spec: {
   readonly operationRef: OperationRef;
   readonly scopeRef: ScopeRef;

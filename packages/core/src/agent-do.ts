@@ -91,7 +91,7 @@ import {
   rejectClaimedAppEvent,
   validateExtensionPackages,
 } from "./extensions";
-import { scopeRefFromLegacyScope, type ScopeRef } from "./effect-claim";
+import { isScopeRef, type ScopeRef } from "./effect-claim";
 import {
   type InternalSubmitSpec,
   submitAgentEffect,
@@ -321,14 +321,8 @@ export abstract class AgentDOBase<Env extends AgentDOEnv> extends DurableObject<
     return {};
   }
 
-  /** Compatibility mapper for existing string-named DO scopes.
-   *
-   *  New app code should override this when scope names are not one of the
-   *  spec-24 conventional prefixes. Returning null is a hard unsupported
-   *  state, not a `realm` fallback.
-   */
-  protected scopeRefForScope(scope: string): ScopeRef | null {
-    return scopeRefFromLegacyScope(scope);
+  protected scopeRefForScope(_scope: string): ScopeRef | null {
+    return null;
   }
 
   /** Register a handler fired whenever a ledger event of `kind` is written.
@@ -569,8 +563,7 @@ export abstract class AgentDOBase<Env extends AgentDOEnv> extends DurableObject<
         }),
       );
     }
-    const targetScopeRef = spec.target.scopeRef ?? this.scopeRefForScope(spec.target.scope);
-    if (targetScopeRef === null) {
+    if (!isScopeRef(spec.target.scopeRef)) {
       return Promise.reject(
         new UnsupportedScopeRef({
           scopeId: spec.target.scope,
@@ -578,14 +571,10 @@ export abstract class AgentDOBase<Env extends AgentDOEnv> extends DurableObject<
         }),
       );
     }
-    const resolvedSpec: DispatchToScopeSpec = {
-      ...spec,
-      target: { ...spec.target, scopeRef: targetScopeRef },
-    };
     return this.runtimeFor(scope).runPromise(
       Effect.gen(function* () {
         const dispatch = yield* Dispatch;
-        return yield* dispatch.dispatchToScope(resolvedSpec);
+        return yield* dispatch.dispatchToScope(spec);
       }),
     );
   }

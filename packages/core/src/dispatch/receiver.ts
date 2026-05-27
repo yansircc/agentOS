@@ -23,7 +23,7 @@ export interface InboundAcceptedPayload {
   readonly outboundEventId: number;
   readonly idempotencyKey: string;
   readonly deliveredEventId: number;
-  readonly claim?: LivedClaim;
+  readonly claim: LivedClaim;
   readonly traceContext?: TraceContext;
 }
 
@@ -43,20 +43,16 @@ export const parseInboundAcceptedPayload = (raw: string): InboundAcceptedPayload
     throw new TypeError("dispatch.inbound.accepted payload malformed");
   }
   const traceContext = parseTraceContext(value.traceContext);
-  const parsedClaim = value.claim === undefined ? undefined : validateEffectClaim(value.claim);
-  let claim: LivedClaim | undefined;
-  if (parsedClaim !== undefined) {
-    if (!parsedClaim.ok || parsedClaim.claim.phase !== "lived") {
-      throw new TypeError("dispatch.inbound.accepted claim must be LivedClaim");
-    }
-    claim = parsedClaim.claim;
+  const parsedClaim = validateEffectClaim(value.claim);
+  if (!parsedClaim.ok || parsedClaim.claim.phase !== "lived") {
+    throw new TypeError("dispatch.inbound.accepted claim must be LivedClaim");
   }
   return {
     sourceScope: value.sourceScope,
     outboundEventId: value.outboundEventId,
     idempotencyKey: value.idempotencyKey,
     deliveredEventId: value.deliveredEventId,
-    ...(claim === undefined ? {} : { claim }),
+    claim: parsedClaim.claim,
     ...(traceContext === undefined ? {} : { traceContext }),
   };
 };

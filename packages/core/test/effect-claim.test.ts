@@ -3,7 +3,6 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   makeOperationRef,
   makePreClaim,
-  scopeRefFromLegacyScope,
   settleLivedClaim,
   settleRejectedClaim,
   validateEffectClaim,
@@ -68,32 +67,6 @@ describe("EffectClaim calculus", () => {
       ok: false,
       issues: ["lived_claim_has_rejection"],
     });
-  });
-
-  it("maps legacy scope strings into the five typed ScopeRef kinds", () => {
-    expect(scopeRefFromLegacyScope("user/u1")).toEqual({
-      kind: "realm",
-      scopeId: "user/u1",
-    });
-    expect(scopeRefFromLegacyScope("org/o1")).toEqual({
-      kind: "realm",
-      scopeId: "org/o1",
-    });
-    expect(scopeRefFromLegacyScope("thread/t1")).toEqual({
-      kind: "conversation",
-      scopeId: "thread/t1",
-    });
-    expect(scopeRefFromLegacyScope("session/s1")).toEqual({
-      kind: "session",
-      scopeId: "session/s1",
-    });
-    expect(scopeRefFromLegacyScope("wp/plugin@example.com")).toEqual({
-      kind: "external",
-      scopeId: "wp/plugin@example.com",
-      systemRef: "wordpress",
-    });
-    expect(scopeRefFromLegacyScope("agent/name/item")).toBeNull();
-    expect(scopeRefFromLegacyScope("custom-scope")).toBeNull();
   });
 
   it("rejects nullable scope/session and missing external systemRef shapes", () => {
