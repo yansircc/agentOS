@@ -51,14 +51,14 @@ export const failureToToolResult = (
   maxBodyBytes: number,
 ): DynamicWorkerToolResult => {
   const isPolicy = failure._tag === "agent_os.dynamic_worker_policy_denied";
-  const body = truncateUtf8(isPolicy ? "" : failure.body ?? "", maxBodyBytes);
+  const body = truncateUtf8(isPolicy ? "" : (failure.body ?? ""), maxBodyBytes);
   return {
     ok: false,
     bodyHead: body.head,
     bodyBytes: body.bytes,
     bodyTruncated: body.truncated,
     durationMs,
-    workerId: isPolicy ? "policy" : failure.workerId ?? "unknown",
+    workerId: isPolicy ? "policy" : (failure.workerId ?? "unknown"),
     failureCode: isPolicy ? "PolicyDenied" : failure.code,
     reason: failure.reason,
     ...(isPolicy || failure.status === undefined ? {} : { status: failure.status }),

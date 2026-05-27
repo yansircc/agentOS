@@ -14,10 +14,8 @@
  */
 
 import type { TraceContext } from "../types";
-import {
-  validateEffectClaim,
-  type LivedClaim,
-} from "../effect-claim";
+import { validateEffectClaim, type LivedClaim } from "../effect-claim";
+import { sqlText } from "../storage/sql-row";
 import { isRecord, parseTraceContext } from "./payload";
 
 export interface InboundAcceptedPayload {
@@ -31,9 +29,7 @@ export interface InboundAcceptedPayload {
 
 export const DISPATCH_INBOUND_ACCEPTED = "dispatch.inbound.accepted";
 
-export const parseInboundAcceptedPayload = (
-  raw: string,
-): InboundAcceptedPayload => {
+export const parseInboundAcceptedPayload = (raw: string): InboundAcceptedPayload => {
   const value = JSON.parse(raw) as unknown;
   if (!isRecord(value)) {
     throw new TypeError("dispatch.inbound.accepted payload must be object");
@@ -47,8 +43,7 @@ export const parseInboundAcceptedPayload = (
     throw new TypeError("dispatch.inbound.accepted payload malformed");
   }
   const traceContext = parseTraceContext(value.traceContext);
-  const parsedClaim =
-    value.claim === undefined ? undefined : validateEffectClaim(value.claim);
+  const parsedClaim = value.claim === undefined ? undefined : validateEffectClaim(value.claim);
   let claim: LivedClaim | undefined;
   if (parsedClaim !== undefined) {
     if (!parsedClaim.ok || parsedClaim.claim.phase !== "lived") {
@@ -72,11 +67,8 @@ export const findAcceptedInRows = (
   idempotencyKey: string,
 ): InboundAcceptedPayload | null => {
   for (const row of rows) {
-    const payload = parseInboundAcceptedPayload(String(row.payload));
-    if (
-      payload.sourceScope === sourceScope &&
-      payload.idempotencyKey === idempotencyKey
-    ) {
+    const payload = parseInboundAcceptedPayload(sqlText(row.payload, "events.payload"));
+    if (payload.sourceScope === sourceScope && payload.idempotencyKey === idempotencyKey) {
       return payload;
     }
   }

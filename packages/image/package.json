@@ -19,9 +19,9 @@
     "@agent-os/core": "workspace:*"
   },
   "devDependencies": {
-    "@effect/language-service": "^0.86.2",
-    "effect": "^3.21.0",
-    "typescript": "^5.7.2",
+    "@effect/language-service": "catalog:",
+    "effect": "catalog:",
+    "typescript": "catalog:",
     "vite-plus": "catalog:",
     "vitest": "catalog:"
   },

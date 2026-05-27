@@ -53,9 +53,7 @@ export interface RegisteredToolSpec<A, R> {
   readonly originRef?: OriginRef;
 }
 
-export const defineRegisteredTool = <A, R>(
-  spec: RegisteredToolSpec<A, R>,
-): Tool<A, R> => {
+export const defineRegisteredTool = <A, R>(spec: RegisteredToolSpec<A, R>): Tool<A, R> => {
   const toolId = spec.definition.function.name;
   return {
     definition: spec.definition,
@@ -66,9 +64,7 @@ export const defineRegisteredTool = <A, R>(
       authorityRef: {
         authorityId: spec.authorityId ?? `tool:${toolId}`,
         authorityClass: spec.authorityClass,
-        ...(spec.authorityVersion === undefined
-          ? {}
-          : { version: spec.authorityVersion }),
+        ...(spec.authorityVersion === undefined ? {} : { version: spec.authorityVersion }),
       },
       ...(spec.originRef === undefined ? {} : { originRef: spec.originRef }),
       roles: ["generator"],
@@ -117,9 +113,7 @@ export type ToolRegistryValidation =
       readonly issues: ReadonlyArray<ToolRegistryIssue>;
     };
 
-export const validateToolRegistry = (
-  tools: Record<string, Tool>,
-): ToolRegistryValidation => {
+export const validateToolRegistry = (tools: Record<string, Tool>): ToolRegistryValidation => {
   const issues: ToolRegistryIssue[] = [];
   const toolIds = new Set<string>();
 
@@ -150,10 +144,7 @@ export const validateToolRegistry = (
     if (!isAuthorityRef(contract.authorityRef)) {
       issues.push({ kind: "invalid_authority_ref", toolId: contract.toolId });
     }
-    if (
-      contract.originRef !== undefined &&
-      !isOriginRef(contract.originRef)
-    ) {
+    if (contract.originRef !== undefined && !isOriginRef(contract.originRef)) {
       issues.push({ kind: "invalid_origin_ref", toolId: contract.toolId });
     }
     if (!contract.roles.includes("generator")) {

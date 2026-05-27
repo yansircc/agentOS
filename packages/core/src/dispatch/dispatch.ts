@@ -23,10 +23,7 @@ import {
 } from "../errors";
 import { EventBus } from "../ledger";
 import type { LedgerEvent } from "../types";
-import type {
-  DispatchToScopeResult,
-  DispatchToScopeSpec,
-} from "../types";
+import type { DispatchToScopeResult, DispatchToScopeSpec } from "../types";
 import {
   makeOperationRef,
   makePreClaim,
@@ -48,11 +45,7 @@ import {
   selectDue,
   type DispatchOutboxRow,
 } from "./outbox";
-import {
-  DISPATCH_INBOUND_ACCEPTED,
-  findAccepted,
-  type InboundAcceptedPayload,
-} from "./receiver";
+import { DISPATCH_INBOUND_ACCEPTED, findAccepted, type InboundAcceptedPayload } from "./receiver";
 
 import type { TraceContext } from "../types";
 
@@ -82,9 +75,7 @@ export interface DispatchTargetNamespace {
   readonly get: (id: DurableObjectId) => unknown;
 }
 
-export type DispatchTargetRegistry = Readonly<
-  Record<string, DispatchTargetNamespace>
->;
+export type DispatchTargetRegistry = Readonly<Record<string, DispatchTargetNamespace>>;
 
 const DISPATCH_OUTBOUND_REQUESTED = "dispatch.outbound.requested";
 const DISPATCH_OUTBOUND_DELIVERED = "dispatch.outbound.delivered";
@@ -107,11 +98,7 @@ export class Dispatch extends Context.Tag("@agent-os/Dispatch")<
       envelope: DispatchEnvelope,
     ) => Effect.Effect<
       { deliveredEventId: number },
-      | SqlError
-      | JsonStringifyError
-      | CapabilityRejected
-      | ScopeMissingError
-      | DispatchScopeMismatch
+      SqlError | JsonStringifyError | CapabilityRejected | ScopeMissingError | DispatchScopeMismatch
     >;
     readonly drainDue: (
       now: number,
@@ -299,13 +286,7 @@ export const DispatchLive = (
             return "delivered";
           }
 
-          yield* markFailed(
-            row.outboundEventId,
-            requested,
-            attempt,
-            now,
-            delivered.left,
-          );
+          yield* markFailed(row.outboundEventId, requested, attempt, now, delivered.left);
           return "failed";
         });
 
@@ -351,8 +332,7 @@ export const DispatchLive = (
             const now = yield* Clock.currentTimeMillis;
             const traceContext = copyTraceContext(spec.traceContext);
             const targetScopeRef =
-              spec.target.scopeRef ??
-              scopeRefFromLegacyScope(spec.target.scope);
+              spec.target.scopeRef ?? scopeRefFromLegacyScope(spec.target.scope);
             if (targetScopeRef === null) {
               return yield* Effect.fail(
                 new UnsupportedScopeRef({

@@ -42,7 +42,5 @@ export interface ImageJobIdentity {
   readonly seed?: string | number;
 }
 
-export const imageJobIdempotencyKey = (
-  identity: ImageJobIdentity,
-): string =>
+export const imageJobIdempotencyKey = (identity: ImageJobIdentity): string =>
   `image.job.${fnv1a64(stableStringify(identity as unknown as StableJson))}`;

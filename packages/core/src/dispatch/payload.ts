@@ -8,15 +8,8 @@
  * parseRequestedPayload + describeCause.
  */
 
-import type {
-  DispatchTargetSpec,
-  TraceContext,
-} from "../types";
-import {
-  isScopeRef,
-  validateEffectClaim,
-  type PreClaim,
-} from "../effect-claim";
+import type { DispatchTargetSpec, TraceContext } from "../types";
+import { isScopeRef, validateEffectClaim, type PreClaim } from "../effect-claim";
 
 export interface DispatchRequestedPayload {
   readonly target: DispatchTargetSpec;
@@ -35,12 +28,8 @@ export const copyTraceContext = (
 ): TraceContext | undefined => {
   if (traceContext === undefined) return undefined;
   return {
-    ...(traceContext.traceparent === undefined
-      ? {}
-      : { traceparent: traceContext.traceparent }),
-    ...(traceContext.tracestate === undefined
-      ? {}
-      : { tracestate: traceContext.tracestate }),
+    ...(traceContext.traceparent === undefined ? {} : { traceparent: traceContext.traceparent }),
+    ...(traceContext.tracestate === undefined ? {} : { tracestate: traceContext.tracestate }),
   };
 };
 
@@ -85,8 +74,7 @@ export const parseRequestedPayload = (raw: string): DispatchRequestedPayload => 
     throw new TypeError("dispatch target scopeRef malformed");
   }
   const traceContext = parseTraceContext(value.traceContext);
-  const parsedClaim =
-    value.claim === undefined ? undefined : validateEffectClaim(value.claim);
+  const parsedClaim = value.claim === undefined ? undefined : validateEffectClaim(value.claim);
   let claim: PreClaim | undefined;
   if (parsedClaim !== undefined) {
     if (!parsedClaim.ok || parsedClaim.claim.phase !== "pre") {

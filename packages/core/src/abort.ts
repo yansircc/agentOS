@@ -19,5 +19,4 @@ export const ABORT = {
 
 export type AbortKind = (typeof ABORT)[keyof typeof ABORT];
 
-export const reasonOf = (kind: AbortKind): string =>
-  kind.replace(/^agent\.aborted\./, "");
+export const reasonOf = (kind: AbortKind): string => kind.replace(/^agent\.aborted\./, "");

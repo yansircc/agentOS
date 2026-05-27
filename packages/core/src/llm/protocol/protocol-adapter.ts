@@ -27,20 +27,8 @@
  * at module init). All IO is in `dispatchProvider` (llm.ts).
  */
 
-import type {
-  LlmRoute,
-  LlmUsage,
-  ProviderRequestBodyFor,
-  LlmToolCall,
-  LlmMessage,
-} from "../llm";
-import type {
-  LiveInput,
-  Outcome,
-  ProbeInput,
-  SchemaContract,
-  Strategy,
-} from "../../admission";
+import type { LlmRoute, LlmUsage, ProviderRequestBodyFor, LlmToolCall, LlmMessage } from "../llm";
+import type { LiveInput, Outcome, ProbeInput, SchemaContract, Strategy } from "../../admission";
 
 import { cfAiBindingAdapter, openaiChatCompatibleAdapter } from "./openai-chat";
 import { anthropicMessagesAdapter } from "./anthropic-messages";
@@ -186,6 +174,5 @@ export const llmProtocolAdapters: LlmProtocolAdapterRegistry = {
 /** Type-narrowed adapter lookup. TS cannot directly narrow
  *  `registry[route.kind]` because the indexed access loses the binding
  *  between `kind` and the adapter's `K`. This helper re-establishes it. */
-export const getProtocolAdapter = <K extends LlmRoute["kind"]>(
-  kind: K,
-): LlmProtocolAdapter<K> => llmProtocolAdapters[kind];
+export const getProtocolAdapter = <K extends LlmRoute["kind"]>(kind: K): LlmProtocolAdapter<K> =>
+  llmProtocolAdapters[kind];

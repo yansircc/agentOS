@@ -1,10 +1,5 @@
 import { encodedScopeTail, uiPath } from "./client";
-import {
-  compactJson,
-  escapeAttr,
-  escapeHtml,
-  prettyJson,
-} from "./html";
+import { compactJson, escapeAttr, escapeHtml, prettyJson } from "./html";
 import type {
   ApiResult,
   CapabilityLease,
@@ -133,9 +128,7 @@ export const renderRunsPanel = (
     return `<div class="header-desc">GET /scopes/:scope/runs</div>${errorBlock(result)}`;
   }
   const page = result?.ok === true ? result.value : { runs: [], nextCursor: null };
-  const rows = page.runs
-    .map((run) => renderRunRow(opts, scope, run, selectedRunId))
-    .join("");
+  const rows = page.runs.map((run) => renderRunRow(opts, scope, run, selectedRunId)).join("");
   const next =
     page.nextCursor === null
       ? ""
@@ -306,17 +299,37 @@ export const renderTelemetryWorkspace = (
   </div>
   ${renderTabs(opts, scope, runId, "telemetry")}
   <div class="telemetry-grid">
-    ${projectionSection(opts, scope, runId, "quota", "GET /scopes/:scope/quota", [
-      ["quotaKey", "key", values.quotaKey ?? ""],
-      ["windowMs", "windowMs", values.windowMs ?? "Infinity"],
-      ["quotaLimit", "limit", values.quotaLimit ?? "1"],
-    ], results.quota)}
-    ${projectionSection(opts, scope, runId, "resource", "GET /scopes/:scope/resource", [
-      ["resourceKey", "key", values.resourceKey ?? ""],
-    ], results.resource)}
-    ${projectionSection(opts, scope, runId, "admission", "GET /scopes/:scope/admission", [
-      ["admissionKey", "key", values.admissionKey ?? ""],
-    ], results.admission)}
+    ${projectionSection(
+      opts,
+      scope,
+      runId,
+      "quota",
+      "GET /scopes/:scope/quota",
+      [
+        ["quotaKey", "key", values.quotaKey ?? ""],
+        ["windowMs", "windowMs", values.windowMs ?? "Infinity"],
+        ["quotaLimit", "limit", values.quotaLimit ?? "1"],
+      ],
+      results.quota,
+    )}
+    ${projectionSection(
+      opts,
+      scope,
+      runId,
+      "resource",
+      "GET /scopes/:scope/resource",
+      [["resourceKey", "key", values.resourceKey ?? ""]],
+      results.resource,
+    )}
+    ${projectionSection(
+      opts,
+      scope,
+      runId,
+      "admission",
+      "GET /scopes/:scope/admission",
+      [["admissionKey", "key", values.admissionKey ?? ""]],
+      results.admission,
+    )}
   </div>`;
 
 const projectionSection = (
@@ -410,10 +423,8 @@ export const chooseInitialRun = (
   return page?.runs[0];
 };
 
-export const scopeRunsTail = (
-  scope: string,
-  query = "runs",
-): string => encodedScopeTail(scope, query);
+export const scopeRunsTail = (scope: string, query = "runs"): string =>
+  encodedScopeTail(scope, query);
 
 const kv = (key: string, value: unknown): string =>
   `<div class="kv"><span class="k">${escapeHtml(key)}</span><span class="v">${escapeHtml(value)}</span></div>`;

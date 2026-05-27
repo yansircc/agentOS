@@ -104,12 +104,12 @@ The operational test is not "will several apps use this?" The test is:
 
 Placement follows from the first guard that fails:
 
-| Placement | Necessary information |
-|---|---|
-| core | universal to all effect boundaries because writer, resolver, or reader invariants fail without it |
-| carrier package | universal to all products using one substrate/provider boundary |
-| experimental package | universal to N>=2 products but not yet proven as a stable carrier API |
-| cookbook/app | per-product policy, vocabulary, ranking, UI, or role semantics |
+| Placement            | Necessary information                                                                             |
+| -------------------- | ------------------------------------------------------------------------------------------------- |
+| core                 | universal to all effect boundaries because writer, resolver, or reader invariants fail without it |
+| carrier package      | universal to all products using one substrate/provider boundary                                   |
+| experimental package | universal to N>=2 products but not yet proven as a stable carrier API                             |
+| cookbook/app         | per-product policy, vocabulary, ranking, UI, or role semantics                                    |
 
 Writer and generator are deliberately separate concepts:
 
@@ -127,26 +127,26 @@ or both.
 ## 2. Claim Types
 
 ```ts
-type EffectClaim = PreClaim | LivedClaim | RejectedClaim
+type EffectClaim = PreClaim | LivedClaim | RejectedClaim;
 
-type OperationRef = string
+type OperationRef = string;
 
 interface PreClaim {
-  readonly phase: "pre"
-  readonly operationRef: OperationRef
-  readonly scopeRef: ScopeRef
-  readonly authorityRef: AuthorityRef
-  readonly originRef: OriginRef
+  readonly phase: "pre";
+  readonly operationRef: OperationRef;
+  readonly scopeRef: ScopeRef;
+  readonly authorityRef: AuthorityRef;
+  readonly originRef: OriginRef;
 }
 
 interface LivedClaim extends Omit<PreClaim, "phase"> {
-  readonly phase: "lived"
-  readonly anchorRef: AnchorRef
+  readonly phase: "lived";
+  readonly anchorRef: AnchorRef;
 }
 
 interface RejectedClaim extends Omit<PreClaim, "phase"> {
-  readonly phase: "rejected"
-  readonly rejectionRef: RejectionRef
+  readonly phase: "rejected";
+  readonly rejectionRef: RejectionRef;
 }
 ```
 
@@ -190,13 +190,13 @@ Rules:
 
 Current mapping:
 
-| Current field | EffectClaim role |
-|---|---|
-| `DispatchToScopeSpec.idempotencyKey` | input to `operationRef` canonicalization |
-| `ResourceReserveSpec.idempotencyKey` | input to `operationRef` canonicalization |
-| `TraceContext.traceparent` | derived trace metadata |
-| `dispatch.outboundEventId` | sender-local anchor/trace metadata |
-| `runId / turn / attempt` | trace projection, not operation identity by default |
+| Current field                        | EffectClaim role                                    |
+| ------------------------------------ | --------------------------------------------------- |
+| `DispatchToScopeSpec.idempotencyKey` | input to `operationRef` canonicalization            |
+| `ResourceReserveSpec.idempotencyKey` | input to `operationRef` canonicalization            |
+| `TraceContext.traceparent`           | derived trace metadata                              |
+| `dispatch.outboundEventId`           | sender-local anchor/trace metadata                  |
+| `runId / turn / attempt`             | trace projection, not operation identity by default |
 
 ---
 
@@ -211,21 +211,21 @@ type ScopeRef =
   | { readonly kind: "session"; readonly scopeId: string }
   | { readonly kind: "artifact"; readonly scopeId: string }
   | {
-      readonly kind: "external"
-      readonly scopeId: string
-      readonly systemRef: string
-    }
+      readonly kind: "external";
+      readonly scopeId: string;
+      readonly systemRef: string;
+    };
 ```
 
 Kind semantics:
 
-| Kind | Owns | Does not imply |
-|---|---|---|
-| `realm` | durable authority, quota, billing, tenant/app resource boundary | ordered interaction or stateful runtime |
-| `conversation` | ordered interaction ledger such as thread/chat/review flow | sandbox, workspace, preview port, or carrier state root |
-| `session` | resumable runtime/workspace lifecycle and stateful carrier root | permanent artifact identity or external account |
-| `artifact` | produced object identity, content/proof lineage, staging output | permission to execute the artifact |
-| `external` | bridge/account/site/project outside agentOS, named by `systemRef` | local carrier state root |
+| Kind           | Owns                                                              | Does not imply                                          |
+| -------------- | ----------------------------------------------------------------- | ------------------------------------------------------- |
+| `realm`        | durable authority, quota, billing, tenant/app resource boundary   | ordered interaction or stateful runtime                 |
+| `conversation` | ordered interaction ledger such as thread/chat/review flow        | sandbox, workspace, preview port, or carrier state root |
+| `session`      | resumable runtime/workspace lifecycle and stateful carrier root   | permanent artifact identity or external account         |
+| `artifact`     | produced object identity, content/proof lineage, staging output   | permission to execute the artifact                      |
+| `external`     | bridge/account/site/project outside agentOS, named by `systemRef` | local carrier state root                                |
 
 Rules:
 
@@ -250,13 +250,13 @@ Rules:
 
 Current scope convention mapping:
 
-| spec-24 convention | ScopeRef |
-|---|---|
-| `user/{userId}` | `{ kind: "realm", scopeId }` |
-| `org/{orgId}` | `{ kind: "realm", scopeId }` |
-| `thread/{threadId}` | `{ kind: "conversation", scopeId }` |
-| `agent/{agentName}/{itemId}` | app-defined; usually `artifact` or `session` |
-| `session/{sessionId}` | `{ kind: "session", scopeId }` |
+| spec-24 convention           | ScopeRef                                                |
+| ---------------------------- | ------------------------------------------------------- |
+| `user/{userId}`              | `{ kind: "realm", scopeId }`                            |
+| `org/{orgId}`                | `{ kind: "realm", scopeId }`                            |
+| `thread/{threadId}`          | `{ kind: "conversation", scopeId }`                     |
+| `agent/{agentName}/{itemId}` | app-defined; usually `artifact` or `session`            |
+| `session/{sessionId}`        | `{ kind: "session", scopeId }`                          |
 | `wp/{pluginId}@{siteDomain}` | `{ kind: "external", scopeId, systemRef: "wordpress" }` |
 
 ---
@@ -267,9 +267,9 @@ Current scope convention mapping:
 
 ```ts
 interface AuthorityRef {
-  readonly authorityId: string
-  readonly authorityClass: string
-  readonly version?: string
+  readonly authorityId: string;
+  readonly authorityClass: string;
+  readonly version?: string;
 }
 ```
 
@@ -297,9 +297,9 @@ the operation identity.
 
 ```ts
 interface OriginRef {
-  readonly originId: string
-  readonly originKind: string
-  readonly version?: string
+  readonly originId: string;
+  readonly originKind: string;
+  readonly version?: string;
 }
 ```
 
@@ -323,13 +323,9 @@ was produced.
 
 ```ts
 interface AnchorRef {
-  readonly anchorId: string
-  readonly anchorKind:
-    | "ledger_event"
-    | "carrier_proof"
-    | "external_receipt"
-    | "dry_run_proof"
-  readonly carrierRef?: string
+  readonly anchorId: string;
+  readonly anchorKind: "ledger_event" | "carrier_proof" | "external_receipt" | "dry_run_proof";
+  readonly carrierRef?: string;
 }
 ```
 
@@ -345,15 +341,15 @@ authority/scope/operation.
 
 ```ts
 interface RejectionRef {
-  readonly rejectionId: string
+  readonly rejectionId: string;
   readonly rejectionKind:
     | "capability_denied"
     | "policy_denied"
     | "validation_failed"
     | "unsupported"
     | "resource_denied"
-    | "provider_rejected"
-  readonly reason?: string
+    | "provider_rejected";
+  readonly reason?: string;
 }
 ```
 
@@ -454,11 +450,11 @@ calculus.
 `EffectClaim` has three runtime roles around it. These roles do not replace
 spec-34's writer capability; they sit around the pre/post effect boundary.
 
-| Role | Responsibility | Must not do |
-|---|---|---|
-| generator | mint a `PreClaim` at an effect boundary, or reject before execution | resolve provider resources as an untyped side channel |
-| resolver | turn `*Ref` values into concrete carrier resources, leases, cleanup roots, or dispatch targets | mint claims unless it is also explicitly a generator |
-| reader | project claim/ledger streams into trace, audit, workbench, or failure-plane views | write durable facts that duplicate the ledger |
+| Role      | Responsibility                                                                                 | Must not do                                           |
+| --------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| generator | mint a `PreClaim` at an effect boundary, or reject before execution                            | resolve provider resources as an untyped side channel |
+| resolver  | turn `*Ref` values into concrete carrier resources, leases, cleanup roots, or dispatch targets | mint claims unless it is also explicitly a generator  |
+| reader    | project claim/ledger streams into trace, audit, workbench, or failure-plane views              | write durable facts that duplicate the ledger         |
 
 Package names are not substrate ontology. A package is an implementation of one
 or more roles on a concrete substrate. The role count should stay stable even
@@ -490,15 +486,15 @@ Rules:
 The previous six "app runtime gaps" collapse into role materializations over
 this calculus.
 
-| Materialization | Role | Boundary decision |
-|---|---|---|
-| tool registry | generator | tool identity and turn authority are one boundary schema; do not split `ToolProvider` and `TurnContract` into separate gates |
-| runtime scope | resolver | `ScopeRef` resolves to resource keys, leases, and cleanup roots; provider cases stay outside core |
-| workspace session | core claim shape + carrier resolver | `kind: "session"` is the core ownership/lifecycle class; session start/restore/backup/preview allocation settle claims when they are auditable effects; sandbox/workspace/preview/backup resolution stays carrier-specific |
-| dynamic worker | generator or carrier materializer | bounded stateless Worker execution; not a substitute for session/workspace state |
-| git/deploy/staging/verification carriers | generator/resolver as needed | adopt claim settlement and proof anchors without app-specific nouns such as `changeId` |
-| Cloudflare resource/control plane | resolver/materializer for `external` | account/site/Worker/resource operations fail closed and anchor proofs in carrier-owned vocabulary |
-| trace locator/failure plane | reader | ledger projection only; no parallel observability facts |
+| Materialization                          | Role                                 | Boundary decision                                                                                                                                                                                                          |
+| ---------------------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| tool registry                            | generator                            | tool identity and turn authority are one boundary schema; do not split `ToolProvider` and `TurnContract` into separate gates                                                                                               |
+| runtime scope                            | resolver                             | `ScopeRef` resolves to resource keys, leases, and cleanup roots; provider cases stay outside core                                                                                                                          |
+| workspace session                        | core claim shape + carrier resolver  | `kind: "session"` is the core ownership/lifecycle class; session start/restore/backup/preview allocation settle claims when they are auditable effects; sandbox/workspace/preview/backup resolution stays carrier-specific |
+| dynamic worker                           | generator or carrier materializer    | bounded stateless Worker execution; not a substitute for session/workspace state                                                                                                                                           |
+| git/deploy/staging/verification carriers | generator/resolver as needed         | adopt claim settlement and proof anchors without app-specific nouns such as `changeId`                                                                                                                                     |
+| Cloudflare resource/control plane        | resolver/materializer for `external` | account/site/Worker/resource operations fail closed and anchor proofs in carrier-owned vocabulary                                                                                                                          |
+| trace locator/failure plane              | reader                               | ledger projection only; no parallel observability facts                                                                                                                                                                    |
 
 This table is a planning matrix, not a package list. A future package should
 state which role it materializes and which `EffectClaim` fields it owns.
@@ -527,14 +523,14 @@ from ephemeral to persistent without changing ownership class.
 
 ## 13. Implementation Stages
 
-| Stage | Ships | Does not claim |
-|---|---|---|
-| P0 - spec | this document, including substrate/runtime completion criteria and role algebra | runtime enforcement |
-| P1 - private helpers | non-barrel core/internal types and claim validators used by one call path | public package API stability |
-| P2 - generator materialization | tool registry as the first named generator for tool identity + authority | universal carrier migration |
-| P3 - resolver materialization | runtime-scope and at least one carrier adopting typed `ScopeRef` resolution | full workspace/session lifecycle |
-| P4 - reader materialization | trace locator/failure-plane projection over claim/ledger state | second observability store |
-| P5 - carrier migration | dynamic-worker/git/deploy/staging/verification/workspace claims and proofs | app domain approval policy |
+| Stage                          | Ships                                                                           | Does not claim                   |
+| ------------------------------ | ------------------------------------------------------------------------------- | -------------------------------- |
+| P0 - spec                      | this document, including substrate/runtime completion criteria and role algebra | runtime enforcement              |
+| P1 - private helpers           | non-barrel core/internal types and claim validators used by one call path       | public package API stability     |
+| P2 - generator materialization | tool registry as the first named generator for tool identity + authority        | universal carrier migration      |
+| P3 - resolver materialization  | runtime-scope and at least one carrier adopting typed `ScopeRef` resolution     | full workspace/session lifecycle |
+| P4 - reader materialization    | trace locator/failure-plane projection over claim/ledger state                  | second observability store       |
+| P5 - carrier migration         | dynamic-worker/git/deploy/staging/verification/workspace claims and proofs      | app domain approval policy       |
 
 Do not add a public barrel export before at least one call path uses the type
 as an invariant-enforcing boundary. A public unused type would be vocabulary,

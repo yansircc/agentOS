@@ -1,7 +1,4 @@
-import type {
-  ApiResult,
-  NormalizedOpsHtmxOptions,
-} from "./types";
+import type { ApiResult, NormalizedOpsHtmxOptions } from "./types";
 
 const trimSlashes = (value: string): string => value.replace(/^\/+|\/+$/g, "");
 
@@ -55,10 +52,7 @@ export const apiGetJson = async <T>(
   }
 
   const body =
-    parsed !== null &&
-    typeof parsed === "object" &&
-    "error" in parsed &&
-    "message" in parsed
+    parsed !== null && typeof parsed === "object" && "error" in parsed && "message" in parsed
       ? (parsed as { readonly error: string; readonly message: string })
       : {
           error: `http_${response.status}`,

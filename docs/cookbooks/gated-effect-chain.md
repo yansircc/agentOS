@@ -55,31 +55,31 @@ Example payloads:
 
 ```ts
 type GateFact = {
-  changeId: string
-  gate: "typecheck" | "build" | "adapter-readback" | "preview-smoke"
-  status: "passed" | "failed"
-  proofRef: string
-  fingerprint: string
-}
+  changeId: string;
+  gate: "typecheck" | "build" | "adapter-readback" | "preview-smoke";
+  status: "passed" | "failed";
+  proofRef: string;
+  fingerprint: string;
+};
 
 type ReadyFact = {
-  changeId: string
-  gateEventIds: ReadonlyArray<number>
-  previewRef?: string
-}
+  changeId: string;
+  gateEventIds: ReadonlyArray<number>;
+  previewRef?: string;
+};
 
 type PublishStepFact = {
-  changeId: string
+  changeId: string;
   step:
     | "merge-main"
     | "adapter-apply"
     | "adapter-readback"
     | "deploy-production"
     | "production-readback"
-    | "staging-gc"
-  status: "passed" | "failed"
-  proofRef: string
-}
+    | "staging-gc";
+  status: "passed" | "failed";
+  proofRef: string;
+};
 ```
 
 Do not use `verification.*`, `deploy.*`, `git.*`, or `staging.*` until those

@@ -20,6 +20,7 @@ import {
   decodeReserveRejectedPayloadSync,
   decodeTerminalPayloadSync,
 } from "./payload";
+import { sqlText } from "../storage/sql-row";
 
 export interface ResourceProjection {
   readonly available: number;
@@ -68,16 +69,14 @@ const addProjection = (
   });
 };
 
-export const projectRows = (
-  rows: ReadonlyArray<ResourceEventRow>,
-): ProjectedState => {
+export const projectRows = (rows: ReadonlyArray<ResourceEventRow>): ProjectedState => {
   const grants: Array<{ key: string; amount: number }> = [];
   const reservations = new Map<string, ReservationState>();
   const byIdempotencyKey = new Map<string, ReservationState>();
 
   for (const row of rows) {
-    const kind = String(row.kind);
-    const payload = JSON.parse(String(row.payload));
+    const kind = sqlText(row.kind, "events.kind");
+    const payload = JSON.parse(sqlText(row.payload, "events.payload"));
     switch (kind) {
       case "resource.granted": {
         const p = decodeGrantPayloadSync(payload);
@@ -143,10 +142,7 @@ export const projectRows = (
 /** Synchronous load — one SELECT + projectRows. Designed to be called
  *  INSIDE `transactionSync`; the read is consistent with subsequent
  *  writes in the same transaction. */
-export const loadState = (
-  sql: SqlStorage,
-  scope: string,
-): ProjectedState => {
+export const loadState = (sql: SqlStorage, scope: string): ProjectedState => {
   const rows = sql
     .exec(
       "SELECT kind, payload FROM events WHERE scope = ? AND kind LIKE 'resource.%' ORDER BY id",

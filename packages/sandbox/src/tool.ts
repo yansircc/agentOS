@@ -27,14 +27,10 @@ const toolParameters = {
 
 const coerceToolArgs = (
   value: unknown,
-  defaults: Required<
-    Pick<MakeSandboxRunToolOptions, "timeoutMs" | "maxOutputBytes" | "network">
-  >,
+  defaults: Required<Pick<MakeSandboxRunToolOptions, "timeoutMs" | "maxOutputBytes" | "network">>,
 ): SandboxRunRequest => {
   const input =
-    typeof value === "object" && value !== null
-      ? (value as Record<string, unknown>)
-      : {};
+    typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
   const command = typeof input.command === "string" ? input.command : "";
   const args = Array.isArray(input.args)
     ? input.args.filter((arg): arg is string => typeof arg === "string")
@@ -63,9 +59,7 @@ const coerceToolArgs = (
   };
 };
 
-export const makeSandboxRunTool = (
-  options: MakeSandboxRunToolOptions,
-): SandboxToolLike => {
+export const makeSandboxRunTool = (options: MakeSandboxRunToolOptions): SandboxToolLike => {
   const timeoutMs = options.timeoutMs ?? 30_000;
   const maxOutputBytes = options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
   const network = options.network ?? { mode: "none" as const };
@@ -75,8 +69,7 @@ export const makeSandboxRunTool = (
       function: {
         name: options.name ?? "sandbox_run",
         description:
-          options.description ??
-          "Run one bounded stateless command in an isolated sandbox.",
+          options.description ?? "Run one bounded stateless command in an isolated sandbox.",
         parameters: toolParameters,
       },
     },

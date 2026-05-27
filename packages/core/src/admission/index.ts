@@ -17,11 +17,7 @@
  */
 
 // ── Schema types + validator ───────────────────────────────────
-export type {
-  JsonSchemaObject,
-  JsonSchemaNode,
-  SchemaContract,
-} from "./json-schema";
+export type { JsonSchemaObject, JsonSchemaNode, SchemaContract } from "./json-schema";
 export { validateAgainstSchema } from "./json-schema";
 
 // ── Lease projection state + pure functions ────────────────────
@@ -40,11 +36,7 @@ export type {
 export { decideTier, projectLease } from "./lease";
 
 // ── Canonical fingerprint algebra ──────────────────────────────
-export {
-  FINGERPRINT_ALGO_VERSION,
-  makeSchemaContract,
-  routeFingerprint,
-} from "./fingerprint";
+export { FINGERPRINT_ALGO_VERSION, makeSchemaContract, routeFingerprint } from "./fingerprint";
 
 // ── Orchestration + Live layer ─────────────────────────────────
 export type {

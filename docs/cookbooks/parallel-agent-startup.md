@@ -30,26 +30,26 @@ git branch --show-current
 
 Root `.dev.vars` is ignored by git and should contain these names:
 
-| Variable | Purpose |
-|---|---|
-| `CLOUDFLARE_ACCOUNT_ID` | Wrangler / Cloudflare remote operations |
-| `CLOUDFLARE_API_TOKEN` | Wrangler / Cloudflare API auth |
-| `CF_AI_GATEWAY_ID` | optional `gatewayRef`, usually `default` |
-| `CF_AI_DEFAULT_TEXT_MODEL` | default Cloudflare AI text model, usually `openai/gpt-5.4-mini` |
-| `OPENROUTER_KEY` | OpenAI-compatible text/image route via OpenRouter |
-| `OPENROUTER_ENDPOINT` | usually `https://openrouter.ai/api/v1` |
-| `OPENROUTER_DEFAULT_TEXT_MODEL` | default strong text model |
-| `OPENROUTER_DEFAULT_IMAGE_MODEL` | default image model |
-| `ANTHROPIC_KEY_AIHUBMIX` | Anthropic Messages route via aihubmix |
-| `AIHUBMIX_ENDPOINT` | usually `https://aihubmix.com` |
-| `AIHUBMIX_DEFAULT_MODEL` | default Claude-class model |
-| `GEMINI_KEY` | official Google Gemini API key |
-| `GEMINI_ENDPOINT` | usually `https://generativelanguage.googleapis.com` |
-| `GEMINI_DEFAULT_MODEL` | default Gemini model |
-| `OPENAI_API_KEY` | optional direct OpenAI key; may stay blank |
-| `ANTHROPIC_API_KEY` | optional direct Anthropic key; may stay blank |
-| `LIVE_LLM` | `0` by default; set `1` only for live model smoke |
-| `LIVE_PROVIDER_TESTS` | `0` by default; set `1` only for provider validation |
+| Variable                         | Purpose                                                         |
+| -------------------------------- | --------------------------------------------------------------- |
+| `CLOUDFLARE_ACCOUNT_ID`          | Wrangler / Cloudflare remote operations                         |
+| `CLOUDFLARE_API_TOKEN`           | Wrangler / Cloudflare API auth                                  |
+| `CF_AI_GATEWAY_ID`               | optional `gatewayRef`, usually `default`                        |
+| `CF_AI_DEFAULT_TEXT_MODEL`       | default Cloudflare AI text model, usually `openai/gpt-5.4-mini` |
+| `OPENROUTER_KEY`                 | OpenAI-compatible text/image route via OpenRouter               |
+| `OPENROUTER_ENDPOINT`            | usually `https://openrouter.ai/api/v1`                          |
+| `OPENROUTER_DEFAULT_TEXT_MODEL`  | default strong text model                                       |
+| `OPENROUTER_DEFAULT_IMAGE_MODEL` | default image model                                             |
+| `ANTHROPIC_KEY_AIHUBMIX`         | Anthropic Messages route via aihubmix                           |
+| `AIHUBMIX_ENDPOINT`              | usually `https://aihubmix.com`                                  |
+| `AIHUBMIX_DEFAULT_MODEL`         | default Claude-class model                                      |
+| `GEMINI_KEY`                     | official Google Gemini API key                                  |
+| `GEMINI_ENDPOINT`                | usually `https://generativelanguage.googleapis.com`             |
+| `GEMINI_DEFAULT_MODEL`           | default Gemini model                                            |
+| `OPENAI_API_KEY`                 | optional direct OpenAI key; may stay blank                      |
+| `ANTHROPIC_API_KEY`              | optional direct Anthropic key; may stay blank                   |
+| `LIVE_LLM`                       | `0` by default; set `1` only for live model smoke               |
+| `LIVE_PROVIDER_TESTS`            | `0` by default; set `1` only for provider validation            |
 
 ## Agent Rules
 

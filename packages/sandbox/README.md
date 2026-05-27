@@ -14,4 +14,3 @@ v0 is intentionally narrow:
 Use `makeSandboxRunTool()` to expose one sandbox run as a normal agentOS Tool.
 The tool returns a ledger-safe `SandboxToolResult` with byte-capped stdout and
 stderr.
-

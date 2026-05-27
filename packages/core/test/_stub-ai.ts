@@ -60,9 +60,7 @@ export const toolCallResp = (
     {
       message: {
         content: null,
-        tool_calls: [
-          { id, type: "function", function: { name: toolName, arguments: argsJson } },
-        ],
+        tool_calls: [{ id, type: "function", function: { name: toolName, arguments: argsJson } }],
       },
     },
   ],

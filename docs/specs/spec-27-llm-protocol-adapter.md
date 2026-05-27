@@ -48,7 +48,7 @@ Corollaries:
   both turn and structured halves.
 - **C-2**. `callLlm` (turn) and `attemptStructured` (structured) MUST consume
   the same adapter for the same `route.kind`. A route's turn behavior and
-  structured behavior are evidence about the *same* wire; allowing two code
+  structured behavior are evidence about the _same_ wire; allowing two code
   paths to handle the wire would let one corner regress invisibly.
 - **C-3**. `openai-chat-compatible` (any endpoint speaking Chat Completions
   JSON) and `anthropic-messages` (Anthropic native Messages API) are NOT
@@ -85,14 +85,14 @@ they want admission to answer.
 
 ## 2. Scope correction relative to spec-25
 
-| spec-25 element | spec-27 change | Reason |
-|---|---|---|
-| §6 `Adapter` interface | **Renamed** to `LlmProtocolAdapter`. `encode/decode` become `encodeStructured/decodeStructured`. Two new methods `encodeTurn/decodeTurn`. `classify` unchanged. | Free-text turn must go through the same per-wire algebra; otherwise adding a new wire breaks `callLlm`. |
-| §11 "Enabled subset" | **Subsumed** by adapter registry. Registration of a `kind` enables it. No separate enablement list. | Single source of truth for "which protocols core can speak". |
-| §7 `attemptStructured` algorithm | **Unchanged**. Step 4 (encode) and step 6 (decode) now call `adapter.encodeStructured` / `adapter.decodeStructured` instead of `adapter.encode` / `adapter.decode`. | Method renames are mechanical. Algorithm is invariant. |
-| §8 FailureClass + TTL | **Unchanged**. Same classify output, same lease projection. | classify is shared between turn and structured. |
-| §9 adapterVersion | **Tightened** (see §5 below). | Single coherence dial across both halves of the adapter. |
-| §10 admissionImpact | **Unchanged**. Turn calls do not produce evidence and so do not have an admissionImpact field. | Structured path's lease semantics intact. |
+| spec-25 element                  | spec-27 change                                                                                                                                                      | Reason                                                                                                  |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| §6 `Adapter` interface           | **Renamed** to `LlmProtocolAdapter`. `encode/decode` become `encodeStructured/decodeStructured`. Two new methods `encodeTurn/decodeTurn`. `classify` unchanged.     | Free-text turn must go through the same per-wire algebra; otherwise adding a new wire breaks `callLlm`. |
+| §11 "Enabled subset"             | **Subsumed** by adapter registry. Registration of a `kind` enables it. No separate enablement list.                                                                 | Single source of truth for "which protocols core can speak".                                            |
+| §7 `attemptStructured` algorithm | **Unchanged**. Step 4 (encode) and step 6 (decode) now call `adapter.encodeStructured` / `adapter.decodeStructured` instead of `adapter.encode` / `adapter.decode`. | Method renames are mechanical. Algorithm is invariant.                                                  |
+| §8 FailureClass + TTL            | **Unchanged**. Same classify output, same lease projection.                                                                                                         | classify is shared between turn and structured.                                                         |
+| §9 adapterVersion                | **Tightened** (see §5 below).                                                                                                                                       | Single coherence dial across both halves of the adapter.                                                |
+| §10 admissionImpact              | **Unchanged**. Turn calls do not produce evidence and so do not have an admissionImpact field.                                                                      | Structured path's lease semantics intact.                                                               |
 
 No spec-25 invariant changes. spec-27 is a layer above, not a rewrite.
 
@@ -103,34 +103,32 @@ No spec-25 invariant changes. spec-27 is a layer above, not a rewrite.
 ```ts
 interface LlmProtocolAdapter<K extends LlmRoute["kind"]> {
   readonly kind: K;
-  readonly version: SemverString;       // governs admission lease per spec-25 §9 + §5 below
+  readonly version: SemverString; // governs admission lease per spec-25 §9 + §5 below
 
   // ──── Free-text agent turn ────────────────────────────────────────
   encodeTurn(
-    route:   Extract<LlmRoute, { kind: K }>,
-    request: TurnRequest,               // { messages, tools?, tool_choice? }
+    route: Extract<LlmRoute, { kind: K }>,
+    request: TurnRequest, // { messages, tools?, tool_choice? }
   ): ProviderRequestBodyFor<K>;
 
-  decodeTurn(
-    raw: unknown,
-  ): TurnResponse;                       // { text, toolCalls[], usage }
+  decodeTurn(raw: unknown): TurnResponse; // { text, toolCalls[], usage }
 
   // ──── Structured-output admission ─────────────────────────────────
   encodeStructured(
-    route:    Extract<LlmRoute, { kind: K }>,
-    schema:   SchemaContract,
+    route: Extract<LlmRoute, { kind: K }>,
+    schema: SchemaContract,
     stimulus: Stimulus,
     strategy: Strategy,
   ): ProviderRequestBodyFor<K>;
 
   decodeStructured(
-    raw:      unknown,
-    schema:   SchemaContract,
+    raw: unknown,
+    schema: SchemaContract,
     strategy: Strategy,
   ): { ok: true; decoded: unknown } | { ok: false; outcome: Outcome };
 
   // ──── Shared by both halves ───────────────────────────────────────
-  classify(error: unknown): Outcome;    // HTTP / transport / protocol-level errors
+  classify(error: unknown): Outcome; // HTTP / transport / protocol-level errors
 }
 ```
 
@@ -164,9 +162,9 @@ which body shape `dispatchProvider` expects.
   identical (no degenerate inheritance — they're just two adapters that
   produce isomorphic bodies).
 - `anthropic-messages` has its own body shape (`{system, messages, tools[],
-  tool_choice, max_tokens, ...}`).
+tool_choice, max_tokens, ...}`).
 - `gemini-generate-content` has its own body shape (`{systemInstruction,
-  contents, tools[], toolConfig, generationConfig?, ...}`).
+contents, tools[], toolConfig, generationConfig?, ...}`).
 
 This was deliberated against the alternative "ProviderRequestBody is a
 single neutral shape, `dispatchProvider` re-shapes per wire". Rejected:
@@ -195,16 +193,16 @@ errors.
 The two halves share interface and adapter version. They diverge in
 semantics:
 
-| Dimension | Turn | Structured |
-|---|---|---|
-| Caller | `callLlm` → `submit-agent.ts` free-text loop, future direct app callers | `attemptStructured` (admission.ts) |
-| Admission evidence | none (no `schemaFingerprint`; turn has no capability claim) | written to `llm.structured.evidence` |
-| Lease projection | n/a | per spec-25 §7.2 |
-| Strictness | permissive: zero tool calls in response is valid (assistant chose to text-respond, or text + tool mix) | strict: forced tool call MUST be present and exactly one; missing / extra / wrong name = `BehaviorFailed` |
-| Output shape | `LlmResponse { text, toolCalls[], usage }` — unified across wires | `{ ok, decoded } | { ok: false, outcome }` |
-| `tool_choice` value | optional; supplied by caller | always set by the adapter to force the synthesized `_submit_structured` tool |
-| `classify` consumption | **v0: not invoked.** dispatch errors propagate as raw `UpstreamFailure`; `submit-agent`'s abort taxonomy handles them. See §3.0.1 + §11 OQ 6. | yes (HTTP error → outcome row in ledger) |
-| `adapterVersion` governance | shared; bump signals turn decode rule change | shared; bump invalidates structured lease per §5 |
+| Dimension                   | Turn                                                                                                                                          | Structured                                                                                                |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------- |
+| Caller                      | `callLlm` → `submit-agent.ts` free-text loop, future direct app callers                                                                       | `attemptStructured` (admission.ts)                                                                        |
+| Admission evidence          | none (no `schemaFingerprint`; turn has no capability claim)                                                                                   | written to `llm.structured.evidence`                                                                      |
+| Lease projection            | n/a                                                                                                                                           | per spec-25 §7.2                                                                                          |
+| Strictness                  | permissive: zero tool calls in response is valid (assistant chose to text-respond, or text + tool mix)                                        | strict: forced tool call MUST be present and exactly one; missing / extra / wrong name = `BehaviorFailed` |
+| Output shape                | `LlmResponse { text, toolCalls[], usage }` — unified across wires                                                                             | `{ ok, decoded }                                                                                          | { ok: false, outcome }` |
+| `tool_choice` value         | optional; supplied by caller                                                                                                                  | always set by the adapter to force the synthesized `_submit_structured` tool                              |
+| `classify` consumption      | **v0: not invoked.** dispatch errors propagate as raw `UpstreamFailure`; `submit-agent`'s abort taxonomy handles them. See §3.0.1 + §11 OQ 6. | yes (HTTP error → outcome row in ledger)                                                                  |
+| `adapterVersion` governance | shared; bump signals turn decode rule change                                                                                                  | shared; bump invalidates structured lease per §5                                                          |
 
 **Strictness asymmetry is the only semantic divergence.** Everything else
 flows from "where does the call originate and what does it commit to the
@@ -278,6 +276,7 @@ Tests in §9.1 verify each row.
 - Version header: `anthropic-version` is required by Anthropic. Default
   `"2023-06-01"`. Routes may pin via optional `anthropicVersion` field.
 - Body shape:
+
   ```jsonc
   {
     "model":       "<modelId>",
@@ -288,12 +287,14 @@ Tests in §9.1 verify each row.
     "tool_choice": { "type": "tool", "name": "..." }   // for forced
   }
   ```
+
   - System messages: extracted from `request.messages` (which uses unified
     role tagging) and concatenated into the top-level `system` field. There
     is no `role: "system"` in Anthropic's `messages[]`.
   - Tool schema location: `tools[].input_schema` (NOT
     `tools[].function.parameters`).
   - Forced tool call: `tool_choice: {type: "tool", name}`.
+
 - Turn decode:
   - Response: `{content: [{type, ...}, ...], stop_reason, usage: {input_tokens, output_tokens}}`
   - For each block:
@@ -329,6 +330,7 @@ distinct `routeFingerprint`.
 - Auth: `x-goog-api-key` header (alternatively `?key=` query; header
   preferred for not leaking into URLs / logs).
 - Body shape:
+
   ```jsonc
   {
     "systemInstruction": { "parts": [{ "text": "<system>" }] },  // top-level
@@ -337,6 +339,7 @@ distinct `routeFingerprint`.
     "toolConfig":        { "functionCallingConfig": { "mode": "ANY", "allowedFunctionNames": ["..."] } }  // for forced
   }
   ```
+
   - Role names: `"user"` and `"model"` (NOT `"assistant"`).
   - System: top-level `systemInstruction`. There is no `role: "system"` in
     `contents[]`.
@@ -345,6 +348,7 @@ distinct `routeFingerprint`.
     group"). For v0, emit a single tool group containing all declarations.
   - Forced tool: `toolConfig.functionCallingConfig.mode = "ANY"` plus
     `allowedFunctionNames: ["<single name>"]` ≡ forced single tool.
+
 - Turn decode:
   - Response: `{candidates: [{content: {parts: [...], role}, finishReason, ...}], usageMetadata: {promptTokenCount, candidatesTokenCount, totalTokenCount}}`
   - For each part in `candidates[0].content.parts`:
@@ -372,10 +376,21 @@ distinct `routeFingerprint`.
 
 ```ts
 type LlmRoute =
-  | { kind: "cf-ai-binding";              modelId: string; gatewayRef?: string }
-  | { kind: "openai-chat-compatible";     endpointRef: string; credentialRef: string; modelId: string }
-  | { kind: "anthropic-messages";         endpointRef: string; credentialRef: string; modelId: string; anthropicVersion?: string }
-  | { kind: "gemini-generate-content";    endpointRef: string; credentialRef: string; modelId: string };
+  | { kind: "cf-ai-binding"; modelId: string; gatewayRef?: string }
+  | { kind: "openai-chat-compatible"; endpointRef: string; credentialRef: string; modelId: string }
+  | {
+      kind: "anthropic-messages";
+      endpointRef: string;
+      credentialRef: string;
+      modelId: string;
+      anthropicVersion?: string;
+    }
+  | {
+      kind: "gemini-generate-content";
+      endpointRef: string;
+      credentialRef: string;
+      modelId: string;
+    };
 ```
 
 Notes:
@@ -437,9 +452,9 @@ const dispatchProvider = <K extends LlmRoute["kind"]>(
 const callLlm = (route, request) =>
   Effect.gen(function* () {
     const adapter = registry[route.kind];
-    const body    = adapter.encodeTurn(route, request);
-    const raw     = yield* dispatchProvider(route, body);
-    return adapter.decodeTurn(raw);                       // returns LlmResponse
+    const body = adapter.encodeTurn(route, request);
+    const raw = yield* dispatchProvider(route, body);
+    return adapter.decodeTurn(raw); // returns LlmResponse
   });
 ```
 
@@ -554,7 +569,7 @@ Non-breaking sequence (all internal; no public RPC change):
      functions; just a different `kind` tag.
    - `dispatchProvider` unchanged.
    - `callLlm` rewritten to: `adapter.encodeTurn → dispatchProvider →
-     adapter.decodeTurn`.
+adapter.decodeTurn`.
    - `attemptStructured` (admission.ts) updated to call
      `adapter.encodeStructured / decodeStructured`. Internal only —
      external callers unaffected.
@@ -623,15 +638,15 @@ cf-ai-binding stays `"1.0.0"` since behavior is identical (per §5.1
 
 ## 12. Decision provenance
 
-| Decision | Origin |
-|---|---|
-| Elevate Adapter to cover turn + structured (not admission-only) | Codex review 2026-05-25: "extending admission-only would leave callLlm broken for any non-Chat-Completions wire — same class of failure recurs on each new app" |
-| OpenRouter route is honest, not a substitute | spec-27 review correction: routeFingerprint reflects wire identity; aggregators and native protocols are coexisting capability surfaces |
-| `adapterVersion` bumps on any observable adapter change | spec-25 §9 generalized: single coherence dial |
-| `ProviderRequestBodyFor<K>` (per-wire body), not single neutral shape | Keep adapter = protocol-translation, dispatcher = transport. Mixing them produced classify gradient collapse in earlier iterations |
-| Default `anthropic-version` NOT in fingerprint, only pinned version is | Re-admission cost of bumping the default would be high and unnecessary for routes that did not pin |
-| Anthropic + Gemini both register native protocols, not via openai-compat | C-3: native and aggregator are different capability surfaces. Apps that need Anthropic admission evidence MUST use anthropic-messages |
-| spike-05 / spike-06 are real-provider validations, not unit-test substitutes | Spec-25's spike-04 verdict: unit tests cannot falsify wire-level assumptions; only real traffic can |
+| Decision                                                                     | Origin                                                                                                                                                          |
+| ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Elevate Adapter to cover turn + structured (not admission-only)              | Codex review 2026-05-25: "extending admission-only would leave callLlm broken for any non-Chat-Completions wire — same class of failure recurs on each new app" |
+| OpenRouter route is honest, not a substitute                                 | spec-27 review correction: routeFingerprint reflects wire identity; aggregators and native protocols are coexisting capability surfaces                         |
+| `adapterVersion` bumps on any observable adapter change                      | spec-25 §9 generalized: single coherence dial                                                                                                                   |
+| `ProviderRequestBodyFor<K>` (per-wire body), not single neutral shape        | Keep adapter = protocol-translation, dispatcher = transport. Mixing them produced classify gradient collapse in earlier iterations                              |
+| Default `anthropic-version` NOT in fingerprint, only pinned version is       | Re-admission cost of bumping the default would be high and unnecessary for routes that did not pin                                                              |
+| Anthropic + Gemini both register native protocols, not via openai-compat     | C-3: native and aggregator are different capability surfaces. Apps that need Anthropic admission evidence MUST use anthropic-messages                           |
+| spike-05 / spike-06 are real-provider validations, not unit-test substitutes | Spec-25's spike-04 verdict: unit tests cannot falsify wire-level assumptions; only real traffic can                                                             |
 
 ---
 

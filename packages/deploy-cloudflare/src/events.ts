@@ -1,7 +1,4 @@
-import type {
-  LivedClaim,
-  RejectedClaim,
-} from "@agent-os/core/effect-claim";
+import type { LivedClaim, RejectedClaim } from "@agent-os/core/effect-claim";
 import { DEPLOY_EVENT_PREFIX } from "./extension";
 
 export const DEPLOY_EVENTS = {
@@ -79,32 +76,18 @@ export interface DeployProjection {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const stringField = (
-  payload: Record<string, unknown>,
-  key: string,
-): string | undefined =>
+const stringField = (payload: Record<string, unknown>, key: string): string | undefined =>
   typeof payload[key] === "string" ? payload[key] : undefined;
 
-const failureFrom = (
-  payload: Record<string, unknown>,
-): DeployFailedPayload | undefined => {
+const failureFrom = (payload: Record<string, unknown>): DeployFailedPayload | undefined => {
   const subjectRef = stringField(payload, "subjectRef");
   const proofRef = stringField(payload, "proofRef");
   const reason = stringField(payload, "reason");
   const step = payload.step;
-  if (
-    subjectRef === undefined ||
-    proofRef === undefined ||
-    reason === undefined
-  ) {
+  if (subjectRef === undefined || proofRef === undefined || reason === undefined) {
     return undefined;
   }
-  if (
-    step !== "preview" &&
-    step !== "promote" &&
-    step !== "readback" &&
-    step !== "rollback"
-  ) {
+  if (step !== "preview" && step !== "promote" && step !== "readback" && step !== "rollback") {
     return undefined;
   }
   return { subjectRef, step, proofRef, reason };

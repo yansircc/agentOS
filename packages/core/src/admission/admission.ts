@@ -24,11 +24,7 @@ import { Clock, Context, Effect, Layer, Schema } from "effect";
 import { EventBus } from "../ledger";
 import { JsonStringifyError, SqlError, safeStringify } from "../errors";
 import { RefResolutionFailed, RefResolverService } from "../ref-resolver";
-import {
-  AiBinding,
-  dispatchProvider,
-  type LlmRoute,
-} from "../llm";
+import { AiBinding, dispatchProvider, type LlmRoute } from "../llm";
 import {
   type AdapterMode,
   getProtocolAdapter,
@@ -37,13 +33,7 @@ import {
 import type { LedgerEvent } from "../types";
 
 import type { SchemaContract } from "./json-schema";
-import type {
-  AdmissionImpact,
-  AttemptKey,
-  CapabilityLease,
-  Outcome,
-  Strategy,
-} from "./lease";
+import type { AdmissionImpact, AttemptKey, CapabilityLease, Outcome, Strategy } from "./lease";
 import { decideTier, projectLease } from "./lease";
 import { routeFingerprint } from "./fingerprint";
 import { loadAdmissionRows } from "./payload";
@@ -123,10 +113,7 @@ export class Admission extends Context.Tag("@agent-os/Admission")<
     >;
     readonly invalidate: (
       spec: InvalidateSpec,
-    ) => Effect.Effect<
-      { readonly barrierId: number },
-      SqlError | JsonStringifyError
-    >;
+    ) => Effect.Effect<{ readonly barrierId: number }, SqlError | JsonStringifyError>;
   }
 >() {}
 
@@ -157,9 +144,7 @@ const reconstructOutcomeFromLease = (
 // pattern matches admission/payload.ts which owns the Schema surface.
 void Schema;
 
-export const AdmissionLive = (
-  ctx: DurableObjectState,
-): Layer.Layer<Admission, never, EventBus> =>
+export const AdmissionLive = (ctx: DurableObjectState): Layer.Layer<Admission, never, EventBus> =>
   Layer.scoped(
     Admission,
     Effect.gen(function* () {
@@ -193,17 +178,10 @@ export const AdmissionLive = (
 
           // Step 2: project lease.
           const rows = yield* loadAdmissionRows(sql, spec.scope);
-          const { lease: preLease, latestBarrierTs } = projectLease(
-            rows,
-            key,
-            now,
-          );
+          const { lease: preLease, latestBarrierTs } = projectLease(rows, key, now);
 
           // Step 3: gate.
-          if (
-            preLease.status === "unsupported" &&
-            now < preLease.retryAfter
-          ) {
+          if (preLease.status === "unsupported" && now < preLease.retryAfter) {
             return {
               ok: false,
               outcome: reconstructOutcomeFromLease(preLease),
@@ -233,9 +211,7 @@ export const AdmissionLive = (
           );
 
           // Step 5-6: call provider + decode (or classify error).
-          const rawEither = yield* Effect.either(
-            dispatchProvider(spec.route, body),
-          );
+          const rawEither = yield* Effect.either(dispatchProvider(spec.route, body));
 
           let outcome: Outcome;
           let decoded: DecodedOutput | undefined;
@@ -332,11 +308,7 @@ export const AdmissionLive = (
           };
           yield* bus.fire(evidenceEvent);
 
-          if (
-            deliverSpec !== null &&
-            txResult.deliverId !== undefined &&
-            deliverStr !== null
-          ) {
+          if (deliverSpec !== null && txResult.deliverId !== undefined && deliverStr !== null) {
             yield* bus.fire({
               id: txResult.deliverId,
               ts: now,
@@ -371,10 +343,7 @@ export const AdmissionLive = (
 
       const invalidate = (
         spec: InvalidateSpec,
-      ): Effect.Effect<
-        { readonly barrierId: number },
-        SqlError | JsonStringifyError
-      > =>
+      ): Effect.Effect<{ readonly barrierId: number }, SqlError | JsonStringifyError> =>
         Effect.gen(function* () {
           const now = yield* Clock.currentTimeMillis;
           const payload = {

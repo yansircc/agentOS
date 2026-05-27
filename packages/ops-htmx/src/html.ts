@@ -16,11 +16,7 @@ const normalizeJsonValue = (
   depth = 0,
 ): unknown => {
   if (value === null) return null;
-  if (
-    typeof value === "string" ||
-    typeof value === "number" ||
-    typeof value === "boolean"
-  ) {
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
     return value;
   }
   if (typeof value === "bigint") return value.toString();
@@ -33,11 +29,7 @@ const normalizeJsonValue = (
   }
   const out: Record<string, unknown> = {};
   for (const key of Object.keys(value).sort()) {
-    out[key] = normalizeJsonValue(
-      (value as Record<string, unknown>)[key],
-      seen,
-      depth + 1,
-    );
+    out[key] = normalizeJsonValue((value as Record<string, unknown>)[key], seen, depth + 1);
   }
   return out;
 };
@@ -48,10 +40,7 @@ export const compactJson = (value: unknown): string =>
 export const prettyJson = (value: unknown): string =>
   JSON.stringify(normalizeJsonValue(value), null, 2) ?? "null";
 
-export const textResponse = (
-  html: string,
-  status = 200,
-): Response =>
+export const textResponse = (html: string, status = 200): Response =>
   new Response(html, {
     status,
     headers: {
@@ -67,7 +56,4 @@ export const methodNotAllowed = (): Response =>
   );
 
 export const notFound = (): Response =>
-  textResponse(
-    '<div class="state state-error"><b>404</b><span>not_found</span></div>',
-    404,
-  );
+  textResponse('<div class="state state-error"><b>404</b><span>not_found</span></div>', 404);

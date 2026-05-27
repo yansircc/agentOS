@@ -4,10 +4,7 @@ import {
   deployCloudflareExtensionPackage,
   projectDeploy,
 } from "../src";
-import {
-  makePreClaim,
-  settleRejectedClaim,
-} from "@agent-os/core/effect-claim";
+import { makePreClaim, settleRejectedClaim } from "@agent-os/core/effect-claim";
 import type { ExtensionCapability } from "@agent-os/core/extensions";
 
 const deployClaim = makePreClaim({

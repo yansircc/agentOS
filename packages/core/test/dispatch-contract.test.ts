@@ -15,6 +15,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import type { DispatchToScopeResult, DispatchToScopeSpec, LedgerEventRpc } from "../src";
 import { validateEffectClaim } from "../src/effect-claim";
+import { sqlText } from "../src/storage/sql-row";
 import type { DispatchTestDO } from "./test-worker";
 
 interface TestEnv {
@@ -88,7 +89,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
       expect(Number(outbound[0]?.id)).toBe(result.outboundEventId);
       expect(Number(outbox[0]?.outbound_event_id)).toBe(result.outboundEventId);
       expect(Number(outbox[0]?.delivered_event_id)).toBe(Number(outboundDelivered[0]?.id));
-      const payload = JSON.parse(String(outbound[0]?.payload)) as {
+      const payload = JSON.parse(sqlText(outbound[0]?.payload, "events.payload")) as {
         readonly claim?: unknown;
       };
       expect(payload).toEqual({
@@ -152,7 +153,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
       expect(Number(outbox[0]?.outbound_event_id)).toBe(result.outboundEventId);
       expect(Number(outbox[0]?.delivered_event_id)).toBe(Number(senderDelivered[0]?.id));
 
-      const payload = JSON.parse(String(senderDelivered[0]?.payload)) as {
+      const payload = JSON.parse(sqlText(senderDelivered[0]?.payload, "events.payload")) as {
         readonly deliveredEventId: number;
       };
       expect(payload.deliveredEventId).toBe(receiverDelivered?.id);
@@ -262,7 +263,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
         .exec("SELECT payload FROM events WHERE kind = 'dispatch.outbound.requested'")
         .toArray();
       expect(rows).toHaveLength(1);
-      const payload = JSON.parse(String(rows[0]?.payload)) as {
+      const payload = JSON.parse(sqlText(rows[0]?.payload, "events.payload")) as {
         readonly traceContext?: unknown;
       };
       expect(payload.traceContext).toEqual(traceContext);
@@ -411,7 +412,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
         .exec("SELECT payload FROM events WHERE kind = 'dispatch.outbound.failed'")
         .toArray();
       expect(failed).toHaveLength(1);
-      const payload = JSON.parse(String(failed[0]?.payload)) as {
+      const payload = JSON.parse(sqlText(failed[0]?.payload, "events.payload")) as {
         readonly outboundEventId: number;
         readonly attempt: number;
         readonly nextAttemptAt: number;
@@ -432,7 +433,9 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
       expect(outbox[0]?.delivered_event_id).toBeNull();
       expect(Number(outbox[0]?.attempts)).toBe(1);
       expect(Number(outbox[0]?.next_attempt_at)).toBe(payload.nextAttemptAt);
-      expect(String(outbox[0]?.last_error)).toContain("dead dispatch target");
+      expect(sqlText(outbox[0]?.last_error, "dispatch_outbox.last_error")).toContain(
+        "dead dispatch target",
+      );
     });
   });
 });

@@ -5,8 +5,7 @@ export const VERIFICATION_EVENTS = {
   GATE_RECORDED: `${VERIFICATION_EVENT_PREFIX}gate.recorded`,
 } as const;
 
-export type VerificationEventKind =
-  (typeof VERIFICATION_EVENTS)[keyof typeof VERIFICATION_EVENTS];
+export type VerificationEventKind = (typeof VERIFICATION_EVENTS)[keyof typeof VERIFICATION_EVENTS];
 
 export type VerificationGateStatus = "passed" | "failed";
 
@@ -42,13 +41,10 @@ export interface VerificationGateProjection {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const gatePayloadFrom = (
-  event: VerificationLedgerEvent,
-): VerificationGateFact | null => {
+const gatePayloadFrom = (event: VerificationLedgerEvent): VerificationGateFact | null => {
   if (event.kind !== VERIFICATION_EVENTS.GATE_RECORDED) return null;
   if (!isRecord(event.payload)) return null;
-  const { subjectRef, gate, status, proofRef, fingerprint, summary } =
-    event.payload;
+  const { subjectRef, gate, status, proofRef, fingerprint, summary } = event.payload;
   if (typeof subjectRef !== "string") return null;
   if (typeof gate !== "string") return null;
   if (status !== "passed" && status !== "failed") return null;
@@ -82,9 +78,7 @@ export const projectVerificationGates = (
   const missing = requiredGates.filter((gate) => !latestByGate.has(gate));
   const failed = requiredGates
     .map((gate) => latestByGate.get(gate))
-    .filter(
-      (fact): fact is VerificationGateFact => fact?.status === "failed",
-    );
+    .filter((fact): fact is VerificationGateFact => fact?.status === "failed");
   const ready = missing.length === 0 && failed.length === 0;
 
   return {

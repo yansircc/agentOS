@@ -12,6 +12,7 @@ import { Effect } from "effect";
 
 import { SqlError } from "../errors";
 import type { EventQueryOptions, LedgerEvent } from "../types";
+import { sqlText } from "./sql-row";
 
 interface LedgerEventSqlRow {
   readonly id: number;
@@ -24,23 +25,13 @@ interface LedgerEventSqlRow {
 const DEFAULT_LIMIT = 1000;
 const MAX_LIMIT = 1000;
 
-const normalizeNonNegativeInteger = (
-  value: number | undefined,
-  fallback: number,
-): number =>
-  value === undefined || !Number.isFinite(value)
-    ? fallback
-    : Math.max(0, Math.floor(value));
+const normalizeNonNegativeInteger = (value: number | undefined, fallback: number): number =>
+  value === undefined || !Number.isFinite(value) ? fallback : Math.max(0, Math.floor(value));
 
 const normalizeLimit = (limit: number | undefined): number =>
-  Math.min(
-    MAX_LIMIT,
-    normalizeNonNegativeInteger(limit, DEFAULT_LIMIT),
-  );
+  Math.min(MAX_LIMIT, normalizeNonNegativeInteger(limit, DEFAULT_LIMIT));
 
-export const EffectSqliteDoReadLive = (
-  sql: SqlStorage,
-) => sqliteDoLayer({ db: sql });
+export const EffectSqliteDoReadLive = (sql: SqlStorage) => sqliteDoLayer({ db: sql });
 
 export const selectLedgerEventsWithEffectSql = (
   scope: string,
@@ -64,9 +55,9 @@ export const selectLedgerEventsWithEffectSql = (
         rows.map((row) => ({
           id: Number(row.id),
           ts: Number(row.ts),
-          kind: String(row.kind),
-          scope: String(row.scope),
-          payload: JSON.parse(String(row.payload)) as unknown,
+          kind: sqlText(row.kind, "events.kind"),
+          scope: sqlText(row.scope, "events.scope"),
+          payload: JSON.parse(sqlText(row.payload, "events.payload")) as unknown,
         })),
       catch: (cause) => new SqlError({ cause }),
     });

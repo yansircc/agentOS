@@ -43,13 +43,11 @@ export const validateDynamicWorkerRequest = (
     }
   });
 
-export const staticPolicy = (
-  options: DynamicWorkerStaticPolicyOptions = {},
-): DynamicWorkerPolicy =>
+export const staticPolicy =
+  (options: DynamicWorkerStaticPolicyOptions = {}): DynamicWorkerPolicy =>
   ({ request }) =>
     Effect.gen(function* () {
-      const maxTimeoutMs =
-        options.maxTimeoutMs ?? DYNAMIC_WORKER_MAX_TIMEOUT_MS;
+      const maxTimeoutMs = options.maxTimeoutMs ?? DYNAMIC_WORKER_MAX_TIMEOUT_MS;
       if (request.timeoutMs > maxTimeoutMs) {
         return yield* new DynamicWorkerPolicyDenied({
           reason: `timeoutMs exceeds policy cap ${maxTimeoutMs}`,

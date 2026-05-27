@@ -54,13 +54,13 @@ user.on("credit.consume.requested")
 
 ## Gap Verdict
 
-| Candidate | Verdict | Primitive / boundary |
-|---|---|---|
-| C1 cross-DO durable delivery | resolved | `dispatchToScope` sends app events between `AgentDOBase` scopes with sender outbox + receiver ledger ingest. |
-| C2 transactional outbox | collapsed into C1 | `dispatch_outbox` is the sender pending buffer behind `dispatchToScope`, not a public primitive. |
-| C3 quota refund/release | resolved | `grantResource`, `reserveResource`, `consumeResource`, `releaseResource` model business resources without conflating them with carrier quota. |
-| C4 R2 blob carrier | not a gap | R2 is an INV-9 carrier. The app owns key containment and cleanup; the ledger stores artifact refs. |
-| C5 image-output route | resolved | `@agent-os/image` uses image route adapters; binary materialization remains app/carrier code. |
+| Candidate                    | Verdict           | Primitive / boundary                                                                                                                          |
+| ---------------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| C1 cross-DO durable delivery | resolved          | `dispatchToScope` sends app events between `AgentDOBase` scopes with sender outbox + receiver ledger ingest.                                  |
+| C2 transactional outbox      | collapsed into C1 | `dispatch_outbox` is the sender pending buffer behind `dispatchToScope`, not a public primitive.                                              |
+| C3 quota refund/release      | resolved          | `grantResource`, `reserveResource`, `consumeResource`, `releaseResource` model business resources without conflating them with carrier quota. |
+| C4 R2 blob carrier           | not a gap         | R2 is an INV-9 carrier. The app owns key containment and cleanup; the ledger stores artifact refs.                                            |
+| C5 image-output route        | resolved          | `@agent-os/image` uses image route adapters; binary materialization remains app/carrier code.                                                 |
 
 ## Public Surface Used
 

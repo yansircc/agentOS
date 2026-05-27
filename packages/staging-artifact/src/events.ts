@@ -6,8 +6,7 @@ export const STAGING_EVENTS = {
   ARTIFACT_REAPED: `${STAGING_EVENT_PREFIX}artifact.reaped`,
 } as const;
 
-export type StagingEventKind =
-  (typeof STAGING_EVENTS)[keyof typeof STAGING_EVENTS];
+export type StagingEventKind = (typeof STAGING_EVENTS)[keyof typeof STAGING_EVENTS];
 
 export interface StagingArtifactPublishedPayload {
   readonly subjectRef: string;
@@ -42,18 +41,11 @@ export interface StagingArtifactProjection {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const stringField = (
-  payload: Record<string, unknown>,
-  key: string,
-): string | undefined =>
+const stringField = (payload: Record<string, unknown>, key: string): string | undefined =>
   typeof payload[key] === "string" ? payload[key] : undefined;
 
-const reapReasonFrom = (
-  value: unknown,
-): StagingArtifactReapedPayload["reason"] | undefined =>
-  value === "published" || value === "discarded" || value === "expired"
-    ? value
-    : undefined;
+const reapReasonFrom = (value: unknown): StagingArtifactReapedPayload["reason"] | undefined =>
+  value === "published" || value === "discarded" || value === "expired" ? value : undefined;
 
 export const projectStagingArtifact = (
   events: Iterable<StagingLedgerEvent>,

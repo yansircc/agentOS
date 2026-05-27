@@ -127,10 +127,7 @@ export class ExtensionTestDO extends AgentDOBase<AgentDOEnv> {
     });
   }
 
-  scheduleImageFact(
-    at: number,
-    data: unknown,
-  ): Promise<{ id: number }> {
+  scheduleImageFact(at: number, data: unknown): Promise<{ id: number }> {
     return this.extensionCapability("@agent-os/image").time({
       at,
       event: "image.job.deferred",

@@ -28,6 +28,21 @@ export const ADAPTER_VERSION = "1.0.0";
  *  single decode invariant. */
 export const CHAT_COMPLETIONS_FORCED_TOOL_NAME = "_submit_structured";
 
+const renderUnknown = (value: unknown): string => {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
+    return String(value);
+  }
+  if (typeof value === "symbol") return value.description ?? "symbol";
+  if (value === null) return "null";
+  if (value === undefined) return "undefined";
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return Object.prototype.toString.call(value);
+  }
+};
+
 /** Unwrap a tagged-error / wrapped error one level to surface the real
  *  upstream Error message. `dispatchProvider` always wraps fetch failures
  *  as `UpstreamFailure{cause: Error("HTTP N ...")}`; without this unwrap
@@ -38,9 +53,9 @@ export const unwrapErrorMessage = (error: unknown): string => {
     const inner = (error as { cause: unknown }).cause;
     if (inner instanceof Error) return inner.message;
     if (typeof inner === "string") return inner;
-    if (inner !== null && inner !== undefined) return String(inner);
+    if (inner !== null && inner !== undefined) return renderUnknown(inner);
   }
-  return error instanceof Error ? error.message : String(error);
+  return error instanceof Error ? error.message : renderUnknown(error);
 };
 
 export const parseHttpStatus = (msg: string): number | undefined => {

@@ -1,9 +1,5 @@
 import { Data } from "effect";
-import {
-  CORE_CLAIMED_PREFIXES,
-  CapabilityRejected,
-  isCoreClaimedEventKind,
-} from "./errors";
+import { CORE_CLAIMED_PREFIXES, CapabilityRejected, isCoreClaimedEventKind } from "./errors";
 
 export interface ExtensionPackage {
   readonly packageId: string;
@@ -24,9 +20,7 @@ export interface ExtensionCapability {
   readonly packageId: string;
   readonly kindPrefixes: ReadonlyArray<string>;
   readonly version: string;
-  readonly commit: (
-    spec: ExtensionCommitSpec,
-  ) => Promise<{ readonly id: number }>;
+  readonly commit: (spec: ExtensionCommitSpec) => Promise<{ readonly id: number }>;
   readonly time: (spec: ExtensionTimeSpec) => Promise<{ readonly id: number }>;
 }
 
@@ -38,8 +32,7 @@ export class ExtensionCapabilityConflict extends Data.TaggedError(
   readonly claimedBy: string;
 }> {}
 
-const prefixesOverlap = (a: string, b: string): boolean =>
-  a.startsWith(b) || b.startsWith(a);
+const prefixesOverlap = (a: string, b: string): boolean => a.startsWith(b) || b.startsWith(a);
 
 export type ExtensionValidation =
   | {
@@ -116,7 +109,5 @@ export const rejectClaimedAppEvent = (
   return null;
 };
 
-export const extensionOwnsEvent = (
-  pkg: ExtensionPackage,
-  event: string,
-): boolean => pkg.kindPrefixes.some((prefix) => event.startsWith(prefix));
+export const extensionOwnsEvent = (pkg: ExtensionPackage, event: string): boolean =>
+  pkg.kindPrefixes.some((prefix) => event.startsWith(prefix));

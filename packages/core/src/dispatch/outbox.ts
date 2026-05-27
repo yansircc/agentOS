@@ -16,6 +16,7 @@
 
 import { Effect } from "effect";
 import { SqlError } from "../errors";
+import { sqlText } from "../storage/sql-row";
 
 export interface DispatchOutboxRow {
   readonly outboundEventId: number;
@@ -24,9 +25,7 @@ export interface DispatchOutboxRow {
   readonly sourceScope: string;
 }
 
-export const ensureDispatchSchema = (
-  sql: SqlStorage,
-): Effect.Effect<void, SqlError> =>
+export const ensureDispatchSchema = (sql: SqlStorage): Effect.Effect<void, SqlError> =>
   Effect.try({
     try: () => {
       sql.exec(`
@@ -61,9 +60,7 @@ export const ensureDispatchSchema = (
 export const retryDelayMs = (attempt: number): number =>
   Math.min(60_000, 1_000 * 2 ** Math.min(Math.max(attempt - 1, 0), 6));
 
-export const findNextPending = (
-  sql: SqlStorage,
-): Effect.Effect<number | null, SqlError> =>
+export const findNextPending = (sql: SqlStorage): Effect.Effect<number | null, SqlError> =>
   Effect.try({
     try: () => {
       const rows = sql
@@ -106,8 +103,8 @@ export const selectDue = (
           (row): DispatchOutboxRow => ({
             outboundEventId: Number(row.outbound_event_id),
             attempts: Number(row.attempts),
-            requestedPayload: String(row.requested_payload),
-            sourceScope: String(row.source_scope),
+            requestedPayload: sqlText(row.requested_payload, "events.payload"),
+            sourceScope: sqlText(row.source_scope, "events.scope"),
           }),
         ),
     catch: (cause) => new SqlError({ cause }),

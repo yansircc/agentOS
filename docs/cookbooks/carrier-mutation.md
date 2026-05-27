@@ -24,7 +24,9 @@ needed to audit, resume, or compensate.
 
 ```ts
 const applyPatchTool: Tool<ApplyArgs, ApplyResult> = {
-  definition: { /* JSON Schema */ },
+  definition: {
+    /* JSON Schema */
+  },
   execute: async (args) => {
     const result = await carrier.apply(args);
 

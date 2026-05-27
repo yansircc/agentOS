@@ -4,10 +4,7 @@ import {
   projectVerificationGates,
   verificationExtensionPackage,
 } from "../src";
-import {
-  makePreClaim,
-  settleLivedClaim,
-} from "@agent-os/core/effect-claim";
+import { makePreClaim, settleLivedClaim } from "@agent-os/core/effect-claim";
 import type { ExtensionCapability } from "@agent-os/core/extensions";
 
 const verificationClaim = makePreClaim({
@@ -69,10 +66,7 @@ describe("@agent-os/verification", () => {
       },
     ] as const;
 
-    const projection = projectVerificationGates(events, "change:1", [
-      "typecheck",
-      "build",
-    ]);
+    const projection = projectVerificationGates(events, "change:1", ["typecheck", "build"]);
 
     expect(projection.ready).toBe(true);
     expect(projection.missing).toEqual([]);

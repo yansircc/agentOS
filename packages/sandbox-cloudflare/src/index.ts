@@ -38,20 +38,14 @@ export interface CloudflareSandboxClient {
     command: string,
     options?: CloudflareSandboxExecOptions,
   ) => Promise<CloudflareSandboxExecResult>;
-  readonly writeFile?: (
-    path: string,
-    content: string | Uint8Array,
-  ) => Promise<unknown>;
+  readonly writeFile?: (path: string, content: string | Uint8Array) => Promise<unknown>;
 }
 
 export interface CloudflareSandboxBackendOptions {
   readonly getSandbox: (
     request: SandboxRunRequest,
   ) => CloudflareSandboxClient | Promise<CloudflareSandboxClient>;
-  readonly sandboxId?: (
-    client: CloudflareSandboxClient,
-    request: SandboxRunRequest,
-  ) => string;
+  readonly sandboxId?: (client: CloudflareSandboxClient, request: SandboxRunRequest) => string;
 }
 
 const fileContent = (content: SandboxFileContent): string | Uint8Array => {
@@ -67,15 +61,27 @@ const fileContent = (content: SandboxFileContent): string | Uint8Array => {
 const messageOf = (cause: unknown): string => {
   if (cause instanceof Error) return cause.message;
   if (typeof cause === "object" && cause !== null && "message" in cause) {
-    return String((cause as { readonly message: unknown }).message);
+    return sandboxText((cause as { readonly message: unknown }).message);
   }
-  return String(cause);
+  return sandboxText(cause);
 };
 
-const classifyCloudflareFailure = (
-  cause: unknown,
-  sandboxId?: string,
-): SandboxFailure => {
+const sandboxText = (value: unknown): string => {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
+    return String(value);
+  }
+  if (typeof value === "symbol") return value.description ?? "symbol";
+  if (value === null || value === undefined) return "";
+  if (value instanceof Uint8Array) return new TextDecoder().decode(value);
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return Object.prototype.toString.call(value);
+  }
+};
+
+const classifyCloudflareFailure = (cause: unknown, sandboxId?: string): SandboxFailure => {
   // v0 classification is necessarily string-based because the Cloudflare
   // sandbox SDK surface does not currently provide stable typed errors here.
   // When typed SDK errors exist, instance checks must be added before this
@@ -100,11 +106,7 @@ const classifyCloudflareFailure = (
   if (lower.includes("oom") || lower.includes("out of memory")) {
     return new SandboxFailure({ code: "OOM", reason, sandboxId });
   }
-  if (
-    lower.includes("network") ||
-    lower.includes("egress") ||
-    lower.includes("blocked")
-  ) {
+  if (lower.includes("network") || lower.includes("egress") || lower.includes("blocked")) {
     return new SandboxFailure({ code: "NetworkBlocked", reason, sandboxId });
   }
   return new SandboxFailure({ code: "ProviderFailure", reason, sandboxId });
@@ -115,16 +117,14 @@ const normalizeExecResult = (
   sandboxId: string,
 ): SandboxRawResult => {
   const exitCode =
-    raw.exitCode ??
-    raw.code ??
-    (raw.success === undefined ? 0 : raw.success ? 0 : 1);
+    raw.exitCode ?? raw.code ?? (raw.success === undefined ? 0 : raw.success ? 0 : 1);
   const stdout =
     raw.stdout === undefined
       ? raw.output === undefined
         ? ""
-        : String(raw.output)
-      : String(raw.stdout);
-  const stderr = raw.stderr === undefined ? "" : String(raw.stderr);
+        : sandboxText(raw.output)
+      : sandboxText(raw.stdout);
+  const stderr = raw.stderr === undefined ? "" : sandboxText(raw.stderr);
   return { exitCode, stdout, stderr, artifacts: [], sandboxId };
 };
 
@@ -135,11 +135,9 @@ export const makeCloudflareSandboxBackend = (
     Effect.gen(function* () {
       const client = yield* Effect.tryPromise({
         try: () => Promise.resolve(options.getSandbox(request)),
-        catch: (cause: unknown): SandboxFailure =>
-          classifyCloudflareFailure(cause),
+        catch: (cause: unknown): SandboxFailure => classifyCloudflareFailure(cause),
       });
-      const sandboxId =
-        options.sandboxId?.(client, request) ?? client.id ?? "cloudflare";
+      const sandboxId = options.sandboxId?.(client, request) ?? client.id ?? "cloudflare";
 
       for (const [path, content] of Object.entries(request.files ?? {})) {
         const writeFile = client.writeFile;
@@ -154,8 +152,7 @@ export const makeCloudflareSandboxBackend = (
         }
         yield* Effect.tryPromise({
           try: () => writeFile(path, fileContent(content)),
-          catch: (cause: unknown): SandboxFailure =>
-            classifyCloudflareFailure(cause, sandboxId),
+          catch: (cause: unknown): SandboxFailure => classifyCloudflareFailure(cause, sandboxId),
         });
       }
 
@@ -167,8 +164,7 @@ export const makeCloudflareSandboxBackend = (
             timeoutMs: request.timeoutMs,
             signal,
           }),
-        catch: (cause: unknown): SandboxFailure =>
-          classifyCloudflareFailure(cause, sandboxId),
+        catch: (cause: unknown): SandboxFailure => classifyCloudflareFailure(cause, sandboxId),
       });
       return normalizeExecResult(raw, sandboxId);
     }),

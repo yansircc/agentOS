@@ -34,9 +34,8 @@ export const validateRequest = (
     }
   });
 
-export const staticPolicy = (
-  options: StaticPolicyOptions = {},
-): SandboxPolicy =>
+export const staticPolicy =
+  (options: StaticPolicyOptions = {}): SandboxPolicy =>
   ({ request }) =>
     Effect.gen(function* () {
       const maxTimeoutMs = options.maxTimeoutMs ?? SANDBOX_MAX_TIMEOUT_MS;

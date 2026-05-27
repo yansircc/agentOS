@@ -48,11 +48,11 @@ Code that's only there because the substrate doesn't have a primitive
 
 ## 2. Three-tier classification
 
-| Tier | Rule | Examples (from img-gen survey) |
-|---|---|---|
-| **Not a gap** | App-domain: prompt content, UI, business schema, provider parameters, image style, moderation policy, payment vendor | 7Pay webhook, Better Auth, `ImageWorkspace.tsx`, `google/nano-banana` provider params |
-| **Candidate gap** | Looks like generic infrastructure that *might* fit one of the four shapes above | cross-DO event routing, durable outbox, credit reservation/settlement, artifact carrier contract, provider idempotency, queue-consumer ledger ownership |
-| **Confirmed gap** | App MUST maintain a state table synonymous with `events`, OR MUST compensate non-atomic resource change with best-effort try/catch | C1/C2 cross-DO durable delivery, C3 resource reservation/release, C5 image-output route |
+| Tier              | Rule                                                                                                                               | Examples (from img-gen survey)                                                                                                                          |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Not a gap**     | App-domain: prompt content, UI, business schema, provider parameters, image style, moderation policy, payment vendor               | 7Pay webhook, Better Auth, `ImageWorkspace.tsx`, `google/nano-banana` provider params                                                                   |
+| **Candidate gap** | Looks like generic infrastructure that _might_ fit one of the four shapes above                                                    | cross-DO event routing, durable outbox, credit reservation/settlement, artifact carrier contract, provider idempotency, queue-consumer ledger ownership |
+| **Confirmed gap** | App MUST maintain a state table synonymous with `events`, OR MUST compensate non-atomic resource change with best-effort try/catch | C1/C2 cross-DO durable delivery, C3 resource reservation/release, C5 image-output route                                                                 |
 
 The substrate ships **only confirmed gaps**, never candidate gaps.
 
@@ -61,8 +61,8 @@ The substrate ships **only confirmed gaps**, never candidate gaps.
 ## 3. Method — falsification spike
 
 Reading img-gen's source can identify candidates but cannot confirm gaps,
-because we can't tell from existing code whether the substrate *would
-have forced* the same pattern. Two paths could have produced the same
+because we can't tell from existing code whether the substrate _would
+have forced_ the same pattern. Two paths could have produced the same
 result.
 
 To confirm, we **build a minimal spike** in agent-OS that mimics img-gen's
@@ -81,13 +81,13 @@ Derived from the img-gen pipeline survey (see survey agent output in
 session 2026-05-25). Each candidate must be tied back to concrete img-gen
 source lines before it can be promoted by the spike.
 
-| # | Candidate | Hypothetical primitive | What it would express |
-|---|---|---|---|
-| C1 | Cross-DO durable delivery | `dispatchToScope(targetScope, event, data)` atomic with current scope's ledger write | session-DO → user-DO credit reservation; session-DO → consumer-DO job dispatch |
-| C2 | Durable outbox (transactional enqueue) | expected implementation hypothesis of C1 (sender ledger atomically writes outbound intent; drain delivers; receiver idempotently ingests) | the "queue_outbox" table img-gen hand-rolls |
-| C3 | Quota refund / release | `Quota.release(scope, key, amount)` writes `dispatch.released` event | failure-path compensation for reserved credit |
-| C4 | Blob carrier (R2) | `R2Carrier` matching INV-9 / §11.1 C1-C4 | scope-namespaced artifact write/read, cleanup primitive |
-| C5 | Image-output route | new image-output route variant + binary-response decoder (`LlmRoute` may later be renamed if the generic concept is broader, e.g. `AiRoute`) | env.AI.run returning image bytes / blob refs, currently outside Chat Completions schema |
+| #   | Candidate                              | Hypothetical primitive                                                                                                                       | What it would express                                                                   |
+| --- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| C1  | Cross-DO durable delivery              | `dispatchToScope(targetScope, event, data)` atomic with current scope's ledger write                                                         | session-DO → user-DO credit reservation; session-DO → consumer-DO job dispatch          |
+| C2  | Durable outbox (transactional enqueue) | expected implementation hypothesis of C1 (sender ledger atomically writes outbound intent; drain delivers; receiver idempotently ingests)    | the "queue_outbox" table img-gen hand-rolls                                             |
+| C3  | Quota refund / release                 | `Quota.release(scope, key, amount)` writes `dispatch.released` event                                                                         | failure-path compensation for reserved credit                                           |
+| C4  | Blob carrier (R2)                      | `R2Carrier` matching INV-9 / §11.1 C1-C4                                                                                                     | scope-namespaced artifact write/read, cleanup primitive                                 |
+| C5  | Image-output route                     | new image-output route variant + binary-response decoder (`LlmRoute` may later be renamed if the generic concept is broader, e.g. `AiRoute`) | env.AI.run returning image bytes / blob refs, currently outside Chat Completions schema |
 
 C1 and C2 intentionally start as separate candidates but may collapse. Cross
 ledger delivery has no distributed transaction, so the likely generator is:
@@ -108,13 +108,13 @@ Three possible outcomes per candidate after spike:
 
 ### 4.1 Spike 07 verdict
 
-| Candidate | Verdict | Reason |
-|---|---|---|
-| C1 cross-DO durable delivery | **confirmed** | The spike must use direct DO RPC between ledger-owning scopes. Sender ledger, delivery intent, and receiver ingest are not one substrate fact. |
-| C2 durable outbox | **disguised duplicate** | Same generator as C1. Durable outbox is the likely implementation mechanism for cross-ledger delivery, not a second public primitive. |
-| C3 quota refund / release | **confirmed** | Existing quota is dispatch pre-consumption. img-gen needs reserve now, consume or release later for a business resource. |
-| C4 R2 blob carrier | **not a gap** | R2 is an INV-9 carrier: bytes live outside the ledger; ledger stores artifact refs. |
-| C5 image-output route | **confirmed** | Image generation is provider route capability and binary response decoding, not Tool execution. |
+| Candidate                    | Verdict                 | Reason                                                                                                                                         |
+| ---------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| C1 cross-DO durable delivery | **confirmed**           | The spike must use direct DO RPC between ledger-owning scopes. Sender ledger, delivery intent, and receiver ingest are not one substrate fact. |
+| C2 durable outbox            | **disguised duplicate** | Same generator as C1. Durable outbox is the likely implementation mechanism for cross-ledger delivery, not a second public primitive.          |
+| C3 quota refund / release    | **confirmed**           | Existing quota is dispatch pre-consumption. img-gen needs reserve now, consume or release later for a business resource.                       |
+| C4 R2 blob carrier           | **not a gap**           | R2 is an INV-9 carrier: bytes live outside the ledger; ledger stores artifact refs.                                                            |
+| C5 image-output route        | **confirmed**           | Image generation is provider route capability and binary response decoding, not Tool execution.                                                |
 
 ---
 
@@ -127,6 +127,7 @@ the workaround visible so the audit code is the report.
 
 The spike's workaround line is not enough by itself. Every confirmed gap
 must cite both:
+
 - the img-gen source line that demonstrates the real app forges the shape,
 - the spike line where agentOS public surface still forces the same forge.
 
@@ -190,6 +191,7 @@ spikes/_active/07-img-gen-shape/
 ```
 
 **What the spike is NOT**:
+
 - not a refactor of img-gen
 - not a complete app
 - no failure-path compensation (separate audit pass; happy path first)

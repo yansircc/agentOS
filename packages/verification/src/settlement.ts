@@ -1,9 +1,6 @@
 import type { ExtensionCapability } from "@agent-os/core/extensions";
 
-import {
-  VERIFICATION_EVENTS,
-  type VerificationGateRecordedPayload,
-} from "./events";
+import { VERIFICATION_EVENTS, type VerificationGateRecordedPayload } from "./events";
 
 export const commitVerificationGateRecorded = (
   cap: ExtensionCapability,

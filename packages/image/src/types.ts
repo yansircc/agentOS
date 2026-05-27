@@ -11,9 +11,7 @@ export interface CfAiBindingImageRoute {
   readonly gatewayRef?: string;
 }
 
-export type ImageRoute =
-  | OpenAIChatCompatibleImageRoute
-  | CfAiBindingImageRoute;
+export type ImageRoute = OpenAIChatCompatibleImageRoute | CfAiBindingImageRoute;
 
 export interface ImageRequest {
   readonly prompt: string;
@@ -74,8 +72,7 @@ export type ImageProviderBodyByKind = {
   readonly "cf-ai-binding-image": CfAiBindingImageBody;
 };
 
-export type ImageProviderBody<K extends ImageRoute["kind"]> =
-  ImageProviderBodyByKind[K];
+export type ImageProviderBody<K extends ImageRoute["kind"]> = ImageProviderBodyByKind[K];
 
 export interface ImageProtocolAdapter<K extends ImageRoute["kind"]> {
   readonly kind: K;

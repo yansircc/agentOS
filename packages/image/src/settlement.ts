@@ -8,8 +8,6 @@ export const withImageResourceSettlement = <A, E, R, CE, CR, RE, RR>(
   },
 ): Effect.Effect<A, E | CE | RE, R | CR | RR> =>
   Effect.matchEffect(effect, {
-    onFailure: (error) =>
-      settlement.release(error).pipe(Effect.zipRight(Effect.fail(error))),
-    onSuccess: (value) =>
-      settlement.consume(value).pipe(Effect.as(value)),
+    onFailure: (error) => settlement.release(error).pipe(Effect.zipRight(Effect.fail(error))),
+    onSuccess: (value) => settlement.consume(value).pipe(Effect.as(value)),
   });

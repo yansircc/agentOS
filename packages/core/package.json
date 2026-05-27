@@ -40,18 +40,18 @@
     "test": "vp test run"
   },
   "dependencies": {
-    "@effect/experimental": "^0.60.0",
-    "@effect/platform": "^0.96.0",
-    "@effect/sql": "^0.51.0",
-    "@effect/sql-sqlite-do": "^0.29.0"
+    "@effect/experimental": "catalog:",
+    "@effect/platform": "catalog:",
+    "@effect/sql": "catalog:",
+    "@effect/sql-sqlite-do": "catalog:"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.16.9",
-    "@cloudflare/workers-types": "^4.20251201.0",
-    "@effect/language-service": "^0.86.2",
-    "effect": "^3.21.0",
-    "fast-check": "^4.8.0",
-    "typescript": "^5.7.2",
+    "@cloudflare/vitest-pool-workers": "catalog:",
+    "@cloudflare/workers-types": "catalog:",
+    "@effect/language-service": "catalog:",
+    "effect": "catalog:",
+    "fast-check": "catalog:",
+    "typescript": "catalog:",
     "vite-plus": "catalog:",
     "vitest": "catalog:"
   },

@@ -26,7 +26,7 @@ Three failures co-exist in core v0.2.17:
    kernel vocabulary. The same shape lurks for any future modality
    (audio/video/web/voice).
 3. **Submit internals leak to the top-level barrel.** `CapabilityLease /
-   AttemptKey / Outcome / Strategy` and `ProviderRegistryConfig` are
+AttemptKey / Outcome / Strategy` and `ProviderRegistryConfig` are
    submit-private machinery. Their public exposure makes `@agent-os/core`
    look like an LLM SDK rather than an event calculus.
 
@@ -87,12 +87,12 @@ react(kind, handler)            // forward subscription over future commits;
 
 Why not 2 (append + read), why not 4 (the spec-24 inflation):
 
-| Pair                 | Collapsible? | Reason                                                          |
-|----------------------|--------------|-----------------------------------------------------------------|
-| commit / effect      | no           | effect binds idempotency/outbox sub-machine; commit does not   |
-| commit / time        | no           | time writes `scheduled_events` (intent buffer) before commit; different table, different sub-machine |
-| project / react      | parameterizable | window axis; v1 keeps two names because react has same-scope transport constraint |
-| ingest / dispatch    | yes (internal)  | both are `commit(cap, event)` with different cause; the cause is encoded in the capability holder, not as a kernel parameter |
+| Pair              | Collapsible?    | Reason                                                                                                                       |
+| ----------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| commit / effect   | no              | effect binds idempotency/outbox sub-machine; commit does not                                                                 |
+| commit / time     | no              | time writes `scheduled_events` (intent buffer) before commit; different table, different sub-machine                         |
+| project / react   | parameterizable | window axis; v1 keeps two names because react has same-scope transport constraint                                            |
+| ingest / dispatch | yes (internal)  | both are `commit(cap, event)` with different cause; the cause is encoded in the capability holder, not as a kernel parameter |
 
 `ingest` and `dispatch` from spec-24 §5.1 are **internal causation patterns
 of `commit`**, not separate kernel ops. They survive as named composites in
@@ -104,14 +104,14 @@ of `commit`**, not separate kernel ops. They survive as named composites in
 
 Six capabilities, four substrate-owned + one app-owned + one higher-order:
 
-| Capability       | Owner                | Write namespace                                            |
-|------------------|----------------------|------------------------------------------------------------|
-| `cap_dispatch`   | dispatch machinery   | `dispatch.*` (`dispatch.outbound.*`, `dispatch.inbound.*`, `dispatch.consumed`, `dispatch.rate_limited`) |
-| `cap_resource`   | resource state       | `resource.*` (`resource.granted`, `resource.reserved`, `resource.reserve_rejected`, `resource.consumed`, `resource.released`) |
-| `cap_submit`     | submit lifecycle     | submit-owned run facts: `chat.ingested`, `llm.response`, `tool.executed`, `agent.run.*`, `agent.aborted.*` |
-| `cap_admission`  | admission gate       | `llm.structured.*` (`llm.structured.evidence`, `llm.structured.invalidate`) |
-| `cap_app`        | app code             | **all kinds not claimed by a substrate or extension cap**  |
-| `cap_scheduler`  | scheduler (h-order)  | no own namespace; carries `defer(cap_X, event)` and later promotes via `cap_X`'s authority |
+| Capability      | Owner               | Write namespace                                                                                                               |
+| --------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `cap_dispatch`  | dispatch machinery  | `dispatch.*` (`dispatch.outbound.*`, `dispatch.inbound.*`, `dispatch.consumed`, `dispatch.rate_limited`)                      |
+| `cap_resource`  | resource state      | `resource.*` (`resource.granted`, `resource.reserved`, `resource.reserve_rejected`, `resource.consumed`, `resource.released`) |
+| `cap_submit`    | submit lifecycle    | submit-owned run facts: `chat.ingested`, `llm.response`, `tool.executed`, `agent.run.*`, `agent.aborted.*`                    |
+| `cap_admission` | admission gate      | `llm.structured.*` (`llm.structured.evidence`, `llm.structured.invalidate`)                                                   |
+| `cap_app`       | app code            | **all kinds not claimed by a substrate or extension cap**                                                                     |
+| `cap_scheduler` | scheduler (h-order) | no own namespace; carries `defer(cap_X, event)` and later promotes via `cap_X`'s authority                                    |
 
 `llm.*` is a shared core prefix with non-overlapping sub-owners:
 `cap_submit` owns `llm.response`; `cap_admission` owns `llm.structured.*`.
@@ -275,21 +275,21 @@ Notes:
 
 Three vocabularies retained from prior specs, namespaced by capability:
 
-| Vocabulary             | Owner          | Reference            |
-|------------------------|----------------|----------------------|
-| Abort kinds            | `cap_submit`   | spec-24 §7           |
-| Run lifecycle terms    | `cap_submit`   | spec-24 §5.1.1       |
-| Structured evidence    | `cap_admission`| spec-25 §3, §7       |
+| Vocabulary          | Owner           | Reference      |
+| ------------------- | --------------- | -------------- |
+| Abort kinds         | `cap_submit`    | spec-24 §7     |
+| Run lifecycle terms | `cap_submit`    | spec-24 §5.1.1 |
+| Structured evidence | `cap_admission` | spec-25 §3, §7 |
 
 Submit, dispatch, and resource event kinds are owned by their respective
 capabilities but were not formalized as "vocabularies" in v0.2; this spec
 promotes them:
 
-| Vocabulary             | Owner          | Kinds                                                              |
-|------------------------|----------------|--------------------------------------------------------------------|
-| Submit turn facts      | `cap_submit`   | `chat.ingested`, `llm.response`, `tool.executed`, `agent.run.started`, `agent.aborted.*` |
-| Dispatch outcomes      | `cap_dispatch` | `dispatch.outbound.requested`, `dispatch.outbound.delivered`, `dispatch.outbound.failed`, `dispatch.inbound.accepted`, `dispatch.consumed`, `dispatch.rate_limited` |
-| Resource transitions   | `cap_resource` | `resource.granted`, `resource.reserved`, `resource.reserve_rejected`, `resource.consumed`, `resource.released` |
+| Vocabulary           | Owner          | Kinds                                                                                                                                                               |
+| -------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Submit turn facts    | `cap_submit`   | `chat.ingested`, `llm.response`, `tool.executed`, `agent.run.started`, `agent.aborted.*`                                                                            |
+| Dispatch outcomes    | `cap_dispatch` | `dispatch.outbound.requested`, `dispatch.outbound.delivered`, `dispatch.outbound.failed`, `dispatch.inbound.accepted`, `dispatch.consumed`, `dispatch.rate_limited` |
+| Resource transitions | `cap_resource` | `resource.granted`, `resource.reserved`, `resource.reserve_rejected`, `resource.consumed`, `resource.released`                                                      |
 
 Unsupported vocabulary:
 
@@ -320,9 +320,9 @@ for proof/projection carriers. P2 positive `effect` remains future work.
 
 ```ts
 interface ExtensionPackage {
-  packageId: string                    // "@agent-os/image"
-  kindPrefixes: ReadonlyArray<string>  // ["image."]
-  version: string                      // package semver
+  packageId: string; // "@agent-os/image"
+  kindPrefixes: ReadonlyArray<string>; // ["image."]
+  version: string; // package semver
 }
 
 // AgentDOBase.registerExtensions()
@@ -333,7 +333,9 @@ interface ExtensionPackage {
 //     reject matching package prefixes with CapabilityRejected
 
 class AgentDOBase {
-  protected registerExtensions(): ReadonlyArray<ExtensionPackage> { return [] }
+  protected registerExtensions(): ReadonlyArray<ExtensionPackage> {
+    return [];
+  }
   // subclass override; validated lazily once per DO instance.
 }
 ```
@@ -366,34 +368,32 @@ Core mints an unforgeable scoped handle for a registered package:
 
 ```ts
 type ExtensionEventSpec = {
-  event: string
-  data: unknown
-}
+  event: string;
+  data: unknown;
+};
 
-type ExtensionEffectOutcome<R> =
-  | { ok: true; result: R }
-  | { ok: false; cause: unknown }
+type ExtensionEffectOutcome<R> = { ok: true; result: R } | { ok: false; cause: unknown };
 
 interface ExtensionCapability {
-  readonly packageId: string
-  readonly kindPrefixes: ReadonlyArray<string>
-  readonly version: string
+  readonly packageId: string;
+  readonly kindPrefixes: ReadonlyArray<string>;
+  readonly version: string;
 
-  commit(spec: ExtensionEventSpec): Promise<{ id: number }>
+  commit(spec: ExtensionEventSpec): Promise<{ id: number }>;
 
-  time(spec: ExtensionEventSpec & { at: number }): Promise<{ id: number }>
+  time(spec: ExtensionEventSpec & { at: number }): Promise<{ id: number }>;
 
   // P2, not P1:
   effect<I, R>(spec: {
-    idempotencyKey: string
-    intent: I
-    run: (intent: I, signal: AbortSignal) => Promise<R>
-    settle: (outcome: ExtensionEffectOutcome<R>) => ExtensionEventSpec
-  }): Promise<{ eventId: number; outcome: ExtensionEffectOutcome<R> }>
+    idempotencyKey: string;
+    intent: I;
+    run: (intent: I, signal: AbortSignal) => Promise<R>;
+    settle: (outcome: ExtensionEffectOutcome<R>) => ExtensionEventSpec;
+  }): Promise<{ eventId: number; outcome: ExtensionEffectOutcome<R> }>;
 }
 
 class AgentDOBase {
-  protected extensionCapability(packageId: string): ExtensionCapability
+  protected extensionCapability(packageId: string): ExtensionCapability;
 }
 ```
 
@@ -432,11 +432,11 @@ packages must either avoid package-owned events or improperly reach into core.
 The implementation can land without forcing zeroY-style app pressure to wait
 for package extraction:
 
-| Stage | Ships | Does not claim |
-|-------|-------|----------------|
-| P0 — v0.3 baseline | `ExtensionPackage` declaration + negative app gate | package-owned writes |
-| P1 — positive commit/time | `ExtensionCapability.commit`, `ExtensionCapability.time`, prefix owner validation, package-only tests | core-owned external-effect outbox semantics |
-| P2 — positive effect | `ExtensionCapability.effect` with idempotent side-effect settlement | generic rollback engine or carrier byte store |
+| Stage                     | Ships                                                                                                 | Does not claim                                |
+| ------------------------- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| P0 — v0.3 baseline        | `ExtensionPackage` declaration + negative app gate                                                    | package-owned writes                          |
+| P1 — positive commit/time | `ExtensionCapability.commit`, `ExtensionCapability.time`, prefix owner validation, package-only tests | core-owned external-effect outbox semantics   |
+| P2 — positive effect      | `ExtensionCapability.effect` with idempotent side-effect settlement                                   | generic rollback engine or carrier byte store |
 
 P1 is enough for a package to record proof facts after a carrier operation whose
 idempotency is already handled by the carrier/provider. P2 is required when
@@ -475,37 +475,37 @@ and must not appear in app-facing composites.
 ```ts
 class AgentDOBase<Env> {
   // ----- composites (RPC) -----
-  submit(spec: SubmitSpec): Promise<SubmitResult>
-  emitEvent(spec: { event: string; data: unknown }): Promise<{ id: number }>
-  scheduleEvent(spec: ScheduledEventSpec): Promise<{ id: number }>
-  dispatchToScope(spec: DispatchToScopeSpec): Promise<DispatchToScopeResult>
-  streamEvents(opts?: StreamEventsOptions): Response
+  submit(spec: SubmitSpec): Promise<SubmitResult>;
+  emitEvent(spec: { event: string; data: unknown }): Promise<{ id: number }>;
+  scheduleEvent(spec: ScheduledEventSpec): Promise<{ id: number }>;
+  dispatchToScope(spec: DispatchToScopeSpec): Promise<DispatchToScopeResult>;
+  streamEvents(opts?: StreamEventsOptions): Response;
 
   // ----- projections (RPC) -----
-  events(opts?: EventQueryOptions): Promise<ReadonlyArray<LedgerEventRpc>>
-  runTrace(runId: string): Promise<RunTrace>
-  runStatus(runId: string): Promise<RunStatus>
-  quotaState(spec: QuotaStateSpec): Promise<QuotaState>
-  resourceState(key: string): Promise<ResourceState>
-  admissionLease(key: AttemptKey): Promise<CapabilityLease | null>
+  events(opts?: EventQueryOptions): Promise<ReadonlyArray<LedgerEventRpc>>;
+  runTrace(runId: string): Promise<RunTrace>;
+  runStatus(runId: string): Promise<RunStatus>;
+  quotaState(spec: QuotaStateSpec): Promise<QuotaState>;
+  resourceState(key: string): Promise<ResourceState>;
+  admissionLease(key: AttemptKey): Promise<CapabilityLease | null>;
 
   // ----- resource composites (RPC) -----
-  grantResource(spec: ResourceGrantSpec): Promise<ResourceGrantResult>
-  reserveResource(spec: ResourceReserveSpec): Promise<ResourceReserveResult>
-  consumeResource(spec: ResourceReservationSpec): Promise<void>
-  releaseResource(spec: ResourceReservationSpec): Promise<void>
+  grantResource(spec: ResourceGrantSpec): Promise<ResourceGrantResult>;
+  reserveResource(spec: ResourceReserveSpec): Promise<ResourceReserveResult>;
+  consumeResource(spec: ResourceReservationSpec): Promise<void>;
+  releaseResource(spec: ResourceReservationSpec): Promise<void>;
 
   // ----- CF runtime hook -----
-  alarm(): Promise<void>
+  alarm(): Promise<void>;
 
   // ----- subclass extension surface (protected) -----
-  protected on(kind: string, handler: EventHandler): void
-  protected off(kind: string, handler: EventHandler): void
-  protected provideDispatchTargets(): DispatchTargetRegistry
-  protected provideRefResolver(): RefResolver
-  protected registerExtensions(): ReadonlyArray<ExtensionPackage>
+  protected on(kind: string, handler: EventHandler): void;
+  protected off(kind: string, handler: EventHandler): void;
+  protected provideDispatchTargets(): DispatchTargetRegistry;
+  protected provideRefResolver(): RefResolver;
+  protected registerExtensions(): ReadonlyArray<ExtensionPackage>;
   // P1 positive package surface:
-  protected extensionCapability(packageId: string): ExtensionCapability
+  protected extensionCapability(packageId: string): ExtensionCapability;
   // provideRegistry() removed — replaced by provideRefResolver().
 }
 ```
@@ -523,61 +523,78 @@ Removed from `AgentDOBase`:
 
 ```ts
 // AgentDOBase + env
-export { AgentDOBase, type AgentDOEnv }
+export { AgentDOBase, type AgentDOEnv };
 
 // Composite spec types
 export type {
-  SubmitSpec, SubmitResult, TurnRef,
+  SubmitSpec,
+  SubmitResult,
+  TurnRef,
   ScheduledEventSpec,
-  DispatchToScopeSpec, DispatchToScopeResult,
-  EventQueryOptions, StreamEventsOptions,
-}
+  DispatchToScopeSpec,
+  DispatchToScopeResult,
+  EventQueryOptions,
+  StreamEventsOptions,
+};
 
 // Projection result types
 export type {
-  RunTrace, RunStatus,
-  QuotaStateSpec, QuotaState,
+  RunTrace,
+  RunStatus,
+  QuotaStateSpec,
+  QuotaState,
   ResourceState,
-  LedgerEventRpc, EventHandler, TraceContext,
-}
+  LedgerEventRpc,
+  EventHandler,
+  TraceContext,
+};
 
 // Resource composite types
 export type {
-  ResourceGrantSpec, ResourceReserveSpec, ResourceReservationSpec,
-  ResourceGrantResult, ResourceReserveResult,
-}
+  ResourceGrantSpec,
+  ResourceReserveSpec,
+  ResourceReservationSpec,
+  ResourceGrantResult,
+  ResourceReserveResult,
+};
 
 // Tools + quota middleware
-export type { Tool, ToolDefinition, LlmUsage }
-export { withQuota, type QuotaSpec }
+export type { Tool, ToolDefinition, LlmUsage };
+export { withQuota, type QuotaSpec };
 
 // Dispatch target registry (for provideDispatchTargets())
-export type { DispatchTargetNamespace, DispatchTargetRegistry }
+export type { DispatchTargetNamespace, DispatchTargetRegistry };
 
 // Abort taxonomy
-export { ABORT, type AbortKind }
+export { ABORT, type AbortKind };
 
 // Tagged errors
 export {
-  SqlError, JsonStringifyError,
-  ScopeMissingError, InvalidScheduleAt,
-  DispatchTargetNotFound, DispatchScopeMismatch,
-  InvalidResourceAmount, ResourceInsufficient,
-  ResourceReservationNotFound, ResourceReservationClosed,
-  UpstreamFailure, ToolError,
+  SqlError,
+  JsonStringifyError,
+  ScopeMissingError,
+  InvalidScheduleAt,
+  DispatchTargetNotFound,
+  DispatchScopeMismatch,
+  InvalidResourceAmount,
+  ResourceInsufficient,
+  ResourceReservationNotFound,
+  ResourceReservationClosed,
+  UpstreamFailure,
+  ToolError,
   RefResolutionFailed,
   CapabilityRejected,
-}
+};
 
 // Admission public surface (narrow)
-export type { JsonSchemaObject, JsonSchemaNode }     // for submit({outputSchema})
-export type { LlmRoute }                              // for SubmitSpec
-export type { CapabilityLease, AttemptKey }           // for admissionLease() return
+export type { JsonSchemaObject, JsonSchemaNode }; // for submit({outputSchema})
+export type { LlmRoute }; // for SubmitSpec
+export type { CapabilityLease, AttemptKey }; // for admissionLease() return
 //   Strategy / Outcome / OutcomeClass / SchemaContract / AdmissionImpact
 //   are submit-internal — NOT exported at barrel.
 
 // Ref resolution and extension package claims
-export type { RefResolver, ExtensionPackage, ExtensionCapability }
+export type { RefResolver, ExtensionPackage, ExtensionCapability };
 ```
 
 Carrier packages that need only these contracts import narrow subpaths instead
@@ -585,8 +602,8 @@ of the `@agent-os/core` barrel, so modality packages do not pull the
 Cloudflare Durable Object type surface:
 
 ```ts
-import type { ExtensionCapability, ExtensionPackage } from "@agent-os/core/extensions"
-import { RefResolutionFailed, type RefResolver } from "@agent-os/core/ref-resolver"
+import type { ExtensionCapability, ExtensionPackage } from "@agent-os/core/extensions";
+import { RefResolutionFailed, type RefResolver } from "@agent-os/core/ref-resolver";
 ```
 
 Removed from barrel:
@@ -669,20 +686,20 @@ Concrete delta against core v0.2.17. All removals are breaking.
 
 ### 10.1 Moved out of core
 
-| Item                              | Destination                       | Mechanism                              |
-|-----------------------------------|-----------------------------------|----------------------------------------|
-| `AgentDOBase.generateImage`       | `@agent-os/image`                 | carrier exposed via tools or direct call |
-| `ImageRoute / ImageArtifact / ImageResult / GenerateImageSpec / ImageRequest` types in barrel | `@agent-os/image` barrel | re-export from package, not core |
-| `image.*` core reserved prefix (spec-32 §1) | extension package claim (§7) | `@agent-os/image` may register `image.` so app-facing core writes cannot forge image facts; package-owned writes use staged positive capability |
-| `submitTextStream` method + `SubmitTextStreamSpec` / `SubmitTextStreamFrame` types | `@agent-os/streaming` (new) | moved out; if package is absent, v0.3 has no public token streaming |
-| `ProviderRegistryConfig` + `EndpointNotFound` / `CredentialNotFound` errors | generalized `RefResolver` | see §10.3 |
+| Item                                                                                          | Destination                  | Mechanism                                                                                                                                       |
+| --------------------------------------------------------------------------------------------- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AgentDOBase.generateImage`                                                                   | `@agent-os/image`            | carrier exposed via tools or direct call                                                                                                        |
+| `ImageRoute / ImageArtifact / ImageResult / GenerateImageSpec / ImageRequest` types in barrel | `@agent-os/image` barrel     | re-export from package, not core                                                                                                                |
+| `image.*` core reserved prefix (spec-32 §1)                                                   | extension package claim (§7) | `@agent-os/image` may register `image.` so app-facing core writes cannot forge image facts; package-owned writes use staged positive capability |
+| `submitTextStream` method + `SubmitTextStreamSpec` / `SubmitTextStreamFrame` types            | `@agent-os/streaming` (new)  | moved out; if package is absent, v0.3 has no public token streaming                                                                             |
+| `ProviderRegistryConfig` + `EndpointNotFound` / `CredentialNotFound` errors                   | generalized `RefResolver`    | see §10.3                                                                                                                                       |
 
 ### 10.2 Narrowed / hidden
 
-| Item                                            | New location                                 |
-|-------------------------------------------------|----------------------------------------------|
-| `Strategy / Outcome / OutcomeClass / SchemaContract / AdmissionImpact` types | submit-internal; not in barrel |
-| `provideRegistry()` protected hook              | replaced by `RefResolver` mechanism (§10.3) |
+| Item                                                                         | New location                                |
+| ---------------------------------------------------------------------------- | ------------------------------------------- |
+| `Strategy / Outcome / OutcomeClass / SchemaContract / AdmissionImpact` types | submit-internal; not in barrel              |
+| `provideRegistry()` protected hook                                           | replaced by `RefResolver` mechanism (§10.3) |
 
 ### 10.3 RefResolver
 
@@ -691,8 +708,8 @@ LLM-only special case and replaced by a capability-neutral resolver:
 
 ```ts
 interface RefResolver {
-  endpoint(ref: string): string | null
-  credential(ref: string): string | null
+  endpoint(ref: string): string | null;
+  credential(ref: string): string | null;
 }
 ```
 
@@ -705,19 +722,19 @@ submit-specific fallback registry. Secret values still never enter the ledger.
 
 ## 11. Spec amendments / supersessions
 
-| Spec     | Section(s)         | Action                                                                 |
-|----------|--------------------|------------------------------------------------------------------------|
-| spec-24  | §3 SSoT discipline | **Amend**: prepend "commit authority + capability owners (see spec-34 §3)" as the primary frame; existing table preserved as a runtime consequence. |
-| spec-24  | §4 corollary        | **Amend**: replace "replayable" wording per spec-34 §9.1.              |
-| spec-24  | §5.1 four algebra ops | **Supersede**: replaced by spec-34 §2 five-op kernel. `ingest` / `dispatch` documented as internal causation patterns of `commit`. |
-| spec-24  | §5.1 reactive face   | **Amend**: reframe `emitEvent` / `scheduleEvent` / `on` as composites under capability ownership (spec-34 §4). |
-| spec-24  | §6 carrier middleware | **Amend**: add cross-reference to spec-34 §5 standard projections.   |
-| spec-24  | INV-3                 | **Amend**: split per spec-34 §9.2.                                    |
-| spec-24  | §7 failure events     | **Amend**: add capability owner column (spec-34 §6).                  |
-| spec-25  | §7 admission key     | **Preserve**: `attemptKey = (route, schemaContract, strategy, adapterVersion)` is the canonical projection key (spec-34 §5).  |
-| spec-31  | text streaming       | **Supersede**: `submitTextStream` leaves `AgentDOBase`; future public surface belongs to `@agent-os/streaming`, with package-owned writes gated by §7.2. |
-| spec-32  | §1 reserved prefix   | **Supersede**: extension package claims (spec-34 §7) replace modality-named reservation. |
-| spec-32  | §2 package direction | **Supersede**: `AgentDOBase.generateImage` leaves core. `@agent-os/image` owns public image API; package commit authority follows §7.2 / §7.3. |
+| Spec    | Section(s)            | Action                                                                                                                                                   |
+| ------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| spec-24 | §3 SSoT discipline    | **Amend**: prepend "commit authority + capability owners (see spec-34 §3)" as the primary frame; existing table preserved as a runtime consequence.      |
+| spec-24 | §4 corollary          | **Amend**: replace "replayable" wording per spec-34 §9.1.                                                                                                |
+| spec-24 | §5.1 four algebra ops | **Supersede**: replaced by spec-34 §2 five-op kernel. `ingest` / `dispatch` documented as internal causation patterns of `commit`.                       |
+| spec-24 | §5.1 reactive face    | **Amend**: reframe `emitEvent` / `scheduleEvent` / `on` as composites under capability ownership (spec-34 §4).                                           |
+| spec-24 | §6 carrier middleware | **Amend**: add cross-reference to spec-34 §5 standard projections.                                                                                       |
+| spec-24 | INV-3                 | **Amend**: split per spec-34 §9.2.                                                                                                                       |
+| spec-24 | §7 failure events     | **Amend**: add capability owner column (spec-34 §6).                                                                                                     |
+| spec-25 | §7 admission key      | **Preserve**: `attemptKey = (route, schemaContract, strategy, adapterVersion)` is the canonical projection key (spec-34 §5).                             |
+| spec-31 | text streaming        | **Supersede**: `submitTextStream` leaves `AgentDOBase`; future public surface belongs to `@agent-os/streaming`, with package-owned writes gated by §7.2. |
+| spec-32 | §1 reserved prefix    | **Supersede**: extension package claims (spec-34 §7) replace modality-named reservation.                                                                 |
+| spec-32 | §2 package direction  | **Supersede**: `AgentDOBase.generateImage` leaves core. `@agent-os/image` owns public image API; package commit authority follows §7.2 / §7.3.           |
 
 ---
 
@@ -789,7 +806,7 @@ capability failures use `CapabilityRejected`, and ref resolution is generalized.
 - **`effect` over `dispatch`**: `dispatch` survives at the composite layer
   (`dispatchToScope`) and as a vocabulary owner (`cap_dispatch`). The
   kernel op name is upgraded because "dispatch" conflated `effect with
-  idempotent settlement` with `cross-scope routing`.
+idempotent settlement` with `cross-scope routing`.
 - **`time` over `schedule`**: `scheduleEvent` survives at the composite
   layer. The kernel op is named for the axis it embodies (deferred-commit
   time-machine), not the user-facing verb.

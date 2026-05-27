@@ -47,11 +47,7 @@ export interface AgentDOIntrospection {
   runs(spec: RunListSpec): Promise<RunListPage>;
   runTrace(runId: number | string): Promise<RunTrace>;
   runStatus(runId: number | string): Promise<RunStatus>;
-  quotaState(spec: {
-    key: string;
-    windowMs: number;
-    limit: number;
-  }): Promise<QuotaState>;
+  quotaState(spec: { key: string; windowMs: number; limit: number }): Promise<QuotaState>;
   resourceState(key: string): Promise<ResourceState>;
   admissionLease(key: AttemptKey): Promise<CapabilityLease | null>;
 }
@@ -78,17 +74,13 @@ const requireOptions = (opts: MountOpsApiOptions): void => {
   }
 };
 
-const defaultStubFor = (
-  resolved: ResolvedScope,
-): AgentDOIntrospection | null => {
+const defaultStubFor = (resolved: ResolvedScope): AgentDOIntrospection | null => {
   if (resolved.namespace === undefined) return null;
   const id = resolved.namespace.idFromName(resolved.scope);
   return resolved.namespace.get(id) as unknown as AgentDOIntrospection;
 };
 
-export const mountOpsApi = (
-  opts: MountOpsApiOptions,
-): ((req: Request) => Promise<Response>) => {
+export const mountOpsApi = (opts: MountOpsApiOptions): ((req: Request) => Promise<Response>) => {
   requireOptions(opts);
   const stubFor = opts.stubFor ?? defaultStubFor;
   return (req) => handle(req, opts, stubFor);
@@ -254,10 +246,7 @@ const dispatchScopeEndpoint = async (
 // Endpoint handlers
 // ============================================================
 
-const onEvents = async (
-  url: URL,
-  stub: AgentDOIntrospection,
-): Promise<Response> => {
+const onEvents = async (url: URL, stub: AgentDOIntrospection): Promise<Response> => {
   const afterId = parseOptionalNonNegInt(url.searchParams.get("afterId"));
   if (afterId === "invalid") {
     return opsError("bad_request", "afterId must be a non-negative integer");
@@ -281,17 +270,11 @@ const onEvents = async (
   }
 };
 
-const onStream = async (
-  req: Request,
-  url: URL,
-  stub: AgentDOIntrospection,
-): Promise<Response> => {
+const onStream = async (req: Request, url: URL, stub: AgentDOIntrospection): Promise<Response> => {
   // Worker-side Last-Event-ID parsing per spec-29 §2.3.
   const headerCursor = req.headers.get("last-event-id");
   const headerAfterId =
-    headerCursor !== null && /^\d+$/.test(headerCursor)
-      ? parseInt(headerCursor, 10)
-      : undefined;
+    headerCursor !== null && /^\d+$/.test(headerCursor) ? parseInt(headerCursor, 10) : undefined;
   const queryAfterId = parseOptionalNonNegInt(url.searchParams.get("afterId"));
   if (queryAfterId === "invalid") {
     return opsError("bad_request", "afterId must be a non-negative integer");
@@ -300,9 +283,7 @@ const onStream = async (
   const kinds = parseKinds(url.searchParams.get("kinds"));
   const heartbeatRaw = url.searchParams.get("heartbeatMs");
   const heartbeatMs =
-    heartbeatRaw !== null && /^\d+$/.test(heartbeatRaw)
-      ? parseInt(heartbeatRaw, 10)
-      : undefined;
+    heartbeatRaw !== null && /^\d+$/.test(heartbeatRaw) ? parseInt(heartbeatRaw, 10) : undefined;
 
   const streamOpts: StreamEventsOptions = {
     ...(afterId !== undefined ? { afterId } : {}),
@@ -317,10 +298,7 @@ const onStream = async (
   }
 };
 
-const onRunsList = async (
-  url: URL,
-  stub: AgentDOIntrospection,
-): Promise<Response> => {
+const onRunsList = async (url: URL, stub: AgentDOIntrospection): Promise<Response> => {
   const statusRaw = url.searchParams.get("status");
   let statuses: ReadonlyArray<RunStatusKind> | undefined;
   if (statusRaw !== null) {
@@ -341,14 +319,9 @@ const onRunsList = async (
     statuses = parts as ReadonlyArray<RunStatusKind>;
   }
 
-  const afterRunId = parseOptionalNonNegInt(
-    url.searchParams.get("afterRunId"),
-  );
+  const afterRunId = parseOptionalNonNegInt(url.searchParams.get("afterRunId"));
   if (afterRunId === "invalid") {
-    return opsError(
-      "bad_request",
-      "afterRunId must be a non-negative integer",
-    );
+    return opsError("bad_request", "afterRunId must be a non-negative integer");
   }
   const limit = parseLimit(url.searchParams.get("limit"), 50, 500);
   if (limit === null) {
@@ -402,33 +375,22 @@ const onRunStatus = async (
   }
 };
 
-const onQuota = async (
-  url: URL,
-  stub: AgentDOIntrospection,
-): Promise<Response> => {
+const onQuota = async (url: URL, stub: AgentDOIntrospection): Promise<Response> => {
   const key = url.searchParams.get("key");
   const windowMsRaw = url.searchParams.get("windowMs");
   const limitRaw = url.searchParams.get("limit");
   if (key === null || windowMsRaw === null || limitRaw === null) {
-    return opsError(
-      "bad_request",
-      "quota requires key, windowMs, limit query params",
-    );
+    return opsError("bad_request", "quota requires key, windowMs, limit query params");
   }
   const windowMs =
-    windowMsRaw === "Infinity"
-      ? Number.POSITIVE_INFINITY
-      : parseInt(windowMsRaw, 10);
+    windowMsRaw === "Infinity" ? Number.POSITIVE_INFINITY : parseInt(windowMsRaw, 10);
   const limit = parseInt(limitRaw, 10);
   if (!Number.isInteger(limit) || limit < 1) {
     return opsError("bad_request", "limit must be an integer >= 1");
   }
   if (windowMs !== Number.POSITIVE_INFINITY) {
     if (!Number.isInteger(windowMs) || windowMs <= 0) {
-      return opsError(
-        "bad_request",
-        "windowMs must be a positive integer or 'Infinity'",
-      );
+      return opsError("bad_request", "windowMs must be a positive integer or 'Infinity'");
     }
   }
   try {
@@ -439,10 +401,7 @@ const onQuota = async (
   }
 };
 
-const onResource = async (
-  url: URL,
-  stub: AgentDOIntrospection,
-): Promise<Response> => {
+const onResource = async (url: URL, stub: AgentDOIntrospection): Promise<Response> => {
   const key = url.searchParams.get("key");
   if (key === null || key.length === 0) {
     return opsError("bad_request", "resource requires key query param");
@@ -455,10 +414,7 @@ const onResource = async (
   }
 };
 
-const onAdmission = async (
-  url: URL,
-  stub: AgentDOIntrospection,
-): Promise<Response> => {
+const onAdmission = async (url: URL, stub: AgentDOIntrospection): Promise<Response> => {
   const keyParam = url.searchParams.get("key");
   if (keyParam === null) {
     return opsError(
@@ -482,11 +438,7 @@ const onAdmission = async (
 // Query parser helpers
 // ============================================================
 
-const parseLimit = (
-  raw: string | null,
-  fallback: number,
-  cap: number,
-): number | null => {
+const parseLimit = (raw: string | null, fallback: number, cap: number): number | null => {
   if (raw === null) return fallback;
   if (!/^\d+$/.test(raw)) return null;
   const n = parseInt(raw, 10);
@@ -494,9 +446,7 @@ const parseLimit = (
   return Math.min(n, cap);
 };
 
-const parseOptionalNonNegInt = (
-  raw: string | null,
-): number | undefined | "invalid" => {
+const parseOptionalNonNegInt = (raw: string | null): number | undefined | "invalid" => {
   if (raw === null) return undefined;
   if (!/^\d+$/.test(raw)) return "invalid";
   return parseInt(raw, 10);

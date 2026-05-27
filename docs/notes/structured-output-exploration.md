@@ -36,6 +36,7 @@ submit({
 ```
 
 Internals (two-stage):
+
 1. Normal agent loop — tools may be called, LLM produces free text.
 2. On natural stop, run a finalizer LLM call:
    - No tools
@@ -46,6 +47,7 @@ Internals (two-stage):
    fast-fail at the Promise boundary (does NOT enter ledger; config error)
 
 Implementation touched:
+
 - errors.ts: ABORT.STRUCTURED_OUTPUT, StructuredOutputFailure, UnsupportedStructuredOutputModel
 - llm.ts: `response_format` field on LlmRequest; Workers-AI-native response shape (Schema.Union);
   NATIVE_STRUCTURED_OUTPUT_MODELS + supportsNativeStructuredOutput
@@ -54,11 +56,11 @@ Implementation touched:
 
 ## Spike-03 raw findings (retained here; runnable spike retired)
 
-| Configuration | Pass rate | Notes |
-|---|---|---|
-| `@cf/openai/gpt-oss-120b` + `response_format: json_schema` (strict:true) | 0-1/3 | Schema silently ignored |
-| `@cf/openai/gpt-oss-120b` + tool-submit + `tool_choice` forcing | 3/3 | But model fabricates schema fields sometimes |
-| `@cf/meta/llama-3.3-70b-instruct-fp8-fast` + `response_format` | works at API level | Model fabricates outer shape (e.g. wraps in `{analysis: {...}}`) |
+| Configuration                                                            | Pass rate          | Notes                                                            |
+| ------------------------------------------------------------------------ | ------------------ | ---------------------------------------------------------------- |
+| `@cf/openai/gpt-oss-120b` + `response_format: json_schema` (strict:true) | 0-1/3              | Schema silently ignored                                          |
+| `@cf/openai/gpt-oss-120b` + tool-submit + `tool_choice` forcing          | 3/3                | But model fabricates schema fields sometimes                     |
+| `@cf/meta/llama-3.3-70b-instruct-fp8-fast` + `response_format`           | works at API level | Model fabricates outer shape (e.g. wraps in `{analysis: {...}}`) |
 
 Verdict: Cloudflare Workers AI's JSON Mode is "best effort", not contractual.
 Substrate must still Schema-decode the result and route mismatches to
@@ -67,6 +69,7 @@ StructuredOutputFailure.
 ## When to revisit
 
 Resume from this note when EITHER:
+
 - First reference app surfaces a real structured-output need (most likely
   Img-Gen's plan generation), OR
 - Cloudflare ships a Workers AI model that strictly enforces JSON Schema
@@ -94,6 +97,6 @@ Open questions to re-decide:
   "structured submit finalizer" mental model and the "native-only" narrow
   cut.
 - The retired spike-03 implementation compared `response_format:
-  json_schema` with `tool_choice`-forced submit tool patterns. The durable
+json_schema` with `tool_choice`-forced submit tool patterns. The durable
   findings are retained in this note; runnable spike code is no longer a
   tracked repo surface.

@@ -24,8 +24,7 @@ export type StatefulScopeRootResult =
       readonly kind: RuntimeScopeKind;
     };
 
-const encodeScopePart = (value: string): string =>
-  encodeURIComponent(value).replace(/\./g, "%2E");
+const encodeScopePart = (value: string): string => encodeURIComponent(value).replace(/\./g, "%2E");
 
 export const runtimeScopeKey = (scopeRef: ScopeRef): string => {
   switch (scopeRef.kind) {
@@ -40,15 +39,11 @@ export const runtimeScopeKey = (scopeRef: ScopeRef): string => {
   }
 };
 
-export const resolveRuntimeScope = (
-  scopeRef: ScopeRef,
-): RuntimeScopeResolution => ({
+export const resolveRuntimeScope = (scopeRef: ScopeRef): RuntimeScopeResolution => ({
   scopeRef,
   scopeKey: runtimeScopeKey(scopeRef),
   ownerKind: scopeRef.kind,
-  ...(scopeRef.kind === "external"
-    ? { externalSystemRef: scopeRef.systemRef }
-    : {}),
+  ...(scopeRef.kind === "external" ? { externalSystemRef: scopeRef.systemRef } : {}),
 });
 
 export const resolveStatefulSessionRoot = (
@@ -63,9 +58,7 @@ export const resolveStatefulSessionRoot = (
     };
   }
 
-  const root = ["session", encodeScopePart(scopeRef.scopeId), carrierRef].join(
-    "/",
-  );
+  const root = ["session", encodeScopePart(scopeRef.scopeId), carrierRef].join("/");
   return {
     ok: true,
     stateRoot: `agentos://${root}`,

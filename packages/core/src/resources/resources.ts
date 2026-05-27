@@ -31,11 +31,7 @@ import type {
   ResourceReserveSpec,
 } from "../types";
 
-import {
-  emptyProjection,
-  loadState,
-  type ResourceProjection,
-} from "./projection";
+import { emptyProjection, loadState, type ResourceProjection } from "./projection";
 
 // Re-export the projection shape so callers that historically imported
 // it from "./resources" keep working.
@@ -47,44 +43,29 @@ export class Resources extends Context.Tag("@agent-os/Resources")<
     readonly grant: (
       scope: string,
       spec: ResourceGrantSpec,
-    ) => Effect.Effect<
-      ResourceGrantResult,
-      SqlError | JsonStringifyError | InvalidResourceAmount
-    >;
+    ) => Effect.Effect<ResourceGrantResult, SqlError | JsonStringifyError | InvalidResourceAmount>;
     readonly reserve: (
       scope: string,
       spec: ResourceReserveSpec,
     ) => Effect.Effect<
       ResourceReserveResult,
-      | SqlError
-      | JsonStringifyError
-      | InvalidResourceAmount
-      | ResourceInsufficient
+      SqlError | JsonStringifyError | InvalidResourceAmount | ResourceInsufficient
     >;
     readonly consume: (
       scope: string,
       spec: ResourceReservationSpec,
     ) => Effect.Effect<
       void,
-      | SqlError
-      | JsonStringifyError
-      | ResourceReservationNotFound
-      | ResourceReservationClosed
+      SqlError | JsonStringifyError | ResourceReservationNotFound | ResourceReservationClosed
     >;
     readonly release: (
       scope: string,
       spec: ResourceReservationSpec,
     ) => Effect.Effect<
       void,
-      | SqlError
-      | JsonStringifyError
-      | ResourceReservationNotFound
-      | ResourceReservationClosed
+      SqlError | JsonStringifyError | ResourceReservationNotFound | ResourceReservationClosed
     >;
-    readonly project: (
-      scope: string,
-      key: string,
-    ) => Effect.Effect<ResourceProjection, SqlError>;
+    readonly project: (scope: string, key: string) => Effect.Effect<ResourceProjection, SqlError>;
   }
 >() {}
 
@@ -103,9 +84,7 @@ const ensureEventsSchema = (sql: SqlStorage): Effect.Effect<void, SqlError> =>
     catch: (cause) => new SqlError({ cause }),
   }).pipe(Effect.asVoid);
 
-const assertPositiveAmount = (
-  amount: number,
-): Effect.Effect<void, InvalidResourceAmount> =>
+const assertPositiveAmount = (amount: number): Effect.Effect<void, InvalidResourceAmount> =>
   Number.isFinite(amount) && amount > 0
     ? Effect.void
     : Effect.fail(new InvalidResourceAmount({ amount }));
@@ -175,9 +154,7 @@ export const ResourcesLive = (
               try: () =>
                 ctx.storage.transactionSync(() => {
                   const projected = loadState(sql, scope);
-                  const existing = projected.byIdempotencyKey.get(
-                    spec.idempotencyKey,
-                  );
+                  const existing = projected.byIdempotencyKey.get(spec.idempotencyKey);
                   if (existing !== undefined) {
                     return {
                       status: "existing" as const,
@@ -186,8 +163,7 @@ export const ResourcesLive = (
                     };
                   }
 
-                  const current =
-                    projected.byKey.get(spec.key) ?? emptyProjection();
+                  const current = projected.byKey.get(spec.key) ?? emptyProjection();
                   if (current.available < spec.amount) {
                     const rejectedPayload = {
                       key: spec.key,

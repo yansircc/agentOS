@@ -60,9 +60,10 @@ Lists all scopes the principal can introspect.
 Query: `?prefix=...&limit=N`. Default limit 100, max 1000.
 
 Response:
+
 ```ts
 {
-  scopes: ReadonlyArray<ScopeSummary>
+  scopes: ReadonlyArray<ScopeSummary>;
 }
 ```
 
@@ -199,25 +200,22 @@ App-provided. ops-api has no fallback.
 
 ```ts
 interface ScopeResolver {
-  list(filter: {
-    prefix?: string;
-    limit?: number;
-  }): Promise<ReadonlyArray<ScopeSummary>>
-  resolve(scope: string): Promise<ResolvedScope | null>
+  list(filter: { prefix?: string; limit?: number }): Promise<ReadonlyArray<ScopeSummary>>;
+  resolve(scope: string): Promise<ResolvedScope | null>;
 }
 
 interface ScopeSummary {
-  readonly scope: string
-  readonly surface: ScopeSurface
+  readonly scope: string;
+  readonly surface: ScopeSurface;
 }
 
 interface ResolvedScope {
-  readonly scope: string
-  readonly surface: ScopeSurface
-  readonly namespace?: DurableObjectNamespace   // only present for introspectable scopes
+  readonly scope: string;
+  readonly surface: ScopeSurface;
+  readonly namespace?: DurableObjectNamespace; // only present for introspectable scopes
 }
 
-type ScopeSurface = "agent-do/v0.3" | "opaque"
+type ScopeSurface = "agent-do/v0.3" | "opaque";
 ```
 
 Discipline:
@@ -231,18 +229,14 @@ Discipline:
 
 ```ts
 interface OpsAuth {
-  authenticate(req: Request): Promise<OpsPrincipal | null>
-  authorize(
-    principal: OpsPrincipal,
-    scope: string,
-    action: "read" | "stream",
-  ): Promise<boolean>
+  authenticate(req: Request): Promise<OpsPrincipal | null>;
+  authorize(principal: OpsPrincipal, scope: string, action: "read" | "stream"): Promise<boolean>;
 }
 
 interface OpsPrincipal {
-  readonly subject: string
-  readonly tenantId?: string
-  readonly claims: Readonly<Record<string, unknown>>
+  readonly subject: string;
+  readonly tenantId?: string;
+  readonly claims: Readonly<Record<string, unknown>>;
 }
 ```
 
@@ -256,11 +250,11 @@ Discipline:
 
 ```ts
 interface MountOpsApiOptions {
-  readonly scopeResolver: ScopeResolver
-  readonly auth: OpsAuth
+  readonly scopeResolver: ScopeResolver;
+  readonly auth: OpsAuth;
 }
 
-function mountOpsApi(opts: MountOpsApiOptions): (request: Request) => Promise<Response>
+function mountOpsApi(opts: MountOpsApiOptions): (request: Request) => Promise<Response>;
 ```
 
 The returned handler is the Worker fetch entry. Apps call it from their Worker:
@@ -271,10 +265,10 @@ export default {
     const handler = mountOpsApi({
       scopeResolver: new AppScopeResolver(env),
       auth: new AppOpsAuth(env),
-    })
-    return handler(req)
-  }
-}
+    });
+    return handler(req);
+  },
+};
 ```
 
 ops-api **never** instantiates `ScopeResolver` or `OpsAuth` itself; the app owns construction (including reading env bindings).
@@ -283,16 +277,16 @@ ops-api **never** instantiates `ScopeResolver` or `OpsAuth` itself; the app owns
 
 ```ts
 type RunStatus =
-  | { kind: "delivered";              at: number; event: string }
-  | { kind: "aborted";                at: number; abortKind: string }
-  | { kind: "open_without_terminal";  startedAt: number }
-  | { kind: "orphaned";               startedAt: number; evidence: string }
+  | { kind: "delivered"; at: number; event: string }
+  | { kind: "aborted"; at: number; abortKind: string }
+  | { kind: "open_without_terminal"; startedAt: number }
+  | { kind: "orphaned"; startedAt: number; evidence: string };
 
 interface RunSummary {
-  readonly runId: number
-  readonly startedAt: number
-  readonly status: RunStatus
-  readonly durationMs?: number    // only when status.kind in {delivered, aborted}
+  readonly runId: number;
+  readonly startedAt: number;
+  readonly status: RunStatus;
+  readonly durationMs?: number; // only when status.kind in {delivered, aborted}
 }
 ```
 
@@ -306,22 +300,22 @@ Uniform shape:
 
 ```ts
 interface OpsErrorBody {
-  readonly error: string         // machine code, e.g. "scope_not_found"
-  readonly message: string       // human description
+  readonly error: string; // machine code, e.g. "scope_not_found"
+  readonly message: string; // human description
 }
 ```
 
 Status codes:
 
-| Status | Code                       | When                                           |
-|--------|----------------------------|------------------------------------------------|
-| 400    | `bad_request`              | Missing required query, malformed AttemptKey   |
-| 401    | `unauthenticated`          | `authenticate` returned null                   |
-| 403    | `forbidden`                | `authorize` returned false                     |
-| 404    | `scope_not_found`          | `resolve` returned null                        |
-| 404    | `run_not_found`            | runId has no `agent.run.started` in scope      |
-| 501    | `not_introspectable`       | scope is opaque                                |
-| 502    | `upstream_failure`         | DO fetch threw / SqlError surfaced             |
+| Status | Code                 | When                                         |
+| ------ | -------------------- | -------------------------------------------- |
+| 400    | `bad_request`        | Missing required query, malformed AttemptKey |
+| 401    | `unauthenticated`    | `authenticate` returned null                 |
+| 403    | `forbidden`          | `authorize` returned false                   |
+| 404    | `scope_not_found`    | `resolve` returned null                      |
+| 404    | `run_not_found`      | runId has no `agent.run.started` in scope    |
+| 501    | `not_introspectable` | scope is opaque                              |
+| 502    | `upstream_failure`   | DO fetch threw / SqlError surfaced           |
 
 No silent fallback. No "200 with empty body" for any unknown state.
 
@@ -344,9 +338,9 @@ request → authenticate(req)
 
 `action` mapping:
 
-- `/scopes`                                         → `read` (against authorize over the special scope `""`, or skipped — see §5.1)
+- `/scopes` → `read` (against authorize over the special scope `""`, or skipped — see §5.1)
 - `/scopes/:scope/events` `/runs` `/runs/:runId/*` `/quota` `/resource` `/admission` → `read`
-- `/scopes/:scope/stream`                           → `stream`
+- `/scopes/:scope/stream` → `stream`
 
 ### 5.1 Listing authorization
 
@@ -378,27 +372,27 @@ Tests use an in-memory `MockScopeResolver` + `MockOpsAuth` + an in-memory `Agent
 
 These are not deferred-to-soon items. They are **excluded by design** until pressure evidence appears.
 
-| Feature                            | Reason                                                                                         |
-|------------------------------------|------------------------------------------------------------------------------------------------|
-| `POST /workflows/:id/event`        | Operator actions are app sagas (`gated-effect-chain.md`), not ops-api. Removing this from spec-24 §5.4 is intentional. |
-| `GET /__ops/api/cost`              | No cost projection exists in core. Quota is not cost. Wait for explicit `cost.*` vocabulary or AI Gateway cost evidence. |
+| Feature                            | Reason                                                                                                                              |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /workflows/:id/event`        | Operator actions are app sagas (`gated-effect-chain.md`), not ops-api. Removing this from spec-24 §5.4 is intentional.              |
+| `GET /__ops/api/cost`              | No cost projection exists in core. Quota is not cost. Wait for explicit `cost.*` vocabulary or AI Gateway cost evidence.            |
 | Cross-scope fan-in                 | spec-30 watchlist; client opens N parallel `/stream` connections; substrate primitive only when O(10) connection pressure surfaces. |
-| Approval / publish endpoints       | Operator decisions are `cap_app` facts (`approval.decided`, `change.approval.decided`). ops-api MUST NOT mint these. |
-| Mutation endpoints (any)           | v0 is read-only. Writes go through `AgentDOBase.emitEvent` / scope-owning app surface, not ops-api. |
-| Pre-computed dashboards / charts   | Every value is `project(events)` on demand. No backing aggregation tables. |
-| React UI (`@agent-os/ops-react`)   | Separate package, not v0. UI shape is opinion-laden; lock the API contract first. |
-| Cross-tenant ScopeResolver default | App-provided. ops-api ships no default resolver. |
+| Approval / publish endpoints       | Operator decisions are `cap_app` facts (`approval.decided`, `change.approval.decided`). ops-api MUST NOT mint these.                |
+| Mutation endpoints (any)           | v0 is read-only. Writes go through `AgentDOBase.emitEvent` / scope-owning app surface, not ops-api.                                 |
+| Pre-computed dashboards / charts   | Every value is `project(events)` on demand. No backing aggregation tables.                                                          |
+| React UI (`@agent-os/ops-react`)   | Separate package, not v0. UI shape is opinion-laden; lock the API contract first.                                                   |
+| Cross-tenant ScopeResolver default | App-provided. ops-api ships no default resolver.                                                                                    |
 
 ---
 
 ## 8. Spec amendments
 
-| Spec    | Section          | Action                                                                                          |
-|---------|------------------|-------------------------------------------------------------------------------------------------|
-| spec-24 | §5.4 Admin Query HTTP API | **Supersede**: replaced by spec-35 §2. The old endpoint set (`/runs?scope=`, `/workflows/...`, `/cost`) is no longer the contract. |
-| spec-24 | §5.4 `POST /workflows/:id/event` | **Delete**: operator actions are app sagas, not ops-api. App may mount its own `POST` endpoint outside `/__ops/api/`. |
-| spec-29 | §6 integration shape | **Preserve and reference**: ops-api `/scopes/:scope/stream` is the canonical Worker fetch integration of spec-29. |
-| spec-34 | §5 standard projections | **Preserve**: spec-35 endpoints are the HTTP form of these projections. |
+| Spec    | Section                          | Action                                                                                                                             |
+| ------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| spec-24 | §5.4 Admin Query HTTP API        | **Supersede**: replaced by spec-35 §2. The old endpoint set (`/runs?scope=`, `/workflows/...`, `/cost`) is no longer the contract. |
+| spec-24 | §5.4 `POST /workflows/:id/event` | **Delete**: operator actions are app sagas, not ops-api. App may mount its own `POST` endpoint outside `/__ops/api/`.              |
+| spec-29 | §6 integration shape             | **Preserve and reference**: ops-api `/scopes/:scope/stream` is the canonical Worker fetch integration of spec-29.                  |
+| spec-34 | §5 standard projections          | **Preserve**: spec-35 endpoints are the HTTP form of these projections.                                                            |
 
 ---
 
