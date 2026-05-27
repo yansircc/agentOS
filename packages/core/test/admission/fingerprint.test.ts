@@ -12,13 +12,9 @@
  */
 
 import { Effect } from "effect";
-import { describe, expect, it } from "@effect/vitest";
+import { describe, expect, it } from "vite-plus/test";
 
-import {
-  type JsonSchemaObject,
-  makeSchemaContract,
-  routeFingerprint,
-} from "../../src/admission";
+import { type JsonSchemaObject, makeSchemaContract, routeFingerprint } from "../../src/admission";
 
 describe("admission — canonical fingerprint (spec-25 §4.1)", () => {
   const S1: JsonSchemaObject = {
@@ -51,30 +47,33 @@ describe("admission — canonical fingerprint (spec-25 §4.1)", () => {
     required: ["keywords", "sentiment", "summary"],
   };
 
-  it.effect("stability: same schema yields byte-equal fingerprint across calls", () =>
-    Effect.gen(function* () {
-      const a = yield* makeSchemaContract(S2);
-      const b = yield* makeSchemaContract(S2);
-      expect(a.fingerprint).toBe(b.fingerprint);
-      expect(a.fingerprint.startsWith("effect-json-schema-v1:sha256:")).toBe(true);
-    }),
-  );
+  it("stability: same schema yields byte-equal fingerprint across calls", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const a = yield* makeSchemaContract(S2);
+        const b = yield* makeSchemaContract(S2);
+        expect(a.fingerprint).toBe(b.fingerprint);
+        expect(a.fingerprint.startsWith("effect-json-schema-v1:sha256:")).toBe(true);
+      }),
+    ));
 
-  it.effect("set-semantics: S2 == S3 (property + required + enum reorder)", () =>
-    Effect.gen(function* () {
-      const fS2 = yield* makeSchemaContract(S2);
-      const fS3 = yield* makeSchemaContract(S3);
-      expect(fS3.fingerprint).toBe(fS2.fingerprint);
-    }),
-  );
+  it("set-semantics: S2 == S3 (property + required + enum reorder)", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const fS2 = yield* makeSchemaContract(S2);
+        const fS3 = yield* makeSchemaContract(S3);
+        expect(fS3.fingerprint).toBe(fS2.fingerprint);
+      }),
+    ));
 
-  it.effect("distinction: S1 != S2 (different schemas)", () =>
-    Effect.gen(function* () {
-      const fS1 = yield* makeSchemaContract(S1);
-      const fS2 = yield* makeSchemaContract(S2);
-      expect(fS1.fingerprint).not.toBe(fS2.fingerprint);
-    }),
-  );
+  it("distinction: S1 != S2 (different schemas)", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const fS1 = yield* makeSchemaContract(S1);
+        const fS2 = yield* makeSchemaContract(S2);
+        expect(fS1.fingerprint).not.toBe(fS2.fingerprint);
+      }),
+    ));
 
   it("routeFingerprint is deterministic, prefix-tagged, and collision-free for distinct routes", () => {
     const r = routeFingerprint({ kind: "cf-ai-binding", modelId: "@cf/x/y" });
