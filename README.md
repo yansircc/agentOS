@@ -1,6 +1,6 @@
 # agentOS
 
-Cloudflare Durable Object substrate for ledger-owned agent control flow.
+Claim/effect-boundary calculus for Cloudflare Durable Object agent substrates.
 
 The repo keeps durable decisions and production core code. Historical runnable
 spikes are retired after their conclusions land in specs, tests, or cookbooks.
@@ -22,8 +22,12 @@ packages/
   git-carrier/           optional Git proof/projection carrier algebra
   verification/          optional verification gate proof algebra
   staging-artifact/      optional staging artifact proof/projection algebra
-  deploy-cloudflare/     optional Cloudflare deploy proof/projection algebra
+  deploy/                optional deploy proof/projection carrier algebra
   workspace-session/     optional stateful session/workspace proof algebra
+
+tooling/
+  ops-api/               read-only infrastructure projection HTTP tooling
+  ops-htmx/              read-only SSR + HTMX ops console tooling
 
 spikes/
   _active/     ignored local throwaway work only
@@ -39,10 +43,13 @@ spikes/
 - cross-scope delivery: `dispatchToScope`
 - business resources: `grantResource`, `reserveResource`, `consumeResource`, `releaseResource`
 - projections: `runTrace`, `runStatus`, `quotaState`, `resourceState`, `admissionLease`
+- context packing: `@agent-os/core/context`
 - provider and extension hooks: `provideRefResolver`, `provideDispatchTargets`, `registerExtensions`
 
 The ledger is the source of truth. Schedules, dispatch outboxes, leases,
 resource availability, and views are pending buffers or projections.
+Core owns the Boundary calculus; carrier packages declare concrete boundaries,
+backend packages bind provider material, and tooling reads projections.
 
 ## Documents
 

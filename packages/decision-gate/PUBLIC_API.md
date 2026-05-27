@@ -6,6 +6,7 @@ Status: 1.0 target.
 
 - `.:DECISION_GATE_EVENTS`
 - `.:DECISION_GATE_EVENT_PREFIX`
+- `.:DECISION_GATE_EVENT_VOCABULARY`
 - `.:DecisionGateConsumedPayload`
 - `.:DecisionGateDecidedPayload`
 - `.:DecisionGateDecision`
@@ -18,6 +19,7 @@ Status: 1.0 target.
 - `.:commitDecisionGateDecided`
 - `.:commitDecisionGateRequested`
 - `.:decisionGateExtensionPackage`
+- `.:decisionGateBoundaryContract`
 - `.:projectDecisionGate`
 
 ## Experimental exports

@@ -88,7 +88,7 @@ mutation and does not write ledger facts.
 | `@agent-os/git-carrier`       | `git.workspace.created`, `git.commit.recorded`, `git.merge.recorded`, `git.revert.recorded`, `git.workspace.cleaned`               | `projectGitChange`         |
 | `@agent-os/verification`      | `verification.gate.recorded`                                                                                                       | `projectVerificationGates` |
 | `@agent-os/staging-artifact`  | `staging.artifact.published`, `staging.artifact.reaped`                                                                            | `projectStagingArtifact`   |
-| `@agent-os/deploy-cloudflare` | `deploy.preview.recorded`, `deploy.production.promoted`, `deploy.production.readback`, `deploy.rollback.recorded`, `deploy.failed` | `projectDeploy`            |
+| `@agent-os/deploy` | `deploy.preview.recorded`, `deploy.production.promoted`, `deploy.production.readback`, `deploy.rollback.recorded`, `deploy.failed` | `projectDeploy`            |
 
 These names are now candidate package vocabulary. They should not be treated as
 provider-complete until a real zeroY3 approve/publish run produces the same

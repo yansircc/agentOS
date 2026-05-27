@@ -37,6 +37,14 @@
     "./runtime-scope": {
       "types": "./src/runtime-scope.ts",
       "default": "./src/runtime-scope.ts"
+    },
+    "./boundary-contract": {
+      "types": "./src/boundary-contract.ts",
+      "default": "./src/boundary-contract.ts"
+    },
+    "./context": {
+      "types": "./src/context.ts",
+      "default": "./src/context.ts"
     }
   },
   "scripts": {

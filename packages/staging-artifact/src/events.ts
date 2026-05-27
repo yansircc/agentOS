@@ -1,10 +1,7 @@
 import { validateEffectClaim, type LivedClaim } from "@agent-os/core/effect-claim";
-import { STAGING_EVENT_PREFIX } from "./extension";
+import { STAGING_EVENT_VOCABULARY } from "./extension";
 
-export const STAGING_EVENTS = {
-  ARTIFACT_PUBLISHED: `${STAGING_EVENT_PREFIX}artifact.published`,
-  ARTIFACT_REAPED: `${STAGING_EVENT_PREFIX}artifact.reaped`,
-} as const;
+export const STAGING_EVENTS = STAGING_EVENT_VOCABULARY;
 
 export type StagingEventKind = (typeof STAGING_EVENTS)[keyof typeof STAGING_EVENTS];
 

@@ -7,6 +7,7 @@ Status: 1.0 target for provider-neutral algebra. Live D1 backend exports may be 
 - `.:CLOUDFLARE_RESOURCE_AUTHORITIES`
 - `.:CLOUDFLARE_RESOURCE_EVENTS`
 - `.:CLOUDFLARE_RESOURCE_EVENT_PREFIX`
+- `.:CLOUDFLARE_RESOURCE_EVENT_VOCABULARY`
 - `.:CloudflareResourceBindRequest`
 - `.:CloudflareResourceBoundPayload`
 - `.:CloudflareResourceCarrier`
@@ -29,6 +30,7 @@ Status: 1.0 target for provider-neutral algebra. Live D1 backend exports may be 
 - `.:CloudflareResourceProvisionRequest`
 - `.:CloudflareResourceProvisionedPayload`
 - `.:cloudflareResourceAuthorityContracts`
+- `.:cloudflareResourceBoundaryContract`
 - `.:cloudflareResourceExtensionPackage`
 - `.:cloudflareResourceFailedPayload`
 - `.:cloudflareResourceRejectionKind`

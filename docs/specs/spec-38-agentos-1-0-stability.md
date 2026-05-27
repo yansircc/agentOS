@@ -58,10 +58,13 @@ public barrels, listed as experimental, or listed as frozen.
 - `@agent-os/core`;
 - `@agent-os/workspace-session`;
 - `@agent-os/cloudflare-resource`;
-- `@agent-os/context-pack`;
 - `@agent-os/decision-gate`;
 - `@agent-os/turn-stream`;
 - `@agent-os/run-stream`.
+
+`@agent-os/core/context` is part of the core manifest. The former standalone
+context-pack package is absorbed because deterministic context packing is pure
+reader algebra with no external boundary.
 
 ---
 

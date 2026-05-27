@@ -1,9 +1,32 @@
-import type { ExtensionPackage } from "@agent-os/core/extensions";
+import {
+  boundaryExtensionPackage,
+  defineBoundaryContract,
+} from "@agent-os/core/boundary-contract";
 
 export const STAGING_EVENT_PREFIX = "staging.";
 
-export const stagingArtifactExtensionPackage = (version: string): ExtensionPackage => ({
+export const STAGING_EVENT_VOCABULARY = {
+  ARTIFACT_PUBLISHED: `${STAGING_EVENT_PREFIX}artifact.published`,
+  ARTIFACT_REAPED: `${STAGING_EVENT_PREFIX}artifact.reaped`,
+} as const;
+
+export const stagingArtifactBoundaryContract = defineBoundaryContract({
   packageId: "@agent-os/staging-artifact",
   kindPrefixes: [STAGING_EVENT_PREFIX],
-  version,
+  roles: ["generator", "resolver", "reader"],
+  vocabulary: STAGING_EVENT_VOCABULARY,
+  authorityContracts: [],
+  claimPayloadKey: "claim",
+  terminalClaims: ["lived"],
+  proof: {
+    anchorKinds: ["carrier_proof"],
+    symbolicOnly: true,
+  },
+  projection: {
+    derivedFromLedger: true,
+    shadowState: false,
+  },
 });
+
+export const stagingArtifactExtensionPackage = (version: string) =>
+  boundaryExtensionPackage(stagingArtifactBoundaryContract, version);

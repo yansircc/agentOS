@@ -1,5 +1,5 @@
 {
-  "name": "@agent-os/deploy-cloudflare",
+  "name": "@agent-os/deploy",
   "version": "0.1.0",
   "private": true,
   "type": "module",

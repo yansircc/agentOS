@@ -35,7 +35,7 @@ export interface DeployRollbackRequest {
   readonly rollbackRef: string;
 }
 
-export interface DeployCloudflareFailure {
+export interface DeployFailure {
   readonly code:
     | "PreviewFailed"
     | "PromotionFailed"
@@ -47,20 +47,20 @@ export interface DeployCloudflareFailure {
   readonly claim: RejectedClaim;
 }
 
-export interface DeployCloudflareCarrier {
+export interface DeployCarrier {
   readonly preview: (
     request: DeployPreviewRequest,
-  ) => Effect.Effect<DeployPreviewRecordedPayload, DeployCloudflareFailure>;
+  ) => Effect.Effect<DeployPreviewRecordedPayload, DeployFailure>;
   readonly promote: (
     request: DeployPromoteRequest,
-  ) => Effect.Effect<DeployProductionPromotedPayload, DeployCloudflareFailure>;
+  ) => Effect.Effect<DeployProductionPromotedPayload, DeployFailure>;
   readonly readback: (
     request: DeployReadbackRequest,
   ) => Effect.Effect<
     DeployProductionReadbackPayload | DeployFailedPayload,
-    DeployCloudflareFailure
+    DeployFailure
   >;
   readonly rollback: (
     request: DeployRollbackRequest,
-  ) => Effect.Effect<DeployRollbackRecordedPayload, DeployCloudflareFailure>;
+  ) => Effect.Effect<DeployRollbackRecordedPayload, DeployFailure>;
 }

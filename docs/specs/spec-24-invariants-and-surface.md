@@ -466,9 +466,6 @@ to know the future query pattern at write time — bad ergonomics.
 
 ```
 @agent-os/core             ← required (4-op + AgentDO + submitAgent + middleware)
-@agent-os/ops-api          ← invariant /__ops/api/* (mounted by app)
-@agent-os/ops-client       ← typed hooks for ops data (opt-in)
-@agent-os/ops-react        ← default observability UI (opt-in)
 
 @agent-os/cf-tools         ← sandbox / workspace / browser carriers
 @agent-os/kb-autorag       ← AutoRAG view source
@@ -482,6 +479,9 @@ to know the future query pattern at write time — bad ergonomics.
 @agent-os/billing-7pay     ← 7Pay integration
 @agent-os/billing-stripe   ← Stripe integration
 @agent-os/billing-credits  ← ledger event schema for credit flows
+
+tooling/ops-api            ← invariant /__ops/api/* projection tooling (mounted by app)
+tooling/ops-htmx           ← optional read-only infrastructure UI over ops-api
 ```
 
 Each extension target ≤ 100 lines of glue. Heavier than that = sign of CF service

@@ -1,7 +1,7 @@
 import {
   DEPLOY_EVENTS,
   commitDeployFailed,
-  deployCloudflareExtensionPackage,
+  deployExtensionPackage,
   projectDeploy,
 } from "../src";
 import { makePreClaim, settleLivedClaim, settleRejectedClaim } from "@agent-os/core/effect-claim";
@@ -11,11 +11,11 @@ const deployClaim = makePreClaim({
   operationRef: "deploy:session-1:promote",
   scopeRef: { kind: "external", scopeId: "site/acme", systemRef: "cloudflare" },
   authorityRef: {
-    authorityId: "@agent-os/deploy-cloudflare.promote",
+    authorityId: "@agent-os/deploy.promote",
     authorityClass: "deploy",
   },
   originRef: {
-    originId: "@agent-os/deploy-cloudflare",
+    originId: "@agent-os/deploy",
     originKind: "extension_package",
   },
 });
@@ -23,13 +23,13 @@ const livedDeployClaim = (anchorId: string) =>
   settleLivedClaim(deployClaim, {
     anchorId,
     anchorKind: "carrier_proof",
-    carrierRef: "deploy-cloudflare",
+    carrierRef: "deploy",
   });
 
-describe("@agent-os/deploy-cloudflare", () => {
+describe("@agent-os/deploy", () => {
   it("declares deploy.* as an extension-owned prefix", () => {
-    expect(deployCloudflareExtensionPackage("0.1.0")).toEqual({
-      packageId: "@agent-os/deploy-cloudflare",
+    expect(deployExtensionPackage("0.1.0")).toEqual({
+      packageId: "@agent-os/deploy",
       kindPrefixes: ["deploy."],
       version: "0.1.0",
     });
@@ -87,7 +87,7 @@ describe("@agent-os/deploy-cloudflare", () => {
   it("settles deploy.* facts through ExtensionCapability", async () => {
     const committed: Array<{ event: string; data: unknown }> = [];
     const cap: ExtensionCapability = {
-      packageId: "@agent-os/deploy-cloudflare",
+      packageId: "@agent-os/deploy",
       kindPrefixes: ["deploy."],
       version: "0.1.0",
       commit: async (spec) => {
@@ -131,11 +131,11 @@ describe("@agent-os/deploy-cloudflare", () => {
               systemRef: "cloudflare",
             },
             authorityRef: {
-              authorityId: "@agent-os/deploy-cloudflare.promote",
+              authorityId: "@agent-os/deploy.promote",
               authorityClass: "deploy",
             },
             originRef: {
-              originId: "@agent-os/deploy-cloudflare",
+              originId: "@agent-os/deploy",
               originKind: "extension_package",
             },
             rejectionRef: {

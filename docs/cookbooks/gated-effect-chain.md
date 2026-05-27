@@ -189,7 +189,7 @@ packages:
 ```text
 @agent-os/git-carrier
 @agent-os/verification
-@agent-os/deploy-cloudflare
+@agent-os/deploy
 @agent-os/staging-artifact
 ```
 

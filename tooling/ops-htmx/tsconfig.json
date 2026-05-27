@@ -9,10 +9,10 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "isolatedModules": true,
-    "types": ["vitest/globals"],
+    "types": ["@cloudflare/workers-types", "vitest/globals"],
     "paths": {
-      "@agent-os/core/effect-claim": ["../core/src/effect-claim.ts"],
-      "@agent-os/core/extensions": ["../core/src/extensions.ts"]
+      "@agent-os/core": ["../../packages/core/src/index.ts"],
+      "@agent-os/ops-api": ["../ops-api/src/index.ts"]
     },
     "exactOptionalPropertyTypes": false,
     "noUncheckedIndexedAccess": false

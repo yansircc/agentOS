@@ -3,13 +3,18 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "lib": ["ES2022"],
+    "lib": ["ES2022", "DOM"],
     "strict": true,
     "noEmit": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "isolatedModules": true,
     "types": ["vitest/globals"],
+    "paths": {
+      "@agent-os/core/boundary-contract": ["../core/src/boundary-contract.ts"],
+      "@agent-os/core/effect-claim": ["../core/src/effect-claim.ts"],
+      "@agent-os/core/extensions": ["../core/src/extensions.ts"]
+    },
     "exactOptionalPropertyTypes": false,
     "noUncheckedIndexedAccess": false
   },

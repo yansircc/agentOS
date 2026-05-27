@@ -1,13 +1,7 @@
 import { validateEffectClaim, type LivedClaim } from "@agent-os/core/effect-claim";
-import { GIT_EVENT_PREFIX } from "./extension";
+import { GIT_EVENT_VOCABULARY } from "./extension";
 
-export const GIT_EVENTS = {
-  WORKSPACE_CREATED: `${GIT_EVENT_PREFIX}workspace.created`,
-  COMMIT_RECORDED: `${GIT_EVENT_PREFIX}commit.recorded`,
-  MERGE_RECORDED: `${GIT_EVENT_PREFIX}merge.recorded`,
-  REVERT_RECORDED: `${GIT_EVENT_PREFIX}revert.recorded`,
-  WORKSPACE_CLEANED: `${GIT_EVENT_PREFIX}workspace.cleaned`,
-} as const;
+export const GIT_EVENTS = GIT_EVENT_VOCABULARY;
 
 export type GitEventKind = (typeof GIT_EVENTS)[keyof typeof GIT_EVENTS];
 

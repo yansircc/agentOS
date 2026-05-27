@@ -4,16 +4,9 @@ import {
   type RejectedClaim,
 } from "@agent-os/core/effect-claim";
 
-import { WORKSPACE_SESSION_EVENT_PREFIX } from "./extension";
+import { WORKSPACE_SESSION_EVENT_VOCABULARY } from "./extension";
 
-export const WORKSPACE_SESSION_EVENTS = {
-  STARTED: `${WORKSPACE_SESSION_EVENT_PREFIX}started`,
-  RESTORED: `${WORKSPACE_SESSION_EVENT_PREFIX}restored`,
-  BACKED_UP: `${WORKSPACE_SESSION_EVENT_PREFIX}backed_up`,
-  PREVIEW_ALLOCATED: `${WORKSPACE_SESSION_EVENT_PREFIX}preview_allocated`,
-  DESTROYED: `${WORKSPACE_SESSION_EVENT_PREFIX}destroyed`,
-  FAILED: `${WORKSPACE_SESSION_EVENT_PREFIX}failed`,
-} as const;
+export const WORKSPACE_SESSION_EVENTS = WORKSPACE_SESSION_EVENT_VOCABULARY;
 
 export type WorkspaceSessionEventKind =
   (typeof WORKSPACE_SESSION_EVENTS)[keyof typeof WORKSPACE_SESSION_EVENTS];
