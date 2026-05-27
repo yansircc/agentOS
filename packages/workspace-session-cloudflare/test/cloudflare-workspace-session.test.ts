@@ -1,8 +1,11 @@
+import { it } from "@effect/vitest";
 import { Cause, Effect, Exit, Option } from "effect";
 import { makePreClaim } from "@agent-os/core/effect-claim";
 import {
+  makeCloudflareWorkspaceSessionLiveProvider,
   makeCloudflareWorkspaceSessionProvider,
   makeCloudflareWorkspaceSessionCarrier,
+  type CloudflareWorkspaceSandboxClient,
   type CloudflareWorkspaceSessionClient,
   type CloudflareWorkspaceSessionNamespace,
   type CloudflareWorkspaceSessionProvider,
@@ -65,18 +68,16 @@ const provider = (overrides: Partial<CloudflareWorkspaceSessionProvider> = {}) =
   }) satisfies CloudflareWorkspaceSessionProvider;
 
 describe("@agent-os/workspace-session-cloudflare", () => {
-  it("starts a Cloudflare workspace session with resolved roots and a lived claim", async () => {
+  it.effect("starts a Cloudflare workspace session with resolved roots and a lived claim", () =>
+    Effect.gen(function* () {
     const carrier = makeCloudflareWorkspaceSessionCarrier({ provider: provider() });
 
-    await expect(
-      Effect.runPromise(
-        carrier.start({
+    const started = yield* carrier.start({
           claim: sessionClaim,
           subjectRef: "run-1",
           retention: { mode: "persistent", leaseRef: "lease/run-1" },
-        }),
-      ),
-    ).resolves.toEqual({
+        });
+    expect(started).toEqual({
       subjectRef: "run-1",
       sessionRef: "cf-session-1",
       workspaceRootRef: "cf-workspace-1",
@@ -101,24 +102,23 @@ describe("@agent-os/workspace-session-cloudflare", () => {
         },
       },
     });
-  });
+    }),
+  );
 
-  it("allocates previews and backups without writing live provider handles", async () => {
+  it.effect("allocates previews and backups without writing live provider handles", () =>
+    Effect.gen(function* () {
     const carrier = makeCloudflareWorkspaceSessionCarrier({
       carrierRef: "cf-sandbox-prod",
       provider: provider(),
     });
 
-    await expect(
-      Effect.runPromise(
-        carrier.backup({
+    const backup = yield* carrier.backup({
           claim: sessionClaim,
           subjectRef: "run-1",
           sessionRef: "cf-session-1",
           expiresAt: "2026-06-01T00:00:00.000Z",
-        }),
-      ),
-    ).resolves.toMatchObject({
+        });
+    expect(backup).toMatchObject({
       subjectRef: "run-1",
       sessionRef: "cf-session-1",
       backupRef: "cf-backup-1",
@@ -133,16 +133,13 @@ describe("@agent-os/workspace-session-cloudflare", () => {
       },
     });
 
-    await expect(
-      Effect.runPromise(
-        carrier.allocatePreview({
+    const preview = yield* carrier.allocatePreview({
           claim: sessionClaim,
           subjectRef: "run-1",
           sessionRef: "cf-session-1",
           port: 8787,
-        }),
-      ),
-    ).resolves.toMatchObject({
+        });
+    expect(preview).toMatchObject({
       subjectRef: "run-1",
       sessionRef: "cf-session-1",
       previewRef: "cf-preview-1",
@@ -157,7 +154,8 @@ describe("@agent-os/workspace-session-cloudflare", () => {
         },
       },
     });
-  });
+    }),
+  );
 
   it("rejects non-session claim scopes before calling the provider", async () => {
     let called = false;
@@ -361,4 +359,83 @@ describe("@agent-os/workspace-session-cloudflare", () => {
       },
     });
   });
+
+  it.effect("maps Cloudflare Sandbox SDK methods into carrier-owned refs without leaking handles", () =>
+    Effect.gen(function* () {
+    const calls: unknown[] = [];
+    const sandboxSecret = "sandbox-client-secret-a24";
+    const client: CloudflareWorkspaceSandboxClient = {
+      createSession: async (options) => {
+        calls.push(["createSession", options, sandboxSecret]);
+      },
+      createBackup: async (options) => {
+        calls.push(["createBackup", options, sandboxSecret]);
+        return { id: "backup-a24", dir: "/workspace" };
+      },
+      restoreBackup: async (backup) => {
+        calls.push(["restoreBackup", backup, sandboxSecret]);
+        return { success: true, id: backup.id, dir: backup.dir };
+      },
+      exposePort: async (port, options) => {
+        calls.push(["exposePort", port, options, sandboxSecret]);
+        return { port, url: "https://preview-a24.example" };
+      },
+      destroy: async () => {
+        calls.push(["destroy", sandboxSecret]);
+      },
+    };
+    const provider = makeCloudflareWorkspaceSessionLiveProvider({
+      source: {
+        kind: "client",
+        getClient: ({ sandboxId }) => {
+          calls.push(["getClient", sandboxId, sandboxSecret]);
+          return client;
+        },
+      },
+      sandboxId: () => "sandbox-a24",
+      sessionId: () => "session-a24",
+      workspaceDir: "/workspace",
+      backup: { name: "backup-name", ttl: 60 },
+      preview: { hostname: "preview.example", name: "preview-name", token: "preview-token" },
+    });
+    const carrier = makeCloudflareWorkspaceSessionCarrier({
+      carrierRef: "cloudflare-sandbox-a24",
+      provider,
+    });
+
+    const started = yield* carrier.start({ claim: sessionClaim, subjectRef: "run-a24" });
+    const backup = yield* carrier.backup({
+        claim: sessionClaim,
+        subjectRef: "run-a24",
+        sessionRef: started.sessionRef,
+      });
+    const restored = yield* carrier.restore({
+        claim: sessionClaim,
+        subjectRef: "run-a24",
+        backupRef: backup.backupRef,
+      });
+    const preview = yield* carrier.allocatePreview({
+        claim: sessionClaim,
+        subjectRef: "run-a24",
+        sessionRef: restored.sessionRef,
+        port: 8787,
+      });
+    const destroyed = yield* carrier.destroy({
+        claim: sessionClaim,
+        subjectRef: "run-a24",
+        sessionRef: restored.sessionRef,
+        reason: "completed",
+      });
+
+    expect(calls).toContainEqual(["createSession", { id: "session-a24", cwd: "/workspace" }, sandboxSecret]);
+    expect(backup.backupRef).toBe("cloudflare-sandbox-backup:backup-a24:%2Fworkspace");
+    expect(preview.url).toBe("https://preview-a24.example");
+    expect(destroyed.claim.anchorRef.anchorId).toBe(
+      `cloudflare-sandbox-destroy:${encodeURIComponent(restored.sessionRef)}`,
+    );
+    const publicJson = JSON.stringify([started, backup, restored, preview, destroyed]);
+    expect(publicJson).not.toContain(sandboxSecret);
+    expect(publicJson).not.toContain("preview-token");
+    }),
+  );
 });
