@@ -252,6 +252,7 @@ const eventsFragment = async (
   url: URL,
 ): Promise<string> => {
   const scope = url.searchParams.get("scope") ?? "";
+  const runId = positiveInt(url.searchParams.get("runId"), 0);
   const limit = positiveInt(url.searchParams.get("limit"), opts.eventLimit);
   const afterId = nonNegativeInt(url.searchParams.get("afterId"));
   const kinds = url.searchParams.get("kinds") ?? undefined;
@@ -265,11 +266,17 @@ const eventsFragment = async (
       kinds: kinds === "" ? undefined : kinds,
     },
   );
-  return renderEventsWorkspace(opts, scope, result, {
-    limit,
-    ...(afterId === undefined ? {} : { afterId }),
-    ...(kinds === undefined || kinds === "" ? {} : { kinds }),
-  });
+  return renderEventsWorkspace(
+    opts,
+    scope,
+    runId === 0 ? undefined : runId,
+    result,
+    {
+      limit,
+      ...(afterId === undefined ? {} : { afterId }),
+      ...(kinds === undefined || kinds === "" ? {} : { kinds }),
+    },
+  );
 };
 
 const telemetryFragment = async (
@@ -278,6 +285,7 @@ const telemetryFragment = async (
   url: URL,
 ): Promise<string> => {
   const scope = url.searchParams.get("scope") ?? "";
+  const runId = positiveInt(url.searchParams.get("runId"), 0);
   const quotaKey = url.searchParams.get("quotaKey") ?? undefined;
   const windowMs = url.searchParams.get("windowMs") ?? undefined;
   const quotaLimit = url.searchParams.get("quotaLimit") ?? undefined;
@@ -310,6 +318,7 @@ const telemetryFragment = async (
   return renderTelemetryWorkspace(
     opts,
     scope,
+    runId === 0 ? undefined : runId,
     { quota, resource, admission },
     { quotaKey, windowMs, quotaLimit, resourceKey, admissionKey },
   );

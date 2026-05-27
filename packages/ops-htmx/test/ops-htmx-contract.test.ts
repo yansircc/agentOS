@@ -220,11 +220,15 @@ describe("@agent-os/ops-htmx", () => {
     const handler = mountOpsHtmx({ apiFetch: makeApi().fetchApi });
     const res = await handler(
       new Request(
-        "https://ops.test/__ops/fragments/events?scope=thread/a&afterId=5&limit=2&kinds=agent.run.started,tool.executed",
+        "https://ops.test/__ops/fragments/events?scope=thread/a&runId=42&afterId=5&limit=2&kinds=agent.run.started,tool.executed",
       ),
     );
     const html = await res.text();
     expect(html).toContain("GET /scopes/:scope/events");
+    expect(html).toContain('href="/__ops/fragments/select-run?scope=thread%2Fa&amp;runId=42"');
+    expect(html).toContain('<details><summary>payload</summary><pre>');
+    expect(html).not.toContain("<details open>");
+    expect(html).toContain('name="runId" value="42"');
     expect(html).toContain("&lt;svg onload=alert(1)&gt;");
     expect(html).not.toContain("<svg onload=alert(1)>");
   });
@@ -262,10 +266,12 @@ describe("@agent-os/ops-htmx", () => {
     const handler = mountOpsHtmx({ apiFetch: api.fetchApi });
     const res = await handler(
       new Request(
-        "https://ops.test/__ops/fragments/telemetry?scope=thread/a&quotaKey=llm&windowMs=Infinity&quotaLimit=10&resourceKey=gpu&admissionKey=encoded-attempt",
+        "https://ops.test/__ops/fragments/telemetry?scope=thread/a&runId=42&quotaKey=llm&windowMs=Infinity&quotaLimit=10&resourceKey=gpu&admissionKey=encoded-attempt",
       ),
     );
     const html = await res.text();
+    expect(html).toContain('href="/__ops/fragments/select-run?scope=thread%2Fa&amp;runId=42"');
+    expect(html).toContain('name="runId" value="42"');
     expect(html).toContain("GET /scopes/:scope/quota");
     expect(html).toContain("GET /scopes/:scope/resource");
     expect(html).toContain("GET /scopes/:scope/admission");
@@ -273,6 +279,11 @@ describe("@agent-os/ops-htmx", () => {
       "/__ops/api/scopes/thread%2Fa/quota",
       "/__ops/api/scopes/thread%2Fa/resource",
       "/__ops/api/scopes/thread%2Fa/admission",
+    ]);
+    expect(api.seen.map((r) => r.search)).toEqual([
+      "?key=llm&windowMs=Infinity&limit=10",
+      "?key=gpu",
+      "?key=encoded-attempt",
     ]);
     expect(api.seen.every((r) => r.method === "GET")).toBe(true);
   });

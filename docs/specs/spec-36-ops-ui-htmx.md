@@ -76,12 +76,16 @@ GET /__ops
 GET /__ops/fragments/scopes
 GET /__ops/fragments/select-scope?scope=...
 GET /__ops/fragments/select-run?scope=...&runId=...
-GET /__ops/fragments/events?scope=...&afterId=&limit=&kinds=
-GET /__ops/fragments/telemetry?scope=...&quotaKey=&windowMs=&quotaLimit=&resourceKey=&admissionKey=
+GET /__ops/fragments/events?scope=...&runId=&afterId=&limit=&kinds=
+GET /__ops/fragments/telemetry?scope=...&runId=&quotaKey=&windowMs=&quotaLimit=&resourceKey=&admissionKey=
 ```
 
 `select-scope` and `select-run` return HTMX out-of-band fragments for the
 affected columns. They do not mutate server state.
+
+`runId` on `events` and `telemetry` is UI navigation context only. It preserves
+the selected Trace tab link across workspace fragments and is not forwarded to
+ops-api projection endpoints.
 
 ---
 
@@ -96,3 +100,7 @@ affected columns. They do not mutate server state.
 6. Event cursor, kind filter, and limit pass through to ops-api.
 7. Dynamic scope, event, run, and JSON payload text is escaped.
 8. There are no mutation controls or app-saga actions.
+9. Event payload JSON is collapsed by default and expands client-side without a
+   second data request.
+10. Switching from Trace to Events or Telemetry preserves the selected run's
+    Trace tab without adding shadow run state.
