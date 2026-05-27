@@ -29,6 +29,21 @@ interface CloudflareWorkspaceSessionNamespace {
 session lookup is not allowed because backup refs and session refs are distinct
 materials.
 
+`makeCloudflareWorkspaceSessionLiveProvider` adapts a structural Cloudflare
+Sandbox client shape. It calls `createSession`, `restoreBackup`,
+`createBackup`, `exposePort`, and `destroy`, then converts successful SDK
+operations into carrier-owned refs:
+
+- `cloudflare-sandbox-session:*`
+- `cloudflare-sandbox-workspace:*`
+- `cloudflare-sandbox-backup:*`
+- `cloudflare-sandbox-preview:*`
+- `cloudflare-sandbox-destroy:*`
+
+Those refs are proofs/handles for the workspace-session carrier. The SDK
+client, namespace binding, preview token, backup handle object, and sandbox
+objects are never written to ledger-visible payloads.
+
 ## Fast-Fail Rules
 
 The provider must return non-empty:
