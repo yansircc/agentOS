@@ -31,11 +31,13 @@ export const settleWorkspaceSessionRejected = (
     readonly code: WorkspaceSessionFailure["code"];
     readonly reason: string;
     readonly proofRef?: string;
+    readonly rejectionKind?: RejectionRef["rejectionKind"];
   },
 ): WorkspaceSessionFailure["claim"] =>
   settleRejectedClaim(claim, {
     rejectionId: spec.proofRef ?? `${claim.operationRef}:rejected`,
-    rejectionKind: workspaceSessionRejectionKind(spec.code),
+    rejectionKind:
+      spec.rejectionKind ?? workspaceSessionRejectionKind(spec.code),
     reason: spec.reason,
   });
 

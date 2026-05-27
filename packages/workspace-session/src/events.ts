@@ -221,6 +221,14 @@ const pushPreview = (
   );
 };
 
+const resetLifecycleRefs = (
+  backups: WorkspaceSessionBackupRef[],
+  previews: WorkspaceSessionPreviewRef[],
+): void => {
+  backups.length = 0;
+  previews.length = 0;
+};
+
 export const projectWorkspaceSession = (
   events: Iterable<WorkspaceSessionLedgerEvent>,
   subjectRef: string,
@@ -241,6 +249,7 @@ export const projectWorkspaceSession = (
     switch (event.kind) {
       case WORKSPACE_SESSION_EVENTS.STARTED: {
         if (livedClaimFrom(event.payload.claim) === undefined) break;
+        resetLifecycleRefs(backups, previews);
         sessionRef = stringField(event.payload, "sessionRef");
         workspaceRootRef = stringField(event.payload, "workspaceRootRef");
         cleanupRef = stringField(event.payload, "cleanupRef");
@@ -252,12 +261,11 @@ export const projectWorkspaceSession = (
       }
       case WORKSPACE_SESSION_EVENTS.RESTORED: {
         if (livedClaimFrom(event.payload.claim) === undefined) break;
+        resetLifecycleRefs(backups, previews);
         sessionRef = stringField(event.payload, "sessionRef");
         workspaceRootRef = stringField(event.payload, "workspaceRootRef");
         cleanupRef = stringField(event.payload, "cleanupRef");
         retention = retentionFrom(event.payload.retention);
-        const backupRef = stringField(event.payload, "backupRef");
-        if (backupRef !== undefined) pushBackup(backups, backupRef);
         status = "active";
         lastEventKind = event.kind;
         failure = undefined;
