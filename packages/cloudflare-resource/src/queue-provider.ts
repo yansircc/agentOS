@@ -21,6 +21,7 @@ export type CloudflareQueueFetch = CloudflareResourceFetch;
 export type CloudflareQueueMutationInput =
   | {
       readonly body: unknown;
+      readonly contentType?: "json" | "text";
     }
   | {
       readonly messages: ReadonlyArray<unknown>;
@@ -40,7 +41,18 @@ const queueMutationInputFrom = (
 ): CloudflareQueueMutationInput | null => {
   if (!isRecord(value)) return null;
   if (mutationKind === "queue.send") {
-    return "body" in value ? { body: value.body } : null;
+    if (!("body" in value)) return null;
+    if (
+      value.contentType !== undefined &&
+      value.contentType !== "json" &&
+      value.contentType !== "text"
+    ) {
+      return null;
+    }
+    return {
+      body: value.body,
+      ...(value.contentType === undefined ? {} : { contentType: value.contentType }),
+    };
   }
   if (mutationKind === "queue.send_batch") {
     return Array.isArray(value.messages) ? { messages: value.messages } : null;
@@ -77,7 +89,14 @@ const queueSpec: CloudflareResourceSpec<CloudflareQueueMaterial, CloudflareQueue
       ? {
           method: "POST",
           path: ["accounts", accountId, "queues", material.queueId, "messages"],
-          json: "body" in input ? { body: input.body } : { body: null },
+          json:
+            "body" in input
+              ? {
+                  body: input.body,
+                  content_type:
+                    input.contentType ?? (typeof input.body === "string" ? "text" : "json"),
+                }
+              : { body: null, content_type: "json" },
         }
       : {
           method: "POST",
