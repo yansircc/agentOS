@@ -82,7 +82,10 @@ import {
   type SubmitSpec,
   type Tool,
 } from "@agent-os/core";
-import { defineRegisteredTool } from "@agent-os/core/tools";
+import {
+  defineRegisteredTool,
+  permissiveToolAdmitter,
+} from "@agent-os/core/tools";
 
 interface Env extends AgentDOEnv {
   AI: Ai;
@@ -93,6 +96,7 @@ interface Env extends AgentDOEnv {
 const myTool: Tool<{ key: string }, { value: string }> = defineRegisteredTool({
   definition: { /* OpenAI function tool spec */ },
   execute: async (args) => ({ value: `value for ${args.key}` }),
+  admit: permissiveToolAdmitter,
   authorityClass: "read",
 });
 
