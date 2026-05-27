@@ -11,6 +11,7 @@ const targets = [
   "decision-gate",
   "turn-stream",
   "run-stream",
+  "tenant-material",
 ];
 
 const stripComments = (source) =>
@@ -24,7 +25,7 @@ const exportedNamesFromSource = (file, seen = new Set()) => {
   const names = new Set();
 
   for (const match of source.matchAll(
-    /\bexport\s+(?:declare\s+)?(?:interface|type|class|const|function)\s+([A-Za-z_$][\w$]*)/g,
+    /\bexport\s+(?:declare\s+)?(?:async\s+)?(?:interface|type|class|const|function\s*\*?)\s+([A-Za-z_$][\w$]*)/g,
   )) {
     names.add(match[1]);
   }

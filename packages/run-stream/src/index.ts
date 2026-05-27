@@ -425,7 +425,11 @@ export async function* composeRealtimeRunStream(
           break;
         }
         case "source_failed":
-          yield { kind: "stream_error", seq, reason: sourceFailureReason(event.source, event.cause) };
+          yield {
+            kind: "stream_error",
+            seq,
+            reason: sourceFailureReason(event.source, event.cause),
+          };
           return;
         case "submit_result":
           if (!isSubmitResult(event.result)) {

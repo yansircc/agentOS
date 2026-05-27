@@ -5,8 +5,10 @@ Status: 1.0 target for frame algebra and batched bridge. Realtime composition ad
 ## Frozen exports
 
 - `.:ComposeBatchedSubmitRunStreamSpec`
+- `.:ComposeRealtimeRunStreamSpec`
 - `.:ComposeRunStreamSpec`
 - `.:LedgerEventRpc`
+- `.:RealtimeRunStreamSource`
 - `.:RunStreamErrorFrame`
 - `.:RunStreamFrame`
 - `.:RunStreamLedgerEventFrame`
@@ -18,6 +20,7 @@ Status: 1.0 target for frame algebra and batched bridge. Realtime composition ad
 - `.:SubmitResult`
 - `.:SubmitSpec`
 - `.:composeBatchedSubmitRunStream`
+- `.:composeRealtimeRunStream`
 - `.:composeRunStream`
 - `.:createBatchedSubmitRunStreamResponse`
 - `.:decodeRunStreamData`
