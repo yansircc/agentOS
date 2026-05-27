@@ -77,7 +77,7 @@ const workflowSpec: CloudflareResourceSpec<CloudflareWorkflowMaterial, Cloudflar
       method: "POST",
       path: ["accounts", accountId, "workflows", material.workflowName, "instances"],
       json: {
-        ...(input.instanceId === undefined ? {} : { id: input.instanceId }),
+        ...(input.instanceId === undefined ? {} : { instance_id: input.instanceId }),
         ...(Object.hasOwn(input, "payload") ? { params: input.payload } : {}),
       },
     }),

@@ -85,8 +85,17 @@ const kvNamespaceSpec: CloudflareResourceSpec<
           json: "body" in input ? input.body : [],
         }
       : {
-          method: "DELETE",
-          path: ["accounts", accountId, "storage", "kv", "namespaces", material.namespaceId, "bulk"],
+          method: "POST",
+          path: [
+            "accounts",
+            accountId,
+            "storage",
+            "kv",
+            "namespaces",
+            material.namespaceId,
+            "bulk",
+            "delete",
+          ],
           json: "keys" in input ? input.keys : [],
         },
 };
