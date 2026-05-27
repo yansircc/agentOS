@@ -10,13 +10,9 @@
 
 import { SELF, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
-import type {
-  EventQueryOptions,
-  LedgerEventRpc,
-  StreamEventsOptions,
-} from "../src";
+import type { EventQueryOptions, LedgerEventRpc, StreamEventsOptions } from "../src";
 import type { StreamTestDO } from "./test-worker";
 
 interface TestEnv {
@@ -28,9 +24,7 @@ interface StreamRpc {
     readonly event: string;
     readonly data: unknown;
   }) => Promise<{ id: number }>;
-  readonly events: (
-    opts?: EventQueryOptions,
-  ) => Promise<ReadonlyArray<LedgerEventRpc>>;
+  readonly events: (opts?: EventQueryOptions) => Promise<ReadonlyArray<LedgerEventRpc>>;
   readonly streamEvents: (opts?: StreamEventsOptions) => Promise<Response>;
 }
 
@@ -44,18 +38,11 @@ interface SseFrame {
 const testEnv = env as unknown as TestEnv;
 
 const stubFor = (scope: string): StreamRpc =>
-  testEnv.STREAM_DO.get(
-    testEnv.STREAM_DO.idFromName(scope),
-  ) as unknown as StreamRpc;
+  testEnv.STREAM_DO.get(testEnv.STREAM_DO.idFromName(scope)) as unknown as StreamRpc;
 
-const withStreamDO = <A>(
-  scope: string,
-  f: (instance: StreamRpc) => Promise<A>,
-): Promise<A> => {
+const withStreamDO = <A>(scope: string, f: (instance: StreamRpc) => Promise<A>): Promise<A> => {
   const stub = testEnv.STREAM_DO.get(testEnv.STREAM_DO.idFromName(scope));
-  return runInDurableObject(stub, (instance) =>
-    f(instance as unknown as StreamRpc),
-  );
+  return runInDurableObject(stub, (instance) => f(instance as unknown as StreamRpc));
 };
 
 const parseFrame = (raw: string): SseFrame => {
@@ -138,15 +125,11 @@ describe("ledger event stream — spec-29", () => {
       await stub.emitEvent({ event: "C", data: { n: 3 } });
 
       const allKinds: string[] = (await stub.events()).map((e) => e.kind);
-      const afterFirstKinds: string[] = (
-        await stub.events({ afterId: first.id })
-      ).map((e) => e.kind);
-      const limitedKinds: string[] = (await stub.events({ limit: 2 })).map(
+      const afterFirstKinds: string[] = (await stub.events({ afterId: first.id })).map(
         (e) => e.kind,
       );
-      const filteredKinds: string[] = (
-        await stub.events({ kinds: ["A", "C"] })
-      ).map((e) => e.kind);
+      const limitedKinds: string[] = (await stub.events({ limit: 2 })).map((e) => e.kind);
+      const filteredKinds: string[] = (await stub.events({ kinds: ["A", "C"] })).map((e) => e.kind);
 
       expect(allKinds).toEqual(["A", "B", "C"]);
       expect(afterFirstKinds).toEqual(["B", "C"]);
@@ -171,15 +154,8 @@ describe("ledger event stream — spec-29", () => {
         heartbeatMs: 1_000,
       });
       expect(response.headers.get("content-type")).toContain("text/event-stream");
-      const frames = await readFrames(
-        response,
-        (frame) => frame.event === "ledger",
-        2,
-      );
-      expect(frames.map((frame) => frame.id)).toEqual([
-        String(first.id),
-        String(second.id),
-      ]);
+      const frames = await readFrames(response, (frame) => frame.event === "ledger", 2);
+      expect(frames.map((frame) => frame.id)).toEqual([String(first.id), String(second.id)]);
       expect(frames.map((frame) => frame.event)).toEqual(["ledger", "ledger"]);
       expect(frames.map((frame) => JSON.parse(frame.data ?? "{}"))).toEqual([
         {
@@ -206,10 +182,7 @@ describe("ledger event stream — spec-29", () => {
       const second = await stub.emitEvent({ event: "cursor.two", data: {} });
       await stub.emitEvent({ event: "cursor.three", data: {} });
 
-      const rows = await readLedgerRows(
-        await stub.streamEvents({ afterId: second.id }),
-        1,
-      );
+      const rows = await readLedgerRows(await stub.streamEvents({ afterId: second.id }), 1);
       expect(rows.map((row) => row.kind)).toEqual(["cursor.three"]);
     });
   });
@@ -223,11 +196,7 @@ describe("ledger event stream — spec-29", () => {
       await stub.emitEvent({ event: "live.three", data: { n: 3 } });
 
       const rows = await readLedgerRows(response, 3);
-      expect(rows.map((row) => row.kind)).toEqual([
-        "live.one",
-        "live.two",
-        "live.three",
-      ]);
+      expect(rows.map((row) => row.kind)).toEqual(["live.one", "live.two", "live.three"]);
     });
   });
 
@@ -239,10 +208,7 @@ describe("ledger event stream — spec-29", () => {
       await stub.emitEvent({ event: "handoff.live", data: {} });
 
       const rows = await readLedgerRows(response, 2);
-      expect(rows.map((row) => row.kind)).toEqual([
-        "handoff.snapshot",
-        "handoff.live",
-      ]);
+      expect(rows.map((row) => row.kind)).toEqual(["handoff.snapshot", "handoff.live"]);
     });
   });
 
@@ -252,16 +218,10 @@ describe("ledger event stream — spec-29", () => {
       await stub.emitEvent({ event: "B", data: {} });
       await stub.emitEvent({ event: "C", data: {} });
 
-      const filtered = await readLedgerRows(
-        await stub.streamEvents({ kinds: ["A", "C"] }),
-        2,
-      );
+      const filtered = await readLedgerRows(await stub.streamEvents({ kinds: ["A", "C"] }), 2);
       expect(filtered.map((row) => row.kind)).toEqual(["A", "C"]);
 
-      const all = await readLedgerRows(
-        await stub.streamEvents({ kinds: [] }),
-        3,
-      );
+      const all = await readLedgerRows(await stub.streamEvents({ kinds: [] }), 3);
       expect(all.map((row) => row.kind)).toEqual(["A", "B", "C"]);
     });
   });

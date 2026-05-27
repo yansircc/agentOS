@@ -10,7 +10,7 @@
 
 import { runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import type {
   LedgerEventRpc,
@@ -27,12 +27,8 @@ interface TestEnv {
 }
 
 interface ResourceRpc {
-  readonly grantResource: (
-    spec: ResourceGrantSpec,
-  ) => Promise<ResourceGrantResult>;
-  readonly reserveResource: (
-    spec: ResourceReserveSpec,
-  ) => Promise<ResourceReserveResult>;
+  readonly grantResource: (spec: ResourceGrantSpec) => Promise<ResourceGrantResult>;
+  readonly reserveResource: (spec: ResourceReserveSpec) => Promise<ResourceReserveResult>;
   readonly consumeResource: (spec: ResourceReservationSpec) => Promise<void>;
   readonly releaseResource: (spec: ResourceReservationSpec) => Promise<void>;
   readonly events: () => Promise<LedgerEventRpc[]>;
@@ -46,22 +42,15 @@ interface Balance {
 
 const testEnv = env as unknown as TestEnv;
 
-const stubFor = (
-  scope: string,
-): DurableObjectStub<DispatchTestDO> & ResourceRpc =>
+const stubFor = (scope: string): DurableObjectStub<DispatchTestDO> & ResourceRpc =>
   testEnv.DISPATCH_DO.get(
     testEnv.DISPATCH_DO.idFromName(scope),
   ) as DurableObjectStub<DispatchTestDO> & ResourceRpc;
 
-const resourceEvents = (
-  events: ReadonlyArray<LedgerEventRpc>,
-): ReadonlyArray<LedgerEventRpc> =>
+const resourceEvents = (events: ReadonlyArray<LedgerEventRpc>): ReadonlyArray<LedgerEventRpc> =>
   events.filter((e) => e.kind.startsWith("resource."));
 
-const countKind = (
-  events: ReadonlyArray<LedgerEventRpc>,
-  kind: string,
-): number => {
+const countKind = (events: ReadonlyArray<LedgerEventRpc>, kind: string): number => {
   let count = 0;
   for (const event of events) {
     if (event.kind === kind) count += 1;
@@ -69,10 +58,7 @@ const countKind = (
   return count;
 };
 
-const projectBalance = (
-  events: ReadonlyArray<LedgerEventRpc>,
-  key: string,
-): Balance => {
+const projectBalance = (events: ReadonlyArray<LedgerEventRpc>, key: string): Balance => {
   let grants = 0;
   const reservations = new Map<
     string,
@@ -91,14 +77,10 @@ const projectBalance = (
         status: "active",
       });
     }
-    if (
-      event.kind === "resource.consumed" ||
-      event.kind === "resource.released"
-    ) {
+    if (event.kind === "resource.consumed" || event.kind === "resource.released") {
       const reservation = reservations.get(String(payload.reservationId));
       if (reservation !== undefined) {
-        reservation.status =
-          event.kind === "resource.consumed" ? "consumed" : "released";
+        reservation.status = event.kind === "resource.consumed" ? "consumed" : "released";
       }
     }
   }
@@ -221,9 +203,7 @@ describe("Resources — business resource reservation ledger", () => {
 
     await runInDurableObject(stub, async (instance) => {
       const rpc = instance as unknown as ResourceRpc;
-      let caught:
-        | { _tag?: string; reservationId?: string; status?: string }
-        | undefined;
+      let caught: { _tag?: string; reservationId?: string; status?: string } | undefined;
       try {
         await rpc.releaseResource({ reservationId, ref: "late-release" });
       } catch (e) {

@@ -13,10 +13,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
-  },
-  "peerDependencies": {
-    "effect": "^3.21.0"
+    "test": "vp test run"
   },
   "dependencies": {
     "@agent-os/core": "workspace:*"
@@ -26,6 +23,10 @@
     "@effect/vitest": "^0.29.0",
     "effect": "^3.21.0",
     "typescript": "^5.7.2",
-    "vitest": "^4.1.0"
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "effect": "^3.21.0"
   }
 }

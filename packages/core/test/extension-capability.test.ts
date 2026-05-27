@@ -1,6 +1,6 @@
 import { runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import type { LedgerEventRpc } from "../src";
 import { validateExtensionPackages } from "../src/extensions";
@@ -31,9 +31,7 @@ describe("extension capability P1", () => {
   });
 
   it("defers package-owned facts through extension time()", async () => {
-    const stub = testEnv.EXTENSION_DO.get(
-      testEnv.EXTENSION_DO.idFromName("extension-time-image"),
-    );
+    const stub = testEnv.EXTENSION_DO.get(testEnv.EXTENSION_DO.idFromName("extension-time-image"));
 
     const scheduled = await stub.scheduleImageFact(Date.now() - 1, {
       jobRef: "img-2",

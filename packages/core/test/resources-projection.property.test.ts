@@ -7,7 +7,7 @@
  */
 
 import * as fc from "fast-check";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import {
   type ProjectedState,
@@ -95,10 +95,7 @@ const reachableHistoryArb: fc.Arbitrary<ReadonlyArray<ResourceRowSpec>> = fc
     let nextReservationId = 0;
     let nextIdempotencyKey = 0;
     const availableByKey = new Map<string, number>();
-    const active = new Map<
-      string,
-      { readonly key: string; readonly amount: number }
-    >();
+    const active = new Map<string, { readonly key: string; readonly amount: number }>();
     const specs: ResourceRowSpec[] = [];
 
     const addAvailable = (key: string, delta: number): void => {
@@ -169,9 +166,7 @@ const toRow = (spec: ResourceRowSpec): ResourceEventRow => {
   return { kind, payload: JSON.stringify(payload) };
 };
 
-const grantTotals = (
-  specs: ReadonlyArray<ResourceRowSpec>,
-): Map<string, number> => {
+const grantTotals = (specs: ReadonlyArray<ResourceRowSpec>): Map<string, number> => {
   const totals = new Map<string, number>();
   for (const spec of specs) {
     if (spec.kind !== "resource.granted") continue;
@@ -180,10 +175,7 @@ const grantTotals = (
   return totals;
 };
 
-const assertConservation = (
-  state: ProjectedState,
-  grants: ReadonlyMap<string, number>,
-): void => {
+const assertConservation = (state: ProjectedState, grants: ReadonlyMap<string, number>): void => {
   const allKeys = new Set([...grants.keys(), ...state.byKey.keys()]);
   for (const key of allKeys) {
     const projection = state.byKey.get(key) ?? {
@@ -191,15 +183,13 @@ const assertConservation = (
       reserved: 0,
       consumed: 0,
     };
-    expect(
-      projection.available + projection.reserved + projection.consumed,
-    ).toBe(grants.get(key) ?? 0);
+    expect(projection.available + projection.reserved + projection.consumed).toBe(
+      grants.get(key) ?? 0,
+    );
   }
 };
 
-const assertIdempotencyIndexPointsAtReservations = (
-  state: ProjectedState,
-): void => {
+const assertIdempotencyIndexPointsAtReservations = (state: ProjectedState): void => {
   for (const reservation of state.byIdempotencyKey.values()) {
     expect(state.byId.get(reservation.reservationId)).toEqual(reservation);
   }

@@ -21,7 +21,7 @@
 
 import { runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import type { LedgerEventRpc } from "../src";
 import type { EmitTestDO, ExtensionTestDO } from "./test-worker";
@@ -104,9 +104,7 @@ describe("emitEvent — substrate now-write primitive", () => {
   });
 
   it("rejects extension-owned event kinds only when the DO registers that extension", async () => {
-    const defaultStub = testEnv.EMIT_DO.get(
-      testEnv.EMIT_DO.idFromName("emit-image-app-fact"),
-    );
+    const defaultStub = testEnv.EMIT_DO.get(testEnv.EMIT_DO.idFromName("emit-image-app-fact"));
     await defaultStub.emitEvent({
       event: "image.job.requested",
       data: { appOwned: true },
@@ -168,9 +166,7 @@ describe("emitEvent — substrate now-write primitive", () => {
     // Use runInDurableObject to inspect raw storage directly — the DOs
     // are distinct SQLite databases by construction.
     await runInDurableObject(stubA, async (_inst, state) => {
-      const rows = state.storage.sql
-        .exec("SELECT scope FROM events")
-        .toArray();
+      const rows = state.storage.sql.exec("SELECT scope FROM events").toArray();
       expect(rows.every((r) => r.scope === scopeA)).toBe(true);
     });
   });

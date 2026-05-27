@@ -12,7 +12,7 @@
  * admission-contract.test.ts:55-82 and 212-340.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import {
   type AttemptKey,
@@ -35,18 +35,114 @@ describe("admission — decideTier truth table (spec-25 §10)", () => {
 
   // 12 rows
   it.each([
-    [1,  "unknown+Supported live",        unknown,         { class: "Supported", tokensUsed: 0 } as const, "live"  as const, 0,    "lease-bearing" as const],
-    [2,  "supported+Supported reinforce", supported(1000), { class: "Supported", tokensUsed: 0 } as const, "live"  as const, 0,    "reinforcement" as const],
-    [3,  "hard-expired surfaces unknown", unknown,         { class: "Supported", tokensUsed: 0 } as const, "live"  as const, 0,    "lease-bearing" as const],
-    [4,  "any+Supported probe",           unknown,         { class: "Supported", tokensUsed: 0 } as const, "probe" as const, 0,    "lease-bearing" as const],
-    [5,  "ProviderRejected",              unknown,         { class: "ProviderRejected", status: 400, body: "" } as const, "live" as const, 0, "lease-bearing" as const],
-    [6,  "SchemaUnsupported",             unknown,         { class: "SchemaUnsupported", reason: "" } as const, "live" as const, 0, "lease-bearing" as const],
-    [7,  "BehaviorFailed",                unknown,         { class: "BehaviorFailed", sampleDigest: "" } as const, "live" as const, 0, "lease-bearing" as const],
-    [8,  "AuthError",                     unknown,         { class: "AuthError", status: 401 } as const, "live" as const, 0, "lease-bearing" as const],
-    [9,  "RateLimited",                   unknown,         { class: "RateLimited" } as const, "live" as const, 0, "lease-bearing" as const],
-    [10, "TransientError",                unknown,         { class: "TransientError", cause: "" } as const, "live" as const, 0, "lease-bearing" as const],
-    [11, "ConfigError",                   unknown,         { class: "ConfigError", reason: "" } as const, "live" as const, 0, "lease-bearing" as const],
-    [12, "barrier-after-lastEvidenceTs (defense-in-depth)", supported(1000), { class: "Supported", tokensUsed: 0 } as const, "live" as const, 2000, "lease-bearing" as const],
+    [
+      1,
+      "unknown+Supported live",
+      unknown,
+      { class: "Supported", tokensUsed: 0 } as const,
+      "live" as const,
+      0,
+      "lease-bearing" as const,
+    ],
+    [
+      2,
+      "supported+Supported reinforce",
+      supported(1000),
+      { class: "Supported", tokensUsed: 0 } as const,
+      "live" as const,
+      0,
+      "reinforcement" as const,
+    ],
+    [
+      3,
+      "hard-expired surfaces unknown",
+      unknown,
+      { class: "Supported", tokensUsed: 0 } as const,
+      "live" as const,
+      0,
+      "lease-bearing" as const,
+    ],
+    [
+      4,
+      "any+Supported probe",
+      unknown,
+      { class: "Supported", tokensUsed: 0 } as const,
+      "probe" as const,
+      0,
+      "lease-bearing" as const,
+    ],
+    [
+      5,
+      "ProviderRejected",
+      unknown,
+      { class: "ProviderRejected", status: 400, body: "" } as const,
+      "live" as const,
+      0,
+      "lease-bearing" as const,
+    ],
+    [
+      6,
+      "SchemaUnsupported",
+      unknown,
+      { class: "SchemaUnsupported", reason: "" } as const,
+      "live" as const,
+      0,
+      "lease-bearing" as const,
+    ],
+    [
+      7,
+      "BehaviorFailed",
+      unknown,
+      { class: "BehaviorFailed", sampleDigest: "" } as const,
+      "live" as const,
+      0,
+      "lease-bearing" as const,
+    ],
+    [
+      8,
+      "AuthError",
+      unknown,
+      { class: "AuthError", status: 401 } as const,
+      "live" as const,
+      0,
+      "lease-bearing" as const,
+    ],
+    [
+      9,
+      "RateLimited",
+      unknown,
+      { class: "RateLimited" } as const,
+      "live" as const,
+      0,
+      "lease-bearing" as const,
+    ],
+    [
+      10,
+      "TransientError",
+      unknown,
+      { class: "TransientError", cause: "" } as const,
+      "live" as const,
+      0,
+      "lease-bearing" as const,
+    ],
+    [
+      11,
+      "ConfigError",
+      unknown,
+      { class: "ConfigError", reason: "" } as const,
+      "live" as const,
+      0,
+      "lease-bearing" as const,
+    ],
+    [
+      12,
+      "barrier-after-lastEvidenceTs (defense-in-depth)",
+      supported(1000),
+      { class: "Supported", tokensUsed: 0 } as const,
+      "live" as const,
+      2000,
+      "lease-bearing" as const,
+    ],
   ])("row %i — %s", (_n, _name, preLease, outcome, stim, barrierTs, expected) => {
     expect(decideTier(preLease, outcome, stim, barrierTs)).toBe(expected);
   });
@@ -60,7 +156,12 @@ describe("admission — projectLease pure projection (spec-25 §7.2)", () => {
     adapterVersion: "1.0.0",
   };
 
-  const ev = (id: number, ts: number, outcome: EvidenceRow["outcome"], extras?: { stim?: "probe" | "live"; impact?: EvidenceRow["admissionImpact"]; adapter?: string }): EvidenceRow => ({
+  const ev = (
+    id: number,
+    ts: number,
+    outcome: EvidenceRow["outcome"],
+    extras?: { stim?: "probe" | "live"; impact?: EvidenceRow["admissionImpact"]; adapter?: string },
+  ): EvidenceRow => ({
     id,
     ts,
     kind: "llm.structured.evidence",
@@ -111,19 +212,14 @@ describe("admission — projectLease pure projection (spec-25 §7.2)", () => {
   });
 
   it("barrier wipes earlier evidence", () => {
-    const rows = [
-      ev(1, 1000, { class: "Supported", tokensUsed: 5 }),
-      barrier(2, 1500),
-    ];
+    const rows = [ev(1, 1000, { class: "Supported", tokensUsed: 5 }), barrier(2, 1500)];
     const { lease, latestBarrierTs } = projectLease(rows, key, 2000);
     expect(lease.status).toBe("unknown");
     expect(latestBarrierTs).toBe(1500);
   });
 
   it("reinforcement evidence is ignored by projection (lease-bearing only)", () => {
-    const rows = [
-      ev(1, 1000, { class: "Supported", tokensUsed: 5 }, { impact: "reinforcement" }),
-    ];
+    const rows = [ev(1, 1000, { class: "Supported", tokensUsed: 5 }, { impact: "reinforcement" })];
     const { lease } = projectLease(rows, key, 2000);
     expect(lease.status).toBe("unknown");
   });
@@ -153,10 +249,7 @@ describe("admission — projectLease pure projection (spec-25 §7.2)", () => {
   it("same ms barrier vs evidence: barrier id > evidence id → evidence cut off", () => {
     // ts=100: evidence id=1, barrier id=2. Barrier comes after evidence
     // under (ts, id) order, so the Supported is wiped → unknown.
-    const rows = [
-      ev(1, 100, { class: "Supported", tokensUsed: 5 }),
-      barrier(2, 100),
-    ];
+    const rows = [ev(1, 100, { class: "Supported", tokensUsed: 5 }), barrier(2, 100)];
     const { lease, latestBarrierTs } = projectLease(rows, key, 200);
     expect(lease.status).toBe("unknown");
     expect(latestBarrierTs).toBe(100);
@@ -165,26 +258,19 @@ describe("admission — projectLease pure projection (spec-25 §7.2)", () => {
   it("same ms barrier vs evidence: barrier id < evidence id → evidence survives", () => {
     // ts=100: barrier id=1, evidence id=2. Evidence is strictly after
     // the barrier under (ts, id) order, so it survives.
-    const rows = [
-      barrier(1, 100),
-      ev(2, 100, { class: "Supported", tokensUsed: 5 }),
-    ];
+    const rows = [barrier(1, 100), ev(2, 100, { class: "Supported", tokensUsed: 5 })];
     const { lease } = projectLease(rows, key, 200);
     expect(lease.status).toBe("supported");
   });
 
   it("different adapter major version is filtered out (§9)", () => {
-    const rows = [
-      ev(1, 1000, { class: "Supported", tokensUsed: 5 }, { adapter: "2.0.0" }),
-    ];
+    const rows = [ev(1, 1000, { class: "Supported", tokensUsed: 5 }, { adapter: "2.0.0" })];
     const { lease } = projectLease(rows, key, 2000);
     expect(lease.status).toBe("unknown");
   });
 
   it("same adapter major with different minor remains valid (§9)", () => {
-    const rows = [
-      ev(1, 1000, { class: "Supported", tokensUsed: 5 }, { adapter: "1.2.3" }),
-    ];
+    const rows = [ev(1, 1000, { class: "Supported", tokensUsed: 5 }, { adapter: "1.2.3" })];
     const { lease } = projectLease(rows, key, 2000);
     expect(lease.status).toBe("supported");
   });

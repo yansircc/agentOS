@@ -6,12 +6,9 @@
  */
 
 import * as fc from "fast-check";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
-import {
-  type InboundAcceptedPayload,
-  findAcceptedInRows,
-} from "../src/dispatch/receiver";
+import { type InboundAcceptedPayload, findAcceptedInRows } from "../src/dispatch/receiver";
 
 const sourceScopes = ["source-a", "source-b", "source-c"] as const;
 const idempotencyKeys = ["idem-a", "idem-b", "idem-c"] as const;
@@ -23,9 +20,7 @@ const payloadArb: fc.Arbitrary<InboundAcceptedPayload> = fc.record({
   deliveredEventId: fc.integer({ min: 1, max: 1000 }),
 });
 
-const rowOf = (
-  payload: InboundAcceptedPayload,
-): { readonly payload: string } => ({
+const rowOf = (payload: InboundAcceptedPayload): { readonly payload: string } => ({
   payload: JSON.stringify(payload),
 });
 
@@ -35,10 +30,7 @@ const oracle = (
   idempotencyKey: string,
 ): InboundAcceptedPayload | null => {
   for (const row of rows) {
-    if (
-      row.sourceScope === sourceScope &&
-      row.idempotencyKey === idempotencyKey
-    ) {
+    if (row.sourceScope === sourceScope && row.idempotencyKey === idempotencyKey) {
       return row;
     }
   }
@@ -53,9 +45,9 @@ describe("dispatch receiver idempotency properties", () => {
         fc.constantFrom(...sourceScopes),
         fc.constantFrom(...idempotencyKeys),
         (payloads, sourceScope, idempotencyKey) => {
-          expect(
-            findAcceptedInRows(payloads.map(rowOf), sourceScope, idempotencyKey),
-          ).toEqual(oracle(payloads, sourceScope, idempotencyKey));
+          expect(findAcceptedInRows(payloads.map(rowOf), sourceScope, idempotencyKey)).toEqual(
+            oracle(payloads, sourceScope, idempotencyKey),
+          );
         },
       ),
       { numRuns: 1000 },

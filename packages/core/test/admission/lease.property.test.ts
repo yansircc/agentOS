@@ -10,7 +10,7 @@
  */
 
 import * as fc from "fast-check";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import {
   type AdmissionRow,
@@ -52,9 +52,7 @@ type RowSpec =
         | "other-route";
     };
 
-const keyForEvidence = (
-  mode: Extract<RowSpec, { tag: "evidence" }>["keyMode"],
-): AttemptKey => {
+const keyForEvidence = (mode: Extract<RowSpec, { tag: "evidence" }>["keyMode"]): AttemptKey => {
   switch (mode) {
     case "target":
       return key;
@@ -110,18 +108,14 @@ const rowFromSpec = (spec: RowSpec, index: number): AdmissionRow => {
 const majorOf = (semver: string): string => semver.split(".")[0] ?? "0";
 
 const barrierMatches = (barrier: Partial<AttemptKey>): boolean => {
-  if (
-    barrier.routeFingerprint !== undefined &&
-    barrier.routeFingerprint !== key.routeFingerprint
-  )
+  if (barrier.routeFingerprint !== undefined && barrier.routeFingerprint !== key.routeFingerprint)
     return false;
   if (
     barrier.schemaFingerprint !== undefined &&
     barrier.schemaFingerprint !== key.schemaFingerprint
   )
     return false;
-  if (barrier.strategy !== undefined && barrier.strategy !== key.strategy)
-    return false;
+  if (barrier.strategy !== undefined && barrier.strategy !== key.strategy) return false;
   if (barrier.adapterVersion === undefined) return true;
   if (barrier.adapterVersion.endsWith(".x")) {
     return majorOf(key.adapterVersion) === barrier.adapterVersion.slice(0, -2);
@@ -155,10 +149,7 @@ const oracle = (rows: ReadonlyArray<AdmissionRow>): CapabilityLease => {
   let barrierTs = 0;
   let barrierId = 0;
   for (const row of rows) {
-    if (
-      row.kind !== "llm.structured.invalidate" ||
-      !barrierMatches(row.key)
-    ) {
+    if (row.kind !== "llm.structured.invalidate" || !barrierMatches(row.key)) {
       continue;
     }
     if (row.ts > barrierTs || (row.ts === barrierTs && row.id > barrierId)) {
@@ -171,9 +162,7 @@ const oracle = (rows: ReadonlyArray<AdmissionRow>): CapabilityLease => {
     .filter((row): row is EvidenceRow => row.kind === "llm.structured.evidence")
     .filter(evidenceMatches)
     .filter((row) => row.admissionImpact === "lease-bearing")
-    .filter(
-      (row) => row.ts > barrierTs || (row.ts === barrierTs && row.id > barrierId),
-    )
+    .filter((row) => row.ts > barrierTs || (row.ts === barrierTs && row.id > barrierId))
     .sort((a, b) => b.ts - a.ts || b.id - a.id);
 
   for (const row of eligible) {

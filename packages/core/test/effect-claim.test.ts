@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import {
   makeOperationRef,
@@ -11,12 +11,7 @@ import {
 
 describe("EffectClaim calculus", () => {
   const pre = makePreClaim({
-    operationRef: makeOperationRef("dispatch", [
-      "source/a",
-      "peer",
-      "thread/t1",
-      "intent 1",
-    ]),
+    operationRef: makeOperationRef("dispatch", ["source/a", "peer", "thread/t1", "intent 1"]),
     scopeRef: { kind: "conversation", scopeId: "thread/t1" },
     authorityRef: {
       authorityId: "cap_dispatch",
@@ -29,9 +24,7 @@ describe("EffectClaim calculus", () => {
   });
 
   it("canonicalizes operation refs without using trace coordinates", () => {
-    expect(pre.operationRef).toBe(
-      "dispatch:source%2Fa:peer:thread%2Ft1:intent%201",
-    );
+    expect(pre.operationRef).toBe("dispatch:source%2Fa:peer:thread%2Ft1:intent%201");
   });
 
   it("keeps terminal phase in the type instead of optional anchor state", () => {

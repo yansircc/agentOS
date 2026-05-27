@@ -12,12 +12,7 @@
  * Supported evidence rows.
  */
 
-import { Effect } from "effect";
-import type {
-  ChatCompletionsBody,
-  LlmRoute,
-  LlmToolCall,
-} from "../llm";
+import type { ChatCompletionsBody, LlmRoute, LlmToolCall } from "../llm";
 import type { SchemaContract, Strategy } from "../../admission";
 import type {
   AdapterMode,
@@ -96,9 +91,7 @@ const encodeChatCompletionsStructured = (
   // exhausts the union. Adding a new strategy is a TS-level breaking
   // change that lights up at the tool_choice construction site below.
   const userText =
-    stimulus.kind === "live"
-      ? stimulus.userInput.userText
-      : String(stimulus.synthetic.synthetic);
+    stimulus.kind === "live" ? stimulus.userInput.userText : String(stimulus.synthetic.synthetic);
   return {
     messages: [
       {
@@ -158,10 +151,7 @@ const decodeChatCompletionsStructured = (
   // enforce this; this branch closes the gap on Chat-Completions wires.
   // Without it a provider that emits `_submit_structured` + extra calls
   // would write a false Supported evidence row.
-  if (
-    toolCalls.length !== 1 ||
-    toolCalls[0].function?.name !== CHAT_COMPLETIONS_FORCED_TOOL_NAME
-  ) {
+  if (toolCalls.length !== 1 || toolCalls[0].function?.name !== CHAT_COMPLETIONS_FORCED_TOOL_NAME) {
     return {
       ok: false,
       outcome: {
@@ -214,8 +204,7 @@ const classifyChatCompletionsError = (error: unknown): Outcome => {
   const lower = msg.toLowerCase();
   if (lower.includes("401") || lower.includes("unauthor"))
     return { class: "AuthError", status: 401 };
-  if (lower.includes("429") || lower.includes("rate"))
-    return { class: "RateLimited" };
+  if (lower.includes("429") || lower.includes("rate")) return { class: "RateLimited" };
   if (lower.includes("timeout") || lower.includes("network"))
     return { class: "TransientError", cause: msg };
   return { class: "ProviderRejected", status: 0, body: msg };
@@ -231,13 +220,12 @@ export const cfAiBindingAdapter: LlmProtocolAdapter<"cf-ai-binding"> = {
   classify: classifyChatCompletionsError,
 };
 
-export const openaiChatCompatibleAdapter: LlmProtocolAdapter<"openai-chat-compatible"> =
-  {
-    kind: "openai-chat-compatible",
-    version: ADAPTER_VERSION,
-    encodeTurn: encodeChatCompletionsTurn,
-    decodeTurn: decodeChatCompletionsTurn,
-    encodeStructured: encodeChatCompletionsStructured,
-    decodeStructured: decodeChatCompletionsStructured,
-    classify: classifyChatCompletionsError,
-  };
+export const openaiChatCompatibleAdapter: LlmProtocolAdapter<"openai-chat-compatible"> = {
+  kind: "openai-chat-compatible",
+  version: ADAPTER_VERSION,
+  encodeTurn: encodeChatCompletionsTurn,
+  decodeTurn: decodeChatCompletionsTurn,
+  encodeStructured: encodeChatCompletionsStructured,
+  decodeStructured: decodeChatCompletionsStructured,
+  classify: classifyChatCompletionsError,
+};

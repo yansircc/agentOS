@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import {
   projectClaimTrace,
@@ -11,12 +11,7 @@ import {
 import type { EffectClaim } from "../src/effect-claim";
 import type { LedgerEvent } from "../src/types";
 
-const event = (
-  id: number,
-  kind: string,
-  payload: unknown,
-  ts = id * 10,
-): LedgerEvent => ({
+const event = (id: number, kind: string, payload: unknown, ts = id * 10): LedgerEvent => ({
   id,
   ts,
   kind,
@@ -237,10 +232,7 @@ describe("standard projections — spec-34", () => {
     });
     expect(
       projectRunStatus(
-        [
-          event(1, "agent.run.started", {}),
-          event(2, "agent.aborted.tool_error", { runId: 1 }),
-        ],
+        [event(1, "agent.run.started", {}), event(2, "agent.aborted.tool_error", { runId: 1 })],
         1,
       ),
     ).toEqual({
@@ -249,10 +241,7 @@ describe("standard projections — spec-34", () => {
       abortKind: "agent.aborted.tool_error",
     });
     expect(
-      projectRunStatus(
-        [event(2, "llm.response", { turn: { id: 99, index: 0 } })],
-        99,
-      ),
+      projectRunStatus([event(2, "llm.response", { turn: { id: 99, index: 0 } })], 99),
     ).toEqual({
       kind: "orphaned",
       startedAt: 20,
@@ -278,9 +267,7 @@ describe("standard projections — spec-34", () => {
         toolName: "lookup",
       }),
     ];
-    expect(
-      projectQuotaState(rows, { key: "lookup", windowMs: 100, limit: 5 }, 130),
-    ).toEqual({
+    expect(projectQuotaState(rows, { key: "lookup", windowMs: 100, limit: 5 }, 130)).toEqual({
       consumed: 1,
       limit: 5,
       remaining: 4,
