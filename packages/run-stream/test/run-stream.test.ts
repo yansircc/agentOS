@@ -1,5 +1,6 @@
 import {
   composeBatchedSubmitRunStream,
+  composeRealtimeRunStream,
   composeRunStream,
   createBatchedSubmitRunStreamResponse,
   decodeRunStreamData,
@@ -56,6 +57,32 @@ const frameDataFromSse = (text: string): ReadonlyArray<RunStreamFrame> =>
       expect(frame).not.toBeNull();
       return frame as RunStreamFrame;
     });
+
+const deferred = <T>(): {
+  readonly promise: Promise<T>;
+  readonly resolve: (value: T) => void;
+  readonly reject: (cause: unknown) => void;
+} => {
+  let resolve!: (value: T) => void;
+  let reject!: (cause: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+};
+
+const collectRunFrames = async (
+  frames: AsyncIterable<RunStreamFrame>,
+): Promise<ReadonlyArray<RunStreamFrame>> => {
+  const collected: RunStreamFrame[] = [];
+  for await (const frame of frames) collected.push(frame);
+  return collected;
+};
+
+async function* emptyLedgerEvents(): AsyncGenerator<LedgerEventRpc> {
+  return;
+}
 
 describe("@agent-os/run-stream", () => {
   it("projects ordered ledger and turn frames into one run view", () => {
@@ -257,5 +284,136 @@ describe("@agent-os/run-stream", () => {
     expect(projection.turnStreams).toEqual({});
     expect(projection.status).toBe("succeeded");
     expect(projection.result).toEqual(okResult);
+  });
+
+  it("composes realtime frames in source arrival order before terminal submit_result", async () => {
+    const ledgerReady = deferred<LedgerEventRpc>();
+    const turnReady = deferred<TurnStreamFrame>();
+    const submitReady = deferred<SubmitResult>();
+    async function* ledgerEvents(): AsyncGenerator<LedgerEventRpc> {
+      yield await ledgerReady.promise;
+    }
+    async function* turnFrames(): AsyncGenerator<TurnStreamFrame> {
+      yield await turnReady.promise;
+    }
+
+    const collecting = collectRunFrames(
+      composeRealtimeRunStream({
+        ledgerEvents: ledgerEvents(),
+        turnFrames: turnFrames(),
+        submitResult: submitReady.promise,
+      }),
+    );
+
+    ledgerReady.resolve(ledgerEvent(9, "agent.run.started"));
+    turnReady.resolve({ kind: "text_delta", turnRef: "turn/realtime", seq: 0, text: "live" });
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    submitReady.resolve(okResult);
+
+    expect(await collecting).toEqual([
+      { kind: "ledger_event", seq: 0, event: ledgerEvent(9, "agent.run.started") },
+      {
+        kind: "turn_frame",
+        seq: 1,
+        frame: { kind: "text_delta", turnRef: "turn/realtime", seq: 0, text: "live" },
+      },
+      { kind: "submit_result", seq: 2, result: okResult },
+    ]);
+  });
+
+  it("emits failed realtime submit results as terminal submit_result frames", async () => {
+    const frames = await collectRunFrames(
+      composeRealtimeRunStream({
+        ledgerEvents: emptyLedgerEvents(),
+        submitResult: Promise.resolve(failedResult),
+      }),
+    );
+
+    expect(projectRunStream(frames)).toEqual({
+      status: "failed",
+      lastSeq: 0,
+      ledgerEvents: [],
+      turnStreams: {},
+      result: failedResult,
+      omittedFrames: [],
+    });
+  });
+
+  it("maps realtime source and submit transport failures to stream_error", async () => {
+    async function* failingLedgerEvents(): AsyncGenerator<LedgerEventRpc> {
+      throw new Error("ledger transport failed");
+    }
+
+    expect(
+      await collectRunFrames(
+        composeRealtimeRunStream({
+          ledgerEvents: failingLedgerEvents(),
+          submitResult: new Promise<SubmitResult>(() => undefined),
+        }),
+      ),
+    ).toEqual([
+      {
+        kind: "stream_error",
+        seq: 0,
+        reason: "ledger_source_failed: ledger transport failed",
+      },
+    ]);
+
+    expect(
+      await collectRunFrames(
+        composeRealtimeRunStream({
+          ledgerEvents: emptyLedgerEvents(),
+          submitResult: Promise.reject(new Error("submit transport failed")),
+        }),
+      ),
+    ).toEqual([
+      {
+        kind: "stream_error",
+        seq: 0,
+        reason: "submit_result_failed: submit transport failed",
+      },
+    ]);
+  });
+
+  it("maps malformed realtime source values to stream_error", async () => {
+    async function* malformedLedgerEvents(): AsyncGenerator<LedgerEventRpc> {
+      yield { bad: true } as unknown as LedgerEventRpc;
+    }
+
+    expect(
+      await collectRunFrames(
+        composeRealtimeRunStream({
+          ledgerEvents: malformedLedgerEvents(),
+          submitResult: new Promise<SubmitResult>(() => undefined),
+        }),
+      ),
+    ).toEqual([{ kind: "stream_error", seq: 0, reason: "ledger_source_malformed_frame" }]);
+  });
+
+  it("realtime composition only consumes passed sources and never writes ledger facts", async () => {
+    const writeLedgerFact = vi.fn();
+    const ledgerReady = deferred<LedgerEventRpc>();
+    const submitReady = deferred<SubmitResult>();
+    async function* ledgerEvents(): AsyncGenerator<LedgerEventRpc> {
+      yield await ledgerReady.promise;
+    }
+
+    const collecting = collectRunFrames(
+      composeRealtimeRunStream({
+        ledgerEvents: ledgerEvents(),
+        submitResult: submitReady.promise,
+      }),
+    );
+
+    ledgerReady.resolve(ledgerEvent(11, "agent.run.completed"));
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    submitReady.resolve(okResult);
+
+    const frames = await collecting;
+    expect(frames).toEqual([
+      { kind: "ledger_event", seq: 0, event: ledgerEvent(11, "agent.run.completed") },
+      { kind: "submit_result", seq: 1, result: okResult },
+    ]);
+    expect(writeLedgerFact).not.toHaveBeenCalled();
   });
 });
