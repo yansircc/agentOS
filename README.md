@@ -23,6 +23,7 @@ packages/
   verification/          optional verification gate proof algebra
   staging-artifact/      optional staging artifact proof/projection algebra
   deploy-cloudflare/     optional Cloudflare deploy proof/projection algebra
+  workspace-session/     optional stateful session/workspace proof algebra
 
 spikes/
   _active/     ignored local throwaway work only
