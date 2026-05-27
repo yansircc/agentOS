@@ -8,6 +8,7 @@
  * resolver.material(ref) at execution time; public artifacts remain symbolic.
  */
 
+import { Data, Effect } from "effect";
 import type { CredentialMaterialRef, MaterialRef } from "@agent-os/core/material-ref";
 import type { RefResolver } from "@agent-os/core/ref-resolver";
 
@@ -78,6 +79,14 @@ export interface TenantCredentialAuditSummary {
   readonly purpose: string;
 }
 
+export type TenantCredentialResolverConfigurationReason = "missing_tenant_id";
+
+export class TenantCredentialResolverConfigurationError extends Data.TaggedError(
+  "agent_os.tenant_credential_resolver_configuration_error",
+)<{
+  readonly reason: TenantCredentialResolverConfigurationReason;
+}> {}
+
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0;
 
@@ -95,11 +104,12 @@ const toResolvedMaterial = (value: unknown): TenantCredentialMaterial | null => 
   return null;
 };
 
-const validateOptions = (options: TenantCredentialResolverOptions): void => {
-  if (!isNonEmptyString(options.tenantId)) {
-    throw new TypeError("@agent-os/tenant-material requires a non-empty tenantId");
-  }
-};
+const validateOptions = (
+  options: TenantCredentialResolverOptions,
+): Effect.Effect<void, TenantCredentialResolverConfigurationError> =>
+  isNonEmptyString(options.tenantId)
+    ? Effect.void
+    : Effect.fail(new TenantCredentialResolverConfigurationError({ reason: "missing_tenant_id" }));
 
 const matchesLookup = (
   record: EncryptedTenantCredentialRecord,
@@ -138,10 +148,8 @@ export const summarizeTenantCredentialRecord = (
 
 export const createTenantCredentialResolver = (
   options: TenantCredentialResolverOptions,
-): RefResolver => {
-  validateOptions(options);
-
-  return {
+): Effect.Effect<RefResolver, TenantCredentialResolverConfigurationError> =>
+  Effect.map(validateOptions(options), () => ({
     material: (ref: MaterialRef): TenantCredentialMaterial | null => {
       if (!isCredentialRef(ref)) return null;
       if (!isNonEmptyString(ref.provider)) return null;
@@ -158,22 +166,17 @@ export const createTenantCredentialResolver = (
 
       if (matchesLookup(record, lookup) !== null) return null;
 
-      try {
-        return toResolvedMaterial(
-          options.decrypt({
-            encryptedBytes: record.encryptedBytes,
-            context: {
-              tenantId: record.tenantId,
-              ref: record.ref,
-              provider: record.provider,
-              purpose: record.purpose,
-              ...(record.metadata === undefined ? {} : { metadata: record.metadata }),
-            },
-          }),
-        );
-      } catch {
-        return null;
-      }
+      return toResolvedMaterial(
+        options.decrypt({
+          encryptedBytes: record.encryptedBytes,
+          context: {
+            tenantId: record.tenantId,
+            ref: record.ref,
+            provider: record.provider,
+            purpose: record.purpose,
+            ...(record.metadata === undefined ? {} : { metadata: record.metadata }),
+          },
+        }),
+      );
     },
-  };
-};
+  }));

@@ -53,6 +53,7 @@
     "@cloudflare/vitest-pool-workers": "catalog:",
     "@cloudflare/workers-types": "catalog:",
     "@effect/language-service": "catalog:",
+    "@effect/vitest": "catalog:",
     "effect": "catalog:",
     "fast-check": "catalog:",
     "typescript": "catalog:",

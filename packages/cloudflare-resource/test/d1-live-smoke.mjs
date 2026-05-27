@@ -74,7 +74,7 @@ const mutationInputs = new Map([
 const carrier = makeCloudflareD1ResourceCarrier({
   fetch,
   resolver,
-  resolveMutationInput: (inputRef) => mutationInputs.get(inputRef) ?? null,
+  resolveMutationInput: async (inputRef) => mutationInputs.get(inputRef) ?? null,
   carrierRef: "cloudflare-d1-live-smoke",
 });
 

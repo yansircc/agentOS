@@ -104,7 +104,7 @@ describe("@agent-os/cloudflare-resource D1 live carrier", () => {
       fetch,
       resolver: resolverWith("secret-cloudflare-token"),
       carrierRef: "cloudflare-d1-test",
-      resolveMutationInput: (inputRef) =>
+      resolveMutationInput: async (inputRef) =>
         inputRef === "mutation://create-table"
           ? { sql: "CREATE TABLE t (id INTEGER PRIMARY KEY)" }
           : null,
@@ -237,7 +237,7 @@ describe("@agent-os/cloudflare-resource D1 live carrier", () => {
     const carrier = makeCloudflareD1ResourceCarrier({
       fetch,
       resolver: resolverWith(null),
-      resolveMutationInput: () => null,
+      resolveMutationInput: async () => null,
     });
 
     const failure = expectFailure(
@@ -273,7 +273,7 @@ describe("@agent-os/cloudflare-resource D1 live carrier", () => {
     const carrier = makeCloudflareD1ResourceCarrier({
       fetch,
       resolver: resolverWith("secret-cloudflare-token"),
-      resolveMutationInput: () => null,
+      resolveMutationInput: async () => null,
     });
 
     const failure = expectFailure(
@@ -306,7 +306,7 @@ describe("@agent-os/cloudflare-resource D1 live carrier", () => {
           errors: [{ message: "raw provider body secret-cloudflare-token" }],
         }),
       resolver: resolverWith("secret-cloudflare-token"),
-      resolveMutationInput: () => ({ sql: "DROP TABLE private_data" }),
+      resolveMutationInput: async () => ({ sql: "DROP TABLE private_data" }),
     });
 
     const failure = expectFailure(

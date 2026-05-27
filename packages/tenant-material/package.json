@@ -16,11 +16,15 @@
     "test": "vp test run"
   },
   "dependencies": {
-    "@agent-os/core": "workspace:*"
+    "@agent-os/core": "workspace:*",
+    "effect": "catalog:"
   },
   "devDependencies": {
     "typescript": "catalog:",
     "vite-plus": "catalog:",
     "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "effect": "^3.21.0"
   }
 }
