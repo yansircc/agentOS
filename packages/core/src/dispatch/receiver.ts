@@ -16,7 +16,12 @@
 import type { TraceContext } from "../types";
 import { validateEffectClaim, type LivedClaim } from "../effect-claim";
 import { sqlText } from "../storage/sql-row";
-import { isRecord, parseTraceContext } from "./payload";
+import {
+  dispatchPayloadParseFailure,
+  isRecord,
+  parseTraceContext,
+  type DispatchPayloadParseResult,
+} from "./payload";
 
 export interface InboundAcceptedPayload {
   readonly sourceScope: string;
@@ -29,10 +34,19 @@ export interface InboundAcceptedPayload {
 
 export const DISPATCH_INBOUND_ACCEPTED = "dispatch.inbound.accepted";
 
-export const parseInboundAcceptedPayload = (raw: string): InboundAcceptedPayload => {
+const parseOk = <T>(value: T): DispatchPayloadParseResult<T> => ({ ok: true, value });
+
+const parseFail = <T = never>(reason: string): DispatchPayloadParseResult<T> => ({
+  ok: false,
+  failure: dispatchPayloadParseFailure(reason),
+});
+
+export const parseInboundAcceptedPayload = (
+  raw: string,
+): DispatchPayloadParseResult<InboundAcceptedPayload> => {
   const value = JSON.parse(raw) as unknown;
   if (!isRecord(value)) {
-    throw new TypeError("dispatch.inbound.accepted payload must be object");
+    return parseFail("dispatch.inbound.accepted payload must be object");
   }
   if (
     typeof value.sourceScope !== "string" ||
@@ -40,35 +54,42 @@ export const parseInboundAcceptedPayload = (raw: string): InboundAcceptedPayload
     typeof value.idempotencyKey !== "string" ||
     typeof value.deliveredEventId !== "number"
   ) {
-    throw new TypeError("dispatch.inbound.accepted payload malformed");
+    return parseFail("dispatch.inbound.accepted payload malformed");
   }
   const traceContext = parseTraceContext(value.traceContext);
+  if (!traceContext.ok) return traceContext;
   const parsedClaim = validateEffectClaim(value.claim);
   if (!parsedClaim.ok || parsedClaim.claim.phase !== "lived") {
-    throw new TypeError("dispatch.inbound.accepted claim must be LivedClaim");
+    return parseFail("dispatch.inbound.accepted claim must be LivedClaim");
   }
-  return {
+  return parseOk({
     sourceScope: value.sourceScope,
     outboundEventId: value.outboundEventId,
     idempotencyKey: value.idempotencyKey,
     deliveredEventId: value.deliveredEventId,
     claim: parsedClaim.claim,
-    ...(traceContext === undefined ? {} : { traceContext }),
-  };
+    ...(traceContext.value === undefined ? {} : { traceContext: traceContext.value }),
+  });
 };
+
+export type FindAcceptedResult = DispatchPayloadParseResult<InboundAcceptedPayload | null>;
 
 export const findAcceptedInRows = (
   rows: ReadonlyArray<{ readonly payload: unknown }>,
   sourceScope: string,
   idempotencyKey: string,
-): InboundAcceptedPayload | null => {
+): FindAcceptedResult => {
   for (const row of rows) {
     const payload = parseInboundAcceptedPayload(sqlText(row.payload, "events.payload"));
-    if (payload.sourceScope === sourceScope && payload.idempotencyKey === idempotencyKey) {
-      return payload;
+    if (!payload.ok) return payload;
+    if (
+      payload.value.sourceScope === sourceScope &&
+      payload.value.idempotencyKey === idempotencyKey
+    ) {
+      return parseOk(payload.value);
     }
   }
-  return null;
+  return parseOk(null);
 };
 
 export const findAccepted = (
@@ -76,7 +97,7 @@ export const findAccepted = (
   scope: string,
   sourceScope: string,
   idempotencyKey: string,
-): InboundAcceptedPayload | null => {
+): FindAcceptedResult => {
   const rows = sql
     .exec(
       "SELECT payload FROM events WHERE scope = ? AND kind = ? ORDER BY id",

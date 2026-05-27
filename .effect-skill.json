@@ -42,6 +42,12 @@
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
     },
     {
+      "path": "packages/llm-transport-http",
+      "shape": ["library"],
+      "dependencyOwner": "workspace-root",
+      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+    },
+    {
       "path": "tooling/ops-api",
       "shape": ["library"],
       "dependencyOwner": "workspace-root",
@@ -67,6 +73,12 @@
     },
     {
       "path": "packages/sandbox-cloudflare",
+      "shape": ["library"],
+      "dependencyOwner": "workspace-root",
+      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+    },
+    {
+      "path": "packages/skill-registry",
       "shape": ["library"],
       "dependencyOwner": "workspace-root",
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
@@ -118,6 +130,104 @@
       "path": "spikes/_active/**",
       "owner": "@parallel-dev",
       "reason": "ignored pressure-test code is local throwaway, not package source"
+    }
+  ],
+  "allowedAdapters": [
+    {
+      "path": "packages/core/src/ledger/stream.ts",
+      "owner": "@agent-os/core",
+      "reason": "terminal ledger SSE adapter owns Response construction",
+      "rules": ["EFF402"]
+    },
+    {
+      "path": "packages/core/src/storage/sql-row.ts",
+      "owner": "@agent-os/core-storage",
+      "reason": "SQLite row adapter owns fail-fast host column shape assertion",
+      "rules": ["EFF025"]
+    },
+    {
+      "path": "packages/core/test/_in-memory-do.ts",
+      "owner": "@agent-os/core-tests",
+      "reason": "test-only Durable Object SQL adapter models transactionSync rollback by synchronous throws",
+      "rules": ["EFF001", "EFF025"]
+    },
+    {
+      "path": "packages/core/test/admission/attempt-structured.test.ts",
+      "owner": "@agent-os/core-tests",
+      "reason": "test HTTP fixture owns provider Response construction",
+      "rules": ["EFF402"]
+    },
+    {
+      "path": "packages/core/test/test-worker.ts",
+      "owner": "@agent-os/core-tests",
+      "reason": "Cloudflare worker test adapter owns Response construction",
+      "rules": ["EFF402"]
+    },
+    {
+      "path": "packages/dynamic-worker/test/dynamic-worker-contract.test.ts",
+      "owner": "@agent-os/dynamic-worker-tests",
+      "reason": "test worker source strings exercise Response construction in sandboxed dynamic workers",
+      "rules": ["EFF402"]
+    },
+    {
+      "path": "packages/dynamic-worker/src/tool.ts",
+      "owner": "@agent-os/dynamic-worker",
+      "reason": "terminal Tool.execute adapter owns the Promise boundary over the Effect program",
+      "rules": ["EFF400"]
+    },
+    {
+      "path": "packages/image/test/adapter-contract.test.ts",
+      "owner": "@agent-os/image-tests",
+      "reason": "test HTTP fixture owns provider Response construction",
+      "rules": ["EFF402"]
+    },
+    {
+      "path": "tooling/ops-api/src/errors.ts",
+      "owner": "@agent-os/ops-api",
+      "reason": "terminal ops-api HTTP error adapter owns Response construction",
+      "rules": ["EFF402"]
+    },
+    {
+      "path": "tooling/ops-api/src/encoding.ts",
+      "owner": "@agent-os/ops-api",
+      "reason": "terminal ops query parser owns malformed URL/base64/JSON decode classification",
+      "rules": ["EFF001"]
+    },
+    {
+      "path": "tooling/ops-api/src/mount.ts",
+      "owner": "@agent-os/ops-api",
+      "reason": "terminal ops-api HTTP mount owns startup option assertions and request handler async boundary",
+      "rules": ["EFF003", "EFF024", "EFF025"]
+    },
+    {
+      "path": "tooling/ops-api/test/contract.test.ts",
+      "owner": "@agent-os/ops-api-tests",
+      "reason": "ops-api HTTP contract tests own Request/Response construction",
+      "rules": ["EFF402"]
+    },
+    {
+      "path": "tooling/ops-htmx/src/client.ts",
+      "owner": "@agent-os/ops-htmx",
+      "reason": "terminal ops-htmx API client adapter owns Request construction",
+      "rules": ["EFF402"]
+    },
+    {
+      "path": "tooling/ops-htmx/src/html.ts",
+      "owner": "@agent-os/ops-htmx",
+      "reason": "terminal ops-htmx HTML adapter owns Response construction",
+      "rules": ["EFF402"]
+    },
+    {
+      "path": "tooling/ops-htmx/test/ops-htmx-contract.test.ts",
+      "owner": "@agent-os/ops-htmx-tests",
+      "reason": "ops-htmx HTTP contract tests own Request/Response construction",
+      "rules": ["EFF402"]
+    },
+    {
+      "path": "packages/run-stream/src/index.ts",
+      "owner": "@agent-os/run-stream",
+      "reason": "batched run-stream HTTP adapter owns Response construction",
+      "rules": ["EFF402"]
     }
   ]
 }

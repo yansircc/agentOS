@@ -1,5 +1,5 @@
 import { Effect, ManagedRuntime } from "effect";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "@effect/vitest";
 
 import { makePreClaim } from "../src/effect-claim";
 import {

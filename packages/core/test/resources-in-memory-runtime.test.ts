@@ -8,7 +8,7 @@
 
 import * as fc from "fast-check";
 import { Cause, Exit, Layer, ManagedRuntime, Option } from "effect";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "@effect/vitest";
 
 import { EventBusLive, Ledger, LedgerLive } from "../src/ledger";
 import { Resources, ResourcesLive } from "../src/resources";

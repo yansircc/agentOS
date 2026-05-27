@@ -6,7 +6,7 @@
  */
 
 import * as fc from "fast-check";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "@effect/vitest";
 
 import { type InboundAcceptedPayload, findAcceptedInRows } from "../src/dispatch/receiver";
 import { makePreClaim, settleLivedClaim } from "../src/effect-claim";
@@ -57,7 +57,7 @@ describe("dispatch receiver idempotency properties", () => {
         fc.constantFrom(...idempotencyKeys),
         (payloads, sourceScope, idempotencyKey) => {
           expect(findAcceptedInRows(payloads.map(rowOf), sourceScope, idempotencyKey)).toEqual(
-            oracle(payloads, sourceScope, idempotencyKey),
+            { ok: true, value: oracle(payloads, sourceScope, idempotencyKey) },
           );
         },
       ),
@@ -82,7 +82,7 @@ describe("dispatch receiver idempotency properties", () => {
               first.sourceScope,
               first.idempotencyKey,
             ),
-          ).toEqual(first);
+          ).toEqual({ ok: true, value: first });
         },
       ),
       { numRuns: 1000 },

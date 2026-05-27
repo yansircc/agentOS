@@ -34,10 +34,35 @@ export const copyTraceContext = (
   };
 };
 
-export const parseTraceContext = (value: unknown): TraceContext | undefined => {
-  if (value === undefined) return undefined;
+export interface DispatchPayloadParseFailure {
+  readonly _tag: "agent_os.dispatch_payload_parse_failure";
+  readonly reason: string;
+}
+
+export type DispatchPayloadParseResult<T> =
+  | { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly failure: DispatchPayloadParseFailure };
+
+export const dispatchPayloadParseFailure = (
+  reason: string,
+): DispatchPayloadParseFailure => ({
+  _tag: "agent_os.dispatch_payload_parse_failure",
+  reason,
+});
+
+const parseOk = <T>(value: T): DispatchPayloadParseResult<T> => ({ ok: true, value });
+
+const parseFail = <T = never>(reason: string): DispatchPayloadParseResult<T> => ({
+  ok: false,
+  failure: dispatchPayloadParseFailure(reason),
+});
+
+export const parseTraceContext = (
+  value: unknown,
+): DispatchPayloadParseResult<TraceContext | undefined> => {
+  if (value === undefined) return parseOk(undefined);
   if (!isRecord(value)) {
-    throw new TypeError("traceContext must be object");
+    return parseFail("traceContext must be object");
   }
   const traceparent = value.traceparent;
   const tracestate = value.tracestate;
@@ -45,50 +70,58 @@ export const parseTraceContext = (value: unknown): TraceContext | undefined => {
     (traceparent !== undefined && typeof traceparent !== "string") ||
     (tracestate !== undefined && typeof tracestate !== "string")
   ) {
-    throw new TypeError("traceContext fields must be strings");
+    return parseFail("traceContext fields must be strings");
   }
-  return copyTraceContext({
-    ...(traceparent === undefined ? {} : { traceparent }),
-    ...(tracestate === undefined ? {} : { tracestate }),
-  });
+  return parseOk(
+    copyTraceContext({
+      ...(traceparent === undefined ? {} : { traceparent }),
+      ...(tracestate === undefined ? {} : { tracestate }),
+    }),
+  );
 };
 
-export const parseDispatchBindingRef = (value: unknown): BindingMaterialRef => {
+export const parseDispatchBindingRef = (
+  value: unknown,
+): DispatchPayloadParseResult<BindingMaterialRef> => {
   if (!isMaterialRef(value) || value.kind !== "binding") {
-    throw new TypeError("dispatch target bindingRef must be a BindingMaterialRef");
+    return parseFail("dispatch target bindingRef must be a BindingMaterialRef");
   }
-  return value;
+  return parseOk(value);
 };
 
-export const parseRequestedPayload = (raw: string): DispatchRequestedPayload => {
+export const parseRequestedPayload = (
+  raw: string,
+): DispatchPayloadParseResult<DispatchRequestedPayload> => {
   const value = JSON.parse(raw) as unknown;
   if (!isRecord(value)) {
-    throw new TypeError("dispatch.outbound.requested payload must be object");
+    return parseFail("dispatch.outbound.requested payload must be object");
   }
   const target = value.target;
   if (!isRecord(target)) {
-    throw new TypeError("dispatch target must be object");
+    return parseFail("dispatch target must be object");
   }
   if (
     typeof target.scope !== "string" ||
     typeof value.event !== "string" ||
     typeof value.idempotencyKey !== "string"
   ) {
-    throw new TypeError("dispatch.outbound.requested payload malformed");
+    return parseFail("dispatch.outbound.requested payload malformed");
   }
   const bindingRef = parseDispatchBindingRef(target.bindingRef);
+  if (!bindingRef.ok) return bindingRef;
   const scopeRef = target.scopeRef;
   if (!isScopeRef(scopeRef)) {
-    throw new TypeError("dispatch target scopeRef malformed");
+    return parseFail("dispatch target scopeRef malformed");
   }
   const traceContext = parseTraceContext(value.traceContext);
+  if (!traceContext.ok) return traceContext;
   const parsedClaim = validateEffectClaim(value.claim);
   if (!parsedClaim.ok || parsedClaim.claim.phase !== "pre") {
-    throw new TypeError("dispatch claim must be a PreClaim");
+    return parseFail("dispatch claim must be a PreClaim");
   }
-  return {
+  return parseOk({
     target: {
-      bindingRef,
+      bindingRef: bindingRef.value,
       scope: target.scope,
       scopeRef,
     },
@@ -96,20 +129,17 @@ export const parseRequestedPayload = (raw: string): DispatchRequestedPayload => 
     data: value.data,
     idempotencyKey: value.idempotencyKey,
     claim: parsedClaim.claim,
-    ...(traceContext === undefined ? {} : { traceContext }),
-  };
+    ...(traceContext.value === undefined ? {} : { traceContext: traceContext.value }),
+  });
 };
 
 export const describeCause = (cause: unknown): string => {
+  if (typeof cause === "string") return cause;
   if (cause instanceof Error) {
     return `${cause.name}: ${cause.message}`;
   }
   if (isRecord(cause) && typeof cause._tag === "string") {
     return cause._tag;
   }
-  try {
-    return JSON.stringify(cause);
-  } catch {
-    return String(cause);
-  }
+  return Object.prototype.toString.call(cause);
 };

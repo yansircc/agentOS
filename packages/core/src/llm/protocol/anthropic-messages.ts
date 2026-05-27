@@ -76,22 +76,11 @@ const buildAnthropicMessages = (
         blocks.push({ type: "text", text: m.content });
       }
       for (const tc of m.tool_calls ?? []) {
-        let parsedInput: unknown;
-        try {
-          parsedInput = JSON.parse(tc.function.arguments);
-        } catch {
-          // If we have a previously-emitted assistant tool_call whose
-          // arguments came from an Anthropic decode (already stringified
-          // from an object), this should succeed. If it fails, surface
-          // the raw string under a single text field — the model will
-          // see malformed input and most likely correct on the next turn.
-          parsedInput = tc.function.arguments;
-        }
         blocks.push({
           type: "tool_use",
           id: tc.id,
           name: tc.function.name,
-          input: parsedInput,
+          input: JSON.parse(tc.function.arguments) as unknown,
         });
       }
       if (blocks.length === 0) blocks.push({ type: "text", text: "" });

@@ -1,7 +1,5 @@
-import { describe, expect, it } from "vite-plus/test";
-import { Effect, Fiber, Layer, Logger, TestClock } from "effect";
-import * as TestContext from "effect/TestContext";
-import type * as TestServices from "effect/TestServices";
+import { describe, expect, it } from "@effect/vitest";
+import { Effect, Fiber, TestClock } from "effect";
 
 import {
   makeSandboxRunTool,
@@ -13,14 +11,8 @@ import {
 
 const backend = (impl: SandboxBackend["run"]): SandboxBackend => ({ run: impl });
 
-const TestEnv = TestContext.TestContext.pipe(Layer.provide(Logger.remove(Logger.defaultLogger)));
-
-const runEffect = <A, E>(effect: Effect.Effect<A, E, TestServices.TestServices>): Promise<A> =>
-  Effect.runPromise(Effect.provide(effect, TestEnv));
-
 describe("@agent-os/sandbox v0 contract", () => {
-  it("runs one bounded stateless command", () =>
-    runEffect(
+  it.effect("runs one bounded stateless command", () =>
       Effect.gen(function* () {
         const result = yield* runSandbox(
           backend((request) =>
@@ -40,10 +32,9 @@ describe("@agent-os/sandbox v0 contract", () => {
         expect(result.stdout).toBe("ran:ls");
         expect(result.sandboxId).toBe("sbx-1");
       }),
-    ));
+    );
 
-  it("policy denial is typed PolicyDenied", () =>
-    runEffect(
+  it.effect("policy denial is typed PolicyDenied", () =>
       Effect.gen(function* () {
         const result = yield* runSandbox(
           backend(() =>
@@ -69,10 +60,9 @@ describe("@agent-os/sandbox v0 contract", () => {
           expect(result.left.reason).toBe("network is disabled");
         }
       }),
-    ));
+    );
 
-  it("allowlist policy rejects hosts outside the allowed set", () =>
-    runEffect(
+  it.effect("allowlist policy rejects hosts outside the allowed set", () =>
       Effect.gen(function* () {
         const result = yield* runSandbox(
           backend(() =>
@@ -98,10 +88,9 @@ describe("@agent-os/sandbox v0 contract", () => {
           expect(result.left.reason).toContain("blocked.com");
         }
       }),
-    ));
+    );
 
-  it("times out when the backend does not complete before timeoutMs", () =>
-    runEffect(
+  it.effect("times out when the backend does not complete before timeoutMs", () =>
       Effect.gen(function* () {
         const fiber = yield* runSandbox(
           backend(() => Effect.never),
@@ -117,10 +106,9 @@ describe("@agent-os/sandbox v0 contract", () => {
           expect(result.left.reason).toContain("10ms");
         }
       }),
-    ));
+    );
 
-  it("provider eviction is typed SandboxEvicted", () =>
-    runEffect(
+  it.effect("provider eviction is typed SandboxEvicted", () =>
       Effect.gen(function* () {
         const result = yield* runSandbox(
           backend(() =>
@@ -142,10 +130,9 @@ describe("@agent-os/sandbox v0 contract", () => {
           expect(result.left.sandboxId).toBe("sbx-dead");
         }
       }),
-    ));
+    );
 
-  it("tool helper byte-caps stdout and preserves explicit truncation facts", () =>
-    runEffect(
+  it.effect("tool helper byte-caps stdout and preserves explicit truncation facts", () =>
       Effect.gen(function* () {
         const tool = makeSandboxRunTool({
           backend: backend(() =>
@@ -171,10 +158,9 @@ describe("@agent-os/sandbox v0 contract", () => {
         expect(result.stderrTruncated).toBe(false);
         expect(result.artifacts).toEqual([]);
       }),
-    ));
+    );
 
-  it("tool helper returns one fresh run result per invocation", () =>
-    runEffect(
+  it.effect("tool helper returns one fresh run result per invocation", () =>
       Effect.gen(function* () {
         let calls = 0;
         const tool = makeSandboxRunTool({
@@ -199,5 +185,5 @@ describe("@agent-os/sandbox v0 contract", () => {
         expect(first.sandboxId).toBe("sbx-1");
         expect(second.sandboxId).toBe("sbx-2");
       }),
-    ));
+    );
 });

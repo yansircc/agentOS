@@ -1,9 +1,13 @@
+import { Effect } from "effect";
 import { artifactFromUrl, classifyHttpish, isRecord } from "../shared";
+import { ImageDecodeFailure } from "../services";
 import type { ImageArtifact, ImageProtocolAdapter, ImageResult } from "../types";
 
-const decodeOpenAIChatCompatibleImage = (raw: unknown): ImageResult => {
+const decodeOpenAIChatCompatibleImage = (
+  raw: unknown,
+): Effect.Effect<ImageResult, ImageDecodeFailure> => {
   if (!isRecord(raw) || !Array.isArray(raw.choices)) {
-    throw new Error("image response missing choices[]");
+    return Effect.fail(new ImageDecodeFailure({ reason: "image response missing choices[]" }));
   }
   const artifacts: ImageArtifact[] = [];
   for (const choice of raw.choices) {
@@ -19,9 +23,11 @@ const decodeOpenAIChatCompatibleImage = (raw: unknown): ImageResult => {
     }
   }
   if (artifacts.length === 0) {
-    throw new Error("image response contained no image_url artifacts");
+    return Effect.fail(
+      new ImageDecodeFailure({ reason: "image response contained no image_url artifacts" }),
+    );
   }
-  return { artifacts, usage: raw.usage };
+  return Effect.succeed({ artifacts, usage: raw.usage });
 };
 
 export const openaiChatCompatibleImageAdapter: ImageProtocolAdapter<"openai-chat-compatible-image"> =
