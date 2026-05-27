@@ -99,6 +99,7 @@ export {
   UnsupportedScopeRef,
   InvalidScheduleAt,
   CapabilityRejected,
+  DispatchBindingRefMalformed,
   DispatchTargetNotFound,
   DispatchScopeMismatch,
   InvalidResourceAmount,

@@ -31,6 +31,7 @@ import { Clock, Effect, Layer, ManagedRuntime } from "effect";
 import { DurableObject } from "cloudflare:workers";
 import {
   CapabilityRejected,
+  DispatchBindingRefMalformed,
   DispatchScopeMismatch,
   DispatchTargetNotFound,
   InvalidScheduleAt,
@@ -78,6 +79,7 @@ import { Scheduler, SchedulerLive } from "./scheduler";
 import { Resources, ResourcesLive } from "./resources";
 import { Quota, QuotaLive } from "./quota";
 import { AiBinding } from "./llm";
+import { isMaterialRef, materialRefKey } from "./material-ref";
 import { Admission, AdmissionLive, type AttemptKey, type CapabilityLease } from "./admission";
 import { RefResolverLive, RefResolverService, type RefResolver } from "./ref-resolver";
 import {
@@ -310,7 +312,8 @@ export abstract class AgentDOBase<Env extends AgentDOEnv> extends DurableObject<
 
   /** Hook for subclass to provide cross-scope dispatch targets.
    *
-   *  `bindingRef` on dispatchToScope resolves through this map to a runtime
+   *  `bindingRef` on dispatchToScope is a symbolic BindingMaterialRef. Its
+   *  `materialRefKey(bindingRef)` resolves through this map to a runtime
    *  DurableObjectNamespace. The ledger stores only the symbolic ref and
    *  target scope; the namespace object is never serialized.
    */
@@ -555,10 +558,14 @@ export abstract class AgentDOBase<Env extends AgentDOEnv> extends DurableObject<
     if (rejected !== null) {
       return Promise.reject(rejected);
     }
-    if (this.provideDispatchTargets()[spec.target.bindingRef] === undefined) {
+    if (!isMaterialRef(spec.target.bindingRef) || spec.target.bindingRef.kind !== "binding") {
+      return Promise.reject(new DispatchBindingRefMalformed({ position: "target" }));
+    }
+    const bindingKey = materialRefKey(spec.target.bindingRef);
+    if (this.provideDispatchTargets()[bindingKey] === undefined) {
       return Promise.reject(
         new DispatchTargetNotFound({
-          bindingRef: spec.target.bindingRef,
+          bindingRef: bindingKey,
         }),
       );
     }

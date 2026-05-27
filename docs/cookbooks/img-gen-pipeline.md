@@ -76,7 +76,14 @@ await session.submit({
 });
 
 await session.dispatchToScope({
-  target: { bindingRef: "USER_DO", scope: userScope },
+  target: {
+    bindingRef: bindingMaterialRef({
+      provider: "cloudflare",
+      bindingKind: "durable_object",
+      ref: "USER_DO",
+    }),
+    scope: userScope,
+  },
   event: "credit.reserve.requested",
   data,
   idempotencyKey,

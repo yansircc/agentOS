@@ -22,6 +22,7 @@ import {
   safeStringify,
 } from "../errors";
 import { EventBus } from "../ledger";
+import { materialRefKey } from "../material-ref";
 import type { LedgerEvent } from "../types";
 import type { DispatchToScopeResult, DispatchToScopeSpec } from "../types";
 import {
@@ -144,7 +145,7 @@ export const DispatchLive = (
                   claim: settleLivedClaim(requested.claim, {
                     anchorId: `${requested.target.scope}:${deliveredEventId}`,
                     anchorKind: "ledger_event",
-                    carrierRef: `dispatch:${requested.target.bindingRef}`,
+                    carrierRef: `dispatch:${materialRefKey(requested.target.bindingRef)}`,
                   }),
                 }),
             ...(requested.traceContext === undefined
@@ -241,7 +242,8 @@ export const DispatchLive = (
             catch: (cause) => new SqlError({ cause }),
           });
           const attempt = row.attempts + 1;
-          const targetNs = targets[requested.target.bindingRef];
+          const bindingKey = materialRefKey(requested.target.bindingRef);
+          const targetNs = targets[bindingKey];
           if (targetNs === undefined) {
             yield* markFailed(
               row.outboundEventId,
@@ -249,7 +251,7 @@ export const DispatchLive = (
               attempt,
               now,
               new DispatchTargetNotFound({
-                bindingRef: requested.target.bindingRef,
+                bindingRef: bindingKey,
               }),
             );
             return "failed";
@@ -320,11 +322,12 @@ export const DispatchLive = (
                 }),
               );
             }
-            const targetNs = targets[spec.target.bindingRef];
+            const bindingKey = materialRefKey(spec.target.bindingRef);
+            const targetNs = targets[bindingKey];
             if (targetNs === undefined) {
               return yield* Effect.fail(
                 new DispatchTargetNotFound({
-                  bindingRef: spec.target.bindingRef,
+                  bindingRef: bindingKey,
                 }),
               );
             }
@@ -344,7 +347,7 @@ export const DispatchLive = (
             const claim = makePreClaim({
               operationRef: makeOperationRef("dispatch", [
                 scope,
-                spec.target.bindingRef,
+                bindingKey,
                 spec.target.scope,
                 spec.idempotencyKey,
               ]),
