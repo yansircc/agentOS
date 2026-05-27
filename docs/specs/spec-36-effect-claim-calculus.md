@@ -529,35 +529,58 @@ do not add effect-boundary fields, claim phases, or durable fact sources.
 
 Stable compositions may graduate to packages when their wiring is invariant
 across products. Volatile compositions remain cookbooks or app code when their
-policy changes by product.
+policy changes by product. Evidence uses the same `N≥2` / `N=1` / `N=0`
+pressure vocabulary as the materialization plan below.
 
-| Composition   | Class       | Boundary decision                                                                                                                                                                                                                                                            |
-| ------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| run-stream    | package     | `@agent-os/run-stream` composes post-baseline ledger rows, optional `turn-stream` frames, and the terminal `submit` result into consumer frames; the shipped submit bridge is batched, ledger rows remain durable truth, and turn frames remain non-durable UI/progress data |
-| scheduled-run | cookbook    | Workflow/alarm may schedule or resume work, but agentOS ledger remains run truth and D1 mirrors are indexes/projections                                                                                                                                                      |
-| decision-saga | cookbook    | DecisionGate records requested/decided/consumed facts; product approval policy decides who can approve and when a continuation submit starts                                                                                                                                 |
-| context-pack  | package/app | `@agent-os/context-pack` owns deterministic fact packing and redaction spans; product context selection and summarization strategy remain app-owned                                                                                                                          |
+| Composition        | Class       | Evidence              | Boundary decision                                                                                                                                                                                                                                                                               |
+| ------------------ | ----------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| run-stream         | package     | N=1 (vibe)            | `@agent-os/run-stream` composes post-baseline ledger rows, optional `turn-stream` frames, and the terminal `submit` result into consumer frames; the shipped submit bridge is batched, ledger rows remain durable truth, and turn frames remain non-durable UI/progress data                    |
+| scheduled-run      | cookbook    | N=1 (vibe) + analogous (zeroY) | Workflow/alarm may schedule or resume work, but agentOS ledger remains run truth and D1 mirrors are indexes/projections; zeroY exhibits the same scheduler-not-truth principle with CST as task truth, so the analogy is recorded in `docs/cookbooks/scheduled-run.md` without package promotion |
+| decision-saga      | cookbook    | N≥2 (vibe, zeroY)     | DecisionGate records requested/decided/consumed facts; product approval policy decides who can approve and when a continuation submit starts                                                                                                                                                    |
+| context-pack       | package/app | N≥2 (vibe, zeroY)     | `@agent-os/context-pack` owns deterministic fact packing and redaction spans; product context selection and summarization strategy remain app-owned                                                                                                                                             |
+| compensation chain | cookbook    | N=1 (zeroY, one `locwp_apply` edge) | A rejected or failed primary effect may trigger a follow-on PreClaim linked by `originKind: "compensation_of"`; this is a cookbook proposal in `docs/cookbooks/scheduled-run.md`, not a new EffectClaim phase                                                                                  |
+| evidence capture   | cookbook    | N=0 validated; proposed | Post-LivedClaim verification is modeled as a new EffectClaim chain linked by `originKind: "verifies"`; zeroY has step definitions only and live execution is pending, so `docs/cookbooks/evidence-capture.md` is a proposed convention                                                          |
+
+Compensation has one zeroY edge (`locwp_apply -> rollback`); evidence-capture
+has step definitions but no live execution yet, so it is N=0 validated. Both
+will graduate only when product code exercises the same convention with actual
+EffectClaim wiring. A different linking shape from a future product (for
+example, multi-level compensation-of-compensation or quorum-based verification
+consensus) would force the convention into spec-level naming. Until then they
+are cookbook proposals that reuse existing core primitives.
+
+A composition pattern graduates to a package only if the shared interface has
+more than one nontrivial implementation in distinct products. Today
+scheduled-run has analogous pressure from two divergent scheduler/truth
+combinations (vibe Cloudflare Workflow + D1 + ledger, zeroY `@effect/workflow`
++ CST task truth) and one cookbook-level shared interface (the ledger-cursor
+resume rule). That is not enough common surface for a package; cookbook is the
+right shape until convergence happens.
 
 ---
 
 ## 13. Materialization Plan
 
 The previous six "app runtime gaps" collapse into role materializations over
-this calculus.
+this calculus. The Evidence column records cross-product pressure per the
+universality test in §1.1: `N≥2` means two or more distinct products
+exhibit the pattern under the same role and invariants; `N=1` means a single
+product has pressured it so far; `N=0` means a planned slot with no live
+pressure yet. Source audit: `docs/notes/zeroY-n2-stability-audit.md`.
 
-| Materialization                          | Class       | Role                                 | Boundary decision                                                                                                                                                                                                                  |
-| ---------------------------------------- | ----------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| tool registry                            | backend     | generator + admitter                 | tool identity and turn authority are one boundary schema; contracts are constructed by the registry, and default admission fails closed                                                                                            |
-| DecisionGate                             | composition | admitter + reader                    | `@agent-os/decision-gate` materializes cross-actor or cross-time approval as `decision_gate.requested/decided/consumed`; core baseline stays synchronous and write-free                                                            |
-| runtime scope                            | backend     | resolver                             | `ScopeRef` resolves to resource keys, leases, and cleanup roots; provider cases stay outside core                                                                                                                                  |
-| workspace session                        | backend     | core claim shape + carrier resolver  | `kind: "session"` is the core ownership/lifecycle class; `@agent-os/workspace-session` owns provider-neutral lifecycle facts, projection, and claim settlement; sandbox/workspace/preview/backup resolution stays carrier-specific |
-| material ref                             | adapter     | resolver + admitter input            | carrier-neutral symbolic refs for execution-time material; never a fifth `PreClaim` field and never a resolved handle in ledger payloads                                                                                           |
-| dynamic worker                           | backend     | generator or carrier materializer    | bounded stateless Worker execution; not a substitute for session/workspace state                                                                                                                                                   |
-| git/deploy/staging/verification carriers | backend     | generator/resolver as needed         | adopt claim settlement and proof anchors without app-specific nouns such as `changeId`                                                                                                                                             |
-| Cloudflare resource/control plane        | backend     | resolver/materializer for `external` | account/site/Worker/resource operations fail closed and anchor proofs in carrier-owned vocabulary                                                                                                                                  |
-| context pack                             | composition | reader                               | `@agent-os/context-pack` derives prompt context from supplied facts with explicit redaction spans and included/omitted refs; product context strategy stays app-owned                                                              |
-| turn stream                              | composition | realtime reader                      | `@agent-os/turn-stream` normalizes non-durable token delta frames; ledger facts remain the durable source of truth                                                                                                                 |
-| trace locator/failure plane              | composition | reader                               | ledger projection only; no parallel observability facts                                                                                                                                                                            |
+| Materialization                          | Class       | Role                                 | Evidence              | Boundary decision                                                                                                                                                                                                                  |
+| ---------------------------------------- | ----------- | ------------------------------------ | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| tool registry                            | backend     | generator + admitter                 | N≥2 (vibe, zeroY)     | tool identity and turn authority are one boundary schema; contracts are constructed by the registry, and default admission fails closed                                                                                            |
+| DecisionGate                             | composition | admitter + reader                    | N≥2 (vibe, zeroY)     | `@agent-os/decision-gate` materializes cross-actor or cross-time approval as `decision_gate.requested/decided/consumed`; core baseline stays synchronous and write-free; vibe's front-door approval and zeroY's `wait_for_approval` validate the same shape |
+| runtime scope                            | backend     | resolver                             | N=1 (vibe)            | `ScopeRef` resolves to resource keys, leases, and cleanup roots; provider cases stay outside core                                                                                                                                  |
+| workspace session                        | backend     | core claim shape + carrier resolver  | N=1 (vibe)            | `kind: "session"` is the core ownership/lifecycle class; `@agent-os/workspace-session` owns provider-neutral lifecycle facts, projection, and claim settlement; sandbox/workspace/preview/backup resolution stays carrier-specific |
+| material ref                             | adapter     | resolver + admitter input            | N≥2 (vibe, zeroY)     | carrier-neutral symbolic refs for execution-time material; never a fifth `PreClaim` field and never a resolved handle in ledger payloads; both products use presence-only redaction for Cloudflare and LLM provider credentials |
+| dynamic worker                           | backend     | generator or carrier materializer    | N=1 (vibe)            | bounded stateless Worker execution; not a substitute for session/workspace state                                                                                                                                                   |
+| git/deploy/staging/verification carriers | backend     | generator/resolver as needed         | N=1 (vibe)            | adopt claim settlement and proof anchors without app-specific nouns such as `changeId`                                                                                                                                             |
+| Cloudflare resource/control plane        | backend     | resolver/materializer for `external` | N=1 (vibe)            | account/site/Worker/resource operations fail closed and anchor proofs in carrier-owned vocabulary; vibe has full resource lifecycle, while zeroY currently carries only the credential surface counted under material ref          |
+| context pack                             | composition | reader                               | N≥2 (vibe, zeroY)     | `@agent-os/context-pack` derives prompt context from supplied facts with explicit redaction spans and included/omitted refs; product context strategy stays app-owned                                                              |
+| turn stream                              | composition | realtime reader                      | N=1 (vibe)            | `@agent-os/turn-stream` normalizes non-durable token delta frames; ledger facts remain the durable source of truth                                                                                                                 |
+| trace locator/failure plane              | composition | reader                               | N≥2 (vibe, zeroY)     | ledger projection only; no parallel observability facts                                                                                                                                                                            |
 
 This table is a planning matrix, not a package list. A future package should
 state which role it materializes and which `EffectClaim` fields it owns.
