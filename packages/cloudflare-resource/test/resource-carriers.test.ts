@@ -145,7 +145,7 @@ const cases: ReadonlyArray<ResourceCase> = [
     expectedRequest: {
       method: "POST",
       path: "/accounts/raw-account-id/queues/raw-queue-id/messages",
-      body: { body: { secret: "raw_queue_message_secret" } },
+      body: { body: { secret: "raw_queue_message_secret" }, content_type: "json" },
     },
     makeCarrier: (options) =>
       makeCloudflareQueueResourceCarrier({

@@ -1,6 +1,6 @@
 # @agent-os/cloudflare-resource Public API
 
-Status: 1.0 target for provider-neutral algebra. Live D1 backend exports may be added under the same manifest when implemented.
+Status: 1.0 target for provider-neutral resource carrier algebra. D1, KV namespace, R2 bucket, Queue, and Workflow carrier exports are frozen here; live-provider evidence is tracked separately from API stability.
 
 ## Frozen exports
 
