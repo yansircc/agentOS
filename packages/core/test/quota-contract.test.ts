@@ -14,7 +14,7 @@
 import { Cause, Effect, Exit, Layer, ManagedRuntime, Option } from "effect";
 import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "@effect/vitest";
 
 import { AdmissionLive } from "../src/admission";
 import { EventBusLive } from "../src/ledger";
@@ -23,8 +23,15 @@ import { AiBinding } from "../src/llm";
 import { RefResolverLive } from "../src/ref-resolver";
 import { QuotaLive } from "../src/quota";
 import { withQuota } from "../src/quota";
-import { type InternalSubmitSpec, submitAgentEffect } from "../src/submit-agent";
-import { defineRegisteredTool, type Tool } from "../src/tools";
+import {
+  type InternalSubmitSpec,
+  submitAgentEffect,
+} from "../src/submit-agent";
+import {
+  defineRegisteredTool,
+  permissiveToolAdmitter,
+  type Tool,
+} from "../src/tools";
 import type { EventHandler } from "../src/types";
 import { finalTextResp, stubAi, toolCallResp } from "./_stub-ai";
 
@@ -46,6 +53,7 @@ const makeQuotaTool = (limit: number): Tool =>
         },
       },
       execute: async () => "2026-05-25T00:00:00Z",
+      admit: permissiveToolAdmitter,
       authorityClass: "read",
     }),
     { windowMs: 60_000, limit, amount: 1 },
@@ -74,8 +82,12 @@ const buildRuntime = (state: DurableObjectState, ai: Ai) => {
     endpoint: () => null,
     credential: () => null,
   });
-  const admission = AdmissionLive(state).pipe(Layer.provide(eventBus));
-  return ManagedRuntime.make(Layer.mergeAll(ledger, quota, aiLayer, admission, refs));
+  const admission = AdmissionLive(state).pipe(
+    Layer.provide(eventBus),
+  );
+  return ManagedRuntime.make(
+    Layer.mergeAll(ledger, quota, aiLayer, admission, refs),
+  );
 };
 
 describe("quota state machine — deterministic", () => {
@@ -173,7 +185,9 @@ describe("quota state machine — deterministic", () => {
       // transactionSync rolls back, Effect.try wraps the throw as
       // SqlError. SqlError is NOT caught by submitAgentEffect.catchTags
       // → surfaces as a Cause.Fail in the Exit.
-      const exit = await runtime.runPromiseExit(submitAgentEffect(makeSpec(scope, 2)));
+      const exit = await runtime.runPromiseExit(
+        submitAgentEffect(makeSpec(scope, 2)),
+      );
 
       expect(Exit.isFailure(exit)).toBe(true);
       if (Exit.isFailure(exit)) {

@@ -290,7 +290,10 @@ Rules:
 - **A-3.** Tool identity and turn contract are one authority surface. A tool
   registry may store the authority class on the tool entry; it must not add a
   second inconsistent gate downstream.
-- **A-4.** Package-owned event vocabulary still follows spec-34 section 7. A
+- **A-4.** Core must not default-admit based on `authorityClass`. Class-specific
+  shortcuts such as "read tools are safe" are product policy or explicit helper
+  opt-ins, never substrate defaults.
+- **A-5.** Package-owned event vocabulary still follows spec-34 section 7. A
   package claim may have an `authorityRef`, but the positive writer remains the
   scoped `ExtensionCapability`.
 
@@ -479,6 +482,9 @@ Rules:
   verdict, and the caller/carrier settles `RejectedClaim` or `LivedClaim`.
   Durable multi-actor gates are admitter materializations, not a new core run
   status.
+- **M-2a.** Malformed admitter verdicts normalize to `RejectedClaim` at the
+  claim algebra boundary. Admitter implementation failures are
+  `provider_rejected`; policy decisions are `policy_denied`.
 - **M-3.** A resolver owns the mapping from typed refs to carrier resources.
   Provider-specific behavior belongs here, not in shared substrate logic.
 - **M-4.** A reader is derived data. Trace locators, failure planes, and
@@ -500,7 +506,7 @@ this calculus.
 
 | Materialization                          | Role                                 | Boundary decision                                                                                                                                                                                                          |
 | ---------------------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| tool registry                            | generator + admitter                 | tool identity and turn authority are one boundary schema; do not split `ToolProvider` and `TurnContract` into unrelated gates                                                                                              |
+| tool registry                            | generator + admitter                 | tool identity and turn authority are one boundary schema; contracts are constructed by the registry, and default admission fails closed                                                                                     |
 | DecisionGate                             | admitter + reader                    | app/durable package materialization for cross-actor or cross-time approval; core baseline stays synchronous and write-free                                                                                                  |
 | runtime scope                            | resolver                             | `ScopeRef` resolves to resource keys, leases, and cleanup roots; provider cases stay outside core                                                                                                                          |
 | workspace session                        | core claim shape + carrier resolver  | `kind: "session"` is the core ownership/lifecycle class; `@agent-os/workspace-session` owns provider-neutral lifecycle facts, projection, and claim settlement; sandbox/workspace/preview/backup resolution stays carrier-specific |
@@ -599,6 +605,8 @@ Implementation checks for a future P1/P2:
 - malformed scope kind rejects before carrier execution;
 - malformed admitter verdict settles as `RejectedClaim`, never as an
   unhandled post-mint exception;
+- missing explicit tool admitter rejects before quota grant and execution,
+  regardless of `authorityClass`;
 - non-session scopes cannot declare a runtime/workspace root;
 - unsupported carrier shape settles as `RejectedClaim`, never fallback success;
 - trace projections can locate operation/anchor/rejection without owning a

@@ -26,11 +26,17 @@ import {
 import type { LlmToolCall, ToolDefinition } from "./llm";
 import type { QuotaSpec } from "./quota";
 
-export interface ToolContract {
+const TOOL_CONTRACT_BRAND = Symbol("@agent-os/core/ToolContract");
+
+interface ToolContractShape {
   readonly toolId: string;
   readonly authorityRef: AuthorityRef;
   readonly originRef?: OriginRef;
   readonly roles: ReadonlyArray<Extract<ClaimRole, "generator" | "admitter">>;
+}
+
+export interface ToolContract extends ToolContractShape {
+  readonly [TOOL_CONTRACT_BRAND]: true;
 }
 
 export interface ToolAdmitInput<A = unknown> {
@@ -43,6 +49,10 @@ export interface ToolAdmitInput<A = unknown> {
 export type ToolAdmitter<A = unknown> = (
   input: ToolAdmitInput<A>,
 ) => AdmitVerdict | Promise<AdmitVerdict>;
+
+export const permissiveToolAdmitter = <A>(
+  _input: ToolAdmitInput<A>,
+): AdmitVerdict => ({ ok: true });
 
 export interface Tool<
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -68,36 +78,48 @@ export interface RegisteredToolSpec<A, R> {
   readonly admit?: ToolAdmitter<A>;
 }
 
-export const defineRegisteredTool = <A, R>(spec: RegisteredToolSpec<A, R>): Tool<A, R> => {
+const makeToolContract = (shape: ToolContractShape): ToolContract =>
+  Object.defineProperty({ ...shape }, TOOL_CONTRACT_BRAND, {
+    value: true,
+    enumerable: false,
+  }) as ToolContract;
+
+const hasToolContractBrand = (contract: ToolContract): boolean =>
+  contract[TOOL_CONTRACT_BRAND] === true;
+
+const explicitAdmitterRequired = <A>(
+  input: ToolAdmitInput<A>,
+): AdmitVerdict => ({
+  ok: false,
+  rejectionRef: {
+    rejectionId: input.claim.operationRef,
+    rejectionKind: "capability_denied",
+    reason: `explicit admitter required for authorityClass=${input.contract.authorityRef.authorityClass}`,
+  },
+});
+
+export const defineRegisteredTool = <A, R>(
+  spec: RegisteredToolSpec<A, R>,
+): Tool<A, R> => {
   const toolId = spec.definition.function.name;
-  const admit: ToolAdmitter<A> =
-    spec.admit ??
-    (({ claim }) =>
-      spec.authorityClass === "read"
-        ? { ok: true }
-        : {
-            ok: false,
-            rejectionRef: {
-              rejectionId: claim.operationRef,
-              rejectionKind: "capability_denied",
-              reason: `authorityClass=${spec.authorityClass} requires explicit admitter`,
-            },
-          });
+  const admit: ToolAdmitter<A> = spec.admit ?? explicitAdmitterRequired;
   return {
     definition: spec.definition,
     execute: spec.execute,
     admit,
     ...(spec.quota === undefined ? {} : { quota: spec.quota }),
-    contract: {
+    contract: makeToolContract({
       toolId,
       authorityRef: {
         authorityId: spec.authorityId ?? `tool:${toolId}`,
         authorityClass: spec.authorityClass,
-        ...(spec.authorityVersion === undefined ? {} : { version: spec.authorityVersion }),
+        ...(spec.authorityVersion === undefined
+          ? {}
+          : { version: spec.authorityVersion }),
       },
       ...(spec.originRef === undefined ? {} : { originRef: spec.originRef }),
       roles: ["generator", "admitter"],
-    },
+    }),
   };
 };
 
@@ -131,6 +153,10 @@ export type ToolRegistryIssue =
       readonly toolId: string;
     }
   | {
+      readonly kind: "unregistered_contract";
+      readonly toolId: string;
+    }
+  | {
       readonly kind: "missing_generator_role";
       readonly toolId: string;
     }
@@ -150,7 +176,9 @@ export type ToolRegistryValidation =
       readonly issues: ReadonlyArray<ToolRegistryIssue>;
     };
 
-export const validateToolRegistry = (tools: Record<string, Tool>): ToolRegistryValidation => {
+export const validateToolRegistry = (
+  tools: Record<string, Tool>,
+): ToolRegistryValidation => {
   const issues: ToolRegistryIssue[] = [];
   const toolIds = new Set<string>();
 
@@ -181,8 +209,14 @@ export const validateToolRegistry = (tools: Record<string, Tool>): ToolRegistryV
     if (!isAuthorityRef(contract.authorityRef)) {
       issues.push({ kind: "invalid_authority_ref", toolId: contract.toolId });
     }
-    if (contract.originRef !== undefined && !isOriginRef(contract.originRef)) {
+    if (
+      contract.originRef !== undefined &&
+      !isOriginRef(contract.originRef)
+    ) {
       issues.push({ kind: "invalid_origin_ref", toolId: contract.toolId });
+    }
+    if (!hasToolContractBrand(contract)) {
+      issues.push({ kind: "unregistered_contract", toolId: contract.toolId });
     }
     if (!contract.roles.includes("generator")) {
       issues.push({ kind: "missing_generator_role", toolId: contract.toolId });

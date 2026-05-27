@@ -33,7 +33,11 @@ export type OperationRef = string;
 
 export interface AnchorRef {
   readonly anchorId: string;
-  readonly anchorKind: "ledger_event" | "carrier_proof" | "external_receipt" | "dry_run_proof";
+  readonly anchorKind:
+    | "ledger_event"
+    | "carrier_proof"
+    | "external_receipt"
+    | "dry_run_proof";
   readonly carrierRef?: string;
 }
 
@@ -82,6 +86,12 @@ export type AdmitVerdict =
       readonly rejectionRef: RejectionRef;
     };
 
+export const INVALID_ADMITTER_VERDICT_REASON =
+  "invalid_admitter_verdict" as const;
+export const INVALID_ADMITTER_REJECTION_REF_REASON =
+  "invalid_admitter_rejection_ref" as const;
+export const ADMITTER_ERROR_REASON_PREFIX = "admitter_error: " as const;
+
 export type ClaimValidationIssue =
   | "claim_must_be_object"
   | "phase_invalid"
@@ -113,8 +123,10 @@ const isNonEmptyString = (value: unknown): value is string =>
 const optionalString = (value: unknown): value is string | undefined =>
   value === undefined || typeof value === "string";
 
-const hasOnlyKeys = (value: Record<string, unknown>, keys: ReadonlySet<string>): boolean =>
-  Object.keys(value).every((key) => keys.has(key));
+const hasOnlyKeys = (
+  value: Record<string, unknown>,
+  keys: ReadonlySet<string>,
+): boolean => Object.keys(value).every((key) => keys.has(key));
 
 const SIMPLE_SCOPE_KEYS = new Set(["kind", "scopeId"]);
 const EXTERNAL_SCOPE_KEYS = new Set(["kind", "scopeId", "systemRef"]);
@@ -122,7 +134,10 @@ const EXTERNAL_SCOPE_KEYS = new Set(["kind", "scopeId", "systemRef"]);
 export const makeOperationRef = (
   namespace: string,
   parts: ReadonlyArray<string | number>,
-): OperationRef => [namespace, ...parts.map((part) => encodeURIComponent(String(part)))].join(":");
+): OperationRef =>
+  [namespace, ...parts.map((part) => encodeURIComponent(String(part)))].join(
+    ":",
+  );
 
 export const scopeRefFromLegacyScope = (scopeId: string): ScopeRef | null => {
   if (scopeId.startsWith("user/") || scopeId.startsWith("org/")) {
@@ -147,7 +162,10 @@ export const makePreClaim = (spec: {
   readonly originRef: OriginRef;
 }): PreClaim => ({ phase: "pre", ...spec });
 
-export const settleLivedClaim = (claim: PreClaim, anchorRef: AnchorRef): LivedClaim => ({
+export const settleLivedClaim = (
+  claim: PreClaim,
+  anchorRef: AnchorRef,
+): LivedClaim => ({
   phase: "lived",
   operationRef: claim.operationRef,
   scopeRef: claim.scopeRef,
@@ -168,6 +186,31 @@ export const settleRejectedClaim = (
   rejectionRef,
 });
 
+export const invalidAdmitterVerdictRejectionRef = (
+  claim: PreClaim,
+): RejectionRef => ({
+  rejectionId: claim.operationRef,
+  rejectionKind: "policy_denied",
+  reason: INVALID_ADMITTER_VERDICT_REASON,
+});
+
+export const invalidAdmitterRejectionRef = (
+  claim: PreClaim,
+): RejectionRef => ({
+  rejectionId: claim.operationRef,
+  rejectionKind: "policy_denied",
+  reason: INVALID_ADMITTER_REJECTION_REF_REASON,
+});
+
+export const admitterErrorRejectionRef = (
+  claim: PreClaim,
+  cause: unknown,
+): RejectionRef => ({
+  rejectionId: claim.operationRef,
+  rejectionKind: "provider_rejected",
+  reason: `${ADMITTER_ERROR_REASON_PREFIX}${String(cause)}`,
+});
+
 export const isScopeRef = (value: unknown): value is ScopeRef => {
   if (!isRecord(value) || !isNonEmptyString(value.scopeId)) {
     return false;
@@ -179,7 +222,10 @@ export const isScopeRef = (value: unknown): value is ScopeRef => {
     case "artifact":
       return hasOnlyKeys(value, SIMPLE_SCOPE_KEYS);
     case "external":
-      return hasOnlyKeys(value, EXTERNAL_SCOPE_KEYS) && isNonEmptyString(value.systemRef);
+      return (
+        hasOnlyKeys(value, EXTERNAL_SCOPE_KEYS) &&
+        isNonEmptyString(value.systemRef)
+      );
     default:
       return false;
   }
@@ -217,13 +263,32 @@ export const isRejectionRef = (value: unknown): value is RejectionRef =>
     value.rejectionKind === "provider_rejected") &&
   optionalString(value.reason);
 
-export const validateEffectClaim = (value: unknown): ClaimValidation => {
+export const normalizeAdmitVerdict = (
+  claim: PreClaim,
+  verdict: unknown,
+): AdmitVerdict => {
+  if (isRecord(verdict) && verdict.ok === true) return { ok: true };
+  if (isRecord(verdict) && verdict.ok === false) {
+    return isRejectionRef(verdict.rejectionRef)
+      ? { ok: false, rejectionRef: verdict.rejectionRef }
+      : { ok: false, rejectionRef: invalidAdmitterRejectionRef(claim) };
+  }
+  return { ok: false, rejectionRef: invalidAdmitterVerdictRejectionRef(claim) };
+};
+
+export const validateEffectClaim = (
+  value: unknown,
+): ClaimValidation => {
   if (!isRecord(value)) {
     return { ok: false, issues: ["claim_must_be_object"] };
   }
 
   const issues: ClaimValidationIssue[] = [];
-  if (value.phase !== "pre" && value.phase !== "lived" && value.phase !== "rejected") {
+  if (
+    value.phase !== "pre" &&
+    value.phase !== "lived" &&
+    value.phase !== "rejected"
+  ) {
     issues.push("phase_invalid");
   }
   if (!isNonEmptyString(value.operationRef)) {

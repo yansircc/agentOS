@@ -34,13 +34,13 @@ import { Quota } from "./quota";
 import { executeTool, parseToolCall, validateToolRegistry, type Tool } from "./tools";
 import { Admission, type JsonSchemaObject, makeSchemaContract } from "./admission";
 import {
+  admitterErrorRejectionRef,
   makeOperationRef,
   makePreClaim,
-  isRejectionRef,
+  normalizeAdmitVerdict,
   settleLivedClaim,
   settleRejectedClaim,
   type RejectionRef,
-  type PreClaim,
   type ScopeRef,
 } from "./effect-claim";
 
@@ -138,39 +138,6 @@ const toolRejectionKind = (reason: string): RejectionRef["rejectionKind"] =>
   reason === "rate_limited" || reason.startsWith("invalid_quota_")
     ? "resource_denied"
     : "provider_rejected";
-
-const admitterErrorReason = (cause: unknown): string =>
-  `admitter_error: ${String(cause)}`;
-
-const normalizeAdmitRejection = (
-  claim: PreClaim,
-  value: unknown,
-): RejectionRef =>
-  isRejectionRef(value)
-    ? value
-    : {
-        rejectionId: claim.operationRef,
-        rejectionKind: "policy_denied",
-        reason: "invalid_admitter_rejection_ref",
-      };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-const admitRejectionFromVerdict = (
-  claim: PreClaim,
-  verdict: unknown,
-): RejectionRef | null => {
-  if (isRecord(verdict) && verdict.ok === true) return null;
-  if (isRecord(verdict) && verdict.ok === false) {
-    return normalizeAdmitRejection(claim, verdict.rejectionRef);
-  }
-  return {
-    rejectionId: claim.operationRef,
-    rejectionKind: "policy_denied",
-    reason: "invalid_admitter_verdict",
-  };
-};
 
 export const buildInitialMessages = (
   spec: Pick<InternalSubmitSpec, "system" | "intent" | "context">,
@@ -448,11 +415,8 @@ export const submitAgentEffect = (
                   toolName: call.function.name,
                 }),
               ),
-            catch: (cause): RejectionRef => ({
-              rejectionId: claim.operationRef,
-              rejectionKind: "policy_denied",
-              reason: admitterErrorReason(cause),
-            }),
+            catch: (cause): RejectionRef =>
+              admitterErrorRejectionRef(claim, cause),
           }).pipe(
             Effect.catchAll((rejectionRef) =>
               Effect.succeed({
@@ -467,10 +431,11 @@ export const submitAgentEffect = (
               }),
             ),
           );
-          const rejectedAdmission = admitRejectionFromVerdict(
-            claim,
-            admission,
-          );
+          const normalizedAdmission = normalizeAdmitVerdict(claim, admission);
+          const rejectedAdmission =
+            normalizedAdmission.ok === false
+              ? normalizedAdmission.rejectionRef
+              : null;
           if (rejectedAdmission !== null) {
             yield* ledger.log(
               "tool.rejected",

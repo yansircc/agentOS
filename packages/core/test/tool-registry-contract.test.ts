@@ -1,7 +1,7 @@
 import { Effect, Layer, ManagedRuntime } from "effect";
 import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "@effect/vitest";
 
 import { AdmissionLive } from "../src/admission";
 import { EventBusLive } from "../src/ledger";
@@ -9,8 +9,16 @@ import { Ledger, LedgerLive } from "../src/ledger";
 import { AiBinding } from "../src/llm";
 import { QuotaLive } from "../src/quota";
 import { RefResolverLive } from "../src/ref-resolver";
-import { type InternalSubmitSpec, submitAgentEffect } from "../src/submit-agent";
-import { defineRegisteredTool, validateToolRegistry, type Tool } from "../src/tools";
+import {
+  type InternalSubmitSpec,
+  submitAgentEffect,
+} from "../src/submit-agent";
+import {
+  defineRegisteredTool,
+  permissiveToolAdmitter,
+  validateToolRegistry,
+  type Tool,
+} from "../src/tools";
 import type { EventHandler } from "../src/types";
 import { finalTextResp, stubAi, toolCallResp } from "./_stub-ai";
 
@@ -31,6 +39,7 @@ const makeTool = (): Tool =>
       },
     },
     execute: async () => ({ value: 42 }),
+    admit: permissiveToolAdmitter,
     authorityClass: "read",
     originRef: {
       originId: "@agent-os/tool-registry/test",
@@ -62,7 +71,9 @@ const buildRuntime = (state: DurableObjectState, ai: Ai) => {
     credential: () => null,
   });
   const admission = AdmissionLive(state).pipe(Layer.provide(eventBus));
-  return ManagedRuntime.make(Layer.mergeAll(ledger, quota, aiLayer, admission, refs));
+  return ManagedRuntime.make(
+    Layer.mergeAll(ledger, quota, aiLayer, admission, refs),
+  );
 };
 
 describe("tool registry generator", () => {
@@ -124,11 +135,40 @@ describe("tool registry generator", () => {
       ok: false,
       issues: [
         {
+          kind: "unregistered_contract",
+          toolId: "lookup",
+        },
+        {
           kind: "missing_admitter",
           toolId: "lookup",
         },
         {
           kind: "missing_admitter_role",
+          toolId: "lookup",
+        },
+      ],
+    });
+  });
+
+  it("requires contracts produced by the registry constructor", () => {
+    const tool = makeTool();
+    const handBuiltContract = {
+      ...tool,
+      contract: {
+        toolId: "lookup",
+        authorityRef: {
+          authorityId: "tool:lookup",
+          authorityClass: "read",
+        },
+        roles: ["generator", "admitter"],
+      },
+    } as unknown as Tool;
+
+    expect(validateToolRegistry({ lookup: handBuiltContract })).toEqual({
+      ok: false,
+      issues: [
+        {
+          kind: "unregistered_contract",
           toolId: "lookup",
         },
       ],
@@ -141,10 +181,15 @@ describe("tool registry generator", () => {
     const stub = testEnv.AGENT_DO.get(id);
 
     await runInDurableObject(stub, async (_inst, state) => {
-      const ai = stubAi([toolCallResp("lookup", "{}", "call-1"), finalTextResp("done")]);
+      const ai = stubAi([
+        toolCallResp("lookup", "{}", "call-1"),
+        finalTextResp("done"),
+      ]);
       const runtime = buildRuntime(state, ai);
 
-      const result = await runtime.runPromise(submitAgentEffect(makeSpec(scope, makeTool())));
+      const result = await runtime.runPromise(
+        submitAgentEffect(makeSpec(scope, makeTool())),
+      );
       expect(result.ok).toBe(true);
 
       const events = await runtime.runPromise(
@@ -181,12 +226,12 @@ describe("tool registry generator", () => {
     });
   });
 
-  it("denies non-read tools without an explicit admitter before execution", async () => {
+  it("denies tools without an explicit admitter before execution", async () => {
     const scope = "tool-registry-admitter-denied";
     const id = testEnv.AGENT_DO.idFromName(scope);
     const stub = testEnv.AGENT_DO.get(id);
     let executed = false;
-    const writeTool = defineRegisteredTool({
+    const readTool = defineRegisteredTool({
       definition: {
         type: "function",
         function: {
@@ -199,7 +244,7 @@ describe("tool registry generator", () => {
         executed = true;
         return { value: 42 };
       },
-      authorityClass: "write",
+      authorityClass: "read",
     });
 
     await runInDurableObject(stub, async (_inst, state) => {
@@ -207,7 +252,7 @@ describe("tool registry generator", () => {
       const runtime = buildRuntime(state, ai);
 
       const result = await runtime.runPromise(
-        submitAgentEffect(makeSpec(scope, writeTool)),
+        submitAgentEffect(makeSpec(scope, readTool)),
       );
       expect(result.ok).toBe(false);
       expect(executed).toBe(false);
@@ -232,13 +277,138 @@ describe("tool registry generator", () => {
             rejectionRef: {
               rejectionId: "tool:tool-registry-admitter-denied:1:0:call-1",
               rejectionKind: "capability_denied",
-              reason: "authorityClass=write requires explicit admitter",
+              reason: "explicit admitter required for authorityClass=read",
             },
           }),
         }),
       );
       expect(events.some((event) => event.kind === "agent.aborted.tool_error"))
         .toBe(true);
+
+      await runtime.dispose();
+    });
+  });
+
+  it("settles malformed admitter rejection refs as rejected claims", async () => {
+    const scope = "tool-registry-admitter-malformed-rejection";
+    const id = testEnv.AGENT_DO.idFromName(scope);
+    const stub = testEnv.AGENT_DO.get(id);
+    let executed = false;
+    const malformedRejectionTool = defineRegisteredTool({
+      definition: {
+        type: "function",
+        function: {
+          name: "lookup",
+          description: "Lookup a value",
+          parameters: { type: "object", properties: {}, required: [] },
+        },
+      },
+      admit: () =>
+        ({
+          ok: false,
+          rejectionRef: {
+            rejectionId: "",
+            rejectionKind: "not_a_kind",
+          },
+        }) as never,
+      execute: async () => {
+        executed = true;
+        return { value: 42 };
+      },
+      authorityClass: "write",
+    });
+
+    await runInDurableObject(stub, async (_inst, state) => {
+      const ai = stubAi([toolCallResp("lookup", "{}", "call-1")]);
+      const runtime = buildRuntime(state, ai);
+
+      const result = await runtime.runPromise(
+        submitAgentEffect(makeSpec(scope, malformedRejectionTool)),
+      );
+      expect(result.ok).toBe(false);
+      expect(executed).toBe(false);
+
+      const events = await runtime.runPromise(
+        Effect.gen(function* () {
+          const l = yield* Ledger;
+          return yield* l.events(scope);
+        }),
+      );
+      const rejected = events.find((event) => event.kind === "tool.rejected");
+      expect(rejected?.payload).toEqual(
+        expect.objectContaining({
+          claim: expect.objectContaining({
+            phase: "rejected",
+            operationRef:
+              "tool:tool-registry-admitter-malformed-rejection:1:0:call-1",
+            rejectionRef: {
+              rejectionId:
+                "tool:tool-registry-admitter-malformed-rejection:1:0:call-1",
+              rejectionKind: "policy_denied",
+              reason: "invalid_admitter_rejection_ref",
+            },
+          }),
+        }),
+      );
+
+      await runtime.dispose();
+    });
+  });
+
+  it("settles admitter throws as provider rejections", async () => {
+    const scope = "tool-registry-admitter-throw";
+    const id = testEnv.AGENT_DO.idFromName(scope);
+    const stub = testEnv.AGENT_DO.get(id);
+    let executed = false;
+    const throwingAdmitterTool = defineRegisteredTool({
+      definition: {
+        type: "function",
+        function: {
+          name: "lookup",
+          description: "Lookup a value",
+          parameters: { type: "object", properties: {}, required: [] },
+        },
+      },
+      admit: () => {
+        throw new Error("policy service down");
+      },
+      execute: async () => {
+        executed = true;
+        return { value: 42 };
+      },
+      authorityClass: "write",
+    });
+
+    await runInDurableObject(stub, async (_inst, state) => {
+      const ai = stubAi([toolCallResp("lookup", "{}", "call-1")]);
+      const runtime = buildRuntime(state, ai);
+
+      const result = await runtime.runPromise(
+        submitAgentEffect(makeSpec(scope, throwingAdmitterTool)),
+      );
+      expect(result.ok).toBe(false);
+      expect(executed).toBe(false);
+
+      const events = await runtime.runPromise(
+        Effect.gen(function* () {
+          const l = yield* Ledger;
+          return yield* l.events(scope);
+        }),
+      );
+      const rejected = events.find((event) => event.kind === "tool.rejected");
+      expect(rejected?.payload).toEqual(
+        expect.objectContaining({
+          claim: expect.objectContaining({
+            phase: "rejected",
+            operationRef: "tool:tool-registry-admitter-throw:1:0:call-1",
+            rejectionRef: {
+              rejectionId: "tool:tool-registry-admitter-throw:1:0:call-1",
+              rejectionKind: "provider_rejected",
+              reason: "admitter_error: Error: policy service down",
+            },
+          }),
+        }),
+      );
 
       await runtime.dispose();
     });
@@ -318,6 +488,7 @@ describe("tool registry generator", () => {
       execute: async () => {
         throw new Error("upstream down");
       },
+      admit: permissiveToolAdmitter,
       authorityClass: "read",
     });
 
@@ -325,7 +496,9 @@ describe("tool registry generator", () => {
       const ai = stubAi([toolCallResp("lookup", "{}", "call-1")]);
       const runtime = buildRuntime(state, ai);
 
-      const result = await runtime.runPromise(submitAgentEffect(makeSpec(scope, failingTool)));
+      const result = await runtime.runPromise(
+        submitAgentEffect(makeSpec(scope, failingTool)),
+      );
       expect(result.ok).toBe(false);
 
       const events = await runtime.runPromise(
@@ -350,7 +523,8 @@ describe("tool registry generator", () => {
           }),
         }),
       );
-      expect(events.some((event) => event.kind === "agent.aborted.tool_error")).toBe(true);
+      expect(events.some((event) => event.kind === "agent.aborted.tool_error"))
+        .toBe(true);
 
       await runtime.dispose();
     });
