@@ -12,7 +12,6 @@
     "types": ["vitest/globals"],
     "exactOptionalPropertyTypes": false,
     "noUncheckedIndexedAccess": false,
-    "baseUrl": ".",
     "paths": {
       "@agent-os/turn-stream": ["../turn-stream/src/index.ts"]
     }

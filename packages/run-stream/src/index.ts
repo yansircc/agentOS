@@ -87,9 +87,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 const isFrameBase = (value: Record<string, unknown>): boolean =>
-  typeof value.seq === "number" &&
-  Number.isInteger(value.seq) &&
-  value.seq >= 0;
+  typeof value.seq === "number" && Number.isInteger(value.seq) && value.seq >= 0;
 
 const isLedgerEventRpc = (value: unknown): value is LedgerEventRpc =>
   isRecord(value) &&
