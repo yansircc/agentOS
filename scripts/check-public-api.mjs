@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
+import ts from "typescript";
 
 const root = process.cwd();
 const targets = [
@@ -14,43 +15,100 @@ const targets = [
   "tenant-material",
 ];
 
-const stripComments = (source) =>
-  source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|\s)\/\/.*$/gm, "");
+const hasExportModifier = (node) =>
+  node.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) === true;
+
+const hasDefaultModifier = (node) =>
+  node.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword) === true;
+
+const nameFromDeclaration = (name) => (ts.isIdentifier(name) ? name.text : null);
+
+const resolveRelativeModule = (fromFile, specifier) => {
+  const base = path.resolve(path.dirname(fromFile), specifier);
+  const candidates = [
+    base,
+    `${base}.ts`,
+    `${base}.tsx`,
+    path.join(base, "index.ts"),
+    path.join(base, "index.tsx"),
+  ];
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) return candidate;
+  }
+  throw new Error(`cannot resolve export module ${specifier} from ${fromFile}`);
+};
+
+const exportedNamesFromAst = (file, seen) => {
+  const source = fs.readFileSync(file, "utf8");
+  const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+  const names = new Set();
+
+  for (const statement of sourceFile.statements) {
+    if (ts.isExportDeclaration(statement)) {
+      const specifier =
+        statement.moduleSpecifier !== undefined && ts.isStringLiteral(statement.moduleSpecifier)
+          ? statement.moduleSpecifier.text
+          : null;
+
+      if (statement.exportClause === undefined) {
+        if (specifier !== null && specifier.startsWith(".")) {
+          const target = resolveRelativeModule(file, specifier);
+          for (const name of exportedNamesFromSource(target, seen)) names.add(name);
+        }
+        continue;
+      }
+
+      if (ts.isNamespaceExport(statement.exportClause)) {
+        names.add(statement.exportClause.name.text);
+        continue;
+      }
+
+      for (const element of statement.exportClause.elements) {
+        names.add(element.name.text);
+      }
+      continue;
+    }
+
+    if (ts.isExportAssignment(statement)) {
+      names.add(statement.isExportEquals === true ? "export=" : "default");
+      continue;
+    }
+
+    if (!hasExportModifier(statement)) continue;
+
+    if (hasDefaultModifier(statement)) {
+      names.add("default");
+      continue;
+    }
+
+    if (
+      ts.isInterfaceDeclaration(statement) ||
+      ts.isTypeAliasDeclaration(statement) ||
+      ts.isClassDeclaration(statement) ||
+      ts.isFunctionDeclaration(statement) ||
+      ts.isEnumDeclaration(statement)
+    ) {
+      const name = statement.name === undefined ? null : nameFromDeclaration(statement.name);
+      if (name !== null) names.add(name);
+      continue;
+    }
+
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        const name = nameFromDeclaration(declaration.name);
+        if (name !== null) names.add(name);
+      }
+    }
+  }
+
+  return names;
+};
 
 const exportedNamesFromSource = (file, seen = new Set()) => {
   const abs = path.resolve(file);
   if (seen.has(abs)) return new Set();
   seen.add(abs);
-  const source = stripComments(fs.readFileSync(abs, "utf8"));
-  const names = new Set();
-
-  for (const match of source.matchAll(
-    /\bexport\s+(?:declare\s+)?(?:async\s+)?(?:interface|type|class|const|function\s*\*?)\s+([A-Za-z_$][\w$]*)/g,
-  )) {
-    names.add(match[1]);
-  }
-
-  for (const match of source.matchAll(/\bexport\s+(?:type\s+)?\{([\s\S]*?)\}/g)) {
-    for (const rawPart of match[1].split(",")) {
-      const cleaned = rawPart.trim().replace(/^type\s+/, "");
-      if (cleaned.length === 0) continue;
-      const alias = cleaned.match(/\bas\s+([A-Za-z_$][\w$]*)$/);
-      const direct = cleaned.match(/^([A-Za-z_$][\w$]*)$/);
-      if (alias !== null) names.add(alias[1]);
-      else if (direct !== null) names.add(direct[1]);
-    }
-  }
-
-  for (const match of source.matchAll(/\bexport\s+\*\s+from\s+["']([^"']+)["']/g)) {
-    const specifier = match[1];
-    if (!specifier.startsWith(".")) continue;
-    const target = path.resolve(path.dirname(abs), `${specifier}.ts`);
-    for (const name of exportedNamesFromSource(target, seen)) {
-      names.add(name);
-    }
-  }
-
-  return names;
+  return exportedNamesFromAst(abs, seen);
 };
 
 const manifestNames = (manifest, section) => {

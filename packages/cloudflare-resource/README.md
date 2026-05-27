@@ -31,3 +31,15 @@ events/projection for resolved token or SQL leakage.
 
 Missing environment is a fast failure. The script does not fallback to ambient
 credentials or unprefixed resource names.
+
+## Mutation Boundary
+
+D1 mutation SQL is execution material. The carrier receives only an `inputRef`
+and calls async `resolveMutationInput(inputRef)` at execution time. The resolved
+SQL is sent to Cloudflare but never written to claim payloads, ledger events,
+projection output, or run-stream frames.
+
+`mutate` does not return query rows. Even when `mutationKind` is `d1.query`,
+the carrier records only symbolic mutation/proof refs. Callers that need rows
+must read them through their own execution-time D1 binding and keep durable
+truth in agentOS ledger facts.

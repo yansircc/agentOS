@@ -54,7 +54,7 @@ Cloudflare product recommendation policy
   `TEST_RUN_ID` / `SCOPE_PREFIX` resources.
 - `cloudflare-resource` D1 is runtime-proven by the opt-in live smoke:
   `TEST_RUN_ID=a08-20260527T132608Z-8957`,
-  `subjectRef=a08-20260527t132608z-8957--d1-live-smoke-mpoa62u`,
+  `subjectRef=a08-20260527t132608z-8957--d1-live-smoke-mpoanzv`,
   final projection `destroyed`, `eventCount=4`. Other resource kinds become
   backend-complete in separate slices.
 - LLM transport becomes adapter-complete when provider HTTP streams resolve

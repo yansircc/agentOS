@@ -187,12 +187,11 @@ Status: 1.0 target.
 - `./tools:defineRegisteredTool`
 - `./tools:executeTool`
 - `./tools:parseToolCall`
-- `./tools:permissiveToolAdmitter`
 - `./tools:validateToolRegistry`
 
 ## Experimental exports
 
-None.
+- `./tools:permissiveToolAdmitter`
 
 ## Internal-only exports
 

@@ -17,6 +17,8 @@ None.
 - `.:TenantCredentialMaterial`
 - `.:TenantCredentialResolutionFailureReason`
 - `.:TenantCredentialResolutionRejection`
+- `.:TenantCredentialResolverConfigurationError`
+- `.:TenantCredentialResolverConfigurationReason`
 - `.:TenantCredentialResolverOptions`
 - `.:TenantCredentialStore`
 - `.:createTenantCredentialResolver`

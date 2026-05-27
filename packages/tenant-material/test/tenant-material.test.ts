@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test"; // eff-ignore EFF200 reason="repo tests use vite-plus; this test only adapts the new Effect constructor"
+import { Effect, Exit } from "effect";
 import { credentialMaterialRef, endpointMaterialRef } from "@agent-os/core/material-ref";
 import type { RefResolver } from "@agent-os/core/ref-resolver";
 
@@ -9,6 +10,7 @@ import {
   type EncryptedTenantCredentialRecord,
   type TenantCredentialLookup,
   type TenantCredentialMaterial,
+  type TenantCredentialResolverOptions,
 } from "../src";
 
 const encoder = new TextEncoder();
@@ -26,6 +28,12 @@ const baseRecord = (overrides: Partial<EncryptedTenantCredentialRecord> = {}) =>
     ...overrides,
   }) satisfies EncryptedTenantCredentialRecord;
 
+const makeResolver = (options: TenantCredentialResolverOptions): RefResolver =>
+  Effect.runSync(createTenantCredentialResolver(options)); // eff-ignore EFF400 reason="test helper unwraps constructor Effect for synchronous resolver assertions"
+
+const makeResolverExit = (options: TenantCredentialResolverOptions) =>
+  Effect.runSyncExit(createTenantCredentialResolver(options)); // eff-ignore EFF400 reason="test unwraps constructor failure"
+
 describe("@agent-os/tenant-material", () => {
   it("returns a core RefResolver that decrypts exact tenant credential material only at material()", () => {
     const record = baseRecord({ encryptedBytes: bytes("ciphertext:exact") });
@@ -34,7 +42,7 @@ describe("@agent-os/tenant-material", () => {
       readonly encrypted: string;
       readonly context: TenantCredentialLookup;
     }> = [];
-    const resolver: RefResolver = createTenantCredentialResolver({
+    const resolver = makeResolver({
       tenantId: "tenant-a",
       store: {
         get: (lookup) => {
@@ -167,7 +175,7 @@ describe("@agent-os/tenant-material", () => {
     for (const testCase of cases) {
       const lookups: Array<TenantCredentialLookup> = [];
       let decryptCount = 0;
-      const resolver = createTenantCredentialResolver({
+      const resolver = makeResolver({
         tenantId: "tenant-a",
         store: {
           get: (lookup) => {
@@ -187,25 +195,25 @@ describe("@agent-os/tenant-material", () => {
     }
   });
 
-  it("fails closed when decrypt throws or returns non-material output", () => {
+  it("fast fails when decrypt throws and returns null for non-material output", () => {
     const ref = credentialMaterialRef("credential-slot-a", {
       provider: "openai-chat-compatible",
       purpose: "llm_transport",
     });
-    const throwing = createTenantCredentialResolver({
+    const throwing = makeResolver({
       tenantId: "tenant-a",
       store: { get: () => baseRecord() },
       decrypt: () => {
         throw new Error("decrypt implementation failed");
       },
     });
-    const invalid = createTenantCredentialResolver({
+    const invalid = makeResolver({
       tenantId: "tenant-a",
       store: { get: () => baseRecord() },
       decrypt: () => ({ secret: "not resolver material" }) as unknown as TenantCredentialMaterial,
     });
 
-    expect(throwing.material(ref)).toBeNull();
+    expect(() => throwing.material(ref)).toThrow("decrypt implementation failed");
     expect(invalid.material(ref)).toBeNull();
   });
 
@@ -213,7 +221,7 @@ describe("@agent-os/tenant-material", () => {
     const secretBytes = bytes("byte-secret-material");
     const secretBuffer = new ArrayBuffer(secretBytes.byteLength);
     new Uint8Array(secretBuffer).set(secretBytes);
-    const resolver = createTenantCredentialResolver({
+    const resolver = makeResolver({
       tenantId: "tenant-a",
       store: { get: () => baseRecord() },
       decrypt: () => secretBuffer,
@@ -232,13 +240,13 @@ describe("@agent-os/tenant-material", () => {
   });
 
   it("rejects ambient tenant configuration at construction", () => {
-    expect(() =>
-      createTenantCredentialResolver({
-        tenantId: "",
-        store: { get: () => null },
-        decrypt: () => "unused",
-      }),
-    ).toThrow("@agent-os/tenant-material requires a non-empty tenantId");
+    const exit = makeResolverExit({
+      tenantId: "",
+      store: { get: () => null },
+      decrypt: () => "unused",
+    });
+
+    expect(Exit.isFailure(exit)).toBe(true);
   });
 
   it("keeps generated public artifacts symbolic under adversarial plaintext scans", () => {
@@ -259,7 +267,7 @@ describe("@agent-os/tenant-material", () => {
         provider: "openai-chat-compatible",
         purpose: "llm_transport",
       });
-      const resolver = createTenantCredentialResolver({
+      const resolver = makeResolver({
         tenantId: "tenant-a",
         store: { get: () => record },
         decrypt: () => plaintext,

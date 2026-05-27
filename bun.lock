@@ -12,6 +12,7 @@
         "@effect/platform": "catalog:",
         "@effect/sql": "catalog:",
         "@effect/sql-sqlite-do": "catalog:",
+        "@effect/vitest": "catalog:",
         "effect": "catalog:",
         "fast-check": "catalog:",
         "typescript": "catalog:",
@@ -57,6 +58,7 @@
         "@cloudflare/vitest-pool-workers": "catalog:",
         "@cloudflare/workers-types": "catalog:",
         "@effect/language-service": "catalog:",
+        "@effect/vitest": "catalog:",
         "effect": "catalog:",
         "fast-check": "catalog:",
         "typescript": "catalog:",
@@ -237,6 +239,22 @@
         "effect": "^3.21.0",
       },
     },
+    "packages/tenant-material": {
+      "name": "@agent-os/tenant-material",
+      "version": "0.1.0",
+      "dependencies": {
+        "@agent-os/core": "workspace:*",
+        "effect": "catalog:",
+      },
+      "devDependencies": {
+        "typescript": "catalog:",
+        "vite-plus": "catalog:",
+        "vitest": "catalog:",
+      },
+      "peerDependencies": {
+        "effect": "^3.21.0",
+      },
+    },
     "packages/turn-stream": {
       "name": "@agent-os/turn-stream",
       "version": "0.1.0",
@@ -309,6 +327,7 @@
     "@effect/platform": "^0.96.0",
     "@effect/sql": "^0.51.0",
     "@effect/sql-sqlite-do": "^0.29.0",
+    "@effect/vitest": "^0.29.0",
     "effect": "^3.21.0",
     "fast-check": "^4.8.0",
     "typescript": "^5.7.2",
@@ -344,6 +363,8 @@
     "@agent-os/sandbox-cloudflare": ["@agent-os/sandbox-cloudflare@workspace:packages/sandbox-cloudflare"],
 
     "@agent-os/staging-artifact": ["@agent-os/staging-artifact@workspace:packages/staging-artifact"],
+
+    "@agent-os/tenant-material": ["@agent-os/tenant-material@workspace:packages/tenant-material"],
 
     "@agent-os/turn-stream": ["@agent-os/turn-stream@workspace:packages/turn-stream"],
 
@@ -382,6 +403,8 @@
     "@effect/sql": ["@effect/sql@0.51.0", "", { "dependencies": { "uuid": "^11.0.3" }, "peerDependencies": { "@effect/experimental": "^0.60.0", "@effect/platform": "^0.96.0", "effect": "^3.21.0" } }, "sha512-e7hWe46QD15eMCr4kNBMVdItIVK/WLHJG+d8DLL1FjVf5Ra82k2mwUYIXplJewVbHjt3my6GSKPPd1ZrQjVd5A=="],
 
     "@effect/sql-sqlite-do": ["@effect/sql-sqlite-do@0.29.0", "", { "peerDependencies": { "@effect/experimental": "^0.60.0", "@effect/sql": "^0.51.0", "effect": "^3.21.0" } }, "sha512-2JNBVIXPgnwfJGDJ+Ks5VgVejjbInmqi63ALQEiyrGijVJ4ojIYpFZ6TaUaAGXmyZCXTVptgplfpw9PbGufZsA=="],
+
+    "@effect/vitest": ["@effect/vitest@0.29.0", "", { "peerDependencies": { "effect": "^3.21.0", "vitest": "^3.2.0" } }, "sha512-DvWr1aeEcaZ8mtu8hNVb4e3rEYvGEwQSr7wsNrW53t6nKYjkmjRICcvVEsXUhjoCblRHSxRsRV0TOt0+UmcvaQ=="],
 
     "@emnapi/runtime": ["@emnapi/runtime@1.10.0", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-ewvYlk86xUoGI0zQRNq/mC+16R1QeDlKQy21Ki3oSYXNgLb45GV1P6A0M+/s6nyCuNDqe5VpaY84BzXGwVbwFA=="],
 

@@ -45,7 +45,7 @@ export interface CloudflareD1MutationInput {
 export interface CloudflareD1ResourceCarrierOptions {
   readonly fetch: CloudflareD1Fetch;
   readonly resolver: RefResolver;
-  readonly resolveMutationInput: (inputRef: string) => CloudflareD1MutationInput | null;
+  readonly resolveMutationInput: (inputRef: string) => Promise<CloudflareD1MutationInput | null>;
   readonly baseUrl?: string;
   readonly carrierRef?: string;
 }
@@ -248,7 +248,7 @@ const mutationInputFrom = (
   inputRef: string,
 ): Effect.Effect<Record<string, unknown>, CloudflareResourceFailure> =>
   Effect.gen(function* () {
-    const input = yield* Effect.try({
+    const input = yield* Effect.tryPromise({
       try: () => options.resolveMutationInput(inputRef),
       catch: () => materialUnavailable(claim, "mutate", "cloudflare_d1_mutation_input_unavailable"),
     });
