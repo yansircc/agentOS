@@ -1,4 +1,4 @@
-import type { LivedClaim } from "@agent-os/core/effect-claim";
+import { validateEffectClaim, type LivedClaim } from "@agent-os/core/effect-claim";
 import { GIT_EVENT_PREFIX } from "./extension";
 
 export const GIT_EVENTS = {
@@ -16,7 +16,7 @@ export interface GitWorkspaceCreatedPayload {
   readonly workspaceRef: string;
   readonly baseRef: string;
   readonly branchRef: string;
-  readonly claim?: LivedClaim;
+  readonly claim: LivedClaim;
 }
 
 export interface GitCommitRecordedPayload {
@@ -24,27 +24,27 @@ export interface GitCommitRecordedPayload {
   readonly commitRef: string;
   readonly parentRef: string;
   readonly diffRef: string;
-  readonly claim?: LivedClaim;
+  readonly claim: LivedClaim;
 }
 
 export interface GitMergeRecordedPayload {
   readonly subjectRef: string;
   readonly mergeCommitRef: string;
   readonly targetRef: string;
-  readonly claim?: LivedClaim;
+  readonly claim: LivedClaim;
 }
 
 export interface GitRevertRecordedPayload {
   readonly subjectRef: string;
   readonly revertCommitRef: string;
   readonly revertedRef: string;
-  readonly claim?: LivedClaim;
+  readonly claim: LivedClaim;
 }
 
 export interface GitWorkspaceCleanedPayload {
   readonly subjectRef: string;
   readonly workspaceRef: string;
-  readonly claim?: LivedClaim;
+  readonly claim: LivedClaim;
 }
 
 export interface GitLedgerEvent {
@@ -70,6 +70,11 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const stringField = (payload: Record<string, unknown>, key: string): string | undefined =>
   typeof payload[key] === "string" ? payload[key] : undefined;
 
+const livedClaimFrom = (value: unknown): LivedClaim | undefined => {
+  const result = validateEffectClaim(value);
+  return result.ok && result.claim.phase === "lived" ? result.claim : undefined;
+};
+
 export const projectGitSubject = (
   events: Iterable<GitLedgerEvent>,
   subjectRef: string,
@@ -85,6 +90,7 @@ export const projectGitSubject = (
   for (const event of events) {
     if (!isRecord(event.payload)) continue;
     if (event.payload.subjectRef !== subjectRef) continue;
+    if (livedClaimFrom(event.payload.claim) === undefined) continue;
     switch (event.kind) {
       case GIT_EVENTS.WORKSPACE_CREATED:
         workspaceRef = stringField(event.payload, "workspaceRef");

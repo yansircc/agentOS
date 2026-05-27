@@ -1,4 +1,4 @@
-import type { LivedClaim } from "@agent-os/core/effect-claim";
+import { validateEffectClaim, type LivedClaim } from "@agent-os/core/effect-claim";
 import { VERIFICATION_EVENT_PREFIX } from "./extension";
 
 export const VERIFICATION_EVENTS = {
@@ -16,7 +16,7 @@ export interface VerificationGateRecordedPayload {
   readonly proofRef: string;
   readonly fingerprint: string;
   readonly summary?: string;
-  readonly claim?: LivedClaim;
+  readonly claim: LivedClaim;
 }
 
 export interface VerificationLedgerEvent {
@@ -41,6 +41,11 @@ export interface VerificationGateProjection {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+const livedClaimFrom = (value: unknown): LivedClaim | undefined => {
+  const result = validateEffectClaim(value);
+  return result.ok && result.claim.phase === "lived" ? result.claim : undefined;
+};
+
 const gatePayloadFrom = (event: VerificationLedgerEvent): VerificationGateFact | null => {
   if (event.kind !== VERIFICATION_EVENTS.GATE_RECORDED) return null;
   if (!isRecord(event.payload)) return null;
@@ -50,6 +55,8 @@ const gatePayloadFrom = (event: VerificationLedgerEvent): VerificationGateFact |
   if (status !== "passed" && status !== "failed") return null;
   if (typeof proofRef !== "string") return null;
   if (typeof fingerprint !== "string") return null;
+  const claim = livedClaimFrom(event.payload.claim);
+  if (claim === undefined) return null;
   return {
     eventId: event.id,
     subjectRef,
@@ -58,6 +65,7 @@ const gatePayloadFrom = (event: VerificationLedgerEvent): VerificationGateFact |
     proofRef,
     fingerprint,
     summary: typeof summary === "string" ? summary : undefined,
+    claim,
   };
 };
 

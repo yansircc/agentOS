@@ -4,14 +4,14 @@ import type { PreClaim, RejectedClaim } from "@agent-os/core/effect-claim";
 import type { StagingArtifactPublishedPayload, StagingArtifactReapedPayload } from "./events";
 
 export interface StagingPublishRequest {
-  readonly claim?: PreClaim;
+  readonly claim: PreClaim;
   readonly subjectRef: string;
   readonly artifactSourceRef: string;
   readonly routeKey: string;
 }
 
 export interface StagingReapRequest {
-  readonly claim?: PreClaim;
+  readonly claim: PreClaim;
   readonly subjectRef: string;
   readonly artifactRef: string;
   readonly reason: StagingArtifactReapedPayload["reason"];
@@ -26,7 +26,7 @@ export interface StagingArtifactFailure {
     | "ProviderFailure";
   readonly reason: string;
   readonly proofRef?: string;
-  readonly claim?: RejectedClaim;
+  readonly claim: RejectedClaim;
 }
 
 export interface StagingArtifactCarrier {

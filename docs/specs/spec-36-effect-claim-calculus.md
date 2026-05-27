@@ -239,11 +239,11 @@ Kind semantics:
 
 Rules:
 
-- **S-1.** `scopeId` stays opaque. The kind is the type-level branch; parsing
-  prefixes such as `thread/` or `session/` is compatibility only.
-- **S-1a.** Compatibility parsing must fail closed on unknown prefixes. It must
-  not default an unknown scope to `realm`; callers with app-defined scope names
-  must pass a typed `ScopeRef`.
+- **S-1.** `scopeId` stays opaque. The kind is the type-level branch; shared
+  substrate code must not infer kind from string prefixes.
+- **S-1a.** Callers must pass a typed `ScopeRef` at effect boundaries. Missing
+  or malformed scope refs fail fast; they do not default to `realm` or any app
+  convention.
 - **S-2.** Only `session` implies that a stateful execution carrier may declare
   a runtime/workspace root for the scope. Artifact storage can still be
   carrier-backed, but artifact bytes are not a resumable execution session.
@@ -423,9 +423,9 @@ Canonical envelope:
 
 - **E-1.** When a ledger event carries a claim, it lives at `payload.claim`.
   Readers must look there. Carriers and core generators must write it there.
-- **E-2.** If a request accepts both a full `PreClaim` and a legacy standalone
-  `scopeRef`, the type must make them mutually exclusive. With a claim present,
-  `claim.scopeRef` is the only scope source.
+- **E-2.** Requests at an effect boundary carry one scope source. Claim-bearing
+  requests use `claim.scopeRef`; non-claim dispatch specs must carry an
+  explicit typed `scopeRef`. There is no legacy string-scope inference.
 
 Incorrect placements:
 
@@ -556,6 +556,15 @@ combinations: vibe uses Cloudflare Workflow + D1 + ledger, while zeroY uses
 `@effect/workflow` + CST task truth. They share one cookbook-level interface:
 the ledger-cursor resume rule. That is not enough common surface for a package;
 cookbook is the right shape until convergence happens.
+
+1.0 hold triggers:
+
+| Hold                  | Promotion trigger                                                                                                                                       |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| compensation chain    | A second product declares a real compensation edge matching `originKind: "compensation_of"`; a different link shape returns to spec review              |
+| evidence capture      | A product actually settles verification claims linked by `originKind: "verifies"`; step definitions without settled claims remain N=0 validated         |
+| skill/MCP registry    | Two products share the same discovery, install, authority, and material contract; sharing only MCP client usage is not enough                           |
+| scheduled-run package | Two products converge on scheduler interface and replay cursor contract; sharing only the scheduler-not-truth invariant remains cookbook-level evidence |
 
 ---
 

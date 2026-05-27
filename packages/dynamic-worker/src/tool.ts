@@ -48,7 +48,7 @@ const coerceToolArgs = (
     readonly egress: DynamicWorkerEgress;
     readonly limits?: DynamicWorkerLimits;
   },
-): DynamicWorkerRunRequest => {
+): Omit<DynamicWorkerRunRequest, "claim"> => {
   const input = record(value);
   const request: DynamicWorkerHttpRequest = {
     url: typeof input.url === "string" ? input.url : "",
@@ -91,11 +91,14 @@ export const makeDynamicWorkerTool = (
         egress,
         limits,
       });
+      const requestWithClaim = { ...request, claim: options.claim(request) };
       const program = Effect.gen(function* () {
         const started = yield* Clock.currentTimeMillis;
-        const result = yield* runDynamicWorker(options.backend, options.policy, request).pipe(
-          Effect.either,
-        );
+        const result = yield* runDynamicWorker(
+          options.backend,
+          options.policy,
+          requestWithClaim,
+        ).pipe(Effect.either);
         const ended = yield* Clock.currentTimeMillis;
         if (result._tag === "Left") {
           return failureToToolResult(result.left, ended - started, maxBodyBytes);

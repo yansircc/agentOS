@@ -3,7 +3,7 @@ import { makePreClaim } from "@agent-os/core/effect-claim";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
-  DynamicWorkerFailure,
+  DynamicWorkerProviderFailure,
   makeDynamicWorkerTool,
   runDynamicWorker,
   staticPolicy,
@@ -40,6 +40,7 @@ describe("@agent-os/dynamic-worker", () => {
     await expect(
       Effect.runPromise(
         runDynamicWorker(backend, staticPolicy(), {
+          claim,
           code: "export default { fetch: () => new Response('ok') }",
           request: { url: "https://example.test/" },
           timeoutMs: 1000,
@@ -56,7 +57,7 @@ describe("@agent-os/dynamic-worker", () => {
     const backend: DynamicWorkerBackend = {
       run: () =>
         Effect.fail(
-          new DynamicWorkerFailure({
+          new DynamicWorkerProviderFailure({
             code: "ProviderFailure",
             reason: "should not run",
           }),
@@ -66,6 +67,7 @@ describe("@agent-os/dynamic-worker", () => {
     const result = await Effect.runPromise(
       Effect.either(
         runDynamicWorker(backend, staticPolicy(), {
+          claim,
           code: "export default { fetch: () => fetch('https://api.example') }",
           request: { url: "https://example.test/" },
           egress: { mode: "allowlist", hosts: ["api.example"] },
@@ -91,6 +93,7 @@ describe("@agent-os/dynamic-worker", () => {
     const result = await Effect.runPromise(
       Effect.either(
         runDynamicWorker(backend, staticPolicy({ maxTimeoutMs: 5 }), {
+          claim,
           code: "export default { fetch: async () => new Response('late') }",
           request: { url: "https://example.test/" },
           timeoutMs: 5,
@@ -122,6 +125,7 @@ describe("@agent-os/dynamic-worker", () => {
     const tool = makeDynamicWorkerTool({
       backend,
       policy: staticPolicy(),
+      claim: () => claim,
       maxBodyBytes: 3,
     });
 
@@ -182,6 +186,7 @@ describe("@agent-os/dynamic-worker", () => {
         Effect.sync(() => {
           seen.push({ owner: "policy", limits: request.limits });
         }),
+      claim: () => claim,
       limits,
     });
 
@@ -217,7 +222,11 @@ describe("@agent-os/dynamic-worker", () => {
               seen.push(runtimeScope);
             }),
           {
-            scopeRef: { kind: "conversation", scopeId: "thread/t1" },
+            claim: makePreClaim({
+              ...claim,
+              operationRef: "dynamic-worker:thread-t1:run",
+              scopeRef: { kind: "conversation", scopeId: "thread/t1" },
+            }),
             code: "export default { fetch: () => new Response('ok') }",
             request: { url: "https://example.test/" },
             timeoutMs: 1000,
@@ -316,7 +325,7 @@ describe("@agent-os/dynamic-worker", () => {
           {
             run: () =>
               Effect.fail(
-                new DynamicWorkerFailure({
+                new DynamicWorkerProviderFailure({
                   code: "ProviderFailure",
                   reason: "provider rejected execution",
                 }),

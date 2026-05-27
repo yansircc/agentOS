@@ -1,4 +1,8 @@
-import type { LivedClaim, RejectedClaim } from "@agent-os/core/effect-claim";
+import {
+  validateEffectClaim,
+  type LivedClaim,
+  type RejectedClaim,
+} from "@agent-os/core/effect-claim";
 import { DEPLOY_EVENT_PREFIX } from "./extension";
 
 export const DEPLOY_EVENTS = {
@@ -15,7 +19,7 @@ export interface DeployPreviewRecordedPayload {
   readonly subjectRef: string;
   readonly previewRef: string;
   readonly artifactRef: string;
-  readonly claim?: LivedClaim;
+  readonly claim: LivedClaim;
 }
 
 export interface DeployProductionPromotedPayload {
@@ -23,7 +27,7 @@ export interface DeployProductionPromotedPayload {
   readonly deployRef: string;
   readonly productionRef: string;
   readonly rollbackRef?: string;
-  readonly claim?: LivedClaim;
+  readonly claim: LivedClaim;
 }
 
 export interface DeployProductionReadbackPayload {
@@ -31,14 +35,14 @@ export interface DeployProductionReadbackPayload {
   readonly productionRef: string;
   readonly readbackRef: string;
   readonly status: "passed" | "failed";
-  readonly claim?: LivedClaim;
+  readonly claim: LivedClaim;
 }
 
 export interface DeployRollbackRecordedPayload {
   readonly subjectRef: string;
   readonly rollbackRef: string;
   readonly restoredDeployRef: string;
-  readonly claim?: LivedClaim;
+  readonly claim: LivedClaim;
 }
 
 export interface DeployFailedPayload {
@@ -46,7 +50,7 @@ export interface DeployFailedPayload {
   readonly step: "preview" | "promote" | "readback" | "rollback";
   readonly proofRef: string;
   readonly reason: string;
-  readonly claim?: RejectedClaim;
+  readonly claim: RejectedClaim;
 }
 
 export interface DeployLedgerEvent {
@@ -79,18 +83,34 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const stringField = (payload: Record<string, unknown>, key: string): string | undefined =>
   typeof payload[key] === "string" ? payload[key] : undefined;
 
+const livedClaimFrom = (value: unknown): LivedClaim | undefined => {
+  const result = validateEffectClaim(value);
+  return result.ok && result.claim.phase === "lived" ? result.claim : undefined;
+};
+
+const rejectedClaimFrom = (value: unknown): RejectedClaim | undefined => {
+  const result = validateEffectClaim(value);
+  return result.ok && result.claim.phase === "rejected" ? result.claim : undefined;
+};
+
 const failureFrom = (payload: Record<string, unknown>): DeployFailedPayload | undefined => {
   const subjectRef = stringField(payload, "subjectRef");
   const proofRef = stringField(payload, "proofRef");
   const reason = stringField(payload, "reason");
+  const claim = rejectedClaimFrom(payload.claim);
   const step = payload.step;
-  if (subjectRef === undefined || proofRef === undefined || reason === undefined) {
+  if (
+    subjectRef === undefined ||
+    proofRef === undefined ||
+    reason === undefined ||
+    claim === undefined
+  ) {
     return undefined;
   }
   if (step !== "preview" && step !== "promote" && step !== "readback" && step !== "rollback") {
     return undefined;
   }
-  return { subjectRef, step, proofRef, reason };
+  return { subjectRef, step, proofRef, reason, claim };
 };
 
 export const projectDeploy = (
@@ -111,12 +131,14 @@ export const projectDeploy = (
     if (event.payload.subjectRef !== subjectRef) continue;
     switch (event.kind) {
       case DEPLOY_EVENTS.PREVIEW_RECORDED:
+        if (livedClaimFrom(event.payload.claim) === undefined) break;
         previewRef = stringField(event.payload, "previewRef");
         artifactRef = stringField(event.payload, "artifactRef");
         status = "previewed";
         failure = undefined;
         break;
       case DEPLOY_EVENTS.PRODUCTION_PROMOTED:
+        if (livedClaimFrom(event.payload.claim) === undefined) break;
         deployRef = stringField(event.payload, "deployRef");
         productionRef = stringField(event.payload, "productionRef");
         rollbackRef = stringField(event.payload, "rollbackRef");
@@ -124,11 +146,13 @@ export const projectDeploy = (
         failure = undefined;
         break;
       case DEPLOY_EVENTS.PRODUCTION_READBACK:
+        if (livedClaimFrom(event.payload.claim) === undefined) break;
         readbackRef = stringField(event.payload, "readbackRef");
         productionRef = stringField(event.payload, "productionRef") ?? productionRef;
         status = event.payload.status === "passed" ? "live_verified" : "failed";
         break;
       case DEPLOY_EVENTS.ROLLBACK_RECORDED:
+        if (livedClaimFrom(event.payload.claim) === undefined) break;
         rollbackRef = stringField(event.payload, "rollbackRef");
         deployRef = stringField(event.payload, "restoredDeployRef") ?? deployRef;
         status = "rolled_back";

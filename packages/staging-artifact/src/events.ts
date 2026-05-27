@@ -1,4 +1,4 @@
-import type { LivedClaim } from "@agent-os/core/effect-claim";
+import { validateEffectClaim, type LivedClaim } from "@agent-os/core/effect-claim";
 import { STAGING_EVENT_PREFIX } from "./extension";
 
 export const STAGING_EVENTS = {
@@ -13,14 +13,14 @@ export interface StagingArtifactPublishedPayload {
   readonly artifactRef: string;
   readonly routeRef: string;
   readonly digest: string;
-  readonly claim?: LivedClaim;
+  readonly claim: LivedClaim;
 }
 
 export interface StagingArtifactReapedPayload {
   readonly subjectRef: string;
   readonly artifactRef: string;
   readonly reason: "published" | "discarded" | "expired";
-  readonly claim?: LivedClaim;
+  readonly claim: LivedClaim;
 }
 
 export interface StagingLedgerEvent {
@@ -44,6 +44,11 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const stringField = (payload: Record<string, unknown>, key: string): string | undefined =>
   typeof payload[key] === "string" ? payload[key] : undefined;
 
+const livedClaimFrom = (value: unknown): LivedClaim | undefined => {
+  const result = validateEffectClaim(value);
+  return result.ok && result.claim.phase === "lived" ? result.claim : undefined;
+};
+
 const reapReasonFrom = (value: unknown): StagingArtifactReapedPayload["reason"] | undefined =>
   value === "published" || value === "discarded" || value === "expired" ? value : undefined;
 
@@ -60,6 +65,7 @@ export const projectStagingArtifact = (
   for (const event of events) {
     if (!isRecord(event.payload)) continue;
     if (event.payload.subjectRef !== subjectRef) continue;
+    if (livedClaimFrom(event.payload.claim) === undefined) continue;
     switch (event.kind) {
       case STAGING_EVENTS.ARTIFACT_PUBLISHED:
         artifactRef = stringField(event.payload, "artifactRef");

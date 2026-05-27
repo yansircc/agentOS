@@ -10,35 +10,35 @@ import type {
 } from "./events";
 
 export interface GitWorkspaceRequest {
-  readonly claim?: PreClaim;
+  readonly claim: PreClaim;
   readonly subjectRef: string;
   readonly sourceRef: string;
   readonly baseRef: string;
 }
 
 export interface GitCommitRequest {
-  readonly claim?: PreClaim;
+  readonly claim: PreClaim;
   readonly subjectRef: string;
   readonly workspaceRef: string;
   readonly message: string;
 }
 
 export interface GitMergeRequest {
-  readonly claim?: PreClaim;
+  readonly claim: PreClaim;
   readonly subjectRef: string;
   readonly workspaceRef: string;
   readonly targetRef: string;
 }
 
 export interface GitRevertRequest {
-  readonly claim?: PreClaim;
+  readonly claim: PreClaim;
   readonly subjectRef: string;
   readonly targetRef: string;
   readonly revertedRef: string;
 }
 
 export interface GitCleanupRequest {
-  readonly claim?: PreClaim;
+  readonly claim: PreClaim;
   readonly subjectRef: string;
   readonly workspaceRef: string;
 }
@@ -53,7 +53,7 @@ export interface GitCarrierFailure {
     | "ProviderFailure";
   readonly reason: string;
   readonly proofRef?: string;
-  readonly claim?: RejectedClaim;
+  readonly claim: RejectedClaim;
 }
 
 export interface GitCarrier {
