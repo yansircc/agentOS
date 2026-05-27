@@ -1,12 +1,14 @@
+import { Effect } from "effect";
 import { artifactFromUrl, classifyHttpish, isRecord } from "../shared";
+import { ImageDecodeFailure } from "../services";
 import type { ImageArtifact, ImageProtocolAdapter, ImageResult } from "../types";
 
-const decodeCfAiBindingImage = (raw: unknown): ImageResult => {
+const decodeCfAiBindingImage = (raw: unknown): Effect.Effect<ImageResult, ImageDecodeFailure> => {
   if (typeof raw === "string") {
-    return { artifacts: [artifactFromUrl(raw)] };
+    return Effect.succeed({ artifacts: [artifactFromUrl(raw)] });
   }
   if (raw instanceof ArrayBuffer) {
-    return {
+    return Effect.succeed({
       artifacts: [
         {
           kind: "bytes",
@@ -14,10 +16,10 @@ const decodeCfAiBindingImage = (raw: unknown): ImageResult => {
           contentType: "application/octet-stream",
         },
       ],
-    };
+    });
   }
   if (raw instanceof Uint8Array) {
-    return {
+    return Effect.succeed({
       artifacts: [
         {
           kind: "bytes",
@@ -25,16 +27,18 @@ const decodeCfAiBindingImage = (raw: unknown): ImageResult => {
           contentType: "application/octet-stream",
         },
       ],
-    };
+    });
   }
   if (!isRecord(raw)) {
-    throw new Error("cf-ai-binding-image response must be object or string");
+    return Effect.fail(
+      new ImageDecodeFailure({ reason: "cf-ai-binding-image response must be object or string" }),
+    );
   }
   if (typeof raw.image === "string") {
-    return { artifacts: [artifactFromUrl(raw.image)], usage: raw.usage };
+    return Effect.succeed({ artifacts: [artifactFromUrl(raw.image)], usage: raw.usage });
   }
   if (typeof raw.url === "string") {
-    return { artifacts: [artifactFromUrl(raw.url)], usage: raw.usage };
+    return Effect.succeed({ artifacts: [artifactFromUrl(raw.url)], usage: raw.usage });
   }
   if (Array.isArray(raw.images)) {
     const artifacts = raw.images.flatMap((image): ImageArtifact[] => {
@@ -44,9 +48,11 @@ const decodeCfAiBindingImage = (raw: unknown): ImageResult => {
       }
       return [];
     });
-    if (artifacts.length > 0) return { artifacts, usage: raw.usage };
+    if (artifacts.length > 0) return Effect.succeed({ artifacts, usage: raw.usage });
   }
-  throw new Error("cf-ai-binding-image response contained no image artifact");
+  return Effect.fail(
+    new ImageDecodeFailure({ reason: "cf-ai-binding-image response contained no image artifact" }),
+  );
 };
 
 export const cfAiBindingImageAdapter: ImageProtocolAdapter<"cf-ai-binding-image"> = {

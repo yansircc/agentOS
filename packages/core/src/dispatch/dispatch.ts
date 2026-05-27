@@ -237,10 +237,14 @@ export const DispatchLive = (
         now: number,
       ): Effect.Effect<"delivered" | "failed", SqlError | JsonStringifyError> =>
         Effect.gen(function* () {
-          const requested = yield* Effect.try({
+          const requestedResult = yield* Effect.try({
             try: () => parseRequestedPayload(row.requestedPayload),
             catch: (cause) => new SqlError({ cause }),
           });
+          if (!requestedResult.ok) {
+            return yield* Effect.fail(new SqlError({ cause: requestedResult.failure }));
+          }
+          const requested = requestedResult.value;
           const attempt = row.attempts + 1;
           const bindingKey = materialRefKey(requested.target.bindingRef);
           const targetNs = targets[bindingKey];
@@ -425,17 +429,27 @@ export const DispatchLive = (
             const result = yield* Effect.try({
               try: () =>
                 ctx.storage.transactionSync(() => {
-                  const accepted = findAccepted(
+                  const acceptedResult = findAccepted(
                     sql,
                     scope,
                     envelope.sourceScope,
                     envelope.idempotencyKey,
                   );
+                  if (!acceptedResult.ok) {
+                    return {
+                      duplicate: false,
+                      deliveredEventId: 0,
+                      event: null,
+                      failure: acceptedResult.failure,
+                    };
+                  }
+                  const accepted = acceptedResult.value;
                   if (accepted !== null) {
                     return {
                       duplicate: true,
                       deliveredEventId: accepted.deliveredEventId,
                       event: null,
+                      failure: null,
                     };
                   }
 
@@ -483,11 +497,14 @@ export const DispatchLive = (
                     scope,
                     payload: envelope.data,
                   };
-                  return { duplicate: false, deliveredEventId, event };
+                  return { duplicate: false, deliveredEventId, event, failure: null };
                 }),
               catch: (cause) => new SqlError({ cause }),
             });
 
+            if (result.failure !== null) {
+              return yield* Effect.fail(new SqlError({ cause: result.failure }));
+            }
             if (!result.duplicate && result.event !== null) {
               yield* bus.fire(result.event);
             }

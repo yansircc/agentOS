@@ -57,10 +57,7 @@ const decodeChatCompletionsTurn = (raw: unknown): TurnResponse => {
       total_tokens?: number;
     };
   };
-  const first = r.choices?.[0];
-  if (first === undefined) {
-    throw new Error("empty choices array in upstream response");
-  }
+  const first = r.choices?.[0] as NonNullable<typeof r.choices>[number];
   const text = first.message?.content ?? "";
   const toolCalls = first.message?.tool_calls ?? [];
   return {

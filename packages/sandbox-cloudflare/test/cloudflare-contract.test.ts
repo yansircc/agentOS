@@ -1,7 +1,5 @@
-import { describe, expect, it } from "vite-plus/test";
-import { Effect, Fiber, Layer, Logger, TestClock } from "effect";
-import * as TestContext from "effect/TestContext";
-import type * as TestServices from "effect/TestServices";
+import { describe, expect, it } from "@effect/vitest";
+import { Effect, Fiber, TestClock } from "effect";
 
 import { runSandbox, staticPolicy } from "@agent-os/sandbox";
 import {
@@ -11,14 +9,8 @@ import {
   type CloudflareSandboxExecResult,
 } from "../src/index";
 
-const TestEnv = TestContext.TestContext.pipe(Layer.provide(Logger.remove(Logger.defaultLogger)));
-
-const runEffect = <A, E>(effect: Effect.Effect<A, E, TestServices.TestServices>): Promise<A> =>
-  Effect.runPromise(Effect.provide(effect, TestEnv));
-
 describe("@agent-os/sandbox-cloudflare backend", () => {
-  it("executes via the supplied Cloudflare-compatible sandbox client", () =>
-    runEffect(
+  it.effect("executes via the supplied Cloudflare-compatible sandbox client", () =>
       Effect.gen(function* () {
         const calls: Array<{
           readonly command: string;
@@ -61,10 +53,9 @@ describe("@agent-os/sandbox-cloudflare backend", () => {
         });
         expect(calls[0]?.options?.signal).toBeInstanceOf(AbortSignal);
       }),
-    ));
+    );
 
-  it("writes supplied files before exec", () =>
-    runEffect(
+  it.effect("writes supplied files before exec", () =>
       Effect.gen(function* () {
         const writes: unknown[] = [];
         const client: CloudflareSandboxClient = {
@@ -88,10 +79,9 @@ describe("@agent-os/sandbox-cloudflare backend", () => {
 
         expect(writes).toEqual([{ path: "app.js", content: "console.log(1)" }]);
       }),
-    ));
+    );
 
-  it("classifies not-found/destroyed backend errors as SandboxEvicted", () =>
-    runEffect(
+  it.effect("classifies not-found/destroyed backend errors as SandboxEvicted", () =>
       Effect.gen(function* () {
         const client: CloudflareSandboxClient = {
           id: "cf-dead",
@@ -112,10 +102,9 @@ describe("@agent-os/sandbox-cloudflare backend", () => {
           expect(result.left.sandboxId).toBe("cf-dead");
         }
       }),
-    ));
+    );
 
-  it("aborts the provider exec signal when algebra timeout fires", () =>
-    runEffect(
+  it.effect("aborts the provider exec signal when algebra timeout fires", () =>
       Effect.gen(function* () {
         let signal: AbortSignal | undefined;
         let aborted = false;
@@ -147,10 +136,9 @@ describe("@agent-os/sandbox-cloudflare backend", () => {
         expect(signal).toBeInstanceOf(AbortSignal);
         expect(aborted).toBe(true);
       }),
-    ));
+    );
 
-  it("fails explicitly when files are requested but writeFile is absent", () =>
-    runEffect(
+  it.effect("fails explicitly when files are requested but writeFile is absent", () =>
       Effect.gen(function* () {
         const client: CloudflareSandboxClient = {
           id: "cf-no-files",
@@ -172,5 +160,5 @@ describe("@agent-os/sandbox-cloudflare backend", () => {
           expect(result.left.reason).toContain("writeFile");
         }
       }),
-    ));
+    );
 });

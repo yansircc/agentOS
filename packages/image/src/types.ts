@@ -1,3 +1,6 @@
+import type { Effect } from "effect";
+import type { ImageDecodeFailure } from "./services";
+
 export interface OpenAIChatCompatibleImageRoute {
   readonly kind: "openai-chat-compatible-image";
   readonly endpointRef: string;
@@ -81,7 +84,7 @@ export interface ImageProtocolAdapter<K extends ImageRoute["kind"]> {
     route: Extract<ImageRoute, { kind: K }>,
     request: ImageRequest,
   ) => ImageProviderBody<K>;
-  readonly decodeImage: (raw: unknown) => ImageResult;
+  readonly decodeImage: (raw: unknown) => Effect.Effect<ImageResult, ImageDecodeFailure>;
   readonly classify: (error: unknown) => ImageOutcome;
 }
 

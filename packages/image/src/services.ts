@@ -13,3 +13,7 @@ export class ImageAiBinding extends Context.Tag("@agent-os/image/ImageAiBinding"
 export class ImageUpstreamFailure extends Data.TaggedError("agent_os.image_upstream_failure")<{
   readonly cause: unknown;
 }> {}
+
+export class ImageDecodeFailure extends Data.TaggedError("agent_os.image_decode_failure")<{
+  readonly reason: string;
+}> {}

@@ -5,7 +5,7 @@
  */
 
 import { Effect, Layer, ManagedRuntime } from "effect";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "@effect/vitest";
 
 import {
   cfAiBindingImageAdapter,
@@ -218,9 +218,9 @@ describe("image route adapters — P3 C5", () => {
     }
   });
 
-  it("decodes data URL, URL, and binary provider artifacts", () => {
-    expect(
-      openaiChatCompatibleImageAdapter.decodeImage({
+  it.effect("decodes data URL, URL, and binary provider artifacts", () =>
+    Effect.gen(function* () {
+      const openai = yield* openaiChatCompatibleImageAdapter.decodeImage({
         choices: [
           {
             message: {
@@ -231,8 +231,8 @@ describe("image route adapters — P3 C5", () => {
             },
           },
         ],
-      }).artifacts,
-    ).toEqual([
+      });
+      expect(openai.artifacts).toEqual([
       {
         kind: "data-url",
         dataUrl: "data:image/webp;base64,BBBB",
@@ -242,12 +242,14 @@ describe("image route adapters — P3 C5", () => {
     ]);
 
     const bytes = new Uint8Array([1, 2, 3]);
-    expect(cfAiBindingImageAdapter.decodeImage(bytes).artifacts).toEqual([
+    const cfAi = yield* cfAiBindingImageAdapter.decodeImage(bytes);
+    expect(cfAi.artifacts).toEqual([
       {
         kind: "bytes",
         bytes,
         contentType: "application/octet-stream",
       },
     ]);
-  });
+    }),
+  );
 });

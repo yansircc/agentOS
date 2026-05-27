@@ -36,11 +36,7 @@ const renderUnknown = (value: unknown): string => {
   if (typeof value === "symbol") return value.description ?? "symbol";
   if (value === null) return "null";
   if (value === undefined) return "undefined";
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return Object.prototype.toString.call(value);
-  }
+  return Object.prototype.toString.call(value);
 };
 
 /** Unwrap a tagged-error / wrapped error one level to surface the real

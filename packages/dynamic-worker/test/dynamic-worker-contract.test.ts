@@ -1,6 +1,6 @@
-import { Effect } from "effect";
+import { Effect, Fiber, TestClock } from "effect";
 import { makePreClaim } from "@agent-os/core/effect-claim";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "@effect/vitest";
 
 import {
   DynamicWorkerProviderFailure,
@@ -26,7 +26,8 @@ const claim = makePreClaim({
 });
 
 describe("@agent-os/dynamic-worker", () => {
-  it("runs one bounded stateless Worker-compatible request", async () => {
+  it.effect("runs one bounded stateless Worker-compatible request", () =>
+    Effect.gen(function* () {
     const backend: DynamicWorkerBackend = {
       run: (request) =>
         Effect.succeed({
@@ -37,23 +38,21 @@ describe("@agent-os/dynamic-worker", () => {
         }),
     };
 
-    await expect(
-      Effect.runPromise(
-        runDynamicWorker(backend, staticPolicy(), {
-          claim,
-          code: "export default { fetch: () => new Response('ok') }",
-          request: { url: "https://example.test/" },
-          timeoutMs: 1000,
-        }),
-      ),
-    ).resolves.toMatchObject({
+    const result = yield* runDynamicWorker(backend, staticPolicy(), {
+      claim,
+      code: "export default { fetch: () => new Response('ok') }",
+      request: { url: "https://example.test/" },
+      timeoutMs: 1000,
+    });
+    expect(result).toMatchObject({
       status: 200,
       body: "ok:https://example.test/",
       workerId: "dw-1",
     });
-  });
+    }));
 
-  it("keeps egress closed unless policy allowlists hosts", async () => {
+  it.effect("keeps egress closed unless policy allowlists hosts", () =>
+    Effect.gen(function* () {
     const backend: DynamicWorkerBackend = {
       run: () =>
         Effect.fail(
@@ -64,16 +63,14 @@ describe("@agent-os/dynamic-worker", () => {
         ),
     };
 
-    const result = await Effect.runPromise(
-      Effect.either(
-        runDynamicWorker(backend, staticPolicy(), {
-          claim,
-          code: "export default { fetch: () => fetch('https://api.example') }",
-          request: { url: "https://example.test/" },
-          egress: { mode: "allowlist", hosts: ["api.example"] },
-          timeoutMs: 1000,
-        }),
-      ),
+    const result = yield* Effect.either(
+      runDynamicWorker(backend, staticPolicy(), {
+        claim,
+        code: "export default { fetch: () => fetch('https://api.example') }",
+        request: { url: "https://example.test/" },
+        egress: { mode: "allowlist", hosts: ["api.example"] },
+        timeoutMs: 1000,
+      }),
     );
 
     expect(result).toMatchObject({
@@ -83,23 +80,24 @@ describe("@agent-os/dynamic-worker", () => {
       },
     });
     expect(result._tag === "Left" ? result.left.reason : "").toBe("egress is disabled");
-  });
+    }));
 
-  it("normalizes timeout as a typed dynamic worker failure", async () => {
+  it.effect("normalizes timeout as a typed dynamic worker failure", () =>
+    Effect.gen(function* () {
     const backend: DynamicWorkerBackend = {
       run: () => Effect.never,
     };
 
-    const result = await Effect.runPromise(
-      Effect.either(
-        runDynamicWorker(backend, staticPolicy({ maxTimeoutMs: 5 }), {
-          claim,
-          code: "export default { fetch: async () => new Response('late') }",
-          request: { url: "https://example.test/" },
-          timeoutMs: 5,
-        }),
-      ),
-    );
+    const fiber = yield* Effect.either(
+      runDynamicWorker(backend, staticPolicy({ maxTimeoutMs: 5 }), {
+        claim,
+        code: "export default { fetch: async () => new Response('late') }",
+        request: { url: "https://example.test/" },
+        timeoutMs: 5,
+      }),
+    ).pipe(Effect.fork);
+    yield* TestClock.adjust("6 millis");
+    const result = yield* Fiber.join(fiber);
 
     expect(result).toMatchObject({
       _tag: "Left",
@@ -107,13 +105,15 @@ describe("@agent-os/dynamic-worker", () => {
         _tag: "agent_os.dynamic_worker_failure",
       },
     });
-    if (result._tag !== "Left" || result.left._tag !== "agent_os.dynamic_worker_failure") {
-      throw new Error("expected DynamicWorkerFailure");
+    if (result._tag === "Left" && result.left._tag === "agent_os.dynamic_worker_failure") {
+      expect(result.left.code).toBe("Timeout");
+    } else {
+      expect.fail("expected DynamicWorkerFailure");
     }
-    expect(result.left.code).toBe("Timeout");
-  });
+    }));
 
-  it("exposes a ledger-safe tool result with byte-capped response body", async () => {
+  it.effect("exposes a ledger-safe tool result with byte-capped response body", () =>
+    Effect.gen(function* () {
     const backend: DynamicWorkerBackend = {
       run: () =>
         Effect.succeed({
@@ -129,12 +129,13 @@ describe("@agent-os/dynamic-worker", () => {
       maxBodyBytes: 3,
     });
 
-    await expect(
+    const result = yield* Effect.promise(() =>
       tool.execute({
         code: "export default { fetch: () => new Response('abcdef') }",
         url: "https://example.test/",
       }),
-    ).resolves.toEqual({
+    );
+    expect(result).toEqual({
       ok: true,
       status: 200,
       headers: undefined,
@@ -144,7 +145,7 @@ describe("@agent-os/dynamic-worker", () => {
       durationMs: expect.any(Number),
       workerId: "dw-tool",
     });
-  });
+    }));
 
   it("keeps bodyHead within the UTF-8 byte cap", () => {
     const accented = truncateUtf8("é", 1);
@@ -163,7 +164,8 @@ describe("@agent-os/dynamic-worker", () => {
     expect(new TextEncoder().encode(mixed.head).length).toBeLessThanOrEqual(6);
   });
 
-  it("forwards configured limits to policy and backend", async () => {
+  it.effect("forwards configured limits to policy and backend", () =>
+    Effect.gen(function* () {
     const limits: DynamicWorkerLimits = { cpuMs: 7, subrequests: 2 };
     const seen: Array<{
       readonly owner: "policy" | "backend";
@@ -190,19 +192,21 @@ describe("@agent-os/dynamic-worker", () => {
       limits,
     });
 
-    await expect(
+    const result = yield* Effect.promise(() =>
       tool.execute({
         code: "export default { fetch: () => new Response('ok') }",
         url: "https://example.test/",
       }),
-    ).resolves.toMatchObject({ ok: true, workerId: "dw-limits" });
+    );
+    expect(result).toMatchObject({ ok: true, workerId: "dw-limits" });
     expect(seen).toEqual([
       { owner: "policy", limits },
       { owner: "backend", limits },
     ]);
-  });
+    }));
 
-  it("resolves typed ScopeRef for policy without declaring stateful roots", async () => {
+  it.effect("resolves typed ScopeRef for policy without declaring stateful roots", () =>
+    Effect.gen(function* () {
     const seen: unknown[] = [];
     const backend: DynamicWorkerBackend = {
       run: () =>
@@ -213,27 +217,24 @@ describe("@agent-os/dynamic-worker", () => {
         }),
     };
 
-    await expect(
-      Effect.runPromise(
-        runDynamicWorker(
-          backend,
-          ({ runtimeScope }) =>
-            Effect.sync(() => {
-              seen.push(runtimeScope);
-            }),
-          {
-            claim: makePreClaim({
-              ...claim,
-              operationRef: "dynamic-worker:thread-t1:run",
-              scopeRef: { kind: "conversation", scopeId: "thread/t1" },
-            }),
-            code: "export default { fetch: () => new Response('ok') }",
-            request: { url: "https://example.test/" },
-            timeoutMs: 1000,
-          },
-        ),
-      ),
-    ).resolves.toMatchObject({ workerId: "dw-scope" });
+    const result = yield* runDynamicWorker(
+      backend,
+      ({ runtimeScope }) =>
+        Effect.sync(() => {
+          seen.push(runtimeScope);
+        }),
+      {
+        claim: makePreClaim({
+          ...claim,
+          operationRef: "dynamic-worker:thread-t1:run",
+          scopeRef: { kind: "conversation", scopeId: "thread/t1" },
+        }),
+        code: "export default { fetch: () => new Response('ok') }",
+        request: { url: "https://example.test/" },
+        timeoutMs: 1000,
+      },
+    );
+    expect(result).toMatchObject({ workerId: "dw-scope" });
 
     expect(seen).toEqual([
       {
@@ -242,9 +243,10 @@ describe("@agent-os/dynamic-worker", () => {
         ownerKind: "conversation",
       },
     ]);
-  });
+    }));
 
-  it("settles run claims as carrier proofs or policy rejections", async () => {
+  it.effect("settles run claims as carrier proofs or policy rejections", () =>
+    Effect.gen(function* () {
     const claimScopes: unknown[] = [];
     const backend: DynamicWorkerBackend = {
       run: () =>
@@ -255,23 +257,20 @@ describe("@agent-os/dynamic-worker", () => {
         }),
     };
 
-    await expect(
-      Effect.runPromise(
-        runDynamicWorker(
-          backend,
-          ({ runtimeScope }) =>
-            Effect.sync(() => {
-              claimScopes.push(runtimeScope);
-            }),
-          {
-            claim,
-            code: "export default { fetch: () => new Response('ok') }",
-            request: { url: "https://example.test/" },
-            timeoutMs: 1000,
-          },
-        ),
-      ),
-    ).resolves.toMatchObject({
+    const success = yield* runDynamicWorker(
+      backend,
+      ({ runtimeScope }) =>
+        Effect.sync(() => {
+          claimScopes.push(runtimeScope);
+        }),
+      {
+        claim,
+        code: "export default { fetch: () => new Response('ok') }",
+        request: { url: "https://example.test/" },
+        timeoutMs: 1000,
+      },
+    );
+    expect(success).toMatchObject({
       workerId: "dw-claim",
       claim: {
         phase: "lived",
@@ -291,15 +290,13 @@ describe("@agent-os/dynamic-worker", () => {
       },
     ]);
 
-    const denied = await Effect.runPromise(
-      Effect.either(
-        runDynamicWorker(backend, staticPolicy(), {
-          claim,
-          code: "",
-          request: { url: "https://example.test/" },
-          timeoutMs: 1000,
-        }),
-      ),
+    const denied = yield* Effect.either(
+      runDynamicWorker(backend, staticPolicy(), {
+        claim,
+        code: "",
+        request: { url: "https://example.test/" },
+        timeoutMs: 1000,
+      }),
     );
 
     expect(denied).toMatchObject({
@@ -319,26 +316,24 @@ describe("@agent-os/dynamic-worker", () => {
       },
     });
 
-    const failed = await Effect.runPromise(
-      Effect.either(
-        runDynamicWorker(
-          {
-            run: () =>
-              Effect.fail(
-                new DynamicWorkerProviderFailure({
-                  code: "ProviderFailure",
-                  reason: "provider rejected execution",
-                }),
-              ),
-          },
-          staticPolicy(),
-          {
-            claim,
-            code: "export default { fetch: () => new Response('ok') }",
-            request: { url: "https://example.test/" },
-            timeoutMs: 1000,
-          },
-        ),
+    const failed = yield* Effect.either(
+      runDynamicWorker(
+        {
+          run: () =>
+            Effect.fail(
+              new DynamicWorkerProviderFailure({
+                code: "ProviderFailure",
+                reason: "provider rejected execution",
+              }),
+            ),
+        },
+        staticPolicy(),
+        {
+          claim,
+          code: "export default { fetch: () => new Response('ok') }",
+          request: { url: "https://example.test/" },
+          timeoutMs: 1000,
+        },
       ),
     );
 
@@ -358,5 +353,5 @@ describe("@agent-os/dynamic-worker", () => {
         },
       },
     });
-  });
+    }));
 });

@@ -74,11 +74,7 @@ const sandboxText = (value: unknown): string => {
   if (typeof value === "symbol") return value.description ?? "symbol";
   if (value === null || value === undefined) return "";
   if (value instanceof Uint8Array) return new TextDecoder().decode(value);
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return Object.prototype.toString.call(value);
-  }
+  return Object.prototype.toString.call(value);
 };
 
 const classifyCloudflareFailure = (cause: unknown, sandboxId?: string): SandboxFailure => {

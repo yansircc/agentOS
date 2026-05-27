@@ -16,7 +16,7 @@
 import { Cause, Effect, Exit, Option } from "effect";
 import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "@effect/vitest";
 
 import { Ledger } from "../../src/ledger";
 import {

@@ -12,6 +12,8 @@ const targets = [
   "turn-stream",
   "run-stream",
   "tenant-material",
+  "llm-transport-http",
+  "skill-registry",
 ];
 
 const hasExportModifier = (node) =>

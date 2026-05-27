@@ -6,7 +6,7 @@ import {
 } from "@agent-os/core/ref-resolver";
 import { credentialMaterialRef, endpointMaterialRef } from "@agent-os/core/material-ref";
 import { getImageProtocolAdapter } from "./adapters/registry";
-import { ImageAiBinding, ImageUpstreamFailure } from "./services";
+import { ImageAiBinding, ImageDecodeFailure, ImageUpstreamFailure } from "./services";
 import type {
   CfAiBindingImageBody,
   GenerateImageSpec,
@@ -44,22 +44,27 @@ const dispatchImageProvider = (
           model: route.modelId,
           ...(body as OpenAIChatCompatibleImageBody),
         };
-        return yield* Effect.tryPromise({
-          try: async () => {
-            const res = await fetch(url, {
+        const res = yield* Effect.tryPromise({
+          try: () =>
+            fetch(url, {
               method: "POST",
               headers: {
                 Authorization: `Bearer ${apiKey}`,
                 "Content-Type": "application/json",
               },
               body: JSON.stringify(fullBody),
-            });
-            if (!res.ok) {
-              const text = await res.text().catch(() => "");
-              throw new Error(`HTTP ${res.status} ${res.statusText}: ${text.slice(0, 500)}`);
-            }
-            return (await res.json()) as unknown;
-          },
+            }),
+          catch: (cause) => new ImageUpstreamFailure({ cause }),
+        });
+        if (!res.ok) {
+          return yield* Effect.fail(
+            new ImageUpstreamFailure({
+              cause: { status: res.status, statusText: res.statusText },
+            }),
+          );
+        }
+        return yield* Effect.tryPromise({
+          try: () => res.json() as Promise<unknown>,
           catch: (cause) => new ImageUpstreamFailure({ cause }),
         });
       });
@@ -80,7 +85,7 @@ export const generateImageEffect = (
   spec: GenerateImageSpec,
 ): Effect.Effect<
   ImageResult,
-  ImageUpstreamFailure | RefResolutionFailed,
+  ImageUpstreamFailure | ImageDecodeFailure | RefResolutionFailed,
   ImageAiBinding | RefResolverService
 > =>
   Effect.gen(function* () {
@@ -90,8 +95,5 @@ export const generateImageEffect = (
       aspectRatio: spec.aspectRatio,
     });
     const raw = yield* dispatchImageProvider(spec.route, body);
-    return yield* Effect.try({
-      try: () => adapter.decodeImage(raw),
-      catch: (cause) => new ImageUpstreamFailure({ cause }),
-    });
+    return yield* adapter.decodeImage(raw);
   });
