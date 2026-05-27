@@ -83,7 +83,8 @@ projection API remain bit-identical to `b5da6ad`.
 Five originally-shipped commits plus one review fix-up commit:
 
 1. `docs(notes): record zeroY n=2 stability audit`
-   adds `docs/notes/zeroY-n2-stability-audit.md` and `Plan.md`.
+   adds `docs/notes/zeroY-n2-stability-audit.md` and this plan note
+   (originally drafted as root `Plan.md` in the worktree).
 
 2. `docs(cookbooks): add scheduled-run with compensation chain section`
    adds `docs/cookbooks/scheduled-run.md` including the compensation
@@ -112,11 +113,13 @@ Five originally-shipped commits plus one review fix-up commit:
      and Cloudflare resource/control plane from N≥2 to N=1 (vibe only
      has resource lifecycle; zeroY carries the credential surface, already
      counted under material ref);
-   - updates Plan.md commit count to reflect the actual six commits.
 
-The Plan.md at the worktree root is itself committed in commit 1 so the
-reviewer has context from the first change forward; commit 6 updates this
-section to reflect the corrections.
+- updates the plan note's commit count to reflect the actual six commits.
+
+This plan note was originally committed as root `Plan.md` in commit 1 so the
+reviewer had context from the first change forward. It moved under
+`docs/notes/` during a16/a07 integration so `main` keeps durable planning notes
+inside the documented docs surface.
 
 ---
 
