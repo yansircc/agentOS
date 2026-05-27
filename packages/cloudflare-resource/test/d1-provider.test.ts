@@ -1,9 +1,11 @@
 import { Cause, Effect, Exit, Option } from "effect";
+import { describe, expect, it, vi } from "@effect/vitest";
 import { makePreClaim } from "@agent-os/core/effect-claim";
 import {
   bindingMaterialRef,
   credentialMaterialRef,
   externalResourceMaterialRef,
+  materialRefKey,
   type MaterialRef,
 } from "@agent-os/core/material-ref";
 import type { RefResolver } from "@agent-os/core/ref-resolver";
@@ -24,7 +26,8 @@ const expectFailure = <A>(exit: Exit.Exit<unknown, A>): A => {
       return failure.value;
     }
   }
-  throw new Error("expected failed exit");
+  expect.fail("expected failed exit");
+  return undefined as never;
 };
 
 const credentialRef = credentialMaterialRef("tenant/cloudflare/api-token", {
@@ -35,13 +38,13 @@ const credentialRef = credentialMaterialRef("tenant/cloudflare/api-token", {
 const accountRef = externalResourceMaterialRef({
   provider: "cloudflare",
   resourceKind: "account",
-  ref: "acct-123",
+  ref: "tenant/account/main",
 });
 
 const d1ResourceRef = externalResourceMaterialRef({
   provider: "cloudflare",
   resourceKind: "d1",
-  ref: "db-123",
+  ref: "tenant/d1/main",
 });
 
 const d1BindingRef = bindingMaterialRef({
@@ -64,7 +67,7 @@ const claimFor = (
     operationRef: `cf-d1:subject:${step}`,
     scopeRef: {
       kind: "external",
-      scopeId: "cloudflare/acct-123/d1/db-123",
+      scopeId: "cloudflare/tenant/d1/main",
       systemRef: "cloudflare",
     },
     authorityRef,
@@ -74,8 +77,22 @@ const claimFor = (
     },
   });
 
-const resolverWith = (material: string | null): RefResolver => ({
-  material: (ref: MaterialRef) => (ref.kind === "credential" ? material : null),
+const resolverFor = (entries: ReadonlyArray<readonly [MaterialRef, unknown]>): RefResolver => {
+  const materials = new Map(entries.map(([ref, value]) => [materialRefKey(ref), value]));
+  return {
+    material: (ref: MaterialRef) => materials.get(materialRefKey(ref)) ?? null,
+  };
+};
+
+const standardMaterials = () =>
+  new Map<string, unknown>([
+    [materialRefKey(credentialRef), "secret-cloudflare-token"],
+    [materialRefKey(accountRef), { accountId: "acct-123" }],
+    [materialRefKey(d1BindingRef), { bindingName: "DB" }],
+  ]);
+
+const resolverFromMap = (materials: Map<string, unknown>): RefResolver => ({
+  material: (ref: MaterialRef) => materials.get(materialRefKey(ref)) ?? null,
 });
 
 const jsonResponse = (status: number, body: unknown) => ({
@@ -85,73 +102,81 @@ const jsonResponse = (status: number, body: unknown) => ({
 });
 
 describe("@agent-os/cloudflare-resource D1 live carrier", () => {
-  it("provisions, binds, mutates, and destroys D1 with symbolic ledger payloads", async () => {
+  it.effect("provisions, binds, mutates, and destroys D1 with symbolic ledger payloads", () =>
+    Effect.gen(function* () {
     const requests: Array<{ readonly url: string; readonly init: CloudflareD1FetchInit }> = [];
     const fetch: CloudflareD1Fetch = async (url, init) => {
       requests.push({ url, init });
       if (url.endsWith("/accounts/acct-123/d1/database") && init.method === "POST") {
+        return jsonResponse(200, {
+          success: true,
+          result: { uuid: "db-created", leaked: "raw-provider-secret" },
+        });
+      }
+      if (url.endsWith("/accounts/acct-123/d1/database/db-created") && init.method === "GET") {
         return jsonResponse(200, { success: true, result: { uuid: "db-created" } });
       }
-      if (url.endsWith("/accounts/acct-123/d1/database/db-123/query") && init.method === "POST") {
+      if (
+        url.endsWith("/accounts/acct-123/d1/database/db-created/query") &&
+        init.method === "POST"
+      ) {
         return jsonResponse(200, { success: true, result: [{ success: true }] });
       }
-      if (url.endsWith("/accounts/acct-123/d1/database/db-123") && init.method === "DELETE") {
+      if (url.endsWith("/accounts/acct-123/d1/database/db-created") && init.method === "DELETE") {
         return jsonResponse(200, { success: true, result: {} });
       }
       return jsonResponse(404, { success: false, errors: [{ message: "unexpected path" }] });
     };
+    const materials = standardMaterials();
     const carrier = makeCloudflareD1ResourceCarrier({
       fetch,
-      resolver: resolverWith("secret-cloudflare-token"),
+      resolver: resolverFromMap(materials),
       carrierRef: "cloudflare-d1-test",
+      recordMaterial: (ref, material) => {
+        materials.set(materialRefKey(ref), material);
+      },
       resolveMutationInput: async (inputRef) =>
         inputRef === "mutation://create-table"
           ? { sql: "CREATE TABLE t (id INTEGER PRIMARY KEY)" }
           : null,
     });
 
-    const provisioned = await Effect.runPromise(
-      carrier.provision({
+    const provisioned = yield* carrier.provision({
         claim: claimFor("provision"),
         subjectRef: "res-1",
         resourceKind: "d1",
         resourceName: "test-db",
         credentialRef,
         accountRef,
-      }),
-    );
-    const bound = await Effect.runPromise(
-      carrier.bind({
+        resourceRef: d1ResourceRef,
+      });
+    const bound = yield* carrier.bind({
         claim: claimFor("bind"),
         subjectRef: "res-1",
         credentialRef,
         accountRef,
         resourceRef: d1ResourceRef,
         bindingRef: d1BindingRef,
-      }),
-    );
-    const mutation = await Effect.runPromise(
-      carrier.mutate({
+      });
+    const mutation = yield* carrier.mutate({
         claim: claimFor("mutate"),
         subjectRef: "res-1",
         credentialRef,
         accountRef,
         resourceRef: d1ResourceRef,
+        bindingRef: d1BindingRef,
         mutationKind: "d1.exec",
         inputRef: "mutation://create-table",
         fingerprint: "sha256:test-fingerprint",
-      }),
-    );
-    const destroyed = await Effect.runPromise(
-      carrier.destroy({
+      });
+    const destroyed = yield* carrier.destroy({
         claim: claimFor("destroy"),
         subjectRef: "res-1",
         credentialRef,
         accountRef,
         resourceRef: d1ResourceRef,
         reason: "manual",
-      }),
-    );
+      });
 
     expect(provisioned).toMatchObject({
       subjectRef: "res-1",
@@ -160,14 +185,14 @@ describe("@agent-os/cloudflare-resource D1 live carrier", () => {
         kind: "external_resource",
         provider: "cloudflare",
         resourceKind: "d1",
-        ref: "db-created",
+        ref: "tenant/d1/main",
       },
       accountRef,
-      proofRef: "proof://cloudflare/d1/provision/acct-123/db-created/res-1",
+      proofRef: expect.stringMatching(/^proof:\/\/cloudflare\/d1\/provision\/[a-f0-9]{8}$/),
       claim: {
         phase: "lived",
         anchorRef: {
-          anchorId: "proof://cloudflare/d1/provision/acct-123/db-created/res-1",
+          anchorId: expect.stringMatching(/^proof:\/\/cloudflare\/d1\/provision\/[a-f0-9]{8}$/),
           carrierRef: "cloudflare-d1-test",
         },
       },
@@ -176,26 +201,35 @@ describe("@agent-os/cloudflare-resource D1 live carrier", () => {
       subjectRef: "res-1",
       resourceRef: d1ResourceRef,
       bindingRef: d1BindingRef,
-      proofRef: "proof://cloudflare/d1/bind/acct-123/db-123/DB",
+      proofRef: expect.stringMatching(/^proof:\/\/cloudflare\/d1\/bind\/[a-f0-9]{8}$/),
     });
     expect(mutation).toMatchObject({
       subjectRef: "res-1",
       resourceRef: d1ResourceRef,
       mutationKind: "d1.exec",
       mutationRef: "mutation://create-table",
-      proofRef: "proof://cloudflare/d1/mutate/acct-123/db-123/mutation%3A%2F%2Fcreate-table",
+      proofRef: expect.stringMatching(/^proof:\/\/cloudflare\/d1\/mutate\/[a-f0-9]{8}$/),
       fingerprint: "sha256:test-fingerprint",
     });
     expect(destroyed).toMatchObject({
       subjectRef: "res-1",
       resourceRef: d1ResourceRef,
-      proofRef: "proof://cloudflare/d1/destroy/acct-123/db-123/res-1",
+      proofRef: expect.stringMatching(/^proof:\/\/cloudflare\/d1\/destroy\/[a-f0-9]{8}$/),
       reason: "manual",
     });
+    expect(provisioned.claim.anchorRef.anchorId).toBe(provisioned.proofRef);
+    expect(bound.claim.anchorRef.anchorId).toBe(bound.proofRef);
+    expect(mutation.claim.anchorRef.anchorId).toBe(mutation.proofRef);
+    expect(destroyed.claim.anchorRef.anchorId).toBe(destroyed.proofRef);
     expect(JSON.stringify([provisioned, bound, mutation, destroyed])).not.toContain(
       "secret-cloudflare-token",
     );
     expect(JSON.stringify([provisioned, bound, mutation, destroyed])).not.toContain("CREATE TABLE");
+    expect(JSON.stringify([provisioned, bound, mutation, destroyed])).not.toContain("acct-123");
+    expect(JSON.stringify([provisioned, bound, mutation, destroyed])).not.toContain("db-created");
+    expect(JSON.stringify([provisioned, bound, mutation, destroyed])).not.toContain(
+      "raw-provider-secret",
+    );
     expect(requests).toEqual([
       {
         url: "https://api.cloudflare.com/client/v4/accounts/acct-123/d1/database",
@@ -209,7 +243,16 @@ describe("@agent-os/cloudflare-resource D1 live carrier", () => {
         },
       },
       {
-        url: "https://api.cloudflare.com/client/v4/accounts/acct-123/d1/database/db-123/query",
+        url: "https://api.cloudflare.com/client/v4/accounts/acct-123/d1/database/db-created",
+        init: {
+          method: "GET",
+          headers: {
+            Authorization: "Bearer secret-cloudflare-token",
+          },
+        },
+      },
+      {
+        url: "https://api.cloudflare.com/client/v4/accounts/acct-123/d1/database/db-created/query",
         init: {
           method: "POST",
           headers: {
@@ -220,28 +263,32 @@ describe("@agent-os/cloudflare-resource D1 live carrier", () => {
         },
       },
       {
-        url: "https://api.cloudflare.com/client/v4/accounts/acct-123/d1/database/db-123",
+        url: "https://api.cloudflare.com/client/v4/accounts/acct-123/d1/database/db-created",
         init: {
           method: "DELETE",
           headers: {
             Authorization: "Bearer secret-cloudflare-token",
-            "Content-Type": "application/json",
           },
         },
       },
     ]);
-  });
+    }),
+  );
 
-  it("fails closed when required credential material is unavailable", async () => {
+  it.effect("fails closed when required credential material is unavailable", () =>
+    Effect.gen(function* () {
     const fetch = vi.fn<CloudflareD1Fetch>();
     const carrier = makeCloudflareD1ResourceCarrier({
       fetch,
-      resolver: resolverWith(null),
+      resolver: resolverFor([
+        [accountRef, { accountId: "acct-123" }],
+        [d1BindingRef, { bindingName: "DB" }],
+      ]),
       resolveMutationInput: async () => null,
     });
 
     const failure = expectFailure(
-      await Effect.runPromiseExit(
+      yield* Effect.exit(
         carrier.provision({
           claim: claimFor("provision"),
           subjectRef: "res-1",
@@ -266,24 +313,32 @@ describe("@agent-os/cloudflare-resource D1 live carrier", () => {
       },
     });
     expect(fetch).not.toHaveBeenCalled();
-  });
+    }),
+  );
 
-  it("fails closed when mutation input material is unavailable", async () => {
+  it.effect("fails closed when mutation input material is unavailable", () =>
+    Effect.gen(function* () {
     const fetch = vi.fn<CloudflareD1Fetch>();
     const carrier = makeCloudflareD1ResourceCarrier({
       fetch,
-      resolver: resolverWith("secret-cloudflare-token"),
+      resolver: resolverFor([
+        [credentialRef, "secret-cloudflare-token"],
+        [accountRef, { accountId: "acct-123" }],
+        [d1ResourceRef, { databaseId: "db-created" }],
+        [d1BindingRef, { bindingName: "DB" }],
+      ]),
       resolveMutationInput: async () => null,
     });
 
     const failure = expectFailure(
-      await Effect.runPromiseExit(
+      yield* Effect.exit(
         carrier.mutate({
           claim: claimFor("mutate"),
           subjectRef: "res-1",
           credentialRef,
           accountRef,
           resourceRef: d1ResourceRef,
+          bindingRef: d1BindingRef,
           mutationKind: "d1.exec",
           inputRef: "mutation://missing",
         }),
@@ -296,27 +351,35 @@ describe("@agent-os/cloudflare-resource D1 live carrier", () => {
       reason: "cloudflare_d1_mutation_input_unavailable",
     });
     expect(fetch).not.toHaveBeenCalled();
-  });
+    }),
+  );
 
-  it("redacts raw provider failures from rejected claims", async () => {
+  it.effect("redacts raw provider failures from rejected claims", () =>
+    Effect.gen(function* () {
     const carrier = makeCloudflareD1ResourceCarrier({
       fetch: async () =>
         jsonResponse(500, {
           success: false,
           errors: [{ message: "raw provider body secret-cloudflare-token" }],
         }),
-      resolver: resolverWith("secret-cloudflare-token"),
+      resolver: resolverFor([
+        [credentialRef, "secret-cloudflare-token"],
+        [accountRef, { accountId: "acct-123" }],
+        [d1ResourceRef, { databaseId: "db-created" }],
+        [d1BindingRef, { bindingName: "DB" }],
+      ]),
       resolveMutationInput: async () => ({ sql: "DROP TABLE private_data" }),
     });
 
     const failure = expectFailure(
-      await Effect.runPromiseExit(
+      yield* Effect.exit(
         carrier.mutate({
           claim: claimFor("mutate"),
           subjectRef: "res-1",
           credentialRef,
           accountRef,
           resourceRef: d1ResourceRef,
+          bindingRef: d1BindingRef,
           mutationKind: "d1.exec",
           inputRef: "mutation://drop-table",
         }),
@@ -338,5 +401,8 @@ describe("@agent-os/cloudflare-resource D1 live carrier", () => {
     expect(JSON.stringify(failure)).not.toContain("secret-cloudflare-token");
     expect(JSON.stringify(failure)).not.toContain("DROP TABLE");
     expect(JSON.stringify(failure)).not.toContain("raw provider body");
-  });
+    expect(JSON.stringify(failure)).not.toContain("acct-123");
+    expect(JSON.stringify(failure)).not.toContain("db-created");
+    }),
+  );
 });

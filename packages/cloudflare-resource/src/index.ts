@@ -2,4 +2,8 @@ export * from "./carrier";
 export * from "./d1-provider";
 export * from "./events";
 export * from "./extension";
+export * from "./kv-namespace-provider";
+export * from "./queue-provider";
+export * from "./r2-bucket-provider";
 export * from "./settlement";
+export * from "./workflow-provider";

@@ -16,6 +16,21 @@ Status: 1.0 target for provider-neutral algebra. Live D1 backend exports may be 
 - `.:CloudflareD1FetchResponse`
 - `.:CloudflareD1MutationInput`
 - `.:CloudflareD1ResourceCarrierOptions`
+- `.:CloudflareKVNamespaceFetch`
+- `.:CloudflareKVNamespaceFetchInit`
+- `.:CloudflareKVNamespaceFetchResponse`
+- `.:CloudflareKVNamespaceMutationInput`
+- `.:CloudflareKVNamespaceResourceCarrierOptions`
+- `.:CloudflareQueueFetch`
+- `.:CloudflareQueueFetchInit`
+- `.:CloudflareQueueFetchResponse`
+- `.:CloudflareQueueMutationInput`
+- `.:CloudflareQueueResourceCarrierOptions`
+- `.:CloudflareR2BucketFetch`
+- `.:CloudflareR2BucketFetchInit`
+- `.:CloudflareR2BucketFetchResponse`
+- `.:CloudflareR2BucketMutationInput`
+- `.:CloudflareR2BucketResourceCarrierOptions`
 - `.:CloudflareResourceDestroyRequest`
 - `.:CloudflareResourceDestroyedPayload`
 - `.:CloudflareResourceEventKind`
@@ -29,6 +44,11 @@ Status: 1.0 target for provider-neutral algebra. Live D1 backend exports may be 
 - `.:CloudflareResourceProjection`
 - `.:CloudflareResourceProvisionRequest`
 - `.:CloudflareResourceProvisionedPayload`
+- `.:CloudflareWorkflowFetch`
+- `.:CloudflareWorkflowFetchInit`
+- `.:CloudflareWorkflowFetchResponse`
+- `.:CloudflareWorkflowMutationInput`
+- `.:CloudflareWorkflowResourceCarrierOptions`
 - `.:cloudflareResourceAuthorityContracts`
 - `.:cloudflareResourceBoundaryContract`
 - `.:cloudflareResourceExtensionPackage`
@@ -40,6 +60,10 @@ Status: 1.0 target for provider-neutral algebra. Live D1 backend exports may be 
 - `.:commitCloudflareResourceMutationRecorded`
 - `.:commitCloudflareResourceProvisioned`
 - `.:makeCloudflareD1ResourceCarrier`
+- `.:makeCloudflareKVNamespaceResourceCarrier`
+- `.:makeCloudflareQueueResourceCarrier`
+- `.:makeCloudflareR2BucketResourceCarrier`
+- `.:makeCloudflareWorkflowResourceCarrier`
 - `.:projectCloudflareResource`
 - `.:settleCloudflareResourceRejected`
 

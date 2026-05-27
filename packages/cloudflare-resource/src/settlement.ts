@@ -15,10 +15,12 @@ import {
 export const cloudflareResourceRejectionKind = (
   code: CloudflareResourceFailure["code"],
 ): RejectionRef["rejectionKind"] =>
-  code === "MaterialUnavailable"
-    ? "resource_denied"
-    : code === "PolicyDenied"
-      ? "policy_denied"
+  code === "UnsupportedResource"
+    ? "unsupported"
+    : code === "MaterialUnavailable"
+      ? "resource_denied"
+      : code === "PolicyDenied"
+        ? "policy_denied"
       : "provider_rejected";
 
 export const settleCloudflareResourceRejected = (
