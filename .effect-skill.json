@@ -113,5 +113,17 @@
       "dependencyOwner": "workspace-root",
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
     }
+  ],
+  "hostTooling": [
+    {
+      "path": ".parallel/**",
+      "owner": "@parallel-dev",
+      "reason": "local isolated worktrees and agent run artifacts are not part of the scanned repo surface"
+    },
+    {
+      "path": "spikes/_active/**",
+      "owner": "@parallel-dev",
+      "reason": "ignored pressure-test code is local throwaway, not package source"
+    }
   ]
 }
