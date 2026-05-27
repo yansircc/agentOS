@@ -7,7 +7,7 @@
  */
 
 import * as fc from "fast-check";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { selectHandoffEvents } from "../src/ledger/stream";
 import type { LedgerEvent } from "../src/types";
@@ -31,19 +31,12 @@ describe("ledger stream handoff properties", () => {
         fc.array(fc.integer({ min: 1, max: 1000 }), { maxLength: 200 }),
         fc.array(fc.integer({ min: 1, max: 1000 }), { maxLength: 200 }),
         (afterId, snapshotRaw, liveExtraRaw) => {
-          const snapshotIds = uniqueSorted(
-            snapshotRaw.filter((id) => id > afterId),
-          );
+          const snapshotIds = uniqueSorted(snapshotRaw.filter((id) => id > afterId));
           const snapshotWatermark =
             snapshotIds.length === 0
               ? afterId
-              : Math.max(
-                  afterId,
-                  snapshotIds[snapshotIds.length - 1] ?? afterId,
-                );
-          const extraLiveIds = uniqueSorted(
-            liveExtraRaw.filter((id) => id > snapshotWatermark),
-          );
+              : Math.max(afterId, snapshotIds[snapshotIds.length - 1] ?? afterId);
+          const extraLiveIds = uniqueSorted(liveExtraRaw.filter((id) => id > snapshotWatermark));
           const liveIds = uniqueSorted([...snapshotIds, ...extraLiveIds]);
 
           const result = selectHandoffEvents(
@@ -52,14 +45,9 @@ describe("ledger stream handoff properties", () => {
             liveIds.map(eventOf),
           );
 
-          expect(result.events.map((event) => event.id)).toEqual([
-            ...snapshotIds,
-            ...extraLiveIds,
-          ]);
+          expect(result.events.map((event) => event.id)).toEqual([...snapshotIds, ...extraLiveIds]);
           expect(result.watermark).toBe(
-            extraLiveIds[extraLiveIds.length - 1] ??
-              snapshotIds[snapshotIds.length - 1] ??
-              afterId,
+            extraLiveIds[extraLiveIds.length - 1] ?? snapshotIds[snapshotIds.length - 1] ?? afterId,
           );
         },
       ),

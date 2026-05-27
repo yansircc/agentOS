@@ -12,7 +12,6 @@
  *    totalTokenCount}`
  */
 
-import { Effect } from "effect";
 import type {
   GeminiContent,
   GeminiFunctionDeclaration,
@@ -48,10 +47,8 @@ import { validateAgainstSchema } from "../../admission/json-schema";
  *  same id (no IO, no clock). The interface in §C requires adapters to
  *  be pure — using `Date.now()` here would break that and lose
  *  reproducibility of decoded turn rows in the ledger. */
-const positionalGeminiToolCallId = (
-  candidateIdx: number,
-  partIdx: number,
-): string => `gemini-cand${candidateIdx}-part${partIdx}`;
+const positionalGeminiToolCallId = (candidateIdx: number, partIdx: number): string =>
+  `gemini-cand${candidateIdx}-part${partIdx}`;
 
 const buildGeminiContents = (
   messages: ReadonlyArray<LlmMessage>,
@@ -91,8 +88,7 @@ const buildGeminiContents = (
           args = tc.function.arguments;
         }
         const signature =
-          tc.metadata !== undefined &&
-          typeof tc.metadata.thoughtSignature === "string"
+          tc.metadata !== undefined && typeof tc.metadata.thoughtSignature === "string"
             ? (tc.metadata.thoughtSignature as string)
             : undefined;
         if (signature !== undefined) {
@@ -163,12 +159,7 @@ const buildGeminiContents = (
  *  closes the gap by construction so the same schema does not trigger
  *  it again.
  */
-const GEMINI_STRIPPED_SCHEMA_FIELDS = new Set([
-  "additionalProperties",
-  "$schema",
-  "$id",
-  "$ref",
-]);
+const GEMINI_STRIPPED_SCHEMA_FIELDS = new Set(["additionalProperties", "$schema", "$id", "$ref"]);
 
 const sanitizeSchemaForGemini = (node: unknown): unknown => {
   if (node === null || typeof node !== "object") return node;
@@ -209,10 +200,7 @@ const encodeGeminiTurn = (
         }
       : undefined;
   return {
-    systemInstruction:
-      systemText !== undefined
-        ? { parts: [{ text: systemText }] }
-        : undefined,
+    systemInstruction: systemText !== undefined ? { parts: [{ text: systemText }] } : undefined,
     contents,
     tools: decls !== undefined ? [{ functionDeclarations: decls }] : undefined,
     toolConfig,
@@ -264,10 +252,7 @@ const foldGeminiParts = (
         metadata.thoughtSignature = p.thoughtSignature;
       }
       toolCalls.push({
-        id:
-          typeof fc.id === "string"
-            ? fc.id
-            : positionalGeminiToolCallId(candidateIdx, partIdx),
+        id: typeof fc.id === "string" ? fc.id : positionalGeminiToolCallId(candidateIdx, partIdx),
         type: "function",
         function: {
           name: fc.name,
@@ -287,8 +272,7 @@ const decodeGeminiTurn = (raw: unknown): TurnResponse => {
   const { text, toolCalls } = foldGeminiParts(cand?.content?.parts, 0);
   const promptTokens = r.usageMetadata?.promptTokenCount ?? 0;
   const completionTokens = r.usageMetadata?.candidatesTokenCount ?? 0;
-  const totalTokens =
-    r.usageMetadata?.totalTokenCount ?? promptTokens + completionTokens;
+  const totalTokens = r.usageMetadata?.totalTokenCount ?? promptTokens + completionTokens;
   return {
     text,
     toolCalls,
@@ -303,9 +287,7 @@ const encodeGeminiStructured = (
   _strategy: Strategy,
 ): GeminiGenerateContentBody => {
   const userText =
-    stimulus.kind === "live"
-      ? stimulus.userInput.userText
-      : String(stimulus.synthetic.synthetic);
+    stimulus.kind === "live" ? stimulus.userInput.userText : String(stimulus.synthetic.synthetic);
   return {
     systemInstruction: {
       parts: [
@@ -353,13 +335,9 @@ const decodeGeminiStructured = (
   const r = response.raw as GeminiRawResponse;
   const parts = r.candidates?.[0]?.content?.parts ?? [];
   const calls = parts.filter(
-    (p): p is Extract<GeminiPart, { functionCall: object }> =>
-      "functionCall" in p,
+    (p): p is Extract<GeminiPart, { functionCall: object }> => "functionCall" in p,
   );
-  if (
-    calls.length !== 1 ||
-    calls[0].functionCall.name !== CHAT_COMPLETIONS_FORCED_TOOL_NAME
-  ) {
+  if (calls.length !== 1 || calls[0].functionCall.name !== CHAT_COMPLETIONS_FORCED_TOOL_NAME) {
     return {
       ok: false,
       outcome: {
@@ -393,8 +371,7 @@ const decodeGeminiStructured = (
   }
   const promptTokens = r.usageMetadata?.promptTokenCount ?? 0;
   const completionTokens = r.usageMetadata?.candidatesTokenCount ?? 0;
-  const tokensUsed =
-    r.usageMetadata?.totalTokenCount ?? promptTokens + completionTokens;
+  const tokensUsed = r.usageMetadata?.totalTokenCount ?? promptTokens + completionTokens;
   return {
     ok: true,
     decoded: parsed as DecodedOutput,
@@ -457,13 +434,12 @@ const classifyGeminiError = (error: unknown): Outcome => {
   };
 };
 
-export const geminiGenerateContentAdapter: LlmProtocolAdapter<"gemini-generate-content"> =
-  {
-    kind: "gemini-generate-content",
-    version: ADAPTER_VERSION,
-    encodeTurn: encodeGeminiTurn,
-    decodeTurn: decodeGeminiTurn,
-    encodeStructured: encodeGeminiStructured,
-    decodeStructured: decodeGeminiStructured,
-    classify: classifyGeminiError,
-  };
+export const geminiGenerateContentAdapter: LlmProtocolAdapter<"gemini-generate-content"> = {
+  kind: "gemini-generate-content",
+  version: ADAPTER_VERSION,
+  encodeTurn: encodeGeminiTurn,
+  decodeTurn: decodeGeminiTurn,
+  encodeStructured: encodeGeminiStructured,
+  decodeStructured: decodeGeminiStructured,
+  classify: classifyGeminiError,
+};

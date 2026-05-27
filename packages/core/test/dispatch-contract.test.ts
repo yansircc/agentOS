@@ -11,13 +11,9 @@
 
 import { runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
-import type {
-  DispatchToScopeResult,
-  DispatchToScopeSpec,
-  LedgerEventRpc,
-} from "../src";
+import type { DispatchToScopeResult, DispatchToScopeSpec, LedgerEventRpc } from "../src";
 import { validateEffectClaim } from "../src/effect-claim";
 import type { DispatchTestDO } from "./test-worker";
 
@@ -28,19 +24,12 @@ interface TestEnv {
 const testEnv = env as unknown as TestEnv;
 
 interface DispatchRpc {
-  readonly dispatchToScope: (
-    spec: DispatchToScopeSpec,
-  ) => Promise<DispatchToScopeResult>;
-  readonly emitEvent: (spec: {
-    event: string;
-    data: unknown;
-  }) => Promise<{ id: number }>;
+  readonly dispatchToScope: (spec: DispatchToScopeSpec) => Promise<DispatchToScopeResult>;
+  readonly emitEvent: (spec: { event: string; data: unknown }) => Promise<{ id: number }>;
   readonly events: () => Promise<LedgerEventRpc[]>;
 }
 
-const stubFor = (
-  scope: string,
-): DurableObjectStub<DispatchTestDO> & DispatchRpc =>
+const stubFor = (scope: string): DurableObjectStub<DispatchTestDO> & DispatchRpc =>
   testEnv.DISPATCH_DO.get(
     testEnv.DISPATCH_DO.idFromName(scope),
   ) as DurableObjectStub<DispatchTestDO> & DispatchRpc;
@@ -84,31 +73,21 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
 
     await runInDurableObject(sender, async (_instance, state) => {
       const outbound = state.storage.sql
-        .exec(
-          "SELECT id, kind, payload FROM events WHERE kind = 'dispatch.outbound.requested'",
-        )
+        .exec("SELECT id, kind, payload FROM events WHERE kind = 'dispatch.outbound.requested'")
         .toArray();
       const outbox = state.storage.sql
-        .exec(
-          "SELECT outbound_event_id, delivered_event_id FROM dispatch_outbox",
-        )
+        .exec("SELECT outbound_event_id, delivered_event_id FROM dispatch_outbox")
         .toArray();
       const outboundDelivered = state.storage.sql
-        .exec(
-          "SELECT id, payload FROM events WHERE kind = 'dispatch.outbound.delivered'",
-        )
+        .exec("SELECT id, payload FROM events WHERE kind = 'dispatch.outbound.delivered'")
         .toArray();
 
       expect(outbound).toHaveLength(1);
       expect(outbox).toHaveLength(1);
       expect(outboundDelivered).toHaveLength(1);
       expect(Number(outbound[0]?.id)).toBe(result.outboundEventId);
-      expect(Number(outbox[0]?.outbound_event_id)).toBe(
-        result.outboundEventId,
-      );
-      expect(Number(outbox[0]?.delivered_event_id)).toBe(
-        Number(outboundDelivered[0]?.id),
-      );
+      expect(Number(outbox[0]?.outbound_event_id)).toBe(result.outboundEventId);
+      expect(Number(outbox[0]?.delivered_event_id)).toBe(Number(outboundDelivered[0]?.id));
       const payload = JSON.parse(String(outbound[0]?.payload)) as {
         readonly claim?: unknown;
       };
@@ -119,8 +98,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
         idempotencyKey: "intent-1",
         claim: expect.objectContaining({
           phase: "pre",
-          operationRef:
-            "dispatch:dispatch-sender-atomic:peer:dispatch-receiver-atomic:intent-1",
+          operationRef: "dispatch:dispatch-sender-atomic:peer:dispatch-receiver-atomic:intent-1",
           scopeRef: {
             kind: "conversation",
             scopeId: "dispatch-receiver-atomic",
@@ -159,30 +137,20 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
     });
 
     const receiverEvents: LedgerEventRpc[] = await receiver.events();
-    const receiverDelivered = receiverEvents.find(
-      (e) => e.kind === "test.delivered",
-    );
+    const receiverDelivered = receiverEvents.find((e) => e.kind === "test.delivered");
 
     await runInDurableObject(sender, async (_instance, state) => {
       const senderDelivered = state.storage.sql
-        .exec(
-          "SELECT id, payload FROM events WHERE kind = 'dispatch.outbound.delivered'",
-        )
+        .exec("SELECT id, payload FROM events WHERE kind = 'dispatch.outbound.delivered'")
         .toArray();
       const outbox = state.storage.sql
-        .exec(
-          "SELECT outbound_event_id, delivered_event_id FROM dispatch_outbox",
-        )
+        .exec("SELECT outbound_event_id, delivered_event_id FROM dispatch_outbox")
         .toArray();
 
       expect(senderDelivered).toHaveLength(1);
       expect(outbox).toHaveLength(1);
-      expect(Number(outbox[0]?.outbound_event_id)).toBe(
-        result.outboundEventId,
-      );
-      expect(Number(outbox[0]?.delivered_event_id)).toBe(
-        Number(senderDelivered[0]?.id),
-      );
+      expect(Number(outbox[0]?.outbound_event_id)).toBe(result.outboundEventId);
+      expect(Number(outbox[0]?.delivered_event_id)).toBe(Number(senderDelivered[0]?.id));
 
       const payload = JSON.parse(String(senderDelivered[0]?.payload)) as {
         readonly deliveredEventId: number;
@@ -277,8 +245,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
     const sender = stubFor("dispatch-sender-trace");
     const receiver = stubFor("dispatch-receiver-trace");
     const traceContext = {
-      traceparent:
-        "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+      traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
       tracestate: "vendor=value",
     };
 
@@ -292,9 +259,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
 
     await runInDurableObject(sender, async (_instance, state) => {
       const rows = state.storage.sql
-        .exec(
-          "SELECT payload FROM events WHERE kind = 'dispatch.outbound.requested'",
-        )
+        .exec("SELECT payload FROM events WHERE kind = 'dispatch.outbound.requested'")
         .toArray();
       expect(rows).toHaveLength(1);
       const payload = JSON.parse(String(rows[0]?.payload)) as {
@@ -305,9 +270,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
 
     const receiverEvents: LedgerEventRpc[] = await receiver.events();
     const delivered = receiverEvents.find((e) => e.kind === "test.delivered");
-    const inbound = receiverEvents.find(
-      (e) => e.kind === "dispatch.inbound.accepted",
-    );
+    const inbound = receiverEvents.find((e) => e.kind === "dispatch.inbound.accepted");
     expect(delivered?.payload).toEqual({ message: "trace" });
     expect(inbound?.payload).toEqual({
       sourceScope: "dispatch-sender-trace",
@@ -316,8 +279,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
       deliveredEventId: delivered?.id,
       claim: expect.objectContaining({
         phase: "lived",
-        operationRef:
-          "dispatch:dispatch-sender-trace:peer:dispatch-receiver-trace:trace-intent",
+        operationRef: "dispatch:dispatch-sender-trace:peer:dispatch-receiver-trace:trace-intent",
       }),
       traceContext,
     });
@@ -343,9 +305,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
       sourceId: delivered?.id,
       sourcePayload: { message: "react" },
     });
-    expect(
-      events.filter((e) => e.kind === "dispatch.inbound.handler_fired"),
-    ).toHaveLength(0);
+    expect(events.filter((e) => e.kind === "dispatch.inbound.handler_fired")).toHaveLength(0);
   });
 
   it("rejects missing bindingRef as config error before writing sender facts", async () => {
@@ -448,9 +408,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
 
     await runInDurableObject(sender, async (_instance, state) => {
       const failed = state.storage.sql
-        .exec(
-          "SELECT payload FROM events WHERE kind = 'dispatch.outbound.failed'",
-        )
+        .exec("SELECT payload FROM events WHERE kind = 'dispatch.outbound.failed'")
         .toArray();
       expect(failed).toHaveLength(1);
       const payload = JSON.parse(String(failed[0]?.payload)) as {

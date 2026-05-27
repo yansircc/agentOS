@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { makePreClaim } from "@agent-os/core/effect-claim";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import {
   DynamicWorkerFailure,
@@ -80,9 +80,7 @@ describe("@agent-os/dynamic-worker", () => {
         _tag: "agent_os.dynamic_worker_policy_denied",
       },
     });
-    expect(result._tag === "Left" ? result.left.reason : "").toBe(
-      "egress is disabled",
-    );
+    expect(result._tag === "Left" ? result.left.reason : "").toBe("egress is disabled");
   });
 
   it("normalizes timeout as a typed dynamic worker failure", async () => {
@@ -106,10 +104,7 @@ describe("@agent-os/dynamic-worker", () => {
         _tag: "agent_os.dynamic_worker_failure",
       },
     });
-    if (
-      result._tag !== "Left" ||
-      result.left._tag !== "agent_os.dynamic_worker_failure"
-    ) {
+    if (result._tag !== "Left" || result.left._tag !== "agent_os.dynamic_worker_failure") {
       throw new Error("expected DynamicWorkerFailure");
     }
     expect(result.left.code).toBe("Timeout");

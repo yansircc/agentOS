@@ -53,10 +53,7 @@ class FakeAgentDO implements AgentDOIntrospection {
     const afterId = opts.afterId ?? 0;
     const rows = this.rows.filter((r) => r.id > afterId).slice(0, 2);
     const body = rows
-      .map(
-        (r) =>
-          `event: ledger\nid: ${r.id}\ndata: ${JSON.stringify(r)}\n\n`,
-      )
+      .map((r) => `event: ledger\nid: ${r.id}\ndata: ${JSON.stringify(r)}\n\n`)
       .join("");
     return new Response(body, {
       status: 200,
@@ -109,9 +106,7 @@ class FakeAgentDO implements AgentDOIntrospection {
       }
     }
     const statusSet =
-      spec.statuses !== undefined && spec.statuses.length > 0
-        ? new Set(spec.statuses)
-        : undefined;
+      spec.statuses !== undefined && spec.statuses.length > 0 ? new Set(spec.statuses) : undefined;
     const all: Array<{
       runId: number;
       startedAt: number;
@@ -137,22 +132,16 @@ class FakeAgentDO implements AgentDOIntrospection {
     }
     all.sort((a, b) => b.runId - a.runId);
     const afterFiltered =
-      spec.afterRunId === undefined
-        ? all
-        : all.filter((r) => r.runId < spec.afterRunId!);
+      spec.afterRunId === undefined ? all : all.filter((r) => r.runId < spec.afterRunId!);
     const page = afterFiltered.slice(0, spec.limit);
     const nextCursor =
-      afterFiltered.length > spec.limit && page.length > 0
-        ? page[page.length - 1]!.runId
-        : null;
+      afterFiltered.length > spec.limit && page.length > 0 ? page[page.length - 1]!.runId : null;
     return Promise.resolve({ runs: page, nextCursor });
   }
 
   runTrace(runId: number | string): Promise<RunTrace> {
     const id = typeof runId === "number" ? runId : parseInt(runId, 10);
-    const started = this.rows.find(
-      (r) => r.id === id && r.kind === "agent.run.started",
-    );
+    const started = this.rows.find((r) => r.id === id && r.kind === "agent.run.started");
     if (started === undefined) {
       return Promise.resolve({
         runId: id,
@@ -173,9 +162,7 @@ class FakeAgentDO implements AgentDOIntrospection {
 
   runStatus(runId: number | string): Promise<RunStatus> {
     const id = typeof runId === "number" ? runId : parseInt(runId, 10);
-    const started = this.rows.find(
-      (r) => r.id === id && r.kind === "agent.run.started",
-    );
+    const started = this.rows.find((r) => r.id === id && r.kind === "agent.run.started");
     if (started === undefined) {
       return Promise.resolve({
         kind: "orphaned",
@@ -186,11 +173,7 @@ class FakeAgentDO implements AgentDOIntrospection {
     return Promise.resolve({ kind: "open_without_terminal", startedAt: started.ts });
   }
 
-  quotaState(spec: {
-    key: string;
-    windowMs: number;
-    limit: number;
-  }): Promise<QuotaState> {
+  quotaState(spec: { key: string; windowMs: number; limit: number }): Promise<QuotaState> {
     return Promise.resolve({
       consumed: 0,
       limit: spec.limit,
@@ -199,7 +182,7 @@ class FakeAgentDO implements AgentDOIntrospection {
     });
   }
 
-  resourceState(key: string): Promise<ResourceState> {
+  resourceState(_key: string): Promise<ResourceState> {
     return Promise.resolve({
       granted: 0,
       reserved: 0,
@@ -226,19 +209,12 @@ class FakeResolver implements ScopeResolver {
     public readonly opaqueScopes: ReadonlySet<string> = new Set(),
   ) {}
 
-  list(filter: {
-    prefix?: string;
-    limit?: number;
-  }): Promise<ReadonlyArray<ScopeSummary>> {
+  list(filter: { prefix?: string; limit?: number }): Promise<ReadonlyArray<ScopeSummary>> {
     const all = Array.from(this.entries.keys());
     const matched = all
-      .filter((s) =>
-        filter.prefix === undefined ? true : s.startsWith(filter.prefix),
-      )
+      .filter((s) => (filter.prefix === undefined ? true : s.startsWith(filter.prefix)))
       .map((s) =>
-        this.opaqueScopes.has(s)
-          ? { scope: s, surface: "opaque" as const }
-          : summary(s),
+        this.opaqueScopes.has(s) ? { scope: s, surface: "opaque" as const } : summary(s),
       );
     return Promise.resolve(matched.slice(0, filter.limit ?? matched.length));
   }
@@ -263,11 +239,7 @@ class FakeAuth implements OpsAuth {
     return Promise.resolve({ subject, claims: {} });
   }
 
-  authorize(
-    principal: OpsPrincipal,
-    scope: string,
-    action: "read" | "stream",
-  ): Promise<boolean> {
+  authorize(principal: OpsPrincipal, scope: string, action: "read" | "stream"): Promise<boolean> {
     const rule = this.rules.find((r) => r.subject === principal.subject);
     if (rule === undefined) return Promise.resolve(false);
     if (action === "stream") {
@@ -288,9 +260,21 @@ const ROWS: LedgerEventRpc[] = [
   { id: 2, ts: 1010, kind: "chat.ingested", scope: SCOPE, payload: { runId: 1 } },
   { id: 3, ts: 1100, kind: "llm.response", scope: SCOPE, payload: { turn: { id: 1, index: 0 } } },
   { id: 4, ts: 1200, kind: "tool.executed", scope: SCOPE, payload: { runId: 1, name: "lookup" } },
-  { id: 5, ts: 1300, kind: "agent.run.completed", scope: SCOPE, payload: { runId: 1, event: "answer.ready" } },
+  {
+    id: 5,
+    ts: 1300,
+    kind: "agent.run.completed",
+    scope: SCOPE,
+    payload: { runId: 1, event: "answer.ready" },
+  },
   { id: 6, ts: 2000, kind: "agent.run.started", scope: SCOPE, payload: { intent: "y" } },
-  { id: 7, ts: 2050, kind: "agent.aborted.tool_error", scope: SCOPE, payload: { runId: 6, toolName: "lookup", cause: "Timeout" } },
+  {
+    id: 7,
+    ts: 2050,
+    kind: "agent.aborted.tool_error",
+    scope: SCOPE,
+    payload: { runId: 6, toolName: "lookup", cause: "Timeout" },
+  },
   { id: 8, ts: 3000, kind: "agent.run.started", scope: SCOPE, payload: { intent: "z" } },
 ];
 
@@ -312,20 +296,12 @@ const makeHandler = (
   for (const s of opts.opaqueScopes ?? []) {
     entries.set(s, { scope: s, surface: "opaque" });
   }
-  const resolver = new FakeResolver(
-    entries,
-    new Set(opts.opaqueScopes ?? []),
-  );
-  const auth = new FakeAuth(
-    opts.rules ?? [
-      { subject: "ops@team", scopes: new Set([SCOPE]) },
-    ],
-  );
+  const resolver = new FakeResolver(entries, new Set(opts.opaqueScopes ?? []));
+  const auth = new FakeAuth(opts.rules ?? [{ subject: "ops@team", scopes: new Set([SCOPE]) }]);
   return mountOpsApi({
     scopeResolver: resolver,
     auth,
-    stubFor: (resolved) =>
-      resolved.surface === "agent-do/v0.3" ? fakeDO : null,
+    stubFor: (resolved) => (resolved.surface === "agent-do/v0.3" ? fakeDO : null),
   });
 };
 
@@ -341,9 +317,7 @@ const get = (
   if (init.lastEventId !== undefined) {
     headers.set("last-event-id", init.lastEventId);
   }
-  return handler(
-    new Request(`https://ops.test${path}`, { method: "GET", headers }),
-  );
+  return handler(new Request(`https://ops.test${path}`, { method: "GET", headers }));
 };
 
 // ============================================================
@@ -372,11 +346,9 @@ describe("review fixes — /runs delegates to core projection (no local fetch+pr
       auth: new FakeAuth([{ subject: "x", scopes: new Set([SCOPE]) }]),
       stubFor: () => fakeDO,
     });
-    const res = await get(
-      handler,
-      `/__ops/api/scopes/${encodeURIComponent(SCOPE)}/runs?limit=10`,
-      { principal: "x" },
-    );
+    const res = await get(handler, `/__ops/api/scopes/${encodeURIComponent(SCOPE)}/runs?limit=10`, {
+      principal: "x",
+    });
     expect(res.status).toBe(200);
     expect(runsCalls).toBe(1);
     expect(eventsCalls).toBe(0);
@@ -397,11 +369,9 @@ describe("review fixes — /runs delegates to core projection (no local fetch+pr
       });
     }
     const handler = makeHandler({ rows });
-    const res = await get(
-      handler,
-      `/__ops/api/scopes/${encodeURIComponent(SCOPE)}/runs?limit=10`,
-      { principal: "ops@team" },
-    );
+    const res = await get(handler, `/__ops/api/scopes/${encodeURIComponent(SCOPE)}/runs?limit=10`, {
+      principal: "ops@team",
+    });
     expect(res.status).toBe(200);
     const body = (await res.json()) as { runs: { runId: number }[] };
     const ids = body.runs.map((r) => r.runId);
@@ -535,9 +505,7 @@ describe("§6.3 OpsAuth is mandatory", () => {
     const missingResolver = {
       auth: new FakeAuth([]),
     } as unknown as MountOpsApiOptions;
-    expect(() => mountOpsApi(missingResolver)).toThrow(
-      /scopeResolver is required/,
-    );
+    expect(() => mountOpsApi(missingResolver)).toThrow(/scopeResolver is required/);
   });
 
   it("missing principal returns 401, never 200", async () => {
@@ -556,11 +524,9 @@ describe("§6.3 OpsAuth is mandatory", () => {
 describe("§6.4 scope unknown 404 + opaque 501", () => {
   it("unknown scope returns 404 scope_not_found", async () => {
     const handler = makeHandler({ rules: [{ subject: "x", scopes: new Set() }] });
-    const res = await get(
-      handler,
-      "/__ops/api/scopes/thread%2Fdoesnotexist/events",
-      { principal: "x" },
-    );
+    const res = await get(handler, "/__ops/api/scopes/thread%2Fdoesnotexist/events", {
+      principal: "x",
+    });
     expect(res.status).toBe(404);
     const body = (await res.json()) as { error: string };
     expect(body.error).toBe("scope_not_found");
@@ -638,11 +604,10 @@ describe("§6.5 events pagination is gap-free and duplicate-free", () => {
 describe("§6.6 stream Last-Event-ID reconnect", () => {
   it("server resumes at afterId derived from Last-Event-ID header", async () => {
     const handler = makeHandler();
-    const res = await get(
-      handler,
-      `/__ops/api/scopes/${encodeURIComponent(SCOPE)}/stream`,
-      { principal: "ops@team", lastEventId: "4" },
-    );
+    const res = await get(handler, `/__ops/api/scopes/${encodeURIComponent(SCOPE)}/stream`, {
+      principal: "ops@team",
+      lastEventId: "4",
+    });
     expect(res.status).toBe(200);
     // Fake stub echoes the afterId via header for test observability.
     expect(res.headers.get("x-ops-test-resumed-from")).toBe("4");
@@ -657,11 +622,9 @@ describe("§6.6 stream Last-Event-ID reconnect", () => {
     const handler = makeHandler({
       rules: [{ subject: "x", scopes: new Set([SCOPE]), streamScopes: new Set() }],
     });
-    const res = await get(
-      handler,
-      `/__ops/api/scopes/${encodeURIComponent(SCOPE)}/stream`,
-      { principal: "x" },
-    );
+    const res = await get(handler, `/__ops/api/scopes/${encodeURIComponent(SCOPE)}/stream`, {
+      principal: "x",
+    });
     expect(res.status).toBe(403);
   });
 });
@@ -768,11 +731,9 @@ describe("§6.9 only GET is allowed", () => {
 describe("§2.4 /runs lists RunSummary projected from run-bearing kinds", () => {
   it("returns runs sorted by runId DESC with correct status", async () => {
     const handler = makeHandler();
-    const res = await get(
-      handler,
-      `/__ops/api/scopes/${encodeURIComponent(SCOPE)}/runs?limit=10`,
-      { principal: "ops@team" },
-    );
+    const res = await get(handler, `/__ops/api/scopes/${encodeURIComponent(SCOPE)}/runs?limit=10`, {
+      principal: "ops@team",
+    });
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       runs: { runId: number; status: RunStatus }[];
@@ -802,15 +763,10 @@ describe("§2.4 /runs lists RunSummary projected from run-bearing kinds", () => 
     const all: number[] = [];
     let afterRunId: number | null = null;
     for (let step = 0; step < 5; step++) {
-      const qs =
-        afterRunId === null
-          ? "?limit=1"
-          : `?limit=1&afterRunId=${afterRunId}`;
-      const res = await get(
-        handler,
-        `/__ops/api/scopes/${encodeURIComponent(SCOPE)}/runs${qs}`,
-        { principal: "ops@team" },
-      );
+      const qs = afterRunId === null ? "?limit=1" : `?limit=1&afterRunId=${afterRunId}`;
+      const res = await get(handler, `/__ops/api/scopes/${encodeURIComponent(SCOPE)}/runs${qs}`, {
+        principal: "ops@team",
+      });
       expect(res.status).toBe(200);
       const body = (await res.json()) as {
         runs: { runId: number }[];

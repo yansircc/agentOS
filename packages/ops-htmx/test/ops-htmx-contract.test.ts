@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { mountOpsHtmx } from "../src";
 
@@ -103,9 +103,7 @@ const makeApi = () => {
     if (url.pathname === "/__ops/api/scopes/thread%2Fa/events") {
       expect(url.searchParams.get("afterId")).toBe("5");
       expect(url.searchParams.get("limit")).toBe("2");
-      expect(url.searchParams.get("kinds")).toBe(
-        "agent.run.started,tool.executed",
-      );
+      expect(url.searchParams.get("kinds")).toBe("agent.run.started,tool.executed");
       return json([
         {
           id: 6,
@@ -177,13 +175,13 @@ describe("@agent-os/ops-htmx", () => {
     expect(html).toContain("thread/a");
     expect(html).toContain("run <b>#42</b>");
     expect(html).toContain('href="/__ops?scope=thread%2Fa&amp;runId=42&amp;tab=events"');
-    expect(html).toContain('hx-get="/__ops/fragments/events?scope=thread%2Fa&amp;runId=42&amp;limit=100"');
+    expect(html).toContain(
+      'hx-get="/__ops/fragments/events?scope=thread%2Fa&amp;runId=42&amp;limit=100"',
+    );
     expect(html).toContain('hx-push-url="/__ops?scope=thread%2Fa&amp;runId=42&amp;tab=events"');
     expect(html).toContain("hello &lt;b&gt;operator&lt;/b&gt;");
     expect(html).not.toContain("<script>alert(1)</script>");
-    expect(html.toLowerCase()).not.toMatch(
-      /\b(change|lead|site|schema|conversation)\b/,
-    );
+    expect(html.toLowerCase()).not.toMatch(/\b(change|lead|site|schema|conversation)\b/);
     expect(api.seen.map((r) => r.pathname)).toEqual([
       "/__ops/api/scopes",
       "/__ops/api/scopes/thread%2Fa/runs",
@@ -209,7 +207,7 @@ describe("@agent-os/ops-htmx", () => {
     expect(html).toContain('href="/__ops?scope=thread%2Fa&amp;runId=42&amp;tab=trace"');
     expect(html).toContain('hx-get="/__ops/fragments/select-run?scope=thread%2Fa&amp;runId=42"');
     expect(html).toContain('hx-push-url="/__ops?scope=thread%2Fa&amp;runId=42&amp;tab=trace"');
-    expect(html).toContain('<details><summary>payload</summary><pre>');
+    expect(html).toContain("<details><summary>payload</summary><pre>");
     expect(api.seen.map((r) => r.pathname)).toEqual([
       "/__ops/api/scopes",
       "/__ops/api/scopes/thread%2Fa/runs",
@@ -258,7 +256,7 @@ describe("@agent-os/ops-htmx", () => {
     expect(html).toContain('href="/__ops?scope=thread%2Fa&amp;runId=42&amp;tab=trace"');
     expect(html).toContain('hx-get="/__ops/fragments/select-run?scope=thread%2Fa&amp;runId=42"');
     expect(html).toContain('hx-push-url="/__ops?scope=thread%2Fa&amp;runId=42&amp;tab=trace"');
-    expect(html).toContain('<details><summary>payload</summary><pre>');
+    expect(html).toContain("<details><summary>payload</summary><pre>");
     expect(html).not.toContain("<details open>");
     expect(html).toContain('name="runId" value="42"');
     expect(html).toContain("&lt;svg onload=alert(1)&gt;");

@@ -11,7 +11,6 @@
     "isolatedModules": true,
     "exactOptionalPropertyTypes": false,
     "noUncheckedIndexedAccess": false,
-    "baseUrl": ".",
     "paths": {
       "@agent-os/sandbox": ["../sandbox/src/index.ts"]
     }

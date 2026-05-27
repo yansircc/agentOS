@@ -12,7 +12,6 @@
  *    a Strategy variant when an app needs it)
  */
 
-import { Effect } from "effect";
 import type {
   AnthropicContentBlock,
   AnthropicMessage,
@@ -211,9 +210,7 @@ const encodeAnthropicStructured = (
   _strategy: Strategy,
 ): AnthropicMessagesBody => {
   const userText =
-    stimulus.kind === "live"
-      ? stimulus.userInput.userText
-      : String(stimulus.synthetic.synthetic);
+    stimulus.kind === "live" ? stimulus.userInput.userText : String(stimulus.synthetic.synthetic);
   return {
     system:
       "Return strictly structured output by calling the submit tool. Do not respond in free text.",
@@ -251,13 +248,9 @@ const decodeAnthropicStructured = (
   const r = response.raw as AnthropicRawResponse;
   const blocks = r.content ?? [];
   const toolUseBlocks = blocks.filter(
-    (b): b is Extract<AnthropicContentBlock, { type: "tool_use" }> =>
-      b.type === "tool_use",
+    (b): b is Extract<AnthropicContentBlock, { type: "tool_use" }> => b.type === "tool_use",
   );
-  if (
-    toolUseBlocks.length !== 1 ||
-    toolUseBlocks[0].name !== CHAT_COMPLETIONS_FORCED_TOOL_NAME
-  ) {
+  if (toolUseBlocks.length !== 1 || toolUseBlocks[0].name !== CHAT_COMPLETIONS_FORCED_TOOL_NAME) {
     return {
       ok: false,
       outcome: {
@@ -312,11 +305,7 @@ const classifyAnthropicError = (error: unknown): Outcome => {
   if (status === 400) {
     // Anthropic invalid_request_error with schema-related text →
     // SchemaUnsupported (the wire told us our schema/tool shape is wrong).
-    if (
-      lower.includes("schema") ||
-      lower.includes("input_schema") ||
-      lower.includes("tool")
-    ) {
+    if (lower.includes("schema") || lower.includes("input_schema") || lower.includes("tool")) {
       return { class: "SchemaUnsupported", reason: msg.slice(0, 200) };
     }
     return { class: "ProviderRejected", status: 400, body: msg.slice(0, 500) };
@@ -338,13 +327,12 @@ const classifyAnthropicError = (error: unknown): Outcome => {
   };
 };
 
-export const anthropicMessagesAdapter: LlmProtocolAdapter<"anthropic-messages"> =
-  {
-    kind: "anthropic-messages",
-    version: ADAPTER_VERSION,
-    encodeTurn: encodeAnthropicTurn,
-    decodeTurn: decodeAnthropicTurn,
-    encodeStructured: encodeAnthropicStructured,
-    decodeStructured: decodeAnthropicStructured,
-    classify: classifyAnthropicError,
-  };
+export const anthropicMessagesAdapter: LlmProtocolAdapter<"anthropic-messages"> = {
+  kind: "anthropic-messages",
+  version: ADAPTER_VERSION,
+  encodeTurn: encodeAnthropicTurn,
+  decodeTurn: decodeAnthropicTurn,
+  encodeStructured: encodeAnthropicStructured,
+  decodeStructured: decodeAnthropicStructured,
+  classify: classifyAnthropicError,
+};
