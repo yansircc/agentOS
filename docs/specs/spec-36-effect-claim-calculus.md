@@ -439,19 +439,21 @@ Incorrect placements:
 
 ## 10. Completion Fixed Points
 
-There are two completion criteria. They must not be collapsed into one status
+There are three completion criteria. They must not be collapsed into one status
 column.
 
 ```text
-substrate complete = the effect boundary calculus is closed
-runtime complete   = the calculus has at least one materialization for the
-                     product's required runtime roles
+substrate complete   = the effect boundary calculus is closed
+backend complete     = the product's required primitives have live
+                       carrier/provider materializations
+composition complete = the product-facing flow wires primitives together
+                       without a second source of truth
 ```
 
 This spec targets substrate completion. A vibe-like product can still need
-runtime packages after this spec is accepted. That is not a contradiction:
-missing runtime materialization is a package/product gap, while a missing
-effect-boundary type is a substrate gap.
+backend packages or composition packages after this spec is accepted. That is
+not a contradiction: missing backend materialization or composition wiring is a
+package/product gap, while a missing effect-boundary type is a substrate gap.
 
 Substrate acceptance:
 
@@ -459,9 +461,14 @@ Substrate acceptance:
 > not add a new effect-boundary type, nullable phase field, side-channel policy
 > field, or second fact source to describe an external effect.
 
-Runtime acceptance is product-local. It is satisfied only when that product has
-materialized the generators, admitters, resolvers, and readers it needs over
-this calculus.
+Backend acceptance is product-local. It is satisfied only when that product has
+live materializations for the generators, admitters, resolvers, and readers it
+needs over this calculus.
+
+Composition acceptance is product-flow-local. It is satisfied only when a
+product can consume a coherent run, approval, scheduler, or context flow by
+reading agentOS facts and frames, without reintroducing a second run ledger,
+second trace store, or side-channel policy source.
 
 ---
 
@@ -515,24 +522,42 @@ Rules:
 
 ---
 
-## 12. Materialization Plan
+## 12. Composition Patterns
+
+Composition patterns wire existing primitives into a product-facing flow. They
+do not add effect-boundary fields, claim phases, or durable fact sources.
+
+Stable compositions may graduate to packages when their wiring is invariant
+across products. Volatile compositions remain cookbooks or app code when their
+policy changes by product.
+
+| Composition     | Class       | Boundary decision                                                                                                                                                                |
+| --------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| run-stream      | package     | `submit` + `turn-stream` + claim settlement + ledger projection become one consumer stream; ledger rows remain durable truth and turn frames remain non-durable UI/progress data |
+| scheduled-run   | cookbook    | Workflow/alarm may schedule or resume work, but agentOS ledger remains run truth and D1 mirrors are indexes/projections                                                          |
+| decision-saga   | cookbook    | DecisionGate records requested/decided/consumed facts; product approval policy decides who can approve and when a continuation submit starts                                     |
+| context-pack    | package/app | `@agent-os/context-pack` owns deterministic fact packing and redaction spans; product context selection and summarization strategy remain app-owned                              |
+
+---
+
+## 13. Materialization Plan
 
 The previous six "app runtime gaps" collapse into role materializations over
 this calculus.
 
-| Materialization                          | Role                                 | Boundary decision                                                                                                                                                                                                                  |
-| ---------------------------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| tool registry                            | generator + admitter                 | tool identity and turn authority are one boundary schema; contracts are constructed by the registry, and default admission fails closed                                                                                            |
-| DecisionGate                             | admitter + reader                    | `@agent-os/decision-gate` materializes cross-actor or cross-time approval as `decision_gate.requested/decided/consumed`; core baseline stays synchronous and write-free                                                            |
-| runtime scope                            | resolver                             | `ScopeRef` resolves to resource keys, leases, and cleanup roots; provider cases stay outside core                                                                                                                                  |
-| workspace session                        | core claim shape + carrier resolver  | `kind: "session"` is the core ownership/lifecycle class; `@agent-os/workspace-session` owns provider-neutral lifecycle facts, projection, and claim settlement; sandbox/workspace/preview/backup resolution stays carrier-specific |
-| material ref                             | resolver + admitter input            | carrier-neutral symbolic refs for execution-time material; never a fifth `PreClaim` field and never a resolved handle in ledger payloads                                                                                           |
-| dynamic worker                           | generator or carrier materializer    | bounded stateless Worker execution; not a substitute for session/workspace state                                                                                                                                                   |
-| git/deploy/staging/verification carriers | generator/resolver as needed         | adopt claim settlement and proof anchors without app-specific nouns such as `changeId`                                                                                                                                             |
-| Cloudflare resource/control plane        | resolver/materializer for `external` | account/site/Worker/resource operations fail closed and anchor proofs in carrier-owned vocabulary                                                                                                                                  |
-| context pack                             | reader                               | `@agent-os/context-pack` derives prompt context from supplied facts with explicit redaction spans and included/omitted refs; product context strategy stays app-owned                                                              |
-| turn stream                              | realtime reader                      | `@agent-os/turn-stream` normalizes non-durable token delta frames; ledger facts remain the durable source of truth                                                                                                                 |
-| trace locator/failure plane              | reader                               | ledger projection only; no parallel observability facts                                                                                                                                                                            |
+| Materialization                          | Class       | Role                                 | Boundary decision                                                                                                                                                                                                                  |
+| ---------------------------------------- | ----------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| tool registry                            | backend     | generator + admitter                 | tool identity and turn authority are one boundary schema; contracts are constructed by the registry, and default admission fails closed                                                                                            |
+| DecisionGate                             | composition | admitter + reader                    | `@agent-os/decision-gate` materializes cross-actor or cross-time approval as `decision_gate.requested/decided/consumed`; core baseline stays synchronous and write-free                                                            |
+| runtime scope                            | backend     | resolver                             | `ScopeRef` resolves to resource keys, leases, and cleanup roots; provider cases stay outside core                                                                                                                                  |
+| workspace session                        | backend     | core claim shape + carrier resolver  | `kind: "session"` is the core ownership/lifecycle class; `@agent-os/workspace-session` owns provider-neutral lifecycle facts, projection, and claim settlement; sandbox/workspace/preview/backup resolution stays carrier-specific |
+| material ref                             | adapter     | resolver + admitter input            | carrier-neutral symbolic refs for execution-time material; never a fifth `PreClaim` field and never a resolved handle in ledger payloads                                                                                           |
+| dynamic worker                           | backend     | generator or carrier materializer    | bounded stateless Worker execution; not a substitute for session/workspace state                                                                                                                                                   |
+| git/deploy/staging/verification carriers | backend     | generator/resolver as needed         | adopt claim settlement and proof anchors without app-specific nouns such as `changeId`                                                                                                                                             |
+| Cloudflare resource/control plane        | backend     | resolver/materializer for `external` | account/site/Worker/resource operations fail closed and anchor proofs in carrier-owned vocabulary                                                                                                                                  |
+| context pack                             | composition | reader                               | `@agent-os/context-pack` derives prompt context from supplied facts with explicit redaction spans and included/omitted refs; product context strategy stays app-owned                                                              |
+| turn stream                              | composition | realtime reader                      | `@agent-os/turn-stream` normalizes non-durable token delta frames; ledger facts remain the durable source of truth                                                                                                                 |
+| trace locator/failure plane              | composition | reader                               | ledger projection only; no parallel observability facts                                                                                                                                                                            |
 
 This table is a planning matrix, not a package list. A future package should
 state which role it materializes and which `EffectClaim` fields it owns.
@@ -587,11 +612,11 @@ and MUST NOT parse scheme or path segments for substrate behavior.
 
 ---
 
-## 13. Implementation Stages
+## 14. Implementation Stages
 
 | Stage                                   | Ships                                                                                                 | Does not claim                   |
 | --------------------------------------- | ----------------------------------------------------------------------------------------------------- | -------------------------------- |
-| P0 - spec                               | this document, including substrate/runtime completion criteria and role algebra                       | runtime enforcement              |
+| P0 - spec                               | this document, including substrate/backend/composition completion criteria and role algebra           | runtime enforcement              |
 | P1 - private helpers                    | non-barrel core/internal types and claim validators used by one call path                             | public package API stability     |
 | P2 - generator/admitter materialization | tool registry as the first named generator for tool identity and admitter for pre-execution authority | universal carrier migration      |
 | P3 - resolver materialization           | runtime-scope and at least one carrier adopting typed `ScopeRef` resolution                           | full workspace/session lifecycle |
@@ -609,7 +634,7 @@ rather than add another nullable or provider-specific field.
 
 ---
 
-## 14. Verification Matrix
+## 15. Verification Matrix
 
 Spec-level checks:
 
