@@ -40,7 +40,7 @@ export interface Tool<
   readonly definition: ToolDefinition;
   readonly execute: (args: A) => Promise<R>;
   readonly quota?: QuotaSpec;
-  readonly contract?: ToolContract;
+  readonly contract: ToolContract;
 }
 
 export interface RegisteredToolSpec<A, R> {

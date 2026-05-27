@@ -40,6 +40,13 @@ export class ScopeMissingError extends Data.TaggedError(
   "agent_os.scope_missing",
 )<{}> {}
 
+export class UnsupportedScopeRef extends Data.TaggedError(
+  "agent_os.unsupported_scope_ref",
+)<{
+  readonly scopeId: string;
+  readonly position: "source" | "target";
+}> {}
+
 export class InvalidScheduleAt extends Data.TaggedError(
   "agent_os.invalid_schedule_at",
 )<{

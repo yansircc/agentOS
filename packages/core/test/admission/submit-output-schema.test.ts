@@ -19,6 +19,7 @@ import {
   type InternalSubmitSpec,
   submitAgentEffect,
 } from "../../src/submit-agent";
+import { defineRegisteredTool } from "../../src/tools";
 import { stubAi } from "../_stub-ai";
 
 import { SCHEMA, makeRuntime, submitStructuredResp } from "./_helpers";
@@ -46,7 +47,11 @@ describe("admission — submitAgent outputSchema path (spec-25 §12.1)", () => {
         route: { kind: "cf-ai-binding", modelId: "@cf/test/model" } as const,
         tools: {},
         outputSchema: SCHEMA,
-        deliver: { scope, event: "structured.done" },
+        deliver: {
+          scope,
+          scopeRef: { kind: "conversation", scopeId: scope },
+          event: "structured.done",
+        },
       };
 
       const r = await runtime.runPromise(submitAgentEffect(spec));
@@ -85,7 +90,7 @@ describe("admission — submitAgent outputSchema path (spec-25 §12.1)", () => {
         context: {},
         route: { kind: "cf-ai-binding", modelId: "@cf/test/model" } as const,
         tools: {
-          someTool: {
+          someTool: defineRegisteredTool({
             definition: {
               type: "function",
               function: {
@@ -95,10 +100,15 @@ describe("admission — submitAgent outputSchema path (spec-25 §12.1)", () => {
               },
             },
             execute: async () => "y",
-          },
+            authorityClass: "read",
+          }),
         },
         outputSchema: SCHEMA,
-        deliver: { scope, event: "structured.done" },
+        deliver: {
+          scope,
+          scopeRef: { kind: "conversation", scopeId: scope },
+          event: "structured.done",
+        },
       };
 
       const exit = await runtime.runPromiseExit(submitAgentEffect(spec));

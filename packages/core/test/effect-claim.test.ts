@@ -99,6 +99,8 @@ describe("EffectClaim calculus", () => {
       scopeId: "wp/plugin@example.com",
       systemRef: "wordpress",
     });
+    expect(scopeRefFromLegacyScope("agent/name/item")).toBeNull();
+    expect(scopeRefFromLegacyScope("custom-scope")).toBeNull();
   });
 
   it("rejects nullable scope/session and missing external systemRef shapes", () => {

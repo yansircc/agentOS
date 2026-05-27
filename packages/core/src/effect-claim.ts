@@ -126,7 +126,7 @@ export const makeOperationRef = (
     ":",
   );
 
-export const scopeRefFromLegacyScope = (scopeId: string): ScopeRef => {
+export const scopeRefFromLegacyScope = (scopeId: string): ScopeRef | null => {
   if (scopeId.startsWith("user/") || scopeId.startsWith("org/")) {
     return { kind: "realm", scopeId };
   }
@@ -139,7 +139,7 @@ export const scopeRefFromLegacyScope = (scopeId: string): ScopeRef => {
   if (scopeId.startsWith("wp/")) {
     return { kind: "external", scopeId, systemRef: "wordpress" };
   }
-  return { kind: "realm", scopeId };
+  return null;
 };
 
 export const makePreClaim = (spec: {

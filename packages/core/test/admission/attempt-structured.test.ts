@@ -547,7 +547,11 @@ describe("admission — cross-route structured output (v0.2.13)", () => {
           },
           tools: {},
           outputSchema: SCHEMA,
-          deliver: { scope, event: "structured.done" },
+          deliver: {
+            scope,
+            scopeRef: { kind: "conversation", scopeId: scope },
+            event: "structured.done",
+          },
         };
 
         const r = await runtime.runPromise(submitAgentEffect(spec));
@@ -638,7 +642,11 @@ describe("admission — cross-route structured output (v0.2.13)", () => {
           route: { kind: "cf-ai-binding", modelId: "@cf/test/model" } as const,
           tools: {},
           outputSchema: SCHEMA,
-          deliver: { scope, event: "structured.done" },
+          deliver: {
+            scope,
+            scopeRef: { kind: "conversation", scopeId: scope },
+            event: "structured.done",
+          },
         };
 
         const r = await runtime.runPromise(submitAgentEffect(spec));

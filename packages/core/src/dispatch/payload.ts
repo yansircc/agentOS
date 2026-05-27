@@ -13,6 +13,7 @@ import type {
   TraceContext,
 } from "../types";
 import {
+  isScopeRef,
   validateEffectClaim,
   type PreClaim,
 } from "../effect-claim";
@@ -79,6 +80,10 @@ export const parseRequestedPayload = (raw: string): DispatchRequestedPayload => 
   ) {
     throw new TypeError("dispatch.outbound.requested payload malformed");
   }
+  const scopeRef = target.scopeRef;
+  if (scopeRef !== undefined && !isScopeRef(scopeRef)) {
+    throw new TypeError("dispatch target scopeRef malformed");
+  }
   const traceContext = parseTraceContext(value.traceContext);
   const parsedClaim =
     value.claim === undefined ? undefined : validateEffectClaim(value.claim);
@@ -90,7 +95,11 @@ export const parseRequestedPayload = (raw: string): DispatchRequestedPayload => 
     claim = parsedClaim.claim;
   }
   return {
-    target: { bindingRef: target.bindingRef, scope: target.scope },
+    target: {
+      bindingRef: target.bindingRef,
+      scope: target.scope,
+      ...(scopeRef === undefined ? {} : { scopeRef }),
+    },
     event: value.event,
     data: value.data,
     idempotencyKey: value.idempotencyKey,

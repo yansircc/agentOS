@@ -17,6 +17,7 @@ import {
   JsonStringifyError,
   ScopeMissingError,
   SqlError,
+  UnsupportedScopeRef,
   isCoreClaimedEventKind,
   safeStringify,
 } from "../errors";
@@ -100,6 +101,7 @@ export class Dispatch extends Context.Tag("@agent-os/Dispatch")<
       | JsonStringifyError
       | DispatchTargetNotFound
       | CapabilityRejected
+      | UnsupportedScopeRef
     >;
     readonly receive: (
       envelope: DispatchEnvelope,
@@ -348,6 +350,17 @@ export const DispatchLive = (
 
             const now = yield* Clock.currentTimeMillis;
             const traceContext = copyTraceContext(spec.traceContext);
+            const targetScopeRef =
+              spec.target.scopeRef ??
+              scopeRefFromLegacyScope(spec.target.scope);
+            if (targetScopeRef === null) {
+              return yield* Effect.fail(
+                new UnsupportedScopeRef({
+                  scopeId: spec.target.scope,
+                  position: "target",
+                }),
+              );
+            }
             const claim = makePreClaim({
               operationRef: makeOperationRef("dispatch", [
                 scope,
@@ -355,7 +368,7 @@ export const DispatchLive = (
                 spec.target.scope,
                 spec.idempotencyKey,
               ]),
-              scopeRef: scopeRefFromLegacyScope(spec.target.scope),
+              scopeRef: targetScopeRef,
               authorityRef: {
                 authorityId: "cap_dispatch",
                 authorityClass: "effect",
@@ -366,7 +379,7 @@ export const DispatchLive = (
               },
             });
             const requestedPayload: DispatchRequestedPayload = {
-              target: spec.target,
+              target: { ...spec.target, scopeRef: targetScopeRef },
               event: spec.event,
               data: spec.data,
               idempotencyKey: spec.idempotencyKey,

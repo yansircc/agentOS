@@ -60,7 +60,11 @@ const makeSpec = (scope: string, limit: number): InternalSubmitSpec => ({
   route: { kind: "cf-ai-binding", modelId: "@cf/stub/test" } as const,
   tools: { get_current_time: makeQuotaTool(limit) },
   budget: { maxTurns: 3 },
-  deliver: { event: "test.delivered", scope },
+  deliver: {
+    event: "test.delivered",
+    scope,
+    scopeRef: { kind: "conversation", scopeId: scope },
+  },
 });
 
 const buildRuntime = (state: DurableObjectState, ai: Ai) => {
