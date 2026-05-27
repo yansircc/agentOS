@@ -10,6 +10,11 @@ Status: 1.0 target for provider-neutral algebra. Live D1 backend exports may be 
 - `.:CloudflareResourceBindRequest`
 - `.:CloudflareResourceBoundPayload`
 - `.:CloudflareResourceCarrier`
+- `.:CloudflareD1Fetch`
+- `.:CloudflareD1FetchInit`
+- `.:CloudflareD1FetchResponse`
+- `.:CloudflareD1MutationInput`
+- `.:CloudflareD1ResourceCarrierOptions`
 - `.:CloudflareResourceDestroyRequest`
 - `.:CloudflareResourceDestroyedPayload`
 - `.:CloudflareResourceEventKind`
@@ -32,6 +37,7 @@ Status: 1.0 target for provider-neutral algebra. Live D1 backend exports may be 
 - `.:commitCloudflareResourceFailed`
 - `.:commitCloudflareResourceMutationRecorded`
 - `.:commitCloudflareResourceProvisioned`
+- `.:makeCloudflareD1ResourceCarrier`
 - `.:projectCloudflareResource`
 - `.:settleCloudflareResourceRejected`
 
