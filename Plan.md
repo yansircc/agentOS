@@ -80,10 +80,10 @@ projection API remain bit-identical to `b5da6ad`.
 
 ## Commit shape
 
-Four commits, each independently reviewable:
+Five originally-shipped commits plus one review fix-up commit:
 
 1. `docs(notes): record zeroY n=2 stability audit`
-   adds `docs/notes/zeroY-n2-stability-audit.md`.
+   adds `docs/notes/zeroY-n2-stability-audit.md` and `Plan.md`.
 
 2. `docs(cookbooks): add scheduled-run with compensation chain section`
    adds `docs/cookbooks/scheduled-run.md` including the compensation
@@ -93,12 +93,29 @@ Four commits, each independently reviewable:
    adds `docs/cookbooks/evidence-capture.md`.
 
 4. `docs(spec-36): record n=2 evidence; reference composition cookbooks`
-   + `docs(decision-gate): declare n=2 stable in package readme`
-   edits spec-36 §12 to add Evidence column and §12.1 composition table;
+   edits spec-36 §12 to add Evidence column and §12.1 composition table.
+
+5. `docs(decision-gate): declare n=2 stable in package readme`
    adds `packages/decision-gate/README.md`.
 
+6. `docs(audit): tighten zeroY evidence claims per codex review` (fix-up)
+   responds to codex's review of commits 1-5:
+   - pins zeroY branch/HEAD/dirty state in the audit;
+   - narrows compensation evidence from a fabricated three-edge example
+     to the single `locwp_apply -> rollback` edge actually present at
+     `packages/workflows/src/index.ts:205-249`;
+   - reframes evidence-capture as a proposed agentOS convention motivated
+     by zeroY step definitions, not as zeroY-validated EffectClaim chains
+     (live execution is still pending at `index.ts:497`);
+   - downgrades scheduled-run from N≥2 to "N=1 (vibe) + analogous (zeroY)"
+     and Cloudflare resource/control plane from N≥2 to N=1 (vibe only
+     has resource lifecycle; zeroY carries the credential surface, already
+     counted under material ref);
+   - updates Plan.md commit count to reflect the actual six commits.
+
 The Plan.md at the worktree root is itself committed in commit 1 so the
-reviewer has context from the first change forward.
+reviewer has context from the first change forward; commit 6 updates this
+section to reflect the corrections.
 
 ---
 

@@ -5,7 +5,12 @@
 > only its own step state and any external index (D1, KV) is a derived
 > projection.
 > **Pressure evidence**: vibe's Cloudflare Workflow + D1 + ledger pipeline
-> and zeroY's `@effect/workflow` step graph + CST task state.
+> and zeroY's `@effect/workflow` step graph + CST as task truth. The
+> *scheduler ≠ truth* principle holds in both, but zeroY uses CST as its
+> truth store rather than the agentOS ledger; this cookbook treats CST as
+> an analogue and the cross-product evidence is "analogous N=1", not
+> equivalent N=2. See `docs/notes/zeroY-n2-stability-audit.md` for the
+> source pin and exact analogy boundary.
 > **Uses**: `submit`, `ledger`, `streamEvents`, `dispatch`, `EffectClaim`,
 > optional `@agent-os/decision-gate`, optional `@agent-os/run-stream`.
 > **Does NOT introduce**: a workflow `Pending` phase, a second durable
@@ -128,6 +133,14 @@ A scheduler may declare a compensation step per primary step. Compensation
 fires when the primary step settles to RejectedClaim or when a downstream
 step requires unwinding work already done.
 
+Pressure evidence is **N=1**: zeroY declares one such edge —
+`locwp_apply -> rollback` in
+`packages/workflows/src/index.ts:205-249` — with `mode:
+"rollback_on_failure"`. No other product yet exhibits the convention. The
+shape below is therefore an agentOS cookbook proposal motivated by that
+single edge, not a cross-product-validated convention. A second product's
+compensation pattern may push the linking shape in another direction.
+
 ```text
 primary step mints PreClaim                 -> LivedClaim or RejectedClaim
 on RejectedClaim or downstream failure:
@@ -137,7 +150,7 @@ on RejectedClaim or downstream failure:
 Compensation is **not** an EffectClaim phase. RejectedClaim remains
 terminal. The compensation is a follow-on effect chain.
 
-Linking convention:
+Proposed linking convention:
 
 ```text
 compensation.PreClaim.originRef = {

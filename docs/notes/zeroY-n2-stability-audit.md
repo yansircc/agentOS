@@ -6,6 +6,29 @@
 > **Source repos**: vibe-coding-web (`/Users/yansir/code/52/vibe-coding-web`),
 > zeroY (`/Users/yansir/code/zeroY`).
 
+## Source pin
+
+The audit reads working-tree state, not a pinned commit. Reviewers
+reproducing the audit must check against this exact state:
+
+```text
+zeroY branch:    codex/surface-coi-typed-op-hard-cut
+zeroY HEAD:      b0f2d5d84478c6b5c9a089f7c7ae88114562bb6d
+zeroY worktree:  dirty (many M files in apps/, packages/domain/, tools/)
+```
+
+The dirty files are all in surface-program / agent-runtime areas and do not
+touch `packages/runtime/`, `packages/workflows/`, or `packages/domain/` schema
+contracts that this audit cites. If a reviewer re-audits against zeroY `main`
+or a different branch and finds divergence in the cited file:line refs, the
+audit must be rerun. Findings here should not be cited as "zeroY-main
+evidence" until they are reproduced against clean main.
+
+vibe state is not pinned: the vibe references here are based on the prior
+file inventory from the round that produced spec-36 §12. They have not been
+re-verified against the current vibe HEAD; if vibe has moved, the vibe column
+of the tables below may be stale.
+
 ---
 
 ## Why this note
@@ -43,7 +66,9 @@ boundary matches, even though the backend is not Cloudflare Sandbox.
 
 ---
 
-## Patterns now N=2 (stable evidence)
+## Patterns now N=2 (equivalent invariants)
+
+These rows are validated under the *same* invariants in both products.
 
 | Pattern                              | vibe surface                             | zeroY surface                                                                                          |
 | ------------------------------------ | ---------------------------------------- | ------------------------------------------------------------------------------------------------------ |
@@ -52,13 +77,23 @@ boundary matches, even though the backend is not Cloudflare Sandbox.
 | Trace / artifact projection          | `traceLocator.ts`                        | `artifact-projections.ts`                                                                              |
 | Credential carried as state-only ref | `tenantCredentialCrypto`                 | `ZeroyRuntimeCloudflareService` + `secretState(value)` presence-only redaction                         |
 | **DecisionGate** (approval gate)     | front-door approval flow                 | `wait_for_approval` workflow step driven by `ApplyCandidateApproval`                                   |
-| **Scheduled-run composition**        | Cloudflare Workflow + D1 + ledger        | `@effect/workflow` step graph + D1 + CST task state                                                    |
-| Context packing                      | `sessionContext.ts`                      | `wordpress-context-contracts.ts` + surface program snapshot                                            |
+| Context packing                      | `sessionContext.ts`                      | `wordpress-context-contracts.ts` + surface program snapshot (different domain, same packing shape)     |
 
-Two of these (`DecisionGate`, scheduled-run composition) were explicitly
-gated on N=2 in spec-36 §12. They graduate now. The others were already in
-use but had only one product reference; they now have two and can be cited as
-stable cross-app patterns.
+`DecisionGate` was explicitly gated on N=2 in spec-36 §12. It graduates.
+The others were already in use but had only one product reference; they
+now have a second product validating the same role boundary and the same
+truth-vs-projection split.
+
+## Patterns with analogous (not equivalent) pressure
+
+These rows have similar pattern in both products but differ on the fact
+store or invariant detail enough that they should not be cited as
+equivalent N=2 evidence.
+
+| Pattern                          | vibe                                                  | zeroY                                                                                                          | Why analogous, not equivalent                                                                                                                                                       |
+| -------------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Scheduled-run composition        | Cloudflare Workflow + D1 + ledger truth + index       | `@effect/workflow` step graph + CST as task truth + workflow runtime evidence as separate typed runtime truth | zeroY explicitly keeps "CST remains task truth; workflow execution evidence is separate typed runtime truth" (`packages/workflows/src/index.ts:269`). This is the same *scheduler ≠ truth* principle but a different *truth store*. Cookbook treats CST as the ledger analogue; whether that satisfies spec-36 §1.1 is interpretive. |
+| Cloudflare resource control      | vibe `cloudflareApi.ts` + per-resource service files  | `ZeroyRuntimeCloudflareService` (account/token carrier only; no D1/KV/R2/Queue/Workflow lifecycle ops in repo) | vibe has actual resource lifecycle (provision, mutate, destroy across resource kinds); zeroY currently carries only the credential surface and a D1 binding. The credential-carrying axis matches (and is already counted N=2 above); resource lifecycle is N=1 (vibe only) until zeroY adds CF resource lifecycle ops. |
 
 ---
 
@@ -83,40 +118,57 @@ composition concerns. Neither is a substrate gap.
 
 ### NP1. Compensation workflow
 
-zeroY's pipeline declares a compensation plan as part of the workflow
-definition:
+zeroY's pipeline declares **one** compensation edge in its workflow plan:
 
 ```text
-agent_apply        -> rollback agent_apply
-code_verification  -> (no compensation)
-wait_for_approval  -> (no compensation)
-locwp_apply        -> rollback locwp_apply
-release_canary     -> rollback release
-browser_evidence   -> (no compensation)
+locwp_apply -> rollback         (compensationFor: "locwp_apply",
+                                  mode: "rollback_on_failure")
 ```
 
-When `locwp_apply` fails, the workflow runner invokes the declared
-`rollback locwp_apply` step. This is **not** an EffectClaim phase. It is a
-follow-on EffectClaim chain: the rollback is itself an effect with its own
-operationRef, authorityRef, anchorRef.
+See `packages/workflows/src/index.ts` lines 205-211 (rollback step
+declaration), 243-249 (compensation plan entry), and 462 (the
+`withCompensation` wrapper applied only around `locwp_apply`). Earlier
+drafts of this audit listed `agent_apply -> rollback` and
+`release_canary -> rollback` as additional edges; that was an extrapolation,
+not actual zeroY code. The catalog has exactly one rollback edge.
+
+When `locwp_apply` fails, the workflow runner invokes the `rollback` step.
+This is **not** an EffectClaim phase. It is a follow-on EffectClaim chain:
+the rollback is itself an effect with its own operationRef, authorityRef,
+and anchorRef.
 
 Placement: this stays a saga composition pattern. It does not change
 EffectClaim's 3-phase shape. RejectedClaim remains terminal. The compensation
-step is a *new* PreClaim with a stable convention linking
+step is a *new* PreClaim with a proposed agentOS-side convention linking
 `compensation.operationRef → primary.operationRef` via `originRef` or trace
-metadata.
+metadata. The convention is motivated by the single zeroY edge; a third
+product that compensates would either confirm or refute it. Until then, the
+linking shape is a cookbook proposal, not validated cross-product convention.
 
 Documented as a section in `docs/cookbooks/scheduled-run.md`.
 
-### NP2. Evidence capture
+### NP2. Evidence capture (proposed, not yet zeroY-validated)
 
-zeroY runs `release_canary` and `browser_evidence` after `locwp_apply`
-settles to LivedClaim. These are post-condition validations: HTML reachable,
-expected CSS classes present, no console errors. They produce screenshots
-and signed evidence references.
+zeroY's workflow catalog declares two post-apply steps:
 
-Placement: post-condition validation is **another EffectClaim**, not a new
-anchor kind. The validating effect has:
+```text
+release_canary     (capability: "release_canary",  evidenceKinds: ["release_canary"])
+browser_evidence   (capability: "browser_evidence", after: ["release_canary"])
+```
+
+See `packages/workflows/src/index.ts` lines 215-228 (step definitions) and
+575+ (`evidenceForStep` produces *synthetic* evidence refs for current
+contract-probe mode). Live execution is explicitly **not implemented yet**:
+`packages/workflows/src/index.ts:497` throws when `executionMode === "live"`
+with the message "live execution must be wired to runtime services before it
+can run". So at HEAD `b0f2d5d`, zeroY exhibits the *intent* to run
+post-condition validation but does not actually execute or settle claims for
+verification effects.
+
+Placement: this audit treats post-condition validation as a *proposed
+agentOS convention motivated by zeroY's step shapes*, not as
+zeroY-validated EffectClaim wiring. The proposed shape, recorded in
+`docs/cookbooks/evidence-capture.md`, is:
 
 - `authorityRef.authorityClass = "verify"` (or carrier-named verify class)
 - `anchorRef.anchorKind = "carrier_proof"` pointing to the screenshot or
@@ -124,10 +176,14 @@ anchor kind. The validating effect has:
 - `originRef.originId = primary.operationRef` linking back to the validated
   effect
 
-This avoids inventing a fifth anchor variant or a sixth EffectClaim phase.
-Verification stays in the carrier and uses existing primitives.
+This avoids inventing a fifth anchor variant or a sixth EffectClaim phase
+and stays within the existing primitives. The convention will only count as
+cross-product evidence after at least one product actually runs
+post-condition validation under this shape and produces lived/rejected
+verification claims. zeroY can become that first product once
+`executionMode: "live"` is wired.
 
-Documented as `docs/cookbooks/evidence-capture.md`.
+Documented as `docs/cookbooks/evidence-capture.md` (proposed cookbook).
 
 ---
 
@@ -149,16 +205,20 @@ belong in zeroY domain, not in any agentOS package.
 
 The materialization plan annotates each row with evidence:
 
-| Row                  | Evidence       |
-| -------------------- | -------------- |
-| tool registry        | N≥2 (vibe, zeroY)               |
-| DecisionGate         | N≥2 (vibe, zeroY) → graduate    |
-| scheduled-run        | N≥2 (vibe, zeroY) → cookbook    |
-| compensation         | N=1 (zeroY) → cookbook section  |
-| evidence-capture     | N=1 (zeroY) → cookbook          |
-| workspace-session-cf | N=1 (vibe)    |
-| run-stream           | N=1 (vibe)    |
-| skill registry       | N=0           |
+| Row                       | Evidence                                                                                |
+| ------------------------- | --------------------------------------------------------------------------------------- |
+| tool registry             | N≥2 (vibe, zeroY)                                                                       |
+| DecisionGate              | N≥2 (vibe, zeroY) → graduate                                                            |
+| material ref (credential) | N≥2 (vibe, zeroY) on the symbolic-ref + presence-only redaction axis                    |
+| context pack              | N≥2 (vibe, zeroY) — different domains, same packing shape                               |
+| trace/failure plane       | N≥2 (vibe, zeroY)                                                                       |
+| scheduled-run             | N=1 (vibe) + analogous pressure (zeroY) — different truth store (CST vs ledger)         |
+| Cloudflare resource lifecycle | N=1 (vibe) — zeroY only carries credentials, no resource lifecycle ops              |
+| compensation              | N=1 (zeroY, single `locwp_apply` edge) → cookbook section                               |
+| evidence-capture          | N=0 validated; proposed convention motivated by zeroY step definitions only             |
+| workspace-session-cf      | N=1 (vibe)                                                                              |
+| run-stream                | N=1 (vibe)                                                                              |
+| skill registry            | N=0                                                                                     |
 
 This is a planning matrix, not a guarantee. Graduation means the cookbook
 or package is published with a stability declaration; it does not freeze the
