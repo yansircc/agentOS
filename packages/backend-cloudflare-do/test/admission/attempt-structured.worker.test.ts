@@ -26,7 +26,7 @@ import {
   makeSchemaContract,
   routeFingerprint,
 } from "../../src/admission";
-import { type InternalSubmitSpec, submitAgentEffect } from "../../src/submit-agent";
+import { type InternalSubmitSpec, submitAgentEffect } from "@agent-os/runtime";
 import { stubAi } from "../_stub-ai";
 
 import { SCHEMA, makeRuntime, makeRuntimeWithRegistry, submitStructuredResp } from "./_helpers";

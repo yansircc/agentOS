@@ -19,20 +19,25 @@
  *
  */
 
-import { Clock, Context, Effect, Layer, Schema } from "effect";
+import { Clock, Effect, Layer, Schema } from "effect";
+import {
+  Admission,
+  type AttemptKey,
+  type AttemptResult,
+  type AttemptSpec,
+  type CapabilityLease,
+  type DecodedOutput,
+  type DeliverSpec,
+  type InvalidateSpec,
+  type Outcome,
+} from "@agent-os/runtime";
 import { EventBus } from "../ledger";
 import { fireLedgerEvents, insertLedgerEvent } from "../ledger/inserted-events";
 import { JsonStringifyError, SqlError, safeStringify } from "@agent-os/kernel/errors";
 import { RefResolutionFailed, RefResolverService } from "@agent-os/kernel/ref-resolver";
-import { AiBinding, dispatchProvider, type LlmRoute } from "../llm";
-import {
-  type AdapterMode,
-  getProtocolAdapter,
-  llmProtocolAdapters,
-} from "../llm/protocol/protocol-adapter";
+import { AiBinding, dispatchProvider } from "../llm";
+import { getProtocolAdapter, llmProtocolAdapters } from "../llm/protocol/protocol-adapter";
 
-import type { SchemaContract } from "./json-schema";
-import type { AdmissionImpact, AttemptKey, CapabilityLease, Outcome, Strategy } from "./lease";
 import { decideTier, projectLease } from "./lease";
 import { routeFingerprint } from "./fingerprint";
 import { loadAdmissionRows } from "./payload";
@@ -42,79 +47,6 @@ import { loadAdmissionRows } from "./payload";
 // here so callers that import from "./admission" keep working.
 export { ADAPTER_VERSION } from "../llm/protocol/protocol-adapter";
 export type { AdapterMode } from "../llm/protocol/protocol-adapter";
-
-// ============================================================
-// Stimulus / spec / result shapes
-// ============================================================
-
-export type ProbeInput = { readonly synthetic: unknown };
-export type LiveInput = { readonly userText: string };
-export type DeliverSpec = {
-  readonly event: string;
-  readonly payload: unknown;
-};
-
-export type Stimulus<O> =
-  | { readonly kind: "probe"; readonly synthetic: ProbeInput }
-  | {
-      readonly kind: "live";
-      readonly userInput: LiveInput;
-      // §5: pure function returning data; NEVER an Effect.
-      readonly deliver: (decoded: O) => DeliverSpec;
-    };
-
-export type DecodedOutput = Record<string, unknown>;
-
-export type AttemptSpec<O> = {
-  readonly scope: string;
-  readonly route: LlmRoute;
-  readonly schemaContract: SchemaContract;
-  readonly strategy: Strategy;
-  readonly stimulus: Stimulus<O>;
-  /** Test-only: lets contract tests force decode failures deterministically.
-   *  Production callers leave this undefined / "production". */
-  readonly adapterMode?: AdapterMode;
-};
-
-export type AttemptResult<O> =
-  | {
-      readonly ok: true;
-      readonly decoded: O;
-      readonly outcome: Outcome;
-      readonly lease: CapabilityLease;
-      readonly admissionImpact: AdmissionImpact;
-      readonly shortCircuited: false;
-    }
-  | {
-      readonly ok: false;
-      readonly outcome: Outcome;
-      readonly lease: CapabilityLease;
-      readonly admissionImpact: AdmissionImpact;
-      readonly shortCircuited: boolean;
-    };
-
-export type InvalidateSpec = {
-  readonly scope: string;
-  readonly key: Partial<AttemptKey>;
-  readonly reason: string;
-  readonly by: string;
-};
-
-export class Admission extends Context.Tag("@agent-os/Admission")<
-  Admission,
-  {
-    readonly attemptStructured: <O>(
-      spec: AttemptSpec<O>,
-    ) => Effect.Effect<
-      AttemptResult<O>,
-      SqlError | JsonStringifyError,
-      AiBinding | RefResolverService
-    >;
-    readonly invalidate: (
-      spec: InvalidateSpec,
-    ) => Effect.Effect<{ readonly barrierId: number }, SqlError | JsonStringifyError>;
-  }
->() {}
 
 const reconstructOutcomeFromLease = (
   lease: CapabilityLease & { status: "unsupported" },
@@ -143,28 +75,20 @@ const reconstructOutcomeFromLease = (
 // pattern matches admission/payload.ts which owns the Schema surface.
 void Schema;
 
-export const AdmissionLive = (ctx: DurableObjectState): Layer.Layer<Admission, never, EventBus> =>
+export const AdmissionLive = (
+  ctx: DurableObjectState,
+): Layer.Layer<Admission, never, EventBus | AiBinding | RefResolverService> =>
   Layer.scoped(
     Admission,
     Effect.gen(function* () {
       const sql = ctx.storage.sql;
       const bus = yield* EventBus;
-
-      // Note on R: AdmissionLive itself only requires EventBus. The
-      // attemptStructured method returns an Effect that requires
-      // `AiBinding | RefResolverService` — those are resolved by the
-      // RUNTIME at call time, not provided to this layer. This matches
-      // how submitAgentEffect uses ledger/quota/admission: services are
-      // composed at the runtime boundary (makeAgentRuntime in agent-do
-      // / buildRuntime in tests), not as transitive layer dependencies.
+      const ai = yield* AiBinding;
+      const resolver = yield* RefResolverService;
 
       const attemptStructured = <O>(
         spec: AttemptSpec<O>,
-      ): Effect.Effect<
-        AttemptResult<O>,
-        SqlError | JsonStringifyError,
-        AiBinding | RefResolverService
-      > =>
+      ): Effect.Effect<AttemptResult<O>, SqlError | JsonStringifyError> =>
         Effect.gen(function* () {
           const adapterMode = spec.adapterMode ?? "production";
           const now = yield* Clock.currentTimeMillis;
@@ -210,7 +134,12 @@ export const AdmissionLive = (ctx: DurableObjectState): Layer.Layer<Admission, n
           );
 
           // Step 5-6: call provider + decode (or classify error).
-          const rawEither = yield* Effect.either(dispatchProvider(spec.route, body));
+          const rawEither = yield* Effect.either(
+            dispatchProvider(spec.route, body).pipe(
+              Effect.provideService(AiBinding, ai),
+              Effect.provideService(RefResolverService, resolver),
+            ),
+          );
 
           let outcome: Outcome;
           let decoded: DecodedOutput | undefined;

@@ -24,7 +24,8 @@
  * fingerprint stable across credential rotation.
  */
 
-import { Context, Effect } from "effect";
+import { Context, Effect, Layer } from "effect";
+import { LlmTransport } from "@agent-os/runtime";
 import {
   ProviderHttpFailure,
   UpstreamFailure,
@@ -587,3 +588,19 @@ export const callLlm = (
       catch: (cause) => new UpstreamFailure({ cause }),
     });
   });
+
+export const LlmTransportLive: Layer.Layer<LlmTransport, never, AiBinding | RefResolverService> =
+  Layer.effect(
+    LlmTransport,
+    Effect.gen(function* () {
+      const ai = yield* AiBinding;
+      const refs = yield* RefResolverService;
+      return {
+        call: (request) =>
+          callLlm(request).pipe(
+            Effect.provideService(AiBinding, ai),
+            Effect.provideService(RefResolverService, refs),
+          ),
+      };
+    }),
+  );

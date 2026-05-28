@@ -14,38 +14,19 @@
  * commit, so `on(kind, handler)` subscribers still see the event.
  */
 
-import { Clock, Context, Effect, Layer } from "effect";
+import { Clock, Effect, Layer } from "effect";
+import { Quota, type GrantResult } from "@agent-os/runtime";
 import { EventBus } from "../ledger";
 import { fireLedgerEvents, insertLedgerEvent } from "../ledger/inserted-events";
-import { JsonStringifyError, SqlError, safeStringify } from "@agent-os/kernel/errors";
+import { SqlError, safeStringify } from "@agent-os/kernel/errors";
 import { sqlText } from "../storage/sql-row";
 import { decodeConsumedPayloadSync } from "./payload";
-
-export interface GrantResult {
-  readonly granted: boolean;
-  readonly consumed: number;
-  readonly limit: number;
-}
 
 /** Owned schema for events.kind = 'dispatch.consumed' payload. We are the
  *  sole writer (consumedPayload below), so any shape mismatch read back is
  *  infra corruption — let Schema.decodeUnknownSync throw, transactionSync
  *  rolls back, and Effect.try wraps it as SqlError. This is the same
  *  failure path as JSON.parse failure, by construction. */
-export class Quota extends Context.Tag("@agent-os/Quota")<
-  Quota,
-  {
-    readonly tryGrant: (
-      scope: string,
-      key: string,
-      amount: number,
-      windowMs: number,
-      limit: number,
-      toolName: string,
-    ) => Effect.Effect<GrantResult, SqlError | JsonStringifyError>;
-  }
->() {}
-
 export const QuotaLive = (ctx: DurableObjectState): Layer.Layer<Quota, never, EventBus> =>
   Layer.scoped(
     Quota,

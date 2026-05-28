@@ -11,10 +11,9 @@
  * resource event.
  */
 
-import { Clock, Context, Effect, Layer } from "effect";
+import { Clock, Effect, Layer } from "effect";
 import {
   InvalidResourceAmount,
-  JsonStringifyError,
   ResourceInsufficient,
   ResourceReservationClosed,
   ResourceReservationNotFound,
@@ -23,52 +22,14 @@ import {
 } from "@agent-os/kernel/errors";
 import { EventBus } from "../ledger";
 import { fireLedgerEvents, insertLedgerEvent } from "../ledger/inserted-events";
-import type {
-  LedgerEvent,
-  ResourceGrantResult,
-  ResourceGrantSpec,
-  ResourceReservationSpec,
-  ResourceReserveResult,
-  ResourceReserveSpec,
-} from "@agent-os/runtime";
+import { Resources } from "@agent-os/runtime";
+import type { LedgerEvent } from "@agent-os/runtime";
 
-import { emptyProjection, loadState, type ResourceProjection } from "./projection";
+import { emptyProjection, loadState } from "./projection";
 
 // Re-export the projection shape so callers that historically imported
 // it from "./resources" keep working.
-export type { ResourceProjection } from "./projection";
-
-export class Resources extends Context.Tag("@agent-os/Resources")<
-  Resources,
-  {
-    readonly grant: (
-      scope: string,
-      spec: ResourceGrantSpec,
-    ) => Effect.Effect<ResourceGrantResult, SqlError | JsonStringifyError | InvalidResourceAmount>;
-    readonly reserve: (
-      scope: string,
-      spec: ResourceReserveSpec,
-    ) => Effect.Effect<
-      ResourceReserveResult,
-      SqlError | JsonStringifyError | InvalidResourceAmount | ResourceInsufficient
-    >;
-    readonly consume: (
-      scope: string,
-      spec: ResourceReservationSpec,
-    ) => Effect.Effect<
-      void,
-      SqlError | JsonStringifyError | ResourceReservationNotFound | ResourceReservationClosed
-    >;
-    readonly release: (
-      scope: string,
-      spec: ResourceReservationSpec,
-    ) => Effect.Effect<
-      void,
-      SqlError | JsonStringifyError | ResourceReservationNotFound | ResourceReservationClosed
-    >;
-    readonly project: (scope: string, key: string) => Effect.Effect<ResourceProjection, SqlError>;
-  }
->() {}
+export type { ResourceProjection } from "@agent-os/runtime";
 
 const ensureEventsSchema = (sql: SqlStorage): Effect.Effect<void, SqlError> =>
   Effect.try({

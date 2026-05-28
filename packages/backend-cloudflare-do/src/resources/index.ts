@@ -10,4 +10,5 @@
  *   payload.ts    Schema decoders for resource.* event rows (leaf)
  */
 
-export { Resources, ResourcesLive, type ResourceProjection } from "./resources";
+export { Resources, type ResourceProjection } from "@agent-os/runtime";
+export { ResourcesLive } from "./resources";

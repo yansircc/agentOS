@@ -15,7 +15,7 @@ import { runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "@effect/vitest";
 
 import { Ledger } from "../../src/ledger";
-import { type InternalSubmitSpec, submitAgentEffect } from "../../src/submit-agent";
+import { type InternalSubmitSpec, submitAgentEffect } from "@agent-os/runtime";
 import { defineRegisteredTool } from "@agent-os/kernel/tools";
 import { stubAi } from "../_stub-ai";
 

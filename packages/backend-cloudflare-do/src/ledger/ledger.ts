@@ -7,9 +7,14 @@
  * LedgerLive depends on EventBus (Layer.provide composition).
  */
 
-import { Clock, Context, Effect, Layer } from "effect";
-import { JsonStringifyError, SqlError, safeStringify } from "@agent-os/kernel/errors";
-import type { EventQueryOptions, LedgerEvent, LedgerEventRpc } from "@agent-os/runtime";
+import { Clock, Effect, Layer } from "effect";
+import { SqlError, safeStringify } from "@agent-os/kernel/errors";
+import {
+  Ledger,
+  type EventQueryOptions,
+  type LedgerEvent,
+  type LedgerEventRpc,
+} from "@agent-os/runtime";
 import { sqlText } from "../storage/sql-row";
 import { EventBus } from "./event-bus";
 import { fireLedgerEvents, insertLedgerEvent } from "./inserted-events";
@@ -19,25 +24,6 @@ const MAX_EVENT_LIMIT = 1000;
 
 const normalizeNonNegativeInteger = (value: number | undefined, fallback: number): number =>
   value === undefined || !Number.isFinite(value) ? fallback : Math.max(0, Math.floor(value));
-
-export class Ledger extends Context.Tag("@agent-os/Ledger")<
-  Ledger,
-  {
-    readonly log: (
-      kind: string,
-      payload: unknown,
-      scope: string,
-    ) => Effect.Effect<LedgerEvent, SqlError | JsonStringifyError>;
-    readonly events: (
-      scope: string,
-      opts?: EventQueryOptions,
-    ) => Effect.Effect<ReadonlyArray<LedgerEvent>, SqlError>;
-    readonly streamSnapshot: (
-      scope: string,
-      opts?: Pick<EventQueryOptions, "afterId" | "kinds">,
-    ) => Effect.Effect<ReadonlyArray<LedgerEvent>, SqlError>;
-  }
->() {}
 
 const ensureSchema = (sql: SqlStorage): Effect.Effect<void, SqlError> =>
   Effect.try({
