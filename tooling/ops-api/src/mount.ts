@@ -5,7 +5,7 @@
  *
  * Routes all /__ops/api/* paths. Returns 405 for non-GET methods.
  * Auth, scope resolution, and opaque-surface gating all run before
- * RPC dispatch. Every response shape comes from AgentDOBase RPC; no
+ * RPC dispatch. Every response shape comes from Cloudflare backend RPC; no
  * server-side cross-scope composition.
  */
 
@@ -22,7 +22,7 @@ import type {
   RunStatusKind,
   RunTrace,
   StreamEventsOptions,
-} from "@agent-os/core";
+} from "@agent-os/runtime";
 
 import { decodeAttemptKey } from "./encoding";
 import { jsonOk, opsError } from "./errors";
@@ -36,7 +36,7 @@ import type {
 } from "./types";
 
 // ============================================================
-// AgentDOBase RPC surface that ops-api calls.
+// Cloudflare backend RPC surface that ops-api calls.
 //   This is a structural interface; the actual DurableObjectStub is
 //   cast to this shape. Test mocks satisfy the same interface.
 // ============================================================
@@ -328,7 +328,7 @@ const onRunsList = async (url: URL, stub: AgentDOIntrospection): Promise<Respons
     return opsError("bad_request", "limit must be a positive integer");
   }
 
-  // /runs is a 1:1 RPC mapping to AgentDOBase.runs — projection lives in core.
+  // /runs is a 1:1 RPC mapping to Cloudflare backend.runs — projection lives in runtime.
   // ops-api does no local fetch+project; the DO walks its own ledger.
   const spec: RunListSpec = {
     limit,

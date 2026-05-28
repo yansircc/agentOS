@@ -40,7 +40,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:projectWorkspaceSession`
 - `.:resolveWorkspaceSession`
 - `.:settleWorkspaceSessionRejected`
-- `.:workspaceSessionExtensionPackage`
+- `.:workspaceSessionBoundaryPackage`
 - `.:workspaceSessionBoundaryContract`
 - `.:workspaceSessionFailedPayload`
 - `.:workspaceSessionRejectionKind`

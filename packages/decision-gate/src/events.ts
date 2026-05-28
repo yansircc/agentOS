@@ -4,7 +4,7 @@ import {
   type LivedClaim,
   type PreClaim,
   type RejectionRef,
-} from "@agent-os/core/effect-claim";
+} from "@agent-os/kernel/effect-claim";
 
 import { DECISION_GATE_EVENT_VOCABULARY } from "./extension";
 

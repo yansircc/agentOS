@@ -2,13 +2,13 @@ import {
   validateEffectClaim,
   type LivedClaim,
   type RejectedClaim,
-} from "@agent-os/core/effect-claim";
+} from "@agent-os/kernel/effect-claim";
 import {
   isMaterialRef,
   type BindingMaterialRef,
   type ExternalResourceMaterialRef,
   type MaterialRef,
-} from "@agent-os/core/material-ref";
+} from "@agent-os/kernel/material-ref";
 
 import { CLOUDFLARE_RESOURCE_EVENT_VOCABULARY } from "./extension";
 

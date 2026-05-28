@@ -7,7 +7,7 @@ import type {
   RunStatus,
   RunSummary,
   RunTrace,
-} from "@agent-os/core";
+} from "@agent-os/runtime";
 import type { OpsErrorBody, ScopeSummary } from "@agent-os/ops-api";
 
 export type OpsApiFetch = (request: Request) => Promise<Response>;

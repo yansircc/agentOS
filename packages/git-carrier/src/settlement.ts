@@ -1,4 +1,4 @@
-import type { ExtensionCapability } from "@agent-os/core/extensions";
+import type { ExtensionCapability } from "@agent-os/kernel/extensions";
 
 import {
   GIT_EVENTS,

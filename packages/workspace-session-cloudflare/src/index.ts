@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { settleLivedClaim, type PreClaim } from "@agent-os/core/effect-claim";
+import { settleLivedClaim, type PreClaim } from "@agent-os/kernel/effect-claim";
 import {
   resolveWorkspaceSession,
   settleWorkspaceSessionRejected,

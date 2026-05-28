@@ -20,7 +20,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:commitDecisionGateConsumed`
 - `.:commitDecisionGateDecided`
 - `.:commitDecisionGateRequested`
-- `.:decisionGateExtensionPackage`
+- `.:decisionGateBoundaryPackage`
 - `.:decisionGateBoundaryContract`
 - `.:projectDecisionGate`
 

@@ -1,6 +1,6 @@
 import { Data, Effect } from "effect";
-import type { LivedClaim, PreClaim, RejectedClaim } from "@agent-os/core/effect-claim";
-import type { RuntimeScopeResolution } from "@agent-os/core/runtime-scope";
+import type { LivedClaim, PreClaim, RejectedClaim } from "@agent-os/kernel/effect-claim";
+import type { RuntimeScopeResolution } from "@agent-os/kernel/runtime-scope";
 
 export const DYNAMIC_WORKER_MAX_TIMEOUT_MS = 10_000;
 export const DEFAULT_MAX_BODY_BYTES = 16_384;

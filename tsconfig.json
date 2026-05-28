@@ -1,5 +1,11 @@
 {
   "files": [],
-  "references": [{ "path": "./packages/image" }, { "path": "./packages/core" }],
+  "references": [
+    { "path": "./packages/kernel" },
+    { "path": "./packages/runtime" },
+    { "path": "./packages/backend-cloudflare-do" },
+    { "path": "./packages/backend-in-memory" },
+    { "path": "./packages/image" }
+  ],
   "include": []
 }

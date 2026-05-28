@@ -6,9 +6,17 @@
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
     },
     "packageOverrides": {
-      "packages/core": {
+      "packages/kernel": {
         "dependencyOwner": "package-local",
-        "dependencyOwnerReason": "core owns substrate dependency declarations in packages/core/package.json"
+        "dependencyOwnerReason": "kernel owns platform-free algebra dependency declarations"
+      },
+      "packages/runtime": {
+        "dependencyOwner": "package-local",
+        "dependencyOwnerReason": "runtime owns backend-neutral runtime dependency declarations"
+      },
+      "packages/backend-cloudflare-do": {
+        "dependencyOwner": "package-local",
+        "dependencyOwnerReason": "Cloudflare DO backend owns platform adapter dependency declarations"
       }
     },
     "hostTooling": [
@@ -30,32 +38,32 @@
     ],
     "allowedAdapters": [
       {
-        "path": "packages/core/src/ledger/stream.ts",
-        "owner": "@agent-os/core",
+        "path": "packages/backend-cloudflare-do/src/ledger/stream.ts",
+        "owner": "@agent-os/backend-cloudflare-do",
         "reason": "terminal ledger SSE adapter owns Response construction",
         "rules": ["EFF402"]
       },
       {
-        "path": "packages/core/src/storage/sql-row.ts",
-        "owner": "@agent-os/core-storage",
+        "path": "packages/backend-cloudflare-do/src/storage/sql-row.ts",
+        "owner": "@agent-os/backend-cloudflare-do-storage",
         "reason": "SQLite row adapter owns fail-fast host column shape assertion",
         "rules": ["EFF025"]
       },
       {
-        "path": "packages/core/test/_in-memory-do.ts",
-        "owner": "@agent-os/core-tests",
+        "path": "packages/backend-cloudflare-do/test/_in-memory-do.ts",
+        "owner": "@agent-os/backend-cloudflare-do-tests",
         "reason": "test-only Durable Object SQL adapter models transactionSync rollback by synchronous throws",
         "rules": ["EFF001", "EFF025"]
       },
       {
-        "path": "packages/core/test/admission/attempt-structured.worker.test.ts",
-        "owner": "@agent-os/core-tests",
+        "path": "packages/backend-cloudflare-do/test/admission/attempt-structured.worker.test.ts",
+        "owner": "@agent-os/backend-cloudflare-do-tests",
         "reason": "test HTTP fixture owns provider Response construction",
         "rules": ["EFF402"]
       },
       {
-        "path": "packages/core/test/test-worker.ts",
-        "owner": "@agent-os/core-tests",
+        "path": "packages/backend-cloudflare-do/test/test-worker.ts",
+        "owner": "@agent-os/backend-cloudflare-do-tests",
         "reason": "Cloudflare worker test adapter owns Response construction",
         "rules": ["EFF402"]
       },
@@ -128,64 +136,8 @@
     ]
   },
   "packageManifests": {
-    "packages/core": {
-      "shape": ["library"],
-      "allowedAdapters": [
-        {
-          "path": "src/agent-do.ts",
-          "owner": "@agent-os/core/cf-do",
-          "reason": "AgentDOBase is the terminal Durable Object HTTP facade for streamEvents; missing named scope is a runtime invariant violation with no Effect return channel",
-          "rules": ["EFF025", "EFF402"]
-        },
-        {
-          "path": "src/dispatch/payload.ts",
-          "owner": "@agent-os/core/dispatch",
-          "reason": "dispatch outbox payload parsing is sync ledger-wire validation caught at the Effect boundary and mapped to SqlError",
-          "rules": ["EFF025"]
-        },
-        {
-          "path": "src/dispatch/receiver.ts",
-          "owner": "@agent-os/core/dispatch",
-          "reason": "dispatch inbound projection parsing runs inside synchronous transactionSync and must fail the transaction on malformed ledger wire data",
-          "rules": ["EFF025"]
-        },
-        {
-          "path": "src/ledger/stream.ts",
-          "owner": "@agent-os/core/http-stream",
-          "reason": "terminal SSE adapter constructs the Response boundary for ledger streamEvents",
-          "rules": ["EFF402"]
-        },
-        {
-          "path": "src/llm/protocol/anthropic-messages.ts",
-          "owner": "@agent-os/core/provider-adapters",
-          "reason": "Anthropic tool-use adapter preserves malformed assistant tool arguments as raw wire data by design",
-          "rules": ["EFF001"]
-        },
-        {
-          "path": "src/llm/protocol/openai-chat.ts",
-          "owner": "@agent-os/core/provider-adapters",
-          "reason": "Chat Completions turn decoder is a finite wire adapter; malformed upstream turn shape is caught and reified as UpstreamFailure",
-          "rules": ["EFF024", "EFF025"]
-        },
-        {
-          "path": "test/_in-memory-do.ts",
-          "owner": "@agent-os/core/test-runtime",
-          "reason": "test-only DO SQLite subset intentionally models transactionSync rollback and fail-fast unsupported SQL using synchronous exceptions",
-          "rules": ["EFF001", "EFF025"]
-        },
-        {
-          "path": "test/test-worker.ts",
-          "owner": "@agent-os/core/test-worker",
-          "reason": "Cloudflare test Worker entry is the terminal HTTP adapter for worker-pool contract tests",
-          "rules": ["EFF402"]
-        },
-        {
-          "path": "test/admission/attempt-structured.worker.test.ts",
-          "owner": "@agent-os/core/test-provider",
-          "reason": "test provider stub constructs terminal HTTP Response objects to model upstream transport",
-          "rules": ["EFF402"]
-        }
-      ]
+    "packages/kernel": {
+      "shape": ["library"]
     },
     "packages/image": {
       "shape": ["library"],
@@ -224,6 +176,71 @@
     },
     "packages/workspace-session": {
       "shape": ["library"]
+    },
+    "packages/runtime": {
+      "shape": ["library"]
+    },
+    "packages/backend-in-memory": {
+      "shape": ["library"]
+    },
+    "packages/backend-cloudflare-do": {
+      "shape": ["library"],
+      "allowedAdapters": [
+        {
+          "path": "src/agent-do.ts",
+          "owner": "@agent-os/backend-cloudflare-do/cf-do",
+          "reason": "CloudflareAgentDO is the terminal Durable Object HTTP facade for streamEvents; missing named scope is a runtime invariant violation with no Effect return channel",
+          "rules": ["EFF025", "EFF402"]
+        },
+        {
+          "path": "src/dispatch/payload.ts",
+          "owner": "@agent-os/backend-cloudflare-do/dispatch",
+          "reason": "dispatch outbox payload parsing is sync ledger-wire validation caught at the Effect boundary and mapped to SqlError",
+          "rules": ["EFF025"]
+        },
+        {
+          "path": "src/dispatch/receiver.ts",
+          "owner": "@agent-os/backend-cloudflare-do/dispatch",
+          "reason": "dispatch inbound projection parsing runs inside synchronous transactionSync and must fail the transaction on malformed ledger wire data",
+          "rules": ["EFF025"]
+        },
+        {
+          "path": "src/ledger/stream.ts",
+          "owner": "@agent-os/backend-cloudflare-do/http-stream",
+          "reason": "terminal SSE adapter constructs the Response boundary for ledger streamEvents",
+          "rules": ["EFF402"]
+        },
+        {
+          "path": "src/llm/protocol/anthropic-messages.ts",
+          "owner": "@agent-os/backend-cloudflare-do/provider-adapters",
+          "reason": "Anthropic tool-use adapter preserves malformed assistant tool arguments as raw wire data by design",
+          "rules": ["EFF001"]
+        },
+        {
+          "path": "src/llm/protocol/openai-chat.ts",
+          "owner": "@agent-os/backend-cloudflare-do/provider-adapters",
+          "reason": "Chat Completions turn decoder is a finite wire adapter; malformed upstream turn shape is caught and reified as UpstreamFailure",
+          "rules": ["EFF024", "EFF025"]
+        },
+        {
+          "path": "test/_in-memory-do.ts",
+          "owner": "@agent-os/backend-cloudflare-do/test-runtime",
+          "reason": "test-only DO SQLite subset intentionally models transactionSync rollback and fail-fast unsupported SQL using synchronous exceptions",
+          "rules": ["EFF001", "EFF025"]
+        },
+        {
+          "path": "test/test-worker.ts",
+          "owner": "@agent-os/backend-cloudflare-do/test-worker",
+          "reason": "Cloudflare test Worker entry is the terminal HTTP adapter for worker-pool contract tests",
+          "rules": ["EFF402"]
+        },
+        {
+          "path": "test/admission/attempt-structured.worker.test.ts",
+          "owner": "@agent-os/backend-cloudflare-do/test-provider",
+          "reason": "test provider stub constructs terminal HTTP Response objects to model upstream transport",
+          "rules": ["EFF402"]
+        }
+      ]
     }
   }
 }

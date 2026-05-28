@@ -1,6 +1,6 @@
 import { it } from "@effect/vitest";
 import { Cause, Effect, Exit, Option } from "effect";
-import { makePreClaim } from "@agent-os/core/effect-claim";
+import { makePreClaim } from "@agent-os/kernel/effect-claim";
 import {
   makeCloudflareWorkspaceSessionLiveProvider,
   makeCloudflareWorkspaceSessionProvider,

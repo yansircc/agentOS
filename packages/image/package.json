@@ -16,7 +16,7 @@
     "test": "vp test run"
   },
   "dependencies": {
-    "@agent-os/core": "workspace:*"
+    "@agent-os/kernel": "workspace:*"
   },
   "devDependencies": {
     "@effect/language-service": "catalog:",

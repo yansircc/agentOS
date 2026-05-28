@@ -11,7 +11,12 @@
     "isolatedModules": true,
     "types": ["@cloudflare/workers-types", "vitest/globals"],
     "paths": {
-      "@agent-os/core": ["../../packages/core/src/index.ts"],
+      "@agent-os/kernel": ["../../packages/kernel/src/index.ts"],
+      "@agent-os/kernel/effect-claim": ["../../packages/kernel/src/effect-claim.ts"],
+      "@agent-os/kernel/llm": ["../../packages/kernel/src/llm.ts"],
+      "@agent-os/kernel/material-ref": ["../../packages/kernel/src/material-ref.ts"],
+      "@agent-os/kernel/tools": ["../../packages/kernel/src/tools.ts"],
+      "@agent-os/runtime": ["../../packages/runtime/src/index.ts"],
       "@agent-os/ops-api": ["../ops-api/src/index.ts"]
     },
     "exactOptionalPropertyTypes": false,

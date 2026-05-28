@@ -16,8 +16,9 @@
     "test": "vp test run"
   },
   "dependencies": {
-    "@agent-os/core": "workspace:*",
-    "@agent-os/ops-api": "workspace:*"
+    "@agent-os/kernel": "workspace:*",
+    "@agent-os/ops-api": "workspace:*",
+    "@agent-os/runtime": "workspace:*"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "catalog:",

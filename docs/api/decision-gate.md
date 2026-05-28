@@ -16,7 +16,7 @@
 - `.:commitDecisionGateConsumed`
 - `.:commitDecisionGateDecided`
 - `.:commitDecisionGateRequested`
-- `.:decisionGateExtensionPackage`
+- `.:decisionGateBoundaryPackage`
 - `.:decisionGateBoundaryContract`
 - `.:projectDecisionGate`
 

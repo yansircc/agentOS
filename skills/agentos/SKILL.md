@@ -24,7 +24,7 @@ Use this skill to integrate agentOS without re-inventing its substrate.
    ```
 
 3. Prefer the agentOS primitive:
-   - agent run loop -> `AgentDOBase.submit`;
+   - agent run loop -> Cloudflare backend `submit`;
    - tool identity/admission -> `defineRegisteredTool` and `ToolContract`;
    - durable truth -> ledger events and projections;
    - execution means -> `MaterialRef` and `RefResolver`;

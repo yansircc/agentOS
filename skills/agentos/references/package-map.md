@@ -4,7 +4,9 @@
 
 | Need                                 | Package                                  |
 | ------------------------------------ | ---------------------------------------- |
-| Durable agent substrate              | `@agent-os/core`                         |
+| Pure agentOS algebra                 | `@agent-os/kernel`                       |
+| Runtime contracts and ports          | `@agent-os/runtime`                      |
+| Cloudflare DO backend                | `@agent-os/backend-cloudflare-do`        |
 | Cloudflare resource lifecycle        | `@agent-os/cloudflare-resource`          |
 | Workspace/session facts              | `@agent-os/workspace-session`            |
 | Cloudflare Sandbox workspace backend | `@agent-os/workspace-session-cloudflare` |

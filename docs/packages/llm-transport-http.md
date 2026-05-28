@@ -9,7 +9,7 @@ Gemini-style token deltas.
 
 LLM streaming is non-durable turn progress. Durable run truth remains the
 terminal `SubmitResult` plus ledger events. This package materializes the LLM
-protocol surface owned by `@agent-os/core`; there is no separate
+protocol surface owned by `@agent-os/kernel`; there is no separate
 provider-neutral `@agent-os/llm-transport` algebra package.
 
 ## Minimal Usage

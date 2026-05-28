@@ -2,7 +2,7 @@
  * @agent-os/ops-api — public barrel.
  *
  *
- * v0 is an HTTP projection of @agent-os/core AgentDOBase RPC. It owns
+ * v0 is an HTTP projection of @agent-os/runtime Cloudflare backend RPC. It owns
  * no storage and ships no default ScopeResolver / OpsAuth.
  */
 

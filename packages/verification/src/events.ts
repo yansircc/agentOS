@@ -1,4 +1,4 @@
-import { validateEffectClaim, type LivedClaim } from "@agent-os/core/effect-claim";
+import { validateEffectClaim, type LivedClaim } from "@agent-os/kernel/effect-claim";
 import { VERIFICATION_EVENT_VOCABULARY } from "./extension";
 
 export const VERIFICATION_EVENTS = VERIFICATION_EVENT_VOCABULARY;

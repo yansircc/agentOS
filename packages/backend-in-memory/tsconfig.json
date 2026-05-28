@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM"],
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "types": ["vitest/globals"],
+    "paths": {
+      "@agent-os/kernel": ["../kernel/src/index.ts"],
+      "@agent-os/kernel/effect-claim": ["../kernel/src/effect-claim.ts"],
+      "@agent-os/kernel/llm": ["../kernel/src/llm.ts"],
+      "@agent-os/kernel/material-ref": ["../kernel/src/material-ref.ts"],
+      "@agent-os/kernel/tools": ["../kernel/src/tools.ts"],
+      "@agent-os/runtime": ["../runtime/src/index.ts"]
+    },
+    "exactOptionalPropertyTypes": false,
+    "noUncheckedIndexedAccess": false
+  },
+  "include": ["src/**/*", "test/**/*", "vitest.config.ts"]
+}

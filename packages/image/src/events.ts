@@ -3,7 +3,7 @@ import { IMAGE_EVENT_PREFIX } from "./extension";
 
 /**
  * Package-owned vocabulary. Core does not reserve modality prefixes globally:
- * a DO protects these facts by returning `imageExtensionPackage(version)` from
+ * a DO protects these facts by returning `imageEventNamespace(version)` from
  * registerExtensions(), which makes app-facing core write paths reject image.*.
  * v0 ships projection names and the negative gate declaration only; positive
  * package commits remain deferred by contract.

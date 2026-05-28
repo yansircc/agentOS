@@ -1,6 +1,6 @@
 import { Clock, Duration, Effect } from "effect";
-import { settleLivedClaim, settleRejectedClaim } from "@agent-os/core/effect-claim";
-import { resolveRuntimeScope } from "@agent-os/core/runtime-scope";
+import { settleLivedClaim, settleRejectedClaim } from "@agent-os/kernel/effect-claim";
+import { resolveRuntimeScope } from "@agent-os/kernel/runtime-scope";
 
 import { validateDynamicWorkerRequest } from "./policy";
 import {

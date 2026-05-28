@@ -13,7 +13,7 @@ import {
   ImageAiBinding,
   openaiChatCompatibleImageAdapter,
 } from "../src";
-import { RefResolverLive } from "@agent-os/core/ref-resolver";
+import { RefResolverLive } from "@agent-os/kernel/ref-resolver";
 
 const SENTINEL_AI = {
   run: (() => {

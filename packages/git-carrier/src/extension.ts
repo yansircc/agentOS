@@ -1,4 +1,4 @@
-import { boundaryExtensionPackage, defineBoundaryContract } from "@agent-os/core/boundary-contract";
+import { boundaryPackage, defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
 
 export const GIT_EVENT_PREFIX = "git.";
 
@@ -35,5 +35,5 @@ export const gitCarrierBoundaryContract = defineBoundaryContract({
   },
 });
 
-export const gitCarrierExtensionPackage = (version: string) =>
-  boundaryExtensionPackage(gitCarrierBoundaryContract, version);
+export const gitCarrierBoundaryPackage = (version: string) =>
+  boundaryPackage(gitCarrierBoundaryContract, version);

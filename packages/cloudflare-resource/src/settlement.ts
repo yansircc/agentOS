@@ -1,6 +1,6 @@
-import type { RejectionRef } from "@agent-os/core/effect-claim";
-import { settleRejectedClaim, type PreClaim } from "@agent-os/core/effect-claim";
-import type { ExtensionCapability } from "@agent-os/core/extensions";
+import type { RejectionRef } from "@agent-os/kernel/effect-claim";
+import { settleRejectedClaim, type PreClaim } from "@agent-os/kernel/effect-claim";
+import type { ExtensionCapability } from "@agent-os/kernel/extensions";
 
 import type { CloudflareResourceFailure } from "./carrier";
 import {

@@ -1,11 +1,11 @@
-import { isOriginRef, type OriginRef } from "@agent-os/core/effect-claim";
-import { isMaterialRequirement, type MaterialRequirement } from "@agent-os/core/material-ref";
+import { isOriginRef, type OriginRef } from "@agent-os/kernel/effect-claim";
+import { isMaterialRequirement, type MaterialRequirement } from "@agent-os/kernel/material-ref";
 import {
   defineRegisteredTool,
   type Tool,
   type ToolAdmitter,
   type ToolDefinition,
-} from "@agent-os/core/tools";
+} from "@agent-os/kernel/tools";
 
 export interface SkillToolManifest {
   readonly definition: ToolDefinition;

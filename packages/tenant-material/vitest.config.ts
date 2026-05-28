@@ -3,9 +3,9 @@ import { defineConfig } from "vite-plus";
 export default defineConfig({
   resolve: {
     alias: {
-      "@agent-os/core/material-ref": new URL("../core/src/material-ref.ts", import.meta.url)
+      "@agent-os/kernel/material-ref": new URL("../kernel/src/material-ref.ts", import.meta.url)
         .pathname,
-      "@agent-os/core/ref-resolver": new URL("../core/src/ref-resolver.ts", import.meta.url)
+      "@agent-os/kernel/ref-resolver": new URL("../kernel/src/ref-resolver.ts", import.meta.url)
         .pathname,
     },
   },

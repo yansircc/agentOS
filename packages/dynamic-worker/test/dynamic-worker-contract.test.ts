@@ -1,5 +1,5 @@
 import { Effect, Fiber, TestClock } from "effect";
-import { makePreClaim } from "@agent-os/core/effect-claim";
+import { makePreClaim } from "@agent-os/kernel/effect-claim";
 import { describe, expect, it } from "@effect/vitest";
 
 import {

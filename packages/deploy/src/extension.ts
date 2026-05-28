@@ -1,4 +1,4 @@
-import { boundaryExtensionPackage, defineBoundaryContract } from "@agent-os/core/boundary-contract";
+import { boundaryPackage, defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
 
 export const DEPLOY_EVENT_PREFIX = "deploy.";
 
@@ -35,5 +35,5 @@ export const deployBoundaryContract = defineBoundaryContract({
   },
 });
 
-export const deployExtensionPackage = (version: string) =>
-  boundaryExtensionPackage(deployBoundaryContract, version);
+export const deployBoundaryPackage = (version: string) =>
+  boundaryPackage(deployBoundaryContract, version);

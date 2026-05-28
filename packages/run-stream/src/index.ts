@@ -4,9 +4,14 @@ import {
   type TurnStreamFrame,
   type TurnStreamProjection,
 } from "@agent-os/turn-stream";
-import type { EventQueryOptions, LedgerEventRpc, SubmitResult, SubmitSpec } from "@agent-os/core";
+import type {
+  EventQueryOptions,
+  LedgerEventRpc,
+  SubmitResult,
+  SubmitSpec,
+} from "@agent-os/runtime";
 
-export type { LedgerEventRpc, SubmitResult, SubmitSpec } from "@agent-os/core";
+export type { LedgerEventRpc, SubmitResult, SubmitSpec } from "@agent-os/runtime";
 
 export interface RunStreamLedgerEventFrame {
   readonly kind: "ledger_event";

@@ -1,5 +1,9 @@
-import { validateToolRegistry, type ToolAdmitter, type ToolDefinition } from "@agent-os/core/tools";
-import { materialRequirement } from "@agent-os/core/material-ref";
+import {
+  validateToolRegistry,
+  type ToolAdmitter,
+  type ToolDefinition,
+} from "@agent-os/kernel/tools";
+import { materialRequirement } from "@agent-os/kernel/material-ref";
 import { registerSkill, unregisterSkill, type SkillManifest } from "../src";
 
 const originRef = {

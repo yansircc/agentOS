@@ -1,5 +1,5 @@
-import { boundaryExtensionPackage, defineBoundaryContract } from "@agent-os/core/boundary-contract";
-import { materialRequirement, type AuthorityContract } from "@agent-os/core/material-ref";
+import { boundaryPackage, defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
+import { materialRequirement, type AuthorityContract } from "@agent-os/kernel/material-ref";
 
 export const CLOUDFLARE_RESOURCE_EVENT_PREFIX = "cf_resource.";
 
@@ -94,5 +94,5 @@ export const cloudflareResourceBoundaryContract = defineBoundaryContract({
   },
 });
 
-export const cloudflareResourceExtensionPackage = (version: string) =>
-  boundaryExtensionPackage(cloudflareResourceBoundaryContract, version);
+export const cloudflareResourceBoundaryPackage = (version: string) =>
+  boundaryPackage(cloudflareResourceBoundaryContract, version);

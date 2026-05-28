@@ -3,7 +3,7 @@
  *
  *
  * v0 renders HTML from @agent-os/ops-api GET responses. It owns no storage,
- * no scope resolver, no AgentDOBase access, and no mutation routes.
+ * no scope resolver, no Cloudflare backend access, and no mutation routes.
  */
 
 export { isOpsHtmxPath, mountOpsHtmx } from "./mount";
