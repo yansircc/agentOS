@@ -53,6 +53,25 @@ spikes/     ignored local pressure tests only
 Do not add tracked examples, spike apps, or development notes unless explicitly
 assigned.
 
+## Documentation Governance
+
+Documentation facts have one writer:
+
+- identity facts are owned by `package.json`;
+- declaration facts are owned by `docs/surface.json`;
+- package explanations are owned by `docs/packages/*.md`;
+- public export intent is owned by `docs/api/*.md`.
+
+Do not derive intent from actual source exports. Package `README.md`,
+package `PUBLIC_API.md`, runtime package tables, and skill package maps are
+generated projections. Edit the source fact, then run:
+
+```sh
+bun run docs:generate
+```
+
+`bun run docs:check` must pass before commit.
+
 ## BoundaryContract Checklist
 
 Claim-bearing packages declare one `BoundaryContract` with five independent

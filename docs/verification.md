@@ -6,6 +6,7 @@ Run from the repo root or an assigned parallel worktree.
 
 ```sh
 bun run check
+bun run docs:check
 bun run check:public-api
 bun run typecheck
 bun run test
@@ -13,14 +14,34 @@ effect-skill-scan /Users/yansir/code/52/agentOS --strict --json --profile
 git diff --check
 ```
 
-`bun run check` includes formatting, public API manifest validation,
-typecheck, and package tests. The explicit commands are still useful when
-isolating failures.
+`bun run check` includes formatting, generated docs validation, public API
+intent validation, typecheck, and package tests. The explicit commands are
+still useful when isolating failures.
+
+## Documentation Gate
+
+Documentation facts follow two rules:
+
+- every fact has exactly one writer;
+- do not derive intent from actual.
+
+`docs/surface.json` owns declaration facts such as release posture, package
+status, role, and holds. `docs/packages/*.md` owns package explanations.
+`docs/api/*.md` owns intended public and experimental exports.
+
+Package `README.md`, package `PUBLIC_API.md`, runtime package tables, and skill
+package maps are generated projections. Change the source fact and run:
+
+```sh
+bun run docs:generate
+```
 
 ## Public API Gate
 
-Every package with a public surface has a `PUBLIC_API.md`. In 0.2.x this is an
-accidental-export gate, not an API freeze. The checker fails when:
+Every package with a public surface has a `docs/api/*.md` intent source. This
+is an accidental-export gate, not an API freeze. The checker reads intent from
+`docs/api/*.md`, actual exports from `package.json.exports` and the TypeScript
+AST, and fails when:
 
 - an exported symbol is missing from the manifest;
 - an internal-only symbol is exported;
