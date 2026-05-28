@@ -2,11 +2,30 @@
 
 # @agent-os/backend-in-memory Public API
 
-Status: Backend package for runtime contract tests. Public exports are limited to the in-memory backend constructor.
+Status: Backend package for runtime contract tests. Public exports are limited to in-memory backend state, runtime Layer constructors, and Tag Live implementations.
 
 ## Public exports
 
-- `.:createInMemoryCommitJournal`
+- `.:InMemoryAdmissionLive`
+- `.:InMemoryBackendState`
+- `.:InMemoryBackendStateOptions`
+- `.:InMemoryDispatchLive`
+- `.:InMemoryDispatchTargetRegistry`
+- `.:InMemoryEventHandlerRegistration`
+- `.:InMemoryEventSpec`
+- `.:InMemoryEventSubscription`
+- `.:InMemoryLedgerLive`
+- `.:InMemoryLlmTransportLive`
+- `.:InMemoryLlmTransportOptions`
+- `.:InMemoryQuotaLive`
+- `.:InMemoryResourcesLive`
+- `.:InMemoryRuntimeBackend`
+- `.:InMemoryRuntimeLayerOptions`
+- `.:InMemoryRuntimeServices`
+- `.:InMemorySchedulerLive`
+- `.:createInMemoryBackendState`
+- `.:createInMemoryRuntimeBackend`
+- `.:makeInMemoryRuntimeLayer`
 
 ## Experimental exports
 

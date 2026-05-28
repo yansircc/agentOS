@@ -9,9 +9,9 @@ accidental exports; they are not stability or schema-freeze promises.
 | Package                                  | Status             | Boundary                                                                 |
 | ---------------------------------------- | ------------------ | ------------------------------------------------------------------------ |
 | `@agent-os/kernel`                       | 0.2.x public       | platform-free claim/material/boundary/tool algebra                       |
-| `@agent-os/runtime`                      | 0.2.x public       | backend-neutral runtime contracts and projections                        |
+| `@agent-os/runtime`                      | 0.2.x public       | backend-neutral runtime Tag contracts and projections                    |
 | `@agent-os/backend-cloudflare-do`        | backend            | Cloudflare DO storage, alarm, SSE, dispatch, and binding materialization |
-| `@agent-os/backend-in-memory`            | backend            | in-memory CommitJournal implementation                                   |
+| `@agent-os/backend-in-memory`            | backend            | in-memory runtime Tag Live implementations                               |
 | `@agent-os/cloudflare-resource`          | 0.2.x public       | Cloudflare D1/KV/R2/Queue/Workflow carrier facts and provider calls      |
 | `@agent-os/workspace-session`            | 0.2.x public       | provider-neutral workspace/session lifecycle facts                       |
 | `@agent-os/workspace-session-cloudflare` | backend            | structural Cloudflare Sandbox-compatible provider                        |

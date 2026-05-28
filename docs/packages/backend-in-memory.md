@@ -7,15 +7,16 @@ checks.
 
 ## Invariant
 
-CommitJournal fanout is owned by the commit path: successful transactions fire
-inserted events exactly once, and failed transactions persist and fire nothing.
+Runtime Tags are the backend contract. The in-memory backend implements the same
+Ledger, Scheduler, Dispatch, Resources, Quota, Admission, and LlmTransport Tag
+surface without importing Cloudflare or SQL substrate APIs.
 
 ## Minimal Usage
 
-Create an in-memory CommitJournal in tests.
+Create an in-memory runtime backend in tests.
 
 ```ts
-import { createInMemoryCommitJournal } from "@agent-os/backend-in-memory";
+import { createInMemoryRuntimeBackend } from "@agent-os/backend-in-memory";
 ```
 
 ## Verification

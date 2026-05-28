@@ -2,7 +2,26 @@
 
 ## Public exports
 
-- `.:createInMemoryCommitJournal`
+- `.:InMemoryAdmissionLive`
+- `.:InMemoryBackendState`
+- `.:InMemoryBackendStateOptions`
+- `.:InMemoryDispatchLive`
+- `.:InMemoryDispatchTargetRegistry`
+- `.:InMemoryEventHandlerRegistration`
+- `.:InMemoryEventSpec`
+- `.:InMemoryEventSubscription`
+- `.:InMemoryLedgerLive`
+- `.:InMemoryLlmTransportLive`
+- `.:InMemoryLlmTransportOptions`
+- `.:InMemoryQuotaLive`
+- `.:InMemoryResourcesLive`
+- `.:InMemoryRuntimeBackend`
+- `.:InMemoryRuntimeLayerOptions`
+- `.:InMemoryRuntimeServices`
+- `.:InMemorySchedulerLive`
+- `.:createInMemoryBackendState`
+- `.:createInMemoryRuntimeBackend`
+- `.:makeInMemoryRuntimeLayer`
 
 ## Experimental exports
 

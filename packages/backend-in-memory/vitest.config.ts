@@ -12,12 +12,24 @@ export default defineConfig({
         replacement: new URL("../kernel/src/effect-claim.ts", import.meta.url).pathname,
       },
       {
+        find: "@agent-os/kernel/errors",
+        replacement: new URL("../kernel/src/errors.ts", import.meta.url).pathname,
+      },
+      {
         find: "@agent-os/kernel/material-ref",
         replacement: new URL("../kernel/src/material-ref.ts", import.meta.url).pathname,
       },
       {
+        find: "@agent-os/kernel/ref-resolver",
+        replacement: new URL("../kernel/src/ref-resolver.ts", import.meta.url).pathname,
+      },
+      {
         find: "@agent-os/kernel/tools",
         replacement: new URL("../kernel/src/tools.ts", import.meta.url).pathname,
+      },
+      {
+        find: "@agent-os/kernel/types",
+        replacement: new URL("../kernel/src/types.ts", import.meta.url).pathname,
       },
       {
         find: "@agent-os/kernel",

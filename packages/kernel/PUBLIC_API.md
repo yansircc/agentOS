@@ -76,7 +76,6 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:MaterialRef`
 - `.:MaterialRequirement`
 - `.:MaterialRequirementInput`
-- `.:MaterialResolverService`
 - `.:MaterialValidationIssue`
 - `.:OpenAIChatCompatibleRoute`
 - `.:OperationRef`
@@ -96,6 +95,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:RejectedClaim`
 - `.:RejectionRef`
 - `.:ResolvedMaterial`
+- `.:ResolvedMaterialService`
 - `.:ResourceGrantResult`
 - `.:ResourceGrantSpec`
 - `.:ResourceInsufficient`
@@ -308,13 +308,13 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `./material-ref:materialRequirement`
 - `./quota:QuotaSpec`
 - `./quota:withQuota`
-- `./ref-resolver:MaterialResolverService`
 - `./ref-resolver:RefResolutionFailed`
 - `./ref-resolver:RefResolver`
 - `./ref-resolver:RefResolverEmpty`
 - `./ref-resolver:RefResolverLive`
 - `./ref-resolver:RefResolverService`
 - `./ref-resolver:ResolvedMaterial`
+- `./ref-resolver:ResolvedMaterialService`
 - `./ref-resolver:resolveStringMaterial`
 - `./runtime-scope:RuntimeScopeKind`
 - `./runtime-scope:RuntimeScopeResolution`
