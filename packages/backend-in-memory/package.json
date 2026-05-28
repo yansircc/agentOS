@@ -16,9 +16,12 @@
     "test": "vp test run"
   },
   "dependencies": {
-    "@agent-os/runtime": "workspace:*"
+    "@agent-os/kernel": "workspace:*",
+    "@agent-os/runtime": "workspace:*",
+    "effect": "catalog:"
   },
   "devDependencies": {
+    "@effect/vitest": "catalog:",
     "typescript": "catalog:",
     "vite-plus": "catalog:",
     "vitest": "catalog:"

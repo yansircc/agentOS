@@ -5,7 +5,7 @@
 | Need                                 | Package                                  |
 | ------------------------------------ | ---------------------------------------- |
 | Pure agentOS algebra                 | `@agent-os/kernel`                       |
-| Runtime contracts and ports          | `@agent-os/runtime`                      |
+| Runtime Effect Tag contracts         | `@agent-os/runtime`                      |
 | Cloudflare DO backend                | `@agent-os/backend-cloudflare-do`        |
 | Cloudflare resource lifecycle        | `@agent-os/cloudflare-resource`          |
 | Workspace/session facts              | `@agent-os/workspace-session`            |

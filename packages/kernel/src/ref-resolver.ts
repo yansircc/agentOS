@@ -24,10 +24,10 @@ export class RefResolutionFailed extends Data.TaggedError("agent_os.ref_resoluti
 
 export class RefResolverService extends Context.Tag("@agent-os/RefResolver")<
   RefResolverService,
-  MaterialResolverService
+  ResolvedMaterialService
 >() {}
 
-export interface MaterialResolverService {
+export interface ResolvedMaterialService {
   readonly material: (ref: MaterialRef) => Effect.Effect<ResolvedMaterial, RefResolutionFailed>;
 }
 
@@ -46,7 +46,7 @@ export const RefResolverLive = (resolver: RefResolver): Layer.Layer<RefResolverS
 };
 
 export const resolveStringMaterial = (
-  refs: MaterialResolverService,
+  refs: ResolvedMaterialService,
   ref: MaterialRef,
 ): Effect.Effect<string, RefResolutionFailed> =>
   Effect.flatMap(refs.material(ref), (value) =>

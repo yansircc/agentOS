@@ -2,22 +2,23 @@
 
 ## Purpose
 
-Backend-neutral runtime contracts: submit/run API types, admission projection
-algebra, and runtime ports such as CommitJournal, TimerBackend, ScopeRouter, and
-MaterialResolver.
+Backend-neutral runtime programs and Effect Tag contracts: submit/run API types,
+boundary commit enforcement, dispatch/scheduler/resource/quota/admission
+algebra, and ledger-derived projections.
 
 ## Invariant
 
-Runtime code expresses programs against ports. It does not import Worker
+Runtime code expresses programs against Effect Tags. It does not import Worker
 modules, Durable Object state, SQL storage implementations, or platform alarm
 APIs.
 
 ## Minimal Usage
 
-Depend on runtime for consumer-facing run, admission, and port types.
+Depend on runtime for consumer-facing run, admission, and backend-neutral Tag
+types.
 
 ```ts
-import type { CommitJournal, SubmitSpec } from "@agent-os/runtime";
+import type { Ledger, SubmitSpec } from "@agent-os/runtime";
 ```
 
 ## Verification
