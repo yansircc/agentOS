@@ -81,7 +81,13 @@ export class DispatchTestDO extends AgentDOBase<DispatchEnv> {
     super(ctx, env);
     this.on("dispatch.inbound.accepted", () =>
       this.emitEvent({
-        event: "dispatch.inbound.handler_fired",
+        event: "test.inbound_accepted_handler_fired",
+        data: {},
+      }).then(() => undefined),
+    );
+    this.on("dispatch.outbound.requested", () =>
+      this.emitEvent({
+        event: "test.outbound_requested_handler_fired",
         data: {},
       }).then(() => undefined),
     );

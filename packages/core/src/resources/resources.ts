@@ -22,6 +22,7 @@ import {
   safeStringify,
 } from "../errors";
 import { EventBus } from "../ledger";
+import { fireLedgerEvents, insertLedgerEvent } from "../ledger/inserted-events";
 import type {
   LedgerEvent,
   ResourceGrantResult,
@@ -105,22 +106,7 @@ export const ResourcesLive = (
         scope: string,
         payloadStr: string,
         payload: unknown,
-      ): LedgerEvent => {
-        const cursor = sql.exec(
-          "INSERT INTO events (ts, kind, scope, payload) VALUES (?, ?, ?, ?) RETURNING id",
-          now,
-          kind,
-          scope,
-          payloadStr,
-        );
-        return {
-          id: Number(cursor.one().id),
-          ts: now,
-          kind,
-          scope,
-          payload,
-        };
-      };
+      ): LedgerEvent => insertLedgerEvent(sql, { ts: now, kind, scope, payloadStr, payload });
 
       return {
         grant: (scope, spec) =>
@@ -140,7 +126,7 @@ export const ResourcesLive = (
                 ),
               catch: (cause) => new SqlError({ cause }),
             });
-            yield* bus.fire(event);
+            yield* fireLedgerEvents(bus, [event]);
             return { eventId: event.id };
           }),
 
@@ -210,7 +196,7 @@ export const ResourcesLive = (
             });
 
             if (tx.event !== null) {
-              yield* bus.fire(tx.event);
+              yield* fireLedgerEvents(bus, [tx.event]);
             }
             if (tx.status === "insufficient") {
               return yield* Effect.fail(
@@ -272,7 +258,7 @@ export const ResourcesLive = (
               );
             }
             if (tx.event !== null) {
-              yield* bus.fire(tx.event);
+              yield* fireLedgerEvents(bus, [tx.event]);
             }
           }),
 
@@ -324,7 +310,7 @@ export const ResourcesLive = (
               );
             }
             if (tx.event !== null) {
-              yield* bus.fire(tx.event);
+              yield* fireLedgerEvents(bus, [tx.event]);
             }
           }),
 

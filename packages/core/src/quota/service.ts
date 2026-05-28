@@ -16,9 +16,9 @@
 
 import { Clock, Context, Effect, Layer } from "effect";
 import { EventBus } from "../ledger";
+import { fireLedgerEvents, insertLedgerEvent } from "../ledger/inserted-events";
 import { JsonStringifyError, SqlError, safeStringify } from "../errors";
 import { sqlText } from "../storage/sql-row";
-import type { LedgerEvent } from "../types";
 import { decodeConsumedPayloadSync } from "./payload";
 
 export interface GrantResult {
@@ -102,45 +102,31 @@ export const QuotaLive = (ctx: DurableObjectState): Layer.Layer<Quota, never, Ev
                       toolName,
                     };
                     const rateLimitedStr = JSON.stringify(rateLimitedPayload);
-                    const cursor = sql.exec(
-                      "INSERT INTO events (ts, kind, scope, payload) VALUES (?, ?, ?, ?) RETURNING id",
-                      now,
-                      "dispatch.rate_limited",
+                    const event = insertLedgerEvent(sql, {
+                      ts: now,
+                      kind: "dispatch.rate_limited",
                       scope,
-                      rateLimitedStr,
-                    );
-                    const id = Number(cursor.one().id);
+                      payloadStr: rateLimitedStr,
+                      payload: rateLimitedPayload,
+                    });
                     return {
                       granted: false as const,
                       consumed,
-                      event: {
-                        id,
-                        ts: now,
-                        kind: "dispatch.rate_limited",
-                        scope,
-                        payload: rateLimitedPayload,
-                      } satisfies LedgerEvent,
+                      event,
                     };
                   }
 
-                  const cursor = sql.exec(
-                    "INSERT INTO events (ts, kind, scope, payload) VALUES (?, ?, ?, ?) RETURNING id",
-                    now,
-                    "dispatch.consumed",
+                  const event = insertLedgerEvent(sql, {
+                    ts: now,
+                    kind: "dispatch.consumed",
                     scope,
-                    consumedStr,
-                  );
-                  const id = Number(cursor.one().id);
+                    payloadStr: consumedStr,
+                    payload: consumedPayload,
+                  });
                   return {
                     granted: true as const,
                     consumed,
-                    event: {
-                      id,
-                      ts: now,
-                      kind: "dispatch.consumed",
-                      scope,
-                      payload: consumedPayload,
-                    } satisfies LedgerEvent,
+                    event,
                   };
                 }),
               catch: (cause) => new SqlError({ cause }),
@@ -148,7 +134,7 @@ export const QuotaLive = (ctx: DurableObjectState): Layer.Layer<Quota, never, Ev
 
             // Fire EventBus AFTER commit (sql.exec inside transactionSync
             // bypassed Ledger.log, which normally fires the bus).
-            yield* bus.fire(txResult.event);
+            yield* fireLedgerEvents(bus, [txResult.event]);
 
             return {
               granted: txResult.granted,
