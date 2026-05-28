@@ -1,9 +1,28 @@
 # @agent-os/sandbox-cloudflare
 
-Cloudflare Sandbox SDK-compatible backend for `@agent-os/sandbox`.
+## Purpose
 
-The package uses structural types instead of importing `@cloudflare/sandbox`;
-apps provide the actual sandbox client from their Worker environment.
+Cloudflare Sandbox-compatible backend for `@agent-os/sandbox`.
 
-This package does not create durable sandbox sessions. Backend reuse is an
-implementation detail and must not become application state.
+## Public API Status
+
+Optional backend package. It uses structural SDK types instead of importing a
+Cloudflare SDK.
+
+## Invariant
+
+Backend reuse is an implementation detail. Sandbox clients, namespace bindings,
+and provider handles are not application state and must not enter ledger-visible
+payloads.
+
+## Minimal Usage
+
+Provide the live sandbox client from the Worker environment and adapt it to the
+provider-neutral sandbox algebra.
+
+## Verification
+
+```sh
+cd packages/sandbox-cloudflare
+vp test run
+```

@@ -1,0 +1,27 @@
+# @agent-os/staging-artifact
+
+## Purpose
+
+Staging artifact publication and reaping proof carrier.
+
+## Public API Status
+
+Carrier package. It owns symbolic artifact proof vocabulary, not artifact
+storage.
+
+## Invariant
+
+Artifact bytes and provider storage handles stay outside ledger payloads. The
+ledger records symbolic artifact and reaping proofs.
+
+## Minimal Usage
+
+Use package events and projections to anchor artifact facts. Store and read
+artifact bytes through the provider data plane.
+
+## Verification
+
+```sh
+cd packages/staging-artifact
+vp test run
+```

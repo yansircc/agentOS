@@ -1,16 +1,27 @@
 # @agent-os/sandbox
 
-Provider-neutral sandbox carrier algebra.
+## Purpose
 
-v0 is intentionally narrow:
+Provider-neutral bounded stateless sandbox tool algebra.
 
-- bounded synchronous exec only;
-- stateless per call;
-- no durable sandbox filesystem contract;
-- no ArtifactStore;
-- no secret injection;
-- no core changes.
+## Public API Status
 
-Use `makeSandboxRunTool()` to expose one sandbox run as a normal agentOS Tool.
-The tool returns a ledger-safe `SandboxToolResult` with byte-capped stdout and
-stderr.
+Optional algebra package. It is not part of the core 1.0 freeze.
+
+## Invariant
+
+A sandbox run is bounded and stateless per call. The package does not own a
+durable filesystem, background process, preview port, artifact store, or secret
+injection model.
+
+## Minimal Usage
+
+Use the package to expose one bounded sandbox run as a normal agentOS tool.
+Use workspace-session when the job needs stateful session semantics.
+
+## Verification
+
+```sh
+cd packages/sandbox
+vp test run
+```

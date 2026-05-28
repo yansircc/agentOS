@@ -1,10 +1,33 @@
 # @agent-os/skill-registry
 
-Status: public-experimental.
+## Purpose
 
-Skill is install-time identity, not runtime identity. This package validates a
-skill manifest and registers its tools through `defineRegisteredTool`. After
-registration, submit/admitters/ledger readers only see core `Tool` entries.
+Install-time skill manifest validation and registration into core tools.
 
-The package does not export ledger events, projections, install audit facts,
-zip install policy, discovery, or MCP transport.
+## Public API Status
+
+Public-experimental. Experimental exports are listed in `PUBLIC_API.md`.
+
+## Invariant
+
+Skill is install-time identity, not runtime identity. After registration,
+submit, admitters, and ledger readers only see core `Tool` entries. This
+package exports no ledger events, projections, install audit facts, discovery
+policy, zip install policy, or MCP transport.
+
+## Minimal Usage
+
+Pass a `SkillManifest` to `registerSkill`. The package constructs registered
+tools through core tool contracts; it does not accept hand-built branded
+contracts.
+
+```ts
+import { registerSkill } from "@agent-os/skill-registry";
+```
+
+## Verification
+
+```sh
+cd packages/skill-registry
+vp test run
+```
