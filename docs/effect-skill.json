@@ -1,0 +1,339 @@
+{
+  "root": {
+    "packages": [
+      {
+        "path": "packages/cloudflare-resource",
+        "shape": ["library"],
+        "dependencyOwner": "workspace-root",
+        "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+      },
+      {
+        "path": "packages/core",
+        "shape": ["library"],
+        "dependencyOwner": "package-local"
+      },
+      {
+        "path": "packages/decision-gate",
+        "shape": ["library"],
+        "dependencyOwner": "workspace-root",
+        "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+      },
+      {
+        "path": "packages/deploy",
+        "shape": ["library"],
+        "dependencyOwner": "workspace-root",
+        "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+      },
+      {
+        "path": "packages/dynamic-worker",
+        "shape": ["library"],
+        "dependencyOwner": "workspace-root",
+        "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+      },
+      {
+        "path": "packages/git-carrier",
+        "shape": ["library"],
+        "dependencyOwner": "workspace-root",
+        "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+      },
+      {
+        "path": "packages/image",
+        "shape": ["library"],
+        "dependencyOwner": "workspace-root",
+        "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+      },
+      {
+        "path": "packages/llm-transport-http",
+        "shape": ["library"],
+        "dependencyOwner": "workspace-root",
+        "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+      },
+      {
+        "path": "tooling/ops-api",
+        "shape": ["library"],
+        "dependencyOwner": "workspace-root",
+        "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+      },
+      {
+        "path": "tooling/ops-htmx",
+        "shape": ["library"],
+        "dependencyOwner": "workspace-root",
+        "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+      },
+      {
+        "path": "packages/run-stream",
+        "shape": ["library"],
+        "dependencyOwner": "workspace-root",
+        "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+      },
+      {
+        "path": "packages/sandbox",
+        "shape": ["library"],
+        "dependencyOwner": "workspace-root",
+        "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+      },
+      {
+        "path": "packages/sandbox-cloudflare",
+        "shape": ["library"],
+        "dependencyOwner": "workspace-root",
+        "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+      },
+      {
+        "path": "packages/skill-registry",
+        "shape": ["library"],
+        "dependencyOwner": "workspace-root",
+        "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+      },
+      {
+        "path": "packages/staging-artifact",
+        "shape": ["library"],
+        "dependencyOwner": "workspace-root",
+        "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+      },
+      {
+        "path": "packages/tenant-material",
+        "shape": ["library"],
+        "dependencyOwner": "workspace-root",
+        "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+      },
+      {
+        "path": "packages/turn-stream",
+        "shape": ["library"],
+        "dependencyOwner": "workspace-root",
+        "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+      },
+      {
+        "path": "packages/verification",
+        "shape": ["library"],
+        "dependencyOwner": "workspace-root",
+        "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+      },
+      {
+        "path": "packages/workspace-session",
+        "shape": ["library"],
+        "dependencyOwner": "workspace-root",
+        "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+      },
+      {
+        "path": "packages/workspace-session-cloudflare",
+        "shape": ["library"],
+        "dependencyOwner": "workspace-root",
+        "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+      }
+    ],
+    "hostTooling": [
+      {
+        "path": ".parallel/**",
+        "owner": "@parallel-dev",
+        "reason": "local isolated worktrees and agent run artifacts are not part of the scanned repo surface"
+      },
+      {
+        "path": "spikes/_active/**",
+        "owner": "@parallel-dev",
+        "reason": "ignored pressure-test code is local throwaway, not package source"
+      },
+      {
+        "path": "spikes/**/.wrangler/**",
+        "owner": "@wrangler",
+        "reason": "Wrangler generated bundles from retired pressure tests are not repo source"
+      }
+    ],
+    "allowedAdapters": [
+      {
+        "path": "packages/core/src/ledger/stream.ts",
+        "owner": "@agent-os/core",
+        "reason": "terminal ledger SSE adapter owns Response construction",
+        "rules": ["EFF402"]
+      },
+      {
+        "path": "packages/core/src/storage/sql-row.ts",
+        "owner": "@agent-os/core-storage",
+        "reason": "SQLite row adapter owns fail-fast host column shape assertion",
+        "rules": ["EFF025"]
+      },
+      {
+        "path": "packages/core/test/_in-memory-do.ts",
+        "owner": "@agent-os/core-tests",
+        "reason": "test-only Durable Object SQL adapter models transactionSync rollback by synchronous throws",
+        "rules": ["EFF001", "EFF025"]
+      },
+      {
+        "path": "packages/core/test/admission/attempt-structured.worker.test.ts",
+        "owner": "@agent-os/core-tests",
+        "reason": "test HTTP fixture owns provider Response construction",
+        "rules": ["EFF402"]
+      },
+      {
+        "path": "packages/core/test/test-worker.ts",
+        "owner": "@agent-os/core-tests",
+        "reason": "Cloudflare worker test adapter owns Response construction",
+        "rules": ["EFF402"]
+      },
+      {
+        "path": "packages/dynamic-worker/test/dynamic-worker-contract.test.ts",
+        "owner": "@agent-os/dynamic-worker-tests",
+        "reason": "test worker source strings exercise Response construction in sandboxed dynamic workers",
+        "rules": ["EFF402"]
+      },
+      {
+        "path": "packages/dynamic-worker/src/tool.ts",
+        "owner": "@agent-os/dynamic-worker",
+        "reason": "terminal Tool.execute adapter owns the Promise boundary over the Effect program",
+        "rules": ["EFF400"]
+      },
+      {
+        "path": "packages/image/test/adapter-contract.test.ts",
+        "owner": "@agent-os/image-tests",
+        "reason": "test HTTP fixture owns provider Response construction",
+        "rules": ["EFF402"]
+      },
+      {
+        "path": "tooling/ops-api/src/errors.ts",
+        "owner": "@agent-os/ops-api",
+        "reason": "terminal ops-api HTTP error adapter owns Response construction",
+        "rules": ["EFF402"]
+      },
+      {
+        "path": "tooling/ops-api/src/encoding.ts",
+        "owner": "@agent-os/ops-api",
+        "reason": "terminal ops query parser owns malformed URL/base64/JSON decode classification",
+        "rules": ["EFF001"]
+      },
+      {
+        "path": "tooling/ops-api/src/mount.ts",
+        "owner": "@agent-os/ops-api",
+        "reason": "terminal ops-api HTTP mount owns startup option assertions and request handler async boundary",
+        "rules": ["EFF003", "EFF024", "EFF025"]
+      },
+      {
+        "path": "tooling/ops-api/test/contract.test.ts",
+        "owner": "@agent-os/ops-api-tests",
+        "reason": "ops-api HTTP contract tests own Request/Response construction",
+        "rules": ["EFF402"]
+      },
+      {
+        "path": "tooling/ops-htmx/src/client.ts",
+        "owner": "@agent-os/ops-htmx",
+        "reason": "terminal ops-htmx API client adapter owns Request construction",
+        "rules": ["EFF402"]
+      },
+      {
+        "path": "tooling/ops-htmx/src/html.ts",
+        "owner": "@agent-os/ops-htmx",
+        "reason": "terminal ops-htmx HTML adapter owns Response construction",
+        "rules": ["EFF402"]
+      },
+      {
+        "path": "tooling/ops-htmx/test/ops-htmx-contract.test.ts",
+        "owner": "@agent-os/ops-htmx-tests",
+        "reason": "ops-htmx HTTP contract tests own Request/Response construction",
+        "rules": ["EFF402"]
+      },
+      {
+        "path": "packages/run-stream/src/index.ts",
+        "owner": "@agent-os/run-stream",
+        "reason": "batched run-stream HTTP adapter owns Response construction",
+        "rules": ["EFF402"]
+      }
+    ]
+  },
+  "packageManifests": {
+    "packages/core": {
+      "shape": ["library"],
+      "allowedAdapters": [
+        {
+          "path": "src/agent-do.ts",
+          "owner": "@agent-os/core/cf-do",
+          "reason": "AgentDOBase is the terminal Durable Object HTTP facade for streamEvents; missing named scope is a runtime invariant violation with no Effect return channel",
+          "rules": ["EFF025", "EFF402"]
+        },
+        {
+          "path": "src/dispatch/payload.ts",
+          "owner": "@agent-os/core/dispatch",
+          "reason": "dispatch outbox payload parsing is sync ledger-wire validation caught at the Effect boundary and mapped to SqlError",
+          "rules": ["EFF025"]
+        },
+        {
+          "path": "src/dispatch/receiver.ts",
+          "owner": "@agent-os/core/dispatch",
+          "reason": "dispatch inbound projection parsing runs inside synchronous transactionSync and must fail the transaction on malformed ledger wire data",
+          "rules": ["EFF025"]
+        },
+        {
+          "path": "src/ledger/stream.ts",
+          "owner": "@agent-os/core/http-stream",
+          "reason": "terminal SSE adapter constructs the Response boundary for ledger streamEvents",
+          "rules": ["EFF402"]
+        },
+        {
+          "path": "src/llm/protocol/anthropic-messages.ts",
+          "owner": "@agent-os/core/provider-adapters",
+          "reason": "Anthropic tool-use adapter preserves malformed assistant tool arguments as raw wire data by design",
+          "rules": ["EFF001"]
+        },
+        {
+          "path": "src/llm/protocol/openai-chat.ts",
+          "owner": "@agent-os/core/provider-adapters",
+          "reason": "Chat Completions turn decoder is a finite wire adapter; malformed upstream turn shape is caught and reified as UpstreamFailure",
+          "rules": ["EFF024", "EFF025"]
+        },
+        {
+          "path": "test/_in-memory-do.ts",
+          "owner": "@agent-os/core/test-runtime",
+          "reason": "test-only DO SQLite subset intentionally models transactionSync rollback and fail-fast unsupported SQL using synchronous exceptions",
+          "rules": ["EFF001", "EFF025"]
+        },
+        {
+          "path": "test/test-worker.ts",
+          "owner": "@agent-os/core/test-worker",
+          "reason": "Cloudflare test Worker entry is the terminal HTTP adapter for worker-pool contract tests",
+          "rules": ["EFF402"]
+        },
+        {
+          "path": "test/admission/attempt-structured.worker.test.ts",
+          "owner": "@agent-os/core/test-provider",
+          "reason": "test provider stub constructs terminal HTTP Response objects to model upstream transport",
+          "rules": ["EFF402"]
+        }
+      ]
+    },
+    "packages/image": {
+      "shape": ["library"],
+      "allowedAdapters": [
+        {
+          "path": "src/adapters/openai-chat-compatible.ts",
+          "owner": "@agent-os/image/provider-adapters",
+          "reason": "OpenAI-compatible image protocol decoder is a finite wire adapter; malformed upstream wire shape is caught by generateImageEffect and reified as ImageUpstreamFailure",
+          "rules": ["EFF024", "EFF025"]
+        },
+        {
+          "path": "src/adapters/cf-ai-binding.ts",
+          "owner": "@agent-os/image/provider-adapters",
+          "reason": "CF AI image protocol decoder is a finite wire adapter; malformed upstream wire shape is caught by generateImageEffect and reified as ImageUpstreamFailure",
+          "rules": ["EFF024", "EFF025"]
+        },
+        {
+          "path": "src/provider.ts",
+          "owner": "@agent-os/image/provider-transport",
+          "reason": "provider.ts is the terminal image transport adapter; non-OK HTTP responses are raised inside Effect.tryPromise and reified as ImageUpstreamFailure",
+          "rules": ["EFF024", "EFF025"]
+        },
+        {
+          "path": "test/adapter-contract.test.ts",
+          "owner": "@agent-os/image/test-provider",
+          "reason": "test provider stub constructs terminal HTTP Response objects and sentinel Errors to model provider transport boundaries",
+          "rules": ["EFF024", "EFF402"]
+        }
+      ]
+    },
+    "packages/sandbox-cloudflare": {
+      "shape": ["library"]
+    },
+    "packages/sandbox": {
+      "shape": ["library"]
+    },
+    "packages/workspace-session": {
+      "shape": ["library"]
+    }
+  }
+}
