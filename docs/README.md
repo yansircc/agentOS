@@ -9,6 +9,6 @@ frozen.
 - [Runtime Packages](runtime-packages.md)
 - [Verification](verification.md)
 
-Source facts live in `docs/surface.json`, `docs/packages/*.md`, and
-`docs/api/*.md`. Package README and `PUBLIC_API.md` files are generated
-projections.
+Source facts live in `docs/surface.json`, `docs/packages/*.md`,
+`docs/api/*.md`, and `docs/effect-skill.json`. Package README, `PUBLIC_API.md`,
+and `.effect-skill.json` files are generated projections.

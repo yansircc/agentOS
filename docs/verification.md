@@ -7,6 +7,7 @@ Run from the repo root or an assigned parallel worktree.
 ```sh
 bun run check
 bun run docs:check
+bun run effect-manifests:check
 bun run check:public-api
 bun run typecheck
 bun run test
@@ -28,12 +29,16 @@ Documentation facts follow two rules:
 `docs/surface.json` owns declaration facts such as release posture, package
 status, role, and holds. `docs/packages/*.md` owns package explanations.
 `docs/api/*.md` owns intended public and experimental exports.
+`docs/effect-skill.json` owns Effect scanner package and adapter declarations.
 
 Package `README.md`, package `PUBLIC_API.md`, runtime package tables, and skill
-package maps are generated projections. Change the source fact and run:
+package maps are generated projections. Root and package-local
+`.effect-skill.json` files are generated scanner input projections. Change the
+source fact and run:
 
 ```sh
 bun run docs:generate
+bun run effect-manifests:generate
 ```
 
 ## Public API Gate

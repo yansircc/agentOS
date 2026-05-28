@@ -61,6 +61,7 @@ Documentation facts have one writer:
 - declaration facts are owned by `docs/surface.json`;
 - package explanations are owned by `docs/packages/*.md`;
 - public export intent is owned by `docs/api/*.md`.
+- Effect scanner declarations are owned by `docs/effect-skill.json`.
 
 Do not derive intent from actual source exports. Package `README.md`,
 package `PUBLIC_API.md`, runtime package tables, and skill package maps are
@@ -68,9 +69,11 @@ generated projections. Edit the source fact, then run:
 
 ```sh
 bun run docs:generate
+bun run effect-manifests:generate
 ```
 
-`bun run docs:check` must pass before commit.
+`bun run docs:check` and `bun run effect-manifests:check` must pass before
+commit.
 
 ## BoundaryContract Checklist
 
