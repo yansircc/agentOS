@@ -1,0 +1,6 @@
+interface:
+  display_name: "agentOS"
+  short_description: "Integrate agentOS primitives in app repos"
+  default_prompt: "Use $agentos to review this app's agent loop and identify which agentOS primitives should replace custom runtime code."
+policy:
+  allow_implicit_invocation: true
