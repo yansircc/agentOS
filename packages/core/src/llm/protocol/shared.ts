@@ -81,10 +81,7 @@ const failureFlagsFromText = (message: string, status: number | undefined): Read
   return flags;
 };
 
-const publicFailureMessage = (
-  status: number | undefined,
-  flags: ReadonlySet<string>,
-): string =>
+const publicFailureMessage = (status: number | undefined, flags: ReadonlySet<string>): string =>
   [
     "provider_failure",
     status === undefined ? undefined : `HTTP ${status}`,

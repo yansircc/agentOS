@@ -113,12 +113,7 @@ export class UpstreamFailure extends Data.TaggedError(ABORT.UPSTREAM_FAILURE)<{
   readonly cause: unknown;
 }> {}
 
-export type ProviderFailureFlag =
-  | "auth"
-  | "rate_limited"
-  | "schema"
-  | "overloaded"
-  | "unavailable";
+export type ProviderFailureFlag = "auth" | "rate_limited" | "schema" | "overloaded" | "unavailable";
 
 export class ProviderHttpFailure extends Data.TaggedError("agent_os.provider_http_failure")<{
   readonly provider: string;

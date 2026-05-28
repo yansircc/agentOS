@@ -10,10 +10,7 @@ export interface InsertLedgerEventSpec {
   readonly payload: unknown;
 }
 
-export const insertLedgerEvent = (
-  sql: SqlStorage,
-  spec: InsertLedgerEventSpec,
-): LedgerEvent => {
+export const insertLedgerEvent = (sql: SqlStorage, spec: InsertLedgerEventSpec): LedgerEvent => {
   const cursor = sql.exec(
     "INSERT INTO events (ts, kind, scope, payload) VALUES (?, ?, ?, ?) RETURNING id",
     spec.ts,
