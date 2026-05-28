@@ -7,7 +7,7 @@ import {
 } from "./material-ref";
 import type { AnchorRef, ClaimRole } from "./effect-claim";
 
-type TerminalClaimPhase = "lived" | "rejected";
+type ClaimPhase = "pre" | "lived" | "rejected";
 
 export interface BoundaryProofContract {
   readonly anchorKinds: ReadonlyArray<AnchorRef["anchorKind"]>;
@@ -35,7 +35,7 @@ export interface BoundaryContract<EventKind extends string = string> {
   readonly authorityContracts: ReadonlyArray<AuthorityContract>;
   readonly materialRequirements: ReadonlyArray<MaterialRequirement>;
   readonly claimPayloadKey: "claim";
-  readonly terminalClaims: ReadonlyArray<TerminalClaimPhase>;
+  readonly claimPhases: Readonly<Record<EventKind, ReadonlyArray<"pre" | "lived" | "rejected">>>;
   readonly proof: BoundaryProofContract;
   readonly projection: BoundaryProjectionContract;
 }
@@ -51,7 +51,7 @@ export type BoundaryContractIssue =
   | "authority_material_outside_axis"
   | "material_authority_unbound"
   | "claim_payload_key_invalid"
-  | "terminal_claims_invalid"
+  | "claim_phases_invalid"
   | "proof_invalid"
   | "projection_invalid";
 
@@ -63,7 +63,7 @@ export type BoundaryContractValidation =
     };
 
 const CLAIM_ROLES = new Set<ClaimRole>(["generator", "admitter", "resolver", "reader"]);
-const TERMINAL_CLAIM_PHASES = new Set<TerminalClaimPhase>(["lived", "rejected"]);
+const CLAIM_PHASES = new Set<ClaimPhase>(["pre", "lived", "rejected"]);
 const ANCHOR_KINDS = new Set<AnchorRef["anchorKind"]>([
   "ledger_event",
   "carrier_proof",
@@ -94,6 +94,22 @@ const valuesOwnedByPrefix = (
   values: ReadonlyArray<string>,
   prefixes: ReadonlyArray<string>,
 ): boolean => values.every((value) => prefixes.some((prefix) => value.startsWith(prefix)));
+
+const claimPhasesAreValid = (
+  claimPhases: unknown,
+  vocabularyValuesList: ReadonlyArray<string>,
+): claimPhases is Readonly<Record<string, ReadonlyArray<ClaimPhase>>> => {
+  if (!isRecord(claimPhases)) return false;
+  const vocabularySet = new Set(vocabularyValuesList);
+  const phaseKeys = Object.keys(claimPhases);
+  if (phaseKeys.length !== vocabularySet.size) return false;
+  for (const value of vocabularySet) {
+    const phases = claimPhases[value];
+    if (!nonEmptyArrayOf(phases, CLAIM_PHASES)) return false;
+    if (phases.includes("pre") && phases.some((phase) => phase !== "pre")) return false;
+  }
+  return phaseKeys.every((kind) => vocabularySet.has(kind));
+};
 
 const materialRequirementMatches = (
   left: MaterialRequirement,
@@ -171,7 +187,7 @@ export const validateBoundaryContract = (value: unknown): BoundaryContractValida
         "authority_contract_invalid",
         "material_requirements_invalid",
         "claim_payload_key_invalid",
-        "terminal_claims_invalid",
+        "claim_phases_invalid",
         "proof_invalid",
         "projection_invalid",
       ],
@@ -237,8 +253,8 @@ export const validateBoundaryContract = (value: unknown): BoundaryContractValida
     issues.push("claim_payload_key_invalid");
   }
 
-  if (!nonEmptyArrayOf(value.terminalClaims, TERMINAL_CLAIM_PHASES)) {
-    issues.push("terminal_claims_invalid");
+  if (values === null || !claimPhasesAreValid(value.claimPhases, values)) {
+    issues.push("claim_phases_invalid");
   }
 
   if (

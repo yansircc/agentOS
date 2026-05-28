@@ -77,7 +77,13 @@ export const cloudflareResourceBoundaryContract = defineBoundaryContract({
   authorityContracts: cloudflareResourceAuthorityContracts,
   materialRequirements: [apiToken, account, binding],
   claimPayloadKey: "claim",
-  terminalClaims: ["lived", "rejected"],
+  claimPhases: {
+    [CLOUDFLARE_RESOURCE_EVENT_VOCABULARY.RESOURCE_PROVISIONED]: ["lived"],
+    [CLOUDFLARE_RESOURCE_EVENT_VOCABULARY.RESOURCE_BOUND]: ["lived"],
+    [CLOUDFLARE_RESOURCE_EVENT_VOCABULARY.MUTATION_RECORDED]: ["lived"],
+    [CLOUDFLARE_RESOURCE_EVENT_VOCABULARY.RESOURCE_DESTROYED]: ["lived"],
+    [CLOUDFLARE_RESOURCE_EVENT_VOCABULARY.FAILED]: ["rejected"],
+  },
   proof: {
     anchorKinds: ["carrier_proof", "external_receipt"],
     symbolicOnly: true,

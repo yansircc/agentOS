@@ -14,7 +14,9 @@ export const verificationBoundaryContract = defineBoundaryContract({
   authorityContracts: [],
   materialRequirements: [],
   claimPayloadKey: "claim",
-  terminalClaims: ["lived"],
+  claimPhases: {
+    [VERIFICATION_EVENT_VOCABULARY.GATE_RECORDED]: ["lived"],
+  },
   proof: {
     anchorKinds: ["carrier_proof", "external_receipt"],
     symbolicOnly: true,

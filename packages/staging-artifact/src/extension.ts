@@ -15,7 +15,10 @@ export const stagingArtifactBoundaryContract = defineBoundaryContract({
   authorityContracts: [],
   materialRequirements: [],
   claimPayloadKey: "claim",
-  terminalClaims: ["lived"],
+  claimPhases: {
+    [STAGING_EVENT_VOCABULARY.ARTIFACT_PUBLISHED]: ["lived"],
+    [STAGING_EVENT_VOCABULARY.ARTIFACT_REAPED]: ["lived"],
+  },
   proof: {
     anchorKinds: ["carrier_proof"],
     symbolicOnly: true,

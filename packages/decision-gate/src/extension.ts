@@ -16,7 +16,11 @@ export const decisionGateBoundaryContract = defineBoundaryContract({
   authorityContracts: [],
   materialRequirements: [],
   claimPayloadKey: "claim",
-  terminalClaims: ["lived"],
+  claimPhases: {
+    [DECISION_GATE_EVENT_VOCABULARY.REQUESTED]: ["pre"],
+    [DECISION_GATE_EVENT_VOCABULARY.DECIDED]: ["lived"],
+    [DECISION_GATE_EVENT_VOCABULARY.CONSUMED]: ["lived"],
+  },
   proof: {
     anchorKinds: ["ledger_event"],
     symbolicOnly: true,

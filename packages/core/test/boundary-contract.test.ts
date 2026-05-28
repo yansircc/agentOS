@@ -33,7 +33,10 @@ describe("BoundaryContract", () => {
     ],
     materialRequirements: [proofStore],
     claimPayloadKey: "claim",
-    terminalClaims: ["lived", "rejected"],
+    claimPhases: {
+      "example.recorded": ["lived"],
+      "example.failed": ["rejected"],
+    },
     proof: {
       anchorKinds: ["carrier_proof"],
       symbolicOnly: true,
@@ -69,7 +72,7 @@ describe("BoundaryContract", () => {
       }),
     ).toEqual({
       ok: false,
-      issues: ["vocabulary_outside_prefix"],
+      issues: ["vocabulary_outside_prefix", "claim_phases_invalid"],
     });
   });
 
@@ -126,15 +129,54 @@ describe("BoundaryContract", () => {
     });
   });
 
-  it("rejects request-time claims as terminal phases", () => {
+  it("allows request-time claim phases only as event-kind declarations", () => {
     expect(
       validateBoundaryContract({
         ...contract,
-        terminalClaims: ["pre"],
+        claimPhases: {
+          "example.recorded": ["pre"],
+          "example.failed": ["rejected"],
+        },
+      }),
+    ).toEqual({
+      ok: true,
+      contract: {
+        ...contract,
+        claimPhases: {
+          "example.recorded": ["pre"],
+          "example.failed": ["rejected"],
+        },
+      },
+    });
+  });
+
+  it("rejects mixed request-time and terminal phases on one event kind", () => {
+    expect(
+      validateBoundaryContract({
+        ...contract,
+        claimPhases: {
+          "example.recorded": ["pre", "lived"],
+          "example.failed": ["rejected"],
+        },
       }),
     ).toEqual({
       ok: false,
-      issues: ["terminal_claims_invalid"],
+      issues: ["claim_phases_invalid"],
+    });
+  });
+
+  it("requires claim phases to cover the event vocabulary exactly", () => {
+    expect(
+      validateBoundaryContract({
+        ...contract,
+        claimPhases: {
+          "example.recorded": ["lived"],
+          "other.failed": ["rejected"],
+        },
+      }),
+    ).toEqual({
+      ok: false,
+      issues: ["claim_phases_invalid"],
     });
   });
 
