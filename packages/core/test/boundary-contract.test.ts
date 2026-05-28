@@ -97,6 +97,47 @@ describe("BoundaryContract", () => {
     });
   });
 
+  it("requires material-axis declarations to be bound to an authority", () => {
+    expect(
+      validateBoundaryContract({
+        ...contract,
+        authorityContracts: [],
+      }),
+    ).toEqual({
+      ok: false,
+      issues: ["material_authority_unbound"],
+    });
+  });
+
+  it("allows empty material requirements only as an explicit no-material contract", () => {
+    expect(
+      validateBoundaryContract({
+        ...contract,
+        authorityContracts: [],
+        materialRequirements: [],
+      }),
+    ).toEqual({
+      ok: true,
+      contract: {
+        ...contract,
+        authorityContracts: [],
+        materialRequirements: [],
+      },
+    });
+  });
+
+  it("rejects request-time claims as terminal phases", () => {
+    expect(
+      validateBoundaryContract({
+        ...contract,
+        terminalClaims: ["pre"],
+      }),
+    ).toEqual({
+      ok: false,
+      issues: ["terminal_claims_invalid"],
+    });
+  });
+
   it("requires claim-bearing symbolic ledger projections", () => {
     expect(
       validateBoundaryContract({
