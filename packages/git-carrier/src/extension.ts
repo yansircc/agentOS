@@ -18,7 +18,13 @@ export const gitCarrierBoundaryContract = defineBoundaryContract({
   authorityContracts: [],
   materialRequirements: [],
   claimPayloadKey: "claim",
-  terminalClaims: ["lived"],
+  claimPhases: {
+    [GIT_EVENT_VOCABULARY.WORKSPACE_CREATED]: ["lived"],
+    [GIT_EVENT_VOCABULARY.COMMIT_RECORDED]: ["lived"],
+    [GIT_EVENT_VOCABULARY.MERGE_RECORDED]: ["lived"],
+    [GIT_EVENT_VOCABULARY.REVERT_RECORDED]: ["lived"],
+    [GIT_EVENT_VOCABULARY.WORKSPACE_CLEANED]: ["lived"],
+  },
   proof: {
     anchorKinds: ["carrier_proof"],
     symbolicOnly: true,

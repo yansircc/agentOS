@@ -19,7 +19,14 @@ export const workspaceSessionBoundaryContract = defineBoundaryContract({
   authorityContracts: [],
   materialRequirements: [],
   claimPayloadKey: "claim",
-  terminalClaims: ["lived", "rejected"],
+  claimPhases: {
+    [WORKSPACE_SESSION_EVENT_VOCABULARY.STARTED]: ["lived"],
+    [WORKSPACE_SESSION_EVENT_VOCABULARY.RESTORED]: ["lived"],
+    [WORKSPACE_SESSION_EVENT_VOCABULARY.BACKED_UP]: ["lived"],
+    [WORKSPACE_SESSION_EVENT_VOCABULARY.PREVIEW_ALLOCATED]: ["lived"],
+    [WORKSPACE_SESSION_EVENT_VOCABULARY.DESTROYED]: ["lived"],
+    [WORKSPACE_SESSION_EVENT_VOCABULARY.FAILED]: ["rejected"],
+  },
   proof: {
     anchorKinds: ["carrier_proof"],
     symbolicOnly: true,

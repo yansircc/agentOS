@@ -18,7 +18,13 @@ export const deployBoundaryContract = defineBoundaryContract({
   authorityContracts: [],
   materialRequirements: [],
   claimPayloadKey: "claim",
-  terminalClaims: ["lived", "rejected"],
+  claimPhases: {
+    [DEPLOY_EVENT_VOCABULARY.PREVIEW_RECORDED]: ["lived"],
+    [DEPLOY_EVENT_VOCABULARY.PRODUCTION_PROMOTED]: ["lived"],
+    [DEPLOY_EVENT_VOCABULARY.PRODUCTION_READBACK]: ["lived"],
+    [DEPLOY_EVENT_VOCABULARY.ROLLBACK_RECORDED]: ["lived"],
+    [DEPLOY_EVENT_VOCABULARY.FAILED]: ["rejected"],
+  },
   proof: {
     anchorKinds: ["carrier_proof", "external_receipt"],
     symbolicOnly: true,
