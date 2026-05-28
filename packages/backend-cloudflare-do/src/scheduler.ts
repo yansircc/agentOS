@@ -13,27 +13,14 @@
  * source per DO instance). schedule(at, event, data) does not accept scope.
  */
 
-import { Clock, Context, Effect, Layer } from "effect";
-import { JsonStringifyError, SqlError, safeStringify } from "@agent-os/kernel/errors";
-import type { LedgerEvent } from "@agent-os/runtime";
+import { Clock, Effect, Layer } from "effect";
+import { SqlError, safeStringify } from "@agent-os/kernel/errors";
+import { Scheduler, type LedgerEvent } from "@agent-os/runtime";
 import { EventBus } from "./ledger";
 import { fireLedgerEvents, insertLedgerEvent } from "./ledger/inserted-events";
 import { sqlText } from "./storage/sql-row";
 
-export class Scheduler extends Context.Tag("@agent-os/Scheduler")<
-  Scheduler,
-  {
-    readonly findNextPending: () => Effect.Effect<number | null, SqlError>;
-    readonly schedule: (
-      at: number,
-      eventKind: string,
-      data: unknown,
-    ) => Effect.Effect<{ id: number }, SqlError | JsonStringifyError>;
-    readonly fireDue: (
-      now: number,
-    ) => Effect.Effect<{ next: number | null; fired: number }, SqlError | JsonStringifyError>;
-  }
->() {}
+export { Scheduler } from "@agent-os/runtime";
 
 const ensureSchedulerSchema = (sql: SqlStorage): Effect.Effect<void, SqlError> =>
   Effect.try({

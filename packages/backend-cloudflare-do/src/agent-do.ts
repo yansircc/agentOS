@@ -41,6 +41,8 @@ import {
   UnsupportedScopeRef,
 } from "@agent-os/kernel/errors";
 import type {
+  AttemptKey,
+  CapabilityLease,
   EventHandler,
   DispatchToScopeResult,
   DispatchToScopeSpec,
@@ -59,7 +61,19 @@ import type {
   RunStatus,
   RunTrace,
   ScheduledEventSpec,
+  SubmitResult,
+  SubmitSpec,
   StreamEventsOptions,
+} from "@agent-os/runtime";
+import {
+  Admission,
+  commitBoundaryEvent,
+  Ledger,
+  LlmTransport,
+  Quota,
+  submitAgentEffect,
+  validateBoundaryEventPayload,
+  type InternalSubmitSpec,
 } from "@agent-os/runtime";
 import {
   Dispatch,
@@ -70,18 +84,16 @@ import {
 import {
   EventBus,
   EventBusLive,
-  Ledger,
   LedgerLive,
   createEventStreamResponse,
   eventToRpc,
 } from "./ledger";
 import { Scheduler, SchedulerLive } from "./scheduler";
 import { Resources, ResourcesLive } from "./resources";
-import { Quota, QuotaLive } from "./quota";
-import { AiBinding } from "./llm";
+import { QuotaLive } from "./quota";
+import { AiBinding, LlmTransportLive } from "./llm";
 import { isMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
-import { Admission, AdmissionLive, type AttemptKey, type CapabilityLease } from "./admission";
-import { commitBoundaryEvent, validateBoundaryEventPayload } from "./boundary-commit";
+import { AdmissionLive } from "./admission";
 import {
   RefResolverLive,
   RefResolverService,
@@ -99,12 +111,6 @@ import {
   validateExtensionDeclarations,
 } from "@agent-os/kernel/extensions";
 import { isScopeRef, type ScopeRef } from "@agent-os/kernel/effect-claim";
-import {
-  type InternalSubmitSpec,
-  submitAgentEffect,
-  type SubmitResult,
-  type SubmitSpec,
-} from "./submit-agent";
 import {
   projectAdmissionLease,
   projectQuotaState,
@@ -140,6 +146,7 @@ type CoreServices =
   | Ledger
   | EventBus
   | AiBinding
+  | LlmTransport
   | Scheduler
   | Dispatch
   | Resources
@@ -166,7 +173,11 @@ const makeAgentRuntime = (
   const quotaLayer = QuotaLive(ctx).pipe(Layer.provide(eventBusLayer));
   const aiLayer = Layer.succeed(AiBinding, ai);
   const refResolverLayer = RefResolverLive(refs);
-  const admissionLayer = AdmissionLive(ctx).pipe(Layer.provide(eventBusLayer));
+  const providerBaseLayer = Layer.mergeAll(aiLayer, refResolverLayer);
+  const llmTransportLayer = LlmTransportLive.pipe(Layer.provide(providerBaseLayer));
+  const admissionLayer = AdmissionLive(ctx).pipe(
+    Layer.provide(Layer.mergeAll(eventBusLayer, providerBaseLayer)),
+  );
   return ManagedRuntime.make(
     Layer.mergeAll(
       eventBusLayer,
@@ -176,6 +187,7 @@ const makeAgentRuntime = (
       resourcesLayer,
       quotaLayer,
       aiLayer,
+      llmTransportLayer,
       admissionLayer,
       refResolverLayer,
     ),

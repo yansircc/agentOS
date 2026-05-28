@@ -17,8 +17,8 @@
  */
 
 // ── Schema types + validator ───────────────────────────────────
-export type { JsonSchemaObject, JsonSchemaNode, SchemaContract } from "./json-schema";
-export { validateAgainstSchema } from "./json-schema";
+export type { JsonSchemaObject, JsonSchemaNode, SchemaContract } from "@agent-os/runtime";
+export { validateAgainstSchema } from "@agent-os/runtime";
 
 // ── Lease projection state + pure functions ────────────────────
 export type {
@@ -32,11 +32,11 @@ export type {
   BarrierRow,
   AdmissionRow,
   LlmRoute,
-} from "./lease";
-export { decideTier, projectLease } from "./lease";
+} from "@agent-os/runtime";
+export { decideTier, projectLease } from "@agent-os/runtime";
 
 // ── Canonical fingerprint algebra ──────────────────────────────
-export { FINGERPRINT_ALGO_VERSION, makeSchemaContract, routeFingerprint } from "./fingerprint";
+export { FINGERPRINT_ALGO_VERSION, makeSchemaContract, routeFingerprint } from "@agent-os/runtime";
 
 // ── Orchestration + Live layer ─────────────────────────────────
 export type {
@@ -48,6 +48,7 @@ export type {
   AttemptSpec,
   AttemptResult,
   InvalidateSpec,
-  AdapterMode,
-} from "./admission";
-export { Admission, AdmissionLive, ADAPTER_VERSION } from "./admission";
+} from "@agent-os/runtime";
+export type { AdapterMode } from "./admission";
+export { Admission } from "@agent-os/runtime";
+export { AdmissionLive, ADAPTER_VERSION } from "./admission";

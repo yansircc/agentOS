@@ -2,7 +2,7 @@ import { Data, Effect } from "effect";
 import { validateEffectClaim, type EffectClaim } from "@agent-os/kernel/effect-claim";
 import type { BoundaryContract } from "@agent-os/kernel/boundary-contract";
 import type { JsonStringifyError, SqlError } from "@agent-os/kernel/errors";
-import type { LedgerEvent } from "@agent-os/runtime";
+import type { LedgerEvent } from "./types";
 
 type BoundaryCommitIssue =
   | "event_outside_vocabulary"

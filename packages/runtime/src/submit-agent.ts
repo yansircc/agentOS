@@ -27,17 +27,18 @@ import {
   ToolError,
   UpstreamFailure,
 } from "@agent-os/kernel/errors";
-import { AiBinding, callLlm, type LlmMessage, type LlmRoute, type ToolDefinition } from "./llm";
+import type { LlmMessage, LlmRoute, ToolDefinition } from "@agent-os/kernel/llm";
+import { LlmTransport } from "./llm-transport";
 import { Ledger } from "./ledger";
-import { RefResolutionFailed, RefResolverService } from "@agent-os/kernel/ref-resolver";
-import { Quota } from "./quota";
+import type { RefResolutionFailed } from "@agent-os/kernel/ref-resolver";
+import { Quota } from "./quota-service";
 import {
   executeTool,
   parseToolCall,
   validateToolRegistry,
   type Tool,
 } from "@agent-os/kernel/tools";
-import { Admission, type JsonSchemaObject, makeSchemaContract } from "./admission";
+import { Admission, makeSchemaContract } from "./admission";
 import {
   admitterErrorRejectionRef,
   makeOperationRef,
@@ -46,81 +47,8 @@ import {
   settleLivedClaim,
   settleRejectedClaim,
   type RejectionRef,
-  type ScopeRef,
 } from "@agent-os/kernel/effect-claim";
-
-export interface SubmitSpec {
-  /** Task input — what this specific invocation is for. Becomes the
-   *  user message. Short, runtime-varying. */
-  readonly intent: string;
-  /** Runtime facts the agent needs for THIS invocation. Stringified into
-   *  the system message under "Context available:". Variable axis. */
-  readonly context: Record<string, unknown>;
-  /** Behavior program — who the agent is, how it operates, what rules
-   *  govern it. When provided, becomes the system message verbatim
-   *  (with the Context block appended). When absent, the substrate
-   *  generates a generic system from intent. Stable axis.
-   *
-   *  The three axes are intentionally distinct (see contract §5.1.1):
-   *    system  = behavior program (stable)
-   *    intent  = task input       (variable)
-   *    context = facts            (variable) */
-  readonly system?: string;
-  /** LLM transport route. Tagged union over protocol kinds (contract §3,
-   *  contract INV-8 revision). Replaces the v0.2.11 `agent: {provider,
-   *  model}` shape, which assumed a single cf-ai-binding transport.
-   *  Apps choose their route per submit; capability is evidence on
-   *  (route, schemaContract, strategy, adapterVersion), not on modelId. */
-  readonly route: LlmRoute;
-  readonly tools: Record<string, Tool>;
-  readonly budget?: {
-    readonly tokens?: number;
-    readonly timeMs?: number;
-    /** LLM loop iteration cap. Hitting this -> RETRIES abort. Default 5. */
-    readonly maxTurns?: number;
-    /** Per-tool retry attempts (total = retries + 1). Default 2 (so 3 attempts). */
-    readonly toolRetries?: number;
-  };
-  /** Spec-25: optional structured output schema. When present, the agent
-   *  loop is bypassed; a single `attemptStructured` call is made under the
-   *  evidence-derived admission lease. The decoded output is written via
-   *  the deliver event payload atomically with the evidence row. In
-   *  v0.2.10, `outputSchema` and a non-empty `tools` are mutually
-   *  exclusive (one-shot structured output, no tool-using turns). */
-  readonly outputSchema?: JsonSchemaObject;
-  /** Only the event name. Scope is structurally owned by the DO instance. */
-  readonly deliver: { readonly event: string };
-}
-
-/** Internal SubmitSpec with scope filled in by Cloudflare backend. */
-export interface InternalSubmitSpec extends Omit<SubmitSpec, "deliver"> {
-  readonly deliver: {
-    readonly scope: string;
-    readonly scopeRef: ScopeRef;
-    readonly event: string;
-  };
-}
-
-export type SubmitResult =
-  | {
-      readonly ok: true;
-      readonly runId: number;
-      readonly final: string;
-      readonly eventCount: number;
-      readonly tokensUsed: number;
-    }
-  | {
-      readonly ok: false;
-      readonly runId: number;
-      readonly reason: string;
-      readonly eventCount: number;
-      readonly tokensUsed: number;
-    };
-
-export interface TurnRef {
-  readonly id: number;
-  readonly index: number;
-}
+import type { InternalSubmitSpec, SubmitResult, TurnRef } from "./submit";
 
 export const turnRefOf = (runId: number, index: number): TurnRef => ({
   id: runId,
@@ -213,7 +141,7 @@ export const submitAgentEffect = (
 ): Effect.Effect<
   SubmitResult,
   SqlError | JsonStringifyError | RefResolutionFailed,
-  Ledger | AiBinding | Quota | Admission | RefResolverService
+  Ledger | LlmTransport | Quota | Admission
 > =>
   Effect.gen(function* () {
     const ledger = yield* Ledger;
@@ -340,11 +268,12 @@ export const submitAgentEffect = (
     const loop: Effect.Effect<
       SubmitResult,
       SqlError | JsonStringifyError | UpstreamFailure | ToolError | RefResolutionFailed,
-      Ledger | AiBinding | Quota | RefResolverService
+      Ledger | LlmTransport | Quota
     > = Effect.gen(function* () {
       const messages: LlmMessage[] = [...initialMessages];
       const toolDefs = toolDefinitionsOf(spec.tools);
       const quotaService = yield* Quota;
+      const llm = yield* LlmTransport;
 
       for (let turn = 0; turn < maxTurns; turn++) {
         const now = yield* Clock.currentTimeMillis;
@@ -360,7 +289,7 @@ export const submitAgentEffect = (
           );
         }
 
-        const resp = yield* callLlm({
+        const resp = yield* llm.call({
           route: spec.route,
           messages,
           tools: toolDefs.length > 0 ? toolDefs : undefined,

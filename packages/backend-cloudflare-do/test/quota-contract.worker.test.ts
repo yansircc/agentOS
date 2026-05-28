@@ -19,11 +19,11 @@ import { describe, expect, it } from "@effect/vitest";
 import { AdmissionLive } from "../src/admission";
 import { EventBusLive } from "../src/ledger";
 import { Ledger, LedgerLive } from "../src/ledger";
-import { AiBinding } from "../src/llm";
+import { AiBinding, LlmTransportLive } from "../src/llm";
 import { RefResolverLive } from "@agent-os/kernel/ref-resolver";
 import { QuotaLive } from "../src/quota";
 import { withQuota } from "../src/quota";
-import { type InternalSubmitSpec, submitAgentEffect } from "../src/submit-agent";
+import { type InternalSubmitSpec, submitAgentEffect } from "@agent-os/runtime";
 import { defineRegisteredTool, permissiveToolAdmitter, type Tool } from "@agent-os/kernel/tools";
 import type { EventHandler } from "@agent-os/runtime";
 import { finalTextResp, stubAi, toolCallResp } from "./_stub-ai";
@@ -74,8 +74,12 @@ const buildRuntime = (state: DurableObjectState, ai: Ai) => {
   const refs = RefResolverLive({
     material: () => null,
   });
-  const admission = AdmissionLive(state).pipe(Layer.provide(eventBus));
-  return ManagedRuntime.make(Layer.mergeAll(ledger, quota, aiLayer, admission, refs));
+  const providerBase = Layer.mergeAll(aiLayer, refs);
+  const llmTransport = LlmTransportLive.pipe(Layer.provide(providerBase));
+  const admission = AdmissionLive(state).pipe(
+    Layer.provide(Layer.mergeAll(eventBus, providerBase)),
+  );
+  return ManagedRuntime.make(Layer.mergeAll(ledger, quota, aiLayer, llmTransport, admission, refs));
 };
 
 describe("quota state machine — deterministic", () => {

@@ -13,7 +13,7 @@
 import { Layer, ManagedRuntime } from "effect";
 
 import { EventBusLive, LedgerLive } from "../../src/ledger";
-import { AiBinding } from "../../src/llm";
+import { AiBinding, LlmTransportLive } from "../../src/llm";
 import { RefResolverLive } from "@agent-os/kernel/ref-resolver";
 import { QuotaLive } from "../../src/quota";
 import { AdmissionLive } from "../../src/admission";
@@ -37,8 +37,12 @@ export const makeRuntime = (state: DurableObjectState, ai: Ai) => {
   const refs = RefResolverLive({
     material: () => null,
   });
-  const admission = AdmissionLive(state).pipe(Layer.provide(eventBus));
-  return ManagedRuntime.make(Layer.mergeAll(ledger, quota, aiLayer, admission, refs));
+  const providerBase = Layer.mergeAll(aiLayer, refs);
+  const llmTransport = LlmTransportLive.pipe(Layer.provide(providerBase));
+  const admission = AdmissionLive(state).pipe(
+    Layer.provide(Layer.mergeAll(eventBus, providerBase)),
+  );
+  return ManagedRuntime.make(Layer.mergeAll(ledger, quota, aiLayer, llmTransport, admission, refs));
 };
 
 export const makeRuntimeWithRegistry = (
@@ -64,8 +68,12 @@ export const makeRuntimeWithRegistry = (
       }
     },
   });
-  const admission = AdmissionLive(state).pipe(Layer.provide(eventBus));
-  return ManagedRuntime.make(Layer.mergeAll(ledger, quota, aiLayer, admission, refs));
+  const providerBase = Layer.mergeAll(aiLayer, refs);
+  const llmTransport = LlmTransportLive.pipe(Layer.provide(providerBase));
+  const admission = AdmissionLive(state).pipe(
+    Layer.provide(Layer.mergeAll(eventBus, providerBase)),
+  );
+  return ManagedRuntime.make(Layer.mergeAll(ledger, quota, aiLayer, llmTransport, admission, refs));
 };
 
 export const submitStructuredResp = (json: string, id = "c1") => ({

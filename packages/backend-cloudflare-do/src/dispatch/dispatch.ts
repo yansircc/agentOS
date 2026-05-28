@@ -8,13 +8,12 @@
  *
  */
 
-import { Clock, Context, Effect, Layer } from "effect";
+import { Clock, Effect, Layer } from "effect";
 import {
   CapabilityRejected,
   DispatchScopeMismatch,
   DispatchTargetNotFound,
   JsonStringifyError,
-  ScopeMissingError,
   SqlError,
   UnsupportedScopeRef,
   isCoreClaimedEventKind,
@@ -23,14 +22,13 @@ import {
 import { EventBus } from "../ledger";
 import { fireLedgerEvents, insertLedgerEvent } from "../ledger/inserted-events";
 import { materialRefKey } from "@agent-os/kernel/material-ref";
-import type { LedgerEvent } from "@agent-os/runtime";
-import type { DispatchToScopeResult, DispatchToScopeSpec } from "@agent-os/runtime";
+import { Dispatch } from "@agent-os/runtime";
+import type { DispatchEnvelope, DispatchReceiver, LedgerEvent } from "@agent-os/runtime";
 import {
   makeOperationRef,
   makePreClaim,
   isScopeRef,
   settleLivedClaim,
-  type PreClaim,
 } from "@agent-os/kernel/effect-claim";
 
 import {
@@ -48,28 +46,9 @@ import {
 } from "./outbox";
 import { DISPATCH_INBOUND_ACCEPTED, findAccepted, type InboundAcceptedPayload } from "./receiver";
 
-import type { TraceContext } from "@agent-os/runtime";
-
 // Re-export the receiver constant so callers that historically reached
 // for it from "./dispatch" keep working.
 export { DISPATCH_INBOUND_ACCEPTED } from "./receiver";
-
-export interface DispatchEnvelope {
-  readonly sourceScope: string;
-  readonly outboundEventId: number;
-  readonly targetScope: string;
-  readonly event: string;
-  readonly data: unknown;
-  readonly idempotencyKey: string;
-  readonly claim: PreClaim;
-  readonly traceContext?: TraceContext;
-}
-
-export interface DispatchReceiver {
-  readonly __agentosReceiveDispatch: (
-    envelope: DispatchEnvelope,
-  ) => Promise<{ deliveredEventId: number }>;
-}
 
 export interface DispatchTargetNamespace {
   readonly idFromName: (name: string) => DurableObjectId;
@@ -81,35 +60,6 @@ export type DispatchTargetRegistry = Readonly<Record<string, DispatchTargetNames
 const DISPATCH_OUTBOUND_REQUESTED = "dispatch.outbound.requested";
 const DISPATCH_OUTBOUND_DELIVERED = "dispatch.outbound.delivered";
 const DISPATCH_OUTBOUND_FAILED = "dispatch.outbound.failed";
-
-export class Dispatch extends Context.Tag("@agent-os/Dispatch")<
-  Dispatch,
-  {
-    readonly dispatchToScope: (
-      spec: DispatchToScopeSpec,
-    ) => Effect.Effect<
-      DispatchToScopeResult,
-      | SqlError
-      | JsonStringifyError
-      | DispatchTargetNotFound
-      | CapabilityRejected
-      | UnsupportedScopeRef
-    >;
-    readonly receive: (
-      envelope: DispatchEnvelope,
-    ) => Effect.Effect<
-      { deliveredEventId: number },
-      SqlError | JsonStringifyError | CapabilityRejected | ScopeMissingError | DispatchScopeMismatch
-    >;
-    readonly drainDue: (
-      now: number,
-    ) => Effect.Effect<
-      { delivered: number; failed: number; next: number | null },
-      SqlError | JsonStringifyError
-    >;
-    readonly findNextPending: () => Effect.Effect<number | null, SqlError>;
-  }
->() {}
 
 export const DispatchLive = (
   ctx: DurableObjectState,

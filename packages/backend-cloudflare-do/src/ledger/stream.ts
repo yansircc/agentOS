@@ -30,9 +30,9 @@
 
 import { Effect, type ManagedRuntime } from "effect";
 
-import type { LedgerEvent, StreamEventsOptions } from "@agent-os/runtime";
+import { Ledger, type LedgerEvent, type StreamEventsOptions } from "@agent-os/runtime";
 import { EventBus } from "./event-bus";
-import { Ledger, eventToRpc } from "./ledger";
+import { eventToRpc } from "./ledger";
 
 const DEFAULT_STREAM_HEARTBEAT_MS = 15_000;
 
