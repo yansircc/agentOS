@@ -97,7 +97,6 @@ describe("@agent-os/llm-transport-http", () => {
           "credential:openai-key": "sk-secret",
         }),
         messages,
-        tools: [weatherTool],
         turnRef: "turn-1",
         fetch,
       }),
@@ -109,18 +108,52 @@ describe("@agent-os/llm-transport-http", () => {
       Accept: "text/event-stream",
       "Content-Type": "application/json",
     });
-    expect(parseJsonBody(seen[0]?.init.body)).toMatchObject({
+    const openAiBody = parseJsonBody(seen[0]?.init.body) as { readonly tools?: unknown };
+    expect(openAiBody).toMatchObject({
       model: "gpt-test",
       messages,
-      tools: [weatherTool],
       stream: true,
       stream_options: { include_usage: true },
     });
+    expect(openAiBody.tools).toBeUndefined();
     expect(projectTurnStream(frames, "turn-1")).toMatchObject({
       status: "done",
       text: "hello",
       includedSeqs: [0, 1, 2, 3, 4],
     });
+  });
+
+  it("fast-fails tool definitions before provider fetch", async () => {
+    const fetch = vi.fn<LlmTransportFetch>();
+    const frames = await collect(
+      streamLlmTurn({
+        route: {
+          kind: "openai-chat-compatible",
+          endpointRef: "openai",
+          credentialRef: "openai-key",
+          modelId: "gpt-test",
+        },
+        resolver: {
+          material: () => {
+            throw new Error("resolver should not run for unsupported tools");
+          },
+        },
+        messages,
+        tools: [weatherTool],
+        turnRef: "turn-tools",
+        fetch,
+      }),
+    );
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(frames).toEqual([
+      {
+        kind: "error",
+        turnRef: "turn-tools",
+        seq: 0,
+        reason: "llm_transport_http_stream_tools_unsupported",
+      },
+    ]);
   });
 
   it("fast-fails missing credential material without calling fetch", async () => {
@@ -194,7 +227,7 @@ describe("@agent-os/llm-transport-http", () => {
     ]);
   });
 
-  it("streams Anthropic Messages SSE and shapes tools as input_schema", async () => {
+  it("streams Anthropic Messages SSE", async () => {
     const seen: RequestInit[] = [];
     const fetch: LlmTransportFetch = async (_input, init) => {
       seen.push(init);
@@ -226,7 +259,6 @@ describe("@agent-os/llm-transport-http", () => {
           "credential:anthropic-key": "anthropic-secret",
         }),
         messages,
-        tools: [weatherTool],
         turnRef: "turn-4",
         fetch,
       }),
@@ -236,20 +268,21 @@ describe("@agent-os/llm-transport-http", () => {
       "x-api-key": "anthropic-secret",
       "anthropic-version": "2023-06-01",
     });
-    expect(parseJsonBody(seen[0]?.body)).toMatchObject({
+    const anthropicBody = parseJsonBody(seen[0]?.body) as { readonly tools?: unknown };
+    expect(anthropicBody).toMatchObject({
       model: "claude-test",
       system: "be direct",
       messages: [{ role: "user", content: "hello" }],
-      tools: [{ name: "weather", input_schema: weatherTool.function.parameters }],
       stream: true,
     });
+    expect(anthropicBody.tools).toBeUndefined();
     expect(projectTurnStream(frames, "turn-4")).toMatchObject({
       status: "done",
       text: "hi",
     });
   });
 
-  it("streams Gemini SSE and strips schema fields Gemini rejects", async () => {
+  it("streams Gemini SSE", async () => {
     const seen: Array<{ readonly input: string; readonly init: RequestInit }> = [];
     const fetch: LlmTransportFetch = async (input, init) => {
       seen.push({ input, init });
@@ -274,7 +307,6 @@ describe("@agent-os/llm-transport-http", () => {
           "credential:gemini-key": "gemini-secret",
         }),
         messages,
-        tools: [weatherTool],
         turnRef: "turn-5",
         fetch,
       }),
@@ -286,15 +318,11 @@ describe("@agent-os/llm-transport-http", () => {
     const body = parseJsonBody(seen[0]?.init.body) as {
       readonly systemInstruction?: unknown;
       readonly contents?: unknown;
-      readonly tools: ReadonlyArray<{
-        readonly functionDeclarations: ReadonlyArray<{
-          readonly parameters: { readonly additionalProperties?: unknown };
-        }>;
-      }>;
+      readonly tools?: unknown;
     };
     expect(body.systemInstruction).toEqual({ parts: [{ text: "be direct" }] });
     expect(body.contents).toEqual([{ role: "user", parts: [{ text: "hello" }] }]);
-    expect(body.tools[0].functionDeclarations[0].parameters.additionalProperties).toBeUndefined();
+    expect(body.tools).toBeUndefined();
     expect(projectTurnStream(frames, "turn-5")).toMatchObject({
       status: "done",
       text: "ok",
