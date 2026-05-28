@@ -12,6 +12,7 @@ export const verificationBoundaryContract = defineBoundaryContract({
   roles: ["generator", "reader"],
   vocabulary: VERIFICATION_EVENT_VOCABULARY,
   authorityContracts: [],
+  materialRequirements: [],
   claimPayloadKey: "claim",
   terminalClaims: ["lived"],
   proof: {

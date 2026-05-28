@@ -1,5 +1,10 @@
 import type { ExtensionPackage } from "./extensions";
-import { isAuthorityContract, type AuthorityContract } from "./material-ref";
+import {
+  isAuthorityContract,
+  isMaterialRequirement,
+  type AuthorityContract,
+  type MaterialRequirement,
+} from "./material-ref";
 import type { AnchorRef, ClaimRole, EffectClaim } from "./effect-claim";
 
 export interface BoundaryProofContract {
@@ -12,12 +17,21 @@ export interface BoundaryProjectionContract {
   readonly shadowState: false;
 }
 
+/**
+ * Five-axis boundary declaration for claim-bearing packages:
+ * vocabulary, authority, material, proof, and projection.
+ *
+ * Cleanup is not a sixth axis here. Release/destruction semantics remain
+ * carrier-owned proof vocabulary until multiple packages expose cleanup as an
+ * independent contract surface.
+ */
 export interface BoundaryContract<EventKind extends string = string> {
   readonly packageId: string;
   readonly kindPrefixes: ReadonlyArray<string>;
   readonly roles: ReadonlyArray<ClaimRole>;
   readonly vocabulary: Readonly<Record<string, EventKind>>;
   readonly authorityContracts: ReadonlyArray<AuthorityContract>;
+  readonly materialRequirements: ReadonlyArray<MaterialRequirement>;
   readonly claimPayloadKey: "claim";
   readonly terminalClaims: ReadonlyArray<EffectClaim["phase"]>;
   readonly proof: BoundaryProofContract;
@@ -31,6 +45,8 @@ export type BoundaryContractIssue =
   | "vocabulary_invalid"
   | "vocabulary_outside_prefix"
   | "authority_contract_invalid"
+  | "material_requirements_invalid"
+  | "authority_material_outside_axis"
   | "claim_payload_key_invalid"
   | "terminal_claims_invalid"
   | "proof_invalid"
@@ -76,6 +92,47 @@ const valuesOwnedByPrefix = (
   prefixes: ReadonlyArray<string>,
 ): boolean => values.every((value) => prefixes.some((prefix) => value.startsWith(prefix)));
 
+const materialRequirementMatches = (
+  left: MaterialRequirement,
+  right: MaterialRequirement,
+): boolean => {
+  if (left.kind !== right.kind || left.slot !== right.slot || left.required !== right.required) {
+    return false;
+  }
+  switch (left.kind) {
+    case "credential":
+      return (
+        right.kind === "credential" &&
+        left.provider === right.provider &&
+        left.purpose === right.purpose
+      );
+    case "endpoint":
+      return right.kind === "endpoint" && left.protocol === right.protocol;
+    case "binding":
+      return (
+        right.kind === "binding" &&
+        left.provider === right.provider &&
+        left.bindingKind === right.bindingKind
+      );
+    case "external_resource":
+      return (
+        right.kind === "external_resource" &&
+        left.provider === right.provider &&
+        left.resourceKind === right.resourceKind
+      );
+  }
+};
+
+const authorityMaterialsAreDeclared = (
+  authorityContracts: ReadonlyArray<AuthorityContract>,
+  materialRequirements: ReadonlyArray<MaterialRequirement>,
+): boolean =>
+  authorityContracts.every((contract) =>
+    contract.requiredMaterials.every((required) =>
+      materialRequirements.some((declared) => materialRequirementMatches(required, declared)),
+    ),
+  );
+
 export const defineBoundaryContract = <EventKind extends string>(
   contract: BoundaryContract<EventKind>,
 ): BoundaryContract<EventKind> => contract;
@@ -99,6 +156,7 @@ export const validateBoundaryContract = (value: unknown): BoundaryContractValida
         "roles_invalid",
         "vocabulary_invalid",
         "authority_contract_invalid",
+        "material_requirements_invalid",
         "claim_payload_key_invalid",
         "terminal_claims_invalid",
         "proof_invalid",
@@ -133,6 +191,23 @@ export const validateBoundaryContract = (value: unknown): BoundaryContractValida
     !value.authorityContracts.every(isAuthorityContract)
   ) {
     issues.push("authority_contract_invalid");
+  }
+
+  if (
+    !Array.isArray(value.materialRequirements) ||
+    !value.materialRequirements.every(isMaterialRequirement)
+  ) {
+    issues.push("material_requirements_invalid");
+  }
+
+  if (
+    Array.isArray(value.authorityContracts) &&
+    value.authorityContracts.every(isAuthorityContract) &&
+    Array.isArray(value.materialRequirements) &&
+    value.materialRequirements.every(isMaterialRequirement) &&
+    !authorityMaterialsAreDeclared(value.authorityContracts, value.materialRequirements)
+  ) {
+    issues.push("authority_material_outside_axis");
   }
 
   if (value.claimPayloadKey !== "claim") {

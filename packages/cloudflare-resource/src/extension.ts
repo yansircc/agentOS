@@ -75,6 +75,7 @@ export const cloudflareResourceBoundaryContract = defineBoundaryContract({
   roles: ["resolver", "reader"],
   vocabulary: CLOUDFLARE_RESOURCE_EVENT_VOCABULARY,
   authorityContracts: cloudflareResourceAuthorityContracts,
+  materialRequirements: [apiToken, account, binding],
   claimPayloadKey: "claim",
   terminalClaims: ["lived", "rejected"],
   proof: {

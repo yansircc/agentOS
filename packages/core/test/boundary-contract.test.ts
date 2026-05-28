@@ -8,6 +8,12 @@ import {
 import { materialRequirement } from "../src/material-ref";
 
 describe("BoundaryContract", () => {
+  const proofStore = materialRequirement({
+    slot: "proof_store",
+    kind: "binding",
+    provider: "example",
+  });
+
   const contract = defineBoundaryContract({
     packageId: "@agent-os/example-carrier",
     kindPrefixes: ["example."],
@@ -22,15 +28,10 @@ describe("BoundaryContract", () => {
           authorityId: "@agent-os/example-carrier.record",
           authorityClass: "effect",
         },
-        requiredMaterials: [
-          materialRequirement({
-            slot: "proof_store",
-            kind: "binding",
-            provider: "example",
-          }),
-        ],
+        requiredMaterials: [proofStore],
       },
     ],
+    materialRequirements: [proofStore],
     claimPayloadKey: "claim",
     terminalClaims: ["lived", "rejected"],
     proof: {
@@ -69,6 +70,30 @@ describe("BoundaryContract", () => {
     ).toEqual({
       ok: false,
       issues: ["vocabulary_outside_prefix"],
+    });
+  });
+
+  it("rejects roles outside the claim role algebra", () => {
+    expect(
+      validateBoundaryContract({
+        ...contract,
+        roles: ["generator", "runtime"],
+      }),
+    ).toEqual({
+      ok: false,
+      issues: ["roles_invalid"],
+    });
+  });
+
+  it("requires authority material dependencies to be declared on the material axis", () => {
+    expect(
+      validateBoundaryContract({
+        ...contract,
+        materialRequirements: [],
+      }),
+    ).toEqual({
+      ok: false,
+      issues: ["authority_material_outside_axis"],
     });
   });
 
