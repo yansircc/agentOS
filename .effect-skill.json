@@ -9,7 +9,8 @@
     {
       "path": "packages/core",
       "shape": ["library"],
-      "dependencyOwner": "package-local"
+      "dependencyOwner": "package-local",
+      "dependencyOwnerReason": "core owns substrate dependency declarations in packages/core/package.json"
     },
     {
       "path": "packages/decision-gate",
@@ -43,18 +44,6 @@
     },
     {
       "path": "packages/llm-transport-http",
-      "shape": ["library"],
-      "dependencyOwner": "workspace-root",
-      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-    },
-    {
-      "path": "tooling/ops-api",
-      "shape": ["library"],
-      "dependencyOwner": "workspace-root",
-      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-    },
-    {
-      "path": "tooling/ops-htmx",
       "shape": ["library"],
       "dependencyOwner": "workspace-root",
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
@@ -115,6 +104,18 @@
     },
     {
       "path": "packages/workspace-session-cloudflare",
+      "shape": ["library"],
+      "dependencyOwner": "workspace-root",
+      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+    },
+    {
+      "path": "tooling/ops-api",
+      "shape": ["library"],
+      "dependencyOwner": "workspace-root",
+      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+    },
+    {
+      "path": "tooling/ops-htmx",
       "shape": ["library"],
       "dependencyOwner": "workspace-root",
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"

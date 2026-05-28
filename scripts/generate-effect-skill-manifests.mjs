@@ -8,6 +8,8 @@ const sourcePath = path.join(root, "docs/effect-skill.json");
 const source = JSON.parse(fs.readFileSync(sourcePath, "utf8"));
 const failures = [];
 
+const isRecord = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
+
 const stableJson = (value) =>
   `${JSON.stringify(value, null, 2).replace(
     /\[\n((?:\s+"(?:\\.|[^"\\])*",?\n)+)\s+\]/gu,
@@ -34,10 +36,71 @@ const writeJson = (file, value) => {
   fs.writeFileSync(target, expected);
 };
 
-if (typeof source.root !== "object" || source.root === null) {
+const workspacePackagePaths = () => {
+  const rootPackage = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
+  const workspaces = Array.isArray(rootPackage.workspaces)
+    ? rootPackage.workspaces
+    : Array.isArray(rootPackage.workspaces?.packages)
+      ? rootPackage.workspaces.packages
+      : [];
+  const paths = new Set();
+
+  for (const workspace of workspaces) {
+    if (typeof workspace !== "string") continue;
+    if (workspace.endsWith("/*")) {
+      const base = workspace.slice(0, -2);
+      const baseDir = path.join(root, base);
+      if (!fs.existsSync(baseDir)) continue;
+      for (const entry of fs.readdirSync(baseDir, { withFileTypes: true })) {
+        if (!entry.isDirectory()) continue;
+        const packagePath = `${base}/${entry.name}`;
+        if (fs.existsSync(path.join(root, packagePath, "package.json"))) {
+          paths.add(packagePath);
+        }
+      }
+      continue;
+    }
+
+    if (fs.existsSync(path.join(root, workspace, "package.json"))) {
+      paths.add(workspace);
+    }
+  }
+
+  return [...paths].sort();
+};
+
+const scannerPackagesFromWorkspaces = (rootSource) => {
+  if (Object.hasOwn(rootSource, "packages")) {
+    failures.push("docs/effect-skill.json root.packages duplicates package ownership");
+  }
+
+  const packageDefaults = isRecord(rootSource.packageDefaults) ? rootSource.packageDefaults : {};
+  const packageOverrides = isRecord(rootSource.packageOverrides) ? rootSource.packageOverrides : {};
+  const paths = workspacePackagePaths();
+  const pathSet = new Set(paths);
+
+  for (const packagePath of Object.keys(packageOverrides)) {
+    if (!pathSet.has(packagePath)) {
+      failures.push(`${packagePath} has an effect scanner override but is not a workspace package`);
+    }
+  }
+
+  return paths.map((packagePath) => ({
+    path: packagePath,
+    ...packageDefaults,
+    ...(isRecord(packageOverrides[packagePath]) ? packageOverrides[packagePath] : {}),
+  }));
+};
+
+if (!isRecord(source.root)) {
   failures.push("docs/effect-skill.json missing root manifest");
 } else {
-  writeJson(".effect-skill.json", source.root);
+  const { packageDefaults: _packageDefaults, packageOverrides: _packageOverrides, ...rootSource } =
+    source.root;
+  writeJson(".effect-skill.json", {
+    packages: scannerPackagesFromWorkspaces(source.root),
+    ...rootSource,
+  });
 }
 
 const packageManifests =
