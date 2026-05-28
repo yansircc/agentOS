@@ -25,11 +25,7 @@
  */
 
 import { Context, Effect } from "effect";
-import {
-  ProviderHttpFailure,
-  UpstreamFailure,
-  type ProviderFailureFlag,
-} from "../errors";
+import { ProviderHttpFailure, UpstreamFailure, type ProviderFailureFlag } from "../errors";
 import { credentialMaterialRef, endpointMaterialRef, type MaterialRef } from "../material-ref";
 import { RefResolutionFailed, RefResolverService, resolveStringMaterial } from "../ref-resolver";
 import { getProtocolAdapter } from "./protocol/protocol-adapter";

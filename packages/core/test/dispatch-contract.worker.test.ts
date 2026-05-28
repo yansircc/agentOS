@@ -393,9 +393,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
       sourceId: delivered?.id,
       sourcePayload: { message: "react" },
     });
-    expect(events.filter((e) => e.kind === "test.inbound_accepted_handler_fired")).toHaveLength(
-      1,
-    );
+    expect(events.filter((e) => e.kind === "test.inbound_accepted_handler_fired")).toHaveLength(1);
   });
 
   it("live-streams dispatch internal rows without reconnect and fires outbound handler once", async () => {
@@ -427,9 +425,9 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
     ]);
 
     const senderEvents: LedgerEventRpc[] = await sender.events();
-    expect(senderEvents.filter((e) => e.kind === "test.outbound_requested_handler_fired")).toHaveLength(
-      1,
-    );
+    expect(
+      senderEvents.filter((e) => e.kind === "test.outbound_requested_handler_fired"),
+    ).toHaveLength(1);
   });
 
   it("rejects missing bindingRef as config error before writing sender facts", async () => {

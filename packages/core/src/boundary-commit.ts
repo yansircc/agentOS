@@ -13,9 +13,7 @@ type BoundaryCommitIssue =
   | "claim_authority_invalid"
   | "claim_anchor_invalid";
 
-export class BoundaryCommitRejected extends Data.TaggedError(
-  "agent_os.boundary_commit_rejected",
-)<{
+export class BoundaryCommitRejected extends Data.TaggedError("agent_os.boundary_commit_rejected")<{
   readonly packageId: string;
   readonly event: string;
   readonly issue: BoundaryCommitIssue;
@@ -39,7 +37,8 @@ const reject = (
   contract: BoundaryContract,
   event: string,
   issue: BoundaryCommitIssue,
-): BoundaryCommitRejected => new BoundaryCommitRejected({ packageId: contract.packageId, event, issue });
+): BoundaryCommitRejected =>
+  new BoundaryCommitRejected({ packageId: contract.packageId, event, issue });
 
 export const validateBoundaryEventPayload = (
   contract: BoundaryContract,

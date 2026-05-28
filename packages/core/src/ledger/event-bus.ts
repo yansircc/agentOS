@@ -30,10 +30,7 @@ export interface EventBusService {
   }) => EventBusSubscription;
 }
 
-export class EventBus extends Context.Tag("@agent-os/EventBus")<
-  EventBus,
-  EventBusService
->() {}
+export class EventBus extends Context.Tag("@agent-os/EventBus")<EventBus, EventBusService>() {}
 
 export const EventBusLive = (handlers: Map<string, Set<EventHandler>>): Layer.Layer<EventBus> => {
   const sinks = new Set<EventBusSink>();
