@@ -1,9 +1,9 @@
 # @agent-os/skill-registry Public API
 
-Status: public-experimental. Skill registration is install-time identity over
-core tool contracts; it is not a runtime ledger/event/projection surface.
+Status: 0.2.x public-experimental. Skill registration is install-time identity
+over core tool contracts; it is not a runtime ledger/event/projection surface.
 
-## Frozen exports
+## Public exports
 
 None.
 

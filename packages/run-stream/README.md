@@ -7,8 +7,9 @@ submit results.
 
 ## Public API Status
 
-1.0 target for frame algebra and batched/realtime composition. Frozen exports
-are listed in `PUBLIC_API.md`.
+0.2.x active development for frame algebra and batched/realtime composition.
+Public exports are listed in `PUBLIC_API.md` to prevent accidental exports;
+they are not frozen.
 
 ## Invariant
 

@@ -1,8 +1,10 @@
 # @agent-os/cloudflare-resource Public API
 
-Status: 1.0 target for provider-neutral resource carrier algebra. D1, KV namespace, R2 bucket, Queue, and Workflow carrier exports are frozen here; live-provider evidence is tracked separately from API stability.
+Status: 0.2.x active development for provider-neutral resource carrier
+algebra. Public exports are listed for accidental export control only; this is
+not an API freeze.
 
-## Frozen exports
+## Public exports
 
 - `.:CLOUDFLARE_RESOURCE_AUTHORITIES`
 - `.:CLOUDFLARE_RESOURCE_EVENTS`

@@ -135,10 +135,10 @@ for (const target of targets) {
 
   const pkg = JSON.parse(fs.readFileSync(path.join(pkgDir, "package.json"), "utf8"));
   const exports = pkg.exports ?? {};
-  const frozen = manifestNames(manifest, "Frozen exports");
+  const publicExports = manifestNames(manifest, "Public exports");
   const experimental = manifestNames(manifest, "Experimental exports");
   const internal = manifestNames(manifest, "Internal-only exports");
-  const declaredPublic = new Set([...frozen, ...experimental]);
+  const declaredPublic = new Set([...publicExports, ...experimental]);
 
   for (const [entrypoint, exportSpec] of Object.entries(exports)) {
     const source = exportSpec?.default ?? exportSpec;

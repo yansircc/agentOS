@@ -43,7 +43,7 @@ compatibility.
 ## Repo Surface
 
 ```text
-docs/       public 1.0 docs only
+docs/       public 0.2.x docs only
 packages/   substrate, carriers, backends, composition packages
 tooling/    repo-local or ops tooling, not substrate
 skills/     repo-shipped Codex skills

@@ -54,6 +54,7 @@ symbolic proof surface, and projection contract.
 
 ## Public API
 
-The frozen public core surface is listed in
-[`packages/core/PUBLIC_API.md`](../packages/core/PUBLIC_API.md). Symbols not
-listed there are internal.
+The current public core surface is listed in
+[`packages/core/PUBLIC_API.md`](../packages/core/PUBLIC_API.md). This is an
+accidental-export control manifest, not an API freeze. Symbols not listed
+there are internal.

@@ -7,8 +7,8 @@ material.
 
 ## Public API Status
 
-Internal-stable, public-experimental. Experimental exports are listed in
-`PUBLIC_API.md`.
+0.2.x public-experimental. Experimental exports are listed in `PUBLIC_API.md`
+to prevent accidental exports; they are not frozen.
 
 ## Invariant
 

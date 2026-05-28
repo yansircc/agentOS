@@ -1,7 +1,7 @@
 /**
  * @agent-os/tenant-material — encrypted tenant credential resolver.
  *
- * Status: internal-stable, public-experimental.
+ * Status: 0.2.x public-experimental.
  *
  * Stable axis: core MaterialRef + RefResolver. Change axis: encrypted tenant
  * credential storage. Resolved credential material is produced only by

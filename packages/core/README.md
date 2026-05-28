@@ -8,7 +8,8 @@ packing, and boundary contracts.
 
 ## Public API Status
 
-1.0 target. Frozen exports are listed in `PUBLIC_API.md`.
+0.2.x active development. Public exports are listed in `PUBLIC_API.md` to
+prevent accidental exports; they are not frozen.
 
 ## Invariant
 

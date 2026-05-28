@@ -1,8 +1,9 @@
 # @agent-os/workspace-session Public API
 
-Status: 1.0 target.
+Status: 0.2.x active development. Public exports are listed for accidental
+export control only; this is not an API freeze.
 
-## Frozen exports
+## Public exports
 
 - `.:WORKSPACE_SESSION_EVENTS`
 - `.:WORKSPACE_SESSION_EVENT_PREFIX`

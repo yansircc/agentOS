@@ -1,29 +1,31 @@
 # Runtime Packages
 
-API stability is declared per package in `PUBLIC_API.md`.
+Public export reachability is declared per package in `PUBLIC_API.md`. In
+0.2.x these manifests prevent accidental exports; they are not stability or
+schema-freeze promises.
 
-| Package                                  | Status              | Boundary                                                                     |
-| ---------------------------------------- | ------------------- | ---------------------------------------------------------------------------- |
-| `@agent-os/core`                         | 1.0 target          | substrate, ledger, claims, tools, material refs, context, boundary contracts |
-| `@agent-os/cloudflare-resource`          | 1.0 target          | Cloudflare D1/KV/R2/Queue/Workflow carrier facts and provider calls          |
-| `@agent-os/workspace-session`            | 1.0 target          | provider-neutral workspace/session lifecycle facts                           |
-| `@agent-os/workspace-session-cloudflare` | backend             | structural Cloudflare Sandbox-compatible provider                            |
-| `@agent-os/tenant-material`              | public-experimental | encrypted credential records to execution-time material                      |
-| `@agent-os/llm-transport-http`           | public-experimental | HTTP provider deltas to non-durable turn frames                              |
-| `@agent-os/turn-stream`                  | 1.0 target          | token/progress frame algebra                                                 |
-| `@agent-os/run-stream`                   | 1.0 target          | ledger/turn/submit-result composition                                        |
-| `@agent-os/decision-gate`                | 1.0 target          | durable decision request/decision/consumption facts                          |
-| `@agent-os/skill-registry`               | public-experimental | install-time skill manifests to core tools                                   |
-| `@agent-os/deploy`                       | carrier             | deploy proof/projection vocabulary                                           |
-| `@agent-os/git-carrier`                  | carrier             | Git proof/projection vocabulary                                              |
-| `@agent-os/staging-artifact`             | carrier             | staging artifact proof/projection vocabulary                                 |
-| `@agent-os/verification`                 | carrier             | verification proof/projection vocabulary                                     |
-| `@agent-os/sandbox`                      | optional algebra    | bounded stateless sandbox tool surface                                       |
-| `@agent-os/sandbox-cloudflare`           | optional backend    | Cloudflare Sandbox-compatible stateless sandbox adapter                      |
-| `@agent-os/dynamic-worker`               | optional backend    | bounded Worker-compatible code execution                                     |
-| `@agent-os/image`                        | optional algebra    | image generation claim/projection helpers                                    |
+| Package                                  | Status             | Boundary                                                                     |
+| ---------------------------------------- | ------------------ | ---------------------------------------------------------------------------- |
+| `@agent-os/core`                         | 0.2.x public       | substrate, ledger, claims, tools, material refs, context, boundary contracts |
+| `@agent-os/cloudflare-resource`          | 0.2.x public       | Cloudflare D1/KV/R2/Queue/Workflow carrier facts and provider calls          |
+| `@agent-os/workspace-session`            | 0.2.x public       | provider-neutral workspace/session lifecycle facts                           |
+| `@agent-os/workspace-session-cloudflare` | backend            | structural Cloudflare Sandbox-compatible provider                            |
+| `@agent-os/tenant-material`              | 0.2.x experimental | encrypted credential records to execution-time material                      |
+| `@agent-os/llm-transport-http`           | 0.2.x experimental | HTTP provider deltas to non-durable turn frames                              |
+| `@agent-os/turn-stream`                  | 0.2.x public       | token/progress frame algebra                                                 |
+| `@agent-os/run-stream`                   | 0.2.x public       | ledger/turn/submit-result composition                                        |
+| `@agent-os/decision-gate`                | 0.2.x public       | durable decision request/decision/consumption facts                          |
+| `@agent-os/skill-registry`               | 0.2.x experimental | install-time skill manifests to core tools                                   |
+| `@agent-os/deploy`                       | carrier            | deploy proof/projection vocabulary                                           |
+| `@agent-os/git-carrier`                  | carrier            | Git proof/projection vocabulary                                              |
+| `@agent-os/staging-artifact`             | carrier            | staging artifact proof/projection vocabulary                                 |
+| `@agent-os/verification`                 | carrier            | verification proof/projection vocabulary                                     |
+| `@agent-os/sandbox`                      | optional algebra   | bounded stateless sandbox tool surface                                       |
+| `@agent-os/sandbox-cloudflare`           | optional backend   | Cloudflare Sandbox-compatible stateless sandbox adapter                      |
+| `@agent-os/dynamic-worker`               | optional backend   | bounded Worker-compatible code execution                                     |
+| `@agent-os/image`                        | optional algebra   | image generation claim/projection helpers                                    |
 
-MCP registry support is not part of the 1.0 surface; it remains a hold until
+MCP registry support is not part of the 0.2.x surface; it remains a hold until
 discovery, install, authority, and material contracts converge across products.
 
 ## Cloudflare Resource Boundary
