@@ -27,5 +27,5 @@ import { defineRegisteredTool } from "@agent-os/core/tools";
 
 ```sh
 cd packages/core
-vp test run
+bun run test
 ```

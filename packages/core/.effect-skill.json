@@ -50,7 +50,7 @@
       "rules": ["EFF402"]
     },
     {
-      "path": "test/admission/attempt-structured.test.ts",
+      "path": "test/admission/attempt-structured.worker.test.ts",
       "owner": "@agent-os/core/test-provider",
       "reason": "test provider stub constructs terminal HTTP Response objects to model upstream transport",
       "rules": ["EFF402"]
