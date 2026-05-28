@@ -331,16 +331,20 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const sanitizedToken = (value: unknown): string | undefined =>
   typeof value === "string" && /^[A-Za-z0-9_.:-]{1,96}$/.test(value) ? value : undefined;
 
-const providerErrorEnvelope = (body: string): Record<string, unknown> | null => {
-  try {
-    const parsed = JSON.parse(body) as unknown;
+const providerErrorEnvelope = (body: string): Effect.Effect<Record<string, unknown> | null> =>
+  Effect.gen(function* () {
+    const parsedEither = yield* Effect.either(
+      Effect.try({
+        try: () => JSON.parse(body) as unknown,
+        catch: () => null,
+      }),
+    );
+    if (parsedEither._tag === "Left") return null;
+    const parsed = parsedEither.right;
     if (!isRecord(parsed)) return null;
     const error = parsed.error;
     return isRecord(error) ? error : parsed;
-  } catch {
-    return null;
-  }
-};
+  });
 
 const providerFailureFlags = (
   status: number,
@@ -386,22 +390,49 @@ const providerFailureFlags = (
   return Array.from(flags);
 };
 
-const providerHttpFailure = async (
+const providerHttpFailure = (
   provider: HttpProvider,
   response: Response,
-): Promise<ProviderHttpFailure> => {
-  const body = await response.text().catch(() => "");
-  const envelope = providerErrorEnvelope(body);
-  const code = sanitizedToken(envelope?.code);
-  const type = sanitizedToken(envelope?.type);
-  return new ProviderHttpFailure({
-    provider,
-    status: response.status,
-    ...(code === undefined ? {} : { code }),
-    ...(type === undefined ? {} : { type }),
-    flags: providerFailureFlags(response.status, body, envelope),
+): Effect.Effect<ProviderHttpFailure> =>
+  Effect.gen(function* () {
+    const bodyEither = yield* Effect.either(
+      Effect.tryPromise({
+        try: () => response.text(),
+        catch: () => null,
+      }),
+    );
+    const body = bodyEither._tag === "Right" ? bodyEither.right : "";
+    const envelope = yield* providerErrorEnvelope(body);
+    const code = sanitizedToken(envelope?.code);
+    const type = sanitizedToken(envelope?.type);
+    return new ProviderHttpFailure({
+      provider,
+      status: response.status,
+      ...(code === undefined ? {} : { code }),
+      ...(type === undefined ? {} : { type }),
+      flags: providerFailureFlags(response.status, body, envelope),
+    });
   });
-};
+
+const fetchProviderJson = (
+  provider: HttpProvider,
+  input: RequestInfo | URL,
+  init: RequestInit,
+): Effect.Effect<unknown, UpstreamFailure> =>
+  Effect.gen(function* () {
+    const res = yield* Effect.tryPromise({
+      try: () => fetch(input, init),
+      catch: (cause) => new UpstreamFailure({ cause }),
+    });
+    if (!res.ok) {
+      const failure = yield* providerHttpFailure(provider, res);
+      return yield* Effect.fail(new UpstreamFailure({ cause: failure }));
+    }
+    return yield* Effect.tryPromise({
+      try: () => res.json() as Promise<unknown>,
+      catch: (cause) => new UpstreamFailure({ cause }),
+    });
+  });
 
 export const dispatchProvider = (
   route: LlmRoute,
@@ -446,22 +477,13 @@ export const dispatchProvider = (
           model: route.modelId,
           ...(body as ChatCompletionsBody),
         };
-        return yield* Effect.tryPromise({
-          try: async () => {
-            const res = await fetch(url, {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${apiKey}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify(fullBody),
-            });
-            if (!res.ok) {
-              throw await providerHttpFailure(route.kind, res);
-            }
-            return (await res.json()) as unknown;
+        return yield* fetchProviderJson(route.kind, url, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
           },
-          catch: (cause) => new UpstreamFailure({ cause }),
+          body: JSON.stringify(fullBody),
         });
       });
     case "anthropic-messages":
@@ -484,23 +506,14 @@ export const dispatchProvider = (
           ...(body as AnthropicMessagesBody),
         };
         const versionHeader = route.anthropicVersion ?? DEFAULT_ANTHROPIC_VERSION;
-        return yield* Effect.tryPromise({
-          try: async () => {
-            const res = await fetch(url, {
-              method: "POST",
-              headers: {
-                "x-api-key": apiKey,
-                "anthropic-version": versionHeader,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify(fullBody),
-            });
-            if (!res.ok) {
-              throw await providerHttpFailure(route.kind, res);
-            }
-            return (await res.json()) as unknown;
+        return yield* fetchProviderJson(route.kind, url, {
+          method: "POST",
+          headers: {
+            "x-api-key": apiKey,
+            "anthropic-version": versionHeader,
+            "Content-Type": "application/json",
           },
-          catch: (cause) => new UpstreamFailure({ cause }),
+          body: JSON.stringify(fullBody),
         });
       });
     case "gemini-generate-content":
@@ -518,22 +531,13 @@ export const dispatchProvider = (
           }),
         );
         const url = `${endpoint.replace(/\/$/, "")}/v1beta/models/${route.modelId}:generateContent`;
-        return yield* Effect.tryPromise({
-          try: async () => {
-            const res = await fetch(url, {
-              method: "POST",
-              headers: {
-                "x-goog-api-key": apiKey,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify(body as GeminiGenerateContentBody),
-            });
-            if (!res.ok) {
-              throw await providerHttpFailure(route.kind, res);
-            }
-            return (await res.json()) as unknown;
+        return yield* fetchProviderJson(route.kind, url, {
+          method: "POST",
+          headers: {
+            "x-goog-api-key": apiKey,
+            "Content-Type": "application/json",
           },
-          catch: (cause) => new UpstreamFailure({ cause }),
+          body: JSON.stringify(body as GeminiGenerateContentBody),
         });
       });
   }
