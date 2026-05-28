@@ -130,6 +130,11 @@
       "path": "spikes/_active/**",
       "owner": "@parallel-dev",
       "reason": "ignored pressure-test code is local throwaway, not package source"
+    },
+    {
+      "path": "spikes/**/.wrangler/**",
+      "owner": "@wrangler",
+      "reason": "Wrangler generated bundles from retired pressure tests are not repo source"
     }
   ],
   "allowedAdapters": [
