@@ -1,4 +1,4 @@
-import type { LlmRoute, ToolDefinition } from "@agent-os/core";
+import type { LlmRoute } from "@agent-os/core";
 import { credentialMaterialRef, endpointMaterialRef } from "@agent-os/core/material-ref";
 import type { MaterialRef } from "@agent-os/core/material-ref";
 import type { RefResolver } from "@agent-os/core/ref-resolver";
@@ -39,7 +39,6 @@ export interface StreamLlmTurnSpec {
   readonly route: LlmRoute;
   readonly resolver: RefResolver;
   readonly messages: ReadonlyArray<LlmTransportMessage>;
-  readonly tools?: ReadonlyArray<ToolDefinition>;
   readonly turnRef: string;
   readonly fetch: LlmTransportFetch;
   readonly signal?: AbortSignal;
@@ -148,9 +147,6 @@ const errorFrame = (turnRef: string, seq: number, reason: string): TurnStreamFra
   seq,
   reason,
 });
-
-const hasToolDefinitions = (tools: ReadonlyArray<ToolDefinition> | undefined): boolean =>
-  tools !== undefined && tools.length > 0;
 
 const resolvedStringMaterial = (resolver: RefResolver, ref: MaterialRef): string | null => {
   const value = resolver.material(ref);
@@ -672,10 +668,6 @@ async function* streamSseFrames(
 export async function* streamLlmTurn(spec: StreamLlmTurnSpec): AsyncGenerator<TurnStreamFrame> {
   if (signalAborted(spec.signal)) {
     yield errorFrame(spec.turnRef, 0, "llm_transport_http_aborted");
-    return;
-  }
-  if (hasToolDefinitions(spec.tools)) {
-    yield errorFrame(spec.turnRef, 0, "llm_transport_http_stream_tools_unsupported");
     return;
   }
   if (typeof spec.fetch !== "function") {

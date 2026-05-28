@@ -1,26 +1,12 @@
 import { projectTurnStream, type TurnStreamFrame } from "@agent-os/turn-stream";
 import { streamLlmTurn, type LlmTransportFetch, type LlmTransportMessage } from "../src";
 import type { RefResolver } from "@agent-os/core/ref-resolver";
-import type { LlmRoute, ToolDefinition } from "@agent-os/core";
+import type { LlmRoute } from "@agent-os/core";
 
 const messages: ReadonlyArray<LlmTransportMessage> = [
   { role: "system", content: "be direct" },
   { role: "user", content: "hello" },
 ];
-
-const weatherTool: ToolDefinition = {
-  type: "function",
-  function: {
-    name: "weather",
-    description: "get weather",
-    parameters: {
-      type: "object",
-      properties: { city: { type: "string" } },
-      required: ["city"],
-      additionalProperties: false,
-    },
-  },
-};
 
 const resolver = (materials: Readonly<Record<string, string>>): RefResolver => ({
   material: (ref) => materials[`${ref.kind}:${ref.ref}`] ?? null,
@@ -121,39 +107,6 @@ describe("@agent-os/llm-transport-http", () => {
       text: "hello",
       includedSeqs: [0, 1, 2, 3, 4],
     });
-  });
-
-  it("fast-fails tool definitions before provider fetch", async () => {
-    const fetch = vi.fn<LlmTransportFetch>();
-    const frames = await collect(
-      streamLlmTurn({
-        route: {
-          kind: "openai-chat-compatible",
-          endpointRef: "openai",
-          credentialRef: "openai-key",
-          modelId: "gpt-test",
-        },
-        resolver: {
-          material: () => {
-            throw new Error("resolver should not run for unsupported tools");
-          },
-        },
-        messages,
-        tools: [weatherTool],
-        turnRef: "turn-tools",
-        fetch,
-      }),
-    );
-
-    expect(fetch).not.toHaveBeenCalled();
-    expect(frames).toEqual([
-      {
-        kind: "error",
-        turnRef: "turn-tools",
-        seq: 0,
-        reason: "llm_transport_http_stream_tools_unsupported",
-      },
-    ]);
   });
 
   it("fast-fails missing credential material without calling fetch", async () => {
