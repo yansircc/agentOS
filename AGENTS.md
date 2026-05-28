@@ -1,206 +1,132 @@
 # AGENTS.md
 
-This repo is an agentOS substrate repo. Treat it as invariant code, not an app
-playground.
+This is the operating guide for agents changing the agentOS repo.
 
 ## Invariant
 
 Write the problem's algebra, not its case analysis.
 
-Before changing code, name:
+Before editing, state:
 
-1. stable axis
-2. change axis
-3. invariant
+```text
+stable axis:
+change axis:
+invariant:
+```
 
-One fact, one location. Derived data is not source of truth. Implementation
-details do not belong in shared substrate logic.
+One fact, one location. Derived data is not source of truth.
+Implementation-specific behavior in shared substrate logic is a boundary
+failure.
+
+## Completion Standard
+
+A change is done only when one of these is true:
+
+- the class of failure is structurally impossible; or
+- the report states why the class-level fix is not viable now and names the
+  condition that makes it required.
+
+Passing the observed test case is not enough.
+
+## Complexity Gate
+
+Do not add defensive branches, shims, shadow state, compatibility surfaces, or
+fallback paths unless the report states:
+
+1. exact failure model;
+2. why redesign is not viable now;
+3. explicit removal condition.
+
+This repo currently has no real users. Prefer deletion and fast failure over
+compatibility.
 
 ## Repo Surface
 
 ```text
-docs/
-  specs/       durable substrate decisions
-  cookbooks/   optional app-shape recipes
-  notes/       retained exploration notes
-
-packages/
-  core/                  substrate package
-  image/                 optional image algebra
-  sandbox/               optional bounded stateless sandbox algebra
-  sandbox-cloudflare/    optional Cloudflare Sandbox backend
-
-spikes/
-  _active/     ignored local throwaway only
+docs/       public 1.0 docs only
+packages/   substrate, carriers, backends, composition packages
+tooling/    repo-local or ops tooling, not substrate
+skills/     repo-shipped Codex skills
+spikes/     ignored local pressure tests only
 ```
 
-Historical runnable spikes and examples are retired. Do not add tracked
-examples or tracked spike apps unless explicitly assigned.
+Do not add tracked examples, spike apps, or development notes unless explicitly
+assigned.
 
-## Required Reading by Task Type
+## BoundaryContract Checklist
 
-Read the minimum set:
+Claim-bearing packages declare one `BoundaryContract` with five independent
+axes:
 
-- Public surface / invariant work: `docs/specs/spec-24-invariants-and-surface.md`
-- Structured output: `docs/specs/spec-25-llm-admission.md`
-- Protocol adapter / routes: `docs/specs/spec-27-llm-protocol-adapter.md`
-- Cross-scope dispatch / resources / image route: `docs/specs/spec-28-img-gen-gap-implementation-plan.md`
-- Event stream: `docs/specs/spec-29-ledger-event-stream.md`
-- Boundary/cookbook decisions: `docs/specs/spec-30-substrate-boundary-cookbook.md`
-- Text streaming: `docs/specs/spec-31-text-streaming-capability.md`
-- Image package boundary: `docs/specs/spec-32-image-package-boundary.md`
-- Sandbox carrier: `docs/specs/spec-33-sandbox-carrier.md`
-- Parallel agent startup: `docs/cookbooks/parallel-agent-startup.md`
-- Parallel isolation rules: `docs/cookbooks/parallel-dev-mvp.md`
+```text
+vocabulary       owned event kind prefixes
+authority        authority refs and required materials by authority
+material         top-level MaterialRequirement axis
+proof            symbolic anchor/proof vocabulary
+projection       derived-from-ledger reader contract
+```
 
-Cookbooks are recipes, not contracts. Specs and core tests are contracts.
+Cleanup is not a sixth axis yet. Release and destruction semantics remain proof
+vocabulary until multiple packages expose cleanup as an independent contract.
 
-## Parallel Dev Rule
+Do not put resolved provider material in claims, ledger events, projections,
+error payloads, run-stream frames, or docs examples.
 
-Do not work in the shared checkout for assigned implementation tasks. Create an
-isolated worktree:
+## Parallel Worktrees
+
+Do not implement assigned work in the shared checkout. Create an isolated
+worktree:
 
 ```sh
-scripts/parallel-dev/create-agent.sh a01 chatbot HEAD
-cd .parallel/worktrees/a01-chatbot
+scripts/parallel-dev/create-agent.sh aNN short-task HEAD
+cd .parallel/worktrees/aNN-short-task
 source <printed-agent-dir>/env.sh
 test "$(pwd)" = "$PARALLEL_WORKTREE" || { echo "wrong worktree: $(pwd)"; exit 1; }
 ```
 
-The env gives you:
+Before editing, write the intended write-set and invariant to the printed
+agent `task.md`.
 
-- `AGENT_ID`
-- `TEST_RUN_ID`
-- `SCOPE_PREFIX`
-- `PORT_BASE`
-- isolated `HOME`
-- isolated `XDG_CACHE_HOME`
-- isolated `TMPDIR`
-- root `.dev.vars` sourced as the only secrets file
-
-Use `$PORT_BASE` through `$((PORT_BASE + 9))`. Prefix all scopes, R2 keys,
-queue names, and test fixtures with `$SCOPE_PREFIX`.
-
-Before writing files, verify that the current directory is the assigned
-worktree:
-
-```sh
-test "$(pwd)" = "$PARALLEL_WORKTREE" || { echo "wrong worktree: $(pwd)"; exit 1; }
-```
-
-## Secrets
-
-Root `.dev.vars` is ignored by git. It is the single local source of provider
-credentials and defaults.
-
-Never print or commit secret values. It is acceptable to report `set/missing`
-or provider-safe summaries.
-
-Common defaults:
-
-- `CF_AI_DEFAULT_TEXT_MODEL=openai/gpt-5.4-mini`
-- `CF_AI_GATEWAY_ID=default`
-- `OPENROUTER_DEFAULT_TEXT_MODEL`
-- `OPENROUTER_DEFAULT_IMAGE_MODEL`
-- `AIHUBMIX_DEFAULT_MODEL`
-- `GEMINI_DEFAULT_MODEL`
-
-Live provider tests are opt-in. Contract tests must use stubs unless the task
-explicitly asks for live-wire validation.
+Use `$PORT_BASE` through `$((PORT_BASE + 9))`. Prefix scopes, resource names,
+R2 keys, queue names, and live fixtures with `$SCOPE_PREFIX`.
 
 ## Write-Set Rule
-
-Before editing, write the intended write-set into your run `task.md`.
 
 Single-writer unless explicitly assigned:
 
 - `bun.lock`
 - root `package.json`
 - public barrel files
+- `PUBLIC_API.md`
 - schema migrations
-- docs/spec indexes
+- docs indexes
 - generated source
 
-If your task needs a forbidden shared file, stop and report the required
+If a task needs a forbidden shared file, stop and report the required
 single-writer change.
 
-## Active Spike / Happy Project Rule
+## Secrets
 
-Happy project implementations are pressure tests, not repo products.
+Root `.dev.vars` is ignored by git and is the only local source of provider
+credentials. Never print or commit secret values. Report only `set/missing` or
+provider-safe summaries.
 
-Put throwaway code under:
-
-```text
-spikes/_active/<agent-id>-<case>/
-```
-
-That path is ignored. The durable output is your report, not the app code. If
-the project exposes a real substrate gap, report the gap first; do not silently
-patch core.
+Live provider tests are opt-in unless the task explicitly requests them.
 
 ## Verification
 
-Normal repo gates:
+Default gates:
 
 ```sh
+bun run check
 bun run typecheck
-cd packages/core && bun run test
+bun run test
+effect-skill-scan /Users/yansir/code/52/agentOS --strict --json --profile
 git diff --check
 ```
 
-For happy projects, run the narrow local smoke first. Full repo gates are
-required only if you touched tracked source.
-
-For ignored spike tests, prefer the repo helper over ad hoc dependency
-installation:
-
-```sh
-scripts/parallel-dev/run-spike-vitest.sh <path-to-vitest.config.ts>
-```
-
-Worktrees may contain `node_modules` symlinks back to the source checkout.
-Treat dependency directories as shared read-only inputs. Do not run
-`bun install` unless dependency ownership is assigned.
-
-When running a server:
-
-- bind to `$PORT_BASE`
-- record owned PIDs in `$PARALLEL_AGENT_DIR/pids.txt`
-- only stop PIDs listed there
-- do not run global `pkill`, `killall`, cache purge, or repo-wide cleanup
-
-## Report Format
-
-Every assigned agent returns:
-
-```text
-agentId:
-branch:
-worktree:
-task:
-writeSet:
-commit: <sha or none>
-
-result:
-  PASS | FAIL | BLOCKED
-
-verification:
-  - <command> -> <exit code> | <safe summary>
-
-proof:
-  - ledger events / HTTP responses / test assertions, with scopes prefixed by TEST_RUN_ID
-
-friction:
-  - DX or docs/API issue encountered
-
-bugs:
-  - invariant:
-    failure:
-    minimal fix:
-    verification:
-```
-
-If there is no issue, say so explicitly and name the remaining untested risk.
+For package-scoped work, run the package test first, then full gates before the
+commit.
 
 ## Review Priority
 
@@ -210,6 +136,12 @@ If there is no issue, say so explicitly and name the remaining untested risk.
 4. semantic inconsistency
 5. style
 
-Passing one observed test is not done. Done means the class of failure is
-structurally impossible, or the report states why eliminating the class is not
-viable yet and names the condition that would require the class-level fix.
+Report format:
+
+```text
+invariant:
+failure:
+minimal fix:
+verification:
+remaining risk:
+```
