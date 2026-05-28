@@ -16,6 +16,7 @@ export const gitCarrierBoundaryContract = defineBoundaryContract({
   roles: ["generator", "resolver", "reader"],
   vocabulary: GIT_EVENT_VOCABULARY,
   authorityContracts: [],
+  materialRequirements: [],
   claimPayloadKey: "claim",
   terminalClaims: ["lived"],
   proof: {

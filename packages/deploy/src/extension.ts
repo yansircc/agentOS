@@ -16,6 +16,7 @@ export const deployBoundaryContract = defineBoundaryContract({
   roles: ["generator", "resolver", "reader"],
   vocabulary: DEPLOY_EVENT_VOCABULARY,
   authorityContracts: [],
+  materialRequirements: [],
   claimPayloadKey: "claim",
   terminalClaims: ["lived", "rejected"],
   proof: {

@@ -17,6 +17,7 @@ export const workspaceSessionBoundaryContract = defineBoundaryContract({
   roles: ["resolver", "reader"],
   vocabulary: WORKSPACE_SESSION_EVENT_VOCABULARY,
   authorityContracts: [],
+  materialRequirements: [],
   claimPayloadKey: "claim",
   terminalClaims: ["lived", "rejected"],
   proof: {

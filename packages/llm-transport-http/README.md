@@ -7,6 +7,10 @@ Status: internal-stable, public-experimental.
 HTTP LLM streaming is non-durable turn progress. Durable run truth remains the
 terminal `SubmitResult` plus ledger events.
 
+This package is the HTTP provider materialization of the LLM protocol surface
+owned by `@agent-os/core`; there is no separate provider-neutral
+`@agent-os/llm-transport` algebra package.
+
 `streamLlmTurn`:
 
 - resolves endpoint and credential material only through the supplied

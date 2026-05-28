@@ -14,6 +14,7 @@ export const decisionGateBoundaryContract = defineBoundaryContract({
   roles: ["admitter", "reader"],
   vocabulary: DECISION_GATE_EVENT_VOCABULARY,
   authorityContracts: [],
+  materialRequirements: [],
   claimPayloadKey: "claim",
   terminalClaims: ["pre", "lived"],
   proof: {

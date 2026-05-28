@@ -13,6 +13,7 @@ export const stagingArtifactBoundaryContract = defineBoundaryContract({
   roles: ["generator", "resolver", "reader"],
   vocabulary: STAGING_EVENT_VOCABULARY,
   authorityContracts: [],
+  materialRequirements: [],
   claimPayloadKey: "claim",
   terminalClaims: ["lived"],
   proof: {
