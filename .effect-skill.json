@@ -157,7 +157,7 @@
       "rules": ["EFF001", "EFF025"]
     },
     {
-      "path": "packages/core/test/admission/attempt-structured.test.ts",
+      "path": "packages/core/test/admission/attempt-structured.worker.test.ts",
       "owner": "@agent-os/core-tests",
       "reason": "test HTTP fixture owns provider Response construction",
       "rules": ["EFF402"]

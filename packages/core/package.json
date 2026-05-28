@@ -49,7 +49,9 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vp test run"
+    "test": "vp test run && vp test run --config vitest.cloudflare.config.ts",
+    "test:unit": "vp test run",
+    "test:worker": "vp test run --config vitest.cloudflare.config.ts"
   },
   "dependencies": {
     "@effect/experimental": "catalog:",
