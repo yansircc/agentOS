@@ -1,5 +1,7 @@
 # agentOS Package Map
 
+<!-- agentos:generated package-map:start -->
+
 | Need                                 | Package                                  |
 | ------------------------------------ | ---------------------------------------- |
 | Durable agent substrate              | `@agent-os/core`                         |
@@ -13,4 +15,7 @@
 | Approval/decision gate               | `@agent-os/decision-gate`                |
 | Skill manifest to tools              | `@agent-os/skill-registry`               |
 
-Exact exports are owned by each package's `PUBLIC_API.md`.
+<!-- agentos:generated package-map:end -->
+
+Exact export intent is owned by `docs/api/*.md`; package `PUBLIC_API.md` files
+are generated projections.

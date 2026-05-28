@@ -1,8 +1,10 @@
 # Runtime Packages
 
-Public export reachability is declared per package in `PUBLIC_API.md`. In
-0.2.x these manifests prevent accidental exports; they are not stability or
-schema-freeze promises.
+Public export intent is declared per package in `docs/api/*.md`; package
+`PUBLIC_API.md` files are generated projections. These manifests prevent
+accidental exports; they are not stability or schema-freeze promises.
+
+<!-- agentos:generated runtime-package-map:start -->
 
 | Package                                  | Status             | Boundary                                                                     |
 | ---------------------------------------- | ------------------ | ---------------------------------------------------------------------------- |
@@ -25,8 +27,13 @@ schema-freeze promises.
 | `@agent-os/dynamic-worker`               | optional backend   | bounded Worker-compatible code execution                                     |
 | `@agent-os/image`                        | optional algebra   | image generation claim/projection helpers                                    |
 
-MCP registry support is not part of the 0.2.x surface; it remains a hold until
-discovery, install, authority, and material contracts converge across products.
+<!-- agentos:generated runtime-package-map:end -->
+
+<!-- agentos:generated holds:start -->
+
+MCP registry support is not part of the 0.2.x surface; it remains a hold until discovery, install, authority, and material contracts converge across products.
+
+<!-- agentos:generated holds:end -->
 
 ## Cloudflare Resource Boundary
 

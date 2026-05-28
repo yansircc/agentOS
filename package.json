@@ -9,8 +9,10 @@
   "scripts": {
     "typecheck": "vp run -r typecheck",
     "test": "vp run -r test",
+    "docs:generate": "node scripts/generate-docs.mjs",
+    "docs:check": "node scripts/generate-docs.mjs --check",
     "check:public-api": "node scripts/check-public-api.mjs",
-    "check": "vp check && bun run check:public-api && vp run typecheck && vp run test"
+    "check": "vp check && bun run docs:check && bun run check:public-api && vp run typecheck && vp run test"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "catalog:",

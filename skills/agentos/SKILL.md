@@ -13,7 +13,7 @@ Use this skill to integrate agentOS without re-inventing its substrate.
    - installed `@agent-os/*` packages;
    - local agent loop, tool gate, ledger, scheduler, material resolver, and
      streaming code;
-   - package READMEs and `PUBLIC_API.md` files for exact exports.
+   - package READMEs and `PUBLIC_API.md` files for exact installed exports.
 
 2. State the boundary before changes:
 
@@ -54,5 +54,5 @@ Use this skill to integrate agentOS without re-inventing its substrate.
 
 - Read `references/integration-checklist.md` when planning a migration.
 - Read `references/package-map.md` when choosing packages.
-- In an agentOS repo checkout, prefer `docs/` and package `PUBLIC_API.md` over
-  this skill for exact API details.
+- In an agentOS repo checkout, prefer `docs/`, `docs/api/*.md`, and package
+  `PUBLIC_API.md` over this skill for exact API details.

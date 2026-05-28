@@ -5,8 +5,11 @@ boundaries. It gives an agent a ledger, claim settlement, material resolution,
 tool admission, and package boundary contracts without making app policy part
 of the substrate.
 
-Current release posture: 0.2.x active development. `PUBLIC_API.md` files guard
-against accidental exports; they are not API or schema freezes.
+<!-- agentos:generated release-posture:start -->
+
+Current release posture: 0.2.x active development. PUBLIC_API.md files guard against accidental exports; they are not API or schema freezes.
+
+<!-- agentos:generated release-posture:end -->
 
 The core rule is simple:
 
@@ -43,6 +46,8 @@ state to make a product flow appear complete.
 
 ## Package Map
 
+<!-- agentos:generated package-map:start -->
+
 | Package                                  | Role                                                                |
 | ---------------------------------------- | ------------------------------------------------------------------- |
 | `@agent-os/core`                         | substrate, ledger, claims, tools, material refs, boundary contracts |
@@ -55,6 +60,8 @@ state to make a product flow appear complete.
 | `@agent-os/run-stream`                   | submit/ledger/turn-frame composition                                |
 | `@agent-os/decision-gate`                | durable decision gate events, projection, and admitter              |
 | `@agent-os/skill-registry`               | install-time skill manifest to core tools                           |
+
+<!-- agentos:generated package-map:end -->
 
 See [docs/runtime-packages.md](docs/runtime-packages.md) for the full package
 surface.

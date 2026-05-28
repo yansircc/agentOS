@@ -1,0 +1,220 @@
+{
+  "release": {
+    "line": "0.2.x",
+    "posture": "active development",
+    "apiFrozen": false,
+    "schemaFrozen": false,
+    "publicApiMeaning": "PUBLIC_API.md files guard against accidental exports; they are not API or schema freezes."
+  },
+  "governance": {
+    "invariants": ["Every fact has exactly one writer.", "Do not derive intent from actual."]
+  },
+  "holds": [
+    {
+      "id": "mcp-registry",
+      "text": "MCP registry support is not part of the 0.2.x surface; it remains a hold until discovery, install, authority, and material contracts converge across products."
+    }
+  ],
+  "packages": [
+    {
+      "slug": "core",
+      "name": "@agent-os/core",
+      "path": "packages/core",
+      "status": "0.2.x public",
+      "role": "substrate, ledger, claims, tools, material refs, boundary contracts",
+      "boundary": "substrate, ledger, claims, tools, material refs, context, boundary contracts",
+      "need": "Durable agent substrate",
+      "readmeStatus": "0.2.x active development. Public exports are listed in `PUBLIC_API.md` to prevent accidental exports; they are not frozen.",
+      "apiStatus": "0.2.x active development. Public exports are listed for accidental export control only; this is not an API freeze.",
+      "apiSource": "docs/api/core.md",
+      "primary": true
+    },
+    {
+      "slug": "cloudflare-resource",
+      "name": "@agent-os/cloudflare-resource",
+      "path": "packages/cloudflare-resource",
+      "status": "0.2.x public",
+      "role": "Cloudflare D1/KV/R2/Queue/Workflow resource carrier",
+      "boundary": "Cloudflare D1/KV/R2/Queue/Workflow carrier facts and provider calls",
+      "need": "Cloudflare resource lifecycle",
+      "readmeStatus": "0.2.x active development. Public exports are listed in `PUBLIC_API.md` to prevent accidental exports; they are not frozen.",
+      "apiStatus": "0.2.x active development for provider-neutral resource carrier algebra. Public exports are listed for accidental export control only; this is not an API freeze.",
+      "apiSource": "docs/api/cloudflare-resource.md",
+      "primary": true
+    },
+    {
+      "slug": "workspace-session",
+      "name": "@agent-os/workspace-session",
+      "path": "packages/workspace-session",
+      "status": "0.2.x public",
+      "role": "provider-neutral workspace/session lifecycle facts",
+      "boundary": "provider-neutral workspace/session lifecycle facts",
+      "need": "Workspace/session facts",
+      "readmeStatus": "0.2.x active development. Public exports are listed in `PUBLIC_API.md` to prevent accidental exports; they are not frozen.",
+      "apiStatus": "0.2.x active development. Public exports are listed for accidental export control only; this is not an API freeze.",
+      "apiSource": "docs/api/workspace-session.md",
+      "primary": true
+    },
+    {
+      "slug": "workspace-session-cloudflare",
+      "name": "@agent-os/workspace-session-cloudflare",
+      "path": "packages/workspace-session-cloudflare",
+      "status": "backend",
+      "role": "Cloudflare Sandbox-compatible workspace backend",
+      "boundary": "structural Cloudflare Sandbox-compatible provider",
+      "need": "Cloudflare Sandbox workspace backend",
+      "readmeStatus": "Backend package. It uses structural SDK types instead of importing a Cloudflare SDK.",
+      "primary": true
+    },
+    {
+      "slug": "tenant-material",
+      "name": "@agent-os/tenant-material",
+      "path": "packages/tenant-material",
+      "status": "0.2.x experimental",
+      "role": "encrypted tenant credential records to `RefResolver.material`",
+      "boundary": "encrypted credential records to execution-time material",
+      "need": "Tenant credential material resolver",
+      "readmeStatus": "0.2.x public-experimental. Experimental exports are listed in `PUBLIC_API.md` to prevent accidental exports; they are not frozen.",
+      "apiStatus": "0.2.x public-experimental. This package may be used by first-party agentOS runtime packages, but its public API is not frozen.",
+      "apiSource": "docs/api/tenant-material.md",
+      "primary": true
+    },
+    {
+      "slug": "llm-transport-http",
+      "name": "@agent-os/llm-transport-http",
+      "path": "packages/llm-transport-http",
+      "status": "0.2.x experimental",
+      "role": "HTTP LLM streaming into non-durable turn frames",
+      "boundary": "HTTP provider deltas to non-durable turn frames",
+      "need": "HTTP LLM token streaming",
+      "readmeStatus": "0.2.x public-experimental. Experimental exports are listed in `PUBLIC_API.md` to prevent accidental exports; they are not frozen.",
+      "apiStatus": "0.2.x public-experimental. This package may be used by first-party agentOS runtime packages, but its public API is not frozen.",
+      "apiSource": "docs/api/llm-transport-http.md",
+      "primary": true
+    },
+    {
+      "slug": "turn-stream",
+      "name": "@agent-os/turn-stream",
+      "path": "packages/turn-stream",
+      "status": "0.2.x public",
+      "role": "token/progress frame algebra",
+      "boundary": "token/progress frame algebra",
+      "need": "Token/progress frames",
+      "readmeStatus": "0.2.x active development. Public exports are listed in `PUBLIC_API.md` to prevent accidental exports; they are not frozen.",
+      "apiStatus": "0.2.x active development for frame algebra. Public exports are listed for accidental export control only; this is not an API freeze.",
+      "apiSource": "docs/api/turn-stream.md",
+      "primary": true
+    },
+    {
+      "slug": "run-stream",
+      "name": "@agent-os/run-stream",
+      "path": "packages/run-stream",
+      "status": "0.2.x public",
+      "role": "submit/ledger/turn-frame composition",
+      "boundary": "ledger/turn/submit-result composition",
+      "need": "Consumer run stream",
+      "readmeStatus": "0.2.x active development. Public exports are listed in `PUBLIC_API.md` to prevent accidental exports; they are not frozen.",
+      "apiStatus": "0.2.x active development for frame algebra and batched/realtime composition. Public exports are listed for accidental export control only; this is not an API freeze.",
+      "apiSource": "docs/api/run-stream.md",
+      "primary": true
+    },
+    {
+      "slug": "decision-gate",
+      "name": "@agent-os/decision-gate",
+      "path": "packages/decision-gate",
+      "status": "0.2.x public",
+      "role": "durable decision gate events, projection, and admitter",
+      "boundary": "durable decision request/decision/consumption facts",
+      "need": "Approval/decision gate",
+      "readmeStatus": "0.2.x active development. Public exports are listed in `PUBLIC_API.md` to prevent accidental exports; they are not frozen.",
+      "apiStatus": "0.2.x active development. Public exports are listed for accidental export control only; this is not an API freeze.",
+      "apiSource": "docs/api/decision-gate.md",
+      "primary": true
+    },
+    {
+      "slug": "skill-registry",
+      "name": "@agent-os/skill-registry",
+      "path": "packages/skill-registry",
+      "status": "0.2.x experimental",
+      "role": "install-time skill manifest to core tools",
+      "boundary": "install-time skill manifests to core tools",
+      "need": "Skill manifest to tools",
+      "readmeStatus": "0.2.x public-experimental. Experimental exports are listed in `PUBLIC_API.md` to prevent accidental exports; they are not frozen.",
+      "apiStatus": "0.2.x public-experimental. Skill registration is install-time identity over core tool contracts; it is not a runtime ledger/event/projection surface.",
+      "apiSource": "docs/api/skill-registry.md",
+      "primary": true
+    },
+    {
+      "slug": "deploy",
+      "name": "@agent-os/deploy",
+      "path": "packages/deploy",
+      "status": "carrier",
+      "role": "deploy proof/projection vocabulary",
+      "boundary": "deploy proof/projection vocabulary",
+      "readmeStatus": "Carrier package. Provider-specific deploy backends are separate materializers."
+    },
+    {
+      "slug": "git-carrier",
+      "name": "@agent-os/git-carrier",
+      "path": "packages/git-carrier",
+      "status": "carrier",
+      "role": "Git proof/projection vocabulary",
+      "boundary": "Git proof/projection vocabulary",
+      "readmeStatus": "Carrier package. It is not a provider SDK and does not own provider-specific Git execution."
+    },
+    {
+      "slug": "staging-artifact",
+      "name": "@agent-os/staging-artifact",
+      "path": "packages/staging-artifact",
+      "status": "carrier",
+      "role": "staging artifact proof/projection vocabulary",
+      "boundary": "staging artifact proof/projection vocabulary",
+      "readmeStatus": "Carrier package. It owns symbolic artifact proof vocabulary, not artifact storage."
+    },
+    {
+      "slug": "verification",
+      "name": "@agent-os/verification",
+      "path": "packages/verification",
+      "status": "carrier",
+      "role": "verification proof/projection vocabulary",
+      "boundary": "verification proof/projection vocabulary",
+      "readmeStatus": "Carrier package. Verification policy and quorum rules remain app-owned."
+    },
+    {
+      "slug": "sandbox",
+      "name": "@agent-os/sandbox",
+      "path": "packages/sandbox",
+      "status": "optional algebra",
+      "role": "bounded stateless sandbox tool surface",
+      "boundary": "bounded stateless sandbox tool surface",
+      "readmeStatus": "Optional algebra package. It is not part of a freeze surface."
+    },
+    {
+      "slug": "sandbox-cloudflare",
+      "name": "@agent-os/sandbox-cloudflare",
+      "path": "packages/sandbox-cloudflare",
+      "status": "optional backend",
+      "role": "Cloudflare Sandbox-compatible stateless sandbox adapter",
+      "boundary": "Cloudflare Sandbox-compatible stateless sandbox adapter",
+      "readmeStatus": "Optional backend package. It uses structural SDK types instead of importing a Cloudflare SDK."
+    },
+    {
+      "slug": "dynamic-worker",
+      "name": "@agent-os/dynamic-worker",
+      "path": "packages/dynamic-worker",
+      "status": "optional backend",
+      "role": "bounded Worker-compatible code execution",
+      "boundary": "bounded Worker-compatible code execution",
+      "readmeStatus": "Optional runtime package. Public exports are package-owned and not part of a freeze surface."
+    },
+    {
+      "slug": "image",
+      "name": "@agent-os/image",
+      "path": "packages/image",
+      "status": "optional algebra",
+      "role": "image generation claim/projection helpers",
+      "boundary": "image generation claim/projection helpers",
+      "readmeStatus": "Optional package. It is not part of a freeze surface."
+    }
+  ]
+}

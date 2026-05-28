@@ -54,7 +54,7 @@ symbolic proof surface, and projection contract.
 
 ## Public API
 
-The current public core surface is listed in
-[`packages/core/PUBLIC_API.md`](../packages/core/PUBLIC_API.md). This is an
-accidental-export control manifest, not an API freeze. Symbols not listed
-there are internal.
+The current public core intent is listed in
+[`docs/api/core.md`](api/core.md). `packages/core/PUBLIC_API.md` is the
+generated package-local projection. This is an accidental-export control
+manifest, not an API freeze. Symbols not listed there are internal.

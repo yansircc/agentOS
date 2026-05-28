@@ -4,17 +4,8 @@ import path from "node:path";
 import ts from "typescript";
 
 const root = process.cwd();
-const targets = [
-  "core",
-  "workspace-session",
-  "cloudflare-resource",
-  "decision-gate",
-  "turn-stream",
-  "run-stream",
-  "tenant-material",
-  "llm-transport-http",
-  "skill-registry",
-];
+const surface = JSON.parse(fs.readFileSync(path.join(root, "docs/surface.json"), "utf8"));
+const targets = surface.packages.filter((pkg) => pkg.apiSource !== undefined);
 
 const hasExportModifier = (node) =>
   node.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) === true;
@@ -125,10 +116,10 @@ const manifestNames = (manifest, section) => {
 let failed = false;
 
 for (const target of targets) {
-  const pkgDir = path.join(root, "packages", target);
-  const manifest = path.join(pkgDir, "PUBLIC_API.md");
+  const pkgDir = path.join(root, target.path);
+  const manifest = path.join(root, target.apiSource);
   if (!fs.existsSync(manifest)) {
-    console.error(`missing PUBLIC_API.md for ${target}`);
+    console.error(`missing public API intent source for ${target.name}: ${target.apiSource}`);
     failed = true;
     continue;
   }
@@ -150,11 +141,11 @@ for (const target of targets) {
 
     for (const name of actual) {
       if (!declaredPublic.has(name)) {
-        console.error(`${target}: exported but not in PUBLIC_API.md: ${name}`);
+        console.error(`${target.name}: exported but not declared in ${target.apiSource}: ${name}`);
         failed = true;
       }
       if (internal.has(name)) {
-        console.error(`${target}: internal export is still exported: ${name}`);
+        console.error(`${target.name}: internal export is still exported: ${name}`);
         failed = true;
       }
     }
@@ -162,7 +153,7 @@ for (const target of targets) {
     for (const name of declaredPublic) {
       const [declaredEntrypoint] = name.split(":");
       if (declaredEntrypoint === entrypoint && !actual.includes(name)) {
-        console.error(`${target}: PUBLIC_API.md lists missing export: ${name}`);
+        console.error(`${target.name}: ${target.apiSource} lists missing export: ${name}`);
         failed = true;
       }
     }
