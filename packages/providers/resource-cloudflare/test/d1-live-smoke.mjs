@@ -9,10 +9,9 @@ import {
   materialRefKey,
 } from "@agent-os/kernel/material-ref";
 import {
-  CLOUDFLARE_RESOURCE_AUTHORITIES,
   makeCloudflareD1ResourceCarrier,
-  projectCloudflareResource,
 } from "../src/index.ts";
+import { RESOURCE_AUTHORITIES, projectResource } from "@agent-os/resource-carrier";
 
 const requiredEnv = (name) => {
   const value = process.env[name];
@@ -103,14 +102,14 @@ const claimFor = (step) =>
     },
     authorityRef:
       step === "provision"
-        ? CLOUDFLARE_RESOURCE_AUTHORITIES.PROVISION
+        ? RESOURCE_AUTHORITIES.PROVISION
         : step === "bind"
-          ? CLOUDFLARE_RESOURCE_AUTHORITIES.BIND
+          ? RESOURCE_AUTHORITIES.BIND
           : step === "mutate"
-            ? CLOUDFLARE_RESOURCE_AUTHORITIES.MUTATE
-            : CLOUDFLARE_RESOURCE_AUTHORITIES.DESTROY,
+            ? RESOURCE_AUTHORITIES.MUTATE
+            : RESOURCE_AUTHORITIES.DESTROY,
     originRef: {
-      originId: "@agent-os/cloudflare-resource.d1-live-smoke",
+      originId: "@agent-os/resource-cloudflare.d1-live-smoke",
       originKind: "test",
     },
   });
@@ -156,7 +155,7 @@ const run = async () => {
     provisionedResourceRef = provisioned.resourceRef;
     events.push({
       id: events.length + 1,
-      kind: "cf_resource.resource.provisioned",
+      kind: "resource.resource.provisioned",
       payload: provisioned,
     });
 
@@ -170,7 +169,7 @@ const run = async () => {
         bindingRef,
       }),
     );
-    events.push({ id: events.length + 1, kind: "cf_resource.resource.bound", payload: bound });
+    events.push({ id: events.length + 1, kind: "resource.resource.bound", payload: bound });
 
     const mutationRef = `mutation://${resourceName}/create-table`;
     const mutated = await Effect.runPromise(
@@ -188,7 +187,7 @@ const run = async () => {
     );
     events.push({
       id: events.length + 1,
-      kind: "cf_resource.mutation.recorded",
+      kind: "resource.mutation.recorded",
       payload: mutated,
     });
 
@@ -204,11 +203,11 @@ const run = async () => {
     );
     events.push({
       id: events.length + 1,
-      kind: "cf_resource.resource.destroyed",
+      kind: "resource.resource.destroyed",
       payload: destroyed,
     });
 
-    const projection = projectCloudflareResource(events, resourceName);
+    const projection = projectResource(events, resourceName);
     if (projection.status !== "destroyed") {
       throw new Error(`expected destroyed projection, got ${projection.status}`);
     }

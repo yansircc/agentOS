@@ -30,7 +30,8 @@ Use this skill to integrate agentOS without re-inventing its substrate.
    - execution means -> `MaterialRef` and `RefResolver`;
    - token progress -> `@agent-os/turn-stream`;
    - consumer run stream -> `@agent-os/run-stream`;
-   - Cloudflare resources -> `@agent-os/cloudflare-resource`;
+   - resource facts -> `@agent-os/resource-carrier`;
+   - Cloudflare resource materialization -> `@agent-os/resource-cloudflare`;
    - install-time tool bundles -> `@agent-os/skill-registry`.
 
 4. Keep the core invariant:

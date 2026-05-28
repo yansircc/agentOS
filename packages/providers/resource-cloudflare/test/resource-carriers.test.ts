@@ -11,7 +11,6 @@ import {
 import type { RefResolver } from "@agent-os/kernel/ref-resolver";
 
 import {
-  CLOUDFLARE_RESOURCE_AUTHORITIES,
   makeCloudflareD1ResourceCarrier,
   makeCloudflareKVNamespaceResourceCarrier,
   makeCloudflareQueueResourceCarrier,
@@ -22,9 +21,9 @@ import {
   type CloudflareKVNamespaceMutationInput,
   type CloudflareQueueMutationInput,
   type CloudflareR2BucketMutationInput,
-  type CloudflareResourceCarrier,
   type CloudflareWorkflowMutationInput,
 } from "../src";
+import { RESOURCE_AUTHORITIES, type ResourceCarrier } from "@agent-os/resource-carrier";
 
 const expectFailure = <A>(exit: Exit.Exit<unknown, A>): A => {
   expect(Exit.isFailure(exit)).toBe(true);
@@ -63,7 +62,7 @@ interface ResourceCase {
     readonly path: string;
     readonly body?: unknown;
   };
-  readonly makeCarrier: (options: TestCarrierOptions) => CloudflareResourceCarrier;
+  readonly makeCarrier: (options: TestCarrierOptions) => ResourceCarrier;
 }
 
 interface TestCarrierOptions {
@@ -192,16 +191,16 @@ const claimFor = (resourceKind: ResourceCase["resourceKind"], step: string) =>
     },
     authorityRef:
       step === "provision"
-        ? CLOUDFLARE_RESOURCE_AUTHORITIES.PROVISION
+        ? RESOURCE_AUTHORITIES.PROVISION
         : step === "bind"
-          ? CLOUDFLARE_RESOURCE_AUTHORITIES.BIND
+          ? RESOURCE_AUTHORITIES.BIND
           : step === "destroy"
-            ? CLOUDFLARE_RESOURCE_AUTHORITIES.DESTROY
-            : CLOUDFLARE_RESOURCE_AUTHORITIES.MUTATE,
-    originRef: {
-      originId: "@agent-os/cloudflare-resource",
-      originKind: "extension_package",
-    },
+            ? RESOURCE_AUTHORITIES.DESTROY
+            : RESOURCE_AUTHORITIES.MUTATE,
+      originRef: {
+        originId: "@agent-os/resource-carrier",
+        originKind: "extension_package",
+      },
   });
 
 const refsFor = (testCase: ResourceCase) => ({
@@ -437,7 +436,7 @@ const assertNegativeContract = (testCase: ResourceCase) => {
   });
 };
 
-describe("@agent-os/cloudflare-resource core5 negative contract", () => {
+describe("@agent-os/resource-cloudflare provider contract", () => {
   for (const testCase of cases) {
     assertNegativeContract(testCase);
   }

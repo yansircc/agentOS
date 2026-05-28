@@ -7,7 +7,8 @@
 | Pure agentOS algebra                 | `@agent-os/kernel`                       |
 | Runtime Effect Tag contracts         | `@agent-os/runtime`                      |
 | Cloudflare DO backend                | `@agent-os/backend-cloudflare-do`        |
-| Cloudflare resource lifecycle        | `@agent-os/cloudflare-resource`          |
+| Resource lifecycle carrier           | `@agent-os/resource-carrier`             |
+| Cloudflare resource provider         | `@agent-os/resource-cloudflare`          |
 | Workspace/session facts              | `@agent-os/workspace-session`            |
 | Cloudflare Sandbox workspace backend | `@agent-os/workspace-session-cloudflare` |
 | Tenant credential material resolver  | `@agent-os/tenant-material`              |

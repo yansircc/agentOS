@@ -10,16 +10,16 @@ import {
   type MaterialRef,
 } from "@agent-os/kernel/material-ref";
 
-import { CLOUDFLARE_RESOURCE_EVENT_VOCABULARY } from "./extension";
+import { RESOURCE_EVENT_VOCABULARY } from "./extension";
 
-export const CLOUDFLARE_RESOURCE_EVENTS = CLOUDFLARE_RESOURCE_EVENT_VOCABULARY;
+export const RESOURCE_EVENTS = RESOURCE_EVENT_VOCABULARY;
 
-export type CloudflareResourceEventKind =
-  (typeof CLOUDFLARE_RESOURCE_EVENTS)[keyof typeof CLOUDFLARE_RESOURCE_EVENTS];
+export type ResourceEventKind =
+  (typeof RESOURCE_EVENTS)[keyof typeof RESOURCE_EVENTS];
 
-export type CloudflareResourceLifecycleStep = "provision" | "bind" | "mutate" | "destroy";
+export type ResourceLifecycleStep = "provision" | "bind" | "mutate" | "destroy";
 
-export interface CloudflareResourceProvisionedPayload {
+export interface ResourceProvisionedPayload {
   readonly subjectRef: string;
   readonly resourceKind: string;
   readonly resourceRef: ExternalResourceMaterialRef;
@@ -29,7 +29,7 @@ export interface CloudflareResourceProvisionedPayload {
   readonly claim: LivedClaim;
 }
 
-export interface CloudflareResourceBoundPayload {
+export interface ResourceBoundPayload {
   readonly subjectRef: string;
   readonly resourceRef: ExternalResourceMaterialRef;
   readonly bindingRef: BindingMaterialRef;
@@ -37,7 +37,7 @@ export interface CloudflareResourceBoundPayload {
   readonly claim: LivedClaim;
 }
 
-export interface CloudflareResourceMutationRecordedPayload {
+export interface ResourceMutationRecordedPayload {
   readonly subjectRef: string;
   readonly resourceRef: MaterialRef;
   readonly mutationKind: string;
@@ -47,7 +47,7 @@ export interface CloudflareResourceMutationRecordedPayload {
   readonly claim: LivedClaim;
 }
 
-export interface CloudflareResourceDestroyedPayload {
+export interface ResourceDestroyedPayload {
   readonly subjectRef: string;
   readonly resourceRef: MaterialRef;
   readonly proofRef: string;
@@ -55,35 +55,35 @@ export interface CloudflareResourceDestroyedPayload {
   readonly claim: LivedClaim;
 }
 
-export interface CloudflareResourceFailedPayload {
+export interface ResourceFailedPayload {
   readonly subjectRef: string;
-  readonly step: CloudflareResourceLifecycleStep;
+  readonly step: ResourceLifecycleStep;
   readonly proofRef?: string;
   readonly reason: string;
   readonly claim: RejectedClaim;
 }
 
-export interface CloudflareResourceLedgerEvent {
+export interface ResourceLedgerEvent {
   readonly id: number;
   readonly kind: string;
   readonly payload: unknown;
 }
 
-export interface CloudflareResourceMutationFact extends CloudflareResourceMutationRecordedPayload {
+export interface ResourceMutationFact extends ResourceMutationRecordedPayload {
   readonly eventId: number;
 }
 
-export interface CloudflareResourceProjection {
+export interface ResourceProjection {
   readonly subjectRef: string;
   readonly status: "missing" | "active" | "mutated" | "destroyed" | "failed";
-  readonly lastEventKind?: CloudflareResourceEventKind;
+  readonly lastEventKind?: ResourceEventKind;
   readonly resourceKind?: string;
   readonly resourceRef?: MaterialRef;
   readonly accountRef?: ExternalResourceMaterialRef;
   readonly bindingRef?: BindingMaterialRef;
-  readonly latestMutation?: CloudflareResourceMutationFact;
+  readonly latestMutation?: ResourceMutationFact;
   readonly mutationEventIds: ReadonlyArray<number>;
-  readonly failure?: CloudflareResourceFailedPayload;
+  readonly failure?: ResourceFailedPayload;
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -111,21 +111,21 @@ const bindingRefFrom = (value: unknown): BindingMaterialRef | undefined =>
 const materialRefFrom = (value: unknown): MaterialRef | undefined =>
   isMaterialRef(value) ? value : undefined;
 
-const lifecycleStepFrom = (value: unknown): CloudflareResourceLifecycleStep | undefined =>
+const lifecycleStepFrom = (value: unknown): ResourceLifecycleStep | undefined =>
   value === "provision" || value === "bind" || value === "mutate" || value === "destroy"
     ? value
     : undefined;
 
 const destroyReasonFrom = (
   value: unknown,
-): CloudflareResourceDestroyedPayload["reason"] | undefined =>
+): ResourceDestroyedPayload["reason"] | undefined =>
   value === "replaced" || value === "expired" || value === "aborted" || value === "manual"
     ? value
     : undefined;
 
 const mutationPayloadFrom = (
-  event: CloudflareResourceLedgerEvent,
-): CloudflareResourceMutationFact | undefined => {
+  event: ResourceLedgerEvent,
+): ResourceMutationFact | undefined => {
   if (!isRecord(event.payload)) return undefined;
   const subjectRef = stringField(event.payload, "subjectRef");
   const resourceRef = materialRefFrom(event.payload.resourceRef);
@@ -159,7 +159,7 @@ const mutationPayloadFrom = (
 
 const failedPayloadFrom = (
   payload: Record<string, unknown>,
-): CloudflareResourceFailedPayload | undefined => {
+): ResourceFailedPayload | undefined => {
   const subjectRef = stringField(payload, "subjectRef");
   const step = lifecycleStepFrom(payload.step);
   const reason = stringField(payload, "reason");
@@ -213,31 +213,31 @@ const materialRefEquals = (left: MaterialRef | undefined, right: MaterialRef): b
 };
 
 const hasLiveResource = (
-  status: CloudflareResourceProjection["status"],
+  status: ResourceProjection["status"],
   provisionedResourceRef: ExternalResourceMaterialRef | undefined,
 ): boolean =>
   status !== "missing" && status !== "destroyed" && provisionedResourceRef !== undefined;
 
-export const projectCloudflareResource = (
-  events: Iterable<CloudflareResourceLedgerEvent>,
+export const projectResource = (
+  events: Iterable<ResourceLedgerEvent>,
   subjectRef: string,
-): CloudflareResourceProjection => {
-  let status: CloudflareResourceProjection["status"] = "missing";
-  let lastEventKind: CloudflareResourceEventKind | undefined;
+): ResourceProjection => {
+  let status: ResourceProjection["status"] = "missing";
+  let lastEventKind: ResourceEventKind | undefined;
   let resourceKind: string | undefined;
   let provisionedResourceRef: ExternalResourceMaterialRef | undefined;
   let resourceRef: MaterialRef | undefined;
   let accountRef: ExternalResourceMaterialRef | undefined;
   let bindingRef: BindingMaterialRef | undefined;
-  let latestMutation: CloudflareResourceMutationFact | undefined;
-  let failure: CloudflareResourceFailedPayload | undefined;
+  let latestMutation: ResourceMutationFact | undefined;
+  let failure: ResourceFailedPayload | undefined;
   const mutationEventIds: number[] = [];
 
   for (const event of events) {
     if (!isRecord(event.payload)) continue;
     if (event.payload.subjectRef !== subjectRef) continue;
     switch (event.kind) {
-      case CLOUDFLARE_RESOURCE_EVENTS.RESOURCE_PROVISIONED: {
+      case RESOURCE_EVENTS.RESOURCE_PROVISIONED: {
         const nextResourceRef = externalResourceRefFrom(event.payload.resourceRef);
         const nextResourceKind = stringField(event.payload, "resourceKind");
         const proofRef = stringField(event.payload, "proofRef");
@@ -260,7 +260,7 @@ export const projectCloudflareResource = (
         failure = undefined;
         break;
       }
-      case CLOUDFLARE_RESOURCE_EVENTS.RESOURCE_BOUND: {
+      case RESOURCE_EVENTS.RESOURCE_BOUND: {
         const nextResourceRef = externalResourceRefFrom(event.payload.resourceRef);
         const nextBindingRef = bindingRefFrom(event.payload.bindingRef);
         const proofRef = stringField(event.payload, "proofRef");
@@ -282,7 +282,7 @@ export const projectCloudflareResource = (
         failure = undefined;
         break;
       }
-      case CLOUDFLARE_RESOURCE_EVENTS.MUTATION_RECORDED: {
+      case RESOURCE_EVENTS.MUTATION_RECORDED: {
         const mutation = mutationPayloadFrom(event);
         if (mutation === undefined) break;
         if (
@@ -301,7 +301,7 @@ export const projectCloudflareResource = (
         failure = undefined;
         break;
       }
-      case CLOUDFLARE_RESOURCE_EVENTS.RESOURCE_DESTROYED: {
+      case RESOURCE_EVENTS.RESOURCE_DESTROYED: {
         const nextResourceRef = materialRefFrom(event.payload.resourceRef);
         const proofRef = stringField(event.payload, "proofRef");
         const reason = destroyReasonFrom(event.payload.reason);
@@ -323,7 +323,7 @@ export const projectCloudflareResource = (
         failure = undefined;
         break;
       }
-      case CLOUDFLARE_RESOURCE_EVENTS.FAILED: {
+      case RESOURCE_EVENTS.FAILED: {
         const nextFailure = failedPayloadFrom(event.payload);
         if (nextFailure === undefined) break;
         failure = nextFailure;

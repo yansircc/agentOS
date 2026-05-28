@@ -8,15 +8,15 @@ import type {
 } from "@agent-os/kernel/material-ref";
 
 import type {
-  CloudflareResourceBoundPayload,
-  CloudflareResourceDestroyedPayload,
-  CloudflareResourceFailedPayload,
-  CloudflareResourceLifecycleStep,
-  CloudflareResourceMutationRecordedPayload,
-  CloudflareResourceProvisionedPayload,
+  ResourceBoundPayload,
+  ResourceDestroyedPayload,
+  ResourceFailedPayload,
+  ResourceLifecycleStep,
+  ResourceMutationRecordedPayload,
+  ResourceProvisionedPayload,
 } from "./events";
 
-export interface CloudflareResourceProvisionRequest {
+export interface ResourceProvisionRequest {
   readonly claim: PreClaim;
   readonly subjectRef: string;
   readonly resourceKind: string;
@@ -27,7 +27,7 @@ export interface CloudflareResourceProvisionRequest {
   readonly bindingRef?: BindingMaterialRef;
 }
 
-export interface CloudflareResourceBindRequest {
+export interface ResourceBindRequest {
   readonly claim: PreClaim;
   readonly subjectRef: string;
   readonly credentialRef: CredentialMaterialRef;
@@ -36,7 +36,7 @@ export interface CloudflareResourceBindRequest {
   readonly bindingRef: BindingMaterialRef;
 }
 
-export interface CloudflareResourceMutationRequest {
+export interface ResourceMutationRequest {
   readonly claim: PreClaim;
   readonly subjectRef: string;
   readonly credentialRef: CredentialMaterialRef;
@@ -48,16 +48,16 @@ export interface CloudflareResourceMutationRequest {
   readonly fingerprint?: string;
 }
 
-export interface CloudflareResourceDestroyRequest {
+export interface ResourceDestroyRequest {
   readonly claim: PreClaim;
   readonly subjectRef: string;
   readonly credentialRef: CredentialMaterialRef;
   readonly accountRef: ExternalResourceMaterialRef;
   readonly resourceRef: MaterialRef;
-  readonly reason: CloudflareResourceDestroyedPayload["reason"];
+  readonly reason: ResourceDestroyedPayload["reason"];
 }
 
-export interface CloudflareResourceFailure {
+export interface ResourceFailure {
   readonly code:
     | "MaterialUnavailable"
     | "PolicyDenied"
@@ -67,31 +67,31 @@ export interface CloudflareResourceFailure {
     | "DestroyFailed"
     | "ProviderFailure"
     | "UnsupportedResource";
-  readonly step: CloudflareResourceLifecycleStep;
+  readonly step: ResourceLifecycleStep;
   readonly reason: string;
   readonly proofRef?: string;
   readonly claim: RejectedClaim;
 }
 
-export interface CloudflareResourceCarrier {
+export interface ResourceCarrier {
   readonly provision: (
-    request: CloudflareResourceProvisionRequest,
-  ) => Effect.Effect<CloudflareResourceProvisionedPayload, CloudflareResourceFailure>;
+    request: ResourceProvisionRequest,
+  ) => Effect.Effect<ResourceProvisionedPayload, ResourceFailure>;
   readonly bind: (
-    request: CloudflareResourceBindRequest,
-  ) => Effect.Effect<CloudflareResourceBoundPayload, CloudflareResourceFailure>;
+    request: ResourceBindRequest,
+  ) => Effect.Effect<ResourceBoundPayload, ResourceFailure>;
   readonly mutate: (
-    request: CloudflareResourceMutationRequest,
-  ) => Effect.Effect<CloudflareResourceMutationRecordedPayload, CloudflareResourceFailure>;
+    request: ResourceMutationRequest,
+  ) => Effect.Effect<ResourceMutationRecordedPayload, ResourceFailure>;
   readonly destroy: (
-    request: CloudflareResourceDestroyRequest,
-  ) => Effect.Effect<CloudflareResourceDestroyedPayload, CloudflareResourceFailure>;
+    request: ResourceDestroyRequest,
+  ) => Effect.Effect<ResourceDestroyedPayload, ResourceFailure>;
 }
 
-export const cloudflareResourceFailedPayload = (
-  failure: CloudflareResourceFailure,
+export const resourceFailedPayload = (
+  failure: ResourceFailure,
   subjectRef: string,
-): CloudflareResourceFailedPayload => ({
+): ResourceFailedPayload => ({
   subjectRef,
   step: failure.step,
   reason: failure.reason,

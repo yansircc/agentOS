@@ -7,7 +7,10 @@
     "publicApiMeaning": "PUBLIC_API.md files guard against accidental exports; they are not API or schema freezes."
   },
   "governance": {
-    "invariants": ["Every fact has exactly one writer.", "Do not derive intent from actual."]
+    "invariants": [
+      "Every fact has exactly one writer.",
+      "Do not derive intent from actual."
+    ]
   },
   "holds": [
     {
@@ -69,16 +72,29 @@
       "primary": false
     },
     {
-      "slug": "cloudflare-resource",
-      "name": "@agent-os/cloudflare-resource",
-      "path": "packages/cloudflare-resource",
+      "slug": "resource-carrier",
+      "name": "@agent-os/resource-carrier",
+      "path": "packages/carriers/resource",
       "status": "0.2.x public",
-      "role": "Cloudflare D1/KV/R2/Queue/Workflow resource carrier",
-      "boundary": "Cloudflare D1/KV/R2/Queue/Workflow carrier facts and provider calls",
-      "need": "Cloudflare resource lifecycle",
+      "role": "provider-neutral resource lifecycle facts, claims, settlement, and projection",
+      "boundary": "provider-neutral resource lifecycle facts and symbolic proofs",
+      "need": "Resource lifecycle carrier",
       "readmeStatus": "0.2.x active development. Public exports are listed in `PUBLIC_API.md` to prevent accidental exports; they are not frozen.",
       "apiStatus": "0.2.x active development for provider-neutral resource carrier algebra. Public exports are listed for accidental export control only; this is not an API freeze.",
-      "apiSource": "docs/api/cloudflare-resource.md",
+      "apiSource": "docs/api/resource-carrier.md",
+      "primary": true
+    },
+    {
+      "slug": "resource-cloudflare",
+      "name": "@agent-os/resource-cloudflare",
+      "path": "packages/providers/resource-cloudflare",
+      "status": "provider",
+      "role": "Cloudflare D1/KV/R2/Queue/Workflow resource materializer",
+      "boundary": "Cloudflare resource API calls to provider-neutral resource carrier payloads",
+      "need": "Cloudflare resource provider",
+      "readmeStatus": "Provider package. It materializes `@agent-os/resource-carrier` for Cloudflare resources.",
+      "apiStatus": "Provider package. Public exports are limited to Cloudflare resource carrier factories and provider-specific material parsers.",
+      "apiSource": "docs/api/resource-cloudflare.md",
       "primary": true
     },
     {
@@ -254,6 +270,28 @@
       "role": "image generation claim/projection helpers",
       "boundary": "image generation claim/projection helpers",
       "readmeStatus": "Optional package. It is not part of a freeze surface."
+    },
+    {
+      "slug": "ops-api",
+      "name": "@agent-os/ops-api",
+      "path": "tooling/ops-api",
+      "status": "tooling",
+      "role": "ops HTTP API over runtime projections",
+      "boundary": "terminal ops API adapter, not substrate truth",
+      "need": "Ops API tooling",
+      "readmeStatus": "Tooling package. It is an ops adapter and not a substrate package.",
+      "primary": false
+    },
+    {
+      "slug": "ops-htmx",
+      "name": "@agent-os/ops-htmx",
+      "path": "tooling/ops-htmx",
+      "status": "tooling",
+      "role": "HTMX ops console over ops-api",
+      "boundary": "terminal ops UI adapter, not substrate truth",
+      "need": "Ops HTMX tooling",
+      "readmeStatus": "Tooling package. It is an ops UI adapter and not a substrate package.",
+      "primary": false
     }
   ]
 }

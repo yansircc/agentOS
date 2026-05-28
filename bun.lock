@@ -50,16 +50,19 @@
       "name": "@agent-os/backend-in-memory",
       "version": "0.2.0",
       "dependencies": {
+        "@agent-os/kernel": "workspace:*",
         "@agent-os/runtime": "workspace:*",
+        "effect": "catalog:",
       },
       "devDependencies": {
+        "@effect/vitest": "catalog:",
         "typescript": "catalog:",
         "vite-plus": "catalog:",
         "vitest": "catalog:",
       },
     },
-    "packages/cloudflare-resource": {
-      "name": "@agent-os/cloudflare-resource",
+    "packages/carriers/resource": {
+      "name": "@agent-os/resource-carrier",
       "version": "0.2.0",
       "dependencies": {
         "@agent-os/kernel": "workspace:*",
@@ -186,6 +189,23 @@
         "typescript": "catalog:",
         "vite-plus": "catalog:",
         "vitest": "catalog:",
+      },
+    },
+    "packages/providers/resource-cloudflare": {
+      "name": "@agent-os/resource-cloudflare",
+      "version": "0.2.0",
+      "dependencies": {
+        "@agent-os/kernel": "workspace:*",
+        "@agent-os/resource-carrier": "workspace:*",
+      },
+      "devDependencies": {
+        "effect": "catalog:",
+        "typescript": "catalog:",
+        "vite-plus": "catalog:",
+        "vitest": "catalog:",
+      },
+      "peerDependencies": {
+        "effect": "^3.21.0",
       },
     },
     "packages/run-stream": {
@@ -410,8 +430,6 @@
 
     "@agent-os/backend-in-memory": ["@agent-os/backend-in-memory@workspace:packages/backend-in-memory"],
 
-    "@agent-os/cloudflare-resource": ["@agent-os/cloudflare-resource@workspace:packages/cloudflare-resource"],
-
     "@agent-os/decision-gate": ["@agent-os/decision-gate@workspace:packages/decision-gate"],
 
     "@agent-os/deploy": ["@agent-os/deploy@workspace:packages/deploy"],
@@ -429,6 +447,10 @@
     "@agent-os/ops-api": ["@agent-os/ops-api@workspace:tooling/ops-api"],
 
     "@agent-os/ops-htmx": ["@agent-os/ops-htmx@workspace:tooling/ops-htmx"],
+
+    "@agent-os/resource-carrier": ["@agent-os/resource-carrier@workspace:packages/carriers/resource"],
+
+    "@agent-os/resource-cloudflare": ["@agent-os/resource-cloudflare@workspace:packages/providers/resource-cloudflare"],
 
     "@agent-os/run-stream": ["@agent-os/run-stream@workspace:packages/run-stream"],
 
