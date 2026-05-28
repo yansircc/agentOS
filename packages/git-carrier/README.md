@@ -6,7 +6,7 @@ Git workspace, commit, merge, revert, and cleanup proof carrier.
 
 ## Public API Status
 
-Carrier package. It is not a provider SDK and does not freeze provider-specific
+Carrier package. It is not a provider SDK and does not own provider-specific
 Git execution.
 
 ## Invariant

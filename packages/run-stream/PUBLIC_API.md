@@ -1,8 +1,10 @@
 # @agent-os/run-stream Public API
 
-Status: 1.0 target for frame algebra and batched bridge. Realtime composition added before 1.0 must be listed here.
+Status: 0.2.x active development for frame algebra and batched/realtime
+composition. Public exports are listed for accidental export control only; this
+is not an API freeze.
 
-## Frozen exports
+## Public exports
 
 - `.:ComposeBatchedSubmitRunStreamSpec`
 - `.:ComposeRealtimeRunStreamSpec`

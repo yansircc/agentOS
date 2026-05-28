@@ -7,8 +7,8 @@ execution.
 
 ## Public API Status
 
-Optional runtime package. Public exports are package-owned and not part of the
-core 1.0 freeze.
+Optional runtime package. Public exports are package-owned and not part of a
+freeze surface.
 
 ## Invariant
 

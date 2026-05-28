@@ -1,8 +1,9 @@
 # @agent-os/tenant-material Public API
 
-Status: internal-stable, public-experimental. This package may be used by first-party agentOS runtime packages before its external API is frozen.
+Status: 0.2.x public-experimental. This package may be used by first-party
+agentOS runtime packages, but its public API is not frozen.
 
-## Frozen exports
+## Public exports
 
 None.
 

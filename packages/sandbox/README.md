@@ -6,7 +6,7 @@ Provider-neutral bounded stateless sandbox tool algebra.
 
 ## Public API Status
 
-Optional algebra package. It is not part of the core 1.0 freeze.
+Optional algebra package. It is not part of a freeze surface.
 
 ## Invariant
 

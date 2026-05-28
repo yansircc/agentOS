@@ -22,7 +22,7 @@
     },
     "packages/cloudflare-resource": {
       "name": "@agent-os/cloudflare-resource",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@agent-os/core": "workspace:*",
       },
@@ -62,7 +62,7 @@
     },
     "packages/decision-gate": {
       "name": "@agent-os/decision-gate",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@agent-os/core": "workspace:*",
       },
@@ -78,7 +78,7 @@
     },
     "packages/deploy": {
       "name": "@agent-os/deploy",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@agent-os/core": "workspace:*",
       },
@@ -94,7 +94,7 @@
     },
     "packages/dynamic-worker": {
       "name": "@agent-os/dynamic-worker",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@agent-os/core": "workspace:*",
       },
@@ -111,7 +111,7 @@
     },
     "packages/git-carrier": {
       "name": "@agent-os/git-carrier",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@agent-os/core": "workspace:*",
       },
@@ -127,7 +127,7 @@
     },
     "packages/image": {
       "name": "@agent-os/image",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@agent-os/core": "workspace:*",
       },
@@ -144,7 +144,7 @@
     },
     "packages/run-stream": {
       "name": "@agent-os/run-stream",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@agent-os/core": "workspace:*",
         "@agent-os/turn-stream": "workspace:*",
@@ -158,7 +158,7 @@
     },
     "packages/sandbox": {
       "name": "@agent-os/sandbox",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "devDependencies": {
         "@effect/language-service": "catalog:",
         "effect": "catalog:",
@@ -172,7 +172,7 @@
     },
     "packages/sandbox-cloudflare": {
       "name": "@agent-os/sandbox-cloudflare",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@agent-os/sandbox": "workspace:*",
       },
@@ -189,7 +189,7 @@
     },
     "packages/staging-artifact": {
       "name": "@agent-os/staging-artifact",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@agent-os/core": "workspace:*",
       },
@@ -205,7 +205,7 @@
     },
     "packages/tenant-material": {
       "name": "@agent-os/tenant-material",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@agent-os/core": "workspace:*",
         "effect": "catalog:",
@@ -221,7 +221,7 @@
     },
     "packages/turn-stream": {
       "name": "@agent-os/turn-stream",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "devDependencies": {
         "typescript": "catalog:",
         "vite-plus": "catalog:",
@@ -230,7 +230,7 @@
     },
     "packages/verification": {
       "name": "@agent-os/verification",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@agent-os/core": "workspace:*",
       },
@@ -246,7 +246,7 @@
     },
     "packages/workspace-session": {
       "name": "@agent-os/workspace-session",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@agent-os/core": "workspace:*",
       },
@@ -263,7 +263,7 @@
     },
     "packages/workspace-session-cloudflare": {
       "name": "@agent-os/workspace-session-cloudflare",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@agent-os/core": "workspace:*",
         "@agent-os/workspace-session": "workspace:*",
@@ -280,7 +280,7 @@
     },
     "tooling/ops-api": {
       "name": "@agent-os/ops-api",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@agent-os/core": "workspace:*",
       },
@@ -293,7 +293,7 @@
     },
     "tooling/ops-htmx": {
       "name": "@agent-os/ops-htmx",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@agent-os/core": "workspace:*",
         "@agent-os/ops-api": "workspace:*",

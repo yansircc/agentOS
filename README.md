@@ -5,6 +5,9 @@ boundaries. It gives an agent a ledger, claim settlement, material resolution,
 tool admission, and package boundary contracts without making app policy part
 of the substrate.
 
+Current release posture: 0.2.x active development. `PUBLIC_API.md` files guard
+against accidental exports; they are not API or schema freezes.
+
 The core rule is simple:
 
 ```text

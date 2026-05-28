@@ -7,7 +7,7 @@ projection helpers.
 
 ## Public API Status
 
-Optional package. It is not part of the core 1.0 freeze.
+Optional package. It is not part of a freeze surface.
 
 ## Invariant
 

@@ -1,8 +1,9 @@
 # @agent-os/turn-stream Public API
 
-Status: 1.0 target for frame algebra. Provider delta adapters added before 1.0 must be listed here.
+Status: 0.2.x active development for frame algebra. Public exports are listed
+for accidental export control only; this is not an API freeze.
 
-## Frozen exports
+## Public exports
 
 - `.:TurnDoneFrame`
 - `.:TurnErrorFrame`

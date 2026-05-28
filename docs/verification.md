@@ -19,7 +19,8 @@ isolating failures.
 
 ## Public API Gate
 
-Every 1.0 target package has a `PUBLIC_API.md`. The checker fails when:
+Every package with a public surface has a `PUBLIC_API.md`. In 0.2.x this is an
+accidental-export gate, not an API freeze. The checker fails when:
 
 - an exported symbol is missing from the manifest;
 - an internal-only symbol is exported;
