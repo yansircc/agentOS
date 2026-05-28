@@ -1,5 +1,5 @@
 /**
- * Admission — canonical fingerprint contract tests (spec-25 §4.1).
+ * Admission — canonical fingerprint contract tests (contract §4.1).
  *
  * Pure-function level. No DO. Validates:
  *   - schema fingerprint stability across calls (sha256 is byte-equal)
@@ -8,7 +8,7 @@
  *   - routeFingerprint is collision-free for distinct routes (Codex P1
  *     regression guard — the FNV-1a aliasing bug)
  *   - anthropic-messages: unpinned `anthropicVersion` fills in the
- *     current substrate default before fingerprinting (spec-27 §7)
+ *     current substrate default before fingerprinting (contract §7)
  */
 
 import { Effect } from "effect";
@@ -16,7 +16,7 @@ import { describe, expect, it } from "@effect/vitest";
 
 import { type JsonSchemaObject, makeSchemaContract, routeFingerprint } from "../../src/admission";
 
-describe("admission — canonical fingerprint (spec-25 §4.1)", () => {
+describe("admission — canonical fingerprint (contract §4.1)", () => {
   const S1: JsonSchemaObject = {
     type: "object",
     properties: {

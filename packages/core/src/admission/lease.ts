@@ -1,5 +1,5 @@
 /**
- * Lease projection + decideTier — spec-25 §7.2, §10.
+ * Lease projection + decideTier — contract §7.2, §10.
  *
  * Owns the admission-domain state types (CapabilityLease, AttemptKey,
  * AdmissionImpact, Outcome, EvidenceRow, BarrierRow, AdmissionRow) and
@@ -91,14 +91,14 @@ export type AdmissionRow = EvidenceRow | BarrierRow;
 export type { LlmRoute };
 
 // ============================================================
-// decideTier (spec-25 §10)
+// decideTier (contract §10)
 //   Pure function; NO IO, NO clock; depends only on pre-call inputs.
 // ============================================================
 
 /**
  * Spec-25 §10 admission-impact rule. Computed BEFORE the evidence
  * append (no post-append re-projection — that's the very anti-pattern
- * spec-25 forbids; race + cost).
+ * contract forbids; race + cost).
  *
  * - probe → lease-bearing (always admission-relevant)
  * - non-Supported → lease-bearing (failures + non-lease classes both
@@ -124,7 +124,7 @@ export const decideTier = (
 };
 
 // ============================================================
-// Lease projection (spec-25 §7.2)
+// Lease projection (contract §7.2)
 //   Pure function. SSoT is `events` table; projection is derivation only.
 // ============================================================
 
@@ -196,7 +196,7 @@ const barrierKeyMatches = (current: AttemptKey, barrier: Partial<AttemptKey>): b
  *  not capability facts; walk past them to find a real lease-bearing event.
  *
  *  Filtered: reinforcement evidence (admission must read lease-bearing rows
- *  only — spec-25 §10).
+ *  only — contract §10).
  *  Filtered: events with a different adapter major version (§9).
  *  Filtered: events strictly before the latest barrier under `(ts, id)`.
  */

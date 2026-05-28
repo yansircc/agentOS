@@ -4,7 +4,7 @@
  * Replaces the former monolithic `packages/core/src/admission.ts`. All
  * imports `from "./admission"` / `from "../src/admission"` continue to
  * resolve here via dir-as-module. The actual implementation is split
- * along spec-25 axes:
+ * along contract axes:
  *
  *   json-schema.ts   types + validator (closed-dialect JSON Schema)
  *   fingerprint.ts   canonical-JSON algebra (route + schema)

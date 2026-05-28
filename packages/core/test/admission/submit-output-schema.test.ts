@@ -1,12 +1,12 @@
 /**
- * Admission — submitAgent outputSchema end-to-end contract (spec-25 §12.1).
+ * Admission — submitAgent outputSchema end-to-end contract (contract §12.1).
  *
  * Two paths:
  *   1. outputSchema present + no tools → admission path; result.final is
  *      the decoded JSON, ledger holds chat.ingested + evidence + deliver.
  *   2. outputSchema + non-empty tools → submit aborts with
  *      `output_schema_excludes_tools_in_v0_2_10` BEFORE any LLM call
- *      (mutual exclusivity invariant — spec-25 §12.1).
+ *      (mutual exclusivity invariant — contract §12.1).
  */
 
 import { Effect, Exit } from "effect";
@@ -26,7 +26,7 @@ interface TestEnv {
 }
 const testEnv = env as unknown as TestEnv;
 
-describe("admission — submitAgent outputSchema path (spec-25 §12.1)", () => {
+describe("admission — submitAgent outputSchema path (contract §12.1)", () => {
   it("outputSchema present → admission path; result.final is the decoded JSON", async () => {
     const scope = "submit-outputschema";
     const id = testEnv.AGENT_DO.idFromName(scope);

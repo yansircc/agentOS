@@ -56,13 +56,13 @@ export interface SubmitSpec {
    *  (with the Context block appended). When absent, the substrate
    *  generates a generic system from intent. Stable axis.
    *
-   *  The three axes are intentionally distinct (see spec-24 §5.1.1):
+   *  The three axes are intentionally distinct (see contract §5.1.1):
    *    system  = behavior program (stable)
    *    intent  = task input       (variable)
    *    context = facts            (variable) */
   readonly system?: string;
-  /** LLM transport route. Tagged union over protocol kinds (spec-25 §3,
-   *  spec-24 INV-8 revision). Replaces the v0.2.11 `agent: {provider,
+  /** LLM transport route. Tagged union over protocol kinds (contract §3,
+   *  contract INV-8 revision). Replaces the v0.2.11 `agent: {provider,
    *  model}` shape, which assumed a single cf-ai-binding transport.
    *  Apps choose their route per submit; capability is evidence on
    *  (route, schemaContract, strategy, adapterVersion), not on modelId. */

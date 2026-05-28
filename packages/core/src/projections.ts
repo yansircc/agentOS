@@ -376,7 +376,7 @@ export const projectAdmissionLease = (
   });
 
 // ============================================================
-// projectRunsPage — list runs scoped to this DO (spec-34 §5).
+// projectRunsPage — list runs scoped to this DO (contract §5).
 //
 //   Source: agent.run.started + agent.run.completed + every ABORT.* kind.
 //   Cursor: runId DESC; afterRunId means "strictly older than this id".

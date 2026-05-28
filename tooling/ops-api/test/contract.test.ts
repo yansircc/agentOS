@@ -1,5 +1,5 @@
 /**
- * @agent-os/ops-api — contract tests (spec-35 §6).
+ * @agent-os/ops-api — contract tests (contract §6).
  *
  * Nine acceptance items, one describe block per item.
  */
@@ -49,7 +49,7 @@ class FakeAgentDO implements AgentDOIntrospection {
 
   streamEvents(opts: StreamEventsOptions): Response {
     // Tests only assert the cursor passes through; emit a short SSE body
-    // containing two rows past `afterId` to mimic spec-29 wire.
+    // containing two rows past `afterId` to mimic contract wire.
     const afterId = opts.afterId ?? 0;
     const rows = this.rows.filter((r) => r.id > afterId).slice(0, 2);
     const body = rows

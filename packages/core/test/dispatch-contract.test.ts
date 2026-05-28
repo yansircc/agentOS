@@ -1,7 +1,7 @@
 /**
  * dispatchToScope — deterministic contract tests.
  *
- * Validates P1 of spec-28:
+ * Validates P1 of contract:
  *   - sender outbound event + dispatch_outbox row are atomic mechanics;
  *   - receiver writes dispatch.inbound.accepted + app event in one tx;
  *   - receiver dedupe SSoT is (sourceScope, idempotencyKey);

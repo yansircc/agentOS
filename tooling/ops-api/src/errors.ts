@@ -1,5 +1,5 @@
 /**
- * @agent-os/ops-api — uniform error responses (spec-35 §4)
+ * @agent-os/ops-api — uniform error responses (contract §4)
  */
 
 export type OpsErrorCode =

@@ -1,7 +1,7 @@
 /**
  * Image route adapters — deterministic contract tests.
  *
- * Validates P3 / C5 from spec-28 without touching real providers.
+ * Validates P3 / C5 from contract without touching real providers.
  */
 
 import { Effect, Layer, ManagedRuntime } from "effect";

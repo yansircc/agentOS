@@ -3,7 +3,7 @@
  * events table.
  *
  * Admission is the SOLE writer of `llm.structured.evidence` and
- * `llm.structured.invalidate` (spec-25 §2 + spec-24 §3.1). Any payload
+ * `llm.structured.invalidate` (contract §2 + contract §3.1). Any payload
  * shape mismatch read back here is infra corruption — same failure path
  * as quota's malformed-payload defense (quota-service.ts:97).
  * `Schema.decodeUnknownSync` throws → `Effect.try` wraps as `SqlError`;

@@ -16,9 +16,9 @@
 import type { Outcome } from "../../admission/lease";
 
 /** Single coherence dial for an adapter's complete behavior. Bumping the
- *  major invalidates structured-output lease evidence (spec-25 §9). Any
+ *  major invalidates structured-output lease evidence (contract §9). Any
  *  observable change to encode/decode/classify on EITHER half (turn or
- *  structured) requires a major bump (spec-27 §5). */
+ *  structured) requires a major bump (contract §5). */
 export const ADAPTER_VERSION = "1.0.0";
 
 /** Synthesized tool name used by every structured-output adapter to force
