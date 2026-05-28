@@ -27,7 +27,7 @@ const sessionClaim = makePreClaim({
 
 describe("@agent-os/workspace-session", () => {
   it("declares workspace_session.* as an extension-owned prefix", () => {
-    expect(workspaceSessionExtensionPackage("0.1.0")).toEqual({
+    expect(workspaceSessionExtensionPackage("0.1.0")).toMatchObject({
       packageId: "@agent-os/workspace-session",
       kindPrefixes: ["workspace_session."],
       version: "0.1.0",

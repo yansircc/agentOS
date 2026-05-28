@@ -81,6 +81,7 @@ import { Quota, QuotaLive } from "./quota";
 import { AiBinding } from "./llm";
 import { isMaterialRef, materialRefKey } from "./material-ref";
 import { Admission, AdmissionLive, type AttemptKey, type CapabilityLease } from "./admission";
+import { commitBoundaryEvent, validateBoundaryEventPayload } from "./boundary-commit";
 import { RefResolverLive, RefResolverService, type RefResolver } from "./ref-resolver";
 import {
   type ExtensionPackage,
@@ -224,10 +225,21 @@ export abstract class AgentDOBase<Env extends AgentDOEnv> extends DurableObject<
         }),
       );
     }
+    if (pkg.boundaryContract !== undefined) {
+      const rejected = validateBoundaryEventPayload(pkg.boundaryContract, event, data);
+      if (rejected !== null) {
+        return Promise.reject(rejected);
+      }
+    }
     return this.runtimeFor(scope).runPromise(
       Effect.gen(function* () {
         const ledger = yield* Ledger;
-        const ev = yield* ledger.log(event, data, scope);
+        const ev =
+          pkg.boundaryContract === undefined
+            ? yield* ledger.log(event, data, scope)
+            : yield* commitBoundaryEvent(pkg.boundaryContract, event, data, () =>
+                ledger.log(event, data, scope),
+              );
         return { id: ev.id };
       }),
     );
@@ -253,6 +265,12 @@ export abstract class AgentDOBase<Env extends AgentDOEnv> extends DurableObject<
           capability: `extension:${pkg.packageId}`,
         }),
       );
+    }
+    if (pkg.boundaryContract !== undefined) {
+      const rejected = validateBoundaryEventPayload(pkg.boundaryContract, event, data);
+      if (rejected !== null) {
+        return Promise.reject(rejected);
+      }
     }
     const ctx = this.ctx;
     return this.runtimeFor(scope).runPromise(

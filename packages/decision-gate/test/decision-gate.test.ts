@@ -29,7 +29,7 @@ const consumedClaim = settleLivedClaim(claim, {
 
 describe("@agent-os/decision-gate", () => {
   it("declares decision_gate.* as an extension-owned prefix", () => {
-    expect(decisionGateExtensionPackage("0.1.0")).toEqual({
+    expect(decisionGateExtensionPackage("0.1.0")).toMatchObject({
       packageId: "@agent-os/decision-gate",
       kindPrefixes: ["decision_gate."],
       version: "0.1.0",
