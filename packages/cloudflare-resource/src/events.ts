@@ -192,7 +192,9 @@ const materialRefEquals = (left: MaterialRef | undefined, right: MaterialRef): b
         left.purpose === right.purpose
       );
     case "endpoint":
-      return right.kind === "endpoint" && left.ref === right.ref && left.protocol === right.protocol;
+      return (
+        right.kind === "endpoint" && left.ref === right.ref && left.protocol === right.protocol
+      );
     case "binding":
       return (
         right.kind === "binding" &&
@@ -213,7 +215,8 @@ const materialRefEquals = (left: MaterialRef | undefined, right: MaterialRef): b
 const hasLiveResource = (
   status: CloudflareResourceProjection["status"],
   provisionedResourceRef: ExternalResourceMaterialRef | undefined,
-): boolean => status !== "missing" && status !== "destroyed" && provisionedResourceRef !== undefined;
+): boolean =>
+  status !== "missing" && status !== "destroyed" && provisionedResourceRef !== undefined;
 
 export const projectCloudflareResource = (
   events: Iterable<CloudflareResourceLedgerEvent>,

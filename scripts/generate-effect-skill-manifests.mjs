@@ -66,7 +66,7 @@ const workspacePackagePaths = () => {
     }
   }
 
-  return [...paths].sort();
+  return [...paths].sort((left, right) => left.localeCompare(right));
 };
 
 const scannerPackagesFromWorkspaces = (rootSource) => {
@@ -95,8 +95,11 @@ const scannerPackagesFromWorkspaces = (rootSource) => {
 if (!isRecord(source.root)) {
   failures.push("docs/effect-skill.json missing root manifest");
 } else {
-  const { packageDefaults: _packageDefaults, packageOverrides: _packageOverrides, ...rootSource } =
-    source.root;
+  const {
+    packageDefaults: _packageDefaults,
+    packageOverrides: _packageOverrides,
+    ...rootSource
+  } = source.root;
   writeJson(".effect-skill.json", {
     packages: scannerPackagesFromWorkspaces(source.root),
     ...rootSource,
