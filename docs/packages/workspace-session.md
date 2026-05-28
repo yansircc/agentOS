@@ -18,6 +18,6 @@ facts. Use a backend package to obtain provider-specific refs.
 ## Verification
 
 ```sh
-cd packages/workspace-session
+cd packages/carriers/workspace-session
 vp test run
 ```

@@ -17,6 +17,6 @@ Use provider adapters or transport packages to convert token deltas into
 ## Verification
 
 ```sh
-cd packages/turn-stream
+cd packages/composers/turn-stream
 vp test run
 ```

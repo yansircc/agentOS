@@ -24,6 +24,6 @@ export class AgentDO extends createAgentDurableObject({}) {}
 ## Verification
 
 ```sh
-cd packages/backend-cloudflare-do
+cd packages/backends/cloudflare-do
 bun run test
 ```

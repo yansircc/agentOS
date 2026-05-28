@@ -1,13 +1,37 @@
 {
   "packages": [
     {
-      "path": "packages/backend-cloudflare-do",
+      "path": "packages/backends/cloudflare-do",
       "shape": ["library"],
       "dependencyOwner": "package-local",
       "dependencyOwnerReason": "Cloudflare DO backend owns platform adapter dependency declarations"
     },
     {
-      "path": "packages/backend-in-memory",
+      "path": "packages/backends/in-memory",
+      "shape": ["library"],
+      "dependencyOwner": "workspace-root",
+      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+    },
+    {
+      "path": "packages/carriers/decision-gate",
+      "shape": ["library"],
+      "dependencyOwner": "workspace-root",
+      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+    },
+    {
+      "path": "packages/carriers/deploy",
+      "shape": ["library"],
+      "dependencyOwner": "workspace-root",
+      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+    },
+    {
+      "path": "packages/carriers/git",
+      "shape": ["library"],
+      "dependencyOwner": "workspace-root",
+      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+    },
+    {
+      "path": "packages/carriers/image",
       "shape": ["library"],
       "dependencyOwner": "workspace-root",
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
@@ -19,31 +43,43 @@
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
     },
     {
-      "path": "packages/decision-gate",
+      "path": "packages/carriers/sandbox",
       "shape": ["library"],
       "dependencyOwner": "workspace-root",
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
     },
     {
-      "path": "packages/deploy",
+      "path": "packages/carriers/staging-artifact",
       "shape": ["library"],
       "dependencyOwner": "workspace-root",
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
     },
     {
-      "path": "packages/dynamic-worker",
+      "path": "packages/carriers/tenant-material",
       "shape": ["library"],
       "dependencyOwner": "workspace-root",
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
     },
     {
-      "path": "packages/git-carrier",
+      "path": "packages/carriers/verification",
       "shape": ["library"],
       "dependencyOwner": "workspace-root",
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
     },
     {
-      "path": "packages/image",
+      "path": "packages/carriers/workspace-session",
+      "shape": ["library"],
+      "dependencyOwner": "workspace-root",
+      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+    },
+    {
+      "path": "packages/composers/run-stream",
+      "shape": ["library"],
+      "dependencyOwner": "workspace-root",
+      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+    },
+    {
+      "path": "packages/composers/turn-stream",
       "shape": ["library"],
       "dependencyOwner": "workspace-root",
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
@@ -55,7 +91,13 @@
       "dependencyOwnerReason": "kernel owns platform-free algebra dependency declarations"
     },
     {
-      "path": "packages/llm-transport-http",
+      "path": "packages/providers/dynamic-worker",
+      "shape": ["library"],
+      "dependencyOwner": "workspace-root",
+      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+    },
+    {
+      "path": "packages/providers/llm-transport-http",
       "shape": ["library"],
       "dependencyOwner": "workspace-root",
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
@@ -67,7 +109,13 @@
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
     },
     {
-      "path": "packages/run-stream",
+      "path": "packages/providers/sandbox-cloudflare",
+      "shape": ["library"],
+      "dependencyOwner": "workspace-root",
+      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+    },
+    {
+      "path": "packages/providers/workspace-session-cloudflare",
       "shape": ["library"],
       "dependencyOwner": "workspace-root",
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
@@ -79,60 +127,6 @@
       "dependencyOwnerReason": "runtime owns backend-neutral runtime dependency declarations"
     },
     {
-      "path": "packages/sandbox",
-      "shape": ["library"],
-      "dependencyOwner": "workspace-root",
-      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-    },
-    {
-      "path": "packages/sandbox-cloudflare",
-      "shape": ["library"],
-      "dependencyOwner": "workspace-root",
-      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-    },
-    {
-      "path": "packages/skill-registry",
-      "shape": ["library"],
-      "dependencyOwner": "workspace-root",
-      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-    },
-    {
-      "path": "packages/staging-artifact",
-      "shape": ["library"],
-      "dependencyOwner": "workspace-root",
-      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-    },
-    {
-      "path": "packages/tenant-material",
-      "shape": ["library"],
-      "dependencyOwner": "workspace-root",
-      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-    },
-    {
-      "path": "packages/turn-stream",
-      "shape": ["library"],
-      "dependencyOwner": "workspace-root",
-      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-    },
-    {
-      "path": "packages/verification",
-      "shape": ["library"],
-      "dependencyOwner": "workspace-root",
-      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-    },
-    {
-      "path": "packages/workspace-session",
-      "shape": ["library"],
-      "dependencyOwner": "workspace-root",
-      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-    },
-    {
-      "path": "packages/workspace-session-cloudflare",
-      "shape": ["library"],
-      "dependencyOwner": "workspace-root",
-      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-    },
-    {
       "path": "tooling/ops-api",
       "shape": ["library"],
       "dependencyOwner": "workspace-root",
@@ -140,6 +134,12 @@
     },
     {
       "path": "tooling/ops-htmx",
+      "shape": ["library"],
+      "dependencyOwner": "workspace-root",
+      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+    },
+    {
+      "path": "tooling/skill-registry",
       "shape": ["library"],
       "dependencyOwner": "workspace-root",
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
@@ -164,52 +164,46 @@
   ],
   "allowedAdapters": [
     {
-      "path": "packages/backend-cloudflare-do/src/ledger/stream.ts",
+      "path": "packages/backends/cloudflare-do/src/ledger/stream.ts",
       "owner": "@agent-os/backend-cloudflare-do",
       "reason": "terminal ledger SSE adapter owns Response construction",
       "rules": ["EFF402"]
     },
     {
-      "path": "packages/backend-cloudflare-do/src/storage/sql-row.ts",
+      "path": "packages/backends/cloudflare-do/src/storage/sql-row.ts",
       "owner": "@agent-os/backend-cloudflare-do-storage",
       "reason": "SQLite row adapter owns fail-fast host column shape assertion",
       "rules": ["EFF025"]
     },
     {
-      "path": "packages/backend-cloudflare-do/test/_in-memory-do.ts",
+      "path": "packages/backends/cloudflare-do/test/_in-memory-do.ts",
       "owner": "@agent-os/backend-cloudflare-do-tests",
       "reason": "test-only Durable Object SQL adapter models transactionSync rollback by synchronous throws",
       "rules": ["EFF001", "EFF025"]
     },
     {
-      "path": "packages/backend-cloudflare-do/test/admission/attempt-structured.worker.test.ts",
+      "path": "packages/backends/cloudflare-do/test/admission/attempt-structured.worker.test.ts",
       "owner": "@agent-os/backend-cloudflare-do-tests",
       "reason": "test HTTP fixture owns provider Response construction",
       "rules": ["EFF402"]
     },
     {
-      "path": "packages/backend-cloudflare-do/test/test-worker.ts",
+      "path": "packages/backends/cloudflare-do/test/test-worker.ts",
       "owner": "@agent-os/backend-cloudflare-do-tests",
       "reason": "Cloudflare worker test adapter owns Response construction",
       "rules": ["EFF402"]
     },
     {
-      "path": "packages/dynamic-worker/test/dynamic-worker-contract.test.ts",
+      "path": "packages/providers/dynamic-worker/test/dynamic-worker-contract.test.ts",
       "owner": "@agent-os/dynamic-worker-tests",
       "reason": "test worker source strings exercise Response construction in sandboxed dynamic workers",
       "rules": ["EFF402"]
     },
     {
-      "path": "packages/dynamic-worker/src/tool.ts",
+      "path": "packages/providers/dynamic-worker/src/tool.ts",
       "owner": "@agent-os/dynamic-worker",
       "reason": "terminal Tool.execute adapter owns the Promise boundary over the Effect program",
       "rules": ["EFF400"]
-    },
-    {
-      "path": "packages/image/test/adapter-contract.test.ts",
-      "owner": "@agent-os/image-tests",
-      "reason": "test HTTP fixture owns provider Response construction",
-      "rules": ["EFF402"]
     },
     {
       "path": "tooling/ops-api/src/errors.ts",
@@ -254,7 +248,7 @@
       "rules": ["EFF402"]
     },
     {
-      "path": "packages/run-stream/src/index.ts",
+      "path": "packages/composers/run-stream/src/index.ts",
       "owner": "@agent-os/run-stream",
       "reason": "batched run-stream HTTP adapter owns Response construction",
       "rules": ["EFF402"]

@@ -1,5 +1,5 @@
 /**
- * Abort taxonomy — zero-dep extraction so non-DurableObject contexts
+ * Abort taxonomy — zero-dep extraction so non-backend contexts
  * (e.g. ops-api, ops-react) can import this vocabulary without pulling
  * a Cloudflare Worker module via a backend barrel.
  *

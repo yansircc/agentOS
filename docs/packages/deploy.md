@@ -17,6 +17,6 @@ provider API calls in a backend package or app-owned execution layer.
 ## Verification
 
 ```sh
-cd packages/deploy
+cd packages/carriers/deploy
 vp test run
 ```

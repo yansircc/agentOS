@@ -24,6 +24,6 @@ import { projectDecisionGate } from "@agent-os/decision-gate";
 ## Verification
 
 ```sh
-cd packages/decision-gate
+cd packages/carriers/decision-gate
 vp test run
 ```

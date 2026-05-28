@@ -17,6 +17,6 @@ artifact bytes through the provider data plane.
 ## Verification
 
 ```sh
-cd packages/staging-artifact
+cd packages/carriers/staging-artifact
 vp test run
 ```

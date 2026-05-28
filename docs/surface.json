@@ -7,10 +7,7 @@
     "publicApiMeaning": "PUBLIC_API.md files guard against accidental exports; they are not API or schema freezes."
   },
   "governance": {
-    "invariants": [
-      "Every fact has exactly one writer.",
-      "Do not derive intent from actual."
-    ]
+    "invariants": ["Every fact has exactly one writer.", "Do not derive intent from actual."]
   },
   "holds": [
     {
@@ -48,7 +45,7 @@
     {
       "slug": "backend-cloudflare-do",
       "name": "@agent-os/backend-cloudflare-do",
-      "path": "packages/backend-cloudflare-do",
+      "path": "packages/backends/cloudflare-do",
       "status": "backend",
       "role": "Cloudflare Durable Object backend for agentOS runtime",
       "boundary": "Cloudflare DO storage, alarm, SSE, dispatch, and binding materialization",
@@ -61,7 +58,7 @@
     {
       "slug": "backend-in-memory",
       "name": "@agent-os/backend-in-memory",
-      "path": "packages/backend-in-memory",
+      "path": "packages/backends/in-memory",
       "status": "backend",
       "role": "in-memory backend instance for runtime contract tests",
       "boundary": "in-memory runtime Tag Live implementations",
@@ -100,7 +97,7 @@
     {
       "slug": "workspace-session",
       "name": "@agent-os/workspace-session",
-      "path": "packages/workspace-session",
+      "path": "packages/carriers/workspace-session",
       "status": "0.2.x public",
       "role": "provider-neutral workspace/session lifecycle facts",
       "boundary": "provider-neutral workspace/session lifecycle facts",
@@ -113,7 +110,7 @@
     {
       "slug": "workspace-session-cloudflare",
       "name": "@agent-os/workspace-session-cloudflare",
-      "path": "packages/workspace-session-cloudflare",
+      "path": "packages/providers/workspace-session-cloudflare",
       "status": "backend",
       "role": "Cloudflare Sandbox-compatible workspace backend",
       "boundary": "structural Cloudflare Sandbox-compatible provider",
@@ -124,7 +121,7 @@
     {
       "slug": "tenant-material",
       "name": "@agent-os/tenant-material",
-      "path": "packages/tenant-material",
+      "path": "packages/carriers/tenant-material",
       "status": "0.2.x experimental",
       "role": "encrypted tenant credential records to `RefResolver.material`",
       "boundary": "encrypted credential records to execution-time material",
@@ -137,7 +134,7 @@
     {
       "slug": "llm-transport-http",
       "name": "@agent-os/llm-transport-http",
-      "path": "packages/llm-transport-http",
+      "path": "packages/providers/llm-transport-http",
       "status": "0.2.x experimental",
       "role": "HTTP LLM streaming into non-durable turn frames",
       "boundary": "HTTP provider deltas to non-durable turn frames",
@@ -150,7 +147,7 @@
     {
       "slug": "turn-stream",
       "name": "@agent-os/turn-stream",
-      "path": "packages/turn-stream",
+      "path": "packages/composers/turn-stream",
       "status": "0.2.x public",
       "role": "token/progress frame algebra",
       "boundary": "token/progress frame algebra",
@@ -163,7 +160,7 @@
     {
       "slug": "run-stream",
       "name": "@agent-os/run-stream",
-      "path": "packages/run-stream",
+      "path": "packages/composers/run-stream",
       "status": "0.2.x public",
       "role": "submit/ledger/turn-frame composition",
       "boundary": "ledger/turn/submit-result composition",
@@ -176,7 +173,7 @@
     {
       "slug": "decision-gate",
       "name": "@agent-os/decision-gate",
-      "path": "packages/decision-gate",
+      "path": "packages/carriers/decision-gate",
       "status": "0.2.x public",
       "role": "durable decision gate events, projection, and admitter",
       "boundary": "durable decision request/decision/consumption facts",
@@ -189,7 +186,7 @@
     {
       "slug": "skill-registry",
       "name": "@agent-os/skill-registry",
-      "path": "packages/skill-registry",
+      "path": "tooling/skill-registry",
       "status": "0.2.x experimental",
       "role": "install-time skill manifest to core tools",
       "boundary": "install-time skill manifests to core tools",
@@ -202,7 +199,7 @@
     {
       "slug": "deploy",
       "name": "@agent-os/deploy",
-      "path": "packages/deploy",
+      "path": "packages/carriers/deploy",
       "status": "carrier",
       "role": "deploy proof/projection vocabulary",
       "boundary": "deploy proof/projection vocabulary",
@@ -211,7 +208,7 @@
     {
       "slug": "git-carrier",
       "name": "@agent-os/git-carrier",
-      "path": "packages/git-carrier",
+      "path": "packages/carriers/git",
       "status": "carrier",
       "role": "Git proof/projection vocabulary",
       "boundary": "Git proof/projection vocabulary",
@@ -220,7 +217,7 @@
     {
       "slug": "staging-artifact",
       "name": "@agent-os/staging-artifact",
-      "path": "packages/staging-artifact",
+      "path": "packages/carriers/staging-artifact",
       "status": "carrier",
       "role": "staging artifact proof/projection vocabulary",
       "boundary": "staging artifact proof/projection vocabulary",
@@ -229,7 +226,7 @@
     {
       "slug": "verification",
       "name": "@agent-os/verification",
-      "path": "packages/verification",
+      "path": "packages/carriers/verification",
       "status": "carrier",
       "role": "verification proof/projection vocabulary",
       "boundary": "verification proof/projection vocabulary",
@@ -238,7 +235,7 @@
     {
       "slug": "sandbox",
       "name": "@agent-os/sandbox",
-      "path": "packages/sandbox",
+      "path": "packages/carriers/sandbox",
       "status": "optional algebra",
       "role": "bounded stateless sandbox tool surface",
       "boundary": "bounded stateless sandbox tool surface",
@@ -247,7 +244,7 @@
     {
       "slug": "sandbox-cloudflare",
       "name": "@agent-os/sandbox-cloudflare",
-      "path": "packages/sandbox-cloudflare",
+      "path": "packages/providers/sandbox-cloudflare",
       "status": "optional backend",
       "role": "Cloudflare Sandbox-compatible stateless sandbox adapter",
       "boundary": "Cloudflare Sandbox-compatible stateless sandbox adapter",
@@ -256,7 +253,7 @@
     {
       "slug": "dynamic-worker",
       "name": "@agent-os/dynamic-worker",
-      "path": "packages/dynamic-worker",
+      "path": "packages/providers/dynamic-worker",
       "status": "optional backend",
       "role": "bounded Worker-compatible code execution",
       "boundary": "bounded Worker-compatible code execution",
@@ -265,10 +262,10 @@
     {
       "slug": "image",
       "name": "@agent-os/image",
-      "path": "packages/image",
+      "path": "packages/carriers/image",
       "status": "optional algebra",
-      "role": "image generation claim/projection helpers",
-      "boundary": "image generation claim/projection helpers",
+      "role": "image namespace reservation and projection helpers",
+      "boundary": "provider-neutral image event namespace and reader algebra",
       "readmeStatus": "Optional package. It is not part of a freeze surface."
     },
     {

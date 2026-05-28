@@ -2,9 +2,12 @@
   "name": "agent-os-monorepo",
   "private": true,
   "workspaces": [
-    "packages/*",
+    "packages/kernel",
+    "packages/runtime",
+    "packages/backends/*",
     "packages/carriers/*",
     "packages/providers/*",
+    "packages/composers/*",
     "tooling/*"
   ],
   "type": "module",

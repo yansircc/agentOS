@@ -39,16 +39,16 @@ repo_root="$(
 )"
 
 vitest_root="${PARALLEL_SOURCE_ROOT:-$repo_root}"
-vitest_bin="$repo_root/packages/backend-cloudflare-do/node_modules/.bin/vitest"
-if [[ ! -x "$vitest_bin" && -x "$vitest_root/packages/backend-cloudflare-do/node_modules/.bin/vitest" ]]; then
-  vitest_bin="$vitest_root/packages/backend-cloudflare-do/node_modules/.bin/vitest"
+vitest_bin="$repo_root/packages/backends/cloudflare-do/node_modules/.bin/vitest"
+if [[ ! -x "$vitest_bin" && -x "$vitest_root/packages/backends/cloudflare-do/node_modules/.bin/vitest" ]]; then
+  vitest_bin="$vitest_root/packages/backends/cloudflare-do/node_modules/.bin/vitest"
 fi
 
 if [[ ! -x "$vitest_bin" ]]; then
   echo "missing backend Vitest binary: $vitest_bin" >&2
-  echo "run in the assigned worktree only if dependency ownership is assigned: cd $repo_root/packages/backend-cloudflare-do && bun install" >&2
+  echo "run in the assigned worktree only if dependency ownership is assigned: cd $repo_root/packages/backends/cloudflare-do && bun install" >&2
   exit 1
 fi
 
-cd "$repo_root/packages/backend-cloudflare-do"
+cd "$repo_root/packages/backends/cloudflare-do"
 exec "$vitest_bin" run --config "$config_abs" "$@"

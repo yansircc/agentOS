@@ -24,6 +24,6 @@ import { registerSkill } from "@agent-os/skill-registry";
 ## Verification
 
 ```sh
-cd packages/skill-registry
+cd tooling/skill-registry
 vp test run
 ```

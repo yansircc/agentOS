@@ -120,10 +120,7 @@ export interface CloudflareResourceSpec<Material, MutationInput> {
     mutationKind: string,
     input: MutationInput,
   ) => CloudflareApiRequest;
-  readonly validateResponse?: (
-    step: ResourceLifecycleStep,
-    body: unknown,
-  ) => string | null;
+  readonly validateResponse?: (step: ResourceLifecycleStep, body: unknown) => string | null;
 }
 
 const DEFAULT_BASE_URL = "https://api.cloudflare.com/client/v4";
@@ -186,24 +183,21 @@ const materialUnavailable = (
   resourceKind: CloudflareResourceKind,
   step: ResourceLifecycleStep,
   reason: string,
-): ResourceFailure =>
-  providerFailure(claim, resourceKind, step, "MaterialUnavailable", reason);
+): ResourceFailure => providerFailure(claim, resourceKind, step, "MaterialUnavailable", reason);
 
 const unsupportedResource = (
   claim: PreClaim,
   resourceKind: CloudflareResourceKind,
   step: ResourceLifecycleStep,
   reason: string,
-): ResourceFailure =>
-  providerFailure(claim, resourceKind, step, "UnsupportedResource", reason);
+): ResourceFailure => providerFailure(claim, resourceKind, step, "UnsupportedResource", reason);
 
 const providerRejected = (
   claim: PreClaim,
   resourceKind: CloudflareResourceKind,
   step: ResourceLifecycleStep,
   reason: string,
-): ResourceFailure =>
-  providerFailure(claim, resourceKind, step, "ProviderFailure", reason);
+): ResourceFailure => providerFailure(claim, resourceKind, step, "ProviderFailure", reason);
 
 const proofRef = (
   resourceKind: CloudflareResourceKind,

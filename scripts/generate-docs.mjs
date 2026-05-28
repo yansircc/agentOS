@@ -109,7 +109,8 @@ for (const pkg of packages) {
   }
 }
 
-for (const pkgPath of workspacePackagePaths()) {
+for (const packagePath of workspacePackagePaths()) {
+  const pkgPath = String(packagePath);
   if (!packagesByPath.has(pkgPath)) {
     failures.push(`${pkgPath} is missing from docs/surface.json`);
   }

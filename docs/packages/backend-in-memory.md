@@ -22,6 +22,6 @@ import { createInMemoryRuntimeBackend } from "@agent-os/backend-in-memory";
 ## Verification
 
 ```sh
-cd packages/backend-in-memory
+cd packages/backends/in-memory
 bun run test
 ```
