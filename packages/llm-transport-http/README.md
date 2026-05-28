@@ -1,48 +1,34 @@
 # @agent-os/llm-transport-http
 
-Status: internal-stable, public-experimental.
+## Purpose
+
+HTTP provider streaming adapter for OpenAI-compatible, Anthropic Messages, and
+Gemini-style token deltas.
+
+## Public API Status
+
+Internal-stable, public-experimental. Experimental exports are listed in
+`PUBLIC_API.md`.
 
 ## Invariant
 
-HTTP LLM streaming is non-durable turn progress. Durable run truth remains the
-terminal `SubmitResult` plus ledger events.
+LLM streaming is non-durable turn progress. Durable run truth remains the
+terminal `SubmitResult` plus ledger events. This package materializes the LLM
+protocol surface owned by `@agent-os/core`; there is no separate
+provider-neutral `@agent-os/llm-transport` algebra package.
 
-This package is the HTTP provider materialization of the LLM protocol surface
-owned by `@agent-os/core`; there is no separate provider-neutral
-`@agent-os/llm-transport` algebra package.
+## Minimal Usage
 
-`streamLlmTurn`:
-
-- resolves endpoint and credential material only through the supplied
-  `RefResolver`;
-- does not read environment variables;
-- does not write ledger events;
-- emits only `@agent-os/turn-stream` frames;
-- does not expose provider secrets or raw provider bodies in frames.
-
-## Realtime Wiring
+Use `streamLlmTurn` to produce `TurnStreamFrame` values. Supply endpoint and
+credential material through `RefResolver`; missing material fails closed.
 
 ```ts
 import { streamLlmTurn } from "@agent-os/llm-transport-http";
-import { composeRealtimeRunStream } from "@agent-os/run-stream";
-
-const turnFrames = streamLlmTurn({
-  route,
-  resolver,
-  messages,
-  tools,
-  turnRef,
-  fetch,
-  signal,
-});
-
-const runFrames = composeRealtimeRunStream({
-  ledgerEvents,
-  turnFrames,
-  submitResult,
-  signal,
-});
 ```
 
-`turnFrames` are progress only. `composeRealtimeRunStream` still terminates from
-`submitResult`; ledger events and the submit result remain the durable truth.
+## Verification
+
+```sh
+cd packages/llm-transport-http
+vp test run
+```

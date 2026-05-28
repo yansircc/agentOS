@@ -1,0 +1,50 @@
+# Runtime Packages
+
+API stability is declared per package in `PUBLIC_API.md`.
+
+| Package | Status | Boundary |
+| --- | --- | --- |
+| `@agent-os/core` | 1.0 target | substrate, ledger, claims, tools, material refs, context, boundary contracts |
+| `@agent-os/cloudflare-resource` | 1.0 target | Cloudflare D1/KV/R2/Queue/Workflow carrier facts and provider calls |
+| `@agent-os/workspace-session` | 1.0 target | provider-neutral workspace/session lifecycle facts |
+| `@agent-os/workspace-session-cloudflare` | backend | structural Cloudflare Sandbox-compatible provider |
+| `@agent-os/tenant-material` | public-experimental | encrypted credential records to execution-time material |
+| `@agent-os/llm-transport-http` | public-experimental | HTTP provider deltas to non-durable turn frames |
+| `@agent-os/turn-stream` | 1.0 target | token/progress frame algebra |
+| `@agent-os/run-stream` | 1.0 target | ledger/turn/submit-result composition |
+| `@agent-os/decision-gate` | 1.0 target | durable decision request/decision/consumption facts |
+| `@agent-os/skill-registry` | public-experimental | install-time skill manifests to core tools |
+| `@agent-os/deploy` | carrier | deploy proof/projection vocabulary |
+| `@agent-os/git-carrier` | carrier | Git proof/projection vocabulary |
+| `@agent-os/staging-artifact` | carrier | staging artifact proof/projection vocabulary |
+| `@agent-os/verification` | carrier | verification proof/projection vocabulary |
+| `@agent-os/sandbox` | optional algebra | bounded stateless sandbox tool surface |
+| `@agent-os/sandbox-cloudflare` | optional backend | Cloudflare Sandbox-compatible stateless sandbox adapter |
+| `@agent-os/dynamic-worker` | optional backend | bounded Worker-compatible code execution |
+| `@agent-os/image` | optional algebra | image generation claim/projection helpers |
+
+MCP registry support is not part of the 1.0 surface; it remains a hold until
+discovery, install, authority, and material contracts converge across products.
+
+## Cloudflare Resource Boundary
+
+The Cloudflare resource carrier records lifecycle and mutation proofs. It does
+not store resource data.
+
+```text
+D1             carrier: lifecycle + exec proof       outside carrier: rows
+KV namespace   carrier: lifecycle + mutation proof   outside carrier: values
+R2 bucket      carrier: lifecycle + mutation proof   outside carrier: object bytes
+Queue          carrier: lifecycle + mutation proof   outside carrier: message bodies
+Workflow       carrier: lifecycle + mutation proof   outside carrier: step payloads
+```
+
+Carrier payloads may contain symbolic refs, proof refs, mutation refs, and
+fingerprints. They must not contain provider tokens, raw data, raw response
+bodies, SQL, object bytes, message bodies, workflow payloads, or live handles.
+
+## Streaming Boundary
+
+`@agent-os/turn-stream` frames are progress only. `@agent-os/run-stream`
+combines ledger events, turn frames, and a terminal submit result. Durable truth
+remains the ledger plus `SubmitResult`.

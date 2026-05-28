@@ -1,74 +1,40 @@
 # @agent-os/cloudflare-resource
 
-Cloudflare resource carrier facts and live Cloudflare resource providers.
+## Purpose
 
-## Resource Core
+Cloudflare D1, KV namespace, R2 bucket, Queue, and Workflow resource carrier.
 
-The package exposes one lifecycle algebra across D1, KV namespace, R2 bucket,
-Queue, and Workflow:
+## Public API Status
 
-- `provision`
-- `bind`
-- `mutate`
-- `destroy`
+1.0 target. Frozen exports are listed in `PUBLIC_API.md`.
 
-Resolved Cloudflare account/resource/binding material comes only from
-`RefResolver.material(MaterialRef)`. Missing material and unsupported
-resource/mutation kinds fail closed; there is no fallback to env, wrangler, or
-dashboard state.
+## Invariant
 
-Carrier payloads are symbolic only: `MaterialRef`, `proofRef`, `mutationRef`,
-and `fingerprint`. Resolved token, provider response body, SQL, object bytes,
-queue message body, workflow payload, account id, database id, and live handles
-stay outside ledger-visible payloads and claims.
+Carrier ledger facts are not the resource data store. Payloads may contain
+symbolic `MaterialRef`, `proofRef`, `mutationRef`, and `fingerprint`; they must
+not contain tokens, raw provider bodies, SQL, object bytes, queue bodies,
+workflow payloads, account ids, database ids, or live handles.
 
-## Live Smokes
+## Minimal Usage
 
-Default tests use stubbed `fetch`. Live smokes are opt-in because they create
-and destroy real Cloudflare resources.
+Use a resource carrier for lifecycle and mutation proofs. Provide all execution
+material through a resolver; missing material and unsupported resource kinds
+fail closed.
 
-Required environment:
-
-- `CLOUDFLARE_ACCOUNT_ID`
-- `CLOUDFLARE_API_TOKEN`
-- `TEST_RUN_ID`
-- `SCOPE_PREFIX`
-
-Run from a parallel worktree:
-
-```sh
-source "$PARALLEL_AGENT_DIR/env.sh"
-set -a
-. /Users/yansir/code/52/agentOS/.dev.vars
-set +a
-bun packages/cloudflare-resource/test/d1-live-smoke.mjs
-bun packages/cloudflare-resource/test/core-live-smoke.mjs
+```ts
+import { makeCloudflareD1ResourceCarrier } from "@agent-os/cloudflare-resource";
 ```
 
-The D1 smoke uses `makeCloudflareD1ResourceCarrier`, not direct provider calls.
-It provisions D1, records the created database id only in the external material
-resolver map, emits a symbolic bind proof, executes one D1 mutation from an
-`inputRef`, destroys the database, projects the resulting facts, and scans the
-events/projection for resolved token, account id, database id, or SQL leakage.
+For query rows, object bytes, values, messages, or workflow state, use the
+provider data plane outside the carrier and keep durable truth in agentOS
+ledger facts.
 
-The core smoke exercises D1, KV namespace, R2 bucket, and Queue through the
-same carrier algebra. R2 records an explicit object delete mutation before
-bucket destroy because Cloudflare rejects deletion of a non-empty bucket.
-Workflow is not in this live smoke: it requires a real Worker script/class
-material supplied by the app. The package fails closed when that material is
-missing instead of fabricating a workflow backend.
+## Verification
 
-Missing environment is a fast failure. The script does not fallback to ambient
-credentials or unprefixed resource names.
+```sh
+cd packages/cloudflare-resource
+vp test run
+```
 
-## Mutation Boundary
-
-D1 mutation SQL is execution material. The carrier receives only an `inputRef`
-and calls async `resolveMutationInput(inputRef)` at execution time. The resolved
-SQL is sent to Cloudflare but never written to claim payloads, ledger events,
-projection output, or run-stream frames.
-
-`mutate` does not return query rows. Even when `mutationKind` is `d1.query`,
-the carrier records only symbolic mutation/proof refs. Callers that need rows
-must read them through their own execution-time D1 binding and keep durable
-truth in agentOS ledger facts.
+Live smokes are opt-in and must use prefixed `TEST_RUN_ID` / `SCOPE_PREFIX`
+resources from a parallel worktree.

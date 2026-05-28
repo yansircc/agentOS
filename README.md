@@ -1,87 +1,118 @@
 # agentOS
 
-Claim/effect-boundary calculus for Cloudflare Durable Object agent substrates.
+agentOS is a TypeScript substrate for agent runtimes that need durable effect
+boundaries. It gives an agent a ledger, claim settlement, material resolution,
+tool admission, and package boundary contracts without making app policy part
+of the substrate.
 
-The repo keeps durable decisions and production core code. Historical runnable
-spikes are retired after their conclusions land in specs, tests, or cookbooks.
-
-## Layout
+The core rule is simple:
 
 ```text
-docs/
-  specs/       frozen or active design records
-  cookbooks/   pseudocode shapes derived from dogfood and spikes
-  notes/       retained exploration notes that are not public surface
-
-packages/
-  core/                  @agent-os/core implementation and contract tests
-  image/                 optional image algebra
-  dynamic-worker/        optional stateless Worker-compatible code carrier
-  sandbox/               optional bounded stateless sandbox algebra
-  sandbox-cloudflare/    optional Cloudflare Sandbox backend
-  git-carrier/           optional Git proof/projection carrier algebra
-  verification/          optional verification gate proof algebra
-  staging-artifact/      optional staging artifact proof/projection algebra
-  deploy/                optional deploy proof/projection carrier algebra
-  workspace-session/     optional stateful session/workspace proof algebra
-
-tooling/
-  ops-api/               read-only infrastructure projection HTTP tooling
-  ops-htmx/              read-only SSR + HTMX ops console tooling
-
-spikes/
-  _active/     ignored local throwaway work only
+ledger = durable truth
+PreClaim = intended effect identity
+MaterialRef = execution means
+Cleanup/proof refs = release and verification vocabulary
+projections = derived views
 ```
 
-## Core Surface
+## What It Owns
 
-`AgentDOBase` is the public boundary. Apps extend it and use:
+- `@agent-os/core`: Durable Object base, ledger, submit loop, effect claims,
+  material refs, tools, quotas, dispatch, extension capabilities, context
+  packing, and `BoundaryContract`.
+- Carrier packages: provider-neutral event vocabulary, claim settlement helpers,
+  proof refs, and derived projections.
+- Backend packages: live provider materialization that resolves symbolic refs at
+  execution time.
+- Composition packages: non-durable streams and UI-facing wiring over ledger
+  events, turn frames, and submit results.
 
-- ledger write/read: `emitEvent`, `events`, `streamEvents`
-- reactive control: `on`, `off`, `scheduleEvent`, `alarm`
-- agent loop: `submit`
-- cross-scope delivery: `dispatchToScope`
-- business resources: `grantResource`, `reserveResource`, `consumeResource`, `releaseResource`
-- projections: `runTrace`, `runStatus`, `quotaState`, `resourceState`, `admissionLease`
-- context packing: `@agent-os/core/context`
-- provider and extension hooks: `provideRefResolver`, `provideDispatchTargets`, `registerExtensions`
+## What It Does Not Own
 
-The ledger is the source of truth. Schedules, dispatch outboxes, leases,
-resource availability, and views are pending buffers or projections.
-Core owns the Boundary calculus; carrier packages declare concrete boundaries,
-backend packages bind provider material, and tooling reads projections.
+- Product approval policy.
+- App scheduling policy.
+- Product-specific context selection or summarization.
+- Provider secrets, raw resource data, SQL, queue bodies, object bytes, or live
+  SDK handles in ledger payloads.
+
+Unsupported capability must fail closed. Do not add fallback behavior or shadow
+state to make a product flow appear complete.
+
+## Package Map
+
+| Package | Role |
+| --- | --- |
+| `@agent-os/core` | substrate, ledger, claims, tools, material refs, boundary contracts |
+| `@agent-os/cloudflare-resource` | Cloudflare D1/KV/R2/Queue/Workflow resource carrier |
+| `@agent-os/workspace-session` | provider-neutral workspace/session lifecycle facts |
+| `@agent-os/workspace-session-cloudflare` | Cloudflare Sandbox-compatible workspace backend |
+| `@agent-os/tenant-material` | encrypted tenant credential records to `RefResolver.material` |
+| `@agent-os/llm-transport-http` | HTTP LLM streaming into non-durable turn frames |
+| `@agent-os/turn-stream` | token/progress frame algebra |
+| `@agent-os/run-stream` | submit/ledger/turn-frame composition |
+| `@agent-os/decision-gate` | durable decision gate events, projection, and admitter |
+| `@agent-os/skill-registry` | install-time skill manifest to core tools |
+
+See [docs/runtime-packages.md](docs/runtime-packages.md) for the full package
+surface.
+
+## Minimal Use
+
+1. Extend `AgentDOBase`.
+2. Register tools with `defineRegisteredTool`; do not bypass `ToolContract`.
+3. Resolve endpoints, credentials, bindings, and external resources through
+   `MaterialRef`.
+4. Submit work through `submit`.
+5. Read durable state from ledger events or derived projections.
+
+```ts
+import { AgentDOBase } from "@agent-os/core";
+import { defineRegisteredTool } from "@agent-os/core/tools";
+
+const lookup = defineRegisteredTool({
+  definition: {
+    type: "function",
+    function: {
+      name: "lookup",
+      description: "Look up a symbolic key.",
+      parameters: {
+        type: "object",
+        properties: { key: { type: "string" } },
+        required: ["key"],
+      },
+    },
+  },
+  authorityClass: "read",
+  admit: async () => ({ ok: true }),
+  execute: async (args: { key: string }) => ({ value: args.key }),
+});
+
+export class AgentDO extends AgentDOBase<Env> {
+  protected provideRefResolver() {
+    return {
+      material: (ref) => {
+        if (ref.kind === "endpoint" && ref.ref === "llm") return this.env.LLM_ENDPOINT;
+        if (ref.kind === "credential" && ref.ref === "llm-key") return this.env.LLM_KEY;
+        return null;
+      },
+    };
+  }
+}
+```
 
 ## Documents
 
-- [Spec 24](docs/specs/spec-24-invariants-and-surface.md): invariants and public surface
-- [Spec 25](docs/specs/spec-25-llm-admission.md): structured-output admission
-- [Spec 27](docs/specs/spec-27-llm-protocol-adapter.md): protocol adapter algebra
-- [Spec 28](docs/specs/spec-28-img-gen-gap-implementation-plan.md): img-gen gap implementation plan
-- [Spec 29](docs/specs/spec-29-ledger-event-stream.md): ledger event stream
-- [Spec 30](docs/specs/spec-30-substrate-boundary-cookbook.md): cookbook boundary charter
-- [Spec 31](docs/specs/spec-31-text-streaming-capability.md): text streaming capability boundary
-- [Spec 32](docs/specs/spec-32-image-package-boundary.md): image package boundary
-- [Spec 33](docs/specs/spec-33-sandbox-carrier.md): sandbox carrier boundary
-- [Spec 34](docs/specs/spec-34-authorized-commit-calculus.md): authorized commit calculus
-- [Spec 35](docs/specs/spec-35-dynamic-worker-carrier.md): dynamic worker carrier boundary
-
-Cookbooks are not runnable examples. They are short app-shape records:
-
-- [Gated Effect Chain](docs/cookbooks/gated-effect-chain.md)
-- [Reactive Interview](docs/cookbooks/reactive-interview.md)
-- [Img-Gen Pipeline](docs/cookbooks/img-gen-pipeline.md)
-- [Protocol Adapter Live-Wire Notes](docs/cookbooks/protocol-adapter-live-wire.md)
-- [Approval Race](docs/cookbooks/approval-race.md)
-- [Carrier Mutation](docs/cookbooks/carrier-mutation.md)
-- [Parallel Dev MVP](docs/cookbooks/parallel-dev-mvp.md)
-- [Parallel Agent Startup](docs/cookbooks/parallel-agent-startup.md)
-- [Happy Project Batch](docs/cookbooks/happy-project-batch.md)
-- [Vibe Strangler](docs/cookbooks/vibe-strangler.md)
+- [Core Model](docs/core.md)
+- [Boundary Contract](docs/boundary-contract.md)
+- [Runtime Packages](docs/runtime-packages.md)
+- [Verification](docs/verification.md)
 
 ## Verification
 
 ```sh
+bun run check
 bun run typecheck
-cd packages/core && bun run test
+bun run test
+effect-skill-scan /Users/yansir/code/52/agentOS --strict --json --profile
 git diff --check
 ```
