@@ -3,6 +3,8 @@
   "private": true,
   "workspaces": [
     "packages/*",
+    "packages/carriers/*",
+    "packages/providers/*",
     "tooling/*"
   ],
   "type": "module",

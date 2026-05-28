@@ -11,15 +11,15 @@ import {
 import type { RefResolver } from "@agent-os/kernel/ref-resolver";
 
 import type {
-  CloudflareResourceBindRequest,
-  CloudflareResourceCarrier,
-  CloudflareResourceDestroyRequest,
-  CloudflareResourceFailure,
-  CloudflareResourceMutationRequest,
-  CloudflareResourceProvisionRequest,
-} from "./carrier";
-import type { CloudflareResourceLifecycleStep } from "./events";
-import { settleCloudflareResourceRejected } from "./settlement";
+  ResourceBindRequest,
+  ResourceCarrier,
+  ResourceDestroyRequest,
+  ResourceFailure,
+  ResourceMutationRequest,
+  ResourceProvisionRequest,
+} from "@agent-os/resource-carrier";
+import type { ResourceLifecycleStep } from "@agent-os/resource-carrier";
+import { settleResourceRejected } from "@agent-os/resource-carrier";
 
 export type CloudflareResourceKind = "d1" | "kv_namespace" | "r2_bucket" | "queue" | "workflow";
 
@@ -121,7 +121,7 @@ export interface CloudflareResourceSpec<Material, MutationInput> {
     input: MutationInput,
   ) => CloudflareApiRequest;
   readonly validateResponse?: (
-    step: CloudflareResourceLifecycleStep,
+    step: ResourceLifecycleStep,
     body: unknown,
   ) => string | null;
 }
@@ -154,17 +154,17 @@ const apiUrl = <MutationInput>(
 const providerFailure = (
   claim: PreClaim,
   resourceKind: CloudflareResourceKind,
-  step: CloudflareResourceLifecycleStep,
-  code: CloudflareResourceFailure["code"],
+  step: ResourceLifecycleStep,
+  code: ResourceFailure["code"],
   reason: string,
-): CloudflareResourceFailure => {
+): ResourceFailure => {
   const proofRef = failureProofRef(resourceKind, step, claim);
   return {
     code,
     step,
     reason,
     proofRef,
-    claim: settleCloudflareResourceRejected(claim, {
+    claim: settleResourceRejected(claim, {
       code,
       reason,
       proofRef,
@@ -172,7 +172,7 @@ const providerFailure = (
   };
 };
 
-const failedCodeFor = (step: CloudflareResourceLifecycleStep): CloudflareResourceFailure["code"] =>
+const failedCodeFor = (step: ResourceLifecycleStep): ResourceFailure["code"] =>
   step === "provision"
     ? "ProvisionFailed"
     : step === "bind"
@@ -184,30 +184,30 @@ const failedCodeFor = (step: CloudflareResourceLifecycleStep): CloudflareResourc
 const materialUnavailable = (
   claim: PreClaim,
   resourceKind: CloudflareResourceKind,
-  step: CloudflareResourceLifecycleStep,
+  step: ResourceLifecycleStep,
   reason: string,
-): CloudflareResourceFailure =>
+): ResourceFailure =>
   providerFailure(claim, resourceKind, step, "MaterialUnavailable", reason);
 
 const unsupportedResource = (
   claim: PreClaim,
   resourceKind: CloudflareResourceKind,
-  step: CloudflareResourceLifecycleStep,
+  step: ResourceLifecycleStep,
   reason: string,
-): CloudflareResourceFailure =>
+): ResourceFailure =>
   providerFailure(claim, resourceKind, step, "UnsupportedResource", reason);
 
 const providerRejected = (
   claim: PreClaim,
   resourceKind: CloudflareResourceKind,
-  step: CloudflareResourceLifecycleStep,
+  step: ResourceLifecycleStep,
   reason: string,
-): CloudflareResourceFailure =>
+): ResourceFailure =>
   providerFailure(claim, resourceKind, step, "ProviderFailure", reason);
 
 const proofRef = (
   resourceKind: CloudflareResourceKind,
-  step: CloudflareResourceLifecycleStep,
+  step: ResourceLifecycleStep,
   claim: PreClaim,
 ): string => `proof://cloudflare/${resourceKind}/${step}/${proofToken(claim.operationRef)}`;
 
@@ -221,7 +221,7 @@ const proofToken = (value: string): string => {
 
 const failureProofRef = (
   resourceKind: CloudflareResourceKind,
-  step: CloudflareResourceLifecycleStep,
+  step: ResourceLifecycleStep,
   claim: PreClaim,
 ): string => `${proofRef(resourceKind, step, claim)}/rejected`;
 
@@ -232,9 +232,9 @@ const requireCloudflareCredential = <Material, MutationInput>(
   options: CloudflareResourceCarrierOptions<MutationInput>,
   spec: CloudflareResourceSpec<Material, MutationInput>,
   claim: PreClaim,
-  step: CloudflareResourceLifecycleStep,
+  step: ResourceLifecycleStep,
   credentialRef: CredentialMaterialRef,
-): Effect.Effect<string, CloudflareResourceFailure> =>
+): Effect.Effect<string, ResourceFailure> =>
   Effect.gen(function* () {
     if (!isCloudflareCredentialRef(credentialRef)) {
       return yield* Effect.fail(
@@ -273,9 +273,9 @@ const requireCloudflareAccount = <Material, MutationInput>(
   options: CloudflareResourceCarrierOptions<MutationInput>,
   spec: CloudflareResourceSpec<Material, MutationInput>,
   claim: PreClaim,
-  step: CloudflareResourceLifecycleStep,
+  step: ResourceLifecycleStep,
   accountRef: ExternalResourceMaterialRef,
-): Effect.Effect<CloudflareAccountMaterial, CloudflareResourceFailure> =>
+): Effect.Effect<CloudflareAccountMaterial, ResourceFailure> =>
   Effect.gen(function* () {
     if (accountRef.provider !== "cloudflare" || accountRef.resourceKind !== "account") {
       return yield* Effect.fail(
@@ -319,9 +319,9 @@ const requireCloudflareAccount = <Material, MutationInput>(
 const requireResourceRef = <Material, MutationInput>(
   spec: CloudflareResourceSpec<Material, MutationInput>,
   claim: PreClaim,
-  step: CloudflareResourceLifecycleStep,
+  step: ResourceLifecycleStep,
   resourceRef: MaterialRef,
-): Effect.Effect<ExternalResourceMaterialRef, CloudflareResourceFailure> => {
+): Effect.Effect<ExternalResourceMaterialRef, ResourceFailure> => {
   if (
     resourceRef.kind !== "external_resource" ||
     resourceRef.provider !== "cloudflare" ||
@@ -342,9 +342,9 @@ const requireResourceRef = <Material, MutationInput>(
 const requireBindingRef = <Material, MutationInput>(
   spec: CloudflareResourceSpec<Material, MutationInput>,
   claim: PreClaim,
-  step: CloudflareResourceLifecycleStep,
+  step: ResourceLifecycleStep,
   bindingRef: BindingMaterialRef,
-): Effect.Effect<BindingMaterialRef, CloudflareResourceFailure> => {
+): Effect.Effect<BindingMaterialRef, ResourceFailure> => {
   if (bindingRef.provider !== "cloudflare" || bindingRef.bindingKind !== spec.bindingKind) {
     return Effect.fail(
       unsupportedResource(
@@ -362,9 +362,9 @@ const requireResourceMaterial = <Material, MutationInput>(
   options: CloudflareResourceCarrierOptions<MutationInput>,
   spec: CloudflareResourceSpec<Material, MutationInput>,
   claim: PreClaim,
-  step: CloudflareResourceLifecycleStep,
+  step: ResourceLifecycleStep,
   resourceRef: ExternalResourceMaterialRef,
-): Effect.Effect<Material, CloudflareResourceFailure> =>
+): Effect.Effect<Material, ResourceFailure> =>
   Effect.gen(function* () {
     const material = yield* Effect.try({
       try: () => options.resolver.material(resourceRef),
@@ -394,9 +394,9 @@ const requireBindingMaterial = <Material, MutationInput>(
   options: CloudflareResourceCarrierOptions<MutationInput>,
   spec: CloudflareResourceSpec<Material, MutationInput>,
   claim: PreClaim,
-  step: CloudflareResourceLifecycleStep,
+  step: ResourceLifecycleStep,
   bindingRef: BindingMaterialRef,
-): Effect.Effect<CloudflareBindingMaterial, CloudflareResourceFailure> =>
+): Effect.Effect<CloudflareBindingMaterial, ResourceFailure> =>
   Effect.gen(function* () {
     const material = yield* Effect.try({
       try: () => options.resolver.material(bindingRef),
@@ -436,10 +436,10 @@ const cloudflareJson = <Material, MutationInput>(
   options: CloudflareResourceCarrierOptions<MutationInput>,
   spec: CloudflareResourceSpec<Material, MutationInput>,
   claim: PreClaim,
-  step: CloudflareResourceLifecycleStep,
+  step: ResourceLifecycleStep,
   token: string,
   request: CloudflareApiRequest,
-): Effect.Effect<unknown, CloudflareResourceFailure> =>
+): Effect.Effect<unknown, ResourceFailure> =>
   Effect.gen(function* () {
     const headers: Record<string, string> = {
       Authorization: `Bearer ${token}`,
@@ -509,7 +509,7 @@ const recordProvisionedMaterial = <Material, MutationInput>(
   claim: PreClaim,
   resourceRef: ExternalResourceMaterialRef,
   material: Material,
-): Effect.Effect<void, CloudflareResourceFailure> => {
+): Effect.Effect<void, ResourceFailure> => {
   if (options.recordMaterial === undefined) return Effect.void;
   return Effect.asVoid(
     Effect.tryPromise({
@@ -528,9 +528,9 @@ const recordProvisionedMaterial = <Material, MutationInput>(
 const validateProviderResponse = <Material, MutationInput>(
   spec: CloudflareResourceSpec<Material, MutationInput>,
   claim: PreClaim,
-  step: CloudflareResourceLifecycleStep,
+  step: ResourceLifecycleStep,
   body: unknown,
-): Effect.Effect<void, CloudflareResourceFailure> => {
+): Effect.Effect<void, ResourceFailure> => {
   const reason = spec.validateResponse?.(step, body) ?? null;
   return reason === null
     ? Effect.void
@@ -547,8 +547,8 @@ const defaultResourceRef = (resourceKind: CloudflareResourceKind, resourceName: 
 const requireProvisionResourceRef = <Material, MutationInput>(
   spec: CloudflareResourceSpec<Material, MutationInput>,
   claim: PreClaim,
-  request: CloudflareResourceProvisionRequest,
-): Effect.Effect<ExternalResourceMaterialRef, CloudflareResourceFailure> =>
+  request: ResourceProvisionRequest,
+): Effect.Effect<ExternalResourceMaterialRef, ResourceFailure> =>
   requireResourceRef(
     spec,
     claim,
@@ -562,7 +562,7 @@ const requireMutationInput = <Material, MutationInput>(
   claim: PreClaim,
   mutationKind: string,
   inputRef: string,
-): Effect.Effect<MutationInput, CloudflareResourceFailure> =>
+): Effect.Effect<MutationInput, ResourceFailure> =>
   Effect.gen(function* () {
     if (inputRef.length === 0) {
       return yield* Effect.fail(
@@ -601,7 +601,7 @@ const requireMutationInput = <Material, MutationInput>(
 const livedPayloadClaim = (
   claim: PreClaim,
   resourceKind: CloudflareResourceKind,
-  step: CloudflareResourceLifecycleStep,
+  step: ResourceLifecycleStep,
   carrierRef: string,
 ) =>
   settleLivedClaim(claim, {
@@ -613,11 +613,11 @@ const livedPayloadClaim = (
 export const makeCloudflareResourceCarrier = <Material, MutationInput>(
   spec: CloudflareResourceSpec<Material, MutationInput>,
   options: CloudflareResourceCarrierOptions<MutationInput>,
-): CloudflareResourceCarrier => {
+): ResourceCarrier => {
   const carrierRef = options.carrierRef ?? spec.defaultCarrierRef;
 
   return {
-    provision: (request: CloudflareResourceProvisionRequest) =>
+    provision: (request: ResourceProvisionRequest) =>
       Effect.gen(function* () {
         if (request.resourceKind !== spec.resourceKind) {
           return yield* Effect.fail(
@@ -701,7 +701,7 @@ export const makeCloudflareResourceCarrier = <Material, MutationInput>(
         };
       }),
 
-    bind: (request: CloudflareResourceBindRequest) =>
+    bind: (request: ResourceBindRequest) =>
       Effect.gen(function* () {
         const resourceRef = yield* requireResourceRef(
           spec,
@@ -756,7 +756,7 @@ export const makeCloudflareResourceCarrier = <Material, MutationInput>(
         };
       }),
 
-    mutate: (request: CloudflareResourceMutationRequest) =>
+    mutate: (request: ResourceMutationRequest) =>
       Effect.gen(function* () {
         if (!spec.supportedMutationKinds.has(request.mutationKind)) {
           return yield* Effect.fail(
@@ -830,7 +830,7 @@ export const makeCloudflareResourceCarrier = <Material, MutationInput>(
         };
       }),
 
-    destroy: (request: CloudflareResourceDestroyRequest) =>
+    destroy: (request: ResourceDestroyRequest) =>
       Effect.gen(function* () {
         const resourceRef = yield* requireResourceRef(
           spec,

@@ -53,7 +53,8 @@ state to make a product flow appear complete.
 | `@agent-os/kernel`                       | pure claim, boundary, material, tool, context, and type algebra                  |
 | `@agent-os/runtime`                      | Effect Tag runtime programs, admission projections, and runtime-facing API types |
 | `@agent-os/backend-cloudflare-do`        | Cloudflare Durable Object backend for agentOS runtime                            |
-| `@agent-os/cloudflare-resource`          | Cloudflare D1/KV/R2/Queue/Workflow resource carrier                              |
+| `@agent-os/resource-carrier`             | provider-neutral resource lifecycle facts, claims, settlement, and projection    |
+| `@agent-os/resource-cloudflare`          | Cloudflare D1/KV/R2/Queue/Workflow resource materializer                         |
 | `@agent-os/workspace-session`            | provider-neutral workspace/session lifecycle facts                               |
 | `@agent-os/workspace-session-cloudflare` | Cloudflare Sandbox-compatible workspace backend                                  |
 | `@agent-os/tenant-material`              | encrypted tenant credential records to `RefResolver.material`                    |

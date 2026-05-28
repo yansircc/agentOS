@@ -11,11 +11,11 @@ import {
 import type { RefResolver } from "@agent-os/kernel/ref-resolver";
 
 import {
-  CLOUDFLARE_RESOURCE_AUTHORITIES,
   makeCloudflareD1ResourceCarrier,
   type CloudflareD1Fetch,
   type CloudflareD1FetchInit,
 } from "../src";
+import { RESOURCE_AUTHORITIES } from "@agent-os/resource-carrier";
 
 const expectFailure = <A>(exit: Exit.Exit<unknown, A>): A => {
   expect(Exit.isFailure(exit)).toBe(true);
@@ -56,12 +56,12 @@ const d1BindingRef = bindingMaterialRef({
 const claimFor = (
   step: "provision" | "bind" | "mutate" | "destroy",
   authorityRef = step === "provision"
-    ? CLOUDFLARE_RESOURCE_AUTHORITIES.PROVISION
+    ? RESOURCE_AUTHORITIES.PROVISION
     : step === "bind"
-      ? CLOUDFLARE_RESOURCE_AUTHORITIES.BIND
+      ? RESOURCE_AUTHORITIES.BIND
       : step === "mutate"
-        ? CLOUDFLARE_RESOURCE_AUTHORITIES.MUTATE
-        : CLOUDFLARE_RESOURCE_AUTHORITIES.DESTROY,
+        ? RESOURCE_AUTHORITIES.MUTATE
+        : RESOURCE_AUTHORITIES.DESTROY,
 ) =>
   makePreClaim({
     operationRef: `cf-d1:subject:${step}`,
@@ -72,7 +72,7 @@ const claimFor = (
     },
     authorityRef,
     originRef: {
-      originId: "@agent-os/cloudflare-resource",
+      originId: "@agent-os/resource-carrier",
       originKind: "extension_package",
     },
   });
@@ -101,7 +101,7 @@ const jsonResponse = (status: number, body: unknown) => ({
   json: async () => body,
 });
 
-describe("@agent-os/cloudflare-resource D1 live carrier", () => {
+describe("@agent-os/resource-cloudflare D1 carrier", () => {
   it.effect("provisions, binds, mutates, and destroys D1 with symbolic ledger payloads", () =>
     Effect.gen(function* () {
       const requests: Array<{ readonly url: string; readonly init: CloudflareD1FetchInit }> = [];

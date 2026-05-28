@@ -9,13 +9,12 @@ import {
   materialRefKey,
 } from "@agent-os/kernel/material-ref";
 import {
-  CLOUDFLARE_RESOURCE_AUTHORITIES,
   makeCloudflareD1ResourceCarrier,
   makeCloudflareKVNamespaceResourceCarrier,
   makeCloudflareQueueResourceCarrier,
   makeCloudflareR2BucketResourceCarrier,
-  projectCloudflareResource,
 } from "../src/index.ts";
+import { RESOURCE_AUTHORITIES, projectResource } from "@agent-os/resource-carrier";
 
 const requiredEnv = (name) => {
   const value = process.env[name];
@@ -131,14 +130,14 @@ const claimFor = (resourceKind, resourceName, step) =>
     },
     authorityRef:
       step === "provision"
-        ? CLOUDFLARE_RESOURCE_AUTHORITIES.PROVISION
+        ? RESOURCE_AUTHORITIES.PROVISION
         : step === "bind"
-          ? CLOUDFLARE_RESOURCE_AUTHORITIES.BIND
+          ? RESOURCE_AUTHORITIES.BIND
           : step === "mutate"
-            ? CLOUDFLARE_RESOURCE_AUTHORITIES.MUTATE
-            : CLOUDFLARE_RESOURCE_AUTHORITIES.DESTROY,
+            ? RESOURCE_AUTHORITIES.MUTATE
+            : RESOURCE_AUTHORITIES.DESTROY,
     originRef: {
-      originId: "@agent-os/cloudflare-resource.core-live-smoke",
+      originId: "@agent-os/resource-cloudflare.core-live-smoke",
       originKind: "test",
     },
   });
@@ -210,7 +209,7 @@ const runResource = async (testCase) => {
       }),
     );
     provisionedRef = provisioned.resourceRef;
-    event("cf_resource.resource.provisioned", provisioned);
+    event("resource.resource.provisioned", provisioned);
 
     const bound = await Effect.runPromise(
       carrier.bind({
@@ -222,7 +221,7 @@ const runResource = async (testCase) => {
         bindingRef,
       }),
     );
-    event("cf_resource.resource.bound", bound);
+    event("resource.resource.bound", bound);
 
     const mutated = await Effect.runPromise(
       carrier.mutate({
@@ -237,7 +236,7 @@ const runResource = async (testCase) => {
         fingerprint: `sha256:${testCase.resourceKind}:${testRunId}`,
       }),
     );
-    event("cf_resource.mutation.recorded", mutated);
+    event("resource.mutation.recorded", mutated);
     cleanupRequired = testCase.cleanupMutation !== undefined;
 
     if (testCase.cleanupMutation !== undefined) {
@@ -254,7 +253,7 @@ const runResource = async (testCase) => {
           fingerprint: `sha256:${testCase.resourceKind}:${testRunId}:cleanup`,
         }),
       );
-      event("cf_resource.mutation.recorded", cleaned);
+      event("resource.mutation.recorded", cleaned);
       cleanupRequired = false;
     }
 
@@ -269,9 +268,9 @@ const runResource = async (testCase) => {
       }),
     );
     destroyed = true;
-    event("cf_resource.resource.destroyed", destroyedPayload);
+    event("resource.resource.destroyed", destroyedPayload);
 
-    const projection = projectCloudflareResource(events, testCase.resourceName);
+    const projection = projectResource(events, testCase.resourceName);
     if (projection.status !== "destroyed") {
       throw new Error(`expected destroyed projection, got ${projection.status}`);
     }

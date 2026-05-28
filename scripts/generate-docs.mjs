@@ -64,6 +64,39 @@ const packages = surface.packages;
 const packagesByPath = new Map(packages.map((pkg) => [pkg.path, pkg]));
 const failures = [];
 
+const workspacePackagePaths = () => {
+  const rootPackage = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
+  const workspaces = Array.isArray(rootPackage.workspaces)
+    ? rootPackage.workspaces
+    : Array.isArray(rootPackage.workspaces?.packages)
+      ? rootPackage.workspaces.packages
+      : [];
+  const paths = new Set();
+
+  for (const workspace of workspaces) {
+    if (typeof workspace !== "string") continue;
+    if (workspace.endsWith("/*")) {
+      const base = workspace.slice(0, -2);
+      const baseDir = path.join(root, base);
+      if (!fs.existsSync(baseDir)) continue;
+      for (const entry of fs.readdirSync(baseDir, { withFileTypes: true })) {
+        if (!entry.isDirectory()) continue;
+        const packagePath = `${base}/${entry.name}`;
+        if (fs.existsSync(path.join(root, packagePath, "package.json"))) {
+          paths.add(packagePath);
+        }
+      }
+      continue;
+    }
+
+    if (fs.existsSync(path.join(root, workspace, "package.json"))) {
+      paths.add(workspace);
+    }
+  }
+
+  return [...paths].sort((left, right) => left.localeCompare(right));
+};
+
 for (const pkg of packages) {
   const packageJsonPath = path.join(root, pkg.path, "package.json");
   if (!fs.existsSync(packageJsonPath)) {
@@ -76,10 +109,8 @@ for (const pkg of packages) {
   }
 }
 
-for (const file of fs.readdirSync(path.join(root, "packages"))) {
-  const pkgPath = `packages/${file}`;
-  const packageJsonPath = path.join(root, pkgPath, "package.json");
-  if (fs.existsSync(packageJsonPath) && !packagesByPath.has(pkgPath)) {
+for (const pkgPath of workspacePackagePaths()) {
+  if (!packagesByPath.has(pkgPath)) {
     failures.push(`${pkgPath} is missing from docs/surface.json`);
   }
 }
