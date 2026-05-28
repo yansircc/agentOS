@@ -469,7 +469,7 @@ describe("tool registry generator", () => {
             rejectionRef: {
               rejectionId: "tool:tool-registry-admitter-throw:1:0:call-1",
               rejectionKind: "provider_rejected",
-              reason: "admitter_error: Error: policy service down",
+              reason: "admitter_error: Error",
             },
           }),
         }),
@@ -580,7 +580,7 @@ describe("tool registry generator", () => {
             rejectionRef: {
               rejectionId: "tool:tool-registry-rejected:1:0:call-1",
               rejectionKind: "provider_rejected",
-              reason: "Error: upstream down",
+              reason: "Error",
             },
           }),
         }),

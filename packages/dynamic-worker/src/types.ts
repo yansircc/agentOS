@@ -77,7 +77,6 @@ export class DynamicWorkerFailure extends Data.TaggedError("agent_os.dynamic_wor
   readonly code: Exclude<DynamicWorkerFailureCode, "PolicyDenied">;
   readonly reason: string;
   readonly status?: number;
-  readonly body?: string;
   readonly workerId?: string;
   readonly claim: RejectedClaim;
 }> {}

@@ -51,7 +51,7 @@ export const failureToToolResult = (
   maxBodyBytes: number,
 ): DynamicWorkerToolResult => {
   const isPolicy = failure._tag === "agent_os.dynamic_worker_policy_denied";
-  const body = truncateUtf8(isPolicy ? "" : (failure.body ?? ""), maxBodyBytes);
+  const body = truncateUtf8("", maxBodyBytes);
   return {
     ok: false,
     bodyHead: body.head,

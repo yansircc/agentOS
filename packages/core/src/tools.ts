@@ -258,7 +258,10 @@ export const parseToolCall = (
       catch: (cause) =>
         new ToolError({
           toolName: call.function.name,
-          cause: { reason: "invalid_args", parseError: String(cause) },
+          cause: {
+            reason: "invalid_args",
+            parseError: cause instanceof Error ? cause.name : typeof cause,
+          },
         }),
     });
     return { tool, args };

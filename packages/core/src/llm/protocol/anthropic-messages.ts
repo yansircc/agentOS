@@ -35,9 +35,8 @@ import type {
 import {
   ADAPTER_VERSION,
   CHAT_COMPLETIONS_FORCED_TOOL_NAME,
-  parseHttpStatus,
+  providerFailureSignal,
   type Outcome,
-  unwrapErrorMessage,
 } from "./shared";
 import { validateAgainstSchema } from "../../admission/json-schema";
 
@@ -281,38 +280,39 @@ const decodeAnthropicStructured = (
 };
 
 const classifyAnthropicError = (error: unknown): Outcome => {
-  const msg = unwrapErrorMessage(error);
-  const status = parseHttpStatus(msg);
+  const signal = providerFailureSignal(error);
+  const msg = signal.message;
+  const status = signal.status;
   const lower = msg.toLowerCase();
 
-  if (status === 401 || status === 403) {
+  if (signal.flags.has("auth") || status === 401 || status === 403) {
     return { class: "AuthError", status: status ?? 401 };
   }
-  if (status === 429) {
+  if (signal.flags.has("rate_limited") || status === 429) {
     return { class: "RateLimited" };
   }
   if (status === 400) {
     // Anthropic invalid_request_error with schema-related text →
     // SchemaUnsupported (the wire told us our schema/tool shape is wrong).
-    if (lower.includes("schema") || lower.includes("input_schema") || lower.includes("tool")) {
-      return { class: "SchemaUnsupported", reason: msg.slice(0, 200) };
+    if (signal.flags.has("schema") || lower.includes("schema") || lower.includes("tool")) {
+      return { class: "SchemaUnsupported", reason: signal.publicMessage.slice(0, 200) };
     }
-    return { class: "ProviderRejected", status: 400, body: msg.slice(0, 500) };
+    return { class: "ProviderRejected", status: 400, body: signal.publicMessage.slice(0, 500) };
   }
-  if (status === 529) {
+  if (signal.flags.has("overloaded") || status === 529) {
     // Anthropic-specific "overloaded".
-    return { class: "TransientError", cause: msg };
+    return { class: "TransientError", cause: signal.publicMessage };
   }
   if (status !== undefined && status >= 500) {
-    return { class: "TransientError", cause: msg };
+    return { class: "TransientError", cause: signal.publicMessage };
   }
   if (lower.includes("timeout") || lower.includes("network")) {
-    return { class: "TransientError", cause: msg };
+    return { class: "TransientError", cause: signal.publicMessage };
   }
   return {
     class: "ProviderRejected",
     status: status ?? 0,
-    body: msg.slice(0, 500),
+    body: signal.publicMessage.slice(0, 500),
   };
 };
 

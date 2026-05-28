@@ -39,6 +39,90 @@ const renderUnknown = (value: unknown): string => {
   return Object.prototype.toString.call(value);
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+interface ProviderFailureSignal {
+  readonly status?: number;
+  readonly flags: ReadonlySet<string>;
+  readonly message: string;
+  readonly publicMessage: string;
+}
+
+const failureFlagsFromText = (message: string, status: number | undefined): ReadonlySet<string> => {
+  const flags = new Set<string>();
+  const lower = message.toLowerCase();
+  if (
+    status === 401 ||
+    status === 403 ||
+    lower.includes("unauthor") ||
+    lower.includes("api_key_invalid") ||
+    lower.includes("permission_denied") ||
+    lower.includes("api key")
+  ) {
+    flags.add("auth");
+  }
+  if (status === 429 || lower.includes("rate") || lower.includes("resource_exhausted")) {
+    flags.add("rate_limited");
+  }
+  if (
+    lower.includes("schema") ||
+    lower.includes("input_schema") ||
+    lower.includes("parameter") ||
+    lower.includes("function") ||
+    lower.includes("tool")
+  ) {
+    flags.add("schema");
+  }
+  if (status === 529 || lower.includes("overloaded")) flags.add("overloaded");
+  if (status === 503 || lower.includes("unavailable")) flags.add("unavailable");
+  if (lower.includes("timeout")) flags.add("timeout");
+  if (lower.includes("network")) flags.add("network");
+  return flags;
+};
+
+const publicFailureMessage = (
+  status: number | undefined,
+  flags: ReadonlySet<string>,
+): string =>
+  [
+    "provider_failure",
+    status === undefined ? undefined : `HTTP ${status}`,
+    ...Array.from(flags).sort(),
+  ]
+    .filter((token): token is string => token !== undefined)
+    .join(" ");
+
+const providerSignalFrom = (value: unknown): ProviderFailureSignal | null => {
+  if (!isRecord(value) || value._tag !== "agent_os.provider_http_failure") return null;
+  const status = typeof value.status === "number" ? value.status : undefined;
+  const flags = Array.isArray(value.flags)
+    ? new Set(value.flags.filter((flag): flag is string => typeof flag === "string"))
+    : new Set<string>();
+  const tokens = [
+    "provider_http_failure",
+    status === undefined ? undefined : `HTTP ${status}`,
+    ...Array.from(flags),
+    typeof value.code === "string" ? value.code : undefined,
+    typeof value.type === "string" ? value.type : undefined,
+  ].filter((token): token is string => token !== undefined);
+  const message = tokens.join(" ");
+  return { status, flags, message, publicMessage: message };
+};
+
+export const providerFailureSignal = (error: unknown): ProviderFailureSignal => {
+  if (isRecord(error) && "cause" in error) {
+    const innerSignal = providerSignalFrom(error.cause);
+    if (innerSignal !== null) return innerSignal;
+  }
+  const directSignal = providerSignalFrom(error);
+  if (directSignal !== null) return directSignal;
+  const message = unwrapErrorMessage(error);
+  const status = parseHttpStatus(message);
+  const flags = failureFlagsFromText(message, status);
+  return { status, flags, message, publicMessage: publicFailureMessage(status, flags) };
+};
+
 /** Unwrap a tagged-error / wrapped error one level to surface the real
  *  upstream Error message. `dispatchProvider` always wraps fetch failures
  *  as `UpstreamFailure{cause: Error("HTTP N ...")}`; without this unwrap

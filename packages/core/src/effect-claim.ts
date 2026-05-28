@@ -168,10 +168,16 @@ export const invalidAdmitterRejectionRef = (claim: PreClaim): RejectionRef => ({
   reason: INVALID_ADMITTER_REJECTION_REF_REASON,
 });
 
+const publicErrorName = (cause: unknown): string => {
+  if (isRecord(cause) && typeof cause._tag === "string") return cause._tag;
+  if (cause instanceof Error) return cause.name;
+  return typeof cause;
+};
+
 export const admitterErrorRejectionRef = (claim: PreClaim, cause: unknown): RejectionRef => ({
   rejectionId: claim.operationRef,
   rejectionKind: "provider_rejected",
-  reason: `${ADMITTER_ERROR_REASON_PREFIX}${String(cause)}`,
+  reason: `${ADMITTER_ERROR_REASON_PREFIX}${publicErrorName(cause)}`,
 });
 
 export const isScopeRef = (value: unknown): value is ScopeRef => {
