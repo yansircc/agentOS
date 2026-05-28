@@ -14,8 +14,7 @@ import { RESOURCE_EVENT_VOCABULARY } from "./extension";
 
 export const RESOURCE_EVENTS = RESOURCE_EVENT_VOCABULARY;
 
-export type ResourceEventKind =
-  (typeof RESOURCE_EVENTS)[keyof typeof RESOURCE_EVENTS];
+export type ResourceEventKind = (typeof RESOURCE_EVENTS)[keyof typeof RESOURCE_EVENTS];
 
 export type ResourceLifecycleStep = "provision" | "bind" | "mutate" | "destroy";
 
@@ -116,16 +115,12 @@ const lifecycleStepFrom = (value: unknown): ResourceLifecycleStep | undefined =>
     ? value
     : undefined;
 
-const destroyReasonFrom = (
-  value: unknown,
-): ResourceDestroyedPayload["reason"] | undefined =>
+const destroyReasonFrom = (value: unknown): ResourceDestroyedPayload["reason"] | undefined =>
   value === "replaced" || value === "expired" || value === "aborted" || value === "manual"
     ? value
     : undefined;
 
-const mutationPayloadFrom = (
-  event: ResourceLedgerEvent,
-): ResourceMutationFact | undefined => {
+const mutationPayloadFrom = (event: ResourceLedgerEvent): ResourceMutationFact | undefined => {
   if (!isRecord(event.payload)) return undefined;
   const subjectRef = stringField(event.payload, "subjectRef");
   const resourceRef = materialRefFrom(event.payload.resourceRef);
@@ -157,9 +152,7 @@ const mutationPayloadFrom = (
   };
 };
 
-const failedPayloadFrom = (
-  payload: Record<string, unknown>,
-): ResourceFailedPayload | undefined => {
+const failedPayloadFrom = (payload: Record<string, unknown>): ResourceFailedPayload | undefined => {
   const subjectRef = stringField(payload, "subjectRef");
   const step = lifecycleStepFrom(payload.step);
   const reason = stringField(payload, "reason");

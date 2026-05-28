@@ -2,23 +2,22 @@
 
 ## Purpose
 
-Optional image generation algebra, adapters, idempotency, settlement, and
-projection helpers.
+Optional image event namespace, idempotency, settlement, and projection helpers.
 
 ## Invariant
 
-Image generation effects settle through symbolic claim/proof state. Provider
-credentials, raw provider responses, and generated binary assets stay outside
-ledger-visible payloads unless reduced to explicit refs.
+Image owns only provider-neutral image.\* vocabulary and reader algebra. Provider
+credentials, raw provider responses, generated binary assets, and transport
+adapters stay outside this carrier unless reduced to explicit refs.
 
 ## Minimal Usage
 
-Use the package when an app needs image-generation effect settlement without
-putting provider vocabulary into core.
+Use the package when an app needs to reserve image.\* events or derive image job
+state from ledger events without putting provider vocabulary into core.
 
 ## Verification
 
 ```sh
-cd packages/image
+cd packages/carriers/image
 vp test run
 ```

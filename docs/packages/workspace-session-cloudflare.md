@@ -24,7 +24,7 @@ import { makeCloudflareWorkspaceSessionLiveProvider } from "@agent-os/workspace-
 ## Verification
 
 ```sh
-cd packages/workspace-session-cloudflare
+cd packages/providers/workspace-session-cloudflare
 vp test run
 ```
 

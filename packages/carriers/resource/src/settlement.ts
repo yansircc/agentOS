@@ -65,5 +65,4 @@ export const commitResourceDestroyed = (
 export const commitResourceFailed = (
   cap: ExtensionCapability,
   payload: ResourceFailedPayload,
-): Promise<{ readonly id: number }> =>
-  cap.commit({ event: RESOURCE_EVENTS.FAILED, data: payload });
+): Promise<{ readonly id: number }> => cap.commit({ event: RESOURCE_EVENTS.FAILED, data: payload });

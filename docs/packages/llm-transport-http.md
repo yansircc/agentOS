@@ -24,6 +24,6 @@ import { streamLlmTurn } from "@agent-os/llm-transport-http";
 ## Verification
 
 ```sh
-cd packages/llm-transport-http
+cd packages/providers/llm-transport-http
 vp test run
 ```

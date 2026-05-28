@@ -18,6 +18,6 @@ provider-neutral sandbox algebra.
 ## Verification
 
 ```sh
-cd packages/sandbox-cloudflare
+cd packages/providers/sandbox-cloudflare
 vp test run
 ```

@@ -18,6 +18,6 @@ effect settles.
 ## Verification
 
 ```sh
-cd packages/verification
+cd packages/carriers/verification
 vp test run
 ```

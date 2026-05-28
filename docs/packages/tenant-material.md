@@ -20,6 +20,6 @@ ambient tenant/provider fallback.
 ## Verification
 
 ```sh
-cd packages/tenant-material
+cd packages/carriers/tenant-material
 vp test run
 ```

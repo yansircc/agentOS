@@ -17,7 +17,7 @@ import { ABORT } from "./abort";
 // ============================================================
 //          ABORT TAXONOMY (re-exported from ./abort)
 //          SSoT lives in ./abort.ts so ops-api / ops-react can
-//          import the vocabulary without pulling DurableObject.
+//          import the vocabulary without pulling backend code.
 // ============================================================
 
 export { ABORT, type AbortKind, reasonOf } from "./abort";

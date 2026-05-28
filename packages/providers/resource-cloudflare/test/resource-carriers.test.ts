@@ -197,10 +197,10 @@ const claimFor = (resourceKind: ResourceCase["resourceKind"], step: string) =>
           : step === "destroy"
             ? RESOURCE_AUTHORITIES.DESTROY
             : RESOURCE_AUTHORITIES.MUTATE,
-      originRef: {
-        originId: "@agent-os/resource-carrier",
-        originKind: "extension_package",
-      },
+    originRef: {
+      originId: "@agent-os/resource-carrier",
+      originKind: "extension_package",
+    },
   });
 
 const refsFor = (testCase: ResourceCase) => ({

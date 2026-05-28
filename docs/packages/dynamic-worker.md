@@ -20,6 +20,6 @@ ports, long-running services, backups, or cleanup roots.
 ## Verification
 
 ```sh
-cd packages/dynamic-worker
+cd packages/providers/dynamic-worker
 vp test run
 ```

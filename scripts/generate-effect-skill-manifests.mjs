@@ -127,7 +127,8 @@ if (packageManifests === null) {
     writeJson(`${packagePath}/.effect-skill.json`, manifest);
   }
 
-  for (const packagePath of workspacePackagePaths()) {
+  for (const workspacePath of workspacePackagePaths()) {
+    const packagePath = String(workspacePath);
     const manifestFile = `${packagePath}/.effect-skill.json`;
     if (fs.existsSync(path.join(root, manifestFile)) && !expectedPackageFiles.has(manifestFile)) {
       failures.push(`${manifestFile} exists but is not declared in docs/effect-skill.json`);

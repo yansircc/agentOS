@@ -29,7 +29,7 @@ accidental exports; they are not stability or schema-freeze promises.
 | `@agent-os/sandbox`                      | optional algebra   | bounded stateless sandbox tool surface                                      |
 | `@agent-os/sandbox-cloudflare`           | optional backend   | Cloudflare Sandbox-compatible stateless sandbox adapter                     |
 | `@agent-os/dynamic-worker`               | optional backend   | bounded Worker-compatible code execution                                    |
-| `@agent-os/image`                        | optional algebra   | image generation claim/projection helpers                                   |
+| `@agent-os/image`                        | optional algebra   | provider-neutral image event namespace and reader algebra                   |
 | `@agent-os/ops-api`                      | tooling            | terminal ops API adapter, not substrate truth                               |
 | `@agent-os/ops-htmx`                     | tooling            | terminal ops UI adapter, not substrate truth                                |
 

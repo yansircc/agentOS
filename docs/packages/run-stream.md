@@ -25,6 +25,6 @@ failure.
 ## Verification
 
 ```sh
-cd packages/run-stream
+cd packages/composers/run-stream
 vp test run
 ```

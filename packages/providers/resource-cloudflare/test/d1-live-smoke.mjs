@@ -8,9 +8,7 @@ import {
   externalResourceMaterialRef,
   materialRefKey,
 } from "@agent-os/kernel/material-ref";
-import {
-  makeCloudflareD1ResourceCarrier,
-} from "../src/index.ts";
+import { makeCloudflareD1ResourceCarrier } from "../src/index.ts";
 import { RESOURCE_AUTHORITIES, projectResource } from "@agent-os/resource-carrier";
 
 const requiredEnv = (name) => {

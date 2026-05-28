@@ -18,6 +18,6 @@ execution in the carrier implementation or app-owned execution layer.
 ## Verification
 
 ```sh
-cd packages/git-carrier
+cd packages/carriers/git
 vp test run
 ```
