@@ -1,126 +1,16 @@
 {
   "root": {
-    "packages": [
-      {
-        "path": "packages/cloudflare-resource",
-        "shape": ["library"],
-        "dependencyOwner": "workspace-root",
-        "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-      },
-      {
-        "path": "packages/core",
-        "shape": ["library"],
-        "dependencyOwner": "package-local"
-      },
-      {
-        "path": "packages/decision-gate",
-        "shape": ["library"],
-        "dependencyOwner": "workspace-root",
-        "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-      },
-      {
-        "path": "packages/deploy",
-        "shape": ["library"],
-        "dependencyOwner": "workspace-root",
-        "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-      },
-      {
-        "path": "packages/dynamic-worker",
-        "shape": ["library"],
-        "dependencyOwner": "workspace-root",
-        "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-      },
-      {
-        "path": "packages/git-carrier",
-        "shape": ["library"],
-        "dependencyOwner": "workspace-root",
-        "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-      },
-      {
-        "path": "packages/image",
-        "shape": ["library"],
-        "dependencyOwner": "workspace-root",
-        "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-      },
-      {
-        "path": "packages/llm-transport-http",
-        "shape": ["library"],
-        "dependencyOwner": "workspace-root",
-        "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-      },
-      {
-        "path": "tooling/ops-api",
-        "shape": ["library"],
-        "dependencyOwner": "workspace-root",
-        "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-      },
-      {
-        "path": "tooling/ops-htmx",
-        "shape": ["library"],
-        "dependencyOwner": "workspace-root",
-        "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-      },
-      {
-        "path": "packages/run-stream",
-        "shape": ["library"],
-        "dependencyOwner": "workspace-root",
-        "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-      },
-      {
-        "path": "packages/sandbox",
-        "shape": ["library"],
-        "dependencyOwner": "workspace-root",
-        "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-      },
-      {
-        "path": "packages/sandbox-cloudflare",
-        "shape": ["library"],
-        "dependencyOwner": "workspace-root",
-        "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-      },
-      {
-        "path": "packages/skill-registry",
-        "shape": ["library"],
-        "dependencyOwner": "workspace-root",
-        "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-      },
-      {
-        "path": "packages/staging-artifact",
-        "shape": ["library"],
-        "dependencyOwner": "workspace-root",
-        "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-      },
-      {
-        "path": "packages/tenant-material",
-        "shape": ["library"],
-        "dependencyOwner": "workspace-root",
-        "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-      },
-      {
-        "path": "packages/turn-stream",
-        "shape": ["library"],
-        "dependencyOwner": "workspace-root",
-        "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-      },
-      {
-        "path": "packages/verification",
-        "shape": ["library"],
-        "dependencyOwner": "workspace-root",
-        "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-      },
-      {
-        "path": "packages/workspace-session",
-        "shape": ["library"],
-        "dependencyOwner": "workspace-root",
-        "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-      },
-      {
-        "path": "packages/workspace-session-cloudflare",
-        "shape": ["library"],
-        "dependencyOwner": "workspace-root",
-        "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+    "packageDefaults": {
+      "shape": ["library"],
+      "dependencyOwner": "workspace-root",
+      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+    },
+    "packageOverrides": {
+      "packages/core": {
+        "dependencyOwner": "package-local",
+        "dependencyOwnerReason": "core owns substrate dependency declarations in packages/core/package.json"
       }
-    ],
+    },
     "hostTooling": [
       {
         "path": ".parallel/**",
