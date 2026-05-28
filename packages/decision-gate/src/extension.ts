@@ -16,7 +16,7 @@ export const decisionGateBoundaryContract = defineBoundaryContract({
   authorityContracts: [],
   materialRequirements: [],
   claimPayloadKey: "claim",
-  terminalClaims: ["pre", "lived"],
+  terminalClaims: ["lived"],
   proof: {
     anchorKinds: ["ledger_event"],
     symbolicOnly: true,

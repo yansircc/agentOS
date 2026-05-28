@@ -5,7 +5,9 @@ import {
   type AuthorityContract,
   type MaterialRequirement,
 } from "./material-ref";
-import type { AnchorRef, ClaimRole, EffectClaim } from "./effect-claim";
+import type { AnchorRef, ClaimRole } from "./effect-claim";
+
+type TerminalClaimPhase = "lived" | "rejected";
 
 export interface BoundaryProofContract {
   readonly anchorKinds: ReadonlyArray<AnchorRef["anchorKind"]>;
@@ -33,7 +35,7 @@ export interface BoundaryContract<EventKind extends string = string> {
   readonly authorityContracts: ReadonlyArray<AuthorityContract>;
   readonly materialRequirements: ReadonlyArray<MaterialRequirement>;
   readonly claimPayloadKey: "claim";
-  readonly terminalClaims: ReadonlyArray<EffectClaim["phase"]>;
+  readonly terminalClaims: ReadonlyArray<TerminalClaimPhase>;
   readonly proof: BoundaryProofContract;
   readonly projection: BoundaryProjectionContract;
 }
@@ -47,6 +49,7 @@ export type BoundaryContractIssue =
   | "authority_contract_invalid"
   | "material_requirements_invalid"
   | "authority_material_outside_axis"
+  | "material_authority_unbound"
   | "claim_payload_key_invalid"
   | "terminal_claims_invalid"
   | "proof_invalid"
@@ -60,7 +63,7 @@ export type BoundaryContractValidation =
     };
 
 const CLAIM_ROLES = new Set<ClaimRole>(["generator", "admitter", "resolver", "reader"]);
-const CLAIM_PHASES = new Set<EffectClaim["phase"]>(["pre", "lived", "rejected"]);
+const TERMINAL_CLAIM_PHASES = new Set<TerminalClaimPhase>(["lived", "rejected"]);
 const ANCHOR_KINDS = new Set<AnchorRef["anchorKind"]>([
   "ledger_event",
   "carrier_proof",
@@ -130,6 +133,16 @@ const authorityMaterialsAreDeclared = (
   authorityContracts.every((contract) =>
     contract.requiredMaterials.every((required) =>
       materialRequirements.some((declared) => materialRequirementMatches(required, declared)),
+    ),
+  );
+
+const materialRequirementsAreBoundToAuthority = (
+  authorityContracts: ReadonlyArray<AuthorityContract>,
+  materialRequirements: ReadonlyArray<MaterialRequirement>,
+): boolean =>
+  materialRequirements.every((declared) =>
+    authorityContracts.some((contract) =>
+      contract.requiredMaterials.some((required) => materialRequirementMatches(required, declared)),
     ),
   );
 
@@ -210,11 +223,21 @@ export const validateBoundaryContract = (value: unknown): BoundaryContractValida
     issues.push("authority_material_outside_axis");
   }
 
+  if (
+    Array.isArray(value.authorityContracts) &&
+    value.authorityContracts.every(isAuthorityContract) &&
+    Array.isArray(value.materialRequirements) &&
+    value.materialRequirements.every(isMaterialRequirement) &&
+    !materialRequirementsAreBoundToAuthority(value.authorityContracts, value.materialRequirements)
+  ) {
+    issues.push("material_authority_unbound");
+  }
+
   if (value.claimPayloadKey !== "claim") {
     issues.push("claim_payload_key_invalid");
   }
 
-  if (!nonEmptyArrayOf(value.terminalClaims, CLAIM_PHASES)) {
+  if (!nonEmptyArrayOf(value.terminalClaims, TERMINAL_CLAIM_PHASES)) {
     issues.push("terminal_claims_invalid");
   }
 
