@@ -36,9 +36,8 @@ import type {
 import {
   ADAPTER_VERSION,
   CHAT_COMPLETIONS_FORCED_TOOL_NAME,
-  parseHttpStatus,
+  providerFailureSignal,
   type Outcome,
-  unwrapErrorMessage,
 } from "./shared";
 import { validateAgainstSchema } from "../../admission/json-schema";
 
@@ -380,11 +379,12 @@ const decodeGeminiStructured = (
 };
 
 const classifyGeminiError = (error: unknown): Outcome => {
-  const msg = unwrapErrorMessage(error);
-  const status = parseHttpStatus(msg);
+  const signal = providerFailureSignal(error);
+  const msg = signal.message;
+  const status = signal.status;
   const lower = msg.toLowerCase();
 
-  if (status === 401 || status === 403) {
+  if (signal.flags.has("auth") || status === 401 || status === 403) {
     return { class: "AuthError", status: status ?? 401 };
   }
   // Gemini quirk: bad API keys return HTTP 400 INVALID_ARGUMENT with
@@ -395,42 +395,37 @@ const classifyGeminiError = (error: unknown): Outcome => {
   // credential as the root cause). The match is on the structured
   // `reason` token from Google's error envelope, not the natural-
   // language "api key not valid" — that string varies by locale.
-  if (
-    status === 400 &&
-    (lower.includes("api_key_invalid") ||
-      lower.includes("permission_denied") ||
-      lower.includes("api key not valid"))
-  ) {
+  if (status === 400 && signal.flags.has("auth")) {
     return { class: "AuthError", status: 400 };
   }
-  if (status === 429 || lower.includes("resource_exhausted")) {
+  if (signal.flags.has("rate_limited") || status === 429 || lower.includes("resource_exhausted")) {
     return { class: "RateLimited" };
   }
   if (status === 400) {
     if (
-      lower.includes("invalid_argument") &&
+      signal.flags.has("schema") &&
       (lower.includes("schema") ||
         lower.includes("parameter") ||
         lower.includes("function") ||
         lower.includes("tools["))
     ) {
-      return { class: "SchemaUnsupported", reason: msg.slice(0, 200) };
+      return { class: "SchemaUnsupported", reason: signal.publicMessage.slice(0, 200) };
     }
-    return { class: "ProviderRejected", status: 400, body: msg.slice(0, 500) };
+    return { class: "ProviderRejected", status: 400, body: signal.publicMessage.slice(0, 500) };
   }
-  if (status === 503 || lower.includes("unavailable")) {
-    return { class: "TransientError", cause: msg };
+  if (signal.flags.has("unavailable") || status === 503 || lower.includes("unavailable")) {
+    return { class: "TransientError", cause: signal.publicMessage };
   }
   if (status !== undefined && status >= 500) {
-    return { class: "TransientError", cause: msg };
+    return { class: "TransientError", cause: signal.publicMessage };
   }
   if (lower.includes("timeout") || lower.includes("network")) {
-    return { class: "TransientError", cause: msg };
+    return { class: "TransientError", cause: signal.publicMessage };
   }
   return {
     class: "ProviderRejected",
     status: status ?? 0,
-    body: msg.slice(0, 500),
+    body: signal.publicMessage.slice(0, 500),
   };
 };
 

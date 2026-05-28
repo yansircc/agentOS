@@ -354,11 +354,62 @@ describe("@agent-os/dynamic-worker", () => {
             rejectionRef: {
               rejectionId: claim.operationRef,
               rejectionKind: "provider_rejected",
-              reason: "provider rejected execution",
+              reason: "dynamic_worker_ProviderFailure",
             },
           },
         },
       });
+    }),
+  );
+
+  it.effect("does not expose provider failure bodies through failure or tool result", () =>
+    Effect.gen(function* () {
+      const backend: DynamicWorkerBackend = {
+        run: () =>
+          Effect.fail(
+            new DynamicWorkerProviderFailure({
+              code: "ProviderFailure",
+              reason: "raw provider secret reason",
+              body: "raw_provider_body_secret",
+              status: 500,
+              workerId: "dw-secret",
+            }),
+          ),
+      };
+
+      const failed = yield* Effect.either(
+        runDynamicWorker(backend, staticPolicy(), {
+          claim,
+          code: "export default { fetch: () => new Response('ok') }",
+          request: { url: "https://example.test/" },
+          timeoutMs: 1000,
+        }),
+      );
+
+      expect(JSON.stringify(failed)).not.toContain("raw_provider_body_secret");
+      expect(JSON.stringify(failed)).not.toContain("raw provider secret reason");
+
+      const tool = makeDynamicWorkerTool({
+        backend,
+        policy: staticPolicy(),
+        claim: () => claim,
+      });
+      const result = yield* Effect.promise(() =>
+        tool.execute({
+          code: "export default { fetch: () => new Response('ok') }",
+          url: "https://example.test/",
+        }),
+      );
+
+      expect(result).toMatchObject({
+        ok: false,
+        bodyHead: "",
+        bodyBytes: 0,
+        bodyTruncated: false,
+        reason: "dynamic_worker_ProviderFailure",
+      });
+      expect(JSON.stringify(result)).not.toContain("raw_provider_body_secret");
+      expect(JSON.stringify(result)).not.toContain("raw provider secret reason");
     }),
   );
 });

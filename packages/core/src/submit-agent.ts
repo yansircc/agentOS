@@ -125,19 +125,46 @@ export const turnRefOf = (runId: number, index: number): TurnRef => ({
 const toolDefinitionsOf = (tools: Record<string, Tool>): ReadonlyArray<ToolDefinition> =>
   Object.values(tools).map((t) => t.definition);
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const symbolicReason = (value: string): string | null =>
+  /^[A-Za-z0-9_.:-]{1,128}$/.test(value) ? value : null;
+
 const toolErrorReason = (error: ToolError): string => {
   const cause = error.cause;
   if (typeof cause === "object" && cause !== null) {
     const reason = (cause as { readonly reason?: unknown }).reason;
-    if (typeof reason === "string" && reason.length > 0) return reason;
+    if (typeof reason === "string" && reason.length > 0) {
+      return symbolicReason(reason) ?? "tool_error";
+    }
   }
-  return String(cause);
+  return publicErrorReason(cause);
 };
 
 const toolRejectionKind = (reason: string): RejectionRef["rejectionKind"] =>
   reason === "rate_limited" || reason.startsWith("invalid_quota_")
     ? "resource_denied"
     : "provider_rejected";
+
+const publicErrorReason = (cause: unknown): string => {
+  if (isRecord(cause) && cause._tag === "agent_os.provider_http_failure") {
+    const provider = symbolicReason(String(cause.provider)) ?? "provider";
+    const status = typeof cause.status === "number" ? `http_${cause.status}` : "http_error";
+    const flags = Array.isArray(cause.flags)
+      ? cause.flags.filter((flag): flag is string => typeof flag === "string").join(":")
+      : "";
+    return ["provider_http_failure", provider, status, flags].filter(Boolean).join(":");
+  }
+  if (isRecord(cause) && typeof cause.reason === "string") {
+    return symbolicReason(cause.reason) ?? "object";
+  }
+  if (isRecord(cause) && typeof cause._tag === "string") {
+    return cause._tag;
+  }
+  if (cause instanceof Error) return cause.name;
+  return typeof cause;
+};
 
 export const buildInitialMessages = (
   spec: Pick<InternalSubmitSpec, "system" | "intent" | "context">,
@@ -590,7 +617,7 @@ export const submitAgentEffect = (
             const tokensUsed = yield* Ref.get(tokensUsedRef);
             return yield* finalAbort(
               ABORT.UPSTREAM_FAILURE,
-              { cause: String(e.cause) },
+              { cause: publicErrorReason(e.cause) },
               scope,
               started.id,
               tokensUsed,
@@ -601,7 +628,7 @@ export const submitAgentEffect = (
             const tokensUsed = yield* Ref.get(tokensUsedRef);
             return yield* finalAbort(
               ABORT.TOOL_ERROR,
-              { toolName: e.toolName, cause: String(e.cause) },
+              { toolName: e.toolName, cause: publicErrorReason(e.cause) },
               scope,
               started.id,
               tokensUsed,

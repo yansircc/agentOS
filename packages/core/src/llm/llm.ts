@@ -25,7 +25,11 @@
  */
 
 import { Context, Effect } from "effect";
-import { UpstreamFailure } from "../errors";
+import {
+  ProviderHttpFailure,
+  UpstreamFailure,
+  type ProviderFailureFlag,
+} from "../errors";
 import { credentialMaterialRef, endpointMaterialRef, type MaterialRef } from "../material-ref";
 import { RefResolutionFailed, RefResolverService, resolveStringMaterial } from "../ref-resolver";
 import { getProtocolAdapter } from "./protocol/protocol-adapter";
@@ -323,6 +327,86 @@ export const DEFAULTS = {
   anthropicVersion: DEFAULT_ANTHROPIC_VERSION,
 } as const;
 
+type HttpProvider = Exclude<LlmRoute["kind"], "cf-ai-binding">;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const sanitizedToken = (value: unknown): string | undefined =>
+  typeof value === "string" && /^[A-Za-z0-9_.:-]{1,96}$/.test(value) ? value : undefined;
+
+const providerErrorEnvelope = (body: string): Record<string, unknown> | null => {
+  try {
+    const parsed = JSON.parse(body) as unknown;
+    if (!isRecord(parsed)) return null;
+    const error = parsed.error;
+    return isRecord(error) ? error : parsed;
+  } catch {
+    return null;
+  }
+};
+
+const providerFailureFlags = (
+  status: number,
+  body: string,
+  envelope: Record<string, unknown> | null,
+): ReadonlyArray<ProviderFailureFlag> => {
+  const flags = new Set<ProviderFailureFlag>();
+  const lower = body.toLowerCase();
+  const statusToken =
+    typeof envelope?.status === "string" ? envelope.status.toLowerCase() : undefined;
+  const reasonTokens =
+    Array.isArray(envelope?.details) && envelope.details.every(isRecord)
+      ? envelope.details
+          .map((detail) => (typeof detail.reason === "string" ? detail.reason.toLowerCase() : ""))
+          .join(" ")
+      : "";
+  const typeToken = typeof envelope?.type === "string" ? envelope.type.toLowerCase() : "";
+  const codeToken = typeof envelope?.code === "string" ? envelope.code.toLowerCase() : "";
+  const haystack = `${lower} ${statusToken ?? ""} ${reasonTokens} ${typeToken} ${codeToken}`;
+
+  if (status === 401 || status === 403) flags.add("auth");
+  if (
+    haystack.includes("api_key_invalid") ||
+    haystack.includes("permission_denied") ||
+    haystack.includes("authentication_error")
+  ) {
+    flags.add("auth");
+  }
+  if (status === 429 || haystack.includes("rate") || haystack.includes("resource_exhausted")) {
+    flags.add("rate_limited");
+  }
+  if (
+    haystack.includes("schema") ||
+    haystack.includes("input_schema") ||
+    haystack.includes("parameter") ||
+    haystack.includes("function") ||
+    haystack.includes("tool")
+  ) {
+    flags.add("schema");
+  }
+  if (status === 529 || haystack.includes("overloaded")) flags.add("overloaded");
+  if (status === 503 || haystack.includes("unavailable")) flags.add("unavailable");
+  return Array.from(flags);
+};
+
+const providerHttpFailure = async (
+  provider: HttpProvider,
+  response: Response,
+): Promise<ProviderHttpFailure> => {
+  const body = await response.text().catch(() => "");
+  const envelope = providerErrorEnvelope(body);
+  const code = sanitizedToken(envelope?.code);
+  const type = sanitizedToken(envelope?.type);
+  return new ProviderHttpFailure({
+    provider,
+    status: response.status,
+    ...(code === undefined ? {} : { code }),
+    ...(type === undefined ? {} : { type }),
+    flags: providerFailureFlags(response.status, body, envelope),
+  });
+};
+
 export const dispatchProvider = (
   route: LlmRoute,
   body: ProviderRequestBody,
@@ -377,8 +461,7 @@ export const dispatchProvider = (
               body: JSON.stringify(fullBody),
             });
             if (!res.ok) {
-              const text = await res.text().catch(() => "");
-              throw new Error(`HTTP ${res.status} ${res.statusText}: ${text.slice(0, 500)}`);
+              throw await providerHttpFailure(route.kind, res);
             }
             return (await res.json()) as unknown;
           },
@@ -417,8 +500,7 @@ export const dispatchProvider = (
               body: JSON.stringify(fullBody),
             });
             if (!res.ok) {
-              const text = await res.text().catch(() => "");
-              throw new Error(`HTTP ${res.status} ${res.statusText}: ${text.slice(0, 500)}`);
+              throw await providerHttpFailure(route.kind, res);
             }
             return (await res.json()) as unknown;
           },
@@ -451,8 +533,7 @@ export const dispatchProvider = (
               body: JSON.stringify(body as GeminiGenerateContentBody),
             });
             if (!res.ok) {
-              const text = await res.text().catch(() => "");
-              throw new Error(`HTTP ${res.status} ${res.statusText}: ${text.slice(0, 500)}`);
+              throw await providerHttpFailure(route.kind, res);
             }
             return (await res.json()) as unknown;
           },

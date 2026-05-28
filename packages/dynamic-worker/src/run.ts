@@ -14,6 +14,12 @@ import {
   type DynamicWorkerRunSuccess,
 } from "./types";
 
+const symbolicReason = (value: string): string | null =>
+  /^[A-Za-z0-9_.:-]{1,128}$/.test(value) ? value : null;
+
+const providerFailureReason = (failure: DynamicWorkerProviderFailure): string =>
+  symbolicReason(failure.reason) ?? `dynamic_worker_${failure.code}`;
+
 export const runDynamicWorker = (
   backend: DynamicWorkerBackend,
   policy: DynamicWorkerPolicy,
@@ -32,15 +38,14 @@ export const runDynamicWorker = (
     const rejectFailure = (failure: DynamicWorkerProviderFailure): DynamicWorkerFailure =>
       new DynamicWorkerFailure({
         code: failure.code,
-        reason: failure.reason,
+        reason: providerFailureReason(failure),
         ...(failure.status === undefined ? {} : { status: failure.status }),
-        ...(failure.body === undefined ? {} : { body: failure.body }),
         ...(failure.workerId === undefined ? {} : { workerId: failure.workerId }),
         claim: settleRejectedClaim(request.claim, {
           rejectionId: request.claim.operationRef,
           rejectionKind:
             failure.code === "ResourceLimitExceeded" ? "resource_denied" : "provider_rejected",
-          reason: failure.reason,
+          reason: providerFailureReason(failure),
         }),
       });
 

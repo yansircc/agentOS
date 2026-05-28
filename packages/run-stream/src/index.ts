@@ -221,8 +221,27 @@ export const composeRunStream = (spec: ComposeRunStreamSpec): ReadonlyArray<RunS
 const maxLedgerEventId = (events: ReadonlyArray<LedgerEventRpc>): number =>
   events.reduce((max, event) => Math.max(max, event.id), 0);
 
-const errorReason = (cause: unknown): string =>
-  cause instanceof Error ? cause.message : String(cause);
+const isSymbolicReason = (value: string): boolean => /^[A-Za-z0-9_.:-]{1,128}$/.test(value);
+
+const errorReason = (cause: unknown): string => {
+  if (isRecord(cause) && cause._tag === "agent_os.provider_http_failure") {
+    const provider =
+      typeof cause.provider === "string" && isSymbolicReason(cause.provider)
+        ? cause.provider
+        : "provider";
+    const status = typeof cause.status === "number" ? `http_${cause.status}` : "http_error";
+    const flags = Array.isArray(cause.flags)
+      ? cause.flags.filter((flag): flag is string => typeof flag === "string").join(":")
+      : "";
+    return ["provider_http_failure", provider, status, flags].filter(Boolean).join(":");
+  }
+  if (isRecord(cause) && typeof cause.reason === "string") {
+    return isSymbolicReason(cause.reason) ? cause.reason : "object";
+  }
+  if (isRecord(cause) && typeof cause._tag === "string") return cause._tag;
+  if (cause instanceof Error) return cause.name;
+  return typeof cause;
+};
 
 async function* arraySource<T>(items: ReadonlyArray<T>): AsyncGenerator<T> {
   for (const item of items) yield item;

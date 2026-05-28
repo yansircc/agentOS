@@ -26,8 +26,8 @@ import type {
 import {
   ADAPTER_VERSION,
   CHAT_COMPLETIONS_FORCED_TOOL_NAME,
+  providerFailureSignal,
   type Outcome,
-  unwrapErrorMessage,
 } from "./shared";
 import { validateAgainstSchema } from "../../admission/json-schema";
 
@@ -197,14 +197,18 @@ const decodeChatCompletionsStructured = (
 };
 
 const classifyChatCompletionsError = (error: unknown): Outcome => {
-  const msg = unwrapErrorMessage(error);
+  const signal = providerFailureSignal(error);
+  const msg = signal.message;
   const lower = msg.toLowerCase();
-  if (lower.includes("401") || lower.includes("unauthor"))
-    return { class: "AuthError", status: 401 };
-  if (lower.includes("429") || lower.includes("rate")) return { class: "RateLimited" };
+  if (signal.flags.has("auth") || signal.status === 401 || signal.status === 403) {
+    return { class: "AuthError", status: signal.status ?? 401 };
+  }
+  if (signal.flags.has("rate_limited") || signal.status === 429 || lower.includes("rate")) {
+    return { class: "RateLimited" };
+  }
   if (lower.includes("timeout") || lower.includes("network"))
-    return { class: "TransientError", cause: msg };
-  return { class: "ProviderRejected", status: 0, body: msg };
+    return { class: "TransientError", cause: signal.publicMessage };
+  return { class: "ProviderRejected", status: signal.status ?? 0, body: signal.publicMessage };
 };
 
 export const cfAiBindingAdapter: LlmProtocolAdapter<"cf-ai-binding"> = {

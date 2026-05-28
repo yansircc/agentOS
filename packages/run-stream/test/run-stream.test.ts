@@ -264,7 +264,7 @@ describe("@agent-os/run-stream", () => {
       lastSeq: 0,
       ledgerEvents: [],
       turnStreams: {},
-      errorReason: "submit transport failed",
+      errorReason: "Error",
       omittedFrames: [],
     });
   });
@@ -349,7 +349,7 @@ describe("@agent-os/run-stream", () => {
       {
         kind: "stream_error",
         seq: 0,
-        reason: "ledger_source_failed: ledger transport failed",
+        reason: "ledger_source_failed: Error",
       },
     ]);
 
@@ -364,7 +364,7 @@ describe("@agent-os/run-stream", () => {
       {
         kind: "stream_error",
         seq: 0,
-        reason: "submit_result_failed: submit transport failed",
+        reason: "submit_result_failed: Error",
       },
     ]);
   });

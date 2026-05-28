@@ -584,6 +584,73 @@ describe("admission — cross-route structured output (v0.2.13)", () => {
     }
   });
 
+  it("classifies provider HTTP failures without writing raw provider bodies to evidence", async () => {
+    const scope = "cross-route-openai-provider-failure-redaction";
+    const id = testEnv.AGENT_DO.idFromName(scope);
+    const stub = testEnv.AGENT_DO.get(id);
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          error: {
+            type: "authentication_error",
+            message: "raw provider body secret OPENROUTER_KEY=stub-key-not-real",
+          },
+        }),
+        {
+          status: 401,
+          headers: { "content-type": "application/json" },
+        },
+      )) as typeof globalThis.fetch;
+
+    try {
+      await runInDurableObject(stub, async (_inst, state) => {
+        const runtime = makeRuntimeWithRegistry(
+          state,
+          SENTINEL_AI,
+          { openrouter: "https://stub.openrouter.test/api/v1" },
+          { OPENROUTER_KEY: "stub-key-not-real" },
+        );
+
+        const spec: InternalSubmitSpec = {
+          intent: "summarize",
+          context: {},
+          route: {
+            kind: "openai-chat-compatible",
+            endpointRef: "openrouter",
+            credentialRef: "OPENROUTER_KEY",
+            modelId: "openai/gpt-4.1",
+          },
+          tools: {},
+          outputSchema: SCHEMA,
+          deliver: {
+            scope,
+            scopeRef: { kind: "conversation", scopeId: scope },
+            event: "structured.done",
+          },
+        };
+
+        const r = await runtime.runPromise(submitAgentEffect(spec));
+        expect(r.ok).toBe(false);
+
+        const events = await runtime.runPromise(
+          Effect.gen(function* () {
+            const l = yield* Ledger;
+            return yield* l.events(scope);
+          }),
+        );
+        const serialized = JSON.stringify(events);
+        expect(serialized).not.toContain("raw provider body secret");
+        expect(serialized).not.toContain("stub-key-not-real");
+        expect(serialized).toContain("AuthError");
+
+        await runtime.dispose();
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("cf-ai-binding route still goes through AiBinding (regression guard)", async () => {
     const scope = "cross-route-cf-ai-binding";
     const id = testEnv.AGENT_DO.idFromName(scope);
