@@ -1,5 +1,5 @@
 /**
- * @agent-os/ops-api — Worker fetch handler (spec-35 §3.3)
+ * @agent-os/ops-api — Worker fetch handler (contract §3.3)
  *
  * mountOpsApi(opts) -> (req: Request) => Promise<Response>
  *
@@ -137,7 +137,7 @@ const handle = async (
 };
 
 // ============================================================
-// /scopes index (spec-35 §2.1, §5.1)
+// /scopes index (contract §2.1, §5.1)
 // ============================================================
 
 const handleScopesIndex = async (
@@ -158,7 +158,7 @@ const handleScopesIndex = async (
   // v0: no cursor. Resolver returns the full set the principal could
   // possibly see (up to limit); ops-api filters by per-scope authorize(read).
   // If a deployment grows past one page, the resolver should accept the
-  // principal and pre-filter — see spec-35 §9 open question.
+  // principal and pre-filter — see contract §9 open question.
   const scopes = await opts.scopeResolver.list({
     ...(prefix !== undefined ? { prefix } : {}),
     limit,
@@ -175,7 +175,7 @@ const handleScopesIndex = async (
 };
 
 // ============================================================
-// /scopes/:scope/* dispatch (spec-35 §2.2–§2.9, §5)
+// /scopes/:scope/* dispatch (contract §2.2–§2.9, §5)
 // ============================================================
 
 const handleScopeRoute = async (
@@ -271,7 +271,7 @@ const onEvents = async (url: URL, stub: AgentDOIntrospection): Promise<Response>
 };
 
 const onStream = async (req: Request, url: URL, stub: AgentDOIntrospection): Promise<Response> => {
-  // Worker-side Last-Event-ID parsing per spec-29 §2.3.
+  // Worker-side Last-Event-ID parsing per contract §2.3.
   const headerCursor = req.headers.get("last-event-id");
   const headerAfterId =
     headerCursor !== null && /^\d+$/.test(headerCursor) ? parseInt(headerCursor, 10) : undefined;

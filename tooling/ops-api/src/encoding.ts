@@ -1,5 +1,5 @@
 /**
- * @agent-os/ops-api — AttemptKey query encoding (spec-35 §2.9)
+ * @agent-os/ops-api — AttemptKey query encoding (contract §2.9)
  *
  * AttemptKey is a 4-tuple with no hierarchy; it cannot be expressed in URL path
  * segments. Encoding: JSON-stringify -> base64url (no padding) -> single
@@ -11,7 +11,7 @@ import type { AttemptKey } from "@agent-os/core";
 // Strategy validation is intentionally lax: ops-api accepts any
 // non-empty string and lets AgentDOBase.admissionLease() reject
 // unknown strategies upstream. This avoids ops-api drift when
-// core's Strategy union grows (spec-25 expects it to).
+// core's Strategy union grows (contract expects it to).
 
 const base64urlEncode = (str: string): string => {
   const utf8 = new TextEncoder().encode(str);

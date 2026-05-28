@@ -1,7 +1,6 @@
 /**
  * @agent-os/ops-api — types
  *
- * Spec: docs/specs/spec-35-ops-api-boundary.md §3
  *
  * All app-provided contracts (ScopeResolver, OpsAuth) live here.
  * ops-api ships no default implementation.

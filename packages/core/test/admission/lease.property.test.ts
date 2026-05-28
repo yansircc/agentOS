@@ -2,7 +2,7 @@
  * Admission lease model tests.
  *
  * These tests generate arbitrary ledger histories and compare projectLease
- * against an independent oracle for the spec-25 rules:
+ * against an independent oracle for the contract rules:
  *   - matching route/schema/strategy
  *   - adapter compatibility by major version
  *   - barrier cutoff by (ts, id)

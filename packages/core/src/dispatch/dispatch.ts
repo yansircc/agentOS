@@ -6,7 +6,6 @@
  *   - receiver acceptance   : `events.kind = dispatch.inbound.accepted`
  *   - `dispatch_outbox`     : pending-delivery buffer (derived; not truth)
  *
- * Spec: docs/specs/spec-24-invariants-and-surface.md
  */
 
 import { Clock, Context, Effect, Layer } from "effect";

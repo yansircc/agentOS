@@ -10,7 +10,6 @@
  * package): errors.ts / types.ts / event-bus.ts / ledger.ts / scheduler.ts /
  * llm.ts / tools.ts / submit-agent.ts.
  *
- * Spec: ../../docs/specs/spec-24-invariants-and-surface.md
  */
 
 // ===== AgentDOBase + env interface =====

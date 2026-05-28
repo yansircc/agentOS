@@ -1,5 +1,5 @@
 /**
- * Admission orchestration — spec-25 attemptStructured + invalidate.
+ * Admission orchestration — contract attemptStructured + invalidate.
  *
  * Algebra:
  *   attemptStructured(scope, route, schema, strategy, stimulus)
@@ -10,14 +10,13 @@
  *     → 5. transactionSync(evidence row + optional deliver row)
  *     → 6. fire EventBus
  *
- * State ownership (spec-25 §2 + spec-24 §3.1):
+ * State ownership (contract §2 + contract §3.1):
  *   `events.kind = 'llm.structured.evidence'`   sole admission evidence writer
  *   `events.kind = 'llm.structured.invalidate'` sole barrier writer
  *   CapabilityLease, latestBarrierTs            pure projection over events
  *
  * No separate `leases` table. No KV cache. No second writer.
  *
- * Spec: docs/specs/spec-25-llm-admission.md
  */
 
 import { Clock, Context, Effect, Layer, Schema } from "effect";
@@ -39,7 +38,7 @@ import { routeFingerprint } from "./fingerprint";
 import { loadAdmissionRows } from "./payload";
 
 // Note: these symbols were historically owned by admission.ts. They now
-// live in protocol/protocol-adapter.ts (spec-27 elevation). Re-exported
+// live in protocol/protocol-adapter.ts (contract elevation). Re-exported
 // here so callers that import from "./admission" keep working.
 export { ADAPTER_VERSION } from "../llm/protocol/protocol-adapter";
 export type { AdapterMode } from "../llm/protocol/protocol-adapter";

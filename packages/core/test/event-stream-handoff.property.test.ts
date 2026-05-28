@@ -3,7 +3,7 @@
  *
  * The stream startup algorithm emits snapshot rows first, then drains buffered
  * live rows strictly after the snapshot watermark. This is the no-gap /
- * no-duplicate core of spec-29 without opening a Workers SSE stream.
+ * no-duplicate core of contract without opening a Workers SSE stream.
  */
 
 import * as fc from "fast-check";

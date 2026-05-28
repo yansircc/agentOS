@@ -15,10 +15,10 @@
  * errors) lives in `protocol/`. `callLlm` and
  * `attemptStructured` (admission.ts) share that registry so a route's
  * turn behavior and structured behavior are evidence about the SAME
- * wire (spec-27 §1 C-2).
+ * wire (contract §1 C-2).
  *
  * Why the route indirection (vs. the previous `agent: {provider, model}`
- * shape): see spec-24 INV-8 revision and spec-25 §3. Capability is
+ * shape): see contract INV-8 revision and contract §3. Capability is
  * evidence on `(route, schemaContract, strategy, adapterVersion)`, not
  * a model-id property. The route taxonomy is what makes admission's
  * fingerprint stable across credential rotation.
@@ -33,7 +33,7 @@ import { getProtocolAdapter } from "./protocol/protocol-adapter";
 export class AiBinding extends Context.Tag("@agent-os/AiBinding")<AiBinding, Ai>() {}
 
 // ============================================================
-//   LlmRoute — tagged union of transport protocols (spec-25 §3)
+//   LlmRoute — tagged union of transport protocols (contract §3)
 // ============================================================
 
 export interface CfAiBindingRoute {
@@ -152,7 +152,7 @@ export interface LlmRequest {
   readonly messages: ReadonlyArray<LlmMessage>;
   readonly tools?: ReadonlyArray<ToolDefinition>;
   /** Forces the model to call the named function. Used by admission's
-   *  structured-output strategy (spec-25 §6). Free-text agent loops leave
+   *  structured-output strategy (contract §6). Free-text agent loops leave
    *  this undefined. */
   readonly tool_choice?: {
     readonly type: "function";
@@ -318,7 +318,7 @@ const DEFAULT_ANTHROPIC_VERSION = "2023-06-01";
  *  leases by construction — that is the intended behavior: a different
  *  Anthropic API version is a different wire surface, and lease
  *  evidence collected against the old version must NOT roll forward to
- *  the new one. See spec-27 §7. */
+ *  the new one. See contract §7. */
 export const DEFAULTS = {
   anthropicVersion: DEFAULT_ANTHROPIC_VERSION,
 } as const;

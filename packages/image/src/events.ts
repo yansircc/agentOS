@@ -6,7 +6,7 @@ import { IMAGE_EVENT_PREFIX } from "./extension";
  * a DO protects these facts by returning `imageExtensionPackage(version)` from
  * registerExtensions(), which makes app-facing core write paths reject image.*.
  * v0 ships projection names and the negative gate declaration only; positive
- * package commits remain deferred by spec-34.
+ * package commits remain deferred by contract.
  */
 export const IMAGE_EVENTS = {
   JOB_REQUESTED: `${IMAGE_EVENT_PREFIX}job.requested`,

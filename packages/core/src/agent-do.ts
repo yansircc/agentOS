@@ -407,7 +407,7 @@ export abstract class AgentDOBase<Env extends AgentDOEnv> extends DurableObject<
     );
   }
 
-  /** spec-34 §5 standard projection — list runs scoped to this DO,
+  /** contract §5 standard projection — list runs scoped to this DO,
    *  sorted runId DESC (newest first). Cursor-paginated via afterRunId.
    *  Caller is responsible for bounding spec.limit. */
   runs(spec: RunListSpec): Promise<RunListPage> {

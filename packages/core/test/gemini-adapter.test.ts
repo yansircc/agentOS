@@ -1,5 +1,5 @@
 /**
- * gemini-generate-content protocol adapter — contract tests (spec-27 §9.1).
+ * gemini-generate-content protocol adapter — contract tests (contract §9.1).
  */
 
 import { describe, expect, it } from "vite-plus/test";
@@ -380,7 +380,7 @@ describe("gemini adapter — classify", () => {
 // ============================================================
 // P2 regression (Codex 2026-05-25): adapter purity
 //   `synthesizeGeminiToolCallId` previously used module-mutable state +
-//   `Date.now()`, breaking the spec-27 §3 "no IO, no clock" rule. The
+//   `Date.now()`, breaking the contract §3 "no IO, no clock" rule. The
 //   fix derives ids from candidate/part position when upstream elides
 //   `functionCall.id`. Same input → same output, regardless of when or
 //   how often decodeTurn is called.
@@ -460,10 +460,10 @@ describe("gemini adapter — P2 purity", () => {
   });
 });
 
-// Layer 4 — text streaming moved out of core (spec-34).
+// Layer 4 — text streaming moved out of core (contract).
 
 // ============================================================
-// Layer 5 — adapter identity invariants (spec-27 C-1)
+// Layer 5 — adapter identity invariants (contract C-1)
 // ============================================================
 
 describe("gemini adapter — identity invariants", () => {

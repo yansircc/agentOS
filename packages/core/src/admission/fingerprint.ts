@@ -1,5 +1,5 @@
 /**
- * Canonical fingerprint algebra (spec-25 §4.1).
+ * Canonical fingerprint algebra (contract §4.1).
  *
  * Two pure functions: `makeSchemaContract` for `(schema → SchemaContract)`
  * and `routeFingerprint` for `(LlmRoute → string)`. Both reach for the
@@ -9,7 +9,7 @@
  * Rules (in order):
  *   a. sort object keys recursively
  *   c'. sort set-semantics arrays (`required`, `enum`) — discovered
- *       during admission validation; see spec-25 §4.1
+ *       during admission validation; see contract §4.1
  *   d. strip non-semantic annotations (title, description, examples,
  *      $comment, x-*)
  *
@@ -82,13 +82,13 @@ export const makeSchemaContract = (schema: JsonSchemaObject): Effect.Effect<Sche
  *  the substrate's current defaults so the fingerprint reflects the
  *  effective wire surface, not just the literal route object.
  *
- *  Why this matters (spec-27 §7): a route field like `anthropicVersion`
+ *  Why this matters (contract §7): a route field like `anthropicVersion`
  *  that has a transport-time default must enter the fingerprint via its
  *  effective value. Otherwise unpinned routes get a fingerprint that
  *  doesn't change when the substrate later bumps its default — and old
  *  lease evidence would silently project forward onto a different wire
  *  surface (different feature set, different error semantics). That
- *  violates spec-25's "capability evidence is keyed by the actual wire"
+ *  violates contract's "capability evidence is keyed by the actual wire"
  *  rule.
  *
  *  Pinned values are unchanged; only `undefined` fields get filled.

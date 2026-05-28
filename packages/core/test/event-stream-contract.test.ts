@@ -1,7 +1,7 @@
 /**
  * Ledger event stream — deterministic contract tests.
  *
- * Validates spec-29:
+ * Validates contract:
  *   - events(opts) is the cursor/filter/limit snapshot read;
  *   - streamEvents(opts) emits SSE frames whose wire is LedgerEventRpc;
  *   - stream tail is not routed through app on() handler semantics;
@@ -117,7 +117,7 @@ const readLedgerRows = async (
   return frames.map((frame) => JSON.parse(frame.data ?? "{}") as LedgerEventRpc);
 };
 
-describe("ledger event stream — spec-29", () => {
+describe("ledger event stream — contract", () => {
   it("events(opts) snapshots by cursor, limit, and exact kind set", async () => {
     await withStreamDO("stream-events-snapshot", async (stub) => {
       const first = await stub.emitEvent({ event: "A", data: { n: 1 } });

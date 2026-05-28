@@ -1,7 +1,6 @@
 /**
  * @agent-os/core protocol adapter algebra — interface + registry only.
  *
- * Spec: docs/specs/spec-27-llm-protocol-adapter.md
  *
  * Cross-wire helpers live in `./shared` (validateAgainstSchema,
  * unwrapErrorMessage, parseHttpStatus, ADAPTER_VERSION,
@@ -104,7 +103,7 @@ export type DecodeStructuredResult =
  *  `dispatchProvider` (llm.ts); secrets are resolved there from
  *  `RefResolver`. The adapter never sees credential values.
  *
- *  Asymmetry (spec-27 §4):
+ *  Asymmetry (contract §4):
  *    - `decodeTurn` is permissive: zero tool calls in the response is
  *      valid (assistant chose a text-only answer).
  *    - `decodeStructured` is strict: exactly one matching forced tool call
@@ -113,7 +112,7 @@ export type DecodeStructuredResult =
  *
  *  Shared:
  *    - `classify` maps transport / HTTP / protocol errors into the closed
- *      `FailureClass` set. **v0 runtime scope (spec-27 §3.0.1):** the
+ *      `FailureClass` set. **v0 runtime scope (contract §3.0.1):** the
  *      only consumer is `attemptStructured` (structured path). `callLlm`
  *      does NOT invoke classify — dispatch errors propagate as raw
  *      `UpstreamFailure` to submit-agent's abort taxonomy. The function

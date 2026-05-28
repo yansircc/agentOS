@@ -1,7 +1,6 @@
 /**
  * @agent-os/ops-api — public barrel.
  *
- * Spec: docs/specs/spec-35-ops-api-boundary.md
  *
  * v0 is an HTTP projection of @agent-os/core AgentDOBase RPC. It owns
  * no storage and ships no default ScopeResolver / OpsAuth.

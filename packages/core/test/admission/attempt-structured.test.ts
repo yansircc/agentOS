@@ -1,5 +1,5 @@
 /**
- * Admission — IO contract tests (spec-25 §2, §10).
+ * Admission — IO contract tests (contract §2, §10).
  *
  * Three test groups:
  *   1. attemptStructured IO contract: closed-schema rejection, atomic

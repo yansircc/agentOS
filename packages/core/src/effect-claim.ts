@@ -71,7 +71,7 @@ export type EffectClaim = PreClaim | LivedClaim | RejectedClaim;
 
 /**
  * Runtime roles around EffectClaim. Writer authority is intentionally not a
- * ClaimRole; durable namespace ownership remains spec-34 ExtensionCapability.
+ * ClaimRole; durable namespace ownership remains contract ExtensionCapability.
  */
 export type ClaimRole = "generator" | "admitter" | "resolver" | "reader";
 

@@ -1,5 +1,5 @@
 /**
- * Admission — pure projection contract tests (spec-25 §7.2, §10).
+ * Admission — pure projection contract tests (contract §7.2, §10).
  *
  * Two pure-function surfaces, no DO:
  *   1. `decideTier` 12-row truth table — admission impact for the cross
@@ -23,7 +23,7 @@ import {
   projectLease,
 } from "../../src/admission";
 
-describe("admission — decideTier truth table (spec-25 §10)", () => {
+describe("admission — decideTier truth table (contract §10)", () => {
   const supported = (lastTs: number): CapabilityLease => ({
     status: "supported",
     pinnedStrategy: "forced-tool-call",
@@ -148,7 +148,7 @@ describe("admission — decideTier truth table (spec-25 §10)", () => {
   });
 });
 
-describe("admission — projectLease pure projection (spec-25 §7.2)", () => {
+describe("admission — projectLease pure projection (contract §7.2)", () => {
   const key: AttemptKey = {
     routeFingerprint: "fnv1a:routeX",
     schemaFingerprint: "effect-json-schema-v1:sha256:schemaX",

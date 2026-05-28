@@ -60,7 +60,7 @@ export const renderShell = (
 </head>
 <body>
   <header class="topbar">
-    <div class="brand">${escapeHtml(opts.title)} <span>spec-36</span></div>
+    <div class="brand">${escapeHtml(opts.title)} <span>ledger</span></div>
     <div class="meta"><code>${escapeHtml(opts.apiBase)}</code></div>
   </header>
   <div class="layout">

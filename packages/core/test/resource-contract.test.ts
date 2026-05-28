@@ -1,7 +1,7 @@
 /**
  * Resources — deterministic contract tests.
  *
- * Validates P2 of spec-28:
+ * Validates P2 of contract:
  *   - no account/reservation tables;
  *   - balance is reconstructed from resource.* ledger facts;
  *   - reserve is idempotent by idempotencyKey;

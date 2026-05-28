@@ -1,7 +1,7 @@
 /**
  * SubmitSpec.system field — deterministic contract test.
  *
- * Validates the three-axis duality (spec-24 §5.1.1):
+ * Validates the three-axis duality (contract §5.1.1):
  *   system  = behavior program (stable)
  *   intent  = task input       (variable)
  *   context = facts            (variable)

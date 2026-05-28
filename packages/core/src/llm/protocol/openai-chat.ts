@@ -6,7 +6,7 @@
  * envelope. Both adapters share encode/decode/classify; only the kind
  * discriminator differs.
  *
- * spec-27 §4 strictness applies to `decodeStructured`: exactly one tool
+ * contract §4 strictness applies to `decodeStructured`: exactly one tool
  * call with the synthesized `_submit_structured` name. Anything else
  * returns `BehaviorFailed` so admission.ts does not write false
  * Supported evidence rows.
@@ -143,7 +143,7 @@ const decodeChatCompletionsStructured = (
     usage?: { total_tokens?: number };
   };
   const toolCalls = raw.choices?.[0]?.message?.tool_calls ?? [];
-  // spec-27 §4 strictness: structured path MUST observe exactly one
+  // contract §4 strictness: structured path MUST observe exactly one
   // forced tool call with the synthesized name. Anthropic/Gemini already
   // enforce this; this branch closes the gap on Chat-Completions wires.
   // Without it a provider that emits `_submit_structured` + extra calls

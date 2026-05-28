@@ -1,5 +1,5 @@
 /**
- * anthropic-messages protocol adapter — contract tests (spec-27 §9.1).
+ * anthropic-messages protocol adapter — contract tests (contract §9.1).
  *
  * Three pure layers (no network):
  *   1. encode shape:    encodeTurn / encodeStructured produce wire-correct
@@ -450,10 +450,10 @@ describe("anthropic adapter — classify", () => {
   });
 });
 
-// Layer 4 — text streaming moved out of core (spec-34).
+// Layer 4 — text streaming moved out of core (contract).
 
 // ============================================================
-// Layer 5 — adapter identity invariants (spec-27 C-1)
+// Layer 5 — adapter identity invariants (contract C-1)
 // ============================================================
 
 describe("anthropic adapter — identity invariants", () => {

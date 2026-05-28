@@ -62,7 +62,7 @@ const rejectedClaim: EffectClaim = {
   },
 };
 
-describe("standard projections — spec-34", () => {
+describe("standard projections — contract", () => {
   it("projects claim trace from ledger claims without a second fact source", () => {
     const rows = [
       event(1, "dispatch.outbound.requested", { claim: preClaim }),
