@@ -184,6 +184,29 @@ describe("@agent-os/decision-gate", () => {
     });
   });
 
+  it("does not approve a gate from a decision without a request", () => {
+    const events = [
+      {
+        id: 1,
+        kind: DECISION_GATE_EVENTS.DECIDED,
+        payload: {
+          gateRef: "gate/lone-decision",
+          decisionRef: "decision/lone",
+          decision: "approved",
+          decidedBy: "operator/alice",
+        },
+      },
+    ] as const;
+
+    expect(projectDecisionGate(events, "gate/lone-decision")).toEqual({
+      gateRef: "gate/lone-decision",
+      status: "missing",
+      request: undefined,
+      decision: undefined,
+      consumed: undefined,
+    });
+  });
+
   it("commits decision_gate.* facts through ExtensionCapability", async () => {
     const committed: Array<{ event: string; data: unknown }> = [];
     const cap: ExtensionCapability = {

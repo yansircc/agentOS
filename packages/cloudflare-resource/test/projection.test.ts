@@ -324,4 +324,77 @@ describe("@agent-os/cloudflare-resource", () => {
       failure: undefined,
     });
   });
+
+  it("does not project lifecycle state from bound, mutation, or destroyed events without provision", () => {
+    const baseExpected = {
+      subjectRef: "res-lone",
+      status: "missing",
+      lastEventKind: undefined,
+      resourceKind: undefined,
+      resourceRef: undefined,
+      accountRef: undefined,
+      bindingRef: undefined,
+      latestMutation: undefined,
+      mutationEventIds: [],
+      failure: undefined,
+    };
+
+    expect(
+      projectCloudflareResource(
+        [
+          {
+            id: 1,
+            kind: CLOUDFLARE_RESOURCE_EVENTS.RESOURCE_BOUND,
+            payload: {
+              subjectRef: "res-lone",
+              resourceRef: d1ResourceRef,
+              bindingRef: d1BindingRef,
+              proofRef: "proof://cf/d1/bind",
+              claim: livedCloudflareResourceClaim("bind", "proof://cf/d1/bind"),
+            },
+          },
+        ],
+        "res-lone",
+      ),
+    ).toEqual(baseExpected);
+
+    expect(
+      projectCloudflareResource(
+        [
+          {
+            id: 1,
+            kind: CLOUDFLARE_RESOURCE_EVENTS.MUTATION_RECORDED,
+            payload: {
+              subjectRef: "res-lone",
+              resourceRef: d1BindingRef,
+              mutationKind: "d1.exec",
+              mutationRef: "mutation://d1/lone",
+              proofRef: "proof://cf/d1/lone",
+              claim: livedCloudflareResourceClaim("mutate", "proof://cf/d1/lone"),
+            },
+          },
+        ],
+        "res-lone",
+      ),
+    ).toEqual(baseExpected);
+
+    expect(
+      projectCloudflareResource(
+        [
+          {
+            id: 1,
+            kind: CLOUDFLARE_RESOURCE_EVENTS.RESOURCE_DESTROYED,
+            payload: {
+              subjectRef: "res-lone",
+              resourceRef: d1ResourceRef,
+              proofRef: "proof://cf/d1/destroy",
+              reason: "manual",
+              claim: livedCloudflareResourceClaim("destroy", "proof://cf/d1/destroy"),
+            },
+          },
+        ],
+        "res-lone",
+      ),
+    ).toEqual(baseExpected);
+  });
 });

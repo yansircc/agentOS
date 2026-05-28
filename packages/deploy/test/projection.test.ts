@@ -79,6 +79,34 @@ describe("@agent-os/deploy", () => {
     });
   });
 
+  it("does not promote production from a promotion without a preview", () => {
+    const events = [
+      {
+        id: 1,
+        kind: DEPLOY_EVENTS.PRODUCTION_PROMOTED,
+        payload: {
+          subjectRef: "ch-lone-promotion",
+          deployRef: "cf-deploy://v2",
+          productionRef: "https://site.example",
+          rollbackRef: "cf-deploy://v1",
+          claim: livedDeployClaim("cf-deploy://v2"),
+        },
+      },
+    ] as const;
+
+    expect(projectDeploy(events, "ch-lone-promotion")).toEqual({
+      subjectRef: "ch-lone-promotion",
+      previewRef: undefined,
+      artifactRef: undefined,
+      deployRef: undefined,
+      productionRef: undefined,
+      readbackRef: undefined,
+      rollbackRef: undefined,
+      status: "missing",
+      failure: undefined,
+    });
+  });
+
   it("settles deploy.* facts through ExtensionCapability", async () => {
     const committed: Array<{ event: string; data: unknown }> = [];
     const cap: ExtensionCapability = {

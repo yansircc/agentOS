@@ -151,7 +151,7 @@ export const projectDecisionGate = (
       }
       case DECISION_GATE_EVENTS.DECIDED: {
         const next = decidedFrom(event.payload);
-        if (next !== undefined) {
+        if (next !== undefined && request !== undefined) {
           decision = next;
           consumed = undefined;
         }
@@ -159,7 +159,12 @@ export const projectDecisionGate = (
       }
       case DECISION_GATE_EVENTS.CONSUMED: {
         const next = consumedFrom(event.payload);
-        if (next !== undefined && decision?.decisionRef === next.decisionRef) {
+        if (
+          next !== undefined &&
+          request !== undefined &&
+          decision?.decision === "approved" &&
+          decision.decisionRef === next.decisionRef
+        ) {
           consumed = next;
         }
         break;
