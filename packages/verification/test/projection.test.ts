@@ -28,7 +28,7 @@ const livedVerificationClaim = (anchorId: string) =>
 
 describe("@agent-os/verification", () => {
   it("declares verification.* as an extension-owned prefix", () => {
-    expect(verificationExtensionPackage("0.1.0")).toEqual({
+    expect(verificationExtensionPackage("0.1.0")).toMatchObject({
       packageId: "@agent-os/verification",
       kindPrefixes: ["verification."],
       version: "0.1.0",

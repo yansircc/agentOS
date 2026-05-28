@@ -23,7 +23,7 @@ const livedDeployClaim = (anchorId: string) =>
 
 describe("@agent-os/deploy", () => {
   it("declares deploy.* as an extension-owned prefix", () => {
-    expect(deployExtensionPackage("0.1.0")).toEqual({
+    expect(deployExtensionPackage("0.1.0")).toMatchObject({
       packageId: "@agent-os/deploy",
       kindPrefixes: ["deploy."],
       version: "0.1.0",

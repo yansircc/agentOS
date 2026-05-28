@@ -1,10 +1,12 @@
 import { Data } from "effect";
 import { CORE_CLAIMED_PREFIXES, CapabilityRejected, isCoreClaimedEventKind } from "./errors";
+import type { BoundaryContract } from "./boundary-contract";
 
 export interface ExtensionPackage {
   readonly packageId: string;
   readonly kindPrefixes: ReadonlyArray<string>;
   readonly version: string;
+  readonly boundaryContract?: BoundaryContract;
 }
 
 export interface ExtensionCommitSpec {

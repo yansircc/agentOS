@@ -29,11 +29,14 @@
 import { DurableObject } from "cloudflare:workers";
 import {
   AgentDOBase,
+  boundaryExtensionPackage,
+  defineBoundaryContract,
   type AgentDOEnv,
   type DispatchTargetNamespace,
   type DispatchTargetRegistry,
   type ExtensionPackage,
 } from "../src";
+import { makePreClaim, settleLivedClaim } from "../src/effect-claim";
 import { bindingMaterialRef, materialRefKey } from "../src/material-ref";
 
 export class TestAgentDO extends DurableObject {}
@@ -105,6 +108,42 @@ export class StreamTestDO extends AgentDOBase<AgentDOEnv> {
   }
 }
 
+const proofBoundaryContract = defineBoundaryContract({
+  packageId: "@agent-os/proof",
+  kindPrefixes: ["proof."],
+  roles: ["generator", "reader"],
+  vocabulary: {
+    RECORDED: "proof.recorded",
+  },
+  authorityContracts: [],
+  materialRequirements: [],
+  claimPayloadKey: "claim",
+  claimPhases: {
+    "proof.recorded": ["lived"],
+  },
+  proof: {
+    anchorKinds: ["carrier_proof"],
+    symbolicOnly: true,
+  },
+  projection: {
+    derivedFromLedger: true,
+    shadowState: false,
+  },
+});
+
+const proofPreClaim = makePreClaim({
+  operationRef: "proof:record",
+  scopeRef: { kind: "conversation", scopeId: "extension-proof" },
+  authorityRef: { authorityId: "proof.record", authorityClass: "effect" },
+  originRef: { originId: "extension-test", originKind: "test" },
+});
+
+export const proofLivedClaim = settleLivedClaim(proofPreClaim, {
+  anchorId: "proof:record",
+  anchorKind: "carrier_proof",
+  carrierRef: "proof",
+});
+
 export class ExtensionTestDO extends AgentDOBase<AgentDOEnv> {
   protected override registerExtensions(): ReadonlyArray<ExtensionPackage> {
     return [
@@ -113,6 +152,7 @@ export class ExtensionTestDO extends AgentDOBase<AgentDOEnv> {
         kindPrefixes: ["image."],
         version: "0.3.0",
       },
+      boundaryExtensionPackage(proofBoundaryContract, "0.1.0"),
     ];
   }
 
@@ -141,6 +181,28 @@ export class ExtensionTestDO extends AgentDOBase<AgentDOEnv> {
     return this.extensionCapability("@agent-os/image").time({
       at,
       event: "image.job.deferred",
+      data,
+    });
+  }
+
+  commitProofFact(data: unknown): Promise<{ id: number }> {
+    return this.extensionCapability("@agent-os/proof").commit({
+      event: "proof.recorded",
+      data,
+    });
+  }
+
+  commitProofOther(data: unknown): Promise<{ id: number }> {
+    return this.extensionCapability("@agent-os/proof").commit({
+      event: "proof.other",
+      data,
+    });
+  }
+
+  scheduleProofFact(at: number, data: unknown): Promise<{ id: number }> {
+    return this.extensionCapability("@agent-os/proof").time({
+      at,
+      event: "proof.recorded",
       data,
     });
   }

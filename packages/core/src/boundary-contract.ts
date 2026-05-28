@@ -167,12 +167,13 @@ export const defineBoundaryContract = <EventKind extends string>(
 ): BoundaryContract<EventKind> => contract;
 
 export const boundaryExtensionPackage = (
-  contract: Pick<BoundaryContract, "packageId" | "kindPrefixes">,
+  contract: BoundaryContract,
   version: string,
 ): ExtensionPackage => ({
   packageId: contract.packageId,
   kindPrefixes: contract.kindPrefixes,
   version,
+  boundaryContract: contract,
 });
 
 export const validateBoundaryContract = (value: unknown): BoundaryContractValidation => {

@@ -28,7 +28,7 @@ const livedStagingClaim = (anchorId: string) =>
 
 describe("@agent-os/staging-artifact", () => {
   it("declares staging.* as an extension-owned prefix", () => {
-    expect(stagingArtifactExtensionPackage("0.1.0")).toEqual({
+    expect(stagingArtifactExtensionPackage("0.1.0")).toMatchObject({
       packageId: "@agent-os/staging-artifact",
       kindPrefixes: ["staging."],
       version: "0.1.0",

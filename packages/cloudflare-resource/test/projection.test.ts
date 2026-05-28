@@ -71,7 +71,7 @@ const unsettledPreCloudflareResourceClaim = makePreClaim({
 
 describe("@agent-os/cloudflare-resource", () => {
   it("declares cf_resource.* as an extension-owned prefix", () => {
-    expect(cloudflareResourceExtensionPackage("0.1.0")).toEqual({
+    expect(cloudflareResourceExtensionPackage("0.1.0")).toMatchObject({
       packageId: "@agent-os/cloudflare-resource",
       kindPrefixes: ["cf_resource."],
       version: "0.1.0",

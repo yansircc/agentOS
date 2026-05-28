@@ -52,6 +52,7 @@ describe("BoundaryContract", () => {
       packageId: "@agent-os/example-carrier",
       kindPrefixes: ["example."],
       version: "0.1.0",
+      boundaryContract: contract,
     });
   });
 

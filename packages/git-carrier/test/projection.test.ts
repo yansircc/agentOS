@@ -28,7 +28,7 @@ const livedGitClaim = (anchorId: string) =>
 
 describe("@agent-os/git-carrier", () => {
   it("declares git.* as an extension-owned prefix", () => {
-    expect(gitCarrierExtensionPackage("0.1.0")).toEqual({
+    expect(gitCarrierExtensionPackage("0.1.0")).toMatchObject({
       packageId: "@agent-os/git-carrier",
       kindPrefixes: ["git."],
       version: "0.1.0",
