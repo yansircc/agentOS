@@ -247,6 +247,38 @@ describe("@agent-os/workspace-session", () => {
     });
   });
 
+  it("does not activate a session from backup without a started or restored session", () => {
+    const events = [
+      {
+        id: 1,
+        kind: WORKSPACE_SESSION_EVENTS.BACKED_UP,
+        payload: {
+          subjectRef: "run-lone-backup",
+          sessionRef: "session://missing",
+          backupRef: "backup://missing",
+          claim: settleLivedClaim(sessionClaim, {
+            anchorId: "backup://missing",
+            anchorKind: "carrier_proof",
+            carrierRef: "workspace-session",
+          }),
+        },
+      },
+    ] as const;
+
+    expect(projectWorkspaceSession(events, "run-lone-backup")).toEqual({
+      subjectRef: "run-lone-backup",
+      status: "missing",
+      lastEventKind: undefined,
+      sessionRef: undefined,
+      workspaceRootRef: undefined,
+      cleanupRef: undefined,
+      retention: undefined,
+      backups: [],
+      previews: [],
+      failure: undefined,
+    });
+  });
+
   it("settles failure claims and projects workspace_session.failed", async () => {
     const rejected = settleWorkspaceSessionRejected(sessionClaim, {
       code: "ScopeNotSession",

@@ -181,6 +181,40 @@ const failedPayloadFrom = (
   };
 };
 
+const materialRefEquals = (left: MaterialRef | undefined, right: MaterialRef): boolean => {
+  if (left === undefined || left.kind !== right.kind) return false;
+  switch (left.kind) {
+    case "credential":
+      return (
+        right.kind === "credential" &&
+        left.ref === right.ref &&
+        left.provider === right.provider &&
+        left.purpose === right.purpose
+      );
+    case "endpoint":
+      return right.kind === "endpoint" && left.ref === right.ref && left.protocol === right.protocol;
+    case "binding":
+      return (
+        right.kind === "binding" &&
+        left.provider === right.provider &&
+        left.bindingKind === right.bindingKind &&
+        left.ref === right.ref
+      );
+    case "external_resource":
+      return (
+        right.kind === "external_resource" &&
+        left.provider === right.provider &&
+        left.resourceKind === right.resourceKind &&
+        left.ref === right.ref
+      );
+  }
+};
+
+const hasLiveResource = (
+  status: CloudflareResourceProjection["status"],
+  provisionedResourceRef: ExternalResourceMaterialRef | undefined,
+): boolean => status !== "missing" && status !== "destroyed" && provisionedResourceRef !== undefined;
+
 export const projectCloudflareResource = (
   events: Iterable<CloudflareResourceLedgerEvent>,
   subjectRef: string,
@@ -188,6 +222,7 @@ export const projectCloudflareResource = (
   let status: CloudflareResourceProjection["status"] = "missing";
   let lastEventKind: CloudflareResourceEventKind | undefined;
   let resourceKind: string | undefined;
+  let provisionedResourceRef: ExternalResourceMaterialRef | undefined;
   let resourceRef: MaterialRef | undefined;
   let accountRef: ExternalResourceMaterialRef | undefined;
   let bindingRef: BindingMaterialRef | undefined;
@@ -201,10 +236,19 @@ export const projectCloudflareResource = (
     switch (event.kind) {
       case CLOUDFLARE_RESOURCE_EVENTS.RESOURCE_PROVISIONED: {
         const nextResourceRef = externalResourceRefFrom(event.payload.resourceRef);
+        const nextResourceKind = stringField(event.payload, "resourceKind");
         const proofRef = stringField(event.payload, "proofRef");
         const claim = livedClaimFrom(event.payload.claim);
-        if (nextResourceRef === undefined || proofRef === undefined || claim === undefined) break;
-        resourceKind = stringField(event.payload, "resourceKind");
+        if (
+          nextResourceRef === undefined ||
+          nextResourceKind === undefined ||
+          proofRef === undefined ||
+          claim === undefined
+        ) {
+          break;
+        }
+        resourceKind = nextResourceKind;
+        provisionedResourceRef = nextResourceRef;
         resourceRef = nextResourceRef;
         accountRef = externalResourceRefFrom(event.payload.accountRef);
         bindingRef = bindingRefFrom(event.payload.bindingRef);
@@ -222,7 +266,9 @@ export const projectCloudflareResource = (
           nextResourceRef === undefined ||
           nextBindingRef === undefined ||
           proofRef === undefined ||
-          claim === undefined
+          claim === undefined ||
+          !hasLiveResource(status, provisionedResourceRef) ||
+          !materialRefEquals(provisionedResourceRef, nextResourceRef)
         ) {
           break;
         }
@@ -236,6 +282,14 @@ export const projectCloudflareResource = (
       case CLOUDFLARE_RESOURCE_EVENTS.MUTATION_RECORDED: {
         const mutation = mutationPayloadFrom(event);
         if (mutation === undefined) break;
+        if (
+          !hasLiveResource(status, provisionedResourceRef) ||
+          bindingRef === undefined ||
+          (!materialRefEquals(bindingRef, mutation.resourceRef) &&
+            !materialRefEquals(provisionedResourceRef, mutation.resourceRef))
+        ) {
+          break;
+        }
         resourceRef = mutation.resourceRef;
         latestMutation = mutation;
         mutationEventIds.push(event.id);
@@ -253,7 +307,10 @@ export const projectCloudflareResource = (
           nextResourceRef === undefined ||
           proofRef === undefined ||
           reason === undefined ||
-          claim === undefined
+          claim === undefined ||
+          !hasLiveResource(status, provisionedResourceRef) ||
+          (!materialRefEquals(provisionedResourceRef, nextResourceRef) &&
+            !materialRefEquals(bindingRef, nextResourceRef))
         ) {
           break;
         }

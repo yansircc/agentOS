@@ -107,6 +107,12 @@ const failureFrom = (payload: Record<string, unknown>): DeployFailedPayload | un
   return { subjectRef, step, proofRef, reason, claim };
 };
 
+const hasPreview = (previewRef: string | undefined, artifactRef: string | undefined): boolean =>
+  previewRef !== undefined && artifactRef !== undefined;
+
+const hasPromotion = (deployRef: string | undefined, productionRef: string | undefined): boolean =>
+  deployRef !== undefined && productionRef !== undefined;
+
 export const projectDeploy = (
   events: Iterable<DeployLedgerEvent>,
   subjectRef: string,
@@ -124,38 +130,81 @@ export const projectDeploy = (
     if (!isRecord(event.payload)) continue;
     if (event.payload.subjectRef !== subjectRef) continue;
     switch (event.kind) {
-      case DEPLOY_EVENTS.PREVIEW_RECORDED:
-        if (livedClaimFrom(event.payload.claim) === undefined) break;
-        previewRef = stringField(event.payload, "previewRef");
-        artifactRef = stringField(event.payload, "artifactRef");
+      case DEPLOY_EVENTS.PREVIEW_RECORDED: {
+        const nextPreviewRef = stringField(event.payload, "previewRef");
+        const nextArtifactRef = stringField(event.payload, "artifactRef");
+        if (
+          livedClaimFrom(event.payload.claim) === undefined ||
+          nextPreviewRef === undefined ||
+          nextArtifactRef === undefined
+        ) {
+          break;
+        }
+        previewRef = nextPreviewRef;
+        artifactRef = nextArtifactRef;
         status = "previewed";
         failure = undefined;
         break;
-      case DEPLOY_EVENTS.PRODUCTION_PROMOTED:
-        if (livedClaimFrom(event.payload.claim) === undefined) break;
-        deployRef = stringField(event.payload, "deployRef");
-        productionRef = stringField(event.payload, "productionRef");
+      }
+      case DEPLOY_EVENTS.PRODUCTION_PROMOTED: {
+        const nextDeployRef = stringField(event.payload, "deployRef");
+        const nextProductionRef = stringField(event.payload, "productionRef");
+        if (
+          !hasPreview(previewRef, artifactRef) ||
+          livedClaimFrom(event.payload.claim) === undefined ||
+          nextDeployRef === undefined ||
+          nextProductionRef === undefined
+        ) {
+          break;
+        }
+        deployRef = nextDeployRef;
+        productionRef = nextProductionRef;
         rollbackRef = stringField(event.payload, "rollbackRef");
         status = "promoted";
         failure = undefined;
         break;
-      case DEPLOY_EVENTS.PRODUCTION_READBACK:
-        if (livedClaimFrom(event.payload.claim) === undefined) break;
-        readbackRef = stringField(event.payload, "readbackRef");
-        productionRef = stringField(event.payload, "productionRef") ?? productionRef;
+      }
+      case DEPLOY_EVENTS.PRODUCTION_READBACK: {
+        const nextProductionRef = stringField(event.payload, "productionRef");
+        const nextReadbackRef = stringField(event.payload, "readbackRef");
+        if (
+          !hasPromotion(deployRef, productionRef) ||
+          livedClaimFrom(event.payload.claim) === undefined ||
+          nextProductionRef === undefined ||
+          nextProductionRef !== productionRef ||
+          nextReadbackRef === undefined ||
+          (event.payload.status !== "passed" && event.payload.status !== "failed")
+        ) {
+          break;
+        }
+        readbackRef = nextReadbackRef;
         status = event.payload.status === "passed" ? "live_verified" : "failed";
         break;
-      case DEPLOY_EVENTS.ROLLBACK_RECORDED:
-        if (livedClaimFrom(event.payload.claim) === undefined) break;
-        rollbackRef = stringField(event.payload, "rollbackRef");
-        deployRef = stringField(event.payload, "restoredDeployRef") ?? deployRef;
+      }
+      case DEPLOY_EVENTS.ROLLBACK_RECORDED: {
+        const nextRollbackRef = stringField(event.payload, "rollbackRef");
+        const restoredDeployRef = stringField(event.payload, "restoredDeployRef");
+        if (
+          !hasPromotion(deployRef, productionRef) ||
+          livedClaimFrom(event.payload.claim) === undefined ||
+          nextRollbackRef === undefined ||
+          restoredDeployRef === undefined
+        ) {
+          break;
+        }
+        rollbackRef = nextRollbackRef;
+        deployRef = restoredDeployRef;
         status = "rolled_back";
         failure = undefined;
         break;
-      case DEPLOY_EVENTS.FAILED:
-        failure = failureFrom(event.payload);
+      }
+      case DEPLOY_EVENTS.FAILED: {
+        const nextFailure = failureFrom(event.payload);
+        if (nextFailure === undefined) break;
+        failure = nextFailure;
         status = "failed";
         break;
+      }
     }
   }
 

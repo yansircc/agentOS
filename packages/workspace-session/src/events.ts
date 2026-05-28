@@ -193,6 +193,18 @@ const resetLifecycleRefs = (
   previews.length = 0;
 };
 
+const hasOpenSession = (
+  status: WorkspaceSessionProjection["status"],
+  sessionRef: string | undefined,
+  workspaceRootRef: string | undefined,
+  cleanupRef: string | undefined,
+): boolean =>
+  status !== "missing" &&
+  status !== "destroyed" &&
+  sessionRef !== undefined &&
+  workspaceRootRef !== undefined &&
+  cleanupRef !== undefined;
+
 export const projectWorkspaceSession = (
   events: Iterable<WorkspaceSessionLedgerEvent>,
   subjectRef: string,
@@ -212,11 +224,21 @@ export const projectWorkspaceSession = (
     if (event.payload.subjectRef !== subjectRef) continue;
     switch (event.kind) {
       case WORKSPACE_SESSION_EVENTS.STARTED: {
-        if (livedClaimFrom(event.payload.claim) === undefined) break;
+        const nextSessionRef = stringField(event.payload, "sessionRef");
+        const nextWorkspaceRootRef = stringField(event.payload, "workspaceRootRef");
+        const nextCleanupRef = stringField(event.payload, "cleanupRef");
+        if (
+          livedClaimFrom(event.payload.claim) === undefined ||
+          nextSessionRef === undefined ||
+          nextWorkspaceRootRef === undefined ||
+          nextCleanupRef === undefined
+        ) {
+          break;
+        }
         resetLifecycleRefs(backups, previews);
-        sessionRef = stringField(event.payload, "sessionRef");
-        workspaceRootRef = stringField(event.payload, "workspaceRootRef");
-        cleanupRef = stringField(event.payload, "cleanupRef");
+        sessionRef = nextSessionRef;
+        workspaceRootRef = nextWorkspaceRootRef;
+        cleanupRef = nextCleanupRef;
         retention = retentionFrom(event.payload.retention);
         status = "active";
         lastEventKind = event.kind;
@@ -224,11 +246,23 @@ export const projectWorkspaceSession = (
         break;
       }
       case WORKSPACE_SESSION_EVENTS.RESTORED: {
-        if (livedClaimFrom(event.payload.claim) === undefined) break;
+        const nextSessionRef = stringField(event.payload, "sessionRef");
+        const backupRef = stringField(event.payload, "backupRef");
+        const nextWorkspaceRootRef = stringField(event.payload, "workspaceRootRef");
+        const nextCleanupRef = stringField(event.payload, "cleanupRef");
+        if (
+          livedClaimFrom(event.payload.claim) === undefined ||
+          nextSessionRef === undefined ||
+          backupRef === undefined ||
+          nextWorkspaceRootRef === undefined ||
+          nextCleanupRef === undefined
+        ) {
+          break;
+        }
         resetLifecycleRefs(backups, previews);
-        sessionRef = stringField(event.payload, "sessionRef");
-        workspaceRootRef = stringField(event.payload, "workspaceRootRef");
-        cleanupRef = stringField(event.payload, "cleanupRef");
+        sessionRef = nextSessionRef;
+        workspaceRootRef = nextWorkspaceRootRef;
+        cleanupRef = nextCleanupRef;
         retention = retentionFrom(event.payload.retention);
         status = "active";
         lastEventKind = event.kind;
@@ -236,37 +270,58 @@ export const projectWorkspaceSession = (
         break;
       }
       case WORKSPACE_SESSION_EVENTS.BACKED_UP: {
-        if (livedClaimFrom(event.payload.claim) === undefined) break;
-        sessionRef = stringField(event.payload, "sessionRef") ?? sessionRef;
+        const nextSessionRef = stringField(event.payload, "sessionRef");
         const backupRef = stringField(event.payload, "backupRef");
-        if (backupRef !== undefined) {
-          pushBackup(backups, backupRef, stringField(event.payload, "expiresAt"));
+        if (
+          livedClaimFrom(event.payload.claim) === undefined ||
+          !hasOpenSession(status, sessionRef, workspaceRootRef, cleanupRef) ||
+          nextSessionRef === undefined ||
+          nextSessionRef !== sessionRef ||
+          backupRef === undefined
+        ) {
+          break;
         }
+        pushBackup(backups, backupRef, stringField(event.payload, "expiresAt"));
         status = "active";
         lastEventKind = event.kind;
         failure = undefined;
         break;
       }
       case WORKSPACE_SESSION_EVENTS.PREVIEW_ALLOCATED: {
-        if (livedClaimFrom(event.payload.claim) === undefined) break;
-        sessionRef = stringField(event.payload, "sessionRef") ?? sessionRef;
+        const nextSessionRef = stringField(event.payload, "sessionRef");
         const previewRef = stringField(event.payload, "previewRef");
         const port = numberField(event.payload, "port");
-        if (previewRef !== undefined && port !== undefined) {
-          pushPreview(previews, previewRef, port, stringField(event.payload, "url"));
+        if (
+          livedClaimFrom(event.payload.claim) === undefined ||
+          !hasOpenSession(status, sessionRef, workspaceRootRef, cleanupRef) ||
+          nextSessionRef === undefined ||
+          nextSessionRef !== sessionRef ||
+          previewRef === undefined ||
+          port === undefined
+        ) {
+          break;
         }
+        pushPreview(previews, previewRef, port, stringField(event.payload, "url"));
         status = "active";
         lastEventKind = event.kind;
         failure = undefined;
         break;
       }
-      case WORKSPACE_SESSION_EVENTS.DESTROYED:
-        if (livedClaimFrom(event.payload.claim) === undefined) break;
-        sessionRef = stringField(event.payload, "sessionRef") ?? sessionRef;
+      case WORKSPACE_SESSION_EVENTS.DESTROYED: {
+        const nextSessionRef = stringField(event.payload, "sessionRef");
+        if (
+          livedClaimFrom(event.payload.claim) === undefined ||
+          !hasOpenSession(status, sessionRef, workspaceRootRef, cleanupRef) ||
+          nextSessionRef === undefined ||
+          nextSessionRef !== sessionRef
+        ) {
+          break;
+        }
         status = "destroyed";
         lastEventKind = event.kind;
         failure = undefined;
         break;
+      }
       case WORKSPACE_SESSION_EVENTS.FAILED:
         failure = failedPayloadFrom(event.payload);
         if (failure !== undefined) {
