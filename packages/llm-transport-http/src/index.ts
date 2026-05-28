@@ -149,6 +149,9 @@ const errorFrame = (turnRef: string, seq: number, reason: string): TurnStreamFra
   reason,
 });
 
+const hasToolDefinitions = (tools: ReadonlyArray<ToolDefinition> | undefined): boolean =>
+  tools !== undefined && tools.length > 0;
+
 const resolvedStringMaterial = (resolver: RefResolver, ref: MaterialRef): string | null => {
   const value = resolver.material(ref);
   return isNonEmptyString(value) ? value : null;
@@ -244,7 +247,6 @@ const buildOpenAiRequest = (
   const body = encodeBody({
     model: route.modelId,
     messages: spec.messages,
-    ...(spec.tools === undefined ? {} : { tools: spec.tools }),
     stream: true,
     stream_options: { include_usage: true },
   });
@@ -267,15 +269,6 @@ const buildOpenAiRequest = (
       },
     },
   };
-};
-
-const toolsToAnthropic = (tools: ReadonlyArray<ToolDefinition> | undefined): unknown => {
-  if (tools === undefined || tools.length === 0) return undefined;
-  return tools.map((tool) => ({
-    name: tool.function.name,
-    description: tool.function.description,
-    input_schema: tool.function.parameters,
-  }));
 };
 
 const buildAnthropicMessages = (
@@ -358,7 +351,6 @@ const buildAnthropicRequest = (
   const body = encodeBody({
     model: route.modelId,
     ...messages.value,
-    tools: toolsToAnthropic(spec.tools),
     max_tokens: ANTHROPIC_DEFAULT_MAX_TOKENS,
     stream: true,
   });
@@ -382,34 +374,6 @@ const buildAnthropicRequest = (
       },
     },
   };
-};
-
-const GEMINI_STRIPPED_SCHEMA_FIELDS = new Set(["additionalProperties", "$schema", "$id", "$ref"]);
-
-const sanitizeSchemaForGemini = (node: unknown): unknown => {
-  if (node === null || typeof node !== "object") return node;
-  if (Array.isArray(node)) return node.map((entry) => sanitizeSchemaForGemini(entry));
-
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
-    if (!GEMINI_STRIPPED_SCHEMA_FIELDS.has(key)) {
-      out[key] = sanitizeSchemaForGemini(value);
-    }
-  }
-  return out;
-};
-
-const toolsToGemini = (tools: ReadonlyArray<ToolDefinition> | undefined): unknown => {
-  if (tools === undefined || tools.length === 0) return undefined;
-  return [
-    {
-      functionDeclarations: tools.map((tool) => ({
-        name: tool.function.name,
-        description: tool.function.description,
-        parameters: sanitizeSchemaForGemini(tool.function.parameters),
-      })),
-    },
-  ];
 };
 
 const buildGeminiContents = (
@@ -499,7 +463,6 @@ const buildGeminiRequest = (
   const body = encodeBody({
     ...(systemText === undefined ? {} : { systemInstruction: { parts: [{ text: systemText }] } }),
     contents,
-    tools: toolsToGemini(spec.tools),
   });
   if (typeof body !== "string") return { ok: false, error: body };
 
@@ -709,6 +672,10 @@ async function* streamSseFrames(
 export async function* streamLlmTurn(spec: StreamLlmTurnSpec): AsyncGenerator<TurnStreamFrame> {
   if (signalAborted(spec.signal)) {
     yield errorFrame(spec.turnRef, 0, "llm_transport_http_aborted");
+    return;
+  }
+  if (hasToolDefinitions(spec.tools)) {
+    yield errorFrame(spec.turnRef, 0, "llm_transport_http_stream_tools_unsupported");
     return;
   }
   if (typeof spec.fetch !== "function") {
