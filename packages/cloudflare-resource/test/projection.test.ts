@@ -2,13 +2,13 @@ import {
   CLOUDFLARE_RESOURCE_AUTHORITIES,
   CLOUDFLARE_RESOURCE_EVENTS,
   cloudflareResourceAuthorityContracts,
-  cloudflareResourceExtensionPackage,
+  cloudflareResourceBoundaryPackage,
   commitCloudflareResourceFailed,
   projectCloudflareResource,
 } from "../src";
-import { makePreClaim, settleLivedClaim, settleRejectedClaim } from "@agent-os/core/effect-claim";
-import type { ExtensionCapability } from "@agent-os/core/extensions";
-import { bindingMaterialRef, externalResourceMaterialRef } from "@agent-os/core/material-ref";
+import { makePreClaim, settleLivedClaim, settleRejectedClaim } from "@agent-os/kernel/effect-claim";
+import type { ExtensionCapability } from "@agent-os/kernel/extensions";
+import { bindingMaterialRef, externalResourceMaterialRef } from "@agent-os/kernel/material-ref";
 
 const accountRef = externalResourceMaterialRef({
   provider: "cloudflare",
@@ -71,7 +71,7 @@ const unsettledPreCloudflareResourceClaim = makePreClaim({
 
 describe("@agent-os/cloudflare-resource", () => {
   it("declares cf_resource.* as an extension-owned prefix", () => {
-    expect(cloudflareResourceExtensionPackage("0.1.0")).toMatchObject({
+    expect(cloudflareResourceBoundaryPackage("0.1.0")).toMatchObject({
       packageId: "@agent-os/cloudflare-resource",
       kindPrefixes: ["cf_resource."],
       version: "0.1.0",

@@ -1,6 +1,6 @@
-import { DEPLOY_EVENTS, commitDeployFailed, deployExtensionPackage, projectDeploy } from "../src";
-import { makePreClaim, settleLivedClaim, settleRejectedClaim } from "@agent-os/core/effect-claim";
-import type { ExtensionCapability } from "@agent-os/core/extensions";
+import { DEPLOY_EVENTS, commitDeployFailed, deployBoundaryPackage, projectDeploy } from "../src";
+import { makePreClaim, settleLivedClaim, settleRejectedClaim } from "@agent-os/kernel/effect-claim";
+import type { ExtensionCapability } from "@agent-os/kernel/extensions";
 
 const deployClaim = makePreClaim({
   operationRef: "deploy:session-1:promote",
@@ -23,7 +23,7 @@ const livedDeployClaim = (anchorId: string) =>
 
 describe("@agent-os/deploy", () => {
   it("declares deploy.* as an extension-owned prefix", () => {
-    expect(deployExtensionPackage("0.1.0")).toMatchObject({
+    expect(deployBoundaryPackage("0.1.0")).toMatchObject({
       packageId: "@agent-os/deploy",
       kindPrefixes: ["deploy."],
       version: "0.1.0",

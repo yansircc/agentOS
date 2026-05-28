@@ -7,10 +7,10 @@ import {
   projectWorkspaceSession,
   resolveWorkspaceSession,
   settleWorkspaceSessionRejected,
-  workspaceSessionExtensionPackage,
+  workspaceSessionBoundaryPackage,
 } from "../src";
-import { makePreClaim, settleLivedClaim } from "@agent-os/core/effect-claim";
-import type { ExtensionCapability } from "@agent-os/core/extensions";
+import { makePreClaim, settleLivedClaim } from "@agent-os/kernel/effect-claim";
+import type { ExtensionCapability } from "@agent-os/kernel/extensions";
 
 const sessionClaim = makePreClaim({
   operationRef: "workspace-session:session-1:start",
@@ -27,7 +27,7 @@ const sessionClaim = makePreClaim({
 
 describe("@agent-os/workspace-session", () => {
   it("declares workspace_session.* as an extension-owned prefix", () => {
-    expect(workspaceSessionExtensionPackage("0.1.0")).toMatchObject({
+    expect(workspaceSessionBoundaryPackage("0.1.0")).toMatchObject({
       packageId: "@agent-os/workspace-session",
       kindPrefixes: ["workspace_session."],
       version: "0.1.0",

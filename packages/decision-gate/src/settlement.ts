@@ -1,5 +1,5 @@
-import type { AdmitVerdict, PreClaim, RejectionRef } from "@agent-os/core/effect-claim";
-import type { ExtensionCapability } from "@agent-os/core/extensions";
+import type { AdmitVerdict, PreClaim, RejectionRef } from "@agent-os/kernel/effect-claim";
+import type { ExtensionCapability } from "@agent-os/kernel/extensions";
 
 import {
   DECISION_GATE_EVENTS,

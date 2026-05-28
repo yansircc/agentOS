@@ -71,8 +71,8 @@ if [[ -d "$repo_root/node_modules" && ! -e "$worktree/node_modules" ]]; then
   ln -s "$repo_root/node_modules" "$worktree/node_modules"
 fi
 
-if [[ -d "$repo_root/packages/core/node_modules" && ! -e "$worktree/packages/core/node_modules" ]]; then
-  ln -s "$repo_root/packages/core/node_modules" "$worktree/packages/core/node_modules"
+if [[ -d "$repo_root/packages/backend-cloudflare-do/node_modules" && ! -e "$worktree/packages/backend-cloudflare-do/node_modules" ]]; then
+  ln -s "$repo_root/packages/backend-cloudflare-do/node_modules" "$worktree/packages/backend-cloudflare-do/node_modules"
 fi
 
 cat > "$agent_dir/ports.json" <<JSON

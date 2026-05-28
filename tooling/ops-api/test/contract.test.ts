@@ -28,7 +28,7 @@ import type {
   RunStatus,
   RunTrace,
   StreamEventsOptions,
-} from "@agent-os/core";
+} from "@agent-os/runtime";
 
 // ============================================================
 // In-memory fakes
@@ -463,7 +463,7 @@ describe("§6.1 ops-api source contains no app nouns", () => {
 // (Structural: each endpoint we hit triggers exactly one RPC call.)
 // ============================================================
 
-describe("§6.2 endpoints map 1:1 to AgentDOBase RPC", () => {
+describe("§6.2 endpoints map 1:1 to Cloudflare backend RPC", () => {
   it("/events hits events() once", async () => {
     let calls = 0;
     const fakeDO = new FakeAgentDO(ROWS);

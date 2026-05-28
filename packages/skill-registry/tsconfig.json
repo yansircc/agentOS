@@ -16,9 +16,9 @@
       "@cloudflare/vitest-pool-workers/types"
     ],
     "paths": {
-      "@agent-os/core/effect-claim": ["../core/src/effect-claim.ts"],
-      "@agent-os/core/material-ref": ["../core/src/material-ref.ts"],
-      "@agent-os/core/tools": ["../core/src/tools.ts"]
+      "@agent-os/kernel/effect-claim": ["../kernel/src/effect-claim.ts"],
+      "@agent-os/kernel/material-ref": ["../kernel/src/material-ref.ts"],
+      "@agent-os/kernel/tools": ["../kernel/src/tools.ts"]
     },
     "exactOptionalPropertyTypes": false,
     "noUncheckedIndexedAccess": false

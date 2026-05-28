@@ -11,10 +11,10 @@
     "isolatedModules": true,
     "types": ["vitest/globals"],
     "paths": {
-      "@agent-os/core/boundary-contract": ["../core/src/boundary-contract.ts"],
-      "@agent-os/core/effect-claim": ["../core/src/effect-claim.ts"],
-      "@agent-os/core/extensions": ["../core/src/extensions.ts"],
-      "@agent-os/core/runtime-scope": ["../core/src/runtime-scope.ts"],
+      "@agent-os/kernel/boundary-contract": ["../kernel/src/boundary-contract.ts"],
+      "@agent-os/kernel/effect-claim": ["../kernel/src/effect-claim.ts"],
+      "@agent-os/kernel/extensions": ["../kernel/src/extensions.ts"],
+      "@agent-os/kernel/runtime-scope": ["../kernel/src/runtime-scope.ts"],
       "@agent-os/workspace-session": ["../workspace-session/src/index.ts"]
     },
     "exactOptionalPropertyTypes": false,

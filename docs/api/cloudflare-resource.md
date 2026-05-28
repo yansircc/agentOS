@@ -49,7 +49,7 @@
 - `.:CloudflareWorkflowResourceCarrierOptions`
 - `.:cloudflareResourceAuthorityContracts`
 - `.:cloudflareResourceBoundaryContract`
-- `.:cloudflareResourceExtensionPackage`
+- `.:cloudflareResourceBoundaryPackage`
 - `.:cloudflareResourceFailedPayload`
 - `.:cloudflareResourceRejectionKind`
 - `.:commitCloudflareResourceBound`

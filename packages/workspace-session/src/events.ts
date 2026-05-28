@@ -2,7 +2,7 @@ import {
   validateEffectClaim,
   type LivedClaim,
   type RejectedClaim,
-} from "@agent-os/core/effect-claim";
+} from "@agent-os/kernel/effect-claim";
 
 import { WORKSPACE_SESSION_EVENT_VOCABULARY } from "./extension";
 

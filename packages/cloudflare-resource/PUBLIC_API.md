@@ -53,7 +53,7 @@ Status: 0.2.x active development for provider-neutral resource carrier algebra. 
 - `.:CloudflareWorkflowResourceCarrierOptions`
 - `.:cloudflareResourceAuthorityContracts`
 - `.:cloudflareResourceBoundaryContract`
-- `.:cloudflareResourceExtensionPackage`
+- `.:cloudflareResourceBoundaryPackage`
 - `.:cloudflareResourceFailedPayload`
 - `.:cloudflareResourceRejectionKind`
 - `.:commitCloudflareResourceBound`

@@ -2,10 +2,10 @@ import {
   STAGING_EVENTS,
   deferStagingArtifactReap,
   projectStagingArtifact,
-  stagingArtifactExtensionPackage,
+  stagingArtifactBoundaryPackage,
 } from "../src";
-import { makePreClaim, settleLivedClaim } from "@agent-os/core/effect-claim";
-import type { ExtensionCapability } from "@agent-os/core/extensions";
+import { makePreClaim, settleLivedClaim } from "@agent-os/kernel/effect-claim";
+import type { ExtensionCapability } from "@agent-os/kernel/extensions";
 
 const stagingClaim = makePreClaim({
   operationRef: "staging:session-1:reap",
@@ -28,7 +28,7 @@ const livedStagingClaim = (anchorId: string) =>
 
 describe("@agent-os/staging-artifact", () => {
   it("declares staging.* as an extension-owned prefix", () => {
-    expect(stagingArtifactExtensionPackage("0.1.0")).toMatchObject({
+    expect(stagingArtifactBoundaryPackage("0.1.0")).toMatchObject({
       packageId: "@agent-os/staging-artifact",
       kindPrefixes: ["staging."],
       version: "0.1.0",

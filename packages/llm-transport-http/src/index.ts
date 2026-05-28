@@ -1,7 +1,7 @@
-import type { LlmRoute } from "@agent-os/core";
-import { credentialMaterialRef, endpointMaterialRef } from "@agent-os/core/material-ref";
-import type { MaterialRef } from "@agent-os/core/material-ref";
-import type { RefResolver } from "@agent-os/core/ref-resolver";
+import type { LlmRoute } from "@agent-os/runtime";
+import { credentialMaterialRef, endpointMaterialRef } from "@agent-os/kernel/material-ref";
+import type { MaterialRef } from "@agent-os/kernel/material-ref";
+import type { RefResolver } from "@agent-os/kernel/ref-resolver";
 import {
   adaptAnthropicDeltaChunk,
   adaptGeminiDeltaChunk,
@@ -495,6 +495,8 @@ const buildProviderRequest = (spec: StreamLlmTurnSpec): ProviderRequestResult =>
         error: { reason: "llm_transport_http_unsupported_route" },
       };
   }
+  const _exhaustive: never = spec.route;
+  return _exhaustive;
 };
 
 interface SseEvent {

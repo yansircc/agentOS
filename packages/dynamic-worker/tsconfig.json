@@ -10,8 +10,8 @@
     "skipLibCheck": true,
     "isolatedModules": true,
     "paths": {
-      "@agent-os/core/effect-claim": ["../core/src/effect-claim.ts"],
-      "@agent-os/core/runtime-scope": ["../core/src/runtime-scope.ts"]
+      "@agent-os/kernel/effect-claim": ["../kernel/src/effect-claim.ts"],
+      "@agent-os/kernel/runtime-scope": ["../kernel/src/runtime-scope.ts"]
     },
     "exactOptionalPropertyTypes": false,
     "noUncheckedIndexedAccess": false

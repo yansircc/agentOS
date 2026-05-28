@@ -1,0 +1,42 @@
+{
+  "name": "@agent-os/backend-cloudflare-do",
+  "version": "0.2.8",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vp test run && vp test run --config vitest.cloudflare.config.ts",
+    "test:unit": "vp test run",
+    "test:worker": "vp test run --config vitest.cloudflare.config.ts"
+  },
+  "dependencies": {
+    "@agent-os/kernel": "workspace:*",
+    "@agent-os/runtime": "workspace:*",
+    "@effect/experimental": "catalog:",
+    "@effect/platform": "catalog:",
+    "@effect/sql": "catalog:",
+    "@effect/sql-sqlite-do": "catalog:"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "catalog:",
+    "@cloudflare/workers-types": "catalog:",
+    "@effect/language-service": "catalog:",
+    "@effect/vitest": "catalog:",
+    "effect": "catalog:",
+    "fast-check": "catalog:",
+    "typescript": "catalog:",
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "effect": "^3.21.0"
+  }
+}

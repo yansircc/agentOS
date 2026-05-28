@@ -1,11 +1,11 @@
 import {
   GIT_EVENTS,
   commitGitCommitRecorded,
-  gitCarrierExtensionPackage,
+  gitCarrierBoundaryPackage,
   projectGitSubject,
 } from "../src";
-import { makePreClaim, settleLivedClaim } from "@agent-os/core/effect-claim";
-import type { ExtensionCapability } from "@agent-os/core/extensions";
+import { makePreClaim, settleLivedClaim } from "@agent-os/kernel/effect-claim";
+import type { ExtensionCapability } from "@agent-os/kernel/extensions";
 
 const gitClaim = makePreClaim({
   operationRef: "git:session-1:commit",
@@ -28,7 +28,7 @@ const livedGitClaim = (anchorId: string) =>
 
 describe("@agent-os/git-carrier", () => {
   it("declares git.* as an extension-owned prefix", () => {
-    expect(gitCarrierExtensionPackage("0.1.0")).toMatchObject({
+    expect(gitCarrierBoundaryPackage("0.1.0")).toMatchObject({
       packageId: "@agent-os/git-carrier",
       kindPrefixes: ["git."],
       version: "0.1.0",

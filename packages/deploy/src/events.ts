@@ -2,7 +2,7 @@ import {
   validateEffectClaim,
   type LivedClaim,
   type RejectedClaim,
-} from "@agent-os/core/effect-claim";
+} from "@agent-os/kernel/effect-claim";
 import { DEPLOY_EVENT_VOCABULARY } from "./extension";
 
 export const DEPLOY_EVENTS = DEPLOY_EVENT_VOCABULARY;

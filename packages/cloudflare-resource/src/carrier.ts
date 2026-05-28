@@ -1,11 +1,11 @@
 import type { Effect } from "effect";
-import type { PreClaim, RejectedClaim } from "@agent-os/core/effect-claim";
+import type { PreClaim, RejectedClaim } from "@agent-os/kernel/effect-claim";
 import type {
   CredentialMaterialRef,
   BindingMaterialRef,
   ExternalResourceMaterialRef,
   MaterialRef,
-} from "@agent-os/core/material-ref";
+} from "@agent-os/kernel/material-ref";
 
 import type {
   CloudflareResourceBoundPayload,

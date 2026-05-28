@@ -6,7 +6,13 @@
  * ops-api ships no default implementation.
  */
 
-import type { AttemptKey, RunListPage, RunListSpec, RunStatus, RunSummary } from "@agent-os/core";
+import type {
+  AttemptKey,
+  RunListPage,
+  RunListSpec,
+  RunStatus,
+  RunSummary,
+} from "@agent-os/runtime";
 
 // ============================================================
 // Scope resolution
@@ -57,7 +63,7 @@ export interface OpsAuth {
 }
 
 // ============================================================
-// Run summary / list — re-exported from @agent-os/core so apps
+// Run summary / list — re-exported from @agent-os/runtime so apps
 // using ops-api type the response correctly without two imports.
 // ============================================================
 

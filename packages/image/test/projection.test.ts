@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { IMAGE_EVENT_PREFIX, IMAGE_EVENTS, imageExtensionPackage, projectImageJobs } from "../src";
+import { IMAGE_EVENT_PREFIX, IMAGE_EVENTS, imageEventNamespace, projectImageJobs } from "../src";
 
 describe("image job projection", () => {
   it("declares image.* as an extension-owned prefix, not core vocabulary", () => {
-    expect(imageExtensionPackage("0.1.0")).toEqual({
+    expect(imageEventNamespace("0.1.0")).toEqual({
       packageId: "@agent-os/image",
       kindPrefixes: [IMAGE_EVENT_PREFIX],
       version: "0.1.0",

@@ -1,5 +1,5 @@
-import type { ScopeRef } from "@agent-os/core/effect-claim";
-import { resolveStatefulSessionRoot, type RuntimeScopeKind } from "@agent-os/core/runtime-scope";
+import type { ScopeRef } from "@agent-os/kernel/effect-claim";
+import { resolveStatefulSessionRoot, type RuntimeScopeKind } from "@agent-os/kernel/runtime-scope";
 
 export interface WorkspaceSessionResolutionSpec {
   readonly carrierRef: string;

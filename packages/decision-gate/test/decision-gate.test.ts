@@ -2,11 +2,11 @@ import {
   DECISION_GATE_EVENTS,
   admitDecisionGate,
   commitDecisionGateRequested,
-  decisionGateExtensionPackage,
+  decisionGateBoundaryPackage,
   projectDecisionGate,
 } from "../src";
-import { makePreClaim, settleLivedClaim } from "@agent-os/core/effect-claim";
-import type { ExtensionCapability } from "@agent-os/core/extensions";
+import { makePreClaim, settleLivedClaim } from "@agent-os/kernel/effect-claim";
+import type { ExtensionCapability } from "@agent-os/kernel/extensions";
 
 const claim = makePreClaim({
   operationRef: "publish:subject-1",
@@ -29,7 +29,7 @@ const consumedClaim = settleLivedClaim(claim, {
 
 describe("@agent-os/decision-gate", () => {
   it("declares decision_gate.* as an extension-owned prefix", () => {
-    expect(decisionGateExtensionPackage("0.1.0")).toMatchObject({
+    expect(decisionGateBoundaryPackage("0.1.0")).toMatchObject({
       packageId: "@agent-os/decision-gate",
       kindPrefixes: ["decision_gate."],
       version: "0.1.0",

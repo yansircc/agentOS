@@ -36,7 +36,7 @@
 - `.:projectWorkspaceSession`
 - `.:resolveWorkspaceSession`
 - `.:settleWorkspaceSessionRejected`
-- `.:workspaceSessionExtensionPackage`
+- `.:workspaceSessionBoundaryPackage`
 - `.:workspaceSessionBoundaryContract`
 - `.:workspaceSessionFailedPayload`
 - `.:workspaceSessionRejectionKind`

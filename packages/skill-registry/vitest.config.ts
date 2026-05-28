@@ -3,11 +3,11 @@ import { defineConfig } from "vite-plus";
 export default defineConfig({
   resolve: {
     alias: {
-      "@agent-os/core/effect-claim": new URL("../core/src/effect-claim.ts", import.meta.url)
+      "@agent-os/kernel/effect-claim": new URL("../kernel/src/effect-claim.ts", import.meta.url)
         .pathname,
-      "@agent-os/core/material-ref": new URL("../core/src/material-ref.ts", import.meta.url)
+      "@agent-os/kernel/material-ref": new URL("../kernel/src/material-ref.ts", import.meta.url)
         .pathname,
-      "@agent-os/core/tools": new URL("../core/src/tools.ts", import.meta.url).pathname,
+      "@agent-os/kernel/tools": new URL("../kernel/src/tools.ts", import.meta.url).pathname,
     },
   },
   test: {

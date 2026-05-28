@@ -30,7 +30,7 @@ subsets of the top-level material axis.
 ## Minimal Shape
 
 ```ts
-import { defineBoundaryContract } from "@agent-os/core/boundary-contract";
+import { defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
 
 export const boundary = defineBoundaryContract({
   packageId: "@agent-os/example",

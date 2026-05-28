@@ -1,5 +1,9 @@
-import { settleRejectedClaim, type PreClaim, type RejectionRef } from "@agent-os/core/effect-claim";
-import type { ExtensionCapability } from "@agent-os/core/extensions";
+import {
+  settleRejectedClaim,
+  type PreClaim,
+  type RejectionRef,
+} from "@agent-os/kernel/effect-claim";
+import type { ExtensionCapability } from "@agent-os/kernel/extensions";
 
 import type { WorkspaceSessionFailure } from "./carrier";
 import {

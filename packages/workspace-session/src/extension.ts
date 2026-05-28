@@ -1,4 +1,4 @@
-import { boundaryExtensionPackage, defineBoundaryContract } from "@agent-os/core/boundary-contract";
+import { boundaryPackage, defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
 
 export const WORKSPACE_SESSION_EVENT_PREFIX = "workspace_session.";
 
@@ -37,5 +37,5 @@ export const workspaceSessionBoundaryContract = defineBoundaryContract({
   },
 });
 
-export const workspaceSessionExtensionPackage = (version: string) =>
-  boundaryExtensionPackage(workspaceSessionBoundaryContract, version);
+export const workspaceSessionBoundaryPackage = (version: string) =>
+  boundaryPackage(workspaceSessionBoundaryContract, version);

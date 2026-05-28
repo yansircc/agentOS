@@ -1,4 +1,4 @@
-import { boundaryExtensionPackage, defineBoundaryContract } from "@agent-os/core/boundary-contract";
+import { boundaryPackage, defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
 
 export const DECISION_GATE_EVENT_PREFIX = "decision_gate.";
 
@@ -31,5 +31,5 @@ export const decisionGateBoundaryContract = defineBoundaryContract({
   },
 });
 
-export const decisionGateExtensionPackage = (version: string) =>
-  boundaryExtensionPackage(decisionGateBoundaryContract, version);
+export const decisionGateBoundaryPackage = (version: string) =>
+  boundaryPackage(decisionGateBoundaryContract, version);

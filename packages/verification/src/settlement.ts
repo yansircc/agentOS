@@ -1,4 +1,4 @@
-import type { ExtensionCapability } from "@agent-os/core/extensions";
+import type { ExtensionCapability } from "@agent-os/kernel/extensions";
 
 import { VERIFICATION_EVENTS, type VerificationGateRecordedPayload } from "./events";
 

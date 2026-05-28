@@ -2,10 +2,10 @@ import {
   VERIFICATION_EVENTS,
   commitVerificationGateRecorded,
   projectVerificationGates,
-  verificationExtensionPackage,
+  verificationBoundaryPackage,
 } from "../src";
-import { makePreClaim, settleLivedClaim } from "@agent-os/core/effect-claim";
-import type { ExtensionCapability } from "@agent-os/core/extensions";
+import { makePreClaim, settleLivedClaim } from "@agent-os/kernel/effect-claim";
+import type { ExtensionCapability } from "@agent-os/kernel/extensions";
 
 const verificationClaim = makePreClaim({
   operationRef: "verification:subject-1:typecheck",
@@ -28,7 +28,7 @@ const livedVerificationClaim = (anchorId: string) =>
 
 describe("@agent-os/verification", () => {
   it("declares verification.* as an extension-owned prefix", () => {
-    expect(verificationExtensionPackage("0.1.0")).toMatchObject({
+    expect(verificationBoundaryPackage("0.1.0")).toMatchObject({
       packageId: "@agent-os/verification",
       kindPrefixes: ["verification."],
       version: "0.1.0",

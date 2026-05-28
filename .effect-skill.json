@@ -1,16 +1,22 @@
 {
   "packages": [
     {
-      "path": "packages/cloudflare-resource",
+      "path": "packages/backend-cloudflare-do",
+      "shape": ["library"],
+      "dependencyOwner": "package-local",
+      "dependencyOwnerReason": "Cloudflare DO backend owns platform adapter dependency declarations"
+    },
+    {
+      "path": "packages/backend-in-memory",
       "shape": ["library"],
       "dependencyOwner": "workspace-root",
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
     },
     {
-      "path": "packages/core",
+      "path": "packages/cloudflare-resource",
       "shape": ["library"],
-      "dependencyOwner": "package-local",
-      "dependencyOwnerReason": "core owns substrate dependency declarations in packages/core/package.json"
+      "dependencyOwner": "workspace-root",
+      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
     },
     {
       "path": "packages/decision-gate",
@@ -43,6 +49,12 @@
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
     },
     {
+      "path": "packages/kernel",
+      "shape": ["library"],
+      "dependencyOwner": "package-local",
+      "dependencyOwnerReason": "kernel owns platform-free algebra dependency declarations"
+    },
+    {
       "path": "packages/llm-transport-http",
       "shape": ["library"],
       "dependencyOwner": "workspace-root",
@@ -53,6 +65,12 @@
       "shape": ["library"],
       "dependencyOwner": "workspace-root",
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+    },
+    {
+      "path": "packages/runtime",
+      "shape": ["library"],
+      "dependencyOwner": "package-local",
+      "dependencyOwnerReason": "runtime owns backend-neutral runtime dependency declarations"
     },
     {
       "path": "packages/sandbox",
@@ -140,32 +158,32 @@
   ],
   "allowedAdapters": [
     {
-      "path": "packages/core/src/ledger/stream.ts",
-      "owner": "@agent-os/core",
+      "path": "packages/backend-cloudflare-do/src/ledger/stream.ts",
+      "owner": "@agent-os/backend-cloudflare-do",
       "reason": "terminal ledger SSE adapter owns Response construction",
       "rules": ["EFF402"]
     },
     {
-      "path": "packages/core/src/storage/sql-row.ts",
-      "owner": "@agent-os/core-storage",
+      "path": "packages/backend-cloudflare-do/src/storage/sql-row.ts",
+      "owner": "@agent-os/backend-cloudflare-do-storage",
       "reason": "SQLite row adapter owns fail-fast host column shape assertion",
       "rules": ["EFF025"]
     },
     {
-      "path": "packages/core/test/_in-memory-do.ts",
-      "owner": "@agent-os/core-tests",
+      "path": "packages/backend-cloudflare-do/test/_in-memory-do.ts",
+      "owner": "@agent-os/backend-cloudflare-do-tests",
       "reason": "test-only Durable Object SQL adapter models transactionSync rollback by synchronous throws",
       "rules": ["EFF001", "EFF025"]
     },
     {
-      "path": "packages/core/test/admission/attempt-structured.worker.test.ts",
-      "owner": "@agent-os/core-tests",
+      "path": "packages/backend-cloudflare-do/test/admission/attempt-structured.worker.test.ts",
+      "owner": "@agent-os/backend-cloudflare-do-tests",
       "reason": "test HTTP fixture owns provider Response construction",
       "rules": ["EFF402"]
     },
     {
-      "path": "packages/core/test/test-worker.ts",
-      "owner": "@agent-os/core-tests",
+      "path": "packages/backend-cloudflare-do/test/test-worker.ts",
+      "owner": "@agent-os/backend-cloudflare-do-tests",
       "reason": "Cloudflare worker test adapter owns Response construction",
       "rules": ["EFF402"]
     },

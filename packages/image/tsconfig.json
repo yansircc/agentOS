@@ -10,9 +10,9 @@
     "skipLibCheck": true,
     "isolatedModules": true,
     "paths": {
-      "@agent-os/core/extensions": ["../core/src/extensions.ts"],
-      "@agent-os/core/material-ref": ["../core/src/material-ref.ts"],
-      "@agent-os/core/ref-resolver": ["../core/src/ref-resolver.ts"]
+      "@agent-os/kernel/extensions": ["../kernel/src/extensions.ts"],
+      "@agent-os/kernel/material-ref": ["../kernel/src/material-ref.ts"],
+      "@agent-os/kernel/ref-resolver": ["../kernel/src/ref-resolver.ts"]
     },
     "exactOptionalPropertyTypes": false,
     "noUncheckedIndexedAccess": false

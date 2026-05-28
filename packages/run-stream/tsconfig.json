@@ -13,7 +13,12 @@
     "exactOptionalPropertyTypes": false,
     "noUncheckedIndexedAccess": false,
     "paths": {
-      "@agent-os/core": ["../core/src/index.ts"],
+      "@agent-os/kernel": ["../kernel/src/index.ts"],
+      "@agent-os/kernel/effect-claim": ["../kernel/src/effect-claim.ts"],
+      "@agent-os/kernel/llm": ["../kernel/src/llm.ts"],
+      "@agent-os/kernel/material-ref": ["../kernel/src/material-ref.ts"],
+      "@agent-os/kernel/tools": ["../kernel/src/tools.ts"],
+      "@agent-os/runtime": ["../runtime/src/index.ts"],
       "@agent-os/turn-stream": ["../turn-stream/src/index.ts"]
     }
   },

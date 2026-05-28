@@ -3,8 +3,8 @@ import {
   RefResolutionFailed,
   RefResolverService,
   resolveStringMaterial,
-} from "@agent-os/core/ref-resolver";
-import { credentialMaterialRef, endpointMaterialRef } from "@agent-os/core/material-ref";
+} from "@agent-os/kernel/ref-resolver";
+import { credentialMaterialRef, endpointMaterialRef } from "@agent-os/kernel/material-ref";
 import { getImageProtocolAdapter } from "./adapters/registry";
 import { ImageAiBinding, ImageDecodeFailure, ImageUpstreamFailure } from "./services";
 import type {

@@ -1,0 +1,124 @@
+# @agent-os/runtime Public API Intent
+
+## Public exports
+
+- `.:ABORT`
+- `.:AbortKind`
+- `.:AdmissionImpact`
+- `.:AdmissionRow`
+- `.:AttemptKey`
+- `.:BarrierRow`
+- `.:CapabilityLease`
+- `.:CommitJournal`
+- `.:CommitJournalTransaction`
+- `.:DispatchTargetSpec`
+- `.:DispatchToScopeResult`
+- `.:DispatchToScopeSpec`
+- `.:EventHandler`
+- `.:EventQueryOptions`
+- `.:EvidenceRow`
+- `.:FINGERPRINT_ALGO_VERSION`
+- `.:InternalSubmitSpec`
+- `.:JsonSchemaNode`
+- `.:JsonSchemaObject`
+- `.:LedgerEvent`
+- `.:LedgerEventRpc`
+- `.:LlmRoute`
+- `.:LlmUsage`
+- `.:MaterialResolver`
+- `.:Outcome`
+- `.:OutcomeClass`
+- `.:QuotaState`
+- `.:QuotaStateSpec`
+- `.:ResourceGrantResult`
+- `.:ResourceGrantSpec`
+- `.:ResourceReservationSpec`
+- `.:ResourceReservationView`
+- `.:ResourceReserveResult`
+- `.:ResourceReserveSpec`
+- `.:ResourceState`
+- `.:RunListPage`
+- `.:RunListSpec`
+- `.:RunStatus`
+- `.:RunStatusKind`
+- `.:RunSummary`
+- `.:RunTerminal`
+- `.:RunToolCall`
+- `.:RunTrace`
+- `.:RunTurn`
+- `.:ScheduledEventSpec`
+- `.:SchemaContract`
+- `.:ScopeRouter`
+- `.:Strategy`
+- `.:StreamEventsOptions`
+- `.:SubmitResult`
+- `.:SubmitSpec`
+- `.:TimerBackend`
+- `.:Tool`
+- `.:ToolDefinition`
+- `.:TraceContext`
+- `.:TurnRef`
+- `.:decideTier`
+- `.:makeSchemaContract`
+- `.:projectLease`
+- `.:reasonOf`
+- `.:routeFingerprint`
+- `.:validateAgainstSchema`
+- `./admission:AdmissionImpact`
+- `./admission:AdmissionRow`
+- `./admission:AttemptKey`
+- `./admission:BarrierRow`
+- `./admission:CapabilityLease`
+- `./admission:EvidenceRow`
+- `./admission:FINGERPRINT_ALGO_VERSION`
+- `./admission:JsonSchemaNode`
+- `./admission:JsonSchemaObject`
+- `./admission:LlmRoute`
+- `./admission:Outcome`
+- `./admission:OutcomeClass`
+- `./admission:SchemaContract`
+- `./admission:Strategy`
+- `./admission:decideTier`
+- `./admission:makeSchemaContract`
+- `./admission:projectLease`
+- `./admission:routeFingerprint`
+- `./admission:validateAgainstSchema`
+- `./abort:ABORT`
+- `./abort:AbortKind`
+- `./abort:reasonOf`
+- `./types:DispatchTargetSpec`
+- `./types:DispatchToScopeResult`
+- `./types:DispatchToScopeSpec`
+- `./types:EventHandler`
+- `./types:EventQueryOptions`
+- `./types:LedgerEvent`
+- `./types:LedgerEventRpc`
+- `./types:QuotaState`
+- `./types:QuotaStateSpec`
+- `./types:ResourceGrantResult`
+- `./types:ResourceGrantSpec`
+- `./types:ResourceReservationSpec`
+- `./types:ResourceReservationView`
+- `./types:ResourceReserveResult`
+- `./types:ResourceReserveSpec`
+- `./types:ResourceState`
+- `./types:RunListPage`
+- `./types:RunListSpec`
+- `./types:RunStatus`
+- `./types:RunStatusKind`
+- `./types:RunSummary`
+- `./types:RunTerminal`
+- `./types:RunToolCall`
+- `./types:RunTrace`
+- `./types:RunTurn`
+- `./types:ScheduledEventSpec`
+- `./types:StreamEventsOptions`
+- `./types:TraceContext`
+
+## Experimental exports
+
+None.
+
+## Internal-only exports
+
+Any package file or symbol not listed above.

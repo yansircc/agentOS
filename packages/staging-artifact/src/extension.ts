@@ -1,4 +1,4 @@
-import { boundaryExtensionPackage, defineBoundaryContract } from "@agent-os/core/boundary-contract";
+import { boundaryPackage, defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
 
 export const STAGING_EVENT_PREFIX = "staging.";
 
@@ -29,5 +29,5 @@ export const stagingArtifactBoundaryContract = defineBoundaryContract({
   },
 });
 
-export const stagingArtifactExtensionPackage = (version: string) =>
-  boundaryExtensionPackage(stagingArtifactBoundaryContract, version);
+export const stagingArtifactBoundaryPackage = (version: string) =>
+  boundaryPackage(stagingArtifactBoundaryContract, version);

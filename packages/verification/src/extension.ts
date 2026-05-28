@@ -1,4 +1,4 @@
-import { boundaryExtensionPackage, defineBoundaryContract } from "@agent-os/core/boundary-contract";
+import { boundaryPackage, defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
 
 export const VERIFICATION_EVENT_PREFIX = "verification.";
 
@@ -27,5 +27,5 @@ export const verificationBoundaryContract = defineBoundaryContract({
   },
 });
 
-export const verificationExtensionPackage = (version: string) =>
-  boundaryExtensionPackage(verificationBoundaryContract, version);
+export const verificationBoundaryPackage = (version: string) =>
+  boundaryPackage(verificationBoundaryContract, version);
