@@ -21,6 +21,7 @@
 
 import { Clock, Context, Effect, Layer, Schema } from "effect";
 import { EventBus } from "../ledger";
+import { fireLedgerEvents, insertLedgerEvent } from "../ledger/inserted-events";
 import { JsonStringifyError, SqlError, safeStringify } from "../errors";
 import { RefResolutionFailed, RefResolverService } from "../ref-resolver";
 import { AiBinding, dispatchProvider, type LlmRoute } from "../llm";
@@ -29,7 +30,6 @@ import {
   getProtocolAdapter,
   llmProtocolAdapters,
 } from "../llm/protocol/protocol-adapter";
-import type { LedgerEvent } from "../types";
 
 import type { SchemaContract } from "./json-schema";
 import type { AdmissionImpact, AttemptKey, CapabilityLease, Outcome, Strategy } from "./lease";
@@ -272,50 +272,33 @@ export const AdmissionLive = (ctx: DurableObjectState): Layer.Layer<Admission, n
           const txResult = yield* Effect.try({
             try: () =>
               ctx.storage.transactionSync(() => {
-                const c1 = sql.exec(
-                  "INSERT INTO events (ts, kind, scope, payload) VALUES (?, ?, ?, ?) RETURNING id",
-                  now,
-                  "llm.structured.evidence",
-                  spec.scope,
-                  evidenceStr,
-                );
-                const evidenceId = Number(c1.one().id);
+                const evidenceEvent = insertLedgerEvent(sql, {
+                  ts: now,
+                  kind: "llm.structured.evidence",
+                  scope: spec.scope,
+                  payloadStr: evidenceStr,
+                  payload: evidencePayload,
+                });
 
-                let deliverId: number | undefined;
+                const events = [evidenceEvent];
                 if (deliverSpec !== null && deliverStr !== null) {
-                  const c2 = sql.exec(
-                    "INSERT INTO events (ts, kind, scope, payload) VALUES (?, ?, ?, ?) RETURNING id",
-                    now,
-                    deliverSpec.event,
-                    spec.scope,
-                    deliverStr,
+                  events.push(
+                    insertLedgerEvent(sql, {
+                      ts: now,
+                      kind: deliverSpec.event,
+                      scope: spec.scope,
+                      payloadStr: deliverStr,
+                      payload: deliverSpec.payload,
+                    }),
                   );
-                  deliverId = Number(c2.one().id);
                 }
-                return { evidenceId, deliverId };
+                return { evidenceId: evidenceEvent.id, events };
               }),
             catch: (cause) => new SqlError({ cause }),
           });
 
-          // Step 9: fire events after commit.
-          const evidenceEvent: LedgerEvent = {
-            id: txResult.evidenceId,
-            ts: now,
-            kind: "llm.structured.evidence",
-            scope: spec.scope,
-            payload: evidencePayload,
-          };
-          yield* bus.fire(evidenceEvent);
-
-          if (deliverSpec !== null && txResult.deliverId !== undefined && deliverStr !== null) {
-            yield* bus.fire({
-              id: txResult.deliverId,
-              ts: now,
-              kind: deliverSpec.event,
-              scope: spec.scope,
-              payload: deliverSpec.payload,
-            });
-          }
+          // Step 9: fire inserted ledger rows after commit.
+          yield* fireLedgerEvents(bus, txResult.events);
 
           // Post-projection (read-only, for the return value's lease shape).
           const postRows = yield* loadAdmissionRows(sql, spec.scope);
@@ -352,29 +335,22 @@ export const AdmissionLive = (ctx: DurableObjectState): Layer.Layer<Admission, n
           };
           const payloadStr = yield* safeStringify(payload);
 
-          const id = yield* Effect.try({
+          const event = yield* Effect.try({
             try: () => {
-              const cursor = sql.exec(
-                "INSERT INTO events (ts, kind, scope, payload) VALUES (?, ?, ?, ?) RETURNING id",
-                now,
-                "llm.structured.invalidate",
-                spec.scope,
+              return insertLedgerEvent(sql, {
+                ts: now,
+                kind: "llm.structured.invalidate",
+                scope: spec.scope,
                 payloadStr,
-              );
-              return Number(cursor.one().id);
+                payload,
+              });
             },
             catch: (cause) => new SqlError({ cause }),
           });
 
-          yield* bus.fire({
-            id,
-            ts: now,
-            kind: "llm.structured.invalidate",
-            scope: spec.scope,
-            payload,
-          });
+          yield* fireLedgerEvents(bus, [event]);
 
-          return { barrierId: id };
+          return { barrierId: event.id };
         });
 
       return { attemptStructured, invalidate };

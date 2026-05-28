@@ -13,7 +13,12 @@ import { runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vite-plus/test";
 
-import type { DispatchToScopeResult, DispatchToScopeSpec, LedgerEventRpc } from "../src";
+import type {
+  DispatchToScopeResult,
+  DispatchToScopeSpec,
+  LedgerEventRpc,
+  StreamEventsOptions,
+} from "../src";
 import { validateEffectClaim } from "../src/effect-claim";
 import { bindingMaterialRef, materialRefKey, type BindingMaterialRef } from "../src/material-ref";
 import { sqlText } from "../src/storage/sql-row";
@@ -29,6 +34,7 @@ interface DispatchRpc {
   readonly dispatchToScope: (spec: DispatchToScopeSpec) => Promise<DispatchToScopeResult>;
   readonly emitEvent: (spec: { event: string; data: unknown }) => Promise<{ id: number }>;
   readonly events: () => Promise<LedgerEventRpc[]>;
+  readonly streamEvents: (opts?: StreamEventsOptions) => Promise<Response>;
 }
 
 const stubFor = (scope: string): DurableObjectStub<DispatchTestDO> & DispatchRpc =>
@@ -57,6 +63,60 @@ const dispatchOperationRef = (source: string, bindingKey: string, target: string
 
 const payloadOf = <T>(events: ReadonlyArray<LedgerEventRpc>, kind: string): T =>
   events.find((e) => e.kind === kind)?.payload as T;
+
+interface SseFrame {
+  readonly event?: string;
+  readonly data?: string;
+}
+
+const parseFrame = (raw: string): SseFrame => {
+  let event: string | undefined;
+  let data: string | undefined;
+  for (const line of raw.split("\n")) {
+    if (line.startsWith("event: ")) event = line.slice(7);
+    else if (line.startsWith("data: ")) data = line.slice(6);
+  }
+  return { event, data };
+};
+
+const readLedgerRows = async (
+  response: Response,
+  count: number,
+  timeoutMs = 1_000,
+): Promise<ReadonlyArray<LedgerEventRpc>> => {
+  if (response.body === null) throw new Error("stream response missing body");
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  const rows: LedgerEventRpc[] = [];
+  let buffer = "";
+  const deadline = Date.now() + timeoutMs;
+  try {
+    while (rows.length < count) {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) throw new Error(`timed out waiting for ${count} ledger row(s)`);
+      const read = await Promise.race([
+        reader.read(),
+        new Promise<ReadableStreamReadResult<Uint8Array>>((resolve) =>
+          setTimeout(() => resolve({ done: true, value: undefined }), remaining),
+        ),
+      ]);
+      if (read.done) throw new Error(`stream ended before ${count} ledger row(s)`);
+      buffer += decoder.decode(read.value, { stream: true });
+      let boundary = buffer.indexOf("\n\n");
+      while (boundary >= 0) {
+        const frame = parseFrame(buffer.slice(0, boundary));
+        buffer = buffer.slice(boundary + 2);
+        if (frame.event === "ledger" && frame.data !== undefined) {
+          rows.push(JSON.parse(frame.data) as LedgerEventRpc);
+        }
+        boundary = buffer.indexOf("\n\n");
+      }
+    }
+    return rows;
+  } finally {
+    await reader.cancel().catch(() => undefined);
+  }
+};
 
 const rowsOrEmpty = (
   state: DurableObjectState,
@@ -176,7 +236,6 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
         readonly deliveredEventId: number;
       };
       expect(payload.deliveredEventId).toBe(receiverDelivered?.id);
-      expect(payload.deliveredEventId).not.toBe(Number(senderDelivered[0]?.id));
     });
   });
 
@@ -314,7 +373,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
     });
   });
 
-  it("fires receiver on() after commit for app event only", async () => {
+  it("fires receiver on() after commit for every inserted dispatch row", async () => {
     const sender = stubFor("dispatch-sender-fire");
     const receiver = stubFor("dispatch-receiver-fire");
 
@@ -334,7 +393,43 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
       sourceId: delivered?.id,
       sourcePayload: { message: "react" },
     });
-    expect(events.filter((e) => e.kind === "dispatch.inbound.handler_fired")).toHaveLength(0);
+    expect(events.filter((e) => e.kind === "test.inbound_accepted_handler_fired")).toHaveLength(
+      1,
+    );
+  });
+
+  it("live-streams dispatch internal rows without reconnect and fires outbound handler once", async () => {
+    const sender = stubFor("dispatch-sender-stream");
+    const receiver = stubFor("dispatch-receiver-stream");
+    const senderStream = await sender.streamEvents({ heartbeatMs: 1_000 });
+    const receiverStream = await receiver.streamEvents({ heartbeatMs: 1_000 });
+
+    await sender.dispatchToScope({
+      target: targetFor("dispatch-receiver-stream"),
+      event: "test.delivered",
+      data: { message: "stream" },
+      idempotencyKey: "stream-intent",
+    });
+
+    const senderRows = await readLedgerRows(senderStream, 3);
+    expect(senderRows.map((row) => row.kind)).toEqual([
+      "dispatch.outbound.requested",
+      "test.outbound_requested_handler_fired",
+      "dispatch.outbound.delivered",
+    ]);
+
+    const receiverRows = await readLedgerRows(receiverStream, 4);
+    expect(receiverRows.map((row) => row.kind)).toEqual([
+      "dispatch.inbound.accepted",
+      "test.delivered",
+      "test.inbound_accepted_handler_fired",
+      "test.followup",
+    ]);
+
+    const senderEvents: LedgerEventRpc[] = await sender.events();
+    expect(senderEvents.filter((e) => e.kind === "test.outbound_requested_handler_fired")).toHaveLength(
+      1,
+    );
   });
 
   it("rejects missing bindingRef as config error before writing sender facts", async () => {

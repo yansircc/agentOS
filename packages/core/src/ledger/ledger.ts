@@ -12,6 +12,7 @@ import { JsonStringifyError, SqlError, safeStringify } from "../errors";
 import type { EventQueryOptions, LedgerEvent, LedgerEventRpc } from "../types";
 import { sqlText } from "../storage/sql-row";
 import { EventBus } from "./event-bus";
+import { fireLedgerEvents, insertLedgerEvent } from "./inserted-events";
 
 const DEFAULT_EVENT_LIMIT = 1000;
 const MAX_EVENT_LIMIT = 1000;
@@ -98,20 +99,18 @@ export const LedgerLive = (sql: SqlStorage): Layer.Layer<Ledger, SqlError, Event
           Effect.gen(function* () {
             const ts = yield* Clock.currentTimeMillis;
             const payloadStr = yield* safeStringify(payload);
-            const cursor = yield* Effect.try({
+            const event = yield* Effect.try({
               try: () =>
-                sql.exec(
-                  "INSERT INTO events (ts, kind, scope, payload) VALUES (?, ?, ?, ?) RETURNING id",
+                insertLedgerEvent(sql, {
                   ts,
                   kind,
                   scope,
                   payloadStr,
-                ),
+                  payload,
+                }),
               catch: (cause) => new SqlError({ cause }),
             });
-            const id = Number(cursor.one().id);
-            const event: LedgerEvent = { id, ts, kind, scope, payload };
-            yield* bus.fire(event);
+            yield* fireLedgerEvents(bus, [event]);
             return event;
           }),
         events: (scope, opts = {}) =>

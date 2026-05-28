@@ -17,6 +17,7 @@ import { Clock, Context, Effect, Layer } from "effect";
 import { JsonStringifyError, SqlError, safeStringify } from "./errors";
 import type { LedgerEvent } from "./types";
 import { EventBus } from "./ledger";
+import { fireLedgerEvents, insertLedgerEvent } from "./ledger/inserted-events";
 import { sqlText } from "./storage/sql-row";
 
 export class Scheduler extends Context.Tag("@agent-os/Scheduler")<
@@ -142,32 +143,25 @@ export const SchedulerLive = (
                     if (stillPending.length === 0) {
                       return null;
                     }
-                    const insertCursor = sql.exec(
-                      "INSERT INTO events (ts, kind, scope, payload) VALUES (?, ?, ?, ?) RETURNING id",
+                    const event = insertLedgerEvent(sql, {
                       ts,
                       kind,
                       scope,
-                      dataStr,
-                    );
-                    const eventId = Number(insertCursor.one().id);
+                      payloadStr: dataStr,
+                      payload: dataValue,
+                    });
                     sql.exec(
                       "UPDATE scheduled_events SET fired_event_id = ? WHERE id = ?",
-                      eventId,
+                      event.id,
                       schedId,
                     );
-                    return {
-                      id: eventId,
-                      ts,
-                      kind,
-                      scope,
-                      payload: dataValue,
-                    } satisfies LedgerEvent;
+                    return event satisfies LedgerEvent;
                   }),
                 catch: (cause) => new SqlError({ cause }),
               });
 
               if (eventOrNull !== null) {
-                yield* bus.fire(eventOrNull);
+                yield* fireLedgerEvents(bus, [eventOrNull]);
                 fired += 1;
               }
             }

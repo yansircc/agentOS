@@ -21,6 +21,7 @@ import {
   safeStringify,
 } from "../errors";
 import { EventBus } from "../ledger";
+import { fireLedgerEvents, insertLedgerEvent } from "../ledger/inserted-events";
 import { materialRefKey } from "../material-ref";
 import type { LedgerEvent } from "../types";
 import type { DispatchToScopeResult, DispatchToScopeSpec } from "../types";
@@ -131,7 +132,7 @@ export const DispatchLive = (
         now: number,
       ): Effect.Effect<void, SqlError | JsonStringifyError> =>
         Effect.gen(function* () {
-          const payloadStr = yield* safeStringify({
+          const payload = {
             outboundEventId,
             target: requested.target,
             event: requested.event,
@@ -150,8 +151,9 @@ export const DispatchLive = (
             ...(requested.traceContext === undefined
               ? {}
               : { traceContext: requested.traceContext }),
-          });
-          yield* Effect.try({
+          };
+          const payloadStr = yield* safeStringify(payload);
+          const events = yield* Effect.try({
             try: () =>
               ctx.storage.transactionSync(() => {
                 const pending = sql
@@ -160,24 +162,25 @@ export const DispatchLive = (
                     outboundEventId,
                   )
                   .toArray();
-                if (pending.length === 0) return;
-                const deliveredCursor = sql.exec(
-                  "INSERT INTO events (ts, kind, scope, payload) VALUES (?, ?, ?, ?) RETURNING id",
-                  now,
-                  DISPATCH_OUTBOUND_DELIVERED,
+                if (pending.length === 0) return [];
+                const event = insertLedgerEvent(sql, {
+                  ts: now,
+                  kind: DISPATCH_OUTBOUND_DELIVERED,
                   scope,
                   payloadStr,
-                );
-                const localDeliveredEventId = Number(deliveredCursor.one().id);
+                  payload,
+                });
                 sql.exec(
                   "UPDATE dispatch_outbox SET delivered_event_id = ?, attempts = ?, last_error = NULL WHERE outbound_event_id = ?",
-                  localDeliveredEventId,
+                  event.id,
                   attempt,
                   outboundEventId,
                 );
+                return [event];
               }),
             catch: (cause) => new SqlError({ cause }),
           });
+          yield* fireLedgerEvents(bus, events);
         });
 
       const markFailed = (
@@ -190,7 +193,7 @@ export const DispatchLive = (
         Effect.gen(function* () {
           const error = describeCause(cause);
           const nextAttemptAt = now + retryDelayMs(attempt);
-          const payloadStr = yield* safeStringify({
+          const payload = {
             outboundEventId,
             target: requested.target,
             event: requested.event,
@@ -201,8 +204,9 @@ export const DispatchLive = (
             ...(requested.traceContext === undefined
               ? {}
               : { traceContext: requested.traceContext }),
-          });
-          yield* Effect.try({
+          };
+          const payloadStr = yield* safeStringify(payload);
+          const events = yield* Effect.try({
             try: () =>
               ctx.storage.transactionSync(() => {
                 const pending = sql
@@ -211,14 +215,14 @@ export const DispatchLive = (
                     outboundEventId,
                   )
                   .toArray();
-                if (pending.length === 0) return;
-                sql.exec(
-                  "INSERT INTO events (ts, kind, scope, payload) VALUES (?, ?, ?, ?)",
-                  now,
-                  DISPATCH_OUTBOUND_FAILED,
+                if (pending.length === 0) return [];
+                const event = insertLedgerEvent(sql, {
+                  ts: now,
+                  kind: DISPATCH_OUTBOUND_FAILED,
                   scope,
                   payloadStr,
-                );
+                  payload,
+                });
                 sql.exec(
                   "UPDATE dispatch_outbox SET attempts = ?, next_attempt_at = ?, last_error = ? WHERE outbound_event_id = ?",
                   attempt,
@@ -226,9 +230,11 @@ export const DispatchLive = (
                   error,
                   outboundEventId,
                 );
+                return [event];
               }),
             catch: (sqlCause) => new SqlError({ cause: sqlCause }),
           });
+          yield* fireLedgerEvents(bus, events);
         });
 
       const deliverOne = (
@@ -372,26 +378,26 @@ export const DispatchLive = (
             };
             const requestedPayloadStr = yield* safeStringify(requestedPayload);
 
-            const outboundEventId = yield* Effect.try({
+            const requestedEvent = yield* Effect.try({
               try: () =>
                 ctx.storage.transactionSync(() => {
-                  const cursor = sql.exec(
-                    "INSERT INTO events (ts, kind, scope, payload) VALUES (?, ?, ?, ?) RETURNING id",
-                    now,
-                    DISPATCH_OUTBOUND_REQUESTED,
+                  const event = insertLedgerEvent(sql, {
+                    ts: now,
+                    kind: DISPATCH_OUTBOUND_REQUESTED,
                     scope,
-                    requestedPayloadStr,
-                  );
-                  const id = Number(cursor.one().id);
+                    payloadStr: requestedPayloadStr,
+                    payload: requestedPayload,
+                  });
                   sql.exec(
                     "INSERT INTO dispatch_outbox (outbound_event_id, next_attempt_at) VALUES (?, ?)",
-                    id,
+                    event.id,
                     now,
                   );
-                  return id;
+                  return event;
                 }),
               catch: (cause) => new SqlError({ cause }),
             });
+            yield* fireLedgerEvents(bus, [requestedEvent]);
 
             const { next } = yield* drainDue(now);
             if (next !== null) {
@@ -400,7 +406,7 @@ export const DispatchLive = (
                 catch: (cause) => new SqlError({ cause }),
               });
             }
-            return { outboundEventId };
+            return { outboundEventId: requestedEvent.id };
           }),
 
         receive: (envelope) =>
@@ -438,7 +444,7 @@ export const DispatchLive = (
                     return {
                       duplicate: false,
                       deliveredEventId: 0,
-                      event: null,
+                      events: [],
                       failure: acceptedResult.failure,
                     };
                   }
@@ -447,56 +453,61 @@ export const DispatchLive = (
                     return {
                       duplicate: true,
                       deliveredEventId: accepted.deliveredEventId,
-                      event: null,
+                      events: [],
                       failure: null,
                     };
                   }
 
-                  const inboundCursor = sql.exec(
-                    "INSERT INTO events (ts, kind, scope, payload) VALUES (?, ?, ?, ?) RETURNING id",
-                    now,
-                    DISPATCH_INBOUND_ACCEPTED,
+                  const inboundPlaceholder = insertLedgerEvent(sql, {
+                    ts: now,
+                    kind: DISPATCH_INBOUND_ACCEPTED,
                     scope,
-                    "{}",
-                  );
-                  const inboundEventId = Number(inboundCursor.one().id);
+                    payloadStr: "{}",
+                    payload: {},
+                  });
 
-                  const appCursor = sql.exec(
-                    "INSERT INTO events (ts, kind, scope, payload) VALUES (?, ?, ?, ?) RETURNING id",
-                    now,
-                    envelope.event,
+                  const appEvent = insertLedgerEvent(sql, {
+                    ts: now,
+                    kind: envelope.event,
                     scope,
-                    appPayloadStr,
-                  );
-                  const deliveredEventId = Number(appCursor.one().id);
+                    payloadStr: appPayloadStr,
+                    payload: envelope.data,
+                  });
+                  const deliveredEventId = appEvent.id;
                   const traceContext = copyTraceContext(envelope.traceContext);
                   const claim = settleLivedClaim(envelope.claim, {
                     anchorId: `${scope}:${deliveredEventId}`,
                     anchorKind: "ledger_event",
                     carrierRef: `dispatch:${envelope.sourceScope}`,
                   });
-                  const inboundPayload = JSON.stringify({
+                  const inboundPayload = {
                     sourceScope: envelope.sourceScope,
                     outboundEventId: envelope.outboundEventId,
                     idempotencyKey: envelope.idempotencyKey,
                     deliveredEventId,
                     claim,
                     ...(traceContext === undefined ? {} : { traceContext }),
-                  } satisfies InboundAcceptedPayload);
+                  } satisfies InboundAcceptedPayload;
+                  const inboundPayloadStr = JSON.stringify(inboundPayload);
                   sql.exec(
                     "UPDATE events SET payload = ? WHERE id = ?",
-                    inboundPayload,
-                    inboundEventId,
+                    inboundPayloadStr,
+                    inboundPlaceholder.id,
                   );
 
-                  const event: LedgerEvent = {
-                    id: deliveredEventId,
+                  const inboundEvent: LedgerEvent = {
+                    id: inboundPlaceholder.id,
                     ts: now,
-                    kind: envelope.event,
+                    kind: DISPATCH_INBOUND_ACCEPTED,
                     scope,
-                    payload: envelope.data,
+                    payload: inboundPayload,
                   };
-                  return { duplicate: false, deliveredEventId, event, failure: null };
+                  return {
+                    duplicate: false,
+                    deliveredEventId,
+                    events: [inboundEvent, appEvent],
+                    failure: null,
+                  };
                 }),
               catch: (cause) => new SqlError({ cause }),
             });
@@ -504,8 +515,8 @@ export const DispatchLive = (
             if (result.failure !== null) {
               return yield* Effect.fail(new SqlError({ cause: result.failure }));
             }
-            if (!result.duplicate && result.event !== null) {
-              yield* bus.fire(result.event);
+            if (!result.duplicate) {
+              yield* fireLedgerEvents(bus, result.events);
             }
             return { deliveredEventId: result.deliveredEventId };
           }),
