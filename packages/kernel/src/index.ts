@@ -25,7 +25,6 @@ export type {
   BoundaryContractIssue,
   BoundaryContractValidation,
   BoundaryProjectionContract,
-  BoundaryProofContract,
 } from "./boundary-contract";
 export {
   boundaryPackage,
@@ -67,5 +66,6 @@ export * from "./llm";
 export * from "./quota";
 export * from "./ref-resolver";
 export * from "./runtime-scope";
+export * from "./settlement-contract";
 export * from "./tools";
 export type * from "./types";

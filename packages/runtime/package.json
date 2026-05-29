@@ -17,10 +17,6 @@
     "./abort": {
       "types": "./src/abort.ts",
       "default": "./src/abort.ts"
-    },
-    "./types": {
-      "types": "./src/types.ts",
-      "default": "./src/types.ts"
     }
   },
   "scripts": {

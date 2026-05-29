@@ -1,5 +1,5 @@
 import type { Effect } from "effect";
-import type { LedgerEvent } from "@agent-os/runtime";
+import type { LedgerEvent } from "@agent-os/kernel/types";
 import type { EventBusService } from "./event-bus";
 
 export interface InsertLedgerEventSpec {

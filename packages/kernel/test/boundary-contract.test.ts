@@ -6,12 +6,18 @@ import {
   validateBoundaryContract,
 } from "../src/boundary-contract";
 import { materialRequirement } from "../src/material-ref";
+import { defineSettlementContract } from "../src/settlement-contract";
 
 describe("BoundaryContract", () => {
   const proofStore = materialRequirement({
     slot: "proof_store",
     kind: "binding",
     provider: "example",
+  });
+  const settlement = defineSettlementContract({
+    settlementId: "@agent-os/example-carrier",
+    anchorKinds: ["carrier_proof"],
+    rejectionKinds: ["policy_denied"],
   });
 
   const contract = defineBoundaryContract({
@@ -37,10 +43,7 @@ describe("BoundaryContract", () => {
       "example.recorded": ["lived"],
       "example.failed": ["rejected"],
     },
-    proof: {
-      anchorKinds: ["carrier_proof"],
-      symbolicOnly: true,
-    },
+    settlement,
     projection: {
       derivedFromLedger: true,
       shadowState: false,
@@ -181,14 +184,15 @@ describe("BoundaryContract", () => {
     });
   });
 
-  it("requires claim-bearing symbolic ledger projections", () => {
+  it("requires claim-bearing settlement and ledger projections", () => {
     expect(
       validateBoundaryContract({
         ...contract,
         claimPayloadKey: "payload",
-        proof: {
-          anchorKinds: ["carrier_proof"],
-          symbolicOnly: false,
+        settlement: {
+          settlementId: "",
+          anchorKinds: ["not_anchor"],
+          rejectionKinds: ["policy_denied"],
         },
         projection: {
           derivedFromLedger: true,
@@ -197,7 +201,25 @@ describe("BoundaryContract", () => {
       }),
     ).toEqual({
       ok: false,
-      issues: ["claim_payload_key_invalid", "proof_invalid", "projection_invalid"],
+      issues: ["claim_payload_key_invalid", "settlement_invalid", "projection_invalid"],
+    });
+  });
+
+  it("rejects the removed proof shape", () => {
+    const withoutSettlement: Record<string, unknown> = { ...contract };
+    delete withoutSettlement.settlement;
+
+    expect(
+      validateBoundaryContract({
+        ...withoutSettlement,
+        proof: {
+          anchorKinds: ["carrier_proof"],
+          symbolicOnly: true,
+        },
+      }),
+    ).toEqual({
+      ok: false,
+      issues: ["settlement_invalid"],
     });
   });
 });

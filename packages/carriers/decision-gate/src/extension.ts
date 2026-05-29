@@ -1,5 +1,6 @@
 import { boundaryPackage, defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
 import { DECISION_GATE_KIND } from "./events";
+import { decisionGateSettlementContract } from "./settlement";
 
 export const DECISION_GATE_EVENT_PREFIX = "decision_gate.";
 
@@ -16,10 +17,7 @@ export const decisionGateBoundaryContract = defineBoundaryContract({
     [DECISION_GATE_KIND.DECIDED]: ["lived"],
     [DECISION_GATE_KIND.CONSUMED]: ["lived"],
   },
-  proof: {
-    anchorKinds: ["ledger_event"],
-    symbolicOnly: true,
-  },
+  settlement: decisionGateSettlementContract,
   projection: {
     derivedFromLedger: true,
     shadowState: false,

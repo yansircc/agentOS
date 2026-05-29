@@ -1,6 +1,6 @@
 import { Context, Effect } from "effect";
 import type { JsonStringifyError, SqlError } from "@agent-os/kernel/errors";
-import type { EventQueryOptions, LedgerEvent } from "./types";
+import type { EventQueryOptions, LedgerEvent } from "@agent-os/kernel/types";
 
 export class Ledger extends Context.Tag("@agent-os/Ledger")<
   Ledger,

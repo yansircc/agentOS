@@ -1,6 +1,7 @@
 import { it } from "@effect/vitest";
 import { Cause, Effect, Exit, Option } from "effect";
 import { makePreClaim } from "@agent-os/kernel/effect-claim";
+import { workspaceSessionSettlementRef } from "@agent-os/workspace-session";
 import {
   makeCloudflareWorkspaceSessionLiveProvider,
   makeCloudflareWorkspaceSessionProvider,
@@ -96,7 +97,7 @@ describe("@agent-os/workspace-session-cloudflare", () => {
             originKind: "extension_package",
           },
           anchorRef: {
-            anchorId: "cf-session-1",
+            anchorId: "workspace_session:session:cf-session-1",
             anchorKind: "carrier_proof",
             carrierRef: "cloudflare-sandbox",
           },
@@ -126,7 +127,7 @@ describe("@agent-os/workspace-session-cloudflare", () => {
         claim: {
           phase: "lived",
           anchorRef: {
-            anchorId: "cf-backup-1",
+            anchorId: "workspace_session:backup:cf-backup-1",
             anchorKind: "carrier_proof",
             carrierRef: "cf-sandbox-prod",
           },
@@ -148,7 +149,7 @@ describe("@agent-os/workspace-session-cloudflare", () => {
         claim: {
           phase: "lived",
           anchorRef: {
-            anchorId: "cf-preview-1",
+            anchorId: "workspace_session:preview:cf-preview-1",
             anchorKind: "carrier_proof",
             carrierRef: "cf-sandbox-prod",
           },
@@ -187,7 +188,7 @@ describe("@agent-os/workspace-session-cloudflare", () => {
         phase: "rejected",
         rejectionRef: {
           rejectionKind: "unsupported",
-          reason: "workspace session claim scope is not session",
+          reason: "workspace_session_ScopeNotSession",
         },
       },
     });
@@ -221,7 +222,7 @@ describe("@agent-os/workspace-session-cloudflare", () => {
         phase: "rejected",
         rejectionRef: {
           rejectionKind: "policy_denied",
-          reason: "preview denied by policy",
+          reason: "workspace_session_PolicyDenied",
         },
       },
     });
@@ -354,7 +355,7 @@ describe("@agent-os/workspace-session-cloudflare", () => {
         phase: "rejected",
         rejectionRef: {
           rejectionKind: "provider_rejected",
-          reason: "Cloudflare workspace session start missing required refs",
+          reason: "workspace_session_ProviderFailure",
         },
       },
     });
@@ -437,7 +438,10 @@ describe("@agent-os/workspace-session-cloudflare", () => {
         expect(backup.backupRef).toBe("cloudflare-sandbox-backup:backup-a24:%2Fworkspace");
         expect(preview.url).toBe("https://preview-a24.example");
         expect(destroyed.claim.anchorRef.anchorId).toBe(
-          `cloudflare-sandbox-destroy:${encodeURIComponent(restored.sessionRef)}`,
+          workspaceSessionSettlementRef(
+            "destroy",
+            `cloudflare-sandbox-destroy:${encodeURIComponent(restored.sessionRef)}`,
+          ),
         );
         const publicJson = JSON.stringify([started, backup, restored, preview, destroyed]);
         expect(publicJson).not.toContain(sandboxSecret);

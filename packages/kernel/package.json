@@ -58,6 +58,10 @@
       "types": "./src/runtime-scope.ts",
       "default": "./src/runtime-scope.ts"
     },
+    "./settlement-contract": {
+      "types": "./src/settlement-contract.ts",
+      "default": "./src/settlement-contract.ts"
+    },
     "./tools": {
       "types": "./src/tools.ts",
       "default": "./src/tools.ts"

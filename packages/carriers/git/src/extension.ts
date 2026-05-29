@@ -1,5 +1,6 @@
 import { boundaryPackage, defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
 import { GIT_KIND } from "./events";
+import { gitSettlementContract } from "./settlement";
 
 export const GIT_EVENT_PREFIX = "git.";
 
@@ -18,10 +19,7 @@ export const gitCarrierBoundaryContract = defineBoundaryContract({
     [GIT_KIND.REVERT_RECORDED]: ["lived"],
     [GIT_KIND.WORKSPACE_CLEANED]: ["lived"],
   },
-  proof: {
-    anchorKinds: ["carrier_proof"],
-    symbolicOnly: true,
-  },
+  settlement: gitSettlementContract,
   projection: {
     derivedFromLedger: true,
     shadowState: false,

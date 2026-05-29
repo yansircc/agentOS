@@ -1,7 +1,6 @@
 export {
   copyTraceContext,
   dispatchPayloadParseFailure,
-  isRecord,
   parseRequestedPayload,
   parseTraceContext,
   type DispatchPayloadParseResult,

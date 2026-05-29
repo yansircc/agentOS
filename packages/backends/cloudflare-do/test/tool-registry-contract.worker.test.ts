@@ -18,7 +18,7 @@ import {
   type Tool,
 } from "@agent-os/kernel/tools";
 import { materialRequirement } from "@agent-os/kernel/material-ref";
-import type { EventHandler } from "@agent-os/runtime";
+import type { EventHandler } from "@agent-os/kernel/types";
 import { finalTextResp, stubAi, toolCallResp } from "./_stub-ai";
 
 interface TestEnv {
@@ -291,7 +291,7 @@ describe("tool registry generator", () => {
               originKind: "tool_provider",
             },
             anchorRef: {
-              anchorId: "tool:tool-registry-claim:1:0:call-1",
+              anchorId: "tool.executed:tool:tool-registry-claim:1:0:call-1",
               anchorKind: "carrier_proof",
               carrierRef: "tool:lookup",
             },
@@ -477,7 +477,7 @@ describe("tool registry generator", () => {
             rejectionRef: {
               rejectionId: "tool:tool-registry-admitter-throw:1:0:call-1",
               rejectionKind: "provider_rejected",
-              reason: "admitter_error: Error",
+              reason: "admitter_error:Error",
             },
           }),
         }),
@@ -586,7 +586,7 @@ describe("tool registry generator", () => {
             phase: "rejected",
             operationRef: "tool:tool-registry-rejected:1:0:call-1",
             rejectionRef: {
-              rejectionId: "tool:tool-registry-rejected:1:0:call-1",
+              rejectionId: "tool.rejected:tool:tool-registry-rejected:1:0:call-1",
               rejectionKind: "provider_rejected",
               reason: "Error",
             },

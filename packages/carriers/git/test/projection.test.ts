@@ -1,5 +1,12 @@
-import { GIT_EVENTS, GIT_KIND, gitCarrierBoundaryPackage, projectGitSubject } from "../src";
-import { makePreClaim, settleLivedClaim } from "@agent-os/kernel/effect-claim";
+import {
+  GIT_EVENTS,
+  GIT_KIND,
+  gitCarrierBoundaryPackage,
+  gitSettlementRef,
+  projectGitSubject,
+  settleGitLived,
+} from "../src";
+import { makePreClaim } from "@agent-os/kernel/effect-claim";
 import { makeCommitters, type ExtensionCapability } from "@agent-os/kernel/extensions";
 
 const gitClaim = makePreClaim({
@@ -15,9 +22,8 @@ const gitClaim = makePreClaim({
   },
 });
 const livedGitClaim = (anchorId: string) =>
-  settleLivedClaim(gitClaim, {
-    anchorId,
-    anchorKind: "carrier_proof",
+  settleGitLived(gitClaim, {
+    proofRef: gitSettlementRef(anchorId),
     carrierRef: "git",
   });
 
@@ -108,11 +114,7 @@ describe("@agent-os/git-carrier", () => {
         commitRef: "commit://def",
         parentRef: "main@abc",
         diffRef: "diff://def",
-        claim: settleLivedClaim(gitClaim, {
-          anchorId: "commit://def",
-          anchorKind: "carrier_proof",
-          carrierRef: "git",
-        }),
+        claim: livedGitClaim("commit://def"),
       }),
     ).resolves.toEqual({ id: 1 });
 
@@ -137,7 +139,7 @@ describe("@agent-os/git-carrier", () => {
               originKind: "extension_package",
             },
             anchorRef: {
-              anchorId: "commit://def",
+              anchorId: gitSettlementRef("commit://def"),
               anchorKind: "carrier_proof",
               carrierRef: "git",
             },

@@ -5,10 +5,12 @@ import {
   WORKSPACE_SESSION_KIND,
   projectWorkspaceSession,
   resolveWorkspaceSession,
+  settleWorkspaceSessionLived,
   settleWorkspaceSessionRejected,
+  workspaceSessionSettlementRef,
   workspaceSessionBoundaryPackage,
 } from "../src";
-import { makePreClaim, settleLivedClaim } from "@agent-os/kernel/effect-claim";
+import { makePreClaim } from "@agent-os/kernel/effect-claim";
 import { makeCommitters, type ExtensionCapability } from "@agent-os/kernel/extensions";
 
 const sessionClaim = makePreClaim({
@@ -23,6 +25,12 @@ const sessionClaim = makePreClaim({
     originKind: "extension_package",
   },
 });
+
+const livedSessionClaim = (anchorId: string) =>
+  settleWorkspaceSessionLived(sessionClaim, {
+    proofRef: workspaceSessionSettlementRef(anchorId),
+    carrierRef: "workspace-session",
+  });
 
 describe("@agent-os/workspace-session", () => {
   it("declares workspace_session.* as an extension-owned prefix", () => {
@@ -63,11 +71,7 @@ describe("@agent-os/workspace-session", () => {
   });
 
   it("projects lifecycle, backups, previews, and destroy from ledger facts", () => {
-    const startedClaim = settleLivedClaim(sessionClaim, {
-      anchorId: "session://1",
-      anchorKind: "carrier_proof",
-      carrierRef: "workspace-session",
-    });
+    const startedClaim = livedSessionClaim("session://1");
     const events = [
       {
         id: 1,
@@ -90,11 +94,7 @@ describe("@agent-os/workspace-session", () => {
           previewRef: "preview://1:5173",
           port: 5173,
           url: "https://preview.example",
-          claim: settleLivedClaim(sessionClaim, {
-            anchorId: "preview://1:5173",
-            anchorKind: "carrier_proof",
-            carrierRef: "workspace-session",
-          }),
+          claim: livedSessionClaim("preview://1:5173"),
         },
       },
       {
@@ -105,11 +105,7 @@ describe("@agent-os/workspace-session", () => {
           sessionRef: "session://1",
           backupRef: "backup://1",
           expiresAt: "2026-06-03T00:00:00Z",
-          claim: settleLivedClaim(sessionClaim, {
-            anchorId: "backup://1",
-            anchorKind: "carrier_proof",
-            carrierRef: "workspace-session",
-          }),
+          claim: livedSessionClaim("backup://1"),
         },
       },
       {
@@ -119,11 +115,7 @@ describe("@agent-os/workspace-session", () => {
           subjectRef: "run-1",
           sessionRef: "session://1",
           reason: "completed",
-          claim: settleLivedClaim(sessionClaim, {
-            anchorId: "cleanup://1",
-            anchorKind: "carrier_proof",
-            carrierRef: "workspace-session",
-          }),
+          claim: livedSessionClaim("cleanup://1"),
         },
       },
     ] as const;
@@ -149,12 +141,7 @@ describe("@agent-os/workspace-session", () => {
   });
 
   it("resets lifecycle refs on restarted or restored sessions", () => {
-    const claimFor = (anchorId: string) =>
-      settleLivedClaim(sessionClaim, {
-        anchorId,
-        anchorKind: "carrier_proof",
-        carrierRef: "workspace-session",
-      });
+    const claimFor = livedSessionClaim;
     const events = [
       {
         id: 1,
@@ -255,11 +242,7 @@ describe("@agent-os/workspace-session", () => {
           subjectRef: "run-lone-backup",
           sessionRef: "session://missing",
           backupRef: "backup://missing",
-          claim: settleLivedClaim(sessionClaim, {
-            anchorId: "backup://missing",
-            anchorKind: "carrier_proof",
-            carrierRef: "workspace-session",
-          }),
+          claim: livedSessionClaim("backup://missing"),
         },
       },
     ] as const;
@@ -282,7 +265,7 @@ describe("@agent-os/workspace-session", () => {
     const rejected = settleWorkspaceSessionRejected(sessionClaim, {
       code: "ScopeNotSession",
       reason: "scope must be kind=session",
-      proofRef: "proof://reject",
+      proofRef: workspaceSessionSettlementRef("reject"),
     });
     const events = [
       {
@@ -291,7 +274,7 @@ describe("@agent-os/workspace-session", () => {
         payload: {
           subjectRef: "run-2",
           step: "start",
-          proofRef: "proof://reject",
+          proofRef: workspaceSessionSettlementRef("reject"),
           reason: "scope must be kind=session",
           claim: rejected,
         },
@@ -311,7 +294,7 @@ describe("@agent-os/workspace-session", () => {
       failure: {
         subjectRef: "run-2",
         step: "start",
-        proofRef: "proof://reject",
+        proofRef: workspaceSessionSettlementRef("reject"),
         reason: "scope must be kind=session",
         claim: rejected,
       },
@@ -336,7 +319,7 @@ describe("@agent-os/workspace-session", () => {
       makeCommitters(WORKSPACE_SESSION_EVENTS, cap)[WORKSPACE_SESSION_KIND.FAILED]({
         subjectRef: "run-2",
         step: "start",
-        proofRef: "proof://reject",
+        proofRef: workspaceSessionSettlementRef("reject"),
         reason: "scope must be kind=session",
         claim: rejected,
       }),
@@ -352,17 +335,17 @@ describe("@agent-os/workspace-session", () => {
   it("lets backends override rejectionKind while preserving claim settlement", () => {
     const rejected = settleWorkspaceSessionRejected(sessionClaim, {
       code: "BackupFailed",
-      reason: "backup quota exhausted",
-      proofRef: "proof://quota",
+      reason: "backup_quota_exhausted",
+      proofRef: workspaceSessionSettlementRef("quota"),
       rejectionKind: "resource_denied",
     });
 
     expect(rejected).toMatchObject({
       phase: "rejected",
       rejectionRef: {
-        rejectionId: "proof://quota",
+        rejectionId: workspaceSessionSettlementRef("quota"),
         rejectionKind: "resource_denied",
-        reason: "backup quota exhausted",
+        reason: "backup_quota_exhausted",
       },
     });
   });
@@ -382,11 +365,7 @@ describe("@agent-os/workspace-session", () => {
         return { id: committed.length };
       },
     };
-    const claim = settleLivedClaim(sessionClaim, {
-      anchorId: "session://1",
-      anchorKind: "carrier_proof",
-      carrierRef: "workspace-session",
-    });
+    const claim = livedSessionClaim("session://1");
 
     await expect(
       makeCommitters(WORKSPACE_SESSION_EVENTS, cap)[WORKSPACE_SESSION_KIND.STARTED]({

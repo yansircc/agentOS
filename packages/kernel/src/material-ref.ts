@@ -1,4 +1,6 @@
+import { Predicate } from "effect";
 import { isAuthorityRef, type AuthorityRef } from "./effect-claim";
+import { isNonEmptyString } from "./string-guards";
 
 export interface CredentialMaterialRef {
   readonly kind: "credential";
@@ -99,12 +101,6 @@ export type MaterialValidationIssue =
   | "authority_contract_must_be_object"
   | "authority_contract_invalid";
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-const isNonEmptyString = (value: unknown): value is string =>
-  typeof value === "string" && value.length > 0;
-
 const optionalString = (value: unknown): value is string | undefined =>
   value === undefined || typeof value === "string";
 
@@ -175,7 +171,7 @@ export const materialRequirement = (spec: MaterialRequirementInput): MaterialReq
   }) as MaterialRequirement;
 
 export const isMaterialRef = (value: unknown): value is MaterialRef => {
-  if (!isRecord(value)) return false;
+  if (!Predicate.isRecord(value)) return false;
   switch (value.kind) {
     case "credential":
       return (
@@ -210,7 +206,7 @@ export const isMaterialRef = (value: unknown): value is MaterialRef => {
 };
 
 export const isMaterialRequirement = (value: unknown): value is MaterialRequirement => {
-  if (!isRecord(value)) {
+  if (!Predicate.isRecord(value)) {
     return false;
   }
   if (!isNonEmptyString(value.slot) || typeof value.required !== "boolean") {
@@ -243,7 +239,7 @@ export const isMaterialRequirement = (value: unknown): value is MaterialRequirem
 };
 
 export const isAuthorityContract = (value: unknown): value is AuthorityContract =>
-  isRecord(value) &&
+  Predicate.isRecord(value) &&
   hasOnlyKeys(value, new Set(["authorityRef", "requiredMaterials"])) &&
   isAuthorityRef(value.authorityRef) &&
   Array.isArray(value.requiredMaterials) &&

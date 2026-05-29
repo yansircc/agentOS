@@ -12,7 +12,7 @@ import { describe, expect, it } from "@effect/vitest";
 
 import { EventBusLive, Ledger, LedgerLive } from "../src/ledger";
 import { Resources, ResourcesLive } from "../src/resources";
-import type { EventHandler } from "@agent-os/runtime";
+import type { EventHandler } from "@agent-os/kernel/types";
 
 import { makeInMemoryDurableObjectState } from "./_in-memory-do";
 

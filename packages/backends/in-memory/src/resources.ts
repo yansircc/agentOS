@@ -6,7 +6,8 @@ import {
   ResourceReservationNotFound,
   SqlError,
 } from "@agent-os/kernel/errors";
-import { Resources, type LedgerEvent, type ResourceProjection } from "@agent-os/runtime";
+import type { LedgerEvent } from "@agent-os/kernel/types";
+import { Resources, type ResourceProjection } from "@agent-os/runtime";
 import type { InMemoryBackendState } from "./state";
 import { decodeOk, finiteNumberField, recordOf, stringField, type DecodeResult } from "./decode";
 

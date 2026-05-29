@@ -1,3 +1,4 @@
+import type { LedgerEvent } from "@agent-os/kernel/types";
 /**
  * Resources — business resource reservation over ledger facts.
  *
@@ -23,7 +24,6 @@ import {
 import { EventBus } from "../ledger";
 import { fireLedgerEvents, insertLedgerEvent } from "../ledger/inserted-events";
 import { Resources } from "@agent-os/runtime";
-import type { LedgerEvent } from "@agent-os/runtime";
 
 import { emptyProjection, loadState } from "./projection";
 

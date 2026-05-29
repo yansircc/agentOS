@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 export interface TurnTextDeltaFrame {
   readonly kind: "text_delta";
   readonly turnRef: string;
@@ -110,9 +111,6 @@ export interface TurnStreamProjection {
   readonly errorReason?: string;
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 const nonEmptyString = (value: unknown): string | null =>
   typeof value === "string" && value.length > 0 ? value : null;
 
@@ -134,7 +132,7 @@ const unsupportedReason = (provider: ProviderDeltaAdapter): string =>
 
 const numericMetadata = (value: unknown): unknown => {
   if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (!isRecord(value)) return undefined;
+  if (!Predicate.isRecord(value)) return undefined;
 
   const sanitized: Record<string, unknown> = {};
   for (const [key, entry] of Object.entries(value)) {
@@ -192,7 +190,7 @@ const isFrameBase = (value: Record<string, unknown>): boolean =>
   value.seq >= 0;
 
 export const isTurnStreamFrame = (value: unknown): value is TurnStreamFrame => {
-  if (!isRecord(value) || !isFrameBase(value)) return false;
+  if (!Predicate.isRecord(value) || !isFrameBase(value)) return false;
   switch (value.kind) {
     case "text_delta":
       return typeof value.text === "string";
@@ -229,7 +227,7 @@ export const adaptOpenAiCompatibleDeltaChunk = (
   if (input.chunk === "[DONE]") {
     return [{ kind: "done", turnRef: input.turnRef, seq: input.seq }];
   }
-  if (!isRecord(input.chunk)) {
+  if (!Predicate.isRecord(input.chunk)) {
     return errorFrame(input.turnRef, input.seq, malformedReason(provider));
   }
 
@@ -253,12 +251,12 @@ export const adaptOpenAiCompatibleDeltaChunk = (
 
   for (const choice of choices ?? []) {
     let choiceRecognized = false;
-    if (!isRecord(choice)) {
+    if (!Predicate.isRecord(choice)) {
       return errorFrame(input.turnRef, input.seq, malformedReason(provider));
     }
 
     if ("delta" in choice) {
-      if (!isRecord(choice.delta)) {
+      if (!Predicate.isRecord(choice.delta)) {
         return errorFrame(input.turnRef, input.seq, malformedReason(provider));
       }
       const allowedDeltaKeys = new Set(["content", "role"]);
@@ -324,7 +322,7 @@ export const adaptAnthropicDeltaChunk = (
   input: TurnStreamDeltaAdapterInput<unknown>,
 ): ReadonlyArray<TurnStreamFrame> => {
   const provider: ProviderDeltaAdapter = "anthropic";
-  if (!isRecord(input.chunk)) {
+  if (!Predicate.isRecord(input.chunk)) {
     return errorFrame(input.turnRef, input.seq, malformedReason(provider));
   }
 
@@ -340,12 +338,12 @@ export const adaptAnthropicDeltaChunk = (
     case "content_block_stop":
       break;
     case "message_start": {
-      const usage = isRecord(input.chunk.message) ? input.chunk.message.usage : undefined;
+      const usage = Predicate.isRecord(input.chunk.message) ? input.chunk.message.usage : undefined;
       seq = appendUsageMetadata(frames, input.turnRef, seq, "anthropic", usage);
       break;
     }
     case "content_block_delta": {
-      if (!isRecord(input.chunk.delta)) {
+      if (!Predicate.isRecord(input.chunk.delta)) {
         return errorFrame(input.turnRef, input.seq, malformedReason(provider));
       }
       if (input.chunk.delta.type !== undefined && input.chunk.delta.type !== "text_delta") {
@@ -363,11 +361,11 @@ export const adaptAnthropicDeltaChunk = (
       break;
     }
     case "message_delta": {
-      if (input.chunk.delta !== undefined && !isRecord(input.chunk.delta)) {
+      if (input.chunk.delta !== undefined && !Predicate.isRecord(input.chunk.delta)) {
         return errorFrame(input.turnRef, input.seq, malformedReason(provider));
       }
       seq = appendUsageMetadata(frames, input.turnRef, seq, "anthropic", input.chunk.usage);
-      if (isRecord(input.chunk.delta)) {
+      if (Predicate.isRecord(input.chunk.delta)) {
         seq = appendFinishMetadata(
           frames,
           input.turnRef,
@@ -392,7 +390,7 @@ export const adaptGeminiDeltaChunk = (
   input: TurnStreamDeltaAdapterInput<unknown>,
 ): ReadonlyArray<TurnStreamFrame> => {
   const provider: ProviderDeltaAdapter = "gemini";
-  if (!isRecord(input.chunk)) {
+  if (!Predicate.isRecord(input.chunk)) {
     return errorFrame(input.turnRef, input.seq, malformedReason(provider));
   }
 
@@ -414,11 +412,11 @@ export const adaptGeminiDeltaChunk = (
   }
 
   for (const candidate of candidates ?? []) {
-    if (!isRecord(candidate)) {
+    if (!Predicate.isRecord(candidate)) {
       return errorFrame(input.turnRef, input.seq, malformedReason(provider));
     }
     const content = candidate.content;
-    if (content !== undefined && !isRecord(content)) {
+    if (content !== undefined && !Predicate.isRecord(content)) {
       return errorFrame(input.turnRef, input.seq, malformedReason(provider));
     }
     const parts = content === undefined ? [] : content.parts;
@@ -426,7 +424,7 @@ export const adaptGeminiDeltaChunk = (
       return errorFrame(input.turnRef, input.seq, malformedReason(provider));
     }
     for (const part of parts ?? []) {
-      if (!isRecord(part)) {
+      if (!Predicate.isRecord(part)) {
         return errorFrame(input.turnRef, input.seq, malformedReason(provider));
       }
       const allowedPartKeys = new Set(["text"]);

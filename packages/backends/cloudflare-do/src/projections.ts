@@ -1,7 +1,4 @@
-import { Effect } from "effect";
-import { ABORT, SqlError } from "@agent-os/kernel/errors";
 import type {
-  LedgerEvent,
   QuotaState,
   QuotaStateSpec,
   ResourceState,
@@ -11,10 +8,13 @@ import type {
   RunStatusKind,
   RunSummary,
   RunTerminal,
+  RunToolCall,
   RunTrace,
   RunTurn,
-  RunToolCall,
-} from "@agent-os/runtime";
+} from "@agent-os/kernel/types";
+import { Effect } from "effect";
+import { ABORT, SqlError } from "@agent-os/kernel/errors";
+import type { LedgerEvent } from "@agent-os/kernel/types";
 import { decodeConsumedPayloadSync } from "./quota/payload";
 import { projectRows } from "./resources/projection";
 import { type AttemptKey, type CapabilityLease, projectLease } from "./admission";
@@ -31,6 +31,9 @@ import {
   type RejectionRef,
   type ScopeRef,
 } from "@agent-os/kernel/effect-claim";
+import { validateTerminalClaim } from "@agent-os/kernel/settlement-contract";
+import { dispatchSettlementContract } from "@agent-os/backend-protocol";
+import { toolSettlementContract } from "@agent-os/runtime";
 
 const abortKinds = new Set<string>(Object.values(ABORT));
 
@@ -97,6 +100,14 @@ export type FailurePlaneEntry = ClaimRejectedFailurePlaneEntry | RunAbortedFailu
 
 const claimFromEvent = (event: LedgerEvent): EffectClaim | null => {
   const raw = payloadObject(event.payload).claim;
+  if (event.kind === "dispatch.outbound.delivered" || event.kind === "dispatch.inbound.accepted") {
+    const validation = validateTerminalClaim(dispatchSettlementContract, raw);
+    return validation.ok ? validation.claim : null;
+  }
+  if (event.kind === "tool.executed" || event.kind === "tool.rejected") {
+    const validation = validateTerminalClaim(toolSettlementContract, raw);
+    return validation.ok ? validation.claim : null;
+  }
   const validation = validateEffectClaim(raw);
   return validation.ok ? validation.claim : null;
 };

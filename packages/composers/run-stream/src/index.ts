@@ -1,17 +1,16 @@
+import { Predicate } from "effect";
 import {
   isTurnStreamFrame,
   projectTurnStream,
   type TurnStreamFrame,
   type TurnStreamProjection,
 } from "@agent-os/turn-stream";
-import type {
-  EventQueryOptions,
-  LedgerEventRpc,
-  SubmitResult,
-  SubmitSpec,
-} from "@agent-os/runtime";
+import { isSymbolicSettlementValue } from "@agent-os/kernel/settlement-contract";
+import type { EventQueryOptions, LedgerEventRpc } from "@agent-os/kernel/types";
+import type { SubmitResult, SubmitSpec } from "@agent-os/runtime";
 
-export type { LedgerEventRpc, SubmitResult, SubmitSpec } from "@agent-os/runtime";
+export type { LedgerEventRpc } from "@agent-os/kernel/types";
+export type { SubmitResult, SubmitSpec } from "@agent-os/runtime";
 
 export interface RunStreamLedgerEventFrame {
   readonly kind: "ledger_event";
@@ -84,9 +83,6 @@ export interface ComposeRealtimeRunStreamSpec {
   readonly signal?: AbortSignal;
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 const isPromiseLike = <T>(value: unknown): value is PromiseLike<T> =>
   (typeof value === "object" || typeof value === "function") &&
   value !== null &&
@@ -102,7 +98,7 @@ const isFrameBase = (value: Record<string, unknown>): boolean =>
   typeof value.seq === "number" && Number.isInteger(value.seq) && value.seq >= 0;
 
 const isLedgerEventRpc = (value: unknown): value is LedgerEventRpc =>
-  isRecord(value) &&
+  Predicate.isRecord(value) &&
   typeof value.id === "number" &&
   Number.isInteger(value.id) &&
   value.id >= 0 &&
@@ -112,7 +108,7 @@ const isLedgerEventRpc = (value: unknown): value is LedgerEventRpc =>
   "payload" in value;
 
 const isSubmitResult = (value: unknown): value is SubmitResult => {
-  if (!isRecord(value) || typeof value.runId !== "number") return false;
+  if (!Predicate.isRecord(value) || typeof value.runId !== "number") return false;
   if (typeof value.eventCount !== "number" || typeof value.tokensUsed !== "number") return false;
   if (value.ok === true) return typeof value.final === "string";
   if (value.ok === false) return typeof value.reason === "string";
@@ -120,7 +116,7 @@ const isSubmitResult = (value: unknown): value is SubmitResult => {
 };
 
 export const isRunStreamFrame = (value: unknown): value is RunStreamFrame => {
-  if (!isRecord(value) || !isFrameBase(value)) return false;
+  if (!Predicate.isRecord(value) || !isFrameBase(value)) return false;
   switch (value.kind) {
     case "ledger_event":
       return isLedgerEventRpc(value.event);
@@ -226,12 +222,10 @@ export const composeRunStream = (spec: ComposeRunStreamSpec): ReadonlyArray<RunS
 const maxLedgerEventId = (events: ReadonlyArray<LedgerEventRpc>): number =>
   events.reduce((max, event) => Math.max(max, event.id), 0);
 
-const isSymbolicReason = (value: string): boolean => /^[A-Za-z0-9_.:-]{1,128}$/.test(value);
-
 const errorReason = (cause: unknown): string => {
-  if (isRecord(cause) && cause._tag === "agent_os.provider_http_failure") {
+  if (Predicate.isRecord(cause) && cause._tag === "agent_os.provider_http_failure") {
     const provider =
-      typeof cause.provider === "string" && isSymbolicReason(cause.provider)
+      typeof cause.provider === "string" && isSymbolicSettlementValue(cause.provider)
         ? cause.provider
         : "provider";
     const status = typeof cause.status === "number" ? `http_${cause.status}` : "http_error";
@@ -240,10 +234,10 @@ const errorReason = (cause: unknown): string => {
       : "";
     return ["provider_http_failure", provider, status, flags].filter(Boolean).join(":");
   }
-  if (isRecord(cause) && typeof cause.reason === "string") {
-    return isSymbolicReason(cause.reason) ? cause.reason : "object";
+  if (Predicate.isRecord(cause) && typeof cause.reason === "string") {
+    return isSymbolicSettlementValue(cause.reason) ? cause.reason : "object";
   }
-  if (isRecord(cause) && typeof cause._tag === "string") return cause._tag;
+  if (Predicate.isRecord(cause) && typeof cause._tag === "string") return cause._tag;
   if (cause instanceof Error) return cause.name;
   return typeof cause;
 };

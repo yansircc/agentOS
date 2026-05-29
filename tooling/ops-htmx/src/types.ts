@@ -1,5 +1,5 @@
+import type { CapabilityLease } from "@agent-os/runtime";
 import type {
-  CapabilityLease,
   LedgerEventRpc,
   QuotaState,
   ResourceState,
@@ -7,7 +7,7 @@ import type {
   RunStatus,
   RunSummary,
   RunTrace,
-} from "@agent-os/runtime";
+} from "@agent-os/kernel/types";
 import type { OpsErrorBody, ScopeSummary } from "@agent-os/ops-api";
 
 export type OpsApiFetch = (request: Request) => Promise<Response>;

@@ -29,6 +29,7 @@ export default defineConfig({
       "@agent-os/kernel/quota": "../../kernel/src/quota.ts",
       "@agent-os/kernel/ref-resolver": "../../kernel/src/ref-resolver.ts",
       "@agent-os/kernel/runtime-scope": "../../kernel/src/runtime-scope.ts",
+      "@agent-os/kernel/settlement-contract": "../../kernel/src/settlement-contract.ts",
       "@agent-os/kernel/tools": "../../kernel/src/tools.ts",
       "@agent-os/kernel/types": "../../kernel/src/types.ts",
       "@agent-os/kernel": "../../kernel/src/index.ts",

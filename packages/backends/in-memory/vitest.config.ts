@@ -32,6 +32,10 @@ export default defineConfig({
         replacement: new URL("../../kernel/src/ref-resolver.ts", import.meta.url).pathname,
       },
       {
+        find: "@agent-os/kernel/settlement-contract",
+        replacement: new URL("../../kernel/src/settlement-contract.ts", import.meta.url).pathname,
+      },
+      {
         find: "@agent-os/kernel/tools",
         replacement: new URL("../../kernel/src/tools.ts", import.meta.url).pathname,
       },

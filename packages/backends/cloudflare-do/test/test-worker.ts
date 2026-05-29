@@ -6,35 +6,39 @@
  */
 
 import { DurableObject } from "cloudflare:workers";
-import { Schema } from "effect";
+import { Schema, Predicate } from "effect";
 import {
-  binding,
   credential,
+  createAgentDurableObject,
   defineAgentDO,
-  durableObjectTarget,
   endpoint,
   openAIChat,
   type AgentEventHandlerContext,
-  type AgentFacadeRuntimeClient,
+  type AgentRuntimeClient,
   type CloudflareAgentEnv,
   type DispatchTargetNamespace,
 } from "../src";
 import { CapabilityRejected } from "@agent-os/kernel/errors";
 import { boundaryPackage, defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
 import { eventNamespace, type ExtensionCapability } from "@agent-os/kernel/extensions";
-import { makePreClaim, settleLivedClaim } from "@agent-os/kernel/effect-claim";
+import { makePreClaim } from "@agent-os/kernel/effect-claim";
+import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
+import { defineSettlementContract, settleLived } from "@agent-os/kernel/settlement-contract";
 import { defineTool } from "@agent-os/kernel/tools";
-import type { EventHandler } from "@agent-os/runtime";
+import type { EventHandler } from "@agent-os/kernel/types";
 
 export class TestAgentDO extends DurableObject {}
 
-export const EmitTestDO = defineAgentDO<CloudflareAgentEnv>({
+export const EmitTestDO = createAgentDurableObject<CloudflareAgentEnv>({
   eventHandlers: ({ runtime }) => [
     {
       kind: "interview.answer",
       handler: (event) =>
         runtime
-          .emit("interview.followup", { sourceId: event.id, sourcePayload: event.payload })
+          .emitEvent({
+            event: "interview.followup",
+            data: { sourceId: event.id, sourcePayload: event.payload },
+          })
           .then(() => undefined),
     },
   ],
@@ -59,36 +63,47 @@ const dispatchTarget = (env: DispatchEnv): DispatchTargetNamespace => {
   return env.DISPATCH_DO;
 };
 
-export const DispatchTestDO = defineAgentDO<DispatchEnv>({
-  bindings: [
-    durableObjectTarget<DispatchEnv>("peer").from(dispatchTarget),
-    durableObjectTarget<DispatchEnv>("dead").from(() => DEAD_TARGET),
-    binding<DispatchEnv, DispatchTargetNamespace>("cloudflare", "durable_object", "generic").from(
-      (env) => env.DISPATCH_DO,
-    ),
-  ],
+const dispatchBindingKey = (ref: string): string =>
+  materialRefKey(
+    bindingMaterialRef({ provider: "cloudflare", bindingKind: "durable_object", ref }),
+  );
+
+export const DispatchTestDO = createAgentDurableObject<DispatchEnv>({
+  dispatchTargets: (env) => ({
+    [dispatchBindingKey("peer")]: dispatchTarget(env),
+    [dispatchBindingKey("dead")]: DEAD_TARGET,
+    [dispatchBindingKey("generic")]: env.DISPATCH_DO,
+  }),
   eventHandlers: ({ runtime }) => [
     {
       kind: "dispatch.inbound.accepted",
-      handler: () => runtime.emit("test.inbound_accepted_handler_fired", {}).then(() => undefined),
+      handler: () =>
+        runtime
+          .emitEvent({ event: "test.inbound_accepted_handler_fired", data: {} })
+          .then(() => undefined),
     },
     {
       kind: "dispatch.outbound.requested",
       handler: () =>
-        runtime.emit("test.outbound_requested_handler_fired", {}).then(() => undefined),
+        runtime
+          .emitEvent({ event: "test.outbound_requested_handler_fired", data: {} })
+          .then(() => undefined),
     },
     {
       kind: "test.delivered",
       handler: (event) =>
         runtime
-          .emit("test.followup", { sourceId: event.id, sourcePayload: event.payload })
+          .emitEvent({
+            event: "test.followup",
+            data: { sourceId: event.id, sourcePayload: event.payload },
+          })
           .then(() => undefined),
     },
   ],
 });
 export type DispatchTestDO = InstanceType<typeof DispatchTestDO>;
 
-export const StreamTestDO = defineAgentDO<CloudflareAgentEnv>({
+export const StreamTestDO = createAgentDurableObject<CloudflareAgentEnv>({
   eventHandlers: () => [
     {
       kind: "stream.slow",
@@ -97,6 +112,12 @@ export const StreamTestDO = defineAgentDO<CloudflareAgentEnv>({
   ],
 });
 export type StreamTestDO = InstanceType<typeof StreamTestDO>;
+
+const proofSettlementContract = defineSettlementContract({
+  settlementId: "@agent-os/proof",
+  anchorKinds: ["carrier_proof"],
+  rejectionKinds: [],
+});
 
 const proofBoundaryContract = defineBoundaryContract({
   packageId: "@agent-os/proof",
@@ -111,10 +132,7 @@ const proofBoundaryContract = defineBoundaryContract({
   claimPhases: {
     "proof.recorded": ["lived"],
   },
-  proof: {
-    anchorKinds: ["carrier_proof"],
-    symbolicOnly: true,
-  },
+  settlement: proofSettlementContract,
   projection: {
     derivedFromLedger: true,
     shadowState: false,
@@ -128,7 +146,7 @@ const proofPreClaim = makePreClaim({
   originRef: { originId: "extension-test", originKind: "test" },
 });
 
-export const proofLivedClaim = settleLivedClaim(proofPreClaim, {
+export const proofLivedClaim = settleLived(proofSettlementContract, proofPreClaim, {
   anchorId: "proof:record",
   anchorKind: "carrier_proof",
   carrierRef: "proof",
@@ -146,9 +164,6 @@ type ExtensionCommand =
   | { readonly op: "commitProofOther"; readonly data: unknown }
   | { readonly op: "scheduleProofFact"; readonly at: number; readonly data: unknown };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 type ExtensionCommandParseResult =
   | { readonly ok: true; readonly command: ExtensionCommand }
   | { readonly ok: false; readonly error: Record<string, unknown> };
@@ -159,7 +174,7 @@ const malformedCommand = (message: string): ExtensionCommandParseResult => ({
 });
 
 const parseExtensionCommand = (value: unknown): ExtensionCommandParseResult => {
-  if (!isRecord(value) || typeof value.op !== "string") {
+  if (!Predicate.isRecord(value) || typeof value.op !== "string") {
     return malformedCommand("extension command malformed");
   }
   const data = value.data;
@@ -180,7 +195,7 @@ const parseExtensionCommand = (value: unknown): ExtensionCommandParseResult => {
 };
 
 const errorPayload = (cause: unknown): Record<string, unknown> => {
-  if (isRecord(cause)) {
+  if (Predicate.isRecord(cause)) {
     return {
       ...(typeof cause._tag === "string" ? { _tag: cause._tag } : {}),
       ...(typeof cause.event === "string" ? { event: cause.event } : {}),
@@ -260,16 +275,19 @@ const runExtensionCommand = (
 const extensionCommandHandlers = ({
   runtime,
   capabilities,
-}: AgentEventHandlerContext<AgentFacadeRuntimeClient>) => [
+}: AgentEventHandlerContext<AgentRuntimeClient>) => [
   {
     kind: EXTENSION_COMMAND_EVENT,
     handler: async (event: Parameters<EventHandler>[0]) => {
       const parsed = parseExtensionCommand(event.payload);
       if (!parsed.ok) {
-        await runtime.emit(EXTENSION_RESULT_EVENT, {
-          op: "malformed",
-          ok: false,
-          error: parsed.error,
+        await runtime.emitEvent({
+          event: EXTENSION_RESULT_EVENT,
+          data: {
+            op: "malformed",
+            ok: false,
+            error: parsed.error,
+          },
         });
         return;
       }
@@ -277,12 +295,15 @@ const extensionCommandHandlers = ({
         (result) => ({ ok: true, result }) as const,
         (cause) => ({ ok: false, error: errorPayload(cause) }) as const,
       );
-      await runtime.emit(EXTENSION_RESULT_EVENT, { op: parsed.command.op, ...outcome });
+      await runtime.emitEvent({
+        event: EXTENSION_RESULT_EVENT,
+        data: { op: parsed.command.op, ...outcome },
+      });
     },
   },
 ];
 
-export const ExtensionTestDO = defineAgentDO<CloudflareAgentEnv>({
+export const ExtensionTestDO = createAgentDurableObject<CloudflareAgentEnv>({
   extensions: () => [
     eventNamespace({
       packageId: "@agent-os/image",

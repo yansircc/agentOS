@@ -29,7 +29,7 @@ import {
   permissiveToolAdmitter,
   type Tool,
 } from "@agent-os/kernel/tools";
-import type { EventHandler } from "@agent-os/runtime";
+import type { EventHandler } from "@agent-os/kernel/types";
 import { finalTextResp, stubAi, toolCallResp } from "./_stub-ai";
 
 interface TestEnv {

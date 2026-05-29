@@ -17,7 +17,6 @@
 - `.:BoundaryContractValidation`
 - `.:BoundaryPackage`
 - `.:BoundaryProjectionContract`
-- `.:BoundaryProofContract`
 - `.:CORE_CLAIMED_PREFIXES`
 - `.:CapabilityRejected`
 - `.:CfAiBindingRoute`
@@ -63,8 +62,10 @@
 - `.:InvalidResourceAmount`
 - `.:InvalidScheduleAt`
 - `.:JsonSchemaDialectError`
+- `.:JsonSchemaDialectIssue`
 - `.:JsonSchemaNode`
 - `.:JsonSchemaObject`
+- `.:JsonSchemaResult`
 - `.:JsonStringifyError`
 - `.:LedgerEvent`
 - `.:LedgerEventRpc`
@@ -124,9 +125,14 @@
 - `.:SchemaContract`
 - `.:ScopeMissingError`
 - `.:ScopeRef`
+- `.:SettlementContract`
+- `.:SettlementContractIssue`
+- `.:SettlementContractValidation`
 - `.:SqlError`
 - `.:StatefulScopeRootResult`
 - `.:StreamEventsOptions`
+- `.:TerminalClaimIssue`
+- `.:TerminalClaimValidation`
 - `.:Tool`
 - `.:ToolAdmitInput`
 - `.:ToolAdmitter`
@@ -148,6 +154,7 @@
 - `.:defineBoundaryContract`
 - `.:defineEventKindView`
 - `.:defineEventPayloads`
+- `.:defineSettlementContract`
 - `.:defineTool`
 - `.:defineToolFromDefinition`
 - `.:endpointMaterialRef`
@@ -168,6 +175,7 @@
 - `.:isOriginRef`
 - `.:isRejectionRef`
 - `.:isScopeRef`
+- `.:isSymbolicSettlementValue`
 - `.:llmRouteMaterialRefs`
 - `.:makeOperationRef`
 - `.:makeCommitters`
@@ -186,14 +194,19 @@
 - `.:runtimeScopeKey`
 - `.:safeStringify`
 - `.:safeStringifyPretty`
-- `.:settleLivedClaim`
-- `.:settleRejectedClaim`
+- `.:settleLived`
+- `.:settleRejected`
+- `.:symbolicSettlementRef`
 - `.:toClosedJsonSchemaNode`
+- `.:toClosedJsonSchemaNodeResult`
 - `.:toClosedJsonSchemaObject`
+- `.:toClosedJsonSchemaObjectResult`
 - `.:validateBoundaryContract`
 - `.:validateAgainstSchema`
 - `.:validateEffectClaim`
 - `.:validateExtensionDeclarations`
+- `.:validateSettlementContract`
+- `.:validateTerminalClaim`
 - `.:validateToolRegistry`
 - `.:withQuota`
 - `./abort:ABORT`
@@ -203,7 +216,6 @@
 - `./boundary-contract:BoundaryContractIssue`
 - `./boundary-contract:BoundaryContractValidation`
 - `./boundary-contract:BoundaryProjectionContract`
-- `./boundary-contract:BoundaryProofContract`
 - `./boundary-contract:boundaryPackage`
 - `./boundary-contract:defineBoundaryContract`
 - `./boundary-contract:validateBoundaryContract`
@@ -243,8 +255,6 @@
 - `./effect-claim:makeOperationRef`
 - `./effect-claim:makePreClaim`
 - `./effect-claim:normalizeAdmitVerdict`
-- `./effect-claim:settleLivedClaim`
-- `./effect-claim:settleRejectedClaim`
 - `./effect-claim:validateEffectClaim`
 - `./errors:ABORT`
 - `./errors:AbortKind`
@@ -344,11 +354,15 @@
 - `./runtime-scope:resolveStatefulSessionRoot`
 - `./runtime-scope:runtimeScopeKey`
 - `./json-schema:JsonSchemaDialectError`
+- `./json-schema:JsonSchemaDialectIssue`
 - `./json-schema:JsonSchemaNode`
 - `./json-schema:JsonSchemaObject`
+- `./json-schema:JsonSchemaResult`
 - `./json-schema:SchemaContract`
 - `./json-schema:toClosedJsonSchemaNode`
+- `./json-schema:toClosedJsonSchemaNodeResult`
 - `./json-schema:toClosedJsonSchemaObject`
+- `./json-schema:toClosedJsonSchemaObjectResult`
 - `./json-schema:validateAgainstSchema`
 - `./tools:DefineToolSpec`
 - `./tools:RegisteredToolSpec`
@@ -395,6 +409,19 @@
 - `./types:ScheduledEventSpec`
 - `./types:StreamEventsOptions`
 - `./types:TraceContext`
+
+- `./settlement-contract:SettlementContract`
+- `./settlement-contract:SettlementContractIssue`
+- `./settlement-contract:SettlementContractValidation`
+- `./settlement-contract:TerminalClaimIssue`
+- `./settlement-contract:TerminalClaimValidation`
+- `./settlement-contract:defineSettlementContract`
+- `./settlement-contract:isSymbolicSettlementValue`
+- `./settlement-contract:settleLived`
+- `./settlement-contract:settleRejected`
+- `./settlement-contract:symbolicSettlementRef`
+- `./settlement-contract:validateSettlementContract`
+- `./settlement-contract:validateTerminalClaim`
 
 ## Experimental exports
 

@@ -1,5 +1,13 @@
-import { DEPLOY_EVENTS, DEPLOY_KIND, deployBoundaryPackage, projectDeploy } from "../src";
-import { makePreClaim, settleLivedClaim, settleRejectedClaim } from "@agent-os/kernel/effect-claim";
+import {
+  DEPLOY_EVENTS,
+  DEPLOY_KIND,
+  deployBoundaryPackage,
+  deploySettlementRef,
+  projectDeploy,
+  settleDeployLived,
+  settleDeployRejected,
+} from "../src";
+import { makePreClaim } from "@agent-os/kernel/effect-claim";
 import { makeCommitters, type ExtensionCapability } from "@agent-os/kernel/extensions";
 
 const deployClaim = makePreClaim({
@@ -15,9 +23,8 @@ const deployClaim = makePreClaim({
   },
 });
 const livedDeployClaim = (anchorId: string) =>
-  settleLivedClaim(deployClaim, {
-    anchorId,
-    anchorKind: "carrier_proof",
+  settleDeployLived(deployClaim, {
+    proofRef: deploySettlementRef(anchorId),
     carrierRef: "deploy",
   });
 
@@ -59,9 +66,9 @@ describe("@agent-os/deploy", () => {
         payload: {
           subjectRef: "ch-1",
           productionRef: "https://site.example",
-          readbackRef: "proof://readback/v2",
+          readbackRef: deploySettlementRef("readback", "v2"),
           status: "passed",
-          claim: livedDeployClaim("proof://readback/v2"),
+          claim: livedDeployClaim("readback:v2"),
         },
       },
     ] as const;
@@ -72,7 +79,7 @@ describe("@agent-os/deploy", () => {
       artifactRef: "r2://staging/ch-1",
       deployRef: "cf-deploy://v2",
       productionRef: "https://site.example",
-      readbackRef: "proof://readback/v2",
+      readbackRef: deploySettlementRef("readback", "v2"),
       rollbackRef: "cf-deploy://v1",
       status: "live_verified",
       failure: undefined,
@@ -127,12 +134,12 @@ describe("@agent-os/deploy", () => {
       makeCommitters(DEPLOY_EVENTS, cap)[DEPLOY_KIND.FAILED]({
         subjectRef: "session:1",
         step: "promote",
-        proofRef: "proof://deploy/1",
+        proofRef: deploySettlementRef("deploy", "1"),
         reason: "readback failed",
-        claim: settleRejectedClaim(deployClaim, {
-          rejectionId: "proof://deploy/1",
+        claim: settleDeployRejected(deployClaim, {
+          proofRef: deploySettlementRef("deploy", "1"),
           rejectionKind: "provider_rejected",
-          reason: "readback failed",
+          reason: "readback_failed",
         }),
       }),
     ).resolves.toEqual({ id: 1 });
@@ -143,7 +150,7 @@ describe("@agent-os/deploy", () => {
         data: {
           subjectRef: "session:1",
           step: "promote",
-          proofRef: "proof://deploy/1",
+          proofRef: deploySettlementRef("deploy", "1"),
           reason: "readback failed",
           claim: {
             phase: "rejected",
@@ -162,9 +169,9 @@ describe("@agent-os/deploy", () => {
               originKind: "extension_package",
             },
             rejectionRef: {
-              rejectionId: "proof://deploy/1",
+              rejectionId: deploySettlementRef("deploy", "1"),
               rejectionKind: "provider_rejected",
-              reason: "readback failed",
+              reason: "readback_failed",
             },
           },
         },

@@ -1,4 +1,5 @@
-import { Clock, Effect } from "effect";
+import { Clock, Effect, Option } from "effect";
+import { defineToolFromDefinition, type Tool } from "@agent-os/kernel/tools";
 
 import { failureToToolResult, truncateUtf8 } from "./output";
 import { runSandbox } from "./run";
@@ -6,7 +7,7 @@ import {
   DEFAULT_MAX_OUTPUT_BYTES,
   type MakeSandboxRunToolOptions,
   type SandboxRunRequest,
-  type SandboxToolLike,
+  type SandboxRunToolArgs,
   type SandboxToolResult,
 } from "./types";
 
@@ -18,52 +19,60 @@ const toolParameters = {
     args: { type: "array", items: { type: "string" } },
     cwd: { type: "string" },
     files: {
-      type: "object",
-      additionalProperties: { type: "string" },
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          path: { type: "string" },
+          text: { type: "string" },
+        },
+        required: ["path", "text"],
+      },
     },
   },
   required: ["command"],
 };
 
-const coerceToolArgs = (
-  value: unknown,
+const failSandboxToolArgs = (message: string): never =>
+  Option.getOrThrowWith(Option.none(), () => new TypeError(message));
+
+const requestFromToolArgs = (
+  input: SandboxRunToolArgs,
   defaults: Required<Pick<MakeSandboxRunToolOptions, "timeoutMs" | "maxOutputBytes" | "network">>,
 ): SandboxRunRequest => {
-  const input =
-    typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
-  const command = typeof input.command === "string" ? input.command : "";
-  const args = Array.isArray(input.args)
-    ? input.args.filter((arg): arg is string => typeof arg === "string")
-    : undefined;
-  const cwd = typeof input.cwd === "string" ? input.cwd : undefined;
-  const rawFiles =
-    typeof input.files === "object" && input.files !== null && !Array.isArray(input.files)
-      ? (input.files as Record<string, unknown>)
-      : undefined;
   const files =
-    rawFiles === undefined
+    input.files === undefined
       ? undefined
       : Object.fromEntries(
-          Object.entries(rawFiles).filter(
-            (entry): entry is [string, string] => typeof entry[1] === "string",
-          ),
+          input.files.map((file) => {
+            if (file.path.length === 0) {
+              return failSandboxToolArgs("sandbox file path must be non-empty");
+            }
+            return [file.path, file.text];
+          }),
         );
+  if (files !== undefined && Object.keys(files).length !== input.files?.length) {
+    return failSandboxToolArgs("sandbox file paths must be unique");
+  }
   return {
-    command,
-    args,
-    cwd,
-    files,
+    command: input.command,
+    ...(input.args === undefined ? {} : { args: input.args }),
+    ...(input.cwd === undefined ? {} : { cwd: input.cwd }),
+    ...(files === undefined ? {} : { files }),
     timeoutMs: defaults.timeoutMs,
     maxOutputBytes: defaults.maxOutputBytes,
     network: defaults.network,
   };
 };
 
-export const makeSandboxRunTool = (options: MakeSandboxRunToolOptions): SandboxToolLike => {
+export const makeSandboxRunTool = (
+  options: MakeSandboxRunToolOptions,
+): Tool<SandboxRunToolArgs, SandboxToolResult> => {
   const timeoutMs = options.timeoutMs ?? 30_000;
   const maxOutputBytes = options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
   const network = options.network ?? { mode: "none" as const };
-  return {
+  return defineToolFromDefinition<SandboxRunToolArgs, SandboxToolResult>({
     definition: {
       type: "function",
       function: {
@@ -73,8 +82,15 @@ export const makeSandboxRunTool = (options: MakeSandboxRunToolOptions): SandboxT
         parameters: toolParameters,
       },
     },
+    decode: (args) => args as SandboxRunToolArgs,
+    authorityClass: options.authority,
+    ...(options.authorityId === undefined ? {} : { authorityId: options.authorityId }),
+    ...(options.authorityVersion === undefined
+      ? {}
+      : { authorityVersion: options.authorityVersion }),
+    admit: options.admit,
     execute: (args) => {
-      const request = coerceToolArgs(args, { timeoutMs, maxOutputBytes, network });
+      const request = requestFromToolArgs(args, { timeoutMs, maxOutputBytes, network });
       const program = Effect.gen(function* () {
         const started = yield* Clock.currentTimeMillis;
         const result = yield* runSandbox(options.backend, options.policy, request).pipe(
@@ -102,5 +118,5 @@ export const makeSandboxRunTool = (options: MakeSandboxRunToolOptions): SandboxT
       });
       return Effect.runPromise(program); // eff-ignore EFF400 reason="Tool.execute is the public Promise adapter for this library; not a process runMain edge"
     },
-  };
+  });
 };

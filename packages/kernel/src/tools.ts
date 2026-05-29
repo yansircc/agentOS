@@ -26,7 +26,11 @@ import {
 import type { LlmToolCall, ToolDefinition } from "./llm";
 import { isMaterialRequirement, type MaterialRequirement } from "./material-ref";
 import type { QuotaSpec } from "./quota";
-import { toClosedJsonSchemaObject, type JsonSchemaObject } from "./json-schema";
+import {
+  toClosedJsonSchemaObject,
+  validateAgainstSchema,
+  type JsonSchemaObject,
+} from "./json-schema";
 
 const TOOL_CONTRACT_BRAND = Symbol("@agent-os/kernel/ToolContract");
 
@@ -112,6 +116,12 @@ const hasToolContractBrand = (contract: ToolContract): boolean =>
 const failToolDefinition = (message: string): never =>
   Option.getOrThrowWith(Option.none(), () => new TypeError(message));
 
+const failToolArgs = (toolId: string, violations: ReadonlyArray<string>): never =>
+  Option.getOrThrowWith(
+    Option.none(),
+    () => new TypeError(`tool ${toolId} args violate schema: ${violations.join(",")}`),
+  );
+
 const normalizeAdmitter = <A>(admit: ToolAdmitter<A> | "allow"): ToolAdmitter<A> =>
   admit === "allow"
     ? permissiveToolAdmitter
@@ -122,9 +132,23 @@ const normalizeAdmitter = <A>(admit: ToolAdmitter<A> | "allow"): ToolAdmitter<A>
 export const defineToolFromDefinition = <A, R>(spec: RegisteredToolSpec<A, R>): Tool<A, R> => {
   const toolId = spec.definition.function.name;
   const admit = normalizeAdmitter(spec.admit);
+  const parameters = toClosedJsonSchemaObject(spec.definition.function.parameters);
+  const schemaDecode = (args: unknown): A => {
+    const violations = validateAgainstSchema(args, parameters);
+    if (violations.length > 0) {
+      return failToolArgs(toolId, violations);
+    }
+    return spec.decode === undefined ? (args as A) : spec.decode(args);
+  };
   return {
-    definition: spec.definition,
-    decode: spec.decode ?? ((args) => args as A),
+    definition: {
+      ...spec.definition,
+      function: {
+        ...spec.definition.function,
+        parameters,
+      },
+    },
+    decode: schemaDecode,
     execute: spec.execute,
     admit,
     ...(spec.quota === undefined ? {} : { quota: spec.quota }),

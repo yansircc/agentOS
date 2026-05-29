@@ -1,20 +1,18 @@
+import type {
+  DispatchToScopeSpec,
+  LedgerEvent,
+  ResourceGrantResult,
+  ResourceGrantSpec,
+  ResourceReservationSpec,
+  ResourceReserveResult,
+  ResourceReserveSpec,
+} from "@agent-os/kernel/types";
 import { Effect } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import { DISPATCH_EVENT_KINDS, DISPATCH_MAX_ATTEMPTS, dispatchBackoffMs } from "../../src";
 import type { BindingMaterialRef } from "@agent-os/kernel/material-ref";
-import type {
-  DispatchEnvelope,
-  DispatchToScopeResult,
-  DispatchToScopeSpec,
-  GrantResult,
-  LedgerEvent,
-  ResourceGrantResult,
-  ResourceGrantSpec,
-  ResourceProjection,
-  ResourceReservationSpec,
-  ResourceReserveResult,
-  ResourceReserveSpec,
-} from "@agent-os/runtime";
+import type { DispatchToScopeResult } from "@agent-os/kernel/types";
+import type { DispatchEnvelope, GrantResult, ResourceProjection } from "@agent-os/runtime";
 
 export type ContractDispatchReceiver = (
   envelope: DispatchEnvelope,

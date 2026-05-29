@@ -188,11 +188,11 @@ describe("@agent-os/resource-cloudflare D1 carrier", () => {
           ref: "tenant/d1/main",
         },
         accountRef,
-        proofRef: expect.stringMatching(/^proof:\/\/cloudflare\/d1\/provision\/[a-f0-9]{8}$/),
+        proofRef: expect.stringMatching(/^resource:cloudflare:d1:provision:[a-f0-9]{8}$/),
         claim: {
           phase: "lived",
           anchorRef: {
-            anchorId: expect.stringMatching(/^proof:\/\/cloudflare\/d1\/provision\/[a-f0-9]{8}$/),
+            anchorId: expect.stringMatching(/^resource:cloudflare:d1:provision:[a-f0-9]{8}$/),
             carrierRef: "cloudflare-d1-test",
           },
         },
@@ -201,20 +201,20 @@ describe("@agent-os/resource-cloudflare D1 carrier", () => {
         subjectRef: "res-1",
         resourceRef: d1ResourceRef,
         bindingRef: d1BindingRef,
-        proofRef: expect.stringMatching(/^proof:\/\/cloudflare\/d1\/bind\/[a-f0-9]{8}$/),
+        proofRef: expect.stringMatching(/^resource:cloudflare:d1:bind:[a-f0-9]{8}$/),
       });
       expect(mutation).toMatchObject({
         subjectRef: "res-1",
         resourceRef: d1ResourceRef,
         mutationKind: "d1.exec",
         mutationRef: "mutation://create-table",
-        proofRef: expect.stringMatching(/^proof:\/\/cloudflare\/d1\/mutate\/[a-f0-9]{8}$/),
+        proofRef: expect.stringMatching(/^resource:cloudflare:d1:mutate:[a-f0-9]{8}$/),
         fingerprint: "sha256:test-fingerprint",
       });
       expect(destroyed).toMatchObject({
         subjectRef: "res-1",
         resourceRef: d1ResourceRef,
-        proofRef: expect.stringMatching(/^proof:\/\/cloudflare\/d1\/destroy\/[a-f0-9]{8}$/),
+        proofRef: expect.stringMatching(/^resource:cloudflare:d1:destroy:[a-f0-9]{8}$/),
         reason: "manual",
       });
       expect(provisioned.claim.anchorRef.anchorId).toBe(provisioned.proofRef);
@@ -310,7 +310,7 @@ describe("@agent-os/resource-cloudflare D1 carrier", () => {
           phase: "rejected",
           rejectionRef: {
             rejectionKind: "resource_denied",
-            reason: "cloudflare_api credential material is unavailable",
+            reason: "resource_MaterialUnavailable",
           },
         },
       });

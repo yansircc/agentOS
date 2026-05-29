@@ -16,7 +16,7 @@ const definition = (name: string): ToolDefinition => ({
   function: {
     name,
     description: `${name} tool`,
-    parameters: { type: "object", additionalProperties: false },
+    parameters: { type: "object", properties: {}, additionalProperties: false },
   },
 });
 
@@ -119,6 +119,36 @@ describe("@agent-os/skill-registry", () => {
         { kind: "invalid_admitter", skillId: "bad-skill", toolId: "bad" },
         { kind: "invalid_execute", skillId: "bad-skill", toolId: "bad" },
       ],
+    });
+  });
+
+  it("rejects tool definitions outside the closed JSON Schema dialect", () => {
+    const result = registerSkill(
+      manifest([
+        {
+          definition: {
+            type: "function",
+            function: {
+              name: "lookup",
+              description: "lookup tool",
+              parameters: {
+                type: "object",
+                properties: {
+                  key: { anyOf: [{ type: "string" }, { type: "number" }] },
+                },
+              },
+            },
+          },
+          authorityClass: "read",
+          admit,
+          execute: async () => null,
+        },
+      ]),
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      issues: [{ kind: "invalid_tool_definition", skillId: "test-skill", index: 0 }],
     });
   });
 

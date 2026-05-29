@@ -39,6 +39,10 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:workspaceSessionFailedPayload`
 - `.:workspaceSessionRejectionKind`
 
+- `.:settleWorkspaceSessionLived`
+- `.:workspaceSessionSettlementContract`
+- `.:workspaceSessionSettlementRef`
+
 ## Experimental exports
 
 None.

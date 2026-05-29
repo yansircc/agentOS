@@ -1,7 +1,7 @@
 import { Schema } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 
-import { defineTool } from "../src/tools";
+import { defineTool, defineToolFromDefinition } from "../src/tools";
 
 describe("defineTool", () => {
   it("derives the OpenAI tool parameters and args decoder from one Schema", () => {
@@ -54,6 +54,63 @@ describe("defineTool", () => {
         admit: "allow",
         execute: ({ key }) => ({ value: key }),
       }),
-    ).toThrow("unsupported-key");
+    ).toThrow("unsupported");
+  });
+});
+
+describe("defineToolFromDefinition", () => {
+  it("closes manifest tool schemas and validates args before custom decode", () => {
+    let decoded = false;
+    const tool = defineToolFromDefinition({
+      definition: {
+        type: "function",
+        function: {
+          name: "lookup",
+          description: "Lookup a symbolic key",
+          parameters: {
+            type: "object",
+            properties: { key: { type: "string" } },
+            required: ["key"],
+            additionalProperties: false,
+          },
+        },
+      },
+      decode: (args) => {
+        decoded = true;
+        return args as { readonly key: string };
+      },
+      authorityClass: "read",
+      admit: "allow",
+      execute: async ({ key }) => ({ value: key }),
+    });
+
+    expect(tool.decode({ key: "abc" })).toEqual({ key: "abc" });
+    expect(decoded).toBe(true);
+    decoded = false;
+    expect(() => tool.decode({ key: 1 })).toThrow("violate schema");
+    expect(decoded).toBe(false);
+  });
+
+  it("rejects manifest schemas outside the closed dialect", () => {
+    expect(() =>
+      defineToolFromDefinition({
+        definition: {
+          type: "function",
+          function: {
+            name: "lookup",
+            description: "Lookup a symbolic key",
+            parameters: {
+              type: "object",
+              properties: {
+                key: { anyOf: [{ type: "string" }, { type: "number" }] },
+              },
+            },
+          },
+        },
+        authorityClass: "read",
+        admit: "allow",
+        execute: async () => null,
+      }),
+    ).toThrow("unsupported");
   });
 });

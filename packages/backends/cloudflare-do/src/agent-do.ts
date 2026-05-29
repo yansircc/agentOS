@@ -1,3 +1,24 @@
+import type {
+  DispatchToScopeResult,
+  DispatchToScopeSpec,
+  EventHandler,
+  EventQueryOptions,
+  LedgerEventRpc,
+  QuotaState,
+  QuotaStateSpec,
+  ResourceGrantResult,
+  ResourceGrantSpec,
+  ResourceReservationSpec,
+  ResourceReserveResult,
+  ResourceReserveSpec,
+  ResourceState,
+  RunListPage,
+  RunListSpec,
+  RunStatus,
+  RunTrace,
+  ScheduledEventSpec,
+  StreamEventsOptions,
+} from "@agent-os/kernel/types";
 /**
  * Cloudflare Durable Object adapter.
  *
@@ -39,31 +60,7 @@ import {
   SqlError,
   UnsupportedScopeRef,
 } from "@agent-os/kernel/errors";
-import type {
-  AttemptKey,
-  CapabilityLease,
-  EventHandler,
-  DispatchToScopeResult,
-  DispatchToScopeSpec,
-  EventQueryOptions,
-  LedgerEventRpc,
-  QuotaState,
-  QuotaStateSpec,
-  ResourceGrantResult,
-  ResourceGrantSpec,
-  ResourceReservationSpec,
-  ResourceReserveResult,
-  ResourceReserveSpec,
-  ResourceState,
-  RunListPage,
-  RunListSpec,
-  RunStatus,
-  RunTrace,
-  ScheduledEventSpec,
-  SubmitResult,
-  SubmitSpec,
-  StreamEventsOptions,
-} from "@agent-os/runtime";
+import type { AttemptKey, CapabilityLease, SubmitResult, SubmitSpec } from "@agent-os/runtime";
 import {
   Admission,
   commitBoundaryEvent,
@@ -114,25 +111,18 @@ export interface CloudflareAgentEnv {
   readonly AI: Ai;
 }
 
-export interface AgentRuntimeBaseClient {
+export interface AgentRuntimeReaderClient {
   readonly events: (opts?: EventQueryOptions) => Promise<LedgerEventRpc[]>;
   readonly streamEvents: (opts?: StreamEventsOptions) => Response;
-  readonly emit: (event: string, data: unknown) => Promise<{ id: number }>;
+}
+
+export interface AgentRuntimeClient extends AgentRuntimeReaderClient {
   readonly emitEvent: (spec: {
     readonly event: string;
     readonly data: unknown;
   }) => Promise<{ id: number }>;
-  readonly dispatch: (spec: DispatchToScopeSpec) => Promise<DispatchToScopeResult>;
   readonly dispatchToScope: (spec: DispatchToScopeSpec) => Promise<DispatchToScopeResult>;
-  readonly schedule: (
-    event: string,
-    data: unknown,
-    options: { readonly at: number },
-  ) => Promise<{ id: number }>;
   readonly scheduleEvent: (spec: ScheduledEventSpec) => Promise<{ id: number }>;
-}
-
-export interface AgentRuntimeClient extends AgentRuntimeBaseClient {
   readonly submit: (spec: SubmitSpec) => Promise<SubmitResult>;
 }
 
@@ -142,7 +132,7 @@ export interface AgentSubmitSpec {
   readonly system?: string;
   readonly budget?: SubmitSpec["budget"];
   readonly outputSchema?: SubmitSpec["outputSchema"];
-  readonly deliver: string | { readonly event: string };
+  readonly deliver: string;
 }
 
 export interface AgentEventHandlerRegistration {
@@ -151,7 +141,7 @@ export interface AgentEventHandlerRegistration {
 }
 
 export interface AgentEventHandlerContext<
-  Runtime extends AgentRuntimeBaseClient = AgentRuntimeClient,
+  Runtime extends AgentRuntimeReaderClient = AgentRuntimeClient,
 > {
   readonly runtime: Runtime;
   readonly capabilities: ReadonlyMap<string, ExtensionCapability>;
@@ -187,7 +177,7 @@ const makeAgentRuntime = (
 
 export interface AgentDurableObjectConfig<
   Env extends CloudflareAgentEnv,
-  Runtime extends AgentRuntimeBaseClient = AgentRuntimeClient,
+  Runtime extends AgentRuntimeReaderClient = AgentRuntimeClient,
 > {
   readonly refResolver?: (env: Env) => RefResolver;
   readonly extensions?: (env: Env) => ReadonlyArray<ExtensionDeclaration>;
@@ -201,7 +191,7 @@ export interface AgentDurableObjectConfig<
 
 export interface MaterializedAgentConfig<
   Env extends CloudflareAgentEnv,
-  Runtime extends AgentRuntimeBaseClient = AgentRuntimeClient,
+  Runtime extends AgentRuntimeReaderClient = AgentRuntimeClient,
 > {
   readonly refResolver: RefResolver;
   readonly extensions: ReadonlyArray<ExtensionDeclaration>;
@@ -224,10 +214,10 @@ const emptyRefResolver: RefResolver = {
 
 export class AgentDurableObject<
   Env extends CloudflareAgentEnv,
-  Runtime extends AgentRuntimeBaseClient = AgentRuntimeBaseClient,
+  Runtime extends AgentRuntimeReaderClient = AgentRuntimeReaderClient,
 >
   extends DurableObject<Env>
-  implements AgentRuntimeBaseClient
+  implements AgentRuntimeReaderClient
 {
   private readonly _handlers: Map<string, Set<EventHandler>> = new Map();
   private readonly _refResolver: RefResolver;
@@ -399,7 +389,6 @@ export class AgentDurableObject<
     spec: AgentSubmitSpec,
     defaults: AgentSubmitDefaults,
   ): Promise<SubmitResult> {
-    const deliver = typeof spec.deliver === "string" ? { event: spec.deliver } : spec.deliver;
     return this.submitFull({
       intent: spec.intent,
       context: { input: spec.input },
@@ -408,7 +397,7 @@ export class AgentDurableObject<
       tools: defaults.tools,
       ...(spec.budget === undefined ? {} : { budget: spec.budget }),
       ...(spec.outputSchema === undefined ? {} : { outputSchema: spec.outputSchema }),
-      deliver,
+      deliver: { event: spec.deliver },
     });
   }
 
@@ -554,7 +543,7 @@ export class AgentDurableObject<
    *  the row is committed and on() handlers are invoked before this Promise
    *  resolves. They are NOT degenerate cases of each other.
    */
-  emitEvent(spec: { event: string; data: unknown }): Promise<{ id: number }> {
+  protected emitEventFull(spec: { event: string; data: unknown }): Promise<{ id: number }> {
     return this.runScopedWrite(spec.event, (scope) =>
       Effect.gen(function* () {
         const ledger = yield* Ledger;
@@ -562,10 +551,6 @@ export class AgentDurableObject<
         return { id: ev.id };
       }),
     );
-  }
-
-  emit(event: string, data: unknown): Promise<{ id: number }> {
-    return this.emitEvent({ event, data });
   }
 
   /** Dispatch an app event to another configured agent scope.
@@ -577,7 +562,7 @@ export class AgentDurableObject<
    *    in one transactionSync;
    *  - receiver dedupe is (sourceScope, idempotencyKey), not outboundEventId.
    */
-  dispatchToScope(spec: DispatchToScopeSpec): Promise<DispatchToScopeResult> {
+  protected dispatchToScopeFull(spec: DispatchToScopeSpec): Promise<DispatchToScopeResult> {
     if (!isMaterialRef(spec.target.bindingRef) || spec.target.bindingRef.kind !== "binding") {
       return Promise.reject(new DispatchBindingRefMalformed({ position: "target" }));
     }
@@ -603,10 +588,6 @@ export class AgentDurableObject<
         return yield* dispatch.dispatchToScope(spec);
       }),
     );
-  }
-
-  dispatch(spec: DispatchToScopeSpec): Promise<DispatchToScopeResult> {
-    return this.dispatchToScope(spec);
   }
 
   grantResource(spec: ResourceGrantSpec): Promise<ResourceGrantResult> {
@@ -697,7 +678,7 @@ export class AgentDurableObject<
    *  the target time, fireDue sees no new pending, and the alarm naturally
    *  reverts (next = whatever was there before, or null).
    */
-  scheduleEvent(spec: ScheduledEventSpec): Promise<{ id: number }> {
+  protected scheduleEventFull(spec: ScheduledEventSpec): Promise<{ id: number }> {
     if (!Number.isFinite(spec.at)) {
       return Promise.reject(new InvalidScheduleAt({ at: spec.at }));
     }
@@ -708,14 +689,6 @@ export class AgentDurableObject<
         return { id };
       }),
     );
-  }
-
-  schedule(
-    event: string,
-    data: unknown,
-    options: { readonly at: number },
-  ): Promise<{ id: number }> {
-    return this.scheduleEvent({ event, data, at: options.at });
   }
 
   /** DO alarm handler — invoked automatically by the CF runtime. */
@@ -754,5 +727,17 @@ export const createAgentDurableObject = <Env extends CloudflareAgentEnv>(
 
     submit(spec: SubmitSpec): Promise<SubmitResult> {
       return this.submitFull(spec);
+    }
+
+    emitEvent(spec: { event: string; data: unknown }): Promise<{ id: number }> {
+      return this.emitEventFull(spec);
+    }
+
+    dispatchToScope(spec: DispatchToScopeSpec): Promise<DispatchToScopeResult> {
+      return this.dispatchToScopeFull(spec);
+    }
+
+    scheduleEvent(spec: ScheduledEventSpec): Promise<{ id: number }> {
+      return this.scheduleEventFull(spec);
     }
   };

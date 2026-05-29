@@ -26,9 +26,8 @@ export type {
   SandboxRawResult,
   SandboxResultFields,
   SandboxRunRequest,
+  SandboxRunToolArgs,
   SandboxRunSuccess,
-  SandboxToolDefinition,
-  SandboxToolLike,
   SandboxToolResult,
   StaticPolicyOptions,
 } from "./types";

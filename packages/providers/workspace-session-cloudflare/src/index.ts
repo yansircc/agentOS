@@ -1,8 +1,10 @@
-import { Effect } from "effect";
-import { settleLivedClaim, type PreClaim } from "@agent-os/kernel/effect-claim";
+import { Effect, Predicate } from "effect";
+import type { PreClaim } from "@agent-os/kernel/effect-claim";
 import {
   resolveWorkspaceSession,
+  settleWorkspaceSessionLived,
   settleWorkspaceSessionRejected,
+  workspaceSessionSettlementRef,
   type WorkspaceSessionBackupRequest,
   type WorkspaceSessionCarrier,
   type WorkspaceSessionDestroyRequest,
@@ -252,9 +254,6 @@ const providerFailure = (
   ...(proofRef === undefined ? {} : { proofRef }),
 });
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0;
 
@@ -288,7 +287,7 @@ const failureFrom = (
   step: WorkspaceSessionFailure["step"],
   cause: unknown,
 ): WorkspaceSessionFailure => {
-  if (isRecord(cause)) {
+  if (Predicate.isRecord(cause)) {
     const code = providerFailureCode(cause.code);
     const reason = typeof cause.reason === "string" ? cause.reason : messageOf(cause);
     const proofRef = typeof cause.proofRef === "string" ? cause.proofRef : undefined;
@@ -443,7 +442,7 @@ const requiredOptionNumber = (
 const isProviderFailure = (
   value: unknown,
 ): value is CloudflareWorkspaceSessionRequiredProviderFailure =>
-  isRecord(value) &&
+  Predicate.isRecord(value) &&
   providerFailureCode(value.code) !== undefined &&
   typeof value.reason === "string";
 
@@ -451,7 +450,7 @@ const requireClient = (
   value: CloudflareWorkspaceSandboxClient,
   step: WorkspaceSessionFailure["step"],
 ): CloudflareWorkspaceSandboxClient | CloudflareWorkspaceSessionRequiredProviderFailure =>
-  isRecord(value)
+  Predicate.isRecord(value)
     ? value
     : {
         code: "ProviderFailure",
@@ -656,9 +655,8 @@ export const makeCloudflareWorkspaceSessionCarrier = (
           workspaceRootRef,
           cleanupRef,
           ...(request.retention === undefined ? {} : { retention: request.retention }),
-          claim: settleLivedClaim(request.claim, {
-            anchorId: sessionRef,
-            anchorKind: "carrier_proof",
+          claim: settleWorkspaceSessionLived(request.claim, {
+            proofRef: workspaceSessionSettlementRef("session", sessionRef),
             carrierRef,
           }),
         };
@@ -707,9 +705,8 @@ export const makeCloudflareWorkspaceSessionCarrier = (
           workspaceRootRef,
           cleanupRef,
           ...(request.retention === undefined ? {} : { retention: request.retention }),
-          claim: settleLivedClaim(request.claim, {
-            anchorId: sessionRef,
-            anchorKind: "carrier_proof",
+          claim: settleWorkspaceSessionLived(request.claim, {
+            proofRef: workspaceSessionSettlementRef("session", sessionRef),
             carrierRef,
           }),
         };
@@ -736,9 +733,8 @@ export const makeCloudflareWorkspaceSessionCarrier = (
           sessionRef: request.sessionRef,
           backupRef: result.backupRef,
           ...(request.expiresAt === undefined ? {} : { expiresAt: request.expiresAt }),
-          claim: settleLivedClaim(request.claim, {
-            anchorId: result.backupRef,
-            anchorKind: "carrier_proof",
+          claim: settleWorkspaceSessionLived(request.claim, {
+            proofRef: workspaceSessionSettlementRef("backup", result.backupRef),
             carrierRef,
           }),
         };
@@ -766,9 +762,8 @@ export const makeCloudflareWorkspaceSessionCarrier = (
           previewRef: result.previewRef,
           port: request.port,
           ...(result.url === undefined ? {} : { url: result.url }),
-          claim: settleLivedClaim(request.claim, {
-            anchorId: result.previewRef,
-            anchorKind: "carrier_proof",
+          claim: settleWorkspaceSessionLived(request.claim, {
+            proofRef: workspaceSessionSettlementRef("preview", result.previewRef),
             carrierRef,
           }),
         };
@@ -795,9 +790,8 @@ export const makeCloudflareWorkspaceSessionCarrier = (
           subjectRef: request.subjectRef,
           sessionRef: request.sessionRef,
           reason: request.reason,
-          claim: settleLivedClaim(request.claim, {
-            anchorId: proofRef,
-            anchorKind: "carrier_proof",
+          claim: settleWorkspaceSessionLived(request.claim, {
+            proofRef: workspaceSessionSettlementRef("destroy", proofRef),
             carrierRef,
           }),
         };

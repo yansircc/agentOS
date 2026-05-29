@@ -84,12 +84,13 @@ axes:
 vocabulary       owned event kind prefixes
 authority        authority refs and required materials by authority
 material         top-level MaterialRequirement axis
-proof            symbolic anchor/proof vocabulary
+settlement       terminal claim vocabulary and symbolic proof constraints
 projection       derived-from-ledger reader contract
 ```
 
-Cleanup is not a sixth axis yet. Release and destruction semantics remain proof
-vocabulary until multiple packages expose cleanup as an independent contract.
+Cleanup is not a sixth axis yet. Release and destruction semantics remain
+settlement vocabulary until multiple packages expose cleanup as an independent
+contract.
 
 Do not put resolved provider material in claims, ledger events, projections,
 error payloads, run-stream frames, or docs examples.

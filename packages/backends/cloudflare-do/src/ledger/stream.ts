@@ -1,3 +1,4 @@
+import type { LedgerEvent, StreamEventsOptions } from "@agent-os/kernel/types";
 /**
  * Server-Sent Events stream for ledger reads — the SSE surface of
  * `Cloudflare backend.streamEvents`. Extracted from agent-do.ts as a pure
@@ -29,8 +30,7 @@
  */
 
 import { Effect, type ManagedRuntime } from "effect";
-
-import { Ledger, type LedgerEvent, type StreamEventsOptions } from "@agent-os/runtime";
+import { Ledger } from "@agent-os/runtime";
 import { EventBus } from "./event-bus";
 import { eventToRpc } from "./ledger";
 

@@ -1,8 +1,6 @@
-import {
-  validateEffectClaim,
-  type LivedClaim,
-  type RejectedClaim,
-} from "@agent-os/kernel/effect-claim";
+import { Predicate } from "effect";
+import type { LivedClaim, RejectedClaim } from "@agent-os/kernel/effect-claim";
+import { validateTerminalClaim } from "@agent-os/kernel/settlement-contract";
 import {
   isMaterialRef,
   type BindingMaterialRef,
@@ -10,6 +8,7 @@ import {
   type MaterialRef,
 } from "@agent-os/kernel/material-ref";
 import { defineEventKindView, defineEventPayloads, payload } from "@agent-os/kernel/extensions";
+import { resourceSettlementContract } from "./settlement";
 
 export type ResourceLifecycleStep = "provision" | "bind" | "mutate" | "destroy";
 
@@ -98,19 +97,16 @@ export interface ResourceProjection {
   readonly failure?: ResourceFailedPayload;
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 const stringField = (payload: Record<string, unknown>, key: string): string | undefined =>
   typeof payload[key] === "string" ? payload[key] : undefined;
 
 const livedClaimFrom = (value: unknown): LivedClaim | undefined => {
-  const result = validateEffectClaim(value);
+  const result = validateTerminalClaim(resourceSettlementContract, value);
   return result.ok && result.claim.phase === "lived" ? result.claim : undefined;
 };
 
 const rejectedClaimFrom = (value: unknown): RejectedClaim | undefined => {
-  const result = validateEffectClaim(value);
+  const result = validateTerminalClaim(resourceSettlementContract, value);
   return result.ok && result.claim.phase === "rejected" ? result.claim : undefined;
 };
 
@@ -134,7 +130,7 @@ const destroyReasonFrom = (value: unknown): ResourceDestroyedPayload["reason"] |
     : undefined;
 
 const mutationPayloadFrom = (event: ResourceLedgerEvent): ResourceMutationFact | undefined => {
-  if (!isRecord(event.payload)) return undefined;
+  if (!Predicate.isRecord(event.payload)) return undefined;
   const subjectRef = stringField(event.payload, "subjectRef");
   const resourceRef = materialRefFrom(event.payload.resourceRef);
   const mutationKind = stringField(event.payload, "mutationKind");
@@ -240,7 +236,7 @@ export const projectResource = (
   const mutationEventIds: number[] = [];
 
   for (const event of events) {
-    if (!isRecord(event.payload)) continue;
+    if (!Predicate.isRecord(event.payload)) continue;
     if (event.payload.subjectRef !== subjectRef) continue;
     switch (event.kind) {
       case RESOURCE_KIND.RESOURCE_PROVISIONED: {

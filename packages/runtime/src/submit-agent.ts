@@ -45,11 +45,17 @@ import {
   makeOperationRef,
   makePreClaim,
   normalizeAdmitVerdict,
-  settleLivedClaim,
-  settleRejectedClaim,
   type RejectionRef,
 } from "@agent-os/kernel/effect-claim";
 import type { InternalSubmitSpec, SubmitResult, TurnRef } from "./submit";
+import {
+  settleToolAdmissionRejected,
+  settleToolExecuted,
+  settleToolExecutionRejected,
+  toolAdmissionFailureCause,
+  toolErrorReason,
+  publicRuntimeCauseReason,
+} from "./tool-settlement";
 
 export const turnRefOf = (runId: number, index: number): TurnRef => ({
   id: runId,
@@ -58,47 +64,6 @@ export const turnRefOf = (runId: number, index: number): TurnRef => ({
 
 const toolDefinitionsOf = (tools: Record<string, Tool>): ReadonlyArray<ToolDefinition> =>
   Object.values(tools).map((t) => t.definition);
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-const symbolicReason = (value: string): string | null =>
-  /^[A-Za-z0-9_.:-]{1,128}$/.test(value) ? value : null;
-
-const toolErrorReason = (error: ToolError): string => {
-  const cause = error.cause;
-  if (typeof cause === "object" && cause !== null) {
-    const reason = (cause as { readonly reason?: unknown }).reason;
-    if (typeof reason === "string" && reason.length > 0) {
-      return symbolicReason(reason) ?? "tool_error";
-    }
-  }
-  return publicErrorReason(cause);
-};
-
-const toolRejectionKind = (reason: string): RejectionRef["rejectionKind"] =>
-  reason === "rate_limited" || reason.startsWith("invalid_quota_")
-    ? "resource_denied"
-    : "provider_rejected";
-
-const publicErrorReason = (cause: unknown): string => {
-  if (isRecord(cause) && cause._tag === "agent_os.provider_http_failure") {
-    const provider = symbolicReason(String(cause.provider)) ?? "provider";
-    const status = typeof cause.status === "number" ? `http_${cause.status}` : "http_error";
-    const flags = Array.isArray(cause.flags)
-      ? cause.flags.filter((flag): flag is string => typeof flag === "string").join(":")
-      : "";
-    return ["provider_http_failure", provider, status, flags].filter(Boolean).join(":");
-  }
-  if (isRecord(cause) && typeof cause.reason === "string") {
-    return symbolicReason(cause.reason) ?? "object";
-  }
-  if (isRecord(cause) && typeof cause._tag === "string") {
-    return cause._tag;
-  }
-  if (cause instanceof Error) return cause.name;
-  return typeof cause;
-};
 
 export const buildInitialMessages = (
   spec: Pick<InternalSubmitSpec, "system" | "intent" | "context">,
@@ -383,11 +348,7 @@ export const submitAgentEffect = (
             Effect.catchAll((rejectionRef) =>
               Effect.succeed({
                 ok: false as const,
-                rejectionRef: {
-                  rejectionId: rejectionRef.rejectionId,
-                  rejectionKind: rejectionRef.rejectionKind,
-                  ...(rejectionRef.reason === undefined ? {} : { reason: rejectionRef.reason }),
-                },
+                rejectionRef,
               }),
             ),
           );
@@ -401,16 +362,13 @@ export const submitAgentEffect = (
                 runId: started.id,
                 name: call.function.name,
                 args: call.function.arguments,
-                claim: settleRejectedClaim(claim, rejectedAdmission),
+                claim: settleToolAdmissionRejected(claim, rejectedAdmission),
               },
               scope,
             );
             return yield* new ToolError({
               toolName: call.function.name,
-              cause: {
-                reason: rejectedAdmission.reason ?? rejectedAdmission.rejectionKind,
-                rejectionKind: rejectedAdmission.rejectionKind,
-              },
+              cause: toolAdmissionFailureCause(rejectedAdmission),
             });
           }
 
@@ -504,11 +462,7 @@ export const submitAgentEffect = (
                       runId: started.id,
                       name: call.function.name,
                       args: call.function.arguments,
-                      claim: settleRejectedClaim(claim, {
-                        rejectionId: claim.operationRef,
-                        rejectionKind: toolRejectionKind(reason),
-                        reason,
-                      }),
+                      claim: settleToolExecutionRejected(claim, reason),
                     },
                     scope,
                   );
@@ -525,11 +479,7 @@ export const submitAgentEffect = (
               name: call.function.name,
               args: call.function.arguments,
               result,
-              claim: settleLivedClaim(claim, {
-                anchorId: claim.operationRef,
-                anchorKind: "carrier_proof",
-                carrierRef: `tool:${contract.toolId}`,
-              }),
+              claim: settleToolExecuted(claim, contract),
             },
             scope,
           );
@@ -553,7 +503,7 @@ export const submitAgentEffect = (
             const tokensUsed = yield* Ref.get(tokensUsedRef);
             return yield* finalAbort(
               ABORT.UPSTREAM_FAILURE,
-              { cause: publicErrorReason(e.cause) },
+              { cause: publicRuntimeCauseReason(e.cause) },
               scope,
               started.id,
               tokensUsed,
@@ -564,7 +514,7 @@ export const submitAgentEffect = (
             const tokensUsed = yield* Ref.get(tokensUsedRef);
             return yield* finalAbort(
               ABORT.TOOL_ERROR,
-              { toolName: e.toolName, cause: publicErrorReason(e.cause) },
+              { toolName: e.toolName, cause: publicRuntimeCauseReason(e.cause) },
               scope,
               started.id,
               tokensUsed,

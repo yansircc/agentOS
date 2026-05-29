@@ -1,3 +1,10 @@
+import type {
+  ResourceGrantResult,
+  ResourceGrantSpec,
+  ResourceReservationSpec,
+  ResourceReserveResult,
+  ResourceReserveSpec,
+} from "@agent-os/kernel/types";
 /**
  * Resources — deterministic contract tests.
  *
@@ -11,15 +18,7 @@
 import { runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vite-plus/test";
-
-import type {
-  LedgerEventRpc,
-  ResourceGrantResult,
-  ResourceGrantSpec,
-  ResourceReservationSpec,
-  ResourceReserveResult,
-  ResourceReserveSpec,
-} from "@agent-os/runtime";
+import type { LedgerEventRpc } from "@agent-os/kernel/types";
 import type { DispatchTestDO } from "./test-worker";
 
 interface TestEnv {

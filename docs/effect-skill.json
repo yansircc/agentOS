@@ -80,12 +80,6 @@
         "rules": ["EFF402"]
       },
       {
-        "path": "packages/providers/dynamic-worker/src/tool.ts",
-        "owner": "@agent-os/dynamic-worker",
-        "reason": "terminal Tool.execute adapter owns the Promise boundary over the Effect program",
-        "rules": ["EFF400"]
-      },
-      {
         "path": "tooling/ops-api/src/errors.ts",
         "owner": "@agent-os/ops-api",
         "reason": "terminal ops-api HTTP error adapter owns Response construction",

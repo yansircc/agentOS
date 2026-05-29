@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   isRejectionRef,
   validateEffectClaim,
@@ -6,6 +7,8 @@ import {
   type RejectionRef,
 } from "@agent-os/kernel/effect-claim";
 import { defineEventKindView, defineEventPayloads, payload } from "@agent-os/kernel/extensions";
+import { validateTerminalClaim } from "@agent-os/kernel/settlement-contract";
+import { decisionGateSettlementContract } from "./settlement";
 
 export type DecisionGateDecision = "approved" | "rejected";
 
@@ -61,9 +64,6 @@ export interface DecisionGateProjection {
   readonly consumed?: DecisionGateConsumedPayload;
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 const stringField = (payload: Record<string, unknown>, key: string): string | undefined =>
   typeof payload[key] === "string" ? payload[key] : undefined;
 
@@ -73,7 +73,7 @@ const preClaimFrom = (value: unknown): PreClaim | undefined => {
 };
 
 const livedClaimFrom = (value: unknown): LivedClaim | undefined => {
-  const result = validateEffectClaim(value);
+  const result = validateTerminalClaim(decisionGateSettlementContract, value);
   return result.ok && result.claim.phase === "lived" ? result.claim : undefined;
 };
 
@@ -145,7 +145,7 @@ export const projectDecisionGate = (
   let consumed: DecisionGateConsumedPayload | undefined;
 
   for (const event of events) {
-    if (!isRecord(event.payload)) continue;
+    if (!Predicate.isRecord(event.payload)) continue;
     if (event.payload.gateRef !== gateRef) continue;
     switch (event.kind) {
       case DECISION_GATE_KIND.REQUESTED: {

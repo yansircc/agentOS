@@ -11,8 +11,8 @@ export type {
   AgentDurableObjectConfig,
   AgentEventHandlerContext,
   AgentEventHandlerRegistration,
-  AgentRuntimeBaseClient,
   AgentRuntimeClient,
+  AgentRuntimeReaderClient,
   AgentSubmitSpec,
 } from "./agent-do";
 export {

@@ -24,7 +24,7 @@
  * fingerprint stable across credential rotation.
  */
 
-import { Context, Effect, Layer } from "effect";
+import { Context, Effect, Layer, Predicate } from "effect";
 import { LlmTransport } from "@agent-os/runtime";
 import {
   ProviderHttpFailure,
@@ -332,9 +332,6 @@ export const DEFAULTS = {
 
 type HttpProvider = Exclude<LlmRoute["kind"], "cf-ai-binding">;
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 const sanitizedToken = (value: unknown): string | undefined =>
   typeof value === "string" && /^[A-Za-z0-9_.:-]{1,96}$/.test(value) ? value : undefined;
 
@@ -348,9 +345,9 @@ const providerErrorEnvelope = (body: string): Effect.Effect<Record<string, unkno
     );
     if (parsedEither._tag === "Left") return null;
     const parsed = parsedEither.right;
-    if (!isRecord(parsed)) return null;
+    if (!Predicate.isRecord(parsed)) return null;
     const error = parsed.error;
-    return isRecord(error) ? error : parsed;
+    return Predicate.isRecord(error) ? error : parsed;
   });
 
 const providerFailureFlags = (
@@ -363,7 +360,7 @@ const providerFailureFlags = (
   const statusToken =
     typeof envelope?.status === "string" ? envelope.status.toLowerCase() : undefined;
   const reasonTokens =
-    Array.isArray(envelope?.details) && envelope.details.every(isRecord)
+    Array.isArray(envelope?.details) && envelope.details.every(Predicate.isRecord)
       ? envelope.details
           .map((detail) => (typeof detail.reason === "string" ? detail.reason.toLowerCase() : ""))
           .join(" ")

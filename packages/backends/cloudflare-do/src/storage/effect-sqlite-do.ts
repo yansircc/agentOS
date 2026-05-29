@@ -1,3 +1,4 @@
+import type { LedgerEvent } from "@agent-os/kernel/types";
 /**
  * Internal Cloudflare-only Effect SQL facade.
  *
@@ -9,9 +10,8 @@
 import { SqlClient } from "@effect/sql/SqlClient";
 import { layer as sqliteDoLayer } from "@effect/sql-sqlite-do/SqliteClient";
 import { Effect } from "effect";
-
 import { SqlError } from "@agent-os/kernel/errors";
-import type { EventQueryOptions, LedgerEvent } from "@agent-os/runtime";
+import type { EventQueryOptions } from "@agent-os/kernel/types";
 import { sqlText } from "./sql-row";
 
 interface LedgerEventSqlRow {

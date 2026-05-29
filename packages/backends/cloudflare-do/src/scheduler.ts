@@ -1,6 +1,7 @@
+import type { LedgerEvent } from "@agent-os/kernel/types";
 import { Clock, Effect, Layer } from "effect";
 import { SqlError, safeStringify } from "@agent-os/kernel/errors";
-import { Scheduler, type LedgerEvent } from "@agent-os/runtime";
+import { Scheduler } from "@agent-os/runtime";
 import { DUE_WORK_SCHEDULED_EVENT } from "@agent-os/backend-protocol";
 import { EventBus } from "./ledger";
 import { fireLedgerEvents, insertLedgerEvent } from "./ledger/inserted-events";

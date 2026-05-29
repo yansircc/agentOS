@@ -1,5 +1,8 @@
-import { validateEffectClaim, type LivedClaim } from "@agent-os/kernel/effect-claim";
+import { Predicate } from "effect";
+import type { LivedClaim } from "@agent-os/kernel/effect-claim";
 import { defineEventKindView, defineEventPayloads, payload } from "@agent-os/kernel/extensions";
+import { validateTerminalClaim } from "@agent-os/kernel/settlement-contract";
+import { gitSettlementContract } from "./settlement";
 
 export interface GitWorkspaceCreatedPayload {
   readonly subjectRef: string;
@@ -72,14 +75,11 @@ export interface GitSubjectProjection {
   readonly cleaned: boolean;
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 const stringField = (payload: Record<string, unknown>, key: string): string | undefined =>
   typeof payload[key] === "string" ? payload[key] : undefined;
 
 const livedClaimFrom = (value: unknown): LivedClaim | undefined => {
-  const result = validateEffectClaim(value);
+  const result = validateTerminalClaim(gitSettlementContract, value);
   return result.ok && result.claim.phase === "lived" ? result.claim : undefined;
 };
 
@@ -96,7 +96,7 @@ export const projectGitSubject = (
   const commitRefs: string[] = [];
 
   for (const event of events) {
-    if (!isRecord(event.payload)) continue;
+    if (!Predicate.isRecord(event.payload)) continue;
     if (event.payload.subjectRef !== subjectRef) continue;
     if (livedClaimFrom(event.payload.claim) === undefined) continue;
     switch (event.kind) {

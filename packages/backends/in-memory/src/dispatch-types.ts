@@ -1,5 +1,6 @@
 import { makePreClaim } from "@agent-os/kernel/effect-claim";
-import type { DispatchReceiver, DispatchTargetSpec, TraceContext } from "@agent-os/runtime";
+import type { DispatchTargetSpec, TraceContext } from "@agent-os/kernel/types";
+import type { DispatchReceiver } from "@agent-os/runtime";
 
 export interface DispatchRequestedPayload {
   readonly target: DispatchTargetSpec;

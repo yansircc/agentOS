@@ -13,7 +13,7 @@ import type {
   ResourceReservationSpec,
   ResourceReserveResult,
   ResourceReserveSpec,
-} from "./types";
+} from "@agent-os/kernel/types";
 
 export interface ResourceProjection {
   readonly available: number;

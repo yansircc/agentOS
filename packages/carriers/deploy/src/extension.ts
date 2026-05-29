@@ -1,5 +1,6 @@
 import { boundaryPackage, defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
 import { DEPLOY_KIND } from "./events";
+import { deploySettlementContract } from "./settlement";
 
 export const DEPLOY_EVENT_PREFIX = "deploy.";
 
@@ -18,10 +19,7 @@ export const deployBoundaryContract = defineBoundaryContract({
     [DEPLOY_KIND.ROLLBACK_RECORDED]: ["lived"],
     [DEPLOY_KIND.FAILED]: ["rejected"],
   },
-  proof: {
-    anchorKinds: ["carrier_proof", "external_receipt"],
-    symbolicOnly: true,
-  },
+  settlement: deploySettlementContract,
   projection: {
     derivedFromLedger: true,
     shadowState: false,

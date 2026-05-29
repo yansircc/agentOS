@@ -1,5 +1,8 @@
-import { validateEffectClaim, type LivedClaim } from "@agent-os/kernel/effect-claim";
+import { Predicate } from "effect";
+import type { LivedClaim } from "@agent-os/kernel/effect-claim";
 import { defineEventKindView, defineEventPayloads, payload } from "@agent-os/kernel/extensions";
+import { validateTerminalClaim } from "@agent-os/kernel/settlement-contract";
+import { verificationSettlementContract } from "./settlement";
 
 export type VerificationGateStatus = "passed" | "failed";
 
@@ -42,17 +45,14 @@ export interface VerificationGateProjection {
   readonly failed: ReadonlyArray<VerificationGateFact>;
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 const livedClaimFrom = (value: unknown): LivedClaim | undefined => {
-  const result = validateEffectClaim(value);
+  const result = validateTerminalClaim(verificationSettlementContract, value);
   return result.ok && result.claim.phase === "lived" ? result.claim : undefined;
 };
 
 const gatePayloadFrom = (event: VerificationLedgerEvent): VerificationGateFact | null => {
   if (event.kind !== VERIFICATION_KIND.GATE_RECORDED) return null;
-  if (!isRecord(event.payload)) return null;
+  if (!Predicate.isRecord(event.payload)) return null;
   const { subjectRef, gate, status, proofRef, fingerprint, summary } = event.payload;
   if (typeof subjectRef !== "string") return null;
   if (typeof gate !== "string") return null;

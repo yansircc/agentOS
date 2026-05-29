@@ -8,7 +8,14 @@ export * from "./quota-service";
 export * from "./resources";
 export * from "./scheduler";
 export * from "./submit-agent";
+export {
+  settleToolAdmissionRejected,
+  settleToolExecuted,
+  settleToolExecutionRejected,
+  toolErrorReason,
+  toolExecutionRejectionKind,
+  toolSettlementContract,
+} from "./tool-settlement";
 export type { LlmRoute, LlmUsage, ToolDefinition } from "@agent-os/kernel/llm";
 export type { Tool } from "@agent-os/kernel/tools";
 export type * from "./submit";
-export type * from "./types";

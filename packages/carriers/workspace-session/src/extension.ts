@@ -1,5 +1,6 @@
 import { boundaryPackage, defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
 import { WORKSPACE_SESSION_KIND } from "./events";
+import { workspaceSessionSettlementContract } from "./settlement";
 
 export const WORKSPACE_SESSION_EVENT_PREFIX = "workspace_session.";
 
@@ -19,10 +20,7 @@ export const workspaceSessionBoundaryContract = defineBoundaryContract({
     [WORKSPACE_SESSION_KIND.DESTROYED]: ["lived"],
     [WORKSPACE_SESSION_KIND.FAILED]: ["rejected"],
   },
-  proof: {
-    anchorKinds: ["carrier_proof"],
-    symbolicOnly: true,
-  },
+  settlement: workspaceSessionSettlementContract,
   projection: {
     derivedFromLedger: true,
     shadowState: false,

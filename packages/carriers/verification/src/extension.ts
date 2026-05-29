@@ -1,5 +1,6 @@
 import { boundaryPackage, defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
 import { VERIFICATION_KIND } from "./events";
+import { verificationSettlementContract } from "./settlement";
 
 export const VERIFICATION_EVENT_PREFIX = "verification.";
 
@@ -14,10 +15,7 @@ export const verificationBoundaryContract = defineBoundaryContract({
   claimPhases: {
     [VERIFICATION_KIND.GATE_RECORDED]: ["lived"],
   },
-  proof: {
-    anchorKinds: ["carrier_proof", "external_receipt"],
-    symbolicOnly: true,
-  },
+  settlement: verificationSettlementContract,
   projection: {
     derivedFromLedger: true,
     shadowState: false,

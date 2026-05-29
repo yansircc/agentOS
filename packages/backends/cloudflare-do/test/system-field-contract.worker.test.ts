@@ -1,3 +1,4 @@
+import type { EventHandler } from "@agent-os/kernel/types";
 /**
  * SubmitSpec.system field — deterministic contract test.
  *
@@ -28,7 +29,6 @@ import { RefResolverLive } from "@agent-os/kernel/ref-resolver";
 import { QuotaLive } from "../src/quota";
 import { sqlText } from "../src/storage/sql-row";
 import { type InternalSubmitSpec, submitAgentEffect } from "@agent-os/runtime";
-import type { EventHandler } from "@agent-os/runtime";
 import { finalTextResp } from "./_stub-ai";
 
 interface TestEnv {

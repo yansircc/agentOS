@@ -16,7 +16,6 @@
 - `.:dispatchPayloadParseFailure`
 - `.:eventToProtocolRpc`
 - `.:fireBackendEventHandlers`
-- `.:isRecord`
 - `.:parseDispatchBindingRef`
 - `.:parseRequestedPayload`
 - `.:parseRequestedPayloadValue`
@@ -32,6 +31,12 @@
 - `.:DueWorkKind`
 - `.:DueWorkPayload`
 - `.:ScheduledEventDuePayload`
+
+- `.:dispatchCarrierRef`
+- `.:dispatchSettlementContract`
+- `.:parseDispatchLivedClaim`
+- `.:settleDispatchInboundAccepted`
+- `.:settleDispatchOutboundDelivered`
 
 ## Experimental exports
 

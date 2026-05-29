@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 /**
  * Cross-wire helpers shared by all `LlmProtocolAdapter<K>` implementations.
  *
@@ -38,9 +39,6 @@ const renderUnknown = (value: unknown): string => {
   if (value === undefined) return "undefined";
   return Object.prototype.toString.call(value);
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 interface ProviderFailureSignal {
   readonly status?: number;
@@ -91,7 +89,7 @@ const publicFailureMessage = (status: number | undefined, flags: ReadonlySet<str
     .join(" ");
 
 const providerSignalFrom = (value: unknown): ProviderFailureSignal | null => {
-  if (!isRecord(value) || value._tag !== "agent_os.provider_http_failure") return null;
+  if (!Predicate.isRecord(value) || value._tag !== "agent_os.provider_http_failure") return null;
   const status = typeof value.status === "number" ? value.status : undefined;
   const flags = Array.isArray(value.flags)
     ? new Set(value.flags.filter((flag): flag is string => typeof flag === "string"))
@@ -108,7 +106,7 @@ const providerSignalFrom = (value: unknown): ProviderFailureSignal | null => {
 };
 
 export const providerFailureSignal = (error: unknown): ProviderFailureSignal => {
-  if (isRecord(error) && "cause" in error) {
+  if (Predicate.isRecord(error) && "cause" in error) {
     const innerSignal = providerSignalFrom(error.cause);
     if (innerSignal !== null) return innerSignal;
   }

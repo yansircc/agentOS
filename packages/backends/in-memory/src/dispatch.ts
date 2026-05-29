@@ -8,12 +8,7 @@ import {
   UnsupportedScopeRef,
   isCoreClaimedEventKind,
 } from "@agent-os/kernel/errors";
-import {
-  isScopeRef,
-  makeOperationRef,
-  makePreClaim,
-  settleLivedClaim,
-} from "@agent-os/kernel/effect-claim";
+import { isScopeRef, makeOperationRef, makePreClaim } from "@agent-os/kernel/effect-claim";
 import { materialRefKey } from "@agent-os/kernel/material-ref";
 import { Dispatch, type DispatchEnvelope, type DispatchReceiver } from "@agent-os/runtime";
 import {
@@ -23,6 +18,9 @@ import {
   copyTraceContext,
   describeDispatchCause,
   dispatchBackoffMs,
+  parseDispatchLivedClaim,
+  settleDispatchInboundAccepted,
+  settleDispatchOutboundDelivered,
 } from "@agent-os/backend-protocol";
 import type { InMemoryBackendState } from "./state";
 import { decodeOk, finiteNumberField, recordOf, type DecodeResult } from "./decode";
@@ -48,6 +46,8 @@ const findAcceptedDeliveryId = (
     ) {
       const deliveredEventId = finiteNumberField(payload.value, "deliveredEventId");
       if (!deliveredEventId.ok) return deliveredEventId;
+      const claim = parseDispatchLivedClaim(payload.value.claim, DISPATCH_INBOUND_ACCEPTED);
+      if (!claim.ok) return { ok: false, cause: claim.failure.reason };
       return decodeOk(deliveredEventId.value);
     }
   }
@@ -126,10 +126,10 @@ const drainDueOutbox = (
               idempotencyKey: row.requested.idempotencyKey,
               deliveredEventId: result.right.deliveredEventId,
               attempt,
-              claim: settleLivedClaim(row.requested.claim, {
-                anchorId: `${row.requested.target.scope}:${result.right.deliveredEventId}`,
-                anchorKind: "ledger_event",
-                carrierRef: `dispatch:${bindingKey}`,
+              claim: settleDispatchOutboundDelivered(row.requested.claim, {
+                bindingKey,
+                targetScope: row.requested.target.scope,
+                deliveredEventId: result.right.deliveredEventId,
               }),
               ...(row.requested.traceContext === undefined
                 ? {}
@@ -273,10 +273,10 @@ export const InMemoryDispatchLive = (
         const traceContext = copyTraceContext(envelope.traceContext);
         const events = yield* state.commitPrepared((nextId) => {
           const deliveredEventId = nextId + 1;
-          const claim = settleLivedClaim(envelope.claim, {
-            anchorId: `${scope}:${deliveredEventId}`,
-            anchorKind: "ledger_event",
-            carrierRef: `dispatch:${envelope.sourceScope}`,
+          const claim = settleDispatchInboundAccepted(envelope.claim, {
+            sourceScope: envelope.sourceScope,
+            targetScope: scope,
+            deliveredEventId,
           });
           return [
             {

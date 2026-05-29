@@ -1,3 +1,4 @@
+import type { RunListPage, RunListSpec } from "@agent-os/kernel/types";
 /**
  * @agent-os/ops-api — contract tests (contract §6).
  *
@@ -10,17 +11,14 @@ import {
   type OpsAuth,
   type OpsPrincipal,
   type ResolvedScope,
-  type RunListPage,
-  type RunListSpec,
   type ScopeResolver,
   type ScopeSummary,
   decodeAttemptKey,
   encodeAttemptKey,
   mountOpsApi,
 } from "../src";
+import type { AttemptKey, CapabilityLease } from "@agent-os/runtime";
 import type {
-  AttemptKey,
-  CapabilityLease,
   EventQueryOptions,
   LedgerEventRpc,
   QuotaState,
@@ -28,7 +26,7 @@ import type {
   RunStatus,
   RunTrace,
   StreamEventsOptions,
-} from "@agent-os/runtime";
+} from "@agent-os/kernel/types";
 
 // ============================================================
 // In-memory fakes

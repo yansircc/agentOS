@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { BoundaryPackage } from "./extensions";
 import {
   isAuthorityContract,
@@ -5,14 +6,11 @@ import {
   type AuthorityContract,
   type MaterialRequirement,
 } from "./material-ref";
-import type { AnchorRef, ClaimRole } from "./effect-claim";
+import type { ClaimRole } from "./effect-claim";
+import { validateSettlementContract, type SettlementContract } from "./settlement-contract";
+import { isNonEmptyString } from "./string-guards";
 
 type ClaimPhase = "pre" | "lived" | "rejected";
-
-export interface BoundaryProofContract {
-  readonly anchorKinds: ReadonlyArray<AnchorRef["anchorKind"]>;
-  readonly symbolicOnly: true;
-}
 
 export interface BoundaryProjectionContract {
   readonly derivedFromLedger: true;
@@ -21,10 +19,10 @@ export interface BoundaryProjectionContract {
 
 /**
  * Five-axis boundary declaration for claim-bearing packages:
- * vocabulary, authority, material, proof, and projection.
+ * vocabulary, authority, material, settlement, and projection.
  *
  * Cleanup is not a sixth axis here. Release/destruction semantics remain
- * carrier-owned proof vocabulary until multiple packages expose cleanup as an
+ * carrier-owned settlement vocabulary until multiple packages expose cleanup as an
  * independent contract surface.
  */
 export interface BoundaryContract<EventKind extends string = string> {
@@ -36,7 +34,7 @@ export interface BoundaryContract<EventKind extends string = string> {
   readonly materialRequirements: ReadonlyArray<MaterialRequirement>;
   readonly claimPayloadKey: "claim";
   readonly claimPhases: Readonly<Record<EventKind, ReadonlyArray<"pre" | "lived" | "rejected">>>;
-  readonly proof: BoundaryProofContract;
+  readonly settlement: SettlementContract;
   readonly projection: BoundaryProjectionContract;
 }
 
@@ -52,7 +50,7 @@ export type BoundaryContractIssue =
   | "material_authority_unbound"
   | "claim_payload_key_invalid"
   | "claim_phases_invalid"
-  | "proof_invalid"
+  | "settlement_invalid"
   | "projection_invalid";
 
 export type BoundaryContractValidation =
@@ -64,29 +62,17 @@ export type BoundaryContractValidation =
 
 const CLAIM_ROLES = new Set<ClaimRole>(["generator", "admitter", "resolver", "reader"]);
 const CLAIM_PHASES = new Set<ClaimPhase>(["pre", "lived", "rejected"]);
-const ANCHOR_KINDS = new Set<AnchorRef["anchorKind"]>([
-  "ledger_event",
-  "carrier_proof",
-  "external_receipt",
-  "dry_run_proof",
-]);
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-const nonEmptyString = (value: unknown): value is string =>
-  typeof value === "string" && value.length > 0;
 
 const nonEmptyStringArray = (value: unknown): value is ReadonlyArray<string> =>
-  Array.isArray(value) && value.length > 0 && value.every(nonEmptyString);
+  Array.isArray(value) && value.length > 0 && value.every(isNonEmptyString);
 
 const nonEmptyArrayOf = <T>(value: unknown, allowed: ReadonlySet<T>): value is ReadonlyArray<T> =>
   Array.isArray(value) && value.length > 0 && value.every((item) => allowed.has(item as T));
 
 const vocabularyValues = (value: unknown): ReadonlyArray<string> | null => {
-  if (!isRecord(value)) return null;
+  if (!Predicate.isRecord(value)) return null;
   const values = Object.values(value);
-  if (values.length === 0 || !values.every(nonEmptyString)) return null;
+  if (values.length === 0 || !values.every(isNonEmptyString)) return null;
   return values;
 };
 
@@ -99,7 +85,7 @@ const claimPhasesAreValid = (
   claimPhases: unknown,
   vocabularyValuesList: ReadonlyArray<string>,
 ): claimPhases is Readonly<Record<string, ReadonlyArray<ClaimPhase>>> => {
-  if (!isRecord(claimPhases)) return false;
+  if (!Predicate.isRecord(claimPhases)) return false;
   const vocabularySet = new Set(vocabularyValuesList);
   const phaseKeys = Object.keys(claimPhases);
   if (phaseKeys.length !== vocabularySet.size) return false;
@@ -174,7 +160,7 @@ export const boundaryPackage = (contract: BoundaryContract, version: string): Bo
 });
 
 export const validateBoundaryContract = (value: unknown): BoundaryContractValidation => {
-  if (!isRecord(value)) {
+  if (!Predicate.isRecord(value)) {
     return {
       ok: false,
       issues: [
@@ -186,14 +172,14 @@ export const validateBoundaryContract = (value: unknown): BoundaryContractValida
         "material_requirements_invalid",
         "claim_payload_key_invalid",
         "claim_phases_invalid",
-        "proof_invalid",
+        "settlement_invalid",
         "projection_invalid",
       ],
     };
   }
 
   const issues: BoundaryContractIssue[] = [];
-  if (!nonEmptyString(value.packageId)) {
+  if (!isNonEmptyString(value.packageId)) {
     issues.push("package_id_invalid");
   }
 
@@ -255,16 +241,12 @@ export const validateBoundaryContract = (value: unknown): BoundaryContractValida
     issues.push("claim_phases_invalid");
   }
 
-  if (
-    !isRecord(value.proof) ||
-    value.proof.symbolicOnly !== true ||
-    !nonEmptyArrayOf(value.proof.anchorKinds, ANCHOR_KINDS)
-  ) {
-    issues.push("proof_invalid");
+  if (!validateSettlementContract(value.settlement).ok) {
+    issues.push("settlement_invalid");
   }
 
   if (
-    !isRecord(value.projection) ||
+    !Predicate.isRecord(value.projection) ||
     value.projection.derivedFromLedger !== true ||
     value.projection.shadowState !== false
   ) {
