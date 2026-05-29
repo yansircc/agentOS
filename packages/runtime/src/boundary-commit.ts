@@ -1,9 +1,6 @@
 import { Data, Effect, Predicate } from "effect";
 import { validateEffectClaim, type EffectClaim } from "@agent-os/kernel/effect-claim";
-import type {
-  BoundaryContract,
-  BoundaryEventContract,
-} from "@agent-os/kernel/boundary-contract";
+import type { BoundaryContract, BoundaryEventContract } from "@agent-os/kernel/boundary-contract";
 import type { JsonStringifyError, SqlError } from "@agent-os/kernel/errors";
 import { validateAgainstSchema } from "@agent-os/kernel/json-schema";
 import { validateTerminalClaim } from "@agent-os/kernel/settlement-contract";
@@ -68,7 +65,10 @@ export const validateBoundaryEventPayload = (
   if (!Predicate.isRecord(payload)) {
     return reject(contract, event, "payload_must_be_object");
   }
-  if (validateAgainstSchema(payloadForSchema(payload, eventContract), eventContract.payloadSchema).length > 0) {
+  if (
+    validateAgainstSchema(payloadForSchema(payload, eventContract), eventContract.payloadSchema)
+      .length > 0
+  ) {
     return reject(contract, event, "payload_schema_invalid");
   }
 

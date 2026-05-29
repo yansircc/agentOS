@@ -17,12 +17,11 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:DecisionGateProjection`
 - `.:DecisionGateRequestedPayload`
 - `.:admitDecisionGate`
-- `.:decisionGateBoundaryPackage`
 - `.:decisionGateBoundaryContract`
-- `.:projectDecisionGate`
-
-- `.:decisionGateSettlementContract`
+- `.:decisionGateBoundaryPackage`
+- `.:decisionGateCarrier`
 - `.:decisionGateSettlementRef`
+- `.:projectDecisionGate`
 - `.:settleDecisionGateConsumed`
 
 ## Experimental exports

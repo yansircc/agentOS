@@ -10,7 +10,7 @@ import {
   symbolicSettlementRef,
 } from "@agent-os/kernel/settlement-contract";
 
-import { resourceCarrierDefinition, resourceSettlementContract } from "./definition";
+import { resourceCarrierDefinition } from "./definition";
 import type { ResourceFailure } from "./carrier";
 
 export const resourceSettlementRef = (...parts: ReadonlyArray<string | number>): string =>

@@ -26,13 +26,12 @@
 - `.:resourceAuthorityContracts`
 - `.:resourceBoundaryContract`
 - `.:resourceBoundaryPackage`
+- `.:resourceCarrierDefinition`
 - `.:resourceFailedPayload`
 - `.:resourceRejectionKind`
-- `.:settleResourceRejected`
-
-- `.:resourceSettlementContract`
 - `.:resourceSettlementRef`
 - `.:settleResourceLived`
+- `.:settleResourceRejected`
 
 ## Experimental exports
 

@@ -6,7 +6,7 @@ import type {
 } from "@agent-os/kernel/effect-claim";
 import { symbolicSettlementRef } from "@agent-os/kernel/settlement-contract";
 
-import { decisionGateCarrier, decisionGateSettlementContract } from "./definition";
+import { decisionGateCarrier } from "./definition";
 import type { DecisionGateProjection } from "./events";
 
 export const decisionGateSettlementRef = (...parts: ReadonlyArray<string | number>): string =>

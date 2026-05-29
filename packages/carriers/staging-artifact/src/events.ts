@@ -1,11 +1,7 @@
 import { Predicate } from "effect";
 import type { LivedClaim } from "@agent-os/kernel/effect-claim";
 import { validateTerminalClaim } from "@agent-os/kernel/settlement-contract";
-import {
-  STAGING_EVENTS,
-  STAGING_KIND,
-  stagingArtifactSettlementContract,
-} from "./definition";
+import { STAGING_EVENTS, STAGING_KIND, stagingArtifactSettlementContract } from "./definition";
 export { STAGING_EVENTS, STAGING_KIND } from "./definition";
 
 type StagingPayloads = typeof STAGING_EVENTS;

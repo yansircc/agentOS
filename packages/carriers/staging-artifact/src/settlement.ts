@@ -1,6 +1,6 @@
 import type { LivedClaim, PreClaim } from "@agent-os/kernel/effect-claim";
 import { symbolicSettlementRef } from "@agent-os/kernel/settlement-contract";
-import { stagingArtifactCarrier, stagingArtifactSettlementContract } from "./definition";
+import { stagingArtifactCarrier } from "./definition";
 
 export const stagingArtifactSettlementRef = (...parts: ReadonlyArray<string | number>): string =>
   symbolicSettlementRef("staging", parts);

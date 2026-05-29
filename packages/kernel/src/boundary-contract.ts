@@ -228,7 +228,12 @@ export const validateBoundaryContract = (value: unknown): BoundaryContractValida
     if (!entries.every(([, contract]) => isJsonSchemaObject(contract.payloadSchema))) {
       issues.push("event_payload_schema_invalid");
     }
-    if (!entries.every(([, contract]) => contract.claim === undefined || isBoundaryEventClaimContract(contract.claim))) {
+    if (
+      !entries.every(
+        ([, contract]) =>
+          contract.claim === undefined || isBoundaryEventClaimContract(contract.claim),
+      )
+    ) {
       issues.push("event_claim_invalid");
     }
     if (!eventClaimKeysDoNotCollide(entries)) {

@@ -4,7 +4,6 @@ import {
   validateEffectClaim,
   type LivedClaim,
   type PreClaim,
-  type RejectionRef,
 } from "@agent-os/kernel/effect-claim";
 import { validateTerminalClaim } from "@agent-os/kernel/settlement-contract";
 import {

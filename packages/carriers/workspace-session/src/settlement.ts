@@ -10,10 +10,7 @@ import {
   symbolicSettlementRef,
 } from "@agent-os/kernel/settlement-contract";
 
-import {
-  workspaceSessionCarrier,
-  workspaceSessionSettlementContract,
-} from "./definition";
+import { workspaceSessionCarrier } from "./definition";
 import type { WorkspaceSessionFailure } from "./carrier";
 
 export const workspaceSessionSettlementRef = (...parts: ReadonlyArray<string | number>): string =>

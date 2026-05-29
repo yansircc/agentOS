@@ -14,7 +14,7 @@ import {
   type RejectedClaim,
   type RejectionRef,
 } from "./effect-claim";
-import { type EventPayloadMap } from "./extensions";
+import { type BoundaryPackage, type EventPayloadMap } from "./extensions";
 import {
   schemaToClosedJsonSchemaObject,
   validateAgainstSchema,
@@ -55,7 +55,11 @@ export type CarrierEventPayload<
         ? { readonly [K in Key]: RejectedClaim }
         : {});
 
-export interface CarrierEvent<Kind extends string, S extends Schema.Schema.AnyNoContext, Slot extends ClaimSlot> {
+export interface CarrierEvent<
+  Kind extends string,
+  S extends Schema.Schema.AnyNoContext,
+  Slot extends ClaimSlot,
+> {
   readonly kind: Kind;
   readonly payload: S;
   readonly claim: Slot;
@@ -63,9 +67,12 @@ export interface CarrierEvent<Kind extends string, S extends Schema.Schema.AnyNo
 
 export type CarrierEventPayloads<
   Prefix extends string,
-  Events extends Readonly<Record<string, CarrierEvent<string, Schema.Schema.AnyNoContext, ClaimSlot>>>,
+  Events extends Readonly<
+    Record<string, CarrierEvent<string, Schema.Schema.AnyNoContext, ClaimSlot>>
+  >,
 > = {
-  readonly [Name in keyof Events & string as `${Prefix}${Events[Name]["kind"]}`]: CarrierEventPayload<
+  readonly [Name in keyof Events &
+    string as `${Prefix}${Events[Name]["kind"]}`]: CarrierEventPayload<
     Events[Name]["payload"],
     Events[Name]["claim"]
   >;
@@ -73,13 +80,17 @@ export type CarrierEventPayloads<
 
 export type CarrierKindView<
   Prefix extends string,
-  Events extends Readonly<Record<string, CarrierEvent<string, Schema.Schema.AnyNoContext, ClaimSlot>>>,
+  Events extends Readonly<
+    Record<string, CarrierEvent<string, Schema.Schema.AnyNoContext, ClaimSlot>>
+  >,
 > = {
   readonly [Name in keyof Events & string as Uppercase<Name>]: `${Prefix}${Events[Name]["kind"]}`;
 };
 
 export type CarrierHandlers<
-  Events extends Readonly<Record<string, CarrierEvent<string, Schema.Schema.AnyNoContext, ClaimSlot>>>,
+  Events extends Readonly<
+    Record<string, CarrierEvent<string, Schema.Schema.AnyNoContext, ClaimSlot>>
+  >,
 > = {
   readonly [Name in keyof Events & string]?: (input: {
     readonly data: CarrierEventPayload<Events[Name]["payload"], Events[Name]["claim"]>;
@@ -95,7 +106,9 @@ export interface CarrierProjection<State, Events extends EventPayloadMap> {
 }
 
 type LivedEventNames<
-  Events extends Readonly<Record<string, CarrierEvent<string, Schema.Schema.AnyNoContext, ClaimSlot>>>,
+  Events extends Readonly<
+    Record<string, CarrierEvent<string, Schema.Schema.AnyNoContext, ClaimSlot>>
+  >,
 > = {
   readonly [Name in keyof Events & string]: Events[Name]["claim"] extends { readonly kind: "lived" }
     ? Name
@@ -103,9 +116,13 @@ type LivedEventNames<
 }[keyof Events & string];
 
 type RejectedEventNames<
-  Events extends Readonly<Record<string, CarrierEvent<string, Schema.Schema.AnyNoContext, ClaimSlot>>>,
+  Events extends Readonly<
+    Record<string, CarrierEvent<string, Schema.Schema.AnyNoContext, ClaimSlot>>
+  >,
 > = {
-  readonly [Name in keyof Events & string]: Events[Name]["claim"] extends { readonly kind: "rejected" }
+  readonly [Name in keyof Events & string]: Events[Name]["claim"] extends {
+    readonly kind: "rejected";
+  }
     ? Name
     : never;
 }[keyof Events & string];
@@ -123,20 +140,32 @@ export type CarrierRejectSpec = {
 };
 
 export type CarrierSettleMap<
-  Events extends Readonly<Record<string, CarrierEvent<string, Schema.Schema.AnyNoContext, ClaimSlot>>>,
+  Events extends Readonly<
+    Record<string, CarrierEvent<string, Schema.Schema.AnyNoContext, ClaimSlot>>
+  >,
 > = {
-  readonly [Name in LivedEventNames<Events>]: (claim: PreClaim, spec: CarrierSettleSpec) => LivedClaim;
+  readonly [Name in LivedEventNames<Events>]: (
+    claim: PreClaim,
+    spec: CarrierSettleSpec,
+  ) => LivedClaim;
 };
 
 export type CarrierRejectMap<
-  Events extends Readonly<Record<string, CarrierEvent<string, Schema.Schema.AnyNoContext, ClaimSlot>>>,
+  Events extends Readonly<
+    Record<string, CarrierEvent<string, Schema.Schema.AnyNoContext, ClaimSlot>>
+  >,
 > = {
-  readonly [Name in RejectedEventNames<Events>]: (claim: PreClaim, spec: CarrierRejectSpec) => RejectedClaim;
+  readonly [Name in RejectedEventNames<Events>]: (
+    claim: PreClaim,
+    spec: CarrierRejectSpec,
+  ) => RejectedClaim;
 };
 
 export interface Carrier<
   Prefix extends string,
-  Events extends Readonly<Record<string, CarrierEvent<string, Schema.Schema.AnyNoContext, ClaimSlot>>>,
+  Events extends Readonly<
+    Record<string, CarrierEvent<string, Schema.Schema.AnyNoContext, ClaimSlot>>
+  >,
   State,
 > {
   readonly packageId: string;
@@ -145,25 +174,34 @@ export interface Carrier<
   readonly events: CarrierEventPayloads<Prefix, Events>;
   readonly boundaryContract: BoundaryContract<keyof CarrierEventPayloads<Prefix, Events> & string>;
   readonly settlementContract: SettlementContract;
-  readonly boundaryPackage: (version: string) => import("./extensions").BoundaryPackage;
+  readonly boundaryPackage: (version: string) => BoundaryPackage;
   readonly settle: CarrierSettleMap<Events>;
   readonly reject: CarrierRejectMap<Events>;
   readonly decode: (
     event: keyof CarrierEventPayloads<Prefix, Events> & string,
     payload: unknown,
   ) => CarrierEventPayloads<Prefix, Events>[keyof CarrierEventPayloads<Prefix, Events> & string];
-  readonly handlers: (handlers: CarrierHandlers<Events>) => Readonly<Record<string, (input: {
-    readonly data: unknown;
-    readonly event: unknown;
-    readonly agent: unknown;
-    readonly env: unknown;
-  }) => void | Promise<void>>>;
+  readonly handlers: (
+    handlers: CarrierHandlers<Events>,
+  ) => Readonly<
+    Record<
+      string,
+      (input: {
+        readonly data: unknown;
+        readonly event: unknown;
+        readonly agent: unknown;
+        readonly env: unknown;
+      }) => void | Promise<void>
+    >
+  >;
   readonly projection: CarrierProjection<State, CarrierEventPayloads<Prefix, Events>>;
 }
 
 export interface DefineCarrierSpec<
   Prefix extends string,
-  Events extends Readonly<Record<string, CarrierEvent<string, Schema.Schema.AnyNoContext, ClaimSlot>>>,
+  Events extends Readonly<
+    Record<string, CarrierEvent<string, Schema.Schema.AnyNoContext, ClaimSlot>>
+  >,
   State,
 > {
   readonly packageId: string;
@@ -231,7 +269,9 @@ const schemaWithoutClaimCollision = (
   eventName: string,
 ): JsonSchemaObject => {
   if (claim.kind !== "none" && claim.key in schema.properties) {
-    return failCarrier(`carrier event ${eventName} payload schema declares claim slot ${claim.key}`);
+    return failCarrier(
+      `carrier event ${eventName} payload schema declares claim slot ${claim.key}`,
+    );
   }
   return schema;
 };
@@ -266,7 +306,9 @@ const decodePayload = (
       : Object.fromEntries(Object.entries(record).filter(([key]) => key !== claim.key));
   const violations = validateAgainstSchema(payloadForSchema, schema);
   if (violations.length > 0) {
-    return failCarrier(`carrier event ${eventKind} payload violates schema: ${violations.join(",")}`);
+    return failCarrier(
+      `carrier event ${eventKind} payload violates schema: ${violations.join(",")}`,
+    );
   }
   if (claim.kind === "none") {
     return payload;
@@ -283,14 +325,18 @@ const decodePayload = (
     return failCarrier(`carrier event ${eventKind} claim slot ${claim.key} invalid`);
   }
   if (claimValidation.claim.phase !== claim.kind) {
-    return failCarrier(`carrier event ${eventKind} claim slot ${claim.key} has phase ${claimValidation.claim.phase}`);
+    return failCarrier(
+      `carrier event ${eventKind} claim slot ${claim.key} has phase ${claimValidation.claim.phase}`,
+    );
   }
   return payload;
 };
 
 export const defineCarrier = <
   const Prefix extends string,
-  const Events extends Readonly<Record<string, CarrierEvent<string, Schema.Schema.AnyNoContext, ClaimSlot>>>,
+  const Events extends Readonly<
+    Record<string, CarrierEvent<string, Schema.Schema.AnyNoContext, ClaimSlot>>
+  >,
   State,
 >(
   spec: DefineCarrierSpec<Prefix, Events, State>,
@@ -368,7 +414,10 @@ export const defineCarrier = <
     authorityContracts: spec.authorityContracts ?? [],
     materialRequirements: spec.materialRequirements ?? [],
     settlement: settlementContract,
-    projection: { derivedFromLedger: true, shadowState: false } satisfies BoundaryProjectionContract,
+    projection: {
+      derivedFromLedger: true,
+      shadowState: false,
+    } satisfies BoundaryProjectionContract,
   } satisfies BoundaryContract;
   const boundaryValidation = validateBoundaryContract(boundaryContract);
   if (!boundaryValidation.ok) {
@@ -382,7 +431,9 @@ export const defineCarrier = <
     prefix: spec.prefix,
     kind: kind as CarrierKindView<Prefix, Events>,
     events: payloadEvents as CarrierEventPayloads<Prefix, Events>,
-    boundaryContract: boundaryContract as unknown as BoundaryContract<keyof CarrierEventPayloads<Prefix, Events> & string>,
+    boundaryContract: boundaryContract as unknown as BoundaryContract<
+      keyof CarrierEventPayloads<Prefix, Events> & string
+    >,
     settlementContract,
     boundaryPackage: (version) => boundaryPackage(boundaryContract, version),
     settle: settle as CarrierSettleMap<Events>,
@@ -399,7 +450,8 @@ export const defineCarrier = <
         settlementContract,
         payload,
         eventKind,
-      ) as CarrierEventPayloads<Prefix, Events>[keyof CarrierEventPayloads<Prefix, Events> & string];
+      ) as CarrierEventPayloads<Prefix, Events>[keyof CarrierEventPayloads<Prefix, Events> &
+        string];
     },
     handlers: (handlers) => {
       const out: Record<
@@ -429,6 +481,9 @@ export const defineCarrier = <
       }
       return out;
     },
-    projection: spec.projection as unknown as CarrierProjection<State, CarrierEventPayloads<Prefix, Events>>,
+    projection: spec.projection as unknown as CarrierProjection<
+      State,
+      CarrierEventPayloads<Prefix, Events>
+    >,
   };
 };

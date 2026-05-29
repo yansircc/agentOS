@@ -1,11 +1,5 @@
 import { Schema } from "effect";
-import {
-  defineCarrier,
-  event,
-  ledgerProjection,
-  lived,
-  rejected,
-} from "@agent-os/kernel/carrier";
+import { defineCarrier, event, ledgerProjection, lived, rejected } from "@agent-os/kernel/carrier";
 
 export const DEPLOY_EVENT_PREFIX = "deploy.";
 
