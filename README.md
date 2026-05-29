@@ -48,21 +48,22 @@ state to make a product flow appear complete.
 
 <!-- agentos:generated package-map:start -->
 
-| Package                                  | Role                                                                             |
-| ---------------------------------------- | -------------------------------------------------------------------------------- |
-| `@agent-os/kernel`                       | pure claim, boundary, material, tool, context, and type algebra                  |
-| `@agent-os/runtime`                      | Effect Tag runtime programs, admission projections, and runtime-facing API types |
-| `@agent-os/backend-cloudflare-do`        | Cloudflare Durable Object backend for agentOS runtime                            |
-| `@agent-os/resource-carrier`             | provider-neutral resource lifecycle facts, claims, settlement, and projection    |
-| `@agent-os/resource-cloudflare`          | Cloudflare D1/KV/R2/Queue/Workflow resource materializer                         |
-| `@agent-os/workspace-session`            | provider-neutral workspace/session lifecycle facts                               |
-| `@agent-os/workspace-session-cloudflare` | Cloudflare Sandbox-compatible workspace backend                                  |
-| `@agent-os/tenant-material`              | encrypted tenant credential records to `RefResolver.material`                    |
-| `@agent-os/llm-transport-http`           | HTTP LLM streaming into non-durable turn frames                                  |
-| `@agent-os/turn-stream`                  | token/progress frame algebra                                                     |
-| `@agent-os/run-stream`                   | submit/ledger/turn-frame composition                                             |
-| `@agent-os/decision-gate`                | durable decision gate events, projection, and admitter                           |
-| `@agent-os/skill-registry`               | install-time skill manifest to core tools                                        |
+| Package                                  | Role                                                                                                              |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `@agent-os/kernel`                       | pure claim, boundary, material, tool, context, and type algebra                                                   |
+| `@agent-os/runtime`                      | Effect Tag runtime programs, admission projections, and runtime-facing API types                                  |
+| `@agent-os/backend-protocol`             | storage-free backend protocol constants, payload parsers, due-work kinds, retry policy, and handler fanout policy |
+| `@agent-os/backend-cloudflare-do`        | Cloudflare Durable Object backend for agentOS runtime                                                             |
+| `@agent-os/resource-carrier`             | provider-neutral resource lifecycle facts, claims, settlement, and projection                                     |
+| `@agent-os/resource-cloudflare`          | Cloudflare D1/KV/R2/Queue/Workflow resource materializer                                                          |
+| `@agent-os/workspace-session`            | provider-neutral workspace/session lifecycle facts                                                                |
+| `@agent-os/workspace-session-cloudflare` | Cloudflare Sandbox-compatible workspace backend                                                                   |
+| `@agent-os/tenant-material`              | encrypted tenant credential records to `RefResolver.material`                                                     |
+| `@agent-os/llm-transport-http`           | HTTP LLM streaming into non-durable turn frames                                                                   |
+| `@agent-os/turn-stream`                  | token/progress frame algebra                                                                                      |
+| `@agent-os/run-stream`                   | submit/ledger/turn-frame composition                                                                              |
+| `@agent-os/decision-gate`                | durable decision gate events, projection, and admitter                                                            |
+| `@agent-os/skill-registry`               | install-time skill manifest to core tools                                                                         |
 
 <!-- agentos:generated package-map:end -->
 

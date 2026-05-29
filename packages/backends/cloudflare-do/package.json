@@ -18,6 +18,7 @@
     "test:worker": "vp test run --config vitest.cloudflare.config.ts"
   },
   "dependencies": {
+    "@agent-os/backend-protocol": "workspace:*",
     "@agent-os/kernel": "workspace:*",
     "@agent-os/runtime": "workspace:*",
     "@effect/experimental": "catalog:",

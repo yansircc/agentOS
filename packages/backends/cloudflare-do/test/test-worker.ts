@@ -1,59 +1,42 @@
 /**
- * Test worker entry — exposes two DO classes:
+ * Test worker entry.
  *
- *   TestAgentDO  — raw DurableObject. Quota contract tests bypass
- *                  CloudflareAgentDO entirely and compose Layers manually inside
- *                  runInDurableObject(stub, (instance, state) => { ... })
- *                  so they can stub the AiBinding deterministically.
- *
- *   EmitTestDO   — extends CloudflareAgentDO. emitEvent contract tests exercise
- *                  the public surface directly (stub.emitEvent(...)) and
- *                  verify the reactive triad: now-write commits a ledger
- *                  row AND fires registered on() handlers in the same DO
- *                  invocation. The constructor wires one handler whose
- *                  side-effect is itself an emitEvent — proving handler →
- *                  handler chaining via the ledger.
- *
- *   DispatchTestDO — extends CloudflareAgentDO. dispatch contract tests use it
- *                    on both sender and receiver sides to validate
- *                    cross-scope delivery without app-level RPC.
- *
- *   StreamTestDO — extends CloudflareAgentDO. event-stream contract tests use it
- *                  to validate streamEvents, events(opts), and worker-layer
- *                  Last-Event-ID parsing.
- *
- * The fetch handler exists only to satisfy the Workers runtime
- * requirement that a worker has a default export.
+ * Test DOs are factory-configured. The Cloudflare backend no longer exposes a
+ * subclass hook surface; tests exercise the same config path apps use.
  */
 
 import { DurableObject } from "cloudflare:workers";
 import {
+  createAgentDurableObject,
+  type AgentEventHandlerContext,
   type CloudflareAgentEnv,
   type DispatchTargetNamespace,
   type DispatchTargetRegistry,
 } from "../src";
-import { CloudflareAgentDO } from "../src/agent-do";
+import { CapabilityRejected } from "@agent-os/kernel/errors";
 import { boundaryPackage, defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
-import type { ExtensionDeclaration } from "@agent-os/kernel/extensions";
+import { eventNamespace, type ExtensionCapability } from "@agent-os/kernel/extensions";
 import { makePreClaim, settleLivedClaim } from "@agent-os/kernel/effect-claim";
 import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
+import type { EventHandler } from "@agent-os/runtime";
 
 export class TestAgentDO extends DurableObject {}
 
-export class EmitTestDO extends CloudflareAgentDO<CloudflareAgentEnv> {
-  constructor(ctx: DurableObjectState, env: CloudflareAgentEnv) {
-    super(ctx, env);
-    // Chain validation: emitting "interview.answer" triggers a handler
-    // that emits "interview.followup". The contract test asserts both
-    // rows appear in the ledger after one external emitEvent call.
-    this.on("interview.answer", (event) =>
-      this.emitEvent({
-        event: "interview.followup",
-        data: { sourceId: event.id, sourcePayload: event.payload },
-      }).then(() => undefined),
-    );
-  }
-}
+export const EmitTestDO = createAgentDurableObject<CloudflareAgentEnv>({
+  eventHandlers: ({ runtime }) => [
+    {
+      kind: "interview.answer",
+      handler: (event) =>
+        runtime
+          .emitEvent({
+            event: "interview.followup",
+            data: { sourceId: event.id, sourcePayload: event.payload },
+          })
+          .then(() => undefined),
+    },
+  ],
+});
+export type EmitTestDO = InstanceType<typeof EmitTestDO>;
 
 interface DispatchEnv extends CloudflareAgentEnv {
   readonly DISPATCH_DO: DurableObjectNamespace<DispatchTestDO>;
@@ -75,43 +58,56 @@ const dispatchBindingKey = (ref: string): string =>
     }),
   );
 
-export class DispatchTestDO extends CloudflareAgentDO<DispatchEnv> {
-  constructor(ctx: DurableObjectState, env: DispatchEnv) {
-    super(ctx, env);
-    this.on("dispatch.inbound.accepted", () =>
-      this.emitEvent({
-        event: "test.inbound_accepted_handler_fired",
-        data: {},
-      }).then(() => undefined),
-    );
-    this.on("dispatch.outbound.requested", () =>
-      this.emitEvent({
-        event: "test.outbound_requested_handler_fired",
-        data: {},
-      }).then(() => undefined),
-    );
-    this.on("test.delivered", (event) =>
-      this.emitEvent({
-        event: "test.followup",
-        data: { sourceId: event.id, sourcePayload: event.payload },
-      }).then(() => undefined),
-    );
-  }
+let dispatchTargetMaterializations = 0;
 
-  protected override provideDispatchTargets(): DispatchTargetRegistry {
-    return {
-      [dispatchBindingKey("peer")]: this.env.DISPATCH_DO,
-      [dispatchBindingKey("dead")]: DEAD_TARGET,
-    };
-  }
-}
+const dispatchTargets = (env: DispatchEnv): DispatchTargetRegistry => {
+  dispatchTargetMaterializations += 1;
+  return {
+    [dispatchBindingKey("peer")]: env.DISPATCH_DO,
+    [dispatchBindingKey("dead")]: DEAD_TARGET,
+  };
+};
 
-export class StreamTestDO extends CloudflareAgentDO<CloudflareAgentEnv> {
-  constructor(ctx: DurableObjectState, env: CloudflareAgentEnv) {
-    super(ctx, env);
-    this.on("stream.slow", () => scheduler.wait(1_000));
-  }
-}
+export const DispatchTestDO = createAgentDurableObject<DispatchEnv>({
+  dispatchTargets,
+  eventHandlers: ({ runtime }) => [
+    {
+      kind: "dispatch.inbound.accepted",
+      handler: () =>
+        runtime
+          .emitEvent({ event: "test.inbound_accepted_handler_fired", data: {} })
+          .then(() => undefined),
+    },
+    {
+      kind: "dispatch.outbound.requested",
+      handler: () =>
+        runtime
+          .emitEvent({ event: "test.outbound_requested_handler_fired", data: {} })
+          .then(() => undefined),
+    },
+    {
+      kind: "test.delivered",
+      handler: (event) =>
+        runtime
+          .emitEvent({
+            event: "test.followup",
+            data: { sourceId: event.id, sourcePayload: event.payload },
+          })
+          .then(() => undefined),
+    },
+  ],
+});
+export type DispatchTestDO = InstanceType<typeof DispatchTestDO>;
+
+export const StreamTestDO = createAgentDurableObject<CloudflareAgentEnv>({
+  eventHandlers: () => [
+    {
+      kind: "stream.slow",
+      handler: () => scheduler.wait(1_000),
+    },
+  ],
+});
+export type StreamTestDO = InstanceType<typeof StreamTestDO>;
 
 const proofBoundaryContract = defineBoundaryContract({
   packageId: "@agent-os/proof",
@@ -149,69 +145,165 @@ export const proofLivedClaim = settleLivedClaim(proofPreClaim, {
   carrierRef: "proof",
 });
 
-export class ExtensionTestDO extends CloudflareAgentDO<CloudflareAgentEnv> {
-  protected override registerExtensions(): ReadonlyArray<ExtensionDeclaration> {
-    return [
-      {
-        packageId: "@agent-os/image",
-        kindPrefixes: ["image."],
-        version: "0.3.0",
-      },
-      boundaryPackage(proofBoundaryContract, "0.1.0"),
-    ];
-  }
+export const EXTENSION_COMMAND_EVENT = "test.extension.command";
+export const EXTENSION_RESULT_EVENT = "test.extension.result";
 
-  commitImageFact(data: unknown): Promise<{ id: number }> {
-    return this.extensionCapability("@agent-os/image").commit({
-      event: "image.job.recorded",
-      data,
-    });
-  }
+type ExtensionCommand =
+  | { readonly op: "commitImageFact"; readonly data: unknown }
+  | { readonly op: "commitWrongPrefix"; readonly data: unknown }
+  | { readonly op: "commitMissingExtension"; readonly data: unknown }
+  | { readonly op: "scheduleImageFact"; readonly at: number; readonly data: unknown }
+  | { readonly op: "commitProofFact"; readonly data: unknown }
+  | { readonly op: "commitProofOther"; readonly data: unknown }
+  | { readonly op: "scheduleProofFact"; readonly at: number; readonly data: unknown };
 
-  commitWrongPrefix(data: unknown): Promise<{ id: number }> {
-    return this.extensionCapability("@agent-os/image").commit({
-      event: "git.commit.recorded",
-      data,
-    });
-  }
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
 
-  commitMissingExtension(data: unknown): Promise<{ id: number }> {
-    return this.extensionCapability("@agent-os/missing").commit({
-      event: "missing.fact",
-      data,
-    });
-  }
+type ExtensionCommandParseResult =
+  | { readonly ok: true; readonly command: ExtensionCommand }
+  | { readonly ok: false; readonly error: Record<string, unknown> };
 
-  scheduleImageFact(at: number, data: unknown): Promise<{ id: number }> {
-    return this.extensionCapability("@agent-os/image").time({
-      at,
-      event: "image.job.deferred",
-      data,
-    });
-  }
+const malformedCommand = (message: string): ExtensionCommandParseResult => ({
+  ok: false,
+  error: { message },
+});
 
-  commitProofFact(data: unknown): Promise<{ id: number }> {
-    return this.extensionCapability("@agent-os/proof").commit({
-      event: "proof.recorded",
-      data,
-    });
+const parseExtensionCommand = (value: unknown): ExtensionCommandParseResult => {
+  if (!isRecord(value) || typeof value.op !== "string") {
+    return malformedCommand("extension command malformed");
   }
+  const data = value.data;
+  switch (value.op) {
+    case "commitImageFact":
+    case "commitWrongPrefix":
+    case "commitMissingExtension":
+    case "commitProofFact":
+    case "commitProofOther":
+      return { ok: true, command: { op: value.op, data } };
+    case "scheduleImageFact":
+    case "scheduleProofFact":
+      if (typeof value.at !== "number") return malformedCommand("extension command at malformed");
+      return { ok: true, command: { op: value.op, at: value.at, data } };
+    default:
+      return malformedCommand(`extension command unsupported: ${value.op}`);
+  }
+};
 
-  commitProofOther(data: unknown): Promise<{ id: number }> {
-    return this.extensionCapability("@agent-os/proof").commit({
-      event: "proof.other",
-      data,
-    });
+const errorPayload = (cause: unknown): Record<string, unknown> => {
+  if (isRecord(cause)) {
+    return {
+      ...(typeof cause._tag === "string" ? { _tag: cause._tag } : {}),
+      ...(typeof cause.event === "string" ? { event: cause.event } : {}),
+      ...(typeof cause.capability === "string" ? { capability: cause.capability } : {}),
+      ...(typeof cause.issue === "string" ? { issue: cause.issue } : {}),
+      ...(typeof cause.message === "string" ? { message: cause.message } : {}),
+    };
   }
+  if (cause instanceof Error) return { message: cause.message };
+  return { message: String(cause) };
+};
 
-  scheduleProofFact(at: number, data: unknown): Promise<{ id: number }> {
-    return this.extensionCapability("@agent-os/proof").time({
-      at,
-      event: "proof.recorded",
-      data,
-    });
-  }
-}
+type CapabilityResult =
+  | { readonly ok: true; readonly capability: ExtensionCapability }
+  | { readonly ok: false; readonly error: CapabilityRejected };
+
+const capabilityOrReject = (
+  capabilities: ReadonlyMap<string, ExtensionCapability>,
+  packageId: string,
+): CapabilityResult => {
+  const cap = capabilities.get(packageId);
+  if (cap !== undefined) return { ok: true, capability: cap };
+  return {
+    ok: false,
+    error: new CapabilityRejected({
+      event: "*",
+      capability:
+        packageId === "@agent-os/image"
+          ? `extension:${packageId}:boundary`
+          : `extension:${packageId}`,
+    }),
+  };
+};
+
+const capabilityPromise = (
+  capabilities: ReadonlyMap<string, ExtensionCapability>,
+  packageId: string,
+): Promise<ExtensionCapability> => {
+  const result = capabilityOrReject(capabilities, packageId);
+  return result.ok ? Promise.resolve(result.capability) : Promise.reject(result.error);
+};
+
+const runExtensionCommand = (
+  capabilities: ReadonlyMap<string, ExtensionCapability>,
+  command: ExtensionCommand,
+) => {
+  const image = () => capabilityPromise(capabilities, "@agent-os/image");
+  const proof = () => capabilityPromise(capabilities, "@agent-os/proof");
+  const missing = () => capabilityPromise(capabilities, "@agent-os/missing");
+  return command.op === "commitImageFact"
+    ? image().then((cap) => cap.commit({ event: "image.job.recorded", data: command.data }))
+    : command.op === "commitWrongPrefix"
+      ? image().then((cap) => cap.commit({ event: "git.commit.recorded", data: command.data }))
+      : command.op === "commitMissingExtension"
+        ? missing().then((cap) => cap.commit({ event: "missing.fact", data: command.data }))
+        : command.op === "scheduleImageFact"
+          ? image().then((cap) =>
+              cap.time({
+                at: command.at,
+                event: "image.job.deferred",
+                data: command.data,
+              }),
+            )
+          : command.op === "commitProofFact"
+            ? proof().then((cap) => cap.commit({ event: "proof.recorded", data: command.data }))
+            : command.op === "commitProofOther"
+              ? proof().then((cap) => cap.commit({ event: "proof.other", data: command.data }))
+              : proof().then((cap) =>
+                  cap.time({
+                    at: command.at,
+                    event: "proof.recorded",
+                    data: command.data,
+                  }),
+                );
+};
+
+const extensionCommandHandlers = ({ runtime, capabilities }: AgentEventHandlerContext) => [
+  {
+    kind: EXTENSION_COMMAND_EVENT,
+    handler: async (event: Parameters<EventHandler>[0]) => {
+      const parsed = parseExtensionCommand(event.payload);
+      if (!parsed.ok) {
+        await runtime.emitEvent({
+          event: EXTENSION_RESULT_EVENT,
+          data: { op: "malformed", ok: false, error: parsed.error },
+        });
+        return;
+      }
+      const outcome = await runExtensionCommand(capabilities, parsed.command).then(
+        (result) => ({ ok: true, result }) as const,
+        (cause) => ({ ok: false, error: errorPayload(cause) }) as const,
+      );
+      await runtime.emitEvent({
+        event: EXTENSION_RESULT_EVENT,
+        data: { op: parsed.command.op, ...outcome },
+      });
+    },
+  },
+];
+
+export const ExtensionTestDO = createAgentDurableObject<CloudflareAgentEnv>({
+  extensions: () => [
+    eventNamespace({
+      packageId: "@agent-os/image",
+      kindPrefixes: ["image."],
+      version: "0.3.0",
+    }),
+    boundaryPackage(proofBoundaryContract, "0.1.0"),
+  ],
+  eventHandlers: extensionCommandHandlers,
+});
+export type ExtensionTestDO = InstanceType<typeof ExtensionTestDO>;
 
 interface WorkerEnv extends CloudflareAgentEnv {
   readonly STREAM_DO: DurableObjectNamespace<StreamTestDO>;
@@ -227,6 +319,9 @@ const parseLastEventId = (value: string | null): number => {
 export default {
   async fetch(req: Request, env: WorkerEnv): Promise<Response> {
     const url = new URL(req.url);
+    if (url.pathname === "/dispatch-target-materializations") {
+      return Response.json({ count: dispatchTargetMaterializations });
+    }
     const match = url.pathname.match(/^\/stream\/([^/]+)$/);
     if (match !== null) {
       const scope = decodeURIComponent(match[1] ?? "");

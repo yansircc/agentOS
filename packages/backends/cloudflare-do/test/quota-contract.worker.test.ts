@@ -1,7 +1,7 @@
 /**
  * Quota state machine — deterministic contract test.
  *
- * Bypasses CloudflareAgentDO to compose production Layers directly (LedgerLive +
+ * Bypasses the DO facade to compose production Layers directly (LedgerLive +
  * EventBusLive + QuotaLive over real DO SQLite from runInDurableObject's
  * state, plus a Layer.succeed(AiBinding, stubAi(...))). This isolates the
  * substrate algorithm from any LLM behavior — every test result is

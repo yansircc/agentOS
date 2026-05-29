@@ -4,6 +4,10 @@ export default defineConfig({
   resolve: {
     alias: [
       {
+        find: "@agent-os/backend-protocol",
+        replacement: new URL("../protocol/src/index.ts", import.meta.url).pathname,
+      },
+      {
         find: "@agent-os/kernel/llm",
         replacement: new URL("../../kernel/src/llm.ts", import.meta.url).pathname,
       },

@@ -1,7 +1,7 @@
 /**
  * emitEvent — deterministic contract test.
  *
- * Exercises CloudflareAgentDO's now-write primitive (the corner of the reactive
+ * Exercises the configured DO now-write primitive (the corner of the reactive
  * surface that submit and scheduleEvent do NOT cover).
  *
  * Two access patterns are exercised, by design:

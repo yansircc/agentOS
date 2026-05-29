@@ -7,6 +7,7 @@ Status: Backend package. Public exports are limited to the Durable Object factor
 ## Public exports
 
 - `.:AgentDurableObjectConfig`
+- `.:AgentEventHandlerContext`
 - `.:AgentEventHandlerRegistration`
 - `.:AgentRuntimeClient`
 - `.:CloudflareAgentEnv`

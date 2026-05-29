@@ -9,7 +9,7 @@
  *   - failed delivery remains retryable instead of disappearing.
  */
 
-import { runInDurableObject } from "cloudflare:test";
+import { SELF, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -45,6 +45,12 @@ const stubFor = (scope: string): DurableObjectStub<DispatchTestDO> & DispatchRpc
   testEnv.DISPATCH_DO.get(
     testEnv.DISPATCH_DO.idFromName(scope),
   ) as DurableObjectStub<DispatchTestDO> & DispatchRpc;
+
+const dispatchTargetMaterializationCount = async (): Promise<number> => {
+  const response = await SELF.fetch("https://test.local/dispatch-target-materializations");
+  const body = (await response.json()) as { readonly count?: unknown };
+  return typeof body.count === "number" ? body.count : Number.NaN;
+};
 
 const dispatchBindingRef = (ref: string): BindingMaterialRef =>
   bindingMaterialRef({
@@ -137,6 +143,23 @@ const rowsOrEmpty = (
 };
 
 describe("dispatchToScope — cross-scope durable delivery primitive", () => {
+  it("materializes dispatch targets once per DO instance", async () => {
+    const before = await dispatchTargetMaterializationCount();
+    const sender = stubFor("dispatch-target-snapshot");
+
+    await sender.events();
+    await sender.events();
+    await sender.dispatchToScope({
+      target: targetFor("dispatch-target-snapshot-dead", dispatchBindingRef("dead")),
+      event: "test.delivered",
+      data: { message: "dead target still uses snapshot" },
+      idempotencyKey: "snapshot-intent",
+    });
+
+    const after = await dispatchTargetMaterializationCount();
+    expect(after).toBe(before + 1);
+  });
+
   it("commits sender outbound event and dispatch_outbox row in one transaction", async () => {
     const sender = stubFor("dispatch-sender-atomic");
     const receiver = stubFor("dispatch-receiver-atomic");
@@ -593,17 +616,28 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
 
       const outbox = state.storage.sql
         .exec(
-          "SELECT outbound_event_id, delivered_event_id, attempts, next_attempt_at, last_error FROM dispatch_outbox",
+          "SELECT outbound_event_id, delivered_event_id, attempts, last_error FROM dispatch_outbox",
         )
         .toArray();
       expect(outbox).toHaveLength(1);
       expect(Number(outbox[0]?.outbound_event_id)).toBe(outboundEventId);
       expect(outbox[0]?.delivered_event_id).toBeNull();
       expect(Number(outbox[0]?.attempts)).toBe(1);
-      expect(Number(outbox[0]?.next_attempt_at)).toBe(payload.nextAttemptAt);
       expect(sqlText(outbox[0]?.last_error, "dispatch_outbox.last_error")).toContain(
         "dead dispatch target",
       );
+
+      const due = state.storage.sql
+        .exec(
+          "SELECT fire_at, kind, payload, completed_at FROM due_work WHERE completed_at IS NULL",
+        )
+        .toArray();
+      expect(due).toHaveLength(1);
+      expect(Number(due[0]?.fire_at)).toBe(payload.nextAttemptAt);
+      expect(due[0]?.kind).toBe("dispatch_retry");
+      expect(JSON.parse(sqlText(due[0]?.payload, "due_work.payload"))).toEqual({
+        outboundEventId,
+      });
     });
   });
 });

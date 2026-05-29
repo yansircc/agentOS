@@ -24,6 +24,7 @@
       "name": "@agent-os/backend-cloudflare-do",
       "version": "0.2.8",
       "dependencies": {
+        "@agent-os/backend-protocol": "workspace:*",
         "@agent-os/kernel": "workspace:*",
         "@agent-os/runtime": "workspace:*",
         "@effect/experimental": "catalog:",
@@ -50,6 +51,7 @@
       "name": "@agent-os/backend-in-memory",
       "version": "0.2.0",
       "dependencies": {
+        "@agent-os/backend-protocol": "workspace:*",
         "@agent-os/kernel": "workspace:*",
         "@agent-os/runtime": "workspace:*",
         "effect": "catalog:",
@@ -59,6 +61,24 @@
         "typescript": "catalog:",
         "vite-plus": "catalog:",
         "vitest": "catalog:",
+      },
+    },
+    "packages/backends/protocol": {
+      "name": "@agent-os/backend-protocol",
+      "version": "0.1.0",
+      "dependencies": {
+        "@agent-os/kernel": "workspace:*",
+        "@agent-os/runtime": "workspace:*",
+        "effect": "catalog:",
+      },
+      "devDependencies": {
+        "@effect/vitest": "catalog:",
+        "typescript": "catalog:",
+        "vite-plus": "catalog:",
+        "vitest": "catalog:",
+      },
+      "peerDependencies": {
+        "effect": "^3.21.0",
       },
     },
     "packages/carriers/decision-gate": {
@@ -421,14 +441,16 @@
     "effect": "^3.21.0",
     "fast-check": "^4.8.0",
     "typescript": "^5.7.2",
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vite-plus": "latest",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.1.22",
+    "vite-plus": "0.1.22",
+    "vitest": "npm:@voidzero-dev/vite-plus-test@0.1.22",
   },
   "packages": {
     "@agent-os/backend-cloudflare-do": ["@agent-os/backend-cloudflare-do@workspace:packages/backends/cloudflare-do"],
 
     "@agent-os/backend-in-memory": ["@agent-os/backend-in-memory@workspace:packages/backends/in-memory"],
+
+    "@agent-os/backend-protocol": ["@agent-os/backend-protocol@workspace:packages/backends/protocol"],
 
     "@agent-os/decision-gate": ["@agent-os/decision-gate@workspace:packages/carriers/decision-gate"],
 
