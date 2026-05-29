@@ -12,7 +12,7 @@
  * invalid LLM-emitted args never consume quota.
  */
 
-import { Effect, JSONSchema, Option, Schema } from "effect";
+import { Effect, Option, Schema } from "effect";
 import { ToolError } from "./errors";
 import {
   type AdmitVerdict,
@@ -29,7 +29,7 @@ import type { QuotaSpec } from "./quota";
 import {
   toClosedJsonSchemaObject,
   validateAgainstSchema,
-  type JsonSchemaObject,
+  schemaToClosedJsonSchemaObject,
 } from "./json-schema";
 
 const TOOL_CONTRACT_BRAND = Symbol("@agent-os/kernel/ToolContract");
@@ -166,9 +166,6 @@ export const defineToolFromDefinition = <A, R>(spec: RegisteredToolSpec<A, R>): 
   };
 };
 
-const schemaToParameters = (schema: Schema.Schema.AnyNoContext): JsonSchemaObject =>
-  toClosedJsonSchemaObject(JSONSchema.make(schema));
-
 export const defineTool = <S extends Schema.Schema.AnyNoContext, R>(
   spec: DefineToolSpec<S, R>,
 ): Tool<Schema.Schema.Type<S>, Awaited<R>> => {
@@ -179,7 +176,7 @@ export const defineTool = <S extends Schema.Schema.AnyNoContext, R>(
       function: {
         name: spec.name,
         description: spec.description,
-        parameters: schemaToParameters(spec.args),
+        parameters: schemaToClosedJsonSchemaObject(spec.args),
       },
     },
     decode,

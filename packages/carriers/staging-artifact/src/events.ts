@@ -1,33 +1,20 @@
 import { Predicate } from "effect";
 import type { LivedClaim } from "@agent-os/kernel/effect-claim";
-import { defineEventKindView, defineEventPayloads, payload } from "@agent-os/kernel/extensions";
 import { validateTerminalClaim } from "@agent-os/kernel/settlement-contract";
-import { stagingArtifactSettlementContract } from "./settlement";
+import {
+  STAGING_EVENTS,
+  STAGING_KIND,
+  stagingArtifactSettlementContract,
+} from "./definition";
+export { STAGING_EVENTS, STAGING_KIND } from "./definition";
 
-export interface StagingArtifactPublishedPayload {
-  readonly subjectRef: string;
-  readonly artifactRef: string;
-  readonly routeRef: string;
-  readonly digest: string;
-  readonly claim: LivedClaim;
-}
+type StagingPayloads = typeof STAGING_EVENTS;
 
-export interface StagingArtifactReapedPayload {
-  readonly subjectRef: string;
-  readonly artifactRef: string;
-  readonly reason: "published" | "discarded" | "expired";
-  readonly claim: LivedClaim;
-}
+export type StagingArtifactPublishedPayload =
+  StagingPayloads[(typeof STAGING_KIND)["ARTIFACT_PUBLISHED"]];
 
-export const STAGING_EVENTS = defineEventPayloads({
-  "staging.artifact.published": payload<StagingArtifactPublishedPayload>(),
-  "staging.artifact.reaped": payload<StagingArtifactReapedPayload>(),
-});
-
-export const STAGING_KIND = defineEventKindView(STAGING_EVENTS, {
-  ARTIFACT_PUBLISHED: "staging.artifact.published",
-  ARTIFACT_REAPED: "staging.artifact.reaped",
-});
+export type StagingArtifactReapedPayload =
+  StagingPayloads[(typeof STAGING_KIND)["ARTIFACT_REAPED"]];
 
 export type StagingEventKind = keyof typeof STAGING_EVENTS;
 

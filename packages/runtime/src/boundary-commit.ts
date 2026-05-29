@@ -1,13 +1,18 @@
 import { Data, Effect, Predicate } from "effect";
 import { validateEffectClaim, type EffectClaim } from "@agent-os/kernel/effect-claim";
-import type { BoundaryContract } from "@agent-os/kernel/boundary-contract";
+import type {
+  BoundaryContract,
+  BoundaryEventContract,
+} from "@agent-os/kernel/boundary-contract";
 import type { JsonStringifyError, SqlError } from "@agent-os/kernel/errors";
+import { validateAgainstSchema } from "@agent-os/kernel/json-schema";
 import { validateTerminalClaim } from "@agent-os/kernel/settlement-contract";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 
 type BoundaryCommitIssue =
   | "event_outside_vocabulary"
   | "payload_must_be_object"
+  | "payload_schema_invalid"
   | "claim_missing"
   | "claim_invalid"
   | "claim_phase_invalid"
@@ -38,19 +43,41 @@ const reject = (
 ): BoundaryCommitRejected =>
   new BoundaryCommitRejected({ packageId: contract.packageId, event, issue });
 
+const payloadForSchema = (
+  payload: Readonly<Record<string, unknown>>,
+  eventContract: BoundaryEventContract,
+): Readonly<Record<string, unknown>> => {
+  const claimKey = eventContract.claim?.key;
+  if (claimKey === undefined || !(claimKey in payload)) return payload;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(payload)) {
+    if (key !== claimKey) out[key] = value;
+  }
+  return out;
+};
+
 export const validateBoundaryEventPayload = (
   contract: BoundaryContract,
   event: string,
   payload: unknown,
 ): BoundaryCommitRejected | null => {
-  const phases = contract.claimPhases[event];
-  if (phases === undefined) {
+  const eventContract = contract.events[event];
+  if (eventContract === undefined) {
     return reject(contract, event, "event_outside_vocabulary");
   }
   if (!Predicate.isRecord(payload)) {
     return reject(contract, event, "payload_must_be_object");
   }
-  const claim = payload[contract.claimPayloadKey];
+  if (validateAgainstSchema(payloadForSchema(payload, eventContract), eventContract.payloadSchema).length > 0) {
+    return reject(contract, event, "payload_schema_invalid");
+  }
+
+  const claimContract = eventContract.claim;
+  if (claimContract === undefined) {
+    return null;
+  }
+
+  const claim = payload[claimContract.key];
   if (claim === undefined) {
     return reject(contract, event, "claim_missing");
   }
@@ -58,7 +85,7 @@ export const validateBoundaryEventPayload = (
   if (!validation.ok) {
     return reject(contract, event, "claim_invalid");
   }
-  if (!phases.includes(validation.claim.phase)) {
+  if (validation.claim.phase !== claimContract.phase) {
     return reject(contract, event, "claim_phase_invalid");
   }
   if (

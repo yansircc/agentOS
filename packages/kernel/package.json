@@ -18,6 +18,10 @@
       "types": "./src/boundary-contract.ts",
       "default": "./src/boundary-contract.ts"
     },
+    "./carrier": {
+      "types": "./src/carrier.ts",
+      "default": "./src/carrier.ts"
+    },
     "./context": {
       "types": "./src/context.ts",
       "default": "./src/context.ts"

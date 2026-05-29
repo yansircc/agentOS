@@ -1,5 +1,6 @@
 import { Predicate } from "effect";
 import type { BoundaryPackage } from "./extensions";
+import type { JsonSchemaObject } from "./json-schema";
 import {
   isAuthorityContract,
   isMaterialRequirement,
@@ -10,7 +11,17 @@ import type { ClaimRole } from "./effect-claim";
 import { validateSettlementContract, type SettlementContract } from "./settlement-contract";
 import { isNonEmptyString } from "./string-guards";
 
-type ClaimPhase = "pre" | "lived" | "rejected";
+export type BoundaryClaimPhase = "pre" | "lived" | "rejected";
+
+export interface BoundaryEventClaimContract {
+  readonly key: string;
+  readonly phase: BoundaryClaimPhase;
+}
+
+export interface BoundaryEventContract {
+  readonly payloadSchema: JsonSchemaObject;
+  readonly claim?: BoundaryEventClaimContract;
+}
 
 export interface BoundaryProjectionContract {
   readonly derivedFromLedger: true;
@@ -21,19 +32,16 @@ export interface BoundaryProjectionContract {
  * Five-axis boundary declaration for claim-bearing packages:
  * vocabulary, authority, material, settlement, and projection.
  *
- * Cleanup is not a sixth axis here. Release/destruction semantics remain
- * carrier-owned settlement vocabulary until multiple packages expose cleanup as an
- * independent contract surface.
+ * Event keys are the vocabulary. Claim slots are event-local so non-claim
+ * extension facts do not need to lie as terminal claim events.
  */
 export interface BoundaryContract<EventKind extends string = string> {
   readonly packageId: string;
   readonly kindPrefixes: ReadonlyArray<string>;
   readonly roles: ReadonlyArray<ClaimRole>;
-  readonly vocabulary: Readonly<Record<string, EventKind>>;
+  readonly events: Readonly<Record<EventKind, BoundaryEventContract>>;
   readonly authorityContracts: ReadonlyArray<AuthorityContract>;
   readonly materialRequirements: ReadonlyArray<MaterialRequirement>;
-  readonly claimPayloadKey: "claim";
-  readonly claimPhases: Readonly<Record<EventKind, ReadonlyArray<"pre" | "lived" | "rejected">>>;
   readonly settlement: SettlementContract;
   readonly projection: BoundaryProjectionContract;
 }
@@ -42,14 +50,15 @@ export type BoundaryContractIssue =
   | "package_id_invalid"
   | "kind_prefixes_invalid"
   | "roles_invalid"
-  | "vocabulary_invalid"
-  | "vocabulary_outside_prefix"
+  | "events_invalid"
+  | "event_outside_prefix"
+  | "event_payload_schema_invalid"
+  | "event_claim_invalid"
+  | "event_claim_key_collides_with_payload"
   | "authority_contract_invalid"
   | "material_requirements_invalid"
   | "authority_material_outside_axis"
   | "material_authority_unbound"
-  | "claim_payload_key_invalid"
-  | "claim_phases_invalid"
   | "settlement_invalid"
   | "projection_invalid";
 
@@ -61,7 +70,7 @@ export type BoundaryContractValidation =
     };
 
 const CLAIM_ROLES = new Set<ClaimRole>(["generator", "admitter", "resolver", "reader"]);
-const CLAIM_PHASES = new Set<ClaimPhase>(["pre", "lived", "rejected"]);
+const CLAIM_PHASES = new Set<BoundaryClaimPhase>(["pre", "lived", "rejected"]);
 
 const nonEmptyStringArray = (value: unknown): value is ReadonlyArray<string> =>
   Array.isArray(value) && value.length > 0 && value.every(isNonEmptyString);
@@ -69,33 +78,51 @@ const nonEmptyStringArray = (value: unknown): value is ReadonlyArray<string> =>
 const nonEmptyArrayOf = <T>(value: unknown, allowed: ReadonlySet<T>): value is ReadonlyArray<T> =>
   Array.isArray(value) && value.length > 0 && value.every((item) => allowed.has(item as T));
 
-const vocabularyValues = (value: unknown): ReadonlyArray<string> | null => {
-  if (!Predicate.isRecord(value)) return null;
-  const values = Object.values(value);
-  if (values.length === 0 || !values.every(isNonEmptyString)) return null;
-  return values;
-};
-
 const valuesOwnedByPrefix = (
   values: ReadonlyArray<string>,
   prefixes: ReadonlyArray<string>,
 ): boolean => values.every((value) => prefixes.some((prefix) => value.startsWith(prefix)));
 
-const claimPhasesAreValid = (
-  claimPhases: unknown,
-  vocabularyValuesList: ReadonlyArray<string>,
-): claimPhases is Readonly<Record<string, ReadonlyArray<ClaimPhase>>> => {
-  if (!Predicate.isRecord(claimPhases)) return false;
-  const vocabularySet = new Set(vocabularyValuesList);
-  const phaseKeys = Object.keys(claimPhases);
-  if (phaseKeys.length !== vocabularySet.size) return false;
-  for (const value of vocabularySet) {
-    const phases = claimPhases[value];
-    if (!nonEmptyArrayOf(phases, CLAIM_PHASES)) return false;
-    if (phases.includes("pre") && phases.some((phase) => phase !== "pre")) return false;
+const isJsonSchemaObject = (value: unknown): value is JsonSchemaObject =>
+  Predicate.isRecord(value) &&
+  value.type === "object" &&
+  Predicate.isRecord(value.properties) &&
+  (value.required === undefined ||
+    (Array.isArray(value.required) && value.required.every(isNonEmptyString))) &&
+  (value.additionalProperties === undefined || typeof value.additionalProperties === "boolean");
+
+const isBoundaryEventClaimContract = (value: unknown): value is BoundaryEventClaimContract =>
+  Predicate.isRecord(value) &&
+  isNonEmptyString(value.key) &&
+  typeof value.phase === "string" &&
+  CLAIM_PHASES.has(value.phase as BoundaryClaimPhase);
+
+const isBoundaryEventContract = (value: unknown): value is BoundaryEventContract =>
+  Predicate.isRecord(value) &&
+  isJsonSchemaObject(value.payloadSchema) &&
+  (value.claim === undefined || isBoundaryEventClaimContract(value.claim));
+
+const eventEntries = (
+  events: unknown,
+): ReadonlyArray<readonly [string, BoundaryEventContract]> | null => {
+  if (!Predicate.isRecord(events)) return null;
+  const entries = Object.entries(events);
+  if (entries.length === 0) return null;
+  const out: Array<readonly [string, BoundaryEventContract]> = [];
+  for (const [event, contract] of entries) {
+    if (!isNonEmptyString(event) || !isBoundaryEventContract(contract)) return null;
+    out.push([event, contract]);
   }
-  return phaseKeys.every((kind) => vocabularySet.has(kind));
+  return out;
 };
+
+const eventClaimKeysDoNotCollide = (
+  entries: ReadonlyArray<readonly [string, BoundaryEventContract]>,
+): boolean =>
+  entries.every(([, contract]) => {
+    const key = contract.claim?.key;
+    return key === undefined || !(key in contract.payloadSchema.properties);
+  });
 
 const materialRequirementMatches = (
   left: MaterialRequirement,
@@ -167,11 +194,9 @@ export const validateBoundaryContract = (value: unknown): BoundaryContractValida
         "package_id_invalid",
         "kind_prefixes_invalid",
         "roles_invalid",
-        "vocabulary_invalid",
+        "events_invalid",
         "authority_contract_invalid",
         "material_requirements_invalid",
-        "claim_payload_key_invalid",
-        "claim_phases_invalid",
         "settlement_invalid",
         "projection_invalid",
       ],
@@ -192,11 +217,23 @@ export const validateBoundaryContract = (value: unknown): BoundaryContractValida
     issues.push("roles_invalid");
   }
 
-  const values = vocabularyValues(value.vocabulary);
-  if (values === null) {
-    issues.push("vocabulary_invalid");
-  } else if (nonEmptyStringArray(prefixes) && !valuesOwnedByPrefix(values, prefixes)) {
-    issues.push("vocabulary_outside_prefix");
+  const entries = eventEntries(value.events);
+  if (entries === null) {
+    issues.push("events_invalid");
+  } else {
+    const eventKinds = entries.map(([event]) => event);
+    if (nonEmptyStringArray(prefixes) && !valuesOwnedByPrefix(eventKinds, prefixes)) {
+      issues.push("event_outside_prefix");
+    }
+    if (!entries.every(([, contract]) => isJsonSchemaObject(contract.payloadSchema))) {
+      issues.push("event_payload_schema_invalid");
+    }
+    if (!entries.every(([, contract]) => contract.claim === undefined || isBoundaryEventClaimContract(contract.claim))) {
+      issues.push("event_claim_invalid");
+    }
+    if (!eventClaimKeysDoNotCollide(entries)) {
+      issues.push("event_claim_key_collides_with_payload");
+    }
   }
 
   if (
@@ -231,14 +268,6 @@ export const validateBoundaryContract = (value: unknown): BoundaryContractValida
     !materialRequirementsAreBoundToAuthority(value.authorityContracts, value.materialRequirements)
   ) {
     issues.push("material_authority_unbound");
-  }
-
-  if (value.claimPayloadKey !== "claim") {
-    issues.push("claim_payload_key_invalid");
-  }
-
-  if (values === null || !claimPhasesAreValid(value.claimPhases, values)) {
-    issues.push("claim_phases_invalid");
   }
 
   if (!validateSettlementContract(value.settlement).ok) {
