@@ -9,6 +9,10 @@ export default defineConfig({
         "../../kernel/src/runtime-scope.ts",
         import.meta.url,
       ).pathname,
+      "@agent-os/kernel/settlement-contract": new URL(
+        "../../kernel/src/settlement-contract.ts",
+        import.meta.url,
+      ).pathname,
     },
   },
   test: {

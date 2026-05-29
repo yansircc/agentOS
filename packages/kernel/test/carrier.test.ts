@@ -1,15 +1,7 @@
 import { Schema } from "effect";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "@effect/vitest";
 
-import {
-  defineCarrier,
-  event,
-  ledgerProjection,
-  lived,
-  none,
-  pre,
-  rejected,
-} from "../src/carrier";
+import { defineCarrier, event, ledgerProjection, lived, none, pre, rejected } from "../src/carrier";
 import { makePreClaim } from "../src/effect-claim";
 
 const claim = makePreClaim({
@@ -224,13 +216,15 @@ describe("defineCarrier", () => {
 
     carrier.settle.consumed(claim, { anchorId: "event:1" });
     carrier.reject.failed(claim, { rejectionId: "policy:1" });
-    if (false) {
+    const assertTypeErrors = () => {
       // @ts-expect-error none events do not expose lived constructors.
-      carrier.settle.decided;
+      const noDecidedSettle = carrier.settle.decided;
       // @ts-expect-error pre events do not expose rejected constructors.
-      carrier.reject.requested;
+      const noRequestedReject = carrier.reject.requested;
       // @ts-expect-error unknown handler keys are rejected.
-      carrier.handlers({ unknown: () => undefined });
-    }
+      const noUnknownHandler = carrier.handlers({ unknown: () => undefined });
+      return [noDecidedSettle, noRequestedReject, noUnknownHandler];
+    };
+    expect(typeof assertTypeErrors).toBe("function");
   });
 });

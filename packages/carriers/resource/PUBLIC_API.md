@@ -30,13 +30,12 @@ Status: 0.2.x active development for provider-neutral resource carrier algebra. 
 - `.:resourceAuthorityContracts`
 - `.:resourceBoundaryContract`
 - `.:resourceBoundaryPackage`
+- `.:resourceCarrierDefinition`
 - `.:resourceFailedPayload`
 - `.:resourceRejectionKind`
-- `.:settleResourceRejected`
-
-- `.:resourceSettlementContract`
 - `.:resourceSettlementRef`
 - `.:settleResourceLived`
+- `.:settleResourceRejected`
 
 ## Experimental exports
 

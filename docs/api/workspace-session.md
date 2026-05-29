@@ -29,14 +29,13 @@
 - `.:WorkspaceSessionStartedPayload`
 - `.:projectWorkspaceSession`
 - `.:resolveWorkspaceSession`
+- `.:settleWorkspaceSessionLived`
 - `.:settleWorkspaceSessionRejected`
-- `.:workspaceSessionBoundaryPackage`
 - `.:workspaceSessionBoundaryContract`
+- `.:workspaceSessionBoundaryPackage`
+- `.:workspaceSessionCarrier`
 - `.:workspaceSessionFailedPayload`
 - `.:workspaceSessionRejectionKind`
-
-- `.:settleWorkspaceSessionLived`
-- `.:workspaceSessionSettlementContract`
 - `.:workspaceSessionSettlementRef`
 
 ## Experimental exports

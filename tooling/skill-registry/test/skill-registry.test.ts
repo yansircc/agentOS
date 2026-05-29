@@ -134,7 +134,7 @@ describe("@agent-os/skill-registry", () => {
               parameters: {
                 type: "object",
                 properties: {
-                  key: { anyOf: [{ type: "string" }, { type: "number" }] },
+                  key: { type: "string", minLength: 1 },
                 },
               },
             },

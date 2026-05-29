@@ -13,12 +13,11 @@
 - `.:DecisionGateProjection`
 - `.:DecisionGateRequestedPayload`
 - `.:admitDecisionGate`
-- `.:decisionGateBoundaryPackage`
 - `.:decisionGateBoundaryContract`
-- `.:projectDecisionGate`
-
-- `.:decisionGateSettlementContract`
+- `.:decisionGateBoundaryPackage`
+- `.:decisionGateCarrier`
 - `.:decisionGateSettlementRef`
+- `.:projectDecisionGate`
 - `.:settleDecisionGateConsumed`
 
 ## Experimental exports

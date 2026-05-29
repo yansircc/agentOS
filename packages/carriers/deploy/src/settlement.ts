@@ -9,7 +9,7 @@ import {
   isSymbolicSettlementValue,
   symbolicSettlementRef,
 } from "@agent-os/kernel/settlement-contract";
-import { deployCarrier, deploySettlementContract } from "./definition";
+import { deployCarrier } from "./definition";
 
 export const deploySettlementRef = (...parts: ReadonlyArray<string | number>): string =>
   symbolicSettlementRef("deploy", parts);

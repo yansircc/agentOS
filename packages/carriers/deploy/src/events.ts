@@ -6,8 +6,7 @@ export { DEPLOY_EVENTS, DEPLOY_KIND } from "./definition";
 
 type DeployPayloads = typeof DEPLOY_EVENTS;
 
-export type DeployPreviewRecordedPayload =
-  DeployPayloads[(typeof DEPLOY_KIND)["PREVIEW_RECORDED"]];
+export type DeployPreviewRecordedPayload = DeployPayloads[(typeof DEPLOY_KIND)["PREVIEW_RECORDED"]];
 
 export type DeployProductionPromotedPayload =
   DeployPayloads[(typeof DEPLOY_KIND)["PRODUCTION_PROMOTED"]];

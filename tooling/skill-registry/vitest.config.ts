@@ -7,6 +7,10 @@ export default defineConfig({
         "../../packages/kernel/src/effect-claim.ts",
         import.meta.url,
       ).pathname,
+      "@agent-os/kernel/json-schema": new URL(
+        "../../packages/kernel/src/json-schema.ts",
+        import.meta.url,
+      ).pathname,
       "@agent-os/kernel/material-ref": new URL(
         "../../packages/kernel/src/material-ref.ts",
         import.meta.url,

@@ -2,9 +2,9 @@
 
 ## Purpose
 
-Pure agentOS algebra: effect claims, BoundaryContract declarations, symbolic
-material refs, tool contracts, context packs, runtime scope refs, and shared
-ledger-visible types.
+Pure agentOS algebra: effect claims, carrier declarations, BoundaryContract
+declarations, symbolic material refs, tool contracts, context packs, runtime
+scope refs, and shared ledger-visible types.
 
 ## Invariant
 
@@ -14,11 +14,11 @@ runtime responses.
 
 ## Minimal Usage
 
-Import claim and boundary helpers from kernel subpaths.
+Carrier authors use the carrier DSL as the first-path authoring surface.
+Expert packages can still import boundary and settlement contracts directly.
 
 ```ts
-import { defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
-import { makePreClaim } from "@agent-os/kernel/effect-claim";
+import { defineCarrier, event, lived } from "@agent-os/kernel/carrier";
 ```
 
 ## Verification

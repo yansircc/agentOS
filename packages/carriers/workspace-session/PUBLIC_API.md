@@ -33,14 +33,13 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:WorkspaceSessionStartedPayload`
 - `.:projectWorkspaceSession`
 - `.:resolveWorkspaceSession`
+- `.:settleWorkspaceSessionLived`
 - `.:settleWorkspaceSessionRejected`
-- `.:workspaceSessionBoundaryPackage`
 - `.:workspaceSessionBoundaryContract`
+- `.:workspaceSessionBoundaryPackage`
+- `.:workspaceSessionCarrier`
 - `.:workspaceSessionFailedPayload`
 - `.:workspaceSessionRejectionKind`
-
-- `.:settleWorkspaceSessionLived`
-- `.:workspaceSessionSettlementContract`
 - `.:workspaceSessionSettlementRef`
 
 ## Experimental exports
