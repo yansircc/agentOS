@@ -4,7 +4,7 @@ import { describe, expect, it } from "@effect/vitest";
 
 import {
   DynamicWorkerProviderFailure,
-  makeDynamicWorkerTool,
+  dynamicWorkerSettlementRef,
   runDynamicWorker,
   staticPolicy,
   truncateUtf8,
@@ -115,42 +115,6 @@ describe("@agent-os/dynamic-worker", () => {
     }),
   );
 
-  it.effect("exposes a ledger-safe tool result with byte-capped response body", () =>
-    Effect.gen(function* () {
-      const backend: DynamicWorkerBackend = {
-        run: () =>
-          Effect.succeed({
-            status: 200,
-            body: "abcdef",
-            workerId: "dw-tool",
-          }),
-      };
-      const tool = makeDynamicWorkerTool({
-        backend,
-        policy: staticPolicy(),
-        claim: () => claim,
-        maxBodyBytes: 3,
-      });
-
-      const result = yield* Effect.promise(() =>
-        tool.execute({
-          code: "export default { fetch: () => new Response('abcdef') }",
-          url: "https://example.test/",
-        }),
-      );
-      expect(result).toEqual({
-        ok: true,
-        status: 200,
-        headers: undefined,
-        bodyHead: "abc",
-        bodyBytes: 6,
-        bodyTruncated: true,
-        durationMs: expect.any(Number),
-        workerId: "dw-tool",
-      });
-    }),
-  );
-
   it("keeps bodyHead within the UTF-8 byte cap", () => {
     const accented = truncateUtf8("é", 1);
     expect(accented).toEqual({
@@ -186,23 +150,21 @@ describe("@agent-os/dynamic-worker", () => {
             };
           }),
       };
-      const tool = makeDynamicWorkerTool({
+      const result = yield* runDynamicWorker(
         backend,
-        policy: ({ request }) =>
+        ({ request }) =>
           Effect.sync(() => {
             seen.push({ owner: "policy", limits: request.limits });
           }),
-        claim: () => claim,
-        limits,
-      });
-
-      const result = yield* Effect.promise(() =>
-        tool.execute({
+        {
+          claim,
           code: "export default { fetch: () => new Response('ok') }",
-          url: "https://example.test/",
-        }),
+          request: { url: "https://example.test/" },
+          timeoutMs: 1000,
+          limits,
+        },
       );
-      expect(result).toMatchObject({ ok: true, workerId: "dw-limits" });
+      expect(result).toMatchObject({ workerId: "dw-limits" });
       expect(seen).toEqual([
         { owner: "policy", limits },
         { owner: "backend", limits },
@@ -282,7 +244,7 @@ describe("@agent-os/dynamic-worker", () => {
           phase: "lived",
           operationRef: claim.operationRef,
           anchorRef: {
-            anchorId: "dw-claim",
+            anchorId: dynamicWorkerSettlementRef("dw-claim"),
             anchorKind: "carrier_proof",
             carrierRef: "dynamic-worker",
           },
@@ -314,9 +276,9 @@ describe("@agent-os/dynamic-worker", () => {
             phase: "rejected",
             operationRef: claim.operationRef,
             rejectionRef: {
-              rejectionId: claim.operationRef,
+              rejectionId: dynamicWorkerSettlementRef(claim.operationRef, "rejected"),
               rejectionKind: "policy_denied",
-              reason: "code must be non-empty",
+              reason: dynamicWorkerSettlementRef("policy_denied"),
             },
           },
         },
@@ -352,7 +314,7 @@ describe("@agent-os/dynamic-worker", () => {
             phase: "rejected",
             operationRef: claim.operationRef,
             rejectionRef: {
-              rejectionId: claim.operationRef,
+              rejectionId: dynamicWorkerSettlementRef(claim.operationRef, "rejected"),
               rejectionKind: "provider_rejected",
               reason: "dynamic_worker_ProviderFailure",
             },
@@ -362,7 +324,7 @@ describe("@agent-os/dynamic-worker", () => {
     }),
   );
 
-  it.effect("does not expose provider failure bodies through failure or tool result", () =>
+  it.effect("does not expose provider failure bodies through failure", () =>
     Effect.gen(function* () {
       const backend: DynamicWorkerBackend = {
         run: () =>
@@ -388,28 +350,6 @@ describe("@agent-os/dynamic-worker", () => {
 
       expect(JSON.stringify(failed)).not.toContain("raw_provider_body_secret");
       expect(JSON.stringify(failed)).not.toContain("raw provider secret reason");
-
-      const tool = makeDynamicWorkerTool({
-        backend,
-        policy: staticPolicy(),
-        claim: () => claim,
-      });
-      const result = yield* Effect.promise(() =>
-        tool.execute({
-          code: "export default { fetch: () => new Response('ok') }",
-          url: "https://example.test/",
-        }),
-      );
-
-      expect(result).toMatchObject({
-        ok: false,
-        bodyHead: "",
-        bodyBytes: 0,
-        bodyTruncated: false,
-        reason: "dynamic_worker_ProviderFailure",
-      });
-      expect(JSON.stringify(result)).not.toContain("raw_provider_body_secret");
-      expect(JSON.stringify(result)).not.toContain("raw provider secret reason");
     }),
   );
 });

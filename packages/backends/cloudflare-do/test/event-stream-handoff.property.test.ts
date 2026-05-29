@@ -10,7 +10,7 @@ import * as fc from "fast-check";
 import { describe, expect, it } from "vite-plus/test";
 
 import { selectHandoffEvents } from "../src/ledger/stream";
-import type { LedgerEvent } from "@agent-os/runtime";
+import type { LedgerEvent } from "@agent-os/kernel/types";
 
 const uniqueSorted = (values: ReadonlyArray<number>): ReadonlyArray<number> =>
   Array.from(new Set(values)).sort((a, b) => a - b);

@@ -1,12 +1,13 @@
 import type { DurableObject } from "cloudflare:workers";
 import type { ExtensionDeclaration } from "@agent-os/kernel/extensions";
 import type { ScopeRef } from "@agent-os/kernel/effect-claim";
+import type { DispatchToScopeResult, DispatchToScopeSpec } from "@agent-os/kernel/types";
 import type { SubmitResult } from "@agent-os/runtime";
 import {
   AgentDurableObject,
   type AgentEventHandlerContext,
   type AgentEventHandlerRegistration,
-  type AgentRuntimeBaseClient,
+  type AgentRuntimeReaderClient,
   type AgentSubmitDefaults,
   type AgentSubmitSpec,
   type CloudflareAgentEnv,
@@ -21,7 +22,15 @@ import {
   type LlmRouteMap,
 } from "./facade-lowering";
 
-export interface AgentFacadeRuntimeClient extends AgentRuntimeBaseClient {}
+export interface AgentFacadeRuntimeClient extends AgentRuntimeReaderClient {
+  readonly emit: (event: string, data: unknown) => Promise<{ id: number }>;
+  readonly dispatch: (spec: DispatchToScopeSpec) => Promise<DispatchToScopeResult>;
+  readonly schedule: (
+    event: string,
+    data: unknown,
+    options: { readonly at: number },
+  ) => Promise<{ id: number }>;
+}
 
 export interface AgentFacadeRuntimeClientWithSubmit extends AgentFacadeRuntimeClient {
   readonly submit: (spec: AgentSubmitSpec) => Promise<SubmitResult>;
@@ -151,6 +160,22 @@ export function defineAgentDO<Env extends CloudflareAgentEnv>(
       submit(spec: AgentSubmitSpec): Promise<SubmitResult> {
         return this.submitWithDefaults(spec, this._submitDefaults);
       }
+
+      emit(event: string, data: unknown): Promise<{ id: number }> {
+        return this.emitEventFull({ event, data });
+      }
+
+      dispatch(spec: DispatchToScopeSpec): Promise<DispatchToScopeResult> {
+        return this.dispatchToScopeFull(spec);
+      }
+
+      schedule(
+        event: string,
+        data: unknown,
+        options: { readonly at: number },
+      ): Promise<{ id: number }> {
+        return this.scheduleEventFull({ event, data, at: options.at });
+      }
     };
   }
 
@@ -175,6 +200,22 @@ export function defineAgentDO<Env extends CloudflareAgentEnv>(
         env,
         materializedConfigForEnv<Env, AgentFacadeRuntimeClient>(eventOnlyConfig, next, env),
       );
+    }
+
+    emit(event: string, data: unknown): Promise<{ id: number }> {
+      return this.emitEventFull({ event, data });
+    }
+
+    dispatch(spec: DispatchToScopeSpec): Promise<DispatchToScopeResult> {
+      return this.dispatchToScopeFull(spec);
+    }
+
+    schedule(
+      event: string,
+      data: unknown,
+      options: { readonly at: number },
+    ): Promise<{ id: number }> {
+      return this.scheduleEventFull({ event, data, at: options.at });
     }
   };
 }

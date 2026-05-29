@@ -5,7 +5,7 @@ import type {
   EventQueryOptions,
   LedgerEvent,
   LedgerEventRpc,
-} from "@agent-os/runtime";
+} from "@agent-os/kernel/types";
 import {
   DUE_WORK_DISPATCH_RETRY,
   DUE_WORK_SCHEDULED_EVENT,

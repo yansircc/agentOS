@@ -10,7 +10,10 @@
     "skipLibCheck": true,
     "isolatedModules": true,
     "exactOptionalPropertyTypes": false,
-    "noUncheckedIndexedAccess": false
+    "noUncheckedIndexedAccess": false,
+    "paths": {
+      "@agent-os/kernel/tools": ["../../kernel/src/tools.ts"]
+    }
   },
   "include": ["src/**/*", "test/**/*", "vitest.config.ts"]
 }

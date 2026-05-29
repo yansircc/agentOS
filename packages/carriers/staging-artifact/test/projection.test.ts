@@ -1,5 +1,11 @@
-import { STAGING_KIND, projectStagingArtifact, stagingArtifactBoundaryPackage } from "../src";
-import { makePreClaim, settleLivedClaim } from "@agent-os/kernel/effect-claim";
+import {
+  STAGING_KIND,
+  projectStagingArtifact,
+  stagingArtifactBoundaryPackage,
+  stagingArtifactSettlementRef,
+  settleStagingArtifactLived,
+} from "../src";
+import { makePreClaim } from "@agent-os/kernel/effect-claim";
 import type { ExtensionCapability } from "@agent-os/kernel/extensions";
 
 const stagingClaim = makePreClaim({
@@ -15,9 +21,8 @@ const stagingClaim = makePreClaim({
   },
 });
 const livedStagingClaim = (anchorId: string) =>
-  settleLivedClaim(stagingClaim, {
-    anchorId,
-    anchorKind: "carrier_proof",
+  settleStagingArtifactLived(stagingClaim, {
+    proofRef: stagingArtifactSettlementRef(anchorId),
     carrierRef: "staging-artifact",
   });
 
@@ -89,11 +94,7 @@ describe("@agent-os/staging-artifact", () => {
           subjectRef: "session:1",
           artifactRef: "r2://staging/session-1",
           reason: "expired",
-          claim: settleLivedClaim(stagingClaim, {
-            anchorId: "r2://staging/session-1",
-            anchorKind: "carrier_proof",
-            carrierRef: "staging-artifact",
-          }),
+          claim: livedStagingClaim("r2://staging/session-1"),
         },
       }),
     ).resolves.toEqual({ id: 1 });
@@ -119,7 +120,7 @@ describe("@agent-os/staging-artifact", () => {
               originKind: "extension_package",
             },
             anchorRef: {
-              anchorId: "r2://staging/session-1",
+              anchorId: stagingArtifactSettlementRef("r2://staging/session-1"),
               anchorKind: "carrier_proof",
               carrierRef: "staging-artifact",
             },

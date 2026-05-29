@@ -1,5 +1,5 @@
-import { Effect } from "effect";
-import { settleLivedClaim, type PreClaim } from "@agent-os/kernel/effect-claim";
+import { Effect, Predicate } from "effect";
+import type { PreClaim } from "@agent-os/kernel/effect-claim";
 import {
   externalResourceMaterialRef,
   materialRefKey,
@@ -19,7 +19,11 @@ import type {
   ResourceProvisionRequest,
 } from "@agent-os/resource-carrier";
 import type { ResourceLifecycleStep } from "@agent-os/resource-carrier";
-import { settleResourceRejected } from "@agent-os/resource-carrier";
+import {
+  resourceSettlementRef,
+  settleResourceLived,
+  settleResourceRejected,
+} from "@agent-os/resource-carrier";
 
 export type CloudflareResourceKind = "d1" | "kv_namespace" | "r2_bucket" | "queue" | "workflow";
 
@@ -125,9 +129,6 @@ export interface CloudflareResourceSpec<Material, MutationInput> {
 
 const DEFAULT_BASE_URL = "https://api.cloudflare.com/client/v4";
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 const nonEmptyString = (value: unknown): string | null =>
   typeof value === "string" && value.length > 0 ? value : null;
 
@@ -203,7 +204,8 @@ const proofRef = (
   resourceKind: CloudflareResourceKind,
   step: ResourceLifecycleStep,
   claim: PreClaim,
-): string => `proof://cloudflare/${resourceKind}/${step}/${proofToken(claim.operationRef)}`;
+): string =>
+  resourceSettlementRef("cloudflare", resourceKind, step, proofToken(claim.operationRef));
 
 const proofToken = (value: string): string => {
   let hash = 0x811c9dc5;
@@ -217,7 +219,14 @@ const failureProofRef = (
   resourceKind: CloudflareResourceKind,
   step: ResourceLifecycleStep,
   claim: PreClaim,
-): string => `${proofRef(resourceKind, step, claim)}/rejected`;
+): string =>
+  resourceSettlementRef(
+    "cloudflare",
+    resourceKind,
+    step,
+    proofToken(claim.operationRef),
+    "rejected",
+  );
 
 const isCloudflareCredentialRef = (ref: CredentialMaterialRef): boolean =>
   ref.provider === "cloudflare" && ref.purpose === "cloudflare_api";
@@ -286,7 +295,7 @@ const requireCloudflareAccount = <Material, MutationInput>(
       catch: () =>
         materialUnavailable(claim, spec.resourceKind, step, "cloudflare account resolution failed"),
     });
-    if (!isRecord(material)) {
+    if (!Predicate.isRecord(material)) {
       return yield* Effect.fail(
         materialUnavailable(
           claim,
@@ -402,7 +411,7 @@ const requireBindingMaterial = <Material, MutationInput>(
           `cloudflare_${spec.resourceKind}_binding_resolution_failed`,
         ),
     });
-    if (!isRecord(material)) {
+    if (!Predicate.isRecord(material)) {
       return yield* Effect.fail(
         materialUnavailable(
           claim,
@@ -483,7 +492,7 @@ const cloudflareJson = <Material, MutationInput>(
           `cloudflare_${spec.resourceKind}_response_json_invalid`,
         ),
     });
-    if (!isRecord(body) || body.success !== true) {
+    if (!Predicate.isRecord(body) || body.success !== true) {
       return yield* Effect.fail(
         providerFailure(
           claim,
@@ -598,9 +607,8 @@ const livedPayloadClaim = (
   step: ResourceLifecycleStep,
   carrierRef: string,
 ) =>
-  settleLivedClaim(claim, {
-    anchorId: proofRef(resourceKind, step, claim),
-    anchorKind: "carrier_proof",
+  settleResourceLived(claim, {
+    proofRef: proofRef(resourceKind, step, claim),
     carrierRef,
   });
 
@@ -883,14 +891,14 @@ const workflowMaterialKeys = new Set(["workflowName", "className", "scriptName"]
 
 export const accountMaterialFrom = (value: unknown): CloudflareAccountMaterial | null =>
   (() => {
-    if (!isRecord(value) || !hasOnlyKeys(value, accountIdKeys)) return null;
+    if (!Predicate.isRecord(value) || !hasOnlyKeys(value, accountIdKeys)) return null;
     const accountId = nonEmptyString(value.accountId);
     return accountId === null ? null : { accountId };
   })();
 
 export const d1MaterialFrom = (value: unknown): CloudflareD1Material | null =>
   (() => {
-    if (!isRecord(value) || !hasOnlyKeys(value, d1MaterialKeys)) return null;
+    if (!Predicate.isRecord(value) || !hasOnlyKeys(value, d1MaterialKeys)) return null;
     const databaseId = nonEmptyString(value.databaseId);
     if (databaseId === null || !optionalNonEmptyString(value.databaseName)) return null;
     return {
@@ -901,7 +909,7 @@ export const d1MaterialFrom = (value: unknown): CloudflareD1Material | null =>
 
 export const kvNamespaceMaterialFrom = (value: unknown): CloudflareKVNamespaceMaterial | null =>
   (() => {
-    if (!isRecord(value) || !hasOnlyKeys(value, kvMaterialKeys)) return null;
+    if (!Predicate.isRecord(value) || !hasOnlyKeys(value, kvMaterialKeys)) return null;
     const namespaceId = nonEmptyString(value.namespaceId);
     if (namespaceId === null || !optionalNonEmptyString(value.title)) return null;
     return {
@@ -912,14 +920,14 @@ export const kvNamespaceMaterialFrom = (value: unknown): CloudflareKVNamespaceMa
 
 export const r2BucketMaterialFrom = (value: unknown): CloudflareR2BucketMaterial | null =>
   (() => {
-    if (!isRecord(value) || !hasOnlyKeys(value, r2MaterialKeys)) return null;
+    if (!Predicate.isRecord(value) || !hasOnlyKeys(value, r2MaterialKeys)) return null;
     const bucketName = nonEmptyString(value.bucketName);
     return bucketName === null ? null : { bucketName };
   })();
 
 export const queueMaterialFrom = (value: unknown): CloudflareQueueMaterial | null =>
   (() => {
-    if (!isRecord(value) || !hasOnlyKeys(value, queueMaterialKeys)) return null;
+    if (!Predicate.isRecord(value) || !hasOnlyKeys(value, queueMaterialKeys)) return null;
     const queueId = nonEmptyString(value.queueId);
     if (queueId === null || !optionalNonEmptyString(value.queueName)) return null;
     return {
@@ -930,7 +938,7 @@ export const queueMaterialFrom = (value: unknown): CloudflareQueueMaterial | nul
 
 export const workflowMaterialFrom = (value: unknown): CloudflareWorkflowMaterial | null =>
   (() => {
-    if (!isRecord(value) || !hasOnlyKeys(value, workflowMaterialKeys)) return null;
+    if (!Predicate.isRecord(value) || !hasOnlyKeys(value, workflowMaterialKeys)) return null;
     const workflowName = nonEmptyString(value.workflowName);
     if (
       workflowName === null ||
@@ -949,7 +957,6 @@ export const workflowMaterialFrom = (value: unknown): CloudflareWorkflowMaterial
 export const materialKey = materialRefKey;
 
 export const materialHelpers = {
-  isRecord,
   nonEmptyString,
   hasOnlyKeys,
 } as const;

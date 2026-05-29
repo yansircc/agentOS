@@ -20,7 +20,6 @@ Status: Backend protocol package. Public exports are limited to storage-free bac
 - `.:dispatchPayloadParseFailure`
 - `.:eventToProtocolRpc`
 - `.:fireBackendEventHandlers`
-- `.:isRecord`
 - `.:parseDispatchBindingRef`
 - `.:parseRequestedPayload`
 - `.:parseRequestedPayloadValue`
@@ -36,6 +35,12 @@ Status: Backend protocol package. Public exports are limited to storage-free bac
 - `.:DueWorkKind`
 - `.:DueWorkPayload`
 - `.:ScheduledEventDuePayload`
+
+- `.:dispatchCarrierRef`
+- `.:dispatchSettlementContract`
+- `.:parseDispatchLivedClaim`
+- `.:settleDispatchInboundAccepted`
+- `.:settleDispatchOutboundDelivered`
 
 ## Experimental exports
 

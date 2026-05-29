@@ -17,6 +17,10 @@
 - `.:decisionGateBoundaryContract`
 - `.:projectDecisionGate`
 
+- `.:decisionGateSettlementContract`
+- `.:decisionGateSettlementRef`
+- `.:settleDecisionGateConsumed`
+
 ## Experimental exports
 
 None.

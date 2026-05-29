@@ -3,8 +3,10 @@ import {
   VERIFICATION_KIND,
   projectVerificationGates,
   verificationBoundaryPackage,
+  verificationSettlementRef,
+  settleVerificationLived,
 } from "../src";
-import { makePreClaim, settleLivedClaim } from "@agent-os/kernel/effect-claim";
+import { makePreClaim } from "@agent-os/kernel/effect-claim";
 import { makeCommitters, type ExtensionCapability } from "@agent-os/kernel/extensions";
 
 const verificationClaim = makePreClaim({
@@ -20,9 +22,8 @@ const verificationClaim = makePreClaim({
   },
 });
 const livedVerificationClaim = (anchorId: string) =>
-  settleLivedClaim(verificationClaim, {
-    anchorId,
-    anchorKind: "carrier_proof",
+  settleVerificationLived(verificationClaim, {
+    proofRef: anchorId,
     carrierRef: "verification",
   });
 
@@ -44,9 +45,9 @@ describe("@agent-os/verification", () => {
           subjectRef: "change:1",
           gate: "build",
           status: "passed",
-          proofRef: "proof://build/1",
+          proofRef: verificationSettlementRef("build", "1"),
           fingerprint: "build/v1",
-          claim: livedVerificationClaim("proof://build/1"),
+          claim: livedVerificationClaim(verificationSettlementRef("build", "1")),
         },
       },
       {
@@ -56,9 +57,9 @@ describe("@agent-os/verification", () => {
           subjectRef: "change:1",
           gate: "typecheck",
           status: "failed",
-          proofRef: "proof://typecheck/1",
+          proofRef: verificationSettlementRef("typecheck", "1"),
           fingerprint: "typecheck/v1",
-          claim: livedVerificationClaim("proof://typecheck/1"),
+          claim: livedVerificationClaim(verificationSettlementRef("typecheck", "1")),
         },
       },
       {
@@ -68,9 +69,9 @@ describe("@agent-os/verification", () => {
           subjectRef: "change:1",
           gate: "typecheck",
           status: "passed",
-          proofRef: "proof://typecheck/2",
+          proofRef: verificationSettlementRef("typecheck", "2"),
           fingerprint: "typecheck/v2",
-          claim: livedVerificationClaim("proof://typecheck/2"),
+          claim: livedVerificationClaim(verificationSettlementRef("typecheck", "2")),
         },
       },
     ] as const;
@@ -104,13 +105,9 @@ describe("@agent-os/verification", () => {
         subjectRef: "subject-1",
         gate: "typecheck",
         status: "failed",
-        proofRef: "proof://typecheck/1",
+        proofRef: verificationSettlementRef("typecheck", "1"),
         fingerprint: "typecheck/v1",
-        claim: settleLivedClaim(verificationClaim, {
-          anchorId: "proof://typecheck/1",
-          anchorKind: "carrier_proof",
-          carrierRef: "verification",
-        }),
+        claim: livedVerificationClaim(verificationSettlementRef("typecheck", "1")),
       }),
     ).resolves.toEqual({ id: 1 });
 
@@ -121,7 +118,7 @@ describe("@agent-os/verification", () => {
           subjectRef: "subject-1",
           gate: "typecheck",
           status: "failed",
-          proofRef: "proof://typecheck/1",
+          proofRef: verificationSettlementRef("typecheck", "1"),
           fingerprint: "typecheck/v1",
           claim: {
             phase: "lived",
@@ -136,7 +133,7 @@ describe("@agent-os/verification", () => {
               originKind: "extension_package",
             },
             anchorRef: {
-              anchorId: "proof://typecheck/1",
+              anchorId: verificationSettlementRef("typecheck", "1"),
               anchorKind: "carrier_proof",
               carrierRef: "verification",
             },

@@ -1,3 +1,4 @@
+import type { EventHandler, LedgerEvent } from "@agent-os/kernel/types";
 import { ManagedRuntime } from "effect";
 import { describe } from "@effect/vitest";
 import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
@@ -8,8 +9,6 @@ import {
   Resources,
   Scheduler,
   type DispatchReceiver,
-  type EventHandler,
-  type LedgerEvent,
 } from "@agent-os/runtime";
 import type { DispatchTargetNamespace } from "../src/dispatch";
 import { findNextDue } from "../src/due-work";

@@ -17,7 +17,6 @@
   },
   "dependencies": {
     "@agent-os/kernel": "workspace:*",
-    "@agent-os/runtime": "workspace:*",
     "@agent-os/turn-stream": "workspace:*",
     "effect": "catalog:"
   },

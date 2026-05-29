@@ -9,9 +9,8 @@
  * server-side cross-scope composition.
  */
 
+import type { AttemptKey, CapabilityLease } from "@agent-os/runtime";
 import type {
-  AttemptKey,
-  CapabilityLease,
   EventQueryOptions,
   LedgerEventRpc,
   QuotaState,
@@ -22,7 +21,7 @@ import type {
   RunStatusKind,
   RunTrace,
   StreamEventsOptions,
-} from "@agent-os/runtime";
+} from "@agent-os/kernel/types";
 
 import { decodeAttemptKey } from "./encoding";
 import { jsonOk, opsError } from "./errors";

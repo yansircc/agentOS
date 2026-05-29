@@ -11,7 +11,7 @@
 - `.:AgentMaterialBinding`
 - `.:AgentMaterialBindingBuilder`
 - `.:AgentOnHandler`
-- `.:AgentRuntimeBaseClient`
+- `.:AgentRuntimeReaderClient`
 - `.:AgentRuntimeClient`
 - `.:AgentSubmitSpec`
 - `.:AnthropicMessagesSpec`

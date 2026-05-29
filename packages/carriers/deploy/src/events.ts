@@ -1,9 +1,8 @@
-import {
-  validateEffectClaim,
-  type LivedClaim,
-  type RejectedClaim,
-} from "@agent-os/kernel/effect-claim";
+import { Predicate } from "effect";
+import type { LivedClaim, RejectedClaim } from "@agent-os/kernel/effect-claim";
 import { defineEventKindView, defineEventPayloads, payload } from "@agent-os/kernel/extensions";
+import { validateTerminalClaim } from "@agent-os/kernel/settlement-contract";
+import { deploySettlementContract } from "./settlement";
 
 export interface DeployPreviewRecordedPayload {
   readonly subjectRef: string;
@@ -85,19 +84,16 @@ export interface DeployProjection {
   readonly failure?: DeployFailedPayload;
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 const stringField = (payload: Record<string, unknown>, key: string): string | undefined =>
   typeof payload[key] === "string" ? payload[key] : undefined;
 
 const livedClaimFrom = (value: unknown): LivedClaim | undefined => {
-  const result = validateEffectClaim(value);
+  const result = validateTerminalClaim(deploySettlementContract, value);
   return result.ok && result.claim.phase === "lived" ? result.claim : undefined;
 };
 
 const rejectedClaimFrom = (value: unknown): RejectedClaim | undefined => {
-  const result = validateEffectClaim(value);
+  const result = validateTerminalClaim(deploySettlementContract, value);
   return result.ok && result.claim.phase === "rejected" ? result.claim : undefined;
 };
 
@@ -141,7 +137,7 @@ export const projectDeploy = (
   let failure: DeployProjection["failure"];
 
   for (const event of events) {
-    if (!isRecord(event.payload)) continue;
+    if (!Predicate.isRecord(event.payload)) continue;
     if (event.payload.subjectRef !== subjectRef) continue;
     switch (event.kind) {
       case DEPLOY_KIND.PREVIEW_RECORDED: {

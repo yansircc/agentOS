@@ -15,6 +15,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vp test run"
   },
+  "dependencies": {
+    "@agent-os/kernel": "workspace:*"
+  },
   "devDependencies": {
     "@effect/language-service": "catalog:",
     "effect": "catalog:",

@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type {
   CloudflareKVNamespaceMaterial,
   CloudflareResourceCarrierOptions,
@@ -12,7 +13,7 @@ import {
   materialHelpers,
 } from "./provider-core";
 
-const { isRecord, nonEmptyString } = materialHelpers;
+const { nonEmptyString } = materialHelpers;
 
 export type CloudflareKVNamespaceFetchInit = CloudflareResourceFetchInit;
 export type CloudflareKVNamespaceFetchResponse = CloudflareResourceFetchResponse;
@@ -30,7 +31,7 @@ export type CloudflareKVNamespaceResourceCarrierOptions =
   CloudflareResourceCarrierOptions<CloudflareKVNamespaceMutationInput>;
 
 const namespaceIdFromCreate = (body: unknown): string | null => {
-  if (!isRecord(body) || !isRecord(body.result)) return null;
+  if (!Predicate.isRecord(body) || !Predicate.isRecord(body.result)) return null;
   return nonEmptyString(body.result.id);
 };
 
@@ -38,9 +39,11 @@ const kvMutationInputFrom = (
   mutationKind: string,
   value: unknown,
 ): CloudflareKVNamespaceMutationInput | null => {
-  if (!isRecord(value)) return null;
+  if (!Predicate.isRecord(value)) return null;
   if (mutationKind === "kv_namespace.bulk_put") {
-    return Array.isArray(value.body) && value.body.every(isRecord) ? { body: value.body } : null;
+    return Array.isArray(value.body) && value.body.every(Predicate.isRecord)
+      ? { body: value.body }
+      : null;
   }
   if (mutationKind === "kv_namespace.bulk_delete") {
     return Array.isArray(value.keys) && value.keys.every((key) => typeof key === "string")

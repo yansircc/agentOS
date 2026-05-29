@@ -1,4 +1,5 @@
 import { Data, Effect } from "effect";
+import type { ToolAdmitter } from "@agent-os/kernel/tools";
 
 export const SANDBOX_MAX_TIMEOUT_MS = 60_000;
 export const DEFAULT_MAX_OUTPUT_BYTES = 16_384;
@@ -121,23 +122,23 @@ export interface SandboxBackend {
   readonly run: (request: SandboxRunRequest) => Effect.Effect<SandboxRawResult, SandboxFailure>;
 }
 
-export interface SandboxToolDefinition {
-  readonly type: "function";
-  readonly function: {
-    readonly name: string;
-    readonly description: string;
-    readonly parameters: object;
-  };
-}
-
-export interface SandboxToolLike {
-  readonly definition: SandboxToolDefinition;
-  readonly execute: (args: unknown) => Promise<SandboxToolResult>;
+export interface SandboxRunToolArgs {
+  readonly command: string;
+  readonly args?: ReadonlyArray<string>;
+  readonly cwd?: string;
+  readonly files?: ReadonlyArray<{
+    readonly path: string;
+    readonly text: string;
+  }>;
 }
 
 export interface MakeSandboxRunToolOptions {
   readonly backend: SandboxBackend;
   readonly policy: SandboxPolicy;
+  readonly authority: string;
+  readonly admit: ToolAdmitter<SandboxRunToolArgs> | "allow";
+  readonly authorityId?: string;
+  readonly authorityVersion?: string;
   readonly name?: string;
   readonly description?: string;
   readonly timeoutMs?: number;

@@ -4,8 +4,9 @@ import {
   admitDecisionGate,
   decisionGateBoundaryPackage,
   projectDecisionGate,
+  settleDecisionGateConsumed,
 } from "../src";
-import { makePreClaim, settleLivedClaim } from "@agent-os/kernel/effect-claim";
+import { makePreClaim } from "@agent-os/kernel/effect-claim";
 import { makeCommitters, type ExtensionCapability } from "@agent-os/kernel/extensions";
 
 const claim = makePreClaim({
@@ -21,10 +22,9 @@ const claim = makePreClaim({
   },
 });
 
-const consumedClaim = settleLivedClaim(claim, {
-  anchorId: "decision/1",
-  anchorKind: "ledger_event",
-  carrierRef: "decision-gate",
+const consumedClaim = settleDecisionGateConsumed(claim, {
+  gateRef: "gate/1",
+  eventId: 3,
 });
 
 describe("@agent-os/decision-gate", () => {

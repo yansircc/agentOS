@@ -21,7 +21,6 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:BoundaryContractValidation`
 - `.:BoundaryPackage`
 - `.:BoundaryProjectionContract`
-- `.:BoundaryProofContract`
 - `.:CORE_CLAIMED_PREFIXES`
 - `.:CapabilityRejected`
 - `.:CfAiBindingRoute`
@@ -67,8 +66,10 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:InvalidResourceAmount`
 - `.:InvalidScheduleAt`
 - `.:JsonSchemaDialectError`
+- `.:JsonSchemaDialectIssue`
 - `.:JsonSchemaNode`
 - `.:JsonSchemaObject`
+- `.:JsonSchemaResult`
 - `.:JsonStringifyError`
 - `.:LedgerEvent`
 - `.:LedgerEventRpc`
@@ -128,9 +129,14 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:SchemaContract`
 - `.:ScopeMissingError`
 - `.:ScopeRef`
+- `.:SettlementContract`
+- `.:SettlementContractIssue`
+- `.:SettlementContractValidation`
 - `.:SqlError`
 - `.:StatefulScopeRootResult`
 - `.:StreamEventsOptions`
+- `.:TerminalClaimIssue`
+- `.:TerminalClaimValidation`
 - `.:Tool`
 - `.:ToolAdmitInput`
 - `.:ToolAdmitter`
@@ -152,6 +158,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:defineBoundaryContract`
 - `.:defineEventKindView`
 - `.:defineEventPayloads`
+- `.:defineSettlementContract`
 - `.:defineTool`
 - `.:defineToolFromDefinition`
 - `.:endpointMaterialRef`
@@ -172,6 +179,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:isOriginRef`
 - `.:isRejectionRef`
 - `.:isScopeRef`
+- `.:isSymbolicSettlementValue`
 - `.:llmRouteMaterialRefs`
 - `.:makeOperationRef`
 - `.:makeCommitters`
@@ -190,14 +198,19 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:runtimeScopeKey`
 - `.:safeStringify`
 - `.:safeStringifyPretty`
-- `.:settleLivedClaim`
-- `.:settleRejectedClaim`
+- `.:settleLived`
+- `.:settleRejected`
+- `.:symbolicSettlementRef`
 - `.:toClosedJsonSchemaNode`
+- `.:toClosedJsonSchemaNodeResult`
 - `.:toClosedJsonSchemaObject`
+- `.:toClosedJsonSchemaObjectResult`
 - `.:validateBoundaryContract`
 - `.:validateAgainstSchema`
 - `.:validateEffectClaim`
 - `.:validateExtensionDeclarations`
+- `.:validateSettlementContract`
+- `.:validateTerminalClaim`
 - `.:validateToolRegistry`
 - `.:withQuota`
 - `./abort:ABORT`
@@ -207,7 +220,6 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `./boundary-contract:BoundaryContractIssue`
 - `./boundary-contract:BoundaryContractValidation`
 - `./boundary-contract:BoundaryProjectionContract`
-- `./boundary-contract:BoundaryProofContract`
 - `./boundary-contract:boundaryPackage`
 - `./boundary-contract:defineBoundaryContract`
 - `./boundary-contract:validateBoundaryContract`
@@ -247,8 +259,6 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `./effect-claim:makeOperationRef`
 - `./effect-claim:makePreClaim`
 - `./effect-claim:normalizeAdmitVerdict`
-- `./effect-claim:settleLivedClaim`
-- `./effect-claim:settleRejectedClaim`
 - `./effect-claim:validateEffectClaim`
 - `./errors:ABORT`
 - `./errors:AbortKind`
@@ -348,11 +358,15 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `./runtime-scope:resolveStatefulSessionRoot`
 - `./runtime-scope:runtimeScopeKey`
 - `./json-schema:JsonSchemaDialectError`
+- `./json-schema:JsonSchemaDialectIssue`
 - `./json-schema:JsonSchemaNode`
 - `./json-schema:JsonSchemaObject`
+- `./json-schema:JsonSchemaResult`
 - `./json-schema:SchemaContract`
 - `./json-schema:toClosedJsonSchemaNode`
+- `./json-schema:toClosedJsonSchemaNodeResult`
 - `./json-schema:toClosedJsonSchemaObject`
+- `./json-schema:toClosedJsonSchemaObjectResult`
 - `./json-schema:validateAgainstSchema`
 - `./tools:DefineToolSpec`
 - `./tools:RegisteredToolSpec`
@@ -399,6 +413,19 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `./types:ScheduledEventSpec`
 - `./types:StreamEventsOptions`
 - `./types:TraceContext`
+
+- `./settlement-contract:SettlementContract`
+- `./settlement-contract:SettlementContractIssue`
+- `./settlement-contract:SettlementContractValidation`
+- `./settlement-contract:TerminalClaimIssue`
+- `./settlement-contract:TerminalClaimValidation`
+- `./settlement-contract:defineSettlementContract`
+- `./settlement-contract:isSymbolicSettlementValue`
+- `./settlement-contract:settleLived`
+- `./settlement-contract:settleRejected`
+- `./settlement-contract:symbolicSettlementRef`
+- `./settlement-contract:validateSettlementContract`
+- `./settlement-contract:validateTerminalClaim`
 
 ## Experimental exports
 

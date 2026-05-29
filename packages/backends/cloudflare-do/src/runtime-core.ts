@@ -1,5 +1,6 @@
+import type { EventHandler } from "@agent-os/kernel/types";
 import { Layer } from "effect";
-import { Ledger, Quota, type EventHandler } from "@agent-os/runtime";
+import { Ledger, Quota } from "@agent-os/runtime";
 import type { SqlError } from "@agent-os/kernel/errors";
 import { Dispatch, DispatchLive, type DispatchTargetRegistry } from "./dispatch";
 import { EventBus, EventBusLive, LedgerLive } from "./ledger";

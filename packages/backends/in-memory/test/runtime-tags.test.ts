@@ -10,8 +10,8 @@ import {
   Scheduler,
   makeSchemaContract,
   type DispatchReceiver,
-  type LedgerEvent,
 } from "@agent-os/runtime";
+import type { LedgerEvent } from "@agent-os/kernel/types";
 import {
   createInMemoryBackendState,
   createInMemoryRuntimeBackend,

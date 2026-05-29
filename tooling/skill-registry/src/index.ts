@@ -1,4 +1,6 @@
+import { Predicate } from "effect";
 import { isOriginRef, type OriginRef } from "@agent-os/kernel/effect-claim";
+import { toClosedJsonSchemaObjectResult } from "@agent-os/kernel/json-schema";
 import { isMaterialRequirement, type MaterialRequirement } from "@agent-os/kernel/material-ref";
 import {
   defineToolFromDefinition,
@@ -55,26 +57,23 @@ export type UnregisterSkillResult =
   | { readonly ok: true; readonly tools: Readonly<Record<string, Tool>> }
   | { readonly ok: false; readonly issues: ReadonlyArray<SkillRegistryIssue> };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0;
 
 const toolNameOf = (tool: SkillToolManifest): string | null =>
   tool.definition.type === "function" &&
-  isRecord(tool.definition.function) &&
+  Predicate.isRecord(tool.definition.function) &&
   isNonEmptyString(tool.definition.function.name)
     ? tool.definition.function.name
     : null;
 
 const isToolDefinition = (value: unknown): value is ToolDefinition =>
-  isRecord(value) &&
+  Predicate.isRecord(value) &&
   value.type === "function" &&
-  isRecord(value.function) &&
+  Predicate.isRecord(value.function) &&
   isNonEmptyString(value.function.name) &&
   isNonEmptyString(value.function.description) &&
-  isRecord(value.function.parameters);
+  Predicate.isRecord(value.function.parameters);
 
 const validateManifest = (manifest: SkillManifest): ReadonlyArray<SkillRegistryIssue> => {
   const issues: SkillRegistryIssue[] = [];
@@ -167,11 +166,24 @@ export const registerSkill = (manifest: SkillManifest): RegisterSkillResult => {
   const tools: Record<string, Tool> = {};
   const toolIds: string[] = [];
 
-  for (const tool of manifest.tools) {
+  for (const [index, tool] of manifest.tools.entries()) {
     const toolId = tool.definition.function.name;
     toolIds.push(toolId);
+    const parameters = toClosedJsonSchemaObjectResult(tool.definition.function.parameters);
+    if (!parameters.ok) {
+      return {
+        ok: false,
+        issues: [{ kind: "invalid_tool_definition", skillId: manifest.skillId, index }],
+      };
+    }
     tools[toolId] = defineToolFromDefinition({
-      definition: tool.definition,
+      definition: {
+        ...tool.definition,
+        function: {
+          ...tool.definition.function,
+          parameters: parameters.value,
+        },
+      },
       execute: tool.execute,
       authorityClass: tool.authorityClass,
       ...(tool.authorityId === undefined ? {} : { authorityId: tool.authorityId }),

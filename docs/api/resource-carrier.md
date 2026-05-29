@@ -30,6 +30,10 @@
 - `.:resourceRejectionKind`
 - `.:settleResourceRejected`
 
+- `.:resourceSettlementContract`
+- `.:resourceSettlementRef`
+- `.:settleResourceLived`
+
 ## Experimental exports
 
 None.

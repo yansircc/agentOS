@@ -1,7 +1,18 @@
-import { Effect, Either, pipe } from "effect";
-import type { DispatchTargetSpec, TraceContext } from "@agent-os/runtime";
-import { isScopeRef, validateEffectClaim, type PreClaim } from "@agent-os/kernel/effect-claim";
+import { Effect, Either, Predicate, pipe } from "effect";
+import {
+  isScopeRef,
+  validateEffectClaim,
+  type LivedClaim,
+  type PreClaim,
+} from "@agent-os/kernel/effect-claim";
 import { isMaterialRef, type BindingMaterialRef } from "@agent-os/kernel/material-ref";
+import {
+  defineSettlementContract,
+  settleLived,
+  symbolicSettlementRef,
+  validateTerminalClaim,
+} from "@agent-os/kernel/settlement-contract";
+import type { DispatchTargetSpec, TraceContext } from "@agent-os/kernel/types";
 
 export const DISPATCH_OUTBOUND_REQUESTED = "dispatch.outbound.requested";
 export const DISPATCH_OUTBOUND_DELIVERED = "dispatch.outbound.delivered";
@@ -16,6 +27,53 @@ export const DISPATCH_EVENT_KINDS = {
 } as const;
 
 export const DISPATCH_MAX_ATTEMPTS = 8;
+
+export const dispatchSettlementContract = defineSettlementContract({
+  settlementId: "@agent-os/dispatch",
+  anchorKinds: ["ledger_event"],
+  rejectionKinds: [],
+});
+
+export const dispatchCarrierRef = (key: string): string => symbolicSettlementRef("dispatch", [key]);
+
+export const settleDispatchOutboundDelivered = (
+  claim: PreClaim,
+  spec: {
+    readonly bindingKey: string;
+    readonly targetScope: string;
+    readonly deliveredEventId: number;
+  },
+): LivedClaim =>
+  settleLived(dispatchSettlementContract, claim, {
+    anchorId: symbolicSettlementRef("dispatch.outbound", [spec.targetScope, spec.deliveredEventId]),
+    anchorKind: "ledger_event",
+    carrierRef: dispatchCarrierRef(spec.bindingKey),
+  });
+
+export const settleDispatchInboundAccepted = (
+  claim: PreClaim,
+  spec: {
+    readonly sourceScope: string;
+    readonly targetScope: string;
+    readonly deliveredEventId: number;
+  },
+): LivedClaim =>
+  settleLived(dispatchSettlementContract, claim, {
+    anchorId: symbolicSettlementRef("dispatch.inbound", [spec.targetScope, spec.deliveredEventId]),
+    anchorKind: "ledger_event",
+    carrierRef: dispatchCarrierRef(spec.sourceScope),
+  });
+
+export const parseDispatchLivedClaim = (
+  value: unknown,
+  label: string,
+): DispatchPayloadParseResult<LivedClaim> => {
+  const validation = validateTerminalClaim(dispatchSettlementContract, value);
+  if (!validation.ok || validation.claim.phase !== "lived") {
+    return parseFail(`${label} claim must be a dispatch LivedClaim`);
+  }
+  return parseOk(validation.claim);
+};
 
 export const DUE_WORK_SCHEDULED_EVENT = "scheduled_event";
 export const DUE_WORK_DISPATCH_RETRY = "dispatch_retry";
@@ -103,9 +161,6 @@ const parseFail = <T = never>(reason: string): DispatchPayloadParseResult<T> => 
   failure: dispatchPayloadParseFailure(reason),
 });
 
-export const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 export const copyTraceContext = (
   traceContext: TraceContext | undefined,
 ): TraceContext | undefined => {
@@ -120,7 +175,7 @@ export const parseTraceContext = (
   value: unknown,
 ): DispatchPayloadParseResult<TraceContext | undefined> => {
   if (value === undefined) return parseOk(undefined);
-  if (!isRecord(value)) return parseFail("traceContext must be object");
+  if (!Predicate.isRecord(value)) return parseFail("traceContext must be object");
   const traceparent = value.traceparent;
   const tracestate = value.tracestate;
   if (
@@ -150,9 +205,10 @@ export const parseDispatchBindingRef = (
 export const parseRequestedPayloadValue = (
   value: unknown,
 ): DispatchPayloadParseResult<DispatchRequestedPayload> => {
-  if (!isRecord(value)) return parseFail("dispatch.outbound.requested payload must be object");
+  if (!Predicate.isRecord(value))
+    return parseFail("dispatch.outbound.requested payload must be object");
   const target = value.target;
-  if (!isRecord(target)) return parseFail("dispatch target must be object");
+  if (!Predicate.isRecord(target)) return parseFail("dispatch target must be object");
   if (
     typeof target.scope !== "string" ||
     typeof value.event !== "string" ||
@@ -204,7 +260,7 @@ export const dispatchBackoffMs = (attempt: number): number =>
 export const describeDispatchCause = (cause: unknown): string => {
   if (typeof cause === "string") return cause;
   if (cause instanceof Error) return `${cause.name}: ${cause.message}`;
-  if (isRecord(cause) && typeof cause._tag === "string") return cause._tag;
+  if (Predicate.isRecord(cause) && typeof cause._tag === "string") return cause._tag;
   return Object.prototype.toString.call(cause);
 };
 

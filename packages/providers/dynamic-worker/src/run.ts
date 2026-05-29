@@ -1,5 +1,4 @@
 import { Clock, Duration, Effect } from "effect";
-import { settleLivedClaim, settleRejectedClaim } from "@agent-os/kernel/effect-claim";
 import { resolveRuntimeScope } from "@agent-os/kernel/runtime-scope";
 
 import { validateDynamicWorkerRequest } from "./policy";
@@ -13,12 +12,12 @@ import {
   type DynamicWorkerRunRequest,
   type DynamicWorkerRunSuccess,
 } from "./types";
-
-const symbolicReason = (value: string): string | null =>
-  /^[A-Za-z0-9_.:-]{1,128}$/.test(value) ? value : null;
-
-const providerFailureReason = (failure: DynamicWorkerProviderFailure): string =>
-  symbolicReason(failure.reason) ?? `dynamic_worker_${failure.code}`;
+import {
+  dynamicWorkerFailureReason,
+  settleDynamicWorkerLived,
+  settleDynamicWorkerPolicyDenied,
+  settleDynamicWorkerProviderFailure,
+} from "./settlement";
 
 export const runDynamicWorker = (
   backend: DynamicWorkerBackend,
@@ -29,24 +28,15 @@ export const runDynamicWorker = (
     const rejectPolicy = (denied: DynamicWorkerPolicyViolation): DynamicWorkerPolicyDenied =>
       new DynamicWorkerPolicyDenied({
         reason: denied.reason,
-        claim: settleRejectedClaim(request.claim, {
-          rejectionId: request.claim.operationRef,
-          rejectionKind: "policy_denied",
-          reason: denied.reason,
-        }),
+        claim: settleDynamicWorkerPolicyDenied(request.claim, denied.reason),
       });
     const rejectFailure = (failure: DynamicWorkerProviderFailure): DynamicWorkerFailure =>
       new DynamicWorkerFailure({
         code: failure.code,
-        reason: providerFailureReason(failure),
+        reason: dynamicWorkerFailureReason(failure),
         ...(failure.status === undefined ? {} : { status: failure.status }),
         ...(failure.workerId === undefined ? {} : { workerId: failure.workerId }),
-        claim: settleRejectedClaim(request.claim, {
-          rejectionId: request.claim.operationRef,
-          rejectionKind:
-            failure.code === "ResourceLimitExceeded" ? "resource_denied" : "provider_rejected",
-          reason: providerFailureReason(failure),
-        }),
+        claim: settleDynamicWorkerProviderFailure(request.claim, failure),
       });
 
     yield* validateDynamicWorkerRequest(request).pipe(Effect.mapError(rejectPolicy));
@@ -73,10 +63,6 @@ export const runDynamicWorker = (
     return {
       ...result,
       durationMs: ended - started,
-      claim: settleLivedClaim(request.claim, {
-        anchorId: result.workerId,
-        anchorKind: "carrier_proof",
-        carrierRef: "dynamic-worker",
-      }),
+      claim: settleDynamicWorkerLived(request.claim, { workerId: result.workerId }),
     };
   });

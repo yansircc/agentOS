@@ -9,7 +9,11 @@ import type {
   UnsupportedScopeRef,
 } from "@agent-os/kernel/errors";
 import type { PreClaim } from "@agent-os/kernel/effect-claim";
-import type { DispatchToScopeResult, DispatchToScopeSpec, TraceContext } from "./types";
+import type {
+  DispatchToScopeResult,
+  DispatchToScopeSpec,
+  TraceContext,
+} from "@agent-os/kernel/types";
 
 export interface DispatchEnvelope {
   readonly sourceScope: string;

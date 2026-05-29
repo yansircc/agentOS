@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  makeOperationRef,
-  makePreClaim,
-  settleLivedClaim,
-  settleRejectedClaim,
-  validateEffectClaim,
-} from "../src/effect-claim";
+import { makeOperationRef, makePreClaim, validateEffectClaim } from "../src/effect-claim";
 
 describe("EffectClaim calculus", () => {
   const pre = makePreClaim({
@@ -43,15 +37,23 @@ describe("EffectClaim calculus", () => {
   });
 
   it("settles lived and rejected claims as disjoint terminal states", () => {
-    const lived = settleLivedClaim(pre, {
-      anchorId: "thread/t1:7",
-      anchorKind: "ledger_event",
-      carrierRef: "dispatch:peer",
-    });
-    const rejected = settleRejectedClaim(pre, {
-      rejectionId: "policy/1",
-      rejectionKind: "policy_denied",
-    });
+    const lived = {
+      ...pre,
+      phase: "lived" as const,
+      anchorRef: {
+        anchorId: "thread/t1:7",
+        anchorKind: "ledger_event" as const,
+        carrierRef: "dispatch:peer",
+      },
+    };
+    const rejected = {
+      ...pre,
+      phase: "rejected" as const,
+      rejectionRef: {
+        rejectionId: "policy/1",
+        rejectionKind: "policy_denied" as const,
+      },
+    };
 
     expect(validateEffectClaim(lived)).toEqual({ ok: true, claim: lived });
     expect(validateEffectClaim(rejected)).toEqual({

@@ -20,7 +20,6 @@ export default defineConfig({
       },
       { find: "@agent-os/kernel/tools", replacement: file("../../kernel/src/tools.ts") },
       { find: "@agent-os/kernel", replacement: file("../../kernel/src/index.ts") },
-      { find: "@agent-os/runtime", replacement: file("../../runtime/src/index.ts") },
       {
         find: "@agent-os/turn-stream",
         replacement: file("../../composers/turn-stream/src/index.ts"),

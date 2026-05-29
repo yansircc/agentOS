@@ -10,6 +10,10 @@ import {
 } from "../src/index";
 
 const backend = (impl: SandboxBackend["run"]): SandboxBackend => ({ run: impl });
+const toolAdmission = {
+  authority: "execute",
+  admit: "allow" as const,
+};
 
 describe("@agent-os/sandbox v0 contract", () => {
   it.effect("runs one bounded stateless command", () =>
@@ -145,6 +149,7 @@ describe("@agent-os/sandbox v0 contract", () => {
           }),
         ),
         policy: staticPolicy(),
+        ...toolAdmission,
         maxOutputBytes: 8,
       });
 
@@ -177,6 +182,7 @@ describe("@agent-os/sandbox v0 contract", () => {
           }),
         ),
         policy: staticPolicy(),
+        ...toolAdmission,
       });
 
       const first = yield* Effect.promise(() => tool.execute({ command: "pwd" }));
@@ -186,4 +192,27 @@ describe("@agent-os/sandbox v0 contract", () => {
       expect(second.sandboxId).toBe("sbx-2");
     }),
   );
+
+  it("tool helper rejects invalid args before execution", () => {
+    let calls = 0;
+    const tool = makeSandboxRunTool({
+      backend: backend(() =>
+        Effect.sync(() => {
+          calls += 1;
+          return {
+            exitCode: 0,
+            stdout: "",
+            stderr: "",
+            artifacts: [],
+            sandboxId: "sbx-unreachable",
+          };
+        }),
+      ),
+      policy: staticPolicy(),
+      ...toolAdmission,
+    });
+
+    expect(() => tool.decode({ args: ["missing-command"] })).toThrow("violate schema");
+    expect(calls).toBe(0);
+  });
 });

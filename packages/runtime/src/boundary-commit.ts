@@ -1,8 +1,9 @@
-import { Data, Effect } from "effect";
+import { Data, Effect, Predicate } from "effect";
 import { validateEffectClaim, type EffectClaim } from "@agent-os/kernel/effect-claim";
 import type { BoundaryContract } from "@agent-os/kernel/boundary-contract";
 import type { JsonStringifyError, SqlError } from "@agent-os/kernel/errors";
-import type { LedgerEvent } from "./types";
+import { validateTerminalClaim } from "@agent-os/kernel/settlement-contract";
+import type { LedgerEvent } from "@agent-os/kernel/types";
 
 type BoundaryCommitIssue =
   | "event_outside_vocabulary"
@@ -11,16 +12,13 @@ type BoundaryCommitIssue =
   | "claim_invalid"
   | "claim_phase_invalid"
   | "claim_authority_invalid"
-  | "claim_anchor_invalid";
+  | "claim_settlement_invalid";
 
 export class BoundaryCommitRejected extends Data.TaggedError("agent_os.boundary_commit_rejected")<{
   readonly packageId: string;
   readonly event: string;
   readonly issue: BoundaryCommitIssue;
 }> {}
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const authorityKey = (claim: EffectClaim): string =>
   `${claim.authorityRef.authorityClass}:${claim.authorityRef.authorityId}:${claim.authorityRef.version ?? ""}`;
@@ -49,7 +47,7 @@ export const validateBoundaryEventPayload = (
   if (phases === undefined) {
     return reject(contract, event, "event_outside_vocabulary");
   }
-  if (!isRecord(payload)) {
+  if (!Predicate.isRecord(payload)) {
     return reject(contract, event, "payload_must_be_object");
   }
   const claim = payload[contract.claimPayloadKey];
@@ -64,10 +62,10 @@ export const validateBoundaryEventPayload = (
     return reject(contract, event, "claim_phase_invalid");
   }
   if (
-    validation.claim.phase === "lived" &&
-    !contract.proof.anchorKinds.includes(validation.claim.anchorRef.anchorKind)
+    validation.claim.phase !== "pre" &&
+    !validateTerminalClaim(contract.settlement, validation.claim).ok
   ) {
-    return reject(contract, event, "claim_anchor_invalid");
+    return reject(contract, event, "claim_settlement_invalid");
   }
   const authorityKeys = contractAuthorityKeys(contract);
   if (authorityKeys.size > 0 && !authorityKeys.has(authorityKey(validation.claim))) {

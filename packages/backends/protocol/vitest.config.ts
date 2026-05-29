@@ -12,6 +12,14 @@ export default defineConfig({
         replacement: new URL("../../kernel/src/material-ref.ts", import.meta.url).pathname,
       },
       {
+        find: "@agent-os/kernel/settlement-contract",
+        replacement: new URL("../../kernel/src/settlement-contract.ts", import.meta.url).pathname,
+      },
+      {
+        find: "@agent-os/kernel/types",
+        replacement: new URL("../../kernel/src/types.ts", import.meta.url).pathname,
+      },
+      {
         find: "@agent-os/kernel",
         replacement: new URL("../../kernel/src/index.ts", import.meta.url).pathname,
       },

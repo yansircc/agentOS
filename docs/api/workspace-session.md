@@ -35,6 +35,10 @@
 - `.:workspaceSessionFailedPayload`
 - `.:workspaceSessionRejectionKind`
 
+- `.:settleWorkspaceSessionLived`
+- `.:workspaceSessionSettlementContract`
+- `.:workspaceSessionSettlementRef`
+
 ## Experimental exports
 
 None.

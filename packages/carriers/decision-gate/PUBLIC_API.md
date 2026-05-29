@@ -21,6 +21,10 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:decisionGateBoundaryContract`
 - `.:projectDecisionGate`
 
+- `.:decisionGateSettlementContract`
+- `.:decisionGateSettlementRef`
+- `.:settleDecisionGateConsumed`
+
 ## Experimental exports
 
 None.

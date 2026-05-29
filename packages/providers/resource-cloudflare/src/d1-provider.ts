@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type {
   CloudflareD1Material,
   CloudflareResourceCarrierOptions,
@@ -8,7 +9,7 @@ import type {
 } from "./provider-core";
 import { d1MaterialFrom, makeCloudflareResourceCarrier, materialHelpers } from "./provider-core";
 
-const { isRecord, nonEmptyString } = materialHelpers;
+const { nonEmptyString } = materialHelpers;
 
 export type CloudflareD1FetchInit = CloudflareResourceFetchInit;
 export type CloudflareD1FetchResponse = CloudflareResourceFetchResponse;
@@ -23,12 +24,12 @@ export type CloudflareD1ResourceCarrierOptions =
   CloudflareResourceCarrierOptions<CloudflareD1MutationInput>;
 
 const d1DatabaseIdFromCreate = (body: unknown): string | null => {
-  if (!isRecord(body) || !isRecord(body.result)) return null;
+  if (!Predicate.isRecord(body) || !Predicate.isRecord(body.result)) return null;
   return nonEmptyString(body.result.uuid);
 };
 
 const mutationInputFrom = (value: unknown): CloudflareD1MutationInput | null => {
-  if (!isRecord(value)) return null;
+  if (!Predicate.isRecord(value)) return null;
   const sql = nonEmptyString(value.sql);
   if (sql === null) return null;
   if (value.params !== undefined && !Array.isArray(value.params)) return null;
@@ -36,9 +37,9 @@ const mutationInputFrom = (value: unknown): CloudflareD1MutationInput | null => 
 };
 
 const querySucceeded = (body: unknown): boolean => {
-  if (!isRecord(body)) return false;
+  if (!Predicate.isRecord(body)) return false;
   if (!Array.isArray(body.result)) return true;
-  return body.result.every((item) => !isRecord(item) || item.success !== false);
+  return body.result.every((item) => !Predicate.isRecord(item) || item.success !== false);
 };
 
 const d1Spec: CloudflareResourceSpec<CloudflareD1Material, CloudflareD1MutationInput> = {

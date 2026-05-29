@@ -1,3 +1,8 @@
+import type {
+  DispatchToScopeSpec,
+  LedgerEventRpc,
+  StreamEventsOptions,
+} from "@agent-os/kernel/types";
 /**
  * dispatchToScope — deterministic contract tests.
  *
@@ -12,13 +17,7 @@
 import { SELF, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vite-plus/test";
-
-import type {
-  DispatchToScopeResult,
-  DispatchToScopeSpec,
-  LedgerEventRpc,
-  StreamEventsOptions,
-} from "@agent-os/runtime";
+import type { DispatchToScopeResult } from "@agent-os/kernel/types";
 import { validateEffectClaim } from "@agent-os/kernel/effect-claim";
 import {
   bindingMaterialRef,

@@ -1,4 +1,4 @@
-import type { LlmRoute } from "@agent-os/runtime";
+import type { LlmRoute } from "@agent-os/kernel/llm";
 import { credentialMaterialRef, endpointMaterialRef } from "@agent-os/kernel/material-ref";
 import type { MaterialRef } from "@agent-os/kernel/material-ref";
 import type { RefResolver } from "@agent-os/kernel/ref-resolver";

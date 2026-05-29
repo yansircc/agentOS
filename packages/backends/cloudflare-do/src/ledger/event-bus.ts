@@ -1,3 +1,4 @@
+import type { LedgerEvent } from "@agent-os/kernel/types";
 /**
  * EventBus — module-private reactive dispatcher.
  *
@@ -10,7 +11,7 @@
  */
 
 import { Context, Effect, Layer } from "effect";
-import type { EventHandler, LedgerEvent } from "@agent-os/runtime";
+import type { EventHandler } from "@agent-os/kernel/types";
 import { fireBackendEventHandlers } from "@agent-os/backend-protocol";
 
 export interface EventBusSubscription {

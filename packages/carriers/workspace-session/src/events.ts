@@ -1,9 +1,8 @@
-import {
-  validateEffectClaim,
-  type LivedClaim,
-  type RejectedClaim,
-} from "@agent-os/kernel/effect-claim";
+import { Predicate } from "effect";
+import type { LivedClaim, RejectedClaim } from "@agent-os/kernel/effect-claim";
 import { defineEventKindView, defineEventPayloads, payload } from "@agent-os/kernel/extensions";
+import { validateTerminalClaim } from "@agent-os/kernel/settlement-contract";
+import { workspaceSessionSettlementContract } from "./settlement";
 
 export type WorkspaceSessionLifecycleStep = "start" | "restore" | "backup" | "preview" | "destroy";
 
@@ -120,9 +119,6 @@ export interface WorkspaceSessionProjection {
   readonly failure?: WorkspaceSessionFailedPayload;
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 const stringField = (payload: Record<string, unknown>, key: string): string | undefined =>
   typeof payload[key] === "string" ? payload[key] : undefined;
 
@@ -130,7 +126,7 @@ const numberField = (payload: Record<string, unknown>, key: string): number | un
   typeof payload[key] === "number" && Number.isFinite(payload[key]) ? payload[key] : undefined;
 
 const retentionFrom = (value: unknown): WorkspaceSessionRetention | undefined => {
-  if (!isRecord(value)) return undefined;
+  if (!Predicate.isRecord(value)) return undefined;
   if (value.mode !== "ephemeral" && value.mode !== "persistent") {
     return undefined;
   }
@@ -145,12 +141,12 @@ const retentionFrom = (value: unknown): WorkspaceSessionRetention | undefined =>
 };
 
 const livedClaimFrom = (value: unknown): LivedClaim | undefined => {
-  const result = validateEffectClaim(value);
+  const result = validateTerminalClaim(workspaceSessionSettlementContract, value);
   return result.ok && result.claim.phase === "lived" ? result.claim : undefined;
 };
 
 const rejectedClaimFrom = (value: unknown): RejectedClaim | undefined => {
-  const result = validateEffectClaim(value);
+  const result = validateTerminalClaim(workspaceSessionSettlementContract, value);
   return result.ok && result.claim.phase === "rejected" ? result.claim : undefined;
 };
 
@@ -234,7 +230,7 @@ export const projectWorkspaceSession = (
   const previews: WorkspaceSessionPreviewRef[] = [];
 
   for (const event of events) {
-    if (!isRecord(event.payload)) continue;
+    if (!Predicate.isRecord(event.payload)) continue;
     if (event.payload.subjectRef !== subjectRef) continue;
     switch (event.kind) {
       case WORKSPACE_SESSION_KIND.STARTED: {

@@ -34,6 +34,10 @@ Status: 0.2.x active development for provider-neutral resource carrier algebra. 
 - `.:resourceRejectionKind`
 - `.:settleResourceRejected`
 
+- `.:resourceSettlementContract`
+- `.:resourceSettlementRef`
+- `.:settleResourceLived`
+
 ## Experimental exports
 
 None.

@@ -9,7 +9,8 @@ import {
   projectRunTrace,
 } from "../src/projections";
 import type { EffectClaim } from "@agent-os/kernel/effect-claim";
-import type { LedgerEvent } from "@agent-os/runtime";
+import { settleDispatchInboundAccepted } from "@agent-os/backend-protocol";
+import type { LedgerEvent } from "@agent-os/kernel/types";
 
 const event = (id: number, kind: string, payload: unknown, ts = id * 10): LedgerEvent => ({
   id,
@@ -33,13 +34,28 @@ const preClaim: EffectClaim = {
   },
 };
 
-const livedClaim: EffectClaim = {
-  ...preClaim,
+const livedClaim: EffectClaim = settleDispatchInboundAccepted(preClaim, {
+  sourceScope: "thread/source",
+  targetScope: "thread/target",
+  deliveredEventId: 42,
+});
+
+const toolClaim: EffectClaim = {
   phase: "lived",
+  operationRef: "tool:projection-scope:1:0:call-1",
+  scopeRef: livedClaim.scopeRef,
+  authorityRef: {
+    authorityId: "tool:lookup",
+    authorityClass: "read",
+  },
+  originRef: {
+    originId: "@agent-os/tool-registry/test",
+    originKind: "tool_provider",
+  },
   anchorRef: {
-    anchorId: "thread/target:42",
-    anchorKind: "ledger_event",
-    carrierRef: "dispatch:binding",
+    anchorId: "tool.executed:tool:projection-scope:1:0:call-1",
+    anchorKind: "carrier_proof",
+    carrierRef: "tool:lookup",
   },
 };
 
@@ -71,10 +87,7 @@ describe("standard projections — contract", () => {
       }),
       event(3, "dispatch.inbound.accepted", { claim: livedClaim }),
       event(4, "tool.executed", {
-        claim: {
-          ...livedClaim,
-          operationRef: "tool:projection-scope:1:0:call-1",
-        },
+        claim: toolClaim,
       }),
     ];
 
@@ -109,10 +122,10 @@ describe("standard projections — contract", () => {
         ts: 40,
         phase: "lived",
         operationRef: "tool:projection-scope:1:0:call-1",
-        scopeRef: livedClaim.scopeRef,
-        authorityRef: livedClaim.authorityRef,
-        originRef: livedClaim.originRef,
-        anchorRef: livedClaim.anchorRef,
+        scopeRef: toolClaim.scopeRef,
+        authorityRef: toolClaim.authorityRef,
+        originRef: toolClaim.originRef,
+        anchorRef: toolClaim.anchorRef,
       },
     ]);
 

@@ -2,7 +2,7 @@ import { runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vite-plus/test";
 
-import type { LedgerEventRpc } from "@agent-os/runtime";
+import type { LedgerEventRpc } from "@agent-os/kernel/types";
 import type { AgentRuntimeClient } from "../src";
 import { validateExtensionDeclarations } from "@agent-os/kernel/extensions";
 import {
@@ -156,7 +156,7 @@ describe("extension capability P1", () => {
     expect(extensionFacts(events)).toHaveLength(0);
   });
 
-  it("rejects boundary-owned facts with proof anchors outside the contract", async () => {
+  it("rejects boundary-owned facts with settlement anchors outside the contract", async () => {
     const { events, result } = await runCommand(stubFor("extension-proof-anchor-kind"), {
       op: "commitProofFact",
       data: {
@@ -174,7 +174,7 @@ describe("extension capability P1", () => {
     expect(result.ok).toBe(false);
     expect(result.error?._tag).toBe("agent_os.boundary_commit_rejected");
     expect(result.error?.event).toBe("proof.recorded");
-    expect(result.error?.issue).toBe("claim_anchor_invalid");
+    expect(result.error?.issue).toBe("claim_settlement_invalid");
     expect(extensionFacts(events)).toHaveLength(0);
   });
 

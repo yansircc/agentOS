@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type {
   CloudflareQueueMaterial,
   CloudflareResourceCarrierOptions,
@@ -8,7 +9,7 @@ import type {
 } from "./provider-core";
 import { makeCloudflareResourceCarrier, materialHelpers, queueMaterialFrom } from "./provider-core";
 
-const { isRecord, nonEmptyString } = materialHelpers;
+const { nonEmptyString } = materialHelpers;
 
 export type CloudflareQueueFetchInit = CloudflareResourceFetchInit;
 export type CloudflareQueueFetchResponse = CloudflareResourceFetchResponse;
@@ -27,7 +28,7 @@ export type CloudflareQueueResourceCarrierOptions =
   CloudflareResourceCarrierOptions<CloudflareQueueMutationInput>;
 
 const queueIdFromCreate = (body: unknown): string | null => {
-  if (!isRecord(body) || !isRecord(body.result)) return null;
+  if (!Predicate.isRecord(body) || !Predicate.isRecord(body.result)) return null;
   return nonEmptyString(body.result.queue_id) ?? nonEmptyString(body.result.id);
 };
 
@@ -35,7 +36,7 @@ const queueMutationInputFrom = (
   mutationKind: string,
   value: unknown,
 ): CloudflareQueueMutationInput | null => {
-  if (!isRecord(value)) return null;
+  if (!Predicate.isRecord(value)) return null;
   if (mutationKind === "queue.send") {
     if (!("body" in value)) return null;
     if (

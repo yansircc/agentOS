@@ -1,5 +1,6 @@
 import { boundaryPackage, defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
 import { STAGING_KIND } from "./events";
+import { stagingArtifactSettlementContract } from "./settlement";
 
 export const STAGING_EVENT_PREFIX = "staging.";
 
@@ -15,10 +16,7 @@ export const stagingArtifactBoundaryContract = defineBoundaryContract({
     [STAGING_KIND.ARTIFACT_PUBLISHED]: ["lived"],
     [STAGING_KIND.ARTIFACT_REAPED]: ["lived"],
   },
-  proof: {
-    anchorKinds: ["carrier_proof"],
-    symbolicOnly: true,
-  },
+  settlement: stagingArtifactSettlementContract,
   projection: {
     derivedFromLedger: true,
     shadowState: false,

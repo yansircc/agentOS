@@ -6,7 +6,7 @@
  * this module for structured-output validation and fingerprinting.
  */
 
-import { Option } from "effect";
+import { Option, Predicate } from "effect";
 
 export type JsonSchemaObject = {
   readonly type: "object";
@@ -39,8 +39,14 @@ export class JsonSchemaDialectError extends Error {
   }
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
+export type JsonSchemaDialectIssue = {
+  readonly path: string;
+  readonly issue: string;
+};
+
+export type JsonSchemaResult<A> =
+  | { readonly ok: true; readonly value: A }
+  | { readonly ok: false; readonly issues: ReadonlyArray<JsonSchemaDialectIssue> };
 
 const reject = (path: string, issue: string): never =>
   Option.getOrThrowWith(Option.none(), () => new JsonSchemaDialectError(path, issue));
@@ -48,32 +54,51 @@ const reject = (path: string, issue: string): never =>
 const ANNOTATION_KEYS = new Set(["title", "description", "default", "examples", "$comment"]);
 const ROOT_ANNOTATION_KEYS = new Set([...ANNOTATION_KEYS, "$schema"]);
 
-const assertAllowedKeys = (
+const ok = <A>(value: A): JsonSchemaResult<A> => ({ ok: true, value });
+
+const fail = <A>(path: string, issue: string): JsonSchemaResult<A> => ({
+  ok: false,
+  issues: [{ path, issue }],
+});
+
+const failFrom = <A>(
+  result: Extract<JsonSchemaResult<unknown>, { ok: false }>,
+): JsonSchemaResult<A> => result;
+
+const firstUnsupportedKey = (
   value: Record<string, unknown>,
   allowed: ReadonlySet<string>,
   path: string,
-): void => {
+): JsonSchemaDialectIssue | undefined => {
   for (const key of Object.keys(value)) {
     if (!allowed.has(key) && !key.startsWith("x-")) {
-      reject(`${path}.${key}`, "unsupported-key");
+      return { path: `${path}.${key}`, issue: "unsupported-key" };
     }
   }
+  return undefined;
 };
 
-const optionalStringArray = (value: unknown, path: string): ReadonlyArray<string> | undefined => {
-  if (value === undefined) return undefined;
+const optionalStringArray = (
+  value: unknown,
+  path: string,
+): JsonSchemaResult<ReadonlyArray<string> | undefined> => {
+  if (value === undefined) return ok(undefined);
   if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) {
-    reject(path, "expected-string-array");
+    return fail(path, "expected-string-array");
   }
-  return value as ReadonlyArray<string>;
+  return ok(value as ReadonlyArray<string>);
 };
 
-export const toClosedJsonSchemaNode = (value: unknown, path = "$"): JsonSchemaNode => {
-  const schema = isRecord(value) ? value : reject(path, "expected-object");
+export const toClosedJsonSchemaNodeResult = (
+  value: unknown,
+  path = "$",
+): JsonSchemaResult<JsonSchemaNode> => {
+  const schema = Predicate.isRecord(value) ? value : undefined;
+  if (schema === undefined) return fail(path, "expected-object");
   const type = schema.type;
   switch (type) {
     case "object": {
-      assertAllowedKeys(
+      const unsupportedKey = firstUnsupportedKey(
         schema,
         new Set([
           "type",
@@ -84,54 +109,106 @@ export const toClosedJsonSchemaNode = (value: unknown, path = "$"): JsonSchemaNo
         ]),
         path,
       );
+      if (unsupportedKey !== undefined) return { ok: false, issues: [unsupportedKey] };
       const rawProperties = schema.properties;
-      const propertiesRecord = isRecord(rawProperties)
-        ? rawProperties
-        : reject(`${path}.properties`, "expected-object");
+      if (!Predicate.isRecord(rawProperties)) return fail(`${path}.properties`, "expected-object");
       const properties: Record<string, JsonSchemaNode> = {};
-      for (const [key, node] of Object.entries(propertiesRecord)) {
-        properties[key] = toClosedJsonSchemaNode(node, `${path}.properties.${key}`);
+      for (const [key, node] of Object.entries(rawProperties)) {
+        const property = toClosedJsonSchemaNodeResult(node, `${path}.properties.${key}`);
+        if (!property.ok) return failFrom(property);
+        properties[key] = property.value;
       }
       const required = optionalStringArray(schema.required, `${path}.required`);
+      if (!required.ok) return failFrom(required);
       const rawAdditionalProperties = schema.additionalProperties;
       if (rawAdditionalProperties !== undefined && typeof rawAdditionalProperties !== "boolean") {
-        reject(`${path}.additionalProperties`, "expected-boolean");
+        return fail(`${path}.additionalProperties`, "expected-boolean");
       }
       const additionalProperties = rawAdditionalProperties as boolean | undefined;
       const objectNode: JsonSchemaObject = {
         type: "object",
         properties,
-        ...(required === undefined ? {} : { required }),
+        ...(required.value === undefined ? {} : { required: required.value }),
         ...(additionalProperties === undefined ? {} : { additionalProperties }),
       };
-      return objectNode;
+      return ok(objectNode);
     }
-    case "array":
-      assertAllowedKeys(schema, new Set(["type", "items", ...ANNOTATION_KEYS]), path);
-      if (schema.items === undefined) reject(`${path}.items`, "missing");
-      return { type: "array", items: toClosedJsonSchemaNode(schema.items, `${path}.items`) };
+    case "array": {
+      const unsupportedKey = firstUnsupportedKey(
+        schema,
+        new Set(["type", "items", ...ANNOTATION_KEYS]),
+        path,
+      );
+      if (unsupportedKey !== undefined) return { ok: false, issues: [unsupportedKey] };
+      if (schema.items === undefined) return fail(`${path}.items`, "missing");
+      const items = toClosedJsonSchemaNodeResult(schema.items, `${path}.items`);
+      if (!items.ok) return failFrom(items);
+      return ok({ type: "array", items: items.value });
+    }
     case "string": {
-      assertAllowedKeys(schema, new Set(["type", "enum", ...ANNOTATION_KEYS]), path);
+      const unsupportedKey = firstUnsupportedKey(
+        schema,
+        new Set(["type", "enum", ...ANNOTATION_KEYS]),
+        path,
+      );
+      if (unsupportedKey !== undefined) return { ok: false, issues: [unsupportedKey] };
       const enumeration = optionalStringArray(schema.enum, `${path}.enum`);
-      return { type: "string", ...(enumeration === undefined ? {} : { enum: enumeration }) };
+      if (!enumeration.ok) return failFrom(enumeration);
+      return ok({
+        type: "string",
+        ...(enumeration.value === undefined ? {} : { enum: enumeration.value }),
+      });
     }
-    case "number":
-      assertAllowedKeys(schema, new Set(["type", ...ANNOTATION_KEYS]), path);
-      return { type: "number" };
-    case "boolean":
-      assertAllowedKeys(schema, new Set(["type", ...ANNOTATION_KEYS]), path);
-      return { type: "boolean" };
+    case "number": {
+      const unsupportedKey = firstUnsupportedKey(
+        schema,
+        new Set(["type", ...ANNOTATION_KEYS]),
+        path,
+      );
+      if (unsupportedKey !== undefined) return { ok: false, issues: [unsupportedKey] };
+      return ok({ type: "number" });
+    }
+    case "boolean": {
+      const unsupportedKey = firstUnsupportedKey(
+        schema,
+        new Set(["type", ...ANNOTATION_KEYS]),
+        path,
+      );
+      if (unsupportedKey !== undefined) return { ok: false, issues: [unsupportedKey] };
+      return ok({ type: "boolean" });
+    }
     default:
-      return reject(`${path}.type`, "unsupported");
+      return fail(`${path}.type`, "unsupported");
   }
 };
 
-export const toClosedJsonSchemaObject = (value: unknown): JsonSchemaObject => {
-  const node = toClosedJsonSchemaNode(value);
-  if (node.type !== "object") {
-    reject("$.type", "root-must-be-object");
+export const toClosedJsonSchemaNode = (value: unknown, path = "$"): JsonSchemaNode => {
+  const result = toClosedJsonSchemaNodeResult(value, path);
+  if (!result.ok) {
+    const issue = result.issues[0] ?? { path, issue: "invalid" };
+    return reject(issue.path, issue.issue);
   }
-  return node as JsonSchemaObject;
+  return result.value;
+};
+
+export const toClosedJsonSchemaObjectResult = (
+  value: unknown,
+): JsonSchemaResult<JsonSchemaObject> => {
+  const result = toClosedJsonSchemaNodeResult(value);
+  if (!result.ok) return failFrom(result);
+  if (result.value.type !== "object") {
+    return fail("$.type", "root-must-be-object");
+  }
+  return ok(result.value as JsonSchemaObject);
+};
+
+export const toClosedJsonSchemaObject = (value: unknown): JsonSchemaObject => {
+  const result = toClosedJsonSchemaObjectResult(value);
+  if (!result.ok) {
+    const issue = result.issues[0] ?? { path: "$", issue: "invalid" };
+    return reject(issue.path, issue.issue);
+  }
+  return result.value;
 };
 
 export const validateAgainstSchema = (value: unknown, schema: JsonSchemaNode): string[] => {

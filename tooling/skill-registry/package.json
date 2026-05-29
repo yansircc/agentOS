@@ -16,7 +16,8 @@
     "test": "vp test run"
   },
   "dependencies": {
-    "@agent-os/kernel": "workspace:*"
+    "@agent-os/kernel": "workspace:*",
+    "effect": "catalog:"
   },
   "devDependencies": {
     "typescript": "catalog:",

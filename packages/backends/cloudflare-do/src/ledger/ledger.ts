@@ -1,3 +1,4 @@
+import type { EventQueryOptions, LedgerEvent, LedgerEventRpc } from "@agent-os/kernel/types";
 /**
  * Ledger — module-private append-only event log on DO SQLite.
  *
@@ -9,12 +10,7 @@
 
 import { Clock, Effect, Layer } from "effect";
 import { SqlError, safeStringify } from "@agent-os/kernel/errors";
-import {
-  Ledger,
-  type EventQueryOptions,
-  type LedgerEvent,
-  type LedgerEventRpc,
-} from "@agent-os/runtime";
+import { Ledger } from "@agent-os/runtime";
 import { sqlText } from "../storage/sql-row";
 import { EventBus } from "./event-bus";
 import { fireLedgerEvents, insertLedgerEvent } from "./inserted-events";

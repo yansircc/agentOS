@@ -4,9 +4,12 @@ import {
   RESOURCE_KIND,
   resourceAuthorityContracts,
   resourceBoundaryPackage,
+  resourceSettlementRef,
   projectResource,
+  settleResourceLived,
+  settleResourceRejected,
 } from "../src";
-import { makePreClaim, settleLivedClaim, settleRejectedClaim } from "@agent-os/kernel/effect-claim";
+import { makePreClaim } from "@agent-os/kernel/effect-claim";
 import { makeCommitters, type ExtensionCapability } from "@agent-os/kernel/extensions";
 import { bindingMaterialRef, externalResourceMaterialRef } from "@agent-os/kernel/material-ref";
 
@@ -47,17 +50,22 @@ const resourceClaim = (step: string) =>
   });
 
 const livedResourceClaim = (step: string, anchorId: string) =>
-  settleLivedClaim(resourceClaim(step), {
-    anchorId,
-    anchorKind: "carrier_proof",
+  settleResourceLived(resourceClaim(step), {
+    proofRef: anchorId,
     carrierRef: "resource-carrier",
   });
 
-const rejectedResourceClaim = settleRejectedClaim(resourceClaim("mutate"), {
-  rejectionId: "proof://resource/database/failed",
+const rejectedResourceProofRef = resourceSettlementRef("database", "failed");
+
+const rejectedResourceClaim = settleResourceRejected(resourceClaim("mutate"), {
+  code: "ProviderFailure",
+  proofRef: rejectedResourceProofRef,
   rejectionKind: "provider_rejected",
-  reason: "resource rejected statement",
+  reason: "resource_rejected_statement",
 });
+
+const resourceProofRef = (...parts: ReadonlyArray<string | number>): string =>
+  resourceSettlementRef(...parts);
 
 const unsettledPreResourceClaim = makePreClaim({
   operationRef: "resource:unsettled-pre:mutate",
@@ -128,8 +136,8 @@ describe("@agent-os/resource-carrier", () => {
           resourceKind: "database",
           resourceRef: resourceRef,
           accountRef,
-          proofRef: "proof://resource/database/provision",
-          claim: livedResourceClaim("provision", "proof://resource/database/provision"),
+          proofRef: resourceProofRef("database", "provision"),
+          claim: livedResourceClaim("provision", resourceProofRef("database", "provision")),
         },
       },
       {
@@ -139,8 +147,8 @@ describe("@agent-os/resource-carrier", () => {
           subjectRef: "res-1",
           resourceRef: resourceRef,
           bindingRef: resourceBindingRef,
-          proofRef: "proof://resource/database/bind",
-          claim: livedResourceClaim("bind", "proof://resource/database/bind"),
+          proofRef: resourceProofRef("database", "bind"),
+          claim: livedResourceClaim("bind", resourceProofRef("database", "bind")),
         },
       },
       {
@@ -151,9 +159,9 @@ describe("@agent-os/resource-carrier", () => {
           resourceRef: resourceBindingRef,
           mutationKind: "database.exec",
           mutationRef: "mutation://database/001",
-          proofRef: "proof://resource/database/exec/001",
+          proofRef: resourceProofRef("database", "exec", "001"),
           fingerprint: "sha256:abc",
-          claim: livedResourceClaim("mutate", "proof://resource/database/exec/001"),
+          claim: livedResourceClaim("mutate", resourceProofRef("database", "exec", "001")),
         },
       },
       {
@@ -164,9 +172,9 @@ describe("@agent-os/resource-carrier", () => {
           resourceRef: resourceBindingRef,
           mutationKind: "database.exec",
           mutationRef: "mutation://database/002",
-          proofRef: "proof://resource/database/exec/002",
+          proofRef: resourceProofRef("database", "exec", "002"),
           fingerprint: "sha256:def",
-          claim: livedResourceClaim("mutate", "proof://resource/database/exec/002"),
+          claim: livedResourceClaim("mutate", resourceProofRef("database", "exec", "002")),
         },
       },
     ] as const;
@@ -185,9 +193,9 @@ describe("@agent-os/resource-carrier", () => {
         resourceRef: resourceBindingRef,
         mutationKind: "database.exec",
         mutationRef: "mutation://database/002",
-        proofRef: "proof://resource/database/exec/002",
+        proofRef: resourceProofRef("database", "exec", "002"),
         fingerprint: "sha256:def",
-        claim: livedResourceClaim("mutate", "proof://resource/database/exec/002"),
+        claim: livedResourceClaim("mutate", resourceProofRef("database", "exec", "002")),
       },
       mutationEventIds: [3, 4],
       failure: undefined,
@@ -204,7 +212,7 @@ describe("@agent-os/resource-carrier", () => {
           resourceRef: { rawBinding: {} },
           mutationKind: "r2.put",
           mutationRef: "mutation://r2/put",
-          proofRef: "proof://r2/put",
+          proofRef: resourceProofRef("r2", "put"),
           rawBytes: new Uint8Array([1, 2, 3]),
         },
       },
@@ -244,7 +252,7 @@ describe("@agent-os/resource-carrier", () => {
       makeCommitters(RESOURCE_EVENTS, cap)[RESOURCE_KIND.FAILED]({
         subjectRef: "res-1",
         step: "mutate",
-        proofRef: "proof://resource/database/failed",
+        proofRef: rejectedResourceProofRef,
         reason: "resource rejected statement",
         claim: rejectedResourceClaim,
       }),
@@ -256,7 +264,7 @@ describe("@agent-os/resource-carrier", () => {
         data: {
           subjectRef: "res-1",
           step: "mutate",
-          proofRef: "proof://resource/database/failed",
+          proofRef: rejectedResourceProofRef,
           reason: "resource rejected statement",
           claim: {
             phase: "rejected",
@@ -272,9 +280,9 @@ describe("@agent-os/resource-carrier", () => {
               originKind: "extension_package",
             },
             rejectionRef: {
-              rejectionId: "proof://resource/database/failed",
+              rejectionId: rejectedResourceProofRef,
               rejectionKind: "provider_rejected",
-              reason: "resource rejected statement",
+              reason: "resource_rejected_statement",
             },
           },
         },
@@ -292,7 +300,7 @@ describe("@agent-os/resource-carrier", () => {
           resourceRef: resourceBindingRef,
           mutationKind: "database.exec",
           mutationRef: "mutation://database/unsettled",
-          proofRef: "proof://resource/database/unsettled",
+          proofRef: resourceProofRef("database", "unsettled"),
         },
       },
       {
@@ -303,7 +311,7 @@ describe("@agent-os/resource-carrier", () => {
           resourceRef: resourceBindingRef,
           mutationKind: "database.exec",
           mutationRef: "mutation://database/preclaim",
-          proofRef: "proof://resource/database/preclaim",
+          proofRef: resourceProofRef("database", "preclaim"),
           claim: unsettledPreResourceClaim,
         },
       },
@@ -347,8 +355,8 @@ describe("@agent-os/resource-carrier", () => {
               subjectRef: "res-lone",
               resourceRef: resourceRef,
               bindingRef: resourceBindingRef,
-              proofRef: "proof://resource/database/bind",
-              claim: livedResourceClaim("bind", "proof://resource/database/bind"),
+              proofRef: resourceProofRef("database", "bind"),
+              claim: livedResourceClaim("bind", resourceProofRef("database", "bind")),
             },
           },
         ],
@@ -367,8 +375,8 @@ describe("@agent-os/resource-carrier", () => {
               resourceRef: resourceBindingRef,
               mutationKind: "database.exec",
               mutationRef: "mutation://database/lone",
-              proofRef: "proof://resource/database/lone",
-              claim: livedResourceClaim("mutate", "proof://resource/database/lone"),
+              proofRef: resourceProofRef("database", "lone"),
+              claim: livedResourceClaim("mutate", resourceProofRef("database", "lone")),
             },
           },
         ],
@@ -385,9 +393,9 @@ describe("@agent-os/resource-carrier", () => {
             payload: {
               subjectRef: "res-lone",
               resourceRef: resourceRef,
-              proofRef: "proof://resource/database/destroy",
+              proofRef: resourceProofRef("database", "destroy"),
               reason: "manual",
-              claim: livedResourceClaim("destroy", "proof://resource/database/destroy"),
+              claim: livedResourceClaim("destroy", resourceProofRef("database", "destroy")),
             },
           },
         ],

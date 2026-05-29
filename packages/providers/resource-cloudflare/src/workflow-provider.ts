@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type {
   CloudflareResourceCarrierOptions,
   CloudflareResourceFetch,
@@ -12,7 +13,7 @@ import {
   workflowMaterialFrom,
 } from "./provider-core";
 
-const { isRecord, nonEmptyString } = materialHelpers;
+const { nonEmptyString } = materialHelpers;
 
 export type CloudflareWorkflowFetchInit = CloudflareResourceFetchInit;
 export type CloudflareWorkflowFetchResponse = CloudflareResourceFetchResponse;
@@ -30,7 +31,7 @@ const workflowMutationInputFrom = (
   mutationKind: string,
   value: unknown,
 ): CloudflareWorkflowMutationInput | null => {
-  if (mutationKind !== "workflow.create_instance" || !isRecord(value)) return null;
+  if (mutationKind !== "workflow.create_instance" || !Predicate.isRecord(value)) return null;
   const instanceId = value.instanceId === undefined ? undefined : nonEmptyString(value.instanceId);
   if (value.instanceId !== undefined && instanceId === null) return null;
   if (instanceId === null) return null;

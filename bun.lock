@@ -68,10 +68,10 @@
       "version": "0.1.0",
       "dependencies": {
         "@agent-os/kernel": "workspace:*",
-        "@agent-os/runtime": "workspace:*",
         "effect": "catalog:",
       },
       "devDependencies": {
+        "@agent-os/runtime": "workspace:*",
         "@effect/vitest": "catalog:",
         "typescript": "catalog:",
         "vite-plus": "catalog:",
@@ -165,6 +165,9 @@
     "packages/carriers/sandbox": {
       "name": "@agent-os/sandbox",
       "version": "0.2.0",
+      "dependencies": {
+        "@agent-os/kernel": "workspace:*",
+      },
       "devDependencies": {
         "@effect/language-service": "catalog:",
         "effect": "catalog:",
@@ -248,6 +251,7 @@
         "@agent-os/kernel": "workspace:*",
         "@agent-os/runtime": "workspace:*",
         "@agent-os/turn-stream": "workspace:*",
+        "effect": "catalog:",
       },
       "devDependencies": {
         "@cloudflare/workers-types": "catalog:",
@@ -259,6 +263,9 @@
     "packages/composers/turn-stream": {
       "name": "@agent-os/turn-stream",
       "version": "0.2.0",
+      "dependencies": {
+        "effect": "catalog:",
+      },
       "devDependencies": {
         "typescript": "catalog:",
         "vite-plus": "catalog:",
@@ -303,7 +310,6 @@
       "version": "0.2.0",
       "dependencies": {
         "@agent-os/kernel": "workspace:*",
-        "@agent-os/runtime": "workspace:*",
         "@agent-os/turn-stream": "workspace:*",
         "effect": "catalog:",
       },
@@ -417,6 +423,7 @@
       "version": "0.2.0",
       "dependencies": {
         "@agent-os/kernel": "workspace:*",
+        "effect": "catalog:",
       },
       "devDependencies": {
         "typescript": "catalog:",

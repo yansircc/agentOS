@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type {
   CloudflareR2BucketMaterial,
   CloudflareResourceCarrierOptions,
@@ -12,7 +13,7 @@ import {
   r2BucketMaterialFrom,
 } from "./provider-core";
 
-const { isRecord, nonEmptyString } = materialHelpers;
+const { nonEmptyString } = materialHelpers;
 
 export type CloudflareR2BucketFetchInit = CloudflareResourceFetchInit;
 export type CloudflareR2BucketFetchResponse = CloudflareResourceFetchResponse;
@@ -35,7 +36,7 @@ const r2MutationInputFrom = (
   mutationKind: string,
   value: unknown,
 ): CloudflareR2BucketMutationInput | null => {
-  if (!isRecord(value)) return null;
+  if (!Predicate.isRecord(value)) return null;
   const objectKey = nonEmptyString(value.objectKey);
   if (objectKey === null) return null;
   if (mutationKind === "r2_bucket.put_object") {

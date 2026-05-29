@@ -1,6 +1,7 @@
 import { boundaryPackage, defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
 import { materialRequirement, type AuthorityContract } from "@agent-os/kernel/material-ref";
 import { RESOURCE_KIND } from "./events";
+import { resourceSettlementContract } from "./settlement";
 
 export const RESOURCE_EVENT_PREFIX = "resource.";
 
@@ -74,10 +75,7 @@ export const resourceBoundaryContract = defineBoundaryContract({
     [RESOURCE_KIND.RESOURCE_DESTROYED]: ["lived"],
     [RESOURCE_KIND.FAILED]: ["rejected"],
   },
-  proof: {
-    anchorKinds: ["carrier_proof", "external_receipt"],
-    symbolicOnly: true,
-  },
+  settlement: resourceSettlementContract,
   projection: {
     derivedFromLedger: true,
     shadowState: false,

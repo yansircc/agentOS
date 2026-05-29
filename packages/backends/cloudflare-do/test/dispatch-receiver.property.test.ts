@@ -9,18 +9,19 @@ import * as fc from "fast-check";
 import { describe, expect, it } from "@effect/vitest";
 
 import { type InboundAcceptedPayload, findAcceptedInRows } from "../src/dispatch/receiver";
-import { makePreClaim, settleLivedClaim } from "@agent-os/kernel/effect-claim";
+import { makePreClaim } from "@agent-os/kernel/effect-claim";
+import { settleDispatchInboundAccepted } from "@agent-os/backend-protocol";
 
 const sourceScopes = ["source-a", "source-b", "source-c"] as const;
 const idempotencyKeys = ["idem-a", "idem-b", "idem-c"] as const;
-const livedClaim = settleLivedClaim(
+const livedClaim = settleDispatchInboundAccepted(
   makePreClaim({
     operationRef: "dispatch:source:target:intent",
     scopeRef: { kind: "conversation", scopeId: "target" },
     authorityRef: { authorityId: "cap_dispatch", authorityClass: "effect" },
     originRef: { originId: "source", originKind: "agent_do" },
   }),
-  { anchorId: "target:1", anchorKind: "ledger_event" },
+  { sourceScope: "source", targetScope: "target", deliveredEventId: 1 },
 );
 
 const payloadArb: fc.Arbitrary<InboundAcceptedPayload> = fc.record({

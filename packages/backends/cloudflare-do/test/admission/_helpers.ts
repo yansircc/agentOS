@@ -18,7 +18,7 @@ import { RefResolverLive } from "@agent-os/kernel/ref-resolver";
 import { QuotaLive } from "../../src/quota";
 import { AdmissionLive } from "../../src/admission";
 import type { JsonSchemaObject } from "../../src/admission";
-import type { EventHandler } from "@agent-os/runtime";
+import type { EventHandler } from "@agent-os/kernel/types";
 
 export const SCHEMA: JsonSchemaObject = {
   type: "object",

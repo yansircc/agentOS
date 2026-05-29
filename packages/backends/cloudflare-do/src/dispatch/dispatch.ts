@@ -1,3 +1,4 @@
+import type { LedgerEvent } from "@agent-os/kernel/types";
 /**
  * Dispatch service algebra — sender + receiver orchestration.
  *
@@ -23,13 +24,8 @@ import { EventBus } from "../ledger";
 import { fireLedgerEvents, insertLedgerEvent } from "../ledger/inserted-events";
 import { materialRefKey } from "@agent-os/kernel/material-ref";
 import { Dispatch } from "@agent-os/runtime";
-import type { DispatchEnvelope, DispatchReceiver, LedgerEvent } from "@agent-os/runtime";
-import {
-  makeOperationRef,
-  makePreClaim,
-  isScopeRef,
-  settleLivedClaim,
-} from "@agent-os/kernel/effect-claim";
+import type { DispatchEnvelope, DispatchReceiver } from "@agent-os/runtime";
+import { makeOperationRef, makePreClaim, isScopeRef } from "@agent-os/kernel/effect-claim";
 import {
   DISPATCH_EVENT_KINDS,
   DISPATCH_INBOUND_ACCEPTED,
@@ -38,6 +34,8 @@ import {
   describeDispatchCause,
   dispatchBackoffMs,
   parseRequestedPayload,
+  settleDispatchInboundAccepted,
+  settleDispatchOutboundDelivered,
   type DispatchRequestedPayload,
 } from "@agent-os/backend-protocol";
 import { ensureDispatchSchema, selectDue, type DispatchOutboxRow } from "./outbox";
@@ -93,10 +91,10 @@ export const DispatchLive = (
             ...(requested.claim === undefined
               ? {}
               : {
-                  claim: settleLivedClaim(requested.claim, {
-                    anchorId: `${requested.target.scope}:${deliveredEventId}`,
-                    anchorKind: "ledger_event",
-                    carrierRef: `dispatch:${materialRefKey(requested.target.bindingRef)}`,
+                  claim: settleDispatchOutboundDelivered(requested.claim, {
+                    bindingKey: materialRefKey(requested.target.bindingRef),
+                    targetScope: requested.target.scope,
+                    deliveredEventId,
                   }),
                 }),
             ...(requested.traceContext === undefined
@@ -442,10 +440,10 @@ export const DispatchLive = (
                   });
                   const deliveredEventId = appEvent.id;
                   const traceContext = copyTraceContext(envelope.traceContext);
-                  const claim = settleLivedClaim(envelope.claim, {
-                    anchorId: `${scope}:${deliveredEventId}`,
-                    anchorKind: "ledger_event",
-                    carrierRef: `dispatch:${envelope.sourceScope}`,
+                  const claim = settleDispatchInboundAccepted(envelope.claim, {
+                    sourceScope: envelope.sourceScope,
+                    targetScope: scope,
+                    deliveredEventId,
                   });
                   const inboundPayload = {
                     sourceScope: envelope.sourceScope,

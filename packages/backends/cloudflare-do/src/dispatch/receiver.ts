@@ -13,13 +13,14 @@
  * appending a duplicate application row.
  */
 
-import type { TraceContext } from "@agent-os/runtime";
-import { validateEffectClaim, type LivedClaim } from "@agent-os/kernel/effect-claim";
+import { Predicate } from "effect";
+import type { TraceContext } from "@agent-os/kernel/types";
+import type { LivedClaim } from "@agent-os/kernel/effect-claim";
 import { sqlText } from "../storage/sql-row";
 import {
   DISPATCH_INBOUND_ACCEPTED,
   dispatchPayloadParseFailure,
-  isRecord,
+  parseDispatchLivedClaim,
   parseTraceContext,
   type DispatchPayloadParseResult,
 } from "@agent-os/backend-protocol";
@@ -44,7 +45,7 @@ export const parseInboundAcceptedPayload = (
   raw: string,
 ): DispatchPayloadParseResult<InboundAcceptedPayload> => {
   const value = JSON.parse(raw) as unknown;
-  if (!isRecord(value)) {
+  if (!Predicate.isRecord(value)) {
     return parseFail("dispatch.inbound.accepted payload must be object");
   }
   if (
@@ -57,16 +58,14 @@ export const parseInboundAcceptedPayload = (
   }
   const traceContext = parseTraceContext(value.traceContext);
   if (!traceContext.ok) return traceContext;
-  const parsedClaim = validateEffectClaim(value.claim);
-  if (!parsedClaim.ok || parsedClaim.claim.phase !== "lived") {
-    return parseFail("dispatch.inbound.accepted claim must be LivedClaim");
-  }
+  const parsedClaim = parseDispatchLivedClaim(value.claim, DISPATCH_INBOUND_ACCEPTED);
+  if (!parsedClaim.ok) return parsedClaim;
   return parseOk({
     sourceScope: value.sourceScope,
     outboundEventId: value.outboundEventId,
     idempotencyKey: value.idempotencyKey,
     deliveredEventId: value.deliveredEventId,
-    claim: parsedClaim.claim,
+    claim: parsedClaim.value,
     ...(traceContext.value === undefined ? {} : { traceContext: traceContext.value }),
   });
 };
