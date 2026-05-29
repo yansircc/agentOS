@@ -50,15 +50,15 @@ state to make a product flow appear complete.
 
 | Package                                  | Role                                                                                                              |
 | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `@agent-os/kernel`                       | pure claim, boundary, material, tool, context, and type algebra                                                   |
+| `@agent-os/kernel`                       | pure claim, boundary, material, JSON Schema, tool, context, and type algebra                                      |
 | `@agent-os/runtime`                      | Effect Tag runtime programs, admission projections, and runtime-facing API types                                  |
 | `@agent-os/backend-protocol`             | storage-free backend protocol constants, payload parsers, due-work kinds, retry policy, and handler fanout policy |
-| `@agent-os/backend-cloudflare-do`        | Cloudflare Durable Object backend for agentOS runtime                                                             |
+| `@agent-os/backend-cloudflare-do`        | Cloudflare Durable Object app facade and backend for agentOS runtime                                              |
 | `@agent-os/resource-carrier`             | provider-neutral resource lifecycle facts, claims, settlement, and projection                                     |
 | `@agent-os/resource-cloudflare`          | Cloudflare D1/KV/R2/Queue/Workflow resource materializer                                                          |
 | `@agent-os/workspace-session`            | provider-neutral workspace/session lifecycle facts                                                                |
 | `@agent-os/workspace-session-cloudflare` | Cloudflare Sandbox-compatible workspace backend                                                                   |
-| `@agent-os/tenant-material`              | encrypted tenant credential records to `RefResolver.material`                                                     |
+| `@agent-os/tenant-material`              | encrypted tenant credential records to execution-time material                                                    |
 | `@agent-os/llm-transport-http`           | HTTP LLM streaming into non-durable turn frames                                                                   |
 | `@agent-os/turn-stream`                  | token/progress frame algebra                                                                                      |
 | `@agent-os/run-stream`                   | submit/ledger/turn-frame composition                                                                              |
@@ -72,49 +72,53 @@ surface.
 
 ## Minimal Use
 
-1. Create a Cloudflare Durable Object class from explicit backend config.
-2. Register tools with `defineRegisteredTool`; do not bypass `ToolContract`.
-3. Resolve endpoints, credentials, bindings, and external resources through
-   `MaterialRef`.
-4. Submit work through `submit`.
+1. Define tools from one Effect Schema.
+2. Declare concrete endpoint, credential, binding, and resource material once
+   in `bindings`.
+3. Reference only symbolic material ids from routes and dispatch targets.
+4. Configure `llms.default` to expose facade `submit`; event-only facades keep
+   `emit`, `schedule`, and `dispatch` without a submit method.
 5. Read durable state from ledger events or derived projections.
 
 ```ts
-import { createAgentDurableObject } from "@agent-os/backend-cloudflare-do";
-import { defineRegisteredTool } from "@agent-os/kernel/tools";
+import { credential, defineAgentDO, endpoint, openAIChat } from "@agent-os/backend-cloudflare-do";
+import { defineTool } from "@agent-os/kernel/tools";
+import { Schema } from "effect";
 
-const lookup = defineRegisteredTool({
-  definition: {
-    type: "function",
-    function: {
-      name: "lookup",
-      description: "Look up a symbolic key.",
-      parameters: {
-        type: "object",
-        properties: { key: { type: "string" } },
-        required: ["key"],
-      },
-    },
-  },
-  authorityClass: "read",
-  admit: async () => ({ ok: true }),
-  execute: async (args: { key: string }) => ({ value: args.key }),
+const lookup = defineTool({
+  name: "lookup",
+  description: "Look up a symbolic key.",
+  args: Schema.Struct({ key: Schema.String }),
+  authority: "read",
+  admit: "allow",
+  execute: ({ key }) => ({ value: key }),
 });
 
-export const AgentDO = createAgentDurableObject<Env>({
-  refResolver: (env) => ({
-    material: (ref) => {
-      if (ref.kind === "endpoint" && ref.ref === "llm") return env.LLM_ENDPOINT;
-      if (ref.kind === "credential" && ref.ref === "llm-key") return env.LLM_KEY;
-      return null;
+export const AgentDO = defineAgentDO<Env>({
+  bindings: [
+    endpoint("llm").from((env) => env.LLM_ENDPOINT),
+    credential("llm-key").from((env) => env.LLM_KEY),
+  ],
+  llms: {
+    default: openAIChat({
+      model: "gpt-4.1-mini",
+      endpoint: "llm",
+      credential: "llm-key",
+    }),
+  },
+  tools: [lookup],
+  on: {
+    "interview.answer": ({ data, agent }) => {
+      return agent.emit("interview.answer.recorded", data);
     },
-  }),
+  },
 });
 ```
 
 ## Documents
 
 - [Runtime Packages](docs/runtime-packages.md)
+- [Usage Surfaces](docs/usage-surfaces.md)
 - [Boundary Contract](docs/boundary-contract.md)
 - [Runtime Packages](docs/runtime-packages.md)
 - [Verification](docs/verification.md)

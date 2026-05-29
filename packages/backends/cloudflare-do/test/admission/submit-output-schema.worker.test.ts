@@ -16,7 +16,7 @@ import { describe, expect, it } from "@effect/vitest";
 
 import { Ledger } from "../../src/ledger";
 import { type InternalSubmitSpec, submitAgentEffect } from "@agent-os/runtime";
-import { defineRegisteredTool } from "@agent-os/kernel/tools";
+import { defineToolFromDefinition } from "@agent-os/kernel/tools";
 import { stubAi } from "../_stub-ai";
 
 import { SCHEMA, makeRuntime, submitStructuredResp } from "./_helpers";
@@ -85,7 +85,7 @@ describe("admission — submitAgent outputSchema path (contract §12.1)", () => 
         context: {},
         route: { kind: "cf-ai-binding", modelId: "@cf/test/model" } as const,
         tools: {
-          someTool: defineRegisteredTool({
+          someTool: defineToolFromDefinition({
             definition: {
               type: "function",
               function: {
@@ -95,6 +95,7 @@ describe("admission — submitAgent outputSchema path (contract §12.1)", () => 
               },
             },
             execute: async () => "y",
+            admit: "allow",
             authorityClass: "read",
           }),
         },

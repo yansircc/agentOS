@@ -39,7 +39,7 @@ import {
   providerFailureSignal,
   type Outcome,
 } from "./shared";
-import { validateAgainstSchema } from "../../admission/json-schema";
+import { validateAgainstSchema } from "@agent-os/kernel/json-schema";
 
 /** Build a stable id when Gemini elides `functionCall.id`. Derived from
  *  candidate + part position so the same response always yields the

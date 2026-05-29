@@ -186,13 +186,10 @@ describe("MaterialRef algebra", () => {
       {
         kind: "endpoint",
         ref: "openrouter",
-        protocol: "openai-chat-compatible",
       },
       {
         kind: "credential",
         ref: "OPENROUTER_KEY",
-        provider: "openai-chat-compatible",
-        purpose: "llm_transport",
       },
     ]);
     expect(

@@ -95,13 +95,7 @@ export const llmRouteMaterialRefs = (route: LlmRoute): ReadonlyArray<MaterialRef
     case "openai-chat-compatible":
     case "anthropic-messages":
     case "gemini-generate-content":
-      return [
-        endpointMaterialRef(route.endpointRef, { protocol: route.kind }),
-        credentialMaterialRef(route.credentialRef, {
-          provider: route.kind,
-          purpose: "llm_transport",
-        }),
-      ];
+      return [endpointMaterialRef(route.endpointRef), credentialMaterialRef(route.credentialRef)];
   }
 };
 
@@ -474,16 +468,10 @@ export const dispatchProvider = (
     case "openai-chat-compatible":
       return Effect.gen(function* () {
         const refs = yield* RefResolverService;
-        const endpoint = yield* resolveStringMaterial(
-          refs,
-          endpointMaterialRef(route.endpointRef, { protocol: route.kind }),
-        );
+        const endpoint = yield* resolveStringMaterial(refs, endpointMaterialRef(route.endpointRef));
         const apiKey = yield* resolveStringMaterial(
           refs,
-          credentialMaterialRef(route.credentialRef, {
-            provider: route.kind,
-            purpose: "llm_transport",
-          }),
+          credentialMaterialRef(route.credentialRef),
         );
         const url = `${endpoint.replace(/\/$/, "")}/chat/completions`;
         const fullBody = {
@@ -502,16 +490,10 @@ export const dispatchProvider = (
     case "anthropic-messages":
       return Effect.gen(function* () {
         const refs = yield* RefResolverService;
-        const endpoint = yield* resolveStringMaterial(
-          refs,
-          endpointMaterialRef(route.endpointRef, { protocol: route.kind }),
-        );
+        const endpoint = yield* resolveStringMaterial(refs, endpointMaterialRef(route.endpointRef));
         const apiKey = yield* resolveStringMaterial(
           refs,
-          credentialMaterialRef(route.credentialRef, {
-            provider: route.kind,
-            purpose: "llm_transport",
-          }),
+          credentialMaterialRef(route.credentialRef),
         );
         const url = `${endpoint.replace(/\/$/, "")}/v1/messages`;
         const fullBody = {
@@ -532,16 +514,10 @@ export const dispatchProvider = (
     case "gemini-generate-content":
       return Effect.gen(function* () {
         const refs = yield* RefResolverService;
-        const endpoint = yield* resolveStringMaterial(
-          refs,
-          endpointMaterialRef(route.endpointRef, { protocol: route.kind }),
-        );
+        const endpoint = yield* resolveStringMaterial(refs, endpointMaterialRef(route.endpointRef));
         const apiKey = yield* resolveStringMaterial(
           refs,
-          credentialMaterialRef(route.credentialRef, {
-            provider: route.kind,
-            purpose: "llm_transport",
-          }),
+          credentialMaterialRef(route.credentialRef),
         );
         const url = `${endpoint.replace(/\/$/, "")}/v1beta/models/${route.modelId}:generateContent`;
         return yield* fetchProviderJson(route.kind, url, {

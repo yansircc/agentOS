@@ -1,4 +1,4 @@
-import { Effect, Layer, ManagedRuntime } from "effect";
+import { Effect, Layer, ManagedRuntime, Schema } from "effect";
 import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "@effect/vitest";
@@ -11,7 +11,8 @@ import { QuotaLive } from "../src/quota";
 import { RefResolverLive } from "@agent-os/kernel/ref-resolver";
 import { type InternalSubmitSpec, submitAgentEffect } from "@agent-os/runtime";
 import {
-  defineRegisteredTool,
+  defineToolFromDefinition,
+  defineTool,
   permissiveToolAdmitter,
   validateToolRegistry,
   type Tool,
@@ -27,7 +28,7 @@ interface TestEnv {
 const testEnv = env as unknown as TestEnv;
 
 const makeTool = (): Tool =>
-  defineRegisteredTool({
+  defineToolFromDefinition({
     definition: {
       type: "function",
       function: {
@@ -177,7 +178,7 @@ describe("tool registry generator", () => {
   });
 
   it("binds authority required materials into the tool contract", () => {
-    const tool = defineRegisteredTool({
+    const tool = defineToolFromDefinition({
       definition: {
         type: "function",
         function: {
@@ -302,33 +303,34 @@ describe("tool registry generator", () => {
     });
   });
 
-  it("denies tools without an explicit admitter before execution", async () => {
-    const scope = "tool-registry-admitter-denied";
+  it("decodes tool args before admit or execute", async () => {
+    const scope = "tool-registry-schema-decode";
     const id = testEnv.AGENT_DO.idFromName(scope);
     const stub = testEnv.AGENT_DO.get(id);
+    let admitted = false;
     let executed = false;
-    const readTool = defineRegisteredTool({
-      definition: {
-        type: "function",
-        function: {
-          name: "lookup",
-          description: "Lookup a value",
-          parameters: { type: "object", properties: {}, required: [] },
-        },
+    const tool = defineTool({
+      name: "lookup",
+      description: "Lookup a value",
+      args: Schema.Struct({ key: Schema.String }),
+      authority: "read",
+      admit: () => {
+        admitted = true;
+        return { ok: true };
       },
       execute: async () => {
         executed = true;
         return { value: 42 };
       },
-      authorityClass: "read",
     });
 
     await runInDurableObject(stub, async (_inst, state) => {
-      const ai = stubAi([toolCallResp("lookup", "{}", "call-1")]);
+      const ai = stubAi([toolCallResp("lookup", '{"key":1}', "call-1")]);
       const runtime = buildRuntime(state, ai);
 
-      const result = await runtime.runPromise(submitAgentEffect(makeSpec(scope, readTool)));
+      const result = await runtime.runPromise(submitAgentEffect(makeSpec(scope, tool)));
       expect(result.ok).toBe(false);
+      expect(admitted).toBe(false);
       expect(executed).toBe(false);
 
       const events = await runtime.runPromise(
@@ -338,26 +340,28 @@ describe("tool registry generator", () => {
         }),
       );
       expect(events.some((event) => event.kind === "tool.executed")).toBe(false);
-      const rejected = events.find((event) => event.kind === "tool.rejected");
-      expect(rejected?.payload).toEqual(
-        expect.objectContaining({
-          runId: 1,
-          name: "lookup",
-          claim: expect.objectContaining({
-            phase: "rejected",
-            operationRef: "tool:tool-registry-admitter-denied:1:0:call-1",
-            rejectionRef: {
-              rejectionId: "tool:tool-registry-admitter-denied:1:0:call-1",
-              rejectionKind: "capability_denied",
-              reason: "explicit admitter required for authorityClass=read",
-            },
-          }),
-        }),
-      );
+      expect(events.some((event) => event.kind === "tool.rejected")).toBe(false);
       expect(events.some((event) => event.kind === "agent.aborted.tool_error")).toBe(true);
 
       await runtime.dispose();
     });
+  });
+
+  it("requires an explicit admitter at construction", () => {
+    expect(() =>
+      defineToolFromDefinition({
+        definition: {
+          type: "function",
+          function: {
+            name: "lookup",
+            description: "Lookup a value",
+            parameters: { type: "object", properties: {}, required: [] },
+          },
+        },
+        execute: async () => ({ value: 42 }),
+        authorityClass: "read",
+      } as never),
+    ).toThrow("tool admitter is required");
   });
 
   it("settles malformed admitter rejection refs as rejected claims", async () => {
@@ -365,7 +369,7 @@ describe("tool registry generator", () => {
     const id = testEnv.AGENT_DO.idFromName(scope);
     const stub = testEnv.AGENT_DO.get(id);
     let executed = false;
-    const malformedRejectionTool = defineRegisteredTool({
+    const malformedRejectionTool = defineToolFromDefinition({
       definition: {
         type: "function",
         function: {
@@ -429,7 +433,7 @@ describe("tool registry generator", () => {
     const id = testEnv.AGENT_DO.idFromName(scope);
     const stub = testEnv.AGENT_DO.get(id);
     let executed = false;
-    const throwingAdmitterTool = defineRegisteredTool({
+    const throwingAdmitterTool = defineToolFromDefinition({
       definition: {
         type: "function",
         function: {
@@ -488,7 +492,7 @@ describe("tool registry generator", () => {
     const id = testEnv.AGENT_DO.idFromName(scope);
     const stub = testEnv.AGENT_DO.get(id);
     let executed = false;
-    const malformedAdmitterTool = defineRegisteredTool({
+    const malformedAdmitterTool = defineToolFromDefinition({
       definition: {
         type: "function",
         function: {
@@ -544,7 +548,7 @@ describe("tool registry generator", () => {
     const scope = "tool-registry-rejected";
     const id = testEnv.AGENT_DO.idFromName(scope);
     const stub = testEnv.AGENT_DO.get(id);
-    const failingTool = defineRegisteredTool({
+    const failingTool = defineToolFromDefinition({
       definition: {
         type: "function",
         function: {

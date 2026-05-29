@@ -73,6 +73,7 @@ import {
   validateBoundaryEventPayload,
   type InternalSubmitSpec,
 } from "@agent-os/runtime";
+import type { LlmRoute } from "@agent-os/kernel/llm";
 import { Dispatch, type DispatchEnvelope, type DispatchTargetRegistry } from "./dispatch";
 import { armNextDue } from "./due-work";
 import { createEventStreamResponse, eventToRpc } from "./ledger";
@@ -113,16 +114,35 @@ export interface CloudflareAgentEnv {
   readonly AI: Ai;
 }
 
-export interface AgentRuntimeClient {
-  readonly submit: (spec: SubmitSpec) => Promise<SubmitResult>;
+export interface AgentRuntimeBaseClient {
   readonly events: (opts?: EventQueryOptions) => Promise<LedgerEventRpc[]>;
   readonly streamEvents: (opts?: StreamEventsOptions) => Response;
+  readonly emit: (event: string, data: unknown) => Promise<{ id: number }>;
   readonly emitEvent: (spec: {
     readonly event: string;
     readonly data: unknown;
   }) => Promise<{ id: number }>;
+  readonly dispatch: (spec: DispatchToScopeSpec) => Promise<DispatchToScopeResult>;
   readonly dispatchToScope: (spec: DispatchToScopeSpec) => Promise<DispatchToScopeResult>;
+  readonly schedule: (
+    event: string,
+    data: unknown,
+    options: { readonly at: number },
+  ) => Promise<{ id: number }>;
   readonly scheduleEvent: (spec: ScheduledEventSpec) => Promise<{ id: number }>;
+}
+
+export interface AgentRuntimeClient extends AgentRuntimeBaseClient {
+  readonly submit: (spec: SubmitSpec) => Promise<SubmitResult>;
+}
+
+export interface AgentSubmitSpec {
+  readonly intent: string;
+  readonly input: unknown;
+  readonly system?: string;
+  readonly budget?: SubmitSpec["budget"];
+  readonly outputSchema?: SubmitSpec["outputSchema"];
+  readonly deliver: string | { readonly event: string };
 }
 
 export interface AgentEventHandlerRegistration {
@@ -130,8 +150,10 @@ export interface AgentEventHandlerRegistration {
   readonly handler: EventHandler;
 }
 
-export interface AgentEventHandlerContext {
-  readonly runtime: AgentRuntimeClient;
+export interface AgentEventHandlerContext<
+  Runtime extends AgentRuntimeBaseClient = AgentRuntimeClient,
+> {
+  readonly runtime: Runtime;
   readonly capabilities: ReadonlyMap<string, ExtensionCapability>;
 }
 
@@ -163,35 +185,49 @@ const makeAgentRuntime = (
   );
 };
 
-export interface AgentDurableObjectConfig<Env extends CloudflareAgentEnv> {
+export interface AgentDurableObjectConfig<
+  Env extends CloudflareAgentEnv,
+  Runtime extends AgentRuntimeBaseClient = AgentRuntimeClient,
+> {
   readonly refResolver?: (env: Env) => RefResolver;
   readonly extensions?: (env: Env) => ReadonlyArray<ExtensionDeclaration>;
   readonly dispatchTargets?: (env: Env) => DispatchTargetRegistry;
   readonly scopeRefForScope?: (scope: string, env: Env) => ScopeRef | null;
   readonly eventHandlers?: (
-    context: AgentEventHandlerContext,
+    context: AgentEventHandlerContext<Runtime>,
     env: Env,
   ) => Iterable<AgentEventHandlerRegistration>;
 }
 
-interface MaterializedAgentConfig<Env extends CloudflareAgentEnv> {
+export interface MaterializedAgentConfig<
+  Env extends CloudflareAgentEnv,
+  Runtime extends AgentRuntimeBaseClient = AgentRuntimeClient,
+> {
   readonly refResolver: RefResolver;
   readonly extensions: ReadonlyArray<ExtensionDeclaration>;
   readonly dispatchTargets: DispatchTargetRegistry;
   readonly scopeRefForScope: (scope: string, env: Env) => ScopeRef | null;
   readonly eventHandlers?: (
-    context: AgentEventHandlerContext,
+    context: AgentEventHandlerContext<Runtime>,
     env: Env,
   ) => Iterable<AgentEventHandlerRegistration>;
+}
+
+export interface AgentSubmitDefaults {
+  readonly route: LlmRoute;
+  readonly tools: Record<string, SubmitSpec["tools"][string]>;
 }
 
 const emptyRefResolver: RefResolver = {
   material: () => null,
 };
 
-class AgentDurableObject<Env extends CloudflareAgentEnv>
+export class AgentDurableObject<
+  Env extends CloudflareAgentEnv,
+  Runtime extends AgentRuntimeBaseClient = AgentRuntimeBaseClient,
+>
   extends DurableObject<Env>
-  implements AgentRuntimeClient
+  implements AgentRuntimeBaseClient
 {
   private readonly _handlers: Map<string, Set<EventHandler>> = new Map();
   private readonly _refResolver: RefResolver;
@@ -201,7 +237,7 @@ class AgentDurableObject<Env extends CloudflareAgentEnv>
   private readonly _scopeRefForScope: (scope: string, env: Env) => ScopeRef | null;
   private _runtime?: ManagedRuntime.ManagedRuntime<CoreServices, SqlError>;
 
-  constructor(ctx: DurableObjectState, env: Env, config: MaterializedAgentConfig<Env>) {
+  constructor(ctx: DurableObjectState, env: Env, config: MaterializedAgentConfig<Env, Runtime>) {
     super(ctx, env);
     this._refResolver = config.refResolver;
     this._extensionValidation = validateExtensionDeclarations(config.extensions);
@@ -210,7 +246,7 @@ class AgentDurableObject<Env extends CloudflareAgentEnv>
     this._scopeRefForScope = config.scopeRefForScope;
 
     for (const registration of config.eventHandlers?.(
-      { runtime: this, capabilities: this._capabilities },
+      { runtime: this as unknown as Runtime, capabilities: this._capabilities },
       env,
     ) ?? []) {
       this.addHandler(registration.kind, registration.handler);
@@ -359,7 +395,24 @@ class AgentDurableObject<Env extends CloudflareAgentEnv>
     set.add(handler);
   }
 
-  submit(spec: SubmitSpec): Promise<SubmitResult> {
+  protected submitWithDefaults(
+    spec: AgentSubmitSpec,
+    defaults: AgentSubmitDefaults,
+  ): Promise<SubmitResult> {
+    const deliver = typeof spec.deliver === "string" ? { event: spec.deliver } : spec.deliver;
+    return this.submitFull({
+      intent: spec.intent,
+      context: { input: spec.input },
+      ...(spec.system === undefined ? {} : { system: spec.system }),
+      route: defaults.route,
+      tools: defaults.tools,
+      ...(spec.budget === undefined ? {} : { budget: spec.budget }),
+      ...(spec.outputSchema === undefined ? {} : { outputSchema: spec.outputSchema }),
+      deliver,
+    });
+  }
+
+  protected submitFull(spec: SubmitSpec): Promise<SubmitResult> {
     return this.scopedPromise((scope) => {
       const scopeRef = this._scopeRefForScope(scope, this.env);
       if (scopeRef === null) {
@@ -511,6 +564,10 @@ class AgentDurableObject<Env extends CloudflareAgentEnv>
     );
   }
 
+  emit(event: string, data: unknown): Promise<{ id: number }> {
+    return this.emitEvent({ event, data });
+  }
+
   /** Dispatch an app event to another configured agent scope.
    *
    *  Delivery truth is split across the two ledgers:
@@ -546,6 +603,10 @@ class AgentDurableObject<Env extends CloudflareAgentEnv>
         return yield* dispatch.dispatchToScope(spec);
       }),
     );
+  }
+
+  dispatch(spec: DispatchToScopeSpec): Promise<DispatchToScopeResult> {
+    return this.dispatchToScope(spec);
   }
 
   grantResource(spec: ResourceGrantSpec): Promise<ResourceGrantResult> {
@@ -649,6 +710,14 @@ class AgentDurableObject<Env extends CloudflareAgentEnv>
     );
   }
 
+  schedule(
+    event: string,
+    data: unknown,
+    options: { readonly at: number },
+  ): Promise<{ id: number }> {
+    return this.scheduleEvent({ event, data, at: options.at });
+  }
+
   /** DO alarm handler — invoked automatically by the CF runtime. */
   alarm(): Promise<void> {
     const ctx = this.ctx;
@@ -669,7 +738,10 @@ class AgentDurableObject<Env extends CloudflareAgentEnv>
 export const createAgentDurableObject = <Env extends CloudflareAgentEnv>(
   config: AgentDurableObjectConfig<Env> = {},
 ) =>
-  class ConfiguredAgentDurableObject extends AgentDurableObject<Env> {
+  class ConfiguredAgentDurableObject
+    extends AgentDurableObject<Env, AgentRuntimeClient>
+    implements AgentRuntimeClient
+  {
     constructor(ctx: DurableObjectState, env: Env) {
       super(ctx, env, {
         refResolver: config.refResolver?.(env) ?? emptyRefResolver,
@@ -678,5 +750,9 @@ export const createAgentDurableObject = <Env extends CloudflareAgentEnv>(
         scopeRefForScope: config.scopeRefForScope ?? (() => null),
         eventHandlers: config.eventHandlers,
       });
+    }
+
+    submit(spec: SubmitSpec): Promise<SubmitResult> {
+      return this.submitFull(spec);
     }
   };

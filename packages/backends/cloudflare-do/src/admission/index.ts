@@ -17,8 +17,12 @@
  */
 
 // ── Schema types + validator ───────────────────────────────────
-export type { JsonSchemaObject, JsonSchemaNode, SchemaContract } from "@agent-os/runtime";
-export { validateAgainstSchema } from "@agent-os/runtime";
+export type {
+  JsonSchemaObject,
+  JsonSchemaNode,
+  SchemaContract,
+} from "@agent-os/kernel/json-schema";
+export { validateAgainstSchema } from "@agent-os/kernel/json-schema";
 
 // ── Lease projection state + pure functions ────────────────────
 export type {

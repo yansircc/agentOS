@@ -62,6 +62,7 @@ export {
 export * from "./context";
 export * from "./effect-claim";
 export * from "./errors";
+export * from "./json-schema";
 export * from "./llm";
 export * from "./quota";
 export * from "./ref-resolver";

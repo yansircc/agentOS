@@ -19,7 +19,7 @@
  */
 
 import { Effect } from "effect";
-import { type JsonSchemaObject, type SchemaContract } from "./json-schema";
+import { type JsonSchemaObject, type SchemaContract } from "@agent-os/kernel/json-schema";
 import { DEFAULTS as LLM_DEFAULTS, type LlmRoute } from "../llm";
 
 export const FINGERPRINT_ALGO_VERSION = "effect-json-schema-v1";

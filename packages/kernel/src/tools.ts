@@ -12,7 +12,7 @@
  * invalid LLM-emitted args never consume quota.
  */
 
-import { Effect } from "effect";
+import { Effect, JSONSchema, Option, Schema } from "effect";
 import { ToolError } from "./errors";
 import {
   type AdmitVerdict,
@@ -26,6 +26,7 @@ import {
 import type { LlmToolCall, ToolDefinition } from "./llm";
 import { isMaterialRequirement, type MaterialRequirement } from "./material-ref";
 import type { QuotaSpec } from "./quota";
+import { toClosedJsonSchemaObject, type JsonSchemaObject } from "./json-schema";
 
 const TOOL_CONTRACT_BRAND = Symbol("@agent-os/kernel/ToolContract");
 
@@ -56,6 +57,8 @@ export const permissiveToolAdmitter = <A>(_input: ToolAdmitInput<A>): AdmitVerdi
   ok: true,
 });
 
+export type ToolDecode<A = unknown> = (args: unknown) => A;
+
 export interface Tool<
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   A = any,
@@ -63,6 +66,7 @@ export interface Tool<
   R = any,
 > {
   readonly definition: ToolDefinition;
+  readonly decode: ToolDecode<A>;
   readonly execute: (args: A) => Promise<R>;
   readonly admit: ToolAdmitter<A>;
   readonly quota?: QuotaSpec;
@@ -71,6 +75,7 @@ export interface Tool<
 
 export interface RegisteredToolSpec<A, R> {
   readonly definition: ToolDefinition;
+  readonly decode?: ToolDecode<A>;
   readonly execute: (args: A) => Promise<R>;
   readonly quota?: QuotaSpec;
   readonly authorityClass: string;
@@ -78,7 +83,21 @@ export interface RegisteredToolSpec<A, R> {
   readonly authorityVersion?: string;
   readonly requiredMaterials?: ReadonlyArray<MaterialRequirement>;
   readonly originRef?: OriginRef;
-  readonly admit?: ToolAdmitter<A>;
+  readonly admit: ToolAdmitter<A> | "allow";
+}
+
+export interface DefineToolSpec<S extends Schema.Schema.AnyNoContext, R> {
+  readonly name: string;
+  readonly description: string;
+  readonly args: S;
+  readonly execute: (args: Schema.Schema.Type<S>) => R | Promise<R>;
+  readonly quota?: QuotaSpec;
+  readonly authority: string;
+  readonly authorityId?: string;
+  readonly authorityVersion?: string;
+  readonly requiredMaterials?: ReadonlyArray<MaterialRequirement>;
+  readonly originRef?: OriginRef;
+  readonly admit: ToolAdmitter<Schema.Schema.Type<S>> | "allow";
 }
 
 const makeToolContract = (shape: ToolContractShape): ToolContract =>
@@ -90,20 +109,22 @@ const makeToolContract = (shape: ToolContractShape): ToolContract =>
 const hasToolContractBrand = (contract: ToolContract): boolean =>
   contract[TOOL_CONTRACT_BRAND] === true;
 
-const explicitAdmitterRequired = <A>(input: ToolAdmitInput<A>): AdmitVerdict => ({
-  ok: false,
-  rejectionRef: {
-    rejectionId: input.claim.operationRef,
-    rejectionKind: "capability_denied",
-    reason: `explicit admitter required for authorityClass=${input.contract.authorityRef.authorityClass}`,
-  },
-});
+const failToolDefinition = (message: string): never =>
+  Option.getOrThrowWith(Option.none(), () => new TypeError(message));
 
-export const defineRegisteredTool = <A, R>(spec: RegisteredToolSpec<A, R>): Tool<A, R> => {
+const normalizeAdmitter = <A>(admit: ToolAdmitter<A> | "allow"): ToolAdmitter<A> =>
+  admit === "allow"
+    ? permissiveToolAdmitter
+    : typeof admit === "function"
+      ? admit
+      : failToolDefinition("tool admitter is required");
+
+export const defineToolFromDefinition = <A, R>(spec: RegisteredToolSpec<A, R>): Tool<A, R> => {
   const toolId = spec.definition.function.name;
-  const admit: ToolAdmitter<A> = spec.admit ?? explicitAdmitterRequired;
+  const admit = normalizeAdmitter(spec.admit);
   return {
     definition: spec.definition,
+    decode: spec.decode ?? ((args) => args as A),
     execute: spec.execute,
     admit,
     ...(spec.quota === undefined ? {} : { quota: spec.quota }),
@@ -119,6 +140,34 @@ export const defineRegisteredTool = <A, R>(spec: RegisteredToolSpec<A, R>): Tool
       roles: ["generator", "admitter"],
     }),
   };
+};
+
+const schemaToParameters = (schema: Schema.Schema.AnyNoContext): JsonSchemaObject =>
+  toClosedJsonSchemaObject(JSONSchema.make(schema));
+
+export const defineTool = <S extends Schema.Schema.AnyNoContext, R>(
+  spec: DefineToolSpec<S, R>,
+): Tool<Schema.Schema.Type<S>, Awaited<R>> => {
+  const decode = Schema.decodeUnknownSync(spec.args);
+  return defineToolFromDefinition<Schema.Schema.Type<S>, Awaited<R>>({
+    definition: {
+      type: "function",
+      function: {
+        name: spec.name,
+        description: spec.description,
+        parameters: schemaToParameters(spec.args),
+      },
+    },
+    decode,
+    execute: (args) => Promise.resolve(spec.execute(args)) as Promise<Awaited<R>>,
+    quota: spec.quota,
+    authorityClass: spec.authority,
+    ...(spec.authorityId === undefined ? {} : { authorityId: spec.authorityId }),
+    ...(spec.authorityVersion === undefined ? {} : { authorityVersion: spec.authorityVersion }),
+    ...(spec.requiredMaterials === undefined ? {} : { requiredMaterials: spec.requiredMaterials }),
+    ...(spec.originRef === undefined ? {} : { originRef: spec.originRef }),
+    admit: spec.admit,
+  });
 };
 
 export type ToolRegistryIssue =
@@ -265,6 +314,23 @@ export const parseToolCall = (
         }),
     });
     return { tool, args };
+  });
+
+export const decodeToolArgs = (
+  tool: Tool,
+  args: unknown,
+  toolName: string,
+): Effect.Effect<unknown, ToolError> =>
+  Effect.try({
+    try: () => tool.decode(args),
+    catch: (cause) =>
+      new ToolError({
+        toolName,
+        cause: {
+          reason: "invalid_args",
+          decodeError: cause instanceof Error ? cause.name : typeof cause,
+        },
+      }),
   });
 
 /** Run the tool's Promise. Failures here are recoverable via retry (network

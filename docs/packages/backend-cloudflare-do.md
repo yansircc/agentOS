@@ -2,8 +2,8 @@
 
 ## Purpose
 
-Cloudflare Durable Object backend for agentOS: DO storage, transactions,
-alarms, SSE streaming, dispatch delivery, and Cloudflare binding
+Cloudflare Durable Object backend for agentOS: app facade, DO storage,
+transactions, alarms, SSE streaming, dispatch delivery, and Cloudflare binding
 materialization.
 
 ## Invariant
@@ -13,13 +13,42 @@ must not import Durable Object state, Worker bindings, or alarm APIs.
 
 ## Minimal Usage
 
-Create a DO class from explicit backend config.
+Create a DO class from one app-facing facade config. `bindings` is the only
+material declaration surface; LLM routes reference symbolic ids.
 
 ```ts
-import { createAgentDurableObject } from "@agent-os/backend-cloudflare-do";
+import { credential, defineAgentDO, endpoint, openAIChat } from "@agent-os/backend-cloudflare-do";
+import { defineTool } from "@agent-os/kernel/tools";
+import { Schema } from "effect";
 
-export const AgentDO = createAgentDurableObject({});
+const lookup = defineTool({
+  name: "lookup",
+  description: "Look up a symbolic key.",
+  args: Schema.Struct({ key: Schema.String }),
+  authority: "read",
+  admit: "allow",
+  execute: ({ key }) => ({ value: key }),
+});
+
+export const AgentDO = defineAgentDO<Env>({
+  bindings: [
+    endpoint("llm").from((env) => env.LLM_ENDPOINT),
+    credential("llm-key").from((env) => env.LLM_KEY),
+  ],
+  llms: {
+    default: openAIChat({
+      model: "gpt-4.1-mini",
+      endpoint: "llm",
+      credential: "llm-key",
+    }),
+  },
+  tools: [lookup],
+});
 ```
+
+Omit `llms` for event-only facades. They keep `emit`, `schedule`, `dispatch`,
+`on`, `bindings`, and extensions, but do not expose `submit`. Full
+`SubmitSpec` remains on the low-level `createAgentDurableObject` API.
 
 ## Verification
 

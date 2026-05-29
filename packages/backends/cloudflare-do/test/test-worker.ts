@@ -6,32 +6,35 @@
  */
 
 import { DurableObject } from "cloudflare:workers";
+import { Schema } from "effect";
 import {
-  createAgentDurableObject,
+  binding,
+  credential,
+  defineAgentDO,
+  durableObjectTarget,
+  endpoint,
+  openAIChat,
   type AgentEventHandlerContext,
+  type AgentFacadeRuntimeClient,
   type CloudflareAgentEnv,
   type DispatchTargetNamespace,
-  type DispatchTargetRegistry,
 } from "../src";
 import { CapabilityRejected } from "@agent-os/kernel/errors";
 import { boundaryPackage, defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
 import { eventNamespace, type ExtensionCapability } from "@agent-os/kernel/extensions";
 import { makePreClaim, settleLivedClaim } from "@agent-os/kernel/effect-claim";
-import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
+import { defineTool } from "@agent-os/kernel/tools";
 import type { EventHandler } from "@agent-os/runtime";
 
 export class TestAgentDO extends DurableObject {}
 
-export const EmitTestDO = createAgentDurableObject<CloudflareAgentEnv>({
+export const EmitTestDO = defineAgentDO<CloudflareAgentEnv>({
   eventHandlers: ({ runtime }) => [
     {
       kind: "interview.answer",
       handler: (event) =>
         runtime
-          .emitEvent({
-            event: "interview.followup",
-            data: { sourceId: event.id, sourcePayload: event.payload },
-          })
+          .emit("interview.followup", { sourceId: event.id, sourcePayload: event.payload })
           .then(() => undefined),
     },
   ],
@@ -39,7 +42,7 @@ export const EmitTestDO = createAgentDurableObject<CloudflareAgentEnv>({
 export type EmitTestDO = InstanceType<typeof EmitTestDO>;
 
 interface DispatchEnv extends CloudflareAgentEnv {
-  readonly DISPATCH_DO: DurableObjectNamespace<DispatchTestDO>;
+  readonly DISPATCH_DO: DurableObjectNamespace;
 }
 
 const DEAD_TARGET: DispatchTargetNamespace = {
@@ -49,57 +52,43 @@ const DEAD_TARGET: DispatchTargetNamespace = {
   }),
 };
 
-const dispatchBindingKey = (ref: string): string =>
-  materialRefKey(
-    bindingMaterialRef({
-      provider: "cloudflare",
-      bindingKind: "durable_object",
-      ref,
-    }),
-  );
-
 let dispatchTargetMaterializations = 0;
 
-const dispatchTargets = (env: DispatchEnv): DispatchTargetRegistry => {
+const dispatchTarget = (env: DispatchEnv): DispatchTargetNamespace => {
   dispatchTargetMaterializations += 1;
-  return {
-    [dispatchBindingKey("peer")]: env.DISPATCH_DO,
-    [dispatchBindingKey("dead")]: DEAD_TARGET,
-  };
+  return env.DISPATCH_DO;
 };
 
-export const DispatchTestDO = createAgentDurableObject<DispatchEnv>({
-  dispatchTargets,
+export const DispatchTestDO = defineAgentDO<DispatchEnv>({
+  bindings: [
+    durableObjectTarget<DispatchEnv>("peer").from(dispatchTarget),
+    durableObjectTarget<DispatchEnv>("dead").from(() => DEAD_TARGET),
+    binding<DispatchEnv, DispatchTargetNamespace>("cloudflare", "durable_object", "generic").from(
+      (env) => env.DISPATCH_DO,
+    ),
+  ],
   eventHandlers: ({ runtime }) => [
     {
       kind: "dispatch.inbound.accepted",
-      handler: () =>
-        runtime
-          .emitEvent({ event: "test.inbound_accepted_handler_fired", data: {} })
-          .then(() => undefined),
+      handler: () => runtime.emit("test.inbound_accepted_handler_fired", {}).then(() => undefined),
     },
     {
       kind: "dispatch.outbound.requested",
       handler: () =>
-        runtime
-          .emitEvent({ event: "test.outbound_requested_handler_fired", data: {} })
-          .then(() => undefined),
+        runtime.emit("test.outbound_requested_handler_fired", {}).then(() => undefined),
     },
     {
       kind: "test.delivered",
       handler: (event) =>
         runtime
-          .emitEvent({
-            event: "test.followup",
-            data: { sourceId: event.id, sourcePayload: event.payload },
-          })
+          .emit("test.followup", { sourceId: event.id, sourcePayload: event.payload })
           .then(() => undefined),
     },
   ],
 });
 export type DispatchTestDO = InstanceType<typeof DispatchTestDO>;
 
-export const StreamTestDO = createAgentDurableObject<CloudflareAgentEnv>({
+export const StreamTestDO = defineAgentDO<CloudflareAgentEnv>({
   eventHandlers: () => [
     {
       kind: "stream.slow",
@@ -268,15 +257,19 @@ const runExtensionCommand = (
                 );
 };
 
-const extensionCommandHandlers = ({ runtime, capabilities }: AgentEventHandlerContext) => [
+const extensionCommandHandlers = ({
+  runtime,
+  capabilities,
+}: AgentEventHandlerContext<AgentFacadeRuntimeClient>) => [
   {
     kind: EXTENSION_COMMAND_EVENT,
     handler: async (event: Parameters<EventHandler>[0]) => {
       const parsed = parseExtensionCommand(event.payload);
       if (!parsed.ok) {
-        await runtime.emitEvent({
-          event: EXTENSION_RESULT_EVENT,
-          data: { op: "malformed", ok: false, error: parsed.error },
+        await runtime.emit(EXTENSION_RESULT_EVENT, {
+          op: "malformed",
+          ok: false,
+          error: parsed.error,
         });
         return;
       }
@@ -284,15 +277,12 @@ const extensionCommandHandlers = ({ runtime, capabilities }: AgentEventHandlerCo
         (result) => ({ ok: true, result }) as const,
         (cause) => ({ ok: false, error: errorPayload(cause) }) as const,
       );
-      await runtime.emitEvent({
-        event: EXTENSION_RESULT_EVENT,
-        data: { op: parsed.command.op, ...outcome },
-      });
+      await runtime.emit(EXTENSION_RESULT_EVENT, { op: parsed.command.op, ...outcome });
     },
   },
 ];
 
-export const ExtensionTestDO = createAgentDurableObject<CloudflareAgentEnv>({
+export const ExtensionTestDO = defineAgentDO<CloudflareAgentEnv>({
   extensions: () => [
     eventNamespace({
       packageId: "@agent-os/image",
@@ -305,9 +295,42 @@ export const ExtensionTestDO = createAgentDurableObject<CloudflareAgentEnv>({
 });
 export type ExtensionTestDO = InstanceType<typeof ExtensionTestDO>;
 
+const facadeLookup = defineTool({
+  name: "lookup",
+  description: "Lookup a symbolic key",
+  args: Schema.Struct({ key: Schema.String }),
+  authority: "read",
+  admit: "allow",
+  execute: ({ key }) => ({ value: key }),
+});
+
+export const makeFacadeSubmitChatResponse = (): Response =>
+  Response.json({
+    choices: [{ message: { content: "facade done" } }],
+    usage: { total_tokens: 7 },
+  });
+
+export const FacadeSubmitTestDO = defineAgentDO<CloudflareAgentEnv>({
+  bindings: [
+    endpoint<CloudflareAgentEnv>("llm").from(() => "https://stub.openai.test/v1"),
+    credential<CloudflareAgentEnv>("llm-key").from(() => "stub-key"),
+  ],
+  llms: {
+    default: openAIChat({
+      model: "gpt-4.1-mini",
+      endpoint: "llm",
+      credential: "llm-key",
+    }),
+  },
+  tools: [facadeLookup],
+  scopeRefForScope: (scope) => ({ kind: "conversation", scopeId: scope }),
+});
+export type FacadeSubmitTestDO = InstanceType<typeof FacadeSubmitTestDO>;
+
 interface WorkerEnv extends CloudflareAgentEnv {
   readonly STREAM_DO: DurableObjectNamespace<StreamTestDO>;
   readonly EXTENSION_DO: DurableObjectNamespace<ExtensionTestDO>;
+  readonly FACADE_SUBMIT_DO: DurableObjectNamespace<FacadeSubmitTestDO>;
 }
 
 const parseLastEventId = (value: string | null): number => {

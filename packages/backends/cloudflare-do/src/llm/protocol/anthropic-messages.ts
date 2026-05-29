@@ -38,7 +38,7 @@ import {
   providerFailureSignal,
   type Outcome,
 } from "./shared";
-import { validateAgainstSchema } from "../../admission/json-schema";
+import { validateAgainstSchema } from "@agent-os/kernel/json-schema";
 
 const ANTHROPIC_DEFAULT_MAX_TOKENS = 4096;
 

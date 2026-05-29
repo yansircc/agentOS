@@ -4,8 +4,7 @@
 
 ## Purpose
 
-Adapter from encrypted tenant credential records to core `RefResolver`
-material.
+Adapter from encrypted tenant credential records to execution-time material.
 
 ## Public API Status
 
@@ -13,9 +12,9 @@ material.
 
 ## Invariant
 
-Resolved credential material exists only as the return value of
-`resolver.material(ref)`. Public summaries, rejections, ledger payloads,
-projections, and stream frames remain symbolic.
+Resolved credential material exists only at execution-time material resolution.
+Public summaries, rejections, ledger payloads, projections, and stream frames
+remain symbolic.
 
 ## Minimal Usage
 

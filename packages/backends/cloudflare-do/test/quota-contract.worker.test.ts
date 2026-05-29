@@ -24,7 +24,11 @@ import { RefResolverLive } from "@agent-os/kernel/ref-resolver";
 import { QuotaLive } from "../src/quota";
 import { withQuota } from "../src/quota";
 import { type InternalSubmitSpec, submitAgentEffect } from "@agent-os/runtime";
-import { defineRegisteredTool, permissiveToolAdmitter, type Tool } from "@agent-os/kernel/tools";
+import {
+  defineToolFromDefinition,
+  permissiveToolAdmitter,
+  type Tool,
+} from "@agent-os/kernel/tools";
 import type { EventHandler } from "@agent-os/runtime";
 import { finalTextResp, stubAi, toolCallResp } from "./_stub-ai";
 
@@ -36,7 +40,7 @@ const testEnv = env as unknown as TestEnv;
 
 const makeQuotaTool = (limit: number): Tool =>
   withQuota(
-    defineRegisteredTool({
+    defineToolFromDefinition({
       definition: {
         type: "function",
         function: {
