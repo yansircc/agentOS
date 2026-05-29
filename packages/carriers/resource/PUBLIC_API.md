@@ -10,6 +10,7 @@ Status: 0.2.x active development for provider-neutral resource carrier algebra. 
 - `.:RESOURCE_EVENTS`
 - `.:RESOURCE_EVENT_PREFIX`
 - `.:RESOURCE_EVENT_VOCABULARY`
+- `.:RESOURCE_KIND`
 - `.:ResourceBindRequest`
 - `.:ResourceBoundPayload`
 - `.:ResourceCarrier`
@@ -26,11 +27,6 @@ Status: 0.2.x active development for provider-neutral resource carrier algebra. 
 - `.:ResourceProjection`
 - `.:ResourceProvisionRequest`
 - `.:ResourceProvisionedPayload`
-- `.:commitResourceBound`
-- `.:commitResourceDestroyed`
-- `.:commitResourceFailed`
-- `.:commitResourceMutationRecorded`
-- `.:commitResourceProvisioned`
 - `.:projectResource`
 - `.:resourceAuthorityContracts`
 - `.:resourceBoundaryContract`

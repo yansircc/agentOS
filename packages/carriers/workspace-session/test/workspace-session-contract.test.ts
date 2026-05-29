@@ -2,15 +2,14 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   WORKSPACE_SESSION_EVENTS,
-  commitWorkspaceSessionFailed,
-  commitWorkspaceSessionStarted,
+  WORKSPACE_SESSION_KIND,
   projectWorkspaceSession,
   resolveWorkspaceSession,
   settleWorkspaceSessionRejected,
   workspaceSessionBoundaryPackage,
 } from "../src";
 import { makePreClaim, settleLivedClaim } from "@agent-os/kernel/effect-claim";
-import type { ExtensionCapability } from "@agent-os/kernel/extensions";
+import { makeCommitters, type ExtensionCapability } from "@agent-os/kernel/extensions";
 
 const sessionClaim = makePreClaim({
   operationRef: "workspace-session:session-1:start",
@@ -72,7 +71,7 @@ describe("@agent-os/workspace-session", () => {
     const events = [
       {
         id: 1,
-        kind: WORKSPACE_SESSION_EVENTS.STARTED,
+        kind: WORKSPACE_SESSION_KIND.STARTED,
         payload: {
           subjectRef: "run-1",
           sessionRef: "session://1",
@@ -84,7 +83,7 @@ describe("@agent-os/workspace-session", () => {
       },
       {
         id: 2,
-        kind: WORKSPACE_SESSION_EVENTS.PREVIEW_ALLOCATED,
+        kind: WORKSPACE_SESSION_KIND.PREVIEW_ALLOCATED,
         payload: {
           subjectRef: "run-1",
           sessionRef: "session://1",
@@ -100,7 +99,7 @@ describe("@agent-os/workspace-session", () => {
       },
       {
         id: 3,
-        kind: WORKSPACE_SESSION_EVENTS.BACKED_UP,
+        kind: WORKSPACE_SESSION_KIND.BACKED_UP,
         payload: {
           subjectRef: "run-1",
           sessionRef: "session://1",
@@ -115,7 +114,7 @@ describe("@agent-os/workspace-session", () => {
       },
       {
         id: 4,
-        kind: WORKSPACE_SESSION_EVENTS.DESTROYED,
+        kind: WORKSPACE_SESSION_KIND.DESTROYED,
         payload: {
           subjectRef: "run-1",
           sessionRef: "session://1",
@@ -132,7 +131,7 @@ describe("@agent-os/workspace-session", () => {
     expect(projectWorkspaceSession(events, "run-1")).toEqual({
       subjectRef: "run-1",
       status: "destroyed",
-      lastEventKind: WORKSPACE_SESSION_EVENTS.DESTROYED,
+      lastEventKind: WORKSPACE_SESSION_KIND.DESTROYED,
       sessionRef: "session://1",
       workspaceRootRef: "workspace://1",
       cleanupRef: "cleanup://1",
@@ -159,7 +158,7 @@ describe("@agent-os/workspace-session", () => {
     const events = [
       {
         id: 1,
-        kind: WORKSPACE_SESSION_EVENTS.STARTED,
+        kind: WORKSPACE_SESSION_KIND.STARTED,
         payload: {
           subjectRef: "run-reused",
           sessionRef: "session://old",
@@ -170,7 +169,7 @@ describe("@agent-os/workspace-session", () => {
       },
       {
         id: 2,
-        kind: WORKSPACE_SESSION_EVENTS.BACKED_UP,
+        kind: WORKSPACE_SESSION_KIND.BACKED_UP,
         payload: {
           subjectRef: "run-reused",
           sessionRef: "session://old",
@@ -180,7 +179,7 @@ describe("@agent-os/workspace-session", () => {
       },
       {
         id: 3,
-        kind: WORKSPACE_SESSION_EVENTS.PREVIEW_ALLOCATED,
+        kind: WORKSPACE_SESSION_KIND.PREVIEW_ALLOCATED,
         payload: {
           subjectRef: "run-reused",
           sessionRef: "session://old",
@@ -191,7 +190,7 @@ describe("@agent-os/workspace-session", () => {
       },
       {
         id: 4,
-        kind: WORKSPACE_SESSION_EVENTS.STARTED,
+        kind: WORKSPACE_SESSION_KIND.STARTED,
         payload: {
           subjectRef: "run-reused",
           sessionRef: "session://new",
@@ -215,7 +214,7 @@ describe("@agent-os/workspace-session", () => {
       ...events,
       {
         id: 5,
-        kind: WORKSPACE_SESSION_EVENTS.BACKED_UP,
+        kind: WORKSPACE_SESSION_KIND.BACKED_UP,
         payload: {
           subjectRef: "run-reused",
           sessionRef: "session://new",
@@ -225,7 +224,7 @@ describe("@agent-os/workspace-session", () => {
       },
       {
         id: 6,
-        kind: WORKSPACE_SESSION_EVENTS.RESTORED,
+        kind: WORKSPACE_SESSION_KIND.RESTORED,
         payload: {
           subjectRef: "run-reused",
           sessionRef: "session://restored",
@@ -251,7 +250,7 @@ describe("@agent-os/workspace-session", () => {
     const events = [
       {
         id: 1,
-        kind: WORKSPACE_SESSION_EVENTS.BACKED_UP,
+        kind: WORKSPACE_SESSION_KIND.BACKED_UP,
         payload: {
           subjectRef: "run-lone-backup",
           sessionRef: "session://missing",
@@ -288,7 +287,7 @@ describe("@agent-os/workspace-session", () => {
     const events = [
       {
         id: 1,
-        kind: WORKSPACE_SESSION_EVENTS.FAILED,
+        kind: WORKSPACE_SESSION_KIND.FAILED,
         payload: {
           subjectRef: "run-2",
           step: "start",
@@ -302,7 +301,7 @@ describe("@agent-os/workspace-session", () => {
     expect(projectWorkspaceSession(events, "run-2")).toEqual({
       subjectRef: "run-2",
       status: "failed",
-      lastEventKind: WORKSPACE_SESSION_EVENTS.FAILED,
+      lastEventKind: WORKSPACE_SESSION_KIND.FAILED,
       sessionRef: undefined,
       workspaceRootRef: undefined,
       cleanupRef: undefined,
@@ -334,7 +333,7 @@ describe("@agent-os/workspace-session", () => {
     };
 
     await expect(
-      commitWorkspaceSessionFailed(cap, {
+      makeCommitters(WORKSPACE_SESSION_EVENTS, cap)[WORKSPACE_SESSION_KIND.FAILED]({
         subjectRef: "run-2",
         step: "start",
         proofRef: "proof://reject",
@@ -343,7 +342,7 @@ describe("@agent-os/workspace-session", () => {
       }),
     ).resolves.toEqual({ id: 1 });
 
-    expect(committed[0]?.event).toBe(WORKSPACE_SESSION_EVENTS.FAILED);
+    expect(committed[0]?.event).toBe(WORKSPACE_SESSION_KIND.FAILED);
     expect(committed[0]?.data).toMatchObject({
       subjectRef: "run-2",
       claim: { phase: "rejected" },
@@ -390,7 +389,7 @@ describe("@agent-os/workspace-session", () => {
     });
 
     await expect(
-      commitWorkspaceSessionStarted(cap, {
+      makeCommitters(WORKSPACE_SESSION_EVENTS, cap)[WORKSPACE_SESSION_KIND.STARTED]({
         subjectRef: "run-1",
         sessionRef: "session://1",
         workspaceRootRef: "workspace://1",
@@ -402,7 +401,7 @@ describe("@agent-os/workspace-session", () => {
 
     expect(committed).toEqual([
       {
-        event: WORKSPACE_SESSION_EVENTS.STARTED,
+        event: WORKSPACE_SESSION_KIND.STARTED,
         data: {
           subjectRef: "run-1",
           sessionRef: "session://1",

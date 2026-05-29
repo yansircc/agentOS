@@ -1,9 +1,5 @@
 import { validateEffectClaim, type LivedClaim } from "@agent-os/kernel/effect-claim";
-import { VERIFICATION_EVENT_VOCABULARY } from "./extension";
-
-export const VERIFICATION_EVENTS = VERIFICATION_EVENT_VOCABULARY;
-
-export type VerificationEventKind = (typeof VERIFICATION_EVENTS)[keyof typeof VERIFICATION_EVENTS];
+import { defineEventKindView, defineEventPayloads, payload } from "@agent-os/kernel/extensions";
 
 export type VerificationGateStatus = "passed" | "failed";
 
@@ -16,6 +12,16 @@ export interface VerificationGateRecordedPayload {
   readonly summary?: string;
   readonly claim: LivedClaim;
 }
+
+export const VERIFICATION_EVENTS = defineEventPayloads({
+  "verification.gate.recorded": payload<VerificationGateRecordedPayload>(),
+});
+
+export const VERIFICATION_KIND = defineEventKindView(VERIFICATION_EVENTS, {
+  GATE_RECORDED: "verification.gate.recorded",
+});
+
+export type VerificationEventKind = keyof typeof VERIFICATION_EVENTS;
 
 export interface VerificationLedgerEvent {
   readonly id: number;
@@ -45,7 +51,7 @@ const livedClaimFrom = (value: unknown): LivedClaim | undefined => {
 };
 
 const gatePayloadFrom = (event: VerificationLedgerEvent): VerificationGateFact | null => {
-  if (event.kind !== VERIFICATION_EVENTS.GATE_RECORDED) return null;
+  if (event.kind !== VERIFICATION_KIND.GATE_RECORDED) return null;
   if (!isRecord(event.payload)) return null;
   const { subjectRef, gate, status, proofRef, fingerprint, summary } = event.payload;
   if (typeof subjectRef !== "string") return null;

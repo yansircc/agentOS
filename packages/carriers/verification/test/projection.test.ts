@@ -1,11 +1,11 @@
 import {
   VERIFICATION_EVENTS,
-  commitVerificationGateRecorded,
+  VERIFICATION_KIND,
   projectVerificationGates,
   verificationBoundaryPackage,
 } from "../src";
 import { makePreClaim, settleLivedClaim } from "@agent-os/kernel/effect-claim";
-import type { ExtensionCapability } from "@agent-os/kernel/extensions";
+import { makeCommitters, type ExtensionCapability } from "@agent-os/kernel/extensions";
 
 const verificationClaim = makePreClaim({
   operationRef: "verification:subject-1:typecheck",
@@ -39,7 +39,7 @@ describe("@agent-os/verification", () => {
     const events = [
       {
         id: 1,
-        kind: VERIFICATION_EVENTS.GATE_RECORDED,
+        kind: VERIFICATION_KIND.GATE_RECORDED,
         payload: {
           subjectRef: "change:1",
           gate: "build",
@@ -51,7 +51,7 @@ describe("@agent-os/verification", () => {
       },
       {
         id: 2,
-        kind: VERIFICATION_EVENTS.GATE_RECORDED,
+        kind: VERIFICATION_KIND.GATE_RECORDED,
         payload: {
           subjectRef: "change:1",
           gate: "typecheck",
@@ -63,7 +63,7 @@ describe("@agent-os/verification", () => {
       },
       {
         id: 3,
-        kind: VERIFICATION_EVENTS.GATE_RECORDED,
+        kind: VERIFICATION_KIND.GATE_RECORDED,
         payload: {
           subjectRef: "change:1",
           gate: "typecheck",
@@ -100,7 +100,7 @@ describe("@agent-os/verification", () => {
     };
 
     await expect(
-      commitVerificationGateRecorded(cap, {
+      makeCommitters(VERIFICATION_EVENTS, cap)[VERIFICATION_KIND.GATE_RECORDED]({
         subjectRef: "subject-1",
         gate: "typecheck",
         status: "failed",
@@ -116,7 +116,7 @@ describe("@agent-os/verification", () => {
 
     expect(committed).toEqual([
       {
-        event: VERIFICATION_EVENTS.GATE_RECORDED,
+        event: VERIFICATION_KIND.GATE_RECORDED,
         data: {
           subjectRef: "subject-1",
           gate: "typecheck",

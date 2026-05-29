@@ -1,13 +1,13 @@
 import {
   RESOURCE_AUTHORITIES,
   RESOURCE_EVENTS,
+  RESOURCE_KIND,
   resourceAuthorityContracts,
   resourceBoundaryPackage,
-  commitResourceFailed,
   projectResource,
 } from "../src";
 import { makePreClaim, settleLivedClaim, settleRejectedClaim } from "@agent-os/kernel/effect-claim";
-import type { ExtensionCapability } from "@agent-os/kernel/extensions";
+import { makeCommitters, type ExtensionCapability } from "@agent-os/kernel/extensions";
 import { bindingMaterialRef, externalResourceMaterialRef } from "@agent-os/kernel/material-ref";
 
 const accountRef = externalResourceMaterialRef({
@@ -122,7 +122,7 @@ describe("@agent-os/resource-carrier", () => {
     const events = [
       {
         id: 1,
-        kind: RESOURCE_EVENTS.RESOURCE_PROVISIONED,
+        kind: RESOURCE_KIND.RESOURCE_PROVISIONED,
         payload: {
           subjectRef: "res-1",
           resourceKind: "database",
@@ -134,7 +134,7 @@ describe("@agent-os/resource-carrier", () => {
       },
       {
         id: 2,
-        kind: RESOURCE_EVENTS.RESOURCE_BOUND,
+        kind: RESOURCE_KIND.RESOURCE_BOUND,
         payload: {
           subjectRef: "res-1",
           resourceRef: resourceRef,
@@ -145,7 +145,7 @@ describe("@agent-os/resource-carrier", () => {
       },
       {
         id: 3,
-        kind: RESOURCE_EVENTS.MUTATION_RECORDED,
+        kind: RESOURCE_KIND.MUTATION_RECORDED,
         payload: {
           subjectRef: "res-1",
           resourceRef: resourceBindingRef,
@@ -158,7 +158,7 @@ describe("@agent-os/resource-carrier", () => {
       },
       {
         id: 4,
-        kind: RESOURCE_EVENTS.MUTATION_RECORDED,
+        kind: RESOURCE_KIND.MUTATION_RECORDED,
         payload: {
           subjectRef: "res-1",
           resourceRef: resourceBindingRef,
@@ -174,7 +174,7 @@ describe("@agent-os/resource-carrier", () => {
     expect(projectResource(events, "res-1")).toEqual({
       subjectRef: "res-1",
       status: "mutated",
-      lastEventKind: RESOURCE_EVENTS.MUTATION_RECORDED,
+      lastEventKind: RESOURCE_KIND.MUTATION_RECORDED,
       resourceKind: "database",
       resourceRef: resourceBindingRef,
       accountRef,
@@ -198,7 +198,7 @@ describe("@agent-os/resource-carrier", () => {
     const events = [
       {
         id: 1,
-        kind: RESOURCE_EVENTS.MUTATION_RECORDED,
+        kind: RESOURCE_KIND.MUTATION_RECORDED,
         payload: {
           subjectRef: "res-raw",
           resourceRef: { rawBinding: {} },
@@ -241,7 +241,7 @@ describe("@agent-os/resource-carrier", () => {
     };
 
     await expect(
-      commitResourceFailed(cap, {
+      makeCommitters(RESOURCE_EVENTS, cap)[RESOURCE_KIND.FAILED]({
         subjectRef: "res-1",
         step: "mutate",
         proofRef: "proof://resource/database/failed",
@@ -252,7 +252,7 @@ describe("@agent-os/resource-carrier", () => {
 
     expect(committed).toEqual([
       {
-        event: RESOURCE_EVENTS.FAILED,
+        event: RESOURCE_KIND.FAILED,
         data: {
           subjectRef: "res-1",
           step: "mutate",
@@ -286,7 +286,7 @@ describe("@agent-os/resource-carrier", () => {
     const events = [
       {
         id: 1,
-        kind: RESOURCE_EVENTS.MUTATION_RECORDED,
+        kind: RESOURCE_KIND.MUTATION_RECORDED,
         payload: {
           subjectRef: "res-unsettled",
           resourceRef: resourceBindingRef,
@@ -297,7 +297,7 @@ describe("@agent-os/resource-carrier", () => {
       },
       {
         id: 2,
-        kind: RESOURCE_EVENTS.MUTATION_RECORDED,
+        kind: RESOURCE_KIND.MUTATION_RECORDED,
         payload: {
           subjectRef: "res-unsettled",
           resourceRef: resourceBindingRef,
@@ -342,7 +342,7 @@ describe("@agent-os/resource-carrier", () => {
         [
           {
             id: 1,
-            kind: RESOURCE_EVENTS.RESOURCE_BOUND,
+            kind: RESOURCE_KIND.RESOURCE_BOUND,
             payload: {
               subjectRef: "res-lone",
               resourceRef: resourceRef,
@@ -361,7 +361,7 @@ describe("@agent-os/resource-carrier", () => {
         [
           {
             id: 1,
-            kind: RESOURCE_EVENTS.MUTATION_RECORDED,
+            kind: RESOURCE_KIND.MUTATION_RECORDED,
             payload: {
               subjectRef: "res-lone",
               resourceRef: resourceBindingRef,
@@ -381,7 +381,7 @@ describe("@agent-os/resource-carrier", () => {
         [
           {
             id: 1,
-            kind: RESOURCE_EVENTS.RESOURCE_DESTROYED,
+            kind: RESOURCE_KIND.RESOURCE_DESTROYED,
             payload: {
               subjectRef: "res-lone",
               resourceRef: resourceRef,

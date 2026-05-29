@@ -9,6 +9,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:DECISION_GATE_EVENTS`
 - `.:DECISION_GATE_EVENT_PREFIX`
 - `.:DECISION_GATE_EVENT_VOCABULARY`
+- `.:DECISION_GATE_KIND`
 - `.:DecisionGateConsumedPayload`
 - `.:DecisionGateDecidedPayload`
 - `.:DecisionGateDecision`
@@ -17,9 +18,6 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:DecisionGateProjection`
 - `.:DecisionGateRequestedPayload`
 - `.:admitDecisionGate`
-- `.:commitDecisionGateConsumed`
-- `.:commitDecisionGateDecided`
-- `.:commitDecisionGateRequested`
 - `.:decisionGateBoundaryPackage`
 - `.:decisionGateBoundaryContract`
 - `.:projectDecisionGate`

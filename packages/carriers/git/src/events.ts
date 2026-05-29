@@ -1,9 +1,5 @@
 import { validateEffectClaim, type LivedClaim } from "@agent-os/kernel/effect-claim";
-import { GIT_EVENT_VOCABULARY } from "./extension";
-
-export const GIT_EVENTS = GIT_EVENT_VOCABULARY;
-
-export type GitEventKind = (typeof GIT_EVENTS)[keyof typeof GIT_EVENTS];
+import { defineEventKindView, defineEventPayloads, payload } from "@agent-os/kernel/extensions";
 
 export interface GitWorkspaceCreatedPayload {
   readonly subjectRef: string;
@@ -40,6 +36,24 @@ export interface GitWorkspaceCleanedPayload {
   readonly workspaceRef: string;
   readonly claim: LivedClaim;
 }
+
+export const GIT_EVENTS = defineEventPayloads({
+  "git.workspace.created": payload<GitWorkspaceCreatedPayload>(),
+  "git.commit.recorded": payload<GitCommitRecordedPayload>(),
+  "git.merge.recorded": payload<GitMergeRecordedPayload>(),
+  "git.revert.recorded": payload<GitRevertRecordedPayload>(),
+  "git.workspace.cleaned": payload<GitWorkspaceCleanedPayload>(),
+});
+
+export const GIT_KIND = defineEventKindView(GIT_EVENTS, {
+  WORKSPACE_CREATED: "git.workspace.created",
+  COMMIT_RECORDED: "git.commit.recorded",
+  MERGE_RECORDED: "git.merge.recorded",
+  REVERT_RECORDED: "git.revert.recorded",
+  WORKSPACE_CLEANED: "git.workspace.cleaned",
+});
+
+export type GitEventKind = keyof typeof GIT_EVENTS;
 
 export interface GitLedgerEvent {
   readonly id: number;
@@ -86,24 +100,24 @@ export const projectGitSubject = (
     if (event.payload.subjectRef !== subjectRef) continue;
     if (livedClaimFrom(event.payload.claim) === undefined) continue;
     switch (event.kind) {
-      case GIT_EVENTS.WORKSPACE_CREATED:
+      case GIT_KIND.WORKSPACE_CREATED:
         workspaceRef = stringField(event.payload, "workspaceRef");
         baseRef = stringField(event.payload, "baseRef");
         branchRef = stringField(event.payload, "branchRef");
         cleaned = false;
         break;
-      case GIT_EVENTS.COMMIT_RECORDED: {
+      case GIT_KIND.COMMIT_RECORDED: {
         const commitRef = stringField(event.payload, "commitRef");
         if (commitRef !== undefined) commitRefs.push(commitRef);
         break;
       }
-      case GIT_EVENTS.MERGE_RECORDED:
+      case GIT_KIND.MERGE_RECORDED:
         mergeCommitRef = stringField(event.payload, "mergeCommitRef");
         break;
-      case GIT_EVENTS.REVERT_RECORDED:
+      case GIT_KIND.REVERT_RECORDED:
         revertCommitRef = stringField(event.payload, "revertCommitRef");
         break;
-      case GIT_EVENTS.WORKSPACE_CLEANED:
+      case GIT_KIND.WORKSPACE_CLEANED:
         cleaned = true;
         break;
     }

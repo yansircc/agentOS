@@ -1,6 +1,6 @@
-import { DEPLOY_EVENTS, commitDeployFailed, deployBoundaryPackage, projectDeploy } from "../src";
+import { DEPLOY_EVENTS, DEPLOY_KIND, deployBoundaryPackage, projectDeploy } from "../src";
 import { makePreClaim, settleLivedClaim, settleRejectedClaim } from "@agent-os/kernel/effect-claim";
-import type { ExtensionCapability } from "@agent-os/kernel/extensions";
+import { makeCommitters, type ExtensionCapability } from "@agent-os/kernel/extensions";
 
 const deployClaim = makePreClaim({
   operationRef: "deploy:session-1:promote",
@@ -34,7 +34,7 @@ describe("@agent-os/deploy", () => {
     const events = [
       {
         id: 1,
-        kind: DEPLOY_EVENTS.PREVIEW_RECORDED,
+        kind: DEPLOY_KIND.PREVIEW_RECORDED,
         payload: {
           subjectRef: "ch-1",
           previewRef: "https://ch-1.staging.example",
@@ -44,7 +44,7 @@ describe("@agent-os/deploy", () => {
       },
       {
         id: 2,
-        kind: DEPLOY_EVENTS.PRODUCTION_PROMOTED,
+        kind: DEPLOY_KIND.PRODUCTION_PROMOTED,
         payload: {
           subjectRef: "ch-1",
           deployRef: "cf-deploy://v2",
@@ -55,7 +55,7 @@ describe("@agent-os/deploy", () => {
       },
       {
         id: 3,
-        kind: DEPLOY_EVENTS.PRODUCTION_READBACK,
+        kind: DEPLOY_KIND.PRODUCTION_READBACK,
         payload: {
           subjectRef: "ch-1",
           productionRef: "https://site.example",
@@ -83,7 +83,7 @@ describe("@agent-os/deploy", () => {
     const events = [
       {
         id: 1,
-        kind: DEPLOY_EVENTS.PRODUCTION_PROMOTED,
+        kind: DEPLOY_KIND.PRODUCTION_PROMOTED,
         payload: {
           subjectRef: "ch-lone-promotion",
           deployRef: "cf-deploy://v2",
@@ -124,7 +124,7 @@ describe("@agent-os/deploy", () => {
     };
 
     await expect(
-      commitDeployFailed(cap, {
+      makeCommitters(DEPLOY_EVENTS, cap)[DEPLOY_KIND.FAILED]({
         subjectRef: "session:1",
         step: "promote",
         proofRef: "proof://deploy/1",
@@ -139,7 +139,7 @@ describe("@agent-os/deploy", () => {
 
     expect(committed).toEqual([
       {
-        event: DEPLOY_EVENTS.FAILED,
+        event: DEPLOY_KIND.FAILED,
         data: {
           subjectRef: "session:1",
           step: "promote",

@@ -3,13 +3,7 @@ import {
   type LivedClaim,
   type RejectedClaim,
 } from "@agent-os/kernel/effect-claim";
-
-import { WORKSPACE_SESSION_EVENT_VOCABULARY } from "./extension";
-
-export const WORKSPACE_SESSION_EVENTS = WORKSPACE_SESSION_EVENT_VOCABULARY;
-
-export type WorkspaceSessionEventKind =
-  (typeof WORKSPACE_SESSION_EVENTS)[keyof typeof WORKSPACE_SESSION_EVENTS];
+import { defineEventKindView, defineEventPayloads, payload } from "@agent-os/kernel/extensions";
 
 export type WorkspaceSessionLifecycleStep = "start" | "restore" | "backup" | "preview" | "destroy";
 
@@ -75,6 +69,26 @@ export interface WorkspaceSessionFailedPayload {
   readonly reason: string;
   readonly claim: RejectedClaim;
 }
+
+export const WORKSPACE_SESSION_EVENTS = defineEventPayloads({
+  "workspace_session.started": payload<WorkspaceSessionStartedPayload>(),
+  "workspace_session.restored": payload<WorkspaceSessionRestoredPayload>(),
+  "workspace_session.backed_up": payload<WorkspaceSessionBackedUpPayload>(),
+  "workspace_session.preview_allocated": payload<WorkspaceSessionPreviewAllocatedPayload>(),
+  "workspace_session.destroyed": payload<WorkspaceSessionDestroyedPayload>(),
+  "workspace_session.failed": payload<WorkspaceSessionFailedPayload>(),
+});
+
+export const WORKSPACE_SESSION_KIND = defineEventKindView(WORKSPACE_SESSION_EVENTS, {
+  STARTED: "workspace_session.started",
+  RESTORED: "workspace_session.restored",
+  BACKED_UP: "workspace_session.backed_up",
+  PREVIEW_ALLOCATED: "workspace_session.preview_allocated",
+  DESTROYED: "workspace_session.destroyed",
+  FAILED: "workspace_session.failed",
+});
+
+export type WorkspaceSessionEventKind = keyof typeof WORKSPACE_SESSION_EVENTS;
 
 export interface WorkspaceSessionLedgerEvent {
   readonly id: number;
@@ -223,7 +237,7 @@ export const projectWorkspaceSession = (
     if (!isRecord(event.payload)) continue;
     if (event.payload.subjectRef !== subjectRef) continue;
     switch (event.kind) {
-      case WORKSPACE_SESSION_EVENTS.STARTED: {
+      case WORKSPACE_SESSION_KIND.STARTED: {
         const nextSessionRef = stringField(event.payload, "sessionRef");
         const nextWorkspaceRootRef = stringField(event.payload, "workspaceRootRef");
         const nextCleanupRef = stringField(event.payload, "cleanupRef");
@@ -245,7 +259,7 @@ export const projectWorkspaceSession = (
         failure = undefined;
         break;
       }
-      case WORKSPACE_SESSION_EVENTS.RESTORED: {
+      case WORKSPACE_SESSION_KIND.RESTORED: {
         const nextSessionRef = stringField(event.payload, "sessionRef");
         const backupRef = stringField(event.payload, "backupRef");
         const nextWorkspaceRootRef = stringField(event.payload, "workspaceRootRef");
@@ -269,7 +283,7 @@ export const projectWorkspaceSession = (
         failure = undefined;
         break;
       }
-      case WORKSPACE_SESSION_EVENTS.BACKED_UP: {
+      case WORKSPACE_SESSION_KIND.BACKED_UP: {
         const nextSessionRef = stringField(event.payload, "sessionRef");
         const backupRef = stringField(event.payload, "backupRef");
         if (
@@ -287,7 +301,7 @@ export const projectWorkspaceSession = (
         failure = undefined;
         break;
       }
-      case WORKSPACE_SESSION_EVENTS.PREVIEW_ALLOCATED: {
+      case WORKSPACE_SESSION_KIND.PREVIEW_ALLOCATED: {
         const nextSessionRef = stringField(event.payload, "sessionRef");
         const previewRef = stringField(event.payload, "previewRef");
         const port = numberField(event.payload, "port");
@@ -307,7 +321,7 @@ export const projectWorkspaceSession = (
         failure = undefined;
         break;
       }
-      case WORKSPACE_SESSION_EVENTS.DESTROYED: {
+      case WORKSPACE_SESSION_KIND.DESTROYED: {
         const nextSessionRef = stringField(event.payload, "sessionRef");
         if (
           livedClaimFrom(event.payload.claim) === undefined ||
@@ -322,7 +336,7 @@ export const projectWorkspaceSession = (
         failure = undefined;
         break;
       }
-      case WORKSPACE_SESSION_EVENTS.FAILED:
+      case WORKSPACE_SESSION_KIND.FAILED:
         failure = failedPayloadFrom(event.payload);
         if (failure !== undefined) {
           status = "failed";

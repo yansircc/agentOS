@@ -9,12 +9,17 @@ export type {
 } from "./extensions";
 export {
   ExtensionCapabilityConflict,
+  defineEventKindView,
+  defineEventPayloads,
   eventNamespace,
   extensionOwnsEvent,
   isBoundaryPackage,
+  makeCommitters,
+  payload,
   rejectClaimedAppEvent,
   validateExtensionDeclarations,
 } from "./extensions";
+export type { CommitterMap, EventPayload, EventPayloadMap } from "./extensions";
 export type {
   BoundaryContract,
   BoundaryContractIssue,

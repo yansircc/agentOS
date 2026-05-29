@@ -34,6 +34,37 @@ export interface ExtensionCapability {
   readonly time: (spec: ExtensionTimeSpec) => Promise<{ readonly id: number }>;
 }
 
+export type EventPayloadMap = Readonly<Record<string, unknown>>;
+
+export type EventPayload<K> = K;
+
+export const payload = <T>(): EventPayload<T> => undefined as unknown as T;
+
+export const defineEventPayloads = <const T extends EventPayloadMap>(events: T): T => events;
+
+export const defineEventKindView = <
+  const Events extends EventPayloadMap,
+  const View extends Readonly<Record<string, keyof Events & string>>,
+>(
+  _events: Events,
+  view: View,
+): View => view;
+
+export type CommitterMap<T extends EventPayloadMap> = {
+  readonly [K in keyof T & string]: (payload: T[K]) => Promise<{ readonly id: number }>;
+};
+
+export const makeCommitters = <const T extends EventPayloadMap>(
+  events: T,
+  cap: ExtensionCapability,
+): CommitterMap<T> => {
+  const out: Record<string, (payload: unknown) => Promise<{ readonly id: number }>> = {};
+  for (const event of Object.keys(events)) {
+    out[event] = (data: unknown) => cap.commit({ event, data });
+  }
+  return out as CommitterMap<T>;
+};
+
 export class ExtensionCapabilityConflict extends Data.TaggedError(
   "agent_os.extension_capability_conflict",
 )<{

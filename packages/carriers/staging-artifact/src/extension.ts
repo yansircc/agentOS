@@ -1,11 +1,9 @@
 import { boundaryPackage, defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
+import { STAGING_KIND } from "./events";
 
 export const STAGING_EVENT_PREFIX = "staging.";
 
-export const STAGING_EVENT_VOCABULARY = {
-  ARTIFACT_PUBLISHED: `${STAGING_EVENT_PREFIX}artifact.published`,
-  ARTIFACT_REAPED: `${STAGING_EVENT_PREFIX}artifact.reaped`,
-} as const;
+export const STAGING_EVENT_VOCABULARY = STAGING_KIND;
 
 export const stagingArtifactBoundaryContract = defineBoundaryContract({
   packageId: "@agent-os/staging-artifact",
@@ -16,8 +14,8 @@ export const stagingArtifactBoundaryContract = defineBoundaryContract({
   materialRequirements: [],
   claimPayloadKey: "claim",
   claimPhases: {
-    [STAGING_EVENT_VOCABULARY.ARTIFACT_PUBLISHED]: ["lived"],
-    [STAGING_EVENT_VOCABULARY.ARTIFACT_REAPED]: ["lived"],
+    [STAGING_KIND.ARTIFACT_PUBLISHED]: ["lived"],
+    [STAGING_KIND.ARTIFACT_REAPED]: ["lived"],
   },
   proof: {
     anchorKinds: ["carrier_proof"],

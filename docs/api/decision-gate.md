@@ -5,6 +5,7 @@
 - `.:DECISION_GATE_EVENTS`
 - `.:DECISION_GATE_EVENT_PREFIX`
 - `.:DECISION_GATE_EVENT_VOCABULARY`
+- `.:DECISION_GATE_KIND`
 - `.:DecisionGateConsumedPayload`
 - `.:DecisionGateDecidedPayload`
 - `.:DecisionGateDecision`
@@ -13,9 +14,6 @@
 - `.:DecisionGateProjection`
 - `.:DecisionGateRequestedPayload`
 - `.:admitDecisionGate`
-- `.:commitDecisionGateConsumed`
-- `.:commitDecisionGateDecided`
-- `.:commitDecisionGateRequested`
 - `.:decisionGateBoundaryPackage`
 - `.:decisionGateBoundaryContract`
 - `.:projectDecisionGate`

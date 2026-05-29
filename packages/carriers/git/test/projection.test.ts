@@ -1,11 +1,6 @@
-import {
-  GIT_EVENTS,
-  commitGitCommitRecorded,
-  gitCarrierBoundaryPackage,
-  projectGitSubject,
-} from "../src";
+import { GIT_EVENTS, GIT_KIND, gitCarrierBoundaryPackage, projectGitSubject } from "../src";
 import { makePreClaim, settleLivedClaim } from "@agent-os/kernel/effect-claim";
-import type { ExtensionCapability } from "@agent-os/kernel/extensions";
+import { makeCommitters, type ExtensionCapability } from "@agent-os/kernel/extensions";
 
 const gitClaim = makePreClaim({
   operationRef: "git:session-1:commit",
@@ -39,7 +34,7 @@ describe("@agent-os/git-carrier", () => {
     const events = [
       {
         id: 1,
-        kind: GIT_EVENTS.WORKSPACE_CREATED,
+        kind: GIT_KIND.WORKSPACE_CREATED,
         payload: {
           subjectRef: "ch-1",
           workspaceRef: "worktree://ch-1",
@@ -50,7 +45,7 @@ describe("@agent-os/git-carrier", () => {
       },
       {
         id: 2,
-        kind: GIT_EVENTS.COMMIT_RECORDED,
+        kind: GIT_KIND.COMMIT_RECORDED,
         payload: {
           subjectRef: "ch-1",
           commitRef: "commit://def",
@@ -61,7 +56,7 @@ describe("@agent-os/git-carrier", () => {
       },
       {
         id: 3,
-        kind: GIT_EVENTS.MERGE_RECORDED,
+        kind: GIT_KIND.MERGE_RECORDED,
         payload: {
           subjectRef: "ch-1",
           mergeCommitRef: "commit://merge",
@@ -71,7 +66,7 @@ describe("@agent-os/git-carrier", () => {
       },
       {
         id: 4,
-        kind: GIT_EVENTS.WORKSPACE_CLEANED,
+        kind: GIT_KIND.WORKSPACE_CLEANED,
         payload: {
           subjectRef: "ch-1",
           workspaceRef: "worktree://ch-1",
@@ -108,7 +103,7 @@ describe("@agent-os/git-carrier", () => {
     };
 
     await expect(
-      commitGitCommitRecorded(cap, {
+      makeCommitters(GIT_EVENTS, cap)[GIT_KIND.COMMIT_RECORDED]({
         subjectRef: "session:1",
         commitRef: "commit://def",
         parentRef: "main@abc",
@@ -123,7 +118,7 @@ describe("@agent-os/git-carrier", () => {
 
     expect(committed).toEqual([
       {
-        event: GIT_EVENTS.COMMIT_RECORDED,
+        event: GIT_KIND.COMMIT_RECORDED,
         data: {
           subjectRef: "session:1",
           commitRef: "commit://def",

@@ -9,6 +9,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:WORKSPACE_SESSION_EVENTS`
 - `.:WORKSPACE_SESSION_EVENT_PREFIX`
 - `.:WORKSPACE_SESSION_EVENT_VOCABULARY`
+- `.:WORKSPACE_SESSION_KIND`
 - `.:WorkspaceSessionBackedUpPayload`
 - `.:WorkspaceSessionBackupRef`
 - `.:WorkspaceSessionBackupRequest`
@@ -31,12 +32,6 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:WorkspaceSessionRetention`
 - `.:WorkspaceSessionStartRequest`
 - `.:WorkspaceSessionStartedPayload`
-- `.:commitWorkspaceSessionBackedUp`
-- `.:commitWorkspaceSessionDestroyed`
-- `.:commitWorkspaceSessionFailed`
-- `.:commitWorkspaceSessionPreviewAllocated`
-- `.:commitWorkspaceSessionRestored`
-- `.:commitWorkspaceSessionStarted`
 - `.:projectWorkspaceSession`
 - `.:resolveWorkspaceSession`
 - `.:settleWorkspaceSessionRejected`

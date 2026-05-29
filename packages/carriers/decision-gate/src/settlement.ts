@@ -1,13 +1,6 @@
 import type { AdmitVerdict, PreClaim, RejectionRef } from "@agent-os/kernel/effect-claim";
-import type { ExtensionCapability } from "@agent-os/kernel/extensions";
 
-import {
-  DECISION_GATE_EVENTS,
-  type DecisionGateConsumedPayload,
-  type DecisionGateDecidedPayload,
-  type DecisionGateProjection,
-  type DecisionGateRequestedPayload,
-} from "./events";
+import type { DecisionGateProjection } from "./events";
 
 const rejection = (
   claim: PreClaim,
@@ -41,21 +34,3 @@ export const admitDecisionGate = (
       return rejection(claim, "decision_gate_missing");
   }
 };
-
-export const commitDecisionGateRequested = (
-  cap: ExtensionCapability,
-  payload: DecisionGateRequestedPayload,
-): Promise<{ readonly id: number }> =>
-  cap.commit({ event: DECISION_GATE_EVENTS.REQUESTED, data: payload });
-
-export const commitDecisionGateDecided = (
-  cap: ExtensionCapability,
-  payload: DecisionGateDecidedPayload,
-): Promise<{ readonly id: number }> =>
-  cap.commit({ event: DECISION_GATE_EVENTS.DECIDED, data: payload });
-
-export const commitDecisionGateConsumed = (
-  cap: ExtensionCapability,
-  payload: DecisionGateConsumedPayload,
-): Promise<{ readonly id: number }> =>
-  cap.commit({ event: DECISION_GATE_EVENTS.CONSUMED, data: payload });

@@ -3,11 +3,7 @@ import {
   type LivedClaim,
   type RejectedClaim,
 } from "@agent-os/kernel/effect-claim";
-import { DEPLOY_EVENT_VOCABULARY } from "./extension";
-
-export const DEPLOY_EVENTS = DEPLOY_EVENT_VOCABULARY;
-
-export type DeployEventKind = (typeof DEPLOY_EVENTS)[keyof typeof DEPLOY_EVENTS];
+import { defineEventKindView, defineEventPayloads, payload } from "@agent-os/kernel/extensions";
 
 export interface DeployPreviewRecordedPayload {
   readonly subjectRef: string;
@@ -46,6 +42,24 @@ export interface DeployFailedPayload {
   readonly reason: string;
   readonly claim: RejectedClaim;
 }
+
+export const DEPLOY_EVENTS = defineEventPayloads({
+  "deploy.preview.recorded": payload<DeployPreviewRecordedPayload>(),
+  "deploy.production.promoted": payload<DeployProductionPromotedPayload>(),
+  "deploy.production.readback": payload<DeployProductionReadbackPayload>(),
+  "deploy.rollback.recorded": payload<DeployRollbackRecordedPayload>(),
+  "deploy.failed": payload<DeployFailedPayload>(),
+});
+
+export const DEPLOY_KIND = defineEventKindView(DEPLOY_EVENTS, {
+  PREVIEW_RECORDED: "deploy.preview.recorded",
+  PRODUCTION_PROMOTED: "deploy.production.promoted",
+  PRODUCTION_READBACK: "deploy.production.readback",
+  ROLLBACK_RECORDED: "deploy.rollback.recorded",
+  FAILED: "deploy.failed",
+});
+
+export type DeployEventKind = keyof typeof DEPLOY_EVENTS;
 
 export interface DeployLedgerEvent {
   readonly id: number;
@@ -130,7 +144,7 @@ export const projectDeploy = (
     if (!isRecord(event.payload)) continue;
     if (event.payload.subjectRef !== subjectRef) continue;
     switch (event.kind) {
-      case DEPLOY_EVENTS.PREVIEW_RECORDED: {
+      case DEPLOY_KIND.PREVIEW_RECORDED: {
         const nextPreviewRef = stringField(event.payload, "previewRef");
         const nextArtifactRef = stringField(event.payload, "artifactRef");
         if (
@@ -146,7 +160,7 @@ export const projectDeploy = (
         failure = undefined;
         break;
       }
-      case DEPLOY_EVENTS.PRODUCTION_PROMOTED: {
+      case DEPLOY_KIND.PRODUCTION_PROMOTED: {
         const nextDeployRef = stringField(event.payload, "deployRef");
         const nextProductionRef = stringField(event.payload, "productionRef");
         if (
@@ -164,7 +178,7 @@ export const projectDeploy = (
         failure = undefined;
         break;
       }
-      case DEPLOY_EVENTS.PRODUCTION_READBACK: {
+      case DEPLOY_KIND.PRODUCTION_READBACK: {
         const nextProductionRef = stringField(event.payload, "productionRef");
         const nextReadbackRef = stringField(event.payload, "readbackRef");
         if (
@@ -181,7 +195,7 @@ export const projectDeploy = (
         status = event.payload.status === "passed" ? "live_verified" : "failed";
         break;
       }
-      case DEPLOY_EVENTS.ROLLBACK_RECORDED: {
+      case DEPLOY_KIND.ROLLBACK_RECORDED: {
         const nextRollbackRef = stringField(event.payload, "rollbackRef");
         const restoredDeployRef = stringField(event.payload, "restoredDeployRef");
         if (
@@ -198,7 +212,7 @@ export const projectDeploy = (
         failure = undefined;
         break;
       }
-      case DEPLOY_EVENTS.FAILED: {
+      case DEPLOY_KIND.FAILED: {
         const nextFailure = failureFrom(event.payload);
         if (nextFailure === undefined) break;
         failure = nextFailure;
