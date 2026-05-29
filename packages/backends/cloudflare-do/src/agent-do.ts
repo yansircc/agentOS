@@ -69,28 +69,15 @@ import {
   commitBoundaryEvent,
   Ledger,
   LlmTransport,
-  Quota,
   submitAgentEffect,
   validateBoundaryEventPayload,
   type InternalSubmitSpec,
 } from "@agent-os/runtime";
-import {
-  Dispatch,
-  DispatchLive,
-  type DispatchEnvelope,
-  type DispatchTargetRegistry,
-} from "./dispatch";
+import { Dispatch, type DispatchEnvelope, type DispatchTargetRegistry } from "./dispatch";
 import { armNextDue } from "./due-work";
-import {
-  EventBus,
-  EventBusLive,
-  LedgerLive,
-  createEventStreamResponse,
-  eventToRpc,
-} from "./ledger";
-import { Scheduler, SchedulerLive } from "./scheduler";
-import { Resources, ResourcesLive } from "./resources";
-import { QuotaLive } from "./quota";
+import { createEventStreamResponse, eventToRpc } from "./ledger";
+import { Scheduler } from "./scheduler";
+import { Resources } from "./resources";
 import { AiBinding, LlmTransportLive } from "./llm";
 import { isMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
 import { AdmissionLive } from "./admission";
@@ -120,6 +107,7 @@ import {
   projectRunTrace,
   RUN_BEARING_KINDS,
 } from "./projections";
+import { makeCloudflareBackendCoreLayer, type CloudflareBackendCoreServices } from "./runtime-core";
 
 export interface CloudflareAgentEnv {
   readonly AI: Ai;
@@ -148,14 +136,9 @@ export interface AgentEventHandlerContext {
 }
 
 type CoreServices =
-  | Ledger
-  | EventBus
+  | CloudflareBackendCoreServices
   | AiBinding
   | LlmTransport
-  | Scheduler
-  | Dispatch
-  | Resources
-  | Quota
   | Admission
   | RefResolverService;
 
@@ -167,35 +150,16 @@ const makeAgentRuntime = (
   refs: RefResolver,
   dispatchTargets: DispatchTargetRegistry,
 ): ManagedRuntime.ManagedRuntime<CoreServices, SqlError> => {
-  const sql = ctx.storage.sql;
-  const eventBusLayer = EventBusLive(handlers);
-  const ledgerLayer = LedgerLive(sql).pipe(Layer.provide(eventBusLayer));
-  const schedulerLayer = SchedulerLive(ctx, scope).pipe(Layer.provide(eventBusLayer));
-  const dispatchLayer = DispatchLive(ctx, scope, dispatchTargets).pipe(
-    Layer.provide(eventBusLayer),
-  );
-  const resourcesLayer = ResourcesLive(ctx).pipe(Layer.provide(eventBusLayer));
-  const quotaLayer = QuotaLive(ctx).pipe(Layer.provide(eventBusLayer));
+  const backendCoreLayer = makeCloudflareBackendCoreLayer(ctx, scope, handlers, dispatchTargets);
   const aiLayer = Layer.succeed(AiBinding, ai);
   const refResolverLayer = RefResolverLive(refs);
   const providerBaseLayer = Layer.mergeAll(aiLayer, refResolverLayer);
   const llmTransportLayer = LlmTransportLive.pipe(Layer.provide(providerBaseLayer));
   const admissionLayer = AdmissionLive(ctx).pipe(
-    Layer.provide(Layer.mergeAll(eventBusLayer, providerBaseLayer)),
+    Layer.provide(Layer.mergeAll(backendCoreLayer, providerBaseLayer)),
   );
   return ManagedRuntime.make(
-    Layer.mergeAll(
-      eventBusLayer,
-      ledgerLayer,
-      schedulerLayer,
-      dispatchLayer,
-      resourcesLayer,
-      quotaLayer,
-      aiLayer,
-      llmTransportLayer,
-      admissionLayer,
-      refResolverLayer,
-    ),
+    Layer.mergeAll(backendCoreLayer, aiLayer, llmTransportLayer, admissionLayer, refResolverLayer),
   );
 };
 

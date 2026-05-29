@@ -1,3 +1,4 @@
+import { Effect, Fiber, TestClock } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import { makePreClaim } from "@agent-os/kernel/effect-claim";
 import { bindingMaterialRef } from "@agent-os/kernel/material-ref";
@@ -8,6 +9,7 @@ import {
   DUE_WORK_SCHEDULED_EVENT,
   describeDispatchCause,
   dispatchBackoffMs,
+  fireBackendEventHandlers,
   parseRequestedPayload,
 } from "../src";
 
@@ -81,4 +83,34 @@ describe("@agent-os/backend-protocol", () => {
     expect(DUE_WORK_SCHEDULED_EVENT).toBe("scheduled_event");
     expect(DUE_WORK_DISPATCH_RETRY).toBe("dispatch_retry");
   });
+
+  it.effect("bounds hung event handlers and continues fanout", () =>
+    Effect.gen(function* () {
+      const calls: string[] = [];
+      const fiber = yield* fireBackendEventHandlers(
+        [
+          () => {
+            calls.push("hung");
+            return new Promise<void>(() => undefined);
+          },
+          () => {
+            calls.push("after");
+          },
+        ],
+        {
+          id: 1,
+          ts: 1,
+          kind: "app.handled",
+          scope: "scope",
+          payload: { ok: true },
+        },
+        "test handler",
+      ).pipe(Effect.fork);
+
+      yield* TestClock.adjust("6 seconds");
+      yield* Fiber.join(fiber);
+
+      expect(calls).toEqual(["hung", "after"]);
+    }),
+  );
 });
