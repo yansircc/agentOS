@@ -4,8 +4,6 @@ import { RESOURCE_KIND } from "./events";
 
 export const RESOURCE_EVENT_PREFIX = "resource.";
 
-export const RESOURCE_EVENT_VOCABULARY = RESOURCE_KIND;
-
 export const RESOURCE_AUTHORITIES = {
   PROVISION: {
     authorityId: "@agent-os/resource-carrier.provision",
@@ -65,7 +63,7 @@ export const resourceBoundaryContract = defineBoundaryContract({
   packageId: "@agent-os/resource-carrier",
   kindPrefixes: [RESOURCE_EVENT_PREFIX],
   roles: ["resolver", "reader"],
-  vocabulary: RESOURCE_EVENT_VOCABULARY,
+  vocabulary: RESOURCE_KIND,
   authorityContracts: resourceAuthorityContracts,
   materialRequirements: [apiToken, account, binding],
   claimPayloadKey: "claim",

@@ -46,7 +46,6 @@ import {
   armBeforeDueCommit,
   completeDueWork,
   ensureDueWorkSchema,
-  findNextDue,
   insertDispatchRetryDueWork,
 } from "../due-work";
 
@@ -283,10 +282,7 @@ export const DispatchLive = (
 
       const drainDue = (
         now: number,
-      ): Effect.Effect<
-        { delivered: number; failed: number; next: number | null },
-        SqlError | JsonStringifyError
-      > =>
+      ): Effect.Effect<{ delivered: number; failed: number }, SqlError | JsonStringifyError> =>
         Effect.gen(function* () {
           const rows = yield* selectDue(sql, now);
           let delivered = 0;
@@ -296,8 +292,7 @@ export const DispatchLive = (
             if (outcome === "delivered") delivered += 1;
             else failed += 1;
           }
-          const next = yield* findNextDue(sql);
-          return { delivered, failed, next };
+          return { delivered, failed };
         });
 
       return {

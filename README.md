@@ -101,7 +101,7 @@ const lookup = defineRegisteredTool({
   execute: async (args: { key: string }) => ({ value: args.key }),
 });
 
-export class AgentDO extends createAgentDurableObject<Env>({
+export const AgentDO = createAgentDurableObject<Env>({
   refResolver: (env) => ({
     material: (ref) => {
       if (ref.kind === "endpoint" && ref.ref === "llm") return env.LLM_ENDPOINT;
@@ -109,7 +109,7 @@ export class AgentDO extends createAgentDurableObject<Env>({
       return null;
     },
   }),
-}) {}
+});
 ```
 
 ## Documents

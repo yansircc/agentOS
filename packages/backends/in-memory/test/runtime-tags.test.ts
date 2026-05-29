@@ -61,15 +61,12 @@ describe("in-memory runtime backend", () => {
       await runtime.runPromise(scheduler.schedule(10, "example.due", { id: "job-1" }));
 
       await expect(runtime.runPromise(scheduler.fireDue(9))).resolves.toEqual({
-        next: 10,
         fired: 0,
       });
       await expect(runtime.runPromise(scheduler.fireDue(10))).resolves.toEqual({
-        next: null,
         fired: 1,
       });
       await expect(runtime.runPromise(scheduler.fireDue(10))).resolves.toEqual({
-        next: null,
         fired: 0,
       });
       const events = await runtime.runPromise(ledger.events("schedule-scope"));

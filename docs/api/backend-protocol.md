@@ -11,7 +11,6 @@
 - `.:DUE_WORK_DISPATCH_RETRY`
 - `.:DUE_WORK_SCHEDULED_EVENT`
 - `.:copyTraceContext`
-- `.:describeCause`
 - `.:describeDispatchCause`
 - `.:dispatchBackoffMs`
 - `.:dispatchPayloadParseFailure`
@@ -22,7 +21,6 @@
 - `.:parseRequestedPayload`
 - `.:parseRequestedPayloadValue`
 - `.:parseTraceContext`
-- `.:retryDelayMs`
 - `.:BackendProtocolEventHandler`
 - `.:BackendProtocolLedgerEventRpc`
 - `.:DispatchOutboundDeliveredPayload`

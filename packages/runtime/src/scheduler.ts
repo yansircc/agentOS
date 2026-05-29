@@ -11,6 +11,6 @@ export class Scheduler extends Context.Tag("@agent-os/Scheduler")<
     ) => Effect.Effect<{ id: number }, SqlError | JsonStringifyError>;
     readonly fireDue: (
       now: number,
-    ) => Effect.Effect<{ next: number | null; fired: number }, SqlError | JsonStringifyError>;
+    ) => Effect.Effect<{ fired: number }, SqlError | JsonStringifyError>;
   }
 >() {}

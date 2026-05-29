@@ -9,7 +9,6 @@ Status: 0.2.x active development for provider-neutral resource carrier algebra. 
 - `.:RESOURCE_AUTHORITIES`
 - `.:RESOURCE_EVENTS`
 - `.:RESOURCE_EVENT_PREFIX`
-- `.:RESOURCE_EVENT_VOCABULARY`
 - `.:RESOURCE_KIND`
 - `.:ResourceBindRequest`
 - `.:ResourceBoundPayload`

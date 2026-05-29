@@ -6,9 +6,9 @@ import {
   DISPATCH_MAX_ATTEMPTS,
   DUE_WORK_DISPATCH_RETRY,
   DUE_WORK_SCHEDULED_EVENT,
-  describeCause,
+  describeDispatchCause,
+  dispatchBackoffMs,
   parseRequestedPayload,
-  retryDelayMs,
 } from "../src";
 
 const bindingRef = bindingMaterialRef({
@@ -75,9 +75,9 @@ describe("@agent-os/backend-protocol", () => {
 
   it("owns retry, cause, and due-work vocabulary", () => {
     expect(DISPATCH_MAX_ATTEMPTS).toBe(8);
-    expect(retryDelayMs(1)).toBe(1_000);
-    expect(retryDelayMs(8)).toBe(60_000);
-    expect(describeCause(new Error("boom"))).toBe("Error: boom");
+    expect(dispatchBackoffMs(1)).toBe(1_000);
+    expect(dispatchBackoffMs(8)).toBe(60_000);
+    expect(describeDispatchCause(new Error("boom"))).toBe("Error: boom");
     expect(DUE_WORK_SCHEDULED_EVENT).toBe("scheduled_event");
     expect(DUE_WORK_DISPATCH_RETRY).toBe("dispatch_retry");
   });

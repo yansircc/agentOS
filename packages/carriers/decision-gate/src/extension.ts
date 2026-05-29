@@ -3,13 +3,11 @@ import { DECISION_GATE_KIND } from "./events";
 
 export const DECISION_GATE_EVENT_PREFIX = "decision_gate.";
 
-export const DECISION_GATE_EVENT_VOCABULARY = DECISION_GATE_KIND;
-
 export const decisionGateBoundaryContract = defineBoundaryContract({
   packageId: "@agent-os/decision-gate",
   kindPrefixes: [DECISION_GATE_EVENT_PREFIX],
   roles: ["admitter", "reader"],
-  vocabulary: DECISION_GATE_EVENT_VOCABULARY,
+  vocabulary: DECISION_GATE_KIND,
   authorityContracts: [],
   materialRequirements: [],
   claimPayloadKey: "claim",

@@ -3,13 +3,11 @@ import { WORKSPACE_SESSION_KIND } from "./events";
 
 export const WORKSPACE_SESSION_EVENT_PREFIX = "workspace_session.";
 
-export const WORKSPACE_SESSION_EVENT_VOCABULARY = WORKSPACE_SESSION_KIND;
-
 export const workspaceSessionBoundaryContract = defineBoundaryContract({
   packageId: "@agent-os/workspace-session",
   kindPrefixes: [WORKSPACE_SESSION_EVENT_PREFIX],
   roles: ["resolver", "reader"],
-  vocabulary: WORKSPACE_SESSION_EVENT_VOCABULARY,
+  vocabulary: WORKSPACE_SESSION_KIND,
   authorityContracts: [],
   materialRequirements: [],
   claimPayloadKey: "claim",
