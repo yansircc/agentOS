@@ -1,9 +1,5 @@
 import { validateEffectClaim, type LivedClaim } from "@agent-os/kernel/effect-claim";
-import { STAGING_EVENT_VOCABULARY } from "./extension";
-
-export const STAGING_EVENTS = STAGING_EVENT_VOCABULARY;
-
-export type StagingEventKind = (typeof STAGING_EVENTS)[keyof typeof STAGING_EVENTS];
+import { defineEventKindView, defineEventPayloads, payload } from "@agent-os/kernel/extensions";
 
 export interface StagingArtifactPublishedPayload {
   readonly subjectRef: string;
@@ -19,6 +15,18 @@ export interface StagingArtifactReapedPayload {
   readonly reason: "published" | "discarded" | "expired";
   readonly claim: LivedClaim;
 }
+
+export const STAGING_EVENTS = defineEventPayloads({
+  "staging.artifact.published": payload<StagingArtifactPublishedPayload>(),
+  "staging.artifact.reaped": payload<StagingArtifactReapedPayload>(),
+});
+
+export const STAGING_KIND = defineEventKindView(STAGING_EVENTS, {
+  ARTIFACT_PUBLISHED: "staging.artifact.published",
+  ARTIFACT_REAPED: "staging.artifact.reaped",
+});
+
+export type StagingEventKind = keyof typeof STAGING_EVENTS;
 
 export interface StagingLedgerEvent {
   readonly id: number;
@@ -64,14 +72,14 @@ export const projectStagingArtifact = (
     if (event.payload.subjectRef !== subjectRef) continue;
     if (livedClaimFrom(event.payload.claim) === undefined) continue;
     switch (event.kind) {
-      case STAGING_EVENTS.ARTIFACT_PUBLISHED:
+      case STAGING_KIND.ARTIFACT_PUBLISHED:
         artifactRef = stringField(event.payload, "artifactRef");
         routeRef = stringField(event.payload, "routeRef");
         digest = stringField(event.payload, "digest");
         status = "published";
         reapedReason = undefined;
         break;
-      case STAGING_EVENTS.ARTIFACT_REAPED:
+      case STAGING_KIND.ARTIFACT_REAPED:
         artifactRef = stringField(event.payload, "artifactRef") ?? artifactRef;
         status = "reaped";
         reapedReason = reapReasonFrom(event.payload.reason);

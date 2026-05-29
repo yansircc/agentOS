@@ -1,15 +1,10 @@
 import { boundaryPackage, defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
 import { materialRequirement, type AuthorityContract } from "@agent-os/kernel/material-ref";
+import { RESOURCE_KIND } from "./events";
 
 export const RESOURCE_EVENT_PREFIX = "resource.";
 
-export const RESOURCE_EVENT_VOCABULARY = {
-  RESOURCE_PROVISIONED: `${RESOURCE_EVENT_PREFIX}resource.provisioned`,
-  RESOURCE_BOUND: `${RESOURCE_EVENT_PREFIX}resource.bound`,
-  MUTATION_RECORDED: `${RESOURCE_EVENT_PREFIX}mutation.recorded`,
-  RESOURCE_DESTROYED: `${RESOURCE_EVENT_PREFIX}resource.destroyed`,
-  FAILED: `${RESOURCE_EVENT_PREFIX}failed`,
-} as const;
+export const RESOURCE_EVENT_VOCABULARY = RESOURCE_KIND;
 
 export const RESOURCE_AUTHORITIES = {
   PROVISION: {
@@ -75,11 +70,11 @@ export const resourceBoundaryContract = defineBoundaryContract({
   materialRequirements: [apiToken, account, binding],
   claimPayloadKey: "claim",
   claimPhases: {
-    [RESOURCE_EVENT_VOCABULARY.RESOURCE_PROVISIONED]: ["lived"],
-    [RESOURCE_EVENT_VOCABULARY.RESOURCE_BOUND]: ["lived"],
-    [RESOURCE_EVENT_VOCABULARY.MUTATION_RECORDED]: ["lived"],
-    [RESOURCE_EVENT_VOCABULARY.RESOURCE_DESTROYED]: ["lived"],
-    [RESOURCE_EVENT_VOCABULARY.FAILED]: ["rejected"],
+    [RESOURCE_KIND.RESOURCE_PROVISIONED]: ["lived"],
+    [RESOURCE_KIND.RESOURCE_BOUND]: ["lived"],
+    [RESOURCE_KIND.MUTATION_RECORDED]: ["lived"],
+    [RESOURCE_KIND.RESOURCE_DESTROYED]: ["lived"],
+    [RESOURCE_KIND.FAILED]: ["rejected"],
   },
   proof: {
     anchorKinds: ["carrier_proof", "external_receipt"],

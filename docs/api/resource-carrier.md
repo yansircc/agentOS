@@ -6,6 +6,7 @@
 - `.:RESOURCE_EVENTS`
 - `.:RESOURCE_EVENT_PREFIX`
 - `.:RESOURCE_EVENT_VOCABULARY`
+- `.:RESOURCE_KIND`
 - `.:ResourceBindRequest`
 - `.:ResourceBoundPayload`
 - `.:ResourceCarrier`
@@ -22,11 +23,6 @@
 - `.:ResourceProjection`
 - `.:ResourceProvisionRequest`
 - `.:ResourceProvisionedPayload`
-- `.:commitResourceBound`
-- `.:commitResourceDestroyed`
-- `.:commitResourceFailed`
-- `.:commitResourceMutationRecorded`
-- `.:commitResourceProvisioned`
 - `.:projectResource`
 - `.:resourceAuthorityContracts`
 - `.:resourceBoundaryContract`

@@ -1,9 +1,4 @@
-import {
-  STAGING_EVENTS,
-  deferStagingArtifactReap,
-  projectStagingArtifact,
-  stagingArtifactBoundaryPackage,
-} from "../src";
+import { STAGING_KIND, projectStagingArtifact, stagingArtifactBoundaryPackage } from "../src";
 import { makePreClaim, settleLivedClaim } from "@agent-os/kernel/effect-claim";
 import type { ExtensionCapability } from "@agent-os/kernel/extensions";
 
@@ -39,7 +34,7 @@ describe("@agent-os/staging-artifact", () => {
     const events = [
       {
         id: 1,
-        kind: STAGING_EVENTS.ARTIFACT_PUBLISHED,
+        kind: STAGING_KIND.ARTIFACT_PUBLISHED,
         payload: {
           subjectRef: "ch-1",
           artifactRef: "r2://staging/ch-1",
@@ -50,7 +45,7 @@ describe("@agent-os/staging-artifact", () => {
       },
       {
         id: 2,
-        kind: STAGING_EVENTS.ARTIFACT_REAPED,
+        kind: STAGING_KIND.ARTIFACT_REAPED,
         payload: {
           subjectRef: "ch-1",
           artifactRef: "r2://staging/ch-1",
@@ -87,22 +82,26 @@ describe("@agent-os/staging-artifact", () => {
     };
 
     await expect(
-      deferStagingArtifactReap(cap, 42, {
-        subjectRef: "session:1",
-        artifactRef: "r2://staging/session-1",
-        reason: "expired",
-        claim: settleLivedClaim(stagingClaim, {
-          anchorId: "r2://staging/session-1",
-          anchorKind: "carrier_proof",
-          carrierRef: "staging-artifact",
-        }),
+      cap.time({
+        at: 42,
+        event: STAGING_KIND.ARTIFACT_REAPED,
+        data: {
+          subjectRef: "session:1",
+          artifactRef: "r2://staging/session-1",
+          reason: "expired",
+          claim: settleLivedClaim(stagingClaim, {
+            anchorId: "r2://staging/session-1",
+            anchorKind: "carrier_proof",
+            carrierRef: "staging-artifact",
+          }),
+        },
       }),
     ).resolves.toEqual({ id: 1 });
 
     expect(deferred).toEqual([
       {
         at: 42,
-        event: STAGING_EVENTS.ARTIFACT_REAPED,
+        event: STAGING_KIND.ARTIFACT_REAPED,
         data: {
           subjectRef: "session:1",
           artifactRef: "r2://staging/session-1",

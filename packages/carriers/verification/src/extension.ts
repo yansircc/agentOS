@@ -1,10 +1,9 @@
 import { boundaryPackage, defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
+import { VERIFICATION_KIND } from "./events";
 
 export const VERIFICATION_EVENT_PREFIX = "verification.";
 
-export const VERIFICATION_EVENT_VOCABULARY = {
-  GATE_RECORDED: `${VERIFICATION_EVENT_PREFIX}gate.recorded`,
-} as const;
+export const VERIFICATION_EVENT_VOCABULARY = VERIFICATION_KIND;
 
 export const verificationBoundaryContract = defineBoundaryContract({
   packageId: "@agent-os/verification",
@@ -15,7 +14,7 @@ export const verificationBoundaryContract = defineBoundaryContract({
   materialRequirements: [],
   claimPayloadKey: "claim",
   claimPhases: {
-    [VERIFICATION_EVENT_VOCABULARY.GATE_RECORDED]: ["lived"],
+    [VERIFICATION_KIND.GATE_RECORDED]: ["lived"],
   },
   proof: {
     anchorKinds: ["carrier_proof", "external_receipt"],

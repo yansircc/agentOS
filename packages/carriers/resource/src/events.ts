@@ -9,12 +9,7 @@ import {
   type ExternalResourceMaterialRef,
   type MaterialRef,
 } from "@agent-os/kernel/material-ref";
-
-import { RESOURCE_EVENT_VOCABULARY } from "./extension";
-
-export const RESOURCE_EVENTS = RESOURCE_EVENT_VOCABULARY;
-
-export type ResourceEventKind = (typeof RESOURCE_EVENTS)[keyof typeof RESOURCE_EVENTS];
+import { defineEventKindView, defineEventPayloads, payload } from "@agent-os/kernel/extensions";
 
 export type ResourceLifecycleStep = "provision" | "bind" | "mutate" | "destroy";
 
@@ -61,6 +56,24 @@ export interface ResourceFailedPayload {
   readonly reason: string;
   readonly claim: RejectedClaim;
 }
+
+export const RESOURCE_EVENTS = defineEventPayloads({
+  "resource.resource.provisioned": payload<ResourceProvisionedPayload>(),
+  "resource.resource.bound": payload<ResourceBoundPayload>(),
+  "resource.mutation.recorded": payload<ResourceMutationRecordedPayload>(),
+  "resource.resource.destroyed": payload<ResourceDestroyedPayload>(),
+  "resource.failed": payload<ResourceFailedPayload>(),
+});
+
+export const RESOURCE_KIND = defineEventKindView(RESOURCE_EVENTS, {
+  RESOURCE_PROVISIONED: "resource.resource.provisioned",
+  RESOURCE_BOUND: "resource.resource.bound",
+  MUTATION_RECORDED: "resource.mutation.recorded",
+  RESOURCE_DESTROYED: "resource.resource.destroyed",
+  FAILED: "resource.failed",
+});
+
+export type ResourceEventKind = keyof typeof RESOURCE_EVENTS;
 
 export interface ResourceLedgerEvent {
   readonly id: number;
@@ -230,7 +243,7 @@ export const projectResource = (
     if (!isRecord(event.payload)) continue;
     if (event.payload.subjectRef !== subjectRef) continue;
     switch (event.kind) {
-      case RESOURCE_EVENTS.RESOURCE_PROVISIONED: {
+      case RESOURCE_KIND.RESOURCE_PROVISIONED: {
         const nextResourceRef = externalResourceRefFrom(event.payload.resourceRef);
         const nextResourceKind = stringField(event.payload, "resourceKind");
         const proofRef = stringField(event.payload, "proofRef");
@@ -253,7 +266,7 @@ export const projectResource = (
         failure = undefined;
         break;
       }
-      case RESOURCE_EVENTS.RESOURCE_BOUND: {
+      case RESOURCE_KIND.RESOURCE_BOUND: {
         const nextResourceRef = externalResourceRefFrom(event.payload.resourceRef);
         const nextBindingRef = bindingRefFrom(event.payload.bindingRef);
         const proofRef = stringField(event.payload, "proofRef");
@@ -275,7 +288,7 @@ export const projectResource = (
         failure = undefined;
         break;
       }
-      case RESOURCE_EVENTS.MUTATION_RECORDED: {
+      case RESOURCE_KIND.MUTATION_RECORDED: {
         const mutation = mutationPayloadFrom(event);
         if (mutation === undefined) break;
         if (
@@ -294,7 +307,7 @@ export const projectResource = (
         failure = undefined;
         break;
       }
-      case RESOURCE_EVENTS.RESOURCE_DESTROYED: {
+      case RESOURCE_KIND.RESOURCE_DESTROYED: {
         const nextResourceRef = materialRefFrom(event.payload.resourceRef);
         const proofRef = stringField(event.payload, "proofRef");
         const reason = destroyReasonFrom(event.payload.reason);
@@ -316,7 +329,7 @@ export const projectResource = (
         failure = undefined;
         break;
       }
-      case RESOURCE_EVENTS.FAILED: {
+      case RESOURCE_KIND.FAILED: {
         const nextFailure = failedPayloadFrom(event.payload);
         if (nextFailure === undefined) break;
         failure = nextFailure;

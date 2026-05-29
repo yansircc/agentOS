@@ -5,13 +5,7 @@ import {
   type PreClaim,
   type RejectionRef,
 } from "@agent-os/kernel/effect-claim";
-
-import { DECISION_GATE_EVENT_VOCABULARY } from "./extension";
-
-export const DECISION_GATE_EVENTS = DECISION_GATE_EVENT_VOCABULARY;
-
-export type DecisionGateEventKind =
-  (typeof DECISION_GATE_EVENTS)[keyof typeof DECISION_GATE_EVENTS];
+import { defineEventKindView, defineEventPayloads, payload } from "@agent-os/kernel/extensions";
 
 export type DecisionGateDecision = "approved" | "rejected";
 
@@ -38,6 +32,20 @@ export interface DecisionGateConsumedPayload {
   readonly consumedBy: string;
   readonly claim: LivedClaim;
 }
+
+export const DECISION_GATE_EVENTS = defineEventPayloads({
+  "decision_gate.requested": payload<DecisionGateRequestedPayload>(),
+  "decision_gate.decided": payload<DecisionGateDecidedPayload>(),
+  "decision_gate.consumed": payload<DecisionGateConsumedPayload>(),
+});
+
+export const DECISION_GATE_KIND = defineEventKindView(DECISION_GATE_EVENTS, {
+  REQUESTED: "decision_gate.requested",
+  DECIDED: "decision_gate.decided",
+  CONSUMED: "decision_gate.consumed",
+});
+
+export type DecisionGateEventKind = keyof typeof DECISION_GATE_EVENTS;
 
 export interface DecisionGateLedgerEvent {
   readonly id: number;
@@ -140,7 +148,7 @@ export const projectDecisionGate = (
     if (!isRecord(event.payload)) continue;
     if (event.payload.gateRef !== gateRef) continue;
     switch (event.kind) {
-      case DECISION_GATE_EVENTS.REQUESTED: {
+      case DECISION_GATE_KIND.REQUESTED: {
         const next = requestedFrom(event.payload);
         if (next !== undefined) {
           request = next;
@@ -149,7 +157,7 @@ export const projectDecisionGate = (
         }
         break;
       }
-      case DECISION_GATE_EVENTS.DECIDED: {
+      case DECISION_GATE_KIND.DECIDED: {
         const next = decidedFrom(event.payload);
         if (next !== undefined && request !== undefined) {
           decision = next;
@@ -157,7 +165,7 @@ export const projectDecisionGate = (
         }
         break;
       }
-      case DECISION_GATE_EVENTS.CONSUMED: {
+      case DECISION_GATE_KIND.CONSUMED: {
         const next = consumedFrom(event.payload);
         if (
           next !== undefined &&

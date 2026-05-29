@@ -1,15 +1,9 @@
 import { boundaryPackage, defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
+import { WORKSPACE_SESSION_KIND } from "./events";
 
 export const WORKSPACE_SESSION_EVENT_PREFIX = "workspace_session.";
 
-export const WORKSPACE_SESSION_EVENT_VOCABULARY = {
-  STARTED: `${WORKSPACE_SESSION_EVENT_PREFIX}started`,
-  RESTORED: `${WORKSPACE_SESSION_EVENT_PREFIX}restored`,
-  BACKED_UP: `${WORKSPACE_SESSION_EVENT_PREFIX}backed_up`,
-  PREVIEW_ALLOCATED: `${WORKSPACE_SESSION_EVENT_PREFIX}preview_allocated`,
-  DESTROYED: `${WORKSPACE_SESSION_EVENT_PREFIX}destroyed`,
-  FAILED: `${WORKSPACE_SESSION_EVENT_PREFIX}failed`,
-} as const;
+export const WORKSPACE_SESSION_EVENT_VOCABULARY = WORKSPACE_SESSION_KIND;
 
 export const workspaceSessionBoundaryContract = defineBoundaryContract({
   packageId: "@agent-os/workspace-session",
@@ -20,12 +14,12 @@ export const workspaceSessionBoundaryContract = defineBoundaryContract({
   materialRequirements: [],
   claimPayloadKey: "claim",
   claimPhases: {
-    [WORKSPACE_SESSION_EVENT_VOCABULARY.STARTED]: ["lived"],
-    [WORKSPACE_SESSION_EVENT_VOCABULARY.RESTORED]: ["lived"],
-    [WORKSPACE_SESSION_EVENT_VOCABULARY.BACKED_UP]: ["lived"],
-    [WORKSPACE_SESSION_EVENT_VOCABULARY.PREVIEW_ALLOCATED]: ["lived"],
-    [WORKSPACE_SESSION_EVENT_VOCABULARY.DESTROYED]: ["lived"],
-    [WORKSPACE_SESSION_EVENT_VOCABULARY.FAILED]: ["rejected"],
+    [WORKSPACE_SESSION_KIND.STARTED]: ["lived"],
+    [WORKSPACE_SESSION_KIND.RESTORED]: ["lived"],
+    [WORKSPACE_SESSION_KIND.BACKED_UP]: ["lived"],
+    [WORKSPACE_SESSION_KIND.PREVIEW_ALLOCATED]: ["lived"],
+    [WORKSPACE_SESSION_KIND.DESTROYED]: ["lived"],
+    [WORKSPACE_SESSION_KIND.FAILED]: ["rejected"],
   },
   proof: {
     anchorKinds: ["carrier_proof"],

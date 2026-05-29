@@ -1,12 +1,12 @@
 import {
   DECISION_GATE_EVENTS,
+  DECISION_GATE_KIND,
   admitDecisionGate,
-  commitDecisionGateRequested,
   decisionGateBoundaryPackage,
   projectDecisionGate,
 } from "../src";
 import { makePreClaim, settleLivedClaim } from "@agent-os/kernel/effect-claim";
-import type { ExtensionCapability } from "@agent-os/kernel/extensions";
+import { makeCommitters, type ExtensionCapability } from "@agent-os/kernel/extensions";
 
 const claim = makePreClaim({
   operationRef: "publish:subject-1",
@@ -40,7 +40,7 @@ describe("@agent-os/decision-gate", () => {
     const events = [
       {
         id: 1,
-        kind: DECISION_GATE_EVENTS.REQUESTED,
+        kind: DECISION_GATE_KIND.REQUESTED,
         payload: {
           gateRef: "gate/1",
           subjectRef: "subject-1",
@@ -50,7 +50,7 @@ describe("@agent-os/decision-gate", () => {
       },
       {
         id: 2,
-        kind: DECISION_GATE_EVENTS.DECIDED,
+        kind: DECISION_GATE_KIND.DECIDED,
         payload: {
           gateRef: "gate/1",
           decisionRef: "decision/1",
@@ -60,7 +60,7 @@ describe("@agent-os/decision-gate", () => {
       },
       {
         id: 3,
-        kind: DECISION_GATE_EVENTS.CONSUMED,
+        kind: DECISION_GATE_KIND.CONSUMED,
         payload: {
           gateRef: "gate/1",
           decisionRef: "decision/1",
@@ -156,7 +156,7 @@ describe("@agent-os/decision-gate", () => {
     const events = [
       {
         id: 1,
-        kind: DECISION_GATE_EVENTS.REQUESTED,
+        kind: DECISION_GATE_KIND.REQUESTED,
         payload: {
           gateRef: "gate/bad",
           subjectRef: "subject-1",
@@ -165,7 +165,7 @@ describe("@agent-os/decision-gate", () => {
       },
       {
         id: 2,
-        kind: DECISION_GATE_EVENTS.DECIDED,
+        kind: DECISION_GATE_KIND.DECIDED,
         payload: {
           gateRef: "gate/bad",
           decisionRef: "decision/bad",
@@ -188,7 +188,7 @@ describe("@agent-os/decision-gate", () => {
     const events = [
       {
         id: 1,
-        kind: DECISION_GATE_EVENTS.DECIDED,
+        kind: DECISION_GATE_KIND.DECIDED,
         payload: {
           gateRef: "gate/lone-decision",
           decisionRef: "decision/lone",
@@ -224,7 +224,7 @@ describe("@agent-os/decision-gate", () => {
     };
 
     await expect(
-      commitDecisionGateRequested(cap, {
+      makeCommitters(DECISION_GATE_EVENTS, cap)[DECISION_GATE_KIND.REQUESTED]({
         gateRef: "gate/1",
         subjectRef: "subject-1",
         summary: "publish ready",
@@ -234,7 +234,7 @@ describe("@agent-os/decision-gate", () => {
 
     expect(committed).toEqual([
       {
-        event: DECISION_GATE_EVENTS.REQUESTED,
+        event: DECISION_GATE_KIND.REQUESTED,
         data: {
           gateRef: "gate/1",
           subjectRef: "subject-1",

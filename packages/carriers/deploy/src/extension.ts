@@ -1,14 +1,9 @@
 import { boundaryPackage, defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
+import { DEPLOY_KIND } from "./events";
 
 export const DEPLOY_EVENT_PREFIX = "deploy.";
 
-export const DEPLOY_EVENT_VOCABULARY = {
-  PREVIEW_RECORDED: `${DEPLOY_EVENT_PREFIX}preview.recorded`,
-  PRODUCTION_PROMOTED: `${DEPLOY_EVENT_PREFIX}production.promoted`,
-  PRODUCTION_READBACK: `${DEPLOY_EVENT_PREFIX}production.readback`,
-  ROLLBACK_RECORDED: `${DEPLOY_EVENT_PREFIX}rollback.recorded`,
-  FAILED: `${DEPLOY_EVENT_PREFIX}failed`,
-} as const;
+export const DEPLOY_EVENT_VOCABULARY = DEPLOY_KIND;
 
 export const deployBoundaryContract = defineBoundaryContract({
   packageId: "@agent-os/deploy",
@@ -19,11 +14,11 @@ export const deployBoundaryContract = defineBoundaryContract({
   materialRequirements: [],
   claimPayloadKey: "claim",
   claimPhases: {
-    [DEPLOY_EVENT_VOCABULARY.PREVIEW_RECORDED]: ["lived"],
-    [DEPLOY_EVENT_VOCABULARY.PRODUCTION_PROMOTED]: ["lived"],
-    [DEPLOY_EVENT_VOCABULARY.PRODUCTION_READBACK]: ["lived"],
-    [DEPLOY_EVENT_VOCABULARY.ROLLBACK_RECORDED]: ["lived"],
-    [DEPLOY_EVENT_VOCABULARY.FAILED]: ["rejected"],
+    [DEPLOY_KIND.PREVIEW_RECORDED]: ["lived"],
+    [DEPLOY_KIND.PRODUCTION_PROMOTED]: ["lived"],
+    [DEPLOY_KIND.PRODUCTION_READBACK]: ["lived"],
+    [DEPLOY_KIND.ROLLBACK_RECORDED]: ["lived"],
+    [DEPLOY_KIND.FAILED]: ["rejected"],
   },
   proof: {
     anchorKinds: ["carrier_proof", "external_receipt"],
