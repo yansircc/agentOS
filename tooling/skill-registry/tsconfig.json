@@ -17,6 +17,7 @@
     ],
     "paths": {
       "@agent-os/kernel/effect-claim": ["../../packages/kernel/src/effect-claim.ts"],
+      "@agent-os/kernel/json-schema": ["../../packages/kernel/src/json-schema.ts"],
       "@agent-os/kernel/material-ref": ["../../packages/kernel/src/material-ref.ts"],
       "@agent-os/kernel/tools": ["../../packages/kernel/src/tools.ts"]
     },

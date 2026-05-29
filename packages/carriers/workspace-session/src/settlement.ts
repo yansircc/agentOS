@@ -6,20 +6,15 @@ import {
   type RejectionRef,
 } from "@agent-os/kernel/effect-claim";
 import {
-  defineSettlementContract,
   isSymbolicSettlementValue,
-  settleLived,
-  settleRejected,
   symbolicSettlementRef,
 } from "@agent-os/kernel/settlement-contract";
 
+import {
+  workspaceSessionCarrier,
+  workspaceSessionSettlementContract,
+} from "./definition";
 import type { WorkspaceSessionFailure } from "./carrier";
-
-export const workspaceSessionSettlementContract = defineSettlementContract({
-  settlementId: "@agent-os/workspace-session",
-  anchorKinds: ["carrier_proof"],
-  rejectionKinds: ["unsupported", "policy_denied", "provider_rejected", "resource_denied"],
-});
 
 export const workspaceSessionSettlementRef = (...parts: ReadonlyArray<string | number>): string =>
   symbolicSettlementRef("workspace_session", parts);
@@ -41,7 +36,7 @@ export const settleWorkspaceSessionLived = (
     readonly anchorKind?: AnchorRef["anchorKind"];
   },
 ): LivedClaim =>
-  settleLived(workspaceSessionSettlementContract, claim, {
+  workspaceSessionCarrier.settle.started(claim, {
     anchorId: spec.proofRef,
     anchorKind: spec.anchorKind ?? "carrier_proof",
     carrierRef: spec.carrierRef,
@@ -56,7 +51,7 @@ export const settleWorkspaceSessionRejected = (
     readonly rejectionKind?: RejectionRef["rejectionKind"];
   },
 ): RejectedClaim =>
-  settleRejected(workspaceSessionSettlementContract, claim, {
+  workspaceSessionCarrier.reject.failed(claim, {
     rejectionId: spec.proofRef ?? workspaceSessionSettlementRef(claim.operationRef, "rejected"),
     rejectionKind: spec.rejectionKind ?? workspaceSessionRejectionKind(spec.code),
     reason: isSymbolicSettlementValue(spec.reason) ? spec.reason : `workspace_session_${spec.code}`,

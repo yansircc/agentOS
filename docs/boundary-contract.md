@@ -19,9 +19,8 @@ subsets of the top-level material axis.
 ## Invariants
 
 - Event kinds stay inside the package-owned prefix.
-- Claim-bearing payloads use the `claim` key.
-- Claim phases are declared per event kind. Request-time `pre` events are not
-  terminal events.
+- Claim slots are event-local. Non-claim extension facts declare no claim slot.
+- Request-time `pre` events are not terminal events.
 - Terminal lived/rejected claims validate against the package settlement
   contract.
 - Projections are derived from ledger facts and do not write shadow truth.
@@ -44,18 +43,36 @@ export const boundary = defineBoundaryContract({
   packageId: "@agent-os/example",
   kindPrefixes: ["example."],
   roles: ["resolver", "reader"],
-  vocabulary: {
-    REQUESTED: "example.requested",
-    RECORDED: "example.recorded",
-    FAILED: "example.failed",
-  },
   authorityContracts: [],
   materialRequirements: [],
-  claimPayloadKey: "claim",
-  claimPhases: {
-    "example.requested": ["pre"],
-    "example.recorded": ["lived"],
-    "example.failed": ["rejected"],
+  events: {
+    "example.requested": {
+      payloadSchema: {
+        type: "object",
+        properties: { subjectRef: { type: "string" } },
+        required: ["subjectRef"],
+        additionalProperties: false,
+      },
+      claim: { key: "claim", phase: "pre" },
+    },
+    "example.recorded": {
+      payloadSchema: {
+        type: "object",
+        properties: { proofRef: { type: "string" } },
+        required: ["proofRef"],
+        additionalProperties: false,
+      },
+      claim: { key: "claim", phase: "lived" },
+    },
+    "example.failed": {
+      payloadSchema: {
+        type: "object",
+        properties: { reason: { type: "string" } },
+        required: ["reason"],
+        additionalProperties: false,
+      },
+      claim: { key: "claim", phase: "rejected" },
+    },
   },
   settlement,
   projection: { derivedFromLedger: true, shadowState: false },

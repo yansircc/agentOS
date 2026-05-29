@@ -1,15 +1,6 @@
 import type { LivedClaim, PreClaim } from "@agent-os/kernel/effect-claim";
-import {
-  defineSettlementContract,
-  settleLived,
-  symbolicSettlementRef,
-} from "@agent-os/kernel/settlement-contract";
-
-export const gitSettlementContract = defineSettlementContract({
-  settlementId: "@agent-os/git-carrier",
-  anchorKinds: ["carrier_proof"],
-  rejectionKinds: [],
-});
+import { symbolicSettlementRef } from "@agent-os/kernel/settlement-contract";
+import { gitCarrier, gitSettlementContract } from "./definition";
 
 export const gitSettlementRef = (...parts: ReadonlyArray<string | number>): string =>
   symbolicSettlementRef("git", parts);
@@ -21,8 +12,7 @@ export const settleGitLived = (
     readonly carrierRef?: string;
   },
 ): LivedClaim =>
-  settleLived(gitSettlementContract, claim, {
+  gitCarrier.settle.commit_recorded(claim, {
     anchorId: spec.proofRef,
-    anchorKind: "carrier_proof",
     ...(spec.carrierRef === undefined ? {} : { carrierRef: spec.carrierRef }),
   });

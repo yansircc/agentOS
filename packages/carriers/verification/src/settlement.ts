@@ -1,15 +1,6 @@
 import type { AnchorRef, LivedClaim, PreClaim } from "@agent-os/kernel/effect-claim";
-import {
-  defineSettlementContract,
-  settleLived,
-  symbolicSettlementRef,
-} from "@agent-os/kernel/settlement-contract";
-
-export const verificationSettlementContract = defineSettlementContract({
-  settlementId: "@agent-os/verification",
-  anchorKinds: ["carrier_proof", "external_receipt"],
-  rejectionKinds: [],
-});
+import { symbolicSettlementRef } from "@agent-os/kernel/settlement-contract";
+import { verificationCarrier, verificationSettlementContract } from "./definition";
 
 export const verificationSettlementRef = (...parts: ReadonlyArray<string | number>): string =>
   symbolicSettlementRef("verification", parts);
@@ -22,7 +13,7 @@ export const settleVerificationLived = (
     readonly anchorKind?: AnchorRef["anchorKind"];
   },
 ): LivedClaim =>
-  settleLived(verificationSettlementContract, claim, {
+  verificationCarrier.settle.gate_recorded(claim, {
     anchorId: spec.proofRef,
     anchorKind: spec.anchorKind ?? "carrier_proof",
     ...(spec.carrierRef === undefined ? {} : { carrierRef: spec.carrierRef }),

@@ -46,6 +46,9 @@
       "@agent-os/kernel/tools": [
         "../../kernel/src/tools.ts"
       ],
+      "@agent-os/kernel/types": [
+        "../../kernel/src/types.ts"
+      ],
       "@agent-os/runtime": [
         "../../runtime/src/index.ts"
       ],
