@@ -4,19 +4,10 @@ import type {
   PreClaim,
   RejectionRef,
 } from "@agent-os/kernel/effect-claim";
-import {
-  defineSettlementContract,
-  settleLived,
-  symbolicSettlementRef,
-} from "@agent-os/kernel/settlement-contract";
+import { symbolicSettlementRef } from "@agent-os/kernel/settlement-contract";
 
+import { decisionGateCarrier, decisionGateSettlementContract } from "./definition";
 import type { DecisionGateProjection } from "./events";
-
-export const decisionGateSettlementContract = defineSettlementContract({
-  settlementId: "@agent-os/decision-gate",
-  anchorKinds: ["ledger_event"],
-  rejectionKinds: ["policy_denied", "capability_denied"],
-});
 
 export const decisionGateSettlementRef = (...parts: ReadonlyArray<string | number>): string =>
   symbolicSettlementRef("decision_gate", parts);
@@ -28,9 +19,8 @@ export const settleDecisionGateConsumed = (
     readonly gateRef: string;
   },
 ): LivedClaim =>
-  settleLived(decisionGateSettlementContract, claim, {
+  decisionGateCarrier.settle.consumed(claim, {
     anchorId: decisionGateSettlementRef(spec.gateRef, spec.eventId),
-    anchorKind: "ledger_event",
     carrierRef: decisionGateSettlementRef("carrier", spec.gateRef),
   });
 

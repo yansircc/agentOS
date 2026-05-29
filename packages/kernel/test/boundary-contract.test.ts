@@ -5,8 +5,24 @@ import {
   defineBoundaryContract,
   validateBoundaryContract,
 } from "../src/boundary-contract";
+import type { JsonSchemaObject } from "../src/json-schema";
 import { materialRequirement } from "../src/material-ref";
 import { defineSettlementContract } from "../src/settlement-contract";
+
+const emptyPayload = {
+  type: "object",
+  properties: {},
+  additionalProperties: false,
+} satisfies JsonSchemaObject;
+
+const recordedPayload = {
+  type: "object",
+  properties: {
+    value: { type: "string" },
+  },
+  required: ["value"],
+  additionalProperties: false,
+} satisfies JsonSchemaObject;
 
 describe("BoundaryContract", () => {
   const proofStore = materialRequirement({
@@ -24,9 +40,22 @@ describe("BoundaryContract", () => {
     packageId: "@agent-os/example-carrier",
     kindPrefixes: ["example."],
     roles: ["generator", "reader"],
-    vocabulary: {
-      RECORDED: "example.recorded",
-      FAILED: "example.failed",
+    events: {
+      "example.requested": {
+        payloadSchema: emptyPayload,
+        claim: { key: "claim", phase: "pre" },
+      },
+      "example.recorded": {
+        payloadSchema: recordedPayload,
+        claim: { key: "claim", phase: "lived" },
+      },
+      "example.failed": {
+        payloadSchema: emptyPayload,
+        claim: { key: "claim", phase: "rejected" },
+      },
+      "example.noted": {
+        payloadSchema: recordedPayload,
+      },
     },
     authorityContracts: [
       {
@@ -38,11 +67,6 @@ describe("BoundaryContract", () => {
       },
     ],
     materialRequirements: [proofStore],
-    claimPayloadKey: "claim",
-    claimPhases: {
-      "example.recorded": ["lived"],
-      "example.failed": ["rejected"],
-    },
     settlement,
     projection: {
       derivedFromLedger: true,
@@ -59,24 +83,50 @@ describe("BoundaryContract", () => {
     });
   });
 
-  it("accepts a complete boundary declaration", () => {
+  it("accepts a complete event-level boundary declaration", () => {
     expect(validateBoundaryContract(contract)).toEqual({
       ok: true,
       contract,
     });
   });
 
-  it("rejects vocabulary outside the owned prefix", () => {
+  it("rejects event vocabulary outside the owned prefix", () => {
     expect(
       validateBoundaryContract({
         ...contract,
-        vocabulary: {
-          RECORDED: "other.recorded",
+        events: {
+          "other.recorded": {
+            payloadSchema: recordedPayload,
+            claim: { key: "claim", phase: "lived" },
+          },
         },
       }),
     ).toEqual({
       ok: false,
-      issues: ["vocabulary_outside_prefix", "claim_phases_invalid"],
+      issues: ["event_outside_prefix"],
+    });
+  });
+
+  it("rejects event claim keys that collide with payload schema properties", () => {
+    expect(
+      validateBoundaryContract({
+        ...contract,
+        events: {
+          "example.recorded": {
+            payloadSchema: {
+              type: "object",
+              properties: {
+                claim: { type: "string" },
+              },
+              additionalProperties: false,
+            },
+            claim: { key: "claim", phase: "lived" },
+          },
+        },
+      }),
+    ).toEqual({
+      ok: false,
+      issues: ["event_claim_key_collides_with_payload"],
     });
   });
 
@@ -133,62 +183,10 @@ describe("BoundaryContract", () => {
     });
   });
 
-  it("allows request-time claim phases only as event-kind declarations", () => {
+  it("requires settlement and ledger projection declarations", () => {
     expect(
       validateBoundaryContract({
         ...contract,
-        claimPhases: {
-          "example.recorded": ["pre"],
-          "example.failed": ["rejected"],
-        },
-      }),
-    ).toEqual({
-      ok: true,
-      contract: {
-        ...contract,
-        claimPhases: {
-          "example.recorded": ["pre"],
-          "example.failed": ["rejected"],
-        },
-      },
-    });
-  });
-
-  it("rejects mixed request-time and terminal phases on one event kind", () => {
-    expect(
-      validateBoundaryContract({
-        ...contract,
-        claimPhases: {
-          "example.recorded": ["pre", "lived"],
-          "example.failed": ["rejected"],
-        },
-      }),
-    ).toEqual({
-      ok: false,
-      issues: ["claim_phases_invalid"],
-    });
-  });
-
-  it("requires claim phases to cover the event vocabulary exactly", () => {
-    expect(
-      validateBoundaryContract({
-        ...contract,
-        claimPhases: {
-          "example.recorded": ["lived"],
-          "other.failed": ["rejected"],
-        },
-      }),
-    ).toEqual({
-      ok: false,
-      issues: ["claim_phases_invalid"],
-    });
-  });
-
-  it("requires claim-bearing settlement and ledger projections", () => {
-    expect(
-      validateBoundaryContract({
-        ...contract,
-        claimPayloadKey: "payload",
         settlement: {
           settlementId: "",
           anchorKinds: ["not_anchor"],
@@ -201,7 +199,7 @@ describe("BoundaryContract", () => {
       }),
     ).toEqual({
       ok: false,
-      issues: ["claim_payload_key_invalid", "settlement_invalid", "projection_invalid"],
+      issues: ["settlement_invalid", "projection_invalid"],
     });
   });
 

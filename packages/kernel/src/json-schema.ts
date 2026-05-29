@@ -6,7 +6,7 @@
  * this module for structured-output validation and fingerprinting.
  */
 
-import { Option, Predicate } from "effect";
+import { JSONSchema, Option, Predicate, Schema } from "effect";
 
 export type JsonSchemaObject = {
   readonly type: "object";
@@ -210,6 +210,10 @@ export const toClosedJsonSchemaObject = (value: unknown): JsonSchemaObject => {
   }
   return result.value;
 };
+
+export const schemaToClosedJsonSchemaObject = (
+  schema: Schema.Schema.AnyNoContext,
+): JsonSchemaObject => toClosedJsonSchemaObject(JSONSchema.make(schema));
 
 export const validateAgainstSchema = (value: unknown, schema: JsonSchemaNode): string[] => {
   const violations: string[] = [];

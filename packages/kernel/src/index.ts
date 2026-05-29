@@ -31,6 +31,7 @@ export {
   defineBoundaryContract,
   validateBoundaryContract,
 } from "./boundary-contract";
+export * from "./carrier";
 export type {
   AuthorityContract,
   BindingMaterialRef,

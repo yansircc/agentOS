@@ -6,47 +6,26 @@ import {
   type PreClaim,
   type RejectionRef,
 } from "@agent-os/kernel/effect-claim";
-import { defineEventKindView, defineEventPayloads, payload } from "@agent-os/kernel/extensions";
 import { validateTerminalClaim } from "@agent-os/kernel/settlement-contract";
-import { decisionGateSettlementContract } from "./settlement";
+import {
+  DECISION_GATE_EVENTS,
+  DECISION_GATE_KIND,
+  decisionGateSettlementContract,
+} from "./definition";
+export { DECISION_GATE_EVENTS, DECISION_GATE_KIND } from "./definition";
 
 export type DecisionGateDecision = "approved" | "rejected";
 
-export interface DecisionGateRequestedPayload {
-  readonly gateRef: string;
-  readonly subjectRef: string;
-  readonly claim: PreClaim;
-  readonly policyRef?: string;
-  readonly summary?: string;
-}
+type DecisionGatePayloads = typeof DECISION_GATE_EVENTS;
 
-export interface DecisionGateDecidedPayload {
-  readonly gateRef: string;
-  readonly decisionRef: string;
-  readonly decision: DecisionGateDecision;
-  readonly decidedBy: string;
-  readonly reason?: string;
-  readonly rejectionRef?: RejectionRef;
-}
+export type DecisionGateRequestedPayload =
+  DecisionGatePayloads[(typeof DECISION_GATE_KIND)["REQUESTED"]];
 
-export interface DecisionGateConsumedPayload {
-  readonly gateRef: string;
-  readonly decisionRef: string;
-  readonly consumedBy: string;
-  readonly claim: LivedClaim;
-}
+export type DecisionGateDecidedPayload =
+  DecisionGatePayloads[(typeof DECISION_GATE_KIND)["DECIDED"]];
 
-export const DECISION_GATE_EVENTS = defineEventPayloads({
-  "decision_gate.requested": payload<DecisionGateRequestedPayload>(),
-  "decision_gate.decided": payload<DecisionGateDecidedPayload>(),
-  "decision_gate.consumed": payload<DecisionGateConsumedPayload>(),
-});
-
-export const DECISION_GATE_KIND = defineEventKindView(DECISION_GATE_EVENTS, {
-  REQUESTED: "decision_gate.requested",
-  DECIDED: "decision_gate.decided",
-  CONSUMED: "decision_gate.consumed",
-});
+export type DecisionGateConsumedPayload =
+  DecisionGatePayloads[(typeof DECISION_GATE_KIND)["CONSUMED"]];
 
 export type DecisionGateEventKind = keyof typeof DECISION_GATE_EVENTS;
 
