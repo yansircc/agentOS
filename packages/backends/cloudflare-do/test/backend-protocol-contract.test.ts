@@ -1,4 +1,4 @@
-import { Layer, ManagedRuntime } from "effect";
+import { ManagedRuntime } from "effect";
 import { describe } from "@effect/vitest";
 import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
 import {
@@ -11,12 +11,9 @@ import {
   type EventHandler,
   type LedgerEvent,
 } from "@agent-os/runtime";
-import { DispatchLive, type DispatchTargetNamespace } from "../src/dispatch";
+import type { DispatchTargetNamespace } from "../src/dispatch";
 import { findNextDue } from "../src/due-work";
-import { EventBusLive, LedgerLive } from "../src/ledger";
-import { QuotaLive } from "../src/quota";
-import { ResourcesLive } from "../src/resources";
-import { SchedulerLive } from "../src/scheduler";
+import { makeCloudflareBackendCoreLayer } from "../src/runtime-core";
 import { makeInMemoryDurableObjectState } from "./_in-memory-do";
 import {
   runRuntimeBackendContractSuite,
@@ -56,15 +53,7 @@ const makeCloudflareDoContractDriver = (): RuntimeBackendContractDriver => {
 
   const makeRuntime = (scope: string) => {
     const state = stateFor(scope);
-    const eventBus = EventBusLive(handlers);
-    const layer = Layer.mergeAll(
-      LedgerLive(state.storage.sql),
-      SchedulerLive(state, scope),
-      DispatchLive(state, scope, targets),
-      ResourcesLive(state),
-      QuotaLive(state),
-    ).pipe(Layer.provide(eventBus));
-    return ManagedRuntime.make(layer);
+    return ManagedRuntime.make(makeCloudflareBackendCoreLayer(state, scope, handlers, targets));
   };
   type RuntimeHandle = ReturnType<typeof makeRuntime>;
   const runtimes = new Map<string, RuntimeHandle>();
