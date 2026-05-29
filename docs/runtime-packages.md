@@ -10,6 +10,7 @@ accidental exports; they are not stability or schema-freeze promises.
 | ---------------------------------------- | ------------------ | --------------------------------------------------------------------------- |
 | `@agent-os/kernel`                       | 0.2.x public       | platform-free claim/material/boundary/tool algebra                          |
 | `@agent-os/runtime`                      | 0.2.x public       | backend-neutral runtime Tag contracts and projections                       |
+| `@agent-os/backend-protocol`             | backend protocol   | backend-only protocol algebra shared by concrete backend implementations    |
 | `@agent-os/backend-cloudflare-do`        | backend            | Cloudflare DO storage, alarm, SSE, dispatch, and binding materialization    |
 | `@agent-os/backend-in-memory`            | backend            | in-memory runtime Tag Live implementations                                  |
 | `@agent-os/resource-carrier`             | 0.2.x public       | provider-neutral resource lifecycle facts and symbolic proofs               |

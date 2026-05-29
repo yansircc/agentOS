@@ -43,6 +43,19 @@
       "primary": true
     },
     {
+      "slug": "backend-protocol",
+      "name": "@agent-os/backend-protocol",
+      "path": "packages/backends/protocol",
+      "status": "backend protocol",
+      "role": "storage-free backend protocol constants, payload parsers, due-work kinds, retry policy, and handler fanout policy",
+      "boundary": "backend-only protocol algebra shared by concrete backend implementations",
+      "need": "Backend protocol algebra",
+      "apiSource": "docs/api/backend-protocol.md",
+      "readmeStatus": "Backend protocol package. It is backend-only shared algebra, not a general-purpose core package.",
+      "apiStatus": "Backend protocol package. Public exports are limited to storage-free backend protocol semantics shared by backend implementations.",
+      "primary": true
+    },
+    {
       "slug": "backend-cloudflare-do",
       "name": "@agent-os/backend-cloudflare-do",
       "path": "packages/backends/cloudflare-do",

@@ -53,6 +53,5 @@ export class Dispatch extends Context.Tag("@agent-os/Dispatch")<
       { delivered: number; failed: number; next: number | null },
       SqlError | JsonStringifyError
     >;
-    readonly findNextPending: () => Effect.Effect<number | null, SqlError>;
   }
 >() {}

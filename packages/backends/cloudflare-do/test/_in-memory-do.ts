@@ -22,6 +22,10 @@ interface InMemoryStorage {
   readonly deleteAlarm: () => Promise<void>;
 }
 
+export interface InMemoryDurableObjectStateOptions {
+  readonly setAlarm?: (scheduledTime: number) => Promise<void> | void;
+}
+
 const normalizeSql = (sql: string): string => sql.trim().replace(/\s+/g, " ");
 
 const cloneRow = (row: Row): Row => ({ ...row });
@@ -70,7 +74,7 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
   private alarm: number | null = null;
   private inTransaction = false;
 
-  constructor() {
+  constructor(private readonly options: InMemoryDurableObjectStateOptions = {}) {
     this.sql = {
       exec: (sql: string, ...args: unknown[]) => this.exec(sql, args),
     } as unknown as SqlStorage;
@@ -101,8 +105,10 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
   }
 
   setAlarm(scheduledTime: number | Date): Promise<void> {
-    this.alarm = scheduledTime instanceof Date ? scheduledTime.getTime() : Number(scheduledTime);
-    return Promise.resolve();
+    const at = scheduledTime instanceof Date ? scheduledTime.getTime() : Number(scheduledTime);
+    return Promise.resolve(this.options.setAlarm?.(at)).then(() => {
+      this.alarm = at;
+    });
   }
 
   deleteAlarm(): Promise<void> {
@@ -191,6 +197,27 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
   }
 
   private select(sql: string, args: readonly unknown[]): InMemorySqlCursor {
+    if (
+      sql ===
+      "SELECT o.outbound_event_id, o.attempts, e.payload AS requested_payload, e.scope AS source_scope FROM dispatch_outbox o JOIN events e ON e.id = o.outbound_event_id WHERE o.outbound_event_id = ? AND o.delivered_event_id IS NULL"
+    ) {
+      const outboundEventId = args[0];
+      const outbox = this.table("dispatch_outbox").rows.find(
+        (row) => row.outbound_event_id === outboundEventId && row.delivered_event_id === null,
+      );
+      if (outbox === undefined) return new InMemorySqlCursor([]);
+      const event = this.table("events").rows.find((row) => row.id === outboundEventId);
+      if (event === undefined) return new InMemorySqlCursor([]);
+      return new InMemorySqlCursor([
+        {
+          outbound_event_id: outbox.outbound_event_id,
+          attempts: outbox.attempts,
+          requested_payload: event.payload,
+          source_scope: event.scope,
+        },
+      ]);
+    }
+
     const minMatch = /^SELECT MIN\(([a-z_]+)\) AS ([a-z_]+) FROM ([a-z_]+)(?: WHERE (.+))?$/i.exec(
       sql,
     );
@@ -233,8 +260,8 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
       if (row.attempts === undefined) row.attempts = 0;
       if (row.last_error === undefined) row.last_error = null;
     }
-    if (tableName === "scheduled_events" && row.fired_event_id === undefined) {
-      row.fired_event_id = null;
+    if (tableName === "due_work" && row.completed_at === undefined) {
+      row.completed_at = null;
     }
   }
 
@@ -250,13 +277,15 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
   }
 }
 
-export const makeInMemoryDurableObjectState = (): DurableObjectState =>
+export const makeInMemoryDurableObjectState = (
+  options: InMemoryDurableObjectStateOptions = {},
+): DurableObjectState =>
   ({
-    storage: new InMemoryDurableObjectStorage(),
+    storage: new InMemoryDurableObjectStorage(options),
   }) as unknown as DurableObjectState;
 
 const hasAutoincrementId = (tableName: string): boolean =>
-  tableName === "events" || tableName === "scheduled_events";
+  tableName === "events" || tableName === "due_work";
 
 const isPromiseLike = (value: unknown): value is PromiseLike<unknown> =>
   typeof value === "object" &&

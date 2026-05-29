@@ -30,25 +30,29 @@ import {
   isScopeRef,
   settleLivedClaim,
 } from "@agent-os/kernel/effect-claim";
-
 import {
+  DISPATCH_EVENT_KINDS,
+  DISPATCH_INBOUND_ACCEPTED,
+  DISPATCH_MAX_ATTEMPTS,
   copyTraceContext,
-  describeCause,
+  describeDispatchCause,
+  dispatchBackoffMs,
   parseRequestedPayload,
   type DispatchRequestedPayload,
-} from "./payload";
+} from "@agent-os/backend-protocol";
+import { ensureDispatchSchema, selectDue, type DispatchOutboxRow } from "./outbox";
+import { findAccepted, type InboundAcceptedPayload } from "./receiver";
 import {
-  ensureDispatchSchema,
-  findNextPending,
-  retryDelayMs,
-  selectDue,
-  type DispatchOutboxRow,
-} from "./outbox";
-import { DISPATCH_INBOUND_ACCEPTED, findAccepted, type InboundAcceptedPayload } from "./receiver";
+  armBeforeDueCommit,
+  completeDueWork,
+  ensureDueWorkSchema,
+  findNextDue,
+  insertDispatchRetryDueWork,
+} from "../due-work";
 
 // Re-export the receiver constant so callers that historically reached
 // for it from "./dispatch" keep working.
-export { DISPATCH_INBOUND_ACCEPTED } from "./receiver";
+export { DISPATCH_INBOUND_ACCEPTED } from "@agent-os/backend-protocol";
 
 export interface DispatchTargetNamespace {
   readonly idFromName: (name: string) => DurableObjectId;
@@ -56,10 +60,6 @@ export interface DispatchTargetNamespace {
 }
 
 export type DispatchTargetRegistry = Readonly<Record<string, DispatchTargetNamespace>>;
-
-const DISPATCH_OUTBOUND_REQUESTED = "dispatch.outbound.requested";
-const DISPATCH_OUTBOUND_DELIVERED = "dispatch.outbound.delivered";
-const DISPATCH_OUTBOUND_FAILED = "dispatch.outbound.failed";
 
 export const DispatchLive = (
   ctx: DurableObjectState,
@@ -72,9 +72,11 @@ export const DispatchLive = (
     Dispatch,
     Effect.gen(function* () {
       yield* ensureDispatchSchema(sql);
+      yield* ensureDueWorkSchema(sql);
       const bus = yield* EventBus;
 
       const markDelivered = (
+        dueWorkId: number,
         outboundEventId: number,
         requested: DispatchRequestedPayload,
         deliveredEventId: number,
@@ -106,6 +108,10 @@ export const DispatchLive = (
           const events = yield* Effect.try({
             try: () =>
               ctx.storage.transactionSync(() => {
+                const duePending = sql
+                  .exec("SELECT id FROM due_work WHERE id = ? AND completed_at IS NULL", dueWorkId)
+                  .toArray();
+                if (duePending.length === 0) return [];
                 const pending = sql
                   .exec(
                     "SELECT outbound_event_id FROM dispatch_outbox WHERE outbound_event_id = ? AND delivered_event_id IS NULL",
@@ -115,7 +121,7 @@ export const DispatchLive = (
                 if (pending.length === 0) return [];
                 const event = insertLedgerEvent(sql, {
                   ts: now,
-                  kind: DISPATCH_OUTBOUND_DELIVERED,
+                  kind: DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED,
                   scope,
                   payloadStr,
                   payload,
@@ -126,6 +132,7 @@ export const DispatchLive = (
                   attempt,
                   outboundEventId,
                 );
+                completeDueWork(sql, dueWorkId, now);
                 return [event];
               }),
             catch: (cause) => new SqlError({ cause }),
@@ -134,6 +141,7 @@ export const DispatchLive = (
         });
 
       const markFailed = (
+        dueWorkId: number,
         outboundEventId: number,
         requested: DispatchRequestedPayload,
         attempt: number,
@@ -141,49 +149,62 @@ export const DispatchLive = (
         cause: unknown,
       ): Effect.Effect<void, SqlError | JsonStringifyError> =>
         Effect.gen(function* () {
-          const error = describeCause(cause);
-          const nextAttemptAt = now + retryDelayMs(attempt);
+          const error = describeDispatchCause(cause);
+          const terminal = attempt >= DISPATCH_MAX_ATTEMPTS;
+          const nextAttemptAt = terminal ? null : now + dispatchBackoffMs(attempt);
           const payload = {
             outboundEventId,
             target: requested.target,
             event: requested.event,
             idempotencyKey: requested.idempotencyKey,
             attempt,
-            nextAttemptAt,
             error,
+            terminal,
+            ...(nextAttemptAt === null ? {} : { nextAttemptAt }),
             ...(requested.traceContext === undefined
               ? {}
               : { traceContext: requested.traceContext }),
           };
           const payloadStr = yield* safeStringify(payload);
-          const events = yield* Effect.try({
-            try: () =>
-              ctx.storage.transactionSync(() => {
-                const pending = sql
-                  .exec(
-                    "SELECT outbound_event_id FROM dispatch_outbox WHERE outbound_event_id = ? AND delivered_event_id IS NULL",
-                    outboundEventId,
-                  )
-                  .toArray();
-                if (pending.length === 0) return [];
-                const event = insertLedgerEvent(sql, {
-                  ts: now,
-                  kind: DISPATCH_OUTBOUND_FAILED,
-                  scope,
-                  payloadStr,
-                  payload,
-                });
-                sql.exec(
-                  "UPDATE dispatch_outbox SET attempts = ?, next_attempt_at = ?, last_error = ? WHERE outbound_event_id = ?",
-                  attempt,
-                  nextAttemptAt,
-                  error,
-                  outboundEventId,
-                );
-                return [event];
-              }),
-            catch: (sqlCause) => new SqlError({ cause: sqlCause }),
-          });
+          const writeFailure = () => {
+            const duePending = sql
+              .exec("SELECT id FROM due_work WHERE id = ? AND completed_at IS NULL", dueWorkId)
+              .toArray();
+            if (duePending.length === 0) return [];
+            const pending = sql
+              .exec(
+                "SELECT outbound_event_id FROM dispatch_outbox WHERE outbound_event_id = ? AND delivered_event_id IS NULL",
+                outboundEventId,
+              )
+              .toArray();
+            if (pending.length === 0) return [];
+            const event = insertLedgerEvent(sql, {
+              ts: now,
+              kind: DISPATCH_EVENT_KINDS.OUTBOUND_FAILED,
+              scope,
+              payloadStr,
+              payload,
+            });
+            sql.exec(
+              "UPDATE dispatch_outbox SET attempts = ?, last_error = ? WHERE outbound_event_id = ?",
+              attempt,
+              error,
+              outboundEventId,
+            );
+            completeDueWork(sql, dueWorkId, now);
+            if (nextAttemptAt !== null) {
+              const duePayloadStr = JSON.stringify({ outboundEventId });
+              insertDispatchRetryDueWork(sql, nextAttemptAt, outboundEventId, duePayloadStr);
+            }
+            return [event];
+          };
+          const events =
+            nextAttemptAt === null
+              ? yield* Effect.try({
+                  try: () => ctx.storage.transactionSync(writeFailure),
+                  catch: (sqlCause) => new SqlError({ cause: sqlCause }),
+                })
+              : yield* armBeforeDueCommit(ctx, sql, nextAttemptAt, writeFailure);
           yield* fireLedgerEvents(bus, events);
         });
 
@@ -205,6 +226,7 @@ export const DispatchLive = (
           const targetNs = targets[bindingKey];
           if (targetNs === undefined) {
             yield* markFailed(
+              row.dueWorkId,
               row.outboundEventId,
               requested,
               attempt,
@@ -238,6 +260,7 @@ export const DispatchLive = (
 
           if (delivered._tag === "Right") {
             yield* markDelivered(
+              row.dueWorkId,
               row.outboundEventId,
               requested,
               delivered.right.deliveredEventId,
@@ -247,7 +270,14 @@ export const DispatchLive = (
             return "delivered";
           }
 
-          yield* markFailed(row.outboundEventId, requested, attempt, now, delivered.left);
+          yield* markFailed(
+            row.dueWorkId,
+            row.outboundEventId,
+            requested,
+            attempt,
+            now,
+            delivered.left,
+          );
           return "failed";
         });
 
@@ -266,7 +296,7 @@ export const DispatchLive = (
             if (outcome === "delivered") delivered += 1;
             else failed += 1;
           }
-          const next = yield* findNextPending(sql);
+          const next = yield* findNextDue(sql);
           return { delivered, failed, next };
         });
 
@@ -328,34 +358,26 @@ export const DispatchLive = (
             };
             const requestedPayloadStr = yield* safeStringify(requestedPayload);
 
-            const requestedEvent = yield* Effect.try({
-              try: () =>
-                ctx.storage.transactionSync(() => {
-                  const event = insertLedgerEvent(sql, {
-                    ts: now,
-                    kind: DISPATCH_OUTBOUND_REQUESTED,
-                    scope,
-                    payloadStr: requestedPayloadStr,
-                    payload: requestedPayload,
-                  });
-                  sql.exec(
-                    "INSERT INTO dispatch_outbox (outbound_event_id, next_attempt_at) VALUES (?, ?)",
-                    event.id,
-                    now,
-                  );
-                  return event;
-                }),
-              catch: (cause) => new SqlError({ cause }),
+            const requestedEvent = yield* armBeforeDueCommit(ctx, sql, now, () => {
+              const event = insertLedgerEvent(sql, {
+                ts: now,
+                kind: DISPATCH_EVENT_KINDS.OUTBOUND_REQUESTED,
+                scope,
+                payloadStr: requestedPayloadStr,
+                payload: requestedPayload,
+              });
+              sql.exec("INSERT INTO dispatch_outbox (outbound_event_id) VALUES (?)", event.id);
+              insertDispatchRetryDueWork(
+                sql,
+                now,
+                event.id,
+                JSON.stringify({ outboundEventId: event.id }),
+              );
+              return event;
             });
             yield* fireLedgerEvents(bus, [requestedEvent]);
 
-            const { next } = yield* drainDue(now);
-            if (next !== null) {
-              yield* Effect.tryPromise({
-                try: () => ctx.storage.setAlarm(next),
-                catch: (cause) => new SqlError({ cause }),
-              });
-            }
+            yield* drainDue(now);
             return { outboundEventId: requestedEvent.id };
           }),
 
@@ -472,7 +494,6 @@ export const DispatchLive = (
           }),
 
         drainDue,
-        findNextPending: () => findNextPending(sql),
       };
     }),
   );

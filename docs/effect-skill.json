@@ -38,6 +38,12 @@
     ],
     "allowedAdapters": [
       {
+        "path": "packages/backends/cloudflare-do/src/agent-do.ts",
+        "owner": "@agent-os/backend-cloudflare-do",
+        "reason": "terminal Cloudflare Durable Object facade owns streamEvents missing-scope Response construction",
+        "rules": ["EFF402"]
+      },
+      {
         "path": "packages/backends/cloudflare-do/src/ledger/stream.ts",
         "owner": "@agent-os/backend-cloudflare-do",
         "reason": "terminal ledger SSE adapter owns Response construction",
@@ -157,7 +163,7 @@
         {
           "path": "src/agent-do.ts",
           "owner": "@agent-os/backend-cloudflare-do/cf-do",
-          "reason": "CloudflareAgentDO is the terminal Durable Object HTTP facade for streamEvents; missing named scope is a runtime invariant violation with no Effect return channel",
+          "reason": "Configured Cloudflare Durable Object facade is the terminal HTTP facade for streamEvents; missing named scope is a runtime invariant violation with no Effect return channel",
           "rules": ["EFF025", "EFF402"]
         },
         {

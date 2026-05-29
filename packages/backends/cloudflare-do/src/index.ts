@@ -9,6 +9,7 @@
 export { createAgentDurableObject, type CloudflareAgentEnv } from "./agent-do";
 export type {
   AgentDurableObjectConfig,
+  AgentEventHandlerContext,
   AgentEventHandlerRegistration,
   AgentRuntimeClient,
 } from "./agent-do";

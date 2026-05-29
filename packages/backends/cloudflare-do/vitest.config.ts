@@ -9,6 +9,7 @@ import { defineConfig } from "vite-plus";
 export default defineConfig({
   resolve: {
     alias: {
+      "@agent-os/backend-protocol": "../protocol/src/index.ts",
       "@agent-os/kernel/abort": "../../kernel/src/abort.ts",
       "@agent-os/kernel/boundary-contract": "../../kernel/src/boundary-contract.ts",
       "@agent-os/kernel/context": "../../kernel/src/context.ts",

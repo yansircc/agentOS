@@ -3,201 +3,212 @@ import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vite-plus/test";
 
 import type { LedgerEventRpc } from "@agent-os/runtime";
+import type { AgentRuntimeClient } from "../src";
 import { validateExtensionDeclarations } from "@agent-os/kernel/extensions";
-import { proofLivedClaim, type ExtensionTestDO } from "./test-worker";
+import {
+  EXTENSION_COMMAND_EVENT,
+  EXTENSION_RESULT_EVENT,
+  proofLivedClaim,
+  type ExtensionTestDO,
+} from "./test-worker";
 
 interface TestEnv {
   readonly EXTENSION_DO: DurableObjectNamespace<ExtensionTestDO>;
 }
 
+type ExtensionRpc = AgentRuntimeClient & { readonly alarm: () => Promise<void> };
+
+interface ExtensionCommand {
+  readonly op: string;
+  readonly at?: number;
+  readonly data: unknown;
+}
+
+interface ExtensionResultPayload {
+  readonly op: string;
+  readonly ok: boolean;
+  readonly result?: { readonly id: number };
+  readonly error?: {
+    readonly _tag?: string;
+    readonly event?: string;
+    readonly capability?: string;
+    readonly issue?: string;
+  };
+}
+
 const testEnv = env as unknown as TestEnv;
+
+const stubFor = (scope: string): DurableObjectStub<ExtensionTestDO> & ExtensionRpc =>
+  testEnv.EXTENSION_DO.get(
+    testEnv.EXTENSION_DO.idFromName(scope),
+  ) as DurableObjectStub<ExtensionTestDO> & ExtensionRpc;
+
+const runCommand = async (
+  stub: ExtensionRpc,
+  command: ExtensionCommand,
+): Promise<{
+  readonly events: ReadonlyArray<LedgerEventRpc>;
+  readonly result: ExtensionResultPayload;
+}> => {
+  await stub.emitEvent({ event: EXTENSION_COMMAND_EVENT, data: command });
+  const events = await stub.events();
+  const resultEvent = [...events]
+    .reverse()
+    .find((event: LedgerEventRpc) => event.kind === EXTENSION_RESULT_EVENT);
+  expect(resultEvent).toBeDefined();
+  return {
+    events,
+    result: resultEvent!.payload as ExtensionResultPayload,
+  };
+};
+
+const extensionFacts = (events: ReadonlyArray<LedgerEventRpc>): ReadonlyArray<LedgerEventRpc> =>
+  events.filter((event) => event.kind.startsWith("image.") || event.kind.startsWith("proof."));
 
 describe("extension capability P1", () => {
   it("rejects positive capability minting for prefix-only namespaces", async () => {
-    const stub = testEnv.EXTENSION_DO.get(
-      testEnv.EXTENSION_DO.idFromName("extension-commit-image"),
-    );
-
-    await runInDurableObject(stub, async (instance) => {
-      let caught: { _tag?: string; event?: string; capability?: string } | undefined;
-      try {
-        await instance.commitImageFact({ jobRef: "img-1" });
-      } catch (e) {
-        caught = e as { _tag?: string; event?: string; capability?: string };
-      }
-      expect(caught?._tag).toBe("agent_os.capability_rejected");
-      expect(caught?.event).toBe("*");
-      expect(caught?.capability).toBe("extension:@agent-os/image:boundary");
+    const { events, result } = await runCommand(stubFor("extension-commit-image"), {
+      op: "commitImageFact",
+      data: { jobRef: "img-1" },
     });
-    await expect(stub.events()).resolves.toHaveLength(0);
+
+    expect(result.ok).toBe(false);
+    expect(result.error?._tag).toBe("agent_os.capability_rejected");
+    expect(result.error?.event).toBe("*");
+    expect(result.error?.capability).toBe("extension:@agent-os/image:boundary");
+    expect(extensionFacts(events)).toHaveLength(0);
   });
 
   it("rejects deferred positive capability minting for prefix-only namespaces", async () => {
-    const stub = testEnv.EXTENSION_DO.get(testEnv.EXTENSION_DO.idFromName("extension-time-image"));
-
-    await runInDurableObject(stub, async (instance) => {
-      let caught: { _tag?: string; event?: string; capability?: string } | undefined;
-      try {
-        await instance.scheduleImageFact(Date.now() - 1, { jobRef: "img-2" });
-      } catch (e) {
-        caught = e as { _tag?: string; event?: string; capability?: string };
-      }
-      expect(caught?._tag).toBe("agent_os.capability_rejected");
-      expect(caught?.event).toBe("*");
-      expect(caught?.capability).toBe("extension:@agent-os/image:boundary");
+    const { events, result } = await runCommand(stubFor("extension-time-image"), {
+      op: "scheduleImageFact",
+      at: Date.now() - 1,
+      data: { jobRef: "img-2" },
     });
-    await expect(stub.events()).resolves.toHaveLength(0);
+
+    expect(result.ok).toBe(false);
+    expect(result.error?._tag).toBe("agent_os.capability_rejected");
+    expect(result.error?.event).toBe("*");
+    expect(result.error?.capability).toBe("extension:@agent-os/image:boundary");
+    expect(extensionFacts(events)).toHaveLength(0);
   });
 
   it("rejects extension capability commits outside the package prefix", async () => {
-    const stub = testEnv.EXTENSION_DO.get(
-      testEnv.EXTENSION_DO.idFromName("extension-wrong-prefix"),
-    );
-
-    await runInDurableObject(stub, async (instance) => {
-      let caught: { _tag?: string; event?: string; capability?: string } | undefined;
-      try {
-        await instance.commitWrongPrefix({ commitRef: "c1" });
-      } catch (e) {
-        caught = e as { _tag?: string; event?: string; capability?: string };
-      }
-      expect(caught?._tag).toBe("agent_os.capability_rejected");
-      expect(caught?.event).toBe("*");
-      expect(caught?.capability).toBe("extension:@agent-os/image:boundary");
+    const { events, result } = await runCommand(stubFor("extension-wrong-prefix"), {
+      op: "commitWrongPrefix",
+      data: { commitRef: "c1" },
     });
-    await expect(stub.events()).resolves.toHaveLength(0);
+
+    expect(result.ok).toBe(false);
+    expect(result.error?._tag).toBe("agent_os.capability_rejected");
+    expect(result.error?.event).toBe("*");
+    expect(result.error?.capability).toBe("extension:@agent-os/image:boundary");
+    expect(extensionFacts(events)).toHaveLength(0);
   });
 
   it("commits boundary-owned facts only through the boundary contract", async () => {
-    const stub = testEnv.EXTENSION_DO.get(testEnv.EXTENSION_DO.idFromName("extension-proof-ok"));
-
-    const result = await stub.commitProofFact({
-      proofRef: "proof:ok",
-      claim: proofLivedClaim,
+    const { events, result } = await runCommand(stubFor("extension-proof-ok"), {
+      op: "commitProofFact",
+      data: {
+        proofRef: "proof:ok",
+        claim: proofLivedClaim,
+      },
     });
-    expect(result.id).toBe(1);
 
-    const events: LedgerEventRpc[] = await stub.events();
-    expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject({
-      id: 1,
+    expect(result.ok).toBe(true);
+    const proof = events.find((event) => event.kind === "proof.recorded");
+    expect(proof).toMatchObject({
       kind: "proof.recorded",
       payload: {
         proofRef: "proof:ok",
         claim: proofLivedClaim,
       },
     });
+    expect(result.result?.id).toBe(proof?.id);
   });
 
   it("rejects boundary-owned facts outside the exact event vocabulary", async () => {
-    const stub = testEnv.EXTENSION_DO.get(
-      testEnv.EXTENSION_DO.idFromName("extension-proof-vocabulary"),
-    );
-
-    await runInDurableObject(stub, async (instance) => {
-      let caught: { _tag?: string; event?: string; issue?: string } | undefined;
-      try {
-        await instance.commitProofOther({
-          proofRef: "proof:bad-kind",
-          claim: proofLivedClaim,
-        });
-      } catch (e) {
-        caught = e as { _tag?: string; event?: string; issue?: string };
-      }
-      expect(caught?._tag).toBe("agent_os.boundary_commit_rejected");
-      expect(caught?.event).toBe("proof.other");
-      expect(caught?.issue).toBe("event_outside_vocabulary");
+    const { events, result } = await runCommand(stubFor("extension-proof-vocabulary"), {
+      op: "commitProofOther",
+      data: {
+        proofRef: "proof:bad-kind",
+        claim: proofLivedClaim,
+      },
     });
-    await expect(stub.events()).resolves.toHaveLength(0);
+
+    expect(result.ok).toBe(false);
+    expect(result.error?._tag).toBe("agent_os.boundary_commit_rejected");
+    expect(result.error?.event).toBe("proof.other");
+    expect(result.error?.issue).toBe("event_outside_vocabulary");
+    expect(extensionFacts(events)).toHaveLength(0);
   });
 
   it("rejects boundary-owned facts without the declared claim", async () => {
-    const stub = testEnv.EXTENSION_DO.get(
-      testEnv.EXTENSION_DO.idFromName("extension-proof-missing-claim"),
-    );
-
-    await runInDurableObject(stub, async (instance) => {
-      let caught: { _tag?: string; event?: string; issue?: string } | undefined;
-      try {
-        await instance.commitProofFact({ proofRef: "proof:missing-claim" });
-      } catch (e) {
-        caught = e as { _tag?: string; event?: string; issue?: string };
-      }
-      expect(caught?._tag).toBe("agent_os.boundary_commit_rejected");
-      expect(caught?.event).toBe("proof.recorded");
-      expect(caught?.issue).toBe("claim_missing");
+    const { events, result } = await runCommand(stubFor("extension-proof-missing-claim"), {
+      op: "commitProofFact",
+      data: { proofRef: "proof:missing-claim" },
     });
-    await expect(stub.events()).resolves.toHaveLength(0);
+
+    expect(result.ok).toBe(false);
+    expect(result.error?._tag).toBe("agent_os.boundary_commit_rejected");
+    expect(result.error?.event).toBe("proof.recorded");
+    expect(result.error?.issue).toBe("claim_missing");
+    expect(extensionFacts(events)).toHaveLength(0);
   });
 
   it("rejects boundary-owned facts with proof anchors outside the contract", async () => {
-    const stub = testEnv.EXTENSION_DO.get(
-      testEnv.EXTENSION_DO.idFromName("extension-proof-anchor-kind"),
-    );
-
-    await runInDurableObject(stub, async (instance) => {
-      let caught: { _tag?: string; event?: string; issue?: string } | undefined;
-      try {
-        await instance.commitProofFact({
-          proofRef: "proof:bad-anchor",
-          claim: {
-            ...proofLivedClaim,
-            anchorRef: {
-              ...proofLivedClaim.anchorRef,
-              anchorKind: "external_receipt",
-            },
+    const { events, result } = await runCommand(stubFor("extension-proof-anchor-kind"), {
+      op: "commitProofFact",
+      data: {
+        proofRef: "proof:bad-anchor",
+        claim: {
+          ...proofLivedClaim,
+          anchorRef: {
+            ...proofLivedClaim.anchorRef,
+            anchorKind: "external_receipt",
           },
-        });
-      } catch (e) {
-        caught = e as { _tag?: string; event?: string; issue?: string };
-      }
-      expect(caught?._tag).toBe("agent_os.boundary_commit_rejected");
-      expect(caught?.event).toBe("proof.recorded");
-      expect(caught?.issue).toBe("claim_anchor_invalid");
+        },
+      },
     });
-    await expect(stub.events()).resolves.toHaveLength(0);
+
+    expect(result.ok).toBe(false);
+    expect(result.error?._tag).toBe("agent_os.boundary_commit_rejected");
+    expect(result.error?.event).toBe("proof.recorded");
+    expect(result.error?.issue).toBe("claim_anchor_invalid");
+    expect(extensionFacts(events)).toHaveLength(0);
   });
 
   it("rejects deferred boundary facts before they enter scheduler state", async () => {
-    const stub = testEnv.EXTENSION_DO.get(
-      testEnv.EXTENSION_DO.idFromName("extension-proof-time-invalid"),
-    );
-
-    await runInDurableObject(stub, async (instance) => {
-      let caught: { _tag?: string; event?: string; issue?: string } | undefined;
-      try {
-        await instance.scheduleProofFact(Date.now() - 1, { proofRef: "proof:defer-invalid" });
-      } catch (e) {
-        caught = e as { _tag?: string; event?: string; issue?: string };
-      }
-      expect(caught?._tag).toBe("agent_os.boundary_commit_rejected");
-      expect(caught?.event).toBe("proof.recorded");
-      expect(caught?.issue).toBe("claim_missing");
+    const stub = stubFor("extension-proof-time-invalid");
+    const { events, result } = await runCommand(stub, {
+      op: "scheduleProofFact",
+      at: Date.now() - 1,
+      data: { proofRef: "proof:defer-invalid" },
     });
 
+    expect(result.ok).toBe(false);
+    expect(result.error?._tag).toBe("agent_os.boundary_commit_rejected");
+    expect(result.error?.event).toBe("proof.recorded");
+    expect(result.error?.issue).toBe("claim_missing");
+    expect(extensionFacts(events)).toHaveLength(0);
+
     await runInDurableObject(stub, async (instance) => {
-      await instance.alarm();
+      await (instance as unknown as { alarm: () => Promise<void> }).alarm();
     });
-    await expect(stub.events()).resolves.toHaveLength(0);
+    expect(extensionFacts(await stub.events())).toHaveLength(0);
   });
 
   it("rejects positive capability minting for unregistered packages", async () => {
-    const stub = testEnv.EXTENSION_DO.get(
-      testEnv.EXTENSION_DO.idFromName("extension-missing-package"),
-    );
-
-    await runInDurableObject(stub, async (instance) => {
-      let caught: { _tag?: string; event?: string; capability?: string } | undefined;
-      try {
-        await instance.commitMissingExtension({ ok: false });
-      } catch (e) {
-        caught = e as { _tag?: string; event?: string; capability?: string };
-      }
-      expect(caught?._tag).toBe("agent_os.capability_rejected");
-      expect(caught?.event).toBe("*");
-      expect(caught?.capability).toBe("extension:@agent-os/missing");
+    const { events, result } = await runCommand(stubFor("extension-missing-package"), {
+      op: "commitMissingExtension",
+      data: { ok: false },
     });
-    await expect(stub.events()).resolves.toHaveLength(0);
+
+    expect(result.ok).toBe(false);
+    expect(result.error?._tag).toBe("agent_os.capability_rejected");
+    expect(result.error?.event).toBe("*");
+    expect(result.error?.capability).toBe("extension:@agent-os/missing");
+    expect(extensionFacts(events)).toHaveLength(0);
   });
 
   it("rejects duplicate package ids before claiming extension prefixes", () => {

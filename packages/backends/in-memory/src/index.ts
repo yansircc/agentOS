@@ -52,14 +52,23 @@ import {
   type ResourceProjection,
   type TraceContext,
 } from "@agent-os/runtime";
+import {
+  DISPATCH_INBOUND_ACCEPTED,
+  DISPATCH_MAX_ATTEMPTS,
+  DISPATCH_EVENT_KINDS,
+  DUE_WORK_DISPATCH_RETRY,
+  DUE_WORK_SCHEDULED_EVENT,
+  copyTraceContext,
+  describeDispatchCause,
+  dispatchBackoffMs,
+  fireBackendEventHandlers,
+  type DueWorkKind,
+  type DueWorkPayload,
+} from "@agent-os/backend-protocol";
 
 const DEFAULT_EVENT_LIMIT = 1000;
 const MAX_EVENT_LIMIT = 1000;
 const IN_MEMORY_ADAPTER_VERSION = "1.0.0";
-const DISPATCH_OUTBOUND_REQUESTED = "dispatch.outbound.requested";
-const DISPATCH_OUTBOUND_DELIVERED = "dispatch.outbound.delivered";
-const DISPATCH_OUTBOUND_FAILED = "dispatch.outbound.failed";
-const DISPATCH_INBOUND_ACCEPTED = "dispatch.inbound.accepted";
 
 export interface InMemoryEventSubscription {
   readonly unsubscribe: () => void;
@@ -82,12 +91,12 @@ interface EventSink {
   readonly sink: (event: LedgerEvent) => void;
 }
 
-interface ScheduledRow {
+interface DueWorkRow<K extends DueWorkKind = DueWorkKind> {
   readonly id: number;
   readonly fireAt: number;
-  readonly eventKind: string;
-  readonly data: unknown;
-  firedEventId: number | null;
+  readonly kind: K;
+  readonly payload: DueWorkPayload<K>;
+  completedAt: number | null;
 }
 
 interface DispatchRequestedPayload {
@@ -104,7 +113,6 @@ interface DispatchOutboxRow {
   readonly sourceScope: string;
   readonly requested: DispatchRequestedPayload;
   attempts: number;
-  nextAttemptAt: number;
   deliveredEventId: number | null;
   lastError: string | null;
 }
@@ -136,26 +144,6 @@ const validateSerializablePayload = (payload: unknown): Effect.Effect<void, Json
 const normalizeNonNegativeInteger = (value: number | undefined, fallback: number): number =>
   value === undefined || !Number.isFinite(value) ? fallback : Math.max(0, Math.floor(value));
 
-const copyTraceContext = (traceContext: TraceContext | undefined): TraceContext | undefined => {
-  if (traceContext === undefined) return undefined;
-  return {
-    ...(traceContext.traceparent === undefined ? {} : { traceparent: traceContext.traceparent }),
-    ...(traceContext.tracestate === undefined ? {} : { tracestate: traceContext.tracestate }),
-  };
-};
-
-const describeCause = (cause: unknown): string => {
-  if (typeof cause === "string") return cause;
-  if (cause instanceof Error) return `${cause.name}: ${cause.message}`;
-  if (typeof cause === "object" && cause !== null && "_tag" in cause) {
-    return String((cause as { readonly _tag: unknown })._tag);
-  }
-  return Object.prototype.toString.call(cause);
-};
-
-const retryDelayMs = (attempt: number): number =>
-  Math.min(60_000, 1_000 * 2 ** Math.min(Math.max(attempt - 1, 0), 6));
-
 const eventToRpc = (event: LedgerEvent): LedgerEventRpc => ({
   id: event.id,
   ts: event.ts,
@@ -166,11 +154,11 @@ const eventToRpc = (event: LedgerEvent): LedgerEventRpc => ({
 
 export class InMemoryBackendState {
   private nextEventId = 1;
-  private nextScheduledId = 1;
+  private nextDueWorkId = 1;
   private readonly rows: LedgerEvent[] = [];
   private readonly sinks = new Set<EventSink>();
   private readonly handlers = new Map<string, Set<EventHandler>>();
-  private readonly scheduled: ScheduledRow[] = [];
+  private readonly dueWork: DueWorkRow[] = [];
   private readonly outbox = new Map<number, DispatchOutboxRow>();
 
   constructor(options: InMemoryBackendStateOptions = {}) {
@@ -266,7 +254,7 @@ export class InMemoryBackendState {
         const committed = specs.map(
           (spec, index): LedgerEvent => ({
             id: startId + index,
-            ts: spec.ts ?? Date.now(),
+            ts: spec.ts ?? startId + index,
             kind: spec.kind,
             scope: spec.scope,
             payload: spec.payload,
@@ -287,53 +275,87 @@ export class InMemoryBackendState {
     data: unknown,
   ): Effect.Effect<{ readonly id: number }, JsonStringifyError> {
     return Effect.gen(this, function* () {
-      yield* validateSerializablePayload(data);
+      const payload = { eventKind, data };
+      yield* validateSerializablePayload(payload);
       return yield* Effect.sync(() => {
-        const id = this.nextScheduledId++;
-        this.scheduled.push({ id, fireAt: at, eventKind, data, firedEventId: null });
+        const id = this.nextDueWorkId++;
+        this.dueWork.push({
+          id,
+          fireAt: at,
+          kind: DUE_WORK_SCHEDULED_EVENT,
+          payload,
+          completedAt: null,
+        });
         return { id };
       });
     });
   }
 
-  dueScheduled(now: number): ReadonlyArray<ScheduledRow> {
-    return this.scheduled
-      .filter((row) => row.firedEventId === null && row.fireAt <= now)
+  dueScheduled(now: number): ReadonlyArray<DueWorkRow<typeof DUE_WORK_SCHEDULED_EVENT>> {
+    return this.dueWork
+      .filter(
+        (row): row is DueWorkRow<typeof DUE_WORK_SCHEDULED_EVENT> =>
+          row.completedAt === null && row.kind === DUE_WORK_SCHEDULED_EVENT && row.fireAt <= now,
+      )
       .sort((a, b) => a.fireAt - b.fireAt || a.id - b.id);
   }
 
-  nextScheduledAt(): number | null {
+  nextDueAt(): number | null {
     let next: number | null = null;
-    for (const row of this.scheduled) {
-      if (row.firedEventId !== null) continue;
+    for (const row of this.dueWork) {
+      if (row.completedAt !== null) continue;
       if (next === null || row.fireAt < next) next = row.fireAt;
     }
     return next;
   }
 
-  markScheduledFired(id: number, eventId: number): void {
-    const row = this.scheduled.find((candidate) => candidate.id === id);
-    if (row !== undefined && row.firedEventId === null) {
-      row.firedEventId = eventId;
+  completeDueWork(id: number, completedAt: number): void {
+    const row = this.dueWork.find((candidate) => candidate.id === id);
+    if (row !== undefined && row.completedAt === null) {
+      row.completedAt = completedAt;
     }
   }
+
   addOutbox(row: DispatchOutboxRow): void {
     this.outbox.set(row.outboundEventId, row);
   }
 
-  dueOutbox(now: number): ReadonlyArray<DispatchOutboxRow> {
-    return Array.from(this.outbox.values())
-      .filter((row) => row.deliveredEventId === null && row.nextAttemptAt <= now)
-      .sort((a, b) => a.nextAttemptAt - b.nextAttemptAt || a.outboundEventId - b.outboundEventId);
+  addDispatchDue(outboundEventId: number, fireAt: number): number {
+    const id = this.nextDueWorkId++;
+    this.dueWork.push({
+      id,
+      fireAt,
+      kind: DUE_WORK_DISPATCH_RETRY,
+      payload: { outboundEventId },
+      completedAt: null,
+    });
+    return id;
   }
 
-  nextOutboxAt(): number | null {
-    let next: number | null = null;
-    for (const row of this.outbox.values()) {
-      if (row.deliveredEventId !== null) continue;
-      if (next === null || row.nextAttemptAt < next) next = row.nextAttemptAt;
-    }
-    return next;
+  dueOutbox(
+    now: number,
+  ): ReadonlyArray<{ readonly dueWorkId: number; readonly row: DispatchOutboxRow }> {
+    return this.dueWork
+      .filter(
+        (work): work is DueWorkRow<typeof DUE_WORK_DISPATCH_RETRY> =>
+          work.completedAt === null && work.kind === DUE_WORK_DISPATCH_RETRY && work.fireAt <= now,
+      )
+      .map((work) => {
+        const row = this.outbox.get(work.payload.outboundEventId);
+        return row === undefined || row.deliveredEventId !== null
+          ? null
+          : { dueWorkId: work.id, row };
+      })
+      .filter(
+        (item): item is { readonly dueWorkId: number; readonly row: DispatchOutboxRow } =>
+          item !== null,
+      )
+      .sort(
+        (a, b) =>
+          this.dueWork.find((work) => work.id === a.dueWorkId)!.fireAt -
+            this.dueWork.find((work) => work.id === b.dueWorkId)!.fireAt ||
+          a.row.outboundEventId - b.row.outboundEventId,
+      );
   }
 
   private fireMany(events: ReadonlyArray<LedgerEvent>): Effect.Effect<void> {
@@ -355,25 +377,10 @@ export class InMemoryBackendState {
           (event) => {
             const handlers = this.handlers.get(event.kind);
             if (handlers === undefined || handlers.size === 0) return Effect.void;
-            const rpcEvent = eventToRpc(event);
-            return Effect.forEach(
+            return fireBackendEventHandlers(
               Array.from(handlers),
-              (handler) =>
-                Effect.tryPromise({
-                  try: () => handler(rpcEvent),
-                  catch: (cause) => cause,
-                }).pipe(
-                  Effect.timeout("5 seconds"),
-                  Effect.catchAll((cause) =>
-                    Effect.sync(() => {
-                      console.error(
-                        `[agent-os] in-memory handler for "${event.kind}" failed:`,
-                        cause,
-                      );
-                    }),
-                  ),
-                ),
-              { concurrency: 1, discard: true },
+              eventToRpc(event),
+              "event handler",
             );
           },
           { concurrency: 1, discard: true },
@@ -404,19 +411,18 @@ export const InMemorySchedulerLive = (
   scope: string,
 ): Layer.Layer<Scheduler> =>
   Layer.succeed(Scheduler, {
-    findNextPending: () => Effect.succeed(state.nextScheduledAt()),
     schedule: (at, eventKind, data) => state.schedule(at, eventKind, data),
     fireDue: (now) =>
       Effect.gen(function* () {
         let fired = 0;
         for (const row of state.dueScheduled(now)) {
-          const [event] = yield* state.commitEvents([
-            { ts: now, kind: row.eventKind, scope, payload: row.data },
+          yield* state.commitEvents([
+            { ts: now, kind: row.payload.eventKind, scope, payload: row.payload.data },
           ]);
-          state.markScheduledFired(row.id, event!.id);
+          state.completeDueWork(row.id, now);
           fired += 1;
         }
-        return { next: state.nextScheduledAt(), fired };
+        return { next: state.nextDueAt(), fired };
       }),
   });
 
@@ -828,16 +834,18 @@ const drainDueOutbox = (
   Effect.gen(function* () {
     let delivered = 0;
     let failed = 0;
-    for (const row of state.dueOutbox(now)) {
+    for (const due of state.dueOutbox(now)) {
+      const row = due.row;
       const bindingKey = materialRefKey(row.requested.target.bindingRef);
       const receiver = targetFor(targets, bindingKey, row.requested.target.scope);
       const attempt = row.attempts + 1;
       if (receiver === undefined) {
-        const nextAttemptAt = now + retryDelayMs(attempt);
+        const terminal = attempt >= DISPATCH_MAX_ATTEMPTS;
+        const nextAttemptAt = terminal ? null : now + dispatchBackoffMs(attempt);
         yield* state.commitEvents([
           {
             ts: now,
-            kind: DISPATCH_OUTBOUND_FAILED,
+            kind: DISPATCH_EVENT_KINDS.OUTBOUND_FAILED,
             scope,
             payload: {
               outboundEventId: row.outboundEventId,
@@ -845,14 +853,16 @@ const drainDueOutbox = (
               event: row.requested.event,
               idempotencyKey: row.requested.idempotencyKey,
               attempt,
-              nextAttemptAt,
               error: "agent_os.dispatch_target_not_found",
+              terminal,
+              ...(nextAttemptAt === null ? {} : { nextAttemptAt }),
             },
           },
         ]);
         row.attempts = attempt;
-        row.nextAttemptAt = nextAttemptAt;
         row.lastError = "agent_os.dispatch_target_not_found";
+        state.completeDueWork(due.dueWorkId, now);
+        if (nextAttemptAt !== null) state.addDispatchDue(row.outboundEventId, nextAttemptAt);
         failed += 1;
         continue;
       }
@@ -878,7 +888,7 @@ const drainDueOutbox = (
         const [event] = yield* state.commitEvents([
           {
             ts: now,
-            kind: DISPATCH_OUTBOUND_DELIVERED,
+            kind: DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED,
             scope,
             payload: {
               outboundEventId: row.outboundEventId,
@@ -901,16 +911,18 @@ const drainDueOutbox = (
         row.deliveredEventId = event!.id;
         row.attempts = attempt;
         row.lastError = null;
+        state.completeDueWork(due.dueWorkId, now);
         delivered += 1;
         continue;
       }
 
-      const nextAttemptAt = now + retryDelayMs(attempt);
-      const error = describeCause(result.left);
+      const terminal = attempt >= DISPATCH_MAX_ATTEMPTS;
+      const nextAttemptAt = terminal ? null : now + dispatchBackoffMs(attempt);
+      const error = describeDispatchCause(result.left);
       yield* state.commitEvents([
         {
           ts: now,
-          kind: DISPATCH_OUTBOUND_FAILED,
+          kind: DISPATCH_EVENT_KINDS.OUTBOUND_FAILED,
           scope,
           payload: {
             outboundEventId: row.outboundEventId,
@@ -918,17 +930,19 @@ const drainDueOutbox = (
             event: row.requested.event,
             idempotencyKey: row.requested.idempotencyKey,
             attempt,
-            nextAttemptAt,
             error,
+            terminal,
+            ...(nextAttemptAt === null ? {} : { nextAttemptAt }),
           },
         },
       ]);
       row.attempts = attempt;
-      row.nextAttemptAt = nextAttemptAt;
       row.lastError = error;
+      state.completeDueWork(due.dueWorkId, now);
+      if (nextAttemptAt !== null) state.addDispatchDue(row.outboundEventId, nextAttemptAt);
       failed += 1;
     }
-    return { delivered, failed, next: state.nextOutboxAt() };
+    return { delivered, failed, next: state.nextDueAt() };
   });
 
 export const InMemoryDispatchLive = (
@@ -987,7 +1001,7 @@ export const InMemoryDispatchLive = (
         const [event] = yield* state.commitEvents([
           {
             ts: now,
-            kind: DISPATCH_OUTBOUND_REQUESTED,
+            kind: DISPATCH_EVENT_KINDS.OUTBOUND_REQUESTED,
             scope,
             payload: requested,
           },
@@ -997,10 +1011,10 @@ export const InMemoryDispatchLive = (
           sourceScope: scope,
           requested,
           attempts: 0,
-          nextAttemptAt: now,
           deliveredEventId: null,
           lastError: null,
         });
+        state.addDispatchDue(event!.id, now);
         yield* drainDueOutbox(state, scope, targets, now);
         return { outboundEventId: event!.id };
       }),
@@ -1056,8 +1070,6 @@ export const InMemoryDispatchLive = (
       }),
 
     drainDue: (now) => drainDueOutbox(state, scope, targets, now),
-
-    findNextPending: () => Effect.succeed(state.nextOutboxAt()),
   });
 
 export interface InMemoryLlmTransportOptions {
@@ -1192,7 +1204,7 @@ export const InMemoryAdmissionLive = (
           let decoded: O | undefined;
           let outcome: Outcome;
           if (response._tag === "Left") {
-            outcome = { class: "TransientError", cause: describeCause(response.left) };
+            outcome = { class: "TransientError", cause: describeDispatchCause(response.left) };
           } else {
             try {
               const parsed = JSON.parse(response.right.text) as O;
@@ -1204,7 +1216,7 @@ export const InMemoryAdmissionLive = (
                 outcome = { class: "Supported", tokensUsed: response.right.usage.totalTokens };
               }
             } catch (cause) {
-              outcome = { class: "BehaviorFailed", sampleDigest: describeCause(cause) };
+              outcome = { class: "BehaviorFailed", sampleDigest: describeDispatchCause(cause) };
             }
           }
 

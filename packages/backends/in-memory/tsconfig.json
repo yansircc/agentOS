@@ -11,6 +11,7 @@
     "isolatedModules": true,
     "types": ["vitest/globals"],
     "paths": {
+      "@agent-os/backend-protocol": ["../protocol/src/index.ts"],
       "@agent-os/kernel": ["../../kernel/src/index.ts"],
       "@agent-os/kernel/boundary-contract": ["../../kernel/src/boundary-contract.ts"],
       "@agent-os/kernel/effect-claim": ["../../kernel/src/effect-claim.ts"],

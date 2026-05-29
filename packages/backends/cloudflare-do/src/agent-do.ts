@@ -1,9 +1,9 @@
 /**
  * Cloudflare Durable Object adapter.
  *
- * Scope is SSoT-owned by the DO instance — derived from `this.ctx.id.name`.
+ * Scope is SSoT-owned by the DO instance.
  * SubmitSpec.deliver carries only the event name. DOs created via
- * `newUniqueId` reject all calls with ScopeMissingError.
+ * `newUniqueId` rejects all scoped calls.
  *
  * Boundary contract:
  *   submit(spec)         resolves SubmitResult; rejects on infra
@@ -22,9 +22,8 @@
  * not the primitive for "app writes a fact". emitEvent is the primitive;
  * use submit only when an agent run is the right shape.
  *
- * Reactive subscribe:
- *   protected on(kind, handler)  composable Set, sequential dispatch
- *   protected off(kind, handler) unregister
+ * Reactive subscribe is config-owned: createAgentDurableObject({ eventHandlers })
+ * receives the runtime client and construction-time extension capabilities.
  */
 
 import { Clock, Effect, Layer, ManagedRuntime } from "effect";
@@ -81,6 +80,7 @@ import {
   type DispatchEnvelope,
   type DispatchTargetRegistry,
 } from "./dispatch";
+import { armNextDue } from "./due-work";
 import {
   EventBus,
   EventBusLive,
@@ -142,6 +142,11 @@ export interface AgentEventHandlerRegistration {
   readonly handler: EventHandler;
 }
 
+export interface AgentEventHandlerContext {
+  readonly runtime: AgentRuntimeClient;
+  readonly capabilities: ReadonlyMap<string, ExtensionCapability>;
+}
+
 type CoreServices =
   | Ledger
   | EventBus
@@ -200,18 +205,53 @@ export interface AgentDurableObjectConfig<Env extends CloudflareAgentEnv> {
   readonly dispatchTargets?: (env: Env) => DispatchTargetRegistry;
   readonly scopeRefForScope?: (scope: string, env: Env) => ScopeRef | null;
   readonly eventHandlers?: (
-    runtime: AgentRuntimeClient,
+    context: AgentEventHandlerContext,
     env: Env,
   ) => Iterable<AgentEventHandlerRegistration>;
 }
 
-export abstract class CloudflareAgentDO<Env extends CloudflareAgentEnv>
+interface MaterializedAgentConfig<Env extends CloudflareAgentEnv> {
+  readonly refResolver: RefResolver;
+  readonly extensions: ReadonlyArray<ExtensionDeclaration>;
+  readonly dispatchTargets: DispatchTargetRegistry;
+  readonly scopeRefForScope: (scope: string, env: Env) => ScopeRef | null;
+  readonly eventHandlers?: (
+    context: AgentEventHandlerContext,
+    env: Env,
+  ) => Iterable<AgentEventHandlerRegistration>;
+}
+
+const emptyRefResolver: RefResolver = {
+  material: () => null,
+};
+
+class AgentDurableObject<Env extends CloudflareAgentEnv>
   extends DurableObject<Env>
   implements AgentRuntimeClient
 {
   private readonly _handlers: Map<string, Set<EventHandler>> = new Map();
+  private readonly _refResolver: RefResolver;
+  private readonly _extensionValidation: ExtensionValidation;
+  private readonly _capabilities: ReadonlyMap<string, ExtensionCapability>;
+  private readonly _dispatchTargets: DispatchTargetRegistry;
+  private readonly _scopeRefForScope: (scope: string, env: Env) => ScopeRef | null;
   private _runtime?: ManagedRuntime.ManagedRuntime<CoreServices, SqlError>;
-  private _extensionValidation?: ExtensionValidation;
+
+  constructor(ctx: DurableObjectState, env: Env, config: MaterializedAgentConfig<Env>) {
+    super(ctx, env);
+    this._refResolver = config.refResolver;
+    this._extensionValidation = validateExtensionDeclarations(config.extensions);
+    this._capabilities = this.extensionCapabilities();
+    this._dispatchTargets = config.dispatchTargets;
+    this._scopeRefForScope = config.scopeRefForScope;
+
+    for (const registration of config.eventHandlers?.(
+      { runtime: this, capabilities: this._capabilities },
+      env,
+    ) ?? []) {
+      this.addHandler(registration.kind, registration.handler);
+    }
+  }
 
   private runtimeFor(scope: string): ManagedRuntime.ManagedRuntime<CoreServices, SqlError> {
     if (this._runtime === undefined) {
@@ -220,21 +260,18 @@ export abstract class CloudflareAgentDO<Env extends CloudflareAgentEnv>
         scope,
         this.env.AI,
         this._handlers,
-        this.provideRefResolver(),
-        this.provideDispatchTargets(),
+        this._refResolver,
+        this._dispatchTargets,
       );
     }
     return this._runtime;
   }
 
   private extensionValidation(): ExtensionValidation {
-    if (this._extensionValidation === undefined) {
-      this._extensionValidation = validateExtensionDeclarations(this.registerExtensions());
-    }
     return this._extensionValidation;
   }
 
-  private appCommitRejection(
+  private appWriteRejection(
     event: string,
   ): CapabilityRejected | ExtensionCapabilityConflict | null {
     const validation = this.extensionValidation();
@@ -242,27 +279,53 @@ export abstract class CloudflareAgentDO<Env extends CloudflareAgentEnv>
     return rejectClaimedAppEvent(event, validation.prefixes);
   }
 
-  private registeredBoundaryPackage(
-    packageId: string,
-  ): BoundaryPackage | CapabilityRejected | ExtensionCapabilityConflict {
-    const validation = this.extensionValidation();
-    if (!validation.ok) return validation.error;
-    const declaration = validation.declarations.find(
-      (candidate) => candidate.packageId === packageId,
-    );
-    if (declaration === undefined) {
-      return new CapabilityRejected({
-        event: "*",
-        capability: `extension:${packageId}`,
-      });
+  private scopeOrError(): string | ScopeMissingError {
+    const scope = this.ctx.id.name;
+    return scope === undefined ? new ScopeMissingError() : scope;
+  }
+
+  private scopedPromise<T>(fn: (scope: string) => Promise<T>): Promise<T> {
+    const scope = this.scopeOrError();
+    return scope instanceof ScopeMissingError ? Promise.reject(scope) : fn(scope);
+  }
+
+  private runScoped<T, E>(fn: (scope: string) => Effect.Effect<T, E, CoreServices>): Promise<T> {
+    return this.scopedPromise((scope) => this.runtimeFor(scope).runPromise(fn(scope)));
+  }
+
+  private runScopedWrite<T, E>(
+    event: string,
+    fn: (scope: string) => Effect.Effect<T, E, CoreServices>,
+  ): Promise<T> {
+    return this.scopedPromise((scope) => {
+      const rejected = this.appWriteRejection(event);
+      if (rejected !== null) {
+        return Promise.reject(rejected);
+      }
+      return this.runtimeFor(scope).runPromise(fn(scope));
+    });
+  }
+
+  private extensionCapabilities(): ReadonlyMap<string, ExtensionCapability> {
+    const validation = this._extensionValidation;
+    const capabilities = new Map<string, ExtensionCapability>();
+    if (!validation.ok) return capabilities;
+    for (const declaration of validation.declarations) {
+      if (isBoundaryPackage(declaration)) {
+        capabilities.set(declaration.packageId, this.makeExtensionCapability(declaration));
+      }
     }
-    if (!isBoundaryPackage(declaration)) {
-      return new CapabilityRejected({
-        event: "*",
-        capability: `extension:${packageId}:boundary`,
-      });
-    }
-    return declaration;
+    return capabilities;
+  }
+
+  private makeExtensionCapability(pkg: BoundaryPackage): ExtensionCapability {
+    return {
+      packageId: pkg.packageId,
+      kindPrefixes: pkg.kindPrefixes,
+      version: pkg.version,
+      commit: (spec) => this.extensionCommit(pkg, spec.event, spec.data),
+      time: (spec) => this.extensionTime(pkg, spec.at, spec.event, spec.data),
+    };
   }
 
   private extensionCommit(
@@ -270,10 +333,6 @@ export abstract class CloudflareAgentDO<Env extends CloudflareAgentEnv>
     event: string,
     data: unknown,
   ): Promise<{ id: number }> {
-    const scope = this.ctx.id.name;
-    if (scope === undefined) {
-      return Promise.reject(new ScopeMissingError());
-    }
     if (!extensionOwnsEvent(pkg, event)) {
       return Promise.reject(
         new CapabilityRejected({
@@ -286,7 +345,7 @@ export abstract class CloudflareAgentDO<Env extends CloudflareAgentEnv>
     if (rejected !== null) {
       return Promise.reject(rejected);
     }
-    return this.runtimeFor(scope).runPromise(
+    return this.runScoped((scope) =>
       Effect.gen(function* () {
         const ledger = yield* Ledger;
         const ev = yield* commitBoundaryEvent(pkg.boundaryContract, event, data, () =>
@@ -303,10 +362,6 @@ export abstract class CloudflareAgentDO<Env extends CloudflareAgentEnv>
     event: string,
     data: unknown,
   ): Promise<{ id: number }> {
-    const scope = this.ctx.id.name;
-    if (scope === undefined) {
-      return Promise.reject(new ScopeMissingError());
-    }
     if (!Number.isFinite(at)) {
       return Promise.reject(new InvalidScheduleAt({ at }));
     }
@@ -322,80 +377,16 @@ export abstract class CloudflareAgentDO<Env extends CloudflareAgentEnv>
     if (rejected !== null) {
       return Promise.reject(rejected);
     }
-    const ctx = this.ctx;
-    return this.runtimeFor(scope).runPromise(
+    return this.runScoped((_scope) =>
       Effect.gen(function* () {
         const scheduler = yield* Scheduler;
-        const existingNext = yield* scheduler.findNextPending();
-        const target = existingNext === null ? at : Math.min(existingNext, at);
-        yield* Effect.tryPromise({
-          try: () => ctx.storage.setAlarm(target),
-          catch: (cause) => new SqlError({ cause }),
-        });
         const { id } = yield* scheduler.schedule(at, event, data);
         return { id };
       }),
     );
   }
 
-  /** Hook for subclass to resolve symbolic endpoint / credential refs.
-   *  Default = empty resolver. Apps using only `cf-ai-binding` do not
-   *  override. External routes return concrete deploy-env values here;
-   *  only refs are ledger-visible. */
-  protected provideRefResolver(): RefResolver {
-    return {
-      material: () => null,
-    };
-  }
-
-  /** Extension packages declare non-core namespaces here. App-facing
-   *  commit paths reject these prefixes; package-owned commit helpers
-   *  are intentionally not public app surface. */
-  protected registerExtensions(): ReadonlyArray<ExtensionDeclaration> {
-    return [];
-  }
-
-  /** Mint a scoped P1 capability for a registered extension package.
-   *
-   *  The handle can commit or defer only events under the package's declared
-   *  prefixes. App-facing write paths still reject those prefixes, so a
-   *  package-owned vocabulary has exactly one positive write path.
-   */
-  protected extensionCapability(packageId: string): ExtensionCapability {
-    const pkg = this.registeredBoundaryPackage(packageId);
-    if (pkg instanceof CapabilityRejected) {
-      throw pkg;
-    }
-    if (pkg instanceof ExtensionCapabilityConflict) {
-      throw pkg;
-    }
-    return {
-      packageId: pkg.packageId,
-      kindPrefixes: pkg.kindPrefixes,
-      version: pkg.version,
-      commit: (spec) => this.extensionCommit(pkg, spec.event, spec.data),
-      time: (spec) => this.extensionTime(pkg, spec.at, spec.event, spec.data),
-    };
-  }
-
-  /** Hook for subclass to provide cross-scope dispatch targets.
-   *
-   *  `bindingRef` on dispatchToScope is a symbolic BindingMaterialRef. Its
-   *  `materialRefKey(bindingRef)` resolves through this map to a runtime
-   *  DurableObjectNamespace. The ledger stores only the symbolic ref and
-   *  target scope; the namespace object is never serialized.
-   */
-  protected provideDispatchTargets(): DispatchTargetRegistry {
-    return {};
-  }
-
-  protected scopeRefForScope(_scope: string): ScopeRef | null {
-    return null;
-  }
-
-  /** Register a handler fired whenever a ledger event of `kind` is written.
-   *  Multiple handlers per kind compose (Set semantics). */
-  protected on(kind: string, handler: EventHandler): void {
+  private addHandler(kind: string, handler: EventHandler): void {
     let set = this._handlers.get(kind);
     if (set === undefined) {
       set = new Set<EventHandler>();
@@ -404,41 +395,27 @@ export abstract class CloudflareAgentDO<Env extends CloudflareAgentEnv>
     set.add(handler);
   }
 
-  /** Unregister a handler previously added via `on`. */
-  protected off(kind: string, handler: EventHandler): void {
-    const set = this._handlers.get(kind);
-    if (set !== undefined) {
-      set.delete(handler);
-    }
-  }
-
   submit(spec: SubmitSpec): Promise<SubmitResult> {
-    const scope = this.ctx.id.name;
-    if (scope === undefined) {
-      return Promise.reject(new ScopeMissingError());
-    }
-    const scopeRef = this.scopeRefForScope(scope);
-    if (scopeRef === null) {
-      return Promise.reject(new UnsupportedScopeRef({ scopeId: scope, position: "source" }));
-    }
-    const rejected = this.appCommitRejection(spec.deliver.event);
-    if (rejected !== null) {
-      return Promise.reject(rejected);
-    }
-    const internalSpec: InternalSubmitSpec = {
-      ...spec,
-      deliver: { event: spec.deliver.event, scope, scopeRef },
-    };
-    return this.runtimeFor(scope).runPromise(submitAgentEffect(internalSpec));
+    return this.scopedPromise((scope) => {
+      const scopeRef = this._scopeRefForScope(scope, this.env);
+      if (scopeRef === null) {
+        return Promise.reject(new UnsupportedScopeRef({ scopeId: scope, position: "source" }));
+      }
+      const rejected = this.appWriteRejection(spec.deliver.event);
+      if (rejected !== null) {
+        return Promise.reject(rejected);
+      }
+      const internalSpec: InternalSubmitSpec = {
+        ...spec,
+        deliver: { event: spec.deliver.event, scope, scopeRef },
+      };
+      return this.runtimeFor(scope).runPromise(submitAgentEffect(internalSpec));
+    });
   }
 
   /** Query ledger events for this DO's scope. */
   events(opts?: EventQueryOptions): Promise<LedgerEventRpc[]> {
-    const scope = this.ctx.id.name;
-    if (scope === undefined) {
-      return Promise.reject(new ScopeMissingError());
-    }
-    return this.runtimeFor(scope).runPromise(
+    return this.runScoped((scope) =>
       Effect.gen(function* () {
         const ledger = yield* Ledger;
         const rows = yield* ledger.events(scope, opts);
@@ -448,11 +425,7 @@ export abstract class CloudflareAgentDO<Env extends CloudflareAgentEnv>
   }
 
   runTrace(runId: number | string): Promise<RunTrace> {
-    const scope = this.ctx.id.name;
-    if (scope === undefined) {
-      return Promise.reject(new ScopeMissingError());
-    }
-    return this.runtimeFor(scope).runPromise(
+    return this.runScoped((scope) =>
       Effect.gen(function* () {
         const ledger = yield* Ledger;
         const rows = yield* ledger.streamSnapshot(scope);
@@ -462,11 +435,7 @@ export abstract class CloudflareAgentDO<Env extends CloudflareAgentEnv>
   }
 
   runStatus(runId: number | string): Promise<RunStatus> {
-    const scope = this.ctx.id.name;
-    if (scope === undefined) {
-      return Promise.reject(new ScopeMissingError());
-    }
-    return this.runtimeFor(scope).runPromise(
+    return this.runScoped((scope) =>
       Effect.gen(function* () {
         const ledger = yield* Ledger;
         const rows = yield* ledger.streamSnapshot(scope);
@@ -479,11 +448,7 @@ export abstract class CloudflareAgentDO<Env extends CloudflareAgentEnv>
    *  sorted runId DESC (newest first). Cursor-paginated via afterRunId.
    *  Caller is responsible for bounding spec.limit. */
   runs(spec: RunListSpec): Promise<RunListPage> {
-    const scope = this.ctx.id.name;
-    if (scope === undefined) {
-      return Promise.reject(new ScopeMissingError());
-    }
-    return this.runtimeFor(scope).runPromise(
+    return this.runScoped((scope) =>
       Effect.gen(function* () {
         const ledger = yield* Ledger;
         const rows = yield* ledger.streamSnapshot(scope, {
@@ -495,11 +460,7 @@ export abstract class CloudflareAgentDO<Env extends CloudflareAgentEnv>
   }
 
   quotaState(spec: QuotaStateSpec): Promise<QuotaState> {
-    const scope = this.ctx.id.name;
-    if (scope === undefined) {
-      return Promise.reject(new ScopeMissingError());
-    }
-    return this.runtimeFor(scope).runPromise(
+    return this.runScoped((scope) =>
       Effect.gen(function* () {
         const ledger = yield* Ledger;
         const rows = yield* ledger.streamSnapshot(scope, {
@@ -515,11 +476,7 @@ export abstract class CloudflareAgentDO<Env extends CloudflareAgentEnv>
   }
 
   resourceState(key: string): Promise<ResourceState> {
-    const scope = this.ctx.id.name;
-    if (scope === undefined) {
-      return Promise.reject(new ScopeMissingError());
-    }
-    return this.runtimeFor(scope).runPromise(
+    return this.runScoped((scope) =>
       Effect.gen(function* () {
         const ledger = yield* Ledger;
         const rows = yield* ledger.streamSnapshot(scope, {
@@ -540,12 +497,8 @@ export abstract class CloudflareAgentDO<Env extends CloudflareAgentEnv>
   }
 
   admissionLease(key: AttemptKey): Promise<CapabilityLease | null> {
-    const scope = this.ctx.id.name;
-    if (scope === undefined) {
-      return Promise.reject(new ScopeMissingError());
-    }
     const sql = this.ctx.storage.sql;
-    return this.runtimeFor(scope).runPromise(
+    return this.runScoped((scope) =>
       Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis;
         return yield* projectAdmissionLease(sql, scope, key, now);
@@ -563,9 +516,9 @@ export abstract class CloudflareAgentDO<Env extends CloudflareAgentEnv>
    *  validates scope and hands the runtime + opts through.
    */
   streamEvents(opts: StreamEventsOptions = {}): Response {
-    const scope = this.ctx.id.name;
-    if (scope === undefined) {
-      throw new ScopeMissingError();
+    const scope = this.scopeOrError();
+    if (scope instanceof ScopeMissingError) {
+      return new Response(JSON.stringify({ error: scope._tag }), { status: 500 });
     }
     return createEventStreamResponse(this.runtimeFor(scope), scope, opts);
   }
@@ -585,15 +538,7 @@ export abstract class CloudflareAgentDO<Env extends CloudflareAgentEnv>
    *  resolves. They are NOT degenerate cases of each other.
    */
   emitEvent(spec: { event: string; data: unknown }): Promise<{ id: number }> {
-    const scope = this.ctx.id.name;
-    if (scope === undefined) {
-      return Promise.reject(new ScopeMissingError());
-    }
-    const rejected = this.appCommitRejection(spec.event);
-    if (rejected !== null) {
-      return Promise.reject(rejected);
-    }
-    return this.runtimeFor(scope).runPromise(
+    return this.runScopedWrite(spec.event, (scope) =>
       Effect.gen(function* () {
         const ledger = yield* Ledger;
         const ev = yield* ledger.log(spec.event, spec.data, scope);
@@ -602,7 +547,7 @@ export abstract class CloudflareAgentDO<Env extends CloudflareAgentEnv>
     );
   }
 
-  /** Dispatch an app event to another CloudflareAgentDO scope.
+  /** Dispatch an app event to another configured agent scope.
    *
    *  Delivery truth is split across the two ledgers:
    *  - sender records dispatch.outbound.requested and a dispatch_outbox row
@@ -612,19 +557,11 @@ export abstract class CloudflareAgentDO<Env extends CloudflareAgentEnv>
    *  - receiver dedupe is (sourceScope, idempotencyKey), not outboundEventId.
    */
   dispatchToScope(spec: DispatchToScopeSpec): Promise<DispatchToScopeResult> {
-    const scope = this.ctx.id.name;
-    if (scope === undefined) {
-      return Promise.reject(new ScopeMissingError());
-    }
-    const rejected = this.appCommitRejection(spec.event);
-    if (rejected !== null) {
-      return Promise.reject(rejected);
-    }
     if (!isMaterialRef(spec.target.bindingRef) || spec.target.bindingRef.kind !== "binding") {
       return Promise.reject(new DispatchBindingRefMalformed({ position: "target" }));
     }
     const bindingKey = materialRefKey(spec.target.bindingRef);
-    if (this.provideDispatchTargets()[bindingKey] === undefined) {
+    if (this._dispatchTargets[bindingKey] === undefined) {
       return Promise.reject(
         new DispatchTargetNotFound({
           bindingRef: bindingKey,
@@ -639,7 +576,7 @@ export abstract class CloudflareAgentDO<Env extends CloudflareAgentEnv>
         }),
       );
     }
-    return this.runtimeFor(scope).runPromise(
+    return this.runScopedWrite(spec.event, (_scope) =>
       Effect.gen(function* () {
         const dispatch = yield* Dispatch;
         return yield* dispatch.dispatchToScope(spec);
@@ -648,14 +585,10 @@ export abstract class CloudflareAgentDO<Env extends CloudflareAgentEnv>
   }
 
   grantResource(spec: ResourceGrantSpec): Promise<ResourceGrantResult> {
-    const scope = this.ctx.id.name;
-    if (scope === undefined) {
-      return Promise.reject(new ScopeMissingError());
-    }
     if (!Number.isFinite(spec.amount) || spec.amount <= 0) {
       return Promise.reject(new InvalidResourceAmount({ amount: spec.amount }));
     }
-    return this.runtimeFor(scope).runPromise(
+    return this.runScoped((scope) =>
       Effect.gen(function* () {
         const resources = yield* Resources;
         return yield* resources.grant(scope, spec);
@@ -664,92 +597,72 @@ export abstract class CloudflareAgentDO<Env extends CloudflareAgentEnv>
   }
 
   reserveResource(spec: ResourceReserveSpec): Promise<ResourceReserveResult> {
-    const scope = this.ctx.id.name;
-    if (scope === undefined) {
-      return Promise.reject(new ScopeMissingError());
-    }
     if (!Number.isFinite(spec.amount) || spec.amount <= 0) {
       return Promise.reject(new InvalidResourceAmount({ amount: spec.amount }));
     }
-    return this.runtimeFor(scope)
-      .runPromise(
-        Effect.gen(function* () {
-          const resources = yield* Resources;
-          return yield* resources.reserve(scope, spec).pipe(Effect.either);
-        }),
-      )
-      .then((result) => {
-        if (result._tag === "Left") {
-          return Promise.reject(result.left);
-        }
-        return result.right;
-      });
+    return this.runScoped((scope) =>
+      Effect.gen(function* () {
+        const resources = yield* Resources;
+        return yield* resources.reserve(scope, spec).pipe(Effect.either);
+      }),
+    ).then((result) => {
+      if (result._tag === "Left") {
+        return Promise.reject(result.left);
+      }
+      return result.right;
+    });
   }
 
   consumeResource(spec: ResourceReservationSpec): Promise<void> {
-    const scope = this.ctx.id.name;
-    if (scope === undefined) {
-      return Promise.reject(new ScopeMissingError());
-    }
-    return this.runtimeFor(scope)
-      .runPromise(
-        Effect.gen(function* () {
-          const resources = yield* Resources;
-          return yield* resources.consume(scope, spec).pipe(Effect.either);
-        }),
-      )
-      .then((result) => {
-        if (result._tag === "Left") {
-          return Promise.reject(result.left);
-        }
-      });
+    return this.runScoped((scope) =>
+      Effect.gen(function* () {
+        const resources = yield* Resources;
+        return yield* resources.consume(scope, spec).pipe(Effect.either);
+      }),
+    ).then((result) => {
+      if (result._tag === "Left") {
+        return Promise.reject(result.left);
+      }
+    });
   }
 
   releaseResource(spec: ResourceReservationSpec): Promise<void> {
-    const scope = this.ctx.id.name;
-    if (scope === undefined) {
-      return Promise.reject(new ScopeMissingError());
-    }
-    return this.runtimeFor(scope)
-      .runPromise(
-        Effect.gen(function* () {
-          const resources = yield* Resources;
-          return yield* resources.release(scope, spec).pipe(Effect.either);
-        }),
-      )
-      .then((result) => {
-        if (result._tag === "Left") {
-          return Promise.reject(result.left);
-        }
-      });
+    return this.runScoped((scope) =>
+      Effect.gen(function* () {
+        const resources = yield* Resources;
+        return yield* resources.release(scope, spec).pipe(Effect.either);
+      }),
+    ).then((result) => {
+      if (result._tag === "Left") {
+        return Promise.reject(result.left);
+      }
+    });
   }
 
   /** Internal RPC target for DispatchLive. Public only because DO RPC can
    *  invoke public methods; app code should use dispatchToScope instead.
    */
   __agentosReceiveDispatch(envelope: DispatchEnvelope): Promise<{ deliveredEventId: number }> {
-    const scope = this.ctx.id.name;
-    if (scope === undefined) {
-      return Promise.reject(new ScopeMissingError());
-    }
-    if (envelope.targetScope !== scope) {
-      return Promise.reject(
-        new DispatchScopeMismatch({
-          expected: scope,
-          actual: envelope.targetScope,
+    return this.scopedPromise((scope) => {
+      if (envelope.targetScope !== scope) {
+        return Promise.reject(
+          new DispatchScopeMismatch({
+            expected: scope,
+            actual: envelope.targetScope,
+          }),
+        );
+      }
+      const rejected = this.appWriteRejection(envelope.event);
+      if (rejected !== null) {
+        return Promise.reject(rejected);
+      }
+      return this.runtimeFor(scope).runPromise(
+        Effect.gen(function* () {
+          const dispatch = yield* Dispatch;
+          return yield* dispatch.receive(envelope);
         }),
       );
-    }
-    const rejected = this.appCommitRejection(envelope.event);
-    if (rejected !== null) {
-      return Promise.reject(rejected);
-    }
-    return this.runtimeFor(scope).runPromise(
-      Effect.gen(function* () {
-        const dispatch = yield* Dispatch;
-        return yield* dispatch.receive(envelope);
-      }),
-    );
+    });
   }
 
   /** Schedule a future ledger event. Scope is implicit (= this DO).
@@ -760,29 +673,12 @@ export abstract class CloudflareAgentDO<Env extends CloudflareAgentEnv>
    *  reverts (next = whatever was there before, or null).
    */
   scheduleEvent(spec: ScheduledEventSpec): Promise<{ id: number }> {
-    const scope = this.ctx.id.name;
-    if (scope === undefined) {
-      return Promise.reject(new ScopeMissingError());
-    }
     if (!Number.isFinite(spec.at)) {
       return Promise.reject(new InvalidScheduleAt({ at: spec.at }));
     }
-    const rejected = this.appCommitRejection(spec.event);
-    if (rejected !== null) {
-      return Promise.reject(rejected);
-    }
-    const ctx = this.ctx;
-    return this.runtimeFor(scope).runPromise(
+    return this.runScopedWrite(spec.event, (_scope) =>
       Effect.gen(function* () {
         const scheduler = yield* Scheduler;
-        const existingNext = yield* scheduler.findNextPending();
-        const target = existingNext === null ? spec.at : Math.min(existingNext, spec.at);
-        // Arm alarm BEFORE the row is inserted. If setAlarm rejects, no
-        // pending row gets created — no orphan possible.
-        yield* Effect.tryPromise({
-          try: () => ctx.storage.setAlarm(target),
-          catch: (cause) => new SqlError({ cause }),
-        });
         const { id } = yield* scheduler.schedule(spec.at, spec.event, spec.data);
         return { id };
       }),
@@ -791,28 +687,16 @@ export abstract class CloudflareAgentDO<Env extends CloudflareAgentEnv>
 
   /** DO alarm handler — invoked automatically by the CF runtime. */
   alarm(): Promise<void> {
-    const scope = this.ctx.id.name;
-    if (scope === undefined) {
-      return Promise.reject(new ScopeMissingError());
-    }
     const ctx = this.ctx;
-    return this.runtimeFor(scope).runPromise(
+    const sql = this.ctx.storage.sql;
+    return this.runScoped((_scope) =>
       Effect.gen(function* () {
         const scheduler = yield* Scheduler;
         const dispatch = yield* Dispatch;
         const now = yield* Clock.currentTimeMillis;
-        const scheduled = yield* scheduler.fireDue(now);
-        const outbound = yield* dispatch.drainDue(now);
-        const nextValues = [scheduled.next, outbound.next].filter(
-          (value): value is number => value !== null,
-        );
-        const next = nextValues.length === 0 ? null : Math.min(...nextValues);
-        if (next !== null) {
-          yield* Effect.tryPromise({
-            try: () => ctx.storage.setAlarm(next),
-            catch: (cause) => new SqlError({ cause }),
-          });
-        }
+        yield* scheduler.fireDue(now);
+        yield* dispatch.drainDue(now);
+        yield* armNextDue(ctx, sql);
       }).pipe(Effect.asVoid),
     );
   }
@@ -821,27 +705,14 @@ export abstract class CloudflareAgentDO<Env extends CloudflareAgentEnv>
 export const createAgentDurableObject = <Env extends CloudflareAgentEnv>(
   config: AgentDurableObjectConfig<Env> = {},
 ) =>
-  class ConfiguredAgentDurableObject extends CloudflareAgentDO<Env> {
+  class ConfiguredAgentDurableObject extends AgentDurableObject<Env> {
     constructor(ctx: DurableObjectState, env: Env) {
-      super(ctx, env);
-      for (const registration of config.eventHandlers?.(this, env) ?? []) {
-        this.on(registration.kind, registration.handler);
-      }
-    }
-
-    protected override provideRefResolver(): RefResolver {
-      return config.refResolver?.(this.env) ?? super.provideRefResolver();
-    }
-
-    protected override registerExtensions(): ReadonlyArray<ExtensionDeclaration> {
-      return config.extensions?.(this.env) ?? super.registerExtensions();
-    }
-
-    protected override provideDispatchTargets(): DispatchTargetRegistry {
-      return config.dispatchTargets?.(this.env) ?? super.provideDispatchTargets();
-    }
-
-    protected override scopeRefForScope(scope: string): ScopeRef | null {
-      return config.scopeRefForScope?.(scope, this.env) ?? super.scopeRefForScope(scope);
+      super(ctx, env, {
+        refResolver: config.refResolver?.(env) ?? emptyRefResolver,
+        extensions: config.extensions?.(env) ?? [],
+        dispatchTargets: config.dispatchTargets?.(env) ?? {},
+        scopeRefForScope: config.scopeRefForScope ?? (() => null),
+        eventHandlers: config.eventHandlers,
+      });
     }
   };

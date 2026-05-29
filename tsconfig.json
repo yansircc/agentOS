@@ -3,6 +3,7 @@
   "references": [
     { "path": "./packages/kernel" },
     { "path": "./packages/runtime" },
+    { "path": "./packages/backends/protocol" },
     { "path": "./packages/backends/cloudflare-do" },
     { "path": "./packages/backends/in-memory" },
     { "path": "./packages/carriers/image" }

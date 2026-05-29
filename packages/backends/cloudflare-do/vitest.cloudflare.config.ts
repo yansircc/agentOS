@@ -7,7 +7,7 @@ import { cloudflareTest } from "@cloudflare/vitest-pool-workers";
  * Tests run inside the Workers runtime via vitest-pool-workers so they have
  * access to real DO SQLite + transactionSync semantics. The AI binding is
  * NOT defined in wrangler-test.jsonc — tests stub it in-process by composing
- * a Layer.succeed(AiBinding, stubAiObj) and bypassing CloudflareAgentDO entirely.
+ * a Layer.succeed(AiBinding, stubAiObj) and bypassing the DO facade entirely.
  *
  * Bound: AGENT_DO (a minimal TestAgentDO subclass of DurableObject — just
  * a vehicle for runInDurableObject(stub, callback) to acquire a real
@@ -16,6 +16,7 @@ import { cloudflareTest } from "@cloudflare/vitest-pool-workers";
 export default defineConfig({
   resolve: {
     alias: {
+      "@agent-os/backend-protocol": "../protocol/src/index.ts",
       "@agent-os/kernel/abort": "../../kernel/src/abort.ts",
       "@agent-os/kernel/boundary-contract": "../../kernel/src/boundary-contract.ts",
       "@agent-os/kernel/context": "../../kernel/src/context.ts",

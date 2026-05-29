@@ -17,11 +17,12 @@ import type { TraceContext } from "@agent-os/runtime";
 import { validateEffectClaim, type LivedClaim } from "@agent-os/kernel/effect-claim";
 import { sqlText } from "../storage/sql-row";
 import {
+  DISPATCH_INBOUND_ACCEPTED,
   dispatchPayloadParseFailure,
   isRecord,
   parseTraceContext,
   type DispatchPayloadParseResult,
-} from "./payload";
+} from "@agent-os/backend-protocol";
 
 export interface InboundAcceptedPayload {
   readonly sourceScope: string;
@@ -31,8 +32,6 @@ export interface InboundAcceptedPayload {
   readonly claim: LivedClaim;
   readonly traceContext?: TraceContext;
 }
-
-export const DISPATCH_INBOUND_ACCEPTED = "dispatch.inbound.accepted";
 
 const parseOk = <T>(value: T): DispatchPayloadParseResult<T> => ({ ok: true, value });
 

@@ -3,6 +3,7 @@
 ## Public exports
 
 - `.:AgentDurableObjectConfig`
+- `.:AgentEventHandlerContext`
 - `.:AgentEventHandlerRegistration`
 - `.:AgentRuntimeClient`
 - `.:CloudflareAgentEnv`
