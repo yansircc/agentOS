@@ -1,60 +1,16 @@
 import { Predicate } from "effect";
 import type { LivedClaim } from "@agent-os/kernel/effect-claim";
-import { defineEventKindView, defineEventPayloads, payload } from "@agent-os/kernel/extensions";
 import { validateTerminalClaim } from "@agent-os/kernel/settlement-contract";
-import { gitSettlementContract } from "./settlement";
+import { GIT_EVENTS, GIT_KIND, gitSettlementContract } from "./definition";
+export { GIT_EVENTS, GIT_KIND } from "./definition";
 
-export interface GitWorkspaceCreatedPayload {
-  readonly subjectRef: string;
-  readonly workspaceRef: string;
-  readonly baseRef: string;
-  readonly branchRef: string;
-  readonly claim: LivedClaim;
-}
+type GitPayloads = typeof GIT_EVENTS;
 
-export interface GitCommitRecordedPayload {
-  readonly subjectRef: string;
-  readonly commitRef: string;
-  readonly parentRef: string;
-  readonly diffRef: string;
-  readonly claim: LivedClaim;
-}
-
-export interface GitMergeRecordedPayload {
-  readonly subjectRef: string;
-  readonly mergeCommitRef: string;
-  readonly targetRef: string;
-  readonly claim: LivedClaim;
-}
-
-export interface GitRevertRecordedPayload {
-  readonly subjectRef: string;
-  readonly revertCommitRef: string;
-  readonly revertedRef: string;
-  readonly claim: LivedClaim;
-}
-
-export interface GitWorkspaceCleanedPayload {
-  readonly subjectRef: string;
-  readonly workspaceRef: string;
-  readonly claim: LivedClaim;
-}
-
-export const GIT_EVENTS = defineEventPayloads({
-  "git.workspace.created": payload<GitWorkspaceCreatedPayload>(),
-  "git.commit.recorded": payload<GitCommitRecordedPayload>(),
-  "git.merge.recorded": payload<GitMergeRecordedPayload>(),
-  "git.revert.recorded": payload<GitRevertRecordedPayload>(),
-  "git.workspace.cleaned": payload<GitWorkspaceCleanedPayload>(),
-});
-
-export const GIT_KIND = defineEventKindView(GIT_EVENTS, {
-  WORKSPACE_CREATED: "git.workspace.created",
-  COMMIT_RECORDED: "git.commit.recorded",
-  MERGE_RECORDED: "git.merge.recorded",
-  REVERT_RECORDED: "git.revert.recorded",
-  WORKSPACE_CLEANED: "git.workspace.cleaned",
-});
+export type GitWorkspaceCreatedPayload = GitPayloads[(typeof GIT_KIND)["WORKSPACE_CREATED"]];
+export type GitCommitRecordedPayload = GitPayloads[(typeof GIT_KIND)["COMMIT_RECORDED"]];
+export type GitMergeRecordedPayload = GitPayloads[(typeof GIT_KIND)["MERGE_RECORDED"]];
+export type GitRevertRecordedPayload = GitPayloads[(typeof GIT_KIND)["REVERT_RECORDED"]];
+export type GitWorkspaceCleanedPayload = GitPayloads[(typeof GIT_KIND)["WORKSPACE_CLEANED"]];
 
 export type GitEventKind = keyof typeof GIT_EVENTS;
 

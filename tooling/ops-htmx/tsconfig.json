@@ -19,7 +19,9 @@
       "@agent-os/kernel/llm": ["../../packages/kernel/src/llm.ts"],
       "@agent-os/kernel/material-ref": ["../../packages/kernel/src/material-ref.ts"],
       "@agent-os/kernel/ref-resolver": ["../../packages/kernel/src/ref-resolver.ts"],
+      "@agent-os/kernel/settlement-contract": ["../../packages/kernel/src/settlement-contract.ts"],
       "@agent-os/kernel/tools": ["../../packages/kernel/src/tools.ts"],
+      "@agent-os/kernel/types": ["../../packages/kernel/src/types.ts"],
       "@agent-os/runtime": ["../../packages/runtime/src/index.ts"],
       "@agent-os/ops-api": ["../ops-api/src/index.ts"]
     },

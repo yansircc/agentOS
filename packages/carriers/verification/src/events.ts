@@ -1,28 +1,19 @@
 import { Predicate } from "effect";
 import type { LivedClaim } from "@agent-os/kernel/effect-claim";
-import { defineEventKindView, defineEventPayloads, payload } from "@agent-os/kernel/extensions";
 import { validateTerminalClaim } from "@agent-os/kernel/settlement-contract";
-import { verificationSettlementContract } from "./settlement";
+import {
+  VERIFICATION_EVENTS,
+  VERIFICATION_KIND,
+  verificationSettlementContract,
+} from "./definition";
+export { VERIFICATION_EVENTS, VERIFICATION_KIND } from "./definition";
 
 export type VerificationGateStatus = "passed" | "failed";
 
-export interface VerificationGateRecordedPayload {
-  readonly subjectRef: string;
-  readonly gate: string;
-  readonly status: VerificationGateStatus;
-  readonly proofRef: string;
-  readonly fingerprint: string;
-  readonly summary?: string;
-  readonly claim: LivedClaim;
-}
+type VerificationPayloads = typeof VERIFICATION_EVENTS;
 
-export const VERIFICATION_EVENTS = defineEventPayloads({
-  "verification.gate.recorded": payload<VerificationGateRecordedPayload>(),
-});
-
-export const VERIFICATION_KIND = defineEventKindView(VERIFICATION_EVENTS, {
-  GATE_RECORDED: "verification.gate.recorded",
-});
+export type VerificationGateRecordedPayload =
+  VerificationPayloads[(typeof VERIFICATION_KIND)["GATE_RECORDED"]];
 
 export type VerificationEventKind = keyof typeof VERIFICATION_EVENTS;
 

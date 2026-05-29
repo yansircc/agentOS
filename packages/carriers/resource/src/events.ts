@@ -7,70 +7,25 @@ import {
   type ExternalResourceMaterialRef,
   type MaterialRef,
 } from "@agent-os/kernel/material-ref";
-import { defineEventKindView, defineEventPayloads, payload } from "@agent-os/kernel/extensions";
-import { resourceSettlementContract } from "./settlement";
+import { RESOURCE_EVENTS, RESOURCE_KIND, resourceSettlementContract } from "./definition";
+export { RESOURCE_EVENTS, RESOURCE_KIND } from "./definition";
 
 export type ResourceLifecycleStep = "provision" | "bind" | "mutate" | "destroy";
 
-export interface ResourceProvisionedPayload {
-  readonly subjectRef: string;
-  readonly resourceKind: string;
-  readonly resourceRef: ExternalResourceMaterialRef;
-  readonly accountRef?: ExternalResourceMaterialRef;
-  readonly bindingRef?: BindingMaterialRef;
-  readonly proofRef: string;
-  readonly claim: LivedClaim;
-}
+type ResourcePayloads = typeof RESOURCE_EVENTS;
 
-export interface ResourceBoundPayload {
-  readonly subjectRef: string;
-  readonly resourceRef: ExternalResourceMaterialRef;
-  readonly bindingRef: BindingMaterialRef;
-  readonly proofRef: string;
-  readonly claim: LivedClaim;
-}
+export type ResourceProvisionedPayload =
+  ResourcePayloads[(typeof RESOURCE_KIND)["RESOURCE_PROVISIONED"]];
 
-export interface ResourceMutationRecordedPayload {
-  readonly subjectRef: string;
-  readonly resourceRef: MaterialRef;
-  readonly mutationKind: string;
-  readonly mutationRef: string;
-  readonly proofRef: string;
-  readonly fingerprint?: string;
-  readonly claim: LivedClaim;
-}
+export type ResourceBoundPayload = ResourcePayloads[(typeof RESOURCE_KIND)["RESOURCE_BOUND"]];
 
-export interface ResourceDestroyedPayload {
-  readonly subjectRef: string;
-  readonly resourceRef: MaterialRef;
-  readonly proofRef: string;
-  readonly reason: "replaced" | "expired" | "aborted" | "manual";
-  readonly claim: LivedClaim;
-}
+export type ResourceMutationRecordedPayload =
+  ResourcePayloads[(typeof RESOURCE_KIND)["MUTATION_RECORDED"]];
 
-export interface ResourceFailedPayload {
-  readonly subjectRef: string;
-  readonly step: ResourceLifecycleStep;
-  readonly proofRef?: string;
-  readonly reason: string;
-  readonly claim: RejectedClaim;
-}
+export type ResourceDestroyedPayload =
+  ResourcePayloads[(typeof RESOURCE_KIND)["RESOURCE_DESTROYED"]];
 
-export const RESOURCE_EVENTS = defineEventPayloads({
-  "resource.resource.provisioned": payload<ResourceProvisionedPayload>(),
-  "resource.resource.bound": payload<ResourceBoundPayload>(),
-  "resource.mutation.recorded": payload<ResourceMutationRecordedPayload>(),
-  "resource.resource.destroyed": payload<ResourceDestroyedPayload>(),
-  "resource.failed": payload<ResourceFailedPayload>(),
-});
-
-export const RESOURCE_KIND = defineEventKindView(RESOURCE_EVENTS, {
-  RESOURCE_PROVISIONED: "resource.resource.provisioned",
-  RESOURCE_BOUND: "resource.resource.bound",
-  MUTATION_RECORDED: "resource.mutation.recorded",
-  RESOURCE_DESTROYED: "resource.resource.destroyed",
-  FAILED: "resource.failed",
-});
+export type ResourceFailedPayload = ResourcePayloads[(typeof RESOURCE_KIND)["FAILED"]];
 
 export type ResourceEventKind = keyof typeof RESOURCE_EVENTS;
 

@@ -1,8 +1,12 @@
 import { Predicate } from "effect";
 import type { LivedClaim, RejectedClaim } from "@agent-os/kernel/effect-claim";
-import { defineEventKindView, defineEventPayloads, payload } from "@agent-os/kernel/extensions";
 import { validateTerminalClaim } from "@agent-os/kernel/settlement-contract";
-import { workspaceSessionSettlementContract } from "./settlement";
+import {
+  WORKSPACE_SESSION_EVENTS,
+  WORKSPACE_SESSION_KIND,
+  workspaceSessionSettlementContract,
+} from "./definition";
+export { WORKSPACE_SESSION_EVENTS, WORKSPACE_SESSION_KIND } from "./definition";
 
 export type WorkspaceSessionLifecycleStep = "start" | "restore" | "backup" | "preview" | "destroy";
 
@@ -18,74 +22,25 @@ export type WorkspaceSessionRetention =
       readonly expiresAt?: string;
     };
 
-export interface WorkspaceSessionStartedPayload {
-  readonly subjectRef: string;
-  readonly sessionRef: string;
-  readonly workspaceRootRef: string;
-  readonly cleanupRef: string;
-  readonly retention?: WorkspaceSessionRetention;
-  readonly claim: LivedClaim;
-}
+type WorkspaceSessionPayloads = typeof WORKSPACE_SESSION_EVENTS;
 
-export interface WorkspaceSessionRestoredPayload {
-  readonly subjectRef: string;
-  readonly sessionRef: string;
-  readonly backupRef: string;
-  readonly workspaceRootRef: string;
-  readonly cleanupRef: string;
-  readonly retention?: WorkspaceSessionRetention;
-  readonly claim: LivedClaim;
-}
+export type WorkspaceSessionStartedPayload =
+  WorkspaceSessionPayloads[(typeof WORKSPACE_SESSION_KIND)["STARTED"]];
 
-export interface WorkspaceSessionBackedUpPayload {
-  readonly subjectRef: string;
-  readonly sessionRef: string;
-  readonly backupRef: string;
-  readonly expiresAt?: string;
-  readonly claim: LivedClaim;
-}
+export type WorkspaceSessionRestoredPayload =
+  WorkspaceSessionPayloads[(typeof WORKSPACE_SESSION_KIND)["RESTORED"]];
 
-export interface WorkspaceSessionPreviewAllocatedPayload {
-  readonly subjectRef: string;
-  readonly sessionRef: string;
-  readonly previewRef: string;
-  readonly port: number;
-  readonly url?: string;
-  readonly claim: LivedClaim;
-}
+export type WorkspaceSessionBackedUpPayload =
+  WorkspaceSessionPayloads[(typeof WORKSPACE_SESSION_KIND)["BACKED_UP"]];
 
-export interface WorkspaceSessionDestroyedPayload {
-  readonly subjectRef: string;
-  readonly sessionRef: string;
-  readonly reason: "completed" | "expired" | "aborted" | "manual";
-  readonly claim: LivedClaim;
-}
+export type WorkspaceSessionPreviewAllocatedPayload =
+  WorkspaceSessionPayloads[(typeof WORKSPACE_SESSION_KIND)["PREVIEW_ALLOCATED"]];
 
-export interface WorkspaceSessionFailedPayload {
-  readonly subjectRef: string;
-  readonly step: WorkspaceSessionLifecycleStep;
-  readonly proofRef?: string;
-  readonly reason: string;
-  readonly claim: RejectedClaim;
-}
+export type WorkspaceSessionDestroyedPayload =
+  WorkspaceSessionPayloads[(typeof WORKSPACE_SESSION_KIND)["DESTROYED"]];
 
-export const WORKSPACE_SESSION_EVENTS = defineEventPayloads({
-  "workspace_session.started": payload<WorkspaceSessionStartedPayload>(),
-  "workspace_session.restored": payload<WorkspaceSessionRestoredPayload>(),
-  "workspace_session.backed_up": payload<WorkspaceSessionBackedUpPayload>(),
-  "workspace_session.preview_allocated": payload<WorkspaceSessionPreviewAllocatedPayload>(),
-  "workspace_session.destroyed": payload<WorkspaceSessionDestroyedPayload>(),
-  "workspace_session.failed": payload<WorkspaceSessionFailedPayload>(),
-});
-
-export const WORKSPACE_SESSION_KIND = defineEventKindView(WORKSPACE_SESSION_EVENTS, {
-  STARTED: "workspace_session.started",
-  RESTORED: "workspace_session.restored",
-  BACKED_UP: "workspace_session.backed_up",
-  PREVIEW_ALLOCATED: "workspace_session.preview_allocated",
-  DESTROYED: "workspace_session.destroyed",
-  FAILED: "workspace_session.failed",
-});
+export type WorkspaceSessionFailedPayload =
+  WorkspaceSessionPayloads[(typeof WORKSPACE_SESSION_KIND)["FAILED"]];
 
 export type WorkspaceSessionEventKind = keyof typeof WORKSPACE_SESSION_EVENTS;
 

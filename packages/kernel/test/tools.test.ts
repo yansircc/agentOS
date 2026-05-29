@@ -102,7 +102,7 @@ describe("defineToolFromDefinition", () => {
             parameters: {
               type: "object",
               properties: {
-                key: { anyOf: [{ type: "string" }, { type: "number" }] },
+                key: { type: "string", minLength: 1 },
               },
             },
           },
@@ -111,6 +111,6 @@ describe("defineToolFromDefinition", () => {
         admit: "allow",
         execute: async () => null,
       }),
-    ).toThrow("unsupported");
+    ).toThrow("unsupported-key");
   });
 });

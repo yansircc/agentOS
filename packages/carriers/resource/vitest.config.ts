@@ -3,6 +3,7 @@ import { defineConfig } from "vite-plus";
 export default defineConfig({
   resolve: {
     alias: {
+      "@agent-os/kernel/carrier": new URL("../../kernel/src/carrier.ts", import.meta.url).pathname,
       "@agent-os/kernel/boundary-contract": new URL(
         "../../kernel/src/boundary-contract.ts",
         import.meta.url,
@@ -15,6 +16,10 @@ export default defineConfig({
         .pathname,
       "@agent-os/kernel/ref-resolver": new URL("../../kernel/src/ref-resolver.ts", import.meta.url)
         .pathname,
+      "@agent-os/kernel/settlement-contract": new URL(
+        "../../kernel/src/settlement-contract.ts",
+        import.meta.url,
+      ).pathname,
     },
   },
   test: {

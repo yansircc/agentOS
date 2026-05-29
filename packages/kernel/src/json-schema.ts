@@ -20,6 +20,7 @@ export type JsonSchemaNode =
   | { readonly type: "number" }
   | { readonly type: "boolean" }
   | { readonly type: "array"; readonly items: JsonSchemaNode }
+  | { readonly anyOf: ReadonlyArray<JsonSchemaNode> }
   | JsonSchemaObject;
 
 export type SchemaContract = {
@@ -95,6 +96,24 @@ export const toClosedJsonSchemaNodeResult = (
 ): JsonSchemaResult<JsonSchemaNode> => {
   const schema = Predicate.isRecord(value) ? value : undefined;
   if (schema === undefined) return fail(path, "expected-object");
+  if (schema.anyOf !== undefined) {
+    const unsupportedKey = firstUnsupportedKey(
+      schema,
+      new Set(["anyOf", ...(path === "$" ? ROOT_ANNOTATION_KEYS : ANNOTATION_KEYS)]),
+      path,
+    );
+    if (unsupportedKey !== undefined) return { ok: false, issues: [unsupportedKey] };
+    if (!Array.isArray(schema.anyOf) || schema.anyOf.length === 0) {
+      return fail(`${path}.anyOf`, "expected-non-empty-array");
+    }
+    const variants: JsonSchemaNode[] = [];
+    for (const [index, variant] of schema.anyOf.entries()) {
+      const closedVariant = toClosedJsonSchemaNodeResult(variant, `${path}.anyOf.${index}`);
+      if (!closedVariant.ok) return failFrom(closedVariant);
+      variants.push(closedVariant.value);
+    }
+    return ok({ anyOf: variants });
+  }
   const type = schema.type;
   switch (type) {
     case "object": {
@@ -196,7 +215,7 @@ export const toClosedJsonSchemaObjectResult = (
 ): JsonSchemaResult<JsonSchemaObject> => {
   const result = toClosedJsonSchemaNodeResult(value);
   if (!result.ok) return failFrom(result);
-  if (result.value.type !== "object") {
+  if (!("type" in result.value) || result.value.type !== "object") {
     return fail("$.type", "root-must-be-object");
   }
   return ok(result.value as JsonSchemaObject);
@@ -218,7 +237,16 @@ export const schemaToClosedJsonSchemaObject = (
 export const validateAgainstSchema = (value: unknown, schema: JsonSchemaNode): string[] => {
   const violations: string[] = [];
   const walk = (v: unknown, s: JsonSchemaNode, path: string): void => {
-    if (s.type === "object") {
+    if ("anyOf" in s) {
+      const matched = s.anyOf.some((variant) => {
+        const nested: string[] = [];
+        const previousLength = violations.length;
+        walk(v, variant, path);
+        nested.push(...violations.splice(previousLength));
+        return nested.length === 0;
+      });
+      if (!matched) violations.push(`${path}:not-any-of`);
+    } else if (s.type === "object") {
       if (typeof v !== "object" || v === null || Array.isArray(v)) {
         violations.push(`${path}:not-object`);
         return;

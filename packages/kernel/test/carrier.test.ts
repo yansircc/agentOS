@@ -205,7 +205,9 @@ describe("defineCarrier", () => {
         events: {
           recorded: event({
             kind: "recorded",
-            payload: Schema.Struct({ value: Schema.Union(Schema.String, Schema.Number) }),
+            payload: Schema.Struct({
+              value: Schema.Record({ key: Schema.String, value: Schema.Unknown }),
+            }),
             claim: none(),
           }),
         },
@@ -214,7 +216,7 @@ describe("defineCarrier", () => {
           reduce: (state) => state,
         }),
       }),
-    ).toThrow(/unsupported-key|unsupported/);
+    ).toThrow(/expected-boolean/);
   });
 
   it("types terminal constructors only on matching claim slots", () => {

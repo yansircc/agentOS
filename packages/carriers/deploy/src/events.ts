@@ -1,62 +1,24 @@
 import { Predicate } from "effect";
 import type { LivedClaim, RejectedClaim } from "@agent-os/kernel/effect-claim";
-import { defineEventKindView, defineEventPayloads, payload } from "@agent-os/kernel/extensions";
 import { validateTerminalClaim } from "@agent-os/kernel/settlement-contract";
-import { deploySettlementContract } from "./settlement";
+import { DEPLOY_EVENTS, DEPLOY_KIND, deploySettlementContract } from "./definition";
+export { DEPLOY_EVENTS, DEPLOY_KIND } from "./definition";
 
-export interface DeployPreviewRecordedPayload {
-  readonly subjectRef: string;
-  readonly previewRef: string;
-  readonly artifactRef: string;
-  readonly claim: LivedClaim;
-}
+type DeployPayloads = typeof DEPLOY_EVENTS;
 
-export interface DeployProductionPromotedPayload {
-  readonly subjectRef: string;
-  readonly deployRef: string;
-  readonly productionRef: string;
-  readonly rollbackRef?: string;
-  readonly claim: LivedClaim;
-}
+export type DeployPreviewRecordedPayload =
+  DeployPayloads[(typeof DEPLOY_KIND)["PREVIEW_RECORDED"]];
 
-export interface DeployProductionReadbackPayload {
-  readonly subjectRef: string;
-  readonly productionRef: string;
-  readonly readbackRef: string;
-  readonly status: "passed" | "failed";
-  readonly claim: LivedClaim;
-}
+export type DeployProductionPromotedPayload =
+  DeployPayloads[(typeof DEPLOY_KIND)["PRODUCTION_PROMOTED"]];
 
-export interface DeployRollbackRecordedPayload {
-  readonly subjectRef: string;
-  readonly rollbackRef: string;
-  readonly restoredDeployRef: string;
-  readonly claim: LivedClaim;
-}
+export type DeployProductionReadbackPayload =
+  DeployPayloads[(typeof DEPLOY_KIND)["PRODUCTION_READBACK"]];
 
-export interface DeployFailedPayload {
-  readonly subjectRef: string;
-  readonly step: "preview" | "promote" | "readback" | "rollback";
-  readonly proofRef: string;
-  readonly reason: string;
-  readonly claim: RejectedClaim;
-}
+export type DeployRollbackRecordedPayload =
+  DeployPayloads[(typeof DEPLOY_KIND)["ROLLBACK_RECORDED"]];
 
-export const DEPLOY_EVENTS = defineEventPayloads({
-  "deploy.preview.recorded": payload<DeployPreviewRecordedPayload>(),
-  "deploy.production.promoted": payload<DeployProductionPromotedPayload>(),
-  "deploy.production.readback": payload<DeployProductionReadbackPayload>(),
-  "deploy.rollback.recorded": payload<DeployRollbackRecordedPayload>(),
-  "deploy.failed": payload<DeployFailedPayload>(),
-});
-
-export const DEPLOY_KIND = defineEventKindView(DEPLOY_EVENTS, {
-  PREVIEW_RECORDED: "deploy.preview.recorded",
-  PRODUCTION_PROMOTED: "deploy.production.promoted",
-  PRODUCTION_READBACK: "deploy.production.readback",
-  ROLLBACK_RECORDED: "deploy.rollback.recorded",
-  FAILED: "deploy.failed",
-});
+export type DeployFailedPayload = DeployPayloads[(typeof DEPLOY_KIND)["FAILED"]];
 
 export type DeployEventKind = keyof typeof DEPLOY_EVENTS;
 

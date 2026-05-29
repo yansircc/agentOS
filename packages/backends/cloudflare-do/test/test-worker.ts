@@ -123,14 +123,20 @@ const proofBoundaryContract = defineBoundaryContract({
   packageId: "@agent-os/proof",
   kindPrefixes: ["proof."],
   roles: ["generator", "reader"],
-  vocabulary: {
-    RECORDED: "proof.recorded",
-  },
   authorityContracts: [],
   materialRequirements: [],
-  claimPayloadKey: "claim",
-  claimPhases: {
-    "proof.recorded": ["lived"],
+  events: {
+    "proof.recorded": {
+      payloadSchema: {
+        type: "object",
+        properties: {
+          proofRef: { type: "string" },
+        },
+        required: ["proofRef"],
+        additionalProperties: false,
+      },
+      claim: { key: "claim", phase: "lived" },
+    },
   },
   settlement: proofSettlementContract,
   projection: {
