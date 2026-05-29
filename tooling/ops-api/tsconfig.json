@@ -17,6 +17,7 @@
       "@agent-os/kernel/boundary-contract": ["../../packages/kernel/src/boundary-contract.ts"],
       "@agent-os/kernel/effect-claim": ["../../packages/kernel/src/effect-claim.ts"],
       "@agent-os/kernel/errors": ["../../packages/kernel/src/errors.ts"],
+      "@agent-os/kernel/json-schema": ["../../packages/kernel/src/json-schema.ts"],
       "@agent-os/kernel/llm": ["../../packages/kernel/src/llm.ts"],
       "@agent-os/kernel/material-ref": ["../../packages/kernel/src/material-ref.ts"],
       "@agent-os/kernel/ref-resolver": ["../../packages/kernel/src/ref-resolver.ts"],

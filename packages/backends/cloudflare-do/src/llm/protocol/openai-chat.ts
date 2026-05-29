@@ -29,7 +29,7 @@ import {
   providerFailureSignal,
   type Outcome,
 } from "./shared";
-import { validateAgainstSchema } from "../../admission/json-schema";
+import { validateAgainstSchema } from "@agent-os/kernel/json-schema";
 
 /** Encode a free-text turn into Chat Completions body. dispatchProvider
  *  injects `model` (cf-ai-binding via env.AI.run argument, openai-chat-

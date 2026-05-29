@@ -26,6 +26,10 @@
         "name": "EXTENSION_DO",
         "class_name": "ExtensionTestDO",
       },
+      {
+        "name": "FACADE_SUBMIT_DO",
+        "class_name": "FacadeSubmitTestDO",
+      },
     ],
   },
   "migrations": [
@@ -37,6 +41,7 @@
         "DispatchTestDO",
         "StreamTestDO",
         "ExtensionTestDO",
+        "FacadeSubmitTestDO",
       ],
     },
   ],

@@ -6,7 +6,6 @@ import {
   decideTier,
   projectLease,
   routeFingerprint,
-  validateAgainstSchema,
   type AdmissionImpact,
   type AdmissionRow,
   type AttemptKey,
@@ -16,6 +15,7 @@ import {
   type InvalidateSpec,
   type Outcome,
 } from "@agent-os/runtime";
+import { validateAgainstSchema } from "@agent-os/kernel/json-schema";
 import { describeDispatchCause } from "@agent-os/backend-protocol";
 import type { InMemoryBackendState } from "./state";
 import { decodeOk, recordOf } from "./decode";

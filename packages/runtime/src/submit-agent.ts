@@ -33,6 +33,7 @@ import { Ledger } from "./ledger";
 import type { RefResolutionFailed } from "@agent-os/kernel/ref-resolver";
 import { Quota } from "./quota-service";
 import {
+  decodeToolArgs,
   executeTool,
   parseToolCall,
   validateToolRegistry,
@@ -352,7 +353,8 @@ export const submitAgentEffect = (
           // AND parsing before any quota grant means invalid LLM-emitted
           // args never consume quota.
           const parsed = yield* parseToolCall(spec.tools, call);
-          const { tool, args } = parsed;
+          const { tool } = parsed;
+          const args = yield* decodeToolArgs(tool, parsed.args, call.function.name);
           const contract = tool.contract;
           // O-2: LLM-emitted tool arguments are not reproducible idempotency
           // material; this concrete call attempt is the semantic effect.

@@ -14,7 +14,8 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 
-import { type JsonSchemaObject, makeSchemaContract, routeFingerprint } from "../src/admission";
+import type { JsonSchemaObject } from "@agent-os/kernel/json-schema";
+import { makeSchemaContract, routeFingerprint } from "../src/admission";
 
 describe("admission — canonical fingerprint (contract §4.1)", () => {
   const S1: JsonSchemaObject = {

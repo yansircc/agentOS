@@ -1,7 +1,7 @@
 import { isOriginRef, type OriginRef } from "@agent-os/kernel/effect-claim";
 import { isMaterialRequirement, type MaterialRequirement } from "@agent-os/kernel/material-ref";
 import {
-  defineRegisteredTool,
+  defineToolFromDefinition,
   type Tool,
   type ToolAdmitter,
   type ToolDefinition,
@@ -170,7 +170,7 @@ export const registerSkill = (manifest: SkillManifest): RegisterSkillResult => {
   for (const tool of manifest.tools) {
     const toolId = tool.definition.function.name;
     toolIds.push(toolId);
-    tools[toolId] = defineRegisteredTool({
+    tools[toolId] = defineToolFromDefinition({
       definition: tool.definition,
       execute: tool.execute,
       authorityClass: tool.authorityClass,

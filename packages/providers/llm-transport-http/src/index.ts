@@ -157,10 +157,7 @@ const endpointFor = (
   resolver: RefResolver,
   route: HttpStreamingLlmRoute,
 ): string | ProviderError => {
-  const endpoint = resolvedStringMaterial(
-    resolver,
-    endpointMaterialRef(route.endpointRef, { protocol: route.kind }),
-  );
+  const endpoint = resolvedStringMaterial(resolver, endpointMaterialRef(route.endpointRef));
   return endpoint ?? { reason: "llm_transport_http_missing_endpoint_material" };
 };
 
@@ -168,13 +165,7 @@ const credentialFor = (
   resolver: RefResolver,
   route: HttpStreamingLlmRoute,
 ): string | ProviderError => {
-  const credential = resolvedStringMaterial(
-    resolver,
-    credentialMaterialRef(route.credentialRef, {
-      provider: route.kind,
-      purpose: "llm_transport",
-    }),
-  );
+  const credential = resolvedStringMaterial(resolver, credentialMaterialRef(route.credentialRef));
   return credential ?? { reason: "llm_transport_http_missing_credential_material" };
 };
 

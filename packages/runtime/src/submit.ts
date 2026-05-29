@@ -1,7 +1,7 @@
 import type { LlmRoute } from "@agent-os/kernel/llm";
 import type { Tool } from "@agent-os/kernel/tools";
 import type { ScopeRef } from "@agent-os/kernel/effect-claim";
-import type { JsonSchemaObject } from "./json-schema";
+import type { JsonSchemaObject } from "@agent-os/kernel/json-schema";
 
 export interface SubmitSpec {
   readonly intent: string;

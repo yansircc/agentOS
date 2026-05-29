@@ -8,6 +8,10 @@ export default defineConfig({
         replacement: new URL("../kernel/src/llm.ts", import.meta.url).pathname,
       },
       {
+        find: "@agent-os/kernel/json-schema",
+        replacement: new URL("../kernel/src/json-schema.ts", import.meta.url).pathname,
+      },
+      {
         find: "@agent-os/kernel/effect-claim",
         replacement: new URL("../kernel/src/effect-claim.ts", import.meta.url).pathname,
       },

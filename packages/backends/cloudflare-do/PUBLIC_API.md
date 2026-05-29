@@ -2,18 +2,43 @@
 
 # @agent-os/backend-cloudflare-do Public API
 
-Status: Backend package. Public exports are limited to the Durable Object factory and backend-specific configuration types.
+Status: Backend package. Public exports include the Cloudflare app facade, binding builders, route builders, Durable Object factory, and backend-specific configuration types.
 
 ## Public exports
 
 - `.:AgentDurableObjectConfig`
 - `.:AgentEventHandlerContext`
 - `.:AgentEventHandlerRegistration`
+- `.:AgentDOClass`
+- `.:AgentFacadeRuntimeClient`
+- `.:AgentFacadeRuntimeClientWithSubmit`
+- `.:AgentMaterialBinding`
+- `.:AgentMaterialBindingBuilder`
+- `.:AgentOnHandler`
+- `.:AgentRuntimeBaseClient`
 - `.:AgentRuntimeClient`
+- `.:AgentSubmitSpec`
+- `.:AnthropicMessagesSpec`
+- `.:CfAiBindingSpec`
 - `.:CloudflareAgentEnv`
+- `.:DefineAgentDOConfig`
+- `.:DefineAgentDOConfigWithSubmit`
+- `.:DefineAgentDOConfigWithoutSubmit`
 - `.:DispatchTargetNamespace`
 - `.:DispatchTargetRegistry`
+- `.:GeminiGenerateContentSpec`
+- `.:OpenAIChatSpec`
+- `.:anthropicMessages`
+- `.:binding`
+- `.:cfAiBinding`
+- `.:credential`
 - `.:createAgentDurableObject`
+- `.:defineAgentDO`
+- `.:durableObjectTarget`
+- `.:endpoint`
+- `.:externalResource`
+- `.:geminiGenerateContent`
+- `.:openAIChat`
 
 ## Experimental exports
 

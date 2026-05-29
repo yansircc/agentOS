@@ -38,6 +38,10 @@
       "types": "./src/llm.ts",
       "default": "./src/llm.ts"
     },
+    "./json-schema": {
+      "types": "./src/json-schema.ts",
+      "default": "./src/json-schema.ts"
+    },
     "./material-ref": {
       "types": "./src/material-ref.ts",
       "default": "./src/material-ref.ts"

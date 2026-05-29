@@ -1,7 +1,7 @@
 import { Context, Effect } from "effect";
 import type { JsonStringifyError, SqlError } from "@agent-os/kernel/errors";
 import type { LlmRoute } from "@agent-os/kernel/llm";
-import type { SchemaContract } from "./json-schema";
+import type { SchemaContract } from "@agent-os/kernel/json-schema";
 import type {
   AdmissionImpact,
   AttemptKey,
@@ -10,7 +10,6 @@ import type {
   Strategy,
 } from "./admission-lease";
 
-export * from "./json-schema";
 export * from "./admission-fingerprint";
 export * from "./admission-lease";
 

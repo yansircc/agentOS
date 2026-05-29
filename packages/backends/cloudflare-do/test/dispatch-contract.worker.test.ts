@@ -60,6 +60,7 @@ const dispatchBindingRef = (ref: string): BindingMaterialRef =>
   });
 
 const peerBindingRef = dispatchBindingRef("peer");
+const genericBindingRef = dispatchBindingRef("generic");
 const peerBindingKey = materialRefKey(peerBindingRef);
 
 const targetFor = (scope: string, bindingRef = peerBindingRef) => ({
@@ -225,6 +226,22 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
 
     const receiverEvents: LedgerEventRpc[] = await receiver.events();
     expect(receiverEvents.some((e) => e.kind === "test.delivered")).toBe(true);
+  });
+
+  it("routes durable object dispatch by MaterialRef shape, not helper choice", async () => {
+    const sender = stubFor("dispatch-generic-binding-sender");
+    const receiver = stubFor("dispatch-generic-binding-receiver");
+
+    const result = await sender.dispatchToScope({
+      target: targetFor("dispatch-generic-binding-receiver", genericBindingRef),
+      event: "test.delivered",
+      data: { message: "generic binding target" },
+      idempotencyKey: "generic-binding-target",
+    });
+
+    expect(result.outboundEventId).toBeGreaterThan(0);
+    const receiverEvents = await receiver.events();
+    expect(receiverEvents.some((event) => event.kind === "test.delivered")).toBe(true);
   });
 
   it("keeps outbox delivered FK local when receiver ledger ids diverge", async () => {

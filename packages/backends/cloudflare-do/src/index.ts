@@ -11,6 +11,35 @@ export type {
   AgentDurableObjectConfig,
   AgentEventHandlerContext,
   AgentEventHandlerRegistration,
+  AgentRuntimeBaseClient,
   AgentRuntimeClient,
+  AgentSubmitSpec,
 } from "./agent-do";
+export {
+  anthropicMessages,
+  binding,
+  cfAiBinding,
+  credential,
+  defineAgentDO,
+  durableObjectTarget,
+  endpoint,
+  externalResource,
+  geminiGenerateContent,
+  openAIChat,
+} from "./facade";
+export type {
+  AgentDOClass,
+  AgentFacadeRuntimeClient,
+  AgentFacadeRuntimeClientWithSubmit,
+  AgentMaterialBinding,
+  AgentMaterialBindingBuilder,
+  AgentOnHandler,
+  AnthropicMessagesSpec,
+  CfAiBindingSpec,
+  DefineAgentDOConfig,
+  DefineAgentDOConfigWithSubmit,
+  DefineAgentDOConfigWithoutSubmit,
+  GeminiGenerateContentSpec,
+  OpenAIChatSpec,
+} from "./facade";
 export type { DispatchTargetNamespace, DispatchTargetRegistry } from "./dispatch";

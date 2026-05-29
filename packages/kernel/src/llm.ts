@@ -47,13 +47,7 @@ export const llmRouteMaterialRefs = (route: LlmRoute): ReadonlyArray<MaterialRef
     case "openai-chat-compatible":
     case "anthropic-messages":
     case "gemini-generate-content":
-      return [
-        endpointMaterialRef(route.endpointRef, { protocol: route.kind }),
-        credentialMaterialRef(route.credentialRef, {
-          provider: route.kind,
-          purpose: "llm_transport",
-        }),
-      ];
+      return [endpointMaterialRef(route.endpointRef), credentialMaterialRef(route.credentialRef)];
   }
 };
 
