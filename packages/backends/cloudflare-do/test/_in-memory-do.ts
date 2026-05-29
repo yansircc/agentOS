@@ -179,12 +179,20 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
     const updates: Row = {};
     let argIndex = 0;
     for (const assignment of assignments) {
-      const assignmentMatch = /^([a-z_]+) = \?$/i.exec(assignment);
-      if (assignmentMatch === null) {
+      const placeholderMatch = /^([a-z_]+) = \?$/i.exec(assignment);
+      if (placeholderMatch !== null) {
+        updates[placeholderMatch[1]!] = args[argIndex];
+        argIndex += 1;
+        continue;
+      }
+      const nullMatch = /^([a-z_]+) = NULL$/i.exec(assignment);
+      if (nullMatch !== null) {
+        updates[nullMatch[1]!] = null;
+        continue;
+      }
+      {
         throw new TypeError(`unsupported in-memory update set: ${assignment}`);
       }
-      updates[assignmentMatch[1]!] = args[argIndex];
-      argIndex += 1;
     }
 
     const predicate = compileWhere(match[3]!, args.slice(argIndex));
