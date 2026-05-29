@@ -3,13 +3,11 @@ import { STAGING_KIND } from "./events";
 
 export const STAGING_EVENT_PREFIX = "staging.";
 
-export const STAGING_EVENT_VOCABULARY = STAGING_KIND;
-
 export const stagingArtifactBoundaryContract = defineBoundaryContract({
   packageId: "@agent-os/staging-artifact",
   kindPrefixes: [STAGING_EVENT_PREFIX],
   roles: ["generator", "resolver", "reader"],
-  vocabulary: STAGING_EVENT_VOCABULARY,
+  vocabulary: STAGING_KIND,
   authorityContracts: [],
   materialRequirements: [],
   claimPayloadKey: "claim",

@@ -4,7 +4,6 @@
 
 - `.:WORKSPACE_SESSION_EVENTS`
 - `.:WORKSPACE_SESSION_EVENT_PREFIX`
-- `.:WORKSPACE_SESSION_EVENT_VOCABULARY`
 - `.:WORKSPACE_SESSION_KIND`
 - `.:WorkspaceSessionBackedUpPayload`
 - `.:WorkspaceSessionBackupRef`

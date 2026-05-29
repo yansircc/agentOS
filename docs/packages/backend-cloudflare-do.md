@@ -18,7 +18,7 @@ Create a DO class from explicit backend config.
 ```ts
 import { createAgentDurableObject } from "@agent-os/backend-cloudflare-do";
 
-export class AgentDO extends createAgentDurableObject({}) {}
+export const AgentDO = createAgentDurableObject({});
 ```
 
 ## Verification

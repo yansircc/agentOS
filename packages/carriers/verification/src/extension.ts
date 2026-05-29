@@ -3,13 +3,11 @@ import { VERIFICATION_KIND } from "./events";
 
 export const VERIFICATION_EVENT_PREFIX = "verification.";
 
-export const VERIFICATION_EVENT_VOCABULARY = VERIFICATION_KIND;
-
 export const verificationBoundaryContract = defineBoundaryContract({
   packageId: "@agent-os/verification",
   kindPrefixes: [VERIFICATION_EVENT_PREFIX],
   roles: ["generator", "reader"],
-  vocabulary: VERIFICATION_EVENT_VOCABULARY,
+  vocabulary: VERIFICATION_KIND,
   authorityContracts: [],
   materialRequirements: [],
   claimPayloadKey: "claim",

@@ -3,13 +3,11 @@ import { DEPLOY_KIND } from "./events";
 
 export const DEPLOY_EVENT_PREFIX = "deploy.";
 
-export const DEPLOY_EVENT_VOCABULARY = DEPLOY_KIND;
-
 export const deployBoundaryContract = defineBoundaryContract({
   packageId: "@agent-os/deploy",
   kindPrefixes: [DEPLOY_EVENT_PREFIX],
   roles: ["generator", "resolver", "reader"],
-  vocabulary: DEPLOY_EVENT_VOCABULARY,
+  vocabulary: DEPLOY_KIND,
   authorityContracts: [],
   materialRequirements: [],
   claimPayloadKey: "claim",

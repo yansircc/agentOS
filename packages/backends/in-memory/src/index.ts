@@ -301,12 +301,12 @@ export class InMemoryBackendState {
   }
 
   nextDueAt(): number | null {
-    let next: number | null = null;
+    let minDueAt: number | null = null;
     for (const row of this.dueWork) {
       if (row.completedAt !== null) continue;
-      if (next === null || row.fireAt < next) next = row.fireAt;
+      if (minDueAt === null || row.fireAt < minDueAt) minDueAt = row.fireAt;
     }
-    return next;
+    return minDueAt;
   }
 
   completeDueWork(id: number, completedAt: number): void {
@@ -422,7 +422,7 @@ export const InMemorySchedulerLive = (
           state.completeDueWork(row.id, now);
           fired += 1;
         }
-        return { next: state.nextDueAt(), fired };
+        return { fired };
       }),
   });
 
@@ -827,10 +827,7 @@ const drainDueOutbox = (
   scope: string,
   targets: InMemoryDispatchTargetRegistry,
   now: number,
-): Effect.Effect<
-  { readonly delivered: number; readonly failed: number; readonly next: number | null },
-  JsonStringifyError
-> =>
+): Effect.Effect<{ readonly delivered: number; readonly failed: number }, JsonStringifyError> =>
   Effect.gen(function* () {
     let delivered = 0;
     let failed = 0;
@@ -942,7 +939,7 @@ const drainDueOutbox = (
       if (nextAttemptAt !== null) state.addDispatchDue(row.outboundEventId, nextAttemptAt);
       failed += 1;
     }
-    return { delivered, failed, next: state.nextDueAt() };
+    return { delivered, failed };
   });
 
 export const InMemoryDispatchLive = (

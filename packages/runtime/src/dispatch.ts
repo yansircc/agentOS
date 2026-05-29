@@ -49,9 +49,6 @@ export class Dispatch extends Context.Tag("@agent-os/Dispatch")<
     >;
     readonly drainDue: (
       now: number,
-    ) => Effect.Effect<
-      { delivered: number; failed: number; next: number | null },
-      SqlError | JsonStringifyError
-    >;
+    ) => Effect.Effect<{ delivered: number; failed: number }, SqlError | JsonStringifyError>;
   }
 >() {}

@@ -3,13 +3,11 @@ import { GIT_KIND } from "./events";
 
 export const GIT_EVENT_PREFIX = "git.";
 
-export const GIT_EVENT_VOCABULARY = GIT_KIND;
-
 export const gitCarrierBoundaryContract = defineBoundaryContract({
   packageId: "@agent-os/git-carrier",
   kindPrefixes: [GIT_EVENT_PREFIX],
   roles: ["generator", "resolver", "reader"],
-  vocabulary: GIT_EVENT_VOCABULARY,
+  vocabulary: GIT_KIND,
   authorityContracts: [],
   materialRequirements: [],
   claimPayloadKey: "claim",

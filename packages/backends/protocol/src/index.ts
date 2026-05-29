@@ -190,7 +190,7 @@ export const parseRequestedPayload = (
   pipe(
     Either.try({
       try: () => JSON.parse(raw) as unknown,
-      catch: (cause) => describeCause(cause),
+      catch: (cause) => describeDispatchCause(cause),
     }),
     Either.match({
       onLeft: (reason) => parseFail(reason),
@@ -198,19 +198,15 @@ export const parseRequestedPayload = (
     }),
   );
 
-export const retryDelayMs = (attempt: number): number =>
+export const dispatchBackoffMs = (attempt: number): number =>
   Math.min(60_000, 1_000 * 2 ** Math.min(Math.max(attempt - 1, 0), 6));
 
-export const dispatchBackoffMs = retryDelayMs;
-
-export const describeCause = (cause: unknown): string => {
+export const describeDispatchCause = (cause: unknown): string => {
   if (typeof cause === "string") return cause;
   if (cause instanceof Error) return `${cause.name}: ${cause.message}`;
   if (isRecord(cause) && typeof cause._tag === "string") return cause._tag;
   return Object.prototype.toString.call(cause);
 };
-
-export const describeDispatchCause = describeCause;
 
 export const eventToProtocolRpc = (
   event: BackendProtocolLedgerEventRpc,

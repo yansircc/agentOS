@@ -5,7 +5,6 @@
 - `.:RESOURCE_AUTHORITIES`
 - `.:RESOURCE_EVENTS`
 - `.:RESOURCE_EVENT_PREFIX`
-- `.:RESOURCE_EVENT_VOCABULARY`
 - `.:RESOURCE_KIND`
 - `.:ResourceBindRequest`
 - `.:ResourceBoundPayload`

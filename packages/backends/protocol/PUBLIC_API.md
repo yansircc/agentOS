@@ -15,7 +15,6 @@ Status: Backend protocol package. Public exports are limited to storage-free bac
 - `.:DUE_WORK_DISPATCH_RETRY`
 - `.:DUE_WORK_SCHEDULED_EVENT`
 - `.:copyTraceContext`
-- `.:describeCause`
 - `.:describeDispatchCause`
 - `.:dispatchBackoffMs`
 - `.:dispatchPayloadParseFailure`
@@ -26,7 +25,6 @@ Status: Backend protocol package. Public exports are limited to storage-free bac
 - `.:parseRequestedPayload`
 - `.:parseRequestedPayloadValue`
 - `.:parseTraceContext`
-- `.:retryDelayMs`
 - `.:BackendProtocolEventHandler`
 - `.:BackendProtocolLedgerEventRpc`
 - `.:DispatchOutboundDeliveredPayload`

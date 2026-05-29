@@ -8,7 +8,6 @@ import {
   completeDueWork,
   enqueueScheduledEvent,
   ensureDueWorkSchema,
-  findNextDue,
   selectDueWork,
 } from "./due-work";
 
@@ -63,8 +62,7 @@ export const SchedulerLive = (
               }
             }
 
-            const next = yield* findNextDue(sql);
-            return { next, fired };
+            return { fired };
           }),
       };
     }),
