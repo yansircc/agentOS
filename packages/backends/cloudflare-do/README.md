@@ -24,6 +24,11 @@ duplicate kinds, and uses that same registry for submit and drain. Apps must
 not import `runtime-core`, `due-work`, SQL helpers, inserted-event helpers, or
 backend state internals.
 
+`agent.enqueueTrigger({ triggerKind, payload, at })` is the app-facing trigger
+submit primitive. It is a public projection of the backend durable-trigger
+commit path: registry lookup happens before any ledger, due-work, or alarm
+write.
+
 ## Minimal Usage
 
 Create a DO class from one app-facing facade config. `bindings` is the only

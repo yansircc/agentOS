@@ -14,6 +14,7 @@ export type {
   AgentRuntimeClient,
   AgentRuntimeReaderClient,
   AgentSubmitSpec,
+  AgentTriggerIntentSpec,
 } from "./agent-do";
 export {
   anthropicMessages,

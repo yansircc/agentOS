@@ -30,6 +30,10 @@
         "name": "FACADE_SUBMIT_DO",
         "class_name": "FacadeSubmitTestDO",
       },
+      {
+        "name": "TRIGGER_FACADE_DO",
+        "class_name": "TriggerFacadeTestDO",
+      },
     ],
   },
   "migrations": [
@@ -42,6 +46,7 @@
         "StreamTestDO",
         "ExtensionTestDO",
         "FacadeSubmitTestDO",
+        "TriggerFacadeTestDO",
       ],
     },
   ],

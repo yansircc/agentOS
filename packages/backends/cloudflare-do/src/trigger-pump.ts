@@ -7,6 +7,7 @@ import {
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import { DurableTriggerRegistry, TriggerPump, type TriggerTx } from "@agent-os/runtime";
 import { fireLedgerEvents, insertLedgerEvent } from "./ledger/inserted-events";
+import { selectLedgerEvents } from "./ledger/ledger";
 import { EventBus } from "./ledger";
 import {
   armNextDue,
@@ -103,6 +104,7 @@ export const TriggerPumpLive = (
                   now,
                   dueWorkId: row.id,
                   intentEventId: row.payload.intentEventId,
+                  events: (opts = {}) => selectLedgerEvents(sql, scope, opts),
                   insertEvent: (spec) => {
                     const payloadStr = JSON.stringify(spec.payload);
                     const event = insertLedgerEvent(sql, {

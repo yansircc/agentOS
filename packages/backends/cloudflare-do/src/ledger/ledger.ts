@@ -36,7 +36,7 @@ const ensureSchema = (sql: SqlStorage): Effect.Effect<void, SqlError> =>
     catch: (cause) => new SqlError({ cause }),
   }).pipe(Effect.asVoid);
 
-const selectEvents = (
+export const selectLedgerEvents = (
   sql: SqlStorage,
   scope: string,
   opts: Pick<EventQueryOptions, "afterId" | "kinds"> & {
@@ -108,13 +108,13 @@ export const LedgerLive = (sql: SqlStorage): Layer.Layer<Ledger, SqlError, Event
                         normalizeNonNegativeInteger(opts.limit, DEFAULT_EVENT_LIMIT),
                       ),
                     );
-              return selectEvents(sql, scope, { ...opts, limit });
+              return selectLedgerEvents(sql, scope, { ...opts, limit });
             },
             catch: (cause) => new SqlError({ cause }),
           }),
         streamSnapshot: (scope, opts = {}) =>
           Effect.try({
-            try: () => selectEvents(sql, scope, opts),
+            try: () => selectLedgerEvents(sql, scope, opts),
             catch: (cause) => new SqlError({ cause }),
           }),
       };

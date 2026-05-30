@@ -14,6 +14,7 @@
 - `.:AgentRuntimeReaderClient`
 - `.:AgentRuntimeClient`
 - `.:AgentSubmitSpec`
+- `.:AgentTriggerIntentSpec`
 - `.:AnthropicMessagesSpec`
 - `.:CfAiBindingSpec`
 - `.:CloudflareAgentEnv`

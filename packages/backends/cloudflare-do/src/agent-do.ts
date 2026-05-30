@@ -59,6 +59,7 @@ import {
   ScopeMissingError,
   SqlError,
   UnsupportedScopeRef,
+  safeStringify,
 } from "@agent-os/kernel/errors";
 import type {
   AttemptKey,
@@ -69,6 +70,7 @@ import type {
 } from "@agent-os/runtime";
 import {
   Admission,
+  DurableTriggerRegistry,
   commitBoundaryEvent,
   Ledger,
   LlmTransport,
@@ -80,7 +82,7 @@ import {
 } from "@agent-os/runtime";
 import type { LlmRoute } from "@agent-os/kernel/llm";
 import { Dispatch, type DispatchEnvelope, type DispatchTargetRegistry } from "./dispatch";
-import { createEventStreamResponse, eventToRpc } from "./ledger";
+import { EventBus, createEventStreamResponse, eventToRpc } from "./ledger";
 import { Scheduler } from "./scheduler";
 import { Resources } from "./resources";
 import { AiBinding, LlmTransportLive } from "./llm";
@@ -113,6 +115,8 @@ import {
   RUN_BEARING_KINDS,
 } from "./projections";
 import { makeCloudflareBackendCoreLayer, type CloudflareBackendCoreServices } from "./runtime-core";
+import { commitDurableTriggerIntent } from "./due-work";
+import { fireLedgerEvents, insertLedgerEvent } from "./ledger/inserted-events";
 
 export interface CloudflareAgentEnv {
   readonly AI: Ai;
@@ -123,11 +127,19 @@ export interface AgentRuntimeReaderClient {
   readonly streamEvents: (opts?: StreamEventsOptions) => Response;
 }
 
+export interface AgentTriggerIntentSpec {
+  readonly triggerKind: string;
+  readonly payload: unknown;
+  readonly at: number;
+  readonly ts?: number;
+}
+
 export interface AgentRuntimeClient extends AgentRuntimeReaderClient {
   readonly emitEvent: (spec: {
     readonly event: string;
     readonly data: unknown;
   }) => Promise<{ id: number }>;
+  readonly enqueueTrigger: (spec: AgentTriggerIntentSpec) => Promise<{ id: number }>;
   readonly dispatchToScope: (spec: DispatchToScopeSpec) => Promise<DispatchToScopeResult>;
   readonly scheduleEvent: (spec: ScheduledEventSpec) => Promise<{ id: number }>;
   readonly submit: (spec: SubmitSpec) => Promise<SubmitResult>;
@@ -572,6 +584,47 @@ export class AgentDurableObject<
     );
   }
 
+  /** Enqueue a registered durable trigger intent.
+   *
+   *  This is the public projection of `commitDurableTriggerIntent`: registry
+   *  lookup happens before any ledger/due/alarm write, and the intent event
+   *  kind is owned by the registered trigger value.
+   */
+  protected enqueueTriggerFull(spec: AgentTriggerIntentSpec): Promise<{ id: number }> {
+    if (!Number.isFinite(spec.at)) {
+      return Promise.reject(new InvalidScheduleAt({ at: spec.at }));
+    }
+    const ctx = this.ctx;
+    const sql = ctx.storage.sql;
+    return this.runScoped((scope) =>
+      Effect.gen(function* () {
+        yield* Ledger;
+        yield* TriggerPump;
+        const bus = yield* EventBus;
+        const registry = yield* DurableTriggerRegistry;
+        const payloadStr = yield* safeStringify(spec.payload);
+        const ts = spec.ts ?? (yield* Clock.currentTimeMillis);
+        const intent = yield* commitDurableTriggerIntent(
+          ctx,
+          sql,
+          spec.at,
+          registry,
+          spec.triggerKind,
+          (trigger) =>
+            insertLedgerEvent(sql, {
+              ts,
+              kind: trigger.intentEventKind,
+              scope,
+              payloadStr,
+              payload: spec.payload,
+            }),
+        );
+        yield* fireLedgerEvents(bus, [intent]);
+        return { id: intent.id };
+      }),
+    );
+  }
+
   /** Dispatch an app event to another configured agent scope.
    *
    *  Delivery truth is split across the two ledgers:
@@ -746,6 +799,10 @@ export const createAgentDurableObject = <Env extends CloudflareAgentEnv>(
 
     emitEvent(spec: { event: string; data: unknown }): Promise<{ id: number }> {
       return this.emitEventFull(spec);
+    }
+
+    enqueueTrigger(spec: AgentTriggerIntentSpec): Promise<{ id: number }> {
+      return this.enqueueTriggerFull(spec);
     }
 
     dispatchToScope(spec: DispatchToScopeSpec): Promise<DispatchToScopeResult> {

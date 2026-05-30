@@ -344,6 +344,19 @@ export class InMemoryBackendState {
         now,
         dueWorkId: row.id,
         intentEventId: row.payload.intentEventId,
+        events: (opts = {}) => {
+          const afterId = normalizeNonNegativeInteger(opts.afterId, 0);
+          const kinds =
+            opts.kinds === undefined
+              ? undefined
+              : new Set(Array.from(new Set(opts.kinds)).filter((kind) => kind.length > 0));
+          return [...this.rows, ...written].filter((event) => {
+            if (event.scope !== scope) return false;
+            if (event.id <= afterId) return false;
+            if (kinds !== undefined && kinds.size > 0 && !kinds.has(event.kind)) return false;
+            return true;
+          });
+        },
         insertEvent: (spec) => {
           const event: LedgerEvent = {
             id: startId + written.length,

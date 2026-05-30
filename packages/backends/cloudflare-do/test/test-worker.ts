@@ -6,7 +6,7 @@
  */
 
 import { DurableObject } from "cloudflare:workers";
-import { Schema, Predicate } from "effect";
+import { Effect, Schema, Predicate } from "effect";
 import {
   credential,
   createAgentDurableObject,
@@ -18,7 +18,12 @@ import {
   type AgentRuntimeClient,
   type CloudflareAgentEnv,
 } from "../src";
-import type { DispatchTargetAdapter } from "@agent-os/runtime";
+import {
+  triggerParseFail,
+  triggerParseOk,
+  type DispatchTargetAdapter,
+  type DurableTrigger,
+} from "@agent-os/runtime";
 import { CapabilityRejected } from "@agent-os/kernel/errors";
 import { boundaryPackage, defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
 import { eventNamespace, type ExtensionCapability } from "@agent-os/kernel/extensions";
@@ -352,10 +357,42 @@ export const FacadeSubmitTestDO = defineAgentDO<CloudflareAgentEnv>({
 });
 export type FacadeSubmitTestDO = InstanceType<typeof FacadeSubmitTestDO>;
 
+interface FoldIntent {
+  readonly label: string;
+}
+
+const parseFoldIntent = (raw: unknown) => {
+  if (!Predicate.isRecord(raw) || typeof raw.label !== "string") {
+    return triggerParseFail<FoldIntent>("fold intent malformed");
+  }
+  return triggerParseOk({ label: raw.label });
+};
+
+const foldTrigger = {
+  kind: "test.fold",
+  intentEventKind: "test.fold.requested",
+  parseIntent: parseFoldIntent,
+  acquire: (intent: FoldIntent) => Effect.succeed(intent),
+  commit: (outcome, tx) => {
+    const seen = tx.events({ kinds: ["test.fold.done"] }).length;
+    tx.insertEvent({
+      kind: "test.fold.done",
+      payload: { label: outcome.label, seen },
+    });
+  },
+} satisfies DurableTrigger<FoldIntent, FoldIntent>;
+
+export const TriggerFacadeTestDO = defineAgentDO<CloudflareAgentEnv>({
+  bindings: [],
+  triggers: [foldTrigger],
+});
+export type TriggerFacadeTestDO = InstanceType<typeof TriggerFacadeTestDO>;
+
 interface WorkerEnv extends CloudflareAgentEnv {
   readonly STREAM_DO: DurableObjectNamespace<StreamTestDO>;
   readonly EXTENSION_DO: DurableObjectNamespace<ExtensionTestDO>;
   readonly FACADE_SUBMIT_DO: DurableObjectNamespace<FacadeSubmitTestDO>;
+  readonly TRIGGER_FACADE_DO: DurableObjectNamespace<TriggerFacadeTestDO>;
 }
 
 const parseLastEventId = (value: string | null): number => {
