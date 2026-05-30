@@ -10,6 +10,7 @@ import {
   type AgentRuntimeReaderClient,
   type AgentSubmitDefaults,
   type AgentSubmitSpec,
+  type AgentTriggerIntentSpec,
   type CloudflareAgentEnv,
   type MaterializedAgentConfig,
 } from "./agent-do";
@@ -24,6 +25,7 @@ import {
 
 export interface AgentFacadeRuntimeClient extends AgentRuntimeReaderClient {
   readonly emit: (event: string, data: unknown) => Promise<{ id: number }>;
+  readonly enqueueTrigger: (spec: AgentTriggerIntentSpec) => Promise<{ id: number }>;
   readonly dispatch: (spec: DispatchToScopeSpec) => Promise<DispatchToScopeResult>;
   readonly schedule: (
     event: string,
@@ -169,6 +171,10 @@ export function defineAgentDO<Env extends CloudflareAgentEnv>(
         return this.emitEventFull({ event, data });
       }
 
+      enqueueTrigger(spec: AgentTriggerIntentSpec): Promise<{ id: number }> {
+        return this.enqueueTriggerFull(spec);
+      }
+
       dispatch(spec: DispatchToScopeSpec): Promise<DispatchToScopeResult> {
         return this.dispatchToScopeFull(spec);
       }
@@ -208,6 +214,10 @@ export function defineAgentDO<Env extends CloudflareAgentEnv>(
 
     emit(event: string, data: unknown): Promise<{ id: number }> {
       return this.emitEventFull({ event, data });
+    }
+
+    enqueueTrigger(spec: AgentTriggerIntentSpec): Promise<{ id: number }> {
+      return this.enqueueTriggerFull(spec);
     }
 
     dispatch(spec: DispatchToScopeSpec): Promise<DispatchToScopeResult> {

@@ -4,7 +4,7 @@ import {
   type JsonStringifyError,
   type SqlError,
 } from "@agent-os/kernel";
-import type { LedgerEvent } from "@agent-os/kernel/types";
+import type { EventQueryOptions, LedgerEvent } from "@agent-os/kernel/types";
 
 export interface TriggerEventSpec {
   readonly kind: string;
@@ -42,6 +42,9 @@ export const triggerParseFail = <Intent = never>(reason: string): TriggerParseRe
 });
 
 export interface TriggerTx extends AcquireCtx {
+  readonly events: (
+    opts?: Pick<EventQueryOptions, "afterId" | "kinds">,
+  ) => ReadonlyArray<LedgerEvent>;
   readonly insertEvent: (spec: TriggerEventSpec) => LedgerEvent;
   readonly enqueue: (spec: TriggerIntentSpec) => LedgerEvent;
   readonly reschedule: (fireAt: number, intentEventId?: number) => void;

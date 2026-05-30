@@ -19,6 +19,10 @@ Durable trigger authors depend on runtime for the shared trigger algebra:
 backend-neutral shape; concrete backends own storage, alarm re-arm, SQL
 transactions, and pump execution.
 
+`TriggerTx` exposes tx-local ledger reads through `events()`. Triggers that need
+current business state fold those rows inside commit before appending terminal
+facts or enqueueing more intents; they do not import backend storage internals.
+
 ## Minimal Usage
 
 Depend on runtime for consumer-facing run, admission, and backend-neutral Tag
