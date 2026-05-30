@@ -6,7 +6,7 @@ Storage-free backend protocol algebra shared by concrete backend implementations
 
 ## Invariant
 
-Backend protocol semantics have one owner. Concrete backends may materialize storage, alarm, and transport, but they must not redefine dispatch vocabulary, retry policy, due-work kinds, payload parsing, or event-handler fanout policy.
+Backend protocol semantics have one owner. Concrete backends may materialize storage, alarm, and transport, but they must not redefine dispatch vocabulary, retry policy, intent-pointer payload parsing, or event-handler fanout policy. Durable trigger kind ownership lives in the runtime `DurableTriggerRegistry`, not in backend protocol constants.
 
 ## Minimal Usage
 
