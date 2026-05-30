@@ -1,5 +1,10 @@
 import { Data, Effect, Predicate } from "effect";
-import { validateEffectClaim, type EffectClaim } from "@agent-os/kernel/effect-claim";
+import {
+  validateEffectClaim,
+  type EffectClaim,
+  type LivedClaim,
+  type RejectedClaim,
+} from "@agent-os/kernel/effect-claim";
 import type { BoundaryContract, BoundaryEventContract } from "@agent-os/kernel/boundary-contract";
 import type { JsonStringifyError, SqlError } from "@agent-os/kernel/errors";
 import { validateAgainstSchema } from "@agent-os/kernel/json-schema";
@@ -53,6 +58,21 @@ const payloadForSchema = (
   return out;
 };
 
+const terminalClaimMatchesEventSlot = (
+  eventContract: BoundaryEventContract,
+  claim: LivedClaim | RejectedClaim,
+): boolean => {
+  const claimContract = eventContract.claim;
+  if (claimContract === undefined || claimContract.phase === "pre") return true;
+  if (claimContract.phase === "lived" && claim.phase === "lived") {
+    return claimContract.anchorKinds.includes(claim.anchorRef.anchorKind);
+  }
+  if (claimContract.phase === "rejected" && claim.phase === "rejected") {
+    return claimContract.rejectionKinds.includes(claim.rejectionRef.rejectionKind);
+  }
+  return true;
+};
+
 export const validateBoundaryEventPayload = (
   contract: BoundaryContract,
   event: string,
@@ -88,11 +108,14 @@ export const validateBoundaryEventPayload = (
   if (validation.claim.phase !== claimContract.phase) {
     return reject(contract, event, "claim_phase_invalid");
   }
-  if (
-    validation.claim.phase !== "pre" &&
-    !validateTerminalClaim(contract.settlement, validation.claim).ok
-  ) {
-    return reject(contract, event, "claim_settlement_invalid");
+  if (validation.claim.phase !== "pre") {
+    const terminalValidation = validateTerminalClaim(contract.settlement, validation.claim);
+    if (
+      !terminalValidation.ok ||
+      !terminalClaimMatchesEventSlot(eventContract, terminalValidation.claim)
+    ) {
+      return reject(contract, event, "claim_settlement_invalid");
+    }
   }
   const authorityKeys = contractAuthorityKeys(contract);
   if (authorityKeys.size > 0 && !authorityKeys.has(authorityKey(validation.claim))) {

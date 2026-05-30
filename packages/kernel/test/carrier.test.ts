@@ -143,6 +143,59 @@ describe("defineCarrier", () => {
     ).toThrow(/has phase lived/);
   });
 
+  it("rejects terminal claims outside the event-local slot vocabulary", () => {
+    const carrier = defineCarrier({
+      packageId: "@agent-os/slot-vocab",
+      prefix: "slot.",
+      roles: ["generator", "reader"],
+      events: {
+        ledgered: event({
+          kind: "ledgered",
+          payload: Schema.Struct({ subjectRef: Schema.String }),
+          claim: lived({ key: "claim", anchorKinds: ["ledger_event"] }),
+        }),
+        proved: event({
+          kind: "proved",
+          payload: Schema.Struct({ subjectRef: Schema.String }),
+          claim: lived({ key: "claim", anchorKinds: ["carrier_proof"] }),
+        }),
+        denied: event({
+          kind: "denied",
+          payload: Schema.Struct({ subjectRef: Schema.String }),
+          claim: rejected({ key: "claim", rejectionKinds: ["policy_denied"] }),
+        }),
+        failed: event({
+          kind: "failed",
+          payload: Schema.Struct({ subjectRef: Schema.String }),
+          claim: rejected({ key: "claim", rejectionKinds: ["provider_rejected"] }),
+        }),
+      },
+      projection: ledgerProjection({
+        initial: () => ({}),
+        reduce: (state) => state,
+      }),
+    });
+
+    const carrierProofClaim = carrier.settle.proved(claim, { anchorId: "proof:1" });
+    const providerRejectedClaim = carrier.reject.failed(claim, {
+      rejectionId: "provider:1",
+      reason: "provider_rejected",
+    });
+
+    expect(() =>
+      carrier.decode("slot.ledgered", {
+        subjectRef: "subject:1",
+        claim: carrierProofClaim,
+      }),
+    ).toThrow(/outside event vocabulary/);
+    expect(() =>
+      carrier.decode("slot.denied", {
+        subjectRef: "subject:1",
+        claim: providerRejectedClaim,
+      }),
+    ).toThrow(/outside event vocabulary/);
+  });
+
   it("rejects duplicate event kinds and claim slot schema collisions at construction", () => {
     expect(() =>
       defineCarrier({

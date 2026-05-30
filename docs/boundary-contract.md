@@ -62,7 +62,7 @@ export const boundary = defineBoundaryContract({
         required: ["proofRef"],
         additionalProperties: false,
       },
-      claim: { key: "claim", phase: "lived" },
+      claim: { key: "claim", phase: "lived", anchorKinds: ["carrier_proof"] },
     },
     "example.failed": {
       payloadSchema: {
@@ -71,7 +71,7 @@ export const boundary = defineBoundaryContract({
         required: ["reason"],
         additionalProperties: false,
       },
-      claim: { key: "claim", phase: "rejected" },
+      claim: { key: "claim", phase: "rejected", rejectionKinds: ["provider_rejected"] },
     },
   },
   settlement,
