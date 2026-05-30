@@ -15,6 +15,7 @@ import {
   DispatchScopeMismatch,
   DispatchTargetNotFound,
   JsonStringifyError,
+  ProviderHttpFailure,
   SqlError,
   UnsupportedScopeRef,
   isCoreClaimedEventKind,
@@ -26,19 +27,22 @@ import { materialRefKey } from "@agent-os/kernel/material-ref";
 import { Dispatch } from "@agent-os/runtime";
 import type {
   DispatchDeliveryReceipt,
+  DispatchDeliveryResult,
   DispatchEnvelope,
   DispatchReceiver,
   DispatchTargetAdapter,
 } from "@agent-os/runtime";
 import { makeOperationRef, makePreClaim, isScopeRef } from "@agent-os/kernel/effect-claim";
 import {
+  DUE_WORK_DELIVERY_RETRY,
   DISPATCH_EVENT_KINDS,
   DISPATCH_INBOUND_ACCEPTED,
-  DISPATCH_MAX_ATTEMPTS,
+  DISPATCH_RETRY_POLICY,
   copyTraceContext,
   describeDispatchCause,
+  dispatchExternalDeliveryReceipt,
   dispatchLedgerDeliveryReceipt,
-  dispatchBackoffMs,
+  durableTriggerBackoffMs,
   parseRequestedPayload,
   settleDispatchInboundAccepted,
   settleDispatchOutboundDelivered,
@@ -48,9 +52,10 @@ import { ensureDispatchSchema, selectDue, type DispatchOutboxRow } from "./outbo
 import { findAccepted, type InboundAcceptedPayload } from "./receiver";
 import {
   armBeforeDueCommit,
+  commitDurableTriggerIntent,
   completeDueWork,
   ensureDueWorkSchema,
-  insertDeliveryRetryDueWork,
+  insertDurableTriggerDueWork,
 } from "../due-work";
 
 // Re-export the receiver constant so callers that historically reached
@@ -64,6 +69,44 @@ export interface DispatchTargetNamespace {
 
 export type DispatchTargetRegistry = Readonly<Record<string, DispatchTargetAdapter>>;
 
+export interface QueueDispatchTargetBinding {
+  readonly send: (message: unknown) => Promise<void> | void;
+}
+
+export interface HttpDispatchTargetSpec {
+  readonly url: string;
+  readonly fetch?: (input: string, init: RequestInit) => Promise<Response>;
+  readonly headers?: Readonly<Record<string, string>>;
+  readonly provider?: string;
+}
+
+export interface ProviderDispatchTargetSpec {
+  readonly providerId: string;
+  readonly invoke: (envelope: DispatchEnvelope) =>
+    | Promise<{ readonly receiptId?: string }>
+    | {
+        readonly receiptId?: string;
+      };
+}
+
+const externalReceiptFor = (
+  targetKind: string,
+  envelope: DispatchEnvelope,
+  receiptId?: string,
+): DispatchDeliveryResult => ({
+  receipt:
+    receiptId === undefined
+      ? dispatchExternalDeliveryReceipt({
+          targetKind,
+          targetScope: envelope.targetScope,
+          idempotencyKey: envelope.idempotencyKey,
+        })
+      : {
+          anchorId: receiptId,
+          anchorKind: "external_receipt",
+        },
+});
+
 export const durableObjectDispatchTarget = (
   namespace: DispatchTargetNamespace,
 ): DispatchTargetAdapter => ({
@@ -72,6 +115,74 @@ export const durableObjectDispatchTarget = (
     const receiver = namespace.get(targetId) as DispatchReceiver;
     return receiver.__agentosReceiveDispatch(envelope);
   },
+});
+
+export const queueDispatchTarget = (queue: QueueDispatchTargetBinding): DispatchTargetAdapter => ({
+  deliver: (envelope) =>
+    Promise.resolve(undefined)
+      .then(() =>
+        queue.send({
+          sourceScope: envelope.sourceScope,
+          targetScope: envelope.targetScope,
+          event: envelope.event,
+          data: envelope.data,
+          idempotencyKey: envelope.idempotencyKey,
+        }),
+      )
+      .then(
+        () => externalReceiptFor("queue", envelope),
+        () => Promise.reject("dispatch queue target failed"),
+      ),
+});
+
+export const httpDispatchTarget = (spec: HttpDispatchTargetSpec): DispatchTargetAdapter => ({
+  deliver: (envelope) => {
+    const fetchFn = spec.fetch ?? fetch;
+    return Promise.resolve(undefined)
+      .then(() =>
+        fetchFn(spec.url, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            ...spec.headers,
+          },
+          body: JSON.stringify({
+            sourceScope: envelope.sourceScope,
+            targetScope: envelope.targetScope,
+            event: envelope.event,
+            data: envelope.data,
+            idempotencyKey: envelope.idempotencyKey,
+          }),
+        }),
+      )
+      .then(
+        (response) => {
+          if (!response.ok) {
+            return Promise.reject(
+              new ProviderHttpFailure({
+                provider: spec.provider ?? "dispatch-http",
+                status: response.status,
+                flags: [],
+              }),
+            );
+          }
+          return externalReceiptFor("http", envelope);
+        },
+        () => Promise.reject("dispatch http target failed"),
+      );
+  },
+});
+
+export const providerDispatchTarget = (
+  spec: ProviderDispatchTargetSpec,
+): DispatchTargetAdapter => ({
+  deliver: (envelope) =>
+    Promise.resolve(undefined)
+      .then(() => spec.invoke(envelope))
+      .then(
+        (result) => externalReceiptFor(`provider.${spec.providerId}`, envelope, result.receiptId),
+        () => Promise.reject(`dispatch provider target failed:${spec.providerId}`),
+      ),
 });
 
 export const DispatchLive = (
@@ -162,8 +273,10 @@ export const DispatchLive = (
       ): Effect.Effect<void, SqlError | JsonStringifyError> =>
         Effect.gen(function* () {
           const error = describeDispatchCause(cause);
-          const terminal = attempt >= DISPATCH_MAX_ATTEMPTS;
-          const nextAttemptAt = terminal ? null : now + dispatchBackoffMs(attempt);
+          const terminal = attempt >= requested.retryPolicy.maxAttempts;
+          const nextAttemptAt = terminal
+            ? null
+            : now + durableTriggerBackoffMs(requested.retryPolicy, attempt);
           const payload = {
             outboundEventId,
             target: requested.target,
@@ -205,7 +318,12 @@ export const DispatchLive = (
             );
             completeDueWork(sql, dueWorkId, now);
             if (nextAttemptAt !== null) {
-              insertDeliveryRetryDueWork(sql, nextAttemptAt, outboundEventId);
+              insertDurableTriggerDueWork(
+                sql,
+                nextAttemptAt,
+                DUE_WORK_DELIVERY_RETRY,
+                outboundEventId,
+              );
             }
             return [event];
           };
@@ -358,23 +476,29 @@ export const DispatchLive = (
               event: spec.event,
               data: spec.data,
               idempotencyKey: spec.idempotencyKey,
+              retryPolicy: DISPATCH_RETRY_POLICY,
               claim,
               ...(traceContext === undefined ? {} : { traceContext }),
             };
             const requestedPayloadStr = yield* safeStringify(requestedPayload);
 
-            const requestedEvent = yield* armBeforeDueCommit(ctx, sql, now, () => {
-              const event = insertLedgerEvent(sql, {
-                ts: now,
-                kind: DISPATCH_EVENT_KINDS.OUTBOUND_REQUESTED,
-                scope,
-                payloadStr: requestedPayloadStr,
-                payload: requestedPayload,
-              });
-              sql.exec("INSERT INTO dispatch_outbox (outbound_event_id) VALUES (?)", event.id);
-              insertDeliveryRetryDueWork(sql, now, event.id);
-              return event;
-            });
+            const requestedEvent = yield* commitDurableTriggerIntent(
+              ctx,
+              sql,
+              now,
+              DUE_WORK_DELIVERY_RETRY,
+              () => {
+                const event = insertLedgerEvent(sql, {
+                  ts: now,
+                  kind: DISPATCH_EVENT_KINDS.OUTBOUND_REQUESTED,
+                  scope,
+                  payloadStr: requestedPayloadStr,
+                  payload: requestedPayload,
+                });
+                sql.exec("INSERT INTO dispatch_outbox (outbound_event_id) VALUES (?)", event.id);
+                return event;
+              },
+            );
             yield* fireLedgerEvents(bus, [requestedEvent]);
 
             yield* drainDue(now);

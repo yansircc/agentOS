@@ -1,12 +1,14 @@
 import { makePreClaim } from "@agent-os/kernel/effect-claim";
 import type { DispatchTargetSpec, TraceContext } from "@agent-os/kernel/types";
 import type { DispatchTargetAdapter } from "@agent-os/runtime";
+import type { DurableTriggerRetryPolicy } from "@agent-os/backend-protocol";
 
 export interface DispatchRequestedPayload {
   readonly target: DispatchTargetSpec;
   readonly event: string;
   readonly data: unknown;
   readonly idempotencyKey: string;
+  readonly retryPolicy: DurableTriggerRetryPolicy;
   readonly claim: ReturnType<typeof makePreClaim>;
   readonly traceContext?: TraceContext;
 }

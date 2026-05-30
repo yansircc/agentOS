@@ -2,7 +2,11 @@ import { Effect, Exit, Layer, ManagedRuntime } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
 import { Dispatch } from "@agent-os/runtime";
-import { DISPATCH_MAX_ATTEMPTS, DUE_WORK_SCHEDULED_EVENT } from "@agent-os/backend-protocol";
+import {
+  DISPATCH_MAX_ATTEMPTS,
+  DUE_WORK_SCHEDULED_EVENT,
+  DURABLE_TRIGGER_SCHEDULED_REQUESTED,
+} from "@agent-os/backend-protocol";
 import { DispatchLive, type DispatchTargetRegistry } from "../src/dispatch";
 import {
   enqueueScheduledEvent,
@@ -48,13 +52,32 @@ describe("due-work alarm protocol", () => {
       yield* ensureDueWorkSchema(sql);
 
       const exit = yield* Effect.exit(
-        enqueueScheduledEvent(state, sql, 10, "app.scheduled", { job: "one" }),
+        enqueueScheduledEvent(state, sql, "sender", 1, 10, "app.scheduled", { job: "one" }),
       );
 
       expect(Exit.isFailure(exit)).toBe(true);
       expect(sql.exec("SELECT * FROM due_work").toArray()).toHaveLength(0);
+      expect(sql.exec("SELECT * FROM events").toArray()).toHaveLength(0);
       const alarm = yield* Effect.promise(() => state.storage.getAlarm());
       expect(alarm).toBeNull();
+    }),
+  );
+
+  it.effect("scheduled due-work points to a scheduled intent ledger fact", () =>
+    Effect.gen(function* () {
+      const state = makeInMemoryDurableObjectState();
+      const sql = state.storage.sql;
+      yield* ensureDueWorkSchema(sql);
+
+      const intent = yield* enqueueScheduledEvent(state, sql, "sender", 1, 10, "app.scheduled", {
+        job: "one",
+      });
+
+      expect(intent.kind).toBe(DURABLE_TRIGGER_SCHEDULED_REQUESTED);
+      const due = sql.exec("SELECT kind, payload FROM due_work").toArray();
+      expect(due).toHaveLength(1);
+      expect(due[0]?.kind).toBe(DUE_WORK_SCHEDULED_EVENT);
+      expect(JSON.parse(due[0]?.payload as string)).toEqual({ intentEventId: intent.id });
     }),
   );
 

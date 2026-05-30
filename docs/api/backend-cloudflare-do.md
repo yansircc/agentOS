@@ -23,7 +23,10 @@
 - `.:DispatchTargetNamespace`
 - `.:DispatchTargetRegistry`
 - `.:GeminiGenerateContentSpec`
+- `.:HttpDispatchTargetSpec`
 - `.:OpenAIChatSpec`
+- `.:ProviderDispatchTargetSpec`
+- `.:QueueDispatchTargetBinding`
 - `.:anthropicMessages`
 - `.:binding`
 - `.:cfAiBinding`
@@ -35,7 +38,10 @@
 - `.:endpoint`
 - `.:externalResource`
 - `.:geminiGenerateContent`
+- `.:httpDispatchTarget`
 - `.:openAIChat`
+- `.:providerDispatchTarget`
+- `.:queueDispatchTarget`
 
 ## Experimental exports
 

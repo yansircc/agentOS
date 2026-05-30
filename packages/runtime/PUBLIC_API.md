@@ -42,8 +42,10 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:Quota`
 - `.:ResourceProjection`
 - `.:Resources`
+- `.:ReconcilerRepairContext`
 - `.:Scheduler`
 - `.:Strategy`
+- `.:StatelessReconciler`
 - `.:Stimulus`
 - `.:SubmitResult`
 - `.:SubmitSpec`
@@ -53,6 +55,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:buildInitialMessages`
 - `.:commitBoundaryEvent`
 - `.:decideTier`
+- `.:defineStatelessReconciler`
 - `.:makeSchemaContract`
 - `.:projectLease`
 - `.:reasonOf`

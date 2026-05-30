@@ -9,7 +9,10 @@ import type {
 import {
   DUE_WORK_DELIVERY_RETRY,
   DUE_WORK_SCHEDULED_EVENT,
+  DURABLE_TRIGGER_SCHEDULED_REQUESTED,
+  durableTriggerDuePayload,
   fireBackendEventHandlers,
+  scheduledEventIntentPayload,
   type DueWorkKind,
   type DueWorkPayload,
 } from "@agent-os/backend-protocol";
@@ -196,25 +199,46 @@ export class InMemoryBackendState {
   }
 
   schedule(
+    scope: string,
+    intentTs: number,
     at: number,
     eventKind: string,
     data: unknown,
   ): Effect.Effect<{ readonly id: number }, JsonStringifyError> {
     return Effect.gen(this, function* () {
-      const payload = { eventKind, data };
+      const payload = scheduledEventIntentPayload(eventKind, data);
       yield* validateSerializablePayload(payload);
-      return yield* Effect.sync(() => {
-        const id = this.nextDueWorkId++;
+      const committed = yield* Effect.sync(() => {
+        const event: LedgerEvent = {
+          id: this.nextEventId,
+          ts: intentTs,
+          kind: DURABLE_TRIGGER_SCHEDULED_REQUESTED,
+          scope,
+          payload,
+        };
+        this.nextEventId += 1;
+        this.rows.push(event);
+        const dueId = this.nextDueWorkId++;
         this.dueWork.push({
-          id,
+          id: dueId,
           fireAt: at,
           kind: DUE_WORK_SCHEDULED_EVENT,
-          payload,
+          payload: durableTriggerDuePayload(event.id),
           completedAt: null,
         });
-        return { id };
+        return event;
       });
+      yield* this.fireMany([committed]);
+      return { id: committed.id };
     });
+  }
+
+  scheduledIntent(intentEventId: number): LedgerEvent | null {
+    return (
+      this.rows.find(
+        (row) => row.id === intentEventId && row.kind === DURABLE_TRIGGER_SCHEDULED_REQUESTED,
+      ) ?? null
+    );
   }
 
   dueScheduled(now: number): ReadonlyArray<DueWorkRow<typeof DUE_WORK_SCHEDULED_EVENT>> {
@@ -252,7 +276,7 @@ export class InMemoryBackendState {
       id,
       fireAt,
       kind: DUE_WORK_DELIVERY_RETRY,
-      payload: { intentEventId },
+      payload: durableTriggerDuePayload(intentEventId),
       completedAt: null,
     });
     return id;

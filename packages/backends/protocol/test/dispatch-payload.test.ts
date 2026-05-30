@@ -5,15 +5,25 @@ import { bindingMaterialRef } from "@agent-os/kernel/material-ref";
 
 import {
   DISPATCH_MAX_ATTEMPTS,
+  DISPATCH_RETRY_POLICY,
   DUE_WORK_DELIVERY_RETRY,
+  DUE_WORK_RECONCILER_RUN,
   DUE_WORK_SCHEDULED_EVENT,
+  DURABLE_TRIGGER_SCHEDULED_REQUESTED,
   describeDispatchCause,
   dispatchBackoffMs,
+  dispatchExternalDeliveryReceipt,
   dispatchLedgerDeliveryReceipt,
   dispatchSettlementContract,
+  durableTriggerBackoffMs,
+  durableTriggerDuePayload,
   fireBackendEventHandlers,
+  parseDurableTriggerRetryPolicy,
   parseDueWorkPayload,
   parseRequestedPayload,
+  parseScheduledEventIntentPayload,
+  reconcilerRunIntentPayload,
+  scheduledEventIntentPayload,
   settleDispatchOutboundDelivered,
 } from "../src";
 
@@ -42,6 +52,7 @@ describe("@agent-os/backend-protocol", () => {
         event: "app.deliver",
         data: { ok: true },
         idempotencyKey: "dispatch-1",
+        retryPolicy: DISPATCH_RETRY_POLICY,
         claim,
         traceContext: { traceparent: "00-test", tracestate: "state" },
       }),
@@ -69,6 +80,7 @@ describe("@agent-os/backend-protocol", () => {
         target: { scope: "receiver" },
         event: "app.deliver",
         idempotencyKey: "dispatch-1",
+        retryPolicy: DISPATCH_RETRY_POLICY,
         claim,
       }),
     );
@@ -83,19 +95,68 @@ describe("@agent-os/backend-protocol", () => {
     expect(DISPATCH_MAX_ATTEMPTS).toBe(8);
     expect(dispatchBackoffMs(1)).toBe(1_000);
     expect(dispatchBackoffMs(8)).toBe(60_000);
+    expect(durableTriggerBackoffMs(DISPATCH_RETRY_POLICY, 8)).toBe(60_000);
     expect(describeDispatchCause(new Error("boom"))).toBe("Error: boom");
     expect(DUE_WORK_SCHEDULED_EVENT).toBe("scheduled_event");
     expect(DUE_WORK_DELIVERY_RETRY).toBe("delivery_retry");
+    expect(DUE_WORK_RECONCILER_RUN).toBe("reconciler_run");
+    expect(DURABLE_TRIGGER_SCHEDULED_REQUESTED).toBe("durable_trigger.scheduled.requested");
+    expect(parseDueWorkPayload(DUE_WORK_SCHEDULED_EVENT, { intentEventId: 7 })).toEqual({
+      ok: true,
+      payload: { intentEventId: 7 },
+    });
     expect(parseDueWorkPayload(DUE_WORK_DELIVERY_RETRY, { intentEventId: 42 })).toEqual({
       ok: true,
       payload: { intentEventId: 42 },
     });
+    expect(parseDueWorkPayload(DUE_WORK_RECONCILER_RUN, { intentEventId: 43 })).toEqual({
+      ok: true,
+      payload: { intentEventId: 43 },
+    });
+    expect(durableTriggerDuePayload(44)).toEqual({ intentEventId: 44 });
     const malformedDeliveryDue = parseDueWorkPayload(DUE_WORK_DELIVERY_RETRY, {
       outboundEventId: 42,
     });
     expect(malformedDeliveryDue.ok).toBe(false);
     if (malformedDeliveryDue.ok) return;
     expect(malformedDeliveryDue.cause.message).toBe("delivery retry due-work payload malformed");
+  });
+
+  it("keeps trigger intents and retry policy as serializable protocol data", () => {
+    expect(parseDurableTriggerRetryPolicy(DISPATCH_RETRY_POLICY)).toEqual({
+      ok: true,
+      payload: DISPATCH_RETRY_POLICY,
+    });
+    const functionPolicy = parseDurableTriggerRetryPolicy({
+      ...DISPATCH_RETRY_POLICY,
+      next: () => 1,
+    });
+    expect(functionPolicy.ok).toBe(false);
+    if (functionPolicy.ok) return;
+    expect(functionPolicy.cause.message).toBe("durable trigger retry policy malformed");
+
+    const scheduledIntent = scheduledEventIntentPayload("app.scheduled", { job: "one" });
+    expect(parseScheduledEventIntentPayload(scheduledIntent)).toEqual({
+      ok: true,
+      value: scheduledIntent,
+    });
+
+    expect(
+      reconcilerRunIntentPayload({
+        intentEventId: 11,
+        reconcilerId: "delivery.stale",
+        idempotencyKey: "delivery.stale:11",
+        retryPolicy: DISPATCH_RETRY_POLICY,
+        payload: { olderThanMs: 60_000 },
+      }),
+    ).toMatchObject({
+      intentEventId: 11,
+      triggerKind: DUE_WORK_RECONCILER_RUN,
+      targetKind: "reconciler",
+      reconcilerId: "delivery.stale",
+      idempotencyKey: "delivery.stale:11",
+      retryPolicy: DISPATCH_RETRY_POLICY,
+    });
   });
 
   it("settles outbound delivery against target receipts, not only receiver ledger ids", () => {
@@ -105,6 +166,16 @@ describe("@agent-os/backend-protocol", () => {
     ).toEqual({
       anchorId: "dispatch.outbound:receiver:42",
       anchorKind: "ledger_event",
+    });
+    expect(
+      dispatchExternalDeliveryReceipt({
+        targetKind: "queue",
+        targetScope: "image-jobs",
+        idempotencyKey: "job-1",
+      }),
+    ).toEqual({
+      anchorId: "dispatch.queue:image-jobs:job-1",
+      anchorKind: "external_receipt",
     });
 
     const lived = settleDispatchOutboundDelivered(claim, {

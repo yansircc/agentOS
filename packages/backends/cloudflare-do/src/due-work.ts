@@ -1,15 +1,17 @@
 import { Effect } from "effect";
 import { JsonStringifyError, SqlError, safeStringify } from "@agent-os/kernel/errors";
+import type { LedgerEvent } from "@agent-os/kernel/types";
 import {
-  DUE_WORK_DELIVERY_RETRY,
   DUE_WORK_SCHEDULED_EVENT,
+  DURABLE_TRIGGER_SCHEDULED_REQUESTED,
+  durableTriggerDuePayload,
   isDueWorkKind,
   parseDueWorkPayload,
-  type DeliveryRetryDuePayload,
+  scheduledEventIntentPayload,
   type DueWorkKind,
   type DueWorkPayload,
-  type ScheduledEventDuePayload,
 } from "@agent-os/backend-protocol";
+import { insertLedgerEvent } from "./ledger/inserted-events";
 import { sqlText } from "./storage/sql-row";
 
 export interface DueWorkRow<K extends DueWorkKind = DueWorkKind> {
@@ -196,43 +198,56 @@ export const selectDueWork = <K extends DueWorkKind>(
     return out;
   });
 
-export const enqueueScheduledEvent = (
-  ctx: DurableObjectState,
-  sql: SqlStorage,
-  at: number,
-  eventKind: string,
-  data: unknown,
-): Effect.Effect<{ readonly id: number }, SqlError | JsonStringifyError> =>
-  Effect.gen(function* () {
-    const payload = { eventKind, data } satisfies ScheduledEventDuePayload;
-    const payloadStr = yield* safeStringify(payload);
-    const id = yield* armBeforeDueCommit(ctx, sql, at, () =>
-      insertDueWork(
-        sql,
-        {
-          fireAt: at,
-          kind: DUE_WORK_SCHEDULED_EVENT,
-          payload,
-        },
-        payloadStr,
-      ),
-    );
-    return { id };
-  });
-
-export const insertDeliveryRetryDueWork = (
+export const insertDurableTriggerDueWork = <K extends DueWorkKind>(
   sql: SqlStorage,
   fireAt: number,
+  kind: K,
   intentEventId: number,
 ): number => {
-  const payload = { intentEventId } satisfies DeliveryRetryDuePayload;
+  const payload = durableTriggerDuePayload(intentEventId) as DueWorkPayload<K>;
   return insertDueWork(
     sql,
     {
       fireAt,
-      kind: DUE_WORK_DELIVERY_RETRY,
+      kind,
       payload,
     },
     JSON.stringify(payload),
   );
 };
+
+export const commitDurableTriggerIntent = <K extends DueWorkKind>(
+  ctx: DurableObjectState,
+  sql: SqlStorage,
+  fireAt: number,
+  kind: K,
+  writeIntent: () => LedgerEvent,
+): Effect.Effect<LedgerEvent, SqlError> =>
+  armBeforeDueCommit(ctx, sql, fireAt, () => {
+    const intent = writeIntent();
+    insertDurableTriggerDueWork(sql, fireAt, kind, intent.id);
+    return intent;
+  });
+
+export const enqueueScheduledEvent = (
+  ctx: DurableObjectState,
+  sql: SqlStorage,
+  scope: string,
+  intentTs: number,
+  at: number,
+  eventKind: string,
+  data: unknown,
+): Effect.Effect<LedgerEvent, SqlError | JsonStringifyError> =>
+  Effect.gen(function* () {
+    const payload = scheduledEventIntentPayload(eventKind, data);
+    const payloadStr = yield* safeStringify(payload);
+    return yield* commitDurableTriggerIntent(ctx, sql, at, DUE_WORK_SCHEDULED_EVENT, () =>
+      insertLedgerEvent(sql, {
+        ts: intentTs,
+        kind: DURABLE_TRIGGER_SCHEDULED_REQUESTED,
+        scope,
+        payloadStr,
+        payload,
+      }),
+    );
+  });

@@ -9,7 +9,9 @@ import {
   openAIChat,
 } from "../src/facade-lowering";
 import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
+import { makePreClaim } from "@agent-os/kernel/effect-claim";
 import type { DispatchTargetNamespace } from "../src/dispatch";
+import { httpDispatchTarget, providerDispatchTarget, queueDispatchTarget } from "../src/dispatch";
 
 interface TestEnv {
   readonly LLM_ENDPOINT: string;
@@ -32,6 +34,21 @@ const env: TestEnv = {
   LLM_ENDPOINT: "https://llm.example",
   LLM_KEY: "secret",
   PEER_DO: target,
+};
+
+const dispatchEnvelope = {
+  sourceScope: "sender",
+  outboundEventId: 1,
+  targetScope: "image-target",
+  event: "image.job.queued",
+  data: { prompt: "test" },
+  idempotencyKey: "job-1",
+  claim: makePreClaim({
+    operationRef: "dispatch:test",
+    scopeRef: { kind: "conversation", scopeId: "image-target" },
+    authorityRef: { authorityId: "cap_dispatch", authorityClass: "effect" },
+    originRef: { originId: "sender", originKind: "agent_do" },
+  }),
 };
 
 describe("defineAgentDO facade lowering", () => {
@@ -125,4 +142,56 @@ describe("defineAgentDO facade lowering", () => {
       ),
     ).toThrow("unbound material");
   });
+
+  it("materializes Queue, HTTP, and provider dispatch targets as external receipts", () => {
+    const queueMessages: unknown[] = [];
+    const queue = queueDispatchTarget({
+      send: (message) => {
+        queueMessages.push(message);
+      },
+    });
+    const http = httpDispatchTarget({
+      url: "https://dispatch.example/target",
+      fetch: (_input, _init) => Promise.resolve({ ok: true, status: 200 } as Response),
+    });
+    const provider = providerDispatchTarget({
+      providerId: "image",
+      invoke: () => ({ receiptId: "provider:image:receipt-1" }),
+    });
+
+    return Promise.all([
+      queue.deliver(dispatchEnvelope),
+      http.deliver(dispatchEnvelope),
+      provider.deliver(dispatchEnvelope),
+    ]).then(([queueResult, httpResult, providerResult]) => {
+      expect(queueMessages).toHaveLength(1);
+      expect(queueResult.receipt).toEqual({
+        anchorId: "dispatch.queue:image-target:job-1",
+        anchorKind: "external_receipt",
+      });
+      expect(httpResult.receipt).toEqual({
+        anchorId: "dispatch.http:image-target:job-1",
+        anchorKind: "external_receipt",
+      });
+      expect(providerResult.receipt).toEqual({
+        anchorId: "provider:image:receipt-1",
+        anchorKind: "external_receipt",
+      });
+    });
+  });
+
+  it("sanitizes external dispatch target failures", () =>
+    expect(
+      queueDispatchTarget({
+        send: () => Promise.reject("raw provider body secret"),
+      }).deliver(dispatchEnvelope),
+    ).rejects.toBe("dispatch queue target failed"));
+
+  it("sanitizes synchronous external dispatch target failures", () =>
+    expect(
+      providerDispatchTarget({
+        providerId: "image",
+        invoke: () => JSON.parse("{") as { readonly receiptId?: string },
+      }).deliver(dispatchEnvelope),
+    ).rejects.toBe("dispatch provider target failed:image"));
 });

@@ -14,11 +14,11 @@ import { Dispatch, type DispatchEnvelope, type DispatchTargetAdapter } from "@ag
 import {
   DISPATCH_EVENT_KINDS,
   DISPATCH_INBOUND_ACCEPTED,
-  DISPATCH_MAX_ATTEMPTS,
+  DISPATCH_RETRY_POLICY,
   copyTraceContext,
   describeDispatchCause,
   dispatchLedgerDeliveryReceipt,
-  dispatchBackoffMs,
+  durableTriggerBackoffMs,
   parseDispatchLivedClaim,
   settleDispatchInboundAccepted,
   settleDispatchOutboundDelivered,
@@ -69,8 +69,10 @@ const drainDueOutbox = (
       const target = targetFor(targets, bindingKey);
       const attempt = row.attempts + 1;
       if (target === undefined) {
-        const terminal = attempt >= DISPATCH_MAX_ATTEMPTS;
-        const nextAttemptAt = terminal ? null : now + dispatchBackoffMs(attempt);
+        const terminal = attempt >= row.requested.retryPolicy.maxAttempts;
+        const nextAttemptAt = terminal
+          ? null
+          : now + durableTriggerBackoffMs(row.requested.retryPolicy, attempt);
         yield* state.commitEvents([
           {
             ts: now,
@@ -144,8 +146,10 @@ const drainDueOutbox = (
         continue;
       }
 
-      const terminal = attempt >= DISPATCH_MAX_ATTEMPTS;
-      const nextAttemptAt = terminal ? null : now + dispatchBackoffMs(attempt);
+      const terminal = attempt >= row.requested.retryPolicy.maxAttempts;
+      const nextAttemptAt = terminal
+        ? null
+        : now + durableTriggerBackoffMs(row.requested.retryPolicy, attempt);
       const error = describeDispatchCause(result.left);
       yield* state.commitEvents([
         {
@@ -223,6 +227,7 @@ export const InMemoryDispatchLive = (
           event: spec.event,
           data: spec.data,
           idempotencyKey: spec.idempotencyKey,
+          retryPolicy: DISPATCH_RETRY_POLICY,
           claim,
           ...(traceContext === undefined ? {} : { traceContext }),
         };

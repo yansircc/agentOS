@@ -15,6 +15,12 @@ export {
   DispatchLive,
   DISPATCH_INBOUND_ACCEPTED,
   durableObjectDispatchTarget,
+  httpDispatchTarget,
+  providerDispatchTarget,
+  queueDispatchTarget,
   type DispatchTargetNamespace,
   type DispatchTargetRegistry,
+  type HttpDispatchTargetSpec,
+  type ProviderDispatchTargetSpec,
+  type QueueDispatchTargetBinding,
 } from "./dispatch";

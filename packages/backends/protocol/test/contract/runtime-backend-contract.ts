@@ -9,7 +9,12 @@ import type {
 } from "@agent-os/kernel/types";
 import { Effect } from "effect";
 import { describe, expect, it } from "@effect/vitest";
-import { DISPATCH_EVENT_KINDS, DISPATCH_MAX_ATTEMPTS, dispatchBackoffMs } from "../../src";
+import {
+  DISPATCH_EVENT_KINDS,
+  DISPATCH_MAX_ATTEMPTS,
+  DURABLE_TRIGGER_SCHEDULED_REQUESTED,
+  dispatchBackoffMs,
+} from "../../src";
 import type { BindingMaterialRef } from "@agent-os/kernel/material-ref";
 import type { DispatchToScopeResult } from "@agent-os/kernel/types";
 import type {
@@ -148,13 +153,15 @@ export const runRuntimeBackendContractSuite = (
           expect(yield* promise(() => driver.fireDue("schedule-scope", 9))).toEqual({
             fired: 0,
           });
-          expect(yield* promise(() => driver.events("schedule-scope"))).toEqual([]);
+          expect(kindsOf(yield* promise(() => driver.events("schedule-scope")))).toEqual([
+            DURABLE_TRIGGER_SCHEDULED_REQUESTED,
+          ]);
           expect(yield* promise(() => driver.fireDue("schedule-scope", 10))).toEqual({ fired: 1 });
           expect(yield* promise(() => driver.fireDue("schedule-scope", 10))).toEqual({ fired: 0 });
 
           const events = yield* promise(() => driver.events("schedule-scope"));
-          expect(kindsOf(events)).toEqual(["app.scheduled"]);
-          expect(events[0]?.payload).toEqual({ job: "one" });
+          expect(kindsOf(events)).toEqual([DURABLE_TRIGGER_SCHEDULED_REQUESTED, "app.scheduled"]);
+          expect(events[1]?.payload).toEqual({ job: "one" });
           expect(yield* promise(() => driver.pendingDueCount("schedule-scope"))).toBe(0);
         }),
       ),
