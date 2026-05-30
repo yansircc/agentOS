@@ -174,19 +174,16 @@ export const providerDispatchTarget = (
 });
 
 type DeliveryRetryOutcome =
-  | { readonly _tag: "skipped" }
   | {
       readonly _tag: "delivered";
       readonly outboundEventId: number;
       readonly requested: DispatchRequestedPayload;
       readonly deliveryReceipt: DispatchDeliveryReceipt;
-      readonly attempt: number;
     }
   | {
       readonly _tag: "failed";
       readonly outboundEventId: number;
       readonly requested: DispatchRequestedPayload;
-      readonly attempt: number;
       readonly cause: unknown;
     };
 
@@ -203,28 +200,20 @@ export const deliveryRetryTrigger = (
   },
   acquire: (requested, acquireCtx) =>
     Effect.gen(function* () {
-      const row = yield* selectPendingOutboxByIntent(
-        sql,
-        acquireCtx.dueWorkId,
-        acquireCtx.intentEventId,
-      ).pipe(Effect.orDie);
-      if (row === null) return { _tag: "skipped" } as const;
-      const attempt = row.attempts + 1;
       const bindingKey = materialRefKey(requested.target.bindingRef);
       const target = targets[bindingKey];
       if (target === undefined) {
         return {
           _tag: "failed",
-          outboundEventId: row.outboundEventId,
+          outboundEventId: acquireCtx.intentEventId,
           requested,
-          attempt,
           cause: new DispatchTargetNotFound({ bindingRef: bindingKey }),
         } as const;
       }
 
       const envelope: DispatchEnvelope = {
-        sourceScope: row.sourceScope,
-        outboundEventId: row.outboundEventId,
+        sourceScope: scope,
+        outboundEventId: acquireCtx.intentEventId,
         targetScope: requested.target.scope,
         event: requested.event,
         data: requested.data,
@@ -239,29 +228,22 @@ export const deliveryRetryTrigger = (
       if (delivered._tag === "Right") {
         return {
           _tag: "delivered",
-          outboundEventId: row.outboundEventId,
+          outboundEventId: acquireCtx.intentEventId,
           requested,
           deliveryReceipt: delivered.right.receipt,
-          attempt,
         } as const;
       }
       return {
         _tag: "failed",
-        outboundEventId: row.outboundEventId,
+        outboundEventId: acquireCtx.intentEventId,
         requested,
-        attempt,
         cause: delivered.left,
       } as const;
     }),
   commit: (outcome, tx) => {
-    if (outcome._tag === "skipped") return;
-    const pending = sql
-      .exec(
-        "SELECT outbound_event_id FROM dispatch_outbox WHERE outbound_event_id = ? AND delivered_event_id IS NULL",
-        outcome.outboundEventId,
-      )
-      .toArray();
-    if (pending.length === 0) return;
+    const row = selectPendingOutboxByIntent(sql, outcome.outboundEventId);
+    if (row === null) return;
+    const attempt = row.attempts + 1;
 
     if (outcome._tag === "delivered") {
       const bindingKey = materialRefKey(outcome.requested.target.bindingRef);
@@ -273,7 +255,7 @@ export const deliveryRetryTrigger = (
           event: outcome.requested.event,
           idempotencyKey: outcome.requested.idempotencyKey,
           deliveryReceipt: outcome.deliveryReceipt,
-          attempt: outcome.attempt,
+          attempt,
           ...(outcome.requested.claim === undefined
             ? {}
             : {
@@ -290,17 +272,17 @@ export const deliveryRetryTrigger = (
       sql.exec(
         "UPDATE dispatch_outbox SET delivered_event_id = ?, attempts = ?, last_error = NULL WHERE outbound_event_id = ?",
         event.id,
-        outcome.attempt,
+        attempt,
         outcome.outboundEventId,
       );
       return;
     }
 
     const error = describeDispatchCause(outcome.cause);
-    const terminal = outcome.attempt >= outcome.requested.retryPolicy.maxAttempts;
+    const terminal = attempt >= outcome.requested.retryPolicy.maxAttempts;
     const nextAttemptAt = terminal
       ? null
-      : tx.now + durableTriggerBackoffMs(outcome.requested.retryPolicy, outcome.attempt);
+      : tx.now + durableTriggerBackoffMs(outcome.requested.retryPolicy, attempt);
     tx.insertEvent({
       kind: DISPATCH_EVENT_KINDS.OUTBOUND_FAILED,
       payload: {
@@ -308,7 +290,7 @@ export const deliveryRetryTrigger = (
         target: outcome.requested.target,
         event: outcome.requested.event,
         idempotencyKey: outcome.requested.idempotencyKey,
-        attempt: outcome.attempt,
+        attempt,
         error,
         terminal,
         ...(nextAttemptAt === null ? {} : { nextAttemptAt }),
@@ -319,7 +301,7 @@ export const deliveryRetryTrigger = (
     });
     sql.exec(
       "UPDATE dispatch_outbox SET attempts = ?, last_error = ? WHERE outbound_event_id = ?",
-      outcome.attempt,
+      attempt,
       error,
       outcome.outboundEventId,
     );

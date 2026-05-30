@@ -44,8 +44,9 @@ export interface DispatchReceiver {
 }
 
 export interface DispatchTargetAdapter {
-  // Delivery can be acquired and then skipped at commit if another drain wins.
-  // Implementations must be idempotent by idempotencyKey within targetScope.
+  // The substrate may invoke deliver more than once for the same envelope
+  // across drain races, redrive, and adapter retries. Implementations must be
+  // idempotent by (targetScope, idempotencyKey) or a target-owned receipt key.
   readonly deliver: (envelope: DispatchEnvelope) => Promise<DispatchDeliveryResult>;
 }
 
