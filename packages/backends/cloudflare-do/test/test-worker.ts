@@ -135,7 +135,7 @@ const proofBoundaryContract = defineBoundaryContract({
         required: ["proofRef"],
         additionalProperties: false,
       },
-      claim: { key: "claim", phase: "lived" },
+      claim: { key: "claim", phase: "lived", anchorKinds: ["carrier_proof"] },
     },
   },
   settlement: proofSettlementContract,

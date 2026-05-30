@@ -1,4 +1,5 @@
 import { Predicate } from "effect";
+import { ANCHOR_KINDS, REJECTION_KINDS } from "./claim-kinds";
 import type { BoundaryPackage } from "./extensions";
 import type { JsonSchemaObject } from "./json-schema";
 import {
@@ -7,16 +8,27 @@ import {
   type AuthorityContract,
   type MaterialRequirement,
 } from "./material-ref";
-import type { ClaimRole } from "./effect-claim";
+import type { AnchorRef, ClaimRole, RejectionRef } from "./effect-claim";
 import { validateSettlementContract, type SettlementContract } from "./settlement-contract";
 import { isNonEmptyString } from "./string-guards";
 
 export type BoundaryClaimPhase = "pre" | "lived" | "rejected";
 
-export interface BoundaryEventClaimContract {
-  readonly key: string;
-  readonly phase: BoundaryClaimPhase;
-}
+export type BoundaryEventClaimContract =
+  | {
+      readonly key: string;
+      readonly phase: "pre";
+    }
+  | {
+      readonly key: string;
+      readonly phase: "lived";
+      readonly anchorKinds: ReadonlyArray<AnchorRef["anchorKind"]>;
+    }
+  | {
+      readonly key: string;
+      readonly phase: "rejected";
+      readonly rejectionKinds: ReadonlyArray<RejectionRef["rejectionKind"]>;
+    };
 
 export interface BoundaryEventContract {
   readonly payloadSchema: JsonSchemaObject;
@@ -54,6 +66,7 @@ export type BoundaryContractIssue =
   | "event_outside_prefix"
   | "event_payload_schema_invalid"
   | "event_claim_invalid"
+  | "event_claim_outside_settlement"
   | "event_claim_key_collides_with_payload"
   | "authority_contract_invalid"
   | "material_requirements_invalid"
@@ -71,6 +84,8 @@ export type BoundaryContractValidation =
 
 const CLAIM_ROLES = new Set<ClaimRole>(["generator", "admitter", "resolver", "reader"]);
 const CLAIM_PHASES = new Set<BoundaryClaimPhase>(["pre", "lived", "rejected"]);
+const ANCHOR_KIND_SET = new Set<AnchorRef["anchorKind"]>(ANCHOR_KINDS);
+const REJECTION_KIND_SET = new Set<RejectionRef["rejectionKind"]>(REJECTION_KINDS);
 
 const nonEmptyStringArray = (value: unknown): value is ReadonlyArray<string> =>
   Array.isArray(value) && value.length > 0 && value.every(isNonEmptyString);
@@ -95,7 +110,13 @@ const isBoundaryEventClaimContract = (value: unknown): value is BoundaryEventCla
   Predicate.isRecord(value) &&
   isNonEmptyString(value.key) &&
   typeof value.phase === "string" &&
-  CLAIM_PHASES.has(value.phase as BoundaryClaimPhase);
+  CLAIM_PHASES.has(value.phase as BoundaryClaimPhase) &&
+  (value.phase === "pre"
+    ? value.anchorKinds === undefined && value.rejectionKinds === undefined
+    : value.phase === "lived"
+      ? nonEmptyArrayOf(value.anchorKinds, ANCHOR_KIND_SET) && value.rejectionKinds === undefined
+      : nonEmptyArrayOf(value.rejectionKinds, REJECTION_KIND_SET) &&
+        value.anchorKinds === undefined);
 
 const isBoundaryEventContract = (value: unknown): value is BoundaryEventContract =>
   Predicate.isRecord(value) &&
@@ -122,6 +143,21 @@ const eventClaimKeysDoNotCollide = (
   entries.every(([, contract]) => {
     const key = contract.claim?.key;
     return key === undefined || !(key in contract.payloadSchema.properties);
+  });
+
+const eventClaimVocabularyIsInSettlement = (
+  entries: ReadonlyArray<readonly [string, BoundaryEventContract]>,
+  settlement: SettlementContract,
+): boolean =>
+  entries.every(([, eventContract]) => {
+    const claim = eventContract.claim;
+    if (claim === undefined || claim.phase === "pre") return true;
+    if (claim.phase === "lived") {
+      return claim.anchorKinds.every((anchorKind) => settlement.anchorKinds.includes(anchorKind));
+    }
+    return claim.rejectionKinds.every((rejectionKind) =>
+      settlement.rejectionKinds.includes(rejectionKind),
+    );
   });
 
 const materialRequirementMatches = (
@@ -218,6 +254,7 @@ export const validateBoundaryContract = (value: unknown): BoundaryContractValida
   }
 
   const entries = eventEntries(value.events);
+  const settlementValidation = validateSettlementContract(value.settlement);
   if (entries === null) {
     issues.push("events_invalid");
   } else {
@@ -238,6 +275,12 @@ export const validateBoundaryContract = (value: unknown): BoundaryContractValida
     }
     if (!eventClaimKeysDoNotCollide(entries)) {
       issues.push("event_claim_key_collides_with_payload");
+    }
+    if (
+      settlementValidation.ok &&
+      !eventClaimVocabularyIsInSettlement(entries, settlementValidation.contract)
+    ) {
+      issues.push("event_claim_outside_settlement");
     }
   }
 
@@ -275,7 +318,7 @@ export const validateBoundaryContract = (value: unknown): BoundaryContractValida
     issues.push("material_authority_unbound");
   }
 
-  if (!validateSettlementContract(value.settlement).ok) {
+  if (!settlementValidation.ok) {
     issues.push("settlement_invalid");
   }
 

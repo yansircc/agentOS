@@ -4,6 +4,10 @@ export default defineConfig({
   resolve: {
     alias: [
       {
+        find: "@agent-os/kernel/boundary-contract",
+        replacement: new URL("../kernel/src/boundary-contract.ts", import.meta.url).pathname,
+      },
+      {
         find: "@agent-os/kernel/llm",
         replacement: new URL("../kernel/src/llm.ts", import.meta.url).pathname,
       },
@@ -18,6 +22,10 @@ export default defineConfig({
       {
         find: "@agent-os/kernel/material-ref",
         replacement: new URL("../kernel/src/material-ref.ts", import.meta.url).pathname,
+      },
+      {
+        find: "@agent-os/kernel/settlement-contract",
+        replacement: new URL("../kernel/src/settlement-contract.ts", import.meta.url).pathname,
       },
       {
         find: "@agent-os/kernel/types",

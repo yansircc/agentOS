@@ -32,8 +32,8 @@ describe("BoundaryContract", () => {
   });
   const settlement = defineSettlementContract({
     settlementId: "@agent-os/example-carrier",
-    anchorKinds: ["carrier_proof"],
-    rejectionKinds: ["policy_denied"],
+    anchorKinds: ["carrier_proof", "ledger_event"],
+    rejectionKinds: ["policy_denied", "provider_rejected"],
   });
 
   const contract = defineBoundaryContract({
@@ -47,11 +47,11 @@ describe("BoundaryContract", () => {
       },
       "example.recorded": {
         payloadSchema: recordedPayload,
-        claim: { key: "claim", phase: "lived" },
+        claim: { key: "claim", phase: "lived", anchorKinds: ["carrier_proof"] },
       },
       "example.failed": {
         payloadSchema: emptyPayload,
-        claim: { key: "claim", phase: "rejected" },
+        claim: { key: "claim", phase: "rejected", rejectionKinds: ["policy_denied"] },
       },
       "example.noted": {
         payloadSchema: recordedPayload,
@@ -97,7 +97,7 @@ describe("BoundaryContract", () => {
         events: {
           "other.recorded": {
             payloadSchema: recordedPayload,
-            claim: { key: "claim", phase: "lived" },
+            claim: { key: "claim", phase: "lived", anchorKinds: ["carrier_proof"] },
           },
         },
       }),
@@ -120,7 +120,7 @@ describe("BoundaryContract", () => {
               },
               additionalProperties: false,
             },
-            claim: { key: "claim", phase: "lived" },
+            claim: { key: "claim", phase: "lived", anchorKinds: ["carrier_proof"] },
           },
         },
       }),
@@ -139,6 +139,27 @@ describe("BoundaryContract", () => {
     ).toEqual({
       ok: false,
       issues: ["roles_invalid"],
+    });
+  });
+
+  it("requires event-local terminal vocabulary to be covered by settlement vocabulary", () => {
+    expect(
+      validateBoundaryContract({
+        ...contract,
+        events: {
+          "example.recorded": {
+            payloadSchema: recordedPayload,
+            claim: { key: "claim", phase: "lived", anchorKinds: ["external_receipt"] },
+          },
+          "example.failed": {
+            payloadSchema: emptyPayload,
+            claim: { key: "claim", phase: "rejected", rejectionKinds: ["resource_denied"] },
+          },
+        },
+      }),
+    ).toEqual({
+      ok: false,
+      issues: ["event_claim_outside_settlement"],
     });
   });
 

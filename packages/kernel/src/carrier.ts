@@ -283,10 +283,23 @@ const boundaryClaimFor = (slot: ClaimSlot): BoundaryEventContract["claim"] => {
     case "pre":
       return { key: slot.key, phase: "pre" };
     case "lived":
-      return { key: slot.key, phase: "lived" };
+      return { key: slot.key, phase: "lived", anchorKinds: slot.anchorKinds };
     case "rejected":
-      return { key: slot.key, phase: "rejected" };
+      return { key: slot.key, phase: "rejected", rejectionKinds: slot.rejectionKinds };
   }
+};
+
+const claimMatchesSlotVocabulary = (
+  slot: ClaimSlot,
+  claim: LivedClaim | RejectedClaim,
+): boolean => {
+  if (slot.kind === "lived" && claim.phase === "lived") {
+    return slot.anchorKinds.includes(claim.anchorRef.anchorKind);
+  }
+  if (slot.kind === "rejected" && claim.phase === "rejected") {
+    return slot.rejectionKinds.includes(claim.rejectionRef.rejectionKind);
+  }
+  return true;
 };
 
 const decodePayload = (
@@ -327,6 +340,14 @@ const decodePayload = (
   if (claimValidation.claim.phase !== claim.kind) {
     return failCarrier(
       `carrier event ${eventKind} claim slot ${claim.key} has phase ${claimValidation.claim.phase}`,
+    );
+  }
+  if (
+    claim.kind !== "pre" &&
+    !claimMatchesSlotVocabulary(claim, claimValidation.claim as LivedClaim | RejectedClaim)
+  ) {
+    return failCarrier(
+      `carrier event ${eventKind} claim slot ${claim.key} outside event vocabulary`,
     );
   }
   return payload;
