@@ -188,6 +188,12 @@
       "rules": ["EFF025"]
     },
     {
+      "path": "packages/backends/cloudflare-do/src/trigger-pump.ts",
+      "owner": "@agent-os/backend-cloudflare-do/durable-trigger",
+      "reason": "trigger pump owns transactionSync rollback when a commit attempts to enqueue an unregistered trigger kind",
+      "rules": ["EFF025"]
+    },
+    {
       "path": "packages/backends/cloudflare-do/test/_in-memory-do.ts",
       "owner": "@agent-os/backend-cloudflare-do-tests",
       "reason": "test-only Durable Object SQL adapter models transactionSync rollback by synchronous throws",

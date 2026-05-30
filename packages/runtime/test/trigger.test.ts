@@ -1,6 +1,14 @@
 import { Effect, Exit } from "effect";
 import { describe, expect, it } from "@effect/vitest";
-import { makeDurableTriggerRegistry, triggerParseOk, type DurableTrigger } from "../src/trigger";
+import {
+  DURABLE_TRIGGER_SCHEDULED_REQUESTED,
+  makeDurableTriggerRegistry,
+  parseScheduledEventIntentPayload,
+  scheduledEventIntentPayload,
+  scheduledEventTrigger,
+  triggerParseOk,
+  type DurableTrigger,
+} from "../src/trigger";
 
 const trigger = (kind: string): DurableTrigger<unknown, { readonly ok: boolean }> => ({
   kind,
@@ -43,6 +51,26 @@ describe("durable trigger runtime algebra", () => {
         },
       );
       expect(outcome).toEqual({ ok: false, reason: "provider unavailable" });
+    }),
+  );
+
+  it.effect("owns the scheduled event trigger value", () =>
+    Effect.gen(function* () {
+      const intent = scheduledEventIntentPayload("app.scheduled", { job: "one" });
+      expect(parseScheduledEventIntentPayload(intent)).toEqual({
+        ok: true,
+        intent,
+      });
+      expect(scheduledEventTrigger.kind).toBe("scheduled_event");
+      expect(scheduledEventTrigger.intentEventKind).toBe(DURABLE_TRIGGER_SCHEDULED_REQUESTED);
+
+      const outcome = yield* scheduledEventTrigger.acquire(intent, {
+        scope: "scope",
+        now: 1,
+        dueWorkId: 2,
+        intentEventId: 3,
+      });
+      expect(outcome).toEqual(intent);
     }),
   );
 });

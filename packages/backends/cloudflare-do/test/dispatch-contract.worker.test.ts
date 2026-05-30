@@ -19,7 +19,11 @@ import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vite-plus/test";
 import type { DispatchToScopeResult } from "@agent-os/kernel/types";
 import { validateEffectClaim } from "@agent-os/kernel/effect-claim";
-import { DISPATCH_RETRY_POLICY, dispatchLedgerDeliveryReceipt } from "@agent-os/backend-protocol";
+import {
+  DELIVERY_RETRY_TRIGGER_KIND,
+  DISPATCH_RETRY_POLICY,
+  dispatchLedgerDeliveryReceipt,
+} from "@agent-os/backend-protocol";
 import {
   bindingMaterialRef,
   materialRefKey,
@@ -657,7 +661,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
         .toArray();
       expect(due).toHaveLength(1);
       expect(Number(due[0]?.fire_at)).toBe(payload.nextAttemptAt);
-      expect(due[0]?.kind).toBe("delivery_retry");
+      expect(due[0]?.kind).toBe(DELIVERY_RETRY_TRIGGER_KIND);
       expect(JSON.parse(sqlText(due[0]?.payload, "due_work.payload"))).toEqual({
         intentEventId: outboundEventId,
       });

@@ -1,15 +1,16 @@
 import { Effect, Exit, Layer, ManagedRuntime } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
-import { Dispatch, TriggerPump } from "@agent-os/runtime";
 import {
-  DISPATCH_MAX_ATTEMPTS,
   DURABLE_TRIGGER_SCHEDULED_REQUESTED,
-} from "@agent-os/backend-protocol";
+  Dispatch,
+  TriggerPump,
+  scheduledEventTrigger,
+} from "@agent-os/runtime";
+import { DISPATCH_MAX_ATTEMPTS } from "@agent-os/backend-protocol";
 import { type DispatchTargetRegistry } from "../src/dispatch";
 import { enqueueScheduledEvent, ensureDueWorkSchema, findNextDue } from "../src/due-work";
 import { EventBusLive } from "../src/ledger";
-import { scheduledEventTrigger } from "../src/scheduled-trigger";
 import { makeCloudflareBackendCoreLayer } from "../src/runtime-core";
 import { TriggerPumpLive } from "../src/trigger-pump";
 import { makeInMemoryDurableObjectState } from "./_in-memory-do";
@@ -49,16 +50,9 @@ describe("due-work alarm protocol", () => {
       yield* ensureDueWorkSchema(sql);
 
       const exit = yield* Effect.exit(
-        enqueueScheduledEvent(
-          state,
-          sql,
-          "sender",
-          1,
-          10,
-          scheduledEventTrigger.kind,
-          "app.scheduled",
-          { job: "one" },
-        ),
+        enqueueScheduledEvent(state, sql, "sender", 1, 10, scheduledEventTrigger, "app.scheduled", {
+          job: "one",
+        }),
       );
 
       expect(Exit.isFailure(exit)).toBe(true);
@@ -81,7 +75,7 @@ describe("due-work alarm protocol", () => {
         "sender",
         1,
         10,
-        scheduledEventTrigger.kind,
+        scheduledEventTrigger,
         "app.scheduled",
         { job: "one" },
       );

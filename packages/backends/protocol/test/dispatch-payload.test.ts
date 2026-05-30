@@ -4,9 +4,9 @@ import { makePreClaim } from "@agent-os/kernel/effect-claim";
 import { bindingMaterialRef } from "@agent-os/kernel/material-ref";
 
 import {
+  DELIVERY_RETRY_TRIGGER_KIND,
   DISPATCH_MAX_ATTEMPTS,
   DISPATCH_RETRY_POLICY,
-  DURABLE_TRIGGER_SCHEDULED_REQUESTED,
   describeDispatchCause,
   dispatchBackoffMs,
   dispatchExternalDeliveryReceipt,
@@ -18,8 +18,6 @@ import {
   parseDurableTriggerRetryPolicy,
   parseIntentPointerDuePayload,
   parseRequestedPayload,
-  parseScheduledEventIntentPayload,
-  scheduledEventIntentPayload,
   settleDispatchOutboundDelivered,
 } from "../src";
 
@@ -89,11 +87,11 @@ describe("@agent-os/backend-protocol", () => {
 
   it("owns retry, cause, and due-work pointer vocabulary", () => {
     expect(DISPATCH_MAX_ATTEMPTS).toBe(8);
+    expect(DELIVERY_RETRY_TRIGGER_KIND).toBe("delivery_retry");
     expect(dispatchBackoffMs(1)).toBe(1_000);
     expect(dispatchBackoffMs(8)).toBe(60_000);
     expect(durableTriggerBackoffMs(DISPATCH_RETRY_POLICY, 8)).toBe(60_000);
     expect(describeDispatchCause(new Error("boom"))).toBe("Error: boom");
-    expect(DURABLE_TRIGGER_SCHEDULED_REQUESTED).toBe("durable_trigger.scheduled.requested");
     expect(parseIntentPointerDuePayload({ intentEventId: 7 })).toEqual({
       ok: true,
       payload: { intentEventId: 7 },
@@ -109,7 +107,7 @@ describe("@agent-os/backend-protocol", () => {
     expect(malformedDeliveryDue.cause.message).toBe("durable trigger due-work payload malformed");
   });
 
-  it("keeps scheduled trigger intents and retry policy as serializable protocol data", () => {
+  it("keeps retry policy as serializable protocol data", () => {
     expect(parseDurableTriggerRetryPolicy(DISPATCH_RETRY_POLICY)).toEqual({
       ok: true,
       payload: DISPATCH_RETRY_POLICY,
@@ -121,12 +119,6 @@ describe("@agent-os/backend-protocol", () => {
     expect(functionPolicy.ok).toBe(false);
     if (functionPolicy.ok) return;
     expect(functionPolicy.cause.message).toBe("durable trigger retry policy malformed");
-
-    const scheduledIntent = scheduledEventIntentPayload("app.scheduled", { job: "one" });
-    expect(parseScheduledEventIntentPayload(scheduledIntent)).toEqual({
-      ok: true,
-      value: scheduledIntent,
-    });
   });
 
   it("settles outbound delivery against target receipts, not only receiver ledger ids", () => {

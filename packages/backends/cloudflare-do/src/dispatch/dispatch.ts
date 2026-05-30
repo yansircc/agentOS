@@ -34,6 +34,7 @@ import type {
 } from "@agent-os/runtime";
 import { makeOperationRef, makePreClaim, isScopeRef } from "@agent-os/kernel/effect-claim";
 import {
+  DELIVERY_RETRY_TRIGGER_KIND,
   DISPATCH_EVENT_KINDS,
   DISPATCH_INBOUND_ACCEPTED,
   DISPATCH_RETRY_POLICY,
@@ -174,7 +175,6 @@ export const providerDispatchTarget = (
 
 type DeliveryRetryOutcome =
   | { readonly _tag: "skipped" }
-  | { readonly _tag: "acquire_failed"; readonly cause: unknown }
   | {
       readonly _tag: "delivered";
       readonly outboundEventId: number;
@@ -190,14 +190,12 @@ type DeliveryRetryOutcome =
       readonly cause: unknown;
     };
 
-const deliveryRetryTriggerKind = "delivery_retry";
-
 export const deliveryRetryTrigger = (
   sql: SqlStorage,
   scope: string,
   targets: DispatchTargetRegistry,
 ): DurableTrigger<DispatchRequestedPayload, DeliveryRetryOutcome> => ({
-  kind: deliveryRetryTriggerKind,
+  kind: DELIVERY_RETRY_TRIGGER_KIND,
   intentEventKind: DISPATCH_EVENT_KINDS.OUTBOUND_REQUESTED,
   parseIntent: (raw) => {
     const parsed = parseRequestedPayloadValue(raw);
@@ -205,15 +203,11 @@ export const deliveryRetryTrigger = (
   },
   acquire: (requested, acquireCtx) =>
     Effect.gen(function* () {
-      const rowResult = yield* selectPendingOutboxByIntent(
+      const row = yield* selectPendingOutboxByIntent(
         sql,
         acquireCtx.dueWorkId,
         acquireCtx.intentEventId,
-      ).pipe(Effect.either);
-      if (rowResult._tag === "Left") {
-        return { _tag: "acquire_failed", cause: rowResult.left } as const;
-      }
-      const row = rowResult.right;
+      ).pipe(Effect.orDie);
       if (row === null) return { _tag: "skipped" } as const;
       const attempt = row.attempts + 1;
       const bindingKey = materialRefKey(requested.target.bindingRef);
@@ -261,7 +255,6 @@ export const deliveryRetryTrigger = (
     }),
   commit: (outcome, tx) => {
     if (outcome._tag === "skipped") return;
-    if (outcome._tag === "acquire_failed") throw outcome.cause;
     const pending = sql
       .exec(
         "SELECT outbound_event_id FROM dispatch_outbox WHERE outbound_event_id = ? AND delivered_event_id IS NULL",
@@ -340,6 +333,7 @@ export const DispatchLive = (
   ctx: DurableObjectState,
   scope: string,
   targets: DispatchTargetRegistry,
+  retryTrigger: Pick<ReturnType<typeof deliveryRetryTrigger>, "kind">,
 ): Layer.Layer<Dispatch, SqlError, EventBus | TriggerPump> => {
   const sql = ctx.storage.sql;
 
@@ -414,7 +408,7 @@ export const DispatchLive = (
               ctx,
               sql,
               now,
-              deliveryRetryTriggerKind,
+              retryTrigger,
               () => {
                 const event = insertLedgerEvent(sql, {
                   ts: now,

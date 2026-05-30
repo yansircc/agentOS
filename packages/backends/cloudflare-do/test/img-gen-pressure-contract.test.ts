@@ -23,7 +23,7 @@ const makeDriver = (triggers: ReadonlyArray<AnyDurableTrigger>): ImgGenPressureD
       await runtime.runPromise(Ledger);
       await runtime.runPromise(TriggerPump);
       await runtime.runPromise(
-        commitDurableTriggerIntent(state, sql, fireAt, trigger.kind, () =>
+        commitDurableTriggerIntent(state, sql, fireAt, trigger, () =>
           insertLedgerEvent(sql, {
             ts: fireAt,
             kind: trigger.intentEventKind,

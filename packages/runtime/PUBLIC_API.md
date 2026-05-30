@@ -27,6 +27,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:DispatchReceiverResult`
 - `.:DispatchTargetAdapter`
 - `.:DurableTrigger`
+- `.:DURABLE_TRIGGER_SCHEDULED_REQUESTED`
 - `.:EvidenceRow`
 - `.:FINGERPRINT_ALGO_VERSION`
 - `.:GrantResult`
@@ -44,6 +45,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:ResourceProjection`
 - `.:Resources`
 - `.:Scheduler`
+- `.:ScheduledEventIntentPayload`
 - `.:Strategy`
 - `.:Stimulus`
 - `.:SubmitResult`
@@ -63,10 +65,13 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:decideTier`
 - `.:makeSchemaContract`
 - `.:makeDurableTriggerRegistry`
+- `.:parseScheduledEventIntentPayload`
 - `.:projectLease`
 - `.:reasonOf`
 - `.:routeFingerprint`
 - `.:submitAgentEffect`
+- `.:scheduledEventIntentPayload`
+- `.:scheduledEventTrigger`
 - `.:triggerParseFail`
 - `.:triggerParseOk`
 - `.:turnRefOf`

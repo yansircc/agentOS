@@ -20,6 +20,12 @@
       "rules": ["EFF025"]
     },
     {
+      "path": "src/trigger-pump.ts",
+      "owner": "@agent-os/backend-cloudflare-do/durable-trigger",
+      "reason": "trigger pump owns transactionSync rollback when a commit attempts to enqueue an unregistered trigger kind",
+      "rules": ["EFF025"]
+    },
+    {
       "path": "src/ledger/stream.ts",
       "owner": "@agent-os/backend-cloudflare-do/http-stream",
       "reason": "terminal SSE adapter constructs the Response boundary for ledger streamEvents",

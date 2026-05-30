@@ -47,6 +47,8 @@ export interface DurableTrigger<Intent, Outcome, R = never> {
   readonly kind: string;
   readonly intentEventKind: string;
   readonly parseIntent: (raw: unknown) => TriggerParseResult<Intent>;
+  // External acquire effects must be idempotent: another drain can complete the
+  // same due row before this trigger reaches commit.
   readonly acquire: (intent: Intent, ctx: AcquireCtx) => Effect.Effect<Outcome, never, R>;
   readonly commit: (outcome: Outcome, tx: TriggerTx) => void;
 }
@@ -57,6 +59,47 @@ export interface DurableTrigger<Intent, Outcome, R = never> {
 export type AnyDurableTrigger = DurableTrigger<any, any, never>;
 
 export type TriggerRegistry = ReadonlyMap<string, AnyDurableTrigger>;
+
+export const DURABLE_TRIGGER_SCHEDULED_REQUESTED = "durable_trigger.scheduled.requested";
+
+export interface ScheduledEventIntentPayload {
+  readonly eventKind: string;
+  readonly data: unknown;
+}
+
+export const scheduledEventIntentPayload = (
+  eventKind: string,
+  data: unknown,
+): ScheduledEventIntentPayload => ({ eventKind, data });
+
+export const parseScheduledEventIntentPayload = (
+  raw: unknown,
+): TriggerParseResult<ScheduledEventIntentPayload> => {
+  if (
+    typeof raw !== "object" ||
+    raw === null ||
+    typeof (raw as { readonly eventKind?: unknown }).eventKind !== "string"
+  ) {
+    return triggerParseFail("scheduled event intent payload malformed");
+  }
+  return triggerParseOk({
+    eventKind: (raw as { readonly eventKind: string }).eventKind,
+    data: (raw as { readonly data?: unknown }).data,
+  });
+};
+
+export const scheduledEventTrigger = {
+  kind: "scheduled_event",
+  intentEventKind: DURABLE_TRIGGER_SCHEDULED_REQUESTED,
+  parseIntent: parseScheduledEventIntentPayload,
+  acquire: (intent: ScheduledEventIntentPayload, _ctx: AcquireCtx) => Effect.succeed(intent),
+  commit: (outcome, tx) => {
+    tx.insertEvent({
+      kind: outcome.eventKind,
+      payload: outcome.data,
+    });
+  },
+} satisfies DurableTrigger<ScheduledEventIntentPayload, ScheduledEventIntentPayload>;
 
 export const makeDurableTriggerRegistry = (
   triggers: Iterable<AnyDurableTrigger>,

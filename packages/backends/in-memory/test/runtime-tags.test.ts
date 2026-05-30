@@ -1,9 +1,9 @@
 import { Cause, Effect, Exit, ManagedRuntime, Option } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
-import { DURABLE_TRIGGER_SCHEDULED_REQUESTED } from "@agent-os/backend-protocol";
 import {
   Admission,
+  DURABLE_TRIGGER_SCHEDULED_REQUESTED,
   Dispatch,
   Ledger,
   Quota,

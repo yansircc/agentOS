@@ -7,13 +7,15 @@ import type {
   LedgerEventRpc,
 } from "@agent-os/kernel/types";
 import {
-  DURABLE_TRIGGER_SCHEDULED_REQUESTED,
   durableTriggerDuePayload,
   fireBackendEventHandlers,
-  scheduledEventIntentPayload,
   type IntentPointerDuePayload,
 } from "@agent-os/backend-protocol";
-import type { TriggerTx } from "@agent-os/runtime";
+import {
+  scheduledEventIntentPayload,
+  type AnyDurableTrigger,
+  type TriggerTx,
+} from "@agent-os/runtime";
 import type { DispatchOutboxRow } from "./dispatch-types";
 
 const DEFAULT_EVENT_LIMIT = 1000;
@@ -200,7 +202,7 @@ export class InMemoryBackendState {
     scope: string,
     intentTs: number,
     at: number,
-    triggerKind: string,
+    trigger: Pick<AnyDurableTrigger, "kind" | "intentEventKind">,
     eventKind: string,
     data: unknown,
   ): Effect.Effect<{ readonly id: number }, JsonStringifyError> {
@@ -211,7 +213,7 @@ export class InMemoryBackendState {
         const event: LedgerEvent = {
           id: this.nextEventId,
           ts: intentTs,
-          kind: DURABLE_TRIGGER_SCHEDULED_REQUESTED,
+          kind: trigger.intentEventKind,
           scope,
           payload,
         };
@@ -221,7 +223,7 @@ export class InMemoryBackendState {
         this.dueWork.push({
           id: dueId,
           fireAt: at,
-          kind: triggerKind,
+          kind: trigger.kind,
           payload: durableTriggerDuePayload(event.id),
           completedAt: null,
         });

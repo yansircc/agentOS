@@ -44,6 +44,8 @@ export interface DispatchReceiver {
 }
 
 export interface DispatchTargetAdapter {
+  // Delivery can be acquired and then skipped at commit if another drain wins.
+  // Implementations must be idempotent by idempotencyKey within targetScope.
   readonly deliver: (envelope: DispatchEnvelope) => Promise<DispatchDeliveryResult>;
 }
 
