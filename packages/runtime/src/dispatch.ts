@@ -6,6 +6,7 @@ import type {
   JsonStringifyError,
   ScopeMissingError,
   SqlError,
+  UnregisteredDurableTriggerKind,
   UnsupportedScopeRef,
 } from "@agent-os/kernel/errors";
 import type { PreClaim } from "@agent-os/kernel/effect-claim";
@@ -62,6 +63,7 @@ export class Dispatch extends Context.Tag("@agent-os/Dispatch")<
       | DispatchTargetNotFound
       | CapabilityRejected
       | UnsupportedScopeRef
+      | UnregisteredDurableTriggerKind
     >;
     readonly receive: (
       envelope: DispatchEnvelope,

@@ -23,6 +23,7 @@
 - `.:DispatchReceiverResult`
 - `.:DispatchTargetAdapter`
 - `.:DurableTrigger`
+- `.:DurableTriggerRegistry`
 - `.:DURABLE_TRIGGER_SCHEDULED_REQUESTED`
 - `.:EvidenceRow`
 - `.:FINGERPRINT_ALGO_VERSION`
@@ -61,6 +62,7 @@
 - `.:decideTier`
 - `.:makeSchemaContract`
 - `.:makeDurableTriggerRegistry`
+- `.:getDurableTrigger`
 - `.:parseScheduledEventIntentPayload`
 - `.:projectLease`
 - `.:reasonOf`

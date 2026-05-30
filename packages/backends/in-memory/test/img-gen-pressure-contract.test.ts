@@ -1,11 +1,11 @@
-import { ManagedRuntime } from "effect";
+import { Effect, ManagedRuntime } from "effect";
 import { describe } from "@effect/vitest";
 import { createInMemoryBackendState, createInMemoryRuntimeBackend } from "../src";
 import {
   runImgGenPressureContract,
   type ImgGenPressureDriver,
 } from "../../protocol/test/contract/img-gen-pressure-contract";
-import { TriggerPump, type AnyDurableTrigger } from "@agent-os/runtime";
+import { DurableTriggerRegistry, TriggerPump, type AnyDurableTrigger } from "@agent-os/runtime";
 
 const makeDriver = (triggers: ReadonlyArray<AnyDurableTrigger>): ImgGenPressureDriver => {
   const scope = "img-gen-pressure";
@@ -20,17 +20,19 @@ const makeDriver = (triggers: ReadonlyArray<AnyDurableTrigger>): ImgGenPressureD
 
   return {
     enqueue: async (trigger, payload, fireAt) => {
-      const [event] = await runtime.runPromise(
-        state.commitEvents([
-          {
-            ts: fireAt,
-            kind: trigger.intentEventKind,
-            scope,
-            payload,
-          },
-        ]),
+      const registry = await runtime.runPromise(
+        Effect.gen(function* () {
+          return yield* DurableTriggerRegistry;
+        }),
       );
-      state.addDueWork(trigger.kind, event!.id, fireAt);
+      await runtime.runPromise(
+        state.commitTriggerIntent(scope, fireAt, registry, trigger.kind, (trigger) => ({
+          ts: fireAt,
+          kind: trigger.intentEventKind,
+          scope,
+          payload,
+        })),
+      );
     },
     drainDue: async (now) => {
       const triggerPump = await runtime.runPromise(TriggerPump);
