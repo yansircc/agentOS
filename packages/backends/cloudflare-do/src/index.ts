@@ -42,4 +42,5 @@ export type {
   GeminiGenerateContentSpec,
   OpenAIChatSpec,
 } from "./facade";
+export { durableObjectDispatchTarget } from "./dispatch";
 export type { DispatchTargetNamespace, DispatchTargetRegistry } from "./dispatch";

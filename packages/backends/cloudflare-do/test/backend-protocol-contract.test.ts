@@ -9,8 +9,9 @@ import {
   Resources,
   Scheduler,
   type DispatchReceiver,
+  type DispatchTargetAdapter,
 } from "@agent-os/runtime";
-import type { DispatchTargetNamespace } from "../src/dispatch";
+import { durableObjectDispatchTarget, type DispatchTargetNamespace } from "../src/dispatch";
 import { findNextDue } from "../src/due-work";
 import { makeCloudflareBackendCoreLayer } from "../src/runtime-core";
 import { makeInMemoryDurableObjectState } from "./_in-memory-do";
@@ -40,7 +41,9 @@ const makeCloudflareDoContractDriver = (): RuntimeBackendContractDriver => {
       return scope === undefined ? undefined : receiverTargets.get(scope);
     },
   };
-  const targets = { [bindingKey]: targetNamespace };
+  const targets: Record<string, DispatchTargetAdapter> = {
+    [bindingKey]: durableObjectDispatchTarget(targetNamespace),
+  };
 
   const stateFor = (scope: string): DurableObjectState => {
     const existing = states.get(scope);
@@ -84,6 +87,14 @@ const makeCloudflareDoContractDriver = (): RuntimeBackendContractDriver => {
   return {
     bindingRef,
     registerDispatchReceiver,
+    setDispatchTargetAdapter: (adapter) => {
+      targets[bindingKey] =
+        typeof adapter === "function"
+          ? {
+              deliver: adapter,
+            }
+          : adapter;
+    },
     addHandler: (kind, handler) => {
       let set = handlers.get(kind);
       if (set === undefined) {

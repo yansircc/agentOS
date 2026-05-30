@@ -19,6 +19,7 @@ import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vite-plus/test";
 import type { DispatchToScopeResult } from "@agent-os/kernel/types";
 import { validateEffectClaim } from "@agent-os/kernel/effect-claim";
+import { dispatchLedgerDeliveryReceipt } from "@agent-os/backend-protocol";
 import {
   bindingMaterialRef,
   materialRefKey,
@@ -276,9 +277,14 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
       expect(Number(outbox[0]?.delivered_event_id)).toBe(Number(senderDelivered[0]?.id));
 
       const payload = JSON.parse(sqlText(senderDelivered[0]?.payload, "events.payload")) as {
-        readonly deliveredEventId: number;
+        readonly deliveryReceipt: unknown;
       };
-      expect(payload.deliveredEventId).toBe(receiverDelivered?.id);
+      expect(payload.deliveryReceipt).toEqual(
+        dispatchLedgerDeliveryReceipt({
+          targetScope: "dispatch-receiver-diverged-ledger",
+          deliveredEventId: Number(receiverDelivered?.id),
+        }),
+      );
     });
   });
 
@@ -650,9 +656,9 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
         .toArray();
       expect(due).toHaveLength(1);
       expect(Number(due[0]?.fire_at)).toBe(payload.nextAttemptAt);
-      expect(due[0]?.kind).toBe("dispatch_retry");
+      expect(due[0]?.kind).toBe("delivery_retry");
       expect(JSON.parse(sqlText(due[0]?.payload, "due_work.payload"))).toEqual({
-        outboundEventId,
+        intentEventId: outboundEventId,
       });
     });
   });

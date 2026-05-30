@@ -2,18 +2,16 @@ import { Effect, Exit, Layer, ManagedRuntime } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
 import { Dispatch } from "@agent-os/runtime";
-import { DISPATCH_MAX_ATTEMPTS } from "@agent-os/backend-protocol";
-import { DispatchLive, type DispatchTargetNamespace } from "../src/dispatch";
-import { enqueueScheduledEvent, ensureDueWorkSchema, findNextDue } from "../src/due-work";
+import { DISPATCH_MAX_ATTEMPTS, DUE_WORK_SCHEDULED_EVENT } from "@agent-os/backend-protocol";
+import { DispatchLive, type DispatchTargetRegistry } from "../src/dispatch";
+import {
+  enqueueScheduledEvent,
+  ensureDueWorkSchema,
+  findNextDue,
+  selectDueWork,
+} from "../src/due-work";
 import { EventBusLive } from "../src/ledger";
 import { makeInMemoryDurableObjectState } from "./_in-memory-do";
-
-const deadTarget: DispatchTargetNamespace = {
-  idFromName: () => ({}) as DurableObjectId,
-  get: () => ({
-    __agentosReceiveDispatch: () => Promise.reject("dead target"),
-  }),
-};
 
 const bindingRef = bindingMaterialRef({
   provider: "cloudflare",
@@ -22,6 +20,12 @@ const bindingRef = bindingMaterialRef({
 });
 
 const bindingKey = materialRefKey(bindingRef);
+
+const deadTargets: DispatchTargetRegistry = {
+  [bindingKey]: {
+    deliver: () => Promise.reject("dead target"),
+  },
+};
 
 const dispatchSpec = {
   target: {
@@ -55,7 +59,7 @@ describe("due-work alarm protocol", () => {
   );
 
   it.effect(
-    "setAlarm failure during dispatch retry does not advance attempt or commit failed fact",
+    "setAlarm failure during delivery retry does not advance attempt or commit failed fact",
     () =>
       Effect.gen(function* () {
         let setAlarmCalls = 0;
@@ -70,9 +74,7 @@ describe("due-work alarm protocol", () => {
         const sql = state.storage.sql;
         const eventBusLayer = EventBusLive(new Map());
         const runtime = ManagedRuntime.make(
-          DispatchLive(state, "sender", { [bindingKey]: deadTarget }).pipe(
-            Layer.provide(eventBusLayer),
-          ),
+          DispatchLive(state, "sender", deadTargets).pipe(Layer.provide(eventBusLayer)),
         );
 
         const dispatch = yield* Effect.promise(() => runtime.runPromise(Dispatch));
@@ -100,6 +102,24 @@ describe("due-work alarm protocol", () => {
       }),
   );
 
+  it.effect("unknown due-work kind fails due selection instead of being ignored", () =>
+    Effect.gen(function* () {
+      const state = makeInMemoryDurableObjectState();
+      const sql = state.storage.sql;
+      yield* ensureDueWorkSchema(sql);
+      sql.exec(
+        "INSERT INTO due_work (fire_at, kind, payload) VALUES (?, ?, ?)",
+        10,
+        "unknown_retry",
+        "{}",
+      );
+
+      const exit = yield* Effect.exit(selectDueWork(sql, DUE_WORK_SCHEDULED_EVENT, 10));
+
+      expect(Exit.isFailure(exit)).toBe(true);
+    }),
+  );
+
   it.effect(
     "dispatch terminal failure stops after max committed attempts with no next due-work",
     () =>
@@ -108,9 +128,7 @@ describe("due-work alarm protocol", () => {
         const sql = state.storage.sql;
         const eventBusLayer = EventBusLive(new Map());
         const runtime = ManagedRuntime.make(
-          DispatchLive(state, "sender", { [bindingKey]: deadTarget }).pipe(
-            Layer.provide(eventBusLayer),
-          ),
+          DispatchLive(state, "sender", deadTargets).pipe(Layer.provide(eventBusLayer)),
         );
 
         const dispatch = yield* Effect.promise(() => runtime.runPromise(Dispatch));

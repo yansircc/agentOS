@@ -60,7 +60,13 @@ import {
   SqlError,
   UnsupportedScopeRef,
 } from "@agent-os/kernel/errors";
-import type { AttemptKey, CapabilityLease, SubmitResult, SubmitSpec } from "@agent-os/runtime";
+import type {
+  AttemptKey,
+  CapabilityLease,
+  DispatchReceiverResult,
+  SubmitResult,
+  SubmitSpec,
+} from "@agent-os/runtime";
 import {
   Admission,
   commitBoundaryEvent,
@@ -648,7 +654,7 @@ export class AgentDurableObject<
   /** Internal RPC target for DispatchLive. Public only because DO RPC can
    *  invoke public methods; app code should use dispatchToScope instead.
    */
-  __agentosReceiveDispatch(envelope: DispatchEnvelope): Promise<{ deliveredEventId: number }> {
+  __agentosReceiveDispatch(envelope: DispatchEnvelope): Promise<DispatchReceiverResult> {
     return this.scopedPromise((scope) => {
       if (envelope.targetScope !== scope) {
         return Promise.reject(

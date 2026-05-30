@@ -12,7 +12,7 @@ import {
   symbolicSettlementRef,
   validateTerminalClaim,
 } from "@agent-os/kernel/settlement-contract";
-import type { DispatchTargetSpec, TraceContext } from "@agent-os/kernel/types";
+import type { DeliveryReceipt, DispatchTargetSpec, TraceContext } from "@agent-os/kernel/types";
 
 export const DISPATCH_OUTBOUND_REQUESTED = "dispatch.outbound.requested";
 export const DISPATCH_OUTBOUND_DELIVERED = "dispatch.outbound.delivered";
@@ -30,23 +30,32 @@ export const DISPATCH_MAX_ATTEMPTS = 8;
 
 export const dispatchSettlementContract = defineSettlementContract({
   settlementId: "@agent-os/dispatch",
-  anchorKinds: ["ledger_event"],
+  anchorKinds: ["ledger_event", "external_receipt"],
   rejectionKinds: [],
 });
 
 export const dispatchCarrierRef = (key: string): string => symbolicSettlementRef("dispatch", [key]);
 
+export type DispatchDeliveryReceipt = DeliveryReceipt;
+
+export const dispatchLedgerDeliveryReceipt = (spec: {
+  readonly targetScope: string;
+  readonly deliveredEventId: number;
+}): DispatchDeliveryReceipt => ({
+  anchorId: symbolicSettlementRef("dispatch.outbound", [spec.targetScope, spec.deliveredEventId]),
+  anchorKind: "ledger_event",
+});
+
 export const settleDispatchOutboundDelivered = (
   claim: PreClaim,
   spec: {
     readonly bindingKey: string;
-    readonly targetScope: string;
-    readonly deliveredEventId: number;
+    readonly deliveryReceipt: DispatchDeliveryReceipt;
   },
 ): LivedClaim =>
   settleLived(dispatchSettlementContract, claim, {
-    anchorId: symbolicSettlementRef("dispatch.outbound", [spec.targetScope, spec.deliveredEventId]),
-    anchorKind: "ledger_event",
+    anchorId: spec.deliveryReceipt.anchorId,
+    anchorKind: spec.deliveryReceipt.anchorKind,
     carrierRef: dispatchCarrierRef(spec.bindingKey),
   });
 
@@ -76,25 +85,94 @@ export const parseDispatchLivedClaim = (
 };
 
 export const DUE_WORK_SCHEDULED_EVENT = "scheduled_event";
-export const DUE_WORK_DISPATCH_RETRY = "dispatch_retry";
+export const DUE_WORK_DELIVERY_RETRY = "delivery_retry";
 
-export type DueWorkKind = typeof DUE_WORK_SCHEDULED_EVENT | typeof DUE_WORK_DISPATCH_RETRY;
+export type DueWorkKind = typeof DUE_WORK_SCHEDULED_EVENT | typeof DUE_WORK_DELIVERY_RETRY;
 
 export interface ScheduledEventDuePayload {
   readonly eventKind: string;
   readonly data: unknown;
 }
 
-export interface DispatchRetryDuePayload {
-  readonly outboundEventId: number;
+export interface DeliveryRetryDuePayload {
+  readonly intentEventId: number;
 }
 
 export type DueWorkPayload<K extends DueWorkKind = DueWorkKind> =
   K extends typeof DUE_WORK_SCHEDULED_EVENT
     ? ScheduledEventDuePayload
-    : K extends typeof DUE_WORK_DISPATCH_RETRY
-      ? DispatchRetryDuePayload
+    : K extends typeof DUE_WORK_DELIVERY_RETRY
+      ? DeliveryRetryDuePayload
       : never;
+
+type DueWorkPayloadParseResult<Payload> =
+  | { readonly ok: true; readonly payload: Payload }
+  | { readonly ok: false; readonly cause: TypeError };
+
+interface DueWorkKindDefinition<K extends string, Payload> {
+  readonly kind: K;
+  readonly parse: (value: unknown) => DueWorkPayloadParseResult<Payload>;
+}
+
+const defineDueWorkKind = <const K extends string, Payload>(
+  definition: DueWorkKindDefinition<K, Payload>,
+): DueWorkKindDefinition<K, Payload> => definition;
+
+const parseScheduledEventDuePayload = (
+  value: unknown,
+): DueWorkPayloadParseResult<ScheduledEventDuePayload> => {
+  if (!Predicate.isRecord(value) || typeof value.eventKind !== "string") {
+    return { ok: false, cause: new TypeError("scheduled due-work payload malformed") };
+  }
+  return { ok: true, payload: value as unknown as ScheduledEventDuePayload };
+};
+
+const parseDeliveryRetryDuePayload = (
+  value: unknown,
+): DueWorkPayloadParseResult<DeliveryRetryDuePayload> => {
+  if (!Predicate.isRecord(value) || typeof value.intentEventId !== "number") {
+    return { ok: false, cause: new TypeError("delivery retry due-work payload malformed") };
+  }
+  return { ok: true, payload: value as unknown as DeliveryRetryDuePayload };
+};
+
+const scheduledEventDueWorkKind = defineDueWorkKind({
+  kind: DUE_WORK_SCHEDULED_EVENT,
+  parse: parseScheduledEventDuePayload,
+});
+
+const deliveryRetryDueWorkKind = defineDueWorkKind({
+  kind: DUE_WORK_DELIVERY_RETRY,
+  parse: parseDeliveryRetryDuePayload,
+});
+
+type DueWorkKindRegistry = {
+  readonly [DUE_WORK_SCHEDULED_EVENT]: typeof scheduledEventDueWorkKind;
+  readonly [DUE_WORK_DELIVERY_RETRY]: typeof deliveryRetryDueWorkKind;
+};
+
+const dueWorkKindRegistry = {
+  [DUE_WORK_SCHEDULED_EVENT]: scheduledEventDueWorkKind,
+  [DUE_WORK_DELIVERY_RETRY]: deliveryRetryDueWorkKind,
+} satisfies DueWorkKindRegistry;
+
+export const isDueWorkKind = (kind: string): kind is DueWorkKind =>
+  kind === DUE_WORK_SCHEDULED_EVENT || kind === DUE_WORK_DELIVERY_RETRY;
+
+export const parseDueWorkPayload = <K extends DueWorkKind>(
+  kind: K,
+  value: unknown,
+): DueWorkPayloadParseResult<DueWorkPayload<K>> => {
+  const definition = (
+    dueWorkKindRegistry as Readonly<
+      Record<string, DueWorkKindDefinition<string, unknown> | undefined>
+    >
+  )[kind];
+  if (definition === undefined) {
+    return { ok: false, cause: new TypeError(`unknown due-work kind: ${kind}`) };
+  }
+  return definition.parse(value) as DueWorkPayloadParseResult<DueWorkPayload<K>>;
+};
 
 export interface DispatchRequestedPayload {
   readonly target: DispatchTargetSpec;
@@ -110,7 +188,7 @@ export interface DispatchOutboundDeliveredPayload {
   readonly target: DispatchTargetSpec;
   readonly event: string;
   readonly idempotencyKey: string;
-  readonly deliveredEventId: number;
+  readonly deliveryReceipt: DispatchDeliveryReceipt;
   readonly attempt: number;
   readonly claim?: unknown;
   readonly traceContext?: TraceContext;

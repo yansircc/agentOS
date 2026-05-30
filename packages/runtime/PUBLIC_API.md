@@ -20,8 +20,12 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:DecodedOutput`
 - `.:DeliverSpec`
 - `.:Dispatch`
+- `.:DispatchDeliveryReceipt`
+- `.:DispatchDeliveryResult`
 - `.:DispatchEnvelope`
 - `.:DispatchReceiver`
+- `.:DispatchReceiverResult`
+- `.:DispatchTargetAdapter`
 - `.:EvidenceRow`
 - `.:FINGERPRINT_ALGO_VERSION`
 - `.:GrantResult`

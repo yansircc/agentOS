@@ -213,6 +213,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `./tools:parseToolCall`
 - `./tools:permissiveToolAdmitter`
 - `./tools:validateToolRegistry`
+- `./types:DeliveryReceipt`
 - `./types:DispatchTargetSpec`
 - `./types:DispatchToScopeResult`
 - `./types:DispatchToScopeSpec`
@@ -286,6 +287,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:DEFAULTS`
 - `.:DefineCarrierSpec`
 - `.:DefineToolSpec`
+- `.:DeliveryReceipt`
 - `.:DispatchBindingRefMalformed`
 - `.:DispatchScopeMismatch`
 - `.:DispatchTargetNotFound`

@@ -7,7 +7,7 @@ import type {
   LedgerEventRpc,
 } from "@agent-os/kernel/types";
 import {
-  DUE_WORK_DISPATCH_RETRY,
+  DUE_WORK_DELIVERY_RETRY,
   DUE_WORK_SCHEDULED_EVENT,
   fireBackendEventHandlers,
   type DueWorkKind,
@@ -246,28 +246,28 @@ export class InMemoryBackendState {
     this.outbox.set(row.outboundEventId, row);
   }
 
-  addDispatchDue(outboundEventId: number, fireAt: number): number {
+  addDeliveryRetryDue(intentEventId: number, fireAt: number): number {
     const id = this.nextDueWorkId++;
     this.dueWork.push({
       id,
       fireAt,
-      kind: DUE_WORK_DISPATCH_RETRY,
-      payload: { outboundEventId },
+      kind: DUE_WORK_DELIVERY_RETRY,
+      payload: { intentEventId },
       completedAt: null,
     });
     return id;
   }
 
-  dueOutbox(
+  dueDeliveryOutbox(
     now: number,
   ): ReadonlyArray<{ readonly dueWorkId: number; readonly row: DispatchOutboxRow }> {
     return this.dueWork
       .filter(
-        (work): work is DueWorkRow<typeof DUE_WORK_DISPATCH_RETRY> =>
-          work.completedAt === null && work.kind === DUE_WORK_DISPATCH_RETRY && work.fireAt <= now,
+        (work): work is DueWorkRow<typeof DUE_WORK_DELIVERY_RETRY> =>
+          work.completedAt === null && work.kind === DUE_WORK_DELIVERY_RETRY && work.fireAt <= now,
       )
       .map((work) => {
-        const row = this.outbox.get(work.payload.outboundEventId);
+        const row = this.outbox.get(work.payload.intentEventId);
         return row === undefined || row.deliveredEventId !== null
           ? null
           : { dueWorkId: work.id, row };

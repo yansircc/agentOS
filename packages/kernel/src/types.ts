@@ -11,6 +11,11 @@
 import type { ScopeRef } from "./effect-claim";
 import type { BindingMaterialRef } from "./material-ref";
 
+export interface DeliveryReceipt {
+  readonly anchorId: string;
+  readonly anchorKind: "ledger_event" | "external_receipt";
+}
+
 export interface LedgerEvent {
   readonly id: number;
   readonly ts: number;

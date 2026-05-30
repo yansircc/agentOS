@@ -12,18 +12,32 @@ import { describe, expect, it } from "@effect/vitest";
 import { DISPATCH_EVENT_KINDS, DISPATCH_MAX_ATTEMPTS, dispatchBackoffMs } from "../../src";
 import type { BindingMaterialRef } from "@agent-os/kernel/material-ref";
 import type { DispatchToScopeResult } from "@agent-os/kernel/types";
-import type { DispatchEnvelope, GrantResult, ResourceProjection } from "@agent-os/runtime";
+import type {
+  DispatchDeliveryResult,
+  DispatchEnvelope,
+  DispatchReceiverResult,
+  DispatchTargetAdapter,
+  GrantResult,
+  ResourceProjection,
+} from "@agent-os/runtime";
 
 export type ContractDispatchReceiver = (
   envelope: DispatchEnvelope,
-  accept: () => Promise<{ readonly deliveredEventId: number }>,
-) => Promise<{ readonly deliveredEventId: number }>;
+  accept: () => Promise<DispatchReceiverResult>,
+) => Promise<DispatchReceiverResult>;
+
+export type ContractDispatchTargetAdapter = (
+  envelope: DispatchEnvelope,
+) => Promise<DispatchDeliveryResult>;
 
 export interface RuntimeBackendContractDriver {
   readonly bindingRef: BindingMaterialRef;
   readonly registerDispatchReceiver: (
     scope: string,
     receiver?: ContractDispatchReceiver,
+  ) => void | Promise<void>;
+  readonly setDispatchTargetAdapter: (
+    adapter: DispatchTargetAdapter | ContractDispatchTargetAdapter,
   ) => void | Promise<void>;
   readonly addHandler: (
     kind: string,
@@ -146,7 +160,7 @@ export const runRuntimeBackendContractSuite = (
       ),
     );
 
-    it.effect("drains scheduler and dispatch retry work from one due-work queue", () =>
+    it.effect("drains scheduler and delivery retry work from one due-work queue", () =>
       withDriver((driver) =>
         Effect.gen(function* () {
           let receiveAttempts = 0;
@@ -265,6 +279,91 @@ export const runRuntimeBackendContractSuite = (
           });
           expect(receiveAttempts).toBe(2);
           expect(yield* promise(() => driver.pendingDueCount("sender"))).toBe(0);
+        }),
+      ),
+    );
+
+    it.effect("drains Queue, HTTP, and provider target adapters through delivery receipts", () =>
+      withDriver((driver) =>
+        Effect.gen(function* () {
+          const targets = [
+            { label: "queue", targetScope: "image-queue", event: "image.job.queued" },
+            { label: "http", targetScope: "image-http", event: "image.provider.invoked" },
+            { label: "provider", targetScope: "image-provider", event: "image.provider.done" },
+          ] as const;
+
+          for (const target of targets) {
+            let attempts = 0;
+            yield* promise(() =>
+              driver.setDispatchTargetAdapter((envelope) => {
+                attempts += 1;
+                if (attempts === 1) return Promise.reject(`${target.label} unavailable`);
+                return Promise.resolve({
+                  receipt: {
+                    anchorId: `${target.label}:image-gen:${envelope.idempotencyKey}`,
+                    anchorKind: "external_receipt",
+                  },
+                });
+              }),
+            );
+
+            const sourceScope = `external-sender-${target.label}`;
+            const idempotencyKey = `${target.label}-adapter`;
+            const result = yield* promise(() =>
+              driver.dispatchToScope(
+                sourceScope,
+                dispatchSpec(driver, target.targetScope, idempotencyKey, target.event, {
+                  prompt: "test",
+                }),
+              ),
+            );
+            const firstEvents = yield* promise(() => driver.events(sourceScope));
+            const failed = payloadsOf<{
+              readonly outboundEventId: number;
+              readonly attempt: number;
+              readonly terminal: boolean;
+              readonly nextAttemptAt?: number;
+            }>(firstEvents, DISPATCH_EVENT_KINDS.OUTBOUND_FAILED);
+            expect(failed).toHaveLength(1);
+            expect(failed[0]).toMatchObject({
+              outboundEventId: result.outboundEventId,
+              attempt: 1,
+              terminal: false,
+            });
+            expect(typeof failed[0]?.nextAttemptAt).toBe("number");
+
+            expect(
+              yield* promise(() => driver.drainDispatchDue(sourceScope, failed[0]!.nextAttemptAt!)),
+            ).toEqual({
+              delivered: 1,
+              failed: 0,
+            });
+
+            const senderEvents = yield* promise(() => driver.events(sourceScope));
+            const delivered = payloadsOf<{
+              readonly outboundEventId: number;
+              readonly deliveryReceipt: unknown;
+              readonly deliveredEventId?: unknown;
+              readonly attempt: number;
+              readonly claim?: { readonly anchorRef?: unknown };
+            }>(senderEvents, DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED);
+            expect(delivered).toHaveLength(1);
+            expect(delivered[0]).toMatchObject({
+              outboundEventId: result.outboundEventId,
+              deliveryReceipt: {
+                anchorId: `${target.label}:image-gen:${idempotencyKey}`,
+                anchorKind: "external_receipt",
+              },
+              attempt: 2,
+            });
+            expect(delivered[0]).not.toHaveProperty("deliveredEventId");
+            expect(delivered[0]?.claim?.anchorRef).toMatchObject({
+              anchorKind: "external_receipt",
+            });
+            expect(yield* promise(() => driver.events(target.targetScope))).toEqual([]);
+            expect(yield* promise(() => driver.pendingDueCount(sourceScope))).toBe(0);
+            expect(attempts).toBe(2);
+          }
         }),
       ),
     );

@@ -8,7 +8,7 @@
 - `.:DISPATCH_OUTBOUND_DELIVERED`
 - `.:DISPATCH_OUTBOUND_FAILED`
 - `.:DISPATCH_OUTBOUND_REQUESTED`
-- `.:DUE_WORK_DISPATCH_RETRY`
+- `.:DUE_WORK_DELIVERY_RETRY`
 - `.:DUE_WORK_SCHEDULED_EVENT`
 - `.:copyTraceContext`
 - `.:describeDispatchCause`
@@ -16,7 +16,9 @@
 - `.:dispatchPayloadParseFailure`
 - `.:eventToProtocolRpc`
 - `.:fireBackendEventHandlers`
+- `.:isDueWorkKind`
 - `.:parseDispatchBindingRef`
+- `.:parseDueWorkPayload`
 - `.:parseRequestedPayload`
 - `.:parseRequestedPayloadValue`
 - `.:parseTraceContext`
@@ -26,13 +28,15 @@
 - `.:DispatchOutboundFailedPayload`
 - `.:DispatchPayloadParseFailure`
 - `.:DispatchPayloadParseResult`
+- `.:DispatchDeliveryReceipt`
 - `.:DispatchRequestedPayload`
-- `.:DispatchRetryDuePayload`
+- `.:DeliveryRetryDuePayload`
 - `.:DueWorkKind`
 - `.:DueWorkPayload`
 - `.:ScheduledEventDuePayload`
 
 - `.:dispatchCarrierRef`
+- `.:dispatchLedgerDeliveryReceipt`
 - `.:dispatchSettlementContract`
 - `.:parseDispatchLivedClaim`
 - `.:settleDispatchInboundAccepted`

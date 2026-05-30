@@ -10,13 +10,14 @@ import {
 } from "@agent-os/kernel/errors";
 import { isScopeRef, makeOperationRef, makePreClaim } from "@agent-os/kernel/effect-claim";
 import { materialRefKey } from "@agent-os/kernel/material-ref";
-import { Dispatch, type DispatchEnvelope, type DispatchReceiver } from "@agent-os/runtime";
+import { Dispatch, type DispatchEnvelope, type DispatchTargetAdapter } from "@agent-os/runtime";
 import {
   DISPATCH_EVENT_KINDS,
   DISPATCH_INBOUND_ACCEPTED,
   DISPATCH_MAX_ATTEMPTS,
   copyTraceContext,
   describeDispatchCause,
+  dispatchLedgerDeliveryReceipt,
   dispatchBackoffMs,
   parseDispatchLivedClaim,
   settleDispatchInboundAccepted,
@@ -29,8 +30,7 @@ import type { DispatchRequestedPayload, InMemoryDispatchTargetRegistry } from ".
 const targetFor = (
   targets: InMemoryDispatchTargetRegistry,
   bindingKey: string,
-  scope: string,
-): DispatchReceiver | undefined => targets[bindingKey]?.[scope];
+): DispatchTargetAdapter | undefined => targets[bindingKey];
 
 const findAcceptedDeliveryId = (
   state: InMemoryBackendState,
@@ -63,12 +63,12 @@ const drainDueOutbox = (
   Effect.gen(function* () {
     let delivered = 0;
     let failed = 0;
-    for (const due of state.dueOutbox(now)) {
+    for (const due of state.dueDeliveryOutbox(now)) {
       const row = due.row;
       const bindingKey = materialRefKey(row.requested.target.bindingRef);
-      const receiver = targetFor(targets, bindingKey, row.requested.target.scope);
+      const target = targetFor(targets, bindingKey);
       const attempt = row.attempts + 1;
-      if (receiver === undefined) {
+      if (target === undefined) {
         const terminal = attempt >= DISPATCH_MAX_ATTEMPTS;
         const nextAttemptAt = terminal ? null : now + dispatchBackoffMs(attempt);
         yield* state.commitEvents([
@@ -91,7 +91,7 @@ const drainDueOutbox = (
         row.attempts = attempt;
         row.lastError = "agent_os.dispatch_target_not_found";
         state.completeDueWork(due.dueWorkId, now);
-        if (nextAttemptAt !== null) state.addDispatchDue(row.outboundEventId, nextAttemptAt);
+        if (nextAttemptAt !== null) state.addDeliveryRetryDue(row.outboundEventId, nextAttemptAt);
         failed += 1;
         continue;
       }
@@ -109,7 +109,7 @@ const drainDueOutbox = (
           : { traceContext: row.requested.traceContext }),
       };
       const result = yield* Effect.tryPromise({
-        try: () => receiver.__agentosReceiveDispatch(envelope),
+        try: () => target.deliver(envelope),
         catch: (cause) => cause,
       }).pipe(Effect.either);
 
@@ -124,12 +124,11 @@ const drainDueOutbox = (
               target: row.requested.target,
               event: row.requested.event,
               idempotencyKey: row.requested.idempotencyKey,
-              deliveredEventId: result.right.deliveredEventId,
+              deliveryReceipt: result.right.receipt,
               attempt,
               claim: settleDispatchOutboundDelivered(row.requested.claim, {
                 bindingKey,
-                targetScope: row.requested.target.scope,
-                deliveredEventId: result.right.deliveredEventId,
+                deliveryReceipt: result.right.receipt,
               }),
               ...(row.requested.traceContext === undefined
                 ? {}
@@ -168,7 +167,7 @@ const drainDueOutbox = (
       row.attempts = attempt;
       row.lastError = error;
       state.completeDueWork(due.dueWorkId, now);
-      if (nextAttemptAt !== null) state.addDispatchDue(row.outboundEventId, nextAttemptAt);
+      if (nextAttemptAt !== null) state.addDeliveryRetryDue(row.outboundEventId, nextAttemptAt);
       failed += 1;
     }
     return { delivered, failed };
@@ -188,7 +187,7 @@ export const InMemoryDispatchLive = (
           );
         }
         const bindingKey = materialRefKey(spec.target.bindingRef);
-        if (targetFor(targets, bindingKey, spec.target.scope) === undefined) {
+        if (targetFor(targets, bindingKey) === undefined) {
           return yield* Effect.fail(new DispatchTargetNotFound({ bindingRef: bindingKey }));
         }
         if (!isScopeRef(spec.target.scopeRef)) {
@@ -243,7 +242,7 @@ export const InMemoryDispatchLive = (
           deliveredEventId: null,
           lastError: null,
         });
-        state.addDispatchDue(event!.id, now);
+        state.addDeliveryRetryDue(event!.id, now);
         yield* drainDueOutbox(state, scope, targets, now);
         return { outboundEventId: event!.id };
       }),
@@ -266,7 +265,13 @@ export const InMemoryDispatchLive = (
           return yield* Effect.fail(new SqlError({ cause: accepted.cause }));
         }
         if (accepted.value !== null) {
-          return { deliveredEventId: accepted.value };
+          return {
+            deliveredEventId: accepted.value,
+            receipt: dispatchLedgerDeliveryReceipt({
+              targetScope: scope,
+              deliveredEventId: accepted.value,
+            }),
+          };
         }
 
         const now = yield* Clock.currentTimeMillis;
@@ -295,7 +300,13 @@ export const InMemoryDispatchLive = (
             { ts: now, kind: envelope.event, scope, payload: envelope.data },
           ];
         });
-        return { deliveredEventId: events[1]!.id };
+        return {
+          deliveredEventId: events[1]!.id,
+          receipt: dispatchLedgerDeliveryReceipt({
+            targetScope: scope,
+            deliveredEventId: events[1]!.id,
+          }),
+        };
       }),
 
     drainDue: (now) => drainDueOutbox(state, scope, targets, now),

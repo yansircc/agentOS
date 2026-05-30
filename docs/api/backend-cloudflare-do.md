@@ -31,6 +31,7 @@
 - `.:createAgentDurableObject`
 - `.:defineAgentDO`
 - `.:durableObjectTarget`
+- `.:durableObjectDispatchTarget`
 - `.:endpoint`
 - `.:externalResource`
 - `.:geminiGenerateContent`

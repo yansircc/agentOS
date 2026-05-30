@@ -209,6 +209,7 @@
 - `./tools:parseToolCall`
 - `./tools:permissiveToolAdmitter`
 - `./tools:validateToolRegistry`
+- `./types:DeliveryReceipt`
 - `./types:DispatchTargetSpec`
 - `./types:DispatchToScopeResult`
 - `./types:DispatchToScopeSpec`
@@ -282,6 +283,7 @@
 - `.:DEFAULTS`
 - `.:DefineCarrierSpec`
 - `.:DefineToolSpec`
+- `.:DeliveryReceipt`
 - `.:DispatchBindingRefMalformed`
 - `.:DispatchScopeMismatch`
 - `.:DispatchTargetNotFound`

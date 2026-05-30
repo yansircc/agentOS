@@ -100,7 +100,11 @@ describe("in-memory runtime backend", () => {
       createInMemoryRuntimeBackend({
         state,
         scope: "sender",
-        dispatchTargets: { [bindingKey]: { receiver } },
+        dispatchTargets: {
+          [bindingKey]: {
+            deliver: (envelope) => receiver.__agentosReceiveDispatch(envelope),
+          },
+        },
       }).layer,
     );
 

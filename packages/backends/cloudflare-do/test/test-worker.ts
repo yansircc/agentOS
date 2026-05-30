@@ -11,13 +11,14 @@ import {
   credential,
   createAgentDurableObject,
   defineAgentDO,
+  durableObjectDispatchTarget,
   endpoint,
   openAIChat,
   type AgentEventHandlerContext,
   type AgentRuntimeClient,
   type CloudflareAgentEnv,
-  type DispatchTargetNamespace,
 } from "../src";
+import type { DispatchTargetAdapter } from "@agent-os/runtime";
 import { CapabilityRejected } from "@agent-os/kernel/errors";
 import { boundaryPackage, defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
 import { eventNamespace, type ExtensionCapability } from "@agent-os/kernel/extensions";
@@ -49,18 +50,15 @@ interface DispatchEnv extends CloudflareAgentEnv {
   readonly DISPATCH_DO: DurableObjectNamespace;
 }
 
-const DEAD_TARGET: DispatchTargetNamespace = {
-  idFromName: (_name) => ({}) as DurableObjectId,
-  get: (_id) => ({
-    __agentosReceiveDispatch: () => Promise.reject("dead dispatch target"),
-  }),
+const DEAD_TARGET: DispatchTargetAdapter = {
+  deliver: () => Promise.reject("dead dispatch target"),
 };
 
 let dispatchTargetMaterializations = 0;
 
-const dispatchTarget = (env: DispatchEnv): DispatchTargetNamespace => {
+const dispatchTarget = (env: DispatchEnv): DispatchTargetAdapter => {
   dispatchTargetMaterializations += 1;
-  return env.DISPATCH_DO;
+  return durableObjectDispatchTarget(env.DISPATCH_DO);
 };
 
 const dispatchBindingKey = (ref: string): string =>
@@ -72,7 +70,7 @@ export const DispatchTestDO = createAgentDurableObject<DispatchEnv>({
   dispatchTargets: (env) => ({
     [dispatchBindingKey("peer")]: dispatchTarget(env),
     [dispatchBindingKey("dead")]: DEAD_TARGET,
-    [dispatchBindingKey("generic")]: env.DISPATCH_DO,
+    [dispatchBindingKey("generic")]: durableObjectDispatchTarget(env.DISPATCH_DO),
   }),
   eventHandlers: ({ runtime }) => [
     {

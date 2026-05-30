@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { SqlError } from "@agent-os/kernel/errors";
-import { DUE_WORK_DISPATCH_RETRY } from "@agent-os/backend-protocol";
+import { DUE_WORK_DELIVERY_RETRY } from "@agent-os/backend-protocol";
 import { selectDueWork } from "../due-work";
 import { sqlText } from "../storage/sql-row";
 
@@ -41,7 +41,7 @@ export const selectDue = (
   now: number,
 ): Effect.Effect<ReadonlyArray<DispatchOutboxRow>, SqlError> =>
   Effect.gen(function* () {
-    const due = yield* selectDueWork(sql, DUE_WORK_DISPATCH_RETRY, now);
+    const due = yield* selectDueWork(sql, DUE_WORK_DELIVERY_RETRY, now);
     return yield* Effect.try({
       try: () =>
         due
@@ -59,7 +59,7 @@ export const selectDue = (
                 WHERE o.outbound_event_id = ?
                   AND o.delivered_event_id IS NULL
               `,
-                work.payload.outboundEventId,
+                work.payload.intentEventId,
               )
               .toArray()[0];
             if (row === undefined) return null;
