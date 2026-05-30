@@ -27,7 +27,10 @@ Status: Backend package. Public exports include the Cloudflare app facade, bindi
 - `.:DispatchTargetNamespace`
 - `.:DispatchTargetRegistry`
 - `.:GeminiGenerateContentSpec`
+- `.:HttpDispatchTargetSpec`
 - `.:OpenAIChatSpec`
+- `.:ProviderDispatchTargetSpec`
+- `.:QueueDispatchTargetBinding`
 - `.:anthropicMessages`
 - `.:binding`
 - `.:cfAiBinding`
@@ -39,7 +42,10 @@ Status: Backend package. Public exports include the Cloudflare app facade, bindi
 - `.:endpoint`
 - `.:externalResource`
 - `.:geminiGenerateContent`
+- `.:httpDispatchTarget`
 - `.:openAIChat`
+- `.:providerDispatchTarget`
+- `.:queueDispatchTarget`
 
 ## Experimental exports
 

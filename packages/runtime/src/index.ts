@@ -5,6 +5,7 @@ export * from "./dispatch";
 export * from "./ledger";
 export * from "./llm-transport";
 export * from "./quota-service";
+export * from "./reconciler";
 export * from "./resources";
 export * from "./scheduler";
 export * from "./submit-agent";

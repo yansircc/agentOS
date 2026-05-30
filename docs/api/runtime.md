@@ -38,8 +38,10 @@
 - `.:Quota`
 - `.:ResourceProjection`
 - `.:Resources`
+- `.:ReconcilerRepairContext`
 - `.:Scheduler`
 - `.:Strategy`
+- `.:StatelessReconciler`
 - `.:Stimulus`
 - `.:SubmitResult`
 - `.:SubmitSpec`
@@ -49,6 +51,7 @@
 - `.:buildInitialMessages`
 - `.:commitBoundaryEvent`
 - `.:decideTier`
+- `.:defineStatelessReconciler`
 - `.:makeSchemaContract`
 - `.:projectLease`
 - `.:reasonOf`

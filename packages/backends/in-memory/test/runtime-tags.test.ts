@@ -1,6 +1,7 @@
 import { Cause, Effect, Exit, ManagedRuntime, Option } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
+import { DURABLE_TRIGGER_SCHEDULED_REQUESTED } from "@agent-os/backend-protocol";
 import {
   Admission,
   Dispatch,
@@ -70,7 +71,10 @@ describe("in-memory runtime backend", () => {
         fired: 0,
       });
       const events = await runtime.runPromise(ledger.events("schedule-scope"));
-      expect(events.map((event) => event.kind)).toEqual(["example.due"]);
+      expect(events.map((event) => event.kind)).toEqual([
+        DURABLE_TRIGGER_SCHEDULED_REQUESTED,
+        "example.due",
+      ]);
     } finally {
       await runtime.dispose();
     }

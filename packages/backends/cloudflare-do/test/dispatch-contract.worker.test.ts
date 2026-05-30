@@ -19,7 +19,7 @@ import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vite-plus/test";
 import type { DispatchToScopeResult } from "@agent-os/kernel/types";
 import { validateEffectClaim } from "@agent-os/kernel/effect-claim";
-import { dispatchLedgerDeliveryReceipt } from "@agent-os/backend-protocol";
+import { DISPATCH_RETRY_POLICY, dispatchLedgerDeliveryReceipt } from "@agent-os/backend-protocol";
 import {
   bindingMaterialRef,
   materialRefKey,
@@ -199,6 +199,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
         event: "test.delivered",
         data: { message: "hello" },
         idempotencyKey: "intent-1",
+        retryPolicy: DISPATCH_RETRY_POLICY,
         claim: expect.objectContaining({
           phase: "pre",
           operationRef: dispatchOperationRef(
