@@ -1,5 +1,9 @@
 import { Effect } from "effect";
-import { JsonStringifyError, SqlError } from "@agent-os/kernel/errors";
+import {
+  JsonStringifyError,
+  SqlError,
+  UnregisteredDurableTriggerKind,
+} from "@agent-os/kernel/errors";
 import type {
   EventHandler,
   EventQueryOptions,
@@ -13,7 +17,8 @@ import {
 } from "@agent-os/backend-protocol";
 import {
   scheduledEventIntentPayload,
-  type AnyDurableTrigger,
+  getDurableTrigger,
+  type TriggerRegistry,
   type TriggerTx,
 } from "@agent-os/runtime";
 import type { DispatchOutboxRow } from "./dispatch-types";
@@ -198,38 +203,70 @@ export class InMemoryBackendState {
     });
   }
 
-  schedule(
+  commitTriggerIntent(
     scope: string,
-    intentTs: number,
-    at: number,
-    trigger: Pick<AnyDurableTrigger, "kind" | "intentEventKind">,
-    eventKind: string,
-    data: unknown,
-  ): Effect.Effect<{ readonly id: number }, JsonStringifyError> {
+    fireAt: number,
+    registry: TriggerRegistry,
+    triggerKind: string,
+    makeSpec: (trigger: {
+      readonly kind: string;
+      readonly intentEventKind: string;
+    }) => InMemoryEventSpec,
+    afterCommit?: (event: LedgerEvent) => void,
+  ): Effect.Effect<LedgerEvent, JsonStringifyError | UnregisteredDurableTriggerKind> {
     return Effect.gen(this, function* () {
-      const payload = scheduledEventIntentPayload(eventKind, data);
-      yield* validateSerializablePayload(payload);
+      const trigger = yield* getDurableTrigger(registry, triggerKind);
+      const spec = makeSpec(trigger);
+      yield* validateSerializablePayload(spec.payload);
       const committed = yield* Effect.sync(() => {
         const event: LedgerEvent = {
           id: this.nextEventId,
-          ts: intentTs,
-          kind: trigger.intentEventKind,
+          ts: spec.ts ?? this.nextEventId,
+          kind: spec.kind,
           scope,
-          payload,
+          payload: spec.payload,
         };
         this.nextEventId += 1;
         this.rows.push(event);
         const dueId = this.nextDueWorkId++;
         this.dueWork.push({
           id: dueId,
-          fireAt: at,
+          fireAt,
           kind: trigger.kind,
           payload: durableTriggerDuePayload(event.id),
           completedAt: null,
         });
+        afterCommit?.(event);
         return event;
       });
       yield* this.fireMany([committed]);
+      return committed;
+    });
+  }
+
+  schedule(
+    scope: string,
+    intentTs: number,
+    at: number,
+    registry: TriggerRegistry,
+    triggerKind: string,
+    eventKind: string,
+    data: unknown,
+  ): Effect.Effect<{ readonly id: number }, JsonStringifyError | UnregisteredDurableTriggerKind> {
+    return Effect.gen(this, function* () {
+      const payload = scheduledEventIntentPayload(eventKind, data);
+      const committed = yield* this.commitTriggerIntent(
+        scope,
+        at,
+        registry,
+        triggerKind,
+        (trigger) => ({
+          ts: intentTs,
+          kind: trigger.intentEventKind,
+          scope,
+          payload,
+        }),
+      );
       return { id: committed.id };
     });
   }
@@ -290,13 +327,13 @@ export class InMemoryBackendState {
     commit: (tx: TriggerTx) => void,
   ): Effect.Effect<
     { readonly completed: boolean; readonly events: ReadonlyArray<LedgerEvent> },
-    JsonStringifyError | SqlError
+    JsonStringifyError | SqlError | UnregisteredDurableTriggerKind
   > {
     return Effect.gen(this, function* () {
       if (row.completedAt !== null) return { completed: false, events: [] };
       const startId = this.nextEventId;
       const written: LedgerEvent[] = [];
-      let rejected: string | null = null;
+      let rejected: UnregisteredDurableTriggerKind | null = null;
       const due: Array<{
         readonly triggerKind: string;
         readonly fireAt: number;
@@ -320,7 +357,7 @@ export class InMemoryBackendState {
         },
         enqueue: (spec) => {
           if (!hasTrigger(spec.triggerKind)) {
-            rejected = `unregistered durable trigger kind: ${spec.triggerKind}`;
+            rejected = new UnregisteredDurableTriggerKind({ kind: spec.triggerKind });
             return {
               id: startId + written.length,
               ts: spec.ts ?? now,
@@ -357,7 +394,7 @@ export class InMemoryBackendState {
         catch: (cause) => new SqlError({ cause }),
       });
       if (rejected !== null) {
-        return yield* Effect.fail(new SqlError({ cause: rejected }));
+        return yield* Effect.fail(rejected);
       }
       yield* Effect.forEach(written, (event) => validateSerializablePayload(event.payload), {
         discard: true,

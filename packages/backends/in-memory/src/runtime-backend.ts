@@ -1,14 +1,16 @@
-import { Layer } from "effect";
-import type { SqlError } from "@agent-os/kernel/errors";
+import { Effect, Layer } from "effect";
+import { SqlError } from "@agent-os/kernel/errors";
 import {
   Admission,
   Dispatch,
+  DurableTriggerRegistry,
   Ledger,
   LlmTransport,
   Quota,
   Resources,
   Scheduler,
   TriggerPump,
+  makeDurableTriggerRegistry,
   scheduledEventTrigger,
   type AnyDurableTrigger,
 } from "@agent-os/runtime";
@@ -29,6 +31,7 @@ import { InMemoryTriggerPumpLive } from "./trigger-pump";
 
 export type InMemoryRuntimeServices =
   | Ledger
+  | DurableTriggerRegistry
   | Scheduler
   | Dispatch
   | Resources
@@ -58,27 +61,31 @@ export const createInMemoryRuntimeBackend = (
   const llmLayer = InMemoryLlmTransportLive(options.llm);
   const admissionLayer = InMemoryAdmissionLive(state).pipe(Layer.provide(llmLayer));
   const dispatchRetryTrigger = deliveryRetryTrigger(state, options.dispatchTargets ?? {});
-  const triggerLayer = InMemoryTriggerPumpLive(state, options.scope, [
-    scheduledEventTrigger,
-    dispatchRetryTrigger,
-    ...(options.triggers ?? []),
-  ]);
+  const triggerRegistryLayer = Layer.effect(
+    DurableTriggerRegistry,
+    makeDurableTriggerRegistry([
+      scheduledEventTrigger,
+      dispatchRetryTrigger,
+      ...(options.triggers ?? []),
+    ]).pipe(Effect.mapError((cause) => new SqlError({ cause }))),
+  );
+  const triggerLayer = InMemoryTriggerPumpLive(state, options.scope).pipe(
+    Layer.provide(triggerRegistryLayer),
+  );
   return {
     state,
     layer: Layer.mergeAll(
       InMemoryLedgerLive(state),
-      InMemorySchedulerLive(state, options.scope),
+      InMemorySchedulerLive(state, options.scope).pipe(Layer.provide(triggerRegistryLayer)),
       triggerLayer,
-      InMemoryDispatchLive(
-        state,
-        options.scope,
-        options.dispatchTargets,
-        dispatchRetryTrigger,
-      ).pipe(Layer.provide(triggerLayer)),
+      InMemoryDispatchLive(state, options.scope, options.dispatchTargets).pipe(
+        Layer.provide(Layer.mergeAll(triggerLayer, triggerRegistryLayer)),
+      ),
       InMemoryResourcesLive(state),
       InMemoryQuotaLive(state),
       llmLayer,
       admissionLayer,
+      triggerRegistryLayer,
     ),
   };
 };

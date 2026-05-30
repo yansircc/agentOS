@@ -158,6 +158,8 @@ export const createImgGenPressureTriggers = (
 const kindsOf = (events: ReadonlyArray<LedgerEvent>): ReadonlyArray<string> =>
   events.map((event) => event.kind);
 
+const sorted = (values: ReadonlyArray<string>): ReadonlyArray<string> => [...values].sort();
+
 export const runImgGenPressureContract = (
   name: string,
   makeDriver: ImgGenPressureDriverFactory,
@@ -185,14 +187,22 @@ export const runImgGenPressureContract = (
             yield* Effect.promise(() => driver.drainDue(100));
             yield* Effect.promise(() => driver.drainDue(100));
 
-            const kinds = kindsOf(yield* Effect.promise(() => driver.events()));
-            expect(kinds).toContain("image.outbox.redrive.requested");
-            expect(kinds).toContain("image.job.retry_scheduled");
-            expect(kinds).toContain("image.job.retry.requested");
-            expect(kinds).toContain("image.job.retry.drained");
-            expect(kinds).toContain("artifact.delete.requested");
-            expect(kinds).toContain("artifact.delete.drained");
-            expect(kinds).toContain("planning.redrive.requested");
+            const kinds = sorted(kindsOf(yield* Effect.promise(() => driver.events())));
+            expect(kinds).toEqual(
+              sorted([
+                "artifact.delete.drained",
+                "artifact.delete.requested",
+                "artifact.orphan.scan.requested",
+                "image.job.retry.drained",
+                "image.job.retry.requested",
+                "image.job.retry_scheduled",
+                "image.outbox.redrive.requested",
+                "image.outbox.scan.requested",
+                "image.running.scan.requested",
+                "planning.redrive.requested",
+                "planning.scan.requested",
+              ]),
+            );
             expect(kinds).not.toContain("planning.program.invoked");
             expect(kinds).not.toContain("r2.deleted");
           }),

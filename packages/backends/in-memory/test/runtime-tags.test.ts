@@ -1,16 +1,20 @@
-import { Cause, Effect, Exit, ManagedRuntime, Option } from "effect";
+import { Cause, Effect, Exit, Layer, ManagedRuntime, Option } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
+import { UnregisteredDurableTriggerKind } from "@agent-os/kernel/errors";
 import {
   Admission,
   DURABLE_TRIGGER_SCHEDULED_REQUESTED,
   Dispatch,
+  DurableTriggerRegistry,
   Ledger,
   Quota,
   Resources,
   Scheduler,
   TriggerPump,
+  makeDurableTriggerRegistry,
   makeSchemaContract,
+  scheduledEventTrigger,
   type DispatchReceiver,
 } from "@agent-os/runtime";
 import type { LedgerEvent } from "@agent-os/kernel/types";
@@ -86,7 +90,11 @@ describe("in-memory runtime backend", () => {
   it.effect("empty trigger registry fails closed and leaves due-work pending", () =>
     Effect.gen(function* () {
       const state = createInMemoryBackendState();
-      const runtime = ManagedRuntime.make(InMemoryTriggerPumpLive(state, "empty-registry", []));
+      const runtime = ManagedRuntime.make(
+        InMemoryTriggerPumpLive(state, "empty-registry").pipe(
+          Layer.provide(Layer.succeed(DurableTriggerRegistry, new Map())),
+        ),
+      );
       const [event] = yield* state.commitEvents([
         {
           ts: 10,
@@ -103,6 +111,31 @@ describe("in-memory runtime backend", () => {
       expect(Exit.isFailure(exit)).toBe(true);
       expect(state.duePending(10)).toHaveLength(1);
       yield* Effect.promise(() => runtime.dispose());
+    }),
+  );
+
+  it.effect("unregistered trigger submit writes no event or due work", () =>
+    Effect.gen(function* () {
+      const state = createInMemoryBackendState();
+      const registry = yield* makeDurableTriggerRegistry([scheduledEventTrigger]);
+
+      const exit = yield* Effect.exit(
+        state.commitTriggerIntent("submit-scope", 10, registry, "missing.trigger", () => {
+          throw new Error("makeSpec should not run");
+        }),
+      );
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        const failure = Cause.failureOption(exit.cause);
+        expect(Option.isSome(failure)).toBe(true);
+        if (Option.isSome(failure)) {
+          expect(failure.value).toBeInstanceOf(UnregisteredDurableTriggerKind);
+          expect((failure.value as UnregisteredDurableTriggerKind).kind).toBe("missing.trigger");
+        }
+      }
+      expect(state.snapshot("submit-scope")).toHaveLength(0);
+      expect(state.duePending(10)).toHaveLength(0);
     }),
   );
 

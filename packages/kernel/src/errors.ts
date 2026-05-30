@@ -45,6 +45,12 @@ export class InvalidScheduleAt extends Data.TaggedError("agent_os.invalid_schedu
   readonly at: unknown;
 }> {}
 
+export class UnregisteredDurableTriggerKind extends Data.TaggedError(
+  "agent_os.unregistered_durable_trigger_kind",
+)<{
+  readonly kind: string;
+}> {}
+
 export class CapabilityRejected extends Data.TaggedError("agent_os.capability_rejected")<{
   readonly event: string;
   readonly capability: string;

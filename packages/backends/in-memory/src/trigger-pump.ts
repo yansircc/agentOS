@@ -1,19 +1,16 @@
 import { Effect, Layer } from "effect";
-import { SqlError } from "@agent-os/kernel/errors";
-import { makeDurableTriggerRegistry, TriggerPump, type AnyDurableTrigger } from "@agent-os/runtime";
+import { SqlError, UnregisteredDurableTriggerKind } from "@agent-os/kernel/errors";
+import { DurableTriggerRegistry, TriggerPump } from "@agent-os/runtime";
 import type { InMemoryBackendState } from "./state";
 
 export const InMemoryTriggerPumpLive = (
   state: InMemoryBackendState,
   scope: string,
-  triggers: Iterable<AnyDurableTrigger>,
-): Layer.Layer<TriggerPump, SqlError> =>
+): Layer.Layer<TriggerPump, SqlError, DurableTriggerRegistry> =>
   Layer.effect(
     TriggerPump,
     Effect.gen(function* () {
-      const registry = yield* makeDurableTriggerRegistry(triggers).pipe(
-        Effect.mapError((cause) => new SqlError({ cause })),
-      );
+      const registry = yield* DurableTriggerRegistry;
       return {
         drainDue: (now) =>
           Effect.gen(function* () {
@@ -22,11 +19,7 @@ export const InMemoryTriggerPumpLive = (
             for (const row of pending) {
               const trigger = registry.get(row.kind);
               if (trigger === undefined) {
-                return yield* Effect.fail(
-                  new SqlError({
-                    cause: new TypeError(`unknown durable trigger kind: ${row.kind}`),
-                  }),
-                );
+                return yield* Effect.fail(new UnregisteredDurableTriggerKind({ kind: row.kind }));
               }
               const intentEvent = state.eventById(
                 row.payload.intentEventId,

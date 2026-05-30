@@ -89,6 +89,7 @@
 - `./errors:ScopeMissingError`
 - `./errors:SqlError`
 - `./errors:ToolError`
+- `./errors:UnregisteredDurableTriggerKind`
 - `./errors:UnsupportedScopeRef`
 - `./errors:UpstreamFailure`
 - `./errors:isClaimedEventKind`
@@ -218,6 +219,7 @@
 - `./types:LedgerEvent`
 - `./types:LedgerEventRpc`
 - `./types:QuotaState`
+- `.:UnregisteredDurableTriggerKind`
 - `./types:QuotaStateSpec`
 - `./types:ResourceGrantResult`
 - `./types:ResourceGrantSpec`

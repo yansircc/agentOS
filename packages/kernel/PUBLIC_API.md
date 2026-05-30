@@ -93,6 +93,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `./errors:ScopeMissingError`
 - `./errors:SqlError`
 - `./errors:ToolError`
+- `./errors:UnregisteredDurableTriggerKind`
 - `./errors:UnsupportedScopeRef`
 - `./errors:UpstreamFailure`
 - `./errors:isClaimedEventKind`
@@ -222,6 +223,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `./types:LedgerEvent`
 - `./types:LedgerEventRpc`
 - `./types:QuotaState`
+- `.:UnregisteredDurableTriggerKind`
 - `./types:QuotaStateSpec`
 - `./types:ResourceGrantResult`
 - `./types:ResourceGrantSpec`

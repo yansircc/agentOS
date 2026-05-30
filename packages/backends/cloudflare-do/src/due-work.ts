@@ -1,12 +1,21 @@
 import { Effect } from "effect";
-import { JsonStringifyError, SqlError, safeStringify } from "@agent-os/kernel/errors";
+import {
+  JsonStringifyError,
+  SqlError,
+  UnregisteredDurableTriggerKind,
+  safeStringify,
+} from "@agent-os/kernel/errors";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import {
   durableTriggerDuePayload,
   parseIntentPointerDuePayload,
   type IntentPointerDuePayload,
 } from "@agent-os/backend-protocol";
-import { scheduledEventIntentPayload, type AnyDurableTrigger } from "@agent-os/runtime";
+import {
+  getDurableTrigger,
+  scheduledEventIntentPayload,
+  type TriggerRegistry,
+} from "@agent-os/runtime";
 import { insertLedgerEvent } from "./ledger/inserted-events";
 import { sqlText } from "./storage/sql-row";
 
@@ -177,13 +186,20 @@ export const commitDurableTriggerIntent = (
   ctx: DurableObjectState,
   sql: SqlStorage,
   fireAt: number,
-  trigger: Pick<AnyDurableTrigger, "kind">,
-  writeIntent: () => LedgerEvent,
-): Effect.Effect<LedgerEvent, SqlError> =>
-  armBeforeDueCommit(ctx, sql, fireAt, () => {
-    const intent = writeIntent();
-    insertDurableTriggerDueWork(sql, fireAt, trigger.kind, intent.id);
-    return intent;
+  registry: TriggerRegistry,
+  triggerKind: string,
+  writeIntent: (trigger: {
+    readonly kind: string;
+    readonly intentEventKind: string;
+  }) => LedgerEvent,
+): Effect.Effect<LedgerEvent, SqlError | UnregisteredDurableTriggerKind> =>
+  Effect.gen(function* () {
+    const trigger = yield* getDurableTrigger(registry, triggerKind);
+    return yield* armBeforeDueCommit(ctx, sql, fireAt, () => {
+      const intent = writeIntent(trigger);
+      insertDurableTriggerDueWork(sql, fireAt, trigger.kind, intent.id);
+      return intent;
+    });
   });
 
 export const enqueueScheduledEvent = (
@@ -192,14 +208,15 @@ export const enqueueScheduledEvent = (
   scope: string,
   intentTs: number,
   at: number,
-  trigger: Pick<AnyDurableTrigger, "kind" | "intentEventKind">,
+  registry: TriggerRegistry,
+  triggerKind: string,
   eventKind: string,
   data: unknown,
-): Effect.Effect<LedgerEvent, SqlError | JsonStringifyError> =>
+): Effect.Effect<LedgerEvent, SqlError | JsonStringifyError | UnregisteredDurableTriggerKind> =>
   Effect.gen(function* () {
     const payload = scheduledEventIntentPayload(eventKind, data);
     const payloadStr = yield* safeStringify(payload);
-    return yield* commitDurableTriggerIntent(ctx, sql, at, trigger, () =>
+    return yield* commitDurableTriggerIntent(ctx, sql, at, registry, triggerKind, (trigger) =>
       insertLedgerEvent(sql, {
         ts: intentTs,
         kind: trigger.intentEventKind,

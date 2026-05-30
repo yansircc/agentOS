@@ -1,12 +1,11 @@
 import { Effect, Layer } from "effect";
-import { JsonStringifyError, SqlError } from "@agent-os/kernel/errors";
-import type { LedgerEvent } from "@agent-os/kernel/types";
 import {
-  makeDurableTriggerRegistry,
-  TriggerPump,
-  type AnyDurableTrigger,
-  type TriggerTx,
-} from "@agent-os/runtime";
+  JsonStringifyError,
+  SqlError,
+  UnregisteredDurableTriggerKind,
+} from "@agent-os/kernel/errors";
+import type { LedgerEvent } from "@agent-os/kernel/types";
+import { DurableTriggerRegistry, TriggerPump, type TriggerTx } from "@agent-os/runtime";
 import { fireLedgerEvents, insertLedgerEvent } from "./ledger/inserted-events";
 import { EventBus } from "./ledger";
 import {
@@ -19,9 +18,12 @@ import {
 } from "./due-work";
 import { sqlText } from "./storage/sql-row";
 
-const failTriggerTransaction = (cause: string): never => {
-  throw new SqlError({ cause });
+const failTriggerTransaction = (kind: string): never => {
+  throw new UnregisteredDurableTriggerKind({ kind });
 };
+
+const triggerTransactionError = (cause: unknown): SqlError | UnregisteredDurableTriggerKind =>
+  cause instanceof UnregisteredDurableTriggerKind ? cause : new SqlError({ cause });
 
 const readIntentPayload = (
   sql: SqlStorage,
@@ -54,28 +56,23 @@ const readIntentPayload = (
 export const TriggerPumpLive = (
   ctx: DurableObjectState,
   scope: string,
-  triggers: Iterable<AnyDurableTrigger>,
-): Layer.Layer<TriggerPump, SqlError, EventBus> => {
+): Layer.Layer<TriggerPump, SqlError, EventBus | DurableTriggerRegistry> => {
   const sql = ctx.storage.sql;
   return Layer.scoped(
     TriggerPump,
     Effect.gen(function* () {
       yield* ensureDueWorkSchema(sql);
       const bus = yield* EventBus;
-      const registry = yield* makeDurableTriggerRegistry(triggers).pipe(
-        Effect.mapError((cause) => new SqlError({ cause })),
-      );
+      const registry = yield* DurableTriggerRegistry;
 
       const runOne = (
         row: DueWorkRow,
         now: number,
-      ): Effect.Effect<boolean, SqlError | JsonStringifyError> =>
+      ): Effect.Effect<boolean, SqlError | JsonStringifyError | UnregisteredDurableTriggerKind> =>
         Effect.gen(function* () {
           const trigger = registry.get(row.kind);
           if (trigger === undefined) {
-            return yield* Effect.fail(
-              new SqlError({ cause: new TypeError(`unknown durable trigger kind: ${row.kind}`) }),
-            );
+            return yield* Effect.fail(new UnregisteredDurableTriggerKind({ kind: row.kind }));
           }
           const rawIntent = yield* readIntentPayload(
             sql,
@@ -120,9 +117,7 @@ export const TriggerPumpLive = (
                   },
                   enqueue: (spec) => {
                     if (!registry.has(spec.triggerKind)) {
-                      return failTriggerTransaction(
-                        `unregistered durable trigger kind: ${spec.triggerKind}`,
-                      );
+                      return failTriggerTransaction(spec.triggerKind);
                     }
                     const payloadStr = JSON.stringify(spec.payload);
                     const event = insertLedgerEvent(sql, {
@@ -144,7 +139,7 @@ export const TriggerPumpLive = (
                 completeDueWork(sql, row.id, now);
                 return written;
               }),
-            catch: (cause) => new SqlError({ cause }),
+            catch: triggerTransactionError,
           });
           if (events === null) return false;
           yield* fireLedgerEvents(bus, events);

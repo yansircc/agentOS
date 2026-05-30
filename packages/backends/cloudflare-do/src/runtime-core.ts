@@ -1,13 +1,15 @@
 import type { EventHandler } from "@agent-os/kernel/types";
-import { Layer } from "effect";
+import { Effect, Layer } from "effect";
 import {
+  DurableTriggerRegistry,
   Ledger,
   Quota,
   TriggerPump,
+  makeDurableTriggerRegistry,
   scheduledEventTrigger,
   type AnyDurableTrigger,
 } from "@agent-os/runtime";
-import type { SqlError } from "@agent-os/kernel/errors";
+import { SqlError } from "@agent-os/kernel/errors";
 import {
   Dispatch,
   DispatchLive,
@@ -22,6 +24,7 @@ import { TriggerPumpLive } from "./trigger-pump";
 
 export type CloudflareBackendCoreServices =
   | EventBus
+  | DurableTriggerRegistry
   | Scheduler
   | Dispatch
   | Resources
@@ -38,20 +41,22 @@ export const makeCloudflareBackendCoreLayer = (
 ): Layer.Layer<CloudflareBackendCoreServices, SqlError> => {
   const eventBusLayer = EventBusLive(handlers);
   const dispatchRetryTrigger = deliveryRetryTrigger(ctx.storage.sql, scope, dispatchTargets);
-  const triggerLayer = TriggerPumpLive(ctx, scope, [
-    scheduledEventTrigger,
-    dispatchRetryTrigger,
-    ...appTriggers,
-  ]).pipe(Layer.provide(eventBusLayer));
-  const triggerDeps = Layer.mergeAll(eventBusLayer, triggerLayer);
+  const triggerRegistryLayer = Layer.effect(
+    DurableTriggerRegistry,
+    makeDurableTriggerRegistry([scheduledEventTrigger, dispatchRetryTrigger, ...appTriggers]).pipe(
+      Effect.mapError((cause) => new SqlError({ cause })),
+    ),
+  );
+  const triggerLayer = TriggerPumpLive(ctx, scope).pipe(
+    Layer.provide(Layer.mergeAll(eventBusLayer, triggerRegistryLayer)),
+  );
+  const triggerDeps = Layer.mergeAll(eventBusLayer, triggerRegistryLayer, triggerLayer);
   const serviceLayer = Layer.mergeAll(
     LedgerLive(ctx.storage.sql),
     SchedulerLive(ctx, scope),
-    DispatchLive(ctx, scope, dispatchTargets, dispatchRetryTrigger).pipe(
-      Layer.provide(triggerDeps),
-    ),
+    DispatchLive(ctx, scope, dispatchTargets).pipe(Layer.provide(triggerDeps)),
     ResourcesLive(ctx),
     QuotaLive(ctx),
-  ).pipe(Layer.provide(eventBusLayer));
-  return Layer.mergeAll(eventBusLayer, triggerLayer, serviceLayer);
+  ).pipe(Layer.provide(Layer.mergeAll(eventBusLayer, triggerRegistryLayer)));
+  return Layer.mergeAll(eventBusLayer, triggerRegistryLayer, triggerLayer, serviceLayer);
 };

@@ -1,5 +1,9 @@
 import { Context, Effect } from "effect";
-import type { JsonStringifyError, SqlError } from "@agent-os/kernel/errors";
+import {
+  UnregisteredDurableTriggerKind,
+  type JsonStringifyError,
+  type SqlError,
+} from "@agent-os/kernel";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 
 export interface TriggerEventSpec {
@@ -59,6 +63,21 @@ export interface DurableTrigger<Intent, Outcome, R = never> {
 export type AnyDurableTrigger = DurableTrigger<any, any, never>;
 
 export type TriggerRegistry = ReadonlyMap<string, AnyDurableTrigger>;
+
+export class DurableTriggerRegistry extends Context.Tag("@agent-os/DurableTriggerRegistry")<
+  DurableTriggerRegistry,
+  TriggerRegistry
+>() {}
+
+export const getDurableTrigger = (
+  registry: TriggerRegistry,
+  kind: string,
+): Effect.Effect<AnyDurableTrigger, UnregisteredDurableTriggerKind> => {
+  const trigger = registry.get(kind);
+  return trigger === undefined
+    ? Effect.fail(new UnregisteredDurableTriggerKind({ kind }))
+    : Effect.succeed(trigger);
+};
 
 export const DURABLE_TRIGGER_SCHEDULED_REQUESTED = "durable_trigger.scheduled.requested";
 
@@ -124,6 +143,9 @@ export class TriggerPump extends Context.Tag("@agent-os/TriggerPump")<
   {
     readonly drainDue: (
       now: number,
-    ) => Effect.Effect<TriggerDrainResult, SqlError | JsonStringifyError>;
+    ) => Effect.Effect<
+      TriggerDrainResult,
+      SqlError | JsonStringifyError | UnregisteredDurableTriggerKind
+    >;
   }
 >() {}

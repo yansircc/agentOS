@@ -1,6 +1,11 @@
-import { ManagedRuntime } from "effect";
+import { Effect, ManagedRuntime } from "effect";
 import { describe } from "@effect/vitest";
-import { Ledger, TriggerPump, type AnyDurableTrigger } from "@agent-os/runtime";
+import {
+  DurableTriggerRegistry,
+  Ledger,
+  TriggerPump,
+  type AnyDurableTrigger,
+} from "@agent-os/runtime";
 import { commitDurableTriggerIntent } from "../src/due-work";
 import { insertLedgerEvent } from "../src/ledger/inserted-events";
 import { makeCloudflareBackendCoreLayer } from "../src/runtime-core";
@@ -22,8 +27,13 @@ const makeDriver = (triggers: ReadonlyArray<AnyDurableTrigger>): ImgGenPressureD
     enqueue: async (trigger, payload, fireAt) => {
       await runtime.runPromise(Ledger);
       await runtime.runPromise(TriggerPump);
+      const registry = await runtime.runPromise(
+        Effect.gen(function* () {
+          return yield* DurableTriggerRegistry;
+        }),
+      );
       await runtime.runPromise(
-        commitDurableTriggerIntent(state, sql, fireAt, trigger, () =>
+        commitDurableTriggerIntent(state, sql, fireAt, registry, trigger.kind, (trigger) =>
           insertLedgerEvent(sql, {
             ts: fireAt,
             kind: trigger.intentEventKind,

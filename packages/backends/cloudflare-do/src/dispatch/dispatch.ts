@@ -23,7 +23,13 @@ import {
 import { EventBus } from "../ledger";
 import { fireLedgerEvents, insertLedgerEvent } from "../ledger/inserted-events";
 import { materialRefKey } from "@agent-os/kernel/material-ref";
-import { Dispatch, TriggerPump, triggerParseFail, triggerParseOk } from "@agent-os/runtime";
+import {
+  Dispatch,
+  DurableTriggerRegistry,
+  TriggerPump,
+  triggerParseFail,
+  triggerParseOk,
+} from "@agent-os/runtime";
 import type {
   DurableTrigger,
   DispatchDeliveryReceipt,
@@ -315,8 +321,7 @@ export const DispatchLive = (
   ctx: DurableObjectState,
   scope: string,
   targets: DispatchTargetRegistry,
-  retryTrigger: Pick<ReturnType<typeof deliveryRetryTrigger>, "kind">,
-): Layer.Layer<Dispatch, SqlError, EventBus | TriggerPump> => {
+): Layer.Layer<Dispatch, SqlError, EventBus | TriggerPump | DurableTriggerRegistry> => {
   const sql = ctx.storage.sql;
 
   return Layer.scoped(
@@ -326,6 +331,7 @@ export const DispatchLive = (
       yield* ensureDueWorkSchema(sql);
       const bus = yield* EventBus;
       const triggerPump = yield* TriggerPump;
+      const registry = yield* DurableTriggerRegistry;
 
       return {
         dispatchToScope: (spec) =>
@@ -390,11 +396,12 @@ export const DispatchLive = (
               ctx,
               sql,
               now,
-              retryTrigger,
-              () => {
+              registry,
+              DELIVERY_RETRY_TRIGGER_KIND,
+              (trigger) => {
                 const event = insertLedgerEvent(sql, {
                   ts: now,
-                  kind: DISPATCH_EVENT_KINDS.OUTBOUND_REQUESTED,
+                  kind: trigger.intentEventKind,
                   scope,
                   payloadStr: requestedPayloadStr,
                   payload: requestedPayload,

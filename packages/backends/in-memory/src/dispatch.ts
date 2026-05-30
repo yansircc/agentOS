@@ -11,6 +11,7 @@ import { isScopeRef, makeOperationRef, makePreClaim } from "@agent-os/kernel/eff
 import { materialRefKey } from "@agent-os/kernel/material-ref";
 import {
   Dispatch,
+  DurableTriggerRegistry,
   TriggerPump,
   triggerParseFail,
   triggerParseOk,
@@ -200,12 +201,12 @@ export const InMemoryDispatchLive = (
   state: InMemoryBackendState,
   scope: string,
   targets: InMemoryDispatchTargetRegistry = {},
-  retryTrigger: Pick<ReturnType<typeof deliveryRetryTrigger>, "kind">,
-): Layer.Layer<Dispatch, never, TriggerPump> =>
+): Layer.Layer<Dispatch, never, TriggerPump | DurableTriggerRegistry> =>
   Layer.effect(
     Dispatch,
     Effect.gen(function* () {
       const triggerPump = yield* TriggerPump;
+      const registry = yield* DurableTriggerRegistry;
       return {
         dispatchToScope: (spec) =>
           Effect.gen(function* () {
@@ -255,25 +256,30 @@ export const InMemoryDispatchLive = (
               claim,
               ...(traceContext === undefined ? {} : { traceContext }),
             };
-            const [event] = yield* state.commitEvents([
-              {
+            const event = yield* state.commitTriggerIntent(
+              scope,
+              now,
+              registry,
+              DELIVERY_RETRY_TRIGGER_KIND,
+              (trigger) => ({
                 ts: now,
-                kind: DISPATCH_EVENT_KINDS.OUTBOUND_REQUESTED,
+                kind: trigger.intentEventKind,
                 scope,
                 payload: requested,
+              }),
+              (event) => {
+                state.addOutbox({
+                  outboundEventId: event.id,
+                  sourceScope: scope,
+                  requested,
+                  attempts: 0,
+                  deliveredEventId: null,
+                  lastError: null,
+                });
               },
-            ]);
-            state.addOutbox({
-              outboundEventId: event!.id,
-              sourceScope: scope,
-              requested,
-              attempts: 0,
-              deliveredEventId: null,
-              lastError: null,
-            });
-            state.addDueWork(retryTrigger.kind, event!.id, now);
+            );
             yield* triggerPump.drainDue(now);
-            return { outboundEventId: event!.id };
+            return { outboundEventId: event.id };
           }),
 
         receive: (envelope) =>
