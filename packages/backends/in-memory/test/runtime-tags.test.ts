@@ -9,6 +9,7 @@ import {
   Quota,
   Resources,
   Scheduler,
+  TriggerPump,
   makeSchemaContract,
   type DispatchReceiver,
 } from "@agent-os/runtime";
@@ -18,6 +19,7 @@ import {
   createInMemoryRuntimeBackend,
   type InMemoryRuntimeLayerOptions,
 } from "../src";
+import { InMemoryTriggerPumpLive } from "../src/trigger-pump";
 
 const response = (text: string) => ({
   text,
@@ -58,17 +60,18 @@ describe("in-memory runtime backend", () => {
     const { runtime } = makeRuntime("schedule-scope");
     try {
       const scheduler = await runtime.runPromise(Scheduler);
+      const triggerPump = await runtime.runPromise(TriggerPump);
       const ledger = await runtime.runPromise(Ledger);
       await runtime.runPromise(scheduler.schedule(10, "example.due", { id: "job-1" }));
 
-      await expect(runtime.runPromise(scheduler.fireDue(9))).resolves.toEqual({
-        fired: 0,
+      await expect(runtime.runPromise(triggerPump.drainDue(9))).resolves.toEqual({
+        drained: 0,
       });
-      await expect(runtime.runPromise(scheduler.fireDue(10))).resolves.toEqual({
-        fired: 1,
+      await expect(runtime.runPromise(triggerPump.drainDue(10))).resolves.toEqual({
+        drained: 1,
       });
-      await expect(runtime.runPromise(scheduler.fireDue(10))).resolves.toEqual({
-        fired: 0,
+      await expect(runtime.runPromise(triggerPump.drainDue(10))).resolves.toEqual({
+        drained: 0,
       });
       const events = await runtime.runPromise(ledger.events("schedule-scope"));
       expect(events.map((event) => event.kind)).toEqual([
@@ -79,6 +82,29 @@ describe("in-memory runtime backend", () => {
       await runtime.dispose();
     }
   });
+
+  it.effect("empty trigger registry fails closed and leaves due-work pending", () =>
+    Effect.gen(function* () {
+      const state = createInMemoryBackendState();
+      const runtime = ManagedRuntime.make(InMemoryTriggerPumpLive(state, "empty-registry", []));
+      const [event] = yield* state.commitEvents([
+        {
+          ts: 10,
+          kind: "unknown.trigger.requested",
+          scope: "empty-registry",
+          payload: { ok: true },
+        },
+      ]);
+      state.addDueWork("unknown.trigger", event!.id, 10);
+      const triggerPump = yield* Effect.promise(() => runtime.runPromise(TriggerPump));
+
+      const exit = yield* Effect.exit(triggerPump.drainDue(10));
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      expect(state.duePending(10)).toHaveLength(1);
+      yield* Effect.promise(() => runtime.dispose());
+    }),
+  );
 
   it("DispatchLive dedupes receiver inbound delivery by source scope and idempotency key", async () => {
     const state = createInMemoryBackendState();

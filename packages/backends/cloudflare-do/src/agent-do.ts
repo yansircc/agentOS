@@ -72,13 +72,14 @@ import {
   commitBoundaryEvent,
   Ledger,
   LlmTransport,
+  TriggerPump,
   submitAgentEffect,
   validateBoundaryEventPayload,
+  type AnyDurableTrigger,
   type InternalSubmitSpec,
 } from "@agent-os/runtime";
 import type { LlmRoute } from "@agent-os/kernel/llm";
 import { Dispatch, type DispatchEnvelope, type DispatchTargetRegistry } from "./dispatch";
-import { armNextDue } from "./due-work";
 import { createEventStreamResponse, eventToRpc } from "./ledger";
 import { Scheduler } from "./scheduler";
 import { Resources } from "./resources";
@@ -167,8 +168,15 @@ const makeAgentRuntime = (
   handlers: Map<string, Set<EventHandler>>,
   refs: RefResolver,
   dispatchTargets: DispatchTargetRegistry,
+  appTriggers: Iterable<AnyDurableTrigger>,
 ): ManagedRuntime.ManagedRuntime<CoreServices, SqlError> => {
-  const backendCoreLayer = makeCloudflareBackendCoreLayer(ctx, scope, handlers, dispatchTargets);
+  const backendCoreLayer = makeCloudflareBackendCoreLayer(
+    ctx,
+    scope,
+    handlers,
+    dispatchTargets,
+    appTriggers,
+  );
   const aiLayer = Layer.succeed(AiBinding, ai);
   const refResolverLayer = RefResolverLive(refs);
   const providerBaseLayer = Layer.mergeAll(aiLayer, refResolverLayer);
@@ -188,6 +196,7 @@ export interface AgentDurableObjectConfig<
   readonly refResolver?: (env: Env) => RefResolver;
   readonly extensions?: (env: Env) => ReadonlyArray<ExtensionDeclaration>;
   readonly dispatchTargets?: (env: Env) => DispatchTargetRegistry;
+  readonly triggers?: (env: Env) => ReadonlyArray<AnyDurableTrigger>;
   readonly scopeRefForScope?: (scope: string, env: Env) => ScopeRef | null;
   readonly eventHandlers?: (
     context: AgentEventHandlerContext<Runtime>,
@@ -202,6 +211,7 @@ export interface MaterializedAgentConfig<
   readonly refResolver: RefResolver;
   readonly extensions: ReadonlyArray<ExtensionDeclaration>;
   readonly dispatchTargets: DispatchTargetRegistry;
+  readonly triggers: ReadonlyArray<AnyDurableTrigger>;
   readonly scopeRefForScope: (scope: string, env: Env) => ScopeRef | null;
   readonly eventHandlers?: (
     context: AgentEventHandlerContext<Runtime>,
@@ -230,6 +240,7 @@ export class AgentDurableObject<
   private readonly _extensionValidation: ExtensionValidation;
   private readonly _capabilities: ReadonlyMap<string, ExtensionCapability>;
   private readonly _dispatchTargets: DispatchTargetRegistry;
+  private readonly _triggers: ReadonlyArray<AnyDurableTrigger>;
   private readonly _scopeRefForScope: (scope: string, env: Env) => ScopeRef | null;
   private _runtime?: ManagedRuntime.ManagedRuntime<CoreServices, SqlError>;
 
@@ -239,6 +250,7 @@ export class AgentDurableObject<
     this._extensionValidation = validateExtensionDeclarations(config.extensions);
     this._capabilities = this.extensionCapabilities();
     this._dispatchTargets = config.dispatchTargets;
+    this._triggers = config.triggers;
     this._scopeRefForScope = config.scopeRefForScope;
 
     for (const registration of config.eventHandlers?.(
@@ -258,6 +270,7 @@ export class AgentDurableObject<
         this._handlers,
         this._refResolver,
         this._dispatchTargets,
+        this._triggers,
       );
     }
     return this._runtime;
@@ -681,8 +694,8 @@ export class AgentDurableObject<
    *
    *  Order: setAlarm BEFORE INSERT, so setAlarm failure leaves no orphan
    *  pending row. If INSERT fails after setAlarm succeeded, alarm fires at
-   *  the target time, fireDue sees no new pending, and the alarm naturally
-   *  reverts (next = whatever was there before, or null).
+   *  the target time, the trigger pump sees no new pending row, and the alarm
+   *  naturally reverts (next = whatever was there before, or null).
    */
   protected scheduleEventFull(spec: ScheduledEventSpec): Promise<{ id: number }> {
     if (!Number.isFinite(spec.at)) {
@@ -699,16 +712,11 @@ export class AgentDurableObject<
 
   /** DO alarm handler — invoked automatically by the CF runtime. */
   alarm(): Promise<void> {
-    const ctx = this.ctx;
-    const sql = this.ctx.storage.sql;
     return this.runScoped((_scope) =>
       Effect.gen(function* () {
-        const scheduler = yield* Scheduler;
-        const dispatch = yield* Dispatch;
+        const triggerPump = yield* TriggerPump;
         const now = yield* Clock.currentTimeMillis;
-        yield* scheduler.fireDue(now);
-        yield* dispatch.drainDue(now);
-        yield* armNextDue(ctx, sql);
+        yield* triggerPump.drainDue(now);
       }).pipe(Effect.asVoid),
     );
   }
@@ -726,6 +734,7 @@ export const createAgentDurableObject = <Env extends CloudflareAgentEnv>(
         refResolver: config.refResolver?.(env) ?? emptyRefResolver,
         extensions: config.extensions?.(env) ?? [],
         dispatchTargets: config.dispatchTargets?.(env) ?? {},
+        triggers: config.triggers?.(env) ?? [],
         scopeRefForScope: config.scopeRefForScope ?? (() => null),
         eventHandlers: config.eventHandlers,
       });

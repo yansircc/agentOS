@@ -4,7 +4,7 @@ export * from "./ledger";
 export * from "./scheduler";
 export * from "./resources";
 export * from "./quota";
-export * from "./dispatch";
+export { InMemoryDispatchLive } from "./dispatch";
 export * from "./llm";
 export * from "./admission";
 export * from "./runtime-backend";

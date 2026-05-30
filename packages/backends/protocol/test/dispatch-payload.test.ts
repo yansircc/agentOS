@@ -6,9 +6,6 @@ import { bindingMaterialRef } from "@agent-os/kernel/material-ref";
 import {
   DISPATCH_MAX_ATTEMPTS,
   DISPATCH_RETRY_POLICY,
-  DUE_WORK_DELIVERY_RETRY,
-  DUE_WORK_RECONCILER_RUN,
-  DUE_WORK_SCHEDULED_EVENT,
   DURABLE_TRIGGER_SCHEDULED_REQUESTED,
   describeDispatchCause,
   dispatchBackoffMs,
@@ -19,10 +16,9 @@ import {
   durableTriggerDuePayload,
   fireBackendEventHandlers,
   parseDurableTriggerRetryPolicy,
-  parseDueWorkPayload,
+  parseIntentPointerDuePayload,
   parseRequestedPayload,
   parseScheduledEventIntentPayload,
-  reconcilerRunIntentPayload,
   scheduledEventIntentPayload,
   settleDispatchOutboundDelivered,
 } from "../src";
@@ -91,38 +87,29 @@ describe("@agent-os/backend-protocol", () => {
     );
   });
 
-  it("owns retry, cause, and due-work vocabulary", () => {
+  it("owns retry, cause, and due-work pointer vocabulary", () => {
     expect(DISPATCH_MAX_ATTEMPTS).toBe(8);
     expect(dispatchBackoffMs(1)).toBe(1_000);
     expect(dispatchBackoffMs(8)).toBe(60_000);
     expect(durableTriggerBackoffMs(DISPATCH_RETRY_POLICY, 8)).toBe(60_000);
     expect(describeDispatchCause(new Error("boom"))).toBe("Error: boom");
-    expect(DUE_WORK_SCHEDULED_EVENT).toBe("scheduled_event");
-    expect(DUE_WORK_DELIVERY_RETRY).toBe("delivery_retry");
-    expect(DUE_WORK_RECONCILER_RUN).toBe("reconciler_run");
     expect(DURABLE_TRIGGER_SCHEDULED_REQUESTED).toBe("durable_trigger.scheduled.requested");
-    expect(parseDueWorkPayload(DUE_WORK_SCHEDULED_EVENT, { intentEventId: 7 })).toEqual({
+    expect(parseIntentPointerDuePayload({ intentEventId: 7 })).toEqual({
       ok: true,
       payload: { intentEventId: 7 },
     });
-    expect(parseDueWorkPayload(DUE_WORK_DELIVERY_RETRY, { intentEventId: 42 })).toEqual({
-      ok: true,
-      payload: { intentEventId: 42 },
-    });
-    expect(parseDueWorkPayload(DUE_WORK_RECONCILER_RUN, { intentEventId: 43 })).toEqual({
-      ok: true,
-      payload: { intentEventId: 43 },
-    });
     expect(durableTriggerDuePayload(44)).toEqual({ intentEventId: 44 });
-    const malformedDeliveryDue = parseDueWorkPayload(DUE_WORK_DELIVERY_RETRY, {
+    expect(parseIntentPointerDuePayload({ intentEventId: 7, outboundEventId: 42 }).ok).toBe(false);
+    expect(parseIntentPointerDuePayload({ intentEventId: 0 }).ok).toBe(false);
+    const malformedDeliveryDue = parseIntentPointerDuePayload({
       outboundEventId: 42,
     });
     expect(malformedDeliveryDue.ok).toBe(false);
     if (malformedDeliveryDue.ok) return;
-    expect(malformedDeliveryDue.cause.message).toBe("delivery retry due-work payload malformed");
+    expect(malformedDeliveryDue.cause.message).toBe("durable trigger due-work payload malformed");
   });
 
-  it("keeps trigger intents and retry policy as serializable protocol data", () => {
+  it("keeps scheduled trigger intents and retry policy as serializable protocol data", () => {
     expect(parseDurableTriggerRetryPolicy(DISPATCH_RETRY_POLICY)).toEqual({
       ok: true,
       payload: DISPATCH_RETRY_POLICY,
@@ -139,23 +126,6 @@ describe("@agent-os/backend-protocol", () => {
     expect(parseScheduledEventIntentPayload(scheduledIntent)).toEqual({
       ok: true,
       value: scheduledIntent,
-    });
-
-    expect(
-      reconcilerRunIntentPayload({
-        intentEventId: 11,
-        reconcilerId: "delivery.stale",
-        idempotencyKey: "delivery.stale:11",
-        retryPolicy: DISPATCH_RETRY_POLICY,
-        payload: { olderThanMs: 60_000 },
-      }),
-    ).toMatchObject({
-      intentEventId: 11,
-      triggerKind: DUE_WORK_RECONCILER_RUN,
-      targetKind: "reconciler",
-      reconcilerId: "delivery.stale",
-      idempotencyKey: "delivery.stale:11",
-      retryPolicy: DISPATCH_RETRY_POLICY,
     });
   });
 

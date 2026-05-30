@@ -5,7 +5,6 @@ export * from "./dispatch";
 export * from "./ledger";
 export * from "./llm-transport";
 export * from "./quota-service";
-export * from "./reconciler";
 export * from "./resources";
 export * from "./scheduler";
 export * from "./submit-agent";
@@ -20,3 +19,4 @@ export {
 export type { LlmRoute, LlmUsage, ToolDefinition } from "@agent-os/kernel/llm";
 export type { Tool } from "@agent-os/kernel/tools";
 export type * from "./submit";
+export * from "./trigger";

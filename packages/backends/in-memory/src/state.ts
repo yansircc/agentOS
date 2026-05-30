@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { JsonStringifyError } from "@agent-os/kernel/errors";
+import { JsonStringifyError, SqlError } from "@agent-os/kernel/errors";
 import type {
   EventHandler,
   EventQueryOptions,
@@ -7,15 +7,13 @@ import type {
   LedgerEventRpc,
 } from "@agent-os/kernel/types";
 import {
-  DUE_WORK_DELIVERY_RETRY,
-  DUE_WORK_SCHEDULED_EVENT,
   DURABLE_TRIGGER_SCHEDULED_REQUESTED,
   durableTriggerDuePayload,
   fireBackendEventHandlers,
   scheduledEventIntentPayload,
-  type DueWorkKind,
-  type DueWorkPayload,
+  type IntentPointerDuePayload,
 } from "@agent-os/backend-protocol";
+import type { TriggerTx } from "@agent-os/runtime";
 import type { DispatchOutboxRow } from "./dispatch-types";
 
 const DEFAULT_EVENT_LIMIT = 1000;
@@ -42,11 +40,11 @@ interface EventSink {
   readonly sink: (event: LedgerEvent) => void;
 }
 
-interface DueWorkRow<K extends DueWorkKind = DueWorkKind> {
+interface InMemoryDueWorkRow {
   readonly id: number;
   readonly fireAt: number;
-  readonly kind: K;
-  readonly payload: DueWorkPayload<K>;
+  readonly kind: string;
+  readonly payload: IntentPointerDuePayload;
   completedAt: number | null;
 }
 
@@ -87,7 +85,7 @@ export class InMemoryBackendState {
   private readonly rows: LedgerEvent[] = [];
   private readonly sinks = new Set<EventSink>();
   private readonly handlers = new Map<string, Set<EventHandler>>();
-  private readonly dueWork: DueWorkRow[] = [];
+  private readonly dueWork: InMemoryDueWorkRow[] = [];
   private readonly outbox = new Map<number, DispatchOutboxRow>();
 
   constructor(options: InMemoryBackendStateOptions = {}) {
@@ -202,6 +200,7 @@ export class InMemoryBackendState {
     scope: string,
     intentTs: number,
     at: number,
+    triggerKind: string,
     eventKind: string,
     data: unknown,
   ): Effect.Effect<{ readonly id: number }, JsonStringifyError> {
@@ -222,7 +221,7 @@ export class InMemoryBackendState {
         this.dueWork.push({
           id: dueId,
           fireAt: at,
-          kind: DUE_WORK_SCHEDULED_EVENT,
+          kind: triggerKind,
           payload: durableTriggerDuePayload(event.id),
           completedAt: null,
         });
@@ -233,20 +232,13 @@ export class InMemoryBackendState {
     });
   }
 
-  scheduledIntent(intentEventId: number): LedgerEvent | null {
-    return (
-      this.rows.find(
-        (row) => row.id === intentEventId && row.kind === DURABLE_TRIGGER_SCHEDULED_REQUESTED,
-      ) ?? null
-    );
+  eventById(intentEventId: number, kind: string): LedgerEvent | null {
+    return this.rows.find((row) => row.id === intentEventId && row.kind === kind) ?? null;
   }
 
-  dueScheduled(now: number): ReadonlyArray<DueWorkRow<typeof DUE_WORK_SCHEDULED_EVENT>> {
+  duePending(now: number): ReadonlyArray<InMemoryDueWorkRow> {
     return this.dueWork
-      .filter(
-        (row): row is DueWorkRow<typeof DUE_WORK_SCHEDULED_EVENT> =>
-          row.completedAt === null && row.kind === DUE_WORK_SCHEDULED_EVENT && row.fireAt <= now,
-      )
+      .filter((row) => row.completedAt === null && row.fireAt <= now)
       .sort((a, b) => a.fireAt - b.fireAt || a.id - b.id);
   }
 
@@ -270,42 +262,123 @@ export class InMemoryBackendState {
     this.outbox.set(row.outboundEventId, row);
   }
 
-  addDeliveryRetryDue(intentEventId: number, fireAt: number): number {
+  addDueWork(kind: string, intentEventId: number, fireAt: number): number {
     const id = this.nextDueWorkId++;
     this.dueWork.push({
       id,
       fireAt,
-      kind: DUE_WORK_DELIVERY_RETRY,
+      kind,
       payload: durableTriggerDuePayload(intentEventId),
       completedAt: null,
     });
     return id;
   }
 
-  dueDeliveryOutbox(
+  pendingOutboxByIntent(intentEventId: number): DispatchOutboxRow | null {
+    const row = this.outbox.get(intentEventId);
+    if (row === undefined || row.deliveredEventId !== null) return null;
+    return row;
+  }
+
+  commitTrigger(
+    scope: string,
+    row: InMemoryDueWorkRow,
     now: number,
-  ): ReadonlyArray<{ readonly dueWorkId: number; readonly row: DispatchOutboxRow }> {
-    return this.dueWork
-      .filter(
-        (work): work is DueWorkRow<typeof DUE_WORK_DELIVERY_RETRY> =>
-          work.completedAt === null && work.kind === DUE_WORK_DELIVERY_RETRY && work.fireAt <= now,
-      )
-      .map((work) => {
-        const row = this.outbox.get(work.payload.intentEventId);
-        return row === undefined || row.deliveredEventId !== null
-          ? null
-          : { dueWorkId: work.id, row };
-      })
-      .filter(
-        (item): item is { readonly dueWorkId: number; readonly row: DispatchOutboxRow } =>
-          item !== null,
-      )
-      .sort(
-        (a, b) =>
-          this.dueWork.find((work) => work.id === a.dueWorkId)!.fireAt -
-            this.dueWork.find((work) => work.id === b.dueWorkId)!.fireAt ||
-          a.row.outboundEventId - b.row.outboundEventId,
-      );
+    hasTrigger: (kind: string) => boolean,
+    commit: (tx: TriggerTx) => void,
+  ): Effect.Effect<
+    { readonly completed: boolean; readonly events: ReadonlyArray<LedgerEvent> },
+    JsonStringifyError | SqlError
+  > {
+    return Effect.gen(this, function* () {
+      if (row.completedAt !== null) return { completed: false, events: [] };
+      const startId = this.nextEventId;
+      const written: LedgerEvent[] = [];
+      let rejected: string | null = null;
+      const due: Array<{
+        readonly triggerKind: string;
+        readonly fireAt: number;
+        readonly intentEventId: number;
+      }> = [];
+      const tx: TriggerTx = {
+        scope,
+        now,
+        dueWorkId: row.id,
+        intentEventId: row.payload.intentEventId,
+        insertEvent: (spec) => {
+          const event: LedgerEvent = {
+            id: startId + written.length,
+            ts: spec.ts ?? now,
+            kind: spec.kind,
+            scope,
+            payload: spec.payload,
+          };
+          written.push(event);
+          return event;
+        },
+        enqueue: (spec) => {
+          if (!hasTrigger(spec.triggerKind)) {
+            rejected = `unregistered durable trigger kind: ${spec.triggerKind}`;
+            return {
+              id: startId + written.length,
+              ts: spec.ts ?? now,
+              kind: spec.intentEventKind,
+              scope,
+              payload: spec.payload,
+            };
+          }
+          const event: LedgerEvent = {
+            id: startId + written.length,
+            ts: spec.ts ?? now,
+            kind: spec.intentEventKind,
+            scope,
+            payload: spec.payload,
+          };
+          written.push(event);
+          due.push({
+            triggerKind: spec.triggerKind,
+            fireAt: spec.fireAt,
+            intentEventId: event.id,
+          });
+          return event;
+        },
+        reschedule: (fireAt, intentEventId = row.payload.intentEventId) => {
+          due.push({
+            triggerKind: row.kind,
+            fireAt,
+            intentEventId,
+          });
+        },
+      };
+      yield* Effect.try({
+        try: () => commit(tx),
+        catch: (cause) => new SqlError({ cause }),
+      });
+      if (rejected !== null) {
+        return yield* Effect.fail(new SqlError({ cause: rejected }));
+      }
+      yield* Effect.forEach(written, (event) => validateSerializablePayload(event.payload), {
+        discard: true,
+      });
+      yield* Effect.sync(() => {
+        this.nextEventId += written.length;
+        this.rows.push(...written);
+        row.completedAt = now;
+        for (const spec of due) {
+          const dueId = this.nextDueWorkId++;
+          this.dueWork.push({
+            id: dueId,
+            fireAt: spec.fireAt,
+            kind: spec.triggerKind,
+            payload: durableTriggerDuePayload(spec.intentEventId),
+            completedAt: null,
+          });
+        }
+      });
+      const events = written.length === 0 ? [] : this.rows.slice(this.rows.length - written.length);
+      yield* this.fireMany(events);
+      return { completed: true, events };
+    });
   }
 
   private fireMany(events: ReadonlyArray<LedgerEvent>): Effect.Effect<void> {

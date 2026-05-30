@@ -1,4 +1,5 @@
 import { Layer } from "effect";
+import type { SqlError } from "@agent-os/kernel/errors";
 import {
   Admission,
   Dispatch,
@@ -7,6 +8,8 @@ import {
   Quota,
   Resources,
   Scheduler,
+  TriggerPump,
+  type AnyDurableTrigger,
 } from "@agent-os/runtime";
 import {
   createInMemoryBackendState,
@@ -14,13 +17,15 @@ import {
   type InMemoryEventHandlerRegistration,
 } from "./state";
 import { InMemoryAdmissionLive } from "./admission";
-import { InMemoryDispatchLive } from "./dispatch";
+import { InMemoryDispatchLive, deliveryRetryTrigger } from "./dispatch";
 import type { InMemoryDispatchTargetRegistry } from "./dispatch-types";
 import { InMemoryLedgerLive } from "./ledger";
 import { InMemoryLlmTransportLive, type InMemoryLlmTransportOptions } from "./llm";
 import { InMemoryQuotaLive } from "./quota";
 import { InMemoryResourcesLive } from "./resources";
 import { InMemorySchedulerLive } from "./scheduler";
+import { scheduledEventTrigger } from "./scheduled-trigger";
+import { InMemoryTriggerPumpLive } from "./trigger-pump";
 
 export type InMemoryRuntimeServices =
   | Ledger
@@ -29,6 +34,7 @@ export type InMemoryRuntimeServices =
   | Resources
   | Quota
   | LlmTransport
+  | TriggerPump
   | Admission;
 
 export interface InMemoryRuntimeLayerOptions {
@@ -37,11 +43,12 @@ export interface InMemoryRuntimeLayerOptions {
   readonly handlers?: Iterable<InMemoryEventHandlerRegistration>;
   readonly dispatchTargets?: InMemoryDispatchTargetRegistry;
   readonly llm?: InMemoryLlmTransportOptions;
+  readonly triggers?: ReadonlyArray<AnyDurableTrigger>;
 }
 
 export interface InMemoryRuntimeBackend {
   readonly state: InMemoryBackendState;
-  readonly layer: Layer.Layer<InMemoryRuntimeServices>;
+  readonly layer: Layer.Layer<InMemoryRuntimeServices, SqlError>;
 }
 
 export const createInMemoryRuntimeBackend = (
@@ -50,12 +57,20 @@ export const createInMemoryRuntimeBackend = (
   const state = options.state ?? createInMemoryBackendState({ handlers: options.handlers });
   const llmLayer = InMemoryLlmTransportLive(options.llm);
   const admissionLayer = InMemoryAdmissionLive(state).pipe(Layer.provide(llmLayer));
+  const triggerLayer = InMemoryTriggerPumpLive(state, options.scope, [
+    scheduledEventTrigger,
+    deliveryRetryTrigger(state, options.dispatchTargets ?? {}),
+    ...(options.triggers ?? []),
+  ]);
   return {
     state,
     layer: Layer.mergeAll(
       InMemoryLedgerLive(state),
       InMemorySchedulerLive(state, options.scope),
-      InMemoryDispatchLive(state, options.scope, options.dispatchTargets),
+      triggerLayer,
+      InMemoryDispatchLive(state, options.scope, options.dispatchTargets).pipe(
+        Layer.provide(triggerLayer),
+      ),
       InMemoryResourcesLive(state),
       InMemoryQuotaLive(state),
       llmLayer,
@@ -66,4 +81,4 @@ export const createInMemoryRuntimeBackend = (
 
 export const makeInMemoryRuntimeLayer = (
   options: InMemoryRuntimeLayerOptions,
-): Layer.Layer<InMemoryRuntimeServices> => createInMemoryRuntimeBackend(options).layer;
+): Layer.Layer<InMemoryRuntimeServices, SqlError> => createInMemoryRuntimeBackend(options).layer;

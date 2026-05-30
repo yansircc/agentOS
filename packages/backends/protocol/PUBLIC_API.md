@@ -13,9 +13,6 @@ Status: Backend protocol package. Public exports are limited to storage-free bac
 - `.:DISPATCH_OUTBOUND_FAILED`
 - `.:DISPATCH_OUTBOUND_REQUESTED`
 - `.:DISPATCH_RETRY_POLICY`
-- `.:DUE_WORK_DELIVERY_RETRY`
-- `.:DUE_WORK_RECONCILER_RUN`
-- `.:DUE_WORK_SCHEDULED_EVENT`
 - `.:DURABLE_TRIGGER_SCHEDULED_REQUESTED`
 - `.:copyTraceContext`
 - `.:describeDispatchCause`
@@ -26,21 +23,16 @@ Status: Backend protocol package. Public exports are limited to storage-free bac
 - `.:durableTriggerDuePayload`
 - `.:eventToProtocolRpc`
 - `.:fireBackendEventHandlers`
-- `.:isDueWorkKind`
 - `.:parseDispatchBindingRef`
 - `.:parseDurableTriggerRetryPolicy`
-- `.:parseDueWorkPayload`
+- `.:parseIntentPointerDuePayload`
 - `.:parseRequestedPayload`
 - `.:parseRequestedPayloadValue`
 - `.:parseScheduledEventIntentPayload`
-- `.:reconcilerRunIntentPayload`
 - `.:scheduledEventIntentPayload`
 - `.:parseTraceContext`
 - `.:BackendProtocolEventHandler`
 - `.:BackendProtocolLedgerEventRpc`
-- `.:DurableTriggerDuePayload`
-- `.:DurableTriggerIntentPayload`
-- `.:DurableTriggerKind`
 - `.:DurableTriggerRetryPolicy`
 - `.:DispatchOutboundDeliveredPayload`
 - `.:DispatchOutboundFailedPayload`
@@ -48,12 +40,7 @@ Status: Backend protocol package. Public exports are limited to storage-free bac
 - `.:DispatchPayloadParseResult`
 - `.:DispatchDeliveryReceipt`
 - `.:DispatchRequestedPayload`
-- `.:DeliveryRetryDuePayload`
-- `.:DueWorkKind`
-- `.:DueWorkPayload`
-- `.:ReconcilerRunDuePayload`
-- `.:ReconcilerRunIntentPayload`
-- `.:ScheduledEventDuePayload`
+- `.:IntentPointerDuePayload`
 - `.:ScheduledEventIntentPayload`
 
 - `.:dispatchCarrierRef`

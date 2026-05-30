@@ -8,9 +8,11 @@ import {
   Quota,
   Resources,
   Scheduler,
+  TriggerPump,
   type DispatchReceiver,
   type DispatchTargetAdapter,
 } from "@agent-os/runtime";
+import { DISPATCH_EVENT_KINDS } from "@agent-os/backend-protocol";
 import { durableObjectDispatchTarget, type DispatchTargetNamespace } from "../src/dispatch";
 import { findNextDue } from "../src/due-work";
 import { makeCloudflareBackendCoreLayer } from "../src/runtime-core";
@@ -122,16 +124,26 @@ const makeCloudflareDoContractDriver = (): RuntimeBackendContractDriver => {
       return runtime(scope).runPromise(scheduler.schedule(at, eventKind, data));
     },
     fireDue: async (scope, now) => {
-      const scheduler = await runtime(scope).runPromise(Scheduler);
-      return runtime(scope).runPromise(scheduler.fireDue(now));
+      const triggerPump = await runtime(scope).runPromise(TriggerPump);
+      const result = await runtime(scope).runPromise(triggerPump.drainDue(now));
+      return { fired: result.drained };
     },
     dispatchToScope: async (scope, spec) => {
       const dispatch = await runtime(scope).runPromise(Dispatch);
       return runtime(scope).runPromise(dispatch.dispatchToScope(spec));
     },
     drainDispatchDue: async (scope, now) => {
-      const dispatch = await runtime(scope).runPromise(Dispatch);
-      return runtime(scope).runPromise(dispatch.drainDue(now));
+      const ledger = await runtime(scope).runPromise(Ledger);
+      const before = await runtime(scope).runPromise(ledger.events(scope));
+      const triggerPump = await runtime(scope).runPromise(TriggerPump);
+      await runtime(scope).runPromise(triggerPump.drainDue(now));
+      const after = await runtime(scope).runPromise(ledger.events(scope));
+      const slice = after.slice(before.length);
+      return {
+        delivered: slice.filter((event) => event.kind === DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED)
+          .length,
+        failed: slice.filter((event) => event.kind === DISPATCH_EVENT_KINDS.OUTBOUND_FAILED).length,
+      };
     },
     nextDueAt: (scope) => runtime(scope).runPromise(findNextDue(stateFor(scope).storage.sql)),
     pendingDueCount: (scope) =>

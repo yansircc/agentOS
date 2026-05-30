@@ -2,7 +2,7 @@ import type { DurableObject } from "cloudflare:workers";
 import type { ExtensionDeclaration } from "@agent-os/kernel/extensions";
 import type { ScopeRef } from "@agent-os/kernel/effect-claim";
 import type { DispatchToScopeResult, DispatchToScopeSpec } from "@agent-os/kernel/types";
-import type { SubmitResult } from "@agent-os/runtime";
+import type { AnyDurableTrigger, SubmitResult } from "@agent-os/runtime";
 import {
   AgentDurableObject,
   type AgentEventHandlerContext,
@@ -66,6 +66,9 @@ interface DefineAgentDOConfigBase<
     context: AgentEventHandlerContext<Runtime>,
     env: Env,
   ) => Iterable<AgentEventHandlerRegistration>;
+  readonly triggers?:
+    | ReadonlyArray<AnyDurableTrigger>
+    | ((env: Env) => ReadonlyArray<AnyDurableTrigger>);
 }
 
 export interface DefineAgentDOConfigWithSubmit<
@@ -120,6 +123,7 @@ const materializedConfigForEnv = <
   refResolver: lowered.refResolver,
   extensions: extensionsFor(config.extensions, env),
   dispatchTargets: lowered.dispatchTargets,
+  triggers: typeof config.triggers === "function" ? config.triggers(env) : (config.triggers ?? []),
   scopeRefForScope: config.scopeRefForScope ?? (() => null),
   eventHandlers: (context, eventEnv) => eventHandlersFor(config, context, eventEnv),
 });
