@@ -6,7 +6,7 @@
 
 Backend-neutral runtime programs and Effect Tag contracts: submit/run API types,
 boundary commit enforcement, dispatch/scheduler/resource/quota/admission
-algebra, and ledger-derived projections.
+algebra, durable trigger authoring, and ledger-derived projections.
 
 ## Public API Status
 
@@ -18,13 +18,22 @@ Runtime code expresses programs against Effect Tags. It does not import Worker
 modules, Durable Object state, SQL storage implementations, or platform alarm
 APIs.
 
+Durable trigger authors depend on runtime for the shared trigger algebra:
+`DurableTrigger`, `AcquireCtx`, `TriggerTx`, trigger parse helpers,
+`DurableTriggerRegistry`, `makeDurableTriggerRegistry`, `getDurableTrigger`,
+`scheduledEventTrigger`, and `DispatchTargetAdapter`. Runtime owns the
+backend-neutral shape; concrete backends own storage, alarm re-arm, SQL
+transactions, and pump execution.
+
 ## Minimal Usage
 
 Depend on runtime for consumer-facing run, admission, and backend-neutral Tag
-types.
+types. App triggers should be written against runtime trigger interfaces and
+registered through a backend facade; they should not import backend SQL helpers,
+due-work storage helpers, inserted-event helpers, or backend state classes.
 
 ```ts
-import type { Ledger, SubmitSpec } from "@agent-os/runtime";
+import type { DurableTrigger, Ledger, SubmitSpec } from "@agent-os/runtime";
 ```
 
 ## Verification

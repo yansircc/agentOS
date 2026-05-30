@@ -17,6 +17,13 @@ Backend package. It is the only substrate package that imports `cloudflare:worke
 Cloudflare-specific APIs stay in this backend. Shared kernel/runtime packages
 must not import Durable Object state, Worker bindings, or alarm APIs.
 
+Application code registers app-owned durable triggers only through the facade
+configuration. `defineAgentDO({ triggers })` is the Cloudflare DO construction
+surface for trigger registration; the backend builds the registry, validates
+duplicate kinds, and uses that same registry for submit and drain. Apps must
+not import `runtime-core`, `due-work`, SQL helpers, inserted-event helpers, or
+backend state internals.
+
 ## Minimal Usage
 
 Create a DO class from one app-facing facade config. `bindings` is the only
@@ -49,6 +56,21 @@ export const AgentDO = defineAgentDO<Env>({
     }),
   },
   tools: [lookup],
+});
+```
+
+App triggers use runtime trigger types and the same facade registration path as
+built-in triggers.
+
+```ts
+import { defineAgentDO } from "@agent-os/backend-cloudflare-do";
+import type { AnyDurableTrigger } from "@agent-os/runtime";
+
+const appTriggers = [imageScanTrigger] satisfies ReadonlyArray<AnyDurableTrigger>;
+
+export const AgentDO = defineAgentDO<Env>({
+  bindings: [],
+  triggers: appTriggers,
 });
 ```
 
