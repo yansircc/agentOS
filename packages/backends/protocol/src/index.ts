@@ -94,17 +94,7 @@ export const parseDispatchLivedClaim = (
   return parseOk(validation.claim);
 };
 
-export const DUE_WORK_SCHEDULED_EVENT = "scheduled_event";
-export const DUE_WORK_DELIVERY_RETRY = "delivery_retry";
-export const DUE_WORK_RECONCILER_RUN = "reconciler_run";
 export const DURABLE_TRIGGER_SCHEDULED_REQUESTED = "durable_trigger.scheduled.requested";
-
-export type DueWorkKind =
-  | typeof DUE_WORK_SCHEDULED_EVENT
-  | typeof DUE_WORK_DELIVERY_RETRY
-  | typeof DUE_WORK_RECONCILER_RUN;
-
-export type DurableTriggerKind = DueWorkKind;
 
 export interface DurableTriggerRetryPolicy {
   readonly maxAttempts: number;
@@ -122,15 +112,7 @@ export const DISPATCH_RETRY_POLICY = {
 
 export const DISPATCH_MAX_ATTEMPTS = DISPATCH_RETRY_POLICY.maxAttempts;
 
-export interface ScheduledEventDuePayload {
-  readonly intentEventId: number;
-}
-
-export interface DeliveryRetryDuePayload {
-  readonly intentEventId: number;
-}
-
-export interface ReconcilerRunDuePayload {
+export interface IntentPointerDuePayload {
   readonly intentEventId: number;
 }
 
@@ -139,112 +121,26 @@ export interface ScheduledEventIntentPayload {
   readonly data: unknown;
 }
 
-export interface DurableTriggerIntentPayload {
-  readonly intentEventId: number;
-  readonly triggerKind: DurableTriggerKind;
-  readonly targetKind: string;
-  readonly idempotencyKey: string;
-  readonly retryPolicy: DurableTriggerRetryPolicy;
-  readonly payloadRef?: string;
-  readonly payload?: unknown;
-}
-
-export interface ReconcilerRunIntentPayload extends DurableTriggerIntentPayload {
-  readonly triggerKind: typeof DUE_WORK_RECONCILER_RUN;
-  readonly targetKind: "reconciler";
-  readonly reconcilerId: string;
-}
-
-export type DueWorkPayload<K extends DueWorkKind = DueWorkKind> =
-  K extends typeof DUE_WORK_SCHEDULED_EVENT
-    ? ScheduledEventDuePayload
-    : K extends typeof DUE_WORK_DELIVERY_RETRY
-      ? DeliveryRetryDuePayload
-      : K extends typeof DUE_WORK_RECONCILER_RUN
-        ? ReconcilerRunDuePayload
-        : never;
-
-export type DurableTriggerDuePayload<K extends DueWorkKind = DueWorkKind> =
-  K extends typeof DUE_WORK_SCHEDULED_EVENT
-    ? ScheduledEventDuePayload
-    : K extends typeof DUE_WORK_DELIVERY_RETRY
-      ? DeliveryRetryDuePayload
-      : K extends typeof DUE_WORK_RECONCILER_RUN
-        ? ReconcilerRunDuePayload
-        : never;
-
-type DueWorkPayloadParseResult<Payload> =
+type ProtocolPayloadParseResult<Payload> =
   | { readonly ok: true; readonly payload: Payload }
   | { readonly ok: false; readonly cause: TypeError };
 
-interface DueWorkKindDefinition<K extends string, Payload> {
-  readonly kind: K;
-  readonly parse: (value: unknown) => DueWorkPayloadParseResult<Payload>;
-}
-
-const defineDueWorkKind = <const K extends string, Payload>(
-  definition: DueWorkKindDefinition<K, Payload>,
-): DueWorkKindDefinition<K, Payload> => definition;
-
-const parseIntentPointerDuePayload = <Payload extends { readonly intentEventId: number }>(
+export const parseIntentPointerDuePayload = (
   value: unknown,
-  label: string,
-): DueWorkPayloadParseResult<Payload> => {
-  if (!Predicate.isRecord(value) || typeof value.intentEventId !== "number") {
-    return { ok: false, cause: new TypeError(`${label} due-work payload malformed`) };
+): ProtocolPayloadParseResult<IntentPointerDuePayload> => {
+  if (
+    !Predicate.isRecord(value) ||
+    Object.keys(value).length !== 1 ||
+    typeof value.intentEventId !== "number" ||
+    !Number.isInteger(value.intentEventId) ||
+    value.intentEventId < 1
+  ) {
+    return { ok: false, cause: new TypeError("durable trigger due-work payload malformed") };
   }
-  return { ok: true, payload: value as unknown as Payload };
+  return { ok: true, payload: { intentEventId: value.intentEventId } };
 };
 
-const scheduledEventDueWorkKind = defineDueWorkKind({
-  kind: DUE_WORK_SCHEDULED_EVENT,
-  parse: (value) =>
-    parseIntentPointerDuePayload<ScheduledEventDuePayload>(value, "scheduled event"),
-});
-
-const deliveryRetryDueWorkKind = defineDueWorkKind({
-  kind: DUE_WORK_DELIVERY_RETRY,
-  parse: (value) => parseIntentPointerDuePayload<DeliveryRetryDuePayload>(value, "delivery retry"),
-});
-
-const reconcilerRunDueWorkKind = defineDueWorkKind({
-  kind: DUE_WORK_RECONCILER_RUN,
-  parse: (value) => parseIntentPointerDuePayload<ReconcilerRunDuePayload>(value, "reconciler run"),
-});
-
-type DueWorkKindRegistry = {
-  readonly [DUE_WORK_SCHEDULED_EVENT]: typeof scheduledEventDueWorkKind;
-  readonly [DUE_WORK_DELIVERY_RETRY]: typeof deliveryRetryDueWorkKind;
-  readonly [DUE_WORK_RECONCILER_RUN]: typeof reconcilerRunDueWorkKind;
-};
-
-const dueWorkKindRegistry = {
-  [DUE_WORK_SCHEDULED_EVENT]: scheduledEventDueWorkKind,
-  [DUE_WORK_DELIVERY_RETRY]: deliveryRetryDueWorkKind,
-  [DUE_WORK_RECONCILER_RUN]: reconcilerRunDueWorkKind,
-} satisfies DueWorkKindRegistry;
-
-export const isDueWorkKind = (kind: string): kind is DueWorkKind =>
-  kind === DUE_WORK_SCHEDULED_EVENT ||
-  kind === DUE_WORK_DELIVERY_RETRY ||
-  kind === DUE_WORK_RECONCILER_RUN;
-
-export const parseDueWorkPayload = <K extends DueWorkKind>(
-  kind: K,
-  value: unknown,
-): DueWorkPayloadParseResult<DueWorkPayload<K>> => {
-  const definition = (
-    dueWorkKindRegistry as Readonly<
-      Record<string, DueWorkKindDefinition<string, unknown> | undefined>
-    >
-  )[kind];
-  if (definition === undefined) {
-    return { ok: false, cause: new TypeError(`unknown due-work kind: ${kind}`) };
-  }
-  return definition.parse(value) as DueWorkPayloadParseResult<DueWorkPayload<K>>;
-};
-
-export const durableTriggerDuePayload = (intentEventId: number): DurableTriggerDuePayload => ({
+export const durableTriggerDuePayload = (intentEventId: number): IntentPointerDuePayload => ({
   intentEventId,
 });
 
@@ -252,7 +148,7 @@ const RETRY_POLICY_KEYS = new Set(["maxAttempts", "initialDelayMs", "maxDelayMs"
 
 export const parseDurableTriggerRetryPolicy = (
   value: unknown,
-): DueWorkPayloadParseResult<DurableTriggerRetryPolicy> => {
+): ProtocolPayloadParseResult<DurableTriggerRetryPolicy> => {
   if (!Predicate.isRecord(value)) {
     return { ok: false, cause: new TypeError("durable trigger retry policy malformed") };
   }
@@ -315,24 +211,6 @@ export const parseScheduledEventIntentPayload = (
     data: value.data,
   });
 };
-
-export const reconcilerRunIntentPayload = (spec: {
-  readonly intentEventId: number;
-  readonly reconcilerId: string;
-  readonly idempotencyKey: string;
-  readonly retryPolicy: DurableTriggerRetryPolicy;
-  readonly payloadRef?: string;
-  readonly payload?: unknown;
-}): ReconcilerRunIntentPayload => ({
-  intentEventId: spec.intentEventId,
-  triggerKind: DUE_WORK_RECONCILER_RUN,
-  targetKind: "reconciler",
-  reconcilerId: spec.reconcilerId,
-  idempotencyKey: spec.idempotencyKey,
-  retryPolicy: spec.retryPolicy,
-  ...(spec.payloadRef === undefined ? {} : { payloadRef: spec.payloadRef }),
-  ...(spec.payload === undefined ? {} : { payload: spec.payload }),
-});
 
 export interface DispatchRequestedPayload {
   readonly target: DispatchTargetSpec;

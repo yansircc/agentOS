@@ -2,29 +2,26 @@ import { Effect } from "effect";
 import { JsonStringifyError, SqlError, safeStringify } from "@agent-os/kernel/errors";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import {
-  DUE_WORK_SCHEDULED_EVENT,
   DURABLE_TRIGGER_SCHEDULED_REQUESTED,
   durableTriggerDuePayload,
-  isDueWorkKind,
-  parseDueWorkPayload,
+  parseIntentPointerDuePayload,
   scheduledEventIntentPayload,
-  type DueWorkKind,
-  type DueWorkPayload,
+  type IntentPointerDuePayload,
 } from "@agent-os/backend-protocol";
 import { insertLedgerEvent } from "./ledger/inserted-events";
 import { sqlText } from "./storage/sql-row";
 
-export interface DueWorkRow<K extends DueWorkKind = DueWorkKind> {
+export interface DueWorkRow {
   readonly id: number;
   readonly fireAt: number;
-  readonly kind: K;
-  readonly payload: DueWorkPayload<K>;
+  readonly kind: string;
+  readonly payload: IntentPointerDuePayload;
 }
 
-export interface DueWorkInsertSpec<K extends DueWorkKind = DueWorkKind> {
+export interface DueWorkInsertSpec {
   readonly fireAt: number;
-  readonly kind: K;
-  readonly payload: DueWorkPayload<K>;
+  readonly kind: string;
+  readonly payload: IntentPointerDuePayload;
 }
 
 export const ensureDueWorkSchema = (sql: SqlStorage): Effect.Effect<void, SqlError> =>
@@ -93,9 +90,9 @@ export const armNextDue = (
     }
   });
 
-export const insertDueWork = <K extends DueWorkKind>(
+export const insertDueWork = (
   sql: SqlStorage,
-  spec: DueWorkInsertSpec<K>,
+  spec: DueWorkInsertSpec,
   payloadStr: string,
 ): number =>
   Number(
@@ -117,41 +114,11 @@ export const completeDueWork = (sql: SqlStorage, id: number, completedAt: number
   );
 };
 
-const ensureNoUnknownDueKind = (sql: SqlStorage, now: number): Effect.Effect<void, SqlError> =>
-  Effect.gen(function* () {
-    const kinds = yield* Effect.try({
-      try: () =>
-        sql
-          .exec(
-            `
-          SELECT kind
-          FROM due_work
-          WHERE completed_at IS NULL
-            AND fire_at <= ?
-          ORDER BY fire_at, id
-          `,
-            now,
-          )
-          .toArray()
-          .map((row) => sqlText(row.kind, "due_work.kind")),
-      catch: (cause) => new SqlError({ cause }),
-    });
-    for (const kind of kinds) {
-      if (!isDueWorkKind(kind)) {
-        return yield* Effect.fail(
-          new SqlError({ cause: new TypeError(`unknown due-work kind: ${kind}`) }),
-        );
-      }
-    }
-  });
-
-export const selectDueWork = <K extends DueWorkKind>(
+export const selectDuePending = (
   sql: SqlStorage,
-  kind: K,
   now: number,
-): Effect.Effect<ReadonlyArray<DueWorkRow<K>>, SqlError> =>
+): Effect.Effect<ReadonlyArray<DueWorkRow>, SqlError> =>
   Effect.gen(function* () {
-    yield* ensureNoUnknownDueKind(sql, now);
     const rows = yield* Effect.try({
       try: () =>
         sql
@@ -160,51 +127,42 @@ export const selectDueWork = <K extends DueWorkKind>(
           SELECT id, fire_at, kind, payload
           FROM due_work
           WHERE completed_at IS NULL
-            AND kind = ?
             AND fire_at <= ?
           ORDER BY fire_at, id
         `,
-            kind,
             now,
           )
           .toArray(),
       catch: (cause) => new SqlError({ cause }),
     });
-    const out: DueWorkRow<K>[] = [];
+    const out: DueWorkRow[] = [];
     for (const row of rows) {
-      const rowKindRaw = sqlText(row.kind, "due_work.kind");
-      if (!isDueWorkKind(rowKindRaw)) {
-        return yield* Effect.fail(
-          new SqlError({ cause: new TypeError(`unknown due-work kind: ${rowKindRaw}`) }),
-        );
-      }
-      const rowKind = rowKindRaw as K;
       const payloadStr = sqlText(row.payload, "due_work.payload");
       const parsed = yield* Effect.try({
         try: () => JSON.parse(payloadStr) as unknown,
         catch: (cause) => new SqlError({ cause }),
       });
-      const payload = parseDueWorkPayload(rowKind, parsed);
+      const payload = parseIntentPointerDuePayload(parsed);
       if (!payload.ok) {
         return yield* Effect.fail(new SqlError({ cause: payload.cause }));
       }
       out.push({
         id: Number(row.id),
         fireAt: Number(row.fire_at),
-        kind: rowKind,
+        kind: sqlText(row.kind, "due_work.kind"),
         payload: payload.payload,
       });
     }
     return out;
   });
 
-export const insertDurableTriggerDueWork = <K extends DueWorkKind>(
+export const insertDurableTriggerDueWork = (
   sql: SqlStorage,
   fireAt: number,
-  kind: K,
+  kind: string,
   intentEventId: number,
 ): number => {
-  const payload = durableTriggerDuePayload(intentEventId) as DueWorkPayload<K>;
+  const payload = durableTriggerDuePayload(intentEventId);
   return insertDueWork(
     sql,
     {
@@ -216,11 +174,11 @@ export const insertDurableTriggerDueWork = <K extends DueWorkKind>(
   );
 };
 
-export const commitDurableTriggerIntent = <K extends DueWorkKind>(
+export const commitDurableTriggerIntent = (
   ctx: DurableObjectState,
   sql: SqlStorage,
   fireAt: number,
-  kind: K,
+  kind: string,
   writeIntent: () => LedgerEvent,
 ): Effect.Effect<LedgerEvent, SqlError> =>
   armBeforeDueCommit(ctx, sql, fireAt, () => {
@@ -235,13 +193,14 @@ export const enqueueScheduledEvent = (
   scope: string,
   intentTs: number,
   at: number,
+  triggerKind: string,
   eventKind: string,
   data: unknown,
 ): Effect.Effect<LedgerEvent, SqlError | JsonStringifyError> =>
   Effect.gen(function* () {
     const payload = scheduledEventIntentPayload(eventKind, data);
     const payloadStr = yield* safeStringify(payload);
-    return yield* commitDurableTriggerIntent(ctx, sql, at, DUE_WORK_SCHEDULED_EVENT, () =>
+    return yield* commitDurableTriggerIntent(ctx, sql, at, triggerKind, () =>
       insertLedgerEvent(sql, {
         ts: intentTs,
         kind: DURABLE_TRIGGER_SCHEDULED_REQUESTED,

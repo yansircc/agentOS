@@ -1,20 +1,17 @@
 import { Effect, Exit, Layer, ManagedRuntime } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
-import { Dispatch } from "@agent-os/runtime";
+import { Dispatch, TriggerPump } from "@agent-os/runtime";
 import {
   DISPATCH_MAX_ATTEMPTS,
-  DUE_WORK_SCHEDULED_EVENT,
   DURABLE_TRIGGER_SCHEDULED_REQUESTED,
 } from "@agent-os/backend-protocol";
-import { DispatchLive, type DispatchTargetRegistry } from "../src/dispatch";
-import {
-  enqueueScheduledEvent,
-  ensureDueWorkSchema,
-  findNextDue,
-  selectDueWork,
-} from "../src/due-work";
+import { type DispatchTargetRegistry } from "../src/dispatch";
+import { enqueueScheduledEvent, ensureDueWorkSchema, findNextDue } from "../src/due-work";
 import { EventBusLive } from "../src/ledger";
+import { scheduledEventTrigger } from "../src/scheduled-trigger";
+import { makeCloudflareBackendCoreLayer } from "../src/runtime-core";
+import { TriggerPumpLive } from "../src/trigger-pump";
 import { makeInMemoryDurableObjectState } from "./_in-memory-do";
 
 const bindingRef = bindingMaterialRef({
@@ -52,7 +49,16 @@ describe("due-work alarm protocol", () => {
       yield* ensureDueWorkSchema(sql);
 
       const exit = yield* Effect.exit(
-        enqueueScheduledEvent(state, sql, "sender", 1, 10, "app.scheduled", { job: "one" }),
+        enqueueScheduledEvent(
+          state,
+          sql,
+          "sender",
+          1,
+          10,
+          scheduledEventTrigger.kind,
+          "app.scheduled",
+          { job: "one" },
+        ),
       );
 
       expect(Exit.isFailure(exit)).toBe(true);
@@ -69,63 +75,26 @@ describe("due-work alarm protocol", () => {
       const sql = state.storage.sql;
       yield* ensureDueWorkSchema(sql);
 
-      const intent = yield* enqueueScheduledEvent(state, sql, "sender", 1, 10, "app.scheduled", {
-        job: "one",
-      });
+      const intent = yield* enqueueScheduledEvent(
+        state,
+        sql,
+        "sender",
+        1,
+        10,
+        scheduledEventTrigger.kind,
+        "app.scheduled",
+        { job: "one" },
+      );
 
       expect(intent.kind).toBe(DURABLE_TRIGGER_SCHEDULED_REQUESTED);
       const due = sql.exec("SELECT kind, payload FROM due_work").toArray();
       expect(due).toHaveLength(1);
-      expect(due[0]?.kind).toBe(DUE_WORK_SCHEDULED_EVENT);
+      expect(due[0]?.kind).toBe(scheduledEventTrigger.kind);
       expect(JSON.parse(due[0]?.payload as string)).toEqual({ intentEventId: intent.id });
     }),
   );
 
-  it.effect(
-    "setAlarm failure during delivery retry does not advance attempt or commit failed fact",
-    () =>
-      Effect.gen(function* () {
-        let setAlarmCalls = 0;
-        const state = makeInMemoryDurableObjectState({
-          setAlarm: () => {
-            setAlarmCalls += 1;
-            if (setAlarmCalls === 2) {
-              return Promise.reject(new Error("alarm unavailable"));
-            }
-          },
-        });
-        const sql = state.storage.sql;
-        const eventBusLayer = EventBusLive(new Map());
-        const runtime = ManagedRuntime.make(
-          DispatchLive(state, "sender", deadTargets).pipe(Layer.provide(eventBusLayer)),
-        );
-
-        const dispatch = yield* Effect.promise(() => runtime.runPromise(Dispatch));
-        const exit = yield* Effect.exit(
-          Effect.tryPromise({
-            try: () => runtime.runPromise(dispatch.dispatchToScope(dispatchSpec)),
-            catch: (cause) => cause,
-          }),
-        );
-
-        expect(Exit.isFailure(exit)).toBe(true);
-        expect(setAlarmCalls).toBe(2);
-        expect(
-          sql.exec("SELECT * FROM events WHERE kind = 'dispatch.outbound.failed'").toArray(),
-        ).toHaveLength(0);
-
-        const outbox = sql.exec("SELECT attempts, last_error FROM dispatch_outbox").toArray();
-        expect(outbox).toHaveLength(1);
-        expect(Number(outbox[0]?.attempts)).toBe(0);
-        expect(outbox[0]?.last_error).toBeNull();
-
-        const due = sql.exec("SELECT * FROM due_work WHERE completed_at IS NULL").toArray();
-        expect(due).toHaveLength(1);
-        yield* Effect.promise(() => runtime.dispose());
-      }),
-  );
-
-  it.effect("unknown due-work kind fails due selection instead of being ignored", () =>
+  it.effect("unknown due-work kind fails trigger drain and remains pending", () =>
     Effect.gen(function* () {
       const state = makeInMemoryDurableObjectState();
       const sql = state.storage.sql;
@@ -134,12 +103,46 @@ describe("due-work alarm protocol", () => {
         "INSERT INTO due_work (fire_at, kind, payload) VALUES (?, ?, ?)",
         10,
         "unknown_retry",
-        "{}",
+        JSON.stringify({ intentEventId: 1 }),
       );
+      const runtime = ManagedRuntime.make(
+        makeCloudflareBackendCoreLayer(state, "sender", new Map(), deadTargets),
+      );
+      const triggerPump = yield* Effect.promise(() => runtime.runPromise(TriggerPump));
 
-      const exit = yield* Effect.exit(selectDueWork(sql, DUE_WORK_SCHEDULED_EVENT, 10));
+      const exit = yield* Effect.exit(triggerPump.drainDue(10));
 
       expect(Exit.isFailure(exit)).toBe(true);
+      expect(sql.exec("SELECT * FROM due_work WHERE completed_at IS NULL").toArray()).toHaveLength(
+        1,
+      );
+      yield* Effect.promise(() => runtime.dispose());
+    }),
+  );
+
+  it.effect("empty trigger registry fails closed and leaves due-work pending", () =>
+    Effect.gen(function* () {
+      const state = makeInMemoryDurableObjectState();
+      const sql = state.storage.sql;
+      yield* ensureDueWorkSchema(sql);
+      sql.exec(
+        "INSERT INTO due_work (fire_at, kind, payload) VALUES (?, ?, ?)",
+        10,
+        "unknown_retry",
+        JSON.stringify({ intentEventId: 1 }),
+      );
+      const runtime = ManagedRuntime.make(
+        TriggerPumpLive(state, "sender", []).pipe(Layer.provide(EventBusLive(new Map()))),
+      );
+      const triggerPump = yield* Effect.promise(() => runtime.runPromise(TriggerPump));
+
+      const exit = yield* Effect.exit(triggerPump.drainDue(10));
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      expect(sql.exec("SELECT * FROM due_work WHERE completed_at IS NULL").toArray()).toHaveLength(
+        1,
+      );
+      yield* Effect.promise(() => runtime.dispose());
     }),
   );
 
@@ -149,18 +152,18 @@ describe("due-work alarm protocol", () => {
       Effect.gen(function* () {
         const state = makeInMemoryDurableObjectState();
         const sql = state.storage.sql;
-        const eventBusLayer = EventBusLive(new Map());
         const runtime = ManagedRuntime.make(
-          DispatchLive(state, "sender", deadTargets).pipe(Layer.provide(eventBusLayer)),
+          makeCloudflareBackendCoreLayer(state, "sender", new Map(), deadTargets),
         );
 
         const dispatch = yield* Effect.promise(() => runtime.runPromise(Dispatch));
+        const triggerPump = yield* Effect.promise(() => runtime.runPromise(TriggerPump));
         yield* Effect.promise(() => runtime.runPromise(dispatch.dispatchToScope(dispatchSpec)));
 
         for (;;) {
           const next = yield* findNextDue(sql);
           if (next === null) break;
-          yield* Effect.promise(() => runtime.runPromise(dispatch.drainDue(next)));
+          yield* Effect.promise(() => runtime.runPromise(triggerPump.drainDue(next)));
         }
 
         const failed = sql

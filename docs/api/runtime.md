@@ -22,6 +22,7 @@
 - `.:DispatchReceiver`
 - `.:DispatchReceiverResult`
 - `.:DispatchTargetAdapter`
+- `.:DurableTrigger`
 - `.:EvidenceRow`
 - `.:FINGERPRINT_ALGO_VERSION`
 - `.:GrantResult`
@@ -38,25 +39,32 @@
 - `.:Quota`
 - `.:ResourceProjection`
 - `.:Resources`
-- `.:ReconcilerRepairContext`
 - `.:Scheduler`
 - `.:Strategy`
-- `.:StatelessReconciler`
 - `.:Stimulus`
 - `.:SubmitResult`
 - `.:SubmitSpec`
 - `.:Tool`
 - `.:ToolDefinition`
+- `.:TriggerDrainResult`
+- `.:TriggerEventSpec`
+- `.:TriggerIntentSpec`
+- `.:TriggerParseResult`
+- `.:TriggerPump`
+- `.:TriggerRegistry`
+- `.:TriggerTx`
 - `.:TurnRef`
 - `.:buildInitialMessages`
 - `.:commitBoundaryEvent`
 - `.:decideTier`
-- `.:defineStatelessReconciler`
 - `.:makeSchemaContract`
+- `.:makeDurableTriggerRegistry`
 - `.:projectLease`
 - `.:reasonOf`
 - `.:routeFingerprint`
 - `.:submitAgentEffect`
+- `.:triggerParseFail`
+- `.:triggerParseOk`
 - `.:turnRefOf`
 - `.:validateBoundaryEventPayload`
 - `./admission:Admission`
@@ -93,6 +101,8 @@
 - `.:toolErrorReason`
 - `.:toolExecutionRejectionKind`
 - `.:toolSettlementContract`
+- `.:AcquireCtx`
+- `.:AnyDurableTrigger`
 
 ## Experimental exports
 
