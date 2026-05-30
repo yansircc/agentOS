@@ -10,6 +10,7 @@ import type {
 } from "@agent-os/kernel/errors";
 import type { PreClaim } from "@agent-os/kernel/effect-claim";
 import type {
+  DeliveryReceipt,
   DispatchToScopeResult,
   DispatchToScopeSpec,
   TraceContext,
@@ -26,10 +27,24 @@ export interface DispatchEnvelope {
   readonly traceContext?: TraceContext;
 }
 
+export type DispatchDeliveryReceipt = DeliveryReceipt;
+
+export interface DispatchDeliveryResult {
+  readonly receipt: DispatchDeliveryReceipt;
+}
+
+export interface DispatchReceiverResult extends DispatchDeliveryResult {
+  readonly deliveredEventId: number;
+}
+
 export interface DispatchReceiver {
   readonly __agentosReceiveDispatch: (
     envelope: DispatchEnvelope,
-  ) => Promise<{ deliveredEventId: number }>;
+  ) => Promise<DispatchReceiverResult>;
+}
+
+export interface DispatchTargetAdapter {
+  readonly deliver: (envelope: DispatchEnvelope) => Promise<DispatchDeliveryResult>;
 }
 
 export class Dispatch extends Context.Tag("@agent-os/Dispatch")<
@@ -48,7 +63,7 @@ export class Dispatch extends Context.Tag("@agent-os/Dispatch")<
     readonly receive: (
       envelope: DispatchEnvelope,
     ) => Effect.Effect<
-      { deliveredEventId: number },
+      DispatchReceiverResult,
       SqlError | JsonStringifyError | CapabilityRejected | ScopeMissingError | DispatchScopeMismatch
     >;
     readonly drainDue: (

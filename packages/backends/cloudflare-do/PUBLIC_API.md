@@ -35,6 +35,7 @@ Status: Backend package. Public exports include the Cloudflare app facade, bindi
 - `.:createAgentDurableObject`
 - `.:defineAgentDO`
 - `.:durableObjectTarget`
+- `.:durableObjectDispatchTarget`
 - `.:endpoint`
 - `.:externalResource`
 - `.:geminiGenerateContent`

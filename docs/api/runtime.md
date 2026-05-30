@@ -16,8 +16,12 @@
 - `.:DecodedOutput`
 - `.:DeliverSpec`
 - `.:Dispatch`
+- `.:DispatchDeliveryReceipt`
+- `.:DispatchDeliveryResult`
 - `.:DispatchEnvelope`
 - `.:DispatchReceiver`
+- `.:DispatchReceiverResult`
+- `.:DispatchTargetAdapter`
 - `.:EvidenceRow`
 - `.:FINGERPRINT_ALGO_VERSION`
 - `.:GrantResult`

@@ -1,6 +1,6 @@
 import { makePreClaim } from "@agent-os/kernel/effect-claim";
 import type { DispatchTargetSpec, TraceContext } from "@agent-os/kernel/types";
-import type { DispatchReceiver } from "@agent-os/runtime";
+import type { DispatchTargetAdapter } from "@agent-os/runtime";
 
 export interface DispatchRequestedPayload {
   readonly target: DispatchTargetSpec;
@@ -20,6 +20,4 @@ export interface DispatchOutboxRow {
   lastError: string | null;
 }
 
-export type InMemoryDispatchTargetRegistry = Readonly<
-  Record<string, Readonly<Record<string, DispatchReceiver>>>
->;
+export type InMemoryDispatchTargetRegistry = Readonly<Record<string, DispatchTargetAdapter>>;

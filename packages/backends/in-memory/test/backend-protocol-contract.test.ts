@@ -8,6 +8,7 @@ import {
   Resources,
   Scheduler,
   type DispatchReceiver,
+  type DispatchTargetAdapter,
 } from "@agent-os/runtime";
 import { createInMemoryBackendState, createInMemoryRuntimeBackend } from "../src";
 import {
@@ -26,7 +27,16 @@ const bindingKey = materialRefKey(bindingRef);
 
 const makeInMemoryContractDriver = (): RuntimeBackendContractDriver => {
   const state = createInMemoryBackendState();
-  const targets: Record<string, Record<string, DispatchReceiver>> = {};
+  const receiverTargets = new Map<string, DispatchReceiver>();
+  const targetAdapter: DispatchTargetAdapter = {
+    deliver: (envelope) => {
+      const receiver = receiverTargets.get(envelope.targetScope);
+      return receiver === undefined
+        ? Promise.reject(`missing receiver target ${envelope.targetScope}`)
+        : receiver.__agentosReceiveDispatch(envelope);
+    },
+  };
+  const targets: Record<string, DispatchTargetAdapter> = { [bindingKey]: targetAdapter };
   const makeRuntime = (scope: string) =>
     ManagedRuntime.make(
       createInMemoryRuntimeBackend({
@@ -54,13 +64,12 @@ const makeInMemoryContractDriver = (): RuntimeBackendContractDriver => {
   };
 
   const registerDispatchReceiver = (scope: string, receiver?: ContractDispatchReceiver): void => {
-    targets[bindingKey] ??= {};
-    targets[bindingKey][scope] = {
+    receiverTargets.set(scope, {
       __agentosReceiveDispatch: (envelope) => {
         const accept = () => acceptDispatch(scope, envelope);
         return receiver === undefined ? accept() : receiver(envelope, accept);
       },
-    };
+    });
   };
 
   const pendingDueRows = (): ReadonlyArray<{ readonly completedAt: number | null }> => {
@@ -73,6 +82,14 @@ const makeInMemoryContractDriver = (): RuntimeBackendContractDriver => {
   return {
     bindingRef,
     registerDispatchReceiver,
+    setDispatchTargetAdapter: (adapter) => {
+      targets[bindingKey] =
+        typeof adapter === "function"
+          ? {
+              deliver: adapter,
+            }
+          : adapter;
+    },
     addHandler: (kind, handler) =>
       state.addHandler(kind, (event) => Promise.resolve(handler(event))),
     log: async (scope, kind, payload) => {

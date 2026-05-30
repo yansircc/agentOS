@@ -24,7 +24,12 @@ import { EventBus } from "../ledger";
 import { fireLedgerEvents, insertLedgerEvent } from "../ledger/inserted-events";
 import { materialRefKey } from "@agent-os/kernel/material-ref";
 import { Dispatch } from "@agent-os/runtime";
-import type { DispatchEnvelope, DispatchReceiver } from "@agent-os/runtime";
+import type {
+  DispatchDeliveryReceipt,
+  DispatchEnvelope,
+  DispatchReceiver,
+  DispatchTargetAdapter,
+} from "@agent-os/runtime";
 import { makeOperationRef, makePreClaim, isScopeRef } from "@agent-os/kernel/effect-claim";
 import {
   DISPATCH_EVENT_KINDS,
@@ -32,6 +37,7 @@ import {
   DISPATCH_MAX_ATTEMPTS,
   copyTraceContext,
   describeDispatchCause,
+  dispatchLedgerDeliveryReceipt,
   dispatchBackoffMs,
   parseRequestedPayload,
   settleDispatchInboundAccepted,
@@ -44,7 +50,7 @@ import {
   armBeforeDueCommit,
   completeDueWork,
   ensureDueWorkSchema,
-  insertDispatchRetryDueWork,
+  insertDeliveryRetryDueWork,
 } from "../due-work";
 
 // Re-export the receiver constant so callers that historically reached
@@ -56,7 +62,17 @@ export interface DispatchTargetNamespace {
   readonly get: (id: DurableObjectId) => unknown;
 }
 
-export type DispatchTargetRegistry = Readonly<Record<string, DispatchTargetNamespace>>;
+export type DispatchTargetRegistry = Readonly<Record<string, DispatchTargetAdapter>>;
+
+export const durableObjectDispatchTarget = (
+  namespace: DispatchTargetNamespace,
+): DispatchTargetAdapter => ({
+  deliver: (envelope) => {
+    const targetId = namespace.idFromName(envelope.targetScope);
+    const receiver = namespace.get(targetId) as DispatchReceiver;
+    return receiver.__agentosReceiveDispatch(envelope);
+  },
+});
 
 export const DispatchLive = (
   ctx: DurableObjectState,
@@ -76,7 +92,7 @@ export const DispatchLive = (
         dueWorkId: number,
         outboundEventId: number,
         requested: DispatchRequestedPayload,
-        deliveredEventId: number,
+        deliveryReceipt: DispatchDeliveryReceipt,
         attempt: number,
         now: number,
       ): Effect.Effect<void, SqlError | JsonStringifyError> =>
@@ -86,15 +102,14 @@ export const DispatchLive = (
             target: requested.target,
             event: requested.event,
             idempotencyKey: requested.idempotencyKey,
-            deliveredEventId,
+            deliveryReceipt,
             attempt,
             ...(requested.claim === undefined
               ? {}
               : {
                   claim: settleDispatchOutboundDelivered(requested.claim, {
                     bindingKey: materialRefKey(requested.target.bindingRef),
-                    targetScope: requested.target.scope,
-                    deliveredEventId,
+                    deliveryReceipt,
                   }),
                 }),
             ...(requested.traceContext === undefined
@@ -190,8 +205,7 @@ export const DispatchLive = (
             );
             completeDueWork(sql, dueWorkId, now);
             if (nextAttemptAt !== null) {
-              const duePayloadStr = JSON.stringify({ outboundEventId });
-              insertDispatchRetryDueWork(sql, nextAttemptAt, outboundEventId, duePayloadStr);
+              insertDeliveryRetryDueWork(sql, nextAttemptAt, outboundEventId);
             }
             return [event];
           };
@@ -220,8 +234,8 @@ export const DispatchLive = (
           const requested = requestedResult.value;
           const attempt = row.attempts + 1;
           const bindingKey = materialRefKey(requested.target.bindingRef);
-          const targetNs = targets[bindingKey];
-          if (targetNs === undefined) {
+          const target = targets[bindingKey];
+          if (target === undefined) {
             yield* markFailed(
               row.dueWorkId,
               row.outboundEventId,
@@ -235,8 +249,6 @@ export const DispatchLive = (
             return "failed";
           }
 
-          const targetId = targetNs.idFromName(requested.target.scope);
-          const receiver = targetNs.get(targetId) as DispatchReceiver;
           const envelope: DispatchEnvelope = {
             sourceScope: row.sourceScope,
             outboundEventId: row.outboundEventId,
@@ -251,7 +263,7 @@ export const DispatchLive = (
           };
 
           const delivered = yield* Effect.tryPromise({
-            try: () => receiver.__agentosReceiveDispatch(envelope),
+            try: () => target.deliver(envelope),
             catch: (cause) => cause,
           }).pipe(Effect.either);
 
@@ -260,7 +272,7 @@ export const DispatchLive = (
               row.dueWorkId,
               row.outboundEventId,
               requested,
-              delivered.right.deliveredEventId,
+              delivered.right.receipt,
               attempt,
               now,
             );
@@ -360,12 +372,7 @@ export const DispatchLive = (
                 payload: requestedPayload,
               });
               sql.exec("INSERT INTO dispatch_outbox (outbound_event_id) VALUES (?)", event.id);
-              insertDispatchRetryDueWork(
-                sql,
-                now,
-                event.id,
-                JSON.stringify({ outboundEventId: event.id }),
-              );
+              insertDeliveryRetryDueWork(sql, now, event.id);
               return event;
             });
             yield* fireLedgerEvents(bus, [requestedEvent]);
@@ -418,6 +425,10 @@ export const DispatchLive = (
                     return {
                       duplicate: true,
                       deliveredEventId: accepted.deliveredEventId,
+                      receipt: dispatchLedgerDeliveryReceipt({
+                        targetScope: scope,
+                        deliveredEventId: accepted.deliveredEventId,
+                      }),
                       events: [],
                       failure: null,
                     };
@@ -470,6 +481,10 @@ export const DispatchLive = (
                   return {
                     duplicate: false,
                     deliveredEventId,
+                    receipt: dispatchLedgerDeliveryReceipt({
+                      targetScope: scope,
+                      deliveredEventId,
+                    }),
                     events: [inboundEvent, appEvent],
                     failure: null,
                   };
@@ -483,7 +498,10 @@ export const DispatchLive = (
             if (!result.duplicate) {
               yield* fireLedgerEvents(bus, result.events);
             }
-            return { deliveredEventId: result.deliveredEventId };
+            return {
+              deliveredEventId: result.deliveredEventId,
+              receipt: result.receipt,
+            };
           }),
 
         drainDue,

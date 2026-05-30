@@ -5,12 +5,16 @@ import { bindingMaterialRef } from "@agent-os/kernel/material-ref";
 
 import {
   DISPATCH_MAX_ATTEMPTS,
-  DUE_WORK_DISPATCH_RETRY,
+  DUE_WORK_DELIVERY_RETRY,
   DUE_WORK_SCHEDULED_EVENT,
   describeDispatchCause,
   dispatchBackoffMs,
+  dispatchLedgerDeliveryReceipt,
+  dispatchSettlementContract,
   fireBackendEventHandlers,
+  parseDueWorkPayload,
   parseRequestedPayload,
+  settleDispatchOutboundDelivered,
 } from "../src";
 
 const bindingRef = bindingMaterialRef({
@@ -81,7 +85,41 @@ describe("@agent-os/backend-protocol", () => {
     expect(dispatchBackoffMs(8)).toBe(60_000);
     expect(describeDispatchCause(new Error("boom"))).toBe("Error: boom");
     expect(DUE_WORK_SCHEDULED_EVENT).toBe("scheduled_event");
-    expect(DUE_WORK_DISPATCH_RETRY).toBe("dispatch_retry");
+    expect(DUE_WORK_DELIVERY_RETRY).toBe("delivery_retry");
+    expect(parseDueWorkPayload(DUE_WORK_DELIVERY_RETRY, { intentEventId: 42 })).toEqual({
+      ok: true,
+      payload: { intentEventId: 42 },
+    });
+    const malformedDeliveryDue = parseDueWorkPayload(DUE_WORK_DELIVERY_RETRY, {
+      outboundEventId: 42,
+    });
+    expect(malformedDeliveryDue.ok).toBe(false);
+    if (malformedDeliveryDue.ok) return;
+    expect(malformedDeliveryDue.cause.message).toBe("delivery retry due-work payload malformed");
+  });
+
+  it("settles outbound delivery against target receipts, not only receiver ledger ids", () => {
+    expect(dispatchSettlementContract.anchorKinds).toEqual(["ledger_event", "external_receipt"]);
+    expect(
+      dispatchLedgerDeliveryReceipt({ targetScope: "receiver", deliveredEventId: 42 }),
+    ).toEqual({
+      anchorId: "dispatch.outbound:receiver:42",
+      anchorKind: "ledger_event",
+    });
+
+    const lived = settleDispatchOutboundDelivered(claim, {
+      bindingKey: "binding:cloudflare:queue:image-jobs",
+      deliveryReceipt: {
+        anchorId: "queue:image-jobs:msg-1",
+        anchorKind: "external_receipt",
+      },
+    });
+
+    expect(lived.anchorRef).toEqual({
+      anchorId: "queue:image-jobs:msg-1",
+      anchorKind: "external_receipt",
+      carrierRef: "dispatch:binding:cloudflare:queue:image-jobs",
+    });
   });
 
   it.effect("bounds hung event handlers and continues fanout", () =>

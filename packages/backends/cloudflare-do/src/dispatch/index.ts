@@ -14,6 +14,7 @@ export { Dispatch, type DispatchEnvelope, type DispatchReceiver } from "@agent-o
 export {
   DispatchLive,
   DISPATCH_INBOUND_ACCEPTED,
+  durableObjectDispatchTarget,
   type DispatchTargetNamespace,
   type DispatchTargetRegistry,
 } from "./dispatch";

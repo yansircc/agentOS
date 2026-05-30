@@ -20,7 +20,11 @@ interface TestEnv {
 const target: DispatchTargetNamespace = {
   idFromName: (_name) => ({}) as DurableObjectId,
   get: (_id) => ({
-    __agentosReceiveDispatch: () => Promise.resolve({ deliveredEventId: 1 }),
+    __agentosReceiveDispatch: () =>
+      Promise.resolve({
+        deliveredEventId: 1,
+        receipt: { anchorId: "dispatch.outbound:peer:1", anchorKind: "ledger_event" as const },
+      }),
   }),
 };
 
@@ -61,7 +65,7 @@ describe("defineAgentDO facade lowering", () => {
         ref: "peer",
       }),
     );
-    expect(lowered.dispatchTargets[peerKey]).toBe(target);
+    expect(typeof lowered.dispatchTargets[peerKey]?.deliver).toBe("function");
     expect(lowered.defaultSubmit?.route).toEqual({
       kind: "openai-chat-compatible",
       modelId: "gpt-4.1-mini",
@@ -88,7 +92,7 @@ describe("defineAgentDO facade lowering", () => {
         ref: "peer",
       }),
     );
-    expect(lowered.dispatchTargets[peerKey]).toBe(target);
+    expect(typeof lowered.dispatchTargets[peerKey]?.deliver).toBe("function");
   });
 
   it("fails on duplicate material keys", () => {

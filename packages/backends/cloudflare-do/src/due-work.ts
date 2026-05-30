@@ -1,9 +1,11 @@
 import { Effect } from "effect";
 import { JsonStringifyError, SqlError, safeStringify } from "@agent-os/kernel/errors";
 import {
-  DUE_WORK_DISPATCH_RETRY,
+  DUE_WORK_DELIVERY_RETRY,
   DUE_WORK_SCHEDULED_EVENT,
-  type DispatchRetryDuePayload,
+  isDueWorkKind,
+  parseDueWorkPayload,
+  type DeliveryRetryDuePayload,
   type DueWorkKind,
   type DueWorkPayload,
   type ScheduledEventDuePayload,
@@ -113,38 +115,33 @@ export const completeDueWork = (sql: SqlStorage, id: number, completedAt: number
   );
 };
 
-type DuePayloadParseResult<K extends DueWorkKind> =
-  | { readonly ok: true; readonly payload: DueWorkPayload<K> }
-  | { readonly ok: false; readonly cause: TypeError };
-
-const parseDuePayload = <K extends DueWorkKind>(
-  kind: K,
-  parsed: unknown,
-): DuePayloadParseResult<K> => {
-  if (kind === DUE_WORK_SCHEDULED_EVENT) {
-    if (
-      typeof parsed !== "object" ||
-      parsed === null ||
-      !("eventKind" in parsed) ||
-      typeof parsed.eventKind !== "string"
-    ) {
-      return { ok: false, cause: new TypeError("scheduled due-work payload malformed") };
+const ensureNoUnknownDueKind = (sql: SqlStorage, now: number): Effect.Effect<void, SqlError> =>
+  Effect.gen(function* () {
+    const kinds = yield* Effect.try({
+      try: () =>
+        sql
+          .exec(
+            `
+          SELECT kind
+          FROM due_work
+          WHERE completed_at IS NULL
+            AND fire_at <= ?
+          ORDER BY fire_at, id
+          `,
+            now,
+          )
+          .toArray()
+          .map((row) => sqlText(row.kind, "due_work.kind")),
+      catch: (cause) => new SqlError({ cause }),
+    });
+    for (const kind of kinds) {
+      if (!isDueWorkKind(kind)) {
+        return yield* Effect.fail(
+          new SqlError({ cause: new TypeError(`unknown due-work kind: ${kind}`) }),
+        );
+      }
     }
-    return { ok: true, payload: parsed as DueWorkPayload<K> };
-  }
-  if (kind === DUE_WORK_DISPATCH_RETRY) {
-    if (
-      typeof parsed !== "object" ||
-      parsed === null ||
-      !("outboundEventId" in parsed) ||
-      typeof parsed.outboundEventId !== "number"
-    ) {
-      return { ok: false, cause: new TypeError("dispatch due-work payload malformed") };
-    }
-    return { ok: true, payload: parsed as DueWorkPayload<K> };
-  }
-  return { ok: false, cause: new TypeError(`unknown due-work kind: ${kind}`) };
-};
+  });
 
 export const selectDueWork = <K extends DueWorkKind>(
   sql: SqlStorage,
@@ -152,6 +149,7 @@ export const selectDueWork = <K extends DueWorkKind>(
   now: number,
 ): Effect.Effect<ReadonlyArray<DueWorkRow<K>>, SqlError> =>
   Effect.gen(function* () {
+    yield* ensureNoUnknownDueKind(sql, now);
     const rows = yield* Effect.try({
       try: () =>
         sql
@@ -172,13 +170,19 @@ export const selectDueWork = <K extends DueWorkKind>(
     });
     const out: DueWorkRow<K>[] = [];
     for (const row of rows) {
-      const rowKind = sqlText(row.kind, "due_work.kind") as K;
+      const rowKindRaw = sqlText(row.kind, "due_work.kind");
+      if (!isDueWorkKind(rowKindRaw)) {
+        return yield* Effect.fail(
+          new SqlError({ cause: new TypeError(`unknown due-work kind: ${rowKindRaw}`) }),
+        );
+      }
+      const rowKind = rowKindRaw as K;
       const payloadStr = sqlText(row.payload, "due_work.payload");
       const parsed = yield* Effect.try({
         try: () => JSON.parse(payloadStr) as unknown,
         catch: (cause) => new SqlError({ cause }),
       });
-      const payload = parseDuePayload(rowKind, parsed);
+      const payload = parseDueWorkPayload(rowKind, parsed);
       if (!payload.ok) {
         return yield* Effect.fail(new SqlError({ cause: payload.cause }));
       }
@@ -216,18 +220,19 @@ export const enqueueScheduledEvent = (
     return { id };
   });
 
-export const insertDispatchRetryDueWork = (
+export const insertDeliveryRetryDueWork = (
   sql: SqlStorage,
   fireAt: number,
-  outboundEventId: number,
-  payloadStr: string,
-): number =>
-  insertDueWork(
+  intentEventId: number,
+): number => {
+  const payload = { intentEventId } satisfies DeliveryRetryDuePayload;
+  return insertDueWork(
     sql,
     {
       fireAt,
-      kind: DUE_WORK_DISPATCH_RETRY,
-      payload: { outboundEventId } satisfies DispatchRetryDuePayload,
+      kind: DUE_WORK_DELIVERY_RETRY,
+      payload,
     },
-    payloadStr,
+    JSON.stringify(payload),
   );
+};

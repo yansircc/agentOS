@@ -22,6 +22,8 @@ import {
 } from "@agent-os/kernel/material-ref";
 import type { RefResolver } from "@agent-os/kernel/ref-resolver";
 import type { Tool } from "@agent-os/kernel/tools";
+import type { DispatchTargetAdapter } from "@agent-os/runtime";
+import { durableObjectDispatchTarget } from "./dispatch";
 import type { DispatchTargetNamespace, DispatchTargetRegistry } from "./dispatch";
 
 export interface AgentMaterialBinding<Env, Value = unknown> {
@@ -205,7 +207,7 @@ export function lowerAgentConfig<Env>(
   env: Env,
 ): LoweredAgentConfig {
   const materials = new Map<string, NonNullable<unknown>>();
-  const dispatchTargets: Record<string, DispatchTargetNamespace> = {};
+  const dispatchTargets: Record<string, DispatchTargetAdapter> = {};
 
   for (const binding of config.bindings ?? []) {
     if (!isMaterialRef(binding.ref)) {
@@ -221,7 +223,7 @@ export function lowerAgentConfig<Env>(
       if (!isDispatchTargetNamespace(value)) {
         return failAgentConfig(`dispatch target ${key} is not a DurableObjectNamespace`);
       }
-      dispatchTargets[key] = value;
+      dispatchTargets[key] = durableObjectDispatchTarget(value);
     }
   }
 
