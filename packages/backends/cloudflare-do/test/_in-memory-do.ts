@@ -207,21 +207,17 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
   private select(sql: string, args: readonly unknown[]): InMemorySqlCursor {
     if (
       sql ===
-      "SELECT o.outbound_event_id, o.attempts, e.payload AS requested_payload, e.scope AS source_scope FROM dispatch_outbox o JOIN events e ON e.id = o.outbound_event_id WHERE o.outbound_event_id = ? AND o.delivered_event_id IS NULL"
+      "SELECT o.outbound_event_id, o.attempts FROM dispatch_outbox o WHERE o.outbound_event_id = ? AND o.delivered_event_id IS NULL"
     ) {
       const outboundEventId = args[0];
       const outbox = this.table("dispatch_outbox").rows.find(
         (row) => row.outbound_event_id === outboundEventId && row.delivered_event_id === null,
       );
       if (outbox === undefined) return new InMemorySqlCursor([]);
-      const event = this.table("events").rows.find((row) => row.id === outboundEventId);
-      if (event === undefined) return new InMemorySqlCursor([]);
       return new InMemorySqlCursor([
         {
           outbound_event_id: outbox.outbound_event_id,
           attempts: outbox.attempts,
-          requested_payload: event.payload,
-          source_scope: event.scope,
         },
       ]);
     }
