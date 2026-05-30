@@ -1,10 +1,9 @@
 import { Clock, Effect, Layer } from "effect";
 import { SqlError } from "@agent-os/kernel/errors";
-import { Scheduler } from "@agent-os/runtime";
+import { Scheduler, scheduledEventTrigger } from "@agent-os/runtime";
 import { EventBus } from "./ledger";
 import { fireLedgerEvents } from "./ledger/inserted-events";
 import { enqueueScheduledEvent, ensureDueWorkSchema } from "./due-work";
-import { scheduledEventTrigger } from "./scheduled-trigger";
 
 export { Scheduler } from "@agent-os/runtime";
 
@@ -29,7 +28,7 @@ export const SchedulerLive = (
               scope,
               now,
               at,
-              scheduledEventTrigger.kind,
+              scheduledEventTrigger,
               eventKind,
               data,
             );

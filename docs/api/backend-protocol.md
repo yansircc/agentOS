@@ -9,7 +9,7 @@
 - `.:DISPATCH_OUTBOUND_FAILED`
 - `.:DISPATCH_OUTBOUND_REQUESTED`
 - `.:DISPATCH_RETRY_POLICY`
-- `.:DURABLE_TRIGGER_SCHEDULED_REQUESTED`
+- `.:DELIVERY_RETRY_TRIGGER_KIND`
 - `.:copyTraceContext`
 - `.:describeDispatchCause`
 - `.:dispatchBackoffMs`
@@ -24,8 +24,6 @@
 - `.:parseIntentPointerDuePayload`
 - `.:parseRequestedPayload`
 - `.:parseRequestedPayloadValue`
-- `.:parseScheduledEventIntentPayload`
-- `.:scheduledEventIntentPayload`
 - `.:parseTraceContext`
 - `.:BackendProtocolEventHandler`
 - `.:BackendProtocolLedgerEventRpc`
@@ -37,7 +35,6 @@
 - `.:DispatchDeliveryReceipt`
 - `.:DispatchRequestedPayload`
 - `.:IntentPointerDuePayload`
-- `.:ScheduledEventIntentPayload`
 
 - `.:dispatchCarrierRef`
 - `.:dispatchLedgerDeliveryReceipt`

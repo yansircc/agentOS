@@ -20,6 +20,7 @@ import {
   type DurableTrigger,
 } from "@agent-os/runtime";
 import {
+  DELIVERY_RETRY_TRIGGER_KIND,
   DISPATCH_EVENT_KINDS,
   DISPATCH_INBOUND_ACCEPTED,
   DISPATCH_RETRY_POLICY,
@@ -85,13 +86,11 @@ type DeliveryRetryOutcome =
       readonly cause: unknown;
     };
 
-const deliveryRetryTriggerKind = "delivery_retry";
-
 export const deliveryRetryTrigger = (
   state: InMemoryBackendState,
   targets: InMemoryDispatchTargetRegistry,
 ): DurableTrigger<ProtocolDispatchRequestedPayload, DeliveryRetryOutcome> => ({
-  kind: deliveryRetryTriggerKind,
+  kind: DELIVERY_RETRY_TRIGGER_KIND,
   intentEventKind: DISPATCH_EVENT_KINDS.OUTBOUND_REQUESTED,
   parseIntent: (raw) => {
     const parsed = parseRequestedPayloadValue(raw);
@@ -201,6 +200,7 @@ export const InMemoryDispatchLive = (
   state: InMemoryBackendState,
   scope: string,
   targets: InMemoryDispatchTargetRegistry = {},
+  retryTrigger: Pick<ReturnType<typeof deliveryRetryTrigger>, "kind">,
 ): Layer.Layer<Dispatch, never, TriggerPump> =>
   Layer.effect(
     Dispatch,
@@ -271,7 +271,7 @@ export const InMemoryDispatchLive = (
               deliveredEventId: null,
               lastError: null,
             });
-            state.addDueWork(deliveryRetryTriggerKind, event!.id, now);
+            state.addDueWork(retryTrigger.kind, event!.id, now);
             yield* triggerPump.drainDue(now);
             return { outboundEventId: event!.id };
           }),

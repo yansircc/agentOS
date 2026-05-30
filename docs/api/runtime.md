@@ -23,6 +23,7 @@
 - `.:DispatchReceiverResult`
 - `.:DispatchTargetAdapter`
 - `.:DurableTrigger`
+- `.:DURABLE_TRIGGER_SCHEDULED_REQUESTED`
 - `.:EvidenceRow`
 - `.:FINGERPRINT_ALGO_VERSION`
 - `.:GrantResult`
@@ -40,6 +41,7 @@
 - `.:ResourceProjection`
 - `.:Resources`
 - `.:Scheduler`
+- `.:ScheduledEventIntentPayload`
 - `.:Strategy`
 - `.:Stimulus`
 - `.:SubmitResult`
@@ -59,10 +61,13 @@
 - `.:decideTier`
 - `.:makeSchemaContract`
 - `.:makeDurableTriggerRegistry`
+- `.:parseScheduledEventIntentPayload`
 - `.:projectLease`
 - `.:reasonOf`
 - `.:routeFingerprint`
 - `.:submitAgentEffect`
+- `.:scheduledEventIntentPayload`
+- `.:scheduledEventTrigger`
 - `.:triggerParseFail`
 - `.:triggerParseOk`
 - `.:turnRefOf`

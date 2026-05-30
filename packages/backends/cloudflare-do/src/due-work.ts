@@ -2,12 +2,11 @@ import { Effect } from "effect";
 import { JsonStringifyError, SqlError, safeStringify } from "@agent-os/kernel/errors";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import {
-  DURABLE_TRIGGER_SCHEDULED_REQUESTED,
   durableTriggerDuePayload,
   parseIntentPointerDuePayload,
-  scheduledEventIntentPayload,
   type IntentPointerDuePayload,
 } from "@agent-os/backend-protocol";
+import { scheduledEventIntentPayload, type AnyDurableTrigger } from "@agent-os/runtime";
 import { insertLedgerEvent } from "./ledger/inserted-events";
 import { sqlText } from "./storage/sql-row";
 
@@ -178,12 +177,12 @@ export const commitDurableTriggerIntent = (
   ctx: DurableObjectState,
   sql: SqlStorage,
   fireAt: number,
-  kind: string,
+  trigger: Pick<AnyDurableTrigger, "kind">,
   writeIntent: () => LedgerEvent,
 ): Effect.Effect<LedgerEvent, SqlError> =>
   armBeforeDueCommit(ctx, sql, fireAt, () => {
     const intent = writeIntent();
-    insertDurableTriggerDueWork(sql, fireAt, kind, intent.id);
+    insertDurableTriggerDueWork(sql, fireAt, trigger.kind, intent.id);
     return intent;
   });
 
@@ -193,17 +192,17 @@ export const enqueueScheduledEvent = (
   scope: string,
   intentTs: number,
   at: number,
-  triggerKind: string,
+  trigger: Pick<AnyDurableTrigger, "kind" | "intentEventKind">,
   eventKind: string,
   data: unknown,
 ): Effect.Effect<LedgerEvent, SqlError | JsonStringifyError> =>
   Effect.gen(function* () {
     const payload = scheduledEventIntentPayload(eventKind, data);
     const payloadStr = yield* safeStringify(payload);
-    return yield* commitDurableTriggerIntent(ctx, sql, at, triggerKind, () =>
+    return yield* commitDurableTriggerIntent(ctx, sql, at, trigger, () =>
       insertLedgerEvent(sql, {
         ts: intentTs,
-        kind: DURABLE_TRIGGER_SCHEDULED_REQUESTED,
+        kind: trigger.intentEventKind,
         scope,
         payloadStr,
         payload,

@@ -13,7 +13,7 @@ Status: Backend protocol package. Public exports are limited to storage-free bac
 - `.:DISPATCH_OUTBOUND_FAILED`
 - `.:DISPATCH_OUTBOUND_REQUESTED`
 - `.:DISPATCH_RETRY_POLICY`
-- `.:DURABLE_TRIGGER_SCHEDULED_REQUESTED`
+- `.:DELIVERY_RETRY_TRIGGER_KIND`
 - `.:copyTraceContext`
 - `.:describeDispatchCause`
 - `.:dispatchBackoffMs`
@@ -28,8 +28,6 @@ Status: Backend protocol package. Public exports are limited to storage-free bac
 - `.:parseIntentPointerDuePayload`
 - `.:parseRequestedPayload`
 - `.:parseRequestedPayloadValue`
-- `.:parseScheduledEventIntentPayload`
-- `.:scheduledEventIntentPayload`
 - `.:parseTraceContext`
 - `.:BackendProtocolEventHandler`
 - `.:BackendProtocolLedgerEventRpc`
@@ -41,7 +39,6 @@ Status: Backend protocol package. Public exports are limited to storage-free bac
 - `.:DispatchDeliveryReceipt`
 - `.:DispatchRequestedPayload`
 - `.:IntentPointerDuePayload`
-- `.:ScheduledEventIntentPayload`
 
 - `.:dispatchCarrierRef`
 - `.:dispatchLedgerDeliveryReceipt`

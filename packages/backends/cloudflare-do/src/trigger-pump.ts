@@ -19,9 +19,8 @@ import {
 } from "./due-work";
 import { sqlText } from "./storage/sql-row";
 
-const failTriggerTransaction = (sql: SqlStorage, cause: string): never => {
-  sql.exec("SELECT agent_os_unregistered_durable_trigger(?)", cause);
-  return undefined as never;
+const failTriggerTransaction = (cause: string): never => {
+  throw new SqlError({ cause });
 };
 
 const readIntentPayload = (
@@ -122,7 +121,6 @@ export const TriggerPumpLive = (
                   enqueue: (spec) => {
                     if (!registry.has(spec.triggerKind)) {
                       return failTriggerTransaction(
-                        sql,
                         `unregistered durable trigger kind: ${spec.triggerKind}`,
                       );
                     }

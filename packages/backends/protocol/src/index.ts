@@ -18,6 +18,7 @@ export const DISPATCH_OUTBOUND_REQUESTED = "dispatch.outbound.requested";
 export const DISPATCH_OUTBOUND_DELIVERED = "dispatch.outbound.delivered";
 export const DISPATCH_OUTBOUND_FAILED = "dispatch.outbound.failed";
 export const DISPATCH_INBOUND_ACCEPTED = "dispatch.inbound.accepted";
+export const DELIVERY_RETRY_TRIGGER_KIND = "delivery_retry";
 
 export const DISPATCH_EVENT_KINDS = {
   OUTBOUND_REQUESTED: DISPATCH_OUTBOUND_REQUESTED,
@@ -94,8 +95,6 @@ export const parseDispatchLivedClaim = (
   return parseOk(validation.claim);
 };
 
-export const DURABLE_TRIGGER_SCHEDULED_REQUESTED = "durable_trigger.scheduled.requested";
-
 export interface DurableTriggerRetryPolicy {
   readonly maxAttempts: number;
   readonly initialDelayMs: number;
@@ -114,11 +113,6 @@ export const DISPATCH_MAX_ATTEMPTS = DISPATCH_RETRY_POLICY.maxAttempts;
 
 export interface IntentPointerDuePayload {
   readonly intentEventId: number;
-}
-
-export interface ScheduledEventIntentPayload {
-  readonly eventKind: string;
-  readonly data: unknown;
 }
 
 type ProtocolPayloadParseResult<Payload> =
@@ -193,23 +187,6 @@ export const durableTriggerBackoffMs = (
   const exponent = Math.max(0, normalizedAttempt - 1);
   const delay = policy.initialDelayMs * policy.multiplier ** exponent;
   return Math.floor(Math.min(policy.maxDelayMs, delay));
-};
-
-export const scheduledEventIntentPayload = (
-  eventKind: string,
-  data: unknown,
-): ScheduledEventIntentPayload => ({ eventKind, data });
-
-export const parseScheduledEventIntentPayload = (
-  value: unknown,
-): DispatchPayloadParseResult<ScheduledEventIntentPayload> => {
-  if (!Predicate.isRecord(value) || typeof value.eventKind !== "string") {
-    return parseFail("scheduled event intent payload malformed");
-  }
-  return parseOk({
-    eventKind: value.eventKind,
-    data: value.data,
-  });
 };
 
 export interface DispatchRequestedPayload {

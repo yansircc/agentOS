@@ -9,6 +9,7 @@ import {
   Resources,
   Scheduler,
   TriggerPump,
+  scheduledEventTrigger,
   type AnyDurableTrigger,
 } from "@agent-os/runtime";
 import {
@@ -24,7 +25,6 @@ import { InMemoryLlmTransportLive, type InMemoryLlmTransportOptions } from "./ll
 import { InMemoryQuotaLive } from "./quota";
 import { InMemoryResourcesLive } from "./resources";
 import { InMemorySchedulerLive } from "./scheduler";
-import { scheduledEventTrigger } from "./scheduled-trigger";
 import { InMemoryTriggerPumpLive } from "./trigger-pump";
 
 export type InMemoryRuntimeServices =
@@ -57,9 +57,10 @@ export const createInMemoryRuntimeBackend = (
   const state = options.state ?? createInMemoryBackendState({ handlers: options.handlers });
   const llmLayer = InMemoryLlmTransportLive(options.llm);
   const admissionLayer = InMemoryAdmissionLive(state).pipe(Layer.provide(llmLayer));
+  const dispatchRetryTrigger = deliveryRetryTrigger(state, options.dispatchTargets ?? {});
   const triggerLayer = InMemoryTriggerPumpLive(state, options.scope, [
     scheduledEventTrigger,
-    deliveryRetryTrigger(state, options.dispatchTargets ?? {}),
+    dispatchRetryTrigger,
     ...(options.triggers ?? []),
   ]);
   return {
@@ -68,9 +69,12 @@ export const createInMemoryRuntimeBackend = (
       InMemoryLedgerLive(state),
       InMemorySchedulerLive(state, options.scope),
       triggerLayer,
-      InMemoryDispatchLive(state, options.scope, options.dispatchTargets).pipe(
-        Layer.provide(triggerLayer),
-      ),
+      InMemoryDispatchLive(
+        state,
+        options.scope,
+        options.dispatchTargets,
+        dispatchRetryTrigger,
+      ).pipe(Layer.provide(triggerLayer)),
       InMemoryResourcesLive(state),
       InMemoryQuotaLive(state),
       llmLayer,
