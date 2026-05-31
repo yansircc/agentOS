@@ -1,5 +1,6 @@
 import { Context, Effect } from "effect";
 import {
+  DurableTriggerDrainLimitExceeded,
   UnregisteredDurableTriggerKind,
   type JsonStringifyError,
   type SqlError,
@@ -141,6 +142,35 @@ export interface TriggerDrainResult {
   readonly drained: number;
 }
 
+export interface TriggerDrainUntilQuietOptions {
+  readonly maxIterations?: number;
+}
+
+export interface TriggerDrainUntilQuietResult {
+  readonly drained: number;
+  readonly iterations: number;
+}
+
+export const DEFAULT_TRIGGER_DRAIN_MAX_ITERATIONS = 32;
+
+export const drainTriggerPumpUntilQuiet = <E>(
+  drainDue: (now: number) => Effect.Effect<TriggerDrainResult, E>,
+  now: number,
+  options: TriggerDrainUntilQuietOptions = {},
+): Effect.Effect<TriggerDrainUntilQuietResult, DurableTriggerDrainLimitExceeded | E> =>
+  Effect.gen(function* () {
+    const maxIterations = options.maxIterations ?? DEFAULT_TRIGGER_DRAIN_MAX_ITERATIONS;
+    let drained = 0;
+    for (let iteration = 1; iteration <= maxIterations; iteration += 1) {
+      const result = yield* drainDue(now);
+      if (result.drained === 0) {
+        return { drained, iterations: iteration };
+      }
+      drained += result.drained;
+    }
+    return yield* Effect.fail(new DurableTriggerDrainLimitExceeded({ maxIterations, drained }));
+  });
+
 export class TriggerPump extends Context.Tag("@agent-os/TriggerPump")<
   TriggerPump,
   {
@@ -149,6 +179,16 @@ export class TriggerPump extends Context.Tag("@agent-os/TriggerPump")<
     ) => Effect.Effect<
       TriggerDrainResult,
       SqlError | JsonStringifyError | UnregisteredDurableTriggerKind
+    >;
+    readonly drainUntilQuiet: (
+      now: number,
+      options?: TriggerDrainUntilQuietOptions,
+    ) => Effect.Effect<
+      TriggerDrainUntilQuietResult,
+      | SqlError
+      | JsonStringifyError
+      | UnregisteredDurableTriggerKind
+      | DurableTriggerDrainLimitExceeded
     >;
   }
 >() {}

@@ -1,7 +1,10 @@
 import { Cause, Effect, Exit, Layer, ManagedRuntime, Option } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
-import { UnregisteredDurableTriggerKind } from "@agent-os/kernel/errors";
+import {
+  DurableTriggerDrainLimitExceeded,
+  UnregisteredDurableTriggerKind,
+} from "@agent-os/kernel/errors";
 import {
   Admission,
   DURABLE_TRIGGER_SCHEDULED_REQUESTED,
@@ -15,7 +18,10 @@ import {
   makeDurableTriggerRegistry,
   makeSchemaContract,
   scheduledEventTrigger,
+  triggerParseFail,
+  triggerParseOk,
   type DispatchReceiver,
+  type DurableTrigger,
 } from "@agent-os/runtime";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import {
@@ -59,6 +65,113 @@ describe("in-memory runtime backend", () => {
       await runtime.dispose();
     }
   });
+
+  it("TriggerPump.drainUntilQuiet drains trigger chains without caller-managed passes", async () => {
+    interface ChainIntent {
+      readonly step: number;
+    }
+    const chainTrigger = {
+      kind: "test.chain",
+      intentEventKind: "test.chain.requested",
+      parseIntent: (raw) =>
+        typeof raw === "object" &&
+        raw !== null &&
+        typeof (raw as { readonly step?: unknown }).step === "number"
+          ? triggerParseOk({ step: (raw as { readonly step: number }).step })
+          : triggerParseFail("chain intent malformed"),
+      acquire: (intent) => Effect.succeed(intent),
+      commit: (intent, tx) => {
+        tx.insertEvent({ kind: "test.chain.done", payload: { step: intent.step } });
+        if (intent.step < 3) {
+          tx.enqueue({
+            triggerKind: "test.chain",
+            intentEventKind: "test.chain.requested",
+            payload: { step: intent.step + 1 },
+            fireAt: tx.now,
+          });
+        }
+      },
+    } satisfies DurableTrigger<ChainIntent, ChainIntent>;
+
+    const { backend, runtime } = makeRuntime("chain-scope", { triggers: [chainTrigger] });
+    try {
+      const triggerPump = await runtime.runPromise(TriggerPump);
+      const ledger = await runtime.runPromise(Ledger);
+      const event = await runtime.runPromise(
+        ledger.log("test.chain.requested", { step: 1 }, "chain-scope"),
+      );
+      backend.state.addDueWork("test.chain", event.id, 10);
+
+      await expect(runtime.runPromise(triggerPump.drainDue(10))).resolves.toEqual({
+        drained: 1,
+      });
+      expect(backend.state.duePending(10)).toHaveLength(1);
+
+      await expect(runtime.runPromise(triggerPump.drainUntilQuiet(10))).resolves.toEqual({
+        drained: 2,
+        iterations: 3,
+      });
+      expect(backend.state.duePending(10)).toHaveLength(0);
+      const events = await runtime.runPromise(ledger.events("chain-scope"));
+      expect(
+        events
+          .filter((row) => row.kind === "test.chain.done")
+          .map((row) => (row.payload as { readonly step: number }).step),
+      ).toEqual([1, 2, 3]);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it.effect("TriggerPump.drainUntilQuiet fails typed when a trigger never reaches quiet", () =>
+    Effect.gen(function* () {
+      interface LoopIntent {
+        readonly count: number;
+      }
+      const loopTrigger = {
+        kind: "test.loop",
+        intentEventKind: "test.loop.requested",
+        parseIntent: (raw) =>
+          typeof raw === "object" &&
+          raw !== null &&
+          typeof (raw as { readonly count?: unknown }).count === "number"
+            ? triggerParseOk({ count: (raw as { readonly count: number }).count })
+            : triggerParseFail("loop intent malformed"),
+        acquire: (intent) => Effect.succeed(intent),
+        commit: (intent, tx) => {
+          tx.insertEvent({ kind: "test.loop.done", payload: { count: intent.count } });
+          tx.enqueue({
+            triggerKind: "test.loop",
+            intentEventKind: "test.loop.requested",
+            payload: { count: intent.count + 1 },
+            fireAt: tx.now,
+          });
+        },
+      } satisfies DurableTrigger<LoopIntent, LoopIntent>;
+
+      const { backend, runtime } = makeRuntime("loop-scope", { triggers: [loopTrigger] });
+      const ledger = yield* Effect.promise(() => runtime.runPromise(Ledger));
+      const triggerPump = yield* Effect.promise(() => runtime.runPromise(TriggerPump));
+      const event = yield* Effect.promise(() =>
+        runtime.runPromise(ledger.log("test.loop.requested", { count: 1 }, "loop-scope")),
+      );
+      backend.state.addDueWork("test.loop", event.id, 10);
+
+      const exit = yield* Effect.exit(triggerPump.drainUntilQuiet(10, { maxIterations: 2 }));
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        const failure = Cause.failureOption(exit.cause);
+        expect(Option.isSome(failure)).toBe(true);
+        if (Option.isSome(failure)) {
+          expect(failure.value).toBeInstanceOf(DurableTriggerDrainLimitExceeded);
+          expect((failure.value as DurableTriggerDrainLimitExceeded).drained).toBe(2);
+        }
+      }
+      expect(backend.state.duePending(10)).toHaveLength(1);
+      yield* Effect.promise(() => runtime.dispose());
+    }),
+  );
 
   it("SchedulerLive fires due events exactly once", async () => {
     const { runtime } = makeRuntime("schedule-scope");

@@ -43,6 +43,10 @@
 - `.:openAIChat`
 - `.:providerDispatchTarget`
 - `.:queueDispatchTarget`
+- `./testing:AgentDOTestingDrainRuntime`
+- `./testing:AgentDrainDueTestingOptions`
+- `./testing:AgentDrainUntilQuietTestingOptions`
+- `./testing:withAgentDOTestingDrain`
 
 ## Experimental exports
 

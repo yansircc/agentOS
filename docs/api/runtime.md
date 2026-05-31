@@ -25,6 +25,7 @@
 - `.:DurableTrigger`
 - `.:DurableTriggerRegistry`
 - `.:DURABLE_TRIGGER_SCHEDULED_REQUESTED`
+- `.:DEFAULT_TRIGGER_DRAIN_MAX_ITERATIONS`
 - `.:EvidenceRow`
 - `.:FINGERPRINT_ALGO_VERSION`
 - `.:GrantResult`
@@ -50,6 +51,8 @@
 - `.:Tool`
 - `.:ToolDefinition`
 - `.:TriggerDrainResult`
+- `.:TriggerDrainUntilQuietOptions`
+- `.:TriggerDrainUntilQuietResult`
 - `.:TriggerEventSpec`
 - `.:TriggerIntentSpec`
 - `.:TriggerParseResult`
@@ -60,6 +63,7 @@
 - `.:buildInitialMessages`
 - `.:commitBoundaryEvent`
 - `.:decideTier`
+- `.:drainTriggerPumpUntilQuiet`
 - `.:makeSchemaContract`
 - `.:makeDurableTriggerRegistry`
 - `.:getDurableTrigger`

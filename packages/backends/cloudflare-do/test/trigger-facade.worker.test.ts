@@ -2,10 +2,11 @@ import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "@effect/vitest";
 
-import type { TriggerFacadeTestDO } from "./test-worker";
+import type { TriggerFacadeTestDO, TriggerTestingDrainTestDO } from "./test-worker";
 
 interface TestEnv {
   readonly TRIGGER_FACADE_DO: DurableObjectNamespace<TriggerFacadeTestDO>;
+  readonly TRIGGER_TESTING_DRAIN_DO: DurableObjectNamespace<TriggerTestingDrainTestDO>;
 }
 
 const testEnv = env as unknown as TestEnv;
@@ -64,5 +65,53 @@ describe("defineAgentDO trigger facade", () => {
       { label: "one", seen: 0 },
       { label: "two", seen: 1 },
     ]);
+  });
+
+  it("does not expose production drain methods on the default facade", async () => {
+    const stub = testEnv.TRIGGER_FACADE_DO.get(
+      testEnv.TRIGGER_FACADE_DO.idFromName("trigger-facade-no-prod-drain"),
+    );
+
+    const keys = await runInDurableObject(stub, (instance) => ({
+      drainDue: "drainDue" in instance,
+      drainUntilQuiet: "drainUntilQuiet" in instance,
+      testingDrain: "__drainUntilQuietForTesting" in instance,
+    }));
+
+    expect(keys).toEqual({
+      drainDue: false,
+      drainUntilQuiet: false,
+      testingDrain: false,
+    });
+  });
+
+  it("exposes explicit testing drain-until-quiet through the testing wrapper only", async () => {
+    const stub = testEnv.TRIGGER_TESTING_DRAIN_DO.get(
+      testEnv.TRIGGER_TESTING_DRAIN_DO.idFromName("trigger-testing-drain-chain"),
+    );
+
+    const result = await runInDurableObject(stub, async (instance) => {
+      await instance.enqueueTrigger({
+        triggerKind: "test.chain",
+        payload: { step: 1 },
+        at: 10,
+      });
+      const once = await instance.__drainDueOnceForTesting({ now: 10 });
+      const untilQuiet = await instance.__drainUntilQuietForTesting({ now: 10 });
+      const events = await instance.events();
+      return {
+        once,
+        untilQuiet,
+        doneSteps: events
+          .filter((event) => event.kind === "test.chain.done")
+          .map((event) => (event.payload as { readonly step: number }).step),
+      };
+    });
+
+    expect(result).toEqual({
+      once: { drained: 1 },
+      untilQuiet: { drained: 2, iterations: 3 },
+      doneSteps: [1, 2, 3],
+    });
   });
 });

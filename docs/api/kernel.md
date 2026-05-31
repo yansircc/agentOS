@@ -78,6 +78,7 @@
 - `./errors:DispatchBindingRefMalformed`
 - `./errors:DispatchScopeMismatch`
 - `./errors:DispatchTargetNotFound`
+- `./errors:DurableTriggerDrainLimitExceeded`
 - `./errors:InvalidResourceAmount`
 - `./errors:InvalidScheduleAt`
 - `./errors:JsonStringifyError`
@@ -219,6 +220,7 @@
 - `./types:LedgerEvent`
 - `./types:LedgerEventRpc`
 - `./types:QuotaState`
+- `.:DurableTriggerDrainLimitExceeded`
 - `.:UnregisteredDurableTriggerKind`
 - `./types:QuotaStateSpec`
 - `./types:ResourceGrantResult`

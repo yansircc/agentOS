@@ -79,6 +79,9 @@ import {
   validateBoundaryEventPayload,
   type AnyDurableTrigger,
   type InternalSubmitSpec,
+  type TriggerDrainResult,
+  type TriggerDrainUntilQuietOptions,
+  type TriggerDrainUntilQuietResult,
 } from "@agent-os/runtime";
 import type { LlmRoute } from "@agent-os/kernel/llm";
 import { Dispatch, type DispatchEnvelope, type DispatchTargetRegistry } from "./dispatch";
@@ -132,6 +135,14 @@ export interface AgentTriggerIntentSpec {
   readonly payload: unknown;
   readonly at: number;
   readonly ts?: number;
+}
+
+export interface AgentDrainDueTestingOptions {
+  readonly now?: number;
+}
+
+export interface AgentDrainUntilQuietTestingOptions extends AgentDrainDueTestingOptions {
+  readonly maxIterations?: number;
 }
 
 export interface AgentRuntimeClient extends AgentRuntimeReaderClient {
@@ -621,6 +632,39 @@ export class AgentDurableObject<
         );
         yield* fireLedgerEvents(bus, [intent]);
         return { id: intent.id };
+      }),
+    );
+  }
+
+  /** Testing-only deterministic drain primitive.
+   *
+   *  Production code should not call this; Cloudflare alarms own production
+   *  due-work drain. The testing subpath exposes an intentionally ugly RPC
+   *  wrapper for local smoke tests that need synchronous trigger progress.
+   */
+  protected drainDueOnceForTestingFull(
+    options: AgentDrainDueTestingOptions = {},
+  ): Promise<TriggerDrainResult> {
+    return this.runScoped((_scope) =>
+      Effect.gen(function* () {
+        const triggerPump = yield* TriggerPump;
+        const now = options.now ?? (yield* Clock.currentTimeMillis);
+        return yield* triggerPump.drainDue(now);
+      }),
+    );
+  }
+
+  /** Testing-only deterministic drain loop; production drain remains alarm-owned. */
+  protected drainUntilQuietForTestingFull(
+    options: AgentDrainUntilQuietTestingOptions = {},
+  ): Promise<TriggerDrainUntilQuietResult> {
+    return this.runScoped((_scope) =>
+      Effect.gen(function* () {
+        const triggerPump = yield* TriggerPump;
+        const now = options.now ?? (yield* Clock.currentTimeMillis);
+        const pumpOptions: TriggerDrainUntilQuietOptions =
+          options.maxIterations === undefined ? {} : { maxIterations: options.maxIterations };
+        return yield* triggerPump.drainUntilQuiet(now, pumpOptions);
       }),
     );
   }

@@ -18,6 +18,7 @@ import {
   type AgentRuntimeClient,
   type CloudflareAgentEnv,
 } from "../src";
+import { withAgentDOTestingDrain } from "../src/testing";
 import {
   triggerParseFail,
   triggerParseOk,
@@ -387,6 +388,43 @@ export const TriggerFacadeTestDO = defineAgentDO<CloudflareAgentEnv>({
   triggers: [foldTrigger],
 });
 export type TriggerFacadeTestDO = InstanceType<typeof TriggerFacadeTestDO>;
+
+interface ChainIntent {
+  readonly step: number;
+}
+
+const parseChainIntent = (raw: unknown) => {
+  if (!Predicate.isRecord(raw) || typeof raw.step !== "number") {
+    return triggerParseFail<ChainIntent>("chain intent malformed");
+  }
+  return triggerParseOk({ step: raw.step });
+};
+
+const chainTrigger = {
+  kind: "test.chain",
+  intentEventKind: "test.chain.requested",
+  parseIntent: parseChainIntent,
+  acquire: (intent: ChainIntent) => Effect.succeed(intent),
+  commit: (outcome, tx) => {
+    tx.insertEvent({ kind: "test.chain.done", payload: { step: outcome.step } });
+    if (outcome.step < 3) {
+      tx.enqueue({
+        triggerKind: "test.chain",
+        intentEventKind: "test.chain.requested",
+        payload: { step: outcome.step + 1 },
+        fireAt: tx.now,
+      });
+    }
+  },
+} satisfies DurableTrigger<ChainIntent, ChainIntent>;
+
+export const TriggerTestingDrainTestDO = withAgentDOTestingDrain(
+  defineAgentDO<CloudflareAgentEnv>({
+    bindings: [],
+    triggers: [chainTrigger],
+  }),
+);
+export type TriggerTestingDrainTestDO = InstanceType<typeof TriggerTestingDrainTestDO>;
 
 interface WorkerEnv extends CloudflareAgentEnv {
   readonly STREAM_DO: DurableObjectNamespace<StreamTestDO>;

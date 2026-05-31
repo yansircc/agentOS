@@ -34,6 +34,10 @@
         "name": "TRIGGER_FACADE_DO",
         "class_name": "TriggerFacadeTestDO",
       },
+      {
+        "name": "TRIGGER_TESTING_DRAIN_DO",
+        "class_name": "TriggerTestingDrainTestDO",
+      },
     ],
   },
   "migrations": [
@@ -47,6 +51,7 @@
         "ExtensionTestDO",
         "FacadeSubmitTestDO",
         "TriggerFacadeTestDO",
+        "TriggerTestingDrainTestDO",
       ],
     },
   ],

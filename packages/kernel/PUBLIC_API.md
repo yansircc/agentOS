@@ -82,6 +82,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `./errors:DispatchBindingRefMalformed`
 - `./errors:DispatchScopeMismatch`
 - `./errors:DispatchTargetNotFound`
+- `./errors:DurableTriggerDrainLimitExceeded`
 - `./errors:InvalidResourceAmount`
 - `./errors:InvalidScheduleAt`
 - `./errors:JsonStringifyError`
@@ -223,6 +224,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `./types:LedgerEvent`
 - `./types:LedgerEventRpc`
 - `./types:QuotaState`
+- `.:DurableTriggerDrainLimitExceeded`
 - `.:UnregisteredDurableTriggerKind`
 - `./types:QuotaStateSpec`
 - `./types:ResourceGrantResult`

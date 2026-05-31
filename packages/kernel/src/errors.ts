@@ -51,6 +51,13 @@ export class UnregisteredDurableTriggerKind extends Data.TaggedError(
   readonly kind: string;
 }> {}
 
+export class DurableTriggerDrainLimitExceeded extends Data.TaggedError(
+  "agent_os.durable_trigger_drain_limit_exceeded",
+)<{
+  readonly maxIterations: number;
+  readonly drained: number;
+}> {}
+
 export class CapabilityRejected extends Data.TaggedError("agent_os.capability_rejected")<{
   readonly event: string;
   readonly capability: string;

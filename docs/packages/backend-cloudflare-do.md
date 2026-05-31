@@ -23,6 +23,10 @@ submit primitive. It is a public projection of the backend durable-trigger
 commit path: registry lookup happens before any ledger, due-work, or alarm
 write.
 
+Production drain is alarm-owned. Deterministic local/test drain is available
+only from `@agent-os/backend-cloudflare-do/testing` with explicit
+`__drain*ForTesting` method names; production app routes must not call it.
+
 ## Minimal Usage
 
 Create a DO class from one app-facing facade config. `bindings` is the only
@@ -76,6 +80,12 @@ export const AgentDO = defineAgentDO<Env>({
 Omit `llms` for event-only facades. They keep `emit`, `schedule`, `dispatch`,
 `on`, `bindings`, and extensions, but do not expose `submit`. Full
 `SubmitSpec` remains on the low-level `createAgentDurableObject` API.
+
+External consumer apps should depend on the public package entrypoints from a
+single lockfile workspace. Current source-package consumption requires
+TypeScript `moduleResolution: Bundler` and must not use backend source subpaths.
+`NodeNext` consumption requires a later built distribution track because the
+current package exports point at source `.ts` files.
 
 ## Verification
 

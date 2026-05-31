@@ -5,7 +5,12 @@ import {
   UnregisteredDurableTriggerKind,
 } from "@agent-os/kernel/errors";
 import type { LedgerEvent } from "@agent-os/kernel/types";
-import { DurableTriggerRegistry, TriggerPump, type TriggerTx } from "@agent-os/runtime";
+import {
+  DurableTriggerRegistry,
+  TriggerPump,
+  drainTriggerPumpUntilQuiet,
+  type TriggerTx,
+} from "@agent-os/runtime";
 import { fireLedgerEvents, insertLedgerEvent } from "./ledger/inserted-events";
 import { selectLedgerEvents } from "./ledger/ledger";
 import { EventBus } from "./ledger";
@@ -148,18 +153,20 @@ export const TriggerPumpLive = (
           return true;
         });
 
+      const drainDue = (now: number) =>
+        Effect.gen(function* () {
+          const rows = yield* selectDuePending(sql, now);
+          let drained = 0;
+          for (const row of rows) {
+            const completed = yield* runOne(row, now);
+            if (completed) drained += 1;
+          }
+          yield* armNextDue(ctx, sql);
+          return { drained };
+        });
       return {
-        drainDue: (now) =>
-          Effect.gen(function* () {
-            const rows = yield* selectDuePending(sql, now);
-            let drained = 0;
-            for (const row of rows) {
-              const completed = yield* runOne(row, now);
-              if (completed) drained += 1;
-            }
-            yield* armNextDue(ctx, sql);
-            return { drained };
-          }),
+        drainDue,
+        drainUntilQuiet: (now, options) => drainTriggerPumpUntilQuiet(drainDue, now, options),
       };
     }),
   );

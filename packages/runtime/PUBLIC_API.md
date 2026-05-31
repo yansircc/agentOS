@@ -29,6 +29,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:DurableTrigger`
 - `.:DurableTriggerRegistry`
 - `.:DURABLE_TRIGGER_SCHEDULED_REQUESTED`
+- `.:DEFAULT_TRIGGER_DRAIN_MAX_ITERATIONS`
 - `.:EvidenceRow`
 - `.:FINGERPRINT_ALGO_VERSION`
 - `.:GrantResult`
@@ -54,6 +55,8 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:Tool`
 - `.:ToolDefinition`
 - `.:TriggerDrainResult`
+- `.:TriggerDrainUntilQuietOptions`
+- `.:TriggerDrainUntilQuietResult`
 - `.:TriggerEventSpec`
 - `.:TriggerIntentSpec`
 - `.:TriggerParseResult`
@@ -64,6 +67,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:buildInitialMessages`
 - `.:commitBoundaryEvent`
 - `.:decideTier`
+- `.:drainTriggerPumpUntilQuiet`
 - `.:makeSchemaContract`
 - `.:makeDurableTriggerRegistry`
 - `.:getDurableTrigger`
