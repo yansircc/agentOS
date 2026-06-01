@@ -33,6 +33,11 @@ Production drain is alarm-owned. Deterministic local/test drain is available
 only from `@agent-os/backend-cloudflare-do/testing` with explicit
 `__drain*ForTesting` method names; production app routes must not call it.
 
+Backend primitives stop at append-only ledger order, trigger identity, tx-local
+ledger reads, and testing-only drain. App-owned projection tables and provider
+idempotency key mappings stay in application code until at least two
+independent apps or adapters prove the same shape should become substrate.
+
 ## Minimal Usage
 
 Create a DO class from one app-facing facade config. `bindings` is the only
