@@ -21,7 +21,6 @@
 
 import { runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
-import { describe, expect, it } from "vite-plus/test";
 
 import type { LedgerEventRpc } from "@agent-os/kernel/types";
 import type { EmitTestDO, ExtensionTestDO } from "./test-worker";

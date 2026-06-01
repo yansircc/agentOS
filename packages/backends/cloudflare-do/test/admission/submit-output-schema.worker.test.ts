@@ -12,7 +12,7 @@
 import { Effect, Exit } from "effect";
 import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
-import { describe, expect, it } from "@effect/vitest";
+import type {} from "@effect/vitest";
 
 import { Ledger } from "../../src/ledger";
 import { type InternalSubmitSpec, submitAgentEffect } from "@agent-os/runtime";

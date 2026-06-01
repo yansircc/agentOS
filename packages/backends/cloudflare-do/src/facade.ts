@@ -1,4 +1,3 @@
-import type { DurableObject } from "cloudflare:workers";
 import type { ExtensionDeclaration } from "@agent-os/kernel/extensions";
 import type { ScopeRef } from "@agent-os/kernel/effect-claim";
 import type { DispatchToScopeResult, DispatchToScopeSpec } from "@agent-os/kernel/types";
@@ -42,7 +41,7 @@ export type AgentDOClass<
   Env extends CloudflareAgentEnv,
   Runtime extends AgentFacadeRuntimeClient,
 > = {
-  new (ctx: DurableObjectState, env: Env): DurableObject<Env> & Runtime;
+  new (ctx: DurableObjectState, env: Env): AgentDurableObject<Env, Runtime> & Runtime;
 };
 
 export type AgentOnHandler<

@@ -19,7 +19,7 @@ import type { EventHandler } from "@agent-os/kernel/types";
 import { Exit, Layer, ManagedRuntime } from "effect";
 import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
-import { describe, expect, it } from "@effect/vitest";
+import type {} from "@effect/vitest";
 
 import { AdmissionLive } from "../src/admission";
 import { EventBusLive } from "../src/ledger";

@@ -11,7 +11,6 @@ import type { LedgerEventRpc, StreamEventsOptions } from "@agent-os/kernel/types
 
 import { SELF, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
-import { describe, expect, it } from "vite-plus/test";
 import type { EventQueryOptions } from "@agent-os/kernel/types";
 import type { StreamTestDO } from "./test-worker";
 

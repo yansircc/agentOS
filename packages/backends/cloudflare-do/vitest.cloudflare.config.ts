@@ -39,6 +39,7 @@ export default defineConfig({
   },
   test: {
     fileParallelism: false,
+    globals: true,
     include: ["test/**/*.worker.test.ts"],
   },
   plugins: [
