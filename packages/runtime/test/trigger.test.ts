@@ -1,7 +1,9 @@
 import { Effect, Exit } from "effect";
 import { describe, expect, it } from "@effect/vitest";
+import { DurableTriggerCommitReturnedThenable } from "@agent-os/kernel";
 import {
   DURABLE_TRIGGER_SCHEDULED_REQUESTED,
+  runSynchronousTriggerCommit,
   makeDurableTriggerRegistry,
   parseScheduledEventIntentPayload,
   scheduledEventIntentPayload,
@@ -48,11 +50,50 @@ describe("durable trigger runtime algebra", () => {
           now: 1,
           dueWorkId: 2,
           intentEventId: 3,
+          signal: new AbortController().signal,
+          acquireMode: "normal",
         },
       );
       expect(outcome).toEqual({ ok: false, reason: "provider unavailable" });
     }),
   );
+
+  it.effect("passes cancellation context through acquire", () =>
+    Effect.gen(function* () {
+      const controller = new AbortController();
+      const seen: Array<{ readonly aborted: boolean; readonly mode: string }> = [];
+      const cancellable: DurableTrigger<unknown, { readonly ok: true }> = {
+        kind: "cancellable",
+        intentEventKind: "cancellable.requested",
+        parseIntent: (raw: unknown) => triggerParseOk(raw),
+        acquire: (_intent, ctx) => {
+          seen.push({ aborted: ctx.signal.aborted, mode: ctx.acquireMode });
+          return Effect.succeed({ ok: true });
+        },
+        commit: () => undefined,
+      };
+
+      controller.abort("test");
+      yield* cancellable.acquire(
+        {},
+        {
+          scope: "scope",
+          now: 1,
+          dueWorkId: 2,
+          intentEventId: 3,
+          signal: controller.signal,
+          acquireMode: "redrive",
+        },
+      );
+
+      expect(seen).toEqual([{ aborted: true, mode: "redrive" }]);
+    }),
+  );
+
+  it("rejects thenable cancellation commits with the same sync guard", () => {
+    const failure = runSynchronousTriggerCommit("scope", "kind", () => Promise.resolve());
+    expect(failure).toBeInstanceOf(DurableTriggerCommitReturnedThenable);
+  });
 
   it.effect("owns the scheduled event trigger value", () =>
     Effect.gen(function* () {
@@ -69,6 +110,8 @@ describe("durable trigger runtime algebra", () => {
         now: 1,
         dueWorkId: 2,
         intentEventId: 3,
+        signal: new AbortController().signal,
+        acquireMode: "normal",
       });
       expect(outcome).toEqual(intent);
     }),

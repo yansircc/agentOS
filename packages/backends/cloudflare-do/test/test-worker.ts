@@ -24,9 +24,10 @@ import {
   triggerParseOk,
   type DispatchTargetAdapter,
   type DurableTrigger,
+  type TriggerCancellation,
   type TriggerTx,
 } from "@agent-os/runtime";
-import { CapabilityRejected } from "@agent-os/kernel/errors";
+import { CapabilityRejected, DurableTriggerAcquireCancelled } from "@agent-os/kernel/errors";
 import { boundaryPackage, defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
 import { eventNamespace, type ExtensionCapability } from "@agent-os/kernel/extensions";
 import { makePreClaim } from "@agent-os/kernel/effect-claim";
@@ -483,6 +484,186 @@ export const TriggerTestingDrainTestDO = withAgentDOTestingDrain(
 );
 export type TriggerTestingDrainTestDO = InstanceType<typeof TriggerTestingDrainTestDO>;
 
+interface CancelIntent {
+  readonly label: string;
+}
+
+const parseCancelIntent = (raw: unknown) => {
+  if (!Predicate.isRecord(raw) || typeof raw.label !== "string") {
+    return triggerParseFail<CancelIntent>("cancel intent malformed");
+  }
+  return triggerParseOk({ label: raw.label });
+};
+
+const acquireCancelled = (
+  kind: string,
+  ctx: Parameters<DurableTrigger<CancelIntent, CancelIntent>["acquire"]>[1],
+  reason?: string,
+) =>
+  new DurableTriggerAcquireCancelled({
+    scope: ctx.scope,
+    kind,
+    dueWorkId: ctx.dueWorkId,
+    intentEventId: ctx.intentEventId,
+    ...(reason === undefined ? {} : { reason }),
+  });
+
+export const TriggerCancelTestDO = withAgentDOTestingDrain(
+  defineAgentDO<CloudflareAgentEnv>({
+    bindings: [],
+    triggers: (ctx) => {
+      ctx.sql.exec(`
+        CREATE TABLE IF NOT EXISTS test_acquire_observations (
+          trigger_kind TEXT NOT NULL,
+          mode TEXT NOT NULL,
+          aborted INTEGER NOT NULL
+        )
+      `);
+      const cancellableTrigger = {
+        kind: "test.cancellable",
+        intentEventKind: "test.cancellable.requested",
+        parseIntent: parseCancelIntent,
+        acquire: (intent: CancelIntent, acquireCtx) =>
+          Effect.tryPromise({
+            try: () =>
+              Promise.race([
+                scheduler.wait(50).then(() => intent),
+                new Promise<CancelIntent>((_resolve, reject) => {
+                  if (acquireCtx.signal.aborted) {
+                    reject(acquireCancelled("test.cancellable", acquireCtx, "already aborted"));
+                    return;
+                  }
+                  acquireCtx.signal.addEventListener(
+                    "abort",
+                    () =>
+                      reject(
+                        acquireCancelled(
+                          "test.cancellable",
+                          acquireCtx,
+                          String(acquireCtx.signal.reason ?? "aborted"),
+                        ),
+                      ),
+                    { once: true },
+                  );
+                }),
+              ]),
+            catch: (cause) =>
+              cause instanceof DurableTriggerAcquireCancelled
+                ? cause
+                : acquireCancelled("test.cancellable", acquireCtx, String(cause)),
+          }),
+        commit: (outcome, tx) => {
+          tx.insertEvent({ kind: "test.cancellable.done", payload: outcome });
+        },
+        commitCancelled: (intent, cancellation, tx) => {
+          tx.insertEvent({
+            kind: "test.cancellable.cancelled",
+            payload: { label: intent.label, reason: cancellation.reason ?? null },
+          });
+        },
+      } satisfies DurableTrigger<CancelIntent, CancelIntent>;
+      const genericCancelTrigger = {
+        kind: "test.generic_cancel",
+        intentEventKind: "test.generic_cancel.requested",
+        parseIntent: parseCancelIntent,
+        acquire: (intent: CancelIntent) => Effect.succeed(intent),
+        commit: (outcome, tx) => {
+          tx.insertEvent({ kind: "test.generic_cancel.done", payload: outcome });
+        },
+      } satisfies DurableTrigger<CancelIntent, CancelIntent>;
+      const thenableCancelTrigger = {
+        kind: "test.thenable_cancel",
+        intentEventKind: "test.thenable_cancel.requested",
+        parseIntent: parseCancelIntent,
+        acquire: (intent: CancelIntent) => Effect.succeed(intent),
+        commit: (outcome, tx) => {
+          tx.insertEvent({ kind: "test.thenable_cancel.done", payload: outcome });
+        },
+        commitCancelled: ((
+          intent: CancelIntent,
+          _cancellation: TriggerCancellation,
+          tx: TriggerTx,
+        ) => {
+          tx.insertEvent({ kind: "test.thenable_cancel.cancelled", payload: intent });
+          return Promise.resolve(undefined);
+        }) as DurableTrigger<CancelIntent, CancelIntent>["commitCancelled"],
+      } satisfies DurableTrigger<CancelIntent, CancelIntent>;
+      const redriveTrigger = {
+        kind: "test.redrive_once",
+        intentEventKind: "test.redrive_once.requested",
+        acquireDeadlineMs: 1,
+        parseIntent: parseCancelIntent,
+        acquire: (intent: CancelIntent, acquireCtx) =>
+          Effect.gen(function* () {
+            ctx.sql.exec(
+              "INSERT INTO test_acquire_observations (trigger_kind, mode, aborted) VALUES (?, ?, ?)",
+              "test.redrive_once",
+              acquireCtx.acquireMode,
+              acquireCtx.signal.aborted ? 1 : 0,
+            );
+            if (acquireCtx.acquireMode === "normal") {
+              yield* Effect.promise(() => scheduler.wait(50));
+            }
+            return intent;
+          }),
+        commit: (outcome, tx) => {
+          tx.insertEvent({ kind: "test.redrive_once.done", payload: outcome });
+        },
+      } satisfies DurableTrigger<CancelIntent, CancelIntent>;
+      const redriveCancelledTrigger = {
+        kind: "test.redrive_cancelled",
+        intentEventKind: "test.redrive_cancelled.requested",
+        acquireDeadlineMs: 1,
+        parseIntent: parseCancelIntent,
+        acquire: (intent: CancelIntent, acquireCtx) =>
+          Effect.gen(function* () {
+            ctx.sql.exec(
+              "INSERT INTO test_acquire_observations (trigger_kind, mode, aborted) VALUES (?, ?, ?)",
+              "test.redrive_cancelled",
+              acquireCtx.acquireMode,
+              acquireCtx.signal.aborted ? 1 : 0,
+            );
+            if (acquireCtx.signal.aborted) {
+              return yield* Effect.fail(
+                acquireCancelled("test.redrive_cancelled", acquireCtx, "redrive aborted"),
+              );
+            }
+            yield* Effect.promise(() => scheduler.wait(50));
+            return intent;
+          }),
+        commit: (outcome, tx) => {
+          tx.insertEvent({ kind: "test.redrive_cancelled.done", payload: outcome });
+        },
+        commitCancelled: (intent, cancellation, tx) => {
+          tx.insertEvent({
+            kind: "test.redrive_cancelled.cancelled",
+            payload: { label: intent.label, reason: cancellation.reason ?? null },
+          });
+        },
+      } satisfies DurableTrigger<CancelIntent, CancelIntent>;
+      const defaultDeadlineTrigger = {
+        kind: "test.default_deadline",
+        intentEventKind: "test.default_deadline.requested",
+        parseIntent: parseCancelIntent,
+        acquire: (intent: CancelIntent) =>
+          Effect.promise(() => scheduler.wait(50)).pipe(Effect.as(intent)),
+        commit: (outcome, tx) => {
+          tx.insertEvent({ kind: "test.default_deadline.done", payload: outcome });
+        },
+      } satisfies DurableTrigger<CancelIntent, CancelIntent>;
+      return [
+        cancellableTrigger,
+        genericCancelTrigger,
+        thenableCancelTrigger,
+        redriveTrigger,
+        redriveCancelledTrigger,
+        defaultDeadlineTrigger,
+      ];
+    },
+  }),
+);
+export type TriggerCancelTestDO = InstanceType<typeof TriggerCancelTestDO>;
+
 interface WorkerEnv extends CloudflareAgentEnv {
   readonly STREAM_DO: DurableObjectNamespace<StreamTestDO>;
   readonly EXTENSION_DO: DurableObjectNamespace<ExtensionTestDO>;
@@ -490,6 +671,7 @@ interface WorkerEnv extends CloudflareAgentEnv {
   readonly TRIGGER_FACADE_DO: DurableObjectNamespace<TriggerFacadeTestDO>;
   readonly TRIGGER_FACTORY_ERROR_DO: DurableObjectNamespace<TriggerFactoryErrorTestDO>;
   readonly TRIGGER_BOUNDARY_DO: DurableObjectNamespace<TriggerBoundaryTestDO>;
+  readonly TRIGGER_CANCEL_DO: DurableObjectNamespace<TriggerCancelTestDO>;
 }
 
 const parseLastEventId = (value: string | null): number => {

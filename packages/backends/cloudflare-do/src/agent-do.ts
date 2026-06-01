@@ -79,6 +79,7 @@ import {
   submitAgentEffect,
   validateBoundaryEventPayload,
   type InternalSubmitSpec,
+  type TriggerCancelResult,
   type TriggerDrainResult,
   type TriggerDrainUntilQuietOptions,
   type TriggerDrainUntilQuietResult,
@@ -138,6 +139,12 @@ export interface AgentTriggerIntentSpec {
   readonly ts?: number;
 }
 
+export interface AgentTriggerCancelSpec {
+  readonly triggerKind: string;
+  readonly intentEventId: number;
+  readonly reason?: string;
+}
+
 export interface AgentDrainDueTestingOptions {
   readonly now?: number;
 }
@@ -152,6 +159,7 @@ export interface AgentRuntimeClient extends AgentRuntimeReaderClient {
     readonly data: unknown;
   }) => Promise<{ id: number }>;
   readonly enqueueTrigger: (spec: AgentTriggerIntentSpec) => Promise<{ id: number }>;
+  readonly cancelTrigger: (spec: AgentTriggerCancelSpec) => Promise<TriggerCancelResult>;
   readonly dispatchToScope: (spec: DispatchToScopeSpec) => Promise<DispatchToScopeResult>;
   readonly scheduleEvent: (spec: ScheduledEventSpec) => Promise<{ id: number }>;
   readonly submit: (spec: SubmitSpec) => Promise<SubmitResult>;
@@ -654,6 +662,15 @@ export class AgentDurableObject<
     );
   }
 
+  protected cancelTriggerFull(spec: AgentTriggerCancelSpec): Promise<TriggerCancelResult> {
+    return this.runScoped(() =>
+      Effect.gen(function* () {
+        const triggerPump = yield* TriggerPump;
+        return yield* triggerPump.cancelTrigger(spec);
+      }),
+    );
+  }
+
   /** Testing-only deterministic drain primitive.
    *
    *  Production code should not call this; Cloudflare alarms own production
@@ -865,6 +882,10 @@ export const createAgentDurableObject = <Env extends CloudflareAgentEnv>(
 
     enqueueTrigger(spec: AgentTriggerIntentSpec): Promise<{ id: number }> {
       return this.enqueueTriggerFull(spec);
+    }
+
+    cancelTrigger(spec: AgentTriggerCancelSpec): Promise<TriggerCancelResult> {
+      return this.cancelTriggerFull(spec);
     }
 
     dispatchToScope(spec: DispatchToScopeSpec): Promise<DispatchToScopeResult> {

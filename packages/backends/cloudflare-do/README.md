@@ -32,6 +32,20 @@ submit primitive. It is a public projection of the backend durable-trigger
 commit path: registry lookup happens before any ledger, due-work, or alarm
 write.
 
+`agent.cancelTrigger({ triggerKind, intentEventId, reason })` is the app-facing
+best-effort cancellation primitive. It is registry-closed: unknown trigger kind
+fails before ledger, due-work, or alarm mutation. Pending rows are terminally
+cancelled in one transaction. Running rows record a durable cancel request and
+abort the active in-isolate `AbortController` when present; if the acquire
+already crossed a non-cancellable external boundary, normal commit may still
+win. Expired claims redrive automatically, and a redrive that sees a durable
+cancel request starts with `AcquireCtx.signal.aborted === true`.
+
+The backend adds claim/cancel columns to `due_work`, but the payload remains the
+intent pointer `{ intentEventId }`. `due_work` is a mechanical buffer, not an
+audit source. Cancellation visibility comes from app `commitCancelled` facts or
+the substrate `durable_trigger.cancelled` fact.
+
 Production drain is alarm-owned. Deterministic local/test drain is available
 only from `@agent-os/backend-cloudflare-do/testing` with explicit
 `__drain*ForTesting` method names; production app routes must not call it.
@@ -43,6 +57,10 @@ independent apps or adapters prove the same shape should become substrate.
 Factories must be idempotent in resource acquisition: Durable Object eviction
 can cause `triggers(ctx)` to run again, and the backend does not promise a
 stable factory call count.
+
+`stuckTriggers(now)` is observability over expired claims. It is not a repair
+entry point; ordinary drain redrives expired claims by claiming the same due row
+with `acquireMode: "redrive"`.
 
 Cross-DO strong consistency is not provided by this backend. Apps choose a
 single DO scope for strong transaction boundaries, or model cross-scope work as

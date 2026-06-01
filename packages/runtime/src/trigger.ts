@@ -1,5 +1,6 @@
 import { Context, Effect } from "effect";
 import {
+  DurableTriggerAcquireCancelled,
   DurableTriggerCommitReturnedThenable,
   DurableTriggerDrainLimitExceeded,
   UnregisteredDurableTriggerKind,
@@ -27,6 +28,13 @@ export interface AcquireCtx {
   readonly now: number;
   readonly dueWorkId: number;
   readonly intentEventId: number;
+  readonly signal: AbortSignal;
+  readonly acquireMode: "normal" | "redrive";
+}
+
+export interface TriggerCancellation {
+  readonly reason?: string;
+  readonly requestedAt?: number;
 }
 
 export type TriggerParseResult<Intent> =
@@ -55,11 +63,20 @@ export interface TriggerTx extends AcquireCtx {
 export interface DurableTrigger<Intent, Outcome, R = never> {
   readonly kind: string;
   readonly intentEventKind: string;
+  readonly acquireDeadlineMs?: number;
   readonly parseIntent: (raw: unknown) => TriggerParseResult<Intent>;
   // External acquire effects must be idempotent: another drain can complete the
   // same due row before this trigger reaches commit.
-  readonly acquire: (intent: Intent, ctx: AcquireCtx) => Effect.Effect<Outcome, never, R>;
+  readonly acquire: (
+    intent: Intent,
+    ctx: AcquireCtx,
+  ) => Effect.Effect<Outcome, DurableTriggerAcquireCancelled, R>;
   readonly commit: (outcome: Outcome, tx: TriggerTx) => void;
+  readonly commitCancelled?: (
+    intent: Intent,
+    cancellation: TriggerCancellation,
+    tx: TriggerTx,
+  ) => void;
 }
 
 // Heterogeneous registries erase the trigger-local intent/outcome types.
@@ -85,6 +102,15 @@ export const getDurableTrigger = (
 };
 
 export const DURABLE_TRIGGER_SCHEDULED_REQUESTED = "durable_trigger.scheduled.requested";
+export const DURABLE_TRIGGER_CANCELLED = "durable_trigger.cancelled";
+export const DEFAULT_TRIGGER_ACQUIRE_DEADLINE_MS = 60_000;
+
+export interface DurableTriggerCancelledPayload {
+  readonly triggerKind: string;
+  readonly intentEventId: number;
+  readonly dueWorkId: number;
+  readonly reason?: string;
+}
 
 export interface ScheduledEventIntentPayload {
   readonly eventKind: string;
@@ -157,6 +183,30 @@ export interface TriggerDrainResult {
   readonly drained: number;
 }
 
+export interface TriggerCancelSpec {
+  readonly triggerKind: string;
+  readonly intentEventId: number;
+  readonly reason?: string;
+}
+
+export type TriggerCancelResult =
+  | { readonly status: "cancelled"; readonly cancelled: number }
+  | { readonly status: "requested"; readonly requested: number }
+  | { readonly status: "not_found"; readonly cancelled: 0 }
+  | { readonly status: "already_completed"; readonly cancelled: 0 };
+
+export interface TriggerStuckRow {
+  readonly dueWorkId: number;
+  readonly triggerKind: string;
+  readonly intentEventId: number;
+  readonly claimDeadlineAt: number;
+  readonly redriveCount: number;
+}
+
+export interface TriggerStuckResult {
+  readonly stuck: ReadonlyArray<TriggerStuckRow>;
+}
+
 export interface TriggerDrainUntilQuietOptions {
   readonly maxIterations?: number;
 }
@@ -209,5 +259,15 @@ export class TriggerPump extends Context.Tag("@agent-os/TriggerPump")<
       | DurableTriggerCommitReturnedThenable
       | DurableTriggerDrainLimitExceeded
     >;
+    readonly cancelTrigger: (
+      spec: TriggerCancelSpec,
+    ) => Effect.Effect<
+      TriggerCancelResult,
+      | SqlError
+      | JsonStringifyError
+      | UnregisteredDurableTriggerKind
+      | DurableTriggerCommitReturnedThenable
+    >;
+    readonly stuckTriggers: (now: number) => Effect.Effect<TriggerStuckResult, SqlError>;
   }
 >() {}

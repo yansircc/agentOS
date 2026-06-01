@@ -46,6 +46,10 @@
         "name": "TRIGGER_TESTING_DRAIN_DO",
         "class_name": "TriggerTestingDrainTestDO",
       },
+      {
+        "name": "TRIGGER_CANCEL_DO",
+        "class_name": "TriggerCancelTestDO",
+      },
     ],
   },
   "migrations": [
@@ -62,6 +66,7 @@
         "TriggerFactoryErrorTestDO",
         "TriggerBoundaryTestDO",
         "TriggerTestingDrainTestDO",
+        "TriggerCancelTestDO",
       ],
     },
   ],

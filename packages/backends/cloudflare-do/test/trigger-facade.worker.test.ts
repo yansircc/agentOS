@@ -3,6 +3,7 @@ import { runInDurableObject } from "cloudflare:test";
 
 import type {
   TriggerBoundaryTestDO,
+  TriggerCancelTestDO,
   TriggerFacadeTestDO,
   TriggerFactoryErrorTestDO,
   TriggerTestingDrainTestDO,
@@ -12,10 +13,12 @@ interface TestEnv {
   readonly TRIGGER_FACADE_DO: DurableObjectNamespace<TriggerFacadeTestDO>;
   readonly TRIGGER_FACTORY_ERROR_DO: DurableObjectNamespace<TriggerFactoryErrorTestDO>;
   readonly TRIGGER_BOUNDARY_DO: DurableObjectNamespace<TriggerBoundaryTestDO>;
+  readonly TRIGGER_CANCEL_DO: DurableObjectNamespace<TriggerCancelTestDO>;
   readonly TRIGGER_TESTING_DRAIN_DO: DurableObjectNamespace<TriggerTestingDrainTestDO>;
 }
 
 const testEnv = env as unknown as TestEnv;
+const CANCEL_TEST_AT = 9_000_000_000_000;
 
 describe("defineAgentDO trigger facade", () => {
   it("rejects unregistered trigger enqueue before writing intent or due work", async () => {
@@ -37,7 +40,10 @@ describe("defineAgentDO trigger facade", () => {
     }
     expect(String(rejected)).toContain("agent_os.unregistered_durable_trigger_kind");
 
-    const events = await stub.events();
+    const events = (await stub.events()) as Array<{
+      readonly kind: string;
+      readonly payload: unknown;
+    }>;
     expect(events).toHaveLength(0);
   });
 
@@ -238,6 +244,322 @@ describe("defineAgentDO trigger facade", () => {
       once: { drained: 1 },
       untilQuiet: { drained: 2, iterations: 3 },
       doneSteps: [1, 2, 3],
+    });
+  });
+
+  it("cancels a running trigger cooperatively and commits the trigger cancellation hook", async () => {
+    const stub = testEnv.TRIGGER_CANCEL_DO.get(
+      testEnv.TRIGGER_CANCEL_DO.idFromName("trigger-running-cancel"),
+    );
+
+    const intent = await runInDurableObject(stub, (instance) =>
+      instance.enqueueTrigger({
+        triggerKind: "test.cancellable",
+        payload: { label: "one" },
+        at: CANCEL_TEST_AT,
+      }),
+    );
+    const drain = runInDurableObject(stub, (instance) =>
+      instance.__drainDueOnceForTesting({ now: CANCEL_TEST_AT }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const cancel = await runInDurableObject(stub, (instance) =>
+      instance.cancelTrigger({
+        triggerKind: "test.cancellable",
+        intentEventId: intent.id,
+        reason: "user",
+      }),
+    );
+    await drain;
+    const events = (await stub.events()) as Array<{
+      readonly kind: string;
+      readonly payload: unknown;
+    }>;
+    const result = {
+      cancel,
+      done: events.filter((event) => event.kind === "test.cancellable.done").length,
+      cancelled: events
+        .filter((event) => event.kind === "test.cancellable.cancelled")
+        .map((event) => event.payload),
+    };
+
+    expect(result).toEqual({
+      cancel: { status: "requested", requested: 1 },
+      done: 0,
+      cancelled: [{ label: "one", reason: "user" }],
+    });
+  });
+
+  it("writes a generic cancellation fact when a trigger has no commitCancelled hook", async () => {
+    const stub = testEnv.TRIGGER_CANCEL_DO.get(
+      testEnv.TRIGGER_CANCEL_DO.idFromName("trigger-generic-cancel"),
+    );
+
+    const result = await runInDurableObject(stub, async (instance, state) => {
+      const intent = await instance.enqueueTrigger({
+        triggerKind: "test.generic_cancel",
+        payload: { label: "two" },
+        at: CANCEL_TEST_AT,
+      });
+      const cancel = await instance.cancelTrigger({
+        triggerKind: "test.generic_cancel",
+        intentEventId: intent.id,
+        reason: "user",
+      });
+      const duplicate = await instance.cancelTrigger({
+        triggerKind: "test.generic_cancel",
+        intentEventId: intent.id,
+        reason: "user",
+      });
+      const events = await instance.events();
+      return {
+        cancel,
+        duplicate,
+        generic: events
+          .filter((event) => event.kind === "durable_trigger.cancelled")
+          .map((event) => event.payload),
+        pendingDue: state.storage.sql
+          .exec("SELECT * FROM due_work WHERE completed_at IS NULL")
+          .toArray().length,
+      };
+    });
+
+    expect(result).toEqual({
+      cancel: { status: "cancelled", cancelled: 1 },
+      duplicate: { status: "not_found", cancelled: 0 },
+      generic: [
+        {
+          triggerKind: "test.generic_cancel",
+          intentEventId: 1,
+          dueWorkId: 1,
+          reason: "user",
+        },
+      ],
+      pendingDue: 0,
+    });
+  });
+
+  it("rejects thenable cancellation commits and keeps the due row pending", async () => {
+    const stub = testEnv.TRIGGER_CANCEL_DO.get(
+      testEnv.TRIGGER_CANCEL_DO.idFromName("trigger-thenable-cancel"),
+    );
+
+    const result = await runInDurableObject(stub, async (instance, state) => {
+      const intent = await instance.enqueueTrigger({
+        triggerKind: "test.thenable_cancel",
+        payload: { label: "cancel" },
+        at: CANCEL_TEST_AT,
+      });
+      let tag: string | undefined;
+      try {
+        await instance.cancelTrigger({
+          triggerKind: "test.thenable_cancel",
+          intentEventId: intent.id,
+          reason: "user",
+        });
+      } catch (cause) {
+        tag = (cause as { readonly _tag?: string })._tag;
+      }
+      const sql = state.storage.sql;
+      return {
+        tag,
+        cancelled: sql
+          .exec("SELECT * FROM events WHERE kind = 'test.thenable_cancel.cancelled'")
+          .toArray().length,
+        pendingDue: sql.exec("SELECT * FROM due_work WHERE completed_at IS NULL").toArray().length,
+      };
+    });
+
+    expect(result).toEqual({
+      tag: "agent_os.durable_trigger_commit_returned_thenable",
+      cancelled: 0,
+      pendingDue: 1,
+    });
+  });
+
+  it("lets concurrent drains claim a due row only once", async () => {
+    const stub = testEnv.TRIGGER_CANCEL_DO.get(
+      testEnv.TRIGGER_CANCEL_DO.idFromName("trigger-concurrent-drain-single-claim"),
+    );
+
+    await runInDurableObject(stub, (instance) =>
+      instance.enqueueTrigger({
+        triggerKind: "test.default_deadline",
+        payload: { label: "concurrent" },
+        at: CANCEL_TEST_AT,
+      }),
+    );
+    const first = runInDurableObject(stub, (instance) =>
+      instance.__drainDueOnceForTesting({ now: CANCEL_TEST_AT }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const second = await runInDurableObject(stub, (instance) =>
+      instance.__drainDueOnceForTesting({ now: CANCEL_TEST_AT }),
+    );
+    const firstResult = await first;
+    const events = (await stub.events()) as Array<{ readonly kind: string }>;
+
+    expect({
+      first: firstResult,
+      second,
+      done: events.filter((event) => event.kind === "test.default_deadline.done").length,
+    }).toEqual({
+      first: { drained: 1 },
+      second: { drained: 0 },
+      done: 1,
+    });
+  });
+
+  it("redrives expired claims and lets only one terminal commit win", async () => {
+    const stub = testEnv.TRIGGER_CANCEL_DO.get(
+      testEnv.TRIGGER_CANCEL_DO.idFromName("trigger-redrive-single-terminal"),
+    );
+
+    await runInDurableObject(stub, (instance) =>
+      instance.enqueueTrigger({
+        triggerKind: "test.redrive_once",
+        payload: { label: "three" },
+        at: CANCEL_TEST_AT,
+      }),
+    );
+    const first = runInDurableObject(stub, (instance) =>
+      instance.__drainDueOnceForTesting({ now: CANCEL_TEST_AT }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await runInDurableObject(stub, (instance) =>
+      instance.__drainDueOnceForTesting({ now: CANCEL_TEST_AT + 2 }),
+    );
+    await first;
+    const result = await runInDurableObject(stub, async (instance, state) => {
+      const events = await instance.events();
+      const observations = state.storage.sql
+        .exec("SELECT mode, aborted FROM test_acquire_observations ORDER BY rowid")
+        .toArray();
+      return {
+        done: events.filter((event) => event.kind === "test.redrive_once.done").length,
+        observations,
+      };
+    });
+
+    expect(result).toEqual({
+      done: 1,
+      observations: [
+        { mode: "normal", aborted: 0 },
+        { mode: "redrive", aborted: 0 },
+      ],
+    });
+  });
+
+  it("propagates a cancel request across redrive by starting the redrive signal aborted", async () => {
+    const stub = testEnv.TRIGGER_CANCEL_DO.get(
+      testEnv.TRIGGER_CANCEL_DO.idFromName("trigger-redrive-cancel-propagates"),
+    );
+
+    const intent = await runInDurableObject(stub, (instance) =>
+      instance.enqueueTrigger({
+        triggerKind: "test.redrive_cancelled",
+        payload: { label: "four" },
+        at: CANCEL_TEST_AT,
+      }),
+    );
+    const first = runInDurableObject(stub, (instance) =>
+      instance.__drainDueOnceForTesting({ now: CANCEL_TEST_AT }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const cancel = await runInDurableObject(stub, (instance) =>
+      instance.cancelTrigger({
+        triggerKind: "test.redrive_cancelled",
+        intentEventId: intent.id,
+        reason: "stop",
+      }),
+    );
+    const second = await runInDurableObject(stub, (instance) =>
+      instance.__drainDueOnceForTesting({ now: CANCEL_TEST_AT + 2 }),
+    );
+    await first;
+    const result = await runInDurableObject(stub, async (instance, state) => {
+      const events = await instance.events();
+      const observations = state.storage.sql
+        .exec("SELECT mode, aborted FROM test_acquire_observations ORDER BY rowid")
+        .toArray();
+      return {
+        cancel,
+        second,
+        done: events.filter((event) => event.kind === "test.redrive_cancelled.done").length,
+        cancelled: events.filter((event) => event.kind === "test.redrive_cancelled.cancelled")
+          .length,
+        observations,
+      };
+    });
+
+    expect(result).toEqual({
+      cancel: { status: "requested", requested: 1 },
+      second: { drained: 1 },
+      done: 0,
+      cancelled: 1,
+      observations: [
+        { mode: "normal", aborted: 0 },
+        { mode: "redrive", aborted: 1 },
+      ],
+    });
+  });
+
+  it("uses the default acquire deadline when a trigger does not override it", async () => {
+    const stub = testEnv.TRIGGER_CANCEL_DO.get(
+      testEnv.TRIGGER_CANCEL_DO.idFromName("trigger-default-deadline"),
+    );
+
+    const result = await runInDurableObject(stub, async (instance, state) => {
+      await instance.enqueueTrigger({
+        triggerKind: "test.default_deadline",
+        payload: { label: "five" },
+        at: CANCEL_TEST_AT,
+      });
+      const drain = instance.__drainDueOnceForTesting({ now: CANCEL_TEST_AT });
+      await scheduler.wait(5);
+      const row = state.storage.sql
+        .exec("SELECT claimed_at, claim_deadline_at FROM due_work")
+        .toArray()[0];
+      await drain;
+      return Number(row?.claim_deadline_at) - Number(row?.claimed_at);
+    });
+
+    expect(result).toBe(60_000);
+  });
+
+  it("rejects unknown trigger cancellation without writing events due work or alarm", async () => {
+    const stub = testEnv.TRIGGER_CANCEL_DO.get(
+      testEnv.TRIGGER_CANCEL_DO.idFromName("trigger-cancel-unknown-kind"),
+    );
+
+    const result = await runInDurableObject(stub, async (instance, state) => {
+      let tag: string | undefined;
+      try {
+        await instance.cancelTrigger({
+          triggerKind: "missing.trigger",
+          intentEventId: 1,
+        });
+      } catch (cause) {
+        tag = (cause as { readonly _tag?: string })._tag;
+      }
+      const sql = state.storage.sql;
+      const hasEventsTable =
+        sql
+          .exec("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'events'")
+          .toArray().length > 0;
+      return {
+        tag,
+        events: hasEventsTable ? sql.exec("SELECT * FROM events").toArray().length : 0,
+        due: sql.exec("SELECT * FROM due_work").toArray().length,
+        alarm: await state.storage.getAlarm(),
+      };
+    });
+
+    expect(result).toEqual({
+      tag: "agent_os.unregistered_durable_trigger_kind",
+      events: 0,
+      due: 0,
+      alarm: null,
     });
   });
 });

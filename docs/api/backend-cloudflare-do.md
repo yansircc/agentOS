@@ -14,6 +14,7 @@
 - `.:AgentRuntimeReaderClient`
 - `.:AgentRuntimeClient`
 - `.:AgentSubmitSpec`
+- `.:AgentTriggerCancelSpec`
 - `.:AgentTriggerIntentSpec`
 - `.:AnthropicMessagesSpec`
 - `.:CfAiBindingSpec`

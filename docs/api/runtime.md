@@ -13,6 +13,7 @@
 - `.:BarrierRow`
 - `.:BoundaryCommitRejected`
 - `.:CapabilityLease`
+- `.:DEFAULT_TRIGGER_ACQUIRE_DEADLINE_MS`
 - `.:DecodedOutput`
 - `.:DeliverSpec`
 - `.:Dispatch`
@@ -23,7 +24,9 @@
 - `.:DispatchReceiverResult`
 - `.:DispatchTargetAdapter`
 - `.:DurableTrigger`
+- `.:DurableTriggerCancelledPayload`
 - `.:DurableTriggerRegistry`
+- `.:DURABLE_TRIGGER_CANCELLED`
 - `.:DURABLE_TRIGGER_SCHEDULED_REQUESTED`
 - `.:DEFAULT_TRIGGER_DRAIN_MAX_ITERATIONS`
 - `.:EvidenceRow`
@@ -50,6 +53,9 @@
 - `.:SubmitSpec`
 - `.:Tool`
 - `.:ToolDefinition`
+- `.:TriggerCancellation`
+- `.:TriggerCancelResult`
+- `.:TriggerCancelSpec`
 - `.:TriggerDrainResult`
 - `.:TriggerDrainUntilQuietOptions`
 - `.:TriggerDrainUntilQuietResult`
@@ -58,6 +64,8 @@
 - `.:TriggerParseResult`
 - `.:TriggerPump`
 - `.:TriggerRegistry`
+- `.:TriggerStuckResult`
+- `.:TriggerStuckRow`
 - `.:TriggerTx`
 - `.:TurnRef`
 - `.:buildInitialMessages`

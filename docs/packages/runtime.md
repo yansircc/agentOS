@@ -19,16 +19,31 @@ Durable trigger authors depend on runtime for the shared trigger algebra:
 backend-neutral shape; concrete backends own storage, alarm re-arm, SQL
 transactions, and pump execution.
 
+Durable trigger acquire effects that touch external providers must be
+provider-idempotent. The trigger pump guarantees at-most-one terminal ledger
+commit for a due row, not exactly-once external side effects across backend
+eviction, redrive, or provider retry. `AcquireCtx` provides stable trigger
+identity (`scope`, `dueWorkId`, `intentEventId`) plus cooperative cancellation
+(`signal`) and binary redrive context (`acquireMode: "normal" | "redrive"`).
+It intentionally has no ledger read access in acquire.
+
 `TriggerTx` exposes tx-local ledger reads through `events()`. Triggers that need
 current business state fold those rows inside commit before appending terminal
 facts or enqueueing more intents; they do not import backend storage internals.
 
-`commit` is a synchronous transaction callback. It must not `await`, return a
-Promise/thenable, or enqueue fire-and-forget callbacks through `.then`, timers,
-or microtasks. All ledger and projection writes must finish before `commit`
-returns. `AcquireCtx` intentionally has no `attempt` field in 0.2.x; retry
-semantics are derived from ledger/domain state folds until a concrete adapter
-requires a stronger identity surface.
+`commit` and `commitCancelled` are synchronous transaction callbacks. They must
+not `await`, return a Promise/thenable, or enqueue fire-and-forget callbacks
+through `.then`, timers, or microtasks. All ledger and projection writes must
+finish before the callback returns. `AcquireCtx` intentionally has no numeric
+`attempt` field in 0.2.x; retry semantics are derived from ledger/domain state
+folds until a concrete adapter requires a stronger identity surface.
+
+Cancellation is cooperative. A trigger may fail acquire with
+`DurableTriggerAcquireCancelled`; the backend then runs `commitCancelled` when
+present, or writes the substrate `durable_trigger.cancelled` audit fact when it
+is absent. If an adapter ignores `signal` and returns a normal outcome before a
+cancelled/redriven row reaches a terminal cancellation commit, normal commit can
+still win. Claim-token rechecks prevent duplicate terminal facts.
 
 Trigger portability is explicit:
 

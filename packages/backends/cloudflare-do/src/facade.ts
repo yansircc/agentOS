@@ -1,7 +1,7 @@
 import type { ExtensionDeclaration } from "@agent-os/kernel/extensions";
 import type { ScopeRef } from "@agent-os/kernel/effect-claim";
 import type { DispatchToScopeResult, DispatchToScopeSpec } from "@agent-os/kernel/types";
-import type { SubmitResult } from "@agent-os/runtime";
+import type { SubmitResult, TriggerCancelResult } from "@agent-os/runtime";
 import {
   AgentDurableObject,
   type AgentEventHandlerContext,
@@ -9,6 +9,7 @@ import {
   type AgentRuntimeReaderClient,
   type AgentSubmitDefaults,
   type AgentSubmitSpec,
+  type AgentTriggerCancelSpec,
   type AgentTriggerIntentSpec,
   type CloudflareAgentEnv,
   type MaterializedAgentConfig,
@@ -26,6 +27,7 @@ import {
 export interface AgentFacadeRuntimeClient extends AgentRuntimeReaderClient {
   readonly emit: (event: string, data: unknown) => Promise<{ id: number }>;
   readonly enqueueTrigger: (spec: AgentTriggerIntentSpec) => Promise<{ id: number }>;
+  readonly cancelTrigger: (spec: AgentTriggerCancelSpec) => Promise<TriggerCancelResult>;
   readonly dispatch: (spec: DispatchToScopeSpec) => Promise<DispatchToScopeResult>;
   readonly schedule: (
     event: string,
@@ -173,6 +175,10 @@ export function defineAgentDO<Env extends CloudflareAgentEnv>(
         return this.enqueueTriggerFull(spec);
       }
 
+      cancelTrigger(spec: AgentTriggerCancelSpec): Promise<TriggerCancelResult> {
+        return this.cancelTriggerFull(spec);
+      }
+
       dispatch(spec: DispatchToScopeSpec): Promise<DispatchToScopeResult> {
         return this.dispatchToScopeFull(spec);
       }
@@ -216,6 +222,10 @@ export function defineAgentDO<Env extends CloudflareAgentEnv>(
 
     enqueueTrigger(spec: AgentTriggerIntentSpec): Promise<{ id: number }> {
       return this.enqueueTriggerFull(spec);
+    }
+
+    cancelTrigger(spec: AgentTriggerCancelSpec): Promise<TriggerCancelResult> {
+      return this.cancelTriggerFull(spec);
     }
 
     dispatch(spec: DispatchToScopeSpec): Promise<DispatchToScopeResult> {

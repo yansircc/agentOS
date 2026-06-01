@@ -54,6 +54,13 @@ interface InMemoryDueWorkRow {
   readonly kind: string;
   readonly payload: IntentPointerDuePayload;
   completedAt: number | null;
+  claimedAt: number | null;
+  claimToken: string | null;
+  claimDeadlineAt: number | null;
+  redriveCount: number;
+  cancelRequestedAt: number | null;
+  cancelReason: string | null;
+  cancelledAt: number | null;
 }
 
 export interface InMemoryBackendStateOptions {
@@ -236,6 +243,13 @@ export class InMemoryBackendState {
           kind: trigger.kind,
           payload: durableTriggerDuePayload(event.id),
           completedAt: null,
+          claimedAt: null,
+          claimToken: null,
+          claimDeadlineAt: null,
+          redriveCount: 0,
+          cancelRequestedAt: null,
+          cancelReason: null,
+          cancelledAt: null,
         });
         afterCommit?.(event);
         return event;
@@ -282,11 +296,24 @@ export class InMemoryBackendState {
       .sort((a, b) => a.fireAt - b.fireAt || a.id - b.id);
   }
 
+  dueClaimable(now: number): ReadonlyArray<InMemoryDueWorkRow> {
+    return this.dueWork
+      .filter(
+        (row) =>
+          row.completedAt === null &&
+          row.fireAt <= now &&
+          (row.claimToken === null || (row.claimDeadlineAt !== null && row.claimDeadlineAt <= now)),
+      )
+      .sort((a, b) => a.fireAt - b.fireAt || a.id - b.id);
+  }
+
   nextDueAt(): number | null {
     let minDueAt: number | null = null;
     for (const row of this.dueWork) {
       if (row.completedAt !== null) continue;
-      if (minDueAt === null || row.fireAt < minDueAt) minDueAt = row.fireAt;
+      const next = row.claimToken === null ? row.fireAt : row.claimDeadlineAt;
+      if (next === null) continue;
+      if (minDueAt === null || next < minDueAt) minDueAt = next;
     }
     return minDueAt;
   }
@@ -310,8 +337,79 @@ export class InMemoryBackendState {
       kind,
       payload: durableTriggerDuePayload(intentEventId),
       completedAt: null,
+      claimedAt: null,
+      claimToken: null,
+      claimDeadlineAt: null,
+      redriveCount: 0,
+      cancelRequestedAt: null,
+      cancelReason: null,
+      cancelledAt: null,
     });
     return id;
+  }
+
+  claimDueWork(
+    row: InMemoryDueWorkRow,
+    now: number,
+    token: string,
+    deadlineAt: number,
+  ): InMemoryDueWorkRow | null {
+    if (row.completedAt !== null || row.fireAt > now) return null;
+    if (row.claimToken !== null && (row.claimDeadlineAt === null || row.claimDeadlineAt > now)) {
+      return null;
+    }
+    const redrive = row.claimToken !== null;
+    row.claimedAt = now;
+    row.claimToken = token;
+    row.claimDeadlineAt = deadlineAt;
+    if (redrive) row.redriveCount += 1;
+    return row;
+  }
+
+  dueByTriggerIntent(kind: string, intentEventId: number): ReadonlyArray<InMemoryDueWorkRow> {
+    return this.dueWork
+      .filter(
+        (row) =>
+          row.completedAt === null &&
+          row.kind === kind &&
+          row.payload.intentEventId === intentEventId,
+      )
+      .sort((a, b) => a.fireAt - b.fireAt || a.id - b.id);
+  }
+
+  requestCancellation(row: InMemoryDueWorkRow, now: number, reason?: string): boolean {
+    if (row.completedAt !== null) return false;
+    row.cancelRequestedAt ??= now;
+    row.cancelReason ??= reason ?? null;
+    if (row.claimToken !== null && (row.claimDeadlineAt === null || row.claimDeadlineAt > now)) {
+      row.claimDeadlineAt = now;
+    }
+    return true;
+  }
+
+  stuckDueWork(now: number): ReadonlyArray<{
+    readonly dueWorkId: number;
+    readonly triggerKind: string;
+    readonly intentEventId: number;
+    readonly claimDeadlineAt: number;
+    readonly redriveCount: number;
+  }> {
+    return this.dueWork
+      .filter(
+        (row) =>
+          row.completedAt === null &&
+          row.claimToken !== null &&
+          row.claimDeadlineAt !== null &&
+          row.claimDeadlineAt <= now,
+      )
+      .sort((a, b) => (a.claimDeadlineAt ?? 0) - (b.claimDeadlineAt ?? 0) || a.id - b.id)
+      .map((row) => ({
+        dueWorkId: row.id,
+        triggerKind: row.kind,
+        intentEventId: row.payload.intentEventId,
+        claimDeadlineAt: row.claimDeadlineAt ?? now,
+        redriveCount: row.redriveCount,
+      }));
   }
 
   pendingOutboxByIntent(intentEventId: number): DispatchOutboxRow | null {
@@ -326,6 +424,13 @@ export class InMemoryBackendState {
     now: number,
     hasTrigger: (kind: string) => boolean,
     commit: (tx: TriggerTx) => DurableTriggerCommitReturnedThenable | null,
+    options: {
+      readonly claimToken?: string;
+      readonly requireUnclaimed?: boolean;
+      readonly cancelled?: boolean;
+      readonly signal?: AbortSignal;
+      readonly acquireMode?: "normal" | "redrive";
+    } = {},
   ): Effect.Effect<
     { readonly completed: boolean; readonly events: ReadonlyArray<LedgerEvent> },
     | JsonStringifyError
@@ -335,6 +440,12 @@ export class InMemoryBackendState {
   > {
     return Effect.gen(this, function* () {
       if (row.completedAt !== null) return { completed: false, events: [] };
+      if (options.claimToken !== undefined && row.claimToken !== options.claimToken) {
+        return { completed: false, events: [] };
+      }
+      if (options.requireUnclaimed === true && row.claimToken !== null) {
+        return { completed: false, events: [] };
+      }
       const startId = this.nextEventId;
       const written: LedgerEvent[] = [];
       let rejected: UnregisteredDurableTriggerKind | null = null;
@@ -348,6 +459,8 @@ export class InMemoryBackendState {
         now,
         dueWorkId: row.id,
         intentEventId: row.payload.intentEventId,
+        signal: options.signal ?? new AbortController().signal,
+        acquireMode: options.acquireMode ?? "normal",
         events: (opts = {}) => {
           const afterId = normalizeNonNegativeInteger(opts.afterId, 0);
           const kinds =
@@ -424,6 +537,7 @@ export class InMemoryBackendState {
         this.nextEventId += written.length;
         this.rows.push(...written);
         row.completedAt = now;
+        if (options.cancelled === true) row.cancelledAt = now;
         for (const spec of due) {
           const dueId = this.nextDueWorkId++;
           this.dueWork.push({
@@ -432,6 +546,13 @@ export class InMemoryBackendState {
             kind: spec.triggerKind,
             payload: durableTriggerDuePayload(spec.intentEventId),
             completedAt: null,
+            claimedAt: null,
+            claimToken: null,
+            claimDeadlineAt: null,
+            redriveCount: 0,
+            cancelRequestedAt: null,
+            cancelReason: null,
+            cancelledAt: null,
           });
         }
       });

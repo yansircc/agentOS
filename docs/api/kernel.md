@@ -78,6 +78,7 @@
 - `./errors:DispatchBindingRefMalformed`
 - `./errors:DispatchScopeMismatch`
 - `./errors:DispatchTargetNotFound`
+- `./errors:DurableTriggerAcquireCancelled`
 - `./errors:DurableTriggerCommitReturnedThenable`
 - `./errors:DurableTriggerDrainLimitExceeded`
 - `./errors:InvalidResourceAmount`
@@ -222,6 +223,7 @@
 - `./types:LedgerEvent`
 - `./types:LedgerEventRpc`
 - `./types:QuotaState`
+- `.:DurableTriggerAcquireCancelled`
 - `.:DurableTriggerCommitReturnedThenable`
 - `.:DurableTriggerDrainLimitExceeded`
 - `.:TriggerFactoryError`

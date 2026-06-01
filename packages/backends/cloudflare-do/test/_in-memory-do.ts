@@ -118,6 +118,27 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
 
   private exec(sql: string, args: readonly unknown[]): InMemorySqlCursor {
     const normalized = normalizeSql(sql);
+    if (/^PRAGMA table_info\(due_work\)$/i.test(normalized)) {
+      return new InMemorySqlCursor(
+        [
+          "id",
+          "fire_at",
+          "kind",
+          "payload",
+          "completed_at",
+          "claimed_at",
+          "claim_token",
+          "claim_deadline_at",
+          "redrive_count",
+          "cancel_requested_at",
+          "cancel_reason",
+          "cancelled_at",
+        ].map((name) => ({ name })),
+      );
+    }
+    if (/^ALTER TABLE due_work ADD COLUMN /i.test(normalized)) {
+      return new InMemorySqlCursor([]);
+    }
     if (/^CREATE (TABLE|INDEX) IF NOT EXISTS /i.test(normalized)) {
       const tableMatch = /^CREATE TABLE IF NOT EXISTS ([a-z_]+)/i.exec(normalized);
       if (tableMatch !== null) this.table(tableMatch[1]!);
@@ -171,6 +192,45 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
   }
 
   private update(sql: string, args: readonly unknown[]): InMemorySqlCursor {
+    const dueWorkClaim =
+      /^UPDATE due_work SET claimed_at = \?, claim_token = \?, claim_deadline_at = \?, redrive_count = redrive_count \+ CASE WHEN claim_token IS NULL THEN 0 ELSE 1 END WHERE id = \? AND completed_at IS NULL AND fire_at <= \? AND \( claim_token IS NULL OR claim_deadline_at <= \? \) RETURNING /i;
+    if (dueWorkClaim.test(sql)) {
+      const [claimedAt, token, deadlineAt, id, now, claimableAt] = args;
+      const row = this.table("due_work").rows.find(
+        (candidate) =>
+          candidate.id === id &&
+          candidate.completed_at === null &&
+          Number(candidate.fire_at) <= Number(now) &&
+          (candidate.claim_token === null ||
+            candidate.claim_token === undefined ||
+            Number(candidate.claim_deadline_at) <= Number(claimableAt)),
+      );
+      if (row === undefined) return new InMemorySqlCursor([]);
+      const redrive = row.claim_token !== null && row.claim_token !== undefined;
+      row.claimed_at = claimedAt;
+      row.claim_token = token;
+      row.claim_deadline_at = deadlineAt;
+      row.redrive_count = Number(row.redrive_count ?? 0) + (redrive ? 1 : 0);
+      return new InMemorySqlCursor([cloneRow(row)]);
+    }
+
+    const dueWorkCompleteClaimed =
+      /^UPDATE due_work SET completed_at = \? WHERE id = \? AND claim_token = \? AND completed_at IS NULL RETURNING id$/i;
+    if (dueWorkCompleteClaimed.test(sql)) {
+      const [completedAt, id, token] = args;
+      const row = this.table("due_work").rows.find(
+        (candidate) =>
+          candidate.id === id && candidate.claim_token === token && candidate.completed_at === null,
+      );
+      if (row === undefined) return new InMemorySqlCursor([]);
+      row.completed_at = completedAt;
+      return new InMemorySqlCursor([{ id }]);
+    }
+
+    if (/^UPDATE due_work SET cancel_requested_at = COALESCE/i.test(sql)) {
+      return this.updateDueWorkCancellation(sql, args);
+    }
+
     const match = /^UPDATE ([a-z_]+) SET (.+) WHERE (.+)$/i.exec(sql);
     if (match === null) {
       throw new TypeError(`unsupported in-memory update: ${sql}`);
@@ -204,7 +264,55 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
     return new InMemorySqlCursor([]);
   }
 
+  private updateDueWorkCancellation(sql: string, args: readonly unknown[]): InMemorySqlCursor {
+    if (/RETURNING id$/i.test(sql)) {
+      const [requestedAt, reason, deadlineIfNull, deadlineThreshold, deadline, id] = args;
+      const row = this.table("due_work").rows.find(
+        (candidate) => candidate.id === id && candidate.completed_at === null,
+      );
+      if (row === undefined) return new InMemorySqlCursor([]);
+      row.cancel_requested_at ??= requestedAt;
+      row.cancel_reason ??= reason ?? null;
+      if (row.claim_token !== null && row.claim_token !== undefined) {
+        if (row.claim_deadline_at === null || row.claim_deadline_at === undefined) {
+          row.claim_deadline_at = deadlineIfNull;
+        } else if (Number(row.claim_deadline_at) > Number(deadlineThreshold)) {
+          row.claim_deadline_at = deadline;
+        }
+      }
+      return new InMemorySqlCursor([{ id }]);
+    }
+
+    const [requestedAt, reason, cancelledAt, completedAt, id, token] = args;
+    const row = this.table("due_work").rows.find((candidate) => {
+      if (candidate.id !== id || candidate.completed_at !== null) return false;
+      if (/AND claim_token = \?/i.test(sql)) return candidate.claim_token === token;
+      if (/AND claim_token IS NULL/i.test(sql)) {
+        return candidate.claim_token === null || candidate.claim_token === undefined;
+      }
+      return true;
+    });
+    if (row === undefined) return new InMemorySqlCursor([]);
+    row.cancel_requested_at ??= requestedAt;
+    row.cancel_reason ??= reason ?? null;
+    row.cancelled_at = cancelledAt;
+    row.completed_at = completedAt;
+    return new InMemorySqlCursor([]);
+  }
+
   private select(sql: string, args: readonly unknown[]): InMemorySqlCursor {
+    if (/^SELECT MIN\(next_at\) AS m FROM \( SELECT fire_at AS next_at FROM due_work /i.test(sql)) {
+      const values = this.table("due_work")
+        .rows.filter((row) => row.completed_at === null)
+        .map((row) =>
+          row.claim_token === null || row.claim_token === undefined
+            ? row.fire_at
+            : row.claim_deadline_at,
+        )
+        .filter((value): value is number => typeof value === "number");
+      return new InMemorySqlCursor([{ m: values.length === 0 ? null : Math.min(...values) }]);
+    }
+
     if (
       sql ===
       "SELECT o.outbound_event_id, o.attempts FROM dispatch_outbox o WHERE o.outbound_event_id = ? AND o.delivered_event_id IS NULL"
@@ -267,6 +375,15 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
     if (tableName === "due_work" && row.completed_at === undefined) {
       row.completed_at = null;
     }
+    if (tableName === "due_work") {
+      row.claimed_at ??= null;
+      row.claim_token ??= null;
+      row.claim_deadline_at ??= null;
+      row.redrive_count ??= 0;
+      row.cancel_requested_at ??= null;
+      row.cancel_reason ??= null;
+      row.cancelled_at ??= null;
+    }
   }
 
   private snapshot(): Map<string, Table> {
@@ -327,6 +444,15 @@ const compileCondition = (
     return {
       argsUsed: 0,
       predicate: (row) => row[column] === null || row[column] === undefined,
+    };
+  }
+
+  const isNotNullMatch = /^([a-z_]+) IS NOT NULL$/i.exec(condition);
+  if (isNotNullMatch !== null) {
+    const column = isNotNullMatch[1]!;
+    return {
+      argsUsed: 0,
+      predicate: (row) => row[column] !== null && row[column] !== undefined,
     };
   }
 

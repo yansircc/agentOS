@@ -70,6 +70,16 @@ export class DurableTriggerCommitReturnedThenable extends Data.TaggedError(
   readonly kind: string;
 }> {}
 
+export class DurableTriggerAcquireCancelled extends Data.TaggedError(
+  "agent_os.durable_trigger_acquire_cancelled",
+)<{
+  readonly scope: string;
+  readonly kind: string;
+  readonly dueWorkId: number;
+  readonly intentEventId: number;
+  readonly reason?: string;
+}> {}
+
 export class CapabilityRejected extends Data.TaggedError("agent_os.capability_rejected")<{
   readonly event: string;
   readonly capability: string;
@@ -124,6 +134,7 @@ export const CORE_CLAIMED_PREFIXES = [
   "tool.",
   "quota.",
   "resource.",
+  "durable_trigger.",
 ] as const;
 
 export const isCoreClaimedEventKind = (event: string): boolean =>
