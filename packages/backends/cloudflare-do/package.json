@@ -17,9 +17,9 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vp test run && vp test run --config vitest.cloudflare.config.ts",
-    "test:unit": "vp test run",
-    "test:worker": "vp test run --config vitest.cloudflare.config.ts"
+    "test": "vp test run --configLoader runner",
+    "test:unit": "vp test run --configLoader runner",
+    "test:worker": "vp test run --configLoader runner --config vitest.cloudflare.config.ts"
   },
   "dependencies": {
     "@agent-os/backend-protocol": "workspace:*",

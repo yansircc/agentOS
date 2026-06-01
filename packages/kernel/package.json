@@ -77,7 +77,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vp test run"
+    "test": "vp test run --configLoader runner"
   },
   "devDependencies": {
     "@effect/language-service": "catalog:",

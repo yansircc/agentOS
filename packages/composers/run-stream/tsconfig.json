@@ -28,5 +28,10 @@
       "@agent-os/kernel/settlement-contract": ["../../kernel/src/settlement-contract.ts"]
     }
   },
-  "include": ["src/**/*", "test/**/*", "vitest.config.ts"]
+  "include": [
+    "src/**/*",
+    "test/**/*",
+    "vitest.config.ts",
+    "../../../types/vite-plus-test-config/index.d.ts"
+  ]
 }

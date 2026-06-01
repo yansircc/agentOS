@@ -38,6 +38,12 @@
     "noUncheckedIndexedAccess": false,
     "resolveJsonModule": true
   },
-  "include": ["src/**/*", "test/**/*", "vitest.config.ts", "vitest.cloudflare.config.ts"],
+  "include": [
+    "src/**/*",
+    "test/**/*",
+    "vitest.config.ts",
+    "vitest.cloudflare.config.ts",
+    "../../../types/vite-plus-test-config/index.d.ts"
+  ],
   "exclude": ["test/consumer-fixture/**/*"]
 }

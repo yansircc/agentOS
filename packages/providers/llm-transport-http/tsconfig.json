@@ -25,5 +25,10 @@
       "@agent-os/turn-stream": ["../../composers/turn-stream/src/index.ts"]
     }
   },
-  "include": ["src/**/*", "test/**/*", "vitest.config.ts"]
+  "include": [
+    "src/**/*",
+    "test/**/*",
+    "vitest.config.ts",
+    "../../../types/vite-plus-test-config/index.d.ts"
+  ]
 }
