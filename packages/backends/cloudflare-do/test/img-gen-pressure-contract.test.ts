@@ -20,7 +20,7 @@ const makeDriver = (triggers: ReadonlyArray<AnyDurableTrigger>): ImgGenPressureD
   const state = makeInMemoryDurableObjectState();
   const sql = state.storage.sql;
   const runtime = ManagedRuntime.make(
-    makeCloudflareBackendCoreLayer(state, scope, new Map(), {}, triggers),
+    makeCloudflareBackendCoreLayer(state, {}, scope, new Map(), {}, triggers),
   );
 
   return {

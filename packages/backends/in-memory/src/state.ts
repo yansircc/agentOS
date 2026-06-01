@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import {
   JsonStringifyError,
+  DurableTriggerCommitReturnedThenable,
   SqlError,
   UnregisteredDurableTriggerKind,
 } from "@agent-os/kernel/errors";
@@ -324,10 +325,13 @@ export class InMemoryBackendState {
     row: InMemoryDueWorkRow,
     now: number,
     hasTrigger: (kind: string) => boolean,
-    commit: (tx: TriggerTx) => void,
+    commit: (tx: TriggerTx) => DurableTriggerCommitReturnedThenable | null,
   ): Effect.Effect<
     { readonly completed: boolean; readonly events: ReadonlyArray<LedgerEvent> },
-    JsonStringifyError | SqlError | UnregisteredDurableTriggerKind
+    | JsonStringifyError
+    | SqlError
+    | UnregisteredDurableTriggerKind
+    | DurableTriggerCommitReturnedThenable
   > {
     return Effect.gen(this, function* () {
       if (row.completedAt !== null) return { completed: false, events: [] };
@@ -402,10 +406,14 @@ export class InMemoryBackendState {
           });
         },
       };
-      yield* Effect.try({
+      const commitFailure = yield* Effect.try({
         try: () => commit(tx),
-        catch: (cause) => new SqlError({ cause }),
+        catch: (cause) =>
+          cause instanceof DurableTriggerCommitReturnedThenable ? cause : new SqlError({ cause }),
       });
+      if (commitFailure !== null) {
+        return yield* Effect.fail(commitFailure);
+      }
       if (rejected !== null) {
         return yield* Effect.fail(rejected);
       }

@@ -58,6 +58,18 @@ export class DurableTriggerDrainLimitExceeded extends Data.TaggedError(
   readonly drained: number;
 }> {}
 
+export class TriggerFactoryError extends Data.TaggedError("agent_os.trigger_factory_error")<{
+  readonly scope: string;
+  readonly cause: unknown;
+}> {}
+
+export class DurableTriggerCommitReturnedThenable extends Data.TaggedError(
+  "agent_os.durable_trigger_commit_returned_thenable",
+)<{
+  readonly scope: string;
+  readonly kind: string;
+}> {}
+
 export class CapabilityRejected extends Data.TaggedError("agent_os.capability_rejected")<{
   readonly event: string;
   readonly capability: string;

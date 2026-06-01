@@ -17,6 +17,12 @@ Runtime Tags are the backend contract. The in-memory backend implements the same
 Ledger, Scheduler, Dispatch, Resources, Quota, Admission, and LlmTransport Tag
 surface without importing Cloudflare or SQL substrate APIs.
 
+The in-memory backend accepts only pure `ReadonlyArray<AnyDurableTrigger>`
+registrations. It does not accept backend-bound trigger factories and does not
+model app-owned projection tables. Projection-touching triggers are
+Cloudflare-bound until a second production backend or second app proves a
+shared projection adapter shape.
+
 ## Minimal Usage
 
 Create an in-memory runtime backend in tests.

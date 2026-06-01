@@ -57,7 +57,7 @@ const makeCloudflareDoContractDriver = (): RuntimeBackendContractDriver => {
 
   const makeRuntime = (scope: string) => {
     const state = stateFor(scope);
-    return ManagedRuntime.make(makeCloudflareBackendCoreLayer(state, scope, handlers, targets));
+    return ManagedRuntime.make(makeCloudflareBackendCoreLayer(state, {}, scope, handlers, targets));
   };
   type RuntimeHandle = ReturnType<typeof makeRuntime>;
   const runtimes = new Map<string, RuntimeHandle>();

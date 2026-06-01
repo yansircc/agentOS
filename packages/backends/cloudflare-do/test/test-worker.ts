@@ -24,6 +24,7 @@ import {
   triggerParseOk,
   type DispatchTargetAdapter,
   type DurableTrigger,
+  type TriggerTx,
 } from "@agent-os/runtime";
 import { CapabilityRejected } from "@agent-os/kernel/errors";
 import { boundaryPackage, defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
@@ -389,6 +390,62 @@ export const TriggerFacadeTestDO = defineAgentDO<CloudflareAgentEnv>({
 });
 export type TriggerFacadeTestDO = InstanceType<typeof TriggerFacadeTestDO>;
 
+export const TriggerFactoryErrorTestDO = defineAgentDO<CloudflareAgentEnv>({
+  bindings: [],
+  triggers: () => {
+    JSON.parse("{");
+    return [];
+  },
+});
+export type TriggerFactoryErrorTestDO = InstanceType<typeof TriggerFactoryErrorTestDO>;
+
+interface BoundaryIntent {
+  readonly label: string;
+}
+
+const parseBoundaryIntent = (raw: unknown) => {
+  if (!Predicate.isRecord(raw) || typeof raw.label !== "string") {
+    return triggerParseFail<BoundaryIntent>("boundary intent malformed");
+  }
+  return triggerParseOk({ label: raw.label });
+};
+
+export const TriggerBoundaryTestDO = defineAgentDO<CloudflareAgentEnv>({
+  bindings: [],
+  triggers: (ctx) => {
+    ctx.sql.exec("CREATE TABLE IF NOT EXISTS test_projection (label TEXT NOT NULL)");
+    const rollbackTrigger = {
+      kind: "test.rollback_projection",
+      intentEventKind: "test.rollback_projection.requested",
+      parseIntent: parseBoundaryIntent,
+      acquire: (intent: BoundaryIntent) => Effect.succeed(intent),
+      commit: (outcome, tx) => {
+        tx.insertEvent({
+          kind: "test.rollback_projection.done",
+          payload: { label: outcome.label },
+        });
+        ctx.sql.exec("INSERT INTO test_projection (label) VALUES (?)", outcome.label);
+        ctx.sql.exec("INSERT INTO missing_projection_table (label) VALUES (?)", outcome.label);
+      },
+    } satisfies DurableTrigger<BoundaryIntent, BoundaryIntent>;
+    const thenableTrigger = {
+      kind: "test.thenable_commit",
+      intentEventKind: "test.thenable_commit.requested",
+      parseIntent: parseBoundaryIntent,
+      acquire: (intent: BoundaryIntent) => Effect.succeed(intent),
+      commit: ((outcome: BoundaryIntent, tx: TriggerTx) => {
+        tx.insertEvent({
+          kind: "test.thenable_commit.done",
+          payload: { label: outcome.label },
+        });
+        return Promise.resolve(undefined);
+      }) as DurableTrigger<BoundaryIntent, BoundaryIntent>["commit"],
+    } satisfies DurableTrigger<BoundaryIntent, BoundaryIntent>;
+    return [rollbackTrigger, thenableTrigger];
+  },
+});
+export type TriggerBoundaryTestDO = InstanceType<typeof TriggerBoundaryTestDO>;
+
 interface ChainIntent {
   readonly step: number;
 }
@@ -431,6 +488,8 @@ interface WorkerEnv extends CloudflareAgentEnv {
   readonly EXTENSION_DO: DurableObjectNamespace<ExtensionTestDO>;
   readonly FACADE_SUBMIT_DO: DurableObjectNamespace<FacadeSubmitTestDO>;
   readonly TRIGGER_FACADE_DO: DurableObjectNamespace<TriggerFacadeTestDO>;
+  readonly TRIGGER_FACTORY_ERROR_DO: DurableObjectNamespace<TriggerFactoryErrorTestDO>;
+  readonly TRIGGER_BOUNDARY_DO: DurableObjectNamespace<TriggerBoundaryTestDO>;
 }
 
 const parseLastEventId = (value: string | null): number => {

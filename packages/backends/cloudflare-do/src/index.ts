@@ -16,6 +16,11 @@ export type {
   AgentSubmitSpec,
   AgentTriggerIntentSpec,
 } from "./agent-do";
+export type {
+  CloudflareTriggerFactory,
+  CloudflareTriggerFactoryContext,
+  CloudflareTriggerSource,
+} from "./trigger-factory";
 export {
   anthropicMessages,
   binding,

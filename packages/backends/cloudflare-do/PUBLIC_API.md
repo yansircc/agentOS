@@ -22,6 +22,9 @@ Status: Backend package. Public exports include the Cloudflare app facade, bindi
 - `.:AnthropicMessagesSpec`
 - `.:CfAiBindingSpec`
 - `.:CloudflareAgentEnv`
+- `.:CloudflareTriggerFactory`
+- `.:CloudflareTriggerFactoryContext`
+- `.:CloudflareTriggerSource`
 - `.:DefineAgentDOConfig`
 - `.:DefineAgentDOConfigWithSubmit`
 - `.:DefineAgentDOConfigWithoutSubmit`

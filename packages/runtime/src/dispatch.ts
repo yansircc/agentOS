@@ -1,6 +1,7 @@
 import { Context, Effect } from "effect";
 import type {
   CapabilityRejected,
+  DurableTriggerCommitReturnedThenable,
   DispatchScopeMismatch,
   DispatchTargetNotFound,
   JsonStringifyError,
@@ -64,6 +65,7 @@ export class Dispatch extends Context.Tag("@agent-os/Dispatch")<
       | CapabilityRejected
       | UnsupportedScopeRef
       | UnregisteredDurableTriggerKind
+      | DurableTriggerCommitReturnedThenable
     >;
     readonly receive: (
       envelope: DispatchEnvelope,

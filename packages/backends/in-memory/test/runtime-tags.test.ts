@@ -2,6 +2,7 @@ import { Cause, Effect, Exit, Layer, ManagedRuntime, Option } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
 import {
+  DurableTriggerCommitReturnedThenable,
   DurableTriggerDrainLimitExceeded,
   UnregisteredDurableTriggerKind,
 } from "@agent-os/kernel/errors";
@@ -169,6 +170,56 @@ describe("in-memory runtime backend", () => {
         }
       }
       expect(backend.state.duePending(10)).toHaveLength(1);
+      yield* Effect.promise(() => runtime.dispose());
+    }),
+  );
+
+  it.effect("TriggerPump rejects thenable trigger commit and leaves due-work pending", () =>
+    Effect.gen(function* () {
+      interface ThenableIntent {
+        readonly label: string;
+      }
+      const thenableTrigger = {
+        kind: "test.thenable",
+        intentEventKind: "test.thenable.requested",
+        parseIntent: (raw) =>
+          typeof raw === "object" &&
+          raw !== null &&
+          typeof (raw as { readonly label?: unknown }).label === "string"
+            ? triggerParseOk({ label: (raw as { readonly label: string }).label })
+            : triggerParseFail("thenable intent malformed"),
+        acquire: (intent) => Effect.succeed(intent),
+        commit: ((intent, tx) => {
+          tx.insertEvent({ kind: "test.thenable.done", payload: intent });
+          return Promise.resolve(undefined);
+        }) as DurableTrigger<ThenableIntent, ThenableIntent>["commit"],
+      } satisfies DurableTrigger<ThenableIntent, ThenableIntent>;
+
+      const { backend, runtime } = makeRuntime("thenable-scope", {
+        triggers: [thenableTrigger],
+      });
+      const ledger = yield* Effect.promise(() => runtime.runPromise(Ledger));
+      const triggerPump = yield* Effect.promise(() => runtime.runPromise(TriggerPump));
+      const event = yield* Effect.promise(() =>
+        runtime.runPromise(
+          ledger.log("test.thenable.requested", { label: "one" }, "thenable-scope"),
+        ),
+      );
+      backend.state.addDueWork("test.thenable", event.id, 10);
+
+      const exit = yield* Effect.exit(triggerPump.drainDue(10));
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        const failure = Cause.failureOption(exit.cause);
+        expect(Option.isSome(failure)).toBe(true);
+        if (Option.isSome(failure)) {
+          expect(failure.value).toBeInstanceOf(DurableTriggerCommitReturnedThenable);
+        }
+      }
+      expect(backend.state.duePending(10)).toHaveLength(1);
+      const events = yield* ledger.events("thenable-scope");
+      expect(events.filter((row) => row.kind === "test.thenable.done")).toHaveLength(0);
       yield* Effect.promise(() => runtime.dispose());
     }),
   );

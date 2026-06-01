@@ -47,7 +47,7 @@ import type {
  * receives the runtime client and construction-time extension capabilities.
  */
 
-import { Clock, Effect, Layer, ManagedRuntime } from "effect";
+import { Cause, Clock, Effect, Exit, Layer, ManagedRuntime, Option } from "effect";
 import { DurableObject } from "cloudflare:workers";
 import {
   CapabilityRejected,
@@ -58,6 +58,7 @@ import {
   InvalidResourceAmount,
   ScopeMissingError,
   SqlError,
+  TriggerFactoryError,
   UnsupportedScopeRef,
   safeStringify,
 } from "@agent-os/kernel/errors";
@@ -77,7 +78,6 @@ import {
   TriggerPump,
   submitAgentEffect,
   validateBoundaryEventPayload,
-  type AnyDurableTrigger,
   type InternalSubmitSpec,
   type TriggerDrainResult,
   type TriggerDrainUntilQuietOptions,
@@ -120,6 +120,7 @@ import {
 import { makeCloudflareBackendCoreLayer, type CloudflareBackendCoreServices } from "./runtime-core";
 import { commitDurableTriggerIntent } from "./due-work";
 import { fireLedgerEvents, insertLedgerEvent } from "./ledger/inserted-events";
+import type { CloudflareTriggerSource } from "./trigger-factory";
 
 export interface CloudflareAgentEnv {
   readonly AI: Ai;
@@ -184,23 +185,24 @@ type CoreServices =
   | Admission
   | RefResolverService;
 
-const makeAgentRuntime = (
+const makeAgentRuntime = <Env extends CloudflareAgentEnv>(
   ctx: DurableObjectState,
+  env: Env,
   scope: string,
-  ai: Ai,
   handlers: Map<string, Set<EventHandler>>,
   refs: RefResolver,
   dispatchTargets: DispatchTargetRegistry,
-  appTriggers: Iterable<AnyDurableTrigger>,
-): ManagedRuntime.ManagedRuntime<CoreServices, SqlError> => {
+  appTriggers: CloudflareTriggerSource<Env>,
+): ManagedRuntime.ManagedRuntime<CoreServices, SqlError | TriggerFactoryError> => {
   const backendCoreLayer = makeCloudflareBackendCoreLayer(
     ctx,
+    env,
     scope,
     handlers,
     dispatchTargets,
     appTriggers,
   );
-  const aiLayer = Layer.succeed(AiBinding, ai);
+  const aiLayer = Layer.succeed(AiBinding, env.AI);
   const refResolverLayer = RefResolverLive(refs);
   const providerBaseLayer = Layer.mergeAll(aiLayer, refResolverLayer);
   const llmTransportLayer = LlmTransportLive.pipe(Layer.provide(providerBaseLayer));
@@ -219,7 +221,7 @@ export interface AgentDurableObjectConfig<
   readonly refResolver?: (env: Env) => RefResolver;
   readonly extensions?: (env: Env) => ReadonlyArray<ExtensionDeclaration>;
   readonly dispatchTargets?: (env: Env) => DispatchTargetRegistry;
-  readonly triggers?: (env: Env) => ReadonlyArray<AnyDurableTrigger>;
+  readonly triggers?: CloudflareTriggerSource<Env>;
   readonly scopeRefForScope?: (scope: string, env: Env) => ScopeRef | null;
   readonly eventHandlers?: (
     context: AgentEventHandlerContext<Runtime>,
@@ -234,7 +236,7 @@ export interface MaterializedAgentConfig<
   readonly refResolver: RefResolver;
   readonly extensions: ReadonlyArray<ExtensionDeclaration>;
   readonly dispatchTargets: DispatchTargetRegistry;
-  readonly triggers: ReadonlyArray<AnyDurableTrigger>;
+  readonly triggers: CloudflareTriggerSource<Env>;
   readonly scopeRefForScope: (scope: string, env: Env) => ScopeRef | null;
   readonly eventHandlers?: (
     context: AgentEventHandlerContext<Runtime>,
@@ -263,9 +265,9 @@ export class AgentDurableObject<
   private readonly _extensionValidation: ExtensionValidation;
   private readonly _capabilities: ReadonlyMap<string, ExtensionCapability>;
   private readonly _dispatchTargets: DispatchTargetRegistry;
-  private readonly _triggers: ReadonlyArray<AnyDurableTrigger>;
+  private readonly _triggers: CloudflareTriggerSource<Env>;
   private readonly _scopeRefForScope: (scope: string, env: Env) => ScopeRef | null;
-  private _runtime?: ManagedRuntime.ManagedRuntime<CoreServices, SqlError>;
+  private _runtime?: ManagedRuntime.ManagedRuntime<CoreServices, SqlError | TriggerFactoryError>;
 
   constructor(ctx: DurableObjectState, env: Env, config: MaterializedAgentConfig<Env, Runtime>) {
     super(ctx, env);
@@ -284,12 +286,14 @@ export class AgentDurableObject<
     }
   }
 
-  private runtimeFor(scope: string): ManagedRuntime.ManagedRuntime<CoreServices, SqlError> {
+  private runtimeFor(
+    scope: string,
+  ): ManagedRuntime.ManagedRuntime<CoreServices, SqlError | TriggerFactoryError> {
     if (this._runtime === undefined) {
       this._runtime = makeAgentRuntime(
         this.ctx,
+        this.env,
         scope,
-        this.env.AI,
         this._handlers,
         this._refResolver,
         this._dispatchTargets,
@@ -321,8 +325,22 @@ export class AgentDurableObject<
     return scope instanceof ScopeMissingError ? Promise.reject(scope) : fn(scope);
   }
 
+  private runScopedEffect<T, E>(
+    scope: string,
+    effect: Effect.Effect<T, E, CoreServices>,
+  ): Promise<T> {
+    return this.runtimeFor(scope)
+      .runPromiseExit(effect)
+      .then((exit) => {
+        if (Exit.isSuccess(exit)) return exit.value;
+        const failure = Cause.failureOption(exit.cause);
+        if (Option.isSome(failure)) return Promise.reject(failure.value);
+        return Promise.reject(exit.cause);
+      });
+  }
+
   private runScoped<T, E>(fn: (scope: string) => Effect.Effect<T, E, CoreServices>): Promise<T> {
-    return this.scopedPromise((scope) => this.runtimeFor(scope).runPromise(fn(scope)));
+    return this.scopedPromise((scope) => this.runScopedEffect(scope, fn(scope)));
   }
 
   private runScopedWrite<T, E>(
@@ -334,7 +352,7 @@ export class AgentDurableObject<
       if (rejected !== null) {
         return Promise.reject(rejected);
       }
-      return this.runtimeFor(scope).runPromise(fn(scope));
+      return this.runScopedEffect(scope, fn(scope));
     });
   }
 
@@ -831,7 +849,7 @@ export const createAgentDurableObject = <Env extends CloudflareAgentEnv>(
         refResolver: config.refResolver?.(env) ?? emptyRefResolver,
         extensions: config.extensions?.(env) ?? [],
         dispatchTargets: config.dispatchTargets?.(env) ?? {},
-        triggers: config.triggers?.(env) ?? [],
+        triggers: config.triggers ?? [],
         scopeRefForScope: config.scopeRefForScope ?? (() => null),
         eventHandlers: config.eventHandlers,
       });

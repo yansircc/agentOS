@@ -35,6 +35,14 @@
         "class_name": "TriggerFacadeTestDO",
       },
       {
+        "name": "TRIGGER_FACTORY_ERROR_DO",
+        "class_name": "TriggerFactoryErrorTestDO",
+      },
+      {
+        "name": "TRIGGER_BOUNDARY_DO",
+        "class_name": "TriggerBoundaryTestDO",
+      },
+      {
         "name": "TRIGGER_TESTING_DRAIN_DO",
         "class_name": "TriggerTestingDrainTestDO",
       },
@@ -51,6 +59,8 @@
         "ExtensionTestDO",
         "FacadeSubmitTestDO",
         "TriggerFacadeTestDO",
+        "TriggerFactoryErrorTestDO",
+        "TriggerBoundaryTestDO",
         "TriggerTestingDrainTestDO",
       ],
     },

@@ -75,6 +75,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:projectLease`
 - `.:reasonOf`
 - `.:routeFingerprint`
+- `.:runSynchronousTriggerCommit`
 - `.:submitAgentEffect`
 - `.:scheduledEventIntentPayload`
 - `.:scheduledEventTrigger`

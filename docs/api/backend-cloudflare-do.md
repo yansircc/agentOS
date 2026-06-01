@@ -18,6 +18,9 @@
 - `.:AnthropicMessagesSpec`
 - `.:CfAiBindingSpec`
 - `.:CloudflareAgentEnv`
+- `.:CloudflareTriggerFactory`
+- `.:CloudflareTriggerFactoryContext`
+- `.:CloudflareTriggerSource`
 - `.:DefineAgentDOConfig`
 - `.:DefineAgentDOConfigWithSubmit`
 - `.:DefineAgentDOConfigWithoutSubmit`

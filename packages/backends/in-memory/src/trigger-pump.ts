@@ -1,6 +1,11 @@
 import { Effect, Layer } from "effect";
 import { SqlError, UnregisteredDurableTriggerKind } from "@agent-os/kernel/errors";
-import { DurableTriggerRegistry, TriggerPump, drainTriggerPumpUntilQuiet } from "@agent-os/runtime";
+import {
+  DurableTriggerRegistry,
+  TriggerPump,
+  drainTriggerPumpUntilQuiet,
+  runSynchronousTriggerCommit,
+} from "@agent-os/runtime";
 import type { InMemoryBackendState } from "./state";
 
 export const InMemoryTriggerPumpLive = (
@@ -46,7 +51,8 @@ export const InMemoryTriggerPumpLive = (
               row,
               now,
               (kind) => registry.has(kind),
-              (tx) => trigger.commit(outcome, tx),
+              (tx) =>
+                runSynchronousTriggerCommit(scope, row.kind, () => trigger.commit(outcome, tx)),
             );
             if (committed.completed) drained += 1;
           }

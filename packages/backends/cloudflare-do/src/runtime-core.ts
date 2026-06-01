@@ -7,9 +7,8 @@ import {
   TriggerPump,
   makeDurableTriggerRegistry,
   scheduledEventTrigger,
-  type AnyDurableTrigger,
 } from "@agent-os/runtime";
-import { SqlError } from "@agent-os/kernel/errors";
+import { SqlError, TriggerFactoryError } from "@agent-os/kernel/errors";
 import {
   Dispatch,
   DispatchLive,
@@ -21,6 +20,7 @@ import { Scheduler, SchedulerLive } from "./scheduler";
 import { Resources, ResourcesLive } from "./resources";
 import { QuotaLive } from "./quota";
 import { TriggerPumpLive } from "./trigger-pump";
+import { resolveCloudflareTriggerSource, type CloudflareTriggerSource } from "./trigger-factory";
 
 export type CloudflareBackendCoreServices =
   | EventBus
@@ -32,20 +32,30 @@ export type CloudflareBackendCoreServices =
   | TriggerPump
   | Ledger;
 
-export const makeCloudflareBackendCoreLayer = (
+export const makeCloudflareBackendCoreLayer = <Env>(
   ctx: DurableObjectState,
+  env: Env,
   scope: string,
   handlers: Map<string, Set<EventHandler>>,
   dispatchTargets: DispatchTargetRegistry,
-  appTriggers: Iterable<AnyDurableTrigger> = [],
-): Layer.Layer<CloudflareBackendCoreServices, SqlError> => {
+  appTriggers: CloudflareTriggerSource<Env> = [],
+): Layer.Layer<CloudflareBackendCoreServices, SqlError | TriggerFactoryError> => {
   const eventBusLayer = EventBusLive(handlers);
   const dispatchRetryTrigger = deliveryRetryTrigger(ctx.storage.sql, scope, dispatchTargets);
   const triggerRegistryLayer = Layer.effect(
     DurableTriggerRegistry,
-    makeDurableTriggerRegistry([scheduledEventTrigger, dispatchRetryTrigger, ...appTriggers]).pipe(
-      Effect.mapError((cause) => new SqlError({ cause })),
-    ),
+    Effect.gen(function* () {
+      const resolvedAppTriggers = yield* resolveCloudflareTriggerSource(appTriggers, {
+        env,
+        scope,
+        sql: ctx.storage.sql,
+      });
+      return yield* makeDurableTriggerRegistry([
+        scheduledEventTrigger,
+        dispatchRetryTrigger,
+        ...resolvedAppTriggers,
+      ]).pipe(Effect.mapError((cause) => new SqlError({ cause })));
+    }),
   );
   const triggerLayer = TriggerPumpLive(ctx, scope).pipe(
     Layer.provide(Layer.mergeAll(eventBusLayer, triggerRegistryLayer)),

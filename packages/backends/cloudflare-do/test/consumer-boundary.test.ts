@@ -17,13 +17,16 @@ const packageLinks = {
 };
 const dependencyLinks = ["@cloudflare", "@effect", "effect"];
 
+const isPackageRuntimeDependencyPath = (source: string): boolean =>
+  source.split(path.sep).includes("node_modules");
+
 const makeExternalFixture = () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-consumer-"));
   fs.mkdirSync(path.join(dir, "node_modules/@agent-os"), { recursive: true });
   for (const [name, target] of Object.entries(packageLinks)) {
     fs.cpSync(path.join(root, target), path.join(dir, "node_modules/@agent-os", name), {
       recursive: true,
-      filter: (source) => !source.includes(`${path.sep}node_modules${path.sep}`),
+      filter: (source) => !isPackageRuntimeDependencyPath(source),
     });
   }
   for (const name of dependencyLinks) {

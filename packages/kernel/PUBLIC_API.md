@@ -82,6 +82,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `./errors:DispatchBindingRefMalformed`
 - `./errors:DispatchScopeMismatch`
 - `./errors:DispatchTargetNotFound`
+- `./errors:DurableTriggerCommitReturnedThenable`
 - `./errors:DurableTriggerDrainLimitExceeded`
 - `./errors:InvalidResourceAmount`
 - `./errors:InvalidScheduleAt`
@@ -94,6 +95,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `./errors:ScopeMissingError`
 - `./errors:SqlError`
 - `./errors:ToolError`
+- `./errors:TriggerFactoryError`
 - `./errors:UnregisteredDurableTriggerKind`
 - `./errors:UnsupportedScopeRef`
 - `./errors:UpstreamFailure`
@@ -224,7 +226,9 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `./types:LedgerEvent`
 - `./types:LedgerEventRpc`
 - `./types:QuotaState`
+- `.:DurableTriggerCommitReturnedThenable`
 - `.:DurableTriggerDrainLimitExceeded`
+- `.:TriggerFactoryError`
 - `.:UnregisteredDurableTriggerKind`
 - `./types:QuotaStateSpec`
 - `./types:ResourceGrantResult`

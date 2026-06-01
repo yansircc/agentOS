@@ -147,7 +147,7 @@ describe("due-work alarm protocol", () => {
         JSON.stringify({ intentEventId: 1 }),
       );
       const runtime = ManagedRuntime.make(
-        makeCloudflareBackendCoreLayer(state, "sender", new Map(), deadTargets),
+        makeCloudflareBackendCoreLayer(state, {}, "sender", new Map(), deadTargets),
       );
       const triggerPump = yield* Effect.promise(() => runtime.runPromise(TriggerPump));
 
@@ -201,7 +201,7 @@ describe("due-work alarm protocol", () => {
         const state = makeInMemoryDurableObjectState();
         const sql = state.storage.sql;
         const runtime = ManagedRuntime.make(
-          makeCloudflareBackendCoreLayer(state, "sender", new Map(), deadTargets),
+          makeCloudflareBackendCoreLayer(state, {}, "sender", new Map(), deadTargets),
         );
 
         const dispatch = yield* Effect.promise(() => runtime.runPromise(Dispatch));

@@ -23,6 +23,24 @@ transactions, and pump execution.
 current business state fold those rows inside commit before appending terminal
 facts or enqueueing more intents; they do not import backend storage internals.
 
+`commit` is a synchronous transaction callback. It must not `await`, return a
+Promise/thenable, or enqueue fire-and-forget callbacks through `.then`, timers,
+or microtasks. All ledger and projection writes must finish before `commit`
+returns. `AcquireCtx` intentionally has no `attempt` field in 0.2.x; retry
+semantics are derived from ledger/domain state folds until a concrete adapter
+requires a stronger identity surface.
+
+Trigger portability is explicit:
+
+- Pure triggers depend only on runtime trigger algebra and are portable across
+  concrete backends.
+- Backend-bound triggers close over backend construction context and only
+  promise that backend's transaction semantics.
+
+Fact payloads are append-only compatible. A breaking semantic change uses a new
+event kind; readers and app-owned projections merge old and new kinds instead
+of rewriting ledger history.
+
 ## Minimal Usage
 
 Depend on runtime for consumer-facing run, admission, and backend-neutral Tag

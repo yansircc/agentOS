@@ -71,6 +71,7 @@
 - `.:projectLease`
 - `.:reasonOf`
 - `.:routeFingerprint`
+- `.:runSynchronousTriggerCommit`
 - `.:submitAgentEffect`
 - `.:scheduledEventIntentPayload`
 - `.:scheduledEventTrigger`

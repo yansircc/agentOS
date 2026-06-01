@@ -78,6 +78,7 @@
 - `./errors:DispatchBindingRefMalformed`
 - `./errors:DispatchScopeMismatch`
 - `./errors:DispatchTargetNotFound`
+- `./errors:DurableTriggerCommitReturnedThenable`
 - `./errors:DurableTriggerDrainLimitExceeded`
 - `./errors:InvalidResourceAmount`
 - `./errors:InvalidScheduleAt`
@@ -90,6 +91,7 @@
 - `./errors:ScopeMissingError`
 - `./errors:SqlError`
 - `./errors:ToolError`
+- `./errors:TriggerFactoryError`
 - `./errors:UnregisteredDurableTriggerKind`
 - `./errors:UnsupportedScopeRef`
 - `./errors:UpstreamFailure`
@@ -220,7 +222,9 @@
 - `./types:LedgerEvent`
 - `./types:LedgerEventRpc`
 - `./types:QuotaState`
+- `.:DurableTriggerCommitReturnedThenable`
 - `.:DurableTriggerDrainLimitExceeded`
+- `.:TriggerFactoryError`
 - `.:UnregisteredDurableTriggerKind`
 - `./types:QuotaStateSpec`
 - `./types:ResourceGrantResult`

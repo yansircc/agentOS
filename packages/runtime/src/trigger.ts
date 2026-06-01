@@ -1,5 +1,6 @@
 import { Context, Effect } from "effect";
 import {
+  DurableTriggerCommitReturnedThenable,
   DurableTriggerDrainLimitExceeded,
   UnregisteredDurableTriggerKind,
   type JsonStringifyError,
@@ -138,6 +139,20 @@ export const makeDurableTriggerRegistry = (
     return registry;
   });
 
+const isThenable = (value: unknown): boolean =>
+  (typeof value === "object" || typeof value === "function") &&
+  value !== null &&
+  typeof (value as { readonly then?: unknown }).then === "function";
+
+export const runSynchronousTriggerCommit = (
+  scope: string,
+  kind: string,
+  commit: () => unknown,
+): DurableTriggerCommitReturnedThenable | null => {
+  const result = commit();
+  return isThenable(result) ? new DurableTriggerCommitReturnedThenable({ scope, kind }) : null;
+};
+
 export interface TriggerDrainResult {
   readonly drained: number;
 }
@@ -178,7 +193,10 @@ export class TriggerPump extends Context.Tag("@agent-os/TriggerPump")<
       now: number,
     ) => Effect.Effect<
       TriggerDrainResult,
-      SqlError | JsonStringifyError | UnregisteredDurableTriggerKind
+      | SqlError
+      | JsonStringifyError
+      | UnregisteredDurableTriggerKind
+      | DurableTriggerCommitReturnedThenable
     >;
     readonly drainUntilQuiet: (
       now: number,
@@ -188,6 +206,7 @@ export class TriggerPump extends Context.Tag("@agent-os/TriggerPump")<
       | SqlError
       | JsonStringifyError
       | UnregisteredDurableTriggerKind
+      | DurableTriggerCommitReturnedThenable
       | DurableTriggerDrainLimitExceeded
     >;
   }

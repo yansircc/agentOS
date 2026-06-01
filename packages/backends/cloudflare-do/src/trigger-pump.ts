@@ -1,5 +1,6 @@
 import { Effect, Layer } from "effect";
 import {
+  DurableTriggerCommitReturnedThenable,
   JsonStringifyError,
   SqlError,
   UnregisteredDurableTriggerKind,
@@ -9,6 +10,7 @@ import {
   DurableTriggerRegistry,
   TriggerPump,
   drainTriggerPumpUntilQuiet,
+  runSynchronousTriggerCommit,
   type TriggerTx,
 } from "@agent-os/runtime";
 import { fireLedgerEvents, insertLedgerEvent } from "./ledger/inserted-events";
@@ -28,8 +30,13 @@ const failTriggerTransaction = (kind: string): never => {
   throw new UnregisteredDurableTriggerKind({ kind });
 };
 
-const triggerTransactionError = (cause: unknown): SqlError | UnregisteredDurableTriggerKind =>
-  cause instanceof UnregisteredDurableTriggerKind ? cause : new SqlError({ cause });
+const triggerTransactionError = (
+  cause: unknown,
+): SqlError | UnregisteredDurableTriggerKind | DurableTriggerCommitReturnedThenable =>
+  cause instanceof UnregisteredDurableTriggerKind ||
+  cause instanceof DurableTriggerCommitReturnedThenable
+    ? cause
+    : new SqlError({ cause });
 
 const readIntentPayload = (
   sql: SqlStorage,
@@ -74,7 +81,13 @@ export const TriggerPumpLive = (
       const runOne = (
         row: DueWorkRow,
         now: number,
-      ): Effect.Effect<boolean, SqlError | JsonStringifyError | UnregisteredDurableTriggerKind> =>
+      ): Effect.Effect<
+        boolean,
+        | SqlError
+        | JsonStringifyError
+        | UnregisteredDurableTriggerKind
+        | DurableTriggerCommitReturnedThenable
+      > =>
         Effect.gen(function* () {
           const trigger = registry.get(row.kind);
           if (trigger === undefined) {
@@ -142,7 +155,10 @@ export const TriggerPumpLive = (
                     insertDurableTriggerDueWork(sql, fireAt, row.kind, intentEventId);
                   },
                 };
-                trigger.commit(outcome, tx);
+                const commitFailure = runSynchronousTriggerCommit(scope, row.kind, () =>
+                  trigger.commit(outcome, tx),
+                );
+                if (commitFailure !== null) throw commitFailure;
                 completeDueWork(sql, row.id, now);
                 return written;
               }),

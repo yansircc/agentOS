@@ -19,9 +19,12 @@ must not import Durable Object state, Worker bindings, or alarm APIs.
 
 Application code registers app-owned durable triggers only through the facade
 configuration. `defineAgentDO({ triggers })` is the Cloudflare DO construction
-surface for trigger registration; the backend builds the registry, validates
-duplicate kinds, and uses that same registry for submit and drain. Apps must
-not import `runtime-core`, `due-work`, SQL helpers, inserted-event helpers, or
+surface for trigger registration. Pure triggers are registered as an array.
+Backend-bound triggers use `triggers(ctx)` where `ctx` exposes `env`, `scope`,
+and DO-local `sql`; they may close over `ctx.sql` for app-owned projection
+writes inside trigger `commit`. The backend builds the registry, validates
+duplicate kinds, and uses that same registry for submit and drain. Apps must not
+import `runtime-core`, `due-work`, SQL helpers, inserted-event helpers, or
 backend state internals.
 
 `agent.enqueueTrigger({ triggerKind, payload, at })` is the app-facing trigger
@@ -37,6 +40,13 @@ Backend primitives stop at append-only ledger order, trigger identity, tx-local
 ledger reads, and testing-only drain. App-owned projection tables and provider
 idempotency key mappings stay in application code until at least two
 independent apps or adapters prove the same shape should become substrate.
+Factories must be idempotent in resource acquisition: Durable Object eviction
+can cause `triggers(ctx)` to run again, and the backend does not promise a
+stable factory call count.
+
+Cross-DO strong consistency is not provided by this backend. Apps choose a
+single DO scope for strong transaction boundaries, or model cross-scope work as
+saga/compensation facts until a future coordination substrate exists.
 
 ## Minimal Usage
 
@@ -74,7 +84,7 @@ export const AgentDO = defineAgentDO<Env>({
 ```
 
 App triggers use runtime trigger types and the same facade registration path as
-built-in triggers.
+built-in triggers. Pure triggers pass as arrays:
 
 ```ts
 import { defineAgentDO } from "@agent-os/backend-cloudflare-do";
@@ -85,6 +95,15 @@ const appTriggers = [imageScanTrigger] satisfies ReadonlyArray<AnyDurableTrigger
 export const AgentDO = defineAgentDO<Env>({
   bindings: [],
   triggers: appTriggers,
+});
+```
+
+Projection-touching triggers use the Cloudflare-bound factory form:
+
+```ts
+export const AgentDO = defineAgentDO<Env>({
+  bindings: [],
+  triggers: (ctx) => [requestConfirmTrigger(ctx.sql)],
 });
 ```
 
