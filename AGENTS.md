@@ -138,6 +138,18 @@ Live provider tests are opt-in unless the task explicitly requests them.
 
 ## Verification
 
+Package `test` scripts are the fast algebra gate and the source of truth for a
+package's pure runner: they may run pure unit, contract, and projection tests,
+but must not start runtime or integration harnesses. Runtime/integration
+harnesses use the package script name `test:runtime`; root `check:runtime` is
+the only monorepo recursive entrypoint for those harnesses.
+
+Root `bun run typecheck` is the repository TypeScript build graph. Package
+`typecheck` scripts remain package-scoped checks, but the root gate must use one
+`tsc -b --noEmit --force` graph over every package instead of recursively
+launching independent package typechecks. TypeScript build info is derived state:
+the root script must clean it after the graph run, and it must not be tracked.
+
 Default gates:
 
 ```sh
@@ -146,6 +158,19 @@ bun run typecheck
 bun run test
 effect-skill-scan /Users/yansir/code/52/agentOS --strict --json --profile
 git diff --check
+```
+
+If a change touches runtime harness code, Durable Object behavior, storage,
+Wrangler config, or runtime facades, also run:
+
+```sh
+bun run check:runtime
+```
+
+Before publishing or release-level integration, run:
+
+```sh
+bun run check:full
 ```
 
 For package-scoped work, run the package test first, then full gates before the

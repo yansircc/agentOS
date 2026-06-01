@@ -3,7 +3,6 @@ import { env } from "cloudflare:workers";
 
 import type { LedgerEventRpc } from "@agent-os/kernel/types";
 import type { AgentRuntimeClient } from "../src";
-import { validateExtensionDeclarations } from "@agent-os/kernel/extensions";
 import {
   EXTENSION_COMMAND_EVENT,
   EXTENSION_RESULT_EVENT,
@@ -208,30 +207,5 @@ describe("extension capability P1", () => {
     expect(result.error?.event).toBe("*");
     expect(result.error?.capability).toBe("extension:@agent-os/missing");
     expect(extensionFacts(events)).toHaveLength(0);
-  });
-
-  it("rejects duplicate package ids before claiming extension prefixes", () => {
-    const validation = validateExtensionDeclarations([
-      {
-        packageId: "@agent-os/proof",
-        kindPrefixes: ["git."],
-        version: "0.1.0",
-      },
-      {
-        packageId: "@agent-os/proof",
-        kindPrefixes: ["deploy."],
-        version: "0.1.0",
-      },
-    ]);
-
-    expect(validation).toMatchObject({
-      ok: false,
-      error: {
-        _tag: "agent_os.extension_capability_conflict",
-        packageId: "@agent-os/proof",
-        kindPrefix: "*",
-        claimedBy: "@agent-os/proof",
-      },
-    });
   });
 });

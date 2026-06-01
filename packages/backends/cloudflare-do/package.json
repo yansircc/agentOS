@@ -17,9 +17,9 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "bun run test:unit && bun run test:worker",
+    "test": "bun run test:unit",
     "test:unit": "vp test run --configLoader runner",
-    "test:worker": "vp test run --configLoader runner --config vitest.cloudflare.config.ts"
+    "test:runtime": "vp test run --configLoader runner --config vitest.cloudflare.config.ts"
   },
   "dependencies": {
     "@agent-os/backend-protocol": "workspace:*",

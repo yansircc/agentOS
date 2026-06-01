@@ -2,6 +2,7 @@ node_modules
 .wrangler/
 .dev.vars
 *.log
+*.tsbuildinfo
 dist/
 .DS_Store
 .parallel/

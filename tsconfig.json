@@ -2,11 +2,30 @@
   "files": [],
   "references": [
     { "path": "./packages/kernel" },
+    { "path": "./packages/composers/turn-stream" },
     { "path": "./packages/runtime" },
     { "path": "./packages/backends/protocol" },
+    { "path": "./packages/carriers/decision-gate" },
+    { "path": "./packages/carriers/deploy" },
+    { "path": "./packages/carriers/git" },
+    { "path": "./packages/carriers/image" },
+    { "path": "./packages/carriers/resource" },
+    { "path": "./packages/carriers/sandbox" },
+    { "path": "./packages/carriers/staging-artifact" },
+    { "path": "./packages/carriers/tenant-material" },
+    { "path": "./packages/carriers/verification" },
+    { "path": "./packages/carriers/workspace-session" },
+    { "path": "./packages/providers/dynamic-worker" },
+    { "path": "./packages/providers/llm-transport-http" },
+    { "path": "./packages/providers/resource-cloudflare" },
+    { "path": "./packages/providers/sandbox-cloudflare" },
+    { "path": "./packages/providers/workspace-session-cloudflare" },
+    { "path": "./packages/composers/run-stream" },
     { "path": "./packages/backends/cloudflare-do" },
     { "path": "./packages/backends/in-memory" },
-    { "path": "./packages/carriers/image" }
+    { "path": "./tooling/ops-api" },
+    { "path": "./tooling/ops-htmx" },
+    { "path": "./tooling/skill-registry" }
   ],
   "include": []
 }
