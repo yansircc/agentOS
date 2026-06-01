@@ -2,7 +2,6 @@ import {
   AgentDurableObject,
   type AgentDrainDueTestingOptions,
   type AgentDrainUntilQuietTestingOptions,
-  type AgentRuntimeReaderClient,
   type CloudflareAgentEnv,
 } from "./agent-do";
 import type { TriggerDrainResult, TriggerDrainUntilQuietResult } from "@agent-os/runtime";
@@ -18,18 +17,23 @@ export interface AgentDOTestingDrainRuntime {
   ) => Promise<TriggerDrainUntilQuietResult>;
 }
 
-type AgentDOTestingDrainBase<
-  Env extends CloudflareAgentEnv,
-  Runtime extends AgentRuntimeReaderClient,
-> = new (...args: any[]) => AgentDurableObject<Env, Runtime>;
+type AgentDOTestingDrainBase = new (...args: any[]) => AgentDurableObject<any, any>;
 
-export const withAgentDOTestingDrain = <
-  Env extends CloudflareAgentEnv,
-  Runtime extends AgentRuntimeReaderClient,
-  Base extends AgentDOTestingDrainBase<Env, Runtime>,
->(
+type AgentDOTestingDrainEnv<Base extends AgentDOTestingDrainBase> = Base extends new (
+  ctx: DurableObjectState,
+  env: infer Env,
+) => AgentDurableObject<any, any>
+  ? Env extends CloudflareAgentEnv
+    ? Env
+    : CloudflareAgentEnv
+  : CloudflareAgentEnv;
+
+export const withAgentDOTestingDrain = <Base extends AgentDOTestingDrainBase>(
   Base: Base,
-): new (ctx: DurableObjectState, env: Env) => InstanceType<Base> & AgentDOTestingDrainRuntime => {
+): new (
+  ctx: DurableObjectState,
+  env: AgentDOTestingDrainEnv<Base>,
+) => InstanceType<Base> & AgentDOTestingDrainRuntime => {
   class AgentDOWithTestingDrain extends Base implements AgentDOTestingDrainRuntime {
     __drainDueOnceForTesting(options?: AgentDrainDueTestingOptions): Promise<TriggerDrainResult> {
       return this.drainDueOnceForTestingFull(options);
@@ -43,6 +47,6 @@ export const withAgentDOTestingDrain = <
   }
   return AgentDOWithTestingDrain as unknown as new (
     ctx: DurableObjectState,
-    env: Env,
+    env: AgentDOTestingDrainEnv<Base>,
   ) => InstanceType<Base> & AgentDOTestingDrainRuntime;
 };
