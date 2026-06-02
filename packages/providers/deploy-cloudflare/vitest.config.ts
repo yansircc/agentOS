@@ -2,18 +2,38 @@ import { defineConfig } from "vite-plus";
 
 export default defineConfig({
   resolve: {
-    alias: [
-      {
-        find: "@agent-os/staging-artifact",
-        replacement: new URL("../../carriers/staging-artifact/src/index.ts", import.meta.url)
-          .pathname,
-      },
-      {
-        find: "@agent-os/workspace-session",
-        replacement: new URL("../../carriers/workspace-session/src/index.ts", import.meta.url)
-          .pathname,
-      },
-    ],
+    alias: {
+      "@agent-os/deploy": new URL("../../carriers/deploy/src/index.ts", import.meta.url).pathname,
+      "@agent-os/kernel/carrier": new URL("../../kernel/src/carrier.ts", import.meta.url).pathname,
+      "@agent-os/kernel/boundary-contract": new URL(
+        "../../kernel/src/boundary-contract.ts",
+        import.meta.url,
+      ).pathname,
+      "@agent-os/kernel/effect-claim": new URL("../../kernel/src/effect-claim.ts", import.meta.url)
+        .pathname,
+      "@agent-os/kernel/extensions": new URL("../../kernel/src/extensions.ts", import.meta.url)
+        .pathname,
+      "@agent-os/kernel/material-ref": new URL("../../kernel/src/material-ref.ts", import.meta.url)
+        .pathname,
+      "@agent-os/kernel/ref-resolver": new URL("../../kernel/src/ref-resolver.ts", import.meta.url)
+        .pathname,
+      "@agent-os/kernel/runtime-scope": new URL(
+        "../../kernel/src/runtime-scope.ts",
+        import.meta.url,
+      ).pathname,
+      "@agent-os/kernel/settlement-contract": new URL(
+        "../../kernel/src/settlement-contract.ts",
+        import.meta.url,
+      ).pathname,
+      "@agent-os/staging-artifact": new URL(
+        "../../carriers/staging-artifact/src/index.ts",
+        import.meta.url,
+      ).pathname,
+      "@agent-os/workspace-session": new URL(
+        "../../carriers/workspace-session/src/index.ts",
+        import.meta.url,
+      ).pathname,
+    },
   },
   test: {
     fileParallelism: false,
