@@ -48,6 +48,52 @@ export interface WorkspaceSessionDestroyRequest {
   readonly reason: WorkspaceSessionDestroyedPayload["reason"];
 }
 
+export interface WorkspaceSessionExecRequest {
+  readonly sessionRef: string;
+  readonly cwd: string;
+  readonly command: string;
+  readonly args?: ReadonlyArray<string>;
+  readonly timeoutMs: number;
+  readonly maxOutputBytes?: number;
+  readonly envRefs?: Readonly<Record<string, string>>;
+  readonly materialRefs?: ReadonlyArray<string>;
+}
+
+export interface WorkspaceSessionExecArtifactRef {
+  readonly ref: string;
+  readonly contentType?: string;
+  readonly name?: string;
+  readonly bytes?: number;
+  readonly digest?: string;
+}
+
+export interface WorkspaceSessionExecResult {
+  readonly exitCode: number;
+  readonly stdout: string;
+  readonly stderr: string;
+  readonly stdoutBytes: number;
+  readonly stderrBytes: number;
+  readonly stdoutTruncated: boolean;
+  readonly stderrTruncated: boolean;
+  readonly artifacts: ReadonlyArray<WorkspaceSessionExecArtifactRef>;
+  readonly durationMs: number;
+}
+
+export type WorkspaceSessionExecFailureCode =
+  | "SessionNotFound"
+  | "PolicyDenied"
+  | "Timeout"
+  | "ExecFailed"
+  | "ProviderFailure";
+
+export interface WorkspaceSessionExecFailure {
+  readonly code: WorkspaceSessionExecFailureCode;
+  readonly reason: string;
+  readonly sessionRef: string;
+  readonly stdout?: string;
+  readonly stderr?: string;
+}
+
 export interface WorkspaceSessionFailure {
   readonly code:
     | "ScopeNotSession"
@@ -77,6 +123,9 @@ export interface WorkspaceSessionCarrier {
   readonly allocatePreview: (
     request: WorkspaceSessionPreviewRequest,
   ) => Effect.Effect<WorkspaceSessionPreviewAllocatedPayload, WorkspaceSessionFailure>;
+  readonly exec: (
+    request: WorkspaceSessionExecRequest,
+  ) => Effect.Effect<WorkspaceSessionExecResult, WorkspaceSessionExecFailure>;
   readonly destroy: (
     request: WorkspaceSessionDestroyRequest,
   ) => Effect.Effect<WorkspaceSessionDestroyedPayload, WorkspaceSessionFailure>;

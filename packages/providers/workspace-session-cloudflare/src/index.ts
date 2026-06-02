@@ -5,6 +5,10 @@ import {
   settleWorkspaceSessionLived,
   settleWorkspaceSessionRejected,
   workspaceSessionSettlementRef,
+  type WorkspaceSessionExecArtifactRef,
+  type WorkspaceSessionExecFailure,
+  type WorkspaceSessionExecRequest,
+  type WorkspaceSessionExecResult,
   type WorkspaceSessionBackupRequest,
   type WorkspaceSessionCarrier,
   type WorkspaceSessionDestroyRequest,
@@ -14,6 +18,23 @@ import {
   type WorkspaceSessionStartRequest,
 } from "@agent-os/workspace-session";
 
+const DEFAULT_EXEC_MAX_OUTPUT_BYTES = 16_384;
+
+export interface CloudflareWorkspaceSessionExecOptions {
+  readonly args?: ReadonlyArray<string>;
+  readonly cwd: string;
+  readonly timeoutMs: number;
+}
+
+export interface CloudflareWorkspaceSessionExecRawResult {
+  readonly exitCode?: number;
+  readonly stdout?: unknown;
+  readonly stderr?: unknown;
+  readonly output?: unknown;
+  readonly artifacts?: ReadonlyArray<WorkspaceSessionExecArtifactRef | string>;
+  readonly artifactRefs?: ReadonlyArray<string>;
+}
+
 export interface CloudflareWorkspaceSessionClient {
   readonly id: string;
   readonly workspaceRootRef: string;
@@ -22,6 +43,10 @@ export interface CloudflareWorkspaceSessionClient {
   readonly preview: (
     request: WorkspaceSessionPreviewRequest,
   ) => Promise<{ readonly id: string; readonly url?: string }>;
+  readonly exec?: (
+    command: string,
+    options: CloudflareWorkspaceSessionExecOptions,
+  ) => Promise<CloudflareWorkspaceSessionExecRawResult>;
   readonly destroy: (request: WorkspaceSessionDestroyRequest) => Promise<{ readonly id: string }>;
 }
 
@@ -73,6 +98,7 @@ export interface CloudflareWorkspaceSessionProvider {
   readonly preview: (
     request: WorkspaceSessionPreviewRequest,
   ) => Promise<CloudflareWorkspaceSessionPreviewResult>;
+  readonly exec: (request: WorkspaceSessionExecRequest) => Promise<WorkspaceSessionExecResult>;
   readonly destroy: (
     request: WorkspaceSessionDestroyRequest,
   ) => Promise<CloudflareWorkspaceSessionDestroyResult>;
@@ -99,11 +125,14 @@ type CloudflareWorkspaceSessionRequiredProviderFailure =
     readonly reason: string;
   };
 
+type CloudflareWorkspaceSessionStep = WorkspaceSessionFailure["step"] | "exec";
+
 type WorkspaceSessionProviderRequest =
   | WorkspaceSessionStartRequest
   | WorkspaceSessionRestoreRequest
   | WorkspaceSessionBackupRequest
   | WorkspaceSessionPreviewRequest
+  | WorkspaceSessionExecRequest
   | WorkspaceSessionDestroyRequest;
 
 export interface CloudflareWorkspaceSandboxOptions {
@@ -165,6 +194,10 @@ export interface CloudflareWorkspaceSandboxClient {
     port: number,
     options: CloudflareWorkspaceSandboxExposePortOptions,
   ) => Promise<CloudflareWorkspaceSandboxExposePortResult>;
+  readonly exec?: (
+    command: string,
+    options: CloudflareWorkspaceSessionExecOptions,
+  ) => Promise<CloudflareWorkspaceSessionExecRawResult>;
   readonly destroy?: () => Promise<unknown>;
 }
 
@@ -234,6 +267,95 @@ const messageOf = (cause: unknown): string => {
     return typeof message === "string" ? message : "provider failure";
   }
   return typeof cause === "string" ? cause : "provider failure";
+};
+
+const textOf = (value: unknown): string => {
+  if (value === undefined) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
+    return `${value}`;
+  }
+  if (value instanceof Uint8Array) return new TextDecoder().decode(value);
+  const encoded = JSON.stringify(value);
+  return encoded === undefined ? "" : encoded;
+};
+
+const truncateUtf8 = (
+  text: string,
+  maxBytes: number,
+): { readonly text: string; readonly bytes: number; readonly truncated: boolean } => {
+  const encoded = new TextEncoder().encode(text);
+  if (encoded.length <= maxBytes) {
+    return { text, bytes: encoded.length, truncated: false };
+  }
+  return {
+    text: new TextDecoder().decode(encoded.slice(0, maxBytes)),
+    bytes: encoded.length,
+    truncated: true,
+  };
+};
+
+const artifactRefFrom = (
+  value: WorkspaceSessionExecArtifactRef | string,
+): WorkspaceSessionExecArtifactRef => (typeof value === "string" ? { ref: value } : value);
+
+const artifactRefsFrom = (
+  result: CloudflareWorkspaceSessionExecRawResult,
+): ReadonlyArray<WorkspaceSessionExecArtifactRef> => {
+  if (Array.isArray(result.artifacts)) return result.artifacts.map(artifactRefFrom);
+  if (Array.isArray(result.artifactRefs)) return result.artifactRefs.map((ref) => ({ ref }));
+  return [];
+};
+
+const normalizeExecResult = (
+  request: WorkspaceSessionExecRequest,
+  result: CloudflareWorkspaceSessionExecRawResult,
+  durationMs: number,
+): WorkspaceSessionExecResult => {
+  const maxOutputBytes = request.maxOutputBytes ?? DEFAULT_EXEC_MAX_OUTPUT_BYTES;
+  const stdout = truncateUtf8(textOf(result.stdout ?? result.output), maxOutputBytes);
+  const stderr = truncateUtf8(textOf(result.stderr), maxOutputBytes);
+  return {
+    exitCode:
+      typeof result.exitCode === "number" && Number.isFinite(result.exitCode) ? result.exitCode : 0,
+    stdout: stdout.text,
+    stderr: stderr.text,
+    stdoutBytes: stdout.bytes,
+    stderrBytes: stderr.bytes,
+    stdoutTruncated: stdout.truncated,
+    stderrTruncated: stderr.truncated,
+    artifacts: artifactRefsFrom(result),
+    durationMs,
+  };
+};
+
+const execFailureCode = (value: unknown): WorkspaceSessionExecFailure["code"] | undefined =>
+  value === "SessionNotFound" ||
+  value === "PolicyDenied" ||
+  value === "Timeout" ||
+  value === "ExecFailed" ||
+  value === "ProviderFailure"
+    ? value
+    : undefined;
+
+const execFailureFrom = (
+  request: WorkspaceSessionExecRequest,
+  cause: unknown,
+): WorkspaceSessionExecFailure => {
+  if (Predicate.isRecord(cause)) {
+    const code = execFailureCode(cause.code);
+    const reason = typeof cause.reason === "string" ? cause.reason : messageOf(cause);
+    if (code !== undefined) {
+      return {
+        code,
+        reason,
+        sessionRef: request.sessionRef,
+        ...(typeof cause.stdout === "string" ? { stdout: cause.stdout } : {}),
+        ...(typeof cause.stderr === "string" ? { stderr: cause.stderr } : {}),
+      };
+    }
+  }
+  return { code: "ProviderFailure", reason: messageOf(cause), sessionRef: request.sessionRef };
 };
 
 const providerFailure = (
@@ -313,18 +435,18 @@ const scopeFailure = (
 const requiredString = (result: Record<string, unknown>, key: string): string | undefined =>
   typeof result[key] === "string" && result[key].length > 0 ? result[key] : undefined;
 
-const clientMethod = <K extends "backup" | "preview" | "destroy">(
+const clientMethod = <K extends "backup" | "preview" | "exec" | "destroy">(
   client: CloudflareWorkspaceSessionClient,
   key: K,
-): CloudflareWorkspaceSessionClient[K] | null => {
+): NonNullable<CloudflareWorkspaceSessionClient[K]> | null => {
   const method = client[key];
   if (typeof method !== "function") {
     return null;
   }
-  return method;
+  return method as NonNullable<CloudflareWorkspaceSessionClient[K]>;
 };
 
-const missingClientMethod = (key: "backup" | "preview" | "destroy"): Promise<never> =>
+const missingClientMethod = (key: "backup" | "preview" | "exec" | "destroy"): Promise<never> =>
   Promise.reject({
     code: "ProviderFailure",
     reason: `Cloudflare workspace session client missing ${key}`,
@@ -346,7 +468,7 @@ const decodedRef = (
   ref: string,
   prefix: string,
   partCount: number,
-  step: WorkspaceSessionFailure["step"],
+  step: CloudflareWorkspaceSessionStep,
 ):
   | { readonly ok: true; readonly parts: ReadonlyArray<string> }
   | { readonly ok: false; readonly failure: CloudflareWorkspaceSessionRequiredProviderFailure } => {
@@ -387,7 +509,7 @@ const backupRefOf = (id: string, dir: string): string => encodedRef(BACKUP_REF_P
 
 const parseBackupRef = (
   backupRef: string,
-  step: WorkspaceSessionFailure["step"],
+  step: CloudflareWorkspaceSessionStep,
 ):
   | Required<CloudflareWorkspaceSandboxBackupHandle>
   | CloudflareWorkspaceSessionRequiredProviderFailure => {
@@ -405,7 +527,7 @@ const destroyProofRefOf = (sessionRef: string): string =>
 
 const parseSessionRef = (
   sessionRef: string,
-  step: WorkspaceSessionFailure["step"],
+  step: CloudflareWorkspaceSessionStep,
 ):
   | { readonly sandboxId: string; readonly sessionId: string }
   | CloudflareWorkspaceSessionRequiredProviderFailure => {
@@ -418,7 +540,7 @@ const parseSessionRef = (
 const requiredOptionString = (
   value: unknown,
   label: string,
-  step: WorkspaceSessionFailure["step"],
+  step: CloudflareWorkspaceSessionStep,
 ): string | CloudflareWorkspaceSessionRequiredProviderFailure =>
   isNonEmptyString(value)
     ? value
@@ -430,7 +552,7 @@ const requiredOptionString = (
 const requiredOptionNumber = (
   value: unknown,
   label: string,
-  step: WorkspaceSessionFailure["step"],
+  step: CloudflareWorkspaceSessionStep,
 ): number | CloudflareWorkspaceSessionRequiredProviderFailure =>
   typeof value === "number" && Number.isFinite(value) && value > 0
     ? value
@@ -448,7 +570,7 @@ const isProviderFailure = (
 
 const requireClient = (
   value: CloudflareWorkspaceSandboxClient,
-  step: WorkspaceSessionFailure["step"],
+  step: CloudflareWorkspaceSessionStep,
 ): CloudflareWorkspaceSandboxClient | CloudflareWorkspaceSessionRequiredProviderFailure =>
   Predicate.isRecord(value)
     ? value
@@ -461,7 +583,7 @@ const sandboxClient = async (
   options: CloudflareWorkspaceSessionSandboxProviderOptions,
   request: WorkspaceSessionProviderRequest,
   sandboxId: string,
-  step: WorkspaceSessionFailure["step"],
+  step: CloudflareWorkspaceSessionStep,
 ): Promise<CloudflareWorkspaceSandboxClient> => {
   const source = options.source;
   const value =
@@ -475,7 +597,7 @@ const sandboxClient = async (
 const requireMethod = <T extends (...args: never[]) => Promise<unknown>>(
   client: CloudflareWorkspaceSandboxClient,
   method: keyof CloudflareWorkspaceSandboxClient,
-  step: WorkspaceSessionFailure["step"],
+  step: CloudflareWorkspaceSessionStep,
 ): T | CloudflareWorkspaceSessionRequiredProviderFailure => {
   const value = client[method];
   return typeof value === "function"
@@ -558,7 +680,7 @@ const ensureSameString = (
   actual: string,
   expected: string,
   label: string,
-  step: WorkspaceSessionFailure["step"],
+  step: CloudflareWorkspaceSessionStep,
 ): CloudflareWorkspaceSessionRequiredProviderFailure | null =>
   actual === expected
     ? null
@@ -598,6 +720,18 @@ export const makeCloudflareWorkspaceSessionProvider = (
     if (preview === null) return missingClientMethod("preview");
     const result = await preview(request);
     return { previewRef: result.id, ...(result.url === undefined ? {} : { url: result.url }) };
+  },
+  exec: async (request) => {
+    const client = await options.namespace.get(request.sessionRef);
+    const exec = clientMethod(client, "exec");
+    if (exec === null) return missingClientMethod("exec");
+    const started = Date.now();
+    const result = await exec(request.command, {
+      ...(request.args === undefined ? {} : { args: request.args }),
+      cwd: request.cwd,
+      timeoutMs: request.timeoutMs,
+    });
+    return normalizeExecResult(request, result, Date.now() - started);
   },
   destroy: async (request) => {
     const client = await options.namespace.get(request.sessionRef);
@@ -769,6 +903,12 @@ export const makeCloudflareWorkspaceSessionCarrier = (
         };
       }),
 
+    exec: (request) =>
+      Effect.tryPromise({
+        try: () => options.provider.exec(request),
+        catch: (cause): WorkspaceSessionExecFailure => execFailureFrom(request, cause),
+      }),
+
     destroy: (request) =>
       Effect.gen(function* () {
         const result = yield* Effect.tryPromise({
@@ -919,6 +1059,26 @@ export const makeCloudflareWorkspaceSessionLiveProvider = (
       previewRef: previewRefOf(request.port, url),
       url,
     };
+  },
+
+  exec: async (request) => {
+    const parsed = parseSessionRef(request.sessionRef, "exec");
+    if (isProviderFailure(parsed)) return providerRejected(parsed.reason, parsed.code);
+    const client = await sandboxClient(options, request, parsed.sandboxId, "exec");
+    const exec = requireMethod<
+      (
+        command: string,
+        options: CloudflareWorkspaceSessionExecOptions,
+      ) => Promise<CloudflareWorkspaceSessionExecRawResult>
+    >(client, "exec", "exec");
+    if (isProviderFailure(exec)) return providerRejected(exec.reason, exec.code);
+    const started = Date.now();
+    const result = await exec.call(client, request.command, {
+      ...(request.args === undefined ? {} : { args: request.args }),
+      cwd: request.cwd,
+      timeoutMs: request.timeoutMs,
+    });
+    return normalizeExecResult(request, result, Date.now() - started);
   },
 
   destroy: async (request) => {

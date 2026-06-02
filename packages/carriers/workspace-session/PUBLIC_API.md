@@ -16,6 +16,11 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:WorkspaceSessionDestroyRequest`
 - `.:WorkspaceSessionDestroyedPayload`
 - `.:WorkspaceSessionEventKind`
+- `.:WorkspaceSessionExecArtifactRef`
+- `.:WorkspaceSessionExecFailure`
+- `.:WorkspaceSessionExecFailureCode`
+- `.:WorkspaceSessionExecRequest`
+- `.:WorkspaceSessionExecResult`
 - `.:WorkspaceSessionFailedPayload`
 - `.:WorkspaceSessionFailure`
 - `.:WorkspaceSessionLedgerEvent`

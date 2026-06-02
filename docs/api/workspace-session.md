@@ -12,6 +12,11 @@
 - `.:WorkspaceSessionDestroyRequest`
 - `.:WorkspaceSessionDestroyedPayload`
 - `.:WorkspaceSessionEventKind`
+- `.:WorkspaceSessionExecArtifactRef`
+- `.:WorkspaceSessionExecFailure`
+- `.:WorkspaceSessionExecFailureCode`
+- `.:WorkspaceSessionExecRequest`
+- `.:WorkspaceSessionExecResult`
 - `.:WorkspaceSessionFailedPayload`
 - `.:WorkspaceSessionFailure`
 - `.:WorkspaceSessionLedgerEvent`

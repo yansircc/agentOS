@@ -64,6 +64,17 @@ const provider = (overrides: Partial<CloudflareWorkspaceSessionProvider> = {}) =
     }),
     backup: async () => ({ backupRef: "cf-backup-1" }),
     preview: async () => ({ previewRef: "cf-preview-1", url: "https://preview.example" }),
+    exec: async () => ({
+      exitCode: 0,
+      stdout: "ok",
+      stderr: "",
+      stdoutBytes: 2,
+      stderrBytes: 0,
+      stdoutTruncated: false,
+      stderrTruncated: false,
+      artifacts: [],
+      durationMs: 1,
+    }),
     destroy: async () => ({ proofRef: "cf-destroy-1" }),
     ...overrides,
   }) satisfies CloudflareWorkspaceSessionProvider;
@@ -242,6 +253,10 @@ describe("@agent-os/workspace-session-cloudflare", () => {
         calls.push(`preview:${id}`);
         return { id: `preview://${id}`, url: `https://${id}.example` };
       },
+      exec: async (command, options) => {
+        calls.push(`exec:${id}:${command}:${options.cwd}:${options.timeoutMs}`);
+        return { exitCode: 0, stdout: "abcdef", stderr: "", artifactRefs: [`artifact:${id}`] };
+      },
       destroy: async () => {
         calls.push(`destroy:${id}`);
         return { id: `destroy://${id}` };
@@ -296,6 +311,22 @@ describe("@agent-os/workspace-session-cloudflare", () => {
       url: "https://session-live.example",
     });
     await expect(
+      liveProvider.exec({
+        sessionRef: "session-live",
+        cwd: "/workspace",
+        command: "npm",
+        args: ["test"],
+        timeoutMs: 1_000,
+        maxOutputBytes: 3,
+      }),
+    ).resolves.toMatchObject({
+      exitCode: 0,
+      stdout: "abc",
+      stdoutBytes: 6,
+      stdoutTruncated: true,
+      artifacts: [{ ref: "artifact:session-live" }],
+    });
+    await expect(
       liveProvider.destroy({
         claim: sessionClaim,
         subjectRef: "run-1",
@@ -310,6 +341,8 @@ describe("@agent-os/workspace-session-cloudflare", () => {
       "backup:session-live",
       "get:session-live",
       "preview:session-live",
+      "get:session-live",
+      "exec:session-live:npm:/workspace:1000",
       "get:session-live",
       "destroy:session-live",
     ]);
@@ -326,6 +359,7 @@ describe("@agent-os/workspace-session-cloudflare", () => {
               cleanupRef: "cleanup://missing",
               backup: async () => ({ id: "backup://unused" }),
               preview: async () => ({ id: "preview://unused" }),
+              exec: async () => ({ exitCode: 0, stdout: "", stderr: "" }),
               destroy: async () => ({ id: "destroy://unused" }),
             }) satisfies CloudflareWorkspaceSessionClient,
           restore: async () => {
@@ -383,6 +417,15 @@ describe("@agent-os/workspace-session-cloudflare", () => {
             calls.push(["exposePort", port, options, sandboxSecret]);
             return { port, url: "https://preview-a24.example" };
           },
+          exec: async (command, options) => {
+            calls.push(["exec", command, options, sandboxSecret]);
+            return {
+              exitCode: 0,
+              stdout: "abcdef",
+              stderr: "err",
+              artifacts: [{ ref: "workspace-exec:artifact:1", bytes: 6 }],
+            };
+          },
           destroy: async () => {
             calls.push(["destroy", sandboxSecret]);
           },
@@ -423,6 +466,15 @@ describe("@agent-os/workspace-session-cloudflare", () => {
           sessionRef: restored.sessionRef,
           port: 8787,
         });
+        const exec = yield* carrier.exec({
+          sessionRef: restored.sessionRef,
+          cwd: "/workspace",
+          command: "bun",
+          args: ["test"],
+          timeoutMs: 2_000,
+          maxOutputBytes: 4,
+          materialRefs: ["material:env:test"],
+        });
         const destroyed = yield* carrier.destroy({
           claim: sessionClaim,
           subjectRef: "run-a24",
@@ -435,15 +487,29 @@ describe("@agent-os/workspace-session-cloudflare", () => {
           { id: "session-a24", cwd: "/workspace" },
           sandboxSecret,
         ]);
+        expect(calls).toContainEqual([
+          "exec",
+          "bun",
+          { args: ["test"], cwd: "/workspace", timeoutMs: 2_000 },
+          sandboxSecret,
+        ]);
         expect(backup.backupRef).toBe("cloudflare-sandbox-backup:backup-a24:%2Fworkspace");
         expect(preview.url).toBe("https://preview-a24.example");
+        expect(exec).toMatchObject({
+          exitCode: 0,
+          stdout: "abcd",
+          stdoutBytes: 6,
+          stdoutTruncated: true,
+          stderr: "err",
+          artifacts: [{ ref: "workspace-exec:artifact:1", bytes: 6 }],
+        });
         expect(destroyed.claim.anchorRef.anchorId).toBe(
           workspaceSessionSettlementRef(
             "destroy",
             `cloudflare-sandbox-destroy:${encodeURIComponent(restored.sessionRef)}`,
           ),
         );
-        const publicJson = JSON.stringify([started, backup, restored, preview, destroyed]);
+        const publicJson = JSON.stringify([started, backup, restored, preview, exec, destroyed]);
         expect(publicJson).not.toContain(sandboxSecret);
         expect(publicJson).not.toContain("preview-token");
       }),
