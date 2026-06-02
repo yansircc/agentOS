@@ -37,6 +37,8 @@ export interface TriggerCancellation {
   readonly requestedAt?: number;
 }
 
+export type DurableTriggerCancellationMode = "cooperative" | "ignored";
+
 export type TriggerParseResult<Intent> =
   | { readonly ok: true; readonly intent: Intent }
   | { readonly ok: false; readonly reason: string };
@@ -63,6 +65,7 @@ export interface TriggerTx extends AcquireCtx {
 export interface DurableTrigger<Intent, Outcome, R = never> {
   readonly kind: string;
   readonly intentEventKind: string;
+  readonly cancellation: DurableTriggerCancellationMode;
   readonly acquireDeadlineMs?: number;
   readonly parseIntent: (raw: unknown) => TriggerParseResult<Intent>;
   // External acquire effects must be idempotent: another drain can complete the
@@ -72,7 +75,7 @@ export interface DurableTrigger<Intent, Outcome, R = never> {
     ctx: AcquireCtx,
   ) => Effect.Effect<Outcome, DurableTriggerAcquireCancelled, R>;
   readonly commit: (outcome: Outcome, tx: TriggerTx) => void;
-  readonly commitCancelled?: (
+  readonly commitCancelled: (
     intent: Intent,
     cancellation: TriggerCancellation,
     tx: TriggerTx,
@@ -102,15 +105,8 @@ export const getDurableTrigger = (
 };
 
 export const DURABLE_TRIGGER_SCHEDULED_REQUESTED = "durable_trigger.scheduled.requested";
-export const DURABLE_TRIGGER_CANCELLED = "durable_trigger.cancelled";
+export const DURABLE_TRIGGER_SCHEDULED_CANCELLED = "durable_trigger.scheduled.cancelled";
 export const DEFAULT_TRIGGER_ACQUIRE_DEADLINE_MS = 60_000;
-
-export interface DurableTriggerCancelledPayload {
-  readonly triggerKind: string;
-  readonly intentEventId: number;
-  readonly dueWorkId: number;
-  readonly reason?: string;
-}
 
 export interface ScheduledEventIntentPayload {
   readonly eventKind: string;
@@ -141,6 +137,7 @@ export const parseScheduledEventIntentPayload = (
 export const scheduledEventTrigger = {
   kind: "scheduled_event",
   intentEventKind: DURABLE_TRIGGER_SCHEDULED_REQUESTED,
+  cancellation: "cooperative",
   parseIntent: parseScheduledEventIntentPayload,
   acquire: (intent: ScheduledEventIntentPayload, _ctx: AcquireCtx) => Effect.succeed(intent),
   commit: (outcome, tx) => {
@@ -149,7 +146,29 @@ export const scheduledEventTrigger = {
       payload: outcome.data,
     });
   },
+  commitCancelled: (_intent, cancellation, tx) => {
+    tx.insertEvent({
+      kind: DURABLE_TRIGGER_SCHEDULED_CANCELLED,
+      payload: {
+        intentEventId: tx.intentEventId,
+        ...(cancellation.requestedAt === undefined
+          ? {}
+          : { requestedAt: cancellation.requestedAt }),
+        ...(cancellation.reason === undefined ? {} : { reason: cancellation.reason }),
+      },
+    });
+  },
 } satisfies DurableTrigger<ScheduledEventIntentPayload, ScheduledEventIntentPayload>;
+
+const requiredTriggerField = (
+  trigger: AnyDurableTrigger,
+): "cancellation" | "commitCancelled" | null => {
+  if (trigger.cancellation !== "cooperative" && trigger.cancellation !== "ignored") {
+    return "cancellation";
+  }
+  if (typeof trigger.commitCancelled !== "function") return "commitCancelled";
+  return null;
+};
 
 export const makeDurableTriggerRegistry = (
   triggers: Iterable<AnyDurableTrigger>,
@@ -157,6 +176,10 @@ export const makeDurableTriggerRegistry = (
   Effect.gen(function* () {
     const registry = new Map<string, AnyDurableTrigger>();
     for (const trigger of triggers) {
+      const missing = requiredTriggerField(trigger);
+      if (missing !== null) {
+        return yield* Effect.fail(`durable trigger ${trigger.kind} missing ${missing}`);
+      }
       if (registry.has(trigger.kind)) {
         return yield* Effect.fail(`duplicate durable trigger kind: ${trigger.kind}`);
       }
@@ -190,6 +213,7 @@ export interface TriggerCancelSpec {
 }
 
 export type TriggerCancelResult =
+  | { readonly status: "ignored" }
   | { readonly status: "cancelled"; readonly cancelled: number }
   | { readonly status: "requested"; readonly requested: number }
   | { readonly status: "not_found"; readonly cancelled: 0 }

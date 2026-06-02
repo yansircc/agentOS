@@ -74,6 +74,7 @@ describe("in-memory runtime backend", () => {
     const chainTrigger = {
       kind: "test.chain",
       intentEventKind: "test.chain.requested",
+      cancellation: "cooperative",
       parseIntent: (raw) =>
         typeof raw === "object" &&
         raw !== null &&
@@ -92,6 +93,7 @@ describe("in-memory runtime backend", () => {
           });
         }
       },
+      commitCancelled: () => undefined,
     } satisfies DurableTrigger<ChainIntent, ChainIntent>;
 
     const { backend, runtime } = makeRuntime("chain-scope", { triggers: [chainTrigger] });
@@ -132,6 +134,7 @@ describe("in-memory runtime backend", () => {
       const loopTrigger = {
         kind: "test.loop",
         intentEventKind: "test.loop.requested",
+        cancellation: "cooperative",
         parseIntent: (raw) =>
           typeof raw === "object" &&
           raw !== null &&
@@ -148,6 +151,7 @@ describe("in-memory runtime backend", () => {
             fireAt: tx.now,
           });
         },
+        commitCancelled: () => undefined,
       } satisfies DurableTrigger<LoopIntent, LoopIntent>;
 
       const { backend, runtime } = makeRuntime("loop-scope", { triggers: [loopTrigger] });
@@ -182,6 +186,7 @@ describe("in-memory runtime backend", () => {
       const thenableTrigger = {
         kind: "test.thenable",
         intentEventKind: "test.thenable.requested",
+        cancellation: "cooperative",
         parseIntent: (raw) =>
           typeof raw === "object" &&
           raw !== null &&
@@ -193,6 +198,7 @@ describe("in-memory runtime backend", () => {
           tx.insertEvent({ kind: "test.thenable.done", payload: intent });
           return Promise.resolve(undefined);
         }) as DurableTrigger<ThenableIntent, ThenableIntent>["commit"],
+        commitCancelled: () => undefined,
       } satisfies DurableTrigger<ThenableIntent, ThenableIntent>;
 
       const { backend, runtime } = makeRuntime("thenable-scope", {

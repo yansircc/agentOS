@@ -3,6 +3,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { DurableTriggerCommitReturnedThenable } from "@agent-os/kernel";
 import {
   DURABLE_TRIGGER_SCHEDULED_REQUESTED,
+  DURABLE_TRIGGER_SCHEDULED_CANCELLED,
   runSynchronousTriggerCommit,
   makeDurableTriggerRegistry,
   parseScheduledEventIntentPayload,
@@ -15,9 +16,11 @@ import {
 const trigger = (kind: string): DurableTrigger<unknown, { readonly ok: boolean }> => ({
   kind,
   intentEventKind: `${kind}.requested`,
+  cancellation: "cooperative",
   parseIntent: (raw) => triggerParseOk(raw),
   acquire: () => Effect.succeed({ ok: true }),
   commit: () => undefined,
+  commitCancelled: () => undefined,
 });
 
 describe("durable trigger runtime algebra", () => {
@@ -38,9 +41,11 @@ describe("durable trigger runtime algebra", () => {
       > = {
         kind: "failed-as-value",
         intentEventKind: "failed-as-value.requested",
+        cancellation: "cooperative",
         parseIntent: (raw: unknown) => triggerParseOk(raw),
         acquire: () => Effect.succeed({ ok: false, reason: "provider unavailable" }),
         commit: () => undefined,
+        commitCancelled: () => undefined,
       };
 
       const outcome = yield* failed.acquire(
@@ -65,12 +70,14 @@ describe("durable trigger runtime algebra", () => {
       const cancellable: DurableTrigger<unknown, { readonly ok: true }> = {
         kind: "cancellable",
         intentEventKind: "cancellable.requested",
+        cancellation: "cooperative",
         parseIntent: (raw: unknown) => triggerParseOk(raw),
         acquire: (_intent, ctx) => {
           seen.push({ aborted: ctx.signal.aborted, mode: ctx.acquireMode });
           return Effect.succeed({ ok: true });
         },
         commit: () => undefined,
+        commitCancelled: () => undefined,
       };
 
       controller.abort("test");
@@ -104,6 +111,7 @@ describe("durable trigger runtime algebra", () => {
       });
       expect(scheduledEventTrigger.kind).toBe("scheduled_event");
       expect(scheduledEventTrigger.intentEventKind).toBe(DURABLE_TRIGGER_SCHEDULED_REQUESTED);
+      expect(scheduledEventTrigger.cancellation).toBe("cooperative");
 
       const outcome = yield* scheduledEventTrigger.acquire(intent, {
         scope: "scope",
@@ -114,6 +122,25 @@ describe("durable trigger runtime algebra", () => {
         acquireMode: "normal",
       });
       expect(outcome).toEqual(intent);
+      expect(DURABLE_TRIGGER_SCHEDULED_CANCELLED).toBe("durable_trigger.scheduled.cancelled");
+    }),
+  );
+
+  it.effect("rejects triggers missing explicit cancellation declarations", () =>
+    Effect.gen(function* () {
+      const valid = trigger("required-fields");
+
+      for (const field of ["cancellation", "commitCancelled"] as const) {
+        const incomplete = { ...valid };
+        delete (incomplete as Record<string, unknown>)[field];
+        const either = yield* Effect.either(
+          makeDurableTriggerRegistry([incomplete as unknown as DurableTrigger<unknown, unknown>]),
+        );
+        expect(either).toMatchObject({
+          _tag: "Left",
+          left: expect.stringContaining(field),
+        });
+      }
     }),
   );
 });

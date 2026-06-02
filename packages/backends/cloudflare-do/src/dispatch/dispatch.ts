@@ -200,6 +200,7 @@ export const deliveryRetryTrigger = (
 ): DurableTrigger<DispatchRequestedPayload, DeliveryRetryOutcome> => ({
   kind: DELIVERY_RETRY_TRIGGER_KIND,
   intentEventKind: DISPATCH_EVENT_KINDS.OUTBOUND_REQUESTED,
+  cancellation: "ignored",
   parseIntent: (raw) => {
     const parsed = parseRequestedPayloadValue(raw);
     return parsed.ok ? triggerParseOk(parsed.value) : triggerParseFail(parsed.failure.reason);
@@ -315,6 +316,7 @@ export const deliveryRetryTrigger = (
       tx.reschedule(nextAttemptAt, outcome.outboundEventId);
     }
   },
+  commitCancelled: () => undefined,
 });
 
 export const DispatchLive = (

@@ -9,7 +9,6 @@ import {
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import {
   DEFAULT_TRIGGER_ACQUIRE_DEADLINE_MS,
-  DURABLE_TRIGGER_CANCELLED,
   DurableTriggerRegistry,
   TriggerPump,
   drainTriggerPumpUntilQuiet,
@@ -57,20 +56,6 @@ const claimToken = (): string => crypto.randomUUID();
 const cancellationFor = (row: DueWorkRow): TriggerCancellation => ({
   ...(row.cancelReason === null ? {} : { reason: row.cancelReason }),
   ...(row.cancelRequestedAt === null ? {} : { requestedAt: row.cancelRequestedAt }),
-});
-
-const genericCancelledPayload = (
-  row: DueWorkRow,
-): {
-  readonly triggerKind: string;
-  readonly intentEventId: number;
-  readonly dueWorkId: number;
-  readonly reason?: string;
-} => ({
-  triggerKind: row.kind,
-  intentEventId: row.payload.intentEventId,
-  dueWorkId: row.id,
-  ...(row.cancelReason === null ? {} : { reason: row.cancelReason }),
 });
 
 const readIntentPayload = (
@@ -261,17 +246,10 @@ export const TriggerPumpLive = (
               if (stillOwned.length === 0) return null;
               const written: LedgerEvent[] = [];
               const tx = txFor(row, now, written, mode.signal, mode.acquireMode);
-              if (trigger.commitCancelled === undefined) {
-                tx.insertEvent({
-                  kind: DURABLE_TRIGGER_CANCELLED,
-                  payload: genericCancelledPayload(row),
-                });
-              } else {
-                const commitFailure = runSynchronousTriggerCommit(scope, row.kind, () =>
-                  trigger.commitCancelled?.(intent, cancellationFor(row), tx),
-                );
-                if (commitFailure !== null) throw commitFailure;
-              }
+              const commitFailure = runSynchronousTriggerCommit(scope, row.kind, () =>
+                trigger.commitCancelled(intent, cancellationFor(row), tx),
+              );
+              if (commitFailure !== null) throw commitFailure;
               sql.exec(
                 `
                   UPDATE due_work
@@ -382,6 +360,7 @@ export const TriggerPumpLive = (
               new UnregisteredDurableTriggerKind({ kind: spec.triggerKind }),
             );
           }
+          if (trigger.cancellation === "ignored") return { status: "ignored" };
           const now = yield* Clock.currentTimeMillis;
           const rows = yield* selectDueByTriggerIntent(sql, spec.triggerKind, spec.intentEventId);
           if (rows.length === 0) {

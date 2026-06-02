@@ -6,7 +6,6 @@ import {
 } from "@agent-os/kernel/errors";
 import {
   DEFAULT_TRIGGER_ACQUIRE_DEADLINE_MS,
-  DURABLE_TRIGGER_CANCELLED,
   DurableTriggerRegistry,
   TriggerPump,
   drainTriggerPumpUntilQuiet,
@@ -24,18 +23,6 @@ const cancellationFor = (row: {
 }): TriggerCancellation => ({
   ...(row.cancelReason === null ? {} : { reason: row.cancelReason }),
   ...(row.cancelRequestedAt === null ? {} : { requestedAt: row.cancelRequestedAt }),
-});
-
-const genericCancelledPayload = (row: {
-  readonly id: number;
-  readonly kind: string;
-  readonly payload: { readonly intentEventId: number };
-  readonly cancelReason: string | null;
-}) => ({
-  triggerKind: row.kind,
-  intentEventId: row.payload.intentEventId,
-  dueWorkId: row.id,
-  ...(row.cancelReason === null ? {} : { reason: row.cancelReason }),
 });
 
 export const InMemoryTriggerPumpLive = (
@@ -131,16 +118,9 @@ export const InMemoryTriggerPumpLive = (
                     now,
                     (kind) => registry.has(kind),
                     (tx) =>
-                      runSynchronousTriggerCommit(scope, row.kind, () => {
-                        if (trigger.commitCancelled === undefined) {
-                          tx.insertEvent({
-                            kind: DURABLE_TRIGGER_CANCELLED,
-                            payload: genericCancelledPayload(row),
-                          });
-                          return undefined;
-                        }
-                        return trigger.commitCancelled(intent, cancellationFor(row), tx);
-                      }),
+                      runSynchronousTriggerCommit(scope, row.kind, () =>
+                        trigger.commitCancelled(intent, cancellationFor(row), tx),
+                      ),
                     { claimToken: token, cancelled: true, signal: controller.signal, acquireMode },
                   );
                 });
@@ -160,6 +140,7 @@ export const InMemoryTriggerPumpLive = (
               new UnregisteredDurableTriggerKind({ kind: spec.triggerKind }),
             );
           }
+          if (trigger.cancellation === "ignored") return { status: "ignored" as const };
           const now = yield* Clock.currentTimeMillis;
           const rows = state.dueByTriggerIntent(spec.triggerKind, spec.intentEventId);
           if (rows.length === 0) return { status: "not_found" as const, cancelled: 0 as const };
@@ -175,16 +156,9 @@ export const InMemoryTriggerPumpLive = (
                 now,
                 (kind) => registry.has(kind),
                 (tx) =>
-                  runSynchronousTriggerCommit(scope, row.kind, () => {
-                    if (trigger.commitCancelled === undefined) {
-                      tx.insertEvent({
-                        kind: DURABLE_TRIGGER_CANCELLED,
-                        payload: genericCancelledPayload(row),
-                      });
-                      return undefined;
-                    }
-                    return trigger.commitCancelled(intent, cancellationFor(row), tx);
-                  }),
+                  runSynchronousTriggerCommit(scope, row.kind, () =>
+                    trigger.commitCancelled(intent, cancellationFor(row), tx),
+                  ),
                 { requireUnclaimed: true, cancelled: true },
               );
               if (committed.completed) cancelled += 1;

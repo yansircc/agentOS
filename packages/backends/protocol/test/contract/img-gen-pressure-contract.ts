@@ -51,6 +51,7 @@ export const createImgGenPressureTriggers = (
   const retryDeliveryTrigger = {
     kind: "img.delivery_retry",
     intentEventKind: "image.job.retry.requested",
+    cancellation: "cooperative",
     parseIntent: (raw: unknown) => {
       if (
         typeof raw !== "object" ||
@@ -65,11 +66,13 @@ export const createImgGenPressureTriggers = (
     commit: (outcome, tx) => {
       tx.insertEvent({ kind: "image.job.retry.drained", payload: outcome });
     },
+    commitCancelled: () => undefined,
   } satisfies DurableTrigger<{ readonly jobId: string }, { readonly jobId: string }>;
 
   const artifactDeleteTrigger = {
     kind: "artifact.delete",
     intentEventKind: "artifact.delete.requested",
+    cancellation: "cooperative",
     parseIntent: (raw: unknown) => {
       if (
         typeof raw !== "object" ||
@@ -84,11 +87,13 @@ export const createImgGenPressureTriggers = (
     commit: (outcome, tx) => {
       tx.insertEvent({ kind: "artifact.delete.drained", payload: outcome });
     },
+    commitCancelled: () => undefined,
   } satisfies DurableTrigger<{ readonly r2Key: string }, { readonly r2Key: string }>;
 
   const staleQueuedOutboxScan = {
     kind: "img.scan.stale_outbox",
     intentEventKind: "image.outbox.scan.requested",
+    cancellation: "cooperative",
     parseIntent: parseScanIntent,
     acquire: () => Effect.succeed(world.staleOutboxIds),
     commit: (ids, tx) => {
@@ -96,11 +101,13 @@ export const createImgGenPressureTriggers = (
         tx.insertEvent({ kind: "image.outbox.redrive.requested", payload: { outboxId } });
       }
     },
+    commitCancelled: () => undefined,
   } satisfies DurableTrigger<ScanIntent, ReadonlyArray<string>>;
 
   const staleRunningJobScan = {
     kind: "img.scan.stale_running",
     intentEventKind: "image.running.scan.requested",
+    cancellation: "cooperative",
     parseIntent: parseScanIntent,
     acquire: () => Effect.succeed(world.staleRunningJobIds),
     commit: (jobIds, tx) => {
@@ -114,11 +121,13 @@ export const createImgGenPressureTriggers = (
         });
       }
     },
+    commitCancelled: () => undefined,
   } satisfies DurableTrigger<ScanIntent, ReadonlyArray<string>>;
 
   const r2OrphanScan = {
     kind: "img.scan.r2_orphan",
     intentEventKind: "artifact.orphan.scan.requested",
+    cancellation: "cooperative",
     parseIntent: parseScanIntent,
     acquire: () => Effect.succeed(world.orphanR2Keys),
     commit: (r2Keys, tx) => {
@@ -131,11 +140,13 @@ export const createImgGenPressureTriggers = (
         });
       }
     },
+    commitCancelled: () => undefined,
   } satisfies DurableTrigger<ScanIntent, ReadonlyArray<string>>;
 
   const stalePlanningScan = {
     kind: "img.scan.stale_planning",
     intentEventKind: "planning.scan.requested",
+    cancellation: "cooperative",
     parseIntent: parseScanIntent,
     acquire: () => Effect.succeed(world.stalePlanningRequestIds),
     commit: (requestIds, tx) => {
@@ -143,6 +154,7 @@ export const createImgGenPressureTriggers = (
         tx.insertEvent({ kind: "planning.redrive.requested", payload: { requestId } });
       }
     },
+    commitCancelled: () => undefined,
   } satisfies DurableTrigger<ScanIntent, ReadonlyArray<string>>;
 
   return [

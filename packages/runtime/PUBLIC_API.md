@@ -28,9 +28,9 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:DispatchReceiverResult`
 - `.:DispatchTargetAdapter`
 - `.:DurableTrigger`
-- `.:DurableTriggerCancelledPayload`
+- `.:DurableTriggerCancellationMode`
 - `.:DurableTriggerRegistry`
-- `.:DURABLE_TRIGGER_CANCELLED`
+- `.:DURABLE_TRIGGER_SCHEDULED_CANCELLED`
 - `.:DURABLE_TRIGGER_SCHEDULED_REQUESTED`
 - `.:DEFAULT_TRIGGER_DRAIN_MAX_ITERATIONS`
 - `.:EvidenceRow`

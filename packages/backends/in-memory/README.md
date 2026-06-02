@@ -25,10 +25,9 @@ shared projection adapter shape.
 
 For pure trigger parity tests, the in-memory backend mirrors durable trigger
 claim, cancel, and redrive semantics: expired claims become claimable again,
-`cancelTrigger` writes the same generic substrate cancellation fact when a
-trigger has no app `commitCancelled` hook, and claim-token checks prevent
-duplicate terminal facts. It does not model Cloudflare isolate eviction or
-backend-local projection writes.
+`cancelTrigger` respects each trigger's `cancellation` declaration, and
+claim-token checks prevent duplicate terminal facts. It does not model
+Cloudflare isolate eviction or backend-local projection writes.
 
 ## Minimal Usage
 

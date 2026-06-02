@@ -290,9 +290,9 @@ describe("defineAgentDO trigger facade", () => {
     });
   });
 
-  it("writes a generic cancellation fact when a trigger has no commitCancelled hook", async () => {
+  it("returns ignored without mutating due-work for ignored triggers", async () => {
     const stub = testEnv.TRIGGER_CANCEL_DO.get(
-      testEnv.TRIGGER_CANCEL_DO.idFromName("trigger-generic-cancel"),
+      testEnv.TRIGGER_CANCEL_DO.idFromName("trigger-ignored-cancel"),
     );
 
     const result = await runInDurableObject(stub, async (instance, state) => {
@@ -315,27 +315,18 @@ describe("defineAgentDO trigger facade", () => {
       return {
         cancel,
         duplicate,
-        generic: events
-          .filter((event) => event.kind === "durable_trigger.cancelled")
-          .map((event) => event.payload),
-        pendingDue: state.storage.sql
-          .exec("SELECT * FROM due_work WHERE completed_at IS NULL")
-          .toArray().length,
+        eventKinds: events.map((event) => event.kind),
+        due: state.storage.sql
+          .exec("SELECT completed_at, cancel_requested_at, cancel_reason FROM due_work")
+          .toArray(),
       };
     });
 
     expect(result).toEqual({
-      cancel: { status: "cancelled", cancelled: 1 },
-      duplicate: { status: "not_found", cancelled: 0 },
-      generic: [
-        {
-          triggerKind: "test.generic_cancel",
-          intentEventId: 1,
-          dueWorkId: 1,
-          reason: "user",
-        },
-      ],
-      pendingDue: 0,
+      cancel: { status: "ignored" },
+      duplicate: { status: "ignored" },
+      eventKinds: ["test.generic_cancel.requested"],
+      due: [{ completed_at: null, cancel_requested_at: null, cancel_reason: null }],
     });
   });
 

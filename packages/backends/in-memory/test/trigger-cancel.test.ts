@@ -1,7 +1,6 @@
 import { Effect, ManagedRuntime } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import {
-  DURABLE_TRIGGER_CANCELLED,
   DurableTriggerRegistry,
   TriggerPump,
   triggerParseOk,
@@ -16,6 +15,7 @@ interface Intent {
 const makeTrigger = (calls: string[]): DurableTrigger<Intent, Intent> => ({
   kind: "test.cancel",
   intentEventKind: "test.cancel.requested",
+  cancellation: "cooperative",
   acquireDeadlineMs: 1,
   parseIntent: (raw) => triggerParseOk(raw as Intent),
   acquire: (intent, ctx) =>
@@ -29,10 +29,16 @@ const makeTrigger = (calls: string[]): DurableTrigger<Intent, Intent> => ({
   commit: (outcome, tx) => {
     tx.insertEvent({ kind: "test.cancel.done", payload: outcome });
   },
+  commitCancelled: (intent, cancellation, tx) => {
+    tx.insertEvent({
+      kind: "test.cancel.cancelled",
+      payload: { label: intent.label, reason: cancellation.reason ?? null },
+    });
+  },
 });
 
 describe("in-memory durable trigger cancellation", () => {
-  it("writes the generic cancellation fact for pending trigger rows", async () => {
+  it("commits trigger-owned cancellation facts for pending trigger rows", async () => {
     const backend = createInMemoryRuntimeBackend({
       scope: "scope",
       triggers: [makeTrigger([])],
@@ -57,8 +63,54 @@ describe("in-memory durable trigger cancellation", () => {
       );
       const events = backend.state.snapshot("scope");
       expect(cancel).toEqual({ status: "cancelled", cancelled: 1 });
-      expect(events.filter((event) => event.kind === DURABLE_TRIGGER_CANCELLED)).toHaveLength(1);
+      expect(events.filter((event) => event.kind === "test.cancel.cancelled")).toHaveLength(1);
       expect(backend.state.duePending(11)).toHaveLength(0);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("returns ignored without mutating pending ignored trigger rows", async () => {
+    const ignoredTrigger = {
+      ...makeTrigger([]),
+      kind: "test.ignored_cancel",
+      intentEventKind: "test.ignored_cancel.requested",
+      cancellation: "ignored",
+      commitCancelled: () => undefined,
+    } satisfies DurableTrigger<Intent, Intent>;
+    const backend = createInMemoryRuntimeBackend({
+      scope: "scope",
+      triggers: [ignoredTrigger],
+    });
+    const runtime = ManagedRuntime.make(backend.layer);
+    try {
+      const registry = await runtime.runPromise(DurableTriggerRegistry);
+      const intent = await runtime.runPromise(
+        backend.state.commitTriggerIntent(
+          "scope",
+          10,
+          registry,
+          "test.ignored_cancel",
+          (trigger) => ({
+            kind: trigger.intentEventKind,
+            scope: "scope",
+            payload: { label: "ignored" },
+          }),
+        ),
+      );
+      const pump = await runtime.runPromise(TriggerPump);
+      const cancel = await runtime.runPromise(
+        pump.cancelTrigger({
+          triggerKind: "test.ignored_cancel",
+          intentEventId: intent.id,
+          reason: "user",
+        }),
+      );
+      expect(cancel).toEqual({ status: "ignored" });
+      expect(backend.state.duePending(11)).toHaveLength(1);
+      expect(backend.state.snapshot("scope").map((event) => event.kind)).toEqual([
+        "test.ignored_cancel.requested",
+      ]);
     } finally {
       await runtime.dispose();
     }

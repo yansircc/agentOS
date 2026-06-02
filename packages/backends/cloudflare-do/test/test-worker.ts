@@ -374,6 +374,7 @@ const parseFoldIntent = (raw: unknown) => {
 const foldTrigger = {
   kind: "test.fold",
   intentEventKind: "test.fold.requested",
+  cancellation: "cooperative",
   parseIntent: parseFoldIntent,
   acquire: (intent: FoldIntent) => Effect.succeed(intent),
   commit: (outcome, tx) => {
@@ -383,6 +384,7 @@ const foldTrigger = {
       payload: { label: outcome.label, seen },
     });
   },
+  commitCancelled: () => undefined,
 } satisfies DurableTrigger<FoldIntent, FoldIntent>;
 
 export const TriggerFacadeTestDO = defineAgentDO<CloudflareAgentEnv>({
@@ -418,6 +420,7 @@ export const TriggerBoundaryTestDO = defineAgentDO<CloudflareAgentEnv>({
     const rollbackTrigger = {
       kind: "test.rollback_projection",
       intentEventKind: "test.rollback_projection.requested",
+      cancellation: "cooperative",
       parseIntent: parseBoundaryIntent,
       acquire: (intent: BoundaryIntent) => Effect.succeed(intent),
       commit: (outcome, tx) => {
@@ -428,10 +431,12 @@ export const TriggerBoundaryTestDO = defineAgentDO<CloudflareAgentEnv>({
         ctx.sql.exec("INSERT INTO test_projection (label) VALUES (?)", outcome.label);
         ctx.sql.exec("INSERT INTO missing_projection_table (label) VALUES (?)", outcome.label);
       },
+      commitCancelled: () => undefined,
     } satisfies DurableTrigger<BoundaryIntent, BoundaryIntent>;
     const thenableTrigger = {
       kind: "test.thenable_commit",
       intentEventKind: "test.thenable_commit.requested",
+      cancellation: "cooperative",
       parseIntent: parseBoundaryIntent,
       acquire: (intent: BoundaryIntent) => Effect.succeed(intent),
       commit: ((outcome: BoundaryIntent, tx: TriggerTx) => {
@@ -441,6 +446,7 @@ export const TriggerBoundaryTestDO = defineAgentDO<CloudflareAgentEnv>({
         });
         return Promise.resolve(undefined);
       }) as DurableTrigger<BoundaryIntent, BoundaryIntent>["commit"],
+      commitCancelled: () => undefined,
     } satisfies DurableTrigger<BoundaryIntent, BoundaryIntent>;
     return [rollbackTrigger, thenableTrigger];
   },
@@ -461,6 +467,7 @@ const parseChainIntent = (raw: unknown) => {
 const chainTrigger = {
   kind: "test.chain",
   intentEventKind: "test.chain.requested",
+  cancellation: "cooperative",
   parseIntent: parseChainIntent,
   acquire: (intent: ChainIntent) => Effect.succeed(intent),
   commit: (outcome, tx) => {
@@ -474,6 +481,7 @@ const chainTrigger = {
       });
     }
   },
+  commitCancelled: () => undefined,
 } satisfies DurableTrigger<ChainIntent, ChainIntent>;
 
 export const TriggerTestingDrainTestDO = withAgentDOTestingDrain(
@@ -522,6 +530,7 @@ export const TriggerCancelTestDO = withAgentDOTestingDrain(
       const cancellableTrigger = {
         kind: "test.cancellable",
         intentEventKind: "test.cancellable.requested",
+        cancellation: "cooperative",
         parseIntent: parseCancelIntent,
         acquire: (intent: CancelIntent, acquireCtx) =>
           Effect.tryPromise({
@@ -565,15 +574,18 @@ export const TriggerCancelTestDO = withAgentDOTestingDrain(
       const genericCancelTrigger = {
         kind: "test.generic_cancel",
         intentEventKind: "test.generic_cancel.requested",
+        cancellation: "ignored",
         parseIntent: parseCancelIntent,
         acquire: (intent: CancelIntent) => Effect.succeed(intent),
         commit: (outcome, tx) => {
           tx.insertEvent({ kind: "test.generic_cancel.done", payload: outcome });
         },
+        commitCancelled: () => undefined,
       } satisfies DurableTrigger<CancelIntent, CancelIntent>;
       const thenableCancelTrigger = {
         kind: "test.thenable_cancel",
         intentEventKind: "test.thenable_cancel.requested",
+        cancellation: "cooperative",
         parseIntent: parseCancelIntent,
         acquire: (intent: CancelIntent) => Effect.succeed(intent),
         commit: (outcome, tx) => {
@@ -591,6 +603,7 @@ export const TriggerCancelTestDO = withAgentDOTestingDrain(
       const redriveTrigger = {
         kind: "test.redrive_once",
         intentEventKind: "test.redrive_once.requested",
+        cancellation: "cooperative",
         acquireDeadlineMs: 1,
         parseIntent: parseCancelIntent,
         acquire: (intent: CancelIntent, acquireCtx) =>
@@ -609,10 +622,12 @@ export const TriggerCancelTestDO = withAgentDOTestingDrain(
         commit: (outcome, tx) => {
           tx.insertEvent({ kind: "test.redrive_once.done", payload: outcome });
         },
+        commitCancelled: () => undefined,
       } satisfies DurableTrigger<CancelIntent, CancelIntent>;
       const redriveCancelledTrigger = {
         kind: "test.redrive_cancelled",
         intentEventKind: "test.redrive_cancelled.requested",
+        cancellation: "cooperative",
         acquireDeadlineMs: 1,
         parseIntent: parseCancelIntent,
         acquire: (intent: CancelIntent, acquireCtx) =>
@@ -644,12 +659,14 @@ export const TriggerCancelTestDO = withAgentDOTestingDrain(
       const defaultDeadlineTrigger = {
         kind: "test.default_deadline",
         intentEventKind: "test.default_deadline.requested",
+        cancellation: "cooperative",
         parseIntent: parseCancelIntent,
         acquire: (intent: CancelIntent) =>
           Effect.promise(() => scheduler.wait(50)).pipe(Effect.as(intent)),
         commit: (outcome, tx) => {
           tx.insertEvent({ kind: "test.default_deadline.done", payload: outcome });
         },
+        commitCancelled: () => undefined,
       } satisfies DurableTrigger<CancelIntent, CancelIntent>;
       return [
         cancellableTrigger,

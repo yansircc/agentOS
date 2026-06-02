@@ -28,17 +28,19 @@ write.
 
 `agent.cancelTrigger({ triggerKind, intentEventId, reason })` is the app-facing
 best-effort cancellation primitive. It is registry-closed: unknown trigger kind
-fails before ledger, due-work, or alarm mutation. Pending rows are terminally
-cancelled in one transaction. Running rows record a durable cancel request and
-abort the active in-isolate `AbortController` when present; if the acquire
-already crossed a non-cancellable external boundary, normal commit may still
-win. Expired claims redrive automatically, and a redrive that sees a durable
-cancel request starts with `AcquireCtx.signal.aborted === true`.
+fails before ledger, due-work, or alarm mutation. Triggers declared with
+`cancellation: "ignored"` return `ignored` before reading or mutating due-work.
+Cooperative pending rows are terminally cancelled in one transaction. Running
+rows record a durable cancel request and abort the active in-isolate
+`AbortController` when present; if the acquire already crossed a
+non-cancellable external boundary, normal commit may still win. Expired claims
+redrive automatically, and a redrive that sees a durable cancel request starts
+with `AcquireCtx.signal.aborted === true`.
 
 The backend adds claim/cancel columns to `due_work`, but the payload remains the
 intent pointer `{ intentEventId }`. `due_work` is a mechanical buffer, not an
-audit source. Cancellation visibility comes from app `commitCancelled` facts or
-the substrate `durable_trigger.cancelled` fact.
+audit source. Cancellation visibility comes from trigger-owned
+`commitCancelled` facts.
 
 Production drain is alarm-owned. Deterministic local/test drain is available
 only from `@agent-os/backend-cloudflare-do/testing` with explicit

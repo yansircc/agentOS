@@ -33,6 +33,13 @@ identity (`scope`, `dueWorkId`, `intentEventId`) plus cooperative cancellation
 (`signal`) and binary redrive context (`acquireMode: "normal" | "redrive"`).
 It intentionally has no ledger read access in acquire.
 
+Every trigger declaration explicitly chooses
+`cancellation: "cooperative" | "ignored"`. Cooperative triggers can be marked
+cancelled by `cancelTrigger`; ignored triggers reject cancellation at the
+trigger-pump boundary without reading or mutating due-work. There is no default.
+Registry construction fails closed when a trigger omits `cancellation` or
+`commitCancelled`.
+
 `TriggerTx` exposes tx-local ledger reads through `events()`. Triggers that need
 current business state fold those rows inside commit before appending terminal
 facts or enqueueing more intents; they do not import backend storage internals.
@@ -45,11 +52,11 @@ finish before the callback returns. `AcquireCtx` intentionally has no numeric
 folds until a concrete adapter requires a stronger identity surface.
 
 Cancellation is cooperative. A trigger may fail acquire with
-`DurableTriggerAcquireCancelled`; the backend then runs `commitCancelled` when
-present, or writes the substrate `durable_trigger.cancelled` audit fact when it
-is absent. If an adapter ignores `signal` and returns a normal outcome before a
-cancelled/redriven row reaches a terminal cancellation commit, normal commit can
-still win. Claim-token rechecks prevent duplicate terminal facts.
+`DurableTriggerAcquireCancelled`; the backend then runs the trigger-owned
+`commitCancelled` transaction callback. If an adapter ignores `signal` and
+returns a normal outcome before a cancelled/redriven row reaches a terminal
+cancellation commit, normal commit can still win. Claim-token rechecks prevent
+duplicate terminal facts.
 
 Trigger portability is explicit:
 
