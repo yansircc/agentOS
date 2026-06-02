@@ -10,7 +10,6 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "isolatedModules": true,
-    "paths": {},
     "exactOptionalPropertyTypes": false,
     "noUncheckedIndexedAccess": false,
     "resolveJsonModule": true
@@ -20,5 +19,6 @@
     "test/**/*",
     "vitest.config.ts",
     "../../types/vite-plus-test-config/index.d.ts"
-  ]
+  ],
+  "extends": "../../tsconfig.source-paths.json"
 }

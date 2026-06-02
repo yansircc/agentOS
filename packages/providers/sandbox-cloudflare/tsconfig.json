@@ -10,16 +10,13 @@
     "skipLibCheck": true,
     "isolatedModules": true,
     "exactOptionalPropertyTypes": false,
-    "noUncheckedIndexedAccess": false,
-    "paths": {
-      "@agent-os/kernel/tools": ["../../kernel/src/tools.ts"],
-      "@agent-os/sandbox": ["../../carriers/sandbox/src/index.ts"]
-    }
+    "noUncheckedIndexedAccess": false
   },
   "include": [
     "src/**/*",
     "test/**/*",
     "vitest.config.ts",
     "../../../types/vite-plus-test-config/index.d.ts"
-  ]
+  ],
+  "extends": "../../../tsconfig.source-paths.json"
 }

@@ -9,11 +9,6 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "isolatedModules": true,
-    "paths": {
-      "@agent-os/kernel/extensions": ["../../kernel/src/extensions.ts"],
-      "@agent-os/kernel/material-ref": ["../../kernel/src/material-ref.ts"],
-      "@agent-os/kernel/ref-resolver": ["../../kernel/src/ref-resolver.ts"]
-    },
     "exactOptionalPropertyTypes": false,
     "noUncheckedIndexedAccess": false
   },
@@ -22,5 +17,6 @@
     "test/**/*",
     "vitest.config.ts",
     "../../../types/vite-plus-test-config/index.d.ts"
-  ]
+  ],
+  "extends": "../../../tsconfig.source-paths.json"
 }

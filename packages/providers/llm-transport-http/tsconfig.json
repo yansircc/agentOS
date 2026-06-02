@@ -11,24 +11,13 @@
     "isolatedModules": true,
     "types": ["@cloudflare/workers-types", "vitest/globals"],
     "exactOptionalPropertyTypes": false,
-    "noUncheckedIndexedAccess": false,
-    "paths": {
-      "@agent-os/kernel": ["../../kernel/src/index.ts"],
-      "@agent-os/kernel/boundary-contract": ["../../kernel/src/boundary-contract.ts"],
-      "@agent-os/kernel/effect-claim": ["../../kernel/src/effect-claim.ts"],
-      "@agent-os/kernel/errors": ["../../kernel/src/errors.ts"],
-      "@agent-os/kernel/json-schema": ["../../kernel/src/json-schema.ts"],
-      "@agent-os/kernel/llm": ["../../kernel/src/llm.ts"],
-      "@agent-os/kernel/material-ref": ["../../kernel/src/material-ref.ts"],
-      "@agent-os/kernel/ref-resolver": ["../../kernel/src/ref-resolver.ts"],
-      "@agent-os/kernel/tools": ["../../kernel/src/tools.ts"],
-      "@agent-os/turn-stream": ["../../composers/turn-stream/src/index.ts"]
-    }
+    "noUncheckedIndexedAccess": false
   },
   "include": [
     "src/**/*",
     "test/**/*",
     "vitest.config.ts",
     "../../../types/vite-plus-test-config/index.d.ts"
-  ]
+  ],
+  "extends": "../../../tsconfig.source-paths.json"
 }

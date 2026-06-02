@@ -10,16 +10,6 @@
     "skipLibCheck": true,
     "isolatedModules": true,
     "types": ["vitest/globals"],
-    "paths": {
-      "@agent-os/kernel/boundary-contract": ["../../kernel/src/boundary-contract.ts"],
-      "@agent-os/kernel/carrier": ["../../kernel/src/carrier.ts"],
-      "@agent-os/kernel/effect-claim": ["../../kernel/src/effect-claim.ts"],
-      "@agent-os/kernel/extensions": ["../../kernel/src/extensions.ts"],
-      "@agent-os/kernel/material-ref": ["../../kernel/src/material-ref.ts"],
-      "@agent-os/kernel/ref-resolver": ["../../kernel/src/ref-resolver.ts"],
-      "@agent-os/kernel/settlement-contract": ["../../kernel/src/settlement-contract.ts"],
-      "@agent-os/resource-carrier": ["../../carriers/resource/src/index.ts"]
-    },
     "exactOptionalPropertyTypes": false,
     "noUncheckedIndexedAccess": false
   },
@@ -28,5 +18,6 @@
     "test/**/*",
     "vitest.config.ts",
     "../../../types/vite-plus-test-config/index.d.ts"
-  ]
+  ],
+  "extends": "../../../tsconfig.source-paths.json"
 }

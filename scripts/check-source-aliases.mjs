@@ -1,14 +1,21 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, sep } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const repoRoot = fileURLToPath(new URL("../", import.meta.url));
 const workspaceRoots = ["packages", "tooling"];
-const helperPath = join(repoRoot, "tooling", "vitest-config", "source-aliases.ts");
+const sharedTsconfigPath = join(repoRoot, "tsconfig.source-paths.json");
+
+const { agentOsSourceAliasSpecs } = await import(
+  pathToFileURL(join(repoRoot, "tooling", "vitest-config", "source-aliases.ts")).href
+);
 
 const toRepoPath = (path) => relative(repoRoot, path).split(sep).join("/");
 
 const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
+
+const sortedMap = (entries) =>
+  new Map([...entries].sort(([left], [right]) => left.localeCompare(right)));
 
 const workspacePackageJsons = () => {
   const packageJsons = [];
@@ -30,6 +37,11 @@ const workspacePackageJsons = () => {
   }
   return packageJsons.sort((left, right) => left.localeCompare(right));
 };
+
+const workspaceTsconfigs = () =>
+  workspacePackageJsons()
+    .map((packageJsonPath) => join(dirname(packageJsonPath), "tsconfig.json"))
+    .filter((path) => existsSync(path));
 
 const resolveExportTarget = (value) => {
   if (typeof value === "string") {
@@ -80,26 +92,10 @@ const expectedAliasSpecs = () => {
       specs.set(specifier, sourcePath.replace(/^\.\//, ""));
     }
   }
-  return specs;
+  return sortedMap(specs);
 };
 
-const actualAliasSpecs = () => {
-  const helperSource = readFileSync(helperPath, "utf8");
-  const specStart = helperSource.indexOf("export const agentOsSourceAliasSpecs = [");
-  const specEnd = helperSource.indexOf("] as const", specStart);
-  if (specStart === -1 || specEnd === -1) {
-    throw new Error(
-      "Could not find agentOsSourceAliasSpecs in tooling/vitest-config/source-aliases.ts",
-    );
-  }
-  const specSource = helperSource.slice(specStart, specEnd);
-  const specs = new Map();
-  const specPattern = /\[\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,?\s*\]/g;
-  for (const match of specSource.matchAll(specPattern)) {
-    specs.set(match[1], match[2]);
-  }
-  return specs;
-};
+const actualAliasSpecs = () => sortedMap(agentOsSourceAliasSpecs);
 
 const findVitestConfigs = () => {
   const configs = [];
@@ -125,7 +121,7 @@ const findVitestConfigs = () => {
 
 const manualAliasPatterns = [/"@agent-os\/[^"]+"\s*:/g, /find:\s*"@agent-os\/[^"]+"/g];
 
-const manualAliasFindings = () => {
+const manualVitestAliasFindings = () => {
   const findings = [];
   for (const configPath of findVitestConfigs()) {
     const source = readFileSync(configPath, "utf8");
@@ -135,6 +131,65 @@ const manualAliasFindings = () => {
         const line = prefix.split("\n").length;
         findings.push(`${toRepoPath(configPath)}:${line}: ${match[0]}`);
       }
+    }
+  }
+  return findings;
+};
+
+const expectedTsconfigPaths = (aliasSpecs) =>
+  Object.fromEntries(
+    [...aliasSpecs.entries()].map(([specifier, sourcePath]) => [specifier, [`./${sourcePath}`]]),
+  );
+
+const sharedTsconfigFindings = (aliasSpecs) => {
+  const findings = [];
+  if (!existsSync(sharedTsconfigPath)) {
+    return ["missing tsconfig.source-paths.json"];
+  }
+  const tsconfig = readJson(sharedTsconfigPath);
+  if (tsconfig.compilerOptions?.baseUrl !== undefined) {
+    findings.push("tsconfig.source-paths.json must not set compilerOptions.baseUrl");
+  }
+  const expectedPaths = expectedTsconfigPaths(aliasSpecs);
+  const actualPaths = tsconfig.compilerOptions?.paths ?? {};
+  for (const [specifier, sourcePaths] of Object.entries(expectedPaths)) {
+    if (JSON.stringify(actualPaths[specifier]) !== JSON.stringify(sourcePaths)) {
+      findings.push(
+        `tsconfig.source-paths.json paths.${specifier}: expected ${JSON.stringify(
+          sourcePaths,
+        )}; actual ${JSON.stringify(actualPaths[specifier])}`,
+      );
+    }
+  }
+  for (const specifier of Object.keys(actualPaths)) {
+    if (!aliasSpecs.has(specifier)) {
+      findings.push(`tsconfig.source-paths.json has extra path ${specifier}`);
+    }
+  }
+  return findings;
+};
+
+const workspaceTsconfigFindings = () => {
+  const findings = [];
+  for (const tsconfigPath of workspaceTsconfigs()) {
+    const tsconfig = readJson(tsconfigPath);
+    const expectedExtends = relative(dirname(tsconfigPath), sharedTsconfigPath)
+      .split(sep)
+      .join("/");
+    if (tsconfig.extends !== expectedExtends) {
+      findings.push(
+        `${toRepoPath(tsconfigPath)}: expected extends ${JSON.stringify(expectedExtends)}; actual ${JSON.stringify(
+          tsconfig.extends,
+        )}`,
+      );
+    }
+    const localAgentOsPaths = Object.keys(tsconfig.compilerOptions?.paths ?? {}).filter(
+      (specifier) => specifier.startsWith("@agent-os/"),
+    );
+    if (localAgentOsPaths.length > 0) {
+      findings.push(
+        `${toRepoPath(tsconfigPath)} has package-local @agent-os paths: ${localAgentOsPaths.join(", ")}`,
+      );
     }
   }
   return findings;
@@ -151,9 +206,18 @@ const mismatched = [...expected.entries()].filter(
   ([specifier, sourcePath]) =>
     actual.get(specifier) !== undefined && actual.get(specifier) !== sourcePath,
 );
-const manualAliases = manualAliasFindings();
+const manualVitestAliases = manualVitestAliasFindings();
+const sharedTsconfigIssues = sharedTsconfigFindings(actual);
+const workspaceTsconfigIssues = workspaceTsconfigFindings();
 
-if (missing.length > 0 || extra.length > 0 || mismatched.length > 0 || manualAliases.length > 0) {
+if (
+  missing.length > 0 ||
+  extra.length > 0 ||
+  mismatched.length > 0 ||
+  manualVitestAliases.length > 0 ||
+  sharedTsconfigIssues.length > 0 ||
+  workspaceTsconfigIssues.length > 0
+) {
   if (missing.length > 0) {
     console.error("Missing source aliases:");
     console.error(formatMap(new Map(missing)));
@@ -165,16 +229,26 @@ if (missing.length > 0 || extra.length > 0 || mismatched.length > 0 || manualAli
   if (mismatched.length > 0) {
     console.error("Mismatched source aliases:");
     for (const [specifier, expectedPath] of mismatched) {
-      console.error(`${specifier}: expected ${expectedPath}; actual ${actual.get(specifier)}`);
+      console.error(
+        `${String(specifier)}: expected ${String(expectedPath)}; actual ${String(actual.get(specifier))}`,
+      );
     }
   }
-  if (manualAliases.length > 0) {
+  if (manualVitestAliases.length > 0) {
     console.error("Manual @agent-os source aliases in Vitest configs:");
-    console.error(manualAliases.join("\n"));
+    console.error(manualVitestAliases.join("\n"));
+  }
+  if (sharedTsconfigIssues.length > 0) {
+    console.error("Shared tsconfig source paths issues:");
+    console.error(sharedTsconfigIssues.join("\n"));
+  }
+  if (workspaceTsconfigIssues.length > 0) {
+    console.error("Workspace tsconfig source path ownership issues:");
+    console.error(workspaceTsconfigIssues.join("\n"));
   }
   process.exit(1);
 }
 
 console.log(
-  `checked ${actual.size} workspace source aliases and ${findVitestConfigs().length} Vitest configs`,
+  `checked ${actual.size} source aliases, ${findVitestConfigs().length} Vitest configs, and ${workspaceTsconfigs().length} workspace tsconfigs`,
 );

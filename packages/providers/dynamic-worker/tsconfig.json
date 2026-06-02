@@ -9,11 +9,6 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "isolatedModules": true,
-    "paths": {
-      "@agent-os/kernel/effect-claim": ["../../kernel/src/effect-claim.ts"],
-      "@agent-os/kernel/runtime-scope": ["../../kernel/src/runtime-scope.ts"],
-      "@agent-os/kernel/settlement-contract": ["../../kernel/src/settlement-contract.ts"]
-    },
     "exactOptionalPropertyTypes": false,
     "noUncheckedIndexedAccess": false
   },
@@ -22,5 +17,6 @@
     "test/**/*",
     "vitest.config.ts",
     "../../../types/vite-plus-test-config/index.d.ts"
-  ]
+  ],
+  "extends": "../../../tsconfig.source-paths.json"
 }
