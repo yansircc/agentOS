@@ -13,12 +13,16 @@ Carrier package. Provider-specific deploy backends are separate materializers.
 ## Invariant
 
 Deploy facts record symbolic preview, promotion, readback, and rollback proofs.
-Provider response bodies and live handles stay outside ledger payloads.
+`previewRef`, `deployRef`, `productionRef`, `readbackRef`, and `rollbackRef`
+are opaque symbolic refs, not provider URLs or handles. Provider response
+bodies, live URLs, account IDs, route IDs, and deploy handles stay outside
+ledger payloads and are recovered through resolver/materializer composition.
 
 ## Minimal Usage
 
 Use deploy events and settlement helpers to anchor deployment facts. Keep
 provider API calls in a backend package or app-owned execution layer.
+Resolve a `productionRef` to a URL outside the deploy ledger projection.
 
 ## Verification
 

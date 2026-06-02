@@ -28,6 +28,15 @@ const livedDeployClaim = (anchorId: string) =>
     carrierRef: "deploy",
   });
 
+const deployRefs = {
+  artifact: deploySettlementRef("artifact", "ch-1"),
+  preview: deploySettlementRef("preview", "ch-1"),
+  deployV1: deploySettlementRef("version", "v1"),
+  deployV2: deploySettlementRef("version", "v2"),
+  production: deploySettlementRef("production", "site"),
+  readbackV2: deploySettlementRef("readback", "v2"),
+} as const;
+
 describe("@agent-os/deploy", () => {
   it("declares deploy.* as an extension-owned prefix", () => {
     expect(deployBoundaryPackage("0.1.0")).toMatchObject({
@@ -44,9 +53,9 @@ describe("@agent-os/deploy", () => {
         kind: DEPLOY_KIND.PREVIEW_RECORDED,
         payload: {
           subjectRef: "ch-1",
-          previewRef: "https://ch-1.staging.example",
-          artifactRef: "r2://staging/ch-1",
-          claim: livedDeployClaim("https://ch-1.staging.example"),
+          previewRef: deployRefs.preview,
+          artifactRef: deployRefs.artifact,
+          claim: livedDeployClaim(deployRefs.preview),
         },
       },
       {
@@ -54,10 +63,10 @@ describe("@agent-os/deploy", () => {
         kind: DEPLOY_KIND.PRODUCTION_PROMOTED,
         payload: {
           subjectRef: "ch-1",
-          deployRef: "cf-deploy://v2",
-          productionRef: "https://site.example",
-          rollbackRef: "cf-deploy://v1",
-          claim: livedDeployClaim("cf-deploy://v2"),
+          deployRef: deployRefs.deployV2,
+          productionRef: deployRefs.production,
+          rollbackRef: deployRefs.deployV1,
+          claim: livedDeployClaim(deployRefs.deployV2),
         },
       },
       {
@@ -65,23 +74,71 @@ describe("@agent-os/deploy", () => {
         kind: DEPLOY_KIND.PRODUCTION_READBACK,
         payload: {
           subjectRef: "ch-1",
-          productionRef: "https://site.example",
-          readbackRef: deploySettlementRef("readback", "v2"),
+          productionRef: deployRefs.production,
+          readbackRef: deployRefs.readbackV2,
           status: "passed",
-          claim: livedDeployClaim("readback:v2"),
+          claim: livedDeployClaim(deployRefs.readbackV2),
         },
       },
     ] as const;
 
+    expect(JSON.stringify(events)).not.toMatch(/[a-z][a-z0-9+.-]*:\/\//i);
     expect(projectDeploy(events, "ch-1")).toEqual({
       subjectRef: "ch-1",
-      previewRef: "https://ch-1.staging.example",
-      artifactRef: "r2://staging/ch-1",
-      deployRef: "cf-deploy://v2",
-      productionRef: "https://site.example",
-      readbackRef: deploySettlementRef("readback", "v2"),
-      rollbackRef: "cf-deploy://v1",
+      previewRef: deployRefs.preview,
+      artifactRef: deployRefs.artifact,
+      deployRef: deployRefs.deployV2,
+      productionRef: deployRefs.production,
+      readbackRef: deployRefs.readbackV2,
+      rollbackRef: deployRefs.deployV1,
       status: "live_verified",
+      failure: undefined,
+    });
+  });
+
+  it("does not project URL-shaped deploy refs from ledger payloads", () => {
+    const events = [
+      {
+        id: 1,
+        kind: DEPLOY_KIND.PREVIEW_RECORDED,
+        payload: {
+          subjectRef: "ch-url",
+          previewRef: "https://ch-url.staging.example",
+          artifactRef: deploySettlementRef("artifact", "ch-url"),
+          claim: livedDeployClaim(deploySettlementRef("preview", "ch-url")),
+        },
+      },
+      {
+        id: 2,
+        kind: DEPLOY_KIND.PREVIEW_RECORDED,
+        payload: {
+          subjectRef: "ch-url",
+          previewRef: deploySettlementRef("preview", "ch-url"),
+          artifactRef: deploySettlementRef("artifact", "ch-url"),
+          claim: livedDeployClaim(deploySettlementRef("preview", "ch-url")),
+        },
+      },
+      {
+        id: 3,
+        kind: DEPLOY_KIND.PRODUCTION_PROMOTED,
+        payload: {
+          subjectRef: "ch-url",
+          deployRef: deploySettlementRef("version", "ch-url", "v1"),
+          productionRef: "https://site.example",
+          claim: livedDeployClaim(deploySettlementRef("version", "ch-url", "v1")),
+        },
+      },
+    ] as const;
+
+    expect(projectDeploy(events, "ch-url")).toEqual({
+      subjectRef: "ch-url",
+      previewRef: deploySettlementRef("preview", "ch-url"),
+      artifactRef: deploySettlementRef("artifact", "ch-url"),
+      deployRef: undefined,
+      productionRef: undefined,
+      readbackRef: undefined,
+      rollbackRef: undefined,
+      status: "previewed",
       failure: undefined,
     });
   });
@@ -93,10 +150,10 @@ describe("@agent-os/deploy", () => {
         kind: DEPLOY_KIND.PRODUCTION_PROMOTED,
         payload: {
           subjectRef: "ch-lone-promotion",
-          deployRef: "cf-deploy://v2",
-          productionRef: "https://site.example",
-          rollbackRef: "cf-deploy://v1",
-          claim: livedDeployClaim("cf-deploy://v2"),
+          deployRef: deployRefs.deployV2,
+          productionRef: deployRefs.production,
+          rollbackRef: deployRefs.deployV1,
+          claim: livedDeployClaim(deployRefs.deployV2),
         },
       },
     ] as const;
