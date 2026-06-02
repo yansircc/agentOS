@@ -219,6 +219,19 @@
       "readmeStatus": "Carrier package. Provider-specific deploy backends are separate materializers."
     },
     {
+      "slug": "deploy-cloudflare",
+      "name": "@agent-os/deploy-cloudflare",
+      "path": "packages/providers/deploy-cloudflare",
+      "status": "provider",
+      "role": "Cloudflare Worker deploy artifact material",
+      "boundary": "Cloudflare Worker artifact material and digest validation",
+      "need": "Cloudflare Worker deploy artifact material",
+      "readmeStatus": "Provider package. It defines Cloudflare Worker deploy bundle material for later deploy providers.",
+      "apiStatus": "Provider package. Public exports are limited to Cloudflare Worker deploy bundle material, digest validation, and resolver contracts.",
+      "apiSource": "docs/api/deploy-cloudflare.md",
+      "primary": true
+    },
+    {
       "slug": "git-carrier",
       "name": "@agent-os/git-carrier",
       "path": "packages/carriers/git",

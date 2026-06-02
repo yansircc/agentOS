@@ -64,6 +64,7 @@ state to make a product flow appear complete.
 | `@agent-os/run-stream`                   | submit/ledger/turn-frame composition                                                                                                |
 | `@agent-os/decision-gate`                | durable decision gate events, projection, and admitter                                                                              |
 | `@agent-os/skill-registry`               | install-time skill manifest to core tools                                                                                           |
+| `@agent-os/deploy-cloudflare`            | Cloudflare Worker deploy artifact material                                                                                          |
 
 <!-- agentos:generated package-map:end -->
 

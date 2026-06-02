@@ -7,7 +7,9 @@ Staging artifact publication and reaping proof carrier.
 ## Invariant
 
 Artifact bytes and provider storage handles stay outside ledger payloads. The
-ledger records symbolic artifact and reaping proofs.
+ledger records symbolic artifact and reaping proofs. `artifactRef` and
+`routeRef` are opaque symbolic refs, not storage URLs, preview URLs, or provider
+handles.
 
 ## Minimal Usage
 

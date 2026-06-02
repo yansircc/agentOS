@@ -288,6 +288,22 @@
         "effect": "^3.21.0",
       },
     },
+    "packages/providers/deploy-cloudflare": {
+      "name": "@agent-os/deploy-cloudflare",
+      "version": "0.2.0",
+      "dependencies": {
+        "effect": "catalog:",
+      },
+      "devDependencies": {
+        "@effect/vitest": "catalog:",
+        "typescript": "catalog:",
+        "vite-plus": "catalog:",
+        "vitest": "catalog:",
+      },
+      "peerDependencies": {
+        "effect": "^3.21.0",
+      },
+    },
     "packages/providers/dynamic-worker": {
       "name": "@agent-os/dynamic-worker",
       "version": "0.2.0",
@@ -462,6 +478,8 @@
     "@agent-os/decision-gate": ["@agent-os/decision-gate@workspace:packages/carriers/decision-gate"],
 
     "@agent-os/deploy": ["@agent-os/deploy@workspace:packages/carriers/deploy"],
+
+    "@agent-os/deploy-cloudflare": ["@agent-os/deploy-cloudflare@workspace:packages/providers/deploy-cloudflare"],
 
     "@agent-os/dynamic-worker": ["@agent-os/dynamic-worker@workspace:packages/providers/dynamic-worker"],
 

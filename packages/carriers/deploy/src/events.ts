@@ -48,11 +48,11 @@ export interface DeployProjection {
 const stringField = (payload: Record<string, unknown>, key: string): string | undefined =>
   typeof payload[key] === "string" ? payload[key] : undefined;
 
-const URL_SHAPED_REF = /^https?:\/\//i;
+const SCHEME_SHAPED_REF = /^[a-z][a-z0-9+.-]*:\/\//i;
 
 const symbolicRefField = (payload: Record<string, unknown>, key: string): string | undefined => {
   const value = stringField(payload, key);
-  return value === undefined || URL_SHAPED_REF.test(value) ? undefined : value;
+  return value === undefined || SCHEME_SHAPED_REF.test(value) ? undefined : value;
 };
 
 const livedClaimFrom = (value: unknown): LivedClaim | undefined => {

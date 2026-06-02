@@ -16,6 +16,7 @@
     { "path": "./packages/carriers/verification" },
     { "path": "./packages/carriers/workspace-session" },
     { "path": "./packages/providers/dynamic-worker" },
+    { "path": "./packages/providers/deploy-cloudflare" },
     { "path": "./packages/providers/llm-transport-http" },
     { "path": "./packages/providers/resource-cloudflare" },
     { "path": "./packages/providers/sandbox-cloudflare" },
