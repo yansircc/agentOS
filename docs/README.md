@@ -8,6 +8,7 @@ What do you need?
 - Review route choices: [decisions](decisions/a52-documentation-substrate.md).
 - Check package intent: [runtime packages](runtime-packages.md).
 - Check API exports: [API reference](api/runtime.md).
+- Check carrier schemas: [carrier reference](reference/carriers.md).
 - Consume npm packages: [internal npm distribution](distribution.md).
 
 Facts live in `docs/**`; package README, `PUBLIC_API.md`, and the docs site are projections.

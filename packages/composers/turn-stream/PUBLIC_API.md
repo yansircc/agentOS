@@ -32,6 +32,10 @@ Status: 0.2.x active development for frame algebra. Public exports are listed fo
 
 None.
 
+## Deprecated exports
+
+None.
+
 ## Internal-only exports
 
 Any package file or symbol not listed above.

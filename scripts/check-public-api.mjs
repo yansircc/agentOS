@@ -1,107 +1,18 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import {
+  apiSourceMode,
+  exportedNamesForPackage,
+  sourceTsdocApiMarkdown,
+  sourceTsdocModes,
+  sourceTsdocRecordsForPackage,
+  validateSourceTsdocRecords,
+} from "./public-api-model.mjs";
 
 const root = process.cwd();
 const surface = JSON.parse(fs.readFileSync(path.join(root, "docs/surface.json"), "utf8"));
 const targets = surface.packages.filter((pkg) => pkg.apiSource !== undefined);
-
-const hasExportModifier = (node) =>
-  node.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) === true;
-
-const hasDefaultModifier = (node) =>
-  node.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword) === true;
-
-const nameFromDeclaration = (name) => (ts.isIdentifier(name) ? name.text : null);
-
-const resolveRelativeModule = (fromFile, specifier) => {
-  const base = path.resolve(path.dirname(fromFile), specifier);
-  const candidates = [
-    base,
-    `${base}.ts`,
-    `${base}.tsx`,
-    path.join(base, "index.ts"),
-    path.join(base, "index.tsx"),
-  ];
-  for (const candidate of candidates) {
-    if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) return candidate;
-  }
-  throw new Error(`cannot resolve export module ${specifier} from ${fromFile}`);
-};
-
-const exportedNamesFromAst = (file, seen) => {
-  const source = fs.readFileSync(file, "utf8");
-  const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
-  const names = new Set();
-
-  for (const statement of sourceFile.statements) {
-    if (ts.isExportDeclaration(statement)) {
-      const specifier =
-        statement.moduleSpecifier !== undefined && ts.isStringLiteral(statement.moduleSpecifier)
-          ? statement.moduleSpecifier.text
-          : null;
-
-      if (statement.exportClause === undefined) {
-        if (specifier !== null && specifier.startsWith(".")) {
-          const target = resolveRelativeModule(file, specifier);
-          for (const name of exportedNamesFromSource(target, seen)) names.add(name);
-        }
-        continue;
-      }
-
-      if (ts.isNamespaceExport(statement.exportClause)) {
-        names.add(statement.exportClause.name.text);
-        continue;
-      }
-
-      for (const element of statement.exportClause.elements) {
-        names.add(element.name.text);
-      }
-      continue;
-    }
-
-    if (ts.isExportAssignment(statement)) {
-      names.add(statement.isExportEquals === true ? "export=" : "default");
-      continue;
-    }
-
-    if (!hasExportModifier(statement)) continue;
-
-    if (hasDefaultModifier(statement)) {
-      names.add("default");
-      continue;
-    }
-
-    if (
-      ts.isInterfaceDeclaration(statement) ||
-      ts.isTypeAliasDeclaration(statement) ||
-      ts.isClassDeclaration(statement) ||
-      ts.isFunctionDeclaration(statement) ||
-      ts.isEnumDeclaration(statement)
-    ) {
-      const name = statement.name === undefined ? null : nameFromDeclaration(statement.name);
-      if (name !== null) names.add(name);
-      continue;
-    }
-
-    if (ts.isVariableStatement(statement)) {
-      for (const declaration of statement.declarationList.declarations) {
-        const name = nameFromDeclaration(declaration.name);
-        if (name !== null) names.add(name);
-      }
-    }
-  }
-
-  return names;
-};
-
-const exportedNamesFromSource = (file, seen = new Set()) => {
-  const abs = path.resolve(file);
-  if (seen.has(abs)) return new Set();
-  seen.add(abs);
-  return exportedNamesFromAst(abs, seen);
-};
 
 const manifestNames = (manifest, section) => {
   const source = fs.readFileSync(manifest, "utf8");
@@ -115,47 +26,55 @@ const manifestNames = (manifest, section) => {
 
 let failed = false;
 
+const fail = (message) => {
+  console.error(message);
+  failed = true;
+};
+
 for (const target of targets) {
-  const pkgDir = path.join(root, target.path);
   const manifest = path.join(root, target.apiSource);
   if (!fs.existsSync(manifest)) {
-    console.error(`missing public API intent source for ${target.name}: ${target.apiSource}`);
-    failed = true;
+    fail(`missing public API intent source for ${target.name}: ${target.apiSource}`);
     continue;
   }
 
-  const pkg = JSON.parse(fs.readFileSync(path.join(pkgDir, "package.json"), "utf8"));
-  const exports = pkg.exports ?? {};
+  const mode = apiSourceMode(target);
+  if (sourceTsdocModes.has(mode)) {
+    const records = sourceTsdocRecordsForPackage(root, target);
+    for (const message of validateSourceTsdocRecords(target, records)) fail(message);
+
+    const expected = `${sourceTsdocApiMarkdown(target, records).replace(/\s+$/u, "")}\n`;
+    const actual = fs.readFileSync(manifest, "utf8");
+    if (actual !== expected) {
+      fail(`${target.apiSource} is stale; run bun run docs:generate`);
+    }
+  } else if (mode !== "manual") {
+    fail(`${target.name}: unsupported apiSourceMode ${mode}`);
+  }
+
   const publicExports = manifestNames(manifest, "Public exports");
   const experimental = manifestNames(manifest, "Experimental exports");
+  const deprecated = manifestNames(manifest, "Deprecated exports");
   const internal = manifestNames(manifest, "Internal-only exports");
-  const declaredPublic = new Set([...publicExports, ...experimental]);
+  const declaredPublic = new Set([...publicExports, ...experimental, ...deprecated]);
 
-  for (const [entrypoint, exportSpec] of Object.entries(exports)) {
-    const source = exportSpec?.default ?? exportSpec;
-    if (typeof source !== "string" || !source.startsWith("./")) continue;
-    const file = path.join(pkgDir, source);
-    const actual = [...exportedNamesFromSource(file)]
-      .map((name) => `${entrypoint}:${String(name)}`)
-      .sort();
+  const actual = exportedNamesForPackage(root, target)
+    .map((record) => record.key)
+    .sort();
 
-    for (const name of actual) {
-      if (!declaredPublic.has(name)) {
-        console.error(`${target.name}: exported but not declared in ${target.apiSource}: ${name}`);
-        failed = true;
-      }
-      if (internal.has(name)) {
-        console.error(`${target.name}: internal export is still exported: ${name}`);
-        failed = true;
-      }
+  for (const name of actual) {
+    if (!declaredPublic.has(name)) {
+      fail(`${target.name}: exported but not declared in ${target.apiSource}: ${name}`);
     }
+    if (internal.has(name)) {
+      fail(`${target.name}: internal export is still exported: ${name}`);
+    }
+  }
 
-    for (const name of declaredPublic) {
-      const [declaredEntrypoint] = name.split(":");
-      if (declaredEntrypoint === entrypoint && !actual.includes(name)) {
-        console.error(`${target.name}: ${target.apiSource} lists missing export: ${name}`);
-        failed = true;
-      }
+  for (const name of declaredPublic) {
+    const key = String(name);
+    if (!actual.includes(key)) {
+      fail(`${target.name}: ${target.apiSource} lists missing export: ${key}`);
     }
   }
 }

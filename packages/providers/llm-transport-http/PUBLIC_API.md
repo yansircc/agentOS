@@ -17,6 +17,10 @@ None.
 - `.:StreamLlmTurnSpec`
 - `.:streamLlmTurn`
 
+## Deprecated exports
+
+None.
+
 ## Internal-only exports
 
 Any package file or symbol not listed above.

@@ -51,6 +51,10 @@ Status: Backend protocol package. Public exports are limited to storage-free bac
 
 None.
 
+## Deprecated exports
+
+None.
+
 ## Internal-only exports
 
 None.

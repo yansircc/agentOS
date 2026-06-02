@@ -1,6 +1,13 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
+import {
+  apiSourceMode,
+  sourceTsdocApiMarkdown,
+  sourceTsdocModes,
+  sourceTsdocRecordsForPackage,
+  validateSourceTsdocRecords,
+} from "./public-api-model.mjs";
 
 const root = process.cwd();
 const check = process.argv.includes("--check");
@@ -31,6 +38,11 @@ const sectionBody = (text, heading) => {
   const after = text.slice(start + marker.length);
   const next = after.search(/^## /m);
   return (next === -1 ? after : after.slice(0, next)).trim();
+};
+
+const optionalSectionBody = (text, heading, fallback) => {
+  const marker = `## ${heading}`;
+  return text.includes(marker) ? sectionBody(text, heading) : fallback;
 };
 
 const pad = (value, width) => `${value}${" ".repeat(Math.max(0, width - value.length))}`;
@@ -164,9 +176,21 @@ for (const pkg of packages) {
   write(`${pkg.path}/README.md`, readme);
 
   if (pkg.apiSource !== undefined) {
+    const mode = apiSourceMode(pkg);
+    if (sourceTsdocModes.has(mode)) {
+      const records = sourceTsdocRecordsForPackage(root, pkg);
+      failures.push(...validateSourceTsdocRecords(pkg, records));
+      write(pkg.apiSource, sourceTsdocApiMarkdown(pkg, records));
+    } else if (mode !== "manual") {
+      failures.push(`${pkg.name}: unsupported apiSourceMode ${mode}`);
+    }
+
     const apiDoc = read(pkg.apiSource);
+    const publicApiSource = sourceTsdocModes.has(mode)
+      ? `docs/surface.json and exported TSDoc in ${pkg.path}/src`
+      : `docs/surface.json and ${pkg.apiSource}`;
     const publicApi = [
-      generatedNotice(`docs/surface.json and ${pkg.apiSource}`),
+      generatedNotice(publicApiSource),
       "",
       `# ${pkg.name} Public API`,
       "",
@@ -179,6 +203,10 @@ for (const pkg of packages) {
       "## Experimental exports",
       "",
       sectionBody(apiDoc, "Experimental exports"),
+      "",
+      "## Deprecated exports",
+      "",
+      optionalSectionBody(apiDoc, "Deprecated exports", "None."),
       "",
       "## Internal-only exports",
       "",

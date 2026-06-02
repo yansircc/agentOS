@@ -19,6 +19,10 @@ None.
 - `.:registerSkill`
 - `.:unregisterSkill`
 
+## Deprecated exports
+
+None.
+
 ## Internal-only exports
 
 Any package file or symbol not listed above.

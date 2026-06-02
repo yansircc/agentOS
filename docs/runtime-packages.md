@@ -1,8 +1,9 @@
 # Runtime Packages
 
-Public export intent is declared per package in `docs/api/*.md`; package
-`PUBLIC_API.md` files are generated projections. These manifests prevent
-accidental exports; they are not stability or schema-freeze promises.
+Public export intent is declared per package by either manual `docs/api/*.md`
+or, for migrated packages, exported TSDoc selected by `apiSourceMode`.
+Package `PUBLIC_API.md` files are generated projections. These manifests
+prevent accidental exports; they are not stability or schema-freeze promises.
 
 <!-- agentos:generated runtime-package-map:start -->
 

@@ -32,11 +32,15 @@ Documentation facts follow two rules:
 
 `docs/surface.json` owns declaration facts such as release posture, package
 status, role, and holds. `docs/packages/*.md` owns package explanations.
-`docs/api/*.md` owns intended public and experimental exports.
+Manual `docs/api/*.md` pages own intended public and experimental exports for
+unmigrated packages. For packages with `apiSourceMode: "source-tsdoc"`,
+exported TSDoc owns the API fact and `docs/api/*.md` is generated.
+`defineCarrier` declarations own generated carrier reference facts.
 `docs/effect-skill.json` owns Effect scanner package and adapter declarations.
 
-Package `README.md`, package `PUBLIC_API.md`, runtime package tables, and skill
-package maps are generated projections. Root and package-local
+Package `README.md`, package `PUBLIC_API.md`, generated API pages, carrier
+reference pages, runtime package tables, and skill package maps are generated
+projections. Root and package-local
 `.effect-skill.json` files are generated scanner input projections. Change the
 source fact and run:
 
@@ -47,14 +51,18 @@ bun run effect-manifests:generate
 
 ## Public API Gate
 
-Every package with a public surface has a `docs/api/*.md` intent source. This
-is an accidental-export gate, not an API freeze. The checker reads intent from
-`docs/api/*.md`, actual exports from `package.json.exports` and the TypeScript
-AST, and fails when:
+Every package with a public surface has an API intent source. Unmigrated
+packages use manual `docs/api/*.md`. Migrated packages use exported TSDoc with
+exactly one status tag: `@public`, `@experimental`, `@internal`, or
+`@deprecated`. This is an accidental-export gate, not an API freeze. The
+checker reads intent, actual exports from `package.json.exports` and the
+TypeScript AST, and fails when:
 
 - an exported symbol is missing from the manifest;
 - an internal-only symbol is exported;
 - a manifest-listed symbol no longer exists.
+- a migrated exported symbol lacks a TSDoc summary or has zero or multiple
+  status tags.
 
 ## Live Provider Tests
 

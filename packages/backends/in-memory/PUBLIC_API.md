@@ -32,6 +32,10 @@ Status: Backend package for runtime contract tests. Public exports are limited t
 
 None.
 
+## Deprecated exports
+
+None.
+
 ## Internal-only exports
 
 Any package file or symbol not listed above.

@@ -179,6 +179,7 @@
       "readmeStatus": "0.2.x public-experimental. Experimental exports are listed in `PUBLIC_API.md` to prevent accidental exports; they are not frozen.",
       "apiStatus": "0.2.x public-experimental for attached stream frame algebra. Public exports are listed for accidental export control only; this is not an API freeze.",
       "apiSource": "docs/api/attached-stream.md",
+      "apiSourceMode": "source-tsdoc",
       "primary": true,
       "published": true
     },

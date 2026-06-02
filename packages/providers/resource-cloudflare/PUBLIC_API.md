@@ -87,6 +87,10 @@ Status: Provider package. Public exports are limited to Cloudflare resource carr
 
 None.
 
+## Deprecated exports
+
+None.
+
 ## Internal-only exports
 
 Any package file or symbol not listed above.

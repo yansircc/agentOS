@@ -60,12 +60,16 @@ Documentation facts have one writer:
 - identity facts are owned by `package.json`;
 - declaration facts are owned by `docs/surface.json`;
 - package explanations are owned by `docs/packages/*.md`;
-- public export intent is owned by `docs/api/*.md`.
+- manual public export intent is owned by `docs/api/*.md`;
+- migrated public export intent is owned by exported TSDoc when
+  `apiSourceMode` is `source-tsdoc`;
+- carrier reference facts are owned by `defineCarrier` declarations;
 - Effect scanner declarations are owned by `docs/effect-skill.json`.
 
-Do not derive intent from actual source exports. Package `README.md`,
-package `PUBLIC_API.md`, runtime package tables, and skill package maps are
-generated projections. Edit the source fact, then run:
+Do not derive intent from unannotated exports. Package `README.md`, package
+`PUBLIC_API.md`, generated `docs/api/*.md` pages, carrier reference pages,
+runtime package tables, and skill package maps are generated projections. Edit
+the source fact, then run:
 
 ```sh
 bun run docs:generate

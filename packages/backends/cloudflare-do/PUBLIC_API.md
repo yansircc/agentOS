@@ -65,6 +65,10 @@ Status: Backend package. Public exports include the Cloudflare app facade, bindi
 
 None.
 
+## Deprecated exports
+
+None.
+
 ## Internal-only exports
 
 Any package file or symbol not listed above.

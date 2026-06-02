@@ -41,6 +41,10 @@ Status: 0.2.x active development for provider-neutral resource carrier algebra. 
 
 None.
 
+## Deprecated exports
+
+None.
+
 ## Internal-only exports
 
 Any package file or symbol not listed above.

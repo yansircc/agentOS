@@ -51,6 +51,10 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 
 None.
 
+## Deprecated exports
+
+None.
+
 ## Internal-only exports
 
 Any package file or symbol not listed above.
