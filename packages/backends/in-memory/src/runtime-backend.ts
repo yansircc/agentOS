@@ -2,6 +2,8 @@ import { Effect, Layer } from "effect";
 import { SqlError } from "@agent-os/kernel/errors";
 import {
   Admission,
+  AttachedStreamRegistry,
+  AttachedStreams,
   Dispatch,
   DurableTriggerRegistry,
   Ledger,
@@ -11,7 +13,9 @@ import {
   Scheduler,
   TriggerPump,
   makeDurableTriggerRegistry,
+  makeAttachedStreamRegistry,
   scheduledEventTrigger,
+  type AnyAttachedStreamHandler,
   type AnyDurableTrigger,
 } from "@agent-os/runtime";
 import {
@@ -20,6 +24,7 @@ import {
   type InMemoryEventHandlerRegistration,
 } from "./state";
 import { InMemoryAdmissionLive } from "./admission";
+import { InMemoryAttachedStreamsLive } from "./attached-stream";
 import { InMemoryDispatchLive, deliveryRetryTrigger } from "./dispatch";
 import type { InMemoryDispatchTargetRegistry } from "./dispatch-types";
 import { InMemoryLedgerLive } from "./ledger";
@@ -38,7 +43,8 @@ export type InMemoryRuntimeServices =
   | Quota
   | LlmTransport
   | TriggerPump
-  | Admission;
+  | Admission
+  | AttachedStreams;
 
 export interface InMemoryRuntimeLayerOptions {
   readonly state?: InMemoryBackendState;
@@ -47,6 +53,7 @@ export interface InMemoryRuntimeLayerOptions {
   readonly dispatchTargets?: InMemoryDispatchTargetRegistry;
   readonly llm?: InMemoryLlmTransportOptions;
   readonly triggers?: ReadonlyArray<AnyDurableTrigger>;
+  readonly streams?: ReadonlyArray<AnyAttachedStreamHandler>;
 }
 
 export interface InMemoryRuntimeBackend {
@@ -69,6 +76,19 @@ export const createInMemoryRuntimeBackend = (
       ...(options.triggers ?? []),
     ]).pipe(Effect.mapError((cause) => new SqlError({ cause }))),
   );
+  const streamRegistryLayer = Layer.effect(
+    AttachedStreamRegistry,
+    makeAttachedStreamRegistry(options.streams ?? [], {
+      reservedKinds: [
+        scheduledEventTrigger.kind,
+        dispatchRetryTrigger.kind,
+        ...(options.triggers ?? []).map((trigger) => trigger.kind),
+      ],
+    }).pipe(Effect.mapError((cause) => new SqlError({ cause }))),
+  );
+  const attachedStreamLayer = InMemoryAttachedStreamsLive(state, options.scope).pipe(
+    Layer.provide(streamRegistryLayer),
+  );
   const triggerLayer = InMemoryTriggerPumpLive(state, options.scope).pipe(
     Layer.provide(triggerRegistryLayer),
   );
@@ -86,6 +106,8 @@ export const createInMemoryRuntimeBackend = (
       llmLayer,
       admissionLayer,
       triggerRegistryLayer,
+      streamRegistryLayer,
+      attachedStreamLayer,
     ),
   };
 };

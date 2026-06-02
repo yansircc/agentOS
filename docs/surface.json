@@ -169,6 +169,20 @@
       "published": true
     },
     {
+      "slug": "attached-stream",
+      "name": "@agent-os/attached-stream",
+      "path": "packages/composers/attached-stream",
+      "status": "0.2.x experimental",
+      "role": "attached live stream frame algebra and transport codec",
+      "boundary": "runtime-neutral attached stream frame algebra; no ledger truth ownership",
+      "need": "Attached live stream frames",
+      "readmeStatus": "0.2.x public-experimental. Experimental exports are listed in `PUBLIC_API.md` to prevent accidental exports; they are not frozen.",
+      "apiStatus": "0.2.x public-experimental for attached stream frame algebra. Public exports are listed for accidental export control only; this is not an API freeze.",
+      "apiSource": "docs/api/attached-stream.md",
+      "primary": true,
+      "published": true
+    },
+    {
       "slug": "turn-stream",
       "name": "@agent-os/turn-stream",
       "path": "packages/composers/turn-stream",

@@ -10,6 +10,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../.
 const tsc = path.join(root, "node_modules/.bin/tsc");
 const fixtureDir = path.join(root, "packages/backends/cloudflare-do/test/consumer-fixture");
 const packageLinks = {
+  "attached-stream": "packages/composers/attached-stream",
   "backend-cloudflare-do": "packages/backends/cloudflare-do",
   "backend-protocol": "packages/backends/protocol",
   kernel: "packages/kernel",

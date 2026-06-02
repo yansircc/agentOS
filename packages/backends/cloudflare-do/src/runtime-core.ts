@@ -1,11 +1,14 @@
 import type { EventHandler } from "@agent-os/kernel/types";
 import { Effect, Layer } from "effect";
 import {
+  AttachedStreamRegistry,
+  AttachedStreams,
   DurableTriggerRegistry,
   Ledger,
   Quota,
   TriggerPump,
   makeDurableTriggerRegistry,
+  makeAttachedStreamRegistry,
   scheduledEventTrigger,
 } from "@agent-os/runtime";
 import { SqlError, TriggerFactoryError } from "@agent-os/kernel/errors";
@@ -21,6 +24,11 @@ import { Resources, ResourcesLive } from "./resources";
 import { QuotaLive } from "./quota";
 import { TriggerPumpLive } from "./trigger-pump";
 import { resolveCloudflareTriggerSource, type CloudflareTriggerSource } from "./trigger-factory";
+import {
+  resolveCloudflareAttachedStreamSource,
+  type CloudflareAttachedStreamSource,
+} from "./stream-factory";
+import { AttachedStreamsLive } from "./attached-stream";
 
 export type CloudflareBackendCoreServices =
   | EventBus
@@ -30,6 +38,8 @@ export type CloudflareBackendCoreServices =
   | Resources
   | Quota
   | TriggerPump
+  | AttachedStreamRegistry
+  | AttachedStreams
   | Ledger;
 
 export const makeCloudflareBackendCoreLayer = <Env>(
@@ -39,6 +49,7 @@ export const makeCloudflareBackendCoreLayer = <Env>(
   handlers: Map<string, Set<EventHandler>>,
   dispatchTargets: DispatchTargetRegistry,
   appTriggers: CloudflareTriggerSource<Env> = [],
+  appStreams: CloudflareAttachedStreamSource<Env> = [],
 ): Layer.Layer<CloudflareBackendCoreServices, SqlError | TriggerFactoryError> => {
   const eventBusLayer = EventBusLive(handlers);
   const dispatchRetryTrigger = deliveryRetryTrigger(ctx.storage.sql, scope, dispatchTargets);
@@ -60,6 +71,23 @@ export const makeCloudflareBackendCoreLayer = <Env>(
   const triggerLayer = TriggerPumpLive(ctx, scope).pipe(
     Layer.provide(Layer.mergeAll(eventBusLayer, triggerRegistryLayer)),
   );
+  const streamRegistryLayer = Layer.effect(
+    AttachedStreamRegistry,
+    Effect.gen(function* () {
+      const triggerRegistry = yield* DurableTriggerRegistry;
+      const resolvedAppStreams = yield* resolveCloudflareAttachedStreamSource(appStreams, {
+        env,
+        scope,
+        sql: ctx.storage.sql,
+      });
+      return yield* makeAttachedStreamRegistry(resolvedAppStreams, {
+        reservedKinds: triggerRegistry.keys(),
+      }).pipe(Effect.mapError((cause) => new SqlError({ cause })));
+    }),
+  ).pipe(Layer.provide(triggerRegistryLayer));
+  const attachedStreamLayer = AttachedStreamsLive(ctx, scope).pipe(
+    Layer.provide(Layer.mergeAll(eventBusLayer, streamRegistryLayer)),
+  );
   const triggerDeps = Layer.mergeAll(eventBusLayer, triggerRegistryLayer, triggerLayer);
   const serviceLayer = Layer.mergeAll(
     LedgerLive(ctx.storage.sql),
@@ -68,5 +96,12 @@ export const makeCloudflareBackendCoreLayer = <Env>(
     ResourcesLive(ctx),
     QuotaLive(ctx),
   ).pipe(Layer.provide(Layer.mergeAll(eventBusLayer, triggerRegistryLayer)));
-  return Layer.mergeAll(eventBusLayer, triggerRegistryLayer, triggerLayer, serviceLayer);
+  return Layer.mergeAll(
+    eventBusLayer,
+    triggerRegistryLayer,
+    triggerLayer,
+    streamRegistryLayer,
+    attachedStreamLayer,
+    serviceLayer,
+  );
 };

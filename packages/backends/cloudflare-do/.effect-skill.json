@@ -2,6 +2,12 @@
   "shape": ["library"],
   "allowedAdapters": [
     {
+      "path": "src/attached-stream-wire.ts",
+      "owner": "@agent-os/backend-cloudflare-do/attached-stream-wire",
+      "reason": "terminal attached-stream transport adapter owns WebSocket/SSE Response construction and platform callback loops",
+      "rules": ["EFF001", "EFF003", "EFF004", "EFF402"]
+    },
+    {
       "path": "src/agent-do.ts",
       "owner": "@agent-os/backend-cloudflare-do/cf-do",
       "reason": "Configured Cloudflare Durable Object facade is the terminal HTTP facade for streamEvents; missing named scope is a runtime invariant violation with no Effect return channel",

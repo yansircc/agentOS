@@ -37,6 +37,7 @@
       "@agent-os/tenant-material": ["./packages/carriers/tenant-material/src/index.ts"],
       "@agent-os/verification": ["./packages/carriers/verification/src/index.ts"],
       "@agent-os/workspace-session": ["./packages/carriers/workspace-session/src/index.ts"],
+      "@agent-os/attached-stream": ["./packages/composers/attached-stream/src/index.ts"],
       "@agent-os/run-stream": ["./packages/composers/run-stream/src/index.ts"],
       "@agent-os/turn-stream": ["./packages/composers/turn-stream/src/index.ts"],
       "@agent-os/deploy-cloudflare": ["./packages/providers/deploy-cloudflare/src/index.ts"],

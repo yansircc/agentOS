@@ -8,6 +8,8 @@
 
 export { createAgentDurableObject, type CloudflareAgentEnv } from "./agent-do";
 export type {
+  AgentAttachedStreamCancelSpec,
+  AgentAttachedStreamSpec,
   AgentDurableObjectConfig,
   AgentEventHandlerContext,
   AgentEventHandlerRegistration,
@@ -17,6 +19,11 @@ export type {
   AgentTriggerCancelSpec,
   AgentTriggerIntentSpec,
 } from "./agent-do";
+export type {
+  CloudflareAttachedStreamFactory,
+  CloudflareAttachedStreamFactoryContext,
+  CloudflareAttachedStreamSource,
+} from "./stream-factory";
 export type {
   CloudflareTriggerFactory,
   CloudflareTriggerFactoryContext,

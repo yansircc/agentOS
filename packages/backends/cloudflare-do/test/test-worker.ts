@@ -21,7 +21,9 @@ import {
 import { withAgentDOTestingDrain } from "../src/testing";
 import {
   triggerParseFail,
+  attachedStreamParseOk,
   triggerParseOk,
+  type AttachedStreamHandler,
   type DispatchTargetAdapter,
   type DurableTrigger,
   type TriggerCancellation,
@@ -681,6 +683,62 @@ export const TriggerCancelTestDO = withAgentDOTestingDrain(
 );
 export type TriggerCancelTestDO = InstanceType<typeof TriggerCancelTestDO>;
 
+const attachedEcho = {
+  kind: "test.attached_echo",
+  mode: "bidi",
+  cancellation: "cooperative",
+  onDetach: "abort",
+  parseStart: (raw) => attachedStreamParseOk(raw),
+  run: async function* (_start, input) {
+    for await (const frame of input) {
+      if (frame.kind !== "input") continue;
+      yield { kind: "output", channel: "stdout", payload: frame.payload };
+      yield { kind: "completed", terminal: { echoed: frame.payload } };
+      return;
+    }
+  },
+  commitTerminal: (terminal, tx) => {
+    tx.insertEvent({ kind: "test.attached_echo.completed", payload: terminal });
+  },
+} satisfies AttachedStreamHandler<unknown, unknown>;
+
+const attachedOutput = {
+  kind: "test.attached_output",
+  mode: "output_only",
+  cancellation: "cooperative",
+  onDetach: "abort",
+  parseStart: (raw) => attachedStreamParseOk(raw),
+  run: async function* (start) {
+    yield { kind: "progress", payload: { start } };
+    yield { kind: "completed", terminal: { ok: true, start } };
+  },
+  commitTerminal: (terminal, tx) => {
+    tx.insertEvent({ kind: "test.attached_output.completed", payload: terminal });
+  },
+} satisfies AttachedStreamHandler<unknown, unknown>;
+
+const attachedCancellable = {
+  kind: "test.attached_cancellable",
+  mode: "output_only",
+  cancellation: "cooperative",
+  onDetach: "abort",
+  parseStart: (raw) => attachedStreamParseOk(raw),
+  run: async function* (_start, _input, ctx) {
+    yield { kind: "progress", payload: { waiting: true } };
+    await new Promise<void>((resolve) => ctx.signal.addEventListener("abort", () => resolve()));
+    yield { kind: "cancelled", reason: String(ctx.signal.reason ?? "cancelled") };
+  },
+  commitTerminal: (terminal, tx) => {
+    tx.insertEvent({ kind: "test.attached_cancellable.cancelled", payload: terminal });
+  },
+} satisfies AttachedStreamHandler<unknown, unknown>;
+
+export const AttachedStreamTestDO = defineAgentDO<CloudflareAgentEnv>({
+  bindings: [],
+  streams: [attachedEcho, attachedOutput, attachedCancellable],
+});
+export type AttachedStreamTestDO = InstanceType<typeof AttachedStreamTestDO>;
+
 interface WorkerEnv extends CloudflareAgentEnv {
   readonly STREAM_DO: DurableObjectNamespace<StreamTestDO>;
   readonly EXTENSION_DO: DurableObjectNamespace<ExtensionTestDO>;
@@ -689,6 +747,7 @@ interface WorkerEnv extends CloudflareAgentEnv {
   readonly TRIGGER_FACTORY_ERROR_DO: DurableObjectNamespace<TriggerFactoryErrorTestDO>;
   readonly TRIGGER_BOUNDARY_DO: DurableObjectNamespace<TriggerBoundaryTestDO>;
   readonly TRIGGER_CANCEL_DO: DurableObjectNamespace<TriggerCancelTestDO>;
+  readonly ATTACHED_STREAM_DO: DurableObjectNamespace<AttachedStreamTestDO>;
 }
 
 const parseLastEventId = (value: string | null): number => {

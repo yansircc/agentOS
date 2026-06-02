@@ -14,6 +14,7 @@
 | Cloudflare Sandbox workspace backend | `@agent-os/workspace-session-cloudflare` |
 | Tenant credential material resolver  | `@agent-os/tenant-material`              |
 | HTTP LLM token streaming             | `@agent-os/llm-transport-http`           |
+| Attached live stream frames          | `@agent-os/attached-stream`              |
 | Token/progress frames                | `@agent-os/turn-stream`                  |
 | Consumer run stream                  | `@agent-os/run-stream`                   |
 | Approval/decision gate               | `@agent-os/decision-gate`                |

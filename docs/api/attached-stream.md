@@ -1,0 +1,42 @@
+# @agent-os/attached-stream Public API Intent
+
+## Public exports
+
+- `.:AttachedStreamCancelFrame`
+- `.:AttachedStreamCancelIgnoredFrame`
+- `.:AttachedStreamCancelledFrame`
+- `.:AttachedStreamCompletedFrame`
+- `.:AttachedStreamFailedFrame`
+- `.:AttachedStreamFrame`
+- `.:AttachedStreamFrameBase`
+- `.:AttachedStreamInboundFrame`
+- `.:AttachedStreamInputFrame`
+- `.:AttachedStreamMode`
+- `.:AttachedStreamOmitReason`
+- `.:AttachedStreamOmittedFrame`
+- `.:AttachedStreamOpenedFrame`
+- `.:AttachedStreamOutboundBody`
+- `.:AttachedStreamOutboundFrame`
+- `.:AttachedStreamOutputFrame`
+- `.:AttachedStreamProgressFrame`
+- `.:AttachedStreamProjection`
+- `.:AttachedStreamStatus`
+- `.:AttachedStreamTerminalFrame`
+- `.:attachedStreamOutboundFrame`
+- `.:decodeAttachedStreamMessage`
+- `.:decodeAttachedStreamOutboundMessage`
+- `.:encodeAttachedStreamMessage`
+- `.:encodeAttachedStreamSse`
+- `.:isAttachedStreamFrame`
+- `.:isAttachedStreamInboundFrame`
+- `.:isAttachedStreamOutboundFrame`
+- `.:isAttachedStreamTerminalFrame`
+- `.:projectAttachedStream`
+
+## Experimental exports
+
+None.
+
+## Internal-only exports
+
+Any package file or symbol not listed above.

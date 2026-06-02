@@ -1,9 +1,15 @@
 import type { ExtensionDeclaration } from "@agent-os/kernel/extensions";
 import type { ScopeRef } from "@agent-os/kernel/effect-claim";
 import type { DispatchToScopeResult, DispatchToScopeSpec } from "@agent-os/kernel/types";
-import type { SubmitResult, TriggerCancelResult } from "@agent-os/runtime";
+import type {
+  AttachedStreamCancelResult,
+  SubmitResult,
+  TriggerCancelResult,
+} from "@agent-os/runtime";
 import {
   AgentDurableObject,
+  type AgentAttachedStreamCancelSpec,
+  type AgentAttachedStreamSpec,
   type AgentEventHandlerContext,
   type AgentEventHandlerRegistration,
   type AgentRuntimeReaderClient,
@@ -15,6 +21,7 @@ import {
   type MaterializedAgentConfig,
 } from "./agent-do";
 import type { CloudflareTriggerSource } from "./trigger-factory";
+import type { CloudflareAttachedStreamSource } from "./stream-factory";
 import {
   lowerAgentConfig,
   type AgentLoweringConfig,
@@ -28,6 +35,10 @@ export interface AgentFacadeRuntimeClient extends AgentRuntimeReaderClient {
   readonly emit: (event: string, data: unknown) => Promise<{ id: number }>;
   readonly enqueueTrigger: (spec: AgentTriggerIntentSpec) => Promise<{ id: number }>;
   readonly cancelTrigger: (spec: AgentTriggerCancelSpec) => Promise<TriggerCancelResult>;
+  readonly attachStream: (spec: AgentAttachedStreamSpec) => Promise<Response>;
+  readonly cancelStream: (
+    spec: AgentAttachedStreamCancelSpec,
+  ) => Promise<AttachedStreamCancelResult>;
   readonly dispatch: (spec: DispatchToScopeSpec) => Promise<DispatchToScopeResult>;
   readonly schedule: (
     event: string,
@@ -71,6 +82,7 @@ interface DefineAgentDOConfigBase<
     env: Env,
   ) => Iterable<AgentEventHandlerRegistration>;
   readonly triggers?: CloudflareTriggerSource<Env>;
+  readonly streams?: CloudflareAttachedStreamSource<Env>;
 }
 
 export interface DefineAgentDOConfigWithSubmit<
@@ -126,6 +138,7 @@ const materializedConfigForEnv = <
   extensions: extensionsFor(config.extensions, env),
   dispatchTargets: lowered.dispatchTargets,
   triggers: config.triggers ?? [],
+  streams: config.streams ?? [],
   scopeRefForScope: config.scopeRefForScope ?? (() => null),
   eventHandlers: (context, eventEnv) => eventHandlersFor(config, context, eventEnv),
 });
@@ -179,6 +192,14 @@ export function defineAgentDO<Env extends CloudflareAgentEnv>(
         return this.cancelTriggerFull(spec);
       }
 
+      attachStream(spec: AgentAttachedStreamSpec): Promise<Response> {
+        return this.attachStreamFull(spec);
+      }
+
+      cancelStream(spec: AgentAttachedStreamCancelSpec): Promise<AttachedStreamCancelResult> {
+        return this.cancelStreamFull(spec);
+      }
+
       dispatch(spec: DispatchToScopeSpec): Promise<DispatchToScopeResult> {
         return this.dispatchToScopeFull(spec);
       }
@@ -226,6 +247,14 @@ export function defineAgentDO<Env extends CloudflareAgentEnv>(
 
     cancelTrigger(spec: AgentTriggerCancelSpec): Promise<TriggerCancelResult> {
       return this.cancelTriggerFull(spec);
+    }
+
+    attachStream(spec: AgentAttachedStreamSpec): Promise<Response> {
+      return this.attachStreamFull(spec);
+    }
+
+    cancelStream(spec: AgentAttachedStreamCancelSpec): Promise<AttachedStreamCancelResult> {
+      return this.cancelStreamFull(spec);
     }
 
     dispatch(spec: DispatchToScopeSpec): Promise<DispatchToScopeResult> {

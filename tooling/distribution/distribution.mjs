@@ -599,10 +599,7 @@ const assertPeerFailure = () => {
     name: "agentos-peer-failure",
     private: true,
     type: "module",
-    dependencies: {
-      "@agent-os/kernel": packageDepsFromTarballs()["@agent-os/kernel"],
-      "@agent-os/runtime": packageDepsFromTarballs()["@agent-os/runtime"],
-    },
+    dependencies: packageDepsFromTarballs(),
     devDependencies: {
       typescript: catalog().typescript,
     },

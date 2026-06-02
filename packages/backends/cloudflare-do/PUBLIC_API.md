@@ -7,6 +7,8 @@ Status: Backend package. Public exports include the Cloudflare app facade, bindi
 ## Public exports
 
 - `.:AgentDurableObjectConfig`
+- `.:AgentAttachedStreamCancelSpec`
+- `.:AgentAttachedStreamSpec`
 - `.:AgentEventHandlerContext`
 - `.:AgentEventHandlerRegistration`
 - `.:AgentDOClass`
@@ -23,6 +25,9 @@ Status: Backend package. Public exports include the Cloudflare app facade, bindi
 - `.:AnthropicMessagesSpec`
 - `.:CfAiBindingSpec`
 - `.:CloudflareAgentEnv`
+- `.:CloudflareAttachedStreamFactory`
+- `.:CloudflareAttachedStreamFactoryContext`
+- `.:CloudflareAttachedStreamSource`
 - `.:CloudflareTriggerFactory`
 - `.:CloudflareTriggerFactoryContext`
 - `.:CloudflareTriggerSource`

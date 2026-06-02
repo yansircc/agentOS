@@ -24,6 +24,7 @@
     "test": "vp test run --configLoader runner"
   },
   "dependencies": {
+    "@agent-os/attached-stream": "workspace:*",
     "@agent-os/kernel": "workspace:*",
     "effect": "catalog:"
   },

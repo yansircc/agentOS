@@ -60,6 +60,7 @@ state to make a product flow appear complete.
 | `@agent-os/workspace-session-cloudflare` | Cloudflare Sandbox-compatible workspace backend                                                                                     |
 | `@agent-os/tenant-material`              | encrypted tenant credential records to execution-time material                                                                      |
 | `@agent-os/llm-transport-http`           | HTTP LLM streaming into non-durable turn frames                                                                                     |
+| `@agent-os/attached-stream`              | attached live stream frame algebra and transport codec                                                                              |
 | `@agent-os/turn-stream`                  | token/progress frame algebra                                                                                                        |
 | `@agent-os/run-stream`                   | submit/ledger/turn-frame composition                                                                                                |
 | `@agent-os/decision-gate`                | durable decision gate events, projection, and admitter                                                                              |

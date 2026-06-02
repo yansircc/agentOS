@@ -7,6 +7,7 @@ Status: Backend package for runtime contract tests. Public exports are limited t
 ## Public exports
 
 - `.:InMemoryAdmissionLive`
+- `.:InMemoryAttachedStreamsLive`
 - `.:InMemoryBackendState`
 - `.:InMemoryBackendStateOptions`
 - `.:InMemoryDispatchLive`

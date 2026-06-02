@@ -60,6 +60,19 @@ Factories must be idempotent in resource acquisition: Durable Object eviction
 can cause `triggers(ctx)` to run again, and the backend does not promise a
 stable factory call count.
 
+`defineAgentDO({ streams })` registers attached stream handlers. `attachStream`
+returns WebSocket for `mode: "bidi"` and SSE for `mode: "output_only"`;
+`cancelStream({ streamRef, reason })` is the explicit output-only cancel
+surface. WebSocket/SSE disconnect only detaches transport. It does not write a
+cancelled fact. v1 streams do not support reconnect/resume or hibernation; an
+active WebSocket pins the Durable Object alive and costs DO uptime. Long
+workspace sessions need a later durable stream log or hibernation substrate.
+
+Kill criterion for the experimental stream surface: if the first vibe-like app
+needs three or more app-local stream bypasses, a51 is removed or redesigned. If
+that app and a second routa-like adoption both fit the contract, the stream
+surface can move toward a stable posture.
+
 `stuckTriggers(now)` is observability over expired claims. It is not a repair
 entry point; ordinary drain redrives expired claims by claiming the same due row
 with `acquireMode: "redrive"`.

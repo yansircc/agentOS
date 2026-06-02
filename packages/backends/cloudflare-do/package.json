@@ -22,6 +22,7 @@
     "test:runtime": "vp test run --configLoader runner --config vitest.cloudflare.config.ts"
   },
   "dependencies": {
+    "@agent-os/attached-stream": "workspace:*",
     "@agent-os/backend-protocol": "workspace:*",
     "@agent-os/kernel": "workspace:*",
     "@agent-os/runtime": "workspace:*",

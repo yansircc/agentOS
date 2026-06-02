@@ -50,6 +50,10 @@
         "name": "TRIGGER_CANCEL_DO",
         "class_name": "TriggerCancelTestDO",
       },
+      {
+        "name": "ATTACHED_STREAM_DO",
+        "class_name": "AttachedStreamTestDO",
+      },
     ],
   },
   "migrations": [
@@ -67,6 +71,7 @@
         "TriggerBoundaryTestDO",
         "TriggerTestingDrainTestDO",
         "TriggerCancelTestDO",
+        "AttachedStreamTestDO",
       ],
     },
   ],

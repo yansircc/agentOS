@@ -3,6 +3,7 @@
 ## Public exports
 
 - `.:InMemoryAdmissionLive`
+- `.:InMemoryAttachedStreamsLive`
 - `.:InMemoryBackendState`
 - `.:InMemoryBackendStateOptions`
 - `.:InMemoryDispatchLive`

@@ -1,5 +1,5 @@
 {
-  "name": "@agent-os/backend-in-memory",
+  "name": "@agent-os/attached-stream",
   "version": "0.2.9",
   "private": true,
   "type": "module",
@@ -15,20 +15,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vp test run --configLoader runner"
   },
-  "dependencies": {
-    "@agent-os/attached-stream": "workspace:*",
-    "@agent-os/backend-protocol": "workspace:*",
-    "@agent-os/kernel": "workspace:*",
-    "@agent-os/runtime": "workspace:*",
-    "effect": "catalog:"
-  },
   "devDependencies": {
-    "@effect/vitest": "catalog:",
     "typescript": "catalog:",
     "vite-plus": "catalog:",
     "vitest": "catalog:"
-  },
-  "peerDependencies": {
-    "effect": "^3.21.0"
   }
 }

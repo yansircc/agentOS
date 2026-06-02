@@ -38,6 +38,18 @@
     ],
     "allowedAdapters": [
       {
+        "path": "packages/composers/attached-stream/src/index.ts",
+        "owner": "@agent-os/attached-stream/json-text-codec",
+        "reason": "attached-stream JSON text codec owns malformed frame decode classification without depending on Effect",
+        "rules": ["EFF001"]
+      },
+      {
+        "path": "packages/backends/cloudflare-do/src/attached-stream-wire.ts",
+        "owner": "@agent-os/backend-cloudflare-do/attached-stream-wire",
+        "reason": "terminal attached-stream transport adapter owns WebSocket/SSE Response construction and platform callback loops",
+        "rules": ["EFF001", "EFF003", "EFF004", "EFF402"]
+      },
+      {
         "path": "packages/backends/cloudflare-do/src/agent-do.ts",
         "owner": "@agent-os/backend-cloudflare-do",
         "reason": "terminal Cloudflare Durable Object facade owns streamEvents missing-scope Response construction",
@@ -160,6 +172,12 @@
     "packages/backends/cloudflare-do": {
       "shape": ["library"],
       "allowedAdapters": [
+        {
+          "path": "src/attached-stream-wire.ts",
+          "owner": "@agent-os/backend-cloudflare-do/attached-stream-wire",
+          "reason": "terminal attached-stream transport adapter owns WebSocket/SSE Response construction and platform callback loops",
+          "rules": ["EFF001", "EFF003", "EFF004", "EFF402"]
+        },
         {
           "path": "src/agent-do.ts",
           "owner": "@agent-os/backend-cloudflare-do/cf-do",

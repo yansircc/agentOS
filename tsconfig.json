@@ -2,6 +2,7 @@
   "files": [],
   "references": [
     { "path": "./packages/kernel" },
+    { "path": "./packages/composers/attached-stream" },
     { "path": "./packages/composers/turn-stream" },
     { "path": "./packages/runtime" },
     { "path": "./packages/backends/protocol" },

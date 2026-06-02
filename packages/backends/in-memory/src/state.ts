@@ -19,6 +19,8 @@ import {
 import {
   scheduledEventIntentPayload,
   getDurableTrigger,
+  type AttachedStreamTx,
+  type AttachedStreamTerminal,
   type TriggerRegistry,
   type TriggerTx,
 } from "@agent-os/runtime";
@@ -416,6 +418,68 @@ export class InMemoryBackendState {
     const row = this.outbox.get(intentEventId);
     if (row === undefined || row.deliveredEventId !== null) return null;
     return row;
+  }
+
+  commitAttachedStreamTerminal<Terminal>(
+    scope: string,
+    streamRef: string,
+    kind: string,
+    now: number,
+    signal: AbortSignal,
+    terminal: AttachedStreamTerminal<Terminal>,
+    commit: (terminal: AttachedStreamTerminal<Terminal>, tx: AttachedStreamTx) => string | null,
+  ): Effect.Effect<{ readonly events: ReadonlyArray<LedgerEvent> }, JsonStringifyError | SqlError> {
+    return Effect.gen(this, function* () {
+      const startId = this.nextEventId;
+      const written: LedgerEvent[] = [];
+      const tx: AttachedStreamTx = {
+        scope,
+        streamRef,
+        now,
+        signal,
+        events: (opts = {}) => {
+          const afterId = normalizeNonNegativeInteger(opts.afterId, 0);
+          const kinds =
+            opts.kinds === undefined
+              ? undefined
+              : new Set(Array.from(new Set(opts.kinds)).filter((entry) => entry.length > 0));
+          return [...this.rows, ...written].filter((event) => {
+            if (event.scope !== scope) return false;
+            if (event.id <= afterId) return false;
+            if (kinds !== undefined && kinds.size > 0 && !kinds.has(event.kind)) return false;
+            return true;
+          });
+        },
+        insertEvent: (spec) => {
+          const event: LedgerEvent = {
+            id: startId + written.length,
+            ts: spec.ts ?? now,
+            kind: spec.kind,
+            scope,
+            payload: spec.payload,
+          };
+          written.push(event);
+          return event;
+        },
+      };
+      const commitFailure = yield* Effect.try({
+        try: () => commit(terminal, tx),
+        catch: (cause) => new SqlError({ cause }),
+      });
+      if (commitFailure !== null) {
+        return yield* Effect.fail(new SqlError({ cause: commitFailure }));
+      }
+      yield* Effect.forEach(written, (event) => validateSerializablePayload(event.payload), {
+        discard: true,
+      });
+      yield* Effect.sync(() => {
+        this.nextEventId += written.length;
+        this.rows.push(...written);
+      });
+      const events = written.length === 0 ? [] : this.rows.slice(this.rows.length - written.length);
+      yield* this.fireMany(events);
+      return { events };
+    });
   }
 
   commitTrigger(

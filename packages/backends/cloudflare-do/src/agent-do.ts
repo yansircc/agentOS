@@ -64,6 +64,8 @@ import {
 } from "@agent-os/kernel/errors";
 import type {
   AttemptKey,
+  AttachedStreamCancelResult,
+  AttachedStreamStartSpec,
   CapabilityLease,
   DispatchReceiverResult,
   SubmitResult,
@@ -71,6 +73,7 @@ import type {
 } from "@agent-os/runtime";
 import {
   Admission,
+  AttachedStreams,
   DurableTriggerRegistry,
   commitBoundaryEvent,
   Ledger,
@@ -122,6 +125,8 @@ import { makeCloudflareBackendCoreLayer, type CloudflareBackendCoreServices } fr
 import { commitDurableTriggerIntent } from "./due-work";
 import { fireLedgerEvents, insertLedgerEvent } from "./ledger/inserted-events";
 import type { CloudflareTriggerSource } from "./trigger-factory";
+import type { CloudflareAttachedStreamSource } from "./stream-factory";
+import { createAttachedStreamResponse } from "./attached-stream-wire";
 
 export interface CloudflareAgentEnv {
   readonly AI: Ai;
@@ -145,6 +150,13 @@ export interface AgentTriggerCancelSpec {
   readonly reason?: string;
 }
 
+export interface AgentAttachedStreamSpec extends AttachedStreamStartSpec {}
+
+export interface AgentAttachedStreamCancelSpec {
+  readonly streamRef: string;
+  readonly reason?: string;
+}
+
 export interface AgentDrainDueTestingOptions {
   readonly now?: number;
 }
@@ -160,6 +172,10 @@ export interface AgentRuntimeClient extends AgentRuntimeReaderClient {
   }) => Promise<{ id: number }>;
   readonly enqueueTrigger: (spec: AgentTriggerIntentSpec) => Promise<{ id: number }>;
   readonly cancelTrigger: (spec: AgentTriggerCancelSpec) => Promise<TriggerCancelResult>;
+  readonly attachStream: (spec: AgentAttachedStreamSpec) => Promise<Response>;
+  readonly cancelStream: (
+    spec: AgentAttachedStreamCancelSpec,
+  ) => Promise<AttachedStreamCancelResult>;
   readonly dispatchToScope: (spec: DispatchToScopeSpec) => Promise<DispatchToScopeResult>;
   readonly scheduleEvent: (spec: ScheduledEventSpec) => Promise<{ id: number }>;
   readonly submit: (spec: SubmitSpec) => Promise<SubmitResult>;
@@ -201,6 +217,7 @@ const makeAgentRuntime = <Env extends CloudflareAgentEnv>(
   refs: RefResolver,
   dispatchTargets: DispatchTargetRegistry,
   appTriggers: CloudflareTriggerSource<Env>,
+  appStreams: CloudflareAttachedStreamSource<Env>,
 ): ManagedRuntime.ManagedRuntime<CoreServices, SqlError | TriggerFactoryError> => {
   const backendCoreLayer = makeCloudflareBackendCoreLayer(
     ctx,
@@ -209,6 +226,7 @@ const makeAgentRuntime = <Env extends CloudflareAgentEnv>(
     handlers,
     dispatchTargets,
     appTriggers,
+    appStreams,
   );
   const aiLayer = Layer.succeed(AiBinding, env.AI);
   const refResolverLayer = RefResolverLive(refs);
@@ -230,6 +248,7 @@ export interface AgentDurableObjectConfig<
   readonly extensions?: (env: Env) => ReadonlyArray<ExtensionDeclaration>;
   readonly dispatchTargets?: (env: Env) => DispatchTargetRegistry;
   readonly triggers?: CloudflareTriggerSource<Env>;
+  readonly streams?: CloudflareAttachedStreamSource<Env>;
   readonly scopeRefForScope?: (scope: string, env: Env) => ScopeRef | null;
   readonly eventHandlers?: (
     context: AgentEventHandlerContext<Runtime>,
@@ -245,6 +264,7 @@ export interface MaterializedAgentConfig<
   readonly extensions: ReadonlyArray<ExtensionDeclaration>;
   readonly dispatchTargets: DispatchTargetRegistry;
   readonly triggers: CloudflareTriggerSource<Env>;
+  readonly streams: CloudflareAttachedStreamSource<Env>;
   readonly scopeRefForScope: (scope: string, env: Env) => ScopeRef | null;
   readonly eventHandlers?: (
     context: AgentEventHandlerContext<Runtime>,
@@ -274,6 +294,7 @@ export class AgentDurableObject<
   private readonly _capabilities: ReadonlyMap<string, ExtensionCapability>;
   private readonly _dispatchTargets: DispatchTargetRegistry;
   private readonly _triggers: CloudflareTriggerSource<Env>;
+  private readonly _streams: CloudflareAttachedStreamSource<Env>;
   private readonly _scopeRefForScope: (scope: string, env: Env) => ScopeRef | null;
   private _runtime?: ManagedRuntime.ManagedRuntime<CoreServices, SqlError | TriggerFactoryError>;
 
@@ -284,6 +305,7 @@ export class AgentDurableObject<
     this._capabilities = this.extensionCapabilities();
     this._dispatchTargets = config.dispatchTargets;
     this._triggers = config.triggers;
+    this._streams = config.streams;
     this._scopeRefForScope = config.scopeRefForScope;
 
     for (const registration of config.eventHandlers?.(
@@ -306,6 +328,7 @@ export class AgentDurableObject<
         this._refResolver,
         this._dispatchTargets,
         this._triggers,
+        this._streams,
       );
     }
     return this._runtime;
@@ -671,6 +694,32 @@ export class AgentDurableObject<
     );
   }
 
+  protected attachStreamFull(spec: AgentAttachedStreamSpec): Promise<Response> {
+    return this.scopedPromise((scope) => {
+      const runStreamEffect = <T, E>(effect: Effect.Effect<T, E, CoreServices>): Promise<T> =>
+        this.runScopedEffect(scope, effect);
+      return this.runScopedEffect(
+        scope,
+        Effect.gen(function* () {
+          const streams = yield* AttachedStreams;
+          const session = yield* streams.attach(spec);
+          return createAttachedStreamResponse(session, runStreamEffect);
+        }),
+      );
+    });
+  }
+
+  protected cancelStreamFull(
+    spec: AgentAttachedStreamCancelSpec,
+  ): Promise<AttachedStreamCancelResult> {
+    return this.runScoped(() =>
+      Effect.gen(function* () {
+        const streams = yield* AttachedStreams;
+        return yield* streams.cancelStream(spec);
+      }),
+    );
+  }
+
   /** Testing-only deterministic drain primitive.
    *
    *  Production code should not call this; Cloudflare alarms own production
@@ -867,6 +916,7 @@ export const createAgentDurableObject = <Env extends CloudflareAgentEnv>(
         extensions: config.extensions?.(env) ?? [],
         dispatchTargets: config.dispatchTargets?.(env) ?? {},
         triggers: config.triggers ?? [],
+        streams: config.streams ?? [],
         scopeRefForScope: config.scopeRefForScope ?? (() => null),
         eventHandlers: config.eventHandlers,
       });
@@ -886,6 +936,14 @@ export const createAgentDurableObject = <Env extends CloudflareAgentEnv>(
 
     cancelTrigger(spec: AgentTriggerCancelSpec): Promise<TriggerCancelResult> {
       return this.cancelTriggerFull(spec);
+    }
+
+    attachStream(spec: AgentAttachedStreamSpec): Promise<Response> {
+      return this.attachStreamFull(spec);
+    }
+
+    cancelStream(spec: AgentAttachedStreamCancelSpec): Promise<AttachedStreamCancelResult> {
+      return this.cancelStreamFull(spec);
     }
 
     dispatchToScope(spec: DispatchToScopeSpec): Promise<DispatchToScopeResult> {

@@ -63,6 +63,13 @@ Fact payloads are append-only compatible. A breaking semantic change uses a new
 event kind; readers and app-owned projections merge old and new kinds instead
 of rewriting ledger history.
 
+Attached streams are the live I/O counterpart to durable triggers. Runtime owns
+the backend-neutral `AttachedStreamHandler`, registry, cancel/detach contract,
+and shared runner. Intermediate frames are not ledger facts; `commitTerminal`
+is the only stream-owned settlement hook and is always explicit. `onDetach`
+must be declared as `"abort"` or `"continue"` so the substrate never silently
+chooses between cost-saving abort and background completion.
+
 ## Minimal Usage
 
 Depend on runtime for consumer-facing run, admission, and backend-neutral Tag
@@ -72,6 +79,12 @@ due-work storage helpers, inserted-event helpers, or backend state classes.
 
 ```ts
 import type { DurableTrigger, Ledger, SubmitSpec } from "@agent-os/runtime";
+```
+
+Attached stream handlers use the same runtime package:
+
+```ts
+import type { AttachedStreamHandler } from "@agent-os/runtime";
 ```
 
 ## Verification

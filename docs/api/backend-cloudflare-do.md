@@ -3,6 +3,8 @@
 ## Public exports
 
 - `.:AgentDurableObjectConfig`
+- `.:AgentAttachedStreamCancelSpec`
+- `.:AgentAttachedStreamSpec`
 - `.:AgentEventHandlerContext`
 - `.:AgentEventHandlerRegistration`
 - `.:AgentDOClass`
@@ -19,6 +21,9 @@
 - `.:AnthropicMessagesSpec`
 - `.:CfAiBindingSpec`
 - `.:CloudflareAgentEnv`
+- `.:CloudflareAttachedStreamFactory`
+- `.:CloudflareAttachedStreamFactoryContext`
+- `.:CloudflareAttachedStreamSource`
 - `.:CloudflareTriggerFactory`
 - `.:CloudflareTriggerFactoryContext`
 - `.:CloudflareTriggerSource`

@@ -19,6 +19,7 @@ accidental exports; they are not stability or schema-freeze promises.
 | `@agent-os/workspace-session-cloudflare` | yes       | backend            | structural Cloudflare Sandbox-compatible provider                                                           |
 | `@agent-os/tenant-material`              | yes       | 0.2.x experimental | encrypted credential records to execution-time material                                                     |
 | `@agent-os/llm-transport-http`           | yes       | 0.2.x experimental | HTTP provider deltas to non-durable turn frames                                                             |
+| `@agent-os/attached-stream`              | yes       | 0.2.x experimental | runtime-neutral attached stream frame algebra; no ledger truth ownership                                    |
 | `@agent-os/turn-stream`                  | yes       | 0.2.x public       | token/progress frame algebra                                                                                |
 | `@agent-os/run-stream`                   | yes       | 0.2.x public       | ledger/turn/submit-result composition                                                                       |
 | `@agent-os/decision-gate`                | yes       | 0.2.x public       | durable decision request/decision/consumption facts                                                         |
