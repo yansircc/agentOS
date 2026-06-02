@@ -9,6 +9,10 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "isolatedModules": true,
+    "paths": {
+      "@agent-os/deploy": ["../../carriers/deploy/src/index.ts"],
+      "@agent-os/kernel/effect-claim": ["../../kernel/src/effect-claim.ts"]
+    },
     "exactOptionalPropertyTypes": false,
     "noUncheckedIndexedAccess": false
   },

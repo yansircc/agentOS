@@ -4,11 +4,12 @@
 
 ## Purpose
 
-Cloudflare Worker deploy material and provider helpers for `@agent-os/deploy`.
+Cloudflare Worker deploy material and provider implementation for
+`@agent-os/deploy`.
 
 ## Public API Status
 
-Provider package. It defines Cloudflare Worker deploy bundle material for later deploy providers.
+Provider package. It materializes `@agent-os/deploy` for Cloudflare Workers while keeping raw provider material resolver-side.
 
 ## Invariant
 
@@ -20,9 +21,9 @@ handles stay out of manifest refs and ledger-visible projections.
 
 ## Minimal Usage
 
-Resolve a staged `artifactRef` to a `CloudflareWorkerDeployBundle`, validate the
-bundle, and compare `cloudflareWorkerDeployBundleDigest(bundle)` with the
-staging digest before deploy.
+Resolve a staged `artifactRef` to a `CloudflareWorkerDeployBundle`, validate
+the bundle digest, and use `makeCloudflareWorkerDeployCarrier` to emit symbolic
+deploy refs while raw Cloudflare material stays resolver-side.
 
 ```ts
 import { cloudflareWorkerDeployBundleDigest } from "@agent-os/deploy-cloudflare";
@@ -35,4 +36,5 @@ cd packages/providers/deploy-cloudflare
 vp test run
 ```
 
-Live Cloudflare deploy smoke belongs to the later deploy provider track.
+Live Cloudflare deploy smoke is opt-in and must not commit provider material or
+raw URLs.

@@ -16,9 +16,11 @@
     "test": "vp test run --configLoader runner"
   },
   "dependencies": {
+    "@agent-os/deploy": "workspace:*",
     "effect": "catalog:"
   },
   "devDependencies": {
+    "@agent-os/kernel": "workspace:*",
     "@effect/vitest": "catalog:",
     "typescript": "catalog:",
     "vite-plus": "catalog:",

@@ -2,23 +2,23 @@
 
 <!-- agentos:generated package-map:start -->
 
-| Need                                       | Package                                  |
-| ------------------------------------------ | ---------------------------------------- |
-| Pure agentOS algebra                       | `@agent-os/kernel`                       |
-| Runtime Effect Tag contracts               | `@agent-os/runtime`                      |
-| Backend protocol algebra                   | `@agent-os/backend-protocol`             |
-| Cloudflare DO app facade and backend       | `@agent-os/backend-cloudflare-do`        |
-| Resource lifecycle carrier                 | `@agent-os/resource-carrier`             |
-| Cloudflare resource provider               | `@agent-os/resource-cloudflare`          |
-| Workspace/session facts                    | `@agent-os/workspace-session`            |
-| Cloudflare Sandbox workspace backend       | `@agent-os/workspace-session-cloudflare` |
-| Tenant credential material resolver        | `@agent-os/tenant-material`              |
-| HTTP LLM token streaming                   | `@agent-os/llm-transport-http`           |
-| Token/progress frames                      | `@agent-os/turn-stream`                  |
-| Consumer run stream                        | `@agent-os/run-stream`                   |
-| Approval/decision gate                     | `@agent-os/decision-gate`                |
-| Skill manifest to tools                    | `@agent-os/skill-registry`               |
-| Cloudflare Worker deploy artifact material | `@agent-os/deploy-cloudflare`            |
+| Need                                 | Package                                  |
+| ------------------------------------ | ---------------------------------------- |
+| Pure agentOS algebra                 | `@agent-os/kernel`                       |
+| Runtime Effect Tag contracts         | `@agent-os/runtime`                      |
+| Backend protocol algebra             | `@agent-os/backend-protocol`             |
+| Cloudflare DO app facade and backend | `@agent-os/backend-cloudflare-do`        |
+| Resource lifecycle carrier           | `@agent-os/resource-carrier`             |
+| Cloudflare resource provider         | `@agent-os/resource-cloudflare`          |
+| Workspace/session facts              | `@agent-os/workspace-session`            |
+| Cloudflare Sandbox workspace backend | `@agent-os/workspace-session-cloudflare` |
+| Tenant credential material resolver  | `@agent-os/tenant-material`              |
+| HTTP LLM token streaming             | `@agent-os/llm-transport-http`           |
+| Token/progress frames                | `@agent-os/turn-stream`                  |
+| Consumer run stream                  | `@agent-os/run-stream`                   |
+| Approval/decision gate               | `@agent-os/decision-gate`                |
+| Skill manifest to tools              | `@agent-os/skill-registry`               |
+| Cloudflare Worker deploy provider    | `@agent-os/deploy-cloudflare`            |
 
 <!-- agentos:generated package-map:end -->
 

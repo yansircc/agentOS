@@ -2,7 +2,7 @@
 
 # @agent-os/deploy-cloudflare Public API
 
-Status: Provider package. Public exports are limited to Cloudflare Worker deploy bundle material, digest validation, and resolver contracts.
+Status: Provider package. Public exports are limited to Cloudflare Worker deploy bundle material, digest validation, resolver contracts, and deploy carrier construction.
 
 ## Public exports
 
@@ -10,14 +10,25 @@ Status: Provider package. Public exports are limited to Cloudflare Worker deploy
 - `.:CloudflareWorkerBundleDigestValidation`
 - `.:CloudflareWorkerBundleResolutionFailure`
 - `.:CloudflareWorkerBundleResolver`
+- `.:CloudflareWorkerDeployCarrierOptions`
 - `.:CloudflareWorkerDeployBundle`
 - `.:CloudflareWorkerDeployBundleIssue`
+- `.:CloudflareWorkerDeployFetch`
+- `.:CloudflareWorkerDeployFetchInit`
+- `.:CloudflareWorkerDeployFetchResponse`
 - `.:CloudflareWorkerDeployBundleValidation`
 - `.:CloudflareWorkerDeployManifest`
+- `.:CloudflareWorkerDeployMaterial`
+- `.:CloudflareWorkerDeployResolutionFailure`
+- `.:CloudflareWorkerDeployResolver`
 - `.:CloudflareWorkerModule`
+- `.:CloudflareWorkerProductionMaterial`
+- `.:CloudflareWorkerRollbackMaterial`
 - `.:CloudflareWorkerRouteRef`
+- `.:CloudflareWorkerTargetMaterial`
 - `.:cloudflareWorkerDeployBundleDigest`
 - `.:encodeCloudflareWorkerDeployBundle`
+- `.:makeCloudflareWorkerDeployCarrier`
 - `.:resolveCloudflareWorkerDeployBundle`
 - `.:validateCloudflareWorkerDeployBundle`
 - `.:validateCloudflareWorkerDeployBundleDigest`
