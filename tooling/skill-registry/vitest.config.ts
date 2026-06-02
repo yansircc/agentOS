@@ -1,23 +1,9 @@
 import { defineConfig } from "vite-plus";
+import { agentOsSourceAliases } from "../vitest-config/source-aliases";
 
 export default defineConfig({
   resolve: {
-    alias: {
-      "@agent-os/kernel/effect-claim": new URL(
-        "../../packages/kernel/src/effect-claim.ts",
-        import.meta.url,
-      ).pathname,
-      "@agent-os/kernel/json-schema": new URL(
-        "../../packages/kernel/src/json-schema.ts",
-        import.meta.url,
-      ).pathname,
-      "@agent-os/kernel/material-ref": new URL(
-        "../../packages/kernel/src/material-ref.ts",
-        import.meta.url,
-      ).pathname,
-      "@agent-os/kernel/tools": new URL("../../packages/kernel/src/tools.ts", import.meta.url)
-        .pathname,
-    },
+    alias: agentOsSourceAliases(),
   },
   test: {
     fileParallelism: false,

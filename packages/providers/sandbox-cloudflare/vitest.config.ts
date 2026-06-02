@@ -1,11 +1,9 @@
 import { defineConfig } from "vite-plus";
+import { agentOsSourceAliases } from "../../../tooling/vitest-config/source-aliases";
 
 export default defineConfig({
   resolve: {
-    alias: {
-      "@agent-os/kernel/tools": new URL("../../kernel/src/tools.ts", import.meta.url).pathname,
-      "@agent-os/sandbox": new URL("../../carriers/sandbox/src/index.ts", import.meta.url).pathname,
-    },
+    alias: agentOsSourceAliases(),
   },
   test: {
     fileParallelism: false,

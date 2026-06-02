@@ -19,7 +19,8 @@
     "effect-manifests:generate": "node scripts/generate-effect-skill-manifests.mjs",
     "effect-manifests:check": "node scripts/generate-effect-skill-manifests.mjs --check",
     "check:public-api": "node scripts/check-public-api.mjs",
-    "check": "vp check && bun run docs:check && bun run effect-manifests:check && bun run check:public-api && bun run typecheck && bun run test",
+    "check:vitest-source-aliases": "node scripts/check-vitest-source-aliases.mjs",
+    "check": "vp check && bun run docs:check && bun run effect-manifests:check && bun run check:public-api && bun run check:vitest-source-aliases && bun run typecheck && bun run test",
     "check:runtime": "vp run --cache -r test:runtime",
     "check:full": "bun run check && bun run check:runtime"
   },
