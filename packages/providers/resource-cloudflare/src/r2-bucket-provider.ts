@@ -62,7 +62,7 @@ const r2BucketSpec: CloudflareResourceSpec<
   defaultCarrierRef: "cloudflare-r2-bucket",
   supportedMutationKinds: new Set(["r2_bucket.put_object", "r2_bucket.delete_object"]),
   parseResourceMaterial: r2BucketMaterialFrom,
-  materialFromProvisionResult: (resourceName) => ({ bucketName: resourceName }),
+  materialFromProvisionResult: (context) => ({ bucketName: context.resourceName }),
   provisionRequest: (accountId, context) => ({
     method: "POST",
     path: ["accounts", accountId, "r2", "buckets"],

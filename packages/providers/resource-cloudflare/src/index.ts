@@ -3,4 +3,7 @@ export * from "./kv-namespace-provider";
 export * from "./provider-core";
 export * from "./queue-provider";
 export * from "./r2-bucket-provider";
+export * from "./worker-route-provider";
+export * from "./worker-script-provider";
+export * from "./worker-subdomain-provider";
 export * from "./workflow-provider";

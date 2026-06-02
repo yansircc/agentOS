@@ -25,7 +25,15 @@ import {
   settleResourceRejected,
 } from "@agent-os/resource-carrier";
 
-export type CloudflareResourceKind = "d1" | "kv_namespace" | "r2_bucket" | "queue" | "workflow";
+export type CloudflareResourceKind =
+  | "d1"
+  | "kv_namespace"
+  | "r2_bucket"
+  | "queue"
+  | "workflow"
+  | "worker_script"
+  | "worker_route"
+  | "worker_subdomain";
 
 export interface CloudflareResourceFetchInit {
   readonly method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
@@ -77,6 +85,24 @@ export interface CloudflareWorkflowMaterial {
   readonly scriptName?: string;
 }
 
+export interface CloudflareWorkerScriptMaterial {
+  readonly scriptName: string;
+  readonly workerId?: string;
+}
+
+export interface CloudflareWorkerRouteMaterial {
+  readonly zoneId: string;
+  readonly pattern: string;
+  readonly scriptName?: string;
+  readonly routeId?: string;
+}
+
+export interface CloudflareWorkerSubdomainMaterial {
+  readonly scriptName: string;
+  readonly enabled: boolean;
+  readonly previewsEnabled?: boolean;
+}
+
 export interface CloudflareResourceCarrierOptions<MutationInput> {
   readonly fetch: CloudflareResourceFetch;
   readonly resolver: RefResolver;
@@ -109,8 +135,15 @@ export interface CloudflareResourceSpec<Material, MutationInput> {
   readonly supportedMutationKinds: ReadonlySet<string>;
   readonly provisionRequiresMaterial?: boolean;
   readonly validateProvisionMaterial?: (material: Material) => string | null;
+  readonly validateResolvedMaterial?: (
+    step: ResourceLifecycleStep,
+    material: Material,
+  ) => string | null;
   readonly parseResourceMaterial: (value: unknown) => Material | null;
-  readonly materialFromProvisionResult: (resourceName: string, body: unknown) => Material | null;
+  readonly materialFromProvisionResult: (
+    context: ProvisionContext<Material>,
+    body: unknown,
+  ) => Material | null;
   readonly provisionRequest: (
     accountId: string,
     context: ProvisionContext<Material>,
@@ -389,6 +422,10 @@ const requireResourceMaterial = <Material, MutationInput>(
           `cloudflare_${spec.resourceKind}_resource_material_unavailable`,
         ),
       );
+    }
+    const reason = spec.validateResolvedMaterial?.(step, parsed) ?? null;
+    if (reason !== null) {
+      return yield* Effect.fail(materialUnavailable(claim, spec.resourceKind, step, reason));
     }
     return parsed;
   });
@@ -678,7 +715,13 @@ export const makeCloudflareResourceCarrier = <Material, MutationInput>(
           }),
         );
         yield* validateProviderResponse(spec, request.claim, "provision", body);
-        const material = spec.materialFromProvisionResult(request.resourceName, body);
+        const material = spec.materialFromProvisionResult(
+          {
+            resourceName: request.resourceName,
+            resourceMaterial: provisionMaterial,
+          },
+          body,
+        );
         if (material === null) {
           return yield* Effect.fail(
             providerFailure(
@@ -888,6 +931,9 @@ const kvMaterialKeys = new Set(["namespaceId", "title"]);
 const r2MaterialKeys = new Set(["bucketName"]);
 const queueMaterialKeys = new Set(["queueId", "queueName"]);
 const workflowMaterialKeys = new Set(["workflowName", "className", "scriptName"]);
+const workerScriptMaterialKeys = new Set(["scriptName", "workerId"]);
+const workerRouteMaterialKeys = new Set(["zoneId", "pattern", "scriptName", "routeId"]);
+const workerSubdomainMaterialKeys = new Set(["scriptName", "enabled", "previewsEnabled"]);
 
 export const accountMaterialFrom = (value: unknown): CloudflareAccountMaterial | null =>
   (() => {
@@ -951,6 +997,58 @@ export const workflowMaterialFrom = (value: unknown): CloudflareWorkflowMaterial
       workflowName,
       ...(value.className === undefined ? {} : { className: value.className }),
       ...(value.scriptName === undefined ? {} : { scriptName: value.scriptName }),
+    };
+  })();
+
+export const workerScriptMaterialFrom = (value: unknown): CloudflareWorkerScriptMaterial | null =>
+  (() => {
+    if (!Predicate.isRecord(value) || !hasOnlyKeys(value, workerScriptMaterialKeys)) return null;
+    const scriptName = nonEmptyString(value.scriptName);
+    if (scriptName === null || !optionalNonEmptyString(value.workerId)) return null;
+    return {
+      scriptName,
+      ...(value.workerId === undefined ? {} : { workerId: value.workerId }),
+    };
+  })();
+
+export const workerRouteMaterialFrom = (value: unknown): CloudflareWorkerRouteMaterial | null =>
+  (() => {
+    if (!Predicate.isRecord(value) || !hasOnlyKeys(value, workerRouteMaterialKeys)) return null;
+    const zoneId = nonEmptyString(value.zoneId);
+    const pattern = nonEmptyString(value.pattern);
+    if (
+      zoneId === null ||
+      pattern === null ||
+      !optionalNonEmptyString(value.scriptName) ||
+      !optionalNonEmptyString(value.routeId)
+    ) {
+      return null;
+    }
+    return {
+      zoneId,
+      pattern,
+      ...(value.scriptName === undefined ? {} : { scriptName: value.scriptName }),
+      ...(value.routeId === undefined ? {} : { routeId: value.routeId }),
+    };
+  })();
+
+export const workerSubdomainMaterialFrom = (
+  value: unknown,
+): CloudflareWorkerSubdomainMaterial | null =>
+  (() => {
+    if (!Predicate.isRecord(value) || !hasOnlyKeys(value, workerSubdomainMaterialKeys)) return null;
+    const scriptName = nonEmptyString(value.scriptName);
+    if (
+      scriptName === null ||
+      typeof value.enabled !== "boolean" ||
+      (value.previewsEnabled !== undefined && typeof value.previewsEnabled !== "boolean")
+    ) {
+      return null;
+    }
+    return {
+      scriptName,
+      enabled: value.enabled,
+      ...(value.previewsEnabled === undefined ? {} : { previewsEnabled: value.previewsEnabled }),
     };
   })();
 

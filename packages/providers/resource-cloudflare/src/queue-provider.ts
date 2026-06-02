@@ -63,9 +63,9 @@ const queueSpec: CloudflareResourceSpec<CloudflareQueueMaterial, CloudflareQueue
   defaultCarrierRef: "cloudflare-queue",
   supportedMutationKinds: new Set(["queue.send", "queue.send_batch"]),
   parseResourceMaterial: queueMaterialFrom,
-  materialFromProvisionResult: (resourceName, body) => {
+  materialFromProvisionResult: (context, body) => {
     const queueId = queueIdFromCreate(body);
-    return queueId === null ? null : { queueId, queueName: resourceName };
+    return queueId === null ? null : { queueId, queueName: context.resourceName };
   },
   provisionRequest: (accountId, context) => ({
     method: "POST",

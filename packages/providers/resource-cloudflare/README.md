@@ -4,12 +4,12 @@
 
 ## Purpose
 
-Cloudflare D1, KV namespace, R2 bucket, Queue, and Workflow materializer for
-`@agent-os/resource-carrier`.
+Cloudflare D1, KV namespace, R2 bucket, Queue, Workflow, and Worker resource
+materializer for `@agent-os/resource-carrier`.
 
 ## Public API Status
 
-Provider package. It materializes `@agent-os/resource-carrier` for Cloudflare resources.
+Provider package. It materializes `@agent-os/resource-carrier` for Cloudflare data and Worker resources.
 
 ## Invariant
 

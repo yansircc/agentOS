@@ -2,8 +2,8 @@
 
 ## Purpose
 
-Cloudflare D1, KV namespace, R2 bucket, Queue, and Workflow materializer for
-`@agent-os/resource-carrier`.
+Cloudflare D1, KV namespace, R2 bucket, Queue, Workflow, and Worker resource
+materializer for `@agent-os/resource-carrier`.
 
 ## Invariant
 

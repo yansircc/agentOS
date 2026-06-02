@@ -44,6 +44,24 @@ Status: Provider package. Public exports are limited to Cloudflare resource carr
 - `.:CloudflareWorkflowMaterial`
 - `.:CloudflareWorkflowMutationInput`
 - `.:CloudflareWorkflowResourceCarrierOptions`
+- `.:CloudflareWorkerRouteFetch`
+- `.:CloudflareWorkerRouteFetchInit`
+- `.:CloudflareWorkerRouteFetchResponse`
+- `.:CloudflareWorkerRouteMaterial`
+- `.:CloudflareWorkerRouteMutationInput`
+- `.:CloudflareWorkerRouteResourceCarrierOptions`
+- `.:CloudflareWorkerScriptFetch`
+- `.:CloudflareWorkerScriptFetchInit`
+- `.:CloudflareWorkerScriptFetchResponse`
+- `.:CloudflareWorkerScriptMaterial`
+- `.:CloudflareWorkerScriptMutationInput`
+- `.:CloudflareWorkerScriptResourceCarrierOptions`
+- `.:CloudflareWorkerSubdomainFetch`
+- `.:CloudflareWorkerSubdomainFetchInit`
+- `.:CloudflareWorkerSubdomainFetchResponse`
+- `.:CloudflareWorkerSubdomainMaterial`
+- `.:CloudflareWorkerSubdomainMutationInput`
+- `.:CloudflareWorkerSubdomainResourceCarrierOptions`
 - `.:accountMaterialFrom`
 - `.:d1MaterialFrom`
 - `.:kvNamespaceMaterialFrom`
@@ -52,11 +70,17 @@ Status: Provider package. Public exports are limited to Cloudflare resource carr
 - `.:makeCloudflareQueueResourceCarrier`
 - `.:makeCloudflareR2BucketResourceCarrier`
 - `.:makeCloudflareResourceCarrier`
+- `.:makeCloudflareWorkerRouteResourceCarrier`
+- `.:makeCloudflareWorkerScriptResourceCarrier`
+- `.:makeCloudflareWorkerSubdomainResourceCarrier`
 - `.:makeCloudflareWorkflowResourceCarrier`
 - `.:materialHelpers`
 - `.:materialKey`
 - `.:queueMaterialFrom`
 - `.:r2BucketMaterialFrom`
+- `.:workerRouteMaterialFrom`
+- `.:workerScriptMaterialFrom`
+- `.:workerSubdomainMaterialFrom`
 - `.:workflowMaterialFrom`
 
 ## Experimental exports

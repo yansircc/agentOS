@@ -55,8 +55,8 @@ const workflowSpec: CloudflareResourceSpec<
       ? "cloudflare_workflow_provision_material_requires_class_and_script"
       : null,
   parseResourceMaterial: workflowMaterialFrom,
-  materialFromProvisionResult: (resourceName) => ({
-    workflowName: resourceName,
+  materialFromProvisionResult: (context) => ({
+    workflowName: context.resourceName,
   }),
   provisionRequest: (accountId, context) => ({
     method: "PUT",

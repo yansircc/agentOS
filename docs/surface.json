@@ -99,10 +99,10 @@
       "name": "@agent-os/resource-cloudflare",
       "path": "packages/providers/resource-cloudflare",
       "status": "provider",
-      "role": "Cloudflare D1/KV/R2/Queue/Workflow resource materializer",
-      "boundary": "Cloudflare resource API calls to provider-neutral resource carrier payloads",
+      "role": "Cloudflare D1/KV/R2/Queue/Workflow/Worker resource materializer",
+      "boundary": "Cloudflare data and Worker resource API calls to provider-neutral resource carrier payloads",
       "need": "Cloudflare resource provider",
-      "readmeStatus": "Provider package. It materializes `@agent-os/resource-carrier` for Cloudflare resources.",
+      "readmeStatus": "Provider package. It materializes `@agent-os/resource-carrier` for Cloudflare data and Worker resources.",
       "apiStatus": "Provider package. Public exports are limited to Cloudflare resource carrier factories and provider-specific material parsers.",
       "apiSource": "docs/api/resource-cloudflare.md",
       "primary": true

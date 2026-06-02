@@ -14,7 +14,7 @@ accidental exports; they are not stability or schema-freeze promises.
 | `@agent-os/backend-cloudflare-do`        | backend            | Cloudflare DO app facade, storage, alarm, SSE, dispatch, and binding materialization                        |
 | `@agent-os/backend-in-memory`            | backend            | in-memory runtime Tag Live implementations                                                                  |
 | `@agent-os/resource-carrier`             | 0.2.x public       | provider-neutral resource lifecycle facts and symbolic proofs                                               |
-| `@agent-os/resource-cloudflare`          | provider           | Cloudflare resource API calls to provider-neutral resource carrier payloads                                 |
+| `@agent-os/resource-cloudflare`          | provider           | Cloudflare data and Worker resource API calls to provider-neutral resource carrier payloads                 |
 | `@agent-os/workspace-session`            | 0.2.x public       | provider-neutral workspace/session lifecycle facts                                                          |
 | `@agent-os/workspace-session-cloudflare` | backend            | structural Cloudflare Sandbox-compatible provider                                                           |
 | `@agent-os/tenant-material`              | 0.2.x experimental | encrypted credential records to execution-time material                                                     |

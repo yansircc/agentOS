@@ -48,9 +48,9 @@ const d1Spec: CloudflareResourceSpec<CloudflareD1Material, CloudflareD1MutationI
   defaultCarrierRef: "cloudflare-d1",
   supportedMutationKinds: new Set(["d1.exec", "d1.query"]),
   parseResourceMaterial: d1MaterialFrom,
-  materialFromProvisionResult: (resourceName, body) => {
+  materialFromProvisionResult: (context, body) => {
     const databaseId = d1DatabaseIdFromCreate(body);
-    return databaseId === null ? null : { databaseId, databaseName: resourceName };
+    return databaseId === null ? null : { databaseId, databaseName: context.resourceName };
   },
   provisionRequest: (accountId, context) => ({
     method: "POST",

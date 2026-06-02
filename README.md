@@ -55,7 +55,7 @@ state to make a product flow appear complete.
 | `@agent-os/backend-protocol`             | storage-free backend protocol constants, intent-pointer payload parsers, retry policy, dispatch protocol, and handler fanout policy |
 | `@agent-os/backend-cloudflare-do`        | Cloudflare Durable Object app facade and backend for agentOS runtime                                                                |
 | `@agent-os/resource-carrier`             | provider-neutral resource lifecycle facts, claims, settlement, and projection                                                       |
-| `@agent-os/resource-cloudflare`          | Cloudflare D1/KV/R2/Queue/Workflow resource materializer                                                                            |
+| `@agent-os/resource-cloudflare`          | Cloudflare D1/KV/R2/Queue/Workflow/Worker resource materializer                                                                     |
 | `@agent-os/workspace-session`            | provider-neutral workspace/session lifecycle facts                                                                                  |
 | `@agent-os/workspace-session-cloudflare` | Cloudflare Sandbox-compatible workspace backend                                                                                     |
 | `@agent-os/tenant-material`              | encrypted tenant credential records to execution-time material                                                                      |

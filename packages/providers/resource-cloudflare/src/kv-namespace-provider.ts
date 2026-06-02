@@ -62,9 +62,9 @@ const kvNamespaceSpec: CloudflareResourceSpec<
   defaultCarrierRef: "cloudflare-kv-namespace",
   supportedMutationKinds: new Set(["kv_namespace.bulk_put", "kv_namespace.bulk_delete"]),
   parseResourceMaterial: kvNamespaceMaterialFrom,
-  materialFromProvisionResult: (resourceName, body) => {
+  materialFromProvisionResult: (context, body) => {
     const namespaceId = namespaceIdFromCreate(body);
-    return namespaceId === null ? null : { namespaceId, title: resourceName };
+    return namespaceId === null ? null : { namespaceId, title: context.resourceName };
   },
   provisionRequest: (accountId, context) => ({
     method: "POST",
