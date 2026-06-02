@@ -20,9 +20,14 @@
     "effect-manifests:check": "node scripts/generate-effect-skill-manifests.mjs --check",
     "check:public-api": "node scripts/check-public-api.mjs",
     "check:source-aliases": "bun scripts/check-source-aliases.mjs",
-    "check": "vp check && bun run docs:check && bun run effect-manifests:check && bun run check:public-api && bun run check:source-aliases && bun run typecheck && bun run test",
+    "check": "vp check && bun run docs:check && bun run effect-manifests:check && bun run check:public-api && bun run check:source-aliases && bun run check:distribution && bun run typecheck && bun run test",
     "check:runtime": "vp run --cache -r test:runtime",
-    "check:full": "bun run check && bun run check:runtime"
+    "check:full": "bun run check && bun run check:runtime",
+    "build:internal-packages": "node tooling/distribution/distribution.mjs build",
+    "pack:internal": "node tooling/distribution/distribution.mjs pack",
+    "check:distribution": "node tooling/distribution/distribution.mjs check",
+    "test:internal-consumer": "node tooling/distribution/distribution.mjs test-consumer",
+    "publish:internal": "node tooling/distribution/distribution.mjs publish"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "catalog:",
@@ -44,6 +49,9 @@
     "vitest": "catalog:"
   },
   "packageManager": "bun@1.3.14",
+  "agentOsRelease": {
+    "version": "0.2.9"
+  },
   "catalog": {
     "@cloudflare/vitest-pool-workers": "^0.16.9",
     "@cloudflare/workers-types": "^4.20251201.0",

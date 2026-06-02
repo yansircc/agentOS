@@ -186,8 +186,13 @@ const rootPackageMap = table(
 replaceBlock("README.md", "package-map", rootPackageMap);
 
 const runtimePackageMap = table(
-  ["Package", "Status", "Boundary"],
-  packages.map((pkg) => [`\`${pkg.name}\``, pkg.status, pkg.boundary]),
+  ["Package", "Published", "Status", "Boundary"],
+  packages.map((pkg) => [
+    `\`${pkg.name}\``,
+    pkg.published === true ? "yes" : "no",
+    pkg.status,
+    pkg.boundary,
+  ]),
 );
 
 replaceBlock("docs/runtime-packages.md", "runtime-package-map", runtimePackageMap);

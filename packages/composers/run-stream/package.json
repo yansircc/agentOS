@@ -1,6 +1,6 @@
 {
   "name": "@agent-os/run-stream",
-  "version": "0.2.0",
+  "version": "0.2.9",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
@@ -26,5 +26,8 @@
     "typescript": "catalog:",
     "vite-plus": "catalog:",
     "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "effect": "^3.21.0"
   }
 }

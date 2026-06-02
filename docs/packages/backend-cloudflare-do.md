@@ -125,11 +125,10 @@ Omit `llms` for event-only facades. They keep `emit`, `schedule`, `dispatch`,
 `on`, `bindings`, and extensions, but do not expose `submit`. Full
 `SubmitSpec` remains on the low-level `createAgentDurableObject` API.
 
-External consumer apps should depend on the public package entrypoints from a
-single lockfile workspace. Current source-package consumption requires
-TypeScript `moduleResolution: Bundler` and must not use backend source subpaths.
-`NodeNext` consumption requires a later built distribution track because the
-current package exports point at source `.ts` files.
+External consumer apps should install the published internal npm packages, not
+source workspace package paths. Use the public package entrypoints only; backend
+source subpaths remain outside the contract. Published packages include
+`dist` JavaScript and declaration files for `NodeNext` and Bundler consumers.
 
 ## Verification
 

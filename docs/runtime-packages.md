@@ -6,34 +6,34 @@ accidental exports; they are not stability or schema-freeze promises.
 
 <!-- agentos:generated runtime-package-map:start -->
 
-| Package                                  | Status             | Boundary                                                                                                    |
-| ---------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------- |
-| `@agent-os/kernel`                       | 0.2.x public       | platform-free claim/material/boundary/schema/tool algebra                                                   |
-| `@agent-os/runtime`                      | 0.2.x public       | backend-neutral runtime Tag contracts, projections, trigger registry contracts, and trigger authoring types |
-| `@agent-os/backend-protocol`             | backend protocol   | backend-only protocol algebra shared by concrete backend implementations                                    |
-| `@agent-os/backend-cloudflare-do`        | backend            | Cloudflare DO app facade, storage, alarm, SSE, dispatch, and binding materialization                        |
-| `@agent-os/backend-in-memory`            | backend            | in-memory runtime Tag Live implementations                                                                  |
-| `@agent-os/resource-carrier`             | 0.2.x public       | provider-neutral resource lifecycle facts and symbolic proofs                                               |
-| `@agent-os/resource-cloudflare`          | provider           | Cloudflare data and Worker resource API calls to provider-neutral resource carrier payloads                 |
-| `@agent-os/workspace-session`            | 0.2.x public       | provider-neutral workspace/session lifecycle facts                                                          |
-| `@agent-os/workspace-session-cloudflare` | backend            | structural Cloudflare Sandbox-compatible provider                                                           |
-| `@agent-os/tenant-material`              | 0.2.x experimental | encrypted credential records to execution-time material                                                     |
-| `@agent-os/llm-transport-http`           | 0.2.x experimental | HTTP provider deltas to non-durable turn frames                                                             |
-| `@agent-os/turn-stream`                  | 0.2.x public       | token/progress frame algebra                                                                                |
-| `@agent-os/run-stream`                   | 0.2.x public       | ledger/turn/submit-result composition                                                                       |
-| `@agent-os/decision-gate`                | 0.2.x public       | durable decision request/decision/consumption facts                                                         |
-| `@agent-os/skill-registry`               | 0.2.x experimental | install-time skill manifests to core tools                                                                  |
-| `@agent-os/deploy`                       | carrier            | deploy proof/projection vocabulary                                                                          |
-| `@agent-os/deploy-cloudflare`            | provider           | Cloudflare Worker artifact material, resolver composition, digest validation, and deploy carrier            |
-| `@agent-os/git-carrier`                  | carrier            | Git proof/projection vocabulary                                                                             |
-| `@agent-os/staging-artifact`             | carrier            | staging artifact proof/projection vocabulary                                                                |
-| `@agent-os/verification`                 | carrier            | verification proof/projection vocabulary                                                                    |
-| `@agent-os/sandbox`                      | optional algebra   | bounded stateless sandbox tool surface                                                                      |
-| `@agent-os/sandbox-cloudflare`           | optional backend   | Cloudflare Sandbox-compatible stateless sandbox adapter                                                     |
-| `@agent-os/dynamic-worker`               | optional backend   | bounded Worker-compatible code execution                                                                    |
-| `@agent-os/image`                        | optional algebra   | provider-neutral image event namespace and reader algebra                                                   |
-| `@agent-os/ops-api`                      | tooling            | terminal ops API adapter, not substrate truth                                                               |
-| `@agent-os/ops-htmx`                     | tooling            | terminal ops UI adapter, not substrate truth                                                                |
+| Package                                  | Published | Status             | Boundary                                                                                                    |
+| ---------------------------------------- | --------- | ------------------ | ----------------------------------------------------------------------------------------------------------- |
+| `@agent-os/kernel`                       | yes       | 0.2.x public       | platform-free claim/material/boundary/schema/tool algebra                                                   |
+| `@agent-os/runtime`                      | yes       | 0.2.x public       | backend-neutral runtime Tag contracts, projections, trigger registry contracts, and trigger authoring types |
+| `@agent-os/backend-protocol`             | yes       | backend protocol   | backend-only protocol algebra shared by concrete backend implementations                                    |
+| `@agent-os/backend-cloudflare-do`        | yes       | backend            | Cloudflare DO app facade, storage, alarm, SSE, dispatch, and binding materialization                        |
+| `@agent-os/backend-in-memory`            | yes       | backend            | in-memory runtime Tag Live implementations                                                                  |
+| `@agent-os/resource-carrier`             | yes       | 0.2.x public       | provider-neutral resource lifecycle facts and symbolic proofs                                               |
+| `@agent-os/resource-cloudflare`          | yes       | provider           | Cloudflare data and Worker resource API calls to provider-neutral resource carrier payloads                 |
+| `@agent-os/workspace-session`            | yes       | 0.2.x public       | provider-neutral workspace/session lifecycle facts                                                          |
+| `@agent-os/workspace-session-cloudflare` | yes       | backend            | structural Cloudflare Sandbox-compatible provider                                                           |
+| `@agent-os/tenant-material`              | yes       | 0.2.x experimental | encrypted credential records to execution-time material                                                     |
+| `@agent-os/llm-transport-http`           | yes       | 0.2.x experimental | HTTP provider deltas to non-durable turn frames                                                             |
+| `@agent-os/turn-stream`                  | yes       | 0.2.x public       | token/progress frame algebra                                                                                |
+| `@agent-os/run-stream`                   | yes       | 0.2.x public       | ledger/turn/submit-result composition                                                                       |
+| `@agent-os/decision-gate`                | yes       | 0.2.x public       | durable decision request/decision/consumption facts                                                         |
+| `@agent-os/skill-registry`               | no        | 0.2.x experimental | install-time skill manifests to core tools                                                                  |
+| `@agent-os/deploy`                       | yes       | carrier            | deploy proof/projection vocabulary                                                                          |
+| `@agent-os/deploy-cloudflare`            | yes       | provider           | Cloudflare Worker artifact material, resolver composition, digest validation, and deploy carrier            |
+| `@agent-os/git-carrier`                  | yes       | carrier            | Git proof/projection vocabulary                                                                             |
+| `@agent-os/staging-artifact`             | yes       | carrier            | staging artifact proof/projection vocabulary                                                                |
+| `@agent-os/verification`                 | yes       | carrier            | verification proof/projection vocabulary                                                                    |
+| `@agent-os/sandbox`                      | yes       | optional algebra   | bounded stateless sandbox tool surface                                                                      |
+| `@agent-os/sandbox-cloudflare`           | yes       | optional backend   | Cloudflare Sandbox-compatible stateless sandbox adapter                                                     |
+| `@agent-os/dynamic-worker`               | yes       | optional backend   | bounded Worker-compatible code execution                                                                    |
+| `@agent-os/image`                        | yes       | optional algebra   | provider-neutral image event namespace and reader algebra                                                   |
+| `@agent-os/ops-api`                      | yes       | tooling            | terminal ops API adapter, not substrate truth                                                               |
+| `@agent-os/ops-htmx`                     | yes       | tooling            | terminal ops UI adapter, not substrate truth                                                                |
 
 <!-- agentos:generated runtime-package-map:end -->
 

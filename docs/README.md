@@ -7,6 +7,7 @@ frozen.
 - [Core Model](core.md)
 - [Boundary Contract](boundary-contract.md)
 - [Runtime Packages](runtime-packages.md)
+- [Internal npm Distribution](distribution.md)
 - [Verification](verification.md)
 
 Source facts live in `docs/surface.json`, `docs/packages/*.md`,

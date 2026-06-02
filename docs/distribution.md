@@ -1,0 +1,55 @@
+# Internal npm Distribution
+
+agentOS app repos consume published `@agent-os/*` packages, not source
+workspace packages. Source package manifests stay private and may keep
+`workspace:` / `catalog:` for monorepo development. `tooling/distribution`
+generates publish-only package projections under `dist/internal-npm`.
+
+## Install
+
+Configure a private registry through npm or environment:
+
+```sh
+export AGENTOS_NPM_REGISTRY=https://registry.example.invalid
+npm config set @agent-os:registry "$AGENTOS_NPM_REGISTRY"
+```
+
+Install agentOS packages plus required peers:
+
+```sh
+bun add @agent-os/runtime @agent-os/backend-cloudflare-do effect
+```
+
+Cloudflare-targeted packages also peer depend on
+`@cloudflare/workers-types`. Worker apps should install a compatible version
+from the release manifest before typechecking Cloudflare-facing code.
+
+## Release Train
+
+Published packages ship as one fixed train. `package.json`
+`agentOsRelease.version` is the single source for the release version. The
+`0.2.9 -> 0.2.10` path publishes every package declared with
+`"published": true` in `docs/surface.json`; breaking package contracts move the
+train to `0.3.0`.
+
+Do not rely on `npm unpublish` for rollback. Publish a new fixed-train patch
+release with the correction.
+
+## Checks
+
+Run distribution gates before publishing:
+
+```sh
+bun run check:distribution
+bun run test:internal-consumer
+```
+
+The checks reject generated package manifests or tarballs that expose
+`workspace:`, `catalog:`, `private`, source `.ts` entrypoints, tests, config,
+or deep `/src/` declaration paths.
+
+## Source Maps
+
+The v1 distribution does not ship source maps. Published stack traces point at
+generated `dist/*.js` files. Add source maps in a later release only if
+production debugging repeatedly needs source-line mapping.
