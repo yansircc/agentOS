@@ -1,4 +1,4 @@
-import { Data, Effect } from "effect";
+import { Data, Effect, Predicate } from "effect";
 import {
   deploySettlementRef,
   settleDeployLived,
@@ -10,6 +10,18 @@ import {
   type DeployReadbackRequest,
   type DeployRollbackRequest,
 } from "@agent-os/deploy";
+import {
+  bindingMaterialRef,
+  endpointMaterialRef,
+  externalResourceMaterialRef,
+  materialRefKey,
+  type BindingMaterialRef,
+  type CredentialMaterialRef,
+  type EndpointMaterialRef,
+  type ExternalResourceMaterialRef,
+  type MaterialRef,
+} from "@agent-os/kernel/material-ref";
+import type { RefResolver } from "@agent-os/kernel/ref-resolver";
 
 export interface CloudflareWorkerBindingRef {
   readonly name: string;
@@ -47,7 +59,9 @@ export interface CloudflareWorkerTargetMaterial {
   readonly apiToken: string;
 }
 
-export interface CloudflareWorkerDeployMaterial extends CloudflareWorkerTargetMaterial {
+export interface CloudflareWorkerDeployMaterial {
+  readonly accountId: string;
+  readonly scriptName: string;
   readonly artifactRef: string;
   readonly targetRef: string;
   readonly versionId?: string;
@@ -148,6 +162,28 @@ export interface CloudflareWorkerDeployCarrierOptions {
   readonly carrierRef?: string;
 }
 
+export interface CloudflareWorkerDeployResolverCompositionOptions {
+  readonly materialResolver: RefResolver;
+  readonly bundleResolver: CloudflareWorkerBundleResolver;
+  readonly expectedDigest: (
+    artifactRef: string,
+  ) => Effect.Effect<string, CloudflareWorkerDeployResolutionFailure>;
+  readonly credentialRef: CredentialMaterialRef;
+  readonly accountRef: ExternalResourceMaterialRef;
+  readonly targetMaterialRef?: (targetRef: string) => ExternalResourceMaterialRef;
+  readonly bindingMaterialRef?: (bindingRef: string) => BindingMaterialRef;
+  readonly productionEndpointRef?: (productionRef: string) => EndpointMaterialRef;
+  readonly rollbackDeployMaterialRef?: (rollbackRef: string) => ExternalResourceMaterialRef;
+  readonly previousDeployRef?: (
+    targetRef: string,
+  ) => Effect.Effect<string | null, CloudflareWorkerDeployResolutionFailure>;
+}
+
+export interface CloudflareWorkerDeployResolverComposition {
+  readonly bundleResolver: CloudflareWorkerBundleResolver;
+  readonly resolver: CloudflareWorkerDeployResolver;
+}
+
 export type CloudflareWorkerBundleDigestValidation =
   | { readonly ok: true; readonly digest: string }
   | {
@@ -240,6 +276,31 @@ export const resolveCloudflareWorkerDeployBundle = (
   artifactRef: string,
 ): Effect.Effect<CloudflareWorkerDeployBundle, CloudflareWorkerBundleResolutionFailure> =>
   resolver.resolve(artifactRef);
+
+export const cloudflareWorkerTargetMaterialRef = (targetRef: string): ExternalResourceMaterialRef =>
+  externalResourceMaterialRef({
+    provider: "cloudflare",
+    resourceKind: "worker_script",
+    ref: targetRef,
+  });
+
+export const cloudflareWorkerDeployMaterialRef = (deployRef: string): ExternalResourceMaterialRef =>
+  externalResourceMaterialRef({
+    provider: "cloudflare",
+    resourceKind: "worker_deploy",
+    ref: deployRef,
+  });
+
+export const cloudflareWorkerProductionEndpointMaterialRef = (
+  productionRef: string,
+): EndpointMaterialRef => endpointMaterialRef(productionRef, { protocol: "https" });
+
+export const cloudflareWorkerBindingMaterialRef = (ref: string): BindingMaterialRef =>
+  bindingMaterialRef({
+    provider: "cloudflare",
+    bindingKind: "worker_binding",
+    ref,
+  });
 
 const DEFAULT_BASE_URL = "https://api.cloudflare.com/client/v4";
 
@@ -473,6 +534,167 @@ const stringFromResult = (body: unknown, key: string): string | undefined => {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 };
 
+const nonEmptyString = (value: unknown): string | null =>
+  typeof value === "string" && value.length > 0 ? value : null;
+
+const accountMaterialFrom = (value: unknown): { readonly accountId: string } | null => {
+  if (!Predicate.isRecord(value)) return null;
+  const accountId = nonEmptyString(value.accountId);
+  return accountId === null ? null : { accountId };
+};
+
+const targetMaterialFrom = (value: unknown): { readonly scriptName: string } | null => {
+  if (!Predicate.isRecord(value)) return null;
+  const scriptName = nonEmptyString(value.scriptName);
+  return scriptName === null ? null : { scriptName };
+};
+
+const deployMaterialFrom = (value: unknown): CloudflareWorkerDeployMaterial | null => {
+  if (!Predicate.isRecord(value)) return null;
+  const accountId = nonEmptyString(value.accountId);
+  const scriptName = nonEmptyString(value.scriptName);
+  const artifactRef = nonEmptyString(value.artifactRef);
+  const targetRef = nonEmptyString(value.targetRef);
+  const versionId = value.versionId === undefined ? undefined : nonEmptyString(value.versionId);
+  const deploymentId =
+    value.deploymentId === undefined ? undefined : nonEmptyString(value.deploymentId);
+  if (
+    accountId === null ||
+    scriptName === null ||
+    artifactRef === null ||
+    targetRef === null ||
+    versionId === null ||
+    deploymentId === null
+  ) {
+    return null;
+  }
+  return {
+    accountId,
+    scriptName,
+    artifactRef,
+    targetRef,
+    ...(versionId === undefined ? {} : { versionId }),
+    ...(deploymentId === undefined ? {} : { deploymentId }),
+  };
+};
+
+const recordMaterialFrom = (value: unknown): Record<string, unknown> | null =>
+  Predicate.isRecord(value) ? (value as Record<string, unknown>) : null;
+
+const materialResolutionFailure = (ref: MaterialRef, reason: string) =>
+  new CloudflareWorkerDeployResolutionFailure({ ref: materialRefKey(ref), reason });
+
+const resolveMaterial = <A>(
+  resolver: RefResolver,
+  ref: MaterialRef,
+  parse: (value: unknown) => A | null,
+  reason: string,
+): Effect.Effect<A, CloudflareWorkerDeployResolutionFailure> => {
+  const value = resolver.material(ref);
+  if (value === null) return Effect.fail(materialResolutionFailure(ref, reason));
+  const material = parse(value);
+  return material === null
+    ? Effect.fail(materialResolutionFailure(ref, reason))
+    : Effect.succeed(material);
+};
+
+const resolveCredentialToken = (
+  options: CloudflareWorkerDeployResolverCompositionOptions,
+): Effect.Effect<string, CloudflareWorkerDeployResolutionFailure> =>
+  resolveMaterial(
+    options.materialResolver,
+    options.credentialRef,
+    nonEmptyString,
+    "cloudflare_worker_credential_material_invalid",
+  );
+
+export const makeCloudflareWorkerDeployResolverComposition = (
+  options: CloudflareWorkerDeployResolverCompositionOptions,
+): CloudflareWorkerDeployResolverComposition => {
+  const targetMaterialRef = options.targetMaterialRef ?? cloudflareWorkerTargetMaterialRef;
+  const productionEndpointRef =
+    options.productionEndpointRef ?? cloudflareWorkerProductionEndpointMaterialRef;
+  const rollbackDeployMaterialRef =
+    options.rollbackDeployMaterialRef ?? cloudflareWorkerDeployMaterialRef;
+
+  const target = (
+    targetRef: string,
+  ): Effect.Effect<CloudflareWorkerTargetMaterial, CloudflareWorkerDeployResolutionFailure> =>
+    Effect.gen(function* () {
+      const apiToken = yield* resolveCredentialToken(options);
+      const account = yield* resolveMaterial(
+        options.materialResolver,
+        options.accountRef,
+        accountMaterialFrom,
+        "cloudflare_worker_account_material_invalid",
+      );
+      const worker = yield* resolveMaterial(
+        options.materialResolver,
+        targetMaterialRef(targetRef),
+        targetMaterialFrom,
+        "cloudflare_worker_target_material_invalid",
+      );
+      return { accountId: account.accountId, scriptName: worker.scriptName, apiToken };
+    });
+
+  const resolver: CloudflareWorkerDeployResolver = {
+    expectedDigest: options.expectedDigest,
+    target,
+    ...(options.previousDeployRef === undefined
+      ? {}
+      : { previousDeployRef: options.previousDeployRef }),
+    productionEndpoint: (productionRef) =>
+      resolveMaterial(
+        options.materialResolver,
+        productionEndpointRef(productionRef),
+        nonEmptyString,
+        "cloudflare_worker_production_endpoint_material_invalid",
+      ),
+    rollback: (rollbackRef) =>
+      Effect.gen(function* () {
+        const apiToken = yield* resolveCredentialToken(options);
+        const material = yield* resolveMaterial(
+          options.materialResolver,
+          rollbackDeployMaterialRef(rollbackRef),
+          deployMaterialFrom,
+          "cloudflare_worker_rollback_material_invalid",
+        );
+        if (material.versionId === undefined) {
+          return yield* Effect.fail(
+            materialResolutionFailure(
+              rollbackDeployMaterialRef(rollbackRef),
+              "cloudflare_worker_rollback_material_requires_version_id",
+            ),
+          );
+        }
+        return {
+          accountId: material.accountId,
+          scriptName: material.scriptName,
+          apiToken,
+          restoredDeployRef: rollbackRef,
+          versionId: material.versionId,
+        };
+      }),
+    ...(options.bindingMaterialRef === undefined
+      ? {}
+      : {
+          binding: (bindingRefValue: string) =>
+            resolveMaterial(
+              options.materialResolver,
+              options.bindingMaterialRef?.(bindingRefValue) ??
+                cloudflareWorkerBindingMaterialRef(bindingRefValue),
+              recordMaterialFrom,
+              "cloudflare_worker_binding_material_invalid",
+            ),
+        }),
+  };
+
+  return {
+    bundleResolver: options.bundleResolver,
+    resolver,
+  };
+};
+
 const recordMaterial = (
   options: CloudflareWorkerDeployCarrierOptions,
   request: DeployPromoteRequest,
@@ -570,7 +792,6 @@ export const makeCloudflareWorkerDeployCarrier = (
         yield* recordMaterial(options, request, deployRef, {
           accountId: target.accountId,
           scriptName: target.scriptName,
-          apiToken: target.apiToken,
           artifactRef: request.artifactRef,
           targetRef: request.productionTargetRef,
           ...(versionId === undefined ? {} : { versionId }),

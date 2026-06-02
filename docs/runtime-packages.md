@@ -24,7 +24,7 @@ accidental exports; they are not stability or schema-freeze promises.
 | `@agent-os/decision-gate`                | 0.2.x public       | durable decision request/decision/consumption facts                                                         |
 | `@agent-os/skill-registry`               | 0.2.x experimental | install-time skill manifests to core tools                                                                  |
 | `@agent-os/deploy`                       | carrier            | deploy proof/projection vocabulary                                                                          |
-| `@agent-os/deploy-cloudflare`            | provider           | Cloudflare Worker artifact material, digest validation, and deploy carrier                                  |
+| `@agent-os/deploy-cloudflare`            | provider           | Cloudflare Worker artifact material, resolver composition, digest validation, and deploy carrier            |
 | `@agent-os/git-carrier`                  | carrier            | Git proof/projection vocabulary                                                                             |
 | `@agent-os/staging-artifact`             | carrier            | staging artifact proof/projection vocabulary                                                                |
 | `@agent-os/verification`                 | carrier            | verification proof/projection vocabulary                                                                    |

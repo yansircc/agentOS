@@ -224,10 +224,10 @@
       "path": "packages/providers/deploy-cloudflare",
       "status": "provider",
       "role": "Cloudflare Worker deploy provider",
-      "boundary": "Cloudflare Worker artifact material, digest validation, and deploy carrier",
+      "boundary": "Cloudflare Worker artifact material, resolver composition, digest validation, and deploy carrier",
       "need": "Cloudflare Worker deploy provider",
       "readmeStatus": "Provider package. It materializes `@agent-os/deploy` for Cloudflare Workers while keeping raw provider material resolver-side.",
-      "apiStatus": "Provider package. Public exports are limited to Cloudflare Worker deploy bundle material, digest validation, resolver contracts, and deploy carrier construction.",
+      "apiStatus": "Provider package. Public exports are limited to Cloudflare Worker deploy bundle material, digest validation, resolver composition, resolver contracts, and deploy carrier construction.",
       "apiSource": "docs/api/deploy-cloudflare.md",
       "primary": true
     },

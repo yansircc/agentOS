@@ -17,10 +17,12 @@
   },
   "dependencies": {
     "@agent-os/deploy": "workspace:*",
+    "@agent-os/kernel": "workspace:*",
     "effect": "catalog:"
   },
   "devDependencies": {
-    "@agent-os/kernel": "workspace:*",
+    "@agent-os/staging-artifact": "workspace:*",
+    "@agent-os/workspace-session": "workspace:*",
     "@effect/vitest": "catalog:",
     "typescript": "catalog:",
     "vite-plus": "catalog:",

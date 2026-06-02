@@ -24,6 +24,16 @@ handles stay out of manifest refs and ledger-visible projections.
 Resolve a staged `artifactRef` to a `CloudflareWorkerDeployBundle`, validate
 the bundle digest, and use `makeCloudflareWorkerDeployCarrier` to emit symbolic
 deploy refs while raw Cloudflare material stays resolver-side.
+Use `makeCloudflareWorkerDeployResolverComposition` to adapt a kernel
+`RefResolver` into the provider-specific resolver contract: credentials,
+Cloudflare resources, bindings, and production endpoints stay material refs;
+artifact bundle lookup stays in the staging artifact resolver.
+The stable Worker webapp route composes bounded workspace exec, staging
+artifact publication, Cloudflare Worker resource material, deploy promotion,
+readback, rollback, and UI endpoint lookup without adding trycf or background
+session-process semantics. Deploy/promote orchestration relies on the a44
+durable trigger claim-token/redrive substrate; the provider does not implement
+its own retry ledger.
 
 ```ts
 import { cloudflareWorkerDeployBundleDigest } from "@agent-os/deploy-cloudflare";

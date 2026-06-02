@@ -182,6 +182,7 @@ describe("@agent-os/deploy-cloudflare DeployCarrier", () => {
       expect(recorded).toHaveLength(2);
       expect(serialized(recorded)).toContain("raw-version-id");
       expect(serialized(recorded)).toContain("raw-script-name");
+      expect(serialized(recorded)).not.toContain("secret-cloudflare-token");
     }),
   );
 
