@@ -1,15 +1,13 @@
 # agentOS Docs
 
-These are the public docs for the current repo surface. They describe the
-substrate and runtime packages, not development history. The API surface is not
-frozen.
+What do you need?
 
-- [Core Model](core.md)
-- [Boundary Contract](boundary-contract.md)
-- [Runtime Packages](runtime-packages.md)
-- [Internal npm Distribution](distribution.md)
-- [Verification](verification.md)
+- First time with agentOS: [build a cloud agent app](tutorials/build-cloud-agent-app.md).
+- Add a capability: [guides](guides/add-attached-stream.md).
+- Understand the model: [concepts](concepts/durable-truth.md).
+- Review route choices: [decisions](decisions/a52-documentation-substrate.md).
+- Check package intent: [runtime packages](runtime-packages.md).
+- Check API exports: [API reference](api/runtime.md).
+- Consume npm packages: [internal npm distribution](distribution.md).
 
-Source facts live in `docs/surface.json`, `docs/packages/*.md`,
-`docs/api/*.md`, and `docs/effect-skill.json`. Package README, `PUBLIC_API.md`,
-and `.effect-skill.json` files are generated projections.
+Facts live in `docs/**`; package README, `PUBLIC_API.md`, and the docs site are projections.

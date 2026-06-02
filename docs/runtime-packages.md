@@ -35,6 +35,7 @@ accidental exports; they are not stability or schema-freeze promises.
 | `@agent-os/image`                        | yes       | optional algebra   | provider-neutral image event namespace and reader algebra                                                   |
 | `@agent-os/ops-api`                      | yes       | tooling            | terminal ops API adapter, not substrate truth                                                               |
 | `@agent-os/ops-htmx`                     | yes       | tooling            | terminal ops UI adapter, not substrate truth                                                                |
+| `@agent-os/docs-site`                    | no        | tooling            | static documentation site projection, not documentation fact source                                         |
 
 <!-- agentos:generated runtime-package-map:end -->
 

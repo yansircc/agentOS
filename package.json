@@ -14,15 +14,20 @@
   "scripts": {
     "typecheck": "sh -c 'tsc -b --noEmit --force; code=$?; tsc -b --clean; exit $code'",
     "test": "vp run --cache -r test",
-    "docs:generate": "node scripts/generate-docs.mjs",
-    "docs:check": "node scripts/generate-docs.mjs --check",
+    "docs:generate": "node scripts/generate-docs.mjs && node scripts/project-docs-site.mjs",
+    "docs:check": "node scripts/generate-docs.mjs --check && node scripts/check-doc-structure.mjs && node scripts/project-docs-site.mjs --check",
     "effect-manifests:generate": "node scripts/generate-effect-skill-manifests.mjs",
     "effect-manifests:check": "node scripts/generate-effect-skill-manifests.mjs --check",
     "check:public-api": "node scripts/check-public-api.mjs",
     "check:source-aliases": "bun scripts/check-source-aliases.mjs",
     "check": "vp check && bun run docs:check && bun run effect-manifests:check && bun run check:public-api && bun run check:source-aliases && bun run check:distribution && bun run typecheck && bun run test",
     "check:runtime": "vp run --cache -r test:runtime",
-    "check:full": "bun run check && bun run check:runtime",
+    "check:full": "bun run check && bun run docs:site:check && bun run check:runtime",
+    "docs:project": "node scripts/project-docs-site.mjs",
+    "docs:project:watch": "node scripts/project-docs-site.mjs --watch",
+    "docs:site:dev": "sh -c 'node scripts/project-docs-site.mjs --watch & watcher=$!; trap \"kill $watcher\" INT TERM EXIT; bun run --cwd tooling/docs-site dev'",
+    "docs:site:build": "bun run docs:project && bun run --cwd tooling/docs-site build && node scripts/check-docs-site-build.mjs",
+    "docs:site:check": "bun run docs:check && bun run docs:site:build",
     "build:internal-packages": "node tooling/distribution/distribution.mjs build",
     "pack:internal": "node tooling/distribution/distribution.mjs pack",
     "check:distribution": "node tooling/distribution/distribution.mjs check",
@@ -45,7 +50,6 @@
     "vitest": "catalog:"
   },
   "overrides": {
-    "vite": "catalog:",
     "vitest": "catalog:"
   },
   "packageManager": "bun@1.3.14",

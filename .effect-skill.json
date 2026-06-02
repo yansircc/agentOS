@@ -145,6 +145,12 @@
       "dependencyOwnerReason": "runtime owns backend-neutral runtime dependency declarations"
     },
     {
+      "path": "tooling/docs-site",
+      "shape": ["library"],
+      "dependencyOwner": "workspace-root",
+      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+    },
+    {
       "path": "tooling/ops-api",
       "shape": ["library"],
       "dependencyOwner": "workspace-root",

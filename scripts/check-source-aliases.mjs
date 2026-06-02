@@ -61,7 +61,14 @@ const exportEntries = (packageDir, packageJson) => {
   if (!packageJson.name?.startsWith("@agent-os/")) {
     return [];
   }
-  const exportsValue = packageJson.exports ?? packageJson.main ?? "./src/index.ts";
+  const fallbackIndex = join(packageDir, "src", "index.ts");
+  const exportsValue =
+    packageJson.exports ??
+    packageJson.main ??
+    (existsSync(fallbackIndex) ? "./src/index.ts" : undefined);
+  if (exportsValue === undefined) {
+    return [];
+  }
   if (typeof exportsValue === "string") {
     return [[packageJson.name, toRepoPath(join(packageDir, exportsValue))]];
   }

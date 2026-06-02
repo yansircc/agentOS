@@ -355,6 +355,18 @@
       "readmeStatus": "Tooling package. It is an ops UI adapter and not a substrate package.",
       "primary": false,
       "published": true
+    },
+    {
+      "slug": "docs-site",
+      "name": "@agent-os/docs-site",
+      "path": "tooling/docs-site",
+      "status": "tooling",
+      "role": "Astro Starlight projection of docs/**",
+      "boundary": "static documentation site projection, not documentation fact source",
+      "need": "English documentation website",
+      "readmeStatus": "Private tooling package. It renders projected docs and is not published.",
+      "primary": false,
+      "published": false
     }
   ]
 }

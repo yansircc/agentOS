@@ -1,0 +1,51 @@
+# a52: Documentation Substrate
+
+## Situation
+
+agentOS needs a documentation website and a documentation governance boundary.
+Package READMEs, public API pages, runtime package tables, and the website are
+already projections, but readers still need one navigable docs surface.
+
+API reference and carrier reference facts are still hand-authored markdown. If
+a52 expands those pages as long-lived source facts, later TSDoc and schema
+generation will delete that work and every export or carrier change will
+require manual markdown churn.
+
+## Options
+
+- Keep package README files as the main docs surface.
+- Build a static documentation site from `docs/**` and keep generated outputs
+  as projections.
+- Delay the documentation website until API and carrier references are fully
+  generated.
+
+## Decision
+
+a52 ships an English-only Astro Starlight projection from `docs/**`. English is
+the default documentation language. Multilingual docs are deferred until the
+English substrate has held through real product work.
+
+Docs are split into tutorials, guides, concepts, decisions, package intent, and
+API reference. Templates and structural checks prevent cross-layer drift.
+Package READMEs remain npm-standalone generated projections with GitHub
+absolute docs links.
+
+a53 will move API facts to source exports plus TSDoc and generated reference
+pages. a54 will generate carrier and schema reference from structured carrier
+and schema declarations.
+
+## Kill Criterion
+
+If two consecutive export changes require hand-editing `docs/api/*.md` beyond
+symbol allowlist maintenance, start a53 before adding more hand-authored API
+reference. If the docs site requires server runtime behavior, revisit Starlight
+before adding app logic to `tooling/docs-site`. If two product docs need the
+same localized mirror before a53/a54 land, start a multilingual docs task
+instead of ad hoc translating individual pages.
+
+## Revisit
+
+Revisit when `@agent-os/attached-stream` has enough TSDoc coverage to pilot
+generated API reference, or when two carriers need the same generated event and
+schema reference shape. Revisit multilingual docs after the English site is used
+by at least one independent agent app adoption.

@@ -44,6 +44,20 @@ const table = (headers, rows) => {
   return [line(headers), divider, ...rows.map(line)].join("\n");
 };
 
+const githubDocsBase = "https://github.com/yansircc/agentOS/blob/main/docs";
+
+const rewriteDocsLinksForGithub = (text, sourceFile) =>
+  text.replace(/\[([^\]\n]+)\]\(([^)\s]+)(\s+"[^"]*")?\)/gu, (full, label, href, title = "") => {
+    if (!href.endsWith(".md") && !href.includes(".md#")) return full;
+    const [rawPath, rawAnchor] = href.split("#");
+    if (!rawPath.endsWith(".md")) return full;
+    const sourceDir = path.posix.dirname(sourceFile);
+    const target = path.posix.normalize(path.posix.join(sourceDir, rawPath));
+    if (!target.startsWith("docs/")) return full;
+    const anchor = rawAnchor === undefined ? "" : `#${rawAnchor}`;
+    return `[${label}](${githubDocsBase}/${target.slice("docs/".length)}${anchor}${title})`;
+  });
+
 const replaceBlock = (file, id, content) => {
   const source = read(file);
   const startMarker = `<!-- agentos:generated ${id}:start -->`;
@@ -119,6 +133,8 @@ for (const packagePath of workspacePackagePaths()) {
 for (const pkg of packages) {
   const packageDocPath = `docs/packages/${pkg.slug}.md`;
   const packageDoc = read(packageDocPath);
+  const packageSection = (heading) =>
+    rewriteDocsLinksForGithub(sectionBody(packageDoc, heading), packageDocPath);
   const readme = [
     generatedNotice(`docs/surface.json and ${packageDocPath}`),
     "",
@@ -126,7 +142,7 @@ for (const pkg of packages) {
     "",
     "## Purpose",
     "",
-    sectionBody(packageDoc, "Purpose"),
+    packageSection("Purpose"),
     "",
     "## Public API Status",
     "",
@@ -134,15 +150,15 @@ for (const pkg of packages) {
     "",
     "## Invariant",
     "",
-    sectionBody(packageDoc, "Invariant"),
+    packageSection("Invariant"),
     "",
     "## Minimal Usage",
     "",
-    sectionBody(packageDoc, "Minimal Usage"),
+    packageSection("Minimal Usage"),
     "",
     "## Verification",
     "",
-    sectionBody(packageDoc, "Verification"),
+    packageSection("Verification"),
     "",
   ].join("\n");
   write(`${pkg.path}/README.md`, readme);

@@ -1,0 +1,24 @@
+# Attached Streams
+
+## Problem
+
+Vibe-like applications need a live session that accepts repeated input, emits
+repeated output, can be cancelled, and settles explicitly when terminal.
+
+## Model
+
+An attached stream is live transport, not durable truth. A handler declares
+`mode`, `cancellation`, `onDetach`, `parseStart`, `run`, and `commitTerminal`.
+Intermediate frames move through WebSocket or SSE. Terminal frames are settled
+only through `commitTerminal`.
+
+## Non-Goals
+
+v1 does not promise reconnect, resume, hibernation, durable stream logs, or
+hour-long workspace process lifecycle.
+
+## Related
+
+- [a51 attached stream decision](../decisions/a51-attached-stream-substrate.md)
+- [Add an attached stream](../guides/add-attached-stream.md)
+- [Attached stream package](../packages/attached-stream.md)
