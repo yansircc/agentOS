@@ -19,12 +19,27 @@ modules inside the scoped spike until promotion is explicit.
 3. Use attached streams for live turn frames.
 4. Commit terminal run facts to the ledger.
 5. Read current run state through `MaterializedProjections`.
-6. Add workspace, tenant config, tools, deploy, HTTP, and ops as spike modules.
-7. Record each module status under `spikes/vibe-like-agent-app/docs/`.
-8. Promote a module only through a decision that moves code from `spikes/` to
-   `packages/`.
-9. Keep the exception, sunset, promotion, and retirement mechanics in
-   `decisions/a58-first-party-consumer-exception.md`.
+6. Add workspace state as projection modules: `workspace.file`,
+   `workspace.git`, `workspace.port`, `workspace.artifact`, and
+   `workspace.url`.
+7. Add tenant config as projection modules: `tenant.credential` and
+   `tenant.skill`.
+8. Add product tools in the spike with `defineTool`, authority contracts, and
+   symbolic deploy readback facts.
+9. Expose app-owned HTTP routes with `@effect/platform` HttpApi, `/openapi.json`,
+   and a Scalar `/reference` page. Do not add an agentOS HTTP wrapper package
+   until repeated cross-app boilerplate is proven.
+10. Keep ops generic: projection status/rebuild, stuck triggers, and active
+    streams. Product-specific ops stays in the spike.
+11. Record each module status under `spikes/vibe-like-agent-app/docs/`.
+12. Gate promotion on numeric acceptance metrics:
+    prompt to first frame under 2s p95, workspace mutation to projection under
+    500ms p95, cancel to abort under 1s p95, 1k-event rebuild under 2s, and
+    attached-stream detach to DO release under 30s.
+13. Promote a module only through a decision that moves code from `spikes/` to
+    `packages/`.
+14. Keep the exception, sunset, promotion, and retirement mechanics in
+    `decisions/a58-first-party-consumer-exception.md`.
 
 ## References
 

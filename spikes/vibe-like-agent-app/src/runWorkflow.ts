@@ -1,4 +1,4 @@
-import { Clock, Effect, ManagedRuntime, Schema } from "effect";
+import { Clock, Data, Effect, ManagedRuntime, Schema } from "effect";
 import { createInMemoryRuntimeBackend } from "@agent-os/backend-in-memory";
 import {
   Ledger,
@@ -28,6 +28,12 @@ export interface RunWorkflowLoopResult {
   };
   readonly state: RunWorkflowState;
 }
+
+export class RunWorkflowProjectionMissing extends Data.TaggedError(
+  "vibe_like.run_workflow_projection_missing",
+)<{
+  readonly runId: string;
+}> {}
 
 const payload = (value: unknown): Record<string, unknown> =>
   value !== null && typeof value === "object" ? (value as Record<string, unknown>) : {};
@@ -82,7 +88,7 @@ export const runWorkflowProjection = defineProjection({
   },
 });
 
-export const runFakeLocalLoop = async (
+export const runFakeLocalLoop = (
   prompt: string,
   scope = "vibe-like-spike",
 ): Promise<RunWorkflowLoopResult> => {
@@ -122,7 +128,7 @@ export const runFakeLocalLoop = async (
     });
     const readCompletedAt = yield* Clock.currentTimeMillis;
     if (row === null) {
-      return yield* Effect.fail(new Error("run.workflow projection row missing"));
+      return yield* new RunWorkflowProjectionMissing({ runId });
     }
     return {
       runId,
