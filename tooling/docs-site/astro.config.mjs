@@ -9,9 +9,18 @@ export default defineConfig({
       sidebar: [
         {
           label: "Start",
+          items: [{ label: "Quick Start", link: "/" }],
+        },
+        {
+          label: "Tutorials",
           items: [
-            { label: "Quick Start", link: "/" },
             { label: "Build a Cloud Agent App", slug: "tutorials/build-cloud-agent-app" },
+            { label: "Weather Tool LLM Loop", slug: "tutorials/weather-tool-llm-loop" },
+            { label: "Read a Projection", slug: "tutorials/read-a-projection" },
+            { label: "Durable Trigger Cancel", slug: "tutorials/durable-trigger-cancel" },
+            { label: "Output-Only Attached Stream", slug: "tutorials/output-only-attached-stream" },
+            { label: "Streaming Chatbot", slug: "tutorials/streaming-chatbot" },
+            { label: "Internal npm Consumer App", slug: "tutorials/internal-npm-consumer-app" },
           ],
         },
         {

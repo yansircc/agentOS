@@ -1,0 +1,92 @@
+# Durable Trigger Cancel
+
+## Goal
+
+Define one cooperative durable trigger, enqueue it, request cancellation, and
+observe the terminal cancellation fact.
+
+## What You Build
+
+An app-owned trigger with `acquire`, `commit`, and `commitCancelled`, registered
+through the Cloudflare DO facade.
+
+## Prerequisites
+
+- [Durable triggers guide](../guides/add-durable-trigger.md)
+- [Cloudflare DO backend](../packages/backend-cloudflare-do.md)
+- [Durable truth](../concepts/durable-truth.md)
+
+## Steps
+
+1. Define a cooperative trigger:
+
+   ```ts
+   const trigger = {
+     kind: "tutorial.cancelable",
+     intentEventKind: "tutorial.cancelable.requested",
+     cancellation: "cooperative",
+     parseIntent,
+     acquire: (intent, ctx) => runExternalWork(intent, { signal: ctx.signal }),
+     commit: (outcome, tx) => {
+       tx.insertEvent({ kind: "tutorial.cancelable.done", payload: outcome });
+     },
+     commitCancelled: (intent, cancellation, tx) => {
+       tx.insertEvent({
+         kind: "tutorial.cancelable.cancelled",
+         payload: { id: intent.id, reason: cancellation.reason ?? null },
+       });
+     },
+   } satisfies DurableTrigger<TutorialIntent, TutorialOutcome>;
+   ```
+
+2. Register it:
+
+   ```ts
+   export const AgentDO = defineAgentDO<Env>({
+     bindings: [],
+     triggers: [trigger],
+   });
+   ```
+
+3. Enqueue work and keep the returned intent id:
+
+   ```ts
+   const intent = await agent.enqueueTrigger({
+     triggerKind: "tutorial.cancelable",
+     payload: { id: "job-1" },
+     at: Date.now(),
+   });
+   ```
+
+4. Request cancellation:
+
+   ```ts
+   const cancel = await agent.cancelTrigger({
+     triggerKind: "tutorial.cancelable",
+     intentEventId: intent.id,
+     reason: "user",
+   });
+   ```
+
+5. Read ledger events or your app projection for
+   `tutorial.cancelable.cancelled`.
+
+## Checkpoint
+
+Interpret `cancel.status` as the request path:
+
+```text
+cancelled          pending row was terminally cancelled now
+requested          running row was marked and ctx.signal was aborted
+ignored            trigger declared cancellation: "ignored"
+not_found          no matching pending work exists
+already_completed  terminal success won before cancellation
+```
+
+The terminal user-visible fact still comes from `commit` or
+`commitCancelled`. Cancellation is cooperative; it is not a hidden timeout or
+forced discard of an already completed provider call.
+
+## Next
+
+Add live progress with [output-only attached streams](output-only-attached-stream.md).

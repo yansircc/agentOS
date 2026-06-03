@@ -1,0 +1,107 @@
+# Streaming Chatbot
+
+## Goal
+
+Build a bidirectional attached stream that accepts user input, emits assistant
+tokens, supports cancel, and commits terminal settlement.
+
+## What You Build
+
+One `mode: "bidi"` handler using a fake token generator. Replacing the token
+generator with a live provider is a later change axis.
+
+## Prerequisites
+
+- [Attached streams](../concepts/attached-streams.md)
+- [Output-only attached stream](output-only-attached-stream.md)
+- [Attached stream API](../api/attached-stream.md)
+
+## Steps
+
+1. Define the stable token source for the local tutorial:
+
+   ```ts
+   const fakeTokens = (message: string) => ["agentOS ", "reply to ", message];
+   ```
+
+2. Define a bidirectional handler:
+
+   ```ts
+   const chatbot = {
+     kind: "tutorial.streaming_chatbot",
+     mode: "bidi",
+     cancellation: "cooperative",
+     onDetach: "abort",
+     parseStart: (raw) => attachedStreamParseOk(raw),
+     run: async function* (_start, input, ctx) {
+       yield { kind: "progress", payload: { phase: "waiting_for_user" } };
+
+       for await (const frame of input) {
+         if (ctx.signal.aborted) {
+           yield { kind: "cancelled", reason: "cancelled", terminal: { cancelled: true } };
+           return;
+         }
+         if (frame.kind !== "input") continue;
+
+         for (const token of fakeTokens(String(frame.payload))) {
+           yield { kind: "output", channel: "assistant.delta", payload: token };
+         }
+         yield { kind: "completed", terminal: { ok: true } };
+         return;
+       }
+     },
+     commitTerminal: (terminal, tx) => {
+       tx.insertEvent({
+         kind: "tutorial.streaming_chatbot.settled",
+         payload: { kind: terminal.kind, terminal },
+       });
+     },
+   } satisfies AttachedStreamHandler<unknown, { readonly ok?: true }>;
+   ```
+
+3. Attach and send user input:
+
+   ```ts
+   const session = await streams.attach({ kind: "tutorial.streaming_chatbot", payload: {} });
+   await runtime.runPromise(
+     session.send({
+       kind: "input",
+       streamRef: session.streamRef,
+       seq: 0,
+       payload: "hello",
+     }),
+   );
+   ```
+
+4. Render `progress`, `output`, and terminal frames in the UI.
+
+5. Cancel from the UI with:
+
+   ```ts
+   await runtime.runPromise(session.cancel("user pressed stop"));
+   ```
+
+## Checkpoint
+
+Completed path:
+
+```text
+opened -> progress -> output* -> completed
+ledger: tutorial.streaming_chatbot.settled { kind: "completed" }
+```
+
+Cancel path:
+
+```text
+cancel returns requested
+handler observes ctx.signal.aborted
+cancelled terminal frame is emitted
+ledger: tutorial.streaming_chatbot.settled { kind: "cancelled" }
+```
+
+Live LLM streaming is not part of this checkpoint. Add it only after provider
+route, credential, and model facts have one source of truth.
+
+## Next
+
+Package the app path with [internal npm consumer app](internal-npm-consumer-app.md).
