@@ -224,7 +224,7 @@ export const InMemoryAdmissionLive = (
 
       const invalidate = (
         spec: InvalidateSpec,
-      ): Effect.Effect<{ readonly barrierId: number }, JsonStringifyError> =>
+      ): Effect.Effect<{ readonly barrierId: number }, SqlError | JsonStringifyError> =>
         Effect.gen(function* () {
           const ts = yield* Clock.currentTimeMillis;
           const [event] = yield* state.commitEvents([

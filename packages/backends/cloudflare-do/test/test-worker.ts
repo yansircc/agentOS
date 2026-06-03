@@ -20,8 +20,13 @@ import {
 } from "../src";
 import { withAgentDOTestingDrain } from "../src/testing";
 import {
+  defineProjection,
   triggerParseFail,
   attachedStreamParseOk,
+  projectionFail,
+  projectionIdentity,
+  projectionMalformed,
+  projectionPut,
   triggerParseOk,
   type AttachedStreamHandler,
   type DispatchTargetAdapter,
@@ -739,6 +744,44 @@ export const AttachedStreamTestDO = defineAgentDO<CloudflareAgentEnv>({
 });
 export type AttachedStreamTestDO = InstanceType<typeof AttachedStreamTestDO>;
 
+const materializedRunProjection = defineProjection({
+  kind: "run.workflow",
+  version: 1,
+  eventKinds: ["run.requested", "run.completed", "run.failed"],
+  identity: Schema.Struct({ runId: Schema.String }),
+  state: Schema.Struct({
+    runId: Schema.String,
+    status: Schema.Literal("requested", "completed"),
+    handoff: Schema.optional(Schema.String),
+  }),
+  identityKey: (identity) => identity.runId,
+  identify: (event) => {
+    const payload = event.payload;
+    if (payload === null || typeof payload !== "object") return projectionMalformed("payload");
+    const runId = (payload as { readonly runId?: unknown }).runId;
+    return typeof runId === "string" ? projectionIdentity({ runId }) : projectionMalformed("runId");
+  },
+  initial: (identity) => ({ runId: identity.runId, status: "requested" as const }),
+  reduce: (state, event) => {
+    if (event.kind === "run.failed") return projectionFail("projection rejected run.failed");
+    if (event.kind === "run.completed") {
+      const payload = event.payload as { readonly handoff?: unknown };
+      return projectionPut({
+        ...state,
+        status: "completed" as const,
+        ...(typeof payload.handoff === "string" ? { handoff: payload.handoff } : {}),
+      });
+    }
+    return projectionPut(state);
+  },
+});
+
+export const MaterializedProjectionTestDO = defineAgentDO<CloudflareAgentEnv>({
+  bindings: [],
+  projections: [materializedRunProjection],
+});
+export type MaterializedProjectionTestDO = InstanceType<typeof MaterializedProjectionTestDO>;
+
 interface WorkerEnv extends CloudflareAgentEnv {
   readonly STREAM_DO: DurableObjectNamespace<StreamTestDO>;
   readonly EXTENSION_DO: DurableObjectNamespace<ExtensionTestDO>;
@@ -748,6 +791,7 @@ interface WorkerEnv extends CloudflareAgentEnv {
   readonly TRIGGER_BOUNDARY_DO: DurableObjectNamespace<TriggerBoundaryTestDO>;
   readonly TRIGGER_CANCEL_DO: DurableObjectNamespace<TriggerCancelTestDO>;
   readonly ATTACHED_STREAM_DO: DurableObjectNamespace<AttachedStreamTestDO>;
+  readonly MATERIALIZED_PROJECTION_DO: DurableObjectNamespace<MaterializedProjectionTestDO>;
 }
 
 const parseLastEventId = (value: string | null): number => {

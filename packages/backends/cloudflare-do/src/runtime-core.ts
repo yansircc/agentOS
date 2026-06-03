@@ -5,11 +5,15 @@ import {
   AttachedStreams,
   DurableTriggerRegistry,
   Ledger,
+  MaterializedProjectionRegistry,
+  MaterializedProjections,
   Quota,
   TriggerPump,
+  makeProjectionRegistry,
   makeDurableTriggerRegistry,
   makeAttachedStreamRegistry,
   scheduledEventTrigger,
+  type AnyMaterializedProjectionDefinition,
 } from "@agent-os/runtime";
 import { SqlError, TriggerFactoryError } from "@agent-os/kernel/errors";
 import {
@@ -29,6 +33,7 @@ import {
   type CloudflareAttachedStreamSource,
 } from "./stream-factory";
 import { AttachedStreamsLive } from "./attached-stream";
+import { CloudflareMaterializedProjectionsLive } from "./materialized-projections";
 
 export type CloudflareBackendCoreServices =
   | EventBus
@@ -40,6 +45,8 @@ export type CloudflareBackendCoreServices =
   | TriggerPump
   | AttachedStreamRegistry
   | AttachedStreams
+  | MaterializedProjectionRegistry
+  | MaterializedProjections
   | Ledger;
 
 export const makeCloudflareBackendCoreLayer = <Env>(
@@ -50,8 +57,18 @@ export const makeCloudflareBackendCoreLayer = <Env>(
   dispatchTargets: DispatchTargetRegistry,
   appTriggers: CloudflareTriggerSource<Env> = [],
   appStreams: CloudflareAttachedStreamSource<Env> = [],
+  appProjections: ReadonlyArray<AnyMaterializedProjectionDefinition> = [],
 ): Layer.Layer<CloudflareBackendCoreServices, SqlError | TriggerFactoryError> => {
   const eventBusLayer = EventBusLive(handlers);
+  const projectionRegistryLayer = Layer.effect(
+    MaterializedProjectionRegistry,
+    makeProjectionRegistry(appProjections).pipe(
+      Effect.mapError((cause) => new SqlError({ cause })),
+    ),
+  );
+  const materializedProjectionLayer = CloudflareMaterializedProjectionsLive(ctx).pipe(
+    Layer.provide(projectionRegistryLayer),
+  );
   const dispatchRetryTrigger = deliveryRetryTrigger(ctx.storage.sql, scope, dispatchTargets);
   const triggerRegistryLayer = Layer.effect(
     DurableTriggerRegistry,
@@ -90,7 +107,7 @@ export const makeCloudflareBackendCoreLayer = <Env>(
   );
   const triggerDeps = Layer.mergeAll(eventBusLayer, triggerRegistryLayer, triggerLayer);
   const serviceLayer = Layer.mergeAll(
-    LedgerLive(ctx.storage.sql),
+    LedgerLive(ctx),
     SchedulerLive(ctx, scope),
     DispatchLive(ctx, scope, dispatchTargets).pipe(Layer.provide(triggerDeps)),
     ResourcesLive(ctx),
@@ -102,6 +119,8 @@ export const makeCloudflareBackendCoreLayer = <Env>(
     triggerLayer,
     streamRegistryLayer,
     attachedStreamLayer,
+    projectionRegistryLayer,
+    materializedProjectionLayer,
     serviceLayer,
   );
 };

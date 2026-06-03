@@ -68,6 +68,12 @@ import type {
   AttachedStreamStartSpec,
   CapabilityLease,
   DispatchReceiverResult,
+  AnyMaterializedProjectionDefinition,
+  MaterializedProjectionGetSpec,
+  MaterializedProjectionListSpec,
+  MaterializedProjectionRebuildResult,
+  MaterializedProjectionRow,
+  MaterializedProjectionStatus,
   SubmitResult,
   SubmitSpec,
 } from "@agent-os/runtime";
@@ -78,6 +84,7 @@ import {
   commitBoundaryEvent,
   Ledger,
   LlmTransport,
+  MaterializedProjections,
   TriggerPump,
   submitAgentEffect,
   validateBoundaryEventPayload,
@@ -135,6 +142,20 @@ export interface CloudflareAgentEnv {
 export interface AgentRuntimeReaderClient {
   readonly events: (opts?: EventQueryOptions) => Promise<LedgerEventRpc[]>;
   readonly streamEvents: (opts?: StreamEventsOptions) => Response;
+  readonly projectionGet: (
+    spec: MaterializedProjectionGetSpec,
+  ) => Promise<MaterializedProjectionRow | null>;
+  readonly projectionList: (
+    spec: MaterializedProjectionListSpec,
+  ) => Promise<ReadonlyArray<MaterializedProjectionRow>>;
+  readonly projectionStatus: (spec: {
+    readonly kind: string;
+    readonly scope: string;
+  }) => Promise<MaterializedProjectionStatus>;
+  readonly projectionRebuild: (spec: {
+    readonly kind: string;
+    readonly scope: string;
+  }) => Promise<MaterializedProjectionRebuildResult>;
 }
 
 export interface AgentTriggerIntentSpec {
@@ -218,6 +239,7 @@ const makeAgentRuntime = <Env extends CloudflareAgentEnv>(
   dispatchTargets: DispatchTargetRegistry,
   appTriggers: CloudflareTriggerSource<Env>,
   appStreams: CloudflareAttachedStreamSource<Env>,
+  appProjections: ReadonlyArray<AnyMaterializedProjectionDefinition>,
 ): ManagedRuntime.ManagedRuntime<CoreServices, SqlError | TriggerFactoryError> => {
   const backendCoreLayer = makeCloudflareBackendCoreLayer(
     ctx,
@@ -227,6 +249,7 @@ const makeAgentRuntime = <Env extends CloudflareAgentEnv>(
     dispatchTargets,
     appTriggers,
     appStreams,
+    appProjections,
   );
   const aiLayer = Layer.succeed(AiBinding, env.AI);
   const refResolverLayer = RefResolverLive(refs);
@@ -249,6 +272,7 @@ export interface AgentDurableObjectConfig<
   readonly dispatchTargets?: (env: Env) => DispatchTargetRegistry;
   readonly triggers?: CloudflareTriggerSource<Env>;
   readonly streams?: CloudflareAttachedStreamSource<Env>;
+  readonly projections?: ReadonlyArray<AnyMaterializedProjectionDefinition>;
   readonly scopeRefForScope?: (scope: string, env: Env) => ScopeRef | null;
   readonly eventHandlers?: (
     context: AgentEventHandlerContext<Runtime>,
@@ -265,6 +289,7 @@ export interface MaterializedAgentConfig<
   readonly dispatchTargets: DispatchTargetRegistry;
   readonly triggers: CloudflareTriggerSource<Env>;
   readonly streams: CloudflareAttachedStreamSource<Env>;
+  readonly projections: ReadonlyArray<AnyMaterializedProjectionDefinition>;
   readonly scopeRefForScope: (scope: string, env: Env) => ScopeRef | null;
   readonly eventHandlers?: (
     context: AgentEventHandlerContext<Runtime>,
@@ -295,6 +320,7 @@ export class AgentDurableObject<
   private readonly _dispatchTargets: DispatchTargetRegistry;
   private readonly _triggers: CloudflareTriggerSource<Env>;
   private readonly _streams: CloudflareAttachedStreamSource<Env>;
+  private readonly _projections: ReadonlyArray<AnyMaterializedProjectionDefinition>;
   private readonly _scopeRefForScope: (scope: string, env: Env) => ScopeRef | null;
   private _runtime?: ManagedRuntime.ManagedRuntime<CoreServices, SqlError | TriggerFactoryError>;
 
@@ -306,6 +332,7 @@ export class AgentDurableObject<
     this._dispatchTargets = config.dispatchTargets;
     this._triggers = config.triggers;
     this._streams = config.streams;
+    this._projections = config.projections;
     this._scopeRefForScope = config.scopeRefForScope;
 
     for (const registration of config.eventHandlers?.(
@@ -329,6 +356,7 @@ export class AgentDurableObject<
         this._dispatchTargets,
         this._triggers,
         this._streams,
+        this._projections,
       );
     }
     return this._runtime;
@@ -618,6 +646,50 @@ export class AgentDurableObject<
       return new Response(JSON.stringify({ error: scope._tag }), { status: 500 });
     }
     return createEventStreamResponse(this.runtimeFor(scope), scope, opts);
+  }
+
+  projectionGet(spec: MaterializedProjectionGetSpec): Promise<MaterializedProjectionRow | null> {
+    return this.runScoped(() =>
+      Effect.gen(function* () {
+        const projections = yield* MaterializedProjections;
+        return yield* projections.get(spec);
+      }),
+    );
+  }
+
+  projectionList(
+    spec: MaterializedProjectionListSpec,
+  ): Promise<ReadonlyArray<MaterializedProjectionRow>> {
+    return this.runScoped(() =>
+      Effect.gen(function* () {
+        const projections = yield* MaterializedProjections;
+        return yield* projections.list(spec);
+      }),
+    );
+  }
+
+  projectionStatus(spec: {
+    readonly kind: string;
+    readonly scope: string;
+  }): Promise<MaterializedProjectionStatus> {
+    return this.runScoped(() =>
+      Effect.gen(function* () {
+        const projections = yield* MaterializedProjections;
+        return yield* projections.status(spec);
+      }),
+    );
+  }
+
+  projectionRebuild(spec: {
+    readonly kind: string;
+    readonly scope: string;
+  }): Promise<MaterializedProjectionRebuildResult> {
+    return this.runScoped(() =>
+      Effect.gen(function* () {
+        const projections = yield* MaterializedProjections;
+        return yield* projections.rebuild(spec);
+      }),
+    );
   }
 
   /** Emit a ledger event NOW for this DO's scope.
@@ -917,6 +989,7 @@ export const createAgentDurableObject = <Env extends CloudflareAgentEnv>(
         dispatchTargets: config.dispatchTargets?.(env) ?? {},
         triggers: config.triggers ?? [],
         streams: config.streams ?? [],
+        projections: config.projections ?? [],
         scopeRefForScope: config.scopeRefForScope ?? (() => null),
         eventHandlers: config.eventHandlers,
       });

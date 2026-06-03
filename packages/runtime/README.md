@@ -18,6 +18,14 @@ Runtime code expresses programs against Effect Tags. It does not import Worker
 modules, Durable Object state, SQL storage implementations, or platform alarm
 APIs.
 
+Materialized projections are the backend-neutral current-state counterpart to
+the ledger. Apps declare `defineProjection({ kind, version, eventKinds,
+identity, state, identityKey, identify, initial, reduce })`; backends own table
+storage, transaction coupling, status, and rebuild. Reducers are synchronous.
+Projection rows store refs and metadata only; bytes, zip bodies, raw secrets,
+provider URLs, tokens, and account ids remain outside ledger-visible state.
+Version mismatch reports `needs_rebuild`; backends do not silently repair rows.
+
 Durable trigger authors depend on runtime for the shared trigger algebra:
 `DurableTrigger`, `AcquireCtx`, `TriggerTx`, trigger parse helpers,
 `DurableTriggerRegistry`, `makeDurableTriggerRegistry`, `getDurableTrigger`,
@@ -91,6 +99,12 @@ Attached stream handlers use the same runtime package:
 
 ```ts
 import type { AttachedStreamHandler } from "@agent-os/runtime";
+```
+
+Materialized projections are registered through the backend facade:
+
+```ts
+import { defineProjection, type MaterializedProjections } from "@agent-os/runtime";
 ```
 
 ## Verification

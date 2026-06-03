@@ -23,5 +23,6 @@ application authorization.
 ## Related
 
 - [Attached streams](/concepts/attached-streams/)
+- [Materialized projections](/concepts/materialized-projections/)
 - [Boundary contract](/boundary-contract/)
 - [Runtime package](/packages/runtime/)

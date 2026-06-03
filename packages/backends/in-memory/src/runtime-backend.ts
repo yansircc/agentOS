@@ -8,15 +8,20 @@ import {
   DurableTriggerRegistry,
   Ledger,
   LlmTransport,
+  MaterializedProjectionRegistry,
+  MaterializedProjections,
   Quota,
   Resources,
   Scheduler,
   TriggerPump,
+  makeProjectionRegistry,
+  makeProjectionRegistryResult,
   makeDurableTriggerRegistry,
   makeAttachedStreamRegistry,
   scheduledEventTrigger,
   type AnyAttachedStreamHandler,
   type AnyDurableTrigger,
+  type AnyMaterializedProjectionDefinition,
 } from "@agent-os/runtime";
 import {
   createInMemoryBackendState,
@@ -29,6 +34,7 @@ import { InMemoryDispatchLive, deliveryRetryTrigger } from "./dispatch";
 import type { InMemoryDispatchTargetRegistry } from "./dispatch-types";
 import { InMemoryLedgerLive } from "./ledger";
 import { InMemoryLlmTransportLive, type InMemoryLlmTransportOptions } from "./llm";
+import { InMemoryMaterializedProjectionsLive } from "./materialized-projections";
 import { InMemoryQuotaLive } from "./quota";
 import { InMemoryResourcesLive } from "./resources";
 import { InMemorySchedulerLive } from "./scheduler";
@@ -44,7 +50,9 @@ export type InMemoryRuntimeServices =
   | LlmTransport
   | TriggerPump
   | Admission
-  | AttachedStreams;
+  | AttachedStreams
+  | MaterializedProjectionRegistry
+  | MaterializedProjections;
 
 export interface InMemoryRuntimeLayerOptions {
   readonly state?: InMemoryBackendState;
@@ -54,6 +62,7 @@ export interface InMemoryRuntimeLayerOptions {
   readonly llm?: InMemoryLlmTransportOptions;
   readonly triggers?: ReadonlyArray<AnyDurableTrigger>;
   readonly streams?: ReadonlyArray<AnyAttachedStreamHandler>;
+  readonly projections?: ReadonlyArray<AnyMaterializedProjectionDefinition>;
 }
 
 export interface InMemoryRuntimeBackend {
@@ -64,7 +73,12 @@ export interface InMemoryRuntimeBackend {
 export const createInMemoryRuntimeBackend = (
   options: InMemoryRuntimeLayerOptions,
 ): InMemoryRuntimeBackend => {
-  const state = options.state ?? createInMemoryBackendState({ handlers: options.handlers });
+  const projections = options.projections ?? [];
+  const state =
+    options.state ?? createInMemoryBackendState({ handlers: options.handlers, projections });
+  if (options.state !== undefined) {
+    state.setProjectionRegistryResult(makeProjectionRegistryResult(projections));
+  }
   const llmLayer = InMemoryLlmTransportLive(options.llm);
   const admissionLayer = InMemoryAdmissionLive(state).pipe(Layer.provide(llmLayer));
   const dispatchRetryTrigger = deliveryRetryTrigger(state, options.dispatchTargets ?? {});
@@ -86,6 +100,11 @@ export const createInMemoryRuntimeBackend = (
       ],
     }).pipe(Effect.mapError((cause) => new SqlError({ cause }))),
   );
+  const projectionRegistryLayer = Layer.effect(
+    MaterializedProjectionRegistry,
+    makeProjectionRegistry(projections).pipe(Effect.mapError((cause) => new SqlError({ cause }))),
+  );
+  const materializedProjectionLayer = InMemoryMaterializedProjectionsLive(state);
   const attachedStreamLayer = InMemoryAttachedStreamsLive(state, options.scope).pipe(
     Layer.provide(streamRegistryLayer),
   );
@@ -108,6 +127,8 @@ export const createInMemoryRuntimeBackend = (
       triggerRegistryLayer,
       streamRegistryLayer,
       attachedStreamLayer,
+      projectionRegistryLayer,
+      materializedProjectionLayer,
     ),
   };
 };

@@ -3,6 +3,7 @@
 What do you need?
 
 - First time with agentOS: [build a cloud agent app](tutorials/build-cloud-agent-app.md).
+- Build a coding app: [vibe-like app guide](guides/build-vibe-like-coding-app.md).
 - Add a capability: [guides](guides/add-attached-stream.md).
 - Understand the model: [concepts](concepts/durable-truth.md).
 - Check package intent: [runtime packages](runtime-packages.md).

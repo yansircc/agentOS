@@ -19,9 +19,11 @@ Application code registers app-owned durable triggers only through the facade
 configuration. `defineAgentDO({ triggers })` is the Cloudflare DO construction
 surface for trigger registration. Pure triggers are registered as an array.
 Backend-bound triggers use `triggers(ctx)` where `ctx` exposes `env`, `scope`,
-and DO-local `sql`; they may close over `ctx.sql` for app-owned projection
-writes inside trigger `commit`. The backend builds the registry, validates
-duplicate kinds, and uses that same registry for submit and drain. Apps must not
+and DO-local `sql`; they may close over `ctx.sql` for app-owned provider
+idempotency or custom tables. Materialized current state should use
+`defineAgentDO({ projections })` instead of trigger-local projection writes. The
+backend builds registries, validates duplicate kinds, and uses those same
+registries for submit, drain, stream, and projection operations. Apps must not
 import `runtime-core`, `due-work`, SQL helpers, inserted-event helpers, or
 backend state internals.
 
@@ -51,12 +53,18 @@ only from `@agent-os/backend-cloudflare-do/testing` with explicit
 `__drain*ForTesting` method names; production app routes must not call it.
 
 Backend primitives stop at append-only ledger order, trigger identity, tx-local
-ledger reads, and testing-only drain. App-owned projection tables and provider
-idempotency key mappings stay in application code until at least two
-independent apps or adapters prove the same shape should become substrate.
-Factories must be idempotent in resource acquisition: Durable Object eviction
-can cause `triggers(ctx)` to run again, and the backend does not promise a
-stable factory call count.
+ledger reads, materialized projection tables, and testing-only drain. Custom
+product SQL tables and provider idempotency key mappings stay in application
+code until at least two independent apps or adapters prove the same shape should
+become substrate. Factories must be idempotent in resource acquisition: Durable
+Object eviction can cause `triggers(ctx)` to run again, and the backend does not
+promise a stable factory call count.
+
+`defineAgentDO({ projections })` registers materialized projection
+declarations. Every ledger insert applies matching projection reducers in the
+same Durable Object transaction. Reducer failure rolls back the ledger insert.
+`projectionStatus` reports version mismatch as `needs_rebuild`; `projectionRebuild`
+is explicit and replays rows from the ledger. There is no hidden auto-repair.
 
 `defineAgentDO({ streams })` registers attached stream handlers. `attachStream`
 returns WebSocket for `mode: "bidi"` and SSE for `mode: "output_only"`;
@@ -124,12 +132,27 @@ export const AgentDO = defineAgentDO<Env>({
 });
 ```
 
-Projection-touching triggers use the Cloudflare-bound factory form:
+Materialized projections use runtime declarations and the facade registration
+path:
 
 ```ts
+import { defineProjection } from "@agent-os/runtime";
+
+const runs = defineProjection({
+  kind: "run.workflow",
+  version: 1,
+  eventKinds: ["run.requested", "run.completed"],
+  identity,
+  state,
+  identityKey,
+  identify,
+  initial,
+  reduce,
+});
+
 export const AgentDO = defineAgentDO<Env>({
   bindings: [],
-  triggers: (ctx) => [requestConfirmTrigger(ctx.sql)],
+  projections: [runs],
 });
 ```
 

@@ -36,6 +36,12 @@ const ensureSchema = (sql: SqlStorage): Effect.Effect<void, SqlError> =>
     catch: (cause) => new SqlError({ cause }),
   }).pipe(Effect.asVoid);
 
+const storageSql = (storage: DurableObjectState | SqlStorage): SqlStorage =>
+  "storage" in storage ? storage.storage.sql : storage;
+
+const transactionSync = <A>(storage: DurableObjectState | SqlStorage, body: () => A): A =>
+  "storage" in storage ? storage.storage.transactionSync(body) : body();
+
 export const selectLedgerEvents = (
   sql: SqlStorage,
   scope: string,
@@ -69,10 +75,13 @@ export const selectLedgerEvents = (
     );
 };
 
-export const LedgerLive = (sql: SqlStorage): Layer.Layer<Ledger, SqlError, EventBus> =>
+export const LedgerLive = (
+  storage: DurableObjectState | SqlStorage,
+): Layer.Layer<Ledger, SqlError, EventBus> =>
   Layer.scoped(
     Ledger,
     Effect.gen(function* () {
+      const sql = storageSql(storage);
       yield* ensureSchema(sql);
       const bus = yield* EventBus;
 
@@ -83,13 +92,15 @@ export const LedgerLive = (sql: SqlStorage): Layer.Layer<Ledger, SqlError, Event
             const payloadStr = yield* safeStringify(payload);
             const event = yield* Effect.try({
               try: () =>
-                insertLedgerEvent(sql, {
-                  ts,
-                  kind,
-                  scope,
-                  payloadStr,
-                  payload,
-                }),
+                transactionSync(storage, () =>
+                  insertLedgerEvent(sql, {
+                    ts,
+                    kind,
+                    scope,
+                    payloadStr,
+                    payload,
+                  }),
+                ),
               catch: (cause) => new SqlError({ cause }),
             });
             yield* fireLedgerEvents(bus, [event]);

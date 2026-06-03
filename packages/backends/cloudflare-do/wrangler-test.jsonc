@@ -54,6 +54,10 @@
         "name": "ATTACHED_STREAM_DO",
         "class_name": "AttachedStreamTestDO",
       },
+      {
+        "name": "MATERIALIZED_PROJECTION_DO",
+        "class_name": "MaterializedProjectionTestDO",
+      },
     ],
   },
   "migrations": [
@@ -72,6 +76,7 @@
         "TriggerTestingDrainTestDO",
         "TriggerCancelTestDO",
         "AttachedStreamTestDO",
+        "MaterializedProjectionTestDO",
       ],
     },
   ],

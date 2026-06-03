@@ -1,6 +1,7 @@
 import type { Effect } from "effect";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import type { EventBusService } from "./event-bus";
+import { applyRegisteredMaterializedProjectionEvents } from "../materialized-projections";
 
 export interface InsertLedgerEventSpec {
   readonly ts: number;
@@ -18,13 +19,15 @@ export const insertLedgerEvent = (sql: SqlStorage, spec: InsertLedgerEventSpec):
     spec.scope,
     spec.payloadStr,
   );
-  return {
+  const event: LedgerEvent = {
     id: Number(cursor.one().id),
     ts: spec.ts,
     kind: spec.kind,
     scope: spec.scope,
     payload: spec.payload,
   };
+  applyRegisteredMaterializedProjectionEvents(sql, [event]);
+  return event;
 };
 
 export const fireLedgerEvents = (

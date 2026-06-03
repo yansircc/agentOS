@@ -18,6 +18,7 @@ title: "@agent-os/backend-in-memory Public API Intent"
 - `.:InMemoryLedgerLive`
 - `.:InMemoryLlmTransportLive`
 - `.:InMemoryLlmTransportOptions`
+- `.:InMemoryMaterializedProjectionsLive`
 - `.:InMemoryQuotaLive`
 - `.:InMemoryResourcesLive`
 - `.:InMemoryRuntimeBackend`

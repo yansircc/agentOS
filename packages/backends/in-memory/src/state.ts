@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 import {
   JsonStringifyError,
   DurableTriggerCommitReturnedThenable,
@@ -18,11 +18,24 @@ import {
 } from "@agent-os/backend-protocol";
 import {
   scheduledEventIntentPayload,
+  applyProjectionEvent,
+  getProjection,
+  makeProjectionRegistryResult,
   getDurableTrigger,
+  type AnyMaterializedProjectionDefinition,
   type AttachedStreamTx,
   type AttachedStreamTerminal,
+  type MaterializedProjectionRebuildResult,
+  type MaterializedProjectionRow,
+  type MaterializedProjectionStatus,
+  type ProjectionApplicationError,
+  type ProjectionRegistry,
+  type ProjectionRegistryBuildResult,
+  type ProjectionRegistryError,
+  type ProjectionReducerReturnedThenable,
   type TriggerRegistry,
   type TriggerTx,
+  UnregisteredProjectionKind,
 } from "@agent-os/runtime";
 import type { DispatchOutboxRow } from "./dispatch-types";
 
@@ -65,8 +78,17 @@ interface InMemoryDueWorkRow {
   cancelledAt: number | null;
 }
 
+interface InMemoryProjectionMeta {
+  version: number;
+  status: "current" | "needs_rebuild";
+  lastAppliedEventId: number;
+  lastRebuiltEventId: number | null;
+  updatedAt: number | null;
+}
+
 export interface InMemoryBackendStateOptions {
   readonly handlers?: Iterable<InMemoryEventHandlerRegistration>;
+  readonly projections?: Iterable<AnyMaterializedProjectionDefinition>;
 }
 
 const validateSerializablePayload = (payload: unknown): Effect.Effect<void, JsonStringifyError> =>
@@ -96,6 +118,27 @@ const eventToRpc = (event: LedgerEvent): LedgerEventRpc => ({
   payload: event.payload,
 });
 
+const projectionRowKey = (scope: string, kind: string, identityKey: string): string =>
+  JSON.stringify([scope, kind, identityKey]);
+
+const projectionMetaKey = (scope: string, kind: string): string => JSON.stringify([scope, kind]);
+
+const cloneProjectionRows = (
+  rows: ReadonlyMap<string, MaterializedProjectionRow>,
+): Map<string, MaterializedProjectionRow> => new Map(rows);
+
+const cloneProjectionMeta = (
+  meta: ReadonlyMap<string, InMemoryProjectionMeta>,
+): Map<string, InMemoryProjectionMeta> => new Map(meta);
+
+const normalizeProjectionLimit = (limit: number | undefined): number =>
+  limit === undefined
+    ? DEFAULT_EVENT_LIMIT
+    : Math.max(
+        0,
+        Math.min(MAX_EVENT_LIMIT, normalizeNonNegativeInteger(limit, DEFAULT_EVENT_LIMIT)),
+      );
+
 export class InMemoryBackendState {
   private nextEventId = 1;
   private nextDueWorkId = 1;
@@ -104,11 +147,261 @@ export class InMemoryBackendState {
   private readonly handlers = new Map<string, Set<EventHandler>>();
   private readonly dueWork: InMemoryDueWorkRow[] = [];
   private readonly outbox = new Map<number, DispatchOutboxRow>();
+  private projectionRegistry: ProjectionRegistry;
+  private projectionRegistryError: ProjectionRegistryError | null = null;
+  private readonly projectionRows = new Map<string, MaterializedProjectionRow>();
+  private readonly projectionMeta = new Map<string, InMemoryProjectionMeta>();
 
   constructor(options: InMemoryBackendStateOptions = {}) {
+    this.projectionRegistry = new Map();
+    this.setProjectionRegistryResult(makeProjectionRegistryResult(options.projections ?? []));
     for (const registration of options.handlers ?? []) {
       this.addHandler(registration.kind, registration.handler);
     }
+  }
+
+  setProjectionRegistry(registry: ProjectionRegistry): void {
+    this.projectionRegistry = registry;
+    this.projectionRegistryError = null;
+  }
+
+  setProjectionRegistryResult(result: ProjectionRegistryBuildResult): void {
+    if (result._tag === "success") {
+      this.setProjectionRegistry(result.registry);
+    } else {
+      this.projectionRegistry = new Map();
+      this.projectionRegistryError = result.error;
+    }
+  }
+
+  private projectionRegistryEffect(): Effect.Effect<ProjectionRegistry, ProjectionRegistryError> {
+    return this.projectionRegistryError === null
+      ? Effect.succeed(this.projectionRegistry)
+      : Effect.fail(this.projectionRegistryError);
+  }
+
+  private projectionDefinitionsForEvent(
+    eventKind: string,
+    registry: ProjectionRegistry = this.projectionRegistry,
+  ): ReadonlyArray<AnyMaterializedProjectionDefinition> {
+    return Array.from(registry.values()).filter((projection) =>
+      projection.eventKinds.includes(eventKind),
+    );
+  }
+
+  private replaceProjectionState(
+    rows: ReadonlyMap<string, MaterializedProjectionRow>,
+    meta: ReadonlyMap<string, InMemoryProjectionMeta>,
+  ): void {
+    this.projectionRows.clear();
+    for (const [key, row] of rows) this.projectionRows.set(key, row);
+    this.projectionMeta.clear();
+    for (const [key, value] of meta) this.projectionMeta.set(key, value);
+  }
+
+  private applyProjectionEventsTo(
+    rows: Map<string, MaterializedProjectionRow>,
+    meta: Map<string, InMemoryProjectionMeta>,
+    events: ReadonlyArray<LedgerEvent>,
+    definitionsForEvent: (
+      eventKind: string,
+    ) => ReadonlyArray<AnyMaterializedProjectionDefinition> = (eventKind) =>
+      this.projectionDefinitionsForEvent(eventKind),
+  ): Effect.Effect<void, ProjectionApplicationError | ProjectionReducerReturnedThenable> {
+    return Effect.gen(this, function* () {
+      for (const event of events) {
+        const definitions = definitionsForEvent(event.kind);
+        for (const projection of definitions) {
+          const result = yield* applyProjectionEvent(projection, event, (identityKey) => {
+            const row = rows.get(projectionRowKey(event.scope, projection.kind, identityKey));
+            return row === undefined ? null : { identity: row.identity, state: row.state };
+          });
+          if (result._tag === "put") {
+            rows.set(projectionRowKey(event.scope, projection.kind, result.identityKey), {
+              kind: projection.kind,
+              scope: event.scope,
+              identityKey: result.identityKey,
+              identity: result.identity,
+              state: result.state,
+              version: projection.version,
+              updatedEventId: event.id,
+              updatedAt: event.ts,
+            });
+          } else if (result._tag === "delete") {
+            rows.delete(projectionRowKey(event.scope, projection.kind, result.identityKey));
+          }
+          const key = projectionMetaKey(event.scope, projection.kind);
+          const current = meta.get(key);
+          meta.set(key, {
+            version: projection.version,
+            status: "current",
+            lastAppliedEventId: event.id,
+            lastRebuiltEventId: current?.lastRebuiltEventId ?? null,
+            updatedAt: event.ts,
+          });
+        }
+      }
+    });
+  }
+
+  private prepareProjectionState(events: ReadonlyArray<LedgerEvent>): Effect.Effect<
+    {
+      readonly rows: Map<string, MaterializedProjectionRow>;
+      readonly meta: Map<string, InMemoryProjectionMeta>;
+    },
+    SqlError
+  > {
+    if (events.length === 0) {
+      return Effect.succeed({
+        rows: cloneProjectionRows(this.projectionRows),
+        meta: cloneProjectionMeta(this.projectionMeta),
+      });
+    }
+    return Effect.gen(this, function* () {
+      const registry = yield* this.projectionRegistryEffect().pipe(
+        Effect.mapError((cause) => new SqlError({ cause })),
+      );
+      if (registry.size === 0) {
+        return {
+          rows: cloneProjectionRows(this.projectionRows),
+          meta: cloneProjectionMeta(this.projectionMeta),
+        };
+      }
+      const rows = cloneProjectionRows(this.projectionRows);
+      const meta = cloneProjectionMeta(this.projectionMeta);
+      yield* this.applyProjectionEventsTo(rows, meta, events, (eventKind) =>
+        this.projectionDefinitionsForEvent(eventKind, registry),
+      ).pipe(Effect.mapError((cause) => new SqlError({ cause })));
+      return { rows, meta };
+    });
+  }
+
+  projectionGet(spec: {
+    readonly kind: string;
+    readonly scope: string;
+    readonly identity: unknown;
+  }): Effect.Effect<MaterializedProjectionRow | null, SqlError | UnregisteredProjectionKind> {
+    return Effect.gen(this, function* () {
+      const registry = yield* this.projectionRegistryEffect().pipe(
+        Effect.mapError((cause) => new SqlError({ cause })),
+      );
+      const projection = yield* getProjection(registry, spec.kind);
+      const identity = yield* Effect.try({
+        try: () => Schema.decodeUnknownSync(projection.identity)(spec.identity),
+        catch: (cause) => new SqlError({ cause }),
+      });
+      const identityKey = projection.identityKey(identity);
+      return this.projectionRows.get(projectionRowKey(spec.scope, spec.kind, identityKey)) ?? null;
+    });
+  }
+
+  projectionList(spec: {
+    readonly kind: string;
+    readonly scope: string;
+    readonly limit?: number;
+    readonly afterKey?: string;
+  }): Effect.Effect<
+    ReadonlyArray<MaterializedProjectionRow>,
+    SqlError | UnregisteredProjectionKind
+  > {
+    return Effect.gen(this, function* () {
+      const registry = yield* this.projectionRegistryEffect().pipe(
+        Effect.mapError((cause) => new SqlError({ cause })),
+      );
+      yield* getProjection(registry, spec.kind);
+      const limit = normalizeProjectionLimit(spec.limit);
+      return Array.from(this.projectionRows.values())
+        .filter((row) => {
+          if (row.scope !== spec.scope || row.kind !== spec.kind) return false;
+          if (spec.afterKey !== undefined && row.identityKey <= spec.afterKey) return false;
+          return true;
+        })
+        .sort((left, right) => left.identityKey.localeCompare(right.identityKey))
+        .slice(0, limit);
+    });
+  }
+
+  projectionStatus(spec: {
+    readonly kind: string;
+    readonly scope: string;
+  }): Effect.Effect<MaterializedProjectionStatus, SqlError | UnregisteredProjectionKind> {
+    return Effect.gen(this, function* () {
+      const registry = yield* this.projectionRegistryEffect().pipe(
+        Effect.mapError((cause) => new SqlError({ cause })),
+      );
+      const projection = yield* getProjection(registry, spec.kind);
+      const meta = this.projectionMeta.get(projectionMetaKey(spec.scope, spec.kind));
+      if (meta === undefined) {
+        return {
+          kind: spec.kind,
+          scope: spec.scope,
+          version: projection.version,
+          status: "current" as const,
+          lastAppliedEventId: 0,
+          lastRebuiltEventId: null,
+          updatedAt: null,
+        };
+      }
+      return {
+        kind: spec.kind,
+        scope: spec.scope,
+        version: projection.version,
+        status:
+          meta.status === "current" && meta.version === projection.version
+            ? ("current" as const)
+            : ("needs_rebuild" as const),
+        lastAppliedEventId: meta.lastAppliedEventId,
+        lastRebuiltEventId: meta.lastRebuiltEventId,
+        updatedAt: meta.updatedAt,
+      };
+    });
+  }
+
+  projectionRebuild(spec: {
+    readonly kind: string;
+    readonly scope: string;
+  }): Effect.Effect<
+    MaterializedProjectionRebuildResult,
+    | SqlError
+    | UnregisteredProjectionKind
+    | ProjectionApplicationError
+    | ProjectionReducerReturnedThenable
+  > {
+    return Effect.gen(this, function* () {
+      const registry = yield* this.projectionRegistryEffect().pipe(
+        Effect.mapError((cause) => new SqlError({ cause })),
+      );
+      const projection = yield* getProjection(registry, spec.kind);
+      const rows = cloneProjectionRows(this.projectionRows);
+      const meta = cloneProjectionMeta(this.projectionMeta);
+      for (const key of rows.keys()) {
+        const row = rows.get(key);
+        if (row?.scope === spec.scope && row.kind === spec.kind) rows.delete(key);
+      }
+      meta.delete(projectionMetaKey(spec.scope, spec.kind));
+      const events = this.rows.filter(
+        (event) => event.scope === spec.scope && projection.eventKinds.includes(event.kind),
+      );
+      yield* this.applyProjectionEventsTo(rows, meta, events, (eventKind) =>
+        projection.eventKinds.includes(eventKind) ? [projection] : [],
+      );
+      const last = events.at(-1) ?? null;
+      const statusKey = projectionMetaKey(spec.scope, spec.kind);
+      const current = meta.get(statusKey);
+      meta.set(statusKey, {
+        version: projection.version,
+        status: "current",
+        lastAppliedEventId: current?.lastAppliedEventId ?? 0,
+        lastRebuiltEventId: last?.id ?? 0,
+        updatedAt: current?.updatedAt ?? null,
+      });
+      this.replaceProjectionState(rows, meta);
+      const rebuilt = Array.from(rows.values()).filter(
+        (row) => row.scope === spec.scope && row.kind === spec.kind,
+      ).length;
+      const status = yield* this.projectionStatus(spec);
+      return { ...status, rows: rebuilt };
+    });
   }
 
   addHandler(kind: string, handler: EventHandler): InMemoryEventSubscription {
@@ -181,32 +474,33 @@ export class InMemoryBackendState {
 
   commitEvents(
     specs: ReadonlyArray<InMemoryEventSpec>,
-  ): Effect.Effect<ReadonlyArray<LedgerEvent>, JsonStringifyError> {
+  ): Effect.Effect<ReadonlyArray<LedgerEvent>, JsonStringifyError | SqlError> {
     return this.commitPrepared(() => specs);
   }
 
   commitPrepared(
     makeSpecs: (nextEventId: number) => ReadonlyArray<InMemoryEventSpec>,
-  ): Effect.Effect<ReadonlyArray<LedgerEvent>, JsonStringifyError> {
+  ): Effect.Effect<ReadonlyArray<LedgerEvent>, JsonStringifyError | SqlError> {
     return Effect.gen(this, function* () {
       const startId = this.nextEventId;
       const specs = makeSpecs(startId);
       yield* Effect.forEach(specs, (spec) => validateSerializablePayload(spec.payload), {
         discard: true,
       });
-      const committed = yield* Effect.sync(() => {
-        const committed = specs.map(
-          (spec, index): LedgerEvent => ({
-            id: startId + index,
-            ts: spec.ts ?? startId + index,
-            kind: spec.kind,
-            scope: spec.scope,
-            payload: spec.payload,
-          }),
-        );
+      const committed = specs.map(
+        (spec, index): LedgerEvent => ({
+          id: startId + index,
+          ts: spec.ts ?? startId + index,
+          kind: spec.kind,
+          scope: spec.scope,
+          payload: spec.payload,
+        }),
+      );
+      const projectionState = yield* this.prepareProjectionState(committed);
+      yield* Effect.sync(() => {
         this.nextEventId += committed.length;
         this.rows.push(...committed);
-        return committed;
+        this.replaceProjectionState(projectionState.rows, projectionState.meta);
       });
       yield* this.fireMany(committed);
       return committed;
@@ -223,21 +517,23 @@ export class InMemoryBackendState {
       readonly intentEventKind: string;
     }) => InMemoryEventSpec,
     afterCommit?: (event: LedgerEvent) => void,
-  ): Effect.Effect<LedgerEvent, JsonStringifyError | UnregisteredDurableTriggerKind> {
+  ): Effect.Effect<LedgerEvent, JsonStringifyError | SqlError | UnregisteredDurableTriggerKind> {
     return Effect.gen(this, function* () {
       const trigger = yield* getDurableTrigger(registry, triggerKind);
       const spec = makeSpec(trigger);
       yield* validateSerializablePayload(spec.payload);
+      const event: LedgerEvent = {
+        id: this.nextEventId,
+        ts: spec.ts ?? this.nextEventId,
+        kind: spec.kind,
+        scope,
+        payload: spec.payload,
+      };
+      const projectionState = yield* this.prepareProjectionState([event]);
       const committed = yield* Effect.sync(() => {
-        const event: LedgerEvent = {
-          id: this.nextEventId,
-          ts: spec.ts ?? this.nextEventId,
-          kind: spec.kind,
-          scope,
-          payload: spec.payload,
-        };
         this.nextEventId += 1;
         this.rows.push(event);
+        this.replaceProjectionState(projectionState.rows, projectionState.meta);
         const dueId = this.nextDueWorkId++;
         this.dueWork.push({
           id: dueId,
@@ -269,7 +565,10 @@ export class InMemoryBackendState {
     triggerKind: string,
     eventKind: string,
     data: unknown,
-  ): Effect.Effect<{ readonly id: number }, JsonStringifyError | UnregisteredDurableTriggerKind> {
+  ): Effect.Effect<
+    { readonly id: number },
+    JsonStringifyError | SqlError | UnregisteredDurableTriggerKind
+  > {
     return Effect.gen(this, function* () {
       const payload = scheduledEventIntentPayload(eventKind, data);
       const committed = yield* this.commitTriggerIntent(
@@ -472,9 +771,11 @@ export class InMemoryBackendState {
       yield* Effect.forEach(written, (event) => validateSerializablePayload(event.payload), {
         discard: true,
       });
+      const projectionState = yield* this.prepareProjectionState(written);
       yield* Effect.sync(() => {
         this.nextEventId += written.length;
         this.rows.push(...written);
+        this.replaceProjectionState(projectionState.rows, projectionState.meta);
       });
       const events = written.length === 0 ? [] : this.rows.slice(this.rows.length - written.length);
       yield* this.fireMany(events);
@@ -597,9 +898,11 @@ export class InMemoryBackendState {
       yield* Effect.forEach(written, (event) => validateSerializablePayload(event.payload), {
         discard: true,
       });
+      const projectionState = yield* this.prepareProjectionState(written);
       yield* Effect.sync(() => {
         this.nextEventId += written.length;
         this.rows.push(...written);
+        this.replaceProjectionState(projectionState.rows, projectionState.meta);
         row.completedAt = now;
         if (options.cancelled === true) row.cancelledAt = now;
         for (const spec of due) {

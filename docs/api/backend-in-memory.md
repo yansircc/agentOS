@@ -14,6 +14,7 @@
 - `.:InMemoryLedgerLive`
 - `.:InMemoryLlmTransportLive`
 - `.:InMemoryLlmTransportOptions`
+- `.:InMemoryMaterializedProjectionsLive`
 - `.:InMemoryQuotaLive`
 - `.:InMemoryResourcesLive`
 - `.:InMemoryRuntimeBackend`

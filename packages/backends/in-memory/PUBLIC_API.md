@@ -18,6 +18,7 @@ Status: Backend package for runtime contract tests. Public exports are limited t
 - `.:InMemoryLedgerLive`
 - `.:InMemoryLlmTransportLive`
 - `.:InMemoryLlmTransportOptions`
+- `.:InMemoryMaterializedProjectionsLive`
 - `.:InMemoryQuotaLive`
 - `.:InMemoryResourcesLive`
 - `.:InMemoryRuntimeBackend`

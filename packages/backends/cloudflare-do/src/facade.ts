@@ -22,6 +22,7 @@ import {
 } from "./agent-do";
 import type { CloudflareTriggerSource } from "./trigger-factory";
 import type { CloudflareAttachedStreamSource } from "./stream-factory";
+import type { AnyMaterializedProjectionDefinition } from "@agent-os/runtime";
 import {
   lowerAgentConfig,
   type AgentLoweringConfig,
@@ -83,6 +84,7 @@ interface DefineAgentDOConfigBase<
   ) => Iterable<AgentEventHandlerRegistration>;
   readonly triggers?: CloudflareTriggerSource<Env>;
   readonly streams?: CloudflareAttachedStreamSource<Env>;
+  readonly projections?: ReadonlyArray<AnyMaterializedProjectionDefinition>;
 }
 
 export interface DefineAgentDOConfigWithSubmit<
@@ -139,6 +141,7 @@ const materializedConfigForEnv = <
   dispatchTargets: lowered.dispatchTargets,
   triggers: config.triggers ?? [],
   streams: config.streams ?? [],
+  projections: config.projections ?? [],
   scopeRefForScope: config.scopeRefForScope ?? (() => null),
   eventHandlers: (context, eventEnv) => eventHandlersFor(config, context, eventEnv),
 });

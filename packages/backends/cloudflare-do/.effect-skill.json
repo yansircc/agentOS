@@ -32,6 +32,12 @@
       "rules": ["EFF025"]
     },
     {
+      "path": "src/materialized-projections.ts",
+      "owner": "@agent-os/backend-cloudflare-do/materialized-projections",
+      "reason": "Cloudflare transactionSync exposes rollback only through synchronous exceptions; this adapter owns projection reducer rollback at the storage boundary",
+      "rules": ["EFF025"]
+    },
+    {
       "path": "src/ledger/stream.ts",
       "owner": "@agent-os/backend-cloudflare-do/http-stream",
       "reason": "terminal SSE adapter constructs the Response boundary for ledger streamEvents",

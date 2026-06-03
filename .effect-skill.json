@@ -224,6 +224,12 @@
       "rules": ["EFF025"]
     },
     {
+      "path": "packages/backends/cloudflare-do/src/materialized-projections.ts",
+      "owner": "@agent-os/backend-cloudflare-do/materialized-projections",
+      "reason": "Cloudflare transactionSync exposes rollback only through synchronous exceptions; this adapter owns projection reducer rollback at the storage boundary",
+      "rules": ["EFF025"]
+    },
+    {
       "path": "packages/backends/cloudflare-do/test/_in-memory-do.ts",
       "owner": "@agent-os/backend-cloudflare-do-tests",
       "reason": "test-only Durable Object SQL adapter models transactionSync rollback by synchronous throws",

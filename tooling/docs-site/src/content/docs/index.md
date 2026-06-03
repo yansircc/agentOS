@@ -7,6 +7,7 @@ title: "agentOS Docs"
 What do you need?
 
 - First time with agentOS: [build a cloud agent app](/tutorials/build-cloud-agent-app/).
+- Build a coding app: [vibe-like app guide](/guides/build-vibe-like-coding-app/).
 - Add a capability: [guides](/guides/add-attached-stream/).
 - Understand the model: [concepts](/concepts/durable-truth/).
 - Check package intent: [runtime packages](/runtime-packages/).
