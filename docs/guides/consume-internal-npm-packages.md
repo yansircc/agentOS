@@ -15,7 +15,14 @@ packages instead of sharing the agentOS source workspace lockfile.
 1. Configure the private `@agent-os` registry.
 2. Install required packages with semver versions.
 3. Install required peers such as `effect`.
-4. Run the app typecheck and tests under its own lockfile.
+4. For prepublish first-party work, run `bun run build:internal-packages` and
+   `bun run pack:internal` in agentOS.
+5. Read `dist/internal-npm/install-manifest.json`.
+6. Copy the required `dependencies` and `overrides` entries into the consumer
+   app. Use the manifest `spec` values, not `file:` package directories.
+   Manifest specs point at content-addressed `.tgz` files so package managers
+   do not reuse stale same-version tarballs after a local repack.
+7. Run the app typecheck and tests under its own lockfile.
 
 ## References
 

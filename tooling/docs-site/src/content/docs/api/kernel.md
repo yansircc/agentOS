@@ -202,6 +202,7 @@ title: "@agent-os/kernel Public API Intent"
 - `./settlement-contract:validateSettlementContract`
 - `./settlement-contract:validateTerminalClaim`
 - `./tools:DefineToolSpec`
+- `./tools:DeterministicToolInvocation`
 - `./tools:RegisteredToolSpec`
 - `./tools:Tool`
 - `./tools:ToolAdmitInput`
@@ -214,9 +215,11 @@ title: "@agent-os/kernel Public API Intent"
 - `./tools:decodeToolArgs`
 - `./tools:defineTool`
 - `./tools:defineToolFromDefinition`
+- `./tools:deterministicToolInvocation`
 - `./tools:executeTool`
 - `./tools:parseToolCall`
 - `./tools:permissiveToolAdmitter`
+- `./tools:runToolByName`
 - `./tools:validateToolRegistry`
 - `./types:DeliveryReceipt`
 - `./types:DispatchTargetSpec`
@@ -301,6 +304,7 @@ title: "@agent-os/kernel Public API Intent"
 - `.:DispatchBindingRefMalformed`
 - `.:DispatchScopeMismatch`
 - `.:DispatchTargetNotFound`
+- `.:DeterministicToolInvocation`
 - `.:DispatchTargetSpec`
 - `.:DispatchToScopeResult`
 - `.:DispatchToScopeSpec`
@@ -421,6 +425,7 @@ title: "@agent-os/kernel Public API Intent"
 - `.:defineSettlementContract`
 - `.:defineTool`
 - `.:defineToolFromDefinition`
+- `.:deterministicToolInvocation`
 - `.:endpointMaterialRef`
 - `.:event`
 - `.:eventNamespace`
@@ -461,6 +466,7 @@ title: "@agent-os/kernel Public API Intent"
 - `.:resolveRuntimeScope`
 - `.:resolveStatefulSessionRoot`
 - `.:resolveStringMaterial`
+- `.:runToolByName`
 - `.:runtimeScopeKey`
 - `.:safeStringify`
 - `.:safeStringifyPretty`

@@ -15,7 +15,7 @@
  * which injects scope from ctx.id.name (SSoT) and runs this effect.
  */
 
-import { Clock, Effect, Ref } from "effect";
+import { Clock, Data, Duration, Effect, Ref } from "effect";
 import {
   ABORT,
   type AbortKind,
@@ -57,10 +57,18 @@ import {
   publicRuntimeCauseReason,
 } from "./tool-settlement";
 
+export const DEFAULT_LLM_CALL_TIMEOUT_MS = 60_000;
+
 export const turnRefOf = (runId: number, index: number): TurnRef => ({
   id: runId,
   index,
 });
+
+class LlmCallTimedOut extends Data.TaggedError("agent_os.llm_call_timed_out")<{
+  readonly mode: "budget" | "provider";
+  readonly elapsedMs: number;
+  readonly timeoutMs: number;
+}> {}
 
 const toolDefinitionsOf = (tools: Record<string, Tool>): ReadonlyArray<ToolDefinition> =>
   Object.values(tools).map((t) => t.definition);
@@ -101,6 +109,56 @@ const finalAbort = (
       tokensUsed,
     } as const;
   });
+
+const llmTimeoutFor = (
+  startTime: number,
+  now: number,
+  budgetTimeMs: number,
+):
+  | {
+      readonly ok: true;
+      readonly mode: "budget" | "provider";
+      readonly timeoutMs: number;
+    }
+  | {
+      readonly ok: false;
+      readonly elapsedMs: number;
+    } => {
+  const elapsedMs = now - startTime;
+  if (Number.isFinite(budgetTimeMs)) {
+    const remaining = budgetTimeMs - elapsedMs;
+    if (remaining <= 0) return { ok: false, elapsedMs };
+    return { ok: true, mode: "budget", timeoutMs: remaining };
+  }
+  return { ok: true, mode: "provider", timeoutMs: DEFAULT_LLM_CALL_TIMEOUT_MS };
+};
+
+const timeoutAbortResult = (
+  timeout: LlmCallTimedOut,
+  scope: string,
+  runId: number,
+  tokensUsed: number,
+): Effect.Effect<SubmitResult, SqlError | JsonStringifyError, Ledger> => {
+  if (timeout.mode === "budget") {
+    return finalAbort(
+      ABORT.BUDGET_TIME,
+      { elapsedMs: timeout.elapsedMs, maxMs: timeout.timeoutMs },
+      scope,
+      runId,
+      tokensUsed,
+    );
+  }
+  return finalAbort(
+    ABORT.UPSTREAM_FAILURE,
+    { cause: "provider_timeout", timeoutMs: timeout.timeoutMs },
+    scope,
+    runId,
+    tokensUsed,
+  );
+};
+
+const isLlmCallTimedOut = (error: unknown): error is LlmCallTimedOut =>
+  error instanceof LlmCallTimedOut;
 
 export const submitAgentEffect = (
   spec: InternalSubmitSpec,
@@ -159,20 +217,57 @@ export const submitAgentEffect = (
       const userText = `${spec.intent}\n\nContext:\n${ctxStr}`;
       const deliverEventName = spec.deliver.event;
 
-      const result = yield* admission.attemptStructured<unknown>({
-        scope,
-        route,
-        schemaContract,
-        strategy: "forced-tool-call",
-        stimulus: {
-          kind: "live",
-          userInput: { userText },
-          deliver: (decoded) => ({
-            event: deliverEventName,
-            payload: decoded,
-          }),
-        },
-      });
+      const beforeCall = yield* Clock.currentTimeMillis;
+      const tokensBeforeCall = yield* Ref.get(tokensUsedRef);
+      const timeout = llmTimeoutFor(startTime, beforeCall, budgetTimeMs);
+      if (!timeout.ok) {
+        return yield* finalAbort(
+          ABORT.BUDGET_TIME,
+          { elapsedMs: timeout.elapsedMs, maxMs: budgetTimeMs },
+          scope,
+          started.id,
+          tokensBeforeCall,
+        );
+      }
+      const controller = new AbortController();
+      const attempted = yield* Effect.either(
+        admission
+          .attemptStructured<unknown>({
+            scope,
+            route,
+            schemaContract,
+            strategy: "forced-tool-call",
+            signal: controller.signal,
+            stimulus: {
+              kind: "live",
+              userInput: { userText },
+              deliver: (decoded) => ({
+                event: deliverEventName,
+                payload: decoded,
+              }),
+            },
+          })
+          .pipe(
+            Effect.timeoutFail({
+              duration: Duration.millis(timeout.timeoutMs),
+              onTimeout: () => {
+                controller.abort("agent_os.llm_call_timeout");
+                return new LlmCallTimedOut({
+                  mode: timeout.mode,
+                  elapsedMs: timeout.mode === "budget" ? budgetTimeMs : timeout.timeoutMs,
+                  timeoutMs: timeout.mode === "budget" ? budgetTimeMs : timeout.timeoutMs,
+                });
+              },
+            }),
+          ),
+      );
+      if (attempted._tag === "Left") {
+        if (isLlmCallTimedOut(attempted.left)) {
+          return yield* timeoutAbortResult(attempted.left, scope, started.id, tokensBeforeCall);
+        }
+        return yield* Effect.fail(attempted.left);
+      }
+      const result = attempted.right;
 
       if (result.ok) {
         const tokens = result.outcome.class === "Supported" ? result.outcome.tokensUsed : 0;
@@ -245,21 +340,49 @@ export const submitAgentEffect = (
         const now = yield* Clock.currentTimeMillis;
         const tokensBeforeCall = yield* Ref.get(tokensUsedRef);
 
-        if (now - startTime > budgetTimeMs) {
+        const timeout = llmTimeoutFor(startTime, now, budgetTimeMs);
+        if (!timeout.ok) {
           return yield* finalAbort(
             ABORT.BUDGET_TIME,
-            { elapsedMs: now - startTime, maxMs: budgetTimeMs },
+            { elapsedMs: timeout.elapsedMs, maxMs: budgetTimeMs },
             scope,
             started.id,
             tokensBeforeCall,
           );
         }
 
-        const resp = yield* llm.call({
-          route: spec.route,
-          messages,
-          tools: toolDefs.length > 0 ? toolDefs : undefined,
-        });
+        const controller = new AbortController();
+        const timedResp = yield* Effect.either(
+          llm
+            .call(
+              {
+                route: spec.route,
+                messages,
+                tools: toolDefs.length > 0 ? toolDefs : undefined,
+              },
+              { signal: controller.signal },
+            )
+            .pipe(
+              Effect.timeoutFail({
+                duration: Duration.millis(timeout.timeoutMs),
+                onTimeout: () => {
+                  controller.abort("agent_os.llm_call_timeout");
+                  return new LlmCallTimedOut({
+                    mode: timeout.mode,
+                    elapsedMs: timeout.mode === "budget" ? budgetTimeMs : timeout.timeoutMs,
+                    timeoutMs: timeout.mode === "budget" ? budgetTimeMs : timeout.timeoutMs,
+                  });
+                },
+              }),
+            ),
+        );
+        if (timedResp._tag === "Left") {
+          if (isLlmCallTimedOut(timedResp.left)) {
+            return yield* timeoutAbortResult(timedResp.left, scope, started.id, tokensBeforeCall);
+          }
+          return yield* Effect.fail(timedResp.left);
+        }
+        const resp = timedResp.right;
 
         const newTokens = tokensBeforeCall + resp.usage.totalTokens;
         yield* Ref.set(tokensUsedRef, newTokens);

@@ -202,6 +202,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `./settlement-contract:validateSettlementContract`
 - `./settlement-contract:validateTerminalClaim`
 - `./tools:DefineToolSpec`
+- `./tools:DeterministicToolInvocation`
 - `./tools:RegisteredToolSpec`
 - `./tools:Tool`
 - `./tools:ToolAdmitInput`
@@ -214,9 +215,11 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `./tools:decodeToolArgs`
 - `./tools:defineTool`
 - `./tools:defineToolFromDefinition`
+- `./tools:deterministicToolInvocation`
 - `./tools:executeTool`
 - `./tools:parseToolCall`
 - `./tools:permissiveToolAdmitter`
+- `./tools:runToolByName`
 - `./tools:validateToolRegistry`
 - `./types:DeliveryReceipt`
 - `./types:DispatchTargetSpec`
@@ -301,6 +304,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:DispatchBindingRefMalformed`
 - `.:DispatchScopeMismatch`
 - `.:DispatchTargetNotFound`
+- `.:DeterministicToolInvocation`
 - `.:DispatchTargetSpec`
 - `.:DispatchToScopeResult`
 - `.:DispatchToScopeSpec`
@@ -421,6 +425,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:defineSettlementContract`
 - `.:defineTool`
 - `.:defineToolFromDefinition`
+- `.:deterministicToolInvocation`
 - `.:endpointMaterialRef`
 - `.:event`
 - `.:eventNamespace`
@@ -461,6 +466,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:resolveRuntimeScope`
 - `.:resolveStatefulSessionRoot`
 - `.:resolveStringMaterial`
+- `.:runToolByName`
 - `.:runtimeScopeKey`
 - `.:safeStringify`
 - `.:safeStringifyPretty`

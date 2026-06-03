@@ -8,6 +8,7 @@ What do you need?
 
 - First time with agentOS: [build a cloud agent app](/tutorials/build-cloud-agent-app/).
 - Build a coding app: [vibe-like app guide](/guides/build-vibe-like-coding-app/).
+- Build a workspace agent: [natural-language workspace agent](/guides/build-natural-language-workspace-agent/).
 - Add a capability: [guides](/guides/add-attached-stream/).
 - Understand the model: [concepts](/concepts/durable-truth/).
 - Check package intent: [runtime packages](/runtime-packages/).

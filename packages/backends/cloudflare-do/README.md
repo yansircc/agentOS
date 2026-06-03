@@ -76,6 +76,12 @@ cancelled fact. v1 streams do not support reconnect/resume or hibernation; an
 active WebSocket pins the Durable Object alive and costs DO uptime. Long
 workspace sessions need a later durable stream log or hibernation substrate.
 
+LLM HTTP routes receive the runtime `AbortSignal` for submit provider-call
+timeouts. Cloudflare `cf-ai-binding` does not expose the same mechanical abort
+surface; timeout still writes one terminal ledger abort fact, but provider
+compute and billing may continue. This is bookkeeping terminal settlement, not
+guaranteed provider-side cancellation.
+
 `stuckTriggers(now)` is observability over expired claims. It is not a repair
 entry point; ordinary drain redrives expired claims by claiming the same due row
 with `acquireMode: "redrive"`.

@@ -33,6 +33,7 @@ import {
 } from "./json-schema";
 
 const TOOL_CONTRACT_BRAND = Symbol("@agent-os/kernel/ToolContract");
+const DETERMINISTIC_TOOL_INVOCATION_BRAND = Symbol("@agent-os/kernel/DeterministicToolInvocation");
 
 interface ToolContractShape {
   readonly toolId: string;
@@ -44,6 +45,12 @@ interface ToolContractShape {
 
 export interface ToolContract extends ToolContractShape {
   readonly [TOOL_CONTRACT_BRAND]: true;
+}
+
+export interface DeterministicToolInvocation<A = unknown> {
+  readonly name: string;
+  readonly args: A;
+  readonly [DETERMINISTIC_TOOL_INVOCATION_BRAND]: true;
 }
 
 export interface ToolAdmitInput<A = unknown> {
@@ -109,6 +116,15 @@ const makeToolContract = (shape: ToolContractShape): ToolContract =>
     value: true,
     enumerable: false,
   }) as ToolContract;
+
+export const deterministicToolInvocation = <A>(
+  name: string,
+  args: A,
+): DeterministicToolInvocation<A> =>
+  Object.defineProperty({ name, args }, DETERMINISTIC_TOOL_INVOCATION_BRAND, {
+    value: true,
+    enumerable: false,
+  }) as DeterministicToolInvocation<A>;
 
 const hasToolContractBrand = (contract: ToolContract): boolean =>
   contract[TOOL_CONTRACT_BRAND] === true;
@@ -364,6 +380,29 @@ export const executeTool = (
   Effect.tryPromise({
     try: () => tool.execute(args),
     catch: (cause) => new ToolError({ toolName, cause }),
+  });
+
+/**
+ * Deterministic product-side tool execution.
+ *
+ * Use only for actions explicitly selected by product code or UI. Never use
+ * this for LLM-selected tool calls; those must go through submit() so budget,
+ * quota, retries, admission, and ledger settlement apply.
+ */
+export const runToolByName = (
+  tools: Record<string, Tool>,
+  invocation: DeterministicToolInvocation,
+): Effect.Effect<unknown, ToolError> =>
+  Effect.gen(function* () {
+    const tool = tools[invocation.name];
+    if (tool === undefined) {
+      return yield* new ToolError({
+        toolName: invocation.name,
+        cause: { reason: "unknown_tool" },
+      });
+    }
+    const decoded = yield* decodeToolArgs(tool, invocation.args, invocation.name);
+    return yield* executeTool(tool, decoded, invocation.name);
   });
 
 export type { ToolDefinition } from "./llm";

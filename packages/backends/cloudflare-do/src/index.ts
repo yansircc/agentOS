@@ -39,6 +39,7 @@ export {
   endpoint,
   externalResource,
   geminiGenerateContent,
+  lowerMaterialBindings,
   openAIChat,
 } from "./facade";
 export type {
@@ -54,6 +55,7 @@ export type {
   DefineAgentDOConfigWithSubmit,
   DefineAgentDOConfigWithoutSubmit,
   GeminiGenerateContentSpec,
+  LoweredMaterialBindings,
   OpenAIChatSpec,
 } from "./facade";
 export {
@@ -69,3 +71,5 @@ export type {
   ProviderDispatchTargetSpec,
   QueueDispatchTargetBinding,
 } from "./dispatch";
+export { durableObjectRpcClient } from "./do-rpc";
+export type { DurableObjectRpcClient } from "./do-rpc";

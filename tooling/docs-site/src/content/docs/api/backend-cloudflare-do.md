@@ -36,8 +36,10 @@ title: "@agent-os/backend-cloudflare-do Public API Intent"
 - `.:DefineAgentDOConfigWithoutSubmit`
 - `.:DispatchTargetNamespace`
 - `.:DispatchTargetRegistry`
+- `.:DurableObjectRpcClient`
 - `.:GeminiGenerateContentSpec`
 - `.:HttpDispatchTargetSpec`
+- `.:LoweredMaterialBindings`
 - `.:OpenAIChatSpec`
 - `.:ProviderDispatchTargetSpec`
 - `.:QueueDispatchTargetBinding`
@@ -49,10 +51,12 @@ title: "@agent-os/backend-cloudflare-do Public API Intent"
 - `.:defineAgentDO`
 - `.:durableObjectTarget`
 - `.:durableObjectDispatchTarget`
+- `.:durableObjectRpcClient`
 - `.:endpoint`
 - `.:externalResource`
 - `.:geminiGenerateContent`
 - `.:httpDispatchTarget`
+- `.:lowerMaterialBindings`
 - `.:openAIChat`
 - `.:providerDispatchTarget`
 - `.:queueDispatchTarget`

@@ -41,6 +41,7 @@ title: "@agent-os/runtime Public API Intent"
 - `.:BoundaryCommitRejected`
 - `.:CapabilityLease`
 - `.:DEFAULT_TRIGGER_ACQUIRE_DEADLINE_MS`
+- `.:DEFAULT_LLM_CALL_TIMEOUT_MS`
 - `.:DecodedOutput`
 - `.:DeliverSpec`
 - `.:Dispatch`
@@ -63,6 +64,7 @@ title: "@agent-os/runtime Public API Intent"
 - `.:InvalidateSpec`
 - `.:Ledger`
 - `.:LiveInput`
+- `.:LlmCallOptions`
 - `.:LlmRoute`
 - `.:LlmTransport`
 - `.:LlmUsage`

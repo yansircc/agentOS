@@ -148,6 +148,11 @@ export interface LoweredAgentConfigBase {
   readonly dispatchTargets: DispatchTargetRegistry;
 }
 
+export interface LoweredMaterialBindings {
+  readonly refResolver: RefResolver;
+  readonly dispatchTargets: DispatchTargetRegistry;
+}
+
 export interface LoweredAgentConfigWithSubmit extends LoweredAgentConfigBase {
   readonly defaultSubmit: {
     readonly route: LlmRoute;
@@ -194,22 +199,14 @@ const toolsToRecord = (tools: ReadonlyArray<Tool> = []): Record<string, Tool> =>
   return out;
 };
 
-export function lowerAgentConfig<Env>(
-  config: AgentLoweringConfigWithSubmit<Env>,
+export const lowerMaterialBindings = <Env>(
+  bindings: ReadonlyArray<AgentMaterialBinding<Env>> | undefined,
   env: Env,
-): LoweredAgentConfigWithSubmit;
-export function lowerAgentConfig<Env>(
-  config: AgentLoweringConfigWithoutSubmit<Env>,
-  env: Env,
-): LoweredAgentConfigWithoutSubmit;
-export function lowerAgentConfig<Env>(
-  config: AgentLoweringConfig<Env>,
-  env: Env,
-): LoweredAgentConfig {
+): LoweredMaterialBindings => {
   const materials = new Map<string, NonNullable<unknown>>();
   const dispatchTargets: Record<string, DispatchTargetAdapter> = {};
 
-  for (const binding of config.bindings ?? []) {
+  for (const binding of bindings ?? []) {
     if (!isMaterialRef(binding.ref)) {
       return failAgentConfig("invalid material binding ref");
     }
@@ -227,22 +224,40 @@ export function lowerAgentConfig<Env>(
     }
   }
 
+  return {
+    refResolver: {
+      material: (ref) => materials.get(materialRefKey(ref)) ?? null,
+    },
+    dispatchTargets,
+  };
+};
+
+export function lowerAgentConfig<Env>(
+  config: AgentLoweringConfigWithSubmit<Env>,
+  env: Env,
+): LoweredAgentConfigWithSubmit;
+export function lowerAgentConfig<Env>(
+  config: AgentLoweringConfigWithoutSubmit<Env>,
+  env: Env,
+): LoweredAgentConfigWithoutSubmit;
+export function lowerAgentConfig<Env>(
+  config: AgentLoweringConfig<Env>,
+  env: Env,
+): LoweredAgentConfig {
+  const loweredMaterials = lowerMaterialBindings(config.bindings, env);
+
   for (const [id, route] of Object.entries(config.llms ?? {})) {
     for (const ref of llmRouteMaterialRefs(route)) {
-      const key = materialRefKey(ref);
-      if (!materials.has(key)) {
+      if (loweredMaterials.refResolver.material(ref) === null) {
         return failAgentConfig(`llm ${id} references unbound material ${materialRefLabel(ref)}`);
       }
     }
   }
 
-  const refResolver: RefResolver = {
-    material: (ref) => materials.get(materialRefKey(ref)) ?? null,
-  };
   const tools = toolsToRecord(config.tools);
   return {
-    refResolver,
-    dispatchTargets,
+    refResolver: loweredMaterials.refResolver,
+    dispatchTargets: loweredMaterials.dispatchTargets,
     defaultSubmit:
       config.llms === undefined
         ? null

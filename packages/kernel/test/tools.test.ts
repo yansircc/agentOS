@@ -1,7 +1,13 @@
-import { Schema } from "effect";
+import { Effect, Schema } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 
-import { defineTool, defineToolFromDefinition } from "../src/tools";
+import {
+  defineTool,
+  defineToolFromDefinition,
+  deterministicToolInvocation,
+  runToolByName,
+} from "../src/tools";
+import type { LlmToolCall } from "../src/llm";
 
 describe("defineTool", () => {
   it("derives the OpenAI tool parameters and args decoder from one Schema", () => {
@@ -112,5 +118,81 @@ describe("defineToolFromDefinition", () => {
         execute: async () => null,
       }),
     ).toThrow("unsupported-key");
+  });
+});
+
+describe("runToolByName", () => {
+  it.effect("runs deterministic product-side tool invocations", () =>
+    Effect.gen(function* () {
+      const tool = defineTool({
+        name: "lookup",
+        description: "Lookup a symbolic key",
+        args: Schema.Struct({ key: Schema.String }),
+        authority: "read",
+        admit: "allow",
+        execute: ({ key }) => ({ value: key }),
+      });
+
+      const result = yield* runToolByName(
+        { lookup: tool },
+        deterministicToolInvocation("lookup", { key: "abc" }),
+      );
+
+      expect(result).toEqual({ value: "abc" });
+    }),
+  );
+
+  it.effect("fails unknown tools and invalid args as ToolError", () =>
+    Effect.gen(function* () {
+      const tool = defineTool({
+        name: "lookup",
+        description: "Lookup a symbolic key",
+        args: Schema.Struct({ key: Schema.String }),
+        authority: "read",
+        admit: "allow",
+        execute: ({ key }) => ({ value: key }),
+      });
+
+      const unknown = yield* Effect.either(
+        runToolByName({ lookup: tool }, deterministicToolInvocation("missing", {})),
+      );
+      expect(unknown._tag).toBe("Left");
+      if (unknown._tag === "Left") {
+        expect(unknown.left.cause).toEqual({ reason: "unknown_tool" });
+      }
+
+      const invalid = yield* Effect.either(
+        runToolByName({ lookup: tool }, deterministicToolInvocation("lookup", { key: 1 })),
+      );
+      expect(invalid._tag).toBe("Left");
+      if (invalid._tag === "Left") {
+        expect(invalid.left.cause).toEqual({
+          reason: "invalid_args",
+          decodeError: "TypeError",
+        });
+      }
+    }),
+  );
+
+  it("rejects LLM tool-call envelopes at type level", () => {
+    const tool = defineTool({
+      name: "lookup",
+      description: "Lookup a symbolic key",
+      args: Schema.Struct({ key: Schema.String }),
+      authority: "read",
+      admit: "allow",
+      execute: ({ key }) => ({ value: key }),
+    });
+    const llmCall: LlmToolCall = {
+      id: "call-1",
+      type: "function",
+      function: { name: "lookup", arguments: '{"key":"abc"}' },
+    };
+
+    // @ts-expect-error LLM-selected tool calls must go through submit().
+    const rejected = () => runToolByName({ lookup: tool }, llmCall);
+    void rejected;
+
+    expect(llmCall.function.name).toBe("lookup");
   });
 });

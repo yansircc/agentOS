@@ -283,6 +283,7 @@ export {
   endpoint,
   externalResource,
   geminiGenerateContent,
+  lowerMaterialBindings,
   openAIChat,
 } from "./facade-lowering";
 export type {
@@ -295,5 +296,6 @@ export type {
   EndpointMaterialRef,
   ExternalResourceMaterialRef,
   GeminiGenerateContentSpec,
+  LoweredMaterialBindings,
   OpenAIChatSpec,
 } from "./facade-lowering";

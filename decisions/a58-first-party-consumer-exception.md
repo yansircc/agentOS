@@ -19,8 +19,10 @@ round needs a first-party app to start now.
 Waive N>=2 only for `spikes/vibe-like-agent-app/*`.
 
 The exception scope is this spike only. It lasts 12 months from the first spike
-commit and must be reviewed at 6 months. Later products follow the standard
-N>=2 rule unless a new decision grants a separately scoped waiver.
+commit and must be reviewed at 6 months. a64 supersedes strict N>=2 with the
+shape-first gate, but the scoped spike exception, sunset, and promotion
+mechanics in this decision still apply. Later products do not inherit this
+exception unless a new decision grants a separately scoped waiver.
 
 Promotion is mechanical: create a promotion decision, evaluate criteria, move
 code physically from `spikes/` to `packages/`, update `docs/surface.json`, and

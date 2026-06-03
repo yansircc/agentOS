@@ -84,6 +84,15 @@ is the only stream-owned settlement hook and is always explicit. `onDetach`
 must be declared as `"abort"` or `"continue"` so the substrate never silently
 chooses between cost-saving abort and background completion.
 
+Submit LLM calls are bounded by the run time budget. In 0.2.x submit is
+non-streaming, so the boundary is a total provider-call timeout, not an idle
+stream timeout. If `budget.timeMs` is finite, the remaining run budget bounds
+each provider call and timeout settles as `agent.aborted.budget_time`. If no
+time budget is supplied, a default provider-call timeout settles as
+`agent.aborted.upstream_failure` with cause `provider_timeout`. Long
+non-streaming generations must set an explicit `budget.timeMs`; future
+streaming LLM transport should use idle timeout semantics instead.
+
 ## Minimal Usage
 
 Depend on runtime for consumer-facing run, admission, and backend-neutral Tag
@@ -106,6 +115,9 @@ Materialized projections are registered through the backend facade:
 ```ts
 import { defineProjection, type MaterializedProjections } from "@agent-os/runtime";
 ```
+
+Deterministic product-side tool actions use `runToolByName`. Do not use it for
+LLM-selected tools; those must go through `submit`.
 
 ## Verification
 

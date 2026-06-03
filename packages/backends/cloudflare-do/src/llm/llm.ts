@@ -25,7 +25,7 @@
  */
 
 import { Context, Effect, Layer, Predicate } from "effect";
-import { LlmTransport } from "@agent-os/runtime";
+import { LlmTransport, type LlmCallOptions } from "@agent-os/runtime";
 import {
   ProviderHttpFailure,
   UpstreamFailure,
@@ -165,6 +165,10 @@ export interface LlmRequest {
     readonly type: "function";
     readonly function: { readonly name: string };
   };
+}
+
+export interface ProviderDispatchOptions {
+  readonly signal?: AbortSignal;
 }
 
 // ============================================================
@@ -418,15 +422,30 @@ const providerHttpFailure = (
     });
   });
 
+const providerTransportFailure = (provider: HttpProvider, cause: unknown): ProviderHttpFailure => {
+  const code = cause instanceof Error ? sanitizedToken(cause.name) : undefined;
+  return new ProviderHttpFailure({
+    provider,
+    status: 0,
+    ...(code === undefined ? {} : { code }),
+    flags: [],
+  });
+};
+
 const fetchProviderJson = (
   provider: HttpProvider,
   input: RequestInfo | URL,
   init: RequestInit,
+  options: ProviderDispatchOptions = {},
 ): Effect.Effect<unknown, UpstreamFailure> =>
   Effect.gen(function* () {
     const res = yield* Effect.tryPromise({
-      try: () => fetch(input, init),
-      catch: (cause) => new UpstreamFailure({ cause }),
+      try: () =>
+        fetch(input, {
+          ...init,
+          ...(options.signal === undefined ? {} : { signal: options.signal }),
+        }),
+      catch: (cause) => new UpstreamFailure({ cause: providerTransportFailure(provider, cause) }),
     });
     if (!res.ok) {
       const failure = yield* providerHttpFailure(provider, res);
@@ -441,6 +460,7 @@ const fetchProviderJson = (
 export const dispatchProvider = (
   route: LlmRoute,
   body: ProviderRequestBody,
+  options: ProviderDispatchOptions = {},
 ): Effect.Effect<
   unknown,
   UpstreamFailure | RefResolutionFailed,
@@ -475,14 +495,19 @@ export const dispatchProvider = (
           model: route.modelId,
           ...(body as ChatCompletionsBody),
         };
-        return yield* fetchProviderJson(route.kind, url, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "Content-Type": "application/json",
+        return yield* fetchProviderJson(
+          route.kind,
+          url,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(fullBody),
           },
-          body: JSON.stringify(fullBody),
-        });
+          options,
+        );
       });
     case "anthropic-messages":
       return Effect.gen(function* () {
@@ -498,15 +523,20 @@ export const dispatchProvider = (
           ...(body as AnthropicMessagesBody),
         };
         const versionHeader = route.anthropicVersion ?? DEFAULT_ANTHROPIC_VERSION;
-        return yield* fetchProviderJson(route.kind, url, {
-          method: "POST",
-          headers: {
-            "x-api-key": apiKey,
-            "anthropic-version": versionHeader,
-            "Content-Type": "application/json",
+        return yield* fetchProviderJson(
+          route.kind,
+          url,
+          {
+            method: "POST",
+            headers: {
+              "x-api-key": apiKey,
+              "anthropic-version": versionHeader,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(fullBody),
           },
-          body: JSON.stringify(fullBody),
-        });
+          options,
+        );
       });
     case "gemini-generate-content":
       return Effect.gen(function* () {
@@ -517,14 +547,19 @@ export const dispatchProvider = (
           credentialMaterialRef(route.credentialRef),
         );
         const url = `${endpoint.replace(/\/$/, "")}/v1beta/models/${route.modelId}:generateContent`;
-        return yield* fetchProviderJson(route.kind, url, {
-          method: "POST",
-          headers: {
-            "x-goog-api-key": apiKey,
-            "Content-Type": "application/json",
+        return yield* fetchProviderJson(
+          route.kind,
+          url,
+          {
+            method: "POST",
+            headers: {
+              "x-goog-api-key": apiKey,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(body as GeminiGenerateContentBody),
           },
-          body: JSON.stringify(body as GeminiGenerateContentBody),
-        });
+          options,
+        );
       });
   }
 };
@@ -539,6 +574,7 @@ export const dispatchProvider = (
 
 export const callLlm = (
   request: LlmRequest,
+  options: LlmCallOptions = {},
 ): Effect.Effect<
   LlmResponse,
   UpstreamFailure | RefResolutionFailed,
@@ -555,7 +591,7 @@ export const callLlm = (
       tools: request.tools,
       tool_choice: request.tool_choice,
     });
-    const raw = yield* dispatchProvider(request.route, body);
+    const raw = yield* dispatchProvider(request.route, body, options);
     return yield* Effect.try({
       try: () => adapter.decodeTurn(raw),
       catch: (cause) => new UpstreamFailure({ cause }),
@@ -569,8 +605,8 @@ export const LlmTransportLive: Layer.Layer<LlmTransport, never, AiBinding | RefR
       const ai = yield* AiBinding;
       const refs = yield* RefResolverService;
       return {
-        call: (request) =>
-          callLlm(request).pipe(
+        call: (request, options) =>
+          callLlm(request, options).pipe(
             Effect.provideService(AiBinding, ai),
             Effect.provideService(RefResolverService, refs),
           ),

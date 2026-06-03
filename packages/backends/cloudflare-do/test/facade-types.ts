@@ -3,6 +3,7 @@ import {
   credential,
   createAgentDurableObject,
   defineAgentDO,
+  durableObjectRpcClient,
   endpoint,
   openAIChat,
   type AgentSubmitSpec,
@@ -12,6 +13,16 @@ import {
 interface TestEnv extends CloudflareAgentEnv {
   readonly LLM_ENDPOINT: string;
   readonly LLM_KEY: string;
+  readonly AGENT_DO: DurableObjectNamespace;
+}
+
+interface ProductRpc {
+  readonly submitWorkspacePrompt: (input: {
+    readonly prompt: string;
+    readonly files: ReadonlyArray<{ readonly path: string }>;
+  }) => Promise<{ readonly ok: boolean }>;
+  readonly invalidFunctionInput: (input: { readonly fn: () => void }) => Promise<void>;
+  readonly value: string;
 }
 
 const scheduleAt = 1_700_000_000_000;
@@ -72,3 +83,11 @@ void lowLevelAgent.emit("test.low", {});
 void lowLevelAgent.dispatch(fullSpec.deliver as never);
 // @ts-expect-error low-level clients do not expose facade schedule alias
 void lowLevelAgent.schedule("test.low", {}, { at: scheduleAt });
+
+declare const env: TestEnv;
+const rpc = durableObjectRpcClient<ProductRpc>(env.AGENT_DO, "agent-scope");
+void rpc.submitWorkspacePrompt({ prompt: "run", files: [{ path: "README.md" }] });
+// @ts-expect-error non-method properties are not projected into the RPC client
+void rpc.value;
+// @ts-expect-error function-bearing payloads cannot cross Durable Object RPC
+void rpc.invalidFunctionInput({ fn: () => undefined });

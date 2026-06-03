@@ -37,6 +37,7 @@ export type AttemptSpec<O> = {
   readonly strategy: Strategy;
   readonly stimulus: Stimulus<O>;
   readonly adapterMode?: "production" | "test-decode-mismatch";
+  readonly signal?: AbortSignal;
 };
 
 export type AttemptResult<O> =

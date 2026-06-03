@@ -32,8 +32,10 @@
 - `.:DefineAgentDOConfigWithoutSubmit`
 - `.:DispatchTargetNamespace`
 - `.:DispatchTargetRegistry`
+- `.:DurableObjectRpcClient`
 - `.:GeminiGenerateContentSpec`
 - `.:HttpDispatchTargetSpec`
+- `.:LoweredMaterialBindings`
 - `.:OpenAIChatSpec`
 - `.:ProviderDispatchTargetSpec`
 - `.:QueueDispatchTargetBinding`
@@ -45,10 +47,12 @@
 - `.:defineAgentDO`
 - `.:durableObjectTarget`
 - `.:durableObjectDispatchTarget`
+- `.:durableObjectRpcClient`
 - `.:endpoint`
 - `.:externalResource`
 - `.:geminiGenerateContent`
 - `.:httpDispatchTarget`
+- `.:lowerMaterialBindings`
 - `.:openAIChat`
 - `.:providerDispatchTarget`
 - `.:queueDispatchTarget`

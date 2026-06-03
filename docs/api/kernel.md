@@ -198,6 +198,7 @@
 - `./settlement-contract:validateSettlementContract`
 - `./settlement-contract:validateTerminalClaim`
 - `./tools:DefineToolSpec`
+- `./tools:DeterministicToolInvocation`
 - `./tools:RegisteredToolSpec`
 - `./tools:Tool`
 - `./tools:ToolAdmitInput`
@@ -210,9 +211,11 @@
 - `./tools:decodeToolArgs`
 - `./tools:defineTool`
 - `./tools:defineToolFromDefinition`
+- `./tools:deterministicToolInvocation`
 - `./tools:executeTool`
 - `./tools:parseToolCall`
 - `./tools:permissiveToolAdmitter`
+- `./tools:runToolByName`
 - `./tools:validateToolRegistry`
 - `./types:DeliveryReceipt`
 - `./types:DispatchTargetSpec`
@@ -297,6 +300,7 @@
 - `.:DispatchBindingRefMalformed`
 - `.:DispatchScopeMismatch`
 - `.:DispatchTargetNotFound`
+- `.:DeterministicToolInvocation`
 - `.:DispatchTargetSpec`
 - `.:DispatchToScopeResult`
 - `.:DispatchToScopeSpec`
@@ -417,6 +421,7 @@
 - `.:defineSettlementContract`
 - `.:defineTool`
 - `.:defineToolFromDefinition`
+- `.:deterministicToolInvocation`
 - `.:endpointMaterialRef`
 - `.:event`
 - `.:eventNamespace`
@@ -457,6 +462,7 @@
 - `.:resolveRuntimeScope`
 - `.:resolveStatefulSessionRoot`
 - `.:resolveStringMaterial`
+- `.:runToolByName`
 - `.:runtimeScopeKey`
 - `.:safeStringify`
 - `.:safeStringifyPretty`

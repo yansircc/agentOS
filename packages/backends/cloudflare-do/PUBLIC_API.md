@@ -36,8 +36,10 @@ Status: Backend package. Public exports include the Cloudflare app facade, bindi
 - `.:DefineAgentDOConfigWithoutSubmit`
 - `.:DispatchTargetNamespace`
 - `.:DispatchTargetRegistry`
+- `.:DurableObjectRpcClient`
 - `.:GeminiGenerateContentSpec`
 - `.:HttpDispatchTargetSpec`
+- `.:LoweredMaterialBindings`
 - `.:OpenAIChatSpec`
 - `.:ProviderDispatchTargetSpec`
 - `.:QueueDispatchTargetBinding`
@@ -49,10 +51,12 @@ Status: Backend package. Public exports include the Cloudflare app facade, bindi
 - `.:defineAgentDO`
 - `.:durableObjectTarget`
 - `.:durableObjectDispatchTarget`
+- `.:durableObjectRpcClient`
 - `.:endpoint`
 - `.:externalResource`
 - `.:geminiGenerateContent`
 - `.:httpDispatchTarget`
+- `.:lowerMaterialBindings`
 - `.:openAIChat`
 - `.:providerDispatchTarget`
 - `.:queueDispatchTarget`

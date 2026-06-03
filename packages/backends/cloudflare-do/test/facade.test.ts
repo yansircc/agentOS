@@ -6,6 +6,7 @@ import {
   durableObjectTarget,
   endpoint,
   lowerAgentConfig,
+  lowerMaterialBindings,
   openAIChat,
 } from "../src/facade-lowering";
 import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
@@ -53,13 +54,14 @@ const dispatchEnvelope = {
 
 describe("defineAgentDO facade lowering", () => {
   it("lowers bindings into RefResolver and dispatch targets by MaterialRef shape", () => {
+    const materialBindings = [
+      endpoint<TestEnv>("llm").from((e) => e.LLM_ENDPOINT),
+      credential<TestEnv>("llm-key").from((e) => e.LLM_KEY),
+      durableObjectTarget<TestEnv>("peer").from((e) => e.PEER_DO),
+    ];
     const lowered = lowerAgentConfig(
       {
-        bindings: [
-          endpoint<TestEnv>("llm").from((e) => e.LLM_ENDPOINT),
-          credential<TestEnv>("llm-key").from((e) => e.LLM_KEY),
-          durableObjectTarget<TestEnv>("peer").from((e) => e.PEER_DO),
-        ],
+        bindings: materialBindings,
         llms: {
           default: openAIChat({
             model: "gpt-4.1-mini",
@@ -74,6 +76,12 @@ describe("defineAgentDO facade lowering", () => {
     expect(lowered.refResolver.material({ kind: "endpoint", ref: "llm" })).toBe(
       "https://llm.example",
     );
+    expect(
+      lowerMaterialBindings(materialBindings, env).refResolver.material({
+        kind: "endpoint",
+        ref: "llm",
+      }),
+    ).toBe("https://llm.example");
     expect(lowered.refResolver.material({ kind: "credential", ref: "llm-key" })).toBe("secret");
     const peerKey = materialRefKey(
       bindingMaterialRef({

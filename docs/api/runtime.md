@@ -37,6 +37,7 @@
 - `.:BoundaryCommitRejected`
 - `.:CapabilityLease`
 - `.:DEFAULT_TRIGGER_ACQUIRE_DEADLINE_MS`
+- `.:DEFAULT_LLM_CALL_TIMEOUT_MS`
 - `.:DecodedOutput`
 - `.:DeliverSpec`
 - `.:Dispatch`
@@ -59,6 +60,7 @@
 - `.:InvalidateSpec`
 - `.:Ledger`
 - `.:LiveInput`
+- `.:LlmCallOptions`
 - `.:LlmRoute`
 - `.:LlmTransport`
 - `.:LlmUsage`

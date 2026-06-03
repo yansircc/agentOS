@@ -41,6 +41,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:BoundaryCommitRejected`
 - `.:CapabilityLease`
 - `.:DEFAULT_TRIGGER_ACQUIRE_DEADLINE_MS`
+- `.:DEFAULT_LLM_CALL_TIMEOUT_MS`
 - `.:DecodedOutput`
 - `.:DeliverSpec`
 - `.:Dispatch`
@@ -63,6 +64,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:InvalidateSpec`
 - `.:Ledger`
 - `.:LiveInput`
+- `.:LlmCallOptions`
 - `.:LlmRoute`
 - `.:LlmTransport`
 - `.:LlmUsage`

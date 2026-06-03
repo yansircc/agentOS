@@ -135,7 +135,7 @@ export const AdmissionLive = (
 
           // Step 5-6: call provider + decode (or classify error).
           const rawEither = yield* Effect.either(
-            dispatchProvider(spec.route, body).pipe(
+            dispatchProvider(spec.route, body, { signal: spec.signal }).pipe(
               Effect.provideService(AiBinding, ai),
               Effect.provideService(RefResolverService, resolver),
             ),
