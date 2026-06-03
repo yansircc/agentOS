@@ -58,6 +58,57 @@ if (!exists("docs/README.md")) {
     failures.push(`docs/README.md has ${lines} lines; reader-intent router max is 30`);
 }
 
+if (!exists("docs/tutorials/sidebar.json")) {
+  failures.push("docs/tutorials/sidebar.json missing");
+} else {
+  let sidebar;
+  try {
+    sidebar = JSON.parse(read("docs/tutorials/sidebar.json"));
+  } catch (cause) {
+    failures.push(`docs/tutorials/sidebar.json is not valid JSON: ${String(cause)}`);
+  }
+  const entries = Array.isArray(sidebar?.tutorials) ? sidebar.tutorials : [];
+  if (!Array.isArray(sidebar?.tutorials)) {
+    failures.push("docs/tutorials/sidebar.json must contain a tutorials array");
+  }
+  const seenSlugs = new Set();
+  const listedFiles = [];
+  entries.forEach((entry, index) => {
+    const label = typeof entry?.label === "string" ? entry.label : "";
+    const slug = typeof entry?.slug === "string" ? entry.slug : "";
+    const expectedPrefix = `A${index + 1} `;
+    if (!label.startsWith(expectedPrefix)) {
+      failures.push(
+        `docs/tutorials/sidebar.json entry ${index + 1} label must start ${expectedPrefix}`,
+      );
+    }
+    if (!slug.startsWith("tutorials/")) {
+      failures.push(`docs/tutorials/sidebar.json entry ${index + 1} slug must start tutorials/`);
+      return;
+    }
+    if (seenSlugs.has(slug)) {
+      failures.push(`docs/tutorials/sidebar.json repeats slug ${slug}`);
+    }
+    seenSlugs.add(slug);
+    const file = `docs/${slug}.md`;
+    listedFiles.push(file);
+    if (!exists(file)) {
+      failures.push(`docs/tutorials/sidebar.json references missing ${file}`);
+    }
+  });
+  const tutorialFiles = markdownDocs
+    .filter((file) => file.startsWith("docs/tutorials/"))
+    .filter((file) => file !== "docs/tutorials/sidebar.json");
+  const listed = new Set(listedFiles);
+  for (const file of tutorialFiles) {
+    if (!listed.has(file)) failures.push(`${file} missing from docs/tutorials/sidebar.json`);
+  }
+  for (const file of listedFiles) {
+    if (!tutorialFiles.includes(file))
+      failures.push(`${file} listed in sidebar but not a tutorial doc`);
+  }
+}
+
 const headingExists = (text, heading) =>
   new RegExp(`^## ${heading.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}$`, "mu").test(text);
 

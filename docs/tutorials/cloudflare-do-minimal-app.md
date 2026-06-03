@@ -1,4 +1,4 @@
-# Build A Cloud Agent App
+# Cloudflare DO Minimal App
 
 ## Goal
 
@@ -119,6 +119,6 @@ LLM call.
 
 ## Next
 
-Add a tool-backed LLM loop with [weather tool LLM loop](weather-tool-llm-loop.md),
-background work with [durable trigger cancellation](durable-trigger-cancel.md),
-or live sessions with [output-only attached streams](output-only-attached-stream.md).
+Bind provider material with [provider material binding](provider-material-binding.md),
+or install the same app-facing packages with
+[internal npm consumer app](internal-npm-consumer-app.md).

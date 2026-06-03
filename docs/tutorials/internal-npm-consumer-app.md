@@ -98,5 +98,4 @@ The consumer typecheck and smoke import pass without `workspace:`, `file:`,
 
 ## Next
 
-Return to [build a cloud agent app](build-cloud-agent-app.md) and swap packed
-tarball paths for the approved internal registry once publishing is enabled.
+Add read-only operations with [ops view](ops-view.md).

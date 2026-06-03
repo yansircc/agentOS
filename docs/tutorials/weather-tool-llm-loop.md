@@ -12,7 +12,7 @@ submit call that returns a tool-informed answer.
 
 ## Prerequisites
 
-- [Build a cloud agent app](build-cloud-agent-app.md)
+- [Hello ledger event](hello-ledger-event.md)
 - [Usage surfaces](../usage-surfaces.md)
 - [Cloudflare DO backend](../packages/backend-cloudflare-do.md)
 
@@ -92,4 +92,4 @@ provider endpoint, credential, and model are declared from one source.
 
 ## Next
 
-Read durable output with [read a projection](read-a-projection.md).
+Tighten the tool contract with [tool schema and authority](tool-schema-authority.md).

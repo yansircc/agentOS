@@ -1,0 +1,60 @@
+{
+  "tutorials": [
+    {
+      "label": "A1 Hello Ledger Event",
+      "slug": "tutorials/hello-ledger-event"
+    },
+    {
+      "label": "A2 Weather Tool LLM Loop",
+      "slug": "tutorials/weather-tool-llm-loop"
+    },
+    {
+      "label": "A3 Tool Schema + Authority",
+      "slug": "tutorials/tool-schema-authority"
+    },
+    {
+      "label": "A4 Projection Reader",
+      "slug": "tutorials/projection-reader"
+    },
+    {
+      "label": "A5 Durable Trigger + Cancel",
+      "slug": "tutorials/durable-trigger-cancel"
+    },
+    {
+      "label": "A6 Output-only Attached Stream",
+      "slug": "tutorials/output-only-attached-stream"
+    },
+    {
+      "label": "A7 Streaming Chatbot",
+      "slug": "tutorials/streaming-chatbot"
+    },
+    {
+      "label": "A8 Cloudflare DO Minimal App",
+      "slug": "tutorials/cloudflare-do-minimal-app"
+    },
+    {
+      "label": "A9 Provider Material Binding",
+      "slug": "tutorials/provider-material-binding"
+    },
+    {
+      "label": "A10 Internal npm Consumer App",
+      "slug": "tutorials/internal-npm-consumer-app"
+    },
+    {
+      "label": "A11 Ops View",
+      "slug": "tutorials/ops-view"
+    },
+    {
+      "label": "A12 Deploy Minimal Worker",
+      "slug": "tutorials/deploy-minimal-worker"
+    },
+    {
+      "label": "A13 Full Small Agent App",
+      "slug": "tutorials/full-small-agent-app"
+    },
+    {
+      "label": "A14 Tutorial IA / Consistency Reviewer",
+      "slug": "tutorials/tutorial-ia-consistency-reviewer"
+    }
+  ]
+}

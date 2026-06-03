@@ -104,4 +104,4 @@ route, credential, and model facts have one source of truth.
 
 ## Next
 
-Package the app path with [internal npm consumer app](internal-npm-consumer-app.md).
+Place the same stream in a Worker with [Cloudflare DO minimal app](cloudflare-do-minimal-app.md).

@@ -6,7 +6,7 @@ title: "agentOS Docs"
 
 What do you need?
 
-- First time with agentOS: [build a cloud agent app](/tutorials/build-cloud-agent-app/).
+- First time with agentOS: [hello ledger event](/tutorials/hello-ledger-event/).
 - Build a coding app: [vibe-like app guide](/guides/build-vibe-like-coding-app/).
 - Build a workspace agent: [natural-language workspace agent](/guides/build-natural-language-workspace-agent/).
 - Add a capability: [guides](/guides/add-attached-stream/).
