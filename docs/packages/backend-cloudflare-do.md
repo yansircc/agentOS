@@ -61,8 +61,6 @@ surface. WebSocket/SSE disconnect only detaches transport. It does not write a
 cancelled fact. v1 streams do not support reconnect/resume or hibernation; an
 active WebSocket pins the Durable Object alive and costs DO uptime. Long
 workspace sessions need a later durable stream log or hibernation substrate.
-The experimental route decision is recorded in
-[a51 attached stream substrate](../decisions/a51-attached-stream-substrate.md).
 
 `stuckTriggers(now)` is observability over expired claims. It is not a repair
 entry point; ordinary drain redrives expired claims by claiming the same due row

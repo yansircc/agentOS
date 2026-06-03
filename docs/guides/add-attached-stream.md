@@ -23,6 +23,5 @@ Cloudflare DO facade.
 
 ## References
 
-- [a51 decision](../decisions/a51-attached-stream-substrate.md)
 - [Attached stream API](../api/attached-stream.md)
 - [Runtime API](../api/runtime.md)

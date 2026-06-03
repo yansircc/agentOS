@@ -9,10 +9,10 @@ What do you need?
 - First time with agentOS: [build a cloud agent app](/tutorials/build-cloud-agent-app/).
 - Add a capability: [guides](/guides/add-attached-stream/).
 - Understand the model: [concepts](/concepts/durable-truth/).
-- Review route choices: [decisions](/decisions/a52-documentation-substrate/).
 - Check package intent: [runtime packages](/runtime-packages/).
-- Check API exports: [API reference](/api/runtime/).
+- Check TypeScript exports: [runtime exports](/api/runtime/).
 - Check carrier schemas: [carrier reference](/reference/carriers/).
 - Consume npm packages: [internal npm distribution](/distribution/).
 
-Facts live in `docs/**`; package README, `PUBLIC_API.md`, and the docs site are projections.
+Public documentation facts live in `docs/**`; package README, `PUBLIC_API.md`,
+and the docs site are projections.

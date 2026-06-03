@@ -21,4 +21,3 @@ to become interactive.
 
 - [Durable truth](durable-truth.md)
 - [Attached streams](attached-streams.md)
-- [a51 attached stream decision](../decisions/a51-attached-stream-substrate.md)

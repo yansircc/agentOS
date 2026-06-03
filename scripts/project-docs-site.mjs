@@ -34,6 +34,7 @@ const isProjectedSource = (file) => {
   const rel = slash(path.relative(docsRoot, file));
   if (!file.endsWith(".md")) return false;
   if (rel.startsWith("templates/")) return false;
+  if (rel.startsWith("decisions/")) return false;
   return true;
 };
 

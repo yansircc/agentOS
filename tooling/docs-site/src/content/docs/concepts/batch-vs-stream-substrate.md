@@ -25,4 +25,3 @@ to become interactive.
 
 - [Durable truth](/concepts/durable-truth/)
 - [Attached streams](/concepts/attached-streams/)
-- [a51 attached stream decision](/decisions/a51-attached-stream-substrate/)

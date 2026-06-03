@@ -23,6 +23,5 @@ hour-long workspace process lifecycle.
 
 ## Related
 
-- [a51 attached stream decision](/decisions/a51-attached-stream-substrate/)
 - [Add an attached stream](/guides/add-attached-stream/)
 - [Attached stream package](/packages/attached-stream/)
