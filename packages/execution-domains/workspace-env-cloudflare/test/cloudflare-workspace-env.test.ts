@@ -78,18 +78,16 @@ describe("@agent-os/workspace-env-cloudflare", () => {
   });
 
   it("calls listFiles with the provider client receiver intact", async () => {
-    let receiver: unknown;
     const client: CloudflareWorkspaceEnvClient = {
       exec: async () => ({ exitCode: 0 }),
       async listFiles(path) {
-        receiver = this;
+        expect(this).toBe(client);
         return { files: [`${path}/b.ts`, `${path}/a.ts`] };
       },
     };
     const env = makeCloudflareWorkspaceEnv({ client, cwd: "/workspace" });
 
     await expect(env.readdir(".")).resolves.toEqual(["/workspace/a.ts", "/workspace/b.ts"]);
-    expect(receiver).toBe(client);
   });
 
   it("prefers Cloudflare listFiles over a structural readdir fallback", async () => {
