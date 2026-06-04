@@ -2,7 +2,6 @@ import { Clock, Effect, Layer } from "effect";
 import { SqlError } from "@agent-os/kernel/errors";
 import { DurableTriggerRegistry, Scheduler, scheduledEventTrigger } from "@agent-os/runtime";
 import { EventBus } from "./ledger";
-import { fireLedgerEvents } from "./ledger/inserted-events";
 import { enqueueScheduledEvent, ensureDueWorkSchema } from "./due-work";
 
 export { Scheduler } from "@agent-os/runtime";
@@ -26,6 +25,7 @@ export const SchedulerLive = (
             const intent = yield* enqueueScheduledEvent(
               ctx,
               sql,
+              bus,
               scope,
               now,
               at,
@@ -34,7 +34,6 @@ export const SchedulerLive = (
               eventKind,
               data,
             );
-            yield* fireLedgerEvents(bus, [intent]);
             return { id: intent.id };
           }),
       };

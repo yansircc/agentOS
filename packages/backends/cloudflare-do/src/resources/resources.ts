@@ -1,4 +1,3 @@
-import type { LedgerEvent } from "@agent-os/kernel/types";
 /**
  * Resources — business resource reservation over ledger facts.
  *
@@ -19,32 +18,16 @@ import {
   ResourceReservationClosed,
   ResourceReservationNotFound,
   SqlError,
-  safeStringify,
 } from "@agent-os/kernel/errors";
 import { EventBus } from "../ledger";
-import { fireLedgerEvents, insertLedgerEvent } from "../ledger/inserted-events";
 import { Resources } from "@agent-os/runtime";
+import { commitLedgerTransaction } from "../ledger/commit";
 
 import { emptyProjection, loadState } from "./projection";
 
 // Re-export the projection shape so callers that historically imported
 // it from "./resources" keep working.
 export type { ResourceProjection } from "@agent-os/runtime";
-
-const ensureEventsSchema = (sql: SqlStorage): Effect.Effect<void, SqlError> =>
-  Effect.try({
-    try: () =>
-      sql.exec(`
-        CREATE TABLE IF NOT EXISTS events (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          ts INTEGER NOT NULL,
-          kind TEXT NOT NULL,
-          scope TEXT NOT NULL,
-          payload TEXT NOT NULL
-        )
-      `),
-    catch: (cause) => new SqlError({ cause }),
-  }).pipe(Effect.asVoid);
 
 const assertPositiveAmount = (amount: number): Effect.Effect<void, InvalidResourceAmount> =>
   Number.isFinite(amount) && amount > 0
@@ -58,16 +41,7 @@ export const ResourcesLive = (
   return Layer.scoped(
     Resources,
     Effect.gen(function* () {
-      yield* ensureEventsSchema(sql);
       const bus = yield* EventBus;
-
-      const insertEvent = (
-        now: number,
-        kind: string,
-        scope: string,
-        payloadStr: string,
-        payload: unknown,
-      ): LedgerEvent => insertLedgerEvent(sql, { ts: now, kind, scope, payloadStr, payload });
 
       return {
         grant: (scope, spec) =>
@@ -79,16 +53,16 @@ export const ResourcesLive = (
               amount: spec.amount,
               ref: spec.ref,
             };
-            const payloadStr = yield* safeStringify(payload);
-            const event = yield* Effect.try({
-              try: () =>
-                ctx.storage.transactionSync(() =>
-                  insertEvent(now, "resource.granted", scope, payloadStr, payload),
-                ),
-              catch: (cause) => new SqlError({ cause }),
+            const committed = yield* commitLedgerTransaction(ctx, bus, (tx) => {
+              const granted = tx.append({
+                ts: now,
+                kind: "resource.granted",
+                scope,
+                payload,
+              });
+              return granted;
             });
-            yield* fireLedgerEvents(bus, [event]);
-            return { eventId: event.id };
+            return { eventId: committed.id(committed.value) };
           }),
 
         reserve: (scope, spec) =>
@@ -97,181 +71,145 @@ export const ResourcesLive = (
             const now = yield* Clock.currentTimeMillis;
             const reservationId = crypto.randomUUID();
 
-            const tx = yield* Effect.try({
-              try: () =>
-                ctx.storage.transactionSync(() => {
-                  const projected = loadState(sql, scope);
-                  const existing = projected.byIdempotencyKey.get(spec.idempotencyKey);
-                  if (existing !== undefined) {
-                    return {
-                      status: "existing" as const,
-                      reservationId: existing.reservationId,
-                      event: null,
-                    };
-                  }
+            const tx = yield* commitLedgerTransaction(ctx, bus, (ledgerTx) => {
+              const projected = loadState(sql, scope);
+              const existing = projected.byIdempotencyKey.get(spec.idempotencyKey);
+              if (existing !== undefined) {
+                return {
+                  status: "existing" as const,
+                  reservationId: existing.reservationId,
+                };
+              }
 
-                  const current = projected.byKey.get(spec.key) ?? emptyProjection();
-                  if (current.available < spec.amount) {
-                    const rejectedPayload = {
-                      key: spec.key,
-                      amount: spec.amount,
-                      ref: spec.ref,
-                      idempotencyKey: spec.idempotencyKey,
-                      available: current.available,
-                    };
-                    const event = insertEvent(
-                      now,
-                      "resource.reserve_rejected",
-                      scope,
-                      JSON.stringify(rejectedPayload),
-                      rejectedPayload,
-                    );
-                    return {
-                      status: "insufficient" as const,
-                      available: current.available,
-                      event,
-                    };
-                  }
+              const current = projected.byKey.get(spec.key) ?? emptyProjection();
+              if (current.available < spec.amount) {
+                const rejectedPayload = {
+                  key: spec.key,
+                  amount: spec.amount,
+                  ref: spec.ref,
+                  idempotencyKey: spec.idempotencyKey,
+                  available: current.available,
+                };
+                ledgerTx.append({
+                  ts: now,
+                  kind: "resource.reserve_rejected",
+                  scope,
+                  payload: rejectedPayload,
+                });
+                return {
+                  status: "insufficient" as const,
+                  available: current.available,
+                };
+              }
 
-                  const reservedPayload = {
-                    key: spec.key,
-                    amount: spec.amount,
-                    ref: spec.ref,
-                    idempotencyKey: spec.idempotencyKey,
-                    reservationId,
-                  };
-                  const event = insertEvent(
-                    now,
-                    "resource.reserved",
-                    scope,
-                    JSON.stringify(reservedPayload),
-                    reservedPayload,
-                  );
-                  return {
-                    status: "reserved" as const,
-                    reservationId,
-                    event,
-                  };
-                }),
-              catch: (cause) => new SqlError({ cause }),
+              const reservedPayload = {
+                key: spec.key,
+                amount: spec.amount,
+                ref: spec.ref,
+                idempotencyKey: spec.idempotencyKey,
+                reservationId,
+              };
+              ledgerTx.append({
+                ts: now,
+                kind: "resource.reserved",
+                scope,
+                payload: reservedPayload,
+              });
+              return {
+                status: "reserved" as const,
+                reservationId,
+              };
             });
 
-            if (tx.event !== null) {
-              yield* fireLedgerEvents(bus, [tx.event]);
-            }
-            if (tx.status === "insufficient") {
+            if (tx.value.status === "insufficient") {
               return yield* Effect.fail(
                 new ResourceInsufficient({
                   key: spec.key,
                   requested: spec.amount,
-                  available: tx.available,
+                  available: tx.value.available,
                 }),
               );
             }
-            return { reservationId: tx.reservationId };
+            return { reservationId: tx.value.reservationId };
           }),
 
         consume: (scope, spec) =>
           Effect.gen(function* () {
             const now = yield* Clock.currentTimeMillis;
-            const tx = yield* Effect.try({
-              try: () =>
-                ctx.storage.transactionSync(() => {
-                  const projected = loadState(sql, scope);
-                  const reservation = projected.byId.get(spec.reservationId);
-                  if (reservation === undefined) {
-                    return { status: "missing" as const, event: null };
-                  }
-                  if (reservation.status === "consumed") {
-                    return { status: "noop" as const, event: null };
-                  }
-                  if (reservation.status === "released") {
-                    return { status: "closed" as const, closed: "released" as const, event: null };
-                  }
-                  const payload = {
-                    reservationId: spec.reservationId,
-                    ref: spec.ref,
-                  };
-                  const event = insertEvent(
-                    now,
-                    "resource.consumed",
-                    scope,
-                    JSON.stringify(payload),
-                    payload,
-                  );
-                  return { status: "written" as const, event };
-                }),
-              catch: (cause) => new SqlError({ cause }),
+            const tx = yield* commitLedgerTransaction(ctx, bus, (ledgerTx) => {
+              const projected = loadState(sql, scope);
+              const reservation = projected.byId.get(spec.reservationId);
+              if (reservation === undefined) return { status: "missing" as const };
+              if (reservation.status === "consumed") return { status: "noop" as const };
+              if (reservation.status === "released") {
+                return { status: "closed" as const, closed: "released" as const };
+              }
+              const payload = {
+                reservationId: spec.reservationId,
+                ref: spec.ref,
+              };
+              ledgerTx.append({
+                ts: now,
+                kind: "resource.consumed",
+                scope,
+                payload,
+              });
+              return { status: "written" as const };
             });
-            if (tx.status === "missing") {
+            if (tx.value.status === "missing") {
               return yield* Effect.fail(
                 new ResourceReservationNotFound({
                   reservationId: spec.reservationId,
                 }),
               );
             }
-            if (tx.status === "closed") {
+            if (tx.value.status === "closed") {
               return yield* Effect.fail(
                 new ResourceReservationClosed({
                   reservationId: spec.reservationId,
-                  status: tx.closed,
+                  status: tx.value.closed,
                 }),
               );
-            }
-            if (tx.event !== null) {
-              yield* fireLedgerEvents(bus, [tx.event]);
             }
           }),
 
         release: (scope, spec) =>
           Effect.gen(function* () {
             const now = yield* Clock.currentTimeMillis;
-            const tx = yield* Effect.try({
-              try: () =>
-                ctx.storage.transactionSync(() => {
-                  const projected = loadState(sql, scope);
-                  const reservation = projected.byId.get(spec.reservationId);
-                  if (reservation === undefined) {
-                    return { status: "missing" as const, event: null };
-                  }
-                  if (reservation.status === "released") {
-                    return { status: "noop" as const, event: null };
-                  }
-                  if (reservation.status === "consumed") {
-                    return { status: "closed" as const, closed: "consumed" as const, event: null };
-                  }
-                  const payload = {
-                    reservationId: spec.reservationId,
-                    ref: spec.ref,
-                  };
-                  const event = insertEvent(
-                    now,
-                    "resource.released",
-                    scope,
-                    JSON.stringify(payload),
-                    payload,
-                  );
-                  return { status: "written" as const, event };
-                }),
-              catch: (cause) => new SqlError({ cause }),
+            const tx = yield* commitLedgerTransaction(ctx, bus, (ledgerTx) => {
+              const projected = loadState(sql, scope);
+              const reservation = projected.byId.get(spec.reservationId);
+              if (reservation === undefined) return { status: "missing" as const };
+              if (reservation.status === "released") return { status: "noop" as const };
+              if (reservation.status === "consumed") {
+                return { status: "closed" as const, closed: "consumed" as const };
+              }
+              const payload = {
+                reservationId: spec.reservationId,
+                ref: spec.ref,
+              };
+              ledgerTx.append({
+                ts: now,
+                kind: "resource.released",
+                scope,
+                payload,
+              });
+              return { status: "written" as const };
             });
-            if (tx.status === "missing") {
+            if (tx.value.status === "missing") {
               return yield* Effect.fail(
                 new ResourceReservationNotFound({
                   reservationId: spec.reservationId,
                 }),
               );
             }
-            if (tx.status === "closed") {
+            if (tx.value.status === "closed") {
               return yield* Effect.fail(
                 new ResourceReservationClosed({
                   reservationId: spec.reservationId,
-                  status: tx.closed,
+                  status: tx.value.closed,
                 }),
               );
-            }
-            if (tx.event !== null) {
-              yield* fireLedgerEvents(bus, [tx.event]);
             }
           }),
 

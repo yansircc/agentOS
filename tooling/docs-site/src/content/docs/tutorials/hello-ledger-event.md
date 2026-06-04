@@ -38,7 +38,9 @@ the same event through `Ledger.events`.
    ```ts
    const program = Effect.gen(function* () {
      const ledger = yield* Ledger;
-     yield* ledger.log("tutorial.hello.recorded", { message: "hello" }, scope);
+     yield* ledger.commit([
+       { kind: "tutorial.hello.recorded", payload: { message: "hello" }, scope },
+     ]);
      return yield* ledger.events(scope);
    });
    ```

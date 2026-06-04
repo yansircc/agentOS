@@ -8,7 +8,6 @@
  *
  *   json-schema.ts   types + validator (closed-dialect JSON Schema)
  *   fingerprint.ts   canonical-JSON algebra (route + schema)
- *   lease.ts         projection state + decideTier + projectLease
  *   payload.ts       evidence/invalidate Schema + SQL loader
  *   admission.ts     attemptStructured + invalidate orchestration
  *
@@ -34,6 +33,7 @@ export type {
   AdmissionImpact,
   EvidenceRow,
   BarrierRow,
+  BarrierCursor,
   AdmissionRow,
   LlmRoute,
 } from "@agent-os/runtime";
@@ -46,7 +46,6 @@ export { FINGERPRINT_ALGO_VERSION, makeSchemaContract, routeFingerprint } from "
 export type {
   ProbeInput,
   LiveInput,
-  DeliverSpec,
   Stimulus,
   DecodedOutput,
   AttemptSpec,

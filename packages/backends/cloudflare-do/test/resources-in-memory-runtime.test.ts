@@ -73,7 +73,7 @@ const makeRuntime = () => {
   const state = makeInMemoryDurableObjectState();
   const handlers = new Map<string, Set<EventHandler>>();
   const eventBus = EventBusLive(handlers);
-  const ledger = LedgerLive(state.storage.sql).pipe(Layer.provide(eventBus));
+  const ledger = LedgerLive(state).pipe(Layer.provide(eventBus));
   const resources = ResourcesLive(state).pipe(Layer.provide(eventBus));
   return ManagedRuntime.make(Layer.mergeAll(ledger, resources));
 };
@@ -115,20 +115,15 @@ describe("in-memory DO subset", () => {
     expect(() =>
       state.storage.transactionSync(() => {
         state.storage.sql.exec(`
-          CREATE TABLE IF NOT EXISTS events (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            ts INTEGER NOT NULL,
-            kind TEXT NOT NULL,
-            scope TEXT NOT NULL,
-            payload TEXT NOT NULL
+          CREATE TABLE IF NOT EXISTS rollback_probe (
+            id INTEGER PRIMARY KEY,
+            label TEXT NOT NULL
           )
         `);
         state.storage.sql.exec(
-          "INSERT INTO events (ts, kind, scope, payload) VALUES (?, ?, ?, ?) RETURNING id",
+          "INSERT INTO rollback_probe (id, label) VALUES (?, ?)",
           1,
-          "resource.granted",
-          "scope-a",
-          JSON.stringify({ key: "credit", amount: 1, ref: "seed" }),
+          "written",
         );
         throw new Error("rollback");
       }),
@@ -136,7 +131,7 @@ describe("in-memory DO subset", () => {
 
     expect(
       state.storage.sql
-        .exec("SELECT * FROM events WHERE scope = ? AND id > ? ORDER BY id ASC", "scope-a", 0)
+        .exec("SELECT * FROM rollback_probe WHERE id > ? ORDER BY id ASC", 0)
         .toArray(),
     ).toEqual([]);
   });

@@ -273,47 +273,53 @@ export const runWorkspaceStateLoop = (scope = "vibe-like-workspace") => {
   const program = Effect.gen(function* () {
     const ledger = yield* Ledger;
     const projections = yield* MaterializedProjections;
-    yield* ledger.log(
-      "workspace.file.written",
+    yield* ledger.commit([
       {
-        path: "src/weather.ts",
-        blobRef: "blob:weather-source-v1",
-        digest: "sha256:file-v1",
-        metadata: { bytes: 128, language: "ts" },
+        kind: "workspace.file.written",
+        payload: {
+          path: "src/weather.ts",
+          blobRef: "blob:weather-source-v1",
+          digest: "sha256:file-v1",
+          metadata: { bytes: 128, language: "ts" },
+        },
+        scope,
       },
-      scope,
-    );
-    yield* ledger.log(
-      "workspace.git.observed",
       {
-        repoRef: "repo:workspace",
-        branch: "main",
-        statusRef: "git-status:clean",
-        diffRef: "git-diff:weather-tool",
+        kind: "workspace.git.observed",
+        payload: {
+          repoRef: "repo:workspace",
+          branch: "main",
+          statusRef: "git-status:clean",
+          diffRef: "git-diff:weather-tool",
+        },
+        scope,
       },
-      scope,
-    );
-    yield* ledger.log("workspace.port.probed", { port: 8787 }, scope);
-    yield* ledger.log(
-      "workspace.url.observed",
+      { kind: "workspace.port.probed", payload: { port: 8787 }, scope },
       {
-        urlRef: "url:preview-8787",
-        purpose: "preview",
-        status: "ready",
+        kind: "workspace.url.observed",
+        payload: {
+          urlRef: "url:preview-8787",
+          purpose: "preview",
+          status: "ready",
+        },
+        scope,
       },
-      scope,
-    );
-    yield* ledger.log("workspace.port.opened", { port: 8787, urlRef: "url:preview-8787" }, scope);
-    yield* ledger.log(
-      "workspace.artifact.created",
       {
-        artifactId: "artifact:weather-build",
-        blobRef: "blob:weather-build",
-        digest: "sha256:artifact-v1",
-        role: "build",
+        kind: "workspace.port.opened",
+        payload: { port: 8787, urlRef: "url:preview-8787" },
+        scope,
       },
-      scope,
-    );
+      {
+        kind: "workspace.artifact.created",
+        payload: {
+          artifactId: "artifact:weather-build",
+          blobRef: "blob:weather-build",
+          digest: "sha256:artifact-v1",
+          role: "build",
+        },
+        scope,
+      },
+    ]);
 
     return {
       file: yield* projections.get({

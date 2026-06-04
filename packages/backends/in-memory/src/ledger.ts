@@ -4,11 +4,10 @@ import type { InMemoryBackendState } from "./state";
 
 export const InMemoryLedgerLive = (state: InMemoryBackendState): Layer.Layer<Ledger> =>
   Layer.succeed(Ledger, {
-    log: (kind, payload, scope) =>
+    commit: (events) =>
       Effect.gen(function* () {
         const ts = yield* Clock.currentTimeMillis;
-        const [event] = yield* state.commitEvents([{ ts, kind, scope, payload }]);
-        return event!;
+        return yield* state.commitEvents(events.map((event) => ({ ts, ...event })));
       }),
     events: (scope, opts = {}) => Effect.succeed(state.snapshot(scope, opts)),
     streamSnapshot: (scope, opts = {}) => Effect.succeed(state.streamSnapshot(scope, opts)),

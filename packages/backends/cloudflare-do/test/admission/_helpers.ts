@@ -31,7 +31,7 @@ export const SCHEMA: JsonSchemaObject = {
 export const makeRuntime = (state: DurableObjectState, ai: Ai) => {
   const handlers = new Map<string, Set<EventHandler>>();
   const eventBus = EventBusLive(handlers);
-  const ledger = LedgerLive(state.storage.sql).pipe(Layer.provide(eventBus));
+  const ledger = LedgerLive(state).pipe(Layer.provide(eventBus));
   const quota = QuotaLive(state).pipe(Layer.provide(eventBus));
   const aiLayer = Layer.succeed(AiBinding, ai);
   const refs = RefResolverLive({
@@ -53,7 +53,7 @@ export const makeRuntimeWithRegistry = (
 ) => {
   const handlers = new Map<string, Set<EventHandler>>();
   const eventBus = EventBusLive(handlers);
-  const ledger = LedgerLive(state.storage.sql).pipe(Layer.provide(eventBus));
+  const ledger = LedgerLive(state).pipe(Layer.provide(eventBus));
   const quota = QuotaLive(state).pipe(Layer.provide(eventBus));
   const aiLayer = Layer.succeed(AiBinding, ai);
   const refs = RefResolverLive({

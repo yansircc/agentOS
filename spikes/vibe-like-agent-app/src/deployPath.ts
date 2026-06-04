@@ -91,33 +91,35 @@ export const runDeployPathLoop = (scope = "vibe-like-deploy") => {
   const program = Effect.gen(function* () {
     const ledger = yield* Ledger;
     const projections = yield* MaterializedProjections;
-    yield* ledger.log(
-      "deploy.requested",
+    yield* ledger.commit([
       {
-        appId: "weather-agent",
-        bundleRef: "bundle:weather-agent-v1",
-        digest: "sha256:worker-v1",
+        kind: "deploy.requested",
+        payload: {
+          appId: "weather-agent",
+          bundleRef: "bundle:weather-agent-v1",
+          digest: "sha256:worker-v1",
+        },
+        scope,
       },
-      scope,
-    );
-    yield* ledger.log(
-      "deploy.completed",
       {
-        appId: "weather-agent",
-        workerRef: "worker:weather-agent",
-        version: "v1",
-        digest: "sha256:worker-v1",
+        kind: "deploy.completed",
+        payload: {
+          appId: "weather-agent",
+          workerRef: "worker:weather-agent",
+          version: "v1",
+          digest: "sha256:worker-v1",
+        },
+        scope,
       },
-      scope,
-    );
-    yield* ledger.log(
-      "deploy.readback",
       {
-        appId: "weather-agent",
-        readbackDigest: "sha256:worker-v1",
+        kind: "deploy.readback",
+        payload: {
+          appId: "weather-agent",
+          readbackDigest: "sha256:worker-v1",
+        },
+        scope,
       },
-      scope,
-    );
+    ]);
     return yield* projections.get({
       kind: "deploy.app",
       scope,

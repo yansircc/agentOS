@@ -113,7 +113,10 @@ const makeCloudflareDoContractDriver = (): RuntimeBackendContractDriver => {
     },
     log: async (scope, kind, payload) => {
       const ledger = await runtime(scope).runPromise(Ledger);
-      return runtime(scope).runPromise(ledger.log(kind, payload, scope));
+      const events = await runtime(scope).runPromise(ledger.commit([{ kind, payload, scope }]));
+      const event = events[0];
+      if (event === undefined) throw new Error("ledger commit returned no event");
+      return event;
     },
     events: async (scope) => {
       const ledger = await runtime(scope).runPromise(Ledger);

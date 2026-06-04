@@ -85,6 +85,13 @@ export type BarrierRow = {
 
 export type AdmissionRow = EvidenceRow | BarrierRow;
 
+export type BarrierCursor = {
+  readonly ts: number;
+  readonly id: number;
+};
+
+export const EMPTY_BARRIER_CURSOR: BarrierCursor = { ts: 0, id: 0 };
+
 // LlmRoute is sourced from llm.ts but re-exported here for callers that
 // want to type-check projection inputs without taking a runtime import
 // from llm. Pure type re-export.
@@ -112,12 +119,12 @@ export const decideTier = (
   preLease: CapabilityLease,
   outcome: Outcome,
   stimulusKind: "probe" | "live",
-  latestBarrierTs: number,
+  latestBarrier: BarrierCursor,
 ): AdmissionImpact => {
   if (stimulusKind === "probe") return "lease-bearing";
   if (outcome.class !== "Supported") return "lease-bearing";
   if (preLease.status === "supported") {
-    if (latestBarrierTs > preLease.lastEvidenceTs) return "lease-bearing";
+    if (latestBarrier.ts > preLease.lastEvidenceTs) return "lease-bearing";
     return "reinforcement";
   }
   return "lease-bearing";
@@ -183,14 +190,14 @@ const barrierKeyMatches = (current: AttemptKey, barrier: Partial<AttemptKey>): b
 
 /** Project the latest lease for `key` from the given event list at time `now`.
  *
- *  Pure function. Reads no IO. Returns `{lease, latestBarrierTs}` so callers
+ *  Pure function. Reads no IO. Returns `{lease, latestBarrier}` so callers
  *  computing admission impact can use both inputs without re-scanning.
  *
- *  Total order over (`ts`, `id`): SQLite's `id` is monotonically increasing
- *  via `INTEGER PRIMARY KEY AUTOINCREMENT`, so even when two events share
- *  the same wall-clock millisecond (`ts`), the later writer has the larger
- *  `id`. Projection uses `(ts, id)` lexicographic ordering everywhere —
- *  both for picking the latest evidence AND for cutting off barriers.
+ *  Total order over (`ts`, `id`): ledger event ids are monotonically
+ *  increasing integer cursors. Even when two events share the same wall-clock
+ *  millisecond (`ts`), the later writer has the larger `id`. Projection uses
+ *  `(ts, id)` lexicographic ordering everywhere — both for picking the latest
+ *  evidence AND for cutting off barriers.
  *
  *  Skipped (per §8): AuthError / RateLimited / TransientError / ConfigError —
  *  not capability facts; walk past them to find a real lease-bearing event.
@@ -204,17 +211,15 @@ export const projectLease = (
   rows: ReadonlyArray<AdmissionRow>,
   key: AttemptKey,
   now: number,
-): { readonly lease: CapabilityLease; readonly latestBarrierTs: number } => {
+): { readonly lease: CapabilityLease; readonly latestBarrier: BarrierCursor } => {
   const curMajor = majorOf(key.adapterVersion);
 
   // Find the latest barrier under (ts, id) ordering.
-  let latestBarrierTs = 0;
-  let latestBarrierId = 0;
+  let latestBarrier: BarrierCursor = EMPTY_BARRIER_CURSOR;
   for (const r of rows) {
     if (r.kind === "llm.structured.invalidate" && barrierKeyMatches(key, r.key)) {
-      if (r.ts > latestBarrierTs || (r.ts === latestBarrierTs && r.id > latestBarrierId)) {
-        latestBarrierTs = r.ts;
-        latestBarrierId = r.id;
+      if (r.ts > latestBarrier.ts || (r.ts === latestBarrier.ts && r.id > latestBarrier.id)) {
+        latestBarrier = { ts: r.ts, id: r.id };
       }
     }
   }
@@ -222,7 +227,7 @@ export const projectLease = (
   // An evidence row counts as "after the barrier" iff
   //   (ev.ts, ev.id) > (barrier.ts, barrier.id)   lexicographic.
   const afterBarrier = (ev: EvidenceRow): boolean =>
-    ev.ts > latestBarrierTs || (ev.ts === latestBarrierTs && ev.id > latestBarrierId);
+    ev.ts > latestBarrier.ts || (ev.ts === latestBarrier.ts && ev.id > latestBarrier.id);
 
   const eligible: EvidenceRow[] = [];
   for (const r of rows) {
@@ -255,7 +260,7 @@ export const projectLease = (
             validUntilHard: ev.ts + SUPPORTED_HARD_MS,
             lastEvidenceTs: ev.ts,
           },
-          latestBarrierTs,
+          latestBarrier,
         };
       }
       continue;
@@ -270,10 +275,10 @@ export const projectLease = (
           retryAfter: ev.ts + ttl,
           lastEvidenceTs: ev.ts,
         },
-        latestBarrierTs,
+        latestBarrier,
       };
     }
   }
 
-  return { lease: { status: "unknown" }, latestBarrierTs };
+  return { lease: { status: "unknown" }, latestBarrier };
 };

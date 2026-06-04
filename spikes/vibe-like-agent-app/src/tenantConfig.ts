@@ -134,25 +134,27 @@ export const runTenantConfigLoop = (scope = "vibe-like-tenant") => {
   const program = Effect.gen(function* () {
     const ledger = yield* Ledger;
     const projections = yield* MaterializedProjections;
-    yield* ledger.log(
-      "tenant.credential.registered",
+    yield* ledger.commit([
       {
-        credentialRef: "credential:weather-api",
-        provider: "weather",
-        purpose: "tool-call",
+        kind: "tenant.credential.registered",
+        payload: {
+          credentialRef: "credential:weather-api",
+          provider: "weather",
+          purpose: "tool-call",
+        },
+        scope,
       },
-      scope,
-    );
-    yield* ledger.log(
-      "tenant.skill.installed",
       {
-        skillId: "weather-tool",
-        zipRef: "zip:weather-tool-v1",
-        versionHash: "sha256:weather-skill-v1",
+        kind: "tenant.skill.installed",
+        payload: {
+          skillId: "weather-tool",
+          zipRef: "zip:weather-tool-v1",
+          versionHash: "sha256:weather-skill-v1",
+        },
+        scope,
       },
-      scope,
-    );
-    yield* ledger.log("tenant.skill.enabled", { skillId: "weather-tool" }, scope);
+      { kind: "tenant.skill.enabled", payload: { skillId: "weather-tool" }, scope },
+    ]);
     return {
       credential: yield* projections.get({
         kind: "tenant.credential",

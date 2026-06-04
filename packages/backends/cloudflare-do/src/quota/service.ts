@@ -17,10 +17,9 @@
 import { Clock, Effect, Layer } from "effect";
 import { Quota, type GrantResult } from "@agent-os/runtime";
 import { EventBus } from "../ledger";
-import { fireLedgerEvents, insertLedgerEvent } from "../ledger/inserted-events";
-import { SqlError, safeStringify } from "@agent-os/kernel/errors";
 import { sqlText } from "../storage/sql-row";
 import { decodeConsumedPayloadSync } from "./payload";
+import { commitLedgerTransaction } from "../ledger/commit";
 
 /** Owned schema for events.kind = 'dispatch.consumed' payload. We are the
  *  sole writer (consumedPayload below), so any shape mismatch read back is
@@ -40,96 +39,77 @@ export const QuotaLive = (ctx: DurableObjectState): Layer.Layer<Quota, never, Ev
             const now = yield* Clock.currentTimeMillis;
             const windowStart = windowMs === Number.POSITIVE_INFINITY ? 0 : now - windowMs;
 
-            // Pre-stringify payloads outside transaction (transactionSync
-            // callback is synchronous; we can't yield* inside).
             const consumedPayload = {
               key,
               amount,
               toolName,
               operationRef,
             };
-            const consumedStr = yield* safeStringify(consumedPayload);
 
-            const txResult = yield* Effect.try({
-              try: () =>
-                ctx.storage.transactionSync(() => {
-                  const rows = sql
-                    .exec(
-                      "SELECT payload FROM events WHERE scope = ? AND kind = 'dispatch.consumed' AND ts >= ?",
-                      scope,
-                      windowStart,
-                    )
-                    .toArray();
-                  let consumed = 0;
-                  for (const r of rows) {
-                    // Decode through owned schema. JSON.parse failure OR
-                    // shape mismatch both throw → tx rolls back → Effect.try
-                    // wraps as SqlError. Single owned failure path; no
-                    // silent skip, no NaN propagation, no undercount.
-                    const p = decodeConsumedPayloadSync(
-                      JSON.parse(sqlText(r.payload, "events.payload")),
-                    );
-                    if (p.key === key && p.operationRef === operationRef) {
-                      return {
-                        granted: true as const,
-                        consumed,
-                        event: null,
-                      };
-                    }
-                    if (p.key === key) {
-                      consumed += p.amount;
-                    }
-                  }
-
-                  if (consumed + amount > limit) {
-                    const rateLimitedPayload = {
-                      key,
-                      attempted: amount,
-                      consumed,
-                      limit,
-                      windowMs,
-                      toolName,
-                    };
-                    const rateLimitedStr = JSON.stringify(rateLimitedPayload);
-                    const event = insertLedgerEvent(sql, {
-                      ts: now,
-                      kind: "dispatch.rate_limited",
-                      scope,
-                      payloadStr: rateLimitedStr,
-                      payload: rateLimitedPayload,
-                    });
-                    return {
-                      granted: false as const,
-                      consumed,
-                      event,
-                    };
-                  }
-
-                  const event = insertLedgerEvent(sql, {
-                    ts: now,
-                    kind: "dispatch.consumed",
-                    scope,
-                    payloadStr: consumedStr,
-                    payload: consumedPayload,
-                  });
+            const txResult = yield* commitLedgerTransaction(ctx, bus, (tx) => {
+              const rows = sql
+                .exec(
+                  "SELECT payload FROM events WHERE scope = ? AND kind = 'dispatch.consumed' AND ts >= ?",
+                  scope,
+                  windowStart,
+                )
+                .toArray();
+              let consumed = 0;
+              for (const r of rows) {
+                // Decode through owned schema. JSON.parse failure OR
+                // shape mismatch both throw → tx rolls back → Effect.try
+                // wraps as SqlError. Single owned failure path; no
+                // silent skip, no NaN propagation, no undercount.
+                const p = decodeConsumedPayloadSync(
+                  JSON.parse(sqlText(r.payload, "events.payload")),
+                );
+                if (p.key === key && p.operationRef === operationRef) {
                   return {
                     granted: true as const,
                     consumed,
-                    event,
                   };
-                }),
-              catch: (cause) => new SqlError({ cause }),
+                }
+                if (p.key === key) {
+                  consumed += p.amount;
+                }
+              }
+
+              if (consumed + amount > limit) {
+                const rateLimitedPayload = {
+                  key,
+                  attempted: amount,
+                  consumed,
+                  limit,
+                  windowMs,
+                  toolName,
+                };
+                tx.append({
+                  ts: now,
+                  kind: "dispatch.rate_limited",
+                  scope,
+                  payload: rateLimitedPayload,
+                });
+                return {
+                  granted: false as const,
+                  consumed,
+                };
+              }
+
+              tx.append({
+                ts: now,
+                kind: "dispatch.consumed",
+                scope,
+                payload: consumedPayload,
+              });
+              return {
+                granted: true as const,
+                consumed,
+              };
             });
 
-            // Fire EventBus AFTER commit (sql.exec inside transactionSync
-            // bypassed Ledger.log, which normally fires the bus).
-            if (txResult.event !== null) {
-              yield* fireLedgerEvents(bus, [txResult.event]);
-            }
-
             return {
-              granted: txResult.granted,
-              consumed: txResult.consumed,
+              granted: txResult.value.granted,
+              consumed: txResult.value.consumed,
               limit,
             } satisfies GrantResult;
           }),

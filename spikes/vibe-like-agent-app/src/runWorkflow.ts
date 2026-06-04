@@ -102,14 +102,16 @@ export const runFakeLocalLoop = (
     const projections = yield* MaterializedProjections;
     const runId = `run-${crypto.randomUUID()}`;
     const requestedAt = yield* Clock.currentTimeMillis;
-    yield* ledger.log(
-      "run.requested",
+    yield* ledger.commit([
       {
-        runId,
-        promptDigest: digestPrompt(prompt),
+        kind: "run.requested",
+        payload: {
+          runId,
+          promptDigest: digestPrompt(prompt),
+        },
+        scope,
       },
-      scope,
-    );
+    ]);
 
     const firstFrameAt = yield* Clock.currentTimeMillis;
     const frame = {
@@ -117,8 +119,10 @@ export const runFakeLocalLoop = (
       channel: "assistant" as const,
       payload: `thinking about ${prompt.slice(0, 32)}`,
     };
-    yield* ledger.log("run.first_frame", { runId }, scope);
-    yield* ledger.log("run.completed", { runId }, scope);
+    yield* ledger.commit([
+      { kind: "run.first_frame", payload: { runId }, scope },
+      { kind: "run.completed", payload: { runId }, scope },
+    ]);
 
     const readStartedAt = yield* Clock.currentTimeMillis;
     const row = yield* projections.get({

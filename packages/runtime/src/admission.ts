@@ -15,27 +15,22 @@ export * from "./admission-lease";
 
 export type ProbeInput = { readonly synthetic: unknown };
 export type LiveInput = { readonly userText: string };
-export type DeliverSpec = {
-  readonly event: string;
-  readonly payload: unknown;
-};
 
-export type Stimulus<O> =
+export type Stimulus =
   | { readonly kind: "probe"; readonly synthetic: ProbeInput }
   | {
       readonly kind: "live";
       readonly userInput: LiveInput;
-      readonly deliver: (decoded: O) => DeliverSpec;
     };
 
 export type DecodedOutput = Record<string, unknown>;
 
-export type AttemptSpec<O> = {
+export type AttemptSpec = {
   readonly scope: string;
   readonly route: LlmRoute;
   readonly schemaContract: SchemaContract;
   readonly strategy: Strategy;
-  readonly stimulus: Stimulus<O>;
+  readonly stimulus: Stimulus;
   readonly signal?: AbortSignal;
 };
 
@@ -67,7 +62,7 @@ export class Admission extends Context.Tag("@agent-os/Admission")<
   Admission,
   {
     readonly attemptStructured: <O>(
-      spec: AttemptSpec<O>,
+      spec: AttemptSpec,
     ) => Effect.Effect<AttemptResult<O>, SqlError | JsonStringifyError>;
     readonly invalidate: (
       spec: InvalidateSpec,

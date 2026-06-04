@@ -3,7 +3,6 @@ import {
   JsonStringifyError,
   SqlError,
   UnregisteredDurableTriggerKind,
-  safeStringify,
 } from "@agent-os/kernel/errors";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import {
@@ -18,7 +17,12 @@ import {
   scheduledEventIntentPayload,
   type TriggerRegistry,
 } from "@agent-os/runtime";
-import { insertLedgerEvent } from "./ledger/inserted-events";
+import {
+  commitLedgerTransaction,
+  type LedgerEventRef,
+  type LedgerTransactionBuilder,
+} from "./ledger/commit";
+import type { EventBusService } from "./ledger/event-bus";
 import { sqlText } from "./storage/sql-row";
 
 export interface DueWorkRow {
@@ -550,26 +554,40 @@ export const insertDurableTriggerDueWork = (
 export const commitDurableTriggerIntent = (
   ctx: DurableObjectState,
   sql: SqlStorage,
+  bus: EventBusService,
   fireAt: number,
   registry: TriggerRegistry,
   triggerKind: string,
-  writeIntent: (trigger: {
-    readonly kind: string;
-    readonly intentEventKind: string;
-  }) => LedgerEvent,
-): Effect.Effect<LedgerEvent, SqlError | UnregisteredDurableTriggerKind> =>
+  writeIntent: (
+    tx: LedgerTransactionBuilder,
+    trigger: {
+      readonly kind: string;
+      readonly intentEventKind: string;
+    },
+  ) => LedgerEventRef,
+): Effect.Effect<LedgerEvent, SqlError | JsonStringifyError | UnregisteredDurableTriggerKind> =>
   Effect.gen(function* () {
     const trigger = yield* getDurableTrigger(registry, triggerKind);
-    return yield* armBeforeDueCommit(ctx, sql, fireAt, () => {
-      const intent = writeIntent(trigger);
-      insertDurableTriggerDueWork(sql, fireAt, trigger.kind, intent.id);
+    const existingNext = yield* findNextDue(sql);
+    const target = existingNext === null ? fireAt : Math.min(existingNext, fireAt);
+    yield* Effect.tryPromise({
+      try: () => ctx.storage.setAlarm(target),
+      catch: (cause) => new SqlError({ cause }),
+    });
+    const committed = yield* commitLedgerTransaction(ctx, bus, (tx) => {
+      const intent = writeIntent(tx, trigger);
+      tx.afterInsert(({ id }) => {
+        insertDurableTriggerDueWork(sql, fireAt, trigger.kind, id(intent));
+      });
       return intent;
     });
+    return committed.event(committed.value);
   });
 
 export const enqueueScheduledEvent = (
   ctx: DurableObjectState,
   sql: SqlStorage,
+  bus: EventBusService,
   scope: string,
   intentTs: number,
   at: number,
@@ -580,14 +598,19 @@ export const enqueueScheduledEvent = (
 ): Effect.Effect<LedgerEvent, SqlError | JsonStringifyError | UnregisteredDurableTriggerKind> =>
   Effect.gen(function* () {
     const payload = scheduledEventIntentPayload(eventKind, data);
-    const payloadStr = yield* safeStringify(payload);
-    return yield* commitDurableTriggerIntent(ctx, sql, at, registry, triggerKind, (trigger) =>
-      insertLedgerEvent(sql, {
-        ts: intentTs,
-        kind: trigger.intentEventKind,
-        scope,
-        payloadStr,
-        payload,
-      }),
+    return yield* commitDurableTriggerIntent(
+      ctx,
+      sql,
+      bus,
+      at,
+      registry,
+      triggerKind,
+      (tx, trigger) =>
+        tx.append({
+          ts: intentTs,
+          kind: trigger.intentEventKind,
+          scope,
+          payload,
+        }),
     );
   });

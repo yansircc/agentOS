@@ -144,7 +144,7 @@ describe("admission — decideTier truth table (contract §10)", () => {
       "lease-bearing" as const,
     ],
   ])("row %i — %s", (_n, _name, preLease, outcome, stim, barrierTs, expected) => {
-    expect(decideTier(preLease, outcome, stim, barrierTs)).toBe(expected);
+    expect(decideTier(preLease, outcome, stim, { ts: barrierTs, id: 0 })).toBe(expected);
   });
 });
 
@@ -213,9 +213,9 @@ describe("admission — projectLease pure projection (contract §7.2)", () => {
 
   it("barrier wipes earlier evidence", () => {
     const rows = [ev(1, 1000, { class: "Supported", tokensUsed: 5 }), barrier(2, 1500)];
-    const { lease, latestBarrierTs } = projectLease(rows, key, 2000);
+    const { lease, latestBarrier } = projectLease(rows, key, 2000);
     expect(lease.status).toBe("unknown");
-    expect(latestBarrierTs).toBe(1500);
+    expect(latestBarrier).toEqual({ ts: 1500, id: 2 });
   });
 
   it("reinforcement evidence is ignored by projection (lease-bearing only)", () => {
@@ -250,9 +250,9 @@ describe("admission — projectLease pure projection (contract §7.2)", () => {
     // ts=100: evidence id=1, barrier id=2. Barrier comes after evidence
     // under (ts, id) order, so the Supported is wiped → unknown.
     const rows = [ev(1, 100, { class: "Supported", tokensUsed: 5 }), barrier(2, 100)];
-    const { lease, latestBarrierTs } = projectLease(rows, key, 200);
+    const { lease, latestBarrier } = projectLease(rows, key, 200);
     expect(lease.status).toBe("unknown");
-    expect(latestBarrierTs).toBe(100);
+    expect(latestBarrier).toEqual({ ts: 100, id: 2 });
   });
 
   it("same ms barrier vs evidence: barrier id < evidence id → evidence survives", () => {

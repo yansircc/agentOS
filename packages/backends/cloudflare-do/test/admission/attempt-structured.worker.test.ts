@@ -3,7 +3,7 @@
  *
  * Three test groups:
  *   1. attemptStructured IO contract: closed-schema rejection, atomic
- *      evidence + deliver write, lease short-circuit, barrier reset.
+ *      evidence write, lease short-circuit, barrier reset.
  *   2. Malformed payload defense (Codex P2): infra corruption MUST
  *      surface as SqlError, not a `TypeError: undefined is not an
  *      object` leak out of projectLease.
@@ -77,7 +77,6 @@ describe("admission — IO contract: attemptStructured", () => {
             stimulus: {
               kind: "live",
               userInput: { userText: "hi" },
-              deliver: (d) => ({ event: "structured.done", payload: d }),
             },
           });
         }),
@@ -105,7 +104,7 @@ describe("admission — IO contract: attemptStructured", () => {
     });
   });
 
-  it("happy path: evidence + deliver committed atomically; lease-bearing first, reinforcement on second", async () => {
+  it("happy path: evidence is committed; lease-bearing first, reinforcement on second", async () => {
     const scope = "admission-happy";
     const id = testEnv.AGENT_DO.idFromName(scope);
     const stub = testEnv.AGENT_DO.get(id);
@@ -131,10 +130,6 @@ describe("admission — IO contract: attemptStructured", () => {
             stimulus: {
               kind: "live",
               userInput: { userText: "hello" },
-              deliver: (decoded) => ({
-                event: "structured.done",
-                payload: decoded,
-              }),
             },
           });
         }),
@@ -157,10 +152,6 @@ describe("admission — IO contract: attemptStructured", () => {
             stimulus: {
               kind: "live",
               userInput: { userText: "hello again" },
-              deliver: (decoded) => ({
-                event: "structured.done",
-                payload: decoded,
-              }),
             },
           });
         }),
@@ -169,7 +160,7 @@ describe("admission — IO contract: attemptStructured", () => {
       expect(r2.ok).toBe(true);
       expect(r2.admissionImpact).toBe("reinforcement");
 
-      // Ledger contents: 2 evidence rows + 2 deliver rows (one for each).
+      // Admission writes evidence only. Submit owns deliver/terminal facts.
       const events = await runtime.runPromise(
         Effect.gen(function* () {
           const l = yield* Ledger;
@@ -181,7 +172,7 @@ describe("admission — IO contract: attemptStructured", () => {
         return acc;
       }, {});
       expect(counts["llm.structured.evidence"]).toBe(2);
-      expect(counts["structured.done"]).toBe(2);
+      expect(counts["structured.done"] ?? 0).toBe(0);
 
       await runtime.dispose();
     });
@@ -217,7 +208,6 @@ describe("admission — IO contract: attemptStructured", () => {
             stimulus: {
               kind: "live",
               userInput: { userText: "x" },
-              deliver: (d) => ({ event: "structured.done", payload: d }),
             },
           });
         }),
@@ -240,7 +230,6 @@ describe("admission — IO contract: attemptStructured", () => {
             stimulus: {
               kind: "live",
               userInput: { userText: "y" },
-              deliver: (d) => ({ event: "structured.done", payload: d }),
             },
           });
         }),
@@ -283,7 +272,6 @@ describe("admission — IO contract: attemptStructured", () => {
             stimulus: {
               kind: "live",
               userInput: { userText: "x" },
-              deliver: (d) => ({ event: "structured.done", payload: d }),
             },
           });
         }),
@@ -320,7 +308,6 @@ describe("admission — IO contract: attemptStructured", () => {
             stimulus: {
               kind: "live",
               userInput: { userText: "y" },
-              deliver: (d) => ({ event: "structured.done", payload: d }),
             },
           });
         }),
@@ -353,15 +340,20 @@ describe("admission — malformed payload → SqlError (Codex P2)", () => {
       const runtime = makeRuntime(state, ai);
       const schemaContract = await runtime.runPromise(makeSchemaContract(SCHEMA));
 
-      state.storage.sql.exec(
-        "INSERT INTO events (ts, kind, scope, payload) VALUES (?, ?, ?, ?)",
-        Date.now(),
-        "llm.structured.evidence",
-        scope,
-        JSON.stringify({
-          stimulusKind: "live",
-          outcome: { class: "Supported", tokensUsed: 10 },
-          admissionImpact: "lease-bearing",
+      await runtime.runPromise(
+        Effect.gen(function* () {
+          const ledger = yield* Ledger;
+          yield* ledger.commit([
+            {
+              kind: "llm.structured.evidence",
+              scope,
+              payload: {
+                stimulusKind: "live",
+                outcome: { class: "Supported", tokensUsed: 10 },
+                admissionImpact: "lease-bearing",
+              },
+            },
+          ]);
         }),
       );
 
@@ -376,7 +368,6 @@ describe("admission — malformed payload → SqlError (Codex P2)", () => {
             stimulus: {
               kind: "live",
               userInput: { userText: "x" },
-              deliver: (d) => ({ event: "structured.done", payload: d }),
             },
           });
         }),
@@ -405,15 +396,20 @@ describe("admission — malformed payload → SqlError (Codex P2)", () => {
       const runtime = makeRuntime(state, ai);
       const schemaContract = await runtime.runPromise(makeSchemaContract(SCHEMA));
 
-      state.storage.sql.exec(
-        "INSERT INTO events (ts, kind, scope, payload) VALUES (?, ?, ?, ?)",
-        Date.now(),
-        "llm.structured.invalidate",
-        scope,
-        JSON.stringify({
-          key: "not-an-object",
-          reason: "test",
-          by: "test",
+      await runtime.runPromise(
+        Effect.gen(function* () {
+          const ledger = yield* Ledger;
+          yield* ledger.commit([
+            {
+              kind: "llm.structured.invalidate",
+              scope,
+              payload: {
+                key: "not-an-object",
+                reason: "test",
+                by: "test",
+              },
+            },
+          ]);
         }),
       );
 
@@ -428,7 +424,6 @@ describe("admission — malformed payload → SqlError (Codex P2)", () => {
             stimulus: {
               kind: "live",
               userInput: { userText: "x" },
-              deliver: (d) => ({ event: "structured.done", payload: d }),
             },
           });
         }),

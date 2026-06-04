@@ -71,7 +71,7 @@ const makeSpec = (scope: string, limit: number): InternalSubmitSpec => ({
 const buildRuntime = (state: DurableObjectState, ai: Ai) => {
   const handlers = new Map<string, Set<EventHandler>>();
   const eventBus = EventBusLive(handlers);
-  const ledger = LedgerLive(state.storage.sql).pipe(Layer.provide(eventBus));
+  const ledger = LedgerLive(state).pipe(Layer.provide(eventBus));
   const quota = QuotaLive(state).pipe(Layer.provide(eventBus));
   const aiLayer = Layer.succeed(AiBinding, ai);
   const refs = RefResolverLive({
@@ -201,31 +201,28 @@ describe("quota state machine — deterministic", () => {
 
       const runtime = buildRuntime(state, ai);
 
-      // Touch Ledger to trigger ensureSchema (creates events table).
-      await runtime.runPromise(
-        Effect.gen(function* () {
-          const l = yield* Ledger;
-          yield* l.events("__init__");
-        }),
-      );
-
-      // Inject a malformed dispatch.consumed row directly. Payload is
-      // valid JSON but fails ConsumedPayloadSchema:
+      // Commit a malformed dispatch.consumed row through the ledger primitive.
+      // Payload is valid JSON but fails ConsumedPayloadSchema:
       //   - amount is "x" (not a finite number)
       //   - matches the key the tool will look up
       // Without the v0.2.9 P2 fix, this row would silently be parsed as
       // `consumed += NaN`, polluting the running total. With the fix,
       // Schema.decodeUnknownSync throws → tx rollback → SqlError escapes.
-      state.storage.sql.exec(
-        "INSERT INTO events (ts, kind, scope, payload) VALUES (?, ?, ?, ?)",
-        Date.now(),
-        "dispatch.consumed",
-        scope,
-        JSON.stringify({
-          key: "get_current_time",
-          amount: "x",
-          toolName: "get_current_time",
-          operationRef: "bad-op",
+      await runtime.runPromise(
+        Effect.gen(function* () {
+          const ledger = yield* Ledger;
+          yield* ledger.commit([
+            {
+              kind: "dispatch.consumed",
+              scope,
+              payload: {
+                key: "get_current_time",
+                amount: "x",
+                toolName: "get_current_time",
+                operationRef: "bad-op",
+              },
+            },
+          ]);
         }),
       );
 

@@ -7,7 +7,14 @@
     "publicApiMeaning": "PUBLIC_API.md files guard against accidental exports; they are not API or schema freezes."
   },
   "governance": {
-    "invariants": ["Every fact has exactly one writer.", "Do not derive intent from actual."]
+    "invariants": [
+      "Already-clear algebra must become type-proof or boot-proof.",
+      "Every ledger fact has one commit primitive as its source generator.",
+      "Every algebra has one code source.",
+      "Runtime validation is only for unknown external input, not internally constructed states.",
+      "Every fact has exactly one writer.",
+      "Do not derive intent from actual."
+    ]
   },
   "holds": [
     {

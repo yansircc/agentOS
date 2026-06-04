@@ -19,6 +19,7 @@ import {
   findNextDue,
 } from "../src/due-work";
 import { EventBusLive } from "../src/ledger";
+import type { EventBusService } from "../src/ledger/event-bus";
 import { makeCloudflareBackendCoreLayer } from "../src/runtime-core";
 import { TriggerPumpLive } from "../src/trigger-pump";
 import { makeInMemoryDurableObjectState } from "./_in-memory-do";
@@ -35,6 +36,12 @@ const deadTargets: DispatchTargetRegistry = {
   [bindingKey]: {
     deliver: () => Promise.reject("dead target"),
   },
+};
+
+const noOpBus: EventBusService = {
+  fire: () => Effect.void,
+  fireMany: () => Effect.void,
+  subscribe: () => ({ unsubscribe: () => undefined }),
 };
 
 const dispatchSpec = {
@@ -62,6 +69,7 @@ describe("due-work alarm protocol", () => {
         enqueueScheduledEvent(
           state,
           sql,
+          noOpBus,
           "sender",
           1,
           10,
@@ -90,6 +98,7 @@ describe("due-work alarm protocol", () => {
       const intent = yield* enqueueScheduledEvent(
         state,
         sql,
+        noOpBus,
         "sender",
         1,
         10,
@@ -115,7 +124,7 @@ describe("due-work alarm protocol", () => {
       const registry = yield* makeDurableTriggerRegistry([scheduledEventTrigger]);
 
       const exit = yield* Effect.exit(
-        commitDurableTriggerIntent(state, sql, 10, registry, "missing.trigger", () => {
+        commitDurableTriggerIntent(state, sql, noOpBus, 10, registry, "missing.trigger", () => {
           throw new Error("writeIntent should not run");
         }),
       );

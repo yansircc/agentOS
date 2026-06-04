@@ -165,6 +165,59 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
   }
 
   private insert(sql: string, args: readonly unknown[]): InMemorySqlCursor {
+    if (/^INSERT INTO materialized_projection_rows /i.test(sql) && / ON CONFLICT/i.test(sql)) {
+      const [
+        scope,
+        kind,
+        identityKey,
+        identityJson,
+        stateJson,
+        version,
+        updatedEventId,
+        updatedAt,
+      ] = args;
+      const table = this.table("materialized_projection_rows");
+      const row = table.rows.find(
+        (candidate) =>
+          candidate.scope === scope &&
+          candidate.kind === kind &&
+          candidate.identity_key === identityKey,
+      );
+      const values = {
+        scope,
+        kind,
+        identity_key: identityKey,
+        identity_json: identityJson,
+        state_json: stateJson,
+        version,
+        updated_event_id: updatedEventId,
+        updated_at: updatedAt,
+      };
+      if (row === undefined) table.rows.push(values);
+      else Object.assign(row, values);
+      return new InMemorySqlCursor([]);
+    }
+
+    if (/^INSERT INTO materialized_projection_meta /i.test(sql) && / ON CONFLICT/i.test(sql)) {
+      const [scope, kind, version, lastAppliedEventId, updatedAt] = args;
+      const table = this.table("materialized_projection_meta");
+      const row = table.rows.find(
+        (candidate) => candidate.scope === scope && candidate.kind === kind,
+      );
+      const values = {
+        scope,
+        kind,
+        version,
+        status: "current",
+        last_applied_event_id: lastAppliedEventId,
+        last_rebuilt_event_id: null,
+        updated_at: updatedAt,
+      };
+      if (row === undefined) table.rows.push(values);
+      else Object.assign(row, values);
+      return new InMemorySqlCursor([]);
+    }
+
     const match = /^INSERT INTO ([a-z_]+) \(([^)]+)\) VALUES \(([^)]+)\)( RETURNING id)?$/i.exec(
       sql,
     );
@@ -328,6 +381,18 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
           attempts: outbox.attempts,
         },
       ]);
+    }
+
+    const maxMatch = /^SELECT COALESCE\(MAX\(([a-z_]+)\), 0\) AS ([a-z_]+) FROM ([a-z_]+)$/i.exec(
+      sql,
+    );
+    if (maxMatch !== null) {
+      const column = maxMatch[1]!;
+      const alias = maxMatch[2]!;
+      const values = this.table(maxMatch[3]!)
+        .rows.map((row) => row[column])
+        .filter((value): value is number => typeof value === "number");
+      return new InMemorySqlCursor([{ [alias]: values.length === 0 ? 0 : Math.max(...values) }]);
     }
 
     const minMatch = /^SELECT MIN\(([a-z_]+)\) AS ([a-z_]+) FROM ([a-z_]+)(?: WHERE (.+))?$/i.exec(

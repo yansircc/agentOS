@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import { SqlError } from "@agent-os/kernel/errors";
+import { ensureLedgerSchema } from "../ledger/commit";
 
 export interface DispatchOutboxRow {
   readonly outboundEventId: number;
@@ -9,15 +10,7 @@ export interface DispatchOutboxRow {
 export const ensureDispatchSchema = (sql: SqlStorage): Effect.Effect<void, SqlError> =>
   Effect.try({
     try: () => {
-      sql.exec(`
-        CREATE TABLE IF NOT EXISTS events (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          ts INTEGER NOT NULL,
-          kind TEXT NOT NULL,
-          scope TEXT NOT NULL,
-          payload TEXT NOT NULL
-        )
-      `);
+      ensureLedgerSchema(sql);
       sql.exec(`
         CREATE TABLE IF NOT EXISTS dispatch_outbox (
           outbound_event_id INTEGER PRIMARY KEY REFERENCES events(id),

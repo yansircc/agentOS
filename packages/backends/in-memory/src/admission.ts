@@ -87,7 +87,7 @@ export const InMemoryAdmissionLive = (
     Effect.gen(function* () {
       const llm = yield* LlmTransport;
       const attemptStructured = <O>(
-        spec: AttemptSpec<O>,
+        spec: AttemptSpec,
       ): Effect.Effect<AttemptResult<O>, SqlError | JsonStringifyError> =>
         Effect.gen(function* () {
           const now = yield* Clock.currentTimeMillis;
@@ -98,7 +98,7 @@ export const InMemoryAdmissionLive = (
             adapterVersion: IN_MEMORY_ADAPTER_VERSION,
           };
           const preRows = yield* projectAdmissionRows(state, spec.scope);
-          const { lease: preLease, latestBarrierTs } = projectLease(preRows, key, now);
+          const { lease: preLease, latestBarrier } = projectLease(preRows, key, now);
           if (preLease.status === "unsupported" && now < preLease.retryAfter) {
             return {
               ok: false,
@@ -164,12 +164,7 @@ export const InMemoryAdmissionLive = (
                 );
           const { decoded, outcome } = decodedResult;
 
-          const admissionImpact = decideTier(
-            preLease,
-            outcome,
-            spec.stimulus.kind,
-            latestBarrierTs,
-          );
+          const admissionImpact = decideTier(preLease, outcome, spec.stimulus.kind, latestBarrier);
           const evidencePayload = {
             key,
             stimulusKind: spec.stimulus.kind,
@@ -177,11 +172,6 @@ export const InMemoryAdmissionLive = (
             admissionImpact,
             adapterId: `in-memory@${IN_MEMORY_ADAPTER_VERSION}`,
           };
-          const deliver =
-            outcome.class === "Supported" && spec.stimulus.kind === "live" && decoded !== undefined
-              ? spec.stimulus.deliver(decoded)
-              : null;
-
           yield* state.commitEvents([
             {
               ts: now,
@@ -189,16 +179,6 @@ export const InMemoryAdmissionLive = (
               scope: spec.scope,
               payload: evidencePayload,
             },
-            ...(deliver === null
-              ? []
-              : [
-                  {
-                    ts: now,
-                    kind: deliver.event,
-                    scope: spec.scope,
-                    payload: deliver.payload,
-                  },
-                ]),
           ]);
 
           const postRows = yield* projectAdmissionRows(state, spec.scope);

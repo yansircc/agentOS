@@ -14,7 +14,7 @@ import { Predicate } from "effect";
  * the registry cycle.
  */
 
-import type { Outcome } from "../../admission/lease";
+import type { Outcome } from "@agent-os/runtime";
 
 /** Single coherence dial for an adapter's complete behavior. Bumping the
  *  major invalidates structured-output lease evidence (contract §9). Any

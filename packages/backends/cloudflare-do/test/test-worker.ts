@@ -1,13 +1,11 @@
 /**
  * Test worker entry.
  *
- * Test DOs are factory-configured for product paths. A raw ledger fixture exists
- * only where a test must construct historical ledger facts that projection
- * application would normally reject.
+ * Test DOs are factory-configured for product paths.
  */
 
 import { DurableObject } from "cloudflare:workers";
-import { Effect, Schema, Predicate } from "effect";
+import { Cause, Effect, Exit, Option, Schema, Predicate } from "effect";
 import {
   credential,
   createAgentDurableObject,
@@ -22,6 +20,9 @@ import {
 import { withAgentDOTestingDrain } from "../src/testing";
 import {
   defineProjection,
+  makeProjectionRegistryResult,
+  MaterializedProjectionRegistry,
+  MaterializedProjections,
   triggerParseFail,
   attachedStreamParseOk,
   projectionFail,
@@ -34,6 +35,7 @@ import {
   type DurableTrigger,
   type TriggerCancellation,
   type TriggerTx,
+  type MaterializedProjectionRebuildResult,
 } from "@agent-os/runtime";
 import { CapabilityRejected, DurableTriggerAcquireCancelled } from "@agent-os/kernel/errors";
 import { boundaryPackage, defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
@@ -43,6 +45,7 @@ import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-re
 import { defineSettlementContract, settleLived } from "@agent-os/kernel/settlement-contract";
 import { defineTool, pureToolExecution } from "@agent-os/kernel/tools";
 import type { EventHandler } from "@agent-os/kernel/types";
+import { CloudflareMaterializedProjectionsLive } from "../src/materialized-projections";
 
 const allowToolAdmitter = () => ({ ok: true as const });
 
@@ -780,31 +783,42 @@ const materializedRunProjection = defineProjection({
   },
 });
 
+const materializedRunFailingRebuildProjection = defineProjection({
+  ...materializedRunProjection,
+  version: 2,
+  reduce: (state, event) =>
+    event.kind === "run.completed"
+      ? projectionFail("projection rebuild failed")
+      : projectionPut(state),
+});
+
 const MaterializedProjectionBaseDO = defineAgentDO<CloudflareAgentEnv>({
   bindings: [],
   projections: [materializedRunProjection],
 });
 
 export class MaterializedProjectionTestDO extends MaterializedProjectionBaseDO {
-  insertRawEvent(event: string, data: unknown): { readonly id: number } {
-    const scope = this.ctx.id.name;
-    if (scope === undefined) throw new Error("scope missing");
-    const payloadStr = JSON.stringify(data);
-    if (typeof payloadStr !== "string") {
-      throw new TypeError("ledger event payload must be JSON serializable");
+  async rebuildWithFailingProjection(spec: {
+    readonly kind: string;
+    readonly scope: string;
+  }): Promise<MaterializedProjectionRebuildResult> {
+    const registryResult = makeProjectionRegistryResult([materializedRunFailingRebuildProjection]);
+    if (registryResult._tag === "failure") {
+      return Promise.reject(registryResult.error);
     }
-    const id = Number(
-      this.ctx.storage.sql
-        .exec(
-          "INSERT INTO events (ts, kind, scope, payload) VALUES (?, ?, ?, ?) RETURNING id",
-          Date.now(),
-          event,
-          scope,
-          payloadStr,
-        )
-        .one().id,
+    const exit = await Effect.runPromiseExit(
+      Effect.gen(function* () {
+        const projections = yield* MaterializedProjections;
+        return yield* projections.rebuild(spec);
+      }).pipe(
+        Effect.provide(CloudflareMaterializedProjectionsLive(this.ctx)),
+        Effect.provideService(MaterializedProjectionRegistry, registryResult.registry),
+      ),
     );
-    return { id };
+    if (Exit.isSuccess(exit)) return exit.value;
+    const failure = Cause.failureOption(exit.cause);
+    if (Option.isSome(failure)) return Promise.reject(failure.value);
+    return Promise.reject(exit.cause);
   }
 }
 

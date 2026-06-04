@@ -28,7 +28,7 @@ const testEnv = env as unknown as TestEnv;
 const makeRuntime = (state: DurableObjectState) => {
   const handlers = new Map<string, Set<EventHandler>>();
   const eventBus = EventBusLive(handlers);
-  const ledger = LedgerLive(state.storage.sql).pipe(Layer.provide(eventBus));
+  const ledger = LedgerLive(state).pipe(Layer.provide(eventBus));
   const effectSql = EffectSqliteDoReadLive(state.storage.sql);
   return ManagedRuntime.make(Layer.mergeAll(ledger, effectSql));
 };
@@ -44,8 +44,10 @@ describe("@effect/sql-sqlite-do read facade", () => {
         const rows = await runtime.runPromise(
           Effect.gen(function* () {
             const ledger = yield* Ledger;
-            yield* ledger.log("test.one", { n: 1 }, scope);
-            yield* ledger.log("test.two", { n: 2 }, scope);
+            yield* ledger.commit([
+              { kind: "test.one", payload: { n: 1 }, scope },
+              { kind: "test.two", payload: { n: 2 }, scope },
+            ]);
             return yield* selectLedgerEventsWithEffectSql(scope, {
               afterId: 0,
               limit: 10,

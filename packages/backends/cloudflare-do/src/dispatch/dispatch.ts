@@ -1,4 +1,3 @@
-import type { LedgerEvent } from "@agent-os/kernel/types";
 /**
  * Dispatch service algebra — sender + receiver orchestration.
  *
@@ -18,10 +17,8 @@ import {
   SqlError,
   UnsupportedScopeRef,
   isCoreClaimedEventKind,
-  safeStringify,
 } from "@agent-os/kernel/errors";
 import { EventBus } from "../ledger";
-import { fireLedgerEvents, insertLedgerEvent } from "../ledger/inserted-events";
 import { materialRefKey } from "@agent-os/kernel/material-ref";
 import {
   Dispatch,
@@ -57,6 +54,7 @@ import {
 import { ensureDispatchSchema, selectPendingOutboxByIntent } from "./outbox";
 import { findAccepted, type InboundAcceptedPayload } from "./receiver";
 import { commitDurableTriggerIntent, ensureDueWorkSchema } from "../due-work";
+import { commitLedgerTransaction, type LedgerPayloadContext } from "../ledger/commit";
 
 // Re-export the receiver constant so callers that historically reached
 // for it from "./dispatch" keep working.
@@ -193,6 +191,10 @@ type DeliveryRetryOutcome =
       readonly cause: unknown;
     };
 
+type CloudflareDispatchTriggerTx = {
+  readonly afterLedgerInsert: (effect: () => void) => void;
+};
+
 export const deliveryRetryTrigger = (
   sql: SqlStorage,
   scope: string,
@@ -276,12 +278,14 @@ export const deliveryRetryTrigger = (
             : { traceContext: outcome.requested.traceContext }),
         },
       });
-      sql.exec(
-        "UPDATE dispatch_outbox SET delivered_event_id = ?, attempts = ?, last_error = NULL WHERE outbound_event_id = ?",
-        event.id,
-        attempt,
-        outcome.outboundEventId,
-      );
+      (tx as unknown as CloudflareDispatchTriggerTx).afterLedgerInsert(() => {
+        sql.exec(
+          "UPDATE dispatch_outbox SET delivered_event_id = ?, attempts = ?, last_error = NULL WHERE outbound_event_id = ?",
+          event.id,
+          attempt,
+          outcome.outboundEventId,
+        );
+      });
       return;
     }
 
@@ -392,27 +396,30 @@ export const DispatchLive = (
               claim,
               ...(traceContext === undefined ? {} : { traceContext }),
             };
-            const requestedPayloadStr = yield* safeStringify(requestedPayload);
-
             const requestedEvent = yield* commitDurableTriggerIntent(
               ctx,
               sql,
+              bus,
               now,
               registry,
               DELIVERY_RETRY_TRIGGER_KIND,
-              (trigger) => {
-                const event = insertLedgerEvent(sql, {
+              (tx, trigger) => {
+                const outbound = tx.ref("dispatch.outbound.requested");
+                tx.append(outbound, {
                   ts: now,
                   kind: trigger.intentEventKind,
                   scope,
-                  payloadStr: requestedPayloadStr,
                   payload: requestedPayload,
                 });
-                sql.exec("INSERT INTO dispatch_outbox (outbound_event_id) VALUES (?)", event.id);
-                return event;
+                tx.afterInsert(({ id }) => {
+                  sql.exec(
+                    "INSERT INTO dispatch_outbox (outbound_event_id) VALUES (?)",
+                    id(outbound),
+                  );
+                });
+                return outbound;
               },
             );
-            yield* fireLedgerEvents(bus, [requestedEvent]);
 
             yield* triggerPump.drainDue(now);
             return { outboundEventId: requestedEvent.id };
@@ -438,106 +445,78 @@ export const DispatchLive = (
             }
 
             const now = yield* Clock.currentTimeMillis;
-            const appPayloadStr = yield* safeStringify(envelope.data);
 
-            const result = yield* Effect.try({
-              try: () =>
-                ctx.storage.transactionSync(() => {
-                  const acceptedResult = findAccepted(
-                    sql,
-                    scope,
-                    envelope.sourceScope,
-                    envelope.idempotencyKey,
-                  );
-                  if (!acceptedResult.ok) {
-                    return {
-                      duplicate: false,
-                      deliveredEventId: 0,
-                      events: [],
-                      failure: acceptedResult.failure,
-                    };
-                  }
-                  const accepted = acceptedResult.value;
-                  if (accepted !== null) {
-                    return {
-                      duplicate: true,
-                      deliveredEventId: accepted.deliveredEventId,
-                      receipt: dispatchLedgerDeliveryReceipt({
-                        targetScope: scope,
-                        deliveredEventId: accepted.deliveredEventId,
-                      }),
-                      events: [],
-                      failure: null,
-                    };
-                  }
+            const result = yield* commitLedgerTransaction(ctx, bus, (tx) => {
+              const acceptedResult = findAccepted(
+                sql,
+                scope,
+                envelope.sourceScope,
+                envelope.idempotencyKey,
+              );
+              if (!acceptedResult.ok) {
+                return {
+                  duplicate: false as const,
+                  deliveredEventId: 0,
+                  failure: acceptedResult.failure,
+                };
+              }
+              const accepted = acceptedResult.value;
+              if (accepted !== null) {
+                return {
+                  duplicate: true as const,
+                  deliveredEventId: accepted.deliveredEventId,
+                  failure: null,
+                };
+              }
 
-                  const inboundPlaceholder = insertLedgerEvent(sql, {
-                    ts: now,
-                    kind: DISPATCH_INBOUND_ACCEPTED,
-                    scope,
-                    payloadStr: "{}",
-                    payload: {},
-                  });
-
-                  const appEvent = insertLedgerEvent(sql, {
-                    ts: now,
-                    kind: envelope.event,
-                    scope,
-                    payloadStr: appPayloadStr,
-                    payload: envelope.data,
-                  });
-                  const deliveredEventId = appEvent.id;
-                  const traceContext = copyTraceContext(envelope.traceContext);
-                  const claim = settleDispatchInboundAccepted(envelope.claim, {
-                    sourceScope: envelope.sourceScope,
-                    targetScope: scope,
-                    deliveredEventId,
-                  });
-                  const inboundPayload = {
+              const inbound = tx.ref("dispatch.inbound.accepted");
+              const delivered = tx.ref("dispatch.inbound.delivered");
+              const traceContext = copyTraceContext(envelope.traceContext);
+              tx.append(inbound, {
+                ts: now,
+                kind: DISPATCH_INBOUND_ACCEPTED,
+                scope,
+                buildPayload: ({ id }: LedgerPayloadContext) => {
+                  const deliveredEventId = id(delivered);
+                  return {
                     sourceScope: envelope.sourceScope,
                     outboundEventId: envelope.outboundEventId,
                     idempotencyKey: envelope.idempotencyKey,
                     deliveredEventId,
-                    claim,
-                    ...(traceContext === undefined ? {} : { traceContext }),
-                  } satisfies InboundAcceptedPayload;
-                  const inboundPayloadStr = JSON.stringify(inboundPayload);
-                  sql.exec(
-                    "UPDATE events SET payload = ? WHERE id = ?",
-                    inboundPayloadStr,
-                    inboundPlaceholder.id,
-                  );
-
-                  const inboundEvent: LedgerEvent = {
-                    id: inboundPlaceholder.id,
-                    ts: now,
-                    kind: DISPATCH_INBOUND_ACCEPTED,
-                    scope,
-                    payload: inboundPayload,
-                  };
-                  return {
-                    duplicate: false,
-                    deliveredEventId,
-                    receipt: dispatchLedgerDeliveryReceipt({
+                    claim: settleDispatchInboundAccepted(envelope.claim, {
+                      sourceScope: envelope.sourceScope,
                       targetScope: scope,
                       deliveredEventId,
                     }),
-                    events: [inboundEvent, appEvent],
-                    failure: null,
-                  };
-                }),
-              catch: (cause) => new SqlError({ cause }),
+                    ...(traceContext === undefined ? {} : { traceContext }),
+                  } satisfies InboundAcceptedPayload;
+                },
+              });
+              tx.append(delivered, {
+                ts: now,
+                kind: envelope.event,
+                scope,
+                payload: envelope.data,
+              });
+              return {
+                duplicate: false as const,
+                delivered,
+                failure: null,
+              };
             });
 
-            if (result.failure !== null) {
-              return yield* Effect.fail(new SqlError({ cause: result.failure }));
+            if (result.value.failure !== null) {
+              return yield* Effect.fail(new SqlError({ cause: result.value.failure }));
             }
-            if (!result.duplicate) {
-              yield* fireLedgerEvents(bus, result.events);
-            }
+            const deliveredEventId = result.value.duplicate
+              ? result.value.deliveredEventId
+              : result.id(result.value.delivered);
             return {
-              deliveredEventId: result.deliveredEventId,
-              receipt: result.receipt,
+              deliveredEventId,
+              receipt: dispatchLedgerDeliveryReceipt({
+                targetScope: scope,
+                deliveredEventId,
+              }),
             };
           }),
       };

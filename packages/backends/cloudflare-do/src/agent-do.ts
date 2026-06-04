@@ -60,7 +60,6 @@ import {
   SqlError,
   TriggerFactoryError,
   UnsupportedScopeRef,
-  safeStringify,
 } from "@agent-os/kernel/errors";
 import type {
   AttemptKey,
@@ -130,7 +129,6 @@ import {
 } from "./projections";
 import { makeCloudflareBackendCoreLayer, type CloudflareBackendCoreServices } from "./runtime-core";
 import { commitDurableTriggerIntent } from "./due-work";
-import { fireLedgerEvents, insertLedgerEvent } from "./ledger/inserted-events";
 import type { CloudflareTriggerSource } from "./trigger-factory";
 import type { CloudflareAttachedStreamSource } from "./stream-factory";
 import { createAttachedStreamResponse } from "./attached-stream-wire";
@@ -458,7 +456,16 @@ export class AgentDurableObject<
       Effect.gen(function* () {
         const ledger = yield* Ledger;
         const ev = yield* commitBoundaryEvent(pkg.boundaryContract, event, data, () =>
-          ledger.log(event, data, scope),
+          Effect.gen(function* () {
+            const events = yield* ledger.commit([{ kind: event, payload: data, scope }]);
+            const committed = events[0];
+            if (committed === undefined) {
+              return yield* Effect.fail(
+                new SqlError({ cause: new Error("ledger commit returned no boundary event") }),
+              );
+            }
+            return committed;
+          }),
         );
         return { id: ev.id };
       }),
@@ -710,8 +717,14 @@ export class AgentDurableObject<
     return this.runScopedWrite(spec.event, (scope) =>
       Effect.gen(function* () {
         const ledger = yield* Ledger;
-        const ev = yield* ledger.log(spec.event, spec.data, scope);
-        return { id: ev.id };
+        const events = yield* ledger.commit([{ kind: spec.event, payload: spec.data, scope }]);
+        const event = events[0];
+        if (event === undefined) {
+          return yield* Effect.fail(
+            new SqlError({ cause: new Error("ledger commit returned no emitted event") }),
+          );
+        }
+        return { id: event.id };
       }),
     );
   }
@@ -734,24 +747,22 @@ export class AgentDurableObject<
         yield* TriggerPump;
         const bus = yield* EventBus;
         const registry = yield* DurableTriggerRegistry;
-        const payloadStr = yield* safeStringify(spec.payload);
         const ts = spec.ts ?? (yield* Clock.currentTimeMillis);
         const intent = yield* commitDurableTriggerIntent(
           ctx,
           sql,
+          bus,
           spec.at,
           registry,
           spec.triggerKind,
-          (trigger) =>
-            insertLedgerEvent(sql, {
+          (tx, trigger) =>
+            tx.append({
               ts,
               kind: trigger.intentEventKind,
               scope,
-              payloadStr,
               payload: spec.payload,
             }),
         );
-        yield* fireLedgerEvents(bus, [intent]);
         return { id: intent.id };
       }),
     );

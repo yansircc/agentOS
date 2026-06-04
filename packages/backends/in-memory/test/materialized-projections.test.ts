@@ -74,9 +74,13 @@ describe("in-memory materialized projections", () => {
       const ledger = await runtime.runPromise(Ledger);
       const projections = await runtime.runPromise(MaterializedProjections);
 
-      await runtime.runPromise(ledger.log("run.requested", { runId: "r1" }, scope));
       await runtime.runPromise(
-        ledger.log("run.completed", { runId: "r1", handoff: "ready" }, scope),
+        ledger.commit([{ kind: "run.requested", payload: { runId: "r1" }, scope }]),
+      );
+      await runtime.runPromise(
+        ledger.commit([
+          { kind: "run.completed", payload: { runId: "r1", handoff: "ready" }, scope },
+        ]),
       );
 
       const row = await runtime.runPromise(
@@ -108,7 +112,9 @@ describe("in-memory materialized projections", () => {
       const ledger = await runtime.runPromise(Ledger);
       const projections = await runtime.runPromise(MaterializedProjections);
 
-      const exit = await runtime.runPromiseExit(ledger.log("run.failed", { runId: "r1" }, scope));
+      const exit = await runtime.runPromiseExit(
+        ledger.commit([{ kind: "run.failed", payload: { runId: "r1" }, scope }]),
+      );
       expect(exit._tag).toBe("Failure");
       await expect(runtime.runPromise(ledger.events(scope))).resolves.toEqual([]);
       await expect(
@@ -126,9 +132,13 @@ describe("in-memory materialized projections", () => {
       const ledger = await runtime.runPromise(Ledger);
       const projections = await runtime.runPromise(MaterializedProjections);
 
-      await runtime.runPromise(ledger.log("run.requested", { runId: "r1" }, scope));
       await runtime.runPromise(
-        ledger.log("run.completed", { runId: "r1", handoff: "done" }, scope),
+        ledger.commit([{ kind: "run.requested", payload: { runId: "r1" }, scope }]),
+      );
+      await runtime.runPromise(
+        ledger.commit([
+          { kind: "run.completed", payload: { runId: "r1", handoff: "done" }, scope },
+        ]),
       );
 
       backend.state.setProjectionRegistryResult(
@@ -168,9 +178,13 @@ describe("in-memory materialized projections", () => {
       const ledger = await runtime.runPromise(Ledger);
       const projections = await runtime.runPromise(MaterializedProjections);
 
-      await runtime.runPromise(ledger.log("run.requested", { runId: "r1" }, scope));
       await runtime.runPromise(
-        ledger.log("run.completed", { runId: "r1", handoff: "done" }, scope),
+        ledger.commit([{ kind: "run.requested", payload: { runId: "r1" }, scope }]),
+      );
+      await runtime.runPromise(
+        ledger.commit([
+          { kind: "run.completed", payload: { runId: "r1", handoff: "done" }, scope },
+        ]),
       );
 
       backend.state.setProjectionRegistryResult(

@@ -46,7 +46,9 @@ export const runOpsLoop = (scope = "vibe-like-ops") => {
   const program = Effect.gen(function* () {
     const ledger = yield* Ledger;
     const projections = yield* MaterializedProjections;
-    yield* ledger.log("run.requested", { runId: "ops-run", promptDigest: "prompt:ops" }, scope);
+    yield* ledger.commit([
+      { kind: "run.requested", payload: { runId: "ops-run", promptDigest: "prompt:ops" }, scope },
+    ]);
     const status = yield* projections.status({ kind: "run.workflow", scope });
     const rebuilt = yield* projections.rebuild({ kind: "run.workflow", scope });
     return {

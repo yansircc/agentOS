@@ -54,12 +54,12 @@ describe("in-memory runtime backend", () => {
 
     try {
       const ledger = await runtime.runPromise(Ledger);
-      const event = await runtime.runPromise(
-        ledger.log("example.recorded", { ok: true }, "ledger-scope"),
+      const [event] = await runtime.runPromise(
+        ledger.commit([{ kind: "example.recorded", payload: { ok: true }, scope: "ledger-scope" }]),
       );
       const events = await runtime.runPromise(ledger.events("ledger-scope"));
 
-      expect(event.id).toBe(1);
+      expect(event?.id).toBe(1);
       expect(events.map((row) => row.kind)).toEqual(["example.recorded"]);
       expect(fired).toEqual(["1:example.recorded"]);
     } finally {
@@ -100,10 +100,12 @@ describe("in-memory runtime backend", () => {
     try {
       const triggerPump = await runtime.runPromise(TriggerPump);
       const ledger = await runtime.runPromise(Ledger);
-      const event = await runtime.runPromise(
-        ledger.log("test.chain.requested", { step: 1 }, "chain-scope"),
+      const [event] = await runtime.runPromise(
+        ledger.commit([
+          { kind: "test.chain.requested", payload: { step: 1 }, scope: "chain-scope" },
+        ]),
       );
-      backend.state.addDueWork("test.chain", event.id, 10);
+      backend.state.addDueWork("test.chain", event!.id, 10);
 
       await expect(runtime.runPromise(triggerPump.drainDue(10))).resolves.toEqual({
         drained: 1,
@@ -157,10 +159,10 @@ describe("in-memory runtime backend", () => {
       const { backend, runtime } = makeRuntime("loop-scope", { triggers: [loopTrigger] });
       const ledger = yield* Effect.promise(() => runtime.runPromise(Ledger));
       const triggerPump = yield* Effect.promise(() => runtime.runPromise(TriggerPump));
-      const event = yield* Effect.promise(() =>
-        runtime.runPromise(ledger.log("test.loop.requested", { count: 1 }, "loop-scope")),
-      );
-      backend.state.addDueWork("test.loop", event.id, 10);
+      const [event] = yield* ledger.commit([
+        { kind: "test.loop.requested", payload: { count: 1 }, scope: "loop-scope" },
+      ]);
+      backend.state.addDueWork("test.loop", event!.id, 10);
 
       const exit = yield* Effect.exit(triggerPump.drainUntilQuiet(10, { maxIterations: 2 }));
 
@@ -206,12 +208,14 @@ describe("in-memory runtime backend", () => {
       });
       const ledger = yield* Effect.promise(() => runtime.runPromise(Ledger));
       const triggerPump = yield* Effect.promise(() => runtime.runPromise(TriggerPump));
-      const event = yield* Effect.promise(() =>
-        runtime.runPromise(
-          ledger.log("test.thenable.requested", { label: "one" }, "thenable-scope"),
-        ),
-      );
-      backend.state.addDueWork("test.thenable", event.id, 10);
+      const [event] = yield* ledger.commit([
+        {
+          kind: "test.thenable.requested",
+          payload: { label: "one" },
+          scope: "thenable-scope",
+        },
+      ]);
+      backend.state.addDueWork("test.thenable", event!.id, 10);
 
       const exit = yield* Effect.exit(triggerPump.drainDue(10));
 
@@ -454,7 +458,7 @@ describe("in-memory runtime backend", () => {
     }
   });
 
-  it("AdmissionLive uses injected LlmTransport and commits evidence plus delivered payload", async () => {
+  it("AdmissionLive uses injected LlmTransport and commits evidence only", async () => {
     const { runtime } = makeRuntime("admission-scope", {
       llm: { responses: [response(JSON.stringify({ answer: "ok" }))] },
     });
@@ -478,17 +482,13 @@ describe("in-memory runtime backend", () => {
           stimulus: {
             kind: "live",
             userInput: { userText: "answer" },
-            deliver: (decoded) => ({ event: "app.structured", payload: decoded }),
           },
         }),
       );
 
       expect(result.ok).toBe(true);
       const events = await runtime.runPromise(ledger.events("admission-scope"));
-      expect(events.map((event: LedgerEvent) => event.kind)).toEqual([
-        "llm.structured.evidence",
-        "app.structured",
-      ]);
+      expect(events.map((event: LedgerEvent) => event.kind)).toEqual(["llm.structured.evidence"]);
     } finally {
       await runtime.dispose();
     }

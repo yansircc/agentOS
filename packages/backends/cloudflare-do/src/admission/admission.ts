@@ -6,14 +6,13 @@
  *     → 1. project lease (read events, no writes)
  *     → 2. gate: if cached unsupported and not expired → short-circuit
  *     → 3. adapter.encode → ai.run → adapter.decode | adapter.classify
- *     → 4. decideTier(preLease, outcome, stimulusKind, latestBarrierTs)
- *     → 5. transactionSync(evidence row + optional deliver row)
- *     → 6. fire EventBus
+ *     → 4. decideTier(preLease, outcome, stimulusKind, latestBarrier)
+ *     → 5. transactionSync(evidence row)
  *
  * State ownership (contract §2 + contract §3.1):
  *   `events.kind = 'llm.structured.evidence'`   sole admission evidence writer
  *   `events.kind = 'llm.structured.invalidate'` sole barrier writer
- *   CapabilityLease, latestBarrierTs            pure projection over events
+ *   CapabilityLease, latestBarrier              pure projection over events
  *
  * No separate `leases` table. No KV cache. No second writer.
  *
@@ -22,24 +21,23 @@
 import { Clock, Effect, Layer, Schema } from "effect";
 import {
   Admission,
+  decideTier,
+  projectLease,
+  routeFingerprint,
   type AttemptKey,
   type AttemptResult,
   type AttemptSpec,
   type CapabilityLease,
   type DecodedOutput,
-  type DeliverSpec,
   type InvalidateSpec,
   type Outcome,
 } from "@agent-os/runtime";
 import { EventBus } from "../ledger";
-import { fireLedgerEvents, insertLedgerEvent } from "../ledger/inserted-events";
-import { JsonStringifyError, SqlError, safeStringify } from "@agent-os/kernel/errors";
+import { JsonStringifyError, SqlError } from "@agent-os/kernel/errors";
 import { RefResolutionFailed, RefResolverService } from "@agent-os/kernel/ref-resolver";
 import { AiBinding, dispatchProvider } from "../llm";
 import { getProtocolAdapter, llmProtocolAdapters } from "../llm/protocol/protocol-adapter";
-
-import { decideTier, projectLease } from "./lease";
-import { routeFingerprint } from "@agent-os/runtime";
+import { commitLedgerTransaction } from "../ledger/commit";
 import { loadAdmissionRows } from "./payload";
 
 // Note: these symbols were historically owned by admission.ts. They now
@@ -86,7 +84,7 @@ export const AdmissionLive = (
       const resolver = yield* RefResolverService;
 
       const attemptStructured = <O>(
-        spec: AttemptSpec<O>,
+        spec: AttemptSpec,
       ): Effect.Effect<AttemptResult<O>, SqlError | JsonStringifyError> =>
         Effect.gen(function* () {
           const now = yield* Clock.currentTimeMillis;
@@ -99,7 +97,7 @@ export const AdmissionLive = (
 
           // Step 2: project lease.
           const rows = yield* loadAdmissionRows(sql, spec.scope);
-          const { lease: preLease, latestBarrierTs } = projectLease(rows, key, now);
+          const { lease: preLease, latestBarrier } = projectLease(rows, key, now);
 
           // Step 3: gate.
           if (preLease.status === "unsupported" && now < preLease.retryAfter) {
@@ -166,14 +164,9 @@ export const AdmissionLive = (
           }
 
           // Step 7: admission impact from pre-call inputs only.
-          const admissionImpact = decideTier(
-            preLease,
-            outcome,
-            spec.stimulus.kind,
-            latestBarrierTs,
-          );
+          const admissionImpact = decideTier(preLease, outcome, spec.stimulus.kind, latestBarrier);
 
-          // Step 8: pre-stringify payloads outside the transaction.
+          // Step 8: commit admission evidence. Submit owns deliver/terminal.
           const evidencePayload = {
             key,
             stimulusKind: spec.stimulus.kind,
@@ -181,50 +174,15 @@ export const AdmissionLive = (
             admissionImpact,
             adapterId: `${adapter.kind}@${adapter.version}`,
           };
-          const evidenceStr = yield* safeStringify(evidencePayload);
 
-          let deliverSpec: DeliverSpec | null = null;
-          let deliverStr: string | null = null;
-          if (
-            outcome.class === "Supported" &&
-            spec.stimulus.kind === "live" &&
-            decoded !== undefined
-          ) {
-            deliverSpec = spec.stimulus.deliver(decoded as O);
-            deliverStr = yield* safeStringify(deliverSpec.payload);
-          }
-
-          // Step 8b: transactionSync(evidence + optional deliver).
-          const txResult = yield* Effect.try({
-            try: () =>
-              ctx.storage.transactionSync(() => {
-                const evidenceEvent = insertLedgerEvent(sql, {
-                  ts: now,
-                  kind: "llm.structured.evidence",
-                  scope: spec.scope,
-                  payloadStr: evidenceStr,
-                  payload: evidencePayload,
-                });
-
-                const events = [evidenceEvent];
-                if (deliverSpec !== null && deliverStr !== null) {
-                  events.push(
-                    insertLedgerEvent(sql, {
-                      ts: now,
-                      kind: deliverSpec.event,
-                      scope: spec.scope,
-                      payloadStr: deliverStr,
-                      payload: deliverSpec.payload,
-                    }),
-                  );
-                }
-                return { evidenceId: evidenceEvent.id, events };
-              }),
-            catch: (cause) => new SqlError({ cause }),
+          yield* commitLedgerTransaction(ctx, bus, (tx) => {
+            tx.append({
+              ts: now,
+              kind: "llm.structured.evidence",
+              scope: spec.scope,
+              payload: evidencePayload,
+            });
           });
-
-          // Step 9: fire inserted ledger rows after commit.
-          yield* fireLedgerEvents(bus, txResult.events);
 
           // Post-projection (read-only, for the return value's lease shape).
           const postRows = yield* loadAdmissionRows(sql, spec.scope);
@@ -259,22 +217,21 @@ export const AdmissionLive = (
             reason: spec.reason,
             by: spec.by,
           };
-          const payloadStr = yield* safeStringify(payload);
 
-          const event = yield* Effect.try({
-            try: () => {
-              return insertLedgerEvent(sql, {
-                ts: now,
-                kind: "llm.structured.invalidate",
-                scope: spec.scope,
-                payloadStr,
-                payload,
-              });
-            },
-            catch: (cause) => new SqlError({ cause }),
+          const result = yield* commitLedgerTransaction(ctx, bus, (tx) => {
+            tx.append({
+              ts: now,
+              kind: "llm.structured.invalidate",
+              scope: spec.scope,
+              payload,
+            });
           });
-
-          yield* fireLedgerEvents(bus, [event]);
+          const event = result.events[0];
+          if (event === undefined) {
+            return yield* Effect.fail(
+              new SqlError({ cause: new Error("invalidate commit returned no event") }),
+            );
+          }
 
           return { barrierId: event.id };
         });

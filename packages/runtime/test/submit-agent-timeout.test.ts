@@ -41,11 +41,23 @@ const runWithHungLlm = (
     let aborted = false;
     const providerObservesAbort = options.providerObservesAbort ?? true;
     const ledger = {
-      log: (kind: string, payload: unknown, scope: string) =>
+      commit: (
+        specs: ReadonlyArray<{
+          readonly kind: string;
+          readonly payload: unknown;
+          readonly scope: string;
+        }>,
+      ) =>
         Effect.sync(() => {
-          const event = { id: nextId++, ts: Date.now(), kind, scope, payload };
-          events.push(event);
-          return event;
+          const committed = specs.map((spec) => ({
+            id: nextId++,
+            ts: Date.now(),
+            kind: spec.kind,
+            scope: spec.scope,
+            payload: spec.payload,
+          }));
+          events.push(...committed);
+          return committed;
         }),
       events: () => Effect.succeed(events),
       streamSnapshot: () => Effect.succeed(events),

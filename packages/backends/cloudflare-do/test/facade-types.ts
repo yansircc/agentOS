@@ -67,7 +67,7 @@ void agent.submit(facadeSpec);
 // @ts-expect-error facade submit does not accept full SubmitSpec
 void agent.submit(fullSpec);
 
-const _objectDeliverSpec: AgentSubmitSpec = {
+const _objectDeliverSubmitSpec: AgentSubmitSpec = {
   intent: "run",
   input: {},
   // @ts-expect-error facade submit deliver is a single event name

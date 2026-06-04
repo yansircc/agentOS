@@ -3,7 +3,7 @@
  *
  * Two paths:
  *   1. outputSchema present + no tools → admission path; result.final is
- *      the decoded JSON, ledger holds chat.ingested + evidence + deliver.
+ *      the decoded JSON, ledger holds chat.ingested + evidence + deliver + terminal.
  *   2. outputSchema + non-empty tools → submit aborts with
  *      `output_schema_excludes_tools_in_v0_2_10` BEFORE any LLM call
  *      (mutual exclusivity invariant — contract §12.1).
@@ -56,7 +56,7 @@ describe("admission — submitAgent outputSchema path (contract §12.1)", () => 
         expect(JSON.parse(r.final)).toEqual({ summary: "from-submit" });
       }
 
-      // Ledger should contain: chat.ingested + llm.structured.evidence + deliver event.
+      // Admission writes evidence; submit writes deliver + terminal.
       const events = await runtime.runPromise(
         Effect.gen(function* () {
           const l = yield* Ledger;
@@ -67,6 +67,7 @@ describe("admission — submitAgent outputSchema path (contract §12.1)", () => 
       expect(kinds).toContain("chat.ingested");
       expect(kinds).toContain("llm.structured.evidence");
       expect(kinds).toContain("structured.done");
+      expect(kinds).toContain("agent.run.completed");
 
       await runtime.dispose();
     });
@@ -131,6 +132,49 @@ describe("admission — submitAgent outputSchema path (contract §12.1)", () => 
         const p = aborted.payload as { reason?: string };
         expect(p.reason).toBe("output_schema_excludes_tools_in_v0_2_10");
       }
+
+      await runtime.dispose();
+    });
+  });
+
+  it("over token budget writes evidence plus budget abort, with no deliver or completed event", async () => {
+    const scope = "submit-outputschema-token-budget";
+    const id = testEnv.AGENT_DO.idFromName(scope);
+    const stub = testEnv.AGENT_DO.get(id);
+
+    await runInDurableObject(stub, async (_inst, state) => {
+      const ai = stubAi([submitStructuredResp('{"summary":"over-budget"}', "c1")]);
+      const runtime = makeRuntime(state, ai);
+
+      const spec: InternalSubmitSpec = {
+        intent: "summarize",
+        context: {},
+        route: { kind: "cf-ai-binding", modelId: "@cf/test/model" } as const,
+        tools: {},
+        outputSchema: SCHEMA,
+        budget: { tokens: 10 },
+        deliver: {
+          scope,
+          scopeRef: { kind: "conversation", scopeId: scope },
+          event: "structured.done",
+        },
+      };
+
+      const r = await runtime.runPromise(submitAgentEffect(spec));
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.reason).toBe("budget_tokens");
+
+      const events = await runtime.runPromise(
+        Effect.gen(function* () {
+          const l = yield* Ledger;
+          return yield* l.events(scope);
+        }),
+      );
+      const kinds = events.map((event) => event.kind);
+      expect(kinds).toContain("llm.structured.evidence");
+      expect(kinds.filter((kind) => kind === "agent.aborted.budget_tokens")).toHaveLength(1);
+      expect(kinds).not.toContain("structured.done");
+      expect(kinds).not.toContain("agent.run.completed");
 
       await runtime.dispose();
     });

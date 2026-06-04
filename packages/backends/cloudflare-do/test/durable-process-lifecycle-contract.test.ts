@@ -7,7 +7,7 @@ import {
   type AnyDurableTrigger,
 } from "@agent-os/runtime";
 import { commitDurableTriggerIntent, selectDurableProcessLifecycle } from "../src/due-work";
-import { insertLedgerEvent } from "../src/ledger/inserted-events";
+import { EventBus } from "../src/ledger";
 import { makeCloudflareBackendCoreLayer } from "../src/runtime-core";
 import { makeInMemoryDurableObjectState } from "./_in-memory-do";
 import {
@@ -32,13 +32,13 @@ const makeDriver = (triggers: ReadonlyArray<AnyDurableTrigger>): DurableProcessL
           return yield* DurableTriggerRegistry;
         }),
       );
+      const bus = await runtime.runPromise(EventBus);
       const event = await runtime.runPromise(
-        commitDurableTriggerIntent(state, sql, fireAt, registry, trigger.kind, (trigger) =>
-          insertLedgerEvent(sql, {
+        commitDurableTriggerIntent(state, sql, bus, fireAt, registry, trigger.kind, (tx, trigger) =>
+          tx.append({
             ts: fireAt,
             kind: trigger.intentEventKind,
             scope,
-            payloadStr: JSON.stringify(payload),
             payload,
           }),
         ),

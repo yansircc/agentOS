@@ -28,8 +28,9 @@ import {
   UpstreamFailure,
 } from "@agent-os/kernel/errors";
 import type { LlmMessage, LlmRoute, ToolDefinition } from "@agent-os/kernel/llm";
+import type { LedgerEvent } from "@agent-os/kernel/types";
 import { LlmTransport } from "./llm-transport";
-import { Ledger } from "./ledger";
+import { Ledger, type LedgerCommitEventSpec } from "./ledger";
 import type { RefResolutionFailed } from "@agent-os/kernel/ref-resolver";
 import { Quota } from "./quota-service";
 import {
@@ -116,6 +117,27 @@ export const buildInitialMessages = (
     ] satisfies ReadonlyArray<LlmMessage>;
   });
 
+const logLedgerEvent = (
+  ledger: {
+    readonly commit: (
+      events: ReadonlyArray<LedgerCommitEventSpec>,
+    ) => Effect.Effect<ReadonlyArray<LedgerEvent>, SqlError | JsonStringifyError>;
+  },
+  kind: string,
+  payload: unknown,
+  scope: string,
+): Effect.Effect<LedgerEvent, SqlError | JsonStringifyError> =>
+  Effect.gen(function* () {
+    const events = yield* ledger.commit([{ kind, payload, scope }]);
+    const event = events[0];
+    if (event === undefined) {
+      return yield* Effect.fail(
+        new SqlError({ cause: new Error("ledger commit returned no events for single log") }),
+      );
+    }
+    return event;
+  });
+
 /** The single termination funnel. All recoverable aborts route through here.
  *  Logs an agent.aborted.* ledger event then constructs SubmitResult.fail. */
 const finalAbort = (
@@ -127,7 +149,7 @@ const finalAbort = (
 ): Effect.Effect<SubmitResult, SqlError | JsonStringifyError, Ledger> =>
   Effect.gen(function* () {
     const ledger = yield* Ledger;
-    yield* ledger.log(kind, { runId, ...payload }, scope);
+    yield* logLedgerEvent(ledger, kind, { runId, ...payload }, scope);
     const events = yield* ledger.events(scope);
     return {
       ok: false,
@@ -205,8 +227,14 @@ export const submitAgentEffect = (
     const scope = spec.deliver.scope;
     const scopeRef = spec.deliver.scopeRef;
 
-    const started = yield* ledger.log("agent.run.started", { intent: spec.intent }, scope);
-    yield* ledger.log(
+    const started = yield* logLedgerEvent(
+      ledger,
+      "agent.run.started",
+      { intent: spec.intent },
+      scope,
+    );
+    yield* logLedgerEvent(
+      ledger,
       "chat.ingested",
       { runId: started.id, intent: spec.intent, context: spec.context },
       scope,
@@ -218,10 +246,8 @@ export const submitAgentEffect = (
     //
     // outputSchema present → bypass the multi-turn tool loop entirely.
     // attemptStructured handles the admission gate (lease cache), provider
-    // call, decode, evidence emission, and deliver event in one
-    // transactionSync. v0.2.10 requires tools to be empty when
-    // outputSchema is supplied; mixing the two is deferred until a real
-    // app needs it.
+    // call, decode, and evidence emission. Submit owns token budget,
+    // deliver, and terminal run facts.
     // ====================================================================
     if (spec.outputSchema !== undefined) {
       if (Object.keys(spec.tools).length > 0) {
@@ -269,10 +295,6 @@ export const submitAgentEffect = (
             stimulus: {
               kind: "live",
               userInput: { userText },
-              deliver: (decoded) => ({
-                event: deliverEventName,
-                payload: decoded,
-              }),
             },
           })
           .pipe(
@@ -300,12 +322,24 @@ export const submitAgentEffect = (
       if (result.ok) {
         const tokens = result.outcome.class === "Supported" ? result.outcome.tokensUsed : 0;
         yield* Ref.set(tokensUsedRef, tokens);
+        if (tokens > budgetTokens) {
+          return yield* finalAbort(
+            ABORT.BUDGET_TOKENS,
+            { tokensUsed: tokens, tokensMax: budgetTokens },
+            scope,
+            started.id,
+            tokens,
+          );
+        }
         const finalStr = yield* safeStringify(result.decoded);
-        yield* ledger.log(
-          "agent.run.completed",
-          { runId: started.id, event: deliverEventName },
-          scope,
-        );
+        yield* ledger.commit([
+          { kind: deliverEventName, payload: result.decoded, scope },
+          {
+            kind: "agent.run.completed",
+            payload: { runId: started.id, event: deliverEventName },
+            scope,
+          },
+        ]);
         const events = yield* ledger.events(scope);
         return {
           ok: true,
@@ -415,7 +449,8 @@ export const submitAgentEffect = (
         const newTokens = tokensBeforeCall + resp.usage.totalTokens;
         yield* Ref.set(tokensUsedRef, newTokens);
 
-        yield* ledger.log(
+        yield* logLedgerEvent(
+          ledger,
           "llm.response",
           {
             turn: turnRefOf(started.id, turn),
@@ -443,16 +478,18 @@ export const submitAgentEffect = (
         });
 
         if (resp.toolCalls.length === 0) {
-          yield* ledger.log(
-            spec.deliver.event,
-            { final: resp.text, turn: turnRefOf(started.id, turn) },
-            scope,
-          );
-          yield* ledger.log(
-            "agent.run.completed",
-            { runId: started.id, event: spec.deliver.event },
-            scope,
-          );
+          yield* ledger.commit([
+            {
+              kind: spec.deliver.event,
+              payload: { final: resp.text, turn: turnRefOf(started.id, turn) },
+              scope,
+            },
+            {
+              kind: "agent.run.completed",
+              payload: { runId: started.id, event: spec.deliver.event },
+              scope,
+            },
+          ]);
           const events = yield* ledger.events(scope);
           return {
             ok: true,
@@ -508,7 +545,8 @@ export const submitAgentEffect = (
           const rejectedAdmission =
             normalizedAdmission.ok === false ? normalizedAdmission.rejectionRef : null;
           if (rejectedAdmission !== null) {
-            yield* ledger.log(
+            yield* logLedgerEvent(
+              ledger,
               "tool.rejected",
               {
                 runId: started.id,
@@ -637,7 +675,8 @@ export const submitAgentEffect = (
               [ABORT.TOOL_ERROR]: (error) =>
                 Effect.gen(function* () {
                   const reason = toolErrorReason(error);
-                  yield* ledger.log(
+                  yield* logLedgerEvent(
+                    ledger,
                     "tool.rejected",
                     {
                       runId: started.id,
@@ -654,7 +693,8 @@ export const submitAgentEffect = (
           );
 
           const resultStr = yield* safeStringify(result);
-          yield* ledger.log(
+          yield* logLedgerEvent(
+            ledger,
             "tool.executed",
             {
               runId: started.id,

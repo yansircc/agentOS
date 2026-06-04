@@ -2,45 +2,24 @@ import type { EventQueryOptions, LedgerEvent, LedgerEventRpc } from "@agent-os/k
 /**
  * Ledger — module-private append-only event log on DO SQLite.
  *
- * Ledger.log writes a row then fires the EventBus (reactive subscribers).
+ * Ledger.commit writes final rows then fires the EventBus (reactive subscribers).
  * Ledger.events queries rows for a given scope.
  *
  * LedgerLive depends on EventBus (Layer.provide composition).
  */
 
 import { Clock, Effect, Layer } from "effect";
-import { SqlError, safeStringify } from "@agent-os/kernel/errors";
+import { SqlError } from "@agent-os/kernel/errors";
 import { Ledger } from "@agent-os/runtime";
 import { sqlText } from "../storage/sql-row";
 import { EventBus } from "./event-bus";
-import { fireLedgerEvents, insertLedgerEvent } from "./inserted-events";
+import { commitLedgerTransaction, ensureLedgerSchema } from "./commit";
 
 const DEFAULT_EVENT_LIMIT = 1000;
 const MAX_EVENT_LIMIT = 1000;
 
 const normalizeNonNegativeInteger = (value: number | undefined, fallback: number): number =>
   value === undefined || !Number.isFinite(value) ? fallback : Math.max(0, Math.floor(value));
-
-const ensureSchema = (sql: SqlStorage): Effect.Effect<void, SqlError> =>
-  Effect.try({
-    try: () =>
-      sql.exec(`
-        CREATE TABLE IF NOT EXISTS events (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          ts INTEGER NOT NULL,
-          kind TEXT NOT NULL,
-          scope TEXT NOT NULL,
-          payload TEXT NOT NULL
-        )
-      `),
-    catch: (cause) => new SqlError({ cause }),
-  }).pipe(Effect.asVoid);
-
-const storageSql = (storage: DurableObjectState | SqlStorage): SqlStorage =>
-  "storage" in storage ? storage.storage.sql : storage;
-
-const transactionSync = <A>(storage: DurableObjectState | SqlStorage, body: () => A): A =>
-  "storage" in storage ? storage.storage.transactionSync(body) : body();
 
 export const selectLedgerEvents = (
   sql: SqlStorage,
@@ -75,36 +54,32 @@ export const selectLedgerEvents = (
     );
 };
 
-export const LedgerLive = (
-  storage: DurableObjectState | SqlStorage,
-): Layer.Layer<Ledger, SqlError, EventBus> =>
+export const LedgerLive = (storage: DurableObjectState): Layer.Layer<Ledger, SqlError, EventBus> =>
   Layer.scoped(
     Ledger,
     Effect.gen(function* () {
-      const sql = storageSql(storage);
-      yield* ensureSchema(sql);
+      const sql = storage.storage.sql;
+      yield* Effect.try({
+        try: () => ensureLedgerSchema(sql),
+        catch: (cause) => new SqlError({ cause }),
+      });
       const bus = yield* EventBus;
 
       return {
-        log: (kind, payload, scope) =>
+        commit: (events) =>
           Effect.gen(function* () {
-            const ts = yield* Clock.currentTimeMillis;
-            const payloadStr = yield* safeStringify(payload);
-            const event = yield* Effect.try({
-              try: () =>
-                transactionSync(storage, () =>
-                  insertLedgerEvent(sql, {
-                    ts,
-                    kind,
-                    scope,
-                    payloadStr,
-                    payload,
-                  }),
-                ),
-              catch: (cause) => new SqlError({ cause }),
+            const now = yield* Clock.currentTimeMillis;
+            const result = yield* commitLedgerTransaction(storage, bus, (tx) => {
+              for (const event of events) {
+                tx.append({
+                  ts: event.ts ?? now,
+                  kind: event.kind,
+                  scope: event.scope,
+                  payload: event.payload,
+                });
+              }
             });
-            yield* fireLedgerEvents(bus, [event]);
-            return event;
+            return result.events;
           }),
         events: (scope, opts = {}) =>
           Effect.try({

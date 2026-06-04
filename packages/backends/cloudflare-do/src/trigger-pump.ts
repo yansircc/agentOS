@@ -18,7 +18,6 @@ import {
   type TriggerCancellation,
   type TriggerTx,
 } from "@agent-os/runtime";
-import { fireLedgerEvents, insertLedgerEvent } from "./ledger/inserted-events";
 import { selectLedgerEvents } from "./ledger/ledger";
 import { EventBus } from "./ledger";
 import {
@@ -34,6 +33,7 @@ import {
   type ClaimedDueWorkRow,
   type DueWorkRow,
 } from "./due-work";
+import { commitLedgerTransaction, type LedgerTransactionBuilder } from "./ledger/commit";
 import { sqlText } from "./storage/sql-row";
 
 const failTriggerTransaction = (kind: string): never => {
@@ -42,11 +42,11 @@ const failTriggerTransaction = (kind: string): never => {
 
 const triggerTransactionError = (
   cause: unknown,
-): SqlError | UnregisteredDurableTriggerKind | DurableTriggerCommitReturnedThenable =>
+): UnregisteredDurableTriggerKind | DurableTriggerCommitReturnedThenable | null =>
   cause instanceof UnregisteredDurableTriggerKind ||
   cause instanceof DurableTriggerCommitReturnedThenable
     ? cause
-    : new SqlError({ cause });
+    : null;
 
 const acquireFailure = (cause: unknown): DurableTriggerAcquireCancelled | SqlError =>
   cause instanceof DurableTriggerAcquireCancelled ? cause : new SqlError({ cause });
@@ -105,49 +105,82 @@ export const TriggerPumpLive = (
       const txFor = (
         row: DueWorkRow,
         now: number,
+        builder: LedgerTransactionBuilder,
         written: LedgerEvent[],
         signal: AbortSignal,
         acquireMode: "normal" | "redrive",
-      ): TriggerTx => ({
-        scope,
-        now,
-        dueWorkId: row.id,
-        intentEventId: row.payload.intentEventId,
-        signal,
-        acquireMode,
-        events: (opts = {}) => selectLedgerEvents(sql, scope, opts),
-        insertEvent: (spec) => {
-          const payloadStr = JSON.stringify(spec.payload);
-          const event = insertLedgerEvent(sql, {
-            ts: spec.ts ?? now,
-            kind: spec.kind,
-            scope,
-            payloadStr,
-            payload: spec.payload,
-          });
-          written.push(event);
-          return event;
-        },
-        enqueue: (spec) => {
-          if (!registry.has(spec.triggerKind)) {
-            return failTriggerTransaction(spec.triggerKind);
-          }
-          const payloadStr = JSON.stringify(spec.payload);
-          const event = insertLedgerEvent(sql, {
-            ts: spec.ts ?? now,
-            kind: spec.intentEventKind,
-            scope,
-            payloadStr,
-            payload: spec.payload,
-          });
-          insertDurableTriggerDueWork(sql, spec.fireAt, spec.triggerKind, event.id);
-          written.push(event);
-          return event;
-        },
-        reschedule: (fireAt, intentEventId = row.payload.intentEventId) => {
-          insertDurableTriggerDueWork(sql, fireAt, row.kind, intentEventId);
-        },
-      });
+      ): TriggerTx =>
+        ({
+          scope,
+          now,
+          dueWorkId: row.id,
+          intentEventId: row.payload.intentEventId,
+          signal,
+          acquireMode,
+          events: (opts = {}) => {
+            const afterId =
+              opts.afterId === undefined || !Number.isFinite(opts.afterId)
+                ? 0
+                : Math.max(0, Math.floor(opts.afterId));
+            const kinds =
+              opts.kinds === undefined
+                ? undefined
+                : new Set(Array.from(new Set(opts.kinds)).filter((kind) => kind.length > 0));
+            return [...selectLedgerEvents(sql, scope, opts), ...written].filter((event) => {
+              if (event.id <= afterId) return false;
+              if (kinds !== undefined && kinds.size > 0 && !kinds.has(event.kind)) return false;
+              return true;
+            });
+          },
+          insertEvent: (spec) => {
+            const ref = builder.append({
+              ts: spec.ts ?? now,
+              kind: spec.kind,
+              scope,
+              payload: spec.payload,
+            });
+            const event = {
+              id: builder.id(ref),
+              ts: spec.ts ?? now,
+              kind: spec.kind,
+              scope,
+              payload: spec.payload,
+            };
+            written.push(event);
+            return event;
+          },
+          enqueue: (spec) => {
+            if (!registry.has(spec.triggerKind)) {
+              return failTriggerTransaction(spec.triggerKind);
+            }
+            const ref = builder.append({
+              ts: spec.ts ?? now,
+              kind: spec.intentEventKind,
+              scope,
+              payload: spec.payload,
+            });
+            const event = {
+              id: builder.id(ref),
+              ts: spec.ts ?? now,
+              kind: spec.intentEventKind,
+              scope,
+              payload: spec.payload,
+            };
+            builder.afterInsert(() => {
+              insertDurableTriggerDueWork(sql, spec.fireAt, spec.triggerKind, event.id);
+            });
+            written.push(event);
+            return event;
+          },
+          reschedule: (fireAt, intentEventId = row.payload.intentEventId) => {
+            builder.afterInsert(() => {
+              insertDurableTriggerDueWork(sql, fireAt, row.kind, intentEventId);
+            });
+          },
+          afterLedgerInsert: (effect: () => void) => {
+            builder.afterInsert(effect);
+          },
+        }) as TriggerTx & { readonly afterLedgerInsert: (effect: () => void) => void };
 
       const parseIntent = (
         trigger: AnyDurableTrigger,
@@ -175,11 +208,16 @@ export const TriggerPumpLive = (
         acquireMode: "normal" | "redrive",
       ): Effect.Effect<
         ReadonlyArray<LedgerEvent> | null,
-        SqlError | UnregisteredDurableTriggerKind | DurableTriggerCommitReturnedThenable
+        | SqlError
+        | JsonStringifyError
+        | UnregisteredDurableTriggerKind
+        | DurableTriggerCommitReturnedThenable
       > =>
-        Effect.try({
-          try: () =>
-            ctx.storage.transactionSync((): ReadonlyArray<LedgerEvent> | null => {
+        Effect.gen(function* () {
+          const committed = yield* commitLedgerTransaction(
+            ctx,
+            bus,
+            (builder) => {
               const stillOwned = sql
                 .exec(
                   `
@@ -193,17 +231,19 @@ export const TriggerPumpLive = (
                   row.claimToken,
                 )
                 .toArray();
-              if (stillOwned.length === 0) return null;
+              if (stillOwned.length === 0) return { owned: false as const };
               const written: LedgerEvent[] = [];
-              const tx = txFor(row, now, written, signal, acquireMode);
+              const tx = txFor(row, now, builder, written, signal, acquireMode);
               const commitFailure = runSynchronousTriggerCommit(scope, row.kind, () =>
                 trigger.commit(outcome, tx),
               );
               if (commitFailure !== null) throw commitFailure;
               completeClaimedDueWork(sql, row.id, now, row.claimToken);
-              return written;
-            }),
-          catch: triggerTransactionError,
+              return { owned: true as const };
+            },
+            triggerTransactionError,
+          );
+          return committed.value.owned ? committed.events : null;
         });
 
       const commitCancelled = (
@@ -219,11 +259,16 @@ export const TriggerPumpLive = (
         },
       ): Effect.Effect<
         ReadonlyArray<LedgerEvent> | null,
-        SqlError | UnregisteredDurableTriggerKind | DurableTriggerCommitReturnedThenable
+        | SqlError
+        | JsonStringifyError
+        | UnregisteredDurableTriggerKind
+        | DurableTriggerCommitReturnedThenable
       > =>
-        Effect.try({
-          try: () =>
-            ctx.storage.transactionSync((): ReadonlyArray<LedgerEvent> | null => {
+        Effect.gen(function* () {
+          const committed = yield* commitLedgerTransaction(
+            ctx,
+            bus,
+            (builder) => {
               const predicate =
                 mode.claimToken === undefined
                   ? mode.requireUnclaimed === true
@@ -243,9 +288,9 @@ export const TriggerPumpLive = (
                   ...params,
                 )
                 .toArray();
-              if (stillOwned.length === 0) return null;
+              if (stillOwned.length === 0) return { owned: false as const };
               const written: LedgerEvent[] = [];
-              const tx = txFor(row, now, written, mode.signal, mode.acquireMode);
+              const tx = txFor(row, now, builder, written, mode.signal, mode.acquireMode);
               const commitFailure = runSynchronousTriggerCommit(scope, row.kind, () =>
                 trigger.commitCancelled(intent, cancellationFor(row), tx),
               );
@@ -267,9 +312,11 @@ export const TriggerPumpLive = (
                 now,
                 ...params,
               );
-              return written;
-            }),
-          catch: triggerTransactionError,
+              return { owned: true as const };
+            },
+            triggerTransactionError,
+          );
+          return committed.value.owned ? committed.events : null;
         });
 
       const runOne = (
@@ -338,7 +385,6 @@ export const TriggerPumpLive = (
                 });
               });
           if (events === null) return false;
-          yield* fireLedgerEvents(bus, events);
           return true;
         });
 
@@ -371,7 +417,6 @@ export const TriggerPumpLive = (
           for (const row of rows) {
             const intent = yield* parseIntent(trigger, row);
             if (row.claimToken === null) {
-              requestDueWorkCancellation(sql, row.id, now, spec.reason);
               const refreshed = {
                 ...row,
                 cancelRequestedAt: row.cancelRequestedAt ?? now,
@@ -384,7 +429,6 @@ export const TriggerPumpLive = (
               });
               if (events !== null) {
                 cancelled += 1;
-                yield* fireLedgerEvents(bus, events);
               }
             } else {
               const updated = requestDueWorkCancellation(sql, row.id, now, spec.reason);
