@@ -18,10 +18,13 @@ prevent accidental exports; they are not stability or schema-freeze promises.
 | `@agent-os/resource-cloudflare`          | yes       | provider           | Cloudflare data and Worker resource API calls to provider-neutral resource carrier payloads                 |
 | `@agent-os/workspace-session`            | yes       | 0.2.x public       | provider-neutral workspace/session lifecycle facts                                                          |
 | `@agent-os/workspace-session-cloudflare` | yes       | backend            | structural Cloudflare Sandbox-compatible provider                                                           |
+| `@agent-os/workspace-env-cloudflare`     | yes       | 0.2.x public       | structural Cloudflare Sandbox-compatible fs+exec actuator adapter                                           |
+| `@agent-os/workspace-env-local`          | yes       | 0.2.x public       | Node fs and shell calls bound to one explicit host workspace root                                           |
 | `@agent-os/tenant-material`              | yes       | 0.2.x experimental | encrypted credential records to execution-time material                                                     |
 | `@agent-os/llm-transport-http`           | yes       | 0.2.x experimental | HTTP provider deltas to non-durable turn frames                                                             |
 | `@agent-os/attached-stream`              | yes       | 0.2.x experimental | runtime-neutral attached stream frame algebra; no ledger truth ownership                                    |
 | `@agent-os/turn-stream`                  | yes       | 0.2.x public       | token/progress frame algebra                                                                                |
+| `@agent-os/workspace-env`                | yes       | 0.2.x public       | runtime-neutral WorkspaceEnv actuator; no ledger fact ownership                                             |
 | `@agent-os/run-stream`                   | yes       | 0.2.x public       | ledger/turn/submit-result composition                                                                       |
 | `@agent-os/decision-gate`                | yes       | 0.2.x public       | durable decision request/decision/consumption facts                                                         |
 | `@agent-os/skill-registry`               | no        | 0.2.x experimental | install-time skill manifests to core tools                                                                  |

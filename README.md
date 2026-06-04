@@ -58,10 +58,13 @@ state to make a product flow appear complete.
 | `@agent-os/resource-cloudflare`          | Cloudflare D1/KV/R2/Queue/Workflow/Worker resource materializer                                                                     |
 | `@agent-os/workspace-session`            | provider-neutral workspace/session lifecycle facts                                                                                  |
 | `@agent-os/workspace-session-cloudflare` | Cloudflare Sandbox-compatible workspace backend                                                                                     |
+| `@agent-os/workspace-env-cloudflare`     | Cloudflare Sandbox-compatible WorkspaceEnv adapter                                                                                  |
+| `@agent-os/workspace-env-local`          | local host WorkspaceEnv adapter with explicit host execution domain                                                                 |
 | `@agent-os/tenant-material`              | encrypted tenant credential records to execution-time material                                                                      |
 | `@agent-os/llm-transport-http`           | HTTP LLM streaming into non-durable turn frames                                                                                     |
 | `@agent-os/attached-stream`              | attached live stream frame algebra and transport codec                                                                              |
 | `@agent-os/turn-stream`                  | token/progress frame algebra                                                                                                        |
+| `@agent-os/workspace-env`                | workspace fs+exec actuator and standard workspace tool generator                                                                    |
 | `@agent-os/run-stream`                   | submit/ledger/turn-frame composition                                                                                                |
 | `@agent-os/decision-gate`                | durable decision gate events, projection, and admitter                                                                              |
 | `@agent-os/skill-registry`               | install-time skill manifest to core tools                                                                                           |

@@ -37,11 +37,17 @@ export const agentOsSourceAliasSpecs = [
   ["@agent-os/attached-stream", "packages/composers/attached-stream/src/index.ts"],
   ["@agent-os/run-stream", "packages/composers/run-stream/src/index.ts"],
   ["@agent-os/turn-stream", "packages/composers/turn-stream/src/index.ts"],
+  ["@agent-os/workspace-env", "packages/composers/workspace-env/src/index.ts"],
   ["@agent-os/deploy-cloudflare", "packages/providers/deploy-cloudflare/src/index.ts"],
   ["@agent-os/dynamic-worker", "packages/providers/dynamic-worker/src/index.ts"],
   ["@agent-os/llm-transport-http", "packages/providers/llm-transport-http/src/index.ts"],
   ["@agent-os/resource-cloudflare", "packages/providers/resource-cloudflare/src/index.ts"],
   ["@agent-os/sandbox-cloudflare", "packages/providers/sandbox-cloudflare/src/index.ts"],
+  [
+    "@agent-os/workspace-env-cloudflare",
+    "packages/providers/workspace-env-cloudflare/src/index.ts",
+  ],
+  ["@agent-os/workspace-env-local", "packages/providers/workspace-env-local/src/index.ts"],
   [
     "@agent-os/workspace-session-cloudflare",
     "packages/providers/workspace-session-cloudflare/src/index.ts",

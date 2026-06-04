@@ -5,7 +5,11 @@ import {
   defineTool,
   defineToolFromDefinition,
   deterministicToolInvocation,
+  executeTool,
+  pureToolExecution,
   runToolByName,
+  validateToolRegistry,
+  type Tool,
 } from "../src/tools";
 import type { LlmToolCall } from "../src/llm";
 
@@ -17,6 +21,7 @@ describe("defineTool", () => {
       args: Schema.Struct({ key: Schema.String }),
       authority: "read",
       admit: "allow",
+      execution: pureToolExecution(),
       execute: ({ key }) => ({ value: key }),
     });
 
@@ -45,6 +50,7 @@ describe("defineTool", () => {
         args: Schema.Struct({ key: Schema.String }),
         authority: "read",
         admit: undefined as never,
+        execution: pureToolExecution(),
         execute: ({ key }) => ({ value: key }),
       }),
     ).toThrow("tool admitter is required");
@@ -58,6 +64,7 @@ describe("defineTool", () => {
         args: Schema.Struct({ key: Schema.String.pipe(Schema.minLength(1)) }),
         authority: "read",
         admit: "allow",
+        execution: pureToolExecution(),
         execute: ({ key }) => ({ value: key }),
       }),
     ).toThrow("unsupported");
@@ -87,6 +94,7 @@ describe("defineToolFromDefinition", () => {
       },
       authorityClass: "read",
       admit: "allow",
+      execution: pureToolExecution(),
       execute: async ({ key }) => ({ value: key }),
     });
 
@@ -115,9 +123,56 @@ describe("defineToolFromDefinition", () => {
         },
         authorityClass: "read",
         admit: "allow",
+        execution: pureToolExecution(),
         execute: async () => null,
       }),
     ).toThrow("unsupported-key");
+  });
+
+  it.effect("passes AbortSignal through executeTool", () =>
+    Effect.gen(function* () {
+      let observed: AbortSignal | undefined;
+      const tool = defineTool({
+        name: "lookup",
+        description: "Lookup",
+        args: Schema.Struct({ key: Schema.String }),
+        authority: "read",
+        admit: "allow",
+        execution: pureToolExecution(),
+        execute: (_args, ctx) => {
+          observed = ctx.signal;
+          return { ok: true };
+        },
+      });
+
+      const result = yield* executeTool(tool, { key: "abc" }, "lookup");
+      expect(result).toEqual({ ok: true });
+      expect(observed).toBeInstanceOf(AbortSignal);
+    }),
+  );
+
+  it("rejects missing execution in registry validation", () => {
+    const tool = defineTool({
+      name: "lookup",
+      description: "Lookup",
+      args: Schema.Struct({ key: Schema.String }),
+      authority: "read",
+      admit: "allow",
+      execution: pureToolExecution(),
+      execute: ({ key }) => ({ value: key }),
+    });
+    const legacy = {
+      ...tool,
+      contract: { ...tool.contract, execution: undefined },
+    } as unknown as Tool;
+
+    expect(validateToolRegistry({ lookup: legacy })).toEqual({
+      ok: false,
+      issues: [
+        { kind: "unregistered_contract", toolId: "lookup" },
+        { kind: "missing_execution", toolId: "lookup" },
+      ],
+    });
   });
 });
 
@@ -130,6 +185,7 @@ describe("runToolByName", () => {
         args: Schema.Struct({ key: Schema.String }),
         authority: "read",
         admit: "allow",
+        execution: pureToolExecution(),
         execute: ({ key }) => ({ value: key }),
       });
 
@@ -150,6 +206,7 @@ describe("runToolByName", () => {
         args: Schema.Struct({ key: Schema.String }),
         authority: "read",
         admit: "allow",
+        execution: pureToolExecution(),
         execute: ({ key }) => ({ value: key }),
       });
 
@@ -181,6 +238,7 @@ describe("runToolByName", () => {
       args: Schema.Struct({ key: Schema.String }),
       authority: "read",
       admit: "allow",
+      execution: pureToolExecution(),
       execute: ({ key }) => ({ value: key }),
     });
     const llmCall: LlmToolCall = {

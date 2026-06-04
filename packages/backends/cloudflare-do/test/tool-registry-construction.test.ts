@@ -3,6 +3,7 @@ import { materialRequirement } from "@agent-os/kernel/material-ref";
 import {
   defineToolFromDefinition,
   permissiveToolAdmitter,
+  pureToolExecution,
   validateToolRegistry,
   type Tool,
 } from "@agent-os/kernel/tools";
@@ -26,6 +27,7 @@ describe("tool registry construction", () => {
         originKind: "tool_provider",
       },
       roles: ["generator", "admitter"],
+      execution: { kind: "pure" },
     });
   });
 
@@ -96,6 +98,7 @@ describe("tool registry construction", () => {
         },
         requiredMaterials: [],
         roles: ["generator", "admitter"],
+        execution: pureToolExecution(),
       },
     } as unknown as Tool;
 
@@ -123,6 +126,7 @@ describe("tool registry construction", () => {
       execute: () => Promise.resolve({ ok: true }),
       admit: permissiveToolAdmitter,
       authorityClass: "deploy",
+      execution: pureToolExecution(),
       requiredMaterials: [
         materialRequirement({
           slot: "cf_api_token",

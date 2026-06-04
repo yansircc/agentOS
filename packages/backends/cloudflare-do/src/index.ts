@@ -58,6 +58,8 @@ export type {
   LoweredMaterialBindings,
   OpenAIChatSpec,
 } from "./facade";
+export { durableObjectRpcClient } from "./do-rpc";
+export type { DurableObjectRpcClient, FunctionFree } from "./do-rpc";
 export {
   durableObjectDispatchTarget,
   httpDispatchTarget,
@@ -71,5 +73,3 @@ export type {
   ProviderDispatchTargetSpec,
   QueueDispatchTargetBinding,
 } from "./dispatch";
-export { durableObjectRpcClient } from "./do-rpc";
-export type { DurableObjectRpcClient } from "./do-rpc";

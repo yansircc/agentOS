@@ -153,7 +153,9 @@ describe("@agent-os/sandbox v0 contract", () => {
         maxOutputBytes: 8,
       });
 
-      const result = yield* Effect.promise(() => tool.execute({ command: "make big-output" }));
+      const result = yield* Effect.promise(() =>
+        tool.execute({ command: "make big-output" }, { signal: new AbortController().signal }),
+      );
 
       expect(result.ok).toBe(true);
       expect(result.stdoutBytes).toBe(20);
@@ -185,8 +187,12 @@ describe("@agent-os/sandbox v0 contract", () => {
         ...toolAdmission,
       });
 
-      const first = yield* Effect.promise(() => tool.execute({ command: "pwd" }));
-      const second = yield* Effect.promise(() => tool.execute({ command: "pwd" }));
+      const first = yield* Effect.promise(() =>
+        tool.execute({ command: "pwd" }, { signal: new AbortController().signal }),
+      );
+      const second = yield* Effect.promise(() =>
+        tool.execute({ command: "pwd" }, { signal: new AbortController().signal }),
+      );
 
       expect(first.sandboxId).toBe("sbx-1");
       expect(second.sandboxId).toBe("sbx-2");

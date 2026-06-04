@@ -99,6 +99,22 @@ describe("defineAgentDO facade lowering", () => {
     });
   });
 
+  it("uses the same material resolver lowering for low-level consumers", () => {
+    const bindings = [
+      endpoint<TestEnv>("llm").from((e) => e.LLM_ENDPOINT),
+      credential<TestEnv>("llm-key").from((e) => e.LLM_KEY),
+    ] as const;
+    const lowered = lowerAgentConfig({ bindings }, env);
+    const materialOnly = lowerMaterialBindings(bindings, env);
+
+    expect(materialOnly.refResolver.material({ kind: "endpoint", ref: "llm" })).toBe(
+      lowered.refResolver.material({ kind: "endpoint", ref: "llm" }),
+    );
+    expect(materialOnly.refResolver.material({ kind: "credential", ref: "llm-key" })).toBe(
+      lowered.refResolver.material({ kind: "credential", ref: "llm-key" }),
+    );
+  });
+
   it("routes durable object bindings by material shape, not helper choice", () => {
     const lowered = lowerAgentConfig(
       {

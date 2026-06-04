@@ -16,7 +16,7 @@ import type {} from "@effect/vitest";
 
 import { Ledger } from "../../src/ledger";
 import { type InternalSubmitSpec, submitAgentEffect } from "@agent-os/runtime";
-import { defineToolFromDefinition } from "@agent-os/kernel/tools";
+import { defineToolFromDefinition, pureToolExecution } from "@agent-os/kernel/tools";
 import { stubAi } from "../_stub-ai";
 
 import { SCHEMA, makeRuntime, submitStructuredResp } from "./_helpers";
@@ -97,6 +97,7 @@ describe("admission — submitAgent outputSchema path (contract §12.1)", () => 
             execute: async () => "y",
             admit: "allow",
             authorityClass: "read",
+            execution: pureToolExecution(),
           }),
         },
         outputSchema: SCHEMA,

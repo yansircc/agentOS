@@ -44,6 +44,12 @@
         "rules": ["EFF001"]
       },
       {
+        "path": "packages/composers/workspace-env/src/index.ts",
+        "owner": "@agent-os/workspace-env/js-actuator-facade",
+        "reason": "WorkspaceEnv is the public Promise/synchronous path facade for workspace actuators; it owns fail-fast AbortSignal and path validation errors before provider side effects",
+        "rules": ["EFF024", "EFF025"]
+      },
+      {
         "path": "packages/backends/cloudflare-do/src/attached-stream-wire.ts",
         "owner": "@agent-os/backend-cloudflare-do/attached-stream-wire",
         "reason": "terminal attached-stream transport adapter owns WebSocket/SSE Response construction and platform callback loops",
@@ -102,6 +108,18 @@
         "owner": "@agent-os/dynamic-worker-tests",
         "reason": "test worker source strings exercise Response construction in sandboxed dynamic workers",
         "rules": ["EFF402"]
+      },
+      {
+        "path": "packages/providers/workspace-env-cloudflare/src/index.ts",
+        "owner": "@agent-os/workspace-env-cloudflare/provider-adapter",
+        "reason": "terminal Cloudflare Sandbox WorkspaceEnv adapter owns Promise provider calls, pre/post AbortSignal checks, and provider duration normalization",
+        "rules": ["EFF003", "EFF004", "EFF024", "EFF025", "EFF026"]
+      },
+      {
+        "path": "packages/providers/workspace-env-local/src/index.ts",
+        "owner": "@agent-os/workspace-env-local/provider-adapter",
+        "reason": "terminal local host WorkspaceEnv adapter owns Node fs/child_process Promise calls, timeout, AbortSignal, and host environment allowlist enforcement",
+        "rules": ["EFF003", "EFF004", "EFF020", "EFF021", "EFF024", "EFF025", "EFF026"]
       },
       {
         "path": "tooling/ops-api/src/errors.ts",

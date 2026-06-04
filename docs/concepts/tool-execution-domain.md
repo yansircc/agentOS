@@ -1,0 +1,37 @@
+# Tool Execution Domain
+
+## Problem
+
+Tool execution used to hide the side-effect location behind `execute(args)`.
+That made host execution an implicit default and prevented cancellation from
+crossing into tool code.
+
+## Model
+
+Tool contracts separate the envelope from the side-effect domain. The tool
+envelope owns admission, claims, quota, contract validation, retry, and ledger
+settlement. The execution domain declares where an effectful tool runs: host,
+sandbox, workspace, or remote. Host execution is never implicit.
+
+Pure tools declare `execution: { kind: "pure" }`. Effectful tools declare
+`execution: { kind: "effectful", domain }`. The registry rejects tools that omit
+execution metadata so a product cannot accidentally run host effects through an
+unstated default.
+
+`@agent-os/sandbox` remains a bounded stateless command carrier.
+`@agent-os/workspace-env` is a stable fs+exec actuator. Provider adapters choose
+the real execution domain: Cloudflare Sandbox declares `sandbox`; local Node
+fs/shell declares `host` with an explicit environment allowlist. These are
+adjacent execution surfaces, not one merged abstraction.
+
+## Non-Goals
+
+This concept does not define durable reconnect, provider billing cancellation,
+workspace-session lifecycle, or product-specific workspace projections.
+
+## Related
+
+- [Sandbox package](../packages/sandbox.md)
+- [WorkspaceEnv package](../packages/workspace-env.md)
+- [Workspace session package](../packages/workspace-session.md)
+- [Local WorkspaceEnv package](../packages/workspace-env-local.md)

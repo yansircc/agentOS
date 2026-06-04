@@ -1,5 +1,9 @@
 import { Clock, Effect, Option } from "effect";
-import { defineToolFromDefinition, type Tool } from "@agent-os/kernel/tools";
+import {
+  defineToolFromDefinition,
+  effectfulToolExecution,
+  type Tool,
+} from "@agent-os/kernel/tools";
 
 import { failureToToolResult, truncateUtf8 } from "./output";
 import { runSandbox } from "./run";
@@ -89,6 +93,10 @@ export const makeSandboxRunTool = (
       ? {}
       : { authorityVersion: options.authorityVersion }),
     admit: options.admit,
+    execution: effectfulToolExecution({
+      kind: "sandbox",
+      ref: options.authorityId ?? options.name ?? "sandbox_run",
+    }),
     execute: (args) => {
       const request = requestFromToolArgs(args, { timeoutMs, maxOutputBytes, network });
       const program = Effect.gen(function* () {

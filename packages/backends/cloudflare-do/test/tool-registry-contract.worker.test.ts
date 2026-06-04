@@ -14,6 +14,7 @@ import {
   defineToolFromDefinition,
   defineTool,
   permissiveToolAdmitter,
+  pureToolExecution,
   type Tool,
 } from "@agent-os/kernel/tools";
 import type { EventHandler } from "@agent-os/kernel/types";
@@ -118,6 +119,7 @@ describe("tool registry generator", () => {
         admitted = true;
         return { ok: true };
       },
+      execution: pureToolExecution(),
       execute: async () => {
         executed = true;
         return { value: 42 };
@@ -174,6 +176,7 @@ describe("tool registry generator", () => {
         return { value: 42 };
       },
       authorityClass: "write",
+      execution: pureToolExecution(),
     });
 
     await runInDurableObject(stub, async (_inst, state) => {
@@ -233,6 +236,7 @@ describe("tool registry generator", () => {
         return { value: 42 };
       },
       authorityClass: "write",
+      execution: pureToolExecution(),
     });
 
     await runInDurableObject(stub, async (_inst, state) => {
@@ -290,6 +294,7 @@ describe("tool registry generator", () => {
         return { value: 42 };
       },
       authorityClass: "write",
+      execution: pureToolExecution(),
     });
 
     await runInDurableObject(stub, async (_inst, state) => {
@@ -345,6 +350,7 @@ describe("tool registry generator", () => {
       },
       admit: permissiveToolAdmitter,
       authorityClass: "read",
+      execution: pureToolExecution(),
     });
 
     await runInDurableObject(stub, async (_inst, state) => {
@@ -377,6 +383,64 @@ describe("tool registry generator", () => {
         }),
       );
       expect(events.some((event) => event.kind === "agent.aborted.tool_error")).toBe(true);
+
+      await runtime.dispose();
+    });
+  });
+
+  it("settles hanging tool execution as budget_time and aborts the tool signal", async () => {
+    const scope = "tool-registry-budget-time";
+    const id = testEnv.AGENT_DO.idFromName(scope);
+    const stub = testEnv.AGENT_DO.get(id);
+    let observedSignal: AbortSignal | undefined;
+    let aborted = false;
+    const hangingTool = defineToolFromDefinition({
+      definition: {
+        type: "function",
+        function: {
+          name: "lookup",
+          description: "Lookup a value",
+          parameters: { type: "object", properties: {}, required: [] },
+        },
+      },
+      execute: async (_args, ctx) => {
+        observedSignal = ctx.signal;
+        ctx.signal.addEventListener("abort", () => {
+          aborted = true;
+        });
+        await new Promise<never>(() => {});
+      },
+      admit: permissiveToolAdmitter,
+      authorityClass: "read",
+      execution: pureToolExecution(),
+    });
+
+    await runInDurableObject(stub, async (_inst, state) => {
+      const ai = stubAi([toolCallResp("lookup", "{}", "call-1")]);
+      const runtime = buildRuntime(state, ai);
+      const spec: InternalSubmitSpec = {
+        ...makeSpec(scope, hangingTool),
+        budget: { maxTurns: 3, timeMs: 50, toolRetries: 0 },
+      };
+
+      const result = await runtime.runPromise(submitAgentEffect(spec));
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.reason).toBe("budget_time");
+      }
+      expect(observedSignal).toBeInstanceOf(AbortSignal);
+      expect(aborted || observedSignal?.aborted).toBe(true);
+
+      const events = await runtime.runPromise(
+        Effect.gen(function* () {
+          const l = yield* Ledger;
+          return yield* l.events(scope);
+        }),
+      );
+      expect(events.some((event) => event.kind === "tool.executed")).toBe(false);
+      expect(events.some((event) => event.kind === "tool.rejected")).toBe(true);
+      expect(events.some((event) => event.kind === "agent.aborted.budget_time")).toBe(true);
+      expect(events.some((event) => event.kind === "agent.run.completed")).toBe(false);
 
       await runtime.dispose();
     });

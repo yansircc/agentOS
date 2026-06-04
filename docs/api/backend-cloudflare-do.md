@@ -33,6 +33,7 @@
 - `.:DispatchTargetNamespace`
 - `.:DispatchTargetRegistry`
 - `.:DurableObjectRpcClient`
+- `.:FunctionFree`
 - `.:GeminiGenerateContentSpec`
 - `.:HttpDispatchTargetSpec`
 - `.:LoweredMaterialBindings`
@@ -45,9 +46,9 @@
 - `.:credential`
 - `.:createAgentDurableObject`
 - `.:defineAgentDO`
-- `.:durableObjectTarget`
 - `.:durableObjectDispatchTarget`
 - `.:durableObjectRpcClient`
+- `.:durableObjectTarget`
 - `.:endpoint`
 - `.:externalResource`
 - `.:geminiGenerateContent`

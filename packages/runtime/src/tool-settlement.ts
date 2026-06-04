@@ -30,7 +30,7 @@ const toolTerminalId = (namespace: string, claim: PreClaim): string =>
   symbolicSettlementRef(namespace, [claim.operationRef]);
 
 export const toolExecutionRejectionKind = (reason: string): RejectionRef["rejectionKind"] =>
-  reason === "rate_limited" || reason.startsWith("invalid_quota_")
+  reason === "budget_time" || reason === "rate_limited" || reason.startsWith("invalid_quota_")
     ? "resource_denied"
     : "provider_rejected";
 

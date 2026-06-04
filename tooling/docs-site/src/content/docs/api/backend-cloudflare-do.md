@@ -37,6 +37,7 @@ title: "@agent-os/backend-cloudflare-do Public API Intent"
 - `.:DispatchTargetNamespace`
 - `.:DispatchTargetRegistry`
 - `.:DurableObjectRpcClient`
+- `.:FunctionFree`
 - `.:GeminiGenerateContentSpec`
 - `.:HttpDispatchTargetSpec`
 - `.:LoweredMaterialBindings`
@@ -49,9 +50,9 @@ title: "@agent-os/backend-cloudflare-do Public API Intent"
 - `.:credential`
 - `.:createAgentDurableObject`
 - `.:defineAgentDO`
-- `.:durableObjectTarget`
 - `.:durableObjectDispatchTarget`
 - `.:durableObjectRpcClient`
+- `.:durableObjectTarget`
 - `.:endpoint`
 - `.:externalResource`
 - `.:geminiGenerateContent`

@@ -24,6 +24,17 @@ Cloudflare-targeted packages also peer depend on
 `@cloudflare/workers-types`. Worker apps should install a compatible version
 from the release manifest before typechecking Cloudflare-facing code.
 
+For first-party prepublish consumers, run:
+
+```sh
+bun run pack:internal
+```
+
+Then copy the needed `dependencies` and matching `overrides` entries from
+`dist/internal-npm/install-manifest.json`. The manifest points at
+content-addressed local `.tgz` files, so rebuilding internal packages changes
+the `file:` spec when package contents change.
+
 ## Release Train
 
 Published packages ship as one fixed train. `package.json`

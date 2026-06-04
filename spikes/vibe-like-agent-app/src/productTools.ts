@@ -1,5 +1,11 @@
 import { Schema } from "effect";
-import { defineTool, materialRequirement, type Tool, type ToolAdmitter } from "@agent-os/kernel";
+import {
+  defineTool,
+  effectfulToolExecution,
+  materialRequirement,
+  type Tool,
+  type ToolAdmitter,
+} from "@agent-os/kernel";
 
 const spikeAdmitter =
   <A>(): ToolAdmitter<A> =>
@@ -19,10 +25,21 @@ const deployMaterial = materialRequirement({
   resourceKind: "worker",
 });
 
+const workspaceExecution = effectfulToolExecution({
+  kind: "workspace",
+  ref: "vibe-like.workspace",
+});
+
+const deployExecution = effectfulToolExecution({
+  kind: "remote",
+  ref: "vibe-like.deploy",
+});
+
 export const boundedShellExecTool = defineTool({
   name: "bounded_shell_exec",
   description: "Run a bounded workspace command and return output refs.",
   args: Schema.Struct({ commandRef: Schema.String, timeoutMs: Schema.Number }),
+  execution: workspaceExecution,
   authority: "vibe-like.workspace-tool",
   requiredMaterials: [workspaceMaterial],
   admit: spikeAdmitter(),
@@ -37,6 +54,7 @@ export const fileListTool = defineTool({
   name: "file_list",
   description: "List workspace files and return an entries ref.",
   args: Schema.Struct({ rootRef: Schema.String }),
+  execution: workspaceExecution,
   authority: "vibe-like.workspace-tool",
   requiredMaterials: [workspaceMaterial],
   admit: spikeAdmitter(),
@@ -47,6 +65,7 @@ export const fileReadTool = defineTool({
   name: "file_read",
   description: "Read a workspace file and return blob metadata.",
   args: Schema.Struct({ path: Schema.String }),
+  execution: workspaceExecution,
   authority: "vibe-like.workspace-tool",
   requiredMaterials: [workspaceMaterial],
   admit: spikeAdmitter(),
@@ -57,6 +76,7 @@ export const fileWriteTool = defineTool({
   name: "file_write",
   description: "Write a workspace file from a blob ref.",
   args: Schema.Struct({ path: Schema.String, blobRef: Schema.String, digest: Schema.String }),
+  execution: workspaceExecution,
   authority: "vibe-like.workspace-tool",
   requiredMaterials: [workspaceMaterial],
   admit: spikeAdmitter(),
@@ -67,6 +87,7 @@ export const gitStatusDiffTool = defineTool({
   name: "git_status_diff",
   description: "Return symbolic refs for git status and diff.",
   args: Schema.Struct({ repoRef: Schema.String }),
+  execution: workspaceExecution,
   authority: "vibe-like.workspace-tool",
   requiredMaterials: [workspaceMaterial],
   admit: spikeAdmitter(),
@@ -80,6 +101,7 @@ export const portProbeTool = defineTool({
   name: "port_probe",
   description: "Probe a workspace port.",
   args: Schema.Struct({ port: Schema.Number }),
+  execution: workspaceExecution,
   authority: "vibe-like.workspace-tool",
   requiredMaterials: [workspaceMaterial],
   admit: spikeAdmitter(),
@@ -90,6 +112,7 @@ export const portOpenTool = defineTool({
   name: "port_open",
   description: "Open a workspace port and return a url ref.",
   args: Schema.Struct({ port: Schema.Number, urlRef: Schema.String }),
+  execution: workspaceExecution,
   authority: "vibe-like.workspace-tool",
   requiredMaterials: [workspaceMaterial],
   admit: spikeAdmitter(),
@@ -100,6 +123,7 @@ export const portCloseTool = defineTool({
   name: "port_close",
   description: "Close a workspace port.",
   args: Schema.Struct({ port: Schema.Number }),
+  execution: workspaceExecution,
   authority: "vibe-like.workspace-tool",
   requiredMaterials: [workspaceMaterial],
   admit: spikeAdmitter(),
@@ -114,6 +138,7 @@ export const workerDeployReadbackTool = defineTool({
     bundleRef: Schema.String,
     digest: Schema.String,
   }),
+  execution: deployExecution,
   authority: "vibe-like.deploy-tool",
   requiredMaterials: [deployMaterial],
   admit: spikeAdmitter(),

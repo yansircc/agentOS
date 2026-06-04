@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -12,12 +12,14 @@ const distRoot = path.join(repoRoot, "dist", "internal-npm");
 const stagingRoot = path.join(distRoot, "packages");
 const tarballRoot = path.join(distRoot, "tarballs");
 const installManifestPath = path.join(distRoot, "install-manifest.json");
+const tarballHashLength = 12;
 
 const runtimePackageRoots = ["packages", "tooling"];
 const cloudflarePackageNames = new Set([
   "@agent-os/backend-cloudflare-do",
   "@agent-os/resource-cloudflare",
   "@agent-os/sandbox-cloudflare",
+  "@agent-os/workspace-env-cloudflare",
   "@agent-os/workspace-session-cloudflare",
 ]);
 const tarballBlocklist = [
@@ -42,10 +44,8 @@ const writeJson = (file, value) => {
   fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
 };
 
-const sha512Hex = (file) => createHash("sha512").update(fs.readFileSync(file)).digest("hex");
-
-const contentAddressedTarballName = (filename, hash) =>
-  filename.replace(/\.tgz$/u, `-${hash.slice(0, 16)}.tgz`);
+const sha256File = (file) =>
+  crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
 
 const run = (cmd, args, options = {}) => {
   const result = spawnSync(cmd, args, {
@@ -427,6 +427,44 @@ const parseNpmJsonOutput = (text) => {
   return JSON.parse(trimmed);
 };
 
+const contentAddressedTarball = (file) => {
+  const sha256 = sha256File(file);
+  const targetDir = path.join(path.dirname(file), sha256.slice(0, tarballHashLength));
+  const target = path.join(targetDir, path.basename(file));
+  fs.mkdirSync(targetDir, { recursive: true });
+  fs.renameSync(file, target);
+  return { file: target, sha256 };
+};
+
+const tarballSpec = (file) => `file:${file}`;
+
+const writeInstallManifest = (entries) => {
+  const sorted = entries
+    .slice()
+    .sort((left, right) =>
+      left.record.packageJson.name.localeCompare(right.record.packageJson.name),
+    );
+  const dependencies = Object.fromEntries(
+    sorted.map((entry) => [entry.record.packageJson.name, tarballSpec(entry.file)]),
+  );
+  writeJson(installManifestPath, {
+    version: releaseVersion(),
+    generatedBy: "tooling/distribution/distribution.mjs pack",
+    dependencies,
+    overrides: dependencies,
+    tarballs: Object.fromEntries(
+      sorted.map((entry) => [
+        entry.record.packageJson.name,
+        {
+          path: repoPath(entry.file),
+          spec: tarballSpec(entry.file),
+          sha256: entry.sha256,
+        },
+      ]),
+    ),
+  });
+};
+
 const npmPackDryRunFiles = (cwd) => {
   const result = run("npm", ["pack", "--dry-run", "--json"], { cwd, capture: true });
   const parsed = parseNpmJsonOutput(result.stdout);
@@ -482,8 +520,6 @@ const packInternal = () => {
   fs.rmSync(tarballRoot, { recursive: true, force: true });
   fs.mkdirSync(tarballRoot, { recursive: true });
   const tarballs = [];
-  const packageSpecs = {};
-  const packageEntries = [];
   for (const record of publishedRecords()) {
     const result = run("npm", ["pack", "--json", "--pack-destination", tarballRoot], {
       cwd: record.stageDir,
@@ -493,64 +529,28 @@ const packInternal = () => {
     const filename = parsed[0]?.filename;
     if (typeof filename !== "string")
       fail(`${record.packageJson.name}: npm pack did not report filename`);
-    const tarball = path.join(tarballRoot, filename);
-    const sha512 = sha512Hex(tarball);
-    const contentTarball = path.join(tarballRoot, contentAddressedTarballName(filename, sha512));
-    fs.copyFileSync(tarball, contentTarball);
-    const spec = `file:${contentTarball}`;
-    tarballs.push(contentTarball);
-    packageSpecs[record.packageJson.name] = spec;
-    packageEntries.push({
-      name: record.packageJson.name,
-      version: releaseVersion(),
-      tarball: repoPath(contentTarball),
-      sourceTarball: repoPath(tarball),
-      sha512,
-      spec,
-    });
+    const addressed = contentAddressedTarball(path.join(tarballRoot, filename));
+    tarballs.push({ record, ...addressed });
   }
-  writeJson(installManifestPath, {
-    version: releaseVersion(),
-    packages: packageEntries.sort((left, right) => left.name.localeCompare(right.name)),
-    dependencies: Object.fromEntries(
-      Object.entries(packageSpecs).sort(([left], [right]) => left.localeCompare(right)),
-    ),
-    overrides: Object.fromEntries(
-      Object.entries(packageSpecs).sort(([left], [right]) => left.localeCompare(right)),
-    ),
-  });
-  console.log(`packed ${tarballs.length} tarballs into ${repoPath(tarballRoot)}`);
-  console.log(`wrote ${repoPath(installManifestPath)}`);
-  return tarballs;
+  writeInstallManifest(tarballs);
+  console.log(
+    `packed ${tarballs.length} tarballs into ${repoPath(tarballRoot)} and wrote ${repoPath(installManifestPath)}`,
+  );
+  return tarballs.map((entry) => entry.file);
 };
 
 const tarballsByPackage = () => {
   if (!fs.existsSync(tarballRoot)) packInternal();
-  if (fs.existsSync(installManifestPath)) {
-    const manifest = readJson(installManifestPath);
-    return new Map(
-      manifest.packages.map((entry) => {
-        if (typeof entry.name !== "string" || typeof entry.spec !== "string") {
-          fail("install manifest package entries must contain name and spec");
-        }
-        if (!entry.spec.startsWith("file:")) {
-          fail(`${entry.name}: install manifest spec must be file:`);
-        }
-        return [entry.name, entry.spec.slice("file:".length)];
-      }),
-    );
-  }
   const byPackage = new Map();
   for (const record of publishedRecords()) {
     const packageNamePart = record.packageJson.name.replace(/^@/u, "").replace(/\//gu, "-");
     const prefix = `${packageNamePart}-`;
-    const tarball = fs
-      .readdirSync(tarballRoot)
-      .filter((entry) => entry.startsWith(prefix) && entry.endsWith(".tgz"))
-      .sort()
+    const tarball = allFiles(tarballRoot)
+      .filter((entry) => path.basename(entry).startsWith(prefix) && entry.endsWith(".tgz"))
+      .sort((left, right) => left.localeCompare(right))
       .at(-1);
     if (tarball === undefined) fail(`${record.packageJson.name}: missing tarball`);
-    byPackage.set(record.packageJson.name, path.join(tarballRoot, tarball));
+    byPackage.set(record.packageJson.name, tarball);
   }
   return byPackage;
 };
@@ -750,9 +750,6 @@ const negativeContractTests = () => {
 
 const testInternalConsumer = () => {
   packInternal();
-  if (!fs.existsSync(installManifestPath)) {
-    fail("pack:internal did not write install-manifest.json");
-  }
   negativeContractTests();
   assertPeerFailure();
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-internal-consumer-"));

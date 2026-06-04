@@ -27,6 +27,7 @@ import { type InternalSubmitSpec, submitAgentEffect } from "@agent-os/runtime";
 import {
   defineToolFromDefinition,
   permissiveToolAdmitter,
+  pureToolExecution,
   type Tool,
 } from "@agent-os/kernel/tools";
 import type { EventHandler } from "@agent-os/kernel/types";
@@ -52,6 +53,7 @@ const makeQuotaTool = (limit: number): Tool =>
       execute: async () => "2026-05-25T00:00:00Z",
       admit: permissiveToolAdmitter,
       authorityClass: "read",
+      execution: pureToolExecution(),
     }),
     { windowMs: 60_000, limit, amount: 1 },
   );

@@ -24,6 +24,19 @@ packages instead of sharing the agentOS source workspace lockfile.
    do not reuse stale same-version tarballs after a local repack.
 7. Run the app typecheck and tests under its own lockfile.
 
+For first-party prepublish work, use the generated internal install manifest
+instead of hand-writing tarball paths:
+
+```sh
+bun run pack:internal
+```
+
+Copy the required `@agent-os/*` entries from
+`dist/internal-npm/install-manifest.json` into the consumer `dependencies` and
+copy the same entries into `overrides`. The manifest uses content-addressed
+`.tgz` file specs so local package managers do not silently keep a stale
+same-version tarball.
+
 ## References
 
 - [Internal npm distribution](../distribution.md)

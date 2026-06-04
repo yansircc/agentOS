@@ -4,9 +4,11 @@ import { toClosedJsonSchemaObjectResult } from "@agent-os/kernel/json-schema";
 import { isMaterialRequirement, type MaterialRequirement } from "@agent-os/kernel/material-ref";
 import {
   defineToolFromDefinition,
+  effectfulToolExecution,
   type Tool,
   type ToolAdmitter,
   type ToolDefinition,
+  type ToolExecutionContext,
 } from "@agent-os/kernel/tools";
 
 export interface SkillToolManifest {
@@ -15,7 +17,7 @@ export interface SkillToolManifest {
   readonly authorityId?: string;
   readonly requiredMaterials?: ReadonlyArray<MaterialRequirement>;
   readonly admit: ToolAdmitter;
-  readonly execute: (args: unknown) => Promise<unknown>;
+  readonly execute: (args: unknown, ctx: ToolExecutionContext) => Promise<unknown>;
 }
 
 export interface SkillManifest {
@@ -192,6 +194,10 @@ export const registerSkill = (manifest: SkillManifest): RegisterSkillResult => {
         : { requiredMaterials: tool.requiredMaterials }),
       originRef: manifest.originRef,
       admit: tool.admit,
+      execution: effectfulToolExecution({
+        kind: "remote",
+        ref: `${manifest.skillId}:${toolId}`,
+      }),
     });
   }
 

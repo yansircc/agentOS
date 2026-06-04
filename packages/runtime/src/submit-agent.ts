@@ -73,6 +73,34 @@ class LlmCallTimedOut extends Data.TaggedError("agent_os.llm_call_timed_out")<{
 const toolDefinitionsOf = (tools: Record<string, Tool>): ReadonlyArray<ToolDefinition> =>
   Object.values(tools).map((t) => t.definition);
 
+const toolBudgetTimeCause = (
+  elapsedMs: number,
+  maxMs: number,
+): { readonly reason: "budget_time"; readonly elapsedMs: number; readonly maxMs: number } => ({
+  reason: "budget_time",
+  elapsedMs,
+  maxMs,
+});
+
+const isToolBudgetTimeError = (error: ToolError): boolean => {
+  const cause = error.cause;
+  return (
+    typeof cause === "object" &&
+    cause !== null &&
+    (cause as { readonly reason?: unknown }).reason === "budget_time"
+  );
+};
+
+const toolBudgetTimePayload = (
+  error: ToolError,
+): { readonly elapsedMs: number; readonly maxMs: number } => {
+  const cause = error.cause as { readonly elapsedMs?: unknown; readonly maxMs?: unknown };
+  return {
+    elapsedMs: typeof cause.elapsedMs === "number" ? cause.elapsedMs : 0,
+    maxMs: typeof cause.maxMs === "number" ? cause.maxMs : 0,
+  };
+};
+
 export const buildInitialMessages = (
   spec: Pick<InternalSubmitSpec, "system" | "intent" | "context">,
 ): Effect.Effect<ReadonlyArray<LlmMessage>, JsonStringifyError> =>
@@ -499,60 +527,84 @@ export const submitAgentEffect = (
           // Each retry independently grants → retries count toward quota.
           const attemptOnce: Effect.Effect<unknown, ToolError | SqlError | JsonStringifyError> =
             Effect.gen(function* () {
-              if (tool.quota !== undefined) {
-                const q = tool.quota;
-                const amount = q.amount ?? 1;
-                if (!Number.isFinite(amount) || amount < 0) {
-                  return yield* new ToolError({
-                    toolName: call.function.name,
-                    cause: { reason: "invalid_quota_amount", amount },
-                  });
+              const attempt = Effect.gen(function* () {
+                if (tool.quota !== undefined) {
+                  const q = tool.quota;
+                  const amount = q.amount ?? 1;
+                  if (!Number.isFinite(amount) || amount < 0) {
+                    return yield* new ToolError({
+                      toolName: call.function.name,
+                      cause: { reason: "invalid_quota_amount", amount },
+                    });
+                  }
+                  if (!Number.isFinite(q.limit) || q.limit < 0) {
+                    return yield* new ToolError({
+                      toolName: call.function.name,
+                      cause: { reason: "invalid_quota_limit", limit: q.limit },
+                    });
+                  }
+                  // windowMs accepts POSITIVE_INFINITY (unbounded billing
+                  // window) but not NaN or negative.
+                  const windowOk =
+                    q.windowMs === Number.POSITIVE_INFINITY ||
+                    (Number.isFinite(q.windowMs) && q.windowMs >= 0);
+                  if (!windowOk) {
+                    return yield* new ToolError({
+                      toolName: call.function.name,
+                      cause: { reason: "invalid_quota_window", windowMs: q.windowMs },
+                    });
+                  }
+                  if (q.key !== undefined && q.key.length === 0) {
+                    return yield* new ToolError({
+                      toolName: call.function.name,
+                      cause: { reason: "invalid_quota_key", key: q.key },
+                    });
+                  }
+                  const key = q.key ?? call.function.name;
+                  const grant = yield* quotaService.tryGrant(
+                    scope,
+                    key,
+                    amount,
+                    q.windowMs,
+                    q.limit,
+                    call.function.name,
+                  );
+                  if (!grant.granted) {
+                    return yield* new ToolError({
+                      toolName: call.function.name,
+                      cause: {
+                        reason: "rate_limited",
+                        key,
+                        consumed: grant.consumed,
+                        limit: grant.limit,
+                      },
+                    });
+                  }
                 }
-                if (!Number.isFinite(q.limit) || q.limit < 0) {
-                  return yield* new ToolError({
-                    toolName: call.function.name,
-                    cause: { reason: "invalid_quota_limit", limit: q.limit },
-                  });
-                }
-                // windowMs accepts POSITIVE_INFINITY (unbounded billing
-                // window) but not NaN or negative.
-                const windowOk =
-                  q.windowMs === Number.POSITIVE_INFINITY ||
-                  (Number.isFinite(q.windowMs) && q.windowMs >= 0);
-                if (!windowOk) {
-                  return yield* new ToolError({
-                    toolName: call.function.name,
-                    cause: { reason: "invalid_quota_window", windowMs: q.windowMs },
-                  });
-                }
-                if (q.key !== undefined && q.key.length === 0) {
-                  return yield* new ToolError({
-                    toolName: call.function.name,
-                    cause: { reason: "invalid_quota_key", key: q.key },
-                  });
-                }
-                const key = q.key ?? call.function.name;
-                const grant = yield* quotaService.tryGrant(
-                  scope,
-                  key,
-                  amount,
-                  q.windowMs,
-                  q.limit,
-                  call.function.name,
-                );
-                if (!grant.granted) {
-                  return yield* new ToolError({
-                    toolName: call.function.name,
-                    cause: {
-                      reason: "rate_limited",
-                      key,
-                      consumed: grant.consumed,
-                      limit: grant.limit,
-                    },
-                  });
-                }
+                return yield* executeTool(tool, args, call.function.name);
+              });
+              if (!Number.isFinite(budgetTimeMs)) {
+                return yield* attempt;
               }
-              return yield* executeTool(tool, args, call.function.name);
+              const now = yield* Clock.currentTimeMillis;
+              const elapsedMs = now - startTime;
+              const remainingMs = budgetTimeMs - elapsedMs;
+              if (remainingMs <= 0) {
+                return yield* new ToolError({
+                  toolName: call.function.name,
+                  cause: toolBudgetTimeCause(elapsedMs, budgetTimeMs),
+                });
+              }
+              return yield* attempt.pipe(
+                Effect.timeoutFail({
+                  duration: Duration.millis(remainingMs),
+                  onTimeout: () =>
+                    new ToolError({
+                      toolName: call.function.name,
+                      cause: toolBudgetTimeCause(budgetTimeMs, budgetTimeMs),
+                    }),
+                }),
+              );
             });
 
           const result = yield* attemptOnce.pipe(
@@ -566,6 +618,7 @@ export const submitAgentEffect = (
                   const cause = (err as ToolError).cause;
                   if (typeof cause === "object" && cause !== null) {
                     const reason = (cause as { reason?: unknown }).reason;
+                    if (reason === "budget_time") return false;
                     if (reason === "rate_limited") return false;
                     if (typeof reason === "string" && reason.startsWith("invalid_quota_")) {
                       return false;
@@ -635,6 +688,15 @@ export const submitAgentEffect = (
         [ABORT.TOOL_ERROR]: (e) =>
           Effect.gen(function* () {
             const tokensUsed = yield* Ref.get(tokensUsedRef);
+            if (isToolBudgetTimeError(e)) {
+              return yield* finalAbort(
+                ABORT.BUDGET_TIME,
+                toolBudgetTimePayload(e),
+                scope,
+                started.id,
+                tokensUsed,
+              );
+            }
             return yield* finalAbort(
               ABORT.TOOL_ERROR,
               { toolName: e.toolName, cause: publicRuntimeCauseReason(e.cause) },

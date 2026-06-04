@@ -3,7 +3,7 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyFunction = (...args: any[]) => any;
 
-type FunctionFree<T> = T extends AnyFunction
+export type FunctionFree<T> = T extends AnyFunction
   ? never
   : T extends readonly [infer Head, ...infer Tail]
     ? readonly [FunctionFree<Head>, ...FunctionFree<Tail>]

@@ -12,10 +12,13 @@
 | Cloudflare resource provider         | `@agent-os/resource-cloudflare`          |
 | Workspace/session facts              | `@agent-os/workspace-session`            |
 | Cloudflare Sandbox workspace backend | `@agent-os/workspace-session-cloudflare` |
+| Cloudflare WorkspaceEnv adapter      | `@agent-os/workspace-env-cloudflare`     |
+| Local WorkspaceEnv adapter           | `@agent-os/workspace-env-local`          |
 | Tenant credential material resolver  | `@agent-os/tenant-material`              |
 | HTTP LLM token streaming             | `@agent-os/llm-transport-http`           |
 | Attached live stream frames          | `@agent-os/attached-stream`              |
 | Token/progress frames                | `@agent-os/turn-stream`                  |
+| Workspace actuator and tools         | `@agent-os/workspace-env`                |
 | Consumer run stream                  | `@agent-os/run-stream`                   |
 | Approval/decision gate               | `@agent-os/decision-gate`                |
 | Skill manifest to tools              | `@agent-os/skill-registry`               |

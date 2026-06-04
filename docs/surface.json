@@ -141,6 +141,34 @@
       "published": true
     },
     {
+      "slug": "workspace-env-cloudflare",
+      "name": "@agent-os/workspace-env-cloudflare",
+      "path": "packages/providers/workspace-env-cloudflare",
+      "status": "0.2.x public",
+      "role": "Cloudflare Sandbox-compatible WorkspaceEnv adapter",
+      "boundary": "structural Cloudflare Sandbox-compatible fs+exec actuator adapter",
+      "need": "Cloudflare WorkspaceEnv adapter",
+      "readmeStatus": "0.2.x active development. Provider-specific exports are listed in `PUBLIC_API.md`; this is not an API freeze.",
+      "apiStatus": "0.2.x active development. Public exports are limited to structural Cloudflare WorkspaceEnv adapter types and factories.",
+      "apiSource": "docs/api/workspace-env-cloudflare.md",
+      "primary": true,
+      "published": true
+    },
+    {
+      "slug": "workspace-env-local",
+      "name": "@agent-os/workspace-env-local",
+      "path": "packages/providers/workspace-env-local",
+      "status": "0.2.x public",
+      "role": "local host WorkspaceEnv adapter with explicit host execution domain",
+      "boundary": "Node fs and shell calls bound to one explicit host workspace root",
+      "need": "Local WorkspaceEnv adapter",
+      "readmeStatus": "0.2.x active development. Provider-specific exports are listed in `PUBLIC_API.md`; this is not an API freeze.",
+      "apiStatus": "0.2.x active development. Public exports are limited to local WorkspaceEnv adapter types and factories.",
+      "apiSource": "docs/api/workspace-env-local.md",
+      "primary": true,
+      "published": true
+    },
+    {
       "slug": "tenant-material",
       "name": "@agent-os/tenant-material",
       "path": "packages/carriers/tenant-material",
@@ -194,6 +222,20 @@
       "readmeStatus": "0.2.x active development. Public exports are listed in `PUBLIC_API.md` to prevent accidental exports; they are not frozen.",
       "apiStatus": "0.2.x active development for frame algebra. Public exports are listed for accidental export control only; this is not an API freeze.",
       "apiSource": "docs/api/turn-stream.md",
+      "primary": true,
+      "published": true
+    },
+    {
+      "slug": "workspace-env",
+      "name": "@agent-os/workspace-env",
+      "path": "packages/composers/workspace-env",
+      "status": "0.2.x public",
+      "role": "workspace fs+exec actuator and standard workspace tool generator",
+      "boundary": "runtime-neutral WorkspaceEnv actuator; no ledger fact ownership",
+      "need": "Workspace actuator and tools",
+      "readmeStatus": "0.2.x active development. Public exports are listed in `PUBLIC_API.md` to prevent accidental exports; they are not frozen.",
+      "apiStatus": "0.2.x active development. Public exports are limited to WorkspaceEnv types, normalization helpers, and standard workspace tool generator.",
+      "apiSource": "docs/api/workspace-env.md",
       "primary": true,
       "published": true
     },

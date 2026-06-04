@@ -35,12 +35,29 @@ import {
 const TOOL_CONTRACT_BRAND = Symbol("@agent-os/kernel/ToolContract");
 const DETERMINISTIC_TOOL_INVOCATION_BRAND = Symbol("@agent-os/kernel/DeterministicToolInvocation");
 
+export interface ToolExecutionContext {
+  readonly signal: AbortSignal;
+}
+
+export type ExecutionDomainKind = "host" | "sandbox" | "workspace" | "remote";
+
+export interface ExecutionDomain {
+  readonly kind: ExecutionDomainKind;
+  readonly ref: string;
+  readonly envAllowlist?: ReadonlyArray<string>;
+}
+
+export type ToolExecution =
+  | { readonly kind: "pure" }
+  | { readonly kind: "effectful"; readonly domain: ExecutionDomain };
+
 interface ToolContractShape {
   readonly toolId: string;
   readonly authorityRef: AuthorityRef;
   readonly requiredMaterials: ReadonlyArray<MaterialRequirement>;
   readonly originRef?: OriginRef;
   readonly roles: ReadonlyArray<Extract<ClaimRole, "generator" | "admitter">>;
+  readonly execution: ToolExecution;
 }
 
 export interface ToolContract extends ToolContractShape {
@@ -78,7 +95,7 @@ export interface Tool<
 > {
   readonly definition: ToolDefinition;
   readonly decode: ToolDecode<A>;
-  readonly execute: (args: A) => Promise<R>;
+  readonly execute: (args: A, ctx: ToolExecutionContext) => Promise<R>;
   readonly admit: ToolAdmitter<A>;
   readonly quota?: QuotaSpec;
   readonly contract: ToolContract;
@@ -87,7 +104,7 @@ export interface Tool<
 export interface RegisteredToolSpec<A, R> {
   readonly definition: ToolDefinition;
   readonly decode?: ToolDecode<A>;
-  readonly execute: (args: A) => Promise<R>;
+  readonly execute: (args: A, ctx: ToolExecutionContext) => Promise<R>;
   readonly quota?: QuotaSpec;
   readonly authorityClass: string;
   readonly authorityId?: string;
@@ -95,13 +112,14 @@ export interface RegisteredToolSpec<A, R> {
   readonly requiredMaterials?: ReadonlyArray<MaterialRequirement>;
   readonly originRef?: OriginRef;
   readonly admit: ToolAdmitter<A> | "allow";
+  readonly execution: ToolExecution;
 }
 
 export interface DefineToolSpec<S extends Schema.Schema.AnyNoContext, R> {
   readonly name: string;
   readonly description: string;
   readonly args: S;
-  readonly execute: (args: Schema.Schema.Type<S>) => R | Promise<R>;
+  readonly execute: (args: Schema.Schema.Type<S>, ctx: ToolExecutionContext) => R | Promise<R>;
   readonly quota?: QuotaSpec;
   readonly authority: string;
   readonly authorityId?: string;
@@ -109,6 +127,7 @@ export interface DefineToolSpec<S extends Schema.Schema.AnyNoContext, R> {
   readonly requiredMaterials?: ReadonlyArray<MaterialRequirement>;
   readonly originRef?: OriginRef;
   readonly admit: ToolAdmitter<Schema.Schema.Type<S>> | "allow";
+  readonly execution: ToolExecution;
 }
 
 const makeToolContract = (shape: ToolContractShape): ToolContract =>
@@ -129,6 +148,13 @@ export const deterministicToolInvocation = <A>(
 const hasToolContractBrand = (contract: ToolContract): boolean =>
   contract[TOOL_CONTRACT_BRAND] === true;
 
+export const pureToolExecution = (): ToolExecution => ({ kind: "pure" });
+
+export const effectfulToolExecution = (domain: ExecutionDomain): ToolExecution => ({
+  kind: "effectful",
+  domain,
+});
+
 const failToolDefinition = (message: string): never =>
   Option.getOrThrowWith(Option.none(), () => new TypeError(message));
 
@@ -144,6 +170,42 @@ const normalizeAdmitter = <A>(admit: ToolAdmitter<A> | "allow"): ToolAdmitter<A>
     : typeof admit === "function"
       ? admit
       : failToolDefinition("tool admitter is required");
+
+const isExecutionDomainKind = (value: unknown): value is ExecutionDomainKind =>
+  value === "host" || value === "sandbox" || value === "workspace" || value === "remote";
+
+const isExecutionDomain = (value: unknown): value is ExecutionDomain => {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as {
+    readonly kind?: unknown;
+    readonly ref?: unknown;
+    readonly envAllowlist?: unknown;
+  };
+  if (!isExecutionDomainKind(candidate.kind)) return false;
+  if (typeof candidate.ref !== "string" || candidate.ref.length === 0) return false;
+  if (candidate.envAllowlist !== undefined) {
+    if (!Array.isArray(candidate.envAllowlist)) return false;
+    if (!candidate.envAllowlist.every((entry) => typeof entry === "string" && entry.length > 0)) {
+      return false;
+    }
+  }
+  return candidate.kind !== "host" || candidate.envAllowlist !== undefined;
+};
+
+const isToolExecution = (value: unknown): value is ToolExecution => {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as { readonly kind?: unknown; readonly domain?: unknown };
+  if (candidate.kind === "pure") return true;
+  return candidate.kind === "effectful" && isExecutionDomain(candidate.domain);
+};
+
+const abortErrorFor = (signal: AbortSignal): Error => {
+  const reason = signal.reason;
+  if (reason instanceof Error) return reason;
+  const error = new Error(reason === undefined ? "tool execution aborted" : String(reason));
+  error.name = "AbortError";
+  return error;
+};
 
 export const defineToolFromDefinition = <A, R>(spec: RegisteredToolSpec<A, R>): Tool<A, R> => {
   const toolId = spec.definition.function.name;
@@ -178,6 +240,7 @@ export const defineToolFromDefinition = <A, R>(spec: RegisteredToolSpec<A, R>): 
       requiredMaterials: spec.requiredMaterials ?? [],
       ...(spec.originRef === undefined ? {} : { originRef: spec.originRef }),
       roles: ["generator", "admitter"],
+      execution: spec.execution,
     }),
   };
 };
@@ -196,7 +259,7 @@ export const defineTool = <S extends Schema.Schema.AnyNoContext, R>(
       },
     },
     decode,
-    execute: (args) => Promise.resolve(spec.execute(args)) as Promise<Awaited<R>>,
+    execute: (args, ctx) => Promise.resolve(spec.execute(args, ctx)) as Promise<Awaited<R>>,
     quota: spec.quota,
     authorityClass: spec.authority,
     ...(spec.authorityId === undefined ? {} : { authorityId: spec.authorityId }),
@@ -204,6 +267,7 @@ export const defineTool = <S extends Schema.Schema.AnyNoContext, R>(
     ...(spec.requiredMaterials === undefined ? {} : { requiredMaterials: spec.requiredMaterials }),
     ...(spec.originRef === undefined ? {} : { originRef: spec.originRef }),
     admit: spec.admit,
+    execution: spec.execution,
   });
 };
 
@@ -254,6 +318,14 @@ export type ToolRegistryIssue =
     }
   | {
       readonly kind: "missing_admitter_role";
+      readonly toolId: string;
+    }
+  | {
+      readonly kind: "missing_execution";
+      readonly toolId: string;
+    }
+  | {
+      readonly kind: "invalid_execution";
       readonly toolId: string;
     };
 
@@ -315,6 +387,11 @@ export const validateToolRegistry = (tools: Record<string, Tool>): ToolRegistryV
     }
     if (!contract.roles.includes("admitter")) {
       issues.push({ kind: "missing_admitter_role", toolId: contract.toolId });
+    }
+    if ((contract as { readonly execution?: unknown }).execution === undefined) {
+      issues.push({ kind: "missing_execution", toolId: contract.toolId });
+    } else if (!isToolExecution(contract.execution)) {
+      issues.push({ kind: "invalid_execution", toolId: contract.toolId });
     }
   }
 
@@ -378,7 +455,12 @@ export const executeTool = (
   toolName: string,
 ): Effect.Effect<unknown, ToolError> =>
   Effect.tryPromise({
-    try: () => tool.execute(args),
+    try: (signal) => {
+      if (signal.aborted) {
+        return Promise.reject(abortErrorFor(signal));
+      }
+      return tool.execute(args, { signal });
+    },
     catch: (cause) => new ToolError({ toolName, cause }),
   });
 

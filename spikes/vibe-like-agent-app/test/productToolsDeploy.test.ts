@@ -21,11 +21,14 @@ describe("vibe-like spike product tools and deploy path", () => {
       expect(tool.admit).toBeTypeOf("function");
     }
 
-    const deploy = await workerDeployReadbackTool.execute({
-      appId: "weather-agent",
-      bundleRef: "bundle:weather-agent-v1",
-      digest: "sha256:worker-v1",
-    });
+    const deploy = await workerDeployReadbackTool.execute(
+      {
+        appId: "weather-agent",
+        bundleRef: "bundle:weather-agent-v1",
+        digest: "sha256:worker-v1",
+      },
+      { signal: new AbortController().signal },
+    );
     expect(deploy).toMatchObject({
       deploymentRef: "deployment:weather-agent",
       readbackDigest: "sha256:worker-v1",

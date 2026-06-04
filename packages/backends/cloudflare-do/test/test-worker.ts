@@ -40,7 +40,7 @@ import { eventNamespace, type ExtensionCapability } from "@agent-os/kernel/exten
 import { makePreClaim } from "@agent-os/kernel/effect-claim";
 import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
 import { defineSettlementContract, settleLived } from "@agent-os/kernel/settlement-contract";
-import { defineTool } from "@agent-os/kernel/tools";
+import { defineTool, pureToolExecution } from "@agent-os/kernel/tools";
 import type { EventHandler } from "@agent-os/kernel/types";
 
 export class TestAgentDO extends DurableObject {}
@@ -341,6 +341,7 @@ const facadeLookup = defineTool({
   args: Schema.Struct({ key: Schema.String }),
   authority: "read",
   admit: "allow",
+  execution: pureToolExecution(),
   execute: ({ key }) => ({ value: key }),
 });
 
