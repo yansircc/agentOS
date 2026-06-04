@@ -76,4 +76,34 @@ describe("@agent-os/workspace-env-cloudflare", () => {
     });
     expect(writeFile).not.toHaveBeenCalled();
   });
+
+  it("calls listFiles with the provider client receiver intact", async () => {
+    let receiver: unknown;
+    const client: CloudflareWorkspaceEnvClient = {
+      exec: async () => ({ exitCode: 0 }),
+      async listFiles(path) {
+        receiver = this;
+        return { files: [`${path}/b.ts`, `${path}/a.ts`] };
+      },
+    };
+    const env = makeCloudflareWorkspaceEnv({ client, cwd: "/workspace" });
+
+    await expect(env.readdir(".")).resolves.toEqual(["/workspace/a.ts", "/workspace/b.ts"]);
+    expect(receiver).toBe(client);
+  });
+
+  it("prefers Cloudflare listFiles over a structural readdir fallback", async () => {
+    const client: CloudflareWorkspaceEnvClient = {
+      exec: async () => ({ exitCode: 0 }),
+      readdir: vi.fn(async () => {
+        throw new TypeError("readdir is not a Cloudflare Sandbox method");
+      }),
+      listFiles: vi.fn(async () => ({ files: ["b.ts", "a.ts"] })),
+    };
+    const env = makeCloudflareWorkspaceEnv({ client });
+
+    await expect(env.readdir(".")).resolves.toEqual(["a.ts", "b.ts"]);
+    expect(client.listFiles).toHaveBeenCalledWith("/workspace");
+    expect(client.readdir).not.toHaveBeenCalled();
+  });
 });

@@ -317,9 +317,13 @@ const cloudflareBackend = (client: CloudflareWorkspaceEnvClient): WorkspaceEnvBa
   },
   readdir: async (path, options) => {
     checkSignal(options?.signal);
-    const list = client.readdir ?? client.listFiles;
-    if (list !== undefined) {
-      const result = await list(path);
+    if (client.listFiles !== undefined) {
+      const result = await client.listFiles(path);
+      checkSignal(options?.signal);
+      return normalizeListFiles(result);
+    }
+    if (client.readdir !== undefined) {
+      const result = await client.readdir(path);
       checkSignal(options?.signal);
       return normalizeListFiles(result);
     }
