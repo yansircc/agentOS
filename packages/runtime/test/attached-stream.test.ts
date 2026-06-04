@@ -3,6 +3,7 @@ import { describe, expect, it } from "@effect/vitest";
 import {
   attachedStreamParseOk,
   makeAttachedStreamRegistry,
+  makeAttachedStreamService,
   runSynchronousAttachedStreamCommit,
   type AttachedStreamHandler,
 } from "../src/attached-stream";
@@ -64,4 +65,34 @@ describe("attached stream runtime algebra", () => {
     );
     expect(runSynchronousAttachedStreamCommit("scope", "kind", () => undefined)).toBeNull();
   });
+
+  it.effect("closes with a failed terminal frame when terminal commit is not acknowledged", () =>
+    Effect.gen(function* () {
+      const streamHandler = handler("commit.fail");
+      const streams = makeAttachedStreamService({
+        registry: new Map([[streamHandler.kind, streamHandler]]),
+        scope: "stream-commit-failure",
+        now: () => Effect.succeed(10),
+        makeStreamRef: () => "attached/failure",
+        commitTerminal: () => Effect.fail("commit failed"),
+      });
+      const session = yield* streams.attach({ kind: streamHandler.kind, payload: {} });
+      const output = session.output[Symbol.asyncIterator]();
+
+      expect(yield* Effect.promise(() => output.next())).toMatchObject({
+        value: { kind: "opened", seq: 0 },
+      });
+      expect(yield* Effect.promise(() => output.next())).toMatchObject({
+        value: {
+          kind: "failed",
+          seq: 1,
+          reason: expect.stringContaining("commit failed"),
+        },
+      });
+      expect(yield* Effect.promise(() => output.next())).toEqual({
+        done: true,
+        value: undefined,
+      });
+    }),
+  );
 });

@@ -168,23 +168,6 @@
         "effect": "^3.21.0",
       },
     },
-    "packages/carriers/sandbox": {
-      "name": "@agent-os/sandbox",
-      "version": "0.2.9",
-      "dependencies": {
-        "@agent-os/kernel": "workspace:*",
-      },
-      "devDependencies": {
-        "@effect/language-service": "catalog:",
-        "effect": "catalog:",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "effect": "^3.21.0",
-      },
-    },
     "packages/carriers/staging-artifact": {
       "name": "@agent-os/staging-artifact",
       "version": "0.2.9",
@@ -293,7 +276,42 @@
         "effect": "^3.21.0",
       },
     },
-    "packages/composers/workspace-env": {
+    "packages/execution-domains/sandbox": {
+      "name": "@agent-os/sandbox",
+      "version": "0.2.9",
+      "dependencies": {
+        "@agent-os/kernel": "workspace:*",
+      },
+      "devDependencies": {
+        "@effect/language-service": "catalog:",
+        "effect": "catalog:",
+        "typescript": "catalog:",
+        "vite-plus": "catalog:",
+        "vitest": "catalog:",
+      },
+      "peerDependencies": {
+        "effect": "^3.21.0",
+      },
+    },
+    "packages/execution-domains/sandbox-cloudflare": {
+      "name": "@agent-os/sandbox-cloudflare",
+      "version": "0.2.9",
+      "dependencies": {
+        "@agent-os/sandbox": "workspace:*",
+      },
+      "devDependencies": {
+        "@effect/language-service": "catalog:",
+        "effect": "catalog:",
+        "typescript": "catalog:",
+        "vite-plus": "catalog:",
+        "vitest": "catalog:",
+      },
+      "peerDependencies": {
+        "@cloudflare/workers-types": "^4.20251201.0",
+        "effect": "^3.21.0",
+      },
+    },
+    "packages/execution-domains/workspace-env": {
       "name": "@agent-os/workspace-env",
       "version": "0.2.9",
       "dependencies": {
@@ -308,6 +326,39 @@
       },
       "peerDependencies": {
         "effect": "^3.21.0",
+      },
+    },
+    "packages/execution-domains/workspace-env-cloudflare": {
+      "name": "@agent-os/workspace-env-cloudflare",
+      "version": "0.2.9",
+      "dependencies": {
+        "@agent-os/workspace-env": "workspace:*",
+      },
+      "devDependencies": {
+        "@effect/language-service": "catalog:",
+        "effect": "catalog:",
+        "typescript": "catalog:",
+        "vite-plus": "catalog:",
+        "vitest": "catalog:",
+      },
+      "peerDependencies": {
+        "@cloudflare/workers-types": "^4.20251201.0",
+        "effect": "^3.21.0",
+      },
+    },
+    "packages/execution-domains/workspace-env-local": {
+      "name": "@agent-os/workspace-env-local",
+      "version": "0.2.9",
+      "dependencies": {
+        "@agent-os/workspace-env": "workspace:*",
+      },
+      "devDependencies": {
+        "@agent-os/kernel": "workspace:*",
+        "@effect/language-service": "catalog:",
+        "@types/node": "^24.12.4",
+        "typescript": "catalog:",
+        "vite-plus": "catalog:",
+        "vitest": "catalog:",
       },
     },
     "packages/kernel": {
@@ -397,57 +448,6 @@
       "peerDependencies": {
         "@cloudflare/workers-types": "^4.20251201.0",
         "effect": "^3.21.0",
-      },
-    },
-    "packages/providers/sandbox-cloudflare": {
-      "name": "@agent-os/sandbox-cloudflare",
-      "version": "0.2.9",
-      "dependencies": {
-        "@agent-os/sandbox": "workspace:*",
-      },
-      "devDependencies": {
-        "@effect/language-service": "catalog:",
-        "effect": "catalog:",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "@cloudflare/workers-types": "^4.20251201.0",
-        "effect": "^3.21.0",
-      },
-    },
-    "packages/providers/workspace-env-cloudflare": {
-      "name": "@agent-os/workspace-env-cloudflare",
-      "version": "0.2.9",
-      "dependencies": {
-        "@agent-os/workspace-env": "workspace:*",
-      },
-      "devDependencies": {
-        "@effect/language-service": "catalog:",
-        "effect": "catalog:",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "@cloudflare/workers-types": "^4.20251201.0",
-        "effect": "^3.21.0",
-      },
-    },
-    "packages/providers/workspace-env-local": {
-      "name": "@agent-os/workspace-env-local",
-      "version": "0.2.9",
-      "dependencies": {
-        "@agent-os/workspace-env": "workspace:*",
-      },
-      "devDependencies": {
-        "@agent-os/kernel": "workspace:*",
-        "@effect/language-service": "catalog:",
-        "@types/node": "^24.12.4",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
       },
     },
     "packages/providers/workspace-session-cloudflare": {
@@ -597,9 +597,9 @@
 
     "@agent-os/runtime": ["@agent-os/runtime@workspace:packages/runtime"],
 
-    "@agent-os/sandbox": ["@agent-os/sandbox@workspace:packages/carriers/sandbox"],
+    "@agent-os/sandbox": ["@agent-os/sandbox@workspace:packages/execution-domains/sandbox"],
 
-    "@agent-os/sandbox-cloudflare": ["@agent-os/sandbox-cloudflare@workspace:packages/providers/sandbox-cloudflare"],
+    "@agent-os/sandbox-cloudflare": ["@agent-os/sandbox-cloudflare@workspace:packages/execution-domains/sandbox-cloudflare"],
 
     "@agent-os/skill-registry": ["@agent-os/skill-registry@workspace:tooling/skill-registry"],
 
@@ -611,11 +611,11 @@
 
     "@agent-os/verification": ["@agent-os/verification@workspace:packages/carriers/verification"],
 
-    "@agent-os/workspace-env": ["@agent-os/workspace-env@workspace:packages/composers/workspace-env"],
+    "@agent-os/workspace-env": ["@agent-os/workspace-env@workspace:packages/execution-domains/workspace-env"],
 
-    "@agent-os/workspace-env-cloudflare": ["@agent-os/workspace-env-cloudflare@workspace:packages/providers/workspace-env-cloudflare"],
+    "@agent-os/workspace-env-cloudflare": ["@agent-os/workspace-env-cloudflare@workspace:packages/execution-domains/workspace-env-cloudflare"],
 
-    "@agent-os/workspace-env-local": ["@agent-os/workspace-env-local@workspace:packages/providers/workspace-env-local"],
+    "@agent-os/workspace-env-local": ["@agent-os/workspace-env-local@workspace:packages/execution-domains/workspace-env-local"],
 
     "@agent-os/workspace-session": ["@agent-os/workspace-session@workspace:packages/carriers/workspace-session"],
 

@@ -138,12 +138,14 @@
       "need": "Cloudflare Sandbox workspace backend",
       "readmeStatus": "Backend package. It uses structural SDK types instead of importing a Cloudflare SDK.",
       "primary": true,
-      "published": true
+      "published": true,
+      "apiSource": "docs/api/workspace-session-cloudflare.md",
+      "apiStatus": "Backend package. It uses structural SDK types instead of importing a Cloudflare SDK."
     },
     {
       "slug": "workspace-env-cloudflare",
       "name": "@agent-os/workspace-env-cloudflare",
-      "path": "packages/providers/workspace-env-cloudflare",
+      "path": "packages/execution-domains/workspace-env-cloudflare",
       "status": "0.2.x public",
       "role": "Cloudflare Sandbox-compatible WorkspaceEnv adapter",
       "boundary": "structural Cloudflare Sandbox-compatible fs+exec actuator adapter",
@@ -157,7 +159,7 @@
     {
       "slug": "workspace-env-local",
       "name": "@agent-os/workspace-env-local",
-      "path": "packages/providers/workspace-env-local",
+      "path": "packages/execution-domains/workspace-env-local",
       "status": "0.2.x public",
       "role": "local host WorkspaceEnv adapter with explicit host execution domain",
       "boundary": "Node fs and shell calls bound to one explicit host workspace root",
@@ -228,7 +230,7 @@
     {
       "slug": "workspace-env",
       "name": "@agent-os/workspace-env",
-      "path": "packages/composers/workspace-env",
+      "path": "packages/execution-domains/workspace-env",
       "status": "0.2.x public",
       "role": "workspace fs+exec actuator and standard workspace tool generator",
       "boundary": "runtime-neutral WorkspaceEnv actuator; no ledger fact ownership",
@@ -289,7 +291,9 @@
       "role": "deploy proof/projection vocabulary",
       "boundary": "deploy proof/projection vocabulary",
       "readmeStatus": "Carrier package. Provider-specific deploy backends are separate materializers.",
-      "published": true
+      "published": true,
+      "apiSource": "docs/api/deploy.md",
+      "apiStatus": "Carrier package. Provider-specific deploy backends are separate materializers."
     },
     {
       "slug": "deploy-cloudflare",
@@ -313,7 +317,9 @@
       "role": "Git proof/projection vocabulary",
       "boundary": "Git proof/projection vocabulary",
       "readmeStatus": "Carrier package. It is not a provider SDK and does not own provider-specific Git execution.",
-      "published": true
+      "published": true,
+      "apiSource": "docs/api/git-carrier.md",
+      "apiStatus": "Carrier package. It is not a provider SDK and does not own provider-specific Git execution."
     },
     {
       "slug": "staging-artifact",
@@ -323,7 +329,9 @@
       "role": "staging artifact proof/projection vocabulary",
       "boundary": "staging artifact proof/projection vocabulary",
       "readmeStatus": "Carrier package. It owns symbolic artifact proof vocabulary, not artifact storage.",
-      "published": true
+      "published": true,
+      "apiSource": "docs/api/staging-artifact.md",
+      "apiStatus": "Carrier package. It owns symbolic artifact proof vocabulary, not artifact storage."
     },
     {
       "slug": "verification",
@@ -333,27 +341,33 @@
       "role": "verification proof/projection vocabulary",
       "boundary": "verification proof/projection vocabulary",
       "readmeStatus": "Carrier package. Verification policy and quorum rules remain app-owned.",
-      "published": true
+      "published": true,
+      "apiSource": "docs/api/verification.md",
+      "apiStatus": "Carrier package. Verification policy and quorum rules remain app-owned."
     },
     {
       "slug": "sandbox",
       "name": "@agent-os/sandbox",
-      "path": "packages/carriers/sandbox",
+      "path": "packages/execution-domains/sandbox",
       "status": "optional algebra",
       "role": "bounded stateless sandbox tool surface",
       "boundary": "bounded stateless sandbox tool surface",
       "readmeStatus": "Optional algebra package. It is not part of a freeze surface.",
-      "published": true
+      "published": true,
+      "apiSource": "docs/api/sandbox.md",
+      "apiStatus": "Optional algebra package. It is not part of a freeze surface."
     },
     {
       "slug": "sandbox-cloudflare",
       "name": "@agent-os/sandbox-cloudflare",
-      "path": "packages/providers/sandbox-cloudflare",
+      "path": "packages/execution-domains/sandbox-cloudflare",
       "status": "optional backend",
       "role": "Cloudflare Sandbox-compatible stateless sandbox adapter",
       "boundary": "Cloudflare Sandbox-compatible stateless sandbox adapter",
       "readmeStatus": "Optional backend package. It uses structural SDK types instead of importing a Cloudflare SDK.",
-      "published": true
+      "published": true,
+      "apiSource": "docs/api/sandbox-cloudflare.md",
+      "apiStatus": "Optional backend package. It uses structural SDK types instead of importing a Cloudflare SDK."
     },
     {
       "slug": "dynamic-worker",
@@ -363,7 +377,9 @@
       "role": "bounded Worker-compatible code execution",
       "boundary": "bounded Worker-compatible code execution",
       "readmeStatus": "Optional runtime package. Public exports are package-owned and not part of a freeze surface.",
-      "published": true
+      "published": true,
+      "apiSource": "docs/api/dynamic-worker.md",
+      "apiStatus": "Optional runtime package. Public exports are package-owned and not part of a freeze surface."
     },
     {
       "slug": "image",
@@ -373,7 +389,9 @@
       "role": "image namespace reservation and projection helpers",
       "boundary": "provider-neutral image event namespace and reader algebra",
       "readmeStatus": "Optional package. It is not part of a freeze surface.",
-      "published": true
+      "published": true,
+      "apiSource": "docs/api/image.md",
+      "apiStatus": "Optional package. It is not part of a freeze surface."
     },
     {
       "slug": "ops-api",
@@ -385,7 +403,9 @@
       "need": "Ops API tooling",
       "readmeStatus": "Tooling package. It is an ops adapter and not a substrate package.",
       "primary": false,
-      "published": true
+      "published": true,
+      "apiSource": "docs/api/ops-api.md",
+      "apiStatus": "Tooling package. It is an ops adapter and not a substrate package."
     },
     {
       "slug": "ops-htmx",
@@ -397,7 +417,9 @@
       "need": "Ops HTMX tooling",
       "readmeStatus": "Tooling package. It is an ops UI adapter and not a substrate package.",
       "primary": false,
-      "published": true
+      "published": true,
+      "apiSource": "docs/api/ops-htmx.md",
+      "apiStatus": "Tooling package. It is an ops UI adapter and not a substrate package."
     },
     {
       "slug": "docs-site",

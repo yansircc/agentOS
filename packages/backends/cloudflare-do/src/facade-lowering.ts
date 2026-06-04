@@ -21,7 +21,12 @@ import {
   type MaterialRef,
 } from "@agent-os/kernel/material-ref";
 import type { RefResolver } from "@agent-os/kernel/ref-resolver";
-import type { Tool } from "@agent-os/kernel/tools";
+import {
+  validateExecutionDomainRegistry,
+  type ExecutionDomainDeclaration,
+  type ExecutionDomainRegistryIssue,
+  type Tool,
+} from "@agent-os/kernel/tools";
 import type { DispatchTargetAdapter } from "@agent-os/runtime";
 import { durableObjectDispatchTarget } from "./dispatch";
 import type { DispatchTargetNamespace, DispatchTargetRegistry } from "./dispatch";
@@ -129,6 +134,7 @@ export type LlmRouteMap = { readonly default: LlmRoute } & Readonly<Record<strin
 export interface AgentLoweringConfigBase<Env> {
   readonly bindings?: ReadonlyArray<AgentMaterialBinding<Env>>;
   readonly tools?: ReadonlyArray<Tool>;
+  readonly domains?: ReadonlyArray<ExecutionDomainDeclaration>;
 }
 
 export interface AgentLoweringConfigWithSubmit<Env> extends AgentLoweringConfigBase<Env> {
@@ -199,6 +205,17 @@ const toolsToRecord = (tools: ReadonlyArray<Tool> = []): Record<string, Tool> =>
   return out;
 };
 
+const executionDomainIssueLabel = (issue: ExecutionDomainRegistryIssue): string => {
+  switch (issue.kind) {
+    case "invalid_declaration":
+      return `invalid declaration at ${issue.index}`;
+    case "duplicate_declaration":
+      return `duplicate ${issue.domain.kind}:${issue.domain.ref}`;
+    case "missing_declaration":
+      return `missing ${issue.domain.kind}:${issue.domain.ref} for ${issue.toolId}`;
+  }
+};
+
 export const lowerMaterialBindings = <Env>(
   bindings: ReadonlyArray<AgentMaterialBinding<Env>> | undefined,
   env: Env,
@@ -255,6 +272,15 @@ export function lowerAgentConfig<Env>(
   }
 
   const tools = toolsToRecord(config.tools);
+  const domainRegistry = validateExecutionDomainRegistry(tools, {
+    domains: config.domains ?? [],
+  });
+  if (!domainRegistry.ok) {
+    return failAgentConfig(
+      `invalid execution domain registry: ${domainRegistry.issues.map(executionDomainIssueLabel).join(", ")}`,
+    );
+  }
+
   return {
     refResolver: loweredMaterials.refResolver,
     dispatchTargets: loweredMaterials.dispatchTargets,

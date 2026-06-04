@@ -268,16 +268,19 @@ describe("standard projections — contract", () => {
         key: "lookup",
         amount: 2,
         toolName: "lookup",
+        operationRef: "op-1",
       }),
       event(2, "dispatch.consumed", {
         key: "other",
         amount: 9,
         toolName: "other",
+        operationRef: "op-2",
       }),
       event(3, "dispatch.consumed", {
         key: "lookup",
         amount: 1,
         toolName: "lookup",
+        operationRef: "op-3",
       }),
     ];
     expect(projectQuotaState(rows, { key: "lookup", windowMs: 100, limit: 5 }, 130)).toEqual({

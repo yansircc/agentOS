@@ -355,16 +355,15 @@ describe("anthropic adapter — decodeStructured", () => {
     }
   });
 
-  it("test-decode-mismatch mode short-circuits to BehaviorFailed", () => {
+  it("missing structured tool use returns BehaviorFailed", () => {
     const r = anthropicMessagesAdapter.decodeStructured(
       { raw: {} },
       SCHEMA_CONTRACT,
       "forced-tool-call",
-      "test-decode-mismatch",
     );
     expect(r.ok).toBe(false);
     if (!r.ok && r.outcome.class === "BehaviorFailed") {
-      expect(r.outcome.sampleDigest).toContain("synthetic-test-decode-mismatch");
+      expect(r.outcome.sampleDigest).toContain("no-tool-use");
     }
   });
 });

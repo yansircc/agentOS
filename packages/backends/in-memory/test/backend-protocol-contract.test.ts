@@ -154,10 +154,10 @@ const makeInMemoryContractDriver = (): RuntimeBackendContractDriver => {
       const resources = await runtime(scope).runPromise(Resources);
       return runtime(scope).runPromise(resources.project(scope, key));
     },
-    quotaTryGrant: async (scope, key, amount, windowMs, limit, toolName) => {
+    quotaTryGrant: async (scope, key, amount, windowMs, limit, toolName, operationRef) => {
       const quota = await runtime(scope).runPromise(Quota);
       return runtime(scope).runPromise(
-        quota.tryGrant(scope, key, amount, windowMs, limit, toolName),
+        quota.tryGrant(scope, key, amount, windowMs, limit, toolName, operationRef),
       );
     },
     dispose: async () => {

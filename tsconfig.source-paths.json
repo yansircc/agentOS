@@ -32,7 +32,7 @@
       "@agent-os/git-carrier": ["./packages/carriers/git/src/index.ts"],
       "@agent-os/image": ["./packages/carriers/image/src/index.ts"],
       "@agent-os/resource-carrier": ["./packages/carriers/resource/src/index.ts"],
-      "@agent-os/sandbox": ["./packages/carriers/sandbox/src/index.ts"],
+      "@agent-os/sandbox": ["./packages/execution-domains/sandbox/src/index.ts"],
       "@agent-os/staging-artifact": ["./packages/carriers/staging-artifact/src/index.ts"],
       "@agent-os/tenant-material": ["./packages/carriers/tenant-material/src/index.ts"],
       "@agent-os/verification": ["./packages/carriers/verification/src/index.ts"],
@@ -40,16 +40,20 @@
       "@agent-os/attached-stream": ["./packages/composers/attached-stream/src/index.ts"],
       "@agent-os/run-stream": ["./packages/composers/run-stream/src/index.ts"],
       "@agent-os/turn-stream": ["./packages/composers/turn-stream/src/index.ts"],
-      "@agent-os/workspace-env": ["./packages/composers/workspace-env/src/index.ts"],
+      "@agent-os/workspace-env": ["./packages/execution-domains/workspace-env/src/index.ts"],
       "@agent-os/deploy-cloudflare": ["./packages/providers/deploy-cloudflare/src/index.ts"],
       "@agent-os/dynamic-worker": ["./packages/providers/dynamic-worker/src/index.ts"],
       "@agent-os/llm-transport-http": ["./packages/providers/llm-transport-http/src/index.ts"],
       "@agent-os/resource-cloudflare": ["./packages/providers/resource-cloudflare/src/index.ts"],
-      "@agent-os/sandbox-cloudflare": ["./packages/providers/sandbox-cloudflare/src/index.ts"],
-      "@agent-os/workspace-env-cloudflare": [
-        "./packages/providers/workspace-env-cloudflare/src/index.ts"
+      "@agent-os/sandbox-cloudflare": [
+        "./packages/execution-domains/sandbox-cloudflare/src/index.ts"
       ],
-      "@agent-os/workspace-env-local": ["./packages/providers/workspace-env-local/src/index.ts"],
+      "@agent-os/workspace-env-cloudflare": [
+        "./packages/execution-domains/workspace-env-cloudflare/src/index.ts"
+      ],
+      "@agent-os/workspace-env-local": [
+        "./packages/execution-domains/workspace-env-local/src/index.ts"
+      ],
       "@agent-os/workspace-session-cloudflare": [
         "./packages/providers/workspace-session-cloudflare/src/index.ts"
       ],

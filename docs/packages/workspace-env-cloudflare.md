@@ -26,6 +26,6 @@ safe.
 ## Verification
 
 ```sh
-cd packages/providers/workspace-env-cloudflare
+cd packages/execution-domains/workspace-env-cloudflare
 vp test run
 ```

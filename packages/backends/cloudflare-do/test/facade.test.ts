@@ -11,6 +11,8 @@ import {
 } from "../src/facade-lowering";
 import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
 import { makePreClaim } from "@agent-os/kernel/effect-claim";
+import { defineTool, effectfulToolExecution, pureToolExecution } from "@agent-os/kernel/tools";
+import { Schema } from "effect";
 import type { DispatchTargetNamespace } from "../src/dispatch";
 import { httpDispatchTarget, providerDispatchTarget, queueDispatchTarget } from "../src/dispatch";
 
@@ -19,6 +21,8 @@ interface TestEnv {
   readonly LLM_KEY: string;
   readonly PEER_DO: DispatchTargetNamespace;
 }
+
+const allowToolAdmitter = () => ({ ok: true as const });
 
 const target: DispatchTargetNamespace = {
   idFromName: (_name) => ({}) as DurableObjectId,
@@ -165,6 +169,56 @@ describe("defineAgentDO facade lowering", () => {
         env,
       ),
     ).toThrow("unbound material");
+  });
+
+  it("allows pure tools without execution domain declarations", () => {
+    const tool = defineTool({
+      name: "lookup",
+      description: "Lookup",
+      args: Schema.Struct({ key: Schema.String }),
+      authority: "read",
+      admit: allowToolAdmitter,
+      execution: pureToolExecution(),
+      execute: ({ key }) => ({ key }),
+    });
+
+    const lowered = lowerAgentConfig({ tools: [tool] }, env);
+
+    expect(lowered.defaultSubmit).toBe(null);
+  });
+
+  it("fails before submit when effectful tools reference undeclared domains", () => {
+    const domain = { kind: "workspace" as const, ref: "workspace:default" };
+    const tool = defineTool({
+      name: "write_file",
+      description: "Write",
+      args: Schema.Struct({ path: Schema.String }),
+      authority: "write",
+      admit: allowToolAdmitter,
+      execution: effectfulToolExecution(domain),
+      execute: ({ path }) => ({ path }),
+    });
+
+    expect(() => lowerAgentConfig({ tools: [tool] }, env)).toThrow(
+      "missing workspace:workspace:default for write_file",
+    );
+  });
+
+  it("passes lowering when effectful tool domains are declared", () => {
+    const domain = { kind: "workspace" as const, ref: "workspace:default" };
+    const tool = defineTool({
+      name: "write_file",
+      description: "Write",
+      args: Schema.Struct({ path: Schema.String }),
+      authority: "write",
+      admit: allowToolAdmitter,
+      execution: effectfulToolExecution(domain),
+      execute: ({ path }) => ({ path }),
+    });
+
+    const lowered = lowerAgentConfig({ tools: [tool], domains: [{ domain }] }, env);
+
+    expect(lowered.defaultSubmit).toBe(null);
   });
 
   it("materializes Queue, HTTP, and provider dispatch targets as external receipts", () => {

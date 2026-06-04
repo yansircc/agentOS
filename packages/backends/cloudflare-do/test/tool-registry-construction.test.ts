@@ -2,13 +2,12 @@ import { describe, expect, it } from "@effect/vitest";
 import { materialRequirement } from "@agent-os/kernel/material-ref";
 import {
   defineToolFromDefinition,
-  permissiveToolAdmitter,
   pureToolExecution,
   validateToolRegistry,
   type Tool,
 } from "@agent-os/kernel/tools";
 
-import { makeLookupTool } from "./_tool-fixture";
+import { allowToolAdmitter, makeLookupTool } from "./_tool-fixture";
 
 describe("tool registry construction", () => {
   it("binds tool identity and authority in one contract", () => {
@@ -27,8 +26,8 @@ describe("tool registry construction", () => {
         originKind: "tool_provider",
       },
       roles: ["generator", "admitter"],
-      execution: { kind: "pure" },
     });
+    expect(tool.execution).toEqual({ kind: "pure" });
   });
 
   it("rejects tools without a single authority contract before execution", () => {
@@ -98,7 +97,6 @@ describe("tool registry construction", () => {
         },
         requiredMaterials: [],
         roles: ["generator", "admitter"],
-        execution: pureToolExecution(),
       },
     } as unknown as Tool;
 
@@ -124,7 +122,7 @@ describe("tool registry construction", () => {
         },
       },
       execute: () => Promise.resolve({ ok: true }),
-      admit: permissiveToolAdmitter,
+      admit: allowToolAdmitter,
       authorityClass: "deploy",
       execution: pureToolExecution(),
       requiredMaterials: [

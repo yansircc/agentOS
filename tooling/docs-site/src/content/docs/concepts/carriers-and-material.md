@@ -16,6 +16,13 @@ provider-specific credentials, endpoints, and resource handles. Ledger payloads
 may contain symbolic refs and proof refs; resolved provider material stays at
 execution time.
 
+Only packages that share the `defineCarrier` generator are carrier packages.
+Similar-looking policy, settlement, or lifecycle shapes do not justify a shared
+carrier abstraction unless they also share event vocabulary, claim settlement,
+authority/material declaration, and derived projection generation. Execution
+domains such as sandbox and WorkspaceEnv are separate locus/actuator surfaces,
+not carriers.
+
 ## Non-Goals
 
 This concept does not choose tenant auth policy or provider API topology.

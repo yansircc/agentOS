@@ -1,8 +1,9 @@
 /**
  * Test worker entry.
  *
- * Test DOs are factory-configured. The Cloudflare backend no longer exposes a
- * subclass hook surface; tests exercise the same config path apps use.
+ * Test DOs are factory-configured for product paths. A raw ledger fixture exists
+ * only where a test must construct historical ledger facts that projection
+ * application would normally reject.
  */
 
 import { DurableObject } from "cloudflare:workers";
@@ -42,6 +43,8 @@ import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-re
 import { defineSettlementContract, settleLived } from "@agent-os/kernel/settlement-contract";
 import { defineTool, pureToolExecution } from "@agent-os/kernel/tools";
 import type { EventHandler } from "@agent-os/kernel/types";
+
+const allowToolAdmitter = () => ({ ok: true as const });
 
 export class TestAgentDO extends DurableObject {}
 
@@ -340,7 +343,7 @@ const facadeLookup = defineTool({
   description: "Lookup a symbolic key",
   args: Schema.Struct({ key: Schema.String }),
   authority: "read",
-  admit: "allow",
+  admit: allowToolAdmitter,
   execution: pureToolExecution(),
   execute: ({ key }) => ({ value: key }),
 });
@@ -777,11 +780,33 @@ const materializedRunProjection = defineProjection({
   },
 });
 
-export const MaterializedProjectionTestDO = defineAgentDO<CloudflareAgentEnv>({
+const MaterializedProjectionBaseDO = defineAgentDO<CloudflareAgentEnv>({
   bindings: [],
   projections: [materializedRunProjection],
 });
-export type MaterializedProjectionTestDO = InstanceType<typeof MaterializedProjectionTestDO>;
+
+export class MaterializedProjectionTestDO extends MaterializedProjectionBaseDO {
+  insertRawEvent(event: string, data: unknown): { readonly id: number } {
+    const scope = this.ctx.id.name;
+    if (scope === undefined) throw new Error("scope missing");
+    const payloadStr = JSON.stringify(data);
+    if (typeof payloadStr !== "string") {
+      throw new TypeError("ledger event payload must be JSON serializable");
+    }
+    const id = Number(
+      this.ctx.storage.sql
+        .exec(
+          "INSERT INTO events (ts, kind, scope, payload) VALUES (?, ?, ?, ?) RETURNING id",
+          Date.now(),
+          event,
+          scope,
+          payloadStr,
+        )
+        .one().id,
+    );
+    return { id };
+  }
+}
 
 interface WorkerEnv extends CloudflareAgentEnv {
   readonly STREAM_DO: DurableObjectNamespace<StreamTestDO>;

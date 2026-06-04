@@ -11,8 +11,8 @@
  *   - declares the per-wire `LlmProtocolAdapter<K>` algebra and shared
  *     turn / structured ADTs (TurnRequest / TurnResponse /
  *     AdapterStimulus / DecodedOutput / DecodeStructuredResult)
- *   - re-exports ADAPTER_VERSION / AdapterMode for back-compat with
- *     callers that historically imported them from the protocol module
+ *   - re-exports ADAPTER_VERSION for callers that historically imported it
+ *     from the protocol module
  *   - holds the per-kind registry and the type-narrowed
  *     `getProtocolAdapter` lookup
  *
@@ -33,16 +33,7 @@ import { cfAiBindingAdapter, openaiChatCompatibleAdapter } from "./openai-chat";
 import { anthropicMessagesAdapter } from "./anthropic-messages";
 import { geminiGenerateContentAdapter } from "./gemini-generate-content";
 
-// Re-export the version + AdapterMode so existing callers that import
-// them from the protocol module keep compiling. Internally these now
-// live on `./shared` to break the registry ↔ wire cycle (see header).
 export { ADAPTER_VERSION } from "./shared";
-
-/** Test-only knob: when set to "test-decode-mismatch", decodeStructured
- *  short-circuits to a BehaviorFailed outcome. Production code never
- *  sets this. Used by admission-contract tests to drive the
- *  short-circuit branch without needing a real flaky upstream. */
-export type AdapterMode = "production" | "test-decode-mismatch";
 
 // ============================================================
 // Section B — Turn vs Structured ADTs
@@ -145,7 +136,6 @@ export interface LlmProtocolAdapter<K extends LlmRoute["kind"]> {
     response: { readonly raw: unknown },
     schema: SchemaContract,
     strategy: Strategy,
-    mode?: AdapterMode,
   ): DecodeStructuredResult;
 
   // ── Shared error classification ───────────────────────────

@@ -114,8 +114,14 @@ Materialized projections are registered through the backend facade:
 import { defineProjection, type MaterializedProjections } from "@agent-os/runtime";
 ```
 
-Deterministic product-side tool actions use `runToolByName`. Do not use it for
-LLM-selected tools; those must go through `submit`.
+Deterministic product-side tool actions use `unsafeRunToolByName`. The `unsafe`
+prefix is intentional: it bypasses submit, admission, quota, retries, and ledger
+settlement. Do not use it for LLM-selected tools; those must go through
+`submit`.
+
+Quota grants are keyed by the semantic tool claim operationRef. Retrying the
+same tool claim cannot double-charge quota; separate tool calls still consume
+separate quota.
 
 ## Verification
 

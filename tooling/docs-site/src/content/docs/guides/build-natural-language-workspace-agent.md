@@ -29,7 +29,7 @@ projections.
 7. Store workspace metadata in ledger facts and materialized projections.
 8. Keep file bytes, provider URLs, credentials, and tokens out of ledger and
    projection state.
-9. Use `runToolByName` only for deterministic UI/system actions, never for
+9. Use `unsafeRunToolByName` only for deterministic UI/system actions, never for
    LLM-selected tool calls.
 
 ## References

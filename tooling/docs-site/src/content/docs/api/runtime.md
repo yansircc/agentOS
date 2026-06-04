@@ -30,6 +30,7 @@ title: "@agent-os/runtime Public API Intent"
 - `.:AttachedStreamSession`
 - `.:AttachedStreamStartSpec`
 - `.:AttachedStreamTerminal`
+- `.:AttachedStreamTerminalCommitAck`
 - `.:AttachedStreamTerminalCommitSpec`
 - `.:AttachedStreamTx`
 - `.:AttachedStreams`

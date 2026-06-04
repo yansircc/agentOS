@@ -14,6 +14,7 @@
 - `.:describeDispatchCause`
 - `.:dispatchBackoffMs`
 - `.:dispatchExternalDeliveryReceipt`
+- `.:durableProcessLifecycleState`
 - `.:dispatchPayloadParseFailure`
 - `.:durableTriggerBackoffMs`
 - `.:durableTriggerDuePayload`
@@ -27,6 +28,10 @@
 - `.:parseTraceContext`
 - `.:BackendProtocolEventHandler`
 - `.:BackendProtocolLedgerEventRpc`
+- `.:DurableProcessCancellationState`
+- `.:DurableProcessClaimState`
+- `.:DurableProcessLifecycleSnapshot`
+- `.:DurableProcessLifecycleState`
 - `.:DurableTriggerRetryPolicy`
 - `.:DispatchOutboundDeliveredPayload`
 - `.:DispatchOutboundFailedPayload`

@@ -1,14 +1,11 @@
-import { Context, Effect } from "effect";
+import { Cause, Context, Effect, Exit } from "effect";
 import type {
   AttachedStreamInboundFrame,
   AttachedStreamMode,
   AttachedStreamOutboundBody,
   AttachedStreamOutboundFrame,
 } from "@agent-os/attached-stream";
-import {
-  attachedStreamOutboundFrame,
-  isAttachedStreamTerminalFrame,
-} from "@agent-os/attached-stream";
+import { attachedStreamOutboundFrame } from "@agent-os/attached-stream";
 import type { JsonStringifyError, SqlError } from "@agent-os/kernel";
 import type { EventQueryOptions, LedgerEvent } from "@agent-os/kernel/types";
 import type { TriggerEventSpec } from "./trigger";
@@ -288,30 +285,14 @@ const resolveOutputSource = (
       })
     : Effect.succeed(source);
 
-const terminalFromFrame = (frame: AttachedStreamOutboundFrame): AttachedStreamTerminal | null => {
-  if (!isAttachedStreamTerminalFrame(frame)) return null;
-  switch (frame.kind) {
-    case "completed":
-      return { kind: "completed", terminal: frame.terminal };
-    case "failed":
-      return {
-        kind: "failed",
-        reason: frame.reason,
-        ...(frame.terminal === undefined ? {} : { terminal: frame.terminal }),
-      };
-    case "cancelled":
-      return {
-        kind: "cancelled",
-        ...(frame.reason === undefined ? {} : { reason: frame.reason }),
-        ...(frame.terminal === undefined ? {} : { terminal: frame.terminal }),
-      };
-  }
-};
-
 export interface AttachedStreamTerminalCommitSpec<Terminal = unknown> {
   readonly handler: AnyAttachedStreamHandler;
   readonly ctx: AttachedStreamCtx;
   readonly terminal: AttachedStreamTerminal<Terminal>;
+}
+
+export interface AttachedStreamTerminalCommitAck {
+  readonly eventIds: ReadonlyArray<number>;
 }
 
 export interface MakeAttachedStreamServiceSpec {
@@ -321,7 +302,7 @@ export interface MakeAttachedStreamServiceSpec {
   readonly makeStreamRef: () => string;
   readonly commitTerminal: (
     spec: AttachedStreamTerminalCommitSpec,
-  ) => Effect.Effect<void, AttachedStreamServiceError>;
+  ) => Effect.Effect<AttachedStreamTerminalCommitAck, AttachedStreamServiceError>;
 }
 
 interface AttachedStreamActiveRecord {
@@ -402,19 +383,52 @@ export const makeAttachedStreamService = (
     record.input.close();
   };
 
+  const terminalFromOutputBody = (
+    body: AttachedStreamHandlerOutput,
+  ): AttachedStreamTerminal | null => {
+    switch (body.kind) {
+      case "completed":
+        return { kind: "completed", terminal: body.terminal };
+      case "failed":
+        return {
+          kind: "failed",
+          reason: body.reason,
+          ...(body.terminal === undefined ? {} : { terminal: body.terminal }),
+        };
+      case "cancelled":
+        return {
+          kind: "cancelled",
+          ...(body.reason === undefined ? {} : { reason: body.reason }),
+          ...(body.terminal === undefined ? {} : { terminal: body.terminal }),
+        };
+      case "output":
+      case "progress":
+        return null;
+    }
+  };
+
   const settleTerminal = (
     record: AttachedStreamActiveRecord,
     handler: AnyAttachedStreamHandler,
     ctx: AttachedStreamCtx,
-    frame: AttachedStreamOutboundFrame,
+    body: AttachedStreamHandlerOutput,
     terminal: AttachedStreamTerminal,
   ): Effect.Effect<boolean, AttachedStreamServiceError> =>
     Effect.gen(function* () {
       record.terminal = true;
       active.delete(record.session.streamRef);
       if (!record.detachedAbort) {
-        yield* spec.commitTerminal({ handler, ctx, terminal });
-        if (!record.detached) record.output.push(frame);
+        const exit = yield* Effect.exit(spec.commitTerminal({ handler, ctx, terminal }));
+        if (!record.detached) {
+          record.output.push(
+            Exit.isSuccess(exit)
+              ? record.emit(body)
+              : record.emit({
+                  kind: "failed",
+                  reason: Cause.pretty(exit.cause),
+                }),
+          );
+        }
       }
       closeRecord(record);
       return false;
@@ -426,9 +440,9 @@ export const makeAttachedStreamService = (
     ctx: AttachedStreamCtx,
     body: AttachedStreamHandlerOutput,
   ): Effect.Effect<boolean, AttachedStreamServiceError> => {
+    const terminal = terminalFromOutputBody(body);
+    if (terminal !== null) return settleTerminal(record, handler, ctx, body, terminal);
     const frame = record.emit(body);
-    const terminal = terminalFromFrame(frame);
-    if (terminal !== null) return settleTerminal(record, handler, ctx, frame, terminal);
     if (!record.detached) record.output.push(frame);
     return Effect.succeed(true);
   };
@@ -479,10 +493,10 @@ export const makeAttachedStreamService = (
     ctx: AttachedStreamCtx,
     cause: AttachedStreamServiceError,
   ): Effect.Effect<void, AttachedStreamServiceError> => {
-    const frame = record.emit({ kind: "failed", reason: String(cause) });
-    const terminal = terminalFromFrame(frame);
+    const body = { kind: "failed", reason: String(cause) } as const;
+    const terminal = terminalFromOutputBody(body);
     if (terminal === null) return Effect.void;
-    return settleTerminal(record, handler, ctx, frame, terminal).pipe(Effect.asVoid);
+    return settleTerminal(record, handler, ctx, body, terminal).pipe(Effect.asVoid);
   };
 
   const driveHandler = (

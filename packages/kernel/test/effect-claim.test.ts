@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { makeOperationRef, makePreClaim, validateEffectClaim } from "../src/effect-claim";
+import {
+  makeOperationRef,
+  makePreClaim,
+  validateEffectClaim,
+  type EffectClaim,
+  type LivedClaim,
+  type PreClaim,
+  type RejectedClaim,
+} from "../src/effect-claim";
 
 describe("EffectClaim calculus", () => {
   const pre = makePreClaim({
@@ -69,6 +77,56 @@ describe("EffectClaim calculus", () => {
       ok: false,
       issues: ["lived_claim_has_rejection"],
     });
+  });
+
+  it("rejects impossible phase fields at type level", () => {
+    const preWithAnchor: PreClaim = {
+      ...pre,
+      // @ts-expect-error pre claims cannot carry terminal anchors.
+      anchorRef: {
+        anchorId: "thread/t1:7",
+        anchorKind: "ledger_event",
+      },
+    };
+
+    const livedWithRejection: LivedClaim = {
+      ...pre,
+      phase: "lived",
+      anchorRef: {
+        anchorId: "thread/t1:7",
+        anchorKind: "ledger_event",
+      },
+      // @ts-expect-error lived claims cannot carry rejection refs.
+      rejectionRef: {
+        rejectionId: "policy/1",
+        rejectionKind: "policy_denied",
+      },
+    };
+
+    // @ts-expect-error rejected claims require rejectionRef.
+    const rejectedWithoutRejection: RejectedClaim = {
+      ...pre,
+      phase: "rejected",
+    };
+
+    // @ts-expect-error phase=rejected cannot carry anchorRef in the EffectClaim union.
+    const rejectedWithAnchor: EffectClaim = {
+      ...pre,
+      phase: "rejected",
+      anchorRef: {
+        anchorId: "thread/t1:7",
+        anchorKind: "ledger_event" as const,
+      },
+      rejectionRef: {
+        rejectionId: "policy/1",
+        rejectionKind: "policy_denied",
+      },
+    };
+
+    void preWithAnchor;
+    void livedWithRejection;
+    void rejectedWithoutRejection;
+    void rejectedWithAnchor;
   });
 
   it("rejects nullable scope/session and missing external systemRef shapes", () => {

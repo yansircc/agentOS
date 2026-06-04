@@ -24,18 +24,15 @@ import { RefResolverLive } from "@agent-os/kernel/ref-resolver";
 import { QuotaLive } from "../src/quota";
 import { withQuota } from "../src/quota";
 import { type InternalSubmitSpec, submitAgentEffect } from "@agent-os/runtime";
-import {
-  defineToolFromDefinition,
-  permissiveToolAdmitter,
-  pureToolExecution,
-  type Tool,
-} from "@agent-os/kernel/tools";
+import { defineToolFromDefinition, pureToolExecution, type Tool } from "@agent-os/kernel/tools";
 import type { EventHandler } from "@agent-os/kernel/types";
 import { finalTextResp, stubAi, toolCallResp } from "./_stub-ai";
 
 interface TestEnv {
   readonly AGENT_DO: DurableObjectNamespace;
 }
+
+const allowToolAdmitter = () => ({ ok: true as const });
 
 const testEnv = env as unknown as TestEnv;
 
@@ -51,7 +48,7 @@ const makeQuotaTool = (limit: number): Tool =>
         },
       },
       execute: async () => "2026-05-25T00:00:00Z",
-      admit: permissiveToolAdmitter,
+      admit: allowToolAdmitter,
       authorityClass: "read",
       execution: pureToolExecution(),
     }),
@@ -89,6 +86,59 @@ const buildRuntime = (state: DurableObjectState, ai: Ai) => {
 };
 
 describe("quota state machine — deterministic", () => {
+  it("tool retry reuses the same quota grant for the same operationRef", async () => {
+    const scope = "quota-retry-idempotent";
+    const id = testEnv.AGENT_DO.idFromName(scope);
+    const stub = testEnv.AGENT_DO.get(id);
+
+    await runInDurableObject(stub, async (_inst, state) => {
+      let calls = 0;
+      const retryingTool = withQuota(
+        defineToolFromDefinition({
+          definition: {
+            type: "function",
+            function: {
+              name: "get_current_time",
+              description: "Returns the current time as ISO string",
+              parameters: { type: "object", properties: {}, required: [] },
+            },
+          },
+          execute: async () => {
+            calls += 1;
+            if (calls === 1) throw new Error("transient");
+            return "2026-05-25T00:00:00Z";
+          },
+          admit: allowToolAdmitter,
+          authorityClass: "read",
+          execution: pureToolExecution(),
+        }),
+        { windowMs: 60_000, limit: 1, amount: 1 },
+      );
+      const ai = stubAi([toolCallResp("get_current_time", "{}", "c1"), finalTextResp("ok")]);
+      const runtime = buildRuntime(state, ai);
+      const spec: InternalSubmitSpec = {
+        ...makeSpec(scope, 1),
+        tools: { get_current_time: retryingTool },
+        budget: { maxTurns: 3, toolRetries: 1 },
+      };
+
+      const result = await runtime.runPromise(submitAgentEffect(spec));
+
+      expect(result.ok).toBe(true);
+      expect(calls).toBe(2);
+      const events = await runtime.runPromise(
+        Effect.gen(function* () {
+          const l = yield* Ledger;
+          return yield* l.events(scope);
+        }),
+      );
+      expect(events.filter((event) => event.kind === "dispatch.consumed")).toHaveLength(1);
+      expect(events.some((event) => event.kind === "dispatch.rate_limited")).toBe(false);
+
+      await runtime.dispose();
+    });
+  });
+
   it("3 submits with limit=2 → 2 consumed, 1 rate_limited, 1 tool_error abort", async () => {
     const scope = "quota-rate-limit-3rd";
     const id = testEnv.AGENT_DO.idFromName(scope);
@@ -175,6 +225,7 @@ describe("quota state machine — deterministic", () => {
           key: "get_current_time",
           amount: "x",
           toolName: "get_current_time",
+          operationRef: "bad-op",
         }),
       );
 

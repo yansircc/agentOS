@@ -8,21 +8,29 @@ crossing into tool code.
 
 ## Model
 
-Tool contracts separate the envelope from the side-effect domain. The tool
-envelope owns admission, claims, quota, contract validation, retry, and ledger
-settlement. The execution domain declares where an effectful tool runs: host,
-sandbox, workspace, or remote. Host execution is never implicit.
+Tools separate the envelope from the side-effect domain. `ToolContract` owns
+admission, claims, quota, contract validation, retry, and ledger settlement.
+`Tool.execution` is a sibling fact that declares where an effectful tool runs:
+host, sandbox, workspace, or remote. Host execution is never implicit.
 
 Pure tools declare `execution: { kind: "pure" }`. Effectful tools declare
-`execution: { kind: "effectful", domain }`. The registry rejects tools that omit
-execution metadata so a product cannot accidentally run host effects through an
-unstated default.
+`execution: { kind: "effectful", domain }`. The tool registry rejects tools
+that omit execution metadata. Backend facades also boot-validate
+`ExecutionDomainDeclaration` entries so effectful tools cannot reference an
+undeclared execution locus.
 
-`@agent-os/sandbox` remains a bounded stateless command carrier.
+In this release `ExecutionDomain` is a declared locus marker, not a dispatcher.
+Actual execution still happens inside the tool closure or generated
+WorkspaceEnv tool. The declaration exists so admission, boot validation, and
+ledger audit all see the same symbolic locus without putting execution inside
+the claim contract.
+
+`@agent-os/sandbox` is bounded stateless execution-domain algebra.
 `@agent-os/workspace-env` is a stable fs+exec actuator. Provider adapters choose
 the real execution domain: Cloudflare Sandbox declares `sandbox`; local Node
 fs/shell declares `host` with an explicit environment allowlist. These are
-adjacent execution surfaces, not one merged abstraction.
+adjacent execution surfaces, not one merged abstraction and not carrier
+packages.
 
 ## Non-Goals
 

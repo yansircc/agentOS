@@ -27,7 +27,7 @@ import {
   routeFingerprint,
 } from "../../src/admission";
 import { type InternalSubmitSpec, submitAgentEffect } from "@agent-os/runtime";
-import { stubAi } from "../_stub-ai";
+import { finalTextResp, stubAi } from "../_stub-ai";
 
 import { SCHEMA, makeRuntime, makeRuntimeWithRegistry, submitStructuredResp } from "./_helpers";
 
@@ -196,16 +196,16 @@ describe("admission — IO contract: attemptStructured", () => {
       // Only ONE stub response. If the second attemptStructured call
       // calls ai.run again, the queue throws → SqlError-equivalent test
       // failure. The lease short-circuit must prevent that call.
-      const ai = stubAi([submitStructuredResp('{"summary":"first-and-only"}', "c1")]);
+      const ai = stubAi([finalTextResp("not a structured tool response")]);
       const runtime = makeRuntime(state, ai);
 
       const schemaContract = await runtime.runPromise(makeSchemaContract(SCHEMA));
 
       const route = { kind: "cf-ai-binding" as const, modelId: "@cf/test/model" };
 
-      // First call: adapterMode=test-decode-mismatch forces BehaviorFailed
-      // despite the stub returning a valid response. (The AI is called
-      // because the adapter's decode is what fails, not the provider.)
+      // First call: provider returns a valid chat response but not the
+      // forced structured tool call. The adapter classifies the real wire
+      // mismatch as BehaviorFailed.
       const r1 = await runtime.runPromise(
         Effect.gen(function* () {
           const admission = yield* Admission;
@@ -219,7 +219,6 @@ describe("admission — IO contract: attemptStructured", () => {
               userInput: { userText: "x" },
               deliver: (d) => ({ event: "structured.done", payload: d }),
             },
-            adapterMode: "test-decode-mismatch",
           });
         }),
       );
@@ -263,8 +262,8 @@ describe("admission — IO contract: attemptStructured", () => {
 
     await runInDurableObject(stub, async (_inst, state) => {
       const ai = stubAi([
-        // first call: forced to BehaviorFailed
-        submitStructuredResp('{"summary":"ignored"}', "c1"),
+        // first call: real protocol mismatch -> BehaviorFailed
+        finalTextResp("not a structured tool response"),
         // post-barrier call: provider is invoked again
         submitStructuredResp('{"summary":"post-barrier"}', "c2"),
       ]);
@@ -286,7 +285,6 @@ describe("admission — IO contract: attemptStructured", () => {
               userInput: { userText: "x" },
               deliver: (d) => ({ event: "structured.done", payload: d }),
             },
-            adapterMode: "test-decode-mismatch",
           });
         }),
       );

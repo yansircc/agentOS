@@ -85,6 +85,7 @@ export const AttachedStreamsLive = (
               catch: (cause) => new SqlError({ cause }),
             });
             yield* fireLedgerEvents(bus, events);
+            return { eventIds: events.map((event) => event.id) };
           }),
       });
     }),

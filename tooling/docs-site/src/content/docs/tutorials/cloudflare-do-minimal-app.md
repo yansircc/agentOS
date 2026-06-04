@@ -42,7 +42,7 @@ credential, and one `openAIChat` route.
      description: "Return the supplied text.",
      args: Schema.Struct({ text: Schema.String }),
      authority: "tutorial.local",
-     admit: "allow",
+     admit: () => ({ ok: true }),
      execute: ({ text }) => ({ text }),
    });
    ```

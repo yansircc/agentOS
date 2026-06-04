@@ -35,7 +35,7 @@ export const QuotaLive = (ctx: DurableObjectState): Layer.Layer<Quota, never, Ev
       const bus = yield* EventBus;
 
       return {
-        tryGrant: (scope, key, amount, windowMs, limit, toolName) =>
+        tryGrant: (scope, key, amount, windowMs, limit, toolName, operationRef) =>
           Effect.gen(function* () {
             const now = yield* Clock.currentTimeMillis;
             const windowStart = windowMs === Number.POSITIVE_INFINITY ? 0 : now - windowMs;
@@ -46,6 +46,7 @@ export const QuotaLive = (ctx: DurableObjectState): Layer.Layer<Quota, never, Ev
               key,
               amount,
               toolName,
+              operationRef,
             };
             const consumedStr = yield* safeStringify(consumedPayload);
 
@@ -68,6 +69,13 @@ export const QuotaLive = (ctx: DurableObjectState): Layer.Layer<Quota, never, Ev
                     const p = decodeConsumedPayloadSync(
                       JSON.parse(sqlText(r.payload, "events.payload")),
                     );
+                    if (p.key === key && p.operationRef === operationRef) {
+                      return {
+                        granted: true as const,
+                        consumed,
+                        event: null,
+                      };
+                    }
                     if (p.key === key) {
                       consumed += p.amount;
                     }
@@ -115,7 +123,9 @@ export const QuotaLive = (ctx: DurableObjectState): Layer.Layer<Quota, never, Ev
 
             // Fire EventBus AFTER commit (sql.exec inside transactionSync
             // bypassed Ledger.log, which normally fires the bus).
-            yield* fireLedgerEvents(bus, [txResult.event]);
+            if (txResult.event !== null) {
+              yield* fireLedgerEvents(bus, [txResult.event]);
+            }
 
             return {
               granted: txResult.granted,

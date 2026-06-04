@@ -15,7 +15,6 @@
 import type { ChatCompletionsBody, LlmRoute, LlmToolCall } from "../llm";
 import type { SchemaContract, Strategy } from "../../admission";
 import type {
-  AdapterMode,
   AdapterStimulus,
   DecodeStructuredResult,
   DecodedOutput,
@@ -121,17 +120,7 @@ const decodeChatCompletionsStructured = (
   response: { readonly raw: unknown },
   schema: SchemaContract,
   _strategy: Strategy,
-  mode: AdapterMode = "production",
 ): DecodeStructuredResult => {
-  if (mode === "test-decode-mismatch") {
-    return {
-      ok: false,
-      outcome: {
-        class: "BehaviorFailed",
-        sampleDigest: "synthetic-test-decode-mismatch",
-      },
-    };
-  }
   const raw = response.raw as {
     choices?: Array<{
       message?: {

@@ -14,3 +14,17 @@ What do you need?
 
 Public documentation facts live in `docs/**`; package README, `PUBLIC_API.md`,
 and the docs site are projections.
+
+## Governance
+
+Already-clear algebra must become type-proof or boot-proof. Runtime validation
+is only for unknown external input, not internally constructed states. Breaking
+refactors may fix concept placement; they do not authorize untriggered
+capabilities.
+
+Deferred triggers: `WorkspaceFs + OverlayFs` starts on real multi-file
+trial/rollback pressure, whole-workspace rollback need, or repeated
+staging-directory rollback logic. `defineBoundary()` starts after a second
+concrete boundary matches a64/a69 direction, shape, policy, discoverability, and
+adaptation locus. Durable reconnect/resume starts only when product UX requires
+automatic long-session resume.

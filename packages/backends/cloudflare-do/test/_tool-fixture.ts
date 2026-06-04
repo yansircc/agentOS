@@ -1,9 +1,6 @@
-import {
-  defineToolFromDefinition,
-  permissiveToolAdmitter,
-  pureToolExecution,
-  type Tool,
-} from "@agent-os/kernel/tools";
+import { defineToolFromDefinition, pureToolExecution, type Tool } from "@agent-os/kernel/tools";
+
+export const allowToolAdmitter = () => ({ ok: true as const });
 
 export const makeLookupTool = (): Tool =>
   defineToolFromDefinition({
@@ -16,7 +13,7 @@ export const makeLookupTool = (): Tool =>
       },
     },
     execute: () => Promise.resolve({ value: 42 }),
-    admit: permissiveToolAdmitter,
+    admit: allowToolAdmitter,
     authorityClass: "read",
     execution: pureToolExecution(),
     originRef: {

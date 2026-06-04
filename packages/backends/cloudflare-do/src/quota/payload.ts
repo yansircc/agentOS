@@ -4,6 +4,7 @@ export const ConsumedPayloadSchema = Schema.Struct({
   key: Schema.String,
   amount: Schema.Number.pipe(Schema.finite()),
   toolName: Schema.String,
+  operationRef: Schema.String,
 });
 
 export const decodeConsumedPayloadSync = Schema.decodeUnknownSync(ConsumedPayloadSchema);

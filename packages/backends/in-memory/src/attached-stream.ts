@@ -36,7 +36,7 @@ export const InMemoryAttachedStreamsLive = (
                   handler.commitTerminal(value, tx),
                 ),
             )
-            .pipe(Effect.asVoid),
+            .pipe(Effect.map(({ events }) => ({ eventIds: events.map((event) => event.id) }))),
       });
     }),
   );

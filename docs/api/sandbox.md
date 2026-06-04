@@ -1,0 +1,38 @@
+# @agent-os/sandbox Public API Intent
+
+## Public exports
+
+- `.:ArtifactRef`
+- `.:ArtifactSource`
+- `.:DEFAULT_MAX_OUTPUT_BYTES`
+- `.:MakeSandboxRunToolOptions`
+- `.:SANDBOX_MAX_TIMEOUT_MS`
+- `.:SandboxBackend`
+- `.:SandboxFailure`
+- `.:SandboxFailureCode`
+- `.:SandboxFileContent`
+- `.:SandboxNetwork`
+- `.:SandboxPolicy`
+- `.:SandboxPolicyDenied`
+- `.:SandboxPolicyRequest`
+- `.:SandboxRawResult`
+- `.:SandboxResultFields`
+- `.:SandboxRunRequest`
+- `.:SandboxRunSuccess`
+- `.:SandboxRunToolArgs`
+- `.:SandboxToolResult`
+- `.:StaticPolicyOptions`
+- `.:makeSandboxRunTool`
+- `.:measureOutputBytes`
+- `.:runSandbox`
+- `.:sandboxFailureFromUnknown`
+- `.:staticPolicy`
+- `.:toSandboxToolResult`
+
+## Experimental exports
+
+None.
+
+## Internal-only exports
+
+Any package file or symbol not listed above.

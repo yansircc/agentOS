@@ -30,6 +30,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:AttachedStreamSession`
 - `.:AttachedStreamStartSpec`
 - `.:AttachedStreamTerminal`
+- `.:AttachedStreamTerminalCommitAck`
 - `.:AttachedStreamTerminalCommitSpec`
 - `.:AttachedStreamTx`
 - `.:AttachedStreams`

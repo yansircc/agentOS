@@ -1,0 +1,43 @@
+# @agent-os/dynamic-worker Public API Intent
+
+## Public exports
+
+- `.:DEFAULT_MAX_BODY_BYTES`
+- `.:DYNAMIC_WORKER_MAX_TIMEOUT_MS`
+- `.:DynamicWorkerBackend`
+- `.:DynamicWorkerBinding`
+- `.:DynamicWorkerEgress`
+- `.:DynamicWorkerFailure`
+- `.:DynamicWorkerFailureCode`
+- `.:DynamicWorkerHttpRequest`
+- `.:DynamicWorkerLimits`
+- `.:DynamicWorkerPolicy`
+- `.:DynamicWorkerPolicyDenied`
+- `.:DynamicWorkerPolicyRequest`
+- `.:DynamicWorkerPolicyViolation`
+- `.:DynamicWorkerProviderFailure`
+- `.:DynamicWorkerRawResult`
+- `.:DynamicWorkerRunRequest`
+- `.:DynamicWorkerRunSuccess`
+- `.:DynamicWorkerStaticPolicyOptions`
+- `.:dynamicWorkerCarrierRef`
+- `.:dynamicWorkerFailureReason`
+- `.:dynamicWorkerProviderRejectionKind`
+- `.:dynamicWorkerSettlementContract`
+- `.:dynamicWorkerSettlementRef`
+- `.:runDynamicWorker`
+- `.:settleDynamicWorkerLived`
+- `.:settleDynamicWorkerPolicyDenied`
+- `.:settleDynamicWorkerProviderFailure`
+- `.:settleDynamicWorkerRejected`
+- `.:staticPolicy`
+- `.:truncateUtf8`
+- `.:validateDynamicWorkerRequest`
+
+## Experimental exports
+
+None.
+
+## Internal-only exports
+
+Any package file or symbol not listed above.

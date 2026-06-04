@@ -418,10 +418,10 @@ describe("in-memory runtime backend", () => {
       const quota = await runtime.runPromise(Quota);
       const ledger = await runtime.runPromise(Ledger);
       await expect(
-        runtime.runPromise(quota.tryGrant("quota-scope", "tool-a", 1, 60_000, 1, "tool-a")),
+        runtime.runPromise(quota.tryGrant("quota-scope", "tool-a", 1, 60_000, 1, "tool-a", "op-1")),
       ).resolves.toMatchObject({ granted: true, consumed: 0, limit: 1 });
       await expect(
-        runtime.runPromise(quota.tryGrant("quota-scope", "tool-a", 1, 60_000, 1, "tool-a")),
+        runtime.runPromise(quota.tryGrant("quota-scope", "tool-a", 1, 60_000, 1, "tool-a", "op-2")),
       ).resolves.toMatchObject({ granted: false, consumed: 1, limit: 1 });
       const events = await runtime.runPromise(ledger.events("quota-scope"));
       expect(events.map((event) => event.kind)).toEqual([
@@ -434,12 +434,12 @@ describe("in-memory runtime backend", () => {
           {
             kind: "dispatch.consumed",
             scope: "quota-scope",
-            payload: { key: "tool-a", amount: "x", toolName: "tool-a" },
+            payload: { key: "tool-a", amount: "x", toolName: "tool-a", operationRef: "bad-op" },
           },
         ]),
       );
       const exit = await runtime.runPromiseExit(
-        quota.tryGrant("quota-scope", "tool-a", 1, Number.POSITIVE_INFINITY, 10, "tool-a"),
+        quota.tryGrant("quota-scope", "tool-a", 1, Number.POSITIVE_INFINITY, 10, "tool-a", "op-3"),
       );
       expect(Exit.isFailure(exit)).toBe(true);
       if (Exit.isFailure(exit)) {

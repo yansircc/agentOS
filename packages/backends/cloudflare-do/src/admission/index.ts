@@ -53,6 +53,5 @@ export type {
   AttemptResult,
   InvalidateSpec,
 } from "@agent-os/runtime";
-export type { AdapterMode } from "./admission";
 export { Admission } from "@agent-os/runtime";
 export { AdmissionLive, ADAPTER_VERSION } from "./admission";

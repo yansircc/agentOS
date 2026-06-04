@@ -1,0 +1,36 @@
+# @agent-os/deploy Public API Intent
+
+## Public exports
+
+- `.:DEPLOY_EVENTS`
+- `.:DEPLOY_EVENT_PREFIX`
+- `.:DEPLOY_KIND`
+- `.:DeployCarrier`
+- `.:DeployEventKind`
+- `.:DeployFailedPayload`
+- `.:DeployFailure`
+- `.:DeployLedgerEvent`
+- `.:DeployPreviewRecordedPayload`
+- `.:DeployPreviewRequest`
+- `.:DeployProductionPromotedPayload`
+- `.:DeployProductionReadbackPayload`
+- `.:DeployProjection`
+- `.:DeployPromoteRequest`
+- `.:DeployReadbackRequest`
+- `.:DeployRollbackRecordedPayload`
+- `.:DeployRollbackRequest`
+- `.:deployBoundaryContract`
+- `.:deployBoundaryPackage`
+- `.:deployCarrier`
+- `.:deploySettlementRef`
+- `.:projectDeploy`
+- `.:settleDeployLived`
+- `.:settleDeployRejected`
+
+## Experimental exports
+
+None.
+
+## Internal-only exports
+
+Any package file or symbol not listed above.

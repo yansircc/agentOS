@@ -21,6 +21,6 @@ projections, but hook failure fails the tool instead of silently drifting.
 ## Verification
 
 ```sh
-cd packages/composers/workspace-env
+cd packages/execution-domains/workspace-env
 vp test run
 ```

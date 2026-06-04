@@ -491,6 +491,7 @@ export const submitAgentEffect = (
                   claim,
                   args,
                   contract,
+                  execution: tool.execution,
                   toolName: call.function.name,
                 }),
               ),
@@ -513,6 +514,7 @@ export const submitAgentEffect = (
                 runId: started.id,
                 name: call.function.name,
                 args: call.function.arguments,
+                execution: tool.execution,
                 claim: settleToolAdmissionRejected(claim, rejectedAdmission),
               },
               scope,
@@ -523,8 +525,10 @@ export const submitAgentEffect = (
             });
           }
 
-          // Per-attempt grant + execute (inside Effect.retry).
-          // Each retry independently grants → retries count toward quota.
+          // Grant + execute are inside retry, but quota grants are keyed by
+          // the semantic tool claim operationRef. Retrying the same claim
+          // cannot double-charge quota; separate tool calls still consume
+          // separate quota.
           const attemptOnce: Effect.Effect<unknown, ToolError | SqlError | JsonStringifyError> =
             Effect.gen(function* () {
               const attempt = Effect.gen(function* () {
@@ -568,6 +572,7 @@ export const submitAgentEffect = (
                     q.windowMs,
                     q.limit,
                     call.function.name,
+                    claim.operationRef,
                   );
                   if (!grant.granted) {
                     return yield* new ToolError({
@@ -638,6 +643,7 @@ export const submitAgentEffect = (
                       runId: started.id,
                       name: call.function.name,
                       args: call.function.arguments,
+                      execution: tool.execution,
                       claim: settleToolExecutionRejected(claim, reason),
                     },
                     scope,
@@ -654,6 +660,7 @@ export const submitAgentEffect = (
               runId: started.id,
               name: call.function.name,
               args: call.function.arguments,
+              execution: tool.execution,
               result,
               claim: settleToolExecuted(claim, contract),
             },

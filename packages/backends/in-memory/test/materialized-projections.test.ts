@@ -51,6 +51,15 @@ const runWorkflowProjection = (version = 1): AnyMaterializedProjectionDefinition
     },
   });
 
+const failingRebuildProjection = (version = 2): AnyMaterializedProjectionDefinition =>
+  defineProjection({
+    ...runWorkflowProjection(version),
+    reduce: (_state, event) =>
+      event.kind === "run.completed"
+        ? projectionFail("projection rebuild failed")
+        : projectionPut({ runId: payload(event.payload).runId as string, status: "requested" }),
+  });
+
 const makeRuntime = (scope: string, projections = [runWorkflowProjection()]) => {
   const backend = createInMemoryRuntimeBackend({ scope, projections });
   const runtime = ManagedRuntime.make(backend.layer);
@@ -147,6 +156,40 @@ describe("in-memory materialized projections", () => {
       );
       expect(row?.version).toBe(2);
       expect(row?.state).toEqual({ runId: "r1", status: "completed", handoff: "done" });
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("keeps current rows when rebuild fails", async () => {
+    const scope = "projection-rebuild-swap";
+    const { backend, runtime } = makeRuntime(scope);
+    try {
+      const ledger = await runtime.runPromise(Ledger);
+      const projections = await runtime.runPromise(MaterializedProjections);
+
+      await runtime.runPromise(ledger.log("run.requested", { runId: "r1" }, scope));
+      await runtime.runPromise(
+        ledger.log("run.completed", { runId: "r1", handoff: "done" }, scope),
+      );
+
+      backend.state.setProjectionRegistryResult(
+        makeProjectionRegistryResult([failingRebuildProjection()]),
+      );
+
+      const exit = await runtime.runPromiseExit(
+        projections.rebuild({ kind: "run.workflow", scope }),
+      );
+      expect(exit._tag).toBe("Failure");
+
+      const row = await runtime.runPromise(
+        projections.get({ kind: "run.workflow", scope, identity: { runId: "r1" } }),
+      );
+      expect(row?.version).toBe(1);
+      expect(row?.state).toEqual({ runId: "r1", status: "completed", handoff: "done" });
+      await expect(
+        runtime.runPromise(projections.status({ kind: "run.workflow", scope })),
+      ).resolves.toMatchObject({ version: 2, status: "needs_rebuild" });
     } finally {
       await runtime.dispose();
     }

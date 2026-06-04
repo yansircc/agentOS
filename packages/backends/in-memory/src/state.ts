@@ -12,8 +12,10 @@ import type {
   LedgerEventRpc,
 } from "@agent-os/kernel/types";
 import {
+  durableProcessLifecycleState,
   durableTriggerDuePayload,
   fireBackendEventHandlers,
+  type DurableProcessLifecycleState,
   type IntentPointerDuePayload,
 } from "@agent-os/backend-protocol";
 import {
@@ -711,6 +713,33 @@ export class InMemoryBackendState {
         claimDeadlineAt: row.claimDeadlineAt ?? now,
         redriveCount: row.redriveCount,
       }));
+  }
+
+  durableProcessLifecycle(): Effect.Effect<ReadonlyArray<DurableProcessLifecycleState>, SqlError> {
+    return Effect.gen(this, function* () {
+      const states: DurableProcessLifecycleState[] = [];
+      for (const row of [...this.dueWork].sort((left, right) => left.id - right.id)) {
+        const result = durableProcessLifecycleState({
+          id: row.id,
+          fireAt: row.fireAt,
+          kind: row.kind,
+          intentEventId: row.payload.intentEventId,
+          completedAt: row.completedAt,
+          claimedAt: row.claimedAt,
+          claimToken: row.claimToken,
+          claimDeadlineAt: row.claimDeadlineAt,
+          redriveCount: row.redriveCount,
+          cancelRequestedAt: row.cancelRequestedAt,
+          cancelReason: row.cancelReason,
+          cancelledAt: row.cancelledAt,
+        });
+        if (!result.ok) {
+          return yield* Effect.fail(new SqlError({ cause: result.cause }));
+        }
+        states.push(result.state);
+      }
+      return states;
+    });
   }
 
   pendingOutboxByIntent(intentEventId: number): DispatchOutboxRow | null {

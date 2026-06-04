@@ -25,7 +25,6 @@ import type {
 } from "../llm";
 import type { SchemaContract, Strategy } from "../../admission";
 import type {
-  AdapterMode,
   AdapterStimulus,
   DecodeStructuredResult,
   DecodedOutput,
@@ -320,17 +319,7 @@ const decodeGeminiStructured = (
   response: { readonly raw: unknown },
   schema: SchemaContract,
   _strategy: Strategy,
-  mode: AdapterMode = "production",
 ): DecodeStructuredResult => {
-  if (mode === "test-decode-mismatch") {
-    return {
-      ok: false,
-      outcome: {
-        class: "BehaviorFailed",
-        sampleDigest: "synthetic-test-decode-mismatch",
-      },
-    };
-  }
   const r = response.raw as GeminiRawResponse;
   const parts = r.candidates?.[0]?.content?.parts ?? [];
   const calls = parts.filter(

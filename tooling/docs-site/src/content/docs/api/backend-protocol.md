@@ -18,6 +18,7 @@ title: "@agent-os/backend-protocol API"
 - `.:describeDispatchCause`
 - `.:dispatchBackoffMs`
 - `.:dispatchExternalDeliveryReceipt`
+- `.:durableProcessLifecycleState`
 - `.:dispatchPayloadParseFailure`
 - `.:durableTriggerBackoffMs`
 - `.:durableTriggerDuePayload`
@@ -31,6 +32,10 @@ title: "@agent-os/backend-protocol API"
 - `.:parseTraceContext`
 - `.:BackendProtocolEventHandler`
 - `.:BackendProtocolLedgerEventRpc`
+- `.:DurableProcessCancellationState`
+- `.:DurableProcessClaimState`
+- `.:DurableProcessLifecycleSnapshot`
+- `.:DurableProcessLifecycleState`
 - `.:DurableTriggerRetryPolicy`
 - `.:DispatchOutboundDeliveredPayload`
 - `.:DispatchOutboundFailedPayload`

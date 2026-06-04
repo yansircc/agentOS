@@ -7,8 +7,10 @@ import {
 } from "@agent-os/kernel/errors";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import {
+  durableProcessLifecycleState,
   durableTriggerDuePayload,
   parseIntentPointerDuePayload,
+  type DurableProcessLifecycleState,
   type IntentPointerDuePayload,
 } from "@agent-os/backend-protocol";
 import {
@@ -394,6 +396,71 @@ export const listStuckDueWork = (
             ? 0
             : Number(row.redrive_count),
       });
+    }
+    return out;
+  });
+
+export const selectDurableProcessLifecycle = (
+  sql: SqlStorage,
+): Effect.Effect<ReadonlyArray<DurableProcessLifecycleState>, SqlError> =>
+  Effect.gen(function* () {
+    const rows = yield* Effect.try({
+      try: () =>
+        sql
+          .exec(
+            `
+            SELECT id, fire_at, kind, payload, completed_at,
+                   claimed_at, claim_token, claim_deadline_at, redrive_count,
+                   cancel_requested_at, cancel_reason, cancelled_at
+            FROM due_work
+            ORDER BY id
+          `,
+          )
+          .toArray(),
+      catch: (cause) => new SqlError({ cause }),
+    });
+    const out: DurableProcessLifecycleState[] = [];
+    for (const row of rows) {
+      const payload = dueRowPayload(row as { readonly payload: unknown });
+      if (!payload.ok) return yield* Effect.fail(new SqlError({ cause: payload.cause }));
+      const result = durableProcessLifecycleState({
+        id: Number(row.id),
+        fireAt: Number(row.fire_at),
+        kind: sqlText(row.kind, "due_work.kind"),
+        intentEventId: payload.value.intentEventId,
+        completedAt:
+          row.completed_at === null || row.completed_at === undefined
+            ? null
+            : Number(row.completed_at),
+        claimedAt:
+          row.claimed_at === null || row.claimed_at === undefined ? null : Number(row.claimed_at),
+        claimToken:
+          row.claim_token === null || row.claim_token === undefined
+            ? null
+            : sqlText(row.claim_token, "due_work.claim_token"),
+        claimDeadlineAt:
+          row.claim_deadline_at === null || row.claim_deadline_at === undefined
+            ? null
+            : Number(row.claim_deadline_at),
+        redriveCount:
+          row.redrive_count === null || row.redrive_count === undefined
+            ? 0
+            : Number(row.redrive_count),
+        cancelRequestedAt:
+          row.cancel_requested_at === null || row.cancel_requested_at === undefined
+            ? null
+            : Number(row.cancel_requested_at),
+        cancelReason:
+          row.cancel_reason === null || row.cancel_reason === undefined
+            ? null
+            : sqlText(row.cancel_reason, "due_work.cancel_reason"),
+        cancelledAt:
+          row.cancelled_at === null || row.cancelled_at === undefined
+            ? null
+            : Number(row.cancelled_at),
+      });
+      if (!result.ok) return yield* Effect.fail(new SqlError({ cause: result.cause }));
+      out.push(result.state);
     }
     return out;
   });

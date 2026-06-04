@@ -18,6 +18,7 @@ Status: Backend protocol package. Public exports are limited to storage-free bac
 - `.:describeDispatchCause`
 - `.:dispatchBackoffMs`
 - `.:dispatchExternalDeliveryReceipt`
+- `.:durableProcessLifecycleState`
 - `.:dispatchPayloadParseFailure`
 - `.:durableTriggerBackoffMs`
 - `.:durableTriggerDuePayload`
@@ -31,6 +32,10 @@ Status: Backend protocol package. Public exports are limited to storage-free bac
 - `.:parseTraceContext`
 - `.:BackendProtocolEventHandler`
 - `.:BackendProtocolLedgerEventRpc`
+- `.:DurableProcessCancellationState`
+- `.:DurableProcessClaimState`
+- `.:DurableProcessLifecycleSnapshot`
+- `.:DurableProcessLifecycleState`
 - `.:DurableTriggerRetryPolicy`
 - `.:DispatchOutboundDeliveredPayload`
 - `.:DispatchOutboundFailedPayload`

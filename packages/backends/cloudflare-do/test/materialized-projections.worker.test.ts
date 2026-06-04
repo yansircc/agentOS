@@ -7,6 +7,10 @@ interface TestEnv {
   readonly MATERIALIZED_PROJECTION_DO: DurableObjectNamespace<MaterializedProjectionTestDO>;
 }
 
+interface MaterializedProjectionTestRpc extends MaterializedProjectionTestDO {
+  readonly insertRawEvent: (event: string, data: unknown) => { readonly id: number };
+}
+
 const testEnv = env as unknown as TestEnv;
 
 describe("materialized projections — Cloudflare DO", () => {
@@ -65,6 +69,47 @@ describe("materialized projections — Cloudflare DO", () => {
       const events: LedgerEventRpc[] = await instance.events();
       expect(events).toEqual([]);
       await expect(instance.projectionList({ kind: "run.workflow", scope })).resolves.toEqual([]);
+    });
+  });
+
+  it("keeps current rows when rebuild fails", async () => {
+    const scope = "materialized-projection-rebuild-swap";
+    const stub = testEnv.MATERIALIZED_PROJECTION_DO.get(
+      testEnv.MATERIALIZED_PROJECTION_DO.idFromName(scope),
+    );
+
+    await runInDurableObject(stub, async (rawInstance) => {
+      const instance = rawInstance as unknown as MaterializedProjectionTestRpc;
+      await instance.emit("run.requested", { runId: "r1" });
+      await instance.emit("run.completed", { runId: "r1", handoff: "ready" });
+      expect(
+        await instance.projectionGet({
+          kind: "run.workflow",
+          scope,
+          identity: { runId: "r1" },
+        }),
+      ).toMatchObject({
+        version: 1,
+        state: { runId: "r1", status: "completed", handoff: "ready" },
+      });
+
+      instance.insertRawEvent("run.failed", { runId: "r1" });
+      await expect(
+        instance.projectionRebuild({ kind: "run.workflow", scope }),
+      ).rejects.toMatchObject({
+        _tag: "agent_os.sql_error",
+      });
+
+      expect(
+        await instance.projectionGet({
+          kind: "run.workflow",
+          scope,
+          identity: { runId: "r1" },
+        }),
+      ).toMatchObject({
+        version: 1,
+        state: { runId: "r1", status: "completed", handoff: "ready" },
+      });
     });
   });
 });

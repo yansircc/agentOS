@@ -13,13 +13,12 @@ import { type InternalSubmitSpec, submitAgentEffect } from "@agent-os/runtime";
 import {
   defineToolFromDefinition,
   defineTool,
-  permissiveToolAdmitter,
   pureToolExecution,
   type Tool,
 } from "@agent-os/kernel/tools";
 import type { EventHandler } from "@agent-os/kernel/types";
 import { finalTextResp, stubAi, toolCallResp } from "./_stub-ai";
-import { makeLookupTool } from "./_tool-fixture";
+import { allowToolAdmitter, makeLookupTool } from "./_tool-fixture";
 
 interface TestEnv {
   readonly AGENT_DO: DurableObjectNamespace;
@@ -348,7 +347,7 @@ describe("tool registry generator", () => {
       execute: async () => {
         throw new Error("upstream down");
       },
-      admit: permissiveToolAdmitter,
+      admit: allowToolAdmitter,
       authorityClass: "read",
       execution: pureToolExecution(),
     });
@@ -410,7 +409,7 @@ describe("tool registry generator", () => {
         });
         await new Promise<never>(() => {});
       },
-      admit: permissiveToolAdmitter,
+      admit: allowToolAdmitter,
       authorityClass: "read",
       execution: pureToolExecution(),
     });

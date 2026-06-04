@@ -26,6 +26,7 @@
 - `.:AttachedStreamSession`
 - `.:AttachedStreamStartSpec`
 - `.:AttachedStreamTerminal`
+- `.:AttachedStreamTerminalCommitAck`
 - `.:AttachedStreamTerminalCommitSpec`
 - `.:AttachedStreamTx`
 - `.:AttachedStreams`

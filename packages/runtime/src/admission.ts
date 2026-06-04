@@ -36,7 +36,6 @@ export type AttemptSpec<O> = {
   readonly schemaContract: SchemaContract;
   readonly strategy: Strategy;
   readonly stimulus: Stimulus<O>;
-  readonly adapterMode?: "production" | "test-decode-mismatch";
   readonly signal?: AbortSignal;
 };
 

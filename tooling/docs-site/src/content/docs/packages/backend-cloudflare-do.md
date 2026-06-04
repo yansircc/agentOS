@@ -32,6 +32,11 @@ submit primitive. It is a public projection of the backend durable-trigger
 commit path: registry lookup happens before any ledger, due-work, or alarm
 write.
 
+`defineAgentDO({ domains, tools })` boot-validates effectful tool execution
+domains. Pure tools need no domain declaration. Effectful tools must reference
+a declared domain; duplicate declarations or host domains without explicit
+environment allowlists fail during lowering, before submit.
+
 `agent.cancelTrigger({ triggerKind, intentEventId, reason })` is the app-facing
 best-effort cancellation primitive. It is registry-closed: unknown trigger kind
 fails before ledger, due-work, or alarm mutation. Triggers declared with
@@ -103,7 +108,7 @@ const lookup = defineTool({
   description: "Look up a symbolic key.",
   args: Schema.Struct({ key: Schema.String }),
   authority: "read",
-  admit: "allow",
+  admit: () => ({ ok: true }),
   execute: ({ key }) => ({ value: key }),
 });
 

@@ -44,7 +44,7 @@
         "rules": ["EFF001"]
       },
       {
-        "path": "packages/composers/workspace-env/src/index.ts",
+        "path": "packages/execution-domains/workspace-env/src/index.ts",
         "owner": "@agent-os/workspace-env/js-actuator-facade",
         "reason": "WorkspaceEnv is the public Promise/synchronous path facade for workspace actuators; it owns fail-fast AbortSignal and path validation errors before provider side effects",
         "rules": ["EFF024", "EFF025"]
@@ -110,13 +110,13 @@
         "rules": ["EFF402"]
       },
       {
-        "path": "packages/providers/workspace-env-cloudflare/src/index.ts",
+        "path": "packages/execution-domains/workspace-env-cloudflare/src/index.ts",
         "owner": "@agent-os/workspace-env-cloudflare/provider-adapter",
         "reason": "terminal Cloudflare Sandbox WorkspaceEnv adapter owns Promise provider calls, pre/post AbortSignal checks, and provider duration normalization",
         "rules": ["EFF003", "EFF004", "EFF024", "EFF025", "EFF026"]
       },
       {
-        "path": "packages/providers/workspace-env-local/src/index.ts",
+        "path": "packages/execution-domains/workspace-env-local/src/index.ts",
         "owner": "@agent-os/workspace-env-local/provider-adapter",
         "reason": "terminal local host WorkspaceEnv adapter owns Node fs/child_process Promise calls, timeout, AbortSignal, and host environment allowlist enforcement",
         "rules": ["EFF003", "EFF004", "EFF020", "EFF021", "EFF024", "EFF025", "EFF026"]
@@ -178,10 +178,10 @@
     "packages/carriers/image": {
       "shape": ["library"]
     },
-    "packages/providers/sandbox-cloudflare": {
+    "packages/execution-domains/sandbox-cloudflare": {
       "shape": ["library"]
     },
-    "packages/carriers/sandbox": {
+    "packages/execution-domains/sandbox": {
       "shape": ["library"]
     },
     "packages/carriers/workspace-session": {

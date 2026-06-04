@@ -151,39 +151,47 @@ export const validateTerminalClaim = (
     return { ok: false, issues: ["claim_not_terminal"] };
   }
 
-  const issues: TerminalClaimIssue[] = [];
-  if (validation.claim.phase === "lived") {
-    if (!contract.anchorKinds.includes(validation.claim.anchorRef.anchorKind)) {
-      issues.push("anchor_kind_outside_contract");
-    }
-    if (!isSymbolicSettlementValue(validation.claim.anchorRef.anchorId)) {
-      issues.push("anchor_id_not_symbolic");
-    }
-    if (
-      validation.claim.anchorRef.carrierRef !== undefined &&
-      !isSymbolicSettlementValue(validation.claim.anchorRef.carrierRef)
-    ) {
-      issues.push("carrier_ref_not_symbolic");
-    }
-  } else {
-    if (!contract.rejectionKinds.includes(validation.claim.rejectionRef.rejectionKind)) {
-      issues.push("rejection_kind_outside_contract");
-    }
-    if (!isSymbolicSettlementValue(validation.claim.rejectionRef.rejectionId)) {
-      issues.push("rejection_id_not_symbolic");
-    }
-    if (
-      validation.claim.rejectionRef.reason !== undefined &&
-      !isSymbolicSettlementValue(validation.claim.rejectionRef.reason)
-    ) {
-      issues.push("reason_not_symbolic");
-    }
-  }
+  const issues = terminalClaimFieldIssues(contract, validation.claim);
 
   if (issues.length > 0) {
     return { ok: false, issues };
   }
   return { ok: true, claim: validation.claim };
+};
+
+const terminalClaimFieldIssues = (
+  contract: SettlementContract,
+  claim: LivedClaim | RejectedClaim,
+): ReadonlyArray<TerminalClaimIssue> => {
+  const issues: TerminalClaimIssue[] = [];
+  if (claim.phase === "lived") {
+    if (!contract.anchorKinds.includes(claim.anchorRef.anchorKind)) {
+      issues.push("anchor_kind_outside_contract");
+    }
+    if (!isSymbolicSettlementValue(claim.anchorRef.anchorId)) {
+      issues.push("anchor_id_not_symbolic");
+    }
+    if (
+      claim.anchorRef.carrierRef !== undefined &&
+      !isSymbolicSettlementValue(claim.anchorRef.carrierRef)
+    ) {
+      issues.push("carrier_ref_not_symbolic");
+    }
+  } else {
+    if (!contract.rejectionKinds.includes(claim.rejectionRef.rejectionKind)) {
+      issues.push("rejection_kind_outside_contract");
+    }
+    if (!isSymbolicSettlementValue(claim.rejectionRef.rejectionId)) {
+      issues.push("rejection_id_not_symbolic");
+    }
+    if (
+      claim.rejectionRef.reason !== undefined &&
+      !isSymbolicSettlementValue(claim.rejectionRef.reason)
+    ) {
+      issues.push("reason_not_symbolic");
+    }
+  }
+  return issues;
 };
 
 export const settleLived = (
@@ -199,10 +207,10 @@ export const settleLived = (
     originRef: claim.originRef,
     anchorRef,
   };
-  const validation = validateTerminalClaim(contract, lived);
-  if (!validation.ok) {
+  const issues = terminalClaimFieldIssues(contract, lived);
+  if (issues.length > 0) {
     return failConstruction(
-      `settled lived claim violates ${contract.settlementId}: ${validation.issues.join(",")}`,
+      `settled lived claim violates ${contract.settlementId}: ${issues.join(",")}`,
     );
   }
   return lived;
@@ -221,10 +229,10 @@ export const settleRejected = (
     originRef: claim.originRef,
     rejectionRef,
   };
-  const validation = validateTerminalClaim(contract, rejected);
-  if (!validation.ok) {
+  const issues = terminalClaimFieldIssues(contract, rejected);
+  if (issues.length > 0) {
     return failConstruction(
-      `settled rejected claim violates ${contract.settlementId}: ${validation.issues.join(",")}`,
+      `settled rejected claim violates ${contract.settlementId}: ${issues.join(",")}`,
     );
   }
   return rejected;

@@ -77,6 +77,7 @@ export interface RuntimeBackendContractDriver {
     windowMs: number,
     limit: number,
     toolName: string,
+    operationRef: string,
   ) => Promise<GrantResult>;
   readonly dispose: () => Promise<void>;
 }
@@ -525,12 +526,12 @@ export const runRuntimeBackendContractSuite = (
         Effect.gen(function* () {
           expect(
             yield* promise(() =>
-              driver.quotaTryGrant("quota-scope", "tool-a", 1, 60_000, 1, "tool-a"),
+              driver.quotaTryGrant("quota-scope", "tool-a", 1, 60_000, 1, "tool-a", "op-1"),
             ),
           ).toMatchObject({ granted: true, consumed: 0, limit: 1 });
           expect(
             yield* promise(() =>
-              driver.quotaTryGrant("quota-scope", "tool-a", 1, 60_000, 1, "tool-a"),
+              driver.quotaTryGrant("quota-scope", "tool-a", 1, 60_000, 1, "tool-a", "op-2"),
             ),
           ).toMatchObject({ granted: false, consumed: 1, limit: 1 });
           yield* promise(() =>
@@ -538,6 +539,7 @@ export const runRuntimeBackendContractSuite = (
               key: "tool-a",
               amount: "x",
               toolName: "tool-a",
+              operationRef: "bad-op",
             }),
           );
 
@@ -549,6 +551,7 @@ export const runRuntimeBackendContractSuite = (
               Number.POSITIVE_INFINITY,
               10,
               "tool-a",
+              "op-3",
             ),
             "agent_os.sql_error",
           );

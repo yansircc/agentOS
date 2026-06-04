@@ -115,6 +115,209 @@ export interface IntentPointerDuePayload {
   readonly intentEventId: number;
 }
 
+export interface DurableProcessLifecycleSnapshot {
+  readonly id: number;
+  readonly fireAt: number;
+  readonly kind: string;
+  readonly intentEventId: number;
+  readonly completedAt: number | null;
+  readonly claimedAt: number | null;
+  readonly claimToken: string | null;
+  readonly claimDeadlineAt: number | null;
+  readonly redriveCount: number;
+  readonly cancelRequestedAt: number | null;
+  readonly cancelReason: string | null;
+  readonly cancelledAt: number | null;
+}
+
+export interface DurableProcessClaimState {
+  readonly token: string;
+  readonly claimedAt: number;
+  readonly deadlineAt: number;
+}
+
+export interface DurableProcessCancellationState {
+  readonly requestedAt: number;
+  readonly reason: string | null;
+}
+
+interface DurableProcessLifecycleBase {
+  readonly id: number;
+  readonly fireAt: number;
+  readonly kind: string;
+  readonly intentEventId: number;
+  readonly redriveCount: number;
+}
+
+export type DurableProcessLifecycleState =
+  | (DurableProcessLifecycleBase & {
+      readonly phase: "scheduled";
+    })
+  | (DurableProcessLifecycleBase & {
+      readonly phase: "claimed";
+      readonly claim: DurableProcessClaimState;
+    })
+  | (DurableProcessLifecycleBase & {
+      readonly phase: "redriven";
+      readonly claim: DurableProcessClaimState;
+    })
+  | (DurableProcessLifecycleBase & {
+      readonly phase: "cancel_requested";
+      readonly cancellation: DurableProcessCancellationState;
+      readonly claim?: DurableProcessClaimState;
+    })
+  | (DurableProcessLifecycleBase & {
+      readonly phase: "completed";
+      readonly completedAt: number;
+      readonly claim?: DurableProcessClaimState;
+    })
+  | (DurableProcessLifecycleBase & {
+      readonly phase: "cancelled";
+      readonly completedAt: number;
+      readonly cancellation: DurableProcessCancellationState & {
+        readonly cancelledAt: number;
+      };
+      readonly claim?: DurableProcessClaimState;
+    });
+
+type DurableProcessLifecycleResult =
+  | { readonly ok: true; readonly state: DurableProcessLifecycleState }
+  | { readonly ok: false; readonly cause: TypeError };
+
+const durableProcessBase = (
+  snapshot: DurableProcessLifecycleSnapshot,
+): DurableProcessLifecycleBase => ({
+  id: snapshot.id,
+  fireAt: snapshot.fireAt,
+  kind: snapshot.kind,
+  intentEventId: snapshot.intentEventId,
+  redriveCount: snapshot.redriveCount,
+});
+
+const durableProcessClaimState = (
+  snapshot: DurableProcessLifecycleSnapshot,
+): DurableProcessClaimState | null => {
+  if (snapshot.claimToken === null) return null;
+  if (snapshot.claimedAt === null || snapshot.claimDeadlineAt === null) return null;
+  return {
+    token: snapshot.claimToken,
+    claimedAt: snapshot.claimedAt,
+    deadlineAt: snapshot.claimDeadlineAt,
+  };
+};
+
+const durableProcessCancellationState = (
+  snapshot: DurableProcessLifecycleSnapshot,
+): DurableProcessCancellationState | null =>
+  snapshot.cancelRequestedAt === null
+    ? null
+    : {
+        requestedAt: snapshot.cancelRequestedAt,
+        reason: snapshot.cancelReason,
+      };
+
+export const durableProcessLifecycleState = (
+  snapshot: DurableProcessLifecycleSnapshot,
+): DurableProcessLifecycleResult => {
+  if (!Number.isInteger(snapshot.id) || snapshot.id < 1) {
+    return { ok: false, cause: new TypeError("durable process id malformed") };
+  }
+  if (!Number.isFinite(snapshot.fireAt)) {
+    return { ok: false, cause: new TypeError("durable process fireAt malformed") };
+  }
+  if (snapshot.kind.length === 0) {
+    return { ok: false, cause: new TypeError("durable process kind malformed") };
+  }
+  if (!Number.isInteger(snapshot.intentEventId) || snapshot.intentEventId < 1) {
+    return { ok: false, cause: new TypeError("durable process intentEventId malformed") };
+  }
+  if (!Number.isInteger(snapshot.redriveCount) || snapshot.redriveCount < 0) {
+    return { ok: false, cause: new TypeError("durable process redriveCount malformed") };
+  }
+  if (snapshot.cancelReason !== null && snapshot.cancelRequestedAt === null) {
+    return {
+      ok: false,
+      cause: new TypeError("durable process cancelReason requires cancelRequestedAt"),
+    };
+  }
+  if (snapshot.cancelledAt !== null && snapshot.completedAt === null) {
+    return {
+      ok: false,
+      cause: new TypeError("durable process cancelledAt requires completedAt"),
+    };
+  }
+  const claim = durableProcessClaimState(snapshot);
+  if (snapshot.claimToken !== null && claim === null) {
+    return {
+      ok: false,
+      cause: new TypeError("durable process claimToken requires claimedAt and claimDeadlineAt"),
+    };
+  }
+  const cancellation = durableProcessCancellationState(snapshot);
+  const base = durableProcessBase(snapshot);
+  if (snapshot.cancelledAt !== null) {
+    const completedAt = snapshot.completedAt;
+    if (completedAt === null) {
+      return {
+        ok: false,
+        cause: new TypeError("durable process cancelledAt requires completedAt"),
+      };
+    }
+    if (cancellation === null) {
+      return {
+        ok: false,
+        cause: new TypeError("durable process cancelledAt requires cancelRequestedAt"),
+      };
+    }
+    return {
+      ok: true,
+      state: {
+        ...base,
+        phase: "cancelled",
+        completedAt,
+        cancellation: { ...cancellation, cancelledAt: snapshot.cancelledAt },
+        ...(claim === null ? {} : { claim }),
+      },
+    };
+  }
+  if (snapshot.completedAt !== null) {
+    return {
+      ok: true,
+      state: {
+        ...base,
+        phase: "completed",
+        completedAt: snapshot.completedAt,
+        ...(claim === null ? {} : { claim }),
+      },
+    };
+  }
+  if (cancellation !== null) {
+    return {
+      ok: true,
+      state: {
+        ...base,
+        phase: "cancel_requested",
+        cancellation,
+        ...(claim === null ? {} : { claim }),
+      },
+    };
+  }
+  if (claim !== null) {
+    return {
+      ok: true,
+      state: {
+        ...base,
+        phase: snapshot.redriveCount > 0 ? "redriven" : "claimed",
+        claim,
+      },
+    };
+  }
+  return {
+    ok: true,
+    state: { ...base, phase: "scheduled" },
+  };
+};
+
 type ProtocolPayloadParseResult<Payload> =
   | { readonly ok: true; readonly payload: Payload }
   | { readonly ok: false; readonly cause: TypeError };

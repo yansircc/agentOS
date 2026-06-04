@@ -53,21 +53,28 @@ export interface RejectionRef {
   readonly reason?: string;
 }
 
-export interface PreClaim {
-  readonly phase: "pre";
+interface ClaimBase {
   readonly operationRef: OperationRef;
   readonly scopeRef: ScopeRef;
   readonly authorityRef: AuthorityRef;
   readonly originRef: OriginRef;
 }
 
-export interface LivedClaim extends Omit<PreClaim, "phase"> {
-  readonly phase: "lived";
-  readonly anchorRef: AnchorRef;
+export interface PreClaim extends ClaimBase {
+  readonly phase: "pre";
+  readonly anchorRef?: never;
+  readonly rejectionRef?: never;
 }
 
-export interface RejectedClaim extends Omit<PreClaim, "phase"> {
+export interface LivedClaim extends ClaimBase {
+  readonly phase: "lived";
+  readonly anchorRef: AnchorRef;
+  readonly rejectionRef?: never;
+}
+
+export interface RejectedClaim extends ClaimBase {
   readonly phase: "rejected";
+  readonly anchorRef?: never;
   readonly rejectionRef: RejectionRef;
 }
 

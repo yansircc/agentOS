@@ -38,6 +38,6 @@ test or demo harness.
 ## Verification
 
 ```sh
-cd packages/providers/workspace-env-local
+cd packages/execution-domains/workspace-env-local
 vp test run
 ```

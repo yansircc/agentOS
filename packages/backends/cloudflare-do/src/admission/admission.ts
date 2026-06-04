@@ -39,14 +39,13 @@ import { AiBinding, dispatchProvider } from "../llm";
 import { getProtocolAdapter, llmProtocolAdapters } from "../llm/protocol/protocol-adapter";
 
 import { decideTier, projectLease } from "./lease";
-import { routeFingerprint } from "./fingerprint";
+import { routeFingerprint } from "@agent-os/runtime";
 import { loadAdmissionRows } from "./payload";
 
 // Note: these symbols were historically owned by admission.ts. They now
 // live in protocol/protocol-adapter.ts (contract elevation). Re-exported
 // here so callers that import from "./admission" keep working.
 export { ADAPTER_VERSION } from "../llm/protocol/protocol-adapter";
-export type { AdapterMode } from "../llm/protocol/protocol-adapter";
 
 const reconstructOutcomeFromLease = (
   lease: CapabilityLease & { status: "unsupported" },
@@ -90,7 +89,6 @@ export const AdmissionLive = (
         spec: AttemptSpec<O>,
       ): Effect.Effect<AttemptResult<O>, SqlError | JsonStringifyError> =>
         Effect.gen(function* () {
-          const adapterMode = spec.adapterMode ?? "production";
           const now = yield* Clock.currentTimeMillis;
           const key: AttemptKey = {
             routeFingerprint: routeFingerprint(spec.route),
@@ -158,7 +156,6 @@ export const AdmissionLive = (
               { raw: rawEither.right },
               spec.schemaContract,
               spec.strategy,
-              adapterMode,
             );
             if (d.ok) {
               decoded = d.decoded;

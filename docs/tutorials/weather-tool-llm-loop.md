@@ -29,7 +29,7 @@ submit call that returns a tool-informed answer.
      description: "Get the current weather for a city.",
      args: Schema.Struct({ city: Schema.String }),
      authority: "weather.read",
-     admit: "allow",
+     admit: () => ({ ok: true }),
      execute: ({ city }) => ({
        city,
        temperatureC: 22,

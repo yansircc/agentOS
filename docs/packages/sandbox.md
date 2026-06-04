@@ -18,6 +18,6 @@ Use workspace-session when the job needs stateful session semantics.
 ## Verification
 
 ```sh
-cd packages/carriers/sandbox
+cd packages/execution-domains/sandbox
 vp test run
 ```

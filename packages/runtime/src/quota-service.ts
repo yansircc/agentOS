@@ -17,6 +17,7 @@ export class Quota extends Context.Tag("@agent-os/Quota")<
       windowMs: number,
       limit: number,
       toolName: string,
+      operationRef: string,
     ) => Effect.Effect<GrantResult, SqlError | JsonStringifyError>;
   }
 >() {}

@@ -7,11 +7,14 @@ import {
   deterministicToolInvocation,
   executeTool,
   pureToolExecution,
-  runToolByName,
+  unsafeRunToolByName,
+  validateExecutionDomainRegistry,
   validateToolRegistry,
   type Tool,
 } from "../src/tools";
 import type { LlmToolCall } from "../src/llm";
+
+const allowToolAdmitter = () => ({ ok: true as const });
 
 describe("defineTool", () => {
   it("derives the OpenAI tool parameters and args decoder from one Schema", () => {
@@ -20,7 +23,7 @@ describe("defineTool", () => {
       description: "Lookup a symbolic key",
       args: Schema.Struct({ key: Schema.String }),
       authority: "read",
-      admit: "allow",
+      admit: allowToolAdmitter,
       execution: pureToolExecution(),
       execute: ({ key }) => ({ value: key }),
     });
@@ -63,7 +66,7 @@ describe("defineTool", () => {
         description: "Lookup a symbolic key",
         args: Schema.Struct({ key: Schema.String.pipe(Schema.minLength(1)) }),
         authority: "read",
-        admit: "allow",
+        admit: allowToolAdmitter,
         execution: pureToolExecution(),
         execute: ({ key }) => ({ value: key }),
       }),
@@ -93,7 +96,7 @@ describe("defineToolFromDefinition", () => {
         return args as { readonly key: string };
       },
       authorityClass: "read",
-      admit: "allow",
+      admit: allowToolAdmitter,
       execution: pureToolExecution(),
       execute: async ({ key }) => ({ value: key }),
     });
@@ -122,7 +125,7 @@ describe("defineToolFromDefinition", () => {
           },
         },
         authorityClass: "read",
-        admit: "allow",
+        admit: allowToolAdmitter,
         execution: pureToolExecution(),
         execute: async () => null,
       }),
@@ -137,7 +140,7 @@ describe("defineToolFromDefinition", () => {
         description: "Lookup",
         args: Schema.Struct({ key: Schema.String }),
         authority: "read",
-        admit: "allow",
+        admit: allowToolAdmitter,
         execution: pureToolExecution(),
         execute: (_args, ctx) => {
           observed = ctx.signal;
@@ -157,26 +160,101 @@ describe("defineToolFromDefinition", () => {
       description: "Lookup",
       args: Schema.Struct({ key: Schema.String }),
       authority: "read",
-      admit: "allow",
+      admit: allowToolAdmitter,
       execution: pureToolExecution(),
       execute: ({ key }) => ({ value: key }),
     });
     const legacy = {
       ...tool,
-      contract: { ...tool.contract, execution: undefined },
+      execution: undefined,
     } as unknown as Tool;
 
     expect(validateToolRegistry({ lookup: legacy })).toEqual({
       ok: false,
-      issues: [
-        { kind: "unregistered_contract", toolId: "lookup" },
-        { kind: "missing_execution", toolId: "lookup" },
-      ],
+      issues: [{ kind: "missing_execution", toolId: "lookup" }],
+    });
+  });
+
+  it("keeps execution out of the claim contract", () => {
+    const tool = defineTool({
+      name: "lookup",
+      description: "Lookup",
+      args: Schema.Struct({ key: Schema.String }),
+      authority: "read",
+      admit: allowToolAdmitter,
+      execution: pureToolExecution(),
+      execute: ({ key }) => ({ value: key }),
+    });
+
+    expect(tool.execution).toEqual({ kind: "pure" });
+    expect("execution" in tool.contract).toBe(false);
+    // @ts-expect-error execution is a Tool sibling, not ToolContract data.
+    expect(tool.contract.execution).toBeUndefined();
+  });
+});
+
+describe("ExecutionDomainRegistry", () => {
+  it("allows pure tools without a domain declaration", () => {
+    const tool = defineTool({
+      name: "lookup",
+      description: "Lookup",
+      args: Schema.Struct({ key: Schema.String }),
+      authority: "read",
+      admit: allowToolAdmitter,
+      execution: pureToolExecution(),
+      execute: ({ key }) => ({ value: key }),
+    });
+
+    expect(validateExecutionDomainRegistry({ lookup: tool }, { domains: [] })).toEqual({
+      ok: true,
+    });
+  });
+
+  it("rejects missing and duplicate effectful domain declarations", () => {
+    const domain = { kind: "workspace" as const, ref: "workspace:default" };
+    const tool = defineTool({
+      name: "write_file",
+      description: "Write",
+      args: Schema.Struct({ path: Schema.String }),
+      authority: "write",
+      admit: allowToolAdmitter,
+      execution: { kind: "effectful", domain },
+      execute: ({ path }) => ({ path }),
+    });
+
+    expect(validateExecutionDomainRegistry({ write_file: tool }, { domains: [] })).toEqual({
+      ok: false,
+      issues: [{ kind: "missing_declaration", toolId: "write_file", domain }],
+    });
+
+    expect(
+      validateExecutionDomainRegistry({ write_file: tool }, { domains: [{ domain }, { domain }] }),
+    ).toEqual({
+      ok: false,
+      issues: [{ kind: "duplicate_declaration", domain }],
+    });
+  });
+
+  it("rejects host declarations without an env allowlist", () => {
+    expect(
+      validateExecutionDomainRegistry(
+        {},
+        {
+          domains: [
+            {
+              domain: { kind: "host", ref: "local" } as never,
+            },
+          ],
+        },
+      ),
+    ).toEqual({
+      ok: false,
+      issues: [{ kind: "invalid_declaration", index: 0 }],
     });
   });
 });
 
-describe("runToolByName", () => {
+describe("unsafeRunToolByName", () => {
   it.effect("runs deterministic product-side tool invocations", () =>
     Effect.gen(function* () {
       const tool = defineTool({
@@ -184,12 +262,12 @@ describe("runToolByName", () => {
         description: "Lookup a symbolic key",
         args: Schema.Struct({ key: Schema.String }),
         authority: "read",
-        admit: "allow",
+        admit: allowToolAdmitter,
         execution: pureToolExecution(),
         execute: ({ key }) => ({ value: key }),
       });
 
-      const result = yield* runToolByName(
+      const result = yield* unsafeRunToolByName(
         { lookup: tool },
         deterministicToolInvocation("lookup", { key: "abc" }),
       );
@@ -205,13 +283,13 @@ describe("runToolByName", () => {
         description: "Lookup a symbolic key",
         args: Schema.Struct({ key: Schema.String }),
         authority: "read",
-        admit: "allow",
+        admit: allowToolAdmitter,
         execution: pureToolExecution(),
         execute: ({ key }) => ({ value: key }),
       });
 
       const unknown = yield* Effect.either(
-        runToolByName({ lookup: tool }, deterministicToolInvocation("missing", {})),
+        unsafeRunToolByName({ lookup: tool }, deterministicToolInvocation("missing", {})),
       );
       expect(unknown._tag).toBe("Left");
       if (unknown._tag === "Left") {
@@ -219,7 +297,7 @@ describe("runToolByName", () => {
       }
 
       const invalid = yield* Effect.either(
-        runToolByName({ lookup: tool }, deterministicToolInvocation("lookup", { key: 1 })),
+        unsafeRunToolByName({ lookup: tool }, deterministicToolInvocation("lookup", { key: 1 })),
       );
       expect(invalid._tag).toBe("Left");
       if (invalid._tag === "Left") {
@@ -237,7 +315,7 @@ describe("runToolByName", () => {
       description: "Lookup a symbolic key",
       args: Schema.Struct({ key: Schema.String }),
       authority: "read",
-      admit: "allow",
+      admit: allowToolAdmitter,
       execution: pureToolExecution(),
       execute: ({ key }) => ({ value: key }),
     });
@@ -248,7 +326,7 @@ describe("runToolByName", () => {
     };
 
     // @ts-expect-error LLM-selected tool calls must go through submit().
-    const rejected = () => runToolByName({ lookup: tool }, llmCall);
+    const rejected = () => unsafeRunToolByName({ lookup: tool }, llmCall);
     void rejected;
 
     expect(llmCall.function.name).toBe("lookup");
