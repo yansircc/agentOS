@@ -8,10 +8,7 @@ import {
 } from "@agent-os/kernel/errors";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import { Resources, type LedgerTruthIdentity, type ResourceProjection } from "@agent-os/runtime";
-import {
-  inMemoryRuntimeEventIdentity,
-  type InMemoryBackendState,
-} from "./state";
+import { inMemoryRuntimeEventIdentity, type InMemoryBackendState } from "./state";
 import { decodeOk, finiteNumberField, recordOf, stringField, type DecodeResult } from "./decode";
 
 interface ReservationState {
@@ -150,7 +147,9 @@ const loadResourceState = (
   state: InMemoryBackendState,
   identity: LedgerTruthIdentity,
 ): Effect.Effect<ProjectedResourceState, SqlError> =>
-  Effect.sync(() => projectResources(state.eventSnapshot(inMemoryRuntimeEventIdentity(identity)))).pipe(
+  Effect.sync(() =>
+    projectResources(state.eventSnapshot(inMemoryRuntimeEventIdentity(identity))),
+  ).pipe(
     Effect.flatMap((result) =>
       result.ok ? Effect.succeed(result.value) : Effect.fail(new SqlError({ cause: result.cause })),
     ),

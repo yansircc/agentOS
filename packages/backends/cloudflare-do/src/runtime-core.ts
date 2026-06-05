@@ -34,6 +34,7 @@ import {
 } from "./stream-factory";
 import { AttachedStreamsLive } from "./attached-stream";
 import { CloudflareMaterializedProjectionsLive } from "./materialized-projections";
+import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
 
 export type CloudflareBackendCoreServices =
   | EventBus
@@ -53,6 +54,7 @@ export const makeCloudflareBackendCoreLayer = <Env>(
   ctx: DurableObjectState,
   env: Env,
   scope: string,
+  identity: BackendProtocolEventIdentity,
   handlers: Map<string, Set<EventHandler>>,
   dispatchTargets: DispatchTargetRegistry,
   appTriggers: CloudflareTriggerSource<Env> = [],
@@ -102,16 +104,16 @@ export const makeCloudflareBackendCoreLayer = <Env>(
       }).pipe(Effect.mapError((cause) => new SqlError({ cause })));
     }),
   ).pipe(Layer.provide(triggerRegistryLayer));
-  const attachedStreamLayer = AttachedStreamsLive(ctx, scope).pipe(
+  const attachedStreamLayer = AttachedStreamsLive(ctx, scope, identity).pipe(
     Layer.provide(Layer.mergeAll(eventBusLayer, streamRegistryLayer)),
   );
   const triggerDeps = Layer.mergeAll(eventBusLayer, triggerRegistryLayer, triggerLayer);
   const serviceLayer = Layer.mergeAll(
     LedgerLive(ctx),
-    SchedulerLive(ctx, scope),
-    DispatchLive(ctx, scope, dispatchTargets).pipe(Layer.provide(triggerDeps)),
-    ResourcesLive(ctx),
-    QuotaLive(ctx),
+    SchedulerLive(ctx, scope, identity),
+    DispatchLive(ctx, scope, identity, dispatchTargets).pipe(Layer.provide(triggerDeps)),
+    ResourcesLive(ctx, identity),
+    QuotaLive(ctx, identity),
   ).pipe(Layer.provide(Layer.mergeAll(eventBusLayer, triggerRegistryLayer)));
   return Layer.mergeAll(
     eventBusLayer,

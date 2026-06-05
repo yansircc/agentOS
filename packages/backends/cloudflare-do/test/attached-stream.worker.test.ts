@@ -4,8 +4,10 @@ import {
   decodeAttachedStreamMessage,
   type AttachedStreamOutboundFrame,
 } from "@agent-os/attached-stream";
+import type { BackendProtocolTruthIdentity } from "@agent-os/backend-protocol";
 import type { AgentAttachedStreamCancelSpec, AgentAttachedStreamSpec } from "../src";
 import type { AttachedStreamTestDO } from "./test-worker";
+import { testTruthIdentity } from "./_identity";
 
 interface TestEnv {
   readonly ATTACHED_STREAM_DO: DurableObjectNamespace<AttachedStreamTestDO>;
@@ -16,19 +18,21 @@ interface AttachedStreamRpc {
   readonly cancelStream: (
     spec: AgentAttachedStreamCancelSpec,
   ) => Promise<{ readonly status: string }>;
-  readonly events: () => Promise<
-    ReadonlyArray<{ readonly kind: string; readonly payload: unknown }>
-  >;
+  readonly events: (
+    identity: BackendProtocolTruthIdentity,
+  ) => Promise<ReadonlyArray<{ readonly kind: string; readonly payload: unknown }>>;
 }
 
 const testEnv = env as unknown as TestEnv;
 
 const withAttachedDO = <A>(
   scope: string,
-  f: (instance: AttachedStreamRpc) => Promise<A>,
+  f: (instance: AttachedStreamRpc, identity: BackendProtocolTruthIdentity) => Promise<A>,
 ): Promise<A> => {
   const stub = testEnv.ATTACHED_STREAM_DO.get(testEnv.ATTACHED_STREAM_DO.idFromName(scope));
-  return runInDurableObject(stub, (instance) => f(instance as unknown as AttachedStreamRpc));
+  return runInDurableObject(stub, (instance) =>
+    f(instance as unknown as AttachedStreamRpc, testTruthIdentity(scope)),
+  );
 };
 
 const nextMessage = (socket: WebSocket): Promise<AttachedStreamOutboundFrame> =>
@@ -91,7 +95,7 @@ const readSseFramesFromReader = async (
 
 describe("attached stream Cloudflare DO surface", () => {
   it("runs a bidi WebSocket attached stream and commits terminal facts", async () => {
-    await withAttachedDO("attached-ws", async (stub) => {
+    await withAttachedDO("attached-ws", async (stub, identity) => {
       const response = await stub.attachStream({
         kind: "test.attached_echo",
         payload: { test: true },
@@ -120,14 +124,14 @@ describe("attached stream Cloudflare DO surface", () => {
         kind: "completed",
         terminal: { echoed: "hello" },
       });
-      const events = await stub.events();
+      const events = await stub.events(identity);
       expect(events.map((event) => event.kind)).toEqual(["test.attached_echo.completed"]);
       socket.close();
     });
   });
 
   it("runs an output-only SSE attached stream", async () => {
-    await withAttachedDO("attached-sse", async (stub) => {
+    await withAttachedDO("attached-sse", async (stub, identity) => {
       const response = await stub.attachStream({
         kind: "test.attached_output",
         payload: { label: "one" },
@@ -135,13 +139,13 @@ describe("attached stream Cloudflare DO surface", () => {
       expect(response.headers.get("content-type")).toContain("text/event-stream");
       const frames = await readSseFrames(response, 3);
       expect(frames.map((frame) => frame.kind)).toEqual(["opened", "progress", "completed"]);
-      const events = await stub.events();
+      const events = await stub.events(identity);
       expect(events.map((event) => event.kind)).toEqual(["test.attached_output.completed"]);
     });
   });
 
   it("cancels output-only streams explicitly; reader cancel only detaches", async () => {
-    await withAttachedDO("attached-cancel", async (stub) => {
+    await withAttachedDO("attached-cancel", async (stub, identity) => {
       const response = await stub.attachStream({
         kind: "test.attached_cancellable",
         payload: {},
@@ -156,12 +160,12 @@ describe("attached stream Cloudflare DO surface", () => {
       });
       expect(cancel).toEqual({ status: "requested" });
       await scheduler.wait(10);
-      const events = await stub.events();
+      const events = await stub.events(identity);
       expect(events.map((event) => event.kind)).toEqual(["test.attached_cancellable.cancelled"]);
       await reader.cancel().catch(() => undefined);
     });
 
-    await withAttachedDO("attached-detach", async (stub) => {
+    await withAttachedDO("attached-detach", async (stub, identity) => {
       const response = await stub.attachStream({
         kind: "test.attached_cancellable",
         payload: {},
@@ -171,7 +175,7 @@ describe("attached stream Cloudflare DO surface", () => {
       await reader.read();
       await reader.cancel();
       await scheduler.wait(10);
-      const events = await stub.events();
+      const events = await stub.events(identity);
       expect(events).toEqual([]);
     });
   });

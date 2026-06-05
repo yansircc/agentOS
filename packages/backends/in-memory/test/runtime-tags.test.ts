@@ -292,11 +292,7 @@ describe("in-memory runtime backend", () => {
     Effect.gen(function* () {
       const state = createInMemoryBackendState();
       const runtime = ManagedRuntime.make(
-        InMemoryTriggerPumpLive(
-          state,
-          truthIdentity("empty-registry"),
-          "empty-registry",
-        ).pipe(
+        InMemoryTriggerPumpLive(state, truthIdentity("empty-registry"), "empty-registry").pipe(
           Layer.provide(Layer.succeed(DurableTriggerRegistry, new Map())),
         ),
       );
@@ -308,12 +304,7 @@ describe("in-memory runtime backend", () => {
           payload: { ok: true },
         },
       ]);
-      state.addDueWork(
-        runtimeEventIdentity("empty-registry"),
-        "unknown.trigger",
-        event!.id,
-        10,
-      );
+      state.addDueWork(runtimeEventIdentity("empty-registry"), "unknown.trigger", event!.id, 10);
       const triggerPump = yield* Effect.promise(() => runtime.runPromise(TriggerPump));
 
       const exit = yield* Effect.exit(triggerPump.drainDue(10));
@@ -468,10 +459,14 @@ describe("in-memory runtime backend", () => {
       const quota = await runtime.runPromise(Quota);
       const ledger = await runtime.runPromise(Ledger);
       await expect(
-        runtime.runPromise(quota.tryGrant(truthIdentity("quota-scope"), "tool-a", 1, 60_000, 1, "tool-a", "op-1")),
+        runtime.runPromise(
+          quota.tryGrant(truthIdentity("quota-scope"), "tool-a", 1, 60_000, 1, "tool-a", "op-1"),
+        ),
       ).resolves.toMatchObject({ granted: true, consumed: 0, limit: 1 });
       await expect(
-        runtime.runPromise(quota.tryGrant(truthIdentity("quota-scope"), "tool-a", 1, 60_000, 1, "tool-a", "op-2")),
+        runtime.runPromise(
+          quota.tryGrant(truthIdentity("quota-scope"), "tool-a", 1, 60_000, 1, "tool-a", "op-2"),
+        ),
       ).resolves.toMatchObject({ granted: false, consumed: 1, limit: 1 });
       const events = await runtime.runPromise(ledger.events(truthIdentity("quota-scope")));
       expect(events.map((event) => event.kind)).toEqual(["quota.consumed", "quota.rate_limited"]);
@@ -486,7 +481,15 @@ describe("in-memory runtime backend", () => {
         ]),
       );
       const exit = await runtime.runPromiseExit(
-        quota.tryGrant(truthIdentity("quota-scope"), "tool-a", 1, Number.POSITIVE_INFINITY, 10, "tool-a", "op-3"),
+        quota.tryGrant(
+          truthIdentity("quota-scope"),
+          "tool-a",
+          1,
+          Number.POSITIVE_INFINITY,
+          10,
+          "tool-a",
+          "op-3",
+        ),
       );
       expect(Exit.isFailure(exit)).toBe(true);
       if (Exit.isFailure(exit)) {

@@ -14,7 +14,7 @@ import type {} from "@effect/vitest";
 import { Ledger } from "../../src/ledger";
 import { Admission, makeAdmissionSchemaSpec, routeFingerprint } from "../../src/admission";
 import { finalTextResp, stubLlmTransport } from "../_stub-ai";
-import { SCHEMA, makeRuntime, submitStructuredResp } from "./_helpers";
+import { SCHEMA, makeRuntime, submitStructuredResp, testIdentity } from "./_helpers";
 
 interface TestEnv {
   readonly AGENT_DO: DurableObjectNamespace;
@@ -38,7 +38,7 @@ describe("admission — IO contract: attemptStructured", () => {
       const llm = stubLlmTransport([
         submitStructuredResp(JSON.stringify({ summary: "ok", extra: "should-be-rejected" }), "c1"),
       ]);
-      const runtime = makeRuntime(state, llm);
+      const runtime = makeRuntime(state, llm, scope);
 
       const schemaSpec = await runtime.runPromise(
         makeAdmissionSchemaSpec(Schema.Struct({ summary: Schema.String })),
@@ -68,7 +68,7 @@ describe("admission — IO contract: attemptStructured", () => {
       const events = await runtime.runPromise(
         Effect.gen(function* () {
           const ledger = yield* Ledger;
-          return yield* ledger.events(scope);
+          return yield* ledger.events(testIdentity(scope));
         }),
       );
       expect(events.filter((event) => event.kind === "structured.done")).toHaveLength(0);
@@ -87,7 +87,7 @@ describe("admission — IO contract: attemptStructured", () => {
         submitStructuredResp('{"summary":"first"}', "c1"),
         submitStructuredResp('{"summary":"second"}', "c2"),
       ]);
-      const runtime = makeRuntime(state, llm);
+      const runtime = makeRuntime(state, llm, scope);
       const schemaSpec = await runtime.runPromise(makeAdmissionSchemaSpec(SCHEMA));
 
       const attempt = (userText: string) =>
@@ -116,7 +116,7 @@ describe("admission — IO contract: attemptStructured", () => {
       const events = await runtime.runPromise(
         Effect.gen(function* () {
           const ledger = yield* Ledger;
-          return yield* ledger.events(scope);
+          return yield* ledger.events(testIdentity(scope));
         }),
       );
       const evidence = events.filter((event) => event.kind === "llm.structured.evidence");
@@ -144,7 +144,7 @@ describe("admission — IO contract: attemptStructured", () => {
 
     await runInDurableObject(stub, async (_inst, state) => {
       const llm = stubLlmTransport([finalTextResp("not a structured tool response")]);
-      const runtime = makeRuntime(state, llm);
+      const runtime = makeRuntime(state, llm, scope);
       const schemaSpec = await runtime.runPromise(makeAdmissionSchemaSpec(SCHEMA));
 
       const attempt = (userText: string) =>
@@ -189,7 +189,7 @@ describe("admission — IO contract: attemptStructured", () => {
         finalTextResp("not a structured tool response"),
         submitStructuredResp('{"summary":"post-barrier"}', "c2"),
       ]);
-      const runtime = makeRuntime(state, llm);
+      const runtime = makeRuntime(state, llm, scope);
       const schemaSpec = await runtime.runPromise(makeAdmissionSchemaSpec(SCHEMA));
 
       await runtime.runPromise(
@@ -251,16 +251,18 @@ describe("admission — malformed payload becomes SqlError", () => {
     const stub = testEnv.AGENT_DO.get(id);
 
     await runInDurableObject(stub, async (_inst, state) => {
-      const runtime = makeRuntime(state, stubLlmTransport([]));
+      const runtime = makeRuntime(state, stubLlmTransport([]), scope);
       const schemaSpec = await runtime.runPromise(makeAdmissionSchemaSpec(SCHEMA));
 
       await runtime.runPromise(
         Effect.gen(function* () {
           const ledger = yield* Ledger;
+          const identity = testIdentity(scope);
           yield* ledger.commit([
             {
               kind: "llm.structured.evidence",
-              scope,
+              scopeRef: identity.scopeRef,
+              effectAuthorityRef: identity.effectAuthorityRef,
               payload: {
                 stimulusKind: "live",
                 outcome: { class: "Supported", tokensUsed: 10 },
@@ -295,16 +297,18 @@ describe("admission — malformed payload becomes SqlError", () => {
     const stub = testEnv.AGENT_DO.get(id);
 
     await runInDurableObject(stub, async (_inst, state) => {
-      const runtime = makeRuntime(state, stubLlmTransport([]));
+      const runtime = makeRuntime(state, stubLlmTransport([]), scope);
       const schemaSpec = await runtime.runPromise(makeAdmissionSchemaSpec(SCHEMA));
 
       await runtime.runPromise(
         Effect.gen(function* () {
           const ledger = yield* Ledger;
+          const identity = testIdentity(scope);
           yield* ledger.commit([
             {
               kind: "llm.structured.invalidate",
-              scope,
+              scopeRef: identity.scopeRef,
+              effectAuthorityRef: identity.effectAuthorityRef,
               payload: { key: "not-an-object", reason: "test", by: "test" },
             },
           ]);

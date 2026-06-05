@@ -20,13 +20,18 @@ import { EventBus } from "../ledger";
 import { sqlText } from "../storage/sql-row";
 import { decodeConsumedPayloadSync } from "./payload";
 import { commitLedgerTransaction } from "../ledger/commit";
+import { eventIdentity, eventIdentityColumns } from "../ledger/identity";
+import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
 
 /** Owned schema for events.kind = 'quota.consumed' payload. We are the
  *  sole writer (consumedPayload below), so any shape mismatch read back is
  *  infra corruption — let Schema.decodeUnknownSync throw, transactionSync
  *  rolls back, and Effect.try wraps it as SqlError. This is the same
  *  failure path as JSON.parse failure, by construction. */
-export const QuotaLive = (ctx: DurableObjectState): Layer.Layer<Quota, never, EventBus> =>
+export const QuotaLive = (
+  ctx: DurableObjectState,
+  ownerIdentity: BackendProtocolEventIdentity,
+): Layer.Layer<Quota, never, EventBus> =>
   Layer.scoped(
     Quota,
     Effect.gen(function* () {
@@ -34,10 +39,13 @@ export const QuotaLive = (ctx: DurableObjectState): Layer.Layer<Quota, never, Ev
       const bus = yield* EventBus;
 
       return {
-        tryGrant: (scope, key, amount, windowMs, limit, toolName, operationRef) =>
+        tryGrant: (identity, key, amount, windowMs, limit, toolName, operationRef) =>
           Effect.gen(function* () {
             const now = yield* Clock.currentTimeMillis;
             const windowStart = windowMs === Number.POSITIVE_INFINITY ? 0 : now - windowMs;
+            const columns = eventIdentityColumns(
+              eventIdentity(identity, ownerIdentity.factOwnerRef),
+            );
 
             const consumedPayload = {
               key,
@@ -46,66 +54,73 @@ export const QuotaLive = (ctx: DurableObjectState): Layer.Layer<Quota, never, Ev
               operationRef,
             };
 
-            const txResult = yield* commitLedgerTransaction(ctx, bus, (tx) => {
-              const rows = sql
-                .exec(
-                  "SELECT payload FROM events WHERE scope = ? AND kind = 'quota.consumed' AND ts >= ?",
-                  scope,
-                  windowStart,
-                )
-                .toArray();
-              let consumed = 0;
-              for (const r of rows) {
-                // Decode through owned schema. JSON.parse failure OR
-                // shape mismatch both throw → tx rolls back → Effect.try
-                // wraps as SqlError. Single owned failure path; no
-                // silent skip, no NaN propagation, no undercount.
-                const p = decodeConsumedPayloadSync(
-                  JSON.parse(sqlText(r.payload, "events.payload")),
-                );
-                if (p.key === key && p.operationRef === operationRef) {
+            const txResult = yield* commitLedgerTransaction(
+              ctx,
+              bus,
+              { factOwnerRef: ownerIdentity.factOwnerRef },
+              (tx) => {
+                const rows = sql
+                  .exec(
+                    "SELECT payload FROM events WHERE event_identity_key = ? AND kind = 'quota.consumed' AND ts >= ?",
+                    columns.event_identity_key,
+                    windowStart,
+                  )
+                  .toArray();
+                let consumed = 0;
+                for (const r of rows) {
+                  // Decode through owned schema. JSON.parse failure OR
+                  // shape mismatch both throw → tx rolls back → Effect.try
+                  // wraps as SqlError. Single owned failure path; no
+                  // silent skip, no NaN propagation, no undercount.
+                  const p = decodeConsumedPayloadSync(
+                    JSON.parse(sqlText(r.payload, "events.payload")),
+                  );
+                  if (p.key === key && p.operationRef === operationRef) {
+                    return {
+                      granted: true as const,
+                      consumed,
+                    };
+                  }
+                  if (p.key === key) {
+                    consumed += p.amount;
+                  }
+                }
+
+                if (consumed + amount > limit) {
+                  const rateLimitedPayload = {
+                    key,
+                    attempted: amount,
+                    consumed,
+                    limit,
+                    windowMs,
+                    toolName,
+                  };
+                  tx.append({
+                    ts: now,
+                    kind: "quota.rate_limited",
+                    scopeRef: identity.scopeRef,
+                    effectAuthorityRef: identity.effectAuthorityRef,
+                    payload: rateLimitedPayload,
+                  });
                   return {
-                    granted: true as const,
+                    granted: false as const,
                     consumed,
                   };
                 }
-                if (p.key === key) {
-                  consumed += p.amount;
-                }
-              }
 
-              if (consumed + amount > limit) {
-                const rateLimitedPayload = {
-                  key,
-                  attempted: amount,
-                  consumed,
-                  limit,
-                  windowMs,
-                  toolName,
-                };
                 tx.append({
                   ts: now,
-                  kind: "quota.rate_limited",
-                  scope,
-                  payload: rateLimitedPayload,
+                  kind: "quota.consumed",
+                  scopeRef: identity.scopeRef,
+                  effectAuthorityRef: identity.effectAuthorityRef,
+                  payload: consumedPayload,
                 });
                 return {
-                  granted: false as const,
+                  granted: true as const,
                   consumed,
                 };
-              }
-
-              tx.append({
-                ts: now,
-                kind: "quota.consumed",
-                scope,
-                payload: consumedPayload,
-              });
-              return {
-                granted: true as const,
-                consumed,
-              };
-            });
+              },
+            );
 
             return {
               granted: txResult.value.granted,

@@ -82,9 +82,7 @@ export interface RuntimeBackendContractDriver {
     kind: string,
     payload: unknown,
   ) => Promise<LedgerEvent>;
-  readonly events: (
-    identity: BackendProtocolEventIdentity,
-  ) => Promise<ReadonlyArray<LedgerEvent>>;
+  readonly events: (identity: BackendProtocolEventIdentity) => Promise<ReadonlyArray<LedgerEvent>>;
   readonly schedule: (
     identity: BackendProtocolEventIdentity,
     at: number,
@@ -244,16 +242,22 @@ export const runRuntimeBackendContractSuite = (
           expect(yield* promise(() => driver.nextDueAt(contractIdentity("schedule-scope")))).toBe(
             10,
           );
-          expect(yield* promise(() => driver.fireDue(contractIdentity("schedule-scope"), 9))).toEqual({
+          expect(
+            yield* promise(() => driver.fireDue(contractIdentity("schedule-scope"), 9)),
+          ).toEqual({
             fired: 0,
           });
-          expect(kindsOf(yield* promise(() => driver.events(contractIdentity("schedule-scope"))))).toEqual(
-            [SCHEDULED_REQUESTED],
-          );
-          expect(yield* promise(() => driver.fireDue(contractIdentity("schedule-scope"), 10))).toEqual({
+          expect(
+            kindsOf(yield* promise(() => driver.events(contractIdentity("schedule-scope")))),
+          ).toEqual([SCHEDULED_REQUESTED]);
+          expect(
+            yield* promise(() => driver.fireDue(contractIdentity("schedule-scope"), 10)),
+          ).toEqual({
             fired: 1,
           });
-          expect(yield* promise(() => driver.fireDue(contractIdentity("schedule-scope"), 10))).toEqual({
+          expect(
+            yield* promise(() => driver.fireDue(contractIdentity("schedule-scope"), 10)),
+          ).toEqual({
             fired: 0,
           });
 
@@ -296,21 +300,25 @@ export const runRuntimeBackendContractSuite = (
             }),
           );
           expect(yield* promise(() => driver.nextDueAt(contractIdentity("combo-scope")))).toBe(10);
-          expect(yield* promise(() => driver.fireDue(contractIdentity("combo-scope"), 10))).toEqual({
-            fired: 1,
-          });
+          expect(yield* promise(() => driver.fireDue(contractIdentity("combo-scope"), 10))).toEqual(
+            {
+              fired: 1,
+            },
+          );
           expect(yield* promise(() => driver.nextDueAt(contractIdentity("combo-scope")))).toBe(
             retryAt,
           );
           expect(
-            yield* promise(() => driver.drainDispatchDue(contractIdentity("combo-scope"), retryAt!)),
+            yield* promise(() =>
+              driver.drainDispatchDue(contractIdentity("combo-scope"), retryAt!),
+            ),
           ).toEqual({
             delivered: 1,
             failed: 0,
           });
-          expect(yield* promise(() => driver.pendingDueCount(contractIdentity("combo-scope")))).toBe(
-            0,
-          );
+          expect(
+            yield* promise(() => driver.pendingDueCount(contractIdentity("combo-scope"))),
+          ).toBe(0);
         }),
       ),
     );
@@ -352,8 +360,8 @@ export const runRuntimeBackendContractSuite = (
     );
 
     it.effect("rejects malformed trace context before dispatch propagation", () =>
-        withDriver((driver) =>
-          Effect.gen(function* () {
+      withDriver((driver) =>
+        Effect.gen(function* () {
           yield* promise(() => driver.registerDispatchReceiver(contractIdentity("receiver")));
           yield* expectRejectTagEffect(
             driver.dispatchToScope(contractIdentity("sender"), {
@@ -515,10 +523,12 @@ export const runRuntimeBackendContractSuite = (
             expect(delivered[0]?.claim?.anchorRef).toMatchObject({
               anchorKind: "external_receipt",
             });
-            expect(yield* promise(() => driver.events(contractIdentity(target.targetScope)))).toEqual([]);
-            expect(yield* promise(() => driver.pendingDueCount(contractIdentity(sourceScope)))).toBe(
-              0,
-            );
+            expect(
+              yield* promise(() => driver.events(contractIdentity(target.targetScope))),
+            ).toEqual([]);
+            expect(
+              yield* promise(() => driver.pendingDueCount(contractIdentity(sourceScope))),
+            ).toBe(0);
             expect(attempts).toBe(2);
           }
         }),
@@ -659,7 +669,8 @@ export const runRuntimeBackendContractSuite = (
                 entry.phase === "sink" &&
                 entry.eventId === event.id &&
                 entry.kind === "app.sink" &&
-                entry.identityKey === backendProtocolTruthIdentityKey(contractIdentity("sink-scope")) &&
+                entry.identityKey ===
+                  backendProtocolTruthIdentityKey(contractIdentity("sink-scope")) &&
                 entry.message.includes("sink failed after commit"),
             ),
           ).toBe(true);
@@ -706,9 +717,7 @@ export const runRuntimeBackendContractSuite = (
             }),
           );
           expect(second.reservationId).toBe(first.reservationId);
-          expect(
-            yield* promise(() => driver.projectResource(creditProjection)),
-          ).toEqual({
+          expect(yield* promise(() => driver.projectResource(creditProjection))).toEqual({
             available: 3,
             reserved: 2,
             consumed: 0,
@@ -745,28 +754,12 @@ export const runRuntimeBackendContractSuite = (
 
           expect(
             yield* promise(() =>
-              driver.quotaTryGrant(
-                quotaIdentity,
-                toolAProjection,
-                1,
-                60_000,
-                1,
-                "tool-a",
-                "op-1",
-              ),
+              driver.quotaTryGrant(quotaIdentity, toolAProjection, 1, 60_000, 1, "tool-a", "op-1"),
             ),
           ).toMatchObject({ granted: true, consumed: 0, limit: 1 });
           expect(
             yield* promise(() =>
-              driver.quotaTryGrant(
-                quotaIdentity,
-                toolAProjection,
-                1,
-                60_000,
-                1,
-                "tool-a",
-                "op-2",
-              ),
+              driver.quotaTryGrant(quotaIdentity, toolAProjection, 1, 60_000, 1, "tool-a", "op-2"),
             ),
           ).toMatchObject({ granted: false, consumed: 1, limit: 1 });
           yield* promise(() =>

@@ -318,7 +318,10 @@ export const validateBoundaryContract = (value: unknown): BoundaryContractValida
     value.effectAuthorityContracts.every(isEffectAuthorityContract) &&
     Array.isArray(value.materialRequirements) &&
     value.materialRequirements.every(isMaterialRequirement) &&
-    !materialRequirementsAreBoundToAuthority(value.effectAuthorityContracts, value.materialRequirements)
+    !materialRequirementsAreBoundToAuthority(
+      value.effectAuthorityContracts,
+      value.materialRequirements,
+    )
   ) {
     issues.push("material_authority_unbound");
   }

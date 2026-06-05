@@ -2,6 +2,8 @@ import { Effect, Layer } from "effect";
 import { SqlError } from "@agent-os/kernel/errors";
 import {
   backendProtocolEventIdentityKey,
+  isBackendProtocolEventIdentity,
+  type BackendProtocolEventIdentity,
   type BackendProtocolTruthIdentity,
 } from "@agent-os/backend-protocol";
 import { MaterializedProjections } from "@agent-os/runtime";
@@ -12,27 +14,36 @@ export const InMemoryMaterializedProjectionsLive = (
   identity: BackendProtocolTruthIdentity,
 ): Layer.Layer<MaterializedProjections> => {
   const eventIdentity = inMemoryRuntimeEventIdentity(identity);
-  const scopeKey = backendProtocolEventIdentityKey(eventIdentity);
-  const requireRuntimeProjectionScope = (scope: string): Effect.Effect<void, SqlError> =>
-    scope === scopeKey
+  const eventIdentityKey = backendProtocolEventIdentityKey(eventIdentity);
+  const requireRuntimeProjectionIdentity = (
+    spec: Pick<BackendProtocolEventIdentity, "scopeRef" | "effectAuthorityRef" | "factOwnerRef">,
+  ): Effect.Effect<void, SqlError> => {
+    const specIdentity = {
+      scopeRef: spec.scopeRef,
+      effectAuthorityRef: spec.effectAuthorityRef,
+      factOwnerRef: spec.factOwnerRef,
+    };
+    return isBackendProtocolEventIdentity(specIdentity) &&
+      backendProtocolEventIdentityKey(specIdentity) === eventIdentityKey
       ? Effect.void
       : Effect.fail(new SqlError({ cause: "materialized projection identity malformed" }));
+  };
 
   return Layer.succeed(MaterializedProjections, {
     get: (spec) =>
-      requireRuntimeProjectionScope(spec.scope).pipe(
+      requireRuntimeProjectionIdentity(spec).pipe(
         Effect.andThen(() => state.projectionGet({ ...spec, eventIdentity })),
       ),
     list: (spec) =>
-      requireRuntimeProjectionScope(spec.scope).pipe(
+      requireRuntimeProjectionIdentity(spec).pipe(
         Effect.andThen(() => state.projectionList({ ...spec, eventIdentity })),
       ),
     status: (spec) =>
-      requireRuntimeProjectionScope(spec.scope).pipe(
+      requireRuntimeProjectionIdentity(spec).pipe(
         Effect.andThen(() => state.projectionStatus({ ...spec, eventIdentity })),
       ),
     rebuild: (spec) =>
-      requireRuntimeProjectionScope(spec.scope).pipe(
+      requireRuntimeProjectionIdentity(spec).pipe(
         Effect.andThen(() => state.projectionRebuild({ ...spec, eventIdentity })),
       ),
   });

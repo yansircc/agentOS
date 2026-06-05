@@ -67,6 +67,7 @@ title: "@agent-os/runtime Public API Intent"
 - `.:InvalidateSpec`
 - `.:Ledger`
 - `.:LedgerCommitEventSpec`
+- `.:LedgerTruthIdentity`
 - `.:LiveInput`
 - `.:LlmCallOptions`
 - `.:LlmRoute`
@@ -74,6 +75,7 @@ title: "@agent-os/runtime Public API Intent"
 - `.:LlmUsage`
 - `.:AnyMaterializedProjectionDefinition`
 - `.:MaterializedProjectionDefinition`
+- `.:MaterializedProjectionEventIdentity`
 - `.:MaterializedProjectionGetSpec`
 - `.:MaterializedProjectionListSpec`
 - `.:MaterializedProjectionRebuildResult`
@@ -113,6 +115,7 @@ title: "@agent-os/runtime Public API Intent"
 - `.:ProjectionStatus`
 - `.:ResourceProjection`
 - `.:Resources`
+- `.:RUNTIME_FACT_OWNER`
 - `.:RUN_BEARING_KINDS`
 - `.:Scheduler`
 - `.:ScheduledEventIntentPayload`

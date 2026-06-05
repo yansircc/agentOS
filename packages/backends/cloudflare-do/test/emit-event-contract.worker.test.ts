@@ -24,6 +24,8 @@ import { env } from "cloudflare:workers";
 
 import type { LedgerEventRpc } from "@agent-os/kernel/types";
 import type { EmitTestDO, ExtensionTestDO } from "./test-worker";
+import { testTruthIdentity } from "./_identity";
+import { sqlText } from "../src/storage/sql-row";
 
 interface TestEnv {
   readonly EMIT_DO: DurableObjectNamespace<EmitTestDO>;
@@ -47,7 +49,7 @@ describe("emitEvent — substrate now-write primitive", () => {
     // awaited before Ledger.log resolves). After the await above, both
     // the source row and the handler-emitted followup MUST be in the
     // ledger already.
-    const events: LedgerEventRpc[] = await stub.events();
+    const events: LedgerEventRpc[] = await stub.events(testTruthIdentity(scope));
 
     const answers = events.filter((e) => e.kind === "interview.answer");
     const followups = events.filter((e) => e.kind === "interview.followup");
@@ -98,7 +100,7 @@ describe("emitEvent — substrate now-write primitive", () => {
     // After all claimed attempts, ledger MUST be empty — emitEvent
     // rejected before any row was written. (Read via stub to validate the
     // ledger is also empty from the outside, not just inside.)
-    const events: LedgerEventRpc[] = await stub.events();
+    const events: LedgerEventRpc[] = await stub.events(testTruthIdentity(scope));
     expect(events).toHaveLength(0);
   });
 
@@ -108,7 +110,9 @@ describe("emitEvent — substrate now-write primitive", () => {
       event: "image.job.requested",
       data: { appOwned: true },
     });
-    await expect(defaultStub.events()).resolves.toHaveLength(1);
+    await expect(
+      defaultStub.events(testTruthIdentity("emit-image-app-fact")),
+    ).resolves.toHaveLength(1);
 
     const extensionStub = testEnv.EXTENSION_DO.get(
       testEnv.EXTENSION_DO.idFromName("emit-image-extension-owned"),
@@ -126,7 +130,9 @@ describe("emitEvent — substrate now-write primitive", () => {
       expect(caught?._tag).toBe("agent_os.capability_rejected");
       expect(caught?.event).toBe("image.job.requested");
     });
-    await expect(extensionStub.events()).resolves.toHaveLength(0);
+    await expect(
+      extensionStub.events(testTruthIdentity("emit-image-extension-owned")),
+    ).resolves.toHaveLength(0);
   });
 
   it("rejects unnamed DOs (newUniqueId) with ScopeMissingError", async () => {
@@ -154,19 +160,21 @@ describe("emitEvent — substrate now-write primitive", () => {
     await stubA.emitEvent({ event: "interview.answer", data: { x: "A" } });
     await stubB.emitEvent({ event: "interview.answer", data: { x: "B" } });
 
-    const eventsA: LedgerEventRpc[] = await stubA.events();
-    const eventsB: LedgerEventRpc[] = await stubB.events();
+    const eventsA: LedgerEventRpc[] = await stubA.events(testTruthIdentity(scopeA));
+    const eventsB: LedgerEventRpc[] = await stubB.events(testTruthIdentity(scopeB));
 
     // Each scope sees its own answer + the handler-chained followup.
-    expect(eventsA.every((e) => e.scope === scopeA)).toBe(true);
-    expect(eventsB.every((e) => e.scope === scopeB)).toBe(true);
+    expect(eventsA.every((e) => e.scopeRef.scopeId === scopeA)).toBe(true);
+    expect(eventsB.every((e) => e.scopeRef.scopeId === scopeB)).toBe(true);
 
     // Inner DO instances did NOT cross-contaminate via the bus.
     // Use runInDurableObject to inspect raw storage directly — the DOs
     // are distinct SQLite databases by construction.
     await runInDurableObject(stubA, async (_inst, state) => {
-      const rows = state.storage.sql.exec("SELECT scope FROM events").toArray();
-      expect(rows.every((r) => r.scope === scopeA)).toBe(true);
+      const rows = state.storage.sql.exec("SELECT scope_ref FROM events").toArray();
+      expect(
+        rows.every((r) => JSON.parse(sqlText(r.scope_ref, "events.scope_ref")).scopeId === scopeA),
+      ).toBe(true);
     });
   });
 });

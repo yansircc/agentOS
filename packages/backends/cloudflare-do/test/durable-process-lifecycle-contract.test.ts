@@ -3,9 +3,11 @@ import { describe } from "@effect/vitest";
 import {
   DurableTriggerRegistry,
   Ledger,
+  RUNTIME_FACT_OWNER,
   TriggerPump,
   type AnyDurableTrigger,
 } from "@agent-os/runtime";
+import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
 import { commitDurableTriggerIntent, selectDurableProcessLifecycle } from "../src/due-work";
 import { EventBus } from "../src/ledger";
 import { makeCloudflareBackendCoreLayer } from "../src/runtime-core";
@@ -17,10 +19,15 @@ import {
 
 const makeDriver = (triggers: ReadonlyArray<AnyDurableTrigger>): DurableProcessLifecycleDriver => {
   const scope = "durable-process-lifecycle";
+  const identity: BackendProtocolEventIdentity = {
+    scopeRef: { kind: "conversation", scopeId: scope },
+    effectAuthorityRef: { authorityClass: "effect", authorityId: scope },
+    factOwnerRef: RUNTIME_FACT_OWNER,
+  };
   const state = makeInMemoryDurableObjectState();
   const sql = state.storage.sql;
   const runtime = ManagedRuntime.make(
-    makeCloudflareBackendCoreLayer(state, {}, scope, new Map(), {}, triggers),
+    makeCloudflareBackendCoreLayer(state, {}, scope, identity, new Map(), {}, triggers),
   );
 
   return {
@@ -34,13 +41,22 @@ const makeDriver = (triggers: ReadonlyArray<AnyDurableTrigger>): DurableProcessL
       );
       const bus = await runtime.runPromise(EventBus);
       const event = await runtime.runPromise(
-        commitDurableTriggerIntent(state, sql, bus, fireAt, registry, trigger.kind, (tx, trigger) =>
-          tx.append({
-            ts: fireAt,
-            kind: trigger.intentEventKind,
-            scope,
-            payload,
-          }),
+        commitDurableTriggerIntent(
+          state,
+          sql,
+          bus,
+          identity,
+          fireAt,
+          registry,
+          trigger.kind,
+          (tx, trigger) =>
+            tx.append({
+              ts: fireAt,
+              kind: trigger.intentEventKind,
+              scopeRef: identity.scopeRef,
+              effectAuthorityRef: identity.effectAuthorityRef,
+              payload,
+            }),
         ),
       );
       return { id: event.id };

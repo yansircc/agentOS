@@ -45,10 +45,7 @@ import {
   type BackendProtocolTruthIdentity,
   type DispatchRequestedPayload as ProtocolDispatchRequestedPayload,
 } from "@agent-os/backend-protocol";
-import {
-  inMemoryRuntimeEventIdentity,
-  type InMemoryBackendState,
-} from "./state";
+import { inMemoryRuntimeEventIdentity, type InMemoryBackendState } from "./state";
 import { decodeOk, finiteNumberField, recordOf, type DecodeResult } from "./decode";
 import type { DispatchRequestedPayload, InMemoryDispatchTargetRegistry } from "./dispatch-types";
 

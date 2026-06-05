@@ -261,8 +261,20 @@ const eventIdentity = (scopeId: string) => ({
 const ROWS: LedgerEventRpc[] = [
   { id: 1, ts: 1000, kind: "agent.run.started", ...eventIdentity(SCOPE), payload: { intent: "x" } },
   { id: 2, ts: 1010, kind: "chat.ingested", ...eventIdentity(SCOPE), payload: { runId: 1 } },
-  { id: 3, ts: 1100, kind: "llm.response", ...eventIdentity(SCOPE), payload: { turn: { id: 1, index: 0 } } },
-  { id: 4, ts: 1200, kind: "tool.executed", ...eventIdentity(SCOPE), payload: { runId: 1, name: "lookup" } },
+  {
+    id: 3,
+    ts: 1100,
+    kind: "llm.response",
+    ...eventIdentity(SCOPE),
+    payload: { turn: { id: 1, index: 0 } },
+  },
+  {
+    id: 4,
+    ts: 1200,
+    kind: "tool.executed",
+    ...eventIdentity(SCOPE),
+    payload: { runId: 1, name: "lookup" },
+  },
   {
     id: 5,
     ts: 1300,

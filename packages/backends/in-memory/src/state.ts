@@ -193,7 +193,8 @@ export const inMemoryConversationTruthIdentity = (
 
 export const inMemoryConversationRuntimeIdentity = (
   scopeId: string,
-): BackendProtocolEventIdentity => inMemoryRuntimeEventIdentity(inMemoryConversationTruthIdentity(scopeId));
+): BackendProtocolEventIdentity =>
+  inMemoryRuntimeEventIdentity(inMemoryConversationTruthIdentity(scopeId));
 
 const eventIdentity = (event: LedgerEvent): BackendProtocolEventIdentity => ({
   scopeRef: event.scopeRef,
@@ -206,14 +207,9 @@ const eventTruthIdentity = (event: LedgerEvent): BackendProtocolTruthIdentity =>
   effectAuthorityRef: event.effectAuthorityRef,
 });
 
-const truthMatches = (event: LedgerEvent, identity: BackendProtocolTruthIdentity): boolean =>
-  backendProtocolTruthIdentityKey(eventTruthIdentity(event)) === backendProtocolTruthIdentityKey(identity);
-
 const eventMatches = (event: LedgerEvent, identity: BackendProtocolEventIdentity): boolean =>
-  backendProtocolEventIdentityKey(eventIdentity(event)) === backendProtocolEventIdentityKey(identity);
-
-const truthDisplayScope = (identity: BackendProtocolTruthIdentity): string =>
-  backendProtocolTruthIdentityKey(identity);
+  backendProtocolEventIdentityKey(eventIdentity(event)) ===
+  backendProtocolEventIdentityKey(identity);
 
 const eventDisplayScope = (identity: BackendProtocolEventIdentity): string =>
   backendProtocolEventIdentityKey(identity);
@@ -341,7 +337,10 @@ export class InMemoryBackendState {
       opts.kinds === undefined
         ? undefined
         : new Set(Array.from(new Set(opts.kinds)).filter((kind) => kind.length > 0));
-    if (opts.scopeRef !== undefined && scopeRefKey(opts.scopeRef) !== scopeRefKey(identity.scopeRef)) {
+    if (
+      opts.scopeRef !== undefined &&
+      scopeRefKey(opts.scopeRef) !== scopeRefKey(identity.scopeRef)
+    ) {
       return [];
     }
     if (
@@ -502,7 +501,10 @@ export class InMemoryBackendState {
         catch: (cause) => new SqlError({ cause }),
       });
       const identityKey = projection.identityKey(identity);
-      return this.projectionRows.get(projectionRowKey(spec.eventIdentity, spec.kind, identityKey)) ?? null;
+      return (
+        this.projectionRows.get(projectionRowKey(spec.eventIdentity, spec.kind, identityKey)) ??
+        null
+      );
     });
   }
 
@@ -836,7 +838,9 @@ export class InMemoryBackendState {
   ): ReadonlyArray<InMemoryDueWorkRow> {
     const identityKey = backendProtocolEventIdentityKey(identity);
     return this.dueWork
-      .filter((row) => row.identityKey === identityKey && row.completedAt === null && row.fireAt <= now)
+      .filter(
+        (row) => row.identityKey === identityKey && row.completedAt === null && row.fireAt <= now,
+      )
       .sort((a, b) => a.fireAt - b.fireAt || a.id - b.id);
   }
 
@@ -968,7 +972,10 @@ export class InMemoryBackendState {
     return true;
   }
 
-  stuckDueWork(identity: BackendProtocolEventIdentity, now: number): ReadonlyArray<{
+  stuckDueWork(
+    identity: BackendProtocolEventIdentity,
+    now: number,
+  ): ReadonlyArray<{
     readonly dueWorkId: number;
     readonly triggerKind: string;
     readonly intentEventId: number;

@@ -138,7 +138,10 @@ export const validateBoundaryEventPayload = (
     }
   }
   const authorityKeys = contractAuthorityKeys(contract);
-  if (authorityKeys.size > 0 && !authorityKeys.has(authorityRefKey(validation.claim.effectAuthorityRef))) {
+  if (
+    authorityKeys.size > 0 &&
+    !authorityKeys.has(authorityRefKey(validation.claim.effectAuthorityRef))
+  ) {
     return reject(contract, event, "claim_authority_invalid");
   }
   return null;
@@ -190,10 +193,7 @@ const validateCommittedBoundaryEvent = (
     return reject(contract, event, "committed_effect_authority_mismatch");
   }
   const authorityKeys = contractAuthorityKeys(contract);
-  if (
-    authorityKeys.size > 0 &&
-    !authorityKeys.has(authorityRefKey(committed.effectAuthorityRef))
-  ) {
+  if (authorityKeys.size > 0 && !authorityKeys.has(authorityRefKey(committed.effectAuthorityRef))) {
     return reject(contract, event, "committed_effect_authority_mismatch");
   }
   return null;

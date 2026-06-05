@@ -18,6 +18,7 @@ import {
   type CloudflareAgentEnv,
 } from "../src";
 import { withAgentDOTestingDrain } from "./_testing-drain";
+import { testTruthIdentity } from "./_identity";
 import {
   defineProjection,
   makeProjectionRegistryResult,
@@ -45,6 +46,7 @@ import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-re
 import { defineSettlementContract, settleLived } from "@agent-os/kernel/settlement-contract";
 import { defineTool, pureToolExecution } from "@agent-os/kernel/tools";
 import type { EventHandler } from "@agent-os/kernel/types";
+import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
 import { CloudflareMaterializedProjectionsLive } from "../src/materialized-projections";
 
 const allowToolAdmitter = () => ({ ok: true as const });
@@ -164,18 +166,28 @@ const proofBoundaryContract = defineBoundaryContract({
   },
 });
 
-const proofPreClaim = makePreClaim({
-  operationRef: "proof:record",
-  scopeRef: { kind: "conversation", scopeId: "extension-proof" },
-  effectAuthorityRef: { authorityId: "proof.record", authorityClass: "effect" },
-  originRef: { originId: "extension-test", originKind: "test" },
-});
+const proofPreClaimForScope = (scopeId: string) =>
+  makePreClaim({
+    operationRef: "proof:record",
+    scopeRef: { kind: "conversation", scopeId },
+    effectAuthorityRef: { authorityId: "proof.record", authorityClass: "effect" },
+    originRef: { originId: "extension-test", originKind: "test" },
+  });
+
+const proofPreClaim = proofPreClaimForScope("extension-proof");
 
 export const proofLivedClaim = settleLived(proofSettlementContract, proofPreClaim, {
   anchorId: "proof:record",
   anchorKind: "carrier_proof",
   carrierRef: "proof",
 });
+
+export const proofLivedClaimForScope = (scopeId: string) =>
+  settleLived(proofSettlementContract, proofPreClaimForScope(scopeId), {
+    anchorId: "proof:record",
+    anchorKind: "carrier_proof",
+    carrierRef: "proof",
+  });
 
 export const EXTENSION_COMMAND_EVENT = "test.extension.command";
 export const EXTENSION_RESULT_EVENT = "test.extension.result";
@@ -815,10 +827,9 @@ const MaterializedProjectionBaseDO = defineAgentDO<CloudflareAgentEnv>({
 });
 
 export class MaterializedProjectionTestDO extends MaterializedProjectionBaseDO {
-  async rebuildWithFailingProjection(spec: {
-    readonly kind: string;
-    readonly scope: string;
-  }): Promise<MaterializedProjectionRebuildResult> {
+  async rebuildWithFailingProjection(
+    spec: BackendProtocolEventIdentity & { readonly kind: string },
+  ): Promise<MaterializedProjectionRebuildResult> {
     const registryResult = makeProjectionRegistryResult([materializedRunFailingRebuildProjection]);
     if (registryResult._tag === "failure") {
       return Promise.reject(registryResult.error);
@@ -867,7 +878,7 @@ export default {
     if (match !== null) {
       const scope = decodeURIComponent(match[1] ?? "");
       const stub = env.STREAM_DO.get(env.STREAM_DO.idFromName(scope));
-      return stub.streamEvents({
+      return stub.streamEvents(testTruthIdentity(scope), {
         afterId: parseLastEventId(req.headers.get("Last-Event-ID")),
       });
     }

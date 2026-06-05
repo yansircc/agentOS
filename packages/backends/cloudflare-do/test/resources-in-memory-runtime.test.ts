@@ -13,6 +13,8 @@ import { describe, expect, it } from "@effect/vitest";
 import { EventBusLive, Ledger, LedgerLive } from "../src/ledger";
 import { Resources, ResourcesLive } from "../src/resources";
 import type { EventHandler } from "@agent-os/kernel/types";
+import { RUNTIME_FACT_OWNER } from "@agent-os/runtime";
+import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
 
 import { makeInMemoryDurableObjectState } from "./_in-memory-do";
 
@@ -69,12 +71,18 @@ const historyStepArb: fc.Arbitrary<HistoryStep> = fc.oneof(
   }),
 );
 
-const makeRuntime = () => {
+const identity = (scopeId: string): BackendProtocolEventIdentity => ({
+  scopeRef: { kind: "conversation", scopeId },
+  effectAuthorityRef: { authorityClass: "effect", authorityId: scopeId },
+  factOwnerRef: RUNTIME_FACT_OWNER,
+});
+
+const makeRuntime = (ownerIdentity: BackendProtocolEventIdentity) => {
   const state = makeInMemoryDurableObjectState();
   const handlers = new Map<string, Set<EventHandler>>();
   const eventBus = EventBusLive(handlers);
   const ledger = LedgerLive(state).pipe(Layer.provide(eventBus));
-  const resources = ResourcesLive(state).pipe(Layer.provide(eventBus));
+  const resources = ResourcesLive(state, ownerIdentity).pipe(Layer.provide(eventBus));
   return ManagedRuntime.make(Layer.mergeAll(ledger, resources));
 };
 
@@ -140,7 +148,8 @@ describe("in-memory DO subset", () => {
     await fc.assert(
       fc.asyncProperty(fc.array(historyStepArb, { maxLength: 80 }), async (steps) => {
         const scope = `in-memory-resource-${crypto.randomUUID()}`;
-        const runtime = makeRuntime();
+        const ownerIdentity = identity(scope);
+        const runtime = makeRuntime(ownerIdentity);
         try {
           const resources = await runtime.runPromise(Resources);
           const ledger = await runtime.runPromise(Ledger);
@@ -150,7 +159,7 @@ describe("in-memory DO subset", () => {
 
           for (const step of steps) {
             if (step.kind === "grant") {
-              await runtime.runPromise(resources.grant(scope, step));
+              await runtime.runPromise(resources.grant(ownerIdentity, step));
               grants.set(step.key, (grants.get(step.key) ?? 0) + step.amount);
               continue;
             }
@@ -160,7 +169,7 @@ describe("in-memory DO subset", () => {
               const idempotencyKey = `idem-${nextIdempotency++}`;
               if (projected.available < step.amount) {
                 const exit = await runtime.runPromiseExit(
-                  resources.reserve(scope, { ...step, idempotencyKey }),
+                  resources.reserve(ownerIdentity, { ...step, idempotencyKey }),
                 );
                 expect(Exit.isFailure(exit)).toBe(true);
                 if (Exit.isFailure(exit)) {
@@ -174,7 +183,7 @@ describe("in-memory DO subset", () => {
               }
 
               const { reservationId } = await runtime.runPromise(
-                resources.reserve(scope, { ...step, idempotencyKey }),
+                resources.reserve(ownerIdentity, { ...step, idempotencyKey }),
               );
               reservations.set(reservationId, {
                 key: step.key,
@@ -189,22 +198,26 @@ describe("in-memory DO subset", () => {
             const reservationId = activeIds[step.pick % activeIds.length]!;
             const reservation = reservations.get(reservationId)!;
             if (step.terminalKind === "consume") {
-              await runtime.runPromise(resources.consume(scope, { reservationId, ref: step.ref }));
+              await runtime.runPromise(
+                resources.consume(ownerIdentity, { reservationId, ref: step.ref }),
+              );
               reservation.status = "consumed";
             } else {
-              await runtime.runPromise(resources.release(scope, { reservationId, ref: step.ref }));
+              await runtime.runPromise(
+                resources.release(ownerIdentity, { reservationId, ref: step.ref }),
+              );
               reservation.status = "released";
             }
           }
 
-          const events = await runtime.runPromise(ledger.events(scope));
+          const events = await runtime.runPromise(ledger.events(ownerIdentity));
           expect(events.map((event) => event.id)).toEqual(
             events.map((event) => event.id).sort((a, b) => a - b),
           );
           for (const key of keys) {
-            await expect(runtime.runPromise(resources.project(scope, key))).resolves.toEqual(
-              projectModel(grants, reservations, key),
-            );
+            await expect(
+              runtime.runPromise(resources.project(ownerIdentity, key)),
+            ).resolves.toEqual(projectModel(grants, reservations, key));
           }
         } finally {
           await runtime.dispose();

@@ -7,20 +7,16 @@ import {
   type AttachedStreamTx,
 } from "@agent-os/runtime";
 import { SqlError } from "@agent-os/kernel/errors";
-import type { LedgerEvent, LedgerEventIdentity } from "@agent-os/kernel/types";
+import type { LedgerEvent } from "@agent-os/kernel/types";
 import { EventBus } from "./ledger/event-bus";
 import { selectLedgerEvents } from "./ledger/ledger";
 import { commitLedgerTransaction } from "./ledger/commit";
-
-const transitionIdentityFromScope = (scope: string): LedgerEventIdentity => ({
-  scopeRef: { kind: "conversation", scopeId: scope },
-  factOwnerRef: "@agent-os/transition-unowned",
-  effectAuthorityRef: { authorityClass: "legacy-scope", authorityId: scope },
-});
+import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
 
 export const AttachedStreamsLive = (
   ctx: DurableObjectState,
   scope: string,
+  identity: BackendProtocolEventIdentity,
 ): Layer.Layer<AttachedStreams, SqlError, AttachedStreamRegistry | EventBus> => {
   let nextStreamId = 1;
   return Layer.effect(
@@ -38,6 +34,7 @@ export const AttachedStreamsLive = (
             const committed = yield* commitLedgerTransaction(
               ctx,
               bus,
+              { factOwnerRef: identity.factOwnerRef },
               (builder) => {
                 const written: LedgerEvent[] = [];
                 const tx: AttachedStreamTx = {
@@ -56,28 +53,32 @@ export const AttachedStreamsLive = (
                         : new Set(
                             Array.from(new Set(opts.kinds)).filter((kind) => kind.length > 0),
                           );
-                    return [...selectLedgerEvents(ctx.storage.sql, scope, opts), ...written].filter(
-                      (event) => {
-                        if (event.id <= afterId) return false;
-                        if (kinds !== undefined && kinds.size > 0 && !kinds.has(event.kind)) {
-                          return false;
-                        }
-                        return true;
-                      },
-                    );
+                    return [
+                      ...selectLedgerEvents(ctx.storage.sql, identity, opts),
+                      ...written,
+                    ].filter((event) => {
+                      if (event.id <= afterId) return false;
+                      if (kinds !== undefined && kinds.size > 0 && !kinds.has(event.kind)) {
+                        return false;
+                      }
+                      return true;
+                    });
                   },
                   insertEvent: (spec) => {
                     const ref = builder.append({
                       ts: spec.ts ?? streamCtx.now,
                       kind: spec.kind,
-                      scope,
+                      scopeRef: identity.scopeRef,
+                      effectAuthorityRef: identity.effectAuthorityRef,
                       payload: spec.payload,
                     });
                     const event = {
                       id: builder.id(ref),
                       ts: spec.ts ?? streamCtx.now,
                       kind: spec.kind,
-                      ...transitionIdentityFromScope(scope),
+                      scopeRef: identity.scopeRef,
+                      factOwnerRef: identity.factOwnerRef,
+                      effectAuthorityRef: identity.effectAuthorityRef,
                       payload: spec.payload,
                     };
                     written.push(event);

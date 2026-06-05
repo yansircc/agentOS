@@ -1,5 +1,10 @@
 import { Context, Data, Effect, Either, Schema } from "effect";
-import { scopeRefKey, type ScopeRef } from "@agent-os/kernel/effect-claim";
+import {
+  scopeRefKey,
+  type AuthorityRef,
+  type FactOwnerRef,
+  type ScopeRef,
+} from "@agent-os/kernel/effect-claim";
 import type { SqlError } from "@agent-os/kernel/errors";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 
@@ -187,15 +192,26 @@ export interface MaterializedProjectionRebuildResult extends MaterializedProject
   readonly rows: number;
 }
 
+export interface MaterializedProjectionEventIdentity {
+  readonly scopeRef: ScopeRef;
+  readonly effectAuthorityRef: AuthorityRef;
+  readonly factOwnerRef: FactOwnerRef;
+  readonly scope?: never;
+}
+
 export interface MaterializedProjectionGetSpec {
   readonly kind: string;
-  readonly scope: string;
+  readonly scopeRef: ScopeRef;
+  readonly effectAuthorityRef: AuthorityRef;
+  readonly factOwnerRef: FactOwnerRef;
   readonly identity: unknown;
 }
 
 export interface MaterializedProjectionListSpec {
   readonly kind: string;
-  readonly scope: string;
+  readonly scopeRef: ScopeRef;
+  readonly effectAuthorityRef: AuthorityRef;
+  readonly factOwnerRef: FactOwnerRef;
   readonly limit?: number;
   readonly afterKey?: string;
 }
@@ -212,14 +228,12 @@ export class MaterializedProjections extends Context.Tag("@agent-os/Materialized
       ReadonlyArray<MaterializedProjectionRow>,
       SqlError | UnregisteredProjectionKind
     >;
-    readonly status: (spec: {
-      readonly kind: string;
-      readonly scope: string;
-    }) => Effect.Effect<MaterializedProjectionStatus, SqlError | UnregisteredProjectionKind>;
-    readonly rebuild: (spec: {
-      readonly kind: string;
-      readonly scope: string;
-    }) => Effect.Effect<
+    readonly status: (
+      spec: MaterializedProjectionEventIdentity & { readonly kind: string },
+    ) => Effect.Effect<MaterializedProjectionStatus, SqlError | UnregisteredProjectionKind>;
+    readonly rebuild: (
+      spec: MaterializedProjectionEventIdentity & { readonly kind: string },
+    ) => Effect.Effect<
       MaterializedProjectionRebuildResult,
       | SqlError
       | UnregisteredProjectionKind

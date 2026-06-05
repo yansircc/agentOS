@@ -24,6 +24,7 @@ import {
 } from "./ledger/commit";
 import type { EventBusService } from "./ledger/event-bus";
 import { sqlText } from "./storage/sql-row";
+import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
 
 export interface DueWorkRow {
   readonly id: number;
@@ -536,6 +537,7 @@ export const commitDurableTriggerIntent = (
   ctx: DurableObjectState,
   sql: SqlStorage,
   bus: EventBusService,
+  identity: BackendProtocolEventIdentity,
   fireAt: number,
   registry: TriggerRegistry,
   triggerKind: string,
@@ -555,13 +557,18 @@ export const commitDurableTriggerIntent = (
       try: () => ctx.storage.setAlarm(target),
       catch: (cause) => new SqlError({ cause }),
     });
-    const committed = yield* commitLedgerTransaction(ctx, bus, (tx) => {
-      const intent = writeIntent(tx, trigger);
-      tx.afterInsert(({ id }) => {
-        insertDurableTriggerDueWork(sql, fireAt, trigger.kind, id(intent));
-      });
-      return intent;
-    });
+    const committed = yield* commitLedgerTransaction(
+      ctx,
+      bus,
+      { factOwnerRef: identity.factOwnerRef },
+      (tx) => {
+        const intent = writeIntent(tx, trigger);
+        tx.afterInsert(({ id }) => {
+          insertDurableTriggerDueWork(sql, fireAt, trigger.kind, id(intent));
+        });
+        return intent;
+      },
+    );
     return committed.event(committed.value);
   });
 
@@ -570,6 +577,7 @@ export const enqueueScheduledEvent = (
   sql: SqlStorage,
   bus: EventBusService,
   scope: string,
+  identity: BackendProtocolEventIdentity,
   intentTs: number,
   at: number,
   registry: TriggerRegistry,
@@ -583,6 +591,7 @@ export const enqueueScheduledEvent = (
       ctx,
       sql,
       bus,
+      identity,
       at,
       registry,
       triggerKind,
@@ -590,7 +599,8 @@ export const enqueueScheduledEvent = (
         tx.append({
           ts: intentTs,
           kind: trigger.intentEventKind,
-          scope,
+          scopeRef: identity.scopeRef,
+          effectAuthorityRef: identity.effectAuthorityRef,
           payload,
         }),
     );

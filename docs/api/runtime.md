@@ -63,6 +63,7 @@
 - `.:InvalidateSpec`
 - `.:Ledger`
 - `.:LedgerCommitEventSpec`
+- `.:LedgerTruthIdentity`
 - `.:LiveInput`
 - `.:LlmCallOptions`
 - `.:LlmRoute`
@@ -70,6 +71,7 @@
 - `.:LlmUsage`
 - `.:AnyMaterializedProjectionDefinition`
 - `.:MaterializedProjectionDefinition`
+- `.:MaterializedProjectionEventIdentity`
 - `.:MaterializedProjectionGetSpec`
 - `.:MaterializedProjectionListSpec`
 - `.:MaterializedProjectionRebuildResult`
@@ -109,6 +111,7 @@
 - `.:ProjectionStatus`
 - `.:ResourceProjection`
 - `.:Resources`
+- `.:RUNTIME_FACT_OWNER`
 - `.:RUN_BEARING_KINDS`
 - `.:Scheduler`
 - `.:ScheduledEventIntentPayload`

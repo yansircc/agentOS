@@ -18,7 +18,9 @@ import type {
 import { runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import type { LedgerEventRpc } from "@agent-os/kernel/types";
+import type { BackendProtocolTruthIdentity } from "@agent-os/backend-protocol";
 import type { DispatchTestDO } from "./test-worker";
+import { testTruthIdentity } from "./_identity";
 
 interface TestEnv {
   readonly DISPATCH_DO: DurableObjectNamespace<DispatchTestDO>;
@@ -29,7 +31,7 @@ interface ResourceRpc {
   readonly reserveResource: (spec: ResourceReserveSpec) => Promise<ResourceReserveResult>;
   readonly consumeResource: (spec: ResourceReservationSpec) => Promise<void>;
   readonly releaseResource: (spec: ResourceReservationSpec) => Promise<void>;
-  readonly events: () => Promise<LedgerEventRpc[]>;
+  readonly events: (identity: BackendProtocolTruthIdentity) => Promise<LedgerEventRpc[]>;
 }
 
 interface Balance {
@@ -44,6 +46,9 @@ const stubFor = (scope: string): DurableObjectStub<DispatchTestDO> & ResourceRpc
   testEnv.DISPATCH_DO.get(
     testEnv.DISPATCH_DO.idFromName(scope),
   ) as DurableObjectStub<DispatchTestDO> & ResourceRpc;
+
+const eventsFor = (stub: ResourceRpc, scope: string): Promise<LedgerEventRpc[]> =>
+  stub.events(testTruthIdentity(scope));
 
 const resourceEvents = (events: ReadonlyArray<LedgerEventRpc>): ReadonlyArray<LedgerEventRpc> =>
   events.filter((e) => e.kind.startsWith("resource_pool."));
@@ -98,7 +103,8 @@ const projectBalance = (events: ReadonlyArray<LedgerEventRpc>, key: string): Bal
 
 describe("Resources — business resource reservation ledger", () => {
   it("reserve succeeds when projected available balance is sufficient", async () => {
-    const stub = stubFor("resource-reserve-success");
+    const scope = "resource-reserve-success";
+    const stub = stubFor(scope);
 
     await stub.grantResource({ key: "credit", amount: 5, ref: "seed" });
     const { reservationId } = await stub.reserveResource({
@@ -109,7 +115,7 @@ describe("Resources — business resource reservation ledger", () => {
     });
 
     expect(reservationId).toMatch(/^[0-9a-f-]{36}$/);
-    const events = await stub.events();
+    const events = await eventsFor(stub, scope);
     expect(resourceEvents(events).map((e) => e.kind)).toEqual([
       "resource_pool.granted",
       "resource_pool.reserved",
@@ -122,7 +128,8 @@ describe("Resources — business resource reservation ledger", () => {
   });
 
   it("reserve rejects without writing resource_pool.reserved when insufficient", async () => {
-    const stub = stubFor("resource-reserve-insufficient");
+    const scope = "resource-reserve-insufficient";
+    const stub = stubFor(scope);
 
     await runInDurableObject(stub, async (instance) => {
       const rpc = instance as unknown as ResourceRpc;
@@ -153,7 +160,7 @@ describe("Resources — business resource reservation ledger", () => {
       expect(caught?.available).toBe(1);
     });
 
-    const events = await stub.events();
+    const events = await eventsFor(stub, scope);
     expect(resourceEvents(events).map((e) => e.kind)).toEqual([
       "resource_pool.granted",
       "resource_pool.reserve_rejected",
@@ -162,7 +169,8 @@ describe("Resources — business resource reservation ledger", () => {
   });
 
   it("same idempotencyKey returns the same reservation without duplicating ledger rows", async () => {
-    const stub = stubFor("resource-reserve-idempotent");
+    const scope = "resource-reserve-idempotent";
+    const stub = stubFor(scope);
 
     await stub.grantResource({ key: "credit", amount: 5, ref: "seed" });
     const first = await stub.reserveResource({
@@ -179,7 +187,7 @@ describe("Resources — business resource reservation ledger", () => {
     });
 
     expect(second.reservationId).toBe(first.reservationId);
-    const events = await stub.events();
+    const events = await eventsFor(stub, scope);
     expect(countKind(events, "resource_pool.reserved")).toBe(1);
     expect(projectBalance(events, "credit")).toEqual({
       available: 3,
@@ -189,7 +197,8 @@ describe("Resources — business resource reservation ledger", () => {
   });
 
   it("consume and release are mutually exclusive", async () => {
-    const stub = stubFor("resource-terminal-exclusive");
+    const scope = "resource-terminal-exclusive";
+    const stub = stubFor(scope);
     await stub.grantResource({ key: "credit", amount: 5, ref: "seed" });
     const { reservationId } = await stub.reserveResource({
       key: "credit",
@@ -216,13 +225,14 @@ describe("Resources — business resource reservation ledger", () => {
       expect(caught?.status).toBe("consumed");
     });
 
-    const events = await stub.events();
+    const events = await eventsFor(stub, scope);
     expect(countKind(events, "resource_pool.consumed")).toBe(1);
     expect(countKind(events, "resource_pool.released")).toBe(0);
   });
 
   it("duplicate consume/release for the same terminal state is idempotent", async () => {
-    const stub = stubFor("resource-terminal-idempotent");
+    const scope = "resource-terminal-idempotent";
+    const stub = stubFor(scope);
     await stub.grantResource({ key: "credit", amount: 10, ref: "seed" });
     const consumed = await stub.reserveResource({
       key: "credit",
@@ -254,13 +264,14 @@ describe("Resources — business resource reservation ledger", () => {
       ref: "job-cancelled-retry",
     });
 
-    const events = await stub.events();
+    const events = await eventsFor(stub, scope);
     expect(countKind(events, "resource_pool.consumed")).toBe(1);
     expect(countKind(events, "resource_pool.released")).toBe(1);
   });
 
   it("projection reconstructs balance from events only", async () => {
-    const stub = stubFor("resource-projection");
+    const scope = "resource-projection";
+    const stub = stubFor(scope);
     await stub.grantResource({ key: "credit", amount: 10, ref: "seed" });
     const consumed = await stub.reserveResource({
       key: "credit",
@@ -290,7 +301,7 @@ describe("Resources — business resource reservation ledger", () => {
       ref: "job-cancelled",
     });
 
-    const events = await stub.events();
+    const events = await eventsFor(stub, scope);
     expect(active.reservationId).toMatch(/^[0-9a-f-]{36}$/);
     expect(projectBalance(events, "credit")).toEqual({
       available: 5,

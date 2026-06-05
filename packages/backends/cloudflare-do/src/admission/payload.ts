@@ -14,6 +14,9 @@ import { Effect, Schema } from "effect";
 import { SqlError } from "@agent-os/kernel/errors";
 import { sqlText } from "../storage/sql-row";
 import type { AdmissionRow, AttemptKey, Outcome } from "@agent-os/runtime";
+import { eventIdentity, eventIdentityColumns } from "../ledger/identity";
+import type { FactOwnerRef } from "@agent-os/kernel/effect-claim";
+import type { LedgerTruthIdentity } from "@agent-os/runtime";
 
 const AttemptKeySchema = Schema.Struct({
   routeFingerprint: Schema.String,
@@ -68,14 +71,16 @@ const decodeInvalidatePayloadSync = Schema.decodeUnknownSync(InvalidatePayloadSc
 
 export const loadAdmissionRows = (
   sql: SqlStorage,
-  scope: string,
+  identity: LedgerTruthIdentity,
+  factOwnerRef: FactOwnerRef,
 ): Effect.Effect<ReadonlyArray<AdmissionRow>, SqlError> =>
   Effect.try({
     try: () => {
+      const columns = eventIdentityColumns(eventIdentity(identity, factOwnerRef));
       const raw = sql
         .exec(
-          "SELECT id, ts, kind, payload FROM events WHERE scope = ? AND (kind = 'llm.structured.evidence' OR kind = 'llm.structured.invalidate') ORDER BY id",
-          scope,
+          "SELECT id, ts, kind, payload FROM events WHERE event_identity_key = ? AND (kind = 'llm.structured.evidence' OR kind = 'llm.structured.invalidate') ORDER BY id",
+          columns.event_identity_key,
         )
         .toArray();
       const out: AdmissionRow[] = [];

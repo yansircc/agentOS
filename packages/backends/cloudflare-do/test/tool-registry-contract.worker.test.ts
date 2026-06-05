@@ -13,12 +13,19 @@ import { defineTool, pureToolExecution, type Tool } from "@agent-os/kernel/tools
 import type { EventHandler } from "@agent-os/kernel/types";
 import { finalTextResp, stubLlmTransport, toolCallResp } from "./_stub-ai";
 import { allowToolAdmitter, makeLookupTool } from "./_tool-fixture";
+import { testEventIdentity } from "./_identity";
+import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
 
 interface TestEnv {
   readonly AGENT_DO: DurableObjectNamespace;
 }
 
 const testEnv = env as unknown as TestEnv;
+
+const toolRegistryAuthorityRef = {
+  authorityClass: "llm_route" as const,
+  authorityId: "tool-registry-contract",
+};
 
 const makeSpec = (scope: string, tool: Tool): InternalSubmitSpec => ({
   intent: "lookup",
@@ -33,19 +40,23 @@ const makeSpec = (scope: string, tool: Tool): InternalSubmitSpec => ({
   budget: { maxTurns: 3 },
   scope,
   scopeRef: { kind: "conversation", scopeId: scope },
-  effectAuthorityRef: { authorityClass: "llm_route", authorityId: "tool-registry-contract" },
+  effectAuthorityRef: toolRegistryAuthorityRef,
 });
 
-const buildRuntime = (state: DurableObjectState, llm: Context.Tag.Service<typeof LlmTransport>) => {
+const buildRuntime = (
+  state: DurableObjectState,
+  llm: Context.Tag.Service<typeof LlmTransport>,
+  identity: BackendProtocolEventIdentity,
+) => {
   const handlers = new Map<string, Set<EventHandler>>();
   const eventBus = EventBusLive(handlers);
   const ledger = LedgerLive(state).pipe(Layer.provide(eventBus));
-  const quota = QuotaLive(state).pipe(Layer.provide(eventBus));
+  const quota = QuotaLive(state, identity).pipe(Layer.provide(eventBus));
   const llmTransport = Layer.succeed(LlmTransport, llm);
   const refs = RefResolverLive({
     material: () => null,
   });
-  const admission = AdmissionLive(state).pipe(
+  const admission = AdmissionLive(state, identity).pipe(
     Layer.provide(Layer.mergeAll(eventBus, llmTransport)),
   );
   return ManagedRuntime.make(Layer.mergeAll(ledger, quota, llmTransport, admission, refs));
@@ -59,7 +70,8 @@ describe("tool registry generator", () => {
 
     await runInDurableObject(stub, async (_inst, state) => {
       const llm = stubLlmTransport([toolCallResp("lookup", "{}", "call-1"), finalTextResp("done")]);
-      const runtime = buildRuntime(state, llm);
+      const identity = testEventIdentity(scope, toolRegistryAuthorityRef);
+      const runtime = buildRuntime(state, llm, identity);
 
       const result = await runtime.runPromise(submitAgentEffect(makeSpec(scope, makeLookupTool())));
       expect(result.ok).toBe(true);
@@ -67,7 +79,7 @@ describe("tool registry generator", () => {
       const events = await runtime.runPromise(
         Effect.gen(function* () {
           const l = yield* Ledger;
-          return yield* l.events(scope);
+          return yield* l.events(identity);
         }),
       );
       const executed = events.find((event) => event.kind === "tool.executed");
@@ -122,7 +134,8 @@ describe("tool registry generator", () => {
 
     await runInDurableObject(stub, async (_inst, state) => {
       const llm = stubLlmTransport([toolCallResp("lookup", '{"key":1}', "call-1")]);
-      const runtime = buildRuntime(state, llm);
+      const identity = testEventIdentity(scope, toolRegistryAuthorityRef);
+      const runtime = buildRuntime(state, llm, identity);
 
       const result = await runtime.runPromise(submitAgentEffect(makeSpec(scope, tool)));
       expect(result.ok).toBe(false);
@@ -132,7 +145,7 @@ describe("tool registry generator", () => {
       const events = await runtime.runPromise(
         Effect.gen(function* () {
           const l = yield* Ledger;
-          return yield* l.events(scope);
+          return yield* l.events(identity);
         }),
       );
       expect(events.some((event) => event.kind === "tool.executed")).toBe(false);
@@ -170,7 +183,8 @@ describe("tool registry generator", () => {
 
     await runInDurableObject(stub, async (_inst, state) => {
       const llm = stubLlmTransport([toolCallResp("lookup", "{}", "call-1")]);
-      const runtime = buildRuntime(state, llm);
+      const identity = testEventIdentity(scope, toolRegistryAuthorityRef);
+      const runtime = buildRuntime(state, llm, identity);
 
       const result = await runtime.runPromise(
         submitAgentEffect(makeSpec(scope, malformedRejectionTool)),
@@ -181,7 +195,7 @@ describe("tool registry generator", () => {
       const events = await runtime.runPromise(
         Effect.gen(function* () {
           const l = yield* Ledger;
-          return yield* l.events(scope);
+          return yield* l.events(identity);
         }),
       );
       const rejected = events.find((event) => event.kind === "tool.rejected");
@@ -225,7 +239,8 @@ describe("tool registry generator", () => {
 
     await runInDurableObject(stub, async (_inst, state) => {
       const llm = stubLlmTransport([toolCallResp("lookup", "{}", "call-1")]);
-      const runtime = buildRuntime(state, llm);
+      const identity = testEventIdentity(scope, toolRegistryAuthorityRef);
+      const runtime = buildRuntime(state, llm, identity);
 
       const result = await runtime.runPromise(
         submitAgentEffect(makeSpec(scope, throwingAdmitterTool)),
@@ -236,7 +251,7 @@ describe("tool registry generator", () => {
       const events = await runtime.runPromise(
         Effect.gen(function* () {
           const l = yield* Ledger;
-          return yield* l.events(scope);
+          return yield* l.events(identity);
         }),
       );
       const rejected = events.find((event) => event.kind === "tool.rejected");
@@ -278,7 +293,8 @@ describe("tool registry generator", () => {
 
     await runInDurableObject(stub, async (_inst, state) => {
       const llm = stubLlmTransport([toolCallResp("lookup", "{}", "call-1")]);
-      const runtime = buildRuntime(state, llm);
+      const identity = testEventIdentity(scope, toolRegistryAuthorityRef);
+      const runtime = buildRuntime(state, llm, identity);
 
       const result = await runtime.runPromise(
         submitAgentEffect(makeSpec(scope, malformedAdmitterTool)),
@@ -289,7 +305,7 @@ describe("tool registry generator", () => {
       const events = await runtime.runPromise(
         Effect.gen(function* () {
           const l = yield* Ledger;
-          return yield* l.events(scope);
+          return yield* l.events(identity);
         }),
       );
       const rejected = events.find((event) => event.kind === "tool.rejected");
@@ -329,7 +345,8 @@ describe("tool registry generator", () => {
 
     await runInDurableObject(stub, async (_inst, state) => {
       const llm = stubLlmTransport([toolCallResp("lookup", "{}", "call-1")]);
-      const runtime = buildRuntime(state, llm);
+      const identity = testEventIdentity(scope, toolRegistryAuthorityRef);
+      const runtime = buildRuntime(state, llm, identity);
 
       const result = await runtime.runPromise(submitAgentEffect(makeSpec(scope, failingTool)));
       expect(result.ok).toBe(false);
@@ -337,7 +354,7 @@ describe("tool registry generator", () => {
       const events = await runtime.runPromise(
         Effect.gen(function* () {
           const l = yield* Ledger;
-          return yield* l.events(scope);
+          return yield* l.events(identity);
         }),
       );
       const rejected = events.find((event) => event.kind === "tool.rejected");
@@ -386,7 +403,8 @@ describe("tool registry generator", () => {
 
     await runInDurableObject(stub, async (_inst, state) => {
       const llm = stubLlmTransport([toolCallResp("lookup", "{}", "call-1")]);
-      const runtime = buildRuntime(state, llm);
+      const identity = testEventIdentity(scope, toolRegistryAuthorityRef);
+      const runtime = buildRuntime(state, llm, identity);
       const spec: InternalSubmitSpec = {
         ...makeSpec(scope, hangingTool),
         budget: { maxTurns: 3, timeMs: 50, toolRetries: 0 },
@@ -403,7 +421,7 @@ describe("tool registry generator", () => {
       const events = await runtime.runPromise(
         Effect.gen(function* () {
           const l = yield* Ledger;
-          return yield* l.events(scope);
+          return yield* l.events(identity);
         }),
       );
       expect(events.some((event) => event.kind === "tool.executed")).toBe(false);

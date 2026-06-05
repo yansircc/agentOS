@@ -11,6 +11,7 @@ type Row = Record<string, unknown>;
 
 interface Table {
   nextId: number;
+  columns: string[];
   rows: Row[];
 }
 
@@ -32,6 +33,7 @@ const cloneRow = (row: Row): Row => ({ ...row });
 
 const cloneTable = (table: Table): Table => ({
   nextId: table.nextId,
+  columns: [...table.columns],
   rows: table.rows.map(cloneRow),
 });
 
@@ -40,6 +42,31 @@ const splitComma = (value: string): string[] =>
     .split(",")
     .map((part) => part.trim())
     .filter((part) => part.length > 0);
+
+const splitTopLevelComma = (value: string): string[] => {
+  const out: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    if (char === "(") depth += 1;
+    else if (char === ")") depth -= 1;
+    else if (char === "," && depth === 0) {
+      out.push(value.slice(start, index).trim());
+      start = index + 1;
+    }
+  }
+  out.push(value.slice(start).trim());
+  return out.filter((part) => part.length > 0);
+};
+
+const parseCreateTableColumns = (body: string): string[] =>
+  splitTopLevelComma(body).flatMap((part) => {
+    const match = /^([a-z_]+)\b/i.exec(part);
+    if (match === null) return [];
+    const name = match[1]!;
+    return /^(primary|unique|foreign|constraint|check)$/i.test(name) ? [] : [name];
+  });
 
 class InMemorySqlCursor {
   readonly columnNames: string[];
@@ -118,30 +145,30 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
 
   private exec(sql: string, args: readonly unknown[]): InMemorySqlCursor {
     const normalized = normalizeSql(sql);
-    if (/^PRAGMA table_info\(due_work\)$/i.test(normalized)) {
+    const pragmaTableInfo = /^PRAGMA table_info\(([a-z_]+)\)$/i.exec(normalized);
+    if (pragmaTableInfo !== null) {
+      const table = this.tables.get(pragmaTableInfo[1]!);
       return new InMemorySqlCursor(
-        [
-          "id",
-          "fire_at",
-          "kind",
-          "payload",
-          "completed_at",
-          "claimed_at",
-          "claim_token",
-          "claim_deadline_at",
-          "redrive_count",
-          "cancel_requested_at",
-          "cancel_reason",
-          "cancelled_at",
-        ].map((name) => ({ name })),
+        table === undefined
+          ? []
+          : table.columns.map((name, cid) => ({
+              cid,
+              name,
+              type: "",
+              notnull: 0,
+              dflt_value: null,
+              pk: name === "id" ? 1 : 0,
+            })),
       );
     }
-    if (/^ALTER TABLE due_work ADD COLUMN /i.test(normalized)) {
+    const alterAddColumn = /^ALTER TABLE ([a-z_]+) ADD COLUMN ([a-z_]+)/i.exec(normalized);
+    if (alterAddColumn !== null) {
+      this.addColumn(alterAddColumn[1]!, alterAddColumn[2]!);
       return new InMemorySqlCursor([]);
     }
     if (/^CREATE (TABLE|INDEX) IF NOT EXISTS /i.test(normalized)) {
-      const tableMatch = /^CREATE TABLE IF NOT EXISTS ([a-z_]+)/i.exec(normalized);
-      if (tableMatch !== null) this.table(tableMatch[1]!);
+      const tableMatch = /^CREATE TABLE IF NOT EXISTS ([a-z_]+) \((.*)\)$/i.exec(normalized);
+      if (tableMatch !== null) this.defineTable(tableMatch[1]!, tableMatch[2]!);
       return new InMemorySqlCursor([]);
     }
     if (/^INSERT INTO /i.test(normalized)) {
@@ -149,6 +176,9 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
     }
     if (/^UPDATE /i.test(normalized)) {
       return this.update(normalized, args);
+    }
+    if (/^DELETE FROM /i.test(normalized)) {
+      return this.delete(normalized, args);
     }
     if (/^SELECT /i.test(normalized)) {
       return this.select(normalized, args);
@@ -159,15 +189,33 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
   private table(name: string): Table {
     const existing = this.tables.get(name);
     if (existing !== undefined) return existing;
-    const table = { nextId: 1, rows: [] };
+    const table = { nextId: 1, columns: [], rows: [] };
     this.tables.set(name, table);
     return table;
+  }
+
+  private defineTable(name: string, body: string): Table {
+    const table = this.table(name);
+    for (const column of parseCreateTableColumns(body)) this.addColumn(name, column);
+    return table;
+  }
+
+  private addColumn(tableName: string, column: string): void {
+    const table = this.table(tableName);
+    if (!table.columns.includes(column)) table.columns.push(column);
   }
 
   private insert(sql: string, args: readonly unknown[]): InMemorySqlCursor {
     if (/^INSERT INTO materialized_projection_rows /i.test(sql) && / ON CONFLICT/i.test(sql)) {
       const [
-        scope,
+        projectionKey,
+        scopeRef,
+        scopeKey,
+        factOwnerRef,
+        factOwnerKey,
+        effectAuthorityRef,
+        effectAuthorityKey,
+        eventIdentityKey,
         kind,
         identityKey,
         identityJson,
@@ -177,14 +225,16 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
         updatedAt,
       ] = args;
       const table = this.table("materialized_projection_rows");
-      const row = table.rows.find(
-        (candidate) =>
-          candidate.scope === scope &&
-          candidate.kind === kind &&
-          candidate.identity_key === identityKey,
-      );
+      const row = table.rows.find((candidate) => candidate.projection_key === projectionKey);
       const values = {
-        scope,
+        projection_key: projectionKey,
+        scope_ref: scopeRef,
+        scope_key: scopeKey,
+        fact_owner_ref: factOwnerRef,
+        fact_owner_key: factOwnerKey,
+        effect_authority_ref: effectAuthorityRef,
+        effect_authority_key: effectAuthorityKey,
+        event_identity_key: eventIdentityKey,
         kind,
         identity_key: identityKey,
         identity_json: identityJson,
@@ -199,13 +249,31 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
     }
 
     if (/^INSERT INTO materialized_projection_meta /i.test(sql) && / ON CONFLICT/i.test(sql)) {
-      const [scope, kind, version, lastAppliedEventId, updatedAt] = args;
+      const [
+        eventIdentityKey,
+        scopeRef,
+        scopeKey,
+        factOwnerRef,
+        factOwnerKey,
+        effectAuthorityRef,
+        effectAuthorityKey,
+        kind,
+        version,
+        lastAppliedEventId,
+        updatedAt,
+      ] = args;
       const table = this.table("materialized_projection_meta");
       const row = table.rows.find(
-        (candidate) => candidate.scope === scope && candidate.kind === kind,
+        (candidate) => candidate.event_identity_key === eventIdentityKey && candidate.kind === kind,
       );
       const values = {
-        scope,
+        event_identity_key: eventIdentityKey,
+        scope_ref: scopeRef,
+        scope_key: scopeKey,
+        fact_owner_ref: factOwnerRef,
+        fact_owner_key: factOwnerKey,
+        effect_authority_ref: effectAuthorityRef,
+        effect_authority_key: effectAuthorityKey,
         kind,
         version,
         status: "current",
@@ -242,6 +310,17 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
     }
     table.rows.push(row);
     return new InMemorySqlCursor(match[4] === undefined ? [] : [{ id: row.id }]);
+  }
+
+  private delete(sql: string, args: readonly unknown[]): InMemorySqlCursor {
+    const match = /^DELETE FROM ([a-z_]+)(?: WHERE (.+))?$/i.exec(sql);
+    if (match === null) {
+      throw new TypeError(`unsupported in-memory delete: ${sql}`);
+    }
+    const table = this.table(match[1]!);
+    const predicate = match[2] === undefined ? () => true : compileWhere(match[2], args);
+    table.rows = table.rows.filter((row) => !predicate(row));
+    return new InMemorySqlCursor([]);
   }
 
   private update(sql: string, args: readonly unknown[]): InMemorySqlCursor {
@@ -470,8 +549,7 @@ export const makeInMemoryDurableObjectState = (
     storage: new InMemoryDurableObjectStorage(options),
   }) as unknown as DurableObjectState;
 
-const hasAutoincrementId = (tableName: string): boolean =>
-  tableName === "events" || tableName === "due_work";
+const hasAutoincrementId = (tableName: string): boolean => tableName === "due_work";
 
 const isPromiseLike = (value: unknown): value is PromiseLike<unknown> =>
   typeof value === "object" &&

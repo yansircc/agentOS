@@ -40,6 +40,7 @@ import { EventBus } from "../ledger";
 import { JsonStringifyError, SqlError, UpstreamFailure } from "@agent-os/kernel/errors";
 import { commitLedgerTransaction } from "../ledger/commit";
 import { loadAdmissionRows } from "./payload";
+import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
 
 const reconstructOutcomeFromLease = (
   lease: CapabilityLease & { status: "unsupported" },
@@ -64,6 +65,7 @@ const reconstructOutcomeFromLease = (
 
 export const AdmissionLive = (
   ctx: DurableObjectState,
+  ownerIdentity: BackendProtocolEventIdentity,
 ): Layer.Layer<Admission, never, EventBus | LlmTransport> =>
   Layer.scoped(
     Admission,
@@ -87,7 +89,7 @@ export const AdmissionLive = (
           };
 
           // Step 2: project lease.
-          const rows = yield* loadAdmissionRows(sql, spec.scope);
+          const rows = yield* loadAdmissionRows(sql, ownerIdentity, ownerIdentity.factOwnerRef);
           const { lease: preLease, latestBarrier } = projectLease(rows, key, now);
 
           // Step 3: gate.
@@ -150,17 +152,23 @@ export const AdmissionLive = (
             ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
           };
 
-          yield* commitLedgerTransaction(ctx, bus, (tx) => {
-            tx.append({
-              ts: now,
-              kind: "llm.structured.evidence",
-              scope: spec.scope,
-              payload: evidencePayload,
-            });
-          });
+          yield* commitLedgerTransaction(
+            ctx,
+            bus,
+            { factOwnerRef: ownerIdentity.factOwnerRef },
+            (tx) => {
+              tx.append({
+                ts: now,
+                kind: "llm.structured.evidence",
+                scopeRef: ownerIdentity.scopeRef,
+                effectAuthorityRef: ownerIdentity.effectAuthorityRef,
+                payload: evidencePayload,
+              });
+            },
+          );
 
           // Post-projection (read-only, for the return value's lease shape).
-          const postRows = yield* loadAdmissionRows(sql, spec.scope);
+          const postRows = yield* loadAdmissionRows(sql, ownerIdentity, ownerIdentity.factOwnerRef);
           const { lease: postLease } = projectLease(postRows, key, now);
 
           if (outcome.class === "Supported" && decoded !== undefined) {
@@ -193,14 +201,20 @@ export const AdmissionLive = (
             by: spec.by,
           };
 
-          const result = yield* commitLedgerTransaction(ctx, bus, (tx) => {
-            tx.append({
-              ts: now,
-              kind: "llm.structured.invalidate",
-              scope: spec.scope,
-              payload,
-            });
-          });
+          const result = yield* commitLedgerTransaction(
+            ctx,
+            bus,
+            { factOwnerRef: ownerIdentity.factOwnerRef },
+            (tx) => {
+              tx.append({
+                ts: now,
+                kind: "llm.structured.invalidate",
+                scopeRef: ownerIdentity.scopeRef,
+                effectAuthorityRef: ownerIdentity.effectAuthorityRef,
+                payload,
+              });
+            },
+          );
           const event = result.events[0];
           if (event === undefined) {
             return yield* Effect.fail(

@@ -3,9 +3,11 @@ import { describe } from "@effect/vitest";
 import {
   DurableTriggerRegistry,
   Ledger,
+  RUNTIME_FACT_OWNER,
   TriggerPump,
   type AnyDurableTrigger,
 } from "@agent-os/runtime";
+import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
 import { commitDurableTriggerIntent } from "../src/due-work";
 import { EventBus } from "../src/ledger";
 import { makeCloudflareBackendCoreLayer } from "../src/runtime-core";
@@ -17,10 +19,15 @@ import {
 
 const makeDriver = (triggers: ReadonlyArray<AnyDurableTrigger>): ImgGenPressureDriver => {
   const scope = "img-gen-pressure";
+  const identity: BackendProtocolEventIdentity = {
+    scopeRef: { kind: "conversation", scopeId: scope },
+    effectAuthorityRef: { authorityClass: "effect", authorityId: scope },
+    factOwnerRef: RUNTIME_FACT_OWNER,
+  };
   const state = makeInMemoryDurableObjectState();
   const sql = state.storage.sql;
   const runtime = ManagedRuntime.make(
-    makeCloudflareBackendCoreLayer(state, {}, scope, new Map(), {}, triggers),
+    makeCloudflareBackendCoreLayer(state, {}, scope, identity, new Map(), {}, triggers),
   );
 
   return {
@@ -34,13 +41,22 @@ const makeDriver = (triggers: ReadonlyArray<AnyDurableTrigger>): ImgGenPressureD
       );
       const bus = await runtime.runPromise(EventBus);
       await runtime.runPromise(
-        commitDurableTriggerIntent(state, sql, bus, fireAt, registry, trigger.kind, (tx, trigger) =>
-          tx.append({
-            ts: fireAt,
-            kind: trigger.intentEventKind,
-            scope,
-            payload,
-          }),
+        commitDurableTriggerIntent(
+          state,
+          sql,
+          bus,
+          identity,
+          fireAt,
+          registry,
+          trigger.kind,
+          (tx, trigger) =>
+            tx.append({
+              ts: fireAt,
+              kind: trigger.intentEventKind,
+              scopeRef: identity.scopeRef,
+              effectAuthorityRef: identity.effectAuthorityRef,
+              payload,
+            }),
         ),
       );
     },
@@ -50,7 +66,7 @@ const makeDriver = (triggers: ReadonlyArray<AnyDurableTrigger>): ImgGenPressureD
     },
     events: async () => {
       const ledger = await runtime.runPromise(Ledger);
-      return runtime.runPromise(ledger.events(scope));
+      return runtime.runPromise(ledger.events(identity));
     },
     dispose: () => runtime.dispose(),
   };

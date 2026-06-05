@@ -1,8 +1,17 @@
-import type { LedgerEvent, LedgerEventIdentity } from "@agent-os/kernel/types";
+import type { FactOwnerRef } from "@agent-os/kernel/effect-claim";
+import type { LedgerEvent } from "@agent-os/kernel/types";
 import { JsonStringifyError, SqlError } from "@agent-os/kernel/errors";
 import { Effect } from "effect";
 import { applyRegisteredMaterializedProjectionEvents } from "../materialized-projections";
 import type { EventBusService } from "./event-bus";
+import {
+  LegacyLedgerSchemaError,
+  assertNoFactOwnerOverride,
+  eventIdentity,
+  eventIdentityColumns,
+  truthIdentityFromCommitSpec,
+} from "./identity";
+import type { BackendProtocolTruthIdentity } from "@agent-os/backend-protocol";
 
 export type LedgerEventRef = {
   readonly key: string;
@@ -22,7 +31,10 @@ export type LedgerEventPayloadBuilder = (context: LedgerPayloadContext) => unkno
 type LedgerEventRecipeBase = {
   readonly ts: number;
   readonly kind: string;
-  readonly scope: string;
+  readonly scopeRef: BackendProtocolTruthIdentity["scopeRef"];
+  readonly effectAuthorityRef: BackendProtocolTruthIdentity["effectAuthorityRef"];
+  readonly scope?: never;
+  readonly factOwnerRef?: never;
 };
 
 export type LedgerEventRecipe =
@@ -110,15 +122,71 @@ class LedgerCommitBuilderImpl implements LedgerTransactionBuilder {
   }
 }
 
+const tableColumns = (sql: SqlStorage, table: string): ReadonlySet<string> =>
+  new Set(
+    sql
+      .exec(`PRAGMA table_info(${table})`)
+      .toArray()
+      .map((row) => String((row as { readonly name?: unknown }).name)),
+  );
+
+const ensureNoLegacyLedgerSchema = (columns: ReadonlySet<string>): void => {
+  if (columns.has("scope")) {
+    throw new LegacyLedgerSchemaError({
+      table: "events",
+      reason: "legacy scope column is invalid",
+    });
+  }
+  const required = [
+    "id",
+    "ts",
+    "kind",
+    "scope_ref",
+    "scope_key",
+    "fact_owner_ref",
+    "fact_owner_key",
+    "effect_authority_ref",
+    "effect_authority_key",
+    "event_identity_key",
+    "payload",
+  ];
+  for (const column of required) {
+    if (!columns.has(column)) {
+      throw new LegacyLedgerSchemaError({
+        table: "events",
+        reason: `missing identity column ${column}`,
+      });
+    }
+  }
+};
+
 export const ensureLedgerSchema = (sql: SqlStorage): void => {
+  const eventColumns = tableColumns(sql, "events");
+  if (eventColumns.size > 0) {
+    ensureNoLegacyLedgerSchema(eventColumns);
+  }
   sql.exec(`
     CREATE TABLE IF NOT EXISTS events (
       id INTEGER PRIMARY KEY,
       ts INTEGER NOT NULL,
       kind TEXT NOT NULL,
-      scope TEXT NOT NULL,
+      scope_ref TEXT NOT NULL,
+      scope_key TEXT NOT NULL,
+      fact_owner_ref TEXT NOT NULL,
+      fact_owner_key TEXT NOT NULL,
+      effect_authority_ref TEXT NOT NULL,
+      effect_authority_key TEXT NOT NULL,
+      event_identity_key TEXT NOT NULL,
       payload TEXT NOT NULL
     )
+  `);
+  sql.exec(`
+    CREATE INDEX IF NOT EXISTS events_truth_lookup
+      ON events (scope_key, effect_authority_key, id)
+  `);
+  sql.exec(`
+    CREATE INDEX IF NOT EXISTS events_owner_lookup
+      ON events (event_identity_key, id)
   `);
   sql.exec(`
     CREATE TABLE IF NOT EXISTS ledger_sequences (
@@ -157,12 +225,6 @@ const encodePayload = (payload: unknown): string => {
   }
 };
 
-const transitionIdentityFromScope = (scope: string): LedgerEventIdentity => ({
-  scopeRef: { kind: "conversation", scopeId: scope },
-  factOwnerRef: "@agent-os/transition-unowned",
-  effectAuthorityRef: { authorityClass: "legacy-scope", authorityId: scope },
-});
-
 const asEffectError = <E>(
   cause: unknown,
   classify?: (cause: unknown) => E | null,
@@ -175,6 +237,7 @@ const asEffectError = <E>(
 export const commitLedgerTransaction = <A, E = never>(
   storage: DurableObjectState,
   bus: EventBusService,
+  owner: { readonly factOwnerRef: FactOwnerRef },
   build: (tx: LedgerTransactionBuilder) => A,
   classifyBuildError?: (cause: unknown) => E | null,
 ): Effect.Effect<LedgerCommitResult<A>, SqlError | JsonStringifyError | E> =>
@@ -193,6 +256,8 @@ export const commitLedgerTransaction = <A, E = never>(
             return event === undefined ? builder.id(ref) : event.id;
           };
           const events = builder.recipes.map((recipe): LedgerEvent => {
+            assertNoFactOwnerOverride(recipe, "ledger event recipe");
+            const truthIdentity = truthIdentityFromCommitSpec(recipe, "ledger event recipe");
             const payload =
               recipe.buildPayload === undefined
                 ? recipe.payload
@@ -201,7 +266,7 @@ export const commitLedgerTransaction = <A, E = never>(
               id: recipe.id,
               ts: recipe.ts,
               kind: recipe.kind,
-              ...transitionIdentityFromScope(recipe.scope),
+              ...eventIdentity(truthIdentity, owner.factOwnerRef),
               payload,
             };
             byRef.set(recipe.ref.key, event);
@@ -210,13 +275,33 @@ export const commitLedgerTransaction = <A, E = never>(
           const encoded = events.map((event) => encodePayload(event.payload));
           for (let index = 0; index < events.length; index++) {
             const event = events[index]!;
-            const recipe = builder.recipes[index]!;
+            const identityColumns = eventIdentityColumns(event);
             sql.exec(
-              "INSERT INTO events (id, ts, kind, scope, payload) VALUES (?, ?, ?, ?, ?)",
+              `
+                INSERT INTO events (
+                  id,
+                  ts,
+                  kind,
+                  scope_ref,
+                  scope_key,
+                  fact_owner_ref,
+                  fact_owner_key,
+                  effect_authority_ref,
+                  effect_authority_key,
+                  event_identity_key,
+                  payload
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              `,
               event.id,
               event.ts,
               event.kind,
-              recipe.scope,
+              identityColumns.scope_ref,
+              identityColumns.scope_key,
+              identityColumns.fact_owner_ref,
+              identityColumns.fact_owner_key,
+              identityColumns.effect_authority_ref,
+              identityColumns.effect_authority_key,
+              identityColumns.event_identity_key,
               encoded[index]!,
             );
           }

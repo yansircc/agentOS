@@ -2,10 +2,7 @@ import { Clock, Effect, Layer } from "effect";
 import { SqlError } from "@agent-os/kernel/errors";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import { Quota, type GrantResult } from "@agent-os/runtime";
-import {
-  inMemoryRuntimeEventIdentity,
-  type InMemoryBackendState,
-} from "./state";
+import { inMemoryRuntimeEventIdentity, type InMemoryBackendState } from "./state";
 import { decodeOk, finiteNumberField, recordOf, stringField, type DecodeResult } from "./decode";
 
 const consumedAmount = (event: LedgerEvent, key: string): DecodeResult<number> => {

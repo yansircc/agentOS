@@ -1,4 +1,4 @@
-import type { LedgerEvent, LedgerEventIdentity } from "@agent-os/kernel/types";
+import type { LedgerEvent } from "@agent-os/kernel/types";
 /**
  * Internal Cloudflare-only Effect SQL facade.
  *
@@ -12,13 +12,21 @@ import { layer as sqliteDoLayer } from "@effect/sql-sqlite-do/SqliteClient";
 import { Effect } from "effect";
 import { SqlError } from "@agent-os/kernel/errors";
 import type { EventQueryOptions } from "@agent-os/kernel/types";
-import { sqlText } from "./sql-row";
+import { ledgerEventFromRow, ledgerIdentityKeys, type LedgerEventSqlRow } from "../ledger/identity";
+import type { BackendProtocolTruthIdentity } from "@agent-os/backend-protocol";
+import { RUNTIME_FACT_OWNER } from "@agent-os/runtime";
 
-interface LedgerEventSqlRow {
+interface EffectSqlLedgerEventRow {
   readonly id: number;
   readonly ts: number;
   readonly kind: string;
-  readonly scope: string;
+  readonly scope_ref: string;
+  readonly scope_key: string;
+  readonly fact_owner_ref: string;
+  readonly fact_owner_key: string;
+  readonly effect_authority_ref: string;
+  readonly effect_authority_key: string;
+  readonly event_identity_key: string;
   readonly payload: string;
 }
 
@@ -31,40 +39,40 @@ const normalizeNonNegativeInteger = (value: number | undefined, fallback: number
 const normalizeLimit = (limit: number | undefined): number =>
   Math.min(MAX_LIMIT, normalizeNonNegativeInteger(limit, DEFAULT_LIMIT));
 
-const transitionIdentityFromScope = (scope: string): LedgerEventIdentity => ({
-  scopeRef: { kind: "conversation", scopeId: scope },
-  factOwnerRef: "@agent-os/transition-unowned",
-  effectAuthorityRef: { authorityClass: "legacy-scope", authorityId: scope },
-});
-
 export const EffectSqliteDoReadLive = (sql: SqlStorage) => sqliteDoLayer({ db: sql });
 
 export const selectLedgerEventsWithEffectSql = (
-  scope: string,
+  identity: BackendProtocolTruthIdentity,
   opts: Pick<EventQueryOptions, "afterId" | "limit"> = {},
 ): Effect.Effect<ReadonlyArray<LedgerEvent>, SqlError, SqlClient> =>
   Effect.gen(function* () {
     const sql = yield* SqlClient;
     const afterId = normalizeNonNegativeInteger(opts.afterId, 0);
     const limit = normalizeLimit(opts.limit);
-    const rows = yield* sql<LedgerEventSqlRow>`
-      SELECT id, ts, kind, scope, payload
+    const keys = ledgerIdentityKeys({ ...identity, factOwnerRef: RUNTIME_FACT_OWNER });
+    const rows = yield* sql<EffectSqlLedgerEventRow>`
+      SELECT
+        id,
+        ts,
+        kind,
+        scope_ref,
+        scope_key,
+        fact_owner_ref,
+        fact_owner_key,
+        effect_authority_ref,
+        effect_authority_key,
+        event_identity_key,
+        payload
       FROM events
-      WHERE scope = ${scope}
+      WHERE scope_key = ${keys.scopeKey}
+        AND effect_authority_key = ${keys.effectAuthorityKey}
         AND id > ${afterId}
       ORDER BY id ASC
       LIMIT ${limit}
     `.pipe(Effect.mapError((cause) => new SqlError({ cause })));
 
     return yield* Effect.try({
-      try: () =>
-        rows.map((row) => ({
-          id: Number(row.id),
-          ts: Number(row.ts),
-          kind: sqlText(row.kind, "events.kind"),
-          ...transitionIdentityFromScope(sqlText(row.scope, "events.scope")),
-          payload: JSON.parse(sqlText(row.payload, "events.payload")) as unknown,
-        })),
+      try: () => rows.map((row) => ledgerEventFromRow(row as unknown as LedgerEventSqlRow)),
       catch: (cause) => new SqlError({ cause }),
     });
   });

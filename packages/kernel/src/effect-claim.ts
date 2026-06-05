@@ -138,11 +138,7 @@ const refKeyPart = (part: string): string => encodeURIComponent(part).replace(/\
 export const scopeRefKey = (scopeRef: ScopeRef): string => {
   switch (scopeRef.kind) {
     case "external":
-      return [
-        "external",
-        refKeyPart(scopeRef.systemRef),
-        refKeyPart(scopeRef.scopeId),
-      ].join(":");
+      return ["external", refKeyPart(scopeRef.systemRef), refKeyPart(scopeRef.scopeId)].join(":");
     case "realm":
     case "conversation":
     case "session":

@@ -65,9 +65,7 @@ const backendProtocolParseOk = <T>(value: T): BackendProtocolParseResult<T> => (
   value,
 });
 
-const backendProtocolParseFail = <T = never>(
-  reason: string,
-): BackendProtocolParseResult<T> => ({
+const backendProtocolParseFail = <T = never>(reason: string): BackendProtocolParseResult<T> => ({
   ok: false,
   failure: {
     _tag: "agent_os.backend_protocol_parse_failure",
@@ -95,16 +93,13 @@ const ledgerEventRpcKeys = new Set([
 ]);
 const dispatchTargetKeys = new Set(["bindingRef", "scopeRef", "effectAuthorityRef"]);
 
-const hasOnlyProtocolKeys = (
-  value: Record<string, unknown>,
-  keys: ReadonlySet<string>,
-): boolean => Object.keys(value).every((key) => keys.has(key));
+const hasOnlyProtocolKeys = (value: Record<string, unknown>, keys: ReadonlySet<string>): boolean =>
+  Object.keys(value).every((key) => keys.has(key));
 
 const isNonEmptyProtocolString = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0;
 
-const protocolKeyPart = (part: string): string =>
-  encodeURIComponent(part).replace(/\./g, "%2E");
+const protocolKeyPart = (part: string): string => encodeURIComponent(part).replace(/\./g, "%2E");
 
 export const isBackendProtocolTruthIdentity = (
   value: unknown,
@@ -134,19 +129,13 @@ export const isBackendProtocolProjectionKey = (
   isNonEmptyProtocolString(value.projectionKind) &&
   isNonEmptyProtocolString(value.projectionId);
 
-export const backendProtocolTruthIdentityKey = (
-  identity: BackendProtocolTruthIdentity,
-): string => ledgerTruthKey(identity);
+export const backendProtocolTruthIdentityKey = (identity: BackendProtocolTruthIdentity): string =>
+  ledgerTruthKey(identity);
 
-export const backendProtocolEventIdentityKey = (
-  identity: BackendProtocolEventIdentity,
-): string => [backendProtocolTruthIdentityKey(identity), factOwnerKey(identity.factOwnerRef)].join(
-  "|",
-);
+export const backendProtocolEventIdentityKey = (identity: BackendProtocolEventIdentity): string =>
+  [backendProtocolTruthIdentityKey(identity), factOwnerKey(identity.factOwnerRef)].join("|");
 
-export const backendProtocolProjectionKey = (
-  key: BackendProtocolProjectionKey,
-): string =>
+export const backendProtocolProjectionKey = (key: BackendProtocolProjectionKey): string =>
   [
     "projection",
     protocolKeyPart(key.projectionKind),
@@ -658,10 +647,7 @@ export const parseRequestedPayloadValue = (
     return parseFail("dispatch.outbound.requested payload must be object");
   const target = value.target;
   if (!Predicate.isRecord(target)) return parseFail("dispatch target must be object");
-  if (
-    typeof value.event !== "string" ||
-    typeof value.idempotencyKey !== "string"
-  ) {
+  if (typeof value.event !== "string" || typeof value.idempotencyKey !== "string") {
     return parseFail("dispatch.outbound.requested payload malformed");
   }
   if ("scope" in target) return parseFail("dispatch target must not include legacy scope");

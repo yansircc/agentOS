@@ -224,7 +224,7 @@ const collectFailuresForFiles = (files) => {
           }
         }
         if (name === "commitLedgerTransaction") {
-          const builder = node.arguments[2];
+          const builder = node.arguments[3];
           if (builder === undefined) {
             failures.push(
               `${nodeLabel(sourceFile, node)} commitLedgerTransaction requires a builder`,
@@ -264,7 +264,7 @@ const selfTest = () => {
       "good.ts",
       `
         transactionSync(() => ({ ok: true }));
-        commitLedgerTransaction(ctx, bus, (tx) => {
+        commitLedgerTransaction(ctx, bus, owner, (tx) => {
           tx.afterInsert(() => undefined);
         });
         const extension = { commit: async () => ({ id: 1 }) };
@@ -286,7 +286,7 @@ const selfTest = () => {
           setTimeout(() => undefined, 1);
           value.then(() => undefined);
         });
-        commitLedgerTransaction(ctx, bus, (tx) => {
+        commitLedgerTransaction(ctx, bus, owner, (tx) => {
           tx.afterInsert(() => Promise.resolve());
         });
         const trigger = {

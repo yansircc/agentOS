@@ -137,50 +137,52 @@ describe("boundary commit validation", () => {
     }),
   );
 
-  it.effect("rejects committed events with caller-controlled owner, kind, scope, or authority", () =>
-    Effect.gen(function* () {
-      const owner = yield* Effect.either(
-        commitBoundaryEvent(contract, "slot.ledgered", { claim: livedClaim }, () =>
-          Effect.succeed(eventFor({ claim: livedClaim, factOwnerRef: "@other/package" })),
-        ),
-      );
-      const kind = yield* Effect.either(
-        commitBoundaryEvent(contract, "slot.ledgered", { claim: livedClaim }, () =>
-          Effect.succeed(eventFor({ claim: livedClaim, kind: "slot.other" })),
-        ),
-      );
-      const scope = yield* Effect.either(
-        commitBoundaryEvent(contract, "slot.ledgered", { claim: livedClaim }, () =>
-          Effect.succeed({
-            ...eventFor({ claim: livedClaim }),
-            scopeRef: { kind: "conversation", scopeId: "thread:2" },
-          }),
-        ),
-      );
-      const authority = yield* Effect.either(
-        commitBoundaryEvent(contract, "slot.ledgered", { claim: livedClaim }, () =>
-          Effect.succeed(
-            eventFor({
-              claim: livedClaim,
-              effectAuthorityRef: { authorityClass: "effect", authorityId: "other.record" },
+  it.effect(
+    "rejects committed events with caller-controlled owner, kind, scope, or authority",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* Effect.either(
+          commitBoundaryEvent(contract, "slot.ledgered", { claim: livedClaim }, () =>
+            Effect.succeed(eventFor({ claim: livedClaim, factOwnerRef: "@other/package" })),
+          ),
+        );
+        const kind = yield* Effect.either(
+          commitBoundaryEvent(contract, "slot.ledgered", { claim: livedClaim }, () =>
+            Effect.succeed(eventFor({ claim: livedClaim, kind: "slot.other" })),
+          ),
+        );
+        const scope = yield* Effect.either(
+          commitBoundaryEvent(contract, "slot.ledgered", { claim: livedClaim }, () =>
+            Effect.succeed({
+              ...eventFor({ claim: livedClaim }),
+              scopeRef: { kind: "conversation", scopeId: "thread:2" },
             }),
           ),
-        ),
-      );
+        );
+        const authority = yield* Effect.either(
+          commitBoundaryEvent(contract, "slot.ledgered", { claim: livedClaim }, () =>
+            Effect.succeed(
+              eventFor({
+                claim: livedClaim,
+                effectAuthorityRef: { authorityClass: "effect", authorityId: "other.record" },
+              }),
+            ),
+          ),
+        );
 
-      expect(Either.isLeft(owner) ? owner.left : null).toMatchObject({
-        issue: "committed_fact_owner_mismatch",
-      });
-      expect(Either.isLeft(kind) ? kind.left : null).toMatchObject({
-        issue: "committed_event_kind_mismatch",
-      });
-      expect(Either.isLeft(scope) ? scope.left : null).toMatchObject({
-        issue: "committed_scope_ref_mismatch",
-      });
-      expect(Either.isLeft(authority) ? authority.left : null).toMatchObject({
-        issue: "committed_effect_authority_mismatch",
-      });
-    }),
+        expect(Either.isLeft(owner) ? owner.left : null).toMatchObject({
+          issue: "committed_fact_owner_mismatch",
+        });
+        expect(Either.isLeft(kind) ? kind.left : null).toMatchObject({
+          issue: "committed_event_kind_mismatch",
+        });
+        expect(Either.isLeft(scope) ? scope.left : null).toMatchObject({
+          issue: "committed_scope_ref_mismatch",
+        });
+        expect(Either.isLeft(authority) ? authority.left : null).toMatchObject({
+          issue: "committed_effect_authority_mismatch",
+        });
+      }),
   );
 
   it.effect("rejects undeclared claim authority before commit", () =>

@@ -12,6 +12,7 @@ import {
   type AnchorRef,
   type AuthorityRef,
   type EffectClaim,
+  type FactOwnerRef,
   type LivedClaim,
   type OriginRef,
   type PreClaim,
@@ -22,6 +23,7 @@ import {
 import { validateTerminalClaim } from "@agent-os/kernel/settlement-contract";
 import { dispatchSettlementContract } from "@agent-os/backend-protocol";
 import { toolSettlementContract } from "@agent-os/runtime";
+import type { LedgerTruthIdentity } from "@agent-os/runtime";
 
 const abortKinds = new Set<string>(Object.values(ABORT));
 
@@ -236,12 +238,13 @@ export const projectResourceState = (
 
 export const projectAdmissionLease = (
   sql: SqlStorage,
-  scope: string,
+  identity: LedgerTruthIdentity,
+  factOwnerRef: FactOwnerRef,
   key: AttemptKey,
   now: number,
 ): Effect.Effect<CapabilityLease | null, SqlError> =>
   Effect.gen(function* () {
-    const rows = yield* loadAdmissionRows(sql, scope);
+    const rows = yield* loadAdmissionRows(sql, identity, factOwnerRef);
     const { lease } = projectLease(rows, key, now);
     return lease.status === "unknown" ? null : lease;
   });

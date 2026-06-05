@@ -33,9 +33,7 @@ const bindingRef = bindingMaterialRef({
 
 const bindingKey = materialRefKey(bindingRef);
 
-const truthIdentity = (
-  identity: BackendProtocolTruthIdentity,
-): BackendProtocolTruthIdentity => ({
+const truthIdentity = (identity: BackendProtocolTruthIdentity): BackendProtocolTruthIdentity => ({
   scopeRef: identity.scopeRef,
   effectAuthorityRef: identity.effectAuthorityRef,
 });

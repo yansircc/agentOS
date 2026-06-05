@@ -13,28 +13,46 @@
 import { Context, Layer, ManagedRuntime, Schema } from "effect";
 
 import { EventBusLive, LedgerLive } from "../../src/ledger";
-import { LlmTransport } from "@agent-os/runtime";
+import { LlmTransport, RUNTIME_FACT_OWNER } from "@agent-os/runtime";
 import { RefResolverLive } from "@agent-os/kernel/ref-resolver";
 import { QuotaLive } from "../../src/quota";
 import { AdmissionLive } from "../../src/admission";
 import type { EventHandler } from "@agent-os/kernel/types";
+import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
+import type { AuthorityRef } from "@agent-os/kernel/effect-claim";
 import { structuredToolResp } from "../_stub-ai";
 
 export const SCHEMA = Schema.Struct({ summary: Schema.String });
 
+export const testIdentity = (
+  scopeId: string,
+  effectAuthorityRef: AuthorityRef = { authorityClass: "effect", authorityId: scopeId },
+): BackendProtocolEventIdentity => ({
+  scopeRef: { kind: "conversation", scopeId },
+  effectAuthorityRef,
+  factOwnerRef: RUNTIME_FACT_OWNER,
+});
+
+const normalizeIdentity = (
+  identityOrScope: string | BackendProtocolEventIdentity,
+): BackendProtocolEventIdentity =>
+  typeof identityOrScope === "string" ? testIdentity(identityOrScope) : identityOrScope;
+
 export const makeRuntime = (
   state: DurableObjectState,
   llm: Context.Tag.Service<typeof LlmTransport>,
+  identityOrScope: string | BackendProtocolEventIdentity,
 ) => {
+  const identity = normalizeIdentity(identityOrScope);
   const handlers = new Map<string, Set<EventHandler>>();
   const eventBus = EventBusLive(handlers);
   const ledger = LedgerLive(state).pipe(Layer.provide(eventBus));
-  const quota = QuotaLive(state).pipe(Layer.provide(eventBus));
+  const quota = QuotaLive(state, identity).pipe(Layer.provide(eventBus));
   const llmTransport = Layer.succeed(LlmTransport, llm);
   const refs = RefResolverLive({
     material: () => null,
   });
-  const admission = AdmissionLive(state).pipe(
+  const admission = AdmissionLive(state, identity).pipe(
     Layer.provide(Layer.mergeAll(eventBus, llmTransport)),
   );
   return ManagedRuntime.make(Layer.mergeAll(ledger, quota, llmTransport, admission, refs));
@@ -43,13 +61,15 @@ export const makeRuntime = (
 export const makeRuntimeWithRegistry = (
   state: DurableObjectState,
   llm: Context.Tag.Service<typeof LlmTransport>,
+  identityOrScope: string | BackendProtocolEventIdentity,
   endpoints: Record<string, string>,
   credentials: Record<string, string>,
 ) => {
+  const identity = normalizeIdentity(identityOrScope);
   const handlers = new Map<string, Set<EventHandler>>();
   const eventBus = EventBusLive(handlers);
   const ledger = LedgerLive(state).pipe(Layer.provide(eventBus));
-  const quota = QuotaLive(state).pipe(Layer.provide(eventBus));
+  const quota = QuotaLive(state, identity).pipe(Layer.provide(eventBus));
   const llmTransport = Layer.succeed(LlmTransport, llm);
   const refs = RefResolverLive({
     material: (ref) => {
@@ -63,7 +83,7 @@ export const makeRuntimeWithRegistry = (
       }
     },
   });
-  const admission = AdmissionLive(state).pipe(
+  const admission = AdmissionLive(state, identity).pipe(
     Layer.provide(Layer.mergeAll(eventBus, llmTransport)),
   );
   return ManagedRuntime.make(Layer.mergeAll(ledger, quota, llmTransport, admission, refs));

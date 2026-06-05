@@ -21,6 +21,9 @@ import {
   decodeTerminalPayloadSync,
 } from "./payload";
 import { sqlText } from "../storage/sql-row";
+import { eventIdentity, eventIdentityColumns } from "../ledger/identity";
+import type { FactOwnerRef } from "@agent-os/kernel/effect-claim";
+import type { LedgerTruthIdentity } from "@agent-os/runtime";
 
 export interface ResourceProjection {
   readonly available: number;
@@ -142,11 +145,16 @@ export const projectRows = (rows: ReadonlyArray<ResourceEventRow>): ProjectedSta
 /** Synchronous load — one SELECT + projectRows. Designed to be called
  *  INSIDE `transactionSync`; the read is consistent with subsequent
  *  writes in the same transaction. */
-export const loadState = (sql: SqlStorage, scope: string): ProjectedState => {
+export const loadState = (
+  sql: SqlStorage,
+  identity: LedgerTruthIdentity,
+  factOwnerRef: FactOwnerRef,
+): ProjectedState => {
+  const columns = eventIdentityColumns(eventIdentity(identity, factOwnerRef));
   const rows = sql
     .exec(
-      "SELECT kind, payload FROM events WHERE scope = ? AND kind LIKE 'resource_pool.%' ORDER BY id",
-      scope,
+      "SELECT kind, payload FROM events WHERE event_identity_key = ? AND kind LIKE 'resource_pool.%' ORDER BY id",
+      columns.event_identity_key,
     )
     .toArray() as unknown as ResourceEventRow[];
   return projectRows(rows);

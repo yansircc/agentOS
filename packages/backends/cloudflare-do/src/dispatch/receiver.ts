@@ -17,6 +17,7 @@ import { Predicate } from "effect";
 import type { TraceContext } from "@agent-os/kernel/types";
 import type { LivedClaim } from "@agent-os/kernel/effect-claim";
 import { sqlText } from "../storage/sql-row";
+import { projectionIdentityColumns } from "../ledger/identity";
 import {
   DISPATCH_INBOUND_ACCEPTED,
   dispatchPayloadParseFailure,
@@ -24,6 +25,7 @@ import {
   parseTraceContext,
   type DispatchPayloadParseResult,
 } from "@agent-os/backend-protocol";
+import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
 
 export interface InboundAcceptedPayload {
   readonly sourceScope: string;
@@ -92,14 +94,19 @@ export const findAcceptedInRows = (
 
 export const findAccepted = (
   sql: SqlStorage,
-  scope: string,
+  identity: BackendProtocolEventIdentity,
   sourceScope: string,
   idempotencyKey: string,
 ): FindAcceptedResult => {
+  const columns = projectionIdentityColumns({
+    ...identity,
+    projectionKind: "dispatch",
+    projectionId: "inbound-accepted",
+  });
   const rows = sql
     .exec(
-      "SELECT payload FROM events WHERE scope = ? AND kind = ? ORDER BY id",
-      scope,
+      "SELECT payload FROM events WHERE event_identity_key = ? AND kind = ? ORDER BY id",
+      columns.event_identity_key,
       DISPATCH_INBOUND_ACCEPTED,
     )
     .toArray();

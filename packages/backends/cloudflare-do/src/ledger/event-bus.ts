@@ -1,5 +1,5 @@
 import type { LedgerEvent } from "@agent-os/kernel/types";
-import { scopeRefKey } from "@agent-os/kernel/effect-claim";
+import { backendProtocolTruthIdentityKey } from "@agent-os/backend-protocol";
 /**
  * EventBus — module-private reactive dispatcher.
  *
@@ -28,7 +28,7 @@ export interface EventBusFanoutDiagnostic {
   readonly phase: "sink";
   readonly eventId: number;
   readonly kind: string;
-  readonly scopeKey: string;
+  readonly identityKey: string;
   readonly message: string;
 }
 
@@ -83,7 +83,7 @@ export const EventBusLive = (handlers: Map<string, Set<EventHandler>>): Layer.La
                   phase: "sink",
                   eventId: event.id,
                   kind: event.kind,
-                  scopeKey: scopeRefKey(event.scopeRef),
+                  identityKey: backendProtocolTruthIdentityKey(event),
                   message: describeFanoutCause(cause),
                 });
               }

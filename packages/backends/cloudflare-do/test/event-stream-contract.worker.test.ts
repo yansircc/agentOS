@@ -1,4 +1,5 @@
 import type { LedgerEventRpc, StreamEventsOptions } from "@agent-os/kernel/types";
+import type { BackendProtocolTruthIdentity } from "@agent-os/backend-protocol";
 /**
  * Ledger event stream — deterministic contract tests.
  *
@@ -13,6 +14,7 @@ import { SELF, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import type { EventQueryOptions } from "@agent-os/kernel/types";
 import type { StreamTestDO } from "./test-worker";
+import { testTruthIdentity } from "./_identity";
 
 interface TestEnv {
   readonly STREAM_DO: DurableObjectNamespace<StreamTestDO>;
@@ -23,8 +25,14 @@ interface StreamRpc {
     readonly event: string;
     readonly data: unknown;
   }) => Promise<{ id: number }>;
-  readonly events: (opts?: EventQueryOptions) => Promise<ReadonlyArray<LedgerEventRpc>>;
-  readonly streamEvents: (opts?: StreamEventsOptions) => Promise<Response>;
+  readonly events: (
+    identity: BackendProtocolTruthIdentity,
+    opts?: EventQueryOptions,
+  ) => Promise<ReadonlyArray<LedgerEventRpc>>;
+  readonly streamEvents: (
+    identity: BackendProtocolTruthIdentity,
+    opts?: StreamEventsOptions,
+  ) => Promise<Response>;
 }
 
 interface SseFrame {
@@ -39,9 +47,14 @@ const testEnv = env as unknown as TestEnv;
 const stubFor = (scope: string): StreamRpc =>
   testEnv.STREAM_DO.get(testEnv.STREAM_DO.idFromName(scope)) as unknown as StreamRpc;
 
-const withStreamDO = <A>(scope: string, f: (instance: StreamRpc) => Promise<A>): Promise<A> => {
+const withStreamDO = <A>(
+  scope: string,
+  f: (instance: StreamRpc, identity: BackendProtocolTruthIdentity) => Promise<A>,
+): Promise<A> => {
   const stub = testEnv.STREAM_DO.get(testEnv.STREAM_DO.idFromName(scope));
-  return runInDurableObject(stub, (instance) => f(instance as unknown as StreamRpc));
+  return runInDurableObject(stub, (instance) =>
+    f(instance as unknown as StreamRpc, testTruthIdentity(scope)),
+  );
 };
 
 const parseFrame = (raw: string): SseFrame => {
@@ -118,17 +131,19 @@ const readLedgerRows = async (
 
 describe("ledger event stream — contract", () => {
   it("events(opts) snapshots by cursor, limit, and exact kind set", async () => {
-    await withStreamDO("stream-events-snapshot", async (stub) => {
+    await withStreamDO("stream-events-snapshot", async (stub, identity) => {
       const first = await stub.emitEvent({ event: "A", data: { n: 1 } });
       await stub.emitEvent({ event: "B", data: { n: 2 } });
       await stub.emitEvent({ event: "C", data: { n: 3 } });
 
-      const allKinds: string[] = (await stub.events()).map((e) => e.kind);
-      const afterFirstKinds: string[] = (await stub.events({ afterId: first.id })).map(
+      const allKinds: string[] = (await stub.events(identity)).map((e) => e.kind);
+      const afterFirstKinds: string[] = (await stub.events(identity, { afterId: first.id })).map(
         (e) => e.kind,
       );
-      const limitedKinds: string[] = (await stub.events({ limit: 2 })).map((e) => e.kind);
-      const filteredKinds: string[] = (await stub.events({ kinds: ["A", "C"] })).map((e) => e.kind);
+      const limitedKinds: string[] = (await stub.events(identity, { limit: 2 })).map((e) => e.kind);
+      const filteredKinds: string[] = (await stub.events(identity, { kinds: ["A", "C"] })).map(
+        (e) => e.kind,
+      );
 
       expect(allKinds).toEqual(["A", "B", "C"]);
       expect(afterFirstKinds).toEqual(["B", "C"]);
@@ -138,7 +153,7 @@ describe("ledger event stream — contract", () => {
   });
 
   it("streams existing snapshot rows as closed LedgerEventRpc SSE wire", async () => {
-    await withStreamDO("stream-snapshot-wire", async (stub) => {
+    await withStreamDO("stream-snapshot-wire", async (stub, identity) => {
       const first = await stub.emitEvent({
         event: "snapshot.one",
         data: { value: 1 },
@@ -148,7 +163,7 @@ describe("ledger event stream — contract", () => {
         data: { value: 2 },
       });
 
-      const response = await stub.streamEvents({
+      const response = await stub.streamEvents(identity, {
         afterId: 0,
         heartbeatMs: 1_000,
       });
@@ -161,14 +176,18 @@ describe("ledger event stream — contract", () => {
           id: first.id,
           ts: expect.any(Number),
           kind: "snapshot.one",
-          scope: "stream-snapshot-wire",
+          scopeRef: identity.scopeRef,
+          effectAuthorityRef: identity.effectAuthorityRef,
+          factOwnerRef: "@agent-os/runtime",
           payload: { value: 1 },
         },
         {
           id: second.id,
           ts: expect.any(Number),
           kind: "snapshot.two",
-          scope: "stream-snapshot-wire",
+          scopeRef: identity.scopeRef,
+          effectAuthorityRef: identity.effectAuthorityRef,
+          factOwnerRef: "@agent-os/runtime",
           payload: { value: 2 },
         },
       ]);
@@ -176,19 +195,22 @@ describe("ledger event stream — contract", () => {
   });
 
   it("resumes from afterId without overlap", async () => {
-    await withStreamDO("stream-cursor", async (stub) => {
+    await withStreamDO("stream-cursor", async (stub, identity) => {
       await stub.emitEvent({ event: "cursor.one", data: {} });
       const second = await stub.emitEvent({ event: "cursor.two", data: {} });
       await stub.emitEvent({ event: "cursor.three", data: {} });
 
-      const rows = await readLedgerRows(await stub.streamEvents({ afterId: second.id }), 1);
+      const rows = await readLedgerRows(
+        await stub.streamEvents(identity, { afterId: second.id }),
+        1,
+      );
       expect(rows.map((row) => row.kind)).toEqual(["cursor.three"]);
     });
   });
 
   it("live-tails rows emitted after stream open", async () => {
-    await withStreamDO("stream-live-tail", async (stub) => {
-      const response = await stub.streamEvents({ heartbeatMs: 1_000 });
+    await withStreamDO("stream-live-tail", async (stub, identity) => {
+      const response = await stub.streamEvents(identity, { heartbeatMs: 1_000 });
 
       await stub.emitEvent({ event: "live.one", data: { n: 1 } });
       await stub.emitEvent({ event: "live.two", data: { n: 2 } });
@@ -200,9 +222,9 @@ describe("ledger event stream — contract", () => {
   });
 
   it("hands off from snapshot to live tail without duplicate rows", async () => {
-    await withStreamDO("stream-snapshot-live-handoff", async (stub) => {
+    await withStreamDO("stream-snapshot-live-handoff", async (stub, identity) => {
       await stub.emitEvent({ event: "handoff.snapshot", data: {} });
-      const response = await stub.streamEvents({ heartbeatMs: 1_000 });
+      const response = await stub.streamEvents(identity, { heartbeatMs: 1_000 });
 
       await stub.emitEvent({ event: "handoff.live", data: {} });
 
@@ -212,23 +234,26 @@ describe("ledger event stream — contract", () => {
   });
 
   it("filters stream rows by exact kind set; empty kinds means all kinds", async () => {
-    await withStreamDO("stream-filter", async (stub) => {
+    await withStreamDO("stream-filter", async (stub, identity) => {
       await stub.emitEvent({ event: "A", data: {} });
       await stub.emitEvent({ event: "B", data: {} });
       await stub.emitEvent({ event: "C", data: {} });
 
-      const filtered = await readLedgerRows(await stub.streamEvents({ kinds: ["A", "C"] }), 2);
+      const filtered = await readLedgerRows(
+        await stub.streamEvents(identity, { kinds: ["A", "C"] }),
+        2,
+      );
       expect(filtered.map((row) => row.kind)).toEqual(["A", "C"]);
 
-      const all = await readLedgerRows(await stub.streamEvents({ kinds: [] }), 3);
+      const all = await readLedgerRows(await stub.streamEvents(identity, { kinds: [] }), 3);
       expect(all.map((row) => row.kind)).toEqual(["A", "B", "C"]);
     });
   });
 
   it("emits heartbeat comment frames", async () => {
-    await withStreamDO("stream-heartbeat", async (stub) => {
+    await withStreamDO("stream-heartbeat", async (stub, identity) => {
       const frames = await readFrames(
-        await stub.streamEvents({ heartbeatMs: 30 }),
+        await stub.streamEvents(identity, { heartbeatMs: 30 }),
         (frame) => frame.raw.startsWith(":"),
         3,
         500,
@@ -238,8 +263,8 @@ describe("ledger event stream — contract", () => {
   });
 
   it("stream sink runs outside app on() handler delay", async () => {
-    await withStreamDO("stream-outside-app-handler", async (stub) => {
-      const response = await stub.streamEvents({ heartbeatMs: 1_000 });
+    await withStreamDO("stream-outside-app-handler", async (stub, identity) => {
+      const response = await stub.streamEvents(identity, { heartbeatMs: 1_000 });
       const pendingEmit = stub.emitEvent({
         event: "stream.slow",
         data: { value: "visible-before-handler-finishes" },

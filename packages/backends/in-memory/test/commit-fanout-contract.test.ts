@@ -36,7 +36,8 @@ describe("in-memory backend commit/fanout contract", () => {
     const projections = [failingDispatchDeliveredProjection];
 
     const receiverRuntime = ManagedRuntime.make(
-      createInMemoryRuntimeBackend({ state, identity: truthIdentity("receiver"), projections }).layer,
+      createInMemoryRuntimeBackend({ state, identity: truthIdentity("receiver"), projections })
+        .layer,
     );
     const receiver: DispatchReceiver = {
       __agentosReceiveDispatch: async (envelope) => {

@@ -12,10 +12,14 @@ import {
   type DispatchReceiver,
   type DispatchTargetAdapter,
 } from "@agent-os/runtime";
-import { DISPATCH_EVENT_KINDS } from "@agent-os/backend-protocol";
+import {
+  DISPATCH_EVENT_KINDS,
+  type BackendProtocolEventIdentity,
+} from "@agent-os/backend-protocol";
 import { durableObjectDispatchTarget, type DispatchTargetNamespace } from "../src/dispatch";
 import { findNextDue } from "../src/due-work";
 import { EventBus } from "../src/ledger";
+import { cloudflareRouteKeyFromScopeRef } from "../src/ledger/identity";
 import { makeCloudflareBackendCoreLayer } from "../src/runtime-core";
 import { makeInMemoryDurableObjectState } from "./_in-memory-do";
 import {
@@ -57,32 +61,47 @@ const makeCloudflareDoContractDriver = (): RuntimeBackendContractDriver => {
     return created;
   };
 
-  const makeRuntime = (scope: string) => {
+  const makeRuntime = (scope: string, identity: BackendProtocolEventIdentity) => {
     const state = stateFor(scope);
-    return ManagedRuntime.make(makeCloudflareBackendCoreLayer(state, {}, scope, handlers, targets));
+    return ManagedRuntime.make(
+      makeCloudflareBackendCoreLayer(state, {}, scope, identity, handlers, targets),
+    );
   };
   type RuntimeHandle = ReturnType<typeof makeRuntime>;
   const runtimes = new Map<string, RuntimeHandle>();
-  const runtime = (scope: string): RuntimeHandle => {
+  const runtime = (scope: string, identity: BackendProtocolEventIdentity): RuntimeHandle => {
     const existing = runtimes.get(scope);
     if (existing !== undefined) return existing;
-    const created = makeRuntime(scope);
+    const created = makeRuntime(scope, identity);
     runtimes.set(scope, created);
     return created;
   };
 
+  const routeKey = (identity: BackendProtocolEventIdentity): string =>
+    cloudflareRouteKeyFromScopeRef(identity.scopeRef);
+
+  const runtimeFor = (identity: BackendProtocolEventIdentity): RuntimeHandle =>
+    runtime(routeKey(identity), identity);
+
+  const stateForIdentity = (identity: BackendProtocolEventIdentity): DurableObjectState =>
+    stateFor(routeKey(identity));
+
   const acceptDispatch = async (
-    scope: string,
+    identity: BackendProtocolEventIdentity,
     envelope: Parameters<DispatchReceiver["__agentosReceiveDispatch"]>[0],
   ) => {
-    const dispatch = await runtime(scope).runPromise(Dispatch);
-    return runtime(scope).runPromise(dispatch.receive(envelope));
+    const handle = runtimeFor(identity);
+    const dispatch = await handle.runPromise(Dispatch);
+    return handle.runPromise(dispatch.receive(envelope));
   };
 
-  const registerDispatchReceiver = (scope: string, receiver?: ContractDispatchReceiver): void => {
-    receiverTargets.set(scope, {
+  const registerDispatchReceiver = (
+    identity: BackendProtocolEventIdentity,
+    receiver?: ContractDispatchReceiver,
+  ): void => {
+    receiverTargets.set(routeKey(identity), {
       __agentosReceiveDispatch: (envelope) => {
-        const accept = () => acceptDispatch(scope, envelope);
+        const accept = () => acceptDispatch(identity, envelope);
         return receiver === undefined ? accept() : receiver(envelope, accept);
       },
     });
@@ -113,48 +132,63 @@ const makeCloudflareDoContractDriver = (): RuntimeBackendContractDriver => {
         },
       };
     },
-    addSink: async (scope, kind, sink) => {
-      const bus = await runtime(scope).runPromise(EventBus);
+    addSink: async (identity, kind, sink) => {
+      const bus = await runtimeFor(identity).runPromise(EventBus);
       return bus.subscribe({ kinds: [kind], sink });
     },
     fanoutDiagnostics: async () => {
       const diagnostics: RuntimeBackendFanoutDiagnostic[] = [];
-      for (const [scope] of states) {
-        const bus = await runtime(scope).runPromise(EventBus);
+      for (const handle of runtimes.values()) {
+        const bus = await handle.runPromise(EventBus);
         diagnostics.push(...bus.fanoutDiagnostics());
       }
       return diagnostics;
     },
-    log: async (scope, kind, payload) => {
-      const ledger = await runtime(scope).runPromise(Ledger);
-      const events = await runtime(scope).runPromise(ledger.commit([{ kind, payload, scope }]));
+    log: async (identity, kind, payload) => {
+      const handle = runtimeFor(identity);
+      const ledger = await handle.runPromise(Ledger);
+      const events = await handle.runPromise(
+        ledger.commit([
+          {
+            kind,
+            payload,
+            scopeRef: identity.scopeRef,
+            effectAuthorityRef: identity.effectAuthorityRef,
+          },
+        ]),
+      );
       const event = events[0];
       if (event === undefined) throw new Error("ledger commit returned no event");
       return event;
     },
-    events: async (scope) => {
-      const ledger = await runtime(scope).runPromise(Ledger);
-      return runtime(scope).runPromise(ledger.events(scope));
+    events: async (identity) => {
+      const handle = runtimeFor(identity);
+      const ledger = await handle.runPromise(Ledger);
+      return handle.runPromise(ledger.events(identity));
     },
-    schedule: async (scope, at, eventKind, data) => {
-      const scheduler = await runtime(scope).runPromise(Scheduler);
-      return runtime(scope).runPromise(scheduler.schedule(at, eventKind, data));
+    schedule: async (identity, at, eventKind, data) => {
+      const handle = runtimeFor(identity);
+      const scheduler = await handle.runPromise(Scheduler);
+      return handle.runPromise(scheduler.schedule(at, eventKind, data));
     },
-    fireDue: async (scope, now) => {
-      const triggerPump = await runtime(scope).runPromise(TriggerPump);
-      const result = await runtime(scope).runPromise(triggerPump.drainDue(now));
+    fireDue: async (identity, now) => {
+      const handle = runtimeFor(identity);
+      const triggerPump = await handle.runPromise(TriggerPump);
+      const result = await handle.runPromise(triggerPump.drainDue(now));
       return { fired: result.drained };
     },
-    dispatchToScope: async (scope, spec) => {
-      const dispatch = await runtime(scope).runPromise(Dispatch);
-      return runtime(scope).runPromise(dispatch.dispatchToScope(spec));
+    dispatchToScope: async (identity, spec) => {
+      const handle = runtimeFor(identity);
+      const dispatch = await handle.runPromise(Dispatch);
+      return handle.runPromise(dispatch.dispatchToScope(spec));
     },
-    drainDispatchDue: async (scope, now) => {
-      const ledger = await runtime(scope).runPromise(Ledger);
-      const before = await runtime(scope).runPromise(ledger.events(scope));
-      const triggerPump = await runtime(scope).runPromise(TriggerPump);
-      await runtime(scope).runPromise(triggerPump.drainDue(now));
-      const after = await runtime(scope).runPromise(ledger.events(scope));
+    drainDispatchDue: async (identity, now) => {
+      const handle = runtimeFor(identity);
+      const ledger = await handle.runPromise(Ledger);
+      const before = await handle.runPromise(ledger.events(identity));
+      const triggerPump = await handle.runPromise(TriggerPump);
+      await handle.runPromise(triggerPump.drainDue(now));
+      const after = await handle.runPromise(ledger.events(identity));
       const slice = after.slice(before.length);
       return {
         delivered: slice.filter((event) => event.kind === DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED)
@@ -162,37 +196,44 @@ const makeCloudflareDoContractDriver = (): RuntimeBackendContractDriver => {
         failed: slice.filter((event) => event.kind === DISPATCH_EVENT_KINDS.OUTBOUND_FAILED).length,
       };
     },
-    nextDueAt: (scope) => runtime(scope).runPromise(findNextDue(stateFor(scope).storage.sql)),
-    pendingDueCount: (scope) =>
+    nextDueAt: (identity) =>
+      runtimeFor(identity).runPromise(findNextDue(stateForIdentity(identity).storage.sql)),
+    pendingDueCount: (identity) =>
       Promise.resolve(
-        stateFor(scope)
+        stateForIdentity(identity)
           .storage.sql.exec("SELECT * FROM due_work WHERE completed_at IS NULL")
           .toArray().length,
       ),
-    grantResource: async (scope, spec) => {
-      const resources = await runtime(scope).runPromise(Resources);
-      return runtime(scope).runPromise(resources.grant(scope, spec));
+    grantResource: async (identity, spec) => {
+      const handle = runtimeFor(identity);
+      const resources = await handle.runPromise(Resources);
+      return handle.runPromise(resources.grant(identity, spec));
     },
-    reserveResource: async (scope, spec) => {
-      const resources = await runtime(scope).runPromise(Resources);
-      return runtime(scope).runPromise(resources.reserve(scope, spec));
+    reserveResource: async (identity, spec) => {
+      const handle = runtimeFor(identity);
+      const resources = await handle.runPromise(Resources);
+      return handle.runPromise(resources.reserve(identity, spec));
     },
-    consumeResource: async (scope, spec) => {
-      const resources = await runtime(scope).runPromise(Resources);
-      return runtime(scope).runPromise(resources.consume(scope, spec));
+    consumeResource: async (identity, spec) => {
+      const handle = runtimeFor(identity);
+      const resources = await handle.runPromise(Resources);
+      return handle.runPromise(resources.consume(identity, spec));
     },
-    releaseResource: async (scope, spec) => {
-      const resources = await runtime(scope).runPromise(Resources);
-      return runtime(scope).runPromise(resources.release(scope, spec));
+    releaseResource: async (identity, spec) => {
+      const handle = runtimeFor(identity);
+      const resources = await handle.runPromise(Resources);
+      return handle.runPromise(resources.release(identity, spec));
     },
-    projectResource: async (scope, key) => {
-      const resources = await runtime(scope).runPromise(Resources);
-      return runtime(scope).runPromise(resources.project(scope, key));
+    projectResource: async (key) => {
+      const handle = runtimeFor(key);
+      const resources = await handle.runPromise(Resources);
+      return handle.runPromise(resources.project(key, key.projectionId));
     },
-    quotaTryGrant: async (scope, key, amount, windowMs, limit, toolName, operationRef) => {
-      const quota = await runtime(scope).runPromise(Quota);
-      return runtime(scope).runPromise(
-        quota.tryGrant(scope, key, amount, windowMs, limit, toolName, operationRef),
+    quotaTryGrant: async (identity, key, amount, windowMs, limit, toolName, operationRef) => {
+      const handle = runtimeFor(identity);
+      const quota = await handle.runPromise(Quota);
+      return handle.runPromise(
+        quota.tryGrant(identity, key.projectionId, amount, windowMs, limit, toolName, operationRef),
       );
     },
     dispose: async () => {

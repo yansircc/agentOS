@@ -67,6 +67,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:InvalidateSpec`
 - `.:Ledger`
 - `.:LedgerCommitEventSpec`
+- `.:LedgerTruthIdentity`
 - `.:LiveInput`
 - `.:LlmCallOptions`
 - `.:LlmRoute`
@@ -74,6 +75,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:LlmUsage`
 - `.:AnyMaterializedProjectionDefinition`
 - `.:MaterializedProjectionDefinition`
+- `.:MaterializedProjectionEventIdentity`
 - `.:MaterializedProjectionGetSpec`
 - `.:MaterializedProjectionListSpec`
 - `.:MaterializedProjectionRebuildResult`
@@ -113,6 +115,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:ProjectionStatus`
 - `.:ResourceProjection`
 - `.:Resources`
+- `.:RUNTIME_FACT_OWNER`
 - `.:RUN_BEARING_KINDS`
 - `.:Scheduler`
 - `.:ScheduledEventIntentPayload`

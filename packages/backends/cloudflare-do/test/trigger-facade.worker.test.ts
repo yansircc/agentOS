@@ -8,6 +8,7 @@ import type {
   TriggerFactoryErrorTestDO,
   TriggerTestingDrainTestDO,
 } from "./test-worker";
+import { testTruthIdentity } from "./_identity";
 
 interface TestEnv {
   readonly TRIGGER_FACADE_DO: DurableObjectNamespace<TriggerFacadeTestDO>;
@@ -40,7 +41,7 @@ describe("defineAgentDO trigger facade", () => {
     }
     expect(String(rejected)).toContain("agent_os.unregistered_durable_trigger_kind");
 
-    const events = (await stub.events()) as Array<{
+    const events = (await stub.events(testTruthIdentity("trigger-facade-unregistered"))) as Array<{
       readonly kind: string;
       readonly payload: unknown;
     }>;
@@ -108,7 +109,7 @@ describe("defineAgentDO trigger facade", () => {
         readonly alarm: () => Promise<void>;
       };
       await alarmInstance.alarm();
-      return instance.events();
+      return instance.events(testTruthIdentity("trigger-facade-fold"));
     });
 
     expect(events.filter((event) => event.kind === "test.fold.requested")).toHaveLength(2);
@@ -230,7 +231,7 @@ describe("defineAgentDO trigger facade", () => {
       });
       const once = await instance.__drainDueOnceForTesting({ now: 10 });
       const untilQuiet = await instance.__drainUntilQuietForTesting({ now: 10 });
-      const events = await instance.events();
+      const events = await instance.events(testTruthIdentity("trigger-testing-drain-chain"));
       return {
         once,
         untilQuiet,
@@ -271,7 +272,7 @@ describe("defineAgentDO trigger facade", () => {
       }),
     );
     await drain;
-    const events = (await stub.events()) as Array<{
+    const events = (await stub.events(testTruthIdentity("trigger-running-cancel"))) as Array<{
       readonly kind: string;
       readonly payload: unknown;
     }>;
@@ -311,7 +312,7 @@ describe("defineAgentDO trigger facade", () => {
         intentEventId: intent.id,
         reason: "user",
       });
-      const events = await instance.events();
+      const events = await instance.events(testTruthIdentity("trigger-ignored-cancel"));
       return {
         cancel,
         duplicate,
@@ -388,7 +389,9 @@ describe("defineAgentDO trigger facade", () => {
       instance.__drainDueOnceForTesting({ now: CANCEL_TEST_AT }),
     );
     const firstResult = await first;
-    const events = (await stub.events()) as Array<{ readonly kind: string }>;
+    const events = (await stub.events(
+      testTruthIdentity("trigger-concurrent-drain-single-claim"),
+    )) as Array<{ readonly kind: string }>;
 
     expect({
       first: firstResult,
@@ -422,7 +425,7 @@ describe("defineAgentDO trigger facade", () => {
     );
     await first;
     const result = await runInDurableObject(stub, async (instance, state) => {
-      const events = await instance.events();
+      const events = await instance.events(testTruthIdentity("trigger-redrive-single-terminal"));
       const observations = state.storage.sql
         .exec("SELECT mode, aborted FROM test_acquire_observations ORDER BY rowid")
         .toArray();
@@ -469,7 +472,7 @@ describe("defineAgentDO trigger facade", () => {
     );
     await first;
     const result = await runInDurableObject(stub, async (instance, state) => {
-      const events = await instance.events();
+      const events = await instance.events(testTruthIdentity("trigger-redrive-cancel-propagates"));
       const observations = state.storage.sql
         .exec("SELECT mode, aborted FROM test_acquire_observations ORDER BY rowid")
         .toArray();
@@ -538,10 +541,14 @@ describe("defineAgentDO trigger facade", () => {
         sql
           .exec("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'events'")
           .toArray().length > 0;
+      const hasDueWorkTable =
+        sql
+          .exec("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'due_work'")
+          .toArray().length > 0;
       return {
         tag,
         events: hasEventsTable ? sql.exec("SELECT * FROM events").toArray().length : 0,
-        due: sql.exec("SELECT * FROM due_work").toArray().length,
+        due: hasDueWorkTable ? sql.exec("SELECT * FROM due_work").toArray().length : 0,
         alarm: await state.storage.getAlarm(),
       };
     });

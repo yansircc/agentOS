@@ -47,10 +47,7 @@ const eventIdentity = (scopeId: string) => ({
   effectAuthorityRef: { authorityClass: "test", authorityId: scopeId },
 });
 
-const commit = (
-  id: number,
-  spec: RuntimeEventCommitSpec,
-): LedgerEvent => ({
+const commit = (id: number, spec: RuntimeEventCommitSpec): LedgerEvent => ({
   id,
   ts: id * 10,
   kind: spec.kind,

@@ -26,6 +26,8 @@ import { LlmTransport, type InternalSubmitSpec, submitAgentEffect } from "@agent
 import { defineTool, pureToolExecution, type Tool } from "@agent-os/kernel/tools";
 import type { EventHandler } from "@agent-os/kernel/types";
 import { finalTextResp, stubLlmTransport, toolCallResp } from "./_stub-ai";
+import { testEventIdentity } from "./_identity";
+import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
 
 interface TestEnv {
   readonly AGENT_DO: DurableObjectNamespace;
@@ -49,6 +51,11 @@ const makeQuotaTool = (limit: number): Tool =>
     { windowMs: 60_000, limit, amount: 1 },
   );
 
+const quotaAuthorityRef = {
+  authorityClass: "llm_route" as const,
+  authorityId: "quota-contract",
+};
+
 const makeSpec = (scope: string, limit: number): InternalSubmitSpec => ({
   intent: "what time is it",
   context: {},
@@ -62,19 +69,23 @@ const makeSpec = (scope: string, limit: number): InternalSubmitSpec => ({
   budget: { maxTurns: 3 },
   scope,
   scopeRef: { kind: "conversation", scopeId: scope },
-  effectAuthorityRef: { authorityClass: "llm_route", authorityId: "quota-contract" },
+  effectAuthorityRef: quotaAuthorityRef,
 });
 
-const buildRuntime = (state: DurableObjectState, llm: Context.Tag.Service<typeof LlmTransport>) => {
+const buildRuntime = (
+  state: DurableObjectState,
+  llm: Context.Tag.Service<typeof LlmTransport>,
+  identity: BackendProtocolEventIdentity,
+) => {
   const handlers = new Map<string, Set<EventHandler>>();
   const eventBus = EventBusLive(handlers);
   const ledger = LedgerLive(state).pipe(Layer.provide(eventBus));
-  const quota = QuotaLive(state).pipe(Layer.provide(eventBus));
+  const quota = QuotaLive(state, identity).pipe(Layer.provide(eventBus));
   const llmTransport = Layer.succeed(LlmTransport, llm);
   const refs = RefResolverLive({
     material: () => null,
   });
-  const admission = AdmissionLive(state).pipe(
+  const admission = AdmissionLive(state, identity).pipe(
     Layer.provide(Layer.mergeAll(eventBus, llmTransport)),
   );
   return ManagedRuntime.make(Layer.mergeAll(ledger, quota, llmTransport, admission, refs));
@@ -108,7 +119,9 @@ describe("quota state machine — deterministic", () => {
         toolCallResp("get_current_time", "{}", "c1"),
         finalTextResp("ok"),
       ]);
-      const runtime = buildRuntime(state, llm);
+      const routeIdentity = testEventIdentity(scope, quotaAuthorityRef);
+      const quotaIdentity = testEventIdentity(scope, retryingTool.contract.effectAuthorityRef);
+      const runtime = buildRuntime(state, llm, routeIdentity);
       const spec: InternalSubmitSpec = {
         ...makeSpec(scope, 1),
         tools: { get_current_time: retryingTool },
@@ -122,7 +135,7 @@ describe("quota state machine — deterministic", () => {
       const events = await runtime.runPromise(
         Effect.gen(function* () {
           const l = yield* Ledger;
-          return yield* l.events(scope);
+          return yield* l.events(quotaIdentity);
         }),
       );
       expect(events.filter((event) => event.kind === "quota.consumed")).toHaveLength(1);
@@ -149,7 +162,9 @@ describe("quota state machine — deterministic", () => {
         toolCallResp("get_current_time", "{}", "c3"),
       ]);
 
-      const runtime = buildRuntime(state, llm);
+      const routeIdentity = testEventIdentity(scope, quotaAuthorityRef);
+      const quotaIdentity = testEventIdentity(scope, makeQuotaTool(2).contract.effectAuthorityRef);
+      const runtime = buildRuntime(state, llm, routeIdentity);
 
       const r1 = await runtime.runPromise(submitAgentEffect(makeSpec(scope, 2)));
       const r2 = await runtime.runPromise(submitAgentEffect(makeSpec(scope, 2)));
@@ -162,21 +177,31 @@ describe("quota state machine — deterministic", () => {
         expect(r3.reason).toBe("tool_error");
       }
 
-      const events = await runtime.runPromise(
+      const quotaEvents = await runtime.runPromise(
         Effect.gen(function* () {
           const l = yield* Ledger;
-          return yield* l.events(scope);
+          return yield* l.events(quotaIdentity);
+        }),
+      );
+      const routeEvents = await runtime.runPromise(
+        Effect.gen(function* () {
+          const l = yield* Ledger;
+          return yield* l.events(routeIdentity);
         }),
       );
 
-      const counts = events.reduce<Record<string, number>>((acc, e) => {
+      const quotaCounts = quotaEvents.reduce<Record<string, number>>((acc, e) => {
+        acc[e.kind] = (acc[e.kind] ?? 0) + 1;
+        return acc;
+      }, {});
+      const routeCounts = routeEvents.reduce<Record<string, number>>((acc, e) => {
         acc[e.kind] = (acc[e.kind] ?? 0) + 1;
         return acc;
       }, {});
 
-      expect(counts["quota.consumed"]).toBe(2);
-      expect(counts["quota.rate_limited"]).toBe(1);
-      expect(counts["agent.aborted.tool_error"]).toBe(1);
+      expect(quotaCounts["quota.consumed"]).toBe(2);
+      expect(quotaCounts["quota.rate_limited"]).toBe(1);
+      expect(routeCounts["agent.aborted.tool_error"]).toBe(1);
 
       await runtime.dispose();
     });
@@ -192,7 +217,9 @@ describe("quota state machine — deterministic", () => {
       // tryGrant call when it reads the corrupted row.
       const llm = stubLlmTransport([toolCallResp("get_current_time", "{}", "c1")]);
 
-      const runtime = buildRuntime(state, llm);
+      const routeIdentity = testEventIdentity(scope, quotaAuthorityRef);
+      const quotaIdentity = testEventIdentity(scope, makeQuotaTool(2).contract.effectAuthorityRef);
+      const runtime = buildRuntime(state, llm, routeIdentity);
 
       // Commit a malformed quota.consumed row through the ledger primitive.
       // Payload is valid JSON but fails ConsumedPayloadSchema:
@@ -207,7 +234,8 @@ describe("quota state machine — deterministic", () => {
           yield* ledger.commit([
             {
               kind: "quota.consumed",
-              scope,
+              scopeRef: quotaIdentity.scopeRef,
+              effectAuthorityRef: quotaIdentity.effectAuthorityRef,
               payload: {
                 key: "get_current_time",
                 amount: "x",

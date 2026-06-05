@@ -179,7 +179,9 @@ describe("@agent-os/backend-protocol", () => {
       factOwnerRef: "@agent-os/other",
     };
 
-    expect(backendProtocolTruthIdentityKey(base)).toBe("conversation:same-scope|test:same-scope:none");
+    expect(backendProtocolTruthIdentityKey(base)).toBe(
+      "conversation:same-scope|test:same-scope:none",
+    );
     expect(backendProtocolTruthIdentityKey(base)).not.toBe(
       backendProtocolTruthIdentityKey(alternateAuthority),
     );

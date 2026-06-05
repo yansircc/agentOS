@@ -31,6 +31,7 @@ import {
   type LoweredAgentConfigWithoutSubmit,
   type LlmRouteMap,
 } from "./facade-lowering";
+import { cloudflareDefaultTruthIdentityFromRoutingScope } from "./ledger/identity";
 
 export interface AgentFacadeRuntimeClient extends AgentRuntimeReaderClient {
   readonly emit: (event: string, data: unknown) => Promise<{ id: number }>;
@@ -142,7 +143,9 @@ const materializedConfigForEnv = <
   triggers: config.triggers ?? [],
   streams: config.streams ?? [],
   projections: config.projections ?? [],
-  scopeRefForScope: config.scopeRefForScope ?? (() => null),
+  scopeRefForScope:
+    config.scopeRefForScope ??
+    ((scope) => cloudflareDefaultTruthIdentityFromRoutingScope(scope).scopeRef),
   eventHandlers: (context, eventEnv) => eventHandlersFor(config, context, eventEnv),
 });
 

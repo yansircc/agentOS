@@ -18,6 +18,7 @@ import {
 import type { EventHandler } from "@agent-os/kernel/types";
 
 import type { TestAgentDO } from "./test-worker";
+import { testTruthIdentity } from "./_identity";
 
 interface TestEnv {
   readonly AGENT_DO: DurableObjectNamespace<TestAgentDO>;
@@ -40,15 +41,26 @@ describe("@effect/sql-sqlite-do read facade", () => {
 
     await runInDurableObject(stub, async (_instance, state) => {
       const runtime = makeRuntime(state);
+      const identity = testTruthIdentity(scope);
       try {
         const rows = await runtime.runPromise(
           Effect.gen(function* () {
             const ledger = yield* Ledger;
             yield* ledger.commit([
-              { kind: "test.one", payload: { n: 1 }, scope },
-              { kind: "test.two", payload: { n: 2 }, scope },
+              {
+                kind: "test.one",
+                payload: { n: 1 },
+                scopeRef: identity.scopeRef,
+                effectAuthorityRef: identity.effectAuthorityRef,
+              },
+              {
+                kind: "test.two",
+                payload: { n: 2 },
+                scopeRef: identity.scopeRef,
+                effectAuthorityRef: identity.effectAuthorityRef,
+              },
             ]);
-            return yield* selectLedgerEventsWithEffectSql(scope, {
+            return yield* selectLedgerEventsWithEffectSql(identity, {
               afterId: 0,
               limit: 10,
             });

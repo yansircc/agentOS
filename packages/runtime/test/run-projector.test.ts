@@ -263,9 +263,12 @@ describe("runtime run projectors", () => {
   });
 
   it("does not fabricate SubmitResult without a terminal runtime fact", () => {
-    expect(projectSubmitResult([event(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "open" }))], 1)).toBe(
-      null,
-    );
+    expect(
+      projectSubmitResult(
+        [event(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "open" }))],
+        1,
+      ),
+    ).toBe(null);
   });
 
   it("fails closed on malformed runtime payloads", () => {

@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
 import type { LedgerEventRpc } from "@agent-os/kernel/types";
 import type { MaterializedProjectionTestDO } from "./test-worker";
+import { testEventIdentity, testTruthIdentity } from "./_identity";
 
 interface TestEnv {
   readonly MATERIALIZED_PROJECTION_DO: DurableObjectNamespace<MaterializedProjectionTestDO>;
@@ -15,6 +16,7 @@ describe("materialized projections — Cloudflare DO", () => {
     const stub = testEnv.MATERIALIZED_PROJECTION_DO.get(
       testEnv.MATERIALIZED_PROJECTION_DO.idFromName(scope),
     );
+    const identity = testEventIdentity(scope);
 
     await runInDurableObject(stub, async (instance) => {
       await instance.emit("run.requested", { runId: "r1" });
@@ -22,29 +24,29 @@ describe("materialized projections — Cloudflare DO", () => {
 
       const row = await instance.projectionGet({
         kind: "run.workflow",
-        scope,
+        ...identity,
         identity: { runId: "r1" },
       });
       expect(row?.state).toEqual({ runId: "r1", status: "completed", handoff: "ready" });
       expect(row?.version).toBe(1);
 
       await expect(
-        instance.projectionStatus({ kind: "run.workflow", scope }),
+        instance.projectionStatus({ kind: "run.workflow", ...identity }),
       ).resolves.toMatchObject({
         kind: "run.workflow",
-        scope,
+        scope: "conversation:materialized-projection-ok",
         version: 1,
         status: "current",
         lastAppliedEventId: 2,
       });
-      await expect(instance.projectionList({ kind: "run.workflow", scope })).resolves.toHaveLength(
-        1,
-      );
       await expect(
-        instance.projectionRebuild({ kind: "run.workflow", scope }),
+        instance.projectionList({ kind: "run.workflow", ...identity }),
+      ).resolves.toHaveLength(1);
+      await expect(
+        instance.projectionRebuild({ kind: "run.workflow", ...identity }),
       ).resolves.toMatchObject({
         kind: "run.workflow",
-        scope,
+        scope: "conversation:materialized-projection-ok",
         status: "current",
         rows: 1,
         lastRebuiltEventId: 2,
@@ -57,14 +59,17 @@ describe("materialized projections — Cloudflare DO", () => {
     const stub = testEnv.MATERIALIZED_PROJECTION_DO.get(
       testEnv.MATERIALIZED_PROJECTION_DO.idFromName(scope),
     );
+    const identity = testEventIdentity(scope);
 
     await runInDurableObject(stub, async (instance) => {
       await expect(instance.emit("run.failed", { runId: "r1" })).rejects.toMatchObject({
         _tag: "agent_os.sql_error",
       });
-      const events: LedgerEventRpc[] = await instance.events();
+      const events: LedgerEventRpc[] = await instance.events(testTruthIdentity(scope));
       expect(events).toEqual([]);
-      await expect(instance.projectionList({ kind: "run.workflow", scope })).resolves.toEqual([]);
+      await expect(instance.projectionList({ kind: "run.workflow", ...identity })).resolves.toEqual(
+        [],
+      );
     });
   });
 
@@ -73,6 +78,7 @@ describe("materialized projections — Cloudflare DO", () => {
     const stub = testEnv.MATERIALIZED_PROJECTION_DO.get(
       testEnv.MATERIALIZED_PROJECTION_DO.idFromName(scope),
     );
+    const identity = testEventIdentity(scope);
 
     await runInDurableObject(stub, async (instance) => {
       await instance.emit("run.requested", { runId: "r1" });
@@ -80,7 +86,7 @@ describe("materialized projections — Cloudflare DO", () => {
       expect(
         await instance.projectionGet({
           kind: "run.workflow",
-          scope,
+          ...identity,
           identity: { runId: "r1" },
         }),
       ).toMatchObject({
@@ -89,7 +95,7 @@ describe("materialized projections — Cloudflare DO", () => {
       });
 
       await expect(
-        instance.rebuildWithFailingProjection({ kind: "run.workflow", scope }),
+        instance.rebuildWithFailingProjection({ kind: "run.workflow", ...identity }),
       ).rejects.toMatchObject({
         _tag: "agent_os.sql_error",
       });
@@ -97,7 +103,7 @@ describe("materialized projections — Cloudflare DO", () => {
       expect(
         await instance.projectionGet({
           kind: "run.workflow",
-          scope,
+          ...identity,
           identity: { runId: "r1" },
         }),
       ).toMatchObject({

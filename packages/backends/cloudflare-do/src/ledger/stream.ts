@@ -30,12 +30,17 @@ import type { LedgerEvent, StreamEventsOptions } from "@agent-os/kernel/types";
  */
 
 import { Effect, type ManagedRuntime } from "effect";
-import { Ledger } from "@agent-os/runtime";
+import { Ledger, type LedgerTruthIdentity } from "@agent-os/runtime";
+import { backendProtocolTruthIdentityKey } from "@agent-os/backend-protocol";
 import { EventBus } from "./event-bus";
 import { eventToRpc } from "./ledger";
 
 const DEFAULT_STREAM_HEARTBEAT_MS = 15_000;
-const transitionScopeString = (event: LedgerEvent): string => event.scopeRef.scopeId;
+const truthIdentityKey = (identity: LedgerTruthIdentity): string =>
+  backendProtocolTruthIdentityKey({
+    scopeRef: identity.scopeRef,
+    effectAuthorityRef: identity.effectAuthorityRef,
+  });
 
 const normalizePositiveInteger = (value: number | undefined, fallback: number): number =>
   value === undefined || !Number.isFinite(value) ? fallback : Math.max(0, Math.floor(value));
@@ -84,11 +89,11 @@ export const selectHandoffEvents = (
  *
  *  `runtime` must provide Ledger + EventBus. Any runtime whose service
  *  union includes both is assignable here (e.g. Cloudflare backend's
- *  CoreServices runtime). `scope` filters which bus events reach the
+ *  CoreServices runtime). `identity` filters which bus events reach the
  *  sink and which ledger rows the snapshot draws from. */
 export const createEventStreamResponse = <R, E>(
   runtime: ManagedRuntime.ManagedRuntime<R, E>,
-  scope: string,
+  identity: LedgerTruthIdentity,
   opts: StreamEventsOptions = {},
 ): Response => {
   const afterId = normalizePositiveInteger(opts.afterId, 0);
@@ -97,6 +102,7 @@ export const createEventStreamResponse = <R, E>(
     normalizePositiveInteger(opts.heartbeatMs, DEFAULT_STREAM_HEARTBEAT_MS),
   );
   const kinds = normalizeKinds(opts.kinds);
+  const identityKey = truthIdentityKey(identity);
   const encoder = new TextEncoder();
 
   let closed = false;
@@ -149,7 +155,7 @@ export const createEventStreamResponse = <R, E>(
             const subscription = bus.subscribe({
               kinds,
               sink: (event) => {
-                if (transitionScopeString(event) !== scope) return;
+                if (truthIdentityKey(event) !== identityKey) return;
                 if (mode === "buffering") {
                   liveQueue.push(event);
                   return;
@@ -162,7 +168,7 @@ export const createEventStreamResponse = <R, E>(
             });
             cleanup = () => subscription.unsubscribe();
 
-            const snapshot = yield* ledger.streamSnapshot(scope, {
+            const snapshot = yield* ledger.streamSnapshot(identity, {
               afterId,
               kinds,
             });

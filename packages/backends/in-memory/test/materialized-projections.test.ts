@@ -12,7 +12,7 @@ import {
   type AnyMaterializedProjectionDefinition,
 } from "@agent-os/runtime";
 import { createInMemoryRuntimeBackend } from "../src";
-import { projectionScopeKey, truthIdentity } from "./identity";
+import { projectionScopeKey, runtimeEventIdentity, truthIdentity } from "./identity";
 
 const payload = (value: unknown): Record<string, unknown> =>
   value !== null && typeof value === "object" ? (value as Record<string, unknown>) : {};
@@ -71,13 +71,16 @@ describe("in-memory materialized projections", () => {
   it("updates projection rows atomically with ledger commits", async () => {
     const scope = "projection-ledger";
     const projectionScope = projectionScopeKey(scope);
+    const projectionIdentitySpec = runtimeEventIdentity(scope);
     const { runtime } = makeRuntime(scope);
     try {
       const ledger = await runtime.runPromise(Ledger);
       const projections = await runtime.runPromise(MaterializedProjections);
 
       await runtime.runPromise(
-        ledger.commit([{ kind: "run.requested", payload: { runId: "r1" }, ...truthIdentity(scope) }]),
+        ledger.commit([
+          { kind: "run.requested", payload: { runId: "r1" }, ...truthIdentity(scope) },
+        ]),
       );
       await runtime.runPromise(
         ledger.commit([
@@ -90,18 +93,22 @@ describe("in-memory materialized projections", () => {
       );
 
       const row = await runtime.runPromise(
-        projections.get({ kind: "run.workflow", scope: projectionScope, identity: { runId: "r1" } }),
+        projections.get({
+          kind: "run.workflow",
+          ...projectionIdentitySpec,
+          identity: { runId: "r1" },
+        }),
       );
       expect(row?.state).toEqual({ runId: "r1", status: "completed", handoff: "ready" });
       expect(row?.version).toBe(1);
 
       const list = await runtime.runPromise(
-        projections.list({ kind: "run.workflow", scope: projectionScope }),
+        projections.list({ kind: "run.workflow", ...projectionIdentitySpec }),
       );
       expect(list.map((entry) => entry.identityKey)).toEqual(["r1"]);
 
       const status = await runtime.runPromise(
-        projections.status({ kind: "run.workflow", scope: projectionScope }),
+        projections.status({ kind: "run.workflow", ...projectionIdentitySpec }),
       );
       expect(status).toMatchObject({
         kind: "run.workflow",
@@ -117,7 +124,7 @@ describe("in-memory materialized projections", () => {
 
   it("rolls back the ledger commit when projection reduce fails", async () => {
     const scope = "projection-rollback";
-    const projectionScope = projectionScopeKey(scope);
+    const projectionIdentitySpec = runtimeEventIdentity(scope);
     const { runtime } = makeRuntime(scope);
     try {
       const ledger = await runtime.runPromise(Ledger);
@@ -129,7 +136,7 @@ describe("in-memory materialized projections", () => {
       expect(exit._tag).toBe("Failure");
       await expect(runtime.runPromise(ledger.events(truthIdentity(scope)))).resolves.toEqual([]);
       await expect(
-        runtime.runPromise(projections.list({ kind: "run.workflow", scope: projectionScope })),
+        runtime.runPromise(projections.list({ kind: "run.workflow", ...projectionIdentitySpec })),
       ).resolves.toEqual([]);
     } finally {
       await runtime.dispose();
@@ -139,13 +146,16 @@ describe("in-memory materialized projections", () => {
   it("reports version mismatch and rebuilds rows from ledger", async () => {
     const scope = "projection-rebuild";
     const projectionScope = projectionScopeKey(scope);
+    const projectionIdentitySpec = runtimeEventIdentity(scope);
     const { backend, runtime } = makeRuntime(scope);
     try {
       const ledger = await runtime.runPromise(Ledger);
       const projections = await runtime.runPromise(MaterializedProjections);
 
       await runtime.runPromise(
-        ledger.commit([{ kind: "run.requested", payload: { runId: "r1" }, ...truthIdentity(scope) }]),
+        ledger.commit([
+          { kind: "run.requested", payload: { runId: "r1" }, ...truthIdentity(scope) },
+        ]),
       );
       await runtime.runPromise(
         ledger.commit([
@@ -162,11 +172,11 @@ describe("in-memory materialized projections", () => {
       );
 
       await expect(
-        runtime.runPromise(projections.status({ kind: "run.workflow", scope: projectionScope })),
+        runtime.runPromise(projections.status({ kind: "run.workflow", ...projectionIdentitySpec })),
       ).resolves.toMatchObject({ version: 2, status: "needs_rebuild" });
 
       const rebuilt = await runtime.runPromise(
-        projections.rebuild({ kind: "run.workflow", scope: projectionScope }),
+        projections.rebuild({ kind: "run.workflow", ...projectionIdentitySpec }),
       );
       expect(rebuilt).toMatchObject({
         kind: "run.workflow",
@@ -178,7 +188,11 @@ describe("in-memory materialized projections", () => {
         lastRebuiltEventId: 2,
       });
       const row = await runtime.runPromise(
-        projections.get({ kind: "run.workflow", scope: projectionScope, identity: { runId: "r1" } }),
+        projections.get({
+          kind: "run.workflow",
+          ...projectionIdentitySpec,
+          identity: { runId: "r1" },
+        }),
       );
       expect(row?.version).toBe(2);
       expect(row?.state).toEqual({ runId: "r1", status: "completed", handoff: "done" });
@@ -189,14 +203,16 @@ describe("in-memory materialized projections", () => {
 
   it("keeps current rows when rebuild fails", async () => {
     const scope = "projection-rebuild-swap";
-    const projectionScope = projectionScopeKey(scope);
+    const projectionIdentitySpec = runtimeEventIdentity(scope);
     const { backend, runtime } = makeRuntime(scope);
     try {
       const ledger = await runtime.runPromise(Ledger);
       const projections = await runtime.runPromise(MaterializedProjections);
 
       await runtime.runPromise(
-        ledger.commit([{ kind: "run.requested", payload: { runId: "r1" }, ...truthIdentity(scope) }]),
+        ledger.commit([
+          { kind: "run.requested", payload: { runId: "r1" }, ...truthIdentity(scope) },
+        ]),
       );
       await runtime.runPromise(
         ledger.commit([
@@ -213,17 +229,21 @@ describe("in-memory materialized projections", () => {
       );
 
       const exit = await runtime.runPromiseExit(
-        projections.rebuild({ kind: "run.workflow", scope: projectionScope }),
+        projections.rebuild({ kind: "run.workflow", ...projectionIdentitySpec }),
       );
       expect(exit._tag).toBe("Failure");
 
       const row = await runtime.runPromise(
-        projections.get({ kind: "run.workflow", scope: projectionScope, identity: { runId: "r1" } }),
+        projections.get({
+          kind: "run.workflow",
+          ...projectionIdentitySpec,
+          identity: { runId: "r1" },
+        }),
       );
       expect(row?.version).toBe(1);
       expect(row?.state).toEqual({ runId: "r1", status: "completed", handoff: "done" });
       await expect(
-        runtime.runPromise(projections.status({ kind: "run.workflow", scope: projectionScope })),
+        runtime.runPromise(projections.status({ kind: "run.workflow", ...projectionIdentitySpec })),
       ).resolves.toMatchObject({ version: 2, status: "needs_rebuild" });
     } finally {
       await runtime.dispose();

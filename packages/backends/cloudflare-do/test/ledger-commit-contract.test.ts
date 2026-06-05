@@ -8,8 +8,10 @@ import {
   projectionFail,
   projectionIdentity,
   projectionPut,
+  RUNTIME_FACT_OWNER,
 } from "@agent-os/runtime";
 import type { AnyMaterializedProjectionDefinition, ProjectionRegistry } from "@agent-os/runtime";
+import type { BackendProtocolTruthIdentity } from "@agent-os/backend-protocol";
 import type { EventBusService } from "../src/ledger/event-bus";
 import {
   commitLedgerTransaction,
@@ -33,6 +35,13 @@ const projectionRegistry = (
   if (result._tag === "failure") throw result.error;
   return result.registry;
 };
+
+const truthIdentity = (scopeId: string): BackendProtocolTruthIdentity => ({
+  scopeRef: { kind: "conversation", scopeId },
+  effectAuthorityRef: { authorityClass: "effect", authorityId: scopeId },
+});
+
+const runtimeOwner = { factOwnerRef: RUNTIME_FACT_OWNER };
 
 describe("cloudflare-do ledger commit primitive", () => {
   it.effect("applies projections over final symbolic payloads before bus fire", () =>
@@ -62,27 +71,35 @@ describe("cloudflare-do ledger commit primitive", () => {
         ]),
       );
 
-      const committed = yield* commitLedgerTransaction(state, recordingBus(fired), (tx) => {
-        const accepted = tx.ref("accepted");
-        const delivered = tx.ref("delivered");
-        tx.append(accepted, {
-          ts: 10,
-          kind: DISPATCH_INBOUND_ACCEPTED,
-          scope: "receiver",
-          buildPayload: ({ id }: LedgerPayloadContext) => ({
-            sourceScope: "sender",
-            outboundEventId: 1,
-            idempotencyKey: "k",
-            deliveredEventId: id(delivered),
-          }),
-        });
-        tx.append(delivered, {
-          ts: 10,
-          kind: "app.delivered",
-          scope: "receiver",
-          payload: { ok: true },
-        });
-      });
+      const identity = truthIdentity("receiver");
+      const committed = yield* commitLedgerTransaction(
+        state,
+        recordingBus(fired),
+        runtimeOwner,
+        (tx) => {
+          const accepted = tx.ref("accepted");
+          const delivered = tx.ref("delivered");
+          tx.append(accepted, {
+            ts: 10,
+            kind: DISPATCH_INBOUND_ACCEPTED,
+            scopeRef: identity.scopeRef,
+            effectAuthorityRef: identity.effectAuthorityRef,
+            buildPayload: ({ id }: LedgerPayloadContext) => ({
+              sourceScope: "sender",
+              outboundEventId: 1,
+              idempotencyKey: "k",
+              deliveredEventId: id(delivered),
+            }),
+          });
+          tx.append(delivered, {
+            ts: 10,
+            kind: "app.delivered",
+            scopeRef: identity.scopeRef,
+            effectAuthorityRef: identity.effectAuthorityRef,
+            payload: { ok: true },
+          });
+        },
+      );
 
       expect(committed.events.map((event) => event.id)).toEqual([1, 2]);
       const row = sql
@@ -134,11 +151,13 @@ describe("cloudflare-do ledger commit primitive", () => {
         );
 
         const exit = yield* Effect.exit(
-          commitLedgerTransaction(state, recordingBus(fired), (tx) => {
+          commitLedgerTransaction(state, recordingBus(fired), runtimeOwner, (tx) => {
+            const identity = truthIdentity("rollback");
             tx.append({
               ts: 20,
               kind: "rollback.fail",
-              scope: "rollback",
+              scopeRef: identity.scopeRef,
+              effectAuthorityRef: identity.effectAuthorityRef,
               payload: { ok: false },
             });
             tx.afterInsert(() => {
@@ -161,21 +180,42 @@ describe("cloudflare-do ledger commit primitive", () => {
       Effect.gen(function* () {
         const state = makeInMemoryDurableObjectState();
         const sql = state.storage.sql;
-        ensureLedgerSchema(sql);
-        sql.exec(
-          "INSERT INTO events (id, ts, kind, scope, payload) VALUES (?, ?, ?, ?, ?)",
-          41,
-          1,
-          "seed.event",
-          "sequence",
-          "{}",
-        );
+        const identity = truthIdentity("sequence");
+        yield* commitLedgerTransaction(state, recordingBus([]), runtimeOwner, (tx) => {
+          for (let index = 1; index <= 41; index += 1) {
+            tx.append({
+              ts: index,
+              kind: "seed.event",
+              scopeRef: identity.scopeRef,
+              effectAuthorityRef: identity.effectAuthorityRef,
+              payload: { index },
+            });
+          }
+        });
+        sql.exec("DELETE FROM ledger_sequences WHERE name = ?", "events");
         const fired: LedgerEvent[] = [];
 
-        const committed = yield* commitLedgerTransaction(state, recordingBus(fired), (tx) => {
-          tx.append({ ts: 2, kind: "next.one", scope: "sequence", payload: { n: 1 } });
-          tx.append({ ts: 3, kind: "next.two", scope: "sequence", payload: { n: 2 } });
-        });
+        const committed = yield* commitLedgerTransaction(
+          state,
+          recordingBus(fired),
+          runtimeOwner,
+          (tx) => {
+            tx.append({
+              ts: 42,
+              kind: "next.one",
+              scopeRef: identity.scopeRef,
+              effectAuthorityRef: identity.effectAuthorityRef,
+              payload: { n: 1 },
+            });
+            tx.append({
+              ts: 43,
+              kind: "next.two",
+              scopeRef: identity.scopeRef,
+              effectAuthorityRef: identity.effectAuthorityRef,
+              payload: { n: 2 },
+            });
+          },
+        );
 
         expect(committed.events.map((event) => event.id)).toEqual([42, 43]);
         expect(fired.map((event) => event.id)).toEqual([42, 43]);

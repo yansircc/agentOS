@@ -20,7 +20,7 @@ import { defineTool, pureToolExecution } from "@agent-os/kernel/tools";
 import { stubLlmTransport } from "../_stub-ai";
 import { allowToolAdmitter } from "../_tool-fixture";
 
-import { SCHEMA, makeRuntime, submitStructuredResp } from "./_helpers";
+import { SCHEMA, makeRuntime, submitStructuredResp, testIdentity } from "./_helpers";
 
 interface TestEnv {
   readonly AGENT_DO: DurableObjectNamespace;
@@ -41,7 +41,12 @@ describe("admission — submitAgent outputSchema path (contract §12.1)", () => 
 
     await runInDurableObject(stub, async (_inst, state) => {
       const llm = stubLlmTransport([submitStructuredResp('{"summary":"from-submit"}', "c1")]);
-      const runtime = makeRuntime(state, llm);
+      const effectAuthorityRef = {
+        authorityClass: "llm_route" as const,
+        authorityId: "submit-outputschema",
+      };
+      const identity = testIdentity(scope, effectAuthorityRef);
+      const runtime = makeRuntime(state, llm, identity);
 
       const spec: InternalSubmitSpec = {
         intent: "summarize",
@@ -51,7 +56,7 @@ describe("admission — submitAgent outputSchema path (contract §12.1)", () => 
         outputSchema: SCHEMA,
         scope,
         scopeRef: { kind: "conversation", scopeId: scope },
-        effectAuthorityRef: { authorityClass: "llm_route", authorityId: "submit-outputschema" },
+        effectAuthorityRef,
       };
 
       const r = await runtime.runPromise(submitAgentEffect(spec));
@@ -64,7 +69,7 @@ describe("admission — submitAgent outputSchema path (contract §12.1)", () => 
       const events = await runtime.runPromise(
         Effect.gen(function* () {
           const l = yield* Ledger;
-          return yield* l.events(scope);
+          return yield* l.events(identity);
         }),
       );
       const kinds = events.map((e) => e.kind);
@@ -84,7 +89,12 @@ describe("admission — submitAgent outputSchema path (contract §12.1)", () => 
 
     await runInDurableObject(stub, async (_inst, state) => {
       const llm = stubLlmTransport([]); // no responses needed; submit aborts before any LLM call
-      const runtime = makeRuntime(state, llm);
+      const effectAuthorityRef = {
+        authorityClass: "llm_route" as const,
+        authorityId: "submit-outputschema-conflict",
+      };
+      const identity = testIdentity(scope, effectAuthorityRef);
+      const runtime = makeRuntime(state, llm, identity);
 
       const spec: InternalSubmitSpec = {
         intent: "x",
@@ -104,10 +114,7 @@ describe("admission — submitAgent outputSchema path (contract §12.1)", () => 
         outputSchema: SCHEMA,
         scope,
         scopeRef: { kind: "conversation", scopeId: scope },
-        effectAuthorityRef: {
-          authorityClass: "llm_route",
-          authorityId: "submit-outputschema-conflict",
-        },
+        effectAuthorityRef,
       };
 
       const exit = await runtime.runPromiseExit(submitAgentEffect(spec));
@@ -123,7 +130,7 @@ describe("admission — submitAgent outputSchema path (contract §12.1)", () => 
       const events = await runtime.runPromise(
         Effect.gen(function* () {
           const l = yield* Ledger;
-          return yield* l.events(scope);
+          return yield* l.events(identity);
         }),
       );
       const aborted = events.find((e) => e.kind === "agent.aborted.upstream_failure");
@@ -144,7 +151,12 @@ describe("admission — submitAgent outputSchema path (contract §12.1)", () => 
 
     await runInDurableObject(stub, async (_inst, state) => {
       const llm = stubLlmTransport([submitStructuredResp('{"summary":"over-budget"}', "c1")]);
-      const runtime = makeRuntime(state, llm);
+      const effectAuthorityRef = {
+        authorityClass: "llm_route" as const,
+        authorityId: "submit-outputschema-token-budget",
+      };
+      const identity = testIdentity(scope, effectAuthorityRef);
+      const runtime = makeRuntime(state, llm, identity);
 
       const spec: InternalSubmitSpec = {
         intent: "summarize",
@@ -155,10 +167,7 @@ describe("admission — submitAgent outputSchema path (contract §12.1)", () => 
         budget: { tokens: 10 },
         scope,
         scopeRef: { kind: "conversation", scopeId: scope },
-        effectAuthorityRef: {
-          authorityClass: "llm_route",
-          authorityId: "submit-outputschema-token-budget",
-        },
+        effectAuthorityRef,
       };
 
       const r = await runtime.runPromise(submitAgentEffect(spec));
@@ -168,7 +177,7 @@ describe("admission — submitAgent outputSchema path (contract §12.1)", () => 
       const events = await runtime.runPromise(
         Effect.gen(function* () {
           const l = yield* Ledger;
-          return yield* l.events(scope);
+          return yield* l.events(identity);
         }),
       );
       const kinds = events.map((event) => event.kind);

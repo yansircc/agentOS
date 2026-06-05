@@ -78,6 +78,7 @@ import {
   Admission,
   AttachedStreams,
   DurableTriggerRegistry,
+  RUNTIME_FACT_OWNER,
   commitBoundaryEvent,
   Ledger,
   LlmTransport,
@@ -91,6 +92,11 @@ import {
   type TriggerDrainUntilQuietOptions,
   type TriggerDrainUntilQuietResult,
 } from "@agent-os/runtime";
+import {
+  backendProtocolEventIdentityKey,
+  type BackendProtocolEventIdentity,
+  type BackendProtocolTruthIdentity,
+} from "@agent-os/backend-protocol";
 import type { LlmRoute } from "@agent-os/kernel/llm";
 import { Dispatch, type DispatchEnvelope, type DispatchTargetRegistry } from "./dispatch";
 import { EventBus, createEventStreamResponse, eventToRpc } from "./ledger";
@@ -128,26 +134,38 @@ import { commitDurableTriggerIntent } from "./due-work";
 import type { CloudflareTriggerSource } from "./trigger-factory";
 import type { CloudflareAttachedStreamSource } from "./stream-factory";
 import { createAttachedStreamResponse } from "./attached-stream-wire";
+import { commitLedgerTransaction } from "./ledger/commit";
+import {
+  cloudflareDefaultTruthIdentityFromRoutingScope,
+  cloudflareRouteKeyFromScopeRef,
+  cloudflareTruthIdentity,
+  eventIdentity,
+  LegacyLedgerSchemaError,
+} from "./ledger/identity";
 
 export interface CloudflareAgentEnv {}
 
 export interface AgentRuntimeReaderClient {
-  readonly events: (opts?: EventQueryOptions) => Promise<LedgerEventRpc[]>;
-  readonly streamEvents: (opts?: StreamEventsOptions) => Response;
+  readonly events: (
+    identity: BackendProtocolTruthIdentity,
+    opts?: EventQueryOptions,
+  ) => Promise<LedgerEventRpc[]>;
+  readonly streamEvents: (
+    identity: BackendProtocolTruthIdentity,
+    opts?: StreamEventsOptions,
+  ) => Response;
   readonly projectionGet: (
     spec: MaterializedProjectionGetSpec,
   ) => Promise<MaterializedProjectionRow | null>;
   readonly projectionList: (
     spec: MaterializedProjectionListSpec,
   ) => Promise<ReadonlyArray<MaterializedProjectionRow>>;
-  readonly projectionStatus: (spec: {
-    readonly kind: string;
-    readonly scope: string;
-  }) => Promise<MaterializedProjectionStatus>;
-  readonly projectionRebuild: (spec: {
-    readonly kind: string;
-    readonly scope: string;
-  }) => Promise<MaterializedProjectionRebuildResult>;
+  readonly projectionStatus: (
+    spec: BackendProtocolEventIdentity & { readonly kind: string },
+  ) => Promise<MaterializedProjectionStatus>;
+  readonly projectionRebuild: (
+    spec: BackendProtocolEventIdentity & { readonly kind: string },
+  ) => Promise<MaterializedProjectionRebuildResult>;
 }
 
 export interface AgentTriggerIntentSpec {
@@ -222,6 +240,7 @@ const makeAgentRuntime = <Env extends CloudflareAgentEnv>(
   ctx: DurableObjectState,
   env: Env,
   scope: string,
+  identity: BackendProtocolEventIdentity,
   handlers: Map<string, Set<EventHandler>>,
   refs: RefResolver,
   dispatchTargets: DispatchTargetRegistry,
@@ -233,6 +252,7 @@ const makeAgentRuntime = <Env extends CloudflareAgentEnv>(
     ctx,
     env,
     scope,
+    identity,
     handlers,
     dispatchTargets,
     appTriggers,
@@ -241,7 +261,7 @@ const makeAgentRuntime = <Env extends CloudflareAgentEnv>(
   );
   const refResolverLayer = RefResolverLive(refs);
   const llmTransportLayer = LlmTransportLive.pipe(Layer.provide(refResolverLayer));
-  const admissionLayer = AdmissionLive(ctx).pipe(
+  const admissionLayer = AdmissionLive(ctx, identity).pipe(
     Layer.provide(Layer.mergeAll(backendCoreLayer, llmTransportLayer)),
   );
   return ManagedRuntime.make(
@@ -308,7 +328,10 @@ export class AgentDurableObject<
   private readonly _streams: CloudflareAttachedStreamSource<Env>;
   private readonly _projections: ReadonlyArray<AnyMaterializedProjectionDefinition>;
   private readonly _scopeRefForScope: (scope: string, env: Env) => ScopeRef | null;
-  private _runtime?: ManagedRuntime.ManagedRuntime<CoreServices, SqlError | TriggerFactoryError>;
+  private readonly _runtimes = new Map<
+    string,
+    ManagedRuntime.ManagedRuntime<CoreServices, SqlError | TriggerFactoryError>
+  >();
 
   constructor(ctx: DurableObjectState, env: Env, config: MaterializedAgentConfig<Env, Runtime>) {
     super(ctx, env);
@@ -329,23 +352,49 @@ export class AgentDurableObject<
     }
   }
 
+  private defaultTruthIdentityForScope(
+    scope: string,
+  ): BackendProtocolTruthIdentity | UnsupportedScopeRef {
+    const scopeRef = this._scopeRefForScope(scope, this.env);
+    if (scopeRef === null) {
+      return new UnsupportedScopeRef({ scopeId: scope, position: "source" });
+    }
+    return {
+      scopeRef,
+      effectAuthorityRef: { authorityClass: "effect", authorityId: scope },
+    };
+  }
+
+  private defaultEventIdentityForScope(
+    scope: string,
+  ): BackendProtocolEventIdentity | UnsupportedScopeRef {
+    const truthIdentity = this.defaultTruthIdentityForScope(scope);
+    return truthIdentity instanceof UnsupportedScopeRef
+      ? truthIdentity
+      : eventIdentity(truthIdentity, RUNTIME_FACT_OWNER);
+  }
+
   private runtimeFor(
     scope: string,
+    identity: BackendProtocolEventIdentity,
   ): ManagedRuntime.ManagedRuntime<CoreServices, SqlError | TriggerFactoryError> {
-    if (this._runtime === undefined) {
-      this._runtime = makeAgentRuntime(
-        this.ctx,
-        this.env,
-        scope,
-        this._handlers,
-        this._refResolver,
-        this._dispatchTargets,
-        this._triggers,
-        this._streams,
-        this._projections,
-      );
-    }
-    return this._runtime;
+    const key = backendProtocolEventIdentityKey(identity);
+    const existing = this._runtimes.get(key);
+    if (existing !== undefined) return existing;
+    const created = makeAgentRuntime(
+      this.ctx,
+      this.env,
+      scope,
+      identity,
+      this._handlers,
+      this._refResolver,
+      this._dispatchTargets,
+      this._triggers,
+      this._streams,
+      this._projections,
+    );
+    this._runtimes.set(key, created);
+    return created;
   }
 
   private extensionValidation(): ExtensionValidation {
@@ -373,8 +422,13 @@ export class AgentDurableObject<
   private runScopedEffect<T, E>(
     scope: string,
     effect: Effect.Effect<T, E, CoreServices>,
+    identity?: BackendProtocolEventIdentity,
   ): Promise<T> {
-    return this.runtimeFor(scope)
+    const runtimeIdentity = identity ?? this.defaultEventIdentityForScope(scope);
+    if (runtimeIdentity instanceof UnsupportedScopeRef) {
+      return Promise.reject(runtimeIdentity);
+    }
+    return this.runtimeFor(scope, runtimeIdentity)
       .runPromiseExit(effect)
       .then((exit) => {
         if (Exit.isSuccess(exit)) return exit.value;
@@ -384,20 +438,60 @@ export class AgentDurableObject<
       });
   }
 
-  private runScoped<T, E>(fn: (scope: string) => Effect.Effect<T, E, CoreServices>): Promise<T> {
-    return this.scopedPromise((scope) => this.runScopedEffect(scope, fn(scope)));
+  private runScoped<T, E>(
+    fn: (
+      scope: string,
+      identity: BackendProtocolEventIdentity,
+    ) => Effect.Effect<T, E, CoreServices>,
+  ): Promise<T> {
+    return this.scopedPromise((scope) => {
+      const identity = this.defaultEventIdentityForScope(scope);
+      if (identity instanceof UnsupportedScopeRef) {
+        return Promise.reject(identity);
+      }
+      return this.runScopedEffect(scope, fn(scope, identity), identity);
+    });
+  }
+
+  private runScopedTruth<T, E>(
+    truthIdentity: BackendProtocolTruthIdentity,
+    fn: (
+      scope: string,
+      identity: BackendProtocolEventIdentity,
+    ) => Effect.Effect<T, E, CoreServices>,
+  ): Promise<T> {
+    return this.scopedPromise((scope) => {
+      const identity = cloudflareTruthIdentity(truthIdentity, "agent runtime query identity");
+      if (identity instanceof LegacyLedgerSchemaError) {
+        return Promise.reject(identity);
+      }
+      if (cloudflareRouteKeyFromScopeRef(identity.scopeRef) !== scope) {
+        return Promise.reject(
+          new UnsupportedScopeRef({ scopeId: identity.scopeRef.scopeId, position: "source" }),
+        );
+      }
+      const runtimeIdentity = eventIdentity(identity, RUNTIME_FACT_OWNER);
+      return this.runScopedEffect(scope, fn(scope, runtimeIdentity), runtimeIdentity);
+    });
   }
 
   private runScopedWrite<T, E>(
     event: string,
-    fn: (scope: string) => Effect.Effect<T, E, CoreServices>,
+    fn: (
+      scope: string,
+      identity: BackendProtocolEventIdentity,
+    ) => Effect.Effect<T, E, CoreServices>,
   ): Promise<T> {
     return this.scopedPromise((scope) => {
       const rejected = this.appWriteRejection(event);
       if (rejected !== null) {
         return Promise.reject(rejected);
       }
-      return this.runScopedEffect(scope, fn(scope));
+      const identity = this.defaultEventIdentityForScope(scope);
+      if (identity instanceof UnsupportedScopeRef) {
+        return Promise.reject(identity);
+      }
+      return this.runScopedEffect(scope, fn(scope, identity), identity);
     });
   }
 
@@ -440,19 +534,32 @@ export class AgentDurableObject<
     if (rejected !== null) {
       return Promise.reject(rejected);
     }
-    return this.runScoped((scope) =>
+    const ctx = this.ctx;
+    return this.runScoped((_scope, runtimeIdentity) =>
       Effect.gen(function* () {
-        const ledger = yield* Ledger;
-        const ev = yield* commitBoundaryEvent(pkg.boundaryContract, event, data, (_identity) =>
+        const bus = yield* EventBus;
+        const ev = yield* commitBoundaryEvent(pkg.boundaryContract, event, data, (identity) =>
           Effect.gen(function* () {
-            const events = yield* ledger.commit([{ kind: event, payload: data, scope }]);
-            const committed = events[0];
-            if (committed === undefined) {
-              return yield* Effect.fail(
-                new SqlError({ cause: new Error("ledger commit returned no boundary event") }),
-              );
-            }
-            return committed;
+            const now = yield* Clock.currentTimeMillis;
+            const scopeRef = identity.scopeRef ?? runtimeIdentity.scopeRef;
+            const effectAuthorityRef =
+              identity.effectAuthorityRef ?? runtimeIdentity.effectAuthorityRef;
+            const committed = yield* commitLedgerTransaction(
+              ctx,
+              bus,
+              { factOwnerRef: identity.factOwnerRef },
+              (tx) => {
+                const ref = tx.append({
+                  ts: now,
+                  kind: event,
+                  scopeRef,
+                  effectAuthorityRef,
+                  payload: data,
+                });
+                return ref;
+              },
+            );
+            return committed.event(committed.value);
           }),
         );
         return { id: ev.id };
@@ -527,26 +634,33 @@ export class AgentDurableObject<
         scope,
         scopeRef,
       };
-      return this.runtimeFor(scope).runPromise(submitAgentEffect(internalSpec));
+      const identity = eventIdentity(
+        { scopeRef, effectAuthorityRef: spec.effectAuthorityRef },
+        RUNTIME_FACT_OWNER,
+      );
+      return this.runtimeFor(scope, identity).runPromise(submitAgentEffect(internalSpec));
     });
   }
 
   /** Query ledger events for this DO's scope. */
-  events(opts?: EventQueryOptions): Promise<LedgerEventRpc[]> {
-    return this.runScoped((scope) =>
+  events(
+    identity: BackendProtocolTruthIdentity,
+    opts?: EventQueryOptions,
+  ): Promise<LedgerEventRpc[]> {
+    return this.runScopedTruth(identity, (_scope, runtimeIdentity) =>
       Effect.gen(function* () {
         const ledger = yield* Ledger;
-        const rows = yield* ledger.events(scope, opts);
+        const rows = yield* ledger.events(runtimeIdentity, opts);
         return rows.map(eventToRpc);
       }),
     );
   }
 
   runTrace(runId: number | string): Promise<RunTrace> {
-    return this.runScoped((scope) =>
+    return this.runScoped((_scope, identity) =>
       Effect.gen(function* () {
         const ledger = yield* Ledger;
-        const rows = yield* ledger.streamSnapshot(scope);
+        const rows = yield* ledger.streamSnapshot(identity);
         return yield* Effect.try({
           try: () => projectRunTrace(rows, runId),
           catch: (cause) => new SqlError({ cause }),
@@ -556,10 +670,10 @@ export class AgentDurableObject<
   }
 
   runStatus(runId: number | string): Promise<RunStatus> {
-    return this.runScoped((scope) =>
+    return this.runScoped((_scope, identity) =>
       Effect.gen(function* () {
         const ledger = yield* Ledger;
-        const rows = yield* ledger.streamSnapshot(scope);
+        const rows = yield* ledger.streamSnapshot(identity);
         return yield* Effect.try({
           try: () => projectRunStatus(rows, runId),
           catch: (cause) => new SqlError({ cause }),
@@ -572,10 +686,10 @@ export class AgentDurableObject<
    *  sorted runId DESC (newest first). Cursor-paginated via afterRunId.
    *  Caller is responsible for bounding spec.limit. */
   runs(spec: RunListSpec): Promise<RunListPage> {
-    return this.runScoped((scope) =>
+    return this.runScoped((_scope, identity) =>
       Effect.gen(function* () {
         const ledger = yield* Ledger;
-        const rows = yield* ledger.streamSnapshot(scope, {
+        const rows = yield* ledger.streamSnapshot(identity, {
           kinds: RUN_BEARING_KINDS,
         });
         return yield* Effect.try({
@@ -587,10 +701,10 @@ export class AgentDurableObject<
   }
 
   quotaState(spec: QuotaStateSpec): Promise<QuotaState> {
-    return this.runScoped((scope) =>
+    return this.runScoped((_scope, identity) =>
       Effect.gen(function* () {
         const ledger = yield* Ledger;
-        const rows = yield* ledger.streamSnapshot(scope, {
+        const rows = yield* ledger.streamSnapshot(identity, {
           kinds: ["quota.consumed"],
         });
         const now = yield* Clock.currentTimeMillis;
@@ -603,10 +717,10 @@ export class AgentDurableObject<
   }
 
   resourceState(key: string): Promise<ResourceState> {
-    return this.runScoped((scope) =>
+    return this.runScoped((_scope, identity) =>
       Effect.gen(function* () {
         const ledger = yield* Ledger;
-        const rows = yield* ledger.streamSnapshot(scope, {
+        const rows = yield* ledger.streamSnapshot(identity, {
           kinds: [
             "resource_pool.granted",
             "resource_pool.reserved",
@@ -625,10 +739,10 @@ export class AgentDurableObject<
 
   admissionLease(key: AttemptKey): Promise<CapabilityLease | null> {
     const sql = this.ctx.storage.sql;
-    return this.runScoped((scope) =>
+    return this.runScoped((_scope, identity) =>
       Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis;
-        return yield* projectAdmissionLease(sql, scope, key, now);
+        return yield* projectAdmissionLease(sql, identity, identity.factOwnerRef, key, now);
       }),
     );
   }
@@ -642,12 +756,34 @@ export class AgentDurableObject<
    *  Implementation lives in `ledger/stream.ts`; this façade only
    *  validates scope and hands the runtime + opts through.
    */
-  streamEvents(opts: StreamEventsOptions = {}): Response {
+  streamEvents(identity: BackendProtocolTruthIdentity, opts: StreamEventsOptions = {}): Response {
     const scope = this.scopeOrError();
     if (scope instanceof ScopeMissingError) {
       return new Response(JSON.stringify({ error: scope._tag }), { status: 500 });
     }
-    return createEventStreamResponse(this.runtimeFor(scope), scope, opts);
+    try {
+      const truthIdentity = cloudflareTruthIdentity(identity, "agent runtime stream identity");
+      if (truthIdentity instanceof LegacyLedgerSchemaError) {
+        return new Response(JSON.stringify({ error: truthIdentity._tag }), { status: 400 });
+      }
+      if (cloudflareRouteKeyFromScopeRef(truthIdentity.scopeRef) !== scope) {
+        return new Response(JSON.stringify({ error: "agent_os.unsupported_scope_ref" }), {
+          status: 400,
+        });
+      }
+      const runtimeIdentity = eventIdentity(truthIdentity, RUNTIME_FACT_OWNER);
+      return createEventStreamResponse(
+        this.runtimeFor(scope, runtimeIdentity),
+        runtimeIdentity,
+        opts,
+      );
+    } catch (cause) {
+      const tag =
+        cause !== null && typeof cause === "object" && "_tag" in cause
+          ? String((cause as { readonly _tag: unknown })._tag)
+          : "agent_os.stream_identity_error";
+      return new Response(JSON.stringify({ error: tag }), { status: 400 });
+    }
   }
 
   projectionGet(spec: MaterializedProjectionGetSpec): Promise<MaterializedProjectionRow | null> {
@@ -670,10 +806,9 @@ export class AgentDurableObject<
     );
   }
 
-  projectionStatus(spec: {
-    readonly kind: string;
-    readonly scope: string;
-  }): Promise<MaterializedProjectionStatus> {
+  projectionStatus(
+    spec: BackendProtocolEventIdentity & { readonly kind: string },
+  ): Promise<MaterializedProjectionStatus> {
     return this.runScoped(() =>
       Effect.gen(function* () {
         const projections = yield* MaterializedProjections;
@@ -682,10 +817,9 @@ export class AgentDurableObject<
     );
   }
 
-  projectionRebuild(spec: {
-    readonly kind: string;
-    readonly scope: string;
-  }): Promise<MaterializedProjectionRebuildResult> {
+  projectionRebuild(
+    spec: BackendProtocolEventIdentity & { readonly kind: string },
+  ): Promise<MaterializedProjectionRebuildResult> {
     return this.runScoped(() =>
       Effect.gen(function* () {
         const projections = yield* MaterializedProjections;
@@ -709,10 +843,17 @@ export class AgentDurableObject<
    *  resolves. They are NOT degenerate cases of each other.
    */
   protected emitEventFull(spec: { event: string; data: unknown }): Promise<{ id: number }> {
-    return this.runScopedWrite(spec.event, (scope) =>
+    return this.runScopedWrite(spec.event, (_scope, identity) =>
       Effect.gen(function* () {
         const ledger = yield* Ledger;
-        const events = yield* ledger.commit([{ kind: spec.event, payload: spec.data, scope }]);
+        const events = yield* ledger.commit([
+          {
+            kind: spec.event,
+            payload: spec.data,
+            scopeRef: identity.scopeRef,
+            effectAuthorityRef: identity.effectAuthorityRef,
+          },
+        ]);
         const event = events[0];
         if (event === undefined) {
           return yield* Effect.fail(
@@ -736,7 +877,7 @@ export class AgentDurableObject<
     }
     const ctx = this.ctx;
     const sql = ctx.storage.sql;
-    return this.runScoped((scope) =>
+    return this.runScoped((_scope, identity) =>
       Effect.gen(function* () {
         yield* Ledger;
         yield* TriggerPump;
@@ -747,6 +888,7 @@ export class AgentDurableObject<
           ctx,
           sql,
           bus,
+          identity,
           spec.at,
           registry,
           spec.triggerKind,
@@ -754,7 +896,8 @@ export class AgentDurableObject<
             tx.append({
               ts,
               kind: trigger.intentEventKind,
-              scope,
+              scopeRef: identity.scopeRef,
+              effectAuthorityRef: identity.effectAuthorityRef,
               payload: spec.payload,
             }),
         );
@@ -852,10 +995,11 @@ export class AgentDurableObject<
         }),
       );
     }
-    if (!isScopeRef(spec.target.scopeRef)) {
+    const targetScopeRef: unknown = spec.target.scopeRef;
+    if (!isScopeRef(targetScopeRef)) {
       return Promise.reject(
         new UnsupportedScopeRef({
-          scopeId: spec.target.scope,
+          scopeId: "malformed",
           position: "target",
         }),
       );
@@ -872,10 +1016,10 @@ export class AgentDurableObject<
     if (!Number.isFinite(spec.amount) || spec.amount <= 0) {
       return Promise.reject(new InvalidResourceAmount({ amount: spec.amount }));
     }
-    return this.runScoped((scope) =>
+    return this.runScoped((_scope, identity) =>
       Effect.gen(function* () {
         const resources = yield* Resources;
-        return yield* resources.grant(scope, spec);
+        return yield* resources.grant(identity, spec);
       }),
     );
   }
@@ -884,10 +1028,10 @@ export class AgentDurableObject<
     if (!Number.isFinite(spec.amount) || spec.amount <= 0) {
       return Promise.reject(new InvalidResourceAmount({ amount: spec.amount }));
     }
-    return this.runScoped((scope) =>
+    return this.runScoped((_scope, identity) =>
       Effect.gen(function* () {
         const resources = yield* Resources;
-        return yield* resources.reserve(scope, spec).pipe(Effect.either);
+        return yield* resources.reserve(identity, spec).pipe(Effect.either);
       }),
     ).then((result) => {
       if (result._tag === "Left") {
@@ -898,10 +1042,10 @@ export class AgentDurableObject<
   }
 
   consumeResource(spec: ResourceReservationSpec): Promise<void> {
-    return this.runScoped((scope) =>
+    return this.runScoped((_scope, identity) =>
       Effect.gen(function* () {
         const resources = yield* Resources;
-        return yield* resources.consume(scope, spec).pipe(Effect.either);
+        return yield* resources.consume(identity, spec).pipe(Effect.either);
       }),
     ).then((result) => {
       if (result._tag === "Left") {
@@ -911,10 +1055,10 @@ export class AgentDurableObject<
   }
 
   releaseResource(spec: ResourceReservationSpec): Promise<void> {
-    return this.runScoped((scope) =>
+    return this.runScoped((_scope, identity) =>
       Effect.gen(function* () {
         const resources = yield* Resources;
-        return yield* resources.release(scope, spec).pipe(Effect.either);
+        return yield* resources.release(identity, spec).pipe(Effect.either);
       }),
     ).then((result) => {
       if (result._tag === "Left") {
@@ -940,7 +1084,11 @@ export class AgentDurableObject<
       if (rejected !== null) {
         return Promise.reject(rejected);
       }
-      return this.runtimeFor(scope).runPromise(
+      const identity = this.defaultEventIdentityForScope(scope);
+      if (identity instanceof UnsupportedScopeRef) {
+        return Promise.reject(identity);
+      }
+      return this.runtimeFor(scope, identity).runPromise(
         Effect.gen(function* () {
           const dispatch = yield* Dispatch;
           return yield* dispatch.receive(envelope);
@@ -996,7 +1144,9 @@ export const createAgentDurableObject = <Env extends CloudflareAgentEnv>(
         triggers: config.triggers ?? [],
         streams: config.streams ?? [],
         projections: config.projections ?? [],
-        scopeRefForScope: config.scopeRefForScope ?? (() => null),
+        scopeRefForScope:
+          config.scopeRefForScope ??
+          ((scope) => cloudflareDefaultTruthIdentityFromRoutingScope(scope).scopeRef),
         eventHandlers: config.eventHandlers,
       });
     }

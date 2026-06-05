@@ -1,6 +1,6 @@
 import { Effect, Layer, Schema } from "effect";
 import { SqlError } from "@agent-os/kernel/errors";
-import type { LedgerEvent, LedgerEventIdentity } from "@agent-os/kernel/types";
+import type { LedgerEvent } from "@agent-os/kernel/types";
 import {
   MaterializedProjectionRegistry,
   MaterializedProjections,
@@ -15,25 +15,22 @@ import {
   type ProjectionRegistry,
 } from "@agent-os/runtime";
 import { sqlText } from "./storage/sql-row";
+import {
+  LegacyLedgerSchemaError,
+  eventIdentityFromQuerySpec,
+  ledgerEventFromRow,
+  projectionIdentityColumns,
+  type LedgerEventSqlRow,
+} from "./ledger/identity";
+import type {
+  BackendProtocolEventIdentity,
+  BackendProtocolProjectionKey,
+} from "@agent-os/backend-protocol";
 
 const DEFAULT_LIMIT = 1000;
 const MAX_LIMIT = 1000;
 
 const registries = new WeakMap<SqlStorage, ProjectionRegistry>();
-
-const rowKey = (
-  scope: string,
-  kind: string,
-  identityKey: string,
-): readonly [string, string, string] => [scope, kind, identityKey];
-
-const transitionIdentityFromScope = (scope: string): LedgerEventIdentity => ({
-  scopeRef: { kind: "conversation", scopeId: scope },
-  factOwnerRef: "@agent-os/transition-unowned",
-  effectAuthorityRef: { authorityClass: "legacy-scope", authorityId: scope },
-});
-
-const transitionScopeString = (event: LedgerEvent): string => event.scopeRef.scopeId;
 
 const normalizeLimit = (value: number | undefined): number =>
   value === undefined || !Number.isFinite(value)
@@ -79,29 +76,69 @@ const json = (
 };
 
 export const ensureMaterializedProjectionSchema = (sql: SqlStorage): void => {
+  const existingRows = new Set(
+    sql
+      .exec("PRAGMA table_info(materialized_projection_rows)")
+      .toArray()
+      .map((row) => String((row as { readonly name?: unknown }).name)),
+  );
+  if (existingRows.has("scope")) {
+    throw new LegacyLedgerSchemaError({
+      table: "materialized_projection_rows",
+      reason: "legacy scope column is invalid",
+    });
+  }
+  const existingMeta = new Set(
+    sql
+      .exec("PRAGMA table_info(materialized_projection_meta)")
+      .toArray()
+      .map((row) => String((row as { readonly name?: unknown }).name)),
+  );
+  if (existingMeta.has("scope")) {
+    throw new LegacyLedgerSchemaError({
+      table: "materialized_projection_meta",
+      reason: "legacy scope column is invalid",
+    });
+  }
   sql.exec(`
     CREATE TABLE IF NOT EXISTS materialized_projection_rows (
-      scope TEXT NOT NULL,
+      projection_key TEXT PRIMARY KEY,
+      scope_ref TEXT NOT NULL,
+      scope_key TEXT NOT NULL,
+      fact_owner_ref TEXT NOT NULL,
+      fact_owner_key TEXT NOT NULL,
+      effect_authority_ref TEXT NOT NULL,
+      effect_authority_key TEXT NOT NULL,
+      event_identity_key TEXT NOT NULL,
       kind TEXT NOT NULL,
       identity_key TEXT NOT NULL,
       identity_json TEXT NOT NULL,
       state_json TEXT NOT NULL,
       version INTEGER NOT NULL,
       updated_event_id INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL,
-      PRIMARY KEY (scope, kind, identity_key)
+      updated_at INTEGER NOT NULL
     )
   `);
   sql.exec(`
+    CREATE INDEX IF NOT EXISTS materialized_projection_rows_identity
+      ON materialized_projection_rows (event_identity_key, kind, identity_key)
+  `);
+  sql.exec(`
     CREATE TABLE IF NOT EXISTS materialized_projection_meta (
-      scope TEXT NOT NULL,
+      event_identity_key TEXT NOT NULL,
+      scope_ref TEXT NOT NULL,
+      scope_key TEXT NOT NULL,
+      fact_owner_ref TEXT NOT NULL,
+      fact_owner_key TEXT NOT NULL,
+      effect_authority_ref TEXT NOT NULL,
+      effect_authority_key TEXT NOT NULL,
       kind TEXT NOT NULL,
       version INTEGER NOT NULL,
       status TEXT NOT NULL,
       last_applied_event_id INTEGER NOT NULL,
       last_rebuilt_event_id INTEGER,
       updated_at INTEGER,
-      PRIMARY KEY (scope, kind)
+      PRIMARY KEY (event_identity_key, kind)
     )
   `);
 };
@@ -116,21 +153,24 @@ export const registerMaterializedProjectionRegistry = (
 
 const currentRow = (
   sql: SqlStorage,
-  scope: string,
+  identity: BackendProtocolEventIdentity,
   kind: string,
   identityKey: string,
 ): { readonly identity: unknown; readonly state: unknown } | null => {
-  const [s, k, key] = rowKey(scope, kind, identityKey);
+  const projectionKey: BackendProtocolProjectionKey = {
+    ...identity,
+    projectionKind: kind,
+    projectionId: identityKey,
+  };
+  const columns = projectionIdentityColumns(projectionKey);
   const row = sql
     .exec(
       `
         SELECT identity_json, state_json
         FROM materialized_projection_rows
-        WHERE scope = ? AND kind = ? AND identity_key = ?
+        WHERE projection_key = ?
       `,
-      s,
-      k,
-      key,
+      columns.projection_key,
     )
     .toArray()[0];
   if (row === undefined) return null;
@@ -145,19 +185,43 @@ const touchMeta = (
   projection: AnyMaterializedProjectionDefinition,
   event: LedgerEvent,
 ): void => {
-  const eventScopeKey = transitionScopeString(event);
+  const identityColumns = projectionIdentityColumns({
+    ...event,
+    projectionKind: projection.kind,
+    projectionId: "meta",
+  });
   sql.exec(
     `
       INSERT INTO materialized_projection_meta
-        (scope, kind, version, status, last_applied_event_id, last_rebuilt_event_id, updated_at)
-      VALUES (?, ?, ?, 'current', ?, NULL, ?)
-      ON CONFLICT(scope, kind) DO UPDATE SET
+        (
+          event_identity_key,
+          scope_ref,
+          scope_key,
+          fact_owner_ref,
+          fact_owner_key,
+          effect_authority_ref,
+          effect_authority_key,
+          kind,
+          version,
+          status,
+          last_applied_event_id,
+          last_rebuilt_event_id,
+          updated_at
+        )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'current', ?, NULL, ?)
+      ON CONFLICT(event_identity_key, kind) DO UPDATE SET
         version = excluded.version,
         status = 'current',
         last_applied_event_id = excluded.last_applied_event_id,
         updated_at = excluded.updated_at
     `,
-    eventScopeKey,
+    identityColumns.event_identity_key,
+    identityColumns.scope_ref,
+    identityColumns.scope_key,
+    identityColumns.fact_owner_ref,
+    identityColumns.fact_owner_key,
+    identityColumns.effect_authority_ref,
+    identityColumns.effect_authority_key,
     projection.kind,
     projection.version,
     event.id,
@@ -173,10 +237,9 @@ const applyEvents = (
   if (events.length === 0) return;
   ensureMaterializedProjectionSchema(sql);
   for (const event of events) {
-    const eventScopeKey = transitionScopeString(event);
     for (const projection of definitionsForEvent(event.kind)) {
       const applied = applyProjectionEventResult(projection, event, (identityKey) =>
-        currentRow(sql, eventScopeKey, projection.kind, identityKey),
+        currentRow(sql, event, projection.kind, identityKey),
       );
       if (applied._tag === "failure") {
         return abortProjectionTransaction(applied.error);
@@ -194,16 +257,71 @@ const applyEvents = (
         sql.exec(
           `
             INSERT INTO materialized_projection_rows
-              (scope, kind, identity_key, identity_json, state_json, version, updated_event_id, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(scope, kind, identity_key) DO UPDATE SET
+              (
+                projection_key,
+                scope_ref,
+                scope_key,
+                fact_owner_ref,
+                fact_owner_key,
+                effect_authority_ref,
+                effect_authority_key,
+                event_identity_key,
+                kind,
+                identity_key,
+                identity_json,
+                state_json,
+                version,
+                updated_event_id,
+                updated_at
+              )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(projection_key) DO UPDATE SET
               identity_json = excluded.identity_json,
               state_json = excluded.state_json,
               version = excluded.version,
               updated_event_id = excluded.updated_event_id,
               updated_at = excluded.updated_at
           `,
-          eventScopeKey,
+          projectionIdentityColumns({
+            ...event,
+            projectionKind: projection.kind,
+            projectionId: result.identityKey,
+          }).projection_key,
+          projectionIdentityColumns({
+            ...event,
+            projectionKind: projection.kind,
+            projectionId: result.identityKey,
+          }).scope_ref,
+          projectionIdentityColumns({
+            ...event,
+            projectionKind: projection.kind,
+            projectionId: result.identityKey,
+          }).scope_key,
+          projectionIdentityColumns({
+            ...event,
+            projectionKind: projection.kind,
+            projectionId: result.identityKey,
+          }).fact_owner_ref,
+          projectionIdentityColumns({
+            ...event,
+            projectionKind: projection.kind,
+            projectionId: result.identityKey,
+          }).fact_owner_key,
+          projectionIdentityColumns({
+            ...event,
+            projectionKind: projection.kind,
+            projectionId: result.identityKey,
+          }).effect_authority_ref,
+          projectionIdentityColumns({
+            ...event,
+            projectionKind: projection.kind,
+            projectionId: result.identityKey,
+          }).effect_authority_key,
+          projectionIdentityColumns({
+            ...event,
+            projectionKind: projection.kind,
+            projectionId: result.identityKey,
+          }).event_identity_key,
           projection.kind,
           result.identityKey,
           identityJson.value,
@@ -216,11 +334,13 @@ const applyEvents = (
         sql.exec(
           `
             DELETE FROM materialized_projection_rows
-            WHERE scope = ? AND kind = ? AND identity_key = ?
+            WHERE projection_key = ?
           `,
-          eventScopeKey,
-          projection.kind,
-          result.identityKey,
+          projectionIdentityColumns({
+            ...event,
+            projectionKind: projection.kind,
+            projectionId: result.identityKey,
+          }).projection_key,
         );
       }
       touchMeta(sql, projection, event);
@@ -241,7 +361,7 @@ export const applyRegisteredMaterializedProjectionEvents = (
 
 const parseProjectionRow = (row: Record<string, unknown>): MaterializedProjectionRow => ({
   kind: sqlText(row.kind, "materialized_projection_rows.kind"),
-  scope: sqlText(row.scope, "materialized_projection_rows.scope"),
+  scope: sqlText(row.scope_key, "materialized_projection_rows.scope_key"),
   identityKey: sqlText(row.identity_key, "materialized_projection_rows.identity_key"),
   identity: JSON.parse(sqlText(row.identity_json, "materialized_projection_rows.identity_json")),
   state: JSON.parse(sqlText(row.state_json, "materialized_projection_rows.state_json")),
@@ -252,13 +372,13 @@ const parseProjectionRow = (row: Record<string, unknown>): MaterializedProjectio
 
 const statusFromMeta = (
   projection: AnyMaterializedProjectionDefinition,
-  scope: string,
+  identity: BackendProtocolEventIdentity,
   row: Record<string, unknown> | undefined,
 ): MaterializedProjectionStatus => {
   if (row === undefined) {
     return {
       kind: projection.kind,
-      scope,
+      scope: identity.scopeRef.scopeId,
       version: projection.version,
       status: "current",
       lastAppliedEventId: 0,
@@ -270,7 +390,7 @@ const statusFromMeta = (
   const status = sqlText(row.status, "materialized_projection_meta.status");
   return {
     kind: projection.kind,
-    scope,
+    scope: sqlText(row.scope_key, "materialized_projection_meta.scope_key"),
     version: projection.version,
     status: status === "current" && version === projection.version ? "current" : "needs_rebuild",
     lastAppliedEventId: Number(row.last_applied_event_id),
@@ -286,63 +406,69 @@ const statusFromMeta = (
 const projectionStatusSync = (
   sql: SqlStorage,
   projection: AnyMaterializedProjectionDefinition,
-  scope: string,
+  identity: BackendProtocolEventIdentity,
 ): MaterializedProjectionStatus => {
   ensureMaterializedProjectionSchema(sql);
+  const identityColumns = projectionIdentityColumns({
+    ...identity,
+    projectionKind: projection.kind,
+    projectionId: "meta",
+  });
   const row = sql
     .exec(
       `
         SELECT *
         FROM materialized_projection_meta
-        WHERE scope = ? AND kind = ?
+        WHERE event_identity_key = ? AND kind = ?
       `,
-      scope,
+      identityColumns.event_identity_key,
       projection.kind,
     )
     .toArray()[0] as Record<string, unknown> | undefined;
-  return statusFromMeta(projection, scope, row);
+  return statusFromMeta(projection, identity, row);
 };
 
 const selectProjectionEvents = (
   sql: SqlStorage,
-  scope: string,
+  identity: BackendProtocolEventIdentity,
   eventKinds: ReadonlyArray<string>,
 ): ReadonlyArray<LedgerEvent> => {
   if (eventKinds.length === 0) return [];
   const placeholders = eventKinds.map(() => "?").join(", ");
+  const identityColumns = projectionIdentityColumns({
+    ...identity,
+    projectionKind: "event-select",
+    projectionId: "event-select",
+  });
   return sql
     .exec(
       `
         SELECT *
         FROM events
-        WHERE scope = ? AND kind IN (${placeholders})
+        WHERE event_identity_key = ? AND kind IN (${placeholders})
         ORDER BY id ASC
       `,
-      scope,
+      identityColumns.event_identity_key,
       ...eventKinds,
     )
     .toArray()
-    .map(
-      (row): LedgerEvent => ({
-        id: Number(row.id),
-        ts: Number(row.ts),
-        kind: sqlText(row.kind, "events.kind"),
-        ...transitionIdentityFromScope(sqlText(row.scope, "events.scope")),
-        payload: JSON.parse(sqlText(row.payload, "events.payload")) as unknown,
-      }),
-    );
+    .map((row): LedgerEvent => ledgerEventFromRow(row as unknown as LedgerEventSqlRow));
 };
 
-const countRows = (sql: SqlStorage, scope: string, kind: string): number =>
+const countRows = (sql: SqlStorage, identity: BackendProtocolEventIdentity, kind: string): number =>
   Number(
     sql
       .exec(
         `
           SELECT COUNT(*) AS count
           FROM materialized_projection_rows
-          WHERE scope = ? AND kind = ?
+          WHERE event_identity_key = ? AND kind = ?
         `,
-        scope,
+        projectionIdentityColumns({
+          ...identity,
+          projectionKind: kind,
+          projectionId: "count",
+        }).event_identity_key,
         kind,
       )
       .one().count,
@@ -363,18 +489,24 @@ export const CloudflareMaterializedProjectionsLive = (
             const projection = yield* getProjection(registry, spec.kind);
             return yield* Effect.try({
               try: () => {
-                const identity = Schema.decodeUnknownSync(projection.identity)(spec.identity);
-                const identityKey = projection.identityKey(identity);
+                const eventIdentity = eventIdentityFromQuerySpec(spec, "projection get spec");
+                const projectionIdentity = Schema.decodeUnknownSync(projection.identity)(
+                  spec.identity,
+                );
+                const identityKey = projection.identityKey(projectionIdentity);
+                const projectionKey = projectionIdentityColumns({
+                  ...eventIdentity,
+                  projectionKind: spec.kind,
+                  projectionId: identityKey,
+                }).projection_key;
                 const row = sql
                   .exec(
                     `
                       SELECT *
                       FROM materialized_projection_rows
-                      WHERE scope = ? AND kind = ? AND identity_key = ?
+                      WHERE projection_key = ?
                     `,
-                    spec.scope,
-                    spec.kind,
-                    identityKey,
+                    projectionKey,
                   )
                   .toArray()[0] as Record<string, unknown> | undefined;
                 return row === undefined ? null : parseProjectionRow(row);
@@ -387,7 +519,13 @@ export const CloudflareMaterializedProjectionsLive = (
             yield* getProjection(registry, spec.kind);
             return yield* Effect.try({
               try: () => {
+                const eventIdentity = eventIdentityFromQuerySpec(spec, "projection list spec");
                 const limit = normalizeLimit(spec.limit);
+                const identityColumns = projectionIdentityColumns({
+                  ...eventIdentity,
+                  projectionKind: spec.kind,
+                  projectionId: "list",
+                });
                 const rows =
                   spec.afterKey === undefined
                     ? sql
@@ -395,11 +533,12 @@ export const CloudflareMaterializedProjectionsLive = (
                           `
                             SELECT *
                             FROM materialized_projection_rows
-                            WHERE scope = ? AND kind = ?
+                            WHERE scope_key = ? AND effect_authority_key = ? AND kind = ?
                             ORDER BY identity_key ASC
                             LIMIT ?
                           `,
-                          spec.scope,
+                          identityColumns.scope_key,
+                          identityColumns.effect_authority_key,
                           spec.kind,
                           limit,
                         )
@@ -409,11 +548,12 @@ export const CloudflareMaterializedProjectionsLive = (
                           `
                             SELECT *
                             FROM materialized_projection_rows
-                            WHERE scope = ? AND kind = ? AND identity_key > ?
+                            WHERE scope_key = ? AND effect_authority_key = ? AND kind = ? AND identity_key > ?
                             ORDER BY identity_key ASC
                             LIMIT ?
                           `,
-                          spec.scope,
+                          identityColumns.scope_key,
+                          identityColumns.effect_authority_key,
                           spec.kind,
                           spec.afterKey,
                           limit,
@@ -428,7 +568,12 @@ export const CloudflareMaterializedProjectionsLive = (
           Effect.gen(function* () {
             const projection = yield* getProjection(registry, spec.kind);
             return yield* Effect.try({
-              try: () => projectionStatusSync(sql, projection, spec.scope),
+              try: () =>
+                projectionStatusSync(
+                  sql,
+                  projection,
+                  eventIdentityFromQuerySpec(spec, "projection status spec"),
+                ),
               catch: (cause) => new SqlError({ cause }),
             });
           }),
@@ -439,41 +584,68 @@ export const CloudflareMaterializedProjectionsLive = (
               try: (): MaterializedProjectionRebuildResult =>
                 ctx.storage.transactionSync(() => {
                   ensureMaterializedProjectionSchema(sql);
+                  const identity = eventIdentityFromQuerySpec(spec, "projection rebuild spec");
+                  const identityColumns = projectionIdentityColumns({
+                    ...identity,
+                    projectionKind: spec.kind,
+                    projectionId: "rebuild",
+                  });
                   sql.exec(
                     `
                       DELETE FROM materialized_projection_rows
-                      WHERE scope = ? AND kind = ?
+                      WHERE scope_key = ? AND effect_authority_key = ? AND kind = ?
                     `,
-                    spec.scope,
+                    identityColumns.scope_key,
+                    identityColumns.effect_authority_key,
                     spec.kind,
                   );
                   sql.exec(
                     `
                       DELETE FROM materialized_projection_meta
-                      WHERE scope = ? AND kind = ?
+                      WHERE event_identity_key = ? AND kind = ?
                     `,
-                    spec.scope,
+                    identityColumns.event_identity_key,
                     spec.kind,
                   );
-                  const events = selectProjectionEvents(sql, spec.scope, projection.eventKinds);
+                  const events = selectProjectionEvents(sql, identity, projection.eventKinds);
                   applyEvents(sql, events, (eventKind) =>
                     projection.eventKinds.includes(eventKind) ? [projection] : [],
                   );
                   const lastEventId = events.at(-1)?.id ?? 0;
-                  const current = projectionStatusSync(sql, projection, spec.scope);
+                  const current = projectionStatusSync(sql, projection, identity);
                   sql.exec(
                     `
                       INSERT INTO materialized_projection_meta
-                        (scope, kind, version, status, last_applied_event_id, last_rebuilt_event_id, updated_at)
-                      VALUES (?, ?, ?, 'current', ?, ?, ?)
-                      ON CONFLICT(scope, kind) DO UPDATE SET
+                        (
+                          event_identity_key,
+                          scope_ref,
+                          scope_key,
+                          fact_owner_ref,
+                          fact_owner_key,
+                          effect_authority_ref,
+                          effect_authority_key,
+                          kind,
+                          version,
+                          status,
+                          last_applied_event_id,
+                          last_rebuilt_event_id,
+                          updated_at
+                        )
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'current', ?, ?, ?)
+                      ON CONFLICT(event_identity_key, kind) DO UPDATE SET
                         version = excluded.version,
                         status = 'current',
                         last_applied_event_id = excluded.last_applied_event_id,
                         last_rebuilt_event_id = excluded.last_rebuilt_event_id,
                         updated_at = excluded.updated_at
                     `,
-                    spec.scope,
+                    identityColumns.event_identity_key,
+                    identityColumns.scope_ref,
+                    identityColumns.scope_key,
+                    identityColumns.fact_owner_ref,
+                    identityColumns.fact_owner_key,
+                    identityColumns.effect_authority_ref,
+                    identityColumns.effect_authority_key,
                     spec.kind,
                     projection.version,
                     current.lastAppliedEventId,
@@ -481,8 +653,8 @@ export const CloudflareMaterializedProjectionsLive = (
                     current.updatedAt,
                   );
                   return {
-                    ...projectionStatusSync(sql, projection, spec.scope),
-                    rows: countRows(sql, spec.scope, spec.kind),
+                    ...projectionStatusSync(sql, projection, identity),
+                    rows: countRows(sql, identity, spec.kind),
                   };
                 }),
               catch: (cause) => new SqlError({ cause }),

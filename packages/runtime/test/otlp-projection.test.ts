@@ -65,7 +65,11 @@ const spanJson = (events: ReadonlyArray<LedgerEvent>): string =>
 describe("OTLP trace projection", () => {
   it("derives ordered spans from ledger/runtime facts without writing trace facts", () => {
     const projection = projectOtlpSpans([
-      event(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "secret prompt", traceContext }), 100),
+      event(
+        1,
+        agentRunStartedEvent({ ...runtimeIdentity, intent: "secret prompt", traceContext }),
+        100,
+      ),
       event(
         2,
         chatIngestedEvent({

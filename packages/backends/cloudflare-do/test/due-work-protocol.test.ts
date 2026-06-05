@@ -6,11 +6,15 @@ import {
   DURABLE_TRIGGER_SCHEDULED_REQUESTED,
   DurableTriggerRegistry,
   Dispatch,
+  RUNTIME_FACT_OWNER,
   TriggerPump,
   makeDurableTriggerRegistry,
   scheduledEventTrigger,
 } from "@agent-os/runtime";
-import { DISPATCH_MAX_ATTEMPTS } from "@agent-os/backend-protocol";
+import {
+  DISPATCH_MAX_ATTEMPTS,
+  type BackendProtocolEventIdentity,
+} from "@agent-os/backend-protocol";
 import { type DispatchTargetRegistry } from "../src/dispatch";
 import {
   commitDurableTriggerIntent,
@@ -45,11 +49,19 @@ const noOpBus: EventBusService = {
   subscribe: () => ({ unsubscribe: () => undefined }),
 };
 
+const identity = (scopeId: string): BackendProtocolEventIdentity => ({
+  scopeRef: { kind: "conversation", scopeId },
+  effectAuthorityRef: { authorityClass: "effect", authorityId: scopeId },
+  factOwnerRef: RUNTIME_FACT_OWNER,
+});
+
+const senderIdentity = identity("sender");
+
 const dispatchSpec = {
   target: {
     bindingRef,
-    scope: "receiver",
     scopeRef: { kind: "conversation" as const, scopeId: "receiver" },
+    effectAuthorityRef: { authorityClass: "effect" as const, authorityId: "receiver" },
   },
   event: "app.deliver",
   data: { value: 1 },
@@ -72,6 +84,7 @@ describe("due-work alarm protocol", () => {
           sql,
           noOpBus,
           "sender",
+          senderIdentity,
           1,
           10,
           registry,
@@ -101,6 +114,7 @@ describe("due-work alarm protocol", () => {
         sql,
         noOpBus,
         "sender",
+        senderIdentity,
         1,
         10,
         registry,
@@ -125,9 +139,18 @@ describe("due-work alarm protocol", () => {
       const registry = yield* makeDurableTriggerRegistry([scheduledEventTrigger]);
 
       const exit = yield* Effect.exit(
-        commitDurableTriggerIntent(state, sql, noOpBus, 10, registry, "missing.trigger", () => {
-          throw new Error("writeIntent should not run");
-        }),
+        commitDurableTriggerIntent(
+          state,
+          sql,
+          noOpBus,
+          senderIdentity,
+          10,
+          registry,
+          "missing.trigger",
+          () => {
+            throw new Error("writeIntent should not run");
+          },
+        ),
       );
 
       expect(Exit.isFailure(exit)).toBe(true);
@@ -157,7 +180,7 @@ describe("due-work alarm protocol", () => {
         JSON.stringify({ intentEventId: 1 }),
       );
       const runtime = ManagedRuntime.make(
-        makeCloudflareBackendCoreLayer(state, {}, "sender", new Map(), deadTargets),
+        makeCloudflareBackendCoreLayer(state, {}, "sender", senderIdentity, new Map(), deadTargets),
       );
       const triggerPump = yield* Effect.promise(() => runtime.runPromise(TriggerPump));
 
@@ -211,7 +234,14 @@ describe("due-work alarm protocol", () => {
         const state = makeInMemoryDurableObjectState();
         const sql = state.storage.sql;
         const runtime = ManagedRuntime.make(
-          makeCloudflareBackendCoreLayer(state, {}, "sender", new Map(), deadTargets),
+          makeCloudflareBackendCoreLayer(
+            state,
+            {},
+            "sender",
+            senderIdentity,
+            new Map(),
+            deadTargets,
+          ),
         );
 
         const dispatch = yield* Effect.promise(() => runtime.runPromise(Dispatch));

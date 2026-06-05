@@ -12,11 +12,11 @@ const makeDriver = (triggers: ReadonlyArray<AnyDurableTrigger>): ImgGenPressureD
   const scope = "img-gen-pressure";
   const state = createInMemoryBackendState();
   const runtime = ManagedRuntime.make(
-      createInMemoryRuntimeBackend({
-        state,
-        identity: truthIdentity(scope),
-        triggers,
-      }).layer,
+    createInMemoryRuntimeBackend({
+      state,
+      identity: truthIdentity(scope),
+      triggers,
+    }).layer,
   );
 
   return {
@@ -27,11 +27,17 @@ const makeDriver = (triggers: ReadonlyArray<AnyDurableTrigger>): ImgGenPressureD
         }),
       );
       await runtime.runPromise(
-        state.commitTriggerIntent(runtimeEventIdentity(scope), fireAt, registry, trigger.kind, (trigger) => ({
-          ts: fireAt,
-          kind: trigger.intentEventKind,
-          payload,
-        })),
+        state.commitTriggerIntent(
+          runtimeEventIdentity(scope),
+          fireAt,
+          registry,
+          trigger.kind,
+          (trigger) => ({
+            ts: fireAt,
+            kind: trigger.intentEventKind,
+            payload,
+          }),
+        ),
       );
     },
     drainDue: async (now) => {

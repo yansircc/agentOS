@@ -3,6 +3,7 @@ import type {
   LedgerEventRpc,
   StreamEventsOptions,
 } from "@agent-os/kernel/types";
+import type { BackendProtocolTruthIdentity } from "@agent-os/backend-protocol";
 /**
  * dispatchToScope — deterministic contract tests.
  *
@@ -29,6 +30,7 @@ import {
   type BindingMaterialRef,
 } from "@agent-os/kernel/material-ref";
 import { sqlText } from "../src/storage/sql-row";
+import { cloudflareRouteKeyFromScopeRef } from "../src/ledger/identity";
 import type { DispatchTestDO } from "./test-worker";
 
 interface TestEnv {
@@ -40,8 +42,14 @@ const testEnv = env as unknown as TestEnv;
 interface DispatchRpc {
   readonly dispatchToScope: (spec: DispatchToScopeSpec) => Promise<DispatchToScopeResult>;
   readonly emitEvent: (spec: { event: string; data: unknown }) => Promise<{ id: number }>;
-  readonly events: () => Promise<LedgerEventRpc[]>;
-  readonly streamEvents: (opts?: StreamEventsOptions) => Promise<Response>;
+  readonly events: (
+    identity: BackendProtocolTruthIdentity,
+    opts?: StreamEventsOptions,
+  ) => Promise<LedgerEventRpc[]>;
+  readonly streamEvents: (
+    identity: BackendProtocolTruthIdentity,
+    opts?: StreamEventsOptions,
+  ) => Promise<Response>;
 }
 
 const stubFor = (scope: string): DurableObjectStub<DispatchTestDO> & DispatchRpc =>
@@ -66,11 +74,18 @@ const peerBindingRef = dispatchBindingRef("peer");
 const genericBindingRef = dispatchBindingRef("generic");
 const peerBindingKey = materialRefKey(peerBindingRef);
 
+const truthFor = (scope: string): BackendProtocolTruthIdentity => ({
+  scopeRef: { kind: "conversation" as const, scopeId: scope },
+  effectAuthorityRef: { authorityClass: "effect", authorityId: scope },
+});
+
 const targetFor = (scope: string, bindingRef = peerBindingRef) => ({
   bindingRef,
-  scope,
-  scopeRef: { kind: "conversation" as const, scopeId: scope },
+  ...truthFor(scope),
 });
+
+const routeKeyFor = (scope: string): string =>
+  cloudflareRouteKeyFromScopeRef(truthFor(scope).scopeRef);
 
 const dispatchOperationRef = (source: string, bindingKey: string, target: string, intent: string) =>
   `dispatch:${source}:${encodeURIComponent(bindingKey)}:${target}:${intent}`;
@@ -151,8 +166,8 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
     const before = await dispatchTargetMaterializationCount();
     const sender = stubFor("dispatch-target-snapshot");
 
-    await sender.events();
-    await sender.events();
+    await sender.events(truthFor("dispatch-target-snapshot"));
+    await sender.events(truthFor("dispatch-target-snapshot"));
     await sender.dispatchToScope({
       target: targetFor("dispatch-target-snapshot-dead", dispatchBindingRef("dead")),
       event: "test.delivered",
@@ -208,7 +223,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
           operationRef: dispatchOperationRef(
             "dispatch-sender-atomic",
             peerBindingKey,
-            "dispatch-receiver-atomic",
+            routeKeyFor("dispatch-receiver-atomic"),
             "intent-1",
           ),
           scopeRef: {
@@ -216,8 +231,8 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
             scopeId: "dispatch-receiver-atomic",
           },
           effectAuthorityRef: {
-            authorityId: "cap_dispatch",
             authorityClass: "effect",
+            authorityId: "dispatch-receiver-atomic",
           },
           originRef: {
             originId: "dispatch-sender-atomic",
@@ -228,7 +243,9 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
       expect(validateEffectClaim(payload.claim).ok).toBe(true);
     });
 
-    const receiverEvents: LedgerEventRpc[] = await receiver.events();
+    const receiverEvents: LedgerEventRpc[] = await receiver.events(
+      truthFor("dispatch-receiver-atomic"),
+    );
     expect(receiverEvents.some((e) => e.kind === "test.delivered")).toBe(true);
   });
 
@@ -244,7 +261,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
     });
 
     expect(result.outboundEventId).toBeGreaterThan(0);
-    const receiverEvents = await receiver.events();
+    const receiverEvents = await receiver.events(truthFor("dispatch-generic-binding-receiver"));
     expect(receiverEvents.some((event) => event.kind === "test.delivered")).toBe(true);
   });
 
@@ -264,7 +281,9 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
       idempotencyKey: "diverged-intent",
     });
 
-    const receiverEvents: LedgerEventRpc[] = await receiver.events();
+    const receiverEvents: LedgerEventRpc[] = await receiver.events(
+      truthFor("dispatch-receiver-diverged-ledger"),
+    );
     const receiverDelivered = receiverEvents.find((e) => e.kind === "test.delivered");
 
     await runInDurableObject(sender, async (_instance, state) => {
@@ -311,7 +330,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
 
     expect(first.outboundEventId).not.toBe(second.outboundEventId);
 
-    const events: LedgerEventRpc[] = await receiver.events();
+    const events: LedgerEventRpc[] = await receiver.events(truthFor("dispatch-receiver-dedupe"));
     const delivered = events.filter((e) => e.kind === "test.delivered");
     const accepted = events.filter((e) => e.kind === "dispatch.inbound.accepted");
     const followups = events.filter((e) => e.kind === "test.followup");
@@ -343,7 +362,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
       idempotencyKey: "payload-intent",
     });
 
-    const events: LedgerEventRpc[] = await receiver.events();
+    const events: LedgerEventRpc[] = await receiver.events(truthFor("dispatch-receiver-payload"));
     const deliveredPayload = payloadOf<typeof data>(events, "test.delivered");
     const inboundPayload = payloadOf<{
       readonly sourceScope: string;
@@ -366,7 +385,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
         operationRef: dispatchOperationRef(
           "dispatch-sender-payload",
           peerBindingKey,
-          "dispatch-receiver-payload",
+          routeKeyFor("dispatch-receiver-payload"),
           "payload-intent",
         ),
         anchorRef: expect.objectContaining({
@@ -404,7 +423,9 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
       expect(payload.traceContext).toEqual(traceContext);
     });
 
-    const receiverEvents: LedgerEventRpc[] = await receiver.events();
+    const receiverEvents: LedgerEventRpc[] = await receiver.events(
+      truthFor("dispatch-receiver-trace"),
+    );
     const delivered = receiverEvents.find((e) => e.kind === "test.delivered");
     const inbound = receiverEvents.find((e) => e.kind === "dispatch.inbound.accepted");
     expect(delivered?.payload).toEqual({ message: "trace" });
@@ -418,7 +439,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
         operationRef: dispatchOperationRef(
           "dispatch-sender-trace",
           peerBindingKey,
-          "dispatch-receiver-trace",
+          routeKeyFor("dispatch-receiver-trace"),
           "trace-intent",
         ),
       }),
@@ -437,7 +458,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
       idempotencyKey: "fire-intent",
     });
 
-    const events: LedgerEventRpc[] = await receiver.events();
+    const events: LedgerEventRpc[] = await receiver.events(truthFor("dispatch-receiver-fire"));
     const delivered = events.find((e) => e.kind === "test.delivered");
     const followup = events.find((e) => e.kind === "test.followup");
 
@@ -452,8 +473,12 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
   it("live-streams dispatch internal rows without reconnect and fires outbound handler once", async () => {
     const sender = stubFor("dispatch-sender-stream");
     const receiver = stubFor("dispatch-receiver-stream");
-    const senderStream = await sender.streamEvents({ heartbeatMs: 1_000 });
-    const receiverStream = await receiver.streamEvents({ heartbeatMs: 1_000 });
+    const senderStream = await sender.streamEvents(truthFor("dispatch-sender-stream"), {
+      heartbeatMs: 1_000,
+    });
+    const receiverStream = await receiver.streamEvents(truthFor("dispatch-receiver-stream"), {
+      heartbeatMs: 1_000,
+    });
 
     await sender.dispatchToScope({
       target: targetFor("dispatch-receiver-stream"),
@@ -477,7 +502,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
       "test.followup",
     ]);
 
-    const senderEvents: LedgerEventRpc[] = await sender.events();
+    const senderEvents: LedgerEventRpc[] = await sender.events(truthFor("dispatch-sender-stream"));
     expect(
       senderEvents.filter((e) => e.kind === "test.outbound_requested_handler_fired"),
     ).toHaveLength(1);
@@ -495,8 +520,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
         await rpc.dispatchToScope({
           target: {
             bindingRef: missingBindingRef,
-            scope: "irrelevant",
-            scopeRef: { kind: "conversation", scopeId: "irrelevant" },
+            ...truthFor("irrelevant"),
           },
           event: "test.delivered",
           data: {},
@@ -526,8 +550,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
         await rpc.dispatchToScope({
           target: {
             bindingRef: "peer",
-            scope: "irrelevant",
-            scopeRef: { kind: "conversation", scopeId: "irrelevant" },
+            ...truthFor("irrelevant"),
           },
           event: "test.delivered",
           data: {},
@@ -572,7 +595,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
 
       expect(caught).toMatchObject({
         _tag: "agent_os.unsupported_scope_ref",
-        scopeId: "agent/name/item",
+        scopeId: "malformed",
         position: "target",
       });
 
@@ -593,8 +616,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
         await rpc.dispatchToScope({
           target: {
             bindingRef: peerBindingRef,
-            scope: "any",
-            scopeRef: { kind: "conversation", scopeId: "any" },
+            ...truthFor("any"),
           },
           event: "llm.response",
           data: {},

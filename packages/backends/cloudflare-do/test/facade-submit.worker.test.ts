@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
 
 import { makeFacadeSubmitChatResponse, type FacadeSubmitTestDO } from "./test-worker";
+import { testTruthIdentity } from "./_identity";
 
 interface TestEnv {
   readonly FACADE_SUBMIT_DO: DurableObjectNamespace<FacadeSubmitTestDO>;
@@ -60,6 +61,10 @@ describe("defineAgentDO facade submit", () => {
       readonly bodyText: string | null;
     }> = [];
     const originalFetch = globalThis.fetch;
+    const effectAuthorityRef = {
+      authorityClass: "llm_route" as const,
+      authorityId: "facade-submit-test",
+    };
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       fetchCalls.push({
         url: requestUrl(input),
@@ -74,18 +79,18 @@ describe("defineAgentDO facade submit", () => {
         instance.submit({
           intent: "lookup",
           input: { key: "abc" },
-          effectAuthorityRef: { authorityClass: "llm_route", authorityId: "facade-submit-test" },
+          effectAuthorityRef,
           budget: { maxTurns: 1 },
         }),
       );
 
       const events = await (
-        stub as {
-          readonly events: () => Promise<
-            ReadonlyArray<{ readonly kind: string; readonly payload: unknown }>
-          >;
+        stub as unknown as {
+          readonly events: (
+            identity: ReturnType<typeof testTruthIdentity>,
+          ) => Promise<ReadonlyArray<{ readonly kind: string; readonly payload: unknown }>>;
         }
-      ).events();
+      ).events(testTruthIdentity(scope, effectAuthorityRef));
 
       expect(result.ok, JSON.stringify({ result, events })).toBe(true);
       if (result.ok) {
