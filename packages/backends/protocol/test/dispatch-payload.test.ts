@@ -7,6 +7,9 @@ import {
   DELIVERY_RETRY_TRIGGER_KIND,
   DISPATCH_MAX_ATTEMPTS,
   DISPATCH_RETRY_POLICY,
+  backendProtocolEventIdentityKey,
+  backendProtocolProjectionKey,
+  backendProtocolTruthIdentityKey,
   describeDispatchCause,
   dispatchBackoffMs,
   dispatchExternalDeliveryReceipt,
@@ -16,6 +19,7 @@ import {
   durableTriggerDuePayload,
   fireBackendEventHandlers,
   parseDurableTriggerRetryPolicy,
+  parseBackendProtocolLedgerEventRpc,
   parseIntentPointerDuePayload,
   parseRequestedPayload,
   settleDispatchOutboundDelivered,
@@ -38,6 +42,11 @@ const eventIdentity = (scopeId: string) => ({
   effectAuthorityRef: { authorityClass: "test", authorityId: scopeId },
 });
 
+const truthIdentity = (scopeId: string) => ({
+  scopeRef: { kind: "conversation" as const, scopeId },
+  effectAuthorityRef: { authorityClass: "effect", authorityId: `dispatch:${scopeId}` },
+});
+
 const claim = makePreClaim({
   operationRef: "dispatch:test",
   scopeRef: { kind: "conversation", scopeId: "sender" },
@@ -51,8 +60,7 @@ describe("@agent-os/backend-protocol", () => {
       JSON.stringify({
         target: {
           bindingRef,
-          scope: "receiver",
-          scopeRef: { kind: "conversation", scopeId: "receiver" },
+          ...truthIdentity("receiver"),
         },
         event: "app.deliver",
         data: { ok: true },
@@ -66,7 +74,12 @@ describe("@agent-os/backend-protocol", () => {
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
     expect(parsed.value.target.bindingRef).toEqual(bindingRef);
-    expect(parsed.value.target.scope).toBe("receiver");
+    expect(parsed.value.target).not.toHaveProperty("scope");
+    expect(parsed.value.target.scopeRef).toEqual({ kind: "conversation", scopeId: "receiver" });
+    expect(parsed.value.target.effectAuthorityRef).toEqual({
+      authorityClass: "effect",
+      authorityId: "dispatch:receiver",
+    });
     expect(parsed.value.event).toBe("app.deliver");
     expect(parsed.value.traceContext).toEqual(traceContext);
   });
@@ -76,8 +89,7 @@ describe("@agent-os/backend-protocol", () => {
       JSON.stringify({
         target: {
           bindingRef,
-          scope: "receiver",
-          scopeRef: { kind: "conversation", scopeId: "receiver" },
+          ...truthIdentity("receiver"),
         },
         event: "app.deliver",
         data: { ok: true },
@@ -101,7 +113,7 @@ describe("@agent-os/backend-protocol", () => {
 
     const malformedTarget = parseRequestedPayload(
       JSON.stringify({
-        target: { scope: "receiver" },
+        target: { scopeRef: { kind: "conversation", scopeId: "receiver" } },
         event: "app.deliver",
         idempotencyKey: "dispatch-1",
         retryPolicy: DISPATCH_RETRY_POLICY,
@@ -113,6 +125,106 @@ describe("@agent-os/backend-protocol", () => {
     expect(malformedTarget.failure.reason).toBe(
       "dispatch target bindingRef must be a BindingMaterialRef",
     );
+  });
+
+  it("rejects legacy target scope strings instead of deriving identity from them", () => {
+    const parsed = parseRequestedPayload(
+      JSON.stringify({
+        target: {
+          bindingRef,
+          scope: "receiver",
+          ...truthIdentity("receiver"),
+        },
+        event: "app.deliver",
+        data: { ok: true },
+        idempotencyKey: "dispatch-1",
+        retryPolicy: DISPATCH_RETRY_POLICY,
+        claim,
+      }),
+    );
+
+    expect(parsed.ok).toBe(false);
+    if (parsed.ok) return;
+    expect(parsed.failure.reason).toBe("dispatch target must not include legacy scope");
+  });
+
+  it("rejects partial target identity without effect authority", () => {
+    const parsed = parseRequestedPayload(
+      JSON.stringify({
+        target: {
+          bindingRef,
+          scopeRef: { kind: "conversation", scopeId: "receiver" },
+        },
+        event: "app.deliver",
+        data: { ok: true },
+        idempotencyKey: "dispatch-1",
+        retryPolicy: DISPATCH_RETRY_POLICY,
+        claim,
+      }),
+    );
+
+    expect(parsed.ok).toBe(false);
+    if (parsed.ok) return;
+    expect(parsed.failure.reason).toBe("dispatch target effectAuthorityRef malformed");
+  });
+
+  it("keys truth, owner, and projections by exact structured identity", () => {
+    const base = eventIdentity("same-scope");
+    const alternateAuthority = {
+      ...base,
+      effectAuthorityRef: { authorityClass: "test", authorityId: "alternate" },
+    };
+    const alternateOwner = {
+      ...base,
+      factOwnerRef: "@agent-os/other",
+    };
+
+    expect(backendProtocolTruthIdentityKey(base)).toBe("conversation:same-scope|test:same-scope:none");
+    expect(backendProtocolTruthIdentityKey(base)).not.toBe(
+      backendProtocolTruthIdentityKey(alternateAuthority),
+    );
+    expect(backendProtocolEventIdentityKey(base)).not.toBe(
+      backendProtocolEventIdentityKey(alternateOwner),
+    );
+    expect(
+      backendProtocolProjectionKey({
+        ...base,
+        projectionKind: "resource",
+        projectionId: "credit",
+      }),
+    ).not.toBe(
+      backendProtocolProjectionKey({
+        ...base,
+        projectionKind: "resource",
+        projectionId: "tokens",
+      }),
+    );
+  });
+
+  it("rejects ownerless or legacy-scope event rows at the protocol boundary", () => {
+    const ownerless = parseBackendProtocolLedgerEventRpc({
+      id: 1,
+      ts: 1,
+      kind: "app.handled",
+      scopeRef: { kind: "conversation", scopeId: "receiver" },
+      effectAuthorityRef: { authorityClass: "effect", authorityId: "dispatch:receiver" },
+      payload: { ok: true },
+    });
+    expect(ownerless.ok).toBe(false);
+    if (ownerless.ok) return;
+    expect(ownerless.failure.reason).toBe("ledger event fields malformed");
+
+    const legacyScope = parseBackendProtocolLedgerEventRpc({
+      id: 1,
+      ts: 1,
+      kind: "app.handled",
+      scope: "receiver",
+      ...eventIdentity("receiver"),
+      payload: { ok: true },
+    });
+    expect(legacyScope.ok).toBe(false);
+    if (legacyScope.ok) return;
+    expect(legacyScope.failure.reason).toBe("ledger event must not include legacy scope");
   });
 
   it("owns retry, cause, and due-work pointer vocabulary", () => {

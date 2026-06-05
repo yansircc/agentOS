@@ -1,15 +1,24 @@
 import type {
-  DispatchToScopeSpec,
   LedgerEvent,
   ResourceGrantResult,
   ResourceGrantSpec,
   ResourceReservationSpec,
   ResourceReserveResult,
   ResourceReserveSpec,
+  TraceContext,
 } from "@agent-os/kernel/types";
 import { Effect } from "effect";
 import { describe, expect, it } from "@effect/vitest";
-import { DISPATCH_EVENT_KINDS, DISPATCH_MAX_ATTEMPTS, dispatchBackoffMs } from "../../src";
+import {
+  DISPATCH_EVENT_KINDS,
+  DISPATCH_MAX_ATTEMPTS,
+  backendProtocolProjectionKey,
+  backendProtocolTruthIdentityKey,
+  dispatchBackoffMs,
+  type BackendProtocolDispatchTarget,
+  type BackendProtocolEventIdentity,
+  type BackendProtocolProjectionKey,
+} from "../../src";
 import type { BindingMaterialRef } from "@agent-os/kernel/material-ref";
 import type { DispatchToScopeResult } from "@agent-os/kernel/types";
 import type {
@@ -34,14 +43,22 @@ export interface RuntimeBackendFanoutDiagnostic {
   readonly phase: "sink";
   readonly eventId: number;
   readonly kind: string;
-  readonly scopeKey: string;
+  readonly identityKey: string;
   readonly message: string;
+}
+
+export interface RuntimeBackendDispatchSpec {
+  readonly target: BackendProtocolDispatchTarget;
+  readonly event: string;
+  readonly data: unknown;
+  readonly idempotencyKey: string;
+  readonly traceContext?: TraceContext;
 }
 
 export interface RuntimeBackendContractDriver {
   readonly bindingRef: BindingMaterialRef;
   readonly registerDispatchReceiver: (
-    scope: string,
+    identity: BackendProtocolEventIdentity,
     receiver?: ContractDispatchReceiver,
   ) => void | Promise<void>;
   readonly setDispatchTargetAdapter: (
@@ -52,43 +69,61 @@ export interface RuntimeBackendContractDriver {
     handler: (event: LedgerEvent) => void | Promise<void>,
   ) => { readonly unsubscribe: () => void } | void;
   readonly addSink: (
-    scope: string,
+    identity: BackendProtocolEventIdentity,
     kind: string,
     sink: (event: LedgerEvent) => void,
   ) => { readonly unsubscribe: () => void } | void | Promise<{ readonly unsubscribe: () => void }>;
   readonly fanoutDiagnostics: () =>
     | ReadonlyArray<RuntimeBackendFanoutDiagnostic>
     | Promise<ReadonlyArray<RuntimeBackendFanoutDiagnostic>>;
-  readonly log: (scope: string, kind: string, payload: unknown) => Promise<LedgerEvent>;
-  readonly events: (scope: string) => Promise<ReadonlyArray<LedgerEvent>>;
+  readonly log: (
+    identity: BackendProtocolEventIdentity,
+    kind: string,
+    payload: unknown,
+  ) => Promise<LedgerEvent>;
+  readonly events: (
+    identity: BackendProtocolEventIdentity,
+  ) => Promise<ReadonlyArray<LedgerEvent>>;
   readonly schedule: (
-    scope: string,
+    identity: BackendProtocolEventIdentity,
     at: number,
     eventKind: string,
     data: unknown,
   ) => Promise<{ readonly id: number }>;
-  readonly fireDue: (scope: string, now: number) => Promise<{ readonly fired: number }>;
+  readonly fireDue: (
+    identity: BackendProtocolEventIdentity,
+    now: number,
+  ) => Promise<{ readonly fired: number }>;
   readonly dispatchToScope: (
-    sourceScope: string,
-    spec: DispatchToScopeSpec,
+    sourceIdentity: BackendProtocolEventIdentity,
+    spec: RuntimeBackendDispatchSpec,
   ) => Promise<DispatchToScopeResult>;
   readonly drainDispatchDue: (
-    scope: string,
+    identity: BackendProtocolEventIdentity,
     now: number,
   ) => Promise<{ readonly delivered: number; readonly failed: number }>;
-  readonly nextDueAt: (scope: string) => Promise<number | null>;
-  readonly pendingDueCount: (scope: string) => Promise<number>;
-  readonly grantResource: (scope: string, spec: ResourceGrantSpec) => Promise<ResourceGrantResult>;
+  readonly nextDueAt: (identity: BackendProtocolEventIdentity) => Promise<number | null>;
+  readonly pendingDueCount: (identity: BackendProtocolEventIdentity) => Promise<number>;
+  readonly grantResource: (
+    identity: BackendProtocolEventIdentity,
+    spec: ResourceGrantSpec,
+  ) => Promise<ResourceGrantResult>;
   readonly reserveResource: (
-    scope: string,
+    identity: BackendProtocolEventIdentity,
     spec: ResourceReserveSpec,
   ) => Promise<ResourceReserveResult>;
-  readonly consumeResource: (scope: string, spec: ResourceReservationSpec) => Promise<void>;
-  readonly releaseResource: (scope: string, spec: ResourceReservationSpec) => Promise<void>;
-  readonly projectResource: (scope: string, key: string) => Promise<ResourceProjection>;
+  readonly consumeResource: (
+    identity: BackendProtocolEventIdentity,
+    spec: ResourceReservationSpec,
+  ) => Promise<void>;
+  readonly releaseResource: (
+    identity: BackendProtocolEventIdentity,
+    spec: ResourceReservationSpec,
+  ) => Promise<void>;
+  readonly projectResource: (key: BackendProtocolProjectionKey) => Promise<ResourceProjection>;
   readonly quotaTryGrant: (
-    scope: string,
-    key: string,
+    identity: BackendProtocolEventIdentity,
+    key: BackendProtocolProjectionKey,
     amount: number,
     windowMs: number,
     limit: number,
@@ -102,13 +137,31 @@ export type RuntimeBackendContractDriverFactory = () =>
   | RuntimeBackendContractDriver
   | Promise<RuntimeBackendContractDriver>;
 
+const CONTRACT_FACT_OWNER = "@agent-os/backend-protocol-contract";
+
+const contractIdentity = (scopeId: string): BackendProtocolEventIdentity => ({
+  scopeRef: { kind: "conversation", scopeId },
+  effectAuthorityRef: { authorityClass: "effect", authorityId: scopeId },
+  factOwnerRef: CONTRACT_FACT_OWNER,
+});
+
+const projectionKey = (
+  identity: BackendProtocolEventIdentity,
+  projectionKind: string,
+  projectionId: string,
+): BackendProtocolProjectionKey => ({
+  ...identity,
+  projectionKind,
+  projectionId,
+});
+
 const targetFor = (
   driver: RuntimeBackendContractDriver,
-  scope: string,
-): DispatchToScopeSpec["target"] => ({
+  scopeId: string,
+): RuntimeBackendDispatchSpec["target"] => ({
   bindingRef: driver.bindingRef,
-  scope,
-  scopeRef: { kind: "conversation", scopeId: scope },
+  scopeRef: { kind: "conversation", scopeId },
+  effectAuthorityRef: { authorityClass: "effect", authorityId: scopeId },
 });
 
 const dispatchSpec = (
@@ -117,7 +170,7 @@ const dispatchSpec = (
   idempotencyKey: string,
   event = "app.received",
   data: unknown = { value: 1 },
-): DispatchToScopeSpec => ({
+): RuntimeBackendDispatchSpec => ({
   target: targetFor(driver, targetScope),
   event,
   data,
@@ -129,6 +182,28 @@ const payloadsOf = <T>(events: ReadonlyArray<LedgerEvent>, kind: string): Readon
 
 const kindsOf = (events: ReadonlyArray<LedgerEvent>): ReadonlyArray<string> =>
   events.map((event) => event.kind);
+
+const expectEventIdentity = (
+  event: LedgerEvent | undefined,
+  identity: BackendProtocolEventIdentity,
+): void => {
+  expect(event).toBeDefined();
+  expect(event).toMatchObject({
+    scopeRef: identity.scopeRef,
+    effectAuthorityRef: identity.effectAuthorityRef,
+    factOwnerRef: identity.factOwnerRef,
+  });
+  expect(event).not.toHaveProperty("scope");
+};
+
+const expectEventsIdentity = (
+  events: ReadonlyArray<LedgerEvent>,
+  identity: BackendProtocolEventIdentity,
+): void => {
+  for (const event of events) {
+    expectEventIdentity(event, identity);
+  }
+};
 
 const SCHEDULED_REQUESTED = "durable_trigger.scheduled.requested";
 
@@ -160,23 +235,35 @@ export const runRuntimeBackendContractSuite = (
       withDriver((driver) =>
         Effect.gen(function* () {
           yield* promise(() =>
-            driver.schedule("schedule-scope", 10, "app.scheduled", { job: "one" }),
+            driver.schedule(contractIdentity("schedule-scope"), 10, "app.scheduled", {
+              job: "one",
+            }),
           );
 
-          expect(yield* promise(() => driver.nextDueAt("schedule-scope"))).toBe(10);
-          expect(yield* promise(() => driver.fireDue("schedule-scope", 9))).toEqual({
+          expect(yield* promise(() => driver.nextDueAt(contractIdentity("schedule-scope")))).toBe(
+            10,
+          );
+          expect(yield* promise(() => driver.fireDue(contractIdentity("schedule-scope"), 9))).toEqual({
             fired: 0,
           });
-          expect(kindsOf(yield* promise(() => driver.events("schedule-scope")))).toEqual([
-            SCHEDULED_REQUESTED,
-          ]);
-          expect(yield* promise(() => driver.fireDue("schedule-scope", 10))).toEqual({ fired: 1 });
-          expect(yield* promise(() => driver.fireDue("schedule-scope", 10))).toEqual({ fired: 0 });
+          expect(kindsOf(yield* promise(() => driver.events(contractIdentity("schedule-scope"))))).toEqual(
+            [SCHEDULED_REQUESTED],
+          );
+          expect(yield* promise(() => driver.fireDue(contractIdentity("schedule-scope"), 10))).toEqual({
+            fired: 1,
+          });
+          expect(yield* promise(() => driver.fireDue(contractIdentity("schedule-scope"), 10))).toEqual({
+            fired: 0,
+          });
 
-          const events = yield* promise(() => driver.events("schedule-scope"));
+          const scheduleIdentity = contractIdentity("schedule-scope");
+          const events = yield* promise(() => driver.events(scheduleIdentity));
           expect(kindsOf(events)).toEqual([SCHEDULED_REQUESTED, "app.scheduled"]);
+          expectEventsIdentity(events, scheduleIdentity);
           expect(events[1]?.payload).toEqual({ job: "one" });
-          expect(yield* promise(() => driver.pendingDueCount("schedule-scope"))).toBe(0);
+          expect(
+            yield* promise(() => driver.pendingDueCount(contractIdentity("schedule-scope"))),
+          ).toBe(0);
         }),
       ),
     );
@@ -186,7 +273,7 @@ export const runRuntimeBackendContractSuite = (
         Effect.gen(function* () {
           let receiveAttempts = 0;
           yield* promise(() =>
-            driver.registerDispatchReceiver("receiver", (_envelope, accept) => {
+            driver.registerDispatchReceiver(contractIdentity("receiver"), (_envelope, accept) => {
               receiveAttempts += 1;
               if (receiveAttempts === 1) return Promise.reject("transient");
               return accept();
@@ -195,24 +282,34 @@ export const runRuntimeBackendContractSuite = (
 
           yield* promise(() =>
             driver.dispatchToScope(
-              "combo-scope",
+              contractIdentity("combo-scope"),
               dispatchSpec(driver, "receiver", "combo-retry", "app.combo", { retry: true }),
             ),
           );
-          const retryAt = yield* promise(() => driver.nextDueAt("combo-scope"));
+          const retryAt = yield* promise(() => driver.nextDueAt(contractIdentity("combo-scope")));
           expect(typeof retryAt).toBe("number");
 
           yield* promise(() =>
-            driver.schedule("combo-scope", 10, "app.combo.scheduled", { due: true }),
+            driver.schedule(contractIdentity("combo-scope"), 10, "app.combo.scheduled", {
+              due: true,
+            }),
           );
-          expect(yield* promise(() => driver.nextDueAt("combo-scope"))).toBe(10);
-          expect(yield* promise(() => driver.fireDue("combo-scope", 10))).toEqual({ fired: 1 });
-          expect(yield* promise(() => driver.nextDueAt("combo-scope"))).toBe(retryAt);
-          expect(yield* promise(() => driver.drainDispatchDue("combo-scope", retryAt!))).toEqual({
+          expect(yield* promise(() => driver.nextDueAt(contractIdentity("combo-scope")))).toBe(10);
+          expect(yield* promise(() => driver.fireDue(contractIdentity("combo-scope"), 10))).toEqual({
+            fired: 1,
+          });
+          expect(yield* promise(() => driver.nextDueAt(contractIdentity("combo-scope")))).toBe(
+            retryAt,
+          );
+          expect(
+            yield* promise(() => driver.drainDispatchDue(contractIdentity("combo-scope"), retryAt!)),
+          ).toEqual({
             delivered: 1,
             failed: 0,
           });
-          expect(yield* promise(() => driver.pendingDueCount("combo-scope"))).toBe(0);
+          expect(yield* promise(() => driver.pendingDueCount(contractIdentity("combo-scope")))).toBe(
+            0,
+          );
         }),
       ),
     );
@@ -222,37 +319,43 @@ export const runRuntimeBackendContractSuite = (
       () =>
         withDriver((driver) =>
           Effect.gen(function* () {
-            yield* promise(() => driver.registerDispatchReceiver("receiver"));
+            yield* promise(() => driver.registerDispatchReceiver(contractIdentity("receiver")));
             const spec = dispatchSpec(driver, "receiver", "same-key", "app.received", { value: 1 });
 
-            yield* promise(() => driver.dispatchToScope("sender", spec));
-            yield* promise(() => driver.dispatchToScope("sender", spec));
+            yield* promise(() => driver.dispatchToScope(contractIdentity("sender"), spec));
+            yield* promise(() => driver.dispatchToScope(contractIdentity("sender"), spec));
 
-            const receiverEvents = yield* promise(() => driver.events("receiver"));
+            const receiverIdentity = contractIdentity("receiver");
+            const receiverEvents = yield* promise(() => driver.events(receiverIdentity));
             expect(kindsOf(receiverEvents)).toEqual([
               DISPATCH_EVENT_KINDS.INBOUND_ACCEPTED,
               "app.received",
             ]);
+            expectEventsIdentity(receiverEvents, receiverIdentity);
             expect(receiverEvents[1]?.payload).toEqual({ value: 1 });
 
-            const senderEvents = yield* promise(() => driver.events("sender"));
+            const senderIdentity = contractIdentity("sender");
+            const senderEvents = yield* promise(() => driver.events(senderIdentity));
+            expectEventsIdentity(senderEvents, senderIdentity);
             expect(payloadsOf(senderEvents, DISPATCH_EVENT_KINDS.OUTBOUND_REQUESTED)).toHaveLength(
               2,
             );
             expect(payloadsOf(senderEvents, DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED)).toHaveLength(
               2,
             );
-            expect(yield* promise(() => driver.pendingDueCount("sender"))).toBe(0);
+            expect(yield* promise(() => driver.pendingDueCount(contractIdentity("sender")))).toBe(
+              0,
+            );
           }),
         ),
     );
 
     it.effect("rejects malformed trace context before dispatch propagation", () =>
-      withDriver((driver) =>
-        Effect.gen(function* () {
-          yield* promise(() => driver.registerDispatchReceiver("receiver"));
+        withDriver((driver) =>
+          Effect.gen(function* () {
+          yield* promise(() => driver.registerDispatchReceiver(contractIdentity("receiver")));
           yield* expectRejectTagEffect(
-            driver.dispatchToScope("sender", {
+            driver.dispatchToScope(contractIdentity("sender"), {
               ...dispatchSpec(driver, "receiver", "bad-trace", "app.received", { value: 1 }),
               traceContext: {
                 traceparent: "00-test",
@@ -261,8 +364,8 @@ export const runRuntimeBackendContractSuite = (
             "agent_os.invalid_trace_context",
           );
 
-          expect(yield* promise(() => driver.events("sender"))).toEqual([]);
-          expect(yield* promise(() => driver.events("receiver"))).toEqual([]);
+          expect(yield* promise(() => driver.events(contractIdentity("sender")))).toEqual([]);
+          expect(yield* promise(() => driver.events(contractIdentity("receiver")))).toEqual([]);
         }),
       ),
     );
@@ -272,7 +375,7 @@ export const runRuntimeBackendContractSuite = (
         Effect.gen(function* () {
           let receiveAttempts = 0;
           yield* promise(() =>
-            driver.registerDispatchReceiver("receiver", (_envelope, accept) => {
+            driver.registerDispatchReceiver(contractIdentity("receiver"), (_envelope, accept) => {
               receiveAttempts += 1;
               if (receiveAttempts === 1) return Promise.reject("transient");
               return accept();
@@ -281,11 +384,11 @@ export const runRuntimeBackendContractSuite = (
 
           const result = yield* promise(() =>
             driver.dispatchToScope(
-              "sender",
+              contractIdentity("sender"),
               dispatchSpec(driver, "receiver", "retry-once", "app.retry", { value: 2 }),
             ),
           );
-          const firstEvents = yield* promise(() => driver.events("sender"));
+          const firstEvents = yield* promise(() => driver.events(contractIdentity("sender")));
           const failed = payloadsOf<{
             readonly outboundEventId: number;
             readonly attempt: number;
@@ -299,16 +402,22 @@ export const runRuntimeBackendContractSuite = (
             terminal: false,
           });
           expect(typeof failed[0]?.nextAttemptAt).toBe("number");
-          expect(yield* promise(() => driver.nextDueAt("sender"))).toBe(failed[0]?.nextAttemptAt);
+          expect(yield* promise(() => driver.nextDueAt(contractIdentity("sender")))).toBe(
+            failed[0]?.nextAttemptAt,
+          );
 
           expect(
-            yield* promise(() => driver.drainDispatchDue("sender", failed[0]!.nextAttemptAt!)),
+            yield* promise(() =>
+              driver.drainDispatchDue(contractIdentity("sender"), failed[0]!.nextAttemptAt!),
+            ),
           ).toEqual({
             delivered: 1,
             failed: 0,
           });
 
-          const senderEvents = yield* promise(() => driver.events("sender"));
+          const senderIdentity = contractIdentity("sender");
+          const senderEvents = yield* promise(() => driver.events(senderIdentity));
+          expectEventsIdentity(senderEvents, senderIdentity);
           const delivered = payloadsOf<{
             readonly outboundEventId: number;
             readonly attempt: number;
@@ -319,7 +428,7 @@ export const runRuntimeBackendContractSuite = (
             attempt: 2,
           });
           expect(receiveAttempts).toBe(2);
-          expect(yield* promise(() => driver.pendingDueCount("sender"))).toBe(0);
+          expect(yield* promise(() => driver.pendingDueCount(contractIdentity("sender")))).toBe(0);
         }),
       ),
     );
@@ -352,13 +461,13 @@ export const runRuntimeBackendContractSuite = (
             const idempotencyKey = `${target.label}-adapter`;
             const result = yield* promise(() =>
               driver.dispatchToScope(
-                sourceScope,
+                contractIdentity(sourceScope),
                 dispatchSpec(driver, target.targetScope, idempotencyKey, target.event, {
                   prompt: "test",
                 }),
               ),
             );
-            const firstEvents = yield* promise(() => driver.events(sourceScope));
+            const firstEvents = yield* promise(() => driver.events(contractIdentity(sourceScope)));
             const failed = payloadsOf<{
               readonly outboundEventId: number;
               readonly attempt: number;
@@ -374,13 +483,17 @@ export const runRuntimeBackendContractSuite = (
             expect(typeof failed[0]?.nextAttemptAt).toBe("number");
 
             expect(
-              yield* promise(() => driver.drainDispatchDue(sourceScope, failed[0]!.nextAttemptAt!)),
+              yield* promise(() =>
+                driver.drainDispatchDue(contractIdentity(sourceScope), failed[0]!.nextAttemptAt!),
+              ),
             ).toEqual({
               delivered: 1,
               failed: 0,
             });
 
-            const senderEvents = yield* promise(() => driver.events(sourceScope));
+            const sourceIdentity = contractIdentity(sourceScope);
+            const senderEvents = yield* promise(() => driver.events(sourceIdentity));
+            expectEventsIdentity(senderEvents, sourceIdentity);
             const delivered = payloadsOf<{
               readonly outboundEventId: number;
               readonly deliveryReceipt: unknown;
@@ -401,8 +514,10 @@ export const runRuntimeBackendContractSuite = (
             expect(delivered[0]?.claim?.anchorRef).toMatchObject({
               anchorKind: "external_receipt",
             });
-            expect(yield* promise(() => driver.events(target.targetScope))).toEqual([]);
-            expect(yield* promise(() => driver.pendingDueCount(sourceScope))).toBe(0);
+            expect(yield* promise(() => driver.events(contractIdentity(target.targetScope)))).toEqual([]);
+            expect(yield* promise(() => driver.pendingDueCount(contractIdentity(sourceScope)))).toBe(
+              0,
+            );
             expect(attempts).toBe(2);
           }
         }),
@@ -413,23 +528,27 @@ export const runRuntimeBackendContractSuite = (
       withDriver((driver) =>
         Effect.gen(function* () {
           yield* promise(() =>
-            driver.registerDispatchReceiver("receiver", () => Promise.reject("permanent")),
+            driver.registerDispatchReceiver(contractIdentity("receiver"), () =>
+              Promise.reject("permanent"),
+            ),
           );
 
           yield* promise(() =>
             driver.dispatchToScope(
-              "sender",
+              contractIdentity("sender"),
               dispatchSpec(driver, "receiver", "terminal", "app.never", { value: 3 }),
             ),
           );
 
           for (let i = 0; i < DISPATCH_MAX_ATTEMPTS + 2; i += 1) {
-            const next = yield* promise(() => driver.nextDueAt("sender"));
+            const next = yield* promise(() => driver.nextDueAt(contractIdentity("sender")));
             if (next === null) break;
-            yield* promise(() => driver.drainDispatchDue("sender", next));
+            yield* promise(() => driver.drainDispatchDue(contractIdentity("sender"), next));
           }
 
-          const senderEvents = yield* promise(() => driver.events("sender"));
+          const senderIdentity = contractIdentity("sender");
+          const senderEvents = yield* promise(() => driver.events(senderIdentity));
+          expectEventsIdentity(senderEvents, senderIdentity);
           const failed = payloadsOf<{
             readonly attempt: number;
             readonly terminal: boolean;
@@ -441,7 +560,7 @@ export const runRuntimeBackendContractSuite = (
             terminal: true,
           });
           expect(failed.at(-1)?.nextAttemptAt).toBeUndefined();
-          expect(yield* promise(() => driver.pendingDueCount("sender"))).toBe(0);
+          expect(yield* promise(() => driver.pendingDueCount(contractIdentity("sender")))).toBe(0);
         }),
       ),
     );
@@ -451,7 +570,7 @@ export const runRuntimeBackendContractSuite = (
         Effect.gen(function* () {
           let receiveAttempts = 0;
           yield* promise(() =>
-            driver.registerDispatchReceiver("receiver", () => {
+            driver.registerDispatchReceiver(contractIdentity("receiver"), () => {
               receiveAttempts += 1;
               return Promise.reject("retry schedule");
             }),
@@ -459,19 +578,21 @@ export const runRuntimeBackendContractSuite = (
 
           yield* promise(() =>
             driver.dispatchToScope(
-              "sender",
+              contractIdentity("sender"),
               dispatchSpec(driver, "receiver", "backoff", "app.backoff", { value: 4 }),
             ),
           );
-          let senderEvents = yield* promise(() => driver.events("sender"));
+          let senderEvents = yield* promise(() => driver.events(contractIdentity("sender")));
           const first = payloadsOf<{ readonly nextAttemptAt?: number }>(
             senderEvents,
             DISPATCH_EVENT_KINDS.OUTBOUND_FAILED,
           )[0];
           expect(typeof first?.nextAttemptAt).toBe("number");
 
-          yield* promise(() => driver.drainDispatchDue("sender", first!.nextAttemptAt!));
-          senderEvents = yield* promise(() => driver.events("sender"));
+          yield* promise(() =>
+            driver.drainDispatchDue(contractIdentity("sender"), first!.nextAttemptAt!),
+          );
+          senderEvents = yield* promise(() => driver.events(contractIdentity("sender")));
           const failures = payloadsOf<{
             readonly attempt: number;
             readonly nextAttemptAt?: number;
@@ -497,11 +618,15 @@ export const runRuntimeBackendContractSuite = (
             calls.push("after");
           });
 
-          yield* promise(() => driver.log("handler-scope", "app.handled", { ok: true }));
+          yield* promise(() =>
+            driver.log(contractIdentity("handler-scope"), "app.handled", { ok: true }),
+          );
 
           expect(calls).toEqual(["rejecting", "after"]);
-          const events = yield* promise(() => driver.events("handler-scope"));
+          const handlerIdentity = contractIdentity("handler-scope");
+          const events = yield* promise(() => driver.events(handlerIdentity));
           expect(kindsOf(events)).toEqual(["app.handled"]);
+          expectEventsIdentity(events, handlerIdentity);
         }),
       ),
     );
@@ -511,18 +636,20 @@ export const runRuntimeBackendContractSuite = (
         Effect.gen(function* () {
           const calls: number[] = [];
           yield* promise(() =>
-            driver.addSink("sink-scope", "app.sink", (event) => {
+            driver.addSink(contractIdentity("sink-scope"), "app.sink", (event) => {
               calls.push(event.id);
               throw new Error("sink failed after commit");
             }),
           );
 
           const event = yield* promise(() =>
-            driver.log("sink-scope", "app.sink", { committed: true }),
+            driver.log(contractIdentity("sink-scope"), "app.sink", { committed: true }),
           );
 
           expect(calls).toEqual([event.id]);
-          expect(yield* promise(() => driver.events("sink-scope"))).toEqual([event]);
+          expect(yield* promise(() => driver.events(contractIdentity("sink-scope")))).toEqual([
+            event,
+          ]);
 
           const diagnostics = yield* promise(() => driver.fanoutDiagnostics());
           expect(
@@ -531,7 +658,7 @@ export const runRuntimeBackendContractSuite = (
                 entry.phase === "sink" &&
                 entry.eventId === event.id &&
                 entry.kind === "app.sink" &&
-                entry.scopeKey === "conversation:sink-scope" &&
+                entry.identityKey === backendProtocolTruthIdentityKey(contractIdentity("sink-scope")) &&
                 entry.message.includes("sink failed after commit"),
             ),
           ).toBe(true);
@@ -542,14 +669,27 @@ export const runRuntimeBackendContractSuite = (
     it.effect("keeps resource reservation semantics identical", () =>
       withDriver((driver) =>
         Effect.gen(function* () {
+          const resourceIdentity = contractIdentity("resource-scope");
+          const creditProjection = projectionKey(resourceIdentity, "resource", "credit");
+          expect(backendProtocolProjectionKey(creditProjection)).not.toBe(
+            backendProtocolProjectionKey({
+              ...creditProjection,
+              effectAuthorityRef: { authorityClass: "effect", authorityId: "resource-other" },
+            }),
+          );
+
           expect(
             yield* promise(() =>
-              driver.grantResource("resource-scope", { key: "credit", amount: 5, ref: "seed" }),
+              driver.grantResource(resourceIdentity, {
+                key: "credit",
+                amount: 5,
+                ref: "seed",
+              }),
             ),
           ).toMatchObject({ eventId: expect.any(Number) });
 
           const first = yield* promise(() =>
-            driver.reserveResource("resource-scope", {
+            driver.reserveResource(resourceIdentity, {
               key: "credit",
               amount: 2,
               ref: "req-1",
@@ -557,7 +697,7 @@ export const runRuntimeBackendContractSuite = (
             }),
           );
           const second = yield* promise(() =>
-            driver.reserveResource("resource-scope", {
+            driver.reserveResource(resourceIdentity, {
               key: "credit",
               amount: 2,
               ref: "req-1-retry",
@@ -565,14 +705,16 @@ export const runRuntimeBackendContractSuite = (
             }),
           );
           expect(second.reservationId).toBe(first.reservationId);
-          expect(yield* promise(() => driver.projectResource("resource-scope", "credit"))).toEqual({
+          expect(
+            yield* promise(() => driver.projectResource(creditProjection)),
+          ).toEqual({
             available: 3,
             reserved: 2,
             consumed: 0,
           });
 
           yield* expectRejectTagEffect(
-            driver.reserveResource("resource-scope", {
+            driver.reserveResource(resourceIdentity, {
               key: "credit",
               amount: 10,
               ref: "too-large",
@@ -580,7 +722,8 @@ export const runRuntimeBackendContractSuite = (
             }),
             "agent_os.resource_insufficient",
           );
-          const events = yield* promise(() => driver.events("resource-scope"));
+          const events = yield* promise(() => driver.events(resourceIdentity));
+          expectEventsIdentity(events, resourceIdentity);
           expect(kindsOf(events)).toEqual([
             "resource_pool.granted",
             "resource_pool.reserved",
@@ -593,18 +736,40 @@ export const runRuntimeBackendContractSuite = (
     it.effect("keeps quota grant, rate-limit, and malformed-fact semantics identical", () =>
       withDriver((driver) =>
         Effect.gen(function* () {
+          const quotaIdentity = contractIdentity("quota-scope");
+          const toolAProjection = projectionKey(quotaIdentity, "quota", "tool-a");
+          expect(backendProtocolProjectionKey(toolAProjection)).not.toBe(
+            backendProtocolProjectionKey({ ...toolAProjection, projectionId: "tool-b" }),
+          );
+
           expect(
             yield* promise(() =>
-              driver.quotaTryGrant("quota-scope", "tool-a", 1, 60_000, 1, "tool-a", "op-1"),
+              driver.quotaTryGrant(
+                quotaIdentity,
+                toolAProjection,
+                1,
+                60_000,
+                1,
+                "tool-a",
+                "op-1",
+              ),
             ),
           ).toMatchObject({ granted: true, consumed: 0, limit: 1 });
           expect(
             yield* promise(() =>
-              driver.quotaTryGrant("quota-scope", "tool-a", 1, 60_000, 1, "tool-a", "op-2"),
+              driver.quotaTryGrant(
+                quotaIdentity,
+                toolAProjection,
+                1,
+                60_000,
+                1,
+                "tool-a",
+                "op-2",
+              ),
             ),
           ).toMatchObject({ granted: false, consumed: 1, limit: 1 });
           yield* promise(() =>
-            driver.log("quota-scope", "quota.consumed", {
+            driver.log(quotaIdentity, "quota.consumed", {
               key: "tool-a",
               amount: "x",
               toolName: "tool-a",
@@ -614,8 +779,8 @@ export const runRuntimeBackendContractSuite = (
 
           yield* expectRejectTagEffect(
             driver.quotaTryGrant(
-              "quota-scope",
-              "tool-a",
+              quotaIdentity,
+              toolAProjection,
               1,
               Number.POSITIVE_INFINITY,
               10,
@@ -625,7 +790,8 @@ export const runRuntimeBackendContractSuite = (
             "agent_os.sql_error",
           );
 
-          const events = yield* promise(() => driver.events("quota-scope"));
+          const events = yield* promise(() => driver.events(quotaIdentity));
+          expectEventsIdentity(events, quotaIdentity);
           expect(kindsOf(events)).toEqual([
             "quota.consumed",
             "quota.rate_limited",

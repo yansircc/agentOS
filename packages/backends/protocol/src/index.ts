@@ -1,6 +1,12 @@
 import { Effect, Either, Predicate, pipe } from "effect";
 import {
+  authorityRefKey,
+  factOwnerKey,
+  isAuthorityRef,
+  isFactOwnerRef,
   isScopeRef,
+  ledgerTruthKey,
+  scopeRefKey,
   validateEffectClaim,
   type AuthorityRef,
   type FactOwnerRef,
@@ -15,7 +21,7 @@ import {
   symbolicSettlementRef,
   validateTerminalClaim,
 } from "@agent-os/kernel/settlement-contract";
-import type { DeliveryReceipt, DispatchTargetSpec, TraceContext } from "@agent-os/kernel/types";
+import type { DeliveryReceipt, TraceContext } from "@agent-os/kernel/types";
 import { validateOptionalTraceContext } from "@agent-os/kernel/trace-context";
 
 export { copyTraceContext } from "@agent-os/kernel/trace-context";
@@ -25,6 +31,130 @@ export const DISPATCH_OUTBOUND_DELIVERED = "dispatch.outbound.delivered";
 export const DISPATCH_OUTBOUND_FAILED = "dispatch.outbound.failed";
 export const DISPATCH_INBOUND_ACCEPTED = "dispatch.inbound.accepted";
 export const DELIVERY_RETRY_TRIGGER_KIND = "delivery_retry";
+
+export interface BackendProtocolTruthIdentity {
+  readonly scopeRef: ScopeRef;
+  readonly effectAuthorityRef: AuthorityRef;
+  readonly scope?: never;
+}
+
+export interface BackendProtocolEventIdentity extends BackendProtocolTruthIdentity {
+  readonly factOwnerRef: FactOwnerRef;
+}
+
+export interface BackendProtocolProjectionKey extends BackendProtocolEventIdentity {
+  readonly projectionKind: string;
+  readonly projectionId: string;
+}
+
+export interface BackendProtocolDispatchTarget extends BackendProtocolTruthIdentity {
+  readonly bindingRef: BindingMaterialRef;
+}
+
+export interface BackendProtocolParseFailure {
+  readonly _tag: "agent_os.backend_protocol_parse_failure";
+  readonly reason: string;
+}
+
+export type BackendProtocolParseResult<T> =
+  | { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly failure: BackendProtocolParseFailure };
+
+const backendProtocolParseOk = <T>(value: T): BackendProtocolParseResult<T> => ({
+  ok: true,
+  value,
+});
+
+const backendProtocolParseFail = <T = never>(
+  reason: string,
+): BackendProtocolParseResult<T> => ({
+  ok: false,
+  failure: {
+    _tag: "agent_os.backend_protocol_parse_failure",
+    reason,
+  },
+});
+
+const truthIdentityKeys = new Set(["scopeRef", "effectAuthorityRef"]);
+const eventIdentityKeys = new Set(["scopeRef", "effectAuthorityRef", "factOwnerRef"]);
+const projectionKeyKeys = new Set([
+  "scopeRef",
+  "effectAuthorityRef",
+  "factOwnerRef",
+  "projectionKind",
+  "projectionId",
+]);
+const ledgerEventRpcKeys = new Set([
+  "id",
+  "ts",
+  "kind",
+  "scopeRef",
+  "factOwnerRef",
+  "effectAuthorityRef",
+  "payload",
+]);
+const dispatchTargetKeys = new Set(["bindingRef", "scopeRef", "effectAuthorityRef"]);
+
+const hasOnlyProtocolKeys = (
+  value: Record<string, unknown>,
+  keys: ReadonlySet<string>,
+): boolean => Object.keys(value).every((key) => keys.has(key));
+
+const isNonEmptyProtocolString = (value: unknown): value is string =>
+  typeof value === "string" && value.length > 0;
+
+const protocolKeyPart = (part: string): string =>
+  encodeURIComponent(part).replace(/\./g, "%2E");
+
+export const isBackendProtocolTruthIdentity = (
+  value: unknown,
+): value is BackendProtocolTruthIdentity =>
+  Predicate.isRecord(value) &&
+  hasOnlyProtocolKeys(value, truthIdentityKeys) &&
+  isScopeRef(value.scopeRef) &&
+  isAuthorityRef(value.effectAuthorityRef);
+
+export const isBackendProtocolEventIdentity = (
+  value: unknown,
+): value is BackendProtocolEventIdentity =>
+  Predicate.isRecord(value) &&
+  hasOnlyProtocolKeys(value, eventIdentityKeys) &&
+  isScopeRef(value.scopeRef) &&
+  isAuthorityRef(value.effectAuthorityRef) &&
+  isFactOwnerRef(value.factOwnerRef);
+
+export const isBackendProtocolProjectionKey = (
+  value: unknown,
+): value is BackendProtocolProjectionKey =>
+  Predicate.isRecord(value) &&
+  hasOnlyProtocolKeys(value, projectionKeyKeys) &&
+  isScopeRef(value.scopeRef) &&
+  isAuthorityRef(value.effectAuthorityRef) &&
+  isFactOwnerRef(value.factOwnerRef) &&
+  isNonEmptyProtocolString(value.projectionKind) &&
+  isNonEmptyProtocolString(value.projectionId);
+
+export const backendProtocolTruthIdentityKey = (
+  identity: BackendProtocolTruthIdentity,
+): string => ledgerTruthKey(identity);
+
+export const backendProtocolEventIdentityKey = (
+  identity: BackendProtocolEventIdentity,
+): string => [backendProtocolTruthIdentityKey(identity), factOwnerKey(identity.factOwnerRef)].join(
+  "|",
+);
+
+export const backendProtocolProjectionKey = (
+  key: BackendProtocolProjectionKey,
+): string =>
+  [
+    "projection",
+    protocolKeyPart(key.projectionKind),
+    protocolKeyPart(key.projectionId),
+    scopeRefKey(key.scopeRef),
+    authorityRefKey(key.effectAuthorityRef),
+    factOwnerKey(key.factOwnerRef),
+  ].join("|");
 
 export const DISPATCH_EVENT_KINDS = {
   OUTBOUND_REQUESTED: DISPATCH_OUTBOUND_REQUESTED,
@@ -399,7 +529,7 @@ export const durableTriggerBackoffMs = (
 };
 
 export interface DispatchRequestedPayload {
-  readonly target: DispatchTargetSpec;
+  readonly target: BackendProtocolDispatchTarget;
   readonly event: string;
   readonly data: unknown;
   readonly idempotencyKey: string;
@@ -410,7 +540,7 @@ export interface DispatchRequestedPayload {
 
 export interface DispatchOutboundDeliveredPayload {
   readonly outboundEventId: number;
-  readonly target: DispatchTargetSpec;
+  readonly target: BackendProtocolDispatchTarget;
   readonly event: string;
   readonly idempotencyKey: string;
   readonly deliveryReceipt: DispatchDeliveryReceipt;
@@ -421,7 +551,7 @@ export interface DispatchOutboundDeliveredPayload {
 
 export interface DispatchOutboundFailedPayload {
   readonly outboundEventId: number;
-  readonly target: DispatchTargetSpec;
+  readonly target: BackendProtocolDispatchTarget;
   readonly event: string;
   readonly idempotencyKey: string;
   readonly attempt: number;
@@ -454,6 +584,43 @@ export interface BackendProtocolLedgerEventRpc {
 export type BackendProtocolEventHandler = (
   event: BackendProtocolLedgerEventRpc,
 ) => Promise<void> | void;
+
+export const parseBackendProtocolLedgerEventRpc = (
+  value: unknown,
+): BackendProtocolParseResult<BackendProtocolLedgerEventRpc> => {
+  if (!Predicate.isRecord(value)) {
+    return backendProtocolParseFail("ledger event must be object");
+  }
+  if ("scope" in value) {
+    return backendProtocolParseFail("ledger event must not include legacy scope");
+  }
+  if (!hasOnlyProtocolKeys(value, ledgerEventRpcKeys)) {
+    return backendProtocolParseFail("ledger event fields malformed");
+  }
+  if (
+    typeof value.id !== "number" ||
+    !Number.isInteger(value.id) ||
+    value.id < 1 ||
+    typeof value.ts !== "number" ||
+    !Number.isFinite(value.ts) ||
+    value.ts < 0 ||
+    typeof value.kind !== "string" ||
+    !isScopeRef(value.scopeRef) ||
+    !isFactOwnerRef(value.factOwnerRef) ||
+    !isAuthorityRef(value.effectAuthorityRef)
+  ) {
+    return backendProtocolParseFail("ledger event fields malformed");
+  }
+  return backendProtocolParseOk({
+    id: value.id,
+    ts: value.ts,
+    kind: value.kind,
+    scopeRef: value.scopeRef,
+    factOwnerRef: value.factOwnerRef,
+    effectAuthorityRef: value.effectAuthorityRef,
+    payload: value.payload,
+  });
+};
 
 export const dispatchPayloadParseFailure = (reason: string): DispatchPayloadParseFailure => ({
   _tag: "agent_os.dispatch_payload_parse_failure",
@@ -492,16 +659,23 @@ export const parseRequestedPayloadValue = (
   const target = value.target;
   if (!Predicate.isRecord(target)) return parseFail("dispatch target must be object");
   if (
-    typeof target.scope !== "string" ||
     typeof value.event !== "string" ||
     typeof value.idempotencyKey !== "string"
   ) {
     return parseFail("dispatch.outbound.requested payload malformed");
   }
+  if ("scope" in target) return parseFail("dispatch target must not include legacy scope");
+  if (!hasOnlyProtocolKeys(target, dispatchTargetKeys)) {
+    return parseFail("dispatch target fields malformed");
+  }
   const bindingRef = parseDispatchBindingRef(target.bindingRef);
   if (!bindingRef.ok) return bindingRef;
   const scopeRef = target.scopeRef;
   if (!isScopeRef(scopeRef)) return parseFail("dispatch target scopeRef malformed");
+  const effectAuthorityRef = target.effectAuthorityRef;
+  if (!isAuthorityRef(effectAuthorityRef)) {
+    return parseFail("dispatch target effectAuthorityRef malformed");
+  }
   const traceContext = parseTraceContext(value.traceContext);
   if (!traceContext.ok) return traceContext;
   const retryPolicy = parseDurableTriggerRetryPolicy(value.retryPolicy);
@@ -513,8 +687,8 @@ export const parseRequestedPayloadValue = (
   return parseOk({
     target: {
       bindingRef: bindingRef.value,
-      scope: target.scope,
       scopeRef,
+      effectAuthorityRef,
     },
     event: value.event,
     data: value.data,
