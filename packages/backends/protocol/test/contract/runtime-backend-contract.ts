@@ -21,6 +21,7 @@ import {
 } from "../../src";
 import type { BindingMaterialRef } from "@agent-os/kernel/material-ref";
 import type { DispatchToScopeResult } from "@agent-os/kernel/types";
+import { RUNTIME_FACT_OWNER } from "@agent-os/runtime";
 import type {
   DispatchDeliveryResult,
   DispatchEnvelope,
@@ -137,7 +138,7 @@ export type RuntimeBackendContractDriverFactory = () =>
   | RuntimeBackendContractDriver
   | Promise<RuntimeBackendContractDriver>;
 
-const CONTRACT_FACT_OWNER = "@agent-os/backend-protocol-contract";
+const CONTRACT_FACT_OWNER = RUNTIME_FACT_OWNER;
 
 const contractIdentity = (scopeId: string): BackendProtocolEventIdentity => ({
   scopeRef: { kind: "conversation", scopeId },

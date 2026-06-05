@@ -6,16 +6,17 @@ import {
   type ImgGenPressureDriver,
 } from "../../protocol/test/contract/img-gen-pressure-contract";
 import { DurableTriggerRegistry, TriggerPump, type AnyDurableTrigger } from "@agent-os/runtime";
+import { runtimeEventIdentity, truthIdentity } from "./identity";
 
 const makeDriver = (triggers: ReadonlyArray<AnyDurableTrigger>): ImgGenPressureDriver => {
   const scope = "img-gen-pressure";
   const state = createInMemoryBackendState();
   const runtime = ManagedRuntime.make(
-    createInMemoryRuntimeBackend({
-      state,
-      scope,
-      triggers,
-    }).layer,
+      createInMemoryRuntimeBackend({
+        state,
+        identity: truthIdentity(scope),
+        triggers,
+      }).layer,
   );
 
   return {
@@ -26,10 +27,9 @@ const makeDriver = (triggers: ReadonlyArray<AnyDurableTrigger>): ImgGenPressureD
         }),
       );
       await runtime.runPromise(
-        state.commitTriggerIntent(scope, fireAt, registry, trigger.kind, (trigger) => ({
+        state.commitTriggerIntent(runtimeEventIdentity(scope), fireAt, registry, trigger.kind, (trigger) => ({
           ts: fireAt,
           kind: trigger.intentEventKind,
-          scope,
           payload,
         })),
       );
@@ -38,7 +38,7 @@ const makeDriver = (triggers: ReadonlyArray<AnyDurableTrigger>): ImgGenPressureD
       const triggerPump = await runtime.runPromise(TriggerPump);
       await runtime.runPromise(triggerPump.drainDue(now));
     },
-    events: () => Promise.resolve(state.snapshot(scope)),
+    events: () => Promise.resolve(state.snapshot(truthIdentity(scope))),
     dispose: () => runtime.dispose(),
   };
 };

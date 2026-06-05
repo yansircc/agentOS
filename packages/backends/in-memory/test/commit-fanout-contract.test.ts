@@ -10,6 +10,7 @@ import {
   type DispatchReceiver,
 } from "@agent-os/runtime";
 import { createInMemoryBackendState, createInMemoryRuntimeBackend } from "../src";
+import { truthIdentity } from "./identity";
 
 const failingDispatchDeliveredProjection = defineProjection({
   kind: "dispatch.delivered.failure",
@@ -35,7 +36,7 @@ describe("in-memory backend commit/fanout contract", () => {
     const projections = [failingDispatchDeliveredProjection];
 
     const receiverRuntime = ManagedRuntime.make(
-      createInMemoryRuntimeBackend({ state, scope: "receiver", projections }).layer,
+      createInMemoryRuntimeBackend({ state, identity: truthIdentity("receiver"), projections }).layer,
     );
     const receiver: DispatchReceiver = {
       __agentosReceiveDispatch: async (envelope) => {
@@ -46,7 +47,7 @@ describe("in-memory backend commit/fanout contract", () => {
     const senderRuntime = ManagedRuntime.make(
       createInMemoryRuntimeBackend({
         state,
-        scope: "sender",
+        identity: truthIdentity("sender"),
         projections,
         dispatchTargets: {
           [bindingKey]: {
@@ -62,8 +63,8 @@ describe("in-memory backend commit/fanout contract", () => {
         dispatch.dispatchToScope({
           target: {
             bindingRef,
-            scope: "receiver",
             scopeRef: { kind: "conversation", scopeId: "receiver" },
+            effectAuthorityRef: { authorityClass: "effect", authorityId: "receiver" },
           },
           event: "app.received",
           data: { ok: true },
@@ -73,7 +74,7 @@ describe("in-memory backend commit/fanout contract", () => {
 
       expect(exit._tag).toBe("Failure");
       const outbound = state
-        .snapshot("sender")
+        .snapshot(truthIdentity("sender"))
         .find((event) => event.kind === DISPATCH_EVENT_KINDS.OUTBOUND_REQUESTED);
       expect(outbound).toBeDefined();
       const outbox = state.pendingOutboxByIntent(outbound!.id);
@@ -85,7 +86,7 @@ describe("in-memory backend commit/fanout contract", () => {
       });
       expect(
         state
-          .snapshot("sender")
+          .snapshot(truthIdentity("sender"))
           .some((event) => event.kind === DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED),
       ).toBe(false);
     } finally {

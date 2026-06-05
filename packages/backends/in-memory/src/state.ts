@@ -9,13 +9,18 @@ import type {
   EventHandler,
   EventQueryOptions,
   LedgerEvent,
-  LedgerEventIdentity,
   LedgerEventRpc,
 } from "@agent-os/kernel/types";
 import {
+  backendProtocolEventIdentityKey,
+  backendProtocolProjectionKey,
+  backendProtocolTruthIdentityKey,
   durableProcessLifecycleState,
   durableTriggerDuePayload,
   fireBackendEventHandlers,
+  type BackendProtocolEventIdentity,
+  type BackendProtocolProjectionKey,
+  type BackendProtocolTruthIdentity,
   type DurableProcessLifecycleState,
   type IntentPointerDuePayload,
 } from "@agent-os/backend-protocol";
@@ -25,6 +30,7 @@ import {
   getProjection,
   makeProjectionRegistryResult,
   getDurableTrigger,
+  RUNTIME_FACT_OWNER,
   type AnyMaterializedProjectionDefinition,
   type AttachedStreamTx,
   type AttachedStreamTerminal,
@@ -40,7 +46,12 @@ import {
   type TriggerTx,
   UnregisteredProjectionKind,
 } from "@agent-os/runtime";
-import { scopeRefKey } from "@agent-os/kernel/effect-claim";
+import {
+  authorityRefKey,
+  scopeRefKey,
+  type AuthorityRef,
+  type ScopeRef,
+} from "@agent-os/kernel/effect-claim";
 import type { DispatchOutboxRow } from "./dispatch-types";
 
 const DEFAULT_EVENT_LIMIT = 1000;
@@ -58,8 +69,28 @@ export interface InMemoryEventHandlerRegistration {
 export interface InMemoryEventSpec {
   readonly ts?: number;
   readonly kind: string;
-  readonly scope: string;
+  readonly scopeRef: ScopeRef;
+  readonly effectAuthorityRef: AuthorityRef;
   readonly payload: unknown;
+  readonly scope?: never;
+  readonly factOwnerRef?: never;
+}
+
+export interface InMemoryProtocolEventSpec extends BackendProtocolEventIdentity {
+  readonly ts?: number;
+  readonly kind: string;
+  readonly payload: unknown;
+  readonly scope?: never;
+}
+
+export interface InMemoryEventContentSpec {
+  readonly ts?: number;
+  readonly kind: string;
+  readonly payload: unknown;
+  readonly scope?: never;
+  readonly scopeRef?: never;
+  readonly effectAuthorityRef?: never;
+  readonly factOwnerRef?: never;
 }
 
 interface EventSink {
@@ -71,12 +102,14 @@ interface InMemoryFanoutDiagnostic {
   readonly phase: "sink";
   readonly eventId: number;
   readonly kind: string;
-  readonly scopeKey: string;
+  readonly identityKey: string;
   readonly message: string;
 }
 
 interface InMemoryDueWorkRow {
   readonly id: number;
+  readonly identity: BackendProtocolEventIdentity;
+  readonly identityKey: string;
   readonly fireAt: number;
   readonly kind: string;
   readonly payload: IntentPointerDuePayload;
@@ -143,13 +176,60 @@ const describeFanoutCause = (cause: unknown): string => {
   return Object.prototype.toString.call(cause);
 };
 
-const transitionIdentityFromScope = (scope: string): LedgerEventIdentity => ({
-  scopeRef: { kind: "conversation", scopeId: scope },
-  factOwnerRef: "@agent-os/transition-unowned",
-  effectAuthorityRef: { authorityClass: "legacy-scope", authorityId: scope },
+export const inMemoryRuntimeEventIdentity = (
+  identity: BackendProtocolTruthIdentity,
+): BackendProtocolEventIdentity => ({
+  scopeRef: identity.scopeRef,
+  effectAuthorityRef: identity.effectAuthorityRef,
+  factOwnerRef: RUNTIME_FACT_OWNER,
 });
 
-const transitionScopeString = (event: LedgerEvent): string => event.scopeRef.scopeId;
+export const inMemoryConversationTruthIdentity = (
+  scopeId: string,
+): BackendProtocolTruthIdentity => ({
+  scopeRef: { kind: "conversation", scopeId },
+  effectAuthorityRef: { authorityClass: "effect", authorityId: scopeId },
+});
+
+export const inMemoryConversationRuntimeIdentity = (
+  scopeId: string,
+): BackendProtocolEventIdentity => inMemoryRuntimeEventIdentity(inMemoryConversationTruthIdentity(scopeId));
+
+const eventIdentity = (event: LedgerEvent): BackendProtocolEventIdentity => ({
+  scopeRef: event.scopeRef,
+  effectAuthorityRef: event.effectAuthorityRef,
+  factOwnerRef: event.factOwnerRef,
+});
+
+const eventTruthIdentity = (event: LedgerEvent): BackendProtocolTruthIdentity => ({
+  scopeRef: event.scopeRef,
+  effectAuthorityRef: event.effectAuthorityRef,
+});
+
+const truthMatches = (event: LedgerEvent, identity: BackendProtocolTruthIdentity): boolean =>
+  backendProtocolTruthIdentityKey(eventTruthIdentity(event)) === backendProtocolTruthIdentityKey(identity);
+
+const eventMatches = (event: LedgerEvent, identity: BackendProtocolEventIdentity): boolean =>
+  backendProtocolEventIdentityKey(eventIdentity(event)) === backendProtocolEventIdentityKey(identity);
+
+const truthDisplayScope = (identity: BackendProtocolTruthIdentity): string =>
+  backendProtocolTruthIdentityKey(identity);
+
+const eventDisplayScope = (identity: BackendProtocolEventIdentity): string =>
+  backendProtocolEventIdentityKey(identity);
+
+const eventMatchesQueryOptions = (
+  event: LedgerEvent,
+  opts: Pick<EventQueryOptions, "afterId" | "kinds">,
+): boolean => {
+  const afterId = normalizeNonNegativeInteger(opts.afterId, 0);
+  if (event.id <= afterId) return false;
+  if (opts.kinds !== undefined) {
+    const kinds = new Set(Array.from(new Set(opts.kinds)).filter((kind) => kind.length > 0));
+    if (kinds.size > 0 && !kinds.has(event.kind)) return false;
+  }
+  return true;
+};
 
 const eventToRpc = (event: LedgerEvent): LedgerEventRpc => ({
   id: event.id,
@@ -161,10 +241,24 @@ const eventToRpc = (event: LedgerEvent): LedgerEventRpc => ({
   payload: event.payload,
 });
 
-const projectionRowKey = (scope: string, kind: string, identityKey: string): string =>
-  JSON.stringify([scope, kind, identityKey]);
+const projectionKeyFor = (
+  identity: BackendProtocolEventIdentity,
+  projectionKind: string,
+  projectionId: string,
+): BackendProtocolProjectionKey => ({
+  ...identity,
+  projectionKind,
+  projectionId,
+});
 
-const projectionMetaKey = (scope: string, kind: string): string => JSON.stringify([scope, kind]);
+const projectionRowKey = (
+  identity: BackendProtocolEventIdentity,
+  kind: string,
+  projectionId: string,
+): string => backendProtocolProjectionKey(projectionKeyFor(identity, kind, projectionId));
+
+const projectionMetaKey = (identity: BackendProtocolEventIdentity, kind: string): string =>
+  backendProtocolProjectionKey(projectionKeyFor(identity, kind, "__meta__"));
 
 const cloneProjectionRows = (
   rows: ReadonlyMap<string, MaterializedProjectionRow>,
@@ -186,6 +280,8 @@ export class InMemoryBackendState {
   private nextEventId = 1;
   private nextDueWorkId = 1;
   private readonly rows: LedgerEvent[] = [];
+  private readonly rowsByTruthIdentityKey = new Map<string, LedgerEvent[]>();
+  private readonly rowsByEventIdentityKey = new Map<string, LedgerEvent[]>();
   private readonly sinks = new Set<EventSink>();
   private readonly fanoutDiagnosticsLog: InMemoryFanoutDiagnostic[] = [];
   private readonly handlers = new Map<string, Set<EventHandler>>();
@@ -202,6 +298,75 @@ export class InMemoryBackendState {
     for (const registration of options.handlers ?? []) {
       this.addHandler(registration.kind, registration.handler);
     }
+  }
+
+  private appendRows(events: ReadonlyArray<LedgerEvent>): void {
+    this.rows.push(...events);
+    for (const event of events) {
+      const truthKey = backendProtocolTruthIdentityKey(eventTruthIdentity(event));
+      const eventKey = backendProtocolEventIdentityKey(eventIdentity(event));
+      const truthRows = this.rowsByTruthIdentityKey.get(truthKey);
+      if (truthRows === undefined) {
+        this.rowsByTruthIdentityKey.set(truthKey, [event]);
+      } else {
+        truthRows.push(event);
+      }
+      const eventRows = this.rowsByEventIdentityKey.get(eventKey);
+      if (eventRows === undefined) {
+        this.rowsByEventIdentityKey.set(eventKey, [event]);
+      } else {
+        eventRows.push(event);
+      }
+    }
+  }
+
+  private rowsForTruthIdentity(identity: BackendProtocolTruthIdentity): ReadonlyArray<LedgerEvent> {
+    return this.rowsByTruthIdentityKey.get(backendProtocolTruthIdentityKey(identity)) ?? [];
+  }
+
+  private rowsForEventIdentity(identity: BackendProtocolEventIdentity): ReadonlyArray<LedgerEvent> {
+    return this.rowsByEventIdentityKey.get(backendProtocolEventIdentityKey(identity)) ?? [];
+  }
+
+  private queryRows(
+    identity: BackendProtocolTruthIdentity,
+    opts: EventQueryOptions = {},
+  ): ReadonlyArray<LedgerEvent> {
+    const afterId = normalizeNonNegativeInteger(opts.afterId, 0);
+    const limit =
+      opts.limit === undefined
+        ? DEFAULT_EVENT_LIMIT
+        : Math.max(0, Math.min(MAX_EVENT_LIMIT, normalizeNonNegativeInteger(opts.limit, 0)));
+    const kinds =
+      opts.kinds === undefined
+        ? undefined
+        : new Set(Array.from(new Set(opts.kinds)).filter((kind) => kind.length > 0));
+    if (opts.scopeRef !== undefined && scopeRefKey(opts.scopeRef) !== scopeRefKey(identity.scopeRef)) {
+      return [];
+    }
+    if (
+      opts.effectAuthorityRef !== undefined &&
+      authorityRefKey(opts.effectAuthorityRef) !== authorityRefKey(identity.effectAuthorityRef)
+    ) {
+      return [];
+    }
+    const factOwnerRefs =
+      opts.factOwnerRefs === undefined
+        ? undefined
+        : new Set(Array.from(new Set(opts.factOwnerRefs)).filter((owner) => owner.length > 0));
+    const selected = this.rowsForTruthIdentity(identity).filter((row) => {
+      if (row.id <= afterId) return false;
+      if (kinds !== undefined && kinds.size > 0 && !kinds.has(row.kind)) return false;
+      if (
+        factOwnerRefs !== undefined &&
+        factOwnerRefs.size > 0 &&
+        !factOwnerRefs.has(row.factOwnerRef)
+      ) {
+        return false;
+      }
+      return true;
+    });
+    return selected.slice(0, limit);
   }
 
   setProjectionRegistry(registry: ProjectionRegistry): void {
@@ -254,17 +419,18 @@ export class InMemoryBackendState {
   ): Effect.Effect<void, ProjectionApplicationError | ProjectionReducerReturnedThenable> {
     return Effect.gen(this, function* () {
       for (const event of events) {
-        const eventScopeKey = transitionScopeString(event);
+        const identity = eventIdentity(event);
+        const displayScope = eventDisplayScope(identity);
         const definitions = definitionsForEvent(event.kind);
         for (const projection of definitions) {
           const result = yield* applyProjectionEvent(projection, event, (identityKey) => {
-            const row = rows.get(projectionRowKey(eventScopeKey, projection.kind, identityKey));
+            const row = rows.get(projectionRowKey(identity, projection.kind, identityKey));
             return row === undefined ? null : { identity: row.identity, state: row.state };
           });
           if (result._tag === "put") {
-            rows.set(projectionRowKey(eventScopeKey, projection.kind, result.identityKey), {
+            rows.set(projectionRowKey(identity, projection.kind, result.identityKey), {
               kind: projection.kind,
-              scope: eventScopeKey,
+              scope: displayScope,
               identityKey: result.identityKey,
               identity: result.identity,
               state: result.state,
@@ -273,9 +439,9 @@ export class InMemoryBackendState {
               updatedAt: event.ts,
             });
           } else if (result._tag === "delete") {
-            rows.delete(projectionRowKey(eventScopeKey, projection.kind, result.identityKey));
+            rows.delete(projectionRowKey(identity, projection.kind, result.identityKey));
           }
-          const key = projectionMetaKey(eventScopeKey, projection.kind);
+          const key = projectionMetaKey(identity, projection.kind);
           const current = meta.get(key);
           meta.set(key, {
             version: projection.version,
@@ -323,7 +489,7 @@ export class InMemoryBackendState {
 
   projectionGet(spec: {
     readonly kind: string;
-    readonly scope: string;
+    readonly eventIdentity: BackendProtocolEventIdentity;
     readonly identity: unknown;
   }): Effect.Effect<MaterializedProjectionRow | null, SqlError | UnregisteredProjectionKind> {
     return Effect.gen(this, function* () {
@@ -336,13 +502,13 @@ export class InMemoryBackendState {
         catch: (cause) => new SqlError({ cause }),
       });
       const identityKey = projection.identityKey(identity);
-      return this.projectionRows.get(projectionRowKey(spec.scope, spec.kind, identityKey)) ?? null;
+      return this.projectionRows.get(projectionRowKey(spec.eventIdentity, spec.kind, identityKey)) ?? null;
     });
   }
 
   projectionList(spec: {
     readonly kind: string;
-    readonly scope: string;
+    readonly eventIdentity: BackendProtocolEventIdentity;
     readonly limit?: number;
     readonly afterKey?: string;
   }): Effect.Effect<
@@ -355,9 +521,10 @@ export class InMemoryBackendState {
       );
       yield* getProjection(registry, spec.kind);
       const limit = normalizeProjectionLimit(spec.limit);
+      const scope = eventDisplayScope(spec.eventIdentity);
       return Array.from(this.projectionRows.values())
         .filter((row) => {
-          if (row.scope !== spec.scope || row.kind !== spec.kind) return false;
+          if (row.scope !== scope || row.kind !== spec.kind) return false;
           if (spec.afterKey !== undefined && row.identityKey <= spec.afterKey) return false;
           return true;
         })
@@ -368,18 +535,19 @@ export class InMemoryBackendState {
 
   projectionStatus(spec: {
     readonly kind: string;
-    readonly scope: string;
+    readonly eventIdentity: BackendProtocolEventIdentity;
   }): Effect.Effect<MaterializedProjectionStatus, SqlError | UnregisteredProjectionKind> {
     return Effect.gen(this, function* () {
       const registry = yield* this.projectionRegistryEffect().pipe(
         Effect.mapError((cause) => new SqlError({ cause })),
       );
       const projection = yield* getProjection(registry, spec.kind);
-      const meta = this.projectionMeta.get(projectionMetaKey(spec.scope, spec.kind));
+      const scope = eventDisplayScope(spec.eventIdentity);
+      const meta = this.projectionMeta.get(projectionMetaKey(spec.eventIdentity, spec.kind));
       if (meta === undefined) {
         return {
           kind: spec.kind,
-          scope: spec.scope,
+          scope,
           version: projection.version,
           status: "current" as const,
           lastAppliedEventId: 0,
@@ -389,7 +557,7 @@ export class InMemoryBackendState {
       }
       return {
         kind: spec.kind,
-        scope: spec.scope,
+        scope,
         version: projection.version,
         status:
           meta.status === "current" && meta.version === projection.version
@@ -404,7 +572,7 @@ export class InMemoryBackendState {
 
   projectionRebuild(spec: {
     readonly kind: string;
-    readonly scope: string;
+    readonly eventIdentity: BackendProtocolEventIdentity;
   }): Effect.Effect<
     MaterializedProjectionRebuildResult,
     | SqlError
@@ -419,20 +587,20 @@ export class InMemoryBackendState {
       const projection = yield* getProjection(registry, spec.kind);
       const rows = cloneProjectionRows(this.projectionRows);
       const meta = cloneProjectionMeta(this.projectionMeta);
+      const scope = eventDisplayScope(spec.eventIdentity);
       for (const key of rows.keys()) {
         const row = rows.get(key);
-        if (row?.scope === spec.scope && row.kind === spec.kind) rows.delete(key);
+        if (row?.scope === scope && row.kind === spec.kind) rows.delete(key);
       }
-      meta.delete(projectionMetaKey(spec.scope, spec.kind));
-      const events = this.rows.filter(
-        (event) =>
-          transitionScopeString(event) === spec.scope && projection.eventKinds.includes(event.kind),
+      meta.delete(projectionMetaKey(spec.eventIdentity, spec.kind));
+      const events = this.rowsForEventIdentity(spec.eventIdentity).filter((event) =>
+        projection.eventKinds.includes(event.kind),
       );
       yield* this.applyProjectionEventsTo(rows, meta, events, (eventKind) =>
         projection.eventKinds.includes(eventKind) ? [projection] : [],
       );
       const last = events.at(-1) ?? null;
-      const statusKey = projectionMetaKey(spec.scope, spec.kind);
+      const statusKey = projectionMetaKey(spec.eventIdentity, spec.kind);
       const current = meta.get(statusKey);
       meta.set(statusKey, {
         version: projection.version,
@@ -443,7 +611,7 @@ export class InMemoryBackendState {
       });
       this.replaceProjectionState(rows, meta);
       const rebuilt = Array.from(rows.values()).filter(
-        (row) => row.scope === spec.scope && row.kind === spec.kind,
+        (row) => row.scope === scope && row.kind === spec.kind,
       ).length;
       const status = yield* this.projectionStatus(spec);
       return { ...status, rows: rebuilt };
@@ -486,40 +654,25 @@ export class InMemoryBackendState {
     return [...this.fanoutDiagnosticsLog];
   }
 
-  snapshot(scope?: string, opts: EventQueryOptions = {}): ReadonlyArray<LedgerEvent> {
-    const afterId = normalizeNonNegativeInteger(opts.afterId, 0);
-    const limit =
-      opts.limit === undefined
-        ? DEFAULT_EVENT_LIMIT
-        : Math.max(0, Math.min(MAX_EVENT_LIMIT, normalizeNonNegativeInteger(opts.limit, 0)));
-    const kinds =
-      opts.kinds === undefined
-        ? undefined
-        : new Set(Array.from(new Set(opts.kinds)).filter((kind) => kind.length > 0));
-    const selected = this.rows.filter((row) => {
-      if (scope !== undefined && transitionScopeString(row) !== scope) return false;
-      if (row.id <= afterId) return false;
-      if (kinds !== undefined && kinds.size > 0 && !kinds.has(row.kind)) return false;
-      return true;
-    });
-    return selected.slice(0, limit);
+  snapshot(
+    identity: BackendProtocolTruthIdentity,
+    opts: EventQueryOptions = {},
+  ): ReadonlyArray<LedgerEvent> {
+    return this.queryRows(identity, opts);
+  }
+
+  eventSnapshot(
+    identity: BackendProtocolEventIdentity,
+    opts: EventQueryOptions = {},
+  ): ReadonlyArray<LedgerEvent> {
+    return this.queryRows(identity, { ...opts, factOwnerRefs: [identity.factOwnerRef] });
   }
 
   streamSnapshot(
-    scope: string,
-    opts: Pick<EventQueryOptions, "afterId" | "kinds"> = {},
+    identity: BackendProtocolTruthIdentity,
+    opts: Pick<EventQueryOptions, "afterId" | "kinds" | "factOwnerRefs"> = {},
   ): ReadonlyArray<LedgerEvent> {
-    const afterId = normalizeNonNegativeInteger(opts.afterId, 0);
-    const kinds =
-      opts.kinds === undefined
-        ? undefined
-        : new Set(Array.from(new Set(opts.kinds)).filter((kind) => kind.length > 0));
-    return this.rows.filter((row) => {
-      if (transitionScopeString(row) !== scope) return false;
-      if (row.id <= afterId) return false;
-      if (kinds !== undefined && kinds.size > 0 && !kinds.has(row.kind)) return false;
-      return true;
-    });
+    return this.queryRows(identity, opts);
   }
 
   commitEvents(
@@ -530,6 +683,27 @@ export class InMemoryBackendState {
 
   commitPrepared(
     makeSpecs: (nextEventId: number) => ReadonlyArray<InMemoryEventSpec>,
+  ): Effect.Effect<ReadonlyArray<LedgerEvent>, JsonStringifyError | SqlError> {
+    return this.commitProtocolPrepared((nextEventId) =>
+      makeSpecs(nextEventId).map((spec) => ({
+        ts: spec.ts,
+        kind: spec.kind,
+        scopeRef: spec.scopeRef,
+        effectAuthorityRef: spec.effectAuthorityRef,
+        factOwnerRef: RUNTIME_FACT_OWNER,
+        payload: spec.payload,
+      })),
+    );
+  }
+
+  commitProtocolEvents(
+    specs: ReadonlyArray<InMemoryProtocolEventSpec>,
+  ): Effect.Effect<ReadonlyArray<LedgerEvent>, JsonStringifyError | SqlError> {
+    return this.commitProtocolPrepared(() => specs);
+  }
+
+  commitProtocolPrepared(
+    makeSpecs: (nextEventId: number) => ReadonlyArray<InMemoryProtocolEventSpec>,
   ): Effect.Effect<ReadonlyArray<LedgerEvent>, JsonStringifyError | SqlError> {
     return Effect.gen(this, function* () {
       const startId = this.nextEventId;
@@ -542,14 +716,16 @@ export class InMemoryBackendState {
           id: startId + index,
           ts: spec.ts ?? startId + index,
           kind: spec.kind,
-          ...transitionIdentityFromScope(spec.scope),
+          scopeRef: spec.scopeRef,
+          effectAuthorityRef: spec.effectAuthorityRef,
+          factOwnerRef: spec.factOwnerRef,
           payload: spec.payload,
         }),
       );
       const projectionState = yield* this.prepareProjectionState(committed);
       yield* Effect.sync(() => {
         this.nextEventId += committed.length;
-        this.rows.push(...committed);
+        this.appendRows(committed);
         this.replaceProjectionState(projectionState.rows, projectionState.meta);
       });
       yield* this.fireMany(committed);
@@ -558,14 +734,14 @@ export class InMemoryBackendState {
   }
 
   commitTriggerIntent(
-    scope: string,
+    identity: BackendProtocolEventIdentity,
     fireAt: number,
     registry: TriggerRegistry,
     triggerKind: string,
     makeSpec: (trigger: {
       readonly kind: string;
       readonly intentEventKind: string;
-    }) => InMemoryEventSpec,
+    }) => InMemoryEventContentSpec,
     stageOutbox?: (event: LedgerEvent) => DispatchOutboxRow,
   ): Effect.Effect<LedgerEvent, JsonStringifyError | SqlError | UnregisteredDurableTriggerKind> {
     return Effect.gen(this, function* () {
@@ -576,18 +752,23 @@ export class InMemoryBackendState {
         id: this.nextEventId,
         ts: spec.ts ?? this.nextEventId,
         kind: spec.kind,
-        ...transitionIdentityFromScope(scope),
+        scopeRef: identity.scopeRef,
+        effectAuthorityRef: identity.effectAuthorityRef,
+        factOwnerRef: identity.factOwnerRef,
         payload: spec.payload,
       };
       const projectionState = yield* this.prepareProjectionState([event]);
+      const identityKey = backendProtocolEventIdentityKey(identity);
       const stagedOutbox = stageOutbox?.(event);
       const committed = yield* Effect.sync(() => {
         this.nextEventId += 1;
-        this.rows.push(event);
+        this.appendRows([event]);
         this.replaceProjectionState(projectionState.rows, projectionState.meta);
         const dueId = this.nextDueWorkId++;
         this.dueWork.push({
           id: dueId,
+          identity,
+          identityKey,
           fireAt,
           kind: trigger.kind,
           payload: durableTriggerDuePayload(event.id),
@@ -609,7 +790,7 @@ export class InMemoryBackendState {
   }
 
   schedule(
-    scope: string,
+    identity: BackendProtocolEventIdentity,
     intentTs: number,
     at: number,
     registry: TriggerRegistry,
@@ -623,14 +804,13 @@ export class InMemoryBackendState {
     return Effect.gen(this, function* () {
       const payload = scheduledEventIntentPayload(eventKind, data);
       const committed = yield* this.commitTriggerIntent(
-        scope,
+        identity,
         at,
         registry,
         triggerKind,
         (trigger) => ({
           ts: intentTs,
           kind: trigger.intentEventKind,
-          scope,
           payload,
         }),
       );
@@ -638,20 +818,37 @@ export class InMemoryBackendState {
     });
   }
 
-  eventById(intentEventId: number, kind: string): LedgerEvent | null {
-    return this.rows.find((row) => row.id === intentEventId && row.kind === kind) ?? null;
+  eventById(
+    identity: BackendProtocolEventIdentity,
+    intentEventId: number,
+    kind: string,
+  ): LedgerEvent | null {
+    return (
+      this.rowsForEventIdentity(identity).find(
+        (row) => row.id === intentEventId && row.kind === kind,
+      ) ?? null
+    );
   }
 
-  duePending(now: number): ReadonlyArray<InMemoryDueWorkRow> {
+  duePending(
+    identity: BackendProtocolEventIdentity,
+    now: number,
+  ): ReadonlyArray<InMemoryDueWorkRow> {
+    const identityKey = backendProtocolEventIdentityKey(identity);
     return this.dueWork
-      .filter((row) => row.completedAt === null && row.fireAt <= now)
+      .filter((row) => row.identityKey === identityKey && row.completedAt === null && row.fireAt <= now)
       .sort((a, b) => a.fireAt - b.fireAt || a.id - b.id);
   }
 
-  dueClaimable(now: number): ReadonlyArray<InMemoryDueWorkRow> {
+  dueClaimable(
+    identity: BackendProtocolEventIdentity,
+    now: number,
+  ): ReadonlyArray<InMemoryDueWorkRow> {
+    const identityKey = backendProtocolEventIdentityKey(identity);
     return this.dueWork
       .filter(
         (row) =>
+          row.identityKey === identityKey &&
           row.completedAt === null &&
           row.fireAt <= now &&
           (row.claimToken === null || (row.claimDeadlineAt !== null && row.claimDeadlineAt <= now)),
@@ -659,9 +856,11 @@ export class InMemoryBackendState {
       .sort((a, b) => a.fireAt - b.fireAt || a.id - b.id);
   }
 
-  nextDueAt(): number | null {
+  nextDueAt(identity: BackendProtocolEventIdentity): number | null {
+    const identityKey = backendProtocolEventIdentityKey(identity);
     let minDueAt: number | null = null;
     for (const row of this.dueWork) {
+      if (row.identityKey !== identityKey) continue;
       if (row.completedAt !== null) continue;
       const next = row.claimToken === null ? row.fireAt : row.claimDeadlineAt;
       if (next === null) continue;
@@ -697,10 +896,18 @@ export class InMemoryBackendState {
     row.lastError = patch.lastError;
   }
 
-  addDueWork(kind: string, intentEventId: number, fireAt: number): number {
+  addDueWork(
+    identity: BackendProtocolEventIdentity,
+    kind: string,
+    intentEventId: number,
+    fireAt: number,
+  ): number {
     const id = this.nextDueWorkId++;
+    const identityKey = backendProtocolEventIdentityKey(identity);
     this.dueWork.push({
       id,
+      identity,
+      identityKey,
       fireAt,
       kind,
       payload: durableTriggerDuePayload(intentEventId),
@@ -734,10 +941,16 @@ export class InMemoryBackendState {
     return row;
   }
 
-  dueByTriggerIntent(kind: string, intentEventId: number): ReadonlyArray<InMemoryDueWorkRow> {
+  dueByTriggerIntent(
+    identity: BackendProtocolEventIdentity,
+    kind: string,
+    intentEventId: number,
+  ): ReadonlyArray<InMemoryDueWorkRow> {
+    const identityKey = backendProtocolEventIdentityKey(identity);
     return this.dueWork
       .filter(
         (row) =>
+          row.identityKey === identityKey &&
           row.completedAt === null &&
           row.kind === kind &&
           row.payload.intentEventId === intentEventId,
@@ -755,16 +968,18 @@ export class InMemoryBackendState {
     return true;
   }
 
-  stuckDueWork(now: number): ReadonlyArray<{
+  stuckDueWork(identity: BackendProtocolEventIdentity, now: number): ReadonlyArray<{
     readonly dueWorkId: number;
     readonly triggerKind: string;
     readonly intentEventId: number;
     readonly claimDeadlineAt: number;
     readonly redriveCount: number;
   }> {
+    const identityKey = backendProtocolEventIdentityKey(identity);
     return this.dueWork
       .filter(
         (row) =>
+          row.identityKey === identityKey &&
           row.completedAt === null &&
           row.claimToken !== null &&
           row.claimDeadlineAt !== null &&
@@ -780,10 +995,15 @@ export class InMemoryBackendState {
       }));
   }
 
-  durableProcessLifecycle(): Effect.Effect<ReadonlyArray<DurableProcessLifecycleState>, SqlError> {
+  durableProcessLifecycle(
+    identity: BackendProtocolEventIdentity,
+  ): Effect.Effect<ReadonlyArray<DurableProcessLifecycleState>, SqlError> {
     return Effect.gen(this, function* () {
+      const identityKey = backendProtocolEventIdentityKey(identity);
       const states: DurableProcessLifecycleState[] = [];
-      for (const row of [...this.dueWork].sort((left, right) => left.id - right.id)) {
+      for (const row of [...this.dueWork]
+        .filter((row) => row.identityKey === identityKey)
+        .sort((left, right) => left.id - right.id)) {
         const result = durableProcessLifecycleState({
           id: row.id,
           fireAt: row.fireAt,
@@ -814,7 +1034,8 @@ export class InMemoryBackendState {
   }
 
   commitAttachedStreamTerminal<Terminal>(
-    scope: string,
+    identity: BackendProtocolEventIdentity,
+    scopeLabel: string,
     streamRef: string,
     kind: string,
     now: number,
@@ -826,29 +1047,24 @@ export class InMemoryBackendState {
       const startId = this.nextEventId;
       const written: LedgerEvent[] = [];
       const tx: AttachedStreamTx = {
-        scope,
+        scope: scopeLabel,
         streamRef,
         now,
         signal,
         events: (opts = {}) => {
-          const afterId = normalizeNonNegativeInteger(opts.afterId, 0);
-          const kinds =
-            opts.kinds === undefined
-              ? undefined
-              : new Set(Array.from(new Set(opts.kinds)).filter((entry) => entry.length > 0));
-          return [...this.rows, ...written].filter((event) => {
-            if (transitionScopeString(event) !== scope) return false;
-            if (event.id <= afterId) return false;
-            if (kinds !== undefined && kinds.size > 0 && !kinds.has(event.kind)) return false;
-            return true;
-          });
+          const committed = this.eventSnapshot(identity, opts);
+          return [...committed, ...written].filter(
+            (event) => eventMatches(event, identity) && eventMatchesQueryOptions(event, opts),
+          );
         },
         insertEvent: (spec) => {
           const event: LedgerEvent = {
             id: startId + written.length,
             ts: spec.ts ?? now,
             kind: spec.kind,
-            ...transitionIdentityFromScope(scope),
+            scopeRef: identity.scopeRef,
+            effectAuthorityRef: identity.effectAuthorityRef,
+            factOwnerRef: identity.factOwnerRef,
             payload: spec.payload,
           };
           written.push(event);
@@ -868,17 +1084,16 @@ export class InMemoryBackendState {
       const projectionState = yield* this.prepareProjectionState(written);
       yield* Effect.sync(() => {
         this.nextEventId += written.length;
-        this.rows.push(...written);
+        this.appendRows(written);
         this.replaceProjectionState(projectionState.rows, projectionState.meta);
       });
-      const events = written.length === 0 ? [] : this.rows.slice(this.rows.length - written.length);
-      yield* this.fireMany(events);
-      return { events };
+      yield* this.fireMany(written);
+      return { events: written };
     });
   }
 
   commitTrigger(
-    scope: string,
+    scopeLabel: string,
     row: InMemoryDueWorkRow,
     now: number,
     hasTrigger: (kind: string) => boolean,
@@ -907,6 +1122,8 @@ export class InMemoryBackendState {
       }
       const startId = this.nextEventId;
       const written: LedgerEvent[] = [];
+      const identity = row.identity;
+      const identityKey = row.identityKey;
       let rejected: UnregisteredDurableTriggerKind | null = null;
       const due: Array<{
         readonly triggerKind: string;
@@ -915,31 +1132,26 @@ export class InMemoryBackendState {
       }> = [];
       const outboxPatches: InMemoryOutboxPatch[] = [];
       const tx: TriggerTx = {
-        scope,
+        scope: scopeLabel,
         now,
         dueWorkId: row.id,
         intentEventId: row.payload.intentEventId,
         signal: options.signal ?? new AbortController().signal,
         acquireMode: options.acquireMode ?? "normal",
         events: (opts = {}) => {
-          const afterId = normalizeNonNegativeInteger(opts.afterId, 0);
-          const kinds =
-            opts.kinds === undefined
-              ? undefined
-              : new Set(Array.from(new Set(opts.kinds)).filter((kind) => kind.length > 0));
-          return [...this.rows, ...written].filter((event) => {
-            if (transitionScopeString(event) !== scope) return false;
-            if (event.id <= afterId) return false;
-            if (kinds !== undefined && kinds.size > 0 && !kinds.has(event.kind)) return false;
-            return true;
-          });
+          const committed = this.eventSnapshot(identity, opts);
+          return [...committed, ...written].filter(
+            (event) => eventMatches(event, identity) && eventMatchesQueryOptions(event, opts),
+          );
         },
         insertEvent: (spec) => {
           const event: LedgerEvent = {
             id: startId + written.length,
             ts: spec.ts ?? now,
             kind: spec.kind,
-            ...transitionIdentityFromScope(scope),
+            scopeRef: identity.scopeRef,
+            effectAuthorityRef: identity.effectAuthorityRef,
+            factOwnerRef: identity.factOwnerRef,
             payload: spec.payload,
           };
           written.push(event);
@@ -952,7 +1164,9 @@ export class InMemoryBackendState {
               id: startId + written.length,
               ts: spec.ts ?? now,
               kind: spec.intentEventKind,
-              ...transitionIdentityFromScope(scope),
+              scopeRef: identity.scopeRef,
+              effectAuthorityRef: identity.effectAuthorityRef,
+              factOwnerRef: identity.factOwnerRef,
               payload: spec.payload,
             };
           }
@@ -960,7 +1174,9 @@ export class InMemoryBackendState {
             id: startId + written.length,
             ts: spec.ts ?? now,
             kind: spec.intentEventKind,
-            ...transitionIdentityFromScope(scope),
+            scopeRef: identity.scopeRef,
+            effectAuthorityRef: identity.effectAuthorityRef,
+            factOwnerRef: identity.factOwnerRef,
             payload: spec.payload,
           };
           written.push(event);
@@ -1021,7 +1237,7 @@ export class InMemoryBackendState {
       const projectionState = yield* this.prepareProjectionState(written);
       yield* Effect.sync(() => {
         this.nextEventId += written.length;
-        this.rows.push(...written);
+        this.appendRows(written);
         this.replaceProjectionState(projectionState.rows, projectionState.meta);
         row.completedAt = now;
         if (options.cancelled === true) row.cancelledAt = now;
@@ -1029,6 +1245,8 @@ export class InMemoryBackendState {
           const dueId = this.nextDueWorkId++;
           this.dueWork.push({
             id: dueId,
+            identity,
+            identityKey,
             fireAt: spec.fireAt,
             kind: spec.triggerKind,
             payload: durableTriggerDuePayload(spec.intentEventId),
@@ -1044,9 +1262,8 @@ export class InMemoryBackendState {
         }
         for (const patch of outboxPatches) this.applyOutboxPatch(patch);
       });
-      const events = written.length === 0 ? [] : this.rows.slice(this.rows.length - written.length);
-      yield* this.fireMany(events);
-      return { completed: true, events };
+      yield* this.fireMany(written);
+      return { completed: true, events: written };
     });
   }
 
@@ -1064,7 +1281,7 @@ export class InMemoryBackendState {
                 phase: "sink",
                 eventId: event.id,
                 kind: event.kind,
-                scopeKey: scopeRefKey(event.scopeRef),
+                identityKey: backendProtocolTruthIdentityKey(eventTruthIdentity(event)),
                 message: describeFanoutCause(cause),
               });
             }

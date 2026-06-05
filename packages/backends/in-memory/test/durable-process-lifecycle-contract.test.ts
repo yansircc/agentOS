@@ -6,16 +6,17 @@ import {
   runDurableProcessLifecycleContract,
   type DurableProcessLifecycleDriver,
 } from "../../protocol/test/contract/durable-process-lifecycle-contract";
+import { runtimeEventIdentity, truthIdentity } from "./identity";
 
 const makeDriver = (triggers: ReadonlyArray<AnyDurableTrigger>): DurableProcessLifecycleDriver => {
   const scope = "durable-process-lifecycle";
   const state = createInMemoryBackendState();
   const runtime = ManagedRuntime.make(
-    createInMemoryRuntimeBackend({
-      state,
-      scope,
-      triggers,
-    }).layer,
+      createInMemoryRuntimeBackend({
+        state,
+        identity: truthIdentity(scope),
+        triggers,
+      }).layer,
   );
 
   return {
@@ -26,10 +27,9 @@ const makeDriver = (triggers: ReadonlyArray<AnyDurableTrigger>): DurableProcessL
         }),
       );
       const event = await runtime.runPromise(
-        state.commitTriggerIntent(scope, fireAt, registry, trigger.kind, (trigger) => ({
+        state.commitTriggerIntent(runtimeEventIdentity(scope), fireAt, registry, trigger.kind, (trigger) => ({
           ts: fireAt,
           kind: trigger.intentEventKind,
-          scope,
           payload,
         })),
       );
@@ -43,7 +43,7 @@ const makeDriver = (triggers: ReadonlyArray<AnyDurableTrigger>): DurableProcessL
       const triggerPump = await runtime.runPromise(TriggerPump);
       await runtime.runPromise(triggerPump.cancelTrigger({ triggerKind, intentEventId, reason }));
     },
-    processes: () => runtime.runPromise(state.durableProcessLifecycle()),
+    processes: () => runtime.runPromise(state.durableProcessLifecycle(runtimeEventIdentity(scope))),
     dispose: () => runtime.dispose(),
   };
 };

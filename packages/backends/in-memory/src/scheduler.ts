@@ -1,10 +1,11 @@
 import { Clock, Effect, Layer } from "effect";
+import type { BackendProtocolTruthIdentity } from "@agent-os/backend-protocol";
 import { DurableTriggerRegistry, Scheduler, scheduledEventTrigger } from "@agent-os/runtime";
-import type { InMemoryBackendState } from "./state";
+import { inMemoryRuntimeEventIdentity, type InMemoryBackendState } from "./state";
 
 export const InMemorySchedulerLive = (
   state: InMemoryBackendState,
-  scope: string,
+  identity: BackendProtocolTruthIdentity,
 ): Layer.Layer<Scheduler, never, DurableTriggerRegistry> =>
   Layer.effect(
     Scheduler,
@@ -15,7 +16,7 @@ export const InMemorySchedulerLive = (
           Effect.gen(function* () {
             const now = yield* Clock.currentTimeMillis;
             return yield* state.schedule(
-              scope,
+              inMemoryRuntimeEventIdentity(identity),
               now,
               at,
               registry,

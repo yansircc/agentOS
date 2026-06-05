@@ -31,6 +31,7 @@ import {
   type InMemoryRuntimeLayerOptions,
 } from "../src";
 import { InMemoryTriggerPumpLive } from "../src/trigger-pump";
+import { truthIdentity, runtimeEventIdentity } from "./identity";
 
 const structuredResponse = (args: Record<string, unknown>) => ({
   items: [
@@ -46,8 +47,11 @@ const structuredResponse = (args: Record<string, unknown>) => ({
   usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
 });
 
-const makeRuntime = (scope: string, options: Omit<InMemoryRuntimeLayerOptions, "scope"> = {}) => {
-  const backend = createInMemoryRuntimeBackend({ ...options, scope });
+const makeRuntime = (
+  scope: string,
+  options: Omit<InMemoryRuntimeLayerOptions, "identity" | "scope"> = {},
+) => {
+  const backend = createInMemoryRuntimeBackend({ ...options, identity: truthIdentity(scope) });
   const runtime = ManagedRuntime.make(backend.layer);
   return { backend, runtime };
 };
@@ -63,9 +67,11 @@ describe("in-memory runtime backend", () => {
     try {
       const ledger = await runtime.runPromise(Ledger);
       const [event] = await runtime.runPromise(
-        ledger.commit([{ kind: "example.recorded", payload: { ok: true }, scope: "ledger-scope" }]),
+        ledger.commit([
+          { kind: "example.recorded", payload: { ok: true }, ...truthIdentity("ledger-scope") },
+        ]),
       );
-      const events = await runtime.runPromise(ledger.events("ledger-scope"));
+      const events = await runtime.runPromise(ledger.events(truthIdentity("ledger-scope")));
 
       expect(event?.id).toBe(1);
       expect(events.map((row) => row.kind)).toEqual(["example.recorded"]);
@@ -110,22 +116,26 @@ describe("in-memory runtime backend", () => {
       const ledger = await runtime.runPromise(Ledger);
       const [event] = await runtime.runPromise(
         ledger.commit([
-          { kind: "test.chain.requested", payload: { step: 1 }, scope: "chain-scope" },
+          {
+            kind: "test.chain.requested",
+            payload: { step: 1 },
+            ...truthIdentity("chain-scope"),
+          },
         ]),
       );
-      backend.state.addDueWork("test.chain", event!.id, 10);
+      backend.state.addDueWork(runtimeEventIdentity("chain-scope"), "test.chain", event!.id, 10);
 
       await expect(runtime.runPromise(triggerPump.drainDue(10))).resolves.toEqual({
         drained: 1,
       });
-      expect(backend.state.duePending(10)).toHaveLength(1);
+      expect(backend.state.duePending(runtimeEventIdentity("chain-scope"), 10)).toHaveLength(1);
 
       await expect(runtime.runPromise(triggerPump.drainUntilQuiet(10))).resolves.toEqual({
         drained: 2,
         iterations: 3,
       });
-      expect(backend.state.duePending(10)).toHaveLength(0);
-      const events = await runtime.runPromise(ledger.events("chain-scope"));
+      expect(backend.state.duePending(runtimeEventIdentity("chain-scope"), 10)).toHaveLength(0);
+      const events = await runtime.runPromise(ledger.events(truthIdentity("chain-scope")));
       expect(
         events
           .filter((row) => row.kind === "test.chain.done")
@@ -168,9 +178,13 @@ describe("in-memory runtime backend", () => {
       const ledger = yield* Effect.promise(() => runtime.runPromise(Ledger));
       const triggerPump = yield* Effect.promise(() => runtime.runPromise(TriggerPump));
       const [event] = yield* ledger.commit([
-        { kind: "test.loop.requested", payload: { count: 1 }, scope: "loop-scope" },
+        {
+          kind: "test.loop.requested",
+          payload: { count: 1 },
+          ...truthIdentity("loop-scope"),
+        },
       ]);
-      backend.state.addDueWork("test.loop", event!.id, 10);
+      backend.state.addDueWork(runtimeEventIdentity("loop-scope"), "test.loop", event!.id, 10);
 
       const exit = yield* Effect.exit(triggerPump.drainUntilQuiet(10, { maxIterations: 2 }));
 
@@ -183,7 +197,7 @@ describe("in-memory runtime backend", () => {
           expect((failure.value as DurableTriggerDrainLimitExceeded).drained).toBe(2);
         }
       }
-      expect(backend.state.duePending(10)).toHaveLength(1);
+      expect(backend.state.duePending(runtimeEventIdentity("loop-scope"), 10)).toHaveLength(1);
       yield* Effect.promise(() => runtime.dispose());
     }),
   );
@@ -220,10 +234,15 @@ describe("in-memory runtime backend", () => {
         {
           kind: "test.thenable.requested",
           payload: { label: "one" },
-          scope: "thenable-scope",
+          ...truthIdentity("thenable-scope"),
         },
       ]);
-      backend.state.addDueWork("test.thenable", event!.id, 10);
+      backend.state.addDueWork(
+        runtimeEventIdentity("thenable-scope"),
+        "test.thenable",
+        event!.id,
+        10,
+      );
 
       const exit = yield* Effect.exit(triggerPump.drainDue(10));
 
@@ -235,8 +254,8 @@ describe("in-memory runtime backend", () => {
           expect(failure.value).toBeInstanceOf(DurableTriggerCommitReturnedThenable);
         }
       }
-      expect(backend.state.duePending(10)).toHaveLength(1);
-      const events = yield* ledger.events("thenable-scope");
+      expect(backend.state.duePending(runtimeEventIdentity("thenable-scope"), 10)).toHaveLength(1);
+      const events = yield* ledger.events(truthIdentity("thenable-scope"));
       expect(events.filter((row) => row.kind === "test.thenable.done")).toHaveLength(0);
       yield* Effect.promise(() => runtime.dispose());
     }),
@@ -259,7 +278,7 @@ describe("in-memory runtime backend", () => {
       await expect(runtime.runPromise(triggerPump.drainDue(10))).resolves.toEqual({
         drained: 0,
       });
-      const events = await runtime.runPromise(ledger.events("schedule-scope"));
+      const events = await runtime.runPromise(ledger.events(truthIdentity("schedule-scope")));
       expect(events.map((event) => event.kind)).toEqual([
         DURABLE_TRIGGER_SCHEDULED_REQUESTED,
         "example.due",
@@ -273,7 +292,11 @@ describe("in-memory runtime backend", () => {
     Effect.gen(function* () {
       const state = createInMemoryBackendState();
       const runtime = ManagedRuntime.make(
-        InMemoryTriggerPumpLive(state, "empty-registry").pipe(
+        InMemoryTriggerPumpLive(
+          state,
+          truthIdentity("empty-registry"),
+          "empty-registry",
+        ).pipe(
           Layer.provide(Layer.succeed(DurableTriggerRegistry, new Map())),
         ),
       );
@@ -281,17 +304,22 @@ describe("in-memory runtime backend", () => {
         {
           ts: 10,
           kind: "unknown.trigger.requested",
-          scope: "empty-registry",
+          ...truthIdentity("empty-registry"),
           payload: { ok: true },
         },
       ]);
-      state.addDueWork("unknown.trigger", event!.id, 10);
+      state.addDueWork(
+        runtimeEventIdentity("empty-registry"),
+        "unknown.trigger",
+        event!.id,
+        10,
+      );
       const triggerPump = yield* Effect.promise(() => runtime.runPromise(TriggerPump));
 
       const exit = yield* Effect.exit(triggerPump.drainDue(10));
 
       expect(Exit.isFailure(exit)).toBe(true);
-      expect(state.duePending(10)).toHaveLength(1);
+      expect(state.duePending(runtimeEventIdentity("empty-registry"), 10)).toHaveLength(1);
       yield* Effect.promise(() => runtime.dispose());
     }),
   );
@@ -302,9 +330,15 @@ describe("in-memory runtime backend", () => {
       const registry = yield* makeDurableTriggerRegistry([scheduledEventTrigger]);
 
       const exit = yield* Effect.exit(
-        state.commitTriggerIntent("submit-scope", 10, registry, "missing.trigger", () => {
-          throw new Error("makeSpec should not run");
-        }),
+        state.commitTriggerIntent(
+          runtimeEventIdentity("submit-scope"),
+          10,
+          registry,
+          "missing.trigger",
+          () => {
+            throw new Error("makeSpec should not run");
+          },
+        ),
       );
 
       expect(Exit.isFailure(exit)).toBe(true);
@@ -316,8 +350,8 @@ describe("in-memory runtime backend", () => {
           expect((failure.value as UnregisteredDurableTriggerKind).kind).toBe("missing.trigger");
         }
       }
-      expect(state.snapshot("submit-scope")).toHaveLength(0);
-      expect(state.duePending(10)).toHaveLength(0);
+      expect(state.snapshot(truthIdentity("submit-scope"))).toHaveLength(0);
+      expect(state.duePending(runtimeEventIdentity("submit-scope"), 10)).toHaveLength(0);
     }),
   );
 
@@ -330,7 +364,7 @@ describe("in-memory runtime backend", () => {
     });
     const bindingKey = materialRefKey(bindingRef);
     const receiverRuntime = ManagedRuntime.make(
-      createInMemoryRuntimeBackend({ state, scope: "receiver" }).layer,
+      createInMemoryRuntimeBackend({ state, identity: truthIdentity("receiver") }).layer,
     );
     const receiver: DispatchReceiver = {
       __agentosReceiveDispatch: (envelope) =>
@@ -344,7 +378,7 @@ describe("in-memory runtime backend", () => {
     const senderRuntime = ManagedRuntime.make(
       createInMemoryRuntimeBackend({
         state,
-        scope: "sender",
+        identity: truthIdentity("sender"),
         dispatchTargets: {
           [bindingKey]: {
             deliver: (envelope) => receiver.__agentosReceiveDispatch(envelope),
@@ -359,8 +393,8 @@ describe("in-memory runtime backend", () => {
       const spec = {
         target: {
           bindingRef,
-          scope: "receiver",
           scopeRef: { kind: "conversation" as const, scopeId: "receiver" },
+          effectAuthorityRef: { authorityClass: "effect", authorityId: "receiver" },
         },
         event: "app.received",
         data: { value: 1 },
@@ -370,12 +404,16 @@ describe("in-memory runtime backend", () => {
       await senderRuntime.runPromise(senderDispatch.dispatchToScope(spec));
       await senderRuntime.runPromise(senderDispatch.dispatchToScope(spec));
 
-      const receiverEvents = await senderRuntime.runPromise(senderLedger.events("receiver"));
+      const receiverEvents = await senderRuntime.runPromise(
+        senderLedger.events(truthIdentity("receiver")),
+      );
       expect(receiverEvents.map((event) => event.kind)).toEqual([
         "dispatch.inbound.accepted",
         "app.received",
       ]);
-      const senderEvents = await senderRuntime.runPromise(senderLedger.events("sender"));
+      const senderEvents = await senderRuntime.runPromise(
+        senderLedger.events(truthIdentity("sender")),
+      );
       expect(
         senderEvents.filter((event) => event.kind === "dispatch.outbound.requested"),
       ).toHaveLength(2);
@@ -393,10 +431,10 @@ describe("in-memory runtime backend", () => {
     try {
       const resources = await runtime.runPromise(Resources);
       await runtime.runPromise(
-        resources.grant("resource-scope", { key: "credit", amount: 5, ref: "seed" }),
+        resources.grant(truthIdentity("resource-scope"), { key: "credit", amount: 5, ref: "seed" }),
       );
       const first = await runtime.runPromise(
-        resources.reserve("resource-scope", {
+        resources.reserve(truthIdentity("resource-scope"), {
           key: "credit",
           amount: 2,
           ref: "req-1",
@@ -404,7 +442,7 @@ describe("in-memory runtime backend", () => {
         }),
       );
       const second = await runtime.runPromise(
-        resources.reserve("resource-scope", {
+        resources.reserve(truthIdentity("resource-scope"), {
           key: "credit",
           amount: 2,
           ref: "req-1-retry",
@@ -413,7 +451,7 @@ describe("in-memory runtime backend", () => {
       );
       expect(second.reservationId).toBe(first.reservationId);
       await expect(
-        runtime.runPromise(resources.project("resource-scope", "credit")),
+        runtime.runPromise(resources.project(truthIdentity("resource-scope"), "credit")),
       ).resolves.toEqual({
         available: 3,
         reserved: 2,
@@ -430,25 +468,25 @@ describe("in-memory runtime backend", () => {
       const quota = await runtime.runPromise(Quota);
       const ledger = await runtime.runPromise(Ledger);
       await expect(
-        runtime.runPromise(quota.tryGrant("quota-scope", "tool-a", 1, 60_000, 1, "tool-a", "op-1")),
+        runtime.runPromise(quota.tryGrant(truthIdentity("quota-scope"), "tool-a", 1, 60_000, 1, "tool-a", "op-1")),
       ).resolves.toMatchObject({ granted: true, consumed: 0, limit: 1 });
       await expect(
-        runtime.runPromise(quota.tryGrant("quota-scope", "tool-a", 1, 60_000, 1, "tool-a", "op-2")),
+        runtime.runPromise(quota.tryGrant(truthIdentity("quota-scope"), "tool-a", 1, 60_000, 1, "tool-a", "op-2")),
       ).resolves.toMatchObject({ granted: false, consumed: 1, limit: 1 });
-      const events = await runtime.runPromise(ledger.events("quota-scope"));
+      const events = await runtime.runPromise(ledger.events(truthIdentity("quota-scope")));
       expect(events.map((event) => event.kind)).toEqual(["quota.consumed", "quota.rate_limited"]);
 
       await runtime.runPromise(
         backend.state.commitEvents([
           {
             kind: "quota.consumed",
-            scope: "quota-scope",
+            ...truthIdentity("quota-scope"),
             payload: { key: "tool-a", amount: "x", toolName: "tool-a", operationRef: "bad-op" },
           },
         ]),
       );
       const exit = await runtime.runPromiseExit(
-        quota.tryGrant("quota-scope", "tool-a", 1, Number.POSITIVE_INFINITY, 10, "tool-a", "op-3"),
+        quota.tryGrant(truthIdentity("quota-scope"), "tool-a", 1, Number.POSITIVE_INFINITY, 10, "tool-a", "op-3"),
       );
       expect(Exit.isFailure(exit)).toBe(true);
       if (Exit.isFailure(exit)) {
@@ -492,7 +530,7 @@ describe("in-memory runtime backend", () => {
       );
 
       expect(result.ok).toBe(true);
-      const events = await runtime.runPromise(ledger.events("admission-scope"));
+      const events = await runtime.runPromise(ledger.events(truthIdentity("admission-scope")));
       expect(events.map((event: LedgerEvent) => event.kind)).toEqual(["llm.structured.evidence"]);
     } finally {
       await runtime.dispose();

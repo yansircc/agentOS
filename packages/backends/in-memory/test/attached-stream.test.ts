@@ -7,6 +7,7 @@ import {
   type AttachedStreamHandler,
 } from "@agent-os/runtime";
 import { createInMemoryRuntimeBackend, type InMemoryRuntimeLayerOptions } from "../src";
+import { truthIdentity } from "./identity";
 
 const delay = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -18,8 +19,11 @@ const waitFor = async (assertion: () => boolean | Promise<boolean>): Promise<voi
   throw new Error("condition not reached");
 };
 
-const makeRuntime = (scope: string, options: Omit<InMemoryRuntimeLayerOptions, "scope">) => {
-  const backend = createInMemoryRuntimeBackend({ ...options, scope });
+const makeRuntime = (
+  scope: string,
+  options: Omit<InMemoryRuntimeLayerOptions, "identity" | "scope">,
+) => {
+  const backend = createInMemoryRuntimeBackend({ ...options, identity: truthIdentity(scope) });
   const runtime = ManagedRuntime.make(backend.layer);
   return { backend, runtime };
 };
@@ -74,9 +78,10 @@ describe("in-memory attached streams", () => {
         value: { kind: "completed", seq: 2, terminal: { echoed: "hello" } },
       });
       await waitFor(
-        async () => (await runtime.runPromise(ledger.events("stream-scope"))).length > 0,
+        async () =>
+          (await runtime.runPromise(ledger.events(truthIdentity("stream-scope")))).length > 0,
       );
-      const events = await runtime.runPromise(ledger.events("stream-scope"));
+      const events = await runtime.runPromise(ledger.events(truthIdentity("stream-scope")));
       expect(events.map((event) => event.kind)).toEqual(["test.echo.completed"]);
     } finally {
       await runtime.dispose();
@@ -159,9 +164,10 @@ describe("in-memory attached streams", () => {
         value: { kind: "completed", terminal: { ignoredAbort: true } },
       });
       await waitFor(
-        async () => (await runtime.runPromise(ledger.events("stubborn-scope"))).length > 0,
+        async () =>
+          (await runtime.runPromise(ledger.events(truthIdentity("stubborn-scope")))).length > 0,
       );
-      const events = await runtime.runPromise(ledger.events("stubborn-scope"));
+      const events = await runtime.runPromise(ledger.events(truthIdentity("stubborn-scope")));
       expect(events.map((event) => event.kind)).toEqual(["test.stubborn.completed"]);
     } finally {
       await runtime.dispose();
@@ -200,7 +206,7 @@ describe("in-memory attached streams", () => {
       await session.output[Symbol.asyncIterator]().next();
       await runtime.runPromise(session.detach());
       await waitFor(() => aborted);
-      const events = await runtime.runPromise(ledger.events("detach-abort-scope"));
+      const events = await runtime.runPromise(ledger.events(truthIdentity("detach-abort-scope")));
       expect(events).toEqual([]);
     } finally {
       await runtime.dispose();
@@ -241,9 +247,13 @@ describe("in-memory attached streams", () => {
       await runtime.runPromise(session.detach());
       release();
       await waitFor(
-        async () => (await runtime.runPromise(ledger.events("detach-continue-scope"))).length > 0,
+        async () =>
+          (await runtime.runPromise(ledger.events(truthIdentity("detach-continue-scope")))).length >
+          0,
       );
-      const events = await runtime.runPromise(ledger.events("detach-continue-scope"));
+      const events = await runtime.runPromise(
+        ledger.events(truthIdentity("detach-continue-scope")),
+      );
       expect(events.map((event) => event.kind)).toEqual(["test.detach_continue.completed"]);
       await expect(output.next()).resolves.toEqual({ done: true, value: undefined });
     } finally {

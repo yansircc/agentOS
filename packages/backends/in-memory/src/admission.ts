@@ -19,6 +19,7 @@ import {
   structuredOutputRequest,
 } from "@agent-os/runtime";
 import type { InMemoryBackendState } from "./state";
+import { inMemoryConversationTruthIdentity, inMemoryRuntimeEventIdentity } from "./state";
 import { decodeOk, recordOf } from "./decode";
 
 const outcomeFromLease = (lease: CapabilityLease & { readonly status: "unsupported" }): Outcome => {
@@ -45,8 +46,9 @@ const projectAdmissionRows = (
   scope: string,
 ): Effect.Effect<ReadonlyArray<AdmissionRow>, SqlError> =>
   Effect.sync(() => {
+    const eventIdentity = inMemoryRuntimeEventIdentity(inMemoryConversationTruthIdentity(scope));
     const rows: AdmissionRow[] = [];
-    for (const event of state.streamSnapshot(scope)) {
+    for (const event of state.eventSnapshot(eventIdentity)) {
       if (event.kind === "llm.structured.evidence") {
         const payload = recordOf(event.payload, event.kind);
         if (!payload.ok) return payload;
@@ -167,7 +169,7 @@ export const InMemoryAdmissionLive = (
             {
               ts: now,
               kind: "llm.structured.evidence",
-              scope: spec.scope,
+              ...inMemoryConversationTruthIdentity(spec.scope),
               payload: evidencePayload,
             },
           ]);
@@ -202,7 +204,7 @@ export const InMemoryAdmissionLive = (
             {
               ts,
               kind: "llm.structured.invalidate",
-              scope: spec.scope,
+              ...inMemoryConversationTruthIdentity(spec.scope),
               payload: { key: spec.key, reason: spec.reason, by: spec.by },
             },
           ]);

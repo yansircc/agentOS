@@ -6,11 +6,13 @@ import {
   runSynchronousAttachedStreamCommit,
 } from "@agent-os/runtime";
 import type { SqlError } from "@agent-os/kernel";
-import type { InMemoryBackendState } from "./state";
+import type { BackendProtocolTruthIdentity } from "@agent-os/backend-protocol";
+import { inMemoryRuntimeEventIdentity, type InMemoryBackendState } from "./state";
 
 export const InMemoryAttachedStreamsLive = (
   state: InMemoryBackendState,
-  scope: string,
+  identity: BackendProtocolTruthIdentity,
+  scopeLabel: string,
 ): Layer.Layer<AttachedStreams, SqlError, AttachedStreamRegistry> => {
   let nextStreamId = 1;
   return Layer.effect(
@@ -19,20 +21,21 @@ export const InMemoryAttachedStreamsLive = (
       const registry = yield* AttachedStreamRegistry;
       return makeAttachedStreamService({
         registry,
-        scope,
+        scope: scopeLabel,
         now: () => Clock.currentTimeMillis,
         makeStreamRef: () => `attached/${nextStreamId++}`,
         commitTerminal: ({ handler, ctx, terminal }) =>
           state
             .commitAttachedStreamTerminal(
-              scope,
+              inMemoryRuntimeEventIdentity(identity),
+              scopeLabel,
               ctx.streamRef,
               handler.kind,
               ctx.now,
               ctx.signal,
               terminal,
               (value, tx) =>
-                runSynchronousAttachedStreamCommit(scope, handler.kind, () =>
+                runSynchronousAttachedStreamCommit(scopeLabel, handler.kind, () =>
                   handler.commitTerminal(value, tx),
                 ),
             )

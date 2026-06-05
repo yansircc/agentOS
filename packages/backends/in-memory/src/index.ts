@@ -1,4 +1,11 @@
-export * from "./state";
+export {
+  InMemoryBackendState,
+  createInMemoryBackendState,
+  type InMemoryBackendStateOptions,
+  type InMemoryEventHandlerRegistration,
+  type InMemoryEventSpec,
+  type InMemoryEventSubscription,
+} from "./state";
 export type { InMemoryDispatchTargetRegistry } from "./dispatch-types";
 export * from "./ledger";
 export * from "./scheduler";

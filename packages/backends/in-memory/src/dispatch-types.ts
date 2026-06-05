@@ -1,10 +1,14 @@
 import { makePreClaim } from "@agent-os/kernel/effect-claim";
-import type { DispatchTargetSpec, TraceContext } from "@agent-os/kernel/types";
+import type { TraceContext } from "@agent-os/kernel/types";
 import type { DispatchTargetAdapter } from "@agent-os/runtime";
-import type { DurableTriggerRetryPolicy } from "@agent-os/backend-protocol";
+import type {
+  BackendProtocolDispatchTarget,
+  BackendProtocolEventIdentity,
+  DurableTriggerRetryPolicy,
+} from "@agent-os/backend-protocol";
 
 export interface DispatchRequestedPayload {
-  readonly target: DispatchTargetSpec;
+  readonly target: BackendProtocolDispatchTarget;
   readonly event: string;
   readonly data: unknown;
   readonly idempotencyKey: string;
@@ -16,6 +20,7 @@ export interface DispatchRequestedPayload {
 export interface DispatchOutboxRow {
   readonly outboundEventId: number;
   readonly sourceScope: string;
+  readonly sourceIdentity: BackendProtocolEventIdentity;
   readonly requested: DispatchRequestedPayload;
   attempts: number;
   deliveredEventId: number | null;

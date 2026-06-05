@@ -1,7 +1,13 @@
 import { ManagedRuntime } from "effect";
 import { describe } from "@effect/vitest";
 import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
-import { DISPATCH_EVENT_KINDS } from "@agent-os/backend-protocol";
+import {
+  DISPATCH_EVENT_KINDS,
+  backendProtocolEventIdentityKey,
+  backendProtocolTruthIdentityKey,
+  type BackendProtocolEventIdentity,
+  type BackendProtocolTruthIdentity,
+} from "@agent-os/backend-protocol";
 import {
   Dispatch,
   Ledger,
@@ -27,6 +33,13 @@ const bindingRef = bindingMaterialRef({
 
 const bindingKey = materialRefKey(bindingRef);
 
+const truthIdentity = (
+  identity: BackendProtocolTruthIdentity,
+): BackendProtocolTruthIdentity => ({
+  scopeRef: identity.scopeRef,
+  effectAuthorityRef: identity.effectAuthorityRef,
+});
+
 const makeInMemoryContractDriver = (): RuntimeBackendContractDriver => {
   const state = createInMemoryBackendState();
   const receiverTargets = new Map<string, DispatchReceiver>();
@@ -39,36 +52,41 @@ const makeInMemoryContractDriver = (): RuntimeBackendContractDriver => {
     },
   };
   const targets: Record<string, DispatchTargetAdapter> = { [bindingKey]: targetAdapter };
-  const makeRuntime = (scope: string) =>
+  const makeRuntime = (identity: BackendProtocolTruthIdentity) =>
     ManagedRuntime.make(
       createInMemoryRuntimeBackend({
         state,
-        scope,
+        identity: truthIdentity(identity),
         dispatchTargets: targets,
       }).layer,
     );
   type RuntimeHandle = ReturnType<typeof makeRuntime>;
   const runtimes = new Map<string, RuntimeHandle>();
-  const runtime = (scope: string): RuntimeHandle => {
-    const existing = runtimes.get(scope);
+  const runtime = (identity: BackendProtocolTruthIdentity): RuntimeHandle => {
+    const key = backendProtocolTruthIdentityKey(identity);
+    const existing = runtimes.get(key);
     if (existing !== undefined) return existing;
-    const created = makeRuntime(scope);
-    runtimes.set(scope, created);
+    const created = makeRuntime(identity);
+    runtimes.set(key, created);
     return created;
   };
 
   const acceptDispatch = async (
-    scope: string,
+    identity: BackendProtocolEventIdentity,
     envelope: Parameters<DispatchReceiver["__agentosReceiveDispatch"]>[0],
   ) => {
-    const dispatch = await runtime(scope).runPromise(Dispatch);
-    return runtime(scope).runPromise(dispatch.receive(envelope));
+    const handle = runtime(identity);
+    const dispatch = await handle.runPromise(Dispatch);
+    return handle.runPromise(dispatch.receive(envelope));
   };
 
-  const registerDispatchReceiver = (scope: string, receiver?: ContractDispatchReceiver): void => {
-    receiverTargets.set(scope, {
+  const registerDispatchReceiver = (
+    identity: BackendProtocolEventIdentity,
+    receiver?: ContractDispatchReceiver,
+  ): void => {
+    receiverTargets.set(backendProtocolTruthIdentityKey(identity), {
       __agentosReceiveDispatch: (envelope) => {
-        const accept = () => acceptDispatch(scope, envelope);
+        const accept = () => acceptDispatch(identity, envelope);
         return receiver === undefined ? accept() : receiver(envelope, accept);
       },
     });
@@ -96,39 +114,44 @@ const makeInMemoryContractDriver = (): RuntimeBackendContractDriver => {
       state.addHandler(kind, (event) => Promise.resolve(handler(event))),
     addSink: (_scope, kind, sink) => state.subscribe({ kinds: [kind], sink }),
     fanoutDiagnostics: () => state.fanoutDiagnostics(),
-    log: async (scope, kind, payload) => {
-      const ledger = await runtime(scope).runPromise(Ledger);
-      const events = await runtime(scope).runPromise(ledger.commit([{ kind, payload, scope }]));
+    log: async (identity, kind, payload) => {
+      const handle = runtime(identity);
+      const ledger = await handle.runPromise(Ledger);
+      const events = await handle.runPromise(
+        ledger.commit([{ kind, payload, ...truthIdentity(identity) }]),
+      );
       const event = events[0];
       if (event === undefined) throw new Error("ledger commit returned no event");
       return event;
     },
-    events: async (scope) => {
-      const ledger = await runtime(scope).runPromise(Ledger);
-      return runtime(scope).runPromise(ledger.events(scope));
+    events: async (identity) => {
+      const handle = runtime(identity);
+      const ledger = await handle.runPromise(Ledger);
+      return handle.runPromise(ledger.events(identity));
     },
-    schedule: async (scope, at, eventKind, data) => {
-      const scheduler = await runtime(scope).runPromise(Scheduler);
-      return runtime(scope).runPromise(scheduler.schedule(at, eventKind, data));
+    schedule: async (identity, at, eventKind, data) => {
+      const handle = runtime(identity);
+      const scheduler = await handle.runPromise(Scheduler);
+      return handle.runPromise(scheduler.schedule(at, eventKind, data));
     },
-    fireDue: async (scope, now) => {
-      const triggerPump = await runtime(scope).runPromise(TriggerPump);
-      const result = await runtime(scope).runPromise(triggerPump.drainDue(now));
+    fireDue: async (identity, now) => {
+      const handle = runtime(identity);
+      const triggerPump = await handle.runPromise(TriggerPump);
+      const result = await handle.runPromise(triggerPump.drainDue(now));
       return { fired: result.drained };
     },
-    dispatchToScope: async (scope, spec) => {
-      const dispatch = await runtime(scope).runPromise(Dispatch);
-      return runtime(scope).runPromise(dispatch.dispatchToScope(spec));
+    dispatchToScope: async (identity, spec) => {
+      const handle = runtime(identity);
+      const dispatch = await handle.runPromise(Dispatch);
+      return handle.runPromise(dispatch.dispatchToScope(spec));
     },
-    drainDispatchDue: async (scope, now) => {
-      const before = await runtime(scope).runPromise(
-        (await runtime(scope).runPromise(Ledger)).events(scope),
-      );
-      const triggerPump = await runtime(scope).runPromise(TriggerPump);
-      await runtime(scope).runPromise(triggerPump.drainDue(now));
-      const after = await runtime(scope).runPromise(
-        (await runtime(scope).runPromise(Ledger)).events(scope),
-      );
+    drainDispatchDue: async (identity, now) => {
+      const handle = runtime(identity);
+      const ledger = await handle.runPromise(Ledger);
+      const before = await handle.runPromise(ledger.events(identity));
+      const triggerPump = await handle.runPromise(TriggerPump);
+      await handle.runPromise(triggerPump.drainDue(now));
+      const after = await handle.runPromise(ledger.events(identity));
       const slice = after.slice(before.length);
       return {
         delivered: slice.filter((event) => event.kind === DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED)
@@ -136,33 +159,46 @@ const makeInMemoryContractDriver = (): RuntimeBackendContractDriver => {
         failed: slice.filter((event) => event.kind === DISPATCH_EVENT_KINDS.OUTBOUND_FAILED).length,
       };
     },
-    nextDueAt: () => Promise.resolve(state.nextDueAt()),
-    pendingDueCount: () =>
-      Promise.resolve(pendingDueRows().filter((row) => row.completedAt === null).length),
-    grantResource: async (scope, spec) => {
-      const resources = await runtime(scope).runPromise(Resources);
-      return runtime(scope).runPromise(resources.grant(scope, spec));
+    nextDueAt: (identity) => Promise.resolve(state.nextDueAt(identity)),
+    pendingDueCount: (identity) =>
+      Promise.resolve(
+        pendingDueRows().filter(
+          (row) =>
+            row.completedAt === null &&
+            (row as { readonly identityKey?: string }).identityKey ===
+              backendProtocolEventIdentityKey(identity),
+        ).length,
+      ),
+    grantResource: async (identity, spec) => {
+      const handle = runtime(identity);
+      const resources = await handle.runPromise(Resources);
+      return handle.runPromise(resources.grant(identity, spec));
     },
-    reserveResource: async (scope, spec) => {
-      const resources = await runtime(scope).runPromise(Resources);
-      return runtime(scope).runPromise(resources.reserve(scope, spec));
+    reserveResource: async (identity, spec) => {
+      const handle = runtime(identity);
+      const resources = await handle.runPromise(Resources);
+      return handle.runPromise(resources.reserve(identity, spec));
     },
-    consumeResource: async (scope, spec) => {
-      const resources = await runtime(scope).runPromise(Resources);
-      return runtime(scope).runPromise(resources.consume(scope, spec));
+    consumeResource: async (identity, spec) => {
+      const handle = runtime(identity);
+      const resources = await handle.runPromise(Resources);
+      return handle.runPromise(resources.consume(identity, spec));
     },
-    releaseResource: async (scope, spec) => {
-      const resources = await runtime(scope).runPromise(Resources);
-      return runtime(scope).runPromise(resources.release(scope, spec));
+    releaseResource: async (identity, spec) => {
+      const handle = runtime(identity);
+      const resources = await handle.runPromise(Resources);
+      return handle.runPromise(resources.release(identity, spec));
     },
-    projectResource: async (scope, key) => {
-      const resources = await runtime(scope).runPromise(Resources);
-      return runtime(scope).runPromise(resources.project(scope, key));
+    projectResource: async (key) => {
+      const handle = runtime(key);
+      const resources = await handle.runPromise(Resources);
+      return handle.runPromise(resources.project(key, key.projectionId));
     },
-    quotaTryGrant: async (scope, key, amount, windowMs, limit, toolName, operationRef) => {
-      const quota = await runtime(scope).runPromise(Quota);
-      return runtime(scope).runPromise(
-        quota.tryGrant(scope, key, amount, windowMs, limit, toolName, operationRef),
+    quotaTryGrant: async (identity, key, amount, windowMs, limit, toolName, operationRef) => {
+      const handle = runtime(identity);
+      const quota = await handle.runPromise(Quota);
+      return handle.runPromise(
+        quota.tryGrant(identity, key.projectionId, amount, windowMs, limit, toolName, operationRef),
       );
     },
     dispose: async () => {

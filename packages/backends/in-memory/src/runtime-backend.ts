@@ -1,6 +1,10 @@
 import { Effect, Layer } from "effect";
 import { SqlError } from "@agent-os/kernel/errors";
 import {
+  backendProtocolTruthIdentityKey,
+  type BackendProtocolTruthIdentity,
+} from "@agent-os/backend-protocol";
+import {
   Admission,
   AttachedStreamRegistry,
   AttachedStreams,
@@ -56,7 +60,8 @@ export type InMemoryRuntimeServices =
 
 export interface InMemoryRuntimeLayerOptions {
   readonly state?: InMemoryBackendState;
-  readonly scope: string;
+  readonly identity: BackendProtocolTruthIdentity;
+  readonly scope?: never;
   readonly handlers?: Iterable<InMemoryEventHandlerRegistration>;
   readonly dispatchTargets?: InMemoryDispatchTargetRegistry;
   readonly llm?: InMemoryLlmTransportOptions;
@@ -104,20 +109,21 @@ export const createInMemoryRuntimeBackend = (
     MaterializedProjectionRegistry,
     makeProjectionRegistry(projections).pipe(Effect.mapError((cause) => new SqlError({ cause }))),
   );
-  const materializedProjectionLayer = InMemoryMaterializedProjectionsLive(state);
-  const attachedStreamLayer = InMemoryAttachedStreamsLive(state, options.scope).pipe(
+  const materializedProjectionLayer = InMemoryMaterializedProjectionsLive(state, options.identity);
+  const scopeLabel = backendProtocolTruthIdentityKey(options.identity);
+  const attachedStreamLayer = InMemoryAttachedStreamsLive(state, options.identity, scopeLabel).pipe(
     Layer.provide(streamRegistryLayer),
   );
-  const triggerLayer = InMemoryTriggerPumpLive(state, options.scope).pipe(
+  const triggerLayer = InMemoryTriggerPumpLive(state, options.identity, scopeLabel).pipe(
     Layer.provide(triggerRegistryLayer),
   );
   return {
     state,
     layer: Layer.mergeAll(
       InMemoryLedgerLive(state),
-      InMemorySchedulerLive(state, options.scope).pipe(Layer.provide(triggerRegistryLayer)),
+      InMemorySchedulerLive(state, options.identity).pipe(Layer.provide(triggerRegistryLayer)),
       triggerLayer,
-      InMemoryDispatchLive(state, options.scope, options.dispatchTargets).pipe(
+      InMemoryDispatchLive(state, options.identity, scopeLabel, options.dispatchTargets).pipe(
         Layer.provide(Layer.mergeAll(triggerLayer, triggerRegistryLayer)),
       ),
       InMemoryResourcesLive(state),

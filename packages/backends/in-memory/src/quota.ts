@@ -2,7 +2,10 @@ import { Clock, Effect, Layer } from "effect";
 import { SqlError } from "@agent-os/kernel/errors";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import { Quota, type GrantResult } from "@agent-os/runtime";
-import type { InMemoryBackendState } from "./state";
+import {
+  inMemoryRuntimeEventIdentity,
+  type InMemoryBackendState,
+} from "./state";
 import { decodeOk, finiteNumberField, recordOf, stringField, type DecodeResult } from "./decode";
 
 const consumedAmount = (event: LedgerEvent, key: string): DecodeResult<number> => {
@@ -27,13 +30,14 @@ const consumedOperationRef = (event: LedgerEvent): DecodeResult<string | null> =
 
 export const InMemoryQuotaLive = (state: InMemoryBackendState): Layer.Layer<Quota> =>
   Layer.succeed(Quota, {
-    tryGrant: (scope, key, amount, windowMs, limit, toolName, operationRef) =>
+    tryGrant: (identity, key, amount, windowMs, limit, toolName, operationRef) =>
       Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis;
+        const eventIdentity = inMemoryRuntimeEventIdentity(identity);
         const windowStart = windowMs === Number.POSITIVE_INFINITY ? 0 : now - windowMs;
         const usage = yield* Effect.sync(() => {
           let sum = 0;
-          for (const event of state.streamSnapshot(scope)) {
+          for (const event of state.eventSnapshot(eventIdentity)) {
             if (event.kind !== "quota.consumed" || event.ts < windowStart) continue;
             const eventOperationRef = consumedOperationRef(event);
             if (!eventOperationRef.ok) return eventOperationRef;
@@ -63,7 +67,7 @@ export const InMemoryQuotaLive = (state: InMemoryBackendState): Layer.Layer<Quot
             {
               ts: now,
               kind: "quota.rate_limited",
-              scope,
+              ...identity,
               payload: { key, attempted: amount, consumed, limit, windowMs, toolName },
             },
           ]);
@@ -74,7 +78,7 @@ export const InMemoryQuotaLive = (state: InMemoryBackendState): Layer.Layer<Quot
           {
             ts: now,
             kind: "quota.consumed",
-            scope,
+            ...identity,
             payload: { key, amount, toolName, operationRef },
           },
         ]);

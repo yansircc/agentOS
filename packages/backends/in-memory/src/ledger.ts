@@ -1,5 +1,5 @@
 import { Clock, Effect, Layer } from "effect";
-import { Ledger } from "@agent-os/runtime";
+import { Ledger, RUNTIME_FACT_OWNER } from "@agent-os/runtime";
 import type { InMemoryBackendState } from "./state";
 
 export const InMemoryLedgerLive = (state: InMemoryBackendState): Layer.Layer<Ledger> =>
@@ -7,8 +7,17 @@ export const InMemoryLedgerLive = (state: InMemoryBackendState): Layer.Layer<Led
     commit: (events) =>
       Effect.gen(function* () {
         const ts = yield* Clock.currentTimeMillis;
-        return yield* state.commitEvents(events.map((event) => ({ ts, ...event })));
+        return yield* state.commitProtocolEvents(
+          events.map((event) => ({
+            ts,
+            kind: event.kind,
+            scopeRef: event.scopeRef,
+            effectAuthorityRef: event.effectAuthorityRef,
+            factOwnerRef: RUNTIME_FACT_OWNER,
+            payload: event.payload,
+          })),
+        );
       }),
-    events: (scope, opts = {}) => Effect.succeed(state.snapshot(scope, opts)),
-    streamSnapshot: (scope, opts = {}) => Effect.succeed(state.streamSnapshot(scope, opts)),
+    events: (identity, opts = {}) => Effect.succeed(state.snapshot(identity, opts)),
+    streamSnapshot: (identity, opts = {}) => Effect.succeed(state.streamSnapshot(identity, opts)),
   });

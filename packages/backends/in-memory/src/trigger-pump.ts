@@ -13,7 +13,11 @@ import {
   type AnyDurableTrigger,
   type TriggerCancellation,
 } from "@agent-os/runtime";
-import type { InMemoryBackendState } from "./state";
+import type {
+  BackendProtocolEventIdentity,
+  BackendProtocolTruthIdentity,
+} from "@agent-os/backend-protocol";
+import { inMemoryRuntimeEventIdentity, type InMemoryBackendState } from "./state";
 
 const claimToken = (): string => crypto.randomUUID();
 
@@ -27,21 +31,30 @@ const cancellationFor = (row: {
 
 export const InMemoryTriggerPumpLive = (
   state: InMemoryBackendState,
-  scope: string,
+  truthIdentity: BackendProtocolTruthIdentity,
+  scopeLabel: string,
 ): Layer.Layer<TriggerPump, SqlError, DurableTriggerRegistry> =>
   Layer.effect(
     TriggerPump,
     Effect.gen(function* () {
       const registry = yield* DurableTriggerRegistry;
+      const identity = inMemoryRuntimeEventIdentity(truthIdentity);
       const activeClaims = new Map<
         number,
         { readonly token: string; readonly controller: AbortController }
       >();
       const parseIntent = (
         trigger: AnyDurableTrigger,
-        row: { readonly payload: { readonly intentEventId: number } },
+        row: {
+          readonly identity: BackendProtocolEventIdentity;
+          readonly payload: { readonly intentEventId: number };
+        },
       ) => {
-        const intentEvent = state.eventById(row.payload.intentEventId, trigger.intentEventKind);
+        const intentEvent = state.eventById(
+          row.identity,
+          row.payload.intentEventId,
+          trigger.intentEventKind,
+        );
         if (intentEvent === null) {
           return Effect.fail(
             new SqlError({
@@ -58,7 +71,7 @@ export const InMemoryTriggerPumpLive = (
       };
       const drainDue = (now: number) =>
         Effect.gen(function* () {
-          const pending = state.dueClaimable(now);
+          const pending = state.dueClaimable(identity, now);
           let drained = 0;
           for (const row of pending) {
             const trigger = registry.get(row.kind);
@@ -78,7 +91,7 @@ export const InMemoryTriggerPumpLive = (
             const acquireMode = claimed.redriveCount > 0 ? "redrive" : "normal";
             const exit = yield* Effect.exit(
               trigger.acquire(intent, {
-                scope,
+                scope: scopeLabel,
                 now,
                 dueWorkId: row.id,
                 intentEventId: row.payload.intentEventId,
@@ -90,12 +103,12 @@ export const InMemoryTriggerPumpLive = (
             if (active?.token === token) activeClaims.delete(row.id);
             const committed = Exit.isSuccess(exit)
               ? yield* state.commitTrigger(
-                  scope,
+                  scopeLabel,
                   row,
                   now,
                   (kind) => registry.has(kind),
                   (tx) =>
-                    runSynchronousTriggerCommit(scope, row.kind, () =>
+                    runSynchronousTriggerCommit(scopeLabel, row.kind, () =>
                       trigger.commit(exit.value, tx),
                     ),
                   { claimToken: token, signal: controller.signal, acquireMode },
@@ -113,12 +126,12 @@ export const InMemoryTriggerPumpLive = (
                     row.cancelRequestedAt ??= now;
                   }
                   return yield* state.commitTrigger(
-                    scope,
+                    scopeLabel,
                     row,
                     now,
                     (kind) => registry.has(kind),
                     (tx) =>
-                      runSynchronousTriggerCommit(scope, row.kind, () =>
+                      runSynchronousTriggerCommit(scopeLabel, row.kind, () =>
                         trigger.commitCancelled(intent, cancellationFor(row), tx),
                       ),
                     { claimToken: token, cancelled: true, signal: controller.signal, acquireMode },
@@ -142,7 +155,7 @@ export const InMemoryTriggerPumpLive = (
           }
           if (trigger.cancellation === "ignored") return { status: "ignored" as const };
           const now = yield* Clock.currentTimeMillis;
-          const rows = state.dueByTriggerIntent(spec.triggerKind, spec.intentEventId);
+          const rows = state.dueByTriggerIntent(identity, spec.triggerKind, spec.intentEventId);
           if (rows.length === 0) return { status: "not_found" as const, cancelled: 0 as const };
           let cancelled = 0;
           let requested = 0;
@@ -151,12 +164,12 @@ export const InMemoryTriggerPumpLive = (
             if (row.claimToken === null) {
               state.requestCancellation(row, now, spec.reason);
               const committed = yield* state.commitTrigger(
-                scope,
+                scopeLabel,
                 row,
                 now,
                 (kind) => registry.has(kind),
                 (tx) =>
-                  runSynchronousTriggerCommit(scope, row.kind, () =>
+                  runSynchronousTriggerCommit(scopeLabel, row.kind, () =>
                     trigger.commitCancelled(intent, cancellationFor(row), tx),
                   ),
                 { requireUnclaimed: true, cancelled: true },
@@ -178,7 +191,7 @@ export const InMemoryTriggerPumpLive = (
         drainDue,
         drainUntilQuiet: (now, options) => drainTriggerPumpUntilQuiet(drainDue, now, options),
         cancelTrigger,
-        stuckTriggers: (now) => Effect.succeed({ stuck: state.stuckDueWork(now) }),
+        stuckTriggers: (now) => Effect.succeed({ stuck: state.stuckDueWork(identity, now) }),
       };
     }),
   );

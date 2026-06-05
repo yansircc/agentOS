@@ -7,8 +7,11 @@ import {
   SqlError,
 } from "@agent-os/kernel/errors";
 import type { LedgerEvent } from "@agent-os/kernel/types";
-import { Resources, type ResourceProjection } from "@agent-os/runtime";
-import type { InMemoryBackendState } from "./state";
+import { Resources, type LedgerTruthIdentity, type ResourceProjection } from "@agent-os/runtime";
+import {
+  inMemoryRuntimeEventIdentity,
+  type InMemoryBackendState,
+} from "./state";
 import { decodeOk, finiteNumberField, recordOf, stringField, type DecodeResult } from "./decode";
 
 interface ReservationState {
@@ -145,9 +148,9 @@ const projectResources = (
 
 const loadResourceState = (
   state: InMemoryBackendState,
-  scope: string,
+  identity: LedgerTruthIdentity,
 ): Effect.Effect<ProjectedResourceState, SqlError> =>
-  Effect.sync(() => projectResources(state.streamSnapshot(scope))).pipe(
+  Effect.sync(() => projectResources(state.eventSnapshot(inMemoryRuntimeEventIdentity(identity)))).pipe(
     Effect.flatMap((result) =>
       result.ok ? Effect.succeed(result.value) : Effect.fail(new SqlError({ cause: result.cause })),
     ),
@@ -155,7 +158,7 @@ const loadResourceState = (
 
 export const InMemoryResourcesLive = (state: InMemoryBackendState): Layer.Layer<Resources> =>
   Layer.succeed(Resources, {
-    grant: (scope, spec) =>
+    grant: (identity, spec) =>
       Effect.gen(function* () {
         yield* positiveAmount(spec.amount);
         const ts = yield* Clock.currentTimeMillis;
@@ -163,18 +166,18 @@ export const InMemoryResourcesLive = (state: InMemoryBackendState): Layer.Layer<
           {
             ts,
             kind: "resource_pool.granted",
-            scope,
+            ...identity,
             payload: { key: spec.key, amount: spec.amount, ref: spec.ref },
           },
         ]);
         return { eventId: event!.id };
       }),
 
-    reserve: (scope, spec) =>
+    reserve: (identity, spec) =>
       Effect.gen(function* () {
         yield* positiveAmount(spec.amount);
         const ts = yield* Clock.currentTimeMillis;
-        const projected = yield* loadResourceState(state, scope);
+        const projected = yield* loadResourceState(state, identity);
         const existing = projected.byIdempotencyKey.get(spec.idempotencyKey);
         if (existing !== undefined) return { reservationId: existing.reservationId };
 
@@ -184,7 +187,7 @@ export const InMemoryResourcesLive = (state: InMemoryBackendState): Layer.Layer<
             {
               ts,
               kind: "resource_pool.reserve_rejected",
-              scope,
+              ...identity,
               payload: {
                 key: spec.key,
                 amount: spec.amount,
@@ -208,7 +211,7 @@ export const InMemoryResourcesLive = (state: InMemoryBackendState): Layer.Layer<
           {
             ts,
             kind: "resource_pool.reserved",
-            scope,
+            ...identity,
             payload: {
               key: spec.key,
               amount: spec.amount,
@@ -221,10 +224,10 @@ export const InMemoryResourcesLive = (state: InMemoryBackendState): Layer.Layer<
         return { reservationId };
       }),
 
-    consume: (scope, spec) =>
+    consume: (identity, spec) =>
       Effect.gen(function* () {
         const ts = yield* Clock.currentTimeMillis;
-        const projected = yield* loadResourceState(state, scope);
+        const projected = yield* loadResourceState(state, identity);
         const reservation = projected.byId.get(spec.reservationId);
         if (reservation === undefined) {
           return yield* Effect.fail(
@@ -244,16 +247,16 @@ export const InMemoryResourcesLive = (state: InMemoryBackendState): Layer.Layer<
           {
             ts,
             kind: "resource_pool.consumed",
-            scope,
+            ...identity,
             payload: { reservationId: spec.reservationId, ref: spec.ref },
           },
         ]);
       }),
 
-    release: (scope, spec) =>
+    release: (identity, spec) =>
       Effect.gen(function* () {
         const ts = yield* Clock.currentTimeMillis;
-        const projected = yield* loadResourceState(state, scope);
+        const projected = yield* loadResourceState(state, identity);
         const reservation = projected.byId.get(spec.reservationId);
         if (reservation === undefined) {
           return yield* Effect.fail(
@@ -273,15 +276,15 @@ export const InMemoryResourcesLive = (state: InMemoryBackendState): Layer.Layer<
           {
             ts,
             kind: "resource_pool.released",
-            scope,
+            ...identity,
             payload: { reservationId: spec.reservationId, ref: spec.ref },
           },
         ]);
       }),
 
-    project: (scope, key) =>
+    project: (identity, key) =>
       Effect.map(
-        loadResourceState(state, scope),
+        loadResourceState(state, identity),
         (projected) => projected.byKey.get(key) ?? emptyResourceProjection(),
       ),
   });
