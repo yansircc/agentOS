@@ -41,13 +41,15 @@ import {
 import { CapabilityRejected, DurableTriggerAcquireCancelled } from "@agent-os/kernel/errors";
 import { boundaryPackage, defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
 import { eventNamespace, type ExtensionCapability } from "@agent-os/kernel/extensions";
-import { makePreClaim } from "@agent-os/kernel/effect-claim";
+import { makePreClaim, type FactOwnerRef } from "@agent-os/kernel/effect-claim";
 import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
 import { defineSettlementContract, settleLived } from "@agent-os/kernel/settlement-contract";
 import { defineTool, pureToolExecution } from "@agent-os/kernel/tools";
 import type { EventHandler } from "@agent-os/kernel/types";
 import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
 import { CloudflareMaterializedProjectionsLive } from "../src/materialized-projections";
+import { commitLedgerTransaction } from "../src/ledger/commit";
+import type { EventBusService } from "../src/ledger/event-bus";
 
 const allowToolAdmitter = () => ({ ok: true as const });
 
@@ -826,7 +828,38 @@ const MaterializedProjectionBaseDO = defineAgentDO<CloudflareAgentEnv>({
   projections: [materializedRunProjection],
 });
 
+const silentEventBus = {
+  fire: () => Effect.void,
+  fireMany: () => Effect.void,
+  fanoutDiagnostics: () => [],
+  subscribe: () => ({ unsubscribe: () => undefined }),
+} satisfies EventBusService;
+
 export class MaterializedProjectionTestDO extends MaterializedProjectionBaseDO {
+  async emitForFactOwner(
+    scopeId: string,
+    factOwnerRef: FactOwnerRef,
+    event: string,
+    data: unknown,
+  ): Promise<void> {
+    const identity = testTruthIdentity(scopeId);
+    const exit = await Effect.runPromiseExit(
+      commitLedgerTransaction(this.ctx, silentEventBus, { factOwnerRef }, (tx) => {
+        tx.append({
+          ts: Date.now(),
+          kind: event,
+          scopeRef: identity.scopeRef,
+          effectAuthorityRef: identity.effectAuthorityRef,
+          payload: data,
+        });
+      }),
+    );
+    if (Exit.isSuccess(exit)) return;
+    const failure = Cause.failureOption(exit.cause);
+    if (Option.isSome(failure)) return Promise.reject(failure.value);
+    return Promise.reject(exit.cause);
+  }
+
   async rebuildWithFailingProjection(
     spec: BackendProtocolEventIdentity & { readonly kind: string },
   ): Promise<MaterializedProjectionRebuildResult> {

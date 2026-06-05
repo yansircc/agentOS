@@ -533,12 +533,11 @@ export const CloudflareMaterializedProjectionsLive = (
                           `
                             SELECT *
                             FROM materialized_projection_rows
-                            WHERE scope_key = ? AND effect_authority_key = ? AND kind = ?
+                            WHERE event_identity_key = ? AND kind = ?
                             ORDER BY identity_key ASC
                             LIMIT ?
                           `,
-                          identityColumns.scope_key,
-                          identityColumns.effect_authority_key,
+                          identityColumns.event_identity_key,
                           spec.kind,
                           limit,
                         )
@@ -548,12 +547,11 @@ export const CloudflareMaterializedProjectionsLive = (
                           `
                             SELECT *
                             FROM materialized_projection_rows
-                            WHERE scope_key = ? AND effect_authority_key = ? AND kind = ? AND identity_key > ?
+                            WHERE event_identity_key = ? AND kind = ? AND identity_key > ?
                             ORDER BY identity_key ASC
                             LIMIT ?
                           `,
-                          identityColumns.scope_key,
-                          identityColumns.effect_authority_key,
+                          identityColumns.event_identity_key,
                           spec.kind,
                           spec.afterKey,
                           limit,
@@ -593,10 +591,9 @@ export const CloudflareMaterializedProjectionsLive = (
                   sql.exec(
                     `
                       DELETE FROM materialized_projection_rows
-                      WHERE scope_key = ? AND effect_authority_key = ? AND kind = ?
+                      WHERE event_identity_key = ? AND kind = ?
                     `,
-                    identityColumns.scope_key,
-                    identityColumns.effect_authority_key,
+                    identityColumns.event_identity_key,
                     spec.kind,
                   );
                   sql.exec(

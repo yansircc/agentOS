@@ -112,4 +112,60 @@ describe("materialized projections — Cloudflare DO", () => {
       });
     });
   });
+
+  it("keeps projection list and rebuild isolated by fact owner", async () => {
+    const scope = "materialized-projection-owner-isolation";
+    const stub = testEnv.MATERIALIZED_PROJECTION_DO.get(
+      testEnv.MATERIALIZED_PROJECTION_DO.idFromName(scope),
+    );
+    const identity = testEventIdentity(scope);
+    const otherIdentity = {
+      ...testTruthIdentity(scope),
+      factOwnerRef: "@agent-os/other-test",
+    };
+
+    await runInDurableObject(stub, async (instance) => {
+      await instance.emit("run.requested", { runId: "runtime" });
+      await instance.emit("run.completed", { runId: "runtime", handoff: "runtime" });
+      await instance.emitForFactOwner(scope, "@agent-os/other-test", "run.requested", {
+        runId: "other",
+      });
+      await instance.emitForFactOwner(scope, "@agent-os/other-test", "run.completed", {
+        runId: "other",
+        handoff: "other",
+      });
+
+      await expect(instance.projectionList({ kind: "run.workflow", ...identity })).resolves.toEqual(
+        [
+          expect.objectContaining({
+            identityKey: "runtime",
+            state: { runId: "runtime", status: "completed", handoff: "runtime" },
+          }),
+        ],
+      );
+      await expect(
+        instance.projectionList({ kind: "run.workflow", ...otherIdentity }),
+      ).resolves.toEqual([
+        expect.objectContaining({
+          identityKey: "other",
+          state: { runId: "other", status: "completed", handoff: "other" },
+        }),
+      ]);
+
+      await expect(
+        instance.projectionRebuild({ kind: "run.workflow", ...identity }),
+      ).resolves.toMatchObject({
+        rows: 1,
+        lastRebuiltEventId: 2,
+      });
+      await expect(
+        instance.projectionList({ kind: "run.workflow", ...otherIdentity }),
+      ).resolves.toEqual([
+        expect.objectContaining({
+          identityKey: "other",
+          state: { runId: "other", status: "completed", handoff: "other" },
+        }),
+      ]);
+    });
+  });
 });
