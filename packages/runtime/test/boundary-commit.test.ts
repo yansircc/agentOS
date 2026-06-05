@@ -111,54 +111,53 @@ describe("boundary commit validation", () => {
     ).toMatchObject({ issue: "claim_settlement_invalid" });
   });
 
-  it("injects contract-owned identity into the commit callback", () => {
-    const result = Effect.runSync(
-      commitBoundaryEvent(contract, "slot.ledgered", { claim: livedClaim }, (identity) => {
-        expect(identity).toEqual({
-          kind: "slot.ledgered",
-          factOwnerRef: "@agent-os/slot-vocab",
-          scopeRef: claim.scopeRef,
-          effectAuthorityRef: claim.effectAuthorityRef,
-        });
-        return Effect.succeed(eventFor({ claim: livedClaim }));
-      }),
-    );
+  it.effect("injects contract-owned identity into the commit callback", () =>
+    Effect.gen(function* () {
+      const result = yield* commitBoundaryEvent(
+        contract,
+        "slot.ledgered",
+        { claim: livedClaim },
+        (identity) => {
+          expect(identity).toEqual({
+            kind: "slot.ledgered",
+            factOwnerRef: "@agent-os/slot-vocab",
+            scopeRef: claim.scopeRef,
+            effectAuthorityRef: claim.effectAuthorityRef,
+          });
+          return Effect.succeed(eventFor({ claim: livedClaim }));
+        },
+      );
 
-    expect(result).toMatchObject({
-      kind: "slot.ledgered",
-      factOwnerRef: "@agent-os/slot-vocab",
-      scopeRef: claim.scopeRef,
-      effectAuthorityRef: claim.effectAuthorityRef,
-    });
-  });
+      expect(result).toMatchObject({
+        kind: "slot.ledgered",
+        factOwnerRef: "@agent-os/slot-vocab",
+        scopeRef: claim.scopeRef,
+        effectAuthorityRef: claim.effectAuthorityRef,
+      });
+    }),
+  );
 
-  it("rejects committed events with caller-controlled owner, kind, scope, or authority", () => {
-    const owner = Effect.runSync(
-      Effect.either(
+  it.effect("rejects committed events with caller-controlled owner, kind, scope, or authority", () =>
+    Effect.gen(function* () {
+      const owner = yield* Effect.either(
         commitBoundaryEvent(contract, "slot.ledgered", { claim: livedClaim }, () =>
           Effect.succeed(eventFor({ claim: livedClaim, factOwnerRef: "@other/package" })),
         ),
-      ),
-    );
-    const kind = Effect.runSync(
-      Effect.either(
+      );
+      const kind = yield* Effect.either(
         commitBoundaryEvent(contract, "slot.ledgered", { claim: livedClaim }, () =>
           Effect.succeed(eventFor({ claim: livedClaim, kind: "slot.other" })),
         ),
-      ),
-    );
-    const scope = Effect.runSync(
-      Effect.either(
+      );
+      const scope = yield* Effect.either(
         commitBoundaryEvent(contract, "slot.ledgered", { claim: livedClaim }, () =>
           Effect.succeed({
             ...eventFor({ claim: livedClaim }),
             scopeRef: { kind: "conversation", scopeId: "thread:2" },
           }),
         ),
-      ),
-    );
-    const authority = Effect.runSync(
-      Effect.either(
+      );
+      const authority = yield* Effect.either(
         commitBoundaryEvent(contract, "slot.ledgered", { claim: livedClaim }, () =>
           Effect.succeed(
             eventFor({
@@ -167,66 +166,66 @@ describe("boundary commit validation", () => {
             }),
           ),
         ),
-      ),
-    );
+      );
 
-    expect(Either.isLeft(owner) ? owner.left : null).toMatchObject({
-      issue: "committed_fact_owner_mismatch",
-    });
-    expect(Either.isLeft(kind) ? kind.left : null).toMatchObject({
-      issue: "committed_event_kind_mismatch",
-    });
-    expect(Either.isLeft(scope) ? scope.left : null).toMatchObject({
-      issue: "committed_scope_ref_mismatch",
-    });
-    expect(Either.isLeft(authority) ? authority.left : null).toMatchObject({
-      issue: "committed_effect_authority_mismatch",
-    });
-  });
+      expect(Either.isLeft(owner) ? owner.left : null).toMatchObject({
+        issue: "committed_fact_owner_mismatch",
+      });
+      expect(Either.isLeft(kind) ? kind.left : null).toMatchObject({
+        issue: "committed_event_kind_mismatch",
+      });
+      expect(Either.isLeft(scope) ? scope.left : null).toMatchObject({
+        issue: "committed_scope_ref_mismatch",
+      });
+      expect(Either.isLeft(authority) ? authority.left : null).toMatchObject({
+        issue: "committed_effect_authority_mismatch",
+      });
+    }),
+  );
 
-  it("rejects undeclared claim authority before commit", () => {
-    const proofStore = materialRequirement({
-      slot: "proof_store",
-      kind: "binding",
-      provider: "example",
-    });
-    const authorityContract = defineBoundaryContract({
-      ...contract,
-      effectAuthorityContracts: [
+  it.effect("rejects undeclared claim authority before commit", () =>
+    Effect.gen(function* () {
+      const proofStore = materialRequirement({
+        slot: "proof_store",
+        kind: "binding",
+        provider: "example",
+      });
+      const authorityContract = defineBoundaryContract({
+        ...contract,
+        effectAuthorityContracts: [
+          {
+            effectAuthorityRef: claim.effectAuthorityRef,
+            requiredMaterials: [proofStore],
+          },
+        ],
+        materialRequirements: [proofStore],
+      });
+      const undeclaredClaim = settleLived(
+        settlement,
         {
-          effectAuthorityRef: claim.effectAuthorityRef,
-          requiredMaterials: [proofStore],
+          ...claim,
+          effectAuthorityRef: {
+            authorityClass: "effect",
+            authorityId: "undeclared.record",
+          },
         },
-      ],
-      materialRequirements: [proofStore],
-    });
-    const undeclaredClaim = settleLived(
-      settlement,
-      {
-        ...claim,
-        effectAuthorityRef: {
-          authorityClass: "effect",
-          authorityId: "undeclared.record",
+        {
+          anchorKind: "ledger_event",
+          anchorId: "event:1",
         },
-      },
-      {
-        anchorKind: "ledger_event",
-        anchorId: "event:1",
-      },
-    );
-    let committed = false;
-    const result = Effect.runSync(
-      Effect.either(
+      );
+      let committed = false;
+      const result = yield* Effect.either(
         commitBoundaryEvent(authorityContract, "slot.ledgered", { claim: undeclaredClaim }, () => {
           committed = true;
           return Effect.succeed(eventFor({ claim: undeclaredClaim }));
         }),
-      ),
-    );
+      );
 
-    expect(committed).toBe(false);
-    expect(Either.isLeft(result) ? result.left : null).toMatchObject({
-      issue: "claim_authority_invalid",
-    });
-  });
+      expect(committed).toBe(false);
+      expect(Either.isLeft(result) ? result.left : null).toMatchObject({
+        issue: "claim_authority_invalid",
+      });
+    }),
+  );
 });
