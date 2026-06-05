@@ -1,0 +1,46 @@
+# External Concept Map
+
+agentOS maps external framework vocabulary onto generated primitive ids. External
+terms are useful for orientation, but they do not own agentOS facts.
+
+## AG-UI
+
+AG-UI is an edge protocol projection. In agentOS, the runtime-owned source facts
+remain ledger events, and the browser-facing projection is named by
+`primitive.ag-ui.projectLedgerEventToAgUiEnvelope`,
+`primitive.ag-ui.projectAgUiFrames`, and
+`primitive.ag-ui-svelte.agUiProjectionReadable`.
+
+## Effect Schema
+
+Effect Schema is the schema source. `primitive.kernel.AgentSchema` is the
+agentOS wrapper that derives provider-specific schema projections and stable
+fingerprints. Products should not hand-write parallel JSON Schema facts for
+agent tools or structured output.
+
+## Effect AI
+
+Effect AI is provider transport. It maps to `primitive.runtime.LlmTransport` and
+feeds `primitive.runtime.SubmitSpec`; it does not own admission evidence,
+budgeting, ledger facts, or terminal run facts.
+
+## Cloudflare Durable Objects
+
+Cloudflare Durable Objects are a backend implementation. They can implement
+`primitive.runtime.Ledger` and `primitive.runtime.MaterializedProjections`, but
+the D10 truth identity stays `scopeRef` plus `effectAuthorityRef`; SQL row shape
+is adapter-owned, not shared substrate language.
+
+## Generated Agent Docs
+
+The generated concept route is:
+
+- `external.ag-ui` to AG-UI projection primitives.
+- `external.effect-schema` to `primitive.kernel.AgentSchema`.
+- `external.effect-ai` to `primitive.runtime.LlmTransport`.
+- `external.cloudflare-durable-object` to runtime ledger and projection
+  services.
+
+The canonical generated source for those mappings is
+`docs/agent/external-vocabulary.source.json`; this page explains why the mapping
+exists.

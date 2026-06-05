@@ -1,0 +1,257 @@
+{
+  "generatedBy": "scripts/generate-agent-docs.mjs",
+  "source": [
+    "docs/agent/invariants.source.json",
+    "exported TSDoc @agentosInvariant tags",
+    "docs/agent/error-metadata.source.json"
+  ],
+  "invariants": [
+    {
+      "invariant": "invariant.algebra.type-or-boot-proof",
+      "statement": "Already-clear algebra must become type-proof or boot-proof.",
+      "primitives": [
+        "primitive.kernel.EffectClaim",
+        "primitive.kernel.ExecutionDomain",
+        "primitive.kernel.ExecutionDomainDeclaration",
+        "primitive.kernel.ExecutionDomainRegistry",
+        "primitive.kernel.LivedClaim",
+        "primitive.kernel.PreClaim",
+        "primitive.kernel.RejectedClaim",
+        "primitive.kernel.Tool",
+        "primitive.kernel.ToolAdmitInput",
+        "primitive.kernel.ToolExecution",
+        "primitive.kernel.ToolExecutionContext"
+      ],
+      "errors": [
+        "agent_os.invalid_resource_amount",
+        "agent_os.sandbox_policy_denied"
+      ],
+      "docs": [
+        "docs/boundary-contract.md",
+        "docs/concepts/tool-execution-domain.md",
+        "docs/packages/resource-carrier.md",
+        "docs/packages/sandbox.md",
+        "docs/README.md"
+      ],
+      "tests": [
+        "packages/kernel/test/effect-claim.test.ts",
+        "packages/kernel/test/tools.test.ts"
+      ],
+      "decisions": [
+        "decisions/a64-shape-first-over-n2.md"
+      ]
+    },
+    {
+      "invariant": "invariant.ledger.single-commit-source",
+      "statement": "Every ledger fact has one commit primitive as its source generator.",
+      "primitives": [
+        "primitive.runtime.Ledger",
+        "primitive.runtime.LedgerCommitEventSpec"
+      ],
+      "errors": [
+        "agent_os.durable_trigger_acquire_cancelled",
+        "agent_os.durable_trigger_commit_returned_thenable",
+        "agent_os.durable_trigger_drain_limit_exceeded",
+        "agent_os.invalid_schedule_at",
+        "agent_os.json_stringify_error",
+        "agent_os.resource_insufficient",
+        "agent_os.resource_reservation_closed",
+        "agent_os.resource_reservation_not_found",
+        "agent_os.sql_error",
+        "agent_os.trigger_factory_error",
+        "agent_os.unregistered_durable_trigger_kind"
+      ],
+      "docs": [
+        "docs/concepts/durable-process-algebra.md",
+        "docs/concepts/durable-truth.md",
+        "docs/packages/resource-carrier.md"
+      ],
+      "tests": [
+        "packages/backends/cloudflare-do/test/ledger-commit-contract.test.ts",
+        "packages/backends/in-memory/test/commit-fanout-contract.test.ts"
+      ],
+      "decisions": []
+    },
+    {
+      "invariant": "invariant.algebra.single-code-source",
+      "statement": "Every algebra has one code source; projections and docs derive from that source.",
+      "primitives": [
+        "primitive.ag-ui-svelte.agUiProjectionReadable",
+        "primitive.ag-ui.projectAgUiFrames",
+        "primitive.ag-ui.projectAgUiFramesToActivities",
+        "primitive.ag-ui.projectLedgerEventToAgUiEnvelope",
+        "primitive.ag-ui.projectLedgerSseToAgUiSse",
+        "primitive.kernel.AgentSchema",
+        "primitive.kernel.AgentSchemaProjections",
+        "primitive.kernel.projectAgentSchema"
+      ],
+      "errors": [
+        "agent_os.effect_ai_json_encode_failed",
+        "agent_os.effect_ai_missing_usage",
+        "agent_os.effect_ai_provider_executed_tool_rejected",
+        "agent_os.effect_ai_tool_handler_called",
+        "agent_os.effect_ai_unsupported_output_part",
+        "agent_os.provider_output_decode_error"
+      ],
+      "docs": [
+        "docs/concepts/ag-ui-wire-adapter.md",
+        "docs/concepts/agent-schema.md",
+        "docs/packages/llm-transport-effect-ai.md",
+        "docs/verification.md"
+      ],
+      "tests": [
+        "packages/runtime/test/runtime-events.test.ts",
+        "scripts/check-public-api.mjs"
+      ],
+      "decisions": [
+        "decisions/a52-documentation-substrate.md",
+        "decisions/a53-tsdoc-api-reference.md"
+      ]
+    },
+    {
+      "invariant": "invariant.boundary.runtime-validation-external-only",
+      "statement": "Runtime validation is only for unknown external input, not internally constructed states.",
+      "primitives": [
+        "primitive.kernel.EffectClaim",
+        "primitive.runtime.LlmTransport"
+      ],
+      "errors": [
+        "agent_os.backend_protocol_parse_failure",
+        "agent_os.cloudflare_worker_bundle_resolution_failure",
+        "agent_os.cloudflare_worker_deploy_resolution_failure",
+        "agent_os.dispatch_payload_parse_failure",
+        "agent_os.dynamic_worker_failure",
+        "agent_os.dynamic_worker_policy_denied",
+        "agent_os.dynamic_worker_policy_violation",
+        "agent_os.dynamic_worker_provider_failure",
+        "agent_os.effect_ai_aborted",
+        "agent_os.effect_ai_prompt_error",
+        "agent_os.effect_ai_unsupported_route",
+        "agent_os.invalid_trace_context",
+        "agent_os.llm_call_timed_out",
+        "agent_os.llm_call_timeout",
+        "agent_os.provider_http_failure",
+        "agent_os.ref_resolution_failed",
+        "agent_os.sandbox_failure",
+        "agent_os.tenant_credential_resolver_configuration_error"
+      ],
+      "docs": [
+        "docs/boundary-contract.md",
+        "docs/concepts/agent-schema.md",
+        "docs/concepts/carriers-and-material.md",
+        "docs/packages/backend-protocol.md",
+        "docs/packages/deploy-cloudflare.md",
+        "docs/packages/dynamic-worker.md",
+        "docs/packages/llm-transport-effect-ai.md",
+        "docs/packages/runtime.md",
+        "docs/packages/sandbox.md",
+        "docs/packages/tenant-material.md",
+        "docs/README.md"
+      ],
+      "tests": [
+        "packages/kernel/test/effect-claim.test.ts",
+        "packages/runtime/test/runtime-events.test.ts"
+      ],
+      "decisions": [
+        "decisions/a64-shape-first-over-n2.md"
+      ]
+    },
+    {
+      "invariant": "invariant.d10.truth-identity",
+      "statement": "For each scopeRef and effectAuthorityRef, ledger facts are the only durable truth and observable state is recomputed from those facts.",
+      "primitives": [
+        "primitive.kernel.AuthorityRef",
+        "primitive.kernel.BoundaryContract",
+        "primitive.kernel.BoundaryProjectionContract",
+        "primitive.kernel.EffectAuthorityContract",
+        "primitive.kernel.LedgerEvent",
+        "primitive.kernel.MaterialRef",
+        "primitive.kernel.ScopeRef",
+        "primitive.kernel.ToolContract",
+        "primitive.runtime.defineProjection",
+        "primitive.runtime.Ledger",
+        "primitive.runtime.LedgerTruthIdentity",
+        "primitive.runtime.MaterializedProjectionDefinition",
+        "primitive.runtime.MaterializedProjections",
+        "primitive.runtime.ProjectionIdentifyResult",
+        "primitive.runtime.ProjectionReduceContext",
+        "primitive.runtime.ProjectionReduceResult",
+        "primitive.runtime.projectRunStatus",
+        "primitive.runtime.projectRunTrace",
+        "primitive.runtime.projectSubmitResult",
+        "primitive.runtime.SubmitResult",
+        "primitive.runtime.SubmitSpec"
+      ],
+      "errors": [
+        "agent_os.boundary_commit_rejected",
+        "agent_os.dispatch_binding_ref_malformed",
+        "agent_os.dispatch_scope_mismatch",
+        "agent_os.dispatch_target_not_found",
+        "agent_os.legacy_ledger_schema",
+        "agent_os.projection_application_error",
+        "agent_os.projection_reducer_returned_thenable",
+        "agent_os.projection_registry_error",
+        "agent_os.scope_missing",
+        "agent_os.stream_identity_error",
+        "agent_os.unregistered_projection_kind",
+        "agent_os.unsupported_scope_ref"
+      ],
+      "docs": [
+        "docs/boundary-contract.md",
+        "docs/concepts/carriers-and-material.md",
+        "docs/concepts/durable-truth.md",
+        "docs/concepts/materialized-projections.md",
+        "docs/concepts/tool-execution-domain.md",
+        "docs/packages/backend-cloudflare-do.md",
+        "docs/tutorials/streaming-chatbot.md"
+      ],
+      "tests": [
+        "packages/backends/protocol/test/contract/runtime-backend-contract.ts",
+        "packages/backends/cloudflare-do/test/backend-protocol-contract.test.ts",
+        "packages/backends/in-memory/test/backend-protocol-contract.test.ts"
+      ],
+      "decisions": []
+    },
+    {
+      "invariant": "invariant.d10.namespace-integrity",
+      "statement": "For each factOwnerRef, event kind ownership is declared once; commit injects factOwnerRef and rejects owner/kind mismatch.",
+      "primitives": [
+        "primitive.kernel.BoundaryContract",
+        "primitive.kernel.FactOwnerRef",
+        "primitive.kernel.LedgerEvent"
+      ],
+      "errors": [
+        "agent_os.boundary_commit_rejected",
+        "agent_os.capability_rejected",
+        "agent_os.extension_capability_conflict"
+      ],
+      "docs": [
+        "docs/boundary-contract.md",
+        "docs/concepts/durable-truth.md"
+      ],
+      "tests": [
+        "packages/runtime/test/boundary-commit.test.ts",
+        "packages/backends/cloudflare-do/test/extension-capability.worker.test.ts"
+      ],
+      "decisions": []
+    },
+    {
+      "invariant": "invariant.docs.agent-projection",
+      "statement": "Agent-facing docs indexes are projections; source JSON and exported TSDoc own routable ids.",
+      "primitives": [],
+      "errors": [],
+      "docs": [
+        "docs/verification.md"
+      ],
+      "tests": [
+        "scripts/generate-docs.mjs",
+        "scripts/check-doc-structure.mjs",
+        "scripts/check-public-api.mjs"
+      ],
+      "decisions": [
+        "decisions/a52-documentation-substrate.md",
+        "decisions/a53-tsdoc-api-reference.md"
+      ]
+    }
+  ]
+}

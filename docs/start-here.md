@@ -6,11 +6,12 @@ Agent-facing docs are generated projections. Source facts live in `docs/agent/*.
 
 ## Navigation
 
-| Surface    | Generated File                                  |
-| ---------- | ----------------------------------------------- |
-| Recipes    | [docs/agent/recipes.json](agent/recipes.json)   |
-| Primitives | [docs/agent/primitives.md](agent/primitives.md) |
-| Errors     | [docs/agent/errors.md](agent/errors.md)         |
+| Surface          | Generated File                                              |
+| ---------------- | ----------------------------------------------------------- |
+| Recipes          | [docs/agent/recipes.json](agent/recipes.json)               |
+| Primitives       | [docs/agent/primitives.md](agent/primitives.md)             |
+| Errors           | [docs/agent/errors.md](agent/errors.md)                     |
+| Invariant Matrix | [docs/agent/invariant-matrix.md](agent/invariant-matrix.md) |
 
 ## Recipes
 

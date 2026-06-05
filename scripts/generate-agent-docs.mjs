@@ -260,6 +260,50 @@ const errorsJson = {
   errors,
 };
 
+const unique = (values) => [...new Set(values)].sort((left, right) => left.localeCompare(right));
+
+const invariantMatrix = invariantsSource.invariants.map((invariant) => {
+  const invariantPrimitives = primitives
+    .filter((primitive) => primitive.invariants.includes(invariant.id))
+    .map((primitive) => primitive.id);
+  const invariantErrors = errors
+    .filter((error) => error.invariants.includes(invariant.id))
+    .map((error) => error.tag);
+  const docs = unique([
+    invariant.docs,
+    ...primitives
+      .filter((primitive) => primitive.invariants.includes(invariant.id))
+      .map((primitive) => primitive.docs),
+    ...errors.filter((error) => error.invariants.includes(invariant.id)).map((error) => error.docs),
+  ]);
+  return {
+    invariant: invariant.id,
+    statement: invariant.statement,
+    primitives: invariantPrimitives,
+    errors: invariantErrors,
+    docs,
+    tests: invariant.tests,
+    decisions: invariant.decisions,
+  };
+});
+
+for (const row of invariantMatrix) {
+  if (row.docs.length === 0) {
+    failures.push(`${row.invariant} has no docs mapping`);
+  }
+  for (const test of row.tests) ensurePath(test, row.invariant);
+}
+
+const invariantMatrixJson = {
+  generatedBy: "scripts/generate-agent-docs.mjs",
+  source: [
+    "docs/agent/invariants.source.json",
+    "exported TSDoc @agentosInvariant tags",
+    "docs/agent/error-metadata.source.json",
+  ],
+  invariants: invariantMatrix,
+};
+
 const startHere = [
   generatedNotice("docs/agent/*.source.json and exported TSDoc @agentosPrimitive tags"),
   "",
@@ -275,6 +319,10 @@ const startHere = [
       ["Recipes", mdLink("docs/start-here.md", "docs/agent/recipes.json", "docs/agent/recipes.json")],
       ["Primitives", mdLink("docs/start-here.md", "docs/agent/primitives.md", "docs/agent/primitives.md")],
       ["Errors", mdLink("docs/start-here.md", "docs/agent/errors.md", "docs/agent/errors.md")],
+      [
+        "Invariant Matrix",
+        mdLink("docs/start-here.md", "docs/agent/invariant-matrix.md", "docs/agent/invariant-matrix.md"),
+      ],
     ],
   ),
   "",
@@ -325,12 +373,36 @@ const errorsMd = [
   "",
 ].join("\n");
 
+const invariantMatrixMd = [
+  generatedNotice(
+    "docs/agent/invariants.source.json, exported TSDoc @agentosInvariant tags, and docs/agent/error-metadata.source.json",
+  ),
+  "",
+  "# Agent Invariant Matrix",
+  "",
+  table(
+    ["Invariant", "Primitives", "Errors", "Docs", "Tests"],
+    invariantMatrix.map((row) => [
+      `\`${row.invariant}\``,
+      row.primitives.map((primitive) => `\`${primitive}\``).join(", "),
+      row.errors.map((error) => `\`${error}\``).join(", "),
+      row.docs
+        .map((doc) => mdLink("docs/agent/invariant-matrix.md", path.posix.basename(doc), doc))
+        .join(", "),
+      row.tests.map((test) => `\`${test}\``).join(", "),
+    ]),
+  ),
+  "",
+].join("\n");
+
 if (failures.length === 0) {
   writeJson("docs/agent/recipes.json", recipesJson);
   writeJson("docs/agent/primitives.json", primitivesJson);
   write("docs/agent/primitives.md", primitivesMd);
   writeJson("docs/agent/errors.json", errorsJson);
   write("docs/agent/errors.md", errorsMd);
+  writeJson("docs/agent/invariant-matrix.json", invariantMatrixJson);
+  write("docs/agent/invariant-matrix.md", invariantMatrixMd);
   write("docs/start-here.md", startHere);
 }
 
