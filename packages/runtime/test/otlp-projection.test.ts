@@ -14,6 +14,10 @@ import {
 } from "../src/runtime-events";
 
 const scope = "otlp-projection";
+const runtimeIdentity = {
+  scopeRef: { kind: "conversation" as const, scopeId: scope },
+  effectAuthorityRef: { authorityClass: "test", authorityId: scope },
+};
 const eventIdentity = (scopeId: string) => ({
   scopeRef: { kind: "conversation" as const, scopeId },
   factOwnerRef: "@agent-os/test",
@@ -41,7 +45,9 @@ const event = (id: number, spec: RuntimeEventCommitSpec, ts = id * 10): LedgerEv
   id,
   ts,
   kind: spec.kind,
-  ...eventIdentity(spec.scope),
+  scopeRef: spec.scopeRef,
+  effectAuthorityRef: spec.effectAuthorityRef,
+  factOwnerRef: "@agent-os/test",
   payload: spec.payload,
 });
 
@@ -59,11 +65,11 @@ const spanJson = (events: ReadonlyArray<LedgerEvent>): string =>
 describe("OTLP trace projection", () => {
   it("derives ordered spans from ledger/runtime facts without writing trace facts", () => {
     const projection = projectOtlpSpans([
-      event(1, agentRunStartedEvent({ scope, intent: "secret prompt", traceContext }), 100),
+      event(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "secret prompt", traceContext }), 100),
       event(
         2,
         chatIngestedEvent({
-          scope,
+          ...runtimeIdentity,
           runId: 1,
           intent: "secret prompt",
           context: { credential: "sk-secret" },
@@ -74,7 +80,7 @@ describe("OTLP trace projection", () => {
       event(
         3,
         llmResponseEvent({
-          scope,
+          ...runtimeIdentity,
           turn: { id: 1, index: 0 },
           items: [{ type: "message", text: "secret completion" }],
           usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
@@ -85,7 +91,7 @@ describe("OTLP trace projection", () => {
       event(
         4,
         toolExecutedEvent({
-          scope,
+          ...runtimeIdentity,
           runId: 1,
           toolCallId: "call-1",
           name: "lookup",
@@ -110,7 +116,7 @@ describe("OTLP trace projection", () => {
       event(
         6,
         agentRunCompletedEvent({
-          scope,
+          ...runtimeIdentity,
           runId: 1,
           final: "done",
           output: "done",
@@ -146,11 +152,11 @@ describe("OTLP trace projection", () => {
 
   it("redacts content and sensitive provider/material data by default", () => {
     const json = spanJson([
-      event(1, agentRunStartedEvent({ scope, intent: "secret prompt", traceContext })),
+      event(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "secret prompt", traceContext })),
       event(
         2,
         chatIngestedEvent({
-          scope,
+          ...runtimeIdentity,
           runId: 1,
           intent: "secret prompt",
           context: { credential: "sk-secret" },
@@ -160,7 +166,7 @@ describe("OTLP trace projection", () => {
       event(
         3,
         llmResponseEvent({
-          scope,
+          ...runtimeIdentity,
           turn: { id: 1, index: 0 },
           items: [{ type: "message", text: "secret completion" }],
           usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
@@ -170,7 +176,7 @@ describe("OTLP trace projection", () => {
       event(
         4,
         toolExecutedEvent({
-          scope,
+          ...runtimeIdentity,
           runId: 1,
           toolCallId: "call-1",
           name: "lookup",
@@ -188,7 +194,7 @@ describe("OTLP trace projection", () => {
       event(
         6,
         agentRunAbortedEvent({
-          scope,
+          ...runtimeIdentity,
           kind: ABORT.TOOL_ERROR,
           runId: 1,
           tokensUsed: 2,

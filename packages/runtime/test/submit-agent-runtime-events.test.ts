@@ -4,7 +4,7 @@ import type { LlmRequest, LlmResponse } from "@agent-os/kernel/llm";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import { defineTool, pureToolExecution } from "@agent-os/kernel/tools";
 import { Admission } from "../src/admission";
-import { Ledger } from "../src/ledger";
+import { Ledger, RUNTIME_FACT_OWNER } from "../src/ledger";
 import { LlmTransport } from "../src/llm-transport";
 import { Quota } from "../src/quota-service";
 import { submitAgentEffect } from "../src/submit-agent";
@@ -12,11 +12,6 @@ import type { InternalSubmitSpec } from "../src/submit";
 import { decodeRuntimeLedgerEvent } from "../src/runtime-events";
 
 const scope = "submit-runtime-events";
-const eventIdentity = (scopeId: string) => ({
-  scopeRef: { kind: "conversation" as const, scopeId },
-  factOwnerRef: "@agent-os/test",
-  effectAuthorityRef: { authorityClass: "test", authorityId: scopeId },
-});
 const traceContext = {
   traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
   tracestate: "vendor=value",
@@ -54,7 +49,8 @@ const makeServices = (responses: ReadonlyArray<LlmResponse> = [response()]) => {
       specs: ReadonlyArray<{
         readonly kind: string;
         readonly payload: unknown;
-        readonly scope: string;
+        readonly scopeRef: LedgerEvent["scopeRef"];
+        readonly effectAuthorityRef: LedgerEvent["effectAuthorityRef"];
         readonly ts?: number;
       }>,
     ) =>
@@ -65,7 +61,9 @@ const makeServices = (responses: ReadonlyArray<LlmResponse> = [response()]) => {
             id,
             ts: spec.ts ?? id * 10,
             kind: spec.kind,
-            ...eventIdentity(spec.scope),
+            scopeRef: spec.scopeRef,
+            effectAuthorityRef: spec.effectAuthorityRef,
+            factOwnerRef: RUNTIME_FACT_OWNER,
             payload: spec.payload,
           };
         });

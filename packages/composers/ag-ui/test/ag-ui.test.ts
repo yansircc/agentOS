@@ -10,6 +10,7 @@ import {
   agentRunAbortedEvent,
   agentRunCompletedEvent,
   agentRunStartedEvent,
+  type RuntimeEventCommitSpec,
 } from "@agent-os/runtime/runtime-events";
 import { settleToolExecuted } from "@agent-os/runtime";
 import {
@@ -35,6 +36,11 @@ import {
 
 const scope = "ag-ui-test";
 
+const runtimeIdentity = {
+  scopeRef: { kind: "conversation" as const, scopeId: scope },
+  effectAuthorityRef: { authorityClass: "test", authorityId: scope },
+};
+
 const eventIdentity = (scopeId: string) => ({
   scopeRef: { kind: "conversation" as const, scopeId },
   factOwnerRef: "@agent-os/test",
@@ -43,12 +49,14 @@ const eventIdentity = (scopeId: string) => ({
 
 const commit = (
   id: number,
-  spec: { kind: string; scope: string; payload: unknown },
+  spec: RuntimeEventCommitSpec,
 ): LedgerEvent => ({
   id,
   ts: id * 10,
   kind: spec.kind,
-  ...eventIdentity(spec.scope),
+  scopeRef: spec.scopeRef,
+  effectAuthorityRef: spec.effectAuthorityRef,
+  factOwnerRef: "@agent-os/test",
   payload: spec.payload,
 });
 
@@ -60,11 +68,11 @@ const toolClaim = makePreClaim({
 });
 
 const transcript = (): ReadonlyArray<LedgerEvent> => [
-  commit(1, agentRunStartedEvent({ scope, intent: "find weather" })),
+  commit(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "find weather" })),
   commit(
     2,
     chatIngestedEvent({
-      scope,
+      ...runtimeIdentity,
       runId: 1,
       intent: "find weather",
       context: { hidden: "not projected" },
@@ -73,7 +81,7 @@ const transcript = (): ReadonlyArray<LedgerEvent> => [
   commit(
     3,
     llmResponseEvent({
-      scope,
+      ...runtimeIdentity,
       turn: { id: 1, index: 0 },
       items: [
         { type: "message", text: "Checking." },
@@ -98,7 +106,7 @@ const transcript = (): ReadonlyArray<LedgerEvent> => [
   commit(
     4,
     toolExecutedEvent({
-      scope,
+      ...runtimeIdentity,
       runId: 1,
       toolCallId: "call-1",
       name: "lookup",
@@ -122,7 +130,7 @@ const transcript = (): ReadonlyArray<LedgerEvent> => [
   commit(
     5,
     agentRunCompletedEvent({
-      scope,
+      ...runtimeIdentity,
       runId: 1,
       final: "Done.",
       output: "Done.",
@@ -418,11 +426,11 @@ describe("@agent-os/ag-ui", () => {
 
   it("maps aborts to AG-UI run errors with the run id retained", () => {
     const frames = projectLedgerEventsToAgUiFrames([
-      commit(1, agentRunStartedEvent({ scope, intent: "too much" })),
+      commit(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "too much" })),
       commit(
         2,
         agentRunAbortedEvent({
-          scope,
+          ...runtimeIdentity,
           kind: "agent.aborted.budget_tokens",
           runId: 1,
           tokensUsed: 20,

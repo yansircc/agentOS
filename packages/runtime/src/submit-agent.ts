@@ -40,7 +40,7 @@ import {
 } from "@agent-os/kernel/trace-context";
 import { ABORT, type AbortKind } from "./abort";
 import { LlmTransport } from "./llm-transport";
-import { Ledger, type LedgerCommitEventSpec } from "./ledger";
+import { Ledger, type LedgerCommitEventSpec, type LedgerTruthIdentity } from "./ledger";
 import type { RefResolutionFailed } from "@agent-os/kernel/ref-resolver";
 import { Quota } from "./quota-service";
 import {
@@ -178,7 +178,7 @@ const submitResultFromEvents = (
 const finalAbort = (
   kind: AbortKind,
   payload: Record<string, unknown>,
-  scope: string,
+  identity: LedgerTruthIdentity,
   runId: number,
   tokensUsed: number,
   traceContext?: TraceContext,
@@ -187,9 +187,9 @@ const finalAbort = (
     const ledger = yield* Ledger;
     yield* logRuntimeLedgerEvent(
       ledger,
-      agentRunAbortedEvent({ scope, kind, runId, tokensUsed, payload, traceContext }),
+      agentRunAbortedEvent({ ...identity, kind, runId, tokensUsed, payload, traceContext }),
     );
-    const events = yield* ledger.events(scope);
+    const events = yield* ledger.events(identity);
     return yield* submitResultFromEvents(events, runId);
   });
 
@@ -218,7 +218,7 @@ const llmTimeoutFor = (
 
 const timeoutAbortResult = (
   timeout: LlmCallTimedOut,
-  scope: string,
+  identity: LedgerTruthIdentity,
   runId: number,
   tokensUsed: number,
   traceContext?: TraceContext,
@@ -227,7 +227,7 @@ const timeoutAbortResult = (
     return finalAbort(
       ABORT.BUDGET_TIME,
       { elapsedMs: timeout.elapsedMs, maxMs: timeout.timeoutMs },
-      scope,
+      identity,
       runId,
       tokensUsed,
       traceContext,
@@ -236,7 +236,7 @@ const timeoutAbortResult = (
   return finalAbort(
     ABORT.UPSTREAM_FAILURE,
     { cause: "provider_timeout", timeoutMs: timeout.timeoutMs },
-    scope,
+    identity,
     runId,
     tokensUsed,
     traceContext,
@@ -272,15 +272,19 @@ export const submitAgentEffect = (
     const toolRetries = Math.max(0, spec.budget?.toolRetries ?? 2);
     const scope = spec.scope;
     const scopeRef = spec.scopeRef;
+    const identity = {
+      scopeRef,
+      effectAuthorityRef: spec.effectAuthorityRef,
+    } satisfies LedgerTruthIdentity;
 
     const started = yield* logRuntimeLedgerEvent(
       ledger,
-      agentRunStartedEvent({ scope, intent: spec.intent, traceContext }),
+      agentRunStartedEvent({ ...identity, intent: spec.intent, traceContext }),
     );
     yield* logRuntimeLedgerEvent(
       ledger,
       chatIngestedEvent({
-        scope,
+        ...identity,
         runId: started.id,
         intent: spec.intent,
         context: spec.context,
@@ -305,7 +309,7 @@ export const submitAgentEffect = (
             reason: "output_schema_excludes_tools_in_v0_2_10",
             toolCount: Object.keys(spec.tools).length,
           },
-          scope,
+          identity,
           started.id,
           0,
           traceContext,
@@ -325,7 +329,7 @@ export const submitAgentEffect = (
         return yield* finalAbort(
           ABORT.BUDGET_TIME,
           { elapsedMs: timeout.elapsedMs, maxMs: budgetTimeMs },
-          scope,
+          identity,
           started.id,
           tokensBeforeCall,
           traceContext,
@@ -364,7 +368,7 @@ export const submitAgentEffect = (
         if (isLlmCallTimedOut(attempted.left)) {
           return yield* timeoutAbortResult(
             attempted.left,
-            scope,
+            identity,
             started.id,
             tokensBeforeCall,
             traceContext,
@@ -374,7 +378,7 @@ export const submitAgentEffect = (
           return yield* finalAbort(
             ABORT.UPSTREAM_FAILURE,
             { cause: publicRuntimeCauseReason(attempted.left.cause) },
-            scope,
+            identity,
             started.id,
             tokensBeforeCall,
             traceContext,
@@ -391,7 +395,7 @@ export const submitAgentEffect = (
           return yield* finalAbort(
             ABORT.BUDGET_TOKENS,
             { tokensUsed: tokens, tokensMax: budgetTokens },
-            scope,
+            identity,
             started.id,
             tokens,
             traceContext,
@@ -400,7 +404,7 @@ export const submitAgentEffect = (
         const finalStr = yield* safeStringify(result.decoded);
         yield* ledger.commit([
           agentRunCompletedEvent({
-            scope,
+            ...identity,
             runId: started.id,
             final: finalStr,
             output: result.decoded,
@@ -409,7 +413,7 @@ export const submitAgentEffect = (
             traceContext,
           }),
         ]);
-        const events = yield* ledger.events(scope);
+        const events = yield* ledger.events(identity);
         return yield* submitResultFromEvents(events, started.id);
       }
 
@@ -425,7 +429,7 @@ export const submitAgentEffect = (
           admissionImpact: result.admissionImpact,
           lease: result.lease,
         },
-        scope,
+        identity,
         started.id,
         0,
         traceContext,
@@ -444,7 +448,7 @@ export const submitAgentEffect = (
           reason: "invalid_tool_registry",
           issues: registry.issues,
         },
-        scope,
+        identity,
         started.id,
         0,
         traceContext,
@@ -472,7 +476,7 @@ export const submitAgentEffect = (
           return yield* finalAbort(
             ABORT.BUDGET_TIME,
             { elapsedMs: timeout.elapsedMs, maxMs: budgetTimeMs },
-            scope,
+            identity,
             started.id,
             tokensBeforeCall,
             traceContext,
@@ -509,7 +513,7 @@ export const submitAgentEffect = (
           if (isLlmCallTimedOut(timedResp.left)) {
             return yield* timeoutAbortResult(
               timedResp.left,
-              scope,
+              identity,
               started.id,
               tokensBeforeCall,
               traceContext,
@@ -527,7 +531,7 @@ export const submitAgentEffect = (
         yield* logRuntimeLedgerEvent(
           ledger,
           llmResponseEvent({
-            scope,
+            ...identity,
             turn: turnRefOf(started.id, turn),
             items: resp.items,
             usage: resp.usage,
@@ -539,7 +543,7 @@ export const submitAgentEffect = (
           return yield* finalAbort(
             ABORT.BUDGET_TOKENS,
             { tokensUsed: newTokens, tokensMax: budgetTokens },
-            scope,
+            identity,
             started.id,
             newTokens,
             traceContext,
@@ -555,7 +559,7 @@ export const submitAgentEffect = (
         if (responseToolCalls.length === 0) {
           yield* ledger.commit([
             agentRunCompletedEvent({
-              scope,
+              ...identity,
               runId: started.id,
               final: responseText,
               output: responseText,
@@ -565,7 +569,7 @@ export const submitAgentEffect = (
               traceContext,
             }),
           ]);
-          const events = yield* ledger.events(scope);
+          const events = yield* ledger.events(identity);
           return yield* submitResultFromEvents(events, started.id);
         }
 
@@ -617,7 +621,7 @@ export const submitAgentEffect = (
             yield* logRuntimeLedgerEvent(
               ledger,
               toolRejectedEvent({
-                scope,
+                ...identity,
                 runId: started.id,
                 toolCallId: call.id,
                 name: call.function.name,
@@ -674,7 +678,10 @@ export const submitAgentEffect = (
                   }
                   const key = q.key ?? call.function.name;
                   const grant = yield* quotaService.tryGrant(
-                    scope,
+                    {
+                      scopeRef,
+                      effectAuthorityRef: contract.effectAuthorityRef,
+                    },
                     key,
                     amount,
                     q.windowMs,
@@ -748,7 +755,7 @@ export const submitAgentEffect = (
                   yield* logRuntimeLedgerEvent(
                     ledger,
                     toolRejectedEvent({
-                      scope,
+                      ...identity,
                       runId: started.id,
                       toolCallId: call.id,
                       name: call.function.name,
@@ -767,7 +774,7 @@ export const submitAgentEffect = (
           yield* logRuntimeLedgerEvent(
             ledger,
             toolExecutedEvent({
-              scope,
+              ...identity,
               runId: started.id,
               toolCallId: call.id,
               name: call.function.name,
@@ -791,7 +798,7 @@ export const submitAgentEffect = (
       return yield* finalAbort(
         ABORT.RETRIES,
         { maxTurns },
-        scope,
+        identity,
         started.id,
         tokensUsed,
         traceContext,
@@ -806,7 +813,7 @@ export const submitAgentEffect = (
             return yield* finalAbort(
               ABORT.UPSTREAM_FAILURE,
               { cause: publicRuntimeCauseReason(e.cause) },
-              scope,
+              identity,
               started.id,
               tokensUsed,
               traceContext,
@@ -819,7 +826,7 @@ export const submitAgentEffect = (
               return yield* finalAbort(
                 ABORT.BUDGET_TIME,
                 toolBudgetTimePayload(e),
-                scope,
+                identity,
                 started.id,
                 tokensUsed,
                 traceContext,
@@ -828,7 +835,7 @@ export const submitAgentEffect = (
             return yield* finalAbort(
               ABORT.TOOL_ERROR,
               { toolName: e.toolName, cause: publicRuntimeCauseReason(e.cause) },
-              scope,
+              identity,
               started.id,
               tokensUsed,
               traceContext,

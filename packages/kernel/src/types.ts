@@ -118,8 +118,9 @@ export interface ScheduledEventSpec {
 
 export interface DispatchTargetSpec {
   readonly bindingRef: BindingMaterialRef;
-  readonly scope: string;
   readonly scopeRef: ScopeRef;
+  readonly effectAuthorityRef: AuthorityRef;
+  readonly scope?: never;
 }
 
 export interface DispatchToScopeSpec {

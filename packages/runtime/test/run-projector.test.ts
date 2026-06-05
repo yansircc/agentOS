@@ -19,6 +19,10 @@ import {
 } from "../src/runtime-events";
 
 const scope = "projection-scope";
+const runtimeIdentity = {
+  scopeRef: { kind: "conversation" as const, scopeId: scope },
+  effectAuthorityRef: { authorityClass: "test", authorityId: scope },
+};
 const eventIdentity = (scopeId: string) => ({
   scopeRef: { kind: "conversation" as const, scopeId },
   factOwnerRef: "@agent-os/test",
@@ -42,7 +46,9 @@ const event = (id: number, spec: RuntimeEventCommitSpec, ts = id * 10): LedgerEv
   id,
   ts,
   kind: spec.kind,
-  ...eventIdentity(spec.scope),
+  scopeRef: spec.scopeRef,
+  effectAuthorityRef: spec.effectAuthorityRef,
+  factOwnerRef: "@agent-os/test",
   payload: spec.payload,
 });
 
@@ -55,12 +61,12 @@ const rawEvent = (id: number, kind: string, payload: unknown, ts = id * 10): Led
 });
 
 const validRunRows = (): ReadonlyArray<LedgerEvent> => [
-  event(1, agentRunStartedEvent({ scope, intent: "x" })),
-  event(2, chatIngestedEvent({ scope, runId: 1, intent: "x", context: {} })),
+  event(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "x" })),
+  event(2, chatIngestedEvent({ ...runtimeIdentity, runId: 1, intent: "x", context: {} })),
   event(
     3,
     llmResponseEvent({
-      scope,
+      ...runtimeIdentity,
       turn: { id: 1, index: 0 },
       items: [{ type: "message", text: "use tool" }],
       usage: { promptTokens: 1, completionTokens: 2, totalTokens: 3 },
@@ -69,7 +75,7 @@ const validRunRows = (): ReadonlyArray<LedgerEvent> => [
   event(
     4,
     toolExecutedEvent({
-      scope,
+      ...runtimeIdentity,
       runId: 1,
       toolCallId: "call-1",
       name: "lookup",
@@ -83,7 +89,7 @@ const validRunRows = (): ReadonlyArray<LedgerEvent> => [
   event(
     6,
     agentRunCompletedEvent({
-      scope,
+      ...runtimeIdentity,
       runId: 1,
       final: "done",
       output: "done",
@@ -147,7 +153,7 @@ describe("runtime run projectors", () => {
 
   it("projects open, aborted, orphaned, and listed runs from the same decoded stream", () => {
     expect(
-      projectRunStatus([event(1, agentRunStartedEvent({ scope, intent: "open" }))], 1),
+      projectRunStatus([event(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "open" }))], 1),
     ).toEqual({
       kind: "open_without_terminal",
       startedAt: 10,
@@ -155,11 +161,11 @@ describe("runtime run projectors", () => {
     expect(
       projectRunStatus(
         [
-          event(1, agentRunStartedEvent({ scope, intent: "abort" })),
+          event(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "abort" })),
           event(
             2,
             agentRunAbortedEvent({
-              scope,
+              ...runtimeIdentity,
               kind: ABORT.TOOL_ERROR,
               runId: 1,
               tokensUsed: 0,
@@ -180,7 +186,7 @@ describe("runtime run projectors", () => {
           event(
             2,
             llmResponseEvent({
-              scope,
+              ...runtimeIdentity,
               turn: { id: 99, index: 0 },
               items: [{ type: "message", text: "orphan" }],
               usage: { promptTokens: 1, completionTokens: 0, totalTokens: 1 },
@@ -198,11 +204,11 @@ describe("runtime run projectors", () => {
     expect(
       projectRunsPage(
         [
-          event(1, agentRunStartedEvent({ scope, intent: "old" })),
+          event(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "old" })),
           event(
             2,
             agentRunCompletedEvent({
-              scope,
+              ...runtimeIdentity,
               runId: 1,
               final: "old",
               output: "old",
@@ -210,7 +216,7 @@ describe("runtime run projectors", () => {
               tokensUsed: 1,
             }),
           ),
-          event(3, agentRunStartedEvent({ scope, intent: "new" })),
+          event(3, agentRunStartedEvent({ ...runtimeIdentity, intent: "new" })),
         ],
         { limit: 2 },
       ),
@@ -234,12 +240,12 @@ describe("runtime run projectors", () => {
 
   it("does not decode product deliver events as runtime facts", () => {
     const rows = [
-      event(1, agentRunStartedEvent({ scope, intent: "x" })),
+      event(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "x" })),
       rawEvent(2, "answer.ready", "product payload can be any shape"),
       event(
         3,
         agentRunCompletedEvent({
-          scope,
+          ...runtimeIdentity,
           runId: 1,
           final: "done",
           output: "done",
@@ -257,7 +263,7 @@ describe("runtime run projectors", () => {
   });
 
   it("does not fabricate SubmitResult without a terminal runtime fact", () => {
-    expect(projectSubmitResult([event(1, agentRunStartedEvent({ scope, intent: "open" }))], 1)).toBe(
+    expect(projectSubmitResult([event(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "open" }))], 1)).toBe(
       null,
     );
   });
@@ -266,7 +272,7 @@ describe("runtime run projectors", () => {
     expect(() =>
       projectRunTrace(
         [
-          event(1, agentRunStartedEvent({ scope, intent: "x" })),
+          event(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "x" })),
           rawEvent(2, "llm.response", { turn: { id: 1, index: 0 } }),
         ],
         1,
@@ -275,7 +281,7 @@ describe("runtime run projectors", () => {
     expect(() =>
       projectRunStatus(
         [
-          event(1, agentRunStartedEvent({ scope, intent: "x" })),
+          event(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "x" })),
           rawEvent(2, "agent.run.completed", { event: "answer.ready" }),
         ],
         1,

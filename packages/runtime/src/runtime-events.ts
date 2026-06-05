@@ -6,7 +6,7 @@ import {
   type LlmUsage,
 } from "@agent-os/kernel/llm";
 import type { LedgerEvent } from "@agent-os/kernel/types";
-import type { LivedClaim, RejectedClaim } from "@agent-os/kernel/effect-claim";
+import type { AuthorityRef, LivedClaim, RejectedClaim, ScopeRef } from "@agent-os/kernel/effect-claim";
 import type { ExecutionDomain, ToolExecution } from "@agent-os/kernel/tools";
 import { TraceContextSchema, type TraceContext } from "@agent-os/kernel/trace-context";
 import { ABORT, type AbortKind } from "./abort";
@@ -218,7 +218,10 @@ export type RuntimeEventCommitSpecByKind<K extends RuntimeEventKind> = {
   readonly ts?: number;
   readonly kind: K;
   readonly payload: RuntimeEventPayloadByKind[K];
-  readonly scope: string;
+  readonly scopeRef: ScopeRef;
+  readonly effectAuthorityRef: AuthorityRef;
+  readonly factOwnerRef?: never;
+  readonly scope?: never;
 };
 
 export type RuntimeEventCommitSpec = {
@@ -296,55 +299,59 @@ export const decodeRuntimeLedgerEvent = (event: LedgerEvent): DecodeRuntimeLedge
 };
 
 const runtimeEvent = <K extends RuntimeEventKind>(
-  scope: string,
+  identity: RuntimeEventIdentitySpec,
   kind: K,
   payload: RuntimeEventPayloadByKind[K],
 ): RuntimeEventCommitSpecByKind<K> => ({
-  scope,
+  scopeRef: identity.scopeRef,
+  effectAuthorityRef: identity.effectAuthorityRef,
   kind,
   payload: decodeRuntimePayload(kind, payload),
 });
 
-export const agentRunStartedEvent = (spec: {
-  readonly scope: string;
+type RuntimeEventIdentitySpec = {
+  readonly scopeRef: ScopeRef;
+  readonly effectAuthorityRef: AuthorityRef;
+  readonly scope?: never;
+  readonly factOwnerRef?: never;
+};
+
+export const agentRunStartedEvent = (spec: RuntimeEventIdentitySpec & {
   readonly intent: string;
   readonly traceContext?: TraceContext;
 }): RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.AGENT_RUN_STARTED> =>
-  runtimeEvent(spec.scope, RUNTIME_EVENT_KIND.AGENT_RUN_STARTED, {
+  runtimeEvent(spec, RUNTIME_EVENT_KIND.AGENT_RUN_STARTED, {
     intent: spec.intent,
     ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
   });
 
-export const chatIngestedEvent = (spec: {
-  readonly scope: string;
+export const chatIngestedEvent = (spec: RuntimeEventIdentitySpec & {
   readonly runId: number;
   readonly intent: string;
   readonly context: unknown;
   readonly traceContext?: TraceContext;
 }): RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.CHAT_INGESTED> =>
-  runtimeEvent(spec.scope, RUNTIME_EVENT_KIND.CHAT_INGESTED, {
+  runtimeEvent(spec, RUNTIME_EVENT_KIND.CHAT_INGESTED, {
     runId: spec.runId,
     intent: spec.intent,
     context: spec.context,
     ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
   });
 
-export const llmResponseEvent = (spec: {
-  readonly scope: string;
+export const llmResponseEvent = (spec: RuntimeEventIdentitySpec & {
   readonly turn: { readonly id: number; readonly index: number };
   readonly items: ReadonlyArray<LlmOutputItem>;
   readonly usage: LlmUsage;
   readonly traceContext?: TraceContext;
 }): RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.LLM_RESPONSE> =>
-  runtimeEvent(spec.scope, RUNTIME_EVENT_KIND.LLM_RESPONSE, {
+  runtimeEvent(spec, RUNTIME_EVENT_KIND.LLM_RESPONSE, {
     turn: spec.turn,
     items: spec.items,
     usage: spec.usage,
     ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
   });
 
-export const toolExecutedEvent = (spec: {
-  readonly scope: string;
+export const toolExecutedEvent = (spec: RuntimeEventIdentitySpec & {
   readonly runId: number;
   readonly toolCallId: string;
   readonly name: string;
@@ -354,7 +361,7 @@ export const toolExecutedEvent = (spec: {
   readonly claim: LivedClaim;
   readonly traceContext?: TraceContext;
 }): RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.TOOL_EXECUTED> =>
-  runtimeEvent(spec.scope, RUNTIME_EVENT_KIND.TOOL_EXECUTED, {
+  runtimeEvent(spec, RUNTIME_EVENT_KIND.TOOL_EXECUTED, {
     runId: spec.runId,
     toolCallId: spec.toolCallId,
     name: spec.name,
@@ -365,8 +372,7 @@ export const toolExecutedEvent = (spec: {
     ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
   });
 
-export const toolRejectedEvent = (spec: {
-  readonly scope: string;
+export const toolRejectedEvent = (spec: RuntimeEventIdentitySpec & {
   readonly runId: number;
   readonly toolCallId: string;
   readonly name: string;
@@ -375,7 +381,7 @@ export const toolRejectedEvent = (spec: {
   readonly claim: RejectedClaim;
   readonly traceContext?: TraceContext;
 }): RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.TOOL_REJECTED> =>
-  runtimeEvent(spec.scope, RUNTIME_EVENT_KIND.TOOL_REJECTED, {
+  runtimeEvent(spec, RUNTIME_EVENT_KIND.TOOL_REJECTED, {
     runId: spec.runId,
     toolCallId: spec.toolCallId,
     name: spec.name,
@@ -385,8 +391,7 @@ export const toolRejectedEvent = (spec: {
     ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
   });
 
-export const agentRunCompletedEvent = (spec: {
-  readonly scope: string;
+export const agentRunCompletedEvent = (spec: RuntimeEventIdentitySpec & {
   readonly runId: number;
   readonly final: string;
   readonly output: unknown;
@@ -395,7 +400,7 @@ export const agentRunCompletedEvent = (spec: {
   readonly turn?: { readonly id: number; readonly index: number };
   readonly traceContext?: TraceContext;
 }): RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED> =>
-  runtimeEvent(spec.scope, RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED, {
+  runtimeEvent(spec, RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED, {
     runId: spec.runId,
     final: spec.final,
     output: spec.output,
@@ -405,15 +410,14 @@ export const agentRunCompletedEvent = (spec: {
     ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
   });
 
-export const agentRunAbortedEvent = (spec: {
-  readonly scope: string;
+export const agentRunAbortedEvent = (spec: RuntimeEventIdentitySpec & {
   readonly kind: RuntimeAbortEventKind;
   readonly runId: number;
   readonly tokensUsed: number;
   readonly payload?: Record<string, unknown>;
   readonly traceContext?: TraceContext;
 }): RuntimeEventCommitSpecByKind<RuntimeAbortEventKind> =>
-  runtimeEvent(spec.scope, spec.kind, {
+  runtimeEvent(spec, spec.kind, {
     ...spec.payload,
     runId: spec.runId,
     tokensUsed: spec.tokensUsed,

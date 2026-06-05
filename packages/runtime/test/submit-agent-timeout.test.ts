@@ -1,7 +1,7 @@
 import { Effect, Fiber, Schema, TestClock } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 
-import { Ledger } from "../src/ledger";
+import { Ledger, RUNTIME_FACT_OWNER } from "../src/ledger";
 import { LlmTransport } from "../src/llm-transport";
 import { Quota } from "../src/quota-service";
 import { Admission } from "../src/admission";
@@ -9,12 +9,6 @@ import { DEFAULT_LLM_CALL_TIMEOUT_MS, submitAgentEffect } from "../src/submit-ag
 import type { InternalSubmitSpec } from "../src/submit";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import { decodeRuntimeLedgerEvent } from "../src/runtime-events";
-
-const eventIdentity = (scopeId: string) => ({
-  scopeRef: { kind: "conversation" as const, scopeId },
-  factOwnerRef: "@agent-os/test",
-  effectAuthorityRef: { authorityClass: "test", authorityId: scopeId },
-});
 
 const makeSpec = (budget?: InternalSubmitSpec["budget"]): InternalSubmitSpec => ({
   intent: "hang",
@@ -51,7 +45,8 @@ const runWithHungLlm = (
         specs: ReadonlyArray<{
           readonly kind: string;
           readonly payload: unknown;
-          readonly scope: string;
+          readonly scopeRef: LedgerEvent["scopeRef"];
+          readonly effectAuthorityRef: LedgerEvent["effectAuthorityRef"];
         }>,
       ) =>
         Effect.sync(() => {
@@ -59,7 +54,9 @@ const runWithHungLlm = (
             id: nextId++,
             ts: Date.now(),
             kind: spec.kind,
-            ...eventIdentity(spec.scope),
+            scopeRef: spec.scopeRef,
+            effectAuthorityRef: spec.effectAuthorityRef,
+            factOwnerRef: RUNTIME_FACT_OWNER,
             payload: spec.payload,
           }));
           events.push(...committed);

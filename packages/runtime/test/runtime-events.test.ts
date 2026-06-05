@@ -15,6 +15,10 @@ import {
 } from "../src/runtime-events";
 
 const scope = "runtime-event-test";
+const runtimeIdentity = {
+  scopeRef: { kind: "conversation" as const, scopeId: scope },
+  effectAuthorityRef: { authorityClass: "test", authorityId: scope },
+};
 const eventIdentity = (scopeId: string) => ({
   scopeRef: { kind: "conversation" as const, scopeId },
   factOwnerRef: "@agent-os/test",
@@ -55,7 +59,9 @@ const ledgerEvent = (id: number, spec: RuntimeEventCommitSpec): LedgerEvent => (
   id,
   ts: id * 10,
   kind: spec.kind,
-  ...eventIdentity(spec.scope),
+  scopeRef: spec.scopeRef,
+  effectAuthorityRef: spec.effectAuthorityRef,
+  factOwnerRef: "@agent-os/test",
   payload: spec.payload,
 });
 
@@ -70,16 +76,16 @@ const rawEvent = (id: number, kind: string, payload: unknown): LedgerEvent => ({
 describe("runtime event vocabulary", () => {
   it("round-trips every runtime constructor through the runtime decoder", () => {
     const specs: RuntimeEventCommitSpec[] = [
-      agentRunStartedEvent({ scope, intent: "answer", traceContext }),
+      agentRunStartedEvent({ ...runtimeIdentity, intent: "answer", traceContext }),
       chatIngestedEvent({
-        scope,
+        ...runtimeIdentity,
         runId: 1,
         intent: "answer",
         context: { topic: "runtime" },
         traceContext,
       }),
       llmResponseEvent({
-        scope,
+        ...runtimeIdentity,
         turn: { id: 1, index: 0 },
         items: [
           { type: "message", text: "use lookup" },
@@ -96,7 +102,7 @@ describe("runtime event vocabulary", () => {
         traceContext,
       }),
       toolExecutedEvent({
-        scope,
+        ...runtimeIdentity,
         runId: 1,
         toolCallId: "call-1",
         name: "lookup",
@@ -107,7 +113,7 @@ describe("runtime event vocabulary", () => {
         traceContext,
       }),
       toolRejectedEvent({
-        scope,
+        ...runtimeIdentity,
         runId: 1,
         toolCallId: "call-1",
         name: "lookup",
@@ -117,7 +123,7 @@ describe("runtime event vocabulary", () => {
         traceContext,
       }),
       agentRunCompletedEvent({
-        scope,
+        ...runtimeIdentity,
         runId: 1,
         final: "done",
         output: "done",
@@ -127,7 +133,7 @@ describe("runtime event vocabulary", () => {
       }),
       ...RUNTIME_ABORT_EVENT_KINDS.map((kind) =>
         agentRunAbortedEvent({
-          scope,
+          ...runtimeIdentity,
           kind,
           runId: 1,
           tokensUsed: 3,
