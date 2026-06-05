@@ -8,8 +8,8 @@ title: "Agent Primitives"
 
 # Agent Primitives
 
-| Primitive                                            | Export                                               | Invariant                                                                                     | Docs                                                                   |
-| ---------------------------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Primitive                                            | Export                                               | Invariant                                                                                     | Docs                                                               |
+| ---------------------------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
 | `primitive.ag-ui-svelte.agUiProjectionReadable`      | `@agent-os/ag-ui-svelte:agUiProjectionReadable`      | `invariant.algebra.single-code-source`                                                        | [ag-ui-wire-adapter.md](/concepts/ag-ui-wire-adapter/)             |
 | `primitive.ag-ui.projectAgUiFrames`                  | `@agent-os/ag-ui:projectAgUiFrames`                  | `invariant.algebra.single-code-source`                                                        | [ag-ui-wire-adapter.md](/concepts/ag-ui-wire-adapter/)             |
 | `primitive.ag-ui.projectAgUiFramesToActivities`      | `@agent-os/ag-ui:projectAgUiFramesToActivities`      | `invariant.algebra.single-code-source`                                                        | [ag-ui-wire-adapter.md](/concepts/ag-ui-wire-adapter/)             |

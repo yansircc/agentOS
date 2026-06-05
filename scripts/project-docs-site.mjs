@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 
 const root = process.cwd();
 const check = process.argv.includes("--check");
@@ -87,6 +89,34 @@ const projectMarkdown = (sourceFile, options = {}) => {
   ].join("\n");
 };
 
+const formatProjectedMarkdown = (expected) => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-docs-site-"));
+  try {
+    for (const [targetRel, content] of expected) {
+      const target = path.join(tmpDir, targetRel);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, `${content.replace(/\s+$/u, "")}\n`);
+    }
+    const result = spawnSync("vp", ["fmt", tmpDir, "--write"], {
+      cwd: root,
+      encoding: "utf8",
+    });
+    if (result.status !== 0) {
+      failures.push(
+        `docs-site projection formatting failed: ${result.stderr || result.stdout || result.status}`,
+      );
+      return expected;
+    }
+    const formatted = new Map();
+    for (const targetRel of expected.keys()) {
+      formatted.set(targetRel, fs.readFileSync(path.join(tmpDir, targetRel), "utf8"));
+    }
+    return formatted;
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+};
+
 const removeEmptyDirs = (dir) => {
   if (!fs.existsSync(dir)) return;
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -105,8 +135,9 @@ const project = () => {
     const targetRel = targetRelForDocsRel(docsRel);
     expected.set(targetRel, projectMarkdown(source));
   }
+  const formattedExpected = formatProjectedMarkdown(expected);
 
-  for (const [targetRel, content] of expected) {
+  for (const [targetRel, content] of formattedExpected) {
     const target = path.join(targetRoot, targetRel);
     const expectedText = `${content.replace(/\s+$/u, "")}\n`;
     if (check) {
@@ -123,7 +154,7 @@ const project = () => {
     .map((file) => slash(path.relative(targetRoot, file)))
     .sort();
   for (const targetRel of actualTargets) {
-    if (!expected.has(targetRel)) {
+    if (!formattedExpected.has(targetRel)) {
       const target = path.join(targetRoot, targetRel);
       if (check) {
         failures.push(`${slash(path.relative(root, target))} is stale extra projection`);

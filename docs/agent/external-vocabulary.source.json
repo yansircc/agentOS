@@ -18,10 +18,7 @@
       "id": "external.effect-schema",
       "name": "Effect Schema",
       "docs": "docs/concepts/agent-schema.md",
-      "mapsTo": [
-        "primitive.kernel.AgentSchema",
-        "primitive.kernel.projectAgentSchema"
-      ],
+      "mapsTo": ["primitive.kernel.AgentSchema", "primitive.kernel.projectAgentSchema"],
       "notes": [
         "Effect Schema is the schema source; AgentSchema derives provider-specific projections and fingerprints."
       ]
@@ -30,10 +27,7 @@
       "id": "external.effect-ai",
       "name": "Effect AI",
       "docs": "docs/packages/llm-transport-effect-ai.md",
-      "mapsTo": [
-        "primitive.runtime.LlmTransport",
-        "primitive.runtime.SubmitSpec"
-      ],
+      "mapsTo": ["primitive.runtime.LlmTransport", "primitive.runtime.SubmitSpec"],
       "notes": [
         "Effect AI is provider transport, not ledger truth or admission evidence ownership."
       ]
@@ -42,10 +36,7 @@
       "id": "external.cloudflare-durable-object",
       "name": "Cloudflare Durable Object",
       "docs": "docs/packages/backend-cloudflare-do.md",
-      "mapsTo": [
-        "primitive.runtime.Ledger",
-        "primitive.runtime.MaterializedProjections"
-      ],
+      "mapsTo": ["primitive.runtime.Ledger", "primitive.runtime.MaterializedProjections"],
       "notes": [
         "The Durable Object adapter owns storage and transaction shape while preserving the backend protocol contract."
       ]

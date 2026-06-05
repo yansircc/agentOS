@@ -12,17 +12,17 @@ Agent-facing docs are generated projections. Source facts live in `docs/agent/*.
 
 ## Navigation
 
-| Surface          | Generated File                                              |
-| ---------------- | ----------------------------------------------------------- |
-| Recipes          | [docs/agent/recipes.json](agent/recipes.json)               |
+| Surface          | Generated File                                             |
+| ---------------- | ---------------------------------------------------------- |
+| Recipes          | [docs/agent/recipes.json](agent/recipes.json)              |
 | Primitives       | [docs/agent/primitives.md](/agent/primitives/)             |
 | Errors           | [docs/agent/errors.md](/agent/errors/)                     |
 | Invariant Matrix | [docs/agent/invariant-matrix.md](/agent/invariant-matrix/) |
 
 ## Recipes
 
-| Recipe                         | Tutorial                                                                                      | Primary Primitives                                                                                                                     |
-| ------------------------------ | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Recipe                         | Tutorial                                                                                     | Primary Primitives                                                                                                                     |
+| ------------------------------ | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `recipe.hello-ledger-event`    | [Append and read a ledger event](/tutorials/hello-ledger-event/)                             | `primitive.kernel.LedgerEvent`, `primitive.kernel.ScopeRef`, `primitive.kernel.AuthorityRef`, `primitive.runtime.Ledger`               |
 | `recipe.projection-reader`     | [Build a materialized projection reader](/tutorials/projection-reader/)                      | `primitive.runtime.MaterializedProjectionDefinition`, `primitive.runtime.defineProjection`, `primitive.runtime.ProjectionReduceResult` |
 | `recipe.streaming-chatbot`     | [Stream an agent run](/tutorials/streaming-chatbot/)                                         | `primitive.runtime.SubmitSpec`, `primitive.runtime.SubmitResult`, `primitive.ag-ui.projectLedgerEventToAgUiEnvelope`                   |

@@ -22,10 +22,7 @@
         "primitive.kernel.ToolExecution",
         "primitive.kernel.ToolExecutionContext"
       ],
-      "errors": [
-        "agent_os.invalid_resource_amount",
-        "agent_os.sandbox_policy_denied"
-      ],
+      "errors": ["agent_os.invalid_resource_amount", "agent_os.sandbox_policy_denied"],
       "docs": [
         "docs/boundary-contract.md",
         "docs/concepts/tool-execution-domain.md",
@@ -33,21 +30,13 @@
         "docs/packages/sandbox.md",
         "docs/README.md"
       ],
-      "tests": [
-        "packages/kernel/test/effect-claim.test.ts",
-        "packages/kernel/test/tools.test.ts"
-      ],
-      "decisions": [
-        "decisions/a64-shape-first-over-n2.md"
-      ]
+      "tests": ["packages/kernel/test/effect-claim.test.ts", "packages/kernel/test/tools.test.ts"],
+      "decisions": ["decisions/a64-shape-first-over-n2.md"]
     },
     {
       "invariant": "invariant.ledger.single-commit-source",
       "statement": "Every ledger fact has one commit primitive as its source generator.",
-      "primitives": [
-        "primitive.runtime.Ledger",
-        "primitive.runtime.LedgerCommitEventSpec"
-      ],
+      "primitives": ["primitive.runtime.Ledger", "primitive.runtime.LedgerCommitEventSpec"],
       "errors": [
         "agent_os.durable_trigger_acquire_cancelled",
         "agent_os.durable_trigger_commit_returned_thenable",
@@ -99,10 +88,7 @@
         "docs/packages/llm-transport-effect-ai.md",
         "docs/verification.md"
       ],
-      "tests": [
-        "packages/runtime/test/runtime-events.test.ts",
-        "scripts/check-public-api.mjs"
-      ],
+      "tests": ["packages/runtime/test/runtime-events.test.ts", "scripts/check-public-api.mjs"],
       "decisions": [
         "decisions/a52-documentation-substrate.md",
         "decisions/a53-tsdoc-api-reference.md"
@@ -111,10 +97,7 @@
     {
       "invariant": "invariant.boundary.runtime-validation-external-only",
       "statement": "Runtime validation is only for unknown external input, not internally constructed states.",
-      "primitives": [
-        "primitive.kernel.EffectClaim",
-        "primitive.runtime.LlmTransport"
-      ],
+      "primitives": ["primitive.kernel.EffectClaim", "primitive.runtime.LlmTransport"],
       "errors": [
         "agent_os.backend_protocol_parse_failure",
         "agent_os.cloudflare_worker_bundle_resolution_failure",
@@ -152,9 +135,7 @@
         "packages/kernel/test/effect-claim.test.ts",
         "packages/runtime/test/runtime-events.test.ts"
       ],
-      "decisions": [
-        "decisions/a64-shape-first-over-n2.md"
-      ]
+      "decisions": ["decisions/a64-shape-first-over-n2.md"]
     },
     {
       "invariant": "invariant.d10.truth-identity",
@@ -225,10 +206,7 @@
         "agent_os.capability_rejected",
         "agent_os.extension_capability_conflict"
       ],
-      "docs": [
-        "docs/boundary-contract.md",
-        "docs/concepts/durable-truth.md"
-      ],
+      "docs": ["docs/boundary-contract.md", "docs/concepts/durable-truth.md"],
       "tests": [
         "packages/runtime/test/boundary-commit.test.ts",
         "packages/backends/cloudflare-do/test/extension-capability.worker.test.ts"
@@ -240,9 +218,7 @@
       "statement": "Agent-facing docs indexes are projections; source JSON and exported TSDoc own routable ids.",
       "primitives": [],
       "errors": [],
-      "docs": [
-        "docs/verification.md"
-      ],
+      "docs": ["docs/verification.md"],
       "tests": [
         "scripts/generate-docs.mjs",
         "scripts/check-doc-structure.mjs",

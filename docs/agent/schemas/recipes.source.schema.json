@@ -25,7 +25,16 @@
     "recipe": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "title", "intents", "tutorial", "primitives", "commands", "evidence", "next"],
+      "required": [
+        "id",
+        "title",
+        "intents",
+        "tutorial",
+        "primitives",
+        "commands",
+        "evidence",
+        "next"
+      ],
       "properties": {
         "id": { "$ref": "#/$defs/id" },
         "title": { "type": "string", "minLength": 1 },
