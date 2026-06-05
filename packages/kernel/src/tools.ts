@@ -59,7 +59,7 @@ export interface ExecutionDomainRegistry {
 
 interface ToolContractShape {
   readonly toolId: string;
-  readonly authorityRef: AuthorityRef;
+  readonly effectAuthorityRef: AuthorityRef;
   readonly requiredMaterials: ReadonlyArray<MaterialRequirement>;
   readonly originRef?: OriginRef;
   readonly roles: ReadonlyArray<Extract<ClaimRole, "generator" | "admitter">>;
@@ -269,7 +269,7 @@ export const defineTool = <S extends Schema.Schema.AnyNoContext, R>(
     quota: spec.quota,
     contract: makeToolContract({
       toolId,
-      authorityRef: {
+      effectAuthorityRef: {
         authorityId: spec.authorityId ?? `tool:${toolId}`,
         authorityClass: spec.authority,
         ...(spec.authorityVersion === undefined ? {} : { version: spec.authorityVersion }),
@@ -374,7 +374,7 @@ export const validateToolRegistry = (tools: Record<string, Tool>): ToolRegistryV
       issues.push({ kind: "duplicate_tool_id", toolId: contract.toolId });
     }
     toolIds.add(contract.toolId);
-    if (!isAuthorityRef(contract.authorityRef)) {
+    if (!isAuthorityRef(contract.effectAuthorityRef)) {
       issues.push({ kind: "invalid_authority_ref", toolId: contract.toolId });
     }
     if (

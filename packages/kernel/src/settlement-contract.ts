@@ -203,7 +203,7 @@ export const settleLived = (
     phase: "lived",
     operationRef: claim.operationRef,
     scopeRef: claim.scopeRef,
-    authorityRef: claim.authorityRef,
+    effectAuthorityRef: claim.effectAuthorityRef,
     originRef: claim.originRef,
     anchorRef,
   };
@@ -225,7 +225,7 @@ export const settleRejected = (
     phase: "rejected",
     operationRef: claim.operationRef,
     scopeRef: claim.scopeRef,
-    authorityRef: claim.authorityRef,
+    effectAuthorityRef: claim.effectAuthorityRef,
     originRef: claim.originRef,
     rejectionRef,
   };

@@ -36,7 +36,7 @@ const claimFor = (step: "preview" | "promote" | "readback" | "rollback") =>
   makePreClaim({
     operationRef: `deploy:worker:${step}`,
     scopeRef: { kind: "external", scopeId: "site/acme", systemRef: "cloudflare" },
-    authorityRef: {
+    effectAuthorityRef: {
       authorityId: `@agent-os/deploy.${step}`,
       authorityClass: "deploy",
     },

@@ -43,7 +43,7 @@ export const boundary = defineBoundaryContract({
   packageId: "@agent-os/example",
   kindPrefixes: ["example."],
   roles: ["resolver", "reader"],
-  authorityContracts: [],
+  effectAuthorityContracts: [],
   materialRequirements: [],
   events: {
     "example.requested": {

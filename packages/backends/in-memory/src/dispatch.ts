@@ -264,7 +264,7 @@ export const InMemoryDispatchLive = (
                 spec.idempotencyKey,
               ]),
               scopeRef: spec.target.scopeRef,
-              authorityRef: {
+              effectAuthorityRef: {
                 authorityId: "cap_dispatch",
                 authorityClass: "effect",
               },

@@ -3,9 +3,9 @@ import { ANCHOR_KINDS, REJECTION_KINDS } from "./claim-kinds";
 import type { BoundaryPackage } from "./extensions";
 import { validateAgainstSchema, type JsonSchemaObject } from "./json-schema-dialect";
 import {
-  isAuthorityContract,
+  isEffectAuthorityContract,
   isMaterialRequirement,
-  type AuthorityContract,
+  type EffectAuthorityContract,
   type MaterialRequirement,
 } from "./material-ref";
 import type { AnchorRef, ClaimRole, RejectionRef } from "./effect-claim";
@@ -52,7 +52,7 @@ export interface BoundaryContract<EventKind extends string = string> {
   readonly kindPrefixes: ReadonlyArray<string>;
   readonly roles: ReadonlyArray<ClaimRole>;
   readonly events: Readonly<Record<EventKind, BoundaryEventContract>>;
-  readonly authorityContracts: ReadonlyArray<AuthorityContract>;
+  readonly effectAuthorityContracts: ReadonlyArray<EffectAuthorityContract>;
   readonly materialRequirements: ReadonlyArray<MaterialRequirement>;
   readonly settlement: SettlementContract;
   readonly projection: BoundaryProjectionContract;
@@ -197,21 +197,21 @@ const materialRequirementMatches = (
 };
 
 const authorityMaterialsAreDeclared = (
-  authorityContracts: ReadonlyArray<AuthorityContract>,
+  effectAuthorityContracts: ReadonlyArray<EffectAuthorityContract>,
   materialRequirements: ReadonlyArray<MaterialRequirement>,
 ): boolean =>
-  authorityContracts.every((contract) =>
+  effectAuthorityContracts.every((contract) =>
     contract.requiredMaterials.every((required) =>
       materialRequirements.some((declared) => materialRequirementMatches(required, declared)),
     ),
   );
 
 const materialRequirementsAreBoundToAuthority = (
-  authorityContracts: ReadonlyArray<AuthorityContract>,
+  effectAuthorityContracts: ReadonlyArray<EffectAuthorityContract>,
   materialRequirements: ReadonlyArray<MaterialRequirement>,
 ): boolean =>
   materialRequirements.every((declared) =>
-    authorityContracts.some((contract) =>
+    effectAuthorityContracts.some((contract) =>
       contract.requiredMaterials.some((required) => materialRequirementMatches(required, declared)),
     ),
   );
@@ -290,8 +290,8 @@ export const validateBoundaryContract = (value: unknown): BoundaryContractValida
   }
 
   if (
-    !Array.isArray(value.authorityContracts) ||
-    !value.authorityContracts.every(isAuthorityContract)
+    !Array.isArray(value.effectAuthorityContracts) ||
+    !value.effectAuthorityContracts.every(isEffectAuthorityContract)
   ) {
     issues.push("authority_contract_invalid");
   }
@@ -304,21 +304,21 @@ export const validateBoundaryContract = (value: unknown): BoundaryContractValida
   }
 
   if (
-    Array.isArray(value.authorityContracts) &&
-    value.authorityContracts.every(isAuthorityContract) &&
+    Array.isArray(value.effectAuthorityContracts) &&
+    value.effectAuthorityContracts.every(isEffectAuthorityContract) &&
     Array.isArray(value.materialRequirements) &&
     value.materialRequirements.every(isMaterialRequirement) &&
-    !authorityMaterialsAreDeclared(value.authorityContracts, value.materialRequirements)
+    !authorityMaterialsAreDeclared(value.effectAuthorityContracts, value.materialRequirements)
   ) {
     issues.push("authority_material_outside_axis");
   }
 
   if (
-    Array.isArray(value.authorityContracts) &&
-    value.authorityContracts.every(isAuthorityContract) &&
+    Array.isArray(value.effectAuthorityContracts) &&
+    value.effectAuthorityContracts.every(isEffectAuthorityContract) &&
     Array.isArray(value.materialRequirements) &&
     value.materialRequirements.every(isMaterialRequirement) &&
-    !materialRequirementsAreBoundToAuthority(value.authorityContracts, value.materialRequirements)
+    !materialRequirementsAreBoundToAuthority(value.effectAuthorityContracts, value.materialRequirements)
   ) {
     issues.push("material_authority_unbound");
   }

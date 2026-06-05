@@ -79,7 +79,7 @@ describe("tool registry generator", () => {
           claim: expect.objectContaining({
             phase: "lived",
             operationRef: "tool:tool-registry-claim:1:0:call-1",
-            authorityRef: {
+            effectAuthorityRef: {
               authorityId: "tool:lookup",
               authorityClass: "read",
             },

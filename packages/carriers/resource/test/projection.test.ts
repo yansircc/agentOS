@@ -2,7 +2,7 @@ import {
   RESOURCE_AUTHORITIES,
   RESOURCE_EVENTS,
   RESOURCE_KIND,
-  resourceAuthorityContracts,
+  resourceEffectAuthorityContracts,
   resourceBoundaryPackage,
   resourceSettlementRef,
   projectResource,
@@ -35,7 +35,7 @@ const resourceClaim = (step: string) =>
   makePreClaim({
     operationRef: `resource:subject-1:${step}`,
     scopeRef: { kind: "external", scopeId: "resource/account/acme/main", systemRef: "resource" },
-    authorityRef:
+    effectAuthorityRef:
       step === "provision"
         ? RESOURCE_AUTHORITIES.PROVISION
         : step === "bind"
@@ -70,7 +70,7 @@ const resourceProofRef = (...parts: ReadonlyArray<string | number>): string =>
 const unsettledPreResourceClaim = makePreClaim({
   operationRef: "resource:unsettled-pre:mutate",
   scopeRef: { kind: "external", scopeId: "resource/account/acme/main", systemRef: "resource" },
-  authorityRef: RESOURCE_AUTHORITIES.MUTATE,
+  effectAuthorityRef: RESOURCE_AUTHORITIES.MUTATE,
   originRef: {
     originId: "@agent-os/resource-carrier",
     originKind: "extension_package",
@@ -87,9 +87,9 @@ describe("@agent-os/resource-carrier", () => {
   });
 
   it("declares required material contracts without concrete refs", () => {
-    expect(resourceAuthorityContracts).toEqual([
+    expect(resourceEffectAuthorityContracts).toEqual([
       {
-        authorityRef: RESOURCE_AUTHORITIES.PROVISION,
+        effectAuthorityRef: RESOURCE_AUTHORITIES.PROVISION,
         requiredMaterials: [
           {
             slot: "api_token",
@@ -106,19 +106,19 @@ describe("@agent-os/resource-carrier", () => {
         ],
       },
       {
-        authorityRef: RESOURCE_AUTHORITIES.BIND,
+        effectAuthorityRef: RESOURCE_AUTHORITIES.BIND,
         requiredMaterials: expect.arrayContaining([
           expect.objectContaining({ slot: "binding", kind: "binding", required: true }),
         ]),
       },
       {
-        authorityRef: RESOURCE_AUTHORITIES.MUTATE,
+        effectAuthorityRef: RESOURCE_AUTHORITIES.MUTATE,
         requiredMaterials: expect.arrayContaining([
           expect.objectContaining({ slot: "binding", kind: "binding", required: true }),
         ]),
       },
       {
-        authorityRef: RESOURCE_AUTHORITIES.DESTROY,
+        effectAuthorityRef: RESOURCE_AUTHORITIES.DESTROY,
         requiredMaterials: expect.not.arrayContaining([
           expect.objectContaining({ slot: "binding" }),
         ]),
@@ -274,7 +274,7 @@ describe("@agent-os/resource-carrier", () => {
               scopeId: "resource/account/acme/main",
               systemRef: "resource",
             },
-            authorityRef: RESOURCE_AUTHORITIES.MUTATE,
+            effectAuthorityRef: RESOURCE_AUTHORITIES.MUTATE,
             originRef: {
               originId: "@agent-os/resource-carrier",
               originKind: "extension_package",

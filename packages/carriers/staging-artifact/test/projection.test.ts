@@ -11,7 +11,7 @@ import type { ExtensionCapability } from "@agent-os/kernel/extensions";
 const stagingClaim = makePreClaim({
   operationRef: "staging:session-1:reap",
   scopeRef: { kind: "artifact", scopeId: "artifact/session-1" },
-  authorityRef: {
+  effectAuthorityRef: {
     authorityId: "@agent-os/staging-artifact.reap",
     authorityClass: "effect",
   },
@@ -165,7 +165,7 @@ describe("@agent-os/staging-artifact", () => {
             phase: "lived",
             operationRef: "staging:session-1:reap",
             scopeRef: { kind: "artifact", scopeId: "artifact/session-1" },
-            authorityRef: {
+            effectAuthorityRef: {
               authorityId: "@agent-os/staging-artifact.reap",
               authorityClass: "effect",
             },

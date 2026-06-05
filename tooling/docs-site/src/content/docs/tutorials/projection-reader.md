@@ -35,7 +35,7 @@ to app projections: durable facts are the source, projections are derived.
    const claim = makePreClaim({
      operationRef: "publish:subject-1",
      scopeRef: { kind: "artifact", scopeId: "artifact/subject-1" },
-     authorityRef: { authorityId: "publish.subject", authorityClass: "effect" },
+     effectAuthorityRef: { authorityId: "publish.subject", authorityClass: "effect" },
      originRef: { originId: "agent/run-1", originKind: "agent_run" },
    });
 

@@ -40,7 +40,7 @@ interface ClaimTraceBase {
   readonly ts: number;
   readonly operationRef: string;
   readonly scopeRef: ScopeRef;
-  readonly authorityRef: AuthorityRef;
+  readonly effectAuthorityRef: AuthorityRef;
   readonly originRef: OriginRef;
 }
 
@@ -102,7 +102,7 @@ const claimTraceBase = (event: LedgerEvent, claim: EffectClaim): ClaimTraceBase 
   ts: event.ts,
   operationRef: claim.operationRef,
   scopeRef: claim.scopeRef,
-  authorityRef: claim.authorityRef,
+  effectAuthorityRef: claim.effectAuthorityRef,
   originRef: claim.originRef,
 });
 

@@ -56,7 +56,7 @@ export interface RejectionRef {
 interface ClaimBase {
   readonly operationRef: OperationRef;
   readonly scopeRef: ScopeRef;
-  readonly authorityRef: AuthorityRef;
+  readonly effectAuthorityRef: AuthorityRef;
   readonly originRef: OriginRef;
 }
 
@@ -102,7 +102,7 @@ export type ClaimValidationIssue =
   | "phase_invalid"
   | "operation_ref_invalid"
   | "scope_ref_invalid"
-  | "authority_ref_invalid"
+  | "effect_authority_ref_invalid"
   | "origin_ref_invalid"
   | "anchor_ref_invalid"
   | "rejection_ref_invalid"
@@ -151,11 +151,11 @@ export const scopeRefKey = (scopeRef: ScopeRef): string => {
   }
 };
 
-export const authorityRefKey = (authorityRef: AuthorityRef): string =>
+export const authorityRefKey = (effectAuthorityRef: AuthorityRef): string =>
   [
-    refKeyPart(authorityRef.authorityClass),
-    refKeyPart(authorityRef.authorityId),
-    authorityRef.version === undefined ? "none" : refKeyPart(authorityRef.version),
+    refKeyPart(effectAuthorityRef.authorityClass),
+    refKeyPart(effectAuthorityRef.authorityId),
+    effectAuthorityRef.version === undefined ? "none" : refKeyPart(effectAuthorityRef.version),
   ].join(":");
 
 export type FactOwnerRef = string;
@@ -172,7 +172,7 @@ export const ledgerTruthKey = (spec: {
 export const makePreClaim = (spec: {
   readonly operationRef: OperationRef;
   readonly scopeRef: ScopeRef;
-  readonly authorityRef: AuthorityRef;
+  readonly effectAuthorityRef: AuthorityRef;
   readonly originRef: OriginRef;
 }): PreClaim => ({ phase: "pre", ...spec });
 
@@ -266,8 +266,8 @@ export const validateEffectClaim = (value: unknown): ClaimValidation => {
   if (!isScopeRef(value.scopeRef)) {
     issues.push("scope_ref_invalid");
   }
-  if (!isAuthorityRef(value.authorityRef)) {
-    issues.push("authority_ref_invalid");
+  if (!isAuthorityRef(value.effectAuthorityRef)) {
+    issues.push("effect_authority_ref_invalid");
   }
   if (!isOriginRef(value.originRef)) {
     issues.push("origin_ref_invalid");

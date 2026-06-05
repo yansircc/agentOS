@@ -35,7 +35,7 @@ export {
 } from "./boundary-contract";
 export * from "./carrier";
 export type {
-  AuthorityContract,
+  EffectAuthorityContract,
   BindingMaterialRef,
   BindingMaterialRequirement,
   CredentialMaterialRef,
@@ -55,7 +55,7 @@ export {
   credentialMaterialRef,
   endpointMaterialRef,
   externalResourceMaterialRef,
-  isAuthorityContract,
+  isEffectAuthorityContract,
   isMaterialRef,
   isMaterialRequirement,
   materialRefKey,

@@ -29,7 +29,7 @@ const livedClaim: LivedClaim = {
   phase: "lived",
   operationRef: "tool:runtime-event-test:1:0:call-1",
   scopeRef: { kind: "conversation", scopeId: scope },
-  authorityRef: { authorityId: "tool:lookup", authorityClass: "read" },
+  effectAuthorityRef: { authorityId: "tool:lookup", authorityClass: "read" },
   originRef: { originId: "run:1", originKind: "submit" },
   anchorRef: {
     anchorId: "tool.executed:tool:runtime-event-test:1:0:call-1",
@@ -42,7 +42,7 @@ const rejectedClaim: RejectedClaim = {
   phase: "rejected",
   operationRef: "tool:runtime-event-test:1:0:call-1",
   scopeRef: { kind: "conversation", scopeId: scope },
-  authorityRef: { authorityId: "tool:lookup", authorityClass: "read" },
+  effectAuthorityRef: { authorityId: "tool:lookup", authorityClass: "read" },
   originRef: { originId: "run:1", originKind: "submit" },
   rejectionRef: {
     rejectionId: "tool.rejected:tool:runtime-event-test:1:0:call-1",

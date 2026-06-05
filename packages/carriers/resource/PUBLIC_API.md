@@ -27,7 +27,7 @@ Status: 0.2.x active development for provider-neutral resource carrier algebra. 
 - `.:ResourceProvisionRequest`
 - `.:ResourceProvisionedPayload`
 - `.:projectResource`
-- `.:resourceAuthorityContracts`
+- `.:resourceEffectAuthorityContracts`
 - `.:resourceBoundaryContract`
 - `.:resourceBoundaryPackage`
 - `.:resourceCarrierDefinition`

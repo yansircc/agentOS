@@ -12,7 +12,7 @@ import { makeCommitters, type ExtensionCapability } from "@agent-os/kernel/exten
 const claim = makePreClaim({
   operationRef: "publish:subject-1",
   scopeRef: { kind: "artifact", scopeId: "artifact/subject-1" },
-  authorityRef: {
+  effectAuthorityRef: {
     authorityId: "publish.subject",
     authorityClass: "effect",
   },

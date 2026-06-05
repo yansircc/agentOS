@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 import { defineCarrier, event, ledgerProjection, lived, rejected } from "@agent-os/kernel/carrier";
-import { materialRequirement, type AuthorityContract } from "@agent-os/kernel/material-ref";
+import { materialRequirement, type EffectAuthorityContract } from "@agent-os/kernel/material-ref";
 
 export const RESOURCE_EVENT_PREFIX = "resource.";
 
@@ -40,21 +40,21 @@ const binding = materialRequirement({
   kind: "binding",
 });
 
-export const resourceAuthorityContracts: ReadonlyArray<AuthorityContract> = [
+export const resourceEffectAuthorityContracts: ReadonlyArray<EffectAuthorityContract> = [
   {
-    authorityRef: RESOURCE_AUTHORITIES.PROVISION,
+    effectAuthorityRef: RESOURCE_AUTHORITIES.PROVISION,
     requiredMaterials: [apiToken, account],
   },
   {
-    authorityRef: RESOURCE_AUTHORITIES.BIND,
+    effectAuthorityRef: RESOURCE_AUTHORITIES.BIND,
     requiredMaterials: [apiToken, account, binding],
   },
   {
-    authorityRef: RESOURCE_AUTHORITIES.MUTATE,
+    effectAuthorityRef: RESOURCE_AUTHORITIES.MUTATE,
     requiredMaterials: [apiToken, account, binding],
   },
   {
-    authorityRef: RESOURCE_AUTHORITIES.DESTROY,
+    effectAuthorityRef: RESOURCE_AUTHORITIES.DESTROY,
     requiredMaterials: [apiToken, account],
   },
 ];
@@ -97,7 +97,7 @@ export const resourceCarrierDefinition = defineCarrier({
   packageId: "@agent-os/resource-carrier",
   prefix: RESOURCE_EVENT_PREFIX,
   roles: ["resolver", "reader"],
-  authorityContracts: resourceAuthorityContracts,
+  effectAuthorityContracts: resourceEffectAuthorityContracts,
   materialRequirements: [apiToken, account, binding],
   events: {
     resource_provisioned: event({

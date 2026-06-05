@@ -7,7 +7,7 @@ import {
   credentialMaterialRef,
   endpointMaterialRef,
   externalResourceMaterialRef,
-  isAuthorityContract,
+  isEffectAuthorityContract,
   isMaterialRef,
   isMaterialRequirement,
   materialRefKey,
@@ -120,7 +120,7 @@ describe("MaterialRef algebra", () => {
 
   it("binds required materials to an authority contract", () => {
     const contract = {
-      authorityRef: {
+      effectAuthorityRef: {
         authorityId: "cf.deploy_worker",
         authorityClass: "deploy",
       },
@@ -141,8 +141,8 @@ describe("MaterialRef algebra", () => {
       ],
     };
 
-    expect(isAuthorityContract(contract)).toBe(true);
-    expect(isAuthorityContract({ ...contract, requiredMaterials: [{}] })).toBe(false);
+    expect(isEffectAuthorityContract(contract)).toBe(true);
+    expect(isEffectAuthorityContract({ ...contract, requiredMaterials: [{}] })).toBe(false);
   });
 
   it("material refs are resolver input, not PreClaim identity", () => {
@@ -153,7 +153,7 @@ describe("MaterialRef algebra", () => {
         scopeId: "cf/account/acme",
         systemRef: "cloudflare",
       },
-      authorityRef: {
+      effectAuthorityRef: {
         authorityId: "cf.deploy_worker",
         authorityClass: "deploy",
       },

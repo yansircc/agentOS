@@ -28,7 +28,7 @@ const preClaim: EffectClaim = {
   phase: "pre",
   operationRef: "dispatch:source:binding:target:idem-1",
   scopeRef: { kind: "conversation", scopeId: "thread/target" },
-  authorityRef: {
+  effectAuthorityRef: {
     authorityId: "cap_dispatch",
     authorityClass: "effect",
   },
@@ -48,7 +48,7 @@ const toolClaim: EffectClaim = {
   phase: "lived",
   operationRef: "tool:projection-scope:1:0:call-1",
   scopeRef: livedClaim.scopeRef,
-  authorityRef: {
+  effectAuthorityRef: {
     authorityId: "tool:lookup",
     authorityClass: "read",
   },
@@ -67,7 +67,7 @@ const rejectedClaim: EffectClaim = {
   phase: "rejected",
   operationRef: "verify:subject-1",
   scopeRef: { kind: "artifact", scopeId: "artifact/subject-1" },
-  authorityRef: {
+  effectAuthorityRef: {
     authorityId: "verification.policy.default",
     authorityClass: "effect",
   },
@@ -104,7 +104,7 @@ describe("standard projections — contract", () => {
         phase: "pre",
         operationRef: preClaim.operationRef,
         scopeRef: preClaim.scopeRef,
-        authorityRef: preClaim.authorityRef,
+        effectAuthorityRef: preClaim.effectAuthorityRef,
         originRef: preClaim.originRef,
       },
       {
@@ -115,7 +115,7 @@ describe("standard projections — contract", () => {
         phase: "lived",
         operationRef: livedClaim.operationRef,
         scopeRef: livedClaim.scopeRef,
-        authorityRef: livedClaim.authorityRef,
+        effectAuthorityRef: livedClaim.effectAuthorityRef,
         originRef: livedClaim.originRef,
         anchorRef: livedClaim.anchorRef,
       },
@@ -127,7 +127,7 @@ describe("standard projections — contract", () => {
         phase: "lived",
         operationRef: "tool:projection-scope:1:0:call-1",
         scopeRef: toolClaim.scopeRef,
-        authorityRef: toolClaim.authorityRef,
+        effectAuthorityRef: toolClaim.effectAuthorityRef,
         originRef: toolClaim.originRef,
         anchorRef: toolClaim.anchorRef,
       },
@@ -147,7 +147,7 @@ describe("standard projections — contract", () => {
         phase: "lived",
         operationRef: livedClaim.operationRef,
         scopeRef: livedClaim.scopeRef,
-        authorityRef: livedClaim.authorityRef,
+        effectAuthorityRef: livedClaim.effectAuthorityRef,
         originRef: livedClaim.originRef,
         anchorRef: livedClaim.anchorRef,
       },

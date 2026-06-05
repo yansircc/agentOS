@@ -57,9 +57,9 @@ describe("BoundaryContract", () => {
         payloadSchema: recordedPayload,
       },
     },
-    authorityContracts: [
+    effectAuthorityContracts: [
       {
-        authorityRef: {
+        effectAuthorityRef: {
           authorityId: "@agent-os/example-carrier.record",
           authorityClass: "effect",
         },
@@ -179,7 +179,7 @@ describe("BoundaryContract", () => {
     expect(
       validateBoundaryContract({
         ...contract,
-        authorityContracts: [],
+        effectAuthorityContracts: [],
       }),
     ).toEqual({
       ok: false,
@@ -191,14 +191,14 @@ describe("BoundaryContract", () => {
     expect(
       validateBoundaryContract({
         ...contract,
-        authorityContracts: [],
+        effectAuthorityContracts: [],
         materialRequirements: [],
       }),
     ).toEqual({
       ok: true,
       contract: {
         ...contract,
-        authorityContracts: [],
+        effectAuthorityContracts: [],
         materialRequirements: [],
       },
     });

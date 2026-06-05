@@ -15,7 +15,7 @@ import {
 const claim = makePreClaim({
   operationRef: "dynamic-worker:session-1:run-1",
   scopeRef: { kind: "session", scopeId: "session/1" },
-  authorityRef: {
+  effectAuthorityRef: {
     authorityId: "dynamic-worker.run",
     authorityClass: "effect",
   },

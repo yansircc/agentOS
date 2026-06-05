@@ -215,7 +215,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
             kind: "conversation",
             scopeId: "dispatch-receiver-atomic",
           },
-          authorityRef: {
+          effectAuthorityRef: {
             authorityId: "cap_dispatch",
             authorityClass: "effect",
           },

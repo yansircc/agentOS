@@ -73,7 +73,7 @@ const claimFor = (
   makePreClaim({
     operationRef: `webapp:${subjectRef}:${packageId}`,
     scopeRef: { kind: "external", scopeId: "site/acme", systemRef: "cloudflare" },
-    authorityRef: {
+    effectAuthorityRef: {
       authorityId: packageId,
       authorityClass: packageId.includes("staging") ? "artifact" : "deploy",
     },

@@ -69,6 +69,7 @@
 - `./effect-claim:ClaimValidation`
 - `./effect-claim:ClaimValidationIssue`
 - `./effect-claim:EffectClaim`
+- `./effect-claim:FactOwnerRef`
 - `./effect-claim:INVALID_ADMITTER_REJECTION_REF_REASON`
 - `./effect-claim:INVALID_ADMITTER_VERDICT_REASON`
 - `./effect-claim:LivedClaim`
@@ -79,16 +80,21 @@
 - `./effect-claim:RejectionRef`
 - `./effect-claim:ScopeRef`
 - `./effect-claim:admitterErrorRejectionRef`
+- `./effect-claim:authorityRefKey`
+- `./effect-claim:factOwnerKey`
 - `./effect-claim:invalidAdmitterRejectionRef`
 - `./effect-claim:invalidAdmitterVerdictRejectionRef`
 - `./effect-claim:isAnchorRef`
 - `./effect-claim:isAuthorityRef`
+- `./effect-claim:isFactOwnerRef`
 - `./effect-claim:isOriginRef`
 - `./effect-claim:isRejectionRef`
 - `./effect-claim:isScopeRef`
+- `./effect-claim:ledgerTruthKey`
 - `./effect-claim:makeOperationRef`
 - `./effect-claim:makePreClaim`
 - `./effect-claim:normalizeAdmitVerdict`
+- `./effect-claim:scopeRefKey`
 - `./effect-claim:validateEffectClaim`
 - `./errors:ABORT`
 - `./errors:AbortKind`
@@ -162,7 +168,7 @@
 - `./llm:llmOutputItemsFromTextAndToolCalls`
 - `./llm:textFromLlmOutputItems`
 - `./llm:toolCallsFromLlmOutputItems`
-- `./material-ref:AuthorityContract`
+- `./material-ref:EffectAuthorityContract`
 - `./material-ref:BindingMaterialRef`
 - `./material-ref:BindingMaterialRequirement`
 - `./material-ref:CredentialMaterialRef`
@@ -180,7 +186,7 @@
 - `./material-ref:credentialMaterialRef`
 - `./material-ref:endpointMaterialRef`
 - `./material-ref:externalResourceMaterialRef`
-- `./material-ref:isAuthorityContract`
+- `./material-ref:isEffectAuthorityContract`
 - `./material-ref:isMaterialRef`
 - `./material-ref:isMaterialRequirement`
 - `./material-ref:materialRefKey`
@@ -280,6 +286,7 @@
 - `./types:EventHandler`
 - `./types:EventQueryOptions`
 - `./types:LedgerEvent`
+- `./types:LedgerEventIdentity`
 - `./types:LedgerEventSchema`
 - `./types:LedgerEventRpc`
 - `./types:QuotaState`
@@ -324,7 +331,7 @@
 - `.:AnthropicMessagesRoute`
 - `.:AnyAgentSchema`
 - `.:AnyAgentSchemaSource`
-- `.:AuthorityContract`
+- `.:EffectAuthorityContract`
 - `.:AuthorityRef`
 - `.:BindingMaterialRef`
 - `.:BindingMaterialRequirement`
@@ -370,6 +377,7 @@
 - `.:DispatchToScopeResult`
 - `.:DispatchToScopeSpec`
 - `.:EffectClaim`
+- `.:FactOwnerRef`
 - `.:EndpointMaterialRef`
 - `.:EndpointMaterialRequirement`
 - `.:EventHandler`
@@ -391,6 +399,7 @@
 - `.:InvalidScheduleAt`
 - `.:JsonStringifyError`
 - `.:LedgerEvent`
+- `.:LedgerEventIdentity`
 - `.:LedgerEventSchema`
 - `.:LedgerEventRpc`
 - `.:LivedClaim`
@@ -475,6 +484,7 @@
 - `.:UpstreamFailure`
 - `.:admitterErrorRejectionRef`
 - `.:assertAgentSchemaProfile`
+- `.:authorityRefKey`
 - `.:bindingMaterialRef`
 - `.:boundaryPackage`
 - `.:buildContextPack`
@@ -493,6 +503,7 @@
 - `.:endpointMaterialRef`
 - `.:event`
 - `.:eventNamespace`
+- `.:factOwnerKey`
 - `.:executeTool`
 - `.:extensionOwnsEvent`
 - `.:externalResourceMaterialRef`
@@ -502,9 +513,10 @@
 - `.:inspectAgentSchemaProfile`
 - `.:isAgentSchema`
 - `.:isAnchorRef`
-- `.:isAuthorityContract`
+- `.:isEffectAuthorityContract`
 - `.:isAuthorityRef`
 - `.:isBoundaryPackage`
+- `.:isFactOwnerRef`
 - `.:isClaimedEventKind`
 - `.:isCoreClaimedEventKind`
 - `.:isMaterialRef`
@@ -513,6 +525,7 @@
 - `.:isRejectionRef`
 - `.:isScopeRef`
 - `.:isSymbolicSettlementValue`
+- `.:ledgerTruthKey`
 - `.:ledgerProjection`
 - `.:lived`
 - `.:llmRouteMaterialRefs`
@@ -535,6 +548,7 @@
 - `.:resolveRuntimeScope`
 - `.:resolveStatefulSessionRoot`
 - `.:resolveStringMaterial`
+- `.:scopeRefKey`
 - `.:runtimeScopeKey`
 - `.:safeStringify`
 - `.:safeStringifyPretty`

@@ -31,7 +31,7 @@ const expectFailure = <A>(exit: Exit.Exit<unknown, A>): A => {
 const sessionClaim = makePreClaim({
   operationRef: "workspace-session:run-1:start",
   scopeRef: { kind: "session", scopeId: "session/run-1" },
-  authorityRef: {
+  effectAuthorityRef: {
     authorityId: "@agent-os/workspace-session.start",
     authorityClass: "effect",
   },
@@ -44,7 +44,7 @@ const sessionClaim = makePreClaim({
 const artifactClaim = makePreClaim({
   operationRef: "workspace-session:artifact:start",
   scopeRef: { kind: "artifact", scopeId: "artifact/run-1" },
-  authorityRef: {
+  effectAuthorityRef: {
     authorityId: "@agent-os/workspace-session.start",
     authorityClass: "effect",
   },
@@ -103,7 +103,7 @@ describe("@agent-os/workspace-session-cloudflare", () => {
           phase: "lived",
           operationRef: "workspace-session:run-1:start",
           scopeRef: { kind: "session", scopeId: "session/run-1" },
-          authorityRef: {
+          effectAuthorityRef: {
             authorityId: "@agent-os/workspace-session.start",
             authorityClass: "effect",
           },

@@ -73,6 +73,7 @@ title: "@agent-os/kernel Public API Intent"
 - `./effect-claim:ClaimValidation`
 - `./effect-claim:ClaimValidationIssue`
 - `./effect-claim:EffectClaim`
+- `./effect-claim:FactOwnerRef`
 - `./effect-claim:INVALID_ADMITTER_REJECTION_REF_REASON`
 - `./effect-claim:INVALID_ADMITTER_VERDICT_REASON`
 - `./effect-claim:LivedClaim`
@@ -83,16 +84,21 @@ title: "@agent-os/kernel Public API Intent"
 - `./effect-claim:RejectionRef`
 - `./effect-claim:ScopeRef`
 - `./effect-claim:admitterErrorRejectionRef`
+- `./effect-claim:authorityRefKey`
+- `./effect-claim:factOwnerKey`
 - `./effect-claim:invalidAdmitterRejectionRef`
 - `./effect-claim:invalidAdmitterVerdictRejectionRef`
 - `./effect-claim:isAnchorRef`
 - `./effect-claim:isAuthorityRef`
+- `./effect-claim:isFactOwnerRef`
 - `./effect-claim:isOriginRef`
 - `./effect-claim:isRejectionRef`
 - `./effect-claim:isScopeRef`
+- `./effect-claim:ledgerTruthKey`
 - `./effect-claim:makeOperationRef`
 - `./effect-claim:makePreClaim`
 - `./effect-claim:normalizeAdmitVerdict`
+- `./effect-claim:scopeRefKey`
 - `./effect-claim:validateEffectClaim`
 - `./errors:ABORT`
 - `./errors:AbortKind`
@@ -166,7 +172,7 @@ title: "@agent-os/kernel Public API Intent"
 - `./llm:llmOutputItemsFromTextAndToolCalls`
 - `./llm:textFromLlmOutputItems`
 - `./llm:toolCallsFromLlmOutputItems`
-- `./material-ref:AuthorityContract`
+- `./material-ref:EffectAuthorityContract`
 - `./material-ref:BindingMaterialRef`
 - `./material-ref:BindingMaterialRequirement`
 - `./material-ref:CredentialMaterialRef`
@@ -184,7 +190,7 @@ title: "@agent-os/kernel Public API Intent"
 - `./material-ref:credentialMaterialRef`
 - `./material-ref:endpointMaterialRef`
 - `./material-ref:externalResourceMaterialRef`
-- `./material-ref:isAuthorityContract`
+- `./material-ref:isEffectAuthorityContract`
 - `./material-ref:isMaterialRef`
 - `./material-ref:isMaterialRequirement`
 - `./material-ref:materialRefKey`
@@ -284,6 +290,7 @@ title: "@agent-os/kernel Public API Intent"
 - `./types:EventHandler`
 - `./types:EventQueryOptions`
 - `./types:LedgerEvent`
+- `./types:LedgerEventIdentity`
 - `./types:LedgerEventSchema`
 - `./types:LedgerEventRpc`
 - `./types:QuotaState`
@@ -328,7 +335,7 @@ title: "@agent-os/kernel Public API Intent"
 - `.:AnthropicMessagesRoute`
 - `.:AnyAgentSchema`
 - `.:AnyAgentSchemaSource`
-- `.:AuthorityContract`
+- `.:EffectAuthorityContract`
 - `.:AuthorityRef`
 - `.:BindingMaterialRef`
 - `.:BindingMaterialRequirement`
@@ -374,6 +381,7 @@ title: "@agent-os/kernel Public API Intent"
 - `.:DispatchToScopeResult`
 - `.:DispatchToScopeSpec`
 - `.:EffectClaim`
+- `.:FactOwnerRef`
 - `.:EndpointMaterialRef`
 - `.:EndpointMaterialRequirement`
 - `.:EventHandler`
@@ -395,6 +403,7 @@ title: "@agent-os/kernel Public API Intent"
 - `.:InvalidScheduleAt`
 - `.:JsonStringifyError`
 - `.:LedgerEvent`
+- `.:LedgerEventIdentity`
 - `.:LedgerEventSchema`
 - `.:LedgerEventRpc`
 - `.:LivedClaim`
@@ -479,6 +488,7 @@ title: "@agent-os/kernel Public API Intent"
 - `.:UpstreamFailure`
 - `.:admitterErrorRejectionRef`
 - `.:assertAgentSchemaProfile`
+- `.:authorityRefKey`
 - `.:bindingMaterialRef`
 - `.:boundaryPackage`
 - `.:buildContextPack`
@@ -497,6 +507,7 @@ title: "@agent-os/kernel Public API Intent"
 - `.:endpointMaterialRef`
 - `.:event`
 - `.:eventNamespace`
+- `.:factOwnerKey`
 - `.:executeTool`
 - `.:extensionOwnsEvent`
 - `.:externalResourceMaterialRef`
@@ -506,9 +517,10 @@ title: "@agent-os/kernel Public API Intent"
 - `.:inspectAgentSchemaProfile`
 - `.:isAgentSchema`
 - `.:isAnchorRef`
-- `.:isAuthorityContract`
+- `.:isEffectAuthorityContract`
 - `.:isAuthorityRef`
 - `.:isBoundaryPackage`
+- `.:isFactOwnerRef`
 - `.:isClaimedEventKind`
 - `.:isCoreClaimedEventKind`
 - `.:isMaterialRef`
@@ -517,6 +529,7 @@ title: "@agent-os/kernel Public API Intent"
 - `.:isRejectionRef`
 - `.:isScopeRef`
 - `.:isSymbolicSettlementValue`
+- `.:ledgerTruthKey`
 - `.:ledgerProjection`
 - `.:lived`
 - `.:llmRouteMaterialRefs`
@@ -539,6 +552,7 @@ title: "@agent-os/kernel Public API Intent"
 - `.:resolveRuntimeScope`
 - `.:resolveStatefulSessionRoot`
 - `.:resolveStringMaterial`
+- `.:scopeRefKey`
 - `.:runtimeScopeKey`
 - `.:safeStringify`
 - `.:safeStringifyPretty`

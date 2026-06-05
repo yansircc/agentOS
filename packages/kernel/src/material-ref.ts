@@ -88,8 +88,8 @@ export type MaterialRequirementInput =
       readonly required?: boolean;
     });
 
-export interface AuthorityContract {
-  readonly authorityRef: AuthorityRef;
+export interface EffectAuthorityContract {
+  readonly effectAuthorityRef: AuthorityRef;
   readonly requiredMaterials: ReadonlyArray<MaterialRequirement>;
 }
 
@@ -238,10 +238,10 @@ export const isMaterialRequirement = (value: unknown): value is MaterialRequirem
   }
 };
 
-export const isAuthorityContract = (value: unknown): value is AuthorityContract =>
+export const isEffectAuthorityContract = (value: unknown): value is EffectAuthorityContract =>
   Predicate.isRecord(value) &&
-  hasOnlyKeys(value, new Set(["authorityRef", "requiredMaterials"])) &&
-  isAuthorityRef(value.authorityRef) &&
+  hasOnlyKeys(value, new Set(["effectAuthorityRef", "requiredMaterials"])) &&
+  isAuthorityRef(value.effectAuthorityRef) &&
   Array.isArray(value.requiredMaterials) &&
   value.requiredMaterials.every(isMaterialRequirement);
 

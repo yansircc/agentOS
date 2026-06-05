@@ -152,12 +152,7 @@ Rejection kinds: `unsupported`, `resource_denied`, `policy_denied`, `provider_re
 
 ### Authority Requirements
 
-| Authority                              | Class  | Required materials                                                                                                                               |
-| -------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `@agent-os/resource-carrier.provision` | effect | `api_token`: required credential, purpose=resource_api<br>`account`: required external_resource, resource=account                                |
-| `@agent-os/resource-carrier.bind`      | effect | `api_token`: required credential, purpose=resource_api<br>`account`: required external_resource, resource=account<br>`binding`: required binding |
-| `@agent-os/resource-carrier.mutate`    | effect | `api_token`: required credential, purpose=resource_api<br>`account`: required external_resource, resource=account<br>`binding`: required binding |
-| `@agent-os/resource-carrier.destroy`   | effect | `api_token`: required credential, purpose=resource_api<br>`account`: required external_resource, resource=account                                |
+None.
 
 ### Material Requirements
 

@@ -23,7 +23,7 @@
 - `.:ResourceProvisionRequest`
 - `.:ResourceProvisionedPayload`
 - `.:projectResource`
-- `.:resourceAuthorityContracts`
+- `.:resourceEffectAuthorityContracts`
 - `.:resourceBoundaryContract`
 - `.:resourceBoundaryPackage`
 - `.:resourceCarrierDefinition`

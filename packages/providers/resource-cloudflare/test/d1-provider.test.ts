@@ -55,7 +55,7 @@ const d1BindingRef = bindingMaterialRef({
 
 const claimFor = (
   step: "provision" | "bind" | "mutate" | "destroy",
-  authorityRef = step === "provision"
+  effectAuthorityRef = step === "provision"
     ? RESOURCE_AUTHORITIES.PROVISION
     : step === "bind"
       ? RESOURCE_AUTHORITIES.BIND
@@ -70,7 +70,7 @@ const claimFor = (
       scopeId: "cloudflare/tenant/d1/main",
       systemRef: "cloudflare",
     },
-    authorityRef,
+    effectAuthorityRef,
     originRef: {
       originId: "@agent-os/resource-carrier",
       originKind: "extension_package",

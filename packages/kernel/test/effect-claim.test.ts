@@ -14,7 +14,7 @@ describe("EffectClaim calculus", () => {
   const pre = makePreClaim({
     operationRef: makeOperationRef("dispatch", ["source/a", "peer", "thread/t1", "intent 1"]),
     scopeRef: { kind: "conversation", scopeId: "thread/t1" },
-    authorityRef: {
+    effectAuthorityRef: {
       authorityId: "cap_dispatch",
       authorityClass: "effect",
     },

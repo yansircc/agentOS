@@ -55,7 +55,7 @@ const commit = (
 const toolClaim = makePreClaim({
   operationRef: "tool:ag-ui-test:1:0:call-1",
   scopeRef: { kind: "conversation", scopeId: scope },
-  authorityRef: { authorityId: "tool:lookup", authorityClass: "tool" },
+  effectAuthorityRef: { authorityId: "tool:lookup", authorityClass: "tool" },
   originRef: { originId: "run:1", originKind: "submit" },
 });
 

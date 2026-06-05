@@ -91,7 +91,7 @@ const terminalAdmissionRejectionRef = (
     phase: "rejected",
     operationRef: claim.operationRef,
     scopeRef: claim.scopeRef,
-    authorityRef: claim.authorityRef,
+    effectAuthorityRef: claim.effectAuthorityRef,
     originRef: claim.originRef,
     rejectionRef: terminal,
   });

@@ -51,7 +51,7 @@ const dispatchEnvelope = {
   claim: makePreClaim({
     operationRef: "dispatch:test",
     scopeRef: { kind: "conversation", scopeId: "image-target" },
-    authorityRef: { authorityId: "cap_dispatch", authorityClass: "effect" },
+    effectAuthorityRef: { authorityId: "cap_dispatch", authorityClass: "effect" },
     originRef: { originId: "sender", originKind: "agent_do" },
   }),
 };

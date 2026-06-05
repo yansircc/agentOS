@@ -73,7 +73,7 @@ The tool contract has one authority and an admitter role:
 
 ```text
 toolId: lookup_weather
-authorityRef.authorityClass: weather.read
+effectAuthorityRef.authorityClass: weather.read
 roles: generator, admitter
 ```
 

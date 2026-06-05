@@ -18,7 +18,7 @@ const livedClaim = settleDispatchInboundAccepted(
   makePreClaim({
     operationRef: "dispatch:source:target:intent",
     scopeRef: { kind: "conversation", scopeId: "target" },
-    authorityRef: { authorityId: "cap_dispatch", authorityClass: "effect" },
+    effectAuthorityRef: { authorityId: "cap_dispatch", authorityClass: "effect" },
     originRef: { originId: "source", originKind: "agent_do" },
   }),
   { sourceScope: "source", targetScope: "target", deliveredEventId: 1 },

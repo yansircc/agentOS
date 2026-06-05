@@ -41,7 +41,7 @@ const eventIdentity = (scopeId: string) => ({
 const claim = makePreClaim({
   operationRef: "dispatch:test",
   scopeRef: { kind: "conversation", scopeId: "sender" },
-  authorityRef: { authorityId: "dispatch.send", authorityClass: "effect" },
+  effectAuthorityRef: { authorityId: "dispatch.send", authorityClass: "effect" },
   originRef: { originId: "backend-protocol-test", originKind: "test" },
 });
 

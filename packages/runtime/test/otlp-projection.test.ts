@@ -28,7 +28,7 @@ const livedClaim: LivedClaim = {
   phase: "lived",
   operationRef: "tool:otlp-projection:1:0:call-1",
   scopeRef: { kind: "conversation", scopeId: scope },
-  authorityRef: { authorityId: "tool:lookup", authorityClass: "read" },
+  effectAuthorityRef: { authorityId: "tool:lookup", authorityClass: "read" },
   originRef: { originId: "run:1", originKind: "submit" },
   anchorRef: {
     anchorId: "tool.executed:tool:otlp-projection:1:0:call-1",

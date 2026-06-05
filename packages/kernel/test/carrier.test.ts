@@ -7,7 +7,7 @@ import { makePreClaim } from "../src/effect-claim";
 const claim = makePreClaim({
   operationRef: "example:op",
   scopeRef: { kind: "conversation", scopeId: "thread:1" },
-  authorityRef: { authorityId: "example.record", authorityClass: "effect" },
+  effectAuthorityRef: { authorityId: "example.record", authorityClass: "effect" },
   originRef: { originId: "example", originKind: "test" },
 });
 

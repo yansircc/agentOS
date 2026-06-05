@@ -21,7 +21,7 @@ import {
 const sessionClaim = makePreClaim({
   operationRef: "workspace-session:session-1:start",
   scopeRef: { kind: "session", scopeId: "session/1" },
-  authorityRef: {
+  effectAuthorityRef: {
     authorityId: "@agent-os/workspace-session.start",
     authorityClass: "effect",
   },

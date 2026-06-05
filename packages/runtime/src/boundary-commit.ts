@@ -31,13 +31,13 @@ export class BoundaryCommitRejected extends Data.TaggedError("agent_os.boundary_
 }> {}
 
 const authorityKey = (claim: EffectClaim): string =>
-  `${claim.authorityRef.authorityClass}:${claim.authorityRef.authorityId}:${claim.authorityRef.version ?? ""}`;
+  `${claim.effectAuthorityRef.authorityClass}:${claim.effectAuthorityRef.authorityId}:${claim.effectAuthorityRef.version ?? ""}`;
 
 const contractAuthorityKeys = (contract: BoundaryContract): ReadonlySet<string> =>
   new Set(
-    contract.authorityContracts.map(
-      ({ authorityRef }) =>
-        `${authorityRef.authorityClass}:${authorityRef.authorityId}:${authorityRef.version ?? ""}`,
+    contract.effectAuthorityContracts.map(
+      ({ effectAuthorityRef }) =>
+        `${effectAuthorityRef.authorityClass}:${effectAuthorityRef.authorityId}:${effectAuthorityRef.version ?? ""}`,
     ),
   );
 

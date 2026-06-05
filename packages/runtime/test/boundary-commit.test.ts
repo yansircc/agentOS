@@ -46,7 +46,7 @@ const contract = defineBoundaryContract({
       claim: { key: "claim", phase: "rejected", rejectionKinds: ["provider_rejected"] },
     },
   },
-  authorityContracts: [],
+  effectAuthorityContracts: [],
   materialRequirements: [],
   settlement,
   projection: {
@@ -58,7 +58,7 @@ const contract = defineBoundaryContract({
 const claim = makePreClaim({
   operationRef: "slot:op",
   scopeRef: { kind: "conversation", scopeId: "thread:1" },
-  authorityRef: { authorityId: "slot.record", authorityClass: "effect" },
+  effectAuthorityRef: { authorityId: "slot.record", authorityClass: "effect" },
   originRef: { originId: "slot-test", originKind: "test" },
 });
 

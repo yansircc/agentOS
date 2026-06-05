@@ -18,7 +18,7 @@ describe("tool registry construction", () => {
     expect(validateToolRegistry({ lookup: tool })).toEqual({ ok: true });
     expect(tool.contract).toEqual({
       toolId: "lookup",
-      authorityRef: {
+      effectAuthorityRef: {
         authorityId: "tool:lookup",
         authorityClass: "read",
       },
@@ -93,7 +93,7 @@ describe("tool registry construction", () => {
       ...tool,
       contract: {
         toolId: "lookup",
-        authorityRef: {
+        effectAuthorityRef: {
           authorityId: "tool:lookup",
           authorityClass: "read",
         },

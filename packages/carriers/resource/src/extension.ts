@@ -1,7 +1,7 @@
 export {
   RESOURCE_AUTHORITIES,
   RESOURCE_EVENT_PREFIX,
-  resourceAuthorityContracts,
+  resourceEffectAuthorityContracts,
   resourceBoundaryContract,
   resourceBoundaryPackage,
   resourceCarrierDefinition,

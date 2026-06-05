@@ -13,7 +13,7 @@ import { makeCommitters, type ExtensionCapability } from "@agent-os/kernel/exten
 const deployClaim = makePreClaim({
   operationRef: "deploy:session-1:promote",
   scopeRef: { kind: "external", scopeId: "site/acme", systemRef: "cloudflare" },
-  authorityRef: {
+  effectAuthorityRef: {
     authorityId: "@agent-os/deploy.promote",
     authorityClass: "deploy",
   },
@@ -217,7 +217,7 @@ describe("@agent-os/deploy", () => {
               scopeId: "site/acme",
               systemRef: "cloudflare",
             },
-            authorityRef: {
+            effectAuthorityRef: {
               authorityId: "@agent-os/deploy.promote",
               authorityClass: "deploy",
             },

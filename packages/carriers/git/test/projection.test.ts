@@ -12,7 +12,7 @@ import { makeCommitters, type ExtensionCapability } from "@agent-os/kernel/exten
 const gitClaim = makePreClaim({
   operationRef: "git:session-1:commit",
   scopeRef: { kind: "session", scopeId: "session/1" },
-  authorityRef: {
+  effectAuthorityRef: {
     authorityId: "@agent-os/git-carrier.commit",
     authorityClass: "write",
   },
@@ -130,7 +130,7 @@ describe("@agent-os/git-carrier", () => {
             phase: "lived",
             operationRef: "git:session-1:commit",
             scopeRef: { kind: "session", scopeId: "session/1" },
-            authorityRef: {
+            effectAuthorityRef: {
               authorityId: "@agent-os/git-carrier.commit",
               authorityClass: "write",
             },

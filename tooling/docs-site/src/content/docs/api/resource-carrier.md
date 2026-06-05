@@ -27,7 +27,7 @@ title: "@agent-os/resource-carrier Public API Intent"
 - `.:ResourceProvisionRequest`
 - `.:ResourceProvisionedPayload`
 - `.:projectResource`
-- `.:resourceAuthorityContracts`
+- `.:resourceEffectAuthorityContracts`
 - `.:resourceBoundaryContract`
 - `.:resourceBoundaryPackage`
 - `.:resourceCarrierDefinition`

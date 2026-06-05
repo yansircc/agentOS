@@ -12,7 +12,7 @@ import { makeCommitters, type ExtensionCapability } from "@agent-os/kernel/exten
 const verificationClaim = makePreClaim({
   operationRef: "verification:subject-1:typecheck",
   scopeRef: { kind: "artifact", scopeId: "artifact/subject-1" },
-  authorityRef: {
+  effectAuthorityRef: {
     authorityId: "@agent-os/verification.gate",
     authorityClass: "effect",
   },
@@ -124,7 +124,7 @@ describe("@agent-os/verification", () => {
             phase: "lived",
             operationRef: "verification:subject-1:typecheck",
             scopeRef: { kind: "artifact", scopeId: "artifact/subject-1" },
-            authorityRef: {
+            effectAuthorityRef: {
               authorityId: "@agent-os/verification.gate",
               authorityClass: "effect",
             },

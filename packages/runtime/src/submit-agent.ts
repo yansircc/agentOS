@@ -585,7 +585,7 @@ export const submitAgentEffect = (
           const claim = makePreClaim({
             operationRef: makeOperationRef("tool", [scope, started.id, turn, call.id]),
             scopeRef,
-            authorityRef: contract.authorityRef,
+            effectAuthorityRef: contract.effectAuthorityRef,
             originRef: contract.originRef ?? {
               originId: `run:${started.id}`,
               originKind: "submit",

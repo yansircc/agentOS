@@ -17,7 +17,7 @@ import {
 } from "./effect-claim";
 import { type BoundaryPackage, type EventPayloadMap } from "./extensions";
 import { validateAgainstSchema, type JsonSchemaObject } from "./json-schema-dialect";
-import type { AuthorityContract, MaterialRequirement } from "./material-ref";
+import type { EffectAuthorityContract, MaterialRequirement } from "./material-ref";
 import {
   defineSettlementContract,
   settleLived,
@@ -205,7 +205,7 @@ export interface DefineCarrierSpec<
   readonly prefix: Prefix;
   readonly roles: BoundaryContract["roles"];
   readonly events: Events;
-  readonly authorityContracts?: ReadonlyArray<AuthorityContract>;
+  readonly effectAuthorityContracts?: ReadonlyArray<EffectAuthorityContract>;
   readonly materialRequirements?: ReadonlyArray<MaterialRequirement>;
   readonly projection: CarrierProjection<State, EventPayloadMap>;
 }
@@ -429,7 +429,7 @@ export const defineCarrier = <
     kindPrefixes: [spec.prefix],
     roles: spec.roles,
     events: boundaryEvents,
-    authorityContracts: spec.authorityContracts ?? [],
+    effectAuthorityContracts: spec.effectAuthorityContracts ?? [],
     materialRequirements: spec.materialRequirements ?? [],
     settlement: settlementContract,
     projection: {

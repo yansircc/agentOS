@@ -98,7 +98,7 @@ const claimFor = (step) =>
       scopeId: `cloudflare/${testRunId}/d1/${resourceName}`,
       systemRef: "cloudflare",
     },
-    authorityRef:
+    effectAuthorityRef:
       step === "provision"
         ? RESOURCE_AUTHORITIES.PROVISION
         : step === "bind"

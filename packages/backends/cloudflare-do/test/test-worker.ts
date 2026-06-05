@@ -142,7 +142,7 @@ const proofBoundaryContract = defineBoundaryContract({
   packageId: "@agent-os/proof",
   kindPrefixes: ["proof."],
   roles: ["generator", "reader"],
-  authorityContracts: [],
+  effectAuthorityContracts: [],
   materialRequirements: [],
   events: {
     "proof.recorded": {
@@ -167,7 +167,7 @@ const proofBoundaryContract = defineBoundaryContract({
 const proofPreClaim = makePreClaim({
   operationRef: "proof:record",
   scopeRef: { kind: "conversation", scopeId: "extension-proof" },
-  authorityRef: { authorityId: "proof.record", authorityClass: "effect" },
+  effectAuthorityRef: { authorityId: "proof.record", authorityClass: "effect" },
   originRef: { originId: "extension-test", originKind: "test" },
 });
 

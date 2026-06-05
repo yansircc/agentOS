@@ -56,7 +56,7 @@ import.
    const claim = makePreClaim({
      operationRef: "operation:tutorial",
      scopeRef: { kind: "session", scopeId: "session:tutorial" },
-     authorityRef: { authorityId: "tutorial.proof", authorityClass: "effect" },
+     effectAuthorityRef: { authorityId: "tutorial.proof", authorityClass: "effect" },
      originRef: { originId: "internal-npm-consumer", originKind: "tutorial" },
    });
 
