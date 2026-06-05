@@ -9,6 +9,7 @@ import type {
   EventHandler,
   EventQueryOptions,
   LedgerEvent,
+  LedgerEventIdentity,
   LedgerEventRpc,
 } from "@agent-os/kernel/types";
 import {
@@ -39,6 +40,7 @@ import {
   type TriggerTx,
   UnregisteredProjectionKind,
 } from "@agent-os/runtime";
+import { scopeRefKey } from "@agent-os/kernel/effect-claim";
 import type { DispatchOutboxRow } from "./dispatch-types";
 
 const DEFAULT_EVENT_LIMIT = 1000;
@@ -69,7 +71,7 @@ interface InMemoryFanoutDiagnostic {
   readonly phase: "sink";
   readonly eventId: number;
   readonly kind: string;
-  readonly scope: string;
+  readonly scopeKey: string;
   readonly message: string;
 }
 
@@ -141,11 +143,21 @@ const describeFanoutCause = (cause: unknown): string => {
   return Object.prototype.toString.call(cause);
 };
 
+const transitionIdentityFromScope = (scope: string): LedgerEventIdentity => ({
+  scopeRef: { kind: "conversation", scopeId: scope },
+  factOwnerRef: "@agent-os/transition-unowned",
+  effectAuthorityRef: { authorityClass: "legacy-scope", authorityId: scope },
+});
+
+const transitionScopeString = (event: LedgerEvent): string => event.scopeRef.scopeId;
+
 const eventToRpc = (event: LedgerEvent): LedgerEventRpc => ({
   id: event.id,
   ts: event.ts,
   kind: event.kind,
-  scope: event.scope,
+  scopeRef: event.scopeRef,
+  factOwnerRef: event.factOwnerRef,
+  effectAuthorityRef: event.effectAuthorityRef,
   payload: event.payload,
 });
 
@@ -242,16 +254,17 @@ export class InMemoryBackendState {
   ): Effect.Effect<void, ProjectionApplicationError | ProjectionReducerReturnedThenable> {
     return Effect.gen(this, function* () {
       for (const event of events) {
+        const eventScopeKey = transitionScopeString(event);
         const definitions = definitionsForEvent(event.kind);
         for (const projection of definitions) {
           const result = yield* applyProjectionEvent(projection, event, (identityKey) => {
-            const row = rows.get(projectionRowKey(event.scope, projection.kind, identityKey));
+            const row = rows.get(projectionRowKey(eventScopeKey, projection.kind, identityKey));
             return row === undefined ? null : { identity: row.identity, state: row.state };
           });
           if (result._tag === "put") {
-            rows.set(projectionRowKey(event.scope, projection.kind, result.identityKey), {
+            rows.set(projectionRowKey(eventScopeKey, projection.kind, result.identityKey), {
               kind: projection.kind,
-              scope: event.scope,
+              scope: eventScopeKey,
               identityKey: result.identityKey,
               identity: result.identity,
               state: result.state,
@@ -260,9 +273,9 @@ export class InMemoryBackendState {
               updatedAt: event.ts,
             });
           } else if (result._tag === "delete") {
-            rows.delete(projectionRowKey(event.scope, projection.kind, result.identityKey));
+            rows.delete(projectionRowKey(eventScopeKey, projection.kind, result.identityKey));
           }
-          const key = projectionMetaKey(event.scope, projection.kind);
+          const key = projectionMetaKey(eventScopeKey, projection.kind);
           const current = meta.get(key);
           meta.set(key, {
             version: projection.version,
@@ -412,7 +425,8 @@ export class InMemoryBackendState {
       }
       meta.delete(projectionMetaKey(spec.scope, spec.kind));
       const events = this.rows.filter(
-        (event) => event.scope === spec.scope && projection.eventKinds.includes(event.kind),
+        (event) =>
+          transitionScopeString(event) === spec.scope && projection.eventKinds.includes(event.kind),
       );
       yield* this.applyProjectionEventsTo(rows, meta, events, (eventKind) =>
         projection.eventKinds.includes(eventKind) ? [projection] : [],
@@ -483,7 +497,7 @@ export class InMemoryBackendState {
         ? undefined
         : new Set(Array.from(new Set(opts.kinds)).filter((kind) => kind.length > 0));
     const selected = this.rows.filter((row) => {
-      if (scope !== undefined && row.scope !== scope) return false;
+      if (scope !== undefined && transitionScopeString(row) !== scope) return false;
       if (row.id <= afterId) return false;
       if (kinds !== undefined && kinds.size > 0 && !kinds.has(row.kind)) return false;
       return true;
@@ -501,7 +515,7 @@ export class InMemoryBackendState {
         ? undefined
         : new Set(Array.from(new Set(opts.kinds)).filter((kind) => kind.length > 0));
     return this.rows.filter((row) => {
-      if (row.scope !== scope) return false;
+      if (transitionScopeString(row) !== scope) return false;
       if (row.id <= afterId) return false;
       if (kinds !== undefined && kinds.size > 0 && !kinds.has(row.kind)) return false;
       return true;
@@ -528,7 +542,7 @@ export class InMemoryBackendState {
           id: startId + index,
           ts: spec.ts ?? startId + index,
           kind: spec.kind,
-          scope: spec.scope,
+          ...transitionIdentityFromScope(spec.scope),
           payload: spec.payload,
         }),
       );
@@ -562,7 +576,7 @@ export class InMemoryBackendState {
         id: this.nextEventId,
         ts: spec.ts ?? this.nextEventId,
         kind: spec.kind,
-        scope,
+        ...transitionIdentityFromScope(scope),
         payload: spec.payload,
       };
       const projectionState = yield* this.prepareProjectionState([event]);
@@ -823,7 +837,7 @@ export class InMemoryBackendState {
               ? undefined
               : new Set(Array.from(new Set(opts.kinds)).filter((entry) => entry.length > 0));
           return [...this.rows, ...written].filter((event) => {
-            if (event.scope !== scope) return false;
+            if (transitionScopeString(event) !== scope) return false;
             if (event.id <= afterId) return false;
             if (kinds !== undefined && kinds.size > 0 && !kinds.has(event.kind)) return false;
             return true;
@@ -834,7 +848,7 @@ export class InMemoryBackendState {
             id: startId + written.length,
             ts: spec.ts ?? now,
             kind: spec.kind,
-            scope,
+            ...transitionIdentityFromScope(scope),
             payload: spec.payload,
           };
           written.push(event);
@@ -914,7 +928,7 @@ export class InMemoryBackendState {
               ? undefined
               : new Set(Array.from(new Set(opts.kinds)).filter((kind) => kind.length > 0));
           return [...this.rows, ...written].filter((event) => {
-            if (event.scope !== scope) return false;
+            if (transitionScopeString(event) !== scope) return false;
             if (event.id <= afterId) return false;
             if (kinds !== undefined && kinds.size > 0 && !kinds.has(event.kind)) return false;
             return true;
@@ -925,7 +939,7 @@ export class InMemoryBackendState {
             id: startId + written.length,
             ts: spec.ts ?? now,
             kind: spec.kind,
-            scope,
+            ...transitionIdentityFromScope(scope),
             payload: spec.payload,
           };
           written.push(event);
@@ -938,7 +952,7 @@ export class InMemoryBackendState {
               id: startId + written.length,
               ts: spec.ts ?? now,
               kind: spec.intentEventKind,
-              scope,
+              ...transitionIdentityFromScope(scope),
               payload: spec.payload,
             };
           }
@@ -946,7 +960,7 @@ export class InMemoryBackendState {
             id: startId + written.length,
             ts: spec.ts ?? now,
             kind: spec.intentEventKind,
-            scope,
+            ...transitionIdentityFromScope(scope),
             payload: spec.payload,
           };
           written.push(event);
@@ -1050,7 +1064,7 @@ export class InMemoryBackendState {
                 phase: "sink",
                 eventId: event.id,
                 kind: event.kind,
-                scope: event.scope,
+                scopeKey: scopeRefKey(event.scopeRef),
                 message: describeFanoutCause(cause),
               });
             }

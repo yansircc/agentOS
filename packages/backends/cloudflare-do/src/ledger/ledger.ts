@@ -1,4 +1,9 @@
-import type { EventQueryOptions, LedgerEvent, LedgerEventRpc } from "@agent-os/kernel/types";
+import type {
+  EventQueryOptions,
+  LedgerEvent,
+  LedgerEventIdentity,
+  LedgerEventRpc,
+} from "@agent-os/kernel/types";
 /**
  * Ledger — module-private append-only event log on DO SQLite.
  *
@@ -20,6 +25,12 @@ const MAX_EVENT_LIMIT = 1000;
 
 const normalizeNonNegativeInteger = (value: number | undefined, fallback: number): number =>
   value === undefined || !Number.isFinite(value) ? fallback : Math.max(0, Math.floor(value));
+
+const transitionIdentityFromScope = (scope: string): LedgerEventIdentity => ({
+  scopeRef: { kind: "conversation", scopeId: scope },
+  factOwnerRef: "@agent-os/transition-unowned",
+  effectAuthorityRef: { authorityClass: "legacy-scope", authorityId: scope },
+});
 
 export const selectLedgerEvents = (
   sql: SqlStorage,
@@ -48,7 +59,7 @@ export const selectLedgerEvents = (
         id: Number(r.id),
         ts: Number(r.ts),
         kind: sqlText(r.kind, "events.kind"),
-        scope: sqlText(r.scope, "events.scope"),
+        ...transitionIdentityFromScope(sqlText(r.scope, "events.scope")),
         payload: JSON.parse(sqlText(r.payload, "events.payload")) as unknown,
       }),
     );
@@ -115,6 +126,8 @@ export const eventToRpc = (event: LedgerEvent): LedgerEventRpc => ({
   id: event.id,
   ts: event.ts,
   kind: event.kind,
-  scope: event.scope,
+  scopeRef: event.scopeRef,
+  factOwnerRef: event.factOwnerRef,
+  effectAuthorityRef: event.effectAuthorityRef,
   payload: event.payload,
 });

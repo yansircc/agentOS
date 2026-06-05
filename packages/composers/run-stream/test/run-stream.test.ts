@@ -11,11 +11,17 @@ import {
 import type { LedgerEventRpc, SubmitResult, SubmitSpec } from "../src";
 import type { TurnStreamFrame } from "@agent-os/turn-stream";
 
+const eventIdentity = (scopeId: string) => ({
+  scopeRef: { kind: "conversation" as const, scopeId },
+  factOwnerRef: "@agent-os/test",
+  effectAuthorityRef: { authorityClass: "test", authorityId: scopeId },
+});
+
 const ledgerEvent = (id: number, kind = "agent.started"): LedgerEventRpc => ({
   id,
   ts: 1_700_000_000_000 + id,
   kind,
-  scope: "session/run-stream",
+  ...eventIdentity("session/run-stream"),
   payload: { id },
 });
 

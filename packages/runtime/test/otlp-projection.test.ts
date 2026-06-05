@@ -14,6 +14,11 @@ import {
 } from "../src/runtime-events";
 
 const scope = "otlp-projection";
+const eventIdentity = (scopeId: string) => ({
+  scopeRef: { kind: "conversation" as const, scopeId },
+  factOwnerRef: "@agent-os/test",
+  effectAuthorityRef: { authorityClass: "test", authorityId: scopeId },
+});
 const traceContext = {
   traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
   tracestate: "vendor=value",
@@ -36,7 +41,7 @@ const event = (id: number, spec: RuntimeEventCommitSpec, ts = id * 10): LedgerEv
   id,
   ts,
   kind: spec.kind,
-  scope: spec.scope,
+  ...eventIdentity(spec.scope),
   payload: spec.payload,
 });
 
@@ -44,7 +49,7 @@ const rawEvent = (id: number, kind: string, payload: unknown, ts = id * 10): Led
   id,
   ts,
   kind,
-  scope,
+  ...eventIdentity(scope),
   payload,
 });
 

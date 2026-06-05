@@ -12,11 +12,17 @@ import {
   projectionPut,
 } from "../src/projection";
 
+const eventIdentity = (scopeId: string) => ({
+  scopeRef: { kind: "conversation" as const, scopeId },
+  factOwnerRef: "@agent-os/test",
+  effectAuthorityRef: { authorityClass: "test", authorityId: scopeId },
+});
+
 const event = (id: number, kind: string, payload: unknown): LedgerEvent => ({
   id,
   ts: id * 10,
   kind,
-  scope: "projection-scope",
+  ...eventIdentity("projection-scope"),
   payload,
 });
 

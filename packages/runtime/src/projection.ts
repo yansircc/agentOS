@@ -1,4 +1,5 @@
 import { Context, Data, Effect, Either, Schema } from "effect";
+import { scopeRefKey, type ScopeRef } from "@agent-os/kernel/effect-claim";
 import type { SqlError } from "@agent-os/kernel/errors";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 
@@ -81,7 +82,8 @@ export const projectionFail = <State = never>(reason: string): ProjectionReduceR
 });
 
 export interface ProjectionReduceContext<Identity> {
-  readonly scope: string;
+  readonly scopeRef: ScopeRef;
+  readonly scopeKey: string;
   readonly identity: Identity;
   readonly identityKey: string;
 }
@@ -455,7 +457,8 @@ export const applyProjectionEventResult = (
   const reducedEither = Either.try({
     try: () =>
       projection.reduce(currentState, event, {
-        scope: event.scope,
+        scopeRef: event.scopeRef,
+        scopeKey: scopeRefKey(event.scopeRef),
         identity,
         identityKey,
       }),

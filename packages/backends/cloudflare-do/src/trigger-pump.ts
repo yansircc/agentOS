@@ -6,7 +6,7 @@ import {
   SqlError,
   UnregisteredDurableTriggerKind,
 } from "@agent-os/kernel/errors";
-import type { LedgerEvent } from "@agent-os/kernel/types";
+import type { LedgerEvent, LedgerEventIdentity } from "@agent-os/kernel/types";
 import {
   DEFAULT_TRIGGER_ACQUIRE_DEADLINE_MS,
   DurableTriggerRegistry,
@@ -35,6 +35,12 @@ import {
 } from "./due-work";
 import { commitLedgerTransaction, type LedgerTransactionBuilder } from "./ledger/commit";
 import { sqlText } from "./storage/sql-row";
+
+const transitionIdentityFromScope = (scope: string): LedgerEventIdentity => ({
+  scopeRef: { kind: "conversation", scopeId: scope },
+  factOwnerRef: "@agent-os/transition-unowned",
+  effectAuthorityRef: { authorityClass: "legacy-scope", authorityId: scope },
+});
 
 const failTriggerTransaction = (kind: string): never => {
   throw new UnregisteredDurableTriggerKind({ kind });
@@ -143,7 +149,7 @@ export const TriggerPumpLive = (
               id: builder.id(ref),
               ts: spec.ts ?? now,
               kind: spec.kind,
-              scope,
+              ...transitionIdentityFromScope(scope),
               payload: spec.payload,
             };
             written.push(event);
@@ -163,7 +169,7 @@ export const TriggerPumpLive = (
               id: builder.id(ref),
               ts: spec.ts ?? now,
               kind: spec.intentEventKind,
-              scope,
+              ...transitionIdentityFromScope(scope),
               payload: spec.payload,
             };
             builder.afterInsert(() => {

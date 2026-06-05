@@ -10,11 +10,17 @@ import type { EffectClaim } from "@agent-os/kernel/effect-claim";
 import { settleDispatchInboundAccepted } from "@agent-os/backend-protocol";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 
+const eventIdentity = (scopeId: string) => ({
+  scopeRef: { kind: "conversation" as const, scopeId },
+  factOwnerRef: "@agent-os/test",
+  effectAuthorityRef: { authorityClass: "test", authorityId: scopeId },
+});
+
 const event = (id: number, kind: string, payload: unknown, ts = id * 10): LedgerEvent => ({
   id,
   ts,
   kind,
-  scope: "projection-scope",
+  ...eventIdentity("projection-scope"),
   payload,
 });
 
@@ -93,7 +99,7 @@ describe("standard projections — contract", () => {
       {
         eventId: 1,
         eventKind: "dispatch.outbound.requested",
-        scope: "projection-scope",
+        scopeKey: "conversation:projection-scope",
         ts: 10,
         phase: "pre",
         operationRef: preClaim.operationRef,
@@ -104,7 +110,7 @@ describe("standard projections — contract", () => {
       {
         eventId: 3,
         eventKind: "dispatch.inbound.accepted",
-        scope: "projection-scope",
+        scopeKey: "conversation:projection-scope",
         ts: 30,
         phase: "lived",
         operationRef: livedClaim.operationRef,
@@ -116,7 +122,7 @@ describe("standard projections — contract", () => {
       {
         eventId: 4,
         eventKind: "tool.executed",
-        scope: "projection-scope",
+        scopeKey: "conversation:projection-scope",
         ts: 40,
         phase: "lived",
         operationRef: "tool:projection-scope:1:0:call-1",
@@ -136,7 +142,7 @@ describe("standard projections — contract", () => {
       {
         eventId: 3,
         eventKind: "dispatch.inbound.accepted",
-        scope: "projection-scope",
+        scopeKey: "conversation:projection-scope",
         ts: 30,
         phase: "lived",
         operationRef: livedClaim.operationRef,
@@ -162,7 +168,7 @@ describe("standard projections — contract", () => {
       {
         eventId: 1,
         eventKind: "verification.gate.rejected",
-        scope: "projection-scope",
+        scopeKey: "conversation:projection-scope",
         ts: 10,
         plane: "claim_rejected",
         operationRef: rejectedClaim.operationRef,
@@ -172,7 +178,7 @@ describe("standard projections — contract", () => {
       {
         eventId: 3,
         eventKind: "agent.aborted.tool_error",
-        scope: "projection-scope",
+        scopeKey: "conversation:projection-scope",
         ts: 30,
         plane: "run_aborted",
         reason: "tool failed",

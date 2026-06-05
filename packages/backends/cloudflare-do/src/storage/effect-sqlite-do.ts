@@ -1,4 +1,4 @@
-import type { LedgerEvent } from "@agent-os/kernel/types";
+import type { LedgerEvent, LedgerEventIdentity } from "@agent-os/kernel/types";
 /**
  * Internal Cloudflare-only Effect SQL facade.
  *
@@ -31,6 +31,12 @@ const normalizeNonNegativeInteger = (value: number | undefined, fallback: number
 const normalizeLimit = (limit: number | undefined): number =>
   Math.min(MAX_LIMIT, normalizeNonNegativeInteger(limit, DEFAULT_LIMIT));
 
+const transitionIdentityFromScope = (scope: string): LedgerEventIdentity => ({
+  scopeRef: { kind: "conversation", scopeId: scope },
+  factOwnerRef: "@agent-os/transition-unowned",
+  effectAuthorityRef: { authorityClass: "legacy-scope", authorityId: scope },
+});
+
 export const EffectSqliteDoReadLive = (sql: SqlStorage) => sqliteDoLayer({ db: sql });
 
 export const selectLedgerEventsWithEffectSql = (
@@ -56,7 +62,7 @@ export const selectLedgerEventsWithEffectSql = (
           id: Number(row.id),
           ts: Number(row.ts),
           kind: sqlText(row.kind, "events.kind"),
-          scope: sqlText(row.scope, "events.scope"),
+          ...transitionIdentityFromScope(sqlText(row.scope, "events.scope")),
           payload: JSON.parse(sqlText(row.payload, "events.payload")) as unknown,
         })),
       catch: (cause) => new SqlError({ cause }),

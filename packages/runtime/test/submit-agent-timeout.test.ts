@@ -10,6 +10,12 @@ import type { InternalSubmitSpec } from "../src/submit";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import { decodeRuntimeLedgerEvent } from "../src/runtime-events";
 
+const eventIdentity = (scopeId: string) => ({
+  scopeRef: { kind: "conversation" as const, scopeId },
+  factOwnerRef: "@agent-os/test",
+  effectAuthorityRef: { authorityClass: "test", authorityId: scopeId },
+});
+
 const makeSpec = (budget?: InternalSubmitSpec["budget"]): InternalSubmitSpec => ({
   intent: "hang",
   context: {},
@@ -55,7 +61,7 @@ const runWithHungLlm = (
             id: nextId++,
             ts: Date.now(),
             kind: spec.kind,
-            scope: spec.scope,
+            ...eventIdentity(spec.scope),
             payload: spec.payload,
           }));
           events.push(...committed);

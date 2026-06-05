@@ -7,10 +7,16 @@ import {
   type AttachedStreamTx,
 } from "@agent-os/runtime";
 import { SqlError } from "@agent-os/kernel/errors";
-import type { LedgerEvent } from "@agent-os/kernel/types";
+import type { LedgerEvent, LedgerEventIdentity } from "@agent-os/kernel/types";
 import { EventBus } from "./ledger/event-bus";
 import { selectLedgerEvents } from "./ledger/ledger";
 import { commitLedgerTransaction } from "./ledger/commit";
+
+const transitionIdentityFromScope = (scope: string): LedgerEventIdentity => ({
+  scopeRef: { kind: "conversation", scopeId: scope },
+  factOwnerRef: "@agent-os/transition-unowned",
+  effectAuthorityRef: { authorityClass: "legacy-scope", authorityId: scope },
+});
 
 export const AttachedStreamsLive = (
   ctx: DurableObjectState,
@@ -71,7 +77,7 @@ export const AttachedStreamsLive = (
                       id: builder.id(ref),
                       ts: spec.ts ?? streamCtx.now,
                       kind: spec.kind,
-                      scope,
+                      ...transitionIdentityFromScope(scope),
                       payload: spec.payload,
                     };
                     written.push(event);

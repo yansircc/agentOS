@@ -253,27 +253,32 @@ class FakeAuth implements OpsAuth {
 // ============================================================
 
 const SCOPE = "thread/abc";
+const eventIdentity = (scopeId: string) => ({
+  scopeRef: { kind: "conversation" as const, scopeId },
+  factOwnerRef: "@agent-os/test",
+  effectAuthorityRef: { authorityClass: "test", authorityId: scopeId },
+});
 const ROWS: LedgerEventRpc[] = [
-  { id: 1, ts: 1000, kind: "agent.run.started", scope: SCOPE, payload: { intent: "x" } },
-  { id: 2, ts: 1010, kind: "chat.ingested", scope: SCOPE, payload: { runId: 1 } },
-  { id: 3, ts: 1100, kind: "llm.response", scope: SCOPE, payload: { turn: { id: 1, index: 0 } } },
-  { id: 4, ts: 1200, kind: "tool.executed", scope: SCOPE, payload: { runId: 1, name: "lookup" } },
+  { id: 1, ts: 1000, kind: "agent.run.started", ...eventIdentity(SCOPE), payload: { intent: "x" } },
+  { id: 2, ts: 1010, kind: "chat.ingested", ...eventIdentity(SCOPE), payload: { runId: 1 } },
+  { id: 3, ts: 1100, kind: "llm.response", ...eventIdentity(SCOPE), payload: { turn: { id: 1, index: 0 } } },
+  { id: 4, ts: 1200, kind: "tool.executed", ...eventIdentity(SCOPE), payload: { runId: 1, name: "lookup" } },
   {
     id: 5,
     ts: 1300,
     kind: "agent.run.completed",
-    scope: SCOPE,
+    ...eventIdentity(SCOPE),
     payload: { runId: 1, event: "answer.ready" },
   },
-  { id: 6, ts: 2000, kind: "agent.run.started", scope: SCOPE, payload: { intent: "y" } },
+  { id: 6, ts: 2000, kind: "agent.run.started", ...eventIdentity(SCOPE), payload: { intent: "y" } },
   {
     id: 7,
     ts: 2050,
     kind: "agent.aborted.tool_error",
-    scope: SCOPE,
+    ...eventIdentity(SCOPE),
     payload: { runId: 6, toolName: "lookup", cause: "Timeout" },
   },
-  { id: 8, ts: 3000, kind: "agent.run.started", scope: SCOPE, payload: { intent: "z" } },
+  { id: 8, ts: 3000, kind: "agent.run.started", ...eventIdentity(SCOPE), payload: { intent: "z" } },
 ];
 
 const makeHandler = (
@@ -362,7 +367,7 @@ describe("review fixes — /runs delegates to core projection (no local fetch+pr
         id: id++,
         ts: ts++,
         kind: "agent.run.started",
-        scope: SCOPE,
+        ...eventIdentity(SCOPE),
         payload: { intent: `r${i}` },
       });
     }

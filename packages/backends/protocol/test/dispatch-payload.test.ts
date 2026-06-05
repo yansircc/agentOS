@@ -32,6 +32,12 @@ const bindingRef = bindingMaterialRef({
   ref: "PEER_DO",
 });
 
+const eventIdentity = (scopeId: string) => ({
+  scopeRef: { kind: "conversation" as const, scopeId },
+  factOwnerRef: "@agent-os/test",
+  effectAuthorityRef: { authorityClass: "test", authorityId: scopeId },
+});
+
 const claim = makePreClaim({
   operationRef: "dispatch:test",
   scopeRef: { kind: "conversation", scopeId: "sender" },
@@ -196,7 +202,7 @@ describe("@agent-os/backend-protocol", () => {
           id: 1,
           ts: 1,
           kind: "app.handled",
-          scope: "scope",
+          ...eventIdentity("scope"),
           payload: { ok: true },
         },
         "test handler",

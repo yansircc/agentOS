@@ -133,6 +133,42 @@ export const makeOperationRef = (
   parts: ReadonlyArray<string | number>,
 ): OperationRef => [namespace, ...parts.map((part) => encodeURIComponent(String(part)))].join(":");
 
+const refKeyPart = (part: string): string => encodeURIComponent(part).replace(/\./g, "%2E");
+
+export const scopeRefKey = (scopeRef: ScopeRef): string => {
+  switch (scopeRef.kind) {
+    case "external":
+      return [
+        "external",
+        refKeyPart(scopeRef.systemRef),
+        refKeyPart(scopeRef.scopeId),
+      ].join(":");
+    case "realm":
+    case "conversation":
+    case "session":
+    case "artifact":
+      return [scopeRef.kind, refKeyPart(scopeRef.scopeId)].join(":");
+  }
+};
+
+export const authorityRefKey = (authorityRef: AuthorityRef): string =>
+  [
+    refKeyPart(authorityRef.authorityClass),
+    refKeyPart(authorityRef.authorityId),
+    authorityRef.version === undefined ? "none" : refKeyPart(authorityRef.version),
+  ].join(":");
+
+export type FactOwnerRef = string;
+
+export const isFactOwnerRef = (value: unknown): value is FactOwnerRef => isNonEmptyString(value);
+
+export const factOwnerKey = (factOwnerRef: FactOwnerRef): string => refKeyPart(factOwnerRef);
+
+export const ledgerTruthKey = (spec: {
+  readonly scopeRef: ScopeRef;
+  readonly effectAuthorityRef: AuthorityRef;
+}): string => [scopeRefKey(spec.scopeRef), authorityRefKey(spec.effectAuthorityRef)].join("|");
+
 export const makePreClaim = (spec: {
   readonly operationRef: OperationRef;
   readonly scopeRef: ScopeRef;
@@ -185,7 +221,7 @@ export const isAuthorityRef = (value: unknown): value is AuthorityRef =>
   Predicate.isRecord(value) &&
   isNonEmptyString(value.authorityId) &&
   isNonEmptyString(value.authorityClass) &&
-  optionalString(value.version);
+  (value.version === undefined || isNonEmptyString(value.version));
 
 export const isOriginRef = (value: unknown): value is OriginRef =>
   Predicate.isRecord(value) &&

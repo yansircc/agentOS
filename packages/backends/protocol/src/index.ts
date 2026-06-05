@@ -2,8 +2,11 @@ import { Effect, Either, Predicate, pipe } from "effect";
 import {
   isScopeRef,
   validateEffectClaim,
+  type AuthorityRef,
+  type FactOwnerRef,
   type LivedClaim,
   type PreClaim,
+  type ScopeRef,
 } from "@agent-os/kernel/effect-claim";
 import { isMaterialRef, type BindingMaterialRef } from "@agent-os/kernel/material-ref";
 import {
@@ -441,8 +444,11 @@ export interface BackendProtocolLedgerEventRpc {
   readonly id: number;
   readonly ts: number;
   readonly kind: string;
-  readonly scope: string;
+  readonly scopeRef: ScopeRef;
+  readonly factOwnerRef: FactOwnerRef;
+  readonly effectAuthorityRef: AuthorityRef;
   readonly payload: unknown;
+  readonly scope?: never;
 }
 
 export type BackendProtocolEventHandler = (
@@ -549,7 +555,9 @@ export const eventToProtocolRpc = (
   id: event.id,
   ts: event.ts,
   kind: event.kind,
-  scope: event.scope,
+  scopeRef: event.scopeRef,
+  factOwnerRef: event.factOwnerRef,
+  effectAuthorityRef: event.effectAuthorityRef,
   payload: event.payload,
 });
 

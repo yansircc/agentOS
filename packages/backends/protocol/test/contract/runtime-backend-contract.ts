@@ -34,7 +34,7 @@ export interface RuntimeBackendFanoutDiagnostic {
   readonly phase: "sink";
   readonly eventId: number;
   readonly kind: string;
-  readonly scope: string;
+  readonly scopeKey: string;
   readonly message: string;
 }
 
@@ -531,7 +531,7 @@ export const runRuntimeBackendContractSuite = (
                 entry.phase === "sink" &&
                 entry.eventId === event.id &&
                 entry.kind === "app.sink" &&
-                entry.scope === "sink-scope" &&
+                entry.scopeKey === "conversation:sink-scope" &&
                 entry.message.includes("sink failed after commit"),
             ),
           ).toBe(true);

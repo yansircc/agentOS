@@ -1,6 +1,6 @@
 import { Effect, Layer, Schema } from "effect";
 import { SqlError } from "@agent-os/kernel/errors";
-import type { LedgerEvent } from "@agent-os/kernel/types";
+import type { LedgerEvent, LedgerEventIdentity } from "@agent-os/kernel/types";
 import {
   MaterializedProjectionRegistry,
   MaterializedProjections,
@@ -26,6 +26,14 @@ const rowKey = (
   kind: string,
   identityKey: string,
 ): readonly [string, string, string] => [scope, kind, identityKey];
+
+const transitionIdentityFromScope = (scope: string): LedgerEventIdentity => ({
+  scopeRef: { kind: "conversation", scopeId: scope },
+  factOwnerRef: "@agent-os/transition-unowned",
+  effectAuthorityRef: { authorityClass: "legacy-scope", authorityId: scope },
+});
+
+const transitionScopeString = (event: LedgerEvent): string => event.scopeRef.scopeId;
 
 const normalizeLimit = (value: number | undefined): number =>
   value === undefined || !Number.isFinite(value)
@@ -137,6 +145,7 @@ const touchMeta = (
   projection: AnyMaterializedProjectionDefinition,
   event: LedgerEvent,
 ): void => {
+  const eventScopeKey = transitionScopeString(event);
   sql.exec(
     `
       INSERT INTO materialized_projection_meta
@@ -148,7 +157,7 @@ const touchMeta = (
         last_applied_event_id = excluded.last_applied_event_id,
         updated_at = excluded.updated_at
     `,
-    event.scope,
+    eventScopeKey,
     projection.kind,
     projection.version,
     event.id,
@@ -164,9 +173,10 @@ const applyEvents = (
   if (events.length === 0) return;
   ensureMaterializedProjectionSchema(sql);
   for (const event of events) {
+    const eventScopeKey = transitionScopeString(event);
     for (const projection of definitionsForEvent(event.kind)) {
       const applied = applyProjectionEventResult(projection, event, (identityKey) =>
-        currentRow(sql, event.scope, projection.kind, identityKey),
+        currentRow(sql, eventScopeKey, projection.kind, identityKey),
       );
       if (applied._tag === "failure") {
         return abortProjectionTransaction(applied.error);
@@ -193,7 +203,7 @@ const applyEvents = (
               updated_event_id = excluded.updated_event_id,
               updated_at = excluded.updated_at
           `,
-          event.scope,
+          eventScopeKey,
           projection.kind,
           result.identityKey,
           identityJson.value,
@@ -208,7 +218,7 @@ const applyEvents = (
             DELETE FROM materialized_projection_rows
             WHERE scope = ? AND kind = ? AND identity_key = ?
           `,
-          event.scope,
+          eventScopeKey,
           projection.kind,
           result.identityKey,
         );
@@ -317,7 +327,7 @@ const selectProjectionEvents = (
         id: Number(row.id),
         ts: Number(row.ts),
         kind: sqlText(row.kind, "events.kind"),
-        scope: sqlText(row.scope, "events.scope"),
+        ...transitionIdentityFromScope(sqlText(row.scope, "events.scope")),
         payload: JSON.parse(sqlText(row.payload, "events.payload")) as unknown,
       }),
     );

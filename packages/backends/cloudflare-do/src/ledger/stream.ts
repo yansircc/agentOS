@@ -35,6 +35,7 @@ import { EventBus } from "./event-bus";
 import { eventToRpc } from "./ledger";
 
 const DEFAULT_STREAM_HEARTBEAT_MS = 15_000;
+const transitionScopeString = (event: LedgerEvent): string => event.scopeRef.scopeId;
 
 const normalizePositiveInteger = (value: number | undefined, fallback: number): number =>
   value === undefined || !Number.isFinite(value) ? fallback : Math.max(0, Math.floor(value));
@@ -148,7 +149,7 @@ export const createEventStreamResponse = <R, E>(
             const subscription = bus.subscribe({
               kinds,
               sink: (event) => {
-                if (event.scope !== scope) return;
+                if (transitionScopeString(event) !== scope) return;
                 if (mode === "buffering") {
                   liveQueue.push(event);
                   return;

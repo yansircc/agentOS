@@ -1,4 +1,10 @@
 import { Schema } from "effect";
+import {
+  scopeRefKey,
+  type AuthorityRef,
+  type FactOwnerRef,
+  type ScopeRef,
+} from "@agent-os/kernel/effect-claim";
 import type { Tool } from "@agent-os/kernel/tools";
 import { decodeLedgerEvent, type LedgerEvent } from "@agent-os/kernel/types";
 import type { SubmitSpec } from "@agent-os/runtime";
@@ -281,7 +287,10 @@ export type AgUiLedgerEventEnvelope = {
   readonly id: number;
   readonly ts: number;
   readonly kind: string;
-  readonly scope: string;
+  readonly scopeRef: ScopeRef;
+  readonly scopeKey: string;
+  readonly factOwnerRef: FactOwnerRef;
+  readonly effectAuthorityRef: AuthorityRef;
   readonly agUiFrames: ReadonlyArray<AgUiFrame>;
 };
 
@@ -289,7 +298,8 @@ export type AgUiLedgerEnvelopeFrame = {
   readonly eventId: number;
   readonly eventTs: number;
   readonly eventKind: string;
-  readonly eventScope: string;
+  readonly eventScopeRef: ScopeRef;
+  readonly eventScopeKey: string;
   readonly frame: AgUiFrame;
 };
 
@@ -343,7 +353,7 @@ export type AgUiActivity =
     };
 
 const threadIdFor = (event: RuntimeLedgerEvent, spec: AgUiRuntimeProjectionSpec): string =>
-  spec.threadId ?? event.scope;
+  spec.threadId ?? scopeRefKey(event.scopeRef);
 
 const messageIdFor = (runId: number, turnIndex: number, ordinal: number): string =>
   `agent-os:run:${runId}:turn:${turnIndex}:message:${ordinal}`;
@@ -685,7 +695,10 @@ export const projectLedgerEventToAgUiEnvelope = (
     id: event.id,
     ts: event.ts,
     kind: event.kind,
-    scope: event.scope,
+    scopeRef: event.scopeRef,
+    scopeKey: scopeRefKey(event.scopeRef),
+    factOwnerRef: event.factOwnerRef,
+    effectAuthorityRef: event.effectAuthorityRef,
     agUiFrames: mapEnvelopeFrames(event, agUiFrames, spec.mapFrame),
   };
 };
@@ -710,7 +723,8 @@ export const framesForAgUiLedgerEnvelope = (
     eventId: envelope.id,
     eventTs: envelope.ts,
     eventKind: envelope.kind,
-    eventScope: envelope.scope,
+    eventScopeRef: envelope.scopeRef,
+    eventScopeKey: envelope.scopeKey,
     frame,
   }));
 

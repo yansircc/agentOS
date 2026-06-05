@@ -7,6 +7,7 @@ import { projectRows } from "./resources/projection";
 import { type AttemptKey, type CapabilityLease, projectLease } from "./admission";
 import { loadAdmissionRows } from "./admission/payload";
 import {
+  scopeRefKey,
   validateEffectClaim,
   type AnchorRef,
   type AuthorityRef,
@@ -35,7 +36,7 @@ export interface ClaimTraceSpec {
 interface ClaimTraceBase {
   readonly eventId: number;
   readonly eventKind: string;
-  readonly scope: string;
+  readonly scopeKey: string;
   readonly ts: number;
   readonly operationRef: string;
   readonly scopeRef: ScopeRef;
@@ -62,7 +63,7 @@ export type ClaimTraceEntry = PreClaimTraceEntry | LivedClaimTraceEntry | Reject
 interface FailurePlaneBase {
   readonly eventId: number;
   readonly eventKind: string;
-  readonly scope: string;
+  readonly scopeKey: string;
   readonly ts: number;
 }
 
@@ -97,7 +98,7 @@ const claimFromEvent = (event: LedgerEvent): EffectClaim | null => {
 const claimTraceBase = (event: LedgerEvent, claim: EffectClaim): ClaimTraceBase => ({
   eventId: event.id,
   eventKind: event.kind,
-  scope: event.scope,
+  scopeKey: scopeRefKey(event.scopeRef),
   ts: event.ts,
   operationRef: claim.operationRef,
   scopeRef: claim.scopeRef,
@@ -153,7 +154,7 @@ export const projectFailurePlane = (
       rows.push({
         eventId: event.id,
         eventKind: event.kind,
-        scope: event.scope,
+        scopeKey: scopeRefKey(event.scopeRef),
         ts: event.ts,
         plane: "claim_rejected",
         operationRef: claim.operationRef,
@@ -167,7 +168,7 @@ export const projectFailurePlane = (
       rows.push({
         eventId: event.id,
         eventKind: event.kind,
-        scope: event.scope,
+        scopeKey: scopeRefKey(event.scopeRef),
         ts: event.ts,
         plane: "run_aborted",
         ...(typeof reason === "string" ? { reason } : {}),

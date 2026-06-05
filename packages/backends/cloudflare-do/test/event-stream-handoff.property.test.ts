@@ -12,6 +12,12 @@ import { describe, expect, it } from "vite-plus/test";
 import { selectHandoffEvents } from "../src/ledger/stream";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 
+const eventIdentity = (scopeId: string) => ({
+  scopeRef: { kind: "conversation" as const, scopeId },
+  factOwnerRef: "@agent-os/test",
+  effectAuthorityRef: { authorityClass: "test", authorityId: scopeId },
+});
+
 const uniqueSorted = (values: ReadonlyArray<number>): ReadonlyArray<number> =>
   Array.from(new Set(values)).sort((a, b) => a - b);
 
@@ -19,7 +25,7 @@ const eventOf = (id: number): LedgerEvent => ({
   id,
   ts: id,
   kind: `event.${id}`,
-  scope: "scope-a",
+  ...eventIdentity("scope-a"),
   payload: { id },
 });
 

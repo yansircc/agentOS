@@ -12,6 +12,11 @@ import type { InternalSubmitSpec } from "../src/submit";
 import { decodeRuntimeLedgerEvent } from "../src/runtime-events";
 
 const scope = "submit-runtime-events";
+const eventIdentity = (scopeId: string) => ({
+  scopeRef: { kind: "conversation" as const, scopeId },
+  factOwnerRef: "@agent-os/test",
+  effectAuthorityRef: { authorityClass: "test", authorityId: scopeId },
+});
 const traceContext = {
   traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
   tracestate: "vendor=value",
@@ -62,7 +67,7 @@ const makeServices = (responses: ReadonlyArray<LlmResponse> = [response()]) => {
             id,
             ts: spec.ts ?? id * 10,
             kind: spec.kind,
-            scope: spec.scope,
+            ...eventIdentity(spec.scope),
             payload: spec.payload,
           };
         });

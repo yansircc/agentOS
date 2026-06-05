@@ -5,7 +5,7 @@
  * are a separate operation and are valid only for `kind: "session"`.
  */
 
-import type { ScopeRef } from "./effect-claim";
+import { scopeRefKey, type ScopeRef } from "./effect-claim";
 
 export type RuntimeScopeKind = ScopeRef["kind"];
 
@@ -24,20 +24,7 @@ export type StatefulScopeRootResult =
       readonly kind: RuntimeScopeKind;
     };
 
-const encodeScopePart = (value: string): string => encodeURIComponent(value).replace(/\./g, "%2E");
-
-export const runtimeScopeKey = (scopeRef: ScopeRef): string => {
-  switch (scopeRef.kind) {
-    case "external":
-      return [
-        "external",
-        encodeScopePart(scopeRef.systemRef),
-        encodeScopePart(scopeRef.scopeId),
-      ].join(":");
-    default:
-      return [scopeRef.kind, encodeScopePart(scopeRef.scopeId)].join(":");
-  }
-};
+export const runtimeScopeKey = scopeRefKey;
 
 export const resolveRuntimeScope = (scopeRef: ScopeRef): RuntimeScopeResolution => ({
   scopeRef,
@@ -58,7 +45,8 @@ export const resolveStatefulSessionRoot = (
     };
   }
 
-  const root = ["session", encodeScopePart(scopeRef.scopeId), carrierRef].join("/");
+  const scopeKeyPart = encodeURIComponent(scopeRef.scopeId).replace(/\./g, "%2E");
+  const root = ["session", scopeKeyPart, carrierRef].join("/");
   return {
     ok: true,
     stateRoot: `agentos://${root}`,

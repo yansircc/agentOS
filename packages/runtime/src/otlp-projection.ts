@@ -1,3 +1,4 @@
+import { authorityRefKey, factOwnerKey, scopeRefKey } from "@agent-os/kernel/effect-claim";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import { validateOptionalTraceContext, type TraceContext } from "@agent-os/kernel/trace-context";
 import { Option } from "effect";
@@ -257,7 +258,9 @@ const genericSpans = (events: ReadonlyArray<LedgerEvent>): ReadonlyArray<OtlpPro
           event.kind.endsWith(".failed") || event.kind.endsWith(".cancelled") ? "ERROR" : "OK",
         attributes: {
           "agentos.event.kind": event.kind,
-          "agentos.event.scope": event.scope,
+          "agentos.event.scope_key": scopeRefKey(event.scopeRef),
+          "agentos.event.fact_owner": factOwnerKey(event.factOwnerRef),
+          "agentos.event.effect_authority": authorityRefKey(event.effectAuthorityRef),
           "agentos.event.id": event.id,
         },
         sourceEventIds: [event.id],

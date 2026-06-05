@@ -1,4 +1,4 @@
-import type { LedgerEvent } from "@agent-os/kernel/types";
+import type { LedgerEvent, LedgerEventIdentity } from "@agent-os/kernel/types";
 import { JsonStringifyError, SqlError } from "@agent-os/kernel/errors";
 import { Effect } from "effect";
 import { applyRegisteredMaterializedProjectionEvents } from "../materialized-projections";
@@ -157,6 +157,12 @@ const encodePayload = (payload: unknown): string => {
   }
 };
 
+const transitionIdentityFromScope = (scope: string): LedgerEventIdentity => ({
+  scopeRef: { kind: "conversation", scopeId: scope },
+  factOwnerRef: "@agent-os/transition-unowned",
+  effectAuthorityRef: { authorityClass: "legacy-scope", authorityId: scope },
+});
+
 const asEffectError = <E>(
   cause: unknown,
   classify?: (cause: unknown) => E | null,
@@ -195,7 +201,7 @@ export const commitLedgerTransaction = <A, E = never>(
               id: recipe.id,
               ts: recipe.ts,
               kind: recipe.kind,
-              scope: recipe.scope,
+              ...transitionIdentityFromScope(recipe.scope),
               payload,
             };
             byRef.set(recipe.ref.key, event);
@@ -204,12 +210,13 @@ export const commitLedgerTransaction = <A, E = never>(
           const encoded = events.map((event) => encodePayload(event.payload));
           for (let index = 0; index < events.length; index++) {
             const event = events[index]!;
+            const recipe = builder.recipes[index]!;
             sql.exec(
               "INSERT INTO events (id, ts, kind, scope, payload) VALUES (?, ?, ?, ?, ?)",
               event.id,
               event.ts,
               event.kind,
-              event.scope,
+              recipe.scope,
               encoded[index]!,
             );
           }

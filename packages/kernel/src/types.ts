@@ -9,7 +9,12 @@
  */
 
 import { Schema } from "effect";
-import type { ScopeRef } from "./effect-claim";
+import {
+  isFactOwnerRef,
+  type AuthorityRef,
+  type FactOwnerRef,
+  type ScopeRef,
+} from "./effect-claim";
 import type { BindingMaterialRef } from "./material-ref";
 import type { TraceContext } from "./trace-context";
 
@@ -24,18 +29,50 @@ export interface LedgerEvent {
   readonly id: number;
   readonly ts: number;
   readonly kind: string;
-  readonly scope: string;
+  readonly scopeRef: ScopeRef;
+  readonly factOwnerRef: FactOwnerRef;
+  readonly effectAuthorityRef: AuthorityRef;
   readonly payload: unknown;
+  readonly scope?: never;
 }
+
+export type LedgerEventIdentity = Pick<
+  LedgerEvent,
+  "scopeRef" | "factOwnerRef" | "effectAuthorityRef"
+>;
 
 const ledgerEventId = Schema.Number.pipe(Schema.int(), Schema.greaterThanOrEqualTo(1));
 const ledgerEventTimestamp = Schema.Number.pipe(Schema.finite(), Schema.greaterThanOrEqualTo(0));
+const NonEmptyStringSchema: Schema.Schema<string> = Schema.String.pipe(
+  Schema.filter((value) => value.length > 0),
+);
+const ScopeRefSchema: Schema.Schema<ScopeRef> = Schema.Union(
+  Schema.Struct({ kind: Schema.Literal("realm"), scopeId: NonEmptyStringSchema }),
+  Schema.Struct({ kind: Schema.Literal("conversation"), scopeId: NonEmptyStringSchema }),
+  Schema.Struct({ kind: Schema.Literal("session"), scopeId: NonEmptyStringSchema }),
+  Schema.Struct({ kind: Schema.Literal("artifact"), scopeId: NonEmptyStringSchema }),
+  Schema.Struct({
+    kind: Schema.Literal("external"),
+    scopeId: NonEmptyStringSchema,
+    systemRef: NonEmptyStringSchema,
+  }),
+);
+const AuthorityRefSchema: Schema.Schema<AuthorityRef> = Schema.Struct({
+  authorityId: NonEmptyStringSchema,
+  authorityClass: NonEmptyStringSchema,
+  version: Schema.optional(NonEmptyStringSchema),
+});
+const FactOwnerRefSchema: Schema.Schema<FactOwnerRef> = NonEmptyStringSchema.pipe(
+  Schema.filter(isFactOwnerRef),
+);
 
 export const LedgerEventSchema: Schema.Schema<LedgerEvent> = Schema.Struct({
   id: ledgerEventId,
   ts: ledgerEventTimestamp,
   kind: Schema.String,
-  scope: Schema.String,
+  scopeRef: ScopeRefSchema,
+  factOwnerRef: FactOwnerRefSchema,
+  effectAuthorityRef: AuthorityRefSchema,
   payload: Schema.Unknown,
 });
 
@@ -45,9 +82,12 @@ export interface LedgerEventRpc {
   id: number;
   ts: number;
   kind: string;
-  scope: string;
+  scopeRef: ScopeRef;
+  factOwnerRef: FactOwnerRef;
+  effectAuthorityRef: AuthorityRef;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   payload: any;
+  scope?: never;
 }
 
 export type EventHandler = (event: LedgerEventRpc) => Promise<void>;
@@ -56,12 +96,18 @@ export interface EventQueryOptions {
   readonly afterId?: number;
   readonly limit?: number;
   readonly kinds?: ReadonlyArray<string>;
+  readonly scopeRef?: ScopeRef;
+  readonly effectAuthorityRef?: AuthorityRef;
+  readonly factOwnerRefs?: ReadonlyArray<FactOwnerRef>;
 }
 
 export interface StreamEventsOptions {
   readonly afterId?: number;
   readonly kinds?: ReadonlyArray<string>;
   readonly heartbeatMs?: number;
+  readonly scopeRef?: ScopeRef;
+  readonly effectAuthorityRef?: AuthorityRef;
+  readonly factOwnerRefs?: ReadonlyArray<FactOwnerRef>;
 }
 
 export interface ScheduledEventSpec {

@@ -35,6 +35,12 @@ import {
 
 const scope = "ag-ui-test";
 
+const eventIdentity = (scopeId: string) => ({
+  scopeRef: { kind: "conversation" as const, scopeId },
+  factOwnerRef: "@agent-os/test",
+  effectAuthorityRef: { authorityClass: "test", authorityId: scopeId },
+});
+
 const commit = (
   id: number,
   spec: { kind: string; scope: string; payload: unknown },
@@ -42,7 +48,7 @@ const commit = (
   id,
   ts: id * 10,
   kind: spec.kind,
-  scope: spec.scope,
+  ...eventIdentity(spec.scope),
   payload: spec.payload,
 });
 
@@ -313,7 +319,7 @@ describe("@agent-os/ag-ui", () => {
       id: 3,
       ts: 30,
       kind: "llm.response",
-      scope,
+      scopeKey: "conversation:ag-ui-test",
     });
     expect(envelope.agUiFrames).toContainEqual({
       type: "TOOL_CALL_ARGS",
@@ -325,14 +331,16 @@ describe("@agent-os/ag-ui", () => {
       eventId: 3,
       eventTs: 30,
       eventKind: "llm.response",
-      eventScope: scope,
+      eventScopeKey: "conversation:ag-ui-test",
     });
 
     const decoded = decodeLedgerEventToAgUiEnvelope({
       id: event.id,
       ts: event.ts,
       kind: event.kind,
-      scope: event.scope,
+      scopeRef: event.scopeRef,
+      factOwnerRef: event.factOwnerRef,
+      effectAuthorityRef: event.effectAuthorityRef,
       payload: event.payload,
     });
     expect(decoded.agUiFrames.length).toBeGreaterThan(0);
@@ -409,7 +417,7 @@ describe("@agent-os/ag-ui", () => {
     expect(frames.at(-1)).toEqual({
       type: "RUN_ERROR",
       timestamp: 20,
-      threadId: scope,
+      threadId: "conversation:ag-ui-test",
       runId: "1",
       message: "agent.aborted.budget_tokens",
       code: "agent.aborted.budget_tokens",
@@ -422,7 +430,7 @@ describe("@agent-os/ag-ui", () => {
         {
           id: 1,
           ts: 1,
-          scope,
+          ...eventIdentity(scope),
           kind: "tool.executed",
           payload: { runId: 1, name: "lookup" },
         },
@@ -436,7 +444,7 @@ describe("@agent-os/ag-ui", () => {
         {
           id: 1,
           ts: 1,
-          scope,
+          ...eventIdentity(scope),
           kind: "workspace.file.observed",
           payload: { path: "README.md", content: "not exposed" },
         },
