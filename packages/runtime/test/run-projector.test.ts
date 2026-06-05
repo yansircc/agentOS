@@ -2,7 +2,12 @@ import { describe, expect, it } from "@effect/vitest";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import type { LivedClaim } from "@agent-os/kernel/effect-claim";
 import { ABORT } from "../src/abort";
-import { projectRunsPage, projectRunStatus, projectRunTrace } from "../src/run-projector";
+import {
+  projectRunsPage,
+  projectRunStatus,
+  projectRunTrace,
+  projectSubmitResult,
+} from "../src/run-projector";
 import {
   agentRunAbortedEvent,
   agentRunCompletedEvent,
@@ -74,11 +79,19 @@ const validRunRows = (): ReadonlyArray<LedgerEvent> => [
       claim: livedClaim,
     }),
   ),
-  rawEvent(5, "answer.ready", {
-    final: "done",
-    turn: { id: 1, index: 1 },
-  }),
-  event(6, agentRunCompletedEvent({ scope, runId: 1, event: "answer.ready" })),
+  rawEvent(5, "answer.ready", { product: "event" }),
+  event(
+    6,
+    agentRunCompletedEvent({
+      scope,
+      runId: 1,
+      final: "done",
+      output: "done",
+      outputKind: "text",
+      tokensUsed: 3,
+      turn: { id: 1, index: 1 },
+    }),
+  ),
 ];
 
 describe("runtime run projectors", () => {
@@ -107,14 +120,28 @@ describe("runtime run projectors", () => {
       terminal: {
         kind: "delivered",
         at: 60,
-        event: "answer.ready",
-        payload: { runId: 1, event: "answer.ready" },
+        event: "agent.run.completed",
+        payload: {
+          runId: 1,
+          final: "done",
+          output: "done",
+          outputKind: "text",
+          tokensUsed: 3,
+          turn: { id: 1, index: 1 },
+        },
       },
     });
     expect(projectRunStatus(rows, 1)).toEqual({
       kind: "delivered",
       at: 60,
-      event: "answer.ready",
+      event: "agent.run.completed",
+    });
+    expect(projectSubmitResult(rows, 1)).toEqual({
+      ok: true,
+      runId: 1,
+      final: "done",
+      eventCount: 6,
+      tokensUsed: 3,
     });
   });
 
@@ -135,6 +162,7 @@ describe("runtime run projectors", () => {
               scope,
               kind: ABORT.TOOL_ERROR,
               runId: 1,
+              tokensUsed: 0,
               payload: { reason: "tool_error" },
             }),
           ),
@@ -171,7 +199,17 @@ describe("runtime run projectors", () => {
       projectRunsPage(
         [
           event(1, agentRunStartedEvent({ scope, intent: "old" })),
-          event(2, agentRunCompletedEvent({ scope, runId: 1, event: "old.done" })),
+          event(
+            2,
+            agentRunCompletedEvent({
+              scope,
+              runId: 1,
+              final: "old",
+              output: "old",
+              outputKind: "text",
+              tokensUsed: 1,
+            }),
+          ),
           event(3, agentRunStartedEvent({ scope, intent: "new" })),
         ],
         { limit: 2 },
@@ -186,7 +224,7 @@ describe("runtime run projectors", () => {
         {
           runId: 1,
           startedAt: 10,
-          status: { kind: "delivered", at: 20, event: "old.done" },
+          status: { kind: "delivered", at: 20, event: "agent.run.completed" },
           durationMs: 10,
         },
       ],
@@ -198,14 +236,30 @@ describe("runtime run projectors", () => {
     const rows = [
       event(1, agentRunStartedEvent({ scope, intent: "x" })),
       rawEvent(2, "answer.ready", "product payload can be any shape"),
-      event(3, agentRunCompletedEvent({ scope, runId: 1, event: "answer.ready" })),
+      event(
+        3,
+        agentRunCompletedEvent({
+          scope,
+          runId: 1,
+          final: "done",
+          output: "done",
+          outputKind: "text",
+          tokensUsed: 1,
+        }),
+      ),
     ];
 
     expect(projectRunStatus(rows, 1)).toEqual({
       kind: "delivered",
       at: 30,
-      event: "answer.ready",
+      event: "agent.run.completed",
     });
+  });
+
+  it("does not fabricate SubmitResult without a terminal runtime fact", () => {
+    expect(projectSubmitResult([event(1, agentRunStartedEvent({ scope, intent: "open" }))], 1)).toBe(
+      null,
+    );
   });
 
   it("fails closed on malformed runtime payloads", () => {

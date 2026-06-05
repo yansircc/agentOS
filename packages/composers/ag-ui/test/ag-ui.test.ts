@@ -119,7 +119,17 @@ const transcript = (): ReadonlyArray<LedgerEvent> => [
       ),
     }),
   ),
-  commit(5, agentRunCompletedEvent({ scope, runId: 1, event: "weather.delivered" })),
+  commit(
+    5,
+    agentRunCompletedEvent({
+      scope,
+      runId: 1,
+      final: "Done.",
+      output: "Done.",
+      outputKind: "text",
+      tokensUsed: 18,
+    }),
+  ),
 ];
 
 const collectAsync = async <A>(source: AsyncIterable<A>): Promise<ReadonlyArray<A>> => {
@@ -263,7 +273,12 @@ describe("@agent-os/ag-ui", () => {
         timestamp: 50,
         threadId: "thread-1",
         runId: "1",
-        result: { event: "weather.delivered" },
+        result: {
+          final: "Done.",
+          output: "Done.",
+          outputKind: "text",
+          tokensUsed: 18,
+        },
         outcome: { type: "success" },
       },
     ]);
@@ -410,7 +425,8 @@ describe("@agent-os/ag-ui", () => {
           scope,
           kind: "agent.aborted.budget_tokens",
           runId: 1,
-          payload: { tokensUsed: 20, tokensMax: 10 },
+          tokensUsed: 20,
+          payload: { tokensMax: 10 },
         }),
       ),
     ]);
@@ -492,7 +508,7 @@ describe("@agent-os/ag-ui", () => {
         modelId: "model",
       },
       tools: {},
-      deliver: { event: "done" },
+      effectAuthorityRef: { authorityClass: "llm_route", authorityId: "ag-ui-test" },
       forwardedPropAllowlist: ["allowed"],
     });
     expect(submit.intent).toBe("ship it");
@@ -527,7 +543,7 @@ describe("@agent-os/ag-ui", () => {
             modelId: "model",
           },
           tools: {},
-          deliver: { event: "done" },
+          effectAuthorityRef: { authorityClass: "llm_route", authorityId: "ag-ui-test" },
         },
       ),
     ).toThrow("AG-UI resume is unsupported");

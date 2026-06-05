@@ -109,7 +109,15 @@ describe("OTLP trace projection", () => {
       ),
       event(
         6,
-        agentRunCompletedEvent({ scope, runId: 1, event: "answer.ready", traceContext }),
+        agentRunCompletedEvent({
+          scope,
+          runId: 1,
+          final: "done",
+          output: "done",
+          outputKind: "text",
+          tokensUsed: 15,
+          traceContext,
+        }),
         150,
       ),
     ]);
@@ -183,6 +191,7 @@ describe("OTLP trace projection", () => {
           scope,
           kind: ABORT.TOOL_ERROR,
           runId: 1,
+          tokensUsed: 2,
           payload: { cause: "secret error detail" },
           traceContext,
         }),

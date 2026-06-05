@@ -27,11 +27,9 @@ const makeSpec = (budget?: InternalSubmitSpec["budget"]): InternalSubmitSpec => 
   },
   tools: {},
   ...(budget === undefined ? {} : { budget }),
-  deliver: {
-    event: "test.delivered",
-    scope: "timeout-scope",
-    scopeRef: { kind: "conversation", scopeId: "timeout-scope" },
-  },
+  scope: "timeout-scope",
+  scopeRef: { kind: "conversation", scopeId: "timeout-scope" },
+  effectAuthorityRef: { authorityClass: "llm_route", authorityId: "timeout-route" },
 });
 
 const makeStructuredSpec = (budget?: InternalSubmitSpec["budget"]): InternalSubmitSpec => ({

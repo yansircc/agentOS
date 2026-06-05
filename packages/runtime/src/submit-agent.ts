@@ -2,7 +2,7 @@
  * submitAgentEffect — the agent loop.
  *
  * Loop terminates on exactly three conditions:
- *   1. LLM returns no more tool calls (natural stop) -> deliver
+ *   1. LLM returns no more tool calls (natural stop) -> complete
  *   2. Any budget dimension exhausted -> abort
  *   3. Tool dispatch retry exhausted -> abort
  *
@@ -38,7 +38,7 @@ import {
   validateOptionalTraceContext,
   type TraceContext,
 } from "@agent-os/kernel/trace-context";
-import { ABORT, type AbortKind, reasonOf } from "./abort";
+import { ABORT, type AbortKind } from "./abort";
 import { LlmTransport } from "./llm-transport";
 import { Ledger, type LedgerCommitEventSpec } from "./ledger";
 import type { RefResolutionFailed } from "@agent-os/kernel/ref-resolver";
@@ -51,6 +51,7 @@ import {
   type Tool,
 } from "@agent-os/kernel/tools";
 import { Admission, makeAdmissionSchemaSpec } from "./admission";
+import { projectSubmitResult } from "./run-projector";
 import {
   admitterErrorRejectionRef,
   makeOperationRef,
@@ -156,6 +157,22 @@ const logRuntimeLedgerEvent = (
     return event;
   });
 
+const submitResultFromEvents = (
+  events: ReadonlyArray<LedgerEvent>,
+  runId: number,
+): Effect.Effect<SubmitResult, SqlError> => {
+  const result = projectSubmitResult(events, runId);
+  if (result !== null) return Effect.succeed(result);
+  return Effect.fail(
+    new SqlError({
+      cause: {
+        reason: "missing_terminal_ledger_fact",
+        runId,
+      },
+    }),
+  );
+};
+
 /** The single termination funnel. All recoverable aborts route through here.
  *  Logs an agent.aborted.* ledger event then constructs SubmitResult.fail. */
 const finalAbort = (
@@ -170,16 +187,10 @@ const finalAbort = (
     const ledger = yield* Ledger;
     yield* logRuntimeLedgerEvent(
       ledger,
-      agentRunAbortedEvent({ scope, kind, runId, payload, traceContext }),
+      agentRunAbortedEvent({ scope, kind, runId, tokensUsed, payload, traceContext }),
     );
     const events = yield* ledger.events(scope);
-    return {
-      ok: false,
-      runId,
-      reason: reasonOf(kind),
-      eventCount: events.length,
-      tokensUsed,
-    } as const;
+    return yield* submitResultFromEvents(events, runId);
   });
 
 const llmTimeoutFor = (
@@ -259,8 +270,8 @@ export const submitAgentEffect = (
     const budgetTimeMs = spec.budget?.timeMs ?? Number.POSITIVE_INFINITY;
     const maxTurns = spec.budget?.maxTurns ?? 5;
     const toolRetries = Math.max(0, spec.budget?.toolRetries ?? 2);
-    const scope = spec.deliver.scope;
-    const scopeRef = spec.deliver.scopeRef;
+    const scope = spec.scope;
+    const scopeRef = spec.scopeRef;
 
     const started = yield* logRuntimeLedgerEvent(
       ledger,
@@ -284,7 +295,7 @@ export const submitAgentEffect = (
     // outputSchema present → bypass the multi-turn tool loop entirely.
     // attemptStructured handles the admission gate (lease cache), provider
     // call, decode, and evidence emission. Submit owns token budget,
-    // deliver, and terminal run facts.
+    // completion, and terminal run facts.
     // ====================================================================
     if (spec.outputSchema !== undefined) {
       if (Object.keys(spec.tools).length > 0) {
@@ -307,8 +318,6 @@ export const submitAgentEffect = (
 
       const ctxStr = yield* safeStringifyPretty(spec.context);
       const userText = `${spec.intent}\n\nContext:\n${ctxStr}`;
-      const deliverEventName = spec.deliver.event;
-
       const beforeCall = yield* Clock.currentTimeMillis;
       const tokensBeforeCall = yield* Ref.get(tokensUsedRef);
       const timeout = llmTimeoutFor(startTime, beforeCall, budgetTimeMs);
@@ -390,22 +399,18 @@ export const submitAgentEffect = (
         }
         const finalStr = yield* safeStringify(result.decoded);
         yield* ledger.commit([
-          { kind: deliverEventName, payload: result.decoded, scope },
           agentRunCompletedEvent({
             scope,
             runId: started.id,
-            event: deliverEventName,
+            final: finalStr,
+            output: result.decoded,
+            outputKind: "json",
+            tokensUsed: tokens,
             traceContext,
           }),
         ]);
         const events = yield* ledger.events(scope);
-        return {
-          ok: true,
-          runId: started.id,
-          final: finalStr,
-          eventCount: events.length,
-          tokensUsed: tokens,
-        } as const;
+        return yield* submitResultFromEvents(events, started.id);
       }
 
       // attemptStructured returned a non-Supported outcome. Funnel
@@ -549,26 +554,19 @@ export const submitAgentEffect = (
 
         if (responseToolCalls.length === 0) {
           yield* ledger.commit([
-            {
-              kind: spec.deliver.event,
-              payload: { final: responseText, turn: turnRefOf(started.id, turn) },
-              scope,
-            },
             agentRunCompletedEvent({
               scope,
               runId: started.id,
-              event: spec.deliver.event,
+              final: responseText,
+              output: responseText,
+              outputKind: "text",
+              tokensUsed: newTokens,
+              turn: turnRefOf(started.id, turn),
               traceContext,
             }),
           ]);
           const events = yield* ledger.events(scope);
-          return {
-            ok: true,
-            runId: started.id,
-            final: responseText,
-            eventCount: events.length,
-            tokensUsed: newTokens,
-          } as const;
+          return yield* submitResultFromEvents(events, started.id);
         }
 
         for (const call of responseToolCalls) {

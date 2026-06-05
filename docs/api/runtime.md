@@ -108,6 +108,7 @@
 - `.:ProjectionStatus`
 - `.:ResourceProjection`
 - `.:Resources`
+- `.:RUN_BEARING_KINDS`
 - `.:Scheduler`
 - `.:ScheduledEventIntentPayload`
 - `.:Strategy`
@@ -155,6 +156,10 @@
 - `.:getDurableTrigger`
 - `.:parseScheduledEventIntentPayload`
 - `.:projectOtlpSpans`
+- `.:projectRunStatus`
+- `.:projectRunTrace`
+- `.:projectRunsPage`
+- `.:projectSubmitResult`
 - `.:projectLease`
 - `.:projectionDelete`
 - `.:projectionFail`
@@ -211,6 +216,7 @@
 - `./run-projector:projectRunStatus`
 - `./run-projector:projectRunTrace`
 - `./run-projector:projectRunsPage`
+- `./run-projector:projectSubmitResult`
 - `./runtime-events:AgentRunAbortedPayload`
 - `./runtime-events:AgentRunAbortedPayloadSchema`
 - `./runtime-events:AgentRunCompletedPayload`

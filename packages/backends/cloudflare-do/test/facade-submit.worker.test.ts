@@ -74,7 +74,7 @@ describe("defineAgentDO facade submit", () => {
         instance.submit({
           intent: "lookup",
           input: { key: "abc" },
-          deliver: "test.delivered",
+          effectAuthorityRef: { authorityClass: "llm_route", authorityId: "facade-submit-test" },
           budget: { maxTurns: 1 },
         }),
       );
@@ -111,12 +111,17 @@ describe("defineAgentDO facade submit", () => {
       expect(body.tools?.map((tool) => tool.function?.name)).toEqual(["lookup"]);
       expect(body.tools?.map((tool) => tool.type)).toEqual(["function"]);
 
-      const delivered = events.filter((event) => event.kind === "test.delivered");
-      expect(delivered).toHaveLength(1);
-      expect(delivered[0]?.payload).toEqual({
+      const completed = events.filter((event) => event.kind === "agent.run.completed");
+      expect(completed).toHaveLength(1);
+      expect(completed[0]?.payload).toEqual({
+        runId: 1,
         final: "facade done",
+        output: "facade done",
+        outputKind: "text",
+        tokensUsed: 7,
         turn: { id: 1, index: 0 },
       });
+      expect(events.some((event) => event.kind === "test.delivered")).toBe(false);
     } finally {
       globalThis.fetch = originalFetch;
     }

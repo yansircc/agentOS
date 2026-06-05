@@ -9,6 +9,7 @@ export * from "./otlp-projection";
 export * from "./projection";
 export * from "./quota-service";
 export * from "./resources";
+export * from "./run-projector";
 export * from "./scheduler";
 export * from "./structured-output";
 export * from "./submit-agent";

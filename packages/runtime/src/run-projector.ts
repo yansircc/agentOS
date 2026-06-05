@@ -11,7 +11,8 @@ import type {
 } from "@agent-os/kernel/types";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import { textFromLlmOutputItems } from "@agent-os/kernel/llm";
-import { ABORT } from "./abort";
+import { ABORT, reasonOf, type AbortKind } from "./abort";
+import type { SubmitResult } from "./submit";
 import {
   decodeRuntimeLedgerEvent,
   isRuntimeAbortEventKind,
@@ -88,7 +89,7 @@ const runTerminal = (
     return {
       kind: "delivered",
       at: completed.ts,
-      event: completed.payload.event,
+      event: completed.kind,
       payload: completed.payload,
     };
   }
@@ -229,7 +230,7 @@ export const projectRunsPage = (
       acc.terminal = {
         kind: "delivered",
         at: ev.ts,
-        event: ev.payload.event,
+        event: ev.kind,
       };
       continue;
     }
@@ -269,4 +270,36 @@ export const projectRunsPage = (
     afterFiltered.length > limit && page.length > 0 ? page[page.length - 1]!.runId : null;
 
   return { runs: page, nextCursor };
+};
+
+export const projectSubmitResult = (
+  events: ReadonlyArray<LedgerEvent>,
+  rawRunId: number | string,
+): SubmitResult | null => {
+  const runtimeEvents = runtimeEventsOf(events);
+  const runId = normalizeRunId(rawRunId);
+  const terminal = runTerminal(runtimeEvents, runId);
+  if (terminal === null) {
+    return null;
+  }
+  if (terminal.kind === "delivered") {
+    const payload = terminal.payload as RuntimeLedgerEventByKind<
+      typeof RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED
+    >["payload"];
+    return {
+      ok: true,
+      runId,
+      final: payload.final,
+      eventCount: events.length,
+      tokensUsed: payload.tokensUsed,
+    };
+  }
+  const payload = terminal.payload as RuntimeLedgerEventByKind<AbortKind>["payload"];
+  return {
+    ok: false,
+    runId,
+    reason: reasonOf(terminal.event as AbortKind),
+    eventCount: events.length,
+    tokensUsed: payload.tokensUsed,
+  };
 };

@@ -1,6 +1,6 @@
 import type { LlmRoute } from "@agent-os/kernel/llm";
 import type { Tool } from "@agent-os/kernel/tools";
-import type { ScopeRef } from "@agent-os/kernel/effect-claim";
+import type { AuthorityRef, ScopeRef } from "@agent-os/kernel/effect-claim";
 import type { AnyAgentSchemaSource } from "@agent-os/kernel/agent-schema";
 import type { TraceContext } from "@agent-os/kernel/trace-context";
 
@@ -18,15 +18,12 @@ export interface SubmitSpec {
   };
   readonly outputSchema?: AnyAgentSchemaSource;
   readonly traceContext?: TraceContext;
-  readonly deliver: { readonly event: string };
+  readonly effectAuthorityRef: AuthorityRef;
 }
 
-export interface InternalSubmitSpec extends Omit<SubmitSpec, "deliver"> {
-  readonly deliver: {
-    readonly scope: string;
-    readonly scopeRef: ScopeRef;
-    readonly event: string;
-  };
+export interface InternalSubmitSpec extends SubmitSpec {
+  readonly scope: string;
+  readonly scopeRef: ScopeRef;
 }
 
 export type SubmitResult =

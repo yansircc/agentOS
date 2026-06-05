@@ -3,7 +3,7 @@
  *
  * Two paths:
  *   1. outputSchema present + no tools → admission path; result.final is
- *      the decoded JSON, ledger holds chat.ingested + evidence + deliver + terminal.
+ *      the decoded JSON, ledger holds chat.ingested + evidence + runtime terminal.
  *   2. outputSchema + non-empty tools → submit aborts with
  *      `output_schema_excludes_tools_in_v0_2_10` BEFORE any LLM call
  *      (mutual exclusivity invariant — contract §12.1).
@@ -49,11 +49,9 @@ describe("admission — submitAgent outputSchema path (contract §12.1)", () => 
         route,
         tools: {},
         outputSchema: SCHEMA,
-        deliver: {
-          scope,
-          scopeRef: { kind: "conversation", scopeId: scope },
-          event: "structured.done",
-        },
+        scope,
+        scopeRef: { kind: "conversation", scopeId: scope },
+        effectAuthorityRef: { authorityClass: "llm_route", authorityId: "submit-outputschema" },
       };
 
       const r = await runtime.runPromise(submitAgentEffect(spec));
@@ -62,7 +60,7 @@ describe("admission — submitAgent outputSchema path (contract §12.1)", () => 
         expect(JSON.parse(r.final)).toEqual({ summary: "from-submit" });
       }
 
-      // Admission writes evidence; submit writes deliver + terminal.
+      // Admission writes evidence; submit writes the runtime terminal fact.
       const events = await runtime.runPromise(
         Effect.gen(function* () {
           const l = yield* Ledger;
@@ -72,8 +70,8 @@ describe("admission — submitAgent outputSchema path (contract §12.1)", () => 
       const kinds = events.map((e) => e.kind);
       expect(kinds).toContain("chat.ingested");
       expect(kinds).toContain("llm.structured.evidence");
-      expect(kinds).toContain("structured.done");
       expect(kinds).toContain("agent.run.completed");
+      expect(kinds).not.toContain("structured.done");
 
       await runtime.dispose();
     });
@@ -104,10 +102,11 @@ describe("admission — submitAgent outputSchema path (contract §12.1)", () => 
           }),
         },
         outputSchema: SCHEMA,
-        deliver: {
-          scope,
-          scopeRef: { kind: "conversation", scopeId: scope },
-          event: "structured.done",
+        scope,
+        scopeRef: { kind: "conversation", scopeId: scope },
+        effectAuthorityRef: {
+          authorityClass: "llm_route",
+          authorityId: "submit-outputschema-conflict",
         },
       };
 
@@ -154,10 +153,11 @@ describe("admission — submitAgent outputSchema path (contract §12.1)", () => 
         tools: {},
         outputSchema: SCHEMA,
         budget: { tokens: 10 },
-        deliver: {
-          scope,
-          scopeRef: { kind: "conversation", scopeId: scope },
-          event: "structured.done",
+        scope,
+        scopeRef: { kind: "conversation", scopeId: scope },
+        effectAuthorityRef: {
+          authorityClass: "llm_route",
+          authorityId: "submit-outputschema-token-budget",
         },
       };
 

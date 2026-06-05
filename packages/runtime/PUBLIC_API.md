@@ -112,6 +112,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:ProjectionStatus`
 - `.:ResourceProjection`
 - `.:Resources`
+- `.:RUN_BEARING_KINDS`
 - `.:Scheduler`
 - `.:ScheduledEventIntentPayload`
 - `.:Strategy`
@@ -159,6 +160,10 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:getDurableTrigger`
 - `.:parseScheduledEventIntentPayload`
 - `.:projectOtlpSpans`
+- `.:projectRunStatus`
+- `.:projectRunTrace`
+- `.:projectRunsPage`
+- `.:projectSubmitResult`
 - `.:projectLease`
 - `.:projectionDelete`
 - `.:projectionFail`
@@ -215,6 +220,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `./run-projector:projectRunStatus`
 - `./run-projector:projectRunTrace`
 - `./run-projector:projectRunsPage`
+- `./run-projector:projectSubmitResult`
 - `./runtime-events:AgentRunAbortedPayload`
 - `./runtime-events:AgentRunAbortedPayloadSchema`
 - `./runtime-events:AgentRunCompletedPayload`

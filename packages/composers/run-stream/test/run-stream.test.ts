@@ -52,7 +52,7 @@ const submitSpec: SubmitSpec = {
   },
   tools: {},
   budget: { maxTurns: 1 },
-  deliver: { event: "stream.done" },
+  effectAuthorityRef: { authorityClass: "llm_route", authorityId: "run-stream-test" },
 };
 
 const frameDataFromSse = (text: string): ReadonlyArray<RunStreamFrame> =>
@@ -207,12 +207,12 @@ describe("@agent-os/run-stream", () => {
           : [ledgerEvent(6, "agent.run.started"), ledgerEvent(7, "agent.run.completed")];
       },
       submit: async (spec) => {
-        operations.push(`submit:${spec.deliver.event}`);
+        operations.push(`submit:${spec.effectAuthorityRef.authorityId}`);
         return okResult;
       },
     });
 
-    expect(operations).toEqual(["events:baseline", "submit:stream.done", "events:after=5"]);
+    expect(operations).toEqual(["events:baseline", "submit:run-stream-test", "events:after=5"]);
     expect(projectRunStream(frames)).toEqual({
       status: "succeeded",
       lastSeq: 2,

@@ -113,12 +113,20 @@ export type ToolRejectedPayload = {
 
 export type AgentRunCompletedPayload = {
   readonly runId: number;
-  readonly event: string;
+  readonly final: string;
+  readonly output: unknown;
+  readonly outputKind: "text" | "json";
+  readonly tokensUsed: number;
+  readonly turn?: {
+    readonly id: number;
+    readonly index: number;
+  };
   readonly traceContext?: TraceContext;
-} & Readonly<Record<string, unknown>>;
+};
 
 export type AgentRunAbortedPayload = {
   readonly runId: number;
+  readonly tokensUsed: number;
   readonly traceContext?: TraceContext;
 } & Readonly<Record<string, unknown>>;
 
@@ -165,12 +173,17 @@ export const ToolRejectedPayloadSchema: Schema.Schema<ToolRejectedPayload> = Sch
 export const AgentRunCompletedPayloadSchema: Schema.Schema<AgentRunCompletedPayload> =
   Schema.Struct({
     runId: positiveInt,
-    event: Schema.String,
+    final: Schema.String,
+    output: Schema.Unknown,
+    outputKind: Schema.Literal("text", "json"),
+    tokensUsed: nonNegativeInt,
+    turn: Schema.optional(TurnRefSchema),
     traceContext: Schema.optional(TraceContextSchema),
-  }).pipe(Schema.extend(unknownRecord));
+  });
 
 export const AgentRunAbortedPayloadSchema: Schema.Schema<AgentRunAbortedPayload> = Schema.Struct({
   runId: positiveInt,
+  tokensUsed: nonNegativeInt,
   traceContext: Schema.optional(TraceContextSchema),
 }).pipe(Schema.extend(unknownRecord));
 
@@ -375,12 +388,20 @@ export const toolRejectedEvent = (spec: {
 export const agentRunCompletedEvent = (spec: {
   readonly scope: string;
   readonly runId: number;
-  readonly event: string;
+  readonly final: string;
+  readonly output: unknown;
+  readonly outputKind: "text" | "json";
+  readonly tokensUsed: number;
+  readonly turn?: { readonly id: number; readonly index: number };
   readonly traceContext?: TraceContext;
 }): RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED> =>
   runtimeEvent(spec.scope, RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED, {
     runId: spec.runId,
-    event: spec.event,
+    final: spec.final,
+    output: spec.output,
+    outputKind: spec.outputKind,
+    tokensUsed: spec.tokensUsed,
+    ...(spec.turn === undefined ? {} : { turn: spec.turn }),
     ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
   });
 
@@ -388,11 +409,13 @@ export const agentRunAbortedEvent = (spec: {
   readonly scope: string;
   readonly kind: RuntimeAbortEventKind;
   readonly runId: number;
+  readonly tokensUsed: number;
   readonly payload?: Record<string, unknown>;
   readonly traceContext?: TraceContext;
 }): RuntimeEventCommitSpecByKind<RuntimeAbortEventKind> =>
   runtimeEvent(spec.scope, spec.kind, {
     ...spec.payload,
     runId: spec.runId,
+    tokensUsed: spec.tokensUsed,
     ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
   });

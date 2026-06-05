@@ -32,11 +32,9 @@ const baseSpec = (overrides: Partial<InternalSubmitSpec> = {}): InternalSubmitSp
     modelId: "test-model",
   },
   tools: {},
-  deliver: {
-    event: "answer.ready",
-    scope,
-    scopeRef: { kind: "conversation", scopeId: scope },
-  },
+  scope,
+  scopeRef: { kind: "conversation", scopeId: scope },
+  effectAuthorityRef: { authorityClass: "llm_route", authorityId: "test-route" },
   ...overrides,
 });
 
@@ -156,7 +154,19 @@ describe("submit-agent runtime event writes", () => {
         "llm.response",
         "agent.run.completed",
       ]);
-      expect(decodeRuntimeLedgerEvent(events[3]!)).toMatchObject({ _tag: "non_runtime" });
+      expect(decodeRuntimeLedgerEvent(events[3]!)).toMatchObject({
+        _tag: "runtime",
+        event: {
+          kind: "agent.run.completed",
+          payload: {
+            runId: 1,
+            final: "done",
+            output: "done",
+            outputKind: "text",
+            tokensUsed: 2,
+          },
+        },
+      });
     }),
   );
 

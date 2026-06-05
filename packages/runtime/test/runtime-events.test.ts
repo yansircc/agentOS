@@ -116,12 +116,21 @@ describe("runtime event vocabulary", () => {
         claim: rejectedClaim,
         traceContext,
       }),
-      agentRunCompletedEvent({ scope, runId: 1, event: "answer.ready", traceContext }),
+      agentRunCompletedEvent({
+        scope,
+        runId: 1,
+        final: "done",
+        output: "done",
+        outputKind: "text",
+        tokensUsed: 3,
+        traceContext,
+      }),
       ...RUNTIME_ABORT_EVENT_KINDS.map((kind) =>
         agentRunAbortedEvent({
           scope,
           kind,
           runId: 1,
+          tokensUsed: 3,
           payload: { reason: kind.replace(/^agent\.aborted\./, "") },
           traceContext,
         }),
@@ -155,7 +164,7 @@ describe("runtime event vocabulary", () => {
       decodeRuntimeLedgerEvent(rawEvent(4, "tool.rejected", { runId: 1, name: "lookup" })),
     ).toThrow();
     expect(() =>
-      decodeRuntimeLedgerEvent(rawEvent(5, "agent.run.completed", { event: "answer.ready" })),
+      decodeRuntimeLedgerEvent(rawEvent(5, "agent.run.completed", { final: "done" })),
     ).toThrow();
     expect(() =>
       decodeRuntimeLedgerEvent(rawEvent(6, "agent.aborted.tool_error", { reason: "tool_error" })),

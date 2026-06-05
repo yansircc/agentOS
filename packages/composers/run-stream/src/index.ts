@@ -1,4 +1,4 @@
-import { Predicate } from "effect";
+import { Predicate, Schema } from "effect";
 import {
   isTurnStreamFrame,
   projectTurnStream,
@@ -6,7 +6,11 @@ import {
   type TurnStreamProjection,
 } from "@agent-os/turn-stream";
 import { isSymbolicSettlementValue } from "@agent-os/kernel/settlement-contract";
-import type { EventQueryOptions, LedgerEventRpc } from "@agent-os/kernel/types";
+import {
+  type EventQueryOptions,
+  LedgerEventSchema,
+  type LedgerEventRpc,
+} from "@agent-os/kernel/types";
 import type { SubmitResult, SubmitSpec } from "@agent-os/runtime";
 
 export type { LedgerEventRpc } from "@agent-os/kernel/types";
@@ -97,15 +101,7 @@ const isAsyncIterable = <T>(value: unknown): value is AsyncIterable<T> =>
 const isFrameBase = (value: Record<string, unknown>): boolean =>
   typeof value.seq === "number" && Number.isInteger(value.seq) && value.seq >= 0;
 
-const isLedgerEventRpc = (value: unknown): value is LedgerEventRpc =>
-  Predicate.isRecord(value) &&
-  typeof value.id === "number" &&
-  Number.isInteger(value.id) &&
-  value.id >= 0 &&
-  typeof value.ts === "number" &&
-  typeof value.kind === "string" &&
-  typeof value.scope === "string" &&
-  "payload" in value;
+const isLedgerEventRpc = Schema.is(LedgerEventSchema);
 
 const isSubmitResult = (value: unknown): value is SubmitResult => {
   if (!Predicate.isRecord(value) || typeof value.runId !== "number") return false;

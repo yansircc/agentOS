@@ -406,7 +406,13 @@ export const agUiRunAgentInputToSubmitSpec = (
 
   const forwardedProps = selectedForwardedProps(input, defaults.forwardedPropAllowlist);
   return {
-    ...defaults,
+    route: defaults.route,
+    tools: defaults.tools,
+    ...(defaults.system === undefined ? {} : { system: defaults.system }),
+    ...(defaults.budget === undefined ? {} : { budget: defaults.budget }),
+    ...(defaults.outputSchema === undefined ? {} : { outputSchema: defaults.outputSchema }),
+    ...(defaults.traceContext === undefined ? {} : { traceContext: defaults.traceContext }),
+    effectAuthorityRef: defaults.effectAuthorityRef,
     intent: latestUserText(input.messages),
     context: {
       ...defaults.context,
@@ -626,7 +632,12 @@ export const projectRuntimeEventToAgUiFrames = (
           timestamp: event.ts,
           threadId: threadIdFor(event, spec),
           runId: String(event.payload.runId),
-          result: { event: event.payload.event },
+          result: {
+            final: event.payload.final,
+            output: event.payload.output,
+            outputKind: event.payload.outputKind,
+            tokensUsed: event.payload.tokensUsed,
+          },
           outcome: { type: "success" },
         },
       ];

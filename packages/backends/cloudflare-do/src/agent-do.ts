@@ -22,8 +22,7 @@ import type {
 /**
  * Cloudflare Durable Object adapter.
  *
- * Scope is SSoT-owned by the DO instance.
- * SubmitSpec.deliver carries only the event name. DOs created via
+ * Scope is SSoT-owned by the DO instance. DOs created via
  * `newUniqueId` rejects all scoped calls.
  *
  * Boundary contract:
@@ -39,9 +38,8 @@ import type {
  *   scheduleEvent  future-write
  *   on / off       react (subscribe)
  *
- * submit() is a composite (now-write × dispatch loop × deliver-event log),
- * not the primitive for "app writes a fact". emitEvent is the primitive;
- * use submit only when an agent run is the right shape.
+ * submit() is the agent run lifecycle. It writes runtime terminal facts only.
+ * emitEvent is the primitive for app facts.
  *
  * Reactive subscribe is config-owned: createAgentDurableObject({ eventHandlers })
  * receives the runtime client and construction-time extension capabilities.
@@ -117,7 +115,7 @@ import {
   rejectClaimedAppEvent,
   validateExtensionDeclarations,
 } from "@agent-os/kernel/extensions";
-import { isScopeRef, type ScopeRef } from "@agent-os/kernel/effect-claim";
+import { isScopeRef, type AuthorityRef, type ScopeRef } from "@agent-os/kernel/effect-claim";
 import { projectAdmissionLease, projectQuotaState, projectResourceState } from "./projections";
 import {
   projectRunsPage,
@@ -199,11 +197,11 @@ export interface AgentRuntimeClient extends AgentRuntimeReaderClient {
 export interface AgentSubmitSpec {
   readonly intent: string;
   readonly input: unknown;
+  readonly effectAuthorityRef: AuthorityRef;
   readonly system?: string;
   readonly budget?: SubmitSpec["budget"];
   readonly outputSchema?: SubmitSpec["outputSchema"];
   readonly traceContext?: SubmitSpec["traceContext"];
-  readonly deliver: string;
 }
 
 export interface AgentEventHandlerRegistration {
@@ -511,10 +509,10 @@ export class AgentDurableObject<
       ...(spec.system === undefined ? {} : { system: spec.system }),
       route: defaults.route,
       tools: defaults.tools,
+      effectAuthorityRef: spec.effectAuthorityRef,
       ...(spec.budget === undefined ? {} : { budget: spec.budget }),
       ...(spec.outputSchema === undefined ? {} : { outputSchema: spec.outputSchema }),
       ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
-      deliver: { event: spec.deliver },
     });
   }
 
@@ -524,13 +522,10 @@ export class AgentDurableObject<
       if (scopeRef === null) {
         return Promise.reject(new UnsupportedScopeRef({ scopeId: scope, position: "source" }));
       }
-      const rejected = this.appWriteRejection(spec.deliver.event);
-      if (rejected !== null) {
-        return Promise.reject(rejected);
-      }
       const internalSpec: InternalSubmitSpec = {
         ...spec,
-        deliver: { event: spec.deliver.event, scope, scopeRef },
+        scope,
+        scopeRef,
       };
       return this.runtimeFor(scope).runPromise(submitAgentEffect(internalSpec));
     });

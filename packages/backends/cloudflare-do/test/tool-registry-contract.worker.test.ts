@@ -31,11 +31,9 @@ const makeSpec = (scope: string, tool: Tool): InternalSubmitSpec => ({
   } as const,
   tools: { lookup: tool },
   budget: { maxTurns: 3 },
-  deliver: {
-    event: "test.delivered",
-    scope,
-    scopeRef: { kind: "conversation", scopeId: scope },
-  },
+  scope,
+  scopeRef: { kind: "conversation", scopeId: scope },
+  effectAuthorityRef: { authorityClass: "llm_route", authorityId: "tool-registry-contract" },
 });
 
 const buildRuntime = (state: DurableObjectState, llm: Context.Tag.Service<typeof LlmTransport>) => {

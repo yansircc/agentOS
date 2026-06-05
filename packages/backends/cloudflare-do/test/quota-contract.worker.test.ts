@@ -60,11 +60,9 @@ const makeSpec = (scope: string, limit: number): InternalSubmitSpec => ({
   } as const,
   tools: { get_current_time: makeQuotaTool(limit) },
   budget: { maxTurns: 3 },
-  deliver: {
-    event: "test.delivered",
-    scope,
-    scopeRef: { kind: "conversation", scopeId: scope },
-  },
+  scope,
+  scopeRef: { kind: "conversation", scopeId: scope },
+  effectAuthorityRef: { authorityClass: "llm_route", authorityId: "quota-contract" },
 });
 
 const buildRuntime = (state: DurableObjectState, llm: Context.Tag.Service<typeof LlmTransport>) => {
