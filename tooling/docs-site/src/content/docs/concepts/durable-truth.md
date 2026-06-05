@@ -15,6 +15,22 @@ The ledger is durable truth. Triggers append terminal facts. Projections fold
 ledger facts and never write shadow truth. Transport frames, provider material,
 and local UI state are not truth unless a handler commits them as facts.
 
+Each ledger fact has structured identity:
+
+- `scopeRef` is the truth scope.
+- `effectAuthorityRef` is the effect/capability authority. Authority version is
+  part of the key.
+- `factOwnerRef` is the package owner for the event kind.
+
+`factOwnerRef` and `effectAuthorityRef` are deliberately separate. Effect
+authority says which capability is allowed to do work; fact ownership says which
+package is allowed to write a durable event kind. A submit path may return a
+`SubmitResult`, but that return value is derived from terminal ledger facts and
+is not a second durable record.
+
+Old `scope:string` ledger rows are not a compatibility format. Backends must
+fail fast on legacy schema rather than infer new identity from old rows.
+
 ## Non-Goals
 
 This concept does not define live streaming, provider credentials, or

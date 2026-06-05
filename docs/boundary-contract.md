@@ -7,14 +7,16 @@ extensions.
 
 ```text
 Vocabulary   owned event kind prefixes and event vocabulary
-Authority    authority refs and per-authority material requirements
+Authority    effectAuthorityRef values and per-authority material requirements
 Material     top-level MaterialRequirement declarations
 Settlement   terminal claim vocabulary and symbolic proof constraints
 Projection   derived-from-ledger reader contract
 ```
 
-These axes must be independently checkable. Authority requirements must be
-subsets of the top-level material axis.
+These axes must be independently checkable. Effect authority requirements must
+be subsets of the top-level material axis. `factOwnerRef` is not part of the
+authority axis; it comes from `packageId` at the commit boundary and cannot be
+set by claim authors.
 
 ## Invariants
 
@@ -23,6 +25,8 @@ subsets of the top-level material axis.
 - Request-time `pre` events are not terminal events.
 - Terminal lived/rejected claims validate against the package settlement
   contract.
+- Claim `effectAuthorityRef` values must be declared by
+  `effectAuthorityContracts`; declaration does not grant fact ownership.
 - Projections are derived from ledger facts and do not write shadow truth.
 - Cleanup is settlement vocabulary until release becomes an independent
   cross-package contract axis.
