@@ -60,6 +60,252 @@
       "invariants": ["invariant.d10.truth-identity"],
       "docs": "docs/concepts/materialized-projections.md",
       "fix": "Register the projection definition before reading, status-checking, or rebuilding that projection kind."
+    },
+    {
+      "tag": "agent_os.backend_protocol_parse_failure",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/backend-protocol.md",
+      "fix": "Decode backend protocol payloads at the protocol boundary and reject malformed external input before it reaches runtime logic."
+    },
+    {
+      "tag": "agent_os.cloudflare_worker_bundle_resolution_failure",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/deploy-cloudflare.md",
+      "fix": "Resolve Cloudflare worker bundle references before deploy composition and fail the provider boundary when the bundle cannot be located."
+    },
+    {
+      "tag": "agent_os.cloudflare_worker_deploy_resolution_failure",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/deploy-cloudflare.md",
+      "fix": "Resolve deploy target bindings and provider configuration before emitting deploy facts."
+    },
+    {
+      "tag": "agent_os.dispatch_binding_ref_malformed",
+      "invariants": ["invariant.d10.truth-identity"],
+      "docs": "docs/packages/backend-cloudflare-do.md",
+      "fix": "Use a valid binding MaterialRef for dispatch targets and reject malformed target refs at the backend boundary."
+    },
+    {
+      "tag": "agent_os.dispatch_payload_parse_failure",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/backend-protocol.md",
+      "fix": "Decode dispatch payloads through the backend protocol parser before committing inbound or outbound dispatch facts."
+    },
+    {
+      "tag": "agent_os.dispatch_scope_mismatch",
+      "invariants": ["invariant.d10.truth-identity"],
+      "docs": "docs/packages/backend-cloudflare-do.md",
+      "fix": "Dispatch only to the exact target scopeRef and effectAuthorityRef; do not reuse a scope-wide derived key as truth."
+    },
+    {
+      "tag": "agent_os.dispatch_target_not_found",
+      "invariants": ["invariant.d10.truth-identity"],
+      "docs": "docs/packages/backend-cloudflare-do.md",
+      "fix": "Register or resolve the dispatch target binding before enqueueing delivery."
+    },
+    {
+      "tag": "agent_os.durable_trigger_acquire_cancelled",
+      "invariants": ["invariant.ledger.single-commit-source"],
+      "docs": "docs/concepts/durable-process-algebra.md",
+      "fix": "Keep trigger acquisition and cancellation in the durable trigger lifecycle contract so a claimed row always has a recoverable terminal path."
+    },
+    {
+      "tag": "agent_os.durable_trigger_commit_returned_thenable",
+      "invariants": ["invariant.ledger.single-commit-source"],
+      "docs": "docs/concepts/durable-process-algebra.md",
+      "fix": "Keep trigger commit callbacks synchronous inside the backend transaction and move asynchronous work after durable commit."
+    },
+    {
+      "tag": "agent_os.durable_trigger_drain_limit_exceeded",
+      "invariants": ["invariant.ledger.single-commit-source"],
+      "docs": "docs/concepts/durable-process-algebra.md",
+      "fix": "Drain due work through the durable trigger scheduler with an explicit limit and retry the remaining due work later."
+    },
+    {
+      "tag": "agent_os.dynamic_worker_failure",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/dynamic-worker.md",
+      "fix": "Surface dynamic worker provider failures through the provider boundary instead of converting them into successful runtime output."
+    },
+    {
+      "tag": "agent_os.dynamic_worker_policy_denied",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/dynamic-worker.md",
+      "fix": "Reject disallowed dynamic worker requests at policy evaluation before provider execution."
+    },
+    {
+      "tag": "agent_os.dynamic_worker_policy_violation",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/dynamic-worker.md",
+      "fix": "Move policy-violating dynamic worker input back to the caller boundary and require a valid provider policy."
+    },
+    {
+      "tag": "agent_os.dynamic_worker_provider_failure",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/dynamic-worker.md",
+      "fix": "Classify provider failures at the dynamic worker adapter and keep product logic out of provider error parsing."
+    },
+    {
+      "tag": "agent_os.effect_ai_aborted",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/llm-transport-effect-ai.md",
+      "fix": "Propagate Effect AI aborts through LlmTransport and let submit own terminal runtime facts."
+    },
+    {
+      "tag": "agent_os.effect_ai_json_encode_failed",
+      "invariants": ["invariant.algebra.single-code-source"],
+      "docs": "docs/packages/llm-transport-effect-ai.md",
+      "fix": "Encode structured provider payloads through the Effect AI transport adapter and fail before committing runtime evidence."
+    },
+    {
+      "tag": "agent_os.effect_ai_missing_usage",
+      "invariants": ["invariant.algebra.single-code-source"],
+      "docs": "docs/packages/llm-transport-effect-ai.md",
+      "fix": "Keep provider usage accounting in the LlmTransport output schema and reject responses that cannot produce runtime usage evidence."
+    },
+    {
+      "tag": "agent_os.effect_ai_prompt_error",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/llm-transport-effect-ai.md",
+      "fix": "Build prompts at the provider adapter boundary and surface prompt construction failures before submit records terminal facts."
+    },
+    {
+      "tag": "agent_os.effect_ai_provider_executed_tool_rejected",
+      "invariants": ["invariant.algebra.single-code-source"],
+      "docs": "docs/packages/llm-transport-effect-ai.md",
+      "fix": "Disable provider-executed tool paths for agentOS tools; tool execution must flow through runtime admission and ledger settlement."
+    },
+    {
+      "tag": "agent_os.effect_ai_tool_handler_called",
+      "invariants": ["invariant.algebra.single-code-source"],
+      "docs": "docs/packages/llm-transport-effect-ai.md",
+      "fix": "Treat provider-side tool handler invocation as an adapter violation; runtime owns tool calls and settlements."
+    },
+    {
+      "tag": "agent_os.effect_ai_unsupported_output_part",
+      "invariants": ["invariant.algebra.single-code-source"],
+      "docs": "docs/packages/llm-transport-effect-ai.md",
+      "fix": "Map provider output parts through the runtime output-item algebra and reject parts without a runtime representation."
+    },
+    {
+      "tag": "agent_os.effect_ai_unsupported_route",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/llm-transport-effect-ai.md",
+      "fix": "Choose a route supported by the Effect AI transport adapter or add an explicit adapter branch for the provider."
+    },
+    {
+      "tag": "agent_os.extension_capability_conflict",
+      "invariants": ["invariant.d10.namespace-integrity"],
+      "docs": "docs/boundary-contract.md",
+      "fix": "Declare one owner for each extension capability and event namespace; remove duplicate capability declarations."
+    },
+    {
+      "tag": "agent_os.invalid_resource_amount",
+      "invariants": ["invariant.algebra.type-or-boot-proof"],
+      "docs": "docs/packages/resource-carrier.md",
+      "fix": "Reject non-positive or non-finite resource amounts before committing resource or quota facts."
+    },
+    {
+      "tag": "agent_os.invalid_schedule_at",
+      "invariants": ["invariant.ledger.single-commit-source"],
+      "docs": "docs/concepts/durable-process-algebra.md",
+      "fix": "Schedule durable work with a valid future timestamp and keep scheduling inside the durable process contract."
+    },
+    {
+      "tag": "agent_os.invalid_trace_context",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/runtime.md",
+      "fix": "Decode trace context at the runtime boundary and reject malformed trace metadata before provider or ledger projection consumes it."
+    },
+    {
+      "tag": "agent_os.llm_call_timed_out",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/runtime.md",
+      "fix": "Propagate LLM call timeout through submit and commit a runtime-owned terminal abort fact."
+    },
+    {
+      "tag": "agent_os.llm_call_timeout",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/runtime.md",
+      "fix": "Use the timeout marker only as abort metadata and let runtime terminal events expose the durable failure."
+    },
+    {
+      "tag": "agent_os.projection_registry_error",
+      "invariants": ["invariant.d10.truth-identity"],
+      "docs": "docs/concepts/materialized-projections.md",
+      "fix": "Build a projection registry with unique projection kinds and valid projection definitions."
+    },
+    {
+      "tag": "agent_os.ref_resolution_failed",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/concepts/carriers-and-material.md",
+      "fix": "Resolve symbolic material refs at the adapter boundary and fail closed when a required ref cannot be resolved."
+    },
+    {
+      "tag": "agent_os.resource_insufficient",
+      "invariants": ["invariant.ledger.single-commit-source"],
+      "docs": "docs/packages/resource-carrier.md",
+      "fix": "Grant or release resources through the resource ledger before attempting a reservation that would exceed available capacity."
+    },
+    {
+      "tag": "agent_os.resource_reservation_closed",
+      "invariants": ["invariant.ledger.single-commit-source"],
+      "docs": "docs/packages/resource-carrier.md",
+      "fix": "Do not consume or release a reservation after its terminal resource fact has already been committed."
+    },
+    {
+      "tag": "agent_os.resource_reservation_not_found",
+      "invariants": ["invariant.ledger.single-commit-source"],
+      "docs": "docs/packages/resource-carrier.md",
+      "fix": "Commit or look up the resource reservation under the exact ledger identity before consuming or releasing it."
+    },
+    {
+      "tag": "agent_os.sandbox_failure",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/sandbox.md",
+      "fix": "Classify sandbox provider failures at the sandbox execution-domain adapter and return a closed tool result."
+    },
+    {
+      "tag": "agent_os.sandbox_policy_denied",
+      "invariants": ["invariant.algebra.type-or-boot-proof"],
+      "docs": "docs/packages/sandbox.md",
+      "fix": "Reject sandbox requests that violate the declared sandbox policy before provider execution."
+    },
+    {
+      "tag": "agent_os.scope_missing",
+      "invariants": ["invariant.d10.truth-identity"],
+      "docs": "docs/concepts/durable-truth.md",
+      "fix": "Resolve the structured scopeRef before runtime or backend operations; do not fall back to an implicit scope."
+    },
+    {
+      "tag": "agent_os.stream_identity_error",
+      "invariants": ["invariant.d10.truth-identity"],
+      "docs": "docs/packages/backend-cloudflare-do.md",
+      "fix": "Stream only with an exact scopeRef and effectAuthorityRef identity and reject malformed stream identity input."
+    },
+    {
+      "tag": "agent_os.tenant_credential_resolver_configuration_error",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/tenant-material.md",
+      "fix": "Configure tenant credential resolution before binding provider credentials to material refs."
+    },
+    {
+      "tag": "agent_os.trigger_factory_error",
+      "invariants": ["invariant.ledger.single-commit-source"],
+      "docs": "docs/concepts/durable-process-algebra.md",
+      "fix": "Keep durable trigger factory output synchronous, typed, and registered before scheduling or claiming trigger work."
+    },
+    {
+      "tag": "agent_os.unregistered_durable_trigger_kind",
+      "invariants": ["invariant.ledger.single-commit-source"],
+      "docs": "docs/concepts/durable-process-algebra.md",
+      "fix": "Register the durable trigger kind before scheduling, claiming, or dispatching due work."
+    },
+    {
+      "tag": "agent_os.unsupported_scope_ref",
+      "invariants": ["invariant.d10.truth-identity"],
+      "docs": "docs/concepts/durable-truth.md",
+      "fix": "Use a backend-supported scopeRef kind or add an explicit backend adapter branch for that scope kind."
     }
   ]
 }

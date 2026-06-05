@@ -1,0 +1,113 @@
+{
+  "generatedBy": "scripts/generate-agent-docs.mjs",
+  "source": "docs/agent/recipes.source.json",
+  "recipes": [
+    {
+      "id": "recipe.hello-ledger-event",
+      "title": "Append and read a ledger event",
+      "intents": [
+        "Learn the D10 ledger truth identity",
+        "Emit one durable fact and read it through the backend protocol"
+      ],
+      "tutorial": "docs/tutorials/hello-ledger-event.md",
+      "primitives": [
+        "primitive.kernel.LedgerEvent",
+        "primitive.kernel.ScopeRef",
+        "primitive.kernel.AuthorityRef",
+        "primitive.runtime.Ledger"
+      ],
+      "commands": [
+        "bun run --cwd packages/kernel test",
+        "bun run --cwd packages/backends/protocol test"
+      ],
+      "evidence": [
+        "packages/kernel/test/effect-claim.test.ts",
+        "packages/backends/protocol/test/contract/runtime-backend-contract.ts"
+      ],
+      "next": [
+        "recipe.projection-reader",
+        "recipe.streaming-chatbot"
+      ]
+    },
+    {
+      "id": "recipe.projection-reader",
+      "title": "Build a materialized projection reader",
+      "intents": [
+        "Derive observable state from ledger facts",
+        "Keep projection state out of the source-of-truth role"
+      ],
+      "tutorial": "docs/tutorials/projection-reader.md",
+      "primitives": [
+        "primitive.runtime.MaterializedProjectionDefinition",
+        "primitive.runtime.defineProjection",
+        "primitive.runtime.ProjectionReduceResult"
+      ],
+      "commands": [
+        "bun run --cwd packages/runtime test",
+        "bun run --cwd packages/backends/in-memory test"
+      ],
+      "evidence": [
+        "packages/runtime/test/projection.test.ts",
+        "packages/backends/in-memory/test/materialized-projections.test.ts"
+      ],
+      "next": [
+        "recipe.durable-trigger-cancel",
+        "recipe.full-small-agent-app"
+      ]
+    },
+    {
+      "id": "recipe.streaming-chatbot",
+      "title": "Stream an agent run",
+      "intents": [
+        "Submit an LLM run through the runtime",
+        "Project runtime ledger facts into browser-safe frames"
+      ],
+      "tutorial": "docs/tutorials/streaming-chatbot.md",
+      "primitives": [
+        "primitive.runtime.SubmitSpec",
+        "primitive.runtime.SubmitResult",
+        "primitive.ag-ui.projectLedgerEventToAgUiEnvelope"
+      ],
+      "commands": [
+        "bun run --cwd packages/runtime test",
+        "bun run --cwd packages/composers/ag-ui test"
+      ],
+      "evidence": [
+        "packages/runtime/test/submit-agent-runtime-events.test.ts",
+        "packages/composers/ag-ui/test/ag-ui.test.ts"
+      ],
+      "next": [
+        "recipe.tool-schema-authority",
+        "recipe.full-small-agent-app"
+      ]
+    },
+    {
+      "id": "recipe.tool-schema-authority",
+      "title": "Add a tool with schema, admission, and execution domain",
+      "intents": [
+        "Define the tool schema from Effect Schema",
+        "Route effectful execution through a declared execution domain"
+      ],
+      "tutorial": "docs/tutorials/tool-schema-authority.md",
+      "primitives": [
+        "primitive.kernel.AgentSchema",
+        "primitive.kernel.Tool",
+        "primitive.kernel.ExecutionDomain",
+        "primitive.kernel.BoundaryContract"
+      ],
+      "commands": [
+        "bun run --cwd packages/kernel test",
+        "bun run --cwd packages/execution-domains/workspace-env test"
+      ],
+      "evidence": [
+        "packages/kernel/test/agent-schema.test.ts",
+        "packages/kernel/test/tools.test.ts",
+        "packages/execution-domains/workspace-env/test/workspace-env.test.ts"
+      ],
+      "next": [
+        "recipe.provider-material-binding",
+        "recipe.full-small-agent-app"
+      ]
+    }
+  ]
+}

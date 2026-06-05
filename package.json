@@ -15,8 +15,8 @@
   "scripts": {
     "typecheck": "sh -c 'tsc -b --noEmit --force; code=$?; tsc -b --clean; exit $code'",
     "test": "vp run --cache -r test",
-    "docs:generate": "node scripts/generate-docs.mjs && bun scripts/generate-carrier-reference.mjs && node scripts/project-docs-site.mjs",
-    "docs:check": "node scripts/generate-docs.mjs --check && bun scripts/generate-carrier-reference.mjs --check && node scripts/check-doc-structure.mjs && node scripts/project-docs-site.mjs --check",
+    "docs:generate": "node scripts/generate-docs.mjs && node scripts/generate-agent-docs.mjs && bun scripts/generate-carrier-reference.mjs && node scripts/project-docs-site.mjs",
+    "docs:check": "node scripts/generate-docs.mjs --check && node scripts/generate-agent-docs.mjs --check && bun scripts/generate-carrier-reference.mjs --check && node scripts/check-doc-structure.mjs && node scripts/project-docs-site.mjs --check",
     "effect-manifests:generate": "node scripts/generate-effect-skill-manifests.mjs",
     "effect-manifests:check": "node scripts/generate-effect-skill-manifests.mjs --check",
     "check:public-api": "node scripts/check-public-api.mjs --self-test && node scripts/check-public-api.mjs",

@@ -151,6 +151,7 @@ const sourceExportRecordsFromAst = (file, entrypoint, seen) => {
       key: `${entrypoint}:${name}`,
       file: abs,
       summary: tsdoc.summary,
+      tags: tsdoc.tags,
       status,
       statusTags: matchingTags,
     });

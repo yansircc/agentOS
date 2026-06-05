@@ -1,0 +1,813 @@
+{
+  "generatedBy": "scripts/generate-agent-docs.mjs",
+  "source": [
+    "exported TSDoc @agentosPrimitive tags",
+    "docs/agent/invariants.source.json"
+  ],
+  "primitives": [
+    {
+      "id": "primitive.ag-ui-svelte.agUiProjectionReadable",
+      "package": "@agent-os/ag-ui-svelte",
+      "packagePath": "packages/composers/ag-ui-svelte",
+      "entrypoints": [
+        "."
+      ],
+      "symbol": "agUiProjectionReadable",
+      "exportKey": ".:agUiProjectionReadable",
+      "sourceFile": "packages/composers/ag-ui-svelte/src/index.ts",
+      "summary": "Svelte readable wrapper over the core AG-UI frame projection.",
+      "aliases": [],
+      "invariants": [
+        "invariant.algebra.single-code-source"
+      ],
+      "decisions": [],
+      "docs": "docs/concepts/ag-ui-wire-adapter.md"
+    },
+    {
+      "id": "primitive.ag-ui.projectAgUiFrames",
+      "package": "@agent-os/ag-ui",
+      "packagePath": "packages/composers/ag-ui",
+      "entrypoints": [
+        "."
+      ],
+      "symbol": "projectAgUiFrames",
+      "exportKey": ".:projectAgUiFrames",
+      "sourceFile": "packages/composers/ag-ui/src/index.ts",
+      "summary": "Folds AG-UI frames into a neutral run projection.",
+      "aliases": [],
+      "invariants": [
+        "invariant.algebra.single-code-source"
+      ],
+      "decisions": [],
+      "docs": "docs/concepts/ag-ui-wire-adapter.md"
+    },
+    {
+      "id": "primitive.ag-ui.projectAgUiFramesToActivities",
+      "package": "@agent-os/ag-ui",
+      "packagePath": "packages/composers/ag-ui",
+      "entrypoints": [
+        "."
+      ],
+      "symbol": "projectAgUiFramesToActivities",
+      "exportKey": ".:projectAgUiFramesToActivities",
+      "sourceFile": "packages/composers/ag-ui/src/index.ts",
+      "summary": "Folds AG-UI frames into a UI-neutral activity list.",
+      "aliases": [],
+      "invariants": [
+        "invariant.algebra.single-code-source"
+      ],
+      "decisions": [],
+      "docs": "docs/concepts/ag-ui-wire-adapter.md"
+    },
+    {
+      "id": "primitive.ag-ui.projectLedgerEventToAgUiEnvelope",
+      "package": "@agent-os/ag-ui",
+      "packagePath": "packages/composers/ag-ui",
+      "entrypoints": [
+        "."
+      ],
+      "symbol": "projectLedgerEventToAgUiEnvelope",
+      "exportKey": ".:projectLedgerEventToAgUiEnvelope",
+      "sourceFile": "packages/composers/ag-ui/src/index.ts",
+      "summary": "Projects one typed ledger event into a browser-safe AG-UI envelope.",
+      "aliases": [],
+      "invariants": [
+        "invariant.algebra.single-code-source"
+      ],
+      "decisions": [],
+      "docs": "docs/concepts/ag-ui-wire-adapter.md"
+    },
+    {
+      "id": "primitive.ag-ui.projectLedgerSseToAgUiSse",
+      "package": "@agent-os/ag-ui",
+      "packagePath": "packages/composers/ag-ui",
+      "entrypoints": [
+        "."
+      ],
+      "symbol": "projectLedgerSseToAgUiSse",
+      "exportKey": ".:projectLedgerSseToAgUiSse",
+      "sourceFile": "packages/composers/ag-ui/src/index.ts",
+      "summary": "Transports ledger SSE events as AG-UI SSE envelopes.",
+      "aliases": [],
+      "invariants": [
+        "invariant.algebra.single-code-source"
+      ],
+      "decisions": [],
+      "docs": "docs/concepts/ag-ui-wire-adapter.md"
+    },
+    {
+      "id": "primitive.kernel.AgentSchema",
+      "package": "@agent-os/kernel",
+      "packagePath": "packages/kernel",
+      "entrypoints": [
+        ".",
+        "./agent-schema"
+      ],
+      "symbol": "AgentSchema",
+      "exportKey": ".:AgentSchema",
+      "sourceFile": "packages/kernel/src/agent-schema.ts",
+      "summary": "Agent-facing schema wrapper derived from one Effect Schema source.",
+      "aliases": [],
+      "invariants": [
+        "invariant.algebra.single-code-source"
+      ],
+      "decisions": [],
+      "docs": "docs/concepts/agent-schema.md"
+    },
+    {
+      "id": "primitive.kernel.AgentSchemaProjections",
+      "package": "@agent-os/kernel",
+      "packagePath": "packages/kernel",
+      "entrypoints": [
+        ".",
+        "./agent-schema"
+      ],
+      "symbol": "AgentSchemaProjections",
+      "exportKey": ".:AgentSchemaProjections",
+      "sourceFile": "packages/kernel/src/agent-schema.ts",
+      "summary": "Provider-specific schema projections derived from AgentSchema.",
+      "aliases": [],
+      "invariants": [
+        "invariant.algebra.single-code-source"
+      ],
+      "decisions": [],
+      "docs": "docs/concepts/agent-schema.md"
+    },
+    {
+      "id": "primitive.kernel.AuthorityRef",
+      "package": "@agent-os/kernel",
+      "packagePath": "packages/kernel",
+      "entrypoints": [
+        ".",
+        "./effect-claim"
+      ],
+      "symbol": "AuthorityRef",
+      "exportKey": ".:AuthorityRef",
+      "sourceFile": "packages/kernel/src/effect-claim.ts",
+      "summary": "Effect or capability authority participating in ledger truth identity.",
+      "aliases": [
+        "effectAuthorityRef"
+      ],
+      "invariants": [
+        "invariant.d10.truth-identity"
+      ],
+      "decisions": [],
+      "docs": "docs/concepts/durable-truth.md"
+    },
+    {
+      "id": "primitive.kernel.BoundaryContract",
+      "package": "@agent-os/kernel",
+      "packagePath": "packages/kernel",
+      "entrypoints": [
+        "./boundary-contract"
+      ],
+      "symbol": "BoundaryContract",
+      "exportKey": "./boundary-contract:BoundaryContract",
+      "sourceFile": "packages/kernel/src/boundary-contract.ts",
+      "summary": "Five-axis boundary declaration for claim-bearing packages: vocabulary, authority, material, settlement, and projection. Event keys are the vocabulary. Claim slots are event-local so non-claim extension facts do not need to lie as terminal claim events.",
+      "aliases": [],
+      "invariants": [
+        "invariant.d10.namespace-integrity",
+        "invariant.d10.truth-identity"
+      ],
+      "decisions": [],
+      "docs": "docs/boundary-contract.md"
+    },
+    {
+      "id": "primitive.kernel.BoundaryProjectionContract",
+      "package": "@agent-os/kernel",
+      "packagePath": "packages/kernel",
+      "entrypoints": [
+        "./boundary-contract"
+      ],
+      "symbol": "BoundaryProjectionContract",
+      "exportKey": "./boundary-contract:BoundaryProjectionContract",
+      "sourceFile": "packages/kernel/src/boundary-contract.ts",
+      "summary": "Boundary axis declaring that observable state is derived from ledger facts.",
+      "aliases": [],
+      "invariants": [
+        "invariant.d10.truth-identity"
+      ],
+      "decisions": [],
+      "docs": "docs/concepts/materialized-projections.md"
+    },
+    {
+      "id": "primitive.kernel.EffectAuthorityContract",
+      "package": "@agent-os/kernel",
+      "packagePath": "packages/kernel",
+      "entrypoints": [
+        "./material-ref"
+      ],
+      "symbol": "EffectAuthorityContract",
+      "exportKey": "./material-ref:EffectAuthorityContract",
+      "sourceFile": "packages/kernel/src/material-ref.ts",
+      "summary": "Effect authority declaration and its required material slots.",
+      "aliases": [
+        "effectAuthorityContract"
+      ],
+      "invariants": [
+        "invariant.d10.truth-identity"
+      ],
+      "decisions": [],
+      "docs": "docs/boundary-contract.md"
+    },
+    {
+      "id": "primitive.kernel.EffectClaim",
+      "package": "@agent-os/kernel",
+      "packagePath": "packages/kernel",
+      "entrypoints": [
+        ".",
+        "./effect-claim"
+      ],
+      "symbol": "EffectClaim",
+      "exportKey": ".:EffectClaim",
+      "sourceFile": "packages/kernel/src/effect-claim.ts",
+      "summary": "Type-proof lifecycle union for pre, lived, and rejected effect claims.",
+      "aliases": [],
+      "invariants": [
+        "invariant.algebra.type-or-boot-proof",
+        "invariant.boundary.runtime-validation-external-only"
+      ],
+      "decisions": [],
+      "docs": "docs/boundary-contract.md"
+    },
+    {
+      "id": "primitive.kernel.ExecutionDomain",
+      "package": "@agent-os/kernel",
+      "packagePath": "packages/kernel",
+      "entrypoints": [
+        ".",
+        "./tools"
+      ],
+      "symbol": "ExecutionDomain",
+      "exportKey": ".:ExecutionDomain",
+      "sourceFile": "packages/kernel/src/tools.ts",
+      "summary": "Declared execution locus for an effectful tool.",
+      "aliases": [],
+      "invariants": [
+        "invariant.algebra.type-or-boot-proof"
+      ],
+      "decisions": [],
+      "docs": "docs/concepts/tool-execution-domain.md"
+    },
+    {
+      "id": "primitive.kernel.ExecutionDomainDeclaration",
+      "package": "@agent-os/kernel",
+      "packagePath": "packages/kernel",
+      "entrypoints": [
+        ".",
+        "./tools"
+      ],
+      "symbol": "ExecutionDomainDeclaration",
+      "exportKey": ".:ExecutionDomainDeclaration",
+      "sourceFile": "packages/kernel/src/tools.ts",
+      "summary": "Boot-time execution-domain declaration consumed by registry validation.",
+      "aliases": [],
+      "invariants": [
+        "invariant.algebra.type-or-boot-proof"
+      ],
+      "decisions": [],
+      "docs": "docs/concepts/tool-execution-domain.md"
+    },
+    {
+      "id": "primitive.kernel.ExecutionDomainRegistry",
+      "package": "@agent-os/kernel",
+      "packagePath": "packages/kernel",
+      "entrypoints": [
+        ".",
+        "./tools"
+      ],
+      "symbol": "ExecutionDomainRegistry",
+      "exportKey": ".:ExecutionDomainRegistry",
+      "sourceFile": "packages/kernel/src/tools.ts",
+      "summary": "Boot-proof registry for all effectful tool execution domains.",
+      "aliases": [],
+      "invariants": [
+        "invariant.algebra.type-or-boot-proof"
+      ],
+      "decisions": [],
+      "docs": "docs/concepts/tool-execution-domain.md"
+    },
+    {
+      "id": "primitive.kernel.FactOwnerRef",
+      "package": "@agent-os/kernel",
+      "packagePath": "packages/kernel",
+      "entrypoints": [
+        ".",
+        "./effect-claim"
+      ],
+      "symbol": "FactOwnerRef",
+      "exportKey": ".:FactOwnerRef",
+      "sourceFile": "packages/kernel/src/effect-claim.ts",
+      "summary": "Package-owned fact namespace injected by commit boundaries.",
+      "aliases": [],
+      "invariants": [
+        "invariant.d10.namespace-integrity"
+      ],
+      "decisions": [],
+      "docs": "docs/boundary-contract.md"
+    },
+    {
+      "id": "primitive.kernel.LedgerEvent",
+      "package": "@agent-os/kernel",
+      "packagePath": "packages/kernel",
+      "entrypoints": [
+        ".",
+        "./types"
+      ],
+      "symbol": "LedgerEvent",
+      "exportKey": ".:LedgerEvent",
+      "sourceFile": "packages/kernel/src/types.ts",
+      "summary": "Canonical durable ledger fact row.",
+      "aliases": [],
+      "invariants": [
+        "invariant.d10.truth-identity",
+        "invariant.d10.namespace-integrity"
+      ],
+      "decisions": [],
+      "docs": "docs/concepts/durable-truth.md"
+    },
+    {
+      "id": "primitive.kernel.LivedClaim",
+      "package": "@agent-os/kernel",
+      "packagePath": "packages/kernel",
+      "entrypoints": [
+        ".",
+        "./effect-claim"
+      ],
+      "symbol": "LivedClaim",
+      "exportKey": ".:LivedClaim",
+      "sourceFile": "packages/kernel/src/effect-claim.ts",
+      "summary": "Effect claim settled by one terminal anchor.",
+      "aliases": [],
+      "invariants": [
+        "invariant.algebra.type-or-boot-proof"
+      ],
+      "decisions": [],
+      "docs": "docs/boundary-contract.md"
+    },
+    {
+      "id": "primitive.kernel.MaterialRef",
+      "package": "@agent-os/kernel",
+      "packagePath": "packages/kernel",
+      "entrypoints": [
+        "./material-ref"
+      ],
+      "symbol": "MaterialRef",
+      "exportKey": "./material-ref:MaterialRef",
+      "sourceFile": "packages/kernel/src/material-ref.ts",
+      "summary": "Symbolic material reference kept out of durable claims and browser projections.",
+      "aliases": [],
+      "invariants": [
+        "invariant.d10.truth-identity"
+      ],
+      "decisions": [],
+      "docs": "docs/concepts/carriers-and-material.md"
+    },
+    {
+      "id": "primitive.kernel.PreClaim",
+      "package": "@agent-os/kernel",
+      "packagePath": "packages/kernel",
+      "entrypoints": [
+        ".",
+        "./effect-claim"
+      ],
+      "symbol": "PreClaim",
+      "exportKey": ".:PreClaim",
+      "sourceFile": "packages/kernel/src/effect-claim.ts",
+      "summary": "Non-terminal effect claim before admission settles it.",
+      "aliases": [],
+      "invariants": [
+        "invariant.algebra.type-or-boot-proof"
+      ],
+      "decisions": [],
+      "docs": "docs/boundary-contract.md"
+    },
+    {
+      "id": "primitive.kernel.projectAgentSchema",
+      "package": "@agent-os/kernel",
+      "packagePath": "packages/kernel",
+      "entrypoints": [
+        ".",
+        "./agent-schema"
+      ],
+      "symbol": "projectAgentSchema",
+      "exportKey": ".:projectAgentSchema",
+      "sourceFile": "packages/kernel/src/agent-schema.ts",
+      "summary": "Derives canonical, provider, and AG-UI schema variants from one canonical schema.",
+      "aliases": [],
+      "invariants": [
+        "invariant.algebra.single-code-source"
+      ],
+      "decisions": [],
+      "docs": "docs/concepts/agent-schema.md"
+    },
+    {
+      "id": "primitive.kernel.RejectedClaim",
+      "package": "@agent-os/kernel",
+      "packagePath": "packages/kernel",
+      "entrypoints": [
+        ".",
+        "./effect-claim"
+      ],
+      "symbol": "RejectedClaim",
+      "exportKey": ".:RejectedClaim",
+      "sourceFile": "packages/kernel/src/effect-claim.ts",
+      "summary": "Effect claim settled by one terminal rejection.",
+      "aliases": [],
+      "invariants": [
+        "invariant.algebra.type-or-boot-proof"
+      ],
+      "decisions": [],
+      "docs": "docs/boundary-contract.md"
+    },
+    {
+      "id": "primitive.kernel.ScopeRef",
+      "package": "@agent-os/kernel",
+      "packagePath": "packages/kernel",
+      "entrypoints": [
+        ".",
+        "./effect-claim"
+      ],
+      "symbol": "ScopeRef",
+      "exportKey": ".:ScopeRef",
+      "sourceFile": "packages/kernel/src/effect-claim.ts",
+      "summary": "Structured ledger scope identity.",
+      "aliases": [],
+      "invariants": [
+        "invariant.d10.truth-identity"
+      ],
+      "decisions": [],
+      "docs": "docs/concepts/durable-truth.md"
+    },
+    {
+      "id": "primitive.kernel.Tool",
+      "package": "@agent-os/kernel",
+      "packagePath": "packages/kernel",
+      "entrypoints": [
+        ".",
+        "./tools"
+      ],
+      "symbol": "Tool",
+      "exportKey": ".:Tool",
+      "sourceFile": "packages/kernel/src/tools.ts",
+      "summary": "Public app-facing tool definition consumed by submit loops.",
+      "aliases": [],
+      "invariants": [
+        "invariant.algebra.type-or-boot-proof"
+      ],
+      "decisions": [],
+      "docs": "docs/concepts/tool-execution-domain.md"
+    },
+    {
+      "id": "primitive.kernel.ToolAdmitInput",
+      "package": "@agent-os/kernel",
+      "packagePath": "packages/kernel",
+      "entrypoints": [
+        ".",
+        "./tools"
+      ],
+      "symbol": "ToolAdmitInput",
+      "exportKey": ".:ToolAdmitInput",
+      "sourceFile": "packages/kernel/src/tools.ts",
+      "summary": "Input passed to non-LLM tool admission with claim, args, contract, and execution metadata.",
+      "aliases": [],
+      "invariants": [
+        "invariant.algebra.type-or-boot-proof"
+      ],
+      "decisions": [],
+      "docs": "docs/concepts/tool-execution-domain.md"
+    },
+    {
+      "id": "primitive.kernel.ToolContract",
+      "package": "@agent-os/kernel",
+      "packagePath": "packages/kernel",
+      "entrypoints": [
+        ".",
+        "./tools"
+      ],
+      "symbol": "ToolContract",
+      "exportKey": ".:ToolContract",
+      "sourceFile": "packages/kernel/src/tools.ts",
+      "summary": "Admission and authority contract for a tool, excluding execution locus.",
+      "aliases": [],
+      "invariants": [
+        "invariant.d10.truth-identity"
+      ],
+      "decisions": [],
+      "docs": "docs/concepts/tool-execution-domain.md"
+    },
+    {
+      "id": "primitive.kernel.ToolExecution",
+      "package": "@agent-os/kernel",
+      "packagePath": "packages/kernel",
+      "entrypoints": [
+        ".",
+        "./tools"
+      ],
+      "symbol": "ToolExecution",
+      "exportKey": ".:ToolExecution",
+      "sourceFile": "packages/kernel/src/tools.ts",
+      "summary": "Tool execution declaration: pure tools stay local, effectful tools name a domain.",
+      "aliases": [],
+      "invariants": [
+        "invariant.algebra.type-or-boot-proof"
+      ],
+      "decisions": [],
+      "docs": "docs/concepts/tool-execution-domain.md"
+    },
+    {
+      "id": "primitive.kernel.ToolExecutionContext",
+      "package": "@agent-os/kernel",
+      "packagePath": "packages/kernel",
+      "entrypoints": [
+        ".",
+        "./tools"
+      ],
+      "symbol": "ToolExecutionContext",
+      "exportKey": ".:ToolExecutionContext",
+      "sourceFile": "packages/kernel/src/tools.ts",
+      "summary": "Per-call execution context passed to a tool implementation.",
+      "aliases": [],
+      "invariants": [
+        "invariant.algebra.type-or-boot-proof"
+      ],
+      "decisions": [],
+      "docs": "docs/concepts/tool-execution-domain.md"
+    },
+    {
+      "id": "primitive.runtime.defineProjection",
+      "package": "@agent-os/runtime",
+      "packagePath": "packages/runtime",
+      "entrypoints": [
+        "."
+      ],
+      "symbol": "defineProjection",
+      "exportKey": ".:defineProjection",
+      "sourceFile": "packages/runtime/src/projection.ts",
+      "summary": "Defines one materialized projection without adding a second truth source.",
+      "aliases": [],
+      "invariants": [
+        "invariant.d10.truth-identity"
+      ],
+      "decisions": [],
+      "docs": "docs/concepts/materialized-projections.md"
+    },
+    {
+      "id": "primitive.runtime.Ledger",
+      "package": "@agent-os/runtime",
+      "packagePath": "packages/runtime",
+      "entrypoints": [
+        "."
+      ],
+      "symbol": "Ledger",
+      "exportKey": ".:Ledger",
+      "sourceFile": "packages/runtime/src/ledger.ts",
+      "summary": "Backend-neutral ledger service for atomic fact commits and exact identity reads.",
+      "aliases": [],
+      "invariants": [
+        "invariant.ledger.single-commit-source",
+        "invariant.d10.truth-identity"
+      ],
+      "decisions": [],
+      "docs": "docs/concepts/durable-truth.md"
+    },
+    {
+      "id": "primitive.runtime.LedgerCommitEventSpec",
+      "package": "@agent-os/runtime",
+      "packagePath": "packages/runtime",
+      "entrypoints": [
+        "."
+      ],
+      "symbol": "LedgerCommitEventSpec",
+      "exportKey": ".:LedgerCommitEventSpec",
+      "sourceFile": "packages/runtime/src/ledger.ts",
+      "summary": "Runtime-owned event commit spec; factOwnerRef is injected by the ledger service.",
+      "aliases": [],
+      "invariants": [
+        "invariant.ledger.single-commit-source"
+      ],
+      "decisions": [],
+      "docs": "docs/concepts/durable-truth.md"
+    },
+    {
+      "id": "primitive.runtime.LedgerTruthIdentity",
+      "package": "@agent-os/runtime",
+      "packagePath": "packages/runtime",
+      "entrypoints": [
+        "."
+      ],
+      "symbol": "LedgerTruthIdentity",
+      "exportKey": ".:LedgerTruthIdentity",
+      "sourceFile": "packages/runtime/src/ledger.ts",
+      "summary": "Exact runtime ledger identity used by reads and streams.",
+      "aliases": [],
+      "invariants": [
+        "invariant.d10.truth-identity"
+      ],
+      "decisions": [],
+      "docs": "docs/concepts/durable-truth.md"
+    },
+    {
+      "id": "primitive.runtime.LlmTransport",
+      "package": "@agent-os/runtime",
+      "packagePath": "packages/runtime",
+      "entrypoints": [
+        "."
+      ],
+      "symbol": "LlmTransport",
+      "exportKey": ".:LlmTransport",
+      "sourceFile": "packages/runtime/src/llm-transport.ts",
+      "summary": "Provider transport boundary for runtime LLM calls.",
+      "aliases": [],
+      "invariants": [
+        "invariant.boundary.runtime-validation-external-only"
+      ],
+      "decisions": [],
+      "docs": "docs/packages/llm-transport-effect-ai.md"
+    },
+    {
+      "id": "primitive.runtime.MaterializedProjectionDefinition",
+      "package": "@agent-os/runtime",
+      "packagePath": "packages/runtime",
+      "entrypoints": [
+        "."
+      ],
+      "symbol": "MaterializedProjectionDefinition",
+      "exportKey": ".:MaterializedProjectionDefinition",
+      "sourceFile": "packages/runtime/src/projection.ts",
+      "summary": "Pure materialized projection definition over ledger facts.",
+      "aliases": [],
+      "invariants": [
+        "invariant.d10.truth-identity"
+      ],
+      "decisions": [],
+      "docs": "docs/concepts/materialized-projections.md"
+    },
+    {
+      "id": "primitive.runtime.MaterializedProjections",
+      "package": "@agent-os/runtime",
+      "packagePath": "packages/runtime",
+      "entrypoints": [
+        "."
+      ],
+      "symbol": "MaterializedProjections",
+      "exportKey": ".:MaterializedProjections",
+      "sourceFile": "packages/runtime/src/projection.ts",
+      "summary": "Backend-neutral service for projection reads, status, and rebuild.",
+      "aliases": [],
+      "invariants": [
+        "invariant.d10.truth-identity"
+      ],
+      "decisions": [],
+      "docs": "docs/concepts/materialized-projections.md"
+    },
+    {
+      "id": "primitive.runtime.ProjectionIdentifyResult",
+      "package": "@agent-os/runtime",
+      "packagePath": "packages/runtime",
+      "entrypoints": [
+        "."
+      ],
+      "symbol": "ProjectionIdentifyResult",
+      "exportKey": ".:ProjectionIdentifyResult",
+      "sourceFile": "packages/runtime/src/projection.ts",
+      "summary": "Event-to-projection identity decision made before reduction.",
+      "aliases": [],
+      "invariants": [
+        "invariant.d10.truth-identity"
+      ],
+      "decisions": [],
+      "docs": "docs/concepts/materialized-projections.md"
+    },
+    {
+      "id": "primitive.runtime.ProjectionReduceContext",
+      "package": "@agent-os/runtime",
+      "packagePath": "packages/runtime",
+      "entrypoints": [
+        "."
+      ],
+      "symbol": "ProjectionReduceContext",
+      "exportKey": ".:ProjectionReduceContext",
+      "sourceFile": "packages/runtime/src/projection.ts",
+      "summary": "Canonical projection reduction context derived from the consumed ledger event.",
+      "aliases": [],
+      "invariants": [
+        "invariant.d10.truth-identity"
+      ],
+      "decisions": [],
+      "docs": "docs/concepts/materialized-projections.md"
+    },
+    {
+      "id": "primitive.runtime.ProjectionReduceResult",
+      "package": "@agent-os/runtime",
+      "packagePath": "packages/runtime",
+      "entrypoints": [
+        "."
+      ],
+      "symbol": "ProjectionReduceResult",
+      "exportKey": ".:ProjectionReduceResult",
+      "sourceFile": "packages/runtime/src/projection.ts",
+      "summary": "Synchronous reducer result for one materialized projection row.",
+      "aliases": [],
+      "invariants": [
+        "invariant.d10.truth-identity"
+      ],
+      "decisions": [],
+      "docs": "docs/concepts/materialized-projections.md"
+    },
+    {
+      "id": "primitive.runtime.projectRunStatus",
+      "package": "@agent-os/runtime",
+      "packagePath": "packages/runtime",
+      "entrypoints": [
+        ".",
+        "./run-projector"
+      ],
+      "symbol": "projectRunStatus",
+      "exportKey": ".:projectRunStatus",
+      "sourceFile": "packages/runtime/src/run-projector.ts",
+      "summary": "Projects runtime ledger facts into a single run status.",
+      "aliases": [],
+      "invariants": [
+        "invariant.d10.truth-identity"
+      ],
+      "decisions": [],
+      "docs": "docs/concepts/durable-truth.md"
+    },
+    {
+      "id": "primitive.runtime.projectRunTrace",
+      "package": "@agent-os/runtime",
+      "packagePath": "packages/runtime",
+      "entrypoints": [
+        ".",
+        "./run-projector"
+      ],
+      "symbol": "projectRunTrace",
+      "exportKey": ".:projectRunTrace",
+      "sourceFile": "packages/runtime/src/run-projector.ts",
+      "summary": "Projects runtime ledger facts into a run trace view.",
+      "aliases": [],
+      "invariants": [
+        "invariant.d10.truth-identity"
+      ],
+      "decisions": [],
+      "docs": "docs/concepts/durable-truth.md"
+    },
+    {
+      "id": "primitive.runtime.projectSubmitResult",
+      "package": "@agent-os/runtime",
+      "packagePath": "packages/runtime",
+      "entrypoints": [
+        ".",
+        "./run-projector"
+      ],
+      "symbol": "projectSubmitResult",
+      "exportKey": ".:projectSubmitResult",
+      "sourceFile": "packages/runtime/src/run-projector.ts",
+      "summary": "Reconstructs SubmitResult from terminal runtime ledger facts.",
+      "aliases": [],
+      "invariants": [
+        "invariant.d10.truth-identity"
+      ],
+      "decisions": [],
+      "docs": "docs/concepts/durable-truth.md"
+    },
+    {
+      "id": "primitive.runtime.SubmitResult",
+      "package": "@agent-os/runtime",
+      "packagePath": "packages/runtime",
+      "entrypoints": [
+        "."
+      ],
+      "symbol": "SubmitResult",
+      "exportKey": ".:SubmitResult",
+      "sourceFile": "packages/runtime/src/submit.ts",
+      "summary": "Terminal return projection reconstructed from runtime ledger facts.",
+      "aliases": [],
+      "invariants": [
+        "invariant.d10.truth-identity"
+      ],
+      "decisions": [],
+      "docs": "docs/concepts/durable-truth.md"
+    },
+    {
+      "id": "primitive.runtime.SubmitSpec",
+      "package": "@agent-os/runtime",
+      "packagePath": "packages/runtime",
+      "entrypoints": [
+        "."
+      ],
+      "symbol": "SubmitSpec",
+      "exportKey": ".:SubmitSpec",
+      "sourceFile": "packages/runtime/src/submit.ts",
+      "summary": "Runtime submit input for one agent run under an effect authority.",
+      "aliases": [],
+      "invariants": [
+        "invariant.d10.truth-identity"
+      ],
+      "decisions": [],
+      "docs": "docs/tutorials/streaming-chatbot.md"
+    }
+  ]
+}

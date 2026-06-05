@@ -36,6 +36,7 @@ const DETERMINISTIC_TOOL_INVOCATION_BRAND = Symbol("@agent-os/kernel/Determinist
  * Per-call execution context passed to a tool implementation.
  *
  * @agentosPrimitive primitive.kernel.ToolExecutionContext
+ * @agentosInvariant invariant.algebra.type-or-boot-proof
  * @agentosDocs docs/concepts/tool-execution-domain.md
  * @public
  */
