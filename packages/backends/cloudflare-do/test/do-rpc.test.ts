@@ -12,7 +12,8 @@ describe("durableObjectRpcClient", () => {
   it("centralizes named Durable Object stub lookup", async () => {
     const stub = {
       ping: async (input: { readonly value: string }) => input.value,
-      response: (input: { readonly status: number }) => ({ status: input.status }) as Response,
+      response: (input: { readonly status: number }) =>
+        new Response(null, { status: input.status }),
     };
     const namespace = {
       idFromName: (name: string) => ({ name }) as unknown as DurableObjectId,
