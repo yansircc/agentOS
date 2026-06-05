@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-os.dev/schemas/agent/recipes.source.schema.json",
+  "title": "agentOS agent recipe source",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "recipes"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "recipes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/recipe" },
+      "uniqueItems": true
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9-]*(\\.[A-Za-z0-9][A-Za-z0-9-]*)+$"
+    },
+    "path": {
+      "type": "string",
+      "pattern": "^(docs|packages|scripts|tooling|skills)/.+$"
+    },
+    "recipe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "intents", "tutorial", "primitives", "commands", "evidence", "next"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "title": { "type": "string", "minLength": 1 },
+        "intents": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1
+        },
+        "tutorial": { "$ref": "#/$defs/path" },
+        "primitives": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/id" },
+          "minItems": 1
+        },
+        "commands": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "evidence": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/path" }
+        },
+        "next": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/id" }
+        }
+      }
+    }
+  }
+}

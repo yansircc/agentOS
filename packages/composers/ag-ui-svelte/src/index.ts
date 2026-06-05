@@ -33,6 +33,14 @@ export const createAgUiSvelteFrameStore = (
   };
 };
 
+/**
+ * Svelte readable wrapper over the core AG-UI frame projection.
+ *
+ * @agentosPrimitive primitive.ag-ui-svelte.agUiProjectionReadable
+ * @agentosInvariant invariant.algebra.single-code-source
+ * @agentosDocs docs/concepts/ag-ui-wire-adapter.md
+ * @public
+ */
 export const agUiProjectionReadable = (
   frames: ReadonlyArray<AgUiFrame>,
 ): Readable<AgUiFrameProjection> => readable(projectAgUiFrames(frames));

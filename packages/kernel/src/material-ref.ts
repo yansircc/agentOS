@@ -29,6 +29,14 @@ export interface ExternalResourceMaterialRef {
   readonly ref: string;
 }
 
+/**
+ * Symbolic material reference kept out of durable claims and browser projections.
+ *
+ * @agentosPrimitive primitive.kernel.MaterialRef
+ * @agentosInvariant invariant.d10.truth-identity
+ * @agentosDocs docs/concepts/carriers-and-material.md
+ * @public
+ */
 export type MaterialRef =
   | CredentialMaterialRef
   | EndpointMaterialRef
@@ -88,6 +96,15 @@ export type MaterialRequirementInput =
       readonly required?: boolean;
     });
 
+/**
+ * Effect authority declaration and its required material slots.
+ *
+ * @agentosPrimitive primitive.kernel.EffectAuthorityContract
+ * @agentosAlias effectAuthorityContract
+ * @agentosInvariant invariant.d10.truth-identity
+ * @agentosDocs docs/boundary-contract.md
+ * @public
+ */
 export interface EffectAuthorityContract {
   readonly effectAuthorityRef: AuthorityRef;
   readonly requiredMaterials: ReadonlyArray<MaterialRequirement>;

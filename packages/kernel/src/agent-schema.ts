@@ -35,6 +35,14 @@ class AgentSchemaDecodeError extends Error {
   }
 }
 
+/**
+ * Agent-facing schema wrapper derived from one Effect Schema source.
+ *
+ * @agentosPrimitive primitive.kernel.AgentSchema
+ * @agentosInvariant invariant.algebra.single-code-source
+ * @agentosDocs docs/concepts/agent-schema.md
+ * @public
+ */
 export type AgentSchema<A = unknown> = {
   readonly [AGENT_SCHEMA_BRAND]: true;
   readonly source: Schema.Schema.AnyNoContext;
@@ -57,6 +65,14 @@ export type AgentSchemaSpec<A = unknown> = {
   readonly fingerprint: string;
 };
 
+/**
+ * Provider-specific schema projections derived from AgentSchema.
+ *
+ * @agentosPrimitive primitive.kernel.AgentSchemaProjections
+ * @agentosInvariant invariant.algebra.single-code-source
+ * @agentosDocs docs/concepts/agent-schema.md
+ * @public
+ */
 export type AgentSchemaProjections = {
   readonly canonical: JsonSchemaObject;
   readonly openai: JsonSchemaObject;
@@ -278,6 +294,14 @@ const sanitizeForGemini = (node: JsonSchemaNode): JsonSchemaNode => {
   return out as unknown as JsonSchemaObject;
 };
 
+/**
+ * Derives canonical, provider, and AG-UI schema variants from one canonical schema.
+ *
+ * @agentosPrimitive primitive.kernel.projectAgentSchema
+ * @agentosInvariant invariant.algebra.single-code-source
+ * @agentosDocs docs/concepts/agent-schema.md
+ * @public
+ */
 export const projectAgentSchema = (schema: JsonSchemaObject): AgentSchemaProjections => ({
   canonical: schema,
   openai: schema,

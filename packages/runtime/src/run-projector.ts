@@ -110,6 +110,14 @@ const runTerminal = (
   return null;
 };
 
+/**
+ * Projects runtime ledger facts into a run trace view.
+ *
+ * @agentosPrimitive primitive.runtime.projectRunTrace
+ * @agentosInvariant invariant.d10.truth-identity
+ * @agentosDocs docs/concepts/durable-truth.md
+ * @public
+ */
 export const projectRunTrace = (
   events: ReadonlyArray<LedgerEvent>,
   rawRunId: number | string,
@@ -160,6 +168,14 @@ export const projectRunTrace = (
   };
 };
 
+/**
+ * Projects runtime ledger facts into a single run status.
+ *
+ * @agentosPrimitive primitive.runtime.projectRunStatus
+ * @agentosInvariant invariant.d10.truth-identity
+ * @agentosDocs docs/concepts/durable-truth.md
+ * @public
+ */
 export const projectRunStatus = (
   events: ReadonlyArray<LedgerEvent>,
   rawRunId: number | string,
@@ -272,6 +288,14 @@ export const projectRunsPage = (
   return { runs: page, nextCursor };
 };
 
+/**
+ * Reconstructs SubmitResult from terminal runtime ledger facts.
+ *
+ * @agentosPrimitive primitive.runtime.projectSubmitResult
+ * @agentosInvariant invariant.d10.truth-identity
+ * @agentosDocs docs/concepts/durable-truth.md
+ * @public
+ */
 export const projectSubmitResult = (
   events: ReadonlyArray<LedgerEvent>,
   rawRunId: number | string,

@@ -697,6 +697,14 @@ const mapEnvelopeFrames = (
   return mapped;
 };
 
+/**
+ * Projects one typed ledger event into a browser-safe AG-UI envelope.
+ *
+ * @agentosPrimitive primitive.ag-ui.projectLedgerEventToAgUiEnvelope
+ * @agentosInvariant invariant.algebra.single-code-source
+ * @agentosDocs docs/concepts/ag-ui-wire-adapter.md
+ * @public
+ */
 export const projectLedgerEventToAgUiEnvelope = (
   event: LedgerEvent,
   spec: AgUiLedgerEnvelopeProjectionSpec = {},
@@ -811,6 +819,14 @@ export async function* projectLedgerSseToAgUiEnvelopes(
   }
 }
 
+/**
+ * Transports ledger SSE events as AG-UI SSE envelopes.
+ *
+ * @agentosPrimitive primitive.ag-ui.projectLedgerSseToAgUiSse
+ * @agentosInvariant invariant.algebra.single-code-source
+ * @agentosDocs docs/concepts/ag-ui-wire-adapter.md
+ * @public
+ */
 export async function* projectLedgerSseToAgUiSse(
   body: ReadableStream<Uint8Array>,
   spec: AgUiLedgerEnvelopeProjectionSpec = {},
@@ -820,6 +836,14 @@ export async function* projectLedgerSseToAgUiSse(
   }
 }
 
+/**
+ * Folds AG-UI frames into a neutral run projection.
+ *
+ * @agentosPrimitive primitive.ag-ui.projectAgUiFrames
+ * @agentosInvariant invariant.algebra.single-code-source
+ * @agentosDocs docs/concepts/ag-ui-wire-adapter.md
+ * @public
+ */
 export const projectAgUiFrames = (frames: Iterable<AgUiFrame>): AgUiFrameProjection => {
   const textMessages = new Map<string, { messageId: string; role: "assistant"; text: string }>();
   const toolCalls = new Map<
@@ -902,6 +926,14 @@ export const projectAgUiFrames = (frames: Iterable<AgUiFrame>): AgUiFrameProject
   };
 };
 
+/**
+ * Folds AG-UI frames into a UI-neutral activity list.
+ *
+ * @agentosPrimitive primitive.ag-ui.projectAgUiFramesToActivities
+ * @agentosInvariant invariant.algebra.single-code-source
+ * @agentosDocs docs/concepts/ag-ui-wire-adapter.md
+ * @public
+ */
 export const projectAgUiFramesToActivities = (
   frames: Iterable<AgUiFrame>,
 ): ReadonlyArray<AgUiActivity> => {

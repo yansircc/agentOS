@@ -10,6 +10,14 @@ import { Predicate } from "effect";
 import { ANCHOR_KINDS, REJECTION_KINDS } from "./claim-kinds";
 import { isNonEmptyString } from "./string-guards";
 
+/**
+ * Structured ledger scope identity.
+ *
+ * @agentosPrimitive primitive.kernel.ScopeRef
+ * @agentosInvariant invariant.d10.truth-identity
+ * @agentosDocs docs/concepts/durable-truth.md
+ * @public
+ */
 export type ScopeRef =
   | { readonly kind: "realm"; readonly scopeId: string }
   | { readonly kind: "conversation"; readonly scopeId: string }
@@ -21,6 +29,15 @@ export type ScopeRef =
       readonly systemRef: string;
     };
 
+/**
+ * Effect or capability authority participating in ledger truth identity.
+ *
+ * @agentosPrimitive primitive.kernel.AuthorityRef
+ * @agentosAlias effectAuthorityRef
+ * @agentosInvariant invariant.d10.truth-identity
+ * @agentosDocs docs/concepts/durable-truth.md
+ * @public
+ */
 export interface AuthorityRef {
   readonly authorityId: string;
   readonly authorityClass: string;
@@ -60,24 +77,57 @@ interface ClaimBase {
   readonly originRef: OriginRef;
 }
 
+/**
+ * Non-terminal effect claim before admission settles it.
+ *
+ * @agentosPrimitive primitive.kernel.PreClaim
+ * @agentosInvariant invariant.algebra.type-or-boot-proof
+ * @agentosDocs docs/boundary-contract.md
+ * @public
+ */
 export interface PreClaim extends ClaimBase {
   readonly phase: "pre";
   readonly anchorRef?: never;
   readonly rejectionRef?: never;
 }
 
+/**
+ * Effect claim settled by one terminal anchor.
+ *
+ * @agentosPrimitive primitive.kernel.LivedClaim
+ * @agentosInvariant invariant.algebra.type-or-boot-proof
+ * @agentosDocs docs/boundary-contract.md
+ * @public
+ */
 export interface LivedClaim extends ClaimBase {
   readonly phase: "lived";
   readonly anchorRef: AnchorRef;
   readonly rejectionRef?: never;
 }
 
+/**
+ * Effect claim settled by one terminal rejection.
+ *
+ * @agentosPrimitive primitive.kernel.RejectedClaim
+ * @agentosInvariant invariant.algebra.type-or-boot-proof
+ * @agentosDocs docs/boundary-contract.md
+ * @public
+ */
 export interface RejectedClaim extends ClaimBase {
   readonly phase: "rejected";
   readonly anchorRef?: never;
   readonly rejectionRef: RejectionRef;
 }
 
+/**
+ * Type-proof lifecycle union for pre, lived, and rejected effect claims.
+ *
+ * @agentosPrimitive primitive.kernel.EffectClaim
+ * @agentosInvariant invariant.algebra.type-or-boot-proof
+ * @agentosInvariant invariant.boundary.runtime-validation-external-only
+ * @agentosDocs docs/boundary-contract.md
+ * @public
+ */
 export type EffectClaim = PreClaim | LivedClaim | RejectedClaim;
 
 /**
@@ -154,6 +204,14 @@ export const authorityRefKey = (effectAuthorityRef: AuthorityRef): string =>
     effectAuthorityRef.version === undefined ? "none" : refKeyPart(effectAuthorityRef.version),
   ].join(":");
 
+/**
+ * Package-owned fact namespace injected by commit boundaries.
+ *
+ * @agentosPrimitive primitive.kernel.FactOwnerRef
+ * @agentosInvariant invariant.d10.namespace-integrity
+ * @agentosDocs docs/boundary-contract.md
+ * @public
+ */
 export type FactOwnerRef = string;
 
 export const isFactOwnerRef = (value: unknown): value is FactOwnerRef => isNonEmptyString(value);

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-os.dev/schemas/agent/external-vocabulary.source.schema.json",
+  "title": "agentOS external vocabulary source",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "vocabulary"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "vocabulary": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/externalConcept" },
+      "uniqueItems": true
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9-]*(\\.[A-Za-z0-9][A-Za-z0-9-]*)+$"
+    },
+    "path": {
+      "type": "string",
+      "pattern": "^(docs|decisions|packages|scripts|tooling|skills)/.+$"
+    },
+    "externalConcept": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "docs", "mapsTo", "notes"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string", "minLength": 1 },
+        "docs": { "$ref": "#/$defs/path" },
+        "mapsTo": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/id" },
+          "minItems": 1
+        },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

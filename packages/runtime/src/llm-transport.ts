@@ -14,6 +14,14 @@ export interface LlmTransportRouteDescriptor {
   readonly transportAdapterVersion: string;
 }
 
+/**
+ * Provider transport boundary for runtime LLM calls.
+ *
+ * @agentosPrimitive primitive.runtime.LlmTransport
+ * @agentosInvariant invariant.boundary.runtime-validation-external-only
+ * @agentosDocs docs/packages/llm-transport-effect-ai.md
+ * @public
+ */
 export class LlmTransport extends Context.Tag("@agent-os/LlmTransport")<
   LlmTransport,
   {

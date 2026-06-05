@@ -32,6 +32,13 @@ import type { TraceContext } from "./trace-context";
 const TOOL_CONTRACT_BRAND = Symbol("@agent-os/kernel/ToolContract");
 const DETERMINISTIC_TOOL_INVOCATION_BRAND = Symbol("@agent-os/kernel/DeterministicToolInvocation");
 
+/**
+ * Per-call execution context passed to a tool implementation.
+ *
+ * @agentosPrimitive primitive.kernel.ToolExecutionContext
+ * @agentosDocs docs/concepts/tool-execution-domain.md
+ * @public
+ */
 export interface ToolExecutionContext {
   readonly signal: AbortSignal;
   readonly traceContext?: TraceContext;
@@ -39,20 +46,52 @@ export interface ToolExecutionContext {
 
 export type ExecutionDomainKind = "host" | "sandbox" | "workspace" | "remote";
 
+/**
+ * Declared execution locus for an effectful tool.
+ *
+ * @agentosPrimitive primitive.kernel.ExecutionDomain
+ * @agentosInvariant invariant.algebra.type-or-boot-proof
+ * @agentosDocs docs/concepts/tool-execution-domain.md
+ * @public
+ */
 export interface ExecutionDomain {
   readonly kind: ExecutionDomainKind;
   readonly ref: string;
   readonly envAllowlist?: ReadonlyArray<string>;
 }
 
+/**
+ * Tool execution declaration: pure tools stay local, effectful tools name a domain.
+ *
+ * @agentosPrimitive primitive.kernel.ToolExecution
+ * @agentosInvariant invariant.algebra.type-or-boot-proof
+ * @agentosDocs docs/concepts/tool-execution-domain.md
+ * @public
+ */
 export type ToolExecution =
   | { readonly kind: "pure" }
   | { readonly kind: "effectful"; readonly domain: ExecutionDomain };
 
+/**
+ * Boot-time execution-domain declaration consumed by registry validation.
+ *
+ * @agentosPrimitive primitive.kernel.ExecutionDomainDeclaration
+ * @agentosInvariant invariant.algebra.type-or-boot-proof
+ * @agentosDocs docs/concepts/tool-execution-domain.md
+ * @public
+ */
 export interface ExecutionDomainDeclaration {
   readonly domain: ExecutionDomain;
 }
 
+/**
+ * Boot-proof registry for all effectful tool execution domains.
+ *
+ * @agentosPrimitive primitive.kernel.ExecutionDomainRegistry
+ * @agentosInvariant invariant.algebra.type-or-boot-proof
+ * @agentosDocs docs/concepts/tool-execution-domain.md
+ * @public
+ */
 export interface ExecutionDomainRegistry {
   readonly domains: ReadonlyArray<ExecutionDomainDeclaration>;
 }
@@ -65,6 +104,14 @@ interface ToolContractShape {
   readonly roles: ReadonlyArray<Extract<ClaimRole, "generator" | "admitter">>;
 }
 
+/**
+ * Admission and authority contract for a tool, excluding execution locus.
+ *
+ * @agentosPrimitive primitive.kernel.ToolContract
+ * @agentosInvariant invariant.d10.truth-identity
+ * @agentosDocs docs/concepts/tool-execution-domain.md
+ * @public
+ */
 export interface ToolContract extends ToolContractShape {
   readonly [TOOL_CONTRACT_BRAND]: true;
 }
@@ -75,6 +122,14 @@ export interface DeterministicToolInvocation<A = unknown> {
   readonly [DETERMINISTIC_TOOL_INVOCATION_BRAND]: true;
 }
 
+/**
+ * Input passed to non-LLM tool admission with claim, args, contract, and execution metadata.
+ *
+ * @agentosPrimitive primitive.kernel.ToolAdmitInput
+ * @agentosInvariant invariant.algebra.type-or-boot-proof
+ * @agentosDocs docs/concepts/tool-execution-domain.md
+ * @public
+ */
 export interface ToolAdmitInput<A = unknown> {
   readonly claim: PreClaim;
   readonly args: A;
@@ -89,6 +144,14 @@ export type ToolAdmitter<A = unknown> = (
 
 export type ToolDecode<A = unknown> = (args: unknown) => A;
 
+/**
+ * Public app-facing tool definition consumed by submit loops.
+ *
+ * @agentosPrimitive primitive.kernel.Tool
+ * @agentosInvariant invariant.algebra.type-or-boot-proof
+ * @agentosDocs docs/concepts/tool-execution-domain.md
+ * @public
+ */
 export interface Tool<
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   A = any,

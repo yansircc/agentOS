@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-os.dev/schemas/agent/error-metadata.source.schema.json",
+  "title": "agentOS error metadata source",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "errors"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "errors": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/error" },
+      "uniqueItems": true
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^invariant\\.[a-z0-9.-]+$"
+    },
+    "path": {
+      "type": "string",
+      "pattern": "^(docs|decisions|packages|scripts|tooling|skills)/.+$"
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tag", "invariants", "docs", "fix"],
+      "properties": {
+        "tag": {
+          "type": "string",
+          "pattern": "^agent_os\\.[a-z0-9_]+$"
+        },
+        "invariants": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/id" },
+          "minItems": 1
+        },
+        "docs": { "$ref": "#/$defs/path" },
+        "fix": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

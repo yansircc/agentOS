@@ -35,6 +35,14 @@ export interface BoundaryEventContract {
   readonly claim?: BoundaryEventClaimContract;
 }
 
+/**
+ * Boundary axis declaring that observable state is derived from ledger facts.
+ *
+ * @agentosPrimitive primitive.kernel.BoundaryProjectionContract
+ * @agentosInvariant invariant.d10.truth-identity
+ * @agentosDocs docs/concepts/materialized-projections.md
+ * @public
+ */
 export interface BoundaryProjectionContract {
   readonly derivedFromLedger: true;
   readonly shadowState: false;
@@ -46,6 +54,12 @@ export interface BoundaryProjectionContract {
  *
  * Event keys are the vocabulary. Claim slots are event-local so non-claim
  * extension facts do not need to lie as terminal claim events.
+ *
+ * @agentosPrimitive primitive.kernel.BoundaryContract
+ * @agentosInvariant invariant.d10.namespace-integrity
+ * @agentosInvariant invariant.d10.truth-identity
+ * @agentosDocs docs/boundary-contract.md
+ * @public
  */
 export interface BoundaryContract<EventKind extends string = string> {
   readonly packageId: string;

@@ -25,6 +25,15 @@ export interface DeliveryReceipt {
   readonly anchorKind: "ledger_event" | "external_receipt";
 }
 
+/**
+ * Canonical durable ledger fact row.
+ *
+ * @agentosPrimitive primitive.kernel.LedgerEvent
+ * @agentosInvariant invariant.d10.truth-identity
+ * @agentosInvariant invariant.d10.namespace-integrity
+ * @agentosDocs docs/concepts/durable-truth.md
+ * @public
+ */
 export interface LedgerEvent {
   readonly id: number;
   readonly ts: number;

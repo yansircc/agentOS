@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "errors": [
+    {
+      "tag": "agent_os.sql_error",
+      "invariants": ["invariant.ledger.single-commit-source"],
+      "docs": "docs/concepts/durable-truth.md",
+      "fix": "Keep SQL writes inside the backend-owned ledger commit primitive and return typed SqlError at the backend boundary."
+    },
+    {
+      "tag": "agent_os.json_stringify_error",
+      "invariants": ["invariant.ledger.single-commit-source"],
+      "docs": "docs/concepts/durable-truth.md",
+      "fix": "Encode final payloads before commit side effects consume them; reject unstringifiable payloads before projection application."
+    },
+    {
+      "tag": "agent_os.legacy_ledger_schema",
+      "invariants": ["invariant.d10.truth-identity"],
+      "docs": "docs/concepts/durable-truth.md",
+      "fix": "Delete old local backend state and initialize the D10 schema; no legacy row migration is supported."
+    },
+    {
+      "tag": "agent_os.boundary_commit_rejected",
+      "invariants": ["invariant.d10.namespace-integrity", "invariant.d10.truth-identity"],
+      "docs": "docs/boundary-contract.md",
+      "fix": "Commit through the owning BoundaryContract with matching event vocabulary, scopeRef, effectAuthorityRef, and claim identity."
+    },
+    {
+      "tag": "agent_os.capability_rejected",
+      "invariants": ["invariant.d10.namespace-integrity"],
+      "docs": "docs/boundary-contract.md",
+      "fix": "Register the extension capability that owns the event prefix before committing or dispatching the fact."
+    },
+    {
+      "tag": "agent_os.provider_http_failure",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/concepts/agent-schema.md",
+      "fix": "Handle provider transport failures at the LLM transport boundary and let submit record the runtime terminal fact."
+    },
+    {
+      "tag": "agent_os.provider_output_decode_error",
+      "invariants": ["invariant.algebra.single-code-source"],
+      "docs": "docs/concepts/agent-schema.md",
+      "fix": "Decode provider output through the runtime output-item schema instead of product-side fallback parsing."
+    },
+    {
+      "tag": "agent_os.projection_application_error",
+      "invariants": ["invariant.d10.truth-identity"],
+      "docs": "docs/concepts/materialized-projections.md",
+      "fix": "Keep projection reducers pure and make malformed facts explicit failures rather than alternate truth."
+    },
+    {
+      "tag": "agent_os.projection_reducer_returned_thenable",
+      "invariants": ["invariant.d10.truth-identity"],
+      "docs": "docs/concepts/materialized-projections.md",
+      "fix": "Move asynchronous work to the ledger writer or backend transaction hook; projection reducers must be synchronous."
+    },
+    {
+      "tag": "agent_os.unregistered_projection_kind",
+      "invariants": ["invariant.d10.truth-identity"],
+      "docs": "docs/concepts/materialized-projections.md",
+      "fix": "Register the projection definition before reading, status-checking, or rebuilding that projection kind."
+    }
+  ]
+}

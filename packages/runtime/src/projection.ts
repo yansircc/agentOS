@@ -24,6 +24,14 @@ export interface ProjectionIdentifyMalformed {
   readonly reason: string;
 }
 
+/**
+ * Event-to-projection identity decision made before reduction.
+ *
+ * @agentosPrimitive primitive.runtime.ProjectionIdentifyResult
+ * @agentosInvariant invariant.d10.truth-identity
+ * @agentosDocs docs/concepts/materialized-projections.md
+ * @public
+ */
 export type ProjectionIdentifyResult<Identity> =
   | ProjectionIdentifyOk<Identity>
   | ProjectionIdentifySkip
@@ -62,6 +70,14 @@ export interface ProjectionFail {
   readonly reason: string;
 }
 
+/**
+ * Synchronous reducer result for one materialized projection row.
+ *
+ * @agentosPrimitive primitive.runtime.ProjectionReduceResult
+ * @agentosInvariant invariant.d10.truth-identity
+ * @agentosDocs docs/concepts/materialized-projections.md
+ * @public
+ */
 export type ProjectionReduceResult<State> =
   | ProjectionPut<State>
   | ProjectionDelete
@@ -86,6 +102,14 @@ export const projectionFail = <State = never>(reason: string): ProjectionReduceR
   reason,
 });
 
+/**
+ * Canonical projection reduction context derived from the consumed ledger event.
+ *
+ * @agentosPrimitive primitive.runtime.ProjectionReduceContext
+ * @agentosInvariant invariant.d10.truth-identity
+ * @agentosDocs docs/concepts/materialized-projections.md
+ * @public
+ */
 export interface ProjectionReduceContext<Identity> {
   readonly scopeRef: ScopeRef;
   readonly scopeKey: string;
@@ -93,6 +117,14 @@ export interface ProjectionReduceContext<Identity> {
   readonly identityKey: string;
 }
 
+/**
+ * Pure materialized projection definition over ledger facts.
+ *
+ * @agentosPrimitive primitive.runtime.MaterializedProjectionDefinition
+ * @agentosInvariant invariant.d10.truth-identity
+ * @agentosDocs docs/concepts/materialized-projections.md
+ * @public
+ */
 export interface MaterializedProjectionDefinition<Identity, State> {
   readonly kind: string;
   readonly version: number;
@@ -118,6 +150,14 @@ export type AnyMaterializedProjectionDefinition = MaterializedProjectionDefiniti
   any
 >;
 
+/**
+ * Defines one materialized projection without adding a second truth source.
+ *
+ * @agentosPrimitive primitive.runtime.defineProjection
+ * @agentosInvariant invariant.d10.truth-identity
+ * @agentosDocs docs/concepts/materialized-projections.md
+ * @public
+ */
 export const defineProjection = <Identity, State>(
   spec: MaterializedProjectionDefinition<Identity, State>,
 ): MaterializedProjectionDefinition<Identity, State> => spec;
@@ -216,6 +256,14 @@ export interface MaterializedProjectionListSpec {
   readonly afterKey?: string;
 }
 
+/**
+ * Backend-neutral service for projection reads, status, and rebuild.
+ *
+ * @agentosPrimitive primitive.runtime.MaterializedProjections
+ * @agentosInvariant invariant.d10.truth-identity
+ * @agentosDocs docs/concepts/materialized-projections.md
+ * @public
+ */
 export class MaterializedProjections extends Context.Tag("@agent-os/MaterializedProjections")<
   MaterializedProjections,
   {
