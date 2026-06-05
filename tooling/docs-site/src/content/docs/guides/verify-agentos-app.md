@@ -27,10 +27,11 @@ review-only checks.
 
 For product apps that consume internal agentOS packages:
 
-1. Pin every consumed `@agent-os/*` package to the current internal tarball
-   manifest produced by `bun run pack:internal`.
-2. Run the product package install from a fresh lockfile when tarball hashes or
-   transitive agentOS dependencies changed.
+1. Pin every consumed `@agent-os/*` package to the current logical local
+   channel tag, such as `agentos-dev`, or to a released semver train.
+2. Run the product package update after `bun run publish:local`; the product
+   lockfile should move to the generated prerelease version, while
+   `package.json` stays free of worktree paths.
 3. Assert the product has no raw JSON Schema source for agentOS-owned tools.
    Workspace tools should come from `@agent-os/workspace-env`.
 4. Assert the product has no runtime-event fallback parser for agentOS-owned
@@ -50,7 +51,7 @@ For product apps that consume internal agentOS packages:
    or non-allowlisted provider metadata appear.
 10. For workspace products, run one natural-language loop:
     inspect -> glob/grep -> edit/write -> verify -> terminal UI. Record the run
-    id, terminal event id, workspace diff, and package tarball hash.
+    id, terminal event id, workspace diff, and resolved agentOS package version.
 
 ## References
 

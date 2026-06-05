@@ -96,16 +96,20 @@ describe("defineAgentDO facade submit", () => {
       const call = fetchCalls[0];
       expect(call).toBeDefined();
       if (call === undefined) return;
-      expect(call.url).toBe("https://stub.openai.test/v1/responses");
+      expect(call.url).toBe("https://stub.openai.test/v1/chat/completions");
       expect(headerValue(call.init.headers, "authorization")).toBe("Bearer stub-key");
       expect(typeof call.bodyText).toBe("string");
       if (call.bodyText === null) return;
       const body = JSON.parse(call.bodyText) as {
         readonly model?: unknown;
-        readonly tools?: ReadonlyArray<{ readonly name?: unknown }>;
+        readonly tools?: ReadonlyArray<{
+          readonly type?: unknown;
+          readonly function?: { readonly name?: unknown };
+        }>;
       };
       expect(body.model).toBe("gpt-4.1-mini");
-      expect(body.tools?.map((tool) => tool.name)).toEqual(["lookup"]);
+      expect(body.tools?.map((tool) => tool.function?.name)).toEqual(["lookup"]);
+      expect(body.tools?.map((tool) => tool.type)).toEqual(["function"]);
 
       const delivered = events.filter((event) => event.kind === "test.delivered");
       expect(delivered).toHaveLength(1);

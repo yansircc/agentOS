@@ -12,7 +12,10 @@ const distRoot = path.join(repoRoot, "dist", "internal-npm");
 const stagingRoot = path.join(distRoot, "packages");
 const tarballRoot = path.join(distRoot, "tarballs");
 const installManifestPath = path.join(distRoot, "install-manifest.json");
+const localChannelManifestPath = path.join(distRoot, "local-channel.json");
 const tarballHashLength = 12;
+let packageVersionOverride;
+const defaultLocalRegistryRoot = path.join(os.homedir(), ".agentos", "local-registry");
 
 const runtimePackageRoots = ["packages", "tooling"];
 const cloudflarePackageNames = new Set([
@@ -71,6 +74,151 @@ const releaseVersion = () => {
     fail("package.json agentOsRelease.version must be a semver string");
   }
   return version;
+};
+
+const packageVersion = () => packageVersionOverride ?? releaseVersion();
+
+const withPackageVersion = (version, fn) => {
+  const previous = packageVersionOverride;
+  packageVersionOverride = version;
+  try {
+    return fn();
+  } finally {
+    packageVersionOverride = previous;
+  }
+};
+
+const parseArgs = (args) => {
+  const parsed = { _: [] };
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index];
+    if (!arg.startsWith("--")) {
+      parsed._.push(arg);
+      continue;
+    }
+    const eq = arg.indexOf("=");
+    if (eq >= 0) {
+      parsed[arg.slice(2, eq)] = arg.slice(eq + 1);
+      continue;
+    }
+    const key = arg.slice(2);
+    const next = args[index + 1];
+    if (next !== undefined && !next.startsWith("--")) {
+      parsed[key] = next;
+      index++;
+    } else {
+      parsed[key] = true;
+    }
+  }
+  return parsed;
+};
+
+const gitValue = (args, fallback) => {
+  const result = spawnSync("git", args, {
+    cwd: repoRoot,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  });
+  if (result.status !== 0) return fallback;
+  const value = result.stdout.trim();
+  return value.length === 0 ? fallback : value;
+};
+
+const prereleaseIdentifier = (value) =>
+  value
+    .toLowerCase()
+    .replace(/[^0-9a-z-]+/gu, "-")
+    .replace(/^-+|-+$/gu, "")
+    .slice(0, 48) || "local";
+
+const timestampIdentifier = () => {
+  const now = new Date();
+  const pad = (value) => String(value).padStart(2, "0");
+  return [
+    now.getUTCFullYear(),
+    pad(now.getUTCMonth() + 1),
+    pad(now.getUTCDate()),
+    pad(now.getUTCHours()),
+    pad(now.getUTCMinutes()),
+    pad(now.getUTCSeconds()),
+  ].join("");
+};
+
+const localPackageVersion = (label) => {
+  const branch = prereleaseIdentifier(label ?? gitValue(["branch", "--show-current"], "local"));
+  const sha = prereleaseIdentifier(gitValue(["rev-parse", "--short=12", "HEAD"], "unknown"));
+  return `${releaseVersion()}-dev.${branch}.${sha}.${timestampIdentifier()}`;
+};
+
+const localRegistryRoot = () => process.env.AGENTOS_LOCAL_REGISTRY_ROOT ?? defaultLocalRegistryRoot;
+
+const isLoopbackRegistry = (registry) => {
+  try {
+    const url = new URL(registry);
+    return url.hostname === "127.0.0.1" || url.hostname === "localhost" || url.hostname === "::1";
+  } catch {
+    return false;
+  }
+};
+
+const registryAuthKey = (registry) => {
+  const url = new URL(registry);
+  return `//${url.host}${url.pathname.endsWith("/") ? url.pathname : `${url.pathname}/`}`;
+};
+
+const verdaccioToken = (registry) => {
+  const code = `
+const registry = process.argv[1].replace(/\\/$/u, "");
+const user = "agentos-local";
+const password = "agentos-local";
+const response = await fetch(\`\${registry}/-/user/org.couchdb.user:\${user}\`, {
+  method: "PUT",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({
+    name: user,
+    password,
+    email: "agentos-local@example.invalid",
+    type: "user",
+  }),
+});
+const text = await response.text();
+if (!response.ok) {
+  throw new Error(\`local registry auth failed: \${response.status} \${text}\`);
+}
+const json = JSON.parse(text);
+if (typeof json.token !== "string" || json.token.length === 0) {
+  throw new Error(\`local registry auth response did not include a token: \${text}\`);
+}
+console.log(json.token);
+`;
+  const result = spawnSync(process.execPath, ["--input-type=module", "-e", code, registry], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  if (result.status !== 0) {
+    fail(`${result.stdout ?? ""}${result.stderr ?? ""}`.trim());
+  }
+  return result.stdout.trim();
+};
+
+const existingLocalRegistryToken = (userconfigPath) => {
+  if (!fs.existsSync(userconfigPath)) return undefined;
+  const match = fs.readFileSync(userconfigPath, "utf8").match(/:_authToken=([^\n]+)/u);
+  return match?.[1]?.trim();
+};
+
+const localRegistryUserconfig = (registry) => {
+  const userconfigPath = path.join(localRegistryRoot(), "npmrc");
+  const token = existingLocalRegistryToken(userconfigPath) ?? verdaccioToken(registry);
+  fs.mkdirSync(path.dirname(userconfigPath), { recursive: true });
+  fs.writeFileSync(
+    userconfigPath,
+    [`@agent-os:registry=${registry}`, `${registryAuthKey(registry)}:_authToken=${token}`, ""].join(
+      "\n",
+    ),
+  );
+  return userconfigPath;
 };
 
 const catalog = () => rootPackage().catalog ?? {};
@@ -339,7 +487,7 @@ const allFiles = (dir) => {
 };
 
 const projectedDependencies = (record) => {
-  const version = releaseVersion();
+  const version = packageVersion();
   const rootCatalog = catalog();
   const dependencies = {};
   for (const [name, value] of Object.entries(record.packageJson.dependencies ?? {})) {
@@ -380,7 +528,7 @@ const generatedManifest = (record) => {
   );
   const manifest = {
     name: record.packageJson.name,
-    version: releaseVersion(),
+    version: packageVersion(),
     type: "module",
     license: "UNLICENSED",
     main: exportsValue["."]?.default,
@@ -448,7 +596,7 @@ const writeInstallManifest = (entries) => {
     sorted.map((entry) => [entry.record.packageJson.name, tarballSpec(entry.file)]),
   );
   writeJson(installManifestPath, {
-    version: releaseVersion(),
+    version: packageVersion(),
     generatedBy: "tooling/distribution/distribution.mjs pack",
     dependencies,
     overrides: dependencies,
@@ -542,9 +690,10 @@ const packInternal = () => {
 const tarballsByPackage = () => {
   if (!fs.existsSync(tarballRoot)) packInternal();
   const byPackage = new Map();
+  const version = packageVersion();
   for (const record of publishedRecords()) {
     const packageNamePart = record.packageJson.name.replace(/^@/u, "").replace(/\//gu, "-");
-    const prefix = `${packageNamePart}-`;
+    const prefix = `${packageNamePart}-${version}`;
     const tarball = allFiles(tarballRoot)
       .filter((entry) => path.basename(entry).startsWith(prefix) && entry.endsWith(".tgz"))
       .sort((left, right) => left.localeCompare(right))
@@ -789,7 +938,111 @@ const publishInternal = () => {
   }
 };
 
+const writeLocalChannelManifest = ({ registry, tag, version }) => {
+  const names = publishedRecords()
+    .map((record) => record.packageJson.name)
+    .sort((left, right) => left.localeCompare(right));
+  writeJson(localChannelManifestPath, {
+    version,
+    registry,
+    tag,
+    generatedBy: "tooling/distribution/distribution.mjs publish-local",
+    dependencies: Object.fromEntries(names.map((name) => [name, tag])),
+    npmrc: [`@agent-os:registry=${registry}`],
+  });
+};
+
+const publishLocal = (rawArgs) => {
+  const args = parseArgs(rawArgs);
+  const registry =
+    args.registry ??
+    process.env.AGENTOS_LOCAL_REGISTRY ??
+    process.env.AGENTOS_NPM_REGISTRY ??
+    "http://127.0.0.1:4873";
+  const tag = args.tag ?? process.env.AGENTOS_LOCAL_TAG ?? "agentos-dev";
+  const version = args.version ?? localPackageVersion(args.label);
+  const access = args.access ?? process.env.AGENTOS_NPM_ACCESS ?? "public";
+  withPackageVersion(version, () => {
+    packInternal();
+    const userconfig =
+      args.userconfig ??
+      (isLoopbackRegistry(registry) ? localRegistryUserconfig(registry) : undefined);
+    const tarballs = tarballsByPackage();
+    for (const [name, tarball] of tarballs.entries()) {
+      console.log(`publishing ${name}@${version} to ${registry} with tag ${tag}`);
+      const publishArgs = [
+        "publish",
+        tarball,
+        "--registry",
+        registry,
+        "--tag",
+        tag,
+        "--access",
+        access,
+      ];
+      if (userconfig !== undefined) publishArgs.push("--userconfig", userconfig);
+      run("npm", publishArgs);
+    }
+    writeLocalChannelManifest({ registry, tag, version });
+  });
+  console.log(
+    `published ${publishedRecords().length} packages to ${registry} with tag ${tag} at version ${version}`,
+  );
+  console.log(`wrote ${repoPath(localChannelManifestPath)}`);
+};
+
+const localRegistry = (rawArgs) => {
+  const args = parseArgs(rawArgs);
+  const port = args.port ?? process.env.AGENTOS_LOCAL_REGISTRY_PORT ?? "4873";
+  const host = args.host ?? process.env.AGENTOS_LOCAL_REGISTRY_HOST ?? "127.0.0.1";
+  const root = localRegistryRoot();
+  const storage = path.join(root, "storage");
+  const configPath = path.join(root, "config.yaml");
+  const htpasswdPath = path.join(root, "htpasswd");
+  fs.mkdirSync(root, { recursive: true });
+  fs.mkdirSync(storage, { recursive: true });
+  fs.writeFileSync(htpasswdPath, fs.existsSync(htpasswdPath) ? fs.readFileSync(htpasswdPath) : "");
+  fs.writeFileSync(
+    configPath,
+    [
+      `storage: ${storage}`,
+      "auth:",
+      "  htpasswd:",
+      `    file: ${htpasswdPath}`,
+      "uplinks:",
+      "  npmjs:",
+      "    url: https://registry.npmjs.org/",
+      "packages:",
+      "  '@agent-os/*':",
+      "    access: $all",
+      "    publish: $all",
+      "    unpublish: $all",
+      "  '**':",
+      "    access: $all",
+      "    proxy: npmjs",
+      "log:",
+      "  - { type: stdout, format: pretty, level: http }",
+      "",
+    ].join("\n"),
+  );
+  console.log(`starting local npm registry at http://${host}:${port}`);
+  console.log(`storage: ${storage}`);
+  run("npm", [
+    "exec",
+    "--yes",
+    "--package",
+    "verdaccio@6.7.2",
+    "--",
+    "verdaccio",
+    "--config",
+    configPath,
+    "--listen",
+    `${host}:${port}`,
+  ]);
+};
+
 const command = process.argv[2] ?? "check";
+const commandArgs = process.argv.slice(3);
 switch (command) {
   case "build":
     buildInternalPackages();
@@ -805,6 +1058,12 @@ switch (command) {
     break;
   case "publish":
     publishInternal();
+    break;
+  case "publish-local":
+    publishLocal(commandArgs);
+    break;
+  case "local-registry":
+    localRegistry(commandArgs);
     break;
   default:
     fail(`unknown distribution command: ${command}`);

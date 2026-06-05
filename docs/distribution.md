@@ -27,13 +27,38 @@ from the release manifest before typechecking Cloudflare-facing code.
 For first-party prepublish consumers, run:
 
 ```sh
-bun run pack:internal
+bun run registry:local
+bun run publish:local
 ```
 
-Then copy the needed `dependencies` and matching `overrides` entries from
-`dist/internal-npm/install-manifest.json`. The manifest points at
-content-addressed local `.tgz` files, so rebuilding internal packages changes
-the `file:` spec when package contents change.
+Then configure the consumer once:
+
+```ini
+@agent-os:registry=http://127.0.0.1:4873
+```
+
+Consumer `package.json` should depend on the logical channel, not a worktree
+path:
+
+```json
+{
+  "dependencies": {
+    "@agent-os/runtime": "agentos-dev",
+    "@agent-os/backend-cloudflare-do": "agentos-dev"
+  }
+}
+```
+
+`publish:local` writes `dist/internal-npm/local-channel.json` with the registry,
+tag, generated prerelease version, and copyable dependency snippets. It also
+packs tarballs for audit under `dist/internal-npm/tarballs`, but consumer apps
+should not copy those `file:` paths for active first-party development.
+
+The local Verdaccio registry state is developer tool state, not distribution
+output. By default `registry:local` stores config, auth, and package storage
+under `~/.agentos/local-registry`; set `AGENTOS_LOCAL_REGISTRY_ROOT` only when a
+different persistent registry root is required. Do not place registry state
+under `dist/internal-npm`, because pack and publish commands own that directory.
 
 ## Release Train
 

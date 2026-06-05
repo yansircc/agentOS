@@ -169,7 +169,7 @@ export class ProviderOutputDecodeError extends Data.TaggedError(
   "agent_os.provider_output_decode_error",
 )<{
   readonly field: string;
-  readonly reason: "missing_or_invalid_usage";
+  readonly reason: "missing_or_invalid_usage" | "missing_or_invalid_field";
 }> {}
 
 export class ToolError extends Data.TaggedError(ABORT.TOOL_ERROR)<{

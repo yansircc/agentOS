@@ -19,27 +19,42 @@ packages instead of sharing the agentOS source workspace lockfile.
 1. Configure the private `@agent-os` registry.
 2. Install required packages with semver versions.
 3. Install required peers such as `effect`.
-4. For prepublish first-party work, run `bun run build:internal-packages` and
-   `bun run pack:internal` in agentOS.
-5. Read `dist/internal-npm/install-manifest.json`.
-6. Copy the required `dependencies` and `overrides` entries into the consumer
-   app. Use the manifest `spec` values, not `file:` package directories.
-   Manifest specs point at content-addressed `.tgz` files so package managers
-   do not reuse stale same-version tarballs after a local repack.
+4. For prepublish first-party work, run a local registry channel:
+   `bun run registry:local`, then `bun run publish:local` in agentOS.
+5. Read `dist/internal-npm/local-channel.json`.
+6. Copy the required `dependencies` entries into the consumer app. Use the
+   logical tag value, for example `agentos-dev`; do not copy worktree tarball
+   paths. Configure `@agent-os:registry` once in the consumer `.npmrc`.
 7. Run the app typecheck and tests under its own lockfile.
 
-For first-party prepublish work, use the generated internal install manifest
-instead of hand-writing tarball paths:
+For first-party prepublish work, use the local channel instead of hand-writing
+tarball paths:
 
 ```sh
-bun run pack:internal
+bun run registry:local
+bun run publish:local
 ```
 
-Copy the required `@agent-os/*` entries from
-`dist/internal-npm/install-manifest.json` into the consumer `dependencies` and
-copy the same entries into `overrides`. The manifest uses content-addressed
-`.tgz` file specs so local package managers do not silently keep a stale
-same-version tarball.
+Consumer `.npmrc`:
+
+```ini
+@agent-os:registry=http://127.0.0.1:4873
+```
+
+Consumer `package.json`:
+
+```json
+{
+  "dependencies": {
+    "@agent-os/ag-ui": "agentos-dev",
+    "@agent-os/runtime": "agentos-dev"
+  }
+}
+```
+
+Every `publish:local` call generates one unique prerelease version and moves
+the `agentos-dev` dist-tag. The consumer lockfile pins the resolved package
+version; the package manifest stays stable across worktrees.
 
 ## References
 

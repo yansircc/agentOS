@@ -22,9 +22,17 @@ import { AnthropicClient, make as makeAnthropicClient } from "@effect/ai-anthrop
 import { make as makeAnthropicLanguageModel } from "@effect/ai-anthropic/AnthropicLanguageModel";
 import { GoogleClient, make as makeGoogleClient } from "@effect/ai-google/GoogleClient";
 import { make as makeGoogleLanguageModel } from "@effect/ai-google/GoogleLanguageModel";
-import { OpenAiClient, make as makeOpenAiClient } from "@effect/ai-openai/OpenAiClient";
-import { make as makeOpenAiLanguageModel } from "@effect/ai-openai/OpenAiLanguageModel";
-import type * as HttpClient from "@effect/platform/HttpClient";
+import {
+  HttpClient as HttpClientTag,
+  type HttpClient as HttpClientService,
+} from "@effect/platform/HttpClient";
+import type { HttpClientError } from "@effect/platform/HttpClientError";
+import type { HttpBodyError } from "@effect/platform/HttpBody";
+import {
+  bodyJson as httpBodyJson,
+  post as httpPost,
+  type HttpClientRequest,
+} from "@effect/platform/HttpClientRequest";
 import { Context, Data, Effect, Layer, Schema } from "effect";
 import * as Redacted from "effect/Redacted";
 import type * as Scope from "effect/Scope";
@@ -45,7 +53,11 @@ import {
   RefResolverService,
   resolveStringMaterial,
 } from "@agent-os/kernel/ref-resolver";
-import { UpstreamFailure } from "@agent-os/kernel/errors";
+import {
+  ProviderHttpFailure,
+  ProviderOutputDecodeError,
+  UpstreamFailure,
+} from "@agent-os/kernel/errors";
 import { LlmTransport, type LlmCallOptions } from "@agent-os/runtime";
 
 export type EffectAiSupportedRoute = Extract<
@@ -53,8 +65,19 @@ export type EffectAiSupportedRoute = Extract<
   { readonly kind: "openai-chat-compatible" | "anthropic-messages" | "gemini-generate-content" }
 >;
 
-export interface EffectAiResolvedRoute {
-  readonly route: EffectAiSupportedRoute;
+type EffectAiLanguageModelRoute = Exclude<
+  EffectAiSupportedRoute,
+  { readonly kind: "openai-chat-compatible" }
+>;
+type OpenAiChatCompatibleRoute = Extract<
+  EffectAiSupportedRoute,
+  { readonly kind: "openai-chat-compatible" }
+>;
+
+export interface EffectAiResolvedRoute<
+  Route extends EffectAiSupportedRoute = EffectAiSupportedRoute,
+> {
+  readonly route: Route;
   readonly endpoint: string;
   readonly credential: string;
 }
@@ -114,11 +137,69 @@ export type EffectAiAdapterError =
   | EffectAiAborted;
 
 export type EffectAiLanguageModelFactory<R = never> = (
-  input: EffectAiResolvedRoute,
+  input: EffectAiResolvedRoute<EffectAiLanguageModelRoute>,
 ) => Effect.Effect<LanguageModelService, unknown, R>;
 
 export const EFFECT_AI_TRANSPORT_ADAPTER_VERSION = "effect-ai-transport-v1";
 const EFFECT_AI_PROVIDER_OUTPUT_ADAPTER_VERSION = "effect-ai-output-v1";
+const OPENAI_CHAT_PROVIDER_OUTPUT_ADAPTER_VERSION = "openai-chat-completions-output-v1";
+
+const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
+const stringField = (
+  record: Readonly<Record<string, unknown>>,
+  field: string,
+): string | undefined => {
+  const value = record[field];
+  return typeof value === "string" ? value : undefined;
+};
+
+const numberField = (
+  record: Readonly<Record<string, unknown>>,
+  field: string,
+): number | undefined => {
+  const value = record[field];
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+};
+
+const arrayField = (
+  record: Readonly<Record<string, unknown>>,
+  field: string,
+): ReadonlyArray<unknown> | undefined => {
+  const value = record[field];
+  return Array.isArray(value) ? value : undefined;
+};
+
+const providerFlagsForStatus = (
+  status: number,
+): ReadonlyArray<"auth" | "rate_limited" | "schema" | "overloaded" | "unavailable"> => {
+  if (status === 401 || status === 403) return ["auth"];
+  if (status === 429) return ["rate_limited"];
+  if (status === 400 || status === 422) return ["schema"];
+  if (status === 503) return ["unavailable"];
+  if (status >= 500) return ["overloaded"];
+  return [];
+};
+
+const providerHttpFailure = (status: number, body: unknown): ProviderHttpFailure => {
+  const error = isRecord(body) && isRecord(body.error) ? body.error : undefined;
+  return new ProviderHttpFailure({
+    provider: "openai",
+    status,
+    ...(error !== undefined && typeof error.code === "string" ? { code: error.code } : {}),
+    ...(error !== undefined && typeof error.type === "string" ? { type: error.type } : {}),
+    flags: providerFlagsForStatus(status),
+  });
+};
+
+const decodeFailure = (field: string): ProviderOutputDecodeError =>
+  new ProviderOutputDecodeError({ field, reason: "missing_or_invalid_field" });
+
+const usageDecodeFailure = (field: string): ProviderOutputDecodeError =>
+  new ProviderOutputDecodeError({ field, reason: "missing_or_invalid_usage" });
+
+const withoutTrailingSlash = (value: string): string => value.replace(/\/$/, "");
 
 const parseJsonOrText = (
   value: string | null,
@@ -375,6 +456,158 @@ const withAbortSignal = <A, E, R>(
   return Effect.raceFirst(effect, abort);
 };
 
+const openAiToolFromDefinition = (definition: ToolDefinition) => ({
+  type: "function" as const,
+  function: {
+    name: definition.function.name,
+    description: definition.function.description,
+    parameters: definition.function.parameters.projections.openai,
+  },
+});
+
+const openAiChatBodyFromRequest = (request: LlmRequest): Readonly<Record<string, unknown>> => ({
+  model: request.route.modelId,
+  messages: request.messages,
+  ...(request.tools === undefined || request.tools.length === 0
+    ? {}
+    : { tools: request.tools.map(openAiToolFromDefinition) }),
+  ...(request.tool_choice === undefined ? {} : { tool_choice: request.tool_choice }),
+  stream: false,
+});
+
+const openAiChatRequest = (
+  resolved: EffectAiResolvedRoute<OpenAiChatCompatibleRoute>,
+  request: LlmRequest,
+): Effect.Effect<HttpClientRequest, HttpBodyError> =>
+  httpPost(`${withoutTrailingSlash(resolved.endpoint)}/chat/completions`, {
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${resolved.credential}`,
+      "Content-Type": "application/json",
+    },
+  }).pipe(httpBodyJson(openAiChatBodyFromRequest(request)));
+
+const responseJsonOrEmpty = <E>(response: {
+  readonly json: Effect.Effect<unknown, E>;
+}): Effect.Effect<unknown> => response.json.pipe(Effect.orElseSucceed(() => ({})));
+
+const normalizeOpenAiChatUsage = (
+  body: Readonly<Record<string, unknown>>,
+): Effect.Effect<LlmUsage, ProviderOutputDecodeError> =>
+  Effect.gen(function* () {
+    const usage = body.usage;
+    if (!isRecord(usage)) return yield* usageDecodeFailure("usage");
+    const promptTokens = numberField(usage, "prompt_tokens") ?? numberField(usage, "promptTokens");
+    const completionTokens =
+      numberField(usage, "completion_tokens") ?? numberField(usage, "completionTokens");
+    const totalTokens = numberField(usage, "total_tokens") ?? numberField(usage, "totalTokens");
+    if (promptTokens === undefined) return yield* usageDecodeFailure("usage.prompt_tokens");
+    if (completionTokens === undefined) {
+      return yield* usageDecodeFailure("usage.completion_tokens");
+    }
+    if (totalTokens === undefined) return yield* usageDecodeFailure("usage.total_tokens");
+    return { promptTokens, completionTokens, totalTokens };
+  });
+
+const firstOpenAiChatMessage = (
+  body: Readonly<Record<string, unknown>>,
+): Effect.Effect<Readonly<Record<string, unknown>>, ProviderOutputDecodeError> =>
+  Effect.gen(function* () {
+    const choices = arrayField(body, "choices");
+    const firstChoice = choices?.[0];
+    if (!isRecord(firstChoice)) return yield* decodeFailure("choices[0]");
+    const message = firstChoice.message;
+    if (!isRecord(message)) return yield* decodeFailure("choices[0].message");
+    return message;
+  });
+
+const openAiChatReasoningPresent = (message: Readonly<Record<string, unknown>>): boolean =>
+  (typeof message.reasoning === "string" && message.reasoning.length > 0) ||
+  (Array.isArray(message.reasoning_details) && message.reasoning_details.length > 0);
+
+const normalizeOpenAiToolCall = (
+  raw: unknown,
+  index: number,
+): Effect.Effect<LlmToolCall, ProviderOutputDecodeError> =>
+  Effect.gen(function* () {
+    if (!isRecord(raw)) return yield* decodeFailure(`choices[0].message.tool_calls[${index}]`);
+    const fn = raw.function;
+    if (!isRecord(fn)) {
+      return yield* decodeFailure(`choices[0].message.tool_calls[${index}].function`);
+    }
+    const id = stringField(raw, "id");
+    const type = stringField(raw, "type");
+    const name = stringField(fn, "name");
+    const args = stringField(fn, "arguments");
+    if (id === undefined) return yield* decodeFailure(`choices[0].message.tool_calls[${index}].id`);
+    if (type !== "function") {
+      return yield* decodeFailure(`choices[0].message.tool_calls[${index}].type`);
+    }
+    if (name === undefined) {
+      return yield* decodeFailure(`choices[0].message.tool_calls[${index}].function.name`);
+    }
+    if (args === undefined) {
+      return yield* decodeFailure(`choices[0].message.tool_calls[${index}].function.arguments`);
+    }
+    return {
+      id,
+      type: "function",
+      function: { name, arguments: args },
+    };
+  });
+
+const normalizeOpenAiChatCompatibleResponse = (
+  body: unknown,
+): Effect.Effect<LlmResponse, ProviderOutputDecodeError> =>
+  Effect.gen(function* () {
+    if (!isRecord(body)) return yield* decodeFailure("response");
+    const usage = yield* normalizeOpenAiChatUsage(body);
+    const message = yield* firstOpenAiChatMessage(body);
+    const items: LlmOutputItem[] = [];
+    if (openAiChatReasoningPresent(message)) items.push({ type: "reasoning", redacted: true });
+    const content = stringField(message, "content");
+    if (content !== undefined && content.length > 0) items.push({ type: "message", text: content });
+    const refusal = stringField(message, "refusal");
+    if (refusal !== undefined && refusal.length > 0) {
+      items.push({ type: "refusal", reason: refusal });
+    }
+    const toolCalls = arrayField(message, "tool_calls") ?? [];
+    for (let index = 0; index < toolCalls.length; index += 1) {
+      items.push({
+        type: "tool_call",
+        call: yield* normalizeOpenAiToolCall(toolCalls[index], index),
+      });
+    }
+    return { items, usage };
+  });
+
+const callOpenAiChatCompatible = (
+  httpClient: HttpClientService,
+  resolved: EffectAiResolvedRoute<OpenAiChatCompatibleRoute>,
+  request: LlmRequest,
+  options: LlmCallOptions = {},
+): Effect.Effect<LlmResponse, UpstreamFailure> =>
+  Effect.gen(function* () {
+    const providerRequest = yield* openAiChatRequest(resolved, request);
+    const response = yield* withAbortSignal(httpClient.execute(providerRequest), options.signal);
+    const body = yield* responseJsonOrEmpty(response);
+    if (response.status < 200 || response.status >= 300) {
+      return yield* providerHttpFailure(response.status, body);
+    }
+    return yield* normalizeOpenAiChatCompatibleResponse(body);
+  }).pipe(
+    Effect.mapError(
+      (
+        cause:
+          | HttpBodyError
+          | HttpClientError
+          | EffectAiAborted
+          | ProviderHttpFailure
+          | ProviderOutputDecodeError,
+      ) => new UpstreamFailure({ cause }),
+    ),
+  );
+
 export const callEffectAiLanguageModel = (
   model: LanguageModelService,
   request: LlmRequest,
@@ -412,20 +645,10 @@ export const resolveEffectAiRoute = (
   });
 
 export const defaultEffectAiLanguageModelFactory: EffectAiLanguageModelFactory<
-  HttpClient.HttpClient | Scope.Scope
+  HttpClientService | Scope.Scope
 > = (input) =>
   Effect.gen(function* () {
     switch (input.route.kind) {
-      case "openai-chat-compatible": {
-        const client = yield* makeOpenAiClient({
-          apiUrl: input.endpoint,
-          apiKey: Redacted.make(input.credential),
-        });
-        return yield* makeOpenAiLanguageModel({
-          model: input.route.modelId,
-          config: { strict: false },
-        }).pipe(Effect.provideService(OpenAiClient, client));
-      }
       case "anthropic-messages": {
         const client = yield* makeAnthropicClient({
           apiUrl: input.endpoint,
@@ -450,16 +673,23 @@ export const defaultEffectAiLanguageModelFactory: EffectAiLanguageModelFactory<
 
 export const makeEffectAiLlmTransportLayer = <R>(
   modelFactory: EffectAiLanguageModelFactory<R> = defaultEffectAiLanguageModelFactory as never,
-): Layer.Layer<LlmTransport, never, RefResolverService | R> =>
+): Layer.Layer<LlmTransport, never, RefResolverService | HttpClientService | R> =>
   Layer.effect(
     LlmTransport,
     Effect.gen(function* () {
       const refs = yield* RefResolverService;
+      const httpClient = yield* HttpClientTag;
       const context = yield* Effect.context<R>();
       return {
         describeRoute: (route) => ({
-          providerOutputAdapterId: `${route.kind}@${EFFECT_AI_PROVIDER_OUTPUT_ADAPTER_VERSION}`,
-          providerOutputAdapterVersion: EFFECT_AI_PROVIDER_OUTPUT_ADAPTER_VERSION,
+          providerOutputAdapterId:
+            route.kind === "openai-chat-compatible"
+              ? `${route.kind}@${OPENAI_CHAT_PROVIDER_OUTPUT_ADAPTER_VERSION}`
+              : `${route.kind}@${EFFECT_AI_PROVIDER_OUTPUT_ADAPTER_VERSION}`,
+          providerOutputAdapterVersion:
+            route.kind === "openai-chat-compatible"
+              ? OPENAI_CHAT_PROVIDER_OUTPUT_ADAPTER_VERSION
+              : EFFECT_AI_PROVIDER_OUTPUT_ADAPTER_VERSION,
           transportAdapterId: `effect-ai@${EFFECT_AI_TRANSPORT_ADAPTER_VERSION}`,
           transportAdapterVersion: EFFECT_AI_TRANSPORT_ADAPTER_VERSION,
         }),
@@ -470,7 +700,23 @@ export const makeEffectAiLlmTransportLayer = <R>(
                 cause instanceof EffectAiUnsupportedRoute ? new UpstreamFailure({ cause }) : cause,
               ),
             );
-            const model = yield* modelFactory(resolved).pipe(
+            if (resolved.route.kind === "openai-chat-compatible") {
+              return yield* callOpenAiChatCompatible(
+                httpClient,
+                {
+                  route: resolved.route,
+                  endpoint: resolved.endpoint,
+                  credential: resolved.credential,
+                },
+                request,
+                options,
+              );
+            }
+            const model = yield* modelFactory({
+              route: resolved.route,
+              endpoint: resolved.endpoint,
+              credential: resolved.credential,
+            }).pipe(
               Effect.provide(context),
               Effect.mapError((cause) => new UpstreamFailure({ cause })),
             );

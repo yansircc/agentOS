@@ -353,43 +353,25 @@ const facadeLookup = defineTool({
 
 export const makeFacadeSubmitChatResponse = (): Response =>
   Response.json({
-    id: "resp_facade_submit",
-    object: "response",
-    status: "completed",
+    id: "chatcmpl_facade_submit",
+    object: "chat.completion",
     model: "gpt-4.1-mini",
-    created_at: 1_700_000_000,
-    error: null,
-    incomplete_details: null,
-    output: [
+    created: 1_700_000_000,
+    choices: [
       {
-        id: "msg_facade_submit",
-        type: "message",
-        status: "completed",
-        role: "assistant",
-        content: [
-          {
-            type: "output_text",
-            text: "facade done",
-            annotations: [],
-          },
-        ],
+        index: 0,
+        message: {
+          role: "assistant",
+          content: "facade done",
+        },
+        finish_reason: "stop",
       },
     ],
-    instructions: null,
-    output_text: "facade done",
     usage: {
-      input_tokens: 3,
-      input_tokens_details: { cached_tokens: 0 },
-      output_tokens: 4,
-      output_tokens_details: { reasoning_tokens: 0 },
+      prompt_tokens: 3,
+      completion_tokens: 4,
       total_tokens: 7,
     },
-    parallel_tool_calls: true,
-    tools: [],
-    tool_choice: "auto",
-    metadata: null,
-    temperature: null,
-    top_p: null,
   });
 
 export const FacadeSubmitTestDO = defineAgentDO<CloudflareAgentEnv>({

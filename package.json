@@ -36,7 +36,9 @@
     "pack:internal": "node tooling/distribution/distribution.mjs pack",
     "check:distribution": "node tooling/distribution/distribution.mjs check",
     "test:internal-consumer": "node tooling/distribution/distribution.mjs test-consumer",
-    "publish:internal": "node tooling/distribution/distribution.mjs publish"
+    "publish:internal": "node tooling/distribution/distribution.mjs publish",
+    "registry:local": "node tooling/distribution/distribution.mjs local-registry",
+    "publish:local": "node tooling/distribution/distribution.mjs publish-local"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "catalog:",
