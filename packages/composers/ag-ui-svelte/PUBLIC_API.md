@@ -7,8 +7,10 @@ Status: 0.2.x active development for Svelte AG-UI consumption helpers. Public ex
 ## Public exports
 
 - `.:AgUiFrame`
+- `.:AgUiActivity`
 - `.:AgUiFrameProjection`
 - `.:AgUiFrameStore`
+- `.:agUiActivitiesReadable`
 - `.:agUiProjectionReadable`
 - `.:createAgUiSvelteFrameStore`
 

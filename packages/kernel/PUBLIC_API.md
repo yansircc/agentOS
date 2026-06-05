@@ -284,6 +284,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `./types:EventHandler`
 - `./types:EventQueryOptions`
 - `./types:LedgerEvent`
+- `./types:LedgerEventSchema`
 - `./types:LedgerEventRpc`
 - `./types:QuotaState`
 - `.:DurableTriggerAcquireCancelled`
@@ -311,6 +312,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `./types:ScheduledEventSpec`
 - `./types:StreamEventsOptions`
 - `./types:TraceContext`
+- `./types:decodeLedgerEvent`
 - `.:ABORT`
 - `.:ADMITTER_ERROR_REASON_PREFIX`
 - `.:AGENT_SCHEMA_FINGERPRINT_VERSION`
@@ -393,6 +395,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:InvalidScheduleAt`
 - `.:JsonStringifyError`
 - `.:LedgerEvent`
+- `.:LedgerEventSchema`
 - `.:LedgerEventRpc`
 - `.:LivedClaim`
 - `.:LlmMessage`
@@ -481,6 +484,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:buildContextPack`
 - `.:canonicalAgentSchemaJson`
 - `.:credentialMaterialRef`
+- `.:decodeLedgerEvent`
 - `.:decodeToolArgs`
 - `.:defineBoundaryContract`
 - `.:defineCarrier`

@@ -284,6 +284,7 @@ title: "@agent-os/kernel Public API Intent"
 - `./types:EventHandler`
 - `./types:EventQueryOptions`
 - `./types:LedgerEvent`
+- `./types:LedgerEventSchema`
 - `./types:LedgerEventRpc`
 - `./types:QuotaState`
 - `.:DurableTriggerAcquireCancelled`
@@ -311,6 +312,7 @@ title: "@agent-os/kernel Public API Intent"
 - `./types:ScheduledEventSpec`
 - `./types:StreamEventsOptions`
 - `./types:TraceContext`
+- `./types:decodeLedgerEvent`
 - `.:ABORT`
 - `.:ADMITTER_ERROR_REASON_PREFIX`
 - `.:AGENT_SCHEMA_FINGERPRINT_VERSION`
@@ -393,6 +395,7 @@ title: "@agent-os/kernel Public API Intent"
 - `.:InvalidScheduleAt`
 - `.:JsonStringifyError`
 - `.:LedgerEvent`
+- `.:LedgerEventSchema`
 - `.:LedgerEventRpc`
 - `.:LivedClaim`
 - `.:LlmMessage`
@@ -481,6 +484,7 @@ title: "@agent-os/kernel Public API Intent"
 - `.:buildContextPack`
 - `.:canonicalAgentSchemaJson`
 - `.:credentialMaterialRef`
+- `.:decodeLedgerEvent`
 - `.:decodeToolArgs`
 - `.:defineBoundaryContract`
 - `.:defineCarrier`

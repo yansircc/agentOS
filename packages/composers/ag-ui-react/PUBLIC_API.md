@@ -7,9 +7,11 @@ Status: 0.2.x active development for React AG-UI consumption helpers. Public exp
 ## Public exports
 
 - `.:AgUiFrame`
+- `.:AgUiActivity`
 - `.:AgUiFrameProjection`
 - `.:AgUiFrameStore`
 - `.:createAgUiReactFrameStore`
+- `.:useAgUiActivities`
 - `.:useAgUiFrameStore`
 - `.:useAgUiProjection`
 

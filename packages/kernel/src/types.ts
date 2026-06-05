@@ -8,6 +8,7 @@
  * ScheduledEventSpec — argument to the runtime client scheduleEvent method.
  */
 
+import { Schema } from "effect";
 import type { ScopeRef } from "./effect-claim";
 import type { BindingMaterialRef } from "./material-ref";
 import type { TraceContext } from "./trace-context";
@@ -26,6 +27,19 @@ export interface LedgerEvent {
   readonly scope: string;
   readonly payload: unknown;
 }
+
+const ledgerEventId = Schema.Number.pipe(Schema.int(), Schema.greaterThanOrEqualTo(1));
+const ledgerEventTimestamp = Schema.Number.pipe(Schema.finite(), Schema.greaterThanOrEqualTo(0));
+
+export const LedgerEventSchema: Schema.Schema<LedgerEvent> = Schema.Struct({
+  id: ledgerEventId,
+  ts: ledgerEventTimestamp,
+  kind: Schema.String,
+  scope: Schema.String,
+  payload: Schema.Unknown,
+});
+
+export const decodeLedgerEvent = Schema.decodeUnknownSync(LedgerEventSchema);
 
 export interface LedgerEventRpc {
   id: number;

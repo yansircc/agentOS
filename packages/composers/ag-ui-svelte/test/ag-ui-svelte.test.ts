@@ -39,12 +39,17 @@ const frames: ReadonlyArray<AgUiFrame> = [
 
 describe("@agent-os/ag-ui-svelte", () => {
   it("consumes the shared AG-UI frame stream through Svelte stores", () => {
-    const { store, projection } = createAgUiSvelteFrameStore(frames);
+    const { store, projection, activities } = createAgUiSvelteFrameStore(frames);
     const snapshots: unknown[] = [];
+    const activitySnapshots: unknown[] = [];
     const unsubscribe = projection.subscribe((value) => {
       snapshots.push(value);
     });
+    const unsubscribeActivities = activities.subscribe((value) => {
+      activitySnapshots.push(value);
+    });
     store.append({ type: "RUN_FINISHED", threadId: "thread-1", runId: "1" });
+    unsubscribeActivities();
     unsubscribe();
     expect(snapshots.at(0)).toMatchObject({
       runId: "1",
@@ -61,6 +66,12 @@ describe("@agent-os/ag-ui-svelte", () => {
       ],
     });
     expect(snapshots.at(-1)).toMatchObject({ status: "completed" });
+    expect(activitySnapshots.at(-1)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "message", text: "Hello" }),
+        expect.objectContaining({ kind: "tool_call", status: "completed" }),
+      ]),
+    );
   });
 
   it("does not import runtime events or raw ledger payload surfaces", () => {

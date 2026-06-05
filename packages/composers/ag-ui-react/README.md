@@ -18,10 +18,11 @@ decode runtime events, or own AG-UI frame mapping semantics.
 ## Minimal Usage
 
 ```ts
-import { useAgUiProjection } from "@agent-os/ag-ui-react";
+import { useAgUiActivities, useAgUiProjection } from "@agent-os/ag-ui-react";
 ```
 
 Use `createAgUiReactFrameStore` when a product wants appendable frame state.
+Use `useAgUiActivities` for a neutral activity feed derived from AG-UI frames.
 
 ## Verification
 

@@ -98,6 +98,12 @@
         "rules": ["EFF402"]
       },
       {
+        "path": "packages/backends/cloudflare-do/test/do-rpc.test.ts",
+        "owner": "@agent-os/backend-cloudflare-do-tests",
+        "reason": "Durable Object RPC typed-client contract test owns Response construction to prove sync Response-returning stub methods are exposed as Promise<Response>",
+        "rules": ["EFF402"]
+      },
+      {
         "path": "packages/backends/cloudflare-do/test/test-worker.ts",
         "owner": "@agent-os/backend-cloudflare-do-tests",
         "reason": "Cloudflare worker test adapter owns Response construction",

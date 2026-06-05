@@ -1,5 +1,6 @@
+import { Schema } from "effect";
 import type { Tool } from "@agent-os/kernel/tools";
-import type { LedgerEvent } from "@agent-os/kernel/types";
+import { decodeLedgerEvent, type LedgerEvent } from "@agent-os/kernel/types";
 import type { SubmitSpec } from "@agent-os/runtime";
 import { isRuntimeAbortEventKind } from "@agent-os/runtime/runtime-events";
 import {
@@ -37,19 +38,21 @@ type BaseAgUiFrame<T extends AgUiEventType> = {
   readonly timestamp?: number;
 };
 
-export type AgUiMessage =
-  | {
-      readonly id: string;
-      readonly role: "developer" | "system" | "assistant" | "user" | "tool";
-      readonly content?: string;
-      readonly name?: string;
-    }
-  | {
-      readonly id: string;
-      readonly role: "reasoning" | "activity";
-      readonly content?: string;
-      readonly name?: string;
-    };
+export type AgUiMessageRole =
+  | "developer"
+  | "system"
+  | "assistant"
+  | "user"
+  | "tool"
+  | "reasoning"
+  | "activity";
+
+export type AgUiMessage = {
+  readonly id: string;
+  readonly role: AgUiMessageRole;
+  readonly content?: string;
+  readonly name?: string;
+};
 
 export type AgUiContext = {
   readonly description: string;
@@ -78,6 +81,59 @@ export type AgUiRunAgentInput = {
     readonly payload?: unknown;
   }>;
 };
+
+const unknownRecord = Schema.Record({ key: Schema.String, value: Schema.Unknown });
+
+export const AgUiMessageRoleSchema: Schema.Schema<AgUiMessageRole> = Schema.Literal(
+  "developer",
+  "system",
+  "assistant",
+  "user",
+  "tool",
+  "reasoning",
+  "activity",
+);
+
+export const AgUiMessageSchema: Schema.Schema<AgUiMessage> = Schema.Struct({
+  id: Schema.String,
+  role: AgUiMessageRoleSchema,
+  content: Schema.optional(Schema.String),
+  name: Schema.optional(Schema.String),
+});
+
+export const AgUiContextSchema: Schema.Schema<AgUiContext> = Schema.Struct({
+  description: Schema.String,
+  value: Schema.String,
+});
+
+export const AgUiToolSchema: Schema.Schema<AgUiTool> = Schema.Struct({
+  name: Schema.String,
+  description: Schema.String,
+  parameters: Schema.optional(Schema.Unknown),
+  metadata: Schema.optional(unknownRecord),
+});
+
+export const AgUiResumeEntrySchema: Schema.Schema<
+  AgUiRunAgentInput["resume"] extends ReadonlyArray<infer Entry> | undefined ? Entry : never
+> = Schema.Struct({
+  interruptId: Schema.String,
+  status: Schema.Literal("resolved", "cancelled"),
+  payload: Schema.optional(Schema.Unknown),
+});
+
+export const AgUiRunAgentInputSchema: Schema.Schema<AgUiRunAgentInput> = Schema.Struct({
+  threadId: Schema.String,
+  runId: Schema.String,
+  parentRunId: Schema.optional(Schema.String),
+  state: Schema.optional(Schema.Unknown),
+  messages: Schema.Array(AgUiMessageSchema),
+  tools: Schema.optional(Schema.Array(AgUiToolSchema)),
+  context: Schema.optional(Schema.Array(AgUiContextSchema)),
+  forwardedProps: Schema.optional(unknownRecord),
+  resume: Schema.optional(Schema.Array(AgUiResumeEntrySchema)),
+});
+
+export const decodeAgUiRunAgentInput = Schema.decodeUnknownSync(AgUiRunAgentInputSchema);
 
 export type AgUiRunStartedFrame = BaseAgUiFrame<"RUN_STARTED"> & {
   readonly threadId: string;
@@ -211,6 +267,80 @@ export type AgUiFrameStore = {
   readonly appendMany: (frames: Iterable<AgUiFrame>) => void;
   readonly reset: (frames?: Iterable<AgUiFrame>) => void;
 };
+
+export type AgUiFrameMapper = (
+  frame: AgUiFrame,
+  event: LedgerEvent,
+) => AgUiFrame | null | undefined;
+
+export type AgUiLedgerEnvelopeProjectionSpec = AgUiLedgerProjectionSpec & {
+  readonly mapFrame?: AgUiFrameMapper;
+};
+
+export type AgUiLedgerEventEnvelope = {
+  readonly id: number;
+  readonly ts: number;
+  readonly kind: string;
+  readonly scope: string;
+  readonly agUiFrames: ReadonlyArray<AgUiFrame>;
+};
+
+export type AgUiLedgerEnvelopeFrame = {
+  readonly eventId: number;
+  readonly eventTs: number;
+  readonly eventKind: string;
+  readonly eventScope: string;
+  readonly frame: AgUiFrame;
+};
+
+export type AgUiActivity =
+  | {
+      readonly kind: "run";
+      readonly id: string;
+      readonly status: "started" | "finished" | "error";
+      readonly runId?: string;
+      readonly threadId?: string;
+      readonly at?: number;
+      readonly message?: string;
+      readonly code?: string;
+      readonly result?: unknown;
+    }
+  | {
+      readonly kind: "message";
+      readonly id: string;
+      readonly role: "assistant";
+      readonly text: string;
+      readonly startedAt?: number;
+      readonly updatedAt?: number;
+      readonly endedAt?: number;
+    }
+  | {
+      readonly kind: "reasoning";
+      readonly id: string;
+      readonly text: string;
+      readonly startedAt?: number;
+      readonly updatedAt?: number;
+      readonly endedAt?: number;
+    }
+  | {
+      readonly kind: "tool_call";
+      readonly id: string;
+      readonly toolCallId: string;
+      readonly name: string;
+      readonly args: string;
+      readonly result: string | null;
+      readonly status: "running" | "completed";
+      readonly startedAt?: number;
+      readonly updatedAt?: number;
+      readonly completedAt?: number;
+    }
+  | {
+      readonly kind: "custom";
+      readonly id: string;
+      readonly name: string;
+      readonly value: unknown;
+      readonly at?: number;
+    };
 
 const threadIdFor = (event: RuntimeLedgerEvent, spec: AgUiRuntimeProjectionSpec): string =>
   spec.threadId ?? event.scope;
@@ -523,6 +653,148 @@ export const projectLedgerEventsToAgUiFrames = (
   return frames;
 };
 
+export const redactAgUiToolPayloadFrame = (
+  frame: AgUiFrame,
+  replacement = "[redacted]",
+): AgUiFrame => {
+  if (frame.type === "TOOL_CALL_ARGS") return { ...frame, delta: replacement };
+  if (frame.type === "TOOL_CALL_RESULT") return { ...frame, content: replacement };
+  return frame;
+};
+
+const mapEnvelopeFrames = (
+  event: LedgerEvent,
+  frames: ReadonlyArray<AgUiFrame>,
+  mapFrame: AgUiFrameMapper | undefined,
+): ReadonlyArray<AgUiFrame> => {
+  if (mapFrame === undefined) return frames;
+  const mapped: AgUiFrame[] = [];
+  for (const frame of frames) {
+    const next = mapFrame(frame, event);
+    if (next !== null && next !== undefined) mapped.push(next);
+  }
+  return mapped;
+};
+
+export const projectLedgerEventToAgUiEnvelope = (
+  event: LedgerEvent,
+  spec: AgUiLedgerEnvelopeProjectionSpec = {},
+): AgUiLedgerEventEnvelope => {
+  const agUiFrames = projectLedgerEventsToAgUiFrames([event], spec);
+  return {
+    id: event.id,
+    ts: event.ts,
+    kind: event.kind,
+    scope: event.scope,
+    agUiFrames: mapEnvelopeFrames(event, agUiFrames, spec.mapFrame),
+  };
+};
+
+export const decodeLedgerEventToAgUiEnvelope = (
+  value: unknown,
+  spec: AgUiLedgerEnvelopeProjectionSpec = {},
+): AgUiLedgerEventEnvelope => projectLedgerEventToAgUiEnvelope(decodeLedgerEvent(value), spec);
+
+export const projectLedgerEventsToAgUiEnvelopes = (
+  events: ReadonlyArray<LedgerEvent>,
+  spec: AgUiLedgerEnvelopeProjectionSpec = {},
+): ReadonlyArray<AgUiLedgerEventEnvelope> =>
+  [...events]
+    .sort((left, right) => left.id - right.id)
+    .map((event) => projectLedgerEventToAgUiEnvelope(event, spec));
+
+export const framesForAgUiLedgerEnvelope = (
+  envelope: AgUiLedgerEventEnvelope,
+): ReadonlyArray<AgUiLedgerEnvelopeFrame> =>
+  envelope.agUiFrames.map((frame) => ({
+    eventId: envelope.id,
+    eventTs: envelope.ts,
+    eventKind: envelope.kind,
+    eventScope: envelope.scope,
+    frame,
+  }));
+
+export const framesForAgUiLedgerEnvelopes = (
+  envelopes: ReadonlyArray<AgUiLedgerEventEnvelope>,
+): ReadonlyArray<AgUiLedgerEnvelopeFrame> => envelopes.flatMap(framesForAgUiLedgerEnvelope);
+
+const encodeSseData = (value: unknown): string =>
+  JSON.stringify(value)
+    .split(/\r?\n/)
+    .map((line) => `data: ${line}`)
+    .join("\n");
+
+export const encodeAgUiLedgerEventEnvelopeSse = (
+  envelope: AgUiLedgerEventEnvelope,
+  eventName = "ag_ui",
+): string => `event: ${eventName}\n${encodeSseData(envelope)}\n\n`;
+
+type ParsedSseBlock = {
+  readonly event?: string;
+  readonly data: string;
+};
+
+const parseSseBlock = (block: string): ParsedSseBlock => {
+  let event: string | undefined;
+  const data: string[] = [];
+  for (const line of block.split(/\r?\n/)) {
+    if (line.startsWith("event:")) {
+      event = line.slice("event:".length).trim();
+      continue;
+    }
+    if (line.startsWith("data:")) data.push(line.slice("data:".length).trimStart());
+  }
+  return { event, data: data.join("\n") };
+};
+
+export async function* projectLedgerSseToAgUiEnvelopes(
+  body: ReadableStream<Uint8Array>,
+  spec: AgUiLedgerEnvelopeProjectionSpec = {},
+): AsyncGenerator<AgUiLedgerEventEnvelope> {
+  const decoder = new TextDecoder();
+  const reader = body.getReader();
+  let buffer = "";
+
+  const flushBlock = (block: string): AgUiLedgerEventEnvelope | null => {
+    const parsed = parseSseBlock(block);
+    if (parsed.event !== "ledger" || parsed.data.length === 0) return null;
+    return decodeLedgerEventToAgUiEnvelope(JSON.parse(parsed.data) as unknown, spec);
+  };
+
+  try {
+    while (true) {
+      const boundary = buffer.indexOf("\n\n");
+      if (boundary >= 0) {
+        const block = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + 2);
+        const envelope = flushBlock(block);
+        if (envelope !== null) yield envelope;
+        continue;
+      }
+
+      const read = await reader.read();
+      if (read.done) {
+        const tail = buffer.trim().length > 0 ? flushBlock(buffer) : null;
+        buffer = "";
+        if (tail !== null) yield tail;
+        return;
+      }
+      buffer += decoder.decode(read.value, { stream: true });
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+export async function* projectLedgerSseToAgUiSse(
+  body: ReadableStream<Uint8Array>,
+  spec: AgUiLedgerEnvelopeProjectionSpec = {},
+): AsyncGenerator<string> {
+  for await (const envelope of projectLedgerSseToAgUiEnvelopes(body, spec)) {
+    yield encodeAgUiLedgerEventEnvelopeSse(envelope);
+  }
+}
+
 export const projectAgUiFrames = (frames: Iterable<AgUiFrame>): AgUiFrameProjection => {
   const textMessages = new Map<string, { messageId: string; role: "assistant"; text: string }>();
   const toolCalls = new Map<
@@ -603,6 +875,188 @@ export const projectAgUiFrames = (frames: Iterable<AgUiFrame>): AgUiFrameProject
     toolCalls: [...toolCalls.values()],
     custom,
   };
+};
+
+export const projectAgUiFramesToActivities = (
+  frames: Iterable<AgUiFrame>,
+): ReadonlyArray<AgUiActivity> => {
+  const activities: AgUiActivity[] = [];
+  const messageIndexes = new Map<string, number>();
+  const reasoningIndexes = new Map<string, number>();
+  const toolIndexes = new Map<string, number>();
+
+  const upsertMessage = (
+    messageId: string,
+    patch: Partial<Extract<AgUiActivity, { readonly kind: "message" }>>,
+  ): void => {
+    const existingIndex = messageIndexes.get(messageId);
+    if (existingIndex === undefined) {
+      messageIndexes.set(messageId, activities.length);
+      activities.push({
+        kind: "message",
+        id: messageId,
+        role: "assistant",
+        text: "",
+        ...patch,
+      });
+      return;
+    }
+    const existing = activities[existingIndex];
+    if (existing?.kind === "message") {
+      activities[existingIndex] = { ...existing, ...patch };
+    }
+  };
+
+  const upsertReasoning = (
+    messageId: string,
+    patch: Partial<Extract<AgUiActivity, { readonly kind: "reasoning" }>>,
+  ): void => {
+    const existingIndex = reasoningIndexes.get(messageId);
+    if (existingIndex === undefined) {
+      reasoningIndexes.set(messageId, activities.length);
+      activities.push({ kind: "reasoning", id: messageId, text: "", ...patch });
+      return;
+    }
+    const existing = activities[existingIndex];
+    if (existing?.kind === "reasoning") {
+      activities[existingIndex] = { ...existing, ...patch };
+    }
+  };
+
+  const upsertTool = (
+    toolCallId: string,
+    patch: Partial<Extract<AgUiActivity, { readonly kind: "tool_call" }>>,
+  ): void => {
+    const existingIndex = toolIndexes.get(toolCallId);
+    if (existingIndex === undefined) {
+      toolIndexes.set(toolCallId, activities.length);
+      activities.push({
+        kind: "tool_call",
+        id: toolCallId,
+        toolCallId,
+        name: "",
+        args: "",
+        result: null,
+        status: "running",
+        ...patch,
+      });
+      return;
+    }
+    const existing = activities[existingIndex];
+    if (existing?.kind === "tool_call") {
+      activities[existingIndex] = { ...existing, ...patch };
+    }
+  };
+
+  let customOrdinal = 0;
+  let runOrdinal = 0;
+  for (const frame of frames) {
+    switch (frame.type) {
+      case "RUN_STARTED":
+        activities.push({
+          kind: "run",
+          id: `run:${runOrdinal++}:started`,
+          status: "started",
+          runId: frame.runId,
+          threadId: frame.threadId,
+          at: frame.timestamp,
+        });
+        break;
+      case "RUN_FINISHED":
+        activities.push({
+          kind: "run",
+          id: `run:${runOrdinal++}:finished`,
+          status: "finished",
+          runId: frame.runId,
+          threadId: frame.threadId,
+          at: frame.timestamp,
+          result: frame.result,
+        });
+        break;
+      case "RUN_ERROR":
+        activities.push({
+          kind: "run",
+          id: `run:${runOrdinal++}:error`,
+          status: "error",
+          runId: frame.runId,
+          threadId: frame.threadId,
+          at: frame.timestamp,
+          message: frame.message,
+          code: frame.code,
+        });
+        break;
+      case "TEXT_MESSAGE_START":
+        upsertMessage(frame.messageId, { startedAt: frame.timestamp });
+        break;
+      case "TEXT_MESSAGE_CONTENT": {
+        const existingIndex = messageIndexes.get(frame.messageId);
+        const existing = existingIndex === undefined ? undefined : activities[existingIndex];
+        const text = existing?.kind === "message" ? existing.text : "";
+        upsertMessage(frame.messageId, {
+          text: `${text}${frame.delta}`,
+          updatedAt: frame.timestamp,
+        });
+        break;
+      }
+      case "TEXT_MESSAGE_END":
+        upsertMessage(frame.messageId, { endedAt: frame.timestamp });
+        break;
+      case "REASONING_START":
+      case "REASONING_MESSAGE_START":
+        upsertReasoning(frame.messageId, { startedAt: frame.timestamp });
+        break;
+      case "REASONING_MESSAGE_CONTENT": {
+        const existingIndex = reasoningIndexes.get(frame.messageId);
+        const existing = existingIndex === undefined ? undefined : activities[existingIndex];
+        const text = existing?.kind === "reasoning" ? existing.text : "";
+        upsertReasoning(frame.messageId, {
+          text: `${text}${frame.delta}`,
+          updatedAt: frame.timestamp,
+        });
+        break;
+      }
+      case "REASONING_MESSAGE_END":
+      case "REASONING_END":
+        upsertReasoning(frame.messageId, { endedAt: frame.timestamp });
+        break;
+      case "TOOL_CALL_START":
+        upsertTool(frame.toolCallId, {
+          name: frame.toolCallName,
+          startedAt: frame.timestamp,
+          updatedAt: frame.timestamp,
+        });
+        break;
+      case "TOOL_CALL_ARGS": {
+        const existingIndex = toolIndexes.get(frame.toolCallId);
+        const existing = existingIndex === undefined ? undefined : activities[existingIndex];
+        const args = existing?.kind === "tool_call" ? existing.args : "";
+        upsertTool(frame.toolCallId, { args: `${args}${frame.delta}`, updatedAt: frame.timestamp });
+        break;
+      }
+      case "TOOL_CALL_END":
+        upsertTool(frame.toolCallId, { updatedAt: frame.timestamp });
+        break;
+      case "TOOL_CALL_RESULT":
+        upsertTool(frame.toolCallId, {
+          result: frame.content,
+          status: "completed",
+          completedAt: frame.timestamp,
+          updatedAt: frame.timestamp,
+        });
+        break;
+      case "CUSTOM":
+        activities.push({
+          kind: "custom",
+          id: `custom:${customOrdinal++}:${frame.name}`,
+          name: frame.name,
+          value: frame.value,
+          at: frame.timestamp,
+        });
+        break;
+    }
+  }
+
+  return activities;
 };
 
 export const createAgUiFrameStore = (initialFrames: Iterable<AgUiFrame> = []): AgUiFrameStore => {

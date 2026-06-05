@@ -18,8 +18,12 @@ decode runtime events, or own AG-UI frame mapping semantics.
 ## Minimal Usage
 
 ```ts
-import { createAgUiSvelteFrameStore } from "@agent-os/ag-ui-svelte";
+import { agUiActivitiesReadable, createAgUiSvelteFrameStore } from "@agent-os/ag-ui-svelte";
 ```
+
+`createAgUiSvelteFrameStore` exposes both the frame projection and the neutral
+activity feed. `agUiActivitiesReadable` wraps a fixed frame array when no
+appendable store is needed.
 
 ## Verification
 

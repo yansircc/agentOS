@@ -7,8 +7,10 @@ title: "@agent-os/ag-ui-svelte Public API Intent"
 ## Public exports
 
 - `.:AgUiFrame`
+- `.:AgUiActivity`
 - `.:AgUiFrameProjection`
 - `.:AgUiFrameStore`
+- `.:agUiActivitiesReadable`
 - `.:agUiProjectionReadable`
 - `.:createAgUiSvelteFrameStore`
 

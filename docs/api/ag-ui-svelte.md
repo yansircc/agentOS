@@ -3,8 +3,10 @@
 ## Public exports
 
 - `.:AgUiFrame`
+- `.:AgUiActivity`
 - `.:AgUiFrameProjection`
 - `.:AgUiFrameStore`
+- `.:agUiActivitiesReadable`
 - `.:agUiProjectionReadable`
 - `.:createAgUiSvelteFrameStore`
 

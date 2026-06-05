@@ -280,6 +280,7 @@
 - `./types:EventHandler`
 - `./types:EventQueryOptions`
 - `./types:LedgerEvent`
+- `./types:LedgerEventSchema`
 - `./types:LedgerEventRpc`
 - `./types:QuotaState`
 - `.:DurableTriggerAcquireCancelled`
@@ -307,6 +308,7 @@
 - `./types:ScheduledEventSpec`
 - `./types:StreamEventsOptions`
 - `./types:TraceContext`
+- `./types:decodeLedgerEvent`
 - `.:ABORT`
 - `.:ADMITTER_ERROR_REASON_PREFIX`
 - `.:AGENT_SCHEMA_FINGERPRINT_VERSION`
@@ -389,6 +391,7 @@
 - `.:InvalidScheduleAt`
 - `.:JsonStringifyError`
 - `.:LedgerEvent`
+- `.:LedgerEventSchema`
 - `.:LedgerEventRpc`
 - `.:LivedClaim`
 - `.:LlmMessage`
@@ -477,6 +480,7 @@
 - `.:buildContextPack`
 - `.:canonicalAgentSchemaJson`
 - `.:credentialMaterialRef`
+- `.:decodeLedgerEvent`
 - `.:decodeToolArgs`
 - `.:defineBoundaryContract`
 - `.:defineCarrier`

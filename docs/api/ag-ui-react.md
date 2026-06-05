@@ -3,9 +3,11 @@
 ## Public exports
 
 - `.:AgUiFrame`
+- `.:AgUiActivity`
 - `.:AgUiFrameProjection`
 - `.:AgUiFrameStore`
 - `.:createAgUiReactFrameStore`
+- `.:useAgUiActivities`
 - `.:useAgUiFrameStore`
 - `.:useAgUiProjection`
 

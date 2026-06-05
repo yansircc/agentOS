@@ -71,4 +71,4 @@ export * from "./runtime-scope";
 export * from "./settlement-contract";
 export * from "./tools";
 export * from "./trace-context";
-export type * from "./types";
+export * from "./types";

@@ -16,14 +16,25 @@ replace agentOS tool algebra, or become runtime source truth.
 
 ## Minimal Usage
 
-Project committed ledger events into AG-UI frames after runtime payloads decode:
+Decode AG-UI run input at unknown boundaries with the package-owned Effect
+Schema:
 
 ```ts
-import { projectLedgerEventsToAgUiFrames } from "@agent-os/ag-ui";
+import { AgUiRunAgentInputSchema, decodeAgUiRunAgentInput } from "@agent-os/ag-ui";
+```
+
+Project committed ledger events into AG-UI frames or cursor-preserving
+envelopes after runtime payloads decode:
+
+```ts
+import { projectLedgerEventsToAgUiFrames, decodeLedgerEventToAgUiEnvelope } from "@agent-os/ag-ui";
 ```
 
 Use `projectToolToAgUiTool` to expose AG-UI tool declarations generated from
 `AgentSchema.projections.agUi`.
+
+Use `projectAgUiFramesToActivities` for a neutral activity feed. React and
+Svelte adapters consume that projection without parsing ledger payloads.
 
 ## Verification
 

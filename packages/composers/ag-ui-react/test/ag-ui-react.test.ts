@@ -66,6 +66,7 @@ describe("@agent-os/ag-ui-react", () => {
 
   it("does not import runtime events or raw ledger payload surfaces", () => {
     const source = readFileSync(resolve("src/index.ts"), "utf8");
+    expect(source).toContain("useAgUiActivities");
     expect(source).not.toContain("@agent-os/runtime");
     expect(source).not.toContain("decodeRuntimeLedgerEvent");
     expect(source).not.toContain("RUNTIME_EVENT_KIND");

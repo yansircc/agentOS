@@ -14,10 +14,21 @@ import {
 import { settleToolExecuted } from "@agent-os/runtime";
 import {
   AG_UI_WIRE_COMPATIBILITY,
+  AgUiRunAgentInputSchema,
   agUiRunAgentInputToSubmitSpec,
+  decodeAgUiRunAgentInput,
+  decodeLedgerEventToAgUiEnvelope,
+  encodeAgUiLedgerEventEnvelopeSse,
+  framesForAgUiLedgerEnvelope,
+  projectAgUiFramesToActivities,
   projectAgUiFrames,
+  projectLedgerEventToAgUiEnvelope,
   projectLedgerEventsToAgUiFrames,
+  projectLedgerSseToAgUiEnvelopes,
+  projectLedgerSseToAgUiSse,
   projectToolToAgUiTool,
+  redactAgUiToolPayloadFrame,
+  type AgUiActivity,
   type AgUiFrame,
   type AgUiRunAgentInput,
 } from "../src/index";
@@ -105,12 +116,47 @@ const transcript = (): ReadonlyArray<LedgerEvent> => [
   commit(5, agentRunCompletedEvent({ scope, runId: 1, event: "weather.delivered" })),
 ];
 
+const collectAsync = async <A>(source: AsyncIterable<A>): Promise<ReadonlyArray<A>> => {
+  const values: A[] = [];
+  for await (const value of source) values.push(value);
+  return values;
+};
+
+const streamOf = (text: string): ReadableStream<Uint8Array> =>
+  new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(text));
+      controller.close();
+    },
+  });
+
 describe("@agent-os/ag-ui", () => {
   it("records the pinned AG-UI wire compatibility contract", () => {
     expect(AG_UI_WIRE_COMPATIBILITY).toEqual({
       core: "@ag-ui/core@0.0.55",
       client: "@ag-ui/client@0.0.55",
     });
+  });
+
+  it("owns the AG-UI run input schema for unknown boundaries", () => {
+    const input = decodeAgUiRunAgentInput({
+      threadId: "thread-1",
+      runId: "client-run-1",
+      messages: [{ id: "m1", role: "user", content: "ship" }],
+      tools: [{ name: "lookup", description: "Lookup", parameters: { type: "object" } }],
+      forwardedProps: { safe: true },
+    });
+    expect(input.messages.at(0)?.content).toBe("ship");
+
+    const standard = Schema.standardSchemaV1(AgUiRunAgentInputSchema);
+    expect(standard["~standard"].validate(input)).toEqual({ value: input });
+    expect(() =>
+      decodeAgUiRunAgentInput({
+        threadId: "thread-1",
+        runId: "client-run-1",
+        messages: [{ id: "m1", role: "customer", content: "invalid role" }],
+      }),
+    ).toThrow();
   });
 
   it("maps typed runtime events into AG-UI frames without raw payload parsing", () => {
@@ -256,6 +302,95 @@ describe("@agent-os/ag-ui", () => {
         },
       ],
     });
+  });
+
+  it("projects a decoded ledger row into an AG-UI envelope with optional frame redaction", () => {
+    const event = transcript()[2]!;
+    const envelope = projectLedgerEventToAgUiEnvelope(event, {
+      mapFrame: (frame) => redactAgUiToolPayloadFrame(frame, "[hidden]"),
+    });
+    expect(envelope).toMatchObject({
+      id: 3,
+      ts: 30,
+      kind: "llm.response",
+      scope,
+    });
+    expect(envelope.agUiFrames).toContainEqual({
+      type: "TOOL_CALL_ARGS",
+      timestamp: 30,
+      toolCallId: "call-1",
+      delta: "[hidden]",
+    });
+    expect(framesForAgUiLedgerEnvelope(envelope).at(0)).toMatchObject({
+      eventId: 3,
+      eventTs: 30,
+      eventKind: "llm.response",
+      eventScope: scope,
+    });
+
+    const decoded = decodeLedgerEventToAgUiEnvelope({
+      id: event.id,
+      ts: event.ts,
+      kind: event.kind,
+      scope: event.scope,
+      payload: event.payload,
+    });
+    expect(decoded.agUiFrames.length).toBeGreaterThan(0);
+    expect(() => decodeLedgerEventToAgUiEnvelope({ id: "3", payload: {} })).toThrow();
+  });
+
+  it("projects ledger SSE into AG-UI envelopes and AG-UI SSE chunks", async () => {
+    const ledgerEvent = transcript()[0]!;
+    const ledgerSse = [
+      "event: heartbeat",
+      "data: {}",
+      "",
+      "event: ledger",
+      `data: ${JSON.stringify(ledgerEvent)}`,
+      "",
+      "",
+    ].join("\n");
+    const envelopes = await collectAsync(projectLedgerSseToAgUiEnvelopes(streamOf(ledgerSse)));
+    expect(envelopes).toHaveLength(1);
+    expect(envelopes[0]).toMatchObject({ id: 1, kind: "agent.run.started" });
+
+    const chunks = await collectAsync(projectLedgerSseToAgUiSse(streamOf(ledgerSse)));
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0]).toBe(encodeAgUiLedgerEventEnvelopeSse(envelopes[0]!));
+    expect(chunks[0]).toContain("event: ag_ui");
+  });
+
+  it("projects AG-UI frames into neutral activities without web-cursor run semantics", () => {
+    const activities = projectAgUiFramesToActivities(
+      projectLedgerEventsToAgUiFrames(transcript(), { threadId: "thread-1" }),
+    );
+    expect(activities).toEqual(
+      expect.arrayContaining<AgUiActivity>([
+        {
+          kind: "message",
+          id: "agent-os:run:1:turn:0:message:0",
+          role: "assistant",
+          text: "Checking.",
+          startedAt: 30,
+          updatedAt: 30,
+          endedAt: 30,
+        },
+        {
+          kind: "tool_call",
+          id: "call-1",
+          toolCallId: "call-1",
+          name: "lookup",
+          args: '{"city":"SF"}',
+          result: '{"temperature":71}',
+          status: "completed",
+          startedAt: 30,
+          updatedAt: 40,
+          completedAt: 40,
+        },
+      ]),
+    );
+    expect(activities.some((activity) => activity.kind === "reasoning")).toBe(true);
+    expect(activities.some((activity) => activity.kind === "custom")).toBe(true);
   });
 
   it("maps aborts to AG-UI run errors with the run id retained", () => {
