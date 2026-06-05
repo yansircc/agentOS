@@ -3,12 +3,12 @@ import {
   credential,
   createAgentDurableObject,
   defineAgentDO,
-  durableObjectRpcClient,
   endpoint,
   openAIChat,
   type AgentSubmitSpec,
   type CloudflareAgentEnv,
 } from "../src";
+import { durableObjectRpcClient } from "../src/do-rpc";
 
 interface TestEnv extends CloudflareAgentEnv {
   readonly LLM_ENDPOINT: string;

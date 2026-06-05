@@ -53,6 +53,11 @@ Production drain is alarm-owned. Deterministic drain helpers are package-local
 test fixtures only; production app routes must not call them and no public
 package subpath exports them.
 
+Durable Object RPC named-stub helpers are exported from
+`@agent-os/backend-cloudflare-do/do-rpc`. Keep them out of the root backend
+barrel so browser/consumer protocol types can import the helper without pulling
+in the Durable Object implementation graph.
+
 Backend primitives stop at append-only ledger order, trigger identity, tx-local
 ledger reads, and materialized projection tables. Custom
 product SQL tables and provider idempotency key mappings stay in application

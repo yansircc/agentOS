@@ -9,6 +9,10 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./do-rpc": {
+      "types": "./src/do-rpc.ts",
+      "default": "./src/do-rpc.ts"
     }
   },
   "scripts": {

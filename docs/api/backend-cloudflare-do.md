@@ -31,8 +31,6 @@
 - `.:DefineAgentDOConfigWithoutSubmit`
 - `.:DispatchTargetNamespace`
 - `.:DispatchTargetRegistry`
-- `.:DurableObjectRpcClient`
-- `.:FunctionFree`
 - `.:GeminiGenerateContentSpec`
 - `.:HttpDispatchTargetSpec`
 - `.:LoweredMaterialBindings`
@@ -45,7 +43,6 @@
 - `.:createAgentDurableObject`
 - `.:defineAgentDO`
 - `.:durableObjectDispatchTarget`
-- `.:durableObjectRpcClient`
 - `.:durableObjectTarget`
 - `.:endpoint`
 - `.:externalResource`
@@ -55,6 +52,9 @@
 - `.:openAIChat`
 - `.:providerDispatchTarget`
 - `.:queueDispatchTarget`
+- `./do-rpc:DurableObjectRpcClient`
+- `./do-rpc:FunctionFree`
+- `./do-rpc:durableObjectRpcClient`
 
 ## Experimental exports
 
