@@ -1,7 +1,7 @@
 import { Predicate } from "effect";
 import { ANCHOR_KINDS, REJECTION_KINDS } from "./claim-kinds";
 import type { BoundaryPackage } from "./extensions";
-import type { JsonSchemaObject } from "./json-schema";
+import { validateAgainstSchema, type JsonSchemaObject } from "./json-schema-dialect";
 import {
   isAuthorityContract,
   isMaterialRequirement,
@@ -122,6 +122,11 @@ const isBoundaryEventContract = (value: unknown): value is BoundaryEventContract
   Predicate.isRecord(value) &&
   isJsonSchemaObject(value.payloadSchema) &&
   (value.claim === undefined || isBoundaryEventClaimContract(value.claim));
+
+export const validateBoundaryPayload = (
+  contract: BoundaryEventContract,
+  payload: Readonly<Record<string, unknown>>,
+): ReadonlyArray<string> => validateAgainstSchema(payload, contract.payloadSchema);
 
 const eventEntries = (
   events: unknown,

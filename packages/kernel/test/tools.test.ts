@@ -3,7 +3,6 @@ import { describe, expect, it } from "@effect/vitest";
 
 import {
   defineTool,
-  defineToolFromDefinition,
   deterministicToolInvocation,
   executeTool,
   pureToolExecution,
@@ -28,18 +27,19 @@ describe("defineTool", () => {
       execute: ({ key }) => ({ value: key }),
     });
 
-    expect(tool.definition).toEqual({
+    expect(tool.definition.function.parameters).toBe(tool.argsSchema);
+    expect(tool.definition).toMatchObject({
       type: "function",
       function: {
         name: "lookup",
         description: "Lookup a symbolic key",
-        parameters: {
-          type: "object",
-          properties: { key: { type: "string" } },
-          required: ["key"],
-          additionalProperties: false,
-        },
       },
+    });
+    expect(tool.definition.function.parameters.projections.openai).toEqual({
+      type: "object",
+      properties: { key: { type: "string" } },
+      required: ["key"],
+      additionalProperties: false,
     });
     expect(tool.decode({ key: "abc" })).toEqual({ key: "abc" });
     expect(() => tool.decode({ key: 1 })).toThrow();
@@ -72,66 +72,6 @@ describe("defineTool", () => {
       }),
     ).toThrow("unsupported");
   });
-});
-
-describe("defineToolFromDefinition", () => {
-  it("closes manifest tool schemas and validates args before custom decode", () => {
-    let decoded = false;
-    const tool = defineToolFromDefinition({
-      definition: {
-        type: "function",
-        function: {
-          name: "lookup",
-          description: "Lookup a symbolic key",
-          parameters: {
-            type: "object",
-            properties: { key: { type: "string" } },
-            required: ["key"],
-            additionalProperties: false,
-          },
-        },
-      },
-      decode: (args) => {
-        decoded = true;
-        return args as { readonly key: string };
-      },
-      authorityClass: "read",
-      admit: allowToolAdmitter,
-      execution: pureToolExecution(),
-      execute: async ({ key }) => ({ value: key }),
-    });
-
-    expect(tool.decode({ key: "abc" })).toEqual({ key: "abc" });
-    expect(decoded).toBe(true);
-    decoded = false;
-    expect(() => tool.decode({ key: 1 })).toThrow("violate schema");
-    expect(decoded).toBe(false);
-  });
-
-  it("rejects manifest schemas outside the closed dialect", () => {
-    expect(() =>
-      defineToolFromDefinition({
-        definition: {
-          type: "function",
-          function: {
-            name: "lookup",
-            description: "Lookup a symbolic key",
-            parameters: {
-              type: "object",
-              properties: {
-                key: { type: "string", minLength: 1 },
-              },
-            },
-          },
-        },
-        authorityClass: "read",
-        admit: allowToolAdmitter,
-        execution: pureToolExecution(),
-        execute: async () => null,
-      }),
-    ).toThrow("unsupported-key");
-  });
-
   it.effect("passes AbortSignal through executeTool", () =>
     Effect.gen(function* () {
       let observed: AbortSignal | undefined;
@@ -303,7 +243,7 @@ describe("unsafeRunToolByName", () => {
       if (invalid._tag === "Left") {
         expect(invalid.left.cause).toEqual({
           reason: "invalid_args",
-          decodeError: "TypeError",
+          decodeError: "AgentSchemaDecodeError",
         });
       }
     }),

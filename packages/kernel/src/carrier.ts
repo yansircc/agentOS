@@ -1,4 +1,5 @@
 import { Option, Schema } from "effect";
+import { defineAgentSchema } from "./agent-schema";
 import {
   boundaryPackage,
   type BoundaryContract,
@@ -15,11 +16,7 @@ import {
   type RejectionRef,
 } from "./effect-claim";
 import { type BoundaryPackage, type EventPayloadMap } from "./extensions";
-import {
-  schemaToClosedJsonSchemaObject,
-  validateAgainstSchema,
-  type JsonSchemaObject,
-} from "./json-schema";
+import { validateAgainstSchema, type JsonSchemaObject } from "./json-schema-dialect";
 import type { AuthorityContract, MaterialRequirement } from "./material-ref";
 import {
   defineSettlementContract,
@@ -382,7 +379,7 @@ export const defineCarrier = <
     kind[name.toUpperCase()] = eventKind;
 
     const schema = schemaWithoutClaimCollision(
-      schemaToClosedJsonSchemaObject(carrierEvent.payload),
+      defineAgentSchema(carrierEvent.payload).jsonSchema,
       carrierEvent.claim,
       eventKind,
     );

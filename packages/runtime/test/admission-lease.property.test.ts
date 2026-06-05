@@ -4,7 +4,7 @@
  * These tests generate arbitrary ledger histories and compare projectLease
  * against an independent oracle for the contract rules:
  *   - matching route/schema/strategy
- *   - adapter compatibility by major version
+ *   - provider-output and transport adapter compatibility by major version
  *   - barrier cutoff by (ts, id)
  *   - reinforcement and non-capability outcomes never form leases
  */
@@ -29,7 +29,8 @@ const key: AttemptKey = {
   routeFingerprint: "route-a",
   schemaFingerprint: "schema-a",
   strategy: "forced-tool-call",
-  adapterVersion: "1.4.0",
+  providerOutputAdapterVersion: "1.4.0",
+  transportAdapterVersion: "1.4.0",
 };
 
 type RowSpec =
@@ -57,9 +58,17 @@ const keyForEvidence = (mode: Extract<RowSpec, { tag: "evidence" }>["keyMode"]):
     case "target":
       return key;
     case "same-major":
-      return { ...key, adapterVersion: "1.0.1" };
+      return {
+        ...key,
+        providerOutputAdapterVersion: "1.0.1",
+        transportAdapterVersion: "1.0.1",
+      };
     case "other-major":
-      return { ...key, adapterVersion: "2.0.0" };
+      return {
+        ...key,
+        providerOutputAdapterVersion: "2.0.0",
+        transportAdapterVersion: "2.0.0",
+      };
     case "other-route":
       return { ...key, routeFingerprint: "route-b" };
   }
@@ -72,13 +81,25 @@ const keyForBarrier = (
     case "target":
       return key;
     case "target-wildcard-major":
-      return { ...key, adapterVersion: "1.x" };
+      return {
+        ...key,
+        providerOutputAdapterVersion: "1.x",
+        transportAdapterVersion: "1.x",
+      };
     case "target-omitted-version": {
-      const { adapterVersion: _adapterVersion, ...rest } = key;
+      const {
+        providerOutputAdapterVersion: _providerOutputAdapterVersion,
+        transportAdapterVersion: _transportAdapterVersion,
+        ...rest
+      } = key;
       return rest;
     }
     case "other-major":
-      return { ...key, adapterVersion: "2.0.0" };
+      return {
+        ...key,
+        providerOutputAdapterVersion: "2.0.0",
+        transportAdapterVersion: "2.0.0",
+      };
     case "other-route":
       return { ...key, routeFingerprint: "route-b" };
   }
@@ -107,6 +128,12 @@ const rowFromSpec = (spec: RowSpec, index: number): AdmissionRow => {
 
 const majorOf = (semver: string): string => semver.split(".")[0] ?? "0";
 
+const versionMatches = (current: string, barrier: string | undefined): boolean => {
+  if (barrier === undefined) return true;
+  if (barrier.endsWith(".x")) return majorOf(current) === barrier.slice(0, -2);
+  return barrier === current;
+};
+
 const barrierMatches = (barrier: Partial<AttemptKey>): boolean => {
   if (barrier.routeFingerprint !== undefined && barrier.routeFingerprint !== key.routeFingerprint)
     return false;
@@ -116,18 +143,18 @@ const barrierMatches = (barrier: Partial<AttemptKey>): boolean => {
   )
     return false;
   if (barrier.strategy !== undefined && barrier.strategy !== key.strategy) return false;
-  if (barrier.adapterVersion === undefined) return true;
-  if (barrier.adapterVersion.endsWith(".x")) {
-    return majorOf(key.adapterVersion) === barrier.adapterVersion.slice(0, -2);
-  }
-  return barrier.adapterVersion === key.adapterVersion;
+  return (
+    versionMatches(key.providerOutputAdapterVersion, barrier.providerOutputAdapterVersion) &&
+    versionMatches(key.transportAdapterVersion, barrier.transportAdapterVersion)
+  );
 };
 
 const evidenceMatches = (row: EvidenceRow): boolean =>
   row.key.routeFingerprint === key.routeFingerprint &&
   row.key.schemaFingerprint === key.schemaFingerprint &&
   row.key.strategy === key.strategy &&
-  majorOf(row.key.adapterVersion) === majorOf(key.adapterVersion);
+  majorOf(row.key.providerOutputAdapterVersion) === majorOf(key.providerOutputAdapterVersion) &&
+  majorOf(row.key.transportAdapterVersion) === majorOf(key.transportAdapterVersion);
 
 const ttlForUnsupported = (outcome: Outcome): number => {
   switch (outcome.class) {

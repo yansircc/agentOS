@@ -709,9 +709,9 @@ const negativeContractTests = () => {
   };
   assertFails("internal-only package marked published", () => {
     const bad = structuredClone(surface());
-    bad.packages.find((pkg) => pkg.path === "tooling/skill-registry").published = true;
-    if (bad.packages.find((pkg) => pkg.path === "tooling/skill-registry").published === true) {
-      fail("tooling/skill-registry: expected published=false");
+    bad.packages.find((pkg) => pkg.path === "tooling/docs-site").published = true;
+    if (bad.packages.find((pkg) => pkg.path === "tooling/docs-site").published === true) {
+      fail("tooling/docs-site: expected published=false");
     }
   });
   assertFails("published package removed from surface", () => {

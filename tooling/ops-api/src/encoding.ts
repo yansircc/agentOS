@@ -63,8 +63,11 @@ export const decodeAttemptKey = (encoded: string): DecodeResult => {
   if (!isString(obj.strategy) || obj.strategy.length === 0) {
     return { ok: false, reason: "invalid_strategy" };
   }
-  if (!isString(obj.adapterVersion)) {
-    return { ok: false, reason: "missing_adapterVersion" };
+  if (!isString(obj.providerOutputAdapterVersion)) {
+    return { ok: false, reason: "missing_providerOutputAdapterVersion" };
+  }
+  if (!isString(obj.transportAdapterVersion)) {
+    return { ok: false, reason: "missing_transportAdapterVersion" };
   }
   return {
     ok: true,
@@ -72,7 +75,8 @@ export const decodeAttemptKey = (encoded: string): DecodeResult => {
       routeFingerprint: obj.routeFingerprint,
       schemaFingerprint: obj.schemaFingerprint,
       strategy: obj.strategy as AttemptKey["strategy"],
-      adapterVersion: obj.adapterVersion,
+      providerOutputAdapterVersion: obj.providerOutputAdapterVersion,
+      transportAdapterVersion: obj.transportAdapterVersion,
     },
   };
 };

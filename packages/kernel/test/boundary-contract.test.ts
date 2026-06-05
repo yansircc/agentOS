@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  type BoundaryEventContract,
   boundaryPackage,
   defineBoundaryContract,
   validateBoundaryContract,
 } from "../src/boundary-contract";
-import type { JsonSchemaObject } from "../src/json-schema";
 import { materialRequirement } from "../src/material-ref";
 import { defineSettlementContract } from "../src/settlement-contract";
 
@@ -13,7 +13,7 @@ const emptyPayload = {
   type: "object",
   properties: {},
   additionalProperties: false,
-} satisfies JsonSchemaObject;
+} satisfies BoundaryEventContract["payloadSchema"];
 
 const recordedPayload = {
   type: "object",
@@ -22,7 +22,7 @@ const recordedPayload = {
   },
   required: ["value"],
   additionalProperties: false,
-} satisfies JsonSchemaObject;
+} satisfies BoundaryEventContract["payloadSchema"];
 
 describe("BoundaryContract", () => {
   const proofStore = materialRequirement({

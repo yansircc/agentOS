@@ -1,5 +1,5 @@
 /**
- * Owned payload Schemas for `events.kind = resource.*` rows.
+ * Owned payload Schemas for `events.kind = resource_pool.*` rows.
  *
  * Leaf module: imports nothing from sibling resources/ files.
  * `projection.ts` and the orchestrator consume `decode*PayloadSync`;

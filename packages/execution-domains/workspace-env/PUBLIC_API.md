@@ -8,13 +8,24 @@ Status: 0.2.x active development. Public exports are limited to WorkspaceEnv typ
 
 - `.:CreateWorkspaceEnvOptions`
 - `.:CreateWorkspaceToolsOptions`
+- `.:EditWorkspaceFileOptions`
+- `.:GlobWorkspaceFilesOptions`
+- `.:GrepWorkspaceFilesOptions`
+- `.:WalkWorkspaceFilesOptions`
 - `.:WorkspaceDeletePathResult`
+- `.:WorkspaceEditFileResult`
 - `.:WorkspaceEnv`
 - `.:WorkspaceEnvBackend`
 - `.:WorkspaceEnvInputError`
 - `.:WorkspaceExecOptions`
 - `.:WorkspaceExecResult`
+- `.:WorkspaceFileSnapshot`
 - `.:WorkspaceFileStat`
+- `.:WorkspaceFilesDiff`
+- `.:WorkspaceGlobFilesResult`
+- `.:WorkspaceGrepFilesResult`
+- `.:WorkspaceGrepMatch`
+- `.:WorkspaceGrepMode`
 - `.:WorkspaceListFilesResult`
 - `.:WorkspaceOperationOptions`
 - `.:WorkspaceReadFileResult`
@@ -27,6 +38,11 @@ Status: 0.2.x active development. Public exports are limited to WorkspaceEnv typ
 - `.:WorkspaceWriteFileResult`
 - `.:createWorkspaceEnv`
 - `.:createWorkspaceTools`
+- `.:diffWorkspaceFiles`
+- `.:editWorkspaceFile`
+- `.:globWorkspaceFiles`
+- `.:grepWorkspaceFiles`
+- `.:walkWorkspaceFiles`
 
 ## Experimental exports
 

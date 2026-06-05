@@ -38,7 +38,12 @@ const failedResult: SubmitResult = {
 const submitSpec: SubmitSpec = {
   intent: "Return a final answer.",
   context: { source: "run-stream-test" },
-  route: { kind: "cf-ai-binding", modelId: "@cf/stub/test" },
+  route: {
+    kind: "openai-chat-compatible",
+    endpointRef: "test-endpoint",
+    credentialRef: "test-credential",
+    modelId: "test-model",
+  },
   tools: {},
   budget: { maxTurns: 1 },
   deliver: { event: "stream.done" },

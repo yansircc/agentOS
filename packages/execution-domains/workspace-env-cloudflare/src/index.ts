@@ -214,20 +214,6 @@ const providerFileContent = (content: string | Uint8Array): string | ReadableStr
       })
     : content;
 
-const normalizeStat = (result: CloudflareWorkspaceEnvStatResult): WorkspaceFileStat => {
-  const type =
-    result.type === "directory" || result.isDirectory === true
-      ? "directory"
-      : result.type === "file" || result.isFile === true
-        ? "file"
-        : "other";
-  return {
-    type,
-    ...(typeof result.size === "number" ? { size: result.size } : {}),
-    ...(typeof result.mtimeMs === "number" ? { mtimeMs: result.mtimeMs } : {}),
-  };
-};
-
 const nameOfFileInfo = (value: unknown): string | null => {
   if (typeof value === "string") return value;
   if (value === null || typeof value !== "object") return null;
@@ -254,24 +240,42 @@ const normalizeListFiles = (
 const normalizeExists = (result: boolean | CloudflareWorkspaceEnvExistsResult): boolean =>
   typeof result === "boolean" ? result : result.exists === true;
 
-const fallbackStat = async (
+const shellStat = async (
   client: CloudflareWorkspaceEnvClient,
   path: string,
   options?: WorkspaceOperationOptions,
 ): Promise<WorkspaceFileStat> => {
   const result = await execOrFail(
     client,
-    `if [ -d ${shellQuote(path)} ]; then echo directory; elif [ -f ${shellQuote(
-      path,
-    )} ]; then echo file; else echo other; fi`,
+    [
+      `if [ -d ${shellQuote(path)} ]; then`,
+      "  echo directory;",
+      `elif [ -f ${shellQuote(path)} ]; then`,
+      `  size=$(stat -c '%s' ${shellQuote(path)} 2>/dev/null || wc -c < ${shellQuote(
+        path,
+      )} | tr -d '[:space:]');`,
+      `  mtime=$(stat -c '%Y' ${shellQuote(path)} 2>/dev/null || echo);`,
+      `  printf 'file\\t%s\\t%s\\n' "$size" "$mtime";`,
+      "else",
+      "  echo other;",
+      "fi",
+    ].join(" "),
     {
       timeoutMs: 5_000,
       signal: options?.signal,
       maxOutputBytes: 128,
     },
   );
-  const type = result.stdout.trim();
-  return type === "directory" || type === "file" ? { type } : { type: "other" };
+  const [type, sizeText, mtimeText] = result.stdout.trim().split(/\s+/);
+  if (type === "directory") return { type };
+  if (type !== "file") return { type: "other" };
+  const size = Number(sizeText);
+  const mtimeSeconds = Number(mtimeText);
+  return {
+    type: "file",
+    ...(Number.isFinite(size) ? { size } : {}),
+    ...(Number.isFinite(mtimeSeconds) ? { mtimeMs: mtimeSeconds * 1000 } : {}),
+  };
 };
 
 const cloudflareBackend = (client: CloudflareWorkspaceEnvClient): WorkspaceEnvBackend => ({
@@ -286,11 +290,6 @@ const cloudflareBackend = (client: CloudflareWorkspaceEnvClient): WorkspaceEnvBa
   },
   readFileBuffer: async (path, options) => {
     checkSignal(options?.signal);
-    if (client.readFileBuffer !== undefined) {
-      const result = await client.readFileBuffer(path);
-      checkSignal(options?.signal);
-      return result;
-    }
     if (client.readFile === undefined) {
       throw workspaceError("Cloudflare workspace client does not expose readFileBuffer");
     }
@@ -308,12 +307,7 @@ const cloudflareBackend = (client: CloudflareWorkspaceEnvClient): WorkspaceEnvBa
   },
   stat: async (path, options) => {
     checkSignal(options?.signal);
-    if (client.stat !== undefined) {
-      const result = await client.stat(path);
-      checkSignal(options?.signal);
-      return normalizeStat(result);
-    }
-    return fallbackStat(client, path, options);
+    return shellStat(client, path, options);
   },
   readdir: async (path, options) => {
     checkSignal(options?.signal);

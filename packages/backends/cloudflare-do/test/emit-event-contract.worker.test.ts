@@ -16,7 +16,7 @@
  *      stripped); calling the method on the in-process instance
  *      preserves the TaggedError shape (`_tag` field accessible).
  *
- * No LLM involved — emitEvent doesn't touch the AiBinding service.
+ * No LLM involved — emitEvent doesn't touch the LlmTransport service.
  */
 
 import { runInDurableObject } from "cloudflare:test";
@@ -73,11 +73,11 @@ describe("emitEvent — substrate now-write primitive", () => {
     const claimed = [
       "agent.aborted.app_test",
       "chat.ingested",
-      "dispatch.consumed",
+      "quota.consumed",
       "llm.response",
       "tool.executed",
       "quota.exceeded",
-      "resource.granted",
+      "resource_pool.granted",
     ];
 
     await runInDurableObject(stub, async (instance) => {

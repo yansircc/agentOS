@@ -11,81 +11,87 @@
  *     current substrate default before fingerprinting (contract §7)
  */
 
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 
-import type { JsonSchemaObject } from "@agent-os/kernel/json-schema";
-import { makeSchemaContract, routeFingerprint } from "../src/admission";
+import { makeAdmissionSchemaSpec, routeFingerprint } from "../src/admission";
 
 describe("admission — canonical fingerprint (contract §4.1)", () => {
-  const S1: JsonSchemaObject = {
-    type: "object",
-    properties: {
-      summary: { type: "string" },
-      sentiment: { type: "string", enum: ["positive", "negative", "neutral"] },
-    },
-    required: ["summary", "sentiment"],
-  };
-  const S2: JsonSchemaObject = {
-    type: "object",
-    properties: {
-      summary: { type: "string" },
-      sentiment: { type: "string", enum: ["positive", "negative", "neutral"] },
-      keywords: { type: "array", items: { type: "string" } },
-    },
-    required: ["summary", "sentiment", "keywords"],
-  };
+  const S1 = Schema.Struct({
+    summary: Schema.String,
+    sentiment: Schema.Literal("positive", "negative", "neutral"),
+  });
+  const S2 = Schema.Struct({
+    summary: Schema.String,
+    sentiment: Schema.Literal("positive", "negative", "neutral"),
+    keywords: Schema.Array(Schema.String),
+  });
   // S3 = S2 with reordered properties AND reordered `required` array.
   // Per §4.1 rule a (sort keys) + rule c' (sort set-semantics arrays),
   // fingerprint MUST equal S2.
-  const S3: JsonSchemaObject = {
-    type: "object",
-    properties: {
-      keywords: { type: "array", items: { type: "string" } },
-      sentiment: { type: "string", enum: ["neutral", "negative", "positive"] },
-      summary: { type: "string" },
-    },
-    required: ["keywords", "sentiment", "summary"],
-  };
+  const S3 = Schema.Struct({
+    keywords: Schema.Array(Schema.String),
+    sentiment: Schema.Literal("neutral", "negative", "positive"),
+    summary: Schema.String,
+  });
 
   it.effect("stability: same schema yields byte-equal fingerprint across calls", () =>
     Effect.gen(function* () {
-      const a = yield* makeSchemaContract(S2);
-      const b = yield* makeSchemaContract(S2);
+      const a = yield* makeAdmissionSchemaSpec(S2);
+      const b = yield* makeAdmissionSchemaSpec(S2);
       expect(a.fingerprint).toBe(b.fingerprint);
-      expect(a.fingerprint.startsWith("effect-json-schema-v1:sha256:")).toBe(true);
+      expect(a.fingerprint.startsWith("agent-schema-v1:sha256:")).toBe(true);
     }),
   );
 
   it.effect("set-semantics: S2 == S3 (property + required + enum reorder)", () =>
     Effect.gen(function* () {
-      const fS2 = yield* makeSchemaContract(S2);
-      const fS3 = yield* makeSchemaContract(S3);
+      const fS2 = yield* makeAdmissionSchemaSpec(S2);
+      const fS3 = yield* makeAdmissionSchemaSpec(S3);
       expect(fS3.fingerprint).toBe(fS2.fingerprint);
     }),
   );
 
   it.effect("distinction: S1 != S2 (different schemas)", () =>
     Effect.gen(function* () {
-      const fS1 = yield* makeSchemaContract(S1);
-      const fS2 = yield* makeSchemaContract(S2);
+      const fS1 = yield* makeAdmissionSchemaSpec(S1);
+      const fS2 = yield* makeAdmissionSchemaSpec(S2);
       expect(fS1.fingerprint).not.toBe(fS2.fingerprint);
     }),
   );
 
   it("routeFingerprint is deterministic, prefix-tagged, and collision-free for distinct routes", () => {
-    const r = routeFingerprint({ kind: "cf-ai-binding", modelId: "@cf/x/y" });
+    const r = routeFingerprint({
+      kind: "openai-chat-compatible",
+      endpointRef: "test-endpoint",
+      credentialRef: "test-credential",
+      modelId: "model-a",
+    });
     expect(r.startsWith("route-json-v1:")).toBe(true);
-    const r2 = routeFingerprint({ kind: "cf-ai-binding", modelId: "@cf/x/y" });
+    const r2 = routeFingerprint({
+      kind: "openai-chat-compatible",
+      endpointRef: "test-endpoint",
+      credentialRef: "test-credential",
+      modelId: "model-a",
+    });
     expect(r).toBe(r2);
     // Codex P1 regression guard: two different modelIds must produce two
     // different route keys. The previous 32-bit FNV implementation aliased
-    // distinct routes onto the same hash (e.g. `@cf/3hwlz7pq9l` and
-    // `@cf/x3qxkshczh` collided), letting a model's unsupported lease
+    // distinct routes onto the same hash, letting a model's unsupported lease
     // short-circuit another model. The canonical-JSON key is collision-free
     // by construction.
-    const a = routeFingerprint({ kind: "cf-ai-binding", modelId: "@cf/3hwlz7pq9l" });
-    const b = routeFingerprint({ kind: "cf-ai-binding", modelId: "@cf/x3qxkshczh" });
+    const a = routeFingerprint({
+      kind: "openai-chat-compatible",
+      endpointRef: "test-endpoint",
+      credentialRef: "test-credential",
+      modelId: "model-collision-a",
+    });
+    const b = routeFingerprint({
+      kind: "openai-chat-compatible",
+      endpointRef: "test-endpoint",
+      credentialRef: "test-credential",
+      modelId: "model-collision-b",
+    });
     expect(a).not.toBe(b);
   });
 

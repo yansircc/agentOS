@@ -1,4 +1,4 @@
-import { Effect, Fiber, TestClock } from "effect";
+import { Effect, Fiber, Schema, TestClock } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 
 import { Ledger } from "../src/ledger";
@@ -8,11 +8,17 @@ import { Admission } from "../src/admission";
 import { DEFAULT_LLM_CALL_TIMEOUT_MS, submitAgentEffect } from "../src/submit-agent";
 import type { InternalSubmitSpec } from "../src/submit";
 import type { LedgerEvent } from "@agent-os/kernel/types";
+import { decodeRuntimeLedgerEvent } from "../src/runtime-events";
 
 const makeSpec = (budget?: InternalSubmitSpec["budget"]): InternalSubmitSpec => ({
   intent: "hang",
   context: {},
-  route: { kind: "cf-ai-binding", modelId: "@cf/test" },
+  route: {
+    kind: "openai-chat-compatible",
+    endpointRef: "test-endpoint",
+    credentialRef: "test-credential",
+    modelId: "test-model",
+  },
   tools: {},
   ...(budget === undefined ? {} : { budget }),
   deliver: {
@@ -24,11 +30,7 @@ const makeSpec = (budget?: InternalSubmitSpec["budget"]): InternalSubmitSpec => 
 
 const makeStructuredSpec = (budget?: InternalSubmitSpec["budget"]): InternalSubmitSpec => ({
   ...makeSpec(budget),
-  outputSchema: {
-    type: "object",
-    properties: { summary: { type: "string" } },
-    required: ["summary"],
-  },
+  outputSchema: Schema.Struct({ summary: Schema.String }),
 });
 
 const runWithHungLlm = (
@@ -63,6 +65,12 @@ const runWithHungLlm = (
       streamSnapshot: () => Effect.succeed(events),
     };
     const llm = {
+      describeRoute: () => ({
+        providerOutputAdapterId: "test-provider-output@1.0.0",
+        providerOutputAdapterVersion: "1.0.0",
+        transportAdapterId: "test-runtime@1.0.0",
+        transportAdapterVersion: "1.0.0",
+      }),
       call: (_request: unknown, options?: { readonly signal?: AbortSignal }) => {
         if (providerObservesAbort) {
           options?.signal?.addEventListener("abort", () => {
@@ -107,6 +115,7 @@ describe("submit agent LLM provider timeout", () => {
       expect(aborted).toBe(true);
       expect(events.some((event) => event.kind === "llm.response")).toBe(false);
       expect(events.find((event) => event.kind === "agent.aborted.budget_time")).toBeDefined();
+      for (const event of events) decodeRuntimeLedgerEvent(event);
     }),
   );
 
@@ -124,6 +133,7 @@ describe("submit agent LLM provider timeout", () => {
         cause: "provider_timeout",
         timeoutMs: DEFAULT_LLM_CALL_TIMEOUT_MS,
       });
+      for (const event of events) decodeRuntimeLedgerEvent(event);
     }),
   );
 
@@ -139,6 +149,7 @@ describe("submit agent LLM provider timeout", () => {
       expect(aborted).toBe(false);
       expect(events.some((event) => event.kind === "llm.response")).toBe(false);
       expect(events.find((event) => event.kind === "agent.aborted.upstream_failure")).toBeDefined();
+      for (const event of events) decodeRuntimeLedgerEvent(event);
     }),
   );
 
@@ -152,6 +163,7 @@ describe("submit agent LLM provider timeout", () => {
       expect(aborted).toBe(true);
       expect(events.some((event) => event.kind === "agent.run.completed")).toBe(false);
       expect(events.find((event) => event.kind === "agent.aborted.budget_time")).toBeDefined();
+      for (const event of events) decodeRuntimeLedgerEvent(event);
     }),
   );
 });

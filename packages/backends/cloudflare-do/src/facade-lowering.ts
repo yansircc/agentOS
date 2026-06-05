@@ -1,7 +1,6 @@
 import { Option } from "effect";
 import type {
   AnthropicMessagesRoute,
-  CfAiBindingRoute,
   GeminiGenerateContentRoute,
   LlmRoute,
   OpenAIChatCompatibleRoute,
@@ -94,11 +93,6 @@ export interface GeminiGenerateContentSpec {
   readonly credential: string;
 }
 
-export interface CfAiBindingSpec {
-  readonly model: string;
-  readonly gatewayRef?: string;
-}
-
 export const openAIChat = (spec: OpenAIChatSpec): OpenAIChatCompatibleRoute => ({
   kind: "openai-chat-compatible",
   modelId: spec.model,
@@ -121,12 +115,6 @@ export const geminiGenerateContent = (
   modelId: spec.model,
   endpointRef: spec.endpoint,
   credentialRef: spec.credential,
-});
-
-export const cfAiBinding = (spec: CfAiBindingSpec): CfAiBindingRoute => ({
-  kind: "cf-ai-binding",
-  modelId: spec.model,
-  ...(spec.gatewayRef === undefined ? {} : { gatewayRef: spec.gatewayRef }),
 });
 
 export type LlmRouteMap = { readonly default: LlmRoute } & Readonly<Record<string, LlmRoute>>;

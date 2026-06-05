@@ -25,7 +25,7 @@ Use this skill to integrate agentOS without re-inventing its substrate.
 
 3. Prefer the agentOS primitive:
    - agent run loop -> Cloudflare backend `submit`;
-   - tool identity/admission -> `defineTool`, `defineToolFromDefinition`, and
+   - tool identity/admission -> `defineTool`, AgentSchema arguments, and
      `ToolContract`;
    - durable truth -> ledger events and projections;
    - execution means -> facade `bindings` backed by `MaterialRef`;
@@ -33,7 +33,6 @@ Use this skill to integrate agentOS without re-inventing its substrate.
    - consumer run stream -> `@agent-os/run-stream`;
    - resource facts -> `@agent-os/resource-carrier`;
    - Cloudflare resource materialization -> `@agent-os/resource-cloudflare`;
-   - install-time tool bundles -> `@agent-os/skill-registry`.
 
 4. Keep the core invariant:
    - `PreClaim` names effect identity only:

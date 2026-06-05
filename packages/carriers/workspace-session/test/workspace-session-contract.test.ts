@@ -9,9 +9,14 @@ import {
   settleWorkspaceSessionRejected,
   workspaceSessionSettlementRef,
   workspaceSessionBoundaryPackage,
+  workspaceSessionCarrier,
 } from "../src";
 import { makePreClaim } from "@agent-os/kernel/effect-claim";
 import { makeCommitters, type ExtensionCapability } from "@agent-os/kernel/extensions";
+import {
+  providerMaterialLeaks,
+  workspaceSessionProviderMaterialNeedles,
+} from "../../../../tooling/test-helpers/provider-material-sentinel";
 
 const sessionClaim = makePreClaim({
   operationRef: "workspace-session:session-1:start",
@@ -93,7 +98,6 @@ describe("@agent-os/workspace-session", () => {
           sessionRef: "session://1",
           previewRef: "preview://1:5173",
           port: 5173,
-          url: "https://preview.example",
           claim: livedSessionClaim("preview://1:5173"),
         },
       },
@@ -133,11 +137,30 @@ describe("@agent-os/workspace-session", () => {
         {
           previewRef: "preview://1:5173",
           port: 5173,
-          url: "https://preview.example",
         },
       ],
       failure: undefined,
     });
+
+    expect(
+      providerMaterialLeaks(
+        projectWorkspaceSession(events, "run-1"),
+        workspaceSessionProviderMaterialNeedles(),
+      ),
+    ).toEqual([]);
+  });
+
+  it("rejects preview_allocated payloads that contain provider URLs", () => {
+    expect(() =>
+      workspaceSessionCarrier.decode(WORKSPACE_SESSION_KIND.PREVIEW_ALLOCATED, {
+        subjectRef: "run-url",
+        sessionRef: "session://url",
+        previewRef: "preview://url",
+        port: 5173,
+        url: "https://provider-url.example",
+        claim: livedSessionClaim("preview://url"),
+      }),
+    ).toThrow();
   });
 
   it("resets lifecycle refs on restarted or restored sessions", () => {

@@ -1,9 +1,5 @@
-import { Clock, Effect, Option } from "effect";
-import {
-  defineToolFromDefinition,
-  effectfulToolExecution,
-  type Tool,
-} from "@agent-os/kernel/tools";
+import { Clock, Effect, Option, Schema } from "effect";
+import { defineTool, effectfulToolExecution, type Tool } from "@agent-os/kernel/tools";
 
 import { failureToToolResult, truncateUtf8 } from "./output";
 import { runSandbox } from "./run";
@@ -15,28 +11,19 @@ import {
   type SandboxToolResult,
 } from "./types";
 
-const toolParameters = {
-  type: "object",
-  additionalProperties: false,
-  properties: {
-    command: { type: "string" },
-    args: { type: "array", items: { type: "string" } },
-    cwd: { type: "string" },
-    files: {
-      type: "array",
-      items: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          path: { type: "string" },
-          text: { type: "string" },
-        },
-        required: ["path", "text"],
-      },
-    },
-  },
-  required: ["command"],
-};
+const SandboxRunToolArgsSchema: Schema.Schema<SandboxRunToolArgs> = Schema.Struct({
+  command: Schema.String,
+  args: Schema.optional(Schema.Array(Schema.String)),
+  cwd: Schema.optional(Schema.String),
+  files: Schema.optional(
+    Schema.Array(
+      Schema.Struct({
+        path: Schema.String,
+        text: Schema.String,
+      }),
+    ),
+  ),
+});
 
 const failSandboxToolArgs = (message: string): never =>
   Option.getOrThrowWith(Option.none(), () => new TypeError(message));
@@ -76,18 +63,11 @@ export const makeSandboxRunTool = (
   const timeoutMs = options.timeoutMs ?? 30_000;
   const maxOutputBytes = options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
   const network = options.network ?? { mode: "none" as const };
-  return defineToolFromDefinition<SandboxRunToolArgs, SandboxToolResult>({
-    definition: {
-      type: "function",
-      function: {
-        name: options.name ?? "sandbox_run",
-        description:
-          options.description ?? "Run one bounded stateless command in an isolated sandbox.",
-        parameters: toolParameters,
-      },
-    },
-    decode: (args) => args as SandboxRunToolArgs,
-    authorityClass: options.authority,
+  return defineTool({
+    name: options.name ?? "sandbox_run",
+    description: options.description ?? "Run one bounded stateless command in an isolated sandbox.",
+    args: SandboxRunToolArgsSchema,
+    authority: options.authority,
     ...(options.authorityId === undefined ? {} : { authorityId: options.authorityId }),
     ...(options.authorityVersion === undefined
       ? {}

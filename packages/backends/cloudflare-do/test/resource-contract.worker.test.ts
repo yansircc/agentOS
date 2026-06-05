@@ -10,7 +10,7 @@ import type {
  *
  * Validates P2 of contract:
  *   - no account/reservation tables;
- *   - balance is reconstructed from resource.* ledger facts;
+ *   - balance is reconstructed from resource_pool.* ledger facts;
  *   - reserve is idempotent by idempotencyKey;
  *   - consume/release are mutually exclusive, same-terminal duplicates no-op.
  */
@@ -46,7 +46,7 @@ const stubFor = (scope: string): DurableObjectStub<DispatchTestDO> & ResourceRpc
   ) as DurableObjectStub<DispatchTestDO> & ResourceRpc;
 
 const resourceEvents = (events: ReadonlyArray<LedgerEventRpc>): ReadonlyArray<LedgerEventRpc> =>
-  events.filter((e) => e.kind.startsWith("resource."));
+  events.filter((e) => e.kind.startsWith("resource_pool."));
 
 const countKind = (events: ReadonlyArray<LedgerEventRpc>, kind: string): number => {
   let count = 0;
@@ -65,20 +65,20 @@ const projectBalance = (events: ReadonlyArray<LedgerEventRpc>, key: string): Bal
 
   for (const event of resourceEvents(events)) {
     const payload = event.payload as Record<string, unknown>;
-    if (event.kind === "resource.granted" && payload.key === key) {
+    if (event.kind === "resource_pool.granted" && payload.key === key) {
       grants += Number(payload.amount);
     }
-    if (event.kind === "resource.reserved" && payload.key === key) {
+    if (event.kind === "resource_pool.reserved" && payload.key === key) {
       reservations.set(String(payload.reservationId), {
         key,
         amount: Number(payload.amount),
         status: "active",
       });
     }
-    if (event.kind === "resource.consumed" || event.kind === "resource.released") {
+    if (event.kind === "resource_pool.consumed" || event.kind === "resource_pool.released") {
       const reservation = reservations.get(String(payload.reservationId));
       if (reservation !== undefined) {
-        reservation.status = event.kind === "resource.consumed" ? "consumed" : "released";
+        reservation.status = event.kind === "resource_pool.consumed" ? "consumed" : "released";
       }
     }
   }
@@ -111,8 +111,8 @@ describe("Resources — business resource reservation ledger", () => {
     expect(reservationId).toMatch(/^[0-9a-f-]{36}$/);
     const events = await stub.events();
     expect(resourceEvents(events).map((e) => e.kind)).toEqual([
-      "resource.granted",
-      "resource.reserved",
+      "resource_pool.granted",
+      "resource_pool.reserved",
     ]);
     expect(projectBalance(events, "credit")).toEqual({
       available: 3,
@@ -121,7 +121,7 @@ describe("Resources — business resource reservation ledger", () => {
     });
   });
 
-  it("reserve rejects without writing resource.reserved when insufficient", async () => {
+  it("reserve rejects without writing resource_pool.reserved when insufficient", async () => {
     const stub = stubFor("resource-reserve-insufficient");
 
     await runInDurableObject(stub, async (instance) => {
@@ -155,10 +155,10 @@ describe("Resources — business resource reservation ledger", () => {
 
     const events = await stub.events();
     expect(resourceEvents(events).map((e) => e.kind)).toEqual([
-      "resource.granted",
-      "resource.reserve_rejected",
+      "resource_pool.granted",
+      "resource_pool.reserve_rejected",
     ]);
-    expect(countKind(events, "resource.reserved")).toBe(0);
+    expect(countKind(events, "resource_pool.reserved")).toBe(0);
   });
 
   it("same idempotencyKey returns the same reservation without duplicating ledger rows", async () => {
@@ -180,7 +180,7 @@ describe("Resources — business resource reservation ledger", () => {
 
     expect(second.reservationId).toBe(first.reservationId);
     const events = await stub.events();
-    expect(countKind(events, "resource.reserved")).toBe(1);
+    expect(countKind(events, "resource_pool.reserved")).toBe(1);
     expect(projectBalance(events, "credit")).toEqual({
       available: 3,
       reserved: 2,
@@ -217,8 +217,8 @@ describe("Resources — business resource reservation ledger", () => {
     });
 
     const events = await stub.events();
-    expect(countKind(events, "resource.consumed")).toBe(1);
-    expect(countKind(events, "resource.released")).toBe(0);
+    expect(countKind(events, "resource_pool.consumed")).toBe(1);
+    expect(countKind(events, "resource_pool.released")).toBe(0);
   });
 
   it("duplicate consume/release for the same terminal state is idempotent", async () => {
@@ -255,8 +255,8 @@ describe("Resources — business resource reservation ledger", () => {
     });
 
     const events = await stub.events();
-    expect(countKind(events, "resource.consumed")).toBe(1);
-    expect(countKind(events, "resource.released")).toBe(1);
+    expect(countKind(events, "resource_pool.consumed")).toBe(1);
+    expect(countKind(events, "resource_pool.released")).toBe(1);
   });
 
   it("projection reconstructs balance from events only", async () => {

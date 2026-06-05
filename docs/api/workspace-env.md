@@ -4,13 +4,24 @@
 
 - `.:CreateWorkspaceEnvOptions`
 - `.:CreateWorkspaceToolsOptions`
+- `.:EditWorkspaceFileOptions`
+- `.:GlobWorkspaceFilesOptions`
+- `.:GrepWorkspaceFilesOptions`
+- `.:WalkWorkspaceFilesOptions`
 - `.:WorkspaceDeletePathResult`
+- `.:WorkspaceEditFileResult`
 - `.:WorkspaceEnv`
 - `.:WorkspaceEnvBackend`
 - `.:WorkspaceEnvInputError`
 - `.:WorkspaceExecOptions`
 - `.:WorkspaceExecResult`
+- `.:WorkspaceFileSnapshot`
 - `.:WorkspaceFileStat`
+- `.:WorkspaceFilesDiff`
+- `.:WorkspaceGlobFilesResult`
+- `.:WorkspaceGrepFilesResult`
+- `.:WorkspaceGrepMatch`
+- `.:WorkspaceGrepMode`
 - `.:WorkspaceListFilesResult`
 - `.:WorkspaceOperationOptions`
 - `.:WorkspaceReadFileResult`
@@ -23,6 +34,11 @@
 - `.:WorkspaceWriteFileResult`
 - `.:createWorkspaceEnv`
 - `.:createWorkspaceTools`
+- `.:diffWorkspaceFiles`
+- `.:editWorkspaceFile`
+- `.:globWorkspaceFiles`
+- `.:grepWorkspaceFiles`
+- `.:walkWorkspaceFiles`
 
 ## Experimental exports
 

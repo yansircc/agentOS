@@ -1,5 +1,4 @@
 import { defineAgentDO, type CloudflareAgentEnv } from "@agent-os/backend-cloudflare-do";
-import { withAgentDOTestingDrain } from "@agent-os/backend-cloudflare-do/testing";
 import { triggerParseOk, type TriggerTx } from "@agent-os/runtime";
 import { Effect } from "effect";
 import type { LedgerEventRpc } from "@agent-os/kernel/types";
@@ -20,12 +19,10 @@ const trigger = {
   commitCancelled: () => undefined,
 };
 
-const FixtureDO = defineAgentDO<CloudflareAgentEnv>({
+export const FixtureDO = defineAgentDO<CloudflareAgentEnv>({
   bindings: [],
   triggers: [trigger],
 });
-
-export const TestingFixtureDO = withAgentDOTestingDrain(FixtureDO);
 
 export const firstKind = (events: ReadonlyArray<LedgerEventRpc>): string | null =>
   events[0]?.kind ?? null;

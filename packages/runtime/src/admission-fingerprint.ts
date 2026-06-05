@@ -1,82 +1,42 @@
 /**
- * Canonical fingerprint algebra (contract §4.1).
+ * Canonical route/schema fingerprint algebra (contract §4.1).
  *
- * Two pure functions: `makeSchemaContract` for `(schema → SchemaContract)`
- * and `routeFingerprint` for `(LlmRoute → string)`. Both reach for the
- * same canonical-JSON serializer so equivalent inputs hash to the same
- * fingerprint across implementations.
- *
- * Rules (in order):
- *   a. sort object keys recursively
- *   c'. sort set-semantics arrays (`required`, `enum`) — discovered
- *       during admission validation; see contract §4.1
- *   d. strip non-semantic annotations (title, description, examples,
- *      $comment, x-*)
- *
- * Algorithm version is embedded in the fingerprint prefix so a future
- * canonicalization change auto-invalidates old leases by construction
- * (no migration needed).
+ * Schema fingerprints are owned by AgentSchema. Runtime only packages an
+ * AgentSchema into the admission contract and keeps route normalization here.
  */
 
 import { Effect } from "effect";
-import { type JsonSchemaObject, type SchemaContract } from "@agent-os/kernel/json-schema";
+import {
+  AGENT_SCHEMA_FINGERPRINT_VERSION,
+  ensureAgentSchema,
+  isAgentSchema,
+  makeAgentSchemaSpec,
+  type AgentSchemaSource,
+  type AgentSchemaSpec,
+} from "@agent-os/kernel/agent-schema";
 import { DEFAULTS as LLM_DEFAULTS, type LlmRoute } from "@agent-os/kernel/llm";
 
-export const FINGERPRINT_ALGO_VERSION = "effect-json-schema-v1";
+export const FINGERPRINT_ALGO_VERSION = AGENT_SCHEMA_FINGERPRINT_VERSION;
 
-const SET_SEMANTICS_ARRAYS = new Set(["required", "enum"]);
-const STRIP_KEYS = new Set(["title", "description", "examples", "$comment"]);
-
-const canonicalize = (node: unknown, parentKey?: string): unknown => {
+const canonicalize = (node: unknown): unknown => {
   if (node === null || typeof node !== "object") return node;
   if (Array.isArray(node)) {
-    const mapped = node.map((item) => canonicalize(item));
-    if (parentKey !== undefined && SET_SEMANTICS_ARRAYS.has(parentKey)) {
-      return [...mapped].sort((a, b) => {
-        const sa = typeof a === "string" ? a : JSON.stringify(a);
-        const sb = typeof b === "string" ? b : JSON.stringify(b);
-        return sa < sb ? -1 : sa > sb ? 1 : 0;
-      });
-    }
-    return mapped;
+    return node.map((item) => canonicalize(item));
   }
   const obj = node as Record<string, unknown>;
-  const sortedKeys = Object.keys(obj)
-    .filter((k) => !STRIP_KEYS.has(k) && !k.startsWith("x-"))
-    .sort();
+  const sortedKeys = Object.keys(obj).sort();
   const out: Record<string, unknown> = {};
-  for (const k of sortedKeys) out[k] = canonicalize(obj[k], k);
+  for (const k of sortedKeys) out[k] = canonicalize(obj[k]);
   return out;
 };
 
 const canonicalJsonString = (node: unknown): string => JSON.stringify(canonicalize(node));
 
-const sha256Hex = (input: string): Effect.Effect<string> => {
-  const bytes = new TextEncoder().encode(input);
-  return Effect.promise(() => crypto.subtle.digest("SHA-256", bytes)).pipe(
-    Effect.map((buf) =>
-      Array.from(new Uint8Array(buf))
-        .map((b) => b.toString(16).padStart(2, "0"))
-        .join(""),
-    ),
-  );
-};
-
-/** Build a SchemaContract from a JSON Schema object.
- *
- *  Deterministic across implementations: same canonicalization rules yield
- *  byte-equal canonical JSON, then SHA-256, then identical fingerprint string.
- *  Algorithm version is embedded in the fingerprint prefix so future
- *  canonicalization changes auto-invalidate old leases. */
-export const makeSchemaContract = (schema: JsonSchemaObject): Effect.Effect<SchemaContract> =>
-  Effect.gen(function* () {
-    const canon = canonicalJsonString(schema);
-    const hex = yield* sha256Hex(canon);
-    return {
-      schema,
-      fingerprint: `${FINGERPRINT_ALGO_VERSION}:sha256:${hex}`,
-    };
-  });
+/** Build an AgentSchemaSpec from an AgentSchema source. */
+export const makeAdmissionSchemaSpec = <A, I>(
+  schema: AgentSchemaSource<A, I>,
+): Effect.Effect<AgentSchemaSpec<A>> =>
+  makeAgentSchemaSpec(isAgentSchema(schema) ? schema : ensureAgentSchema(schema));
 
 /** Per-kind route normalizer applied BEFORE canonical JSON. Fills in
  *  the substrate's current defaults so the fingerprint reflects the
@@ -103,7 +63,6 @@ const normalizeRouteForFingerprint = (route: LlmRoute): LlmRoute => {
         ...route,
         anthropicVersion: route.anthropicVersion ?? LLM_DEFAULTS.anthropicVersion,
       };
-    case "cf-ai-binding":
     case "openai-chat-compatible":
     case "gemini-generate-content":
       return route;

@@ -12,17 +12,43 @@ settlement.
 ## Prerequisites
 
 - [Durable truth](/concepts/durable-truth/)
+- [Durable process algebra](/concepts/durable-process-algebra/)
 - [Runtime package](/packages/runtime/)
 - [Cloudflare DO backend](/packages/backend-cloudflare-do/)
 
 ## Steps
 
 1. Define a `DurableTrigger` in app code.
-2. Parse the intent payload with `parseIntent`.
-3. Use `acquire` for provider or tool work.
-4. Use synchronous `commit` and `commitCancelled` callbacks for durable facts.
-5. Register the trigger with `defineAgentDO({ triggers: [trigger] })`.
-6. Submit work with `agent.enqueueTrigger(...)`.
+2. Give the trigger one intent event kind. The intent event is the durable
+   request; the `due_work` row is only the backend scheduling cursor.
+3. Parse the intent payload with `parseIntent`. Reject malformed input before
+   acquire.
+4. Use `acquire` for provider, tool, dispatch, or file work. The acquire
+   boundary is the only place external effects may run.
+5. Use stable provider idempotency keys derived from the semantic intent or
+   step. Retry must repeat the same external operation, not create a new one.
+6. Use synchronous `commit` and `commitCancelled` callbacks for durable facts.
+   These callbacks must only append ledger facts or staged backend work through
+   the transaction API.
+7. Do not call providers, tools, network services, clocks that affect business
+   meaning, random ids, or background dispatch directly from commit callbacks.
+   Commit must be deterministic from the acquired outcome and transaction
+   inputs.
+8. Register the trigger with `defineAgentDO({ triggers: [trigger] })`.
+9. Submit work with `agent.enqueueTrigger(...)`.
+
+Cancellation is cooperative. If cancellation arrives before acquire, the trigger
+commits cancellation. If it arrives while acquire is running, the backend records
+cancel requested and forces the claim deadline forward. The eventual commit path
+must produce exactly one terminal outcome.
+
+Redrive retries expired claimed work with `acquireMode: "redrive"`. Redrive may
+retry the same idempotent external step and may append a new terminal fact only
+if the previous semantic step has no terminal fact.
+
+Deleting or compacting completed `due_work` or dispatch outbox rows must never
+erase audit-visible state. Any process state that must survive cleanup belongs
+in ledger facts plus a materialized projection, not in the buffer row.
 
 ## References
 

@@ -10,44 +10,39 @@
  * NOT a test file — vitest ignores _-prefixed files via glob.
  */
 
-import { Layer, ManagedRuntime } from "effect";
+import { Context, Layer, ManagedRuntime, Schema } from "effect";
 
 import { EventBusLive, LedgerLive } from "../../src/ledger";
-import { AiBinding, LlmTransportLive } from "../../src/llm";
+import { LlmTransport } from "@agent-os/runtime";
 import { RefResolverLive } from "@agent-os/kernel/ref-resolver";
 import { QuotaLive } from "../../src/quota";
 import { AdmissionLive } from "../../src/admission";
-import type { JsonSchemaObject } from "../../src/admission";
 import type { EventHandler } from "@agent-os/kernel/types";
+import { structuredToolResp } from "../_stub-ai";
 
-export const SCHEMA: JsonSchemaObject = {
-  type: "object",
-  properties: {
-    summary: { type: "string" },
-  },
-  required: ["summary"],
-};
+export const SCHEMA = Schema.Struct({ summary: Schema.String });
 
-export const makeRuntime = (state: DurableObjectState, ai: Ai) => {
+export const makeRuntime = (
+  state: DurableObjectState,
+  llm: Context.Tag.Service<typeof LlmTransport>,
+) => {
   const handlers = new Map<string, Set<EventHandler>>();
   const eventBus = EventBusLive(handlers);
   const ledger = LedgerLive(state).pipe(Layer.provide(eventBus));
   const quota = QuotaLive(state).pipe(Layer.provide(eventBus));
-  const aiLayer = Layer.succeed(AiBinding, ai);
+  const llmTransport = Layer.succeed(LlmTransport, llm);
   const refs = RefResolverLive({
     material: () => null,
   });
-  const providerBase = Layer.mergeAll(aiLayer, refs);
-  const llmTransport = LlmTransportLive.pipe(Layer.provide(providerBase));
   const admission = AdmissionLive(state).pipe(
-    Layer.provide(Layer.mergeAll(eventBus, providerBase)),
+    Layer.provide(Layer.mergeAll(eventBus, llmTransport)),
   );
-  return ManagedRuntime.make(Layer.mergeAll(ledger, quota, aiLayer, llmTransport, admission, refs));
+  return ManagedRuntime.make(Layer.mergeAll(ledger, quota, llmTransport, admission, refs));
 };
 
 export const makeRuntimeWithRegistry = (
   state: DurableObjectState,
-  ai: Ai,
+  llm: Context.Tag.Service<typeof LlmTransport>,
   endpoints: Record<string, string>,
   credentials: Record<string, string>,
 ) => {
@@ -55,7 +50,7 @@ export const makeRuntimeWithRegistry = (
   const eventBus = EventBusLive(handlers);
   const ledger = LedgerLive(state).pipe(Layer.provide(eventBus));
   const quota = QuotaLive(state).pipe(Layer.provide(eventBus));
-  const aiLayer = Layer.succeed(AiBinding, ai);
+  const llmTransport = Layer.succeed(LlmTransport, llm);
   const refs = RefResolverLive({
     material: (ref) => {
       switch (ref.kind) {
@@ -68,28 +63,10 @@ export const makeRuntimeWithRegistry = (
       }
     },
   });
-  const providerBase = Layer.mergeAll(aiLayer, refs);
-  const llmTransport = LlmTransportLive.pipe(Layer.provide(providerBase));
   const admission = AdmissionLive(state).pipe(
-    Layer.provide(Layer.mergeAll(eventBus, providerBase)),
+    Layer.provide(Layer.mergeAll(eventBus, llmTransport)),
   );
-  return ManagedRuntime.make(Layer.mergeAll(ledger, quota, aiLayer, llmTransport, admission, refs));
+  return ManagedRuntime.make(Layer.mergeAll(ledger, quota, llmTransport, admission, refs));
 };
 
-export const submitStructuredResp = (json: string, id = "c1") => ({
-  choices: [
-    {
-      message: {
-        content: null,
-        tool_calls: [
-          {
-            id,
-            type: "function" as const,
-            function: { name: "_submit_structured", arguments: json },
-          },
-        ],
-      },
-    },
-  ],
-  usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
-});
+export const submitStructuredResp = structuredToolResp;

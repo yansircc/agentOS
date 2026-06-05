@@ -8,6 +8,8 @@ export interface InMemoryLlmTransportOptions {
   readonly responses?: ReadonlyArray<LlmResponse>;
 }
 
+const IN_MEMORY_LLM_TRANSPORT_VERSION = "1.0.0";
+
 const responseQueueHandler = (
   responses: ReadonlyArray<LlmResponse>,
 ): ((request: LlmRequest) => LlmResponse | Promise<LlmResponse>) => {
@@ -26,6 +28,12 @@ export const InMemoryLlmTransportLive = (
 ): Layer.Layer<LlmTransport> => {
   const handler = options.handler ?? responseQueueHandler(options.responses ?? []);
   return Layer.succeed(LlmTransport, {
+    describeRoute: (route) => ({
+      providerOutputAdapterId: `${route.kind}@in-memory-${IN_MEMORY_LLM_TRANSPORT_VERSION}`,
+      providerOutputAdapterVersion: IN_MEMORY_LLM_TRANSPORT_VERSION,
+      transportAdapterId: `in-memory-llm-transport@${IN_MEMORY_LLM_TRANSPORT_VERSION}`,
+      transportAdapterVersion: IN_MEMORY_LLM_TRANSPORT_VERSION,
+    }),
     call: (request) =>
       Effect.tryPromise({
         try: () => Promise.resolve(handler(request)),

@@ -23,7 +23,6 @@ title: "@agent-os/backend-cloudflare-do Public API Intent"
 - `.:AgentTriggerCancelSpec`
 - `.:AgentTriggerIntentSpec`
 - `.:AnthropicMessagesSpec`
-- `.:CfAiBindingSpec`
 - `.:CloudflareAgentEnv`
 - `.:CloudflareAttachedStreamFactory`
 - `.:CloudflareAttachedStreamFactoryContext`
@@ -46,7 +45,6 @@ title: "@agent-os/backend-cloudflare-do Public API Intent"
 - `.:QueueDispatchTargetBinding`
 - `.:anthropicMessages`
 - `.:binding`
-- `.:cfAiBinding`
 - `.:credential`
 - `.:createAgentDurableObject`
 - `.:defineAgentDO`
@@ -61,10 +59,6 @@ title: "@agent-os/backend-cloudflare-do Public API Intent"
 - `.:openAIChat`
 - `.:providerDispatchTarget`
 - `.:queueDispatchTarget`
-- `./testing:AgentDOTestingDrainRuntime`
-- `./testing:AgentDrainDueTestingOptions`
-- `./testing:AgentDrainUntilQuietTestingOptions`
-- `./testing:withAgentDOTestingDrain`
 
 ## Experimental exports
 

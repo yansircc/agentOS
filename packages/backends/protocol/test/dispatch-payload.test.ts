@@ -21,6 +21,11 @@ import {
   settleDispatchOutboundDelivered,
 } from "../src";
 
+const traceContext = {
+  traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+  tracestate: "vendor=value",
+};
+
 const bindingRef = bindingMaterialRef({
   provider: "cloudflare",
   bindingKind: "durable_object",
@@ -48,7 +53,7 @@ describe("@agent-os/backend-protocol", () => {
         idempotencyKey: "dispatch-1",
         retryPolicy: DISPATCH_RETRY_POLICY,
         claim,
-        traceContext: { traceparent: "00-test", tracestate: "state" },
+        traceContext,
       }),
     );
 
@@ -57,10 +62,29 @@ describe("@agent-os/backend-protocol", () => {
     expect(parsed.value.target.bindingRef).toEqual(bindingRef);
     expect(parsed.value.target.scope).toBe("receiver");
     expect(parsed.value.event).toBe("app.deliver");
-    expect(parsed.value.traceContext).toEqual({
-      traceparent: "00-test",
-      tracestate: "state",
-    });
+    expect(parsed.value.traceContext).toEqual(traceContext);
+  });
+
+  it("rejects malformed trace context before dispatch propagation", () => {
+    const parsed = parseRequestedPayload(
+      JSON.stringify({
+        target: {
+          bindingRef,
+          scope: "receiver",
+          scopeRef: { kind: "conversation", scopeId: "receiver" },
+        },
+        event: "app.deliver",
+        data: { ok: true },
+        idempotencyKey: "dispatch-1",
+        retryPolicy: DISPATCH_RETRY_POLICY,
+        claim,
+        traceContext: { traceparent: "00-test" },
+      }),
+    );
+
+    expect(parsed.ok).toBe(false);
+    if (parsed.ok) return;
+    expect(parsed.failure.reason).toContain("traceparent");
   });
 
   it("returns typed failures for malformed dispatch payloads", () => {

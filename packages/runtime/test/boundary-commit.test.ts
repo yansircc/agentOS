@@ -1,8 +1,10 @@
 import { describe, expect, it } from "@effect/vitest";
 
-import { defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
+import {
+  defineBoundaryContract,
+  type BoundaryEventContract,
+} from "@agent-os/kernel/boundary-contract";
 import { makePreClaim } from "@agent-os/kernel/effect-claim";
-import type { JsonSchemaObject } from "@agent-os/kernel/json-schema";
 import {
   defineSettlementContract,
   settleLived,
@@ -14,7 +16,7 @@ const emptyPayload = {
   type: "object",
   properties: {},
   additionalProperties: false,
-} satisfies JsonSchemaObject;
+} satisfies BoundaryEventContract["payloadSchema"];
 
 const settlement = defineSettlementContract({
   settlementId: "@agent-os/slot-vocab",

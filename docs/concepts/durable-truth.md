@@ -18,6 +18,7 @@ application authorization.
 
 ## Related
 
+- [Durable process algebra](durable-process-algebra.md)
 - [Attached streams](attached-streams.md)
 - [Materialized projections](materialized-projections.md)
 - [Boundary contract](../boundary-contract.md)

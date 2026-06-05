@@ -17,18 +17,28 @@
 
 import { Clock, Data, Duration, Effect, Ref } from "effect";
 import {
-  ABORT,
-  type AbortKind,
   JsonStringifyError,
-  reasonOf,
+  InvalidTraceContext,
   safeStringify,
   safeStringifyPretty,
   SqlError,
   ToolError,
   UpstreamFailure,
 } from "@agent-os/kernel/errors";
-import type { LlmMessage, LlmRoute, ToolDefinition } from "@agent-os/kernel/llm";
+import {
+  textFromLlmOutputItems,
+  toolCallsFromLlmOutputItems,
+  type LlmMessage,
+  type LlmRoute,
+  type ToolDefinition,
+} from "@agent-os/kernel/llm";
 import type { LedgerEvent } from "@agent-os/kernel/types";
+import {
+  copyTraceContext,
+  validateOptionalTraceContext,
+  type TraceContext,
+} from "@agent-os/kernel/trace-context";
+import { ABORT, type AbortKind, reasonOf } from "./abort";
 import { LlmTransport } from "./llm-transport";
 import { Ledger, type LedgerCommitEventSpec } from "./ledger";
 import type { RefResolutionFailed } from "@agent-os/kernel/ref-resolver";
@@ -40,7 +50,7 @@ import {
   validateToolRegistry,
   type Tool,
 } from "@agent-os/kernel/tools";
-import { Admission, makeSchemaContract } from "./admission";
+import { Admission, makeAdmissionSchemaSpec } from "./admission";
 import {
   admitterErrorRejectionRef,
   makeOperationRef,
@@ -57,6 +67,16 @@ import {
   toolErrorReason,
   publicRuntimeCauseReason,
 } from "./tool-settlement";
+import {
+  agentRunAbortedEvent,
+  agentRunCompletedEvent,
+  agentRunStartedEvent,
+  chatIngestedEvent,
+  llmResponseEvent,
+  toolExecutedEvent,
+  toolRejectedEvent,
+  type RuntimeEventCommitSpec,
+} from "./runtime-events";
 
 export const DEFAULT_LLM_CALL_TIMEOUT_MS = 60_000;
 
@@ -117,18 +137,16 @@ export const buildInitialMessages = (
     ] satisfies ReadonlyArray<LlmMessage>;
   });
 
-const logLedgerEvent = (
+const logRuntimeLedgerEvent = (
   ledger: {
     readonly commit: (
       events: ReadonlyArray<LedgerCommitEventSpec>,
     ) => Effect.Effect<ReadonlyArray<LedgerEvent>, SqlError | JsonStringifyError>;
   },
-  kind: string,
-  payload: unknown,
-  scope: string,
+  spec: RuntimeEventCommitSpec,
 ): Effect.Effect<LedgerEvent, SqlError | JsonStringifyError> =>
   Effect.gen(function* () {
-    const events = yield* ledger.commit([{ kind, payload, scope }]);
+    const events = yield* ledger.commit([spec]);
     const event = events[0];
     if (event === undefined) {
       return yield* Effect.fail(
@@ -142,14 +160,18 @@ const logLedgerEvent = (
  *  Logs an agent.aborted.* ledger event then constructs SubmitResult.fail. */
 const finalAbort = (
   kind: AbortKind,
-  payload: object,
+  payload: Record<string, unknown>,
   scope: string,
   runId: number,
   tokensUsed: number,
+  traceContext?: TraceContext,
 ): Effect.Effect<SubmitResult, SqlError | JsonStringifyError, Ledger> =>
   Effect.gen(function* () {
     const ledger = yield* Ledger;
-    yield* logLedgerEvent(ledger, kind, { runId, ...payload }, scope);
+    yield* logRuntimeLedgerEvent(
+      ledger,
+      agentRunAbortedEvent({ scope, kind, runId, payload, traceContext }),
+    );
     const events = yield* ledger.events(scope);
     return {
       ok: false,
@@ -188,6 +210,7 @@ const timeoutAbortResult = (
   scope: string,
   runId: number,
   tokensUsed: number,
+  traceContext?: TraceContext,
 ): Effect.Effect<SubmitResult, SqlError | JsonStringifyError, Ledger> => {
   if (timeout.mode === "budget") {
     return finalAbort(
@@ -196,6 +219,7 @@ const timeoutAbortResult = (
       scope,
       runId,
       tokensUsed,
+      traceContext,
     );
   }
   return finalAbort(
@@ -204,6 +228,7 @@ const timeoutAbortResult = (
     scope,
     runId,
     tokensUsed,
+    traceContext,
   );
 };
 
@@ -214,11 +239,21 @@ export const submitAgentEffect = (
   spec: InternalSubmitSpec,
 ): Effect.Effect<
   SubmitResult,
-  SqlError | JsonStringifyError | RefResolutionFailed,
+  SqlError | JsonStringifyError | InvalidTraceContext | RefResolutionFailed,
   Ledger | LlmTransport | Quota | Admission
 > =>
   Effect.gen(function* () {
     const ledger = yield* Ledger;
+    const traceContextResult = validateOptionalTraceContext(spec.traceContext);
+    if (!traceContextResult.ok) {
+      return yield* Effect.fail(
+        new InvalidTraceContext({
+          position: "submit",
+          reason: traceContextResult.reason,
+        }),
+      );
+    }
+    const traceContext = copyTraceContext(traceContextResult.traceContext);
     const startTime = yield* Clock.currentTimeMillis;
     const budgetTokens = spec.budget?.tokens ?? Number.POSITIVE_INFINITY;
     const budgetTimeMs = spec.budget?.timeMs ?? Number.POSITIVE_INFINITY;
@@ -227,17 +262,19 @@ export const submitAgentEffect = (
     const scope = spec.deliver.scope;
     const scopeRef = spec.deliver.scopeRef;
 
-    const started = yield* logLedgerEvent(
+    const started = yield* logRuntimeLedgerEvent(
       ledger,
-      "agent.run.started",
-      { intent: spec.intent },
-      scope,
+      agentRunStartedEvent({ scope, intent: spec.intent, traceContext }),
     );
-    yield* logLedgerEvent(
+    yield* logRuntimeLedgerEvent(
       ledger,
-      "chat.ingested",
-      { runId: started.id, intent: spec.intent, context: spec.context },
-      scope,
+      chatIngestedEvent({
+        scope,
+        runId: started.id,
+        intent: spec.intent,
+        context: spec.context,
+        traceContext,
+      }),
     );
 
     const tokensUsedRef = yield* Ref.make(0);
@@ -260,11 +297,12 @@ export const submitAgentEffect = (
           scope,
           started.id,
           0,
+          traceContext,
         );
       }
 
       const admission = yield* Admission;
-      const schemaContract = yield* makeSchemaContract(spec.outputSchema);
+      const schemaSpec = yield* makeAdmissionSchemaSpec(spec.outputSchema);
       const route: LlmRoute = spec.route;
 
       const ctxStr = yield* safeStringifyPretty(spec.context);
@@ -281,6 +319,7 @@ export const submitAgentEffect = (
           scope,
           started.id,
           tokensBeforeCall,
+          traceContext,
         );
       }
       const controller = new AbortController();
@@ -289,8 +328,9 @@ export const submitAgentEffect = (
           .attemptStructured<unknown>({
             scope,
             route,
-            schemaContract,
+            schemaSpec,
             strategy: "forced-tool-call",
+            traceContext,
             signal: controller.signal,
             stimulus: {
               kind: "live",
@@ -313,7 +353,23 @@ export const submitAgentEffect = (
       );
       if (attempted._tag === "Left") {
         if (isLlmCallTimedOut(attempted.left)) {
-          return yield* timeoutAbortResult(attempted.left, scope, started.id, tokensBeforeCall);
+          return yield* timeoutAbortResult(
+            attempted.left,
+            scope,
+            started.id,
+            tokensBeforeCall,
+            traceContext,
+          );
+        }
+        if (attempted.left._tag === ABORT.UPSTREAM_FAILURE) {
+          return yield* finalAbort(
+            ABORT.UPSTREAM_FAILURE,
+            { cause: publicRuntimeCauseReason(attempted.left.cause) },
+            scope,
+            started.id,
+            tokensBeforeCall,
+            traceContext,
+          );
         }
         return yield* Effect.fail(attempted.left);
       }
@@ -329,16 +385,18 @@ export const submitAgentEffect = (
             scope,
             started.id,
             tokens,
+            traceContext,
           );
         }
         const finalStr = yield* safeStringify(result.decoded);
         yield* ledger.commit([
           { kind: deliverEventName, payload: result.decoded, scope },
-          {
-            kind: "agent.run.completed",
-            payload: { runId: started.id, event: deliverEventName },
+          agentRunCompletedEvent({
             scope,
-          },
+            runId: started.id,
+            event: deliverEventName,
+            traceContext,
+          }),
         ]);
         const events = yield* ledger.events(scope);
         return {
@@ -365,6 +423,7 @@ export const submitAgentEffect = (
         scope,
         started.id,
         0,
+        traceContext,
       );
     }
 
@@ -383,6 +442,7 @@ export const submitAgentEffect = (
         scope,
         started.id,
         0,
+        traceContext,
       );
     }
 
@@ -410,6 +470,7 @@ export const submitAgentEffect = (
             scope,
             started.id,
             tokensBeforeCall,
+            traceContext,
           );
         }
 
@@ -421,6 +482,7 @@ export const submitAgentEffect = (
                 route: spec.route,
                 messages,
                 tools: toolDefs.length > 0 ? toolDefs : undefined,
+                traceContext,
               },
               { signal: controller.signal },
             )
@@ -440,25 +502,32 @@ export const submitAgentEffect = (
         );
         if (timedResp._tag === "Left") {
           if (isLlmCallTimedOut(timedResp.left)) {
-            return yield* timeoutAbortResult(timedResp.left, scope, started.id, tokensBeforeCall);
+            return yield* timeoutAbortResult(
+              timedResp.left,
+              scope,
+              started.id,
+              tokensBeforeCall,
+              traceContext,
+            );
           }
           return yield* Effect.fail(timedResp.left);
         }
         const resp = timedResp.right;
+        const responseText = textFromLlmOutputItems(resp.items);
+        const responseToolCalls = toolCallsFromLlmOutputItems(resp.items);
 
         const newTokens = tokensBeforeCall + resp.usage.totalTokens;
         yield* Ref.set(tokensUsedRef, newTokens);
 
-        yield* logLedgerEvent(
+        yield* logRuntimeLedgerEvent(
           ledger,
-          "llm.response",
-          {
+          llmResponseEvent({
+            scope,
             turn: turnRefOf(started.id, turn),
-            text: resp.text,
-            toolCalls: resp.toolCalls,
+            items: resp.items,
             usage: resp.usage,
-          },
-          scope,
+            traceContext,
+          }),
         );
 
         if (newTokens > budgetTokens) {
@@ -468,39 +537,41 @@ export const submitAgentEffect = (
             scope,
             started.id,
             newTokens,
+            traceContext,
           );
         }
 
         messages.push({
           role: "assistant",
-          content: resp.text,
-          tool_calls: resp.toolCalls.length > 0 ? resp.toolCalls : undefined,
+          content: responseText,
+          tool_calls: responseToolCalls.length > 0 ? responseToolCalls : undefined,
         });
 
-        if (resp.toolCalls.length === 0) {
+        if (responseToolCalls.length === 0) {
           yield* ledger.commit([
             {
               kind: spec.deliver.event,
-              payload: { final: resp.text, turn: turnRefOf(started.id, turn) },
+              payload: { final: responseText, turn: turnRefOf(started.id, turn) },
               scope,
             },
-            {
-              kind: "agent.run.completed",
-              payload: { runId: started.id, event: spec.deliver.event },
+            agentRunCompletedEvent({
               scope,
-            },
+              runId: started.id,
+              event: spec.deliver.event,
+              traceContext,
+            }),
           ]);
           const events = yield* ledger.events(scope);
           return {
             ok: true,
             runId: started.id,
-            final: resp.text,
+            final: responseText,
             eventCount: events.length,
             tokensUsed: newTokens,
           } as const;
         }
 
-        for (const call of resp.toolCalls) {
+        for (const call of responseToolCalls) {
           // Parse OUTSIDE the retry block. unknown_tool / invalid_args are
           // non-recoverable: retrying the same args won't make them valid,
           // AND parsing before any quota grant means invalid LLM-emitted
@@ -545,17 +616,18 @@ export const submitAgentEffect = (
           const rejectedAdmission =
             normalizedAdmission.ok === false ? normalizedAdmission.rejectionRef : null;
           if (rejectedAdmission !== null) {
-            yield* logLedgerEvent(
+            yield* logRuntimeLedgerEvent(
               ledger,
-              "tool.rejected",
-              {
+              toolRejectedEvent({
+                scope,
                 runId: started.id,
+                toolCallId: call.id,
                 name: call.function.name,
                 args: call.function.arguments,
                 execution: tool.execution,
                 claim: settleToolAdmissionRejected(claim, rejectedAdmission),
-              },
-              scope,
+                traceContext,
+              }),
             );
             return yield* new ToolError({
               toolName: call.function.name,
@@ -624,7 +696,7 @@ export const submitAgentEffect = (
                     });
                   }
                 }
-                return yield* executeTool(tool, args, call.function.name);
+                return yield* executeTool(tool, args, call.function.name, traceContext);
               });
               if (!Number.isFinite(budgetTimeMs)) {
                 return yield* attempt;
@@ -675,17 +747,18 @@ export const submitAgentEffect = (
               [ABORT.TOOL_ERROR]: (error) =>
                 Effect.gen(function* () {
                   const reason = toolErrorReason(error);
-                  yield* logLedgerEvent(
+                  yield* logRuntimeLedgerEvent(
                     ledger,
-                    "tool.rejected",
-                    {
+                    toolRejectedEvent({
+                      scope,
                       runId: started.id,
+                      toolCallId: call.id,
                       name: call.function.name,
                       args: call.function.arguments,
                       execution: tool.execution,
                       claim: settleToolExecutionRejected(claim, reason),
-                    },
-                    scope,
+                      traceContext,
+                    }),
                   );
                   return yield* error;
                 }),
@@ -693,18 +766,19 @@ export const submitAgentEffect = (
           );
 
           const resultStr = yield* safeStringify(result);
-          yield* logLedgerEvent(
+          yield* logRuntimeLedgerEvent(
             ledger,
-            "tool.executed",
-            {
+            toolExecutedEvent({
+              scope,
               runId: started.id,
+              toolCallId: call.id,
               name: call.function.name,
               args: call.function.arguments,
               execution: tool.execution,
               result,
               claim: settleToolExecuted(claim, contract),
-            },
-            scope,
+              traceContext,
+            }),
           );
           messages.push({
             role: "tool",
@@ -716,7 +790,14 @@ export const submitAgentEffect = (
       }
 
       const tokensUsed = yield* Ref.get(tokensUsedRef);
-      return yield* finalAbort(ABORT.RETRIES, { maxTurns }, scope, started.id, tokensUsed);
+      return yield* finalAbort(
+        ABORT.RETRIES,
+        { maxTurns },
+        scope,
+        started.id,
+        tokensUsed,
+        traceContext,
+      );
     });
 
     return yield* loop.pipe(
@@ -730,6 +811,7 @@ export const submitAgentEffect = (
               scope,
               started.id,
               tokensUsed,
+              traceContext,
             );
           }),
         [ABORT.TOOL_ERROR]: (e) =>
@@ -742,6 +824,7 @@ export const submitAgentEffect = (
                 scope,
                 started.id,
                 tokensUsed,
+                traceContext,
               );
             }
             return yield* finalAbort(
@@ -750,6 +833,7 @@ export const submitAgentEffect = (
               scope,
               started.id,
               tokensUsed,
+              traceContext,
             );
           }),
       }),

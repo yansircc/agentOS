@@ -192,12 +192,6 @@ describe("MaterialRef algebra", () => {
         ref: "OPENROUTER_KEY",
       },
     ]);
-    expect(
-      llmRouteMaterialRefs({
-        kind: "cf-ai-binding",
-        modelId: "@cf/stub/test",
-      }),
-    ).toEqual([]);
   });
 
   it("resolves non-secret material through RefResolver material axis", async () => {

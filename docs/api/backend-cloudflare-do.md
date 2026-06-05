@@ -19,7 +19,6 @@
 - `.:AgentTriggerCancelSpec`
 - `.:AgentTriggerIntentSpec`
 - `.:AnthropicMessagesSpec`
-- `.:CfAiBindingSpec`
 - `.:CloudflareAgentEnv`
 - `.:CloudflareAttachedStreamFactory`
 - `.:CloudflareAttachedStreamFactoryContext`
@@ -42,7 +41,6 @@
 - `.:QueueDispatchTargetBinding`
 - `.:anthropicMessages`
 - `.:binding`
-- `.:cfAiBinding`
 - `.:credential`
 - `.:createAgentDurableObject`
 - `.:defineAgentDO`
@@ -57,10 +55,6 @@
 - `.:openAIChat`
 - `.:providerDispatchTarget`
 - `.:queueDispatchTarget`
-- `./testing:AgentDOTestingDrainRuntime`
-- `./testing:AgentDrainDueTestingOptions`
-- `./testing:AgentDrainUntilQuietTestingOptions`
-- `./testing:withAgentDOTestingDrain`
 
 ## Experimental exports
 

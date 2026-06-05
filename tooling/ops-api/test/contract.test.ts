@@ -637,7 +637,8 @@ describe("§6.7 AttemptKey base64url JSON roundtrip", () => {
       routeFingerprint: "openai-chat:gpt-5:a1b2",
       schemaFingerprint: "order_v3:b8c4",
       strategy: "forced-tool-call",
-      adapterVersion: "1.2.0",
+      providerOutputAdapterVersion: "1.2.0",
+      transportAdapterVersion: "2.3.0",
     };
     const encoded = encodeAttemptKey(key);
     expect(encoded).not.toContain("=");

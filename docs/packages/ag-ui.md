@@ -1,0 +1,29 @@
+# @agent-os/ag-ui
+
+## Purpose
+
+Framework-neutral AG-UI wire projection for typed agentOS runtime events and
+AgentSchema tool declarations.
+
+## Invariant
+
+AG-UI frames are edge protocol projections. They never write ledger facts,
+replace agentOS tool algebra, or become runtime source truth.
+
+## Minimal Usage
+
+Project committed ledger events into AG-UI frames after runtime payloads decode:
+
+```ts
+import { projectLedgerEventsToAgUiFrames } from "@agent-os/ag-ui";
+```
+
+Use `projectToolToAgUiTool` to expose AG-UI tool declarations generated from
+`AgentSchema.projections.agUi`.
+
+## Verification
+
+```sh
+cd packages/composers/ag-ui
+vp test run
+```

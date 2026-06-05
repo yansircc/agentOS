@@ -84,6 +84,10 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:MakeAttachedStreamServiceSpec`
 - `.:Outcome`
 - `.:OutcomeClass`
+- `.:OTLP_GENAI_SEMCONV_MAPPING_VERSION`
+- `.:OtlpAttributeValue`
+- `.:OtlpProjection`
+- `.:OtlpProjectionSpan`
 - `.:ProbeInput`
 - `.:Quota`
 - `.:ProjectionApplicationError`
@@ -111,6 +115,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:Scheduler`
 - `.:ScheduledEventIntentPayload`
 - `.:Strategy`
+- `.:StructuredDecodeResult`
 - `.:Stimulus`
 - `.:SubmitResult`
 - `.:SubmitSpec`
@@ -140,11 +145,12 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:commitBoundaryEvent`
 - `.:createAttachedStreamQueue`
 - `.:decideTier`
+- `.:decodeStructuredOutputFromItems`
 - `.:defineProjection`
 - `.:drainTriggerPumpUntilQuiet`
 - `.:getAttachedStreamHandler`
 - `.:getProjection`
-- `.:makeSchemaContract`
+- `.:makeAdmissionSchemaSpec`
 - `.:makeAttachedStreamRegistry`
 - `.:makeAttachedStreamService`
 - `.:makeDurableTriggerRegistry`
@@ -152,6 +158,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:makeProjectionRegistryResult`
 - `.:getDurableTrigger`
 - `.:parseScheduledEventIntentPayload`
+- `.:projectOtlpSpans`
 - `.:projectLease`
 - `.:projectionDelete`
 - `.:projectionFail`
@@ -193,12 +200,57 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `./admission:Strategy`
 - `./admission:Stimulus`
 - `./admission:decideTier`
-- `./admission:makeSchemaContract`
+- `./admission:makeAdmissionSchemaSpec`
 - `./admission:projectLease`
 - `./admission:routeFingerprint`
 - `./abort:ABORT`
 - `./abort:AbortKind`
 - `./abort:reasonOf`
+- `./otlp-projection:OTLP_GENAI_SEMCONV_MAPPING_VERSION`
+- `./otlp-projection:OtlpAttributeValue`
+- `./otlp-projection:OtlpProjection`
+- `./otlp-projection:OtlpProjectionSpan`
+- `./otlp-projection:projectOtlpSpans`
+- `./run-projector:RUN_BEARING_KINDS`
+- `./run-projector:projectRunStatus`
+- `./run-projector:projectRunTrace`
+- `./run-projector:projectRunsPage`
+- `./runtime-events:AgentRunAbortedPayload`
+- `./runtime-events:AgentRunAbortedPayloadSchema`
+- `./runtime-events:AgentRunCompletedPayload`
+- `./runtime-events:AgentRunCompletedPayloadSchema`
+- `./runtime-events:AgentRunStartedPayload`
+- `./runtime-events:AgentRunStartedPayloadSchema`
+- `./runtime-events:ChatIngestedPayload`
+- `./runtime-events:ChatIngestedPayloadSchema`
+- `./runtime-events:DecodeRuntimeLedgerEventResult`
+- `./runtime-events:LlmResponsePayload`
+- `./runtime-events:LlmResponsePayloadSchema`
+- `./runtime-events:RUNTIME_ABORT_EVENT_KINDS`
+- `./runtime-events:RUNTIME_EVENT_KIND`
+- `./runtime-events:RUNTIME_EVENT_KINDS`
+- `./runtime-events:RuntimeAbortEventKind`
+- `./runtime-events:RuntimeEventCommitSpec`
+- `./runtime-events:RuntimeEventCommitSpecByKind`
+- `./runtime-events:RuntimeEventKind`
+- `./runtime-events:RuntimeEventPayloadByKind`
+- `./runtime-events:RuntimeLedgerEvent`
+- `./runtime-events:RuntimeLedgerEventByKind`
+- `./runtime-events:ToolExecutedPayload`
+- `./runtime-events:ToolExecutedPayloadSchema`
+- `./runtime-events:ToolRejectedPayload`
+- `./runtime-events:ToolRejectedPayloadSchema`
+- `./runtime-events:agentRunAbortedEvent`
+- `./runtime-events:agentRunCompletedEvent`
+- `./runtime-events:agentRunStartedEvent`
+- `./runtime-events:chatIngestedEvent`
+- `./runtime-events:decodeRuntimeEventPayload`
+- `./runtime-events:decodeRuntimeLedgerEvent`
+- `./runtime-events:isRuntimeAbortEventKind`
+- `./runtime-events:isRuntimeEventKind`
+- `./runtime-events:llmResponseEvent`
+- `./runtime-events:toolExecutedEvent`
+- `./runtime-events:toolRejectedEvent`
 
 - `.:settleToolAdmissionRejected`
 - `.:settleToolExecuted`
@@ -211,7 +263,10 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 
 ## Experimental exports
 
-None.
+- `.:LlmTransportRouteDescriptor`
+- `.:StructuredCallFailureClassification`
+- `.:classifyStructuredCallFailure`
+- `.:structuredOutputRequest`
 
 ## Deprecated exports
 

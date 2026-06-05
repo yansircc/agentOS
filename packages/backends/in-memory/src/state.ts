@@ -65,6 +65,14 @@ interface EventSink {
   readonly sink: (event: LedgerEvent) => void;
 }
 
+interface InMemoryFanoutDiagnostic {
+  readonly phase: "sink";
+  readonly eventId: number;
+  readonly kind: string;
+  readonly scope: string;
+  readonly message: string;
+}
+
 interface InMemoryDueWorkRow {
   readonly id: number;
   readonly fireAt: number;
@@ -87,6 +95,21 @@ interface InMemoryProjectionMeta {
   lastRebuiltEventId: number | null;
   updatedAt: number | null;
 }
+
+type InMemoryOutboxPatch =
+  | { readonly _tag: "add"; readonly row: DispatchOutboxRow }
+  | {
+      readonly _tag: "delivered";
+      readonly outboundEventId: number;
+      readonly deliveredEventId: number;
+      readonly attempts: number;
+    }
+  | {
+      readonly _tag: "failed";
+      readonly outboundEventId: number;
+      readonly attempts: number;
+      readonly lastError: string;
+    };
 
 export interface InMemoryBackendStateOptions {
   readonly handlers?: Iterable<InMemoryEventHandlerRegistration>;
@@ -111,6 +134,12 @@ const validateSerializablePayload = (payload: unknown): Effect.Effect<void, Json
 
 const normalizeNonNegativeInteger = (value: number | undefined, fallback: number): number =>
   value === undefined || !Number.isFinite(value) ? fallback : Math.max(0, Math.floor(value));
+
+const describeFanoutCause = (cause: unknown): string => {
+  if (typeof cause === "string") return cause;
+  if (cause instanceof Error) return `${cause.name}: ${cause.message}`;
+  return Object.prototype.toString.call(cause);
+};
 
 const eventToRpc = (event: LedgerEvent): LedgerEventRpc => ({
   id: event.id,
@@ -146,6 +175,7 @@ export class InMemoryBackendState {
   private nextDueWorkId = 1;
   private readonly rows: LedgerEvent[] = [];
   private readonly sinks = new Set<EventSink>();
+  private readonly fanoutDiagnosticsLog: InMemoryFanoutDiagnostic[] = [];
   private readonly handlers = new Map<string, Set<EventHandler>>();
   private readonly dueWork: InMemoryDueWorkRow[] = [];
   private readonly outbox = new Map<number, DispatchOutboxRow>();
@@ -438,6 +468,10 @@ export class InMemoryBackendState {
     };
   }
 
+  fanoutDiagnostics(): ReadonlyArray<InMemoryFanoutDiagnostic> {
+    return [...this.fanoutDiagnosticsLog];
+  }
+
   snapshot(scope?: string, opts: EventQueryOptions = {}): ReadonlyArray<LedgerEvent> {
     const afterId = normalizeNonNegativeInteger(opts.afterId, 0);
     const limit =
@@ -518,7 +552,7 @@ export class InMemoryBackendState {
       readonly kind: string;
       readonly intentEventKind: string;
     }) => InMemoryEventSpec,
-    afterCommit?: (event: LedgerEvent) => void,
+    stageOutbox?: (event: LedgerEvent) => DispatchOutboxRow,
   ): Effect.Effect<LedgerEvent, JsonStringifyError | SqlError | UnregisteredDurableTriggerKind> {
     return Effect.gen(this, function* () {
       const trigger = yield* getDurableTrigger(registry, triggerKind);
@@ -532,6 +566,7 @@ export class InMemoryBackendState {
         payload: spec.payload,
       };
       const projectionState = yield* this.prepareProjectionState([event]);
+      const stagedOutbox = stageOutbox?.(event);
       const committed = yield* Effect.sync(() => {
         this.nextEventId += 1;
         this.rows.push(event);
@@ -551,7 +586,7 @@ export class InMemoryBackendState {
           cancelReason: null,
           cancelledAt: null,
         });
-        afterCommit?.(event);
+        if (stagedOutbox !== undefined) this.applyOutboxPatch({ _tag: "add", row: stagedOutbox });
         return event;
       });
       yield* this.fireMany([committed]);
@@ -630,6 +665,22 @@ export class InMemoryBackendState {
 
   addOutbox(row: DispatchOutboxRow): void {
     this.outbox.set(row.outboundEventId, row);
+  }
+
+  private applyOutboxPatch(patch: InMemoryOutboxPatch): void {
+    if (patch._tag === "add") {
+      this.outbox.set(patch.row.outboundEventId, patch.row);
+      return;
+    }
+    const row = this.outbox.get(patch.outboundEventId);
+    if (row === undefined || row.deliveredEventId !== null) return;
+    row.attempts = patch.attempts;
+    if (patch._tag === "delivered") {
+      row.deliveredEventId = patch.deliveredEventId;
+      row.lastError = null;
+      return;
+    }
+    row.lastError = patch.lastError;
   }
 
   addDueWork(kind: string, intentEventId: number, fireAt: number): number {
@@ -848,6 +899,7 @@ export class InMemoryBackendState {
         readonly fireAt: number;
         readonly intentEventId: number;
       }> = [];
+      const outboxPatches: InMemoryOutboxPatch[] = [];
       const tx: TriggerTx = {
         scope,
         now,
@@ -912,6 +964,31 @@ export class InMemoryBackendState {
             intentEventId,
           });
         },
+        markOutboxDelivered: (spec: {
+          readonly outboundEventId: number;
+          readonly deliveredEventId: number;
+          readonly attempts: number;
+        }) => {
+          outboxPatches.push({ _tag: "delivered", ...spec });
+        },
+        markOutboxFailed: (spec: {
+          readonly outboundEventId: number;
+          readonly attempts: number;
+          readonly lastError: string;
+        }) => {
+          outboxPatches.push({ _tag: "failed", ...spec });
+        },
+      } as TriggerTx & {
+        readonly markOutboxDelivered: (spec: {
+          readonly outboundEventId: number;
+          readonly deliveredEventId: number;
+          readonly attempts: number;
+        }) => void;
+        readonly markOutboxFailed: (spec: {
+          readonly outboundEventId: number;
+          readonly attempts: number;
+          readonly lastError: string;
+        }) => void;
       };
       const commitFailure = yield* Effect.try({
         try: () => commit(tx),
@@ -951,6 +1028,7 @@ export class InMemoryBackendState {
             cancelledAt: null,
           });
         }
+        for (const patch of outboxPatches) this.applyOutboxPatch(patch);
       });
       const events = written.length === 0 ? [] : this.rows.slice(this.rows.length - written.length);
       yield* this.fireMany(events);
@@ -965,7 +1043,17 @@ export class InMemoryBackendState {
       for (const event of events) {
         for (const subscription of sinks) {
           if (subscription.kinds === undefined || subscription.kinds.has(event.kind)) {
-            subscription.sink(event);
+            try {
+              subscription.sink(event);
+            } catch (cause) {
+              this.fanoutDiagnosticsLog.push({
+                phase: "sink",
+                eventId: event.id,
+                kind: event.kind,
+                scope: event.scope,
+                message: describeFanoutCause(cause),
+              });
+            }
           }
         }
       }

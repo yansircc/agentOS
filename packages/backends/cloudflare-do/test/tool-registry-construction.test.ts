@@ -1,7 +1,9 @@
 import { describe, expect, it } from "@effect/vitest";
+import { Schema } from "effect";
+import { defineAgentSchema } from "@agent-os/kernel/agent-schema";
 import { materialRequirement } from "@agent-os/kernel/material-ref";
 import {
-  defineToolFromDefinition,
+  defineTool,
   pureToolExecution,
   validateToolRegistry,
   type Tool,
@@ -37,7 +39,7 @@ describe("tool registry construction", () => {
         function: {
           name: "lookup",
           description: "Lookup a value",
-          parameters: { type: "object", properties: {}, required: [] },
+          parameters: defineAgentSchema(Schema.Struct({})),
         },
       },
       execute: () => Promise.resolve({ value: 42 }),
@@ -112,18 +114,13 @@ describe("tool registry construction", () => {
   });
 
   it("binds authority required materials into the tool contract", () => {
-    const tool = defineToolFromDefinition({
-      definition: {
-        type: "function",
-        function: {
-          name: "deploy",
-          description: "Deploy a worker",
-          parameters: { type: "object", properties: {}, required: [] },
-        },
-      },
+    const tool = defineTool({
+      name: "deploy",
+      description: "Deploy a worker",
+      args: Schema.Struct({}),
       execute: () => Promise.resolve({ ok: true }),
       admit: allowToolAdmitter,
-      authorityClass: "deploy",
+      authority: "deploy",
       execution: pureToolExecution(),
       requiredMaterials: [
         materialRequirement({
@@ -194,17 +191,13 @@ describe("tool registry construction", () => {
 
   it("requires an explicit admitter at construction", () => {
     expect(() =>
-      defineToolFromDefinition({
-        definition: {
-          type: "function",
-          function: {
-            name: "lookup",
-            description: "Lookup a value",
-            parameters: { type: "object", properties: {}, required: [] },
-          },
-        },
+      defineTool({
+        name: "lookup",
+        description: "Lookup a value",
+        args: Schema.Struct({}),
         execute: () => Promise.resolve({ value: 42 }),
-        authorityClass: "read",
+        authority: "read",
+        execution: pureToolExecution(),
       } as never),
     ).toThrow("tool admitter is required");
   });

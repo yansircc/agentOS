@@ -17,7 +17,7 @@ import {
   type AgentRuntimeClient,
   type CloudflareAgentEnv,
 } from "../src";
-import { withAgentDOTestingDrain } from "../src/testing";
+import { withAgentDOTestingDrain } from "./_testing-drain";
 import {
   defineProjection,
   makeProjectionRegistryResult,
@@ -353,8 +353,43 @@ const facadeLookup = defineTool({
 
 export const makeFacadeSubmitChatResponse = (): Response =>
   Response.json({
-    choices: [{ message: { content: "facade done" } }],
-    usage: { total_tokens: 7 },
+    id: "resp_facade_submit",
+    object: "response",
+    status: "completed",
+    model: "gpt-4.1-mini",
+    created_at: 1_700_000_000,
+    error: null,
+    incomplete_details: null,
+    output: [
+      {
+        id: "msg_facade_submit",
+        type: "message",
+        status: "completed",
+        role: "assistant",
+        content: [
+          {
+            type: "output_text",
+            text: "facade done",
+            annotations: [],
+          },
+        ],
+      },
+    ],
+    instructions: null,
+    output_text: "facade done",
+    usage: {
+      input_tokens: 3,
+      input_tokens_details: { cached_tokens: 0 },
+      output_tokens: 4,
+      output_tokens_details: { reasoning_tokens: 0 },
+      total_tokens: 7,
+    },
+    parallel_tool_calls: true,
+    tools: [],
+    tool_choice: "auto",
+    metadata: null,
+    temperature: null,
+    top_p: null,
   });
 
 export const FacadeSubmitTestDO = defineAgentDO<CloudflareAgentEnv>({

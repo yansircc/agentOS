@@ -261,7 +261,7 @@ describe("defineCarrier", () => {
           reduce: (state) => state,
         }),
       }),
-    ).toThrow(/expected-boolean/);
+    ).toThrow(/index-signature-unsupported/);
   });
 
   it("types terminal constructors only on matching claim slots", () => {

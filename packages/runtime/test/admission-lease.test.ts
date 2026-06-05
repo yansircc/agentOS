@@ -5,8 +5,8 @@
  *   1. `decideTier` 12-row truth table — admission impact for the cross
  *      product of preLease × outcome × stimulus × barrier
  *   2. `projectLease` over hand-built event lists — barrier cutoffs,
- *      (ts, id) lexicographic ordering, reinforcement filtering, adapter
- *      major-version filtering
+ *      (ts, id) lexicographic ordering, reinforcement filtering, provider-output
+ *      and transport adapter major-version filtering
  *
  * Same source coverage as the prior monolith's two describe blocks at
  * admission-contract.test.ts:55-82 and 212-340.
@@ -153,19 +153,30 @@ describe("admission — projectLease pure projection (contract §7.2)", () => {
     routeFingerprint: "fnv1a:routeX",
     schemaFingerprint: "effect-json-schema-v1:sha256:schemaX",
     strategy: "forced-tool-call",
-    adapterVersion: "1.0.0",
+    providerOutputAdapterVersion: "1.0.0",
+    transportAdapterVersion: "1.0.0",
   };
 
   const ev = (
     id: number,
     ts: number,
     outcome: EvidenceRow["outcome"],
-    extras?: { stim?: "probe" | "live"; impact?: EvidenceRow["admissionImpact"]; adapter?: string },
+    extras?: {
+      stim?: "probe" | "live";
+      impact?: EvidenceRow["admissionImpact"];
+      providerOutputAdapter?: string;
+      transportAdapter?: string;
+    },
   ): EvidenceRow => ({
     id,
     ts,
     kind: "llm.structured.evidence",
-    key: { ...key, adapterVersion: extras?.adapter ?? key.adapterVersion },
+    key: {
+      ...key,
+      providerOutputAdapterVersion:
+        extras?.providerOutputAdapter ?? key.providerOutputAdapterVersion,
+      transportAdapterVersion: extras?.transportAdapter ?? key.transportAdapterVersion,
+    },
     stimulusKind: extras?.stim ?? "live",
     outcome,
     admissionImpact: extras?.impact ?? "lease-bearing",
@@ -263,14 +274,34 @@ describe("admission — projectLease pure projection (contract §7.2)", () => {
     expect(lease.status).toBe("supported");
   });
 
-  it("different adapter major version is filtered out (§9)", () => {
-    const rows = [ev(1, 1000, { class: "Supported", tokensUsed: 5 }, { adapter: "2.0.0" })];
+  it("different provider-output adapter major version is filtered out (§9)", () => {
+    const rows = [
+      ev(1, 1000, { class: "Supported", tokensUsed: 5 }, { providerOutputAdapter: "2.0.0" }),
+    ];
     const { lease } = projectLease(rows, key, 2000);
     expect(lease.status).toBe("unknown");
   });
 
-  it("same adapter major with different minor remains valid (§9)", () => {
-    const rows = [ev(1, 1000, { class: "Supported", tokensUsed: 5 }, { adapter: "1.2.3" })];
+  it("same provider-output adapter major with different minor remains valid (§9)", () => {
+    const rows = [
+      ev(1, 1000, { class: "Supported", tokensUsed: 5 }, { providerOutputAdapter: "1.2.3" }),
+    ];
+    const { lease } = projectLease(rows, key, 2000);
+    expect(lease.status).toBe("supported");
+  });
+
+  it("different transport adapter major version is filtered out (§9)", () => {
+    const rows = [
+      ev(1, 1000, { class: "Supported", tokensUsed: 5 }, { transportAdapter: "2.0.0" }),
+    ];
+    const { lease } = projectLease(rows, key, 2000);
+    expect(lease.status).toBe("unknown");
+  });
+
+  it("same transport adapter major with different minor remains valid (§9)", () => {
+    const rows = [
+      ev(1, 1000, { class: "Supported", tokensUsed: 5 }, { transportAdapter: "1.2.3" }),
+    ];
     const { lease } = projectLease(rows, key, 2000);
     expect(lease.status).toBe("supported");
   });

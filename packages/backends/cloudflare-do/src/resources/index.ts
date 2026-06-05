@@ -7,7 +7,7 @@
  *
  *   resources.ts  Resources Tag + ResourcesLive (orchestration)
  *   projection.ts Pure projectRows + loadState + types
- *   payload.ts    Schema decoders for resource.* event rows (leaf)
+ *   payload.ts    Schema decoders for resource_pool.* event rows (leaf)
  */
 
 export { Resources, type ResourceProjection } from "@agent-os/runtime";

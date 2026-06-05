@@ -28,8 +28,8 @@
       "name": "@agent-os/kernel",
       "path": "packages/kernel",
       "status": "0.2.x public",
-      "role": "pure claim, boundary, material, JSON Schema, tool, context, and type algebra",
-      "boundary": "platform-free claim/material/boundary/schema/tool algebra",
+      "role": "pure claim, boundary, material, AgentSchema, JSON Schema dialect, tool, context, and type algebra",
+      "boundary": "platform-free claim/material/boundary/AgentSchema/tool algebra plus raw JSON Schema dialect for non-LLM boundaries",
       "need": "Pure agentOS algebra",
       "apiSource": "docs/api/kernel.md",
       "readmeStatus": "0.2.x active development. Public exports are listed for package ownership; they are not frozen.",
@@ -206,6 +206,20 @@
       "published": true
     },
     {
+      "slug": "llm-transport-effect-ai",
+      "name": "@agent-os/llm-transport-effect-ai",
+      "path": "packages/providers/llm-transport-effect-ai",
+      "status": "0.2.x experimental",
+      "role": "Effect AI provider projection adapter for runtime LlmTransport",
+      "boundary": "agentOS LlmRoute/material/tool/output algebra to Effect AI LanguageModel calls",
+      "need": "Effect AI LLM transport proof",
+      "readmeStatus": "0.2.x public-experimental. Exports are listed in `PUBLIC_API.md` to prevent accidental exports; this is not an API freeze.",
+      "apiStatus": "0.2.x public-experimental. Effect AI remains a provider projection layer and does not own runtime facts.",
+      "apiSource": "docs/api/llm-transport-effect-ai.md",
+      "primary": true,
+      "published": true
+    },
+    {
       "slug": "attached-stream",
       "name": "@agent-os/attached-stream",
       "path": "packages/composers/attached-stream",
@@ -249,6 +263,48 @@
       "published": true
     },
     {
+      "slug": "ag-ui",
+      "name": "@agent-os/ag-ui",
+      "path": "packages/composers/ag-ui",
+      "status": "0.2.x public",
+      "role": "AG-UI wire frame projection over typed agentOS runtime events",
+      "boundary": "framework-neutral AG-UI edge protocol frames derived from typed runtime events and AgentSchema tool projections",
+      "need": "AG-UI wire compatibility",
+      "readmeStatus": "0.2.x active development. Public exports are listed in `PUBLIC_API.md` to prevent accidental exports; they are not frozen.",
+      "apiStatus": "0.2.x active development for AG-UI wire projection. Public exports are listed for accidental export control only; this is not an API freeze.",
+      "apiSource": "docs/api/ag-ui.md",
+      "primary": true,
+      "published": true
+    },
+    {
+      "slug": "ag-ui-react",
+      "name": "@agent-os/ag-ui-react",
+      "path": "packages/composers/ag-ui-react",
+      "status": "0.2.x public",
+      "role": "React consumption helpers for AG-UI frames",
+      "boundary": "React hooks and stores over @agent-os/ag-ui frames; no runtime event parsing",
+      "need": "React AG-UI consumption",
+      "readmeStatus": "0.2.x active development. Public exports are listed in `PUBLIC_API.md` to prevent accidental exports; they are not frozen.",
+      "apiStatus": "0.2.x active development for React AG-UI consumption helpers. Public exports are listed for accidental export control only; this is not an API freeze.",
+      "apiSource": "docs/api/ag-ui-react.md",
+      "primary": true,
+      "published": true
+    },
+    {
+      "slug": "ag-ui-svelte",
+      "name": "@agent-os/ag-ui-svelte",
+      "path": "packages/composers/ag-ui-svelte",
+      "status": "0.2.x public",
+      "role": "Svelte consumption helpers for AG-UI frames",
+      "boundary": "Svelte stores over @agent-os/ag-ui frames; no runtime event parsing",
+      "need": "Svelte AG-UI consumption",
+      "readmeStatus": "0.2.x active development. Public exports are listed in `PUBLIC_API.md` to prevent accidental exports; they are not frozen.",
+      "apiStatus": "0.2.x active development for Svelte AG-UI consumption helpers. Public exports are listed for accidental export control only; this is not an API freeze.",
+      "apiSource": "docs/api/ag-ui-svelte.md",
+      "primary": true,
+      "published": true
+    },
+    {
       "slug": "run-stream",
       "name": "@agent-os/run-stream",
       "path": "packages/composers/run-stream",
@@ -275,20 +331,6 @@
       "apiSource": "docs/api/decision-gate.md",
       "primary": true,
       "published": true
-    },
-    {
-      "slug": "skill-registry",
-      "name": "@agent-os/skill-registry",
-      "path": "tooling/skill-registry",
-      "status": "0.2.x experimental",
-      "role": "install-time skill manifest to core tools",
-      "boundary": "install-time skill manifests to core tools",
-      "need": "Skill manifest to tools",
-      "readmeStatus": "0.2.x public-experimental. Experimental exports are listed in `PUBLIC_API.md` to prevent accidental exports; they are not frozen.",
-      "apiStatus": "0.2.x public-experimental. Skill registration is install-time identity over core tool contracts; it is not a runtime ledger/event/projection surface.",
-      "apiSource": "docs/api/skill-registry.md",
-      "primary": true,
-      "published": false
     },
     {
       "slug": "deploy",

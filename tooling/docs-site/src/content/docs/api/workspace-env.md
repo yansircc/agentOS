@@ -8,13 +8,24 @@ title: "@agent-os/workspace-env Public API Intent"
 
 - `.:CreateWorkspaceEnvOptions`
 - `.:CreateWorkspaceToolsOptions`
+- `.:EditWorkspaceFileOptions`
+- `.:GlobWorkspaceFilesOptions`
+- `.:GrepWorkspaceFilesOptions`
+- `.:WalkWorkspaceFilesOptions`
 - `.:WorkspaceDeletePathResult`
+- `.:WorkspaceEditFileResult`
 - `.:WorkspaceEnv`
 - `.:WorkspaceEnvBackend`
 - `.:WorkspaceEnvInputError`
 - `.:WorkspaceExecOptions`
 - `.:WorkspaceExecResult`
+- `.:WorkspaceFileSnapshot`
 - `.:WorkspaceFileStat`
+- `.:WorkspaceFilesDiff`
+- `.:WorkspaceGlobFilesResult`
+- `.:WorkspaceGrepFilesResult`
+- `.:WorkspaceGrepMatch`
+- `.:WorkspaceGrepMode`
 - `.:WorkspaceListFilesResult`
 - `.:WorkspaceOperationOptions`
 - `.:WorkspaceReadFileResult`
@@ -27,6 +38,11 @@ title: "@agent-os/workspace-env Public API Intent"
 - `.:WorkspaceWriteFileResult`
 - `.:createWorkspaceEnv`
 - `.:createWorkspaceTools`
+- `.:diffWorkspaceFiles`
+- `.:editWorkspaceFile`
+- `.:globWorkspaceFiles`
+- `.:grepWorkspaceFiles`
+- `.:walkWorkspaceFiles`
 
 ## Experimental exports
 

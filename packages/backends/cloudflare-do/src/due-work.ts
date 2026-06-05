@@ -190,25 +190,6 @@ export const findNextDue = (sql: SqlStorage): Effect.Effect<number | null, SqlEr
     catch: (cause) => new SqlError({ cause }),
   });
 
-export const armBeforeDueCommit = <T>(
-  ctx: DurableObjectState,
-  sql: SqlStorage,
-  fireAt: number,
-  write: () => T,
-): Effect.Effect<T, SqlError> =>
-  Effect.gen(function* () {
-    const existingNext = yield* findNextDue(sql);
-    const target = existingNext === null ? fireAt : Math.min(existingNext, fireAt);
-    yield* Effect.tryPromise({
-      try: () => ctx.storage.setAlarm(target),
-      catch: (cause) => new SqlError({ cause }),
-    });
-    return yield* Effect.try({
-      try: () => ctx.storage.transactionSync(write),
-      catch: (cause) => new SqlError({ cause }),
-    });
-  });
-
 export const armNextDue = (
   ctx: DurableObjectState,
   sql: SqlStorage,

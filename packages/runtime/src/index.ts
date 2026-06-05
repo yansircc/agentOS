@@ -5,10 +5,12 @@ export * from "./boundary-commit";
 export * from "./dispatch";
 export * from "./ledger";
 export * from "./llm-transport";
+export * from "./otlp-projection";
 export * from "./projection";
 export * from "./quota-service";
 export * from "./resources";
 export * from "./scheduler";
+export * from "./structured-output";
 export * from "./submit-agent";
 export {
   settleToolAdmissionRejected,

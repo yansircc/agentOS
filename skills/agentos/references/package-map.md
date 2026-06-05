@@ -16,12 +16,15 @@
 | Local WorkspaceEnv adapter           | `@agent-os/workspace-env-local`          |
 | Tenant credential material resolver  | `@agent-os/tenant-material`              |
 | HTTP LLM token streaming             | `@agent-os/llm-transport-http`           |
+| Effect AI LLM transport proof        | `@agent-os/llm-transport-effect-ai`      |
 | Attached live stream frames          | `@agent-os/attached-stream`              |
 | Token/progress frames                | `@agent-os/turn-stream`                  |
 | Workspace actuator and tools         | `@agent-os/workspace-env`                |
+| AG-UI wire compatibility             | `@agent-os/ag-ui`                        |
+| React AG-UI consumption              | `@agent-os/ag-ui-react`                  |
+| Svelte AG-UI consumption             | `@agent-os/ag-ui-svelte`                 |
 | Consumer run stream                  | `@agent-os/run-stream`                   |
 | Approval/decision gate               | `@agent-os/decision-gate`                |
-| Skill manifest to tools              | `@agent-os/skill-registry`               |
 | Cloudflare Worker deploy provider    | `@agent-os/deploy-cloudflare`            |
 
 <!-- agentos:generated package-map:end -->

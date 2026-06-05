@@ -10,6 +10,9 @@
 
 import type { ScopeRef } from "./effect-claim";
 import type { BindingMaterialRef } from "./material-ref";
+import type { TraceContext } from "./trace-context";
+
+export type { TraceContext } from "./trace-context";
 
 export interface DeliveryReceipt {
   readonly anchorId: string;
@@ -57,11 +60,6 @@ export interface DispatchTargetSpec {
   readonly bindingRef: BindingMaterialRef;
   readonly scope: string;
   readonly scopeRef: ScopeRef;
-}
-
-export interface TraceContext {
-  readonly traceparent?: string;
-  readonly tracestate?: string;
 }
 
 export interface DispatchToScopeSpec {

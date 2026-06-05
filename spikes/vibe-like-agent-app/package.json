@@ -1,8 +1,0 @@
-{
-  "name": "@agent-os-spike/vibe-like-agent-app",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "test": "vp test run --configLoader runner"
-  }
-}

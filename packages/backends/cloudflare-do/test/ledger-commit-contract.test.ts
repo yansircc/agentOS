@@ -22,6 +22,7 @@ import { makeInMemoryDurableObjectState } from "./_in-memory-do";
 const recordingBus = (fired: LedgerEvent[]): EventBusService => ({
   fire: (event) => Effect.sync(() => void fired.push(event)),
   fireMany: (events) => Effect.sync(() => void fired.push(...events)),
+  fanoutDiagnostics: () => [],
   subscribe: () => ({ unsubscribe: () => undefined }),
 });
 

@@ -1,17 +1,4 @@
-import type {
-  QuotaState,
-  QuotaStateSpec,
-  ResourceState,
-  RunListPage,
-  RunListSpec,
-  RunStatus,
-  RunStatusKind,
-  RunSummary,
-  RunTerminal,
-  RunToolCall,
-  RunTrace,
-  RunTurn,
-} from "@agent-os/kernel/types";
+import type { QuotaState, QuotaStateSpec, ResourceState } from "@agent-os/kernel/types";
 import { Effect } from "effect";
 import { ABORT, SqlError } from "@agent-os/kernel/errors";
 import type { LedgerEvent } from "@agent-os/kernel/types";
@@ -36,11 +23,6 @@ import { dispatchSettlementContract } from "@agent-os/backend-protocol";
 import { toolSettlementContract } from "@agent-os/runtime";
 
 const abortKinds = new Set<string>(Object.values(ABORT));
-
-const normalizeRunId = (runId: number | string): number => {
-  const n = typeof runId === "number" ? runId : Number(runId);
-  return Number.isInteger(n) && n >= 1 ? n : 0;
-};
 
 const payloadObject = (payload: unknown): Record<string, unknown> =>
   payload !== null && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
@@ -195,129 +177,6 @@ export const projectFailurePlane = (
   return rows;
 };
 
-const numericPayloadRunId = (event: LedgerEvent): number | undefined => {
-  const value = payloadObject(event.payload).runId;
-  return typeof value === "number" && Number.isInteger(value) ? value : undefined;
-};
-
-const turnRunId = (event: LedgerEvent): number | undefined => {
-  const turn = payloadObject(event.payload).turn;
-  if (turn === null || typeof turn !== "object") return undefined;
-  const value = (turn as { readonly id?: unknown }).id;
-  return typeof value === "number" && Number.isInteger(value) ? value : undefined;
-};
-
-const startFor = (events: ReadonlyArray<LedgerEvent>, runId: number): LedgerEvent | undefined =>
-  events.find((event) => event.id === runId && event.kind === "agent.run.started");
-
-const runTerminal = (events: ReadonlyArray<LedgerEvent>, runId: number): RunTerminal | null => {
-  const completed = events.find(
-    (event) => event.kind === "agent.run.completed" && numericPayloadRunId(event) === runId,
-  );
-  if (completed !== undefined) {
-    const eventName = payloadObject(completed.payload).event;
-    return {
-      kind: "delivered",
-      at: completed.ts,
-      event: typeof eventName === "string" ? eventName : completed.kind,
-      payload: completed.payload,
-    };
-  }
-
-  const aborted = events.find(
-    (event) => abortKinds.has(event.kind) && numericPayloadRunId(event) === runId,
-  );
-  if (aborted !== undefined) {
-    return {
-      kind: "aborted",
-      at: aborted.ts,
-      event: aborted.kind,
-      payload: aborted.payload,
-    };
-  }
-
-  return null;
-};
-
-export const projectRunTrace = (
-  events: ReadonlyArray<LedgerEvent>,
-  rawRunId: number | string,
-): RunTrace => {
-  const runId = normalizeRunId(rawRunId);
-  const start = startFor(events, runId);
-  if (start === undefined) {
-    return {
-      runId,
-      startedAt: 0,
-      turns: [],
-      toolCalls: [],
-      terminal: null,
-    };
-  }
-
-  const turns: RunTurn[] = events
-    .filter((event) => event.kind === "llm.response" && turnRunId(event) === runId)
-    .map((event) => {
-      const p = payloadObject(event.payload);
-      const turn = payloadObject(p.turn);
-      return {
-        index: typeof turn.index === "number" ? turn.index : 0,
-        at: event.ts,
-        text: typeof p.text === "string" ? p.text : "",
-        usage: p.usage,
-      };
-    });
-
-  const toolCalls: RunToolCall[] = events
-    .filter((event) => event.kind === "tool.executed" && numericPayloadRunId(event) === runId)
-    .map((event) => {
-      const p = payloadObject(event.payload);
-      return {
-        at: event.ts,
-        name: typeof p.name === "string" ? p.name : "",
-        args: p.args,
-        result: p.result,
-      };
-    });
-
-  return {
-    runId,
-    startedAt: start.ts,
-    turns,
-    toolCalls,
-    terminal: runTerminal(events, runId),
-  };
-};
-
-export const projectRunStatus = (
-  events: ReadonlyArray<LedgerEvent>,
-  rawRunId: number | string,
-): RunStatus => {
-  const runId = normalizeRunId(rawRunId);
-  const start = startFor(events, runId);
-  const terminal = runTerminal(events, runId);
-
-  if (terminal?.kind === "delivered") {
-    return { kind: "delivered", at: terminal.at, event: terminal.event };
-  }
-  if (terminal?.kind === "aborted") {
-    return { kind: "aborted", at: terminal.at, abortKind: terminal.event };
-  }
-
-  if (start !== undefined) {
-    return { kind: "open_without_terminal", startedAt: start.ts };
-  }
-
-  const evidence = events.find(
-    (event) => numericPayloadRunId(event) === runId || turnRunId(event) === runId,
-  );
-  return {
-    kind: "orphaned",
-    startedAt: evidence?.ts ?? 0,
-    evidence: evidence?.kind ?? "no_run_evidence",
-  };
-};
-
 export const projectQuotaState = (
   events: ReadonlyArray<LedgerEvent>,
   spec: QuotaStateSpec,
@@ -326,7 +185,7 @@ export const projectQuotaState = (
   const windowStart = spec.windowMs === Number.POSITIVE_INFINITY ? 0 : now - spec.windowMs;
   let consumed = 0;
   for (const event of events) {
-    if (event.kind !== "dispatch.consumed") continue;
+    if (event.kind !== "quota.consumed") continue;
     if (event.ts < windowStart) continue;
     const payload = decodeConsumedPayloadSync(event.payload);
     if (payload.key === spec.key) {
@@ -348,7 +207,7 @@ export const projectResourceState = (
 ): ResourceState => {
   const state = projectRows(
     events
-      .filter((event) => event.kind.startsWith("resource."))
+      .filter((event) => event.kind.startsWith("resource_pool."))
       .map((event) => ({
         kind: event.kind,
         payload: JSON.stringify(event.payload),
@@ -385,110 +244,3 @@ export const projectAdmissionLease = (
     const { lease } = projectLease(rows, key, now);
     return lease.status === "unknown" ? null : lease;
   });
-
-// ============================================================
-// projectRunsPage — list runs scoped to this DO (contract §5).
-//
-//   Source: agent.run.started + agent.run.completed + every ABORT.* kind.
-//   Cursor: runId DESC; afterRunId means "strictly older than this id".
-//   Filter: optional status subset (delivered | aborted | open_without_terminal | orphaned).
-//
-// Input MUST be ordered by ledger id ASC (streamSnapshot's contract).
-// ============================================================
-
-export const RUN_BEARING_KINDS: ReadonlyArray<string> = [
-  "agent.run.started",
-  "agent.run.completed",
-  ...Object.values(ABORT),
-];
-
-const RUN_STARTED = "agent.run.started";
-const RUN_COMPLETED = "agent.run.completed";
-
-type TerminalAcc = {
-  readonly kind: "delivered" | "aborted";
-  readonly at: number;
-  readonly event: string;
-};
-
-const summarizeStatus = (startedAt: number, terminal: TerminalAcc | undefined): RunStatus => {
-  if (terminal === undefined) {
-    return { kind: "open_without_terminal", startedAt };
-  }
-  if (terminal.kind === "delivered") {
-    return { kind: "delivered", at: terminal.at, event: terminal.event };
-  }
-  return { kind: "aborted", at: terminal.at, abortKind: terminal.event };
-};
-
-export const projectRunsPage = (
-  events: ReadonlyArray<LedgerEvent>,
-  spec: RunListSpec,
-): RunListPage => {
-  type Acc = {
-    runId: number;
-    startedAt: number;
-    terminal: TerminalAcc | undefined;
-  };
-
-  const byRun = new Map<number, Acc>();
-
-  for (const ev of events) {
-    if (ev.kind === RUN_STARTED) {
-      if (!byRun.has(ev.id)) {
-        byRun.set(ev.id, { runId: ev.id, startedAt: ev.ts, terminal: undefined });
-      }
-      continue;
-    }
-    const runId = numericPayloadRunId(ev);
-    if (runId === undefined) continue;
-    const acc = byRun.get(runId);
-    if (acc === undefined) continue;
-    if (acc.terminal !== undefined) continue;
-    if (ev.kind === RUN_COMPLETED) {
-      const eventName = payloadObject(ev.payload).event;
-      acc.terminal = {
-        kind: "delivered",
-        at: ev.ts,
-        event: typeof eventName === "string" ? eventName : RUN_COMPLETED,
-      };
-      continue;
-    }
-    if (abortKinds.has(ev.kind)) {
-      acc.terminal = { kind: "aborted", at: ev.ts, event: ev.kind };
-    }
-  }
-
-  const statusSet =
-    spec.statuses !== undefined && spec.statuses.length > 0
-      ? new Set<RunStatusKind>(spec.statuses)
-      : undefined;
-
-  const summaries: RunSummary[] = [];
-  for (const acc of byRun.values()) {
-    const status = summarizeStatus(acc.startedAt, acc.terminal);
-    if (statusSet !== undefined && !statusSet.has(status.kind)) continue;
-    const summary: RunSummary = {
-      runId: acc.runId,
-      startedAt: acc.startedAt,
-      status,
-      ...(acc.terminal !== undefined
-        ? { durationMs: Math.max(0, acc.terminal.at - acc.startedAt) }
-        : {}),
-    };
-    summaries.push(summary);
-  }
-
-  // DESC sort by runId; pagination cursor is runId-keyed.
-  summaries.sort((a, b) => b.runId - a.runId);
-
-  const afterFiltered =
-    spec.afterRunId === undefined ? summaries : summaries.filter((s) => s.runId < spec.afterRunId!);
-
-  const limit = Math.max(0, spec.limit);
-  const page = afterFiltered.slice(0, limit);
-  const nextCursor =
-    afterFiltered.length > limit && page.length > 0 ? page[page.length - 1]!.runId : null;
-
-  return { runs: page, nextCursor };
-};

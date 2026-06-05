@@ -111,6 +111,22 @@ source <printed-agent-dir>/env.sh
 test "$(pwd)" = "$PARALLEL_WORKTREE" || { echo "wrong worktree: $(pwd)"; exit 1; }
 ```
 
+For CST-backed tasks, do not run `cst take` inside a worker worktree. Claim the
+task centrally while creating the worktree:
+
+```sh
+scripts/parallel-dev/create-cst-agent.sh <task-id> aNN short-task HEAD
+cd .parallel/worktrees/aNN-short-task
+source <printed-agent-dir>/env.sh
+test "$(pwd)" = "$PARALLEL_WORKTREE" || { echo "wrong worktree: $(pwd)"; exit 1; }
+cst show "$PARALLEL_CST_TASK_ID"
+```
+
+The generated `env.sh` injects a `cst()` wrapper that reads/writes the central
+source checkout store. It blocks `cst take` and `cst run` inside the worker:
+run verification commands directly in `$PARALLEL_WORKTREE`, then record
+evidence or completion through the central wrapper.
+
 Before editing, write the intended write-set and invariant to the printed
 agent `task.md`.
 

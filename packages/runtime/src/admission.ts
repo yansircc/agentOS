@@ -1,7 +1,8 @@
 import { Context, Effect } from "effect";
-import type { JsonStringifyError, SqlError } from "@agent-os/kernel/errors";
+import type { JsonStringifyError, SqlError, UpstreamFailure } from "@agent-os/kernel/errors";
 import type { LlmRoute } from "@agent-os/kernel/llm";
-import type { SchemaContract } from "@agent-os/kernel/json-schema";
+import type { AgentSchemaSpec } from "@agent-os/kernel/agent-schema";
+import type { TraceContext } from "@agent-os/kernel/trace-context";
 import type {
   AdmissionImpact,
   AttemptKey,
@@ -28,9 +29,10 @@ export type DecodedOutput = Record<string, unknown>;
 export type AttemptSpec = {
   readonly scope: string;
   readonly route: LlmRoute;
-  readonly schemaContract: SchemaContract;
+  readonly schemaSpec: AgentSchemaSpec;
   readonly strategy: Strategy;
   readonly stimulus: Stimulus;
+  readonly traceContext?: TraceContext;
   readonly signal?: AbortSignal;
 };
 
@@ -63,7 +65,7 @@ export class Admission extends Context.Tag("@agent-os/Admission")<
   {
     readonly attemptStructured: <O>(
       spec: AttemptSpec,
-    ) => Effect.Effect<AttemptResult<O>, SqlError | JsonStringifyError>;
+    ) => Effect.Effect<AttemptResult<O>, SqlError | JsonStringifyError | UpstreamFailure>;
     readonly invalidate: (
       spec: InvalidateSpec,
     ) => Effect.Effect<{ readonly barrierId: number }, SqlError | JsonStringifyError>;

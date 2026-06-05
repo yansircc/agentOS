@@ -153,7 +153,7 @@ const run = async () => {
     provisionedResourceRef = provisioned.resourceRef;
     events.push({
       id: events.length + 1,
-      kind: "resource.resource.provisioned",
+      kind: "resource.provisioned",
       payload: provisioned,
     });
 
@@ -167,7 +167,7 @@ const run = async () => {
         bindingRef,
       }),
     );
-    events.push({ id: events.length + 1, kind: "resource.resource.bound", payload: bound });
+    events.push({ id: events.length + 1, kind: "resource.bound", payload: bound });
 
     const mutationRef = `mutation://${resourceName}/create-table`;
     const mutated = await Effect.runPromise(
@@ -201,7 +201,7 @@ const run = async () => {
     );
     events.push({
       id: events.length + 1,
-      kind: "resource.resource.destroyed",
+      kind: "resource.destroyed",
       payload: destroyed,
     });
 

@@ -6,7 +6,7 @@
  * resolve here via dir-as-module. The actual implementation is split
  * along contract axes:
  *
- *   json-schema.ts   types + validator (closed-dialect JSON Schema)
+ *   agent-schema.ts  AgentSchema contract construction
  *   fingerprint.ts   canonical-JSON algebra (route + schema)
  *   payload.ts       evidence/invalidate Schema + SQL loader
  *   admission.ts     attemptStructured + invalidate orchestration
@@ -16,12 +16,7 @@
  */
 
 // ── Schema types + validator ───────────────────────────────────
-export type {
-  JsonSchemaObject,
-  JsonSchemaNode,
-  SchemaContract,
-} from "@agent-os/kernel/json-schema";
-export { validateAgainstSchema } from "@agent-os/kernel/json-schema";
+export type { AgentSchemaSpec } from "@agent-os/kernel/agent-schema";
 
 // ── Lease projection state + pure functions ────────────────────
 export type {
@@ -40,7 +35,11 @@ export type {
 export { decideTier, projectLease } from "@agent-os/runtime";
 
 // ── Canonical fingerprint algebra ──────────────────────────────
-export { FINGERPRINT_ALGO_VERSION, makeSchemaContract, routeFingerprint } from "@agent-os/runtime";
+export {
+  FINGERPRINT_ALGO_VERSION,
+  makeAdmissionSchemaSpec,
+  routeFingerprint,
+} from "@agent-os/runtime";
 
 // ── Orchestration + Live layer ─────────────────────────────────
 export type {
@@ -53,4 +52,4 @@ export type {
   InvalidateSpec,
 } from "@agent-os/runtime";
 export { Admission } from "@agent-os/runtime";
-export { AdmissionLive, ADAPTER_VERSION } from "./admission";
+export { AdmissionLive } from "./admission";

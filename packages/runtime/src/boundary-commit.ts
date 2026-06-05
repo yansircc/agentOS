@@ -5,9 +5,12 @@ import {
   type LivedClaim,
   type RejectedClaim,
 } from "@agent-os/kernel/effect-claim";
-import type { BoundaryContract, BoundaryEventContract } from "@agent-os/kernel/boundary-contract";
+import {
+  validateBoundaryPayload,
+  type BoundaryContract,
+  type BoundaryEventContract,
+} from "@agent-os/kernel/boundary-contract";
 import type { JsonStringifyError, SqlError } from "@agent-os/kernel/errors";
-import { validateAgainstSchema } from "@agent-os/kernel/json-schema";
 import { validateTerminalClaim } from "@agent-os/kernel/settlement-contract";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 
@@ -85,10 +88,7 @@ export const validateBoundaryEventPayload = (
   if (!Predicate.isRecord(payload)) {
     return reject(contract, event, "payload_must_be_object");
   }
-  if (
-    validateAgainstSchema(payloadForSchema(payload, eventContract), eventContract.payloadSchema)
-      .length > 0
-  ) {
+  if (validateBoundaryPayload(eventContract, payloadForSchema(payload, eventContract)).length > 0) {
     return reject(contract, event, "payload_schema_invalid");
   }
 

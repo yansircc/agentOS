@@ -23,7 +23,6 @@ Status: Backend package. Public exports include the Cloudflare app facade, bindi
 - `.:AgentTriggerCancelSpec`
 - `.:AgentTriggerIntentSpec`
 - `.:AnthropicMessagesSpec`
-- `.:CfAiBindingSpec`
 - `.:CloudflareAgentEnv`
 - `.:CloudflareAttachedStreamFactory`
 - `.:CloudflareAttachedStreamFactoryContext`
@@ -46,7 +45,6 @@ Status: Backend package. Public exports include the Cloudflare app facade, bindi
 - `.:QueueDispatchTargetBinding`
 - `.:anthropicMessages`
 - `.:binding`
-- `.:cfAiBinding`
 - `.:credential`
 - `.:createAgentDurableObject`
 - `.:defineAgentDO`
@@ -61,10 +59,6 @@ Status: Backend package. Public exports include the Cloudflare app facade, bindi
 - `.:openAIChat`
 - `.:providerDispatchTarget`
 - `.:queueDispatchTarget`
-- `./testing:AgentDOTestingDrainRuntime`
-- `./testing:AgentDrainDueTestingOptions`
-- `./testing:AgentDrainUntilQuietTestingOptions`
-- `./testing:withAgentDOTestingDrain`
 
 ## Experimental exports
 

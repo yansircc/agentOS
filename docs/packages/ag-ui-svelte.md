@@ -1,0 +1,23 @@
+# @agent-os/ag-ui-svelte
+
+## Purpose
+
+Svelte stores for consuming AG-UI frames produced by `@agent-os/ag-ui`.
+
+## Invariant
+
+Svelte bindings consume AG-UI frames only. They do not parse ledger payloads,
+decode runtime events, or own AG-UI frame mapping semantics.
+
+## Minimal Usage
+
+```ts
+import { createAgUiSvelteFrameStore } from "@agent-os/ag-ui-svelte";
+```
+
+## Verification
+
+```sh
+cd packages/composers/ag-ui-svelte
+vp test run
+```

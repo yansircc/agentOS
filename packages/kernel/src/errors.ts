@@ -41,6 +41,11 @@ export class UnsupportedScopeRef extends Data.TaggedError("agent_os.unsupported_
   readonly position: "source" | "target";
 }> {}
 
+export class InvalidTraceContext extends Data.TaggedError("agent_os.invalid_trace_context")<{
+  readonly position: "submit" | "dispatch" | "dispatch_payload";
+  readonly reason: string;
+}> {}
+
 export class InvalidScheduleAt extends Data.TaggedError("agent_os.invalid_schedule_at")<{
   readonly at: unknown;
 }> {}
@@ -133,6 +138,7 @@ export const CORE_CLAIMED_PREFIXES = [
   "llm.",
   "tool.",
   "quota.",
+  "resource_pool.",
   "resource.",
   "durable_trigger.",
 ] as const;
@@ -157,6 +163,13 @@ export class ProviderHttpFailure extends Data.TaggedError("agent_os.provider_htt
   readonly code?: string;
   readonly type?: string;
   readonly flags: ReadonlyArray<ProviderFailureFlag>;
+}> {}
+
+export class ProviderOutputDecodeError extends Data.TaggedError(
+  "agent_os.provider_output_decode_error",
+)<{
+  readonly field: string;
+  readonly reason: "missing_or_invalid_usage";
 }> {}
 
 export class ToolError extends Data.TaggedError(ABORT.TOOL_ERROR)<{

@@ -18,12 +18,15 @@
  *
  */
 
-import { Clock, Effect, Layer, Schema } from "effect";
+import { Clock, Effect, Layer } from "effect";
 import {
   Admission,
+  LlmTransport,
+  classifyStructuredCallFailure,
   decideTier,
   projectLease,
   routeFingerprint,
+  structuredOutputRequest,
   type AttemptKey,
   type AttemptResult,
   type AttemptSpec,
@@ -31,19 +34,12 @@ import {
   type DecodedOutput,
   type InvalidateSpec,
   type Outcome,
+  decodeStructuredOutputFromItems,
 } from "@agent-os/runtime";
 import { EventBus } from "../ledger";
-import { JsonStringifyError, SqlError } from "@agent-os/kernel/errors";
-import { RefResolutionFailed, RefResolverService } from "@agent-os/kernel/ref-resolver";
-import { AiBinding, dispatchProvider } from "../llm";
-import { getProtocolAdapter, llmProtocolAdapters } from "../llm/protocol/protocol-adapter";
+import { JsonStringifyError, SqlError, UpstreamFailure } from "@agent-os/kernel/errors";
 import { commitLedgerTransaction } from "../ledger/commit";
 import { loadAdmissionRows } from "./payload";
-
-// Note: these symbols were historically owned by admission.ts. They now
-// live in protocol/protocol-adapter.ts (contract elevation). Re-exported
-// here so callers that import from "./admission" keep working.
-export { ADAPTER_VERSION } from "../llm/protocol/protocol-adapter";
 
 const reconstructOutcomeFromLease = (
   lease: CapabilityLease & { status: "unsupported" },
@@ -66,33 +62,28 @@ const reconstructOutcomeFromLease = (
   }
 };
 
-// Schema unused — silence the unused-import warning while keeping the
-// import statement so a future refactor that needs a Schema-derived
-// type lights up at compile time instead of needing a stray edit. The
-// pattern matches admission/payload.ts which owns the Schema surface.
-void Schema;
-
 export const AdmissionLive = (
   ctx: DurableObjectState,
-): Layer.Layer<Admission, never, EventBus | AiBinding | RefResolverService> =>
+): Layer.Layer<Admission, never, EventBus | LlmTransport> =>
   Layer.scoped(
     Admission,
     Effect.gen(function* () {
       const sql = ctx.storage.sql;
       const bus = yield* EventBus;
-      const ai = yield* AiBinding;
-      const resolver = yield* RefResolverService;
+      const llm = yield* LlmTransport;
 
       const attemptStructured = <O>(
         spec: AttemptSpec,
-      ): Effect.Effect<AttemptResult<O>, SqlError | JsonStringifyError> =>
+      ): Effect.Effect<AttemptResult<O>, SqlError | JsonStringifyError | UpstreamFailure> =>
         Effect.gen(function* () {
           const now = yield* Clock.currentTimeMillis;
           const key: AttemptKey = {
             routeFingerprint: routeFingerprint(spec.route),
-            schemaFingerprint: spec.schemaContract.fingerprint,
+            schemaFingerprint: spec.schemaSpec.fingerprint,
             strategy: spec.strategy,
-            adapterVersion: llmProtocolAdapters[spec.route.kind].version,
+            providerOutputAdapterVersion: llm.describeRoute(spec.route)
+              .providerOutputAdapterVersion,
+            transportAdapterVersion: llm.describeRoute(spec.route).transportAdapterVersion,
           };
 
           // Step 2: project lease.
@@ -110,51 +101,34 @@ export const AdmissionLive = (
             };
           }
 
-          // Step 4: encode (pure).
-          const adapterStim =
-            spec.stimulus.kind === "live"
-              ? { kind: "live" as const, userInput: spec.stimulus.userInput }
-              : { kind: "probe" as const, synthetic: spec.stimulus.synthetic };
-
-          // v0.2.13: pick adapter by route.kind, dispatch transport via
-          // dispatchProvider. evidence is tagged with the chosen
-          // adapter's identity (cf-ai-binding@X vs openai-chat-compatible@X),
-          // so routeFingerprint and adapterId always agree on which
-          // protocol actually served the call.
-          const adapter = getProtocolAdapter(spec.route.kind);
-          const body = adapter.encodeStructured(
-            spec.route as never,
-            spec.schemaContract,
-            adapterStim,
-            spec.strategy,
-          );
-
-          // Step 5-6: call provider + decode (or classify error).
-          const rawEither = yield* Effect.either(
-            dispatchProvider(spec.route, body, { signal: spec.signal }).pipe(
-              Effect.provideService(AiBinding, ai),
-              Effect.provideService(RefResolverService, resolver),
+          const descriptor = llm.describeRoute(spec.route);
+          const responseEither = yield* Effect.either(
+            llm.call(
+              structuredOutputRequest({
+                route: spec.route,
+                schemaSpec: spec.schemaSpec,
+                stimulus: spec.stimulus,
+                traceContext: spec.traceContext,
+              }),
+              { signal: spec.signal },
             ),
           );
 
           let outcome: Outcome;
           let decoded: DecodedOutput | undefined;
 
-          if (rawEither._tag === "Left") {
-            if (rawEither.left instanceof RefResolutionFailed) {
-              outcome = {
-                class: "ConfigError",
-                reason: `${rawEither.left.kind}:${rawEither.left.ref}`,
-              };
-            } else {
-              outcome = adapter.classify(rawEither.left);
+          if (responseEither._tag === "Left") {
+            const classified = classifyStructuredCallFailure(responseEither.left);
+            if (classified.kind === "fail_before_evidence") {
+              return yield* Effect.fail(classified.failure);
             }
+            outcome = classified.outcome;
           } else {
-            const d = adapter.decodeStructured(
-              { raw: rawEither.right },
-              spec.schemaContract,
-              spec.strategy,
-            );
+            const d = yield* decodeStructuredOutputFromItems<DecodedOutput>({
+              items: responseEither.right.items,
+              usage: responseEither.right.usage,
+              schemaSpec: spec.schemaSpec,
+            });
             if (d.ok) {
               decoded = d.decoded;
               outcome = { class: "Supported", tokensUsed: d.tokensUsed };
@@ -172,7 +146,8 @@ export const AdmissionLive = (
             stimulusKind: spec.stimulus.kind,
             outcome,
             admissionImpact,
-            adapterId: `${adapter.kind}@${adapter.version}`,
+            adapterId: descriptor.providerOutputAdapterId,
+            ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
           };
 
           yield* commitLedgerTransaction(ctx, bus, (tx) => {
@@ -229,7 +204,7 @@ export const AdmissionLive = (
           const event = result.events[0];
           if (event === undefined) {
             return yield* Effect.fail(
-              new SqlError({ cause: new Error("invalidate commit returned no event") }),
+              new SqlError({ cause: { reason: "invalidate_commit_returned_no_event" } }),
             );
           }
 

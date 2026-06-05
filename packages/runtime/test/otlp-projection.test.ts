@@ -1,0 +1,204 @@
+import { describe, expect, it } from "@effect/vitest";
+import type { LedgerEvent } from "@agent-os/kernel/types";
+import type { LivedClaim } from "@agent-os/kernel/effect-claim";
+import { ABORT } from "../src/abort";
+import { OTLP_GENAI_SEMCONV_MAPPING_VERSION, projectOtlpSpans } from "../src/otlp-projection";
+import {
+  agentRunAbortedEvent,
+  agentRunCompletedEvent,
+  agentRunStartedEvent,
+  chatIngestedEvent,
+  llmResponseEvent,
+  toolExecutedEvent,
+  type RuntimeEventCommitSpec,
+} from "../src/runtime-events";
+
+const scope = "otlp-projection";
+const traceContext = {
+  traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+  tracestate: "vendor=value",
+};
+
+const livedClaim: LivedClaim = {
+  phase: "lived",
+  operationRef: "tool:otlp-projection:1:0:call-1",
+  scopeRef: { kind: "conversation", scopeId: scope },
+  authorityRef: { authorityId: "tool:lookup", authorityClass: "read" },
+  originRef: { originId: "run:1", originKind: "submit" },
+  anchorRef: {
+    anchorId: "tool.executed:tool:otlp-projection:1:0:call-1",
+    anchorKind: "carrier_proof",
+    carrierRef: "tool:lookup",
+  },
+};
+
+const event = (id: number, spec: RuntimeEventCommitSpec, ts = id * 10): LedgerEvent => ({
+  id,
+  ts,
+  kind: spec.kind,
+  scope: spec.scope,
+  payload: spec.payload,
+});
+
+const rawEvent = (id: number, kind: string, payload: unknown, ts = id * 10): LedgerEvent => ({
+  id,
+  ts,
+  kind,
+  scope,
+  payload,
+});
+
+const spanJson = (events: ReadonlyArray<LedgerEvent>): string =>
+  JSON.stringify(projectOtlpSpans(events).spans);
+
+describe("OTLP trace projection", () => {
+  it("derives ordered spans from ledger/runtime facts without writing trace facts", () => {
+    const projection = projectOtlpSpans([
+      event(1, agentRunStartedEvent({ scope, intent: "secret prompt", traceContext }), 100),
+      event(
+        2,
+        chatIngestedEvent({
+          scope,
+          runId: 1,
+          intent: "secret prompt",
+          context: { credential: "sk-secret" },
+          traceContext,
+        }),
+        110,
+      ),
+      event(
+        3,
+        llmResponseEvent({
+          scope,
+          turn: { id: 1, index: 0 },
+          items: [{ type: "message", text: "secret completion" }],
+          usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+          traceContext,
+        }),
+        120,
+      ),
+      event(
+        4,
+        toolExecutedEvent({
+          scope,
+          runId: 1,
+          toolCallId: "call-1",
+          name: "lookup",
+          args: '{"credential":"sk-secret"}',
+          execution: { kind: "effectful", domain: { kind: "workspace", ref: "local" } },
+          result: { fileBytes: "secret bytes", ok: true },
+          claim: livedClaim,
+          traceContext,
+        }),
+        130,
+      ),
+      rawEvent(
+        5,
+        "dispatch.outbound.delivered",
+        {
+          target: "hidden target",
+          providerUrl: "https://provider.example/private",
+          traceContext,
+        },
+        140,
+      ),
+      event(
+        6,
+        agentRunCompletedEvent({ scope, runId: 1, event: "answer.ready", traceContext }),
+        150,
+      ),
+    ]);
+
+    expect(projection.mappingVersion).toBe(OTLP_GENAI_SEMCONV_MAPPING_VERSION);
+    expect(projection.spans.map((span) => span.kind)).toEqual([
+      "agent_run",
+      "llm_call",
+      "tool_execution",
+      "dispatch_delivery",
+    ]);
+    expect(projection.spans.map((span) => span.sourceEventIds[0])).toEqual([1, 3, 4, 5]);
+    expect(projection.spans[0]).toMatchObject({
+      name: "agent.run",
+      traceId: "4bf92f3577b34da6a3ce929d0e0e4736",
+      parentSpanId: "00f067aa0ba902b7",
+      status: "OK",
+      sourceEventIds: [1, 6],
+    });
+    expect(projection.spans[2]?.attributes).toMatchObject({
+      "agentos.tool.name": "lookup",
+      "agentos.execution_domain.kind": "workspace",
+      "agentos.execution_domain.ref": "local",
+    });
+  });
+
+  it("redacts content and sensitive provider/material data by default", () => {
+    const json = spanJson([
+      event(1, agentRunStartedEvent({ scope, intent: "secret prompt", traceContext })),
+      event(
+        2,
+        chatIngestedEvent({
+          scope,
+          runId: 1,
+          intent: "secret prompt",
+          context: { credential: "sk-secret" },
+          traceContext,
+        }),
+      ),
+      event(
+        3,
+        llmResponseEvent({
+          scope,
+          turn: { id: 1, index: 0 },
+          items: [{ type: "message", text: "secret completion" }],
+          usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+          traceContext,
+        }),
+      ),
+      event(
+        4,
+        toolExecutedEvent({
+          scope,
+          runId: 1,
+          toolCallId: "call-1",
+          name: "lookup",
+          args: '{"credential":"sk-secret"}',
+          execution: { kind: "pure" },
+          result: { fileBytes: "secret bytes" },
+          claim: livedClaim,
+          traceContext,
+        }),
+      ),
+      rawEvent(5, "dispatch.outbound.delivered", {
+        traceContext,
+        providerUrl: "https://provider.example/private",
+      }),
+      event(
+        6,
+        agentRunAbortedEvent({
+          scope,
+          kind: ABORT.TOOL_ERROR,
+          runId: 1,
+          payload: { cause: "secret error detail" },
+          traceContext,
+        }),
+      ),
+    ]);
+
+    expect(json).not.toContain("secret prompt");
+    expect(json).not.toContain("secret completion");
+    expect(json).not.toContain("sk-secret");
+    expect(json).not.toContain("secret bytes");
+    expect(json).not.toContain("provider.example");
+    expect(json).not.toContain("secret error detail");
+  });
+
+  it("fails closed on malformed trace context in source events", () => {
+    expect(() =>
+      projectOtlpSpans([
+        rawEvent(1, "dispatch.outbound.delivered", {
+          traceContext: { traceparent: "00-test" },
+        }),
+      ]),
+    ).toThrow();
+  });
+});

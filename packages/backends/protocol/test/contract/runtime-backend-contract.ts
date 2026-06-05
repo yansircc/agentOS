@@ -30,6 +30,14 @@ export type ContractDispatchTargetAdapter = (
   envelope: DispatchEnvelope,
 ) => Promise<DispatchDeliveryResult>;
 
+export interface RuntimeBackendFanoutDiagnostic {
+  readonly phase: "sink";
+  readonly eventId: number;
+  readonly kind: string;
+  readonly scope: string;
+  readonly message: string;
+}
+
 export interface RuntimeBackendContractDriver {
   readonly bindingRef: BindingMaterialRef;
   readonly registerDispatchReceiver: (
@@ -43,6 +51,14 @@ export interface RuntimeBackendContractDriver {
     kind: string,
     handler: (event: LedgerEvent) => void | Promise<void>,
   ) => { readonly unsubscribe: () => void } | void;
+  readonly addSink: (
+    scope: string,
+    kind: string,
+    sink: (event: LedgerEvent) => void,
+  ) => { readonly unsubscribe: () => void } | void | Promise<{ readonly unsubscribe: () => void }>;
+  readonly fanoutDiagnostics: () =>
+    | ReadonlyArray<RuntimeBackendFanoutDiagnostic>
+    | Promise<ReadonlyArray<RuntimeBackendFanoutDiagnostic>>;
   readonly log: (scope: string, kind: string, payload: unknown) => Promise<LedgerEvent>;
   readonly events: (scope: string) => Promise<ReadonlyArray<LedgerEvent>>;
   readonly schedule: (
@@ -229,6 +245,26 @@ export const runRuntimeBackendContractSuite = (
             expect(yield* promise(() => driver.pendingDueCount("sender"))).toBe(0);
           }),
         ),
+    );
+
+    it.effect("rejects malformed trace context before dispatch propagation", () =>
+      withDriver((driver) =>
+        Effect.gen(function* () {
+          yield* promise(() => driver.registerDispatchReceiver("receiver"));
+          yield* expectRejectTagEffect(
+            driver.dispatchToScope("sender", {
+              ...dispatchSpec(driver, "receiver", "bad-trace", "app.received", { value: 1 }),
+              traceContext: {
+                traceparent: "00-test",
+              },
+            }),
+            "agent_os.invalid_trace_context",
+          );
+
+          expect(yield* promise(() => driver.events("sender"))).toEqual([]);
+          expect(yield* promise(() => driver.events("receiver"))).toEqual([]);
+        }),
+      ),
     );
 
     it.effect("records retry attempts and later delivery after transient dispatch failure", () =>
@@ -470,6 +506,39 @@ export const runRuntimeBackendContractSuite = (
       ),
     );
 
+    it.effect("treats stream sink failure as post-commit diagnostics", () =>
+      withDriver((driver) =>
+        Effect.gen(function* () {
+          const calls: number[] = [];
+          yield* promise(() =>
+            driver.addSink("sink-scope", "app.sink", (event) => {
+              calls.push(event.id);
+              throw new Error("sink failed after commit");
+            }),
+          );
+
+          const event = yield* promise(() =>
+            driver.log("sink-scope", "app.sink", { committed: true }),
+          );
+
+          expect(calls).toEqual([event.id]);
+          expect(yield* promise(() => driver.events("sink-scope"))).toEqual([event]);
+
+          const diagnostics = yield* promise(() => driver.fanoutDiagnostics());
+          expect(
+            diagnostics.some(
+              (entry) =>
+                entry.phase === "sink" &&
+                entry.eventId === event.id &&
+                entry.kind === "app.sink" &&
+                entry.scope === "sink-scope" &&
+                entry.message.includes("sink failed after commit"),
+            ),
+          ).toBe(true);
+        }),
+      ),
+    );
+
     it.effect("keeps resource reservation semantics identical", () =>
       withDriver((driver) =>
         Effect.gen(function* () {
@@ -513,9 +582,9 @@ export const runRuntimeBackendContractSuite = (
           );
           const events = yield* promise(() => driver.events("resource-scope"));
           expect(kindsOf(events)).toEqual([
-            "resource.granted",
-            "resource.reserved",
-            "resource.reserve_rejected",
+            "resource_pool.granted",
+            "resource_pool.reserved",
+            "resource_pool.reserve_rejected",
           ]);
         }),
       ),
@@ -535,7 +604,7 @@ export const runRuntimeBackendContractSuite = (
             ),
           ).toMatchObject({ granted: false, consumed: 1, limit: 1 });
           yield* promise(() =>
-            driver.log("quota-scope", "dispatch.consumed", {
+            driver.log("quota-scope", "quota.consumed", {
               key: "tool-a",
               amount: "x",
               toolName: "tool-a",
@@ -558,9 +627,9 @@ export const runRuntimeBackendContractSuite = (
 
           const events = yield* promise(() => driver.events("quota-scope"));
           expect(kindsOf(events)).toEqual([
-            "dispatch.consumed",
-            "dispatch.rate_limited",
-            "dispatch.consumed",
+            "quota.consumed",
+            "quota.rate_limited",
+            "quota.consumed",
           ]);
         }),
       ),

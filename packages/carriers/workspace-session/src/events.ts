@@ -53,7 +53,6 @@ export interface WorkspaceSessionLedgerEvent {
 export interface WorkspaceSessionPreviewRef {
   readonly previewRef: string;
   readonly port: number;
-  readonly url?: string;
 }
 
 export interface WorkspaceSessionBackupRef {
@@ -145,9 +144,8 @@ const pushPreview = (
   previews: WorkspaceSessionPreviewRef[],
   previewRef: string,
   port: number,
-  url?: string,
 ): void => {
-  previews.push(url === undefined ? { previewRef, port } : { previewRef, port, url });
+  previews.push({ previewRef, port });
 };
 
 const resetLifecycleRefs = (
@@ -266,7 +264,7 @@ export const projectWorkspaceSession = (
         ) {
           break;
         }
-        pushPreview(previews, previewRef, port, stringField(event.payload, "url"));
+        pushPreview(previews, previewRef, port);
         status = "active";
         lastEventKind = event.kind;
         failure = undefined;

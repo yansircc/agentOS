@@ -4,8 +4,8 @@
  * v0.2.8 semantics (per codex review):
  *   - amount is STATIC (or function of args — not result). Default 1.
  *   - Pre-grant is atomic with consume: a single ctx.storage.transactionSync
- *     reads consumed-in-window and writes EITHER dispatch.consumed (grant)
- *     OR dispatch.rate_limited (deny). No await window between read and
+ *     reads consumed-in-window and writes EITHER quota.consumed (grant)
+ *     OR quota.rate_limited (deny). No await window between read and
  *     write — concurrent submits cannot both observe the same stale state.
  *   - Per-attempt: grant happens inside the retry loop, so each retry
  *     consumes a slot. Carrier rate-limit semantics, not "successful

@@ -1,5 +1,5 @@
 import { Clock, Effect, Layer } from "effect";
-import { JsonStringifyError, SqlError } from "@agent-os/kernel/errors";
+import { JsonStringifyError, SqlError, UpstreamFailure } from "@agent-os/kernel/errors";
 import {
   Admission,
   LlmTransport,
@@ -14,13 +14,12 @@ import {
   type CapabilityLease,
   type InvalidateSpec,
   type Outcome,
+  decodeStructuredOutputFromItems,
+  classifyStructuredCallFailure,
+  structuredOutputRequest,
 } from "@agent-os/runtime";
-import { validateAgainstSchema } from "@agent-os/kernel/json-schema";
-import { describeDispatchCause } from "@agent-os/backend-protocol";
 import type { InMemoryBackendState } from "./state";
 import { decodeOk, recordOf } from "./decode";
-
-const IN_MEMORY_ADAPTER_VERSION = "1.0.0";
 
 const outcomeFromLease = (lease: CapabilityLease & { readonly status: "unsupported" }): Outcome => {
   switch (lease.failureClass) {
@@ -88,14 +87,16 @@ export const InMemoryAdmissionLive = (
       const llm = yield* LlmTransport;
       const attemptStructured = <O>(
         spec: AttemptSpec,
-      ): Effect.Effect<AttemptResult<O>, SqlError | JsonStringifyError> =>
+      ): Effect.Effect<AttemptResult<O>, SqlError | JsonStringifyError | UpstreamFailure> =>
         Effect.gen(function* () {
           const now = yield* Clock.currentTimeMillis;
           const key: AttemptKey = {
             routeFingerprint: routeFingerprint(spec.route),
-            schemaFingerprint: spec.schemaContract.fingerprint,
+            schemaFingerprint: spec.schemaSpec.fingerprint,
             strategy: spec.strategy,
-            adapterVersion: IN_MEMORY_ADAPTER_VERSION,
+            providerOutputAdapterVersion: llm.describeRoute(spec.route)
+              .providerOutputAdapterVersion,
+            transportAdapterVersion: llm.describeRoute(spec.route).transportAdapterVersion,
           };
           const preRows = yield* projectAdmissionRows(state, spec.scope);
           const { lease: preLease, latestBarrier } = projectLease(preRows, key, now);
@@ -109,59 +110,49 @@ export const InMemoryAdmissionLive = (
             };
           }
 
-          const userContent =
-            spec.stimulus.kind === "live"
-              ? spec.stimulus.userInput.userText
-              : JSON.stringify(spec.stimulus.synthetic);
           const response = yield* Effect.either(
-            llm.call({
-              route: spec.route,
-              messages: [{ role: "user", content: userContent }],
-            }),
+            llm.call(
+              structuredOutputRequest({
+                route: spec.route,
+                schemaSpec: spec.schemaSpec,
+                stimulus: spec.stimulus,
+              }),
+              { signal: spec.signal },
+            ),
           );
 
-          const decodedResult =
-            response._tag === "Left"
-              ? yield* Effect.succeed({
-                  decoded: undefined as O | undefined,
-                  outcome: {
-                    class: "TransientError" as const,
-                    cause: describeDispatchCause(response.left),
-                  } satisfies Outcome,
-                })
-              : yield* Effect.try({
-                  try: () => JSON.parse(response.right.text) as O,
-                  catch: (cause) => describeDispatchCause(cause),
-                }).pipe(
-                  Effect.map((parsed) => {
-                    const violations = validateAgainstSchema(parsed, spec.schemaContract.schema);
-                    if (violations.length > 0) {
-                      return {
-                        decoded: undefined,
-                        outcome: {
-                          class: "BehaviorFailed" as const,
-                          sampleDigest: violations.join("|"),
-                        } satisfies Outcome,
-                      };
-                    }
-                    return {
-                      decoded: parsed,
+          const decodedResult = yield* Effect.gen(function* () {
+            if (response._tag === "Left") {
+              const classified = classifyStructuredCallFailure(response.left);
+              if (classified.kind === "fail_before_evidence") {
+                return yield* Effect.fail(classified.failure);
+              }
+              return {
+                decoded: undefined as O | undefined,
+                outcome: classified.outcome,
+              };
+            }
+            return yield* decodeStructuredOutputFromItems<O>({
+              items: response.right.items,
+              usage: response.right.usage,
+              schemaSpec: spec.schemaSpec,
+            }).pipe(
+              Effect.map((decoded) =>
+                decoded.ok
+                  ? {
+                      decoded: decoded.decoded,
                       outcome: {
                         class: "Supported" as const,
-                        tokensUsed: response.right.usage.totalTokens,
+                        tokensUsed: decoded.tokensUsed,
                       } satisfies Outcome,
-                    };
-                  }),
-                  Effect.catchAll((sampleDigest) =>
-                    Effect.succeed({
+                    }
+                  : {
                       decoded: undefined as O | undefined,
-                      outcome: {
-                        class: "BehaviorFailed" as const,
-                        sampleDigest,
-                      } satisfies Outcome,
-                    }),
-                  ),
-                );
+                      outcome: decoded.outcome,
+                    },
+              ),
+            );
+          });
           const { decoded, outcome } = decodedResult;
 
           const admissionImpact = decideTier(preLease, outcome, spec.stimulus.kind, latestBarrier);
@@ -170,7 +161,7 @@ export const InMemoryAdmissionLive = (
             stimulusKind: spec.stimulus.kind,
             outcome,
             admissionImpact,
-            adapterId: `in-memory@${IN_MEMORY_ADAPTER_VERSION}`,
+            adapterId: llm.describeRoute(spec.route).providerOutputAdapterId,
           };
           yield* state.commitEvents([
             {

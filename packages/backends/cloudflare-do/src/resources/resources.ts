@@ -5,7 +5,7 @@
  * Resources owns reserve-now, consume-or-release-later state for app
  * resources such as img-gen credits.
  *
- * SSoT: only `events.kind = resource.*`. There is no account table and no
+ * SSoT: only `events.kind = resource_pool.*`. There is no account table and no
  * reservation table. Projection (`./projection.ts`) rebuilds balance from
  * ledger rows inside the same `transactionSync` that writes the next
  * resource event.
@@ -56,7 +56,7 @@ export const ResourcesLive = (
             const committed = yield* commitLedgerTransaction(ctx, bus, (tx) => {
               const granted = tx.append({
                 ts: now,
-                kind: "resource.granted",
+                kind: "resource_pool.granted",
                 scope,
                 payload,
               });
@@ -92,7 +92,7 @@ export const ResourcesLive = (
                 };
                 ledgerTx.append({
                   ts: now,
-                  kind: "resource.reserve_rejected",
+                  kind: "resource_pool.reserve_rejected",
                   scope,
                   payload: rejectedPayload,
                 });
@@ -111,7 +111,7 @@ export const ResourcesLive = (
               };
               ledgerTx.append({
                 ts: now,
-                kind: "resource.reserved",
+                kind: "resource_pool.reserved",
                 scope,
                 payload: reservedPayload,
               });
@@ -150,7 +150,7 @@ export const ResourcesLive = (
               };
               ledgerTx.append({
                 ts: now,
-                kind: "resource.consumed",
+                kind: "resource_pool.consumed",
                 scope,
                 payload,
               });
@@ -190,7 +190,7 @@ export const ResourcesLive = (
               };
               ledgerTx.append({
                 ts: now,
-                kind: "resource.released",
+                kind: "resource_pool.released",
                 scope,
                 payload,
               });

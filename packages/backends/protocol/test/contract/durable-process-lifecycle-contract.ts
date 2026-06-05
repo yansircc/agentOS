@@ -144,6 +144,13 @@ export const runDurableProcessLifecycleContract = (
             expect(phaseFor(yield* Effect.promise(() => driver.processes()), scheduled.id)).toBe(
               "completed",
             );
+            yield* Effect.promise(() =>
+              driver.cancel(completedTrigger.kind, scheduled.id, "cancel after completed"),
+            );
+            yield* Effect.promise(() => driver.drainDue(10));
+            expect(phaseFor(yield* Effect.promise(() => driver.processes()), scheduled.id)).toBe(
+              "completed",
+            );
 
             const cancelled = yield* Effect.promise(() =>
               driver.enqueue(completedTrigger, { id: "cancelled" }, 20),
@@ -151,6 +158,10 @@ export const runDurableProcessLifecycleContract = (
             yield* Effect.promise(() =>
               driver.cancel(completedTrigger.kind, cancelled.id, "cancel before acquire"),
             );
+            expect(phaseFor(yield* Effect.promise(() => driver.processes()), cancelled.id)).toBe(
+              "cancelled",
+            );
+            yield* Effect.promise(() => driver.drainDue(20));
             expect(phaseFor(yield* Effect.promise(() => driver.processes()), cancelled.id)).toBe(
               "cancelled",
             );

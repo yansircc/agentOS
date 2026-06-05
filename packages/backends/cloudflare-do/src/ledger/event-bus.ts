@@ -23,9 +23,18 @@ interface EventBusSink {
   readonly sink: (event: LedgerEvent) => void;
 }
 
+export interface EventBusFanoutDiagnostic {
+  readonly phase: "sink";
+  readonly eventId: number;
+  readonly kind: string;
+  readonly scope: string;
+  readonly message: string;
+}
+
 export interface EventBusService {
   readonly fire: (event: LedgerEvent) => Effect.Effect<void>;
   readonly fireMany: (events: ReadonlyArray<LedgerEvent>) => Effect.Effect<void>;
+  readonly fanoutDiagnostics: () => ReadonlyArray<EventBusFanoutDiagnostic>;
   readonly subscribe: (opts: {
     readonly kinds?: ReadonlyArray<string>;
     readonly sink: (event: LedgerEvent) => void;
@@ -34,9 +43,17 @@ export interface EventBusService {
 
 export class EventBus extends Context.Tag("@agent-os/EventBus")<EventBus, EventBusService>() {}
 
+const describeFanoutCause = (cause: unknown): string => {
+  if (typeof cause === "string") return cause;
+  if (cause instanceof Error) return `${cause.name}: ${cause.message}`;
+  return Object.prototype.toString.call(cause);
+};
+
 export const EventBusLive = (handlers: Map<string, Set<EventHandler>>): Layer.Layer<EventBus> => {
   const sinks = new Set<EventBusSink>();
+  const diagnostics: EventBusFanoutDiagnostic[] = [];
   const service: EventBusService = {
+    fanoutDiagnostics: () => [...diagnostics],
     subscribe: (opts) => {
       const subscription: EventBusSink = {
         ...(opts.kinds === undefined || opts.kinds.length === 0
@@ -58,7 +75,17 @@ export const EventBusLive = (handlers: Map<string, Set<EventHandler>>): Layer.La
         for (const event of events) {
           for (const subscription of streamSinks) {
             if (subscription.kinds === undefined || subscription.kinds.has(event.kind)) {
-              subscription.sink(event);
+              try {
+                subscription.sink(event);
+              } catch (cause) {
+                diagnostics.push({
+                  phase: "sink",
+                  eventId: event.id,
+                  kind: event.kind,
+                  scope: event.scope,
+                  message: describeFanoutCause(cause),
+                });
+              }
             }
           }
         }

@@ -2,7 +2,7 @@
  * Resource projection model tests.
  *
  * The oracle is the conservation law for resource ledgers:
- *   available + reserved + consumed = sum(resource.granted)
+ *   available + reserved + consumed = sum(resource_pool.granted)
  * for every resource key, regardless of terminal/reject noise.
  */
 
@@ -17,13 +17,13 @@ import {
 
 type ResourceRowSpec =
   | {
-      readonly kind: "resource.granted";
+      readonly kind: "resource_pool.granted";
       readonly key: string;
       readonly amount: number;
       readonly ref: string;
     }
   | {
-      readonly kind: "resource.reserved";
+      readonly kind: "resource_pool.reserved";
       readonly key: string;
       readonly amount: number;
       readonly ref: string;
@@ -31,7 +31,7 @@ type ResourceRowSpec =
       readonly reservationId: string;
     }
   | {
-      readonly kind: "resource.reserve_rejected";
+      readonly kind: "resource_pool.reserve_rejected";
       readonly key: string;
       readonly amount: number;
       readonly ref: string;
@@ -39,7 +39,7 @@ type ResourceRowSpec =
       readonly available: number;
     }
   | {
-      readonly kind: "resource.consumed" | "resource.released";
+      readonly kind: "resource_pool.consumed" | "resource_pool.released";
       readonly reservationId: string;
       readonly ref: string;
     };
@@ -61,7 +61,7 @@ type HistoryStep =
     }
   | {
       readonly kind: "terminal";
-      readonly terminalKind: "resource.consumed" | "resource.released";
+      readonly terminalKind: "resource_pool.consumed" | "resource_pool.released";
       readonly pick: number;
       readonly ref: string;
     };
@@ -83,7 +83,7 @@ const historyStepArb: fc.Arbitrary<HistoryStep> = fc.oneof(
   }),
   fc.record({
     kind: fc.constant("terminal"),
-    terminalKind: fc.constantFrom("resource.consumed", "resource.released"),
+    terminalKind: fc.constantFrom("resource_pool.consumed", "resource_pool.released"),
     pick: fc.nat(),
     ref: refArb,
   }),
@@ -105,7 +105,7 @@ const reachableHistoryArb: fc.Arbitrary<ReadonlyArray<ResourceRowSpec>> = fc
     for (const step of steps) {
       if (step.kind === "grant") {
         specs.push({
-          kind: "resource.granted",
+          kind: "resource_pool.granted",
           key: step.key,
           amount: step.amount,
           ref: step.ref,
@@ -119,7 +119,7 @@ const reachableHistoryArb: fc.Arbitrary<ReadonlyArray<ResourceRowSpec>> = fc
         const idempotencyKey = `idem-${nextIdempotencyKey++}`;
         if (available < step.amount) {
           specs.push({
-            kind: "resource.reserve_rejected",
+            kind: "resource_pool.reserve_rejected",
             key: step.key,
             amount: step.amount,
             ref: step.ref,
@@ -131,7 +131,7 @@ const reachableHistoryArb: fc.Arbitrary<ReadonlyArray<ResourceRowSpec>> = fc
 
         const reservationId = `reservation-${nextReservationId++}`;
         specs.push({
-          kind: "resource.reserved",
+          kind: "resource_pool.reserved",
           key: step.key,
           amount: step.amount,
           ref: step.ref,
@@ -153,7 +153,7 @@ const reachableHistoryArb: fc.Arbitrary<ReadonlyArray<ResourceRowSpec>> = fc
         ref: step.ref,
       });
       active.delete(reservationId);
-      if (step.terminalKind === "resource.released") {
+      if (step.terminalKind === "resource_pool.released") {
         addAvailable(reservation.key, reservation.amount);
       }
     }
@@ -169,7 +169,7 @@ const toRow = (spec: ResourceRowSpec): ResourceEventRow => {
 const grantTotals = (specs: ReadonlyArray<ResourceRowSpec>): Map<string, number> => {
   const totals = new Map<string, number>();
   for (const spec of specs) {
-    if (spec.kind !== "resource.granted") continue;
+    if (spec.kind !== "resource_pool.granted") continue;
     totals.set(spec.key, (totals.get(spec.key) ?? 0) + spec.amount);
   }
   return totals;

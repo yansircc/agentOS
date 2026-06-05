@@ -3,7 +3,7 @@
  *
  * Bypasses the DO facade to compose production Layers directly (LedgerLive +
  * EventBusLive + QuotaLive over real DO SQLite from runInDurableObject's
- * state, plus a Layer.succeed(AiBinding, stubAi(...))). This isolates the
+ * state, plus a Layer.succeed(LlmTransport, stubLlmTransport(...))). This isolates the
  * substrate algorithm from any LLM behavior — every test result is
  * structurally determined by the canned response queue.
  *
@@ -11,7 +11,7 @@
  * 2026-05-25 P1 finding).
  */
 
-import { Cause, Effect, Exit, Layer, ManagedRuntime, Option } from "effect";
+import { Cause, Context, Effect, Exit, Layer, ManagedRuntime, Option, Schema } from "effect";
 import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
 import type {} from "@effect/vitest";
@@ -19,14 +19,13 @@ import type {} from "@effect/vitest";
 import { AdmissionLive } from "../src/admission";
 import { EventBusLive } from "../src/ledger";
 import { Ledger, LedgerLive } from "../src/ledger";
-import { AiBinding, LlmTransportLive } from "../src/llm";
 import { RefResolverLive } from "@agent-os/kernel/ref-resolver";
 import { QuotaLive } from "../src/quota";
 import { withQuota } from "../src/quota";
-import { type InternalSubmitSpec, submitAgentEffect } from "@agent-os/runtime";
-import { defineToolFromDefinition, pureToolExecution, type Tool } from "@agent-os/kernel/tools";
+import { LlmTransport, type InternalSubmitSpec, submitAgentEffect } from "@agent-os/runtime";
+import { defineTool, pureToolExecution, type Tool } from "@agent-os/kernel/tools";
 import type { EventHandler } from "@agent-os/kernel/types";
-import { finalTextResp, stubAi, toolCallResp } from "./_stub-ai";
+import { finalTextResp, stubLlmTransport, toolCallResp } from "./_stub-ai";
 
 interface TestEnv {
   readonly AGENT_DO: DurableObjectNamespace;
@@ -38,18 +37,13 @@ const testEnv = env as unknown as TestEnv;
 
 const makeQuotaTool = (limit: number): Tool =>
   withQuota(
-    defineToolFromDefinition({
-      definition: {
-        type: "function",
-        function: {
-          name: "get_current_time",
-          description: "Returns the current time as ISO string",
-          parameters: { type: "object", properties: {}, required: [] },
-        },
-      },
+    defineTool({
+      name: "get_current_time",
+      description: "Returns the current time as ISO string",
+      args: Schema.Struct({}),
       execute: async () => "2026-05-25T00:00:00Z",
       admit: allowToolAdmitter,
-      authorityClass: "read",
+      authority: "read",
       execution: pureToolExecution(),
     }),
     { windowMs: 60_000, limit, amount: 1 },
@@ -58,7 +52,12 @@ const makeQuotaTool = (limit: number): Tool =>
 const makeSpec = (scope: string, limit: number): InternalSubmitSpec => ({
   intent: "what time is it",
   context: {},
-  route: { kind: "cf-ai-binding", modelId: "@cf/stub/test" } as const,
+  route: {
+    kind: "openai-chat-compatible",
+    endpointRef: "test-endpoint",
+    credentialRef: "test-credential",
+    modelId: "test-model",
+  } as const,
   tools: { get_current_time: makeQuotaTool(limit) },
   budget: { maxTurns: 3 },
   deliver: {
@@ -68,21 +67,19 @@ const makeSpec = (scope: string, limit: number): InternalSubmitSpec => ({
   },
 });
 
-const buildRuntime = (state: DurableObjectState, ai: Ai) => {
+const buildRuntime = (state: DurableObjectState, llm: Context.Tag.Service<typeof LlmTransport>) => {
   const handlers = new Map<string, Set<EventHandler>>();
   const eventBus = EventBusLive(handlers);
   const ledger = LedgerLive(state).pipe(Layer.provide(eventBus));
   const quota = QuotaLive(state).pipe(Layer.provide(eventBus));
-  const aiLayer = Layer.succeed(AiBinding, ai);
+  const llmTransport = Layer.succeed(LlmTransport, llm);
   const refs = RefResolverLive({
     material: () => null,
   });
-  const providerBase = Layer.mergeAll(aiLayer, refs);
-  const llmTransport = LlmTransportLive.pipe(Layer.provide(providerBase));
   const admission = AdmissionLive(state).pipe(
-    Layer.provide(Layer.mergeAll(eventBus, providerBase)),
+    Layer.provide(Layer.mergeAll(eventBus, llmTransport)),
   );
-  return ManagedRuntime.make(Layer.mergeAll(ledger, quota, aiLayer, llmTransport, admission, refs));
+  return ManagedRuntime.make(Layer.mergeAll(ledger, quota, llmTransport, admission, refs));
 };
 
 describe("quota state machine — deterministic", () => {
@@ -94,28 +91,26 @@ describe("quota state machine — deterministic", () => {
     await runInDurableObject(stub, async (_inst, state) => {
       let calls = 0;
       const retryingTool = withQuota(
-        defineToolFromDefinition({
-          definition: {
-            type: "function",
-            function: {
-              name: "get_current_time",
-              description: "Returns the current time as ISO string",
-              parameters: { type: "object", properties: {}, required: [] },
-            },
-          },
+        defineTool({
+          name: "get_current_time",
+          description: "Returns the current time as ISO string",
+          args: Schema.Struct({}),
           execute: async () => {
             calls += 1;
             if (calls === 1) throw new Error("transient");
             return "2026-05-25T00:00:00Z";
           },
           admit: allowToolAdmitter,
-          authorityClass: "read",
+          authority: "read",
           execution: pureToolExecution(),
         }),
         { windowMs: 60_000, limit: 1, amount: 1 },
       );
-      const ai = stubAi([toolCallResp("get_current_time", "{}", "c1"), finalTextResp("ok")]);
-      const runtime = buildRuntime(state, ai);
+      const llm = stubLlmTransport([
+        toolCallResp("get_current_time", "{}", "c1"),
+        finalTextResp("ok"),
+      ]);
+      const runtime = buildRuntime(state, llm);
       const spec: InternalSubmitSpec = {
         ...makeSpec(scope, 1),
         tools: { get_current_time: retryingTool },
@@ -132,8 +127,8 @@ describe("quota state machine — deterministic", () => {
           return yield* l.events(scope);
         }),
       );
-      expect(events.filter((event) => event.kind === "dispatch.consumed")).toHaveLength(1);
-      expect(events.some((event) => event.kind === "dispatch.rate_limited")).toBe(false);
+      expect(events.filter((event) => event.kind === "quota.consumed")).toHaveLength(1);
+      expect(events.some((event) => event.kind === "quota.rate_limited")).toBe(false);
 
       await runtime.dispose();
     });
@@ -148,7 +143,7 @@ describe("quota state machine — deterministic", () => {
       // Each successful submit: one tool_call turn, one final text turn.
       // Submit 3 hits rate_limit on the tool_call turn → aborts (no second
       // LLM call). 2*2 + 1 = 5 stub responses pre-loaded.
-      const ai = stubAi([
+      const llm = stubLlmTransport([
         toolCallResp("get_current_time", "{}", "c1"),
         finalTextResp("ok 1"),
         toolCallResp("get_current_time", "{}", "c2"),
@@ -156,7 +151,7 @@ describe("quota state machine — deterministic", () => {
         toolCallResp("get_current_time", "{}", "c3"),
       ]);
 
-      const runtime = buildRuntime(state, ai);
+      const runtime = buildRuntime(state, llm);
 
       const r1 = await runtime.runPromise(submitAgentEffect(makeSpec(scope, 2)));
       const r2 = await runtime.runPromise(submitAgentEffect(makeSpec(scope, 2)));
@@ -181,15 +176,15 @@ describe("quota state machine — deterministic", () => {
         return acc;
       }, {});
 
-      expect(counts["dispatch.consumed"]).toBe(2);
-      expect(counts["dispatch.rate_limited"]).toBe(1);
+      expect(counts["quota.consumed"]).toBe(2);
+      expect(counts["quota.rate_limited"]).toBe(1);
       expect(counts["agent.aborted.tool_error"]).toBe(1);
 
       await runtime.dispose();
     });
   });
 
-  it("malformed dispatch.consumed payload → SqlError escapes Promise (validates a304601 P2 fix)", async () => {
+  it("malformed quota.consumed payload → SqlError escapes Promise (validates a304601 P2 fix)", async () => {
     const scope = "quota-malformed-payload";
     const id = testEnv.AGENT_DO.idFromName(scope);
     const stub = testEnv.AGENT_DO.get(id);
@@ -197,11 +192,11 @@ describe("quota state machine — deterministic", () => {
     await runInDurableObject(stub, async (_inst, state) => {
       // One stub response is enough — the submit aborts during the first
       // tryGrant call when it reads the corrupted row.
-      const ai = stubAi([toolCallResp("get_current_time", "{}", "c1")]);
+      const llm = stubLlmTransport([toolCallResp("get_current_time", "{}", "c1")]);
 
-      const runtime = buildRuntime(state, ai);
+      const runtime = buildRuntime(state, llm);
 
-      // Commit a malformed dispatch.consumed row through the ledger primitive.
+      // Commit a malformed quota.consumed row through the ledger primitive.
       // Payload is valid JSON but fails ConsumedPayloadSchema:
       //   - amount is "x" (not a finite number)
       //   - matches the key the tool will look up
@@ -213,7 +208,7 @@ describe("quota state machine — deterministic", () => {
           const ledger = yield* Ledger;
           yield* ledger.commit([
             {
-              kind: "dispatch.consumed",
+              kind: "quota.consumed",
               scope,
               payload: {
                 key: "get_current_time",

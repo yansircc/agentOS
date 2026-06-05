@@ -1,4 +1,4 @@
-import { Cause, Effect, Exit, Layer, ManagedRuntime, Option } from "effect";
+import { Cause, Effect, Exit, Layer, ManagedRuntime, Option, Schema } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
 import {
@@ -17,7 +17,7 @@ import {
   Scheduler,
   TriggerPump,
   makeDurableTriggerRegistry,
-  makeSchemaContract,
+  makeAdmissionSchemaSpec,
   scheduledEventTrigger,
   triggerParseFail,
   triggerParseOk,
@@ -32,9 +32,17 @@ import {
 } from "../src";
 import { InMemoryTriggerPumpLive } from "../src/trigger-pump";
 
-const response = (text: string) => ({
-  text,
-  toolCalls: [],
+const structuredResponse = (args: Record<string, unknown>) => ({
+  items: [
+    {
+      type: "tool_call" as const,
+      call: {
+        id: "structured-call",
+        type: "function" as const,
+        function: { name: "_submit_structured", arguments: JSON.stringify(args) },
+      },
+    },
+  ],
   usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
 });
 
@@ -428,15 +436,12 @@ describe("in-memory runtime backend", () => {
         runtime.runPromise(quota.tryGrant("quota-scope", "tool-a", 1, 60_000, 1, "tool-a", "op-2")),
       ).resolves.toMatchObject({ granted: false, consumed: 1, limit: 1 });
       const events = await runtime.runPromise(ledger.events("quota-scope"));
-      expect(events.map((event) => event.kind)).toEqual([
-        "dispatch.consumed",
-        "dispatch.rate_limited",
-      ]);
+      expect(events.map((event) => event.kind)).toEqual(["quota.consumed", "quota.rate_limited"]);
 
       await runtime.runPromise(
         backend.state.commitEvents([
           {
-            kind: "dispatch.consumed",
+            kind: "quota.consumed",
             scope: "quota-scope",
             payload: { key: "tool-a", amount: "x", toolName: "tool-a", operationRef: "bad-op" },
           },
@@ -460,24 +465,24 @@ describe("in-memory runtime backend", () => {
 
   it("AdmissionLive uses injected LlmTransport and commits evidence only", async () => {
     const { runtime } = makeRuntime("admission-scope", {
-      llm: { responses: [response(JSON.stringify({ answer: "ok" }))] },
+      llm: { responses: [structuredResponse({ answer: "ok" })] },
     });
     try {
       const admission = await runtime.runPromise(Admission);
       const ledger = await runtime.runPromise(Ledger);
-      const schemaContract = await runtime.runPromise(
-        makeSchemaContract({
-          type: "object",
-          properties: { answer: { type: "string" } },
-          required: ["answer"],
-          additionalProperties: false,
-        }),
+      const schemaSpec = await runtime.runPromise(
+        makeAdmissionSchemaSpec(Schema.Struct({ answer: Schema.String })),
       );
       const result = await runtime.runPromise(
         admission.attemptStructured<{ readonly answer: string }>({
           scope: "admission-scope",
-          route: { kind: "cf-ai-binding", modelId: "@cf/test" },
-          schemaContract,
+          route: {
+            kind: "openai-chat-compatible",
+            endpointRef: "test-endpoint",
+            credentialRef: "test-credential",
+            modelId: "test-model",
+          },
+          schemaSpec,
           strategy: "forced-tool-call",
           stimulus: {
             kind: "live",

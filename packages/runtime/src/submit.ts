@@ -1,7 +1,8 @@
 import type { LlmRoute } from "@agent-os/kernel/llm";
 import type { Tool } from "@agent-os/kernel/tools";
 import type { ScopeRef } from "@agent-os/kernel/effect-claim";
-import type { JsonSchemaObject } from "@agent-os/kernel/json-schema";
+import type { AnyAgentSchemaSource } from "@agent-os/kernel/agent-schema";
+import type { TraceContext } from "@agent-os/kernel/trace-context";
 
 export interface SubmitSpec {
   readonly intent: string;
@@ -15,7 +16,8 @@ export interface SubmitSpec {
     readonly maxTurns?: number;
     readonly toolRetries?: number;
   };
-  readonly outputSchema?: JsonSchemaObject;
+  readonly outputSchema?: AnyAgentSchemaSource;
+  readonly traceContext?: TraceContext;
   readonly deliver: { readonly event: string };
 }
 

@@ -98,7 +98,7 @@ import { Dispatch, type DispatchEnvelope, type DispatchTargetRegistry } from "./
 import { EventBus, createEventStreamResponse, eventToRpc } from "./ledger";
 import { Scheduler } from "./scheduler";
 import { Resources } from "./resources";
-import { AiBinding, LlmTransportLive } from "./llm";
+import { LlmTransportLive } from "./llm";
 import { isMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
 import { AdmissionLive } from "./admission";
 import {
@@ -118,24 +118,20 @@ import {
   validateExtensionDeclarations,
 } from "@agent-os/kernel/extensions";
 import { isScopeRef, type ScopeRef } from "@agent-os/kernel/effect-claim";
+import { projectAdmissionLease, projectQuotaState, projectResourceState } from "./projections";
 import {
-  projectAdmissionLease,
-  projectQuotaState,
-  projectResourceState,
   projectRunsPage,
   projectRunStatus,
   projectRunTrace,
   RUN_BEARING_KINDS,
-} from "./projections";
+} from "@agent-os/runtime/run-projector";
 import { makeCloudflareBackendCoreLayer, type CloudflareBackendCoreServices } from "./runtime-core";
 import { commitDurableTriggerIntent } from "./due-work";
 import type { CloudflareTriggerSource } from "./trigger-factory";
 import type { CloudflareAttachedStreamSource } from "./stream-factory";
 import { createAttachedStreamResponse } from "./attached-stream-wire";
 
-export interface CloudflareAgentEnv {
-  readonly AI: Ai;
-}
+export interface CloudflareAgentEnv {}
 
 export interface AgentRuntimeReaderClient {
   readonly events: (opts?: EventQueryOptions) => Promise<LedgerEventRpc[]>;
@@ -206,6 +202,7 @@ export interface AgentSubmitSpec {
   readonly system?: string;
   readonly budget?: SubmitSpec["budget"];
   readonly outputSchema?: SubmitSpec["outputSchema"];
+  readonly traceContext?: SubmitSpec["traceContext"];
   readonly deliver: string;
 }
 
@@ -221,12 +218,7 @@ export interface AgentEventHandlerContext<
   readonly capabilities: ReadonlyMap<string, ExtensionCapability>;
 }
 
-type CoreServices =
-  | CloudflareBackendCoreServices
-  | AiBinding
-  | LlmTransport
-  | Admission
-  | RefResolverService;
+type CoreServices = CloudflareBackendCoreServices | LlmTransport | Admission | RefResolverService;
 
 const makeAgentRuntime = <Env extends CloudflareAgentEnv>(
   ctx: DurableObjectState,
@@ -249,15 +241,13 @@ const makeAgentRuntime = <Env extends CloudflareAgentEnv>(
     appStreams,
     appProjections,
   );
-  const aiLayer = Layer.succeed(AiBinding, env.AI);
   const refResolverLayer = RefResolverLive(refs);
-  const providerBaseLayer = Layer.mergeAll(aiLayer, refResolverLayer);
-  const llmTransportLayer = LlmTransportLive.pipe(Layer.provide(providerBaseLayer));
+  const llmTransportLayer = LlmTransportLive.pipe(Layer.provide(refResolverLayer));
   const admissionLayer = AdmissionLive(ctx).pipe(
-    Layer.provide(Layer.mergeAll(backendCoreLayer, providerBaseLayer)),
+    Layer.provide(Layer.mergeAll(backendCoreLayer, llmTransportLayer)),
   );
   return ManagedRuntime.make(
-    Layer.mergeAll(backendCoreLayer, aiLayer, llmTransportLayer, admissionLayer, refResolverLayer),
+    Layer.mergeAll(backendCoreLayer, llmTransportLayer, admissionLayer, refResolverLayer),
   );
 };
 
@@ -523,6 +513,7 @@ export class AgentDurableObject<
       tools: defaults.tools,
       ...(spec.budget === undefined ? {} : { budget: spec.budget }),
       ...(spec.outputSchema === undefined ? {} : { outputSchema: spec.outputSchema }),
+      ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
       deliver: { event: spec.deliver },
     });
   }
@@ -561,7 +552,10 @@ export class AgentDurableObject<
       Effect.gen(function* () {
         const ledger = yield* Ledger;
         const rows = yield* ledger.streamSnapshot(scope);
-        return projectRunTrace(rows, runId);
+        return yield* Effect.try({
+          try: () => projectRunTrace(rows, runId),
+          catch: (cause) => new SqlError({ cause }),
+        });
       }),
     );
   }
@@ -571,7 +565,10 @@ export class AgentDurableObject<
       Effect.gen(function* () {
         const ledger = yield* Ledger;
         const rows = yield* ledger.streamSnapshot(scope);
-        return projectRunStatus(rows, runId);
+        return yield* Effect.try({
+          try: () => projectRunStatus(rows, runId),
+          catch: (cause) => new SqlError({ cause }),
+        });
       }),
     );
   }
@@ -586,7 +583,10 @@ export class AgentDurableObject<
         const rows = yield* ledger.streamSnapshot(scope, {
           kinds: RUN_BEARING_KINDS,
         });
-        return projectRunsPage(rows, spec);
+        return yield* Effect.try({
+          try: () => projectRunsPage(rows, spec),
+          catch: (cause) => new SqlError({ cause }),
+        });
       }),
     );
   }
@@ -596,7 +596,7 @@ export class AgentDurableObject<
       Effect.gen(function* () {
         const ledger = yield* Ledger;
         const rows = yield* ledger.streamSnapshot(scope, {
-          kinds: ["dispatch.consumed"],
+          kinds: ["quota.consumed"],
         });
         const now = yield* Clock.currentTimeMillis;
         return yield* Effect.try({
@@ -613,11 +613,11 @@ export class AgentDurableObject<
         const ledger = yield* Ledger;
         const rows = yield* ledger.streamSnapshot(scope, {
           kinds: [
-            "resource.granted",
-            "resource.reserved",
-            "resource.reserve_rejected",
-            "resource.consumed",
-            "resource.released",
+            "resource_pool.granted",
+            "resource_pool.reserved",
+            "resource_pool.reserve_rejected",
+            "resource_pool.consumed",
+            "resource_pool.released",
           ],
         });
         return yield* Effect.try({
@@ -805,9 +805,9 @@ export class AgentDurableObject<
 
   /** Testing-only deterministic drain primitive.
    *
-   *  Production code should not call this; Cloudflare alarms own production
-   *  due-work drain. The testing subpath exposes an intentionally ugly RPC
-   *  wrapper for local smoke tests that need synchronous trigger progress.
+   *  Production drain is alarm-owned. Package-local test fixtures may expose
+   *  this protected primitive through ugly RPC names for synchronous smoke
+   *  tests; it is not a public package subpath.
    */
   protected drainDueOnceForTestingFull(
     options: AgentDrainDueTestingOptions = {},

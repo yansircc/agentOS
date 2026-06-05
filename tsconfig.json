@@ -4,6 +4,9 @@
     { "path": "./packages/kernel" },
     { "path": "./packages/composers/attached-stream" },
     { "path": "./packages/composers/turn-stream" },
+    { "path": "./packages/composers/ag-ui" },
+    { "path": "./packages/composers/ag-ui-react" },
+    { "path": "./packages/composers/ag-ui-svelte" },
     { "path": "./packages/execution-domains/workspace-env" },
     { "path": "./packages/runtime" },
     { "path": "./packages/backends/protocol" },
@@ -19,6 +22,7 @@
     { "path": "./packages/carriers/workspace-session" },
     { "path": "./packages/providers/dynamic-worker" },
     { "path": "./packages/providers/deploy-cloudflare" },
+    { "path": "./packages/providers/llm-transport-effect-ai" },
     { "path": "./packages/providers/llm-transport-http" },
     { "path": "./packages/providers/resource-cloudflare" },
     { "path": "./packages/execution-domains/sandbox-cloudflare" },
@@ -29,8 +33,7 @@
     { "path": "./packages/backends/cloudflare-do" },
     { "path": "./packages/backends/in-memory" },
     { "path": "./tooling/ops-api" },
-    { "path": "./tooling/ops-htmx" },
-    { "path": "./tooling/skill-registry" }
+    { "path": "./tooling/ops-htmx" }
   ],
   "include": []
 }

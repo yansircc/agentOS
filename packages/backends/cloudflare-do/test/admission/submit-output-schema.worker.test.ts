@@ -9,15 +9,15 @@
  *      (mutual exclusivity invariant — contract §12.1).
  */
 
-import { Effect, Exit } from "effect";
+import { Effect, Exit, Schema } from "effect";
 import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
 import type {} from "@effect/vitest";
 
 import { Ledger } from "../../src/ledger";
 import { type InternalSubmitSpec, submitAgentEffect } from "@agent-os/runtime";
-import { defineToolFromDefinition, pureToolExecution } from "@agent-os/kernel/tools";
-import { stubAi } from "../_stub-ai";
+import { defineTool, pureToolExecution } from "@agent-os/kernel/tools";
+import { stubLlmTransport } from "../_stub-ai";
 import { allowToolAdmitter } from "../_tool-fixture";
 
 import { SCHEMA, makeRuntime, submitStructuredResp } from "./_helpers";
@@ -26,6 +26,12 @@ interface TestEnv {
   readonly AGENT_DO: DurableObjectNamespace;
 }
 const testEnv = env as unknown as TestEnv;
+const route = {
+  kind: "openai-chat-compatible",
+  endpointRef: "test-endpoint",
+  credentialRef: "test-credential",
+  modelId: "test-model",
+} as const;
 
 describe("admission — submitAgent outputSchema path (contract §12.1)", () => {
   it("outputSchema present → admission path; result.final is the decoded JSON", async () => {
@@ -34,13 +40,13 @@ describe("admission — submitAgent outputSchema path (contract §12.1)", () => 
     const stub = testEnv.AGENT_DO.get(id);
 
     await runInDurableObject(stub, async (_inst, state) => {
-      const ai = stubAi([submitStructuredResp('{"summary":"from-submit"}', "c1")]);
-      const runtime = makeRuntime(state, ai);
+      const llm = stubLlmTransport([submitStructuredResp('{"summary":"from-submit"}', "c1")]);
+      const runtime = makeRuntime(state, llm);
 
       const spec: InternalSubmitSpec = {
         intent: "summarize",
         context: {},
-        route: { kind: "cf-ai-binding", modelId: "@cf/test/model" } as const,
+        route,
         tools: {},
         outputSchema: SCHEMA,
         deliver: {
@@ -79,26 +85,21 @@ describe("admission — submitAgent outputSchema path (contract §12.1)", () => 
     const stub = testEnv.AGENT_DO.get(id);
 
     await runInDurableObject(stub, async (_inst, state) => {
-      const ai = stubAi([]); // no responses needed; submit aborts before any LLM call
-      const runtime = makeRuntime(state, ai);
+      const llm = stubLlmTransport([]); // no responses needed; submit aborts before any LLM call
+      const runtime = makeRuntime(state, llm);
 
       const spec: InternalSubmitSpec = {
         intent: "x",
         context: {},
-        route: { kind: "cf-ai-binding", modelId: "@cf/test/model" } as const,
+        route,
         tools: {
-          someTool: defineToolFromDefinition({
-            definition: {
-              type: "function",
-              function: {
-                name: "someTool",
-                description: "x",
-                parameters: { type: "object", properties: {}, required: [] },
-              },
-            },
+          someTool: defineTool({
+            name: "someTool",
+            description: "x",
+            args: Schema.Struct({}),
             execute: async () => "y",
             admit: allowToolAdmitter,
-            authorityClass: "read",
+            authority: "read",
             execution: pureToolExecution(),
           }),
         },
@@ -143,13 +144,13 @@ describe("admission — submitAgent outputSchema path (contract §12.1)", () => 
     const stub = testEnv.AGENT_DO.get(id);
 
     await runInDurableObject(stub, async (_inst, state) => {
-      const ai = stubAi([submitStructuredResp('{"summary":"over-budget"}', "c1")]);
-      const runtime = makeRuntime(state, ai);
+      const llm = stubLlmTransport([submitStructuredResp('{"summary":"over-budget"}', "c1")]);
+      const runtime = makeRuntime(state, llm);
 
       const spec: InternalSubmitSpec = {
         intent: "summarize",
         context: {},
-        route: { kind: "cf-ai-binding", modelId: "@cf/test/model" } as const,
+        route,
         tools: {},
         outputSchema: SCHEMA,
         budget: { tokens: 10 },

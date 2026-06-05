@@ -13,6 +13,9 @@ import {
   validateTerminalClaim,
 } from "@agent-os/kernel/settlement-contract";
 import type { DeliveryReceipt, DispatchTargetSpec, TraceContext } from "@agent-os/kernel/types";
+import { validateOptionalTraceContext } from "@agent-os/kernel/trace-context";
+
+export { copyTraceContext } from "@agent-os/kernel/trace-context";
 
 export const DISPATCH_OUTBOUND_REQUESTED = "dispatch.outbound.requested";
 export const DISPATCH_OUTBOUND_DELIVERED = "dispatch.outbound.delivered";
@@ -458,35 +461,11 @@ const parseFail = <T = never>(reason: string): DispatchPayloadParseResult<T> => 
   failure: dispatchPayloadParseFailure(reason),
 });
 
-export const copyTraceContext = (
-  traceContext: TraceContext | undefined,
-): TraceContext | undefined => {
-  if (traceContext === undefined) return undefined;
-  return {
-    ...(traceContext.traceparent === undefined ? {} : { traceparent: traceContext.traceparent }),
-    ...(traceContext.tracestate === undefined ? {} : { tracestate: traceContext.tracestate }),
-  };
-};
-
 export const parseTraceContext = (
   value: unknown,
 ): DispatchPayloadParseResult<TraceContext | undefined> => {
-  if (value === undefined) return parseOk(undefined);
-  if (!Predicate.isRecord(value)) return parseFail("traceContext must be object");
-  const traceparent = value.traceparent;
-  const tracestate = value.tracestate;
-  if (
-    (traceparent !== undefined && typeof traceparent !== "string") ||
-    (tracestate !== undefined && typeof tracestate !== "string")
-  ) {
-    return parseFail("traceContext fields must be strings");
-  }
-  return parseOk(
-    copyTraceContext({
-      ...(traceparent === undefined ? {} : { traceparent }),
-      ...(tracestate === undefined ? {} : { tracestate }),
-    }),
-  );
+  const parsed = validateOptionalTraceContext(value);
+  return parsed.ok ? parseOk(parsed.traceContext) : parseFail(parsed.reason);
 };
 
 export const parseDispatchBindingRef = (

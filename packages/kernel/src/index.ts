@@ -1,4 +1,5 @@
 export { ABORT, type AbortKind, reasonOf } from "./abort";
+export * from "./agent-schema";
 export type {
   BoundaryPackage,
   EventNamespace,
@@ -29,6 +30,7 @@ export type {
 export {
   boundaryPackage,
   defineBoundaryContract,
+  validateBoundaryPayload,
   validateBoundaryContract,
 } from "./boundary-contract";
 export * from "./carrier";
@@ -62,11 +64,11 @@ export {
 export * from "./context";
 export * from "./effect-claim";
 export * from "./errors";
-export * from "./json-schema";
 export * from "./llm";
 export * from "./quota";
 export * from "./ref-resolver";
 export * from "./runtime-scope";
 export * from "./settlement-contract";
 export * from "./tools";
+export * from "./trace-context";
 export type * from "./types";

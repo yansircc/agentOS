@@ -15,11 +15,13 @@ import {
 import { DISPATCH_EVENT_KINDS } from "@agent-os/backend-protocol";
 import { durableObjectDispatchTarget, type DispatchTargetNamespace } from "../src/dispatch";
 import { findNextDue } from "../src/due-work";
+import { EventBus } from "../src/ledger";
 import { makeCloudflareBackendCoreLayer } from "../src/runtime-core";
 import { makeInMemoryDurableObjectState } from "./_in-memory-do";
 import {
   runRuntimeBackendContractSuite,
   type ContractDispatchReceiver,
+  type RuntimeBackendFanoutDiagnostic,
   type RuntimeBackendContractDriver,
 } from "../../protocol/test/contract/runtime-backend-contract";
 
@@ -110,6 +112,18 @@ const makeCloudflareDoContractDriver = (): RuntimeBackendContractDriver => {
           set?.delete(wrapped);
         },
       };
+    },
+    addSink: async (scope, kind, sink) => {
+      const bus = await runtime(scope).runPromise(EventBus);
+      return bus.subscribe({ kinds: [kind], sink });
+    },
+    fanoutDiagnostics: async () => {
+      const diagnostics: RuntimeBackendFanoutDiagnostic[] = [];
+      for (const [scope] of states) {
+        const bus = await runtime(scope).runPromise(EventBus);
+        diagnostics.push(...bus.fanoutDiagnostics());
+      }
+      return diagnostics;
     },
     log: async (scope, kind, payload) => {
       const ledger = await runtime(scope).runPromise(Ledger);

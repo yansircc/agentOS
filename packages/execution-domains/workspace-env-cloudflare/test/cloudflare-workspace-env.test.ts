@@ -104,4 +104,56 @@ describe("@agent-os/workspace-env-cloudflare", () => {
     expect(client.listFiles).toHaveBeenCalledWith("/workspace");
     expect(client.readdir).not.toHaveBeenCalled();
   });
+
+  it("derives stat through sandbox shell instead of probing an RPC stat method", async () => {
+    const exec = vi.fn<CloudflareWorkspaceEnvClient["exec"]>(async () => ({
+      exitCode: 0,
+      stdout: "file\t12\t1700000000\n",
+      stderr: "",
+      durationMs: 1,
+    }));
+    const stat = vi.fn<NonNullable<CloudflareWorkspaceEnvClient["stat"]>>(async () => {
+      throw new Error('The RPC receiver does not implement the method "stat".');
+    });
+    const env = makeCloudflareWorkspaceEnv({
+      client: {
+        exec,
+        stat,
+      },
+      cwd: "/workspace",
+    });
+
+    await expect(env.stat("README.md")).resolves.toEqual({
+      type: "file",
+      size: 12,
+      mtimeMs: 1_700_000_000_000,
+    });
+    expect(exec).toHaveBeenCalledTimes(1);
+    expect(stat).not.toHaveBeenCalled();
+  });
+
+  it("derives readFileBuffer through readFile instead of probing an RPC buffer method", async () => {
+    const readFile = vi.fn<NonNullable<CloudflareWorkspaceEnvClient["readFile"]>>(async () => ({
+      content: "hello",
+    }));
+    const readFileBuffer = vi.fn<NonNullable<CloudflareWorkspaceEnvClient["readFileBuffer"]>>(
+      async () => {
+        throw new Error('The RPC receiver does not implement the method "readFileBuffer".');
+      },
+    );
+    const env = makeCloudflareWorkspaceEnv({
+      client: {
+        exec: async () => ({ exitCode: 0 }),
+        readFile,
+        readFileBuffer,
+      },
+      cwd: "/workspace",
+    });
+
+    await expect(env.readFileBuffer("hello.py")).resolves.toEqual(
+      new TextEncoder().encode("hello"),
+    );
+    expect(readFile).toHaveBeenCalledWith("/workspace/hello.py", { encoding: "utf-8" });
+    expect(readFileBuffer).not.toHaveBeenCalled();
+  });
 });

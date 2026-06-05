@@ -54,7 +54,6 @@ export const workspaceSessionCarrier = defineCarrier({
         sessionRef: Schema.String,
         previewRef: Schema.String,
         port: Schema.Number,
-        url: Schema.optional(Schema.String),
       }),
       claim: lived({ key: "claim", anchorKinds: ["carrier_proof"] }),
     }),

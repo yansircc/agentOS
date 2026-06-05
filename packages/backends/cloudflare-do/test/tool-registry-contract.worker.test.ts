@@ -1,4 +1,4 @@
-import { Effect, Layer, ManagedRuntime, Schema } from "effect";
+import { Context, Effect, Layer, ManagedRuntime, Schema } from "effect";
 import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
 import type {} from "@effect/vitest";
@@ -6,18 +6,12 @@ import type {} from "@effect/vitest";
 import { AdmissionLive } from "../src/admission";
 import { EventBusLive } from "../src/ledger";
 import { Ledger, LedgerLive } from "../src/ledger";
-import { AiBinding, LlmTransportLive } from "../src/llm";
 import { QuotaLive } from "../src/quota";
 import { RefResolverLive } from "@agent-os/kernel/ref-resolver";
-import { type InternalSubmitSpec, submitAgentEffect } from "@agent-os/runtime";
-import {
-  defineToolFromDefinition,
-  defineTool,
-  pureToolExecution,
-  type Tool,
-} from "@agent-os/kernel/tools";
+import { LlmTransport, type InternalSubmitSpec, submitAgentEffect } from "@agent-os/runtime";
+import { defineTool, pureToolExecution, type Tool } from "@agent-os/kernel/tools";
 import type { EventHandler } from "@agent-os/kernel/types";
-import { finalTextResp, stubAi, toolCallResp } from "./_stub-ai";
+import { finalTextResp, stubLlmTransport, toolCallResp } from "./_stub-ai";
 import { allowToolAdmitter, makeLookupTool } from "./_tool-fixture";
 
 interface TestEnv {
@@ -29,7 +23,12 @@ const testEnv = env as unknown as TestEnv;
 const makeSpec = (scope: string, tool: Tool): InternalSubmitSpec => ({
   intent: "lookup",
   context: {},
-  route: { kind: "cf-ai-binding", modelId: "@cf/stub/test" } as const,
+  route: {
+    kind: "openai-chat-compatible",
+    endpointRef: "test-endpoint",
+    credentialRef: "test-credential",
+    modelId: "test-model",
+  } as const,
   tools: { lookup: tool },
   budget: { maxTurns: 3 },
   deliver: {
@@ -39,21 +38,19 @@ const makeSpec = (scope: string, tool: Tool): InternalSubmitSpec => ({
   },
 });
 
-const buildRuntime = (state: DurableObjectState, ai: Ai) => {
+const buildRuntime = (state: DurableObjectState, llm: Context.Tag.Service<typeof LlmTransport>) => {
   const handlers = new Map<string, Set<EventHandler>>();
   const eventBus = EventBusLive(handlers);
   const ledger = LedgerLive(state).pipe(Layer.provide(eventBus));
   const quota = QuotaLive(state).pipe(Layer.provide(eventBus));
-  const aiLayer = Layer.succeed(AiBinding, ai);
+  const llmTransport = Layer.succeed(LlmTransport, llm);
   const refs = RefResolverLive({
     material: () => null,
   });
-  const providerBase = Layer.mergeAll(aiLayer, refs);
-  const llmTransport = LlmTransportLive.pipe(Layer.provide(providerBase));
   const admission = AdmissionLive(state).pipe(
-    Layer.provide(Layer.mergeAll(eventBus, providerBase)),
+    Layer.provide(Layer.mergeAll(eventBus, llmTransport)),
   );
-  return ManagedRuntime.make(Layer.mergeAll(ledger, quota, aiLayer, llmTransport, admission, refs));
+  return ManagedRuntime.make(Layer.mergeAll(ledger, quota, llmTransport, admission, refs));
 };
 
 describe("tool registry generator", () => {
@@ -63,8 +60,8 @@ describe("tool registry generator", () => {
     const stub = testEnv.AGENT_DO.get(id);
 
     await runInDurableObject(stub, async (_inst, state) => {
-      const ai = stubAi([toolCallResp("lookup", "{}", "call-1"), finalTextResp("done")]);
-      const runtime = buildRuntime(state, ai);
+      const llm = stubLlmTransport([toolCallResp("lookup", "{}", "call-1"), finalTextResp("done")]);
+      const runtime = buildRuntime(state, llm);
 
       const result = await runtime.runPromise(submitAgentEffect(makeSpec(scope, makeLookupTool())));
       expect(result.ok).toBe(true);
@@ -126,8 +123,8 @@ describe("tool registry generator", () => {
     });
 
     await runInDurableObject(stub, async (_inst, state) => {
-      const ai = stubAi([toolCallResp("lookup", '{"key":1}', "call-1")]);
-      const runtime = buildRuntime(state, ai);
+      const llm = stubLlmTransport([toolCallResp("lookup", '{"key":1}', "call-1")]);
+      const runtime = buildRuntime(state, llm);
 
       const result = await runtime.runPromise(submitAgentEffect(makeSpec(scope, tool)));
       expect(result.ok).toBe(false);
@@ -153,15 +150,10 @@ describe("tool registry generator", () => {
     const id = testEnv.AGENT_DO.idFromName(scope);
     const stub = testEnv.AGENT_DO.get(id);
     let executed = false;
-    const malformedRejectionTool = defineToolFromDefinition({
-      definition: {
-        type: "function",
-        function: {
-          name: "lookup",
-          description: "Lookup a value",
-          parameters: { type: "object", properties: {}, required: [] },
-        },
-      },
+    const malformedRejectionTool = defineTool({
+      name: "lookup",
+      description: "Lookup a value",
+      args: Schema.Struct({}),
       admit: () =>
         ({
           ok: false,
@@ -174,13 +166,13 @@ describe("tool registry generator", () => {
         executed = true;
         return { value: 42 };
       },
-      authorityClass: "write",
+      authority: "write",
       execution: pureToolExecution(),
     });
 
     await runInDurableObject(stub, async (_inst, state) => {
-      const ai = stubAi([toolCallResp("lookup", "{}", "call-1")]);
-      const runtime = buildRuntime(state, ai);
+      const llm = stubLlmTransport([toolCallResp("lookup", "{}", "call-1")]);
+      const runtime = buildRuntime(state, llm);
 
       const result = await runtime.runPromise(
         submitAgentEffect(makeSpec(scope, malformedRejectionTool)),
@@ -218,15 +210,10 @@ describe("tool registry generator", () => {
     const id = testEnv.AGENT_DO.idFromName(scope);
     const stub = testEnv.AGENT_DO.get(id);
     let executed = false;
-    const throwingAdmitterTool = defineToolFromDefinition({
-      definition: {
-        type: "function",
-        function: {
-          name: "lookup",
-          description: "Lookup a value",
-          parameters: { type: "object", properties: {}, required: [] },
-        },
-      },
+    const throwingAdmitterTool = defineTool({
+      name: "lookup",
+      description: "Lookup a value",
+      args: Schema.Struct({}),
       admit: () => {
         throw new Error("policy service down");
       },
@@ -234,13 +221,13 @@ describe("tool registry generator", () => {
         executed = true;
         return { value: 42 };
       },
-      authorityClass: "write",
+      authority: "write",
       execution: pureToolExecution(),
     });
 
     await runInDurableObject(stub, async (_inst, state) => {
-      const ai = stubAi([toolCallResp("lookup", "{}", "call-1")]);
-      const runtime = buildRuntime(state, ai);
+      const llm = stubLlmTransport([toolCallResp("lookup", "{}", "call-1")]);
+      const runtime = buildRuntime(state, llm);
 
       const result = await runtime.runPromise(
         submitAgentEffect(makeSpec(scope, throwingAdmitterTool)),
@@ -278,27 +265,22 @@ describe("tool registry generator", () => {
     const id = testEnv.AGENT_DO.idFromName(scope);
     const stub = testEnv.AGENT_DO.get(id);
     let executed = false;
-    const malformedAdmitterTool = defineToolFromDefinition({
-      definition: {
-        type: "function",
-        function: {
-          name: "lookup",
-          description: "Lookup a value",
-          parameters: { type: "object", properties: {}, required: [] },
-        },
-      },
+    const malformedAdmitterTool = defineTool({
+      name: "lookup",
+      description: "Lookup a value",
+      args: Schema.Struct({}),
       admit: () => undefined as never,
       execute: async () => {
         executed = true;
         return { value: 42 };
       },
-      authorityClass: "write",
+      authority: "write",
       execution: pureToolExecution(),
     });
 
     await runInDurableObject(stub, async (_inst, state) => {
-      const ai = stubAi([toolCallResp("lookup", "{}", "call-1")]);
-      const runtime = buildRuntime(state, ai);
+      const llm = stubLlmTransport([toolCallResp("lookup", "{}", "call-1")]);
+      const runtime = buildRuntime(state, llm);
 
       const result = await runtime.runPromise(
         submitAgentEffect(makeSpec(scope, malformedAdmitterTool)),
@@ -335,26 +317,21 @@ describe("tool registry generator", () => {
     const scope = "tool-registry-rejected";
     const id = testEnv.AGENT_DO.idFromName(scope);
     const stub = testEnv.AGENT_DO.get(id);
-    const failingTool = defineToolFromDefinition({
-      definition: {
-        type: "function",
-        function: {
-          name: "lookup",
-          description: "Lookup a value",
-          parameters: { type: "object", properties: {}, required: [] },
-        },
-      },
+    const failingTool = defineTool({
+      name: "lookup",
+      description: "Lookup a value",
+      args: Schema.Struct({}),
       execute: async () => {
         throw new Error("upstream down");
       },
       admit: allowToolAdmitter,
-      authorityClass: "read",
+      authority: "read",
       execution: pureToolExecution(),
     });
 
     await runInDurableObject(stub, async (_inst, state) => {
-      const ai = stubAi([toolCallResp("lookup", "{}", "call-1")]);
-      const runtime = buildRuntime(state, ai);
+      const llm = stubLlmTransport([toolCallResp("lookup", "{}", "call-1")]);
+      const runtime = buildRuntime(state, llm);
 
       const result = await runtime.runPromise(submitAgentEffect(makeSpec(scope, failingTool)));
       expect(result.ok).toBe(false);
@@ -393,15 +370,10 @@ describe("tool registry generator", () => {
     const stub = testEnv.AGENT_DO.get(id);
     let observedSignal: AbortSignal | undefined;
     let aborted = false;
-    const hangingTool = defineToolFromDefinition({
-      definition: {
-        type: "function",
-        function: {
-          name: "lookup",
-          description: "Lookup a value",
-          parameters: { type: "object", properties: {}, required: [] },
-        },
-      },
+    const hangingTool = defineTool({
+      name: "lookup",
+      description: "Lookup a value",
+      args: Schema.Struct({}),
       execute: async (_args, ctx) => {
         observedSignal = ctx.signal;
         ctx.signal.addEventListener("abort", () => {
@@ -410,13 +382,13 @@ describe("tool registry generator", () => {
         await new Promise<never>(() => {});
       },
       admit: allowToolAdmitter,
-      authorityClass: "read",
+      authority: "read",
       execution: pureToolExecution(),
     });
 
     await runInDurableObject(stub, async (_inst, state) => {
-      const ai = stubAi([toolCallResp("lookup", "{}", "call-1")]);
-      const runtime = buildRuntime(state, ai);
+      const llm = stubLlmTransport([toolCallResp("lookup", "{}", "call-1")]);
+      const runtime = buildRuntime(state, llm);
       const spec: InternalSubmitSpec = {
         ...makeSpec(scope, hangingTool),
         budget: { maxTurns: 3, timeMs: 50, toolRetries: 0 },

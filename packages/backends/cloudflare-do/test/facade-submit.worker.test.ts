@@ -12,6 +12,44 @@ const testEnv = env as unknown as TestEnv;
 const requestUrl = (input: RequestInfo | URL): string =>
   typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
 
+const headerValue = (headers: HeadersInit | undefined, name: string): string | null => {
+  if (headers === undefined) return null;
+  if (headers instanceof Headers) return headers.get(name);
+  if (Array.isArray(headers)) {
+    return headers.find(([key]) => key.toLowerCase() === name.toLowerCase())?.[1] ?? null;
+  }
+  if (Symbol.iterator in headers) {
+    for (const entry of headers) {
+      const [key, value] = Array.from(entry);
+      if (key?.toLowerCase() === name.toLowerCase()) return value ?? null;
+    }
+    return null;
+  }
+  const record = headers as Record<string, string>;
+  return record[name] ?? record[name.toLowerCase()] ?? null;
+};
+
+const requestBodyText = async (
+  input: RequestInfo | URL,
+  init: RequestInit | undefined,
+): Promise<string | null> => {
+  if (typeof init?.body === "string") return init.body;
+  if (init?.body instanceof Uint8Array) return new TextDecoder().decode(init.body);
+  if (init?.body instanceof ReadableStream) {
+    const reader = init.body.getReader();
+    const decoder = new TextDecoder();
+    let out = "";
+    for (;;) {
+      const next = await reader.read();
+      if (next.done) break;
+      out += decoder.decode(next.value, { stream: true });
+    }
+    return out + decoder.decode();
+  }
+  if (input instanceof Request) return input.clone().text();
+  return null;
+};
+
 describe("defineAgentDO facade submit", () => {
   it("uses llms.default and configured tools from the facade config", async () => {
     const scope = "facade-submit-defaults";
@@ -19,10 +57,15 @@ describe("defineAgentDO facade submit", () => {
     const fetchCalls: Array<{
       readonly url: string;
       readonly init: RequestInit;
+      readonly bodyText: string | null;
     }> = [];
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-      fetchCalls.push({ url: requestUrl(input), init: init ?? {} });
+      fetchCalls.push({
+        url: requestUrl(input),
+        init: init ?? {},
+        bodyText: await requestBodyText(input, init),
+      });
       return makeFacadeSubmitChatResponse();
     }) as typeof globalThis.fetch;
 
@@ -36,7 +79,15 @@ describe("defineAgentDO facade submit", () => {
         }),
       );
 
-      expect(result.ok).toBe(true);
+      const events = await (
+        stub as {
+          readonly events: () => Promise<
+            ReadonlyArray<{ readonly kind: string; readonly payload: unknown }>
+          >;
+        }
+      ).events();
+
+      expect(result.ok, JSON.stringify({ result, events })).toBe(true);
       if (result.ok) {
         expect(result.final).toBe("facade done");
         expect(result.tokensUsed).toBe(7);
@@ -45,24 +96,17 @@ describe("defineAgentDO facade submit", () => {
       const call = fetchCalls[0];
       expect(call).toBeDefined();
       if (call === undefined) return;
-      expect(call.url).toBe("https://stub.openai.test/v1/chat/completions");
-      expect((call.init.headers as Record<string, string>).Authorization).toBe("Bearer stub-key");
-      expect(typeof call.init.body).toBe("string");
-      if (typeof call.init.body !== "string") return;
-      const body = JSON.parse(call.init.body) as {
+      expect(call.url).toBe("https://stub.openai.test/v1/responses");
+      expect(headerValue(call.init.headers, "authorization")).toBe("Bearer stub-key");
+      expect(typeof call.bodyText).toBe("string");
+      if (call.bodyText === null) return;
+      const body = JSON.parse(call.bodyText) as {
         readonly model?: unknown;
-        readonly tools?: ReadonlyArray<{ readonly function?: { readonly name?: unknown } }>;
+        readonly tools?: ReadonlyArray<{ readonly name?: unknown }>;
       };
       expect(body.model).toBe("gpt-4.1-mini");
-      expect(body.tools?.map((tool) => tool.function?.name)).toEqual(["lookup"]);
+      expect(body.tools?.map((tool) => tool.name)).toEqual(["lookup"]);
 
-      const events = await (
-        stub as {
-          readonly events: () => Promise<
-            ReadonlyArray<{ readonly kind: string; readonly payload: unknown }>
-          >;
-        }
-      ).events();
       const delivered = events.filter((event) => event.kind === "test.delivered");
       expect(delivered).toHaveLength(1);
       expect(delivered[0]?.payload).toEqual({

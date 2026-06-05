@@ -2,21 +2,36 @@ import { defineConfig } from "vite-plus";
 import { agentOsSourceAliases } from "../../../tooling/vitest-config/source-aliases";
 import { cloudflareTest } from "@cloudflare/vitest-pool-workers";
 
+const sourceAliases = agentOsSourceAliases();
+const workerOnlyAnthropicTokenizerStub = new URL(
+  "./test/_anthropic-tokenizer-worker-stub.ts",
+  import.meta.url,
+).pathname;
+
 /**
  * vitest config for @agent-os/backend-cloudflare-do contract tests.
  *
  * Tests run inside the Workers runtime via vitest-pool-workers so they have
- * access to real DO SQLite + transactionSync semantics. The AI binding is
- * NOT defined in wrangler-test.jsonc — tests stub it in-process by composing
- * a Layer.succeed(AiBinding, stubAiObj) and bypassing the DO facade entirely.
+ * access to real DO SQLite + transactionSync semantics. LLM-dependent tests
+ * inject a LlmTransport test layer in-process and bypass provider credentials.
  *
  * Bound: AGENT_DO (a minimal TestAgentDO subclass of DurableObject — just
  * a vehicle for runInDurableObject(stub, callback) to acquire a real
  * DurableObjectState).
+ *
+ * Worker tests do not exercise Anthropic routes. @effect/ai-anthropic imports
+ * @anthropic-ai/tokenizer at module load, and that package currently declares a
+ * CommonJS package while exposing TypeScript source that the worker test
+ * evaluator cannot load. The alias is test-only and must be removed once this
+ * harness adds Anthropic route coverage or the upstream package ships a worker
+ * compatible ESM entry.
  */
 export default defineConfig({
   resolve: {
-    alias: agentOsSourceAliases(),
+    alias: {
+      ...sourceAliases,
+      "@anthropic-ai/tokenizer": workerOnlyAnthropicTokenizerStub,
+    },
   },
   test: {
     fileParallelism: false,

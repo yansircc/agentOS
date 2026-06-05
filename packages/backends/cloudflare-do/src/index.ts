@@ -32,7 +32,6 @@ export type {
 export {
   anthropicMessages,
   binding,
-  cfAiBinding,
   credential,
   defineAgentDO,
   durableObjectTarget,
@@ -50,7 +49,6 @@ export type {
   AgentMaterialBindingBuilder,
   AgentOnHandler,
   AnthropicMessagesSpec,
-  CfAiBindingSpec,
   DefineAgentDOConfig,
   DefineAgentDOConfigWithSubmit,
   DefineAgentDOConfigWithoutSubmit,

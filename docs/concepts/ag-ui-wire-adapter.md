@@ -1,0 +1,82 @@
+# AG-UI Wire Adapter
+
+AG-UI is an edge protocol adapter over agentOS runtime facts.
+
+## Problem
+
+UI clients need AG-UI-compatible run streams, but AG-UI must not become a
+second runtime model. If products parse `LedgerEvent.payload` directly or each
+UI framework maps runtime events on its own, the event vocabulary has multiple
+code sources and drifts from the ledger/runtime algebra.
+
+## Model
+
+Decoded agentOS runtime events are the source for run frames. AG-UI frames are
+derived projections and are never written back to the ledger. Product-owned
+events can appear only through explicit `CUSTOM` extension projectors.
+
+AG-UI tool declarations are generated from `AgentSchema.projections.agUi`.
+AG-UI tool JSON Schema never creates `Tool.execution`, admission policy, quota,
+material refs, or settlement authority.
+
+### Bindings
+
+`@agent-os/ag-ui` owns all frame mapping, field retention, redaction, submit
+input lowering, and core frame reduction.
+
+`@agent-os/ag-ui-react` and `@agent-os/ag-ui-svelte` are thin consumers over the
+same frame stream. They must not import runtime event decoders or inspect raw
+ledger payloads.
+
+### Field Retention
+
+| Source field                     | AG-UI frame                                          |
+| -------------------------------- | ---------------------------------------------------- |
+| `agent.run.started.id`           | `RUN_STARTED.runId`                                  |
+| runtime event `scope`            | `RUN_STARTED.threadId` unless caller overrides       |
+| `llm.response.items.message`     | `TEXT_MESSAGE_*`                                     |
+| `llm.response.items.tool_call`   | `TOOL_CALL_START`, `TOOL_CALL_ARGS`, `TOOL_CALL_END` |
+| `llm.response.usage`             | `CUSTOM: agent-os.llm.usage`                         |
+| `tool.executed.result`           | `TOOL_CALL_RESULT.content`                           |
+| `agent.run.completed`            | `RUN_FINISHED`                                       |
+| `agent.aborted.*`                | `RUN_ERROR`                                          |
+| product/runtime extension events | explicit `CUSTOM` projector output                   |
+
+### Redaction
+
+AG-UI frames omit provider URLs, credentials, provider-native metadata, resolved
+material values, file bytes, and raw ledger payloads. Reasoning metadata is not
+forwarded; only an explicit `summaryRef` or a redacted marker is projected.
+
+Tool arguments and tool results are retained because AG-UI has native tool-call
+frames for them. A product that needs stronger redaction must redact at the
+tool/result owner before exposing the frame stream.
+
+### Compatibility Contract
+
+The adapter targets the AG-UI 0.0.55 wire shape:
+
+```text
+@ag-ui/core@0.0.55
+@ag-ui/client@0.0.55
+```
+
+agentOS vendors the wire grammar as typed frame unions instead of importing the
+upstream package as source truth. Upstream packages can be pinned later at the
+HTTP/client boundary without changing runtime facts.
+
+## Non-Goals
+
+This adapter does not add a new ledger vocabulary, replace attached streams,
+execute tools through AG-UI, or derive execution domains, quota, admission, or
+material refs from client-provided AG-UI tool declarations.
+
+It also does not promote product-owned workspace file events into substrate
+runtime events. Product events remain extension frames until a separate carrier
+or projection owner is declared.
+
+## Related
+
+- [AgentSchema](agent-schema.md)
+- [Durable truth](durable-truth.md)
+- [Usage surfaces](../usage-surfaces.md)

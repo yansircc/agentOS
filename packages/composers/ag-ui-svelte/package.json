@@ -1,0 +1,30 @@
+{
+  "name": "@agent-os/ag-ui-svelte",
+  "version": "0.2.9",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vp test run --configLoader runner"
+  },
+  "dependencies": {
+    "@agent-os/ag-ui": "workspace:*"
+  },
+  "devDependencies": {
+    "svelte": "catalog:",
+    "typescript": "catalog:",
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "svelte": "^5.56.2"
+  }
+}

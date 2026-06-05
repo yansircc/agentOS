@@ -14,7 +14,7 @@ claim settlement remain part of the model.
 | Surface            | Package                                  | Audience                    | First symbols                                                                             |
 | ------------------ | ---------------------------------------- | --------------------------- | ----------------------------------------------------------------------------------------- |
 | App facade         | `@agent-os/backend-cloudflare-do`        | Cloudflare app authors      | `defineAgentDO`, `endpoint`, `credential`, `binding`, `durableObjectTarget`, `openAIChat` |
-| Tool algebra       | `@agent-os/kernel/tools`                 | App and skill authors       | `defineTool`, `defineToolFromDefinition`                                                  |
+| Tool algebra       | `@agent-os/kernel/tools`                 | App and skill authors       | `defineTool`, AgentSchema arguments                                                       |
 | Kernel algebra     | `@agent-os/kernel` subpaths              | Carrier and backend authors | `material-ref`, `effect-claim`, `extensions`, `boundary-contract`                         |
 | Runtime substrate  | `@agent-os/runtime`                      | Backend authors             | Effect Tags, `SubmitSpec`, projections                                                    |
 | Backend protocol   | `@agent-os/backend-protocol`             | Backend authors             | shared dispatch/scheduler/resource/quota semantics                                        |

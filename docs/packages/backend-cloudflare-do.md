@@ -49,12 +49,12 @@ intent pointer `{ intentEventId }`. `due_work` is a mechanical buffer, not an
 audit source. Cancellation visibility comes from trigger-owned
 `commitCancelled` facts.
 
-Production drain is alarm-owned. Deterministic local/test drain is available
-only from `@agent-os/backend-cloudflare-do/testing` with explicit
-`__drain*ForTesting` method names; production app routes must not call it.
+Production drain is alarm-owned. Deterministic drain helpers are package-local
+test fixtures only; production app routes must not call them and no public
+package subpath exports them.
 
 Backend primitives stop at append-only ledger order, trigger identity, tx-local
-ledger reads, materialized projection tables, and testing-only drain. Custom
+ledger reads, and materialized projection tables. Custom
 product SQL tables and provider idempotency key mappings stay in application
 code until at least two independent apps or adapters prove the same shape should
 become substrate. Factories must be idempotent in resource acquisition: Durable
@@ -75,11 +75,11 @@ cancelled fact. v1 streams do not support reconnect/resume or hibernation; an
 active WebSocket pins the Durable Object alive and costs DO uptime. Long
 workspace sessions need a later durable stream log or hibernation substrate.
 
-LLM HTTP routes receive the runtime `AbortSignal` for submit provider-call
-timeouts. Cloudflare `cf-ai-binding` does not expose the same mechanical abort
-surface; timeout still writes one terminal ledger abort fact, but provider
-compute and billing may continue. This is bookkeeping terminal settlement, not
-guaranteed provider-side cancellation.
+LLM routes are dispatched through the Effect AI transport. Submit provider-call
+timeouts pass runtime cancellation through the HTTP transport and still write
+one terminal ledger abort fact. Provider-side cancellation and billing semantics
+remain provider-specific; the ledger terminal fact is the substrate-owned
+bookkeeping boundary.
 
 `stuckTriggers(now)` is observability over expired claims. It is not a repair
 entry point; ordinary drain redrives expired claims by claiming the same due row

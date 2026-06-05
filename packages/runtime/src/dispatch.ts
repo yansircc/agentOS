@@ -4,6 +4,7 @@ import type {
   DurableTriggerCommitReturnedThenable,
   DispatchScopeMismatch,
   DispatchTargetNotFound,
+  InvalidTraceContext,
   JsonStringifyError,
   ScopeMissingError,
   SqlError,
@@ -62,6 +63,7 @@ export class Dispatch extends Context.Tag("@agent-os/Dispatch")<
       | SqlError
       | JsonStringifyError
       | DispatchTargetNotFound
+      | InvalidTraceContext
       | CapabilityRejected
       | UnsupportedScopeRef
       | UnregisteredDurableTriggerKind
@@ -71,7 +73,12 @@ export class Dispatch extends Context.Tag("@agent-os/Dispatch")<
       envelope: DispatchEnvelope,
     ) => Effect.Effect<
       DispatchReceiverResult,
-      SqlError | JsonStringifyError | CapabilityRejected | ScopeMissingError | DispatchScopeMismatch
+      | SqlError
+      | JsonStringifyError
+      | InvalidTraceContext
+      | CapabilityRejected
+      | ScopeMissingError
+      | DispatchScopeMismatch
     >;
   }
 >() {}

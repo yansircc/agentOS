@@ -14,6 +14,10 @@
       "types": "./src/abort.ts",
       "default": "./src/abort.ts"
     },
+    "./agent-schema": {
+      "types": "./src/agent-schema.ts",
+      "default": "./src/agent-schema.ts"
+    },
     "./boundary-contract": {
       "types": "./src/boundary-contract.ts",
       "default": "./src/boundary-contract.ts"
@@ -42,10 +46,6 @@
       "types": "./src/llm.ts",
       "default": "./src/llm.ts"
     },
-    "./json-schema": {
-      "types": "./src/json-schema.ts",
-      "default": "./src/json-schema.ts"
-    },
     "./material-ref": {
       "types": "./src/material-ref.ts",
       "default": "./src/material-ref.ts"
@@ -69,6 +69,10 @@
     "./tools": {
       "types": "./src/tools.ts",
       "default": "./src/tools.ts"
+    },
+    "./trace-context": {
+      "types": "./src/trace-context.ts",
+      "default": "./src/trace-context.ts"
     },
     "./types": {
       "types": "./src/types.ts",

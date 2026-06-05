@@ -14,10 +14,12 @@ import {
   CapabilityRejected,
   DispatchScopeMismatch,
   DispatchTargetNotFound,
+  InvalidTraceContext,
   SqlError,
   UnsupportedScopeRef,
   isCoreClaimedEventKind,
 } from "@agent-os/kernel/errors";
+import { validateOptionalTraceContext } from "@agent-os/kernel/trace-context";
 import { EventBus } from "../ledger";
 import { materialRefKey } from "@agent-os/kernel/material-ref";
 import {
@@ -361,7 +363,16 @@ export const DispatchLive = (
             }
 
             const now = yield* Clock.currentTimeMillis;
-            const traceContext = copyTraceContext(spec.traceContext);
+            const traceContextResult = validateOptionalTraceContext(spec.traceContext);
+            if (!traceContextResult.ok) {
+              return yield* Effect.fail(
+                new InvalidTraceContext({
+                  position: "dispatch",
+                  reason: traceContextResult.reason,
+                }),
+              );
+            }
+            const traceContext = copyTraceContext(traceContextResult.traceContext);
             if (!isScopeRef(spec.target.scopeRef)) {
               return yield* Effect.fail(
                 new UnsupportedScopeRef({
@@ -445,6 +456,16 @@ export const DispatchLive = (
             }
 
             const now = yield* Clock.currentTimeMillis;
+            const traceContextResult = validateOptionalTraceContext(envelope.traceContext);
+            if (!traceContextResult.ok) {
+              return yield* Effect.fail(
+                new InvalidTraceContext({
+                  position: "dispatch",
+                  reason: traceContextResult.reason,
+                }),
+              );
+            }
+            const traceContext = copyTraceContext(traceContextResult.traceContext);
 
             const result = yield* commitLedgerTransaction(ctx, bus, (tx) => {
               const acceptedResult = findAccepted(
@@ -471,7 +492,6 @@ export const DispatchLive = (
 
               const inbound = tx.ref("dispatch.inbound.accepted");
               const delivered = tx.ref("dispatch.inbound.delivered");
-              const traceContext = copyTraceContext(envelope.traceContext);
               tx.append(inbound, {
                 ts: now,
                 kind: DISPATCH_INBOUND_ACCEPTED,

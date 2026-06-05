@@ -1,5 +1,5 @@
 /**
- * Pure projection over `events.kind = resource.*` rows.
+ * Pure projection over `events.kind = resource_pool.*` rows.
  *
  * Reads the ledger event stream and rebuilds:
  *   - per-(scope, key) balance: available / reserved / consumed
@@ -78,12 +78,12 @@ export const projectRows = (rows: ReadonlyArray<ResourceEventRow>): ProjectedSta
     const kind = sqlText(row.kind, "events.kind");
     const payload = JSON.parse(sqlText(row.payload, "events.payload"));
     switch (kind) {
-      case "resource.granted": {
+      case "resource_pool.granted": {
         const p = decodeGrantPayloadSync(payload);
         grants.push({ key: p.key, amount: p.amount });
         break;
       }
-      case "resource.reserved": {
+      case "resource_pool.reserved": {
         const p = decodeReservePayloadSync(payload);
         const reservation: ReservationState = {
           reservationId: p.reservationId,
@@ -97,16 +97,16 @@ export const projectRows = (rows: ReadonlyArray<ResourceEventRow>): ProjectedSta
         byIdempotencyKey.set(p.idempotencyKey, reservation);
         break;
       }
-      case "resource.reserve_rejected": {
+      case "resource_pool.reserve_rejected": {
         decodeReserveRejectedPayloadSync(payload);
         break;
       }
-      case "resource.consumed":
-      case "resource.released": {
+      case "resource_pool.consumed":
+      case "resource_pool.released": {
         const p = decodeTerminalPayloadSync(payload);
         const existing = reservations.get(p.reservationId);
         if (existing !== undefined) {
-          const status = kind === "resource.consumed" ? "consumed" : "released";
+          const status = kind === "resource_pool.consumed" ? "consumed" : "released";
           const next = { ...existing, status } satisfies ReservationState;
           reservations.set(p.reservationId, next);
           byIdempotencyKey.set(next.idempotencyKey, next);
@@ -145,7 +145,7 @@ export const projectRows = (rows: ReadonlyArray<ResourceEventRow>): ProjectedSta
 export const loadState = (sql: SqlStorage, scope: string): ProjectedState => {
   const rows = sql
     .exec(
-      "SELECT kind, payload FROM events WHERE scope = ? AND kind LIKE 'resource.%' ORDER BY id",
+      "SELECT kind, payload FROM events WHERE scope = ? AND kind LIKE 'resource_pool.%' ORDER BY id",
       scope,
     )
     .toArray() as unknown as ResourceEventRow[];

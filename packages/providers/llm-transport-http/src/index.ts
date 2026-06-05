@@ -480,11 +480,6 @@ const buildProviderRequest = (spec: StreamLlmTurnSpec): ProviderRequestResult =>
       return buildAnthropicRequest(spec, spec.route);
     case "gemini-generate-content":
       return buildGeminiRequest(spec, spec.route);
-    case "cf-ai-binding":
-      return {
-        ok: false,
-        error: { reason: "llm_transport_http_unsupported_route" },
-      };
   }
   const _exhaustive: never = spec.route;
   return _exhaustive;

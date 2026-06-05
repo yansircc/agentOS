@@ -26,17 +26,15 @@ import {
 import type { LlmToolCall, ToolDefinition } from "./llm";
 import { isMaterialRequirement, type MaterialRequirement } from "./material-ref";
 import type { QuotaSpec } from "./quota";
-import {
-  toClosedJsonSchemaObject,
-  validateAgainstSchema,
-  schemaToClosedJsonSchemaObject,
-} from "./json-schema";
+import { ensureAgentSchema, type AgentSchema } from "./agent-schema";
+import type { TraceContext } from "./trace-context";
 
 const TOOL_CONTRACT_BRAND = Symbol("@agent-os/kernel/ToolContract");
 const DETERMINISTIC_TOOL_INVOCATION_BRAND = Symbol("@agent-os/kernel/DeterministicToolInvocation");
 
 export interface ToolExecutionContext {
   readonly signal: AbortSignal;
+  readonly traceContext?: TraceContext;
 }
 
 export type ExecutionDomainKind = "host" | "sandbox" | "workspace" | "remote";
@@ -98,26 +96,13 @@ export interface Tool<
   R = any,
 > {
   readonly definition: ToolDefinition;
+  readonly argsSchema: AgentSchema<A>;
   readonly decode: ToolDecode<A>;
   readonly execute: (args: A, ctx: ToolExecutionContext) => Promise<R>;
   readonly admit: ToolAdmitter<A>;
   readonly execution: ToolExecution;
   readonly quota?: QuotaSpec;
   readonly contract: ToolContract;
-}
-
-export interface RegisteredToolSpec<A, R> {
-  readonly definition: ToolDefinition;
-  readonly decode?: ToolDecode<A>;
-  readonly execute: (args: A, ctx: ToolExecutionContext) => Promise<R>;
-  readonly quota?: QuotaSpec;
-  readonly authorityClass: string;
-  readonly authorityId?: string;
-  readonly authorityVersion?: string;
-  readonly requiredMaterials?: ReadonlyArray<MaterialRequirement>;
-  readonly originRef?: OriginRef;
-  readonly admit: ToolAdmitter<A>;
-  readonly execution: ToolExecution;
 }
 
 export interface DefineToolSpec<S extends Schema.Schema.AnyNoContext, R> {
@@ -162,12 +147,6 @@ export const effectfulToolExecution = (domain: ExecutionDomain): ToolExecution =
 
 const failToolDefinition = (message: string): never =>
   Option.getOrThrowWith(Option.none(), () => new TypeError(message));
-
-const failToolArgs = (toolId: string, violations: ReadonlyArray<string>): never =>
-  Option.getOrThrowWith(
-    Option.none(),
-    () => new TypeError(`tool ${toolId} args violate schema: ${violations.join(",")}`),
-  );
 
 const normalizeAdmitter = <A>(admit: ToolAdmitter<A>): ToolAdmitter<A> =>
   typeof admit === "function" ? admit : failToolDefinition("tool admitter is required");
@@ -267,35 +246,32 @@ const abortErrorFor = (signal: AbortSignal): Error => {
   return error;
 };
 
-export const defineToolFromDefinition = <A, R>(spec: RegisteredToolSpec<A, R>): Tool<A, R> => {
-  const toolId = spec.definition.function.name;
+export const defineTool = <S extends Schema.Schema.AnyNoContext, R>(
+  spec: DefineToolSpec<S, R>,
+): Tool<Schema.Schema.Type<S>, Awaited<R>> => {
+  const argsSchema = ensureAgentSchema(spec.args);
+  const toolId = spec.name;
   const admit = normalizeAdmitter(spec.admit);
-  const parameters = toClosedJsonSchemaObject(spec.definition.function.parameters);
-  const schemaDecode = (args: unknown): A => {
-    const violations = validateAgainstSchema(args, parameters);
-    if (violations.length > 0) {
-      return failToolArgs(toolId, violations);
-    }
-    return spec.decode === undefined ? (args as A) : spec.decode(args);
-  };
   return {
     definition: {
-      ...spec.definition,
+      type: "function",
       function: {
-        ...spec.definition.function,
-        parameters,
+        name: spec.name,
+        description: spec.description,
+        parameters: argsSchema as AgentSchema<unknown>,
       },
     },
-    decode: schemaDecode,
-    execute: spec.execute,
+    argsSchema,
+    decode: argsSchema.decode,
+    execute: (args, ctx) => Promise.resolve(spec.execute(args, ctx)) as Promise<Awaited<R>>,
     admit,
     execution: spec.execution,
-    ...(spec.quota === undefined ? {} : { quota: spec.quota }),
+    quota: spec.quota,
     contract: makeToolContract({
       toolId,
       authorityRef: {
         authorityId: spec.authorityId ?? `tool:${toolId}`,
-        authorityClass: spec.authorityClass,
+        authorityClass: spec.authority,
         ...(spec.authorityVersion === undefined ? {} : { version: spec.authorityVersion }),
       },
       requiredMaterials: spec.requiredMaterials ?? [],
@@ -303,32 +279,6 @@ export const defineToolFromDefinition = <A, R>(spec: RegisteredToolSpec<A, R>): 
       roles: ["generator", "admitter"],
     }),
   };
-};
-
-export const defineTool = <S extends Schema.Schema.AnyNoContext, R>(
-  spec: DefineToolSpec<S, R>,
-): Tool<Schema.Schema.Type<S>, Awaited<R>> => {
-  const decode = Schema.decodeUnknownSync(spec.args);
-  return defineToolFromDefinition<Schema.Schema.Type<S>, Awaited<R>>({
-    definition: {
-      type: "function",
-      function: {
-        name: spec.name,
-        description: spec.description,
-        parameters: schemaToClosedJsonSchemaObject(spec.args),
-      },
-    },
-    decode,
-    execute: (args, ctx) => Promise.resolve(spec.execute(args, ctx)) as Promise<Awaited<R>>,
-    quota: spec.quota,
-    authorityClass: spec.authority,
-    ...(spec.authorityId === undefined ? {} : { authorityId: spec.authorityId }),
-    ...(spec.authorityVersion === undefined ? {} : { authorityVersion: spec.authorityVersion }),
-    ...(spec.requiredMaterials === undefined ? {} : { requiredMaterials: spec.requiredMaterials }),
-    ...(spec.originRef === undefined ? {} : { originRef: spec.originRef }),
-    admit: spec.admit,
-    execution: spec.execution,
-  });
 };
 
 export type ToolRegistryIssue =
@@ -513,13 +463,17 @@ export const executeTool = (
   tool: Tool,
   args: unknown,
   toolName: string,
+  traceContext?: TraceContext,
 ): Effect.Effect<unknown, ToolError> =>
   Effect.tryPromise({
     try: (signal) => {
       if (signal.aborted) {
         return Promise.reject(abortErrorFor(signal));
       }
-      return tool.execute(args, { signal });
+      return tool.execute(args, {
+        signal,
+        ...(traceContext === undefined ? {} : { traceContext }),
+      });
     },
     catch: (cause) => new ToolError({ toolName, cause }),
   });

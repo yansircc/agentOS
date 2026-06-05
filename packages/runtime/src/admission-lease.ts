@@ -42,7 +42,8 @@ export type AttemptKey = {
   readonly routeFingerprint: string;
   readonly schemaFingerprint: string;
   readonly strategy: Strategy;
-  readonly adapterVersion: string;
+  readonly providerOutputAdapterVersion: string;
+  readonly transportAdapterVersion: string;
 };
 
 export type CapabilityLease =
@@ -165,9 +166,11 @@ const nonVersionKeysMatch = (
 
 const evidenceKeyMatches = (current: AttemptKey, evidence: AttemptKey): boolean =>
   nonVersionKeysMatch(current, evidence) &&
-  majorOf(current.adapterVersion) === majorOf(evidence.adapterVersion);
+  majorOf(current.providerOutputAdapterVersion) ===
+    majorOf(evidence.providerOutputAdapterVersion) &&
+  majorOf(current.transportAdapterVersion) === majorOf(evidence.transportAdapterVersion);
 
-const barrierAdapterVersionMatches = (current: string, barrier: string | undefined): boolean => {
+const barrierVersionMatches = (current: string, barrier: string | undefined): boolean => {
   if (barrier === undefined) return true;
   if (barrier.endsWith(".x")) return majorOf(current) === barrier.slice(0, -2);
   return current === barrier;
@@ -185,7 +188,12 @@ const barrierKeyMatches = (current: AttemptKey, barrier: Partial<AttemptKey>): b
   )
     return false;
   if (barrier.strategy !== undefined && current.strategy !== barrier.strategy) return false;
-  return barrierAdapterVersionMatches(current.adapterVersion, barrier.adapterVersion);
+  return (
+    barrierVersionMatches(
+      current.providerOutputAdapterVersion,
+      barrier.providerOutputAdapterVersion,
+    ) && barrierVersionMatches(current.transportAdapterVersion, barrier.transportAdapterVersion)
+  );
 };
 
 /** Project the latest lease for `key` from the given event list at time `now`.
@@ -212,8 +220,6 @@ export const projectLease = (
   key: AttemptKey,
   now: number,
 ): { readonly lease: CapabilityLease; readonly latestBarrier: BarrierCursor } => {
-  const curMajor = majorOf(key.adapterVersion);
-
   // Find the latest barrier under (ts, id) ordering.
   let latestBarrier: BarrierCursor = EMPTY_BARRIER_CURSOR;
   for (const r of rows) {
@@ -235,7 +241,6 @@ export const projectLease = (
     if (!evidenceKeyMatches(key, r.key)) continue;
     if (r.admissionImpact !== "lease-bearing") continue;
     if (!afterBarrier(r)) continue;
-    if (majorOf(r.key.adapterVersion) !== curMajor) continue;
     eligible.push(r);
   }
   // Newer-first by (ts, id).

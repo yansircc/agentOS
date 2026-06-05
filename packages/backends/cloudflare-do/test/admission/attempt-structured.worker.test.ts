@@ -1,283 +1,210 @@
 /**
- * Admission — IO contract tests (contract §2, §10).
+ * Admission IO contract tests.
  *
- * Three test groups:
- *   1. attemptStructured IO contract: closed-schema rejection, atomic
- *      evidence write, lease short-circuit, barrier reset.
- *   2. Malformed payload defense (Codex P2): infra corruption MUST
- *      surface as SqlError, not a `TypeError: undefined is not an
- *      object` leak out of projectLease.
- *   3. Cross-route structured-output dispatch (v0.2.13): structured
- *      output dispatches on `route.kind` exactly like free-text submit;
- *      AiBinding sentinel proves the openai-chat-compatible route does
- *      NOT touch the cf-ai-binding transport.
+ * Provider wire dispatch is not tested here. Admission consumes an agentOS
+ * LlmTransport and writes evidence only; submit owns delivery and terminal
+ * run facts.
  */
 
-import { Cause, Effect, Exit, Option } from "effect";
+import { Cause, Effect, Exit, Option, Schema } from "effect";
 import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
 import type {} from "@effect/vitest";
 
 import { Ledger } from "../../src/ledger";
-import {
-  ADAPTER_VERSION,
-  Admission,
-  type JsonSchemaObject,
-  makeSchemaContract,
-  routeFingerprint,
-} from "../../src/admission";
-import { type InternalSubmitSpec, submitAgentEffect } from "@agent-os/runtime";
-import { finalTextResp, stubAi } from "../_stub-ai";
-
-import { SCHEMA, makeRuntime, makeRuntimeWithRegistry, submitStructuredResp } from "./_helpers";
-
-const requestUrl = (input: RequestInfo | URL): string =>
-  typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+import { Admission, makeAdmissionSchemaSpec, routeFingerprint } from "../../src/admission";
+import { finalTextResp, stubLlmTransport } from "../_stub-ai";
+import { SCHEMA, makeRuntime, submitStructuredResp } from "./_helpers";
 
 interface TestEnv {
   readonly AGENT_DO: DurableObjectNamespace;
 }
 const testEnv = env as unknown as TestEnv;
 
-// ============================================================
-// IO contract: attemptStructured
-// ============================================================
+const route = {
+  kind: "openai-chat-compatible",
+  endpointRef: "test-endpoint",
+  credentialRef: "test-credential",
+  modelId: "test-model",
+} as const;
 
 describe("admission — IO contract: attemptStructured", () => {
-  it("additionalProperties:false rejects extra keys → BehaviorFailed", async () => {
+  it("additionalProperties:false rejects extra keys as BehaviorFailed", async () => {
     const scope = "admission-closed-schema";
     const id = testEnv.AGENT_DO.idFromName(scope);
     const stub = testEnv.AGENT_DO.get(id);
 
     await runInDurableObject(stub, async (_inst, state) => {
-      // LLM returns valid `summary` + an extra `extra` key. With
-      // additionalProperties:false the decoder MUST reject this as
-      // BehaviorFailed (Codex P1: prior implementation silently passed).
-      const ai = stubAi([
+      const llm = stubLlmTransport([
         submitStructuredResp(JSON.stringify({ summary: "ok", extra: "should-be-rejected" }), "c1"),
       ]);
-      const runtime = makeRuntime(state, ai);
+      const runtime = makeRuntime(state, llm);
 
-      const closedSchema: JsonSchemaObject = {
-        type: "object",
-        properties: { summary: { type: "string" } },
-        required: ["summary"],
-        additionalProperties: false,
-      };
-      const schemaContract = await runtime.runPromise(makeSchemaContract(closedSchema));
+      const schemaSpec = await runtime.runPromise(
+        makeAdmissionSchemaSpec(Schema.Struct({ summary: Schema.String })),
+      );
 
-      const r = await runtime.runPromise(
+      const result = await runtime.runPromise(
         Effect.gen(function* () {
           const admission = yield* Admission;
           return yield* admission.attemptStructured<{ summary: string }>({
             scope,
-            route: { kind: "cf-ai-binding", modelId: "@cf/test/model" },
-            schemaContract,
+            route,
+            schemaSpec,
             strategy: "forced-tool-call",
-            stimulus: {
-              kind: "live",
-              userInput: { userText: "hi" },
-            },
+            stimulus: { kind: "live", userInput: { userText: "hi" } },
           });
         }),
       );
 
-      expect(r.ok).toBe(false);
-      if (!r.ok) {
-        expect(r.outcome.class).toBe("BehaviorFailed");
-        if (r.outcome.class === "BehaviorFailed") {
-          expect(r.outcome.sampleDigest).toContain("unknown-property");
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.outcome.class).toBe("BehaviorFailed");
+        if (result.outcome.class === "BehaviorFailed") {
+          expect(result.outcome.sampleDigest).toContain("decode-failed");
         }
       }
 
-      // No deliver row should have been written.
       const events = await runtime.runPromise(
         Effect.gen(function* () {
-          const l = yield* Ledger;
-          return yield* l.events(scope);
+          const ledger = yield* Ledger;
+          return yield* ledger.events(scope);
         }),
       );
-      const deliveries = events.filter((e) => e.kind === "structured.done");
-      expect(deliveries).toHaveLength(0);
+      expect(events.filter((event) => event.kind === "structured.done")).toHaveLength(0);
 
       await runtime.dispose();
     });
   });
 
-  it("happy path: evidence is committed; lease-bearing first, reinforcement on second", async () => {
+  it("happy path commits evidence only and reuses the supported lease", async () => {
     const scope = "admission-happy";
     const id = testEnv.AGENT_DO.idFromName(scope);
     const stub = testEnv.AGENT_DO.get(id);
 
     await runInDurableObject(stub, async (_inst, state) => {
-      const ai = stubAi([
+      const llm = stubLlmTransport([
         submitStructuredResp('{"summary":"first"}', "c1"),
         submitStructuredResp('{"summary":"second"}', "c2"),
       ]);
-      const runtime = makeRuntime(state, ai);
+      const runtime = makeRuntime(state, llm);
+      const schemaSpec = await runtime.runPromise(makeAdmissionSchemaSpec(SCHEMA));
 
-      const schemaContract = await runtime.runPromise(makeSchemaContract(SCHEMA));
+      const attempt = (userText: string) =>
+        runtime.runPromise(
+          Effect.gen(function* () {
+            const admission = yield* Admission;
+            return yield* admission.attemptStructured<{ summary: string }>({
+              scope,
+              route,
+              schemaSpec,
+              strategy: "forced-tool-call",
+              stimulus: { kind: "live", userInput: { userText } },
+            });
+          }),
+        );
 
-      // Two consecutive Supported attempts in same scope.
-      const r1 = await runtime.runPromise(
-        Effect.gen(function* () {
-          const admission = yield* Admission;
-          return yield* admission.attemptStructured<{ summary: string }>({
-            scope,
-            route: { kind: "cf-ai-binding", modelId: "@cf/test/model" },
-            schemaContract,
-            strategy: "forced-tool-call",
-            stimulus: {
-              kind: "live",
-              userInput: { userText: "hello" },
-            },
-          });
-        }),
-      );
+      const first = await attempt("hello");
+      expect(first.ok).toBe(true);
+      expect(first.admissionImpact).toBe("lease-bearing");
+      if (first.ok) expect(first.decoded).toEqual({ summary: "first" });
 
-      expect(r1.ok).toBe(true);
-      expect(r1.admissionImpact).toBe("lease-bearing");
-      if (r1.ok) {
-        expect(r1.decoded).toEqual({ summary: "first" });
-      }
+      const second = await attempt("hello again");
+      expect(second.ok).toBe(true);
+      expect(second.admissionImpact).toBe("reinforcement");
 
-      const r2 = await runtime.runPromise(
-        Effect.gen(function* () {
-          const admission = yield* Admission;
-          return yield* admission.attemptStructured<{ summary: string }>({
-            scope,
-            route: { kind: "cf-ai-binding", modelId: "@cf/test/model" },
-            schemaContract,
-            strategy: "forced-tool-call",
-            stimulus: {
-              kind: "live",
-              userInput: { userText: "hello again" },
-            },
-          });
-        }),
-      );
-
-      expect(r2.ok).toBe(true);
-      expect(r2.admissionImpact).toBe("reinforcement");
-
-      // Admission writes evidence only. Submit owns deliver/terminal facts.
       const events = await runtime.runPromise(
         Effect.gen(function* () {
-          const l = yield* Ledger;
-          return yield* l.events(scope);
+          const ledger = yield* Ledger;
+          return yield* ledger.events(scope);
         }),
       );
-      const counts = events.reduce<Record<string, number>>((acc, e) => {
-        acc[e.kind] = (acc[e.kind] ?? 0) + 1;
-        return acc;
-      }, {});
-      expect(counts["llm.structured.evidence"]).toBe(2);
-      expect(counts["structured.done"] ?? 0).toBe(0);
+      const evidence = events.filter((event) => event.kind === "llm.structured.evidence");
+      expect(evidence).toHaveLength(2);
+      expect(events.some((event) => event.kind === "structured.done")).toBe(false);
+      const payload = evidence[0]?.payload as {
+        readonly adapterId?: string;
+        readonly key?: {
+          readonly providerOutputAdapterVersion?: string;
+          readonly transportAdapterVersion?: string;
+        };
+      };
+      expect(payload.adapterId).toBe("openai-chat-compatible@test-output-1.0.0");
+      expect(payload.key?.providerOutputAdapterVersion).toBe("1.0.0");
+      expect(payload.key?.transportAdapterVersion).toBe("1.0.0");
 
       await runtime.dispose();
     });
   });
 
-  it("short-circuit after BehaviorFailed: second call does NOT consume the AI queue", async () => {
+  it("short-circuits after BehaviorFailed without another provider call", async () => {
     const scope = "admission-short-circuit";
     const id = testEnv.AGENT_DO.idFromName(scope);
     const stub = testEnv.AGENT_DO.get(id);
 
     await runInDurableObject(stub, async (_inst, state) => {
-      // Only ONE stub response. If the second attemptStructured call
-      // calls ai.run again, the queue throws → SqlError-equivalent test
-      // failure. The lease short-circuit must prevent that call.
-      const ai = stubAi([finalTextResp("not a structured tool response")]);
-      const runtime = makeRuntime(state, ai);
+      const llm = stubLlmTransport([finalTextResp("not a structured tool response")]);
+      const runtime = makeRuntime(state, llm);
+      const schemaSpec = await runtime.runPromise(makeAdmissionSchemaSpec(SCHEMA));
 
-      const schemaContract = await runtime.runPromise(makeSchemaContract(SCHEMA));
+      const attempt = (userText: string) =>
+        runtime.runPromise(
+          Effect.gen(function* () {
+            const admission = yield* Admission;
+            return yield* admission.attemptStructured<{ summary: string }>({
+              scope,
+              route,
+              schemaSpec,
+              strategy: "forced-tool-call",
+              stimulus: { kind: "live", userInput: { userText } },
+            });
+          }),
+        );
 
-      const route = { kind: "cf-ai-binding" as const, modelId: "@cf/test/model" };
-
-      // First call: provider returns a valid chat response but not the
-      // forced structured tool call. The adapter classifies the real wire
-      // mismatch as BehaviorFailed.
-      const r1 = await runtime.runPromise(
-        Effect.gen(function* () {
-          const admission = yield* Admission;
-          return yield* admission.attemptStructured<{ summary: string }>({
-            scope,
-            route,
-            schemaContract,
-            strategy: "forced-tool-call",
-            stimulus: {
-              kind: "live",
-              userInput: { userText: "x" },
-            },
-          });
-        }),
-      );
-      expect(r1.ok).toBe(false);
-      if (!r1.ok) {
-        expect(r1.outcome.class).toBe("BehaviorFailed");
-        expect(r1.shortCircuited).toBe(false); // first call was the admission probe
+      const first = await attempt("x");
+      expect(first.ok).toBe(false);
+      if (!first.ok) {
+        expect(first.outcome.class).toBe("BehaviorFailed");
+        expect(first.shortCircuited).toBe(false);
       }
 
-      // Second call: lease is unsupported; provider must NOT be called.
-      const r2 = await runtime.runPromise(
-        Effect.gen(function* () {
-          const admission = yield* Admission;
-          return yield* admission.attemptStructured<{ summary: string }>({
-            scope,
-            route,
-            schemaContract,
-            strategy: "forced-tool-call",
-            stimulus: {
-              kind: "live",
-              userInput: { userText: "y" },
-            },
-          });
-        }),
-      );
-      expect(r2.ok).toBe(false);
-      if (!r2.ok) {
-        expect(r2.shortCircuited).toBe(true);
-        expect(r2.outcome.class).toBe("BehaviorFailed");
+      const second = await attempt("y");
+      expect(second.ok).toBe(false);
+      if (!second.ok) {
+        expect(second.outcome.class).toBe("BehaviorFailed");
+        expect(second.shortCircuited).toBe(true);
       }
 
       await runtime.dispose();
     });
   });
 
-  it("invalidate barrier resets the lease — next attempt re-probes provider", async () => {
+  it("invalidate barrier resets the lease and the next attempt re-probes", async () => {
     const scope = "admission-invalidate";
     const id = testEnv.AGENT_DO.idFromName(scope);
     const stub = testEnv.AGENT_DO.get(id);
 
     await runInDurableObject(stub, async (_inst, state) => {
-      const ai = stubAi([
-        // first call: real protocol mismatch -> BehaviorFailed
+      const llm = stubLlmTransport([
         finalTextResp("not a structured tool response"),
-        // post-barrier call: provider is invoked again
         submitStructuredResp('{"summary":"post-barrier"}', "c2"),
       ]);
-      const runtime = makeRuntime(state, ai);
-      const schemaContract = await runtime.runPromise(makeSchemaContract(SCHEMA));
-      const route = { kind: "cf-ai-binding" as const, modelId: "@cf/test/model" };
+      const runtime = makeRuntime(state, llm);
+      const schemaSpec = await runtime.runPromise(makeAdmissionSchemaSpec(SCHEMA));
 
-      // 1) BehaviorFailed
       await runtime.runPromise(
         Effect.gen(function* () {
           const admission = yield* Admission;
           yield* admission.attemptStructured<{ summary: string }>({
             scope,
             route,
-            schemaContract,
+            schemaSpec,
             strategy: "forced-tool-call",
-            stimulus: {
-              kind: "live",
-              userInput: { userText: "x" },
-            },
+            stimulus: { kind: "live", userInput: { userText: "x" } },
           });
         }),
       );
 
-      // 2) Append barrier
       await runtime.runPromise(
         Effect.gen(function* () {
           const admission = yield* Admission;
@@ -285,9 +212,8 @@ describe("admission — IO contract: attemptStructured", () => {
             scope,
             key: {
               routeFingerprint: routeFingerprint(route),
-              schemaFingerprint: schemaContract.fingerprint,
+              schemaFingerprint: schemaSpec.fingerprint,
               strategy: "forced-tool-call",
-              adapterVersion: ADAPTER_VERSION,
             },
             reason: "test reset",
             by: "test",
@@ -295,27 +221,22 @@ describe("admission — IO contract: attemptStructured", () => {
         }),
       );
 
-      // 3) Next attempt — barrier wipes lease, provider IS called and
-      // returns the second stub response (Supported this time).
-      const r3 = await runtime.runPromise(
+      const result = await runtime.runPromise(
         Effect.gen(function* () {
           const admission = yield* Admission;
           return yield* admission.attemptStructured<{ summary: string }>({
             scope,
             route,
-            schemaContract,
+            schemaSpec,
             strategy: "forced-tool-call",
-            stimulus: {
-              kind: "live",
-              userInput: { userText: "y" },
-            },
+            stimulus: { kind: "live", userInput: { userText: "y" } },
           });
         }),
       );
-      expect(r3.ok).toBe(true);
-      if (r3.ok) {
-        expect(r3.decoded).toEqual({ summary: "post-barrier" });
-        expect(r3.admissionImpact).toBe("lease-bearing"); // post-barrier first Supported = admission-forming
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.decoded).toEqual({ summary: "post-barrier" });
+        expect(result.admissionImpact).toBe("lease-bearing");
       }
 
       await runtime.dispose();
@@ -323,22 +244,15 @@ describe("admission — IO contract: attemptStructured", () => {
   });
 });
 
-// ============================================================
-// Codex P2 regression guard: malformed admission payload → SqlError,
-// NOT a raw `TypeError: undefined is not an object` defect leaking out
-// of projectLease. Mirrors quota's malformed-payload defense.
-// ============================================================
-
-describe("admission — malformed payload → SqlError (Codex P2)", () => {
-  it("evidence row missing `key` field → SqlError escapes Promise", async () => {
+describe("admission — malformed payload becomes SqlError", () => {
+  it("evidence row missing key field escapes as SqlError", async () => {
     const scope = "admission-malformed-evidence";
     const id = testEnv.AGENT_DO.idFromName(scope);
     const stub = testEnv.AGENT_DO.get(id);
 
     await runInDurableObject(stub, async (_inst, state) => {
-      const ai = stubAi([]);
-      const runtime = makeRuntime(state, ai);
-      const schemaContract = await runtime.runPromise(makeSchemaContract(SCHEMA));
+      const runtime = makeRuntime(state, stubLlmTransport([]));
+      const schemaSpec = await runtime.runPromise(makeAdmissionSchemaSpec(SCHEMA));
 
       await runtime.runPromise(
         Effect.gen(function* () {
@@ -362,39 +276,27 @@ describe("admission — malformed payload → SqlError (Codex P2)", () => {
           const admission = yield* Admission;
           return yield* admission.attemptStructured<{ summary: string }>({
             scope,
-            route: { kind: "cf-ai-binding", modelId: "@cf/test/model" },
-            schemaContract,
+            route,
+            schemaSpec,
             strategy: "forced-tool-call",
-            stimulus: {
-              kind: "live",
-              userInput: { userText: "x" },
-            },
+            stimulus: { kind: "live", userInput: { userText: "x" } },
           });
         }),
       );
 
-      expect(Exit.isFailure(exit)).toBe(true);
-      if (Exit.isFailure(exit)) {
-        const failure = Cause.failureOption(exit.cause);
-        expect(Option.isSome(failure)).toBe(true);
-        if (Option.isSome(failure)) {
-          expect((failure.value as { _tag: string })._tag).toBe("agent_os.sql_error");
-        }
-      }
-
+      expectSqlError(exit);
       await runtime.dispose();
     });
   });
 
-  it("invalidate row with non-object `key` → SqlError escapes Promise", async () => {
+  it("invalidate row with non-object key escapes as SqlError", async () => {
     const scope = "admission-malformed-invalidate";
     const id = testEnv.AGENT_DO.idFromName(scope);
     const stub = testEnv.AGENT_DO.get(id);
 
     await runInDurableObject(stub, async (_inst, state) => {
-      const ai = stubAi([]);
-      const runtime = makeRuntime(state, ai);
-      const schemaContract = await runtime.runPromise(makeSchemaContract(SCHEMA));
+      const runtime = makeRuntime(state, stubLlmTransport([]));
+      const schemaSpec = await runtime.runPromise(makeAdmissionSchemaSpec(SCHEMA));
 
       await runtime.runPromise(
         Effect.gen(function* () {
@@ -403,11 +305,7 @@ describe("admission — malformed payload → SqlError (Codex P2)", () => {
             {
               kind: "llm.structured.invalidate",
               scope,
-              payload: {
-                key: "not-an-object",
-                reason: "test",
-                by: "test",
-              },
+              payload: { key: "not-an-object", reason: "test", by: "test" },
             },
           ]);
         }),
@@ -418,286 +316,27 @@ describe("admission — malformed payload → SqlError (Codex P2)", () => {
           const admission = yield* Admission;
           return yield* admission.attemptStructured<{ summary: string }>({
             scope,
-            route: { kind: "cf-ai-binding", modelId: "@cf/test/model" },
-            schemaContract,
+            route,
+            schemaSpec,
             strategy: "forced-tool-call",
-            stimulus: {
-              kind: "live",
-              userInput: { userText: "x" },
-            },
+            stimulus: { kind: "live", userInput: { userText: "x" } },
           });
         }),
       );
 
-      expect(Exit.isFailure(exit)).toBe(true);
-      if (Exit.isFailure(exit)) {
-        const failure = Cause.failureOption(exit.cause);
-        expect(Option.isSome(failure)).toBe(true);
-        if (Option.isSome(failure)) {
-          expect((failure.value as { _tag: string })._tag).toBe("agent_os.sql_error");
-        }
-      }
-
+      expectSqlError(exit);
       await runtime.dispose();
     });
   });
 });
 
-// ============================================================
-// Cross-route structured-output dispatch (v0.2.13)
-//
-// Invariant: structured output must dispatch on `route.kind` exactly like
-// free-text submit does (no parallel transport in admission). Without
-// this, evidence rows would be tagged with one route while a different
-// transport actually served the call — SSoT corruption.
-// ============================================================
-
-const SENTINEL_AI: Ai = {
-  run: (() => {
-    throw new Error(
-      "SENTINEL_AI: admission should NOT touch AiBinding when route is openai-chat-compatible",
-    );
-  }) as Ai["run"],
-} as Ai;
-
-describe("admission — cross-route structured output (v0.2.13)", () => {
-  it("openai-chat-compatible route MUST NOT touch AiBinding; evidence is tagged with the route's adapter", async () => {
-    const scope = "cross-route-openai-compat";
-    const id = testEnv.AGENT_DO.idFromName(scope);
-    const stub = testEnv.AGENT_DO.get(id);
-
-    // Capture the fetch call to assert URL, auth header, body shape.
-    const fetchCalls: Array<{
-      readonly url: string;
-      readonly init: RequestInit;
-    }> = [];
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-      fetchCalls.push({ url: requestUrl(input), init: init ?? {} });
-      // Return a Chat Completions shaped response with the expected
-      // _submit_structured tool call.
-      const body = {
-        choices: [
-          {
-            message: {
-              tool_calls: [
-                {
-                  id: "c1",
-                  type: "function",
-                  function: {
-                    name: "_submit_structured",
-                    arguments: JSON.stringify({ summary: "via-openrouter" }),
-                  },
-                },
-              ],
-            },
-          },
-        ],
-        usage: { total_tokens: 42 },
-      };
-      return new Response(JSON.stringify(body), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
-    }) as typeof globalThis.fetch;
-
-    try {
-      await runInDurableObject(stub, async (_inst, state) => {
-        // AiBinding is the SENTINEL that throws on any call. RefResolver
-        // resolves to a stub endpoint + credential.
-        const runtime = makeRuntimeWithRegistry(
-          state,
-          SENTINEL_AI,
-          { openrouter: "https://stub.openrouter.test/api/v1" },
-          { OPENROUTER_KEY: "stub-key-not-real" },
-        );
-
-        const spec: InternalSubmitSpec = {
-          intent: "summarize",
-          context: {},
-          route: {
-            kind: "openai-chat-compatible",
-            endpointRef: "openrouter",
-            credentialRef: "OPENROUTER_KEY",
-            modelId: "openai/gpt-4.1",
-          },
-          tools: {},
-          outputSchema: SCHEMA,
-          deliver: {
-            scope,
-            scopeRef: { kind: "conversation", scopeId: scope },
-            event: "structured.done",
-          },
-        };
-
-        const r = await runtime.runPromise(submitAgentEffect(spec));
-
-        // Success
-        expect(r.ok).toBe(true);
-        if (r.ok) {
-          expect(JSON.parse(r.final)).toEqual({ summary: "via-openrouter" });
-        }
-
-        // Fetch was called exactly once, with the right URL + auth.
-        expect(fetchCalls).toHaveLength(1);
-        expect(fetchCalls[0]?.url).toBe("https://stub.openrouter.test/api/v1/chat/completions");
-        const headers = fetchCalls[0]?.init.headers as Record<string, string> | undefined;
-        expect(headers?.Authorization).toBe("Bearer stub-key-not-real");
-
-        // AiBinding sentinel was NEVER called (if it had been, SENTINEL_AI
-        // would have thrown a string containing "SENTINEL_AI").
-
-        // Evidence row tags the chosen adapter (openai-chat-compatible),
-        // NOT cf-ai-binding. routeFingerprint reflects the variant fields.
-        const events = await runtime.runPromise(
-          Effect.gen(function* () {
-            const l = yield* Ledger;
-            return yield* l.events(scope);
-          }),
-        );
-        const evidence = events.find((e) => e.kind === "llm.structured.evidence");
-        expect(evidence).toBeDefined();
-        const ep = evidence?.payload as {
-          adapterId?: string;
-          key?: { routeFingerprint?: string };
-        };
-        expect(ep.adapterId?.startsWith("openai-chat-compatible@")).toBe(true);
-        expect(ep.key?.routeFingerprint).toContain('"openai-chat-compatible"');
-        expect(ep.key?.routeFingerprint).toContain('"OPENROUTER_KEY"');
-        expect(ep.key?.routeFingerprint).toContain('"openrouter"');
-
-        // adapterVersion in the AttemptKey reflects the chosen adapter's version.
-        const adapterKey = (ep as unknown as { key: { adapterVersion?: string } }).key;
-        expect(adapterKey.adapterVersion).toBe(ADAPTER_VERSION);
-
-        await runtime.dispose();
-      });
-    } finally {
-      globalThis.fetch = originalFetch;
+const expectSqlError = (exit: Exit.Exit<unknown, unknown>) => {
+  expect(Exit.isFailure(exit)).toBe(true);
+  if (Exit.isFailure(exit)) {
+    const failure = Cause.failureOption(exit.cause);
+    expect(Option.isSome(failure)).toBe(true);
+    if (Option.isSome(failure)) {
+      expect((failure.value as { _tag: string })._tag).toBe("agent_os.sql_error");
     }
-  });
-
-  it("classifies provider HTTP failures without writing raw provider bodies to evidence", async () => {
-    const scope = "cross-route-openai-provider-failure-redaction";
-    const id = testEnv.AGENT_DO.idFromName(scope);
-    const stub = testEnv.AGENT_DO.get(id);
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = (async () =>
-      new Response(
-        JSON.stringify({
-          error: {
-            type: "authentication_error",
-            message: "raw provider body secret OPENROUTER_KEY=stub-key-not-real",
-          },
-        }),
-        {
-          status: 401,
-          headers: { "content-type": "application/json" },
-        },
-      )) as typeof globalThis.fetch;
-
-    try {
-      await runInDurableObject(stub, async (_inst, state) => {
-        const runtime = makeRuntimeWithRegistry(
-          state,
-          SENTINEL_AI,
-          { openrouter: "https://stub.openrouter.test/api/v1" },
-          { OPENROUTER_KEY: "stub-key-not-real" },
-        );
-
-        const spec: InternalSubmitSpec = {
-          intent: "summarize",
-          context: {},
-          route: {
-            kind: "openai-chat-compatible",
-            endpointRef: "openrouter",
-            credentialRef: "OPENROUTER_KEY",
-            modelId: "openai/gpt-4.1",
-          },
-          tools: {},
-          outputSchema: SCHEMA,
-          deliver: {
-            scope,
-            scopeRef: { kind: "conversation", scopeId: scope },
-            event: "structured.done",
-          },
-        };
-
-        const r = await runtime.runPromise(submitAgentEffect(spec));
-        expect(r.ok).toBe(false);
-
-        const events = await runtime.runPromise(
-          Effect.gen(function* () {
-            const l = yield* Ledger;
-            return yield* l.events(scope);
-          }),
-        );
-        const serialized = JSON.stringify(events);
-        expect(serialized).not.toContain("raw provider body secret");
-        expect(serialized).not.toContain("stub-key-not-real");
-        expect(serialized).toContain("AuthError");
-
-        await runtime.dispose();
-      });
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
-  });
-
-  it("cf-ai-binding route still goes through AiBinding (regression guard)", async () => {
-    const scope = "cross-route-cf-ai-binding";
-    const id = testEnv.AGENT_DO.idFromName(scope);
-    const stub = testEnv.AGENT_DO.get(id);
-
-    // Sentinel fetch: any HTTP call here is a bug.
-    const originalFetch = globalThis.fetch;
-    let fetchTouched = false;
-    globalThis.fetch = (async () => {
-      fetchTouched = true;
-      throw new Error("SENTINEL_FETCH: cf-ai-binding route should NOT hit fetch");
-    }) as typeof globalThis.fetch;
-
-    try {
-      await runInDurableObject(stub, async (_inst, state) => {
-        const ai = stubAi([submitStructuredResp('{"summary":"via-cf-ai"}', "c1")]);
-        const runtime = makeRuntimeWithRegistry(
-          state,
-          ai,
-          { openrouter: "https://stub.test/v1" },
-          { OPENROUTER_KEY: "stub" },
-        );
-
-        const spec: InternalSubmitSpec = {
-          intent: "summarize",
-          context: {},
-          route: { kind: "cf-ai-binding", modelId: "@cf/test/model" } as const,
-          tools: {},
-          outputSchema: SCHEMA,
-          deliver: {
-            scope,
-            scopeRef: { kind: "conversation", scopeId: scope },
-            event: "structured.done",
-          },
-        };
-
-        const r = await runtime.runPromise(submitAgentEffect(spec));
-        expect(r.ok).toBe(true);
-        expect(fetchTouched).toBe(false);
-
-        const events = await runtime.runPromise(
-          Effect.gen(function* () {
-            const l = yield* Ledger;
-            return yield* l.events(scope);
-          }),
-        );
-        const evidence = events.find((e) => e.kind === "llm.structured.evidence");
-        const ep = evidence?.payload as { adapterId?: string };
-        expect(ep.adapterId?.startsWith("cf-ai-binding@")).toBe(true);
-
-        await runtime.dispose();
-      });
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
-  });
-});
+  }
+};

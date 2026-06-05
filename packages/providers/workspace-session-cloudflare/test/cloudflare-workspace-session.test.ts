@@ -11,6 +11,10 @@ import {
   type CloudflareWorkspaceSessionNamespace,
   type CloudflareWorkspaceSessionProvider,
 } from "../src";
+import {
+  providerMaterialLeaks,
+  workspaceSessionProviderMaterialNeedles,
+} from "../../../../tooling/test-helpers/provider-material-sentinel";
 
 const expectFailure = <A>(exit: Exit.Exit<unknown, A>): A => {
   expect(Exit.isFailure(exit)).toBe(true);
@@ -63,7 +67,7 @@ const provider = (overrides: Partial<CloudflareWorkspaceSessionProvider> = {}) =
       cleanupRef: "cf-cleanup-restored",
     }),
     backup: async () => ({ backupRef: "cf-backup-1" }),
-    preview: async () => ({ previewRef: "cf-preview-1", url: "https://preview.example" }),
+    preview: async () => ({ previewRef: "cf-preview-1" }),
     exec: async () => ({
       exitCode: 0,
       stdout: "ok",
@@ -156,7 +160,6 @@ describe("@agent-os/workspace-session-cloudflare", () => {
         sessionRef: "cf-session-1",
         previewRef: "cf-preview-1",
         port: 8787,
-        url: "https://preview.example",
         claim: {
           phase: "lived",
           anchorRef: {
@@ -165,6 +168,34 @@ describe("@agent-os/workspace-session-cloudflare", () => {
             carrierRef: "cf-sandbox-prod",
           },
         },
+      });
+      expect(providerMaterialLeaks(preview, workspaceSessionProviderMaterialNeedles())).toEqual([]);
+    }),
+  );
+
+  it.effect("rejects preview refs that contain provider material", () =>
+    Effect.gen(function* () {
+      const carrier = makeCloudflareWorkspaceSessionCarrier({
+        provider: provider({
+          preview: async () => ({ previewRef: "https://provider.example/session" }),
+        }),
+      });
+
+      const failure = expectFailure(
+        yield* Effect.exit(
+          carrier.allocatePreview({
+            claim: sessionClaim,
+            subjectRef: "run-1",
+            sessionRef: "cf-session-1",
+            port: 8787,
+          }),
+        ),
+      );
+
+      expect(failure).toMatchObject({
+        code: "ProviderFailure",
+        step: "preview",
+        reason: "Cloudflare workspace session previewRef contains provider URL",
       });
     }),
   );
@@ -251,7 +282,7 @@ describe("@agent-os/workspace-session-cloudflare", () => {
       },
       preview: async () => {
         calls.push(`preview:${id}`);
-        return { id: `preview://${id}`, url: `https://${id}.example` };
+        return { id: `https://preview-provider-id.example/${id}`, url: `https://${id}.example` };
       },
       exec: async (command, options) => {
         calls.push(`exec:${id}:${command}:${options.cwd}:${options.timeoutMs}`);
@@ -307,8 +338,7 @@ describe("@agent-os/workspace-session-cloudflare", () => {
         port: 8787,
       }),
     ).resolves.toEqual({
-      previewRef: "preview://session-live",
-      url: "https://session-live.example",
+      previewRef: "cloudflare-sandbox-preview:session-live:8787",
     });
     await expect(
       liveProvider.exec({
@@ -494,7 +524,9 @@ describe("@agent-os/workspace-session-cloudflare", () => {
           sandboxSecret,
         ]);
         expect(backup.backupRef).toBe("cloudflare-sandbox-backup:backup-a24:%2Fworkspace");
-        expect(preview.url).toBe("https://preview-a24.example");
+        expect(preview.previewRef).toBe("cloudflare-sandbox-preview:sandbox-a24:8787");
+        expect(preview.previewRef).not.toContain("https://");
+        expect(preview.previewRef).not.toContain("preview-a24.example");
         expect(exec).toMatchObject({
           exitCode: 0,
           stdout: "abcd",
@@ -510,8 +542,15 @@ describe("@agent-os/workspace-session-cloudflare", () => {
           ),
         );
         const publicJson = JSON.stringify([started, backup, restored, preview, exec, destroyed]);
+        expect(
+          providerMaterialLeaks(
+            [started, backup, restored, preview, exec, destroyed],
+            workspaceSessionProviderMaterialNeedles(),
+          ),
+        ).toEqual([]);
         expect(publicJson).not.toContain(sandboxSecret);
         expect(publicJson).not.toContain("preview-token");
+        expect(publicJson).not.toContain("https://preview-a24.example");
       }),
   );
 });

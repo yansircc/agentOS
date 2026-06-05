@@ -19,7 +19,8 @@ const AttemptKeySchema = Schema.Struct({
   routeFingerprint: Schema.String,
   schemaFingerprint: Schema.String,
   strategy: Schema.Literal("forced-tool-call"),
-  adapterVersion: Schema.String,
+  providerOutputAdapterVersion: Schema.String,
+  transportAdapterVersion: Schema.String,
 });
 
 const OutcomeSchema = Schema.Union(
@@ -57,7 +58,8 @@ export const InvalidatePayloadSchema = Schema.Struct({
     routeFingerprint: Schema.optional(Schema.String),
     schemaFingerprint: Schema.optional(Schema.String),
     strategy: Schema.optional(Schema.Literal("forced-tool-call")),
-    adapterVersion: Schema.optional(Schema.String),
+    providerOutputAdapterVersion: Schema.optional(Schema.String),
+    transportAdapterVersion: Schema.optional(Schema.String),
   }),
   reason: Schema.String,
   by: Schema.String,

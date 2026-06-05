@@ -21,7 +21,7 @@ export type DurableObjectRpcClient<Client> = {
   readonly [K in keyof Client as Client[K] extends AnyFunction ? K : never]: Client[K] extends (
     ...args: infer Args
   ) => infer Result
-    ? (...args: FunctionFreeArgs<Args>) => Result
+    ? (...args: FunctionFreeArgs<Args>) => Promise<Awaited<Result>>
     : never;
 };
 

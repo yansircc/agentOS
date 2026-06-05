@@ -209,7 +209,7 @@ const runResource = async (testCase) => {
       }),
     );
     provisionedRef = provisioned.resourceRef;
-    event("resource.resource.provisioned", provisioned);
+    event("resource.provisioned", provisioned);
 
     const bound = await Effect.runPromise(
       carrier.bind({
@@ -221,7 +221,7 @@ const runResource = async (testCase) => {
         bindingRef,
       }),
     );
-    event("resource.resource.bound", bound);
+    event("resource.bound", bound);
 
     const mutated = await Effect.runPromise(
       carrier.mutate({
@@ -268,7 +268,7 @@ const runResource = async (testCase) => {
       }),
     );
     destroyed = true;
-    event("resource.resource.destroyed", destroyedPayload);
+    event("resource.destroyed", destroyedPayload);
 
     const projection = projectResource(events, testCase.resourceName);
     if (projection.status !== "destroyed") {

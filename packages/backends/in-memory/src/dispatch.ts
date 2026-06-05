@@ -3,10 +3,12 @@ import {
   CapabilityRejected,
   DispatchScopeMismatch,
   DispatchTargetNotFound,
+  InvalidTraceContext,
   SqlError,
   UnsupportedScopeRef,
   isCoreClaimedEventKind,
 } from "@agent-os/kernel/errors";
+import { validateOptionalTraceContext } from "@agent-os/kernel/trace-context";
 import { isScopeRef, makeOperationRef, makePreClaim } from "@agent-os/kernel/effect-claim";
 import { materialRefKey } from "@agent-os/kernel/material-ref";
 import {
@@ -39,9 +41,18 @@ import type { InMemoryBackendState } from "./state";
 import { decodeOk, finiteNumberField, recordOf, type DecodeResult } from "./decode";
 import type { DispatchRequestedPayload, InMemoryDispatchTargetRegistry } from "./dispatch-types";
 
-type PendingDispatchOutboxRow = NonNullable<
-  ReturnType<InMemoryBackendState["pendingOutboxByIntent"]>
->;
+type InMemoryDispatchTriggerTx = {
+  readonly markOutboxDelivered: (spec: {
+    readonly outboundEventId: number;
+    readonly deliveredEventId: number;
+    readonly attempts: number;
+  }) => void;
+  readonly markOutboxFailed: (spec: {
+    readonly outboundEventId: number;
+    readonly attempts: number;
+    readonly lastError: string;
+  }) => void;
+};
 
 const targetFor = (
   targets: InMemoryDispatchTargetRegistry,
@@ -74,14 +85,14 @@ type DeliveryRetryOutcome =
   | { readonly _tag: "skipped" }
   | {
       readonly _tag: "delivered";
-      readonly row: PendingDispatchOutboxRow;
+      readonly outboundEventId: number;
       readonly requested: ProtocolDispatchRequestedPayload;
       readonly receipt: DispatchDeliveryReceipt;
       readonly attempt: number;
     }
   | {
       readonly _tag: "failed";
-      readonly row: PendingDispatchOutboxRow;
+      readonly outboundEventId: number;
       readonly requested: ProtocolDispatchRequestedPayload;
       readonly attempt: number;
       readonly cause: unknown;
@@ -108,7 +119,7 @@ export const deliveryRetryTrigger = (
       if (target === undefined) {
         return {
           _tag: "failed",
-          row,
+          outboundEventId: row.outboundEventId,
           requested,
           attempt,
           cause: "agent_os.dispatch_target_not_found",
@@ -131,7 +142,7 @@ export const deliveryRetryTrigger = (
       if (result._tag === "Right") {
         return {
           _tag: "delivered",
-          row,
+          outboundEventId: row.outboundEventId,
           requested,
           receipt: result.right.receipt,
           attempt,
@@ -139,7 +150,7 @@ export const deliveryRetryTrigger = (
       }
       return {
         _tag: "failed",
-        row,
+        outboundEventId: row.outboundEventId,
         requested,
         attempt,
         cause: result.left,
@@ -147,13 +158,12 @@ export const deliveryRetryTrigger = (
     }),
   commit: (outcome, tx) => {
     if (outcome._tag === "skipped") return;
-    if (outcome.row.deliveredEventId !== null) return;
     if (outcome._tag === "delivered") {
       const bindingKey = materialRefKey(outcome.requested.target.bindingRef);
       const event = tx.insertEvent({
         kind: DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED,
         payload: {
-          outboundEventId: outcome.row.outboundEventId,
+          outboundEventId: outcome.outboundEventId,
           target: outcome.requested.target,
           event: outcome.requested.event,
           idempotencyKey: outcome.requested.idempotencyKey,
@@ -168,9 +178,11 @@ export const deliveryRetryTrigger = (
             : { traceContext: outcome.requested.traceContext }),
         },
       });
-      outcome.row.deliveredEventId = event.id;
-      outcome.row.attempts = outcome.attempt;
-      outcome.row.lastError = null;
+      (tx as unknown as InMemoryDispatchTriggerTx).markOutboxDelivered({
+        outboundEventId: outcome.outboundEventId,
+        deliveredEventId: event.id,
+        attempts: outcome.attempt,
+      });
       return;
     }
 
@@ -182,7 +194,7 @@ export const deliveryRetryTrigger = (
     tx.insertEvent({
       kind: DISPATCH_EVENT_KINDS.OUTBOUND_FAILED,
       payload: {
-        outboundEventId: outcome.row.outboundEventId,
+        outboundEventId: outcome.outboundEventId,
         target: outcome.requested.target,
         event: outcome.requested.event,
         idempotencyKey: outcome.requested.idempotencyKey,
@@ -192,9 +204,12 @@ export const deliveryRetryTrigger = (
         ...(nextAttemptAt === null ? {} : { nextAttemptAt }),
       },
     });
-    outcome.row.attempts = outcome.attempt;
-    outcome.row.lastError = error;
-    if (nextAttemptAt !== null) tx.reschedule(nextAttemptAt, outcome.row.outboundEventId);
+    (tx as unknown as InMemoryDispatchTriggerTx).markOutboxFailed({
+      outboundEventId: outcome.outboundEventId,
+      attempts: outcome.attempt,
+      lastError: error,
+    });
+    if (nextAttemptAt !== null) tx.reschedule(nextAttemptAt, outcome.outboundEventId);
   },
   commitCancelled: () => undefined,
 });
@@ -231,7 +246,16 @@ export const InMemoryDispatchLive = (
             }
 
             const now = yield* Clock.currentTimeMillis;
-            const traceContext = copyTraceContext(spec.traceContext);
+            const traceContextResult = validateOptionalTraceContext(spec.traceContext);
+            if (!traceContextResult.ok) {
+              return yield* Effect.fail(
+                new InvalidTraceContext({
+                  position: "dispatch",
+                  reason: traceContextResult.reason,
+                }),
+              );
+            }
+            const traceContext = copyTraceContext(traceContextResult.traceContext);
             const claim = makePreClaim({
               operationRef: makeOperationRef("dispatch", [
                 scope,
@@ -269,16 +293,14 @@ export const InMemoryDispatchLive = (
                 scope,
                 payload: requested,
               }),
-              (event) => {
-                state.addOutbox({
-                  outboundEventId: event.id,
-                  sourceScope: scope,
-                  requested,
-                  attempts: 0,
-                  deliveredEventId: null,
-                  lastError: null,
-                });
-              },
+              (event) => ({
+                outboundEventId: event.id,
+                sourceScope: scope,
+                requested,
+                attempts: 0,
+                deliveredEventId: null,
+                lastError: null,
+              }),
             );
             yield* triggerPump.drainDue(now);
             return { outboundEventId: event.id };
@@ -312,7 +334,16 @@ export const InMemoryDispatchLive = (
             }
 
             const now = yield* Clock.currentTimeMillis;
-            const traceContext = copyTraceContext(envelope.traceContext);
+            const traceContextResult = validateOptionalTraceContext(envelope.traceContext);
+            if (!traceContextResult.ok) {
+              return yield* Effect.fail(
+                new InvalidTraceContext({
+                  position: "dispatch",
+                  reason: traceContextResult.reason,
+                }),
+              );
+            }
+            const traceContext = copyTraceContext(traceContextResult.traceContext);
             const events = yield* state.commitPrepared((nextId) => {
               const deliveredEventId = nextId + 1;
               const claim = settleDispatchInboundAccepted(envelope.claim, {

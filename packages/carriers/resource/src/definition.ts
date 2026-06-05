@@ -101,7 +101,7 @@ export const resourceCarrierDefinition = defineCarrier({
   materialRequirements: [apiToken, account, binding],
   events: {
     resource_provisioned: event({
-      kind: "resource.provisioned",
+      kind: "provisioned",
       payload: Schema.Struct({
         subjectRef: Schema.String,
         resourceKind: Schema.String,
@@ -113,7 +113,7 @@ export const resourceCarrierDefinition = defineCarrier({
       claim: lived({ key: "claim", anchorKinds: ["carrier_proof", "external_receipt"] }),
     }),
     resource_bound: event({
-      kind: "resource.bound",
+      kind: "bound",
       payload: Schema.Struct({
         subjectRef: Schema.String,
         resourceRef: externalResourceMaterialRefSchema,
@@ -135,7 +135,7 @@ export const resourceCarrierDefinition = defineCarrier({
       claim: lived({ key: "claim", anchorKinds: ["carrier_proof", "external_receipt"] }),
     }),
     resource_destroyed: event({
-      kind: "resource.destroyed",
+      kind: "destroyed",
       payload: Schema.Struct({
         subjectRef: Schema.String,
         resourceRef: materialRefSchema,

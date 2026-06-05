@@ -277,7 +277,6 @@ export function defineAgentDO<Env extends CloudflareAgentEnv>(
 export {
   anthropicMessages,
   binding,
-  cfAiBinding,
   credential,
   durableObjectTarget,
   endpoint,
@@ -291,7 +290,6 @@ export type {
   AgentMaterialBindingBuilder,
   AnthropicMessagesSpec,
   BindingMaterialRef,
-  CfAiBindingSpec,
   CredentialMaterialRef,
   EndpointMaterialRef,
   ExternalResourceMaterialRef,

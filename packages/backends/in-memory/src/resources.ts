@@ -57,12 +57,12 @@ const projectResources = (
   const byIdempotencyKey = new Map<string, ReservationState>();
 
   for (const event of events) {
-    if (!event.kind.startsWith("resource.")) continue;
+    if (!event.kind.startsWith("resource_pool.")) continue;
     const payloadResult = recordOf(event.payload, event.kind);
     if (!payloadResult.ok) return payloadResult;
     const payload = payloadResult.value;
     switch (event.kind) {
-      case "resource.granted": {
+      case "resource_pool.granted": {
         const key = stringField(payload, "key");
         if (!key.ok) return key;
         const amount = finiteNumberField(payload, "amount");
@@ -73,7 +73,7 @@ const projectResources = (
         });
         break;
       }
-      case "resource.reserved": {
+      case "resource_pool.reserved": {
         const reservationId = stringField(payload, "reservationId");
         if (!reservationId.ok) return reservationId;
         const key = stringField(payload, "key");
@@ -93,7 +93,7 @@ const projectResources = (
         byIdempotencyKey.set(reservation.idempotencyKey, reservation);
         break;
       }
-      case "resource.reserve_rejected": {
+      case "resource_pool.reserve_rejected": {
         const key = stringField(payload, "key");
         if (!key.ok) return key;
         const amount = finiteNumberField(payload, "amount");
@@ -104,15 +104,15 @@ const projectResources = (
         if (!available.ok) return available;
         break;
       }
-      case "resource.consumed":
-      case "resource.released": {
+      case "resource_pool.consumed":
+      case "resource_pool.released": {
         const reservationId = stringField(payload, "reservationId");
         if (!reservationId.ok) return reservationId;
         const existing = reservations.get(reservationId.value);
         if (existing !== undefined) {
           const next = {
             ...existing,
-            status: event.kind === "resource.consumed" ? "consumed" : "released",
+            status: event.kind === "resource_pool.consumed" ? "consumed" : "released",
           } satisfies ReservationState;
           reservations.set(reservationId.value, next);
           byIdempotencyKey.set(next.idempotencyKey, next);
@@ -162,7 +162,7 @@ export const InMemoryResourcesLive = (state: InMemoryBackendState): Layer.Layer<
         const [event] = yield* state.commitEvents([
           {
             ts,
-            kind: "resource.granted",
+            kind: "resource_pool.granted",
             scope,
             payload: { key: spec.key, amount: spec.amount, ref: spec.ref },
           },
@@ -183,7 +183,7 @@ export const InMemoryResourcesLive = (state: InMemoryBackendState): Layer.Layer<
           yield* state.commitEvents([
             {
               ts,
-              kind: "resource.reserve_rejected",
+              kind: "resource_pool.reserve_rejected",
               scope,
               payload: {
                 key: spec.key,
@@ -207,7 +207,7 @@ export const InMemoryResourcesLive = (state: InMemoryBackendState): Layer.Layer<
         yield* state.commitEvents([
           {
             ts,
-            kind: "resource.reserved",
+            kind: "resource_pool.reserved",
             scope,
             payload: {
               key: spec.key,
@@ -243,7 +243,7 @@ export const InMemoryResourcesLive = (state: InMemoryBackendState): Layer.Layer<
         yield* state.commitEvents([
           {
             ts,
-            kind: "resource.consumed",
+            kind: "resource_pool.consumed",
             scope,
             payload: { reservationId: spec.reservationId, ref: spec.ref },
           },
@@ -272,7 +272,7 @@ export const InMemoryResourcesLive = (state: InMemoryBackendState): Layer.Layer<
         yield* state.commitEvents([
           {
             ts,
-            kind: "resource.released",
+            kind: "resource_pool.released",
             scope,
             payload: { reservationId: spec.reservationId, ref: spec.ref },
           },

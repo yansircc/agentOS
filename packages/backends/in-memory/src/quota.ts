@@ -6,7 +6,7 @@ import type { InMemoryBackendState } from "./state";
 import { decodeOk, finiteNumberField, recordOf, stringField, type DecodeResult } from "./decode";
 
 const consumedAmount = (event: LedgerEvent, key: string): DecodeResult<number> => {
-  const payloadResult = recordOf(event.payload, "dispatch.consumed");
+  const payloadResult = recordOf(event.payload, "quota.consumed");
   if (!payloadResult.ok) return payloadResult;
   const payload = payloadResult.value;
   const payloadKey = stringField(payload, "key");
@@ -19,7 +19,7 @@ const consumedAmount = (event: LedgerEvent, key: string): DecodeResult<number> =
 };
 
 const consumedOperationRef = (event: LedgerEvent): DecodeResult<string | null> => {
-  const payloadResult = recordOf(event.payload, "dispatch.consumed");
+  const payloadResult = recordOf(event.payload, "quota.consumed");
   if (!payloadResult.ok) return payloadResult;
   const value = payloadResult.value.operationRef;
   return decodeOk(typeof value === "string" ? value : null);
@@ -34,7 +34,7 @@ export const InMemoryQuotaLive = (state: InMemoryBackendState): Layer.Layer<Quot
         const usage = yield* Effect.sync(() => {
           let sum = 0;
           for (const event of state.streamSnapshot(scope)) {
-            if (event.kind !== "dispatch.consumed" || event.ts < windowStart) continue;
+            if (event.kind !== "quota.consumed" || event.ts < windowStart) continue;
             const eventOperationRef = consumedOperationRef(event);
             if (!eventOperationRef.ok) return eventOperationRef;
             if (eventOperationRef.value === operationRef) {
@@ -62,7 +62,7 @@ export const InMemoryQuotaLive = (state: InMemoryBackendState): Layer.Layer<Quot
           yield* state.commitEvents([
             {
               ts: now,
-              kind: "dispatch.rate_limited",
+              kind: "quota.rate_limited",
               scope,
               payload: { key, attempted: amount, consumed, limit, windowMs, toolName },
             },
@@ -73,7 +73,7 @@ export const InMemoryQuotaLive = (state: InMemoryBackendState): Layer.Layer<Quot
         yield* state.commitEvents([
           {
             ts: now,
-            kind: "dispatch.consumed",
+            kind: "quota.consumed",
             scope,
             payload: { key, amount, toolName, operationRef },
           },

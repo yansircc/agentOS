@@ -14,6 +14,7 @@ const packageLinks = {
   "backend-cloudflare-do": "packages/backends/cloudflare-do",
   "backend-protocol": "packages/backends/protocol",
   kernel: "packages/kernel",
+  "llm-transport-effect-ai": "packages/providers/llm-transport-effect-ai",
   runtime: "packages/runtime",
 };
 const dependencyLinks = ["@cloudflare", "@effect", "effect"];

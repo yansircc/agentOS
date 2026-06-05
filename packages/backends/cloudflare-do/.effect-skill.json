@@ -44,18 +44,6 @@
       "rules": ["EFF402"]
     },
     {
-      "path": "src/llm/protocol/anthropic-messages.ts",
-      "owner": "@agent-os/backend-cloudflare-do/provider-adapters",
-      "reason": "Anthropic tool-use adapter preserves malformed assistant tool arguments as raw wire data by design",
-      "rules": ["EFF001"]
-    },
-    {
-      "path": "src/llm/protocol/openai-chat.ts",
-      "owner": "@agent-os/backend-cloudflare-do/provider-adapters",
-      "reason": "Chat Completions turn decoder is a finite wire adapter; malformed upstream turn shape is caught and reified as UpstreamFailure",
-      "rules": ["EFF024", "EFF025"]
-    },
-    {
       "path": "test/_in-memory-do.ts",
       "owner": "@agent-os/backend-cloudflare-do/test-runtime",
       "reason": "test-only DO SQLite subset intentionally models transactionSync rollback and fail-fast unsupported SQL using synchronous exceptions",

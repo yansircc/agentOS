@@ -78,7 +78,6 @@ export interface CloudflareWorkspaceSessionBackupResult {
 
 export interface CloudflareWorkspaceSessionPreviewResult {
   readonly previewRef?: string;
-  readonly url?: string;
 }
 
 export interface CloudflareWorkspaceSessionDestroyResult {
@@ -420,6 +419,14 @@ const failureFrom = (
   return providerFailure(claim, step, defaultFailureCode(step), messageOf(cause));
 };
 
+const providerMaterialInPreviewRef = (previewRef: string): string | null => {
+  const decoded = decodeURIComponent(previewRef);
+  if (/https?:\/\//i.test(decoded)) return "provider URL";
+  if (/\b[a-z0-9-]*preview[a-z0-9.-]*\.[a-z]{2,}\b/i.test(decoded)) return "preview hostname";
+  if (/(?:token|secret)/i.test(decoded)) return "secret marker";
+  return null;
+};
+
 const sessionResolution = (
   claim: PreClaim,
   carrierRef: string,
@@ -519,8 +526,8 @@ const parseBackupRef = (
   return { id: id!, dir: dir! };
 };
 
-const previewRefOf = (port: number, url: string): string =>
-  encodedRef(PREVIEW_REF_PREFIX, [String(port), url]);
+const previewRefOf = (sandboxId: string, port: number): string =>
+  encodedRef(PREVIEW_REF_PREFIX, [sandboxId, String(port)]);
 
 const destroyProofRefOf = (sessionRef: string): string =>
   encodedRef(DESTROY_PROOF_REF_PREFIX, [sessionRef]);
@@ -718,8 +725,8 @@ export const makeCloudflareWorkspaceSessionProvider = (
     const client = await options.namespace.get(request.sessionRef);
     const preview = clientMethod(client, "preview");
     if (preview === null) return missingClientMethod("preview");
-    const result = await preview(request);
-    return { previewRef: result.id, ...(result.url === undefined ? {} : { url: result.url }) };
+    await preview(request);
+    return { previewRef: previewRefOf(request.sessionRef, request.port) };
   },
   exec: async (request) => {
     const client = await options.namespace.get(request.sessionRef);
@@ -890,12 +897,22 @@ export const makeCloudflareWorkspaceSessionCarrier = (
             ),
           );
         }
+        const leakedMaterial = providerMaterialInPreviewRef(result.previewRef);
+        if (leakedMaterial !== null) {
+          return yield* Effect.fail(
+            providerFailure(
+              request.claim,
+              "preview",
+              "ProviderFailure",
+              `Cloudflare workspace session previewRef contains ${leakedMaterial}`,
+            ),
+          );
+        }
         return {
           subjectRef: request.subjectRef,
           sessionRef: request.sessionRef,
           previewRef: result.previewRef,
           port: request.port,
-          ...(result.url === undefined ? {} : { url: result.url }),
           claim: settleWorkspaceSessionLived(request.claim, {
             proofRef: workspaceSessionSettlementRef("preview", result.previewRef),
             carrierRef,
@@ -1056,8 +1073,7 @@ export const makeCloudflareWorkspaceSessionLiveProvider = (
     const url = requiredOptionString(exposed.url, "exposePort.url", "preview");
     if (isProviderFailure(url)) return providerRejected(url.reason, url.code);
     return {
-      previewRef: previewRefOf(request.port, url),
-      url,
+      previewRef: previewRefOf(parsed.sandboxId, request.port),
     };
   },
 

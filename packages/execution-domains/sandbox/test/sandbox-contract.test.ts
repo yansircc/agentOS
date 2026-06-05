@@ -219,7 +219,7 @@ describe("@agent-os/sandbox v0 contract", () => {
       ...toolAdmission,
     });
 
-    expect(() => tool.decode({ args: ["missing-command"] })).toThrow("violate schema");
+    expect(() => tool.decode({ args: ["missing-command"] })).toThrow("$.command:missing");
     expect(calls).toBe(0);
   });
 });

@@ -6,8 +6,8 @@
  * because the read-modify-write happens in a single transaction.
  *
  * Writes either:
- *   - dispatch.consumed (grant) — counts toward future quota checks
- *   - dispatch.rate_limited (deny) — observation only
+ *   - quota.consumed (grant) — counts toward future quota checks
+ *   - quota.rate_limited (deny) — observation only
  *
  * Both writes go through raw sql.exec inside transactionSync (so they're
  * atomic with the read). The service then fires EventBus.fire(event) AFTER
@@ -21,7 +21,7 @@ import { sqlText } from "../storage/sql-row";
 import { decodeConsumedPayloadSync } from "./payload";
 import { commitLedgerTransaction } from "../ledger/commit";
 
-/** Owned schema for events.kind = 'dispatch.consumed' payload. We are the
+/** Owned schema for events.kind = 'quota.consumed' payload. We are the
  *  sole writer (consumedPayload below), so any shape mismatch read back is
  *  infra corruption — let Schema.decodeUnknownSync throw, transactionSync
  *  rolls back, and Effect.try wraps it as SqlError. This is the same
@@ -49,7 +49,7 @@ export const QuotaLive = (ctx: DurableObjectState): Layer.Layer<Quota, never, Ev
             const txResult = yield* commitLedgerTransaction(ctx, bus, (tx) => {
               const rows = sql
                 .exec(
-                  "SELECT payload FROM events WHERE scope = ? AND kind = 'dispatch.consumed' AND ts >= ?",
+                  "SELECT payload FROM events WHERE scope = ? AND kind = 'quota.consumed' AND ts >= ?",
                   scope,
                   windowStart,
                 )
@@ -85,7 +85,7 @@ export const QuotaLive = (ctx: DurableObjectState): Layer.Layer<Quota, never, Ev
                 };
                 tx.append({
                   ts: now,
-                  kind: "dispatch.rate_limited",
+                  kind: "quota.rate_limited",
                   scope,
                   payload: rateLimitedPayload,
                 });
@@ -97,7 +97,7 @@ export const QuotaLive = (ctx: DurableObjectState): Layer.Layer<Quota, never, Ev
 
               tx.append({
                 ts: now,
-                kind: "dispatch.consumed",
+                kind: "quota.consumed",
                 scope,
                 payload: consumedPayload,
               });
