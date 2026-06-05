@@ -40,6 +40,7 @@ title: "@agent-os/runtime Public API Intent"
 - `.:AttemptSpec`
 - `.:BarrierCursor`
 - `.:BarrierRow`
+- `.:BoundaryCommitIdentity`
 - `.:BoundaryCommitRejected`
 - `.:CapabilityLease`
 - `.:DEFAULT_TRIGGER_ACQUIRE_DEADLINE_MS`
@@ -143,6 +144,7 @@ title: "@agent-os/runtime Public API Intent"
 - `.:attachedStreamParseOk`
 - `.:applyProjectionEvent`
 - `.:applyProjectionEventResult`
+- `.:boundaryCommitIdentity`
 - `.:commitBoundaryEvent`
 - `.:createAttachedStreamQueue`
 - `.:decideTier`

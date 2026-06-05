@@ -443,7 +443,7 @@ export class AgentDurableObject<
     return this.runScoped((scope) =>
       Effect.gen(function* () {
         const ledger = yield* Ledger;
-        const ev = yield* commitBoundaryEvent(pkg.boundaryContract, event, data, () =>
+        const ev = yield* commitBoundaryEvent(pkg.boundaryContract, event, data, (_identity) =>
           Effect.gen(function* () {
             const events = yield* ledger.commit([{ kind: event, payload: data, scope }]);
             const committed = events[0];

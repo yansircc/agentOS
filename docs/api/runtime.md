@@ -36,6 +36,7 @@
 - `.:AttemptSpec`
 - `.:BarrierCursor`
 - `.:BarrierRow`
+- `.:BoundaryCommitIdentity`
 - `.:BoundaryCommitRejected`
 - `.:CapabilityLease`
 - `.:DEFAULT_TRIGGER_ACQUIRE_DEADLINE_MS`
@@ -139,6 +140,7 @@
 - `.:attachedStreamParseOk`
 - `.:applyProjectionEvent`
 - `.:applyProjectionEventResult`
+- `.:boundaryCommitIdentity`
 - `.:commitBoundaryEvent`
 - `.:createAttachedStreamQueue`
 - `.:decideTier`
