@@ -301,6 +301,8 @@ describe("@agent-os/workspace-env", () => {
         content: "def ping():\n    return 'pong'\n",
         encoding: "utf-8",
         size: 30,
+        contentBytes: 30,
+        truncated: false,
       });
       expect(list).toEqual({ path: "src", entries: ["pingpong.py"] });
       expect(shell).toEqual(
@@ -323,6 +325,32 @@ describe("@agent-os/workspace-env", () => {
           durationMs: 1,
         },
       ]);
+    }),
+  );
+
+  it.effect("bounds read_file output by UTF-8 bytes", () =>
+    Effect.gen(function* () {
+      const { env } = workspace();
+      const tools = createWorkspaceTools(env, {
+        authority: "test.workspace",
+        admit: allowToolAdmitter,
+        maxFileBytes: 5,
+      });
+      yield* Effect.promise(() => env.writeFile("unicode.txt", "αβγ"));
+
+      const read = yield* unsafeRunToolByName(
+        tools,
+        deterministicToolInvocation("read_file", { path: "unicode.txt" }),
+      );
+
+      expect(read).toEqual({
+        path: "unicode.txt",
+        content: "αβ",
+        encoding: "utf-8",
+        size: 6,
+        contentBytes: 4,
+        truncated: true,
+      });
     }),
   );
 

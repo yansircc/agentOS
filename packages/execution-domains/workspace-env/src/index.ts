@@ -162,6 +162,8 @@ export interface WorkspaceReadFileResult {
   readonly content: string;
   readonly encoding: "utf-8";
   readonly size: number;
+  readonly contentBytes: number;
+  readonly truncated: boolean;
 }
 
 export interface WorkspaceWriteFileResult {
@@ -809,12 +811,15 @@ export const createWorkspaceTools = (
       ...common,
       execute: async (args, ctx): Promise<WorkspaceReadFileResult> => {
         const path = env.resolvePath(args.path);
-        const content = await env.readFile(path, { signal: ctx.signal });
+        const bytes = await env.readFileBuffer(path, { signal: ctx.signal });
+        const preview = truncateUtf8(textDecoder.decode(bytes), maxFileBytes);
         return {
           path: relativePath(env.cwd, path),
-          content,
+          content: preview.text,
           encoding: "utf-8",
-          size: utf8Bytes(content),
+          size: bytes.byteLength,
+          contentBytes: preview.bytes,
+          truncated: preview.truncated,
         };
       },
     }),
