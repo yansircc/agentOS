@@ -8,6 +8,14 @@ import {
   type WorkspaceOperationOptions,
 } from "@agent-os/workspace-env";
 
+/**
+ * Structured-clone-safe subset passed to Cloudflare Sandbox `exec`.
+ *
+ * This intentionally does not include `AbortSignal`. In-flight `exec`
+ * cancellation is non-cooperative for this adapter: caller signals are checked
+ * before and after the provider call, while provider interruption must come
+ * from Cloudflare timeout/session/process controls.
+ */
 export interface CloudflareWorkspaceEnvExecOptions {
   readonly cwd?: string;
   readonly timeout?: number;

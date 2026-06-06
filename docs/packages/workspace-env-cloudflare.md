@@ -18,10 +18,10 @@ Supply the live Cloudflare Sandbox client from Worker code and call
 `makeCloudflareWorkspaceEnv`. The returned env can be passed to
 `createWorkspaceTools`.
 
-The adapter forwards provider timeouts to Sandbox `exec` and performs
-pre/post-operation `AbortSignal` checks. It does not pass `AbortSignal` objects
-through Sandbox RPC options because those options must stay structured-clone
-safe.
+The adapter forwards provider timeouts to Sandbox `exec`. In-flight `exec`
+cancellation is non-cooperative: caller `AbortSignal`s are checked before the
+provider call and again after it settles, but they are not passed through
+Sandbox RPC options because those options must stay structured-clone safe.
 
 ## Verification
 

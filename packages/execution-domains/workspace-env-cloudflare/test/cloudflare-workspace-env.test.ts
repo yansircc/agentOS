@@ -77,6 +77,56 @@ describe("@agent-os/workspace-env-cloudflare", () => {
     expect(writeFile).not.toHaveBeenCalled();
   });
 
+  it("documents exec as non-cooperative while the provider call is in flight", async () => {
+    let releaseExec:
+      | ((result: Awaited<ReturnType<CloudflareWorkspaceEnvClient["exec"]>>) => void)
+      | undefined;
+    let providerOptions: unknown;
+    const exec = vi.fn<CloudflareWorkspaceEnvClient["exec"]>(
+      (_command, options) =>
+        new Promise((resolve) => {
+          providerOptions = options;
+          releaseExec = resolve;
+        }),
+    );
+    const env = makeCloudflareWorkspaceEnv({
+      client: { exec },
+      cwd: "/workspace/project",
+    });
+    const controller = new AbortController();
+
+    let settled = false;
+    const result = env
+      .exec("sleep 10", {
+        timeoutMs: 12_000,
+        signal: controller.signal,
+      })
+      .then(
+        () => undefined,
+        (error: unknown) => error,
+      )
+      .finally(() => {
+        settled = true;
+      });
+
+    expect(exec).toHaveBeenCalledTimes(1);
+    controller.abort("stop");
+    await Promise.resolve();
+
+    expect(settled).toBe(false);
+    expect(providerOptions).toEqual({
+      cwd: "/workspace/project",
+      timeout: 12_000,
+      timeoutMs: 12_000,
+    });
+
+    releaseExec?.({ exitCode: 0, stdout: "done", stderr: "", durationMs: 1 });
+    await expect(result).resolves.toMatchObject({
+      name: "AbortError",
+      message: "stop",
+    });
+  });
+
   it("calls listFiles with the provider client receiver intact", async () => {
     const client: CloudflareWorkspaceEnvClient = {
       exec: async () => ({ exitCode: 0 }),
