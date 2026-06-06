@@ -58,7 +58,7 @@ export class Ledger extends Context.Tag("@agent-os/Ledger")<
     ) => Effect.Effect<ReadonlyArray<LedgerEvent>, SqlError>;
     readonly streamSnapshot: (
       identity: LedgerTruthIdentity,
-      opts?: Pick<EventQueryOptions, "afterId" | "kinds">,
+      opts?: Pick<EventQueryOptions, "afterId" | "kinds" | "factOwnerRefs">,
     ) => Effect.Effect<ReadonlyArray<LedgerEvent>, SqlError>;
   }
 >() {}

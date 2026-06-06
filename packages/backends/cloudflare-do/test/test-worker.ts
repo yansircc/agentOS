@@ -126,11 +126,75 @@ export const DispatchTestDO = createAgentDurableObject<DispatchEnv>({
 });
 export type DispatchTestDO = InstanceType<typeof DispatchTestDO>;
 
+export const STREAM_OWNER_FACT_OWNER = "@agent-os/stream-owner-test";
+export const STREAM_OWNER_COMMAND_EVENT = "stream.command.owner";
+export const STREAM_OWNER_VISIBLE_EVENT = "stream.owner.visible";
+
+const streamOwnerSettlementContract = defineSettlementContract({
+  settlementId: "@agent-os/stream-owner-test",
+  anchorKinds: [],
+  rejectionKinds: [],
+});
+
+const streamOwnerBoundaryContract = defineBoundaryContract({
+  packageId: STREAM_OWNER_FACT_OWNER,
+  kindPrefixes: ["stream.owner."],
+  roles: ["generator", "reader"],
+  effectAuthorityContracts: [],
+  materialRequirements: [],
+  events: {
+    [STREAM_OWNER_VISIBLE_EVENT]: {
+      payloadSchema: {
+        type: "object",
+        properties: {
+          label: { type: "string" },
+        },
+        required: ["label"],
+        additionalProperties: false,
+      },
+    },
+  },
+  settlement: streamOwnerSettlementContract,
+  projection: {
+    derivedFromLedger: true,
+    shadowState: false,
+  },
+});
+
 export const StreamTestDO = createAgentDurableObject<CloudflareAgentEnv>({
-  eventHandlers: () => [
+  extensions: () => [boundaryPackage(streamOwnerBoundaryContract, "0.1.0")],
+  eventHandlers: ({ capabilities }) => [
     {
       kind: "stream.slow",
       handler: () => scheduler.wait(1_000),
+    },
+    {
+      kind: STREAM_OWNER_COMMAND_EVENT,
+      handler: (event) => {
+        const capability = capabilities.get(STREAM_OWNER_FACT_OWNER);
+        if (capability === undefined) {
+          return Promise.reject(
+            new CapabilityRejected({
+              event: STREAM_OWNER_VISIBLE_EVENT,
+              capability: `extension:${STREAM_OWNER_FACT_OWNER}`,
+            }),
+          );
+        }
+        return capability
+          .commit({
+            event: STREAM_OWNER_VISIBLE_EVENT,
+            data: {
+              label:
+                typeof event.payload === "object" &&
+                event.payload !== null &&
+                "label" in event.payload &&
+                typeof event.payload.label === "string"
+                  ? event.payload.label
+                  : "visible",
+            },
+          })
+          .then(() => undefined);
+      },
     },
   ],
 });

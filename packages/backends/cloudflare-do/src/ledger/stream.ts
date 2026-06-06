@@ -1,4 +1,5 @@
 import type { LedgerEvent, StreamEventsOptions } from "@agent-os/kernel/types";
+import type { FactOwnerRef } from "@agent-os/kernel/effect-claim";
 /**
  * Server-Sent Events stream for ledger reads — the SSE surface of
  * `Cloudflare backend.streamEvents`. Extracted from agent-do.ts as a pure
@@ -53,6 +54,19 @@ const normalizeKinds = (
   return normalized.length === 0 ? undefined : normalized;
 };
 
+const normalizeFactOwnerRefs = (
+  factOwnerRefs: ReadonlyArray<FactOwnerRef> | undefined,
+): ReadonlySet<FactOwnerRef> | undefined => {
+  if (factOwnerRefs === undefined) return undefined;
+  const normalized = Array.from(new Set(factOwnerRefs)).filter((owner) => owner.length > 0);
+  return normalized.length === 0 ? undefined : new Set(normalized);
+};
+
+const matchesFactOwner = (
+  event: LedgerEvent,
+  factOwnerRefs: ReadonlySet<FactOwnerRef> | undefined,
+): boolean => factOwnerRefs === undefined || factOwnerRefs.has(event.factOwnerRef);
+
 const encodeSseEvent = (encoder: TextEncoder, event: LedgerEvent): Uint8Array =>
   encoder.encode(
     [`id: ${event.id}`, "event: ledger", `data: ${JSON.stringify(eventToRpc(event))}`, "", ""].join(
@@ -102,6 +116,7 @@ export const createEventStreamResponse = <R, E>(
     normalizePositiveInteger(opts.heartbeatMs, DEFAULT_STREAM_HEARTBEAT_MS),
   );
   const kinds = normalizeKinds(opts.kinds);
+  const factOwnerRefs = normalizeFactOwnerRefs(opts.factOwnerRefs);
   const identityKey = truthIdentityKey(identity);
   const encoder = new TextEncoder();
 
@@ -156,6 +171,7 @@ export const createEventStreamResponse = <R, E>(
               kinds,
               sink: (event) => {
                 if (truthIdentityKey(event) !== identityKey) return;
+                if (!matchesFactOwner(event, factOwnerRefs)) return;
                 if (mode === "buffering") {
                   liveQueue.push(event);
                   return;
@@ -171,6 +187,7 @@ export const createEventStreamResponse = <R, E>(
             const snapshot = yield* ledger.streamSnapshot(identity, {
               afterId,
               kinds,
+              factOwnerRefs: opts.factOwnerRefs,
             });
             const handoff = selectHandoffEvents(watermark, snapshot, liveQueue);
             for (const event of handoff.events) {

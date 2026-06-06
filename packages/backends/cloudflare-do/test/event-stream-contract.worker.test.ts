@@ -13,7 +13,12 @@ import type { BackendProtocolTruthIdentity } from "@agent-os/backend-protocol";
 import { SELF, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import type { EventQueryOptions } from "@agent-os/kernel/types";
-import type { StreamTestDO } from "./test-worker";
+import {
+  STREAM_OWNER_COMMAND_EVENT,
+  STREAM_OWNER_FACT_OWNER,
+  STREAM_OWNER_VISIBLE_EVENT,
+  type StreamTestDO,
+} from "./test-worker";
 import { testTruthIdentity } from "./_identity";
 
 interface TestEnv {
@@ -247,6 +252,50 @@ describe("ledger event stream — contract", () => {
 
       const all = await readLedgerRows(await stub.streamEvents(identity, { kinds: [] }), 3);
       expect(all.map((row) => row.kind)).toEqual(["A", "B", "C"]);
+    });
+  });
+
+  it("filters snapshots and streams by fact owner refs", async () => {
+    await withStreamDO("stream-owner-filter", async (stub, identity) => {
+      await stub.emitEvent({ event: "owner.runtime", data: {} });
+      await stub.emitEvent({
+        event: STREAM_OWNER_COMMAND_EVENT,
+        data: { label: "snapshot-extension" },
+      });
+
+      const extensionSnapshot = await stub.events(identity, {
+        factOwnerRefs: [STREAM_OWNER_FACT_OWNER],
+      });
+      expect(extensionSnapshot.map((row) => row.kind)).toEqual([STREAM_OWNER_VISIBLE_EVENT]);
+      expect(extensionSnapshot.map((row) => row.factOwnerRef)).toEqual([STREAM_OWNER_FACT_OWNER]);
+
+      const extensionStreamRows = await readLedgerRows(
+        await stub.streamEvents(identity, {
+          factOwnerRefs: [STREAM_OWNER_FACT_OWNER],
+          heartbeatMs: 1_000,
+        }),
+        1,
+      );
+      expect(extensionStreamRows.map((row) => row.kind)).toEqual([STREAM_OWNER_VISIBLE_EVENT]);
+      expect(extensionStreamRows.map((row) => row.factOwnerRef)).toEqual([STREAM_OWNER_FACT_OWNER]);
+    });
+  });
+
+  it("filters live stream rows by fact owner refs", async () => {
+    await withStreamDO("stream-owner-live-filter", async (stub, identity) => {
+      const response = await stub.streamEvents(identity, {
+        factOwnerRefs: [STREAM_OWNER_FACT_OWNER],
+        heartbeatMs: 1_000,
+      });
+
+      await stub.emitEvent({
+        event: STREAM_OWNER_COMMAND_EVENT,
+        data: { label: "live-extension" },
+      });
+
+      const rows = await readLedgerRows(response, 1);
+      expect(rows.map((row) => row.kind)).toEqual([STREAM_OWNER_VISIBLE_EVENT]);
+      expect(rows.map((row) => row.factOwnerRef)).toEqual([STREAM_OWNER_FACT_OWNER]);
     });
   });
 
