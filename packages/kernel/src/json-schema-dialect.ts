@@ -16,7 +16,7 @@ export type JsonSchemaObject = {
 };
 
 export type JsonSchemaNode =
-  | { readonly type: "string"; readonly enum?: ReadonlyArray<string> }
+  | { readonly type: "string"; readonly enum?: ReadonlyArray<string>; readonly pattern?: string }
   | { readonly type: "number" }
   | { readonly type: "boolean" }
   | { readonly type: "array"; readonly items: JsonSchemaNode }
@@ -162,15 +162,25 @@ export const parseDialectNodeResult = (
     case "string": {
       const unsupportedKey = firstUnsupportedKey(
         schema,
-        new Set(["type", "enum", ...ANNOTATION_KEYS]),
+        new Set(["type", "enum", "pattern", ...ANNOTATION_KEYS]),
         path,
       );
       if (unsupportedKey !== undefined) return { ok: false, issues: [unsupportedKey] };
       const enumeration = optionalStringArray(schema.enum, `${path}.enum`);
       if (!enumeration.ok) return failFrom(enumeration);
+      const pattern = schema.pattern;
+      if (pattern !== undefined) {
+        if (typeof pattern !== "string") return fail(`${path}.pattern`, "expected-string");
+        try {
+          new RegExp(pattern);
+        } catch {
+          return fail(`${path}.pattern`, "invalid-regex");
+        }
+      }
       return ok({
         type: "string",
         ...(enumeration.value === undefined ? {} : { enum: enumeration.value }),
+        ...(pattern === undefined ? {} : { pattern }),
       });
     }
     case "number": {
@@ -262,7 +272,12 @@ export const validateAgainstSchema = (value: unknown, schema: JsonSchemaNode): s
       v.forEach((item, i) => walk(item, s.items, `${path}[${i}]`));
     } else if (s.type === "string") {
       if (typeof v !== "string") violations.push(`${path}:not-string`);
-      else if (s.enum && !s.enum.includes(v)) violations.push(`${path}:not-in-enum`);
+      else {
+        if (s.pattern !== undefined && !new RegExp(s.pattern).test(v)) {
+          violations.push(`${path}:pattern`);
+        }
+        if (s.enum && !s.enum.includes(v)) violations.push(`${path}:not-in-enum`);
+      }
     } else if (s.type === "number") {
       if (typeof v !== "number") violations.push(`${path}:not-number`);
     } else if (s.type === "boolean") {

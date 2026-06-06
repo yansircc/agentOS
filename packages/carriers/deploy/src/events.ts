@@ -48,13 +48,6 @@ export interface DeployProjection {
 const stringField = (payload: Record<string, unknown>, key: string): string | undefined =>
   typeof payload[key] === "string" ? payload[key] : undefined;
 
-const SCHEME_SHAPED_REF = /^[a-z][a-z0-9+.-]*:\/\//i;
-
-const symbolicRefField = (payload: Record<string, unknown>, key: string): string | undefined => {
-  const value = stringField(payload, key);
-  return value === undefined || SCHEME_SHAPED_REF.test(value) ? undefined : value;
-};
-
 const livedClaimFrom = (value: unknown): LivedClaim | undefined => {
   const result = validateTerminalClaim(deploySettlementContract, value);
   return result.ok && result.claim.phase === "lived" ? result.claim : undefined;
@@ -67,7 +60,7 @@ const rejectedClaimFrom = (value: unknown): RejectedClaim | undefined => {
 
 const failureFrom = (payload: Record<string, unknown>): DeployFailedPayload | undefined => {
   const subjectRef = stringField(payload, "subjectRef");
-  const proofRef = symbolicRefField(payload, "proofRef");
+  const proofRef = stringField(payload, "proofRef");
   const reason = stringField(payload, "reason");
   const claim = rejectedClaimFrom(payload.claim);
   const step = payload.step;
@@ -109,8 +102,8 @@ export const projectDeploy = (
     if (event.payload.subjectRef !== subjectRef) continue;
     switch (event.kind) {
       case DEPLOY_KIND.PREVIEW_RECORDED: {
-        const nextPreviewRef = symbolicRefField(event.payload, "previewRef");
-        const nextArtifactRef = symbolicRefField(event.payload, "artifactRef");
+        const nextPreviewRef = stringField(event.payload, "previewRef");
+        const nextArtifactRef = stringField(event.payload, "artifactRef");
         if (
           livedClaimFrom(event.payload.claim) === undefined ||
           nextPreviewRef === undefined ||
@@ -125,8 +118,8 @@ export const projectDeploy = (
         break;
       }
       case DEPLOY_KIND.PRODUCTION_PROMOTED: {
-        const nextDeployRef = symbolicRefField(event.payload, "deployRef");
-        const nextProductionRef = symbolicRefField(event.payload, "productionRef");
+        const nextDeployRef = stringField(event.payload, "deployRef");
+        const nextProductionRef = stringField(event.payload, "productionRef");
         if (
           !hasPreview(previewRef, artifactRef) ||
           livedClaimFrom(event.payload.claim) === undefined ||
@@ -137,14 +130,14 @@ export const projectDeploy = (
         }
         deployRef = nextDeployRef;
         productionRef = nextProductionRef;
-        rollbackRef = symbolicRefField(event.payload, "rollbackRef");
+        rollbackRef = stringField(event.payload, "rollbackRef");
         status = "promoted";
         failure = undefined;
         break;
       }
       case DEPLOY_KIND.PRODUCTION_READBACK: {
-        const nextProductionRef = symbolicRefField(event.payload, "productionRef");
-        const nextReadbackRef = symbolicRefField(event.payload, "readbackRef");
+        const nextProductionRef = stringField(event.payload, "productionRef");
+        const nextReadbackRef = stringField(event.payload, "readbackRef");
         if (
           !hasPromotion(deployRef, productionRef) ||
           livedClaimFrom(event.payload.claim) === undefined ||
@@ -160,8 +153,8 @@ export const projectDeploy = (
         break;
       }
       case DEPLOY_KIND.ROLLBACK_RECORDED: {
-        const nextRollbackRef = symbolicRefField(event.payload, "rollbackRef");
-        const restoredDeployRef = symbolicRefField(event.payload, "restoredDeployRef");
+        const nextRollbackRef = stringField(event.payload, "rollbackRef");
+        const restoredDeployRef = stringField(event.payload, "restoredDeployRef");
         if (
           !hasPromotion(deployRef, productionRef) ||
           livedClaimFrom(event.payload.claim) === undefined ||

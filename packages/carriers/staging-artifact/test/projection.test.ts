@@ -1,6 +1,7 @@
 import {
   STAGING_KIND,
   projectStagingArtifact,
+  stagingArtifactCarrier,
   stagingArtifactBoundaryPackage,
   stagingArtifactSettlementRef,
   settleStagingArtifactLived,
@@ -78,33 +79,30 @@ describe("@agent-os/staging-artifact", () => {
     });
   });
 
-  it("does not project scheme-shaped artifact or route refs", () => {
-    const events = [
+  it("rejects URL-shaped staging refs at the carrier decode boundary", () => {
+    const cases = [
       {
-        id: 1,
-        kind: STAGING_KIND.ARTIFACT_PUBLISHED,
+        event: STAGING_KIND.ARTIFACT_PUBLISHED,
         payload: {
           subjectRef: "ch-url",
           artifactRef: "r2://staging/ch-url",
+          routeRef: stagingArtifactSettlementRef("route", "ch-url"),
+          digest: "sha256:bad",
+          claim: livedStagingClaim(stagingArtifactSettlementRef("artifact", "ch-url")),
+        },
+      },
+      {
+        event: STAGING_KIND.ARTIFACT_PUBLISHED,
+        payload: {
+          subjectRef: "ch-url",
+          artifactRef: stagingArtifactSettlementRef("artifact", "ch-url"),
           routeRef: "https://ch-url.staging.example",
           digest: "sha256:bad",
           claim: livedStagingClaim(stagingArtifactSettlementRef("artifact", "ch-url")),
         },
       },
       {
-        id: 2,
-        kind: STAGING_KIND.ARTIFACT_PUBLISHED,
-        payload: {
-          subjectRef: "ch-url",
-          artifactRef: stagingArtifactSettlementRef("artifact", "ch-url"),
-          routeRef: stagingArtifactSettlementRef("route", "ch-url"),
-          digest: "sha256:ok",
-          claim: livedStagingClaim(stagingArtifactSettlementRef("artifact", "ch-url")),
-        },
-      },
-      {
-        id: 3,
-        kind: STAGING_KIND.ARTIFACT_REAPED,
+        event: STAGING_KIND.ARTIFACT_REAPED,
         payload: {
           subjectRef: "ch-url",
           artifactRef: "r2://staging/ch-url",
@@ -114,14 +112,11 @@ describe("@agent-os/staging-artifact", () => {
       },
     ] as const;
 
-    expect(projectStagingArtifact(events, "ch-url")).toEqual({
-      subjectRef: "ch-url",
-      artifactRef: stagingArtifactSettlementRef("artifact", "ch-url"),
-      routeRef: stagingArtifactSettlementRef("route", "ch-url"),
-      digest: "sha256:ok",
-      status: "published",
-      reapedReason: undefined,
-    });
+    for (const { event, payload } of cases) {
+      expect(() => stagingArtifactCarrier.decode(event, payload)).toThrow(
+        /payload violates schema/,
+      );
+    }
   });
 
   it("defers staging.* facts through ExtensionCapability time()", async () => {

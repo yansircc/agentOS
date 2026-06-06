@@ -32,13 +32,6 @@ export interface StagingArtifactProjection {
 const stringField = (payload: Record<string, unknown>, key: string): string | undefined =>
   typeof payload[key] === "string" ? payload[key] : undefined;
 
-const SCHEME_SHAPED_REF = /^[a-z][a-z0-9+.-]*:\/\//i;
-
-const symbolicRefField = (payload: Record<string, unknown>, key: string): string | undefined => {
-  const value = stringField(payload, key);
-  return value === undefined || SCHEME_SHAPED_REF.test(value) ? undefined : value;
-};
-
 const livedClaimFrom = (value: unknown): LivedClaim | undefined => {
   const result = validateTerminalClaim(stagingArtifactSettlementContract, value);
   return result.ok && result.claim.phase === "lived" ? result.claim : undefined;
@@ -63,8 +56,8 @@ export const projectStagingArtifact = (
     if (livedClaimFrom(event.payload.claim) === undefined) continue;
     switch (event.kind) {
       case STAGING_KIND.ARTIFACT_PUBLISHED: {
-        const nextArtifactRef = symbolicRefField(event.payload, "artifactRef");
-        const nextRouteRef = symbolicRefField(event.payload, "routeRef");
+        const nextArtifactRef = stringField(event.payload, "artifactRef");
+        const nextRouteRef = stringField(event.payload, "routeRef");
         const nextDigest = stringField(event.payload, "digest");
         if (nextArtifactRef === undefined || nextRouteRef === undefined || nextDigest === undefined)
           break;
@@ -76,7 +69,7 @@ export const projectStagingArtifact = (
         break;
       }
       case STAGING_KIND.ARTIFACT_REAPED: {
-        const nextArtifactRef = symbolicRefField(event.payload, "artifactRef");
+        const nextArtifactRef = stringField(event.payload, "artifactRef");
         if (nextArtifactRef === undefined) break;
         artifactRef = nextArtifactRef;
         status = "reaped";

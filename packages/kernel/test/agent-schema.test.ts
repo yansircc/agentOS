@@ -105,6 +105,27 @@ describe("AgentSchema profile spike", () => {
     }),
   );
 
+  it("supports string pattern refinements as closed schema semantics", () => {
+    const symbolicRefPattern = "^[A-Za-z0-9_.:-]{1,128}$";
+    const source = Schema.Struct({
+      ref: Schema.String.pipe(Schema.pattern(new RegExp(symbolicRefPattern))),
+    });
+
+    expect(inspectAgentSchemaProfile(source)).toEqual([]);
+
+    const schema = defineAgentSchema(source);
+    expect(schema.jsonSchema).toEqual({
+      type: "object",
+      properties: {
+        ref: { type: "string", pattern: symbolicRefPattern },
+      },
+      required: ["ref"],
+      additionalProperties: false,
+    });
+    expect(schema.decode({ ref: "deploy:preview:1" })).toEqual({ ref: "deploy:preview:1" });
+    expect(() => schema.decode({ ref: "https://preview.example" })).toThrow();
+  });
+
   it.effect("treats title description and examples as non-semantic annotations", () =>
     Effect.gen(function* () {
       const plain = defineAgentSchema(Schema.Struct({ alpha: Schema.String }));

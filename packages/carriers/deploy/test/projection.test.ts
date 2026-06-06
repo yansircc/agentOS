@@ -1,6 +1,7 @@
 import {
   DEPLOY_EVENTS,
   DEPLOY_KIND,
+  deployCarrier,
   deployBoundaryPackage,
   deploySettlementRef,
   projectDeploy,
@@ -96,11 +97,10 @@ describe("@agent-os/deploy", () => {
     });
   });
 
-  it("does not project URL-shaped deploy refs from ledger payloads", () => {
-    const events = [
+  it("rejects URL-shaped deploy refs at the carrier decode boundary", () => {
+    const cases = [
       {
-        id: 1,
-        kind: DEPLOY_KIND.PREVIEW_RECORDED,
+        event: DEPLOY_KIND.PREVIEW_RECORDED,
         payload: {
           subjectRef: "ch-url",
           previewRef: "https://ch-url.staging.example",
@@ -109,18 +109,16 @@ describe("@agent-os/deploy", () => {
         },
       },
       {
-        id: 2,
-        kind: DEPLOY_KIND.PREVIEW_RECORDED,
+        event: DEPLOY_KIND.PREVIEW_RECORDED,
         payload: {
           subjectRef: "ch-url",
           previewRef: deploySettlementRef("preview", "ch-url"),
-          artifactRef: deploySettlementRef("artifact", "ch-url"),
+          artifactRef: "r2://deploy/ch-url",
           claim: livedDeployClaim(deploySettlementRef("preview", "ch-url")),
         },
       },
       {
-        id: 3,
-        kind: DEPLOY_KIND.PRODUCTION_PROMOTED,
+        event: DEPLOY_KIND.PRODUCTION_PROMOTED,
         payload: {
           subjectRef: "ch-url",
           deployRef: deploySettlementRef("version", "ch-url", "v1"),
@@ -128,19 +126,44 @@ describe("@agent-os/deploy", () => {
           claim: livedDeployClaim(deploySettlementRef("version", "ch-url", "v1")),
         },
       },
+      {
+        event: DEPLOY_KIND.PRODUCTION_READBACK,
+        payload: {
+          subjectRef: "ch-url",
+          productionRef: deploySettlementRef("production", "site"),
+          readbackRef: "https://site.example/readback",
+          status: "passed",
+          claim: livedDeployClaim(deploySettlementRef("readback", "ch-url")),
+        },
+      },
+      {
+        event: DEPLOY_KIND.ROLLBACK_RECORDED,
+        payload: {
+          subjectRef: "ch-url",
+          rollbackRef: "https://site.example/rollback",
+          restoredDeployRef: deploySettlementRef("version", "ch-url", "v1"),
+          claim: livedDeployClaim(deploySettlementRef("rollback", "ch-url")),
+        },
+      },
+      {
+        event: DEPLOY_KIND.FAILED,
+        payload: {
+          subjectRef: "ch-url",
+          step: "promote",
+          proofRef: "https://site.example/failure",
+          reason: "provider returned a URL",
+          claim: settleDeployRejected(deployClaim, {
+            proofRef: deploySettlementRef("failure", "ch-url"),
+            rejectionKind: "provider_rejected",
+            reason: "provider_returned_url",
+          }),
+        },
+      },
     ] as const;
 
-    expect(projectDeploy(events, "ch-url")).toEqual({
-      subjectRef: "ch-url",
-      previewRef: deploySettlementRef("preview", "ch-url"),
-      artifactRef: deploySettlementRef("artifact", "ch-url"),
-      deployRef: undefined,
-      productionRef: undefined,
-      readbackRef: undefined,
-      rollbackRef: undefined,
-      status: "previewed",
-      failure: undefined,
-    });
+    for (const { event, payload } of cases) {
+      expect(() => deployCarrier.decode(event, payload)).toThrow(/payload violates schema/);
+    }
   });
 
   it("does not promote production from a promotion without a preview", () => {

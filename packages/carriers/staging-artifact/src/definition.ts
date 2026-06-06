@@ -1,7 +1,11 @@
 import { Schema } from "effect";
 import { defineCarrier, event, ledgerProjection, lived } from "@agent-os/kernel/carrier";
+import { SYMBOLIC_SETTLEMENT_VALUE_PATTERN } from "@agent-os/kernel/settlement-contract";
 
 export const STAGING_EVENT_PREFIX = "staging.";
+const StagingSymbolicRef = Schema.String.pipe(
+  Schema.pattern(new RegExp(SYMBOLIC_SETTLEMENT_VALUE_PATTERN)),
+);
 
 export const stagingArtifactCarrier = defineCarrier({
   packageId: "@agent-os/staging-artifact",
@@ -12,8 +16,8 @@ export const stagingArtifactCarrier = defineCarrier({
       kind: "artifact.published",
       payload: Schema.Struct({
         subjectRef: Schema.String,
-        artifactRef: Schema.String,
-        routeRef: Schema.String,
+        artifactRef: StagingSymbolicRef,
+        routeRef: StagingSymbolicRef,
         digest: Schema.String,
       }),
       claim: lived({ key: "claim", anchorKinds: ["carrier_proof"] }),
@@ -22,7 +26,7 @@ export const stagingArtifactCarrier = defineCarrier({
       kind: "artifact.reaped",
       payload: Schema.Struct({
         subjectRef: Schema.String,
-        artifactRef: Schema.String,
+        artifactRef: StagingSymbolicRef,
         reason: Schema.Literal("published", "discarded", "expired"),
       }),
       claim: lived({ key: "claim", anchorKinds: ["carrier_proof"] }),

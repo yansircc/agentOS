@@ -1,7 +1,11 @@
 import { Schema } from "effect";
 import { defineCarrier, event, ledgerProjection, lived, rejected } from "@agent-os/kernel/carrier";
+import { SYMBOLIC_SETTLEMENT_VALUE_PATTERN } from "@agent-os/kernel/settlement-contract";
 
 export const DEPLOY_EVENT_PREFIX = "deploy.";
+const DeploySymbolicRef = Schema.String.pipe(
+  Schema.pattern(new RegExp(SYMBOLIC_SETTLEMENT_VALUE_PATTERN)),
+);
 
 export const deployCarrier = defineCarrier({
   packageId: "@agent-os/deploy",
@@ -12,8 +16,8 @@ export const deployCarrier = defineCarrier({
       kind: "preview.recorded",
       payload: Schema.Struct({
         subjectRef: Schema.String,
-        previewRef: Schema.String,
-        artifactRef: Schema.String,
+        previewRef: DeploySymbolicRef,
+        artifactRef: DeploySymbolicRef,
       }),
       claim: lived({ key: "claim", anchorKinds: ["carrier_proof", "external_receipt"] }),
     }),
@@ -21,9 +25,9 @@ export const deployCarrier = defineCarrier({
       kind: "production.promoted",
       payload: Schema.Struct({
         subjectRef: Schema.String,
-        deployRef: Schema.String,
-        productionRef: Schema.String,
-        rollbackRef: Schema.optional(Schema.String),
+        deployRef: DeploySymbolicRef,
+        productionRef: DeploySymbolicRef,
+        rollbackRef: Schema.optional(DeploySymbolicRef),
       }),
       claim: lived({ key: "claim", anchorKinds: ["carrier_proof", "external_receipt"] }),
     }),
@@ -31,8 +35,8 @@ export const deployCarrier = defineCarrier({
       kind: "production.readback",
       payload: Schema.Struct({
         subjectRef: Schema.String,
-        productionRef: Schema.String,
-        readbackRef: Schema.String,
+        productionRef: DeploySymbolicRef,
+        readbackRef: DeploySymbolicRef,
         status: Schema.Literal("passed", "failed"),
       }),
       claim: lived({ key: "claim", anchorKinds: ["carrier_proof", "external_receipt"] }),
@@ -41,8 +45,8 @@ export const deployCarrier = defineCarrier({
       kind: "rollback.recorded",
       payload: Schema.Struct({
         subjectRef: Schema.String,
-        rollbackRef: Schema.String,
-        restoredDeployRef: Schema.String,
+        rollbackRef: DeploySymbolicRef,
+        restoredDeployRef: DeploySymbolicRef,
       }),
       claim: lived({ key: "claim", anchorKinds: ["carrier_proof", "external_receipt"] }),
     }),
@@ -51,7 +55,7 @@ export const deployCarrier = defineCarrier({
       payload: Schema.Struct({
         subjectRef: Schema.String,
         step: Schema.Literal("preview", "promote", "readback", "rollback"),
-        proofRef: Schema.String,
+        proofRef: DeploySymbolicRef,
         reason: Schema.String,
       }),
       claim: rejected({

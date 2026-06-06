@@ -11,7 +11,8 @@ import {
 import { ANCHOR_KINDS, REJECTION_KINDS } from "./claim-kinds";
 import { isNonEmptyString } from "./string-guards";
 
-const SYMBOLIC_SETTLEMENT_VALUE = /^[A-Za-z0-9_.:-]{1,128}$/;
+export const SYMBOLIC_SETTLEMENT_VALUE_PATTERN = "^[A-Za-z0-9_.:-]{1,128}$";
+const SYMBOLIC_SETTLEMENT_VALUE = new RegExp(SYMBOLIC_SETTLEMENT_VALUE_PATTERN);
 const SYMBOLIC_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.:-";
 
 export interface SettlementContract {

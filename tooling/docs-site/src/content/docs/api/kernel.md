@@ -211,6 +211,7 @@ title: "@agent-os/kernel Public API Intent"
 - `./runtime-scope:resolveRuntimeScope`
 - `./runtime-scope:resolveStatefulSessionRoot`
 - `./runtime-scope:runtimeScopeKey`
+- `./settlement-contract:SYMBOLIC_SETTLEMENT_VALUE_PATTERN`
 - `./settlement-contract:SettlementContract`
 - `./settlement-contract:SettlementContractIssue`
 - `./settlement-contract:SettlementContractValidation`
@@ -224,6 +225,7 @@ title: "@agent-os/kernel Public API Intent"
 - `./settlement-contract:validateSettlementContract`
 - `./settlement-contract:validateTerminalClaim`
 - `.:InvalidTraceContext`
+- `.:SYMBOLIC_SETTLEMENT_VALUE_PATTERN`
 - `.:TRACE_CONTEXT_VERSION`
 - `.:TraceContextSchema`
 - `.:TraceContextValidation`
