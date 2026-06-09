@@ -105,6 +105,12 @@ interface DueWorkRow {
   readonly cancelReason: string | null;
 }
 
+interface DispatchRetryState {
+  readonly intent: LedgerEvent;
+  readonly deliveredCount: number;
+  readonly attemptCount: number;
+}
+
 interface ReservationState {
   readonly reservationId: string;
   readonly key: string;
@@ -800,34 +806,23 @@ export class NodePostgresBackend {
   }
 
   async #commitDispatchRetry(row: DueWorkRow, now: number): Promise<void> {
-    const [intent] = await this.#eventById(row.identity, row.payload.intentEventId);
-    if (intent === undefined) {
+    const state = await this.#dispatchRetryState(row.identity, row.payload.intentEventId);
+    if (state === null) {
       await this.#completeDue(row.id, now, row.claimToken);
       return;
     }
+    const { intent } = state;
     const parsed = parseRequestedPayloadValue(intent.payload);
     if (!parsed.ok) {
       await this.#completeDue(row.id, now, row.claimToken);
       return;
     }
     const requested = parsed.value;
-    const existingDelivered = (await this.#events(row.identity)).filter(
-      (event) =>
-        event.kind === DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED &&
-        recordOf(event.payload, DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED).outboundEventId ===
-          intent.id,
-    );
-    if (existingDelivered.length > 0) {
+    if (state.deliveredCount > 0) {
       await this.#completeDue(row.id, now, row.claimToken);
       return;
     }
-    const attempts =
-      (await this.#events(row.identity)).filter(
-        (event) =>
-          (event.kind === DISPATCH_EVENT_KINDS.OUTBOUND_FAILED ||
-            event.kind === DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED) &&
-          recordOf(event.payload, event.kind).outboundEventId === intent.id,
-      ).length + 1;
+    const attempts = state.attemptCount + 1;
     const bindingKey = materialRefKey(requested.target.bindingRef);
     const target = this.#targets.get(bindingKey);
     const envelope: DispatchEnvelope = {
@@ -1069,6 +1064,41 @@ export class NodePostgresBackend {
         AND id = ${sqlNumber(id)}
       ORDER BY id ASC
     `);
+  }
+
+  async #dispatchRetryState(
+    identity: BackendProtocolEventIdentity,
+    intentEventId: number,
+  ): Promise<DispatchRetryState | null> {
+    const rows = await this.#sql.json<{
+      readonly intent: LedgerEvent;
+      readonly deliveredCount: number;
+      readonly attemptCount: number;
+    }>(`
+      WITH intent AS (
+        ${eventRowSelect}
+        WHERE identity_key = ${sqlString(backendProtocolEventIdentityKey(identity))}
+          AND id = ${sqlNumber(intentEventId)}
+      ),
+      related AS (
+        SELECT kind
+        FROM agentos_events
+        WHERE identity_key = ${sqlString(backendProtocolEventIdentityKey(identity))}
+          AND kind = ANY(ARRAY[
+            ${sqlString(DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED)},
+            ${sqlString(DISPATCH_EVENT_KINDS.OUTBOUND_FAILED)}
+          ]::text[])
+          AND (payload ->> 'outboundEventId')::bigint = ${sqlNumber(intentEventId)}
+      )
+      SELECT
+        (SELECT row_to_json(intent) FROM intent) AS "intent",
+        (SELECT COUNT(*)::int FROM related WHERE kind = ${sqlString(
+          DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED,
+        )}) AS "deliveredCount",
+        (SELECT COUNT(*)::int FROM related) AS "attemptCount"
+    `);
+    const row = rows[0];
+    return row === undefined || row.intent === null ? null : row;
   }
 
   async #events(
