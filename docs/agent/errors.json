@@ -398,7 +398,7 @@
       "invariants": ["invariant.boundary.runtime-validation-external-only"],
       "docs": "docs/packages/tenant-material.md",
       "fix": "Configure tenant credential resolution before binding provider credentials to material refs.",
-      "sourceFiles": ["packages/carriers/tenant-material/src/index.ts"]
+      "sourceFiles": ["packages/providers/tenant-material/src/index.ts"]
     },
     {
       "tag": "agent_os.trigger_factory_error",

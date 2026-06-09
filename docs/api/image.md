@@ -12,7 +12,6 @@
 - `.:imageEventNamespace`
 - `.:imageJobIdempotencyKey`
 - `.:projectImageJobs`
-- `.:withImageResourceSettlement`
 
 ## Experimental exports
 

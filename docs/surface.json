@@ -236,7 +236,7 @@
     {
       "slug": "tenant-material",
       "name": "@agent-os/tenant-material",
-      "path": "packages/carriers/tenant-material",
+      "path": "packages/providers/tenant-material",
       "status": "0.2.x experimental",
       "role": "encrypted tenant credential records to execution-time material",
       "boundary": "encrypted credential records to execution-time material",
@@ -511,6 +511,19 @@
       "published": true,
       "apiSource": "docs/api/image.md",
       "apiStatus": "Optional package. It is not part of a freeze surface."
+    },
+    {
+      "slug": "image-resource-settlement",
+      "name": "@agent-os/image-resource-settlement",
+      "path": "packages/providers/image-resource-settlement",
+      "status": "provider helper",
+      "role": "Effect resource settlement wrapper for image provider calls",
+      "boundary": "provider-side Effect helper for resource consume/release; image carrier owns only vocabulary and projections",
+      "need": "Image resource settlement helper",
+      "readmeStatus": "Provider helper package. It keeps Effect resource settlement outside the image carrier vocabulary package.",
+      "published": true,
+      "apiSource": "docs/api/image-resource-settlement.md",
+      "apiStatus": "Provider helper package. Public exports are limited to image resource settlement wrapping."
     },
     {
       "slug": "ops-api",

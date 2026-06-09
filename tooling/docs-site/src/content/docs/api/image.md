@@ -16,7 +16,6 @@ title: "@agent-os/image Public API Intent"
 - `.:imageEventNamespace`
 - `.:imageJobIdempotencyKey`
 - `.:projectImageJobs`
-- `.:withImageResourceSettlement`
 
 ## Experimental exports
 

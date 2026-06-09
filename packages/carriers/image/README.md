@@ -4,7 +4,7 @@
 
 ## Purpose
 
-Optional image event namespace, idempotency, settlement, and projection helpers.
+Optional image event namespace, idempotency, and projection helpers.
 
 ## Public API Status
 
@@ -20,6 +20,9 @@ adapters stay outside this carrier unless reduced to explicit refs.
 
 Use the package when an app needs to reserve image.\* events or derive image job
 state from ledger events without putting provider vocabulary into core.
+
+Use `@agent-os/image-resource-settlement` for Effect-based resource settlement
+wrapping around provider calls.
 
 ## Verification
 

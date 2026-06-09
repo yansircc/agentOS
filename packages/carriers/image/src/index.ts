@@ -10,4 +10,3 @@
 export * from "./extension";
 export * from "./events";
 export * from "./idempotency";
-export * from "./settlement";

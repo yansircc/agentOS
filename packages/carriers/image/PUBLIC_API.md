@@ -16,7 +16,6 @@ Status: Optional package. It is not part of a freeze surface.
 - `.:imageEventNamespace`
 - `.:imageJobIdempotencyKey`
 - `.:projectImageJobs`
-- `.:withImageResourceSettlement`
 
 ## Experimental exports
 

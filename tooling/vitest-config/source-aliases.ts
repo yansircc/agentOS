@@ -35,7 +35,7 @@ export const agentOsSourceAliasSpecs = [
   ["@agent-os/resource-carrier", "packages/carriers/resource/src/index.ts"],
   ["@agent-os/sandbox", "packages/execution-domains/sandbox/src/index.ts"],
   ["@agent-os/staging-artifact", "packages/carriers/staging-artifact/src/index.ts"],
-  ["@agent-os/tenant-material", "packages/carriers/tenant-material/src/index.ts"],
+  ["@agent-os/tenant-material", "packages/providers/tenant-material/src/index.ts"],
   ["@agent-os/verification", "packages/carriers/verification/src/index.ts"],
   ["@agent-os/workspace-session", "packages/carriers/workspace-session/src/index.ts"],
   ["@agent-os/attached-stream", "packages/composers/attached-stream/src/index.ts"],
@@ -50,6 +50,10 @@ export const agentOsSourceAliasSpecs = [
   ["@agent-os/dynamic-worker", "packages/providers/dynamic-worker/src/index.ts"],
   ["@agent-os/llm-transport-effect-ai", "packages/providers/llm-transport-effect-ai/src/index.ts"],
   ["@agent-os/llm-transport-http", "packages/providers/llm-transport-http/src/index.ts"],
+  [
+    "@agent-os/image-resource-settlement",
+    "packages/providers/image-resource-settlement/src/index.ts",
+  ],
   ["@agent-os/resource-cloudflare", "packages/providers/resource-cloudflare/src/index.ts"],
   ["@agent-os/sandbox-cloudflare", "packages/execution-domains/sandbox-cloudflare/src/index.ts"],
   [
