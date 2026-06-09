@@ -13,6 +13,7 @@ export * from "./run-projector";
 export * from "./scheduler";
 export * from "./structured-output";
 export * from "./submit-agent";
+export * from "./telemetry-tree";
 export {
   settleToolAdmissionRejected,
   settleToolExecuted,

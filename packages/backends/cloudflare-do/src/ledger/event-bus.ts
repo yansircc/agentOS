@@ -14,6 +14,7 @@ import { backendProtocolTruthIdentityKey } from "@agent-os/backend-protocol";
 import { Context, Effect, Layer } from "effect";
 import type { EventHandler } from "@agent-os/kernel/types";
 import { fireBackendEventHandlers } from "@agent-os/backend-protocol/reference";
+import type { TelemetryFanoutDiagnostic } from "@agent-os/telemetry-protocol";
 
 export interface EventBusSubscription {
   readonly unsubscribe: () => void;
@@ -24,18 +25,10 @@ interface EventBusSink {
   readonly sink: (event: LedgerEvent) => void;
 }
 
-export interface EventBusFanoutDiagnostic {
-  readonly phase: "sink";
-  readonly eventId: number;
-  readonly kind: string;
-  readonly identityKey: string;
-  readonly message: string;
-}
-
 export interface EventBusService {
   readonly fire: (event: LedgerEvent) => Effect.Effect<void>;
   readonly fireMany: (events: ReadonlyArray<LedgerEvent>) => Effect.Effect<void>;
-  readonly fanoutDiagnostics: () => ReadonlyArray<EventBusFanoutDiagnostic>;
+  readonly telemetryDiagnostics: () => ReadonlyArray<TelemetryFanoutDiagnostic>;
   readonly subscribe: (opts: {
     readonly kinds?: ReadonlyArray<string>;
     readonly sink: (event: LedgerEvent) => void;
@@ -52,9 +45,9 @@ const describeFanoutCause = (cause: unknown): string => {
 
 export const EventBusLive = (handlers: Map<string, Set<EventHandler>>): Layer.Layer<EventBus> => {
   const sinks = new Set<EventBusSink>();
-  const diagnostics: EventBusFanoutDiagnostic[] = [];
+  const diagnostics: TelemetryFanoutDiagnostic[] = [];
   const service: EventBusService = {
-    fanoutDiagnostics: () => [...diagnostics],
+    telemetryDiagnostics: () => [...diagnostics],
     subscribe: (opts) => {
       const subscription: EventBusSink = {
         ...(opts.kinds === undefined || opts.kinds.length === 0

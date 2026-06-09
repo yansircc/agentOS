@@ -145,6 +145,7 @@ title: "@agent-os/runtime Public API Intent"
 - `.:projectRunTrace`
 - `.:projectRunsPage`
 - `.:projectSubmitResult`
+- `.:projectTelemetryEventTree`
 - `.:projectionDelete`
 - `.:projectionFail`
 - `.:projectionIdentity`

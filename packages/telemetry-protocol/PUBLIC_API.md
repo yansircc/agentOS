@@ -18,8 +18,15 @@ Status: Telemetry protocol package. Public exports are limited to trace context 
 - `.:InvalidTraceContext`
 - `.:TelemetryEmitKind`
 - `.:TelemetryAttributeValue`
+- `.:TelemetryDiagnosticPhase`
+- `.:TelemetryFanoutDiagnostic`
 - `.:TelemetryEventNode`
 - `.:TelemetryEventTree`
+- `.:TelemetryService`
+- `.:Telemetry`
+- `.:canonicalizeTelemetryEventTree`
+- `.:canonicalTelemetryEventTreeJson`
+- `.:telemetryEventTreesEqual`
 
 ## Experimental exports
 

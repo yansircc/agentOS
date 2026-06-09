@@ -105,7 +105,7 @@ const makeInMemoryContractDriver = (): RuntimeBackendContractDriver => {
     addHandler: (kind, handler) =>
       state.addHandler(kind, (event) => Promise.resolve(handler(event))),
     addSink: (_scope, kind, sink) => state.subscribe({ kinds: [kind], sink }),
-    fanoutDiagnostics: () => state.fanoutDiagnostics(),
+    telemetryDiagnostics: () => state.telemetryDiagnostics(),
     log: async (identity, kind, payload) => {
       const handle = runtime(identity);
       const ledger = await handle.runPromise(Ledger);

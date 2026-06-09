@@ -896,7 +896,7 @@ const MaterializedProjectionBaseDO = defineAgentDO<CloudflareAgentEnv>({
 const silentEventBus = {
   fire: () => Effect.void,
   fireMany: () => Effect.void,
-  fanoutDiagnostics: () => [],
+  telemetryDiagnostics: () => [],
   subscribe: () => ({ unsubscribe: () => undefined }),
 } satisfies EventBusService;
 

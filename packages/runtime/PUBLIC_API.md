@@ -145,6 +145,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:projectRunTrace`
 - `.:projectRunsPage`
 - `.:projectSubmitResult`
+- `.:projectTelemetryEventTree`
 - `.:projectionDelete`
 - `.:projectionFail`
 - `.:projectionIdentity`

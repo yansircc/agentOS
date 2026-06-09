@@ -46,6 +46,7 @@ import {
   UnregisteredProjectionKind,
 } from "@agent-os/runtime";
 import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
+import type { TelemetryFanoutDiagnostic } from "@agent-os/telemetry-protocol";
 import {
   authorityRefKey,
   scopeRefKey,
@@ -96,14 +97,6 @@ export interface InMemoryEventContentSpec {
 interface EventSink {
   readonly kinds?: ReadonlySet<string>;
   readonly sink: (event: LedgerEvent) => void;
-}
-
-interface InMemoryFanoutDiagnostic {
-  readonly phase: "sink";
-  readonly eventId: number;
-  readonly kind: string;
-  readonly identityKey: string;
-  readonly message: string;
 }
 
 interface InMemoryDueWorkRow {
@@ -279,7 +272,7 @@ export class InMemoryBackendState {
   private readonly rowsByTruthIdentityKey = new Map<string, LedgerEvent[]>();
   private readonly rowsByEventIdentityKey = new Map<string, LedgerEvent[]>();
   private readonly sinks = new Set<EventSink>();
-  private readonly fanoutDiagnosticsLog: InMemoryFanoutDiagnostic[] = [];
+  private readonly telemetryDiagnosticsLog: TelemetryFanoutDiagnostic[] = [];
   private readonly handlers = new Map<string, Set<EventHandler>>();
   private readonly dueWork: InMemoryDueWorkRow[] = [];
   private readonly outbox = new Map<number, DispatchOutboxRow>();
@@ -652,8 +645,8 @@ export class InMemoryBackendState {
     };
   }
 
-  fanoutDiagnostics(): ReadonlyArray<InMemoryFanoutDiagnostic> {
-    return [...this.fanoutDiagnosticsLog];
+  telemetryDiagnostics(): ReadonlyArray<TelemetryFanoutDiagnostic> {
+    return [...this.telemetryDiagnosticsLog];
   }
 
   snapshot(
@@ -1284,7 +1277,7 @@ export class InMemoryBackendState {
             try {
               subscription.sink(event);
             } catch (cause) {
-              this.fanoutDiagnosticsLog.push({
+              this.telemetryDiagnosticsLog.push({
                 phase: "sink",
                 eventId: event.id,
                 kind: event.kind,

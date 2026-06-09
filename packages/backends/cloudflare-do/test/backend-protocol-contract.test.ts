@@ -19,9 +19,9 @@ import { makeInMemoryDurableObjectState } from "./_in-memory-do";
 import {
   runRuntimeBackendContractSuite,
   type ContractDispatchReceiver,
-  type RuntimeBackendFanoutDiagnostic,
   type RuntimeBackendContractDriver,
 } from "../../protocol/test/contract/runtime-backend-contract";
+import type { TelemetryFanoutDiagnostic } from "@agent-os/telemetry-protocol";
 
 const bindingRef = bindingMaterialRef({
   provider: "cloudflare",
@@ -130,11 +130,11 @@ const makeCloudflareDoContractDriver = (): RuntimeBackendContractDriver => {
       const bus = await runtimeFor(identity).runPromise(EventBus);
       return bus.subscribe({ kinds: [kind], sink });
     },
-    fanoutDiagnostics: async () => {
-      const diagnostics: RuntimeBackendFanoutDiagnostic[] = [];
+    telemetryDiagnostics: async () => {
+      const diagnostics: TelemetryFanoutDiagnostic[] = [];
       for (const handle of runtimes.values()) {
         const bus = await handle.runPromise(EventBus);
-        diagnostics.push(...bus.fanoutDiagnostics());
+        diagnostics.push(...bus.telemetryDiagnostics());
       }
       return diagnostics;
     },

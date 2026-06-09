@@ -1,4 +1,4 @@
-import { Data, Either, Schema } from "effect";
+import { Context, Data, Effect, Either, Schema } from "effect";
 
 export const TRACE_CONTEXT_VERSION = "w3c-trace-context-v1";
 
@@ -99,6 +99,21 @@ export type TelemetryEmitKind =
 
 export type TelemetryAttributeValue = string | number | boolean | null;
 
+export type TelemetryDiagnosticPhase =
+  | "sink"
+  | "handler"
+  | "projection"
+  | "dispatch"
+  | (string & {});
+
+export interface TelemetryFanoutDiagnostic {
+  readonly phase: TelemetryDiagnosticPhase;
+  readonly eventId: number;
+  readonly kind: string;
+  readonly identityKey: string;
+  readonly message: string;
+}
+
 export interface TelemetryEventNode {
   readonly id: string;
   readonly parentId?: string;
@@ -107,9 +122,109 @@ export interface TelemetryEventNode {
   readonly at?: number;
   readonly traceContext?: TraceContext;
   readonly ledgerEventId?: number;
+  readonly sourceEventIds?: ReadonlyArray<number>;
   readonly attributes?: Readonly<Record<string, TelemetryAttributeValue>>;
 }
 
 export interface TelemetryEventTree {
   readonly nodes: ReadonlyArray<TelemetryEventNode>;
 }
+
+export interface TelemetryService {
+  readonly emit: (node: TelemetryEventNode) => Effect.Effect<void>;
+  readonly eventTree: () => Effect.Effect<TelemetryEventTree>;
+}
+
+export class Telemetry extends Context.Tag("@agent-os/Telemetry")<Telemetry, TelemetryService>() {}
+
+const volatileTelemetryAttributeKeys = new Set([
+  "agentos.backend.host_id",
+  "agentos.backend.instance_id",
+  "agentos.duration_ms",
+  "agentos.generated.span_id",
+  "agentos.span.id",
+  "duration_ms",
+  "host.id",
+  "span.id",
+]);
+
+const compareString = (left: string, right: string): number => (left < right ? -1 : left > right ? 1 : 0);
+
+const compareNumbers = (left: number | undefined, right: number | undefined): number => {
+  if (left === undefined && right === undefined) return 0;
+  if (left === undefined) return 1;
+  if (right === undefined) return -1;
+  return left - right;
+};
+
+const firstSourceEventId = (node: TelemetryEventNode): number | undefined =>
+  node.ledgerEventId ?? node.sourceEventIds?.[0];
+
+const telemetryNodeSortKey = (node: TelemetryEventNode): string =>
+  [
+    firstSourceEventId(node) ?? Number.MAX_SAFE_INTEGER,
+    node.emitKind,
+    node.name,
+    node.id,
+  ].join("\u0000");
+
+const sortedAttributes = (
+  attributes: Readonly<Record<string, TelemetryAttributeValue>> | undefined,
+): Readonly<Record<string, TelemetryAttributeValue>> | undefined => {
+  if (attributes === undefined) return undefined;
+  const entries = Object.entries(attributes)
+    .filter(([key]) => !volatileTelemetryAttributeKeys.has(key))
+    .sort(([left], [right]) => compareString(left, right));
+  if (entries.length === 0) return undefined;
+  return Object.fromEntries(entries);
+};
+
+const sortedSourceEventIds = (
+  sourceEventIds: ReadonlyArray<number> | undefined,
+): ReadonlyArray<number> | undefined =>
+  sourceEventIds === undefined
+    ? undefined
+    : [...sourceEventIds].sort((left, right) => left - right);
+
+export const canonicalizeTelemetryEventTree = (
+  tree: TelemetryEventTree,
+): TelemetryEventTree => {
+  const ordered = tree.nodes
+    .map((node, index) => ({ node, index }))
+    .sort((left, right) => {
+      const source = compareNumbers(firstSourceEventId(left.node), firstSourceEventId(right.node));
+      if (source !== 0) return source;
+      const semantic = compareString(telemetryNodeSortKey(left.node), telemetryNodeSortKey(right.node));
+      return semantic === 0 ? left.index - right.index : semantic;
+    });
+  const ids = new Map<string, string>();
+  for (const [index, entry] of ordered.entries()) {
+    ids.set(entry.node.id, `telemetry-node:${index + 1}`);
+  }
+  return {
+    nodes: ordered.map(({ node }) => {
+      const attributes = sortedAttributes(node.attributes);
+      const sourceEventIds = sortedSourceEventIds(node.sourceEventIds);
+      return {
+        id: ids.get(node.id) ?? node.id,
+        ...(node.parentId === undefined
+          ? {}
+          : { parentId: ids.get(node.parentId) ?? node.parentId }),
+        emitKind: node.emitKind,
+        name: node.name,
+        ...(node.traceContext === undefined ? {} : { traceContext: copyTraceContext(node.traceContext) }),
+        ...(node.ledgerEventId === undefined ? {} : { ledgerEventId: node.ledgerEventId }),
+        ...(sourceEventIds === undefined ? {} : { sourceEventIds }),
+        ...(attributes === undefined ? {} : { attributes }),
+      };
+    }),
+  };
+};
+
+export const canonicalTelemetryEventTreeJson = (tree: TelemetryEventTree): string =>
+  JSON.stringify(canonicalizeTelemetryEventTree(tree));
+
+export const telemetryEventTreesEqual = (
+  left: TelemetryEventTree,
+  right: TelemetryEventTree,
+): boolean => canonicalTelemetryEventTreeJson(left) === canonicalTelemetryEventTreeJson(right);

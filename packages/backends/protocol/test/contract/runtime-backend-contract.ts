@@ -6,7 +6,7 @@ import type {
   ResourceReserveResult,
   ResourceReserveSpec,
 } from "@agent-os/kernel/types";
-import type { TraceContext } from "@agent-os/telemetry-protocol";
+import type { TelemetryFanoutDiagnostic, TraceContext } from "@agent-os/telemetry-protocol";
 import { Effect } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import {
@@ -38,14 +38,6 @@ export type ContractDispatchTargetAdapter = (
   envelope: DispatchEnvelope,
 ) => Promise<DispatchDeliveryResult>;
 
-export interface RuntimeBackendFanoutDiagnostic {
-  readonly phase: "sink";
-  readonly eventId: number;
-  readonly kind: string;
-  readonly identityKey: string;
-  readonly message: string;
-}
-
 export interface RuntimeBackendDispatchSpec {
   readonly target: BackendProtocolDispatchTarget;
   readonly event: string;
@@ -72,9 +64,9 @@ export interface RuntimeBackendContractDriver {
     kind: string,
     sink: (event: LedgerEvent) => void,
   ) => { readonly unsubscribe: () => void } | void | Promise<{ readonly unsubscribe: () => void }>;
-  readonly fanoutDiagnostics: () =>
-    | ReadonlyArray<RuntimeBackendFanoutDiagnostic>
-    | Promise<ReadonlyArray<RuntimeBackendFanoutDiagnostic>>;
+  readonly telemetryDiagnostics: () =>
+    | ReadonlyArray<TelemetryFanoutDiagnostic>
+    | Promise<ReadonlyArray<TelemetryFanoutDiagnostic>>;
   readonly log: (
     identity: BackendProtocolEventIdentity,
     kind: string,
@@ -751,7 +743,7 @@ export const runRuntimeBackendContractSuite = (
             event,
           ]);
 
-          const diagnostics = yield* promise(() => driver.fanoutDiagnostics());
+          const diagnostics = yield* promise(() => driver.telemetryDiagnostics());
           expect(
             diagnostics.some(
               (entry) =>

@@ -141,6 +141,7 @@
 - `.:projectRunTrace`
 - `.:projectRunsPage`
 - `.:projectSubmitResult`
+- `.:projectTelemetryEventTree`
 - `.:projectionDelete`
 - `.:projectionFail`
 - `.:projectionIdentity`

@@ -45,7 +45,7 @@ const deadTargets: DispatchTargetRegistry = {
 const noOpBus: EventBusService = {
   fire: () => Effect.void,
   fireMany: () => Effect.void,
-  fanoutDiagnostics: () => [],
+  telemetryDiagnostics: () => [],
   subscribe: () => ({ unsubscribe: () => undefined }),
 };
 

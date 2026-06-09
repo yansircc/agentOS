@@ -14,8 +14,15 @@
 - `.:InvalidTraceContext`
 - `.:TelemetryEmitKind`
 - `.:TelemetryAttributeValue`
+- `.:TelemetryDiagnosticPhase`
+- `.:TelemetryFanoutDiagnostic`
 - `.:TelemetryEventNode`
 - `.:TelemetryEventTree`
+- `.:TelemetryService`
+- `.:Telemetry`
+- `.:canonicalizeTelemetryEventTree`
+- `.:canonicalTelemetryEventTreeJson`
+- `.:telemetryEventTreesEqual`
 
 ## Experimental exports
 
