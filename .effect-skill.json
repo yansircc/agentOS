@@ -278,6 +278,12 @@
       "rules": ["EFF402"]
     },
     {
+      "path": "packages/transports/sse-http/src/index.ts",
+      "owner": "@agent-os/sse-http/web-fetch-transport",
+      "reason": "terminal SSE-over-HTTP transport adapter owns Web Fetch Response construction and async iterator pumping from composer-owned frame codecs",
+      "rules": ["EFF001", "EFF002", "EFF003", "EFF004", "EFF402"]
+    },
+    {
       "path": "packages/backends/cloudflare-do/src/storage/sql-row.ts",
       "owner": "@agent-os/backend-cloudflare-do-storage",
       "reason": "SQLite row adapter owns fail-fast host column shape assertion",
