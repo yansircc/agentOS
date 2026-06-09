@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Schema } from "effect";
+import { Effect, Schema } from "effect";
 import { defineAgentSchema } from "@agent-os/kernel/agent-schema";
 import { materialRequirement } from "@agent-os/kernel/material-ref";
 import {
@@ -42,7 +42,7 @@ describe("tool registry construction", () => {
           parameters: defineAgentSchema(Schema.Struct({})),
         },
       },
-      execute: () => Promise.resolve({ value: 42 }),
+      execute: () => Effect.succeed({ value: 42 }),
     } as unknown as Tool;
 
     expect(validateToolRegistry({ lookup: bareTool })).toEqual({
@@ -118,7 +118,7 @@ describe("tool registry construction", () => {
       name: "deploy",
       description: "Deploy a worker",
       args: Schema.Struct({}),
-      execute: () => Promise.resolve({ ok: true }),
+      execute: () => Effect.succeed({ ok: true }),
       admit: allowToolAdmitter,
       authority: "deploy",
       execution: pureToolExecution(),
@@ -195,7 +195,7 @@ describe("tool registry construction", () => {
         name: "lookup",
         description: "Lookup a value",
         args: Schema.Struct({}),
-        execute: () => Promise.resolve({ value: 42 }),
+        execute: () => Effect.succeed({ value: 42 }),
         authority: "read",
         execution: pureToolExecution(),
       } as never),

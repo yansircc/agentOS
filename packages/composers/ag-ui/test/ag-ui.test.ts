@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Effect, Schema } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import { defineTool, pureToolExecution } from "@agent-os/kernel/tools";
 import { makePreClaim } from "@agent-os/kernel/effect-claim";
@@ -120,8 +120,8 @@ const transcript = (): ReadonlyArray<LedgerEvent> => [
           args: Schema.Struct({ city: Schema.String }),
           authority: "tool",
           execution: pureToolExecution(),
-          admit: () => ({ ok: true }),
-          execute: () => ({ temperature: 71 }),
+          admit: () => Effect.succeed({ ok: true }),
+          execute: () => Effect.succeed({ temperature: 71 }),
         }).contract,
       ),
     }),
@@ -635,8 +635,8 @@ describe("@agent-os/ag-ui", () => {
       args: Schema.Struct({ city: Schema.String }),
       authority: "tool",
       execution: pureToolExecution(),
-      admit: () => ({ ok: true }),
-      execute: () => ({ temperature: 71 }),
+      admit: () => Effect.succeed({ ok: true }),
+      execute: () => Effect.succeed({ temperature: 71 }),
     });
     expect(projectToolToAgUiTool(tool)).toEqual({
       name: "lookup",

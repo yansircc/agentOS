@@ -292,9 +292,10 @@ describe("submit-agent runtime event writes", () => {
         name: "lookup",
         description: "lookup",
         args: Schema.Struct({ q: Schema.String }),
-        execute: () => ({ ok: true }),
+        execute: () => Effect.succeed({ ok: true }),
         authority: "read",
-        admit: () => ({
+        admit: () =>
+          Effect.succeed({
           ok: false,
           rejectionRef: {
             rejectionId: "lookup-denied",
@@ -345,7 +346,7 @@ describe("submit-agent runtime event writes", () => {
         args: Schema.Struct({ title: Schema.String }),
         execute: (_args, ctx) => {
           observedToken = ctx.materials.wp_token;
-          return { applied: true };
+          return Effect.succeed({ applied: true });
         },
         authority: "write",
         requiredMaterials: [
@@ -356,7 +357,7 @@ describe("submit-agent runtime event writes", () => {
             purpose: "apply",
           }),
         ],
-        admit: () => ({ ok: true }),
+        admit: () => Effect.succeed({ ok: true }),
         execution: pureToolExecution(),
       });
 
@@ -411,7 +412,7 @@ describe("submit-agent runtime event writes", () => {
         args: Schema.Struct({ title: Schema.String }),
         execute: () => {
           executed = true;
-          return { applied: true };
+          return Effect.succeed({ applied: true });
         },
         authority: "write",
         requiredMaterials: [
@@ -422,7 +423,7 @@ describe("submit-agent runtime event writes", () => {
             purpose: "apply",
           }),
         ],
-        admit: () => ({ ok: true }),
+        admit: () => Effect.succeed({ ok: true }),
         execution: pureToolExecution(),
       });
 
@@ -464,10 +465,10 @@ describe("submit-agent runtime event writes", () => {
         args: Schema.Struct({ title: Schema.String }),
         execute: () => {
           executed += 1;
-          return { ok: true };
+          return Effect.succeed({ ok: true });
         },
         authority: "write",
-        admit: () => ({ ok: true }),
+        admit: () => Effect.succeed({ ok: true }),
         execution: pureToolExecution(),
       });
 
@@ -531,10 +532,10 @@ describe("submit-agent runtime event writes", () => {
         args: Schema.Struct({ title: Schema.String }),
         execute: () => {
           executed += 1;
-          return { applied: true };
+          return Effect.succeed({ applied: true });
         },
         authority: "write",
-        admit: () => ({ ok: true }),
+        admit: () => Effect.succeed({ ok: true }),
         execution: pureToolExecution(),
       });
       const services = makeServices([
@@ -639,10 +640,10 @@ describe("submit-agent runtime event writes", () => {
         args: Schema.Struct({ title: Schema.String }),
         execute: () => {
           executed += 1;
-          return { applied: true };
+          return Effect.succeed({ applied: true });
         },
         authority: "write",
-        admit: () => ({ ok: true }),
+        admit: () => Effect.succeed({ ok: true }),
         execution: pureToolExecution(),
       });
       const services = makeServices([
@@ -711,19 +712,15 @@ describe("submit-agent runtime event writes", () => {
     }),
   );
 
-  it.effect("propagates trace context through LLM request, tool context, and runtime facts", () =>
+  it.effect("propagates trace context through LLM request and runtime facts only", () =>
     Effect.gen(function* () {
-      let toolTraceContext: unknown;
       const tool = defineTool({
         name: "lookup",
         description: "lookup",
         args: Schema.Struct({ q: Schema.String }),
-        execute: (_args, ctx) => {
-          toolTraceContext = ctx.traceContext;
-          return { ok: true };
-        },
+        execute: () => Effect.succeed({ ok: true }),
         authority: "read",
-        admit: () => ({ ok: true }),
+        admit: () => Effect.succeed({ ok: true }),
         execution: pureToolExecution(),
       });
 
@@ -750,7 +747,6 @@ describe("submit-agent runtime event writes", () => {
       expect(result).toMatchObject({ ok: true });
       expect(llmRequests[0]?.traceContext).toEqual(traceContext);
       expect(llmRequests[1]?.traceContext).toEqual(traceContext);
-      expect(toolTraceContext).toEqual(traceContext);
       const runtimePayloads = events.flatMap((event) => {
         const decoded = decodeRuntimeLedgerEvent(event);
         return decoded._tag === "runtime" ? [decoded.event.payload] : [];

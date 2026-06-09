@@ -1,4 +1,5 @@
 import { Clock, Effect, Option, Schema } from "effect";
+import { ToolError } from "@agent-os/kernel/errors";
 import { defineTool, effectfulToolExecution, type Tool } from "@agent-os/kernel/tools";
 
 import { failureToToolResult, truncateUtf8 } from "./output";
@@ -77,9 +78,12 @@ export const makeSandboxRunTool = (
       kind: "sandbox",
       ref: options.authorityId ?? options.name ?? "sandbox_run",
     }),
-    execute: (args) => {
-      const request = requestFromToolArgs(args, { timeoutMs, maxOutputBytes, network });
-      const program = Effect.gen(function* () {
+    execute: (args) =>
+      Effect.gen(function* () {
+        const request = yield* Effect.try({
+          try: () => requestFromToolArgs(args, { timeoutMs, maxOutputBytes, network }),
+          catch: (cause) => new ToolError({ toolName: options.name ?? "sandbox_run", cause }),
+        });
         const started = yield* Clock.currentTimeMillis;
         const result = yield* runSandbox(options.backend, options.policy, request).pipe(
           Effect.either,
@@ -103,8 +107,6 @@ export const makeSandboxRunTool = (
           durationMs: result.right.durationMs,
           sandboxId: result.right.sandboxId,
         } satisfies SandboxToolResult;
-      });
-      return Effect.runPromise(program); // eff-ignore EFF400 reason="Tool.execute is the public Promise adapter for this library; not a process runMain edge"
-    },
+      }),
   });
 };

@@ -1123,9 +1123,9 @@ export const submitAgentEffect = (
             });
           }
 
-          const admission = yield* Effect.tryPromise({
-            try: () =>
-              Promise.resolve(
+          const admissionProgram = yield* Effect.either(
+            Effect.try({
+              try: () =>
                 tool.admit({
                   claim,
                   args,
@@ -1133,16 +1133,23 @@ export const submitAgentEffect = (
                   execution: tool.execution,
                   toolName: call.function.name,
                 }),
-              ),
-            catch: (cause): RejectionRef => admitterErrorRejectionRef(claim, cause),
-          }).pipe(
-            Effect.catchAll((rejectionRef) =>
-              Effect.succeed({
-                ok: false as const,
-                rejectionRef,
-              }),
-            ),
+              catch: (cause): RejectionRef => admitterErrorRejectionRef(claim, cause),
+            }),
           );
+          const admission =
+            admissionProgram._tag === "Left"
+              ? {
+                  ok: false as const,
+                  rejectionRef: admissionProgram.left,
+                }
+              : yield* admissionProgram.right.pipe(
+                  Effect.catchAll((cause) =>
+                    Effect.succeed({
+                      ok: false as const,
+                      rejectionRef: admitterErrorRejectionRef(claim, cause),
+                    }),
+                  ),
+                );
           const normalizedAdmission = normalizeAdmitVerdict(claim, admission);
           const rejectedAdmission =
             normalizedAdmission.ok === false ? normalizedAdmission.rejectionRef : null;
@@ -1234,7 +1241,6 @@ export const submitAgentEffect = (
                   tool,
                   args,
                   call.function.name,
-                  traceContext,
                   resolvedMaterials.materials,
                 );
               });

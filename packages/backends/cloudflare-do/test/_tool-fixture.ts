@@ -1,14 +1,14 @@
-import { Schema } from "effect";
+import { Effect, Schema } from "effect";
 import { defineTool, pureToolExecution, type Tool } from "@agent-os/kernel/tools";
 
-export const allowToolAdmitter = () => ({ ok: true as const });
+export const allowToolAdmitter = () => Effect.succeed({ ok: true as const });
 
 export const makeLookupTool = (): Tool =>
   defineTool({
     name: "lookup",
     description: "Lookup a value",
     args: Schema.Struct({}),
-    execute: () => Promise.resolve({ value: 42 }),
+    execute: () => Effect.succeed({ value: 42 }),
     admit: allowToolAdmitter,
     authority: "read",
     execution: pureToolExecution(),

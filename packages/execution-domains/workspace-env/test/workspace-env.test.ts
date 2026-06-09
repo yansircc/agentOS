@@ -15,7 +15,7 @@ import {
   type WorkspaceExecResult,
 } from "../src";
 
-const allowToolAdmitter = () => ({ ok: true as const });
+const allowToolAdmitter = () => Effect.succeed({ ok: true as const });
 
 const execResult = (overrides: Partial<WorkspaceExecResult> = {}): WorkspaceExecResult => ({
   exitCode: 0,
@@ -423,7 +423,8 @@ describe("@agent-os/workspace-env", () => {
     }),
   );
 
-  it("fails tool execution when observation hook fails", async () => {
+  it.effect("fails tool execution when observation hook fails", () =>
+    Effect.gen(function* () {
     const { env } = workspace();
     const tools = createWorkspaceTools(env, {
       authority: "test.workspace",
@@ -435,14 +436,19 @@ describe("@agent-os/workspace-env", () => {
       },
     });
 
-    await expect(
+    const result = yield* Effect.either(
       tools.write_file!.execute(
         {
           path: "a.txt",
           content: "a",
         },
-        { signal: new AbortController().signal, materials: {} },
+        { materials: {} },
       ),
-    ).rejects.toThrow("projection failed");
-  });
+    );
+    expect(result._tag).toBe("Left");
+    if (result._tag === "Left") {
+      expect(String(result.left.cause)).toContain("projection failed");
+    }
+    }),
+  );
 });

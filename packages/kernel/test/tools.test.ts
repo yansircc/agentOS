@@ -13,7 +13,7 @@ import {
   type Tool,
 } from "../src/tools";
 
-const allowToolAdmitter = () => ({ ok: true as const });
+const allowToolAdmitter = () => Effect.succeed({ ok: true as const });
 
 describe("defineTool", () => {
   it("derives tool parameters and args decoder from one Schema", () => {
@@ -24,7 +24,7 @@ describe("defineTool", () => {
       authority: "read",
       admit: allowToolAdmitter,
       execution: pureToolExecution(),
-      execute: ({ key }) => ({ value: key }),
+      execute: ({ key }) => Effect.succeed({ value: key }),
     });
 
     expect(tool.definition.function.parameters).toBe(tool.argsSchema);
@@ -54,7 +54,7 @@ describe("defineTool", () => {
         authority: "read",
         admit: undefined as never,
         execution: pureToolExecution(),
-        execute: ({ key }) => ({ value: key }),
+        execute: ({ key }) => Effect.succeed({ value: key }),
       }),
     ).toThrow("tool admitter is required");
   });
@@ -68,13 +68,12 @@ describe("defineTool", () => {
         authority: "read",
         admit: allowToolAdmitter,
         execution: pureToolExecution(),
-        execute: ({ key }) => ({ value: key }),
+        execute: ({ key }) => Effect.succeed({ value: key }),
       }),
     ).toThrow("unsupported");
   });
-  it.effect("passes AbortSignal through executeTool", () =>
+  it.effect("passes resolved materials through executeTool", () =>
     Effect.gen(function* () {
-      let observed: AbortSignal | undefined;
       let observedMaterials: unknown;
       const tool = defineTool({
         name: "lookup",
@@ -84,17 +83,15 @@ describe("defineTool", () => {
         admit: allowToolAdmitter,
         execution: pureToolExecution(),
         execute: (_args, ctx) => {
-          observed = ctx.signal;
           observedMaterials = ctx.materials;
-          return { ok: true };
+          return Effect.succeed({ ok: true });
         },
       });
 
-      const result = yield* executeTool(tool, { key: "abc" }, "lookup", undefined, {
+      const result = yield* executeTool(tool, { key: "abc" }, "lookup", {
         api_token: "resolved-secret",
       });
       expect(result).toEqual({ ok: true });
-      expect(observed).toBeInstanceOf(AbortSignal);
       expect(observedMaterials).toEqual({ api_token: "resolved-secret" });
     }),
   );
@@ -107,7 +104,7 @@ describe("defineTool", () => {
       authority: "read",
       admit: allowToolAdmitter,
       execution: pureToolExecution(),
-      execute: ({ key }) => ({ value: key }),
+      execute: ({ key }) => Effect.succeed({ value: key }),
     });
     const legacy = {
       ...tool,
@@ -128,7 +125,7 @@ describe("defineTool", () => {
       authority: "read",
       admit: allowToolAdmitter,
       execution: pureToolExecution(),
-      execute: ({ key }) => ({ value: key }),
+      execute: ({ key }) => Effect.succeed({ value: key }),
     });
 
     expect(tool.execution).toEqual({ kind: "pure" });
@@ -147,7 +144,7 @@ describe("ExecutionDomainRegistry", () => {
       authority: "read",
       admit: allowToolAdmitter,
       execution: pureToolExecution(),
-      execute: ({ key }) => ({ value: key }),
+      execute: ({ key }) => Effect.succeed({ value: key }),
     });
 
     expect(validateExecutionDomainRegistry({ lookup: tool }, { domains: [] })).toEqual({
@@ -164,7 +161,7 @@ describe("ExecutionDomainRegistry", () => {
       authority: "write",
       admit: allowToolAdmitter,
       execution: { kind: "effectful", domain },
-      execute: ({ path }) => ({ path }),
+      execute: ({ path }) => Effect.succeed({ path }),
     });
 
     expect(validateExecutionDomainRegistry({ write_file: tool }, { domains: [] })).toEqual({
@@ -209,7 +206,7 @@ describe("unsafeRunToolByName", () => {
         authority: "read",
         admit: allowToolAdmitter,
         execution: pureToolExecution(),
-        execute: ({ key }) => ({ value: key }),
+        execute: ({ key }) => Effect.succeed({ value: key }),
       });
 
       const result = yield* unsafeRunToolByName(
@@ -230,7 +227,7 @@ describe("unsafeRunToolByName", () => {
         authority: "read",
         admit: allowToolAdmitter,
         execution: pureToolExecution(),
-        execute: ({ key }) => ({ value: key }),
+        execute: ({ key }) => Effect.succeed({ value: key }),
       });
 
       const unknown = yield* Effect.either(
@@ -262,7 +259,7 @@ describe("unsafeRunToolByName", () => {
       authority: "read",
       admit: allowToolAdmitter,
       execution: pureToolExecution(),
-      execute: ({ key }) => ({ value: key }),
+      execute: ({ key }) => Effect.succeed({ value: key }),
     });
     const llmCall: ToolCall = {
       id: "call-1",

@@ -106,7 +106,7 @@ describe("admission — submitAgent outputSchema path (contract §12.1)", () => 
             name: "someTool",
             description: "x",
             args: Schema.Struct({}),
-            execute: async () => "y",
+            execute: () => Effect.succeed("y"),
             admit: allowToolAdmitter,
             authority: "read",
             execution: pureToolExecution(),

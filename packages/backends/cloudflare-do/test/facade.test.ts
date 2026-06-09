@@ -12,7 +12,7 @@ import {
 import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
 import { makePreClaim } from "@agent-os/kernel/effect-claim";
 import { defineTool, effectfulToolExecution, pureToolExecution } from "@agent-os/kernel/tools";
-import { Schema } from "effect";
+import { Effect, Schema } from "effect";
 import type { DispatchTargetNamespace } from "../src/dispatch";
 import { httpDispatchTarget, providerDispatchTarget, queueDispatchTarget } from "../src/dispatch";
 
@@ -22,7 +22,7 @@ interface TestEnv {
   readonly PEER_DO: DispatchTargetNamespace;
 }
 
-const allowToolAdmitter = () => ({ ok: true as const });
+const allowToolAdmitter = () => Effect.succeed({ ok: true as const });
 
 const target: DispatchTargetNamespace = {
   idFromName: (_name) => ({}) as DurableObjectId,
@@ -179,7 +179,7 @@ describe("defineAgentDO facade lowering", () => {
       authority: "read",
       admit: allowToolAdmitter,
       execution: pureToolExecution(),
-      execute: ({ key }) => ({ key }),
+      execute: ({ key }) => Effect.succeed({ key }),
     });
 
     const lowered = lowerAgentConfig({ tools: [tool] }, env);
@@ -196,7 +196,7 @@ describe("defineAgentDO facade lowering", () => {
       authority: "write",
       admit: allowToolAdmitter,
       execution: effectfulToolExecution(domain),
-      execute: ({ path }) => ({ path }),
+      execute: ({ path }) => Effect.succeed({ path }),
     });
 
     expect(() => lowerAgentConfig({ tools: [tool] }, env)).toThrow(
@@ -213,7 +213,7 @@ describe("defineAgentDO facade lowering", () => {
       authority: "write",
       admit: allowToolAdmitter,
       execution: effectfulToolExecution(domain),
-      execute: ({ path }) => ({ path }),
+      execute: ({ path }) => Effect.succeed({ path }),
     });
 
     const lowered = lowerAgentConfig({ tools: [tool], domains: [{ domain }] }, env);

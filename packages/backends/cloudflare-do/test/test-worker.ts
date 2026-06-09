@@ -53,7 +53,7 @@ import { CloudflareMaterializedProjectionsLive } from "../src/materialized-proje
 import { commitLedgerTransaction } from "../src/ledger/commit";
 import type { EventBusService } from "../src/ledger/event-bus";
 
-const allowToolAdmitter = () => ({ ok: true as const });
+const allowToolAdmitter = () => Effect.succeed({ ok: true as const });
 
 export class TestAgentDO extends DurableObject {}
 
@@ -428,7 +428,7 @@ const facadeLookup = defineTool({
   authority: "read",
   admit: allowToolAdmitter,
   execution: pureToolExecution(),
-  execute: ({ key }) => ({ value: key }),
+  execute: ({ key }) => Effect.succeed({ value: key }),
 });
 
 export const makeFacadeSubmitChatResponse = (): Response =>

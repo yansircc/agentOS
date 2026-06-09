@@ -8,7 +8,7 @@ import { deterministicToolInvocation, unsafeRunToolByName } from "@agent-os/kern
 
 import { makeLocalWorkspaceEnv, makeTemporaryLocalWorkspaceEnv } from "../src";
 
-const allowToolAdmitter = () => ({ ok: true as const });
+const allowToolAdmitter = () => Effect.succeed({ ok: true as const });
 
 const roots: string[] = [];
 

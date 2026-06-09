@@ -1,9 +1,8 @@
 /**
  * Tool interface — public app-facing type.
  *
- * `Tool<A, R>` has plain Promise execute; apps never touch Effect.
- * Optional `quota?: QuotaSpec` lets the agent loop pre-check + consume
- * against ledger before/after execute.
+ * `Tool<A, R>` is Effect-native: admission is pure validation and execution
+ * uses the Effect error/cancellation/runtime channel.
  *
  * `parseToolCall` and `executeTool` are split intentionally so the agent
  * loop can run parsing OUTSIDE the per-attempt retry (parse failure won't
@@ -40,12 +39,13 @@ const DETERMINISTIC_TOOL_INVOCATION_BRAND = Symbol("@agent-os/kernel/Determinist
  * @public
  */
 export interface ToolExecutionContext {
-  readonly signal: AbortSignal;
   readonly materials: ResolvedToolMaterials;
-  readonly traceContext?: unknown;
+  readonly extensions?: Readonly<Record<string, unknown>>;
 }
 
 export type ResolvedToolMaterials = Readonly<Record<string, ResolvedMaterial>>;
+export type ToolRequirements = never;
+export type ToolEffect<R> = Effect.Effect<R, ToolError, ToolRequirements>;
 
 export type ExecutionDomainKind = "host" | "sandbox" | "workspace" | "remote";
 
@@ -162,9 +162,13 @@ export interface ToolAdmitInput<A = unknown> {
 
 export type ToolAdmitter<A = unknown> = (
   input: ToolAdmitInput<A>,
-) => AdmitVerdict | Promise<AdmitVerdict>;
+) => Effect.Effect<AdmitVerdict, ToolError, never>;
 
 export type ToolDecode<A = unknown> = (args: unknown) => A;
+export type ToolExecute<A = unknown, R = unknown> = (
+  args: A,
+  ctx: ToolExecutionContext,
+) => ToolEffect<R>;
 
 /**
  * Public app-facing tool definition consumed by submit loops.
@@ -183,7 +187,7 @@ export interface Tool<
   readonly definition: ToolDefinition;
   readonly argsSchema: AgentSchema<A>;
   readonly decode: ToolDecode<A>;
-  readonly execute: (args: A, ctx: ToolExecutionContext) => Promise<R>;
+  readonly execute: ToolExecute<A, R>;
   readonly admit: ToolAdmitter<A>;
   readonly execution: ToolExecution;
   readonly quota?: QuotaSpec;
@@ -194,7 +198,7 @@ export interface DefineToolSpec<S extends Schema.Schema.AnyNoContext, R> {
   readonly name: string;
   readonly description: string;
   readonly args: S;
-  readonly execute: (args: Schema.Schema.Type<S>, ctx: ToolExecutionContext) => R | Promise<R>;
+  readonly execute: ToolExecute<Schema.Schema.Type<S>, R>;
   readonly quota?: QuotaSpec;
   readonly authority: string;
   readonly authorityId?: string;
@@ -323,17 +327,9 @@ export const validateExecutionDomainRegistry = (
   return issues.length === 0 ? { ok: true } : { ok: false, issues };
 };
 
-const abortErrorFor = (signal: AbortSignal): Error => {
-  const reason = signal.reason;
-  if (reason instanceof Error) return reason;
-  const error = new Error(reason === undefined ? "tool execution aborted" : String(reason));
-  error.name = "AbortError";
-  return error;
-};
-
 export const defineTool = <S extends Schema.Schema.AnyNoContext, R>(
   spec: DefineToolSpec<S, R>,
-): Tool<Schema.Schema.Type<S>, Awaited<R>> => {
+): Tool<Schema.Schema.Type<S>, R> => {
   const argsSchema = ensureAgentSchema(spec.args);
   const toolId = spec.name;
   const admit = normalizeAdmitter(spec.admit);
@@ -348,7 +344,7 @@ export const defineTool = <S extends Schema.Schema.AnyNoContext, R>(
     },
     argsSchema,
     decode: argsSchema.decode,
-    execute: (args, ctx) => Promise.resolve(spec.execute(args, ctx)) as Promise<Awaited<R>>,
+    execute: spec.execute,
     admit,
     execution: spec.execution,
     quota: spec.quota,
@@ -542,27 +538,20 @@ export const decodeToolArgs = (
       }),
   });
 
-/** Run the tool's Promise. Failures here are recoverable via retry (network
- *  flake, transient upstream). Caller wraps this in Effect.retry. */
+/** Run the tool Effect. Failures here are recoverable via retry (network
+ *  flake, transient upstream) when the caller wraps this in Effect.retry. */
 export const executeTool = (
   tool: Tool,
   args: unknown,
   toolName: string,
-  traceContext?: unknown,
   materials: ResolvedToolMaterials = {},
 ): Effect.Effect<unknown, ToolError> =>
-  Effect.tryPromise({
-    try: (signal) => {
-      if (signal.aborted) {
-        return Promise.reject(abortErrorFor(signal));
-      }
-      return tool.execute(args, {
-        signal,
-        materials,
-        ...(traceContext === undefined ? {} : { traceContext }),
-      });
-    },
-    catch: (cause) => new ToolError({ toolName, cause }),
+  Effect.gen(function* () {
+    const program = yield* Effect.try({
+      try: () => tool.execute(args, { materials }),
+      catch: (cause) => new ToolError({ toolName, cause }),
+    });
+    return yield* program;
   });
 
 /**

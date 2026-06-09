@@ -10,7 +10,7 @@ import {
 } from "../src/index";
 
 const backend = (impl: SandboxBackend["run"]): SandboxBackend => ({ run: impl });
-const allowToolAdmitter = () => ({ ok: true as const });
+const allowToolAdmitter = () => Effect.succeed({ ok: true as const });
 const toolAdmission = {
   authority: "execute",
   admit: allowToolAdmitter,
@@ -154,12 +154,7 @@ describe("@agent-os/sandbox v0 contract", () => {
         maxOutputBytes: 8,
       });
 
-      const result = yield* Effect.promise(() =>
-        tool.execute(
-          { command: "make big-output" },
-          { signal: new AbortController().signal, materials: {} },
-        ),
-      );
+      const result = yield* tool.execute({ command: "make big-output" }, { materials: {} });
 
       expect(result.ok).toBe(true);
       expect(result.stdoutBytes).toBe(20);
@@ -191,12 +186,8 @@ describe("@agent-os/sandbox v0 contract", () => {
         ...toolAdmission,
       });
 
-      const first = yield* Effect.promise(() =>
-        tool.execute({ command: "pwd" }, { signal: new AbortController().signal, materials: {} }),
-      );
-      const second = yield* Effect.promise(() =>
-        tool.execute({ command: "pwd" }, { signal: new AbortController().signal, materials: {} }),
-      );
+      const first = yield* tool.execute({ command: "pwd" }, { materials: {} });
+      const second = yield* tool.execute({ command: "pwd" }, { materials: {} });
 
       expect(first.sandboxId).toBe("sbx-1");
       expect(second.sandboxId).toBe("sbx-2");

@@ -35,7 +35,7 @@ interface TestEnv {
   readonly AGENT_DO: DurableObjectNamespace;
 }
 
-const allowToolAdmitter = () => ({ ok: true as const });
+const allowToolAdmitter = () => Effect.succeed({ ok: true as const });
 
 const testEnv = env as unknown as TestEnv;
 
@@ -45,7 +45,7 @@ const makeQuotaTool = (limit: number): Tool =>
       name: "get_current_time",
       description: "Returns the current time as ISO string",
       args: Schema.Struct({}),
-      execute: async () => "2026-05-25T00:00:00Z",
+      execute: () => Effect.succeed("2026-05-25T00:00:00Z"),
       admit: allowToolAdmitter,
       authority: "read",
       execution: pureToolExecution(),
@@ -109,11 +109,12 @@ describe("quota state machine — deterministic", () => {
           name: "get_current_time",
           description: "Returns the current time as ISO string",
           args: Schema.Struct({}),
-          execute: async () => {
+          execute: () =>
+            Effect.sync(() => {
             calls += 1;
             if (calls === 1) throw new Error("transient");
             return "2026-05-25T00:00:00Z";
-          },
+          }),
           admit: allowToolAdmitter,
           authority: "read",
           execution: pureToolExecution(),

@@ -10,6 +10,7 @@ import { Ledger, LedgerLive } from "../src/ledger";
 import { QuotaLive } from "../src/quota";
 import { RefResolverLive } from "@agent-os/kernel/ref-resolver";
 import type { ResolvedMaterial } from "@agent-os/kernel/ref-resolver";
+import { ToolError } from "@agent-os/kernel/errors";
 import { LlmTransport, submitAgentEffect } from "@agent-os/runtime";
 import type { InternalSubmitSpec } from "@agent-os/runtime-protocol";
 import { defineTool, pureToolExecution, type Tool } from "@agent-os/kernel/tools";
@@ -140,7 +141,7 @@ describe("tool registry generator", () => {
         args: Schema.Struct({}),
         execute: (_args, ctx) => {
           observedToken = ctx.materials.wp_token;
-          return { ok: true };
+          return Effect.succeed({ ok: true });
         },
         admit: allowToolAdmitter,
         authority: "read",
@@ -194,13 +195,14 @@ describe("tool registry generator", () => {
       authority: "read",
       admit: () => {
         admitted = true;
-        return { ok: true };
+        return Effect.succeed({ ok: true });
       },
       execution: pureToolExecution(),
-      execute: async () => {
+      execute: () =>
+        Effect.sync(() => {
         executed = true;
         return { value: 42 };
-      },
+      }),
     });
 
     await runInDurableObject(stub, async (_inst, state) => {
@@ -237,17 +239,18 @@ describe("tool registry generator", () => {
       description: "Lookup a value",
       args: Schema.Struct({}),
       admit: () =>
-        ({
+        Effect.succeed({
           ok: false,
           rejectionRef: {
             rejectionId: "",
             rejectionKind: "not_a_kind",
           },
-        }) as never,
-      execute: async () => {
+        } as never),
+      execute: () =>
+        Effect.sync(() => {
         executed = true;
         return { value: 42 };
-      },
+      }),
       authority: "write",
       execution: pureToolExecution(),
     });
@@ -297,13 +300,15 @@ describe("tool registry generator", () => {
       name: "lookup",
       description: "Lookup a value",
       args: Schema.Struct({}),
-      admit: () => {
-        throw new Error("policy service down");
-      },
-      execute: async () => {
+      admit: () =>
+        Effect.fail(
+          new ToolError({ toolName: "lookup", cause: new Error("policy service down") }),
+        ),
+      execute: () =>
+        Effect.sync(() => {
         executed = true;
         return { value: 42 };
-      },
+      }),
       authority: "write",
       execution: pureToolExecution(),
     });
@@ -353,11 +358,12 @@ describe("tool registry generator", () => {
       name: "lookup",
       description: "Lookup a value",
       args: Schema.Struct({}),
-      admit: () => undefined as never,
-      execute: async () => {
+      admit: () => Effect.succeed(undefined as never),
+      execute: () =>
+        Effect.sync(() => {
         executed = true;
         return { value: 42 };
-      },
+      }),
       authority: "write",
       execution: pureToolExecution(),
     });
@@ -406,9 +412,8 @@ describe("tool registry generator", () => {
       name: "lookup",
       description: "Lookup a value",
       args: Schema.Struct({}),
-      execute: async () => {
-        throw new Error("upstream down");
-      },
+      execute: () =>
+        Effect.fail(new ToolError({ toolName: "lookup", cause: new Error("upstream down") })),
       admit: allowToolAdmitter,
       authority: "read",
       execution: pureToolExecution(),
@@ -454,19 +459,19 @@ describe("tool registry generator", () => {
     const scope = "tool-registry-budget-time";
     const id = testEnv.AGENT_DO.idFromName(scope);
     const stub = testEnv.AGENT_DO.get(id);
-    let observedSignal: AbortSignal | undefined;
     let aborted = false;
     const hangingTool = defineTool({
       name: "lookup",
       description: "Lookup a value",
       args: Schema.Struct({}),
-      execute: async (_args, ctx) => {
-        observedSignal = ctx.signal;
-        ctx.signal.addEventListener("abort", () => {
-          aborted = true;
-        });
-        await new Promise<never>(() => {});
-      },
+      execute: () =>
+        Effect.never.pipe(
+          Effect.ensuring(
+            Effect.sync(() => {
+              aborted = true;
+            }),
+          ),
+        ),
       admit: allowToolAdmitter,
       authority: "read",
       execution: pureToolExecution(),
@@ -486,8 +491,7 @@ describe("tool registry generator", () => {
       if (!result.ok) {
         expect(result.reason).toBe("budget_time");
       }
-      expect(observedSignal).toBeInstanceOf(AbortSignal);
-      expect(aborted || observedSignal?.aborted).toBe(true);
+      expect(aborted).toBe(true);
 
       const events = await runtime.runPromise(
         Effect.gen(function* () {
