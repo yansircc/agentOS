@@ -17,13 +17,13 @@ import {
   backendProtocolTruthIdentityKey,
   durableProcessLifecycleState,
   durableTriggerDuePayload,
-  fireBackendEventHandlers,
   type BackendProtocolEventIdentity,
   type BackendProtocolProjectionKey,
   type BackendProtocolTruthIdentity,
   type DurableProcessLifecycleState,
   type IntentPointerDuePayload,
 } from "@agent-os/backend-protocol";
+import { fireBackendEventHandlers } from "@agent-os/backend-protocol/reference";
 import {
   scheduledEventIntentPayload,
   applyProjectionEvent,

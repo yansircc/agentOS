@@ -13,7 +13,7 @@ import { backendProtocolTruthIdentityKey } from "@agent-os/backend-protocol";
 
 import { Context, Effect, Layer } from "effect";
 import type { EventHandler } from "@agent-os/kernel/types";
-import { fireBackendEventHandlers } from "@agent-os/backend-protocol";
+import { fireBackendEventHandlers } from "@agent-os/backend-protocol/reference";
 
 export interface EventBusSubscription {
   readonly unsubscribe: () => void;

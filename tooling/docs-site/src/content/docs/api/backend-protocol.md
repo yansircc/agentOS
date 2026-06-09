@@ -26,7 +26,6 @@ title: "@agent-os/backend-protocol API"
 - `.:durableTriggerBackoffMs`
 - `.:durableTriggerDuePayload`
 - `.:eventToProtocolRpc`
-- `.:fireBackendEventHandlers`
 - `.:isBackendProtocolEventIdentity`
 - `.:isBackendProtocolProjectionKey`
 - `.:isBackendProtocolTruthIdentity`
@@ -71,6 +70,7 @@ title: "@agent-os/backend-protocol API"
 - `.:parseDispatchLivedClaim`
 - `.:settleDispatchInboundAccepted`
 - `.:settleDispatchOutboundDelivered`
+- `./reference:fireBackendEventHandlers`
 
 ## Experimental exports
 

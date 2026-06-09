@@ -16,6 +16,8 @@ Backend protocol semantics have one owner. Runtime services and concrete backend
 
 Runtime services and backend implementations import protocol constants, port DTOs, and helpers from `@agent-os/backend-protocol`. Application and carrier packages do not depend on it.
 
+Effectful reference helpers are opt-in through `@agent-os/backend-protocol/reference`; the main entry remains vocabulary-only.
+
 ## Verification
 
 Run the backend protocol consumers through their package gates:

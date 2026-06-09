@@ -26,7 +26,6 @@ Status: Backend protocol package. Public exports are limited to storage-free bac
 - `.:durableTriggerBackoffMs`
 - `.:durableTriggerDuePayload`
 - `.:eventToProtocolRpc`
-- `.:fireBackendEventHandlers`
 - `.:isBackendProtocolEventIdentity`
 - `.:isBackendProtocolProjectionKey`
 - `.:isBackendProtocolTruthIdentity`
@@ -71,6 +70,7 @@ Status: Backend protocol package. Public exports are limited to storage-free bac
 - `.:parseDispatchLivedClaim`
 - `.:settleDispatchInboundAccepted`
 - `.:settleDispatchOutboundDelivered`
+- `./reference:fireBackendEventHandlers`
 
 ## Experimental exports
 

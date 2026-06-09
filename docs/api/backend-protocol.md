@@ -22,7 +22,6 @@
 - `.:durableTriggerBackoffMs`
 - `.:durableTriggerDuePayload`
 - `.:eventToProtocolRpc`
-- `.:fireBackendEventHandlers`
 - `.:isBackendProtocolEventIdentity`
 - `.:isBackendProtocolProjectionKey`
 - `.:isBackendProtocolTruthIdentity`
@@ -67,6 +66,7 @@
 - `.:parseDispatchLivedClaim`
 - `.:settleDispatchInboundAccepted`
 - `.:settleDispatchOutboundDelivered`
+- `./reference:fireBackendEventHandlers`
 
 ## Experimental exports
 
