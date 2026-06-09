@@ -22,9 +22,11 @@
     "check:public-api": "node scripts/check-public-api.mjs --self-test && node scripts/check-public-api.mjs",
     "check:event-namespaces": "node scripts/check-event-namespaces.mjs --self-test && node scripts/check-event-namespaces.mjs",
     "check:transaction-sync": "node scripts/check-transaction-sync-sync-only.mjs --self-test && node scripts/check-transaction-sync-sync-only.mjs",
+    "check:boundaries": "node scripts/check-boundaries.mjs",
+    "check:backend-neutrality": "node scripts/check-backend-neutrality.mjs",
     "check:source-aliases": "bun scripts/check-source-aliases.mjs",
     "check:spikes": "node scripts/check-spike-hygiene.mjs",
-    "check": "vp check && bun run docs:check && bun run effect-manifests:check && bun run check:public-api && bun run check:event-namespaces && bun run check:transaction-sync && bun run check:source-aliases && bun run check:spikes && bun run check:distribution && bun run typecheck && bun run test",
+    "check": "vp check && bun run docs:check && bun run effect-manifests:check && bun run check:public-api && bun run check:event-namespaces && bun run check:transaction-sync && bun run check:boundaries -- --self-test && bun run check:boundaries && bun run check:backend-neutrality -- --self-test && bun run check:backend-neutrality && bun run check:source-aliases && bun run check:spikes && bun run check:distribution && bun run typecheck && bun run test",
     "check:runtime": "vp run --cache -r test:runtime",
     "check:full": "bun run check && bun run docs:site:check && bun run check:runtime",
     "docs:project": "node scripts/project-docs-site.mjs",
@@ -68,6 +70,18 @@
   "packageManager": "bun@1.3.14",
   "agentOsRelease": {
     "version": "0.2.9"
+  },
+  "agentos": {
+    "backendNeutralityStatus": "boundary-prepared",
+    "backendNeutrality": {
+      "productionBackendPackages": []
+    },
+    "boundaryGuard": {
+      "matrixVersion": "2026-06-09.1",
+      "activeStages": [
+        "boundary-prepared"
+      ]
+    }
   },
   "catalog": {
     "@cloudflare/vitest-pool-workers": "^0.16.9",
