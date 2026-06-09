@@ -111,10 +111,10 @@ describe("quota state machine — deterministic", () => {
           args: Schema.Struct({}),
           execute: () =>
             Effect.sync(() => {
-            calls += 1;
-            if (calls === 1) throw new Error("transient");
-            return "2026-05-25T00:00:00Z";
-          }),
+              calls += 1;
+              if (calls === 1) throw new Error("transient");
+              return "2026-05-25T00:00:00Z";
+            }),
           admit: allowToolAdmitter,
           authority: "read",
           execution: pureToolExecution(),

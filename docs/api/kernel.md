@@ -210,8 +210,11 @@
 - `.:ExecutionDomainRegistryIssue`
 - `.:ExecutionDomainRegistryValidation`
 - `.:ResolvedToolMaterials`
+- `.:ToolEffect`
 - `.:ToolExecution`
 - `.:ToolExecutionContext`
+- `.:ToolExecute`
+- `.:ToolRequirements`
 - `.:deterministicToolInvocation`
 - `.:effectfulToolExecution`
 - `.:pureToolExecution`
@@ -233,8 +236,11 @@
 - `./tools:ToolContract`
 - `./tools:ToolDecode`
 - `./tools:ToolDefinition`
+- `./tools:ToolEffect`
 - `./tools:ToolExecution`
 - `./tools:ToolExecutionContext`
+- `./tools:ToolExecute`
+- `./tools:ToolRequirements`
 - `./tools:ToolRegistryIssue`
 - `./tools:ToolRegistryValidation`
 - `./tools:decodeToolArgs`
@@ -440,7 +446,10 @@ text`
 - `.:ToolContract`
 - `.:ToolDecode`
 - `.:ToolDefinition`
+- `.:ToolEffect`
 - `.:ToolError`
+- `.:ToolExecute`
+- `.:ToolRequirements`
 - `.:ToolRegistryIssue`
 - `.:ToolRegistryValidation`
 - `.:UnsupportedScopeRef`

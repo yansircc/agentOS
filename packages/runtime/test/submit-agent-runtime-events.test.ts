@@ -296,13 +296,13 @@ describe("submit-agent runtime event writes", () => {
         authority: "read",
         admit: () =>
           Effect.succeed({
-          ok: false,
-          rejectionRef: {
-            rejectionId: "lookup-denied",
-            rejectionKind: "policy_denied",
-            reason: "denied",
-          },
-        }),
+            ok: false,
+            rejectionRef: {
+              rejectionId: "lookup-denied",
+              rejectionKind: "policy_denied",
+              reason: "denied",
+            },
+          }),
         execution: pureToolExecution(),
       });
       const { result, events } = yield* runSubmit(baseSpec({ tools: { lookup: tool } }), [

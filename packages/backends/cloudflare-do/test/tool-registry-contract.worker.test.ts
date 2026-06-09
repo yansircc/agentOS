@@ -200,9 +200,9 @@ describe("tool registry generator", () => {
       execution: pureToolExecution(),
       execute: () =>
         Effect.sync(() => {
-        executed = true;
-        return { value: 42 };
-      }),
+          executed = true;
+          return { value: 42 };
+        }),
     });
 
     await runInDurableObject(stub, async (_inst, state) => {
@@ -248,9 +248,9 @@ describe("tool registry generator", () => {
         } as never),
       execute: () =>
         Effect.sync(() => {
-        executed = true;
-        return { value: 42 };
-      }),
+          executed = true;
+          return { value: 42 };
+        }),
       authority: "write",
       execution: pureToolExecution(),
     });
@@ -301,14 +301,12 @@ describe("tool registry generator", () => {
       description: "Lookup a value",
       args: Schema.Struct({}),
       admit: () =>
-        Effect.fail(
-          new ToolError({ toolName: "lookup", cause: new Error("policy service down") }),
-        ),
+        Effect.fail(new ToolError({ toolName: "lookup", cause: new Error("policy service down") })),
       execute: () =>
         Effect.sync(() => {
-        executed = true;
-        return { value: 42 };
-      }),
+          executed = true;
+          return { value: 42 };
+        }),
       authority: "write",
       execution: pureToolExecution(),
     });
@@ -361,9 +359,9 @@ describe("tool registry generator", () => {
       admit: () => Effect.succeed(undefined as never),
       execute: () =>
         Effect.sync(() => {
-        executed = true;
-        return { value: 42 };
-      }),
+          executed = true;
+          return { value: 42 };
+        }),
       authority: "write",
       execution: pureToolExecution(),
     });

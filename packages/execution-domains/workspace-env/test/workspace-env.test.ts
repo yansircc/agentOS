@@ -425,30 +425,30 @@ describe("@agent-os/workspace-env", () => {
 
   it.effect("fails tool execution when observation hook fails", () =>
     Effect.gen(function* () {
-    const { env } = workspace();
-    const tools = createWorkspaceTools(env, {
-      authority: "test.workspace",
-      admit: allowToolAdmitter,
-      hooks: {
-        onAfterWrite: () => {
-          throw new Error("projection failed");
+      const { env } = workspace();
+      const tools = createWorkspaceTools(env, {
+        authority: "test.workspace",
+        admit: allowToolAdmitter,
+        hooks: {
+          onAfterWrite: () => {
+            throw new Error("projection failed");
+          },
         },
-      },
-    });
+      });
 
-    const result = yield* Effect.either(
-      tools.write_file!.execute(
-        {
-          path: "a.txt",
-          content: "a",
-        },
-        { materials: {} },
-      ),
-    );
-    expect(result._tag).toBe("Left");
-    if (result._tag === "Left") {
-      expect(String(result.left.cause)).toContain("projection failed");
-    }
+      const result = yield* Effect.either(
+        tools.write_file!.execute(
+          {
+            path: "a.txt",
+            content: "a",
+          },
+          { materials: {} },
+        ),
+      );
+      expect(result._tag).toBe("Left");
+      if (result._tag === "Left") {
+        expect(String(result.left.cause)).toContain("projection failed");
+      }
     }),
   );
 });
