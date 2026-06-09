@@ -73,6 +73,7 @@ state to make a product flow appear complete.
 | `@agent-os/ag-ui-react`                  | React consumption helpers for AG-UI frames                                                                                                                                       |
 | `@agent-os/ag-ui-svelte`                 | Svelte consumption helpers for AG-UI frames                                                                                                                                      |
 | `@agent-os/run-stream`                   | submit/ledger/turn-frame composition                                                                                                                                             |
+| `@agent-os/sse-http`                     | Web Fetch SSE-over-HTTP response construction for agentOS stream codecs                                                                                                          |
 | `@agent-os/decision-gate`                | durable decision gate events, projection, and admitter                                                                                                                           |
 | `@agent-os/deploy-cloudflare`            | Cloudflare Worker deploy provider                                                                                                                                                |
 

@@ -33,6 +33,7 @@ prevent accidental exports; they are not stability or schema-freeze promises.
 | `@agent-os/ag-ui-react`                  | yes       | 0.2.x public       | React hooks and stores over @agent-os/ag-ui frames; no runtime event parsing                                                         |
 | `@agent-os/ag-ui-svelte`                 | yes       | 0.2.x public       | Svelte stores over @agent-os/ag-ui frames; no runtime event parsing                                                                  |
 | `@agent-os/run-stream`                   | yes       | 0.2.x public       | ledger/turn/submit-result composition                                                                                                |
+| `@agent-os/sse-http`                     | yes       | 0.2.x experimental | HTTP Response and stream lifecycle wrappers over composer-owned frame codecs                                                         |
 | `@agent-os/decision-gate`                | yes       | 0.2.x public       | durable decision request/decision/consumption facts                                                                                  |
 | `@agent-os/deploy`                       | yes       | carrier            | deploy proof/projection vocabulary                                                                                                   |
 | `@agent-os/deploy-cloudflare`            | yes       | provider           | Cloudflare Worker artifact material, resolver composition, digest validation, and deploy carrier                                     |

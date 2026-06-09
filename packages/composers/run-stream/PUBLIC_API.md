@@ -24,7 +24,6 @@ Status: 0.2.x active development for frame algebra and batched/realtime composit
 - `.:composeBatchedSubmitRunStream`
 - `.:composeRealtimeRunStream`
 - `.:composeRunStream`
-- `.:createBatchedSubmitRunStreamResponse`
 - `.:decodeRunStreamData`
 - `.:encodeRunStreamSse`
 - `.:isRunStreamFrame`

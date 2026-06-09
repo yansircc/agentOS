@@ -19,6 +19,7 @@ title: "@agent-os/ag-ui Public API Intent"
 - `.:AgUiLedgerEnvelopeProjectionSpec`
 - `.:AgUiLedgerEventEnvelope`
 - `.:AgUiLedgerProjectionSpec`
+- `.:AgUiSseChunk`
 - `.:AgUiContextSchema`
 - `.:AgUiMessageRole`
 - `.:AgUiMessageRoleSchema`

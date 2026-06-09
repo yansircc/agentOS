@@ -500,13 +500,3 @@ export const composeBatchedSubmitRunStream = async (
 
   return frames;
 };
-
-export const createBatchedSubmitRunStreamResponse = async (
-  spec: ComposeBatchedSubmitRunStreamSpec,
-): Promise<Response> =>
-  new Response((await composeBatchedSubmitRunStream(spec)).map(encodeRunStreamSse).join(""), {
-    headers: {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-cache",
-    },
-  });

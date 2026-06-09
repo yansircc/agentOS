@@ -2,7 +2,6 @@ import {
   composeBatchedSubmitRunStream,
   composeRealtimeRunStream,
   composeRunStream,
-  createBatchedSubmitRunStreamResponse,
   decodeRunStreamData,
   encodeRunStreamSse,
   projectRunStream,
@@ -56,20 +55,6 @@ const submitSpec: SubmitSpec = {
   budget: { maxTurns: 1 },
   effectAuthorityRef: { authorityClass: "llm_route", authorityId: "run-stream-test" },
 };
-
-const frameDataFromSse = (text: string): ReadonlyArray<RunStreamFrame> =>
-  text
-    .split("\n\n")
-    .filter((raw) => raw.length > 0)
-    .map((raw) => {
-      const data = raw
-        .split("\n")
-        .find((line) => line.startsWith("data: "))
-        ?.slice(6);
-      const frame = data === undefined ? null : decodeRunStreamData(data);
-      expect(frame).not.toBeNull();
-      return frame as RunStreamFrame;
-    });
 
 const deferred = <T>(): {
   readonly promise: Promise<T>;
@@ -280,21 +265,6 @@ describe("@agent-os/run-stream", () => {
       errorReason: "Error",
       omittedFrames: [],
     });
-  });
-
-  it("creates a batched SSE response without requiring token deltas", async () => {
-    const response = await createBatchedSubmitRunStreamResponse({
-      submitSpec,
-      afterId: 0,
-      events: async () => [ledgerEvent(1, "agent.run.completed")],
-      submit: async () => okResult,
-    });
-
-    expect(response.headers.get("content-type")).toContain("text/event-stream");
-    const projection = projectRunStream(frameDataFromSse(await response.text()));
-    expect(projection.turnStreams).toEqual({});
-    expect(projection.status).toBe("succeeded");
-    expect(projection.result).toEqual(okResult);
   });
 
   it("composes realtime frames in source arrival order before terminal submit_result", async () => {

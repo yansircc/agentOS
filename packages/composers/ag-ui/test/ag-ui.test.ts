@@ -145,13 +145,9 @@ const collectAsync = async <A>(source: AsyncIterable<A>): Promise<ReadonlyArray<
   return values;
 };
 
-const streamOf = (text: string): ReadableStream<Uint8Array> =>
-  new ReadableStream({
-    start(controller) {
-      controller.enqueue(new TextEncoder().encode(text));
-      controller.close();
-    },
-  });
+async function* chunksOf(text: string): AsyncGenerator<Uint8Array> {
+  yield new TextEncoder().encode(text);
+}
 
 describe("@agent-os/ag-ui", () => {
   it("records the pinned AG-UI wire compatibility contract", () => {
@@ -380,11 +376,11 @@ describe("@agent-os/ag-ui", () => {
       "",
       "",
     ].join("\n");
-    const envelopes = await collectAsync(projectLedgerSseToAgUiEnvelopes(streamOf(ledgerSse)));
+    const envelopes = await collectAsync(projectLedgerSseToAgUiEnvelopes(chunksOf(ledgerSse)));
     expect(envelopes).toHaveLength(1);
     expect(envelopes[0]).toMatchObject({ id: 1, kind: "agent.run.started" });
 
-    const chunks = await collectAsync(projectLedgerSseToAgUiSse(streamOf(ledgerSse)));
+    const chunks = await collectAsync(projectLedgerSseToAgUiSse(chunksOf(ledgerSse)));
     expect(chunks).toHaveLength(1);
     expect(chunks[0]).toBe(encodeAgUiLedgerEventEnvelopeSse(envelopes[0]!));
     expect(chunks[0]).toContain("event: ag_ui");

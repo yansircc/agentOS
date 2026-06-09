@@ -19,7 +19,10 @@ const packageLinks = {
   "llm-transport-effect-ai": "packages/providers/llm-transport-effect-ai",
   runtime: "packages/runtime",
   "runtime-protocol": "packages/runtime-protocol",
+  "run-stream": "packages/composers/run-stream",
+  "sse-http": "packages/transports/sse-http",
   "telemetry-protocol": "packages/telemetry-protocol",
+  "turn-stream": "packages/composers/turn-stream",
 };
 const dependencyLinks = ["@cloudflare", "@effect", "effect"];
 

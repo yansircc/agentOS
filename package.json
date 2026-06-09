@@ -12,6 +12,7 @@
     "packages/execution-domains/*",
     "packages/providers/*",
     "packages/composers/*",
+    "packages/transports/*",
     "tooling/*"
   ],
   "type": "module",

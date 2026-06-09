@@ -205,6 +205,12 @@
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
     },
     {
+      "path": "packages/transports/sse-http",
+      "shape": ["library"],
+      "dependencyOwner": "workspace-root",
+      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+    },
+    {
       "path": "tooling/docs-site",
       "shape": ["library"],
       "dependencyOwner": "workspace-root",

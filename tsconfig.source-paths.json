@@ -46,6 +46,7 @@
       "@agent-os/ag-ui-react": ["./packages/composers/ag-ui-react/src/index.ts"],
       "@agent-os/ag-ui-svelte": ["./packages/composers/ag-ui-svelte/src/index.ts"],
       "@agent-os/run-stream": ["./packages/composers/run-stream/src/index.ts"],
+      "@agent-os/sse-http": ["./packages/transports/sse-http/src/index.ts"],
       "@agent-os/turn-stream": ["./packages/composers/turn-stream/src/index.ts"],
       "@agent-os/workspace-env": ["./packages/execution-domains/workspace-env/src/index.ts"],
       "@agent-os/deploy-cloudflare": ["./packages/providers/deploy-cloudflare/src/index.ts"],

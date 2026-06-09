@@ -32,6 +32,7 @@
     { "path": "./packages/execution-domains/workspace-env-local" },
     { "path": "./packages/providers/workspace-session-cloudflare" },
     { "path": "./packages/composers/run-stream" },
+    { "path": "./packages/transports/sse-http" },
     { "path": "./packages/backends/cloudflare-do" },
     { "path": "./packages/backends/in-memory" },
     { "path": "./tooling/ops-api" },

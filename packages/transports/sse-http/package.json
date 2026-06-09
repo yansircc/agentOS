@@ -1,0 +1,27 @@
+{
+  "name": "@agent-os/sse-http",
+  "version": "0.2.9",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vp test run --configLoader runner"
+  },
+  "dependencies": {
+    "@agent-os/attached-stream": "workspace:*",
+    "@agent-os/run-stream": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
+  }
+}

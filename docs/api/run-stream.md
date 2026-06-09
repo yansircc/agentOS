@@ -20,7 +20,6 @@
 - `.:composeBatchedSubmitRunStream`
 - `.:composeRealtimeRunStream`
 - `.:composeRunStream`
-- `.:createBatchedSubmitRunStreamResponse`
 - `.:decodeRunStreamData`
 - `.:encodeRunStreamSse`
 - `.:isRunStreamFrame`

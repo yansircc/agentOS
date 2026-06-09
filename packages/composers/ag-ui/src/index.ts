@@ -807,12 +807,13 @@ const parseSseBlock = (block: string): ParsedSseBlock => {
   return { event, data: data.join("\n") };
 };
 
+export type AgUiSseChunk = string | Uint8Array;
+
 export async function* projectLedgerSseToAgUiEnvelopes(
-  body: ReadableStream<Uint8Array>,
+  chunks: AsyncIterable<AgUiSseChunk>,
   spec: AgUiLedgerEnvelopeProjectionSpec = {},
 ): AsyncGenerator<AgUiLedgerEventEnvelope> {
   const decoder = new TextDecoder();
-  const reader = body.getReader();
   let buffer = "";
 
   const flushBlock = (block: string): AgUiLedgerEventEnvelope | null => {
@@ -821,29 +822,25 @@ export async function* projectLedgerSseToAgUiEnvelopes(
     return decodeLedgerEventToAgUiEnvelope(JSON.parse(parsed.data) as unknown, spec);
   };
 
-  try {
+  const flushBuffered = function* (): Generator<AgUiLedgerEventEnvelope> {
     while (true) {
       const boundary = buffer.indexOf("\n\n");
-      if (boundary >= 0) {
-        const block = buffer.slice(0, boundary);
-        buffer = buffer.slice(boundary + 2);
-        const envelope = flushBlock(block);
-        if (envelope !== null) yield envelope;
-        continue;
-      }
-
-      const read = await reader.read();
-      if (read.done) {
-        const tail = buffer.trim().length > 0 ? flushBlock(buffer) : null;
-        buffer = "";
-        if (tail !== null) yield tail;
-        return;
-      }
-      buffer += decoder.decode(read.value, { stream: true });
+      if (boundary < 0) return;
+      const block = buffer.slice(0, boundary);
+      buffer = buffer.slice(boundary + 2);
+      const envelope = flushBlock(block);
+      if (envelope !== null) yield envelope;
     }
-  } finally {
-    reader.releaseLock();
+  };
+
+  for await (const chunk of chunks) {
+    buffer += typeof chunk === "string" ? chunk : decoder.decode(chunk, { stream: true });
+    yield* flushBuffered();
   }
+  buffer += decoder.decode();
+  const tail = buffer.trim().length > 0 ? flushBlock(buffer) : null;
+  buffer = "";
+  if (tail !== null) yield tail;
 }
 
 /**
@@ -855,10 +852,10 @@ export async function* projectLedgerSseToAgUiEnvelopes(
  * @public
  */
 export async function* projectLedgerSseToAgUiSse(
-  body: ReadableStream<Uint8Array>,
+  chunks: AsyncIterable<AgUiSseChunk>,
   spec: AgUiLedgerEnvelopeProjectionSpec = {},
 ): AsyncGenerator<string> {
-  for await (const envelope of projectLedgerSseToAgUiEnvelopes(body, spec)) {
+  for await (const envelope of projectLedgerSseToAgUiEnvelopes(chunks, spec)) {
     yield encodeAgUiLedgerEventEnvelopeSse(envelope);
   }
 }

@@ -361,6 +361,20 @@
       "published": true
     },
     {
+      "slug": "sse-http",
+      "name": "@agent-os/sse-http",
+      "path": "packages/transports/sse-http",
+      "status": "0.2.x experimental",
+      "role": "Web Fetch SSE-over-HTTP response construction for agentOS stream codecs",
+      "boundary": "HTTP Response and stream lifecycle wrappers over composer-owned frame codecs",
+      "need": "SSE-over-HTTP transport",
+      "readmeStatus": "0.2.x public-experimental. Exports are listed in `PUBLIC_API.md` to prevent accidental exports; this is not an API freeze.",
+      "apiStatus": "0.2.x public-experimental. This package owns Web Fetch SSE response wrappers; composers stay host-free.",
+      "apiSource": "docs/api/sse-http.md",
+      "primary": true,
+      "published": true
+    },
+    {
       "slug": "decision-gate",
       "name": "@agent-os/decision-gate",
       "path": "packages/carriers/decision-gate",

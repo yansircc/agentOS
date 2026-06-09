@@ -19,6 +19,7 @@ Status: 0.2.x active development for AG-UI wire projection. Public exports are l
 - `.:AgUiLedgerEnvelopeProjectionSpec`
 - `.:AgUiLedgerEventEnvelope`
 - `.:AgUiLedgerProjectionSpec`
+- `.:AgUiSseChunk`
 - `.:AgUiContextSchema`
 - `.:AgUiMessageRole`
 - `.:AgUiMessageRoleSchema`

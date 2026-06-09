@@ -29,6 +29,7 @@
     "@agent-os/llm-transport-effect-ai": "workspace:*",
     "@agent-os/runtime": "workspace:*",
     "@agent-os/runtime-protocol": "workspace:*",
+    "@agent-os/sse-http": "workspace:*",
     "@agent-os/telemetry-protocol": "workspace:*",
     "@effect/experimental": "catalog:",
     "@effect/platform": "catalog:",

@@ -1,45 +1,13 @@
 import {
   decodeAttachedStreamMessage,
   encodeAttachedStreamMessage,
-  encodeAttachedStreamSse,
   isAttachedStreamInboundFrame,
 } from "@agent-os/attached-stream";
 import type { AttachedStreamSession } from "@agent-os/runtime";
+import { createAttachedStreamSseResponse } from "@agent-os/sse-http";
 import { Effect } from "effect";
 
 type AttachedStreamEffectRunner = <A, E>(effect: Effect.Effect<A, E>) => Promise<A>;
-
-const attachedStreamSseResponse = (
-  session: AttachedStreamSession,
-  runEffect: AttachedStreamEffectRunner,
-): Response => {
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream<Uint8Array>({
-    start: (controller) => {
-      void (async () => {
-        try {
-          for await (const frame of session.output) {
-            controller.enqueue(encoder.encode(encodeAttachedStreamSse(frame)));
-          }
-          controller.close();
-        } catch (cause) {
-          controller.error(cause);
-        }
-      })();
-    },
-    cancel: () => {
-      void runEffect(session.detach()).catch(() => undefined);
-    },
-  });
-
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-    },
-  });
-};
 
 const attachedStreamWebSocketResponse = (
   session: AttachedStreamSession,
@@ -86,4 +54,6 @@ export const createAttachedStreamResponse = (
 ): Response =>
   session.mode === "bidi"
     ? attachedStreamWebSocketResponse(session, runEffect)
-    : attachedStreamSseResponse(session, runEffect);
+    : createAttachedStreamSseResponse(session.output, {
+        onCancel: () => runEffect(session.detach()),
+      });

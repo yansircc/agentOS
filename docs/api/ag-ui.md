@@ -15,6 +15,7 @@
 - `.:AgUiLedgerEnvelopeProjectionSpec`
 - `.:AgUiLedgerEventEnvelope`
 - `.:AgUiLedgerProjectionSpec`
+- `.:AgUiSseChunk`
 - `.:AgUiContextSchema`
 - `.:AgUiMessageRole`
 - `.:AgUiMessageRoleSchema`

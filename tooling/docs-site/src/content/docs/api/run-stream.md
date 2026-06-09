@@ -24,7 +24,6 @@ title: "@agent-os/run-stream Public API Intent"
 - `.:composeBatchedSubmitRunStream`
 - `.:composeRealtimeRunStream`
 - `.:composeRunStream`
-- `.:createBatchedSubmitRunStreamResponse`
 - `.:decodeRunStreamData`
 - `.:encodeRunStreamSse`
 - `.:isRunStreamFrame`
