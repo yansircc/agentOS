@@ -59,6 +59,7 @@ Status: Backend protocol package. Public exports are limited to storage-free bac
 - `.:DispatchReceiver`
 - `.:DispatchReceiverResult`
 - `.:DispatchRequestedPayload`
+- `.:DispatchReplaySnapshot`
 - `.:DispatchTargetAdapter`
 - `.:GrantResult`
 - `.:IntentPointerDuePayload`
@@ -66,8 +67,10 @@ Status: Backend protocol package. Public exports are limited to storage-free bac
 
 - `.:dispatchCarrierRef`
 - `.:dispatchLedgerDeliveryReceipt`
+- `.:dispatchReplaySnapshotFromDeliveredPayload`
 - `.:dispatchSettlementContract`
 - `.:parseDispatchLivedClaim`
+- `.:replayDispatchDeliveryFromSnapshot`
 - `.:settleDispatchInboundAccepted`
 - `.:settleDispatchOutboundDelivered`
 - `./reference:fireBackendEventHandlers`

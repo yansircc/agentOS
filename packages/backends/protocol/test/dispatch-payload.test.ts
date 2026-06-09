@@ -14,6 +14,7 @@ import {
   dispatchBackoffMs,
   dispatchExternalDeliveryReceipt,
   dispatchLedgerDeliveryReceipt,
+  dispatchReplaySnapshotFromDeliveredPayload,
   dispatchSettlementContract,
   durableTriggerBackoffMs,
   durableTriggerDuePayload,
@@ -21,7 +22,9 @@ import {
   parseBackendProtocolLedgerEventRpc,
   parseIntentPointerDuePayload,
   parseRequestedPayload,
+  replayDispatchDeliveryFromSnapshot,
   settleDispatchOutboundDelivered,
+  type DispatchTargetAdapter,
 } from "../src";
 import { fireBackendEventHandlers } from "../src/reference";
 
@@ -297,6 +300,39 @@ describe("@agent-os/backend-protocol", () => {
       anchorKind: "external_receipt",
       carrierRef: "dispatch:binding:cloudflare:queue:image-jobs",
     });
+  });
+
+  it("replay mode DispatchTargetAdapter not called: dispatch delivery replays from receipt snapshot", async () => {
+    let liveDispatchTargetAdapterCalled = false;
+    const liveDispatchTargetAdapter: DispatchTargetAdapter = {
+      deliver: () => {
+        liveDispatchTargetAdapterCalled = true;
+        return Promise.reject(new Error("live dispatch adapter should not be called in replay"));
+      },
+    };
+    const delivered = {
+      outboundEventId: 17,
+      target: {
+        bindingRef,
+        ...truthIdentity("receiver"),
+      },
+      event: "app.deliver",
+      idempotencyKey: "dispatch-replay-1",
+      deliveryReceipt: dispatchExternalDeliveryReceipt({
+        targetKind: "queue",
+        targetScope: "receiver",
+        idempotencyKey: "dispatch-replay-1",
+      }),
+      attempt: 2,
+      traceContext,
+    };
+
+    const snapshot = dispatchReplaySnapshotFromDeliveredPayload(delivered);
+    const replayed = replayDispatchDeliveryFromSnapshot(snapshot);
+
+    expect(replayed).toEqual({ receipt: delivered.deliveryReceipt });
+    expect(liveDispatchTargetAdapterCalled).toBe(false);
+    expect(liveDispatchTargetAdapter.deliver).toBeDefined();
   });
 
   it.effect("bounds hung event handlers and continues fanout", () =>

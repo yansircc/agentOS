@@ -3,7 +3,10 @@ import type {
   LedgerEventRpc,
   StreamEventsOptions,
 } from "@agent-os/kernel/types";
-import type { BackendProtocolTruthIdentity } from "@agent-os/backend-protocol";
+import type {
+  BackendProtocolTruthIdentity,
+  DispatchTargetAdapter,
+} from "@agent-os/backend-protocol";
 /**
  * dispatchToScope — deterministic contract tests.
  *
@@ -23,6 +26,8 @@ import {
   DELIVERY_RETRY_TRIGGER_KIND,
   DISPATCH_RETRY_POLICY,
   dispatchLedgerDeliveryReceipt,
+  dispatchReplaySnapshotFromDeliveredPayload,
+  replayDispatchDeliveryFromSnapshot,
 } from "@agent-os/backend-protocol";
 import {
   bindingMaterialRef,
@@ -162,6 +167,35 @@ const rowsOrEmpty = (
 };
 
 describe("dispatchToScope — cross-scope durable delivery primitive", () => {
+  it("replay mode live dispatch adapter not called when delivery receipt snapshot is present", async () => {
+    let liveDispatchAdapterCalled = false;
+    const liveDispatchAdapter: DispatchTargetAdapter = {
+      deliver: () => {
+        liveDispatchAdapterCalled = true;
+        return Promise.reject(new Error("live dispatch should not be called in replay"));
+      },
+    };
+    const deliveryReceipt = dispatchLedgerDeliveryReceipt({
+      targetScope: "dispatch-replay-receiver",
+      deliveredEventId: 42,
+    });
+
+    const replayed = replayDispatchDeliveryFromSnapshot(
+      dispatchReplaySnapshotFromDeliveredPayload({
+        outboundEventId: 7,
+        target: targetFor("dispatch-replay-receiver", peerBindingRef),
+        event: "test.delivered",
+        idempotencyKey: "dispatch-replay",
+        deliveryReceipt,
+        attempt: 1,
+      }),
+    );
+
+    expect(replayed).toEqual({ receipt: deliveryReceipt });
+    expect(liveDispatchAdapterCalled).toBe(false);
+    expect(liveDispatchAdapter.deliver).toBeDefined();
+  });
+
   it("materializes dispatch targets once per DO instance", async () => {
     const before = await dispatchTargetMaterializationCount();
     const sender = stubFor("dispatch-target-snapshot");

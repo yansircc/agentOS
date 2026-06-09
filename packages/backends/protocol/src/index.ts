@@ -582,6 +582,36 @@ export interface DispatchOutboundDeliveredPayload {
   readonly traceContext?: TraceContext;
 }
 
+export interface DispatchReplaySnapshot {
+  readonly kind: "dispatch.delivery";
+  readonly outboundEventId: number;
+  readonly target: BackendProtocolDispatchTarget;
+  readonly event: string;
+  readonly idempotencyKey: string;
+  readonly deliveryReceipt: DispatchDeliveryReceipt;
+  readonly attempt: number;
+  readonly traceContext?: TraceContext;
+}
+
+export const dispatchReplaySnapshotFromDeliveredPayload = (
+  payload: DispatchOutboundDeliveredPayload,
+): DispatchReplaySnapshot => ({
+  kind: "dispatch.delivery",
+  outboundEventId: payload.outboundEventId,
+  target: payload.target,
+  event: payload.event,
+  idempotencyKey: payload.idempotencyKey,
+  deliveryReceipt: payload.deliveryReceipt,
+  attempt: payload.attempt,
+  ...(payload.traceContext === undefined ? {} : { traceContext: payload.traceContext }),
+});
+
+export const replayDispatchDeliveryFromSnapshot = (
+  snapshot: DispatchReplaySnapshot,
+): DispatchDeliveryResult => ({
+  receipt: snapshot.deliveryReceipt,
+});
+
 export interface DispatchOutboundFailedPayload {
   readonly outboundEventId: number;
   readonly target: BackendProtocolDispatchTarget;

@@ -59,6 +59,7 @@ title: "@agent-os/backend-protocol API"
 - `.:DispatchReceiver`
 - `.:DispatchReceiverResult`
 - `.:DispatchRequestedPayload`
+- `.:DispatchReplaySnapshot`
 - `.:DispatchTargetAdapter`
 - `.:GrantResult`
 - `.:IntentPointerDuePayload`
@@ -66,8 +67,10 @@ title: "@agent-os/backend-protocol API"
 
 - `.:dispatchCarrierRef`
 - `.:dispatchLedgerDeliveryReceipt`
+- `.:dispatchReplaySnapshotFromDeliveredPayload`
 - `.:dispatchSettlementContract`
 - `.:parseDispatchLivedClaim`
+- `.:replayDispatchDeliveryFromSnapshot`
 - `.:settleDispatchInboundAccepted`
 - `.:settleDispatchOutboundDelivered`
 - `./reference:fireBackendEventHandlers`
