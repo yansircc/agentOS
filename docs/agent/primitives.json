@@ -143,6 +143,20 @@
       "docs": "docs/concepts/materialized-projections.md"
     },
     {
+      "id": "primitive.kernel.defineProductTool",
+      "package": "@agent-os/kernel",
+      "packagePath": "packages/kernel",
+      "entrypoints": [".", "./tools"],
+      "symbol": "defineProductTool",
+      "exportKey": ".:defineProductTool",
+      "sourceFile": "packages/kernel/src/tools.ts",
+      "summary": "Defines a product-owned tool with the same Effect-native execution contract as `defineTool`, defaulting to pure execution when no domain is required.",
+      "aliases": [],
+      "invariants": ["invariant.algebra.type-or-boot-proof"],
+      "decisions": [],
+      "docs": "docs/concepts/tool-execution-domain.md"
+    },
+    {
       "id": "primitive.kernel.EffectAuthorityContract",
       "package": "@agent-os/kernel",
       "packagePath": "packages/kernel",
@@ -606,6 +620,20 @@
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
       "docs": "docs/tutorials/streaming-chatbot.md"
+    },
+    {
+      "id": "primitive.runtime.waitForProjection",
+      "package": "@agent-os/runtime",
+      "packagePath": "packages/runtime",
+      "entrypoints": ["."],
+      "symbol": "waitForProjection",
+      "exportKey": ".:waitForProjection",
+      "sourceFile": "packages/runtime/src/projection.ts",
+      "summary": "Waits until a ledger-derived projection row exists and satisfies an optional pure readiness predicate.",
+      "aliases": [],
+      "invariants": ["invariant.d10.truth-identity"],
+      "decisions": [],
+      "docs": "docs/concepts/materialized-projections.md"
     }
   ]
 }

@@ -1,4 +1,4 @@
-import { Context, Data, Effect, Either, Schema } from "effect";
+import { Context, Data, Duration, Effect, Either, Schema } from "effect";
 import {
   scopeRefKey,
   type AuthorityRef,
@@ -290,6 +290,84 @@ export class MaterializedProjections extends Context.Tag("@agent-os/Materialized
     >;
   }
 >() {}
+
+export interface ProjectionWaitSpec<Identity = unknown, State = unknown>
+  extends MaterializedProjectionGetSpec {
+  readonly ready?: (row: MaterializedProjectionRow<Identity, State>) => boolean;
+  readonly maxAttempts?: number;
+  readonly pollIntervalMs?: number;
+}
+
+export class ProjectionWaitTimedOut extends Data.TaggedError(
+  "agent_os.projection_wait_timed_out",
+)<{
+  readonly projectionKind: string;
+  readonly maxAttempts: number;
+  readonly reason: "missing" | "not_ready";
+  readonly lastObservedEventId?: number;
+}> {}
+
+const DEFAULT_PROJECTION_WAIT_MAX_ATTEMPTS = 20;
+const DEFAULT_PROJECTION_WAIT_POLL_INTERVAL_MS = 50;
+
+const positiveIntegerOr = (value: number | undefined, fallback: number): number =>
+  Number.isInteger(value) && value !== undefined && value > 0 ? value : fallback;
+
+const nonNegativeIntegerOr = (value: number | undefined, fallback: number): number =>
+  Number.isInteger(value) && value !== undefined && value >= 0 ? value : fallback;
+
+/**
+ * Waits until a ledger-derived projection row exists and satisfies an optional
+ * pure readiness predicate.
+ *
+ * @agentosPrimitive primitive.runtime.waitForProjection
+ * @agentosInvariant invariant.d10.truth-identity
+ * @agentosDocs docs/concepts/materialized-projections.md
+ * @public
+ */
+export const waitForProjection = <Identity = unknown, State = unknown>(
+  spec: ProjectionWaitSpec<Identity, State>,
+): Effect.Effect<
+  MaterializedProjectionRow<Identity, State>,
+  SqlError | UnregisteredProjectionKind | ProjectionWaitTimedOut,
+  MaterializedProjections
+> =>
+  Effect.gen(function* () {
+    const projections = yield* MaterializedProjections;
+    const maxAttempts = positiveIntegerOr(spec.maxAttempts, DEFAULT_PROJECTION_WAIT_MAX_ATTEMPTS);
+    const pollIntervalMs = nonNegativeIntegerOr(
+      spec.pollIntervalMs,
+      DEFAULT_PROJECTION_WAIT_POLL_INTERVAL_MS,
+    );
+
+    const loop = (
+      attempt: number,
+    ): Effect.Effect<
+      MaterializedProjectionRow<Identity, State>,
+      SqlError | UnregisteredProjectionKind | ProjectionWaitTimedOut
+    > =>
+      Effect.gen(function* () {
+        const row = (yield* projections.get(spec)) as MaterializedProjectionRow<
+          Identity,
+          State
+        > | null;
+        if (row !== null && (spec.ready === undefined || spec.ready(row))) return row;
+        if (attempt >= maxAttempts) {
+          return yield* new ProjectionWaitTimedOut({
+            projectionKind: spec.kind,
+            maxAttempts,
+            reason: row === null ? "missing" : "not_ready",
+            ...(row === null ? {} : { lastObservedEventId: row.updatedEventId }),
+          });
+        }
+        if (pollIntervalMs > 0) {
+          yield* Effect.sleep(Duration.millis(pollIntervalMs));
+        }
+        return yield* loop(attempt + 1);
+      });
+
+    return yield* loop(1);
+  });
 
 const projectionRegistrySuccess = (
   registry: ProjectionRegistry,

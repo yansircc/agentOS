@@ -88,6 +88,8 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:ProjectionRegistryBuildResult`
 - `.:ProjectionRegistryError`
 - `.:ProjectionStatus`
+- `.:ProjectionWaitSpec`
+- `.:ProjectionWaitTimedOut`
 - `.:Quota`
 - `.:RUN_BEARING_KINDS`
 - `.:Resources`
@@ -143,6 +145,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:projectionMalformed`
 - `.:projectionPut`
 - `.:projectionSkip`
+- `.:waitForProjection`
 - `.:runSynchronousAttachedStreamCommit`
 - `.:runSynchronousTriggerCommit`
 - `.:scheduledEventIntentPayload`

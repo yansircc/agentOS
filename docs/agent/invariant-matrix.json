@@ -10,6 +10,7 @@
       "invariant": "invariant.algebra.type-or-boot-proof",
       "statement": "Already-clear algebra must become type-proof or boot-proof.",
       "primitives": [
+        "primitive.kernel.defineProductTool",
         "primitive.kernel.EffectClaim",
         "primitive.kernel.ExecutionDomain",
         "primitive.kernel.ExecutionDomainDeclaration",
@@ -164,7 +165,8 @@
         "primitive.runtime.projectRunTrace",
         "primitive.runtime.projectSubmitResult",
         "primitive.runtime.SubmitResult",
-        "primitive.runtime.SubmitSpec"
+        "primitive.runtime.SubmitSpec",
+        "primitive.runtime.waitForProjection"
       ],
       "errors": [
         "agent_os.boundary_commit_rejected",
@@ -175,6 +177,7 @@
         "agent_os.projection_application_error",
         "agent_os.projection_reducer_returned_thenable",
         "agent_os.projection_registry_error",
+        "agent_os.projection_wait_timed_out",
         "agent_os.scope_missing",
         "agent_os.stream_identity_error",
         "agent_os.unregistered_projection_kind",

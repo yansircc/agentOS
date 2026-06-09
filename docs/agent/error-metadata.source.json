@@ -56,6 +56,12 @@
       "fix": "Move asynchronous work to the ledger writer or backend transaction hook; projection reducers must be synchronous."
     },
     {
+      "tag": "agent_os.projection_wait_timed_out",
+      "invariants": ["invariant.d10.truth-identity"],
+      "docs": "docs/concepts/materialized-projections.md",
+      "fix": "Wait on the ledger-derived projection with a bounded Effect retry policy, or commit the missing ledger fact before reading the projection."
+    },
+    {
       "tag": "agent_os.unregistered_projection_kind",
       "invariants": ["invariant.d10.truth-identity"],
       "docs": "docs/concepts/materialized-projections.md",

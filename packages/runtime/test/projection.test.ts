@@ -2,7 +2,9 @@ import { Effect, Exit, Schema } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import {
+  MaterializedProjections,
   ProjectionReducerReturnedThenable,
+  ProjectionWaitTimedOut,
   applyProjectionEvent,
   defineProjection,
   makeProjectionRegistry,
@@ -10,6 +12,8 @@ import {
   projectionIdentity,
   projectionMalformed,
   projectionPut,
+  waitForProjection,
+  type MaterializedProjectionRow,
 } from "../src/projection";
 
 const eventIdentity = (scopeId: string) => ({
@@ -30,6 +34,15 @@ const payload = (event: LedgerEvent): Record<string, unknown> =>
   event.payload !== null && typeof event.payload === "object"
     ? (event.payload as Record<string, unknown>)
     : {};
+
+interface RunIdentity {
+  readonly runId: string;
+}
+
+interface RunState {
+  readonly runId: string;
+  readonly status: "requested" | "completed";
+}
 
 const runProjection = defineProjection({
   kind: "run.workflow",
@@ -52,6 +65,20 @@ const runProjection = defineProjection({
     row.kind === "run.completed"
       ? projectionPut({ ...state, status: "completed" as const })
       : projectionPut(state),
+});
+
+const row = (
+  id: number,
+  status: "requested" | "completed",
+): MaterializedProjectionRow<RunIdentity, RunState> => ({
+  kind: "run.workflow",
+  scope: "conversation:projection-scope",
+  identityKey: "r1",
+  identity: { runId: "r1" },
+  state: { runId: "r1", status },
+  version: 1,
+  updatedEventId: id,
+  updatedAt: id * 10,
 });
 
 describe("materialized projection runtime algebra", () => {
@@ -148,4 +175,80 @@ describe("materialized projection runtime algebra", () => {
     const error = new ProjectionReducerReturnedThenable({ kind: "run.thenable", eventId: 1 });
     expect(error._tag).toBe("agent_os.projection_reducer_returned_thenable");
   });
+
+  it.effect("waits for a projection row through the Effect service", () =>
+    Effect.gen(function* () {
+      let reads = 0;
+      const service = {
+        get: () =>
+          Effect.sync(() => {
+            reads += 1;
+            return reads === 1 ? null : row(2, "completed");
+          }),
+        list: () => Effect.succeed([]),
+        status: () =>
+          Effect.die("unused status"),
+        rebuild: () => Effect.die("unused rebuild"),
+      };
+
+      const result = yield* waitForProjection<RunIdentity, RunState>({
+        kind: "run.workflow",
+        ...eventIdentity("projection-scope"),
+        identity: { runId: "r1" },
+        maxAttempts: 3,
+        pollIntervalMs: 0,
+      }).pipe(Effect.provideService(MaterializedProjections, service));
+
+      expect(result.state.status).toBe("completed");
+      expect(reads).toBe(2);
+    }),
+  );
+
+  it.effect("waits until the ready predicate matches and fails with a typed timeout", () =>
+    Effect.gen(function* () {
+      let reads = 0;
+      const service = {
+        get: () =>
+          Effect.sync(() => {
+            reads += 1;
+            return row(reads, reads > 1 ? "completed" : "requested");
+          }),
+        list: () => Effect.succeed([]),
+        status: () => Effect.die("unused status"),
+        rebuild: () => Effect.die("unused rebuild"),
+      };
+
+      const completed = yield* waitForProjection<RunIdentity, RunState>({
+        kind: "run.workflow",
+        ...eventIdentity("projection-scope"),
+        identity: { runId: "r1" },
+        ready: (projection) => projection.state.status === "completed",
+        maxAttempts: 3,
+        pollIntervalMs: 0,
+      }).pipe(Effect.provideService(MaterializedProjections, service));
+      expect(completed.updatedEventId).toBe(2);
+
+      const timedOut = yield* Effect.either(
+        waitForProjection<RunIdentity, RunState>({
+          kind: "run.workflow",
+          ...eventIdentity("projection-scope"),
+          identity: { runId: "missing" },
+          maxAttempts: 2,
+          pollIntervalMs: 0,
+        }).pipe(
+          Effect.provideService(MaterializedProjections, {
+            ...service,
+            get: () => Effect.succeed(null),
+          }),
+        ),
+      );
+      expect(timedOut._tag).toBe("Left");
+      if (timedOut._tag === "Left") {
+        expect(timedOut.left._tag).toBe("agent_os.projection_wait_timed_out");
+        if (timedOut.left._tag === "agent_os.projection_wait_timed_out") {
+          expect(timedOut.left.reason).toBe("missing");
+        }
+      }
+    }),
+  );
 });

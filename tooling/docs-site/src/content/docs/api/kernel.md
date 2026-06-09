@@ -207,6 +207,7 @@ title: "@agent-os/kernel Public API Intent"
 - `.:SYMBOLIC_SETTLEMENT_VALUE_PATTERN`
   `
 - `.:DeterministicToolInvocation`
+- `.:DefineProductToolSpec`
 - `.:ExecutionDomain`
 - `.:ExecutionDomainDeclaration`
 - `.:ExecutionDomainKind`
@@ -220,11 +221,13 @@ title: "@agent-os/kernel Public API Intent"
 - `.:ToolExecute`
 - `.:ToolRequirements`
 - `.:deterministicToolInvocation`
+- `.:defineProductTool`
 - `.:effectfulToolExecution`
 - `.:pureToolExecution`
 - `.:unsafeRunToolByName`
 - `.:validateExecutionDomainRegistry`
 - `./tools:DefineToolSpec`
+- `./tools:DefineProductToolSpec`
 - `./tools:DeterministicToolInvocation`
 - `./tools:ExecutionDomain`
 - `./tools:ExecutionDomainDeclaration`
@@ -249,6 +252,7 @@ title: "@agent-os/kernel Public API Intent"
 - `./tools:ToolRegistryValidation`
 - `./tools:decodeToolArgs`
 - `./tools:deterministicToolInvocation`
+- `./tools:defineProductTool`
 - `./tools:defineTool`
 - `./tools:effectfulToolExecution`
 - `./tools:executeTool`
@@ -353,6 +357,7 @@ text`
 - `.:CredentialMaterialRequirement`
 - `.:DefineCarrierSpec`
 - `.:DefineToolSpec`
+- `.:DefineProductToolSpec`
 - `.:DeliveryReceipt`
 - `.:DispatchBindingRefMalformed`
 - `.:DispatchScopeMismatch`
@@ -475,6 +480,7 @@ text`
 - `.:defineEventPayloads`
 - `.:defineSettlementContract`
 - `.:defineTool`
+- `.:defineProductTool`
 - `.:ensureAgentSchema`
 - `.:endpointMaterialRef`
 - `.:event`

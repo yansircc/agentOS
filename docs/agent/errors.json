@@ -287,6 +287,16 @@
       "sourceFiles": ["packages/runtime/src/projection.ts"]
     },
     {
+      "tag": "agent_os.projection_wait_timed_out",
+      "invariants": ["invariant.d10.truth-identity"],
+      "docs": "docs/concepts/materialized-projections.md",
+      "fix": "Wait on the ledger-derived projection with a bounded Effect retry policy, or commit the missing ledger fact before reading the projection.",
+      "sourceFiles": [
+        "packages/runtime/src/projection.ts",
+        "packages/runtime/test/projection.test.ts"
+      ]
+    },
+    {
       "tag": "agent_os.provider_http_failure",
       "invariants": ["invariant.boundary.runtime-validation-external-only"],
       "docs": "docs/concepts/agent-schema.md",

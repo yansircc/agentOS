@@ -88,6 +88,8 @@ title: "@agent-os/runtime Public API Intent"
 - `.:ProjectionRegistryBuildResult`
 - `.:ProjectionRegistryError`
 - `.:ProjectionStatus`
+- `.:ProjectionWaitSpec`
+- `.:ProjectionWaitTimedOut`
 - `.:Quota`
 - `.:RUN_BEARING_KINDS`
 - `.:Resources`
@@ -143,6 +145,7 @@ title: "@agent-os/runtime Public API Intent"
 - `.:projectionMalformed`
 - `.:projectionPut`
 - `.:projectionSkip`
+- `.:waitForProjection`
 - `.:runSynchronousAttachedStreamCommit`
 - `.:runSynchronousTriggerCommit`
 - `.:scheduledEventIntentPayload`

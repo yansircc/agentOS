@@ -3,6 +3,7 @@ import { describe, expect, it } from "@effect/vitest";
 
 import {
   defineTool,
+  defineProductTool,
   deterministicToolInvocation,
   executeTool,
   pureToolExecution,
@@ -133,6 +134,25 @@ describe("defineTool", () => {
     // @ts-expect-error execution is a Tool sibling, not ToolContract data.
     expect(tool.contract.execution).toBeUndefined();
   });
+});
+
+describe("defineProductTool", () => {
+  it.effect("defaults to pure Effect execution without a Promise waiter boundary", () =>
+    Effect.gen(function* () {
+      const tool = defineProductTool({
+        name: "refresh_view",
+        description: "Refresh a product view",
+        args: Schema.Struct({ projectionId: Schema.String }),
+        authority: "product",
+        admit: allowToolAdmitter,
+        execute: ({ projectionId }) => Effect.succeed({ projectionId, refreshed: true }),
+      });
+
+      expect(tool.execution).toEqual({ kind: "pure" });
+      const result = yield* executeTool(tool, { projectionId: "run:r1" }, "refresh_view");
+      expect(result).toEqual({ projectionId: "run:r1", refreshed: true });
+    }),
+  );
 });
 
 describe("ExecutionDomainRegistry", () => {

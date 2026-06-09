@@ -84,6 +84,8 @@
 - `.:ProjectionRegistryBuildResult`
 - `.:ProjectionRegistryError`
 - `.:ProjectionStatus`
+- `.:ProjectionWaitSpec`
+- `.:ProjectionWaitTimedOut`
 - `.:Quota`
 - `.:RUN_BEARING_KINDS`
 - `.:Resources`
@@ -139,6 +141,7 @@
 - `.:projectionMalformed`
 - `.:projectionPut`
 - `.:projectionSkip`
+- `.:waitForProjection`
 - `.:runSynchronousAttachedStreamCommit`
 - `.:runSynchronousTriggerCommit`
 - `.:scheduledEventIntentPayload`

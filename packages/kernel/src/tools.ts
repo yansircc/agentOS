@@ -209,6 +209,11 @@ export interface DefineToolSpec<S extends Schema.Schema.AnyNoContext, R> {
   readonly execution: ToolExecution;
 }
 
+export interface DefineProductToolSpec<S extends Schema.Schema.AnyNoContext, R>
+  extends Omit<DefineToolSpec<S, R>, "execution"> {
+  readonly execution?: ToolExecution;
+}
+
 const makeToolContract = (shape: ToolContractShape): ToolContract =>
   Object.defineProperty({ ...shape }, TOOL_CONTRACT_BRAND, {
     value: true,
@@ -361,6 +366,23 @@ export const defineTool = <S extends Schema.Schema.AnyNoContext, R>(
     }),
   };
 };
+
+/**
+ * Defines a product-owned tool with the same Effect-native execution contract
+ * as `defineTool`, defaulting to pure execution when no domain is required.
+ *
+ * @agentosPrimitive primitive.kernel.defineProductTool
+ * @agentosInvariant invariant.algebra.type-or-boot-proof
+ * @agentosDocs docs/concepts/tool-execution-domain.md
+ * @public
+ */
+export const defineProductTool = <S extends Schema.Schema.AnyNoContext, R>(
+  spec: DefineProductToolSpec<S, R>,
+): Tool<Schema.Schema.Type<S>, R> =>
+  defineTool({
+    ...spec,
+    execution: spec.execution ?? pureToolExecution(),
+  });
 
 export type ToolRegistryIssue =
   | {
