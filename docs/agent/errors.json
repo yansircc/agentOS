@@ -264,6 +264,13 @@
       "sourceFiles": ["packages/runtime/src/submit-agent.ts"]
     },
     {
+      "tag": "agent_os.postgres_harness_error",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/backend-node-postgres.md",
+      "fix": "Start and clean up the runtime contract Postgres harness at the test boundary, mapping Docker, psql, and config failures into the harness error channel.",
+      "sourceFiles": ["packages/backends/node-postgres/test/postgres-harness.ts"]
+    },
+    {
       "tag": "agent_os.projection_application_error",
       "invariants": ["invariant.d10.truth-identity"],
       "docs": "docs/concepts/materialized-projections.md",

@@ -53,10 +53,6 @@ title: "@agent-os/runtime Public API Intent"
 - `.:DurableTriggerCancellationMode`
 - `.:DurableTriggerRegistry`
 - `.:Ledger`
-- `.:LlmCallOptions`
-- `.:LlmRoute`
-- `.:LlmTransport`
-- `.:LlmUsage`
 - `.:MakeAttachedStreamRegistryOptions`
 - `.:MakeAttachedStreamServiceSpec`
 - `.:MaterializedProjectionDefinition`
@@ -164,7 +160,6 @@ title: "@agent-os/runtime Public API Intent"
 
 ## Experimental exports
 
-- `.:LlmTransportRouteDescriptor`
 - `.:StructuredCallFailureClassification`
 - `.:classifyStructuredCallFailure`
 - `.:structuredOutputRequest`

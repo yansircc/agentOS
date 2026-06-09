@@ -10,6 +10,9 @@ Status: LLM protocol package. Public exports are limited to provider-neutral LLM
 - `.:LlmJsonSchemaObject`
 - `.:LlmRoute`
 - `.:LlmWireDescriptor`
+- `.:LlmCallOptions`
+- `.:LlmTransportRouteDescriptor`
+- `.:LlmTransport`
 - `.:llmRouteMaterialRefs`
 - `.:LlmToolCall`
 - `.:LlmMessage`

@@ -1,42 +1,25 @@
 {
   "version": 1,
-  "productionBackends": [
-    "packages/backends/cloudflare-do",
-    "packages/backends/node-postgres"
-  ],
+  "productionBackends": ["packages/backends/cloudflare-do", "packages/backends/node-postgres"],
   "scenarios": [
     {
       "kind": "dispatch.delivery",
       "liveIoAdapterCalls": 0,
-      "appendedFacts": [
-        "dispatch.outbound.delivered"
-      ]
+      "appendedFacts": ["dispatch.outbound.delivered"]
     },
     {
       "kind": "llm.call",
       "liveIoAdapterCalls": 0,
-      "appendedFacts": [
-        "llm.call.replayed"
-      ]
+      "appendedFacts": ["llm.call.replayed"]
     },
     {
       "kind": "tool.call",
       "liveIoAdapterCalls": 0,
-      "appendedFacts": [
-        "tool.call.replayed"
-      ]
+      "appendedFacts": ["tool.call.replayed"]
     }
   ],
   "backendResults": {
-    "packages/backends/cloudflare-do": [
-      "dispatch.delivery",
-      "llm.call",
-      "tool.call"
-    ],
-    "packages/backends/node-postgres": [
-      "dispatch.delivery",
-      "llm.call",
-      "tool.call"
-    ]
+    "packages/backends/cloudflare-do": ["dispatch.delivery", "llm.call", "tool.call"],
+    "packages/backends/node-postgres": ["dispatch.delivery", "llm.call", "tool.call"]
   }
 }

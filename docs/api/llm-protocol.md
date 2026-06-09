@@ -6,6 +6,9 @@
 - `.:LlmJsonSchemaObject`
 - `.:LlmRoute`
 - `.:LlmWireDescriptor`
+- `.:LlmCallOptions`
+- `.:LlmTransportRouteDescriptor`
+- `.:LlmTransport`
 - `.:llmRouteMaterialRefs`
 - `.:LlmToolCall`
 - `.:LlmMessage`

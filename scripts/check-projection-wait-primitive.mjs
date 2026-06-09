@@ -33,15 +33,19 @@ const collectFailures = (root = repoRoot) => {
     "export class ProjectionWaitTimedOut",
     "export const waitForProjection",
   ]) {
-    if (!runtimeProjection.includes(required)) failures.push(`${runtimeProjectionFile}: missing ${required}`);
+    if (!runtimeProjection.includes(required))
+      failures.push(`${runtimeProjectionFile}: missing ${required}`);
   }
   const waitBlock = blockFrom(runtimeProjection, "export const waitForProjection");
-  if (waitBlock.length === 0) failures.push(`${runtimeProjectionFile}: missing waitForProjection block`);
+  if (waitBlock.length === 0)
+    failures.push(`${runtimeProjectionFile}: missing waitForProjection block`);
   if (/\bPromise\b|new Promise|async\s*\(/.test(waitBlock)) {
     failures.push(`${runtimeProjectionFile}: waitForProjection must stay Effect-native`);
   }
   if (!/MaterializedProjections/.test(waitBlock)) {
-    failures.push(`${runtimeProjectionFile}: waitForProjection must read through MaterializedProjections`);
+    failures.push(
+      `${runtimeProjectionFile}: waitForProjection must read through MaterializedProjections`,
+    );
   }
   if (!/waits for a projection row through the Effect service/.test(runtimeTest)) {
     failures.push(`${runtimeProjectionTest}: missing Effect service projection wait test`);
@@ -63,7 +67,11 @@ const collectFailures = (root = repoRoot) => {
   }
 
   const combined = [runtimeProjection, kernelTools].join("\n");
-  if (/ToolProjectionWaiter|awaitProjection:\s*.*Promise|awaitProjection[\s\S]{0,80}Promise/.test(combined)) {
+  if (
+    /ToolProjectionWaiter|awaitProjection:\s*.*Promise|awaitProjection[\s\S]{0,80}Promise/.test(
+      combined,
+    )
+  ) {
     failures.push("projection wait primitive leaked a Promise-shaped tool waiter");
   }
   return failures;
@@ -124,7 +132,9 @@ const collectSelfTestFailures = () => {
     );
     const rejected = collectFailures(root);
     if (!rejected.some((failure) => failure.includes("Effect-native"))) {
-      return [`projection wait primitive Promise mutation was not rejected: ${JSON.stringify(rejected)}`];
+      return [
+        `projection wait primitive Promise mutation was not rejected: ${JSON.stringify(rejected)}`,
+      ];
     }
     return [];
   } finally {

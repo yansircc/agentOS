@@ -10,6 +10,9 @@ title: "@agent-os/llm-protocol API"
 - `.:LlmJsonSchemaObject`
 - `.:LlmRoute`
 - `.:LlmWireDescriptor`
+- `.:LlmCallOptions`
+- `.:LlmTransportRouteDescriptor`
+- `.:LlmTransport`
 - `.:llmRouteMaterialRefs`
 - `.:LlmToolCall`
 - `.:LlmMessage`

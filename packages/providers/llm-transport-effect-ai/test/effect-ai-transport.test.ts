@@ -19,6 +19,7 @@ import { Cause, Effect, Exit, Fiber, Layer, Option, Schema, Stream } from "effec
 import { ensureAgentSchema } from "@agent-os/kernel/agent-schema";
 import {
   llmCallSnapshotFromResponse,
+  LlmTransport,
   projectAgentSchemaForLlmTool,
   replayLlmResponseFromSnapshot,
   type LlmRequest,
@@ -26,7 +27,6 @@ import {
 import type { ToolDefinition } from "@agent-os/kernel/tools";
 import { RefResolverLive } from "@agent-os/kernel/ref-resolver";
 import { ProviderHttpFailure, UpstreamFailure } from "@agent-os/kernel/errors";
-import { LlmTransport } from "@agent-os/runtime";
 import {
   callEffectAiLanguageModel,
   effectAiPromptFromMessages,

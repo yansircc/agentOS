@@ -39,25 +39,38 @@ const collectFailures = (root = repoRoot) => {
   const proofBlock = functionBlock(protocol, "dispatchReceiptBeforeTerminalProof");
   if (proofBlock.length === 0) failures.push(`${protocolFile}: missing receipt proof block`);
   if (!/idempotencyKey/.test(proofBlock) || !/deliveryReceipt/.test(proofBlock)) {
-    failures.push(`${protocolFile}: receipt-before-terminal proof must include idempotencyKey and deliveryReceipt`);
+    failures.push(
+      `${protocolFile}: receipt-before-terminal proof must include idempotencyKey and deliveryReceipt`,
+    );
   }
 
   const failedBlock = functionBlock(protocol, "dispatchFailedHasNoDeliveryReceipt");
-  if (failedBlock.length === 0) failures.push(`${protocolFile}: missing failed terminal receipt exclusion`);
+  if (failedBlock.length === 0)
+    failures.push(`${protocolFile}: missing failed terminal receipt exclusion`);
   if (!/deliveryReceipt/.test(failedBlock)) {
     failures.push(`${protocolFile}: failed terminal receipt exclusion must reject deliveryReceipt`);
   }
 
-  if (!/receipt-before-terminal proof ties terminal delivery to idempotency receipt/.test(protocolTestSource)) {
+  if (
+    !/receipt-before-terminal proof ties terminal delivery to idempotency receipt/.test(
+      protocolTestSource,
+    )
+  ) {
     failures.push(`${protocolTest}: missing receipt-before-terminal proof test`);
   }
   if (!/dispatchFailedHasNoDeliveryReceipt/.test(protocolTestSource)) {
     failures.push(`${protocolTest}: missing terminal failure no-receipt test`);
   }
-  if (!/drains Queue, HTTP, and provider target adapters through delivery receipts/.test(backendContract)) {
+  if (
+    !/drains Queue, HTTP, and provider target adapters through delivery receipts/.test(
+      backendContract,
+    )
+  ) {
     failures.push(`${backendContractTest}: missing external mutation receipt contract`);
   }
-  if (!/receiver dedupes by \(sourceScope, idempotencyKey\), not outboundEventId/.test(cloudflare)) {
+  if (
+    !/receiver dedupes by \(sourceScope, idempotencyKey\), not outboundEventId/.test(cloudflare)
+  ) {
     failures.push(`${cloudflareTest}: missing receiver idempotency contract`);
   }
   if (!/deliveryReceipt/.test(cloudflare)) {
@@ -122,7 +135,9 @@ const collectSelfTestFailures = () => {
     );
     const rejected = collectFailures(root);
     if (!rejected.some((failure) => failure.includes("deliveryReceipt"))) {
-      return [`dispatch idempotency receipt mutation was not rejected: ${JSON.stringify(rejected)}`];
+      return [
+        `dispatch idempotency receipt mutation was not rejected: ${JSON.stringify(rejected)}`,
+      ];
     }
     return [];
   } finally {

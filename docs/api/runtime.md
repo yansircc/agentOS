@@ -49,10 +49,6 @@
 - `.:DurableTriggerCancellationMode`
 - `.:DurableTriggerRegistry`
 - `.:Ledger`
-- `.:LlmCallOptions`
-- `.:LlmRoute`
-- `.:LlmTransport`
-- `.:LlmUsage`
 - `.:MakeAttachedStreamRegistryOptions`
 - `.:MakeAttachedStreamServiceSpec`
 - `.:MaterializedProjectionDefinition`
@@ -160,7 +156,6 @@
 
 ## Experimental exports
 
-- `.:LlmTransportRouteDescriptor`
 - `.:StructuredCallFailureClassification`
 - `.:classifyStructuredCallFailure`
 - `.:structuredOutputRequest`

@@ -26,6 +26,7 @@ export const agentOsSourceAliasSpecs = [
   ["@agent-os/backend-cloudflare-do", "packages/backends/cloudflare-do/src/index.ts"],
   ["@agent-os/backend-cloudflare-do/do-rpc", "packages/backends/cloudflare-do/src/do-rpc.ts"],
   ["@agent-os/backend-in-memory", "packages/backends/in-memory/src/index.ts"],
+  ["@agent-os/backend-node-postgres", "packages/backends/node-postgres/src/index.ts"],
   ["@agent-os/backend-protocol", "packages/backends/protocol/src/index.ts"],
   ["@agent-os/backend-protocol/reference", "packages/backends/protocol/src/reference/index.ts"],
   ["@agent-os/decision-gate", "packages/carriers/decision-gate/src/index.ts"],

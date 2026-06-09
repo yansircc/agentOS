@@ -3,12 +3,11 @@ import { describe, expect, it } from "@effect/vitest";
 
 import { Ledger } from "../src/ledger";
 import { BoundaryEvents } from "../src/boundary-events";
-import { LlmTransport } from "../src/llm-transport";
 import { Quota } from "../src/quota-service";
 import { Admission } from "../src/admission";
 import { DEFAULT_LLM_CALL_TIMEOUT_MS, submitAgentEffect } from "../src/submit-agent";
 import type { LedgerEvent } from "@agent-os/kernel/types";
-import type { LlmRoute, LlmWireDescriptor } from "@agent-os/llm-protocol";
+import { LlmTransport, type LlmRoute, type LlmWireDescriptor } from "@agent-os/llm-protocol";
 import {
   RUNTIME_FACT_OWNER,
   decodeRuntimeLedgerEvent,

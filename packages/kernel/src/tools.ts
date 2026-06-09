@@ -209,8 +209,10 @@ export interface DefineToolSpec<S extends Schema.Schema.AnyNoContext, R> {
   readonly execution: ToolExecution;
 }
 
-export interface DefineProductToolSpec<S extends Schema.Schema.AnyNoContext, R>
-  extends Omit<DefineToolSpec<S, R>, "execution"> {
+export interface DefineProductToolSpec<S extends Schema.Schema.AnyNoContext, R> extends Omit<
+  DefineToolSpec<S, R>,
+  "execution"
+> {
   readonly execution?: ToolExecution;
 }
 

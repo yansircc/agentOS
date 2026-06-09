@@ -11,7 +11,8 @@ import { QuotaLive } from "../src/quota";
 import { RefResolverLive } from "@agent-os/kernel/ref-resolver";
 import type { ResolvedMaterial } from "@agent-os/kernel/ref-resolver";
 import { ToolError } from "@agent-os/kernel/errors";
-import { LlmTransport, submitAgentEffect } from "@agent-os/runtime";
+import { LlmTransport } from "@agent-os/llm-protocol";
+import { submitAgentEffect } from "@agent-os/runtime";
 import type { InternalSubmitSpec } from "@agent-os/runtime-protocol";
 import { defineTool, pureToolExecution, type Tool } from "@agent-os/kernel/tools";
 import {
@@ -334,11 +335,11 @@ describe("tool registry generator", () => {
           claim: expect.objectContaining({
             phase: "rejected",
             operationRef: "tool:tool-registry-admitter-throw:1:0:call-1",
-              rejectionRef: {
-                rejectionId: "tool:tool-registry-admitter-throw:1:0:call-1",
-                rejectionKind: "provider_rejected",
-                reason: "admitter_error:agent.aborted.tool_error",
-              },
+            rejectionRef: {
+              rejectionId: "tool:tool-registry-admitter-throw:1:0:call-1",
+              rejectionKind: "provider_rejected",
+              reason: "admitter_error:agent.aborted.tool_error",
+            },
           }),
         }),
       );

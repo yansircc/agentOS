@@ -291,16 +291,16 @@ export class MaterializedProjections extends Context.Tag("@agent-os/Materialized
   }
 >() {}
 
-export interface ProjectionWaitSpec<Identity = unknown, State = unknown>
-  extends MaterializedProjectionGetSpec {
+export interface ProjectionWaitSpec<
+  Identity = unknown,
+  State = unknown,
+> extends MaterializedProjectionGetSpec {
   readonly ready?: (row: MaterializedProjectionRow<Identity, State>) => boolean;
   readonly maxAttempts?: number;
   readonly pollIntervalMs?: number;
 }
 
-export class ProjectionWaitTimedOut extends Data.TaggedError(
-  "agent_os.projection_wait_timed_out",
-)<{
+export class ProjectionWaitTimedOut extends Data.TaggedError("agent_os.projection_wait_timed_out")<{
   readonly projectionKind: string;
   readonly maxAttempts: number;
   readonly reason: "missing" | "not_ready";

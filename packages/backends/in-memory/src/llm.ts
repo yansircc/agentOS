@@ -1,7 +1,12 @@
 import { Effect, Layer } from "effect";
 import { UpstreamFailure } from "@agent-os/kernel/errors";
-import type { LlmRequest, LlmResponse, LlmRoute, LlmWireDescriptor } from "@agent-os/llm-protocol";
-import { LlmTransport } from "@agent-os/runtime";
+import {
+  LlmTransport,
+  type LlmRequest,
+  type LlmResponse,
+  type LlmRoute,
+  type LlmWireDescriptor,
+} from "@agent-os/llm-protocol";
 
 export interface InMemoryLlmTransportOptions {
   readonly handler?: (request: LlmRequest) => LlmResponse | Promise<LlmResponse>;

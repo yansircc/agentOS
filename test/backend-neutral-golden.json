@@ -1,9 +1,6 @@
 {
   "version": 1,
-  "productionBackends": [
-    "packages/backends/cloudflare-do",
-    "packages/backends/node-postgres"
-  ],
+  "productionBackends": ["packages/backends/cloudflare-do", "packages/backends/node-postgres"],
   "scenario": "schedule-dispatch-retry",
   "canonicalFlow": [
     {
@@ -45,11 +42,5 @@
       "eventKind": "app.combo"
     }
   ],
-  "volatileFieldsExcluded": [
-    "id",
-    "ts",
-    "backendHostId",
-    "routeKey",
-    "postgresSchema"
-  ]
+  "volatileFieldsExcluded": ["id", "ts", "backendHostId", "routeKey", "postgresSchema"]
 }

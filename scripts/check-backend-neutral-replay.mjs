@@ -38,7 +38,8 @@ const collectFailures = (root = repoRoot) => {
     "scripts/check-replay-llm-snapshot.mjs",
     "scripts/check-replay-tool-snapshot.mjs",
   ]) {
-    if (!fs.existsSync(path.join(root, script))) failures.push(`${script}: missing replay snapshot gate`);
+    if (!fs.existsSync(path.join(root, script)))
+      failures.push(`${script}: missing replay snapshot gate`);
   }
   return failures;
 };
@@ -58,7 +59,9 @@ const collectSelfTestFailures = () => {
       JSON.stringify({
         productionBackends: expectedBackends,
         scenarios: requiredKinds.map((kind) => ({ kind, liveIoAdapterCalls: 0 })),
-        backendResults: Object.fromEntries(expectedBackends.map((backend) => [backend, requiredKinds])),
+        backendResults: Object.fromEntries(
+          expectedBackends.map((backend) => [backend, requiredKinds]),
+        ),
       }),
     );
     for (const script of [
@@ -75,8 +78,13 @@ const collectSelfTestFailures = () => {
       "test/backend-neutral-replay.json",
       JSON.stringify({
         productionBackends: expectedBackends,
-        scenarios: requiredKinds.map((kind) => ({ kind, liveIoAdapterCalls: kind === "tool.call" ? 1 : 0 })),
-        backendResults: Object.fromEntries(expectedBackends.map((backend) => [backend, requiredKinds])),
+        scenarios: requiredKinds.map((kind) => ({
+          kind,
+          liveIoAdapterCalls: kind === "tool.call" ? 1 : 0,
+        })),
+        backendResults: Object.fromEntries(
+          expectedBackends.map((backend) => [backend, requiredKinds]),
+        ),
       }),
     );
     const rejected = collectFailures(root);
@@ -96,4 +104,8 @@ if (failures.length > 0) {
   console.error(failures.join("\n"));
   process.exit(1);
 }
-console.log(process.argv.includes("--self-test") ? "backend-neutral replay self-test passed" : "backend-neutral replay passed");
+console.log(
+  process.argv.includes("--self-test")
+    ? "backend-neutral replay self-test passed"
+    : "backend-neutral replay passed",
+);

@@ -21,7 +21,6 @@
 import { Clock, Effect, Layer } from "effect";
 import {
   Admission,
-  LlmTransport,
   classifyStructuredCallFailure,
   decodeStructuredOutputFromItems,
   structuredOutputRequest,
@@ -37,7 +36,7 @@ import {
   type InvalidateSpec,
   type Outcome,
 } from "@agent-os/runtime-protocol";
-import { llmWireDescriptorFingerprint } from "@agent-os/llm-protocol";
+import { LlmTransport, llmWireDescriptorFingerprint } from "@agent-os/llm-protocol";
 import { EventBus } from "../ledger";
 import { JsonStringifyError, SqlError, UpstreamFailure } from "@agent-os/kernel/errors";
 import { commitLedgerTransaction } from "../ledger/commit";

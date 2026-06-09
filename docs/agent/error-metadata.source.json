@@ -8,6 +8,12 @@
       "fix": "Keep SQL writes inside the backend-owned ledger commit primitive and return typed SqlError at the backend boundary."
     },
     {
+      "tag": "agent_os.postgres_harness_error",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/backend-node-postgres.md",
+      "fix": "Start and clean up the runtime contract Postgres harness at the test boundary, mapping Docker, psql, and config failures into the harness error channel."
+    },
+    {
       "tag": "agent_os.json_stringify_error",
       "invariants": ["invariant.ledger.single-commit-source"],
       "docs": "docs/concepts/durable-truth.md",

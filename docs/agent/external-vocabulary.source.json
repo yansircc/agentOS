@@ -27,7 +27,7 @@
       "id": "external.effect-ai",
       "name": "Effect AI",
       "docs": "docs/packages/llm-transport-effect-ai.md",
-      "mapsTo": ["primitive.runtime.LlmTransport", "primitive.runtime.SubmitSpec"],
+      "mapsTo": ["primitive.llm_protocol.LlmTransport", "primitive.runtime.SubmitSpec"],
       "notes": [
         "Effect AI is provider transport, not ledger truth or admission evidence ownership."
       ]

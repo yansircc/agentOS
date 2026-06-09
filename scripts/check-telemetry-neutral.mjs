@@ -79,7 +79,9 @@ const collectFailures = (root = repoRoot) => {
     failures.push(`${runtimeTreeFile}: missing runtime telemetry tree projection`);
   }
   if (!/canonicalTelemetryEventTreeJson/.test(runtimeTest)) {
-    failures.push(`${runtimeTreeTest}: runtime test must compare telemetry-protocol canonical trees`);
+    failures.push(
+      `${runtimeTreeTest}: runtime test must compare telemetry-protocol canonical trees`,
+    );
   }
 
   for (const scanRoot of scanRoots) {
@@ -148,7 +150,9 @@ const collectSelfTestFailures = () => {
       !rejected.some((failure) => failure.includes("fanoutDiagnosticsLog")) ||
       !rejected.some((failure) => failure.includes("fanoutDiagnostics:"))
     ) {
-      return [`telemetry-neutral fanout mutation fixture was not rejected: ${JSON.stringify(rejected)}`];
+      return [
+        `telemetry-neutral fanout mutation fixture was not rejected: ${JSON.stringify(rejected)}`,
+      ];
     }
 
     writeFixture(
@@ -169,7 +173,9 @@ const collectSelfTestFailures = () => {
     );
     const missingService = collectFailures(root);
     if (!missingService.some((failure) => failure.includes("export class Telemetry"))) {
-      return [`telemetry-neutral service mutation fixture was not rejected: ${JSON.stringify(missingService)}`];
+      return [
+        `telemetry-neutral service mutation fixture was not rejected: ${JSON.stringify(missingService)}`,
+      ];
     }
 
     return [];

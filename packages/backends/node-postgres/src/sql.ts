@@ -11,20 +11,12 @@ export interface PsqlCliOptions {
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 export const quoteIdentifier = (value: string): string => {
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)) {
-    throw new SqlError({ cause: new TypeError(`invalid postgres identifier: ${value}`) });
-  }
   return `"${value.replace(/"/g, '""')}"`;
 };
 
 export const sqlString = (value: string): string => `'${value.replace(/'/g, "''")}'`;
 
-export const sqlNumber = (value: number): string => {
-  if (!Number.isFinite(value)) {
-    throw new SqlError({ cause: new TypeError("postgres numeric literal must be finite") });
-  }
-  return String(value);
-};
+export const sqlNumber = (value: number): string => String(value);
 
 export const sqlJson = (value: unknown): string => `${sqlString(JSON.stringify(value))}::jsonb`;
 

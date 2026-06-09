@@ -280,7 +280,7 @@
       "name": "@agent-os/llm-transport-effect-ai",
       "path": "packages/providers/llm-transport-effect-ai",
       "status": "0.2.x experimental",
-      "role": "Effect AI provider projection adapter for runtime LlmTransport",
+      "role": "Effect AI provider projection adapter for the provider-neutral LlmTransport port",
       "boundary": "agentOS LlmRoute/material/tool/output algebra to Effect AI LanguageModel calls",
       "need": "Effect AI LLM transport proof",
       "readmeStatus": "0.2.x public-experimental. Exports are listed in `PUBLIC_API.md` to prevent accidental exports; this is not an API freeze.",

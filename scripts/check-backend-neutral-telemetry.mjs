@@ -31,7 +31,10 @@ const collectFailures = (root = repoRoot) => {
       }
     }
   }
-  const protocol = fs.readFileSync(path.join(root, "packages/telemetry-protocol/src/index.ts"), "utf8");
+  const protocol = fs.readFileSync(
+    path.join(root, "packages/telemetry-protocol/src/index.ts"),
+    "utf8",
+  );
   if (!protocol.includes("canonicalTelemetryEventTreeJson")) {
     failures.push("telemetry-protocol must own canonical telemetry tree JSON");
   }
@@ -54,9 +57,16 @@ const collectSelfTestFailures = () => {
     writeFixture(
       root,
       "test/backend-neutral-telemetry.json",
-      JSON.stringify({ productionBackends: expectedBackends, canonicalTrees: Object.fromEntries(expectedBackends.map((backend) => [backend, tree])) }),
+      JSON.stringify({
+        productionBackends: expectedBackends,
+        canonicalTrees: Object.fromEntries(expectedBackends.map((backend) => [backend, tree])),
+      }),
     );
-    writeFixture(root, "packages/telemetry-protocol/src/index.ts", "canonicalTelemetryEventTreeJson\ntelemetryEventTreesEqual");
+    writeFixture(
+      root,
+      "packages/telemetry-protocol/src/index.ts",
+      "canonicalTelemetryEventTreeJson\ntelemetryEventTreesEqual",
+    );
     const baseline = collectFailures(root);
     if (baseline.length > 0) return [`telemetry positive fixture failed:\n${baseline.join("\n")}`];
     writeFixture(
@@ -87,4 +97,8 @@ if (failures.length > 0) {
   console.error(failures.join("\n"));
   process.exit(1);
 }
-console.log(process.argv.includes("--self-test") ? "backend-neutral telemetry self-test passed" : "backend-neutral telemetry passed");
+console.log(
+  process.argv.includes("--self-test")
+    ? "backend-neutral telemetry self-test passed"
+    : "backend-neutral telemetry passed",
+);

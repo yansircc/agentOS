@@ -13,7 +13,7 @@
 import { Context, Layer, ManagedRuntime, Schema } from "effect";
 
 import { EventBusLive, LedgerLive } from "../../src/ledger";
-import { LlmTransport } from "@agent-os/runtime";
+import { LlmTransport } from "@agent-os/llm-protocol";
 import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
 import { RefResolverLive } from "@agent-os/kernel/ref-resolver";
 import { QuotaLive } from "../../src/quota";

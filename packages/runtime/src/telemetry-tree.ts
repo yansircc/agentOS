@@ -1,7 +1,9 @@
 import { authorityRefKey, factOwnerKey, scopeRefKey } from "@agent-os/kernel/effect-claim";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import { ABORT } from "@agent-os/kernel/abort";
+import { Effect } from "effect";
 import {
+  InvalidTraceContext,
   validateOptionalTraceContext,
   type TelemetryAttributeValue,
   type TelemetryEmitKind,
@@ -19,11 +21,17 @@ import {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const traceContextFromPayload = (payload: unknown): TraceContext | undefined => {
-  if (!isRecord(payload)) return undefined;
+const traceContextFromPayload = (
+  payload: unknown,
+): Effect.Effect<TraceContext | undefined, InvalidTraceContext> => {
+  if (!isRecord(payload)) return Effect.succeed(undefined);
   const parsed = validateOptionalTraceContext(payload.traceContext);
-  if (!parsed.ok) throw new TypeError(`traceContext malformed: ${parsed.reason}`);
-  return parsed.traceContext;
+  if (!parsed.ok) {
+    return Effect.fail(
+      new InvalidTraceContext({ position: "dispatch_payload", reason: parsed.reason }),
+    );
+  }
+  return Effect.succeed(parsed.traceContext);
 };
 
 const runtimeEventsOf = (events: ReadonlyArray<LedgerEvent>): ReadonlyArray<RuntimeLedgerEvent> => {
@@ -82,10 +90,11 @@ const traceContextForRun = (
 const runtimeTraceContext = (
   runtimeEvents: ReadonlyArray<RuntimeLedgerEvent>,
   event: RuntimeLedgerEvent,
-): TraceContext | undefined => {
-  const direct = traceContextFromPayload(event.payload);
-  return direct ?? traceContextForRun(runtimeEvents, runIdForRuntimeEvent(event));
-};
+): Effect.Effect<TraceContext | undefined, InvalidTraceContext> =>
+  Effect.gen(function* () {
+    const direct = yield* traceContextFromPayload(event.payload);
+    return direct ?? traceContextForRun(runtimeEvents, runIdForRuntimeEvent(event));
+  });
 
 const telemetryNode = (spec: {
   readonly event: LedgerEvent;
@@ -111,87 +120,88 @@ const runNodeId = (runId: number): string => `ledger:${runId}:agent.run`;
 
 const runtimeTelemetryNodes = (
   events: ReadonlyArray<LedgerEvent>,
-): ReadonlyArray<TelemetryEventNode> => {
-  const runtimeEvents = runtimeEventsOf(events);
-  const nodes: TelemetryEventNode[] = [];
+): Effect.Effect<ReadonlyArray<TelemetryEventNode>, InvalidTraceContext> =>
+  Effect.gen(function* () {
+    const runtimeEvents = runtimeEventsOf(events);
+    const nodes: TelemetryEventNode[] = [];
 
-  for (const start of runtimeEvents) {
-    if (start.kind !== RUNTIME_EVENT_KIND.AGENT_RUN_STARTED) continue;
-    const terminal = terminalForRun(runtimeEvents, start.id);
-    nodes.push(
-      telemetryNode({
-        event: start,
-        emitKind: "runtime",
-        name: "agent.run",
-        traceContext: runtimeTraceContext(runtimeEvents, start),
-        sourceEventIds: terminal === undefined ? [start.id] : [start.id, terminal.id],
-        attributes: {
-          "agentos.run.id": start.id,
-          "agentos.event.kind": start.kind,
-          "agentos.run.status":
-            terminal === undefined
-              ? "open"
-              : terminal.kind === RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED
-                ? "completed"
-                : "failed",
-        },
-      }),
-    );
-  }
-
-  for (const event of runtimeEvents) {
-    if (event.kind === RUNTIME_EVENT_KIND.LLM_RESPONSE) {
+    for (const start of runtimeEvents) {
+      if (start.kind !== RUNTIME_EVENT_KIND.AGENT_RUN_STARTED) continue;
+      const terminal = terminalForRun(runtimeEvents, start.id);
       nodes.push(
         telemetryNode({
-          event,
-          parentId: runNodeId(event.payload.turn.id),
-          emitKind: "provider",
-          name: "gen_ai.call",
-          traceContext: runtimeTraceContext(runtimeEvents, event),
-          attributes: {
-            "agentos.run.id": event.payload.turn.id,
-            "agentos.turn.index": event.payload.turn.index,
-            "agentos.event.kind": event.kind,
-            "gen_ai.operation.name": "chat",
-            "gen_ai.usage.input_tokens": event.payload.usage.promptTokens,
-            "gen_ai.usage.output_tokens": event.payload.usage.completionTokens,
-          },
-        }),
-      );
-      continue;
-    }
-    if (
-      event.kind === RUNTIME_EVENT_KIND.TOOL_EXECUTED ||
-      event.kind === RUNTIME_EVENT_KIND.TOOL_REJECTED
-    ) {
-      const domain =
-        event.payload.execution.kind === "effectful" ? event.payload.execution.domain : undefined;
-      nodes.push(
-        telemetryNode({
-          event,
-          parentId: runNodeId(event.payload.runId),
+          event: start,
           emitKind: "runtime",
-          name: "tool.execute",
-          traceContext: runtimeTraceContext(runtimeEvents, event),
+          name: "agent.run",
+          traceContext: yield* runtimeTraceContext(runtimeEvents, start),
+          sourceEventIds: terminal === undefined ? [start.id] : [start.id, terminal.id],
           attributes: {
-            "agentos.run.id": event.payload.runId,
-            "agentos.tool.name": event.payload.name,
-            "agentos.tool.execution.kind": event.payload.execution.kind,
-            "agentos.event.kind": event.kind,
-            ...(domain === undefined
-              ? {}
-              : {
-                  "agentos.execution_domain.kind": domain.kind,
-                  "agentos.execution_domain.ref": domain.ref,
-                }),
+            "agentos.run.id": start.id,
+            "agentos.event.kind": start.kind,
+            "agentos.run.status":
+              terminal === undefined
+                ? "open"
+                : terminal.kind === RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED
+                  ? "completed"
+                  : "failed",
           },
         }),
       );
     }
-  }
 
-  return nodes;
-};
+    for (const event of runtimeEvents) {
+      if (event.kind === RUNTIME_EVENT_KIND.LLM_RESPONSE) {
+        nodes.push(
+          telemetryNode({
+            event,
+            parentId: runNodeId(event.payload.turn.id),
+            emitKind: "provider",
+            name: "gen_ai.call",
+            traceContext: yield* runtimeTraceContext(runtimeEvents, event),
+            attributes: {
+              "agentos.run.id": event.payload.turn.id,
+              "agentos.turn.index": event.payload.turn.index,
+              "agentos.event.kind": event.kind,
+              "gen_ai.operation.name": "chat",
+              "gen_ai.usage.input_tokens": event.payload.usage.promptTokens,
+              "gen_ai.usage.output_tokens": event.payload.usage.completionTokens,
+            },
+          }),
+        );
+        continue;
+      }
+      if (
+        event.kind === RUNTIME_EVENT_KIND.TOOL_EXECUTED ||
+        event.kind === RUNTIME_EVENT_KIND.TOOL_REJECTED
+      ) {
+        const domain =
+          event.payload.execution.kind === "effectful" ? event.payload.execution.domain : undefined;
+        nodes.push(
+          telemetryNode({
+            event,
+            parentId: runNodeId(event.payload.runId),
+            emitKind: "runtime",
+            name: "tool.execute",
+            traceContext: yield* runtimeTraceContext(runtimeEvents, event),
+            attributes: {
+              "agentos.run.id": event.payload.runId,
+              "agentos.tool.name": event.payload.name,
+              "agentos.tool.execution.kind": event.payload.execution.kind,
+              "agentos.event.kind": event.kind,
+              ...(domain === undefined
+                ? {}
+                : {
+                    "agentos.execution_domain.kind": domain.kind,
+                    "agentos.execution_domain.ref": domain.ref,
+                  }),
+            },
+          }),
+        );
+      }
+    }
+
+    return nodes;
+  });
 
 const genericEmitKind = (event: LedgerEvent): TelemetryEmitKind | undefined => {
   if (event.kind.startsWith("dispatch.")) return "backend";
@@ -213,31 +223,40 @@ const genericNodeName = (event: LedgerEvent): string => {
 
 const genericTelemetryNodes = (
   events: ReadonlyArray<LedgerEvent>,
-): ReadonlyArray<TelemetryEventNode> =>
-  events.flatMap((event) => {
-    const emitKind = genericEmitKind(event);
-    if (emitKind === undefined) return [];
-    return [
-      telemetryNode({
-        event,
-        emitKind,
-        name: genericNodeName(event),
-        traceContext: traceContextFromPayload(event.payload),
-        attributes: {
-          "agentos.event.kind": event.kind,
-          "agentos.event.scope_key": scopeRefKey(event.scopeRef),
-          "agentos.event.fact_owner": factOwnerKey(event.factOwnerRef),
-          "agentos.event.effect_authority": authorityRefKey(event.effectAuthorityRef),
-          "agentos.event.id": event.id,
-        },
-      }),
-    ];
+): Effect.Effect<ReadonlyArray<TelemetryEventNode>, InvalidTraceContext> =>
+  Effect.gen(function* () {
+    const nodes: TelemetryEventNode[] = [];
+    for (const event of events) {
+      const emitKind = genericEmitKind(event);
+      if (emitKind === undefined) continue;
+      nodes.push(
+        telemetryNode({
+          event,
+          emitKind,
+          name: genericNodeName(event),
+          traceContext: yield* traceContextFromPayload(event.payload),
+          attributes: {
+            "agentos.event.kind": event.kind,
+            "agentos.event.scope_key": scopeRefKey(event.scopeRef),
+            "agentos.event.fact_owner": factOwnerKey(event.factOwnerRef),
+            "agentos.event.effect_authority": authorityRefKey(event.effectAuthorityRef),
+            "agentos.event.id": event.id,
+          },
+        }),
+      );
+    }
+    return nodes;
   });
 
 export const projectTelemetryEventTree = (
   events: ReadonlyArray<LedgerEvent>,
-): TelemetryEventTree => ({
-  nodes: [...runtimeTelemetryNodes(events), ...genericTelemetryNodes(events)].sort(
-    (left, right) => (left.ledgerEventId ?? 0) - (right.ledgerEventId ?? 0),
-  ),
-});
+): Effect.Effect<TelemetryEventTree, InvalidTraceContext> =>
+  Effect.gen(function* () {
+    const runtimeNodes = yield* runtimeTelemetryNodes(events);
+    const genericNodes = yield* genericTelemetryNodes(events);
+    return {
+      nodes: [...runtimeNodes, ...genericNodes].sort(
+        (left, right) => (left.ledgerEventId ?? 0) - (right.ledgerEventId ?? 0),
+      ),
+    };
+  });

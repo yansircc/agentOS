@@ -20,9 +20,10 @@ agent tools or structured output.
 
 ## Effect AI
 
-Effect AI is provider transport. It maps to `primitive.runtime.LlmTransport` and
-feeds `primitive.runtime.SubmitSpec`; it does not own admission evidence,
-budgeting, ledger facts, or terminal run facts.
+Effect AI is provider transport. It maps to
+`primitive.llm_protocol.LlmTransport` and feeds `primitive.runtime.SubmitSpec`;
+it does not own admission evidence, budgeting, ledger facts, or terminal run
+facts.
 
 ## Cloudflare Durable Objects
 
@@ -37,7 +38,7 @@ The generated concept route is:
 
 - `external.ag-ui` to AG-UI projection primitives.
 - `external.effect-schema` to `primitive.kernel.AgentSchema`.
-- `external.effect-ai` to `primitive.runtime.LlmTransport`.
+- `external.effect-ai` to `primitive.llm_protocol.LlmTransport`.
 - `external.cloudflare-durable-object` to runtime ledger and projection
   services.
 

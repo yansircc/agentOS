@@ -2,7 +2,6 @@ import { Clock, Effect, Layer } from "effect";
 import { JsonStringifyError, SqlError, UpstreamFailure } from "@agent-os/kernel/errors";
 import {
   Admission,
-  LlmTransport,
   classifyStructuredCallFailure,
   decodeStructuredOutputFromItems,
   structuredOutputRequest,
@@ -19,7 +18,7 @@ import {
   type InvalidateSpec,
   type Outcome,
 } from "@agent-os/runtime-protocol";
-import { llmWireDescriptorFingerprint } from "@agent-os/llm-protocol";
+import { LlmTransport, llmWireDescriptorFingerprint } from "@agent-os/llm-protocol";
 import type { InMemoryBackendState } from "./state";
 import { inMemoryConversationTruthIdentity, inMemoryRuntimeEventIdentity } from "./state";
 import { decodeOk, recordOf } from "./decode";

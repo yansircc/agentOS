@@ -1,18 +1,16 @@
 import { randomUUID } from "node:crypto";
 import { describe } from "@effect/vitest";
-import { afterAll, beforeAll } from "vitest";
+import { afterAll, beforeAll } from "vite-plus/test";
+import { Effect } from "effect";
 import { bindingMaterialRef } from "@agent-os/kernel/material-ref";
 import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
-import {
-  NodePostgresBackend,
-  type NodePostgresEventSubscription,
-} from "../src";
+import { NodePostgresBackend, type NodePostgresEventSubscription } from "../src";
 import {
   runRuntimeBackendContractSuite,
   type ContractDispatchReceiver,
   type RuntimeBackendContractDriver,
 } from "../../protocol/test/contract/runtime-backend-contract";
-import { startPostgresRuntimeHarness, type PostgresRuntimeHarness } from "./postgres-harness";
+import { startPostgresRuntimeHarnessEffect, type PostgresRuntimeHarness } from "./postgres-harness";
 
 const bindingRef = bindingMaterialRef({
   provider: "node",
@@ -23,11 +21,13 @@ const bindingRef = bindingMaterialRef({
 let harness: PostgresRuntimeHarness | undefined;
 
 beforeAll(async () => {
-  harness = await startPostgresRuntimeHarness();
+  harness = await Effect.runPromise(startPostgresRuntimeHarnessEffect); // eff-ignore EFF400 reason="vitest lifecycle hook starts the external Postgres harness"
 }, 120_000);
 
 afterAll(async () => {
-  await harness?.cleanup();
+  if (harness !== undefined) {
+    await Effect.runPromise(harness.cleanup); // eff-ignore EFF400 reason="vitest lifecycle hook cleans up the external Postgres harness"
+  }
 }, 120_000);
 
 const makeNodePostgresContractDriver = async (): Promise<RuntimeBackendContractDriver> => {
@@ -40,10 +40,7 @@ const makeNodePostgresContractDriver = async (): Promise<RuntimeBackendContractD
   await backend.initialize();
   return {
     bindingRef,
-    registerDispatchReceiver: (
-      identity,
-      receiver?: ContractDispatchReceiver,
-    ): void => {
+    registerDispatchReceiver: (identity, receiver?: ContractDispatchReceiver): void => {
       backend.registerDispatchReceiver(identity, receiver);
     },
     setDispatchTargetAdapter: (adapter): void => {
@@ -56,8 +53,7 @@ const makeNodePostgresContractDriver = async (): Promise<RuntimeBackendContractD
     telemetryDiagnostics: () => backend.telemetryDiagnostics(),
     log: (identity, kind, payload) => backend.log(identity, kind, payload),
     events: (identity) => backend.events(identity),
-    schedule: (identity, at, eventKind, data) =>
-      backend.schedule(identity, at, eventKind, data),
+    schedule: (identity, at, eventKind, data) => backend.schedule(identity, at, eventKind, data),
     fireDue: (identity, now) => backend.fireDue(identity, now),
     dispatchToScope: (identity, spec) => backend.dispatchToScope(identity, spec),
     drainDispatchDue: (identity, now) => backend.drainDispatchDue(identity, now),

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Effect AI provider adapter for the runtime `LlmTransport` boundary.
+Effect AI provider adapter for the provider-neutral `LlmTransport` protocol port.
 
 ## Invariant
 

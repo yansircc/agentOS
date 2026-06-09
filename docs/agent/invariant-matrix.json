@@ -101,7 +101,7 @@
     {
       "invariant": "invariant.boundary.runtime-validation-external-only",
       "statement": "Runtime validation is only for unknown external input, not internally constructed states.",
-      "primitives": ["primitive.kernel.EffectClaim", "primitive.runtime.LlmTransport"],
+      "primitives": ["primitive.kernel.EffectClaim", "primitive.llm_protocol.LlmTransport"],
       "errors": [
         "agent_os.backend_protocol_parse_failure",
         "agent_os.cloudflare_worker_bundle_resolution_failure",
@@ -117,6 +117,7 @@
         "agent_os.invalid_trace_context",
         "agent_os.llm_call_timed_out",
         "agent_os.llm_call_timeout",
+        "agent_os.postgres_harness_error",
         "agent_os.provider_http_failure",
         "agent_os.ref_resolution_failed",
         "agent_os.sandbox_failure",
@@ -126,9 +127,11 @@
         "docs/boundary-contract.md",
         "docs/concepts/agent-schema.md",
         "docs/concepts/carriers-and-material.md",
+        "docs/packages/backend-node-postgres.md",
         "docs/packages/backend-protocol.md",
         "docs/packages/deploy-cloudflare.md",
         "docs/packages/dynamic-worker.md",
+        "docs/packages/llm-protocol.md",
         "docs/packages/llm-transport-effect-ai.md",
         "docs/packages/runtime.md",
         "docs/packages/sandbox.md",

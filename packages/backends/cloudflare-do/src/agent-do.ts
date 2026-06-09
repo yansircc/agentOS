@@ -86,7 +86,6 @@ import {
   DurableTriggerRegistry,
   commitBoundaryEvent,
   Ledger,
-  LlmTransport,
   MaterializedProjections,
   TriggerPump,
   submitAgentEffect,
@@ -96,6 +95,7 @@ import {
   type TriggerDrainUntilQuietOptions,
   type TriggerDrainUntilQuietResult,
 } from "@agent-os/runtime";
+import { LlmTransport } from "@agent-os/llm-protocol";
 import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
 import {
   backendProtocolEventIdentityKey,

@@ -36,17 +36,19 @@ import {
 import { Context, Data, Effect, Layer, Schema } from "effect";
 import * as Redacted from "effect/Redacted";
 import type * as Scope from "effect/Scope";
+import { LlmTransport, projectAgentSchemaForLlmTool } from "@agent-os/llm-protocol";
 import type {
   LlmMessage,
   LlmOutputItem,
   LlmRequest,
   LlmResponse,
   LlmRoute,
+  LlmCallOptions,
+  LlmTransportRouteDescriptor,
   LlmToolCall,
   LlmUsage,
   LlmWireDescriptor,
 } from "@agent-os/llm-protocol";
-import { projectAgentSchemaForLlmTool } from "@agent-os/llm-protocol";
 import { credentialMaterialRef, endpointMaterialRef } from "@agent-os/kernel/material-ref";
 import {
   RefResolutionFailed,
@@ -59,11 +61,6 @@ import {
   UpstreamFailure,
 } from "@agent-os/kernel/errors";
 import type { ToolDefinition } from "@agent-os/kernel/tools";
-import {
-  LlmTransport,
-  type LlmCallOptions,
-  type LlmTransportRouteDescriptor,
-} from "@agent-os/runtime";
 
 const ANTHROPIC_DEFAULT_VERSION = "2023-06-01";
 

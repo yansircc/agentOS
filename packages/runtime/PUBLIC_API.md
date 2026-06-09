@@ -53,10 +53,6 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:DurableTriggerCancellationMode`
 - `.:DurableTriggerRegistry`
 - `.:Ledger`
-- `.:LlmCallOptions`
-- `.:LlmRoute`
-- `.:LlmTransport`
-- `.:LlmUsage`
 - `.:MakeAttachedStreamRegistryOptions`
 - `.:MakeAttachedStreamServiceSpec`
 - `.:MaterializedProjectionDefinition`
@@ -164,7 +160,6 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 
 ## Experimental exports
 
-- `.:LlmTransportRouteDescriptor`
 - `.:StructuredCallFailureClassification`
 - `.:classifyStructuredCallFailure`
 - `.:structuredOutputRequest`

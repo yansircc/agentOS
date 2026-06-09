@@ -17,7 +17,6 @@ import {
   Dispatch,
   DurableTriggerRegistry,
   Ledger,
-  LlmTransport,
   MaterializedProjectionRegistry,
   MaterializedProjections,
   Quota,
@@ -33,6 +32,7 @@ import {
   type AnyDurableTrigger,
   type AnyMaterializedProjectionDefinition,
 } from "@agent-os/runtime";
+import { LlmTransport } from "@agent-os/llm-protocol";
 import {
   createInMemoryBackendState,
   type InMemoryBackendState,

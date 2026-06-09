@@ -2,6 +2,7 @@ import { Effect, Schema } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import {
   llmCallSnapshotFromResponse,
+  LlmTransport,
   replayLlmResponseFromSnapshot,
   type LlmRequest,
   type LlmResponse,
@@ -15,7 +16,6 @@ import { Admission } from "../src/admission";
 import { BoundaryEvents } from "../src/boundary-events";
 import { commitBoundaryEvent } from "../src/boundary-commit";
 import { Ledger } from "../src/ledger";
-import { LlmTransport } from "../src/llm-transport";
 import { Quota } from "../src/quota-service";
 import { submitAgentEffect } from "../src/submit-agent";
 import {

@@ -148,7 +148,8 @@ const volatileTelemetryAttributeKeys = new Set([
   "span.id",
 ]);
 
-const compareString = (left: string, right: string): number => (left < right ? -1 : left > right ? 1 : 0);
+const compareString = (left: string, right: string): number =>
+  left < right ? -1 : left > right ? 1 : 0;
 
 const compareNumbers = (left: number | undefined, right: number | undefined): number => {
   if (left === undefined && right === undefined) return 0;
@@ -161,12 +162,9 @@ const firstSourceEventId = (node: TelemetryEventNode): number | undefined =>
   node.ledgerEventId ?? node.sourceEventIds?.[0];
 
 const telemetryNodeSortKey = (node: TelemetryEventNode): string =>
-  [
-    firstSourceEventId(node) ?? Number.MAX_SAFE_INTEGER,
-    node.emitKind,
-    node.name,
-    node.id,
-  ].join("\u0000");
+  [firstSourceEventId(node) ?? Number.MAX_SAFE_INTEGER, node.emitKind, node.name, node.id].join(
+    "\u0000",
+  );
 
 const sortedAttributes = (
   attributes: Readonly<Record<string, TelemetryAttributeValue>> | undefined,
@@ -186,15 +184,16 @@ const sortedSourceEventIds = (
     ? undefined
     : [...sourceEventIds].sort((left, right) => left - right);
 
-export const canonicalizeTelemetryEventTree = (
-  tree: TelemetryEventTree,
-): TelemetryEventTree => {
+export const canonicalizeTelemetryEventTree = (tree: TelemetryEventTree): TelemetryEventTree => {
   const ordered = tree.nodes
     .map((node, index) => ({ node, index }))
     .sort((left, right) => {
       const source = compareNumbers(firstSourceEventId(left.node), firstSourceEventId(right.node));
       if (source !== 0) return source;
-      const semantic = compareString(telemetryNodeSortKey(left.node), telemetryNodeSortKey(right.node));
+      const semantic = compareString(
+        telemetryNodeSortKey(left.node),
+        telemetryNodeSortKey(right.node),
+      );
       return semantic === 0 ? left.index - right.index : semantic;
     });
   const ids = new Map<string, string>();
@@ -212,7 +211,9 @@ export const canonicalizeTelemetryEventTree = (
           : { parentId: ids.get(node.parentId) ?? node.parentId }),
         emitKind: node.emitKind,
         name: node.name,
-        ...(node.traceContext === undefined ? {} : { traceContext: copyTraceContext(node.traceContext) }),
+        ...(node.traceContext === undefined
+          ? {}
+          : { traceContext: copyTraceContext(node.traceContext) }),
         ...(node.ledgerEventId === undefined ? {} : { ledgerEventId: node.ledgerEventId }),
         ...(sourceEventIds === undefined ? {} : { sourceEventIds }),
         ...(attributes === undefined ? {} : { attributes }),

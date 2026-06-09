@@ -1,9 +1,6 @@
 {
   "version": 1,
-  "productionBackends": [
-    "packages/backends/cloudflare-do",
-    "packages/backends/node-postgres"
-  ],
+  "productionBackends": ["packages/backends/cloudflare-do", "packages/backends/node-postgres"],
   "canonicalTrees": {
     "packages/backends/cloudflare-do": {
       "nodes": [

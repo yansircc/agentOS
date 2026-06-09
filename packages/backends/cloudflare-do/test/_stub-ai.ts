@@ -7,9 +7,13 @@
  */
 
 import { Context, Effect } from "effect";
-import type { LlmResponse, LlmRoute, LlmWireDescriptor } from "@agent-os/llm-protocol";
+import {
+  LlmTransport,
+  type LlmResponse,
+  type LlmRoute,
+  type LlmWireDescriptor,
+} from "@agent-os/llm-protocol";
 import { UpstreamFailure } from "@agent-os/kernel/errors";
-import { LlmTransport } from "@agent-os/runtime";
 
 const DEFAULT_USAGE = {
   promptTokens: 10,

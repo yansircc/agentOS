@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
+import { Effect } from "effect";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import type { LivedClaim } from "@agent-os/kernel/effect-claim";
 import { canonicalTelemetryEventTreeJson } from "@agent-os/telemetry-protocol";
@@ -102,34 +103,37 @@ const fixtureEvents = (timeOffset: number): ReadonlyArray<LedgerEvent> => [
 ];
 
 describe("runtime telemetry tree projection", () => {
-  it("projects ledger facts into a backend-neutral canonical telemetry tree", () => {
-    const cfTree = projectTelemetryEventTree(fixtureEvents(0));
-    const pgTree = projectTelemetryEventTree(fixtureEvents(1000));
+  it.effect("projects ledger facts into a backend-neutral canonical telemetry tree", () =>
+    Effect.gen(function* () {
+      const cfTree = yield* projectTelemetryEventTree(fixtureEvents(0));
+      const pgTree = yield* projectTelemetryEventTree(fixtureEvents(1000));
 
-    expect(cfTree.nodes.map((node) => node.name)).toEqual([
-      "agent.run",
-      "gen_ai.call",
-      "tool.execute",
-      "dispatch.delivery",
-    ]);
-    expect(cfTree.nodes.map((node) => node.emitKind)).toEqual([
-      "runtime",
-      "provider",
-      "runtime",
-      "backend",
-    ]);
-    expect(canonicalTelemetryEventTreeJson(cfTree)).toBe(
-      canonicalTelemetryEventTreeJson(pgTree),
-    );
-  });
+      expect(cfTree.nodes.map((node) => node.name)).toEqual([
+        "agent.run",
+        "gen_ai.call",
+        "tool.execute",
+        "dispatch.delivery",
+      ]);
+      expect(cfTree.nodes.map((node) => node.emitKind)).toEqual([
+        "runtime",
+        "provider",
+        "runtime",
+        "backend",
+      ]);
+      expect(canonicalTelemetryEventTreeJson(cfTree)).toBe(canonicalTelemetryEventTreeJson(pgTree));
+    }),
+  );
 
-  it("fails closed on malformed trace context in source events", () => {
-    expect(() =>
-      projectTelemetryEventTree([
-        rawEvent(1, "dispatch.outbound.delivered", {
-          traceContext: { traceparent: "00-test" },
-        }),
-      ]),
-    ).toThrow();
-  });
+  it.effect("fails closed on malformed trace context in source events", () =>
+    Effect.gen(function* () {
+      const result = yield* Effect.either(
+        projectTelemetryEventTree([
+          rawEvent(1, "dispatch.outbound.delivered", {
+            traceContext: { traceparent: "00-test" },
+          }),
+        ]),
+      );
+      expect(result._tag).toBe("Left");
+    }),
+  );
 });

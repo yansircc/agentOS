@@ -6,10 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..");
-const expectedBackends = [
-  "packages/backends/cloudflare-do",
-  "packages/backends/node-postgres",
-];
+const expectedBackends = ["packages/backends/cloudflare-do", "packages/backends/node-postgres"];
 const requiredPhases = [
   "schedule_requested",
   "scheduled_event_fired",
@@ -49,7 +46,9 @@ const collectFailures = (root = repoRoot) => {
     if (phases.indexOf("dispatch_retry_failed") >= phases.indexOf("dispatch_retry_delivered")) {
       failures.push("dispatch retry failure must precede delivered terminal fact");
     }
-    const delivered = fixture.canonicalFlow.find((step) => step.phase === "dispatch_retry_delivered");
+    const delivered = fixture.canonicalFlow.find(
+      (step) => step.phase === "dispatch_retry_delivered",
+    );
     if (delivered?.eventKind !== "dispatch.outbound.delivered") {
       failures.push("retry delivered phase must be dispatch.outbound.delivered");
     }
@@ -71,7 +70,10 @@ const collectFailures = (root = repoRoot) => {
   if (!/FOR UPDATE SKIP LOCKED/.test(nodePg)) {
     failures.push("node-postgres backend must prove concurrent due-work claim with SKIP LOCKED");
   }
-  const contract = read(root, "packages/backends/protocol/test/contract/runtime-backend-contract.ts");
+  const contract = read(
+    root,
+    "packages/backends/protocol/test/contract/runtime-backend-contract.ts",
+  );
   for (const term of [
     "drains scheduler and delivery retry work from one due-work queue",
     "claims one due dispatch retry across concurrent drainers",
@@ -104,14 +106,22 @@ const collectSelfTestFailures = () => {
     writeFixture(
       root,
       "test/backend-neutral-golden.json",
-      JSON.stringify({ productionBackends: expectedBackends, canonicalFlow: requiredPhases.map((phase) => ({
-        phase,
-        eventKind: phase === "dispatch_retry_delivered" ? "dispatch.outbound.delivered" : "x",
-        deliveryReceipt: phase === "dispatch_retry_delivered" ? { anchorKind: "ledger_event" } : undefined,
-      })) }),
+      JSON.stringify({
+        productionBackends: expectedBackends,
+        canonicalFlow: requiredPhases.map((phase) => ({
+          phase,
+          eventKind: phase === "dispatch_retry_delivered" ? "dispatch.outbound.delivered" : "x",
+          deliveryReceipt:
+            phase === "dispatch_retry_delivered" ? { anchorKind: "ledger_event" } : undefined,
+        })),
+      }),
     );
     for (const backend of expectedBackends) {
-      writeFixture(root, `${backend}/test/backend-protocol-contract.test.ts`, "runRuntimeBackendContractSuite");
+      writeFixture(
+        root,
+        `${backend}/test/backend-protocol-contract.test.ts`,
+        "runRuntimeBackendContractSuite",
+      );
       writeFixture(root, `${backend}/src/index.ts`, "FOR UPDATE SKIP LOCKED");
     }
     writeFixture(
@@ -139,4 +149,8 @@ if (failures.length > 0) {
   console.error(failures.join("\n"));
   process.exit(1);
 }
-console.log(process.argv.includes("--self-test") ? "backend-neutral golden self-test passed" : "backend-neutral golden passed");
+console.log(
+  process.argv.includes("--self-test")
+    ? "backend-neutral golden self-test passed"
+    : "backend-neutral golden passed",
+);

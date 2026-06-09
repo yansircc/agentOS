@@ -412,6 +412,20 @@
       "docs": "docs/concepts/tool-execution-domain.md"
     },
     {
+      "id": "primitive.llm_protocol.LlmTransport",
+      "package": "@agent-os/llm-protocol",
+      "packagePath": "packages/llm-protocol",
+      "entrypoints": ["."],
+      "symbol": "LlmTransport",
+      "exportKey": ".:LlmTransport",
+      "sourceFile": "packages/llm-protocol/src/index.ts",
+      "summary": "Provider-neutral port for resolving and calling an LLM route.",
+      "aliases": [],
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "decisions": [],
+      "docs": "docs/packages/llm-protocol.md"
+    },
+    {
       "id": "primitive.runtime.defineProjection",
       "package": "@agent-os/runtime",
       "packagePath": "packages/runtime",
@@ -466,20 +480,6 @@
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
       "docs": "docs/concepts/durable-truth.md"
-    },
-    {
-      "id": "primitive.runtime.LlmTransport",
-      "package": "@agent-os/runtime",
-      "packagePath": "packages/runtime",
-      "entrypoints": ["."],
-      "symbol": "LlmTransport",
-      "exportKey": ".:LlmTransport",
-      "sourceFile": "packages/runtime/src/llm-transport.ts",
-      "summary": "Provider transport boundary for runtime LLM calls.",
-      "aliases": [],
-      "invariants": ["invariant.boundary.runtime-validation-external-only"],
-      "decisions": [],
-      "docs": "docs/packages/llm-transport-effect-ai.md"
     },
     {
       "id": "primitive.runtime.MaterializedProjectionDefinition",

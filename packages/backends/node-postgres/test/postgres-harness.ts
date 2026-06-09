@@ -1,70 +1,113 @@
 import { execFile } from "node:child_process";
 import { createServer } from "node:net";
 import { promisify } from "node:util";
+import { Clock, Config, Data, Duration, Effect } from "effect";
 
 const execFileAsync = promisify(execFile);
 
 export interface PostgresRuntimeHarness {
   readonly databaseUrl: string;
-  readonly cleanup: () => Promise<void>;
+  readonly cleanup: Effect.Effect<void, PostgresHarnessError>;
 }
 
-const dockerImage = process.env.AGENTOS_NODE_POSTGRES_IMAGE ?? "postgres:16-alpine";
+export class PostgresHarnessError extends Data.TaggedError("agent_os.postgres_harness_error")<{
+  readonly operation: string;
+  readonly cause: unknown;
+}> {}
 
-const exec = async (
+const readConfig = (name: string, fallback: string): Effect.Effect<string, PostgresHarnessError> =>
+  Effect.configProviderWith((provider) =>
+    provider
+      .load(Config.string(name).pipe(Config.withDefault(fallback)))
+      .pipe(
+        Effect.mapError(
+          (cause) => new PostgresHarnessError({ operation: `config:${name}`, cause }),
+        ),
+      ),
+  );
+
+const exec = (
   command: string,
   args: ReadonlyArray<string>,
   timeout = 120_000,
-): Promise<void> => {
-  await execFileAsync(command, [...args], { timeout, maxBuffer: 1024 * 1024 });
-};
+): Effect.Effect<void, PostgresHarnessError> =>
+  Effect.tryPromise({
+    try: () =>
+      execFileAsync(command, [...args], { timeout, maxBuffer: 1024 * 1024 }).then(() => undefined),
+    catch: (cause) => new PostgresHarnessError({ operation: command, cause }),
+  });
 
-const freePort = (): Promise<number> =>
-  new Promise((resolve, reject) => {
+const freePort = (): Effect.Effect<number, PostgresHarnessError> =>
+  Effect.async<number, PostgresHarnessError>((resume) => {
     const server = createServer();
-    server.on("error", reject);
+    server.on("error", (cause) => {
+      resume(Effect.fail(new PostgresHarnessError({ operation: "free_port", cause })));
+    });
     server.listen(0, "127.0.0.1", () => {
       const address = server.address();
       server.close(() => {
         if (typeof address === "object" && address !== null) {
-          resolve(address.port);
+          resume(Effect.succeed(address.port));
           return;
         }
-        reject(new Error("free port unavailable"));
+        resume(
+          Effect.fail(
+            new PostgresHarnessError({ operation: "free_port", cause: "address unavailable" }),
+          ),
+        );
       });
     });
   });
 
-const waitForPostgres = async (databaseUrl: string): Promise<void> => {
-  const deadline = Date.now() + 60_000;
-  let lastError: unknown;
-  while (Date.now() < deadline) {
-    try {
-      await execFileAsync("psql", [databaseUrl, "-X", "-q", "-t", "-A", "-c", "SELECT 1"], {
+const psqlReady = (databaseUrl: string): Effect.Effect<void, PostgresHarnessError> =>
+  Effect.tryPromise({
+    try: () =>
+      execFileAsync("psql", [databaseUrl, "-X", "-q", "-t", "-A", "-c", "SELECT 1"], {
         timeout: 5_000,
-      });
-      return;
-    } catch (cause) {
-      lastError = cause;
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    }
-  }
-  throw lastError instanceof Error ? lastError : new Error("postgres did not become ready");
-};
+      }).then(() => undefined),
+    catch: (cause) => new PostgresHarnessError({ operation: "psql_ready", cause }),
+  });
 
-export const startPostgresRuntimeHarness = async (): Promise<PostgresRuntimeHarness> => {
-  const configured = process.env.AGENTOS_NODE_POSTGRES_DATABASE_URL;
-  if (configured !== undefined && configured.length > 0) {
-    await waitForPostgres(configured);
+const waitForPostgres = (databaseUrl: string): Effect.Effect<void, PostgresHarnessError> =>
+  Effect.gen(function* () {
+    const deadline = (yield* Clock.currentTimeMillis) + 60_000;
+    const loop = (
+      lastCause: unknown = "postgres did not become ready",
+    ): Effect.Effect<void, PostgresHarnessError> =>
+      Effect.gen(function* () {
+        const now = yield* Clock.currentTimeMillis;
+        if (now >= deadline) {
+          return yield* new PostgresHarnessError({
+            operation: "wait_for_postgres",
+            cause: lastCause,
+          });
+        }
+        const ready = yield* Effect.either(psqlReady(databaseUrl));
+        if (ready._tag === "Right") return;
+        yield* Effect.sleep(Duration.millis(500));
+        return yield* loop(ready.left);
+      });
+    yield* loop();
+  });
+
+export const startPostgresRuntimeHarnessEffect: Effect.Effect<
+  PostgresRuntimeHarness,
+  PostgresHarnessError
+> = Effect.gen(function* () {
+  const configured = yield* readConfig("AGENTOS_NODE_POSTGRES_DATABASE_URL", "");
+  if (configured.length > 0) {
+    yield* waitForPostgres(configured);
     return {
       databaseUrl: configured,
-      cleanup: async () => undefined,
+      cleanup: Effect.void,
     };
   }
 
-  const port = await freePort();
-  const name = `agentos-node-postgres-${process.pid}-${Date.now()}`;
-  await exec("docker", [
+  const dockerImage = yield* readConfig("AGENTOS_NODE_POSTGRES_IMAGE", "postgres:16-alpine");
+  const port = yield* freePort();
+  const now = yield* Clock.currentTimeMillis;
+  const name = `agentos-node-postgres-${process.pid}-${now}`;
+  yield* exec("docker", [
     "run",
     "--rm",
     "-d",
@@ -81,16 +124,13 @@ export const startPostgresRuntimeHarness = async (): Promise<PostgresRuntimeHarn
     dockerImage,
   ]);
   const databaseUrl = `postgres://postgres:postgres@127.0.0.1:${port}/agentos`;
-  try {
-    await waitForPostgres(databaseUrl);
-  } catch (cause) {
-    await exec("docker", ["rm", "-f", name]).catch(() => undefined);
-    throw cause;
+  const ready = yield* Effect.either(waitForPostgres(databaseUrl));
+  if (ready._tag === "Left") {
+    yield* exec("docker", ["rm", "-f", name]).pipe(Effect.ignore);
+    return yield* ready.left;
   }
   return {
     databaseUrl,
-    cleanup: async () => {
-      await exec("docker", ["rm", "-f", name]).catch(() => undefined);
-    },
+    cleanup: exec("docker", ["rm", "-f", name]).pipe(Effect.ignore),
   };
-};
+});

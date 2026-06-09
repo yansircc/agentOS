@@ -186,8 +186,7 @@ describe("materialized projection runtime algebra", () => {
             return reads === 1 ? null : row(2, "completed");
           }),
         list: () => Effect.succeed([]),
-        status: () =>
-          Effect.die("unused status"),
+        status: () => Effect.die("unused status"),
         rebuild: () => Effect.die("unused rebuild"),
       };
 
@@ -244,6 +243,7 @@ describe("materialized projection runtime algebra", () => {
       );
       expect(timedOut._tag).toBe("Left");
       if (timedOut._tag === "Left") {
+        expect(timedOut.left).toBeInstanceOf(ProjectionWaitTimedOut);
         expect(timedOut.left._tag).toBe("agent_os.projection_wait_timed_out");
         if (timedOut.left._tag === "agent_os.projection_wait_timed_out") {
           expect(timedOut.left.reason).toBe("missing");

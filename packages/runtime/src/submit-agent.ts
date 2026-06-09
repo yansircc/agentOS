@@ -38,6 +38,7 @@ import {
   type LlmMessage,
   type LlmRoute,
 } from "@agent-os/llm-protocol";
+import { LlmTransport } from "@agent-os/llm-protocol";
 import type { ToolDefinition } from "@agent-os/kernel/tools";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import { materialRefKey, materialRefSatisfiesRequirement } from "@agent-os/kernel/material-ref";
@@ -65,7 +66,6 @@ import {
   type SubmitResult,
   type TurnRef,
 } from "@agent-os/runtime-protocol";
-import { LlmTransport } from "./llm-transport";
 import type { LedgerCommitEventSpec, LedgerTruthIdentity } from "@agent-os/runtime-protocol";
 import { Ledger } from "./ledger";
 import {

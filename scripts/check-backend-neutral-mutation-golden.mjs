@@ -191,7 +191,10 @@ const validateGoldenFlow = (flow) => {
   if (terminal.step.eventKind !== "dispatch.outbound.delivered") {
     failures.push("external apply terminal fact must be dispatch receipt-owned");
   }
-  if (typeof terminal.step.idempotencyKey !== "string" || terminal.step.idempotencyKey.length === 0) {
+  if (
+    typeof terminal.step.idempotencyKey !== "string" ||
+    terminal.step.idempotencyKey.length === 0
+  ) {
     failures.push("dispatch receipt terminal fact must carry idempotencyKey");
   }
   if (terminal.step.deliveryReceipt?.anchorKind !== "external_receipt") {
@@ -245,7 +248,9 @@ const collectSelfTestFailures = () => {
     writeSourceFixture(root);
     const sourceBaseline = sourceTermFailures(root);
     if (sourceBaseline.length > 0) {
-      return [`backend-neutral mutation source positive fixture failed:\n${sourceBaseline.join("\n")}`];
+      return [
+        `backend-neutral mutation source positive fixture failed:\n${sourceBaseline.join("\n")}`,
+      ];
     }
 
     writeFixture(root, "packages/backends/protocol/src/index.ts", "idempotencyKey\n");
@@ -260,7 +265,9 @@ const collectSelfTestFailures = () => {
 
     const flowBaseline = validateGoldenFlow(baselineGoldenFlow);
     if (flowBaseline.length > 0) {
-      return [`backend-neutral mutation golden positive fixture failed:\n${flowBaseline.join("\n")}`];
+      return [
+        `backend-neutral mutation golden positive fixture failed:\n${flowBaseline.join("\n")}`,
+      ];
     }
 
     const directToolMutation = [

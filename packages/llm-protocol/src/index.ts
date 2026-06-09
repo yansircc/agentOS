@@ -1,5 +1,6 @@
-import { Schema } from "effect";
+import { Context, Effect, Schema } from "effect";
 import type { AgentSchema } from "@agent-os/kernel/agent-schema";
+import type { UpstreamFailure } from "@agent-os/kernel/errors";
 import type { MaterialRef } from "@agent-os/kernel/material-ref";
 import type { ToolDefinition } from "@agent-os/kernel/tools";
 
@@ -20,6 +21,39 @@ export interface LlmWireDescriptor {
   readonly headers: ReadonlyArray<readonly [name: string, value: string]>;
   readonly bodySchema?: LlmJsonSchemaObject;
 }
+
+export interface LlmCallOptions {
+  readonly signal?: AbortSignal;
+}
+
+export interface LlmTransportRouteDescriptor {
+  readonly wireDescriptor: LlmWireDescriptor;
+  readonly providerOutputAdapterId: string;
+  readonly providerOutputAdapterVersion: string;
+  readonly transportAdapterId: string;
+  readonly transportAdapterVersion: string;
+}
+
+/**
+ * Provider-neutral port for resolving and calling an LLM route.
+ *
+ * @agentosPrimitive primitive.llm_protocol.LlmTransport
+ * @agentosInvariant invariant.boundary.runtime-validation-external-only
+ * @agentosDocs docs/packages/llm-protocol.md
+ * @public
+ */
+export class LlmTransport extends Context.Tag("@agent-os/LlmTransport")<
+  LlmTransport,
+  {
+    readonly resolveRoute: (
+      route: LlmRoute,
+    ) => Effect.Effect<LlmTransportRouteDescriptor, UpstreamFailure>;
+    readonly call: (
+      request: LlmRequest,
+      options?: LlmCallOptions,
+    ) => Effect.Effect<LlmResponse, UpstreamFailure>;
+  }
+>() {}
 
 export const llmRouteMaterialRefs = (route: LlmRoute): ReadonlyArray<MaterialRef> => [
   ...(typeof route.endpointRef === "string"

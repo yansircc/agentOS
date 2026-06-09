@@ -12,7 +12,7 @@ import {
   defaultEffectAiLanguageModelFactory,
   makeEffectAiLlmTransportLayer,
 } from "@agent-os/llm-transport-effect-ai";
-import { LlmTransport } from "@agent-os/runtime";
+import { LlmTransport } from "@agent-os/llm-protocol";
 import { RefResolverService } from "@agent-os/kernel/ref-resolver";
 
 export type {
