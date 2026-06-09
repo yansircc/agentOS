@@ -1,7 +1,7 @@
 import { Context, Effect } from "effect";
 import type { RefResolutionFailed } from "@agent-os/kernel/ref-resolver";
 import type { UpstreamFailure } from "@agent-os/kernel/errors";
-import type { LlmRequest, LlmResponse, LlmRoute } from "@agent-os/kernel/llm";
+import type { LlmRequest, LlmResponse, LlmRoute } from "@agent-os/llm-protocol";
 
 export interface LlmCallOptions {
   readonly signal?: AbortSignal;

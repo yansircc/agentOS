@@ -4,7 +4,7 @@ import {
   LlmUsageSchema,
   type LlmOutputItem,
   type LlmUsage,
-} from "@agent-os/kernel/llm";
+} from "@agent-os/llm-protocol";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import type {
   AuthorityRef,

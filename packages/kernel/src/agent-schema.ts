@@ -3,7 +3,6 @@ import { Effect, JSONSchema, Option, Schema, SchemaAST } from "effect";
 import {
   parseDialectObject,
   validateAgainstSchema,
-  type JsonSchemaNode,
   type JsonSchemaObject,
 } from "./json-schema-dialect";
 
@@ -66,7 +65,7 @@ export type AgentSchemaSpec<A = unknown> = {
 };
 
 /**
- * Provider-specific schema projections derived from AgentSchema.
+ * Schema projections derived from AgentSchema.
  *
  * @agentosPrimitive primitive.kernel.AgentSchemaProjections
  * @agentosInvariant invariant.algebra.single-code-source
@@ -75,10 +74,6 @@ export type AgentSchemaSpec<A = unknown> = {
  */
 export type AgentSchemaProjections = {
   readonly canonical: JsonSchemaObject;
-  readonly openai: JsonSchemaObject;
-  readonly anthropic: JsonSchemaObject;
-  readonly gemini: JsonSchemaObject;
-  readonly agUi: JsonSchemaObject;
 };
 
 const SET_SEMANTICS_ARRAYS = new Set(["required", "enum"]);
@@ -90,8 +85,6 @@ const STRIP_FINGERPRINT_KEYS = new Set([
   "default",
   "$comment",
 ]);
-const GEMINI_STRIPPED_SCHEMA_FIELDS = new Set(["additionalProperties", "$schema", "$id", "$ref"]);
-
 const unsupportedAnnotationIds = [
   { id: SchemaAST.BrandAnnotationId, issue: "brand-unsupported" },
   { id: SchemaAST.DefaultAnnotationId, issue: "default-unsupported" },
@@ -297,27 +290,8 @@ export const fingerprintAgentSchema = (schema: JsonSchemaObject): Effect.Effect<
     Effect.map((hash) => `${AGENT_SCHEMA_FINGERPRINT_VERSION}:sha256:${hash}`),
   );
 
-const sanitizeForGemini = (node: JsonSchemaNode): JsonSchemaNode => {
-  if ("anyOf" in node) return { anyOf: node.anyOf.map(sanitizeForGemini) };
-  if (node.type === "array") return { type: "array", items: sanitizeForGemini(node.items) };
-  if (node.type !== "object") return node;
-  const properties: Record<string, JsonSchemaNode> = {};
-  for (const [key, value] of Object.entries(node.properties)) {
-    properties[key] = sanitizeForGemini(value);
-  }
-  const out: Record<string, unknown> = {
-    type: "object",
-    properties,
-    ...(node.required === undefined ? {} : { required: node.required }),
-  };
-  for (const key of Object.keys(out)) {
-    if (GEMINI_STRIPPED_SCHEMA_FIELDS.has(key)) delete out[key];
-  }
-  return out as unknown as JsonSchemaObject;
-};
-
 /**
- * Derives canonical, provider, and AG-UI schema variants from one canonical schema.
+ * Derives schema projections from one canonical schema.
  *
  * @agentosPrimitive primitive.kernel.projectAgentSchema
  * @agentosInvariant invariant.algebra.single-code-source
@@ -326,10 +300,6 @@ const sanitizeForGemini = (node: JsonSchemaNode): JsonSchemaNode => {
  */
 export const projectAgentSchema = (schema: JsonSchemaObject): AgentSchemaProjections => ({
   canonical: schema,
-  openai: schema,
-  anthropic: schema,
-  gemini: sanitizeForGemini(schema) as JsonSchemaObject,
-  agUi: schema,
 });
 
 export const defineAgentSchema = <A, I>(schema: Schema.Schema<A, I, never>): AgentSchema<A> => {

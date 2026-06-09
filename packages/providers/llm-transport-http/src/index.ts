@@ -1,4 +1,4 @@
-import type { LlmRoute } from "@agent-os/kernel/llm";
+import type { LlmRoute } from "@agent-os/llm-protocol";
 import { credentialMaterialRef, endpointMaterialRef } from "@agent-os/kernel/material-ref";
 import type { MaterialRef } from "@agent-os/kernel/material-ref";
 import type { RefResolver } from "@agent-os/kernel/ref-resolver";
@@ -10,10 +10,48 @@ import {
 } from "@agent-os/turn-stream";
 import { Either, pipe } from "effect";
 
-export type HttpStreamingLlmRoute = Extract<
-  LlmRoute,
-  { readonly kind: "openai-chat-compatible" | "anthropic-messages" | "gemini-generate-content" }
->;
+interface HttpStreamingRouteBase extends LlmRoute {
+  readonly endpointRef: string;
+  readonly credentialRef: string;
+  readonly modelId: string;
+}
+
+interface OpenAiChatCompatibleRoute extends HttpStreamingRouteBase {
+  readonly kind: "openai-chat-compatible";
+}
+
+interface AnthropicMessagesRoute extends HttpStreamingRouteBase {
+  readonly kind: "anthropic-messages";
+  readonly anthropicVersion?: string;
+}
+
+interface GeminiGenerateContentRoute extends HttpStreamingRouteBase {
+  readonly kind: "gemini-generate-content";
+}
+
+export type HttpStreamingLlmRoute =
+  | OpenAiChatCompatibleRoute
+  | AnthropicMessagesRoute
+  | GeminiGenerateContentRoute;
+
+const hasRouteMaterial = (
+  route: LlmRoute,
+): route is LlmRoute & {
+  readonly kind: unknown;
+  readonly endpointRef: string;
+  readonly credentialRef: string;
+  readonly modelId: string;
+} =>
+  typeof route.kind === "string" &&
+  typeof route.endpointRef === "string" &&
+  typeof route.credentialRef === "string" &&
+  typeof route.modelId === "string";
+
+const isHttpStreamingLlmRoute = (route: LlmRoute): route is HttpStreamingLlmRoute =>
+  hasRouteMaterial(route) &&
+  (route.kind === "openai-chat-compatible" ||
+    route.kind === "anthropic-messages" ||
+    route.kind === "gemini-generate-content");
 
 export interface LlmTransportToolCall {
   readonly id: string;
@@ -224,7 +262,7 @@ const encodeBody = (body: unknown): string | ProviderError => {
 
 const buildOpenAiRequest = (
   spec: StreamLlmTurnSpec,
-  route: Extract<LlmRoute, { readonly kind: "openai-chat-compatible" }>,
+  route: OpenAiChatCompatibleRoute,
 ): ProviderRequestResult => {
   const endpoint = endpointFor(spec.resolver, route);
   if (typeof endpoint !== "string") return { ok: false, error: endpoint };
@@ -326,7 +364,7 @@ const buildAnthropicMessages = (
 
 const buildAnthropicRequest = (
   spec: StreamLlmTurnSpec,
-  route: Extract<LlmRoute, { readonly kind: "anthropic-messages" }>,
+  route: AnthropicMessagesRoute,
 ): ProviderRequestResult => {
   const endpoint = endpointFor(spec.resolver, route);
   if (typeof endpoint !== "string") return { ok: false, error: endpoint };
@@ -437,7 +475,7 @@ const buildGeminiContents = (
 
 const buildGeminiRequest = (
   spec: StreamLlmTurnSpec,
-  route: Extract<LlmRoute, { readonly kind: "gemini-generate-content" }>,
+  route: GeminiGenerateContentRoute,
 ): ProviderRequestResult => {
   const endpoint = endpointFor(spec.resolver, route);
   if (typeof endpoint !== "string") return { ok: false, error: endpoint };
@@ -473,6 +511,9 @@ const buildGeminiRequest = (
 };
 
 const buildProviderRequest = (spec: StreamLlmTurnSpec): ProviderRequestResult => {
+  if (!isHttpStreamingLlmRoute(spec.route)) {
+    return { ok: false, error: { reason: "llm_transport_http_unsupported_route" } };
+  }
   switch (spec.route.kind) {
     case "openai-chat-compatible":
       return buildOpenAiRequest(spec, spec.route);
@@ -481,8 +522,6 @@ const buildProviderRequest = (spec: StreamLlmTurnSpec): ProviderRequestResult =>
     case "gemini-generate-content":
       return buildGeminiRequest(spec, spec.route);
   }
-  const _exhaustive: never = spec.route;
-  return _exhaustive;
 };
 
 interface SseEvent {

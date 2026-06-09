@@ -145,6 +145,12 @@
       "dependencyOwnerReason": "kernel owns platform-free algebra dependency declarations"
     },
     {
+      "path": "packages/llm-protocol",
+      "shape": ["library"],
+      "dependencyOwner": "workspace-root",
+      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+    },
+    {
       "path": "packages/providers/deploy-cloudflare",
       "shape": ["library"],
       "dependencyOwner": "workspace-root",

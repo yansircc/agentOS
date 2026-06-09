@@ -36,8 +36,8 @@ import {
   type LlmToolCall,
   type LlmMessage,
   type LlmRoute,
-  type ToolDefinition,
-} from "@agent-os/kernel/llm";
+} from "@agent-os/llm-protocol";
+import type { ToolDefinition } from "@agent-os/kernel/tools";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import { materialRefKey, materialRefSatisfiesRequirement } from "@agent-os/kernel/material-ref";
 import {

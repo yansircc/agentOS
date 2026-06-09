@@ -40,6 +40,7 @@
     "@agent-os/backend-protocol": "workspace:*",
     "@agent-os/decision-gate": "workspace:*",
     "@agent-os/kernel": "workspace:*",
+    "@agent-os/llm-protocol": "workspace:*",
     "@agent-os/telemetry-protocol": "workspace:*",
     "effect": "catalog:"
   },

@@ -17,7 +17,8 @@ import type { HttpClientResponse } from "@effect/platform/HttpClientResponse";
 import { describe, expect, it } from "@effect/vitest";
 import { Cause, Effect, Exit, Fiber, Layer, Option, Schema, Stream } from "effect";
 import { ensureAgentSchema } from "@agent-os/kernel/agent-schema";
-import type { LlmRequest, ToolDefinition } from "@agent-os/kernel/llm";
+import { projectAgentSchemaForLlmTool, type LlmRequest } from "@agent-os/llm-protocol";
+import type { ToolDefinition } from "@agent-os/kernel/tools";
 import { RefResolverLive } from "@agent-os/kernel/ref-resolver";
 import { ProviderHttpFailure, UpstreamFailure } from "@agent-os/kernel/errors";
 import { LlmTransport } from "@agent-os/runtime";
@@ -42,9 +43,7 @@ const response = (
   parts: ReadonlyArray<ResponsePart<Record<string, AnyTool>>>,
 ): GenerateTextResponse<Record<string, AnyTool>> => new GenerateTextResponse([...parts]);
 
-type OpenAiRoute = Extract<LlmRequest["route"], { readonly kind: "openai-chat-compatible" }>;
-
-const openAiRoute = (): OpenAiRoute => ({
+const openAiRoute = (): LlmRequest["route"] => ({
   kind: "openai-chat-compatible",
   endpointRef: "openai",
   credentialRef: "openai-key",
@@ -192,7 +191,7 @@ describe("@agent-os/llm-transport-effect-ai", () => {
             function: {
               name: "lookup",
               description: "Look up a value.",
-              parameters: lookupTool().function.parameters.projections.openai,
+              parameters: projectAgentSchemaForLlmTool(lookupTool().function.parameters),
             },
           },
         ],

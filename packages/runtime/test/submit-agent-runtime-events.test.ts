@@ -1,6 +1,6 @@
 import { Effect, Schema } from "effect";
 import { describe, expect, it } from "@effect/vitest";
-import type { LlmRequest, LlmResponse } from "@agent-os/kernel/llm";
+import type { LlmRequest, LlmResponse } from "@agent-os/llm-protocol";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import type { BoundaryContract } from "@agent-os/kernel/boundary-contract";
 import { defineTool, pureToolExecution } from "@agent-os/kernel/tools";

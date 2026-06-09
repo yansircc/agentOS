@@ -15,6 +15,7 @@ const packageLinks = {
   "backend-protocol": "packages/backends/protocol",
   "decision-gate": "packages/carriers/decision-gate",
   kernel: "packages/kernel",
+  "llm-protocol": "packages/llm-protocol",
   "llm-transport-effect-ai": "packages/providers/llm-transport-effect-ai",
   runtime: "packages/runtime",
   "telemetry-protocol": "packages/telemetry-protocol",

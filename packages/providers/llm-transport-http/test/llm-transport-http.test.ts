@@ -1,6 +1,6 @@
 import { projectTurnStream, type TurnStreamFrame } from "@agent-os/turn-stream";
 import { streamLlmTurn, type LlmTransportFetch, type LlmTransportMessage } from "../src";
-import type { LlmRoute } from "@agent-os/kernel/llm";
+import type { LlmRoute } from "@agent-os/llm-protocol";
 import type { RefResolver } from "@agent-os/kernel/ref-resolver";
 
 const messages: ReadonlyArray<LlmTransportMessage> = [

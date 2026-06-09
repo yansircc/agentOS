@@ -23,7 +23,6 @@ import {
   type OriginRef,
   type PreClaim,
 } from "./effect-claim";
-import type { LlmToolCall, ToolDefinition } from "./llm";
 import { isMaterialRequirement, type MaterialRequirement } from "./material-ref";
 import type { ResolvedMaterial } from "./ref-resolver";
 import type { QuotaSpec } from "./quota";
@@ -124,6 +123,25 @@ export interface DeterministicToolInvocation<A = unknown> {
   readonly name: string;
   readonly args: A;
   readonly [DETERMINISTIC_TOOL_INVOCATION_BRAND]: true;
+}
+
+export interface ToolDefinition {
+  readonly type: "function";
+  readonly function: {
+    readonly name: string;
+    readonly description: string;
+    readonly parameters: AgentSchema<unknown>;
+  };
+}
+
+export interface ToolCall {
+  readonly id: string;
+  readonly type: "function";
+  readonly function: {
+    readonly name: string;
+    readonly arguments: string;
+  };
+  readonly metadata?: Readonly<Record<string, unknown>>;
 }
 
 /**
@@ -483,7 +501,7 @@ export const validateToolRegistry = (tools: Record<string, Tool>): ToolRegistryV
  *  outside any retry block. */
 export const parseToolCall = (
   tools: Record<string, Tool>,
-  call: LlmToolCall,
+  call: ToolCall,
 ): Effect.Effect<{ readonly tool: Tool; readonly args: unknown }, ToolError> =>
   Effect.gen(function* () {
     const tool = tools[call.function.name];
@@ -569,5 +587,3 @@ export const unsafeRunToolByName = (
     const decoded = yield* decodeToolArgs(tool, invocation.args, invocation.name);
     return yield* executeTool(tool, decoded, invocation.name);
   });
-
-export type { ToolDefinition } from "./llm";

@@ -23,14 +23,13 @@ export type {
   LlmRoute,
   LlmToolCall,
   LlmUsage,
-  ToolDefinition,
-} from "@agent-os/kernel/llm";
+} from "@agent-os/llm-protocol";
+export type { ToolDefinition } from "@agent-os/kernel/tools";
 export {
-  DEFAULTS,
   llmOutputItemsFromTextAndToolCalls,
   textFromLlmOutputItems,
   toolCallsFromLlmOutputItems,
-} from "@agent-os/kernel/llm";
+} from "@agent-os/llm-protocol";
 
 export const LlmTransportLive: Layer.Layer<LlmTransport, never, RefResolverService> =
   makeEffectAiLlmTransportLayer(defaultEffectAiLanguageModelFactory).pipe(

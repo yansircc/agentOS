@@ -5,6 +5,7 @@
     "packages/kernel",
     "packages/runtime",
     "packages/telemetry-protocol",
+    "packages/llm-protocol",
     "packages/backends/*",
     "packages/carriers/*",
     "packages/execution-domains/*",

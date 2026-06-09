@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@agent-os/kernel": "workspace:*",
+    "@agent-os/llm-protocol": "workspace:*",
     "@agent-os/runtime": "workspace:*",
     "@effect/ai": "catalog:",
     "@effect/ai-anthropic": "catalog:",

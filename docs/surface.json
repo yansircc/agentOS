@@ -66,6 +66,20 @@
       "published": true
     },
     {
+      "slug": "llm-protocol",
+      "name": "@agent-os/llm-protocol",
+      "path": "packages/llm-protocol",
+      "status": "LLM protocol",
+      "role": "provider-neutral LLM request, response, route, and wire descriptor vocabulary",
+      "boundary": "LLM protocol vocabulary and provider-neutral wire descriptors; concrete provider protocols are provider implementations",
+      "need": "LLM protocol algebra",
+      "apiSource": "docs/api/llm-protocol.md",
+      "readmeStatus": "LLM protocol package. It owns provider-neutral LLM request, response, route, and wire descriptor vocabulary.",
+      "apiStatus": "LLM protocol package. Public exports are limited to provider-neutral LLM protocol vocabulary and wire descriptor helpers.",
+      "primary": true,
+      "published": true
+    },
+    {
       "slug": "backend-protocol",
       "name": "@agent-os/backend-protocol",
       "path": "packages/backends/protocol",

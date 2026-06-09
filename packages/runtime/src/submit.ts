@@ -1,4 +1,4 @@
-import type { LlmRoute } from "@agent-os/kernel/llm";
+import type { LlmRoute } from "@agent-os/llm-protocol";
 import type { Tool } from "@agent-os/kernel/tools";
 import type { AuthorityRef, ScopeRef } from "@agent-os/kernel/effect-claim";
 import type { AnyAgentSchemaSource } from "@agent-os/kernel/agent-schema";

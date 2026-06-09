@@ -641,7 +641,7 @@ describe("@agent-os/ag-ui", () => {
     expect(projectToolToAgUiTool(tool)).toEqual({
       name: "lookup",
       description: "Lookup weather",
-      parameters: tool.argsSchema.projections.agUi,
+      parameters: tool.argsSchema.projections.canonical,
     });
   });
 });

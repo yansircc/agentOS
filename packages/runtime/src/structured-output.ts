@@ -6,7 +6,7 @@ import {
   type LlmRequest,
   type LlmRoute,
   type LlmUsage,
-} from "@agent-os/kernel/llm";
+} from "@agent-os/llm-protocol";
 import type { AgentSchemaSpec } from "@agent-os/kernel/agent-schema";
 import type { TraceContext } from "@agent-os/telemetry-protocol";
 import {

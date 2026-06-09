@@ -1,48 +1,36 @@
 import { Schema } from "effect";
-import { credentialMaterialRef, endpointMaterialRef, type MaterialRef } from "./material-ref";
-import type { AgentSchema } from "./agent-schema";
+import type { AgentSchema } from "@agent-os/kernel/agent-schema";
+import {
+  credentialMaterialRef,
+  endpointMaterialRef,
+  type MaterialRef,
+} from "@agent-os/kernel/material-ref";
+import type { ToolDefinition } from "@agent-os/kernel/tools";
 
-export interface OpenAIChatCompatibleRoute {
-  readonly kind: "openai-chat-compatible";
-  readonly endpointRef: string;
-  readonly credentialRef: string;
-  readonly modelId: string;
+export const LLM_WIRE_DESCRIPTOR_VERSION = "llm-wire-descriptor-v1";
+
+export type LlmJsonSchemaObject = AgentSchema<unknown>["jsonSchema"];
+
+export interface LlmRoute {
+  readonly endpointRef?: string;
+  readonly credentialRef?: string;
+  readonly [key: string]: unknown;
 }
 
-export interface AnthropicMessagesRoute {
-  readonly kind: "anthropic-messages";
-  readonly endpointRef: string;
-  readonly credentialRef: string;
-  readonly modelId: string;
-  readonly anthropicVersion?: string;
+export interface LlmWireDescriptor {
+  readonly method: "POST";
+  readonly url: string;
+  readonly headers: ReadonlyArray<readonly [name: string, value: string]>;
+  readonly bodySchema?: LlmJsonSchemaObject;
 }
 
-export interface GeminiGenerateContentRoute {
-  readonly kind: "gemini-generate-content";
-  readonly endpointRef: string;
-  readonly credentialRef: string;
-  readonly modelId: string;
-}
+export const llmRouteMaterialRefs = (route: LlmRoute): ReadonlyArray<MaterialRef> => [
+  ...(typeof route.endpointRef === "string" ? [endpointMaterialRef(route.endpointRef)] : []),
+  ...(typeof route.credentialRef === "string" ? [credentialMaterialRef(route.credentialRef)] : []),
+];
 
-export type LlmRoute =
-  | OpenAIChatCompatibleRoute
-  | AnthropicMessagesRoute
-  | GeminiGenerateContentRoute;
-
-const DEFAULT_ANTHROPIC_VERSION = "2023-06-01";
-
-export const DEFAULTS = {
-  anthropicVersion: DEFAULT_ANTHROPIC_VERSION,
-} as const;
-
-export const llmRouteMaterialRefs = (route: LlmRoute): ReadonlyArray<MaterialRef> => {
-  switch (route.kind) {
-    case "openai-chat-compatible":
-    case "anthropic-messages":
-    case "gemini-generate-content":
-      return [endpointMaterialRef(route.endpointRef), credentialMaterialRef(route.credentialRef)];
-  }
-};
+const unknownRecord = Schema.Record({ key: Schema.String, value: Schema.Unknown });
+const nonNegativeInt = Schema.Number.pipe(Schema.int(), Schema.greaterThanOrEqualTo(0));
 
 export interface LlmToolCall {
   readonly id: string;
@@ -67,9 +55,6 @@ export interface LlmUsage {
   readonly completionTokens: number;
   readonly totalTokens: number;
 }
-
-const nonNegativeInt = Schema.Number.pipe(Schema.int(), Schema.greaterThanOrEqualTo(0));
-const unknownRecord = Schema.Record({ key: Schema.String, value: Schema.Unknown });
 
 export const LlmUsageSchema: Schema.Schema<LlmUsage> = Schema.Struct({
   promptTokens: nonNegativeInt,
@@ -170,15 +155,6 @@ export const llmOutputItemsFromTextAndToolCalls = (
   ...toolCalls.map((call) => ({ type: "tool_call" as const, call })),
 ];
 
-export interface ToolDefinition {
-  readonly type: "function";
-  readonly function: {
-    readonly name: string;
-    readonly description: string;
-    readonly parameters: AgentSchema<unknown>;
-  };
-}
-
 export interface LlmRequest {
   readonly route: LlmRoute;
   readonly messages: ReadonlyArray<LlmMessage>;
@@ -189,3 +165,23 @@ export interface LlmRequest {
     readonly function: { readonly name: string };
   };
 }
+
+export const projectAgentSchemaForLlmTool = (schema: AgentSchema<unknown>): LlmJsonSchemaObject =>
+  schema.projections.canonical;
+
+const canonicalizeWireDescriptor = (descriptor: LlmWireDescriptor): LlmWireDescriptor => ({
+  ...descriptor,
+  headers: [...descriptor.headers].sort(([left], [right]) => left.localeCompare(right)),
+});
+
+export const canonicalLlmWireDescriptorJson = (descriptor: LlmWireDescriptor): string =>
+  JSON.stringify(canonicalize(canonicalizeWireDescriptor(descriptor)));
+
+const canonicalize = (node: unknown): unknown => {
+  if (node === null || typeof node !== "object") return node;
+  if (Array.isArray(node)) return node.map((item) => canonicalize(item));
+  const obj = node as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const key of Object.keys(obj).sort()) out[key] = canonicalize(obj[key]);
+  return out;
+};

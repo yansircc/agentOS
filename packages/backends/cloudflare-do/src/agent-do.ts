@@ -97,7 +97,7 @@ import {
   type BackendProtocolTruthIdentity,
   type DispatchReceiverResult,
 } from "@agent-os/backend-protocol";
-import type { LlmRoute } from "@agent-os/kernel/llm";
+import type { LlmRoute } from "@agent-os/llm-protocol";
 import { Dispatch, type DispatchEnvelope, type DispatchTargetRegistry } from "./dispatch";
 import { EventBus, createEventStreamResponse, eventToRpc } from "./ledger";
 import { Scheduler } from "./scheduler";

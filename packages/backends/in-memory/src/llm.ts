@@ -1,6 +1,6 @@
 import { Effect, Layer } from "effect";
 import { UpstreamFailure } from "@agent-os/kernel/errors";
-import type { LlmRequest, LlmResponse } from "@agent-os/kernel/llm";
+import type { LlmRequest, LlmResponse } from "@agent-os/llm-protocol";
 import { LlmTransport } from "@agent-os/runtime";
 
 export interface InMemoryLlmTransportOptions {
@@ -29,7 +29,7 @@ export const InMemoryLlmTransportLive = (
   const handler = options.handler ?? responseQueueHandler(options.responses ?? []);
   return Layer.succeed(LlmTransport, {
     describeRoute: (route) => ({
-      providerOutputAdapterId: `${route.kind}@in-memory-${IN_MEMORY_LLM_TRANSPORT_VERSION}`,
+      providerOutputAdapterId: `${String(route.kind)}@in-memory-${IN_MEMORY_LLM_TRANSPORT_VERSION}`,
       providerOutputAdapterVersion: IN_MEMORY_LLM_TRANSPORT_VERSION,
       transportAdapterId: `in-memory-llm-transport@${IN_MEMORY_LLM_TRANSPORT_VERSION}`,
       transportAdapterVersion: IN_MEMORY_LLM_TRANSPORT_VERSION,

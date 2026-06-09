@@ -430,7 +430,7 @@ export const agUiRunAgentInputToSubmitSpec = (
 export const projectToolToAgUiTool = (tool: Tool): AgUiTool => ({
   name: tool.definition.function.name,
   description: tool.definition.function.description,
-  parameters: tool.definition.function.parameters.projections.agUi,
+  parameters: tool.definition.function.parameters.projections.canonical,
 });
 
 export const projectToolsToAgUiTools = (

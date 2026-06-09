@@ -14,7 +14,6 @@ import {
   materialRefKey,
   materialRequirement,
 } from "../src/material-ref";
-import { llmRouteMaterialRefs } from "../src/llm";
 import { RefResolverLive, RefResolverService, resolveStringMaterial } from "../src/ref-resolver";
 
 describe("MaterialRef algebra", () => {
@@ -196,26 +195,6 @@ describe("MaterialRef algebra", () => {
     expect(claim.operationRef).toBe("deploy:worker:acme");
     expect(materialRefKey(personalToken)).not.toBe(materialRefKey(orgToken));
     expect("materialRef" in claim).toBe(false);
-  });
-
-  it("projects existing LLM route refs into MaterialRef", () => {
-    expect(
-      llmRouteMaterialRefs({
-        kind: "openai-chat-compatible",
-        endpointRef: "openrouter",
-        credentialRef: "OPENROUTER_KEY",
-        modelId: "openai/gpt-5.4-mini",
-      }),
-    ).toEqual([
-      {
-        kind: "endpoint",
-        ref: "openrouter",
-      },
-      {
-        kind: "credential",
-        ref: "OPENROUTER_KEY",
-      },
-    ]);
   });
 
   it("resolves non-secret material through RefResolver material axis", async () => {

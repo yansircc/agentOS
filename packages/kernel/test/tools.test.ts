@@ -9,14 +9,14 @@ import {
   unsafeRunToolByName,
   validateExecutionDomainRegistry,
   validateToolRegistry,
+  type ToolCall,
   type Tool,
 } from "../src/tools";
-import type { LlmToolCall } from "../src/llm";
 
 const allowToolAdmitter = () => ({ ok: true as const });
 
 describe("defineTool", () => {
-  it("derives the OpenAI tool parameters and args decoder from one Schema", () => {
+  it("derives tool parameters and args decoder from one Schema", () => {
     const tool = defineTool({
       name: "lookup",
       description: "Lookup a symbolic key",
@@ -35,7 +35,7 @@ describe("defineTool", () => {
         description: "Lookup a symbolic key",
       },
     });
-    expect(tool.definition.function.parameters.projections.openai).toEqual({
+    expect(tool.definition.function.parameters.projections.canonical).toEqual({
       type: "object",
       properties: { key: { type: "string" } },
       required: ["key"],
@@ -264,7 +264,7 @@ describe("unsafeRunToolByName", () => {
       execution: pureToolExecution(),
       execute: ({ key }) => ({ value: key }),
     });
-    const llmCall: LlmToolCall = {
+    const llmCall: ToolCall = {
       id: "call-1",
       type: "function",
       function: { name: "lookup", arguments: '{"key":"abc"}' },

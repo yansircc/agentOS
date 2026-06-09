@@ -12,7 +12,7 @@ import type {
   RunTurn,
 } from "@agent-os/kernel/types";
 import type { LedgerEvent } from "@agent-os/kernel/types";
-import { textFromLlmOutputItems } from "@agent-os/kernel/llm";
+import { textFromLlmOutputItems } from "@agent-os/llm-protocol";
 import { ABORT, reasonOf, type AbortKind } from "./abort";
 import type { SubmitResult } from "./submit";
 import {

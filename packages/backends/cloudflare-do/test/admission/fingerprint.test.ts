@@ -7,8 +7,7 @@
  *   - distinct schemas yield distinct fingerprints
  *   - routeFingerprint is collision-free for distinct routes (Codex P1
  *     regression guard — the FNV-1a aliasing bug)
- *   - anthropic-messages: unpinned `anthropicVersion` fills in the
- *     current substrate default before fingerprinting (contract §7)
+ *   - opaque route fields are canonicalized but never invented by runtime
  */
 
 import { Effect, Schema } from "effect";
@@ -62,14 +61,14 @@ describe("admission — canonical fingerprint (contract §4.1)", () => {
 
   it("routeFingerprint is deterministic, prefix-tagged, and collision-free for distinct routes", () => {
     const r = routeFingerprint({
-      kind: "openai-chat-compatible",
+      kind: "chat-http",
       endpointRef: "test-endpoint",
       credentialRef: "test-credential",
       modelId: "model-a",
     });
     expect(r.startsWith("route-json-v1:")).toBe(true);
     const r2 = routeFingerprint({
-      kind: "openai-chat-compatible",
+      kind: "chat-http",
       endpointRef: "test-endpoint",
       credentialRef: "test-credential",
       modelId: "model-a",
@@ -81,13 +80,13 @@ describe("admission — canonical fingerprint (contract §4.1)", () => {
     // short-circuit another model. The canonical-JSON key is collision-free
     // by construction.
     const a = routeFingerprint({
-      kind: "openai-chat-compatible",
+      kind: "chat-http",
       endpointRef: "test-endpoint",
       credentialRef: "test-credential",
       modelId: "model-collision-a",
     });
     const b = routeFingerprint({
-      kind: "openai-chat-compatible",
+      kind: "chat-http",
       endpointRef: "test-endpoint",
       credentialRef: "test-credential",
       modelId: "model-collision-b",
@@ -95,63 +94,55 @@ describe("admission — canonical fingerprint (contract §4.1)", () => {
     expect(a).not.toBe(b);
   });
 
-  // ── Codex regression 2026-05-26: anthropic-messages route default
-  //    must enter the fingerprint. `anthropicVersion` is part of the
-  //    wire surface (different version = different feature set + error
-  //    semantics), so capability evidence keyed without it would roll
-  //    forward incorrectly when the substrate later bumps its default.
-  //    Normalization injects the current default before canonical JSON,
-  //    making bumps invalidate unpinned-route leases by construction.
-  it("anthropic route: unpinned routeFingerprint matches explicit current default", () => {
+  it("opaque route: runtime does not inject provider defaults", () => {
     const unpinned = routeFingerprint({
-      kind: "anthropic-messages",
+      kind: "chat-http",
       endpointRef: "test",
       credentialRef: "K",
-      modelId: "claude-sonnet-4-6",
+      modelId: "model-a",
     });
-    const explicitDefault = routeFingerprint({
-      kind: "anthropic-messages",
+    const explicitVersion = routeFingerprint({
+      kind: "chat-http",
       endpointRef: "test",
       credentialRef: "K",
-      modelId: "claude-sonnet-4-6",
-      anthropicVersion: "2023-06-01",
+      modelId: "model-a",
+      wireVersion: "2023-06-01",
     });
-    expect(unpinned).toBe(explicitDefault);
-    // and the canonical JSON actually contains the version field
-    expect(unpinned).toContain('"anthropicVersion":"2023-06-01"');
+    expect(unpinned).not.toBe(explicitVersion);
+    expect(unpinned).not.toContain("wireVersion");
   });
 
-  it("anthropic route: pinned version yields a fingerprint distinct from default", () => {
+  it("opaque route: pinned fields change the fingerprint", () => {
     const unpinned = routeFingerprint({
-      kind: "anthropic-messages",
+      kind: "chat-http",
       endpointRef: "test",
       credentialRef: "K",
-      modelId: "claude-sonnet-4-6",
+      modelId: "model-a",
     });
-    const pinnedFuture = routeFingerprint({
-      kind: "anthropic-messages",
+    const pinned = routeFingerprint({
+      kind: "chat-http",
       endpointRef: "test",
       credentialRef: "K",
-      modelId: "claude-sonnet-4-6",
-      anthropicVersion: "2099-01-01",
+      modelId: "model-a",
+      wireVersion: "2099-01-01",
     });
-    expect(unpinned).not.toBe(pinnedFuture);
+    expect(unpinned).not.toBe(pinned);
   });
 
-  it("anthropic route: same pinned version yields equal fingerprint regardless of construction order", () => {
+  it("opaque route: same pinned fields yield equal fingerprint regardless of construction order", () => {
     const a = routeFingerprint({
-      anthropicVersion: "2024-08-01",
-      kind: "anthropic-messages",
+      wireVersion: "2024-08-01",
+      kind: "chat-http",
       endpointRef: "x",
       credentialRef: "Y",
-      modelId: "claude-haiku",
+      modelId: "model-a",
     });
     const b = routeFingerprint({
-      kind: "anthropic-messages",
-      modelId: "claude-haiku",
+      kind: "chat-http",
+      modelId: "model-a",
       endpointRef: "x",
       credentialRef: "Y",
-      anthropicVersion: "2024-08-01",
+      wireVersion: "2024-08-01",
     });
     expect(a).toBe(b);
   });

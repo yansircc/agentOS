@@ -10,7 +10,7 @@
  * admission modules import FROM here.
  */
 
-import type { LlmRoute } from "@agent-os/kernel/llm";
+import type { LlmRoute } from "@agent-os/llm-protocol";
 
 export type Strategy = "forced-tool-call";
 

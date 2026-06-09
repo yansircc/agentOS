@@ -14,7 +14,7 @@ import {
   type AgentSchemaSource,
   type AgentSchemaSpec,
 } from "@agent-os/kernel/agent-schema";
-import { DEFAULTS as LLM_DEFAULTS, type LlmRoute } from "@agent-os/kernel/llm";
+import type { LlmRoute } from "@agent-os/llm-protocol";
 
 export const FINGERPRINT_ALGO_VERSION = AGENT_SCHEMA_FINGERPRINT_VERSION;
 
@@ -38,37 +38,6 @@ export const makeAdmissionSchemaSpec = <A, I>(
 ): Effect.Effect<AgentSchemaSpec<A>> =>
   makeAgentSchemaSpec(isAgentSchema(schema) ? schema : ensureAgentSchema(schema));
 
-/** Per-kind route normalizer applied BEFORE canonical JSON. Fills in
- *  the substrate's current defaults so the fingerprint reflects the
- *  effective wire surface, not just the literal route object.
- *
- *  Why this matters (contract §7): a route field like `anthropicVersion`
- *  that has a transport-time default must enter the fingerprint via its
- *  effective value. Otherwise unpinned routes get a fingerprint that
- *  doesn't change when the substrate later bumps its default — and old
- *  lease evidence would silently project forward onto a different wire
- *  surface (different feature set, different error semantics). That
- *  violates contract's "capability evidence is keyed by the actual wire"
- *  rule.
- *
- *  Pinned values are unchanged; only `undefined` fields get filled.
- *  Bumping `LLM_DEFAULTS.anthropicVersion` in code → unpinned-route
- *  fingerprints change → existing leases no longer match → routes
- *  re-admit against the new wire by construction.
- */
-const normalizeRouteForFingerprint = (route: LlmRoute): LlmRoute => {
-  switch (route.kind) {
-    case "anthropic-messages":
-      return {
-        ...route,
-        anthropicVersion: route.anthropicVersion ?? LLM_DEFAULTS.anthropicVersion,
-      };
-    case "openai-chat-compatible":
-    case "gemini-generate-content":
-      return route;
-  }
-};
-
 /** Route key is the canonical JSON of the route, prefixed with an algorithm
  *  version tag. We deliberately do NOT hash it.
  *
@@ -81,6 +50,6 @@ const normalizeRouteForFingerprint = (route: LlmRoute): LlmRoute => {
  *  prefix lets a future canonicalization change auto-invalidate stored
  *  keys without an adapter version bump. */
 export const routeFingerprint = (route: LlmRoute): string => {
-  const canon = canonicalJsonString(normalizeRouteForFingerprint(route) as unknown);
+  const canon = canonicalJsonString(route);
   return `route-json-v1:${canon}`;
 };

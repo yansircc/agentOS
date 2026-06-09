@@ -25,6 +25,7 @@
     "@agent-os/attached-stream": "workspace:*",
     "@agent-os/backend-protocol": "workspace:*",
     "@agent-os/kernel": "workspace:*",
+    "@agent-os/llm-protocol": "workspace:*",
     "@agent-os/llm-transport-effect-ai": "workspace:*",
     "@agent-os/runtime": "workspace:*",
     "@agent-os/telemetry-protocol": "workspace:*",

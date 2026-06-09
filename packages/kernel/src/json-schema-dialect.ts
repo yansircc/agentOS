@@ -2,8 +2,8 @@
  * Closed JSON Schema dialect + validator.
  *
  * Kernel owns the dialect because app-authored tools live in kernel and must
- * derive OpenAI tool parameters without depending on runtime. Runtime imports
- * this module for structured-output validation and fingerprinting.
+ * derive canonical tool parameters without depending on runtime. Runtime
+ * imports this module for structured-output validation and fingerprinting.
  */
 
 import { Option, Predicate } from "effect";

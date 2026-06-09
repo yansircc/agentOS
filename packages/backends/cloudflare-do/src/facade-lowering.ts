@@ -1,11 +1,6 @@
 import { Option } from "effect";
-import type {
-  AnthropicMessagesRoute,
-  GeminiGenerateContentRoute,
-  LlmRoute,
-  OpenAIChatCompatibleRoute,
-} from "@agent-os/kernel/llm";
-import { llmRouteMaterialRefs } from "@agent-os/kernel/llm";
+import type { LlmRoute } from "@agent-os/llm-protocol";
+import { llmRouteMaterialRefs } from "@agent-os/llm-protocol";
 import {
   bindingMaterialRef,
   credentialMaterialRef,
@@ -80,6 +75,13 @@ export interface OpenAIChatSpec {
   readonly credential: string;
 }
 
+export interface OpenAIChatCompatibleRoute extends LlmRoute {
+  readonly kind: "openai-chat-compatible";
+  readonly endpointRef: string;
+  readonly credentialRef: string;
+  readonly modelId: string;
+}
+
 export interface AnthropicMessagesSpec {
   readonly model: string;
   readonly endpoint: string;
@@ -87,10 +89,25 @@ export interface AnthropicMessagesSpec {
   readonly anthropicVersion?: string;
 }
 
+export interface AnthropicMessagesRoute extends LlmRoute {
+  readonly kind: "anthropic-messages";
+  readonly endpointRef: string;
+  readonly credentialRef: string;
+  readonly modelId: string;
+  readonly anthropicVersion?: string;
+}
+
 export interface GeminiGenerateContentSpec {
   readonly model: string;
   readonly endpoint: string;
   readonly credential: string;
+}
+
+export interface GeminiGenerateContentRoute extends LlmRoute {
+  readonly kind: "gemini-generate-content";
+  readonly endpointRef: string;
+  readonly credentialRef: string;
+  readonly modelId: string;
 }
 
 export const openAIChat = (spec: OpenAIChatSpec): OpenAIChatCompatibleRoute => ({

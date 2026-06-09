@@ -22,7 +22,7 @@ export {
   toolExecutionRejectionKind,
   toolSettlementContract,
 } from "./tool-settlement";
-export type { LlmRoute, LlmUsage, ToolDefinition } from "@agent-os/kernel/llm";
-export type { Tool } from "@agent-os/kernel/tools";
+export type { LlmRoute, LlmUsage } from "@agent-os/llm-protocol";
+export type { Tool, ToolDefinition } from "@agent-os/kernel/tools";
 export type * from "./submit";
 export * from "./trigger";

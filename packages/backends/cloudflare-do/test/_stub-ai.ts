@@ -7,7 +7,7 @@
  */
 
 import { Context, Effect } from "effect";
-import type { LlmResponse } from "@agent-os/kernel/llm";
+import type { LlmResponse } from "@agent-os/llm-protocol";
 import { UpstreamFailure } from "@agent-os/kernel/errors";
 import { LlmTransport } from "@agent-os/runtime";
 
@@ -45,7 +45,7 @@ export const stubLlmTransport = (
   let i = 0;
   return {
     describeRoute: (route) => ({
-      providerOutputAdapterId: `${route.kind}@test-output-1.0.0`,
+      providerOutputAdapterId: `${String(route.kind)}@test-output-1.0.0`,
       providerOutputAdapterVersion: "1.0.0",
       transportAdapterId: "test-llm-transport@1.0.0",
       transportAdapterVersion: "1.0.0",

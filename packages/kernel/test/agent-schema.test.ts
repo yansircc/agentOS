@@ -66,14 +66,7 @@ describe("AgentSchema profile spike", () => {
 
       const fingerprint = yield* schema.fingerprint;
       expect(fingerprint.startsWith("agent-schema-v1:sha256:")).toBe(true);
-      expect(schema.projections.openai).toEqual(schema.projections.canonical);
-      expect(schema.projections.anthropic).toEqual(schema.projections.canonical);
-      expect(schema.projections.agUi).toEqual(schema.projections.canonical);
-      expect(schema.projections.gemini).toEqual({
-        type: "object",
-        properties: schema.projections.canonical.properties,
-        required: schema.projections.canonical.required,
-      });
+      expect(schema.projections.canonical).toEqual(schema.jsonSchema);
     }),
   );
 
@@ -144,14 +137,12 @@ describe("AgentSchema profile spike", () => {
     }),
   );
 
-  it.effect("keeps provider-specific projection differences out of schema fingerprint", () =>
+  it.effect("fingerprints canonical schema projections", () =>
     Effect.gen(function* () {
       const schema = defineAgentSchema(Schema.Struct({ value: Schema.String }));
       const canonicalFingerprint = yield* fingerprintAgentSchema(schema.projections.canonical);
-      const geminiFingerprint = yield* fingerprintAgentSchema(schema.projections.canonical);
 
-      expect(schema.projections.gemini).not.toEqual(schema.projections.canonical);
-      expect(geminiFingerprint).toBe(canonicalFingerprint);
+      expect(canonicalFingerprint).toBe(yield* schema.fingerprint);
     }),
   );
 
