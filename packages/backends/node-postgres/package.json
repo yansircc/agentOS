@@ -1,0 +1,36 @@
+{
+  "name": "@agent-os/backend-node-postgres",
+  "version": "0.2.9",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vp test run --configLoader runner",
+    "test:runtime": "vp test run --configLoader runner"
+  },
+  "dependencies": {
+    "@agent-os/backend-protocol": "workspace:*",
+    "@agent-os/kernel": "workspace:*",
+    "@agent-os/runtime-protocol": "workspace:*",
+    "@agent-os/telemetry-protocol": "workspace:*",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@effect/vitest": "catalog:",
+    "@types/node": "^24.12.4",
+    "typescript": "catalog:",
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "effect": "^3.21.0"
+  }
+}
