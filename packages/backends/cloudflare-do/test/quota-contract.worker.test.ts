@@ -23,6 +23,7 @@ import { Ledger, LedgerLive } from "../src/ledger";
 import { RefResolverLive } from "@agent-os/kernel/ref-resolver";
 import { QuotaLive } from "../src/quota";
 import { withQuota } from "../src/quota";
+import { ToolError } from "@agent-os/kernel/errors";
 import { LlmTransport, submitAgentEffect } from "@agent-os/runtime";
 import type { InternalSubmitSpec } from "@agent-os/runtime-protocol";
 import { defineTool, pureToolExecution, type Tool } from "@agent-os/kernel/tools";
@@ -112,9 +113,19 @@ describe("quota state machine — deterministic", () => {
           execute: () =>
             Effect.sync(() => {
               calls += 1;
-              if (calls === 1) throw new Error("transient");
-              return "2026-05-25T00:00:00Z";
-            }),
+              return calls;
+            }).pipe(
+              Effect.flatMap((attempt) =>
+                attempt === 1
+                  ? Effect.fail(
+                      new ToolError({
+                        toolName: "get_current_time",
+                        cause: { reason: "transient" },
+                      }),
+                    )
+                  : Effect.succeed("2026-05-25T00:00:00Z"),
+              ),
+            ),
           admit: allowToolAdmitter,
           authority: "read",
           execution: pureToolExecution(),

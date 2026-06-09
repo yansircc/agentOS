@@ -70,7 +70,10 @@ import type {
   MaterializedProjectionStatus,
 } from "@agent-os/runtime";
 import type {
+  AgentBindings,
+  AgentManifest,
   AgentSubmitBindings,
+  MountedAgent,
   AttemptKey,
   CapabilityLease,
   InternalSubmitSpec,
@@ -136,6 +139,7 @@ import { commitDurableTriggerIntent } from "./due-work";
 import type { CloudflareTriggerSource } from "./trigger-factory";
 import type { CloudflareAttachedStreamSource } from "./stream-factory";
 import { createAttachedStreamResponse } from "./attached-stream-wire";
+import { mountCloudflareAgent } from "./mount";
 import { commitLedgerTransaction } from "./ledger/commit";
 import {
   cloudflareDefaultTruthIdentityFromRoutingScope,
@@ -277,6 +281,8 @@ export interface AgentDurableObjectConfig<
   Env extends CloudflareAgentEnv,
   Runtime extends AgentRuntimeReaderClient = AgentRuntimeClient,
 > {
+  readonly manifest?: AgentManifest;
+  readonly agentBindings?: AgentBindings;
   readonly refResolver?: (env: Env) => RefResolver;
   readonly extensions?: (env: Env) => ReadonlyArray<ExtensionDeclaration>;
   readonly dispatchTargets?: (env: Env) => DispatchTargetRegistry;
@@ -294,6 +300,7 @@ export interface MaterializedAgentConfig<
   Env extends CloudflareAgentEnv,
   Runtime extends AgentRuntimeReaderClient = AgentRuntimeClient,
 > {
+  readonly mountedAgent: MountedAgent;
   readonly refResolver: RefResolver;
   readonly extensions: ReadonlyArray<ExtensionDeclaration>;
   readonly dispatchTargets: DispatchTargetRegistry;
@@ -329,6 +336,7 @@ export class AgentDurableObject<
   implements AgentRuntimeReaderClient
 {
   private readonly _handlers: Map<string, Set<EventHandler>> = new Map();
+  private readonly _mountedAgent: MountedAgent;
   private readonly _refResolver: RefResolver;
   private readonly _extensionValidation: ExtensionValidation;
   private readonly _capabilities: ReadonlyMap<string, ExtensionCapability>;
@@ -344,6 +352,7 @@ export class AgentDurableObject<
 
   constructor(ctx: DurableObjectState, env: Env, config: MaterializedAgentConfig<Env, Runtime>) {
     super(ctx, env);
+    this._mountedAgent = config.mountedAgent;
     this._refResolver = config.refResolver;
     this._extensionValidation = validateExtensionDeclarations(config.extensions);
     this._capabilities = this.extensionCapabilities();
@@ -1153,6 +1162,7 @@ export const createAgentDurableObject = <Env extends CloudflareAgentEnv>(
   {
     constructor(ctx: DurableObjectState, env: Env) {
       super(ctx, env, {
+        mountedAgent: mountCloudflareAgent(config.manifest, config.agentBindings),
         refResolver: config.refResolver?.(env) ?? emptyRefResolver,
         extensions: config.extensions?.(env) ?? [],
         dispatchTargets: config.dispatchTargets?.(env) ?? {},

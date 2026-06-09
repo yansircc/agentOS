@@ -20,6 +20,7 @@
 - `.:AgentTriggerIntentSpec`
 - `.:AnthropicMessagesSpec`
 - `.:CloudflareAgentEnv`
+- `.:CloudflareAgentMountPort`
 - `.:CloudflareAttachedStreamFactory`
 - `.:CloudflareAttachedStreamFactoryContext`
 - `.:CloudflareAttachedStreamSource`
@@ -39,6 +40,7 @@
 - `.:QueueDispatchTargetBinding`
 - `.:anthropicMessages`
 - `.:binding`
+- `.:cloudflareAgentMountPort`
 - `.:credential`
 - `.:createAgentDurableObject`
 - `.:defineAgentDO`
@@ -49,6 +51,7 @@
 - `.:geminiGenerateContent`
 - `.:httpDispatchTarget`
 - `.:lowerMaterialBindings`
+- `.:mountCloudflareAgent`
 - `.:openAIChat`
 - `.:providerDispatchTarget`
 - `.:queueDispatchTarget`

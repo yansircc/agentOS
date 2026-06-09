@@ -334,11 +334,11 @@ describe("tool registry generator", () => {
           claim: expect.objectContaining({
             phase: "rejected",
             operationRef: "tool:tool-registry-admitter-throw:1:0:call-1",
-            rejectionRef: {
-              rejectionId: "tool:tool-registry-admitter-throw:1:0:call-1",
-              rejectionKind: "provider_rejected",
-              reason: "admitter_error:Error",
-            },
+              rejectionRef: {
+                rejectionId: "tool:tool-registry-admitter-throw:1:0:call-1",
+                rejectionKind: "provider_rejected",
+                reason: "admitter_error:agent.aborted.tool_error",
+              },
           }),
         }),
       );

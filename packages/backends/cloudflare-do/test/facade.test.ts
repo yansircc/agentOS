@@ -9,10 +9,12 @@ import {
   lowerMaterialBindings,
   openAIChat,
 } from "../src/facade-lowering";
+import { cloudflareAgentMountPort, mountCloudflareAgent } from "../src/mount";
 import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
 import { makePreClaim } from "@agent-os/kernel/effect-claim";
 import { defineTool, effectfulToolExecution, pureToolExecution } from "@agent-os/kernel/tools";
 import { Effect, Schema } from "effect";
+import { defineAgentBindings, defineAgentManifest } from "@agent-os/runtime-protocol";
 import type { DispatchTargetNamespace } from "../src/dispatch";
 import { httpDispatchTarget, providerDispatchTarget, queueDispatchTarget } from "../src/dispatch";
 
@@ -57,6 +59,39 @@ const dispatchEnvelope = {
 };
 
 describe("defineAgentDO facade lowering", () => {
+  it("mounts AgentManifest through the Cloudflare backend port and sse-http transport", () => {
+    const effectAuthorityRef = {
+      authorityClass: "agent" as const,
+      authorityId: "cloudflare-mount-test",
+    };
+    const manifest = defineAgentManifest({
+      agentId: "agent.cloudflare-mount-test",
+      scope: { kind: "conversation", idSource: "submit_scope" },
+      effectAuthorityRef,
+      handlers: ["user_message"] as const,
+      llmRoutes: {
+        default: { bindingRef: "llm.default" },
+      },
+    });
+    const bindings = defineAgentBindings<(typeof manifest.handlers)[number]>({
+      handlers: {
+        user_message: () => ({ ok: true }),
+      },
+    });
+
+    const mounted = mountCloudflareAgent(manifest, bindings);
+
+    expect(mounted.manifest).toBe(manifest);
+    expect(mounted.bindings).toBe(bindings);
+    expect(mounted.port).toEqual(cloudflareAgentMountPort);
+    expect(mounted.port).toMatchObject({
+      backend: "cloudflare-do",
+      backendProtocol: "@agent-os/backend-protocol",
+      runtimeProtocol: "@agent-os/runtime-protocol",
+      transport: "sse-http",
+    });
+  });
+
   it("lowers bindings into RefResolver and dispatch targets by MaterialRef shape", () => {
     const materialBindings = [
       endpoint<TestEnv>("llm").from((e) => e.LLM_ENDPOINT),

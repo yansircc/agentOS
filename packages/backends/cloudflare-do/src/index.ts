@@ -7,6 +7,7 @@
  */
 
 export { createAgentDurableObject, type CloudflareAgentEnv } from "./agent-do";
+export { cloudflareAgentMountPort, mountCloudflareAgent } from "./mount";
 export type {
   AgentAttachedStreamCancelSpec,
   AgentAttachedStreamSpec,
@@ -19,6 +20,7 @@ export type {
   AgentTriggerCancelSpec,
   AgentTriggerIntentSpec,
 } from "./agent-do";
+export type { CloudflareAgentMountPort } from "./mount";
 export type {
   CloudflareAttachedStreamFactory,
   CloudflareAttachedStreamFactoryContext,

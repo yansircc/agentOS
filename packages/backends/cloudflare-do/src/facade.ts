@@ -2,7 +2,7 @@ import type { ExtensionDeclaration } from "@agent-os/kernel/extensions";
 import type { ScopeRef } from "@agent-os/kernel/effect-claim";
 import type { DispatchToScopeResult, DispatchToScopeSpec } from "@agent-os/kernel/types";
 import type { AttachedStreamCancelResult, TriggerCancelResult } from "@agent-os/runtime";
-import type { SubmitResult } from "@agent-os/runtime-protocol";
+import type { AgentBindings, AgentManifest, SubmitResult } from "@agent-os/runtime-protocol";
 import {
   AgentDurableObject,
   type AgentAttachedStreamCancelSpec,
@@ -16,6 +16,7 @@ import {
   type CloudflareAgentEnv,
   type MaterializedAgentConfig,
 } from "./agent-do";
+import { mountCloudflareAgent } from "./mount";
 import type { CloudflareTriggerSource } from "./trigger-factory";
 import type { CloudflareAttachedStreamSource } from "./stream-factory";
 import type { AnyMaterializedProjectionDefinition } from "@agent-os/runtime";
@@ -70,6 +71,8 @@ interface DefineAgentDOConfigBase<
   Env extends CloudflareAgentEnv,
   Runtime extends AgentFacadeRuntimeClient,
 > extends Omit<AgentLoweringConfig<Env>, "llms"> {
+  readonly manifest?: AgentManifest;
+  readonly agentBindings?: AgentBindings;
   readonly on?: Readonly<Record<string, AgentOnHandler<Env, Runtime>>>;
   readonly extensions?:
     | ReadonlyArray<ExtensionDeclaration>
@@ -133,6 +136,7 @@ const materializedConfigForEnv = <
   lowered: LoweredAgentConfig,
   env: Env,
 ): MaterializedAgentConfig<Env, Runtime> => ({
+  mountedAgent: mountCloudflareAgent(config.manifest, config.agentBindings),
   refResolver: lowered.refResolver,
   extensions: extensionsFor(config.extensions, env),
   dispatchTargets: lowered.dispatchTargets,

@@ -24,6 +24,7 @@ title: "@agent-os/backend-cloudflare-do Public API Intent"
 - `.:AgentTriggerIntentSpec`
 - `.:AnthropicMessagesSpec`
 - `.:CloudflareAgentEnv`
+- `.:CloudflareAgentMountPort`
 - `.:CloudflareAttachedStreamFactory`
 - `.:CloudflareAttachedStreamFactoryContext`
 - `.:CloudflareAttachedStreamSource`
@@ -43,6 +44,7 @@ title: "@agent-os/backend-cloudflare-do Public API Intent"
 - `.:QueueDispatchTargetBinding`
 - `.:anthropicMessages`
 - `.:binding`
+- `.:cloudflareAgentMountPort`
 - `.:credential`
 - `.:createAgentDurableObject`
 - `.:defineAgentDO`
@@ -53,6 +55,7 @@ title: "@agent-os/backend-cloudflare-do Public API Intent"
 - `.:geminiGenerateContent`
 - `.:httpDispatchTarget`
 - `.:lowerMaterialBindings`
+- `.:mountCloudflareAgent`
 - `.:openAIChat`
 - `.:providerDispatchTarget`
 - `.:queueDispatchTarget`
