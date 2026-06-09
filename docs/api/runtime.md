@@ -3,11 +3,6 @@
 ## Public exports
 
 - `./admission:Admission`
-- `./otlp-projection:OTLP_GENAI_SEMCONV_MAPPING_VERSION`
-- `./otlp-projection:OtlpAttributeValue`
-- `./otlp-projection:OtlpProjection`
-- `./otlp-projection:OtlpProjectionSpan`
-- `./otlp-projection:projectOtlpSpans`
 - `./run-projector:RUN_BEARING_KINDS`
 - `./run-projector:projectRunStatus`
 - `./run-projector:projectRunTrace`
@@ -69,10 +64,6 @@
 - `.:MaterializedProjectionRow`
 - `.:MaterializedProjectionStatus`
 - `.:MaterializedProjections`
-- `.:OTLP_GENAI_SEMCONV_MAPPING_VERSION`
-- `.:OtlpAttributeValue`
-- `.:OtlpProjection`
-- `.:OtlpProjectionSpan`
 - `.:ProjectionApplicationError`
 - `.:ProjectionApplyEventResult`
 - `.:ProjectionApplyResult`
@@ -136,7 +127,6 @@
 - `.:makeProjectionRegistry`
 - `.:makeProjectionRegistryResult`
 - `.:parseScheduledEventIntentPayload`
-- `.:projectOtlpSpans`
 - `.:projectRunStatus`
 - `.:projectRunTrace`
 - `.:projectRunsPage`

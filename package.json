@@ -13,6 +13,7 @@
     "packages/providers/*",
     "packages/composers/*",
     "packages/transports/*",
+    "packages/wire-adapters/*",
     "tooling/*"
   ],
   "type": "module",

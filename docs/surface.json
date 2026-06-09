@@ -80,6 +80,20 @@
       "published": true
     },
     {
+      "slug": "telemetry-otlp",
+      "name": "@agent-os/telemetry-otlp",
+      "path": "packages/wire-adapters/telemetry-otlp",
+      "status": "telemetry wire adapter",
+      "role": "OTLP projection adapter for agentOS telemetry and ledger facts",
+      "boundary": "OTLP and OpenTelemetry semantic-convention mapping only; telemetry source vocabulary lives in telemetry-protocol",
+      "need": "Telemetry OTLP wire mapping",
+      "apiSource": "docs/api/telemetry-otlp.md",
+      "readmeStatus": "Telemetry wire adapter package. It maps agentOS telemetry semantics to OTLP span payloads.",
+      "apiStatus": "Telemetry OTLP adapter public exports are limited to the mapping version, OTLP span DTOs, and pure projection function.",
+      "primary": true,
+      "published": true
+    },
+    {
       "slug": "llm-protocol",
       "name": "@agent-os/llm-protocol",
       "path": "packages/llm-protocol",

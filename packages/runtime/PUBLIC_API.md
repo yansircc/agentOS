@@ -7,11 +7,6 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 ## Public exports
 
 - `./admission:Admission`
-- `./otlp-projection:OTLP_GENAI_SEMCONV_MAPPING_VERSION`
-- `./otlp-projection:OtlpAttributeValue`
-- `./otlp-projection:OtlpProjection`
-- `./otlp-projection:OtlpProjectionSpan`
-- `./otlp-projection:projectOtlpSpans`
 - `./run-projector:RUN_BEARING_KINDS`
 - `./run-projector:projectRunStatus`
 - `./run-projector:projectRunTrace`
@@ -73,10 +68,6 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:MaterializedProjectionRow`
 - `.:MaterializedProjectionStatus`
 - `.:MaterializedProjections`
-- `.:OTLP_GENAI_SEMCONV_MAPPING_VERSION`
-- `.:OtlpAttributeValue`
-- `.:OtlpProjection`
-- `.:OtlpProjectionSpan`
 - `.:ProjectionApplicationError`
 - `.:ProjectionApplyEventResult`
 - `.:ProjectionApplyResult`
@@ -140,7 +131,6 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:makeProjectionRegistry`
 - `.:makeProjectionRegistryResult`
 - `.:parseScheduledEventIntentPayload`
-- `.:projectOtlpSpans`
 - `.:projectRunStatus`
 - `.:projectRunTrace`
 - `.:projectRunsPage`

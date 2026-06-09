@@ -2,7 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import type { LivedClaim } from "@agent-os/kernel/effect-claim";
 import { ABORT } from "@agent-os/kernel/abort";
-import { OTLP_GENAI_SEMCONV_MAPPING_VERSION, projectOtlpSpans } from "../src/otlp-projection";
+import { OTLP_GENAI_SEMCONV_MAPPING_VERSION, projectOtlpSpans } from "../src";
 import {
   agentRunAbortedEvent,
   agentRunCompletedEvent,

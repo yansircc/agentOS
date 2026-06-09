@@ -1,5 +1,5 @@
 {
-  "name": "@agent-os/runtime",
+  "name": "@agent-os/telemetry-otlp",
   "version": "0.2.9",
   "private": true,
   "type": "module",
@@ -9,14 +9,6 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
-    },
-    "./admission": {
-      "types": "./src/admission.ts",
-      "default": "./src/admission.ts"
-    },
-    "./run-projector": {
-      "types": "./src/run-projector.ts",
-      "default": "./src/run-projector.ts"
     }
   },
   "scripts": {
@@ -24,17 +16,12 @@
     "test": "vp test run --configLoader runner"
   },
   "dependencies": {
-    "@agent-os/attached-stream": "workspace:*",
-    "@agent-os/backend-protocol": "workspace:*",
-    "@agent-os/decision-gate": "workspace:*",
     "@agent-os/kernel": "workspace:*",
-    "@agent-os/llm-protocol": "workspace:*",
     "@agent-os/runtime-protocol": "workspace:*",
     "@agent-os/telemetry-protocol": "workspace:*",
     "effect": "catalog:"
   },
   "devDependencies": {
-    "@effect/language-service": "catalog:",
     "@effect/vitest": "catalog:",
     "typescript": "catalog:",
     "vite-plus": "catalog:",
