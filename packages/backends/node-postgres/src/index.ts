@@ -103,6 +103,9 @@ interface DueWorkRow {
   readonly redriveCount: number;
   readonly cancelRequestedAt: number | null;
   readonly cancelReason: string | null;
+  readonly dispatchIntent: LedgerEvent | null;
+  readonly dispatchDeliveredCount: number;
+  readonly dispatchAttemptCount: number;
 }
 
 interface DispatchRetryState {
@@ -806,23 +809,22 @@ export class NodePostgresBackend {
   }
 
   async #commitDispatchRetry(row: DueWorkRow, now: number): Promise<void> {
-    const state = await this.#dispatchRetryState(row.identity, row.payload.intentEventId);
-    if (state === null) {
+    const intent = row.dispatchIntent;
+    if (intent === null) {
       await this.#completeDue(row.id, now, row.claimToken);
       return;
     }
-    const { intent } = state;
     const parsed = parseRequestedPayloadValue(intent.payload);
     if (!parsed.ok) {
       await this.#completeDue(row.id, now, row.claimToken);
       return;
     }
     const requested = parsed.value;
-    if (state.deliveredCount > 0) {
+    if (row.dispatchDeliveredCount > 0) {
       await this.#completeDue(row.id, now, row.claimToken);
       return;
     }
-    const attempts = state.attemptCount + 1;
+    const attempts = row.dispatchAttemptCount + 1;
     const bindingKey = materialRefKey(requested.target.bindingRef);
     const target = this.#targets.get(bindingKey);
     const envelope: DispatchEnvelope = {
@@ -1035,8 +1037,40 @@ export class NodePostgresBackend {
           work.cancel_requested_at AS "cancelRequestedAt",
           work.cancel_reason AS "cancelReason"
       )
+      , intent AS (
+        ${eventRowSelect}
+        WHERE id = (
+          SELECT (claimed."payload" ->> 'intentEventId')::bigint
+          FROM claimed
+        )
+        AND identity_key = ${sqlString(backendProtocolEventIdentityKey(identity))}
+      )
+      , related AS (
+        SELECT kind
+        FROM agentos_events
+        WHERE identity_key = ${sqlString(backendProtocolEventIdentityKey(identity))}
+          AND kind = ANY(ARRAY[
+            ${sqlString(DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED)},
+            ${sqlString(DISPATCH_EVENT_KINDS.OUTBOUND_FAILED)}
+          ]::text[])
+          AND (payload ->> 'outboundEventId')::bigint = (
+            SELECT (claimed."payload" ->> 'intentEventId')::bigint
+            FROM claimed
+          )
+      )
       , agentos_json_rows AS (
-        SELECT * FROM claimed
+        SELECT
+          claimed.*,
+          CASE
+            WHEN claimed."kind" = ${sqlString(DELIVERY_RETRY_TRIGGER_KIND)}
+            THEN (SELECT row_to_json(intent) FROM intent)
+            ELSE NULL
+          END AS "dispatchIntent",
+          (SELECT COUNT(*)::int FROM related WHERE kind = ${sqlString(
+            DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED,
+          )}) AS "dispatchDeliveredCount",
+          (SELECT COUNT(*)::int FROM related) AS "dispatchAttemptCount"
+        FROM claimed
       )
       SELECT COALESCE(json_agg(row_to_json(agentos_json_rows)), '[]'::json)::text
       FROM agentos_json_rows
