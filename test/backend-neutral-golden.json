@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "productionBackends": [
+    "packages/backends/cloudflare-do",
+    "packages/backends/node-postgres"
+  ],
+  "scenario": "schedule-dispatch-retry",
+  "canonicalFlow": [
+    {
+      "phase": "schedule_requested",
+      "eventKind": "durable_trigger.scheduled.requested",
+      "owner": "@agent-os/runtime"
+    },
+    {
+      "phase": "scheduled_event_fired",
+      "eventKind": "app.combo.scheduled",
+      "owner": "@agent-os/runtime"
+    },
+    {
+      "phase": "dispatch_requested",
+      "eventKind": "dispatch.outbound.requested",
+      "owner": "@agent-os/runtime",
+      "idempotencyKey": "combo-retry"
+    },
+    {
+      "phase": "dispatch_retry_failed",
+      "eventKind": "dispatch.outbound.failed",
+      "terminal": false,
+      "attempt": 1
+    },
+    {
+      "phase": "dispatch_retry_delivered",
+      "eventKind": "dispatch.outbound.delivered",
+      "attempt": 2,
+      "deliveryReceipt": {
+        "anchorKind": "ledger_event"
+      }
+    },
+    {
+      "phase": "dispatch_inbound_accepted",
+      "eventKind": "dispatch.inbound.accepted"
+    },
+    {
+      "phase": "receiver_app_event",
+      "eventKind": "app.combo"
+    }
+  ],
+  "volatileFieldsExcluded": [
+    "id",
+    "ts",
+    "backendHostId",
+    "routeKey",
+    "postgresSchema"
+  ]
+}
