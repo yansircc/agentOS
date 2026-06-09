@@ -54,9 +54,16 @@ title: "@agent-os/backend-protocol API"
 - `.:DispatchOutboundFailedPayload`
 - `.:DispatchPayloadParseFailure`
 - `.:DispatchPayloadParseResult`
+- `.:DispatchDeliveryResult`
 - `.:DispatchDeliveryReceipt`
+- `.:DispatchEnvelope`
+- `.:DispatchReceiver`
+- `.:DispatchReceiverResult`
 - `.:DispatchRequestedPayload`
+- `.:DispatchTargetAdapter`
+- `.:GrantResult`
 - `.:IntentPointerDuePayload`
+- `.:ResourceProjection`
 
 - `.:dispatchCarrierRef`
 - `.:dispatchLedgerDeliveryReceipt`

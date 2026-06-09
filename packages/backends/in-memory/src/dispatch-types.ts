@@ -1,9 +1,9 @@
 import { makePreClaim } from "@agent-os/kernel/effect-claim";
 import type { TraceContext } from "@agent-os/telemetry-protocol";
-import type { DispatchTargetAdapter } from "@agent-os/runtime";
 import type {
   BackendProtocolDispatchTarget,
   BackendProtocolEventIdentity,
+  DispatchTargetAdapter,
   DurableTriggerRetryPolicy,
 } from "@agent-os/backend-protocol";
 

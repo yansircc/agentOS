@@ -64,7 +64,6 @@ import type {
   AttachedStreamCancelResult,
   AttachedStreamStartSpec,
   CapabilityLease,
-  DispatchReceiverResult,
   AnyMaterializedProjectionDefinition,
   MaterializedProjectionGetSpec,
   MaterializedProjectionListSpec,
@@ -96,6 +95,7 @@ import {
   backendProtocolEventIdentityKey,
   type BackendProtocolEventIdentity,
   type BackendProtocolTruthIdentity,
+  type DispatchReceiverResult,
 } from "@agent-os/backend-protocol";
 import type { LlmRoute } from "@agent-os/kernel/llm";
 import { Dispatch, type DispatchEnvelope, type DispatchTargetRegistry } from "./dispatch";

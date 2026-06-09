@@ -7,7 +7,8 @@ import {
   SqlError,
 } from "@agent-os/kernel/errors";
 import type { LedgerEvent } from "@agent-os/kernel/types";
-import { Resources, type LedgerTruthIdentity, type ResourceProjection } from "@agent-os/runtime";
+import { Resources, type LedgerTruthIdentity } from "@agent-os/runtime";
+import type { ResourceProjection } from "@agent-os/backend-protocol";
 import { inMemoryRuntimeEventIdentity, type InMemoryBackendState } from "./state";
 import { decodeOk, finiteNumberField, recordOf, stringField, type DecodeResult } from "./decode";
 

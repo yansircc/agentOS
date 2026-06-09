@@ -47,12 +47,6 @@ title: "@agent-os/runtime Public API Intent"
 - `.:DEFAULT_LLM_CALL_TIMEOUT_MS`
 - `.:DecodedOutput`
 - `.:Dispatch`
-- `.:DispatchDeliveryReceipt`
-- `.:DispatchDeliveryResult`
-- `.:DispatchEnvelope`
-- `.:DispatchReceiver`
-- `.:DispatchReceiverResult`
-- `.:DispatchTargetAdapter`
 - `.:DurableTrigger`
 - `.:DurableTriggerCancellationMode`
 - `.:DurableTriggerRegistry`
@@ -62,7 +56,6 @@ title: "@agent-os/runtime Public API Intent"
 - `.:EMPTY_BARRIER_CURSOR`
 - `.:EvidenceRow`
 - `.:FINGERPRINT_ALGO_VERSION`
-- `.:GrantResult`
 - `.:InternalSubmitSpec`
 - `.:InvalidateSpec`
 - `.:Ledger`
@@ -113,7 +106,6 @@ title: "@agent-os/runtime Public API Intent"
 - `.:ProjectionRegistryBuildResult`
 - `.:ProjectionRegistryError`
 - `.:ProjectionStatus`
-- `.:ResourceProjection`
 - `.:Resources`
 - `.:RUNTIME_FACT_OWNER`
 - `.:RUN_BEARING_KINDS`

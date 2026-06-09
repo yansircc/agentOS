@@ -6,15 +6,16 @@ import {
   Dispatch,
   Ledger,
   Quota,
+  RUNTIME_FACT_OWNER,
   Resources,
   Scheduler,
   TriggerPump,
-  type DispatchReceiver,
-  type DispatchTargetAdapter,
 } from "@agent-os/runtime";
 import {
   DISPATCH_EVENT_KINDS,
   type BackendProtocolEventIdentity,
+  type DispatchReceiver,
+  type DispatchTargetAdapter,
 } from "@agent-os/backend-protocol";
 import { durableObjectDispatchTarget, type DispatchTargetNamespace } from "../src/dispatch";
 import { findNextDue } from "../src/due-work";
@@ -243,5 +244,7 @@ const makeCloudflareDoContractDriver = (): RuntimeBackendContractDriver => {
 };
 
 describe("cloudflare-do backend protocol driver", () => {
-  runRuntimeBackendContractSuite("cloudflare-do", makeCloudflareDoContractDriver);
+  runRuntimeBackendContractSuite("cloudflare-do", makeCloudflareDoContractDriver, {
+    runtimeFactOwner: RUNTIME_FACT_OWNER,
+  });
 });

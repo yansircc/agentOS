@@ -4,7 +4,7 @@
 
 ## Purpose
 
-Storage-free backend protocol algebra shared by concrete backend implementations.
+Storage-free backend protocol algebra shared by runtime services and concrete backend implementations.
 
 ## Public API Status
 
@@ -12,11 +12,11 @@ Backend protocol package. It is backend-only shared algebra, not a general-purpo
 
 ## Invariant
 
-Backend protocol semantics have one owner. Concrete backends may materialize storage, alarm, and transport, but they must not redefine dispatch vocabulary, retry policy, intent-pointer payload parsing, or event-handler fanout policy. Durable trigger kind ownership lives in the runtime `DurableTriggerRegistry`, not in backend protocol constants.
+Backend protocol semantics have one owner. Runtime services and concrete backends may consume the protocol DTOs and helpers, but they must not redefine dispatch vocabulary, retry policy, intent-pointer payload parsing, resource/quota projection shapes, or event-handler fanout policy. Durable trigger kind ownership lives in the runtime `DurableTriggerRegistry`, not in backend protocol constants.
 
 ## Minimal Usage
 
-Backend implementations import protocol constants and helpers from `@agent-os/backend-protocol`; application, carrier, and runtime packages do not depend on it.
+Runtime services and backend implementations import protocol constants, port DTOs, and helpers from `@agent-os/backend-protocol`. Application and carrier packages do not depend on it.
 
 ## Verification
 

@@ -47,12 +47,6 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:DEFAULT_LLM_CALL_TIMEOUT_MS`
 - `.:DecodedOutput`
 - `.:Dispatch`
-- `.:DispatchDeliveryReceipt`
-- `.:DispatchDeliveryResult`
-- `.:DispatchEnvelope`
-- `.:DispatchReceiver`
-- `.:DispatchReceiverResult`
-- `.:DispatchTargetAdapter`
 - `.:DurableTrigger`
 - `.:DurableTriggerCancellationMode`
 - `.:DurableTriggerRegistry`
@@ -62,7 +56,6 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:EMPTY_BARRIER_CURSOR`
 - `.:EvidenceRow`
 - `.:FINGERPRINT_ALGO_VERSION`
-- `.:GrantResult`
 - `.:InternalSubmitSpec`
 - `.:InvalidateSpec`
 - `.:Ledger`
@@ -113,7 +106,6 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:ProjectionRegistryBuildResult`
 - `.:ProjectionRegistryError`
 - `.:ProjectionStatus`
-- `.:ResourceProjection`
 - `.:Resources`
 - `.:RUNTIME_FACT_OWNER`
 - `.:RUN_BEARING_KINDS`

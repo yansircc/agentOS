@@ -15,7 +15,8 @@
  */
 
 import { Clock, Effect, Layer } from "effect";
-import { Quota, type GrantResult } from "@agent-os/runtime";
+import { Quota } from "@agent-os/runtime";
+import type { GrantResult } from "@agent-os/backend-protocol";
 import { EventBus } from "../ledger";
 import { sqlText } from "../storage/sql-row";
 import { decodeConsumedPayloadSync } from "./payload";

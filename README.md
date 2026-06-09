@@ -48,31 +48,31 @@ state to make a product flow appear complete.
 
 <!-- agentos:generated package-map:start -->
 
-| Package                                  | Role                                                                                                                                |
-| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `@agent-os/kernel`                       | pure claim, boundary, material, AgentSchema, JSON Schema dialect, tool, context, and type algebra                                   |
-| `@agent-os/runtime`                      | Effect Tag runtime programs, admission projections, runtime-facing API types, and backend-neutral durable trigger authoring algebra |
-| `@agent-os/telemetry-protocol`           | trace context and backend-neutral telemetry event tree vocabulary                                                                   |
-| `@agent-os/backend-protocol`             | storage-free backend protocol constants, intent-pointer payload parsers, retry policy, dispatch protocol, and handler fanout policy |
-| `@agent-os/backend-cloudflare-do`        | Cloudflare Durable Object app facade and backend for agentOS runtime                                                                |
-| `@agent-os/resource-carrier`             | provider-neutral resource lifecycle facts, claims, settlement, and projection                                                       |
-| `@agent-os/resource-cloudflare`          | Cloudflare D1/KV/R2/Queue/Workflow/Worker resource materializer                                                                     |
-| `@agent-os/workspace-session`            | provider-neutral workspace/session lifecycle facts                                                                                  |
-| `@agent-os/workspace-session-cloudflare` | Cloudflare Sandbox-compatible workspace backend                                                                                     |
-| `@agent-os/workspace-env-cloudflare`     | Cloudflare Sandbox-compatible WorkspaceEnv adapter                                                                                  |
-| `@agent-os/workspace-env-local`          | local host WorkspaceEnv adapter with explicit host execution domain                                                                 |
-| `@agent-os/tenant-material`              | encrypted tenant credential records to execution-time material                                                                      |
-| `@agent-os/llm-transport-http`           | HTTP LLM streaming into non-durable turn frames                                                                                     |
-| `@agent-os/llm-transport-effect-ai`      | Effect AI provider projection adapter for runtime LlmTransport                                                                      |
-| `@agent-os/attached-stream`              | attached live stream frame algebra and transport codec                                                                              |
-| `@agent-os/turn-stream`                  | token/progress frame algebra                                                                                                        |
-| `@agent-os/workspace-env`                | workspace fs+exec actuator and standard workspace tool generator                                                                    |
-| `@agent-os/ag-ui`                        | AG-UI wire frame projection over typed agentOS runtime events                                                                       |
-| `@agent-os/ag-ui-react`                  | React consumption helpers for AG-UI frames                                                                                          |
-| `@agent-os/ag-ui-svelte`                 | Svelte consumption helpers for AG-UI frames                                                                                         |
-| `@agent-os/run-stream`                   | submit/ledger/turn-frame composition                                                                                                |
-| `@agent-os/decision-gate`                | durable decision gate events, projection, and admitter                                                                              |
-| `@agent-os/deploy-cloudflare`            | Cloudflare Worker deploy provider                                                                                                   |
+| Package                                  | Role                                                                                                                                                                             |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@agent-os/kernel`                       | pure claim, boundary, material, AgentSchema, JSON Schema dialect, tool, context, and type algebra                                                                                |
+| `@agent-os/runtime`                      | Effect Tag runtime programs, admission projections, runtime-facing API types, and backend-neutral durable trigger authoring algebra                                              |
+| `@agent-os/telemetry-protocol`           | trace context and backend-neutral telemetry event tree vocabulary                                                                                                                |
+| `@agent-os/backend-protocol`             | storage-free backend port DTOs, protocol constants, intent-pointer payload parsers, retry policy, dispatch protocol, resource/quota projection shapes, and handler fanout policy |
+| `@agent-os/backend-cloudflare-do`        | Cloudflare Durable Object app facade and backend for agentOS runtime                                                                                                             |
+| `@agent-os/resource-carrier`             | provider-neutral resource lifecycle facts, claims, settlement, and projection                                                                                                    |
+| `@agent-os/resource-cloudflare`          | Cloudflare D1/KV/R2/Queue/Workflow/Worker resource materializer                                                                                                                  |
+| `@agent-os/workspace-session`            | provider-neutral workspace/session lifecycle facts                                                                                                                               |
+| `@agent-os/workspace-session-cloudflare` | Cloudflare Sandbox-compatible workspace backend                                                                                                                                  |
+| `@agent-os/workspace-env-cloudflare`     | Cloudflare Sandbox-compatible WorkspaceEnv adapter                                                                                                                               |
+| `@agent-os/workspace-env-local`          | local host WorkspaceEnv adapter with explicit host execution domain                                                                                                              |
+| `@agent-os/tenant-material`              | encrypted tenant credential records to execution-time material                                                                                                                   |
+| `@agent-os/llm-transport-http`           | HTTP LLM streaming into non-durable turn frames                                                                                                                                  |
+| `@agent-os/llm-transport-effect-ai`      | Effect AI provider projection adapter for runtime LlmTransport                                                                                                                   |
+| `@agent-os/attached-stream`              | attached live stream frame algebra and transport codec                                                                                                                           |
+| `@agent-os/turn-stream`                  | token/progress frame algebra                                                                                                                                                     |
+| `@agent-os/workspace-env`                | workspace fs+exec actuator and standard workspace tool generator                                                                                                                 |
+| `@agent-os/ag-ui`                        | AG-UI wire frame projection over typed agentOS runtime events                                                                                                                    |
+| `@agent-os/ag-ui-react`                  | React consumption helpers for AG-UI frames                                                                                                                                       |
+| `@agent-os/ag-ui-svelte`                 | Svelte consumption helpers for AG-UI frames                                                                                                                                      |
+| `@agent-os/run-stream`                   | submit/ledger/turn-frame composition                                                                                                                                             |
+| `@agent-os/decision-gate`                | durable decision gate events, projection, and admitter                                                                                                                           |
+| `@agent-os/deploy-cloudflare`            | Cloudflare Worker deploy provider                                                                                                                                                |
 
 <!-- agentos:generated package-map:end -->
 

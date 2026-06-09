@@ -2,7 +2,7 @@
 
 # @agent-os/backend-protocol Public API
 
-Status: Backend protocol package. Public exports are limited to storage-free backend protocol semantics shared by backend implementations.
+Status: Backend protocol package. Public exports are limited to storage-free backend protocol semantics shared by runtime services and backend implementations.
 
 ## Public exports
 
@@ -54,9 +54,16 @@ Status: Backend protocol package. Public exports are limited to storage-free bac
 - `.:DispatchOutboundFailedPayload`
 - `.:DispatchPayloadParseFailure`
 - `.:DispatchPayloadParseResult`
+- `.:DispatchDeliveryResult`
 - `.:DispatchDeliveryReceipt`
+- `.:DispatchEnvelope`
+- `.:DispatchReceiver`
+- `.:DispatchReceiverResult`
 - `.:DispatchRequestedPayload`
+- `.:DispatchTargetAdapter`
+- `.:GrantResult`
 - `.:IntentPointerDuePayload`
+- `.:ResourceProjection`
 
 - `.:dispatchCarrierRef`
 - `.:dispatchLedgerDeliveryReceipt`

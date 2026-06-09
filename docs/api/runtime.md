@@ -43,12 +43,6 @@
 - `.:DEFAULT_LLM_CALL_TIMEOUT_MS`
 - `.:DecodedOutput`
 - `.:Dispatch`
-- `.:DispatchDeliveryReceipt`
-- `.:DispatchDeliveryResult`
-- `.:DispatchEnvelope`
-- `.:DispatchReceiver`
-- `.:DispatchReceiverResult`
-- `.:DispatchTargetAdapter`
 - `.:DurableTrigger`
 - `.:DurableTriggerCancellationMode`
 - `.:DurableTriggerRegistry`
@@ -58,7 +52,6 @@
 - `.:EMPTY_BARRIER_CURSOR`
 - `.:EvidenceRow`
 - `.:FINGERPRINT_ALGO_VERSION`
-- `.:GrantResult`
 - `.:InternalSubmitSpec`
 - `.:InvalidateSpec`
 - `.:Ledger`
@@ -109,7 +102,6 @@
 - `.:ProjectionRegistryBuildResult`
 - `.:ProjectionRegistryError`
 - `.:ProjectionStatus`
-- `.:ResourceProjection`
 - `.:Resources`
 - `.:RUNTIME_FACT_OWNER`
 - `.:RUN_BEARING_KINDS`

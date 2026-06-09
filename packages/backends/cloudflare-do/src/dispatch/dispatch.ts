@@ -28,14 +28,7 @@ import {
   triggerParseFail,
   triggerParseOk,
 } from "@agent-os/runtime";
-import type {
-  DurableTrigger,
-  DispatchDeliveryReceipt,
-  DispatchDeliveryResult,
-  DispatchEnvelope,
-  DispatchReceiver,
-  DispatchTargetAdapter,
-} from "@agent-os/runtime";
+import type { DurableTrigger } from "@agent-os/runtime";
 import {
   makeOperationRef,
   makePreClaim,
@@ -55,7 +48,12 @@ import {
   parseRequestedPayloadValue,
   settleDispatchInboundAccepted,
   settleDispatchOutboundDelivered,
+  type DispatchDeliveryReceipt,
+  type DispatchDeliveryResult,
+  type DispatchEnvelope,
+  type DispatchReceiver,
   type DispatchRequestedPayload,
+  type DispatchTargetAdapter,
 } from "@agent-os/backend-protocol";
 import { ensureDispatchSchema, selectPendingOutboxByIntent } from "./outbox";
 import { findAccepted, type InboundAcceptedPayload } from "./receiver";

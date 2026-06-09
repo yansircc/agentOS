@@ -1,6 +1,7 @@
 import { Cause, Effect, Exit, Layer, ManagedRuntime, Option, Schema } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
+import type { DispatchReceiver } from "@agent-os/backend-protocol";
 import {
   DurableTriggerCommitReturnedThenable,
   DurableTriggerDrainLimitExceeded,
@@ -21,7 +22,6 @@ import {
   scheduledEventTrigger,
   triggerParseFail,
   triggerParseOk,
-  type DispatchReceiver,
   type DurableTrigger,
 } from "@agent-os/runtime";
 import type { LedgerEvent } from "@agent-os/kernel/types";

@@ -1,7 +1,8 @@
 import { Clock, Effect, Layer } from "effect";
 import { SqlError } from "@agent-os/kernel/errors";
 import type { LedgerEvent } from "@agent-os/kernel/types";
-import { Quota, type GrantResult } from "@agent-os/runtime";
+import { Quota } from "@agent-os/runtime";
+import type { GrantResult } from "@agent-os/backend-protocol";
 import { inMemoryRuntimeEventIdentity, type InMemoryBackendState } from "./state";
 import { decodeOk, finiteNumberField, recordOf, stringField, type DecodeResult } from "./decode";
 

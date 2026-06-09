@@ -18,18 +18,16 @@ import {
   type BackendProtocolDispatchTarget,
   type BackendProtocolEventIdentity,
   type BackendProtocolProjectionKey,
+  type DispatchDeliveryResult,
+  type DispatchEnvelope,
+  type DispatchReceiverResult,
+  type DispatchTargetAdapter,
+  type GrantResult,
+  type ResourceProjection,
 } from "../../src";
 import type { BindingMaterialRef } from "@agent-os/kernel/material-ref";
+import type { FactOwnerRef } from "@agent-os/kernel/effect-claim";
 import type { DispatchToScopeResult } from "@agent-os/kernel/types";
-import { RUNTIME_FACT_OWNER } from "@agent-os/runtime";
-import type {
-  DispatchDeliveryResult,
-  DispatchEnvelope,
-  DispatchReceiverResult,
-  DispatchTargetAdapter,
-  GrantResult,
-  ResourceProjection,
-} from "@agent-os/runtime";
 
 export type ContractDispatchReceiver = (
   envelope: DispatchEnvelope,
@@ -136,12 +134,17 @@ export type RuntimeBackendContractDriverFactory = () =>
   | RuntimeBackendContractDriver
   | Promise<RuntimeBackendContractDriver>;
 
-const CONTRACT_FACT_OWNER = RUNTIME_FACT_OWNER;
+export interface RuntimeBackendContractSuiteOptions {
+  readonly runtimeFactOwner: FactOwnerRef;
+}
 
-const contractIdentity = (scopeId: string): BackendProtocolEventIdentity => ({
+const contractEventIdentity = (
+  scopeId: string,
+  factOwnerRef: FactOwnerRef,
+): BackendProtocolEventIdentity => ({
   scopeRef: { kind: "conversation", scopeId },
   effectAuthorityRef: { authorityClass: "effect", authorityId: scopeId },
-  factOwnerRef: CONTRACT_FACT_OWNER,
+  factOwnerRef,
 });
 
 const projectionKey = (
@@ -209,7 +212,11 @@ const SCHEDULED_REQUESTED = "durable_trigger.scheduled.requested";
 export const runRuntimeBackendContractSuite = (
   name: string,
   makeDriver: RuntimeBackendContractDriverFactory,
+  options: RuntimeBackendContractSuiteOptions,
 ): void => {
+  const contractIdentity = (scopeId: string): BackendProtocolEventIdentity =>
+    contractEventIdentity(scopeId, options.runtimeFactOwner);
+
   const promise = <A>(thunk: () => Promise<A> | A): Effect.Effect<A> =>
     Effect.promise(() => Promise.resolve(thunk()));
 

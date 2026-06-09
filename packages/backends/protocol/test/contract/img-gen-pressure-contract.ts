@@ -6,7 +6,7 @@ import {
   triggerParseOk,
   type AnyDurableTrigger,
   type DurableTrigger,
-} from "@agent-os/runtime";
+} from "./durable-trigger-contract";
 
 interface ScanIntent {
   readonly scanId: string;

@@ -7,16 +7,17 @@ import {
   backendProtocolTruthIdentityKey,
   type BackendProtocolEventIdentity,
   type BackendProtocolTruthIdentity,
+  type DispatchReceiver,
+  type DispatchTargetAdapter,
 } from "@agent-os/backend-protocol";
 import {
   Dispatch,
   Ledger,
   Quota,
+  RUNTIME_FACT_OWNER,
   Resources,
   Scheduler,
   TriggerPump,
-  type DispatchReceiver,
-  type DispatchTargetAdapter,
 } from "@agent-os/runtime";
 import { createInMemoryBackendState, createInMemoryRuntimeBackend } from "../src";
 import {
@@ -206,5 +207,7 @@ const makeInMemoryContractDriver = (): RuntimeBackendContractDriver => {
 };
 
 describe("in-memory backend protocol driver", () => {
-  runRuntimeBackendContractSuite("in-memory", makeInMemoryContractDriver);
+  runRuntimeBackendContractSuite("in-memory", makeInMemoryContractDriver, {
+    runtimeFactOwner: RUNTIME_FACT_OWNER,
+  });
 });

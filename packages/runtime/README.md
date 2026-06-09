@@ -29,7 +29,7 @@ Version mismatch reports `needs_rebuild`; backends do not silently repair rows.
 Durable trigger authors depend on runtime for the shared trigger algebra:
 `DurableTrigger`, `AcquireCtx`, `TriggerTx`, trigger parse helpers,
 `DurableTriggerRegistry`, `makeDurableTriggerRegistry`, `getDurableTrigger`,
-`scheduledEventTrigger`, and `DispatchTargetAdapter`. Runtime owns the
+and `scheduledEventTrigger`. Runtime owns the
 backend-neutral shape; concrete backends own storage, alarm re-arm, SQL
 transactions, and pump execution.
 

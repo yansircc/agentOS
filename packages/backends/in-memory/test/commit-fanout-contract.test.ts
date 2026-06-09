@@ -1,14 +1,8 @@
 import { ManagedRuntime, Schema } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
-import { DISPATCH_EVENT_KINDS } from "@agent-os/backend-protocol";
-import {
-  Dispatch,
-  defineProjection,
-  projectionFail,
-  projectionIdentity,
-  type DispatchReceiver,
-} from "@agent-os/runtime";
+import { DISPATCH_EVENT_KINDS, type DispatchReceiver } from "@agent-os/backend-protocol";
+import { Dispatch, defineProjection, projectionFail, projectionIdentity } from "@agent-os/runtime";
 import { createInMemoryBackendState, createInMemoryRuntimeBackend } from "../src";
 import { truthIdentity } from "./identity";
 

@@ -21,7 +21,6 @@
     "effect": "catalog:"
   },
   "devDependencies": {
-    "@agent-os/runtime": "workspace:*",
     "@effect/vitest": "catalog:",
     "typescript": "catalog:",
     "vite-plus": "catalog:",

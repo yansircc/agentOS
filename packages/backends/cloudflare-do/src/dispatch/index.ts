@@ -10,7 +10,8 @@
  *   payload.ts    parse + trace-context helpers (leaf)
  */
 
-export { Dispatch, type DispatchEnvelope, type DispatchReceiver } from "@agent-os/runtime";
+export { Dispatch } from "@agent-os/runtime";
+export type { DispatchEnvelope, DispatchReceiver } from "@agent-os/backend-protocol";
 export {
   DispatchLive,
   DISPATCH_INBOUND_ACCEPTED,

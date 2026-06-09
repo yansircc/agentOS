@@ -21,9 +21,6 @@ import {
   TriggerPump,
   triggerParseFail,
   triggerParseOk,
-  type DispatchDeliveryReceipt,
-  type DispatchEnvelope,
-  type DispatchTargetAdapter,
   type DurableTrigger,
 } from "@agent-os/runtime";
 import {
@@ -42,7 +39,10 @@ import {
   settleDispatchOutboundDelivered,
   type BackendProtocolDispatchTarget,
   type BackendProtocolTruthIdentity,
+  type DispatchDeliveryReceipt,
+  type DispatchEnvelope,
   type DispatchRequestedPayload as ProtocolDispatchRequestedPayload,
+  type DispatchTargetAdapter,
 } from "@agent-os/backend-protocol";
 import { inMemoryRuntimeEventIdentity, type InMemoryBackendState } from "./state";
 import { decodeOk, finiteNumberField, recordOf, type DecodeResult } from "./decode";

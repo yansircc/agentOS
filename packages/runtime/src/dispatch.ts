@@ -10,47 +10,9 @@ import type {
   UnregisteredDurableTriggerKind,
   UnsupportedScopeRef,
 } from "@agent-os/kernel/errors";
-import type { PreClaim } from "@agent-os/kernel/effect-claim";
-import type {
-  DeliveryReceipt,
-  DispatchToScopeResult,
-  DispatchToScopeSpec,
-} from "@agent-os/kernel/types";
-import type { InvalidTraceContext, TraceContext } from "@agent-os/telemetry-protocol";
-
-export interface DispatchEnvelope {
-  readonly sourceScope: string;
-  readonly outboundEventId: number;
-  readonly targetScope: string;
-  readonly event: string;
-  readonly data: unknown;
-  readonly idempotencyKey: string;
-  readonly claim: PreClaim;
-  readonly traceContext?: TraceContext;
-}
-
-export type DispatchDeliveryReceipt = DeliveryReceipt;
-
-export interface DispatchDeliveryResult {
-  readonly receipt: DispatchDeliveryReceipt;
-}
-
-export interface DispatchReceiverResult extends DispatchDeliveryResult {
-  readonly deliveredEventId: number;
-}
-
-export interface DispatchReceiver {
-  readonly __agentosReceiveDispatch: (
-    envelope: DispatchEnvelope,
-  ) => Promise<DispatchReceiverResult>;
-}
-
-export interface DispatchTargetAdapter {
-  // The substrate may invoke deliver more than once for the same envelope
-  // across drain races, redrive, and adapter retries. Implementations must be
-  // idempotent by (targetScope, idempotencyKey) or a target-owned receipt key.
-  readonly deliver: (envelope: DispatchEnvelope) => Promise<DispatchDeliveryResult>;
-}
+import type { DispatchToScopeResult, DispatchToScopeSpec } from "@agent-os/kernel/types";
+import type { InvalidTraceContext } from "@agent-os/telemetry-protocol";
+import type { DispatchEnvelope, DispatchReceiverResult } from "@agent-os/backend-protocol";
 
 export class Dispatch extends Context.Tag("@agent-os/Dispatch")<
   Dispatch,

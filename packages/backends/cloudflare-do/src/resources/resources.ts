@@ -28,7 +28,7 @@ import { emptyProjection, loadState } from "./projection";
 
 // Re-export the projection shape so callers that historically imported
 // it from "./resources" keep working.
-export type { ResourceProjection } from "@agent-os/runtime";
+export type { ResourceProjection } from "@agent-os/backend-protocol";
 
 const assertPositiveAmount = (amount: number): Effect.Effect<void, InvalidResourceAmount> =>
   Number.isFinite(amount) && amount > 0

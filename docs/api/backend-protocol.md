@@ -50,9 +50,16 @@
 - `.:DispatchOutboundFailedPayload`
 - `.:DispatchPayloadParseFailure`
 - `.:DispatchPayloadParseResult`
+- `.:DispatchDeliveryResult`
 - `.:DispatchDeliveryReceipt`
+- `.:DispatchEnvelope`
+- `.:DispatchReceiver`
+- `.:DispatchReceiverResult`
 - `.:DispatchRequestedPayload`
+- `.:DispatchTargetAdapter`
+- `.:GrantResult`
 - `.:IntentPointerDuePayload`
+- `.:ResourceProjection`
 
 - `.:dispatchCarrierRef`
 - `.:dispatchLedgerDeliveryReceipt`

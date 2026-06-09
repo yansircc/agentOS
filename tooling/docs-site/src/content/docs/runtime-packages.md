@@ -16,7 +16,7 @@ prevent accidental exports; they are not stability or schema-freeze promises.
 | `@agent-os/kernel`                       | yes       | 0.2.x public       | platform-free claim/material/boundary/AgentSchema/tool algebra plus raw JSON Schema dialect for non-LLM boundaries |
 | `@agent-os/runtime`                      | yes       | 0.2.x public       | backend-neutral runtime Tag contracts, projections, trigger registry contracts, and trigger authoring types        |
 | `@agent-os/telemetry-protocol`           | yes       | telemetry protocol | telemetry semantic vocabulary and validation only; OTLP and vendor sinks are wire adapters                         |
-| `@agent-os/backend-protocol`             | yes       | backend protocol   | backend-only protocol algebra shared by concrete backend implementations                                           |
+| `@agent-os/backend-protocol`             | yes       | backend protocol   | backend protocol algebra shared by runtime services and concrete backend implementations                           |
 | `@agent-os/backend-cloudflare-do`        | yes       | backend            | Cloudflare DO app facade, storage, alarm, SSE, dispatch, and binding materialization                               |
 | `@agent-os/backend-in-memory`            | yes       | backend            | in-memory runtime Tag Live implementations                                                                         |
 | `@agent-os/resource-carrier`             | yes       | 0.2.x public       | provider-neutral resource lifecycle facts and symbolic proofs                                                      |

@@ -14,13 +14,8 @@ import type {
   ResourceReserveResult,
   ResourceReserveSpec,
 } from "@agent-os/kernel/types";
+import type { ResourceProjection } from "@agent-os/backend-protocol";
 import type { LedgerTruthIdentity } from "./ledger";
-
-export interface ResourceProjection {
-  readonly available: number;
-  readonly reserved: number;
-  readonly consumed: number;
-}
 
 export class Resources extends Context.Tag("@agent-os/Resources")<
   Resources,

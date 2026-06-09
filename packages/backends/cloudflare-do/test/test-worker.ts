@@ -32,7 +32,6 @@ import {
   projectionPut,
   triggerParseOk,
   type AttachedStreamHandler,
-  type DispatchTargetAdapter,
   type DurableTrigger,
   type TriggerCancellation,
   type TriggerTx,
@@ -46,7 +45,10 @@ import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-re
 import { defineSettlementContract, settleLived } from "@agent-os/kernel/settlement-contract";
 import { defineTool, pureToolExecution } from "@agent-os/kernel/tools";
 import type { EventHandler } from "@agent-os/kernel/types";
-import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
+import type {
+  BackendProtocolEventIdentity,
+  DispatchTargetAdapter,
+} from "@agent-os/backend-protocol";
 import { CloudflareMaterializedProjectionsLive } from "../src/materialized-projections";
 import { commitLedgerTransaction } from "../src/ledger/commit";
 import type { EventBusService } from "../src/ledger/event-bus";

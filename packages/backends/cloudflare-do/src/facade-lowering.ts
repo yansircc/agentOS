@@ -26,7 +26,7 @@ import {
   type ExecutionDomainRegistryIssue,
   type Tool,
 } from "@agent-os/kernel/tools";
-import type { DispatchTargetAdapter } from "@agent-os/runtime";
+import type { DispatchTargetAdapter } from "@agent-os/backend-protocol";
 import { durableObjectDispatchTarget } from "./dispatch";
 import type { DispatchTargetNamespace, DispatchTargetRegistry } from "./dispatch";
 
