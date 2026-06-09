@@ -1,6 +1,6 @@
 import { Effect, Schema } from "effect";
 import { describe, expect, it } from "@effect/vitest";
-import type { LlmRequest, LlmResponse } from "@agent-os/llm-protocol";
+import type { LlmRequest, LlmResponse, LlmRoute, LlmWireDescriptor } from "@agent-os/llm-protocol";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import type { BoundaryContract } from "@agent-os/kernel/boundary-contract";
 import { defineTool, pureToolExecution } from "@agent-os/kernel/tools";
@@ -53,6 +53,28 @@ const response = (override: Partial<LlmResponse> = {}): LlmResponse => ({
   items: [{ type: "message", text: "done" }],
   usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
   ...override,
+});
+
+const routeKind = (route: LlmRoute): string =>
+  typeof route.kind === "string" ? route.kind : "unknown";
+
+const testWireDescriptor = (route: LlmRoute): LlmWireDescriptor => ({
+  method: "POST",
+  url: `test-llm://${routeKind(route)}`,
+  headers: [
+    ["x-agentos-endpoint-ref", String(route.endpointRef ?? "")],
+    ["x-agentos-credential-ref", String(route.credentialRef ?? "")],
+  ],
+  bodySchema: {
+    type: "object",
+    properties: {
+      messages: {
+        type: "array",
+        items: { type: "object", properties: {}, additionalProperties: true },
+      },
+    },
+    additionalProperties: true,
+  },
 });
 
 const makeServices = (
@@ -115,12 +137,14 @@ const makeServices = (
       ),
   };
   const llm = {
-    describeRoute: () => ({
-      providerOutputAdapterId: "test-provider-output@1.0.0",
-      providerOutputAdapterVersion: "1.0.0",
-      transportAdapterId: "test-runtime@1.0.0",
-      transportAdapterVersion: "1.0.0",
-    }),
+    resolveRoute: (route: LlmRoute) =>
+      Effect.succeed({
+        wireDescriptor: testWireDescriptor(route),
+        providerOutputAdapterId: "test-provider-output@1.0.0",
+        providerOutputAdapterVersion: "1.0.0",
+        transportAdapterId: "test-runtime@1.0.0",
+        transportAdapterVersion: "1.0.0",
+      }),
     call: (request: LlmRequest) =>
       Effect.sync(() => {
         llmRequests.push(request);

@@ -26,6 +26,7 @@ title: "@agent-os/llm-protocol API"
 - `.:LlmRequest`
 - `.:projectAgentSchemaForLlmTool`
 - `.:canonicalLlmWireDescriptorJson`
+- `.:llmWireDescriptorFingerprint`
 
 ## Experimental exports
 

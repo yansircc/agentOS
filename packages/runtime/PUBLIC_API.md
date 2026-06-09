@@ -173,7 +173,6 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:projectionPut`
 - `.:projectionSkip`
 - `.:reasonOf`
-- `.:routeFingerprint`
 - `.:runSynchronousAttachedStreamCommit`
 - `.:runSynchronousTriggerCommit`
 - `.:submitAgentEffect`
@@ -207,7 +206,6 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `./admission:decideTier`
 - `./admission:makeAdmissionSchemaSpec`
 - `./admission:projectLease`
-- `./admission:routeFingerprint`
 - `./abort:ABORT`
 - `./abort:AbortKind`
 - `./abort:reasonOf`

@@ -1,10 +1,6 @@
 import { Schema } from "effect";
 import type { AgentSchema } from "@agent-os/kernel/agent-schema";
-import {
-  credentialMaterialRef,
-  endpointMaterialRef,
-  type MaterialRef,
-} from "@agent-os/kernel/material-ref";
+import type { MaterialRef } from "@agent-os/kernel/material-ref";
 import type { ToolDefinition } from "@agent-os/kernel/tools";
 
 export const LLM_WIRE_DESCRIPTOR_VERSION = "llm-wire-descriptor-v1";
@@ -25,8 +21,12 @@ export interface LlmWireDescriptor {
 }
 
 export const llmRouteMaterialRefs = (route: LlmRoute): ReadonlyArray<MaterialRef> => [
-  ...(typeof route.endpointRef === "string" ? [endpointMaterialRef(route.endpointRef)] : []),
-  ...(typeof route.credentialRef === "string" ? [credentialMaterialRef(route.credentialRef)] : []),
+  ...(typeof route.endpointRef === "string"
+    ? [{ kind: "endpoint" as const, ref: route.endpointRef }]
+    : []),
+  ...(typeof route.credentialRef === "string"
+    ? [{ kind: "credential" as const, ref: route.credentialRef }]
+    : []),
 ];
 
 const unknownRecord = Schema.Record({ key: Schema.String, value: Schema.Unknown });
@@ -171,11 +171,19 @@ export const projectAgentSchemaForLlmTool = (schema: AgentSchema<unknown>): LlmJ
 
 const canonicalizeWireDescriptor = (descriptor: LlmWireDescriptor): LlmWireDescriptor => ({
   ...descriptor,
-  headers: [...descriptor.headers].sort(([left], [right]) => left.localeCompare(right)),
+  headers: [...descriptor.headers]
+    .map(([name, value]) => [name.toLowerCase(), value] as const)
+    .sort(
+      ([leftName, leftValue], [rightName, rightValue]) =>
+        leftName.localeCompare(rightName) || leftValue.localeCompare(rightValue),
+    ),
 });
 
 export const canonicalLlmWireDescriptorJson = (descriptor: LlmWireDescriptor): string =>
   JSON.stringify(canonicalize(canonicalizeWireDescriptor(descriptor)));
+
+export const llmWireDescriptorFingerprint = (descriptor: LlmWireDescriptor): string =>
+  `${LLM_WIRE_DESCRIPTOR_VERSION}:${canonicalLlmWireDescriptorJson(descriptor)}`;
 
 const canonicalize = (node: unknown): unknown => {
   if (node === null || typeof node !== "object") return node;

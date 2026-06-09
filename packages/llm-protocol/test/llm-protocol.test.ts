@@ -2,8 +2,10 @@ import { describe, expect, it } from "@effect/vitest";
 
 import {
   canonicalLlmWireDescriptorJson,
+  llmWireDescriptorFingerprint,
   llmRouteMaterialRefs,
   textFromLlmOutputItems,
+  type LlmWireDescriptor,
 } from "../src/index";
 
 describe("@agent-os/llm-protocol", () => {
@@ -32,6 +34,53 @@ describe("@agent-os/llm-protocol", () => {
       ],
     });
     expect(left).toBe(right);
+  });
+
+  it("fingerprints only provider-neutral wire descriptor shape", () => {
+    const descriptor: LlmWireDescriptor = {
+      method: "POST" as const,
+      url: "https://llm.example/v1",
+      headers: [
+        ["Authorization", "Bearer ${credential:llm-key}"],
+        ["Content-Type", "application/json"],
+      ],
+      bodySchema: {
+        type: "object" as const,
+        properties: { model: { type: "string" as const } },
+        required: ["model"],
+        additionalProperties: true,
+      },
+    };
+    expect(llmWireDescriptorFingerprint(descriptor)).toBe(
+      `llm-wire-descriptor-v1:${canonicalLlmWireDescriptorJson(descriptor)}`,
+    );
+    expect(llmWireDescriptorFingerprint(descriptor)).toContain("authorization");
+  });
+
+  it("keeps distinct resolved wire bodies distinct without provider route fields", () => {
+    const descriptor = (modelId: string): LlmWireDescriptor => ({
+      method: "POST" as const,
+      url: "https://llm.example/v1/chat",
+      headers: [
+        ["Authorization", "Bearer ${credential:primary}"],
+        ["Content-Type", "application/json"],
+      ],
+      bodySchema: {
+        type: "object" as const,
+        properties: {
+          model: { type: "string" as const, enum: [modelId] },
+          messages: {
+            type: "array" as const,
+            items: { type: "object" as const, properties: {}, additionalProperties: true },
+          },
+        },
+        required: ["model", "messages"],
+        additionalProperties: true,
+      },
+    });
+    expect(llmWireDescriptorFingerprint(descriptor("model-a"))).not.toBe(
+      llmWireDescriptorFingerprint(descriptor("model-b")),
+    );
   });
 
   it("projects message text from output items", () => {

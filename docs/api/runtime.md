@@ -169,7 +169,6 @@
 - `.:projectionPut`
 - `.:projectionSkip`
 - `.:reasonOf`
-- `.:routeFingerprint`
 - `.:runSynchronousAttachedStreamCommit`
 - `.:runSynchronousTriggerCommit`
 - `.:submitAgentEffect`
@@ -203,7 +202,6 @@
 - `./admission:decideTier`
 - `./admission:makeAdmissionSchemaSpec`
 - `./admission:projectLease`
-- `./admission:routeFingerprint`
 - `./abort:ABORT`
 - `./abort:AbortKind`
 - `./abort:reasonOf`

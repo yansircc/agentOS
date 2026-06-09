@@ -22,6 +22,7 @@
 - `.:LlmRequest`
 - `.:projectAgentSchemaForLlmTool`
 - `.:canonicalLlmWireDescriptorJson`
+- `.:llmWireDescriptorFingerprint`
 
 ## Experimental exports
 

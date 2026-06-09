@@ -7,7 +7,7 @@
  */
 
 import { Context, Effect } from "effect";
-import type { LlmResponse } from "@agent-os/llm-protocol";
+import type { LlmResponse, LlmRoute, LlmWireDescriptor } from "@agent-os/llm-protocol";
 import { UpstreamFailure } from "@agent-os/kernel/errors";
 import { LlmTransport } from "@agent-os/runtime";
 
@@ -16,6 +16,9 @@ const DEFAULT_USAGE = {
   completionTokens: 5,
   totalTokens: 15,
 };
+
+const routeKind = (route: LlmRoute): string =>
+  typeof route.kind === "string" ? route.kind : "unknown";
 
 export const toolCallResp = (
   toolName: string,
@@ -39,17 +42,38 @@ export const finalTextResp = (text: string): LlmResponse => ({
   usage: DEFAULT_USAGE,
 });
 
+export const stubLlmWireDescriptor = (route: LlmRoute): LlmWireDescriptor => ({
+  method: "POST",
+  url: `test-llm://${routeKind(route)}`,
+  headers: [
+    ["x-agentos-endpoint-ref", String(route.endpointRef ?? "")],
+    ["x-agentos-credential-ref", String(route.credentialRef ?? "")],
+  ],
+  bodySchema: {
+    type: "object",
+    properties: {
+      messages: {
+        type: "array",
+        items: { type: "object", properties: {}, additionalProperties: true },
+      },
+    },
+    additionalProperties: true,
+  },
+});
+
 export const stubLlmTransport = (
   responses: ReadonlyArray<LlmResponse>,
 ): Context.Tag.Service<typeof LlmTransport> => {
   let i = 0;
   return {
-    describeRoute: (route) => ({
-      providerOutputAdapterId: `${String(route.kind)}@test-output-1.0.0`,
-      providerOutputAdapterVersion: "1.0.0",
-      transportAdapterId: "test-llm-transport@1.0.0",
-      transportAdapterVersion: "1.0.0",
-    }),
+    resolveRoute: (route) =>
+      Effect.succeed({
+        wireDescriptor: stubLlmWireDescriptor(route),
+        providerOutputAdapterId: `${routeKind(route)}@test-output-1.0.0`,
+        providerOutputAdapterVersion: "1.0.0",
+        transportAdapterId: "test-llm-transport@1.0.0",
+        transportAdapterVersion: "1.0.0",
+      }),
     call: () =>
       Effect.gen(function* () {
         const next = responses[i];

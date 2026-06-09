@@ -10,10 +10,11 @@ import { Cause, Effect, Exit, Option, Schema } from "effect";
 import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
 import type {} from "@effect/vitest";
+import { llmWireDescriptorFingerprint } from "@agent-os/llm-protocol";
 
 import { Ledger } from "../../src/ledger";
-import { Admission, makeAdmissionSchemaSpec, routeFingerprint } from "../../src/admission";
-import { finalTextResp, stubLlmTransport } from "../_stub-ai";
+import { Admission, makeAdmissionSchemaSpec } from "../../src/admission";
+import { finalTextResp, stubLlmTransport, stubLlmWireDescriptor } from "../_stub-ai";
 import { SCHEMA, makeRuntime, submitStructuredResp, testIdentity } from "./_helpers";
 
 interface TestEnv {
@@ -211,7 +212,7 @@ describe("admission — IO contract: attemptStructured", () => {
           yield* admission.invalidate({
             scope,
             key: {
-              routeFingerprint: routeFingerprint(route),
+              routeFingerprint: llmWireDescriptorFingerprint(stubLlmWireDescriptor(route)),
               schemaFingerprint: schemaSpec.fingerprint,
               strategy: "forced-tool-call",
             },

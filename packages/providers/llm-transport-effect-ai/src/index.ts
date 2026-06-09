@@ -44,6 +44,7 @@ import type {
   LlmRoute,
   LlmToolCall,
   LlmUsage,
+  LlmWireDescriptor,
 } from "@agent-os/llm-protocol";
 import { projectAgentSchemaForLlmTool } from "@agent-os/llm-protocol";
 import { credentialMaterialRef, endpointMaterialRef } from "@agent-os/kernel/material-ref";
@@ -58,7 +59,11 @@ import {
   UpstreamFailure,
 } from "@agent-os/kernel/errors";
 import type { ToolDefinition } from "@agent-os/kernel/tools";
-import { LlmTransport, type LlmCallOptions } from "@agent-os/runtime";
+import {
+  LlmTransport,
+  type LlmCallOptions,
+  type LlmTransportRouteDescriptor,
+} from "@agent-os/runtime";
 
 const ANTHROPIC_DEFAULT_VERSION = "2023-06-01";
 
@@ -106,9 +111,6 @@ const isEffectAiSupportedRoute = (route: LlmRoute): route is EffectAiSupportedRo
   (route.kind === "openai-chat-compatible" ||
     route.kind === "anthropic-messages" ||
     route.kind === "gemini-generate-content");
-
-const isOpenAiChatCompatibleRoute = (route: LlmRoute): route is OpenAiChatCompatibleRoute =>
-  hasRouteMaterial(route) && route.kind === "openai-chat-compatible";
 
 export interface EffectAiResolvedRoute<
   Route extends EffectAiSupportedRoute = EffectAiSupportedRoute,
@@ -236,6 +238,100 @@ const usageDecodeFailure = (field: string): ProviderOutputDecodeError =>
   new ProviderOutputDecodeError({ field, reason: "missing_or_invalid_usage" });
 
 const withoutTrailingSlash = (value: string): string => value.replace(/\/$/, "");
+
+const credentialPlaceholder = (credentialRef: string): string => `\${credential:${credentialRef}}`;
+
+const chatBodySchema = (modelId: string): LlmWireDescriptor["bodySchema"] => ({
+  type: "object",
+  properties: {
+    model: { type: "string", enum: [modelId] },
+    messages: {
+      type: "array",
+      items: { type: "object", properties: {}, additionalProperties: true },
+    },
+    tools: {
+      type: "array",
+      items: { type: "object", properties: {}, additionalProperties: true },
+    },
+  },
+  required: ["model", "messages"],
+  additionalProperties: true,
+});
+
+const effectAiWireDescriptor = (resolved: EffectAiResolvedRoute): LlmWireDescriptor => {
+  switch (resolved.route.kind) {
+    case "openai-chat-compatible":
+      return {
+        method: "POST",
+        url: `${withoutTrailingSlash(resolved.endpoint)}/chat/completions`,
+        headers: [
+          ["accept", "application/json"],
+          ["authorization", `Bearer ${credentialPlaceholder(resolved.route.credentialRef)}`],
+          ["content-type", "application/json"],
+        ],
+        bodySchema: chatBodySchema(resolved.route.modelId),
+      };
+    case "anthropic-messages":
+      return {
+        method: "POST",
+        url: `${withoutTrailingSlash(resolved.endpoint)}/v1/messages`,
+        headers: [
+          ["anthropic-version", resolved.route.anthropicVersion ?? ANTHROPIC_DEFAULT_VERSION],
+          ["content-type", "application/json"],
+          ["x-api-key", credentialPlaceholder(resolved.route.credentialRef)],
+        ],
+        bodySchema: chatBodySchema(resolved.route.modelId),
+      };
+    case "gemini-generate-content":
+      return {
+        method: "POST",
+        url: `${withoutTrailingSlash(resolved.endpoint)}/v1beta/models/${encodeURIComponent(
+          resolved.route.modelId,
+        )}:generateContent`,
+        headers: [
+          ["content-type", "application/json"],
+          ["x-goog-api-key", credentialPlaceholder(resolved.route.credentialRef)],
+        ],
+        bodySchema: {
+          type: "object",
+          properties: {
+            contents: {
+              type: "array",
+              items: { type: "object", properties: {}, additionalProperties: true },
+            },
+            tools: {
+              type: "array",
+              items: { type: "object", properties: {}, additionalProperties: true },
+            },
+          },
+          required: ["contents"],
+          additionalProperties: true,
+        },
+      };
+  }
+};
+
+const effectAiRouteDescriptor = (resolved: EffectAiResolvedRoute): LlmTransportRouteDescriptor => ({
+  wireDescriptor: effectAiWireDescriptor(resolved),
+  providerOutputAdapterId:
+    resolved.route.kind === "openai-chat-compatible"
+      ? `${resolved.route.kind}@${OPENAI_CHAT_PROVIDER_OUTPUT_ADAPTER_VERSION}`
+      : `${resolved.route.kind}@${EFFECT_AI_PROVIDER_OUTPUT_ADAPTER_VERSION}`,
+  providerOutputAdapterVersion:
+    resolved.route.kind === "openai-chat-compatible"
+      ? OPENAI_CHAT_PROVIDER_OUTPUT_ADAPTER_VERSION
+      : EFFECT_AI_PROVIDER_OUTPUT_ADAPTER_VERSION,
+  transportAdapterId: `effect-ai@${EFFECT_AI_TRANSPORT_ADAPTER_VERSION}`,
+  transportAdapterVersion: EFFECT_AI_TRANSPORT_ADAPTER_VERSION,
+});
+
+const resolveEffectAiRouteForTransport = (
+  refs: Context.Tag.Service<RefResolverService>,
+  route: LlmRoute,
+): Effect.Effect<EffectAiResolvedRoute, UpstreamFailure> =>
+  resolveEffectAiRoute(refs, route).pipe(
+    Effect.mapError((cause) => new UpstreamFailure({ cause })),
+  );
 
 const parseJsonOrText = (
   value: string | null,
@@ -723,23 +819,11 @@ export const makeEffectAiLlmTransportLayer = <R>(
       const httpClient = yield* HttpClientTag;
       const context = yield* Effect.context<R>();
       return {
-        describeRoute: (route) => ({
-          providerOutputAdapterId: isOpenAiChatCompatibleRoute(route)
-            ? `${route.kind}@${OPENAI_CHAT_PROVIDER_OUTPUT_ADAPTER_VERSION}`
-            : `${String(route.kind)}@${EFFECT_AI_PROVIDER_OUTPUT_ADAPTER_VERSION}`,
-          providerOutputAdapterVersion: isOpenAiChatCompatibleRoute(route)
-            ? OPENAI_CHAT_PROVIDER_OUTPUT_ADAPTER_VERSION
-            : EFFECT_AI_PROVIDER_OUTPUT_ADAPTER_VERSION,
-          transportAdapterId: `effect-ai@${EFFECT_AI_TRANSPORT_ADAPTER_VERSION}`,
-          transportAdapterVersion: EFFECT_AI_TRANSPORT_ADAPTER_VERSION,
-        }),
+        resolveRoute: (route) =>
+          resolveEffectAiRouteForTransport(refs, route).pipe(Effect.map(effectAiRouteDescriptor)),
         call: (request, options) =>
           Effect.gen(function* () {
-            const resolved = yield* resolveEffectAiRoute(refs, request.route).pipe(
-              Effect.mapError((cause) =>
-                cause instanceof EffectAiUnsupportedRoute ? new UpstreamFailure({ cause }) : cause,
-              ),
-            );
+            const resolved = yield* resolveEffectAiRouteForTransport(refs, request.route);
             if (resolved.route.kind === "openai-chat-compatible") {
               return yield* callOpenAiChatCompatible(
                 httpClient,

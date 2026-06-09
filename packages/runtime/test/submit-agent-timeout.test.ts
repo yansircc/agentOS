@@ -9,6 +9,7 @@ import { Admission } from "../src/admission";
 import { DEFAULT_LLM_CALL_TIMEOUT_MS, submitAgentEffect } from "../src/submit-agent";
 import type { InternalSubmitSpec } from "../src/submit";
 import type { LedgerEvent } from "@agent-os/kernel/types";
+import type { LlmRoute, LlmWireDescriptor } from "@agent-os/llm-protocol";
 import { decodeRuntimeLedgerEvent } from "../src/runtime-events";
 import { RefResolverEmpty } from "@agent-os/kernel/ref-resolver";
 
@@ -31,6 +32,28 @@ const makeSpec = (budget?: InternalSubmitSpec["budget"]): InternalSubmitSpec => 
 const makeStructuredSpec = (budget?: InternalSubmitSpec["budget"]): InternalSubmitSpec => ({
   ...makeSpec(budget),
   outputSchema: Schema.Struct({ summary: Schema.String }),
+});
+
+const routeKind = (route: LlmRoute): string =>
+  typeof route.kind === "string" ? route.kind : "unknown";
+
+const testWireDescriptor = (route: LlmRoute): LlmWireDescriptor => ({
+  method: "POST",
+  url: `test-llm://${routeKind(route)}`,
+  headers: [
+    ["x-agentos-endpoint-ref", String(route.endpointRef ?? "")],
+    ["x-agentos-credential-ref", String(route.credentialRef ?? "")],
+  ],
+  bodySchema: {
+    type: "object",
+    properties: {
+      messages: {
+        type: "array",
+        items: { type: "object", properties: {}, additionalProperties: true },
+      },
+    },
+    additionalProperties: true,
+  },
 });
 
 const runWithHungLlm = (
@@ -68,12 +91,14 @@ const runWithHungLlm = (
       streamSnapshot: () => Effect.succeed(events),
     };
     const llm = {
-      describeRoute: () => ({
-        providerOutputAdapterId: "test-provider-output@1.0.0",
-        providerOutputAdapterVersion: "1.0.0",
-        transportAdapterId: "test-runtime@1.0.0",
-        transportAdapterVersion: "1.0.0",
-      }),
+      resolveRoute: (route: LlmRoute) =>
+        Effect.succeed({
+          wireDescriptor: testWireDescriptor(route),
+          providerOutputAdapterId: "test-provider-output@1.0.0",
+          providerOutputAdapterVersion: "1.0.0",
+          transportAdapterId: "test-runtime@1.0.0",
+          transportAdapterVersion: "1.0.0",
+        }),
       call: (_request: unknown, options?: { readonly signal?: AbortSignal }) => {
         if (providerObservesAbort) {
           options?.signal?.addEventListener("abort", () => {

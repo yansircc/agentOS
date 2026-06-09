@@ -7,7 +7,7 @@
  * along contract axes:
  *
  *   agent-schema.ts  AgentSchema contract construction
- *   fingerprint.ts   canonical-JSON algebra (route + schema)
+ *   fingerprint.ts   schema contract construction
  *   payload.ts       evidence/invalidate Schema + SQL loader
  *   admission.ts     attemptStructured + invalidate orchestration
  *
@@ -35,11 +35,7 @@ export type {
 export { decideTier, projectLease } from "@agent-os/runtime";
 
 // ── Canonical fingerprint algebra ──────────────────────────────
-export {
-  FINGERPRINT_ALGO_VERSION,
-  makeAdmissionSchemaSpec,
-  routeFingerprint,
-} from "@agent-os/runtime";
+export { FINGERPRINT_ALGO_VERSION, makeAdmissionSchemaSpec } from "@agent-os/runtime";
 
 // ── Orchestration + Live layer ─────────────────────────────────
 export type {

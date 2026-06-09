@@ -5,7 +5,6 @@ import {
   LlmTransport,
   decideTier,
   projectLease,
-  routeFingerprint,
   type AdmissionImpact,
   type AdmissionRow,
   type AttemptKey,
@@ -18,6 +17,7 @@ import {
   classifyStructuredCallFailure,
   structuredOutputRequest,
 } from "@agent-os/runtime";
+import { llmWireDescriptorFingerprint } from "@agent-os/llm-protocol";
 import type { InMemoryBackendState } from "./state";
 import { inMemoryConversationTruthIdentity, inMemoryRuntimeEventIdentity } from "./state";
 import { decodeOk, recordOf } from "./decode";
@@ -92,13 +92,13 @@ export const InMemoryAdmissionLive = (
       ): Effect.Effect<AttemptResult<O>, SqlError | JsonStringifyError | UpstreamFailure> =>
         Effect.gen(function* () {
           const now = yield* Clock.currentTimeMillis;
+          const descriptor = yield* llm.resolveRoute(spec.route);
           const key: AttemptKey = {
-            routeFingerprint: routeFingerprint(spec.route),
+            routeFingerprint: llmWireDescriptorFingerprint(descriptor.wireDescriptor),
             schemaFingerprint: spec.schemaSpec.fingerprint,
             strategy: spec.strategy,
-            providerOutputAdapterVersion: llm.describeRoute(spec.route)
-              .providerOutputAdapterVersion,
-            transportAdapterVersion: llm.describeRoute(spec.route).transportAdapterVersion,
+            providerOutputAdapterVersion: descriptor.providerOutputAdapterVersion,
+            transportAdapterVersion: descriptor.transportAdapterVersion,
           };
           const preRows = yield* projectAdmissionRows(state, spec.scope);
           const { lease: preLease, latestBarrier } = projectLease(preRows, key, now);
@@ -163,7 +163,7 @@ export const InMemoryAdmissionLive = (
             stimulusKind: spec.stimulus.kind,
             outcome,
             admissionImpact,
-            adapterId: llm.describeRoute(spec.route).providerOutputAdapterId,
+            adapterId: descriptor.providerOutputAdapterId,
           };
           yield* state.commitEvents([
             {

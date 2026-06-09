@@ -289,7 +289,12 @@ describe("@agent-os/llm-transport-effect-ai", () => {
 
     return Effect.gen(function* () {
       const transport = yield* LlmTransport;
-      const descriptor = transport.describeRoute(request().route);
+      const descriptor = yield* transport.resolveRoute(request().route);
+      expect(descriptor.wireDescriptor).toMatchObject({
+        method: "POST",
+        url: "https://provider.example/base/chat/completions",
+      });
+      expect(JSON.stringify(descriptor.wireDescriptor)).not.toContain("sk-secret");
       expect(descriptor.providerOutputAdapterVersion).toBe("openai-chat-completions-output-v1");
       const result = yield* transport.call(request());
 

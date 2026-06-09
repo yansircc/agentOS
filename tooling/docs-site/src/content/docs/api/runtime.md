@@ -173,7 +173,6 @@ title: "@agent-os/runtime Public API Intent"
 - `.:projectionPut`
 - `.:projectionSkip`
 - `.:reasonOf`
-- `.:routeFingerprint`
 - `.:runSynchronousAttachedStreamCommit`
 - `.:runSynchronousTriggerCommit`
 - `.:submitAgentEffect`
@@ -207,7 +206,6 @@ title: "@agent-os/runtime Public API Intent"
 - `./admission:decideTier`
 - `./admission:makeAdmissionSchemaSpec`
 - `./admission:projectLease`
-- `./admission:routeFingerprint`
 - `./abort:ABORT`
 - `./abort:AbortKind`
 - `./abort:reasonOf`

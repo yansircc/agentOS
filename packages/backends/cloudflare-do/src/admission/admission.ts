@@ -25,7 +25,6 @@ import {
   classifyStructuredCallFailure,
   decideTier,
   projectLease,
-  routeFingerprint,
   structuredOutputRequest,
   type AttemptKey,
   type AttemptResult,
@@ -36,6 +35,7 @@ import {
   type Outcome,
   decodeStructuredOutputFromItems,
 } from "@agent-os/runtime";
+import { llmWireDescriptorFingerprint } from "@agent-os/llm-protocol";
 import { EventBus } from "../ledger";
 import { JsonStringifyError, SqlError, UpstreamFailure } from "@agent-os/kernel/errors";
 import { commitLedgerTransaction } from "../ledger/commit";
@@ -79,13 +79,13 @@ export const AdmissionLive = (
       ): Effect.Effect<AttemptResult<O>, SqlError | JsonStringifyError | UpstreamFailure> =>
         Effect.gen(function* () {
           const now = yield* Clock.currentTimeMillis;
+          const descriptor = yield* llm.resolveRoute(spec.route);
           const key: AttemptKey = {
-            routeFingerprint: routeFingerprint(spec.route),
+            routeFingerprint: llmWireDescriptorFingerprint(descriptor.wireDescriptor),
             schemaFingerprint: spec.schemaSpec.fingerprint,
             strategy: spec.strategy,
-            providerOutputAdapterVersion: llm.describeRoute(spec.route)
-              .providerOutputAdapterVersion,
-            transportAdapterVersion: llm.describeRoute(spec.route).transportAdapterVersion,
+            providerOutputAdapterVersion: descriptor.providerOutputAdapterVersion,
+            transportAdapterVersion: descriptor.transportAdapterVersion,
           };
 
           // Step 2: project lease.
@@ -103,7 +103,6 @@ export const AdmissionLive = (
             };
           }
 
-          const descriptor = llm.describeRoute(spec.route);
           const responseEither = yield* Effect.either(
             llm.call(
               structuredOutputRequest({
