@@ -1,6 +1,13 @@
 import { Effect, Schema } from "effect";
 import { describe, expect, it } from "@effect/vitest";
-import type { LlmRequest, LlmResponse, LlmRoute, LlmWireDescriptor } from "@agent-os/llm-protocol";
+import {
+  llmCallSnapshotFromResponse,
+  replayLlmResponseFromSnapshot,
+  type LlmRequest,
+  type LlmResponse,
+  type LlmRoute,
+  type LlmWireDescriptor,
+} from "@agent-os/llm-protocol";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import type { BoundaryContract } from "@agent-os/kernel/boundary-contract";
 import { defineTool, pureToolExecution } from "@agent-os/kernel/tools";
@@ -225,6 +232,40 @@ const expectRuntimePayloadsDecode = (events: ReadonlyArray<LedgerEvent>) => {
 };
 
 describe("submit-agent runtime event writes", () => {
+  it("replay mode live LLM provider adapter not called when call snapshot is present", () => {
+    let liveLlmProviderAdapterCalled = false;
+    const liveLlm = {
+      resolveRoute: (route: LlmRoute) =>
+        Effect.succeed({
+          wireDescriptor: testWireDescriptor(route),
+          providerOutputAdapterId: "test-provider-output@1.0.0",
+          providerOutputAdapterVersion: "1.0.0",
+          transportAdapterId: "test-runtime@1.0.0",
+          transportAdapterVersion: "1.0.0",
+        }),
+      call: () =>
+        Effect.sync(() => {
+          liveLlmProviderAdapterCalled = true;
+          return response({ items: [{ type: "message", text: "live" }] });
+        }),
+    };
+    const spec = baseSpec();
+    const snapshot = llmCallSnapshotFromResponse({
+      wireDescriptor: testWireDescriptor(spec.route),
+      request: {
+        route: spec.route,
+        messages: [{ role: "user", content: "hello" }],
+      },
+      response: response({ items: [{ type: "message", text: "snapshot" }] }),
+    });
+
+    const replayed = replayLlmResponseFromSnapshot(snapshot);
+
+    expect(replayed.items).toEqual([{ type: "message", text: "snapshot" }]);
+    expect(liveLlmProviderAdapterCalled).toBe(false);
+    expect(liveLlm.call).toBeDefined();
+  });
+
   it.effect("standard submit emits constructor-backed runtime facts", () =>
     Effect.gen(function* () {
       const { result, events } = yield* runSubmit(baseSpec());

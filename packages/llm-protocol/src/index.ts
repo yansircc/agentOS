@@ -4,6 +4,7 @@ import type { MaterialRef } from "@agent-os/kernel/material-ref";
 import type { ToolDefinition } from "@agent-os/kernel/tools";
 
 export const LLM_WIRE_DESCRIPTOR_VERSION = "llm-wire-descriptor-v1";
+export const LLM_CALL_SNAPSHOT_VERSION = "llm-call-snapshot-v1";
 
 export type LlmJsonSchemaObject = AgentSchema<unknown>["jsonSchema"];
 
@@ -127,6 +128,79 @@ export interface LlmResponse {
   readonly items: ReadonlyArray<LlmOutputItem>;
   readonly usage: LlmUsage;
 }
+
+export interface LlmSnapshotToolDefinition {
+  readonly type: "function";
+  readonly function: {
+    readonly name: string;
+    readonly description: string;
+    readonly parameters: LlmJsonSchemaObject;
+  };
+}
+
+export interface LlmSnapshotRequest {
+  readonly messages: ReadonlyArray<LlmMessage>;
+  readonly tools?: ReadonlyArray<LlmSnapshotToolDefinition>;
+  readonly traceContext?: unknown;
+  readonly tool_choice?: {
+    readonly type: "function";
+    readonly function: { readonly name: string };
+  };
+}
+
+export interface LlmCallSnapshot {
+  readonly kind: "llm.call";
+  readonly wireDescriptor: LlmWireDescriptor;
+  readonly wireDescriptorFingerprint: string;
+  readonly request: LlmSnapshotRequest;
+  readonly requestFingerprint: string;
+  readonly response: LlmResponse;
+}
+
+export const llmSnapshotToolDefinitionFromToolDefinition = (
+  tool: ToolDefinition,
+): LlmSnapshotToolDefinition => ({
+  type: "function",
+  function: {
+    name: tool.function.name,
+    description: tool.function.description,
+    parameters: projectAgentSchemaForLlmTool(tool.function.parameters),
+  },
+});
+
+export const llmSnapshotRequestFromRequest = (request: LlmRequest): LlmSnapshotRequest => ({
+  messages: request.messages,
+  ...(request.tools === undefined
+    ? {}
+    : { tools: request.tools.map(llmSnapshotToolDefinitionFromToolDefinition) }),
+  ...(request.traceContext === undefined ? {} : { traceContext: request.traceContext }),
+  ...(request.tool_choice === undefined ? {} : { tool_choice: request.tool_choice }),
+});
+
+export const canonicalLlmSnapshotRequestJson = (request: LlmSnapshotRequest): string =>
+  JSON.stringify(canonicalize(request));
+
+export const llmSnapshotRequestFingerprint = (request: LlmSnapshotRequest): string =>
+  `${LLM_CALL_SNAPSHOT_VERSION}:request:${canonicalLlmSnapshotRequestJson(request)}`;
+
+export const llmCallSnapshotFromResponse = (spec: {
+  readonly wireDescriptor: LlmWireDescriptor;
+  readonly request: LlmRequest;
+  readonly response: LlmResponse;
+}): LlmCallSnapshot => {
+  const snapshotRequest = llmSnapshotRequestFromRequest(spec.request);
+  return {
+    kind: "llm.call",
+    wireDescriptor: canonicalizeWireDescriptor(spec.wireDescriptor),
+    wireDescriptorFingerprint: llmWireDescriptorFingerprint(spec.wireDescriptor),
+    request: snapshotRequest,
+    requestFingerprint: llmSnapshotRequestFingerprint(snapshotRequest),
+    response: spec.response,
+  };
+};
+
+export const replayLlmResponseFromSnapshot = (snapshot: LlmCallSnapshot): LlmResponse =>
+  snapshot.response;
 
 export const textFromLlmOutputItems = (items: ReadonlyArray<LlmOutputItem>): string =>
   items

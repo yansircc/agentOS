@@ -1,6 +1,11 @@
 import { projectTurnStream, type TurnStreamFrame } from "@agent-os/turn-stream";
 import { streamLlmTurn, type LlmTransportFetch, type LlmTransportMessage } from "../src";
-import type { LlmRoute } from "@agent-os/llm-protocol";
+import {
+  llmCallSnapshotFromResponse,
+  replayLlmResponseFromSnapshot,
+  type LlmRequest,
+  type LlmRoute,
+} from "@agent-os/llm-protocol";
 import type { RefResolver } from "@agent-os/kernel/ref-resolver";
 
 const messages: ReadonlyArray<LlmTransportMessage> = [
@@ -56,6 +61,41 @@ const sse = (...data: ReadonlyArray<string>): Response =>
   });
 
 describe("@agent-os/llm-transport-http", () => {
+  it("replay mode live LLM provider adapter not called when call snapshot is present", () => {
+    let liveLlmProviderAdapterCalled = false;
+    const fetch: LlmTransportFetch = async () => {
+      liveLlmProviderAdapterCalled = true;
+      return sse("[DONE]");
+    };
+    const request: LlmRequest = {
+      route: {
+        kind: "test-route",
+        endpointRef: "llm",
+        credentialRef: "llm-key",
+        modelId: "model-a",
+      },
+      messages,
+    };
+    const snapshot = llmCallSnapshotFromResponse({
+      wireDescriptor: {
+        method: "POST",
+        url: "https://llm.example/chat",
+        headers: [["Content-Type", "application/json"]],
+      },
+      request,
+      response: {
+        items: [{ type: "message", text: "snapshot" }],
+        usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+      },
+    });
+
+    const replayed = replayLlmResponseFromSnapshot(snapshot);
+
+    expect(replayed.items).toEqual([{ type: "message", text: "snapshot" }]);
+    expect(liveLlmProviderAdapterCalled).toBe(false);
+    expect(fetch).toBeDefined();
+  });
+
   it("streams OpenAI-compatible SSE through existing turn delta frames", async () => {
     const seen: Array<{ readonly input: string; readonly init: RequestInit }> = [];
     const fetch: LlmTransportFetch = async (input, init) => {

@@ -20,6 +20,16 @@ title: "@agent-os/llm-protocol API"
 - `.:LlmOutputItem`
 - `.:LlmOutputItemSchema`
 - `.:LlmResponse`
+- `.:LLM_CALL_SNAPSHOT_VERSION`
+- `.:LlmSnapshotToolDefinition`
+- `.:LlmSnapshotRequest`
+- `.:LlmCallSnapshot`
+- `.:llmSnapshotToolDefinitionFromToolDefinition`
+- `.:llmSnapshotRequestFromRequest`
+- `.:canonicalLlmSnapshotRequestJson`
+- `.:llmSnapshotRequestFingerprint`
+- `.:llmCallSnapshotFromResponse`
+- `.:replayLlmResponseFromSnapshot`
 - `.:textFromLlmOutputItems`
 - `.:toolCallsFromLlmOutputItems`
 - `.:llmOutputItemsFromTextAndToolCalls`

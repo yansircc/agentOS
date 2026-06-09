@@ -17,7 +17,12 @@ import type { HttpClientResponse } from "@effect/platform/HttpClientResponse";
 import { describe, expect, it } from "@effect/vitest";
 import { Cause, Effect, Exit, Fiber, Layer, Option, Schema, Stream } from "effect";
 import { ensureAgentSchema } from "@agent-os/kernel/agent-schema";
-import { projectAgentSchemaForLlmTool, type LlmRequest } from "@agent-os/llm-protocol";
+import {
+  llmCallSnapshotFromResponse,
+  projectAgentSchemaForLlmTool,
+  replayLlmResponseFromSnapshot,
+  type LlmRequest,
+} from "@agent-os/llm-protocol";
 import type { ToolDefinition } from "@agent-os/kernel/tools";
 import { RefResolverLive } from "@agent-os/kernel/ref-resolver";
 import { ProviderHttpFailure, UpstreamFailure } from "@agent-os/kernel/errors";
@@ -110,6 +115,33 @@ const expectFailure = <E>(exit: Exit.Exit<unknown, E>): E => {
 };
 
 describe("@agent-os/llm-transport-effect-ai", () => {
+  it("replay mode live LLM provider adapter not called when call snapshot is present", () => {
+    let liveLlmProviderAdapterCalled = false;
+    const liveModelFactory: EffectAiLanguageModelFactory<never> = () =>
+      Effect.sync(() => {
+        liveLlmProviderAdapterCalled = true;
+        return fakeModel(() => Effect.die("live LLM provider adapter should not be called"));
+      });
+    const snapshot = llmCallSnapshotFromResponse({
+      wireDescriptor: {
+        method: "POST",
+        url: "https://llm.example/chat",
+        headers: [["Content-Type", "application/json"]],
+      },
+      request: request(),
+      response: {
+        items: [{ type: "message", text: "snapshot" }],
+        usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+      },
+    });
+
+    const replayed = replayLlmResponseFromSnapshot(snapshot);
+
+    expect(replayed.items).toEqual([{ type: "message", text: "snapshot" }]);
+    expect(liveLlmProviderAdapterCalled).toBe(false);
+    expect(liveModelFactory).toBeDefined();
+  });
+
   it.effect("sends openai-chat-compatible requests through chat completions wire", () =>
     Effect.gen(function* () {
       let captured: HttpClientRequest | undefined;
