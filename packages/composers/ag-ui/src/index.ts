@@ -7,14 +7,14 @@ import {
 } from "@agent-os/kernel/effect-claim";
 import type { Tool } from "@agent-os/kernel/tools";
 import { decodeLedgerEvent, type LedgerEvent } from "@agent-os/kernel/types";
-import type { SubmitSpec } from "@agent-os/runtime";
-import { isRuntimeAbortEventKind } from "@agent-os/runtime/runtime-events";
+import type { SubmitSpec } from "@agent-os/runtime-protocol";
+import { isRuntimeAbortEventKind } from "@agent-os/runtime-protocol";
 import {
   decodeRuntimeLedgerEvent,
   RUNTIME_EVENT_KIND,
   type RuntimeLedgerEvent,
   type RuntimeLedgerEventByKind,
-} from "@agent-os/runtime/runtime-events";
+} from "@agent-os/runtime-protocol";
 
 export const AG_UI_WIRE_COMPATIBILITY = {
   core: "@ag-ui/core@0.0.55",

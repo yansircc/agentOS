@@ -14,14 +14,6 @@
       "types": "./src/admission.ts",
       "default": "./src/admission.ts"
     },
-    "./abort": {
-      "types": "./src/abort.ts",
-      "default": "./src/abort.ts"
-    },
-    "./runtime-events": {
-      "types": "./src/runtime-events.ts",
-      "default": "./src/runtime-events.ts"
-    },
     "./otlp-projection": {
       "types": "./src/otlp-projection.ts",
       "default": "./src/otlp-projection.ts"
@@ -41,6 +33,7 @@
     "@agent-os/decision-gate": "workspace:*",
     "@agent-os/kernel": "workspace:*",
     "@agent-os/llm-protocol": "workspace:*",
+    "@agent-os/runtime-protocol": "workspace:*",
     "@agent-os/telemetry-protocol": "workspace:*",
     "effect": "catalog:"
   },

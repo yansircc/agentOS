@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import type { LivedClaim } from "@agent-os/kernel/effect-claim";
-import { ABORT } from "../src/abort";
+import { ABORT } from "@agent-os/kernel/abort";
 import { OTLP_GENAI_SEMCONV_MAPPING_VERSION, projectOtlpSpans } from "../src/otlp-projection";
 import {
   agentRunAbortedEvent,
@@ -11,7 +11,7 @@ import {
   llmResponseEvent,
   toolExecutedEvent,
   type RuntimeEventCommitSpec,
-} from "../src/runtime-events";
+} from "@agent-os/runtime-protocol";
 
 const scope = "otlp-projection";
 const runtimeIdentity = {

@@ -1,14 +1,14 @@
 import { authorityRefKey, factOwnerKey, scopeRefKey } from "@agent-os/kernel/effect-claim";
 import type { LedgerEvent } from "@agent-os/kernel/types";
+import { ABORT } from "@agent-os/kernel/abort";
 import { validateOptionalTraceContext, type TraceContext } from "@agent-os/telemetry-protocol";
 import { Option } from "effect";
-import { ABORT } from "./abort";
 import {
   decodeRuntimeLedgerEvent,
   isRuntimeAbortEventKind,
   RUNTIME_EVENT_KIND,
   type RuntimeLedgerEvent,
-} from "./runtime-events";
+} from "@agent-os/runtime-protocol";
 
 export const OTLP_GENAI_SEMCONV_MAPPING_VERSION = "agent-os-otlp-genai-v1";
 

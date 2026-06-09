@@ -17,10 +17,11 @@
   },
   "dependencies": {
     "@agent-os/kernel": "workspace:*",
-    "@agent-os/runtime": "workspace:*",
+    "@agent-os/runtime-protocol": "workspace:*",
     "effect": "catalog:"
   },
   "devDependencies": {
+    "@agent-os/runtime": "workspace:*",
     "@effect/vitest": "catalog:",
     "typescript": "catalog:",
     "vite-plus": "catalog:",

@@ -1,4 +1,4 @@
-import type { CapabilityLease } from "@agent-os/runtime";
+import type { CapabilityLease } from "@agent-os/runtime-protocol";
 import type {
   LedgerEventRpc,
   QuotaState,

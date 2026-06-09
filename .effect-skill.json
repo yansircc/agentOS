@@ -193,6 +193,12 @@
       "dependencyOwnerReason": "runtime owns backend-neutral runtime dependency declarations"
     },
     {
+      "path": "packages/runtime-protocol",
+      "shape": ["library"],
+      "dependencyOwner": "workspace-root",
+      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+    },
+    {
       "path": "packages/telemetry-protocol",
       "shape": ["library"],
       "dependencyOwner": "workspace-root",

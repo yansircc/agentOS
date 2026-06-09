@@ -15,8 +15,7 @@ import {
   UpstreamFailure,
 } from "@agent-os/kernel/errors";
 import type { RefResolutionFailed } from "@agent-os/kernel/ref-resolver";
-import type { Outcome } from "./admission-lease";
-import type { Stimulus } from "./admission";
+import type { Outcome, Stimulus } from "@agent-os/runtime-protocol";
 
 export type StructuredDecodeResult<O = Record<string, unknown>> =
   | {

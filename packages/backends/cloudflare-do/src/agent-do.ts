@@ -60,24 +60,26 @@ import {
   UnsupportedScopeRef,
 } from "@agent-os/kernel/errors";
 import type {
-  AttemptKey,
   AttachedStreamCancelResult,
   AttachedStreamStartSpec,
-  CapabilityLease,
   AnyMaterializedProjectionDefinition,
   MaterializedProjectionGetSpec,
   MaterializedProjectionListSpec,
   MaterializedProjectionRebuildResult,
   MaterializedProjectionRow,
   MaterializedProjectionStatus,
+} from "@agent-os/runtime";
+import type {
+  AttemptKey,
+  CapabilityLease,
+  InternalSubmitSpec,
   SubmitResult,
   SubmitSpec,
-} from "@agent-os/runtime";
+} from "@agent-os/runtime-protocol";
 import {
   Admission,
   AttachedStreams,
   DurableTriggerRegistry,
-  RUNTIME_FACT_OWNER,
   commitBoundaryEvent,
   Ledger,
   LlmTransport,
@@ -85,12 +87,12 @@ import {
   TriggerPump,
   submitAgentEffect,
   validateBoundaryEventPayload,
-  type InternalSubmitSpec,
   type TriggerCancelResult,
   type TriggerDrainResult,
   type TriggerDrainUntilQuietOptions,
   type TriggerDrainUntilQuietResult,
 } from "@agent-os/runtime";
+import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
 import {
   backendProtocolEventIdentityKey,
   type BackendProtocolEventIdentity,

@@ -10,7 +10,8 @@ import type { EventQueryOptions, LedgerEvent, LedgerEventRpc } from "@agent-os/k
 
 import { Clock, Effect, Layer } from "effect";
 import { SqlError } from "@agent-os/kernel/errors";
-import { Ledger, RUNTIME_FACT_OWNER } from "@agent-os/runtime";
+import { Ledger } from "@agent-os/runtime";
+import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
 import { EventBus } from "./event-bus";
 import { commitLedgerTransaction, ensureLedgerSchema } from "./commit";
 import {

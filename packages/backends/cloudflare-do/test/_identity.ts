@@ -3,7 +3,7 @@ import type {
   BackendProtocolTruthIdentity,
 } from "@agent-os/backend-protocol";
 import type { AuthorityRef } from "@agent-os/kernel/effect-claim";
-import { RUNTIME_FACT_OWNER } from "@agent-os/runtime";
+import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
 
 export const testTruthIdentity = (
   scopeId: string,

@@ -21,6 +21,7 @@
     "@agent-os/kernel": "workspace:*",
     "@agent-os/llm-protocol": "workspace:*",
     "@agent-os/runtime": "workspace:*",
+    "@agent-os/runtime-protocol": "workspace:*",
     "@agent-os/telemetry-protocol": "workspace:*",
     "effect": "catalog:"
   },

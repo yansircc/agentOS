@@ -14,7 +14,7 @@ import { SqlError } from "@agent-os/kernel/errors";
 import type { EventQueryOptions } from "@agent-os/kernel/types";
 import { ledgerEventFromRow, ledgerIdentityKeys, type LedgerEventSqlRow } from "../ledger/identity";
 import type { BackendProtocolTruthIdentity } from "@agent-os/backend-protocol";
-import { RUNTIME_FACT_OWNER } from "@agent-os/runtime";
+import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
 
 interface EffectSqlLedgerEventRow {
   readonly id: number;

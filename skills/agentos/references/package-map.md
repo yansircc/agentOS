@@ -6,6 +6,7 @@
 | ------------------------------------ | ---------------------------------------- |
 | Pure agentOS algebra                 | `@agent-os/kernel`                       |
 | Runtime Effect Tag contracts         | `@agent-os/runtime`                      |
+| Runtime protocol algebra             | `@agent-os/runtime-protocol`             |
 | Telemetry protocol algebra           | `@agent-os/telemetry-protocol`           |
 | LLM protocol algebra                 | `@agent-os/llm-protocol`                 |
 | Backend protocol algebra             | `@agent-os/backend-protocol`             |

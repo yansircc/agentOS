@@ -18,12 +18,12 @@ import {
   Scheduler,
   TriggerPump,
   makeDurableTriggerRegistry,
-  makeAdmissionSchemaSpec,
   scheduledEventTrigger,
   triggerParseFail,
   triggerParseOk,
   type DurableTrigger,
 } from "@agent-os/runtime";
+import { makeAdmissionSchemaSpec } from "@agent-os/runtime-protocol";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import {
   createInMemoryBackendState,

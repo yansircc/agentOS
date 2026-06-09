@@ -3,6 +3,11 @@ import { JsonStringifyError, SqlError, UpstreamFailure } from "@agent-os/kernel/
 import {
   Admission,
   LlmTransport,
+  classifyStructuredCallFailure,
+  decodeStructuredOutputFromItems,
+  structuredOutputRequest,
+} from "@agent-os/runtime";
+import {
   decideTier,
   projectLease,
   type AdmissionImpact,
@@ -13,10 +18,7 @@ import {
   type CapabilityLease,
   type InvalidateSpec,
   type Outcome,
-  decodeStructuredOutputFromItems,
-  classifyStructuredCallFailure,
-  structuredOutputRequest,
-} from "@agent-os/runtime";
+} from "@agent-os/runtime-protocol";
 import { llmWireDescriptorFingerprint } from "@agent-os/llm-protocol";
 import type { InMemoryBackendState } from "./state";
 import { inMemoryConversationTruthIdentity, inMemoryRuntimeEventIdentity } from "./state";

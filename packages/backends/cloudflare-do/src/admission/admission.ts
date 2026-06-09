@@ -23,9 +23,12 @@ import {
   Admission,
   LlmTransport,
   classifyStructuredCallFailure,
+  decodeStructuredOutputFromItems,
+  structuredOutputRequest,
+} from "@agent-os/runtime";
+import {
   decideTier,
   projectLease,
-  structuredOutputRequest,
   type AttemptKey,
   type AttemptResult,
   type AttemptSpec,
@@ -33,8 +36,7 @@ import {
   type DecodedOutput,
   type InvalidateSpec,
   type Outcome,
-  decodeStructuredOutputFromItems,
-} from "@agent-os/runtime";
+} from "@agent-os/runtime-protocol";
 import { llmWireDescriptorFingerprint } from "@agent-os/llm-protocol";
 import { EventBus } from "../ledger";
 import { JsonStringifyError, SqlError, UpstreamFailure } from "@agent-os/kernel/errors";

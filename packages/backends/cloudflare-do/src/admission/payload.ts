@@ -13,10 +13,14 @@
 import { Effect, Schema } from "effect";
 import { SqlError } from "@agent-os/kernel/errors";
 import { sqlText } from "../storage/sql-row";
-import type { AdmissionRow, AttemptKey, Outcome } from "@agent-os/runtime";
+import type {
+  AdmissionRow,
+  AttemptKey,
+  LedgerTruthIdentity,
+  Outcome,
+} from "@agent-os/runtime-protocol";
 import { eventIdentity, eventIdentityColumns } from "../ledger/identity";
 import type { FactOwnerRef } from "@agent-os/kernel/effect-claim";
-import type { LedgerTruthIdentity } from "@agent-os/runtime";
 
 const AttemptKeySchema = Schema.Struct({
   routeFingerprint: Schema.String,

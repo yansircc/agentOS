@@ -10,15 +10,8 @@ import {
   type DispatchReceiver,
   type DispatchTargetAdapter,
 } from "@agent-os/backend-protocol";
-import {
-  Dispatch,
-  Ledger,
-  Quota,
-  RUNTIME_FACT_OWNER,
-  Resources,
-  Scheduler,
-  TriggerPump,
-} from "@agent-os/runtime";
+import { Dispatch, Ledger, Quota, Resources, Scheduler, TriggerPump } from "@agent-os/runtime";
+import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
 import { createInMemoryBackendState, createInMemoryRuntimeBackend } from "../src";
 import {
   runRuntimeBackendContractSuite,

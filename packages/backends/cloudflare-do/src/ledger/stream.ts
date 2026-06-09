@@ -31,7 +31,8 @@ import type { FactOwnerRef } from "@agent-os/kernel/effect-claim";
  */
 
 import { Effect, type ManagedRuntime } from "effect";
-import { Ledger, type LedgerTruthIdentity } from "@agent-os/runtime";
+import { Ledger } from "@agent-os/runtime";
+import type { LedgerTruthIdentity } from "@agent-os/runtime-protocol";
 import { backendProtocolTruthIdentityKey } from "@agent-os/backend-protocol";
 import { EventBus } from "./event-bus";
 import { eventToRpc } from "./ledger";

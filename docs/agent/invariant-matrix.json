@@ -88,7 +88,10 @@
         "docs/packages/llm-transport-effect-ai.md",
         "docs/verification.md"
       ],
-      "tests": ["packages/runtime/test/runtime-events.test.ts", "scripts/check-public-api.mjs"],
+      "tests": [
+        "packages/runtime-protocol/test/runtime-events.test.ts",
+        "scripts/check-public-api.mjs"
+      ],
       "decisions": [
         "decisions/a52-documentation-substrate.md",
         "decisions/a53-tsdoc-api-reference.md"
@@ -133,7 +136,7 @@
       ],
       "tests": [
         "packages/kernel/test/effect-claim.test.ts",
-        "packages/runtime/test/runtime-events.test.ts"
+        "packages/runtime-protocol/test/runtime-events.test.ts"
       ],
       "decisions": ["decisions/a64-shape-first-over-n2.md"]
     },

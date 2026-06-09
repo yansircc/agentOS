@@ -6,7 +6,7 @@
  * `?key=` query param. Decode validates shape before returning.
  */
 
-import type { AttemptKey } from "@agent-os/runtime";
+import type { AttemptKey } from "@agent-os/runtime-protocol";
 
 // Strategy validation is intentionally lax: ops-api accepts any
 // non-empty string and lets Cloudflare backend.admissionLease() reject

@@ -12,9 +12,8 @@ import type {
   RunTurn,
 } from "@agent-os/kernel/types";
 import type { LedgerEvent } from "@agent-os/kernel/types";
+import { ABORT, reasonOf, type AbortKind } from "@agent-os/kernel/abort";
 import { textFromLlmOutputItems } from "@agent-os/llm-protocol";
-import { ABORT, reasonOf, type AbortKind } from "./abort";
-import type { SubmitResult } from "./submit";
 import {
   decodeRuntimeLedgerEvent,
   isRuntimeAbortEventKind,
@@ -22,7 +21,8 @@ import {
   type RuntimeAbortEventKind,
   type RuntimeLedgerEvent,
   type RuntimeLedgerEventByKind,
-} from "./runtime-events";
+  type SubmitResult,
+} from "@agent-os/runtime-protocol";
 
 export const RUN_BEARING_KINDS: ReadonlyArray<string> = [
   RUNTIME_EVENT_KIND.AGENT_RUN_STARTED,

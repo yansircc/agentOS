@@ -93,14 +93,17 @@ streaming LLM transport should use idle timeout semantics instead.
 
 ## Minimal Usage
 
-Depend on runtime for consumer-facing run, admission, and backend-neutral Tag
-types. App triggers should be written against runtime trigger interfaces and
+Depend on runtime for consumer-facing runtime execution, admission service, and
+backend-neutral Tag types. App triggers should be written against runtime trigger interfaces and
 registered through a backend facade; they should not import backend SQL helpers,
 due-work storage helpers, inserted-event helpers, or backend state classes.
 
 ```ts
-import type { DurableTrigger, Ledger, SubmitSpec } from "@agent-os/runtime";
+import type { DurableTrigger, Ledger } from "@agent-os/runtime";
 ```
+
+Serializable submit, admission, and runtime event DTOs live in
+`@agent-os/runtime-protocol`, not runtime.
 
 Attached stream handlers use the same runtime package:
 

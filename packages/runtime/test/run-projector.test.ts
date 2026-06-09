@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import type { LivedClaim } from "@agent-os/kernel/effect-claim";
-import { ABORT } from "../src/abort";
+import { ABORT } from "@agent-os/kernel/abort";
 import {
   projectRunsPage,
   projectRunStatus,
@@ -18,7 +18,7 @@ import {
   llmResponseEvent,
   toolExecutedEvent,
   type RuntimeEventCommitSpec,
-} from "../src/runtime-events";
+} from "@agent-os/runtime-protocol";
 
 const scope = "projection-scope";
 const runtimeIdentity = {

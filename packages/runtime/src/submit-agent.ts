@@ -30,6 +30,7 @@ import {
   ToolError,
   UpstreamFailure,
 } from "@agent-os/kernel/errors";
+import { ABORT, type AbortKind } from "@agent-os/kernel/abort";
 import {
   textFromLlmOutputItems,
   toolCallsFromLlmOutputItems,
@@ -46,9 +47,27 @@ import {
   validateOptionalTraceContext,
   type TraceContext,
 } from "@agent-os/telemetry-protocol";
-import { ABORT, type AbortKind } from "./abort";
+import {
+  agentRunAbortedEvent,
+  agentRunCompletedEvent,
+  agentRunInterruptedEvent,
+  agentRunResumedEvent,
+  agentRunStartedEvent,
+  chatIngestedEvent,
+  decodeRuntimeLedgerEvent,
+  llmResponseEvent,
+  RUNTIME_EVENT_KIND,
+  toolExecutedEvent,
+  toolRejectedEvent,
+  type InternalSubmitSpec,
+  type RuntimeEventCommitSpec,
+  type SubmitDecisionInterrupt,
+  type SubmitResult,
+  type TurnRef,
+} from "@agent-os/runtime-protocol";
 import { LlmTransport } from "./llm-transport";
-import { Ledger, type LedgerCommitEventSpec, type LedgerTruthIdentity } from "./ledger";
+import type { LedgerCommitEventSpec, LedgerTruthIdentity } from "@agent-os/runtime-protocol";
+import { Ledger } from "./ledger";
 import {
   RefResolverService,
   type RefResolutionFailed,
@@ -64,7 +83,8 @@ import {
   type Tool,
   type ResolvedToolMaterials,
 } from "@agent-os/kernel/tools";
-import { Admission, makeAdmissionSchemaSpec } from "./admission";
+import { makeAdmissionSchemaSpec } from "@agent-os/runtime-protocol";
+import { Admission } from "./admission";
 import { projectSubmitResult } from "./run-projector";
 import {
   admitterErrorRejectionRef,
@@ -73,7 +93,6 @@ import {
   normalizeAdmitVerdict,
   type RejectionRef,
 } from "@agent-os/kernel/effect-claim";
-import type { InternalSubmitSpec, SubmitDecisionInterrupt, SubmitResult, TurnRef } from "./submit";
 import {
   settleToolAdmissionRejected,
   settleToolExecuted,
@@ -82,20 +101,6 @@ import {
   toolErrorReason,
   publicRuntimeCauseReason,
 } from "./tool-settlement";
-import {
-  agentRunAbortedEvent,
-  agentRunCompletedEvent,
-  agentRunInterruptedEvent,
-  agentRunResumedEvent,
-  agentRunStartedEvent,
-  chatIngestedEvent,
-  decodeRuntimeLedgerEvent,
-  llmResponseEvent,
-  toolExecutedEvent,
-  toolRejectedEvent,
-  type RuntimeEventCommitSpec,
-  RUNTIME_EVENT_KIND,
-} from "./runtime-events";
 import { BoundaryEvents } from "./boundary-events";
 import type { BoundaryCommitRejected } from "./boundary-commit";
 

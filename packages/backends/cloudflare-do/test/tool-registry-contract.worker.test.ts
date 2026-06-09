@@ -10,7 +10,8 @@ import { Ledger, LedgerLive } from "../src/ledger";
 import { QuotaLive } from "../src/quota";
 import { RefResolverLive } from "@agent-os/kernel/ref-resolver";
 import type { ResolvedMaterial } from "@agent-os/kernel/ref-resolver";
-import { LlmTransport, type InternalSubmitSpec, submitAgentEffect } from "@agent-os/runtime";
+import { LlmTransport, submitAgentEffect } from "@agent-os/runtime";
+import type { InternalSubmitSpec } from "@agent-os/runtime-protocol";
 import { defineTool, pureToolExecution, type Tool } from "@agent-os/kernel/tools";
 import {
   credentialMaterialRef,

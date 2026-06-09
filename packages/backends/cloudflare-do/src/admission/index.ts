@@ -31,11 +31,11 @@ export type {
   BarrierCursor,
   AdmissionRow,
   LlmRoute,
-} from "@agent-os/runtime";
-export { decideTier, projectLease } from "@agent-os/runtime";
+} from "@agent-os/runtime-protocol";
+export { decideTier, projectLease } from "@agent-os/runtime-protocol";
 
 // ── Canonical fingerprint algebra ──────────────────────────────
-export { FINGERPRINT_ALGO_VERSION, makeAdmissionSchemaSpec } from "@agent-os/runtime";
+export { FINGERPRINT_ALGO_VERSION, makeAdmissionSchemaSpec } from "@agent-os/runtime-protocol";
 
 // ── Orchestration + Live layer ─────────────────────────────────
 export type {
@@ -46,6 +46,6 @@ export type {
   AttemptSpec,
   AttemptResult,
   InvalidateSpec,
-} from "@agent-os/runtime";
+} from "@agent-os/runtime-protocol";
 export { Admission } from "@agent-os/runtime";
 export { AdmissionLive } from "./admission";

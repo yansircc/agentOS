@@ -9,7 +9,7 @@
  * server-side cross-scope composition.
  */
 
-import type { AttemptKey, CapabilityLease } from "@agent-os/runtime";
+import type { AttemptKey, CapabilityLease } from "@agent-os/runtime-protocol";
 import type {
   EventQueryOptions,
   LedgerEventRpc,

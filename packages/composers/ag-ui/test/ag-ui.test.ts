@@ -13,7 +13,7 @@ import {
   agentRunResumedEvent,
   agentRunStartedEvent,
   type RuntimeEventCommitSpec,
-} from "@agent-os/runtime/runtime-events";
+} from "@agent-os/runtime-protocol";
 import { settleToolExecuted } from "@agent-os/runtime";
 import {
   AG_UI_WIRE_COMPATIBILITY,

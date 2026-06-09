@@ -1,4 +1,4 @@
-import type { SubmitSpec } from "@agent-os/runtime";
+import type { SubmitSpec } from "@agent-os/runtime-protocol";
 import {
   credential,
   createAgentDurableObject,

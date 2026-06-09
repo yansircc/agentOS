@@ -14,7 +14,7 @@ import type {
 } from "@agent-os/kernel/effect-claim";
 import type { ExecutionDomain, ToolExecution } from "@agent-os/kernel/tools";
 import { TraceContextSchema, type TraceContext } from "@agent-os/telemetry-protocol";
-import { ABORT, type AbortKind } from "./abort";
+import { ABORT, type AbortKind } from "@agent-os/kernel/abort";
 
 const positiveInt = Schema.Number.pipe(Schema.int(), Schema.greaterThanOrEqualTo(1));
 const nonNegativeInt = Schema.Number.pipe(Schema.int(), Schema.greaterThanOrEqualTo(0));

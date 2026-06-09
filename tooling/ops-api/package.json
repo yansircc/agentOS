@@ -17,7 +17,7 @@
   },
   "dependencies": {
     "@agent-os/kernel": "workspace:*",
-    "@agent-os/runtime": "workspace:*"
+    "@agent-os/runtime-protocol": "workspace:*"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "catalog:",

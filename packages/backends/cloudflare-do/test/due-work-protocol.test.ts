@@ -6,11 +6,11 @@ import {
   DURABLE_TRIGGER_SCHEDULED_REQUESTED,
   DurableTriggerRegistry,
   Dispatch,
-  RUNTIME_FACT_OWNER,
   TriggerPump,
   makeDurableTriggerRegistry,
   scheduledEventTrigger,
 } from "@agent-os/runtime";
+import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
 import {
   DISPATCH_MAX_ATTEMPTS,
   type BackendProtocolEventIdentity,

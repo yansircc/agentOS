@@ -3,7 +3,7 @@ import {
   type BackendProtocolEventIdentity,
   type BackendProtocolTruthIdentity,
 } from "@agent-os/backend-protocol";
-import { RUNTIME_FACT_OWNER } from "@agent-os/runtime";
+import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
 
 export const truthIdentity = (scopeId: string): BackendProtocolTruthIdentity => ({
   scopeRef: { kind: "conversation", scopeId },

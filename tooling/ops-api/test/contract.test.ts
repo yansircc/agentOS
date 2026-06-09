@@ -17,7 +17,7 @@ import {
   encodeAttemptKey,
   mountOpsApi,
 } from "../src";
-import type { AttemptKey, CapabilityLease } from "@agent-os/runtime";
+import type { AttemptKey, CapabilityLease } from "@agent-os/runtime-protocol";
 import type {
   EventQueryOptions,
   LedgerEventRpc,

@@ -30,7 +30,6 @@ import {
   getProjection,
   makeProjectionRegistryResult,
   getDurableTrigger,
-  RUNTIME_FACT_OWNER,
   type AnyMaterializedProjectionDefinition,
   type AttachedStreamTx,
   type AttachedStreamTerminal,
@@ -46,6 +45,7 @@ import {
   type TriggerTx,
   UnregisteredProjectionKind,
 } from "@agent-os/runtime";
+import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
 import {
   authorityRefKey,
   scopeRefKey,

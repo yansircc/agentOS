@@ -6,7 +6,7 @@
  * ops-api ships no default implementation.
  */
 
-import type { AttemptKey } from "@agent-os/runtime";
+import type { AttemptKey } from "@agent-os/runtime-protocol";
 import type { RunListPage, RunListSpec, RunStatus, RunSummary } from "@agent-os/kernel/types";
 
 // ============================================================
@@ -58,7 +58,7 @@ export interface OpsAuth {
 }
 
 // ============================================================
-// Run summary / list — re-exported from @agent-os/runtime so apps
+// Run summary / list — re-exported from kernel/runtime-protocol so apps
 // using ops-api type the response correctly without two imports.
 // ============================================================
 

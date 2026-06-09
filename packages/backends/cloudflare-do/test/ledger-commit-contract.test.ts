@@ -8,8 +8,8 @@ import {
   projectionFail,
   projectionIdentity,
   projectionPut,
-  RUNTIME_FACT_OWNER,
 } from "@agent-os/runtime";
+import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
 import type { AnyMaterializedProjectionDefinition, ProjectionRegistry } from "@agent-os/runtime";
 import type { BackendProtocolTruthIdentity } from "@agent-os/backend-protocol";
 import type { EventBusService } from "../src/ledger/event-bus";

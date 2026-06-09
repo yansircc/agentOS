@@ -15,7 +15,7 @@ import type {
   ResourceReserveSpec,
 } from "@agent-os/kernel/types";
 import type { ResourceProjection } from "@agent-os/backend-protocol";
-import type { LedgerTruthIdentity } from "./ledger";
+import type { LedgerTruthIdentity } from "@agent-os/runtime-protocol";
 
 export class Resources extends Context.Tag("@agent-os/Resources")<
   Resources,

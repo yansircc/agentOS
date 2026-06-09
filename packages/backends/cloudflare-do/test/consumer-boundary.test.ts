@@ -18,6 +18,7 @@ const packageLinks = {
   "llm-protocol": "packages/llm-protocol",
   "llm-transport-effect-ai": "packages/providers/llm-transport-effect-ai",
   runtime: "packages/runtime",
+  "runtime-protocol": "packages/runtime-protocol",
   "telemetry-protocol": "packages/telemetry-protocol",
 };
 const dependencyLinks = ["@cloudflare", "@effect", "effect"];

@@ -1,16 +1,19 @@
 import { Effect, Fiber, Schema, TestClock } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 
-import { Ledger, RUNTIME_FACT_OWNER } from "../src/ledger";
+import { Ledger } from "../src/ledger";
 import { BoundaryEvents } from "../src/boundary-events";
 import { LlmTransport } from "../src/llm-transport";
 import { Quota } from "../src/quota-service";
 import { Admission } from "../src/admission";
 import { DEFAULT_LLM_CALL_TIMEOUT_MS, submitAgentEffect } from "../src/submit-agent";
-import type { InternalSubmitSpec } from "../src/submit";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import type { LlmRoute, LlmWireDescriptor } from "@agent-os/llm-protocol";
-import { decodeRuntimeLedgerEvent } from "../src/runtime-events";
+import {
+  RUNTIME_FACT_OWNER,
+  decodeRuntimeLedgerEvent,
+  type InternalSubmitSpec,
+} from "@agent-os/runtime-protocol";
 import { RefResolverEmpty } from "@agent-os/kernel/ref-resolver";
 
 const makeSpec = (budget?: InternalSubmitSpec["budget"]): InternalSubmitSpec => ({

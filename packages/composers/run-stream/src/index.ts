@@ -11,10 +11,10 @@ import {
   LedgerEventSchema,
   type LedgerEventRpc,
 } from "@agent-os/kernel/types";
-import type { SubmitResult, SubmitSpec } from "@agent-os/runtime";
+import type { SubmitResult, SubmitSpec } from "@agent-os/runtime-protocol";
 
 export type { LedgerEventRpc } from "@agent-os/kernel/types";
-export type { SubmitResult, SubmitSpec } from "@agent-os/runtime";
+export type { SubmitResult, SubmitSpec } from "@agent-os/runtime-protocol";
 
 export interface RunStreamLedgerEventFrame {
   readonly kind: "ledger_event";

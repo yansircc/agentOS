@@ -23,7 +23,7 @@ import {
 import { sqlText } from "../storage/sql-row";
 import { eventIdentity, eventIdentityColumns } from "../ledger/identity";
 import type { FactOwnerRef } from "@agent-os/kernel/effect-claim";
-import type { LedgerTruthIdentity } from "@agent-os/runtime";
+import type { LedgerTruthIdentity } from "@agent-os/runtime-protocol";
 
 export interface ResourceProjection {
   readonly available: number;

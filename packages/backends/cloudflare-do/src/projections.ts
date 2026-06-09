@@ -23,7 +23,7 @@ import {
 import { validateTerminalClaim } from "@agent-os/kernel/settlement-contract";
 import { dispatchSettlementContract } from "@agent-os/backend-protocol";
 import { toolSettlementContract } from "@agent-os/runtime";
-import type { LedgerTruthIdentity } from "@agent-os/runtime";
+import type { LedgerTruthIdentity } from "@agent-os/runtime-protocol";
 
 const abortKinds = new Set<string>(Object.values(ABORT));
 

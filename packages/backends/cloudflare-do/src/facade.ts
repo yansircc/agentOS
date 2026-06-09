@@ -1,11 +1,8 @@
 import type { ExtensionDeclaration } from "@agent-os/kernel/extensions";
 import type { ScopeRef } from "@agent-os/kernel/effect-claim";
 import type { DispatchToScopeResult, DispatchToScopeSpec } from "@agent-os/kernel/types";
-import type {
-  AttachedStreamCancelResult,
-  SubmitResult,
-  TriggerCancelResult,
-} from "@agent-os/runtime";
+import type { AttachedStreamCancelResult, TriggerCancelResult } from "@agent-os/runtime";
+import type { SubmitResult } from "@agent-os/runtime-protocol";
 import {
   AgentDurableObject,
   type AgentAttachedStreamCancelSpec,

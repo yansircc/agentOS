@@ -2,15 +2,8 @@ import type { EventHandler, LedgerEvent } from "@agent-os/kernel/types";
 import { ManagedRuntime } from "effect";
 import { describe } from "@effect/vitest";
 import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
-import {
-  Dispatch,
-  Ledger,
-  Quota,
-  RUNTIME_FACT_OWNER,
-  Resources,
-  Scheduler,
-  TriggerPump,
-} from "@agent-os/runtime";
+import { Dispatch, Ledger, Quota, Resources, Scheduler, TriggerPump } from "@agent-os/runtime";
+import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
 import {
   DISPATCH_EVENT_KINDS,
   type BackendProtocolEventIdentity,

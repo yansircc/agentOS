@@ -7,12 +7,15 @@ import { defineTool, pureToolExecution } from "@agent-os/kernel/tools";
 import { Admission } from "../src/admission";
 import { BoundaryEvents } from "../src/boundary-events";
 import { commitBoundaryEvent } from "../src/boundary-commit";
-import { Ledger, RUNTIME_FACT_OWNER } from "../src/ledger";
+import { Ledger } from "../src/ledger";
 import { LlmTransport } from "../src/llm-transport";
 import { Quota } from "../src/quota-service";
 import { submitAgentEffect } from "../src/submit-agent";
-import type { InternalSubmitSpec } from "../src/submit";
-import { decodeRuntimeLedgerEvent } from "../src/runtime-events";
+import {
+  RUNTIME_FACT_OWNER,
+  decodeRuntimeLedgerEvent,
+  type InternalSubmitSpec,
+} from "@agent-os/runtime-protocol";
 import { RefResolutionFailed, RefResolverService } from "@agent-os/kernel/ref-resolver";
 import type { ResolvedMaterial } from "@agent-os/kernel/ref-resolver";
 import {

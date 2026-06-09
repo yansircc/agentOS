@@ -1,0 +1,87 @@
+# @agent-os/runtime-protocol API
+
+## Public exports
+
+- `.:AdmissionImpact`
+- `.:AdmissionRow`
+- `.:AgentRunAbortedPayload`
+- `.:AgentRunAbortedPayloadSchema`
+- `.:AgentRunCompletedPayload`
+- `.:AgentRunCompletedPayloadSchema`
+- `.:AgentRunInterruptedPayload`
+- `.:AgentRunInterruptedPayloadSchema`
+- `.:AgentRunResumedPayload`
+- `.:AgentRunResumedPayloadSchema`
+- `.:AgentRunStartedPayload`
+- `.:AgentRunStartedPayloadSchema`
+- `.:AttemptKey`
+- `.:AttemptResult`
+- `.:AttemptSpec`
+- `.:BarrierCursor`
+- `.:BarrierRow`
+- `.:CapabilityLease`
+- `.:ChatIngestedPayload`
+- `.:ChatIngestedPayloadSchema`
+- `.:DecodeRuntimeLedgerEventResult`
+- `.:DecodedOutput`
+- `.:EMPTY_BARRIER_CURSOR`
+- `.:EvidenceRow`
+- `.:FINGERPRINT_ALGO_VERSION`
+- `.:InternalSubmitSpec`
+- `.:InvalidateSpec`
+- `.:LedgerCommitEventSpec`
+- `.:LedgerTruthIdentity`
+- `.:LiveInput`
+- `.:LlmResponsePayload`
+- `.:LlmResponsePayloadSchema`
+- `.:LlmRoute`
+- `.:Outcome`
+- `.:OutcomeClass`
+- `.:ProbeInput`
+- `.:RUNTIME_ABORT_EVENT_KINDS`
+- `.:RUNTIME_EVENT_KIND`
+- `.:RUNTIME_EVENT_KINDS`
+- `.:RUNTIME_FACT_OWNER`
+- `.:RuntimeAbortEventKind`
+- `.:RuntimeEventCommitSpec`
+- `.:RuntimeEventCommitSpecByKind`
+- `.:RuntimeEventKind`
+- `.:RuntimeEventPayloadByKind`
+- `.:RuntimeLedgerEvent`
+- `.:RuntimeLedgerEventByKind`
+- `.:Stimulus`
+- `.:Strategy`
+- `.:SubmitDecisionInterrupt`
+- `.:SubmitDecisionInterruptReason`
+- `.:SubmitResult`
+- `.:SubmitResumeDecision`
+- `.:SubmitSpec`
+- `.:ToolExecutedPayload`
+- `.:ToolExecutedPayloadSchema`
+- `.:ToolRejectedPayload`
+- `.:ToolRejectedPayloadSchema`
+- `.:TurnRef`
+- `.:agentRunAbortedEvent`
+- `.:agentRunCompletedEvent`
+- `.:agentRunInterruptedEvent`
+- `.:agentRunResumedEvent`
+- `.:agentRunStartedEvent`
+- `.:chatIngestedEvent`
+- `.:decideTier`
+- `.:decodeRuntimeEventPayload`
+- `.:decodeRuntimeLedgerEvent`
+- `.:isRuntimeAbortEventKind`
+- `.:isRuntimeEventKind`
+- `.:llmResponseEvent`
+- `.:makeAdmissionSchemaSpec`
+- `.:projectLease`
+- `.:toolExecutedEvent`
+- `.:toolRejectedEvent`
+
+## Experimental exports
+
+None.
+
+## Internal-only exports
+
+None.

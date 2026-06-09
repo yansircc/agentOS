@@ -3,10 +3,10 @@ import { describe } from "@effect/vitest";
 import {
   DurableTriggerRegistry,
   Ledger,
-  RUNTIME_FACT_OWNER,
   TriggerPump,
   type AnyDurableTrigger,
 } from "@agent-os/runtime";
+import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
 import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
 import { commitDurableTriggerIntent } from "../src/due-work";
 import { EventBus } from "../src/ledger";
