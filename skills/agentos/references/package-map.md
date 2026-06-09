@@ -6,6 +6,7 @@
 | ------------------------------------ | ---------------------------------------- |
 | Pure agentOS algebra                 | `@agent-os/kernel`                       |
 | Runtime Effect Tag contracts         | `@agent-os/runtime`                      |
+| Telemetry protocol algebra           | `@agent-os/telemetry-protocol`           |
 | Backend protocol algebra             | `@agent-os/backend-protocol`             |
 | Cloudflare DO app facade and backend | `@agent-os/backend-cloudflare-do`        |
 | Resource lifecycle carrier           | `@agent-os/resource-carrier`             |

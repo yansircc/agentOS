@@ -110,7 +110,6 @@ title: "@agent-os/kernel Public API Intent"
 - `./errors:DurableTriggerAcquireCancelled`
 - `./errors:DurableTriggerCommitReturnedThenable`
 - `./errors:DurableTriggerDrainLimitExceeded`
-- `./errors:InvalidTraceContext`
 - `./errors:InvalidResourceAmount`
 - `./errors:InvalidScheduleAt`
 - `./errors:JsonStringifyError`
@@ -225,13 +224,8 @@ title: "@agent-os/kernel Public API Intent"
 - `./settlement-contract:symbolicSettlementRef`
 - `./settlement-contract:validateSettlementContract`
 - `./settlement-contract:validateTerminalClaim`
-- `.:InvalidTraceContext`
 - `.:SYMBOLIC_SETTLEMENT_VALUE_PATTERN`
-- `.:TRACE_CONTEXT_VERSION`
-- `.:TraceContextSchema`
-- `.:TraceContextValidation`
-- `.:TraceparentSchema`
-- `.:TracestateSchema`
+  `
 - `.:DeterministicToolInvocation`
 - `.:ExecutionDomain`
 - `.:ExecutionDomainDeclaration`
@@ -245,11 +239,8 @@ title: "@agent-os/kernel Public API Intent"
 - `.:deterministicToolInvocation`
 - `.:effectfulToolExecution`
 - `.:pureToolExecution`
-- `.:copyTraceContext`
 - `.:unsafeRunToolByName`
-- `.:validateOptionalTraceContext`
 - `.:validateExecutionDomainRegistry`
-- `.:validateTraceContext`
 - `./tools:DefineToolSpec`
 - `./tools:DeterministicToolInvocation`
 - `./tools:ExecutionDomain`
@@ -279,15 +270,13 @@ title: "@agent-os/kernel Public API Intent"
 - `./tools:unsafeRunToolByName`
 - `./tools:validateExecutionDomainRegistry`
 - `./tools:validateToolRegistry`
-- `./trace-context:TRACE_CONTEXT_VERSION`
-- `./trace-context:TraceContext`
-- `./trace-context:TraceContextSchema`
-- `./trace-context:TraceContextValidation`
-- `./trace-context:TraceparentSchema`
-- `./trace-context:TracestateSchema`
-- `./trace-context:copyTraceContext`
-- `./trace-context:validateOptionalTraceContext`
-- `./trace-context:validateTraceContext`
+  text`
+textSchema`
+  `
+tSchema`
+  text`
+text`
+  text`
 - `./types:DeliveryReceipt`
 - `./types:DispatchTargetSpec`
 - `./types:DispatchToScopeResult`
@@ -325,7 +314,6 @@ title: "@agent-os/kernel Public API Intent"
 - `./types:RunTurn`
 - `./types:ScheduledEventSpec`
 - `./types:StreamEventsOptions`
-- `./types:TraceContext`
 - `./types:decodeLedgerEvent`
 - `.:ABORT`
 - `.:ADMITTER_ERROR_REASON_PREFIX`
@@ -492,7 +480,6 @@ title: "@agent-os/kernel Public API Intent"
 - `.:ToolError`
 - `.:ToolRegistryIssue`
 - `.:ToolRegistryValidation`
-- `.:TraceContext`
 - `.:UnsupportedScopeRef`
 - `.:UpstreamFailure`
 - `.:admitterErrorRejectionRef`

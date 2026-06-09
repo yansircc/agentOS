@@ -4,7 +4,6 @@ import type {
   DurableTriggerCommitReturnedThenable,
   DispatchScopeMismatch,
   DispatchTargetNotFound,
-  InvalidTraceContext,
   JsonStringifyError,
   ScopeMissingError,
   SqlError,
@@ -16,8 +15,8 @@ import type {
   DeliveryReceipt,
   DispatchToScopeResult,
   DispatchToScopeSpec,
-  TraceContext,
 } from "@agent-os/kernel/types";
+import type { InvalidTraceContext, TraceContext } from "@agent-os/telemetry-protocol";
 
 export interface DispatchEnvelope {
   readonly sourceScope: string;

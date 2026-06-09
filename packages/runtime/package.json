@@ -39,6 +39,7 @@
     "@agent-os/attached-stream": "workspace:*",
     "@agent-os/decision-gate": "workspace:*",
     "@agent-os/kernel": "workspace:*",
+    "@agent-os/telemetry-protocol": "workspace:*",
     "effect": "catalog:"
   },
   "devDependencies": {

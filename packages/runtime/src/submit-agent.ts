@@ -24,7 +24,6 @@ import {
 } from "@agent-os/decision-gate";
 import {
   JsonStringifyError,
-  InvalidTraceContext,
   safeStringify,
   safeStringifyPretty,
   SqlError,
@@ -42,10 +41,11 @@ import {
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import { materialRefKey, materialRefSatisfiesRequirement } from "@agent-os/kernel/material-ref";
 import {
+  InvalidTraceContext,
   copyTraceContext,
   validateOptionalTraceContext,
   type TraceContext,
-} from "@agent-os/kernel/trace-context";
+} from "@agent-os/telemetry-protocol";
 import { ABORT, type AbortKind } from "./abort";
 import { LlmTransport } from "./llm-transport";
 import { Ledger, type LedgerCommitEventSpec, type LedgerTruthIdentity } from "./ledger";

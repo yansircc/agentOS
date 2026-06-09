@@ -1,7 +1,6 @@
 import { Schema } from "effect";
 import { credentialMaterialRef, endpointMaterialRef, type MaterialRef } from "./material-ref";
 import type { AgentSchema } from "./agent-schema";
-import type { TraceContext } from "./trace-context";
 
 export interface OpenAIChatCompatibleRoute {
   readonly kind: "openai-chat-compatible";
@@ -184,7 +183,7 @@ export interface LlmRequest {
   readonly route: LlmRoute;
   readonly messages: ReadonlyArray<LlmMessage>;
   readonly tools?: ReadonlyArray<ToolDefinition>;
-  readonly traceContext?: TraceContext;
+  readonly traceContext?: unknown;
   readonly tool_choice?: {
     readonly type: "function";
     readonly function: { readonly name: string };

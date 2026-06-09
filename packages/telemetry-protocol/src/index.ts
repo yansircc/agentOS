@@ -1,4 +1,4 @@
-import { Either, Schema } from "effect";
+import { Data, Either, Schema } from "effect";
 
 export const TRACE_CONTEXT_VERSION = "w3c-trace-context-v1";
 
@@ -82,3 +82,34 @@ export const copyTraceContext = (
         traceparent: traceContext.traceparent,
         ...(traceContext.tracestate === undefined ? {} : { tracestate: traceContext.tracestate }),
       };
+
+export class InvalidTraceContext extends Data.TaggedError("agent_os.invalid_trace_context")<{
+  readonly position: "submit" | "dispatch" | "dispatch_payload";
+  readonly reason: string;
+}> {}
+
+export type TelemetryEmitKind =
+  | "runtime"
+  | "backend"
+  | "carrier"
+  | "provider"
+  | "transport"
+  | "wire_adapter"
+  | (string & {});
+
+export type TelemetryAttributeValue = string | number | boolean | null;
+
+export interface TelemetryEventNode {
+  readonly id: string;
+  readonly parentId?: string;
+  readonly emitKind: TelemetryEmitKind;
+  readonly name: string;
+  readonly at?: number;
+  readonly traceContext?: TraceContext;
+  readonly ledgerEventId?: number;
+  readonly attributes?: Readonly<Record<string, TelemetryAttributeValue>>;
+}
+
+export interface TelemetryEventTree {
+  readonly nodes: ReadonlyArray<TelemetryEventNode>;
+}

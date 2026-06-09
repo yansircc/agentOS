@@ -3,12 +3,11 @@ import {
   CapabilityRejected,
   DispatchScopeMismatch,
   DispatchTargetNotFound,
-  InvalidTraceContext,
   SqlError,
   UnsupportedScopeRef,
   isCoreClaimedEventKind,
 } from "@agent-os/kernel/errors";
-import { validateOptionalTraceContext } from "@agent-os/kernel/trace-context";
+import { InvalidTraceContext, validateOptionalTraceContext } from "@agent-os/telemetry-protocol";
 import {
   isAuthorityRef,
   isScopeRef,

@@ -70,10 +70,6 @@
       "types": "./src/tools.ts",
       "default": "./src/tools.ts"
     },
-    "./trace-context": {
-      "types": "./src/trace-context.ts",
-      "default": "./src/trace-context.ts"
-    },
     "./types": {
       "types": "./src/types.ts",
       "default": "./src/types.ts"

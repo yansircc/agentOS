@@ -2,7 +2,7 @@ import type { LlmRoute } from "@agent-os/kernel/llm";
 import type { Tool } from "@agent-os/kernel/tools";
 import type { AuthorityRef, ScopeRef } from "@agent-os/kernel/effect-claim";
 import type { AnyAgentSchemaSource } from "@agent-os/kernel/agent-schema";
-import type { TraceContext } from "@agent-os/kernel/trace-context";
+import type { TraceContext } from "@agent-os/telemetry-protocol";
 import type { MaterialRef } from "@agent-os/kernel/material-ref";
 
 /**

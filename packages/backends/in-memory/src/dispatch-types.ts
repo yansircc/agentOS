@@ -1,5 +1,5 @@
 import { makePreClaim } from "@agent-os/kernel/effect-claim";
-import type { TraceContext } from "@agent-os/kernel/types";
+import type { TraceContext } from "@agent-os/telemetry-protocol";
 import type { DispatchTargetAdapter } from "@agent-os/runtime";
 import type {
   BackendProtocolDispatchTarget,

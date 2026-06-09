@@ -5,8 +5,8 @@ import type {
   ResourceReservationSpec,
   ResourceReserveResult,
   ResourceReserveSpec,
-  TraceContext,
 } from "@agent-os/kernel/types";
+import type { TraceContext } from "@agent-os/telemetry-protocol";
 import { Effect } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import {

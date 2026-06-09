@@ -41,11 +41,6 @@ export class UnsupportedScopeRef extends Data.TaggedError("agent_os.unsupported_
   readonly position: "source" | "target";
 }> {}
 
-export class InvalidTraceContext extends Data.TaggedError("agent_os.invalid_trace_context")<{
-  readonly position: "submit" | "dispatch" | "dispatch_payload";
-  readonly reason: string;
-}> {}
-
 export class InvalidScheduleAt extends Data.TaggedError("agent_os.invalid_schedule_at")<{
   readonly at: unknown;
 }> {}

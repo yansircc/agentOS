@@ -52,6 +52,20 @@
       "published": true
     },
     {
+      "slug": "telemetry-protocol",
+      "name": "@agent-os/telemetry-protocol",
+      "path": "packages/telemetry-protocol",
+      "status": "telemetry protocol",
+      "role": "trace context and backend-neutral telemetry event tree vocabulary",
+      "boundary": "telemetry semantic vocabulary and validation only; OTLP and vendor sinks are wire adapters",
+      "need": "Telemetry protocol algebra",
+      "apiSource": "docs/api/telemetry-protocol.md",
+      "readmeStatus": "Telemetry protocol package. It owns trace context and agentOS telemetry event tree vocabulary.",
+      "apiStatus": "Telemetry protocol package. Public exports are limited to trace context validation and backend-neutral telemetry event tree vocabulary.",
+      "primary": true,
+      "published": true
+    },
+    {
       "slug": "backend-protocol",
       "name": "@agent-os/backend-protocol",
       "path": "packages/backends/protocol",

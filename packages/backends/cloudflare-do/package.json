@@ -27,6 +27,7 @@
     "@agent-os/kernel": "workspace:*",
     "@agent-os/llm-transport-effect-ai": "workspace:*",
     "@agent-os/runtime": "workspace:*",
+    "@agent-os/telemetry-protocol": "workspace:*",
     "@effect/experimental": "catalog:",
     "@effect/platform": "catalog:",
     "@effect/sql": "catalog:",

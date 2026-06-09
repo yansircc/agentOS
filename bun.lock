@@ -36,6 +36,7 @@
         "@agent-os/kernel": "workspace:*",
         "@agent-os/llm-transport-effect-ai": "workspace:*",
         "@agent-os/runtime": "workspace:*",
+        "@agent-os/telemetry-protocol": "workspace:*",
         "@effect/experimental": "catalog:",
         "@effect/platform": "catalog:",
         "@effect/sql": "catalog:",
@@ -65,6 +66,7 @@
         "@agent-os/backend-protocol": "workspace:*",
         "@agent-os/kernel": "workspace:*",
         "@agent-os/runtime": "workspace:*",
+        "@agent-os/telemetry-protocol": "workspace:*",
         "effect": "catalog:",
       },
       "devDependencies": {
@@ -82,6 +84,7 @@
       "version": "0.2.9",
       "dependencies": {
         "@agent-os/kernel": "workspace:*",
+        "@agent-os/telemetry-protocol": "workspace:*",
         "effect": "catalog:",
       },
       "devDependencies": {
@@ -555,12 +558,29 @@
       "version": "0.2.9",
       "dependencies": {
         "@agent-os/attached-stream": "workspace:*",
+        "@agent-os/decision-gate": "workspace:*",
         "@agent-os/kernel": "workspace:*",
+        "@agent-os/telemetry-protocol": "workspace:*",
         "effect": "catalog:",
       },
       "devDependencies": {
         "@effect/language-service": "catalog:",
         "@effect/vitest": "catalog:",
+        "typescript": "catalog:",
+        "vite-plus": "catalog:",
+        "vitest": "catalog:",
+      },
+      "peerDependencies": {
+        "effect": "^3.21.0",
+      },
+    },
+    "packages/telemetry-protocol": {
+      "name": "@agent-os/telemetry-protocol",
+      "version": "0.2.9",
+      "devDependencies": {
+        "@effect/language-service": "catalog:",
+        "@effect/vitest": "catalog:",
+        "effect": "catalog:",
         "typescript": "catalog:",
         "vite-plus": "catalog:",
         "vitest": "catalog:",
@@ -686,6 +706,8 @@
     "@agent-os/sandbox-cloudflare": ["@agent-os/sandbox-cloudflare@workspace:packages/execution-domains/sandbox-cloudflare"],
 
     "@agent-os/staging-artifact": ["@agent-os/staging-artifact@workspace:packages/carriers/staging-artifact"],
+
+    "@agent-os/telemetry-protocol": ["@agent-os/telemetry-protocol@workspace:packages/telemetry-protocol"],
 
     "@agent-os/tenant-material": ["@agent-os/tenant-material@workspace:packages/carriers/tenant-material"],
 

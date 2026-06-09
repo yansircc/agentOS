@@ -21,10 +21,10 @@ import {
   symbolicSettlementRef,
   validateTerminalClaim,
 } from "@agent-os/kernel/settlement-contract";
-import type { DeliveryReceipt, TraceContext } from "@agent-os/kernel/types";
-import { validateOptionalTraceContext } from "@agent-os/kernel/trace-context";
+import type { DeliveryReceipt } from "@agent-os/kernel/types";
+import { validateOptionalTraceContext, type TraceContext } from "@agent-os/telemetry-protocol";
 
-export { copyTraceContext } from "@agent-os/kernel/trace-context";
+export { copyTraceContext } from "@agent-os/telemetry-protocol";
 
 export const DISPATCH_OUTBOUND_REQUESTED = "dispatch.outbound.requested";
 export const DISPATCH_OUTBOUND_DELIVERED = "dispatch.outbound.delivered";

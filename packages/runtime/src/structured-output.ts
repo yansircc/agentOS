@@ -8,7 +8,7 @@ import {
   type LlmUsage,
 } from "@agent-os/kernel/llm";
 import type { AgentSchemaSpec } from "@agent-os/kernel/agent-schema";
-import type { TraceContext } from "@agent-os/kernel/trace-context";
+import type { TraceContext } from "@agent-os/telemetry-protocol";
 import {
   ProviderHttpFailure,
   ProviderOutputDecodeError,

@@ -17,6 +17,7 @@ const packageLinks = {
   kernel: "packages/kernel",
   "llm-transport-effect-ai": "packages/providers/llm-transport-effect-ai",
   runtime: "packages/runtime",
+  "telemetry-protocol": "packages/telemetry-protocol",
 };
 const dependencyLinks = ["@cloudflare", "@effect", "effect"];
 

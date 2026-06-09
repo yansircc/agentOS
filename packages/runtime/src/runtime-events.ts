@@ -13,7 +13,7 @@ import type {
   ScopeRef,
 } from "@agent-os/kernel/effect-claim";
 import type { ExecutionDomain, ToolExecution } from "@agent-os/kernel/tools";
-import { TraceContextSchema, type TraceContext } from "@agent-os/kernel/trace-context";
+import { TraceContextSchema, type TraceContext } from "@agent-os/telemetry-protocol";
 import { ABORT, type AbortKind } from "./abort";
 
 const positiveInt = Schema.Number.pipe(Schema.int(), Schema.greaterThanOrEqualTo(1));

@@ -28,7 +28,6 @@ import { isMaterialRequirement, type MaterialRequirement } from "./material-ref"
 import type { ResolvedMaterial } from "./ref-resolver";
 import type { QuotaSpec } from "./quota";
 import { ensureAgentSchema, type AgentSchema } from "./agent-schema";
-import type { TraceContext } from "./trace-context";
 
 const TOOL_CONTRACT_BRAND = Symbol("@agent-os/kernel/ToolContract");
 const DETERMINISTIC_TOOL_INVOCATION_BRAND = Symbol("@agent-os/kernel/DeterministicToolInvocation");
@@ -44,7 +43,7 @@ const DETERMINISTIC_TOOL_INVOCATION_BRAND = Symbol("@agent-os/kernel/Determinist
 export interface ToolExecutionContext {
   readonly signal: AbortSignal;
   readonly materials: ResolvedToolMaterials;
-  readonly traceContext?: TraceContext;
+  readonly traceContext?: unknown;
 }
 
 export type ResolvedToolMaterials = Readonly<Record<string, ResolvedMaterial>>;
@@ -531,7 +530,7 @@ export const executeTool = (
   tool: Tool,
   args: unknown,
   toolName: string,
-  traceContext?: TraceContext,
+  traceContext?: unknown,
   materials: ResolvedToolMaterials = {},
 ): Effect.Effect<unknown, ToolError> =>
   Effect.tryPromise({

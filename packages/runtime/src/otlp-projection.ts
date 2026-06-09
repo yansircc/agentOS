@@ -1,6 +1,6 @@
 import { authorityRefKey, factOwnerKey, scopeRefKey } from "@agent-os/kernel/effect-claim";
 import type { LedgerEvent } from "@agent-os/kernel/types";
-import { validateOptionalTraceContext, type TraceContext } from "@agent-os/kernel/trace-context";
+import { validateOptionalTraceContext, type TraceContext } from "@agent-os/telemetry-protocol";
 import { Option } from "effect";
 import { ABORT } from "./abort";
 import {

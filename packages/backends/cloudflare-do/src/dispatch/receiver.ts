@@ -14,7 +14,7 @@
  */
 
 import { Predicate } from "effect";
-import type { TraceContext } from "@agent-os/kernel/types";
+import type { TraceContext } from "@agent-os/telemetry-protocol";
 import type { LivedClaim } from "@agent-os/kernel/effect-claim";
 import { sqlText } from "../storage/sql-row";
 import { projectionIdentityColumns } from "../ledger/identity";

@@ -16,9 +16,6 @@ import {
   type ScopeRef,
 } from "./effect-claim";
 import type { BindingMaterialRef } from "./material-ref";
-import type { TraceContext } from "./trace-context";
-
-export type { TraceContext } from "./trace-context";
 
 export interface DeliveryReceipt {
   readonly anchorId: string;
@@ -137,7 +134,7 @@ export interface DispatchToScopeSpec {
   readonly event: string;
   readonly data: unknown;
   readonly idempotencyKey: string;
-  readonly traceContext?: TraceContext;
+  readonly traceContext?: unknown;
 }
 
 export interface DispatchToScopeResult {

@@ -52,6 +52,7 @@ state to make a product flow appear complete.
 | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `@agent-os/kernel`                       | pure claim, boundary, material, AgentSchema, JSON Schema dialect, tool, context, and type algebra                                   |
 | `@agent-os/runtime`                      | Effect Tag runtime programs, admission projections, runtime-facing API types, and backend-neutral durable trigger authoring algebra |
+| `@agent-os/telemetry-protocol`           | trace context and backend-neutral telemetry event tree vocabulary                                                                   |
 | `@agent-os/backend-protocol`             | storage-free backend protocol constants, intent-pointer payload parsers, retry policy, dispatch protocol, and handler fanout policy |
 | `@agent-os/backend-cloudflare-do`        | Cloudflare Durable Object app facade and backend for agentOS runtime                                                                |
 | `@agent-os/resource-carrier`             | provider-neutral resource lifecycle facts, claims, settlement, and projection                                                       |
