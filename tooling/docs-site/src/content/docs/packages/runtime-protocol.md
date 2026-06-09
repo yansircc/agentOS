@@ -29,6 +29,18 @@ Use `@agent-os/runtime` for Effect services and execution:
 import { Ledger, submitAgentEffect } from "@agent-os/runtime";
 ```
 
+## Replay Stage
+
+Replay stage 1 is complete for state replay from committed ledger facts:
+runtime-owned events are serializable protocol values, and projections can fold
+the ledger without calling runtime services or backend hosts.
+
+This is ledger replay, not deterministic re-execution across external IO. A
+run that would call dispatch targets, LLM providers, or tools still needs an IO
+snapshot oracle before the replay mode can assert that live adapters are not
+invoked. Until dispatch, LLM, and tool snapshots all exist, replay claims stop
+at substrate state reconstruction.
+
 ## Verification
 
 Run the package and graph gates:
