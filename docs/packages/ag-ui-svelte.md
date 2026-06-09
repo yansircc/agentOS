@@ -22,6 +22,6 @@ appendable store is needed.
 ## Verification
 
 ```sh
-cd packages/composers/ag-ui-svelte
+cd packages/wire-adapters/ag-ui-svelte
 vp test run
 ```

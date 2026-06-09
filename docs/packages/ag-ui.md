@@ -35,6 +35,6 @@ Svelte adapters consume that projection without parsing ledger payloads.
 ## Verification
 
 ```sh
-cd packages/composers/ag-ui
+cd packages/wire-adapters/ag-ui
 vp test run
 ```

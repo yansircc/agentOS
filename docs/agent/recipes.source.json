@@ -63,11 +63,11 @@
       ],
       "commands": [
         "bun run --cwd packages/runtime test",
-        "bun run --cwd packages/composers/ag-ui test"
+        "bun run --cwd packages/wire-adapters/ag-ui test"
       ],
       "evidence": [
         "packages/runtime/test/submit-agent-runtime-events.test.ts",
-        "packages/composers/ag-ui/test/ag-ui.test.ts"
+        "packages/wire-adapters/ag-ui/test/ag-ui.test.ts"
       ],
       "next": ["recipe.tool-schema-authority", "recipe.full-small-agent-app"]
     },

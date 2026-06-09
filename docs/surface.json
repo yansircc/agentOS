@@ -321,7 +321,7 @@
     {
       "slug": "ag-ui",
       "name": "@agent-os/ag-ui",
-      "path": "packages/composers/ag-ui",
+      "path": "packages/wire-adapters/ag-ui",
       "status": "0.2.x public",
       "role": "AG-UI wire frame projection over typed agentOS runtime events",
       "boundary": "framework-neutral AG-UI edge protocol frames derived from typed runtime events and AgentSchema tool projections",
@@ -335,7 +335,7 @@
     {
       "slug": "ag-ui-react",
       "name": "@agent-os/ag-ui-react",
-      "path": "packages/composers/ag-ui-react",
+      "path": "packages/wire-adapters/ag-ui-react",
       "status": "0.2.x public",
       "role": "React consumption helpers for AG-UI frames",
       "boundary": "React hooks and stores over @agent-os/ag-ui frames; no runtime event parsing",
@@ -349,7 +349,7 @@
     {
       "slug": "ag-ui-svelte",
       "name": "@agent-os/ag-ui-svelte",
-      "path": "packages/composers/ag-ui-svelte",
+      "path": "packages/wire-adapters/ag-ui-svelte",
       "status": "0.2.x public",
       "role": "Svelte consumption helpers for AG-UI frames",
       "boundary": "Svelte stores over @agent-os/ag-ui frames; no runtime event parsing",

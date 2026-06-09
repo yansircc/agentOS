@@ -27,6 +27,6 @@ Use `useAgUiActivities` for a neutral activity feed derived from AG-UI frames.
 ## Verification
 
 ```sh
-cd packages/composers/ag-ui-react
+cd packages/wire-adapters/ag-ui-react
 vp test run
 ```
