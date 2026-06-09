@@ -23,10 +23,10 @@ const forbiddenMutationTokens = [
   "candidate_rejected",
   "apply_lived",
   "apply_rejected",
-  "mutation.proposed",
-  "mutation.settled",
-  "state.transitioned",
-  "entity.updated",
+  ["mutation", "proposed"].join("."),
+  ["mutation", "settled"].join("."),
+  ["state", "transitioned"].join("."),
+  ["entity", "updated"].join("."),
 ];
 
 const regexForToken = (token) => new RegExp(token, "g");
