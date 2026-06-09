@@ -36,6 +36,7 @@
     "test:facade-run-scoped-bindings": "node scripts/check-facade-run-scoped-bindings.mjs --self-test && node scripts/check-facade-run-scoped-bindings.mjs",
     "test:replay-dispatch-snapshot": "node scripts/check-replay-dispatch-snapshot.mjs --self-test && node scripts/check-replay-dispatch-snapshot.mjs",
     "test:replay-llm-snapshot": "node scripts/check-replay-llm-snapshot.mjs --self-test && node scripts/check-replay-llm-snapshot.mjs",
+    "test:replay-tool-snapshot": "node scripts/check-replay-tool-snapshot.mjs --self-test && node scripts/check-replay-tool-snapshot.mjs",
     "check": "vp check && bun run docs:check && bun run effect-manifests:check && bun run check:public-api && bun run check:event-namespaces && bun run check:transaction-sync && bun run check:boundaries -- --self-test && bun run check:boundaries && bun run check:backend-neutrality -- --self-test && bun run check:backend-neutrality && bun run check:source-aliases && bun run check:spikes && bun run check:distribution && bun run typecheck && bun run test",
     "check:runtime": "vp run --cache -r test:runtime",
     "check:full": "bun run check && bun run docs:site:check && bun run check:runtime",

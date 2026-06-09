@@ -92,6 +92,9 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:ToolExecutedPayloadSchema`
 - `.:ToolRejectedPayload`
 - `.:ToolRejectedPayloadSchema`
+- `.:TOOL_RESULT_SNAPSHOT_VERSION`
+- `.:ToolResultReplayOutcome`
+- `.:ToolResultSnapshot`
 - `.:TurnRef`
 - `.:agentRunAbortedEvent`
 - `.:agentRunCompletedEvent`
@@ -111,7 +114,9 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:makeAdmissionSchemaSpec`
 - `.:mountAgent`
 - `.:projectLease`
+- `.:replayToolResultFromSnapshot`
 - `.:toolExecutedEvent`
+- `.:toolResultSnapshotFromExecutedPayload`
 - `.:toolRejectedEvent`
 - `.:validateAgentMount`
 - `.:validateIntentSettlementVocabulary`

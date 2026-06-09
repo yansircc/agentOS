@@ -21,6 +21,8 @@ import { submitAgentEffect } from "../src/submit-agent";
 import {
   RUNTIME_FACT_OWNER,
   decodeRuntimeLedgerEvent,
+  replayToolResultFromSnapshot,
+  toolResultSnapshotFromExecutedPayload,
   type InternalSubmitSpec,
 } from "@agent-os/runtime-protocol";
 import { RefResolutionFailed, RefResolverService } from "@agent-os/kernel/ref-resolver";
@@ -265,6 +267,57 @@ describe("submit-agent runtime event writes", () => {
     expect(liveLlmProviderAdapterCalled).toBe(false);
     expect(liveLlm.call).toBeDefined();
   });
+
+  it.effect("replay mode live tool execute not called when tool result snapshot is present", () =>
+    Effect.gen(function* () {
+      const tool = defineTool({
+        name: "lookup",
+        description: "lookup",
+        args: Schema.Struct({ q: Schema.String }),
+        execute: () => Effect.succeed({ value: "from-run" }),
+        authority: "read",
+        admit: () => Effect.succeed({ ok: true }),
+        execution: pureToolExecution(),
+      });
+      const { events } = yield* runSubmit(baseSpec({ tools: { lookup: tool } }), [
+        response({
+          items: [
+            { type: "message", text: "use lookup" },
+            {
+              type: "tool_call",
+              call: {
+                id: "call-1",
+                type: "function",
+                function: { name: "lookup", arguments: '{"q":"x"}' },
+              },
+            },
+          ],
+        }),
+        response({ items: [{ type: "message", text: "done" }] }),
+      ]);
+      let liveToolExecuteCalled = false;
+      const liveTool = {
+        execute: () => {
+          liveToolExecuteCalled = true;
+          return Effect.succeed({ value: "live" });
+        },
+      };
+      const toolEvent = events
+        .map((event) => decodeRuntimeLedgerEvent(event))
+        .find((decoded) => decoded._tag === "runtime" && decoded.event.kind === "tool.executed");
+      if (toolEvent?._tag !== "runtime" || toolEvent.event.kind !== "tool.executed") {
+        expect.fail("expected tool.executed runtime event");
+      }
+
+      const replayed = replayToolResultFromSnapshot(
+        toolResultSnapshotFromExecutedPayload(toolEvent.event.payload),
+      );
+
+      expect(replayed).toMatchObject({ ok: true, result: { value: "from-run" } });
+      expect(liveToolExecuteCalled).toBe(false);
+      expect(liveTool.execute).toBeDefined();
+    }),
+  );
 
   it.effect("standard submit emits constructor-backed runtime facts", () =>
     Effect.gen(function* () {

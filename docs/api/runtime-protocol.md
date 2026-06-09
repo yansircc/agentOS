@@ -88,6 +88,9 @@
 - `.:ToolExecutedPayloadSchema`
 - `.:ToolRejectedPayload`
 - `.:ToolRejectedPayloadSchema`
+- `.:TOOL_RESULT_SNAPSHOT_VERSION`
+- `.:ToolResultReplayOutcome`
+- `.:ToolResultSnapshot`
 - `.:TurnRef`
 - `.:agentRunAbortedEvent`
 - `.:agentRunCompletedEvent`
@@ -107,7 +110,9 @@
 - `.:makeAdmissionSchemaSpec`
 - `.:mountAgent`
 - `.:projectLease`
+- `.:replayToolResultFromSnapshot`
 - `.:toolExecutedEvent`
+- `.:toolResultSnapshotFromExecutedPayload`
 - `.:toolRejectedEvent`
 - `.:validateAgentMount`
 - `.:validateIntentSettlementVocabulary`

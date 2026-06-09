@@ -38,6 +38,8 @@ export const RUNTIME_EVENT_KIND = {
   AGENT_ABORTED_CLIENT_DISCONNECT: "agent.aborted.client_disconnect",
 } as const;
 
+export const TOOL_RESULT_SNAPSHOT_VERSION = "tool-result-snapshot-v1";
+
 export type RuntimeEventKind = (typeof RUNTIME_EVENT_KIND)[keyof typeof RUNTIME_EVENT_KIND];
 export type RuntimeAbortEventKind = AbortKind;
 
@@ -108,6 +110,31 @@ export type ToolExecutedPayload = {
   readonly claim: unknown;
   readonly traceContext?: TraceContext;
 };
+
+export interface ToolResultSnapshot {
+  readonly kind: "tool.result";
+  readonly version: typeof TOOL_RESULT_SNAPSHOT_VERSION;
+  readonly runId: number;
+  readonly toolCallId: string;
+  readonly name: string;
+  readonly args: unknown;
+  readonly execution: ToolExecution;
+  readonly result: unknown;
+  readonly claim: LivedClaim;
+  readonly traceContext?: TraceContext;
+}
+
+export type ToolResultReplayOutcome =
+  | {
+      readonly ok: true;
+      readonly result: unknown;
+      readonly claim: LivedClaim;
+    }
+  | {
+      readonly ok: false;
+      readonly reason: "effectful_tool_replay_requires_receipt";
+      readonly execution: Extract<ToolExecution, { readonly kind: "effectful" }>;
+    };
 
 export type ToolRejectedPayload = {
   readonly runId: number;
@@ -503,6 +530,38 @@ export const toolExecutedEvent = (
     claim: spec.claim,
     ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
   });
+
+export const toolResultSnapshotFromExecutedPayload = (
+  payload: ToolExecutedPayload,
+): ToolResultSnapshot => ({
+  kind: "tool.result",
+  version: TOOL_RESULT_SNAPSHOT_VERSION,
+  runId: payload.runId,
+  toolCallId: payload.toolCallId,
+  name: payload.name,
+  args: payload.args,
+  execution: payload.execution,
+  result: payload.result,
+  claim: payload.claim as LivedClaim,
+  ...(payload.traceContext === undefined ? {} : { traceContext: payload.traceContext }),
+});
+
+export const replayToolResultFromSnapshot = (
+  snapshot: ToolResultSnapshot,
+): ToolResultReplayOutcome => {
+  if (snapshot.execution.kind === "effectful") {
+    return {
+      ok: false,
+      reason: "effectful_tool_replay_requires_receipt",
+      execution: snapshot.execution,
+    };
+  }
+  return {
+    ok: true,
+    result: snapshot.result,
+    claim: snapshot.claim,
+  };
+};
 
 export const toolRejectedEvent = (
   spec: RuntimeEventIdentitySpec & {

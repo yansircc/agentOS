@@ -92,6 +92,9 @@ title: "@agent-os/runtime-protocol API"
 - `.:ToolExecutedPayloadSchema`
 - `.:ToolRejectedPayload`
 - `.:ToolRejectedPayloadSchema`
+- `.:TOOL_RESULT_SNAPSHOT_VERSION`
+- `.:ToolResultReplayOutcome`
+- `.:ToolResultSnapshot`
 - `.:TurnRef`
 - `.:agentRunAbortedEvent`
 - `.:agentRunCompletedEvent`
@@ -111,7 +114,9 @@ title: "@agent-os/runtime-protocol API"
 - `.:makeAdmissionSchemaSpec`
 - `.:mountAgent`
 - `.:projectLease`
+- `.:replayToolResultFromSnapshot`
 - `.:toolExecutedEvent`
+- `.:toolResultSnapshotFromExecutedPayload`
 - `.:toolRejectedEvent`
 - `.:validateAgentMount`
 - `.:validateIntentSettlementVocabulary`

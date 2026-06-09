@@ -11,7 +11,9 @@ import {
   decodeRuntimeLedgerEvent,
   llmResponseEvent,
   RUNTIME_ABORT_EVENT_KINDS,
+  replayToolResultFromSnapshot,
   toolExecutedEvent,
+  toolResultSnapshotFromExecutedPayload,
   toolRejectedEvent,
   type RuntimeEventCommitSpec,
 } from "../src/runtime-events";
@@ -177,6 +179,53 @@ describe("runtime event vocabulary", () => {
   it("reports product deliver events as non-runtime unknown payloads", () => {
     const decoded = decodeRuntimeLedgerEvent(rawEvent(1, "answer.ready", { final: "done" }));
     expect(decoded).toMatchObject({ _tag: "non_runtime" });
+  });
+
+  it("replay mode tool execute not called: pure tool result replays from snapshot", () => {
+    let liveToolExecuteCalled = false;
+    const liveTool = {
+      execute: () => {
+        liveToolExecuteCalled = true;
+        throw new Error("live tool execute should not be called in replay");
+      },
+    };
+    const payload = toolExecutedEvent({
+      ...runtimeIdentity,
+      runId: 1,
+      toolCallId: "call-1",
+      name: "lookup",
+      args: { q: "x" },
+      execution: { kind: "pure" },
+      result: { ok: true },
+      claim: livedClaim,
+      traceContext,
+    }).payload;
+
+    const snapshot = toolResultSnapshotFromExecutedPayload(payload);
+    const replayed = replayToolResultFromSnapshot(snapshot);
+
+    expect(replayed).toEqual({ ok: true, result: { ok: true }, claim: livedClaim });
+    expect(liveToolExecuteCalled).toBe(false);
+    expect(liveTool.execute).toBeDefined();
+  });
+
+  it("does not replay effectful tool side effects before receipt vocabulary exists", () => {
+    const payload = toolExecutedEvent({
+      ...runtimeIdentity,
+      runId: 1,
+      toolCallId: "call-1",
+      name: "write_file",
+      args: { path: "out.txt" },
+      execution: { kind: "effectful", domain: { kind: "workspace", ref: "workspace:default" } },
+      result: { written: true },
+      claim: livedClaim,
+    }).payload;
+
+    expect(replayToolResultFromSnapshot(toolResultSnapshotFromExecutedPayload(payload))).toEqual({
+      ok: false,
+      reason: "effectful_tool_replay_requires_receipt",
+      execution: { kind: "effectful", domain: { kind: "workspace", ref: "workspace:default" } },
+    });
   });
 
   it("rejects missing required runtime payload fields", () => {
