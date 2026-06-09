@@ -149,7 +149,8 @@ const makeInMemoryContractDriver = (): RuntimeBackendContractDriver => {
       const ledger = await handle.runPromise(Ledger);
       const before = await handle.runPromise(ledger.events(identity));
       const triggerPump = await handle.runPromise(TriggerPump);
-      await handle.runPromise(triggerPump.drainDue(now));
+      const result = await handle.runPromise(triggerPump.drainDue(now));
+      if (result.drained === 0) return { delivered: 0, failed: 0 };
       const after = await handle.runPromise(ledger.events(identity));
       const slice = after.slice(before.length);
       return {
