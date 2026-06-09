@@ -1,4 +1,5 @@
 import type { SubmitSpec } from "@agent-os/runtime-protocol";
+import { defineAgentSubmitBindings } from "@agent-os/runtime-protocol";
 import {
   credential,
   createAgentDurableObject,
@@ -58,6 +59,7 @@ const LlmDO = defineAgentDO<TestEnv>({
 declare const agent: InstanceType<typeof LlmDO>;
 declare const facadeSpec: AgentSubmitSpec;
 declare const fullSpec: SubmitSpec;
+declare const lookupTool: NonNullable<NonNullable<AgentSubmitSpec["bindings"]>["tools"]>[string];
 
 void agent.emit("test.followup", {});
 // @ts-expect-error facade clients do not expose low-level emitEvent
@@ -68,6 +70,13 @@ void agent.dispatchToScope({} as never);
 void agent.scheduleEvent({ event: "test.followup", data: {}, at: scheduleAt });
 
 void agent.submit(facadeSpec);
+void agent.submit({
+  ...facadeSpec,
+  bindings: defineAgentSubmitBindings({
+    handlers: {},
+    tools: { lookup: lookupTool },
+  }),
+});
 // @ts-expect-error facade submit does not accept full SubmitSpec
 void agent.submit(fullSpec);
 

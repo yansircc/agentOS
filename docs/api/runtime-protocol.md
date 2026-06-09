@@ -34,6 +34,7 @@
 - `.:AgentScopeIdentityPolicy`
 - `.:AgentScopeKind`
 - `.:AgentSettlementKind`
+- `.:AgentSubmitBindings`
 - `.:AgentToolBindingRef`
 - `.:AttemptKey`
 - `.:AttemptResult`
@@ -97,6 +98,7 @@
 - `.:decideTier`
 - `.:defineAgentBindings`
 - `.:defineAgentManifest`
+- `.:defineAgentSubmitBindings`
 - `.:decodeRuntimeEventPayload`
 - `.:decodeRuntimeLedgerEvent`
 - `.:isRuntimeAbortEventKind`

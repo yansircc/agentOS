@@ -421,7 +421,7 @@ export const ExtensionTestDO = createAgentDurableObject<CloudflareAgentEnv>({
 });
 export type ExtensionTestDO = InstanceType<typeof ExtensionTestDO>;
 
-const facadeLookup = defineTool({
+export const facadeLookup = defineTool({
   name: "lookup",
   description: "Lookup a symbolic key",
   args: Schema.Struct({ key: Schema.String }),
@@ -466,7 +466,6 @@ export const FacadeSubmitTestDO = defineAgentDO<CloudflareAgentEnv>({
       credential: "llm-key",
     }),
   },
-  tools: [facadeLookup],
   scopeRefForScope: (scope) => ({ kind: "conversation", scopeId: scope }),
 });
 export type FacadeSubmitTestDO = InstanceType<typeof FacadeSubmitTestDO>;

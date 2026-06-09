@@ -38,6 +38,7 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:AgentScopeIdentityPolicy`
 - `.:AgentScopeKind`
 - `.:AgentSettlementKind`
+- `.:AgentSubmitBindings`
 - `.:AgentToolBindingRef`
 - `.:AttemptKey`
 - `.:AttemptResult`
@@ -101,6 +102,7 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:decideTier`
 - `.:defineAgentBindings`
 - `.:defineAgentManifest`
+- `.:defineAgentSubmitBindings`
 - `.:decodeRuntimeEventPayload`
 - `.:decodeRuntimeLedgerEvent`
 - `.:isRuntimeAbortEventKind`

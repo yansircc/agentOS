@@ -1,6 +1,7 @@
 import { Option } from "effect";
 import type { LlmRoute } from "@agent-os/llm-protocol";
 import { llmRouteMaterialRefs } from "@agent-os/llm-protocol";
+import { defineAgentSubmitBindings, type AgentSubmitBindings } from "@agent-os/runtime-protocol";
 import {
   bindingMaterialRef,
   credentialMaterialRef,
@@ -165,14 +166,11 @@ export interface LoweredMaterialBindings {
 }
 
 export interface LoweredAgentConfigWithSubmit extends LoweredAgentConfigBase {
-  readonly defaultSubmit: {
-    readonly route: LlmRoute;
-    readonly tools: Record<string, Tool>;
-  };
+  readonly submitBindings: AgentSubmitBindings;
 }
 
 export interface LoweredAgentConfigWithoutSubmit extends LoweredAgentConfigBase {
-  readonly defaultSubmit: null;
+  readonly submitBindings: null;
 }
 
 export type LoweredAgentConfig = LoweredAgentConfigWithSubmit | LoweredAgentConfigWithoutSubmit;
@@ -289,13 +287,14 @@ export function lowerAgentConfig<Env>(
   return {
     refResolver: loweredMaterials.refResolver,
     dispatchTargets: loweredMaterials.dispatchTargets,
-    defaultSubmit:
+    submitBindings:
       config.llms === undefined
         ? null
-        : {
-            route: config.llms.default,
+        : defineAgentSubmitBindings({
+            handlers: {},
+            llmRoutes: { default: config.llms.default },
             tools,
-          },
+          }),
   };
 }
 

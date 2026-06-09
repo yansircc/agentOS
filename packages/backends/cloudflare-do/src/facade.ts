@@ -10,7 +10,6 @@ import {
   type AgentEventHandlerContext,
   type AgentEventHandlerRegistration,
   type AgentRuntimeReaderClient,
-  type AgentSubmitDefaults,
   type AgentSubmitSpec,
   type AgentTriggerCancelSpec,
   type AgentTriggerIntentSpec,
@@ -171,16 +170,16 @@ export function defineAgentDO<Env extends CloudflareAgentEnv>(
       extends AgentDurableObject<Env, AgentFacadeRuntimeClientWithSubmit>
       implements AgentFacadeRuntimeClientWithSubmit
     {
-      private readonly _submitDefaults: AgentSubmitDefaults;
+      private readonly _submitBindings: LoweredAgentConfigWithSubmit["submitBindings"];
 
       constructor(ctx: DurableObjectState, env: Env) {
         const next = getLowered(env);
         super(ctx, env, materializedConfigForEnv(config, next, env));
-        this._submitDefaults = next.defaultSubmit;
+        this._submitBindings = next.submitBindings;
       }
 
       submit(spec: AgentSubmitSpec): Promise<SubmitResult> {
-        return this.submitWithDefaults(spec, this._submitDefaults);
+        return this.submitWithBindings(spec, this._submitBindings);
       }
 
       emit(event: string, data: unknown): Promise<{ id: number }> {

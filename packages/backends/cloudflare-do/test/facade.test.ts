@@ -95,7 +95,7 @@ describe("defineAgentDO facade lowering", () => {
       }),
     );
     expect(typeof lowered.dispatchTargets[peerKey]?.deliver).toBe("function");
-    expect(lowered.defaultSubmit?.route).toEqual({
+    expect(lowered.submitBindings?.llmRoutes?.default).toEqual({
       kind: "openai-chat-compatible",
       modelId: "gpt-4.1-mini",
       endpointRef: "llm",
@@ -184,7 +184,7 @@ describe("defineAgentDO facade lowering", () => {
 
     const lowered = lowerAgentConfig({ tools: [tool] }, env);
 
-    expect(lowered.defaultSubmit).toBe(null);
+    expect(lowered.submitBindings).toBe(null);
   });
 
   it("fails before submit when effectful tools reference undeclared domains", () => {
@@ -218,7 +218,7 @@ describe("defineAgentDO facade lowering", () => {
 
     const lowered = lowerAgentConfig({ tools: [tool], domains: [{ domain }] }, env);
 
-    expect(lowered.defaultSubmit).toBe(null);
+    expect(lowered.submitBindings).toBe(null);
   });
 
   it("materializes Queue, HTTP, and provider dispatch targets as external receipts", () => {

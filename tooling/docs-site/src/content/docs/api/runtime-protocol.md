@@ -38,6 +38,7 @@ title: "@agent-os/runtime-protocol API"
 - `.:AgentScopeIdentityPolicy`
 - `.:AgentScopeKind`
 - `.:AgentSettlementKind`
+- `.:AgentSubmitBindings`
 - `.:AgentToolBindingRef`
 - `.:AttemptKey`
 - `.:AttemptResult`
@@ -101,6 +102,7 @@ title: "@agent-os/runtime-protocol API"
 - `.:decideTier`
 - `.:defineAgentBindings`
 - `.:defineAgentManifest`
+- `.:defineAgentSubmitBindings`
 - `.:decodeRuntimeEventPayload`
 - `.:decodeRuntimeLedgerEvent`
 - `.:isRuntimeAbortEventKind`

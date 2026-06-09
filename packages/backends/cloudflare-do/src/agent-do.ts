@@ -70,6 +70,7 @@ import type {
   MaterializedProjectionStatus,
 } from "@agent-os/runtime";
 import type {
+  AgentSubmitBindings,
   AttemptKey,
   CapabilityLease,
   InternalSubmitSpec,
@@ -99,7 +100,6 @@ import {
   type BackendProtocolTruthIdentity,
   type DispatchReceiverResult,
 } from "@agent-os/backend-protocol";
-import type { LlmRoute } from "@agent-os/llm-protocol";
 import { Dispatch, type DispatchEnvelope, type DispatchTargetRegistry } from "./dispatch";
 import { EventBus, createEventStreamResponse, eventToRpc } from "./ledger";
 import { Scheduler } from "./scheduler";
@@ -218,6 +218,8 @@ export interface AgentSubmitSpec {
   readonly intent: string;
   readonly input: unknown;
   readonly effectAuthorityRef: AuthorityRef;
+  readonly bindings?: AgentSubmitBindings;
+  readonly llmRouteBindingRef?: string;
   readonly system?: string;
   readonly budget?: SubmitSpec["budget"];
   readonly outputSchema?: SubmitSpec["outputSchema"];
@@ -305,14 +307,19 @@ export interface MaterializedAgentConfig<
   ) => Iterable<AgentEventHandlerRegistration>;
 }
 
-export interface AgentSubmitDefaults {
-  readonly route: LlmRoute;
-  readonly tools: Record<string, SubmitSpec["tools"][string]>;
-}
-
 const emptyRefResolver: RefResolver = {
   material: () => null,
 };
+
+const mergeSubmitBindings = (
+  base: AgentSubmitBindings,
+  run: AgentSubmitBindings | undefined,
+): AgentSubmitBindings => ({
+  handlers: {},
+  llmRoutes: { ...base.llmRoutes, ...run?.llmRoutes },
+  tools: { ...base.tools, ...run?.tools },
+  materials: { ...base.materials, ...run?.materials },
+});
 
 export class AgentDurableObject<
   Env extends CloudflareAgentEnv,
@@ -608,16 +615,22 @@ export class AgentDurableObject<
     set.add(handler);
   }
 
-  protected submitWithDefaults(
+  protected submitWithBindings(
     spec: AgentSubmitSpec,
-    defaults: AgentSubmitDefaults,
+    baseBindings: AgentSubmitBindings,
   ): Promise<SubmitResult> {
+    const bindings = mergeSubmitBindings(baseBindings, spec.bindings);
+    const routeBindingRef = spec.llmRouteBindingRef ?? "default";
+    const route = bindings.llmRoutes?.[routeBindingRef];
+    if (route === undefined) {
+      return Promise.reject(new TypeError(`missing llm route binding ${routeBindingRef}`));
+    }
     return this.submitFull({
       intent: spec.intent,
       context: { input: spec.input },
       ...(spec.system === undefined ? {} : { system: spec.system }),
-      route: defaults.route,
-      tools: defaults.tools,
+      route,
+      tools: { ...bindings.tools },
       effectAuthorityRef: spec.effectAuthorityRef,
       ...(spec.budget === undefined ? {} : { budget: spec.budget }),
       ...(spec.outputSchema === undefined ? {} : { outputSchema: spec.outputSchema }),

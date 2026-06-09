@@ -1,7 +1,8 @@
 import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
 
-import { makeFacadeSubmitChatResponse, type FacadeSubmitTestDO } from "./test-worker";
+import { defineAgentSubmitBindings } from "@agent-os/runtime-protocol";
+import { facadeLookup, makeFacadeSubmitChatResponse, type FacadeSubmitTestDO } from "./test-worker";
 import { testTruthIdentity } from "./_identity";
 
 interface TestEnv {
@@ -52,7 +53,7 @@ const requestBodyText = async (
 };
 
 describe("defineAgentDO facade submit", () => {
-  it("uses llms.default and configured tools from the facade config", async () => {
+  it("uses llms.default and run-scoped tools from submit bindings", async () => {
     const scope = "facade-submit-defaults";
     const stub = testEnv.FACADE_SUBMIT_DO.get(testEnv.FACADE_SUBMIT_DO.idFromName(scope));
     const fetchCalls: Array<{
@@ -80,6 +81,10 @@ describe("defineAgentDO facade submit", () => {
           intent: "lookup",
           input: { key: "abc" },
           effectAuthorityRef,
+          bindings: defineAgentSubmitBindings({
+            handlers: {},
+            tools: { lookup: facadeLookup },
+          }),
           budget: { maxTurns: 1 },
         }),
       );

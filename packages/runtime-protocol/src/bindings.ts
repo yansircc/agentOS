@@ -23,6 +23,11 @@ export interface AgentBindings<K extends HandlerKind = HandlerKind> {
   readonly materials?: Readonly<Record<string, unknown>>;
 }
 
+export type AgentSubmitBindings = AgentBindings<never>;
+
 export const defineAgentBindings = <K extends HandlerKind>(
   bindings: AgentBindings<K>,
 ): AgentBindings<K> => bindings;
+
+export const defineAgentSubmitBindings = (bindings: AgentSubmitBindings): AgentSubmitBindings =>
+  bindings;
