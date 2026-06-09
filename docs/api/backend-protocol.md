@@ -54,6 +54,7 @@
 - `.:DispatchEnvelope`
 - `.:DispatchReceiver`
 - `.:DispatchReceiverResult`
+- `.:DispatchReceiptBeforeTerminalProof`
 - `.:DispatchRequestedPayload`
 - `.:DispatchReplaySnapshot`
 - `.:DispatchTargetAdapter`
@@ -62,8 +63,10 @@
 - `.:ResourceProjection`
 
 - `.:dispatchCarrierRef`
+- `.:dispatchFailedHasNoDeliveryReceipt`
 - `.:dispatchLedgerDeliveryReceipt`
 - `.:dispatchReplaySnapshotFromDeliveredPayload`
+- `.:dispatchReceiptBeforeTerminalProof`
 - `.:dispatchSettlementContract`
 - `.:parseDispatchLivedClaim`
 - `.:replayDispatchDeliveryFromSnapshot`

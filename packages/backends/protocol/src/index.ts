@@ -624,6 +624,28 @@ export interface DispatchOutboundFailedPayload {
   readonly traceContext?: TraceContext;
 }
 
+export interface DispatchReceiptBeforeTerminalProof {
+  readonly eventKind: typeof DISPATCH_OUTBOUND_DELIVERED;
+  readonly outboundEventId: number;
+  readonly idempotencyKey: string;
+  readonly deliveryReceipt: DispatchDeliveryReceipt;
+  readonly attempt: number;
+}
+
+export const dispatchReceiptBeforeTerminalProof = (
+  payload: DispatchOutboundDeliveredPayload,
+): DispatchReceiptBeforeTerminalProof => ({
+  eventKind: DISPATCH_OUTBOUND_DELIVERED,
+  outboundEventId: payload.outboundEventId,
+  idempotencyKey: payload.idempotencyKey,
+  deliveryReceipt: payload.deliveryReceipt,
+  attempt: payload.attempt,
+});
+
+export const dispatchFailedHasNoDeliveryReceipt = (
+  payload: DispatchOutboundFailedPayload,
+): boolean => !Object.prototype.hasOwnProperty.call(payload, "deliveryReceipt");
+
 export interface DispatchPayloadParseFailure {
   readonly _tag: "agent_os.dispatch_payload_parse_failure";
   readonly reason: string;

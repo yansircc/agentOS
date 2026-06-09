@@ -13,8 +13,10 @@ import {
   describeDispatchCause,
   dispatchBackoffMs,
   dispatchExternalDeliveryReceipt,
+  dispatchFailedHasNoDeliveryReceipt,
   dispatchLedgerDeliveryReceipt,
   dispatchReplaySnapshotFromDeliveredPayload,
+  dispatchReceiptBeforeTerminalProof,
   dispatchSettlementContract,
   durableTriggerBackoffMs,
   durableTriggerDuePayload,
@@ -300,6 +302,56 @@ describe("@agent-os/backend-protocol", () => {
       anchorKind: "external_receipt",
       carrierRef: "dispatch:binding:cloudflare:queue:image-jobs",
     });
+  });
+
+  it("receipt-before-terminal proof ties terminal delivery to idempotency receipt", () => {
+    const delivered = {
+      outboundEventId: 22,
+      target: {
+        bindingRef,
+        ...truthIdentity("receiver"),
+      },
+      event: "app.deliver",
+      idempotencyKey: "dispatch-terminal-1",
+      deliveryReceipt: dispatchExternalDeliveryReceipt({
+        targetKind: "queue",
+        targetScope: "receiver",
+        idempotencyKey: "dispatch-terminal-1",
+      }),
+      attempt: 1,
+      traceContext,
+    };
+
+    expect(dispatchReceiptBeforeTerminalProof(delivered)).toEqual({
+      eventKind: "dispatch.outbound.delivered",
+      outboundEventId: 22,
+      idempotencyKey: "dispatch-terminal-1",
+      deliveryReceipt: delivered.deliveryReceipt,
+      attempt: 1,
+    });
+    expect(
+      dispatchFailedHasNoDeliveryReceipt({
+        outboundEventId: 22,
+        target: delivered.target,
+        event: delivered.event,
+        idempotencyKey: delivered.idempotencyKey,
+        attempt: 8,
+        error: "permanent",
+        terminal: true,
+      }),
+    ).toBe(true);
+    expect(
+      dispatchFailedHasNoDeliveryReceipt({
+        outboundEventId: 22,
+        target: delivered.target,
+        event: delivered.event,
+        idempotencyKey: delivered.idempotencyKey,
+        attempt: 8,
+        error: "permanent",
+        terminal: true,
+        deliveryReceipt: delivered.deliveryReceipt,
+      } as never),
+    ).toBe(false);
   });
 
   it("replay mode DispatchTargetAdapter not called: dispatch delivery replays from receipt snapshot", async () => {

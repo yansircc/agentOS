@@ -58,6 +58,7 @@ title: "@agent-os/backend-protocol API"
 - `.:DispatchEnvelope`
 - `.:DispatchReceiver`
 - `.:DispatchReceiverResult`
+- `.:DispatchReceiptBeforeTerminalProof`
 - `.:DispatchRequestedPayload`
 - `.:DispatchReplaySnapshot`
 - `.:DispatchTargetAdapter`
@@ -66,8 +67,10 @@ title: "@agent-os/backend-protocol API"
 - `.:ResourceProjection`
 
 - `.:dispatchCarrierRef`
+- `.:dispatchFailedHasNoDeliveryReceipt`
 - `.:dispatchLedgerDeliveryReceipt`
 - `.:dispatchReplaySnapshotFromDeliveredPayload`
+- `.:dispatchReceiptBeforeTerminalProof`
 - `.:dispatchSettlementContract`
 - `.:parseDispatchLivedClaim`
 - `.:replayDispatchDeliveryFromSnapshot`

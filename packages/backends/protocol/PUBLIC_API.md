@@ -58,6 +58,7 @@ Status: Backend protocol package. Public exports are limited to storage-free bac
 - `.:DispatchEnvelope`
 - `.:DispatchReceiver`
 - `.:DispatchReceiverResult`
+- `.:DispatchReceiptBeforeTerminalProof`
 - `.:DispatchRequestedPayload`
 - `.:DispatchReplaySnapshot`
 - `.:DispatchTargetAdapter`
@@ -66,8 +67,10 @@ Status: Backend protocol package. Public exports are limited to storage-free bac
 - `.:ResourceProjection`
 
 - `.:dispatchCarrierRef`
+- `.:dispatchFailedHasNoDeliveryReceipt`
 - `.:dispatchLedgerDeliveryReceipt`
 - `.:dispatchReplaySnapshotFromDeliveredPayload`
+- `.:dispatchReceiptBeforeTerminalProof`
 - `.:dispatchSettlementContract`
 - `.:parseDispatchLivedClaim`
 - `.:replayDispatchDeliveryFromSnapshot`
