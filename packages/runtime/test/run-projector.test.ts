@@ -11,6 +11,8 @@ import {
 import {
   agentRunAbortedEvent,
   agentRunCompletedEvent,
+  agentRunInterruptedEvent,
+  agentRunResumedEvent,
   agentRunStartedEvent,
   chatIngestedEvent,
   llmResponseEvent,
@@ -144,6 +146,7 @@ describe("runtime run projectors", () => {
     });
     expect(projectSubmitResult(rows, 1)).toEqual({
       ok: true,
+      status: "delivered",
       runId: 1,
       final: "done",
       eventCount: 6,
@@ -235,6 +238,111 @@ describe("runtime run projectors", () => {
         },
       ],
       nextCursor: null,
+    });
+  });
+
+  it("projects interrupted and resumed lifecycle from ledger facts only", () => {
+    const rows = [
+      event(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "needs approval" })),
+      event(
+        2,
+        agentRunInterruptedEvent({
+          ...runtimeIdentity,
+          runId: 1,
+          turn: { id: 1, index: 0 },
+          interruptId: "approval-1",
+          reason: "decision_required",
+          resumeSchema: { type: "object", required: ["approved"] },
+          tokensUsed: 4,
+        }),
+      ),
+    ];
+
+    expect(projectRunStatus(rows, 1)).toEqual({
+      kind: "interrupted",
+      at: 20,
+      event: "agent.run.interrupted",
+      interruptId: "approval-1",
+      reason: "decision_required",
+    });
+    expect(projectRunTrace(rows, 1)).toMatchObject({
+      runId: 1,
+      interruptions: [
+        {
+          at: 20,
+          event: "agent.run.interrupted",
+          interruptId: "approval-1",
+          turn: { id: 1, index: 0 },
+          reason: "decision_required",
+          resumeSchema: { type: "object", required: ["approved"] },
+        },
+      ],
+    });
+
+    const resumedRows = [
+      ...rows,
+      event(
+        3,
+        agentRunResumedEvent({
+          ...runtimeIdentity,
+          runId: 1,
+          turn: { id: 1, index: 0 },
+          interruptId: "approval-1",
+          resume: { approved: true },
+          resumedAtEventId: 2,
+        }),
+      ),
+    ];
+
+    expect(projectRunStatus(resumedRows, 1)).toEqual({
+      kind: "open_without_terminal",
+      startedAt: 10,
+    });
+    expect(projectRunTrace(resumedRows, 1)).toMatchObject({
+      runId: 1,
+      resumes: [
+        {
+          at: 30,
+          event: "agent.run.resumed",
+          interruptId: "approval-1",
+          turn: { id: 1, index: 0 },
+          resumedAtEventId: 2,
+        },
+      ],
+    });
+  });
+
+  it("does not let unmatched resume facts fabricate a resumed run", () => {
+    const rows = [
+      event(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "needs approval" })),
+      event(
+        2,
+        agentRunInterruptedEvent({
+          ...runtimeIdentity,
+          runId: 1,
+          turn: { id: 1, index: 0 },
+          interruptId: "approval-1",
+          reason: "decision_required",
+          resumeSchema: { type: "object" },
+          tokensUsed: 4,
+        }),
+      ),
+      event(
+        3,
+        agentRunResumedEvent({
+          ...runtimeIdentity,
+          runId: 1,
+          turn: { id: 1, index: 0 },
+          interruptId: "other",
+          resume: { approved: true },
+          resumedAtEventId: 2,
+        }),
+      ),
+    ];
+
+    expect(projectRunStatus(rows, 1)).toMatchObject({
+      kind: "interrupted",
+      interruptId: "approval-1",
     });
   });
 

@@ -137,7 +137,7 @@ export const projectDecisionGate = (
       }
       case DECISION_GATE_KIND.DECIDED: {
         const next = decidedFrom(event.payload);
-        if (next !== undefined && request !== undefined) {
+        if (next !== undefined && request !== undefined && consumed === undefined) {
           decision = next;
           consumed = undefined;
         }

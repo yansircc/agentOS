@@ -2,6 +2,7 @@ import { Effect, Fiber, Schema, TestClock } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 
 import { Ledger, RUNTIME_FACT_OWNER } from "../src/ledger";
+import { BoundaryEvents } from "../src/boundary-events";
 import { LlmTransport } from "../src/llm-transport";
 import { Quota } from "../src/quota-service";
 import { Admission } from "../src/admission";
@@ -9,6 +10,7 @@ import { DEFAULT_LLM_CALL_TIMEOUT_MS, submitAgentEffect } from "../src/submit-ag
 import type { InternalSubmitSpec } from "../src/submit";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import { decodeRuntimeLedgerEvent } from "../src/runtime-events";
+import { RefResolverEmpty } from "@agent-os/kernel/ref-resolver";
 
 const makeSpec = (budget?: InternalSubmitSpec["budget"]): InternalSubmitSpec => ({
   intent: "hang",
@@ -94,12 +96,17 @@ const runWithHungLlm = (
       },
       invalidate: () => Effect.succeed({ barrierId: 1 }),
     };
+    const boundaryEvents = {
+      commit: () => Effect.die(new Error("boundary events are not used in timeout tests")),
+    };
 
     const fiber = yield* submitAgentEffect(spec).pipe(
       Effect.provideService(Ledger, ledger),
+      Effect.provideService(BoundaryEvents, boundaryEvents),
       Effect.provideService(LlmTransport, llm),
       Effect.provideService(Quota, quota),
       Effect.provideService(Admission, admission),
+      Effect.provide(RefResolverEmpty),
       Effect.fork,
     );
     return { result: yield* Fiber.join(fiber), events, aborted };

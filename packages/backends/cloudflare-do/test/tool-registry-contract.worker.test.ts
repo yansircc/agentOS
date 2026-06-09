@@ -4,12 +4,20 @@ import { runInDurableObject } from "cloudflare:test";
 import type {} from "@effect/vitest";
 
 import { AdmissionLive } from "../src/admission";
+import { BoundaryEventsLive } from "../src/boundary-events";
 import { EventBusLive } from "../src/ledger";
 import { Ledger, LedgerLive } from "../src/ledger";
 import { QuotaLive } from "../src/quota";
 import { RefResolverLive } from "@agent-os/kernel/ref-resolver";
+import type { ResolvedMaterial } from "@agent-os/kernel/ref-resolver";
 import { LlmTransport, type InternalSubmitSpec, submitAgentEffect } from "@agent-os/runtime";
 import { defineTool, pureToolExecution, type Tool } from "@agent-os/kernel/tools";
+import {
+  credentialMaterialRef,
+  materialRefKey,
+  materialRequirement,
+  type MaterialRef,
+} from "@agent-os/kernel/material-ref";
 import type { EventHandler } from "@agent-os/kernel/types";
 import { finalTextResp, stubLlmTransport, toolCallResp } from "./_stub-ai";
 import { allowToolAdmitter, makeLookupTool } from "./_tool-fixture";
@@ -47,19 +55,23 @@ const buildRuntime = (
   state: DurableObjectState,
   llm: Context.Tag.Service<typeof LlmTransport>,
   identity: BackendProtocolEventIdentity,
+  material: (ref: MaterialRef) => ResolvedMaterial | null = () => null,
 ) => {
   const handlers = new Map<string, Set<EventHandler>>();
   const eventBus = EventBusLive(handlers);
   const ledger = LedgerLive(state).pipe(Layer.provide(eventBus));
+  const boundaryEvents = BoundaryEventsLive(state, identity).pipe(Layer.provide(eventBus));
   const quota = QuotaLive(state, identity).pipe(Layer.provide(eventBus));
   const llmTransport = Layer.succeed(LlmTransport, llm);
   const refs = RefResolverLive({
-    material: () => null,
+    material,
   });
   const admission = AdmissionLive(state, identity).pipe(
     Layer.provide(Layer.mergeAll(eventBus, llmTransport)),
   );
-  return ManagedRuntime.make(Layer.mergeAll(ledger, quota, llmTransport, admission, refs));
+  return ManagedRuntime.make(
+    Layer.mergeAll(ledger, boundaryEvents, quota, llmTransport, admission, refs),
+  );
 };
 
 describe("tool registry generator", () => {
@@ -105,6 +117,64 @@ describe("tool registry generator", () => {
           }),
         }),
       );
+
+      await runtime.dispose();
+    });
+  });
+
+  it("passes declared resolved material through the DO runtime tool context", async () => {
+    const scope = "tool-registry-material-context";
+    const id = testEnv.AGENT_DO.idFromName(scope);
+    const stub = testEnv.AGENT_DO.get(id);
+
+    await runInDurableObject(stub, async (_inst, state) => {
+      const tokenRef = credentialMaterialRef("WP_TOKEN", {
+        provider: "wordpress",
+        purpose: "apply",
+      });
+      let observedToken: unknown;
+      const tool = defineTool({
+        name: "lookup",
+        description: "Lookup",
+        args: Schema.Struct({}),
+        execute: (_args, ctx) => {
+          observedToken = ctx.materials.wp_token;
+          return { ok: true };
+        },
+        admit: allowToolAdmitter,
+        authority: "read",
+        requiredMaterials: [
+          materialRequirement({
+            slot: "wp_token",
+            kind: "credential",
+            provider: "wordpress",
+            purpose: "apply",
+          }),
+        ],
+        execution: pureToolExecution(),
+      });
+      const llm = stubLlmTransport([toolCallResp("lookup", "{}", "call-1"), finalTextResp("done")]);
+      const identity = testEventIdentity(scope, toolRegistryAuthorityRef);
+      const runtime = buildRuntime(state, llm, identity, (ref) =>
+        materialRefKey(ref) === materialRefKey(tokenRef) ? "do-secret-token" : null,
+      );
+
+      const result = await runtime.runPromise(
+        submitAgentEffect({
+          ...makeSpec(scope, tool),
+          materials: { wp_token: tokenRef },
+        }),
+      );
+
+      expect(result.ok).toBe(true);
+      expect(observedToken).toBe("do-secret-token");
+      const events = await runtime.runPromise(
+        Effect.gen(function* () {
+          const l = yield* Ledger;
+          return yield* l.events(identity);
+        }),
+      );
+      expect(JSON.stringify(events)).not.toContain("do-secret-token");
 
       await runtime.dispose();
     });

@@ -123,6 +123,9 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:StructuredDecodeResult`
 - `.:Stimulus`
 - `.:SubmitResult`
+- `.:SubmitDecisionInterrupt`
+- `.:SubmitDecisionInterruptReason`
+- `.:SubmitResumeDecision`
 - `.:SubmitSpec`
 - `.:Tool`
 - `.:ToolDefinition`
@@ -230,6 +233,10 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `./runtime-events:AgentRunAbortedPayloadSchema`
 - `./runtime-events:AgentRunCompletedPayload`
 - `./runtime-events:AgentRunCompletedPayloadSchema`
+- `./runtime-events:AgentRunInterruptedPayload`
+- `./runtime-events:AgentRunInterruptedPayloadSchema`
+- `./runtime-events:AgentRunResumedPayload`
+- `./runtime-events:AgentRunResumedPayloadSchema`
 - `./runtime-events:AgentRunStartedPayload`
 - `./runtime-events:AgentRunStartedPayloadSchema`
 - `./runtime-events:ChatIngestedPayload`
@@ -253,6 +260,8 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `./runtime-events:ToolRejectedPayloadSchema`
 - `./runtime-events:agentRunAbortedEvent`
 - `./runtime-events:agentRunCompletedEvent`
+- `./runtime-events:agentRunInterruptedEvent`
+- `./runtime-events:agentRunResumedEvent`
 - `./runtime-events:agentRunStartedEvent`
 - `./runtime-events:chatIngestedEvent`
 - `./runtime-events:decodeRuntimeEventPayload`
@@ -264,6 +273,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `./runtime-events:toolRejectedEvent`
 
 - `.:settleToolAdmissionRejected`
+- `.:BoundaryEvents`
 - `.:settleToolExecuted`
 - `.:settleToolExecutionRejected`
 - `.:toolErrorReason`

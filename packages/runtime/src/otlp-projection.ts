@@ -85,6 +85,8 @@ const runIdForRuntimeEvent = (event: RuntimeLedgerEvent): number => {
   switch (event.kind) {
     case RUNTIME_EVENT_KIND.AGENT_RUN_STARTED:
       return event.id;
+    case RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED:
+    case RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED:
     case RUNTIME_EVENT_KIND.CHAT_INGESTED:
     case RUNTIME_EVENT_KIND.TOOL_EXECUTED:
     case RUNTIME_EVENT_KIND.TOOL_REJECTED:

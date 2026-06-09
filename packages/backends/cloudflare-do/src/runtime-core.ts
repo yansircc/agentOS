@@ -3,6 +3,7 @@ import { Effect, Layer } from "effect";
 import {
   AttachedStreamRegistry,
   AttachedStreams,
+  BoundaryEvents,
   DurableTriggerRegistry,
   Ledger,
   MaterializedProjectionRegistry,
@@ -33,6 +34,7 @@ import {
   type CloudflareAttachedStreamSource,
 } from "./stream-factory";
 import { AttachedStreamsLive } from "./attached-stream";
+import { BoundaryEventsLive } from "./boundary-events";
 import { CloudflareMaterializedProjectionsLive } from "./materialized-projections";
 import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
 
@@ -46,6 +48,7 @@ export type CloudflareBackendCoreServices =
   | TriggerPump
   | AttachedStreamRegistry
   | AttachedStreams
+  | BoundaryEvents
   | MaterializedProjectionRegistry
   | MaterializedProjections
   | Ledger;
@@ -110,6 +113,7 @@ export const makeCloudflareBackendCoreLayer = <Env>(
   const triggerDeps = Layer.mergeAll(eventBusLayer, triggerRegistryLayer, triggerLayer);
   const serviceLayer = Layer.mergeAll(
     LedgerLive(ctx),
+    BoundaryEventsLive(ctx, identity),
     SchedulerLive(ctx, scope, identity),
     DispatchLive(ctx, scope, identity, dispatchTargets).pipe(Layer.provide(triggerDeps)),
     ResourcesLive(ctx, identity),

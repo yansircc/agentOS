@@ -10,6 +10,7 @@ import {
   isEffectAuthorityContract,
   isMaterialRef,
   isMaterialRequirement,
+  materialRefSatisfiesRequirement,
   materialRefKey,
   materialRequirement,
 } from "../src/material-ref";
@@ -95,6 +96,29 @@ describe("MaterialRef algebra", () => {
         provider: "cloudflare",
       }),
     ).toBe(false);
+  });
+
+  it("matches symbolic refs against requirement filters without resolving values", () => {
+    const deployToken = materialRequirement({
+      slot: "api_token",
+      kind: "credential",
+      provider: "cloudflare",
+      purpose: "deploy",
+    });
+
+    expect(
+      materialRefSatisfiesRequirement(
+        credentialMaterialRef("CF_API_TOKEN", { provider: "cloudflare", purpose: "deploy" }),
+        deployToken,
+      ),
+    ).toBe(true);
+    expect(
+      materialRefSatisfiesRequirement(
+        credentialMaterialRef("CF_API_TOKEN", { provider: "cloudflare", purpose: "read" }),
+        deployToken,
+      ),
+    ).toBe(false);
+    expect(materialRefSatisfiesRequirement(endpointMaterialRef("openai"), deployToken)).toBe(false);
   });
 
   it("derives stable keys without resolving material", () => {

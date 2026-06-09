@@ -27,6 +27,7 @@ const ledgerEvent = (id: number, kind = "agent.started"): LedgerEventRpc => ({
 
 const okResult: SubmitResult = {
   ok: true,
+  status: "delivered",
   runId: 1,
   final: "done",
   eventCount: 2,
@@ -35,6 +36,7 @@ const okResult: SubmitResult = {
 
 const failedResult: SubmitResult = {
   ok: false,
+  status: "failed",
   runId: 2,
   reason: "agent.aborted.retries",
   eventCount: 3,

@@ -15,5 +15,6 @@ export { InMemoryDispatchLive } from "./dispatch";
 export * from "./llm";
 export * from "./admission";
 export * from "./attached-stream";
+export * from "./boundary-events";
 export * from "./materialized-projections";
 export * from "./runtime-backend";

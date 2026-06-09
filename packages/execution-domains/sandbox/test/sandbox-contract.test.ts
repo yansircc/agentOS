@@ -155,7 +155,10 @@ describe("@agent-os/sandbox v0 contract", () => {
       });
 
       const result = yield* Effect.promise(() =>
-        tool.execute({ command: "make big-output" }, { signal: new AbortController().signal }),
+        tool.execute(
+          { command: "make big-output" },
+          { signal: new AbortController().signal, materials: {} },
+        ),
       );
 
       expect(result.ok).toBe(true);
@@ -189,10 +192,10 @@ describe("@agent-os/sandbox v0 contract", () => {
       });
 
       const first = yield* Effect.promise(() =>
-        tool.execute({ command: "pwd" }, { signal: new AbortController().signal }),
+        tool.execute({ command: "pwd" }, { signal: new AbortController().signal, materials: {} }),
       );
       const second = yield* Effect.promise(() =>
-        tool.execute({ command: "pwd" }, { signal: new AbortController().signal }),
+        tool.execute({ command: "pwd" }, { signal: new AbortController().signal, materials: {} }),
       );
 
       expect(first.sandboxId).toBe("sbx-1");

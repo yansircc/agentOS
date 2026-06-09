@@ -3,6 +3,7 @@ import type { Tool } from "@agent-os/kernel/tools";
 import type { AuthorityRef, ScopeRef } from "@agent-os/kernel/effect-claim";
 import type { AnyAgentSchemaSource } from "@agent-os/kernel/agent-schema";
 import type { TraceContext } from "@agent-os/kernel/trace-context";
+import type { MaterialRef } from "@agent-os/kernel/material-ref";
 
 /**
  * Runtime submit input for one agent run under an effect authority.
@@ -27,11 +28,38 @@ export interface SubmitSpec {
   readonly outputSchema?: AnyAgentSchemaSource;
   readonly traceContext?: TraceContext;
   readonly effectAuthorityRef: AuthorityRef;
+  readonly materials?: Readonly<Record<string, MaterialRef>>;
+  readonly decisionInterrupts?: ReadonlyArray<SubmitDecisionInterrupt>;
+  readonly resume?: SubmitResumeDecision;
 }
 
 export interface InternalSubmitSpec extends SubmitSpec {
   readonly scope: string;
   readonly scopeRef: ScopeRef;
+}
+
+export interface SubmitDecisionInterrupt {
+  readonly toolName: string;
+  readonly reason: SubmitDecisionInterruptReason;
+  readonly policyRef?: string;
+  readonly summary?: string;
+  readonly gateRefPrefix?: string;
+  readonly interruptIdPrefix?: string;
+  readonly resumeSchema?: unknown;
+}
+
+export type SubmitDecisionInterruptReason =
+  | "approval_required"
+  | "user_input_required"
+  | (string & {});
+
+export interface SubmitResumeDecision {
+  readonly runId: number;
+  readonly turn: TurnRef;
+  readonly interruptId: string;
+  readonly gateRef: string;
+  readonly decisionRef: string;
+  readonly resume: unknown;
 }
 
 /**
@@ -45,6 +73,7 @@ export interface InternalSubmitSpec extends SubmitSpec {
 export type SubmitResult =
   | {
       readonly ok: true;
+      readonly status: "delivered";
       readonly runId: number;
       readonly final: string;
       readonly eventCount: number;
@@ -52,6 +81,18 @@ export type SubmitResult =
     }
   | {
       readonly ok: false;
+      readonly status: "interrupted";
+      readonly runId: number;
+      readonly reason: "interrupted";
+      readonly eventCount: number;
+      readonly tokensUsed: number;
+      readonly interruptId: string;
+      readonly turn: TurnRef;
+      readonly gateRef: string;
+    }
+  | {
+      readonly ok: false;
+      readonly status: "failed";
       readonly runId: number;
       readonly reason: string;
       readonly eventCount: number;

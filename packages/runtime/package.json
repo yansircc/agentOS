@@ -37,6 +37,7 @@
   },
   "dependencies": {
     "@agent-os/attached-stream": "workspace:*",
+    "@agent-os/decision-gate": "workspace:*",
     "@agent-os/kernel": "workspace:*",
     "effect": "catalog:"
   },

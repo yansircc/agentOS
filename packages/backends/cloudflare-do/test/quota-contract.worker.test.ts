@@ -17,6 +17,7 @@ import { runInDurableObject } from "cloudflare:test";
 import type {} from "@effect/vitest";
 
 import { AdmissionLive } from "../src/admission";
+import { BoundaryEventsLive } from "../src/boundary-events";
 import { EventBusLive } from "../src/ledger";
 import { Ledger, LedgerLive } from "../src/ledger";
 import { RefResolverLive } from "@agent-os/kernel/ref-resolver";
@@ -80,6 +81,7 @@ const buildRuntime = (
   const handlers = new Map<string, Set<EventHandler>>();
   const eventBus = EventBusLive(handlers);
   const ledger = LedgerLive(state).pipe(Layer.provide(eventBus));
+  const boundaryEvents = BoundaryEventsLive(state, identity).pipe(Layer.provide(eventBus));
   const quota = QuotaLive(state, identity).pipe(Layer.provide(eventBus));
   const llmTransport = Layer.succeed(LlmTransport, llm);
   const refs = RefResolverLive({
@@ -88,7 +90,9 @@ const buildRuntime = (
   const admission = AdmissionLive(state, identity).pipe(
     Layer.provide(Layer.mergeAll(eventBus, llmTransport)),
   );
-  return ManagedRuntime.make(Layer.mergeAll(ledger, quota, llmTransport, admission, refs));
+  return ManagedRuntime.make(
+    Layer.mergeAll(ledger, boundaryEvents, quota, llmTransport, admission, refs),
+  );
 };
 
 describe("quota state machine — deterministic", () => {

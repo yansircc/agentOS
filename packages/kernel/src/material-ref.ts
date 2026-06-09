@@ -262,6 +262,36 @@ export const isEffectAuthorityContract = (value: unknown): value is EffectAuthor
   Array.isArray(value.requiredMaterials) &&
   value.requiredMaterials.every(isMaterialRequirement);
 
+export const materialRefSatisfiesRequirement = (
+  ref: MaterialRef,
+  requirement: MaterialRequirement,
+): boolean => {
+  if (ref.kind !== requirement.kind) return false;
+  switch (ref.kind) {
+    case "credential":
+      if (requirement.kind !== "credential") return false;
+      return (
+        (requirement.provider === undefined || ref.provider === requirement.provider) &&
+        (requirement.purpose === undefined || ref.purpose === requirement.purpose)
+      );
+    case "endpoint":
+      if (requirement.kind !== "endpoint") return false;
+      return requirement.protocol === undefined || ref.protocol === requirement.protocol;
+    case "binding":
+      if (requirement.kind !== "binding") return false;
+      return (
+        (requirement.provider === undefined || ref.provider === requirement.provider) &&
+        (requirement.bindingKind === undefined || ref.bindingKind === requirement.bindingKind)
+      );
+    case "external_resource":
+      if (requirement.kind !== "external_resource") return false;
+      return (
+        (requirement.provider === undefined || ref.provider === requirement.provider) &&
+        (requirement.resourceKind === undefined || ref.resourceKind === requirement.resourceKind)
+      );
+  }
+};
+
 const encodePart = (value: string): string => encodeURIComponent(value);
 
 export const materialRefKey = (ref: MaterialRef): string => {

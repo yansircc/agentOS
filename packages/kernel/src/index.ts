@@ -58,6 +58,7 @@ export {
   isEffectAuthorityContract,
   isMaterialRef,
   isMaterialRequirement,
+  materialRefSatisfiesRequirement,
   materialRefKey,
   materialRequirement,
 } from "./material-ref";

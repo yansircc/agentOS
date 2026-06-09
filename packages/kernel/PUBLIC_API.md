@@ -194,6 +194,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `./material-ref:isMaterialRef`
 - `./material-ref:isMaterialRequirement`
 - `./material-ref:materialRefKey`
+- `./material-ref:materialRefSatisfiesRequirement`
 - `./material-ref:materialRequirement`
 - `./quota:QuotaSpec`
 - `./quota:withQuota`
@@ -238,6 +239,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:ExecutionDomainRegistry`
 - `.:ExecutionDomainRegistryIssue`
 - `.:ExecutionDomainRegistryValidation`
+- `.:ResolvedToolMaterials`
 - `.:ToolExecution`
 - `.:ToolExecutionContext`
 - `.:deterministicToolInvocation`
@@ -256,6 +258,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `./tools:ExecutionDomainRegistry`
 - `./tools:ExecutionDomainRegistryIssue`
 - `./tools:ExecutionDomainRegistryValidation`
+- `./tools:ResolvedToolMaterials`
 - `./tools:Tool`
 - `./tools:ToolAdmitInput`
 - `./tools:ToolAdmitter`
@@ -311,6 +314,8 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `./types:ResourceState`
 - `./types:RunListPage`
 - `./types:RunListSpec`
+- `./types:RunInterruption`
+- `./types:RunResume`
 - `./types:RunStatus`
 - `./types:RunStatusKind`
 - `./types:RunSummary`
@@ -455,6 +460,8 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:ResourceState`
 - `.:RunListPage`
 - `.:RunListSpec`
+- `.:RunInterruption`
+- `.:RunResume`
 - `.:RunStatus`
 - `.:RunStatusKind`
 - `.:RunSummary`
@@ -541,6 +548,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:makeOperationRef`
 - `.:makePreClaim`
 - `.:materialRefKey`
+- `.:materialRefSatisfiesRequirement`
 - `.:materialRequirement`
 - `.:none`
 - `.:normalizeAdmitVerdict`

@@ -10,6 +10,7 @@ title: "@agent-os/backend-in-memory Public API Intent"
 - `.:InMemoryAttachedStreamsLive`
 - `.:InMemoryBackendState`
 - `.:InMemoryBackendStateOptions`
+- `.:InMemoryBoundaryEventsLive`
 - `.:InMemoryDispatchLive`
 - `.:InMemoryDispatchTargetRegistry`
 - `.:InMemoryEventHandlerRegistration`

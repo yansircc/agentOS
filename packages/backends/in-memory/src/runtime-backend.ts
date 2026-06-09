@@ -5,9 +5,15 @@ import {
   type BackendProtocolTruthIdentity,
 } from "@agent-os/backend-protocol";
 import {
+  RefResolverLive,
+  type RefResolver,
+  RefResolverService,
+} from "@agent-os/kernel/ref-resolver";
+import {
   Admission,
   AttachedStreamRegistry,
   AttachedStreams,
+  BoundaryEvents,
   Dispatch,
   DurableTriggerRegistry,
   Ledger,
@@ -34,6 +40,7 @@ import {
 } from "./state";
 import { InMemoryAdmissionLive } from "./admission";
 import { InMemoryAttachedStreamsLive } from "./attached-stream";
+import { InMemoryBoundaryEventsLive } from "./boundary-events";
 import { InMemoryDispatchLive, deliveryRetryTrigger } from "./dispatch";
 import type { InMemoryDispatchTargetRegistry } from "./dispatch-types";
 import { InMemoryLedgerLive } from "./ledger";
@@ -52,11 +59,13 @@ export type InMemoryRuntimeServices =
   | Resources
   | Quota
   | LlmTransport
+  | BoundaryEvents
   | TriggerPump
   | Admission
   | AttachedStreams
   | MaterializedProjectionRegistry
-  | MaterializedProjections;
+  | MaterializedProjections
+  | RefResolverService;
 
 export interface InMemoryRuntimeLayerOptions {
   readonly state?: InMemoryBackendState;
@@ -65,6 +74,7 @@ export interface InMemoryRuntimeLayerOptions {
   readonly handlers?: Iterable<InMemoryEventHandlerRegistration>;
   readonly dispatchTargets?: InMemoryDispatchTargetRegistry;
   readonly llm?: InMemoryLlmTransportOptions;
+  readonly refResolver?: RefResolver;
   readonly triggers?: ReadonlyArray<AnyDurableTrigger>;
   readonly streams?: ReadonlyArray<AnyAttachedStreamHandler>;
   readonly projections?: ReadonlyArray<AnyMaterializedProjectionDefinition>;
@@ -85,6 +95,7 @@ export const createInMemoryRuntimeBackend = (
     state.setProjectionRegistryResult(makeProjectionRegistryResult(projections));
   }
   const llmLayer = InMemoryLlmTransportLive(options.llm);
+  const refResolverLayer = RefResolverLive(options.refResolver ?? { material: () => null });
   const admissionLayer = InMemoryAdmissionLive(state).pipe(Layer.provide(llmLayer));
   const dispatchRetryTrigger = deliveryRetryTrigger(state, options.dispatchTargets ?? {});
   const triggerRegistryLayer = Layer.effect(
@@ -121,6 +132,7 @@ export const createInMemoryRuntimeBackend = (
     state,
     layer: Layer.mergeAll(
       InMemoryLedgerLive(state),
+      InMemoryBoundaryEventsLive(state, options.identity),
       InMemorySchedulerLive(state, options.identity).pipe(Layer.provide(triggerRegistryLayer)),
       triggerLayer,
       InMemoryDispatchLive(state, options.identity, scopeLabel, options.dispatchTargets).pipe(
@@ -129,6 +141,7 @@ export const createInMemoryRuntimeBackend = (
       InMemoryResourcesLive(state),
       InMemoryQuotaLive(state),
       llmLayer,
+      refResolverLayer,
       admissionLayer,
       triggerRegistryLayer,
       streamRegistryLayer,

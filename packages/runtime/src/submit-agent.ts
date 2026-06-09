@@ -15,7 +15,13 @@
  * which injects scope from ctx.id.name (SSoT) and runs this effect.
  */
 
-import { Clock, Data, Duration, Effect, Ref } from "effect";
+import { Clock, Data, Duration, Effect, Predicate, Ref } from "effect";
+import {
+  DECISION_GATE_KIND,
+  decisionGateBoundaryContract,
+  projectDecisionGate,
+  settleDecisionGateConsumed,
+} from "@agent-os/decision-gate";
 import {
   JsonStringifyError,
   InvalidTraceContext,
@@ -28,11 +34,13 @@ import {
 import {
   textFromLlmOutputItems,
   toolCallsFromLlmOutputItems,
+  type LlmToolCall,
   type LlmMessage,
   type LlmRoute,
   type ToolDefinition,
 } from "@agent-os/kernel/llm";
 import type { LedgerEvent } from "@agent-os/kernel/types";
+import { materialRefKey, materialRefSatisfiesRequirement } from "@agent-os/kernel/material-ref";
 import {
   copyTraceContext,
   validateOptionalTraceContext,
@@ -41,7 +49,12 @@ import {
 import { ABORT, type AbortKind } from "./abort";
 import { LlmTransport } from "./llm-transport";
 import { Ledger, type LedgerCommitEventSpec, type LedgerTruthIdentity } from "./ledger";
-import type { RefResolutionFailed } from "@agent-os/kernel/ref-resolver";
+import {
+  RefResolverService,
+  type RefResolutionFailed,
+  type ResolvedMaterial,
+  type ResolvedMaterialService,
+} from "@agent-os/kernel/ref-resolver";
 import { Quota } from "./quota-service";
 import {
   decodeToolArgs,
@@ -49,6 +62,7 @@ import {
   parseToolCall,
   validateToolRegistry,
   type Tool,
+  type ResolvedToolMaterials,
 } from "@agent-os/kernel/tools";
 import { Admission, makeAdmissionSchemaSpec } from "./admission";
 import { projectSubmitResult } from "./run-projector";
@@ -59,7 +73,7 @@ import {
   normalizeAdmitVerdict,
   type RejectionRef,
 } from "@agent-os/kernel/effect-claim";
-import type { InternalSubmitSpec, SubmitResult, TurnRef } from "./submit";
+import type { InternalSubmitSpec, SubmitDecisionInterrupt, SubmitResult, TurnRef } from "./submit";
 import {
   settleToolAdmissionRejected,
   settleToolExecuted,
@@ -71,13 +85,19 @@ import {
 import {
   agentRunAbortedEvent,
   agentRunCompletedEvent,
+  agentRunInterruptedEvent,
+  agentRunResumedEvent,
   agentRunStartedEvent,
   chatIngestedEvent,
+  decodeRuntimeLedgerEvent,
   llmResponseEvent,
   toolExecutedEvent,
   toolRejectedEvent,
   type RuntimeEventCommitSpec,
+  RUNTIME_EVENT_KIND,
 } from "./runtime-events";
+import { BoundaryEvents } from "./boundary-events";
+import type { BoundaryCommitRejected } from "./boundary-commit";
 
 export const DEFAULT_LLM_CALL_TIMEOUT_MS = 60_000;
 
@@ -173,6 +193,238 @@ const submitResultFromEvents = (
   );
 };
 
+const interruptedSubmitResultFromEvents = (
+  events: ReadonlyArray<LedgerEvent>,
+  runId: number,
+  spec: {
+    readonly interruptId: string;
+    readonly turn: TurnRef;
+    readonly gateRef: string;
+    readonly tokensUsed: number;
+  },
+): SubmitResult => ({
+  ok: false,
+  status: "interrupted",
+  runId,
+  reason: "interrupted",
+  eventCount: events.length,
+  tokensUsed: spec.tokensUsed,
+  interruptId: spec.interruptId,
+  turn: spec.turn,
+  gateRef: spec.gateRef,
+});
+
+const decisionInterruptFor = (
+  spec: InternalSubmitSpec,
+  toolName: string,
+): SubmitDecisionInterrupt | undefined =>
+  spec.decisionInterrupts?.find((interrupt) => interrupt.toolName === toolName);
+
+const refSuffixFor = (operationRef: string): string => encodeURIComponent(operationRef);
+
+const decisionGateRefFor = (interrupt: SubmitDecisionInterrupt, operationRef: string): string =>
+  `${interrupt.gateRefPrefix ?? "decision_gate"}:${refSuffixFor(operationRef)}`;
+
+const decisionInterruptIdFor = (interrupt: SubmitDecisionInterrupt, operationRef: string): string =>
+  `${interrupt.interruptIdPrefix ?? "decision"}:${refSuffixFor(operationRef)}`;
+
+const decisionSubjectRefFor = (claim: { readonly operationRef: string }): string =>
+  claim.operationRef;
+
+const materialRejection = (
+  claim: { readonly operationRef: string },
+  reason: string,
+  kind: RejectionRef["rejectionKind"] = "resource_denied",
+): RejectionRef => ({
+  rejectionId: claim.operationRef,
+  rejectionKind: kind,
+  reason,
+});
+
+const resolveToolMaterials = (
+  refs: ResolvedMaterialService,
+  spec: InternalSubmitSpec,
+  tool: Tool,
+  claim: { readonly operationRef: string },
+): Effect.Effect<
+  | {
+      readonly ok: true;
+      readonly materials: ResolvedToolMaterials;
+    }
+  | {
+      readonly ok: false;
+      readonly rejectionRef: RejectionRef;
+    },
+  never
+> =>
+  Effect.gen(function* () {
+    const out: Record<string, ResolvedMaterial> = {};
+    for (const requirement of tool.contract.requiredMaterials) {
+      const ref = spec.materials?.[requirement.slot];
+      if (ref === undefined) {
+        if (requirement.required) {
+          return {
+            ok: false,
+            rejectionRef: materialRejection(
+              claim,
+              `material_missing:${requirement.slot}`,
+              "resource_denied",
+            ),
+          };
+        }
+        continue;
+      }
+      if (!materialRefSatisfiesRequirement(ref, requirement)) {
+        return {
+          ok: false,
+          rejectionRef: materialRejection(
+            claim,
+            `material_invalid:${requirement.slot}:${materialRefKey(ref)}`,
+            "validation_failed",
+          ),
+        };
+      }
+      const resolved = yield* Effect.either(refs.material(ref));
+      if (resolved._tag === "Left") {
+        return {
+          ok: false,
+          rejectionRef: materialRejection(
+            claim,
+            `material_unresolved:${requirement.slot}:${materialRefKey(ref)}`,
+            "resource_denied",
+          ),
+        };
+      }
+      out[requirement.slot] = resolved.right;
+    }
+    return { ok: true, materials: out };
+  });
+
+const payloadRecord = (event: LedgerEvent): Readonly<Record<string, unknown>> | null =>
+  Predicate.isRecord(event.payload) ? event.payload : null;
+
+const matchingDecisionEvent = (
+  events: ReadonlyArray<LedgerEvent>,
+  gateRef: string,
+  decisionRef: string,
+): LedgerEvent | undefined =>
+  events.find((event) => {
+    const payload = payloadRecord(event);
+    return (
+      event.kind === DECISION_GATE_KIND.DECIDED &&
+      payload?.gateRef === gateRef &&
+      payload.decisionRef === decisionRef
+    );
+  });
+
+const matchingInterruptionEvent = (
+  events: ReadonlyArray<LedgerEvent>,
+  resume: NonNullable<InternalSubmitSpec["resume"]>,
+): LedgerEvent | undefined =>
+  events.find((event) => {
+    const decoded = decodeRuntimeLedgerEvent(event);
+    return (
+      decoded._tag === "runtime" &&
+      decoded.event.kind === RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED &&
+      decoded.event.payload.runId === resume.runId &&
+      decoded.event.payload.turn.id === resume.turn.id &&
+      decoded.event.payload.turn.index === resume.turn.index &&
+      decoded.event.payload.interruptId === resume.interruptId &&
+      decoded.event.payload.decision?.gateRef === resume.gateRef
+    );
+  });
+
+const replayMessagesToInterruptedTool = (
+  initialMessages: ReadonlyArray<LlmMessage>,
+  events: ReadonlyArray<LedgerEvent>,
+  resume: NonNullable<InternalSubmitSpec["resume"]>,
+  interruptedToolCallId: string,
+): Effect.Effect<
+  {
+    readonly messages: LlmMessage[];
+    readonly call: LlmToolCall;
+  },
+  SqlError | JsonStringifyError
+> =>
+  Effect.gen(function* () {
+    const messages: LlmMessage[] = [...initialMessages];
+
+    for (let index = 0; index <= resume.turn.index; index++) {
+      const llmEvent = events.find((event) => {
+        const decoded = decodeRuntimeLedgerEvent(event);
+        return (
+          decoded._tag === "runtime" &&
+          decoded.event.kind === RUNTIME_EVENT_KIND.LLM_RESPONSE &&
+          decoded.event.payload.turn.id === resume.runId &&
+          decoded.event.payload.turn.index === index
+        );
+      });
+      if (llmEvent === undefined) {
+        return yield* Effect.fail(
+          new SqlError({
+            cause: {
+              reason: "resume_missing_llm_turn",
+              runId: resume.runId,
+              turnIndex: index,
+            },
+          }),
+        );
+      }
+
+      const decoded = decodeRuntimeLedgerEvent(llmEvent);
+      if (decoded._tag !== "runtime" || decoded.event.kind !== RUNTIME_EVENT_KIND.LLM_RESPONSE) {
+        return yield* Effect.fail(new SqlError({ cause: { reason: "resume_bad_llm_turn" } }));
+      }
+      const responseText = textFromLlmOutputItems(decoded.event.payload.items);
+      const responseToolCalls = toolCallsFromLlmOutputItems(decoded.event.payload.items);
+      messages.push({
+        role: "assistant",
+        content: responseText,
+        tool_calls: responseToolCalls.length > 0 ? responseToolCalls : undefined,
+      });
+
+      for (const call of responseToolCalls) {
+        if (index === resume.turn.index && call.id === interruptedToolCallId) {
+          return { messages, call };
+        }
+
+        const toolEvent = events.find((event) => {
+          const decodedTool = decodeRuntimeLedgerEvent(event);
+          return (
+            decodedTool._tag === "runtime" &&
+            decodedTool.event.kind === RUNTIME_EVENT_KIND.TOOL_EXECUTED &&
+            decodedTool.event.payload.runId === resume.runId &&
+            decodedTool.event.payload.toolCallId === call.id
+          );
+        });
+        if (toolEvent === undefined) continue;
+        const decodedTool = decodeRuntimeLedgerEvent(toolEvent);
+        if (
+          decodedTool._tag === "runtime" &&
+          decodedTool.event.kind === RUNTIME_EVENT_KIND.TOOL_EXECUTED
+        ) {
+          const resultStr = yield* safeStringify(decodedTool.event.payload.result);
+          messages.push({
+            role: "tool",
+            tool_call_id: call.id,
+            name: call.function.name,
+            content: resultStr,
+          });
+        }
+      }
+    }
+
+    return yield* Effect.fail(
+      new SqlError({
+        cause: {
+          reason: "resume_missing_interrupted_tool_call",
+          runId: resume.runId,
+          interruptId: resume.interruptId,
+        },
+      }),
+    );
+  });
+
 /** The single termination funnel. All recoverable aborts route through here.
  *  Logs an agent.aborted.* ledger event then constructs SubmitResult.fail. */
 const finalAbort = (
@@ -250,8 +502,12 @@ export const submitAgentEffect = (
   spec: InternalSubmitSpec,
 ): Effect.Effect<
   SubmitResult,
-  SqlError | JsonStringifyError | InvalidTraceContext | RefResolutionFailed,
-  Ledger | LlmTransport | Quota | Admission
+  | SqlError
+  | JsonStringifyError
+  | InvalidTraceContext
+  | RefResolutionFailed
+  | BoundaryCommitRejected,
+  Ledger | BoundaryEvents | LlmTransport | Quota | Admission | RefResolverService
 > =>
   Effect.gen(function* () {
     const ledger = yield* Ledger;
@@ -277,20 +533,55 @@ export const submitAgentEffect = (
       effectAuthorityRef: spec.effectAuthorityRef,
     } satisfies LedgerTruthIdentity;
 
-    const started = yield* logRuntimeLedgerEvent(
-      ledger,
-      agentRunStartedEvent({ ...identity, intent: spec.intent, traceContext }),
-    );
-    yield* logRuntimeLedgerEvent(
-      ledger,
-      chatIngestedEvent({
-        ...identity,
-        runId: started.id,
-        intent: spec.intent,
-        context: spec.context,
-        traceContext,
-      }),
-    );
+    if (spec.resume !== undefined && spec.resume.turn.id !== spec.resume.runId) {
+      return yield* Effect.fail(
+        new SqlError({
+          cause: {
+            reason: "resume_turn_run_mismatch",
+            runId: spec.resume.runId,
+            turn: spec.resume.turn,
+          },
+        }),
+      );
+    }
+
+    const priorEvents = spec.resume === undefined ? [] : yield* ledger.events(identity);
+    const started =
+      spec.resume === undefined
+        ? yield* logRuntimeLedgerEvent(
+            ledger,
+            agentRunStartedEvent({ ...identity, intent: spec.intent, traceContext }),
+          )
+        : priorEvents.find(
+            (event) =>
+              event.id === spec.resume?.runId &&
+              event.kind === RUNTIME_EVENT_KIND.AGENT_RUN_STARTED,
+          );
+    if (started === undefined) {
+      return yield* Effect.fail(
+        new SqlError({
+          cause: {
+            reason: "resume_missing_run_started",
+            runId: spec.resume?.runId,
+          },
+        }),
+      );
+    }
+    if (spec.resume === undefined) {
+      yield* logRuntimeLedgerEvent(
+        ledger,
+        chatIngestedEvent({
+          ...identity,
+          runId: started.id,
+          intent: spec.intent,
+          context: spec.context,
+          traceContext,
+        }),
+      );
+    } else {
+      const existingTerminal = projectSubmitResult(priorEvents, started.id);
+      if (existingTerminal !== null) return existingTerminal;
+    }
 
     const tokensUsedRef = yield* Ref.make(0);
     // ====================================================================
@@ -302,6 +593,16 @@ export const submitAgentEffect = (
     // completion, and terminal run facts.
     // ====================================================================
     if (spec.outputSchema !== undefined) {
+      if (spec.resume !== undefined) {
+        return yield* finalAbort(
+          ABORT.UPSTREAM_FAILURE,
+          { reason: "output_schema_excludes_resume_in_v0_2_10" },
+          identity,
+          started.id,
+          0,
+          traceContext,
+        );
+      }
       if (Object.keys(spec.tools).length > 0) {
         return yield* finalAbort(
           ABORT.UPSTREAM_FAILURE,
@@ -459,85 +760,266 @@ export const submitAgentEffect = (
 
     const loop: Effect.Effect<
       SubmitResult,
-      SqlError | JsonStringifyError | UpstreamFailure | ToolError | RefResolutionFailed,
-      Ledger | LlmTransport | Quota
+      | SqlError
+      | JsonStringifyError
+      | UpstreamFailure
+      | ToolError
+      | RefResolutionFailed
+      | BoundaryCommitRejected,
+      Ledger | BoundaryEvents | LlmTransport | Quota | RefResolverService
     > = Effect.gen(function* () {
-      const messages: LlmMessage[] = [...initialMessages];
+      let messages: LlmMessage[] = [...initialMessages];
       const toolDefs = toolDefinitionsOf(spec.tools);
       const quotaService = yield* Quota;
       const llm = yield* LlmTransport;
+      const boundaryEvents = yield* BoundaryEvents;
+      const refs = yield* RefResolverService;
+      let firstTurn = 0;
+      let resumedToolCall: LlmToolCall | undefined;
 
-      for (let turn = 0; turn < maxTurns; turn++) {
-        const now = yield* Clock.currentTimeMillis;
-        const tokensBeforeCall = yield* Ref.get(tokensUsedRef);
-
-        const timeout = llmTimeoutFor(startTime, now, budgetTimeMs);
-        if (!timeout.ok) {
+      if (spec.resume !== undefined) {
+        const interruption = matchingInterruptionEvent(priorEvents, spec.resume);
+        if (interruption === undefined) {
           return yield* finalAbort(
-            ABORT.BUDGET_TIME,
-            { elapsedMs: timeout.elapsedMs, maxMs: budgetTimeMs },
+            ABORT.TOOL_ERROR,
+            {
+              reason: "resume_missing_matching_interruption",
+              interruptId: spec.resume.interruptId,
+              gateRef: spec.resume.gateRef,
+            },
             identity,
             started.id,
-            tokensBeforeCall,
+            0,
+            traceContext,
+          );
+        }
+        const decodedInterruption = decodeRuntimeLedgerEvent(interruption);
+        const decision =
+          decodedInterruption._tag === "runtime" &&
+          decodedInterruption.event.kind === RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED
+            ? decodedInterruption.event.payload.decision
+            : undefined;
+        if (decision === undefined) {
+          return yield* finalAbort(
+            ABORT.TOOL_ERROR,
+            {
+              reason: "resume_interruption_missing_decision_binding",
+              interruptId: spec.resume.interruptId,
+            },
+            identity,
+            started.id,
+            0,
             traceContext,
           );
         }
 
-        const controller = new AbortController();
-        const timedResp = yield* Effect.either(
-          llm
-            .call(
-              {
-                route: spec.route,
-                messages,
-                tools: toolDefs.length > 0 ? toolDefs : undefined,
-                traceContext,
-              },
-              { signal: controller.signal },
-            )
-            .pipe(
-              Effect.timeoutFail({
-                duration: Duration.millis(timeout.timeoutMs),
-                onTimeout: () => {
-                  controller.abort("agent_os.llm_call_timeout");
-                  return new LlmCallTimedOut({
-                    mode: timeout.mode,
-                    elapsedMs: timeout.mode === "budget" ? budgetTimeMs : timeout.timeoutMs,
-                    timeoutMs: timeout.mode === "budget" ? budgetTimeMs : timeout.timeoutMs,
-                  });
-                },
-              }),
-            ),
+        const projection = projectDecisionGate(priorEvents, spec.resume.gateRef);
+        if (
+          projection.status !== "approved" ||
+          projection.decision?.decisionRef !== spec.resume.decisionRef ||
+          projection.request === undefined
+        ) {
+          return yield* finalAbort(
+            ABORT.TOOL_ERROR,
+            {
+              reason:
+                projection.status === "consumed"
+                  ? "decision_gate_consumed"
+                  : projection.status === "rejected"
+                    ? "decision_gate_rejected"
+                    : "decision_gate_not_approved",
+              gateRef: spec.resume.gateRef,
+              decisionRef: spec.resume.decisionRef,
+              status: projection.status,
+            },
+            identity,
+            started.id,
+            0,
+            traceContext,
+          );
+        }
+        const decisionEvent = matchingDecisionEvent(
+          priorEvents,
+          spec.resume.gateRef,
+          spec.resume.decisionRef,
         );
-        if (timedResp._tag === "Left") {
-          if (isLlmCallTimedOut(timedResp.left)) {
-            return yield* timeoutAbortResult(
-              timedResp.left,
+        if (decisionEvent === undefined) {
+          return yield* finalAbort(
+            ABORT.TOOL_ERROR,
+            {
+              reason: "decision_gate_approved_without_decision_event",
+              gateRef: spec.resume.gateRef,
+              decisionRef: spec.resume.decisionRef,
+            },
+            identity,
+            started.id,
+            0,
+            traceContext,
+          );
+        }
+
+        const replayed = yield* replayMessagesToInterruptedTool(
+          initialMessages,
+          priorEvents,
+          spec.resume,
+          decision.toolCallId,
+        );
+        messages = replayed.messages;
+        resumedToolCall = replayed.call;
+        firstTurn = spec.resume.turn.index;
+        const priorTokens = priorEvents.reduce((sum, event) => {
+          const decoded = decodeRuntimeLedgerEvent(event);
+          return decoded._tag === "runtime" &&
+            decoded.event.kind === RUNTIME_EVENT_KIND.LLM_RESPONSE &&
+            decoded.event.payload.turn.id === spec.resume?.runId
+            ? sum + decoded.event.payload.usage.totalTokens
+            : sum;
+        }, 0);
+        yield* Ref.set(tokensUsedRef, priorTokens);
+
+        const consumed = yield* boundaryEvents.commit(
+          decisionGateBoundaryContract,
+          DECISION_GATE_KIND.CONSUMED,
+          {
+            gateRef: spec.resume.gateRef,
+            decisionRef: spec.resume.decisionRef,
+            consumedBy: `agent.run:${spec.resume.runId}`,
+            claim: settleDecisionGateConsumed(projection.request.claim, {
+              gateRef: spec.resume.gateRef,
+              eventId: decisionEvent.id,
+            }),
+          },
+        );
+        yield* logRuntimeLedgerEvent(
+          ledger,
+          agentRunResumedEvent({
+            ...identity,
+            runId: spec.resume.runId,
+            turn: spec.resume.turn,
+            interruptId: spec.resume.interruptId,
+            resume: spec.resume.resume,
+            resumedAtEventId: consumed.id,
+            traceContext,
+          }),
+        );
+      }
+
+      for (let turn = firstTurn; turn < maxTurns; turn++) {
+        const now = yield* Clock.currentTimeMillis;
+        const tokensBeforeCall = yield* Ref.get(tokensUsedRef);
+
+        const resumedThisTurn = resumedToolCall;
+        resumedToolCall = undefined;
+        const resumedToolCallIdThisTurn = resumedThisTurn?.id;
+        const responseToolCalls: LlmToolCall[] =
+          resumedThisTurn === undefined ? [] : [resumedThisTurn];
+        let newTokens = tokensBeforeCall;
+
+        if (resumedThisTurn === undefined) {
+          const timeout = llmTimeoutFor(startTime, now, budgetTimeMs);
+          if (!timeout.ok) {
+            return yield* finalAbort(
+              ABORT.BUDGET_TIME,
+              { elapsedMs: timeout.elapsedMs, maxMs: budgetTimeMs },
               identity,
               started.id,
               tokensBeforeCall,
               traceContext,
             );
           }
-          return yield* Effect.fail(timedResp.left);
+
+          const controller = new AbortController();
+          const timedResp = yield* Effect.either(
+            llm
+              .call(
+                {
+                  route: spec.route,
+                  messages,
+                  tools: toolDefs.length > 0 ? toolDefs : undefined,
+                  traceContext,
+                },
+                { signal: controller.signal },
+              )
+              .pipe(
+                Effect.timeoutFail({
+                  duration: Duration.millis(timeout.timeoutMs),
+                  onTimeout: () => {
+                    controller.abort("agent_os.llm_call_timeout");
+                    return new LlmCallTimedOut({
+                      mode: timeout.mode,
+                      elapsedMs: timeout.mode === "budget" ? budgetTimeMs : timeout.timeoutMs,
+                      timeoutMs: timeout.mode === "budget" ? budgetTimeMs : timeout.timeoutMs,
+                    });
+                  },
+                }),
+              ),
+          );
+          if (timedResp._tag === "Left") {
+            if (isLlmCallTimedOut(timedResp.left)) {
+              return yield* timeoutAbortResult(
+                timedResp.left,
+                identity,
+                started.id,
+                tokensBeforeCall,
+                traceContext,
+              );
+            }
+            return yield* Effect.fail(timedResp.left);
+          }
+          const resp = timedResp.right;
+          const nextResponseText = textFromLlmOutputItems(resp.items);
+          const nextResponseToolCalls = toolCallsFromLlmOutputItems(resp.items);
+
+          newTokens = tokensBeforeCall + resp.usage.totalTokens;
+          yield* Ref.set(tokensUsedRef, newTokens);
+
+          yield* logRuntimeLedgerEvent(
+            ledger,
+            llmResponseEvent({
+              ...identity,
+              turn: turnRefOf(started.id, turn),
+              items: resp.items,
+              usage: resp.usage,
+              traceContext,
+            }),
+          );
+
+          if (newTokens > budgetTokens) {
+            return yield* finalAbort(
+              ABORT.BUDGET_TOKENS,
+              { tokensUsed: newTokens, tokensMax: budgetTokens },
+              identity,
+              started.id,
+              newTokens,
+              traceContext,
+            );
+          }
+
+          messages.push({
+            role: "assistant",
+            content: nextResponseText,
+            tool_calls: nextResponseToolCalls.length > 0 ? nextResponseToolCalls : undefined,
+          });
+
+          if (nextResponseToolCalls.length === 0) {
+            yield* ledger.commit([
+              agentRunCompletedEvent({
+                ...identity,
+                runId: started.id,
+                final: nextResponseText,
+                output: nextResponseText,
+                outputKind: "text",
+                tokensUsed: newTokens,
+                turn: turnRefOf(started.id, turn),
+                traceContext,
+              }),
+            ]);
+            const events = yield* ledger.events(identity);
+            return yield* submitResultFromEvents(events, started.id);
+          }
+
+          responseToolCalls.push(...nextResponseToolCalls);
         }
-        const resp = timedResp.right;
-        const responseText = textFromLlmOutputItems(resp.items);
-        const responseToolCalls = toolCallsFromLlmOutputItems(resp.items);
-
-        const newTokens = tokensBeforeCall + resp.usage.totalTokens;
-        yield* Ref.set(tokensUsedRef, newTokens);
-
-        yield* logRuntimeLedgerEvent(
-          ledger,
-          llmResponseEvent({
-            ...identity,
-            turn: turnRefOf(started.id, turn),
-            items: resp.items,
-            usage: resp.usage,
-            traceContext,
-          }),
-        );
 
         if (newTokens > budgetTokens) {
           return yield* finalAbort(
@@ -548,29 +1030,6 @@ export const submitAgentEffect = (
             newTokens,
             traceContext,
           );
-        }
-
-        messages.push({
-          role: "assistant",
-          content: responseText,
-          tool_calls: responseToolCalls.length > 0 ? responseToolCalls : undefined,
-        });
-
-        if (responseToolCalls.length === 0) {
-          yield* ledger.commit([
-            agentRunCompletedEvent({
-              ...identity,
-              runId: started.id,
-              final: responseText,
-              output: responseText,
-              outputKind: "text",
-              tokensUsed: newTokens,
-              turn: turnRefOf(started.id, turn),
-              traceContext,
-            }),
-          ]);
-          const events = yield* ledger.events(identity);
-          return yield* submitResultFromEvents(events, started.id);
         }
 
         for (const call of responseToolCalls) {
@@ -593,6 +1052,71 @@ export const submitAgentEffect = (
               originKind: "submit",
             },
           });
+
+          const interrupt = decisionInterruptFor(spec, call.function.name);
+          if (interrupt !== undefined && call.id !== resumedToolCallIdThisTurn) {
+            const gateRef = decisionGateRefFor(interrupt, claim.operationRef);
+            const interruptId = decisionInterruptIdFor(interrupt, claim.operationRef);
+            const subjectRef = decisionSubjectRefFor(claim);
+            yield* boundaryEvents.commit(
+              decisionGateBoundaryContract,
+              DECISION_GATE_KIND.REQUESTED,
+              {
+                gateRef,
+                subjectRef,
+                ...(interrupt.policyRef === undefined ? {} : { policyRef: interrupt.policyRef }),
+                ...(interrupt.summary === undefined ? {} : { summary: interrupt.summary }),
+                claim,
+              },
+            );
+            yield* logRuntimeLedgerEvent(
+              ledger,
+              agentRunInterruptedEvent({
+                ...identity,
+                runId: started.id,
+                turn: turnRefOf(started.id, turn),
+                interruptId,
+                reason: interrupt.reason,
+                resumeSchema: interrupt.resumeSchema ?? {},
+                tokensUsed: newTokens,
+                decision: {
+                  gateRef,
+                  subjectRef,
+                  toolCallId: call.id,
+                  toolName: call.function.name,
+                },
+                traceContext,
+              }),
+            );
+            const events = yield* ledger.events(identity);
+            return interruptedSubmitResultFromEvents(events, started.id, {
+              interruptId,
+              turn: turnRefOf(started.id, turn),
+              gateRef,
+              tokensUsed: newTokens,
+            });
+          }
+
+          const resolvedMaterials = yield* resolveToolMaterials(refs, spec, tool, claim);
+          if (!resolvedMaterials.ok) {
+            yield* logRuntimeLedgerEvent(
+              ledger,
+              toolRejectedEvent({
+                ...identity,
+                runId: started.id,
+                toolCallId: call.id,
+                name: call.function.name,
+                args: call.function.arguments,
+                execution: tool.execution,
+                claim: settleToolAdmissionRejected(claim, resolvedMaterials.rejectionRef),
+                traceContext,
+              }),
+            );
+            return yield* new ToolError({
+              toolName: call.function.name,
+              cause: toolAdmissionFailureCause(resolvedMaterials.rejectionRef),
+            });
+          }
 
           const admission = yield* Effect.tryPromise({
             try: () =>
@@ -701,7 +1225,13 @@ export const submitAgentEffect = (
                     });
                   }
                 }
-                return yield* executeTool(tool, args, call.function.name, traceContext);
+                return yield* executeTool(
+                  tool,
+                  args,
+                  call.function.name,
+                  traceContext,
+                  resolvedMaterials.materials,
+                );
               });
               if (!Number.isFinite(budgetTimeMs)) {
                 return yield* attempt;

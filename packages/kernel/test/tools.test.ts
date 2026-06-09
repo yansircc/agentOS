@@ -75,6 +75,7 @@ describe("defineTool", () => {
   it.effect("passes AbortSignal through executeTool", () =>
     Effect.gen(function* () {
       let observed: AbortSignal | undefined;
+      let observedMaterials: unknown;
       const tool = defineTool({
         name: "lookup",
         description: "Lookup",
@@ -84,13 +85,17 @@ describe("defineTool", () => {
         execution: pureToolExecution(),
         execute: (_args, ctx) => {
           observed = ctx.signal;
+          observedMaterials = ctx.materials;
           return { ok: true };
         },
       });
 
-      const result = yield* executeTool(tool, { key: "abc" }, "lookup");
+      const result = yield* executeTool(tool, { key: "abc" }, "lookup", undefined, {
+        api_token: "resolved-secret",
+      });
       expect(result).toEqual({ ok: true });
       expect(observed).toBeInstanceOf(AbortSignal);
+      expect(observedMaterials).toEqual({ api_token: "resolved-secret" });
     }),
   );
 

@@ -191,11 +191,38 @@ export interface RunTerminal {
   readonly payload: unknown;
 }
 
+export interface RunInterruption {
+  readonly at: number;
+  readonly event: "agent.run.interrupted";
+  readonly interruptId: string;
+  readonly turn: {
+    readonly id: number;
+    readonly index: number;
+  };
+  readonly reason: string;
+  readonly resumeSchema: unknown;
+  readonly payload: unknown;
+}
+
+export interface RunResume {
+  readonly at: number;
+  readonly event: "agent.run.resumed";
+  readonly interruptId: string;
+  readonly turn: {
+    readonly id: number;
+    readonly index: number;
+  };
+  readonly resumedAtEventId: number;
+  readonly payload: unknown;
+}
+
 export interface RunTrace {
   readonly runId: number;
   readonly startedAt: number;
   readonly turns: ReadonlyArray<RunTurn>;
   readonly toolCalls: ReadonlyArray<RunToolCall>;
+  readonly interruptions?: ReadonlyArray<RunInterruption>;
+  readonly resumes?: ReadonlyArray<RunResume>;
   readonly terminal: RunTerminal | null;
 }
 
@@ -205,6 +232,13 @@ export type RunStatus =
       readonly kind: "aborted";
       readonly at: number;
       readonly abortKind: string;
+    }
+  | {
+      readonly kind: "interrupted";
+      readonly at: number;
+      readonly event: "agent.run.interrupted";
+      readonly interruptId: string;
+      readonly reason: string;
     }
   | { readonly kind: "open_without_terminal"; readonly startedAt: number }
   | {

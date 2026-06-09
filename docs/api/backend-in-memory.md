@@ -6,6 +6,7 @@
 - `.:InMemoryAttachedStreamsLive`
 - `.:InMemoryBackendState`
 - `.:InMemoryBackendStateOptions`
+- `.:InMemoryBoundaryEventsLive`
 - `.:InMemoryDispatchLive`
 - `.:InMemoryDispatchTargetRegistry`
 - `.:InMemoryEventHandlerRegistration`

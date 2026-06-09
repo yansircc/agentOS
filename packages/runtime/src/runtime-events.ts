@@ -18,10 +18,13 @@ import { ABORT, type AbortKind } from "./abort";
 
 const positiveInt = Schema.Number.pipe(Schema.int(), Schema.greaterThanOrEqualTo(1));
 const nonNegativeInt = Schema.Number.pipe(Schema.int(), Schema.greaterThanOrEqualTo(0));
+const nonEmptyString = Schema.String.pipe(Schema.filter((value) => value.length > 0));
 const unknownRecord = Schema.Record({ key: Schema.String, value: Schema.Unknown });
 
 export const RUNTIME_EVENT_KIND = {
   AGENT_RUN_STARTED: "agent.run.started",
+  AGENT_RUN_INTERRUPTED: "agent.run.interrupted",
+  AGENT_RUN_RESUMED: "agent.run.resumed",
   CHAT_INGESTED: "chat.ingested",
   LLM_RESPONSE: "llm.response",
   TOOL_EXECUTED: "tool.executed",
@@ -129,6 +132,37 @@ export type AgentRunCompletedPayload = {
   readonly traceContext?: TraceContext;
 };
 
+export type AgentRunInterruptedPayload = {
+  readonly runId: number;
+  readonly turn: {
+    readonly id: number;
+    readonly index: number;
+  };
+  readonly interruptId: string;
+  readonly reason: string;
+  readonly resumeSchema: unknown;
+  readonly tokensUsed: number;
+  readonly decision?: {
+    readonly gateRef: string;
+    readonly subjectRef: string;
+    readonly toolCallId: string;
+    readonly toolName: string;
+  };
+  readonly traceContext?: TraceContext;
+};
+
+export type AgentRunResumedPayload = {
+  readonly runId: number;
+  readonly turn: {
+    readonly id: number;
+    readonly index: number;
+  };
+  readonly interruptId: string;
+  readonly resume: unknown;
+  readonly resumedAtEventId: number;
+  readonly traceContext?: TraceContext;
+};
+
 export type AgentRunAbortedPayload = {
   readonly runId: number;
   readonly tokensUsed: number;
@@ -186,6 +220,34 @@ export const AgentRunCompletedPayloadSchema: Schema.Schema<AgentRunCompletedPayl
     traceContext: Schema.optional(TraceContextSchema),
   });
 
+export const AgentRunInterruptedPayloadSchema: Schema.Schema<AgentRunInterruptedPayload> =
+  Schema.Struct({
+    runId: positiveInt,
+    turn: TurnRefSchema,
+    interruptId: nonEmptyString,
+    reason: nonEmptyString,
+    resumeSchema: Schema.Unknown,
+    tokensUsed: nonNegativeInt,
+    decision: Schema.optional(
+      Schema.Struct({
+        gateRef: nonEmptyString,
+        subjectRef: nonEmptyString,
+        toolCallId: nonEmptyString,
+        toolName: nonEmptyString,
+      }),
+    ),
+    traceContext: Schema.optional(TraceContextSchema),
+  }).pipe(Schema.filter((payload) => payload.runId === payload.turn.id));
+
+export const AgentRunResumedPayloadSchema: Schema.Schema<AgentRunResumedPayload> = Schema.Struct({
+  runId: positiveInt,
+  turn: TurnRefSchema,
+  interruptId: nonEmptyString,
+  resume: Schema.Unknown,
+  resumedAtEventId: positiveInt,
+  traceContext: Schema.optional(TraceContextSchema),
+}).pipe(Schema.filter((payload) => payload.runId === payload.turn.id));
+
 export const AgentRunAbortedPayloadSchema: Schema.Schema<AgentRunAbortedPayload> = Schema.Struct({
   runId: positiveInt,
   tokensUsed: nonNegativeInt,
@@ -194,6 +256,8 @@ export const AgentRunAbortedPayloadSchema: Schema.Schema<AgentRunAbortedPayload>
 
 export type RuntimeEventPayloadByKind = {
   readonly [RUNTIME_EVENT_KIND.AGENT_RUN_STARTED]: AgentRunStartedPayload;
+  readonly [RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED]: AgentRunInterruptedPayload;
+  readonly [RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED]: AgentRunResumedPayload;
   readonly [RUNTIME_EVENT_KIND.CHAT_INGESTED]: ChatIngestedPayload;
   readonly [RUNTIME_EVENT_KIND.LLM_RESPONSE]: LlmResponsePayload;
   readonly [RUNTIME_EVENT_KIND.TOOL_EXECUTED]: ToolExecutedPayload;
@@ -250,6 +314,14 @@ const decodeRuntimePayload = <K extends RuntimeEventKind>(
   switch (kind) {
     case RUNTIME_EVENT_KIND.AGENT_RUN_STARTED:
       return Schema.decodeUnknownSync(AgentRunStartedPayloadSchema)(
+        payload,
+      ) as RuntimeEventPayloadByKind[K];
+    case RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED:
+      return Schema.decodeUnknownSync(AgentRunInterruptedPayloadSchema)(
+        payload,
+      ) as RuntimeEventPayloadByKind[K];
+    case RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED:
+      return Schema.decodeUnknownSync(AgentRunResumedPayloadSchema)(
         payload,
       ) as RuntimeEventPayloadByKind[K];
     case RUNTIME_EVENT_KIND.CHAT_INGESTED:
@@ -344,6 +416,53 @@ export const chatIngestedEvent = (
     runId: spec.runId,
     intent: spec.intent,
     context: spec.context,
+    ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
+  });
+
+export const agentRunInterruptedEvent = (
+  spec: RuntimeEventIdentitySpec & {
+    readonly runId: number;
+    readonly turn: { readonly id: number; readonly index: number };
+    readonly interruptId: string;
+    readonly reason: string;
+    readonly resumeSchema: unknown;
+    readonly tokensUsed: number;
+    readonly decision?: {
+      readonly gateRef: string;
+      readonly subjectRef: string;
+      readonly toolCallId: string;
+      readonly toolName: string;
+    };
+    readonly traceContext?: TraceContext;
+  },
+): RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED> =>
+  runtimeEvent(spec, RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED, {
+    runId: spec.runId,
+    turn: spec.turn,
+    interruptId: spec.interruptId,
+    reason: spec.reason,
+    resumeSchema: spec.resumeSchema,
+    tokensUsed: spec.tokensUsed,
+    ...(spec.decision === undefined ? {} : { decision: spec.decision }),
+    ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
+  });
+
+export const agentRunResumedEvent = (
+  spec: RuntimeEventIdentitySpec & {
+    readonly runId: number;
+    readonly turn: { readonly id: number; readonly index: number };
+    readonly interruptId: string;
+    readonly resume: unknown;
+    readonly resumedAtEventId: number;
+    readonly traceContext?: TraceContext;
+  },
+): RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED> =>
+  runtimeEvent(spec, RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED, {
+    runId: spec.runId,
+    turn: spec.turn,
+    interruptId: spec.interruptId,
+    resume: spec.resume,
+    resumedAtEventId: spec.resumedAtEventId,
     ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
   });
 

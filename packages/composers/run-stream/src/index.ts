@@ -106,8 +106,18 @@ const isLedgerEventRpc = Schema.is(LedgerEventSchema);
 const isSubmitResult = (value: unknown): value is SubmitResult => {
   if (!Predicate.isRecord(value) || typeof value.runId !== "number") return false;
   if (typeof value.eventCount !== "number" || typeof value.tokensUsed !== "number") return false;
-  if (value.ok === true) return typeof value.final === "string";
-  if (value.ok === false) return typeof value.reason === "string";
+  if (value.ok === true) return value.status === "delivered" && typeof value.final === "string";
+  if (value.ok === false && value.status === "failed") return typeof value.reason === "string";
+  if (value.ok === false && value.status === "interrupted") {
+    return (
+      value.reason === "interrupted" &&
+      typeof value.interruptId === "string" &&
+      typeof value.gateRef === "string" &&
+      Predicate.isRecord(value.turn) &&
+      typeof value.turn.id === "number" &&
+      typeof value.turn.index === "number"
+    );
+  }
   return false;
 };
 

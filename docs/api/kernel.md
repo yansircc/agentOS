@@ -190,6 +190,7 @@
 - `./material-ref:isMaterialRef`
 - `./material-ref:isMaterialRequirement`
 - `./material-ref:materialRefKey`
+- `./material-ref:materialRefSatisfiesRequirement`
 - `./material-ref:materialRequirement`
 - `./quota:QuotaSpec`
 - `./quota:withQuota`
@@ -234,6 +235,7 @@
 - `.:ExecutionDomainRegistry`
 - `.:ExecutionDomainRegistryIssue`
 - `.:ExecutionDomainRegistryValidation`
+- `.:ResolvedToolMaterials`
 - `.:ToolExecution`
 - `.:ToolExecutionContext`
 - `.:deterministicToolInvocation`
@@ -252,6 +254,7 @@
 - `./tools:ExecutionDomainRegistry`
 - `./tools:ExecutionDomainRegistryIssue`
 - `./tools:ExecutionDomainRegistryValidation`
+- `./tools:ResolvedToolMaterials`
 - `./tools:Tool`
 - `./tools:ToolAdmitInput`
 - `./tools:ToolAdmitter`
@@ -307,6 +310,8 @@
 - `./types:ResourceState`
 - `./types:RunListPage`
 - `./types:RunListSpec`
+- `./types:RunInterruption`
+- `./types:RunResume`
 - `./types:RunStatus`
 - `./types:RunStatusKind`
 - `./types:RunSummary`
@@ -451,6 +456,8 @@
 - `.:ResourceState`
 - `.:RunListPage`
 - `.:RunListSpec`
+- `.:RunInterruption`
+- `.:RunResume`
 - `.:RunStatus`
 - `.:RunStatusKind`
 - `.:RunSummary`
@@ -537,6 +544,7 @@
 - `.:makeOperationRef`
 - `.:makePreClaim`
 - `.:materialRefKey`
+- `.:materialRefSatisfiesRequirement`
 - `.:materialRequirement`
 - `.:none`
 - `.:normalizeAdmitVerdict`

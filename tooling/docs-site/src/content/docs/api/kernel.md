@@ -194,6 +194,7 @@ title: "@agent-os/kernel Public API Intent"
 - `./material-ref:isMaterialRef`
 - `./material-ref:isMaterialRequirement`
 - `./material-ref:materialRefKey`
+- `./material-ref:materialRefSatisfiesRequirement`
 - `./material-ref:materialRequirement`
 - `./quota:QuotaSpec`
 - `./quota:withQuota`
@@ -238,6 +239,7 @@ title: "@agent-os/kernel Public API Intent"
 - `.:ExecutionDomainRegistry`
 - `.:ExecutionDomainRegistryIssue`
 - `.:ExecutionDomainRegistryValidation`
+- `.:ResolvedToolMaterials`
 - `.:ToolExecution`
 - `.:ToolExecutionContext`
 - `.:deterministicToolInvocation`
@@ -256,6 +258,7 @@ title: "@agent-os/kernel Public API Intent"
 - `./tools:ExecutionDomainRegistry`
 - `./tools:ExecutionDomainRegistryIssue`
 - `./tools:ExecutionDomainRegistryValidation`
+- `./tools:ResolvedToolMaterials`
 - `./tools:Tool`
 - `./tools:ToolAdmitInput`
 - `./tools:ToolAdmitter`
@@ -311,6 +314,8 @@ title: "@agent-os/kernel Public API Intent"
 - `./types:ResourceState`
 - `./types:RunListPage`
 - `./types:RunListSpec`
+- `./types:RunInterruption`
+- `./types:RunResume`
 - `./types:RunStatus`
 - `./types:RunStatusKind`
 - `./types:RunSummary`
@@ -455,6 +460,8 @@ title: "@agent-os/kernel Public API Intent"
 - `.:ResourceState`
 - `.:RunListPage`
 - `.:RunListSpec`
+- `.:RunInterruption`
+- `.:RunResume`
 - `.:RunStatus`
 - `.:RunStatusKind`
 - `.:RunSummary`
@@ -541,6 +548,7 @@ title: "@agent-os/kernel Public API Intent"
 - `.:makeOperationRef`
 - `.:makePreClaim`
 - `.:materialRefKey`
+- `.:materialRefSatisfiesRequirement`
 - `.:materialRequirement`
 - `.:none`
 - `.:normalizeAdmitVerdict`

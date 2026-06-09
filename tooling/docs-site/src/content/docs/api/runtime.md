@@ -123,6 +123,9 @@ title: "@agent-os/runtime Public API Intent"
 - `.:StructuredDecodeResult`
 - `.:Stimulus`
 - `.:SubmitResult`
+- `.:SubmitDecisionInterrupt`
+- `.:SubmitDecisionInterruptReason`
+- `.:SubmitResumeDecision`
 - `.:SubmitSpec`
 - `.:Tool`
 - `.:ToolDefinition`
@@ -230,6 +233,10 @@ title: "@agent-os/runtime Public API Intent"
 - `./runtime-events:AgentRunAbortedPayloadSchema`
 - `./runtime-events:AgentRunCompletedPayload`
 - `./runtime-events:AgentRunCompletedPayloadSchema`
+- `./runtime-events:AgentRunInterruptedPayload`
+- `./runtime-events:AgentRunInterruptedPayloadSchema`
+- `./runtime-events:AgentRunResumedPayload`
+- `./runtime-events:AgentRunResumedPayloadSchema`
 - `./runtime-events:AgentRunStartedPayload`
 - `./runtime-events:AgentRunStartedPayloadSchema`
 - `./runtime-events:ChatIngestedPayload`
@@ -253,6 +260,8 @@ title: "@agent-os/runtime Public API Intent"
 - `./runtime-events:ToolRejectedPayloadSchema`
 - `./runtime-events:agentRunAbortedEvent`
 - `./runtime-events:agentRunCompletedEvent`
+- `./runtime-events:agentRunInterruptedEvent`
+- `./runtime-events:agentRunResumedEvent`
 - `./runtime-events:agentRunStartedEvent`
 - `./runtime-events:chatIngestedEvent`
 - `./runtime-events:decodeRuntimeEventPayload`
@@ -264,6 +273,7 @@ title: "@agent-os/runtime Public API Intent"
 - `./runtime-events:toolRejectedEvent`
 
 - `.:settleToolAdmissionRejected`
+- `.:BoundaryEvents`
 - `.:settleToolExecuted`
 - `.:settleToolExecutionRejected`
 - `.:toolErrorReason`

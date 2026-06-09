@@ -4,6 +4,8 @@ import type { LivedClaim, RejectedClaim } from "@agent-os/kernel/effect-claim";
 import {
   agentRunAbortedEvent,
   agentRunCompletedEvent,
+  agentRunInterruptedEvent,
+  agentRunResumedEvent,
   agentRunStartedEvent,
   chatIngestedEvent,
   decodeRuntimeLedgerEvent,
@@ -82,6 +84,25 @@ describe("runtime event vocabulary", () => {
         runId: 1,
         intent: "answer",
         context: { topic: "runtime" },
+        traceContext,
+      }),
+      agentRunInterruptedEvent({
+        ...runtimeIdentity,
+        runId: 1,
+        turn: { id: 1, index: 0 },
+        interruptId: "interrupt-1",
+        reason: "decision_required",
+        resumeSchema: { type: "object", required: ["approved"] },
+        tokensUsed: 3,
+        traceContext,
+      }),
+      agentRunResumedEvent({
+        ...runtimeIdentity,
+        runId: 1,
+        turn: { id: 1, index: 0 },
+        interruptId: "interrupt-1",
+        resume: { approved: true },
+        resumedAtEventId: 3,
         traceContext,
       }),
       llmResponseEvent({
@@ -177,7 +198,30 @@ describe("runtime event vocabulary", () => {
     ).toThrow();
     expect(() =>
       decodeRuntimeLedgerEvent(
-        rawEvent(7, "agent.run.started", {
+        rawEvent(7, "agent.run.interrupted", {
+          runId: 1,
+          turn: { id: 2, index: 0 },
+          interruptId: "interrupt-1",
+          reason: "decision_required",
+          resumeSchema: {},
+          tokensUsed: 0,
+        }),
+      ),
+    ).toThrow();
+    expect(() =>
+      decodeRuntimeLedgerEvent(
+        rawEvent(8, "agent.run.resumed", {
+          runId: 1,
+          turn: { id: 1, index: 0 },
+          interruptId: "",
+          resume: {},
+          resumedAtEventId: 7,
+        }),
+      ),
+    ).toThrow();
+    expect(() =>
+      decodeRuntimeLedgerEvent(
+        rawEvent(9, "agent.run.started", {
           intent: "answer",
           traceContext: { traceparent: "00-test" },
         }),

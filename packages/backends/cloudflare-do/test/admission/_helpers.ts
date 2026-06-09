@@ -17,6 +17,7 @@ import { LlmTransport, RUNTIME_FACT_OWNER } from "@agent-os/runtime";
 import { RefResolverLive } from "@agent-os/kernel/ref-resolver";
 import { QuotaLive } from "../../src/quota";
 import { AdmissionLive } from "../../src/admission";
+import { BoundaryEventsLive } from "../../src/boundary-events";
 import type { EventHandler } from "@agent-os/kernel/types";
 import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
 import type { AuthorityRef } from "@agent-os/kernel/effect-claim";
@@ -47,6 +48,7 @@ export const makeRuntime = (
   const handlers = new Map<string, Set<EventHandler>>();
   const eventBus = EventBusLive(handlers);
   const ledger = LedgerLive(state).pipe(Layer.provide(eventBus));
+  const boundaryEvents = BoundaryEventsLive(state, identity).pipe(Layer.provide(eventBus));
   const quota = QuotaLive(state, identity).pipe(Layer.provide(eventBus));
   const llmTransport = Layer.succeed(LlmTransport, llm);
   const refs = RefResolverLive({
@@ -55,7 +57,9 @@ export const makeRuntime = (
   const admission = AdmissionLive(state, identity).pipe(
     Layer.provide(Layer.mergeAll(eventBus, llmTransport)),
   );
-  return ManagedRuntime.make(Layer.mergeAll(ledger, quota, llmTransport, admission, refs));
+  return ManagedRuntime.make(
+    Layer.mergeAll(ledger, boundaryEvents, quota, llmTransport, admission, refs),
+  );
 };
 
 export const makeRuntimeWithRegistry = (
@@ -69,6 +73,7 @@ export const makeRuntimeWithRegistry = (
   const handlers = new Map<string, Set<EventHandler>>();
   const eventBus = EventBusLive(handlers);
   const ledger = LedgerLive(state).pipe(Layer.provide(eventBus));
+  const boundaryEvents = BoundaryEventsLive(state, identity).pipe(Layer.provide(eventBus));
   const quota = QuotaLive(state, identity).pipe(Layer.provide(eventBus));
   const llmTransport = Layer.succeed(LlmTransport, llm);
   const refs = RefResolverLive({
@@ -86,7 +91,9 @@ export const makeRuntimeWithRegistry = (
   const admission = AdmissionLive(state, identity).pipe(
     Layer.provide(Layer.mergeAll(eventBus, llmTransport)),
   );
-  return ManagedRuntime.make(Layer.mergeAll(ledger, quota, llmTransport, admission, refs));
+  return ManagedRuntime.make(
+    Layer.mergeAll(ledger, boundaryEvents, quota, llmTransport, admission, refs),
+  );
 };
 
 export const submitStructuredResp = structuredToolResp;

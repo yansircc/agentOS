@@ -249,7 +249,7 @@ export type AgUiSubmitDefaults = Omit<SubmitSpec, "intent" | "context"> & {
 export type AgUiFrameProjection = {
   readonly runId: string | null;
   readonly threadId: string | null;
-  readonly status: "idle" | "running" | "completed" | "aborted";
+  readonly status: "idle" | "running" | "interrupted" | "completed" | "aborted";
   readonly text: string;
   readonly textMessages: ReadonlyArray<{
     readonly messageId: string;
@@ -400,10 +400,6 @@ export const agUiRunAgentInputToSubmitSpec = (
   input: AgUiRunAgentInput,
   defaults: AgUiSubmitDefaults,
 ): SubmitSpec => {
-  if (input.resume !== undefined && input.resume.length > 0) {
-    throw new TypeError("AG-UI resume is unsupported until agentOS owns interrupt facts");
-  }
-
   const forwardedProps = selectedForwardedProps(input, defaults.forwardedPropAllowlist);
   return {
     route: defaults.route,
@@ -425,6 +421,7 @@ export const agUiRunAgentInputToSubmitSpec = (
         state: input.state,
         clientToolNames: (input.tools ?? []).map((tool) => tool.name),
         forwardedProps,
+        resume: input.resume ?? [],
       },
     },
   };
@@ -598,6 +595,36 @@ export const projectRuntimeEventToAgUiFrames = (
           value: {
             runId: event.payload.runId,
             intent: event.payload.intent,
+          },
+        },
+      ];
+    case RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED:
+      return [
+        {
+          type: "CUSTOM",
+          timestamp: event.ts,
+          name: "agent-os.run.interrupted",
+          value: {
+            runId: event.payload.runId,
+            turn: event.payload.turn,
+            interruptId: event.payload.interruptId,
+            reason: event.payload.reason,
+            resumeSchema: event.payload.resumeSchema,
+            tokensUsed: event.payload.tokensUsed,
+          },
+        },
+      ];
+    case RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED:
+      return [
+        {
+          type: "CUSTOM",
+          timestamp: event.ts,
+          name: "agent-os.run.resumed",
+          value: {
+            runId: event.payload.runId,
+            turn: event.payload.turn,
+            interruptId: event.payload.interruptId,
+            resumedAtEventId: event.payload.resumedAtEventId,
           },
         },
       ];
@@ -909,6 +936,12 @@ export const projectAgUiFrames = (frames: Iterable<AgUiFrame>): AgUiFrameProject
         break;
       }
       case "CUSTOM":
+        if (frame.name === "agent-os.run.interrupted") {
+          status = "interrupted";
+        }
+        if (frame.name === "agent-os.run.resumed") {
+          status = "running";
+        }
         custom.push(frame);
         break;
     }

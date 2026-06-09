@@ -13,6 +13,7 @@ const packageLinks = {
   "attached-stream": "packages/composers/attached-stream",
   "backend-cloudflare-do": "packages/backends/cloudflare-do",
   "backend-protocol": "packages/backends/protocol",
+  "decision-gate": "packages/carriers/decision-gate",
   kernel: "packages/kernel",
   "llm-transport-effect-ai": "packages/providers/llm-transport-effect-ai",
   runtime: "packages/runtime",

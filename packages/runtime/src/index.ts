@@ -1,6 +1,7 @@
 export { ABORT, type AbortKind, reasonOf } from "./abort";
 export * from "./admission";
 export * from "./attached-stream";
+export * from "./boundary-events";
 export * from "./boundary-commit";
 export * from "./dispatch";
 export * from "./ledger";

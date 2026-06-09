@@ -207,6 +207,58 @@ describe("@agent-os/decision-gate", () => {
     });
   });
 
+  it("does not reopen a consumed gate from a later lone decision", () => {
+    const events = [
+      {
+        id: 1,
+        kind: DECISION_GATE_KIND.REQUESTED,
+        payload: {
+          gateRef: "gate/consumed",
+          subjectRef: "subject-1",
+          claim,
+        },
+      },
+      {
+        id: 2,
+        kind: DECISION_GATE_KIND.DECIDED,
+        payload: {
+          gateRef: "gate/consumed",
+          decisionRef: "decision/1",
+          decision: "approved",
+          decidedBy: "operator/alice",
+        },
+      },
+      {
+        id: 3,
+        kind: DECISION_GATE_KIND.CONSUMED,
+        payload: {
+          gateRef: "gate/consumed",
+          decisionRef: "decision/1",
+          consumedBy: "submit",
+          claim: consumedClaim,
+        },
+      },
+      {
+        id: 4,
+        kind: DECISION_GATE_KIND.DECIDED,
+        payload: {
+          gateRef: "gate/consumed",
+          decisionRef: "decision/2",
+          decision: "approved",
+          decidedBy: "operator/alice",
+        },
+      },
+    ] as const;
+
+    expect(projectDecisionGate(events, "gate/consumed")).toMatchObject({
+      status: "consumed",
+      consumed: {
+        gateRef: "gate/consumed",
+        decisionRef: "decision/1",
+      },
+    });
+  });
+
   it("commits decision_gate.* facts through ExtensionCapability", async () => {
     const committed: Array<{ event: string; data: unknown }> = [];
     const cap: ExtensionCapability = {

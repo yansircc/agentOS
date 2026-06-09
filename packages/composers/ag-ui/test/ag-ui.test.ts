@@ -9,6 +9,8 @@ import {
   toolExecutedEvent,
   agentRunAbortedEvent,
   agentRunCompletedEvent,
+  agentRunInterruptedEvent,
+  agentRunResumedEvent,
   agentRunStartedEvent,
   type RuntimeEventCommitSpec,
 } from "@agent-os/runtime/runtime-events";
@@ -527,31 +529,103 @@ describe("@agent-os/ag-ui", () => {
       state: input.state,
       clientToolNames: ["client-tool"],
       forwardedProps: { allowed: 1 },
+      resume: [],
     });
     expect(JSON.stringify(submit)).not.toContain("drop");
   });
 
-  it("rejects AG-UI resume until agentOS owns interrupt facts", () => {
-    expect(() =>
-      agUiRunAgentInputToSubmitSpec(
-        {
-          threadId: "thread-1",
-          runId: "client-run-1",
-          messages: [],
-          resume: [{ interruptId: "i1", status: "resolved" }],
+  it("maps AG-UI resume input into submit context instead of adapter-local state", () => {
+    const submit = agUiRunAgentInputToSubmitSpec(
+      {
+        threadId: "thread-1",
+        runId: "client-run-1",
+        messages: [],
+        resume: [{ interruptId: "i1", status: "resolved", payload: { approved: true } }],
+      },
+      {
+        route: {
+          kind: "openai-chat-compatible",
+          endpointRef: "endpoint:openai",
+          credentialRef: "credential:openai",
+          modelId: "model",
         },
-        {
-          route: {
-            kind: "openai-chat-compatible",
-            endpointRef: "endpoint:openai",
-            credentialRef: "credential:openai",
-            modelId: "model",
-          },
-          tools: {},
-          effectAuthorityRef: { authorityClass: "llm_route", authorityId: "ag-ui-test" },
-        },
+        tools: {},
+        effectAuthorityRef: { authorityClass: "llm_route", authorityId: "ag-ui-test" },
+      },
+    );
+
+    expect(submit.context.agUi).toMatchObject({
+      threadId: "thread-1",
+      clientRunId: "client-run-1",
+      resume: [{ interruptId: "i1", status: "resolved", payload: { approved: true } }],
+    });
+  });
+
+  it("projects runtime interrupt and resume facts as AG-UI timeline frames", () => {
+    const frames = projectLedgerEventsToAgUiFrames([
+      commit(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "approve" })),
+      commit(
+        2,
+        agentRunInterruptedEvent({
+          ...runtimeIdentity,
+          runId: 1,
+          turn: { id: 1, index: 0 },
+          interruptId: "approval-1",
+          reason: "decision_required",
+          resumeSchema: { type: "object", required: ["approved"] },
+          tokensUsed: 5,
+        }),
       ),
-    ).toThrow("AG-UI resume is unsupported");
+      commit(
+        3,
+        agentRunResumedEvent({
+          ...runtimeIdentity,
+          runId: 1,
+          turn: { id: 1, index: 0 },
+          interruptId: "approval-1",
+          resume: { approved: true },
+          resumedAtEventId: 2,
+        }),
+      ),
+    ]);
+
+    expect(frames).toEqual([
+      {
+        type: "RUN_STARTED",
+        timestamp: 10,
+        threadId: "conversation:ag-ui-test",
+        runId: "1",
+      },
+      {
+        type: "CUSTOM",
+        timestamp: 20,
+        name: "agent-os.run.interrupted",
+        value: {
+          runId: 1,
+          turn: { id: 1, index: 0 },
+          interruptId: "approval-1",
+          reason: "decision_required",
+          resumeSchema: { type: "object", required: ["approved"] },
+          tokensUsed: 5,
+        },
+      },
+      {
+        type: "CUSTOM",
+        timestamp: 30,
+        name: "agent-os.run.resumed",
+        value: {
+          runId: 1,
+          turn: { id: 1, index: 0 },
+          interruptId: "approval-1",
+          resumedAtEventId: 2,
+        },
+      },
+    ]);
+    expect(projectAgUiFrames(frames)).toMatchObject({
+      runId: "1",
+      threadId: "conversation:ag-ui-test",
+      status: "running",
+    });
   });
 
   it("projects agentOS Tool schemas to AG-UI tool parameters", () => {

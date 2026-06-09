@@ -441,7 +441,7 @@ describe("@agent-os/workspace-env", () => {
           path: "a.txt",
           content: "a",
         },
-        { signal: new AbortController().signal },
+        { signal: new AbortController().signal, materials: {} },
       ),
     ).rejects.toThrow("projection failed");
   });
