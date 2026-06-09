@@ -319,6 +319,31 @@ const matrix = [
     ],
   },
   {
+    id: "product-resource-substrate-boundary",
+    stage: "boundary-prepared",
+    include: (repoPath) =>
+      repoPath.startsWith("packages/kernel/src/") ||
+      repoPath.startsWith("packages/runtime-protocol/src/") ||
+      repoPath.startsWith("packages/backends/protocol/src/"),
+    forbiddenTokens: [
+      "\\bSurfaceProgram\\b",
+      "\\bWordPress\\b",
+      "\\bwp_posts\\b",
+      "\\bNotion\\b",
+      "\\bGhost\\b",
+      "\\bDurableObjectId\\b",
+      "\\bDO instance\\b",
+      "\\brouteKey\\b",
+      "\\broute key\\b",
+      "\\bbackend row id\\b",
+      "\\bPostgres row id\\b",
+      "\\bwp_post\\b",
+      "mutation\\.(?:proposed|settled)",
+      "state\\.transitioned",
+      "entity\\.updated",
+    ],
+  },
+  {
     id: "tool-final-effect-pure-boundary",
     stage: "backend-neutral",
     include: (repoPath) => repoPath === "packages/kernel/src/tools.ts",
@@ -479,6 +504,12 @@ const collectSelfTestFailures = () => {
         file: "packages/kernel/src/tools.ts",
         bad: "export interface ToolRequirements { readonly ledger: Ledger }\n",
         expected: "tool-mutation-write-port-boundary",
+      },
+      {
+        name: "product resource leakage",
+        file: "packages/runtime-protocol/src/index.ts",
+        bad: "export interface AgentManifest { readonly surface: SurfaceProgram }\n",
+        expected: "product-resource-substrate-boundary",
       },
     ];
 
