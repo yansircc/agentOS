@@ -12,6 +12,7 @@
 | LLM protocol algebra                 | `@agent-os/llm-protocol`                 |
 | Backend protocol algebra             | `@agent-os/backend-protocol`             |
 | Cloudflare DO app facade and backend | `@agent-os/backend-cloudflare-do`        |
+| Node/Postgres backend interpreter    | `@agent-os/backend-node-postgres`        |
 | Resource lifecycle carrier           | `@agent-os/resource-carrier`             |
 | Cloudflare resource provider         | `@agent-os/resource-cloudflare`          |
 | Workspace/session facts              | `@agent-os/workspace-session`            |

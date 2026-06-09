@@ -80,6 +80,7 @@
       "sourceFiles": [
         "packages/backends/cloudflare-do/test/dispatch-contract.worker.test.ts",
         "packages/backends/in-memory/src/dispatch.ts",
+        "packages/backends/node-postgres/src/index.ts",
         "packages/kernel/src/errors.ts"
       ]
     },

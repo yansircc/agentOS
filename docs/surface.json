@@ -136,6 +136,20 @@
       "published": true
     },
     {
+      "slug": "backend-node-postgres",
+      "name": "@agent-os/backend-node-postgres",
+      "path": "packages/backends/node-postgres",
+      "status": "backend",
+      "role": "Node/Postgres production backend interpreter for backend-protocol schedule, dispatch, resource, quota, replay, and telemetry parity gates",
+      "boundary": "Node process plus Postgres storage, due-work claiming, dispatch retry, and backend-neutral ledger persistence",
+      "need": "Node/Postgres backend interpreter",
+      "apiSource": "docs/api/backend-node-postgres.md",
+      "readmeStatus": "Backend package. It is the Node/Postgres production interpreter used as the second backend-neutral proof backend.",
+      "apiStatus": "Backend package. Public exports are limited to the Node/Postgres backend interpreter and backend-specific configuration types.",
+      "primary": true,
+      "published": true
+    },
+    {
       "slug": "backend-in-memory",
       "name": "@agent-os/backend-in-memory",
       "path": "packages/backends/in-memory",
