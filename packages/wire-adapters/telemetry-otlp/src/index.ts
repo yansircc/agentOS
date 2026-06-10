@@ -106,8 +106,10 @@ const otlpStatus = (outcome: TelemetryOutcome | undefined): OtlpProjectionSpan["
 const sourceEventIdsForNode = (node: TelemetryEventNode): ReadonlyArray<number> =>
   node.sourceEventIds ?? (node.ledgerEventId === undefined ? [] : [node.ledgerEventId]);
 
-const firstSourceEventId = (node: TelemetryEventNode): number =>
-  sourceEventIdsForNode(node)[0] ?? node.ledgerEventId ?? Number.MAX_SAFE_INTEGER;
+const firstSourceEventId = (source: {
+  readonly ledgerEventId?: number;
+  readonly sourceEventIds?: ReadonlyArray<number>;
+}): number => source.sourceEventIds?.[0] ?? source.ledgerEventId ?? Number.MAX_SAFE_INTEGER;
 
 const copyAttribute = (
   attributes: Record<string, OtlpAttributeValue>,
@@ -154,8 +156,8 @@ export const projectOtlpSpans = (tree: TelemetryEventTree): OtlpProjection => {
   return {
     mappingVersion: OTLP_GENAI_SEMCONV_MAPPING_VERSION,
     spans: spans.sort((left, right) => {
-      const leftId = left.sourceEventIds[0] ?? Number.MAX_SAFE_INTEGER;
-      const rightId = right.sourceEventIds[0] ?? Number.MAX_SAFE_INTEGER;
+      const leftId = firstSourceEventId(left);
+      const rightId = firstSourceEventId(right);
       return leftId - rightId;
     }),
   };

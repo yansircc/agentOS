@@ -248,7 +248,9 @@ for (const entry of primitiveEvidenceSource.evidence) {
   }
   if (hasTests) {
     for (const test of entry.tests) ensurePath(test, entry.primitive);
-    primitiveEvidenceById.set(entry.primitive, { tests: [...entry.tests].sort() });
+    primitiveEvidenceById.set(entry.primitive, {
+      tests: [...entry.tests].sort((left, right) => left.localeCompare(right)),
+    });
   } else {
     primitiveEvidenceById.set(entry.primitive, { noTestReason: entry.noTestReason.trim() });
   }

@@ -841,11 +841,12 @@ export const facadeApply = defineTool({
 });
 
 const facadeSubmitLlmTransport = Layer.succeed(LlmTransport, {
-  resolveRoute: (route) =>
-    Effect.succeed({
+  resolveRoute: (route) => {
+    const routeKind = typeof route.kind === "string" ? route.kind : "unknown";
+    return Effect.succeed({
       wireDescriptor: {
         method: "POST",
-        url: `test-llm://${String(route.kind ?? "unknown")}`,
+        url: `test-llm://${routeKind}`,
         headers: [
           ["x-agentos-endpoint-ref", String(route.endpointRef ?? "")],
           ["x-agentos-credential-ref", String(route.credentialRef ?? "")],
@@ -861,11 +862,12 @@ const facadeSubmitLlmTransport = Layer.succeed(LlmTransport, {
           additionalProperties: true,
         },
       },
-      providerOutputAdapterId: `${String(route.kind ?? "unknown")}@facade-submit-test`,
+      providerOutputAdapterId: `${routeKind}@facade-submit-test`,
       providerOutputAdapterVersion: "1.0.0",
       transportAdapterId: "facade-submit-test-transport",
       transportAdapterVersion: "1.0.0",
-    }),
+    });
+  },
   call: (request) => {
     const route = request.route;
     const toolNames = request.tools?.map((tool) => tool.function.name) ?? [];

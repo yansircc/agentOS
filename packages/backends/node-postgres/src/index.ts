@@ -183,14 +183,6 @@ const recordOf = (value: unknown, label: string): Record<string, unknown> => {
   return value as Record<string, unknown>;
 };
 
-const stringField = (value: Record<string, unknown>, key: string): string => {
-  const field = value[key];
-  if (typeof field !== "string") {
-    throw new SqlError({ cause: `${key} must be string` });
-  }
-  return field;
-};
-
 const finiteNumberField = (value: Record<string, unknown>, key: string): number => {
   const field = value[key];
   if (typeof field !== "number" || !Number.isFinite(field)) {

@@ -110,19 +110,17 @@ const writeProjections = (root, productionBackends) => {
 };
 
 const collectAllFailures = (root) => [
-  ["golden", collectGoldenFailures(root)],
-  ["replay", collectReplayFailures(root)],
-  ["telemetry", collectTelemetryFailures(root)],
+  { name: "golden", failures: collectGoldenFailures(root) },
+  { name: "replay", failures: collectReplayFailures(root) },
+  { name: "telemetry", failures: collectTelemetryFailures(root) },
 ];
 
 const expectPass = (root, label) => {
-  const failures = collectAllFailures(root).filter(
-    ([, scriptFailures]) => scriptFailures.length > 0,
-  );
+  const failures = collectAllFailures(root).filter((script) => script.failures.length > 0);
   if (failures.length > 0) {
     return [
       `${label} expected metadata-derived backend projections to pass:\n${failures
-        .map(([name, scriptFailures]) => `${name}:\n${scriptFailures.join("\n")}`)
+        .map((script) => `${script.name}:\n${script.failures.join("\n")}`)
         .join("\n")}`,
     ];
   }
@@ -131,10 +129,10 @@ const expectPass = (root, label) => {
 
 const expectDriftFailure = (root) => {
   const failures = [];
-  for (const [name, scriptFailures] of collectAllFailures(root)) {
-    if (!scriptFailures.some((failure) => failure.includes(driftFailure))) {
+  for (const script of collectAllFailures(root)) {
+    if (!script.failures.some((failure) => failure.includes(driftFailure))) {
       failures.push(
-        `${name} did not reject backend projection drift from ${productionBackendPackagesPath}; failures=${JSON.stringify(scriptFailures)}`,
+        `${script.name} did not reject backend projection drift from ${productionBackendPackagesPath}; failures=${JSON.stringify(script.failures)}`,
       );
     }
   }

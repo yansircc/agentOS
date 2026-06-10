@@ -68,9 +68,8 @@ const readJson = (root, relativePath, failures) => {
   try {
     return JSON.parse(source);
   } catch (cause) {
-    failures.push(
-      `${relativePath}: invalid JSON: ${cause instanceof Error ? cause.message : cause}`,
-    );
+    const reason = cause instanceof Error ? cause.message : String(cause);
+    failures.push(`${relativePath}: invalid JSON: ${reason}`);
     return null;
   }
 };
