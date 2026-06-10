@@ -27,6 +27,12 @@ const consumedClaim = settleDecisionGateConsumed(claim, {
   eventId: 3,
 });
 
+const rejectionRef = {
+  rejectionId: "decision/rejected",
+  rejectionKind: "policy_denied" as const,
+  reason: "operator rejected",
+};
+
 describe("@agent-os/decision-gate", () => {
   it("declares decision_gate.* as an extension-owned prefix", () => {
     expect(decisionGateBoundaryPackage("0.1.0")).toMatchObject({
@@ -256,6 +262,136 @@ describe("@agent-os/decision-gate", () => {
         gateRef: "gate/consumed",
         decisionRef: "decision/1",
       },
+    });
+  });
+
+  it("keeps a consumed gate terminal across later requested and decided facts", () => {
+    const events = [
+      {
+        id: 1,
+        kind: DECISION_GATE_KIND.REQUESTED,
+        payload: {
+          gateRef: "gate/consumed-terminal",
+          subjectRef: "subject-1",
+          claim,
+        },
+      },
+      {
+        id: 2,
+        kind: DECISION_GATE_KIND.DECIDED,
+        payload: {
+          gateRef: "gate/consumed-terminal",
+          decisionRef: "decision/1",
+          decision: "approved",
+          decidedBy: "operator/alice",
+        },
+      },
+      {
+        id: 3,
+        kind: DECISION_GATE_KIND.CONSUMED,
+        payload: {
+          gateRef: "gate/consumed-terminal",
+          decisionRef: "decision/1",
+          consumedBy: "submit",
+          claim: consumedClaim,
+        },
+      },
+      {
+        id: 4,
+        kind: DECISION_GATE_KIND.REQUESTED,
+        payload: {
+          gateRef: "gate/consumed-terminal",
+          subjectRef: "subject-2",
+          claim,
+        },
+      },
+      {
+        id: 5,
+        kind: DECISION_GATE_KIND.DECIDED,
+        payload: {
+          gateRef: "gate/consumed-terminal",
+          decisionRef: "decision/2",
+          decision: "rejected",
+          decidedBy: "operator/bob",
+          rejectionRef,
+        },
+      },
+    ] as const;
+
+    expect(projectDecisionGate(events, "gate/consumed-terminal")).toMatchObject({
+      status: "consumed",
+      request: {
+        gateRef: "gate/consumed-terminal",
+        subjectRef: "subject-1",
+      },
+      decision: {
+        gateRef: "gate/consumed-terminal",
+        decisionRef: "decision/1",
+        decision: "approved",
+      },
+      consumed: {
+        gateRef: "gate/consumed-terminal",
+        decisionRef: "decision/1",
+      },
+    });
+  });
+
+  it("keeps a rejected gate terminal across later requested and decided facts", () => {
+    const events = [
+      {
+        id: 1,
+        kind: DECISION_GATE_KIND.REQUESTED,
+        payload: {
+          gateRef: "gate/rejected-terminal",
+          subjectRef: "subject-1",
+          claim,
+        },
+      },
+      {
+        id: 2,
+        kind: DECISION_GATE_KIND.DECIDED,
+        payload: {
+          gateRef: "gate/rejected-terminal",
+          decisionRef: "decision/rejected",
+          decision: "rejected",
+          decidedBy: "operator/bob",
+          rejectionRef,
+        },
+      },
+      {
+        id: 3,
+        kind: DECISION_GATE_KIND.REQUESTED,
+        payload: {
+          gateRef: "gate/rejected-terminal",
+          subjectRef: "subject-2",
+          claim,
+        },
+      },
+      {
+        id: 4,
+        kind: DECISION_GATE_KIND.DECIDED,
+        payload: {
+          gateRef: "gate/rejected-terminal",
+          decisionRef: "decision/approved",
+          decision: "approved",
+          decidedBy: "operator/alice",
+        },
+      },
+    ] as const;
+
+    expect(projectDecisionGate(events, "gate/rejected-terminal")).toMatchObject({
+      status: "rejected",
+      request: {
+        gateRef: "gate/rejected-terminal",
+        subjectRef: "subject-1",
+      },
+      decision: {
+        gateRef: "gate/rejected-terminal",
+        decisionRef: "decision/rejected",
+        decision: "rejected",
+        rejectionRef,
+      },
+      consumed: undefined,
     });
   });
 

@@ -114,6 +114,11 @@ const consumedFrom = (
   return { gateRef, decisionRef, consumedBy, claim };
 };
 
+const isTerminalLifecycle = (
+  decision: DecisionGateDecidedPayload | undefined,
+  consumed: DecisionGateConsumedPayload | undefined,
+): boolean => consumed !== undefined || decision?.decision === "rejected";
+
 export const projectDecisionGate = (
   events: Iterable<DecisionGateLedgerEvent>,
   gateRef: string,
@@ -125,21 +130,19 @@ export const projectDecisionGate = (
   for (const event of events) {
     if (!Predicate.isRecord(event.payload)) continue;
     if (event.payload.gateRef !== gateRef) continue;
+    if (isTerminalLifecycle(decision, consumed)) continue;
     switch (event.kind) {
       case DECISION_GATE_KIND.REQUESTED: {
         const next = requestedFrom(event.payload);
-        if (next !== undefined) {
+        if (next !== undefined && request === undefined) {
           request = next;
-          decision = undefined;
-          consumed = undefined;
         }
         break;
       }
       case DECISION_GATE_KIND.DECIDED: {
         const next = decidedFrom(event.payload);
-        if (next !== undefined && request !== undefined && consumed === undefined) {
+        if (next !== undefined && request !== undefined && decision === undefined) {
           decision = next;
-          consumed = undefined;
         }
         break;
       }
