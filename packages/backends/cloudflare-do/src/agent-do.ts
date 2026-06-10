@@ -109,7 +109,7 @@ import { Dispatch, type DispatchEnvelope, type DispatchTargetRegistry } from "./
 import { EventBus, createEventStreamResponse, eventToRpc } from "./ledger";
 import { Scheduler } from "./scheduler";
 import { Resources } from "./resources";
-import { LlmTransportLive } from "./llm";
+import { MissingLlmTransportLive } from "./llm";
 import { isMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
 import { AdmissionLive } from "./admission";
 import {
@@ -251,6 +251,7 @@ const makeAgentRuntime = <Env extends CloudflareAgentEnv>(
   identity: BackendProtocolEventIdentity,
   handlers: Map<string, Set<EventHandler>>,
   refs: RefResolver,
+  llmTransport: Layer.Layer<LlmTransport, never, RefResolverService>,
   dispatchTargets: DispatchTargetRegistry,
   appTriggers: CloudflareTriggerSource<Env>,
   appStreams: CloudflareAttachedStreamSource<Env>,
@@ -268,7 +269,7 @@ const makeAgentRuntime = <Env extends CloudflareAgentEnv>(
     appProjections,
   );
   const refResolverLayer = RefResolverLive(refs);
-  const llmTransportLayer = LlmTransportLive.pipe(Layer.provide(refResolverLayer));
+  const llmTransportLayer = llmTransport.pipe(Layer.provide(refResolverLayer));
   const admissionLayer = AdmissionLive(ctx, identity).pipe(
     Layer.provide(Layer.mergeAll(backendCoreLayer, llmTransportLayer)),
   );
@@ -284,6 +285,7 @@ export interface AgentDurableObjectConfig<
   readonly manifest?: AgentManifest;
   readonly agentBindings?: AgentBindings;
   readonly refResolver?: (env: Env) => RefResolver;
+  readonly llmTransport?: (env: Env) => Layer.Layer<LlmTransport, never, RefResolverService>;
   readonly extensions?: (env: Env) => ReadonlyArray<ExtensionDeclaration>;
   readonly dispatchTargets?: (env: Env) => DispatchTargetRegistry;
   readonly triggers?: CloudflareTriggerSource<Env>;
@@ -302,6 +304,7 @@ export interface MaterializedAgentConfig<
 > {
   readonly mountedAgent: MountedAgent;
   readonly refResolver: RefResolver;
+  readonly llmTransport: Layer.Layer<LlmTransport, never, RefResolverService>;
   readonly extensions: ReadonlyArray<ExtensionDeclaration>;
   readonly dispatchTargets: DispatchTargetRegistry;
   readonly triggers: CloudflareTriggerSource<Env>;
@@ -338,6 +341,7 @@ export class AgentDurableObject<
   private readonly _handlers: Map<string, Set<EventHandler>> = new Map();
   private readonly _mountedAgent: MountedAgent;
   private readonly _refResolver: RefResolver;
+  private readonly _llmTransport: Layer.Layer<LlmTransport, never, RefResolverService>;
   private readonly _extensionValidation: ExtensionValidation;
   private readonly _capabilities: ReadonlyMap<string, ExtensionCapability>;
   private readonly _dispatchTargets: DispatchTargetRegistry;
@@ -354,6 +358,7 @@ export class AgentDurableObject<
     super(ctx, env);
     this._mountedAgent = config.mountedAgent;
     this._refResolver = config.refResolver;
+    this._llmTransport = config.llmTransport;
     this._extensionValidation = validateExtensionDeclarations(config.extensions);
     this._capabilities = this.extensionCapabilities();
     this._dispatchTargets = config.dispatchTargets;
@@ -406,6 +411,7 @@ export class AgentDurableObject<
       identity,
       this._handlers,
       this._refResolver,
+      this._llmTransport,
       this._dispatchTargets,
       this._triggers,
       this._streams,
@@ -1165,6 +1171,7 @@ export const createAgentDurableObject = <Env extends CloudflareAgentEnv>(
       super(ctx, env, {
         mountedAgent: mountCloudflareAgent(config.manifest, config.agentBindings),
         refResolver: config.refResolver?.(env) ?? emptyRefResolver,
+        llmTransport: config.llmTransport?.(env) ?? MissingLlmTransportLive,
         extensions: config.extensions?.(env) ?? [],
         dispatchTargets: config.dispatchTargets?.(env) ?? {},
         triggers: config.triggers ?? [],

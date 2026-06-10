@@ -1,19 +1,7 @@
-/**
- * Cloudflare LLM transport layer.
- *
- * Provider protocol projection is owned by @agent-os/llm-transport-effect-ai.
- * Cloudflare DO only composes the transport with the DO ref resolver and a
- * fetch-backed Effect Platform HTTP client.
- */
-
-import { layer as FetchHttpClientLive } from "@effect/platform/FetchHttpClient";
-import { Layer } from "effect";
-import {
-  defaultEffectAiLanguageModelFactory,
-  makeEffectAiLlmTransportLayer,
-} from "@agent-os/llm-transport-effect-ai";
+import { Effect, Layer } from "effect";
+import { UpstreamFailure } from "@agent-os/kernel/errors";
 import { LlmTransport } from "@agent-os/llm-protocol";
-import { RefResolverService } from "@agent-os/kernel/ref-resolver";
+import type { RefResolverService } from "@agent-os/kernel/ref-resolver";
 
 export type {
   LlmMessage,
@@ -31,7 +19,11 @@ export {
   toolCallsFromLlmOutputItems,
 } from "@agent-os/llm-protocol";
 
-export const LlmTransportLive: Layer.Layer<LlmTransport, never, RefResolverService> =
-  makeEffectAiLlmTransportLayer(defaultEffectAiLanguageModelFactory).pipe(
-    Layer.provide(Layer.mergeAll(FetchHttpClientLive, Layer.scope)),
-  );
+const missingLlmTransport = () =>
+  new UpstreamFailure({ cause: { reason: "cloudflare_do_llm_transport_unbound" } });
+
+export const MissingLlmTransportLive: Layer.Layer<LlmTransport, never, RefResolverService> =
+  Layer.succeed(LlmTransport, {
+    resolveRoute: () => Effect.fail(missingLlmTransport()),
+    call: () => Effect.fail(missingLlmTransport()),
+  });

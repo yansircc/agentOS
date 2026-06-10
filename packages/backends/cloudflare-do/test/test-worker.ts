@@ -5,7 +5,8 @@
  */
 
 import { DurableObject } from "cloudflare:workers";
-import { Cause, Effect, Exit, Option, Schema, Predicate } from "effect";
+import { Cause, Effect, Exit, Layer, Option, Schema, Predicate } from "effect";
+import { LlmTransport } from "@agent-os/llm-protocol";
 import {
   credential,
   createAgentDurableObject,
@@ -49,6 +50,7 @@ import {
 import { defineSettlementContract, settleLived } from "@agent-os/kernel/settlement-contract";
 import { defineTool, pureToolExecution } from "@agent-os/kernel/tools";
 import type { EventHandler } from "@agent-os/kernel/types";
+import { UpstreamFailure } from "@agent-os/kernel/errors";
 import type {
   BackendProtocolEventIdentity,
   DispatchTargetAdapter,
@@ -435,6 +437,8 @@ export const facadeLookup = defineTool({
   execute: ({ key }) => Effect.succeed({ value: key }),
 });
 
+const FACADE_SECRET = "facade-secret-that-must-stay-out-of-ledger-and-llm-requests";
+
 export const facadeApply = defineTool({
   name: "apply",
   description: "Apply with a run-scoped material",
@@ -452,34 +456,108 @@ export const facadeApply = defineTool({
   ],
   execute: (_args, ctx) =>
     Effect.succeed({
-      materialMatched:
-        ctx.materials.facade_token ===
-        "facade-secret-that-must-stay-out-of-ledger-and-llm-requests",
+      materialMatched: ctx.materials.facade_token === FACADE_SECRET,
     }),
 });
 
-export const makeFacadeSubmitChatResponse = (): Response =>
-  Response.json({
-    id: "chatcmpl_facade_submit",
-    object: "chat.completion",
-    model: "gpt-4.1-mini",
-    created: 1_700_000_000,
-    choices: [
-      {
-        index: 0,
-        message: {
-          role: "assistant",
-          content: "facade done",
+const facadeSubmitLlmTransport = Layer.succeed(LlmTransport, {
+  resolveRoute: (route) =>
+    Effect.succeed({
+      wireDescriptor: {
+        method: "POST",
+        url: `test-llm://${String(route.kind ?? "unknown")}`,
+        headers: [
+          ["x-agentos-endpoint-ref", String(route.endpointRef ?? "")],
+          ["x-agentos-credential-ref", String(route.credentialRef ?? "")],
+        ],
+        bodySchema: {
+          type: "object",
+          properties: {
+            messages: {
+              type: "array",
+              items: { type: "object", properties: {}, additionalProperties: true },
+            },
+          },
+          additionalProperties: true,
         },
-        finish_reason: "stop",
       },
-    ],
-    usage: {
-      prompt_tokens: 3,
-      completion_tokens: 4,
-      total_tokens: 7,
-    },
-  });
+      providerOutputAdapterId: `${String(route.kind ?? "unknown")}@facade-submit-test`,
+      providerOutputAdapterVersion: "1.0.0",
+      transportAdapterId: "facade-submit-test-transport",
+      transportAdapterVersion: "1.0.0",
+    }),
+  call: (request) => {
+    const route = request.route;
+    const toolNames = request.tools?.map((tool) => tool.function.name) ?? [];
+    const requestJson = JSON.stringify(request);
+    if (requestJson.includes(FACADE_SECRET)) {
+      return Effect.fail(
+        new UpstreamFailure({
+          cause: {
+            reason: "facade_submit_test_llm_request_leaked_provider_material",
+          },
+        }),
+      );
+    }
+    const routeOk = route.kind === "openai-chat-compatible" && route.modelId === "gpt-4.1-mini";
+    if (routeOk && toolNames.length === 1 && toolNames[0] === "lookup") {
+      return Effect.succeed({
+        items: [{ type: "message" as const, text: "facade done" }],
+        usage: {
+          promptTokens: 3,
+          completionTokens: 4,
+          totalTokens: 7,
+        },
+      });
+    }
+    if (routeOk && toolNames.length === 1 && toolNames[0] === "apply") {
+      const hasToolResult = request.messages.some(
+        (message) =>
+          message.role === "tool" && message.content?.includes('"materialMatched":true') === true,
+      );
+      if (hasToolResult) {
+        return Effect.succeed({
+          items: [{ type: "message" as const, text: "facade done" }],
+          usage: {
+            promptTokens: 2,
+            completionTokens: 3,
+            totalTokens: 5,
+          },
+        });
+      }
+      return Effect.succeed({
+        items: [
+          {
+            type: "tool_call" as const,
+            call: {
+              id: "call-apply",
+              type: "function" as const,
+              function: {
+                name: "apply",
+                arguments: '{"key":"abc"}',
+              },
+            },
+          },
+        ],
+        usage: {
+          promptTokens: 3,
+          completionTokens: 2,
+          totalTokens: 5,
+        },
+      });
+    }
+    return Effect.fail(
+      new UpstreamFailure({
+        cause: {
+          reason: "facade_submit_test_llm_request_mismatch",
+          routeKind: route.kind,
+          modelId: route.modelId,
+          toolNames,
+        },
+      }),
+    );
+  },
+});
 
 export const FacadeSubmitTestDO = defineAgentDO<CloudflareAgentEnv>({
   bindings: [
@@ -488,7 +566,7 @@ export const FacadeSubmitTestDO = defineAgentDO<CloudflareAgentEnv>({
     credential<CloudflareAgentEnv>("facade-token", {
       provider: "facade",
       purpose: "apply",
-    }).from(() => "facade-secret-that-must-stay-out-of-ledger-and-llm-requests"),
+    }).from(() => FACADE_SECRET),
   ],
   llms: {
     default: openAIChat({
@@ -497,6 +575,7 @@ export const FacadeSubmitTestDO = defineAgentDO<CloudflareAgentEnv>({
       credential: "llm-key",
     }),
   },
+  llmTransport: () => facadeSubmitLlmTransport,
   scopeRefForScope: (scope) => ({ kind: "conversation", scopeId: scope }),
 });
 export type FacadeSubmitTestDO = InstanceType<typeof FacadeSubmitTestDO>;

@@ -1,9 +1,8 @@
 /**
  * LLM public barrel.
  *
- * Owns the Cloudflare DO composition point for the shared LlmTransport.
- * Provider protocol projection lives in @agent-os/llm-transport-effect-ai;
- * this barrel only exposes the backend's transport layer and shared LLM types.
+ * Re-exports provider-neutral LlmTransport types and the fail-closed backend
+ * service used when no explicit provider binding is configured.
  *
  * `ref-resolver.ts` deliberately stays at the src/ root: it's a
  * cross-cutting endpoint+credential lookup, not LLM-specific.

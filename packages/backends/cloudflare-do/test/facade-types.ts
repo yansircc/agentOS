@@ -1,6 +1,9 @@
 import type { SubmitSpec } from "@agent-os/runtime-protocol";
 import { credentialMaterialRef } from "@agent-os/kernel/material-ref";
 import { defineAgentSubmitBindings } from "@agent-os/runtime-protocol";
+import type { LlmTransport } from "@agent-os/llm-protocol";
+import type { RefResolverService } from "@agent-os/kernel/ref-resolver";
+import type { Layer } from "effect";
 import {
   credential,
   createAgentDurableObject,
@@ -28,6 +31,7 @@ interface ProductRpc {
 }
 
 const scheduleAt = 1_700_000_000_000;
+declare const llmTransport: (env: TestEnv) => Layer.Layer<LlmTransport, never, RefResolverService>;
 
 defineAgentDO<TestEnv>({
   on: {
@@ -61,6 +65,7 @@ const LlmDO = defineAgentDO<TestEnv>({
       credential: "llm-key",
     }),
   },
+  llmTransport,
 });
 
 declare const agent: InstanceType<typeof LlmDO>;

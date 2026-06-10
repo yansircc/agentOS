@@ -3,6 +3,9 @@ import type { ScopeRef } from "@agent-os/kernel/effect-claim";
 import type { DispatchToScopeResult, DispatchToScopeSpec } from "@agent-os/kernel/types";
 import type { AttachedStreamCancelResult, TriggerCancelResult } from "@agent-os/runtime";
 import type { AgentBindings, AgentManifest, SubmitResult } from "@agent-os/runtime-protocol";
+import type { LlmTransport } from "@agent-os/llm-protocol";
+import type { RefResolverService } from "@agent-os/kernel/ref-resolver";
+import type { Layer } from "effect";
 import {
   AgentDurableObject,
   type AgentAttachedStreamCancelSpec,
@@ -19,6 +22,7 @@ import { mountCloudflareAgent } from "./mount";
 import type { CloudflareTriggerSource } from "./trigger-factory";
 import type { CloudflareAttachedStreamSource } from "./stream-factory";
 import type { AnyMaterializedProjectionDefinition } from "@agent-os/runtime";
+import { MissingLlmTransportLive } from "./llm";
 import {
   lowerAgentConfig,
   type AgentLoweringConfig,
@@ -72,6 +76,7 @@ interface DefineAgentDOConfigBase<
 > extends Omit<AgentLoweringConfig<Env>, "llms"> {
   readonly manifest?: AgentManifest;
   readonly agentBindings?: AgentBindings;
+  readonly llmTransport?: (env: Env) => Layer.Layer<LlmTransport, never, RefResolverService>;
   readonly on?: Readonly<Record<string, AgentOnHandler<Env, Runtime>>>;
   readonly extensions?:
     | ReadonlyArray<ExtensionDeclaration>
@@ -90,6 +95,7 @@ export interface DefineAgentDOConfigWithSubmit<
   Env extends CloudflareAgentEnv,
 > extends DefineAgentDOConfigBase<Env, AgentFacadeRuntimeClientWithSubmit> {
   readonly llms: LlmRouteMap;
+  readonly llmTransport: (env: Env) => Layer.Layer<LlmTransport, never, RefResolverService>;
 }
 
 export interface DefineAgentDOConfigWithoutSubmit<
@@ -137,6 +143,7 @@ const materializedConfigForEnv = <
 ): MaterializedAgentConfig<Env, Runtime> => ({
   mountedAgent: mountCloudflareAgent(config.manifest, config.agentBindings),
   refResolver: lowered.refResolver,
+  llmTransport: config.llmTransport?.(env) ?? MissingLlmTransportLive,
   extensions: extensionsFor(config.extensions, env),
   dispatchTargets: lowered.dispatchTargets,
   triggers: config.triggers ?? [],
