@@ -542,88 +542,6 @@ export const runRuntimeBackendContractSuite = (
       ),
     );
 
-    it.effect("claims one due dispatch retry across concurrent drainers", () =>
-      withDriver((driver) =>
-        Effect.gen(function* () {
-          const senderIdentity = contractIdentity("concurrent-sender");
-          const receiverIdentity = contractIdentity("concurrent-receiver");
-          let receiveAttempts = 0;
-          let releaseRetry: (() => void) | undefined;
-          let retryStartedResolve: (() => void) | undefined;
-          const retryStarted = new Promise<void>((resolve) => {
-            retryStartedResolve = resolve;
-          });
-          const waitForRetryStarted = (): Promise<void> =>
-            new Promise((resolve, reject) => {
-              const timeout = setTimeout(
-                () => reject(new Error("concurrent retry drain never reached receiver")),
-                1_000,
-              );
-              retryStarted.then(
-                () => {
-                  clearTimeout(timeout);
-                  resolve();
-                },
-                (cause) => {
-                  clearTimeout(timeout);
-                  reject(cause);
-                },
-              );
-            });
-
-          yield* promise(() =>
-            driver.registerDispatchReceiver(receiverIdentity, (_envelope, accept) => {
-              receiveAttempts += 1;
-              if (receiveAttempts === 1) return Promise.reject("retry once");
-              retryStartedResolve?.();
-              return new Promise<void>((resolve) => {
-                releaseRetry = resolve;
-              }).then(() => accept());
-            }),
-          );
-
-          yield* promise(() =>
-            driver.dispatchToScope(
-              senderIdentity,
-              dispatchSpec(driver, "concurrent-receiver", "concurrent-claim", "app.concurrent", {
-                value: 5,
-              }),
-            ),
-          );
-          const firstEvents = yield* promise(() => driver.events(senderIdentity));
-          const failed = payloadsOf<{ readonly nextAttemptAt?: number }>(
-            firstEvents,
-            DISPATCH_EVENT_KINDS.OUTBOUND_FAILED,
-          );
-          expect(failed).toHaveLength(1);
-          expect(typeof failed[0]?.nextAttemptAt).toBe("number");
-
-          const concurrentDrains = Array.from({ length: 8 }, () =>
-            driver.drainDispatchDue(senderIdentity, failed[0]!.nextAttemptAt!),
-          );
-          yield* promise(waitForRetryStarted);
-          releaseRetry?.();
-          const results = yield* promise(() => Promise.all(concurrentDrains));
-
-          expect(results.reduce((sum, result) => sum + result.delivered, 0)).toBe(1);
-          expect(results.reduce((sum, result) => sum + result.failed, 0)).toBe(0);
-          expect(
-            results.filter((result) => result.delivered === 0 && result.failed === 0),
-          ).toHaveLength(results.length - 1);
-          expect(receiveAttempts).toBe(2);
-
-          const senderEvents = yield* promise(() => driver.events(senderIdentity));
-          const delivered = payloadsOf<{ readonly attempt: number }>(
-            senderEvents,
-            DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED,
-          );
-          expect(delivered).toHaveLength(1);
-          expect(delivered[0]).toMatchObject({ attempt: 2 });
-          expect(yield* promise(() => driver.pendingDueCount(senderIdentity))).toBe(0);
-        }),
-      ),
-    );
-
     it.effect("marks dispatch terminal failure at the shared attempt cap", () =>
       withDriver((driver) =>
         Effect.gen(function* () {
@@ -880,6 +798,88 @@ export const runRuntimeBackendContractSuite = (
             "quota.rate_limited",
             "quota.consumed",
           ]);
+        }),
+      ),
+    );
+
+    it.effect("claims one due dispatch retry across concurrent drainers", () =>
+      withDriver((driver) =>
+        Effect.gen(function* () {
+          const senderIdentity = contractIdentity("concurrent-sender");
+          const receiverIdentity = contractIdentity("concurrent-receiver");
+          let receiveAttempts = 0;
+          let releaseRetry: (() => void) | undefined;
+          let retryStartedResolve: (() => void) | undefined;
+          const retryStarted = new Promise<void>((resolve) => {
+            retryStartedResolve = resolve;
+          });
+          const waitForRetryStarted = (): Promise<void> =>
+            new Promise((resolve, reject) => {
+              const timeout = setTimeout(
+                () => reject(new Error("concurrent retry drain never reached receiver")),
+                1_000,
+              );
+              retryStarted.then(
+                () => {
+                  clearTimeout(timeout);
+                  resolve();
+                },
+                (cause) => {
+                  clearTimeout(timeout);
+                  reject(cause);
+                },
+              );
+            });
+
+          yield* promise(() =>
+            driver.registerDispatchReceiver(receiverIdentity, (_envelope, accept) => {
+              receiveAttempts += 1;
+              if (receiveAttempts === 1) return Promise.reject("retry once");
+              retryStartedResolve?.();
+              return new Promise<void>((resolve) => {
+                releaseRetry = resolve;
+              }).then(() => accept());
+            }),
+          );
+
+          yield* promise(() =>
+            driver.dispatchToScope(
+              senderIdentity,
+              dispatchSpec(driver, "concurrent-receiver", "concurrent-claim", "app.concurrent", {
+                value: 5,
+              }),
+            ),
+          );
+          const firstEvents = yield* promise(() => driver.events(senderIdentity));
+          const failed = payloadsOf<{ readonly nextAttemptAt?: number }>(
+            firstEvents,
+            DISPATCH_EVENT_KINDS.OUTBOUND_FAILED,
+          );
+          expect(failed).toHaveLength(1);
+          expect(typeof failed[0]?.nextAttemptAt).toBe("number");
+
+          const concurrentDrains = Array.from({ length: 8 }, () =>
+            driver.drainDispatchDue(senderIdentity, failed[0]!.nextAttemptAt!),
+          );
+          yield* promise(waitForRetryStarted);
+          releaseRetry?.();
+          const results = yield* promise(() => Promise.all(concurrentDrains));
+
+          expect(results.reduce((sum, result) => sum + result.delivered, 0)).toBe(1);
+          expect(results.reduce((sum, result) => sum + result.failed, 0)).toBe(0);
+          expect(
+            results.filter((result) => result.delivered === 0 && result.failed === 0),
+          ).toHaveLength(results.length - 1);
+          expect(receiveAttempts).toBe(2);
+
+          const senderEvents = yield* promise(() => driver.events(senderIdentity));
+          const delivered = payloadsOf<{ readonly attempt: number }>(
+            senderEvents,
+            DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED,
+          );
+          expect(delivered).toHaveLength(1);
+          expect(delivered[0]).toMatchObject({ attempt: 2 });
+          expect(yield* promise(() => driver.pendingDueCount(senderIdentity))).toBe(0);
         }),
       ),
     );

@@ -294,17 +294,18 @@ export const QuotaConsumedPayloadSchema = Schema.Struct({
   operationRef: Schema.String,
 });
 
-export const decodeResourceGrantPayloadSync =
-  Schema.decodeUnknownSync(ResourceGrantPayloadSchema);
-export const decodeResourceReservePayloadSync =
-  Schema.decodeUnknownSync(ResourceReservePayloadSchema);
+export const decodeResourceGrantPayloadSync = Schema.decodeUnknownSync(ResourceGrantPayloadSchema);
+export const decodeResourceReservePayloadSync = Schema.decodeUnknownSync(
+  ResourceReservePayloadSchema,
+);
 export const decodeResourceReserveRejectedPayloadSync = Schema.decodeUnknownSync(
   ResourceReserveRejectedPayloadSchema,
 );
-export const decodeResourceTerminalPayloadSync =
-  Schema.decodeUnknownSync(ResourceTerminalPayloadSchema);
-export const decodeQuotaConsumedPayloadSync =
-  Schema.decodeUnknownSync(QuotaConsumedPayloadSchema);
+export const decodeResourceTerminalPayloadSync = Schema.decodeUnknownSync(
+  ResourceTerminalPayloadSchema,
+);
+export const decodeQuotaConsumedPayloadSync = Schema.decodeUnknownSync(QuotaConsumedPayloadSchema);
+const decodeResourceEventKindSync = Schema.decodeUnknownSync(Schema.String);
 
 export type ResourceReservationStatus = "active" | "consumed" | "released";
 
@@ -334,7 +335,7 @@ export const emptyResourceProjection = (): ResourceProjection => ({
   consumed: 0,
 });
 
-const resourceKind = (value: unknown): string => Schema.decodeUnknownSync(Schema.String)(value);
+const resourceKind = (value: unknown): string => decodeResourceEventKindSync(value);
 
 const resourcePayload = (value: unknown): unknown =>
   typeof value === "string" ? (JSON.parse(value) as unknown) : value;
@@ -426,9 +427,7 @@ export const projectResourceRows = (
   return { byId: reservations, byIdempotencyKey, byKey };
 };
 
-export const projectResourceEvents = (
-  events: ReadonlyArray<LedgerEvent>,
-): ProjectedResourceState =>
+export const projectResourceEvents = (events: ReadonlyArray<LedgerEvent>): ProjectedResourceState =>
   projectResourceRows(events.map((event) => ({ kind: event.kind, payload: event.payload })));
 
 export const projectResourceState = (

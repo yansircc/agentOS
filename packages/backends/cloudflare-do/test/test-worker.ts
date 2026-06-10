@@ -5,7 +5,7 @@
  */
 
 import { DurableObject } from "cloudflare:workers";
-import { Cause, Effect, Exit, Layer, Option, Schema, Predicate } from "effect";
+import { Cause, Effect, Exit, Layer, ManagedRuntime, Option, Schema, Predicate } from "effect";
 import { LlmTransport } from "@agent-os/llm-protocol";
 import {
   credential,
@@ -21,10 +21,16 @@ import {
 import { withAgentDOTestingDrain } from "./_testing-drain";
 import { testTruthIdentity } from "./_identity";
 import {
+  Dispatch,
   defineProjection,
+  Ledger,
   makeProjectionRegistryResult,
   MaterializedProjectionRegistry,
   MaterializedProjections,
+  Quota,
+  Resources,
+  Scheduler,
+  TriggerPump,
   triggerParseFail,
   attachedStreamParseOk,
   projectionFail,
@@ -49,19 +55,393 @@ import {
 } from "@agent-os/kernel/material-ref";
 import { defineSettlementContract, settleLived } from "@agent-os/kernel/settlement-contract";
 import { defineTool, pureToolExecution } from "@agent-os/kernel/tools";
-import type { EventHandler } from "@agent-os/kernel/types";
 import { UpstreamFailure } from "@agent-os/kernel/errors";
 import type {
+  DispatchToScopeSpec,
+  EventHandler,
+  LedgerEvent,
+  ResourceGrantResult,
+  ResourceGrantSpec,
+  ResourceReservationSpec,
+  ResourceReserveResult,
+  ResourceReserveSpec,
+} from "@agent-os/kernel/types";
+import type {
   BackendProtocolEventIdentity,
+  BackendProtocolProjectionKey,
+  DispatchEnvelope,
+  DispatchReceiverResult,
   DispatchTargetAdapter,
+  DispatchTargetResult,
+  GrantResult,
+  ResourceProjection,
 } from "@agent-os/backend-protocol";
+import {
+  backendProtocolTruthIdentityKey,
+  DISPATCH_EVENT_KINDS,
+  dispatchTargetDelivered,
+} from "@agent-os/backend-protocol";
+import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
+import type { TelemetryFanoutDiagnostic } from "@agent-os/telemetry-protocol";
 import { CloudflareMaterializedProjectionsLive } from "../src/materialized-projections";
 import { commitLedgerTransaction } from "../src/ledger/commit";
 import type { EventBusService } from "../src/ledger/event-bus";
+import { cloudflareRouteKeyFromScopeRef } from "../src/ledger/identity";
+import { makeCloudflareBackendCoreLayer } from "../src/runtime-core";
+import { findNextDue } from "../src/due-work";
 
 const allowToolAdmitter = () => Effect.succeed({ ok: true as const });
 
 export class TestAgentDO extends DurableObject {}
+
+export const BACKEND_PROTOCOL_CONTRACT_BINDING_REF = bindingMaterialRef({
+  provider: "cloudflare",
+  bindingKind: "durable_object",
+  ref: "backend-protocol-contract",
+});
+
+const backendProtocolContractBindingKey = materialRefKey(BACKEND_PROTOCOL_CONTRACT_BINDING_REF);
+
+type ContractDispatchReceiver = (
+  envelope: DispatchEnvelope,
+  accept: () => Promise<DispatchReceiverResult>,
+) => Promise<DispatchReceiverResult>;
+
+type ContractDispatchTargetAdapter =
+  | DispatchTargetAdapter
+  | ((envelope: DispatchEnvelope) => Promise<DispatchTargetResult>);
+
+type ContractReceiveResult =
+  | { readonly ok: true; readonly result: DispatchReceiverResult }
+  | { readonly ok: false; readonly error: string };
+
+interface BackendProtocolContractEnv extends CloudflareAgentEnv {
+  readonly BACKEND_PROTOCOL_CONTRACT_DO: DurableObjectNamespace<BackendProtocolContractTestDO>;
+}
+
+const contractIdentityForScope = (scope: string): BackendProtocolEventIdentity => ({
+  scopeRef: { kind: "conversation", scopeId: scope },
+  effectAuthorityRef: { authorityClass: "effect", authorityId: scope },
+  factOwnerRef: RUNTIME_FACT_OWNER,
+});
+
+const makeBackendProtocolContractRuntime = (
+  ctx: DurableObjectState,
+  env: BackendProtocolContractEnv,
+  scope: string,
+  identity: BackendProtocolEventIdentity,
+  handlers: Map<string, Set<EventHandler>>,
+  dispatchTargets: Record<string, DispatchTargetAdapter>,
+) =>
+  ManagedRuntime.make(
+    makeCloudflareBackendCoreLayer(ctx, env, scope, identity, handlers, dispatchTargets),
+  );
+
+type BackendProtocolContractRuntime = ReturnType<typeof makeBackendProtocolContractRuntime>;
+
+export class BackendProtocolContractTestDO extends DurableObject<BackendProtocolContractEnv> {
+  private readonly handlers = new Map<string, Set<EventHandler>>();
+  private readonly dispatchTargets: Record<string, DispatchTargetAdapter>;
+  private readonly sinkDiagnostics: TelemetryFanoutDiagnostic[] = [];
+  private receiverIdentity: BackendProtocolEventIdentity | undefined;
+  private receiver: ContractDispatchReceiver | undefined;
+  private idPrefix = "";
+
+  constructor(ctx: DurableObjectState, env: BackendProtocolContractEnv) {
+    super(ctx, env);
+    this.dispatchTargets = {
+      [backendProtocolContractBindingKey]: this.defaultDispatchTarget(),
+    };
+  }
+
+  configure(spec: { readonly idPrefix: string }): void {
+    this.idPrefix = spec.idPrefix;
+  }
+
+  replaceHandlers(handlers: Map<string, Set<EventHandler>>): void {
+    this.handlers.clear();
+    for (const [kind, set] of handlers) {
+      this.handlers.set(kind, new Set(set));
+    }
+  }
+
+  setDispatchTargetAdapter(adapter: ContractDispatchTargetAdapter | undefined): void {
+    this.dispatchTargets[backendProtocolContractBindingKey] =
+      adapter === undefined
+        ? this.defaultDispatchTarget()
+        : typeof adapter === "function"
+          ? { deliver: adapter }
+          : adapter;
+  }
+
+  registerDispatchReceiver(
+    identity: BackendProtocolEventIdentity,
+    receiver?: ContractDispatchReceiver,
+  ): void {
+    this.receiverIdentity = identity;
+    this.receiver = receiver;
+  }
+
+  addHandler(kind: string, handler: EventHandler): { readonly unsubscribe: () => void } {
+    let set = this.handlers.get(kind);
+    if (set === undefined) {
+      set = new Set();
+      this.handlers.set(kind, set);
+    }
+    set.add(handler);
+    return {
+      unsubscribe: () => {
+        set?.delete(handler);
+      },
+    };
+  }
+
+  addSink(
+    identity: BackendProtocolEventIdentity,
+    kind: string,
+    sink: (event: LedgerEvent) => void,
+  ): { readonly unsubscribe: () => void } {
+    const identityKey = backendProtocolTruthIdentityKey(identity);
+    const handler: EventHandler = (event) => {
+      if (backendProtocolTruthIdentityKey(event) !== identityKey) return Promise.resolve();
+      return Promise.resolve()
+        .then(() => sink(event))
+        .catch((cause) => {
+          this.sinkDiagnostics.push({
+            phase: "sink",
+            eventId: event.id,
+            kind: event.kind,
+            identityKey,
+            message: cause instanceof Error ? `${cause.name}: ${cause.message}` : String(cause),
+          });
+        });
+    };
+    return this.addHandler(kind, handler);
+  }
+
+  async telemetryDiagnostics(): Promise<ReadonlyArray<TelemetryFanoutDiagnostic>> {
+    return [...this.sinkDiagnostics];
+  }
+
+  async log(
+    identity: BackendProtocolEventIdentity,
+    kind: string,
+    payload: unknown,
+  ): Promise<LedgerEvent> {
+    return this.withRuntime(identity, async (runtime) => {
+      const ledger = await runtime.runPromise(Ledger);
+      const events = await runtime.runPromise(
+        ledger.commit([
+          {
+            kind,
+            payload,
+            scopeRef: identity.scopeRef,
+            effectAuthorityRef: identity.effectAuthorityRef,
+          },
+        ]),
+      );
+      const event = events[0];
+      if (event === undefined) throw new Error("ledger commit returned no event");
+      return event;
+    });
+  }
+
+  async events(identity: BackendProtocolEventIdentity): Promise<ReadonlyArray<LedgerEvent>> {
+    return this.withRuntime(identity, async (runtime) => {
+      const ledger = await runtime.runPromise(Ledger);
+      return runtime.runPromise(ledger.events(identity));
+    });
+  }
+
+  async schedule(
+    identity: BackendProtocolEventIdentity,
+    at: number,
+    eventKind: string,
+    data: unknown,
+  ): Promise<{ readonly id: number }> {
+    return this.withRuntime(identity, async (runtime) => {
+      const scheduler = await runtime.runPromise(Scheduler);
+      return runtime.runPromise(scheduler.schedule(at, eventKind, data));
+    });
+  }
+
+  async fireDue(
+    identity: BackendProtocolEventIdentity,
+    now: number,
+  ): Promise<{ readonly fired: number }> {
+    return this.withRuntime(identity, async (runtime) => {
+      const triggerPump = await runtime.runPromise(TriggerPump);
+      const result = await runtime.runPromise(triggerPump.drainDue(now));
+      return { fired: result.drained };
+    });
+  }
+
+  async dispatchToScope(identity: BackendProtocolEventIdentity, spec: DispatchToScopeSpec) {
+    return this.withRuntime(identity, async (runtime) => {
+      const dispatch = await runtime.runPromise(Dispatch);
+      return runtime.runPromise(dispatch.dispatchToScope(spec));
+    });
+  }
+
+  async drainDispatchDue(
+    identity: BackendProtocolEventIdentity,
+    now: number,
+  ): Promise<{ readonly delivered: number; readonly failed: number }> {
+    return this.withRuntime(identity, async (runtime) => {
+      const ledger = await runtime.runPromise(Ledger);
+      const before = await runtime.runPromise(ledger.events(identity));
+      const triggerPump = await runtime.runPromise(TriggerPump);
+      const result = await runtime.runPromise(triggerPump.drainDue(now));
+      if (result.drained === 0) return { delivered: 0, failed: 0 };
+      const after = await runtime.runPromise(ledger.events(identity));
+      const slice = after.slice(before.length);
+      return {
+        delivered: slice.filter((event) => event.kind === DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED)
+          .length,
+        failed: slice.filter((event) => event.kind === DISPATCH_EVENT_KINDS.OUTBOUND_FAILED).length,
+      };
+    });
+  }
+
+  nextDueAt(identity: BackendProtocolEventIdentity): Promise<number | null> {
+    return this.withRuntime(identity, (runtime) =>
+      runtime.runPromise(findNextDue(this.ctx.storage.sql)),
+    );
+  }
+
+  pendingDueCount(): number {
+    return this.ctx.storage.sql.exec("SELECT * FROM due_work WHERE completed_at IS NULL").toArray()
+      .length;
+  }
+
+  async grantResource(
+    identity: BackendProtocolEventIdentity,
+    spec: ResourceGrantSpec,
+  ): Promise<ResourceGrantResult> {
+    return this.withRuntime(identity, async (runtime) => {
+      const resources = await runtime.runPromise(Resources);
+      return runtime.runPromise(resources.grant(identity, spec));
+    });
+  }
+
+  async reserveResource(
+    identity: BackendProtocolEventIdentity,
+    spec: ResourceReserveSpec,
+  ): Promise<ResourceReserveResult> {
+    return this.withRuntime(identity, async (runtime) => {
+      const resources = await runtime.runPromise(Resources);
+      return runtime.runPromise(resources.reserve(identity, spec));
+    });
+  }
+
+  async consumeResource(
+    identity: BackendProtocolEventIdentity,
+    spec: ResourceReservationSpec,
+  ): Promise<void> {
+    return this.withRuntime(identity, async (runtime) => {
+      const resources = await runtime.runPromise(Resources);
+      return runtime.runPromise(resources.consume(identity, spec));
+    });
+  }
+
+  async releaseResource(
+    identity: BackendProtocolEventIdentity,
+    spec: ResourceReservationSpec,
+  ): Promise<void> {
+    return this.withRuntime(identity, async (runtime) => {
+      const resources = await runtime.runPromise(Resources);
+      return runtime.runPromise(resources.release(identity, spec));
+    });
+  }
+
+  async projectResource(key: BackendProtocolProjectionKey): Promise<ResourceProjection> {
+    return this.withRuntime(key, async (runtime) => {
+      const resources = await runtime.runPromise(Resources);
+      return runtime.runPromise(resources.project(key, key.projectionId));
+    });
+  }
+
+  async quotaTryGrant(
+    identity: BackendProtocolEventIdentity,
+    key: BackendProtocolProjectionKey,
+    amount: number,
+    windowMs: number,
+    limit: number,
+    toolName: string,
+    operationRef: string,
+  ): Promise<GrantResult> {
+    return this.withRuntime(identity, async (runtime) => {
+      const quota = await runtime.runPromise(Quota);
+      return runtime.runPromise(
+        quota.tryGrant(identity, key.projectionId, amount, windowMs, limit, toolName, operationRef),
+      );
+    });
+  }
+
+  async disposeDriver(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  alarm(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  __agentosReceiveDispatch(envelope: DispatchEnvelope): Promise<DispatchReceiverResult> {
+    const identity = this.receiverIdentity ?? contractIdentityForScope(envelope.targetScope);
+    const accept = async () => {
+      return this.withRuntime(identity, async (runtime) => {
+        const dispatch = await runtime.runPromise(Dispatch);
+        return runtime.runPromise(dispatch.receive(envelope));
+      });
+    };
+    return this.receiver === undefined ? accept() : this.receiver(envelope, accept);
+  }
+
+  async __agentosTryReceiveDispatch(envelope: DispatchEnvelope): Promise<ContractReceiveResult> {
+    try {
+      return { ok: true, result: await this.__agentosReceiveDispatch(envelope) };
+    } catch (cause) {
+      return { ok: false, error: cause instanceof Error ? cause.message : String(cause) };
+    }
+  }
+
+  private async withRuntime<A>(
+    identity: BackendProtocolEventIdentity,
+    fn: (runtime: BackendProtocolContractRuntime) => Promise<A>,
+  ): Promise<A> {
+    const runtime = this.runtimeFor(identity);
+    try {
+      return await fn(runtime);
+    } finally {
+      await runtime.dispose();
+    }
+  }
+
+  private runtimeFor(identity: BackendProtocolEventIdentity): BackendProtocolContractRuntime {
+    return makeBackendProtocolContractRuntime(
+      this.ctx,
+      this.env,
+      cloudflareRouteKeyFromScopeRef(identity.scopeRef),
+      identity,
+      this.handlers,
+      this.dispatchTargets,
+    );
+  }
+
+  private defaultDispatchTarget(): DispatchTargetAdapter {
+    return {
+      deliver: async (envelope) => {
+        const id = this.env.BACKEND_PROTOCOL_CONTRACT_DO.idFromName(
+          this.idPrefix + envelope.targetScope,
+        );
+        const receiver = this.env.BACKEND_PROTOCOL_CONTRACT_DO.get(id);
+        const received = await receiver.__agentosTryReceiveDispatch(envelope);
+        if (!received.ok) return Promise.reject(received.error);
+        return dispatchTargetDelivered(received.result);
+      },
+    };
+  }
+}
 
 export const EmitTestDO = createAgentDurableObject<CloudflareAgentEnv>({
   eventHandlers: ({ runtime }) => [

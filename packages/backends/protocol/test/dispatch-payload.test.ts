@@ -347,6 +347,7 @@ describe("@agent-os/backend-protocol", () => {
     expect(projected.byId.get("reservation-1")).toMatchObject({ status: "consumed" });
     expect(projected.byId.get("reservation-2")).toMatchObject({ status: "released" });
     expect(projected.byIdempotencyKey.get("op-1")?.reservationId).toBe("reservation-1");
+    expect(() => projectResourceRows([{ kind: 1, payload: {} }])).toThrow();
     expect(
       projectResourceState(
         rows.map((row, index) => ledgerEvent(index + 1, String(row.kind), row.payload)),

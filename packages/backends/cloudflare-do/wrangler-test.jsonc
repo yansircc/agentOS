@@ -58,6 +58,10 @@
         "name": "MATERIALIZED_PROJECTION_DO",
         "class_name": "MaterializedProjectionTestDO",
       },
+      {
+        "name": "BACKEND_PROTOCOL_CONTRACT_DO",
+        "class_name": "BackendProtocolContractTestDO",
+      },
     ],
   },
   "migrations": [
@@ -77,6 +81,7 @@
         "TriggerCancelTestDO",
         "AttachedStreamTestDO",
         "MaterializedProjectionTestDO",
+        "BackendProtocolContractTestDO",
       ],
     },
   ],
