@@ -3,21 +3,30 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  collectProductionBackendPackageSet,
+  productionBackendPackagesPath,
+  readJson,
+  sameStringSet,
+} from "./backend-neutral-production-backends.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..");
-const expectedBackends = ["packages/backends/cloudflare-do", "packages/backends/node-postgres"];
 const requiredKinds = ["dispatch.delivery", "llm.call", "tool.call"];
 
-const readJson = (root, rel) => JSON.parse(fs.readFileSync(path.join(root, rel), "utf8"));
-const sameSet = (left, right) =>
-  left.length === right.length && left.every((value) => right.includes(value));
-
-const collectFailures = (root = repoRoot) => {
+export const collectFailures = (root = repoRoot) => {
   const failures = [];
+  const backendSet = collectProductionBackendPackageSet(root, {
+    minCount: 2,
+    requireExistingSrc: true,
+  });
+  failures.push(...backendSet.failures);
+  const expectedBackends = backendSet.productionBackends;
   const fixture = readJson(root, "test/backend-neutral-replay.json");
-  if (!sameSet(fixture.productionBackends ?? [], expectedBackends)) {
-    failures.push("backend-neutral replay fixture must cover both production backends");
+  if (!sameStringSet(fixture.productionBackends ?? [], expectedBackends)) {
+    failures.push(
+      `backend-neutral replay fixture productionBackends must equal package.json ${productionBackendPackagesPath}`,
+    );
   }
   const scenarios = Array.isArray(fixture.scenarios) ? fixture.scenarios : [];
   for (const kind of requiredKinds) {
@@ -29,7 +38,7 @@ const collectFailures = (root = repoRoot) => {
   }
   const results = fixture.backendResults ?? {};
   for (const backend of expectedBackends) {
-    if (!sameSet(results[backend] ?? [], requiredKinds)) {
+    if (!sameStringSet(results[backend] ?? [], requiredKinds)) {
       failures.push(`replay backend result missing required scenarios for ${backend}`);
     }
   }
@@ -53,17 +62,31 @@ const writeFixture = (root, rel, source) => {
 const collectSelfTestFailures = () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-backend-neutral-replay-"));
   try {
+    const selfTestBackends = ["packages/backends/replay-alpha", "packages/backends/replay-beta"];
+    writeFixture(
+      root,
+      "package.json",
+      JSON.stringify({
+        agentos: {
+          backendNeutralityStatus: "backend-neutral",
+          backendNeutrality: { productionBackendPackages: selfTestBackends },
+        },
+      }),
+    );
     writeFixture(
       root,
       "test/backend-neutral-replay.json",
       JSON.stringify({
-        productionBackends: expectedBackends,
+        productionBackends: selfTestBackends,
         scenarios: requiredKinds.map((kind) => ({ kind, liveIoAdapterCalls: 0 })),
         backendResults: Object.fromEntries(
-          expectedBackends.map((backend) => [backend, requiredKinds]),
+          selfTestBackends.map((backend) => [backend, requiredKinds]),
         ),
       }),
     );
+    for (const backend of selfTestBackends) {
+      writeFixture(root, `${backend}/src/index.ts`, "");
+    }
     for (const script of [
       "scripts/check-replay-dispatch-snapshot.mjs",
       "scripts/check-replay-llm-snapshot.mjs",
@@ -77,13 +100,13 @@ const collectSelfTestFailures = () => {
       root,
       "test/backend-neutral-replay.json",
       JSON.stringify({
-        productionBackends: expectedBackends,
+        productionBackends: selfTestBackends,
         scenarios: requiredKinds.map((kind) => ({
           kind,
           liveIoAdapterCalls: kind === "tool.call" ? 1 : 0,
         })),
         backendResults: Object.fromEntries(
-          expectedBackends.map((backend) => [backend, requiredKinds]),
+          selfTestBackends.map((backend) => [backend, requiredKinds]),
         ),
       }),
     );
@@ -97,15 +120,20 @@ const collectSelfTestFailures = () => {
   }
 };
 
-const failures = process.argv.includes("--self-test")
-  ? collectSelfTestFailures()
-  : collectFailures(repoRoot);
-if (failures.length > 0) {
-  console.error(failures.join("\n"));
-  process.exit(1);
+const isMain =
+  process.argv[1] !== undefined && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isMain) {
+  const failures = process.argv.includes("--self-test")
+    ? collectSelfTestFailures()
+    : collectFailures(repoRoot);
+  if (failures.length > 0) {
+    console.error(failures.join("\n"));
+    process.exit(1);
+  }
+  console.log(
+    process.argv.includes("--self-test")
+      ? "backend-neutral replay self-test passed"
+      : "backend-neutral replay passed",
+  );
 }
-console.log(
-  process.argv.includes("--self-test")
-    ? "backend-neutral replay self-test passed"
-    : "backend-neutral replay passed",
-);

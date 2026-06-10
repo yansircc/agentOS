@@ -3,21 +3,31 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  collectProductionBackendPackageSet,
+  productionBackendPackagesPath,
+  readJson,
+  sameStringSet,
+} from "./backend-neutral-production-backends.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..");
-const expectedBackends = ["packages/backends/cloudflare-do", "packages/backends/node-postgres"];
 
-const readJson = (root, rel) => JSON.parse(fs.readFileSync(path.join(root, rel), "utf8"));
 const canonicalJson = (value) => JSON.stringify(value);
-const sameSet = (left, right) =>
-  left.length === right.length && left.every((value) => right.includes(value));
 
-const collectFailures = (root = repoRoot) => {
+export const collectFailures = (root = repoRoot) => {
   const failures = [];
+  const backendSet = collectProductionBackendPackageSet(root, {
+    minCount: 2,
+    requireExistingSrc: true,
+  });
+  failures.push(...backendSet.failures);
+  const expectedBackends = backendSet.productionBackends;
   const fixture = readJson(root, "test/backend-neutral-telemetry.json");
-  if (!sameSet(fixture.productionBackends ?? [], expectedBackends)) {
-    failures.push("backend-neutral telemetry fixture must cover both production backends");
+  if (!sameStringSet(fixture.productionBackends ?? [], expectedBackends)) {
+    failures.push(
+      `backend-neutral telemetry fixture productionBackends must equal package.json ${productionBackendPackagesPath}`,
+    );
   }
   const trees = fixture.canonicalTrees ?? {};
   const baseline = trees[expectedBackends[0]];
@@ -53,15 +63,32 @@ const writeFixture = (root, rel, source) => {
 const collectSelfTestFailures = () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-backend-neutral-telemetry-"));
   try {
+    const selfTestBackends = [
+      "packages/backends/telemetry-alpha",
+      "packages/backends/telemetry-beta",
+    ];
     const tree = { nodes: [{ id: "a", emitKind: "runtime", name: "dispatch" }] };
+    writeFixture(
+      root,
+      "package.json",
+      JSON.stringify({
+        agentos: {
+          backendNeutralityStatus: "backend-neutral",
+          backendNeutrality: { productionBackendPackages: selfTestBackends },
+        },
+      }),
+    );
     writeFixture(
       root,
       "test/backend-neutral-telemetry.json",
       JSON.stringify({
-        productionBackends: expectedBackends,
-        canonicalTrees: Object.fromEntries(expectedBackends.map((backend) => [backend, tree])),
+        productionBackends: selfTestBackends,
+        canonicalTrees: Object.fromEntries(selfTestBackends.map((backend) => [backend, tree])),
       }),
     );
+    for (const backend of selfTestBackends) {
+      writeFixture(root, `${backend}/src/index.ts`, "");
+    }
     writeFixture(
       root,
       "packages/telemetry-protocol/src/index.ts",
@@ -73,10 +100,12 @@ const collectSelfTestFailures = () => {
       root,
       "test/backend-neutral-telemetry.json",
       JSON.stringify({
-        productionBackends: expectedBackends,
+        productionBackends: selfTestBackends,
         canonicalTrees: {
-          [expectedBackends[0]]: tree,
-          [expectedBackends[1]]: { nodes: [{ id: "b", emitKind: "backend", name: "dispatch" }] },
+          [selfTestBackends[0]]: tree,
+          [selfTestBackends[1]]: {
+            nodes: [{ id: "b", emitKind: "backend", name: "dispatch" }],
+          },
         },
       }),
     );
@@ -90,15 +119,20 @@ const collectSelfTestFailures = () => {
   }
 };
 
-const failures = process.argv.includes("--self-test")
-  ? collectSelfTestFailures()
-  : collectFailures(repoRoot);
-if (failures.length > 0) {
-  console.error(failures.join("\n"));
-  process.exit(1);
+const isMain =
+  process.argv[1] !== undefined && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isMain) {
+  const failures = process.argv.includes("--self-test")
+    ? collectSelfTestFailures()
+    : collectFailures(repoRoot);
+  if (failures.length > 0) {
+    console.error(failures.join("\n"));
+    process.exit(1);
+  }
+  console.log(
+    process.argv.includes("--self-test")
+      ? "backend-neutral telemetry self-test passed"
+      : "backend-neutral telemetry passed",
+  );
 }
-console.log(
-  process.argv.includes("--self-test")
-    ? "backend-neutral telemetry self-test passed"
-    : "backend-neutral telemetry passed",
-);

@@ -3,10 +3,15 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  collectProductionBackendPackageSet,
+  productionBackendPackagesPath,
+  readJson,
+  sameStringSet,
+} from "./backend-neutral-production-backends.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..");
-const expectedBackends = ["packages/backends/cloudflare-do", "packages/backends/node-postgres"];
 const requiredPhases = [
   "schedule_requested",
   "scheduled_event_fired",
@@ -17,24 +22,25 @@ const requiredPhases = [
   "receiver_app_event",
 ];
 
-const readJson = (root, rel) => JSON.parse(fs.readFileSync(path.join(root, rel), "utf8"));
 const read = (root, rel) => fs.readFileSync(path.join(root, rel), "utf8");
-const sameSet = (left, right) =>
-  left.length === right.length && left.every((value) => right.includes(value));
 
-const collectFailures = (root = repoRoot) => {
+export const collectFailures = (root = repoRoot) => {
   const failures = [];
-  const pkg = readJson(root, "package.json");
+  const backendSet = collectProductionBackendPackageSet(root, {
+    minCount: 2,
+    requireExistingSrc: true,
+  });
+  failures.push(...backendSet.failures);
+  const pkg = backendSet.rootPackage;
+  const expectedBackends = backendSet.productionBackends;
   const fixture = readJson(root, "test/backend-neutral-golden.json");
-  const productionBackends = pkg.agentos?.backendNeutrality?.productionBackendPackages ?? [];
   if (pkg.agentos?.backendNeutralityStatus !== "backend-neutral") {
     failures.push("package.json must declare backendNeutralityStatus=backend-neutral");
   }
-  if (!sameSet(productionBackends, expectedBackends)) {
-    failures.push(`productionBackendPackages must equal ${expectedBackends.join(", ")}`);
-  }
-  if (!sameSet(fixture.productionBackends ?? [], expectedBackends)) {
-    failures.push("backend-neutral golden fixture must cover both production backends");
+  if (!sameStringSet(fixture.productionBackends ?? [], expectedBackends)) {
+    failures.push(
+      `backend-neutral golden fixture productionBackends must equal package.json ${productionBackendPackagesPath}`,
+    );
   }
   if (!Array.isArray(fixture.canonicalFlow)) {
     failures.push("backend-neutral golden fixture canonicalFlow must be an array");
@@ -66,9 +72,14 @@ const collectFailures = (root = repoRoot) => {
       failures.push(`${contractTest}: must run shared runtime backend contract suite`);
     }
   }
-  const nodePg = read(root, "packages/backends/node-postgres/src/index.ts");
-  if (!/FOR UPDATE SKIP LOCKED/.test(nodePg)) {
-    failures.push("node-postgres backend must prove concurrent due-work claim with SKIP LOCKED");
+  const nodePostgresBackend = "packages/backends/node-postgres";
+  const nodePostgresSource = `${nodePostgresBackend}/src/index.ts`;
+  if (
+    expectedBackends.includes(nodePostgresBackend) &&
+    (!fs.existsSync(path.join(root, nodePostgresSource)) ||
+      !/FOR UPDATE SKIP LOCKED/.test(read(root, nodePostgresSource)))
+  ) {
+    failures.push(`${nodePostgresBackend} must prove concurrent due-work claim with SKIP LOCKED`);
   }
   const contract = read(
     root,
@@ -92,6 +103,10 @@ const writeFixture = (root, rel, source) => {
 const collectSelfTestFailures = () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-backend-neutral-golden-"));
   try {
+    const selfTestBackends = [
+      "packages/backends/cloudflare-do",
+      "packages/backends/node-postgres",
+    ];
     writeFixture(
       root,
       "package.json",
@@ -99,7 +114,7 @@ const collectSelfTestFailures = () => {
         scripts: {},
         agentos: {
           backendNeutralityStatus: "backend-neutral",
-          backendNeutrality: { productionBackendPackages: expectedBackends },
+          backendNeutrality: { productionBackendPackages: selfTestBackends },
         },
       }),
     );
@@ -107,7 +122,7 @@ const collectSelfTestFailures = () => {
       root,
       "test/backend-neutral-golden.json",
       JSON.stringify({
-        productionBackends: expectedBackends,
+        productionBackends: selfTestBackends,
         canonicalFlow: requiredPhases.map((phase) => ({
           phase,
           eventKind: phase === "dispatch_retry_delivered" ? "dispatch.outbound.delivered" : "x",
@@ -116,7 +131,7 @@ const collectSelfTestFailures = () => {
         })),
       }),
     );
-    for (const backend of expectedBackends) {
+    for (const backend of selfTestBackends) {
       writeFixture(
         root,
         `${backend}/test/backend-protocol-contract.test.ts`,
@@ -142,15 +157,20 @@ const collectSelfTestFailures = () => {
   }
 };
 
-const failures = process.argv.includes("--self-test")
-  ? collectSelfTestFailures()
-  : collectFailures(repoRoot);
-if (failures.length > 0) {
-  console.error(failures.join("\n"));
-  process.exit(1);
+const isMain =
+  process.argv[1] !== undefined && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isMain) {
+  const failures = process.argv.includes("--self-test")
+    ? collectSelfTestFailures()
+    : collectFailures(repoRoot);
+  if (failures.length > 0) {
+    console.error(failures.join("\n"));
+    process.exit(1);
+  }
+  console.log(
+    process.argv.includes("--self-test")
+      ? "backend-neutral golden self-test passed"
+      : "backend-neutral golden passed",
+  );
 }
-console.log(
-  process.argv.includes("--self-test")
-    ? "backend-neutral golden self-test passed"
-    : "backend-neutral golden passed",
-);

@@ -2,6 +2,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { collectProductionBackendPackageSet } from "./backend-neutral-production-backends.mjs";
 
 const repoRoot = process.cwd();
 
@@ -34,42 +35,13 @@ export const collectBackendNeutralityFailures = (root = repoRoot) => {
     );
   }
 
-  const productionBackendPackages =
-    agentos?.backendNeutrality?.productionBackendPackages === undefined
-      ? []
-      : agentos.backendNeutrality.productionBackendPackages;
-
-  if (!Array.isArray(productionBackendPackages)) {
-    fail("agentos.backendNeutrality.productionBackendPackages must be an array");
-  }
-
-  const normalizedProductionBackends = Array.isArray(productionBackendPackages)
-    ? productionBackendPackages
-        .filter((value) => typeof value === "string")
-        .map((value) => value.replace(/^\.\//u, "").replace(/\/+$/u, ""))
-    : [];
-
-  for (const backendPath of normalizedProductionBackends) {
-    if (!backendPath.startsWith("packages/backends/")) {
-      fail(`production backend must live under packages/backends: ${backendPath}`);
-    }
-    if (/(?:^|\/)(?:in-memory|protocol|reference)(?:$|\/)/u.test(backendPath)) {
-      fail(
-        `non-production/reference backend cannot count toward backend-neutral status: ${backendPath}`,
-      );
-    }
-    if (!fs.existsSync(path.join(root, backendPath, "src"))) {
-      fail(`production backend path must exist and contain src: ${backendPath}`);
-    }
-  }
+  const backendSet = collectProductionBackendPackageSet(root, {
+    minCount: status === "backend-neutral" ? 2 : 0,
+    requireExistingSrc: true,
+  });
+  failures.push(...backendSet.failures);
 
   if (status === "backend-neutral") {
-    const uniqueBackends = new Set(normalizedProductionBackends);
-    if (uniqueBackends.size < 2) {
-      fail(
-        `backend-neutral requires at least 2 production backends, excluding in-memory/reference; actual ${uniqueBackends.size}`,
-      );
-    }
     for (const script of requiredProofScripts) {
       if (rootPackage.scripts?.[script] === undefined) {
         fail(`backend-neutral requires root proof script ${script}`);
