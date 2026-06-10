@@ -97,6 +97,8 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:SubmitResult`
 - `.:SubmitResumeDecision`
 - `.:SubmitSpec`
+- `.:SubmitToolContext`
+- `.:SubmitToolIntent`
 - `.:TOOL_EXECUTION_CLAIM_MUST_BE_LIVED_REASON`
 - `.:ToolExecutedPayload`
 - `.:ToolExecutedPayloadSchema`

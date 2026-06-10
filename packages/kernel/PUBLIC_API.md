@@ -216,7 +216,12 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:ToolEffect`
 - `.:ToolExecution`
 - `.:ToolExecutionContext`
+- `.:ToolExecutionContextInput`
 - `.:ToolExecute`
+- `.:ToolIntentEmitter`
+- `.:ToolProjectionRow`
+- `.:ToolProjectionWaitSpec`
+- `.:ToolProjectionWaiter`
 - `.:ToolRequirements`
 - `.:deterministicToolInvocation`
 - `.:defineProductTool`
@@ -244,7 +249,12 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `./tools:ToolEffect`
 - `./tools:ToolExecution`
 - `./tools:ToolExecutionContext`
+- `./tools:ToolExecutionContextInput`
 - `./tools:ToolExecute`
+- `./tools:ToolIntentEmitter`
+- `./tools:ToolProjectionRow`
+- `./tools:ToolProjectionWaitSpec`
+- `./tools:ToolProjectionWaiter`
 - `./tools:ToolRequirements`
 - `./tools:ToolRegistryIssue`
 - `./tools:ToolRegistryValidation`

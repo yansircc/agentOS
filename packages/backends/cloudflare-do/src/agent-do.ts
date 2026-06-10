@@ -79,6 +79,7 @@ import type {
   InternalSubmitSpec,
   SubmitResult,
   SubmitSpec,
+  SubmitToolIntent,
 } from "@agent-os/runtime-protocol";
 import {
   Admission,
@@ -233,6 +234,11 @@ export interface AgentSubmitSpec {
   readonly resume?: SubmitSpec["resume"];
 }
 
+export interface AgentDeclaredIntent {
+  readonly kind: string;
+  readonly boundaryPackageId: string;
+}
+
 export interface AgentEventHandlerRegistration {
   readonly kind: string;
   readonly handler: EventHandler;
@@ -288,6 +294,7 @@ export interface AgentDurableObjectConfig<
   readonly refResolver?: (env: Env) => RefResolver;
   readonly llmTransport?: (env: Env) => Layer.Layer<LlmTransport, never, RefResolverService>;
   readonly extensions?: (env: Env) => ReadonlyArray<ExtensionDeclaration>;
+  readonly declaredIntents?: (env: Env) => ReadonlyArray<AgentDeclaredIntent>;
   readonly dispatchTargets?: (env: Env) => DispatchTargetRegistry;
   readonly triggers?: CloudflareTriggerSource<Env>;
   readonly streams?: CloudflareAttachedStreamSource<Env>;
@@ -307,6 +314,7 @@ export interface MaterializedAgentConfig<
   readonly refResolver: RefResolver;
   readonly llmTransport: Layer.Layer<LlmTransport, never, RefResolverService>;
   readonly extensions: ReadonlyArray<ExtensionDeclaration>;
+  readonly declaredIntents: ReadonlyArray<AgentDeclaredIntent>;
   readonly dispatchTargets: DispatchTargetRegistry;
   readonly triggers: CloudflareTriggerSource<Env>;
   readonly streams: CloudflareAttachedStreamSource<Env>;
@@ -322,6 +330,9 @@ const emptyRefResolver: RefResolver = {
   material: () => null,
 };
 
+const rejectAgentConfig = (message: string): never =>
+  Option.getOrThrowWith(Option.none(), () => new TypeError(message));
+
 const mergeSubmitBindings = (
   base: AgentSubmitBindings,
   run: AgentSubmitBindings | undefined,
@@ -330,9 +341,46 @@ const mergeSubmitBindings = (
   tools: { ...base.tools, ...run?.tools },
   materials: { ...base.materials, ...run?.materials },
   resolvedMaterials: { ...base.resolvedMaterials, ...run?.resolvedMaterials },
+  toolContext: {
+    extensions: {
+      ...base.toolContext?.extensions,
+      ...run?.toolContext?.extensions,
+    },
+  },
+  toolIntents: [...(base.toolIntents ?? []), ...(run?.toolIntents ?? [])],
   context: run?.context ?? base.context,
   decisionInterrupts: run?.decisionInterrupts ?? base.decisionInterrupts,
 });
+
+const declaredToolIntents = (
+  extensions: ReadonlyArray<ExtensionDeclaration>,
+  declaredIntents: ReadonlyArray<AgentDeclaredIntent>,
+): ReadonlyArray<SubmitToolIntent> => {
+  const boundaryPackages = new Map<string, BoundaryPackage>();
+  for (const extension of extensions) {
+    if (isBoundaryPackage(extension)) {
+      boundaryPackages.set(extension.packageId, extension);
+    }
+  }
+
+  return declaredIntents.map((intent) => {
+    const boundaryPackage = boundaryPackages.get(intent.boundaryPackageId);
+    if (boundaryPackage === undefined) {
+      return rejectAgentConfig(
+        `declared intent ${intent.kind} references unbound boundary package`,
+      );
+    }
+    if (!extensionOwnsEvent(boundaryPackage, intent.kind)) {
+      return rejectAgentConfig(
+        `declared intent ${intent.kind} is not owned by ${intent.boundaryPackageId}`,
+      );
+    }
+    return {
+      kind: intent.kind,
+      boundaryPackage,
+    };
+  });
+};
 
 export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentRuntimeReaderClient>
   extends DurableObject<Env>
@@ -344,6 +392,7 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
   private readonly _llmTransport: Layer.Layer<LlmTransport, never, RefResolverService>;
   private readonly _extensionValidation: ExtensionValidation;
   private readonly _capabilities: ReadonlyMap<string, ExtensionCapability>;
+  private readonly _toolIntents: ReadonlyArray<SubmitToolIntent>;
   private readonly _dispatchTargets: DispatchTargetRegistry;
   private readonly _triggers: CloudflareTriggerSource<Env>;
   private readonly _streams: CloudflareAttachedStreamSource<Env>;
@@ -361,6 +410,7 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
     this._llmTransport = config.llmTransport;
     this._extensionValidation = validateExtensionDeclarations(config.extensions);
     this._capabilities = this.extensionCapabilities();
+    this._toolIntents = declaredToolIntents(config.extensions, config.declaredIntents);
     this._dispatchTargets = config.dispatchTargets;
     this._triggers = config.triggers;
     this._streams = config.streams;
@@ -648,6 +698,8 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
       tools: { ...bindings.tools },
       materials: { ...bindings.materials },
       resolvedMaterials: { ...bindings.resolvedMaterials },
+      toolContext: bindings.toolContext,
+      toolIntents: [...this._toolIntents, ...(bindings.toolIntents ?? [])],
       effectAuthorityRef: spec.effectAuthorityRef,
       ...(spec.budget === undefined ? {} : { budget: spec.budget }),
       ...(spec.outputSchema === undefined ? {} : { outputSchema: spec.outputSchema }),
@@ -1178,6 +1230,7 @@ export const createAgentDurableObject = <Env extends CloudflareAgentEnv>(
         refResolver: config.refResolver?.(env) ?? emptyRefResolver,
         llmTransport: config.llmTransport?.(env) ?? MissingLlmTransportLive,
         extensions: config.extensions?.(env) ?? [],
+        declaredIntents: config.declaredIntents?.(env) ?? [],
         dispatchTargets: config.dispatchTargets?.(env) ?? {},
         triggers: config.triggers ?? [],
         streams: config.streams ?? [],

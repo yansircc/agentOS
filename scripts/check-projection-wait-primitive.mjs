@@ -67,11 +67,7 @@ const collectFailures = (root = repoRoot) => {
   }
 
   const combined = [runtimeProjection, kernelTools].join("\n");
-  if (
-    /ToolProjectionWaiter|awaitProjection:\s*.*Promise|awaitProjection[\s\S]{0,80}Promise/.test(
-      combined,
-    )
-  ) {
+  if (/awaitProjection:\s*.*Promise|awaitProjection[\s\S]{0,80}Promise/.test(combined)) {
     failures.push("projection wait primitive leaked a Promise-shaped tool waiter");
   }
   return failures;

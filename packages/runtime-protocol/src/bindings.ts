@@ -4,7 +4,7 @@ import type { ResolvedMaterial } from "@agent-os/kernel/ref-resolver";
 import type { Tool } from "@agent-os/kernel/tools";
 import type { HandlerKind } from "./manifest";
 import type { AgentIntent } from "./intent";
-import type { SubmitDecisionInterrupt } from "./submit";
+import type { SubmitDecisionInterrupt, SubmitToolContext, SubmitToolIntent } from "./submit";
 
 export interface AgentHandlerContext {
   readonly intent: AgentIntent;
@@ -31,6 +31,8 @@ export interface AgentSubmitBindings {
   readonly tools?: Readonly<Record<string, Tool>>;
   readonly materials?: Readonly<Record<string, MaterialRef>>;
   readonly resolvedMaterials?: Readonly<Record<string, ResolvedMaterial>>;
+  readonly toolContext?: SubmitToolContext;
+  readonly toolIntents?: ReadonlyArray<SubmitToolIntent>;
   readonly context?: Record<string, unknown>;
   readonly decisionInterrupts?: ReadonlyArray<SubmitDecisionInterrupt>;
 }

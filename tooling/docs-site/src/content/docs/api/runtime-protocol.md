@@ -97,6 +97,8 @@ title: "@agent-os/runtime-protocol API"
 - `.:SubmitResult`
 - `.:SubmitResumeDecision`
 - `.:SubmitSpec`
+- `.:SubmitToolContext`
+- `.:SubmitToolIntent`
 - `.:TOOL_EXECUTION_CLAIM_MUST_BE_LIVED_REASON`
 - `.:ToolExecutedPayload`
 - `.:ToolExecutedPayloadSchema`

@@ -100,9 +100,13 @@ const validateToolContractShape = (source, failures) => {
   const executeToolBlock = blockFrom(source, "export const executeTool");
   if (executeToolBlock === null) {
     failures.push("packages/kernel/src/tools.ts: missing executeTool");
-  } else if (!/tool\.execute\s*\(\s*args\s*,\s*\{\s*materials\s*\}\s*\)/u.test(executeToolBlock)) {
+  } else if (
+    !/tool\.execute\s*\(\s*args\s*,\s*\{\s*\.\.\.context\s*,\s*materials\s*\}\s*\)/u.test(
+      executeToolBlock,
+    )
+  ) {
     failures.push(
-      "packages/kernel/src/tools.ts: executeTool must pass only resolved materials to tool.execute",
+      "packages/kernel/src/tools.ts: executeTool must let resolved materials override injected context",
     );
   }
 };
@@ -210,9 +214,9 @@ export type ToolExecute<A = unknown, R = unknown> = (
   args: A,
   ctx: ToolExecutionContext,
 ) => ToolEffect<R>;
-export const executeTool = (tool, args, _toolName, materials = {}) =>
+export const executeTool = (tool, args, _toolName, materials = {}, context = {}) =>
   Effect.gen(function* () {
-    const program = yield* Effect.try({ try: () => tool.execute(args, { materials }) });
+    const program = yield* Effect.try({ try: () => tool.execute(args, { ...context, materials }) });
     return yield* program;
   });
 `;
@@ -282,10 +286,10 @@ const collectSelfTestFailures = () => {
         name: "execute context writer",
         file: "packages/kernel/src/tools.ts",
         source: positiveToolsSource.replace(
-          "tool.execute(args, { materials })",
-          "tool.execute(args, { materials, ledger })",
+          "tool.execute(args, { ...context, materials })",
+          "tool.execute(args, { ...context, materials, ledger })",
         ),
-        expected: "executeTool must pass only resolved materials",
+        expected: "executeTool must let resolved materials override injected context",
       },
       {
         name: "tool lifecycle fact",

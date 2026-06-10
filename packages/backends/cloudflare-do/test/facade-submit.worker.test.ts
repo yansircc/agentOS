@@ -3,7 +3,7 @@ import { runInDurableObject } from "cloudflare:test";
 
 import { credentialMaterialRef } from "@agent-os/kernel/material-ref";
 import { defineAgentSubmitBindings } from "@agent-os/runtime-protocol";
-import { facadeApply, facadeLookup, type FacadeSubmitTestDO } from "./test-worker";
+import { facadeApply, facadeIntent, facadeLookup, type FacadeSubmitTestDO } from "./test-worker";
 import { testTruthIdentity } from "./_identity";
 
 interface TestEnv {
@@ -143,5 +143,43 @@ describe("defineAgentDO facade submit", () => {
     });
     expect(events.some((event) => event.kind === "agent.run.interrupted")).toBe(true);
     expect(events.some((event) => event.kind === "tool.executed")).toBe(false);
+  });
+
+  it("passes declared intent emission and projection wait capabilities to run-scoped tools", async () => {
+    const scope = "facade-submit-tool-context-capabilities";
+    const stub = testEnv.FACADE_SUBMIT_DO.get(testEnv.FACADE_SUBMIT_DO.idFromName(scope));
+    const effectAuthorityRef = {
+      authorityClass: "llm_route" as const,
+      authorityId: "facade-submit-intent-test",
+    };
+
+    const result = await runInDurableObject(stub, (instance) =>
+      instance.submit({
+        intent: "intent",
+        input: { label: "abc" },
+        effectAuthorityRef,
+        bindings: defineAgentSubmitBindings({
+          tools: { intent: facadeIntent },
+        }),
+        budget: { maxTurns: 2 },
+      }),
+    );
+
+    const events = await (
+      stub as unknown as {
+        readonly events: (
+          identity: ReturnType<typeof testTruthIdentity>,
+        ) => Promise<ReadonlyArray<{ readonly kind: string; readonly payload: unknown }>>;
+      }
+    ).events(testTruthIdentity(scope, effectAuthorityRef));
+
+    expect(result.ok, JSON.stringify({ result, events })).toBe(true);
+    if (result.ok) {
+      expect(result.final).toBe("facade intent done");
+    }
+    expect(events.some((event) => event.kind === "facade.intent.requested")).toBe(true);
+    expect(events.find((event) => event.kind === "tool.executed")?.payload).toMatchObject({
+      result: { projectedState: { label: "abc" } },
+    });
   });
 });

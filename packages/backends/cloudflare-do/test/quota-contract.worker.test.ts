@@ -25,13 +25,14 @@ import { QuotaLive } from "../src/quota";
 import { withQuota } from "../src/quota";
 import { ToolError } from "@agent-os/kernel/errors";
 import { LlmTransport } from "@agent-os/llm-protocol";
-import { submitAgentEffect } from "@agent-os/runtime";
+import { MaterializedProjectionRegistry, submitAgentEffect } from "@agent-os/runtime";
 import type { InternalSubmitSpec } from "@agent-os/runtime-protocol";
 import { defineTool, pureToolExecution, type Tool } from "@agent-os/kernel/tools";
 import type { EventHandler } from "@agent-os/kernel/types";
 import { finalTextResp, stubLlmTransport, toolCallResp } from "./_stub-ai";
 import { testEventIdentity } from "./_identity";
 import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
+import { CloudflareMaterializedProjectionsLive } from "../src/materialized-projections";
 
 interface TestEnv {
   readonly AGENT_DO: DurableObjectNamespace;
@@ -85,6 +86,10 @@ const buildRuntime = (
   const eventBus = EventBusLive(handlers);
   const ledger = LedgerLive(state).pipe(Layer.provide(eventBus));
   const boundaryEvents = BoundaryEventsLive(state, identity).pipe(Layer.provide(eventBus));
+  const projectionRegistry = Layer.succeed(MaterializedProjectionRegistry, new Map());
+  const projections = CloudflareMaterializedProjectionsLive(state).pipe(
+    Layer.provide(projectionRegistry),
+  );
   const quota = QuotaLive(state, identity).pipe(Layer.provide(eventBus));
   const llmTransport = Layer.succeed(LlmTransport, llm);
   const refs = RefResolverLive({
@@ -94,7 +99,7 @@ const buildRuntime = (
     Layer.provide(Layer.mergeAll(eventBus, llmTransport)),
   );
   return ManagedRuntime.make(
-    Layer.mergeAll(ledger, boundaryEvents, quota, llmTransport, admission, refs),
+    Layer.mergeAll(ledger, boundaryEvents, projections, quota, llmTransport, admission, refs),
   );
 };
 

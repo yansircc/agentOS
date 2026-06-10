@@ -3,6 +3,7 @@ import { describe, expect, it } from "@effect/vitest";
 
 import { Ledger } from "../src/ledger";
 import { BoundaryEvents } from "../src/boundary-events";
+import { MaterializedProjections } from "../src/projection";
 import { Quota } from "../src/quota-service";
 import { Admission } from "../src/admission";
 import { DEFAULT_LLM_CALL_TIMEOUT_MS, submitAgentEffect } from "../src/submit-agent";
@@ -126,10 +127,36 @@ const runWithHungLlm = (
     const boundaryEvents = {
       commit: () => Effect.die(new Error("boundary events are not used in timeout tests")),
     };
+    const projections = {
+      get: () => Effect.succeed(null),
+      list: () => Effect.succeed([]),
+      status: () =>
+        Effect.succeed({
+          kind: "test.projection",
+          scope: "conversation:timeout-scope",
+          version: 1,
+          status: "current" as const,
+          lastAppliedEventId: 0,
+          lastRebuiltEventId: null,
+          updatedAt: null,
+        }),
+      rebuild: () =>
+        Effect.succeed({
+          kind: "test.projection",
+          scope: "conversation:timeout-scope",
+          version: 1,
+          status: "current" as const,
+          lastAppliedEventId: 0,
+          lastRebuiltEventId: 0,
+          updatedAt: null,
+          rows: 0,
+        }),
+    };
 
     const fiber = yield* submitAgentEffect(spec).pipe(
       Effect.provideService(Ledger, ledger),
       Effect.provideService(BoundaryEvents, boundaryEvents),
+      Effect.provideService(MaterializedProjections, projections),
       Effect.provideService(LlmTransport, llm),
       Effect.provideService(Quota, quota),
       Effect.provideService(Admission, admission),

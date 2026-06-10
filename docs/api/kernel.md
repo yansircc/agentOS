@@ -212,7 +212,12 @@
 - `.:ToolEffect`
 - `.:ToolExecution`
 - `.:ToolExecutionContext`
+- `.:ToolExecutionContextInput`
 - `.:ToolExecute`
+- `.:ToolIntentEmitter`
+- `.:ToolProjectionRow`
+- `.:ToolProjectionWaitSpec`
+- `.:ToolProjectionWaiter`
 - `.:ToolRequirements`
 - `.:deterministicToolInvocation`
 - `.:defineProductTool`
@@ -240,7 +245,12 @@
 - `./tools:ToolEffect`
 - `./tools:ToolExecution`
 - `./tools:ToolExecutionContext`
+- `./tools:ToolExecutionContextInput`
 - `./tools:ToolExecute`
+- `./tools:ToolIntentEmitter`
+- `./tools:ToolProjectionRow`
+- `./tools:ToolProjectionWaitSpec`
+- `./tools:ToolProjectionWaiter`
 - `./tools:ToolRequirements`
 - `./tools:ToolRegistryIssue`
 - `./tools:ToolRegistryValidation`

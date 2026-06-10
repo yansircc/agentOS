@@ -18,6 +18,7 @@ import {
   isAuthorityRef,
   isOriginRef,
   type AuthorityRef,
+  type FactOwnerRef,
   type ClaimRole,
   type OriginRef,
   type PreClaim,
@@ -40,12 +41,43 @@ const DETERMINISTIC_TOOL_INVOCATION_BRAND = Symbol("@agent-os/kernel/Determinist
  */
 export interface ToolExecutionContext {
   readonly materials: ResolvedToolMaterials;
+  readonly resume?: unknown;
+  readonly emitIntent?: ToolIntentEmitter;
+  readonly awaitProjection?: ToolProjectionWaiter;
   readonly extensions?: Readonly<Record<string, unknown>>;
 }
 
 export type ResolvedToolMaterials = Readonly<Record<string, ResolvedMaterial>>;
 export type ToolRequirements = never;
 export type ToolEffect<R> = Effect.Effect<R, ToolError, ToolRequirements>;
+
+export type ToolExecutionContextInput = Omit<ToolExecutionContext, "materials">;
+
+export type ToolIntentEmitter = (
+  kind: string,
+  payload: unknown,
+) => Effect.Effect<{ readonly id: number }, ToolError, never>;
+
+export interface ToolProjectionWaitSpec<State = unknown> {
+  readonly kind: string;
+  readonly identity: unknown;
+  readonly factOwnerRef?: FactOwnerRef;
+  readonly maxAttempts?: number;
+  readonly pollIntervalMs?: number;
+  readonly ready?: (row: ToolProjectionRow<State>) => boolean;
+}
+
+export interface ToolProjectionRow<State = unknown> {
+  readonly kind: string;
+  readonly projectionKind: string;
+  readonly identityKey: string;
+  readonly state: State;
+  readonly updatedEventId: number;
+}
+
+export type ToolProjectionWaiter = <State = unknown>(
+  spec: ToolProjectionWaitSpec<State>,
+) => Effect.Effect<ToolProjectionRow<State>, ToolError, never>;
 
 export type ExecutionDomainKind = "host" | "sandbox" | "workspace" | "remote";
 
@@ -569,10 +601,11 @@ export const executeTool = (
   args: unknown,
   toolName: string,
   materials: ResolvedToolMaterials = {},
+  context: ToolExecutionContextInput = {},
 ): Effect.Effect<unknown, ToolError> =>
   Effect.gen(function* () {
     const program = yield* Effect.try({
-      try: () => tool.execute(args, { materials }),
+      try: () => tool.execute(args, { ...context, materials }),
       catch: (cause) => new ToolError({ toolName, cause }),
     });
     return yield* program;

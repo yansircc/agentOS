@@ -10,6 +10,7 @@ import {
   AgentDurableObject,
   type AgentAttachedStreamCancelSpec,
   type AgentAttachedStreamSpec,
+  type AgentDeclaredIntent,
   type AgentEventHandlerContext,
   type AgentEventHandlerRegistration,
   type AgentSubmitSpec,
@@ -81,6 +82,9 @@ interface DefineAgentDOConfigBase<
   readonly extensions?:
     | ReadonlyArray<ExtensionDeclaration>
     | ((env: Env) => ReadonlyArray<ExtensionDeclaration>);
+  readonly declaredIntents?:
+    | ReadonlyArray<AgentDeclaredIntent>
+    | ((env: Env) => ReadonlyArray<AgentDeclaredIntent>);
   readonly scopeRefForScope?: (scope: string, env: Env) => ScopeRef | null;
   readonly eventHandlers?: (
     context: AgentEventHandlerContext<Runtime>,
@@ -114,6 +118,12 @@ const extensionsFor = <Env extends CloudflareAgentEnv>(
 ): ReadonlyArray<ExtensionDeclaration> =>
   typeof extensions === "function" ? extensions(env) : (extensions ?? []);
 
+const declaredIntentsFor = <Env extends CloudflareAgentEnv>(
+  declaredIntents: DefineAgentDOConfig<Env>["declaredIntents"],
+  env: Env,
+): ReadonlyArray<AgentDeclaredIntent> =>
+  typeof declaredIntents === "function" ? declaredIntents(env) : (declaredIntents ?? []);
+
 const eventHandlersFor = <Env extends CloudflareAgentEnv, Runtime extends AgentFacadeRuntimeClient>(
   config: DefineAgentDOConfigBase<Env, Runtime>,
   context: AgentEventHandlerContext<Runtime>,
@@ -145,6 +155,7 @@ const materializedConfigForEnv = <
   refResolver: lowered.refResolver,
   llmTransport: config.llmTransport?.(env) ?? MissingLlmTransportLive,
   extensions: extensionsFor(config.extensions, env),
+  declaredIntents: declaredIntentsFor(config.declaredIntents, env),
   dispatchTargets: lowered.dispatchTargets,
   triggers: config.triggers ?? [],
   streams: config.streams ?? [],

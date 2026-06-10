@@ -37,6 +37,7 @@ import {
   projectionIdentity,
   projectionMalformed,
   projectionPut,
+  projectionSkip,
   triggerParseOk,
   type AttachedStreamHandler,
   type DurableTrigger,
@@ -44,7 +45,11 @@ import {
   type TriggerTx,
   type MaterializedProjectionRebuildResult,
 } from "@agent-os/runtime";
-import { CapabilityRejected, DurableTriggerAcquireCancelled } from "@agent-os/kernel/errors";
+import {
+  CapabilityRejected,
+  DurableTriggerAcquireCancelled,
+  ToolError,
+} from "@agent-os/kernel/errors";
 import { boundaryPackage, defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
 import { eventNamespace, type ExtensionCapability } from "@agent-os/kernel/extensions";
 import { makePreClaim, type FactOwnerRef } from "@agent-os/kernel/effect-claim";
@@ -840,6 +845,85 @@ export const facadeApply = defineTool({
     }),
 });
 
+const facadeIntentBoundaryPackage = boundaryPackage(
+  defineBoundaryContract({
+    packageId: "@agent-os/facade-intent-test",
+    kindPrefixes: ["facade.intent."],
+    roles: ["generator", "reader"],
+    events: {
+      "facade.intent.requested": {
+        payloadSchema: {
+          type: "object",
+          properties: { label: { type: "string" } },
+          required: ["label"],
+          additionalProperties: false,
+        },
+      },
+    },
+    effectAuthorityContracts: [],
+    materialRequirements: [],
+    settlement: defineSettlementContract({
+      settlementId: "facade.intent.test",
+      anchorKinds: ["ledger_event"],
+      rejectionKinds: ["validation_failed"],
+    }),
+    projection: { derivedFromLedger: true, shadowState: false },
+  }),
+  "0.0.0",
+);
+
+const facadeIntentProjection = defineProjection({
+  kind: "facade.intent.projection",
+  version: 1,
+  eventKinds: ["facade.intent.requested"],
+  identity: Schema.Struct({ label: Schema.String }),
+  state: Schema.Struct({ label: Schema.String, eventId: Schema.Number }),
+  identityKey: (identity) => identity.label,
+  identify: (event) => {
+    const payload = Predicate.isRecord(event.payload) ? event.payload : {};
+    return typeof payload.label === "string"
+      ? projectionIdentity({ label: payload.label })
+      : projectionSkip();
+  },
+  initial: (identity, event) => ({ label: identity.label, eventId: event.id }),
+  reduce: (state, event) => projectionPut({ ...state, eventId: event.id }),
+});
+
+export const facadeIntent = defineTool({
+  name: "intent",
+  description: "Emit a declared intent and wait for its projection.",
+  args: Schema.Struct({ label: Schema.String }),
+  authority: "write",
+  admit: allowToolAdmitter,
+  execution: pureToolExecution(),
+  execute: (args, ctx) =>
+    Effect.gen(function* () {
+      if (ctx.emitIntent === undefined) {
+        return yield* new ToolError({
+          toolName: "intent",
+          cause: { reason: "missing_emit_intent" },
+        });
+      }
+      if (ctx.awaitProjection === undefined) {
+        return yield* new ToolError({
+          toolName: "intent",
+          cause: { reason: "missing_await_projection" },
+        });
+      }
+      const emitted = yield* ctx.emitIntent("facade.intent.requested", { label: args.label });
+      const projected = yield* ctx.awaitProjection({
+        kind: "facade.intent.projection",
+        identity: { label: args.label },
+        factOwnerRef: facadeIntentBoundaryPackage.packageId,
+        maxAttempts: 1,
+      });
+      return {
+        emittedId: emitted.id,
+        projectedState: projected.state,
+      };
+    }),
+});
+
 const facadeSubmitLlmTransport = Layer.succeed(LlmTransport, {
   resolveRoute: (route) => {
     const routeKind = typeof route.kind === "string" ? route.kind : "unknown";
@@ -928,6 +1012,43 @@ const facadeSubmitLlmTransport = Layer.succeed(LlmTransport, {
         },
       });
     }
+    if (routeOk && toolNames.length === 1 && toolNames[0] === "intent") {
+      const hasToolResult = request.messages.some(
+        (message) =>
+          message.role === "tool" &&
+          message.content?.includes('"projectedState":{"label":"abc"') === true,
+      );
+      if (hasToolResult) {
+        return Effect.succeed({
+          items: [{ type: "message" as const, text: "facade intent done" }],
+          usage: {
+            promptTokens: 2,
+            completionTokens: 3,
+            totalTokens: 5,
+          },
+        });
+      }
+      return Effect.succeed({
+        items: [
+          {
+            type: "tool_call" as const,
+            call: {
+              id: "call-intent",
+              type: "function" as const,
+              function: {
+                name: "intent",
+                arguments: '{"label":"abc"}',
+              },
+            },
+          },
+        ],
+        usage: {
+          promptTokens: 3,
+          completionTokens: 2,
+          totalTokens: 5,
+        },
+      });
+    }
     return Effect.fail(
       new UpstreamFailure({
         cause: {
@@ -958,6 +1079,14 @@ export const FacadeSubmitTestDO = defineAgentDO<CloudflareAgentEnv>({
     }),
   },
   llmTransport: () => facadeSubmitLlmTransport,
+  extensions: [facadeIntentBoundaryPackage],
+  declaredIntents: [
+    {
+      kind: "facade.intent.requested",
+      boundaryPackageId: facadeIntentBoundaryPackage.packageId,
+    },
+  ],
+  projections: [facadeIntentProjection],
   scopeRefForScope: (scope) => ({ kind: "conversation", scopeId: scope }),
 });
 export type FacadeSubmitTestDO = InstanceType<typeof FacadeSubmitTestDO>;

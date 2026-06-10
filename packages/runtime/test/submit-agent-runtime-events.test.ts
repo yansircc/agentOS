@@ -16,6 +16,7 @@ import { Admission } from "../src/admission";
 import { BoundaryEvents } from "../src/boundary-events";
 import { commitBoundaryEvent } from "../src/boundary-commit";
 import { Ledger } from "../src/ledger";
+import { MaterializedProjections } from "../src/projection";
 import { Quota } from "../src/quota-service";
 import { submitAgentEffect } from "../src/submit-agent";
 import {
@@ -195,7 +196,32 @@ const makeServices = (
       }),
     invalidate: () => Effect.succeed({ barrierId: 1 }),
   };
-  return { events, llmRequests, ledger, boundaryEvents, llm, quota, refs, admission };
+  const projections = {
+    get: () => Effect.succeed(null),
+    list: () => Effect.succeed([]),
+    status: () =>
+      Effect.succeed({
+        kind: "test.projection",
+        scope: "conversation:submit-runtime-events",
+        version: 1,
+        status: "current" as const,
+        lastAppliedEventId: 0,
+        lastRebuiltEventId: null,
+        updatedAt: null,
+      }),
+    rebuild: () =>
+      Effect.succeed({
+        kind: "test.projection",
+        scope: "conversation:submit-runtime-events",
+        version: 1,
+        status: "current" as const,
+        lastAppliedEventId: 0,
+        lastRebuiltEventId: 0,
+        updatedAt: null,
+        rows: 0,
+      }),
+  };
+  return { events, llmRequests, ledger, boundaryEvents, llm, quota, refs, admission, projections };
 };
 
 const runSubmit = (spec: InternalSubmitSpec, responses?: ReadonlyArray<LlmResponse>) => {
@@ -210,6 +236,7 @@ const runSubmitWithServices = (
   const effect = submitAgentEffect(spec).pipe(
     Effect.provideService(Ledger, services.ledger),
     Effect.provideService(BoundaryEvents, services.boundaryEvents),
+    Effect.provideService(MaterializedProjections, services.projections),
     Effect.provideService(LlmTransport, services.llm),
     Effect.provideService(Quota, services.quota),
     Effect.provideService(RefResolverService, services.refs),
@@ -975,6 +1002,89 @@ describe("submit-agent runtime event writes", () => {
       expect(executed).toBe(0);
       expect(projectDecisionGate(services.events, first.result.gateRef)).toMatchObject({
         status: "rejected",
+      });
+    }),
+  );
+
+  it.effect("passes approved resume payload to the resumed tool call only", () =>
+    Effect.gen(function* () {
+      let observedResume: unknown;
+      const tool = defineTool({
+        name: "askUserQuestions",
+        description: "ask for input",
+        args: Schema.Struct({ question: Schema.String }),
+        execute: (_args, ctx) => {
+          observedResume = ctx.resume;
+          return Effect.succeed({ kind: "user_input_received", resume: ctx.resume });
+        },
+        authority: "read",
+        admit: () => Effect.succeed({ ok: true }),
+        execution: pureToolExecution(),
+      });
+      const services = makeServices([
+        response({
+          items: [
+            { type: "message", text: "need input" },
+            {
+              type: "tool_call",
+              call: {
+                id: "call-questions",
+                type: "function",
+                function: {
+                  name: "askUserQuestions",
+                  arguments: '{"question":"What should change?"}',
+                },
+              },
+            },
+          ],
+        }),
+        response({ items: [{ type: "message", text: "answered" }] }),
+      ]);
+
+      const first = yield* runSubmitWithServices(
+        baseSpec({
+          tools: { askUserQuestions: tool },
+          decisionInterrupts: [{ toolName: "askUserQuestions", reason: "user_input_required" }],
+        }),
+        services,
+      );
+      if (first.result.status !== "interrupted") {
+        expect.fail("expected interrupted result");
+      }
+      expect(observedResume).toBeUndefined();
+
+      yield* services.boundaryEvents.commit(
+        decisionGateBoundaryContract,
+        DECISION_GATE_KIND.DECIDED,
+        {
+          gateRef: first.result.gateRef,
+          decisionRef: "decision/answers",
+          decision: "approved",
+          decidedBy: "operator/alice",
+        },
+      );
+
+      const resume = { answers: { site_style: "clean" } };
+      const resumed = yield* runSubmitWithServices(
+        baseSpec({
+          tools: { askUserQuestions: tool },
+          resume: {
+            runId: first.result.runId,
+            turn: first.result.turn,
+            interruptId: first.result.interruptId,
+            gateRef: first.result.gateRef,
+            decisionRef: "decision/answers",
+            resume,
+          },
+        }),
+        services,
+      );
+
+      expect(resumed.result).toMatchObject({ ok: true, final: "answered" });
+      expect(observedResume).toEqual(resume);
+      const executed = services.events.find((event) => event.kind === "tool.executed");
+      expect(executed?.payload).toMatchObject({
+        result: { kind: "user_input_received", resume },
       });
     }),
   );

@@ -1,10 +1,18 @@
 import type { LlmRoute } from "@agent-os/llm-protocol";
-import type { Tool } from "@agent-os/kernel/tools";
+import type { Tool, ToolExecutionContextInput } from "@agent-os/kernel/tools";
 import type { AuthorityRef, ScopeRef } from "@agent-os/kernel/effect-claim";
 import type { AnyAgentSchemaSource } from "@agent-os/kernel/agent-schema";
 import type { TraceContext } from "@agent-os/telemetry-protocol";
 import type { MaterialRef } from "@agent-os/kernel/material-ref";
 import type { ResolvedMaterial } from "@agent-os/kernel/ref-resolver";
+import type { BoundaryPackage } from "@agent-os/kernel/extensions";
+
+export interface SubmitToolIntent {
+  readonly kind: string;
+  readonly boundaryPackage: BoundaryPackage;
+}
+
+export type SubmitToolContext = Pick<ToolExecutionContextInput, "extensions">;
 
 /**
  * Runtime submit input for one agent run under an effect authority.
@@ -31,6 +39,8 @@ export interface SubmitSpec {
   readonly effectAuthorityRef: AuthorityRef;
   readonly materials?: Readonly<Record<string, MaterialRef>>;
   readonly resolvedMaterials?: Readonly<Record<string, ResolvedMaterial>>;
+  readonly toolContext?: SubmitToolContext;
+  readonly toolIntents?: ReadonlyArray<SubmitToolIntent>;
   readonly decisionInterrupts?: ReadonlyArray<SubmitDecisionInterrupt>;
   readonly resume?: SubmitResumeDecision;
 }

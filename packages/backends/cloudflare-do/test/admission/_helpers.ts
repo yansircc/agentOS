@@ -13,7 +13,9 @@
 import { Context, Layer, ManagedRuntime, Schema } from "effect";
 
 import { EventBusLive, LedgerLive } from "../../src/ledger";
+import { CloudflareMaterializedProjectionsLive } from "../../src/materialized-projections";
 import { LlmTransport } from "@agent-os/llm-protocol";
+import { MaterializedProjectionRegistry } from "@agent-os/runtime";
 import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
 import { RefResolverLive } from "@agent-os/kernel/ref-resolver";
 import { QuotaLive } from "../../src/quota";
@@ -50,6 +52,10 @@ export const makeRuntime = (
   const eventBus = EventBusLive(handlers);
   const ledger = LedgerLive(state).pipe(Layer.provide(eventBus));
   const boundaryEvents = BoundaryEventsLive(state, identity).pipe(Layer.provide(eventBus));
+  const projectionRegistry = Layer.succeed(MaterializedProjectionRegistry, new Map());
+  const projections = CloudflareMaterializedProjectionsLive(state).pipe(
+    Layer.provide(projectionRegistry),
+  );
   const quota = QuotaLive(state, identity).pipe(Layer.provide(eventBus));
   const llmTransport = Layer.succeed(LlmTransport, llm);
   const refs = RefResolverLive({
@@ -59,7 +65,7 @@ export const makeRuntime = (
     Layer.provide(Layer.mergeAll(eventBus, llmTransport)),
   );
   return ManagedRuntime.make(
-    Layer.mergeAll(ledger, boundaryEvents, quota, llmTransport, admission, refs),
+    Layer.mergeAll(ledger, boundaryEvents, projections, quota, llmTransport, admission, refs),
   );
 };
 
@@ -75,6 +81,10 @@ export const makeRuntimeWithRegistry = (
   const eventBus = EventBusLive(handlers);
   const ledger = LedgerLive(state).pipe(Layer.provide(eventBus));
   const boundaryEvents = BoundaryEventsLive(state, identity).pipe(Layer.provide(eventBus));
+  const projectionRegistry = Layer.succeed(MaterializedProjectionRegistry, new Map());
+  const projections = CloudflareMaterializedProjectionsLive(state).pipe(
+    Layer.provide(projectionRegistry),
+  );
   const quota = QuotaLive(state, identity).pipe(Layer.provide(eventBus));
   const llmTransport = Layer.succeed(LlmTransport, llm);
   const refs = RefResolverLive({
@@ -93,7 +103,7 @@ export const makeRuntimeWithRegistry = (
     Layer.provide(Layer.mergeAll(eventBus, llmTransport)),
   );
   return ManagedRuntime.make(
-    Layer.mergeAll(ledger, boundaryEvents, quota, llmTransport, admission, refs),
+    Layer.mergeAll(ledger, boundaryEvents, projections, quota, llmTransport, admission, refs),
   );
 };
 

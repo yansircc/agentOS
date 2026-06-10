@@ -15,7 +15,7 @@
  * which injects scope from ctx.id.name (SSoT) and runs this effect.
  */
 
-import { Clock, Data, Duration, Effect, Predicate, Ref } from "effect";
+import { Clock, Context, Data, Duration, Effect, Predicate, Ref } from "effect";
 import {
   DECISION_GATE_KIND,
   decisionGateBoundaryContract,
@@ -62,6 +62,7 @@ import {
   decodeRuntimeLedgerEvent,
   EFFECTFUL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
   llmResponseEvent,
+  RUNTIME_FACT_OWNER,
   RUNTIME_EVENT_KIND,
   toolExecutedEvent,
   toolReplayArtifactFromExecutedPayload,
@@ -88,6 +89,8 @@ import {
   parseToolCall,
   validateToolRegistry,
   type Tool,
+  type ToolExecutionContextInput,
+  type ToolProjectionWaitSpec,
   type ResolvedToolMaterials,
 } from "@agent-os/kernel/tools";
 import { makeAdmissionSchemaSpec } from "@agent-os/runtime-protocol";
@@ -110,6 +113,7 @@ import {
 } from "./tool-settlement";
 import { BoundaryEvents } from "./boundary-events";
 import type { BoundaryCommitRejected } from "./boundary-commit";
+import { MaterializedProjections, waitForProjection } from "./projection";
 
 export const DEFAULT_LLM_CALL_TIMEOUT_MS = 60_000;
 
@@ -126,6 +130,73 @@ class LlmCallTimedOut extends Data.TaggedError("agent_os.llm_call_timed_out")<{
 
 const toolDefinitionsOf = (tools: Record<string, Tool>): ReadonlyArray<ToolDefinition> =>
   Object.values(tools).map((t) => t.definition);
+
+const runtimeToolContext = (
+  spec: InternalSubmitSpec,
+  boundaryEvents: Context.Tag.Service<typeof BoundaryEvents>,
+  projections: Context.Tag.Service<typeof MaterializedProjections>,
+  resume: unknown,
+): ToolExecutionContextInput => {
+  const declaredIntents = new Map((spec.toolIntents ?? []).map((intent) => [intent.kind, intent]));
+  return {
+    ...spec.toolContext,
+    ...(resume === undefined ? {} : { resume }),
+    ...(declaredIntents.size === 0
+      ? {}
+      : {
+          emitIntent: (kind, payload) => {
+            const declared = declaredIntents.get(kind);
+            if (declared === undefined) {
+              return Effect.fail(
+                new ToolError({
+                  toolName: "emitIntent",
+                  cause: { reason: "undeclared_intent", kind },
+                }),
+              );
+            }
+            return boundaryEvents
+              .commit(declared.boundaryPackage.boundaryContract, kind, payload)
+              .pipe(
+                Effect.map((event) => ({ id: event.id })),
+                Effect.mapError((cause) => new ToolError({ toolName: "emitIntent", cause })),
+              );
+          },
+        }),
+    awaitProjection: <State = unknown>(projectionSpec: ToolProjectionWaitSpec<State>) => {
+      const ready = projectionSpec.ready;
+      return waitForProjection({
+        kind: projectionSpec.kind,
+        scopeRef: spec.scopeRef,
+        effectAuthorityRef: spec.effectAuthorityRef,
+        factOwnerRef: projectionSpec.factOwnerRef ?? RUNTIME_FACT_OWNER,
+        identity: projectionSpec.identity,
+        maxAttempts: projectionSpec.maxAttempts,
+        pollIntervalMs: projectionSpec.pollIntervalMs,
+        ready:
+          ready === undefined
+            ? undefined
+            : (row) =>
+                ready({
+                  kind: row.kind,
+                  projectionKind: row.kind,
+                  identityKey: row.identityKey,
+                  state: row.state as State,
+                  updatedEventId: row.updatedEventId,
+                }),
+      }).pipe(
+        Effect.provideService(MaterializedProjections, projections),
+        Effect.map((row) => ({
+          kind: row.kind,
+          projectionKind: row.kind,
+          identityKey: row.identityKey,
+          state: row.state as State,
+          updatedEventId: row.updatedEventId,
+        })),
+        Effect.mapError((cause) => new ToolError({ toolName: "awaitProjection", cause })),
+      );
+    },
+  };
+};
 
 const toolBudgetTimeCause = (
   elapsedMs: number,
@@ -548,7 +619,13 @@ export const submitAgentEffect = (
   | InvalidTraceContext
   | RefResolutionFailed
   | BoundaryCommitRejected,
-  Ledger | BoundaryEvents | LlmTransport | Quota | Admission | RefResolverService
+  | Ledger
+  | BoundaryEvents
+  | MaterializedProjections
+  | LlmTransport
+  | Quota
+  | Admission
+  | RefResolverService
 > =>
   Effect.gen(function* () {
     const ledger = yield* Ledger;
@@ -807,13 +884,14 @@ export const submitAgentEffect = (
       | ToolError
       | RefResolutionFailed
       | BoundaryCommitRejected,
-      Ledger | BoundaryEvents | LlmTransport | Quota | RefResolverService
+      Ledger | BoundaryEvents | MaterializedProjections | LlmTransport | Quota | RefResolverService
     > = Effect.gen(function* () {
       let messages: LlmMessage[] = [...initialMessages];
       const toolDefs = toolDefinitionsOf(spec.tools);
       const quotaService = yield* Quota;
       const llm = yield* LlmTransport;
       const boundaryEvents = yield* BoundaryEvents;
+      const projections = yield* MaterializedProjections;
       const refs = yield* RefResolverService;
       let firstTurn = 0;
       let resumedToolCall: LlmToolCall | undefined;
@@ -1301,6 +1379,12 @@ export const submitAgentEffect = (
                   args,
                   call.function.name,
                   resolvedMaterials.materials,
+                  runtimeToolContext(
+                    spec,
+                    boundaryEvents,
+                    projections,
+                    call.id === resumedToolCallIdThisTurn ? spec.resume?.resume : undefined,
+                  ),
                 );
               });
               if (!Number.isFinite(budgetTimeMs)) {

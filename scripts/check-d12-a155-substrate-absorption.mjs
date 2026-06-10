@@ -73,8 +73,14 @@ const requiredTerms = [
     terms: [
       "export type ToolRequirements = never",
       "export type ToolEffect<R> = Effect.Effect<R, ToolError, ToolRequirements>",
+      "readonly emitIntent?: ToolIntentEmitter",
+      "readonly awaitProjection?: ToolProjectionWaiter",
       ") => Effect.Effect<AdmitVerdict, ToolError, never>",
     ],
+  },
+  {
+    file: "packages/runtime-protocol/src/submit.ts",
+    terms: ["export interface SubmitToolIntent", "readonly toolIntents?: ReadonlyArray"],
   },
   {
     file: "packages/backends/protocol/src/index.ts",
@@ -125,7 +131,7 @@ const requiredTerms = [
 ];
 
 const obsoletePatterns = [
-  /emitIntent/u,
+  /context\.emitIntent/u,
   /_submitDefaults/u,
   /submitWithDefaults/u,
   /@agent-os\/kernel\/(?:llm|trace-context)/u,
