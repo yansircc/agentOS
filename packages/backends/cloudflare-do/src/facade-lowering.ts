@@ -291,7 +291,6 @@ export function lowerAgentConfig<Env>(
       config.llms === undefined
         ? null
         : defineAgentSubmitBindings({
-            handlers: {},
             llmRoutes: { default: config.llms.default },
             tools,
           }),

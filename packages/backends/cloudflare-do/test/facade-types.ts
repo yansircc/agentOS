@@ -85,15 +85,24 @@ void agent.submit(facadeSpec);
 void agent.submit({
   ...facadeSpec,
   bindings: defineAgentSubmitBindings({
-    handlers: {},
     tools: { lookup: lookupTool },
     materials: { facade_token: credentialMaterialRef("facade-token") },
+    resolvedMaterials: { facade_token: "resolved-provider-material" },
+    context: { input: {}, source: "run-binding" },
+    decisionInterrupts: [{ toolName: "lookup", reason: "approval_required" }],
   }),
+  resume: {
+    runId: 1,
+    turn: { id: 1, index: 0 },
+    interruptId: "decision:lookup",
+    gateRef: "gate:lookup",
+    decisionRef: "decision:approved",
+    resume: { approved: true },
+  },
 });
 void agent.submit({
   ...facadeSpec,
   bindings: defineAgentSubmitBindings({
-    handlers: {},
     // @ts-expect-error submit material bindings carry symbolic MaterialRef values
     materials: { facade_token: "resolved-provider-material" },
   }),

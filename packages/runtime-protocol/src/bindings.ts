@@ -1,8 +1,10 @@
 import type { LlmRoute } from "@agent-os/llm-protocol";
 import type { MaterialRef } from "@agent-os/kernel/material-ref";
+import type { ResolvedMaterial } from "@agent-os/kernel/ref-resolver";
 import type { Tool } from "@agent-os/kernel/tools";
 import type { HandlerKind } from "./manifest";
 import type { AgentIntent } from "./intent";
+import type { SubmitDecisionInterrupt } from "./submit";
 
 export interface AgentHandlerContext {
   readonly intent: AgentIntent;
@@ -24,7 +26,14 @@ export interface AgentBindings<K extends HandlerKind = HandlerKind> {
   readonly materials?: Readonly<Record<string, MaterialRef>>;
 }
 
-export type AgentSubmitBindings = AgentBindings<never>;
+export interface AgentSubmitBindings {
+  readonly llmRoutes?: Readonly<Record<string, LlmRoute>>;
+  readonly tools?: Readonly<Record<string, Tool>>;
+  readonly materials?: Readonly<Record<string, MaterialRef>>;
+  readonly resolvedMaterials?: Readonly<Record<string, ResolvedMaterial>>;
+  readonly context?: Record<string, unknown>;
+  readonly decisionInterrupts?: ReadonlyArray<SubmitDecisionInterrupt>;
+}
 
 export const defineAgentBindings = <K extends HandlerKind>(
   bindings: AgentBindings<K>,

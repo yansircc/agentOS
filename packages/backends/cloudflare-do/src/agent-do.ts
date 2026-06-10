@@ -230,6 +230,7 @@ export interface AgentSubmitSpec {
   readonly budget?: SubmitSpec["budget"];
   readonly outputSchema?: SubmitSpec["outputSchema"];
   readonly traceContext?: SubmitSpec["traceContext"];
+  readonly resume?: SubmitSpec["resume"];
 }
 
 export interface AgentEventHandlerRegistration {
@@ -325,10 +326,12 @@ const mergeSubmitBindings = (
   base: AgentSubmitBindings,
   run: AgentSubmitBindings | undefined,
 ): AgentSubmitBindings => ({
-  handlers: {},
   llmRoutes: { ...base.llmRoutes, ...run?.llmRoutes },
   tools: { ...base.tools, ...run?.tools },
   materials: { ...base.materials, ...run?.materials },
+  resolvedMaterials: { ...base.resolvedMaterials, ...run?.resolvedMaterials },
+  context: run?.context ?? base.context,
+  decisionInterrupts: run?.decisionInterrupts ?? base.decisionInterrupts,
 });
 
 export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentRuntimeReaderClient>
@@ -639,15 +642,20 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
     }
     return this.submitFull({
       intent: spec.intent,
-      context: { input: spec.input },
+      context: bindings.context ?? { input: spec.input },
       ...(spec.system === undefined ? {} : { system: spec.system }),
       route,
       tools: { ...bindings.tools },
       materials: { ...bindings.materials },
+      resolvedMaterials: { ...bindings.resolvedMaterials },
       effectAuthorityRef: spec.effectAuthorityRef,
       ...(spec.budget === undefined ? {} : { budget: spec.budget }),
       ...(spec.outputSchema === undefined ? {} : { outputSchema: spec.outputSchema }),
       ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
+      ...(bindings.decisionInterrupts === undefined
+        ? {}
+        : { decisionInterrupts: bindings.decisionInterrupts }),
+      ...(spec.resume === undefined ? {} : { resume: spec.resume }),
     });
   }
 

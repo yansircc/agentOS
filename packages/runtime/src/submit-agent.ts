@@ -306,6 +306,11 @@ const resolveToolMaterials = (
           ),
         };
       }
+      const runResolved = spec.resolvedMaterials?.[requirement.slot];
+      if (runResolved !== undefined && runResolved !== null) {
+        out[requirement.slot] = runResolved;
+        continue;
+      }
       const resolved = yield* Effect.either(refs.material(ref));
       if (resolved._tag === "Left") {
         return {

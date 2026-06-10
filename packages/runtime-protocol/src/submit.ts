@@ -4,6 +4,7 @@ import type { AuthorityRef, ScopeRef } from "@agent-os/kernel/effect-claim";
 import type { AnyAgentSchemaSource } from "@agent-os/kernel/agent-schema";
 import type { TraceContext } from "@agent-os/telemetry-protocol";
 import type { MaterialRef } from "@agent-os/kernel/material-ref";
+import type { ResolvedMaterial } from "@agent-os/kernel/ref-resolver";
 
 /**
  * Runtime submit input for one agent run under an effect authority.
@@ -29,6 +30,7 @@ export interface SubmitSpec {
   readonly traceContext?: TraceContext;
   readonly effectAuthorityRef: AuthorityRef;
   readonly materials?: Readonly<Record<string, MaterialRef>>;
+  readonly resolvedMaterials?: Readonly<Record<string, ResolvedMaterial>>;
   readonly decisionInterrupts?: ReadonlyArray<SubmitDecisionInterrupt>;
   readonly resume?: SubmitResumeDecision;
 }

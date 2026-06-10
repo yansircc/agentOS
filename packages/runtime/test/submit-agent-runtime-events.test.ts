@@ -663,6 +663,66 @@ describe("submit-agent runtime event writes", () => {
     }),
   );
 
+  it.effect("uses submit-scoped resolved material values without resolver lookup", () =>
+    Effect.gen(function* () {
+      let executed = false;
+      const tool = defineTool({
+        name: "apply",
+        description: "Apply a post",
+        args: Schema.Struct({ title: Schema.String }),
+        execute: (_args, ctx) => {
+          executed = ctx.materials.wp_token === "secret-token-value";
+          return Effect.succeed({ applied: true });
+        },
+        authority: "write",
+        requiredMaterials: [
+          materialRequirement({
+            slot: "wp_token",
+            kind: "credential",
+            provider: "wordpress",
+            purpose: "apply",
+          }),
+        ],
+        admit: () => Effect.succeed({ ok: true }),
+        execution: pureToolExecution(),
+      });
+
+      const tokenRef = credentialMaterialRef("run-wp-token", {
+        provider: "wordpress",
+        purpose: "apply",
+      });
+
+      const { result, events } = yield* runSubmit(
+        baseSpec({
+          tools: { apply: tool },
+          materials: { wp_token: tokenRef },
+          resolvedMaterials: { wp_token: "secret-token-value" },
+          budget: { maxTurns: 2 },
+        }),
+        [
+          response({
+            items: [
+              { type: "message", text: "use apply" },
+              {
+                type: "tool_call",
+                call: {
+                  id: "call-1",
+                  type: "function",
+                  function: { name: "apply", arguments: '{"title":"Hello"}' },
+                },
+              },
+            ],
+          }),
+          response({ items: [{ type: "message", text: "applied" }] }),
+        ],
+      );
+
+      expect(result).toMatchObject({ ok: true, final: "applied" });
+      expect(executed).toBe(true);
+      expect(JSON.stringify(events)).not.toContain("secret-token-value");
+    }),
+  );
+
   it.effect("interrupts an externally gated tool before execution", () =>
     Effect.gen(function* () {
       let executed = 0;

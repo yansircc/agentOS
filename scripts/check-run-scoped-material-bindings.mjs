@@ -121,11 +121,10 @@ const resolve = (ref, requirement) => {
 };
 `,
   "packages/backends/cloudflare-do/test/facade-submit.worker.test.ts": `
-defineAgentSubmitBindings({ handlers: {}, materials: { facade_token: tokenRef } });
+defineAgentSubmitBindings({ materials: { facade_token: tokenRef } });
 `,
   "packages/backends/cloudflare-do/test/facade-types.ts": `
 defineAgentSubmitBindings({
-  handlers: {},
   // @ts-expect-error submit material bindings carry symbolic MaterialRef values
   materials: { facade_token: "resolved-provider-material" },
 });

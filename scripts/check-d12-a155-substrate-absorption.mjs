@@ -25,7 +25,7 @@ const requiredTerms = [
     file: "packages/runtime-protocol/src/bindings.ts",
     terms: [
       "export interface AgentBindings",
-      "export type AgentSubmitBindings = AgentBindings<never>",
+      "export interface AgentSubmitBindings",
       "export const defineAgentSubmitBindings",
     ],
   },
