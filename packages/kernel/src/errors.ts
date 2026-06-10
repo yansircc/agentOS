@@ -170,7 +170,11 @@ export class ProviderOutputDecodeError extends Data.TaggedError(
 export class ToolError extends Data.TaggedError(ABORT.TOOL_ERROR)<{
   readonly toolName: string;
   readonly cause: unknown;
-}> {}
+}> {
+  constructor(args: { readonly toolName: string; readonly cause: unknown }) {
+    super(args);
+  }
+}
 
 // ============================================================
 //                     JSON SAFE-STRINGIFY

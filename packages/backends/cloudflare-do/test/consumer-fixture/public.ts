@@ -7,6 +7,7 @@ import {
 } from "@agent-os/backend-cloudflare-do/do-rpc";
 import { triggerParseOk, type TriggerTx } from "@agent-os/runtime";
 import { Effect } from "effect";
+import { ToolError } from "@agent-os/kernel/errors";
 import type { LedgerEventRpc } from "@agent-os/kernel/types";
 
 interface Intent {
@@ -41,3 +42,8 @@ export const fixtureRpcClient = (
 
 export const firstKind = (events: ReadonlyArray<LedgerEventRpc>): string | null =>
   events[0]?.kind ?? null;
+
+export const fixtureToolError = new ToolError({
+  toolName: "fixture",
+  cause: "consumer-visible constructor",
+});
