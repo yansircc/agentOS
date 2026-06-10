@@ -9,7 +9,6 @@ import {
   type AgentAttachedStreamSpec,
   type AgentEventHandlerContext,
   type AgentEventHandlerRegistration,
-  type AgentRuntimeReaderClient,
   type AgentSubmitSpec,
   type AgentTriggerCancelSpec,
   type AgentTriggerIntentSpec,
@@ -30,7 +29,7 @@ import {
 } from "./facade-lowering";
 import { cloudflareDefaultTruthIdentityFromRoutingScope } from "./ledger/identity";
 
-export interface AgentFacadeRuntimeClient extends AgentRuntimeReaderClient {
+export interface AgentFacadeRuntimeClient {
   readonly emit: (event: string, data: unknown) => Promise<{ id: number }>;
   readonly enqueueTrigger: (spec: AgentTriggerIntentSpec) => Promise<{ id: number }>;
   readonly cancelTrigger: (spec: AgentTriggerCancelSpec) => Promise<TriggerCancelResult>;

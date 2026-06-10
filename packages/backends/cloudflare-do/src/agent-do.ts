@@ -235,9 +235,7 @@ export interface AgentEventHandlerRegistration {
   readonly handler: EventHandler;
 }
 
-export interface AgentEventHandlerContext<
-  Runtime extends AgentRuntimeReaderClient = AgentRuntimeClient,
-> {
+export interface AgentEventHandlerContext<Runtime = AgentRuntimeClient> {
   readonly runtime: Runtime;
   readonly capabilities: ReadonlyMap<string, ExtensionCapability>;
 }
@@ -279,7 +277,7 @@ const makeAgentRuntime = <Env extends CloudflareAgentEnv>(
 
 export interface AgentDurableObjectConfig<
   Env extends CloudflareAgentEnv,
-  Runtime extends AgentRuntimeReaderClient = AgentRuntimeClient,
+  Runtime = AgentRuntimeClient,
 > {
   readonly manifest?: AgentManifest;
   readonly agentBindings?: AgentBindings;
@@ -298,7 +296,7 @@ export interface AgentDurableObjectConfig<
 
 export interface MaterializedAgentConfig<
   Env extends CloudflareAgentEnv,
-  Runtime extends AgentRuntimeReaderClient = AgentRuntimeClient,
+  Runtime = AgentRuntimeClient,
 > {
   readonly mountedAgent: MountedAgent;
   readonly refResolver: RefResolver;
@@ -330,7 +328,7 @@ const mergeSubmitBindings = (
 
 export class AgentDurableObject<
   Env extends CloudflareAgentEnv,
-  Runtime extends AgentRuntimeReaderClient = AgentRuntimeReaderClient,
+  Runtime = AgentRuntimeReaderClient,
 >
   extends DurableObject<Env>
   implements AgentRuntimeReaderClient

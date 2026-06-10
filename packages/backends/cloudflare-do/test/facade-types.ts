@@ -32,6 +32,12 @@ defineAgentDO<TestEnv>({
   on: {
     "test.event": ({ agent }) => {
       void agent.emit("test.followup", {});
+      // @ts-expect-error facade handler clients do not expose raw ledger reads
+      void agent.events({} as never);
+      // @ts-expect-error facade handler clients do not expose raw event streams
+      void agent.streamEvents({} as never);
+      // @ts-expect-error facade handler clients do not expose projection admin
+      void agent.projectionRebuild({} as never);
       // @ts-expect-error event-only facade clients do not expose submit
       void agent.submit({
         intent: "run",
