@@ -40,6 +40,18 @@ fallback paths unless the report states:
 This repo currently has no real users. Prefer deletion and fast failure over
 compatibility.
 
+## Commit Messages
+
+All commits must use Conventional Commits:
+
+```text
+type(scope): subject
+type: subject
+```
+
+Use lowercase subjects and choose the narrowest accurate type, such as `feat`,
+`fix`, `refactor`, `test`, `docs`, `chore`, `build`, `ci`, or `perf`.
+
 ## Repo Surface
 
 ```text
