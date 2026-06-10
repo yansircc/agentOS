@@ -9,7 +9,13 @@ title: "@agent-os/sse-http API"
 - `.:SSE_HTTP_CONTENT_TYPE`
 - `.:SseHttpChunk`
 - `.:SseHttpSource`
+- `.:SseHttpEvent`
 - `.:SseHttpResponseOptions`
+- `.:encodeSseHttpData`
+- `.:encodeSseHttpEvent`
+- `.:encodeSseHttpJsonEvent`
+- `.:parseSseHttpEventBlock`
+- `.:decodeSseHttpEvents`
 - `.:createSseHttpResponse`
 - `.:createSseHttpTextResponse`
 - `.:createBatchedSubmitRunStreamResponse`

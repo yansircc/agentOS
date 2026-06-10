@@ -5,6 +5,10 @@ import {
   createBatchedSubmitRunStreamResponse,
   createSseHttpResponse,
   createSseHttpTextResponse,
+  decodeSseHttpEvents,
+  encodeSseHttpEvent,
+  encodeSseHttpJsonEvent,
+  parseSseHttpEventBlock,
   SSE_HTTP_CONTENT_TYPE,
 } from "../src";
 import { decodeRunStreamData, projectRunStream, type LedgerEventRpc } from "@agent-os/run-stream";
@@ -61,7 +65,37 @@ const frameDataFromSse = (text: string) =>
       return frame!;
     });
 
+const collectAsync = async <A>(source: AsyncIterable<A>): Promise<ReadonlyArray<A>> => {
+  const values: A[] = [];
+  for await (const value of source) values.push(value);
+  return values;
+};
+
 describe("@agent-os/sse-http", () => {
+  it("encodes and parses generic SSE events", async () => {
+    expect(encodeSseHttpEvent({ event: "ready", data: "one\ntwo" })).toBe(
+      "event: ready\ndata: one\ndata: two\n\n",
+    );
+    expect(encodeSseHttpJsonEvent("ledger", { id: 1, ok: true })).toBe(
+      'event: ledger\ndata: {"id":1,"ok":true}\n\n',
+    );
+    expect(parseSseHttpEventBlock("event: ledger\ndata: {\"id\":1}")).toEqual({
+      event: "ledger",
+      data: '{"id":1}',
+    });
+
+    async function* chunks(): AsyncGenerator<string | Uint8Array> {
+      yield "event: heartbeat\ndata: {}\n\n";
+      yield new TextEncoder().encode('event: ledger\ndata: {"id":1');
+      yield '}\n\n';
+    }
+
+    await expect(collectAsync(decodeSseHttpEvents(chunks()))).resolves.toEqual([
+      { event: "heartbeat", data: "{}" },
+      { event: "ledger", data: '{"id":1}' },
+    ]);
+  });
+
   it("creates a Web Fetch SSE response from encoded chunks", async () => {
     const response = createSseHttpResponse(["event: one\ndata: 1\n\n"]);
     expect(response.headers.get("content-type")).toBe(SSE_HTTP_CONTENT_TYPE);

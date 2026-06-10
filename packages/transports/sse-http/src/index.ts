@@ -13,6 +13,11 @@ export const SSE_HTTP_CONTENT_TYPE = "text/event-stream; charset=utf-8";
 export type SseHttpChunk = string | Uint8Array;
 export type SseHttpSource = Iterable<SseHttpChunk> | AsyncIterable<SseHttpChunk>;
 
+export type SseHttpEvent = {
+  readonly event?: string;
+  readonly data: string;
+};
+
 export interface SseHttpResponseOptions {
   readonly headers?: HeadersInit;
   readonly onCancel?: () => void | Promise<void>;
@@ -37,6 +42,60 @@ const sseHeaders = (init?: HeadersInit): Headers => {
   if (!headers.has("Connection")) headers.set("Connection", "keep-alive");
   return headers;
 };
+
+export const encodeSseHttpData = (value: unknown): string =>
+  JSON.stringify(value)
+    .split(/\r?\n/)
+    .map((line) => `data: ${line}`)
+    .join("\n");
+
+export const encodeSseHttpEvent = (event: SseHttpEvent): string =>
+  `${event.event === undefined ? "" : `event: ${event.event}\n`}${event.data
+    .split(/\r?\n/)
+    .map((line) => `data: ${line}`)
+    .join("\n")}\n\n`;
+
+export const encodeSseHttpJsonEvent = (eventName: string, value: unknown): string =>
+  `event: ${eventName}\n${encodeSseHttpData(value)}\n\n`;
+
+export const parseSseHttpEventBlock = (block: string): SseHttpEvent => {
+  let event: string | undefined;
+  const data: string[] = [];
+  for (const line of block.split(/\r?\n/)) {
+    if (line.startsWith("event:")) {
+      event = line.slice("event:".length).trim();
+      continue;
+    }
+    if (line.startsWith("data:")) data.push(line.slice("data:".length).trimStart());
+  }
+  return { event, data: data.join("\n") };
+};
+
+export async function* decodeSseHttpEvents(
+  chunks: AsyncIterable<SseHttpChunk>,
+): AsyncGenerator<SseHttpEvent> {
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  const flushBuffered = function* (): Generator<SseHttpEvent> {
+    while (true) {
+      const boundary = buffer.indexOf("\n\n");
+      if (boundary < 0) return;
+      const block = buffer.slice(0, boundary);
+      buffer = buffer.slice(boundary + 2);
+      yield parseSseHttpEventBlock(block);
+    }
+  };
+
+  for await (const chunk of chunks) {
+    buffer += typeof chunk === "string" ? chunk : decoder.decode(chunk, { stream: true });
+    yield* flushBuffered();
+  }
+  buffer += decoder.decode();
+  const tail = buffer.trim().length > 0 ? parseSseHttpEventBlock(buffer) : null;
+  buffer = "";
+  if (tail !== null) yield tail;
+}
 
 /**
  * Creates a Web Fetch Server-Sent Events response from already-encoded chunks.

@@ -18,6 +18,7 @@
   "dependencies": {
     "@agent-os/kernel": "workspace:*",
     "@agent-os/runtime-protocol": "workspace:*",
+    "@agent-os/sse-http": "workspace:*",
     "effect": "catalog:"
   },
   "devDependencies": {

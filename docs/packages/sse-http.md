@@ -2,15 +2,15 @@
 
 ## Purpose
 
-Web Fetch Server-Sent Events response construction for agentOS stream codecs.
+Web Fetch Server-Sent Events codecs and response construction for agentOS stream adapters.
 
 ## Invariant
 
-Composers own frame algebra and pure frame-to-bytes codecs. This package owns SSE-over-HTTP `Response` and stream lifecycle construction, and backends select it when their host exposes Web Fetch APIs.
+Composers and wire adapters own frame/envelope algebra. This package owns SSE-over-HTTP event/data framing, parsing, `Response`, and stream lifecycle construction; backends select it when their host exposes Web Fetch APIs.
 
 ## Minimal Usage
 
-Backends pass already-encoded stream chunks or composer frame sources to `createSseHttpResponse`, `createBatchedSubmitRunStreamResponse`, or `createAttachedStreamSseResponse`.
+Adapters call `encodeSseHttpJsonEvent` or `decodeSseHttpEvents` for SSE wire framing. Backends pass already-encoded stream chunks or composer frame sources to `createSseHttpResponse`, `createBatchedSubmitRunStreamResponse`, or `createAttachedStreamSseResponse`.
 
 ## Verification
 

@@ -10,6 +10,11 @@ import { decodeLedgerEvent, type LedgerEvent } from "@agent-os/kernel/types";
 import type { SubmitSpec } from "@agent-os/runtime-protocol";
 import { isRuntimeAbortEventKind } from "@agent-os/runtime-protocol";
 import {
+  decodeSseHttpEvents,
+  encodeSseHttpJsonEvent,
+  type SseHttpChunk,
+} from "@agent-os/sse-http";
+import {
   decodeRuntimeLedgerEvent,
   RUNTIME_EVENT_KIND,
   type RuntimeLedgerEvent,
@@ -787,69 +792,21 @@ export const framesForAgUiLedgerEnvelopes = (
   envelopes: ReadonlyArray<AgUiLedgerEventEnvelope>,
 ): ReadonlyArray<AgUiLedgerEnvelopeFrame> => envelopes.flatMap(framesForAgUiLedgerEnvelope);
 
-const encodeSseData = (value: unknown): string =>
-  JSON.stringify(value)
-    .split(/\r?\n/)
-    .map((line) => `data: ${line}`)
-    .join("\n");
-
 export const encodeAgUiLedgerEventEnvelopeSse = (
   envelope: AgUiLedgerEventEnvelope,
   eventName = "ag_ui",
-): string => `event: ${eventName}\n${encodeSseData(envelope)}\n\n`;
+): string => encodeSseHttpJsonEvent(eventName, envelope);
 
-type ParsedSseBlock = {
-  readonly event?: string;
-  readonly data: string;
-};
-
-const parseSseBlock = (block: string): ParsedSseBlock => {
-  let event: string | undefined;
-  const data: string[] = [];
-  for (const line of block.split(/\r?\n/)) {
-    if (line.startsWith("event:")) {
-      event = line.slice("event:".length).trim();
-      continue;
-    }
-    if (line.startsWith("data:")) data.push(line.slice("data:".length).trimStart());
-  }
-  return { event, data: data.join("\n") };
-};
-
-export type AgUiSseChunk = string | Uint8Array;
+export type AgUiSseChunk = SseHttpChunk;
 
 export async function* projectLedgerSseToAgUiEnvelopes(
   chunks: AsyncIterable<AgUiSseChunk>,
   spec: AgUiLedgerEnvelopeProjectionSpec = {},
 ): AsyncGenerator<AgUiLedgerEventEnvelope> {
-  const decoder = new TextDecoder();
-  let buffer = "";
-
-  const flushBlock = (block: string): AgUiLedgerEventEnvelope | null => {
-    const parsed = parseSseBlock(block);
-    if (parsed.event !== "ledger" || parsed.data.length === 0) return null;
-    return decodeLedgerEventToAgUiEnvelope(JSON.parse(parsed.data) as unknown, spec);
-  };
-
-  const flushBuffered = function* (): Generator<AgUiLedgerEventEnvelope> {
-    while (true) {
-      const boundary = buffer.indexOf("\n\n");
-      if (boundary < 0) return;
-      const block = buffer.slice(0, boundary);
-      buffer = buffer.slice(boundary + 2);
-      const envelope = flushBlock(block);
-      if (envelope !== null) yield envelope;
-    }
-  };
-
-  for await (const chunk of chunks) {
-    buffer += typeof chunk === "string" ? chunk : decoder.decode(chunk, { stream: true });
-    yield* flushBuffered();
+  for await (const parsed of decodeSseHttpEvents(chunks)) {
+    if (parsed.event !== "ledger" || parsed.data.length === 0) continue;
+    yield decodeLedgerEventToAgUiEnvelope(JSON.parse(parsed.data) as unknown, spec);
   }
-  buffer += decoder.decode();
-  const tail = buffer.trim().length > 0 ? flushBlock(buffer) : null;
-  buffer = "";
-  if (tail !== null) yield tail;
 }
 
 /**
