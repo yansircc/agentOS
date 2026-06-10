@@ -889,6 +889,8 @@ const facadeIntentProjection = defineProjection({
   reduce: (state, event) => projectionPut({ ...state, eventId: event.id }),
 });
 
+export const FACADE_INTENT_COMMAND_EVENT = "facade.command.intent";
+
 export const facadeIntent = defineTool({
   name: "intent",
   description: "Emit a declared intent and wait for its projection.",
@@ -1080,6 +1082,23 @@ export const FacadeSubmitTestDO = defineAgentDO<CloudflareAgentEnv>({
   },
   llmTransport: () => facadeSubmitLlmTransport,
   extensions: [facadeIntentBoundaryPackage],
+  on: {
+    [FACADE_INTENT_COMMAND_EVENT]: async ({ data, capabilities }) => {
+      const payload = Predicate.isRecord(data) ? data : {};
+      if (typeof payload.label !== "string") return;
+      const capability = capabilities.get(facadeIntentBoundaryPackage.packageId);
+      if (capability === undefined) {
+        throw new CapabilityRejected({
+          event: "facade.intent.requested",
+          capability: `extension:${facadeIntentBoundaryPackage.packageId}`,
+        });
+      }
+      await capability.commit({
+        event: "facade.intent.requested",
+        data: { label: payload.label },
+      });
+    },
+  },
   declaredIntents: [
     {
       kind: "facade.intent.requested",

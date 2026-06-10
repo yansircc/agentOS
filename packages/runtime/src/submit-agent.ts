@@ -101,6 +101,7 @@ import {
   makeOperationRef,
   makePreClaim,
   normalizeAdmitVerdict,
+  type PreClaim,
   type RejectionRef,
 } from "@agent-os/kernel/effect-claim";
 import {
@@ -114,6 +115,7 @@ import {
 import { BoundaryEvents } from "./boundary-events";
 import type { BoundaryCommitRejected } from "./boundary-commit";
 import { MaterializedProjections, waitForProjection } from "./projection";
+import type { BoundaryContract } from "@agent-os/kernel/boundary-contract";
 
 export const DEFAULT_LLM_CALL_TIMEOUT_MS = 60_000;
 
@@ -131,10 +133,22 @@ class LlmCallTimedOut extends Data.TaggedError("agent_os.llm_call_timed_out")<{
 const toolDefinitionsOf = (tools: Record<string, Tool>): ReadonlyArray<ToolDefinition> =>
   Object.values(tools).map((t) => t.definition);
 
+const payloadWithToolPreClaim = (
+  contract: BoundaryContract,
+  kind: string,
+  payload: unknown,
+  claim: PreClaim,
+): unknown => {
+  const claimContract = contract.events[kind]?.claim;
+  if (claimContract?.phase !== "pre") return payload;
+  return Predicate.isRecord(payload) ? { ...payload, [claimContract.key]: claim } : payload;
+};
+
 const runtimeToolContext = (
   spec: InternalSubmitSpec,
   boundaryEvents: Context.Tag.Service<typeof BoundaryEvents>,
   projections: Context.Tag.Service<typeof MaterializedProjections>,
+  claim: PreClaim,
   resume: unknown,
 ): ToolExecutionContextInput => {
   const declaredIntents = new Map((spec.toolIntents ?? []).map((intent) => [intent.kind, intent]));
@@ -155,7 +169,16 @@ const runtimeToolContext = (
               );
             }
             return boundaryEvents
-              .commit(declared.boundaryPackage.boundaryContract, kind, payload)
+              .commit(
+                declared.boundaryPackage.boundaryContract,
+                kind,
+                payloadWithToolPreClaim(
+                  declared.boundaryPackage.boundaryContract,
+                  kind,
+                  payload,
+                  claim,
+                ),
+              )
               .pipe(
                 Effect.map((event) => ({ id: event.id })),
                 Effect.mapError((cause) => new ToolError({ toolName: "emitIntent", cause })),
@@ -166,8 +189,8 @@ const runtimeToolContext = (
       const ready = projectionSpec.ready;
       return waitForProjection({
         kind: projectionSpec.kind,
-        scopeRef: spec.scopeRef,
-        effectAuthorityRef: spec.effectAuthorityRef,
+        scopeRef: projectionSpec.scopeRef ?? spec.scopeRef,
+        effectAuthorityRef: projectionSpec.effectAuthorityRef ?? spec.effectAuthorityRef,
         factOwnerRef: projectionSpec.factOwnerRef ?? RUNTIME_FACT_OWNER,
         identity: projectionSpec.identity,
         maxAttempts: projectionSpec.maxAttempts,
@@ -1383,6 +1406,7 @@ export const submitAgentEffect = (
                     spec,
                     boundaryEvents,
                     projections,
+                    claim,
                     call.id === resumedToolCallIdThisTurn ? spec.resume?.resume : undefined,
                   ),
                 );

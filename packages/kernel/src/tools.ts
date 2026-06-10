@@ -22,6 +22,7 @@ import {
   type ClaimRole,
   type OriginRef,
   type PreClaim,
+  type ScopeRef,
 } from "./effect-claim";
 import { isMaterialRequirement, type MaterialRequirement } from "./material-ref";
 import type { ResolvedMaterial } from "./ref-resolver";
@@ -60,6 +61,8 @@ export type ToolIntentEmitter = (
 
 export interface ToolProjectionWaitSpec<State = unknown> {
   readonly kind: string;
+  readonly scopeRef?: ScopeRef;
+  readonly effectAuthorityRef?: AuthorityRef;
   readonly identity: unknown;
   readonly factOwnerRef?: FactOwnerRef;
   readonly maxAttempts?: number;

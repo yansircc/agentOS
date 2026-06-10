@@ -68,6 +68,7 @@ export type AgentOnHandler<
   readonly event: Parameters<AgentEventHandlerRegistration["handler"]>[0];
   readonly data: unknown;
   readonly agent: Runtime;
+  readonly capabilities: AgentEventHandlerContext<Runtime>["capabilities"];
   readonly env: Env;
 }) => void | Promise<void>;
 
@@ -134,7 +135,15 @@ const eventHandlersFor = <Env extends CloudflareAgentEnv, Runtime extends AgentF
     registrations.push({
       kind,
       handler: (event) =>
-        Promise.resolve(handler({ event, data: event.payload, agent: context.runtime, env })),
+        Promise.resolve(
+          handler({
+            event,
+            data: event.payload,
+            agent: context.runtime,
+            capabilities: context.capabilities,
+            env,
+          }),
+        ),
     });
   }
   for (const registration of config.eventHandlers?.(context, env) ?? []) {

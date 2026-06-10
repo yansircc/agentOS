@@ -10,13 +10,22 @@ import {
   type LlmWireDescriptor,
 } from "@agent-os/llm-protocol";
 import type { LedgerEvent } from "@agent-os/kernel/types";
-import type { BoundaryContract } from "@agent-os/kernel/boundary-contract";
+import {
+  boundaryPackage,
+  defineBoundaryContract,
+  type BoundaryContract,
+} from "@agent-os/kernel/boundary-contract";
 import { defineTool, effectfulToolExecution, pureToolExecution } from "@agent-os/kernel/tools";
+import { ToolError } from "@agent-os/kernel/errors";
 import { Admission } from "../src/admission";
 import { BoundaryEvents } from "../src/boundary-events";
 import { commitBoundaryEvent } from "../src/boundary-commit";
 import { Ledger } from "../src/ledger";
-import { MaterializedProjections } from "../src/projection";
+import {
+  MaterializedProjections,
+  type MaterializedProjectionGetSpec,
+  type MaterializedProjectionRow,
+} from "../src/projection";
 import { Quota } from "../src/quota-service";
 import { submitAgentEffect } from "../src/submit-agent";
 import {
@@ -27,6 +36,7 @@ import {
   toolReplayArtifactFromExecutedPayload,
   type InternalSubmitSpec,
 } from "@agent-os/runtime-protocol";
+import { defineSettlementContract } from "@agent-os/kernel/settlement-contract";
 import { RefResolutionFailed, RefResolverService } from "@agent-os/kernel/ref-resolver";
 import type { ResolvedMaterial } from "@agent-os/kernel/ref-resolver";
 import {
@@ -197,7 +207,8 @@ const makeServices = (
     invalidate: () => Effect.succeed({ barrierId: 1 }),
   };
   const projections = {
-    get: () => Effect.succeed(null),
+    get: (_spec: MaterializedProjectionGetSpec) =>
+      Effect.succeed(null as MaterializedProjectionRow | null),
     list: () => Effect.succeed([]),
     status: () =>
       Effect.succeed({
@@ -392,6 +403,197 @@ describe("submit-agent runtime event writes", () => {
       ]);
       expect(events.some((event) => event.kind === "tool.executed")).toBe(false);
       expect(JSON.stringify(events)).toContain(EFFECTFUL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON);
+    }),
+  );
+
+  it.effect("injects the tool pre-claim when emitting a declared intent with a claim slot", () =>
+    Effect.gen(function* () {
+      const intentPackage = boundaryPackage(
+        defineBoundaryContract({
+          packageId: "@agent-os/runtime-test.claimed-intent",
+          kindPrefixes: ["runtime.claimed_intent."],
+          roles: ["generator", "reader"],
+          events: {
+            "runtime.claimed_intent.requested": {
+              payloadSchema: {
+                type: "object",
+                properties: { label: { type: "string" } },
+                required: ["label"],
+                additionalProperties: false,
+              },
+              claim: { key: "claim", phase: "pre" },
+            },
+          },
+          effectAuthorityContracts: [],
+          materialRequirements: [],
+          settlement: defineSettlementContract({
+            settlementId: "runtime.claimed_intent.test",
+            anchorKinds: ["ledger_event"],
+            rejectionKinds: ["validation_failed"],
+          }),
+          projection: { derivedFromLedger: true, shadowState: false },
+        }),
+        "0.0.0",
+      );
+      const tool = defineTool({
+        name: "intent",
+        description: "intent",
+        args: Schema.Struct({ label: Schema.String }),
+        execute: (args, ctx) =>
+          Effect.gen(function* () {
+            if (ctx.emitIntent === undefined) {
+              return yield* new ToolError({
+                toolName: "intent",
+                cause: { reason: "missing_emit_intent" },
+              });
+            }
+            const emitted = yield* ctx.emitIntent("runtime.claimed_intent.requested", {
+              label: args.label,
+            });
+            return { emittedId: emitted.id };
+          }),
+        authority: "write",
+        admit: () => Effect.succeed({ ok: true }),
+        execution: pureToolExecution(),
+      });
+
+      const { result, events } = yield* runSubmit(
+        baseSpec({
+          tools: { intent: tool },
+          toolIntents: [
+            {
+              kind: "runtime.claimed_intent.requested",
+              boundaryPackage: intentPackage,
+            },
+          ],
+        }),
+        [
+          response({
+            items: [
+              { type: "message", text: "emit intent" },
+              {
+                type: "tool_call",
+                call: {
+                  id: "call-1",
+                  type: "function",
+                  function: { name: "intent", arguments: '{"label":"abc"}' },
+                },
+              },
+            ],
+          }),
+          response({ items: [{ type: "message", text: "done" }] }),
+        ],
+      );
+
+      expect(result).toMatchObject({ ok: true, final: "done" });
+      const intentEvent = events.find((event) => event.kind === "runtime.claimed_intent.requested");
+      expect(intentEvent?.factOwnerRef).toBe("@agent-os/runtime-test.claimed-intent");
+      expect(intentEvent?.payload).toMatchObject({
+        label: "abc",
+        claim: {
+          phase: "pre",
+          operationRef: "tool:submit-runtime-events:1:0:call-1",
+          scopeRef: { kind: "conversation", scopeId: "submit-runtime-events" },
+          effectAuthorityRef: { authorityClass: "write", authorityId: "tool:intent" },
+          originRef: { originKind: "submit", originId: "run:1" },
+        },
+      });
+      expect(events.some((event) => event.kind === "tool.rejected")).toBe(false);
+    }),
+  );
+
+  it.effect("lets tools wait for projections under an explicit truth identity", () =>
+    Effect.gen(function* () {
+      const projectionScopeRef = {
+        kind: "conversation" as const,
+        scopeId: "projection-owner-scope",
+      };
+      const projectionEffectAuthorityRef = {
+        authorityClass: "tool" as const,
+        authorityId: "projection-writer",
+      };
+      const projectionFactOwnerRef = "@agent-os/runtime-test.projection-owner" as const;
+      let observedProjectionSpec:
+        | {
+            readonly kind: string;
+            readonly scopeRef: unknown;
+            readonly effectAuthorityRef: unknown;
+            readonly factOwnerRef: unknown;
+            readonly identity: unknown;
+          }
+        | undefined;
+      const tool = defineTool({
+        name: "await_projection",
+        description: "wait projection",
+        args: Schema.Struct({ id: Schema.String }),
+        execute: (args, ctx) =>
+          Effect.gen(function* () {
+            if (ctx.awaitProjection === undefined) {
+              return yield* new ToolError({
+                toolName: "await_projection",
+                cause: { reason: "missing_await_projection" },
+              });
+            }
+            const row = yield* ctx.awaitProjection<{ readonly ok: boolean }>({
+              kind: "runtime.test.projection",
+              scopeRef: projectionScopeRef,
+              effectAuthorityRef: projectionEffectAuthorityRef,
+              factOwnerRef: projectionFactOwnerRef,
+              identity: { id: args.id },
+              maxAttempts: 1,
+            });
+            return { identityKey: row.identityKey, state: row.state };
+          }),
+        authority: "read",
+        admit: () => Effect.succeed({ ok: true }),
+        execution: pureToolExecution(),
+      });
+      const services = makeServices([
+        response({
+          items: [
+            {
+              type: "tool_call",
+              call: {
+                id: "call-1",
+                type: "function",
+                function: { name: "await_projection", arguments: '{"id":"intent-1"}' },
+              },
+            },
+          ],
+        }),
+        response({ items: [{ type: "message", text: "projected" }] }),
+      ]);
+      services.projections.get = (spec) =>
+        Effect.sync(() => {
+          observedProjectionSpec = spec;
+          return {
+            kind: spec.kind,
+            scope: "conversation:projection-owner-scope",
+            identityKey: "intent-1",
+            identity: spec.identity,
+            state: { ok: true },
+            version: 1,
+            updatedEventId: 42,
+            updatedAt: 420,
+          };
+        });
+
+      const { result, events } = yield* runSubmitWithServices(
+        baseSpec({ tools: { await_projection: tool }, budget: { maxTurns: 2 } }),
+        services,
+      );
+
+      expect(result).toMatchObject({ ok: true, final: "projected" });
+      expect(observedProjectionSpec).toMatchObject({
+        kind: "runtime.test.projection",
+        scopeRef: projectionScopeRef,
+        effectAuthorityRef: projectionEffectAuthorityRef,
+        factOwnerRef: projectionFactOwnerRef,
+        identity: { id: "intent-1" },
+      });
+      expect(events.find((event) => event.kind === "tool.executed")?.payload).toMatchObject({
+        result: { identityKey: "intent-1", state: { ok: true } },
+      });
     }),
   );
 

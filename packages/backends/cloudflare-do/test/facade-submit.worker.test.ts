@@ -3,7 +3,13 @@ import { runInDurableObject } from "cloudflare:test";
 
 import { credentialMaterialRef } from "@agent-os/kernel/material-ref";
 import { defineAgentSubmitBindings } from "@agent-os/runtime-protocol";
-import { facadeApply, facadeIntent, facadeLookup, type FacadeSubmitTestDO } from "./test-worker";
+import {
+  FACADE_INTENT_COMMAND_EVENT,
+  facadeApply,
+  facadeIntent,
+  facadeLookup,
+  type FacadeSubmitTestDO,
+} from "./test-worker";
 import { testTruthIdentity } from "./_identity";
 
 interface TestEnv {
@@ -181,5 +187,40 @@ describe("defineAgentDO facade submit", () => {
     expect(events.find((event) => event.kind === "tool.executed")?.payload).toMatchObject({
       result: { projectedState: { label: "abc" } },
     });
+  });
+
+  it("lets facade on handlers commit boundary facts through extension capabilities", async () => {
+    const scope = "facade-on-boundary-capability";
+    const stub = testEnv.FACADE_SUBMIT_DO.get(testEnv.FACADE_SUBMIT_DO.idFromName(scope));
+
+    await runInDurableObject(stub, async (instance) => {
+      await expect(
+        instance.emit("facade.intent.requested", { label: "direct" }),
+      ).rejects.toMatchObject({
+        _tag: "agent_os.capability_rejected",
+        event: "facade.intent.requested",
+      });
+
+      await instance.emit(FACADE_INTENT_COMMAND_EVENT, { label: "from-handler" });
+    });
+
+    const events = await (
+      stub as unknown as {
+        readonly events: (identity: ReturnType<typeof testTruthIdentity>) => Promise<
+          ReadonlyArray<{
+            readonly kind: string;
+            readonly factOwnerRef: string;
+            readonly payload: unknown;
+          }>
+        >;
+      }
+    ).events(testTruthIdentity(scope));
+
+    const requested = events.find((event) => event.kind === "facade.intent.requested");
+    expect(requested).toMatchObject({
+      factOwnerRef: "@agent-os/facade-intent-test",
+      payload: { label: "from-handler" },
+    });
+    expect(events.filter((event) => event.kind === "facade.intent.requested")).toHaveLength(1);
   });
 });

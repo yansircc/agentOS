@@ -28,6 +28,7 @@
         "packages/backends/cloudflare-do/test/dispatch-contract.worker.test.ts",
         "packages/backends/cloudflare-do/test/emit-event-contract.worker.test.ts",
         "packages/backends/cloudflare-do/test/extension-capability.worker.test.ts",
+        "packages/backends/cloudflare-do/test/facade-submit.worker.test.ts",
         "packages/kernel/src/errors.ts"
       ]
     },
