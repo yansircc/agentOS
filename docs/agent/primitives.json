@@ -1,6 +1,10 @@
 {
   "generatedBy": "scripts/generate-agent-docs.mjs",
-  "source": ["exported TSDoc @agentosPrimitive tags", "docs/agent/invariants.source.json"],
+  "source": [
+    "exported TSDoc @agentosPrimitive tags",
+    "docs/agent/invariants.source.json",
+    "docs/agent/primitive-evidence.source.json"
+  ],
   "primitives": [
     {
       "id": "primitive.ag-ui-svelte.agUiProjectionReadable",
@@ -14,7 +18,10 @@
       "aliases": [],
       "invariants": ["invariant.algebra.single-code-source"],
       "decisions": [],
-      "docs": "docs/concepts/ag-ui-wire-adapter.md"
+      "docs": "docs/concepts/ag-ui-wire-adapter.md",
+      "testEvidence": {
+        "tests": ["packages/wire-adapters/ag-ui-svelte/test/ag-ui-svelte.test.ts"]
+      }
     },
     {
       "id": "primitive.ag-ui.projectAgUiFrames",
@@ -28,7 +35,10 @@
       "aliases": [],
       "invariants": ["invariant.algebra.single-code-source"],
       "decisions": [],
-      "docs": "docs/concepts/ag-ui-wire-adapter.md"
+      "docs": "docs/concepts/ag-ui-wire-adapter.md",
+      "testEvidence": {
+        "tests": ["packages/wire-adapters/ag-ui/test/ag-ui.test.ts"]
+      }
     },
     {
       "id": "primitive.ag-ui.projectAgUiFramesToActivities",
@@ -42,7 +52,10 @@
       "aliases": [],
       "invariants": ["invariant.algebra.single-code-source"],
       "decisions": [],
-      "docs": "docs/concepts/ag-ui-wire-adapter.md"
+      "docs": "docs/concepts/ag-ui-wire-adapter.md",
+      "testEvidence": {
+        "tests": ["packages/wire-adapters/ag-ui/test/ag-ui.test.ts"]
+      }
     },
     {
       "id": "primitive.ag-ui.projectLedgerEventToAgUiEnvelope",
@@ -56,7 +69,10 @@
       "aliases": [],
       "invariants": ["invariant.algebra.single-code-source"],
       "decisions": [],
-      "docs": "docs/concepts/ag-ui-wire-adapter.md"
+      "docs": "docs/concepts/ag-ui-wire-adapter.md",
+      "testEvidence": {
+        "tests": ["packages/wire-adapters/ag-ui/test/ag-ui.test.ts"]
+      }
     },
     {
       "id": "primitive.ag-ui.projectLedgerSseToAgUiSse",
@@ -70,7 +86,10 @@
       "aliases": [],
       "invariants": ["invariant.algebra.single-code-source"],
       "decisions": [],
-      "docs": "docs/concepts/ag-ui-wire-adapter.md"
+      "docs": "docs/concepts/ag-ui-wire-adapter.md",
+      "testEvidence": {
+        "tests": ["packages/wire-adapters/ag-ui/test/ag-ui.test.ts"]
+      }
     },
     {
       "id": "primitive.kernel.AgentSchema",
@@ -84,7 +103,10 @@
       "aliases": [],
       "invariants": ["invariant.algebra.single-code-source"],
       "decisions": [],
-      "docs": "docs/concepts/agent-schema.md"
+      "docs": "docs/concepts/agent-schema.md",
+      "testEvidence": {
+        "tests": ["packages/kernel/test/agent-schema.test.ts"]
+      }
     },
     {
       "id": "primitive.kernel.AgentSchemaProjections",
@@ -98,7 +120,10 @@
       "aliases": [],
       "invariants": ["invariant.algebra.single-code-source"],
       "decisions": [],
-      "docs": "docs/concepts/agent-schema.md"
+      "docs": "docs/concepts/agent-schema.md",
+      "testEvidence": {
+        "tests": ["packages/kernel/test/agent-schema.test.ts"]
+      }
     },
     {
       "id": "primitive.kernel.AuthorityRef",
@@ -112,7 +137,10 @@
       "aliases": ["effectAuthorityRef"],
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
-      "docs": "docs/concepts/durable-truth.md"
+      "docs": "docs/concepts/durable-truth.md",
+      "testEvidence": {
+        "tests": ["packages/kernel/test/effect-claim.test.ts"]
+      }
     },
     {
       "id": "primitive.kernel.BoundaryContract",
@@ -126,7 +154,10 @@
       "aliases": [],
       "invariants": ["invariant.d10.namespace-integrity", "invariant.d10.truth-identity"],
       "decisions": [],
-      "docs": "docs/boundary-contract.md"
+      "docs": "docs/boundary-contract.md",
+      "testEvidence": {
+        "tests": ["packages/kernel/test/boundary-contract.test.ts"]
+      }
     },
     {
       "id": "primitive.kernel.BoundaryProjectionContract",
@@ -140,7 +171,10 @@
       "aliases": [],
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
-      "docs": "docs/concepts/materialized-projections.md"
+      "docs": "docs/concepts/materialized-projections.md",
+      "testEvidence": {
+        "tests": ["packages/kernel/test/boundary-contract.test.ts"]
+      }
     },
     {
       "id": "primitive.kernel.defineProductTool",
@@ -154,7 +188,10 @@
       "aliases": [],
       "invariants": ["invariant.algebra.type-or-boot-proof"],
       "decisions": [],
-      "docs": "docs/concepts/tool-execution-domain.md"
+      "docs": "docs/concepts/tool-execution-domain.md",
+      "testEvidence": {
+        "tests": ["packages/kernel/test/tools.test.ts"]
+      }
     },
     {
       "id": "primitive.kernel.EffectAuthorityContract",
@@ -168,7 +205,10 @@
       "aliases": ["effectAuthorityContract"],
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
-      "docs": "docs/boundary-contract.md"
+      "docs": "docs/boundary-contract.md",
+      "testEvidence": {
+        "tests": ["packages/kernel/test/material-ref.test.ts"]
+      }
     },
     {
       "id": "primitive.kernel.EffectClaim",
@@ -185,7 +225,10 @@
         "invariant.boundary.runtime-validation-external-only"
       ],
       "decisions": [],
-      "docs": "docs/boundary-contract.md"
+      "docs": "docs/boundary-contract.md",
+      "testEvidence": {
+        "tests": ["packages/kernel/test/effect-claim.test.ts"]
+      }
     },
     {
       "id": "primitive.kernel.ExecutionDomain",
@@ -199,7 +242,10 @@
       "aliases": [],
       "invariants": ["invariant.algebra.type-or-boot-proof"],
       "decisions": [],
-      "docs": "docs/concepts/tool-execution-domain.md"
+      "docs": "docs/concepts/tool-execution-domain.md",
+      "testEvidence": {
+        "tests": ["packages/kernel/test/tools.test.ts"]
+      }
     },
     {
       "id": "primitive.kernel.ExecutionDomainDeclaration",
@@ -213,7 +259,10 @@
       "aliases": [],
       "invariants": ["invariant.algebra.type-or-boot-proof"],
       "decisions": [],
-      "docs": "docs/concepts/tool-execution-domain.md"
+      "docs": "docs/concepts/tool-execution-domain.md",
+      "testEvidence": {
+        "tests": ["packages/kernel/test/tools.test.ts"]
+      }
     },
     {
       "id": "primitive.kernel.ExecutionDomainRegistry",
@@ -227,7 +276,10 @@
       "aliases": [],
       "invariants": ["invariant.algebra.type-or-boot-proof"],
       "decisions": [],
-      "docs": "docs/concepts/tool-execution-domain.md"
+      "docs": "docs/concepts/tool-execution-domain.md",
+      "testEvidence": {
+        "tests": ["packages/kernel/test/tools.test.ts"]
+      }
     },
     {
       "id": "primitive.kernel.FactOwnerRef",
@@ -241,7 +293,10 @@
       "aliases": [],
       "invariants": ["invariant.d10.namespace-integrity"],
       "decisions": [],
-      "docs": "docs/boundary-contract.md"
+      "docs": "docs/boundary-contract.md",
+      "testEvidence": {
+        "tests": ["packages/kernel/test/effect-claim.test.ts"]
+      }
     },
     {
       "id": "primitive.kernel.LedgerEvent",
@@ -255,7 +310,10 @@
       "aliases": [],
       "invariants": ["invariant.d10.truth-identity", "invariant.d10.namespace-integrity"],
       "decisions": [],
-      "docs": "docs/concepts/durable-truth.md"
+      "docs": "docs/concepts/durable-truth.md",
+      "testEvidence": {
+        "tests": ["packages/runtime-protocol/test/runtime-events.test.ts"]
+      }
     },
     {
       "id": "primitive.kernel.LivedClaim",
@@ -269,7 +327,10 @@
       "aliases": [],
       "invariants": ["invariant.algebra.type-or-boot-proof"],
       "decisions": [],
-      "docs": "docs/boundary-contract.md"
+      "docs": "docs/boundary-contract.md",
+      "testEvidence": {
+        "tests": ["packages/kernel/test/effect-claim.test.ts"]
+      }
     },
     {
       "id": "primitive.kernel.MaterialRef",
@@ -283,7 +344,10 @@
       "aliases": [],
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
-      "docs": "docs/concepts/carriers-and-material.md"
+      "docs": "docs/concepts/carriers-and-material.md",
+      "testEvidence": {
+        "tests": ["packages/kernel/test/material-ref.test.ts"]
+      }
     },
     {
       "id": "primitive.kernel.PreClaim",
@@ -297,7 +361,10 @@
       "aliases": [],
       "invariants": ["invariant.algebra.type-or-boot-proof"],
       "decisions": [],
-      "docs": "docs/boundary-contract.md"
+      "docs": "docs/boundary-contract.md",
+      "testEvidence": {
+        "tests": ["packages/kernel/test/effect-claim.test.ts"]
+      }
     },
     {
       "id": "primitive.kernel.projectAgentSchema",
@@ -311,7 +378,10 @@
       "aliases": [],
       "invariants": ["invariant.algebra.single-code-source"],
       "decisions": [],
-      "docs": "docs/concepts/agent-schema.md"
+      "docs": "docs/concepts/agent-schema.md",
+      "testEvidence": {
+        "tests": ["packages/kernel/test/agent-schema.test.ts"]
+      }
     },
     {
       "id": "primitive.kernel.RejectedClaim",
@@ -325,7 +395,10 @@
       "aliases": [],
       "invariants": ["invariant.algebra.type-or-boot-proof"],
       "decisions": [],
-      "docs": "docs/boundary-contract.md"
+      "docs": "docs/boundary-contract.md",
+      "testEvidence": {
+        "tests": ["packages/kernel/test/effect-claim.test.ts"]
+      }
     },
     {
       "id": "primitive.kernel.ScopeRef",
@@ -339,7 +412,13 @@
       "aliases": [],
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
-      "docs": "docs/concepts/durable-truth.md"
+      "docs": "docs/concepts/durable-truth.md",
+      "testEvidence": {
+        "tests": [
+          "packages/kernel/test/effect-claim.test.ts",
+          "packages/kernel/test/runtime-scope.test.ts"
+        ]
+      }
     },
     {
       "id": "primitive.kernel.Tool",
@@ -353,7 +432,10 @@
       "aliases": [],
       "invariants": ["invariant.algebra.type-or-boot-proof"],
       "decisions": [],
-      "docs": "docs/concepts/tool-execution-domain.md"
+      "docs": "docs/concepts/tool-execution-domain.md",
+      "testEvidence": {
+        "tests": ["packages/kernel/test/tools.test.ts"]
+      }
     },
     {
       "id": "primitive.kernel.ToolAdmitInput",
@@ -367,7 +449,10 @@
       "aliases": [],
       "invariants": ["invariant.algebra.type-or-boot-proof"],
       "decisions": [],
-      "docs": "docs/concepts/tool-execution-domain.md"
+      "docs": "docs/concepts/tool-execution-domain.md",
+      "testEvidence": {
+        "tests": ["packages/kernel/test/tools.test.ts"]
+      }
     },
     {
       "id": "primitive.kernel.ToolContract",
@@ -381,7 +466,10 @@
       "aliases": [],
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
-      "docs": "docs/concepts/tool-execution-domain.md"
+      "docs": "docs/concepts/tool-execution-domain.md",
+      "testEvidence": {
+        "tests": ["packages/kernel/test/tools.test.ts"]
+      }
     },
     {
       "id": "primitive.kernel.ToolExecution",
@@ -395,7 +483,10 @@
       "aliases": [],
       "invariants": ["invariant.algebra.type-or-boot-proof"],
       "decisions": [],
-      "docs": "docs/concepts/tool-execution-domain.md"
+      "docs": "docs/concepts/tool-execution-domain.md",
+      "testEvidence": {
+        "tests": ["packages/kernel/test/tools.test.ts"]
+      }
     },
     {
       "id": "primitive.kernel.ToolExecutionContext",
@@ -409,7 +500,10 @@
       "aliases": [],
       "invariants": ["invariant.algebra.type-or-boot-proof"],
       "decisions": [],
-      "docs": "docs/concepts/tool-execution-domain.md"
+      "docs": "docs/concepts/tool-execution-domain.md",
+      "testEvidence": {
+        "tests": ["packages/kernel/test/tools.test.ts"]
+      }
     },
     {
       "id": "primitive.llm_protocol.LlmTransport",
@@ -423,7 +517,10 @@
       "aliases": [],
       "invariants": ["invariant.boundary.runtime-validation-external-only"],
       "decisions": [],
-      "docs": "docs/packages/llm-protocol.md"
+      "docs": "docs/packages/llm-protocol.md",
+      "testEvidence": {
+        "tests": ["packages/llm-protocol/test/llm-protocol.test.ts"]
+      }
     },
     {
       "id": "primitive.runtime.defineProjection",
@@ -437,7 +534,10 @@
       "aliases": [],
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
-      "docs": "docs/concepts/materialized-projections.md"
+      "docs": "docs/concepts/materialized-projections.md",
+      "testEvidence": {
+        "tests": ["packages/runtime/test/projection.test.ts"]
+      }
     },
     {
       "id": "primitive.runtime.Ledger",
@@ -451,7 +551,10 @@
       "aliases": [],
       "invariants": ["invariant.ledger.single-commit-source", "invariant.d10.truth-identity"],
       "decisions": [],
-      "docs": "docs/concepts/durable-truth.md"
+      "docs": "docs/concepts/durable-truth.md",
+      "testEvidence": {
+        "tests": ["packages/backends/protocol/test/contract/runtime-backend-contract.ts"]
+      }
     },
     {
       "id": "primitive.runtime.LedgerCommitEventSpec",
@@ -465,7 +568,10 @@
       "aliases": [],
       "invariants": ["invariant.ledger.single-commit-source"],
       "decisions": [],
-      "docs": "docs/concepts/durable-truth.md"
+      "docs": "docs/concepts/durable-truth.md",
+      "testEvidence": {
+        "tests": ["packages/runtime-protocol/test/runtime-events.test.ts"]
+      }
     },
     {
       "id": "primitive.runtime.LedgerTruthIdentity",
@@ -479,7 +585,10 @@
       "aliases": [],
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
-      "docs": "docs/concepts/durable-truth.md"
+      "docs": "docs/concepts/durable-truth.md",
+      "testEvidence": {
+        "tests": ["packages/backends/protocol/test/contract/runtime-backend-contract.ts"]
+      }
     },
     {
       "id": "primitive.runtime.MaterializedProjectionDefinition",
@@ -493,7 +602,10 @@
       "aliases": [],
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
-      "docs": "docs/concepts/materialized-projections.md"
+      "docs": "docs/concepts/materialized-projections.md",
+      "testEvidence": {
+        "tests": ["packages/runtime/test/projection.test.ts"]
+      }
     },
     {
       "id": "primitive.runtime.MaterializedProjections",
@@ -507,7 +619,13 @@
       "aliases": [],
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
-      "docs": "docs/concepts/materialized-projections.md"
+      "docs": "docs/concepts/materialized-projections.md",
+      "testEvidence": {
+        "tests": [
+          "packages/backends/cloudflare-do/test/materialized-projections.worker.test.ts",
+          "packages/runtime/test/projection.test.ts"
+        ]
+      }
     },
     {
       "id": "primitive.runtime.ProjectionIdentifyResult",
@@ -521,7 +639,10 @@
       "aliases": [],
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
-      "docs": "docs/concepts/materialized-projections.md"
+      "docs": "docs/concepts/materialized-projections.md",
+      "testEvidence": {
+        "tests": ["packages/runtime/test/projection.test.ts"]
+      }
     },
     {
       "id": "primitive.runtime.ProjectionReduceContext",
@@ -535,7 +656,10 @@
       "aliases": [],
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
-      "docs": "docs/concepts/materialized-projections.md"
+      "docs": "docs/concepts/materialized-projections.md",
+      "testEvidence": {
+        "tests": ["packages/runtime/test/projection.test.ts"]
+      }
     },
     {
       "id": "primitive.runtime.ProjectionReduceResult",
@@ -549,7 +673,10 @@
       "aliases": [],
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
-      "docs": "docs/concepts/materialized-projections.md"
+      "docs": "docs/concepts/materialized-projections.md",
+      "testEvidence": {
+        "tests": ["packages/runtime/test/projection.test.ts"]
+      }
     },
     {
       "id": "primitive.runtime.projectRunStatus",
@@ -563,7 +690,10 @@
       "aliases": [],
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
-      "docs": "docs/concepts/durable-truth.md"
+      "docs": "docs/concepts/durable-truth.md",
+      "testEvidence": {
+        "tests": ["packages/runtime/test/run-projector.test.ts"]
+      }
     },
     {
       "id": "primitive.runtime.projectRunTrace",
@@ -577,7 +707,10 @@
       "aliases": [],
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
-      "docs": "docs/concepts/durable-truth.md"
+      "docs": "docs/concepts/durable-truth.md",
+      "testEvidence": {
+        "tests": ["packages/runtime/test/run-projector.test.ts"]
+      }
     },
     {
       "id": "primitive.runtime.projectSubmitResult",
@@ -591,7 +724,13 @@
       "aliases": [],
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
-      "docs": "docs/concepts/durable-truth.md"
+      "docs": "docs/concepts/durable-truth.md",
+      "testEvidence": {
+        "tests": [
+          "packages/runtime/test/run-projector.test.ts",
+          "packages/runtime/test/submit-agent-runtime-events.test.ts"
+        ]
+      }
     },
     {
       "id": "primitive.runtime.SubmitResult",
@@ -605,7 +744,13 @@
       "aliases": [],
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
-      "docs": "docs/concepts/durable-truth.md"
+      "docs": "docs/concepts/durable-truth.md",
+      "testEvidence": {
+        "tests": [
+          "packages/runtime-protocol/test/runtime-events.test.ts",
+          "packages/runtime/test/submit-agent-runtime-events.test.ts"
+        ]
+      }
     },
     {
       "id": "primitive.runtime.SubmitSpec",
@@ -619,7 +764,13 @@
       "aliases": [],
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
-      "docs": "docs/tutorials/streaming-chatbot.md"
+      "docs": "docs/tutorials/streaming-chatbot.md",
+      "testEvidence": {
+        "tests": [
+          "packages/runtime/test/submit-agent-runtime-events.test.ts",
+          "packages/runtime/test/submit-agent-timeout.test.ts"
+        ]
+      }
     },
     {
       "id": "primitive.runtime.waitForProjection",
@@ -633,7 +784,10 @@
       "aliases": [],
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
-      "docs": "docs/concepts/materialized-projections.md"
+      "docs": "docs/concepts/materialized-projections.md",
+      "testEvidence": {
+        "tests": ["packages/runtime/test/projection.test.ts"]
+      }
     }
   ]
 }

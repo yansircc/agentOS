@@ -1,0 +1,185 @@
+{
+  "schemaVersion": 1,
+  "evidence": [
+    {
+      "primitive": "primitive.ag-ui-svelte.agUiProjectionReadable",
+      "tests": ["packages/wire-adapters/ag-ui-svelte/test/ag-ui-svelte.test.ts"]
+    },
+    {
+      "primitive": "primitive.ag-ui.projectAgUiFrames",
+      "tests": ["packages/wire-adapters/ag-ui/test/ag-ui.test.ts"]
+    },
+    {
+      "primitive": "primitive.ag-ui.projectAgUiFramesToActivities",
+      "tests": ["packages/wire-adapters/ag-ui/test/ag-ui.test.ts"]
+    },
+    {
+      "primitive": "primitive.ag-ui.projectLedgerEventToAgUiEnvelope",
+      "tests": ["packages/wire-adapters/ag-ui/test/ag-ui.test.ts"]
+    },
+    {
+      "primitive": "primitive.ag-ui.projectLedgerSseToAgUiSse",
+      "tests": ["packages/wire-adapters/ag-ui/test/ag-ui.test.ts"]
+    },
+    {
+      "primitive": "primitive.kernel.AgentSchema",
+      "tests": ["packages/kernel/test/agent-schema.test.ts"]
+    },
+    {
+      "primitive": "primitive.kernel.AgentSchemaProjections",
+      "tests": ["packages/kernel/test/agent-schema.test.ts"]
+    },
+    {
+      "primitive": "primitive.kernel.AuthorityRef",
+      "tests": ["packages/kernel/test/effect-claim.test.ts"]
+    },
+    {
+      "primitive": "primitive.kernel.BoundaryContract",
+      "tests": ["packages/kernel/test/boundary-contract.test.ts"]
+    },
+    {
+      "primitive": "primitive.kernel.BoundaryProjectionContract",
+      "tests": ["packages/kernel/test/boundary-contract.test.ts"]
+    },
+    {
+      "primitive": "primitive.kernel.defineProductTool",
+      "tests": ["packages/kernel/test/tools.test.ts"]
+    },
+    {
+      "primitive": "primitive.kernel.EffectAuthorityContract",
+      "tests": ["packages/kernel/test/material-ref.test.ts"]
+    },
+    {
+      "primitive": "primitive.kernel.EffectClaim",
+      "tests": ["packages/kernel/test/effect-claim.test.ts"]
+    },
+    {
+      "primitive": "primitive.kernel.ExecutionDomain",
+      "tests": ["packages/kernel/test/tools.test.ts"]
+    },
+    {
+      "primitive": "primitive.kernel.ExecutionDomainDeclaration",
+      "tests": ["packages/kernel/test/tools.test.ts"]
+    },
+    {
+      "primitive": "primitive.kernel.ExecutionDomainRegistry",
+      "tests": ["packages/kernel/test/tools.test.ts"]
+    },
+    {
+      "primitive": "primitive.kernel.FactOwnerRef",
+      "tests": ["packages/kernel/test/effect-claim.test.ts"]
+    },
+    {
+      "primitive": "primitive.kernel.LedgerEvent",
+      "tests": ["packages/runtime-protocol/test/runtime-events.test.ts"]
+    },
+    {
+      "primitive": "primitive.kernel.LivedClaim",
+      "tests": ["packages/kernel/test/effect-claim.test.ts"]
+    },
+    {
+      "primitive": "primitive.kernel.MaterialRef",
+      "tests": ["packages/kernel/test/material-ref.test.ts"]
+    },
+    {
+      "primitive": "primitive.kernel.PreClaim",
+      "tests": ["packages/kernel/test/effect-claim.test.ts"]
+    },
+    {
+      "primitive": "primitive.kernel.projectAgentSchema",
+      "tests": ["packages/kernel/test/agent-schema.test.ts"]
+    },
+    {
+      "primitive": "primitive.kernel.RejectedClaim",
+      "tests": ["packages/kernel/test/effect-claim.test.ts"]
+    },
+    {
+      "primitive": "primitive.kernel.ScopeRef",
+      "tests": ["packages/kernel/test/runtime-scope.test.ts", "packages/kernel/test/effect-claim.test.ts"]
+    },
+    {
+      "primitive": "primitive.kernel.Tool",
+      "tests": ["packages/kernel/test/tools.test.ts"]
+    },
+    {
+      "primitive": "primitive.kernel.ToolAdmitInput",
+      "tests": ["packages/kernel/test/tools.test.ts"]
+    },
+    {
+      "primitive": "primitive.kernel.ToolContract",
+      "tests": ["packages/kernel/test/tools.test.ts"]
+    },
+    {
+      "primitive": "primitive.kernel.ToolExecution",
+      "tests": ["packages/kernel/test/tools.test.ts"]
+    },
+    {
+      "primitive": "primitive.kernel.ToolExecutionContext",
+      "tests": ["packages/kernel/test/tools.test.ts"]
+    },
+    {
+      "primitive": "primitive.llm_protocol.LlmTransport",
+      "tests": ["packages/llm-protocol/test/llm-protocol.test.ts"]
+    },
+    {
+      "primitive": "primitive.runtime.defineProjection",
+      "tests": ["packages/runtime/test/projection.test.ts"]
+    },
+    {
+      "primitive": "primitive.runtime.Ledger",
+      "tests": ["packages/backends/protocol/test/contract/runtime-backend-contract.ts"]
+    },
+    {
+      "primitive": "primitive.runtime.LedgerCommitEventSpec",
+      "tests": ["packages/runtime-protocol/test/runtime-events.test.ts"]
+    },
+    {
+      "primitive": "primitive.runtime.LedgerTruthIdentity",
+      "tests": ["packages/backends/protocol/test/contract/runtime-backend-contract.ts"]
+    },
+    {
+      "primitive": "primitive.runtime.MaterializedProjectionDefinition",
+      "tests": ["packages/runtime/test/projection.test.ts"]
+    },
+    {
+      "primitive": "primitive.runtime.MaterializedProjections",
+      "tests": ["packages/backends/cloudflare-do/test/materialized-projections.worker.test.ts", "packages/runtime/test/projection.test.ts"]
+    },
+    {
+      "primitive": "primitive.runtime.ProjectionIdentifyResult",
+      "tests": ["packages/runtime/test/projection.test.ts"]
+    },
+    {
+      "primitive": "primitive.runtime.ProjectionReduceContext",
+      "tests": ["packages/runtime/test/projection.test.ts"]
+    },
+    {
+      "primitive": "primitive.runtime.ProjectionReduceResult",
+      "tests": ["packages/runtime/test/projection.test.ts"]
+    },
+    {
+      "primitive": "primitive.runtime.projectRunStatus",
+      "tests": ["packages/runtime/test/run-projector.test.ts"]
+    },
+    {
+      "primitive": "primitive.runtime.projectRunTrace",
+      "tests": ["packages/runtime/test/run-projector.test.ts"]
+    },
+    {
+      "primitive": "primitive.runtime.projectSubmitResult",
+      "tests": ["packages/runtime/test/run-projector.test.ts", "packages/runtime/test/submit-agent-runtime-events.test.ts"]
+    },
+    {
+      "primitive": "primitive.runtime.SubmitResult",
+      "tests": ["packages/runtime/test/submit-agent-runtime-events.test.ts", "packages/runtime-protocol/test/runtime-events.test.ts"]
+    },
+    {
+      "primitive": "primitive.runtime.SubmitSpec",
+      "tests": ["packages/runtime/test/submit-agent-runtime-events.test.ts", "packages/runtime/test/submit-agent-timeout.test.ts"]
+    },
+    {
+      "primitive": "primitive.runtime.waitForProjection",
+      "tests": ["packages/runtime/test/projection.test.ts"]
+    }
+  ]
+}

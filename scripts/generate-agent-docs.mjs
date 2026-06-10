@@ -135,11 +135,13 @@ const ensurePath = (file, owner) => {
 const surface = readJson("docs/surface.json");
 const recipesSource = readJson("docs/agent/recipes.source.json");
 const invariantsSource = readJson("docs/agent/invariants.source.json");
+const primitiveEvidenceSource = readJson("docs/agent/primitive-evidence.source.json");
 const errorsSource = readJson("docs/agent/error-metadata.source.json");
 const externalVocabularySource = readJson("docs/agent/external-vocabulary.source.json");
 
 ensureUnique(recipesSource.recipes, (recipe) => recipe.id, "recipe id");
 ensureUnique(invariantsSource.invariants, (invariant) => invariant.id, "invariant id");
+ensureUnique(primitiveEvidenceSource.evidence, (entry) => entry.primitive, "primitive evidence id");
 ensureUnique(errorsSource.errors, (error) => error.tag, "error tag metadata");
 ensureUnique(externalVocabularySource.vocabulary, (entry) => entry.id, "external vocabulary id");
 
@@ -230,6 +232,39 @@ const primitives = collectPrimitiveAnnotations();
 ensureUnique(primitives, (primitive) => primitive.id, "primitive id");
 
 const primitiveIds = new Set(primitives.map((primitive) => primitive.id));
+const primitiveEvidenceById = new Map();
+
+for (const entry of primitiveEvidenceSource.evidence) {
+  if (!primitiveIds.has(entry.primitive)) {
+    failures.push(`primitive evidence references unknown primitive ${entry.primitive}`);
+    continue;
+  }
+  const hasTests = Array.isArray(entry.tests) && entry.tests.length > 0;
+  const hasNoTestReason =
+    typeof entry.noTestReason === "string" && entry.noTestReason.trim().length > 0;
+  if (hasTests === hasNoTestReason) {
+    failures.push(
+      `${entry.primitive} must have exactly one of tests[] or non-empty noTestReason`,
+    );
+    continue;
+  }
+  if (hasTests) {
+    for (const test of entry.tests) ensurePath(test, entry.primitive);
+    primitiveEvidenceById.set(entry.primitive, { tests: [...entry.tests].sort() });
+  } else {
+    primitiveEvidenceById.set(entry.primitive, { noTestReason: entry.noTestReason.trim() });
+  }
+}
+
+for (const primitive of primitives) {
+  const evidence = primitiveEvidenceById.get(primitive.id);
+  if (evidence === undefined) {
+    failures.push(`${primitive.id} is missing primitive test evidence`);
+    primitive.testEvidence = { noTestReason: "missing evidence source" };
+    continue;
+  }
+  primitive.testEvidence = evidence;
+}
 
 for (const recipe of recipesSource.recipes) {
   ensurePath(recipe.tutorial, recipe.id);
@@ -299,7 +334,11 @@ const errors = discoveredErrors
 
 const primitivesJson = {
   generatedBy: "scripts/generate-agent-docs.mjs",
-  source: ["exported TSDoc @agentosPrimitive tags", "docs/agent/invariants.source.json"],
+  source: [
+    "exported TSDoc @agentosPrimitive tags",
+    "docs/agent/invariants.source.json",
+    "docs/agent/primitive-evidence.source.json",
+  ],
   primitives,
 };
 
@@ -430,17 +469,22 @@ const agentNavigation = [
 ].join("\n");
 
 const primitivesMd = [
-  generatedNotice("exported TSDoc @agentosPrimitive tags"),
+  generatedNotice("exported TSDoc @agentosPrimitive tags and docs/agent/primitive-evidence.source.json"),
   "",
   "# Agent Primitives",
   "",
   table(
-    ["Primitive", "Export", "Invariant", "Docs"],
+    ["Primitive", "Export", "Invariant", "Docs", "Test Evidence"],
     primitives.map((primitive) => [
       `\`${primitive.id}\``,
       `\`${primitive.package}:${primitive.symbol}\``,
       primitive.invariants.map((invariant) => `\`${invariant}\``).join(", "),
       mdLink("docs/agent/primitives.md", path.posix.basename(primitive.docs), primitive.docs),
+      primitive.testEvidence.tests === undefined
+        ? `no test: ${primitive.testEvidence.noTestReason}`
+        : primitive.testEvidence.tests
+            .map((test) => mdLink("docs/agent/primitives.md", path.posix.basename(test), test))
+            .join(", "),
     ]),
   ),
   "",
