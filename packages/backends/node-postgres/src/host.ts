@@ -10,6 +10,10 @@ export interface PsqlCliOptions {
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
+export type NodePostgresNow = () => number;
+
+export const systemTimeNow: NodePostgresNow = () => Date.now();
+
 export const quoteIdentifier = (value: string): string => {
   return `"${value.replace(/"/g, '""')}"`;
 };

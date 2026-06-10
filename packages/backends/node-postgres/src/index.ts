@@ -76,7 +76,15 @@ import {
 } from "@agent-os/runtime-protocol";
 import { InvalidTraceContext, type TelemetryFanoutDiagnostic } from "@agent-os/telemetry-protocol";
 import { validateOptionalTraceContext } from "@agent-os/telemetry-protocol";
-import { PsqlCli, quoteIdentifier, sqlJson, sqlNumber, sqlString } from "./sql";
+import {
+  PsqlCli,
+  quoteIdentifier,
+  sqlJson,
+  sqlNumber,
+  sqlString,
+  systemTimeNow,
+  type NodePostgresNow,
+} from "./host";
 
 export interface NodePostgresBackendOptions {
   readonly databaseUrl: string;
@@ -283,10 +291,12 @@ export class NodePostgresBackend {
   readonly #sinks = new Set<EventSink>();
   readonly #diagnostics: TelemetryFanoutDiagnostic[] = [];
   readonly #targets = new Map<string, DispatchTargetAdapter>();
+  readonly #now: NodePostgresNow;
 
   constructor(options: NodePostgresBackendOptions) {
     this.bindingRef = options.bindingRef;
     this.#schema = schemaName(options.schema);
+    this.#now = systemTimeNow;
     this.#sql = new PsqlCli({
       databaseUrl: options.databaseUrl,
       schema: this.#schema,
@@ -422,7 +432,7 @@ export class NodePostgresBackend {
   ): Promise<LedgerEvent> {
     const [event] = await this.#appendEvents([
       {
-        ts: Date.now(),
+        ts: this.#now(),
         kind,
         identity,
         payload,
@@ -433,7 +443,7 @@ export class NodePostgresBackend {
   }
 
   async commit(events: ReadonlyArray<LedgerCommitEventSpec>): Promise<ReadonlyArray<LedgerEvent>> {
-    const ts = Date.now();
+    const ts = this.#now();
     return this.#appendEvents(
       events.map((event) => ({
         ts: event.ts ?? ts,
@@ -466,7 +476,7 @@ export class NodePostgresBackend {
   ): Promise<{ readonly id: number }> {
     const [event] = await this.#appendEvents([
       {
-        ts: Date.now(),
+        ts: this.#now(),
         kind: DURABLE_TRIGGER_SCHEDULED_REQUESTED,
         identity,
         payload: scheduledEventIntentPayload(eventKind, data),
@@ -582,17 +592,18 @@ export class NodePostgresBackend {
         ? {}
         : { traceContext: copyTraceContext(traceContextResult.traceContext) }),
     };
+    const now = this.#now();
     const [event] = await this.#appendEvents([
       {
-        ts: Date.now(),
+        ts: now,
         kind: DISPATCH_EVENT_KINDS.OUTBOUND_REQUESTED,
         identity,
         payload: requested,
       },
     ]);
     if (event === undefined) throw new SqlError({ cause: "dispatch commit returned no event" });
-    await this.#insertDueWork(identity, DELIVERY_RETRY_TRIGGER_KIND, event.id, Date.now());
-    await this.#drainDue(identity, Date.now());
+    await this.#insertDueWork(identity, DELIVERY_RETRY_TRIGGER_KIND, event.id, now);
+    await this.#drainDue(identity, now);
     return { outboundEventId: event.id };
   }
 
@@ -634,7 +645,7 @@ export class NodePostgresBackend {
     const events = await this.#appendEventsWithIds([
       {
         id: acceptedEventId,
-        ts: Date.now(),
+        ts: this.#now(),
         kind: DISPATCH_INBOUND_ACCEPTED,
         identity,
         payload: {
@@ -650,7 +661,7 @@ export class NodePostgresBackend {
       },
       {
         id: deliveredEventId,
-        ts: Date.now(),
+        ts: this.#now(),
         kind: envelope.event,
         identity,
         payload: envelope.data,
@@ -674,7 +685,7 @@ export class NodePostgresBackend {
   ): Promise<ResourceGrantResult> {
     positiveAmount(spec.amount);
     const event = await this.#appendResourceEventLocked({
-      ts: Date.now(),
+      ts: this.#now(),
       kind: RESOURCE_EVENT_KIND.GRANTED,
       identity,
       payload: { key: spec.key, amount: spec.amount, ref: spec.ref },
@@ -689,6 +700,7 @@ export class NodePostgresBackend {
     positiveAmount(spec.amount);
     const reservationId = randomUUID();
     const identityKey = backendProtocolEventIdentityKey(identity);
+    const now = this.#now();
     const [row] = await this.#sql.jsonArrayStatement<ResourceReserveTransactionRow>(`
       BEGIN;
       SELECT pg_advisory_xact_lock(hashtextextended(${sqlString(resourceLockKey(identityKey))}, 0));
@@ -774,7 +786,7 @@ export class NodePostgresBackend {
           payload
         )
         SELECT
-          ${sqlNumber(Date.now())},
+          ${sqlNumber(now)},
           event_input.kind,
           ${sqlString(backendProtocolTruthIdentityKey(identity))},
           ${sqlString(identityKey)},
@@ -851,7 +863,7 @@ export class NodePostgresBackend {
     toolName: string,
     operationRef: string,
   ): Promise<GrantResult> {
-    const now = Date.now();
+    const now = this.#now();
     const windowStart = windowMs === Number.POSITIVE_INFINITY ? 0 : now - windowMs;
     const events = await this.#events(identity);
     let usage: ReturnType<typeof projectQuotaGrantUsage>;
@@ -1133,6 +1145,7 @@ export class NodePostgresBackend {
     const identityKey = backendProtocolEventIdentityKey(identity);
     const terminalStatus =
       terminalKind === RESOURCE_EVENT_KIND.CONSUMED ? "consumed" : "released";
+    const now = this.#now();
     const [row] = await this.#sql.jsonArrayStatement<ResourceTerminalTransactionRow>(`
       BEGIN;
       SELECT pg_advisory_xact_lock(hashtextextended(${sqlString(resourceLockKey(identityKey))}, 0));
@@ -1184,7 +1197,7 @@ export class NodePostgresBackend {
           payload
         )
         SELECT
-          ${sqlNumber(Date.now())},
+          ${sqlNumber(now)},
           event_input.kind,
           ${sqlString(backendProtocolTruthIdentityKey(identity))},
           ${sqlString(identityKey)},

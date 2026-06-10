@@ -45,6 +45,7 @@
     "test:resource-quota-protocol-ownership": "node scripts/check-resource-quota-protocol-ownership.mjs --self-test && node scripts/check-resource-quota-protocol-ownership.mjs",
     "test:resource-reservation-concurrency": "node scripts/check-resource-reservation-concurrency.mjs --self-test && node scripts/check-resource-reservation-concurrency.mjs",
     "test:node-postgres-runtime-import-boundary": "node scripts/check-node-postgres-runtime-import-boundary.mjs --self-test && node scripts/check-node-postgres-runtime-import-boundary.mjs",
+    "test:node-postgres-effect-governance": "node scripts/check-node-postgres-effect-governance.mjs --self-test && node scripts/check-node-postgres-effect-governance.mjs",
     "test:backend-provider-axis-boundary": "node scripts/check-backend-provider-axis-boundary.mjs --self-test && node scripts/check-backend-provider-axis-boundary.mjs",
     "test:run-scoped-material-bindings": "node scripts/check-run-scoped-material-bindings.mjs --self-test && node scripts/check-run-scoped-material-bindings.mjs",
     "test:turn-stream-provider-wire-boundary": "node scripts/check-turn-stream-provider-wire-boundary.mjs --self-test && node scripts/check-turn-stream-provider-wire-boundary.mjs",
