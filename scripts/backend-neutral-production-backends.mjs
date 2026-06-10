@@ -1,8 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-export const productionBackendPackagesPath =
-  "agentos.backendNeutrality.productionBackendPackages";
+export const productionBackendPackagesPath = "agentos.backendNeutrality.productionBackendPackages";
 
 export const readJson = (root, rel) => JSON.parse(fs.readFileSync(path.join(root, rel), "utf8"));
 

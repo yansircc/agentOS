@@ -79,7 +79,7 @@ describe("@agent-os/sse-http", () => {
     expect(encodeSseHttpJsonEvent("ledger", { id: 1, ok: true })).toBe(
       'event: ledger\ndata: {"id":1,"ok":true}\n\n',
     );
-    expect(parseSseHttpEventBlock("event: ledger\ndata: {\"id\":1}")).toEqual({
+    expect(parseSseHttpEventBlock('event: ledger\ndata: {"id":1}')).toEqual({
       event: "ledger",
       data: '{"id":1}',
     });
@@ -87,7 +87,7 @@ describe("@agent-os/sse-http", () => {
     async function* chunks(): AsyncGenerator<string | Uint8Array> {
       yield "event: heartbeat\ndata: {}\n\n";
       yield new TextEncoder().encode('event: ledger\ndata: {"id":1');
-      yield '}\n\n';
+      yield "}\n\n";
     }
 
     await expect(collectAsync(decodeSseHttpEvents(chunks()))).resolves.toEqual([

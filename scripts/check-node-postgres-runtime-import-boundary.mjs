@@ -52,18 +52,15 @@ const forbiddenLocalOwnership = [
   },
   {
     name: "scheduled trigger kind constant",
-    pattern:
-      /\b(?:const|let|var|function|class|interface|type)\s+SCHEDULED_EVENT_TRIGGER_KIND\b/u,
+    pattern: /\b(?:const|let|var|function|class|interface|type)\s+SCHEDULED_EVENT_TRIGGER_KIND\b/u,
   },
   {
     name: "scheduled payload shape",
-    pattern:
-      /\b(?:const|let|var|function|class|interface|type)\s+ScheduledEventIntentPayload\b/u,
+    pattern: /\b(?:const|let|var|function|class|interface|type)\s+ScheduledEventIntentPayload\b/u,
   },
   {
     name: "scheduled payload constructor",
-    pattern:
-      /\b(?:const|let|var|function|class|interface|type)\s+scheduledEventIntentPayload\b/u,
+    pattern: /\b(?:const|let|var|function|class|interface|type)\s+scheduledEventIntentPayload\b/u,
   },
   {
     name: "scheduled payload parser",
@@ -259,7 +256,9 @@ const collectSelfTestFailures = () => {
   }
 };
 
-const failures = process.argv.includes("--self-test") ? collectSelfTestFailures() : collectFailures();
+const failures = process.argv.includes("--self-test")
+  ? collectSelfTestFailures()
+  : collectFailures();
 if (failures.length > 0) {
   console.error(failures.join("\n"));
   process.exit(1);

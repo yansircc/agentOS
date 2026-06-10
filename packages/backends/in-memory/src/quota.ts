@@ -1,7 +1,11 @@
 import { Clock, Effect, Layer } from "effect";
 import { SqlError } from "@agent-os/kernel/errors";
 import { Quota } from "@agent-os/runtime";
-import { projectQuotaGrantUsage, QUOTA_EVENT_KIND, type GrantResult } from "@agent-os/backend-protocol";
+import {
+  projectQuotaGrantUsage,
+  QUOTA_EVENT_KIND,
+  type GrantResult,
+} from "@agent-os/backend-protocol";
 import { inMemoryRuntimeEventIdentity, type InMemoryBackendState } from "./state";
 
 export const InMemoryQuotaLive = (state: InMemoryBackendState): Layer.Layer<Quota> =>

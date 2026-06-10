@@ -169,7 +169,9 @@ const collectSelfTestFailures = () => {
     writeFixture(root, providerTestPath, providerTestFixture);
     const baseline = collectFailures(root);
     if (baseline.length > 0) {
-      return [`turn-stream provider wire boundary positive fixture failed:\n${baseline.join("\n")}`];
+      return [
+        `turn-stream provider wire boundary positive fixture failed:\n${baseline.join("\n")}`,
+      ];
     }
 
     writeFixture(

@@ -48,12 +48,12 @@ describe("in-memory backend commit/fanout contract", () => {
         state,
         identity: truthIdentity("sender"),
         projections,
-	        dispatchTargets: {
-	          [bindingKey]: {
-	            deliver: (envelope) =>
-	              receiver.__agentosReceiveDispatch(envelope).then(dispatchTargetDelivered),
-	          },
-	        },
+        dispatchTargets: {
+          [bindingKey]: {
+            deliver: (envelope) =>
+              receiver.__agentosReceiveDispatch(envelope).then(dispatchTargetDelivered),
+          },
+        },
       }).layer,
     );
 

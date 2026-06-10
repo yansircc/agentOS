@@ -9,6 +9,7 @@ Status: Backend protocol package. Public exports are limited to storage-free bac
 - `.:DISPATCH_INBOUND_ACCEPTED`
 - `.:DISPATCH_EVENT_KINDS`
 - `.:DISPATCH_MAX_ATTEMPTS`
+- `.:DISPATCH_OUTBOUND_ENQUEUED`
 - `.:DISPATCH_OUTBOUND_DELIVERED`
 - `.:DISPATCH_OUTBOUND_FAILED`
 - `.:DISPATCH_OUTBOUND_REQUESTED`
@@ -30,7 +31,7 @@ Status: Backend protocol package. Public exports are limited to storage-free bac
 - `.:decodeResourceTerminalPayloadSync`
 - `.:describeDispatchCause`
 - `.:dispatchBackoffMs`
-- `.:dispatchExternalDeliveryReceipt`
+- `.:dispatchExternalEnqueueAcknowledgement`
 - `.:durableProcessLifecycleState`
 - `.:dispatchPayloadParseFailure`
 - `.:durableTriggerBackoffMs`
@@ -66,7 +67,9 @@ Status: Backend protocol package. Public exports are limited to storage-free bac
 - `.:DurableProcessLifecycleSnapshot`
 - `.:DurableProcessLifecycleState`
 - `.:DurableTriggerRetryPolicy`
+- `.:DispatchEnqueueAcknowledgement`
 - `.:DispatchOutboundDeliveredPayload`
+- `.:DispatchOutboundEnqueuedPayload`
 - `.:DispatchOutboundFailedPayload`
 - `.:DispatchPayloadParseFailure`
 - `.:DispatchPayloadParseResult`
@@ -79,6 +82,9 @@ Status: Backend protocol package. Public exports are limited to storage-free bac
 - `.:DispatchRequestedPayload`
 - `.:DispatchReplaySnapshot`
 - `.:DispatchTargetAdapter`
+- `.:DispatchTargetDeliveredResult`
+- `.:DispatchTargetEnqueuedResult`
+- `.:DispatchTargetResult`
 - `.:GrantResult`
 - `.:IntentPointerDuePayload`
 - `.:ProjectedResourceState`
@@ -99,6 +105,8 @@ Status: Backend protocol package. Public exports are limited to storage-free bac
 - `.:dispatchReplaySnapshotFromDeliveredPayload`
 - `.:dispatchReceiptBeforeTerminalProof`
 - `.:dispatchSettlementContract`
+- `.:dispatchTargetDelivered`
+- `.:dispatchTargetEnqueued`
 - `.:parseDispatchLivedClaim`
 - `.:replayDispatchDeliveryFromSnapshot`
 - `.:scheduledEventIntentPayload`

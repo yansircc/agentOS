@@ -70,10 +70,7 @@ const validate = (root = repoRoot) => {
 const writeFixture = (root, relativePath, value) => {
   const file = path.join(root, relativePath);
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(
-    file,
-    typeof value === "string" ? value : JSON.stringify(value, null, 2),
-  );
+  fs.writeFileSync(file, typeof value === "string" ? value : JSON.stringify(value, null, 2));
 };
 
 const collectSelfTestFailures = () => {

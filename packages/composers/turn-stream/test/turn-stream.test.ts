@@ -88,5 +88,4 @@ describe("@agent-os/turn-stream", () => {
     ).toEqual(frame);
     expect(decodeTurnStreamData('{"kind":"text_delta","turnRef":"turn/1","seq":0}')).toBeNull();
   });
-
 });

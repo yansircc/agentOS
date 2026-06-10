@@ -35,7 +35,9 @@ const collectFailures = (root = repoRoot) => {
   if (/\bagUi\s*:\s*{[\s\S]*?\bresume\s*:/m.test(body)) {
     failures.push(`${adapterPath}: AG-UI resume is still hidden in context.agUi`);
   }
-  if (!/\.\.\.\(defaults\.resume === undefined \? \{\} : \{ resume: defaults\.resume \}\)/.test(body)) {
+  if (
+    !/\.\.\.\(defaults\.resume === undefined \? \{\} : \{ resume: defaults\.resume \}\)/.test(body)
+  ) {
     failures.push(`${adapterPath}: runtime defaults.resume is not passed to SubmitSpec.resume`);
   }
   if (!/rejects AG-UI resume input/.test(testSource)) {
@@ -91,7 +93,9 @@ const collectSelfTestFailures = () => {
     );
     const rejected = collectFailures(root);
     if (!rejected.some((failure) => failure.includes("context.agUi"))) {
-      return [`AG-UI resume boundary mutation fixture was not rejected: ${JSON.stringify(rejected)}`];
+      return [
+        `AG-UI resume boundary mutation fixture was not rejected: ${JSON.stringify(rejected)}`,
+      ];
     }
     return [];
   } finally {

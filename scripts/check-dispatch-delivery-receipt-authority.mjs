@@ -58,19 +58,27 @@ const collectFailures = (root = repoRoot) => {
   }
 
   if (/dispatchExternalDeliveryReceipt/.test(combined)) {
-    failures.push("dispatch external enqueue acknowledgement must not share a delivery receipt helper");
+    failures.push(
+      "dispatch external enqueue acknowledgement must not share a delivery receipt helper",
+    );
   }
-  if (/delivered_event_id/.test(`${cloudflareDispatch}\n${cloudflareOutbox}\n${cloudflareSqlStub}`)) {
+  if (
+    /delivered_event_id/.test(`${cloudflareDispatch}\n${cloudflareOutbox}\n${cloudflareSqlStub}`)
+  ) {
     failures.push("dispatch_outbox success cache must not be named delivered_event_id");
   }
   if (!/success_event_id/.test(cloudflareOutbox) || !/success_event_id/.test(cloudflareDispatch)) {
     failures.push("Cloudflare dispatch outbox must cache success_event_id");
   }
   if (!/dispatchTargetEnqueued/.test(cloudflareDispatch)) {
-    failures.push(`${files.cloudflareDispatch}: external adapters must return enqueued target results`);
+    failures.push(
+      `${files.cloudflareDispatch}: external adapters must return enqueued target results`,
+    );
   }
   if (!/dispatchTargetDelivered/.test(cloudflareDispatch)) {
-    failures.push(`${files.cloudflareDispatch}: durable object receivers must wrap target delivery`);
+    failures.push(
+      `${files.cloudflareDispatch}: durable object receivers must wrap target delivery`,
+    );
   }
   if (!/kind:\s*DISPATCH_EVENT_KINDS\.OUTBOUND_ENQUEUED/.test(cloudflareDispatch)) {
     failures.push(`${files.cloudflareDispatch}: missing dispatch.outbound.enqueued commit branch`);
@@ -81,7 +89,9 @@ const collectFailures = (root = repoRoot) => {
   const deliveredBranch = eventBranch(cloudflareDispatch, "OUTBOUND_DELIVERED");
   const enqueuedBranch = eventBranch(cloudflareDispatch, "OUTBOUND_ENQUEUED");
   if (/enqueueAcknowledgement/.test(deliveredBranch)) {
-    failures.push(`${files.cloudflareDispatch}: delivered branch must not carry enqueue acknowledgement`);
+    failures.push(
+      `${files.cloudflareDispatch}: delivered branch must not carry enqueue acknowledgement`,
+    );
   }
   if (/deliveryReceipt/.test(enqueuedBranch)) {
     failures.push(`${files.cloudflareDispatch}: enqueued branch must not carry deliveryReceipt`);
@@ -93,26 +103,36 @@ const collectFailures = (root = repoRoot) => {
   if (!/represents external enqueue acknowledgement as a weaker outbound fact/.test(protocolTest)) {
     failures.push(`${files.protocolTest}: missing weak enqueue acknowledgement protocol test`);
   }
-  if (!/drains Queue, HTTP, and provider target adapters through enqueue acknowledgements/.test(
-    backendContract,
-  )) {
+  if (
+    !/drains Queue, HTTP, and provider target adapters through enqueue acknowledgements/.test(
+      backendContract,
+    )
+  ) {
     failures.push(`${files.backendContract}: missing external enqueue contract`);
   }
   if (!/DISPATCH_EVENT_KINDS\.OUTBOUND_ENQUEUED/.test(backendContract)) {
-    failures.push(`${files.backendContract}: external contract must assert outbound enqueued facts`);
+    failures.push(
+      `${files.backendContract}: external contract must assert outbound enqueued facts`,
+    );
   }
-  if (/drains Queue, HTTP, and provider target adapters through delivery receipts/.test(
-    backendContract,
-  )) {
+  if (
+    /drains Queue, HTTP, and provider target adapters through delivery receipts/.test(
+      backendContract,
+    )
+  ) {
     failures.push(`${files.backendContract}: stale external delivery receipt contract remains`);
   }
-  if (!/materializes Queue, HTTP, and provider dispatch targets as enqueue acknowledgements/.test(
-    cloudflareFacadeTest,
-  )) {
+  if (
+    !/materializes Queue, HTTP, and provider dispatch targets as enqueue acknowledgements/.test(
+      cloudflareFacadeTest,
+    )
+  ) {
     failures.push(`${files.cloudflareFacadeTest}: missing Cloudflare adapter enqueue test`);
   }
   if (/anchorKind:\s*"external_receipt"/.test(cloudflareFacadeTest)) {
-    failures.push(`${files.cloudflareFacadeTest}: external adapter ack must not be external_receipt`);
+    failures.push(
+      `${files.cloudflareFacadeTest}: external adapter ack must not be external_receipt`,
+    );
   }
 
   return failures;

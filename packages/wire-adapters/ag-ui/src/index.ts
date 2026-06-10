@@ -9,11 +9,7 @@ import type { Tool } from "@agent-os/kernel/tools";
 import { decodeLedgerEvent, type LedgerEvent } from "@agent-os/kernel/types";
 import type { SubmitSpec } from "@agent-os/runtime-protocol";
 import { isRuntimeAbortEventKind } from "@agent-os/runtime-protocol";
-import {
-  decodeSseHttpEvents,
-  encodeSseHttpJsonEvent,
-  type SseHttpChunk,
-} from "@agent-os/sse-http";
+import { decodeSseHttpEvents, encodeSseHttpJsonEvent, type SseHttpChunk } from "@agent-os/sse-http";
 import {
   decodeRuntimeLedgerEvent,
   RUNTIME_EVENT_KIND,

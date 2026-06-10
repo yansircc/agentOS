@@ -373,12 +373,12 @@ describe("in-memory runtime backend", () => {
       createInMemoryRuntimeBackend({
         state,
         identity: truthIdentity("sender"),
-	        dispatchTargets: {
-	          [bindingKey]: {
-	            deliver: (envelope) =>
-	              receiver.__agentosReceiveDispatch(envelope).then(dispatchTargetDelivered),
-	          },
-	        },
+        dispatchTargets: {
+          [bindingKey]: {
+            deliver: (envelope) =>
+              receiver.__agentosReceiveDispatch(envelope).then(dispatchTargetDelivered),
+          },
+        },
       }).layer,
     );
 

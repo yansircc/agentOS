@@ -22,6 +22,8 @@ title: "@agent-os/telemetry-protocol API"
 - `.:TelemetryFanoutDiagnostic`
 - `.:TelemetryEventNode`
 - `.:TelemetryEventTree`
+- `.:TelemetryEventKind`
+- `.:TelemetryOutcome`
 - `.:TelemetryService`
 - `.:Telemetry`
 - `.:canonicalizeTelemetryEventTree`

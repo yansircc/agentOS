@@ -35,17 +35,23 @@ const collectFailures = (root = repoRoot) => {
   ) {
     failures.push(`${eventsPath}: missing consumed/rejected terminal lifecycle predicate`);
   }
-  if (!/if\s*\(\s*isTerminalLifecycle\(decision,\s*consumed\)\s*\)\s*continue;/.test(projectionSource)) {
+  if (
+    !/if\s*\(\s*isTerminalLifecycle\(decision,\s*consumed\)\s*\)\s*continue;/.test(projectionSource)
+  ) {
     failures.push(`${eventsPath}: projection does not absorb terminal lifecycle facts`);
   }
   if (!/next !== undefined && request === undefined/.test(projectionSource)) {
     failures.push(`${eventsPath}: requested facts are not first-fact wins`);
   }
-  if (!/next !== undefined && request !== undefined && decision === undefined/.test(projectionSource)) {
+  if (
+    !/next !== undefined && request !== undefined && decision === undefined/.test(projectionSource)
+  ) {
     failures.push(`${eventsPath}: decided facts are not first-fact wins after request`);
   }
   if (/\b(?:decision|consumed)\s*=\s*undefined\s*;/.test(projectionSource)) {
-    failures.push(`${eventsPath}: projection clears lifecycle state instead of folding monotonically`);
+    failures.push(
+      `${eventsPath}: projection clears lifecycle state instead of folding monotonically`,
+    );
   }
   if (!/keeps a consumed gate terminal across later requested and decided facts/.test(testSource)) {
     failures.push(`${testPath}: missing consumed terminal lifecycle regression`);
@@ -126,11 +132,7 @@ const collectSelfTestFailures = () => {
       ];
     }
 
-    writeFixture(
-      root,
-      eventsPath,
-      validEventsFixture.replace(" && request === undefined", ""),
-    );
+    writeFixture(root, eventsPath, validEventsFixture.replace(" && request === undefined", ""));
     const mutableRequest = collectFailures(root);
     if (!mutableRequest.some((failure) => failure.includes("requested facts"))) {
       return [

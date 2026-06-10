@@ -10,11 +10,19 @@ None.
 
 ## Experimental exports
 
+- `.:AnthropicDeltaChunk`
+- `.:GeminiDeltaChunk`
 - `.:HttpStreamingLlmRoute`
 - `.:LlmTransportFetch`
 - `.:LlmTransportMessage`
 - `.:LlmTransportToolCall`
+- `.:OpenAiCompatibleDeltaChoice`
+- `.:OpenAiCompatibleDeltaChunk`
 - `.:StreamLlmTurnSpec`
+- `.:TurnStreamDeltaAdapterInput`
+- `.:adaptAnthropicDeltaChunk`
+- `.:adaptGeminiDeltaChunk`
+- `.:adaptOpenAiCompatibleDeltaChunk`
 - `.:streamLlmTurn`
 
 ## Internal-only exports

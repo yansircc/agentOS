@@ -182,7 +182,11 @@ export const providerDispatchTarget = (
       .then(() => spec.invoke(envelope))
       .then(
         (result) =>
-          externalEnqueueAcknowledgementFor(`provider.${spec.providerId}`, envelope, result.receiptId),
+          externalEnqueueAcknowledgementFor(
+            `provider.${spec.providerId}`,
+            envelope,
+            result.receiptId,
+          ),
         () => Promise.reject(`dispatch provider target failed:${spec.providerId}`),
       ),
 });

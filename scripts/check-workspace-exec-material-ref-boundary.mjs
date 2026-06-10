@@ -70,7 +70,11 @@ const collectFailures = (root = repoRoot) => {
     if (!/options\.materialRefs\.length > 0/.test(execOrFail)) {
       failures.push(`${workspaceEnvCloudflarePath}: symbolic materialRefs are not rejected`);
     }
-    if (!/throw workspaceError\("Cloudflare WorkspaceEnv exec does not resolve symbolic envRefs"\)/.test(execOrFail)) {
+    if (
+      !/throw workspaceError\("Cloudflare WorkspaceEnv exec does not resolve symbolic envRefs"\)/.test(
+        execOrFail,
+      )
+    ) {
       failures.push(`${workspaceEnvCloudflarePath}: envRefs rejection is not a WorkspaceEnv error`);
     }
     if (
@@ -87,7 +91,11 @@ const collectFailures = (root = repoRoot) => {
     }
   }
 
-  if (!/fails closed on symbolic exec refs before invoking Cloudflare exec/.test(envCloudflareTestSource)) {
+  if (
+    !/fails closed on symbolic exec refs before invoking Cloudflare exec/.test(
+      envCloudflareTestSource,
+    )
+  ) {
     failures.push(`${workspaceEnvCloudflareTestPath}: missing Cloudflare WorkspaceEnv ref test`);
   }
 
@@ -102,7 +110,9 @@ const collectFailures = (root = repoRoot) => {
       failures.push(`${workspaceSessionCloudflarePath}: provider does not inspect materialRefs`);
     }
     if (!/code: "ProviderFailure"/.test(unsupportedExecRefs)) {
-      failures.push(`${workspaceSessionCloudflarePath}: unsupported refs are not typed ProviderFailure`);
+      failures.push(
+        `${workspaceSessionCloudflarePath}: unsupported refs are not typed ProviderFailure`,
+      );
     }
   }
 
@@ -112,10 +122,18 @@ const collectFailures = (root = repoRoot) => {
     "exec: async (request) => {",
   );
   if (!/unsupportedExecRefs\(request\)/.test(directProviderExec)) {
-    failures.push(`${workspaceSessionCloudflarePath}: namespace provider exec does not preflight refs`);
+    failures.push(
+      `${workspaceSessionCloudflarePath}: namespace provider exec does not preflight refs`,
+    );
   }
-  if (/options\.namespace\.get\(request\.sessionRef\)[\s\S]*unsupportedExecRefs\(request\)/.test(directProviderExec)) {
-    failures.push(`${workspaceSessionCloudflarePath}: namespace lookup happens before ref rejection`);
+  if (
+    /options\.namespace\.get\(request\.sessionRef\)[\s\S]*unsupportedExecRefs\(request\)/.test(
+      directProviderExec,
+    )
+  ) {
+    failures.push(
+      `${workspaceSessionCloudflarePath}: namespace lookup happens before ref rejection`,
+    );
   }
 
   const liveProviderExec = methodBlockFrom(
@@ -126,21 +144,39 @@ const collectFailures = (root = repoRoot) => {
   if (!/unsupportedExecRefs\(request\)/.test(liveProviderExec)) {
     failures.push(`${workspaceSessionCloudflarePath}: live provider exec does not preflight refs`);
   }
-  if (/exec\.call\(client[\s\S]*envRefs|exec\.call\(client[\s\S]*materialRefs/.test(liveProviderExec)) {
-    failures.push(`${workspaceSessionCloudflarePath}: symbolic refs are still forwarded to sandbox exec`);
+  if (
+    /exec\.call\(client[\s\S]*envRefs|exec\.call\(client[\s\S]*materialRefs/.test(liveProviderExec)
+  ) {
+    failures.push(
+      `${workspaceSessionCloudflarePath}: symbolic refs are still forwarded to sandbox exec`,
+    );
   }
 
-  if (!/fails closed on symbolic exec refs before invoking a Cloudflare namespace client/.test(sessionCloudflareTestSource)) {
-    failures.push(`${workspaceSessionCloudflareTestPath}: missing namespace provider ref rejection test`);
+  if (
+    !/fails closed on symbolic exec refs before invoking a Cloudflare namespace client/.test(
+      sessionCloudflareTestSource,
+    )
+  ) {
+    failures.push(
+      `${workspaceSessionCloudflareTestPath}: missing namespace provider ref rejection test`,
+    );
   }
-  if (!/settles unsupported symbolic exec refs as typed carrier failures/.test(sessionCloudflareTestSource)) {
+  if (
+    !/settles unsupported symbolic exec refs as typed carrier failures/.test(
+      sessionCloudflareTestSource,
+    )
+  ) {
     failures.push(`${workspaceSessionCloudflareTestPath}: missing carrier typed failure test`);
   }
   if (!/expect\(execCalls\[0\]\?\.options\.envRefs\)\.toEqual/.test(workspaceEnvTestSource)) {
-    failures.push(`${workspaceEnvTestPath}: workspace tool no longer passes envRefs to its backend`);
+    failures.push(
+      `${workspaceEnvTestPath}: workspace tool no longer passes envRefs to its backend`,
+    );
   }
   if (!/expect\(execCalls\[0\]\?\.options\.materialRefs\)\.toEqual/.test(workspaceEnvTestSource)) {
-    failures.push(`${workspaceEnvTestPath}: workspace tool no longer passes materialRefs to its backend`);
+    failures.push(
+      `${workspaceEnvTestPath}: workspace tool no longer passes materialRefs to its backend`,
+    );
   }
 
   return failures;

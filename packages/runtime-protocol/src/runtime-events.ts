@@ -41,8 +41,7 @@ export const RUNTIME_EVENT_KIND = {
 } as const;
 
 export const TOOL_RESULT_SNAPSHOT_VERSION = "tool-result-snapshot-v1";
-export const EFFECTFUL_TOOL_EXECUTION_RECEIPT_VERSION =
-  "effectful-tool-execution-receipt-v1";
+export const EFFECTFUL_TOOL_EXECUTION_RECEIPT_VERSION = "effectful-tool-execution-receipt-v1";
 export const EFFECTFUL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON =
   "effectful_tool_replay_requires_receipt";
 export const TOOL_EXECUTION_CLAIM_MUST_BE_LIVED_REASON = "tool_execution_claim_must_be_lived";

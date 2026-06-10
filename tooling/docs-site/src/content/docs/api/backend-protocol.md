@@ -9,6 +9,7 @@ title: "@agent-os/backend-protocol API"
 - `.:DISPATCH_INBOUND_ACCEPTED`
 - `.:DISPATCH_EVENT_KINDS`
 - `.:DISPATCH_MAX_ATTEMPTS`
+- `.:DISPATCH_OUTBOUND_ENQUEUED`
 - `.:DISPATCH_OUTBOUND_DELIVERED`
 - `.:DISPATCH_OUTBOUND_FAILED`
 - `.:DISPATCH_OUTBOUND_REQUESTED`
@@ -30,7 +31,7 @@ title: "@agent-os/backend-protocol API"
 - `.:decodeResourceTerminalPayloadSync`
 - `.:describeDispatchCause`
 - `.:dispatchBackoffMs`
-- `.:dispatchExternalDeliveryReceipt`
+- `.:dispatchExternalEnqueueAcknowledgement`
 - `.:durableProcessLifecycleState`
 - `.:dispatchPayloadParseFailure`
 - `.:durableTriggerBackoffMs`
@@ -66,7 +67,9 @@ title: "@agent-os/backend-protocol API"
 - `.:DurableProcessLifecycleSnapshot`
 - `.:DurableProcessLifecycleState`
 - `.:DurableTriggerRetryPolicy`
+- `.:DispatchEnqueueAcknowledgement`
 - `.:DispatchOutboundDeliveredPayload`
+- `.:DispatchOutboundEnqueuedPayload`
 - `.:DispatchOutboundFailedPayload`
 - `.:DispatchPayloadParseFailure`
 - `.:DispatchPayloadParseResult`
@@ -79,6 +82,9 @@ title: "@agent-os/backend-protocol API"
 - `.:DispatchRequestedPayload`
 - `.:DispatchReplaySnapshot`
 - `.:DispatchTargetAdapter`
+- `.:DispatchTargetDeliveredResult`
+- `.:DispatchTargetEnqueuedResult`
+- `.:DispatchTargetResult`
 - `.:GrantResult`
 - `.:IntentPointerDuePayload`
 - `.:ProjectedResourceState`
@@ -99,6 +105,8 @@ title: "@agent-os/backend-protocol API"
 - `.:dispatchReplaySnapshotFromDeliveredPayload`
 - `.:dispatchReceiptBeforeTerminalProof`
 - `.:dispatchSettlementContract`
+- `.:dispatchTargetDelivered`
+- `.:dispatchTargetEnqueued`
 - `.:parseDispatchLivedClaim`
 - `.:replayDispatchDeliveryFromSnapshot`
 - `.:scheduledEventIntentPayload`

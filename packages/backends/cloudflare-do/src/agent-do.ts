@@ -331,10 +331,7 @@ const mergeSubmitBindings = (
   materials: { ...base.materials, ...run?.materials },
 });
 
-export class AgentDurableObject<
-  Env extends CloudflareAgentEnv,
-  Runtime = AgentRuntimeReaderClient,
->
+export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentRuntimeReaderClient>
   extends DurableObject<Env>
   implements AgentRuntimeReaderClient
 {

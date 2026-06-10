@@ -183,9 +183,7 @@ const collectSelfTestFailures = () => {
       !ledgerLeak.some((failure) => failure.includes("ledger event.kind"))
     ) {
       return [
-        `telemetry OTLP ledger-classifier mutation was not rejected: ${JSON.stringify(
-          ledgerLeak,
-        )}`,
+        `telemetry OTLP ledger-classifier mutation was not rejected: ${JSON.stringify(ledgerLeak)}`,
       ];
     }
 

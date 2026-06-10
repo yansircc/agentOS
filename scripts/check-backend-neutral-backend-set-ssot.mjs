@@ -68,7 +68,9 @@ const writeReplayProjection = (root, productionBackends) => {
     version: 1,
     productionBackends,
     scenarios: requiredKinds.map((kind) => ({ kind, liveIoAdapterCalls: 0 })),
-    backendResults: Object.fromEntries(productionBackends.map((backend) => [backend, requiredKinds])),
+    backendResults: Object.fromEntries(
+      productionBackends.map((backend) => [backend, requiredKinds]),
+    ),
   });
 };
 
@@ -114,7 +116,9 @@ const collectAllFailures = (root) => [
 ];
 
 const expectPass = (root, label) => {
-  const failures = collectAllFailures(root).filter(([, scriptFailures]) => scriptFailures.length > 0);
+  const failures = collectAllFailures(root).filter(
+    ([, scriptFailures]) => scriptFailures.length > 0,
+  );
   if (failures.length > 0) {
     return [
       `${label} expected metadata-derived backend projections to pass:\n${failures

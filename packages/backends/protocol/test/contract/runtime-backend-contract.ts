@@ -442,104 +442,108 @@ export const runRuntimeBackendContractSuite = (
       ),
     );
 
-    it.effect("drains Queue, HTTP, and provider target adapters through enqueue acknowledgements", () =>
-      withDriver((driver) =>
-        Effect.gen(function* () {
-          const targets = [
-            { label: "queue", targetScope: "image-queue", event: "image.job.queued" },
-            { label: "http", targetScope: "image-http", event: "image.provider.invoked" },
-            { label: "provider", targetScope: "image-provider", event: "image.provider.done" },
-          ] as const;
+    it.effect(
+      "drains Queue, HTTP, and provider target adapters through enqueue acknowledgements",
+      () =>
+        withDriver((driver) =>
+          Effect.gen(function* () {
+            const targets = [
+              { label: "queue", targetScope: "image-queue", event: "image.job.queued" },
+              { label: "http", targetScope: "image-http", event: "image.provider.invoked" },
+              { label: "provider", targetScope: "image-provider", event: "image.provider.done" },
+            ] as const;
 
-          for (const target of targets) {
-            let attempts = 0;
-            yield* promise(() =>
-              driver.setDispatchTargetAdapter((envelope) => {
-                attempts += 1;
-                if (attempts === 1) return Promise.reject(`${target.label} unavailable`);
-                return Promise.resolve({
-                  _tag: "enqueued",
-                  acknowledgement: dispatchExternalEnqueueAcknowledgement({
-                    targetKind: target.label,
-                    targetScope: envelope.targetScope,
-                    idempotencyKey: envelope.idempotencyKey,
-                  }),
-                });
-              }),
-            );
-
-            const sourceScope = `external-sender-${target.label}`;
-            const idempotencyKey = `${target.label}-adapter`;
-            const result = yield* promise(() =>
-              driver.dispatchToScope(
-                contractIdentity(sourceScope),
-                dispatchSpec(driver, target.targetScope, idempotencyKey, target.event, {
-                  prompt: "test",
-                }),
-              ),
-            );
-            const firstEvents = yield* promise(() => driver.events(contractIdentity(sourceScope)));
-            const failed = payloadsOf<{
-              readonly outboundEventId: number;
-              readonly attempt: number;
-              readonly terminal: boolean;
-              readonly nextAttemptAt?: number;
-            }>(firstEvents, DISPATCH_EVENT_KINDS.OUTBOUND_FAILED);
-            expect(failed).toHaveLength(1);
-            expect(failed[0]).toMatchObject({
-              outboundEventId: result.outboundEventId,
-              attempt: 1,
-              terminal: false,
-            });
-            expect(typeof failed[0]?.nextAttemptAt).toBe("number");
-
-            expect(
+            for (const target of targets) {
+              let attempts = 0;
               yield* promise(() =>
-                driver.drainDispatchDue(contractIdentity(sourceScope), failed[0]!.nextAttemptAt!),
-              ),
-            ).toEqual({
-              delivered: 0,
-              failed: 0,
-            });
+                driver.setDispatchTargetAdapter((envelope) => {
+                  attempts += 1;
+                  if (attempts === 1) return Promise.reject(`${target.label} unavailable`);
+                  return Promise.resolve({
+                    _tag: "enqueued",
+                    acknowledgement: dispatchExternalEnqueueAcknowledgement({
+                      targetKind: target.label,
+                      targetScope: envelope.targetScope,
+                      idempotencyKey: envelope.idempotencyKey,
+                    }),
+                  });
+                }),
+              );
 
-            const sourceIdentity = contractIdentity(sourceScope);
-            const senderEvents = yield* promise(() => driver.events(sourceIdentity));
-            expectEventsIdentity(senderEvents, sourceIdentity);
-            const delivered = payloadsOf<{
-              readonly outboundEventId: number;
-              readonly attempt: number;
-            }>(senderEvents, DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED);
-            expect(delivered).toHaveLength(0);
-            const enqueued = payloadsOf<{
-              readonly outboundEventId: number;
-              readonly enqueueAcknowledgement: unknown;
-              readonly deliveryReceipt?: unknown;
-              readonly claim?: unknown;
-              readonly attempt: number;
-            }>(senderEvents, DISPATCH_EVENT_KINDS.OUTBOUND_ENQUEUED);
-            expect(enqueued).toHaveLength(1);
-            expect(enqueued[0]).toMatchObject({
-              outboundEventId: result.outboundEventId,
-              enqueueAcknowledgement: {
-                acknowledgementId: expect.stringMatching(
-                  `^dispatch\\.${target.label}\\.enqueued:.*:${idempotencyKey}$`,
+              const sourceScope = `external-sender-${target.label}`;
+              const idempotencyKey = `${target.label}-adapter`;
+              const result = yield* promise(() =>
+                driver.dispatchToScope(
+                  contractIdentity(sourceScope),
+                  dispatchSpec(driver, target.targetScope, idempotencyKey, target.event, {
+                    prompt: "test",
+                  }),
                 ),
-                acknowledgementKind: "external_enqueue",
-              },
-              attempt: 2,
-            });
-            expect(enqueued[0]).not.toHaveProperty("deliveryReceipt");
-            expect(enqueued[0]).not.toHaveProperty("claim");
-            expect(
-              yield* promise(() => driver.events(contractIdentity(target.targetScope))),
-            ).toEqual([]);
-            expect(
-              yield* promise(() => driver.pendingDueCount(contractIdentity(sourceScope))),
-            ).toBe(0);
-            expect(attempts).toBe(2);
-          }
-        }),
-      ),
+              );
+              const firstEvents = yield* promise(() =>
+                driver.events(contractIdentity(sourceScope)),
+              );
+              const failed = payloadsOf<{
+                readonly outboundEventId: number;
+                readonly attempt: number;
+                readonly terminal: boolean;
+                readonly nextAttemptAt?: number;
+              }>(firstEvents, DISPATCH_EVENT_KINDS.OUTBOUND_FAILED);
+              expect(failed).toHaveLength(1);
+              expect(failed[0]).toMatchObject({
+                outboundEventId: result.outboundEventId,
+                attempt: 1,
+                terminal: false,
+              });
+              expect(typeof failed[0]?.nextAttemptAt).toBe("number");
+
+              expect(
+                yield* promise(() =>
+                  driver.drainDispatchDue(contractIdentity(sourceScope), failed[0]!.nextAttemptAt!),
+                ),
+              ).toEqual({
+                delivered: 0,
+                failed: 0,
+              });
+
+              const sourceIdentity = contractIdentity(sourceScope);
+              const senderEvents = yield* promise(() => driver.events(sourceIdentity));
+              expectEventsIdentity(senderEvents, sourceIdentity);
+              const delivered = payloadsOf<{
+                readonly outboundEventId: number;
+                readonly attempt: number;
+              }>(senderEvents, DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED);
+              expect(delivered).toHaveLength(0);
+              const enqueued = payloadsOf<{
+                readonly outboundEventId: number;
+                readonly enqueueAcknowledgement: unknown;
+                readonly deliveryReceipt?: unknown;
+                readonly claim?: unknown;
+                readonly attempt: number;
+              }>(senderEvents, DISPATCH_EVENT_KINDS.OUTBOUND_ENQUEUED);
+              expect(enqueued).toHaveLength(1);
+              expect(enqueued[0]).toMatchObject({
+                outboundEventId: result.outboundEventId,
+                enqueueAcknowledgement: {
+                  acknowledgementId: expect.stringMatching(
+                    `^dispatch\\.${target.label}\\.enqueued:.*:${idempotencyKey}$`,
+                  ),
+                  acknowledgementKind: "external_enqueue",
+                },
+                attempt: 2,
+              });
+              expect(enqueued[0]).not.toHaveProperty("deliveryReceipt");
+              expect(enqueued[0]).not.toHaveProperty("claim");
+              expect(
+                yield* promise(() => driver.events(contractIdentity(target.targetScope))),
+              ).toEqual([]);
+              expect(
+                yield* promise(() => driver.pendingDueCount(contractIdentity(sourceScope))),
+              ).toBe(0);
+              expect(attempts).toBe(2);
+            }
+          }),
+        ),
     );
 
     it.effect("marks dispatch terminal failure at the shared attempt cap", () =>

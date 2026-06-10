@@ -47,10 +47,7 @@ const protocolExports = [
 ];
 
 const requiredBackendImports = {
-  "packages/backends/cloudflare-do/src/agent-do.ts": [
-    "RESOURCE_EVENT_KIND",
-    "QUOTA_EVENT_KIND",
-  ],
+  "packages/backends/cloudflare-do/src/agent-do.ts": ["RESOURCE_EVENT_KIND", "QUOTA_EVENT_KIND"],
   "packages/backends/cloudflare-do/src/projections.ts": [
     "projectQuotaState",
     "projectResourceState",
@@ -65,10 +62,7 @@ const requiredBackendImports = {
   ],
   "packages/backends/cloudflare-do/src/resources/resources.ts": ["RESOURCE_EVENT_KIND"],
   "packages/backends/in-memory/src/quota.ts": ["projectQuotaGrantUsage", "QUOTA_EVENT_KIND"],
-  "packages/backends/in-memory/src/resources.ts": [
-    "projectResourceEvents",
-    "RESOURCE_EVENT_KIND",
-  ],
+  "packages/backends/in-memory/src/resources.ts": ["projectResourceEvents", "RESOURCE_EVENT_KIND"],
   "packages/backends/node-postgres/src/index.ts": [
     "projectQuotaGrantUsage",
     "projectResourceEvents",
@@ -109,7 +103,8 @@ const exists = (root, file) => fs.existsSync(path.join(root, file));
 const readJson = (root, file) => JSON.parse(read(root, file));
 
 const hasProtocolImport = (source, symbol) => {
-  const importBlocks = source.match(/import\s*\{[\s\S]*?\}\s*from\s*["']@agent-os\/backend-protocol["'];?/gu) ?? [];
+  const importBlocks =
+    source.match(/import\s*\{[\s\S]*?\}\s*from\s*["']@agent-os\/backend-protocol["'];?/gu) ?? [];
   return importBlocks.some((block) => new RegExp(`\\b${symbol}\\b`, "u").test(block));
 };
 
@@ -123,7 +118,9 @@ const collectFailures = (root = repoRoot) => {
 
   const protocolSource = read(root, protocolPath);
   for (const symbol of protocolExports) {
-    if (!new RegExp(`export\\s+(?:const|interface|type)\\s+${symbol}\\b`, "u").test(protocolSource)) {
+    if (
+      !new RegExp(`export\\s+(?:const|interface|type)\\s+${symbol}\\b`, "u").test(protocolSource)
+    ) {
       failures.push(`${protocolPath}: missing protocol-owned ${symbol}`);
     }
   }

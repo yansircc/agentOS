@@ -57,7 +57,9 @@ const spanIdFromString = (value: string): string => {
 };
 
 const spanIdForNode = (node: TelemetryEventNode): string =>
-  node.ledgerEventId === undefined ? spanIdFromString(node.id) : spanIdFromNumber(node.ledgerEventId);
+  node.ledgerEventId === undefined
+    ? spanIdFromString(node.id)
+    : spanIdFromNumber(node.ledgerEventId);
 
 const traceContextParts = (
   traceContext: TraceContext | undefined,
@@ -86,14 +88,10 @@ const isOtlpSpanKind = (
   }
 };
 
-const otlpSpanKind = (
-  telemetryKind: TelemetryEventKind,
-): OtlpProjectionSpan["kind"] | undefined =>
+const otlpSpanKind = (telemetryKind: TelemetryEventKind): OtlpProjectionSpan["kind"] | undefined =>
   isOtlpSpanKind(telemetryKind) ? telemetryKind : undefined;
 
-const otlpStatus = (
-  outcome: TelemetryOutcome | undefined,
-): OtlpProjectionSpan["status"] => {
+const otlpStatus = (outcome: TelemetryOutcome | undefined): OtlpProjectionSpan["status"] => {
   switch (outcome) {
     case "ok":
       return "OK";
@@ -119,9 +117,7 @@ const copyAttribute = (
   if (value !== null) attributes[key] = value;
 };
 
-const otlpAttributes = (
-  node: TelemetryEventNode,
-): Readonly<Record<string, OtlpAttributeValue>> => {
+const otlpAttributes = (node: TelemetryEventNode): Readonly<Record<string, OtlpAttributeValue>> => {
   const attributes: Record<string, OtlpAttributeValue> = {
     "agentos.mapping.version": OTLP_GENAI_SEMCONV_MAPPING_VERSION,
   };
@@ -146,9 +142,7 @@ export const projectOtlpSpans = (tree: TelemetryEventTree): OtlpProjection => {
       kind,
       ...traceContext,
       spanId: spanIds.get(node.id) ?? spanIdForNode(node),
-      ...(topologyParentSpanId === undefined
-        ? {}
-        : { parentSpanId: topologyParentSpanId }),
+      ...(topologyParentSpanId === undefined ? {} : { parentSpanId: topologyParentSpanId }),
       startTimeUnixNano: tsNanos(node.at),
       endTimeUnixNano: tsNanos(node.endedAt ?? node.at),
       status: otlpStatus(node.outcome),

@@ -22,6 +22,8 @@ Status: Telemetry protocol package. Public exports are limited to trace context 
 - `.:TelemetryFanoutDiagnostic`
 - `.:TelemetryEventNode`
 - `.:TelemetryEventTree`
+- `.:TelemetryEventKind`
+- `.:TelemetryOutcome`
 - `.:TelemetryService`
 - `.:Telemetry`
 - `.:canonicalizeTelemetryEventTree`

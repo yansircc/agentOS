@@ -243,9 +243,7 @@ for (const entry of primitiveEvidenceSource.evidence) {
   const hasNoTestReason =
     typeof entry.noTestReason === "string" && entry.noTestReason.trim().length > 0;
   if (hasTests === hasNoTestReason) {
-    failures.push(
-      `${entry.primitive} must have exactly one of tests[] or non-empty noTestReason`,
-    );
+    failures.push(`${entry.primitive} must have exactly one of tests[] or non-empty noTestReason`);
     continue;
   }
   if (hasTests) {
@@ -469,7 +467,9 @@ const agentNavigation = [
 ].join("\n");
 
 const primitivesMd = [
-  generatedNotice("exported TSDoc @agentosPrimitive tags and docs/agent/primitive-evidence.source.json"),
+  generatedNotice(
+    "exported TSDoc @agentosPrimitive tags and docs/agent/primitive-evidence.source.json",
+  ),
   "",
   "# Agent Primitives",
   "",

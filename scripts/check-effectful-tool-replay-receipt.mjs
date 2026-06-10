@@ -47,10 +47,7 @@ const collectFailures = (root = repoRoot) => {
     failures.push(`${protocolFile}: raw snapshot constructor still accepts generic tool payloads`);
   }
 
-  const receiptBlock = blockFrom(
-    protocol,
-    "export interface EffectfulToolExecutionReceipt",
-  );
+  const receiptBlock = blockFrom(protocol, "export interface EffectfulToolExecutionReceipt");
   if (receiptBlock.length === 0) {
     failures.push(`${protocolFile}: missing EffectfulToolExecutionReceipt`);
   }
@@ -74,7 +71,10 @@ const collectFailures = (root = repoRoot) => {
     }
   }
 
-  const artifactConstructor = blockFrom(protocol, "export const toolReplayArtifactFromExecutedPayload");
+  const artifactConstructor = blockFrom(
+    protocol,
+    "export const toolReplayArtifactFromExecutedPayload",
+  );
   for (const term of [
     'payload.execution.kind === "pure"',
     "toolResultSnapshotFromExecutedPayload",
@@ -120,13 +120,25 @@ const collectFailures = (root = repoRoot) => {
     failures.push(`${runtimeFile}: missing shared effectful execution receipt reason`);
   }
 
-  if (!/does not build a raw result snapshot for an effectful tool without a receipt/u.test(protocolTests)) {
+  if (
+    !/does not build a raw result snapshot for an effectful tool without a receipt/u.test(
+      protocolTests,
+    )
+  ) {
     failures.push(`${protocolTest}: missing effectful no-raw-snapshot test`);
   }
-  if (!/replays receipt-backed effectful tool execution from the receipt artifact/u.test(protocolTests)) {
+  if (
+    !/replays receipt-backed effectful tool execution from the receipt artifact/u.test(
+      protocolTests,
+    )
+  ) {
     failures.push(`${protocolTest}: missing receipt-backed effectful replay test`);
   }
-  if (!/does not execute an effectful tool without a receipt-backed terminal contract/u.test(runtimeTests)) {
+  if (
+    !/does not execute an effectful tool without a receipt-backed terminal contract/u.test(
+      runtimeTests,
+    )
+  ) {
     failures.push(`${runtimeTest}: missing submit-time effectful receipt guard test`);
   }
 
@@ -147,23 +159,23 @@ const collectSelfTestFailures = () => {
       protocolFile,
       [
         "export type PureToolExecution = { readonly kind: 'pure' };",
-        "export type ExternalReceiptAnchorRef = { readonly anchorKind: \"external_receipt\" };",
+        'export type ExternalReceiptAnchorRef = { readonly anchorKind: "external_receipt" };',
         "export interface ToolResultSnapshot {",
         "  readonly execution: PureToolExecution;",
         "}",
         "export interface EffectfulToolExecutionReceipt {",
         "  readonly receipt: ExternalReceiptAnchorRef;",
         "}",
-        "export const EFFECTFUL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON = \"effectful_tool_replay_requires_receipt\";",
+        'export const EFFECTFUL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON = "effectful_tool_replay_requires_receipt";',
         "export const toolResultSnapshotFromExecutedPayload = (payload: PureToolExecutedPayload) => payload;",
         "export const effectfulToolExecutionReceiptFromExecutedPayload = (payload) => {",
-        "  if (payload.claim.anchorRef.anchorKind === \"external_receipt\") {",
+        '  if (payload.claim.anchorRef.anchorKind === "external_receipt") {',
         "    return { ok: true, artifact: { idempotencyKey: payload.claim.operationRef, receipt: payload.claim.anchorRef } };",
         "  }",
         "  return { ok: false, reason: EFFECTFUL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON };",
         "};",
         "export const toolReplayArtifactFromExecutedPayload = (payload) => {",
-        "  if (payload.execution.kind === \"pure\") return toolResultSnapshotFromExecutedPayload(payload);",
+        '  if (payload.execution.kind === "pure") return toolResultSnapshotFromExecutedPayload(payload);',
         "  return effectfulToolExecutionReceiptFromExecutedPayload(payload);",
         "};",
         "export const replayToolResultFromSnapshot = (snapshot) => snapshot.result;",
@@ -179,7 +191,7 @@ const collectSelfTestFailures = () => {
         "  return replayToolFromArtifact(artifact.artifact);",
         "}",
         "/** The single termination funnel */",
-        "if (tool.execution.kind === \"effectful\") {",
+        'if (tool.execution.kind === "effectful") {',
         "  return EFFECTFUL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON;",
         "}",
         "return yield* executeTool(tool);",

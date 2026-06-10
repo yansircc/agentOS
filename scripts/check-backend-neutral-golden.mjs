@@ -103,10 +103,7 @@ const writeFixture = (root, rel, source) => {
 const collectSelfTestFailures = () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-backend-neutral-golden-"));
   try {
-    const selfTestBackends = [
-      "packages/backends/cloudflare-do",
-      "packages/backends/node-postgres",
-    ];
+    const selfTestBackends = ["packages/backends/cloudflare-do", "packages/backends/node-postgres"];
     writeFixture(
       root,
       "package.json",

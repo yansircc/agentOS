@@ -95,7 +95,10 @@
     },
     {
       "primitive": "primitive.kernel.ScopeRef",
-      "tests": ["packages/kernel/test/runtime-scope.test.ts", "packages/kernel/test/effect-claim.test.ts"]
+      "tests": [
+        "packages/kernel/test/runtime-scope.test.ts",
+        "packages/kernel/test/effect-claim.test.ts"
+      ]
     },
     {
       "primitive": "primitive.kernel.Tool",
@@ -143,7 +146,10 @@
     },
     {
       "primitive": "primitive.runtime.MaterializedProjections",
-      "tests": ["packages/backends/cloudflare-do/test/materialized-projections.worker.test.ts", "packages/runtime/test/projection.test.ts"]
+      "tests": [
+        "packages/backends/cloudflare-do/test/materialized-projections.worker.test.ts",
+        "packages/runtime/test/projection.test.ts"
+      ]
     },
     {
       "primitive": "primitive.runtime.ProjectionIdentifyResult",
@@ -167,15 +173,24 @@
     },
     {
       "primitive": "primitive.runtime.projectSubmitResult",
-      "tests": ["packages/runtime/test/run-projector.test.ts", "packages/runtime/test/submit-agent-runtime-events.test.ts"]
+      "tests": [
+        "packages/runtime/test/run-projector.test.ts",
+        "packages/runtime/test/submit-agent-runtime-events.test.ts"
+      ]
     },
     {
       "primitive": "primitive.runtime.SubmitResult",
-      "tests": ["packages/runtime/test/submit-agent-runtime-events.test.ts", "packages/runtime-protocol/test/runtime-events.test.ts"]
+      "tests": [
+        "packages/runtime/test/submit-agent-runtime-events.test.ts",
+        "packages/runtime-protocol/test/runtime-events.test.ts"
+      ]
     },
     {
       "primitive": "primitive.runtime.SubmitSpec",
-      "tests": ["packages/runtime/test/submit-agent-runtime-events.test.ts", "packages/runtime/test/submit-agent-timeout.test.ts"]
+      "tests": [
+        "packages/runtime/test/submit-agent-runtime-events.test.ts",
+        "packages/runtime/test/submit-agent-timeout.test.ts"
+      ]
     },
     {
       "primitive": "primitive.runtime.waitForProjection",

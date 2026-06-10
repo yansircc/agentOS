@@ -18,6 +18,8 @@
 - `.:TelemetryFanoutDiagnostic`
 - `.:TelemetryEventNode`
 - `.:TelemetryEventTree`
+- `.:TelemetryEventKind`
+- `.:TelemetryOutcome`
 - `.:TelemetryService`
 - `.:Telemetry`
 - `.:canonicalizeTelemetryEventTree`

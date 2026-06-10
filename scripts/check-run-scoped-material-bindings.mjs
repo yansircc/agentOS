@@ -152,7 +152,7 @@ const collectSelfTestFailures = () => {
     writeFixture(
       root,
       "packages/runtime-protocol/src/bindings.ts",
-      'export interface AgentBindings { readonly materials?: Readonly<Record<string, unknown>>; }\n',
+      "export interface AgentBindings { readonly materials?: Readonly<Record<string, unknown>>; }\n",
     );
     const unknownBindingFailures = collectFailures(root);
     if (

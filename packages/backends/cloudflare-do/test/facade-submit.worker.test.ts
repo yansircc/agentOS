@@ -3,11 +3,7 @@ import { runInDurableObject } from "cloudflare:test";
 
 import { credentialMaterialRef } from "@agent-os/kernel/material-ref";
 import { defineAgentSubmitBindings } from "@agent-os/runtime-protocol";
-import {
-  facadeApply,
-  facadeLookup,
-  type FacadeSubmitTestDO,
-} from "./test-worker";
+import { facadeApply, facadeLookup, type FacadeSubmitTestDO } from "./test-worker";
 import { testTruthIdentity } from "./_identity";
 
 interface TestEnv {
