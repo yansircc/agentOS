@@ -1143,8 +1143,7 @@ export class NodePostgresBackend {
     terminalKind: typeof RESOURCE_EVENT_KIND.CONSUMED | typeof RESOURCE_EVENT_KIND.RELEASED,
   ): Promise<void> {
     const identityKey = backendProtocolEventIdentityKey(identity);
-    const terminalStatus =
-      terminalKind === RESOURCE_EVENT_KIND.CONSUMED ? "consumed" : "released";
+    const terminalStatus = terminalKind === RESOURCE_EVENT_KIND.CONSUMED ? "consumed" : "released";
     const now = this.#now();
     const [row] = await this.#sql.jsonArrayStatement<ResourceTerminalTransactionRow>(`
       BEGIN;

@@ -220,14 +220,22 @@ const packageGateFailures = (root) => {
   const failures = [];
   const expected =
     "node scripts/check-d12-a155-substrate-absorption.mjs --self-test && node scripts/check-d12-a155-substrate-absorption.mjs";
+  const aggregateExpected =
+    "node scripts/check-substrate-consumer-guards.mjs --self-test && node scripts/check-substrate-consumer-guards.mjs";
+  const check = scripts.check;
+  const directRootCheck =
+    typeof check === "string" && check.includes("bun run test:d12-a155-substrate-absorption");
+  const aggregateRootCheck =
+    typeof check === "string" &&
+    check.includes("bun run test:substrate-consumer-guards") &&
+    scripts["test:substrate-consumer-guards"] === aggregateExpected;
   if (scripts["test:d12-a155-substrate-absorption"] !== expected) {
     failures.push("package.json: missing canonical test:d12-a155-substrate-absorption script");
   }
-  if (
-    typeof scripts.check !== "string" ||
-    !scripts.check.includes("bun run test:d12-a155-substrate-absorption")
-  ) {
-    failures.push("package.json: root check must include test:d12-a155-substrate-absorption");
+  if (!directRootCheck && !aggregateRootCheck) {
+    failures.push(
+      "package.json: root check must include test:d12-a155-substrate-absorption directly or through test:substrate-consumer-guards",
+    );
   }
   return failures;
 };
@@ -295,7 +303,9 @@ const positivePackageJson = {
   scripts: {
     "test:d12-a155-substrate-absorption":
       "node scripts/check-d12-a155-substrate-absorption.mjs --self-test && node scripts/check-d12-a155-substrate-absorption.mjs",
-    check: "bun run test:d12-a155-substrate-absorption",
+    "test:substrate-consumer-guards":
+      "node scripts/check-substrate-consumer-guards.mjs --self-test && node scripts/check-substrate-consumer-guards.mjs",
+    check: "bun run test:substrate-consumer-guards",
   },
 };
 
@@ -369,6 +379,16 @@ const collectSelfTestFailures = () => {
         file: "package.json",
         mutate: () =>
           JSON.stringify({ scripts: { ...positivePackageJson.scripts, check: "bun run test" } }),
+        expected: "root check must include",
+      },
+      {
+        name: "missing aggregate script",
+        file: "package.json",
+        mutate: () => {
+          const scripts = { ...positivePackageJson.scripts };
+          delete scripts["test:substrate-consumer-guards"];
+          return JSON.stringify({ scripts });
+        },
         expected: "root check must include",
       },
       {

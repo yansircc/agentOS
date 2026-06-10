@@ -68,7 +68,9 @@ const readJson = (root, relativePath, failures) => {
   try {
     return JSON.parse(source);
   } catch (cause) {
-    failures.push(`${relativePath}: invalid JSON: ${cause instanceof Error ? cause.message : cause}`);
+    failures.push(
+      `${relativePath}: invalid JSON: ${cause instanceof Error ? cause.message : cause}`,
+    );
     return null;
   }
 };
@@ -224,7 +226,8 @@ const requiredTerminalSignals = [
 const forbiddenOutsideTerminal = [
   {
     name: "child_process import",
-    pattern: /\bfrom\s+["'](?:node:)?child_process["']|\bimport\s*\(\s*["'](?:node:)?child_process["']\s*\)/gu,
+    pattern:
+      /\bfrom\s+["'](?:node:)?child_process["']|\bimport\s*\(\s*["'](?:node:)?child_process["']\s*\)/gu,
   },
   { name: "host timeout", pattern: /\b(?:setTimeout|clearTimeout)\s*\(/gu },
   { name: "host clock", pattern: /\bDate\.now\s*\(/gu },
@@ -235,7 +238,9 @@ const forbiddenOutsideTerminal = [
 const collectSourceFailures = (root, failures) => {
   const oldSqlPath = `${sourceRoot}/sql.ts`;
   if (fs.existsSync(path.join(root, oldSqlPath))) {
-    failures.push(`${oldSqlPath}: legacy host adapter path must not exist; use ${terminalAdapter.repoPath}`);
+    failures.push(
+      `${oldSqlPath}: legacy host adapter path must not exist; use ${terminalAdapter.repoPath}`,
+    );
   }
 
   const terminalSource = readText(root, terminalAdapter.repoPath, failures);
@@ -249,7 +254,9 @@ const collectSourceFailures = (root, failures) => {
 
   const entrySource = readText(root, `${sourceRoot}/index.ts`, failures);
   if (entrySource !== null && !/from\s+["']\.\/host["']/u.test(entrySource)) {
-    failures.push(`${sourceRoot}/index.ts: backend must consume the declared terminal host adapter`);
+    failures.push(
+      `${sourceRoot}/index.ts: backend must consume the declared terminal host adapter`,
+    );
   }
 
   for (const file of sourceFiles(root, sourceRoot)) {
@@ -279,7 +286,8 @@ const writeFixture = (root, relativePath, source) => {
   fs.writeFileSync(file, source);
 };
 
-const writeJsonFixture = (root, relativePath, value) => writeFixture(root, relativePath, stableJson(value));
+const writeJsonFixture = (root, relativePath, value) =>
+  writeFixture(root, relativePath, stableJson(value));
 
 const positiveEffectSource = () => ({
   root: { allowedAdapters: [expectedRootAdapter()] },
@@ -332,7 +340,11 @@ const writePositiveFixture = (root) => {
   writeJsonFixture(root, "package.json", positivePackageJson());
   const effectSource = positiveEffectSource();
   writeJsonFixture(root, "docs/effect-skill.json", effectSource);
-  writeJsonFixture(root, `${packagePath}/.effect-skill.json`, effectSource.packageManifests[packagePath]);
+  writeJsonFixture(
+    root,
+    `${packagePath}/.effect-skill.json`,
+    effectSource.packageManifests[packagePath],
+  );
   writeFixture(root, terminalAdapter.repoPath, positiveHostSource);
   writeFixture(root, `${sourceRoot}/index.ts`, positiveIndexSource);
 };
@@ -361,12 +373,14 @@ const collectSelfTestFailures = () => {
       },
       {
         name: "stale generated manifest",
-        mutate: () => writeJsonFixture(root, `${packagePath}/.effect-skill.json`, { shape: ["library"] }),
+        mutate: () =>
+          writeJsonFixture(root, `${packagePath}/.effect-skill.json`, { shape: ["library"] }),
         expected: "generated package scanner manifest is stale",
       },
       {
         name: "host clock leak",
-        mutate: () => writeFixture(root, `${sourceRoot}/index.ts`, `${positiveIndexSource}\nDate.now();\n`),
+        mutate: () =>
+          writeFixture(root, `${sourceRoot}/index.ts`, `${positiveIndexSource}\nDate.now();\n`),
         expected: "non-terminal Node/Postgres source owns host clock",
       },
       {
@@ -416,7 +430,9 @@ const collectSelfTestFailures = () => {
   }
 };
 
-const failures = process.argv.includes("--self-test") ? collectSelfTestFailures() : collectFailures();
+const failures = process.argv.includes("--self-test")
+  ? collectSelfTestFailures()
+  : collectFailures();
 
 if (failures.length > 0) {
   console.error(failures.join("\n"));

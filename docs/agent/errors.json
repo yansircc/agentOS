@@ -348,6 +348,7 @@
       "fix": "Do not consume or release a reservation after its terminal resource fact has already been committed.",
       "sourceFiles": [
         "packages/backends/cloudflare-do/test/resource-contract.worker.test.ts",
+        "packages/backends/protocol/test/contract/runtime-backend-contract.ts",
         "packages/kernel/src/errors.ts"
       ]
     },
