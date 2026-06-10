@@ -111,6 +111,19 @@ interface DueWorkRow {
   readonly dispatchAttemptCount: number;
 }
 
+interface ResourceReserveTransactionRow {
+  readonly status: "existing" | "reserved" | "insufficient";
+  readonly reservationId: string;
+  readonly available: number;
+  readonly event: LedgerEvent | null;
+}
+
+interface ResourceTerminalTransactionRow {
+  readonly status: "written" | "noop" | "missing" | "closed";
+  readonly closedStatus: "consumed" | "released" | null;
+  readonly event: LedgerEvent | null;
+}
+
 const DEFAULT_EVENT_LIMIT = 1000;
 const MAX_EVENT_LIMIT = 1000;
 
@@ -188,6 +201,78 @@ const eventRowSelect = `
     effect_authority_ref AS "effectAuthorityRef",
     payload AS "payload"
   FROM agentos_events
+`;
+
+const resourceLockKey = (identityKey: string): string => `agentos:resource:${identityKey}`;
+
+const resourceProjectionCtes = (identityKey: string): string => `
+  resource_events AS (
+    SELECT id, kind, payload
+    FROM agentos_events
+    WHERE identity_key = ${sqlString(identityKey)}
+      AND kind LIKE 'resource_pool.%'
+    ORDER BY id ASC
+  ),
+  resource_grants AS (
+    SELECT
+      id,
+      payload ->> 'key' AS resource_key,
+      (payload ->> 'amount')::double precision AS amount
+    FROM resource_events
+    WHERE kind = ${sqlString(RESOURCE_EVENT_KIND.GRANTED)}
+  ),
+  resource_reserved AS (
+    SELECT
+      id,
+      payload ->> 'reservationId' AS reservation_id,
+      payload ->> 'idempotencyKey' AS idempotency_key,
+      payload ->> 'key' AS resource_key,
+      (payload ->> 'amount')::double precision AS amount
+    FROM resource_events
+    WHERE kind = ${sqlString(RESOURCE_EVENT_KIND.RESERVED)}
+  ),
+  resource_rejections AS (
+    SELECT
+      id,
+      payload ->> 'idempotencyKey' AS idempotency_key,
+      payload ->> 'key' AS resource_key,
+      (payload ->> 'amount')::double precision AS amount,
+      (payload ->> 'available')::double precision AS available
+    FROM resource_events
+    WHERE kind = ${sqlString(RESOURCE_EVENT_KIND.RESERVE_REJECTED)}
+  ),
+  resource_terminal AS (
+    SELECT
+      payload ->> 'reservationId' AS reservation_id,
+      kind,
+      id,
+      row_number() OVER (PARTITION BY payload ->> 'reservationId' ORDER BY id DESC) AS ordinal
+    FROM resource_events
+    WHERE kind IN (
+      ${sqlString(RESOURCE_EVENT_KIND.CONSUMED)},
+      ${sqlString(RESOURCE_EVENT_KIND.RELEASED)}
+    )
+  ),
+  resource_reservations AS (
+    SELECT
+      reserved.id,
+      reserved.reservation_id,
+      reserved.idempotency_key,
+      reserved.resource_key,
+      reserved.amount,
+      terminal.kind AS terminal_kind
+    FROM resource_reserved reserved
+    LEFT JOIN resource_terminal terminal
+      ON terminal.reservation_id = reserved.reservation_id
+     AND terminal.ordinal = 1
+  ),
+  resource_projection_validation AS (
+    SELECT
+      (SELECT COUNT(*) FROM resource_grants)
+      + (SELECT COUNT(*) FROM resource_reserved)
+      + (SELECT COUNT(*) FROM resource_rejections)
+      + (SELECT COUNT(*) FROM resource_terminal) AS row_count
+  )
 `;
 
 export class NodePostgresBackend {
@@ -588,15 +673,12 @@ export class NodePostgresBackend {
     spec: ResourceGrantSpec,
   ): Promise<ResourceGrantResult> {
     positiveAmount(spec.amount);
-    const [event] = await this.#appendEvents([
-      {
-        ts: Date.now(),
-        kind: RESOURCE_EVENT_KIND.GRANTED,
-        identity,
-        payload: { key: spec.key, amount: spec.amount, ref: spec.ref },
-      },
-    ]);
-    if (event === undefined) throw new SqlError({ cause: "resource grant returned no event" });
+    const event = await this.#appendResourceEventLocked({
+      ts: Date.now(),
+      kind: RESOURCE_EVENT_KIND.GRANTED,
+      identity,
+      payload: { key: spec.key, amount: spec.amount, ref: spec.ref },
+    });
     return { eventId: event.id };
   }
 
@@ -605,99 +687,154 @@ export class NodePostgresBackend {
     spec: ResourceReserveSpec,
   ): Promise<ResourceReserveResult> {
     positiveAmount(spec.amount);
-    const projected = await this.#loadResourceState(identity);
-    const existing = projected.byIdempotencyKey.get(spec.idempotencyKey);
-    if (existing !== undefined) return { reservationId: existing.reservationId };
-    const current = projected.byKey.get(spec.key) ?? emptyResourceProjection();
-    if (current.available < spec.amount) {
-      await this.#appendEvents([
-        {
-          ts: Date.now(),
-          kind: RESOURCE_EVENT_KIND.RESERVE_REJECTED,
-          identity,
-          payload: {
-            key: spec.key,
-            amount: spec.amount,
-            ref: spec.ref,
-            idempotencyKey: spec.idempotencyKey,
-            available: current.available,
-          },
-        },
-      ]);
+    const reservationId = randomUUID();
+    const identityKey = backendProtocolEventIdentityKey(identity);
+    const [row] = await this.#sql.jsonArrayStatement<ResourceReserveTransactionRow>(`
+      BEGIN;
+      SELECT pg_advisory_xact_lock(hashtextextended(${sqlString(resourceLockKey(identityKey))}, 0));
+
+      WITH
+      ${resourceProjectionCtes(identityKey)},
+      resource_balance AS (
+        SELECT
+          COALESCE(
+            (SELECT SUM(amount) FROM resource_grants WHERE resource_key = ${sqlString(spec.key)}),
+            0
+          )
+          - COALESCE(
+            (
+              SELECT SUM(amount)
+              FROM resource_reservations
+              WHERE resource_key = ${sqlString(spec.key)}
+                AND terminal_kind IS NULL
+            ),
+            0
+          )
+          - COALESCE(
+            (
+              SELECT SUM(amount)
+              FROM resource_reservations
+              WHERE resource_key = ${sqlString(spec.key)}
+                AND terminal_kind = ${sqlString(RESOURCE_EVENT_KIND.CONSUMED)}
+            ),
+            0
+          ) AS available
+        FROM resource_projection_validation
+      ),
+      existing_reservation AS (
+        SELECT reservation_id
+        FROM resource_reservations
+        WHERE idempotency_key = ${sqlString(spec.idempotencyKey)}
+        ORDER BY id DESC
+        LIMIT 1
+      ),
+      decision AS (
+        SELECT
+          existing_reservation.reservation_id AS existing_reservation_id,
+          resource_balance.available AS available
+        FROM resource_balance
+        LEFT JOIN existing_reservation ON TRUE
+      ),
+      event_input AS (
+        SELECT
+          CASE
+            WHEN decision.available < ${sqlNumber(spec.amount)}
+              THEN ${sqlString(RESOURCE_EVENT_KIND.RESERVE_REJECTED)}
+            ELSE ${sqlString(RESOURCE_EVENT_KIND.RESERVED)}
+          END AS kind,
+          CASE
+            WHEN decision.available < ${sqlNumber(spec.amount)}
+              THEN jsonb_build_object(
+                'key', ${sqlString(spec.key)},
+                'amount', ${sqlNumber(spec.amount)},
+                'ref', ${sqlString(spec.ref)},
+                'idempotencyKey', ${sqlString(spec.idempotencyKey)},
+                'available', decision.available
+              )
+            ELSE jsonb_build_object(
+              'key', ${sqlString(spec.key)},
+              'amount', ${sqlNumber(spec.amount)},
+              'ref', ${sqlString(spec.ref)},
+              'idempotencyKey', ${sqlString(spec.idempotencyKey)},
+              'reservationId', ${sqlString(reservationId)}
+            )
+          END AS payload
+        FROM decision
+        WHERE decision.existing_reservation_id IS NULL
+      ),
+      inserted AS (
+        INSERT INTO agentos_events (
+          ts,
+          kind,
+          truth_key,
+          identity_key,
+          scope_ref,
+          fact_owner_ref,
+          effect_authority_ref,
+          payload
+        )
+        SELECT
+          ${sqlNumber(Date.now())},
+          event_input.kind,
+          ${sqlString(backendProtocolTruthIdentityKey(identity))},
+          ${sqlString(identityKey)},
+          ${sqlJson(identity.scopeRef)},
+          ${sqlJson(identity.factOwnerRef)},
+          ${sqlJson(identity.effectAuthorityRef)},
+          event_input.payload
+        FROM event_input
+        RETURNING
+          id::int AS "id",
+          ts AS "ts",
+          kind AS "kind",
+          scope_ref AS "scopeRef",
+          fact_owner_ref #>> '{}' AS "factOwnerRef",
+          effect_authority_ref AS "effectAuthorityRef",
+          payload AS "payload"
+      ),
+      result AS (
+        SELECT
+          CASE
+            WHEN decision.existing_reservation_id IS NOT NULL THEN 'existing'
+            WHEN decision.available < ${sqlNumber(spec.amount)} THEN 'insufficient'
+            ELSE 'reserved'
+          END AS "status",
+          COALESCE(decision.existing_reservation_id, ${sqlString(reservationId)}) AS "reservationId",
+          decision.available AS "available",
+          (SELECT row_to_json(inserted) FROM inserted LIMIT 1) AS "event"
+        FROM decision
+      ),
+      agentos_json_rows AS (
+        SELECT * FROM result
+      )
+      SELECT COALESCE(json_agg(row_to_json(agentos_json_rows)), '[]'::json)::text
+      FROM agentos_json_rows;
+      COMMIT
+    `);
+    if (row === undefined) throw new SqlError({ cause: "resource reserve returned no result" });
+    if (row.event !== null) await this.#fireMany([row.event]);
+    if (row.status === "insufficient") {
       throw new ResourceInsufficient({
         key: spec.key,
         requested: spec.amount,
-        available: current.available,
+        available: row.available,
       });
     }
-    const reservationId = randomUUID();
-    await this.#appendEvents([
-      {
-        ts: Date.now(),
-        kind: RESOURCE_EVENT_KIND.RESERVED,
-        identity,
-        payload: {
-          key: spec.key,
-          amount: spec.amount,
-          ref: spec.ref,
-          idempotencyKey: spec.idempotencyKey,
-          reservationId,
-        },
-      },
-    ]);
-    return { reservationId };
+    return { reservationId: row.reservationId };
   }
 
   async consumeResource(
     identity: BackendProtocolEventIdentity,
     spec: ResourceReservationSpec,
   ): Promise<void> {
-    const projected = await this.#loadResourceState(identity);
-    const reservation = projected.byId.get(spec.reservationId);
-    if (reservation === undefined) {
-      throw new ResourceReservationNotFound({ reservationId: spec.reservationId });
-    }
-    if (reservation.status === "consumed") return;
-    if (reservation.status === "released") {
-      throw new ResourceReservationClosed({
-        reservationId: spec.reservationId,
-        status: "released",
-      });
-    }
-    await this.#appendEvents([
-      {
-        ts: Date.now(),
-        kind: RESOURCE_EVENT_KIND.CONSUMED,
-        identity,
-        payload: { reservationId: spec.reservationId, ref: spec.ref },
-      },
-    ]);
+    await this.#terminalResourceReservationLocked(identity, spec, RESOURCE_EVENT_KIND.CONSUMED);
   }
 
   async releaseResource(
     identity: BackendProtocolEventIdentity,
     spec: ResourceReservationSpec,
   ): Promise<void> {
-    const projected = await this.#loadResourceState(identity);
-    const reservation = projected.byId.get(spec.reservationId);
-    if (reservation === undefined) {
-      throw new ResourceReservationNotFound({ reservationId: spec.reservationId });
-    }
-    if (reservation.status === "released") return;
-    if (reservation.status === "consumed") {
-      throw new ResourceReservationClosed({
-        reservationId: spec.reservationId,
-        status: "consumed",
-      });
-    }
-    await this.#appendEvents([
-      {
-        ts: Date.now(),
-        kind: RESOURCE_EVENT_KIND.RELEASED,
-        identity,
-        payload: { reservationId: spec.reservationId, ref: spec.ref },
-      },
-    ]);
+    await this.#terminalResourceReservationLocked(identity, spec, RESOURCE_EVENT_KIND.RELEASED);
   }
 
   async projectResource(key: BackendProtocolProjectionKey): Promise<ResourceProjection> {
@@ -932,6 +1069,164 @@ export class NodePostgresBackend {
       }
     }
     return null;
+  }
+
+  async #appendResourceEventLocked(spec: {
+    readonly ts: number;
+    readonly kind: string;
+    readonly identity: BackendProtocolEventIdentity;
+    readonly payload: unknown;
+  }): Promise<LedgerEvent> {
+    const identityKey = backendProtocolEventIdentityKey(spec.identity);
+    const rows = await this.#sql.jsonArrayStatement<LedgerEvent>(`
+      BEGIN;
+      SELECT pg_advisory_xact_lock(hashtextextended(${sqlString(resourceLockKey(identityKey))}, 0));
+
+      WITH inserted AS (
+        INSERT INTO agentos_events (
+          ts,
+          kind,
+          truth_key,
+          identity_key,
+          scope_ref,
+          fact_owner_ref,
+          effect_authority_ref,
+          payload
+        )
+        VALUES (
+          ${sqlNumber(spec.ts)},
+          ${sqlString(spec.kind)},
+          ${sqlString(backendProtocolTruthIdentityKey(spec.identity))},
+          ${sqlString(identityKey)},
+          ${sqlJson(spec.identity.scopeRef)},
+          ${sqlJson(spec.identity.factOwnerRef)},
+          ${sqlJson(spec.identity.effectAuthorityRef)},
+          ${sqlPayload(spec.payload)}
+        )
+        RETURNING
+          id::int AS "id",
+          ts AS "ts",
+          kind AS "kind",
+          scope_ref AS "scopeRef",
+          fact_owner_ref #>> '{}' AS "factOwnerRef",
+          effect_authority_ref AS "effectAuthorityRef",
+          payload AS "payload"
+      ),
+      agentos_json_rows AS (
+        SELECT * FROM inserted ORDER BY id ASC
+      )
+      SELECT COALESCE(json_agg(row_to_json(agentos_json_rows)), '[]'::json)::text
+      FROM agentos_json_rows;
+      COMMIT
+    `);
+    const event = rows[0];
+    if (event === undefined) throw new SqlError({ cause: "resource append returned no event" });
+    await this.#fireMany(rows);
+    return event;
+  }
+
+  async #terminalResourceReservationLocked(
+    identity: BackendProtocolEventIdentity,
+    spec: ResourceReservationSpec,
+    terminalKind: typeof RESOURCE_EVENT_KIND.CONSUMED | typeof RESOURCE_EVENT_KIND.RELEASED,
+  ): Promise<void> {
+    const identityKey = backendProtocolEventIdentityKey(identity);
+    const terminalStatus =
+      terminalKind === RESOURCE_EVENT_KIND.CONSUMED ? "consumed" : "released";
+    const [row] = await this.#sql.jsonArrayStatement<ResourceTerminalTransactionRow>(`
+      BEGIN;
+      SELECT pg_advisory_xact_lock(hashtextextended(${sqlString(resourceLockKey(identityKey))}, 0));
+
+      WITH
+      ${resourceProjectionCtes(identityKey)},
+      target_reservation AS (
+        SELECT reservation_id, terminal_kind
+        FROM resource_reservations
+        WHERE reservation_id = ${sqlString(spec.reservationId)}
+        ORDER BY id DESC
+        LIMIT 1
+      ),
+      decision AS (
+        SELECT
+          CASE
+            WHEN target_reservation.reservation_id IS NULL THEN 'missing'
+            WHEN target_reservation.terminal_kind = ${sqlString(terminalKind)} THEN 'noop'
+            WHEN target_reservation.terminal_kind IS NOT NULL THEN 'closed'
+            ELSE 'written'
+          END AS status,
+          CASE target_reservation.terminal_kind
+            WHEN ${sqlString(RESOURCE_EVENT_KIND.CONSUMED)} THEN 'consumed'
+            WHEN ${sqlString(RESOURCE_EVENT_KIND.RELEASED)} THEN 'released'
+            ELSE NULL
+          END AS closed_status
+        FROM resource_projection_validation
+        LEFT JOIN target_reservation ON TRUE
+      ),
+      event_input AS (
+        SELECT
+          ${sqlString(terminalKind)} AS kind,
+          jsonb_build_object(
+            'reservationId', ${sqlString(spec.reservationId)},
+            'ref', ${sqlString(spec.ref)}
+          ) AS payload
+        FROM decision
+        WHERE decision.status = 'written'
+      ),
+      inserted AS (
+        INSERT INTO agentos_events (
+          ts,
+          kind,
+          truth_key,
+          identity_key,
+          scope_ref,
+          fact_owner_ref,
+          effect_authority_ref,
+          payload
+        )
+        SELECT
+          ${sqlNumber(Date.now())},
+          event_input.kind,
+          ${sqlString(backendProtocolTruthIdentityKey(identity))},
+          ${sqlString(identityKey)},
+          ${sqlJson(identity.scopeRef)},
+          ${sqlJson(identity.factOwnerRef)},
+          ${sqlJson(identity.effectAuthorityRef)},
+          event_input.payload
+        FROM event_input
+        RETURNING
+          id::int AS "id",
+          ts AS "ts",
+          kind AS "kind",
+          scope_ref AS "scopeRef",
+          fact_owner_ref #>> '{}' AS "factOwnerRef",
+          effect_authority_ref AS "effectAuthorityRef",
+          payload AS "payload"
+      ),
+      result AS (
+        SELECT
+          decision.status AS "status",
+          decision.closed_status AS "closedStatus",
+          (SELECT row_to_json(inserted) FROM inserted LIMIT 1) AS "event"
+        FROM decision
+      ),
+      agentos_json_rows AS (
+        SELECT * FROM result
+      )
+      SELECT COALESCE(json_agg(row_to_json(agentos_json_rows)), '[]'::json)::text
+      FROM agentos_json_rows;
+      COMMIT
+    `);
+    if (row === undefined) throw new SqlError({ cause: "resource terminal returned no result" });
+    if (row.event !== null) await this.#fireMany([row.event]);
+    if (row.status === "missing") {
+      throw new ResourceReservationNotFound({ reservationId: spec.reservationId });
+    }
+    if (row.status === "closed") {
+      throw new ResourceReservationClosed({
+        reservationId: spec.reservationId,
+        status: row.closedStatus ?? terminalStatus,
+      });
+    }
   }
 
   async #loadResourceState(identity: LedgerTruthIdentity): Promise<ProjectedResourceState> {

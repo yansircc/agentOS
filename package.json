@@ -43,6 +43,7 @@
     "test:facade-handler-capability-boundary": "node scripts/check-facade-handler-capability-boundary.mjs --self-test && node scripts/check-facade-handler-capability-boundary.mjs",
     "test:agent-doc-primitive-evidence": "node scripts/check-agent-doc-primitive-evidence.mjs --self-test && node scripts/check-agent-doc-primitive-evidence.mjs",
     "test:resource-quota-protocol-ownership": "node scripts/check-resource-quota-protocol-ownership.mjs --self-test && node scripts/check-resource-quota-protocol-ownership.mjs",
+    "test:resource-reservation-concurrency": "node scripts/check-resource-reservation-concurrency.mjs --self-test && node scripts/check-resource-reservation-concurrency.mjs",
     "test:node-postgres-runtime-import-boundary": "node scripts/check-node-postgres-runtime-import-boundary.mjs --self-test && node scripts/check-node-postgres-runtime-import-boundary.mjs",
     "test:backend-provider-axis-boundary": "node scripts/check-backend-provider-axis-boundary.mjs --self-test && node scripts/check-backend-provider-axis-boundary.mjs",
     "test:run-scoped-material-bindings": "node scripts/check-run-scoped-material-bindings.mjs --self-test && node scripts/check-run-scoped-material-bindings.mjs",

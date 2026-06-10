@@ -754,6 +754,160 @@ export const runRuntimeBackendContractSuite = (
       ),
     );
 
+    it.effect("terminalizes resource reservations idempotently", () =>
+      withDriver((driver) =>
+        Effect.gen(function* () {
+          const resourceIdentity = contractIdentity("resource-terminal");
+          const creditProjection = projectionKey(resourceIdentity, "resource", "credit");
+          yield* promise(() =>
+            driver.grantResource(resourceIdentity, {
+              key: "credit",
+              amount: 5,
+              ref: "seed",
+            }),
+          );
+          const reserved = yield* promise(() =>
+            driver.reserveResource(resourceIdentity, {
+              key: "credit",
+              amount: 2,
+              ref: "req-1",
+              idempotencyKey: "reserve-terminal",
+            }),
+          );
+
+          yield* promise(() =>
+            driver.consumeResource(resourceIdentity, {
+              reservationId: reserved.reservationId,
+              ref: "consume-1",
+            }),
+          );
+          yield* promise(() =>
+            driver.consumeResource(resourceIdentity, {
+              reservationId: reserved.reservationId,
+              ref: "consume-1-retry",
+            }),
+          );
+          yield* expectRejectTagEffect(
+            driver.releaseResource(resourceIdentity, {
+              reservationId: reserved.reservationId,
+              ref: "release-after-consume",
+            }),
+            "agent_os.resource_reservation_closed",
+          );
+
+          expect(yield* promise(() => driver.projectResource(creditProjection))).toEqual({
+            available: 3,
+            reserved: 0,
+            consumed: 2,
+          });
+          const events = yield* promise(() => driver.events(resourceIdentity));
+          expectEventsIdentity(events, resourceIdentity);
+          expect(kindsOf(events)).toEqual([
+            "resource_pool.granted",
+            "resource_pool.reserved",
+            "resource_pool.consumed",
+          ]);
+        }),
+      ),
+    );
+
+    it.effect("serializes concurrent resource reserve decisions", () =>
+      withDriver((driver) =>
+        Effect.gen(function* () {
+          const resourceIdentity = contractIdentity("resource-concurrent-reserve");
+          const creditProjection = projectionKey(resourceIdentity, "resource", "credit");
+          yield* promise(() =>
+            driver.grantResource(resourceIdentity, {
+              key: "credit",
+              amount: 5,
+              ref: "seed",
+            }),
+          );
+
+          const settled = yield* promise(() =>
+            Promise.allSettled(
+              Array.from({ length: 8 }, (_value, index) =>
+                driver.reserveResource(resourceIdentity, {
+                  key: "credit",
+                  amount: 3,
+                  ref: `req-${index}`,
+                  idempotencyKey: `reserve-${index}`,
+                }),
+              ),
+            ),
+          );
+          const fulfilled = settled.filter(
+            (result): result is PromiseFulfilledResult<ResourceReserveResult> =>
+              result.status === "fulfilled",
+          );
+          const rejected = settled.filter(
+            (result): result is PromiseRejectedResult => result.status === "rejected",
+          );
+
+          expect(fulfilled).toHaveLength(1);
+          expect(rejected).toHaveLength(settled.length - 1);
+          for (const failure of rejected) {
+            expect(failure.reason).toMatchObject({
+              name: expect.stringContaining("agent_os.resource_insufficient"),
+            });
+          }
+          expect(yield* promise(() => driver.projectResource(creditProjection))).toEqual({
+            available: 2,
+            reserved: 3,
+            consumed: 0,
+          });
+
+          const events = yield* promise(() => driver.events(resourceIdentity));
+          expectEventsIdentity(events, resourceIdentity);
+          expect(payloadsOf(events, "resource_pool.reserved")).toHaveLength(1);
+          expect(payloadsOf(events, "resource_pool.reserve_rejected")).toHaveLength(
+            settled.length - 1,
+          );
+        }),
+      ),
+    );
+
+    it.effect("dedupes concurrent resource reserves by idempotency key", () =>
+      withDriver((driver) =>
+        Effect.gen(function* () {
+          const resourceIdentity = contractIdentity("resource-concurrent-idempotency");
+          const creditProjection = projectionKey(resourceIdentity, "resource", "credit");
+          yield* promise(() =>
+            driver.grantResource(resourceIdentity, {
+              key: "credit",
+              amount: 10,
+              ref: "seed",
+            }),
+          );
+
+          const results = yield* promise(() =>
+            Promise.all(
+              Array.from({ length: 8 }, (_value, index) =>
+                driver.reserveResource(resourceIdentity, {
+                  key: "credit",
+                  amount: 2,
+                  ref: `retry-${index}`,
+                  idempotencyKey: "same-reserve",
+                }),
+              ),
+            ),
+          );
+
+          expect(new Set(results.map((result) => result.reservationId)).size).toBe(1);
+          expect(yield* promise(() => driver.projectResource(creditProjection))).toEqual({
+            available: 8,
+            reserved: 2,
+            consumed: 0,
+          });
+
+          const events = yield* promise(() => driver.events(resourceIdentity));
+          expectEventsIdentity(events, resourceIdentity);
+          expect(payloadsOf(events, "resource_pool.reserved")).toHaveLength(1);
+          expect(payloadsOf(events, "resource_pool.reserve_rejected")).toHaveLength(0);
+        }),
+      ),
+    );
+
     it.effect("keeps quota grant, rate-limit, and malformed-fact semantics identical", () =>
       withDriver((driver) =>
         Effect.gen(function* () {
