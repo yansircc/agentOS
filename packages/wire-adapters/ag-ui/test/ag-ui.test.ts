@@ -525,18 +525,39 @@ describe("@agent-os/ag-ui", () => {
       state: input.state,
       clientToolNames: ["client-tool"],
       forwardedProps: { allowed: 1 },
-      resume: [],
     });
     expect(JSON.stringify(submit)).not.toContain("drop");
   });
 
-  it("maps AG-UI resume input into submit context instead of adapter-local state", () => {
+  it("rejects AG-UI resume input because it is not a runtime SubmitSpec.resume decision", () => {
+    expect(() =>
+      agUiRunAgentInputToSubmitSpec(
+        {
+          threadId: "thread-1",
+          runId: "client-run-1",
+          messages: [],
+          resume: [{ interruptId: "i1", status: "resolved", payload: { approved: true } }],
+        },
+        {
+          route: {
+            kind: "openai-chat-compatible",
+            endpointRef: "endpoint:openai",
+            credentialRef: "credential:openai",
+            modelId: "model",
+          },
+          tools: {},
+          effectAuthorityRef: { authorityClass: "llm_route", authorityId: "ag-ui-test" },
+        },
+      ),
+    ).toThrow("AG-UI resume input cannot be lowered to SubmitSpec.resume");
+  });
+
+  it("passes through runtime resume decisions supplied by defaults", () => {
     const submit = agUiRunAgentInputToSubmitSpec(
       {
         threadId: "thread-1",
         runId: "client-run-1",
         messages: [],
-        resume: [{ interruptId: "i1", status: "resolved", payload: { approved: true } }],
       },
       {
         route: {
@@ -547,13 +568,34 @@ describe("@agent-os/ag-ui", () => {
         },
         tools: {},
         effectAuthorityRef: { authorityClass: "llm_route", authorityId: "ag-ui-test" },
+        resume: {
+          runId: 1,
+          turn: { id: 1, index: 0 },
+          interruptId: "i1",
+          gateRef: "decision-gate:i1",
+          decisionRef: "decision:i1",
+          resume: { approved: true },
+        },
       },
     );
 
-    expect(submit.context.agUi).toMatchObject({
+    expect(submit.resume).toEqual({
+      runId: 1,
+      turn: { id: 1, index: 0 },
+      interruptId: "i1",
+      gateRef: "decision-gate:i1",
+      decisionRef: "decision:i1",
+      resume: { approved: true },
+    });
+    expect(submit.context.agUi).toEqual({
       threadId: "thread-1",
       clientRunId: "client-run-1",
-      resume: [{ interruptId: "i1", status: "resolved", payload: { approved: true } }],
+      parentRunId: undefined,
+      messages: [],
+      context: [],
+      state: undefined,
+      clientToolNames: [],
+      forwardedProps: {},
     });
   });
 

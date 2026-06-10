@@ -400,6 +400,11 @@ export const agUiRunAgentInputToSubmitSpec = (
   input: AgUiRunAgentInput,
   defaults: AgUiSubmitDefaults,
 ): SubmitSpec => {
+  if ((input.resume ?? []).length > 0) {
+    throw new TypeError(
+      "AG-UI resume input cannot be lowered to SubmitSpec.resume; pass a runtime resume decision through defaults.resume",
+    );
+  }
   const forwardedProps = selectedForwardedProps(input, defaults.forwardedPropAllowlist);
   return {
     route: defaults.route,
@@ -408,6 +413,11 @@ export const agUiRunAgentInputToSubmitSpec = (
     ...(defaults.budget === undefined ? {} : { budget: defaults.budget }),
     ...(defaults.outputSchema === undefined ? {} : { outputSchema: defaults.outputSchema }),
     ...(defaults.traceContext === undefined ? {} : { traceContext: defaults.traceContext }),
+    ...(defaults.materials === undefined ? {} : { materials: defaults.materials }),
+    ...(defaults.decisionInterrupts === undefined
+      ? {}
+      : { decisionInterrupts: defaults.decisionInterrupts }),
+    ...(defaults.resume === undefined ? {} : { resume: defaults.resume }),
     effectAuthorityRef: defaults.effectAuthorityRef,
     intent: latestUserText(input.messages),
     context: {
@@ -421,7 +431,6 @@ export const agUiRunAgentInputToSubmitSpec = (
         state: input.state,
         clientToolNames: (input.tools ?? []).map((tool) => tool.name),
         forwardedProps,
-        resume: input.resume ?? [],
       },
     },
   };

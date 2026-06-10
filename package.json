@@ -36,6 +36,7 @@
     "test:backend-neutral-telemetry": "node scripts/check-backend-neutral-telemetry.mjs --self-test && node scripts/check-backend-neutral-telemetry.mjs",
     "test:backend-neutral-replay": "node scripts/check-backend-neutral-replay.mjs --self-test && node scripts/check-backend-neutral-replay.mjs",
     "test:d12-a155-substrate-absorption": "node scripts/check-d12-a155-substrate-absorption.mjs --self-test && node scripts/check-d12-a155-substrate-absorption.mjs",
+    "test:ag-ui-resume-boundary": "node scripts/check-ag-ui-resume-boundary.mjs --self-test && node scripts/check-ag-ui-resume-boundary.mjs",
     "test:tool-mutation-boundary": "node scripts/check-tool-mutation-boundary.mjs --self-test && node scripts/check-tool-mutation-boundary.mjs",
     "test:agent-manifest-intent-boundary": "node scripts/check-agent-manifest-intent-boundary.mjs --self-test && node scripts/check-agent-manifest-intent-boundary.mjs",
     "test:intent-settlement-boundary": "node scripts/check-intent-settlement-boundary.mjs --self-test && node scripts/check-intent-settlement-boundary.mjs",
