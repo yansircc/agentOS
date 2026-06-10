@@ -314,6 +314,7 @@ describe("@agent-os/workspace-env", () => {
       );
       expect(execCalls[0]?.options.signal).toBeInstanceOf(AbortSignal);
       expect(execCalls[0]?.options.envRefs).toEqual({ TOKEN: "credential:token" });
+      expect(execCalls[0]?.options.materialRefs).toEqual(["credential:token"]);
       expect(writes).toEqual([{ path: "src/pingpong.py", bytes: 30 }]);
       expect(execs).toEqual([
         {

@@ -197,6 +197,12 @@ const execOrFail = async (
   options: WorkspaceExecOptions,
 ): Promise<WorkspaceExecResult> => {
   checkSignal(options.signal);
+  if (options.envRefs !== undefined && Object.keys(options.envRefs).length > 0) {
+    throw workspaceError("Cloudflare WorkspaceEnv exec does not resolve symbolic envRefs");
+  }
+  if (options.materialRefs !== undefined && options.materialRefs.length > 0) {
+    throw workspaceError("Cloudflare WorkspaceEnv exec does not resolve symbolic materialRefs");
+  }
   const started = Date.now();
   const raw = await client.exec(command, {
     cwd: options.cwd,

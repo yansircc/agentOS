@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "@effect/vitest";
 
-import { makeCloudflareWorkspaceEnv, type CloudflareWorkspaceEnvClient } from "../src";
+import {
+  CloudflareWorkspaceEnvError,
+  makeCloudflareWorkspaceEnv,
+  type CloudflareWorkspaceEnvClient,
+} from "../src";
 
 describe("@agent-os/workspace-env-cloudflare", () => {
   it("maps Cloudflare-compatible file and exec methods into WorkspaceEnv", async () => {
@@ -75,6 +79,33 @@ describe("@agent-os/workspace-env-cloudflare", () => {
       message: "stop",
     });
     expect(writeFile).not.toHaveBeenCalled();
+  });
+
+  it("fails closed on symbolic exec refs before invoking Cloudflare exec", async () => {
+    const exec = vi.fn<CloudflareWorkspaceEnvClient["exec"]>(async () => ({ exitCode: 0 }));
+    const env = makeCloudflareWorkspaceEnv({ client: { exec } });
+
+    await expect(
+      env.exec("echo $TOKEN", {
+        timeoutMs: 1_000,
+        envRefs: { TOKEN: "material:env:test" },
+      }),
+    ).rejects.toEqual(
+      new CloudflareWorkspaceEnvError(
+        "Cloudflare WorkspaceEnv exec does not resolve symbolic envRefs",
+      ),
+    );
+    await expect(
+      env.exec("cat secret.txt", {
+        timeoutMs: 1_000,
+        materialRefs: ["material:env:test"],
+      }),
+    ).rejects.toEqual(
+      new CloudflareWorkspaceEnvError(
+        "Cloudflare WorkspaceEnv exec does not resolve symbolic materialRefs",
+      ),
+    );
+    expect(exec).not.toHaveBeenCalled();
   });
 
   it("documents exec as non-cooperative while the provider call is in flight", async () => {

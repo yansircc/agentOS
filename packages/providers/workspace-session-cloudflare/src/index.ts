@@ -468,6 +468,19 @@ const providerRejected = <A>(
     reason,
   } satisfies CloudflareWorkspaceSessionProviderFailure);
 
+const unsupportedExecRefs = (
+  request: WorkspaceSessionExecRequest,
+): CloudflareWorkspaceSessionRequiredProviderFailure | null => {
+  const hasEnvRefs = request.envRefs !== undefined && Object.keys(request.envRefs).length > 0;
+  const hasMaterialRefs = request.materialRefs !== undefined && request.materialRefs.length > 0;
+  return hasEnvRefs || hasMaterialRefs
+    ? {
+        code: "ProviderFailure",
+        reason: "Cloudflare workspace session exec does not resolve symbolic envRefs/materialRefs",
+      }
+    : null;
+};
+
 const encodedRef = (prefix: string, parts: ReadonlyArray<string>): string =>
   `${prefix}${parts.map((part) => encodeURIComponent(part)).join(":")}`;
 
@@ -729,6 +742,8 @@ export const makeCloudflareWorkspaceSessionProvider = (
     return { previewRef: previewRefOf(request.sessionRef, request.port) };
   },
   exec: async (request) => {
+    const refFailure = unsupportedExecRefs(request);
+    if (refFailure !== null) return providerRejected(refFailure.reason, refFailure.code);
     const client = await options.namespace.get(request.sessionRef);
     const exec = clientMethod(client, "exec");
     if (exec === null) return missingClientMethod("exec");
@@ -1080,6 +1095,8 @@ export const makeCloudflareWorkspaceSessionLiveProvider = (
   exec: async (request) => {
     const parsed = parseSessionRef(request.sessionRef, "exec");
     if (isProviderFailure(parsed)) return providerRejected(parsed.reason, parsed.code);
+    const refFailure = unsupportedExecRefs(request);
+    if (refFailure !== null) return providerRejected(refFailure.reason, refFailure.code);
     const client = await sandboxClient(options, request, parsed.sandboxId, "exec");
     const exec = requireMethod<
       (

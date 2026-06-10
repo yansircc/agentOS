@@ -378,6 +378,99 @@ describe("@agent-os/workspace-session-cloudflare", () => {
     ]);
   });
 
+  it("fails closed on symbolic exec refs before invoking a Cloudflare namespace client", async () => {
+    const calls: string[] = [];
+    const namespace: CloudflareWorkspaceSessionNamespace = {
+      start: async () => {
+        throw new Error("unused");
+      },
+      restore: async () => {
+        throw new Error("unused");
+      },
+      get: async (sessionRef) => {
+        calls.push(`get:${sessionRef}`);
+        return {
+          id: sessionRef,
+          workspaceRootRef: `workspace://${sessionRef}`,
+          cleanupRef: `cleanup://${sessionRef}`,
+          backup: async () => ({ id: "unused" }),
+          preview: async () => ({ id: "unused" }),
+          exec: async () => {
+            calls.push("exec");
+            return { exitCode: 0, stdout: "unused", stderr: "" };
+          },
+          destroy: async () => ({ id: "unused" }),
+        };
+      },
+    };
+    const liveProvider = makeCloudflareWorkspaceSessionProvider({ namespace });
+
+    await expect(
+      liveProvider.exec({
+        sessionRef: "session-live",
+        cwd: "/workspace",
+        command: "npm",
+        timeoutMs: 1_000,
+        envRefs: { TOKEN: "material:env:test" },
+      }),
+    ).rejects.toEqual({
+      code: "ProviderFailure",
+      reason: "Cloudflare workspace session exec does not resolve symbolic envRefs/materialRefs",
+    });
+    await expect(
+      liveProvider.exec({
+        sessionRef: "session-live",
+        cwd: "/workspace",
+        command: "npm",
+        timeoutMs: 1_000,
+        materialRefs: ["material:env:test"],
+      }),
+    ).rejects.toEqual({
+      code: "ProviderFailure",
+      reason: "Cloudflare workspace session exec does not resolve symbolic envRefs/materialRefs",
+    });
+    expect(calls).toEqual([]);
+  });
+
+  it.effect("settles unsupported symbolic exec refs as typed carrier failures", () =>
+    Effect.gen(function* () {
+      const carrier = makeCloudflareWorkspaceSessionCarrier({
+        provider: makeCloudflareWorkspaceSessionProvider({
+          namespace: {
+            start: async () => {
+              throw new Error("unused");
+            },
+            restore: async () => {
+              throw new Error("unused");
+            },
+            get: async () => {
+              throw new Error("symbolic refs must fail before namespace lookup");
+            },
+          },
+        }),
+      });
+
+      const failure = expectFailure(
+        yield* Effect.exit(
+          carrier.exec({
+            sessionRef: "session-live",
+            cwd: "/workspace",
+            command: "npm",
+            timeoutMs: 1_000,
+            envRefs: { TOKEN: "material:env:test" },
+            materialRefs: ["material:env:test"],
+          }),
+        ),
+      );
+
+      expect(failure).toEqual({
+        code: "ProviderFailure",
+        reason: "Cloudflare workspace session exec does not resolve symbolic envRefs/materialRefs",
+        sessionRef: "session-live",
+      });
+    }),
+  );
+
   it("fails closed when live provider structural refs are missing", async () => {
     const carrier = makeCloudflareWorkspaceSessionCarrier({
       provider: makeCloudflareWorkspaceSessionProvider({
@@ -503,7 +596,6 @@ describe("@agent-os/workspace-session-cloudflare", () => {
           args: ["test"],
           timeoutMs: 2_000,
           maxOutputBytes: 4,
-          materialRefs: ["material:env:test"],
         });
         const destroyed = yield* carrier.destroy({
           claim: sessionClaim,
