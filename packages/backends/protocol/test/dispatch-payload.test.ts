@@ -7,6 +7,8 @@ import {
   DELIVERY_RETRY_TRIGGER_KIND,
   DISPATCH_MAX_ATTEMPTS,
   DISPATCH_RETRY_POLICY,
+  QUOTA_EVENT_KIND,
+  RESOURCE_EVENT_KIND,
   backendProtocolEventIdentityKey,
   backendProtocolProjectionKey,
   backendProtocolTruthIdentityKey,
@@ -24,6 +26,10 @@ import {
   parseBackendProtocolLedgerEventRpc,
   parseIntentPointerDuePayload,
   parseRequestedPayload,
+  projectQuotaGrantUsage,
+  projectQuotaState,
+  projectResourceRows,
+  projectResourceState,
   replayDispatchDeliveryFromSnapshot,
   settleDispatchOutboundDelivered,
   type DispatchTargetAdapter,
@@ -57,6 +63,14 @@ const claim = makePreClaim({
   scopeRef: { kind: "conversation", scopeId: "sender" },
   effectAuthorityRef: { authorityId: "dispatch.send", authorityClass: "effect" },
   originRef: { originId: "backend-protocol-test", originKind: "test" },
+});
+
+const ledgerEvent = (id: number, kind: string, payload: unknown) => ({
+  id,
+  ts: id,
+  kind,
+  ...eventIdentity("projection"),
+  payload,
 });
 
 describe("@agent-os/backend-protocol", () => {
@@ -254,6 +268,123 @@ describe("@agent-os/backend-protocol", () => {
     expect(malformedDeliveryDue.ok).toBe(false);
     if (malformedDeliveryDue.ok) return;
     expect(malformedDeliveryDue.cause.message).toBe("durable trigger due-work payload malformed");
+  });
+
+  it("owns resource payload codecs and projection fold", () => {
+    const rows = [
+      {
+        kind: RESOURCE_EVENT_KIND.GRANTED,
+        payload: JSON.stringify({ key: "gpu", amount: 10, ref: "seed" }),
+      },
+      {
+        kind: RESOURCE_EVENT_KIND.RESERVED,
+        payload: {
+          key: "gpu",
+          amount: 3,
+          ref: "reserve-1",
+          idempotencyKey: "op-1",
+          reservationId: "reservation-1",
+        },
+      },
+      {
+        kind: RESOURCE_EVENT_KIND.RESERVED,
+        payload: {
+          key: "gpu",
+          amount: 2,
+          ref: "reserve-2",
+          idempotencyKey: "op-2",
+          reservationId: "reservation-2",
+        },
+      },
+      {
+        kind: RESOURCE_EVENT_KIND.RELEASED,
+        payload: { reservationId: "reservation-2", ref: "release-2" },
+      },
+      {
+        kind: RESOURCE_EVENT_KIND.CONSUMED,
+        payload: { reservationId: "reservation-1", ref: "consume-1" },
+      },
+      {
+        kind: RESOURCE_EVENT_KIND.RESERVE_REJECTED,
+        payload: {
+          key: "gpu",
+          amount: 99,
+          ref: "reserve-reject",
+          idempotencyKey: "op-reject",
+          available: 7,
+        },
+      },
+    ];
+
+    const projected = projectResourceRows(rows);
+
+    expect(projected.byKey.get("gpu")).toEqual({ available: 7, reserved: 0, consumed: 3 });
+    expect(projected.byId.get("reservation-1")).toMatchObject({ status: "consumed" });
+    expect(projected.byId.get("reservation-2")).toMatchObject({ status: "released" });
+    expect(projected.byIdempotencyKey.get("op-1")?.reservationId).toBe("reservation-1");
+    expect(
+      projectResourceState(
+        rows.map((row, index) => ledgerEvent(index + 1, String(row.kind), row.payload)),
+        "gpu",
+      ),
+    ).toEqual({
+      granted: 10,
+      reserved: 0,
+      consumed: 3,
+      available: 7,
+      reservations: [],
+    });
+  });
+
+  it("owns quota payload codecs, idempotent grant usage, and malformed fact failure", () => {
+    const events = [
+      ledgerEvent(1, QUOTA_EVENT_KIND.CONSUMED, {
+        key: "tool-a",
+        amount: 2,
+        toolName: "tool-a",
+        operationRef: "op-1",
+      }),
+      ledgerEvent(2, QUOTA_EVENT_KIND.CONSUMED, {
+        key: "tool-a",
+        amount: 3,
+        toolName: "tool-a",
+        operationRef: "op-2",
+      }),
+      ledgerEvent(3, QUOTA_EVENT_KIND.CONSUMED, {
+        key: "tool-b",
+        amount: 7,
+        toolName: "tool-b",
+        operationRef: "op-b",
+      }),
+    ];
+
+    expect(
+      projectQuotaGrantUsage(events, {
+        key: "tool-a",
+        windowStart: 0,
+        operationRef: "op-2",
+      }),
+    ).toEqual({ consumed: 2, alreadyGranted: true });
+    expect(projectQuotaState(events, { key: "tool-a", windowMs: 2, limit: 10 }, 3)).toEqual({
+      consumed: 5,
+      limit: 10,
+      remaining: 5,
+      refundable: 0,
+      windowStart: 1,
+    });
+    expect(() =>
+      projectQuotaGrantUsage(
+        [
+          ledgerEvent(1, QUOTA_EVENT_KIND.CONSUMED, {
+            key: "tool-a",
+            amount: "x",
+            toolName: "tool-a",
+            operationRef: "bad-op",
+          }),
+        ],
+        { key: "tool-a", windowStart: 0, operationRef: "op-3" },
+      ),
+    ).toThrow();
   });
 
   it("keeps retry policy as serializable protocol data", () => {

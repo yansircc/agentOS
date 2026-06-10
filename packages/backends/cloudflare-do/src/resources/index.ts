@@ -6,8 +6,7 @@
  * to resolve here.
  *
  *   resources.ts  Resources Tag + ResourcesLive (orchestration)
- *   projection.ts Pure projectRows + loadState + types
- *   payload.ts    Schema decoders for resource_pool.* event rows (leaf)
+ *   projection.ts SQL row loading + backend-protocol projection helpers
  */
 
 export { Resources } from "@agent-os/runtime";

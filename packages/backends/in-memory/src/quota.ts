@@ -1,30 +1,8 @@
 import { Clock, Effect, Layer } from "effect";
 import { SqlError } from "@agent-os/kernel/errors";
-import type { LedgerEvent } from "@agent-os/kernel/types";
 import { Quota } from "@agent-os/runtime";
-import type { GrantResult } from "@agent-os/backend-protocol";
+import { projectQuotaGrantUsage, QUOTA_EVENT_KIND, type GrantResult } from "@agent-os/backend-protocol";
 import { inMemoryRuntimeEventIdentity, type InMemoryBackendState } from "./state";
-import { decodeOk, finiteNumberField, recordOf, stringField, type DecodeResult } from "./decode";
-
-const consumedAmount = (event: LedgerEvent, key: string): DecodeResult<number> => {
-  const payloadResult = recordOf(event.payload, "quota.consumed");
-  if (!payloadResult.ok) return payloadResult;
-  const payload = payloadResult.value;
-  const payloadKey = stringField(payload, "key");
-  if (!payloadKey.ok) return payloadKey;
-  const amount = finiteNumberField(payload, "amount");
-  if (!amount.ok) return amount;
-  const toolName = stringField(payload, "toolName");
-  if (!toolName.ok) return toolName;
-  return decodeOk(payloadKey.value === key ? amount.value : 0);
-};
-
-const consumedOperationRef = (event: LedgerEvent): DecodeResult<string | null> => {
-  const payloadResult = recordOf(event.payload, "quota.consumed");
-  if (!payloadResult.ok) return payloadResult;
-  const value = payloadResult.value.operationRef;
-  return decodeOk(typeof value === "string" ? value : null);
-};
 
 export const InMemoryQuotaLive = (state: InMemoryBackendState): Layer.Layer<Quota> =>
   Layer.succeed(Quota, {
@@ -33,27 +11,15 @@ export const InMemoryQuotaLive = (state: InMemoryBackendState): Layer.Layer<Quot
         const now = yield* Clock.currentTimeMillis;
         const eventIdentity = inMemoryRuntimeEventIdentity(identity);
         const windowStart = windowMs === Number.POSITIVE_INFINITY ? 0 : now - windowMs;
-        const usage = yield* Effect.sync(() => {
-          let sum = 0;
-          for (const event of state.eventSnapshot(eventIdentity)) {
-            if (event.kind !== "quota.consumed" || event.ts < windowStart) continue;
-            const eventOperationRef = consumedOperationRef(event);
-            if (!eventOperationRef.ok) return eventOperationRef;
-            if (eventOperationRef.value === operationRef) {
-              return decodeOk({ consumed: sum, alreadyGranted: true });
-            }
-            const amountResult = consumedAmount(event, key);
-            if (!amountResult.ok) return amountResult;
-            sum += amountResult.value;
-          }
-          return decodeOk({ consumed: sum, alreadyGranted: false });
-        }).pipe(
-          Effect.flatMap((result) =>
-            result.ok
-              ? Effect.succeed(result.value)
-              : Effect.fail(new SqlError({ cause: result.cause })),
-          ),
-        );
+        const usage = yield* Effect.try({
+          try: () =>
+            projectQuotaGrantUsage(state.eventSnapshot(eventIdentity), {
+              key,
+              windowStart,
+              operationRef,
+            }),
+          catch: (cause) => new SqlError({ cause }),
+        });
 
         if (usage.alreadyGranted) {
           return { granted: true, consumed: usage.consumed, limit } satisfies GrantResult;
@@ -64,7 +30,7 @@ export const InMemoryQuotaLive = (state: InMemoryBackendState): Layer.Layer<Quot
           yield* state.commitEvents([
             {
               ts: now,
-              kind: "quota.rate_limited",
+              kind: QUOTA_EVENT_KIND.RATE_LIMITED,
               ...identity,
               payload: { key, attempted: amount, consumed, limit, windowMs, toolName },
             },
@@ -75,7 +41,7 @@ export const InMemoryQuotaLive = (state: InMemoryBackendState): Layer.Layer<Quot
         yield* state.commitEvents([
           {
             ts: now,
-            kind: "quota.consumed",
+            kind: QUOTA_EVENT_KIND.CONSUMED,
             ...identity,
             payload: { key, amount, toolName, operationRef },
           },

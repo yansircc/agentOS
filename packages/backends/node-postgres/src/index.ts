@@ -36,6 +36,8 @@ import {
   DISPATCH_EVENT_KINDS,
   DISPATCH_INBOUND_ACCEPTED,
   DISPATCH_RETRY_POLICY,
+  QUOTA_EVENT_KIND,
+  RESOURCE_EVENT_KIND,
   backendProtocolEventIdentityKey,
   backendProtocolProjectionKey,
   backendProtocolTruthIdentityKey,
@@ -44,8 +46,11 @@ import {
   dispatchBackoffMs,
   dispatchLedgerDeliveryReceipt,
   durableTriggerDuePayload,
+  emptyResourceProjection,
   parseDispatchLivedClaim,
   parseRequestedPayloadValue,
+  projectQuotaGrantUsage,
+  projectResourceEvents,
   settleDispatchInboundAccepted,
   settleDispatchOutboundDelivered,
   type BackendProtocolEventIdentity,
@@ -55,6 +60,7 @@ import {
   type DispatchReceiverResult,
   type DispatchTargetAdapter,
   type GrantResult,
+  type ProjectedResourceState,
   type ResourceProjection,
 } from "@agent-os/backend-protocol";
 import {
@@ -103,20 +109,6 @@ interface DueWorkRow {
   readonly dispatchAttemptCount: number;
 }
 
-interface ReservationState {
-  readonly reservationId: string;
-  readonly key: string;
-  readonly amount: number;
-  readonly idempotencyKey: string;
-  readonly status: "active" | "consumed" | "released";
-}
-
-interface ProjectedResourceState {
-  readonly byId: Map<string, ReservationState>;
-  readonly byIdempotencyKey: Map<string, ReservationState>;
-  readonly byKey: Map<string, ResourceProjection>;
-}
-
 const DEFAULT_EVENT_LIMIT = 1000;
 const MAX_EVENT_LIMIT = 1000;
 const SCHEDULED_EVENT_TRIGGER_KIND = "scheduled_event";
@@ -160,25 +152,6 @@ const positiveAmount = (amount: number): void => {
   if (!Number.isFinite(amount) || amount <= 0) {
     throw new InvalidResourceAmount({ amount });
   }
-};
-
-const emptyResourceProjection = (): ResourceProjection => ({
-  available: 0,
-  reserved: 0,
-  consumed: 0,
-});
-
-const addResourceProjection = (
-  map: Map<string, ResourceProjection>,
-  key: string,
-  delta: Partial<ResourceProjection>,
-): void => {
-  const current = map.get(key) ?? emptyResourceProjection();
-  map.set(key, {
-    available: current.available + (delta.available ?? 0),
-    reserved: current.reserved + (delta.reserved ?? 0),
-    consumed: current.consumed + (delta.consumed ?? 0),
-  });
 };
 
 const recordOf = (value: unknown, label: string): Record<string, unknown> => {
@@ -613,7 +586,7 @@ export class NodePostgresBackend {
     const [event] = await this.#appendEvents([
       {
         ts: Date.now(),
-        kind: "resource_pool.granted",
+        kind: RESOURCE_EVENT_KIND.GRANTED,
         identity,
         payload: { key: spec.key, amount: spec.amount, ref: spec.ref },
       },
@@ -635,7 +608,7 @@ export class NodePostgresBackend {
       await this.#appendEvents([
         {
           ts: Date.now(),
-          kind: "resource_pool.reserve_rejected",
+          kind: RESOURCE_EVENT_KIND.RESERVE_REJECTED,
           identity,
           payload: {
             key: spec.key,
@@ -656,7 +629,7 @@ export class NodePostgresBackend {
     await this.#appendEvents([
       {
         ts: Date.now(),
-        kind: "resource_pool.reserved",
+        kind: RESOURCE_EVENT_KIND.RESERVED,
         identity,
         payload: {
           key: spec.key,
@@ -689,7 +662,7 @@ export class NodePostgresBackend {
     await this.#appendEvents([
       {
         ts: Date.now(),
-        kind: "resource_pool.consumed",
+        kind: RESOURCE_EVENT_KIND.CONSUMED,
         identity,
         payload: { reservationId: spec.reservationId, ref: spec.ref },
       },
@@ -715,7 +688,7 @@ export class NodePostgresBackend {
     await this.#appendEvents([
       {
         ts: Date.now(),
-        kind: "resource_pool.released",
+        kind: RESOURCE_EVENT_KIND.RELEASED,
         identity,
         payload: { reservationId: spec.reservationId, ref: spec.ref },
       },
@@ -739,23 +712,23 @@ export class NodePostgresBackend {
     const now = Date.now();
     const windowStart = windowMs === Number.POSITIVE_INFINITY ? 0 : now - windowMs;
     const events = await this.#events(identity);
-    let consumed = 0;
-    for (const event of events) {
-      if (event.kind !== "quota.consumed" || event.ts < windowStart) continue;
-      const payload = recordOf(event.payload, "quota.consumed");
-      const eventOperationRef =
-        typeof payload.operationRef === "string" ? payload.operationRef : null;
-      if (eventOperationRef === operationRef) return { granted: true, consumed, limit };
-      const payloadKey = stringField(payload, "key");
-      const consumedAmount = finiteNumberField(payload, "amount");
-      stringField(payload, "toolName");
-      if (payloadKey === key.projectionId) consumed += consumedAmount;
+    let usage: ReturnType<typeof projectQuotaGrantUsage>;
+    try {
+      usage = projectQuotaGrantUsage(events, {
+        key: key.projectionId,
+        windowStart,
+        operationRef,
+      });
+    } catch (cause) {
+      throw new SqlError({ cause });
     }
+    if (usage.alreadyGranted) return { granted: true, consumed: usage.consumed, limit };
+    const consumed = usage.consumed;
     if (consumed + amount > limit) {
       await this.#appendEvents([
         {
           ts: now,
-          kind: "quota.rate_limited",
+          kind: QUOTA_EVENT_KIND.RATE_LIMITED,
           identity,
           payload: {
             key: key.projectionId,
@@ -772,7 +745,7 @@ export class NodePostgresBackend {
     await this.#appendEvents([
       {
         ts: now,
-        kind: "quota.consumed",
+        kind: QUOTA_EVENT_KIND.CONSUMED,
         identity,
         payload: { key: key.projectionId, amount, toolName, operationRef },
       },
@@ -933,64 +906,11 @@ export class NodePostgresBackend {
 
   async #loadResourceState(identity: LedgerTruthIdentity): Promise<ProjectedResourceState> {
     const events = await this.#events(runtimeIdentity(identity));
-    const reservations = new Map<string, ReservationState>();
-    const byIdempotencyKey = new Map<string, ReservationState>();
-    const grants: Array<{ readonly key: string; readonly amount: number }> = [];
-    for (const event of events) {
-      if (!event.kind.startsWith("resource_pool.")) continue;
-      const payload = recordOf(event.payload, event.kind);
-      switch (event.kind) {
-        case "resource_pool.granted":
-          grants.push({
-            key: stringField(payload, "key"),
-            amount: finiteNumberField(payload, "amount"),
-          });
-          break;
-        case "resource_pool.reserved": {
-          const reservation: ReservationState = {
-            reservationId: stringField(payload, "reservationId"),
-            key: stringField(payload, "key"),
-            amount: finiteNumberField(payload, "amount"),
-            idempotencyKey: stringField(payload, "idempotencyKey"),
-            status: "active",
-          };
-          reservations.set(reservation.reservationId, reservation);
-          byIdempotencyKey.set(reservation.idempotencyKey, reservation);
-          break;
-        }
-        case "resource_pool.consumed":
-        case "resource_pool.released": {
-          const reservationId = stringField(payload, "reservationId");
-          const existing = reservations.get(reservationId);
-          if (existing !== undefined) {
-            const next = {
-              ...existing,
-              status: event.kind === "resource_pool.consumed" ? "consumed" : "released",
-            } satisfies ReservationState;
-            reservations.set(reservationId, next);
-            byIdempotencyKey.set(next.idempotencyKey, next);
-          }
-          break;
-        }
-      }
+    try {
+      return projectResourceEvents(events);
+    } catch (cause) {
+      throw new SqlError({ cause });
     }
-    const byKey = new Map<string, ResourceProjection>();
-    for (const grant of grants)
-      addResourceProjection(byKey, grant.key, { available: grant.amount });
-    for (const reservation of reservations.values()) {
-      if (reservation.status === "active") {
-        addResourceProjection(byKey, reservation.key, {
-          available: -reservation.amount,
-          reserved: reservation.amount,
-        });
-      } else if (reservation.status === "consumed") {
-        addResourceProjection(byKey, reservation.key, {
-          available: -reservation.amount,
-          consumed: reservation.amount,
-        });
-      }
-    }
-    return { byId: reservations, byIdempotencyKey, byKey };
   }
 
   async #insertDueWork(

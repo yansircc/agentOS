@@ -99,6 +99,8 @@ import { LlmTransport } from "@agent-os/llm-protocol";
 import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
 import {
   backendProtocolEventIdentityKey,
+  QUOTA_EVENT_KIND,
+  RESOURCE_EVENT_KIND,
   type BackendProtocolEventIdentity,
   type BackendProtocolTruthIdentity,
   type DispatchReceiverResult,
@@ -727,7 +729,7 @@ export class AgentDurableObject<
       Effect.gen(function* () {
         const ledger = yield* Ledger;
         const rows = yield* ledger.streamSnapshot(identity, {
-          kinds: ["quota.consumed"],
+          kinds: [QUOTA_EVENT_KIND.CONSUMED],
         });
         const now = yield* Clock.currentTimeMillis;
         return yield* Effect.try({
@@ -744,11 +746,11 @@ export class AgentDurableObject<
         const ledger = yield* Ledger;
         const rows = yield* ledger.streamSnapshot(identity, {
           kinds: [
-            "resource_pool.granted",
-            "resource_pool.reserved",
-            "resource_pool.reserve_rejected",
-            "resource_pool.consumed",
-            "resource_pool.released",
+            RESOURCE_EVENT_KIND.GRANTED,
+            RESOURCE_EVENT_KIND.RESERVED,
+            RESOURCE_EVENT_KIND.RESERVE_REJECTED,
+            RESOURCE_EVENT_KIND.CONSUMED,
+            RESOURCE_EVENT_KIND.RELEASED,
           ],
         });
         return yield* Effect.try({

@@ -2,8 +2,6 @@ import type { QuotaState, QuotaStateSpec, ResourceState } from "@agent-os/kernel
 import { Effect } from "effect";
 import { ABORT, SqlError } from "@agent-os/kernel/errors";
 import type { LedgerEvent } from "@agent-os/kernel/types";
-import { decodeConsumedPayloadSync } from "./quota/payload";
-import { projectRows } from "./resources/projection";
 import { type AttemptKey, type CapabilityLease, projectLease } from "./admission";
 import { loadAdmissionRows } from "./admission/payload";
 import {
@@ -21,7 +19,11 @@ import {
   type ScopeRef,
 } from "@agent-os/kernel/effect-claim";
 import { validateTerminalClaim } from "@agent-os/kernel/settlement-contract";
-import { dispatchSettlementContract } from "@agent-os/backend-protocol";
+import {
+  dispatchSettlementContract,
+  projectQuotaState as projectProtocolQuotaState,
+  projectResourceState as projectProtocolResourceState,
+} from "@agent-os/backend-protocol";
 import { toolSettlementContract } from "@agent-os/runtime";
 import type { LedgerTruthIdentity } from "@agent-os/runtime-protocol";
 
@@ -184,57 +186,12 @@ export const projectQuotaState = (
   events: ReadonlyArray<LedgerEvent>,
   spec: QuotaStateSpec,
   now: number,
-): QuotaState => {
-  const windowStart = spec.windowMs === Number.POSITIVE_INFINITY ? 0 : now - spec.windowMs;
-  let consumed = 0;
-  for (const event of events) {
-    if (event.kind !== "quota.consumed") continue;
-    if (event.ts < windowStart) continue;
-    const payload = decodeConsumedPayloadSync(event.payload);
-    if (payload.key === spec.key) {
-      consumed += payload.amount;
-    }
-  }
-  return {
-    consumed,
-    limit: spec.limit,
-    remaining: Math.max(0, spec.limit - consumed),
-    refundable: 0,
-    ...(spec.windowMs === Number.POSITIVE_INFINITY ? {} : { windowStart }),
-  };
-};
+): QuotaState => projectProtocolQuotaState(events, spec, now);
 
 export const projectResourceState = (
   events: ReadonlyArray<LedgerEvent>,
   key: string,
-): ResourceState => {
-  const state = projectRows(
-    events
-      .filter((event) => event.kind.startsWith("resource_pool."))
-      .map((event) => ({
-        kind: event.kind,
-        payload: JSON.stringify(event.payload),
-      })),
-  );
-  const projection = state.byKey.get(key) ?? {
-    available: 0,
-    reserved: 0,
-    consumed: 0,
-  };
-  const reservations = Array.from(state.byId.values())
-    .filter((reservation) => reservation.key === key && reservation.status === "active")
-    .map((reservation) => ({
-      id: reservation.reservationId,
-      amount: reservation.amount,
-    }));
-  return {
-    granted: projection.available + projection.reserved + projection.consumed,
-    reserved: projection.reserved,
-    consumed: projection.consumed,
-    available: projection.available,
-    reservations,
-  };
-};
+): ResourceState => projectProtocolResourceState(events, key);
 
 export const projectAdmissionLease = (
   sql: SqlStorage,

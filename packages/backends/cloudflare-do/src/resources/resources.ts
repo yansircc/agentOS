@@ -22,7 +22,7 @@ import {
 import { EventBus } from "../ledger";
 import { Resources } from "@agent-os/runtime";
 import { commitLedgerTransaction } from "../ledger/commit";
-import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
+import { RESOURCE_EVENT_KIND, type BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
 
 import { emptyProjection, loadState } from "./projection";
 
@@ -62,7 +62,7 @@ export const ResourcesLive = (
               (tx) => {
                 const granted = tx.append({
                   ts: now,
-                  kind: "resource_pool.granted",
+                  kind: RESOURCE_EVENT_KIND.GRANTED,
                   scopeRef: identity.scopeRef,
                   effectAuthorityRef: identity.effectAuthorityRef,
                   payload,
@@ -104,7 +104,7 @@ export const ResourcesLive = (
                   };
                   ledgerTx.append({
                     ts: now,
-                    kind: "resource_pool.reserve_rejected",
+                    kind: RESOURCE_EVENT_KIND.RESERVE_REJECTED,
                     scopeRef: identity.scopeRef,
                     effectAuthorityRef: identity.effectAuthorityRef,
                     payload: rejectedPayload,
@@ -124,7 +124,7 @@ export const ResourcesLive = (
                 };
                 ledgerTx.append({
                   ts: now,
-                  kind: "resource_pool.reserved",
+                  kind: RESOURCE_EVENT_KIND.RESERVED,
                   scopeRef: identity.scopeRef,
                   effectAuthorityRef: identity.effectAuthorityRef,
                   payload: reservedPayload,
@@ -169,7 +169,7 @@ export const ResourcesLive = (
                 };
                 ledgerTx.append({
                   ts: now,
-                  kind: "resource_pool.consumed",
+                  kind: RESOURCE_EVENT_KIND.CONSUMED,
                   scopeRef: identity.scopeRef,
                   effectAuthorityRef: identity.effectAuthorityRef,
                   payload,
@@ -215,7 +215,7 @@ export const ResourcesLive = (
                 };
                 ledgerTx.append({
                   ts: now,
-                  kind: "resource_pool.released",
+                  kind: RESOURCE_EVENT_KIND.RELEASED,
                   scopeRef: identity.scopeRef,
                   effectAuthorityRef: identity.effectAuthorityRef,
                   payload,

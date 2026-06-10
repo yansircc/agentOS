@@ -10,10 +10,17 @@
 - `.:DISPATCH_OUTBOUND_REQUESTED`
 - `.:DISPATCH_RETRY_POLICY`
 - `.:DELIVERY_RETRY_TRIGGER_KIND`
+- `.:QUOTA_EVENT_KIND`
+- `.:RESOURCE_EVENT_KIND`
 - `.:backendProtocolEventIdentityKey`
 - `.:backendProtocolProjectionKey`
 - `.:backendProtocolTruthIdentityKey`
 - `.:copyTraceContext`
+- `.:decodeQuotaConsumedPayloadSync`
+- `.:decodeResourceGrantPayloadSync`
+- `.:decodeResourceReservePayloadSync`
+- `.:decodeResourceReserveRejectedPayloadSync`
+- `.:decodeResourceTerminalPayloadSync`
 - `.:describeDispatchCause`
 - `.:dispatchBackoffMs`
 - `.:dispatchExternalDeliveryReceipt`
@@ -21,6 +28,7 @@
 - `.:dispatchPayloadParseFailure`
 - `.:durableTriggerBackoffMs`
 - `.:durableTriggerDuePayload`
+- `.:emptyResourceProjection`
 - `.:eventToProtocolRpc`
 - `.:isBackendProtocolEventIdentity`
 - `.:isBackendProtocolProjectionKey`
@@ -32,6 +40,11 @@
 - `.:parseRequestedPayload`
 - `.:parseRequestedPayloadValue`
 - `.:parseTraceContext`
+- `.:projectQuotaGrantUsage`
+- `.:projectQuotaState`
+- `.:projectResourceEvents`
+- `.:projectResourceRows`
+- `.:projectResourceState`
 - `.:BackendProtocolDispatchTarget`
 - `.:BackendProtocolEventIdentity`
 - `.:BackendProtocolEventHandler`
@@ -60,7 +73,16 @@
 - `.:DispatchTargetAdapter`
 - `.:GrantResult`
 - `.:IntentPointerDuePayload`
+- `.:ProjectedResourceState`
+- `.:QuotaConsumedPayloadSchema`
+- `.:ResourceGrantPayloadSchema`
 - `.:ResourceProjection`
+- `.:ResourceProtocolEventRow`
+- `.:ResourceReservationProjection`
+- `.:ResourceReservationStatus`
+- `.:ResourceReservePayloadSchema`
+- `.:ResourceReserveRejectedPayloadSchema`
+- `.:ResourceTerminalPayloadSchema`
 
 - `.:dispatchCarrierRef`
 - `.:dispatchFailedHasNoDeliveryReceipt`

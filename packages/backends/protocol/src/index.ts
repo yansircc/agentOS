@@ -1,4 +1,4 @@
-import { Either, Predicate, pipe } from "effect";
+import { Either, Predicate, Schema, pipe } from "effect";
 import {
   authorityRefKey,
   factOwnerKey,
@@ -21,7 +21,13 @@ import {
   symbolicSettlementRef,
   validateTerminalClaim,
 } from "@agent-os/kernel/settlement-contract";
-import type { DeliveryReceipt } from "@agent-os/kernel/types";
+import type {
+  DeliveryReceipt,
+  LedgerEvent,
+  QuotaState,
+  QuotaStateSpec,
+  ResourceState,
+} from "@agent-os/kernel/types";
 import { validateOptionalTraceContext, type TraceContext } from "@agent-os/telemetry-protocol";
 
 export { copyTraceContext } from "@agent-os/telemetry-protocol";
@@ -205,6 +211,255 @@ export interface GrantResult {
   readonly consumed: number;
   readonly limit: number;
 }
+
+export const RESOURCE_EVENT_KIND = {
+  GRANTED: "resource_pool.granted",
+  RESERVED: "resource_pool.reserved",
+  RESERVE_REJECTED: "resource_pool.reserve_rejected",
+  CONSUMED: "resource_pool.consumed",
+  RELEASED: "resource_pool.released",
+} as const;
+
+export const QUOTA_EVENT_KIND = {
+  CONSUMED: "quota.consumed",
+  RATE_LIMITED: "quota.rate_limited",
+} as const;
+
+export const ResourceGrantPayloadSchema = Schema.Struct({
+  key: Schema.String,
+  amount: Schema.Number.pipe(Schema.finite()),
+  ref: Schema.String,
+});
+
+export const ResourceReservePayloadSchema = Schema.Struct({
+  key: Schema.String,
+  amount: Schema.Number.pipe(Schema.finite()),
+  ref: Schema.String,
+  idempotencyKey: Schema.String,
+  reservationId: Schema.String,
+});
+
+export const ResourceReserveRejectedPayloadSchema = Schema.Struct({
+  key: Schema.String,
+  amount: Schema.Number.pipe(Schema.finite()),
+  ref: Schema.String,
+  idempotencyKey: Schema.String,
+  available: Schema.Number.pipe(Schema.finite()),
+});
+
+export const ResourceTerminalPayloadSchema = Schema.Struct({
+  reservationId: Schema.String,
+  ref: Schema.String,
+});
+
+export const QuotaConsumedPayloadSchema = Schema.Struct({
+  key: Schema.String,
+  amount: Schema.Number.pipe(Schema.finite()),
+  toolName: Schema.String,
+  operationRef: Schema.String,
+});
+
+export const decodeResourceGrantPayloadSync =
+  Schema.decodeUnknownSync(ResourceGrantPayloadSchema);
+export const decodeResourceReservePayloadSync =
+  Schema.decodeUnknownSync(ResourceReservePayloadSchema);
+export const decodeResourceReserveRejectedPayloadSync = Schema.decodeUnknownSync(
+  ResourceReserveRejectedPayloadSchema,
+);
+export const decodeResourceTerminalPayloadSync =
+  Schema.decodeUnknownSync(ResourceTerminalPayloadSchema);
+export const decodeQuotaConsumedPayloadSync =
+  Schema.decodeUnknownSync(QuotaConsumedPayloadSchema);
+
+export type ResourceReservationStatus = "active" | "consumed" | "released";
+
+export interface ResourceReservationProjection {
+  readonly reservationId: string;
+  readonly key: string;
+  readonly amount: number;
+  readonly ref: string;
+  readonly idempotencyKey: string;
+  readonly status: ResourceReservationStatus;
+}
+
+export interface ProjectedResourceState {
+  readonly byId: Map<string, ResourceReservationProjection>;
+  readonly byIdempotencyKey: Map<string, ResourceReservationProjection>;
+  readonly byKey: Map<string, ResourceProjection>;
+}
+
+export interface ResourceProtocolEventRow {
+  readonly kind: unknown;
+  readonly payload: unknown;
+}
+
+export const emptyResourceProjection = (): ResourceProjection => ({
+  available: 0,
+  reserved: 0,
+  consumed: 0,
+});
+
+const resourceKind = (value: unknown): string => {
+  if (typeof value !== "string") throw new TypeError("resource event kind must be string");
+  return value;
+};
+
+const resourcePayload = (value: unknown): unknown =>
+  typeof value === "string" ? (JSON.parse(value) as unknown) : value;
+
+const addResourceProjection = (
+  map: Map<string, ResourceProjection>,
+  key: string,
+  delta: Partial<ResourceProjection>,
+): void => {
+  const current = map.get(key) ?? emptyResourceProjection();
+  map.set(key, {
+    available: current.available + (delta.available ?? 0),
+    reserved: current.reserved + (delta.reserved ?? 0),
+    consumed: current.consumed + (delta.consumed ?? 0),
+  });
+};
+
+export const projectResourceRows = (
+  rows: ReadonlyArray<ResourceProtocolEventRow>,
+): ProjectedResourceState => {
+  const grants: Array<{ readonly key: string; readonly amount: number }> = [];
+  const reservations = new Map<string, ResourceReservationProjection>();
+  const byIdempotencyKey = new Map<string, ResourceReservationProjection>();
+
+  for (const row of rows) {
+    const kind = resourceKind(row.kind);
+    if (!kind.startsWith("resource_pool.")) continue;
+    const payload = resourcePayload(row.payload);
+    switch (kind) {
+      case RESOURCE_EVENT_KIND.GRANTED: {
+        const decoded = decodeResourceGrantPayloadSync(payload);
+        grants.push({ key: decoded.key, amount: decoded.amount });
+        break;
+      }
+      case RESOURCE_EVENT_KIND.RESERVED: {
+        const decoded = decodeResourceReservePayloadSync(payload);
+        const reservation: ResourceReservationProjection = {
+          reservationId: decoded.reservationId,
+          key: decoded.key,
+          amount: decoded.amount,
+          ref: decoded.ref,
+          idempotencyKey: decoded.idempotencyKey,
+          status: "active",
+        };
+        reservations.set(reservation.reservationId, reservation);
+        byIdempotencyKey.set(reservation.idempotencyKey, reservation);
+        break;
+      }
+      case RESOURCE_EVENT_KIND.RESERVE_REJECTED:
+        decodeResourceReserveRejectedPayloadSync(payload);
+        break;
+      case RESOURCE_EVENT_KIND.CONSUMED:
+      case RESOURCE_EVENT_KIND.RELEASED: {
+        const decoded = decodeResourceTerminalPayloadSync(payload);
+        const existing = reservations.get(decoded.reservationId);
+        if (existing !== undefined) {
+          const next = {
+            ...existing,
+            status: kind === RESOURCE_EVENT_KIND.CONSUMED ? "consumed" : "released",
+          } satisfies ResourceReservationProjection;
+          reservations.set(decoded.reservationId, next);
+          byIdempotencyKey.set(next.idempotencyKey, next);
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  }
+
+  const byKey = new Map<string, ResourceProjection>();
+  for (const grant of grants) {
+    addResourceProjection(byKey, grant.key, { available: grant.amount });
+  }
+  for (const reservation of reservations.values()) {
+    if (reservation.status === "active") {
+      addResourceProjection(byKey, reservation.key, {
+        available: -reservation.amount,
+        reserved: reservation.amount,
+      });
+    } else if (reservation.status === "consumed") {
+      addResourceProjection(byKey, reservation.key, {
+        available: -reservation.amount,
+        consumed: reservation.amount,
+      });
+    }
+  }
+
+  return { byId: reservations, byIdempotencyKey, byKey };
+};
+
+export const projectResourceEvents = (
+  events: ReadonlyArray<LedgerEvent>,
+): ProjectedResourceState =>
+  projectResourceRows(events.map((event) => ({ kind: event.kind, payload: event.payload })));
+
+export const projectResourceState = (
+  events: ReadonlyArray<LedgerEvent>,
+  key: string,
+): ResourceState => {
+  const state = projectResourceEvents(events);
+  const projection = state.byKey.get(key) ?? emptyResourceProjection();
+  const reservations = Array.from(state.byId.values())
+    .filter((reservation) => reservation.key === key && reservation.status === "active")
+    .map((reservation) => ({
+      id: reservation.reservationId,
+      amount: reservation.amount,
+    }));
+  return {
+    granted: projection.available + projection.reserved + projection.consumed,
+    reserved: projection.reserved,
+    consumed: projection.consumed,
+    available: projection.available,
+    reservations,
+  };
+};
+
+export const projectQuotaState = (
+  events: ReadonlyArray<LedgerEvent>,
+  spec: QuotaStateSpec,
+  now: number,
+): QuotaState => {
+  const windowStart = spec.windowMs === Number.POSITIVE_INFINITY ? 0 : now - spec.windowMs;
+  let consumed = 0;
+  for (const event of events) {
+    if (event.kind !== QUOTA_EVENT_KIND.CONSUMED || event.ts < windowStart) continue;
+    const payload = decodeQuotaConsumedPayloadSync(event.payload);
+    if (payload.key === spec.key) consumed += payload.amount;
+  }
+  return {
+    consumed,
+    limit: spec.limit,
+    remaining: Math.max(0, spec.limit - consumed),
+    refundable: 0,
+    ...(spec.windowMs === Number.POSITIVE_INFINITY ? {} : { windowStart }),
+  };
+};
+
+export const projectQuotaGrantUsage = (
+  events: ReadonlyArray<LedgerEvent>,
+  spec: {
+    readonly key: string;
+    readonly windowStart: number;
+    readonly operationRef: string;
+  },
+): { readonly consumed: number; readonly alreadyGranted: boolean } => {
+  let consumed = 0;
+  for (const event of events) {
+    if (event.kind !== QUOTA_EVENT_KIND.CONSUMED || event.ts < spec.windowStart) continue;
+    const payload = decodeQuotaConsumedPayloadSync(event.payload);
+    if (payload.operationRef === spec.operationRef) {
+      return { consumed, alreadyGranted: true };
+    }
+    if (payload.key === spec.key) consumed += payload.amount;
+  }
+  return { consumed, alreadyGranted: false };
+};
 
 export const dispatchLedgerDeliveryReceipt = (spec: {
   readonly targetScope: string;

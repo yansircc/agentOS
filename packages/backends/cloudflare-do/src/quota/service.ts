@@ -16,19 +16,20 @@
 
 import { Clock, Effect, Layer } from "effect";
 import { Quota } from "@agent-os/runtime";
-import type { GrantResult } from "@agent-os/backend-protocol";
+import {
+  decodeQuotaConsumedPayloadSync,
+  QUOTA_EVENT_KIND,
+  type GrantResult,
+} from "@agent-os/backend-protocol";
 import { EventBus } from "../ledger";
 import { sqlText } from "../storage/sql-row";
-import { decodeConsumedPayloadSync } from "./payload";
 import { commitLedgerTransaction } from "../ledger/commit";
 import { eventIdentity, eventIdentityColumns } from "../ledger/identity";
 import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
 
-/** Owned schema for events.kind = 'quota.consumed' payload. We are the
- *  sole writer (consumedPayload below), so any shape mismatch read back is
- *  infra corruption — let Schema.decodeUnknownSync throw, transactionSync
- *  rolls back, and Effect.try wraps it as SqlError. This is the same
- *  failure path as JSON.parse failure, by construction. */
+/** Protocol-owned schema for events.kind = 'quota.consumed' payload.
+ *  Any shape mismatch read back is infra corruption: the protocol decoder
+ *  throws, transactionSync rolls back, and Effect.try wraps it as SqlError. */
 export const QuotaLive = (
   ctx: DurableObjectState,
   ownerIdentity: BackendProtocolEventIdentity,
@@ -62,8 +63,9 @@ export const QuotaLive = (
               (tx) => {
                 const rows = sql
                   .exec(
-                    "SELECT payload FROM events WHERE event_identity_key = ? AND kind = 'quota.consumed' AND ts >= ?",
+                    "SELECT payload FROM events WHERE event_identity_key = ? AND kind = ? AND ts >= ?",
                     columns.event_identity_key,
+                    QUOTA_EVENT_KIND.CONSUMED,
                     windowStart,
                   )
                   .toArray();
@@ -73,7 +75,7 @@ export const QuotaLive = (
                   // shape mismatch both throw → tx rolls back → Effect.try
                   // wraps as SqlError. Single owned failure path; no
                   // silent skip, no NaN propagation, no undercount.
-                  const p = decodeConsumedPayloadSync(
+                  const p = decodeQuotaConsumedPayloadSync(
                     JSON.parse(sqlText(r.payload, "events.payload")),
                   );
                   if (p.key === key && p.operationRef === operationRef) {
@@ -98,7 +100,7 @@ export const QuotaLive = (
                   };
                   tx.append({
                     ts: now,
-                    kind: "quota.rate_limited",
+                    kind: QUOTA_EVENT_KIND.RATE_LIMITED,
                     scopeRef: identity.scopeRef,
                     effectAuthorityRef: identity.effectAuthorityRef,
                     payload: rateLimitedPayload,
@@ -111,7 +113,7 @@ export const QuotaLive = (
 
                 tx.append({
                   ts: now,
-                  kind: "quota.consumed",
+                  kind: QUOTA_EVENT_KIND.CONSUMED,
                   scopeRef: identity.scopeRef,
                   effectAuthorityRef: identity.effectAuthorityRef,
                   payload: consumedPayload,

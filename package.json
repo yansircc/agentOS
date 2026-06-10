@@ -40,6 +40,7 @@
     "test:ag-ui-sse-axis": "node scripts/check-ag-ui-sse-axis.mjs --self-test && node scripts/check-ag-ui-sse-axis.mjs",
     "test:facade-handler-capability-boundary": "node scripts/check-facade-handler-capability-boundary.mjs --self-test && node scripts/check-facade-handler-capability-boundary.mjs",
     "test:agent-doc-primitive-evidence": "node scripts/check-agent-doc-primitive-evidence.mjs --self-test && node scripts/check-agent-doc-primitive-evidence.mjs",
+    "test:resource-quota-protocol-ownership": "node scripts/check-resource-quota-protocol-ownership.mjs --self-test && node scripts/check-resource-quota-protocol-ownership.mjs",
     "test:tool-mutation-boundary": "node scripts/check-tool-mutation-boundary.mjs --self-test && node scripts/check-tool-mutation-boundary.mjs",
     "test:agent-manifest-intent-boundary": "node scripts/check-agent-manifest-intent-boundary.mjs --self-test && node scripts/check-agent-manifest-intent-boundary.mjs",
     "test:intent-settlement-boundary": "node scripts/check-intent-settlement-boundary.mjs --self-test && node scripts/check-intent-settlement-boundary.mjs",
