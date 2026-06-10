@@ -11,7 +11,7 @@ import {
 } from "@agent-os/llm-protocol";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import type { BoundaryContract } from "@agent-os/kernel/boundary-contract";
-import { defineTool, pureToolExecution } from "@agent-os/kernel/tools";
+import { defineTool, effectfulToolExecution, pureToolExecution } from "@agent-os/kernel/tools";
 import { Admission } from "../src/admission";
 import { BoundaryEvents } from "../src/boundary-events";
 import { commitBoundaryEvent } from "../src/boundary-commit";
@@ -21,8 +21,9 @@ import { submitAgentEffect } from "../src/submit-agent";
 import {
   RUNTIME_FACT_OWNER,
   decodeRuntimeLedgerEvent,
-  replayToolResultFromSnapshot,
-  toolResultSnapshotFromExecutedPayload,
+  EFFECTFUL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
+  replayToolFromArtifact,
+  toolReplayArtifactFromExecutedPayload,
   type InternalSubmitSpec,
 } from "@agent-os/runtime-protocol";
 import { RefResolutionFailed, RefResolverService } from "@agent-os/kernel/ref-resolver";
@@ -309,13 +310,61 @@ describe("submit-agent runtime event writes", () => {
         expect.fail("expected tool.executed runtime event");
       }
 
-      const replayed = replayToolResultFromSnapshot(
-        toolResultSnapshotFromExecutedPayload(toolEvent.event.payload),
-      );
+      const artifact = toolReplayArtifactFromExecutedPayload(toolEvent.event.payload);
+      if (!artifact.ok) {
+        expect.fail("expected pure tool result snapshot artifact");
+      }
+      const replayed = replayToolFromArtifact(artifact.artifact);
 
       expect(replayed).toMatchObject({ ok: true, result: { value: "from-run" } });
       expect(liveToolExecuteCalled).toBe(false);
       expect(liveTool.execute).toBeDefined();
+    }),
+  );
+
+  it.effect("does not execute an effectful tool without a receipt-backed terminal contract", () =>
+    Effect.gen(function* () {
+      let liveToolExecuteCalled = false;
+      const tool = defineTool({
+        name: "write_file",
+        description: "write file",
+        args: Schema.Struct({ path: Schema.String }),
+        execute: () => {
+          liveToolExecuteCalled = true;
+          return Effect.succeed({ written: true });
+        },
+        authority: "write",
+        admit: () => Effect.succeed({ ok: true }),
+        execution: effectfulToolExecution({ kind: "workspace", ref: "workspace:default" }),
+      });
+
+      const { result, events } = yield* runSubmit(baseSpec({ tools: { write_file: tool } }), [
+        response({
+          items: [
+            { type: "message", text: "write file" },
+            {
+              type: "tool_call",
+              call: {
+                id: "call-1",
+                type: "function",
+                function: { name: "write_file", arguments: '{"path":"out.txt"}' },
+              },
+            },
+          ],
+        }),
+      ]);
+
+      expect(result).toMatchObject({ ok: false, reason: "tool_error" });
+      expect(liveToolExecuteCalled).toBe(false);
+      expect(decodedRuntimeKinds(events)).toEqual([
+        "agent.run.started",
+        "chat.ingested",
+        "llm.response",
+        "tool.rejected",
+        "agent.aborted.tool_error",
+      ]);
+      expect(events.some((event) => event.kind === "tool.executed")).toBe(false);
+      expect(JSON.stringify(events)).toContain(EFFECTFUL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON);
     }),
   );
 

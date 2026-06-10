@@ -60,10 +60,13 @@ import {
   agentRunStartedEvent,
   chatIngestedEvent,
   decodeRuntimeLedgerEvent,
+  EFFECTFUL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
   llmResponseEvent,
   RUNTIME_EVENT_KIND,
   toolExecutedEvent,
+  toolReplayArtifactFromExecutedPayload,
   toolRejectedEvent,
+  replayToolFromArtifact,
   type InternalSubmitSpec,
   type RuntimeEventCommitSpec,
   type SubmitDecisionInterrupt,
@@ -422,7 +425,21 @@ const replayMessagesToInterruptedTool = (
           decodedTool._tag === "runtime" &&
           decodedTool.event.kind === RUNTIME_EVENT_KIND.TOOL_EXECUTED
         ) {
-          const resultStr = yield* safeStringify(decodedTool.event.payload.result);
+          const artifact = toolReplayArtifactFromExecutedPayload(decodedTool.event.payload);
+          if (!artifact.ok) {
+            return yield* Effect.fail(
+              new SqlError({
+                cause: {
+                  reason: artifact.reason,
+                  runId: resume.runId,
+                  toolCallId: call.id,
+                  toolName: call.function.name,
+                },
+              }),
+            );
+          }
+          const replayed = replayToolFromArtifact(artifact.artifact);
+          const resultStr = yield* safeStringify(replayed.result);
           messages.push({
             role: "tool",
             tool_call_id: call.id,
@@ -1184,6 +1201,29 @@ export const submitAgentEffect = (
             return yield* new ToolError({
               toolName: call.function.name,
               cause: toolAdmissionFailureCause(rejectedAdmission),
+            });
+          }
+
+          if (tool.execution.kind === "effectful") {
+            yield* logRuntimeLedgerEvent(
+              ledger,
+              toolRejectedEvent({
+                ...identity,
+                runId: started.id,
+                toolCallId: call.id,
+                name: call.function.name,
+                args: call.function.arguments,
+                execution: tool.execution,
+                claim: settleToolExecutionRejected(
+                  claim,
+                  EFFECTFUL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
+                ),
+                traceContext,
+              }),
+            );
+            return yield* new ToolError({
+              toolName: call.function.name,
+              cause: { reason: EFFECTFUL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON },
             });
           }
 

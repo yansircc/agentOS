@@ -6,11 +6,13 @@ import {
   type LlmUsage,
 } from "@agent-os/llm-protocol";
 import type { LedgerEvent } from "@agent-os/kernel/types";
-import type {
-  AuthorityRef,
-  LivedClaim,
-  RejectedClaim,
-  ScopeRef,
+import {
+  validateEffectClaim,
+  type AnchorRef,
+  type AuthorityRef,
+  type LivedClaim,
+  type RejectedClaim,
+  type ScopeRef,
 } from "@agent-os/kernel/effect-claim";
 import type { ExecutionDomain, ToolExecution } from "@agent-os/kernel/tools";
 import { TraceContextSchema, type TraceContext } from "@agent-os/telemetry-protocol";
@@ -39,6 +41,13 @@ export const RUNTIME_EVENT_KIND = {
 } as const;
 
 export const TOOL_RESULT_SNAPSHOT_VERSION = "tool-result-snapshot-v1";
+export const EFFECTFUL_TOOL_EXECUTION_RECEIPT_VERSION =
+  "effectful-tool-execution-receipt-v1";
+export const EFFECTFUL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON =
+  "effectful_tool_replay_requires_receipt";
+export const TOOL_EXECUTION_CLAIM_MUST_BE_LIVED_REASON = "tool_execution_claim_must_be_lived";
+export const EFFECTFUL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON =
+  "effectful_tool_execution_requires_receipt";
 
 export type RuntimeEventKind = (typeof RUNTIME_EVENT_KIND)[keyof typeof RUNTIME_EVENT_KIND];
 export type RuntimeAbortEventKind = AbortKind;
@@ -111,6 +120,20 @@ export type ToolExecutedPayload = {
   readonly traceContext?: TraceContext;
 };
 
+export type PureToolExecution = Extract<ToolExecution, { readonly kind: "pure" }>;
+export type EffectfulToolExecution = Extract<ToolExecution, { readonly kind: "effectful" }>;
+export type ExternalReceiptAnchorRef = AnchorRef & { readonly anchorKind: "external_receipt" };
+
+export type PureToolExecutedPayload = Omit<ToolExecutedPayload, "execution" | "claim"> & {
+  readonly execution: PureToolExecution;
+  readonly claim: LivedClaim;
+};
+
+export type EffectfulToolExecutedPayload = Omit<ToolExecutedPayload, "execution" | "claim"> & {
+  readonly execution: EffectfulToolExecution;
+  readonly claim: LivedClaim;
+};
+
 export interface ToolResultSnapshot {
   readonly kind: "tool.result";
   readonly version: typeof TOOL_RESULT_SNAPSHOT_VERSION;
@@ -118,23 +141,73 @@ export interface ToolResultSnapshot {
   readonly toolCallId: string;
   readonly name: string;
   readonly args: unknown;
-  readonly execution: ToolExecution;
+  readonly execution: PureToolExecution;
   readonly result: unknown;
   readonly claim: LivedClaim;
   readonly traceContext?: TraceContext;
 }
 
-export type ToolResultReplayOutcome =
+export interface EffectfulToolExecutionReceipt {
+  readonly kind: "tool.execution.receipt";
+  readonly version: typeof EFFECTFUL_TOOL_EXECUTION_RECEIPT_VERSION;
+  readonly runId: number;
+  readonly toolCallId: string;
+  readonly name: string;
+  readonly args: unknown;
+  readonly execution: EffectfulToolExecution;
+  readonly result: unknown;
+  readonly claim: LivedClaim;
+  readonly idempotencyKey: string;
+  readonly receipt: ExternalReceiptAnchorRef;
+  readonly traceContext?: TraceContext;
+}
+
+export type ToolReplayArtifact = ToolResultSnapshot | EffectfulToolExecutionReceipt;
+
+export type EffectfulToolExecutionReceiptFromExecutedPayloadResult =
   | {
       readonly ok: true;
-      readonly result: unknown;
-      readonly claim: LivedClaim;
+      readonly artifact: EffectfulToolExecutionReceipt;
     }
   | {
       readonly ok: false;
-      readonly reason: "effectful_tool_replay_requires_receipt";
-      readonly execution: Extract<ToolExecution, { readonly kind: "effectful" }>;
+      readonly reason: typeof EFFECTFUL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON;
+      readonly execution: EffectfulToolExecution;
+      readonly claim: LivedClaim;
     };
+
+export type ToolResultReplayOutcome = {
+  readonly ok: true;
+  readonly result: unknown;
+  readonly claim: LivedClaim;
+};
+
+export type EffectfulToolReceiptReplayOutcome = {
+  readonly ok: true;
+  readonly result: unknown;
+  readonly claim: LivedClaim;
+  readonly idempotencyKey: string;
+  readonly receipt: ExternalReceiptAnchorRef;
+};
+
+export type ToolReplayArtifactFromExecutedPayloadResult =
+  | {
+      readonly ok: true;
+      readonly artifact: ToolReplayArtifact;
+    }
+  | {
+      readonly ok: false;
+      readonly reason: typeof TOOL_EXECUTION_CLAIM_MUST_BE_LIVED_REASON;
+      readonly claim: unknown;
+    }
+  | {
+      readonly ok: false;
+      readonly reason: typeof EFFECTFUL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON;
+      readonly execution: EffectfulToolExecution;
+      readonly claim: LivedClaim;
+    };
+
+export type ToolReplayOutcome = ToolResultReplayOutcome | EffectfulToolReceiptReplayOutcome;
 
 export type ToolRejectedPayload = {
   readonly runId: number;
@@ -531,8 +604,18 @@ export const toolExecutedEvent = (
     ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
   });
 
+const livedClaimFromUnknown = (claim: unknown): LivedClaim | null => {
+  const validation = validateEffectClaim(claim);
+  return validation.ok && validation.claim.phase === "lived" ? validation.claim : null;
+};
+
+const externalReceiptAnchorFromClaim = (claim: LivedClaim): ExternalReceiptAnchorRef | null =>
+  claim.anchorRef.anchorKind === "external_receipt"
+    ? (claim.anchorRef as ExternalReceiptAnchorRef)
+    : null;
+
 export const toolResultSnapshotFromExecutedPayload = (
-  payload: ToolExecutedPayload,
+  payload: PureToolExecutedPayload,
 ): ToolResultSnapshot => ({
   kind: "tool.result",
   version: TOOL_RESULT_SNAPSHOT_VERSION,
@@ -542,26 +625,87 @@ export const toolResultSnapshotFromExecutedPayload = (
   args: payload.args,
   execution: payload.execution,
   result: payload.result,
-  claim: payload.claim as LivedClaim,
+  claim: payload.claim,
   ...(payload.traceContext === undefined ? {} : { traceContext: payload.traceContext }),
 });
 
-export const replayToolResultFromSnapshot = (
-  snapshot: ToolResultSnapshot,
-): ToolResultReplayOutcome => {
-  if (snapshot.execution.kind === "effectful") {
+export const effectfulToolExecutionReceiptFromExecutedPayload = (
+  payload: EffectfulToolExecutedPayload,
+): EffectfulToolExecutionReceiptFromExecutedPayloadResult => {
+  const receipt = externalReceiptAnchorFromClaim(payload.claim);
+  if (receipt === null) {
     return {
       ok: false,
-      reason: "effectful_tool_replay_requires_receipt",
-      execution: snapshot.execution,
+      reason: EFFECTFUL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON,
+      execution: payload.execution,
+      claim: payload.claim,
     };
   }
   return {
     ok: true,
-    result: snapshot.result,
-    claim: snapshot.claim,
+    artifact: {
+      kind: "tool.execution.receipt",
+      version: EFFECTFUL_TOOL_EXECUTION_RECEIPT_VERSION,
+      runId: payload.runId,
+      toolCallId: payload.toolCallId,
+      name: payload.name,
+      args: payload.args,
+      execution: payload.execution,
+      result: payload.result,
+      claim: payload.claim,
+      idempotencyKey: payload.claim.operationRef,
+      receipt,
+      ...(payload.traceContext === undefined ? {} : { traceContext: payload.traceContext }),
+    },
   };
 };
+
+export const toolReplayArtifactFromExecutedPayload = (
+  payload: ToolExecutedPayload,
+): ToolReplayArtifactFromExecutedPayloadResult => {
+  const claim = livedClaimFromUnknown(payload.claim);
+  if (claim === null) {
+    return { ok: false, reason: TOOL_EXECUTION_CLAIM_MUST_BE_LIVED_REASON, claim: payload.claim };
+  }
+  if (payload.execution.kind === "pure") {
+    return {
+      ok: true,
+      artifact: toolResultSnapshotFromExecutedPayload({
+        ...payload,
+        execution: payload.execution,
+        claim,
+      }),
+    };
+  }
+  return effectfulToolExecutionReceiptFromExecutedPayload({
+    ...payload,
+    execution: payload.execution,
+    claim,
+  });
+};
+
+export const replayToolResultFromSnapshot = (
+  snapshot: ToolResultSnapshot,
+): ToolResultReplayOutcome => ({
+  ok: true,
+  result: snapshot.result,
+  claim: snapshot.claim,
+});
+
+export const replayEffectfulToolExecutionFromReceipt = (
+  receipt: EffectfulToolExecutionReceipt,
+): EffectfulToolReceiptReplayOutcome => ({
+  ok: true,
+  result: receipt.result,
+  claim: receipt.claim,
+  idempotencyKey: receipt.idempotencyKey,
+  receipt: receipt.receipt,
+});
+
+export const replayToolFromArtifact = (artifact: ToolReplayArtifact): ToolReplayOutcome =>
+  artifact.kind === "tool.result"
+    ? replayToolResultFromSnapshot(artifact)
+    : replayEffectfulToolExecutionFromReceipt(artifact);
 
 export const toolRejectedEvent = (
   spec: RuntimeEventIdentitySpec & {

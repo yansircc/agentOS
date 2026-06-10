@@ -9,9 +9,12 @@ import {
   agentRunStartedEvent,
   chatIngestedEvent,
   decodeRuntimeLedgerEvent,
+  EFFECTFUL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON,
   llmResponseEvent,
   RUNTIME_ABORT_EVENT_KINDS,
+  replayToolFromArtifact,
   replayToolResultFromSnapshot,
+  toolReplayArtifactFromExecutedPayload,
   toolExecutedEvent,
   toolResultSnapshotFromExecutedPayload,
   toolRejectedEvent,
@@ -43,6 +46,14 @@ const livedClaim: LivedClaim = {
     anchorId: "tool.executed:tool:runtime-event-test:1:0:call-1",
     anchorKind: "carrier_proof",
     carrierRef: "tool:lookup",
+  },
+};
+
+const receiptBackedLivedClaim: LivedClaim = {
+  ...livedClaim,
+  anchorRef: {
+    anchorId: "receipt:tool:runtime-event-test:1:0:call-1",
+    anchorKind: "external_receipt",
   },
 };
 
@@ -201,7 +212,11 @@ describe("runtime event vocabulary", () => {
       traceContext,
     }).payload;
 
-    const snapshot = toolResultSnapshotFromExecutedPayload(payload);
+    const snapshot = toolResultSnapshotFromExecutedPayload({
+      ...payload,
+      execution: { kind: "pure" },
+      claim: livedClaim,
+    });
     const replayed = replayToolResultFromSnapshot(snapshot);
 
     expect(replayed).toEqual({ ok: true, result: { ok: true }, claim: livedClaim });
@@ -209,7 +224,7 @@ describe("runtime event vocabulary", () => {
     expect(liveTool.execute).toBeDefined();
   });
 
-  it("does not replay effectful tool side effects before receipt vocabulary exists", () => {
+  it("does not build a raw result snapshot for an effectful tool without a receipt", () => {
     const payload = toolExecutedEvent({
       ...runtimeIdentity,
       runId: 1,
@@ -221,10 +236,46 @@ describe("runtime event vocabulary", () => {
       claim: livedClaim,
     }).payload;
 
-    expect(replayToolResultFromSnapshot(toolResultSnapshotFromExecutedPayload(payload))).toEqual({
+    expect(toolReplayArtifactFromExecutedPayload(payload)).toEqual({
       ok: false,
-      reason: "effectful_tool_replay_requires_receipt",
+      reason: EFFECTFUL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON,
       execution: { kind: "effectful", domain: { kind: "workspace", ref: "workspace:default" } },
+      claim: livedClaim,
+    });
+  });
+
+  it("replays receipt-backed effectful tool execution from the receipt artifact", () => {
+    const payload = toolExecutedEvent({
+      ...runtimeIdentity,
+      runId: 1,
+      toolCallId: "call-1",
+      name: "write_file",
+      args: { path: "out.txt" },
+      execution: { kind: "effectful", domain: { kind: "workspace", ref: "workspace:default" } },
+      result: { written: true },
+      claim: receiptBackedLivedClaim,
+      traceContext,
+    }).payload;
+
+    const artifact = toolReplayArtifactFromExecutedPayload(payload);
+    expect(artifact).toMatchObject({
+      ok: true,
+      artifact: {
+        kind: "tool.execution.receipt",
+        idempotencyKey: receiptBackedLivedClaim.operationRef,
+        receipt: receiptBackedLivedClaim.anchorRef,
+      },
+    });
+    if (!artifact.ok) {
+      expect.fail("expected receipt-backed effectful tool replay artifact");
+    }
+
+    expect(replayToolFromArtifact(artifact.artifact)).toEqual({
+      ok: true,
+      result: { written: true },
+      claim: receiptBackedLivedClaim,
+      idempotencyKey: receiptBackedLivedClaim.operationRef,
+      receipt: receiptBackedLivedClaim.anchorRef,
     });
   });
 
