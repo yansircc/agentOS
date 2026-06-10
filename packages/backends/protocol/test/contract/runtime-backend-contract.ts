@@ -1043,3 +1043,128 @@ export const runRuntimeBackendContractSuite = (
     );
   });
 };
+
+export const runDispatchReceiveConcurrencyContract = (
+  name: string,
+  makeDriver: RuntimeBackendContractDriverFactory,
+  options: RuntimeBackendContractSuiteOptions,
+): void => {
+  const contractIdentity = (scopeId: string): BackendProtocolEventIdentity =>
+    contractEventIdentity(scopeId, options.runtimeFactOwner);
+
+  const promise = <A>(thunk: () => Promise<A> | A): Effect.Effect<A> =>
+    Effect.promise(() => Promise.resolve(thunk()));
+
+  const withDriver = (
+    fn: (driver: RuntimeBackendContractDriver) => Effect.Effect<void>,
+  ): Effect.Effect<void> =>
+    Effect.gen(function* () {
+      const driver = yield* promise(() => makeDriver());
+      yield* fn(driver).pipe(Effect.ensuring(promise(() => driver.dispose())));
+    });
+
+  describe(name + " dispatch receive concurrency contract", () => {
+    it.effect("linearizes concurrent dispatch receives by source and idempotency key", () =>
+      withDriver((driver) =>
+        Effect.gen(function* () {
+          const senderIdentity = contractIdentity("concurrent-receive-sender");
+          const receiverIdentity = contractIdentity("concurrent-receive-receiver");
+          const concurrency = 8;
+          const requiredOverlap = 2;
+          const acceptResults: DispatchReceiverResult[] = [];
+          let receiveStarts = 0;
+          let releaseAccept: (() => void) | undefined;
+          let overlappedReceiversStarted: (() => void) | undefined;
+          const released = new Promise<void>((resolve) => {
+            releaseAccept = resolve;
+          });
+          const receiversStarted = new Promise<void>((resolve) => {
+            overlappedReceiversStarted = resolve;
+          });
+          const waitForReceiversStarted = (): Promise<void> =>
+            new Promise((resolve, reject) => {
+              const timeout = setTimeout(
+                () => reject(new Error("concurrent dispatch receive overlap never formed")),
+                2_000,
+              );
+              receiversStarted.then(
+                () => {
+                  clearTimeout(timeout);
+                  resolve();
+                },
+                (cause) => {
+                  clearTimeout(timeout);
+                  reject(cause);
+                },
+              );
+            });
+
+          yield* promise(() =>
+            driver.registerDispatchReceiver(receiverIdentity, async (_envelope, accept) => {
+              receiveStarts += 1;
+              if (receiveStarts === requiredOverlap) overlappedReceiversStarted?.();
+              await released;
+              const result = await accept();
+              acceptResults.push(result);
+              return result;
+            }),
+          );
+
+          const sends = Array.from({ length: concurrency }, () =>
+            driver.dispatchToScope(
+              senderIdentity,
+              dispatchSpec(
+                driver,
+                "concurrent-receive-receiver",
+                "concurrent-receive-key",
+                "app.concurrent-receive",
+                { value: 6 },
+              ),
+            ),
+          );
+          try {
+            yield* promise(waitForReceiversStarted);
+          } finally {
+            releaseAccept?.();
+          }
+          yield* promise(() => Promise.all(sends));
+
+          expect(acceptResults).toHaveLength(concurrency);
+          expect(new Set(acceptResults.map((result) => result.deliveredEventId)).size).toBe(1);
+
+          const receiverEvents = yield* promise(() => driver.events(receiverIdentity));
+          expect(kindsOf(receiverEvents)).toEqual([
+            DISPATCH_EVENT_KINDS.INBOUND_ACCEPTED,
+            "app.concurrent-receive",
+          ]);
+          expectEventsIdentity(receiverEvents, receiverIdentity);
+          expect(receiverEvents[1]?.payload).toEqual({ value: 6 });
+
+          const deliveredEventId = acceptResults[0]!.deliveredEventId;
+          expect(receiverEvents[0]?.payload).toMatchObject({
+            idempotencyKey: "concurrent-receive-key",
+            deliveredEventId,
+          });
+          expect(
+            typeof (receiverEvents[0]?.payload as { readonly sourceScope?: unknown }).sourceScope,
+          ).toBe("string");
+          expect(receiverEvents[1]?.id).toBe(deliveredEventId);
+
+          const senderEvents = yield* promise(() => driver.events(senderIdentity));
+          expect(payloadsOf(senderEvents, DISPATCH_EVENT_KINDS.OUTBOUND_REQUESTED)).toHaveLength(
+            concurrency,
+          );
+          const delivered = payloadsOf<{ readonly deliveryReceipt: { readonly anchorId: string } }>(
+            senderEvents,
+            DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED,
+          );
+          expect(delivered).toHaveLength(concurrency);
+          expect(new Set(delivered.map((payload) => payload.deliveryReceipt.anchorId)).size).toBe(
+            1,
+          );
+          expect(yield* promise(() => driver.pendingDueCount(senderIdentity))).toBe(0);
+        }),
+      ),
+    );
+  });
+};

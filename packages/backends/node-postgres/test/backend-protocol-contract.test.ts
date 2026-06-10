@@ -6,6 +6,7 @@ import { bindingMaterialRef } from "@agent-os/kernel/material-ref";
 import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
 import { NodePostgresBackend, type NodePostgresEventSubscription } from "../src";
 import {
+  runDispatchReceiveConcurrencyContract,
   runRuntimeBackendContractSuite,
   type ContractDispatchReceiver,
   type RuntimeBackendContractDriver,
@@ -72,6 +73,9 @@ const makeNodePostgresContractDriver = async (): Promise<RuntimeBackendContractD
 
 describe("node-postgres backend protocol driver", () => {
   runRuntimeBackendContractSuite("node-postgres", makeNodePostgresContractDriver, {
+    runtimeFactOwner: RUNTIME_FACT_OWNER,
+  });
+  runDispatchReceiveConcurrencyContract("node-postgres", makeNodePostgresContractDriver, {
     runtimeFactOwner: RUNTIME_FACT_OWNER,
   });
 });

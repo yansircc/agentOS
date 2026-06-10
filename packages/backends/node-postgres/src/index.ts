@@ -326,6 +326,13 @@ export class NodePostgresBackend {
         ON agentos_events (identity_key, id);
       CREATE INDEX IF NOT EXISTS agentos_events_kind_idx
         ON agentos_events (kind);
+      CREATE UNIQUE INDEX IF NOT EXISTS agentos_dispatch_inbound_idempotency_idx
+        ON agentos_events (
+          identity_key,
+          ((payload ->> 'sourceScope')),
+          ((payload ->> 'idempotencyKey'))
+        )
+        WHERE kind = ${sqlString(DISPATCH_INBOUND_ACCEPTED)};
 
       CREATE TABLE IF NOT EXISTS agentos_due_work (
         id BIGSERIAL PRIMARY KEY,
@@ -642,32 +649,37 @@ export class NodePostgresBackend {
       targetScope: scopeLabel,
       deliveredEventId,
     });
-    const events = await this.#appendEventsWithIds([
-      {
-        id: acceptedEventId,
-        ts: this.#now(),
-        kind: DISPATCH_INBOUND_ACCEPTED,
-        identity,
-        payload: {
-          sourceScope: envelope.sourceScope,
-          outboundEventId: envelope.outboundEventId,
-          idempotencyKey: envelope.idempotencyKey,
-          deliveredEventId,
-          claim,
-          ...(traceContextResult.traceContext === undefined
-            ? {}
-            : { traceContext: copyTraceContext(traceContextResult.traceContext) }),
-        },
+    const events = await this.#appendDispatchReceiveEvents({
+      identity,
+      acceptedEventId,
+      deliveredEventId,
+      acceptedPayload: {
+        sourceScope: envelope.sourceScope,
+        outboundEventId: envelope.outboundEventId,
+        idempotencyKey: envelope.idempotencyKey,
+        deliveredEventId,
+        claim,
+        ...(traceContextResult.traceContext === undefined
+          ? {}
+          : { traceContext: copyTraceContext(traceContextResult.traceContext) }),
       },
-      {
-        id: deliveredEventId,
-        ts: this.#now(),
-        kind: envelope.event,
-        identity,
-        payload: envelope.data,
-      },
-    ]);
-    const delivered = events[1];
+      deliveredKind: envelope.event,
+      deliveredPayload: envelope.data,
+    });
+    if (events.length === 0) {
+      const concurrentAccepted = await this.#findAcceptedDeliveryId(identity, envelope);
+      if (concurrentAccepted === null) {
+        throw new SqlError({ cause: "dispatch receive conflict returned no accepted event" });
+      }
+      return {
+        deliveredEventId: concurrentAccepted,
+        receipt: dispatchLedgerDeliveryReceipt({
+          targetScope: scopeLabel,
+          deliveredEventId: concurrentAccepted,
+        }),
+      };
+    }
+    const delivered = events.find((event) => event.id === deliveredEventId);
     if (delivered === undefined)
       throw new SqlError({ cause: "dispatch receive returned no event" });
     return {
@@ -677,6 +689,89 @@ export class NodePostgresBackend {
         deliveredEventId: delivered.id,
       }),
     };
+  }
+
+  async #appendDispatchReceiveEvents(spec: {
+    readonly identity: BackendProtocolEventIdentity;
+    readonly acceptedEventId: number;
+    readonly deliveredEventId: number;
+    readonly acceptedPayload: unknown;
+    readonly deliveredKind: string;
+    readonly deliveredPayload: unknown;
+  }): Promise<ReadonlyArray<LedgerEvent>> {
+    const ts = this.#now();
+    const truthKey = backendProtocolTruthIdentityKey(spec.identity);
+    const identityKey = backendProtocolEventIdentityKey(spec.identity);
+    const rows = await this.#sql.jsonArrayStatement<LedgerEvent>(`
+      WITH accepted AS (
+        INSERT INTO agentos_events (
+          id, ts, kind, truth_key, identity_key, scope_ref, fact_owner_ref, effect_authority_ref, payload
+        )
+        VALUES (
+          ${sqlNumber(spec.acceptedEventId)},
+          ${sqlNumber(ts)},
+          ${sqlString(DISPATCH_INBOUND_ACCEPTED)},
+          ${sqlString(truthKey)},
+          ${sqlString(identityKey)},
+          ${sqlJson(spec.identity.scopeRef)},
+          ${sqlJson(spec.identity.factOwnerRef)},
+          ${sqlJson(spec.identity.effectAuthorityRef)},
+          ${sqlPayload(spec.acceptedPayload)}
+        )
+        ON CONFLICT (
+          identity_key,
+          ((payload ->> 'sourceScope')),
+          ((payload ->> 'idempotencyKey'))
+        )
+        WHERE kind = ${sqlString(DISPATCH_INBOUND_ACCEPTED)}
+        DO NOTHING
+        RETURNING
+          id::int AS "id",
+          ts AS "ts",
+          kind AS "kind",
+          scope_ref AS "scopeRef",
+          fact_owner_ref #>> '{}' AS "factOwnerRef",
+          effect_authority_ref AS "effectAuthorityRef",
+          payload AS "payload"
+      ),
+      delivered AS (
+        INSERT INTO agentos_events (
+          id, ts, kind, truth_key, identity_key, scope_ref, fact_owner_ref, effect_authority_ref, payload
+        )
+        SELECT
+          ${sqlNumber(spec.deliveredEventId)},
+          ${sqlNumber(ts)},
+          ${sqlString(spec.deliveredKind)},
+          ${sqlString(truthKey)},
+          ${sqlString(identityKey)},
+          ${sqlJson(spec.identity.scopeRef)},
+          ${sqlJson(spec.identity.factOwnerRef)},
+          ${sqlJson(spec.identity.effectAuthorityRef)},
+          ${sqlPayload(spec.deliveredPayload)}
+        FROM accepted
+        RETURNING
+          id::int AS "id",
+          ts AS "ts",
+          kind AS "kind",
+          scope_ref AS "scopeRef",
+          fact_owner_ref #>> '{}' AS "factOwnerRef",
+          effect_authority_ref AS "effectAuthorityRef",
+          payload AS "payload"
+      ),
+      agentos_json_rows AS (
+        SELECT * FROM accepted
+        UNION ALL
+        SELECT * FROM delivered
+        ORDER BY "id" ASC
+      )
+      SELECT COALESCE(json_agg(row_to_json(agentos_json_rows)), '[]'::json)::text
+      FROM agentos_json_rows
+    `);
+    if (rows.length !== 0 && rows.length !== 2) {
+      throw new SqlError({ cause: "dispatch receive append returned partial event pair" });
+    }
+    await this.#fireMany(rows);
+    return rows;
   }
 
   async grantResource(
@@ -1068,19 +1163,23 @@ export class NodePostgresBackend {
     identity: BackendProtocolEventIdentity,
     envelope: DispatchEnvelope,
   ): Promise<number | null> {
-    for (const event of await this.#events(identity, { kinds: [DISPATCH_INBOUND_ACCEPTED] })) {
-      const payload = recordOf(event.payload, DISPATCH_INBOUND_ACCEPTED);
-      if (
-        payload.sourceScope === envelope.sourceScope &&
-        payload.idempotencyKey === envelope.idempotencyKey
-      ) {
-        const deliveredEventId = finiteNumberField(payload, "deliveredEventId");
-        const claim = parseDispatchLivedClaim(payload.claim, DISPATCH_INBOUND_ACCEPTED);
-        if (!claim.ok) throw new SqlError({ cause: claim.failure.reason });
-        return deliveredEventId;
-      }
-    }
-    return null;
+    const rows = await this.#sql.json<{ readonly payload: unknown }>(`
+      SELECT payload AS "payload"
+      FROM agentos_events
+      WHERE identity_key = ${sqlString(backendProtocolEventIdentityKey(identity))}
+        AND kind = ${sqlString(DISPATCH_INBOUND_ACCEPTED)}
+        AND payload ->> 'sourceScope' = ${sqlString(envelope.sourceScope)}
+        AND payload ->> 'idempotencyKey' = ${sqlString(envelope.idempotencyKey)}
+      ORDER BY id ASC
+      LIMIT 1
+    `);
+    const row = rows[0];
+    if (row === undefined) return null;
+    const payload = recordOf(row.payload, DISPATCH_INBOUND_ACCEPTED);
+    const deliveredEventId = finiteNumberField(payload, "deliveredEventId");
+    const claim = parseDispatchLivedClaim(payload.claim, DISPATCH_INBOUND_ACCEPTED);
+    if (!claim.ok) throw new SqlError({ cause: claim.failure.reason });
+    return deliveredEventId;
   }
 
   async #appendResourceEventLocked(spec: {
@@ -1483,68 +1582,6 @@ export class NodePostgresBackend {
     const row = rows[0];
     if (row === undefined) throw new SqlError({ cause: "next event id unavailable" });
     return row.id;
-  }
-
-  async #appendEventsWithIds(
-    specs: ReadonlyArray<{
-      readonly id: number;
-      readonly ts: number;
-      readonly kind: string;
-      readonly identity: BackendProtocolEventIdentity;
-      readonly payload: unknown;
-    }>,
-  ): Promise<ReadonlyArray<LedgerEvent>> {
-    const rows = await this.#sql.jsonArrayStatement<LedgerEvent>(`
-      WITH input AS (
-        SELECT *
-        FROM jsonb_to_recordset(${sqlPayload(
-          specs.map((spec) => ({
-            id: spec.id,
-            ts: spec.ts,
-            kind: spec.kind,
-            truthKey: backendProtocolTruthIdentityKey(spec.identity),
-            identityKey: backendProtocolEventIdentityKey(spec.identity),
-            scopeRef: spec.identity.scopeRef,
-            factOwnerRef: spec.identity.factOwnerRef,
-            effectAuthorityRef: spec.identity.effectAuthorityRef,
-            payload: spec.payload,
-          })),
-        )})
-        AS x(
-          "id" bigint,
-          "ts" double precision,
-          "kind" text,
-          "truthKey" text,
-          "identityKey" text,
-          "scopeRef" jsonb,
-          "factOwnerRef" jsonb,
-          "effectAuthorityRef" jsonb,
-          "payload" jsonb
-        )
-      ),
-      inserted AS (
-        INSERT INTO agentos_events (
-          id, ts, kind, truth_key, identity_key, scope_ref, fact_owner_ref, effect_authority_ref, payload
-        )
-        SELECT "id", "ts", "kind", "truthKey", "identityKey", "scopeRef", "factOwnerRef", "effectAuthorityRef", "payload"
-        FROM input
-        RETURNING
-          id::int AS "id",
-          ts AS "ts",
-          kind AS "kind",
-          scope_ref AS "scopeRef",
-          fact_owner_ref #>> '{}' AS "factOwnerRef",
-          effect_authority_ref AS "effectAuthorityRef",
-          payload AS "payload"
-      )
-      , agentos_json_rows AS (
-        SELECT * FROM inserted ORDER BY id ASC
-      )
-      SELECT COALESCE(json_agg(row_to_json(agentos_json_rows)), '[]'::json)::text
-      FROM agentos_json_rows
-    `);
-    await this.#fireMany(rows);
-    return rows;
   }
 
   async #fireMany(events: ReadonlyArray<LedgerEvent>): Promise<void> {
