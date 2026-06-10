@@ -20,7 +20,7 @@ import {
 export const toolSettlementContract = defineSettlementContract({
   settlementId: "@agent-os/runtime.tool",
   anchorKinds: ["carrier_proof"],
-  rejectionKinds: ["policy_denied", "provider_rejected", "resource_denied"],
+  rejectionKinds: ["policy_denied", "provider_rejected", "resource_denied", "validation_failed"],
 });
 
 const symbolicReasonOr = (value: string, fallback: string): string =>

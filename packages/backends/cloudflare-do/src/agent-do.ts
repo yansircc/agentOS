@@ -640,6 +640,7 @@ export class AgentDurableObject<
       ...(spec.system === undefined ? {} : { system: spec.system }),
       route,
       tools: { ...bindings.tools },
+      materials: { ...bindings.materials },
       effectAuthorityRef: spec.effectAuthorityRef,
       ...(spec.budget === undefined ? {} : { budget: spec.budget }),
       ...(spec.outputSchema === undefined ? {} : { outputSchema: spec.outputSchema }),

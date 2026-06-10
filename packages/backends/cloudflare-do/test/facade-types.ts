@@ -1,4 +1,5 @@
 import type { SubmitSpec } from "@agent-os/runtime-protocol";
+import { credentialMaterialRef } from "@agent-os/kernel/material-ref";
 import { defineAgentSubmitBindings } from "@agent-os/runtime-protocol";
 import {
   credential,
@@ -81,6 +82,15 @@ void agent.submit({
   bindings: defineAgentSubmitBindings({
     handlers: {},
     tools: { lookup: lookupTool },
+    materials: { facade_token: credentialMaterialRef("facade-token") },
+  }),
+});
+void agent.submit({
+  ...facadeSpec,
+  bindings: defineAgentSubmitBindings({
+    handlers: {},
+    // @ts-expect-error submit material bindings carry symbolic MaterialRef values
+    materials: { facade_token: "resolved-provider-material" },
   }),
 });
 // @ts-expect-error facade submit does not accept full SubmitSpec

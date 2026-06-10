@@ -41,7 +41,11 @@ import { CapabilityRejected, DurableTriggerAcquireCancelled } from "@agent-os/ke
 import { boundaryPackage, defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
 import { eventNamespace, type ExtensionCapability } from "@agent-os/kernel/extensions";
 import { makePreClaim, type FactOwnerRef } from "@agent-os/kernel/effect-claim";
-import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
+import {
+  bindingMaterialRef,
+  materialRefKey,
+  materialRequirement,
+} from "@agent-os/kernel/material-ref";
 import { defineSettlementContract, settleLived } from "@agent-os/kernel/settlement-contract";
 import { defineTool, pureToolExecution } from "@agent-os/kernel/tools";
 import type { EventHandler } from "@agent-os/kernel/types";
@@ -431,6 +435,29 @@ export const facadeLookup = defineTool({
   execute: ({ key }) => Effect.succeed({ value: key }),
 });
 
+export const facadeApply = defineTool({
+  name: "apply",
+  description: "Apply with a run-scoped material",
+  args: Schema.Struct({ key: Schema.String }),
+  authority: "write",
+  admit: allowToolAdmitter,
+  execution: pureToolExecution(),
+  requiredMaterials: [
+    materialRequirement({
+      slot: "facade_token",
+      kind: "credential",
+      provider: "facade",
+      purpose: "apply",
+    }),
+  ],
+  execute: (_args, ctx) =>
+    Effect.succeed({
+      materialMatched:
+        ctx.materials.facade_token ===
+        "facade-secret-that-must-stay-out-of-ledger-and-llm-requests",
+    }),
+});
+
 export const makeFacadeSubmitChatResponse = (): Response =>
   Response.json({
     id: "chatcmpl_facade_submit",
@@ -458,6 +485,10 @@ export const FacadeSubmitTestDO = defineAgentDO<CloudflareAgentEnv>({
   bindings: [
     endpoint<CloudflareAgentEnv>("llm").from(() => "https://stub.openai.test/v1"),
     credential<CloudflareAgentEnv>("llm-key").from(() => "stub-key"),
+    credential<CloudflareAgentEnv>("facade-token", {
+      provider: "facade",
+      purpose: "apply",
+    }).from(() => "facade-secret-that-must-stay-out-of-ledger-and-llm-requests"),
   ],
   llms: {
     default: openAIChat({

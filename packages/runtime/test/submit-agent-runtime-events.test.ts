@@ -550,6 +550,70 @@ describe("submit-agent runtime event writes", () => {
     }),
   );
 
+  it.effect("rejects non-symbolic material values before resolver lookup", () =>
+    Effect.gen(function* () {
+      let executed = false;
+      const tool = defineTool({
+        name: "apply",
+        description: "apply",
+        args: Schema.Struct({ title: Schema.String }),
+        execute: () => {
+          executed = true;
+          return Effect.succeed({ applied: true });
+        },
+        authority: "write",
+        requiredMaterials: [
+          materialRequirement({
+            slot: "wp_token",
+            kind: "credential",
+            provider: "wordpress",
+            purpose: "apply",
+          }),
+        ],
+        admit: () => Effect.succeed({ ok: true }),
+        execution: pureToolExecution(),
+      });
+
+      const resolvedProviderMaterial = {
+        kind: "credential",
+        ref: "WP_TOKEN",
+        provider: "wordpress",
+        purpose: "apply",
+        value: "secret-token-value",
+      };
+
+      const { result, events } = yield* runSubmit(
+        baseSpec({
+          tools: { apply: tool },
+          materials: {
+            wp_token: resolvedProviderMaterial,
+          } as unknown as InternalSubmitSpec["materials"],
+        }),
+        [
+          response({
+            items: [
+              { type: "message", text: "use apply" },
+              {
+                type: "tool_call",
+                call: {
+                  id: "call-1",
+                  type: "function",
+                  function: { name: "apply", arguments: '{"title":"Hello"}' },
+                },
+              },
+            ],
+          }),
+        ],
+      );
+
+      expect(result).toMatchObject({ ok: false, reason: "tool_error" });
+      expect(executed).toBe(false);
+      const rejected = events.find((event) => event.kind === "tool.rejected");
+      expect(JSON.stringify(rejected?.payload)).toContain("material_invalid:wp_token");
+      expect(JSON.stringify(events)).not.toContain("secret-token-value");
+    }),
+  );
+
   it.effect("interrupts an externally gated tool before execution", () =>
     Effect.gen(function* () {
       let executed = 0;

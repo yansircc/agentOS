@@ -1,4 +1,5 @@
 import type { LlmRoute } from "@agent-os/llm-protocol";
+import type { MaterialRef } from "@agent-os/kernel/material-ref";
 import type { Tool } from "@agent-os/kernel/tools";
 import type { HandlerKind } from "./manifest";
 import type { AgentIntent } from "./intent";
@@ -20,7 +21,7 @@ export interface AgentBindings<K extends HandlerKind = HandlerKind> {
   readonly handlers: AgentHandlerBindings<K>;
   readonly llmRoutes?: Readonly<Record<string, LlmRoute>>;
   readonly tools?: Readonly<Record<string, Tool>>;
-  readonly materials?: Readonly<Record<string, unknown>>;
+  readonly materials?: Readonly<Record<string, MaterialRef>>;
 }
 
 export type AgentSubmitBindings = AgentBindings<never>;

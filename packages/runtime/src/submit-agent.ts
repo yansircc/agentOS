@@ -41,7 +41,11 @@ import {
 import { LlmTransport } from "@agent-os/llm-protocol";
 import type { ToolDefinition } from "@agent-os/kernel/tools";
 import type { LedgerEvent } from "@agent-os/kernel/types";
-import { materialRefKey, materialRefSatisfiesRequirement } from "@agent-os/kernel/material-ref";
+import {
+  isMaterialRef,
+  materialRefKey,
+  materialRefSatisfiesRequirement,
+} from "@agent-os/kernel/material-ref";
 import {
   InvalidTraceContext,
   copyTraceContext,
@@ -278,6 +282,16 @@ const resolveToolMaterials = (
           };
         }
         continue;
+      }
+      if (!isMaterialRef(ref)) {
+        return {
+          ok: false,
+          rejectionRef: materialRejection(
+            claim,
+            `material_invalid:${requirement.slot}`,
+            "validation_failed",
+          ),
+        };
       }
       if (!materialRefSatisfiesRequirement(ref, requirement)) {
         return {
