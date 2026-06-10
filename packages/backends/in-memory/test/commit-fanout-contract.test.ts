@@ -1,7 +1,11 @@
 import { ManagedRuntime, Schema } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
-import { DISPATCH_EVENT_KINDS, type DispatchReceiver } from "@agent-os/backend-protocol";
+import {
+  DISPATCH_EVENT_KINDS,
+  dispatchTargetDelivered,
+  type DispatchReceiver,
+} from "@agent-os/backend-protocol";
 import { Dispatch, defineProjection, projectionFail, projectionIdentity } from "@agent-os/runtime";
 import { createInMemoryBackendState, createInMemoryRuntimeBackend } from "../src";
 import { truthIdentity } from "./identity";
@@ -44,11 +48,12 @@ describe("in-memory backend commit/fanout contract", () => {
         state,
         identity: truthIdentity("sender"),
         projections,
-        dispatchTargets: {
-          [bindingKey]: {
-            deliver: (envelope) => receiver.__agentosReceiveDispatch(envelope),
-          },
-        },
+	        dispatchTargets: {
+	          [bindingKey]: {
+	            deliver: (envelope) =>
+	              receiver.__agentosReceiveDispatch(envelope).then(dispatchTargetDelivered),
+	          },
+	        },
       }).layer,
     );
 
@@ -76,7 +81,7 @@ describe("in-memory backend commit/fanout contract", () => {
       expect(outbox).toMatchObject({
         outboundEventId: outbound!.id,
         attempts: 0,
-        deliveredEventId: null,
+        successEventId: null,
         lastError: null,
       });
       expect(

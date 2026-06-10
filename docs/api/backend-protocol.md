@@ -5,6 +5,7 @@
 - `.:DISPATCH_INBOUND_ACCEPTED`
 - `.:DISPATCH_EVENT_KINDS`
 - `.:DISPATCH_MAX_ATTEMPTS`
+- `.:DISPATCH_OUTBOUND_ENQUEUED`
 - `.:DISPATCH_OUTBOUND_DELIVERED`
 - `.:DISPATCH_OUTBOUND_FAILED`
 - `.:DISPATCH_OUTBOUND_REQUESTED`
@@ -26,7 +27,7 @@
 - `.:decodeResourceTerminalPayloadSync`
 - `.:describeDispatchCause`
 - `.:dispatchBackoffMs`
-- `.:dispatchExternalDeliveryReceipt`
+- `.:dispatchExternalEnqueueAcknowledgement`
 - `.:durableProcessLifecycleState`
 - `.:dispatchPayloadParseFailure`
 - `.:durableTriggerBackoffMs`
@@ -62,7 +63,9 @@
 - `.:DurableProcessLifecycleSnapshot`
 - `.:DurableProcessLifecycleState`
 - `.:DurableTriggerRetryPolicy`
+- `.:DispatchEnqueueAcknowledgement`
 - `.:DispatchOutboundDeliveredPayload`
+- `.:DispatchOutboundEnqueuedPayload`
 - `.:DispatchOutboundFailedPayload`
 - `.:DispatchPayloadParseFailure`
 - `.:DispatchPayloadParseResult`
@@ -75,6 +78,9 @@
 - `.:DispatchRequestedPayload`
 - `.:DispatchReplaySnapshot`
 - `.:DispatchTargetAdapter`
+- `.:DispatchTargetDeliveredResult`
+- `.:DispatchTargetEnqueuedResult`
+- `.:DispatchTargetResult`
 - `.:GrantResult`
 - `.:IntentPointerDuePayload`
 - `.:ProjectedResourceState`
@@ -95,6 +101,8 @@
 - `.:dispatchReplaySnapshotFromDeliveredPayload`
 - `.:dispatchReceiptBeforeTerminalProof`
 - `.:dispatchSettlementContract`
+- `.:dispatchTargetDelivered`
+- `.:dispatchTargetEnqueued`
 - `.:parseDispatchLivedClaim`
 - `.:replayDispatchDeliveryFromSnapshot`
 - `.:scheduledEventIntentPayload`

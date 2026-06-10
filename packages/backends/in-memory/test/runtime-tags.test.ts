@@ -3,6 +3,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
 import {
   DURABLE_TRIGGER_SCHEDULED_REQUESTED,
+  dispatchTargetDelivered,
   type DispatchReceiver,
 } from "@agent-os/backend-protocol";
 import {
@@ -372,11 +373,12 @@ describe("in-memory runtime backend", () => {
       createInMemoryRuntimeBackend({
         state,
         identity: truthIdentity("sender"),
-        dispatchTargets: {
-          [bindingKey]: {
-            deliver: (envelope) => receiver.__agentosReceiveDispatch(envelope),
-          },
-        },
+	        dispatchTargets: {
+	          [bindingKey]: {
+	            deliver: (envelope) =>
+	              receiver.__agentosReceiveDispatch(envelope).then(dispatchTargetDelivered),
+	          },
+	        },
       }).layer,
     );
 

@@ -62,11 +62,14 @@ const collectFailures = (root = repoRoot) => {
     failures.push(`${protocolTest}: missing terminal failure no-receipt test`);
   }
   if (
-    !/drains Queue, HTTP, and provider target adapters through delivery receipts/.test(
+    !/drains Queue, HTTP, and provider target adapters through enqueue acknowledgements/.test(
       backendContract,
     )
   ) {
-    failures.push(`${backendContractTest}: missing external mutation receipt contract`);
+    failures.push(`${backendContractTest}: missing external enqueue acknowledgement contract`);
+  }
+  if (!/DISPATCH_EVENT_KINDS\.OUTBOUND_ENQUEUED/.test(backendContract)) {
+    failures.push(`${backendContractTest}: external contract must assert outbound enqueued facts`);
   }
   if (
     !/receiver dedupes by \(sourceScope, idempotencyKey\), not outboundEventId/.test(cloudflare)
@@ -109,7 +112,11 @@ const collectSelfTestFailures = () => {
     writeFixture(
       root,
       backendContractTest,
-      "it('drains Queue, HTTP, and provider target adapters through delivery receipts', () => {});",
+      [
+        "it('drains Queue, HTTP, and provider target adapters through enqueue acknowledgements', () => {",
+        "  DISPATCH_EVENT_KINDS.OUTBOUND_ENQUEUED;",
+        "});",
+      ].join("\n"),
     );
     writeFixture(
       root,

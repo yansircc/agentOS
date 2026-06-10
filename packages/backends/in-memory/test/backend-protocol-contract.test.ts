@@ -5,6 +5,7 @@ import {
   DISPATCH_EVENT_KINDS,
   backendProtocolEventIdentityKey,
   backendProtocolTruthIdentityKey,
+  dispatchTargetDelivered,
   type BackendProtocolEventIdentity,
   type BackendProtocolTruthIdentity,
   type DispatchReceiver,
@@ -40,7 +41,7 @@ const makeInMemoryContractDriver = (): RuntimeBackendContractDriver => {
       const receiver = receiverTargets.get(envelope.targetScope);
       return receiver === undefined
         ? Promise.reject(`missing receiver target ${envelope.targetScope}`)
-        : receiver.__agentosReceiveDispatch(envelope);
+        : receiver.__agentosReceiveDispatch(envelope).then(dispatchTargetDelivered);
     },
   };
   const targets: Record<string, DispatchTargetAdapter> = { [bindingKey]: targetAdapter };

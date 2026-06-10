@@ -3,9 +3,10 @@
  *
  * SSoT split:
  *   - sender intent truth   : `events.kind = dispatch.outbound.requested`
+ *   - external enqueue ack  : `events.kind = dispatch.outbound.enqueued`
  *   - receiver acceptance   : `events.kind = dispatch.inbound.accepted`
  *   - `dispatch_outbox`     : mechanical pending-delivery buffer; caches
- *                              attempts / last_error / delivered_event_id
+ *                              attempts / last_error / success_event_id
  *
  */
 
@@ -42,14 +43,16 @@ import {
   DISPATCH_RETRY_POLICY,
   copyTraceContext,
   describeDispatchCause,
-  dispatchExternalDeliveryReceipt,
+  dispatchExternalEnqueueAcknowledgement,
   dispatchLedgerDeliveryReceipt,
+  dispatchTargetDelivered,
+  dispatchTargetEnqueued,
   durableTriggerBackoffMs,
   parseRequestedPayloadValue,
   settleDispatchInboundAccepted,
   settleDispatchOutboundDelivered,
+  type DispatchEnqueueAcknowledgement,
   type DispatchDeliveryReceipt,
-  type DispatchDeliveryResult,
   type DispatchEnvelope,
   type DispatchReceiver,
   type DispatchRequestedPayload,
@@ -93,23 +96,23 @@ export interface ProviderDispatchTargetSpec {
       };
 }
 
-const externalReceiptFor = (
+const externalEnqueueAcknowledgementFor = (
   targetKind: string,
   envelope: DispatchEnvelope,
   receiptId?: string,
-): DispatchDeliveryResult => ({
-  receipt:
+): ReturnType<typeof dispatchTargetEnqueued> =>
+  dispatchTargetEnqueued(
     receiptId === undefined
-      ? dispatchExternalDeliveryReceipt({
+      ? dispatchExternalEnqueueAcknowledgement({
           targetKind,
           targetScope: envelope.targetScope,
           idempotencyKey: envelope.idempotencyKey,
         })
       : {
-          anchorId: receiptId,
-          anchorKind: "external_receipt",
+          acknowledgementId: receiptId,
+          acknowledgementKind: "external_enqueue",
         },
-});
+  );
 
 export const durableObjectDispatchTarget = (
   namespace: DispatchTargetNamespace,
@@ -117,7 +120,7 @@ export const durableObjectDispatchTarget = (
   deliver: (envelope) => {
     const targetId = namespace.idFromName(envelope.targetScope);
     const receiver = namespace.get(targetId) as DispatchReceiver;
-    return receiver.__agentosReceiveDispatch(envelope);
+    return receiver.__agentosReceiveDispatch(envelope).then(dispatchTargetDelivered);
   },
 });
 
@@ -134,7 +137,7 @@ export const queueDispatchTarget = (queue: QueueDispatchTargetBinding): Dispatch
         }),
       )
       .then(
-        () => externalReceiptFor("queue", envelope),
+        () => externalEnqueueAcknowledgementFor("queue", envelope),
         () => Promise.reject("dispatch queue target failed"),
       ),
 });
@@ -164,7 +167,7 @@ export const httpDispatchTarget = (spec: HttpDispatchTargetSpec): DispatchTarget
           if (!response.ok) {
             return Promise.reject(`dispatch http target failed:${response.status}`);
           }
-          return externalReceiptFor("http", envelope);
+          return externalEnqueueAcknowledgementFor("http", envelope);
         },
         () => Promise.reject("dispatch http target failed"),
       );
@@ -178,7 +181,8 @@ export const providerDispatchTarget = (
     Promise.resolve(undefined)
       .then(() => spec.invoke(envelope))
       .then(
-        (result) => externalReceiptFor(`provider.${spec.providerId}`, envelope, result.receiptId),
+        (result) =>
+          externalEnqueueAcknowledgementFor(`provider.${spec.providerId}`, envelope, result.receiptId),
         () => Promise.reject(`dispatch provider target failed:${spec.providerId}`),
       ),
 });
@@ -189,6 +193,12 @@ type DeliveryRetryOutcome =
       readonly outboundEventId: number;
       readonly requested: DispatchRequestedPayload;
       readonly deliveryReceipt: DispatchDeliveryReceipt;
+    }
+  | {
+      readonly _tag: "enqueued";
+      readonly outboundEventId: number;
+      readonly requested: DispatchRequestedPayload;
+      readonly enqueueAcknowledgement: DispatchEnqueueAcknowledgement;
     }
   | {
       readonly _tag: "failed";
@@ -237,23 +247,31 @@ export const deliveryRetryTrigger = (
         claim: requested.claim,
         ...(requested.traceContext === undefined ? {} : { traceContext: requested.traceContext }),
       };
-      const delivered = yield* Effect.tryPromise({
+      const delivery = yield* Effect.tryPromise({
         try: () => target.deliver(envelope),
         catch: (cause) => cause,
       }).pipe(Effect.either);
-      if (delivered._tag === "Right") {
+      if (delivery._tag === "Right") {
+        if (delivery.right._tag === "delivered") {
+          return {
+            _tag: "delivered",
+            outboundEventId: acquireCtx.intentEventId,
+            requested,
+            deliveryReceipt: delivery.right.receipt,
+          } as const;
+        }
         return {
-          _tag: "delivered",
+          _tag: "enqueued",
           outboundEventId: acquireCtx.intentEventId,
           requested,
-          deliveryReceipt: delivered.right.receipt,
+          enqueueAcknowledgement: delivery.right.acknowledgement,
         } as const;
       }
       return {
         _tag: "failed",
         outboundEventId: acquireCtx.intentEventId,
         requested,
-        cause: delivered.left,
+        cause: delivery.left,
       } as const;
     }),
   commit: (outcome, tx) => {
@@ -287,7 +305,33 @@ export const deliveryRetryTrigger = (
       });
       (tx as unknown as CloudflareDispatchTriggerTx).afterLedgerInsert(() => {
         sql.exec(
-          "UPDATE dispatch_outbox SET delivered_event_id = ?, attempts = ?, last_error = NULL WHERE outbound_event_id = ?",
+          "UPDATE dispatch_outbox SET success_event_id = ?, attempts = ?, last_error = NULL WHERE outbound_event_id = ?",
+          event.id,
+          attempt,
+          outcome.outboundEventId,
+        );
+      });
+      return;
+    }
+
+    if (outcome._tag === "enqueued") {
+      const event = tx.insertEvent({
+        kind: DISPATCH_EVENT_KINDS.OUTBOUND_ENQUEUED,
+        payload: {
+          outboundEventId: outcome.outboundEventId,
+          target: outcome.requested.target,
+          event: outcome.requested.event,
+          idempotencyKey: outcome.requested.idempotencyKey,
+          enqueueAcknowledgement: outcome.enqueueAcknowledgement,
+          attempt,
+          ...(outcome.requested.traceContext === undefined
+            ? {}
+            : { traceContext: outcome.requested.traceContext }),
+        },
+      });
+      (tx as unknown as CloudflareDispatchTriggerTx).afterLedgerInsert(() => {
+        sql.exec(
+          "UPDATE dispatch_outbox SET success_event_id = ?, attempts = ?, last_error = NULL WHERE outbound_event_id = ?",
           event.id,
           attempt,
           outcome.outboundEventId,

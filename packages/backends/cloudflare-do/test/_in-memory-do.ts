@@ -447,11 +447,11 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
 
     if (
       sql ===
-      "SELECT o.outbound_event_id, o.attempts FROM dispatch_outbox o WHERE o.outbound_event_id = ? AND o.delivered_event_id IS NULL"
+      "SELECT o.outbound_event_id, o.attempts FROM dispatch_outbox o WHERE o.outbound_event_id = ? AND o.success_event_id IS NULL"
     ) {
       const outboundEventId = args[0];
       const outbox = this.table("dispatch_outbox").rows.find(
-        (row) => row.outbound_event_id === outboundEventId && row.delivered_event_id === null,
+        (row) => row.outbound_event_id === outboundEventId && row.success_event_id === null,
       );
       if (outbox === undefined) return new InMemorySqlCursor([]);
       return new InMemorySqlCursor([
@@ -512,7 +512,7 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
 
   private applyDefaults(tableName: string, row: Row): void {
     if (tableName === "dispatch_outbox") {
-      if (row.delivered_event_id === undefined) row.delivered_event_id = null;
+      if (row.success_event_id === undefined) row.success_event_id = null;
       if (row.attempts === undefined) row.attempts = 0;
       if (row.last_error === undefined) row.last_error = null;
     }

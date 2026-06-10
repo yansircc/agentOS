@@ -33,6 +33,7 @@ import { validateOptionalTraceContext, type TraceContext } from "@agent-os/telem
 export { copyTraceContext } from "@agent-os/telemetry-protocol";
 
 export const DISPATCH_OUTBOUND_REQUESTED = "dispatch.outbound.requested";
+export const DISPATCH_OUTBOUND_ENQUEUED = "dispatch.outbound.enqueued";
 export const DISPATCH_OUTBOUND_DELIVERED = "dispatch.outbound.delivered";
 export const DISPATCH_OUTBOUND_FAILED = "dispatch.outbound.failed";
 export const DISPATCH_INBOUND_ACCEPTED = "dispatch.inbound.accepted";
@@ -156,6 +157,7 @@ export const backendProtocolProjectionKey = (key: BackendProtocolProjectionKey):
 
 export const DISPATCH_EVENT_KINDS = {
   OUTBOUND_REQUESTED: DISPATCH_OUTBOUND_REQUESTED,
+  OUTBOUND_ENQUEUED: DISPATCH_OUTBOUND_ENQUEUED,
   OUTBOUND_DELIVERED: DISPATCH_OUTBOUND_DELIVERED,
   OUTBOUND_FAILED: DISPATCH_OUTBOUND_FAILED,
   INBOUND_ACCEPTED: DISPATCH_INBOUND_ACCEPTED,
@@ -190,6 +192,36 @@ export interface DispatchReceiverResult extends DispatchDeliveryResult {
   readonly deliveredEventId: number;
 }
 
+export interface DispatchEnqueueAcknowledgement {
+  readonly acknowledgementId: string;
+  readonly acknowledgementKind: "external_enqueue";
+}
+
+export interface DispatchTargetDeliveredResult extends DispatchDeliveryResult {
+  readonly _tag: "delivered";
+}
+
+export interface DispatchTargetEnqueuedResult {
+  readonly _tag: "enqueued";
+  readonly acknowledgement: DispatchEnqueueAcknowledgement;
+}
+
+export type DispatchTargetResult = DispatchTargetDeliveredResult | DispatchTargetEnqueuedResult;
+
+export const dispatchTargetDelivered = (
+  result: DispatchDeliveryResult,
+): DispatchTargetDeliveredResult => ({
+  _tag: "delivered",
+  receipt: result.receipt,
+});
+
+export const dispatchTargetEnqueued = (
+  acknowledgement: DispatchEnqueueAcknowledgement,
+): DispatchTargetEnqueuedResult => ({
+  _tag: "enqueued",
+  acknowledgement,
+});
+
 export interface DispatchReceiver {
   readonly __agentosReceiveDispatch: (
     envelope: DispatchEnvelope,
@@ -200,7 +232,7 @@ export interface DispatchTargetAdapter {
   // The substrate may invoke deliver more than once for the same envelope
   // across drain races, redrive, and adapter retries. Implementations must be
   // idempotent by (targetScope, idempotencyKey) or a target-owned receipt key.
-  readonly deliver: (envelope: DispatchEnvelope) => Promise<DispatchDeliveryResult>;
+  readonly deliver: (envelope: DispatchEnvelope) => Promise<DispatchTargetResult>;
 }
 
 export interface ResourceProjection {
@@ -469,16 +501,16 @@ export const dispatchLedgerDeliveryReceipt = (spec: {
   anchorKind: "ledger_event",
 });
 
-export const dispatchExternalDeliveryReceipt = (spec: {
+export const dispatchExternalEnqueueAcknowledgement = (spec: {
   readonly targetKind: string;
   readonly targetScope: string;
   readonly idempotencyKey: string;
-}): DispatchDeliveryReceipt => ({
-  anchorId: symbolicSettlementRef(`dispatch.${spec.targetKind}`, [
+}): DispatchEnqueueAcknowledgement => ({
+  acknowledgementId: symbolicSettlementRef(`dispatch.${spec.targetKind}.enqueued`, [
     spec.targetScope,
     spec.idempotencyKey,
   ]),
-  anchorKind: "external_receipt",
+  acknowledgementKind: "external_enqueue",
 });
 
 export const settleDispatchOutboundDelivered = (
@@ -857,6 +889,16 @@ export interface DispatchOutboundDeliveredPayload {
   readonly deliveryReceipt: DispatchDeliveryReceipt;
   readonly attempt: number;
   readonly claim?: unknown;
+  readonly traceContext?: TraceContext;
+}
+
+export interface DispatchOutboundEnqueuedPayload {
+  readonly outboundEventId: number;
+  readonly target: BackendProtocolDispatchTarget;
+  readonly event: string;
+  readonly idempotencyKey: string;
+  readonly enqueueAcknowledgement: DispatchEnqueueAcknowledgement;
+  readonly attempt: number;
   readonly traceContext?: TraceContext;
 }
 

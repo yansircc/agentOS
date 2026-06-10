@@ -40,6 +40,7 @@ import {
   type BackendProtocolDispatchTarget,
   type BackendProtocolTruthIdentity,
   type DispatchDeliveryReceipt,
+  type DispatchEnqueueAcknowledgement,
   type DispatchEnvelope,
   type DispatchRequestedPayload as ProtocolDispatchRequestedPayload,
   type DispatchTargetAdapter,
@@ -49,9 +50,9 @@ import { decodeOk, finiteNumberField, recordOf, type DecodeResult } from "./deco
 import type { DispatchRequestedPayload, InMemoryDispatchTargetRegistry } from "./dispatch-types";
 
 type InMemoryDispatchTriggerTx = {
-  readonly markOutboxDelivered: (spec: {
+  readonly markOutboxSucceeded: (spec: {
     readonly outboundEventId: number;
-    readonly deliveredEventId: number;
+    readonly successEventId: number;
     readonly attempts: number;
   }) => void;
   readonly markOutboxFailed: (spec: {
@@ -98,6 +99,13 @@ type DeliveryRetryOutcome =
       readonly outboundEventId: number;
       readonly requested: ProtocolDispatchRequestedPayload;
       readonly receipt: DispatchDeliveryReceipt;
+      readonly attempt: number;
+    }
+  | {
+      readonly _tag: "enqueued";
+      readonly outboundEventId: number;
+      readonly requested: ProtocolDispatchRequestedPayload;
+      readonly acknowledgement: DispatchEnqueueAcknowledgement;
       readonly attempt: number;
     }
   | {
@@ -150,11 +158,20 @@ export const deliveryRetryTrigger = (
         catch: (cause) => cause,
       }).pipe(Effect.either);
       if (result._tag === "Right") {
+        if (result.right._tag === "delivered") {
+          return {
+            _tag: "delivered",
+            outboundEventId: row.outboundEventId,
+            requested,
+            receipt: result.right.receipt,
+            attempt,
+          } as const;
+        }
         return {
-          _tag: "delivered",
+          _tag: "enqueued",
           outboundEventId: row.outboundEventId,
           requested,
-          receipt: result.right.receipt,
+          acknowledgement: result.right.acknowledgement,
           attempt,
         } as const;
       }
@@ -188,9 +205,32 @@ export const deliveryRetryTrigger = (
             : { traceContext: outcome.requested.traceContext }),
         },
       });
-      (tx as unknown as InMemoryDispatchTriggerTx).markOutboxDelivered({
+      (tx as unknown as InMemoryDispatchTriggerTx).markOutboxSucceeded({
         outboundEventId: outcome.outboundEventId,
-        deliveredEventId: event.id,
+        successEventId: event.id,
+        attempts: outcome.attempt,
+      });
+      return;
+    }
+
+    if (outcome._tag === "enqueued") {
+      const event = tx.insertEvent({
+        kind: DISPATCH_EVENT_KINDS.OUTBOUND_ENQUEUED,
+        payload: {
+          outboundEventId: outcome.outboundEventId,
+          target: outcome.requested.target,
+          event: outcome.requested.event,
+          idempotencyKey: outcome.requested.idempotencyKey,
+          enqueueAcknowledgement: outcome.acknowledgement,
+          attempt: outcome.attempt,
+          ...(outcome.requested.traceContext === undefined
+            ? {}
+            : { traceContext: outcome.requested.traceContext }),
+        },
+      });
+      (tx as unknown as InMemoryDispatchTriggerTx).markOutboxSucceeded({
+        outboundEventId: outcome.outboundEventId,
+        successEventId: event.id,
         attempts: outcome.attempt,
       });
       return;
@@ -315,7 +355,7 @@ export const InMemoryDispatchLive = (
                 sourceIdentity: eventIdentity,
                 requested,
                 attempts: 0,
-                deliveredEventId: null,
+                successEventId: null,
                 lastError: null,
               }),
             );

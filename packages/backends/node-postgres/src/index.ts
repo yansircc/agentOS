@@ -47,6 +47,7 @@ import {
   describeDispatchCause,
   dispatchBackoffMs,
   dispatchLedgerDeliveryReceipt,
+  dispatchTargetDelivered,
   durableTriggerDuePayload,
   emptyResourceProjection,
   parseDispatchLivedClaim,
@@ -60,6 +61,7 @@ import {
   type BackendProtocolEventIdentity,
   type BackendProtocolProjectionKey,
   type BackendProtocolTruthIdentity,
+  type DispatchEnqueueAcknowledgement,
   type DispatchEnvelope,
   type DispatchReceiverResult,
   type DispatchTargetAdapter,
@@ -105,7 +107,7 @@ interface DueWorkRow {
   readonly cancelRequestedAt: number | null;
   readonly cancelReason: string | null;
   readonly dispatchIntent: LedgerEvent | null;
-  readonly dispatchDeliveredCount: number;
+  readonly dispatchSuccessCount: number;
   readonly dispatchAttemptCount: number;
 }
 
@@ -272,13 +274,17 @@ export class NodePostgresBackend {
           if (target !== undefined) return target.deliver(envelope);
         }
         const accept = () => this.receive(identity, envelope);
-        return receiver === undefined ? accept() : receiver(envelope, accept);
+        return (receiver === undefined ? accept() : receiver(envelope, accept)).then(
+          dispatchTargetDelivered,
+        );
       },
     });
     this.#targets.set(`${materialRefKey(this.bindingRef)}:${targetScope}`, {
       deliver: (envelope) => {
         const accept = () => this.receive(identity, envelope);
-        return receiver === undefined ? accept() : receiver(envelope, accept);
+        return (receiver === undefined ? accept() : receiver(envelope, accept)).then(
+          dispatchTargetDelivered,
+        );
       },
     });
   }
@@ -809,7 +815,7 @@ export class NodePostgresBackend {
       return;
     }
     const requested = parsed.value;
-    if (row.dispatchDeliveredCount > 0) {
+    if (row.dispatchSuccessCount > 0) {
       await this.#completeDue(row.id, now, row.claimToken);
       return;
     }
@@ -829,28 +835,50 @@ export class NodePostgresBackend {
     try {
       if (target === undefined) throw "agent_os.dispatch_target_not_found";
       const result = await target.deliver(envelope);
-      await this.#appendEvents([
-        {
-          ts: now,
-          kind: DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED,
-          identity: row.identity,
-          payload: {
-            outboundEventId: intent.id,
-            target: requested.target,
-            event: requested.event,
-            idempotencyKey: requested.idempotencyKey,
-            deliveryReceipt: result.receipt,
-            attempt: attempts,
-            claim: settleDispatchOutboundDelivered(requested.claim, {
-              bindingKey,
+      if (result._tag === "delivered") {
+        await this.#appendEvents([
+          {
+            ts: now,
+            kind: DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED,
+            identity: row.identity,
+            payload: {
+              outboundEventId: intent.id,
+              target: requested.target,
+              event: requested.event,
+              idempotencyKey: requested.idempotencyKey,
               deliveryReceipt: result.receipt,
-            }),
-            ...(requested.traceContext === undefined
-              ? {}
-              : { traceContext: requested.traceContext }),
+              attempt: attempts,
+              claim: settleDispatchOutboundDelivered(requested.claim, {
+                bindingKey,
+                deliveryReceipt: result.receipt,
+              }),
+              ...(requested.traceContext === undefined
+                ? {}
+                : { traceContext: requested.traceContext }),
+            },
           },
-        },
-      ]);
+        ]);
+      } else {
+        const acknowledgement: DispatchEnqueueAcknowledgement = result.acknowledgement;
+        await this.#appendEvents([
+          {
+            ts: now,
+            kind: DISPATCH_EVENT_KINDS.OUTBOUND_ENQUEUED,
+            identity: row.identity,
+            payload: {
+              outboundEventId: intent.id,
+              target: requested.target,
+              event: requested.event,
+              idempotencyKey: requested.idempotencyKey,
+              enqueueAcknowledgement: acknowledgement,
+              attempt: attempts,
+              ...(requested.traceContext === undefined
+                ? {}
+                : { traceContext: requested.traceContext }),
+            },
+          },
+        ]);
+      }
       await this.#completeDue(row.id, now, row.claimToken);
     } catch (cause) {
       const terminal = attempts >= requested.retryPolicy.maxAttempts;
@@ -999,6 +1027,7 @@ export class NodePostgresBackend {
         FROM agentos_events
         WHERE identity_key = ${sqlString(backendProtocolEventIdentityKey(identity))}
           AND kind = ANY(ARRAY[
+            ${sqlString(DISPATCH_EVENT_KINDS.OUTBOUND_ENQUEUED)},
             ${sqlString(DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED)},
             ${sqlString(DISPATCH_EVENT_KINDS.OUTBOUND_FAILED)}
           ]::text[])
@@ -1015,9 +1044,10 @@ export class NodePostgresBackend {
             THEN (SELECT row_to_json(intent) FROM intent)
             ELSE NULL
           END AS "dispatchIntent",
-          (SELECT COUNT(*)::int FROM related WHERE kind = ${sqlString(
-            DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED,
-          )}) AS "dispatchDeliveredCount",
+          (SELECT COUNT(*)::int FROM related WHERE kind = ANY(ARRAY[
+            ${sqlString(DISPATCH_EVENT_KINDS.OUTBOUND_ENQUEUED)},
+            ${sqlString(DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED)}
+          ]::text[])) AS "dispatchSuccessCount",
           (SELECT COUNT(*)::int FROM related) AS "dispatchAttemptCount"
         FROM claimed
       )

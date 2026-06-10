@@ -23,7 +23,7 @@ export interface DispatchOutboxRow {
   readonly sourceIdentity: BackendProtocolEventIdentity;
   readonly requested: DispatchRequestedPayload;
   attempts: number;
-  deliveredEventId: number | null;
+  successEventId: number | null;
   lastError: string | null;
 }
 

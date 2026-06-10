@@ -5,6 +5,7 @@ import { bindingMaterialRef } from "@agent-os/kernel/material-ref";
 
 import {
   DELIVERY_RETRY_TRIGGER_KIND,
+  DISPATCH_EVENT_KINDS,
   DISPATCH_MAX_ATTEMPTS,
   DISPATCH_RETRY_POLICY,
   DURABLE_TRIGGER_SCHEDULED_CANCELLED,
@@ -17,12 +18,13 @@ import {
   backendProtocolTruthIdentityKey,
   describeDispatchCause,
   dispatchBackoffMs,
-  dispatchExternalDeliveryReceipt,
+  dispatchExternalEnqueueAcknowledgement,
   dispatchFailedHasNoDeliveryReceipt,
   dispatchLedgerDeliveryReceipt,
   dispatchReplaySnapshotFromDeliveredPayload,
   dispatchReceiptBeforeTerminalProof,
   dispatchSettlementContract,
+  dispatchTargetEnqueued,
   durableTriggerBackoffMs,
   durableTriggerDuePayload,
   parseDurableTriggerRetryPolicy,
@@ -424,7 +426,7 @@ describe("@agent-os/backend-protocol", () => {
     expect(functionPolicy.cause.message).toBe("durable trigger retry policy malformed");
   });
 
-  it("settles outbound delivery against target receipts, not only receiver ledger ids", () => {
+  it("settles outbound delivery against target-owned receipts", () => {
     expect(dispatchSettlementContract.anchorKinds).toEqual(["ledger_event", "external_receipt"]);
     expect(
       dispatchLedgerDeliveryReceipt({ targetScope: "receiver", deliveredEventId: 42 }),
@@ -432,29 +434,38 @@ describe("@agent-os/backend-protocol", () => {
       anchorId: "dispatch.outbound:receiver:42",
       anchorKind: "ledger_event",
     });
-    expect(
-      dispatchExternalDeliveryReceipt({
-        targetKind: "queue",
-        targetScope: "image-jobs",
-        idempotencyKey: "job-1",
-      }),
-    ).toEqual({
-      anchorId: "dispatch.queue:image-jobs:job-1",
-      anchorKind: "external_receipt",
-    });
+    const targetOwnedExternalReceipt = {
+      anchorId: "target-receiver:receipt-1",
+      anchorKind: "external_receipt" as const,
+    };
 
     const lived = settleDispatchOutboundDelivered(claim, {
       bindingKey: "binding:cloudflare:queue:image-jobs",
-      deliveryReceipt: {
-        anchorId: "queue:image-jobs:msg-1",
-        anchorKind: "external_receipt",
-      },
+      deliveryReceipt: targetOwnedExternalReceipt,
     });
 
     expect(lived.anchorRef).toEqual({
-      anchorId: "queue:image-jobs:msg-1",
+      anchorId: "target-receiver:receipt-1",
       anchorKind: "external_receipt",
       carrierRef: "dispatch:binding:cloudflare:queue:image-jobs",
+    });
+  });
+
+  it("represents external enqueue acknowledgement as a weaker outbound fact", () => {
+    const acknowledgement = dispatchExternalEnqueueAcknowledgement({
+      targetKind: "queue",
+      targetScope: "image-jobs",
+      idempotencyKey: "job-1",
+    });
+
+    expect(DISPATCH_EVENT_KINDS.OUTBOUND_ENQUEUED).toBe("dispatch.outbound.enqueued");
+    expect(acknowledgement).toEqual({
+      acknowledgementId: "dispatch.queue.enqueued:image-jobs:job-1",
+      acknowledgementKind: "external_enqueue",
+    });
+    expect(dispatchTargetEnqueued(acknowledgement)).toEqual({
+      _tag: "enqueued",
+      acknowledgement,
     });
   });
 
@@ -467,10 +478,9 @@ describe("@agent-os/backend-protocol", () => {
       },
       event: "app.deliver",
       idempotencyKey: "dispatch-terminal-1",
-      deliveryReceipt: dispatchExternalDeliveryReceipt({
-        targetKind: "queue",
+      deliveryReceipt: dispatchLedgerDeliveryReceipt({
         targetScope: "receiver",
-        idempotencyKey: "dispatch-terminal-1",
+        deliveredEventId: 7,
       }),
       attempt: 1,
       traceContext,
@@ -524,10 +534,9 @@ describe("@agent-os/backend-protocol", () => {
       },
       event: "app.deliver",
       idempotencyKey: "dispatch-replay-1",
-      deliveryReceipt: dispatchExternalDeliveryReceipt({
-        targetKind: "queue",
+      deliveryReceipt: dispatchLedgerDeliveryReceipt({
         targetScope: "receiver",
-        idempotencyKey: "dispatch-replay-1",
+        deliveredEventId: 9,
       }),
       attempt: 2,
       traceContext,

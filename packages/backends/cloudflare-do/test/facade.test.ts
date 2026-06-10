@@ -256,7 +256,7 @@ describe("defineAgentDO facade lowering", () => {
     expect(lowered.submitBindings).toBe(null);
   });
 
-  it("materializes Queue, HTTP, and provider dispatch targets as external receipts", () => {
+  it("materializes Queue, HTTP, and provider dispatch targets as enqueue acknowledgements", () => {
     const queueMessages: unknown[] = [];
     const queue = queueDispatchTarget({
       send: (message) => {
@@ -278,17 +278,26 @@ describe("defineAgentDO facade lowering", () => {
       provider.deliver(dispatchEnvelope),
     ]).then(([queueResult, httpResult, providerResult]) => {
       expect(queueMessages).toHaveLength(1);
-      expect(queueResult.receipt).toEqual({
-        anchorId: "dispatch.queue:image-target:job-1",
-        anchorKind: "external_receipt",
+      expect(queueResult).toEqual({
+        _tag: "enqueued",
+        acknowledgement: {
+          acknowledgementId: "dispatch.queue.enqueued:image-target:job-1",
+          acknowledgementKind: "external_enqueue",
+        },
       });
-      expect(httpResult.receipt).toEqual({
-        anchorId: "dispatch.http:image-target:job-1",
-        anchorKind: "external_receipt",
+      expect(httpResult).toEqual({
+        _tag: "enqueued",
+        acknowledgement: {
+          acknowledgementId: "dispatch.http.enqueued:image-target:job-1",
+          acknowledgementKind: "external_enqueue",
+        },
       });
-      expect(providerResult.receipt).toEqual({
-        anchorId: "provider:image:receipt-1",
-        anchorKind: "external_receipt",
+      expect(providerResult).toEqual({
+        _tag: "enqueued",
+        acknowledgement: {
+          acknowledgementId: "provider:image:receipt-1",
+          acknowledgementKind: "external_enqueue",
+        },
       });
     });
   });

@@ -127,9 +127,9 @@ interface InMemoryProjectionMeta {
 type InMemoryOutboxPatch =
   | { readonly _tag: "add"; readonly row: DispatchOutboxRow }
   | {
-      readonly _tag: "delivered";
+      readonly _tag: "success";
       readonly outboundEventId: number;
-      readonly deliveredEventId: number;
+      readonly successEventId: number;
       readonly attempts: number;
     }
   | {
@@ -883,10 +883,10 @@ export class InMemoryBackendState {
       return;
     }
     const row = this.outbox.get(patch.outboundEventId);
-    if (row === undefined || row.deliveredEventId !== null) return;
+    if (row === undefined || row.successEventId !== null) return;
     row.attempts = patch.attempts;
-    if (patch._tag === "delivered") {
-      row.deliveredEventId = patch.deliveredEventId;
+    if (patch._tag === "success") {
+      row.successEventId = patch.successEventId;
       row.lastError = null;
       return;
     }
@@ -1029,7 +1029,7 @@ export class InMemoryBackendState {
 
   pendingOutboxByIntent(intentEventId: number): DispatchOutboxRow | null {
     const row = this.outbox.get(intentEventId);
-    if (row === undefined || row.deliveredEventId !== null) return null;
+    if (row === undefined || row.successEventId !== null) return null;
     return row;
   }
 
@@ -1194,12 +1194,12 @@ export class InMemoryBackendState {
             intentEventId,
           });
         },
-        markOutboxDelivered: (spec: {
+        markOutboxSucceeded: (spec: {
           readonly outboundEventId: number;
-          readonly deliveredEventId: number;
+          readonly successEventId: number;
           readonly attempts: number;
         }) => {
-          outboxPatches.push({ _tag: "delivered", ...spec });
+          outboxPatches.push({ _tag: "success", ...spec });
         },
         markOutboxFailed: (spec: {
           readonly outboundEventId: number;
@@ -1209,9 +1209,9 @@ export class InMemoryBackendState {
           outboxPatches.push({ _tag: "failed", ...spec });
         },
       } as TriggerTx & {
-        readonly markOutboxDelivered: (spec: {
+        readonly markOutboxSucceeded: (spec: {
           readonly outboundEventId: number;
-          readonly deliveredEventId: number;
+          readonly successEventId: number;
           readonly attempts: number;
         }) => void;
         readonly markOutboxFailed: (spec: {

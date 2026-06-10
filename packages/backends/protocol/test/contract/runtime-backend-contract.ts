@@ -15,13 +15,14 @@ import {
   backendProtocolProjectionKey,
   backendProtocolTruthIdentityKey,
   dispatchBackoffMs,
+  dispatchExternalEnqueueAcknowledgement,
   type BackendProtocolDispatchTarget,
   type BackendProtocolEventIdentity,
   type BackendProtocolProjectionKey,
-  type DispatchDeliveryResult,
   type DispatchEnvelope,
   type DispatchReceiverResult,
   type DispatchTargetAdapter,
+  type DispatchTargetResult,
   type GrantResult,
   type ResourceProjection,
 } from "../../src";
@@ -36,7 +37,7 @@ export type ContractDispatchReceiver = (
 
 export type ContractDispatchTargetAdapter = (
   envelope: DispatchEnvelope,
-) => Promise<DispatchDeliveryResult>;
+) => Promise<DispatchTargetResult>;
 
 export interface RuntimeBackendDispatchSpec {
   readonly target: BackendProtocolDispatchTarget;
@@ -441,7 +442,7 @@ export const runRuntimeBackendContractSuite = (
       ),
     );
 
-    it.effect("drains Queue, HTTP, and provider target adapters through delivery receipts", () =>
+    it.effect("drains Queue, HTTP, and provider target adapters through enqueue acknowledgements", () =>
       withDriver((driver) =>
         Effect.gen(function* () {
           const targets = [
@@ -457,10 +458,12 @@ export const runRuntimeBackendContractSuite = (
                 attempts += 1;
                 if (attempts === 1) return Promise.reject(`${target.label} unavailable`);
                 return Promise.resolve({
-                  receipt: {
-                    anchorId: `${target.label}:image-gen:${envelope.idempotencyKey}`,
-                    anchorKind: "external_receipt",
-                  },
+                  _tag: "enqueued",
+                  acknowledgement: dispatchExternalEnqueueAcknowledgement({
+                    targetKind: target.label,
+                    targetScope: envelope.targetScope,
+                    idempotencyKey: envelope.idempotencyKey,
+                  }),
                 });
               }),
             );
@@ -495,7 +498,7 @@ export const runRuntimeBackendContractSuite = (
                 driver.drainDispatchDue(contractIdentity(sourceScope), failed[0]!.nextAttemptAt!),
               ),
             ).toEqual({
-              delivered: 1,
+              delivered: 0,
               failed: 0,
             });
 
@@ -504,24 +507,29 @@ export const runRuntimeBackendContractSuite = (
             expectEventsIdentity(senderEvents, sourceIdentity);
             const delivered = payloadsOf<{
               readonly outboundEventId: number;
-              readonly deliveryReceipt: unknown;
-              readonly deliveredEventId?: unknown;
               readonly attempt: number;
-              readonly claim?: { readonly anchorRef?: unknown };
             }>(senderEvents, DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED);
-            expect(delivered).toHaveLength(1);
-            expect(delivered[0]).toMatchObject({
+            expect(delivered).toHaveLength(0);
+            const enqueued = payloadsOf<{
+              readonly outboundEventId: number;
+              readonly enqueueAcknowledgement: unknown;
+              readonly deliveryReceipt?: unknown;
+              readonly claim?: unknown;
+              readonly attempt: number;
+            }>(senderEvents, DISPATCH_EVENT_KINDS.OUTBOUND_ENQUEUED);
+            expect(enqueued).toHaveLength(1);
+            expect(enqueued[0]).toMatchObject({
               outboundEventId: result.outboundEventId,
-              deliveryReceipt: {
-                anchorId: `${target.label}:image-gen:${idempotencyKey}`,
-                anchorKind: "external_receipt",
+              enqueueAcknowledgement: {
+                acknowledgementId: expect.stringMatching(
+                  `^dispatch\\.${target.label}\\.enqueued:.*:${idempotencyKey}$`,
+                ),
+                acknowledgementKind: "external_enqueue",
               },
               attempt: 2,
             });
-            expect(delivered[0]).not.toHaveProperty("deliveredEventId");
-            expect(delivered[0]?.claim?.anchorRef).toMatchObject({
-              anchorKind: "external_receipt",
-            });
+            expect(enqueued[0]).not.toHaveProperty("deliveryReceipt");
+            expect(enqueued[0]).not.toHaveProperty("claim");
             expect(
               yield* promise(() => driver.events(contractIdentity(target.targetScope))),
             ).toEqual([]);

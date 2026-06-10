@@ -14,7 +14,7 @@ export const ensureDispatchSchema = (sql: SqlStorage): Effect.Effect<void, SqlEr
       sql.exec(`
         CREATE TABLE IF NOT EXISTS dispatch_outbox (
           outbound_event_id INTEGER PRIMARY KEY REFERENCES events(id),
-          delivered_event_id INTEGER REFERENCES events(id),
+          success_event_id INTEGER REFERENCES events(id),
           attempts INTEGER NOT NULL DEFAULT 0,
           last_error TEXT
         )
@@ -35,7 +35,7 @@ export const selectPendingOutboxByIntent = (
             o.attempts
           FROM dispatch_outbox o
           WHERE o.outbound_event_id = ?
-            AND o.delivered_event_id IS NULL
+            AND o.success_event_id IS NULL
         `,
       intentEventId,
     )
