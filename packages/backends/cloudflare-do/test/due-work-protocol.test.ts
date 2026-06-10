@@ -3,7 +3,6 @@ import { describe, expect, it } from "@effect/vitest";
 import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
 import { UnregisteredDurableTriggerKind } from "@agent-os/kernel/errors";
 import {
-  DURABLE_TRIGGER_SCHEDULED_REQUESTED,
   DurableTriggerRegistry,
   Dispatch,
   TriggerPump,
@@ -13,6 +12,8 @@ import {
 import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
 import {
   DISPATCH_MAX_ATTEMPTS,
+  DURABLE_TRIGGER_SCHEDULED_REQUESTED,
+  SCHEDULED_EVENT_TRIGGER_KIND,
   type BackendProtocolEventIdentity,
 } from "@agent-os/backend-protocol";
 import { type DispatchTargetRegistry } from "../src/dispatch";
@@ -88,7 +89,7 @@ describe("due-work alarm protocol", () => {
           1,
           10,
           registry,
-          scheduledEventTrigger.kind,
+          SCHEDULED_EVENT_TRIGGER_KIND,
           "app.scheduled",
           { job: "one" },
         ),
@@ -118,7 +119,7 @@ describe("due-work alarm protocol", () => {
         1,
         10,
         registry,
-        scheduledEventTrigger.kind,
+        SCHEDULED_EVENT_TRIGGER_KIND,
         "app.scheduled",
         { job: "one" },
       );
@@ -126,7 +127,7 @@ describe("due-work alarm protocol", () => {
       expect(intent.kind).toBe(DURABLE_TRIGGER_SCHEDULED_REQUESTED);
       const due = sql.exec("SELECT kind, payload FROM due_work").toArray();
       expect(due).toHaveLength(1);
-      expect(due[0]?.kind).toBe(scheduledEventTrigger.kind);
+      expect(due[0]?.kind).toBe(SCHEDULED_EVENT_TRIGGER_KIND);
       expect(JSON.parse(due[0]?.payload as string)).toEqual({ intentEventId: intent.id });
     }),
   );

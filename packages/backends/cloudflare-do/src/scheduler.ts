@@ -1,6 +1,7 @@
 import { Clock, Effect, Layer } from "effect";
 import { SqlError } from "@agent-os/kernel/errors";
-import { DurableTriggerRegistry, Scheduler, scheduledEventTrigger } from "@agent-os/runtime";
+import { SCHEDULED_EVENT_TRIGGER_KIND } from "@agent-os/backend-protocol";
+import { DurableTriggerRegistry, Scheduler } from "@agent-os/runtime";
 import { EventBus } from "./ledger";
 import { enqueueScheduledEvent, ensureDueWorkSchema } from "./due-work";
 import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
@@ -33,7 +34,7 @@ export const SchedulerLive = (
               now,
               at,
               registry,
-              scheduledEventTrigger.kind,
+              SCHEDULED_EVENT_TRIGGER_KIND,
               eventKind,
               data,
             );

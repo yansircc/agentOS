@@ -10,8 +10,11 @@
 - `.:DISPATCH_OUTBOUND_REQUESTED`
 - `.:DISPATCH_RETRY_POLICY`
 - `.:DELIVERY_RETRY_TRIGGER_KIND`
+- `.:DURABLE_TRIGGER_SCHEDULED_CANCELLED`
+- `.:DURABLE_TRIGGER_SCHEDULED_REQUESTED`
 - `.:QUOTA_EVENT_KIND`
 - `.:RESOURCE_EVENT_KIND`
+- `.:SCHEDULED_EVENT_TRIGGER_KIND`
 - `.:backendProtocolEventIdentityKey`
 - `.:backendProtocolProjectionKey`
 - `.:backendProtocolTruthIdentityKey`
@@ -39,6 +42,7 @@
 - `.:parseIntentPointerDuePayload`
 - `.:parseRequestedPayload`
 - `.:parseRequestedPayloadValue`
+- `.:parseScheduledEventIntentPayload`
 - `.:parseTraceContext`
 - `.:projectQuotaGrantUsage`
 - `.:projectQuotaState`
@@ -83,6 +87,7 @@
 - `.:ResourceReservePayloadSchema`
 - `.:ResourceReserveRejectedPayloadSchema`
 - `.:ResourceTerminalPayloadSchema`
+- `.:ScheduledEventIntentPayload`
 
 - `.:dispatchCarrierRef`
 - `.:dispatchFailedHasNoDeliveryReceipt`
@@ -92,6 +97,7 @@
 - `.:dispatchSettlementContract`
 - `.:parseDispatchLivedClaim`
 - `.:replayDispatchDeliveryFromSnapshot`
+- `.:scheduledEventIntentPayload`
 - `.:settleDispatchInboundAccepted`
 - `.:settleDispatchOutboundDelivered`
 - `./reference:fireBackendEventHandlers`

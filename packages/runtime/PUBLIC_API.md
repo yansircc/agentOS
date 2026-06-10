@@ -46,8 +46,6 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:DEFAULT_LLM_CALL_TIMEOUT_MS`
 - `.:DEFAULT_TRIGGER_ACQUIRE_DEADLINE_MS`
 - `.:DEFAULT_TRIGGER_DRAIN_MAX_ITERATIONS`
-- `.:DURABLE_TRIGGER_SCHEDULED_CANCELLED`
-- `.:DURABLE_TRIGGER_SCHEDULED_REQUESTED`
 - `.:Dispatch`
 - `.:DurableTrigger`
 - `.:DurableTriggerCancellationMode`
@@ -89,7 +87,6 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:Quota`
 - `.:RUN_BEARING_KINDS`
 - `.:Resources`
-- `.:ScheduledEventIntentPayload`
 - `.:Scheduler`
 - `.:StructuredDecodeResult`
 - `.:Tool`
@@ -128,7 +125,6 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:makeDurableTriggerRegistry`
 - `.:makeProjectionRegistry`
 - `.:makeProjectionRegistryResult`
-- `.:parseScheduledEventIntentPayload`
 - `.:projectRunStatus`
 - `.:projectRunTrace`
 - `.:projectRunsPage`
@@ -144,7 +140,6 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:waitForProjection`
 - `.:runSynchronousAttachedStreamCommit`
 - `.:runSynchronousTriggerCommit`
-- `.:scheduledEventIntentPayload`
 - `.:scheduledEventTrigger`
 - `.:settleToolAdmissionRejected`
 - `.:settleToolExecuted`

@@ -36,6 +36,9 @@ export const DISPATCH_OUTBOUND_REQUESTED = "dispatch.outbound.requested";
 export const DISPATCH_OUTBOUND_DELIVERED = "dispatch.outbound.delivered";
 export const DISPATCH_OUTBOUND_FAILED = "dispatch.outbound.failed";
 export const DISPATCH_INBOUND_ACCEPTED = "dispatch.inbound.accepted";
+export const SCHEDULED_EVENT_TRIGGER_KIND = "scheduled_event";
+export const DURABLE_TRIGGER_SCHEDULED_REQUESTED = "durable_trigger.scheduled.requested";
+export const DURABLE_TRIGGER_SCHEDULED_CANCELLED = "durable_trigger.scheduled.cancelled";
 export const DELIVERY_RETRY_TRIGGER_KIND = "delivery_retry";
 
 export interface BackendProtocolTruthIdentity {
@@ -299,10 +302,7 @@ export const emptyResourceProjection = (): ResourceProjection => ({
   consumed: 0,
 });
 
-const resourceKind = (value: unknown): string => {
-  if (typeof value !== "string") throw new TypeError("resource event kind must be string");
-  return value;
-};
+const resourceKind = (value: unknown): string => Schema.decodeUnknownSync(Schema.String)(value);
 
 const resourcePayload = (value: unknown): unknown =>
   typeof value === "string" ? (JSON.parse(value) as unknown) : value;
@@ -539,6 +539,11 @@ export interface IntentPointerDuePayload {
   readonly intentEventId: number;
 }
 
+export interface ScheduledEventIntentPayload {
+  readonly eventKind: string;
+  readonly data: unknown;
+}
+
 export interface DurableProcessLifecycleSnapshot {
   readonly id: number;
   readonly fireAt: number;
@@ -764,6 +769,24 @@ export const parseIntentPointerDuePayload = (
 export const durableTriggerDuePayload = (intentEventId: number): IntentPointerDuePayload => ({
   intentEventId,
 });
+
+export const scheduledEventIntentPayload = (
+  eventKind: string,
+  data: unknown,
+): ScheduledEventIntentPayload => ({ eventKind, data });
+
+export const parseScheduledEventIntentPayload = (
+  raw: unknown,
+): ProtocolPayloadParseResult<ScheduledEventIntentPayload> => {
+  if (
+    !Predicate.isRecord(raw) ||
+    Object.keys(raw).some((key) => key !== "eventKind" && key !== "data") ||
+    typeof raw.eventKind !== "string"
+  ) {
+    return { ok: false, cause: new TypeError("scheduled event intent payload malformed") };
+  }
+  return { ok: true, payload: { eventKind: raw.eventKind, data: raw.data } };
+};
 
 const RETRY_POLICY_KEYS = new Set(["maxAttempts", "initialDelayMs", "maxDelayMs", "multiplier"]);
 

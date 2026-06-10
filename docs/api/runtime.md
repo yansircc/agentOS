@@ -42,8 +42,6 @@
 - `.:DEFAULT_LLM_CALL_TIMEOUT_MS`
 - `.:DEFAULT_TRIGGER_ACQUIRE_DEADLINE_MS`
 - `.:DEFAULT_TRIGGER_DRAIN_MAX_ITERATIONS`
-- `.:DURABLE_TRIGGER_SCHEDULED_CANCELLED`
-- `.:DURABLE_TRIGGER_SCHEDULED_REQUESTED`
 - `.:Dispatch`
 - `.:DurableTrigger`
 - `.:DurableTriggerCancellationMode`
@@ -85,7 +83,6 @@
 - `.:Quota`
 - `.:RUN_BEARING_KINDS`
 - `.:Resources`
-- `.:ScheduledEventIntentPayload`
 - `.:Scheduler`
 - `.:StructuredDecodeResult`
 - `.:Tool`
@@ -124,7 +121,6 @@
 - `.:makeDurableTriggerRegistry`
 - `.:makeProjectionRegistry`
 - `.:makeProjectionRegistryResult`
-- `.:parseScheduledEventIntentPayload`
 - `.:projectRunStatus`
 - `.:projectRunTrace`
 - `.:projectRunsPage`
@@ -140,7 +136,6 @@
 - `.:waitForProjection`
 - `.:runSynchronousAttachedStreamCommit`
 - `.:runSynchronousTriggerCommit`
-- `.:scheduledEventIntentPayload`
 - `.:scheduledEventTrigger`
 - `.:settleToolAdmissionRejected`
 - `.:settleToolExecuted`

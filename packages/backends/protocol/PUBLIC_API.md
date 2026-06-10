@@ -14,8 +14,11 @@ Status: Backend protocol package. Public exports are limited to storage-free bac
 - `.:DISPATCH_OUTBOUND_REQUESTED`
 - `.:DISPATCH_RETRY_POLICY`
 - `.:DELIVERY_RETRY_TRIGGER_KIND`
+- `.:DURABLE_TRIGGER_SCHEDULED_CANCELLED`
+- `.:DURABLE_TRIGGER_SCHEDULED_REQUESTED`
 - `.:QUOTA_EVENT_KIND`
 - `.:RESOURCE_EVENT_KIND`
+- `.:SCHEDULED_EVENT_TRIGGER_KIND`
 - `.:backendProtocolEventIdentityKey`
 - `.:backendProtocolProjectionKey`
 - `.:backendProtocolTruthIdentityKey`
@@ -43,6 +46,7 @@ Status: Backend protocol package. Public exports are limited to storage-free bac
 - `.:parseIntentPointerDuePayload`
 - `.:parseRequestedPayload`
 - `.:parseRequestedPayloadValue`
+- `.:parseScheduledEventIntentPayload`
 - `.:parseTraceContext`
 - `.:projectQuotaGrantUsage`
 - `.:projectQuotaState`
@@ -87,6 +91,7 @@ Status: Backend protocol package. Public exports are limited to storage-free bac
 - `.:ResourceReservePayloadSchema`
 - `.:ResourceReserveRejectedPayloadSchema`
 - `.:ResourceTerminalPayloadSchema`
+- `.:ScheduledEventIntentPayload`
 
 - `.:dispatchCarrierRef`
 - `.:dispatchFailedHasNoDeliveryReceipt`
@@ -96,6 +101,7 @@ Status: Backend protocol package. Public exports are limited to storage-free bac
 - `.:dispatchSettlementContract`
 - `.:parseDispatchLivedClaim`
 - `.:replayDispatchDeliveryFromSnapshot`
+- `.:scheduledEventIntentPayload`
 - `.:settleDispatchInboundAccepted`
 - `.:settleDispatchOutboundDelivered`
 - `./reference:fireBackendEventHandlers`

@@ -10,7 +10,7 @@ Storage-free backend protocol algebra shared by runtime services and concrete ba
 
 ## Invariant
 
-Backend protocol semantics have one owner. Runtime services and concrete backends may consume the protocol DTOs and helpers, but they must not redefine dispatch vocabulary, retry policy, intent-pointer payload parsing, resource/quota projection shapes, or event-handler fanout policy. Durable trigger kind ownership lives in the runtime `DurableTriggerRegistry`, not in backend protocol constants.
+Backend protocol semantics have one owner. Runtime services and concrete backends may consume the protocol DTOs and helpers, but they must not redefine dispatch vocabulary, scheduled trigger vocabulary, retry policy, intent-pointer payload parsing, scheduled intent payload parsing, resource/quota projection shapes, or event-handler fanout policy. Runtime may implement trigger execution, but durable schedule intent vocabulary and due-work discriminators live here.
 
 ## Minimal Usage
 

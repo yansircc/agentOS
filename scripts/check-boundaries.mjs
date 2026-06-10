@@ -301,7 +301,11 @@ const matrix = [
     id: "node-postgres-backend-boundary",
     stage: "boundary-prepared",
     include: pathStarts("packages/backends/node-postgres/src/"),
-    forbiddenImports: ["cloudflare:workers", "@agent-os/backend-cloudflare-do"],
+    forbiddenImports: [
+      "cloudflare:workers",
+      "@agent-os/backend-cloudflare-do",
+      "@agent-os/runtime",
+    ],
   },
   {
     id: "tool-mutation-write-port-boundary",
@@ -504,6 +508,14 @@ const collectSelfTestFailures = () => {
         file: "packages/kernel/src/tools.ts",
         bad: "export interface ToolRequirements { readonly ledger: Ledger }\n",
         expected: "tool-mutation-write-port-boundary",
+      },
+      {
+        name: "node postgres runtime import",
+        file: "packages/backends/node-postgres/src/index.ts",
+        bad:
+          'import { scheduledEventIntentPayload } from "@agent-os/runtime";\n' +
+          "export const nodePostgres = 1;\n",
+        expected: "node-postgres-backend-boundary",
       },
       {
         name: "product resource leakage",

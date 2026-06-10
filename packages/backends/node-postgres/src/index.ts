@@ -36,8 +36,10 @@ import {
   DISPATCH_EVENT_KINDS,
   DISPATCH_INBOUND_ACCEPTED,
   DISPATCH_RETRY_POLICY,
+  DURABLE_TRIGGER_SCHEDULED_REQUESTED,
   QUOTA_EVENT_KIND,
   RESOURCE_EVENT_KIND,
+  SCHEDULED_EVENT_TRIGGER_KIND,
   backendProtocolEventIdentityKey,
   backendProtocolProjectionKey,
   backendProtocolTruthIdentityKey,
@@ -48,9 +50,11 @@ import {
   durableTriggerDuePayload,
   emptyResourceProjection,
   parseDispatchLivedClaim,
+  parseScheduledEventIntentPayload,
   parseRequestedPayloadValue,
   projectQuotaGrantUsage,
   projectResourceEvents,
+  scheduledEventIntentPayload,
   settleDispatchInboundAccepted,
   settleDispatchOutboundDelivered,
   type BackendProtocolEventIdentity,
@@ -70,10 +74,6 @@ import {
 } from "@agent-os/runtime-protocol";
 import { InvalidTraceContext, type TelemetryFanoutDiagnostic } from "@agent-os/telemetry-protocol";
 import { validateOptionalTraceContext } from "@agent-os/telemetry-protocol";
-import {
-  DURABLE_TRIGGER_SCHEDULED_REQUESTED,
-  scheduledEventIntentPayload,
-} from "@agent-os/runtime";
 import { PsqlCli, quoteIdentifier, sqlJson, sqlNumber, sqlString } from "./sql";
 
 export interface NodePostgresBackendOptions {
@@ -111,7 +111,6 @@ interface DueWorkRow {
 
 const DEFAULT_EVENT_LIMIT = 1000;
 const MAX_EVENT_LIMIT = 1000;
-const SCHEDULED_EVENT_TRIGGER_KIND = "scheduled_event";
 
 const schemaName = (schema: string | undefined): string =>
   schema ?? `agentos_node_postgres_${randomUUID().replace(/-/g, "_")}`;
@@ -782,14 +781,17 @@ export class NodePostgresBackend {
       await this.#completeDue(row.id, now, row.claimToken);
       return;
     }
-    const payload = recordOf(intent.payload, DURABLE_TRIGGER_SCHEDULED_REQUESTED);
-    const eventKind = stringField(payload, "eventKind");
+    const parsed = parseScheduledEventIntentPayload(intent.payload);
+    if (!parsed.ok) {
+      await this.#completeDue(row.id, now, row.claimToken);
+      return;
+    }
     await this.#appendEvents([
       {
         ts: now,
-        kind: eventKind,
+        kind: parsed.payload.eventKind,
         identity: row.identity,
-        payload: payload.data,
+        payload: parsed.payload.data,
       },
     ]);
     await this.#completeDue(row.id, now, row.claimToken);

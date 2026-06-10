@@ -4,10 +4,12 @@ import { DurableTriggerCommitReturnedThenable } from "@agent-os/kernel";
 import {
   DURABLE_TRIGGER_SCHEDULED_REQUESTED,
   DURABLE_TRIGGER_SCHEDULED_CANCELLED,
+  SCHEDULED_EVENT_TRIGGER_KIND,
+  scheduledEventIntentPayload,
+} from "@agent-os/backend-protocol";
+import {
   runSynchronousTriggerCommit,
   makeDurableTriggerRegistry,
-  parseScheduledEventIntentPayload,
-  scheduledEventIntentPayload,
   scheduledEventTrigger,
   triggerParseOk,
   type DurableTrigger,
@@ -102,14 +104,11 @@ describe("durable trigger runtime algebra", () => {
     expect(failure).toBeInstanceOf(DurableTriggerCommitReturnedThenable);
   });
 
-  it.effect("owns the scheduled event trigger value", () =>
+  it.effect("implements the protocol-owned scheduled event trigger", () =>
     Effect.gen(function* () {
       const intent = scheduledEventIntentPayload("app.scheduled", { job: "one" });
-      expect(parseScheduledEventIntentPayload(intent)).toEqual({
-        ok: true,
-        intent,
-      });
-      expect(scheduledEventTrigger.kind).toBe("scheduled_event");
+      expect(scheduledEventTrigger.parseIntent(intent)).toEqual({ ok: true, intent });
+      expect(scheduledEventTrigger.kind).toBe(SCHEDULED_EVENT_TRIGGER_KIND);
       expect(scheduledEventTrigger.intentEventKind).toBe(DURABLE_TRIGGER_SCHEDULED_REQUESTED);
       expect(scheduledEventTrigger.cancellation).toBe("cooperative");
 

@@ -7,8 +7,11 @@ import {
   DELIVERY_RETRY_TRIGGER_KIND,
   DISPATCH_MAX_ATTEMPTS,
   DISPATCH_RETRY_POLICY,
+  DURABLE_TRIGGER_SCHEDULED_CANCELLED,
+  DURABLE_TRIGGER_SCHEDULED_REQUESTED,
   QUOTA_EVENT_KIND,
   RESOURCE_EVENT_KIND,
+  SCHEDULED_EVENT_TRIGGER_KIND,
   backendProtocolEventIdentityKey,
   backendProtocolProjectionKey,
   backendProtocolTruthIdentityKey,
@@ -25,12 +28,14 @@ import {
   parseDurableTriggerRetryPolicy,
   parseBackendProtocolLedgerEventRpc,
   parseIntentPointerDuePayload,
+  parseScheduledEventIntentPayload,
   parseRequestedPayload,
   projectQuotaGrantUsage,
   projectQuotaState,
   projectResourceRows,
   projectResourceState,
   replayDispatchDeliveryFromSnapshot,
+  scheduledEventIntentPayload,
   settleDispatchOutboundDelivered,
   type DispatchTargetAdapter,
 } from "../src";
@@ -268,6 +273,24 @@ describe("@agent-os/backend-protocol", () => {
     expect(malformedDeliveryDue.ok).toBe(false);
     if (malformedDeliveryDue.ok) return;
     expect(malformedDeliveryDue.cause.message).toBe("durable trigger due-work payload malformed");
+  });
+
+  it("owns scheduled trigger discriminator and intent payload vocabulary", () => {
+    const payload = scheduledEventIntentPayload("app.scheduled", { job: "one" });
+    expect(SCHEDULED_EVENT_TRIGGER_KIND).toBe("scheduled_event");
+    expect(DURABLE_TRIGGER_SCHEDULED_REQUESTED).toBe("durable_trigger.scheduled.requested");
+    expect(DURABLE_TRIGGER_SCHEDULED_CANCELLED).toBe("durable_trigger.scheduled.cancelled");
+    expect(parseScheduledEventIntentPayload(payload)).toEqual({
+      ok: true,
+      payload,
+    });
+    expect(parseScheduledEventIntentPayload({ eventKind: "app.scheduled", extra: true }).ok).toBe(
+      false,
+    );
+    const malformed = parseScheduledEventIntentPayload({ data: { job: "one" } });
+    expect(malformed.ok).toBe(false);
+    if (malformed.ok) return;
+    expect(malformed.cause.message).toBe("scheduled event intent payload malformed");
   });
 
   it("owns resource payload codecs and projection fold", () => {

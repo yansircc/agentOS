@@ -8,6 +8,13 @@ import {
   type SqlError,
 } from "@agent-os/kernel";
 import type { EventQueryOptions, LedgerEvent } from "@agent-os/kernel/types";
+import {
+  DURABLE_TRIGGER_SCHEDULED_CANCELLED,
+  DURABLE_TRIGGER_SCHEDULED_REQUESTED,
+  SCHEDULED_EVENT_TRIGGER_KIND,
+  parseScheduledEventIntentPayload,
+  type ScheduledEventIntentPayload,
+} from "@agent-os/backend-protocol";
 
 export interface TriggerEventSpec {
   readonly kind: string;
@@ -104,41 +111,16 @@ export const getDurableTrigger = (
     : Effect.succeed(trigger);
 };
 
-export const DURABLE_TRIGGER_SCHEDULED_REQUESTED = "durable_trigger.scheduled.requested";
-export const DURABLE_TRIGGER_SCHEDULED_CANCELLED = "durable_trigger.scheduled.cancelled";
 export const DEFAULT_TRIGGER_ACQUIRE_DEADLINE_MS = 60_000;
 
-export interface ScheduledEventIntentPayload {
-  readonly eventKind: string;
-  readonly data: unknown;
-}
-
-export const scheduledEventIntentPayload = (
-  eventKind: string,
-  data: unknown,
-): ScheduledEventIntentPayload => ({ eventKind, data });
-
-export const parseScheduledEventIntentPayload = (
-  raw: unknown,
-): TriggerParseResult<ScheduledEventIntentPayload> => {
-  if (
-    typeof raw !== "object" ||
-    raw === null ||
-    typeof (raw as { readonly eventKind?: unknown }).eventKind !== "string"
-  ) {
-    return triggerParseFail("scheduled event intent payload malformed");
-  }
-  return triggerParseOk({
-    eventKind: (raw as { readonly eventKind: string }).eventKind,
-    data: (raw as { readonly data?: unknown }).data,
-  });
-};
-
 export const scheduledEventTrigger = {
-  kind: "scheduled_event",
+  kind: SCHEDULED_EVENT_TRIGGER_KIND,
   intentEventKind: DURABLE_TRIGGER_SCHEDULED_REQUESTED,
   cancellation: "cooperative",
-  parseIntent: parseScheduledEventIntentPayload,
+  parseIntent: (raw) => {
+    const parsed = parseScheduledEventIntentPayload(raw);
+    return parsed.ok ? triggerParseOk(parsed.payload) : triggerParseFail(parsed.cause.message);
+  },
   acquire: (intent: ScheduledEventIntentPayload, _ctx: AcquireCtx) => Effect.succeed(intent),
   commit: (outcome, tx) => {
     tx.insertEvent({

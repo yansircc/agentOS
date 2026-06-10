@@ -9,14 +9,11 @@ import {
   durableProcessLifecycleState,
   durableTriggerDuePayload,
   parseIntentPointerDuePayload,
+  scheduledEventIntentPayload,
   type DurableProcessLifecycleState,
   type IntentPointerDuePayload,
 } from "@agent-os/backend-protocol";
-import {
-  getDurableTrigger,
-  scheduledEventIntentPayload,
-  type TriggerRegistry,
-} from "@agent-os/runtime";
+import { getDurableTrigger, type TriggerRegistry } from "@agent-os/runtime";
 import {
   commitLedgerTransaction,
   type LedgerEventRef,

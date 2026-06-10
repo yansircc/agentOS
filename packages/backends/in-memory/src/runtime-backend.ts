@@ -2,6 +2,7 @@ import { Effect, Layer } from "effect";
 import { SqlError } from "@agent-os/kernel/errors";
 import {
   backendProtocolTruthIdentityKey,
+  SCHEDULED_EVENT_TRIGGER_KIND,
   type BackendProtocolTruthIdentity,
 } from "@agent-os/backend-protocol";
 import {
@@ -110,7 +111,7 @@ export const createInMemoryRuntimeBackend = (
     AttachedStreamRegistry,
     makeAttachedStreamRegistry(options.streams ?? [], {
       reservedKinds: [
-        scheduledEventTrigger.kind,
+        SCHEDULED_EVENT_TRIGGER_KIND,
         dispatchRetryTrigger.kind,
         ...(options.triggers ?? []).map((trigger) => trigger.kind),
       ],

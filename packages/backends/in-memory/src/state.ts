@@ -17,6 +17,7 @@ import {
   backendProtocolTruthIdentityKey,
   durableProcessLifecycleState,
   durableTriggerDuePayload,
+  scheduledEventIntentPayload,
   type BackendProtocolEventIdentity,
   type BackendProtocolProjectionKey,
   type BackendProtocolTruthIdentity,
@@ -25,7 +26,6 @@ import {
 } from "@agent-os/backend-protocol";
 import { fireBackendEventHandlers } from "@agent-os/backend-protocol/reference";
 import {
-  scheduledEventIntentPayload,
   applyProjectionEvent,
   getProjection,
   makeProjectionRegistryResult,

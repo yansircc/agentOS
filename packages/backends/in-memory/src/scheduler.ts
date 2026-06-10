@@ -1,6 +1,9 @@
 import { Clock, Effect, Layer } from "effect";
-import type { BackendProtocolTruthIdentity } from "@agent-os/backend-protocol";
-import { DurableTriggerRegistry, Scheduler, scheduledEventTrigger } from "@agent-os/runtime";
+import {
+  SCHEDULED_EVENT_TRIGGER_KIND,
+  type BackendProtocolTruthIdentity,
+} from "@agent-os/backend-protocol";
+import { DurableTriggerRegistry, Scheduler } from "@agent-os/runtime";
 import { inMemoryRuntimeEventIdentity, type InMemoryBackendState } from "./state";
 
 export const InMemorySchedulerLive = (
@@ -20,7 +23,7 @@ export const InMemorySchedulerLive = (
               now,
               at,
               registry,
-              scheduledEventTrigger.kind,
+              SCHEDULED_EVENT_TRIGGER_KIND,
               eventKind,
               data,
             );
