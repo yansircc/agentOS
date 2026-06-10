@@ -15,7 +15,7 @@ import {
   type RejectedClaim,
   type RejectionRef,
 } from "./effect-claim";
-import { type BoundaryPackage, type EventPayloadMap } from "./extensions";
+import { type BoundaryPackage } from "./extensions";
 import { validateAgainstSchema, type JsonSchemaObject } from "./json-schema-dialect";
 import type { EffectAuthorityContract, MaterialRequirement } from "./material-ref";
 import {
@@ -97,11 +97,6 @@ export type CarrierHandlers<
   }) => void | Promise<void>;
 };
 
-export interface CarrierProjection<State, Events extends EventPayloadMap> {
-  readonly initial: () => State;
-  readonly reduce: (state: State, event: Events[keyof Events & string]) => State;
-}
-
 type LivedEventNames<
   Events extends Readonly<
     Record<string, CarrierEvent<string, Schema.Schema.AnyNoContext, ClaimSlot>>
@@ -163,7 +158,6 @@ export interface Carrier<
   Events extends Readonly<
     Record<string, CarrierEvent<string, Schema.Schema.AnyNoContext, ClaimSlot>>
   >,
-  State,
 > {
   readonly packageId: string;
   readonly prefix: Prefix;
@@ -191,7 +185,6 @@ export interface Carrier<
       }) => void | Promise<void>
     >
   >;
-  readonly projection: CarrierProjection<State, CarrierEventPayloads<Prefix, Events>>;
 }
 
 export interface DefineCarrierSpec<
@@ -199,7 +192,6 @@ export interface DefineCarrierSpec<
   Events extends Readonly<
     Record<string, CarrierEvent<string, Schema.Schema.AnyNoContext, ClaimSlot>>
   >,
-  State,
 > {
   readonly packageId: string;
   readonly prefix: Prefix;
@@ -207,7 +199,6 @@ export interface DefineCarrierSpec<
   readonly events: Events;
   readonly effectAuthorityContracts?: ReadonlyArray<EffectAuthorityContract>;
   readonly materialRequirements?: ReadonlyArray<MaterialRequirement>;
-  readonly projection: CarrierProjection<State, EventPayloadMap>;
 }
 
 const failCarrier = (message: string): never =>
@@ -255,10 +246,6 @@ export const event = <
   readonly payload: S;
   readonly claim: Slot;
 }): CarrierEvent<Kind, S, Slot> => spec;
-
-export const ledgerProjection = <State, Events extends EventPayloadMap>(
-  spec: CarrierProjection<State, Events>,
-): CarrierProjection<State, Events> => spec;
 
 const schemaWithoutClaimCollision = (
   schema: JsonSchemaObject,
@@ -355,10 +342,9 @@ export const defineCarrier = <
   const Events extends Readonly<
     Record<string, CarrierEvent<string, Schema.Schema.AnyNoContext, ClaimSlot>>
   >,
-  State,
 >(
-  spec: DefineCarrierSpec<Prefix, Events, State>,
-): Carrier<Prefix, Events, State> => {
+  spec: DefineCarrierSpec<Prefix, Events>,
+): Carrier<Prefix, Events> => {
   const fullKinds = new Map<string, string>();
   const kind: Record<string, string> = {};
   const payloadEvents: Record<string, unknown> = {};
@@ -499,9 +485,5 @@ export const defineCarrier = <
       }
       return out;
     },
-    projection: spec.projection as unknown as CarrierProjection<
-      State,
-      CarrierEventPayloads<Prefix, Events>
-    >,
   };
 };

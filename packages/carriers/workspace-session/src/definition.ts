@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { defineCarrier, event, ledgerProjection, lived, rejected } from "@agent-os/kernel/carrier";
+import { defineCarrier, event, lived, rejected } from "@agent-os/kernel/carrier";
 
 export const WORKSPACE_SESSION_EVENT_PREFIX = "workspace_session.";
 
@@ -80,10 +80,6 @@ export const workspaceSessionCarrier = defineCarrier({
       }),
     }),
   },
-  projection: ledgerProjection({
-    initial: () => ({ status: "missing" as const }),
-    reduce: (state) => state,
-  }),
 });
 
 export const WORKSPACE_SESSION_KIND = workspaceSessionCarrier.kind;

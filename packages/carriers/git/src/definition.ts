@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { defineCarrier, event, ledgerProjection, lived } from "@agent-os/kernel/carrier";
+import { defineCarrier, event, lived } from "@agent-os/kernel/carrier";
 
 export const GIT_EVENT_PREFIX = "git.";
 
@@ -55,10 +55,6 @@ export const gitCarrier = defineCarrier({
       claim: lived({ key: "claim", anchorKinds: ["carrier_proof"] }),
     }),
   },
-  projection: ledgerProjection({
-    initial: () => ({ cleaned: false }),
-    reduce: (state) => state,
-  }),
 });
 
 export const GIT_KIND = gitCarrier.kind;

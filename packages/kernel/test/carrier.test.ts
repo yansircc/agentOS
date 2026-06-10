@@ -1,7 +1,7 @@
 import { Schema } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 
-import { defineCarrier, event, ledgerProjection, lived, none, pre, rejected } from "../src/carrier";
+import { defineCarrier, event, lived, none, pre, rejected } from "../src/carrier";
 import { makePreClaim } from "../src/effect-claim";
 
 const claim = makePreClaim({
@@ -47,10 +47,6 @@ const exampleCarrier = () =>
         claim: rejected({ key: "claim", rejectionKinds: ["policy_denied"] }),
       }),
     },
-    projection: ledgerProjection({
-      initial: () => ({ seen: 0 }),
-      reduce: (state) => ({ seen: state.seen + 1 }),
-    }),
   });
 
 describe("defineCarrier", () => {
@@ -72,6 +68,7 @@ describe("defineCarrier", () => {
     });
     expect(carrier.settlementContract.anchorKinds).toEqual(["ledger_event"]);
     expect(carrier.settlementContract.rejectionKinds).toEqual(["policy_denied"]);
+    expect("projection" in carrier).toBe(false);
   });
 
   it("decodes none, pre, lived, and rejected claim slots", () => {
@@ -170,10 +167,6 @@ describe("defineCarrier", () => {
           claim: rejected({ key: "claim", rejectionKinds: ["provider_rejected"] }),
         }),
       },
-      projection: ledgerProjection({
-        initial: () => ({}),
-        reduce: (state) => state,
-      }),
     });
 
     const carrierProofClaim = carrier.settle.proved(claim, { anchorId: "proof:1" });
@@ -214,10 +207,6 @@ describe("defineCarrier", () => {
             claim: none(),
           }),
         },
-        projection: ledgerProjection({
-          initial: () => ({}),
-          reduce: (state) => state,
-        }),
       }),
     ).toThrow(/duplicate carrier event kind/);
 
@@ -233,10 +222,6 @@ describe("defineCarrier", () => {
             claim: lived({ key: "claim", anchorKinds: ["ledger_event"] }),
           }),
         },
-        projection: ledgerProjection({
-          initial: () => ({}),
-          reduce: (state) => state,
-        }),
       }),
     ).toThrow(/payload schema declares claim slot/);
   });
@@ -256,10 +241,6 @@ describe("defineCarrier", () => {
             claim: none(),
           }),
         },
-        projection: ledgerProjection({
-          initial: () => ({}),
-          reduce: (state) => state,
-        }),
       }),
     ).toThrow(/index-signature-unsupported/);
   });

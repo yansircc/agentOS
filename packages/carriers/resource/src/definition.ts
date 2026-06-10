@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { defineCarrier, event, ledgerProjection, lived, rejected } from "@agent-os/kernel/carrier";
+import { defineCarrier, event, lived, rejected } from "@agent-os/kernel/carrier";
 import { materialRequirement, type EffectAuthorityContract } from "@agent-os/kernel/material-ref";
 
 export const RESOURCE_EVENT_PREFIX = "resource.";
@@ -158,10 +158,6 @@ export const resourceCarrierDefinition = defineCarrier({
       }),
     }),
   },
-  projection: ledgerProjection({
-    initial: () => ({ status: "missing" as const }),
-    reduce: (state) => state,
-  }),
 });
 
 export const RESOURCE_KIND = resourceCarrierDefinition.kind;

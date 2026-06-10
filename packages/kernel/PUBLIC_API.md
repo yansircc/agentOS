@@ -44,7 +44,6 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `./carrier:CarrierEventPayloads`
 - `./carrier:CarrierHandlers`
 - `./carrier:CarrierKindView`
-- `./carrier:CarrierProjection`
 - `./carrier:CarrierRejectMap`
 - `./carrier:CarrierRejectSpec`
 - `./carrier:CarrierSettleMap`
@@ -52,7 +51,6 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `./carrier:DefineCarrierSpec`
 - `./carrier:defineCarrier`
 - `./carrier:event`
-- `./carrier:ledgerProjection`
 - `./carrier:lived`
 - `./carrier:none`
 - `./carrier:pre`
@@ -337,7 +335,6 @@ text`
 - `.:CarrierEventPayloads`
 - `.:CarrierHandlers`
 - `.:CarrierKindView`
-- `.:CarrierProjection`
 - `.:CarrierRejectMap`
 - `.:CarrierRejectSpec`
 - `.:CarrierSettleMap`
@@ -508,7 +505,6 @@ text`
 - `.:isScopeRef`
 - `.:isSymbolicSettlementValue`
 - `.:ledgerTruthKey`
-- `.:ledgerProjection`
 - `.:lived`
 - `.:makeAgentSchemaSpec`
 - `.:makeCommitters`

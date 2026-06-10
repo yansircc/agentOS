@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { defineCarrier, event, ledgerProjection, lived, none, pre } from "@agent-os/kernel/carrier";
+import { defineCarrier, event, lived, none, pre } from "@agent-os/kernel/carrier";
 
 export const DECISION_GATE_EVENT_PREFIX = "decision_gate.";
 
@@ -53,10 +53,6 @@ export const decisionGateCarrier = defineCarrier({
       claim: lived({ key: "claim", anchorKinds: ["ledger_event"] }),
     }),
   },
-  projection: ledgerProjection({
-    initial: () => ({ status: "missing" as const }),
-    reduce: (state) => state,
-  }),
 });
 
 export const DECISION_GATE_KIND = decisionGateCarrier.kind;

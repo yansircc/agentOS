@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { defineCarrier, event, ledgerProjection, lived } from "@agent-os/kernel/carrier";
+import { defineCarrier, event, lived } from "@agent-os/kernel/carrier";
 import { SYMBOLIC_SETTLEMENT_VALUE_PATTERN } from "@agent-os/kernel/settlement-contract";
 
 export const STAGING_EVENT_PREFIX = "staging.";
@@ -32,10 +32,6 @@ export const stagingArtifactCarrier = defineCarrier({
       claim: lived({ key: "claim", anchorKinds: ["carrier_proof"] }),
     }),
   },
-  projection: ledgerProjection({
-    initial: () => ({ status: "missing" as const }),
-    reduce: (state) => state,
-  }),
 });
 
 export const STAGING_KIND = stagingArtifactCarrier.kind;

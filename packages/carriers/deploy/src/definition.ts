@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { defineCarrier, event, ledgerProjection, lived, rejected } from "@agent-os/kernel/carrier";
+import { defineCarrier, event, lived, rejected } from "@agent-os/kernel/carrier";
 import { SYMBOLIC_SETTLEMENT_VALUE_PATTERN } from "@agent-os/kernel/settlement-contract";
 
 export const DEPLOY_EVENT_PREFIX = "deploy.";
@@ -64,10 +64,6 @@ export const deployCarrier = defineCarrier({
       }),
     }),
   },
-  projection: ledgerProjection({
-    initial: () => ({ status: "missing" as const }),
-    reduce: (state) => state,
-  }),
 });
 
 export const DEPLOY_KIND = deployCarrier.kind;

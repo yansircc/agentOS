@@ -40,7 +40,6 @@
 - `./carrier:CarrierEventPayloads`
 - `./carrier:CarrierHandlers`
 - `./carrier:CarrierKindView`
-- `./carrier:CarrierProjection`
 - `./carrier:CarrierRejectMap`
 - `./carrier:CarrierRejectSpec`
 - `./carrier:CarrierSettleMap`
@@ -48,7 +47,6 @@
 - `./carrier:DefineCarrierSpec`
 - `./carrier:defineCarrier`
 - `./carrier:event`
-- `./carrier:ledgerProjection`
 - `./carrier:lived`
 - `./carrier:none`
 - `./carrier:pre`
@@ -333,7 +331,6 @@ text`
 - `.:CarrierEventPayloads`
 - `.:CarrierHandlers`
 - `.:CarrierKindView`
-- `.:CarrierProjection`
 - `.:CarrierRejectMap`
 - `.:CarrierRejectSpec`
 - `.:CarrierSettleMap`
@@ -504,7 +501,6 @@ text`
 - `.:isScopeRef`
 - `.:isSymbolicSettlementValue`
 - `.:ledgerTruthKey`
-- `.:ledgerProjection`
 - `.:lived`
 - `.:makeAgentSchemaSpec`
 - `.:makeCommitters`

@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { defineCarrier, event, ledgerProjection, lived } from "@agent-os/kernel/carrier";
+import { defineCarrier, event, lived } from "@agent-os/kernel/carrier";
 
 export const VERIFICATION_EVENT_PREFIX = "verification.";
 
@@ -21,10 +21,6 @@ export const verificationCarrier = defineCarrier({
       claim: lived({ key: "claim", anchorKinds: ["carrier_proof", "external_receipt"] }),
     }),
   },
-  projection: ledgerProjection({
-    initial: () => ({ ready: false }),
-    reduce: (state) => state,
-  }),
 });
 
 export const VERIFICATION_KIND = verificationCarrier.kind;
