@@ -110,6 +110,8 @@ const makeCloudflareProductionRuntimeContractDriver = (): RuntimeBackendContract
       withInstance(identity, (instance) => instance.fireDue(identity, now)),
     dispatchToScope: (identity, spec) =>
       withInstance(identity, (instance) => instance.dispatchToScope(identity, spec)),
+    receive: (identity, envelope) =>
+      withInstance(identity, (instance) => instance.__agentosReceiveDispatch(envelope)),
     drainDispatchDue: (identity, now) =>
       withInstance(identity, (instance) => instance.drainDispatchDue(identity, now)),
     nextDueAt: (identity) => withInstance(identity, (instance) => instance.nextDueAt(identity)),

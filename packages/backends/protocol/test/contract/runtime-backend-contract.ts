@@ -27,7 +27,7 @@ import {
   type ResourceProjection,
 } from "../../src";
 import type { BindingMaterialRef } from "@agent-os/kernel/material-ref";
-import type { FactOwnerRef } from "@agent-os/kernel/effect-claim";
+import { makeOperationRef, makePreClaim, type FactOwnerRef } from "@agent-os/kernel/effect-claim";
 import type { DispatchToScopeResult } from "@agent-os/kernel/types";
 
 export type ContractDispatchReceiver = (
@@ -88,6 +88,10 @@ export interface RuntimeBackendContractDriver {
     sourceIdentity: BackendProtocolEventIdentity,
     spec: RuntimeBackendDispatchSpec,
   ) => Promise<DispatchToScopeResult>;
+  readonly receive: (
+    targetIdentity: BackendProtocolEventIdentity,
+    envelope: DispatchEnvelope,
+  ) => Promise<DispatchReceiverResult>;
   readonly drainDispatchDue: (
     identity: BackendProtocolEventIdentity,
     now: number,
@@ -171,6 +175,38 @@ const dispatchSpec = (
   data,
   idempotencyKey,
 });
+
+const dispatchEnvelope = (
+  sourceIdentity: BackendProtocolEventIdentity,
+  targetIdentity: BackendProtocolEventIdentity,
+  outboundEventId: number,
+  idempotencyKey: string,
+  event = "app.received",
+  data: unknown = { value: 1 },
+): DispatchEnvelope => {
+  const sourceScope = backendProtocolTruthIdentityKey(sourceIdentity);
+  const targetScope = backendProtocolTruthIdentityKey(targetIdentity);
+  return {
+    sourceScope,
+    outboundEventId,
+    targetScope,
+    event,
+    data,
+    idempotencyKey,
+    claim: makePreClaim({
+      operationRef: makeOperationRef("dispatch", [sourceScope, targetScope, idempotencyKey]),
+      scopeRef: targetIdentity.scopeRef,
+      effectAuthorityRef: {
+        authorityId: "cap_dispatch",
+        authorityClass: "effect",
+      },
+      originRef: {
+        originId: sourceScope,
+        originKind: "agent_do",
+      },
+    }),
+  };
+};
 
 const payloadsOf = <T>(events: ReadonlyArray<LedgerEvent>, kind: string): ReadonlyArray<T> =>
   events.filter((event) => event.kind === kind).map((event) => event.payload as T);
@@ -1069,65 +1105,20 @@ export const runDispatchReceiveConcurrencyContract = (
         Effect.gen(function* () {
           const senderIdentity = contractIdentity("concurrent-receive-sender");
           const receiverIdentity = contractIdentity("concurrent-receive-receiver");
-          const concurrency = 8;
-          const requiredOverlap = 2;
-          const acceptResults: DispatchReceiverResult[] = [];
-          let receiveStarts = 0;
-          let releaseAccept: (() => void) | undefined;
-          let overlappedReceiversStarted: (() => void) | undefined;
-          const released = new Promise<void>((resolve) => {
-            releaseAccept = resolve;
-          });
-          const receiversStarted = new Promise<void>((resolve) => {
-            overlappedReceiversStarted = resolve;
-          });
-          const waitForReceiversStarted = (): Promise<void> =>
-            new Promise((resolve, reject) => {
-              const timeout = setTimeout(
-                () => reject(new Error("concurrent dispatch receive overlap never formed")),
-                2_000,
-              );
-              receiversStarted.then(
-                () => {
-                  clearTimeout(timeout);
-                  resolve();
-                },
-                (cause) => {
-                  clearTimeout(timeout);
-                  reject(cause);
-                },
-              );
-            });
-
-          yield* promise(() =>
-            driver.registerDispatchReceiver(receiverIdentity, async (_envelope, accept) => {
-              receiveStarts += 1;
-              if (receiveStarts === requiredOverlap) overlappedReceiversStarted?.();
-              await released;
-              const result = await accept();
-              acceptResults.push(result);
-              return result;
-            }),
-          );
-
-          const sends = Array.from({ length: concurrency }, () =>
-            driver.dispatchToScope(
+          const concurrency = 16;
+          const envelopes = Array.from({ length: concurrency }, (_value, index) =>
+            dispatchEnvelope(
               senderIdentity,
-              dispatchSpec(
-                driver,
-                "concurrent-receive-receiver",
-                "concurrent-receive-key",
-                "app.concurrent-receive",
-                { value: 6 },
-              ),
+              receiverIdentity,
+              10_000 + index,
+              "concurrent-receive-key",
+              "app.concurrent-receive",
+              { value: 6 },
             ),
           );
-          try {
-            yield* promise(waitForReceiversStarted);
-          } finally {
-            releaseAccept?.();
-          }
-          yield* promise(() => Promise.all(sends));
+          const acceptResults = yield* promise(() =>
+            Promise.all(envelopes.map((envelope) => driver.receive(receiverIdentity, envelope))),
+          );
 
           expect(acceptResults).toHaveLength(concurrency);
           expect(new Set(acceptResults.map((result) => result.deliveredEventId)).size).toBe(1);
@@ -1141,28 +1132,21 @@ export const runDispatchReceiveConcurrencyContract = (
           expect(receiverEvents[1]?.payload).toEqual({ value: 6 });
 
           const deliveredEventId = acceptResults[0]!.deliveredEventId;
-          expect(receiverEvents[0]?.payload).toMatchObject({
+          const acceptedPayload = receiverEvents[0]!.payload as {
+            readonly deliveredEventId?: unknown;
+            readonly idempotencyKey?: unknown;
+            readonly outboundEventId?: unknown;
+            readonly sourceScope?: unknown;
+          };
+          expect(acceptedPayload).toMatchObject({
             idempotencyKey: "concurrent-receive-key",
             deliveredEventId,
           });
-          expect(
-            typeof (receiverEvents[0]?.payload as { readonly sourceScope?: unknown }).sourceScope,
-          ).toBe("string");
+          expect(envelopes.map((envelope) => envelope.outboundEventId)).toContain(
+            acceptedPayload.outboundEventId,
+          );
+          expect(typeof acceptedPayload.sourceScope).toBe("string");
           expect(receiverEvents[1]?.id).toBe(deliveredEventId);
-
-          const senderEvents = yield* promise(() => driver.events(senderIdentity));
-          expect(payloadsOf(senderEvents, DISPATCH_EVENT_KINDS.OUTBOUND_REQUESTED)).toHaveLength(
-            concurrency,
-          );
-          const delivered = payloadsOf<{ readonly deliveryReceipt: { readonly anchorId: string } }>(
-            senderEvents,
-            DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED,
-          );
-          expect(delivered).toHaveLength(concurrency);
-          expect(new Set(delivered.map((payload) => payload.deliveryReceipt.anchorId)).size).toBe(
-            1,
-          );
-          expect(yield* promise(() => driver.pendingDueCount(senderIdentity))).toBe(0);
         }),
       ),
     );

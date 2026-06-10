@@ -176,6 +176,7 @@ const makeCloudflareDoContractDriver = (): RuntimeBackendContractDriver => {
       const dispatch = await handle.runPromise(Dispatch);
       return handle.runPromise(dispatch.dispatchToScope(spec));
     },
+    receive: acceptDispatch,
     drainDispatchDue: async (identity, now) => {
       const handle = runtimeFor(identity);
       const ledger = await handle.runPromise(Ledger);

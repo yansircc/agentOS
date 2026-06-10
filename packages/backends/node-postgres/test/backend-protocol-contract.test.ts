@@ -57,6 +57,7 @@ const makeNodePostgresContractDriver = async (): Promise<RuntimeBackendContractD
     schedule: (identity, at, eventKind, data) => backend.schedule(identity, at, eventKind, data),
     fireDue: (identity, now) => backend.fireDue(identity, now),
     dispatchToScope: (identity, spec) => backend.dispatchToScope(identity, spec),
+    receive: (identity, envelope) => backend.receive(identity, envelope),
     drainDispatchDue: (identity, now) => backend.drainDispatchDue(identity, now),
     nextDueAt: (identity) => backend.nextDueAt(identity),
     pendingDueCount: (identity) => backend.pendingDueCount(identity),
