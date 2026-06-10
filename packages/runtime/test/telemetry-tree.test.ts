@@ -114,6 +114,13 @@ describe("runtime telemetry tree projection", () => {
         "tool.execute",
         "dispatch.delivery",
       ]);
+      expect(cfTree.nodes.map((node) => node.telemetryKind)).toEqual([
+        "agent_run",
+        "llm_call",
+        "tool_execution",
+        "dispatch_delivery",
+      ]);
+      expect(cfTree.nodes.map((node) => node.outcome)).toEqual(["ok", "ok", "ok", "ok"]);
       expect(cfTree.nodes.map((node) => node.emitKind)).toEqual([
         "runtime",
         "provider",

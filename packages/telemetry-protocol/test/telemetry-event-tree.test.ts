@@ -17,9 +17,12 @@ describe("telemetry event tree", () => {
       nodes: [
         {
           id: "cf-span-9",
+          telemetryKind: "dispatch_delivery",
           emitKind: "backend",
           name: "dispatch.delivery",
           at: 100,
+          endedAt: 101,
+          outcome: "ok",
           ledgerEventId: 12,
           sourceEventIds: [12],
           traceContext,
@@ -31,9 +34,12 @@ describe("telemetry event tree", () => {
         },
         {
           id: "cf-root",
+          telemetryKind: "agent_run",
           emitKind: "runtime",
           name: "agent.run",
           at: 90,
+          endedAt: 130,
+          outcome: "ok",
           ledgerEventId: 10,
           sourceEventIds: [10, 13],
           traceContext,
@@ -48,9 +54,12 @@ describe("telemetry event tree", () => {
       nodes: [
         {
           id: "pg-root",
+          telemetryKind: "agent_run",
           emitKind: "runtime",
           name: "agent.run",
           at: 900,
+          endedAt: 930,
+          outcome: "ok",
           ledgerEventId: 10,
           sourceEventIds: [13, 10],
           traceContext,
@@ -61,9 +70,12 @@ describe("telemetry event tree", () => {
         },
         {
           id: "pg-span-1",
+          telemetryKind: "dispatch_delivery",
           emitKind: "backend",
           name: "dispatch.delivery",
           at: 940,
+          endedAt: 945,
+          outcome: "ok",
           ledgerEventId: 12,
           sourceEventIds: [12],
           traceContext,
@@ -85,16 +97,20 @@ describe("telemetry event tree", () => {
       nodes: [
         {
           id: "root-a",
+          telemetryKind: "agent_run",
           emitKind: "runtime",
           name: "agent.run",
+          outcome: "ok",
           ledgerEventId: 1,
           attributes: { "agentos.run.id": 1 },
         },
         {
           id: "child-a",
           parentId: "root-a",
+          telemetryKind: "llm_call",
           emitKind: "provider",
           name: "gen_ai.call",
+          outcome: "ok",
           ledgerEventId: 2,
           attributes: { "gen_ai.usage.output_tokens": 5 },
         },
@@ -104,16 +120,20 @@ describe("telemetry event tree", () => {
       nodes: [
         {
           id: "root-b",
+          telemetryKind: "agent_run",
           emitKind: "runtime",
           name: "agent.run",
+          outcome: "ok",
           ledgerEventId: 1,
           attributes: { "agentos.run.id": 1 },
         },
         {
           id: "child-b",
           parentId: "root-b",
+          telemetryKind: "llm_call",
           emitKind: "provider",
           name: "gen_ai.call",
+          outcome: "ok",
           ledgerEventId: 2,
           attributes: { "gen_ai.usage.output_tokens": 6 },
         },

@@ -97,6 +97,17 @@ export type TelemetryEmitKind =
   | "wire_adapter"
   | (string & {});
 
+export type TelemetryEventKind =
+  | "agent_run"
+  | "llm_call"
+  | "tool_execution"
+  | "dispatch_delivery"
+  | "durable_trigger"
+  | "verification_gate"
+  | (string & {});
+
+export type TelemetryOutcome = "ok" | "error" | "unset";
+
 export type TelemetryAttributeValue = string | number | boolean | null;
 
 export type TelemetryDiagnosticPhase =
@@ -117,9 +128,12 @@ export interface TelemetryFanoutDiagnostic {
 export interface TelemetryEventNode {
   readonly id: string;
   readonly parentId?: string;
+  readonly telemetryKind: TelemetryEventKind;
   readonly emitKind: TelemetryEmitKind;
   readonly name: string;
   readonly at?: number;
+  readonly endedAt?: number;
+  readonly outcome?: TelemetryOutcome;
   readonly traceContext?: TraceContext;
   readonly ledgerEventId?: number;
   readonly sourceEventIds?: ReadonlyArray<number>;
@@ -162,9 +176,13 @@ const firstSourceEventId = (node: TelemetryEventNode): number | undefined =>
   node.ledgerEventId ?? node.sourceEventIds?.[0];
 
 const telemetryNodeSortKey = (node: TelemetryEventNode): string =>
-  [firstSourceEventId(node) ?? Number.MAX_SAFE_INTEGER, node.emitKind, node.name, node.id].join(
-    "\u0000",
-  );
+  [
+    firstSourceEventId(node) ?? Number.MAX_SAFE_INTEGER,
+    node.emitKind,
+    node.telemetryKind,
+    node.name,
+    node.id,
+  ].join("\u0000");
 
 const sortedAttributes = (
   attributes: Readonly<Record<string, TelemetryAttributeValue>> | undefined,
@@ -210,7 +228,9 @@ export const canonicalizeTelemetryEventTree = (tree: TelemetryEventTree): Teleme
           ? {}
           : { parentId: ids.get(node.parentId) ?? node.parentId }),
         emitKind: node.emitKind,
+        telemetryKind: node.telemetryKind,
         name: node.name,
+        ...(node.outcome === undefined ? {} : { outcome: node.outcome }),
         ...(node.traceContext === undefined
           ? {}
           : { traceContext: copyTraceContext(node.traceContext) }),

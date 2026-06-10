@@ -7,8 +7,10 @@ import {
   validateOptionalTraceContext,
   type TelemetryAttributeValue,
   type TelemetryEmitKind,
+  type TelemetryEventKind,
   type TelemetryEventNode,
   type TelemetryEventTree,
+  type TelemetryOutcome,
   type TraceContext,
 } from "@agent-os/telemetry-protocol";
 import {
@@ -98,8 +100,11 @@ const runtimeTraceContext = (
 
 const telemetryNode = (spec: {
   readonly event: LedgerEvent;
+  readonly telemetryKind: TelemetryEventKind;
   readonly emitKind: TelemetryEmitKind;
   readonly name: string;
+  readonly endedAt?: number;
+  readonly outcome?: TelemetryOutcome;
   readonly parentId?: string;
   readonly traceContext?: TraceContext;
   readonly sourceEventIds?: ReadonlyArray<number>;
@@ -107,9 +112,12 @@ const telemetryNode = (spec: {
 }): TelemetryEventNode => ({
   id: `ledger:${spec.event.id}:${spec.name}`,
   ...(spec.parentId === undefined ? {} : { parentId: spec.parentId }),
+  telemetryKind: spec.telemetryKind,
   emitKind: spec.emitKind,
   name: spec.name,
   at: spec.event.ts,
+  ...(spec.endedAt === undefined ? {} : { endedAt: spec.endedAt }),
+  ...(spec.outcome === undefined ? {} : { outcome: spec.outcome }),
   ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
   ledgerEventId: spec.event.id,
   sourceEventIds: spec.sourceEventIds ?? [spec.event.id],
@@ -131,19 +139,21 @@ const runtimeTelemetryNodes = (
       nodes.push(
         telemetryNode({
           event: start,
+          telemetryKind: "agent_run",
           emitKind: "runtime",
           name: "agent.run",
+          endedAt: terminal?.ts,
+          outcome:
+            terminal === undefined
+              ? "unset"
+              : terminal.kind === RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED
+                ? "ok"
+                : "error",
           traceContext: yield* runtimeTraceContext(runtimeEvents, start),
           sourceEventIds: terminal === undefined ? [start.id] : [start.id, terminal.id],
           attributes: {
             "agentos.run.id": start.id,
             "agentos.event.kind": start.kind,
-            "agentos.run.status":
-              terminal === undefined
-                ? "open"
-                : terminal.kind === RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED
-                  ? "completed"
-                  : "failed",
           },
         }),
       );
@@ -155,8 +165,11 @@ const runtimeTelemetryNodes = (
           telemetryNode({
             event,
             parentId: runNodeId(event.payload.turn.id),
+            telemetryKind: "llm_call",
             emitKind: "provider",
             name: "gen_ai.call",
+            endedAt: event.ts,
+            outcome: "ok",
             traceContext: yield* runtimeTraceContext(runtimeEvents, event),
             attributes: {
               "agentos.run.id": event.payload.turn.id,
@@ -180,8 +193,11 @@ const runtimeTelemetryNodes = (
           telemetryNode({
             event,
             parentId: runNodeId(event.payload.runId),
+            telemetryKind: "tool_execution",
             emitKind: "runtime",
             name: "tool.execute",
+            endedAt: event.ts,
+            outcome: event.kind === RUNTIME_EVENT_KIND.TOOL_EXECUTED ? "ok" : "error",
             traceContext: yield* runtimeTraceContext(runtimeEvents, event),
             attributes: {
               "agentos.run.id": event.payload.runId,
@@ -203,22 +219,44 @@ const runtimeTelemetryNodes = (
     return nodes;
   });
 
-const genericEmitKind = (event: LedgerEvent): TelemetryEmitKind | undefined => {
-  if (event.kind.startsWith("dispatch.")) return "backend";
-  if (event.kind.startsWith("durable_trigger.")) return "carrier";
+const genericOutcome = (event: LedgerEvent): TelemetryOutcome =>
+  event.kind.endsWith(".failed") || event.kind.endsWith(".cancelled") ? "error" : "ok";
+
+const genericTelemetrySemantics = (
+  event: LedgerEvent,
+):
+  | {
+      readonly emitKind: TelemetryEmitKind;
+      readonly telemetryKind: TelemetryEventKind;
+      readonly name: string;
+      readonly outcome: TelemetryOutcome;
+    }
+  | undefined => {
+  if (event.kind.startsWith("dispatch.")) {
+    return {
+      emitKind: "backend",
+      telemetryKind: "dispatch_delivery",
+      name: "dispatch.delivery",
+      outcome: genericOutcome(event),
+    };
+  }
+  if (event.kind.startsWith("durable_trigger.")) {
+    return {
+      emitKind: "carrier",
+      telemetryKind: "durable_trigger",
+      name: "durable_trigger.step",
+      outcome: genericOutcome(event),
+    };
+  }
   if (event.kind.startsWith("verification.") || event.kind.includes(".verification.")) {
-    return "carrier";
+    return {
+      emitKind: "carrier",
+      telemetryKind: "verification_gate",
+      name: "verification.gate",
+      outcome: genericOutcome(event),
+    };
   }
   return undefined;
-};
-
-const genericNodeName = (event: LedgerEvent): string => {
-  if (event.kind.startsWith("dispatch.")) return "dispatch.delivery";
-  if (event.kind.startsWith("durable_trigger.")) return "durable_trigger.step";
-  if (event.kind.startsWith("verification.") || event.kind.includes(".verification.")) {
-    return "verification.gate";
-  }
-  return event.kind;
 };
 
 const genericTelemetryNodes = (
@@ -227,13 +265,16 @@ const genericTelemetryNodes = (
   Effect.gen(function* () {
     const nodes: TelemetryEventNode[] = [];
     for (const event of events) {
-      const emitKind = genericEmitKind(event);
-      if (emitKind === undefined) continue;
+      const semantics = genericTelemetrySemantics(event);
+      if (semantics === undefined) continue;
       nodes.push(
         telemetryNode({
           event,
-          emitKind,
-          name: genericNodeName(event),
+          telemetryKind: semantics.telemetryKind,
+          emitKind: semantics.emitKind,
+          name: semantics.name,
+          endedAt: event.ts,
+          outcome: semantics.outcome,
           traceContext: yield* traceContextFromPayload(event.payload),
           attributes: {
             "agentos.event.kind": event.kind,
