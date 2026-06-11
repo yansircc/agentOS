@@ -29,12 +29,22 @@ export type AgentMountIssue =
   | {
       readonly kind: "missing_handler_binding";
       readonly handlerKind: string;
+    }
+  | {
+      readonly kind: "missing_capability_binding";
+      readonly capability: string;
+      readonly bindingRef: string;
     };
 
-export type AgentMountWarning = {
-  readonly kind: "dead_handler_binding";
-  readonly handlerKind: string;
-};
+export type AgentMountWarning =
+  | {
+      readonly kind: "dead_handler_binding";
+      readonly handlerKind: string;
+    }
+  | {
+      readonly kind: "dead_capability_binding";
+      readonly bindingRef: string;
+    };
 
 export type AgentMountValidation =
   | {
@@ -135,6 +145,24 @@ export const validateAgentMount = <K extends HandlerKind>(
   for (const handlerKind of Object.keys(bindings.handlers)) {
     if (!declaredHandlers.has(handlerKind)) {
       warnings.push({ kind: "dead_handler_binding", handlerKind });
+    }
+  }
+
+  const declaredCapabilityBindingRefs = new Set<string>();
+  for (const [capability, ref] of Object.entries(manifest.capabilities ?? {})) {
+    declaredCapabilityBindingRefs.add(ref.bindingRef);
+    if (bindings.capabilities?.[ref.bindingRef] === undefined) {
+      issues.push({
+        kind: "missing_capability_binding",
+        capability,
+        bindingRef: ref.bindingRef,
+      });
+    }
+  }
+
+  for (const bindingRef of Object.keys(bindings.capabilities ?? {})) {
+    if (!declaredCapabilityBindingRefs.has(bindingRef)) {
+      warnings.push({ kind: "dead_capability_binding", bindingRef });
     }
   }
 

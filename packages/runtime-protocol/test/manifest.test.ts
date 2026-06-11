@@ -1,5 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import {
+  capabilityIntent,
+  defineAgentCapability,
   defineAgentBindings,
   defineAgentManifest,
   mountAgent,
@@ -24,6 +26,38 @@ const baseManifest = defineAgentManifest({
   },
   tools: {
     lookup: { bindingRef: "tool.lookup" },
+  },
+});
+
+const capability = defineAgentCapability({
+  id: "runtime-protocol.test-capability",
+  intents: {
+    requested: capabilityIntent<{ readonly id: string }>()("runtime_protocol.requested", {
+      boundaryPackage: {
+        packageId: "@agent-os/runtime-protocol.test-capability",
+        kindPrefixes: ["runtime_protocol."],
+        version: "0.1.0",
+        boundaryContract: {
+          packageId: "@agent-os/runtime-protocol.test-capability",
+          kindPrefixes: ["runtime_protocol."],
+          roles: ["generator"],
+          events: {
+            "runtime_protocol.requested": {
+              payloadSchema: { type: "object", properties: {}, additionalProperties: true },
+              claim: { key: "claim", phase: "pre" },
+            },
+          },
+          effectAuthorityContracts: [],
+          materialRequirements: [],
+          settlement: {
+            settlementId: "runtime-protocol.test-capability",
+            anchorKinds: ["ledger_event"],
+            rejectionKinds: ["validation_failed"],
+          },
+          projection: { derivedFromLedger: true, shadowState: false },
+        },
+      },
+    }),
   },
 });
 
@@ -84,6 +118,66 @@ describe("AgentManifest mount algebra", () => {
     expect(dead).toEqual({
       ok: true,
       warnings: [{ kind: "dead_handler_binding", handlerKind: "tool_called" }],
+    });
+  });
+
+  it("treats missing declared capability bindings as hard errors and dead capabilities as warnings", () => {
+    const manifest = defineAgentManifest({
+      agentId: "agent.capability",
+      scope: { kind: "conversation", idSource: "submit_scope" },
+      effectAuthorityRef,
+      handlers: ["user_message"] as const,
+      capabilities: {
+        surfaceEdit: { bindingRef: "capability.surface-edit" },
+      },
+    });
+
+    const missing = validateAgentMount(
+      manifest,
+      defineAgentBindings<"user_message">({
+        handlers: { user_message: () => ({ ok: true }) },
+      }),
+    );
+
+    expect(missing).toEqual({
+      ok: false,
+      issues: [
+        {
+          kind: "missing_capability_binding",
+          capability: "surfaceEdit",
+          bindingRef: "capability.surface-edit",
+        },
+      ],
+      warnings: [],
+    });
+
+    const mounted = mountAgent(
+      manifest,
+      defineAgentBindings<"user_message">({
+        handlers: { user_message: () => ({ ok: true }) },
+        capabilities: { "capability.surface-edit": capability },
+      }),
+      { backend: "test" },
+    );
+
+    expect(mounted.warnings).toEqual([]);
+
+    const dead = validateAgentMount(
+      defineAgentManifest({
+        agentId: "agent.dead-capability",
+        scope: { kind: "conversation", idSource: "submit_scope" },
+        effectAuthorityRef,
+        handlers: ["user_message"] as const,
+      }),
+      defineAgentBindings<"user_message">({
+        handlers: { user_message: () => ({ ok: true }) },
+        capabilities: { "capability.surface-edit": capability },
+      }),
+    );
+
+    expect(dead).toEqual({
+      ok: true,
+      warnings: [{ kind: "dead_capability_binding", bindingRef: "capability.surface-edit" }],
     });
   });
 

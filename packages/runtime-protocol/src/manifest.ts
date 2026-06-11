@@ -32,6 +32,10 @@ export interface AgentToolBindingRef {
   readonly bindingRef: string;
 }
 
+export interface AgentCapabilityBindingRef {
+  readonly bindingRef: string;
+}
+
 export interface AgentDefinitionExtension<K extends ExtensionHandlerKind = ExtensionHandlerKind> {
   readonly extensionId: string;
   readonly handlerKinds: ReadonlyArray<K>;
@@ -46,6 +50,7 @@ export interface AgentManifest<K extends HandlerKind = HandlerKind> {
   readonly extensions?: ReadonlyArray<AgentDefinitionExtension>;
   readonly llmRoutes?: Readonly<Record<string, AgentLlmRouteBindingRef>>;
   readonly tools?: Readonly<Record<string, AgentToolBindingRef>>;
+  readonly capabilities?: Readonly<Record<string, AgentCapabilityBindingRef>>;
   readonly materials?: Readonly<Record<string, MaterialRef>>;
   readonly outputSchema?: AgentSchemaSpec;
 }
