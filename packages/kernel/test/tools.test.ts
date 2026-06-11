@@ -266,6 +266,7 @@ describe("unsafeRunToolByName", () => {
         expect(invalid.left.cause).toEqual({
           reason: "invalid_args",
           decodeError: "AgentSchemaDecodeError",
+          schemaIssues: [{ path: "$.key", issue: "not-string" }],
         });
       }
     }),

@@ -11,6 +11,7 @@ Status: 0.2.x active development. Public exports are limited to WorkspaceEnv typ
 - `.:EditWorkspaceFileOptions`
 - `.:GlobWorkspaceFilesOptions`
 - `.:GrepWorkspaceFilesOptions`
+- `.:NormalizeWorkspaceToolPathOptions`
 - `.:WalkWorkspaceFilesOptions`
 - `.:WorkspaceDeletePathResult`
 - `.:WorkspaceEditFileResult`
@@ -42,6 +43,7 @@ Status: 0.2.x active development. Public exports are limited to WorkspaceEnv typ
 - `.:editWorkspaceFile`
 - `.:globWorkspaceFiles`
 - `.:grepWorkspaceFiles`
+- `.:normalizeWorkspaceToolPath`
 - `.:walkWorkspaceFiles`
 
 ## Experimental exports

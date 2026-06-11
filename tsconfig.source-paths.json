@@ -47,6 +47,7 @@
       "@agent-os/ag-ui-react": ["./packages/wire-adapters/ag-ui-react/src/index.ts"],
       "@agent-os/ag-ui-svelte": ["./packages/wire-adapters/ag-ui-svelte/src/index.ts"],
       "@agent-os/run-stream": ["./packages/composers/run-stream/src/index.ts"],
+      "@agent-os/workspace-binding": ["./packages/composers/workspace-binding/src/index.ts"],
       "@agent-os/sse-http": ["./packages/transports/sse-http/src/index.ts"],
       "@agent-os/turn-stream": ["./packages/composers/turn-stream/src/index.ts"],
       "@agent-os/workspace-env": ["./packages/execution-domains/workspace-env/src/index.ts"],

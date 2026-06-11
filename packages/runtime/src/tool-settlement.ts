@@ -118,6 +118,13 @@ export const settleToolExecutionRejected = (claim: PreClaim, reason: string): Re
     reason,
   });
 
+export const settleToolValidationRejected = (claim: PreClaim, reason: string): RejectedClaim =>
+  settleRejected(toolSettlementContract, claim, {
+    rejectionId: toolTerminalId("tool.rejected", claim),
+    rejectionKind: "validation_failed",
+    reason,
+  });
+
 export const settleToolExecuted = (claim: PreClaim, contract: ToolContract): LivedClaim =>
   settleLived(toolSettlementContract, claim, {
     anchorId: symbolicSettlementRef("tool.executed", [claim.operationRef]),

@@ -11,6 +11,7 @@ title: "@agent-os/workspace-env Public API Intent"
 - `.:EditWorkspaceFileOptions`
 - `.:GlobWorkspaceFilesOptions`
 - `.:GrepWorkspaceFilesOptions`
+- `.:NormalizeWorkspaceToolPathOptions`
 - `.:WalkWorkspaceFilesOptions`
 - `.:WorkspaceDeletePathResult`
 - `.:WorkspaceEditFileResult`
@@ -42,6 +43,7 @@ title: "@agent-os/workspace-env Public API Intent"
 - `.:editWorkspaceFile`
 - `.:globWorkspaceFiles`
 - `.:grepWorkspaceFiles`
+- `.:normalizeWorkspaceToolPath`
 - `.:walkWorkspaceFiles`
 
 ## Experimental exports

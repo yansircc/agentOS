@@ -228,7 +228,10 @@ describe("tool registry generator", () => {
         }),
       );
       expect(events.some((event) => event.kind === "tool.executed")).toBe(false);
-      expect(events.some((event) => event.kind === "tool.rejected")).toBe(false);
+      expect(events.some((event) => event.kind === "tool.rejected")).toBe(true);
+      expect(
+        JSON.stringify(events.find((event) => event.kind === "tool.rejected")?.payload),
+      ).toContain("invalid_args");
       expect(events.some((event) => event.kind === "agent.aborted.tool_error")).toBe(true);
 
       await runtime.dispose();

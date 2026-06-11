@@ -1,0 +1,29 @@
+# @agent-os/workspace-binding
+
+## Purpose
+
+Composition package for binding standard workspace tools and workspace material
+refs into one runtime submit binding object.
+
+## Invariant
+
+Workspace-binding is a write-side binding helper only. It does not normalize
+paths, project diagnostics, execute effectful tools, or mint receipts.
+
+## Minimal Usage
+
+Use it when a consumer already has a `WorkspaceEnv` and needs run-scoped submit
+bindings for the standard workspace tools.
+
+```ts
+import { bindWorkspaceToolsForRuntime } from "@agent-os/workspace-binding";
+```
+
+Effectful workspace execution still requires a receipt/dispatch-backed path.
+
+## Verification
+
+```sh
+cd packages/composers/workspace-binding
+vp test run
+```

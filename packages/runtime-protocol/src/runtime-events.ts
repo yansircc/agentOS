@@ -14,6 +14,7 @@ import {
   type RejectedClaim,
   type ScopeRef,
 } from "@agent-os/kernel/effect-claim";
+import type { AgentSchemaIssue } from "@agent-os/kernel/agent-schema";
 import type { ExecutionDomain, ToolExecution } from "@agent-os/kernel/tools";
 import { TraceContextSchema, type TraceContext } from "@agent-os/telemetry-protocol";
 import { ABORT, type AbortKind } from "@agent-os/kernel/abort";
@@ -215,8 +216,25 @@ export type ToolRejectedPayload = {
   readonly args: unknown;
   readonly execution: ToolExecution;
   readonly claim: unknown;
+  readonly diagnostics?: ToolRejectedDiagnostics;
   readonly traceContext?: TraceContext;
 };
+
+export type ToolRejectedDiagnosticsPhase = "parse" | "decode" | "material" | "admit" | "execution";
+
+export interface ToolArgumentSummary {
+  readonly type: string;
+  readonly keys?: ReadonlyArray<string>;
+  readonly bytes?: number;
+  readonly truncated?: boolean;
+}
+
+export interface ToolRejectedDiagnostics {
+  readonly phase: ToolRejectedDiagnosticsPhase;
+  readonly reason: string;
+  readonly argumentSummary?: ToolArgumentSummary;
+  readonly schemaIssues?: ReadonlyArray<AgentSchemaIssue>;
+}
 
 export type AgentRunCompletedPayload = {
   readonly runId: number;
@@ -305,6 +323,23 @@ export const ToolRejectedPayloadSchema: Schema.Schema<ToolRejectedPayload> = Sch
   args: Schema.Unknown,
   execution: ToolExecutionSchema,
   claim: Schema.Unknown,
+  diagnostics: Schema.optional(
+    Schema.Struct({
+      phase: Schema.Literal("parse", "decode", "material", "admit", "execution"),
+      reason: nonEmptyString,
+      argumentSummary: Schema.optional(
+        Schema.Struct({
+          type: nonEmptyString,
+          keys: Schema.optional(Schema.Array(Schema.String)),
+          bytes: Schema.optional(nonNegativeInt),
+          truncated: Schema.optional(Schema.Boolean),
+        }),
+      ),
+      schemaIssues: Schema.optional(
+        Schema.Array(Schema.Struct({ path: Schema.String, issue: Schema.String })),
+      ),
+    }),
+  ),
   traceContext: Schema.optional(TraceContextSchema),
 });
 
@@ -714,6 +749,7 @@ export const toolRejectedEvent = (
     readonly args: unknown;
     readonly execution: ToolExecution;
     readonly claim: RejectedClaim;
+    readonly diagnostics?: ToolRejectedDiagnostics;
     readonly traceContext?: TraceContext;
   },
 ): RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.TOOL_REJECTED> =>
@@ -724,6 +760,7 @@ export const toolRejectedEvent = (
     args: spec.args,
     execution: spec.execution,
     claim: spec.claim,
+    ...(spec.diagnostics === undefined ? {} : { diagnostics: spec.diagnostics }),
     ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
   });
 

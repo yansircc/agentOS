@@ -27,7 +27,7 @@ import {
 import { isMaterialRequirement, type MaterialRequirement } from "./material-ref";
 import type { ResolvedMaterial } from "./ref-resolver";
 import type { QuotaSpec } from "./quota";
-import { ensureAgentSchema, type AgentSchema } from "./agent-schema";
+import { ensureAgentSchema, type AgentSchema, type AgentSchemaIssue } from "./agent-schema";
 
 const TOOL_CONTRACT_BRAND = Symbol("@agent-os/kernel/ToolContract");
 const DETERMINISTIC_TOOL_INVOCATION_BRAND = Symbol("@agent-os/kernel/DeterministicToolInvocation");
@@ -593,9 +593,26 @@ export const decodeToolArgs = (
         cause: {
           reason: "invalid_args",
           decodeError: cause instanceof Error ? cause.name : typeof cause,
+          ...schemaDecodeIssueCause(cause),
         },
       }),
   });
+
+const schemaDecodeIssueCause = (
+  cause: unknown,
+): { readonly schemaIssues?: ReadonlyArray<AgentSchemaIssue> } => {
+  if (typeof cause !== "object" || cause === null) return {};
+  const issues = (cause as { readonly issues?: unknown }).issues;
+  if (!Array.isArray(issues)) return {};
+  const schemaIssues = issues.filter(
+    (issue): issue is AgentSchemaIssue =>
+      typeof issue === "object" &&
+      issue !== null &&
+      typeof (issue as { readonly path?: unknown }).path === "string" &&
+      typeof (issue as { readonly issue?: unknown }).issue === "string",
+  );
+  return schemaIssues.length === 0 ? {} : { schemaIssues };
+};
 
 /** Run the tool Effect. Failures here are recoverable via retry (network
  *  flake, transient upstream) when the caller wraps this in Effect.retry. */

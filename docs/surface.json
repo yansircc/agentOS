@@ -389,6 +389,20 @@
       "published": true
     },
     {
+      "slug": "workspace-binding",
+      "name": "@agent-os/workspace-binding",
+      "path": "packages/composers/workspace-binding",
+      "status": "0.2.x public",
+      "role": "workspace-env to runtime submit binding composer",
+      "boundary": "run-scoped submit bindings over workspace-env tools and material refs; no diagnostics, path policy, or effectful executor",
+      "need": "Workspace submit binding",
+      "readmeStatus": "0.2.x active development. Public exports are listed in `PUBLIC_API.md` to prevent accidental exports; they are not frozen.",
+      "apiStatus": "0.2.x active development for workspace submit binding composition. Public exports are listed for accidental export control only; this is not an API freeze.",
+      "apiSource": "docs/api/workspace-binding.md",
+      "primary": true,
+      "published": true
+    },
+    {
       "slug": "sse-http",
       "name": "@agent-os/sse-http",
       "path": "packages/transports/sse-http",

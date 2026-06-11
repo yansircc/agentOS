@@ -7,6 +7,7 @@
 - `.:EditWorkspaceFileOptions`
 - `.:GlobWorkspaceFilesOptions`
 - `.:GrepWorkspaceFilesOptions`
+- `.:NormalizeWorkspaceToolPathOptions`
 - `.:WalkWorkspaceFilesOptions`
 - `.:WorkspaceDeletePathResult`
 - `.:WorkspaceEditFileResult`
@@ -38,6 +39,7 @@
 - `.:editWorkspaceFile`
 - `.:globWorkspaceFiles`
 - `.:grepWorkspaceFiles`
+- `.:normalizeWorkspaceToolPath`
 - `.:walkWorkspaceFiles`
 
 ## Experimental exports

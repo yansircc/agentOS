@@ -34,6 +34,7 @@
     { "path": "./packages/execution-domains/workspace-env-local" },
     { "path": "./packages/providers/workspace-session-cloudflare" },
     { "path": "./packages/composers/run-stream" },
+    { "path": "./packages/composers/workspace-binding" },
     { "path": "./packages/transports/sse-http" },
     { "path": "./packages/wire-adapters/telemetry-otlp" },
     { "path": "./packages/backends/cloudflare-do" },

@@ -179,6 +179,13 @@
       ]
     },
     {
+      "primitive": "primitive.runtime.projectFailureDiagnostics",
+      "tests": [
+        "packages/runtime-protocol/test/failure-diagnostics.test.ts",
+        "packages/runtime/test/submit-agent-runtime-events.test.ts"
+      ]
+    },
+    {
       "primitive": "primitive.runtime.SubmitResult",
       "tests": [
         "packages/runtime/test/submit-agent-runtime-events.test.ts",

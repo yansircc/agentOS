@@ -29,6 +29,7 @@
 | React AG-UI consumption              | `@agent-os/ag-ui-react`                  |
 | Svelte AG-UI consumption             | `@agent-os/ag-ui-svelte`                 |
 | Consumer run stream                  | `@agent-os/run-stream`                   |
+| Workspace submit binding             | `@agent-os/workspace-binding`            |
 | SSE-over-HTTP transport              | `@agent-os/sse-http`                     |
 | Approval/decision gate               | `@agent-os/decision-gate`                |
 | Cloudflare Worker deploy provider    | `@agent-os/deploy-cloudflare`            |

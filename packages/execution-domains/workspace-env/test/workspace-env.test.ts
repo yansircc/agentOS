@@ -9,6 +9,7 @@ import {
   editWorkspaceFile,
   globWorkspaceFiles,
   grepWorkspaceFiles,
+  normalizeWorkspaceToolPath,
   walkWorkspaceFiles,
   type WorkspaceEnvBackend,
   type WorkspaceExecOptions,
@@ -100,6 +101,19 @@ describe("@agent-os/workspace-env", () => {
     expect(env.resolvePath("/workspace/src/index.ts")).toBe("/workspace/src/index.ts");
     expect(() => env.resolvePath("../secrets")).toThrow("cannot escape");
     expect(() => env.resolvePath("/other/secrets")).toThrow("cannot escape");
+  });
+
+  it("normalizes agent-facing workspace tool paths without host absolute semantics", () => {
+    expect(normalizeWorkspaceToolPath("input/editor.json")).toBe("input/editor.json");
+    expect(normalizeWorkspaceToolPath("./input/editor.json")).toBe("input/editor.json");
+    expect(normalizeWorkspaceToolPath("/input/editor.json")).toBe("input/editor.json");
+    expect(normalizeWorkspaceToolPath("/", { allowRoot: true })).toBe(".");
+    expect(() => normalizeWorkspaceToolPath("")).toThrow("required");
+    expect(() => normalizeWorkspaceToolPath("..\u0000/x")).toThrow("NUL");
+    expect(() => normalizeWorkspaceToolPath("../x")).toThrow("cannot escape");
+    expect(() =>
+      normalizeWorkspaceToolPath("/workspace/input/editor.json", { cwd: "/workspace" }),
+    ).toThrow("host-absolute");
   });
 
   it("walks workspace files deterministically and diffs pure snapshots", async () => {
@@ -274,22 +288,23 @@ describe("@agent-os/workspace-env", () => {
       yield* unsafeRunToolByName(
         tools,
         deterministicToolInvocation("write_file", {
-          path: "src/pingpong.py",
+          path: "/src/pingpong.py",
           content: "def ping():\n    return 'pong'\n",
         }),
       );
       const read = yield* unsafeRunToolByName(
         tools,
-        deterministicToolInvocation("read_file", { path: "src/pingpong.py" }),
+        deterministicToolInvocation("read_file", { path: "./src/pingpong.py" }),
       );
       const list = yield* unsafeRunToolByName(
         tools,
-        deterministicToolInvocation("list_files", { path: "src" }),
+        deterministicToolInvocation("list_files", { path: "/src" }),
       );
       const shell = yield* unsafeRunToolByName(
         tools,
         deterministicToolInvocation("run_shell", {
           command: "python3 -m py_compile src/pingpong.py",
+          cwd: "/",
           envRefs: [{ name: "TOKEN", ref: "credential:token" }],
           materialRefs: ["credential:token"],
         }),
@@ -352,6 +367,31 @@ describe("@agent-os/workspace-env", () => {
         contentBytes: 4,
         truncated: true,
       });
+    }),
+  );
+
+  it.effect("rejects host absolute workspace tool paths before actuator resolution", () =>
+    Effect.gen(function* () {
+      const { env } = workspace();
+      const tools = createWorkspaceTools(env, {
+        authority: "test.workspace",
+        admit: allowToolAdmitter,
+      });
+
+      const result = yield* Effect.either(
+        unsafeRunToolByName(
+          tools,
+          deterministicToolInvocation("write_file", {
+            path: "/workspace/src/host-path.txt",
+            content: "nope",
+          }),
+        ),
+      );
+
+      expect(result._tag).toBe("Left");
+      if (result._tag === "Left") {
+        expect(String(result.left.cause)).toContain("host-absolute");
+      }
     }),
   );
 

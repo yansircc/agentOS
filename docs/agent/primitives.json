@@ -628,6 +628,26 @@
       }
     },
     {
+      "id": "primitive.runtime.projectFailureDiagnostics",
+      "package": "@agent-os/runtime-protocol",
+      "packagePath": "packages/runtime-protocol",
+      "entrypoints": ["."],
+      "symbol": "FailureDiagnostics",
+      "exportKey": ".:FailureDiagnostics",
+      "sourceFile": "packages/runtime-protocol/src/failure-diagnostics.ts",
+      "summary": "Redacted failure diagnostics derived from runtime ledger facts.",
+      "aliases": [],
+      "invariants": ["invariant.d10.truth-identity"],
+      "decisions": [],
+      "docs": "docs/concepts/durable-truth.md",
+      "testEvidence": {
+        "tests": [
+          "packages/runtime-protocol/test/failure-diagnostics.test.ts",
+          "packages/runtime/test/submit-agent-runtime-events.test.ts"
+        ]
+      }
+    },
+    {
       "id": "primitive.runtime.ProjectionIdentifyResult",
       "package": "@agent-os/runtime",
       "packagePath": "packages/runtime",

@@ -32,6 +32,7 @@ import {
   RUNTIME_FACT_OWNER,
   decodeRuntimeLedgerEvent,
   EFFECTFUL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
+  projectFailureDiagnostics,
   replayToolFromArtifact,
   toolReplayArtifactFromExecutedPayload,
   type InternalSubmitSpec,
@@ -702,6 +703,145 @@ describe("submit-agent runtime event writes", () => {
         "tool.rejected",
         "agent.aborted.tool_error",
       ]);
+    }),
+  );
+
+  it.effect("known tool schema decode failure emits tool.rejected diagnostics before abort", () =>
+    Effect.gen(function* () {
+      const tool = defineTool({
+        name: "write_file",
+        description: "write file",
+        args: Schema.Struct({ path: Schema.String, content: Schema.String }),
+        execute: () => Effect.succeed({ ok: true }),
+        authority: "write",
+        admit: () => Effect.succeed({ ok: true }),
+        execution: pureToolExecution(),
+      });
+
+      const { result, events } = yield* runSubmit(baseSpec({ tools: { write_file: tool } }), [
+        response({
+          items: [
+            { type: "message", text: "write" },
+            {
+              type: "tool_call",
+              call: {
+                id: "call-1",
+                type: "function",
+                function: { name: "write_file", arguments: '{"path":"out.txt"}' },
+              },
+            },
+          ],
+        }),
+      ]);
+
+      expect(result).toMatchObject({ ok: false, reason: "tool_error" });
+      expect(decodedRuntimeKinds(events)).toEqual([
+        "agent.run.started",
+        "chat.ingested",
+        "llm.response",
+        "tool.rejected",
+        "agent.aborted.tool_error",
+      ]);
+      const rejected = events.find((event) => event.kind === "tool.rejected");
+      expect(decodeRuntimeLedgerEvent(rejected!)).toMatchObject({
+        _tag: "runtime",
+        event: {
+          payload: {
+            name: "write_file",
+            diagnostics: {
+              phase: "decode",
+              reason: "invalid_args",
+              argumentSummary: { type: "object", keys: ["path"], truncated: false },
+            },
+          },
+        },
+      });
+      const diagnostics = projectFailureDiagnostics(events, 1);
+      expect(JSON.stringify(diagnostics)).toContain("content");
+      expect(JSON.stringify(diagnostics)).not.toContain("out.txt");
+    }),
+  );
+
+  it.effect("known tool JSON parse failure emits tool.rejected diagnostics before abort", () =>
+    Effect.gen(function* () {
+      const tool = defineTool({
+        name: "lookup",
+        description: "lookup",
+        args: Schema.Struct({ q: Schema.String }),
+        execute: () => Effect.succeed({ ok: true }),
+        authority: "read",
+        admit: () => Effect.succeed({ ok: true }),
+        execution: pureToolExecution(),
+      });
+
+      const { result, events } = yield* runSubmit(baseSpec({ tools: { lookup: tool } }), [
+        response({
+          items: [
+            { type: "message", text: "lookup" },
+            {
+              type: "tool_call",
+              call: {
+                id: "call-1",
+                type: "function",
+                function: { name: "lookup", arguments: '{"q":' },
+              },
+            },
+          ],
+        }),
+      ]);
+
+      expect(result).toMatchObject({ ok: false, reason: "tool_error" });
+      expect(decodedRuntimeKinds(events)).toEqual([
+        "agent.run.started",
+        "chat.ingested",
+        "llm.response",
+        "tool.rejected",
+        "agent.aborted.tool_error",
+      ]);
+      expect(projectFailureDiagnostics(events, 1)).toMatchObject({
+        diagnostics: [
+          {
+            source: "tool",
+            phase: "parse",
+            reason: "invalid_args",
+            toolName: "lookup",
+            toolCallId: "call-1",
+          },
+        ],
+      });
+    }),
+  );
+
+  it.effect("unknown tool remains terminal-only diagnostics without a fabricated claim", () =>
+    Effect.gen(function* () {
+      const { result, events } = yield* runSubmit(baseSpec(), [
+        response({
+          items: [
+            { type: "message", text: "missing" },
+            {
+              type: "tool_call",
+              call: {
+                id: "call-1",
+                type: "function",
+                function: { name: "missing_tool", arguments: "{}" },
+              },
+            },
+          ],
+        }),
+      ]);
+
+      expect(result).toMatchObject({ ok: false, reason: "tool_error" });
+      expect(events.some((event) => event.kind === "tool.rejected")).toBe(false);
+      expect(projectFailureDiagnostics(events, 1)).toMatchObject({
+        diagnostics: [
+          {
+            source: "run",
+            phase: "terminal",
+            reason: "unknown_tool",
+            toolName: "missing_tool",
+          },
+        ],
+      });
     }),
   );
 

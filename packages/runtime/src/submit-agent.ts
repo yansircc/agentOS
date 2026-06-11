@@ -72,6 +72,8 @@ import {
   type RuntimeEventCommitSpec,
   type SubmitDecisionInterrupt,
   type SubmitResult,
+  type ToolArgumentSummary,
+  type ToolRejectedDiagnostics,
   type TurnRef,
 } from "@agent-os/runtime-protocol";
 import type { LedgerCommitEventSpec, LedgerTruthIdentity } from "@agent-os/runtime-protocol";
@@ -86,7 +88,6 @@ import { Quota } from "./quota-service";
 import {
   decodeToolArgs,
   executeTool,
-  parseToolCall,
   validateToolRegistry,
   type Tool,
   type ToolExecutionContextInput,
@@ -108,6 +109,7 @@ import {
   settleToolAdmissionRejected,
   settleToolExecuted,
   settleToolExecutionRejected,
+  settleToolValidationRejected,
   toolAdmissionFailureCause,
   toolErrorReason,
   publicRuntimeCauseReason,
@@ -132,6 +134,44 @@ class LlmCallTimedOut extends Data.TaggedError("agent_os.llm_call_timed_out")<{
 
 const toolDefinitionsOf = (tools: Record<string, Tool>): ReadonlyArray<ToolDefinition> =>
   Object.values(tools).map((t) => t.definition);
+
+const toolArgumentSummaryEncoder = new TextEncoder();
+
+const summarizeToolArguments = (value: unknown): ToolArgumentSummary => {
+  if (typeof value === "string") {
+    return {
+      type: "string",
+      bytes: toolArgumentSummaryEncoder.encode(value).byteLength,
+      truncated: false,
+    };
+  }
+  if (Array.isArray(value)) {
+    return { type: "array", keys: [], truncated: value.length > 0 };
+  }
+  if (Predicate.isRecord(value)) {
+    const keys = Object.keys(value).sort();
+    return {
+      type: "object",
+      keys: keys.slice(0, 20),
+      truncated: keys.length > 20,
+    };
+  }
+  return { type: value === null ? "null" : typeof value };
+};
+
+const schemaIssuesFromToolError = (
+  error: ToolError,
+): ToolRejectedDiagnostics["schemaIssues"] | undefined => {
+  const cause = error.cause;
+  if (!Predicate.isRecord(cause) || !Array.isArray(cause.schemaIssues)) return undefined;
+  const issues = cause.schemaIssues.filter(
+    (issue): issue is { readonly path: string; readonly issue: string } =>
+      Predicate.isRecord(issue) &&
+      typeof issue.path === "string" &&
+      typeof issue.issue === "string",
+  );
+  return issues.length === 0 ? undefined : issues;
+};
 
 const payloadWithToolPreClaim = (
   contract: BoundaryContract,
@@ -1179,9 +1219,13 @@ export const submitAgentEffect = (
           // non-recoverable: retrying the same args won't make them valid,
           // AND parsing before any quota grant means invalid LLM-emitted
           // args never consume quota.
-          const parsed = yield* parseToolCall(spec.tools, call);
-          const { tool } = parsed;
-          const args = yield* decodeToolArgs(tool, parsed.args, call.function.name);
+          const tool = spec.tools[call.function.name];
+          if (tool === undefined) {
+            return yield* new ToolError({
+              toolName: call.function.name,
+              cause: { reason: "unknown_tool" },
+            });
+          }
           const contract = tool.contract;
           // O-2: LLM-emitted tool arguments are not reproducible idempotency
           // material; this concrete call attempt is the semantic effect.
@@ -1194,6 +1238,67 @@ export const submitAgentEffect = (
               originKind: "submit",
             },
           });
+          const parsed = yield* Effect.either(
+            Effect.try({
+              try: () => JSON.parse(call.function.arguments) as unknown,
+              catch: (cause) =>
+                new ToolError({
+                  toolName: call.function.name,
+                  cause: {
+                    reason: "invalid_args",
+                    parseError: cause instanceof Error ? cause.name : typeof cause,
+                  },
+                }),
+            }),
+          );
+          if (parsed._tag === "Left") {
+            yield* logRuntimeLedgerEvent(
+              ledger,
+              toolRejectedEvent({
+                ...identity,
+                runId: started.id,
+                toolCallId: call.id,
+                name: call.function.name,
+                args: summarizeToolArguments(call.function.arguments),
+                execution: tool.execution,
+                claim: settleToolValidationRejected(claim, "invalid_args"),
+                diagnostics: {
+                  phase: "parse",
+                  reason: "invalid_args",
+                  argumentSummary: summarizeToolArguments(call.function.arguments),
+                },
+                traceContext,
+              }),
+            );
+            return yield* parsed.left;
+          }
+          const decoded = yield* Effect.either(
+            decodeToolArgs(tool, parsed.right, call.function.name),
+          );
+          if (decoded._tag === "Left") {
+            const schemaIssues = schemaIssuesFromToolError(decoded.left);
+            yield* logRuntimeLedgerEvent(
+              ledger,
+              toolRejectedEvent({
+                ...identity,
+                runId: started.id,
+                toolCallId: call.id,
+                name: call.function.name,
+                args: summarizeToolArguments(parsed.right),
+                execution: tool.execution,
+                claim: settleToolValidationRejected(claim, "invalid_args"),
+                diagnostics: {
+                  phase: "decode",
+                  reason: "invalid_args",
+                  argumentSummary: summarizeToolArguments(parsed.right),
+                  ...(schemaIssues === undefined ? {} : { schemaIssues }),
+                },
+                traceContext,
+              }),
+            );
+            return yield* decoded.left;
+          }
+          const args = decoded.right;
 
           const interrupt = decisionInterruptFor(spec, call.function.name);
           if (interrupt !== undefined && call.id !== resumedToolCallIdThisTurn) {

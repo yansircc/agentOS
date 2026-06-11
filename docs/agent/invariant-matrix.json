@@ -161,6 +161,7 @@
         "primitive.runtime.LedgerTruthIdentity",
         "primitive.runtime.MaterializedProjectionDefinition",
         "primitive.runtime.MaterializedProjections",
+        "primitive.runtime.projectFailureDiagnostics",
         "primitive.runtime.ProjectionIdentifyResult",
         "primitive.runtime.ProjectionReduceContext",
         "primitive.runtime.ProjectionReduceResult",

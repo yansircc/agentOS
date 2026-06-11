@@ -59,6 +59,8 @@
 - `.:EffectfulToolExecutionReceipt`
 - `.:EffectfulToolExecutionReceiptFromExecutedPayloadResult`
 - `.:EffectfulToolReceiptReplayOutcome`
+- `.:FailureDiagnostic`
+- `.:FailureDiagnostics`
 - `.:FINGERPRINT_ALGO_VERSION`
 - `.:ExternalReceiptAnchorRef`
 - `.:InternalSubmitSpec`
@@ -96,6 +98,7 @@
 - `.:SubmitToolContext`
 - `.:SubmitToolIntent`
 - `.:TOOL_EXECUTION_CLAIM_MUST_BE_LIVED_REASON`
+- `.:ToolArgumentSummary`
 - `.:ToolExecutedPayload`
 - `.:ToolExecutedPayloadSchema`
 - `.:PureToolExecutedPayload`
@@ -103,6 +106,8 @@
 - `.:ToolReplayArtifact`
 - `.:ToolReplayArtifactFromExecutedPayloadResult`
 - `.:ToolReplayOutcome`
+- `.:ToolRejectedDiagnostics`
+- `.:ToolRejectedDiagnosticsPhase`
 - `.:ToolRejectedPayload`
 - `.:ToolRejectedPayloadSchema`
 - `.:TOOL_RESULT_SNAPSHOT_VERSION`
@@ -128,6 +133,7 @@
 - `.:makeAdmissionSchemaSpec`
 - `.:mountAgent`
 - `.:projectLease`
+- `.:projectFailureDiagnostics`
 - `.:replayEffectfulToolExecutionFromReceipt`
 - `.:replayToolFromArtifact`
 - `.:replayToolResultFromSnapshot`

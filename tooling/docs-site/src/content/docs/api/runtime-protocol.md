@@ -63,6 +63,8 @@ title: "@agent-os/runtime-protocol API"
 - `.:EffectfulToolExecutionReceipt`
 - `.:EffectfulToolExecutionReceiptFromExecutedPayloadResult`
 - `.:EffectfulToolReceiptReplayOutcome`
+- `.:FailureDiagnostic`
+- `.:FailureDiagnostics`
 - `.:FINGERPRINT_ALGO_VERSION`
 - `.:ExternalReceiptAnchorRef`
 - `.:InternalSubmitSpec`
@@ -100,6 +102,7 @@ title: "@agent-os/runtime-protocol API"
 - `.:SubmitToolContext`
 - `.:SubmitToolIntent`
 - `.:TOOL_EXECUTION_CLAIM_MUST_BE_LIVED_REASON`
+- `.:ToolArgumentSummary`
 - `.:ToolExecutedPayload`
 - `.:ToolExecutedPayloadSchema`
 - `.:PureToolExecutedPayload`
@@ -107,6 +110,8 @@ title: "@agent-os/runtime-protocol API"
 - `.:ToolReplayArtifact`
 - `.:ToolReplayArtifactFromExecutedPayloadResult`
 - `.:ToolReplayOutcome`
+- `.:ToolRejectedDiagnostics`
+- `.:ToolRejectedDiagnosticsPhase`
 - `.:ToolRejectedPayload`
 - `.:ToolRejectedPayloadSchema`
 - `.:TOOL_RESULT_SNAPSHOT_VERSION`
@@ -132,6 +137,7 @@ title: "@agent-os/runtime-protocol API"
 - `.:makeAdmissionSchemaSpec`
 - `.:mountAgent`
 - `.:projectLease`
+- `.:projectFailureDiagnostics`
 - `.:replayEffectfulToolExecutionFromReceipt`
 - `.:replayToolFromArtifact`
 - `.:replayToolResultFromSnapshot`
