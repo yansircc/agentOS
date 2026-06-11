@@ -59,7 +59,7 @@ import {
   materialRequirement,
 } from "@agent-os/kernel/material-ref";
 import { defineSettlementContract, settleLived } from "@agent-os/kernel/settlement-contract";
-import { defineTool, pureToolExecution } from "@agent-os/kernel/tools";
+import { defineTool, deterministicToolExecution } from "@agent-os/kernel/tools";
 import { UpstreamFailure } from "@agent-os/kernel/errors";
 import type {
   DispatchToScopeSpec,
@@ -818,7 +818,7 @@ export const facadeLookup = defineTool({
   args: Schema.Struct({ key: Schema.String }),
   authority: "read",
   admit: allowToolAdmitter,
-  execution: pureToolExecution(),
+  execution: deterministicToolExecution(),
   execute: ({ key }) => Effect.succeed({ value: key }),
 });
 
@@ -830,7 +830,7 @@ export const facadeApply = defineTool({
   args: Schema.Struct({ key: Schema.String }),
   authority: "write",
   admit: allowToolAdmitter,
-  execution: pureToolExecution(),
+  execution: deterministicToolExecution(),
   requiredMaterials: [
     materialRequirement({
       slot: "facade_token",
@@ -897,7 +897,7 @@ export const facadeIntent = defineTool({
   args: Schema.Struct({ label: Schema.String }),
   authority: "write",
   admit: allowToolAdmitter,
-  execution: pureToolExecution(),
+  execution: deterministicToolExecution(),
   execute: (args, ctx) =>
     Effect.gen(function* () {
       if (ctx.emitIntent === undefined) {

@@ -14,14 +14,16 @@ crossing into tool code.
 
 Tools separate the envelope from the side-effect domain. `ToolContract` owns
 admission, claims, quota, contract validation, retry, and ledger settlement.
-`Tool.execution` is a sibling fact that declares where an effectful tool runs:
-host, sandbox, workspace, or remote. Host execution is never implicit.
+`Tool.execution` is a sibling fact that declares whether a tool is
+deterministic or external. External tools also declare access (`read` or
+`write`) and the domain: host, sandbox, workspace, or remote. Host execution is
+never implicit.
 
-Pure tools declare `execution: { kind: "pure" }`. Effectful tools declare
-`execution: { kind: "effectful", domain }`. The tool registry rejects tools
-that omit execution metadata. Backend facades also boot-validate
-`ExecutionDomainDeclaration` entries so effectful tools cannot reference an
-undeclared execution locus.
+Deterministic tools declare `execution: { kind: "deterministic" }`. External
+tools declare `execution: { kind: "external", access, domain }`. The tool
+registry rejects tools that omit execution metadata. Backend facades also
+boot-validate `ExecutionDomainDeclaration` entries so external tools cannot
+reference an undeclared execution locus.
 
 In this release `ExecutionDomain` is a declared locus marker, not a dispatcher.
 Actual execution still happens inside the tool closure or generated

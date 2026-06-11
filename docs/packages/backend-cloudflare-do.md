@@ -28,9 +28,9 @@ submit primitive. It is a public projection of the backend durable-trigger
 commit path: registry lookup happens before any ledger, due-work, or alarm
 write.
 
-`defineAgentDO({ domains, tools })` boot-validates effectful tool execution
-domains. Pure tools need no domain declaration. Effectful tools must reference
-a declared domain; duplicate declarations or host domains without explicit
+`defineAgentDO({ domains, tools })` boot-validates external tool execution
+domains. Deterministic tools need no domain declaration. External tools must
+reference a declared domain; duplicate declarations or host domains without explicit
 environment allowlists fail during lowering, before submit.
 
 `agent.cancelTrigger({ triggerKind, intentEventId, reason })` is the app-facing

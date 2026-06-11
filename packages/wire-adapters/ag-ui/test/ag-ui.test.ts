@@ -1,6 +1,6 @@
 import { Effect, Schema } from "effect";
 import { describe, expect, it } from "@effect/vitest";
-import { defineTool, pureToolExecution } from "@agent-os/kernel/tools";
+import { defineTool, deterministicToolExecution } from "@agent-os/kernel/tools";
 import { makePreClaim } from "@agent-os/kernel/effect-claim";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import {
@@ -110,7 +110,7 @@ const transcript = (): ReadonlyArray<LedgerEvent> => [
       toolCallId: "call-1",
       name: "lookup",
       args: '{"city":"SF"}',
-      execution: pureToolExecution(),
+      execution: deterministicToolExecution(),
       result: { temperature: 71 },
       claim: settleToolExecuted(
         toolClaim,
@@ -119,7 +119,7 @@ const transcript = (): ReadonlyArray<LedgerEvent> => [
           description: "Lookup weather",
           args: Schema.Struct({ city: Schema.String }),
           authority: "tool",
-          execution: pureToolExecution(),
+          execution: deterministicToolExecution(),
           admit: () => Effect.succeed({ ok: true }),
           execute: () => Effect.succeed({ temperature: 71 }),
         }).contract,
@@ -717,7 +717,7 @@ describe("@agent-os/ag-ui", () => {
       description: "Lookup weather",
       args: Schema.Struct({ city: Schema.String }),
       authority: "tool",
-      execution: pureToolExecution(),
+      execution: deterministicToolExecution(),
       admit: () => Effect.succeed({ ok: true }),
       execute: () => Effect.succeed({ temperature: 71 }),
     });

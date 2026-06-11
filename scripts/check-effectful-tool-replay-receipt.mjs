@@ -29,10 +29,10 @@ const collectFailures = (root = repoRoot) => {
   const runtimeTests = read(root, runtimeTest);
 
   const snapshotBlock = blockFrom(protocol, "export interface ToolResultSnapshot");
-  if (!snapshotBlock.includes("readonly execution: PureToolExecution")) {
+  if (!snapshotBlock.includes("readonly execution: DeterministicToolExecution")) {
     failures.push(`${protocolFile}: ToolResultSnapshot must be pure-execution only`);
   }
-  if (/readonly execution:\s*(ToolExecution|EffectfulToolExecution)/u.test(snapshotBlock)) {
+  if (/readonly execution:\s*(ToolExecution|ExternalToolExecution)/u.test(snapshotBlock)) {
     failures.push(`${protocolFile}: ToolResultSnapshot accepts non-pure execution`);
   }
 
@@ -40,34 +40,34 @@ const collectFailures = (root = repoRoot) => {
     protocol,
     "export const toolResultSnapshotFromExecutedPayload",
   );
-  if (!snapshotConstructor.includes("payload: PureToolExecutedPayload")) {
-    failures.push(`${protocolFile}: raw snapshot constructor must accept PureToolExecutedPayload`);
+  if (!snapshotConstructor.includes("payload: DeterministicToolExecutedPayload")) {
+    failures.push(`${protocolFile}: raw snapshot constructor must accept DeterministicToolExecutedPayload`);
   }
   if (/payload:\s*ToolExecutedPayload/u.test(snapshotConstructor)) {
     failures.push(`${protocolFile}: raw snapshot constructor still accepts generic tool payloads`);
   }
 
-  const receiptBlock = blockFrom(protocol, "export interface EffectfulToolExecutionReceipt");
+  const receiptBlock = blockFrom(protocol, "export interface ExternalToolExecutionReceipt");
   if (receiptBlock.length === 0) {
-    failures.push(`${protocolFile}: missing EffectfulToolExecutionReceipt`);
+    failures.push(`${protocolFile}: missing ExternalToolExecutionReceipt`);
   }
   if (!receiptBlock.includes("ExternalReceiptAnchorRef")) {
-    failures.push(`${protocolFile}: effectful receipt must use an external receipt anchor type`);
+    failures.push(`${protocolFile}: external receipt must use an external receipt anchor type`);
   }
 
   const receiptConstructor = blockFrom(
     protocol,
-    "export const effectfulToolExecutionReceiptFromExecutedPayload",
+    "export const externalToolExecutionReceiptFromExecutedPayload",
   );
   if (!protocol.includes('anchorKind === "external_receipt"')) {
-    failures.push(`${protocolFile}: effectful receipt constructor missing external receipt check`);
+    failures.push(`${protocolFile}: external receipt constructor missing external receipt check`);
   }
   for (const term of [
     "idempotencyKey: payload.claim.operationRef",
-    "EFFECTFUL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON",
+    "EXTERNAL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON",
   ]) {
     if (!receiptConstructor.includes(term)) {
-      failures.push(`${protocolFile}: effectful receipt constructor missing ${term}`);
+      failures.push(`${protocolFile}: external receipt constructor missing ${term}`);
     }
   }
 
@@ -76,9 +76,9 @@ const collectFailures = (root = repoRoot) => {
     "export const toolReplayArtifactFromExecutedPayload",
   );
   for (const term of [
-    'payload.execution.kind === "pure"',
+    'payload.execution.kind === "deterministic"',
     "toolResultSnapshotFromExecutedPayload",
-    "effectfulToolExecutionReceiptFromExecutedPayload",
+    "externalToolExecutionReceiptFromExecutedPayload",
   ]) {
     if (!artifactConstructor.includes(term)) {
       failures.push(`${protocolFile}: replay artifact constructor missing ${term}`);
@@ -86,14 +86,14 @@ const collectFailures = (root = repoRoot) => {
   }
 
   const snapshotReplay = blockFrom(protocol, "export const replayToolResultFromSnapshot");
-  if (/effectful_tool_replay_requires_receipt/u.test(snapshotReplay)) {
-    failures.push(`${protocolFile}: raw snapshot replay still case-analyzes effectful execution`);
+  if (/external_tool_replay_requires_receipt/u.test(snapshotReplay)) {
+    failures.push(`${protocolFile}: raw snapshot replay still case-analyzes external execution`);
   }
   if (/\.execute\s*\(/u.test(snapshotReplay)) {
     failures.push(`${protocolFile}: raw snapshot replay calls live tool execute`);
   }
-  if (!protocol.includes("export const replayEffectfulToolExecutionFromReceipt")) {
-    failures.push(`${protocolFile}: missing effectful receipt replay helper`);
+  if (!protocol.includes("export const replayExternalToolExecutionFromReceipt")) {
+    failures.push(`${protocolFile}: missing external receipt replay helper`);
   }
 
   const resumeReplay = blockFrom(
@@ -111,35 +111,35 @@ const collectFailures = (root = repoRoot) => {
     failures.push(`${runtimeFile}: resume replay reads raw tool result payload`);
   }
 
-  const guardIndex = runtime.indexOf('tool.execution.kind === "effectful"');
+  const guardIndex = runtime.indexOf('tool.execution.kind === "external"');
   const executeIndex = runtime.indexOf("return yield* executeTool", guardIndex);
   if (guardIndex < 0 || executeIndex < 0) {
-    failures.push(`${runtimeFile}: missing submit-time effectful receipt guard before execute`);
+    failures.push(`${runtimeFile}: missing submit-time external receipt guard before execute`);
   }
-  if (!runtime.includes("EFFECTFUL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON")) {
-    failures.push(`${runtimeFile}: missing shared effectful execution receipt reason`);
+  if (!runtime.includes("EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON")) {
+    failures.push(`${runtimeFile}: missing shared external execution receipt reason`);
   }
 
   if (
-    !/does not build a raw result snapshot for an effectful tool without a receipt/u.test(
+    !/does not build a raw result snapshot for an external tool without a receipt/u.test(
       protocolTests,
     )
   ) {
-    failures.push(`${protocolTest}: missing effectful no-raw-snapshot test`);
+    failures.push(`${protocolTest}: missing external no-raw-snapshot test`);
   }
   if (
-    !/replays receipt-backed effectful tool execution from the receipt artifact/u.test(
+    !/replays receipt-backed external tool execution from the receipt artifact/u.test(
       protocolTests,
     )
   ) {
-    failures.push(`${protocolTest}: missing receipt-backed effectful replay test`);
+    failures.push(`${protocolTest}: missing receipt-backed external replay test`);
   }
   if (
-    !/does not execute an effectful tool without a receipt-backed terminal contract/u.test(
+    !/does not execute an external tool without a receipt-backed terminal contract/u.test(
       runtimeTests,
     )
   ) {
-    failures.push(`${runtimeTest}: missing submit-time effectful receipt guard test`);
+    failures.push(`${runtimeTest}: missing submit-time external receipt guard test`);
   }
 
   return failures;
@@ -152,34 +152,34 @@ const writeFixture = (root, file, source) => {
 };
 
 const collectSelfTestFailures = () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-effectful-tool-replay-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-external-tool-replay-"));
   try {
     writeFixture(
       root,
       protocolFile,
       [
-        "export type PureToolExecution = { readonly kind: 'pure' };",
+        "export type DeterministicToolExecution = { readonly kind: 'deterministic' };",
         'export type ExternalReceiptAnchorRef = { readonly anchorKind: "external_receipt" };',
         "export interface ToolResultSnapshot {",
-        "  readonly execution: PureToolExecution;",
+        "  readonly execution: DeterministicToolExecution;",
         "}",
-        "export interface EffectfulToolExecutionReceipt {",
+        "export interface ExternalToolExecutionReceipt {",
         "  readonly receipt: ExternalReceiptAnchorRef;",
         "}",
-        'export const EFFECTFUL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON = "effectful_tool_replay_requires_receipt";',
-        "export const toolResultSnapshotFromExecutedPayload = (payload: PureToolExecutedPayload) => payload;",
-        "export const effectfulToolExecutionReceiptFromExecutedPayload = (payload) => {",
+        'export const EXTERNAL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON = "external_tool_replay_requires_receipt";',
+        "export const toolResultSnapshotFromExecutedPayload = (payload: DeterministicToolExecutedPayload) => payload;",
+        "export const externalToolExecutionReceiptFromExecutedPayload = (payload) => {",
         '  if (payload.claim.anchorRef.anchorKind === "external_receipt") {',
         "    return { ok: true, artifact: { idempotencyKey: payload.claim.operationRef, receipt: payload.claim.anchorRef } };",
         "  }",
-        "  return { ok: false, reason: EFFECTFUL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON };",
+        "  return { ok: false, reason: EXTERNAL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON };",
         "};",
         "export const toolReplayArtifactFromExecutedPayload = (payload) => {",
-        '  if (payload.execution.kind === "pure") return toolResultSnapshotFromExecutedPayload(payload);',
-        "  return effectfulToolExecutionReceiptFromExecutedPayload(payload);",
+        '  if (payload.execution.kind === "deterministic") return toolResultSnapshotFromExecutedPayload(payload);',
+        "  return externalToolExecutionReceiptFromExecutedPayload(payload);",
         "};",
         "export const replayToolResultFromSnapshot = (snapshot) => snapshot.result;",
-        "export const replayEffectfulToolExecutionFromReceipt = (receipt) => receipt.result;",
+        "export const replayExternalToolExecutionFromReceipt = (receipt) => receipt.result;",
       ].join("\n"),
     );
     writeFixture(
@@ -191,8 +191,8 @@ const collectSelfTestFailures = () => {
         "  return replayToolFromArtifact(artifact.artifact);",
         "}",
         "/** The single termination funnel */",
-        'if (tool.execution.kind === "effectful") {',
-        "  return EFFECTFUL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON;",
+        'if (tool.execution.kind === "external") {',
+        "  return EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON;",
         "}",
         "return yield* executeTool(tool);",
       ].join("\n"),
@@ -201,18 +201,18 @@ const collectSelfTestFailures = () => {
       root,
       protocolTest,
       [
-        "it('does not build a raw result snapshot for an effectful tool without a receipt', () => {});",
-        "it('replays receipt-backed effectful tool execution from the receipt artifact', () => {});",
+        "it('does not build a raw result snapshot for an external tool without a receipt', () => {});",
+        "it('replays receipt-backed external tool execution from the receipt artifact', () => {});",
       ].join("\n"),
     );
     writeFixture(
       root,
       runtimeTest,
-      "it('does not execute an effectful tool without a receipt-backed terminal contract', () => {});",
+      "it('does not execute an external tool without a receipt-backed terminal contract', () => {});",
     );
     const baseline = collectFailures(root);
     if (baseline.length > 0) {
-      return [`effectful tool replay receipt positive fixture failed:\n${baseline.join("\n")}`];
+      return [`external tool replay receipt positive fixture failed:\n${baseline.join("\n")}`];
     }
 
     writeFixture(
@@ -222,10 +222,10 @@ const collectSelfTestFailures = () => {
         "export interface ToolResultSnapshot {",
         "  readonly execution: ToolExecution;",
         "}",
-        "export interface EffectfulToolExecutionReceipt {}",
+        "export interface ExternalToolExecutionReceipt {}",
         "export const toolResultSnapshotFromExecutedPayload = (payload: ToolExecutedPayload) => payload;",
         "export const replayToolResultFromSnapshot = (snapshot) => {",
-        "  if (snapshot.execution.kind === 'effectful') return { reason: 'effectful_tool_replay_requires_receipt' };",
+        "  if (snapshot.execution.kind === 'external') return { reason: 'external_tool_replay_requires_receipt' };",
         "  return snapshot.result;",
         "};",
       ].join("\n"),
@@ -245,7 +245,7 @@ const collectSelfTestFailures = () => {
       !rejected.some((failure) => failure.includes("resume replay reads raw tool result"))
     ) {
       return [
-        `effectful tool replay receipt mutation fixture was not rejected: ${JSON.stringify(
+        `external tool replay receipt mutation fixture was not rejected: ${JSON.stringify(
           rejected,
         )}`,
       ];
@@ -267,6 +267,6 @@ if (failures.length > 0) {
 
 console.log(
   process.argv.includes("--self-test")
-    ? "effectful tool replay receipt self-test passed"
-    : "effectful tool replay receipt passed",
+    ? "external tool replay receipt self-test passed"
+    : "external tool replay receipt passed",
 );

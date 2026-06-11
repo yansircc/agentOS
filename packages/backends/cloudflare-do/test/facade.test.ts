@@ -12,7 +12,12 @@ import {
 import { cloudflareAgentMountPort, mountCloudflareAgent } from "../src/mount";
 import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
 import { makePreClaim } from "@agent-os/kernel/effect-claim";
-import { defineTool, effectfulToolExecution, pureToolExecution } from "@agent-os/kernel/tools";
+import {
+  defineTool,
+  externalToolExecution,
+  deterministicToolExecution,
+  withToolWriteRequirement,
+} from "@agent-os/kernel/tools";
 import { Effect, Schema } from "effect";
 import { defineAgentBindings, defineAgentManifest } from "@agent-os/runtime-protocol";
 import type { DispatchTargetNamespace } from "../src/dispatch";
@@ -206,14 +211,14 @@ describe("defineAgentDO facade lowering", () => {
     ).toThrow("unbound material");
   });
 
-  it("allows pure tools without execution domain declarations", () => {
+  it("allows deterministic tools without execution domain declarations", () => {
     const tool = defineTool({
       name: "lookup",
       description: "Lookup",
       args: Schema.Struct({ key: Schema.String }),
       authority: "read",
       admit: allowToolAdmitter,
-      execution: pureToolExecution(),
+      execution: deterministicToolExecution(),
       execute: ({ key }) => Effect.succeed({ key }),
     });
 
@@ -222,7 +227,7 @@ describe("defineAgentDO facade lowering", () => {
     expect(lowered.submitBindings).toBe(null);
   });
 
-  it("fails before submit when effectful tools reference undeclared domains", () => {
+  it("fails before submit when external tools reference undeclared domains", () => {
     const domain = { kind: "workspace" as const, ref: "workspace:default" };
     const tool = defineTool({
       name: "write_file",
@@ -230,8 +235,8 @@ describe("defineAgentDO facade lowering", () => {
       args: Schema.Struct({ path: Schema.String }),
       authority: "write",
       admit: allowToolAdmitter,
-      execution: effectfulToolExecution(domain),
-      execute: ({ path }) => Effect.succeed({ path }),
+      execution: externalToolExecution("write", domain),
+      execute: ({ path }) => withToolWriteRequirement(Effect.succeed({ path })),
     });
 
     expect(() => lowerAgentConfig({ tools: [tool] }, env)).toThrow(
@@ -239,7 +244,7 @@ describe("defineAgentDO facade lowering", () => {
     );
   });
 
-  it("passes lowering when effectful tool domains are declared", () => {
+  it("passes lowering when external tool domains are declared", () => {
     const domain = { kind: "workspace" as const, ref: "workspace:default" };
     const tool = defineTool({
       name: "write_file",
@@ -247,8 +252,8 @@ describe("defineAgentDO facade lowering", () => {
       args: Schema.Struct({ path: Schema.String }),
       authority: "write",
       admit: allowToolAdmitter,
-      execution: effectfulToolExecution(domain),
-      execute: ({ path }) => Effect.succeed({ path }),
+      execution: externalToolExecution("write", domain),
+      execute: ({ path }) => withToolWriteRequirement(Effect.succeed({ path })),
     });
 
     const lowered = lowerAgentConfig({ tools: [tool], domains: [{ domain }] }, env);

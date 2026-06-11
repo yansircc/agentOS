@@ -188,7 +188,7 @@ const runtimeTelemetryNodes = (
         event.kind === RUNTIME_EVENT_KIND.TOOL_REJECTED
       ) {
         const domain =
-          event.payload.execution.kind === "effectful" ? event.payload.execution.domain : undefined;
+          event.payload.execution.kind === "external" ? event.payload.execution.domain : undefined;
         nodes.push(
           telemetryNode({
             event,

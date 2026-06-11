@@ -9,7 +9,7 @@ import {
   agentRunStartedEvent,
   chatIngestedEvent,
   decodeRuntimeLedgerEvent,
-  EFFECTFUL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON,
+  EXTERNAL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON,
   llmResponseEvent,
   RUNTIME_ABORT_EVENT_KINDS,
   replayToolFromArtifact,
@@ -141,7 +141,7 @@ describe("runtime event vocabulary", () => {
         toolCallId: "call-1",
         name: "lookup",
         args: '{"q":"x"}',
-        execution: { kind: "pure" },
+        execution: { kind: "deterministic" },
         result: { ok: true },
         claim: livedClaim,
         traceContext,
@@ -152,7 +152,7 @@ describe("runtime event vocabulary", () => {
         toolCallId: "call-1",
         name: "lookup",
         args: '{"q":"x"}',
-        execution: { kind: "pure" },
+        execution: { kind: "deterministic" },
         claim: rejectedClaim,
         traceContext,
       }),
@@ -192,7 +192,7 @@ describe("runtime event vocabulary", () => {
     expect(decoded).toMatchObject({ _tag: "non_runtime" });
   });
 
-  it("replay mode tool execute not called: pure tool result replays from snapshot", () => {
+  it("replay mode tool execute not called: deterministic tool result replays from snapshot", () => {
     let liveToolExecuteCalled = false;
     const liveTool = {
       execute: () => {
@@ -206,7 +206,7 @@ describe("runtime event vocabulary", () => {
       toolCallId: "call-1",
       name: "lookup",
       args: { q: "x" },
-      execution: { kind: "pure" },
+      execution: { kind: "deterministic" },
       result: { ok: true },
       claim: livedClaim,
       traceContext,
@@ -214,7 +214,7 @@ describe("runtime event vocabulary", () => {
 
     const snapshot = toolResultSnapshotFromExecutedPayload({
       ...payload,
-      execution: { kind: "pure" },
+      execution: { kind: "deterministic" },
       claim: livedClaim,
     });
     const replayed = replayToolResultFromSnapshot(snapshot);
@@ -224,34 +224,46 @@ describe("runtime event vocabulary", () => {
     expect(liveTool.execute).toBeDefined();
   });
 
-  it("does not build a raw result snapshot for an effectful tool without a receipt", () => {
+  it("does not build a raw result snapshot for an external tool without a receipt", () => {
     const payload = toolExecutedEvent({
       ...runtimeIdentity,
       runId: 1,
       toolCallId: "call-1",
       name: "write_file",
       args: { path: "out.txt" },
-      execution: { kind: "effectful", domain: { kind: "workspace", ref: "workspace:default" } },
+      execution: {
+        kind: "external",
+        access: "write",
+        domain: { kind: "workspace", ref: "workspace:default" },
+      },
       result: { written: true },
       claim: livedClaim,
     }).payload;
 
     expect(toolReplayArtifactFromExecutedPayload(payload)).toEqual({
       ok: false,
-      reason: EFFECTFUL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON,
-      execution: { kind: "effectful", domain: { kind: "workspace", ref: "workspace:default" } },
+      reason: EXTERNAL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON,
+      execution: {
+        kind: "external",
+        access: "write",
+        domain: { kind: "workspace", ref: "workspace:default" },
+      },
       claim: livedClaim,
     });
   });
 
-  it("replays receipt-backed effectful tool execution from the receipt artifact", () => {
+  it("replays receipt-backed external tool execution from the receipt artifact", () => {
     const payload = toolExecutedEvent({
       ...runtimeIdentity,
       runId: 1,
       toolCallId: "call-1",
       name: "write_file",
       args: { path: "out.txt" },
-      execution: { kind: "effectful", domain: { kind: "workspace", ref: "workspace:default" } },
+      execution: {
+        kind: "external",
+        access: "write",
+        domain: { kind: "workspace", ref: "workspace:default" },
+      },
       result: { written: true },
       claim: receiptBackedLivedClaim,
       traceContext,
@@ -267,7 +279,7 @@ describe("runtime event vocabulary", () => {
       },
     });
     if (!artifact.ok) {
-      expect.fail("expected receipt-backed effectful tool replay artifact");
+      expect.fail("expected receipt-backed external tool replay artifact");
     }
 
     expect(replayToolFromArtifact(artifact.artifact)).toEqual({

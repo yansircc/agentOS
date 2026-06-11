@@ -49,8 +49,23 @@ export interface ToolExecutionContext {
 }
 
 export type ResolvedToolMaterials = Readonly<Record<string, ResolvedMaterial>>;
-export type ToolRequirements = never;
-export type ToolEffect<R> = Effect.Effect<R, ToolError, ToolRequirements>;
+declare const TOOL_EXTERNAL_REQUIREMENT_BRAND: unique symbol;
+
+export interface ToolExternalReadRequirement {
+  readonly _tag: "@agent-os/kernel/ToolExternalReadRequirement";
+}
+
+export interface ToolExternalWriteRequirement {
+  readonly _tag: "@agent-os/kernel/ToolExternalWriteRequirement";
+}
+
+export type ToolRequirements = ToolExternalReadRequirement | ToolExternalWriteRequirement;
+
+export type ToolEffect<R, Requirements = never> = [Requirements] extends [never]
+  ? Effect.Effect<R, ToolError, never>
+  : Effect.Effect<R, ToolError, Requirements> & {
+      readonly [TOOL_EXTERNAL_REQUIREMENT_BRAND]: Requirements;
+    };
 
 export type ToolExecutionContextInput = Omit<ToolExecutionContext, "materials">;
 
@@ -83,9 +98,10 @@ export type ToolProjectionWaiter = <State = unknown>(
 ) => Effect.Effect<ToolProjectionRow<State>, ToolError, never>;
 
 export type ExecutionDomainKind = "host" | "sandbox" | "workspace" | "remote";
+export type ToolAccess = "read" | "write";
 
 /**
- * Declared execution locus for an effectful tool.
+ * Declared execution locus for an external tool.
  *
  * @agentosPrimitive primitive.kernel.ExecutionDomain
  * @agentosInvariant invariant.algebra.type-or-boot-proof
@@ -99,7 +115,7 @@ export interface ExecutionDomain {
 }
 
 /**
- * Tool execution declaration: pure tools stay local, effectful tools name a domain.
+ * Tool execution declaration: deterministic tools stay local; external tools name access and domain.
  *
  * @agentosPrimitive primitive.kernel.ToolExecution
  * @agentosInvariant invariant.algebra.type-or-boot-proof
@@ -107,8 +123,17 @@ export interface ExecutionDomain {
  * @public
  */
 export type ToolExecution =
-  | { readonly kind: "pure" }
-  | { readonly kind: "effectful"; readonly domain: ExecutionDomain };
+  | { readonly kind: "deterministic" }
+  | { readonly kind: "external"; readonly access: ToolAccess; readonly domain: ExecutionDomain };
+
+export type ToolExecutionRequirements<E extends ToolExecution> = E extends {
+  readonly kind: "external";
+  readonly access: "read";
+}
+  ? ToolExternalReadRequirement
+  : E extends { readonly kind: "external"; readonly access: "write" }
+    ? ToolExternalWriteRequirement
+    : never;
 
 /**
  * Boot-time execution-domain declaration consumed by registry validation.
@@ -123,7 +148,7 @@ export interface ExecutionDomainDeclaration {
 }
 
 /**
- * Boot-proof registry for all effectful tool execution domains.
+ * Boot-proof registry for all external tool execution domains.
  *
  * @agentosPrimitive primitive.kernel.ExecutionDomainRegistry
  * @agentosInvariant invariant.algebra.type-or-boot-proof
@@ -200,10 +225,10 @@ export type ToolAdmitter<A = unknown> = (
 ) => Effect.Effect<AdmitVerdict, ToolError, never>;
 
 export type ToolDecode<A = unknown> = (args: unknown) => A;
-export type ToolExecute<A = unknown, R = unknown> = (
+export type ToolExecute<A = unknown, R = unknown, Requirements = never> = (
   args: A,
   ctx: ToolExecutionContext,
-) => ToolEffect<R>;
+) => ToolEffect<R, Requirements>;
 
 /**
  * Public app-facing tool definition consumed by submit loops.
@@ -218,22 +243,27 @@ export interface Tool<
   A = any,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   R = any,
+  E extends ToolExecution = ToolExecution,
 > {
   readonly definition: ToolDefinition;
   readonly argsSchema: AgentSchema<A>;
   readonly decode: ToolDecode<A>;
-  readonly execute: ToolExecute<A, R>;
+  readonly execute: ToolExecute<A, R, ToolExecutionRequirements<E>>;
   readonly admit: ToolAdmitter<A>;
-  readonly execution: ToolExecution;
+  readonly execution: E;
   readonly quota?: QuotaSpec;
   readonly contract: ToolContract;
 }
 
-export interface DefineToolSpec<S extends Schema.Schema.AnyNoContext, R> {
+export interface DefineToolSpec<
+  S extends Schema.Schema.AnyNoContext,
+  R,
+  E extends ToolExecution,
+> {
   readonly name: string;
   readonly description: string;
   readonly args: S;
-  readonly execute: ToolExecute<Schema.Schema.Type<S>, R>;
+  readonly execute: ToolExecute<Schema.Schema.Type<S>, R, ToolExecutionRequirements<E>>;
   readonly quota?: QuotaSpec;
   readonly authority: string;
   readonly authorityId?: string;
@@ -241,14 +271,18 @@ export interface DefineToolSpec<S extends Schema.Schema.AnyNoContext, R> {
   readonly requiredMaterials?: ReadonlyArray<MaterialRequirement>;
   readonly originRef?: OriginRef;
   readonly admit: ToolAdmitter<Schema.Schema.Type<S>>;
-  readonly execution: ToolExecution;
+  readonly execution: E;
 }
 
-export interface DefineProductToolSpec<S extends Schema.Schema.AnyNoContext, R> extends Omit<
-  DefineToolSpec<S, R>,
+export interface DefineProductToolSpec<
+  S extends Schema.Schema.AnyNoContext,
+  R,
+  E extends ToolExecution = ReturnType<typeof deterministicToolExecution>,
+> extends Omit<
+  DefineToolSpec<S, R, E>,
   "execution"
 > {
-  readonly execution?: ToolExecution;
+  readonly execution?: E;
 }
 
 const makeToolContract = (shape: ToolContractShape): ToolContract =>
@@ -269,12 +303,28 @@ export const deterministicToolInvocation = <A>(
 const hasToolContractBrand = (contract: ToolContract): boolean =>
   contract[TOOL_CONTRACT_BRAND] === true;
 
-export const pureToolExecution = (): ToolExecution => ({ kind: "pure" });
+export const deterministicToolExecution = (): { readonly kind: "deterministic" } => ({
+  kind: "deterministic",
+});
 
-export const effectfulToolExecution = (domain: ExecutionDomain): ToolExecution => ({
-  kind: "effectful",
+export const externalToolExecution = <A extends ToolAccess>(
+  access: A,
+  domain: ExecutionDomain,
+): { readonly kind: "external"; readonly access: A; readonly domain: ExecutionDomain } => ({
+  kind: "external",
+  access,
   domain,
 });
+
+export const withToolReadRequirement = <R>(
+  effect: Effect.Effect<R, ToolError, never>,
+): ToolEffect<R, ToolExternalReadRequirement> =>
+  effect as unknown as ToolEffect<R, ToolExternalReadRequirement>;
+
+export const withToolWriteRequirement = <R>(
+  effect: Effect.Effect<R, ToolError, never>,
+): ToolEffect<R, ToolExternalWriteRequirement> =>
+  effect as unknown as ToolEffect<R, ToolExternalWriteRequirement>;
 
 const failToolDefinition = (message: string): never =>
   Option.getOrThrowWith(Option.none(), () => new TypeError(message));
@@ -305,9 +355,17 @@ const isExecutionDomain = (value: unknown): value is ExecutionDomain => {
 
 const isToolExecution = (value: unknown): value is ToolExecution => {
   if (typeof value !== "object" || value === null) return false;
-  const candidate = value as { readonly kind?: unknown; readonly domain?: unknown };
-  if (candidate.kind === "pure") return true;
-  return candidate.kind === "effectful" && isExecutionDomain(candidate.domain);
+  const candidate = value as {
+    readonly kind?: unknown;
+    readonly access?: unknown;
+    readonly domain?: unknown;
+  };
+  if (candidate.kind === "deterministic") return true;
+  return (
+    candidate.kind === "external" &&
+    (candidate.access === "read" || candidate.access === "write") &&
+    isExecutionDomain(candidate.domain)
+  );
 };
 
 const executionDomainKey = (domain: ExecutionDomain): string => `${domain.kind}:${domain.ref}`;
@@ -355,7 +413,7 @@ export const validateExecutionDomainRegistry = (
   });
 
   for (const tool of Object.values(tools)) {
-    if (tool.execution.kind === "pure") continue;
+    if (tool.execution.kind === "deterministic") continue;
     const domain = tool.execution.domain;
     if (!declared.has(executionDomainKey(domain))) {
       issues.push({
@@ -369,9 +427,9 @@ export const validateExecutionDomainRegistry = (
   return issues.length === 0 ? { ok: true } : { ok: false, issues };
 };
 
-export const defineTool = <S extends Schema.Schema.AnyNoContext, R>(
-  spec: DefineToolSpec<S, R>,
-): Tool<Schema.Schema.Type<S>, R> => {
+export const defineTool = <S extends Schema.Schema.AnyNoContext, R, E extends ToolExecution>(
+  spec: DefineToolSpec<S, R, E>,
+): Tool<Schema.Schema.Type<S>, R, E> => {
   const argsSchema = ensureAgentSchema(spec.args);
   const toolId = spec.name;
   const admit = normalizeAdmitter(spec.admit);
@@ -406,19 +464,23 @@ export const defineTool = <S extends Schema.Schema.AnyNoContext, R>(
 
 /**
  * Defines a product-owned tool with the same Effect-native execution contract
- * as `defineTool`, defaulting to pure execution when no domain is required.
+ * as `defineTool`, defaulting to deterministic execution when no domain is required.
  *
  * @agentosPrimitive primitive.kernel.defineProductTool
  * @agentosInvariant invariant.algebra.type-or-boot-proof
  * @agentosDocs docs/concepts/tool-execution-domain.md
  * @public
  */
-export const defineProductTool = <S extends Schema.Schema.AnyNoContext, R>(
-  spec: DefineProductToolSpec<S, R>,
-): Tool<Schema.Schema.Type<S>, R> =>
+export const defineProductTool = <
+  S extends Schema.Schema.AnyNoContext,
+  R,
+  E extends ToolExecution = ReturnType<typeof deterministicToolExecution>,
+>(
+  spec: DefineProductToolSpec<S, R, E>,
+): Tool<Schema.Schema.Type<S>, R, E | ReturnType<typeof deterministicToolExecution>> =>
   defineTool({
     ...spec,
-    execution: spec.execution ?? pureToolExecution(),
+    execution: spec.execution ?? deterministicToolExecution(),
   });
 
 export type ToolRegistryIssue =

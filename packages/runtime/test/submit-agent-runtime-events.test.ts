@@ -15,7 +15,12 @@ import {
   defineBoundaryContract,
   type BoundaryContract,
 } from "@agent-os/kernel/boundary-contract";
-import { defineTool, effectfulToolExecution, pureToolExecution } from "@agent-os/kernel/tools";
+import {
+  defineTool,
+  externalToolExecution,
+  deterministicToolExecution,
+  withToolWriteRequirement,
+} from "@agent-os/kernel/tools";
 import { ToolError } from "@agent-os/kernel/errors";
 import { Admission } from "../src/admission";
 import { BoundaryEvents } from "../src/boundary-events";
@@ -31,7 +36,7 @@ import { submitAgentEffect } from "../src/submit-agent";
 import {
   RUNTIME_FACT_OWNER,
   decodeRuntimeLedgerEvent,
-  EFFECTFUL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
+  EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
   projectFailureDiagnostics,
   replayToolFromArtifact,
   toolReplayArtifactFromExecutedPayload,
@@ -317,7 +322,7 @@ describe("submit-agent runtime event writes", () => {
         execute: () => Effect.succeed({ value: "from-run" }),
         authority: "read",
         admit: () => Effect.succeed({ ok: true }),
-        execution: pureToolExecution(),
+        execution: deterministicToolExecution(),
       });
       const { events } = yield* runSubmit(baseSpec({ tools: { lookup: tool } }), [
         response({
@@ -351,7 +356,7 @@ describe("submit-agent runtime event writes", () => {
 
       const artifact = toolReplayArtifactFromExecutedPayload(toolEvent.event.payload);
       if (!artifact.ok) {
-        expect.fail("expected pure tool result snapshot artifact");
+        expect.fail("expected deterministic tool result snapshot artifact");
       }
       const replayed = replayToolFromArtifact(artifact.artifact);
 
@@ -361,7 +366,7 @@ describe("submit-agent runtime event writes", () => {
     }),
   );
 
-  it.effect("does not execute an effectful tool without a receipt-backed terminal contract", () =>
+  it.effect("does not execute an external tool without a receipt-backed terminal contract", () =>
     Effect.gen(function* () {
       let liveToolExecuteCalled = false;
       const tool = defineTool({
@@ -370,11 +375,14 @@ describe("submit-agent runtime event writes", () => {
         args: Schema.Struct({ path: Schema.String }),
         execute: () => {
           liveToolExecuteCalled = true;
-          return Effect.succeed({ written: true });
+          return withToolWriteRequirement(Effect.succeed({ written: true }));
         },
         authority: "write",
         admit: () => Effect.succeed({ ok: true }),
-        execution: effectfulToolExecution({ kind: "workspace", ref: "workspace:default" }),
+        execution: externalToolExecution("write", {
+          kind: "workspace",
+          ref: "workspace:default",
+        }),
       });
 
       const { result, events } = yield* runSubmit(baseSpec({ tools: { write_file: tool } }), [
@@ -403,12 +411,12 @@ describe("submit-agent runtime event writes", () => {
         "agent.aborted.tool_error",
       ]);
       expect(events.some((event) => event.kind === "tool.executed")).toBe(false);
-      expect(JSON.stringify(events)).toContain(EFFECTFUL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON);
+      expect(JSON.stringify(events)).toContain(EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON);
       expect(projectFailureDiagnostics(events, 1)).toMatchObject({
         diagnostics: [
           {
             source: "tool",
-            reason: EFFECTFUL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
+            reason: EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
             category: "missing_execution_path",
             owner: "integrator",
             retryable: false,
@@ -467,7 +475,7 @@ describe("submit-agent runtime event writes", () => {
           }),
         authority: "write",
         admit: () => Effect.succeed({ ok: true }),
-        execution: pureToolExecution(),
+        execution: deterministicToolExecution(),
       });
 
       const { result, events } = yield* runSubmit(
@@ -559,7 +567,7 @@ describe("submit-agent runtime event writes", () => {
           }),
         authority: "read",
         admit: () => Effect.succeed({ ok: true }),
-        execution: pureToolExecution(),
+        execution: deterministicToolExecution(),
       });
       const services = makeServices([
         response({
@@ -688,7 +696,7 @@ describe("submit-agent runtime event writes", () => {
               reason: "denied",
             },
           }),
-        execution: pureToolExecution(),
+        execution: deterministicToolExecution(),
       });
       const { result, events } = yield* runSubmit(baseSpec({ tools: { lookup: tool } }), [
         response({
@@ -727,7 +735,7 @@ describe("submit-agent runtime event writes", () => {
         execute: () => Effect.succeed({ ok: true }),
         authority: "write",
         admit: () => Effect.succeed({ ok: true }),
-        execution: pureToolExecution(),
+        execution: deterministicToolExecution(),
       });
 
       const { result, events } = yield* runSubmit(baseSpec({ tools: { write_file: tool } }), [
@@ -783,7 +791,7 @@ describe("submit-agent runtime event writes", () => {
         execute: () => Effect.succeed({ ok: true }),
         authority: "read",
         admit: () => Effect.succeed({ ok: true }),
-        execution: pureToolExecution(),
+        execution: deterministicToolExecution(),
       });
 
       const { result, events } = yield* runSubmit(baseSpec({ tools: { lookup: tool } }), [
@@ -882,7 +890,7 @@ describe("submit-agent runtime event writes", () => {
           }),
         ],
         admit: () => Effect.succeed({ ok: true }),
-        execution: pureToolExecution(),
+        execution: deterministicToolExecution(),
       });
 
       const services = makeServices(
@@ -948,7 +956,7 @@ describe("submit-agent runtime event writes", () => {
           }),
         ],
         admit: () => Effect.succeed({ ok: true }),
-        execution: pureToolExecution(),
+        execution: deterministicToolExecution(),
       });
 
       const { result, events } = yield* runSubmit(
@@ -1001,7 +1009,7 @@ describe("submit-agent runtime event writes", () => {
           }),
         ],
         admit: () => Effect.succeed({ ok: true }),
-        execution: pureToolExecution(),
+        execution: deterministicToolExecution(),
       });
 
       const resolvedProviderMaterial = {
@@ -1065,7 +1073,7 @@ describe("submit-agent runtime event writes", () => {
           }),
         ],
         admit: () => Effect.succeed({ ok: true }),
-        execution: pureToolExecution(),
+        execution: deterministicToolExecution(),
       });
 
       const tokenRef = credentialMaterialRef("run-wp-token", {
@@ -1117,7 +1125,7 @@ describe("submit-agent runtime event writes", () => {
         },
         authority: "write",
         admit: () => Effect.succeed({ ok: true }),
-        execution: pureToolExecution(),
+        execution: deterministicToolExecution(),
       });
 
       const { result, events } = yield* runSubmit(
@@ -1184,7 +1192,7 @@ describe("submit-agent runtime event writes", () => {
         },
         authority: "write",
         admit: () => Effect.succeed({ ok: true }),
-        execution: pureToolExecution(),
+        execution: deterministicToolExecution(),
       });
       const services = makeServices([
         response({
@@ -1292,7 +1300,7 @@ describe("submit-agent runtime event writes", () => {
         },
         authority: "write",
         admit: () => Effect.succeed({ ok: true }),
-        execution: pureToolExecution(),
+        execution: deterministicToolExecution(),
       });
       const services = makeServices([
         response({
@@ -1373,7 +1381,7 @@ describe("submit-agent runtime event writes", () => {
         },
         authority: "read",
         admit: () => Effect.succeed({ ok: true }),
-        execution: pureToolExecution(),
+        execution: deterministicToolExecution(),
       });
       const services = makeServices([
         response({
@@ -1452,7 +1460,7 @@ describe("submit-agent runtime event writes", () => {
         execute: () => Effect.succeed({ ok: true }),
         authority: "read",
         admit: () => Effect.succeed({ ok: true }),
-        execution: pureToolExecution(),
+        execution: deterministicToolExecution(),
       });
 
       const { result, events, llmRequests } = yield* runSubmit(

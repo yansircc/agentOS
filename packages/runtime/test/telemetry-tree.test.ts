@@ -79,7 +79,11 @@ const fixtureEvents = (timeOffset: number): ReadonlyArray<LedgerEvent> => [
       toolCallId: "call-1",
       name: "lookup",
       args: '{"secret":"value"}',
-      execution: { kind: "effectful", domain: { kind: "workspace", ref: "local" } },
+      execution: {
+        kind: "external",
+        access: "read",
+        domain: { kind: "workspace", ref: "local" },
+      },
       result: { ok: true },
       claim: livedClaim,
       traceContext,

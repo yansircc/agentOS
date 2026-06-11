@@ -20,7 +20,7 @@ const requiredSourceTerms = [
   },
   {
     file: "packages/kernel/src/tools.ts",
-    terms: ["export const defineProductTool", "pureToolExecution"],
+    terms: ["export const defineProductTool", "deterministicToolExecution"],
   },
   {
     file: "packages/carriers/decision-gate/src/definition.ts",

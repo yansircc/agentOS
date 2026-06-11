@@ -30,8 +30,8 @@ const collectFailures = (root = repoRoot) => {
   if (!protocol.includes("toolResultSnapshotFromExecutedPayload")) {
     failures.push(`${protocolFile}: missing snapshot constructor`);
   }
-  if (!protocol.includes("effectful_tool_replay_requires_receipt")) {
-    failures.push(`${protocolFile}: missing effectful-tool replay exclusion`);
+  if (!protocol.includes("external_tool_replay_requires_receipt")) {
+    failures.push(`${protocolFile}: missing external-tool replay exclusion`);
   }
   const replayBlock = replayFunctionBlock(protocol);
   if (replayBlock.length === 0) {
@@ -66,7 +66,7 @@ const collectSelfTestFailures = () => {
         "export interface ToolResultSnapshot {}",
         "export const toolResultSnapshotFromExecutedPayload = () => ({});",
         "export const replayToolResultFromSnapshot = (snapshot) => {",
-        "  if (snapshot.execution?.kind === 'effectful') return { ok: false, reason: 'effectful_tool_replay_requires_receipt' };",
+        "  if (snapshot.execution?.kind === 'external') return { ok: false, reason: 'external_tool_replay_requires_receipt' };",
         "  return { ok: true, result: snapshot.result };",
         "};",
       ].join("\n"),

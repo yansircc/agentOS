@@ -12,7 +12,7 @@ refs into one runtime submit binding object.
 ## Invariant
 
 Workspace-binding is a write-side binding helper only. It does not normalize
-paths, project diagnostics, execute effectful tools, or mint receipts.
+paths, project diagnostics, execute external tools, or mint receipts.
 
 ## Minimal Usage
 
@@ -23,7 +23,7 @@ bindings for the standard workspace tools.
 import { bindWorkspaceToolsForRuntime } from "@agent-os/workspace-binding";
 ```
 
-Effectful workspace execution still requires a receipt/dispatch-backed path.
+External workspace execution still requires a receipt/dispatch-backed path.
 
 ## Verification
 

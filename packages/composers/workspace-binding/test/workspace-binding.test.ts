@@ -40,7 +40,7 @@ describe("@agent-os/workspace-binding", () => {
     });
   });
 
-  it("returns submit bindings without diagnostics, path policy, or effectful executor", () => {
+  it("returns submit bindings without diagnostics, path policy, or external executor", () => {
     const bindings = bindWorkspaceToolsForRuntime({
       env,
       authority: "test.workspace",
@@ -61,11 +61,12 @@ describe("@agent-os/workspace-binding", () => {
     expect(bindings.resolvedMaterials?.workspace).toBe(env);
     expect(bindings.tools).toBeDefined();
     expect((bindings.tools!.write_file as { readonly execution?: unknown }).execution).toEqual({
-      kind: "effectful",
+      kind: "external",
+      access: "write",
       domain: env.domain,
     });
     expect("diagnostics" in bindings).toBe(false);
     expect("pathPolicy" in bindings).toBe(false);
-    expect("effectfulExecutor" in bindings).toBe(false);
+    expect("externalExecutor" in bindings).toBe(false);
   });
 });

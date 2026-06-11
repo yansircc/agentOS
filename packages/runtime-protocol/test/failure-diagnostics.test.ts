@@ -4,7 +4,7 @@ import type { LedgerEvent } from "@agent-os/kernel/types";
 import type { RejectedClaim } from "@agent-os/kernel/effect-claim";
 import {
   agentRunAbortedEvent,
-  EFFECTFUL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
+  EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
   projectFailureDiagnostics,
   toolRejectedEvent,
   type RuntimeEventCommitSpec,
@@ -50,7 +50,7 @@ describe("projectFailureDiagnostics", () => {
           toolCallId: "call-1",
           name: "write_file",
           args: { type: "object", keys: ["path"], truncated: false },
-          execution: { kind: "pure" },
+          execution: { kind: "deterministic" },
           claim: rejectedClaim("invalid_args"),
           diagnostics: {
             phase: "decode",
@@ -157,10 +157,11 @@ describe("projectFailureDiagnostics", () => {
           name: "write_file",
           args: { type: "object", keys: ["path"], truncated: false },
           execution: {
-            kind: "effectful",
+            kind: "external",
+            access: "write",
             domain: { kind: "workspace", ref: "workspace:default" },
           },
-          claim: rejectedClaim(EFFECTFUL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON),
+          claim: rejectedClaim(EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON),
         }),
       ),
       ledgerEvent(
@@ -172,7 +173,7 @@ describe("projectFailureDiagnostics", () => {
           tokensUsed: 0,
           payload: {
             toolName: "write_file",
-            cause: EFFECTFUL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
+            cause: EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
           },
         }),
       ),
@@ -184,14 +185,14 @@ describe("projectFailureDiagnostics", () => {
       diagnostics: [
         {
           source: "tool",
-          reason: EFFECTFUL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
+          reason: EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
           category: "missing_execution_path",
           owner: "integrator",
           retryable: false,
           publicMessage: "This tool requires a receipt-backed execution path before it can run.",
           internalFacts: {
             source: "tool",
-            reason: EFFECTFUL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
+            reason: EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
             toolName: "write_file",
             toolCallId: "call-1",
           },

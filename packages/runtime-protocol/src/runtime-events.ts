@@ -42,12 +42,12 @@ export const RUNTIME_EVENT_KIND = {
 } as const;
 
 export const TOOL_RESULT_SNAPSHOT_VERSION = "tool-result-snapshot-v1";
-export const EFFECTFUL_TOOL_EXECUTION_RECEIPT_VERSION = "effectful-tool-execution-receipt-v1";
-export const EFFECTFUL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON =
-  "effectful_tool_replay_requires_receipt";
+export const EXTERNAL_TOOL_EXECUTION_RECEIPT_VERSION = "external-tool-execution-receipt-v1";
+export const EXTERNAL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON =
+  "external_tool_replay_requires_receipt";
 export const TOOL_EXECUTION_CLAIM_MUST_BE_LIVED_REASON = "tool_execution_claim_must_be_lived";
-export const EFFECTFUL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON =
-  "effectful_tool_execution_requires_receipt";
+export const EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON =
+  "external_tool_execution_requires_receipt";
 
 export type RuntimeEventKind = (typeof RUNTIME_EVENT_KIND)[keyof typeof RUNTIME_EVENT_KIND];
 export type RuntimeAbortEventKind = AbortKind;
@@ -80,9 +80,10 @@ const ExecutionDomainSchema: Schema.Schema<ExecutionDomain> = Schema.Struct({
 });
 
 const ToolExecutionSchema: Schema.Schema<ToolExecution> = Schema.Union(
-  Schema.Struct({ kind: Schema.Literal("pure") }),
+  Schema.Struct({ kind: Schema.Literal("deterministic") }),
   Schema.Struct({
-    kind: Schema.Literal("effectful"),
+    kind: Schema.Literal("external"),
+    access: Schema.Literal("read", "write"),
     domain: ExecutionDomainSchema,
   }),
 );
@@ -120,17 +121,20 @@ export type ToolExecutedPayload = {
   readonly traceContext?: TraceContext;
 };
 
-export type PureToolExecution = Extract<ToolExecution, { readonly kind: "pure" }>;
-export type EffectfulToolExecution = Extract<ToolExecution, { readonly kind: "effectful" }>;
+export type DeterministicToolExecution = Extract<
+  ToolExecution,
+  { readonly kind: "deterministic" }
+>;
+export type ExternalToolExecution = Extract<ToolExecution, { readonly kind: "external" }>;
 export type ExternalReceiptAnchorRef = AnchorRef & { readonly anchorKind: "external_receipt" };
 
-export type PureToolExecutedPayload = Omit<ToolExecutedPayload, "execution" | "claim"> & {
-  readonly execution: PureToolExecution;
+export type DeterministicToolExecutedPayload = Omit<ToolExecutedPayload, "execution" | "claim"> & {
+  readonly execution: DeterministicToolExecution;
   readonly claim: LivedClaim;
 };
 
-export type EffectfulToolExecutedPayload = Omit<ToolExecutedPayload, "execution" | "claim"> & {
-  readonly execution: EffectfulToolExecution;
+export type ExternalToolExecutedPayload = Omit<ToolExecutedPayload, "execution" | "claim"> & {
+  readonly execution: ExternalToolExecution;
   readonly claim: LivedClaim;
 };
 
@@ -141,20 +145,20 @@ export interface ToolResultSnapshot {
   readonly toolCallId: string;
   readonly name: string;
   readonly args: unknown;
-  readonly execution: PureToolExecution;
+  readonly execution: DeterministicToolExecution;
   readonly result: unknown;
   readonly claim: LivedClaim;
   readonly traceContext?: TraceContext;
 }
 
-export interface EffectfulToolExecutionReceipt {
+export interface ExternalToolExecutionReceipt {
   readonly kind: "tool.execution.receipt";
-  readonly version: typeof EFFECTFUL_TOOL_EXECUTION_RECEIPT_VERSION;
+  readonly version: typeof EXTERNAL_TOOL_EXECUTION_RECEIPT_VERSION;
   readonly runId: number;
   readonly toolCallId: string;
   readonly name: string;
   readonly args: unknown;
-  readonly execution: EffectfulToolExecution;
+  readonly execution: ExternalToolExecution;
   readonly result: unknown;
   readonly claim: LivedClaim;
   readonly idempotencyKey: string;
@@ -162,17 +166,17 @@ export interface EffectfulToolExecutionReceipt {
   readonly traceContext?: TraceContext;
 }
 
-export type ToolReplayArtifact = ToolResultSnapshot | EffectfulToolExecutionReceipt;
+export type ToolReplayArtifact = ToolResultSnapshot | ExternalToolExecutionReceipt;
 
-export type EffectfulToolExecutionReceiptFromExecutedPayloadResult =
+export type ExternalToolExecutionReceiptFromExecutedPayloadResult =
   | {
       readonly ok: true;
-      readonly artifact: EffectfulToolExecutionReceipt;
+      readonly artifact: ExternalToolExecutionReceipt;
     }
   | {
       readonly ok: false;
-      readonly reason: typeof EFFECTFUL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON;
-      readonly execution: EffectfulToolExecution;
+      readonly reason: typeof EXTERNAL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON;
+      readonly execution: ExternalToolExecution;
       readonly claim: LivedClaim;
     };
 
@@ -182,7 +186,7 @@ export type ToolResultReplayOutcome = {
   readonly claim: LivedClaim;
 };
 
-export type EffectfulToolReceiptReplayOutcome = {
+export type ExternalToolReceiptReplayOutcome = {
   readonly ok: true;
   readonly result: unknown;
   readonly claim: LivedClaim;
@@ -202,12 +206,12 @@ export type ToolReplayArtifactFromExecutedPayloadResult =
     }
   | {
       readonly ok: false;
-      readonly reason: typeof EFFECTFUL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON;
-      readonly execution: EffectfulToolExecution;
+      readonly reason: typeof EXTERNAL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON;
+      readonly execution: ExternalToolExecution;
       readonly claim: LivedClaim;
     };
 
-export type ToolReplayOutcome = ToolResultReplayOutcome | EffectfulToolReceiptReplayOutcome;
+export type ToolReplayOutcome = ToolResultReplayOutcome | ExternalToolReceiptReplayOutcome;
 
 export type ToolRejectedPayload = {
   readonly runId: number;
@@ -649,7 +653,7 @@ const externalReceiptAnchorFromClaim = (claim: LivedClaim): ExternalReceiptAncho
     : null;
 
 export const toolResultSnapshotFromExecutedPayload = (
-  payload: PureToolExecutedPayload,
+  payload: DeterministicToolExecutedPayload,
 ): ToolResultSnapshot => ({
   kind: "tool.result",
   version: TOOL_RESULT_SNAPSHOT_VERSION,
@@ -663,14 +667,14 @@ export const toolResultSnapshotFromExecutedPayload = (
   ...(payload.traceContext === undefined ? {} : { traceContext: payload.traceContext }),
 });
 
-export const effectfulToolExecutionReceiptFromExecutedPayload = (
-  payload: EffectfulToolExecutedPayload,
-): EffectfulToolExecutionReceiptFromExecutedPayloadResult => {
+export const externalToolExecutionReceiptFromExecutedPayload = (
+  payload: ExternalToolExecutedPayload,
+): ExternalToolExecutionReceiptFromExecutedPayloadResult => {
   const receipt = externalReceiptAnchorFromClaim(payload.claim);
   if (receipt === null) {
     return {
       ok: false,
-      reason: EFFECTFUL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON,
+      reason: EXTERNAL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON,
       execution: payload.execution,
       claim: payload.claim,
     };
@@ -679,7 +683,7 @@ export const effectfulToolExecutionReceiptFromExecutedPayload = (
     ok: true,
     artifact: {
       kind: "tool.execution.receipt",
-      version: EFFECTFUL_TOOL_EXECUTION_RECEIPT_VERSION,
+      version: EXTERNAL_TOOL_EXECUTION_RECEIPT_VERSION,
       runId: payload.runId,
       toolCallId: payload.toolCallId,
       name: payload.name,
@@ -701,7 +705,7 @@ export const toolReplayArtifactFromExecutedPayload = (
   if (claim === null) {
     return { ok: false, reason: TOOL_EXECUTION_CLAIM_MUST_BE_LIVED_REASON, claim: payload.claim };
   }
-  if (payload.execution.kind === "pure") {
+  if (payload.execution.kind === "deterministic") {
     return {
       ok: true,
       artifact: toolResultSnapshotFromExecutedPayload({
@@ -711,7 +715,7 @@ export const toolReplayArtifactFromExecutedPayload = (
       }),
     };
   }
-  return effectfulToolExecutionReceiptFromExecutedPayload({
+  return externalToolExecutionReceiptFromExecutedPayload({
     ...payload,
     execution: payload.execution,
     claim,
@@ -726,9 +730,9 @@ export const replayToolResultFromSnapshot = (
   claim: snapshot.claim,
 });
 
-export const replayEffectfulToolExecutionFromReceipt = (
-  receipt: EffectfulToolExecutionReceipt,
-): EffectfulToolReceiptReplayOutcome => ({
+export const replayExternalToolExecutionFromReceipt = (
+  receipt: ExternalToolExecutionReceipt,
+): ExternalToolReceiptReplayOutcome => ({
   ok: true,
   result: receipt.result,
   claim: receipt.claim,
@@ -739,7 +743,7 @@ export const replayEffectfulToolExecutionFromReceipt = (
 export const replayToolFromArtifact = (artifact: ToolReplayArtifact): ToolReplayOutcome =>
   artifact.kind === "tool.result"
     ? replayToolResultFromSnapshot(artifact)
-    : replayEffectfulToolExecutionFromReceipt(artifact);
+    : replayExternalToolExecutionFromReceipt(artifact);
 
 export const toolRejectedEvent = (
   spec: RuntimeEventIdentitySpec & {

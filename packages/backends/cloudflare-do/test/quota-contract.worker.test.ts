@@ -27,7 +27,7 @@ import { ToolError } from "@agent-os/kernel/errors";
 import { LlmTransport } from "@agent-os/llm-protocol";
 import { MaterializedProjectionRegistry, submitAgentEffect } from "@agent-os/runtime";
 import type { InternalSubmitSpec } from "@agent-os/runtime-protocol";
-import { defineTool, pureToolExecution, type Tool } from "@agent-os/kernel/tools";
+import { defineTool, deterministicToolExecution, type Tool } from "@agent-os/kernel/tools";
 import type { EventHandler } from "@agent-os/kernel/types";
 import { finalTextResp, stubLlmTransport, toolCallResp } from "./_stub-ai";
 import { testEventIdentity } from "./_identity";
@@ -51,7 +51,7 @@ const makeQuotaTool = (limit: number): Tool =>
       execute: () => Effect.succeed("2026-05-25T00:00:00Z"),
       admit: allowToolAdmitter,
       authority: "read",
-      execution: pureToolExecution(),
+      execution: deterministicToolExecution(),
     }),
     { windowMs: 60_000, limit, amount: 1 },
   );
@@ -134,7 +134,7 @@ describe("quota state machine — deterministic", () => {
             ),
           admit: allowToolAdmitter,
           authority: "read",
-          execution: pureToolExecution(),
+          execution: deterministicToolExecution(),
         }),
         { windowMs: 60_000, limit: 1, amount: 1 },
       );

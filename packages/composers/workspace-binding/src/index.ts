@@ -34,7 +34,7 @@ export const workspaceEnvMaterialRef = (env: WorkspaceEnv): MaterialRef =>
 /**
  * Binds standard workspace tools and their workspace material for one submit.
  *
- * This helper does not execute effectful tools. Runtime still requires a
+ * This helper does not execute external tools. Runtime still requires a
  * receipt/dispatch-backed path for external workspace mutation.
  */
 export const bindWorkspaceToolsForRuntime = (

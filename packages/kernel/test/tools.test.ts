@@ -6,10 +6,12 @@ import {
   defineProductTool,
   deterministicToolInvocation,
   executeTool,
-  pureToolExecution,
+  deterministicToolExecution,
+  externalToolExecution,
   unsafeRunToolByName,
   validateExecutionDomainRegistry,
   validateToolRegistry,
+  withToolWriteRequirement,
   type ToolCall,
   type Tool,
 } from "../src/tools";
@@ -24,7 +26,7 @@ describe("defineTool", () => {
       args: Schema.Struct({ key: Schema.String }),
       authority: "read",
       admit: allowToolAdmitter,
-      execution: pureToolExecution(),
+      execution: deterministicToolExecution(),
       execute: ({ key }) => Effect.succeed({ value: key }),
     });
 
@@ -54,7 +56,7 @@ describe("defineTool", () => {
         args: Schema.Struct({ key: Schema.String }),
         authority: "read",
         admit: undefined as never,
-        execution: pureToolExecution(),
+        execution: deterministicToolExecution(),
         execute: ({ key }) => Effect.succeed({ value: key }),
       }),
     ).toThrow("tool admitter is required");
@@ -68,7 +70,7 @@ describe("defineTool", () => {
         args: Schema.Struct({ key: Schema.String.pipe(Schema.brand("LookupKey")) }),
         authority: "read",
         admit: allowToolAdmitter,
-        execution: pureToolExecution(),
+        execution: deterministicToolExecution(),
         execute: ({ key }) => Effect.succeed({ value: key }),
       }),
     ).toThrow("unsupported");
@@ -84,7 +86,7 @@ describe("defineTool", () => {
       }),
       authority: "write",
       admit: allowToolAdmitter,
-      execution: pureToolExecution(),
+      execution: deterministicToolExecution(),
       execute: ({ content }) => Effect.succeed({ bytes: content.length }),
     });
 
@@ -116,7 +118,7 @@ describe("defineTool", () => {
         args: Schema.Struct({ key: Schema.String }),
         authority: "read",
         admit: allowToolAdmitter,
-        execution: pureToolExecution(),
+        execution: deterministicToolExecution(),
         execute: (_args, ctx) => {
           observedMaterials = ctx.materials;
           return Effect.succeed({ ok: true });
@@ -138,7 +140,7 @@ describe("defineTool", () => {
       args: Schema.Struct({ key: Schema.String }),
       authority: "read",
       admit: allowToolAdmitter,
-      execution: pureToolExecution(),
+      execution: deterministicToolExecution(),
       execute: ({ key }) => Effect.succeed({ value: key }),
     });
     const legacy = {
@@ -159,11 +161,11 @@ describe("defineTool", () => {
       args: Schema.Struct({ key: Schema.String }),
       authority: "read",
       admit: allowToolAdmitter,
-      execution: pureToolExecution(),
+      execution: deterministicToolExecution(),
       execute: ({ key }) => Effect.succeed({ value: key }),
     });
 
-    expect(tool.execution).toEqual({ kind: "pure" });
+    expect(tool.execution).toEqual({ kind: "deterministic" });
     expect("execution" in tool.contract).toBe(false);
     // @ts-expect-error execution is a Tool sibling, not ToolContract data.
     expect(tool.contract.execution).toBeUndefined();
@@ -182,7 +184,7 @@ describe("defineProductTool", () => {
         execute: ({ projectionId }) => Effect.succeed({ projectionId, refreshed: true }),
       });
 
-      expect(tool.execution).toEqual({ kind: "pure" });
+      expect(tool.execution).toEqual({ kind: "deterministic" });
       const result = yield* executeTool(tool, { projectionId: "run:r1" }, "refresh_view");
       expect(result).toEqual({ projectionId: "run:r1", refreshed: true });
     }),
@@ -190,14 +192,14 @@ describe("defineProductTool", () => {
 });
 
 describe("ExecutionDomainRegistry", () => {
-  it("allows pure tools without a domain declaration", () => {
+  it("allows deterministic tools without a domain declaration", () => {
     const tool = defineTool({
       name: "lookup",
       description: "Lookup",
       args: Schema.Struct({ key: Schema.String }),
       authority: "read",
       admit: allowToolAdmitter,
-      execution: pureToolExecution(),
+      execution: deterministicToolExecution(),
       execute: ({ key }) => Effect.succeed({ value: key }),
     });
 
@@ -206,7 +208,7 @@ describe("ExecutionDomainRegistry", () => {
     });
   });
 
-  it("rejects missing and duplicate effectful domain declarations", () => {
+  it("rejects missing and duplicate external domain declarations", () => {
     const domain = { kind: "workspace" as const, ref: "workspace:default" };
     const tool = defineTool({
       name: "write_file",
@@ -214,8 +216,8 @@ describe("ExecutionDomainRegistry", () => {
       args: Schema.Struct({ path: Schema.String }),
       authority: "write",
       admit: allowToolAdmitter,
-      execution: { kind: "effectful", domain },
-      execute: ({ path }) => Effect.succeed({ path }),
+      execution: externalToolExecution("write", domain),
+      execute: ({ path }) => withToolWriteRequirement(Effect.succeed({ path })),
     });
 
     expect(validateExecutionDomainRegistry({ write_file: tool }, { domains: [] })).toEqual({
@@ -259,7 +261,7 @@ describe("unsafeRunToolByName", () => {
         args: Schema.Struct({ key: Schema.String }),
         authority: "read",
         admit: allowToolAdmitter,
-        execution: pureToolExecution(),
+        execution: deterministicToolExecution(),
         execute: ({ key }) => Effect.succeed({ value: key }),
       });
 
@@ -280,7 +282,7 @@ describe("unsafeRunToolByName", () => {
         args: Schema.Struct({ key: Schema.String }),
         authority: "read",
         admit: allowToolAdmitter,
-        execution: pureToolExecution(),
+        execution: deterministicToolExecution(),
         execute: ({ key }) => Effect.succeed({ value: key }),
       });
 
@@ -313,7 +315,7 @@ describe("unsafeRunToolByName", () => {
       args: Schema.Struct({ key: Schema.String }),
       authority: "read",
       admit: allowToolAdmitter,
-      execution: pureToolExecution(),
+      execution: deterministicToolExecution(),
       execute: ({ key }) => Effect.succeed({ value: key }),
     });
     const llmCall: ToolCall = {

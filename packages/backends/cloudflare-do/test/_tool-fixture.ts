@@ -1,5 +1,5 @@
 import { Effect, Schema } from "effect";
-import { defineTool, pureToolExecution, type Tool } from "@agent-os/kernel/tools";
+import { defineTool, deterministicToolExecution, type Tool } from "@agent-os/kernel/tools";
 
 export const allowToolAdmitter = () => Effect.succeed({ ok: true as const });
 
@@ -11,7 +11,7 @@ export const makeLookupTool = (): Tool =>
     execute: () => Effect.succeed({ value: 42 }),
     admit: allowToolAdmitter,
     authority: "read",
-    execution: pureToolExecution(),
+    execution: deterministicToolExecution(),
     originRef: {
       originId: "@agent-os/tool-registry/test",
       originKind: "tool_provider",

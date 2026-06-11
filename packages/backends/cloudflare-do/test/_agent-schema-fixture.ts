@@ -6,7 +6,7 @@ import {
 } from "@agent-os/kernel/agent-schema";
 import {
   defineTool,
-  pureToolExecution,
+  deterministicToolExecution,
   type Tool,
   type ToolAdmitter,
 } from "@agent-os/kernel/tools";
@@ -33,7 +33,7 @@ export const defineEmptyTool = <R>(spec: {
     args: emptyArgsSchema,
     authority: spec.authority,
     admit: spec.admit,
-    execution: pureToolExecution(),
+    execution: deterministicToolExecution(),
     execute: spec.execute,
   });
 

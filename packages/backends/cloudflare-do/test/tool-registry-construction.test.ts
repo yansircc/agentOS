@@ -4,7 +4,7 @@ import { defineAgentSchema } from "@agent-os/kernel/agent-schema";
 import { materialRequirement } from "@agent-os/kernel/material-ref";
 import {
   defineTool,
-  pureToolExecution,
+  deterministicToolExecution,
   validateToolRegistry,
   type Tool,
 } from "@agent-os/kernel/tools";
@@ -29,7 +29,7 @@ describe("tool registry construction", () => {
       },
       roles: ["generator", "admitter"],
     });
-    expect(tool.execution).toEqual({ kind: "pure" });
+    expect(tool.execution).toEqual({ kind: "deterministic" });
   });
 
   it("rejects tools without a single authority contract before execution", () => {
@@ -121,7 +121,7 @@ describe("tool registry construction", () => {
       execute: () => Effect.succeed({ ok: true }),
       admit: allowToolAdmitter,
       authority: "deploy",
-      execution: pureToolExecution(),
+      execution: deterministicToolExecution(),
       requiredMaterials: [
         materialRequirement({
           slot: "cf_api_token",
@@ -197,7 +197,7 @@ describe("tool registry construction", () => {
         args: Schema.Struct({}),
         execute: () => Effect.succeed({ value: 42 }),
         authority: "read",
-        execution: pureToolExecution(),
+        execution: deterministicToolExecution(),
       } as never),
     ).toThrow("tool admitter is required");
   });

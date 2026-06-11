@@ -60,7 +60,7 @@ import {
   agentRunStartedEvent,
   chatIngestedEvent,
   decodeRuntimeLedgerEvent,
-  EFFECTFUL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
+  EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
   llmResponseEvent,
   RUNTIME_FACT_OWNER,
   RUNTIME_EVENT_KIND,
@@ -1415,7 +1415,7 @@ export const submitAgentEffect = (
             });
           }
 
-          if (tool.execution.kind === "effectful") {
+          if (tool.execution.kind === "external") {
             yield* logRuntimeLedgerEvent(
               ledger,
               toolRejectedEvent({
@@ -1427,14 +1427,14 @@ export const submitAgentEffect = (
                 execution: tool.execution,
                 claim: settleToolExecutionRejected(
                   claim,
-                  EFFECTFUL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
+                  EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
                 ),
                 traceContext,
               }),
             );
             return yield* new ToolError({
               toolName: call.function.name,
-              cause: { reason: EFFECTFUL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON },
+              cause: { reason: EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON },
             });
           }
 

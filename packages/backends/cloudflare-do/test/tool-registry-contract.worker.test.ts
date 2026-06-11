@@ -14,7 +14,7 @@ import { ToolError } from "@agent-os/kernel/errors";
 import { LlmTransport } from "@agent-os/llm-protocol";
 import { MaterializedProjectionRegistry, submitAgentEffect } from "@agent-os/runtime";
 import type { InternalSubmitSpec } from "@agent-os/runtime-protocol";
-import { defineTool, pureToolExecution, type Tool } from "@agent-os/kernel/tools";
+import { defineTool, deterministicToolExecution, type Tool } from "@agent-os/kernel/tools";
 import {
   credentialMaterialRef,
   materialRefKey,
@@ -159,7 +159,7 @@ describe("tool registry generator", () => {
             purpose: "apply",
           }),
         ],
-        execution: pureToolExecution(),
+        execution: deterministicToolExecution(),
       });
       const llm = stubLlmTransport([toolCallResp("lookup", "{}", "call-1"), finalTextResp("done")]);
       const identity = testEventIdentity(scope, toolRegistryAuthorityRef);
@@ -203,7 +203,7 @@ describe("tool registry generator", () => {
         admitted = true;
         return Effect.succeed({ ok: true });
       },
-      execution: pureToolExecution(),
+      execution: deterministicToolExecution(),
       execute: () =>
         Effect.sync(() => {
           executed = true;
@@ -261,7 +261,7 @@ describe("tool registry generator", () => {
           return { value: 42 };
         }),
       authority: "write",
-      execution: pureToolExecution(),
+      execution: deterministicToolExecution(),
     });
 
     await runInDurableObject(stub, async (_inst, state) => {
@@ -317,7 +317,7 @@ describe("tool registry generator", () => {
           return { value: 42 };
         }),
       authority: "write",
-      execution: pureToolExecution(),
+      execution: deterministicToolExecution(),
     });
 
     await runInDurableObject(stub, async (_inst, state) => {
@@ -372,7 +372,7 @@ describe("tool registry generator", () => {
           return { value: 42 };
         }),
       authority: "write",
-      execution: pureToolExecution(),
+      execution: deterministicToolExecution(),
     });
 
     await runInDurableObject(stub, async (_inst, state) => {
@@ -423,7 +423,7 @@ describe("tool registry generator", () => {
         Effect.fail(new ToolError({ toolName: "lookup", cause: new Error("upstream down") })),
       admit: allowToolAdmitter,
       authority: "read",
-      execution: pureToolExecution(),
+      execution: deterministicToolExecution(),
     });
 
     await runInDurableObject(stub, async (_inst, state) => {
@@ -481,7 +481,7 @@ describe("tool registry generator", () => {
         ),
       admit: allowToolAdmitter,
       authority: "read",
-      execution: pureToolExecution(),
+      execution: deterministicToolExecution(),
     });
 
     await runInDurableObject(stub, async (_inst, state) => {

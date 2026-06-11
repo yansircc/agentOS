@@ -1,6 +1,11 @@
 import { Clock, Effect, Option, Schema } from "effect";
 import { ToolError } from "@agent-os/kernel/errors";
-import { defineTool, effectfulToolExecution, type Tool } from "@agent-os/kernel/tools";
+import {
+  defineTool,
+  externalToolExecution,
+  withToolWriteRequirement,
+  type Tool,
+} from "@agent-os/kernel/tools";
 
 import { failureToToolResult, truncateUtf8 } from "./output";
 import { runSandbox } from "./run";
@@ -74,39 +79,41 @@ export const makeSandboxRunTool = (
       ? {}
       : { authorityVersion: options.authorityVersion }),
     admit: options.admit,
-    execution: effectfulToolExecution({
+    execution: externalToolExecution("write", {
       kind: "sandbox",
       ref: options.authorityId ?? options.name ?? "sandbox_run",
     }),
     execute: (args) =>
-      Effect.gen(function* () {
-        const request = yield* Effect.try({
-          try: () => requestFromToolArgs(args, { timeoutMs, maxOutputBytes, network }),
-          catch: (cause) => new ToolError({ toolName: options.name ?? "sandbox_run", cause }),
-        });
-        const started = yield* Clock.currentTimeMillis;
-        const result = yield* runSandbox(options.backend, options.policy, request).pipe(
-          Effect.either,
-        );
-        const ended = yield* Clock.currentTimeMillis;
-        if (result._tag === "Left") {
-          return failureToToolResult(result.left, ended - started, maxOutputBytes);
-        }
-        const stdout = truncateUtf8(result.right.stdout, maxOutputBytes);
-        const stderr = truncateUtf8(result.right.stderr, maxOutputBytes);
-        return {
-          ok: true,
-          exitCode: result.right.exitCode,
-          stdoutHead: stdout.head,
-          stderrHead: stderr.head,
-          stdoutBytes: stdout.bytes,
-          stderrBytes: stderr.bytes,
-          stdoutTruncated: stdout.truncated,
-          stderrTruncated: stderr.truncated,
-          artifacts: [],
-          durationMs: result.right.durationMs,
-          sandboxId: result.right.sandboxId,
-        } satisfies SandboxToolResult;
-      }),
+      withToolWriteRequirement(
+        Effect.gen(function* () {
+          const request = yield* Effect.try({
+            try: () => requestFromToolArgs(args, { timeoutMs, maxOutputBytes, network }),
+            catch: (cause) => new ToolError({ toolName: options.name ?? "sandbox_run", cause }),
+          });
+          const started = yield* Clock.currentTimeMillis;
+          const result = yield* runSandbox(options.backend, options.policy, request).pipe(
+            Effect.either,
+          );
+          const ended = yield* Clock.currentTimeMillis;
+          if (result._tag === "Left") {
+            return failureToToolResult(result.left, ended - started, maxOutputBytes);
+          }
+          const stdout = truncateUtf8(result.right.stdout, maxOutputBytes);
+          const stderr = truncateUtf8(result.right.stderr, maxOutputBytes);
+          return {
+            ok: true,
+            exitCode: result.right.exitCode,
+            stdoutHead: stdout.head,
+            stderrHead: stderr.head,
+            stdoutBytes: stdout.bytes,
+            stderrBytes: stderr.bytes,
+            stdoutTruncated: stdout.truncated,
+            stderrTruncated: stderr.truncated,
+            artifacts: [],
+            durationMs: result.right.durationMs,
+            sandboxId: result.right.sandboxId,
+          } satisfies SandboxToolResult;
+        }),
+      ),
   });
 };

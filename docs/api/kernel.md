@@ -209,22 +209,28 @@
 - `.:ExecutionDomainRegistryIssue`
 - `.:ExecutionDomainRegistryValidation`
 - `.:ResolvedToolMaterials`
+- `.:ToolAccess`
 - `.:ToolEffect`
 - `.:ToolExecution`
 - `.:ToolExecutionContext`
 - `.:ToolExecutionContextInput`
+- `.:ToolExecutionRequirements`
 - `.:ToolExecute`
+- `.:ToolExternalReadRequirement`
+- `.:ToolExternalWriteRequirement`
 - `.:ToolIntentEmitter`
 - `.:ToolProjectionRow`
 - `.:ToolProjectionWaitSpec`
 - `.:ToolProjectionWaiter`
 - `.:ToolRequirements`
+- `.:deterministicToolExecution`
 - `.:deterministicToolInvocation`
 - `.:defineProductTool`
-- `.:effectfulToolExecution`
-- `.:pureToolExecution`
+- `.:externalToolExecution`
 - `.:unsafeRunToolByName`
 - `.:validateExecutionDomainRegistry`
+- `.:withToolReadRequirement`
+- `.:withToolWriteRequirement`
 - `./tools:DefineToolSpec`
 - `./tools:DefineProductToolSpec`
 - `./tools:DeterministicToolInvocation`
@@ -242,11 +248,15 @@
 - `./tools:ToolContract`
 - `./tools:ToolDecode`
 - `./tools:ToolDefinition`
+- `./tools:ToolAccess`
 - `./tools:ToolEffect`
 - `./tools:ToolExecution`
 - `./tools:ToolExecutionContext`
 - `./tools:ToolExecutionContextInput`
+- `./tools:ToolExecutionRequirements`
 - `./tools:ToolExecute`
+- `./tools:ToolExternalReadRequirement`
+- `./tools:ToolExternalWriteRequirement`
 - `./tools:ToolIntentEmitter`
 - `./tools:ToolProjectionRow`
 - `./tools:ToolProjectionWaitSpec`
@@ -255,16 +265,18 @@
 - `./tools:ToolRegistryIssue`
 - `./tools:ToolRegistryValidation`
 - `./tools:decodeToolArgs`
+- `./tools:deterministicToolExecution`
 - `./tools:deterministicToolInvocation`
 - `./tools:defineProductTool`
 - `./tools:defineTool`
-- `./tools:effectfulToolExecution`
 - `./tools:executeTool`
+- `./tools:externalToolExecution`
 - `./tools:parseToolCall`
-- `./tools:pureToolExecution`
 - `./tools:unsafeRunToolByName`
 - `./tools:validateExecutionDomainRegistry`
 - `./tools:validateToolRegistry`
+- `./tools:withToolReadRequirement`
+- `./tools:withToolWriteRequirement`
   text`
 textSchema`
   `

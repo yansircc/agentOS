@@ -82,7 +82,7 @@ const validRunRows = (): ReadonlyArray<LedgerEvent> => [
       toolCallId: "call-1",
       name: "lookup",
       args: "{}",
-      execution: { kind: "pure" },
+      execution: { kind: "deterministic" },
       result: { ok: true },
       claim: livedClaim,
     }),

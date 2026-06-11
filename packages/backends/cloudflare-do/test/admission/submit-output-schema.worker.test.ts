@@ -17,7 +17,7 @@ import type {} from "@effect/vitest";
 import { Ledger } from "../../src/ledger";
 import { submitAgentEffect } from "@agent-os/runtime";
 import type { InternalSubmitSpec } from "@agent-os/runtime-protocol";
-import { defineTool, pureToolExecution } from "@agent-os/kernel/tools";
+import { defineTool, deterministicToolExecution } from "@agent-os/kernel/tools";
 import { stubLlmTransport } from "../_stub-ai";
 import { allowToolAdmitter } from "../_tool-fixture";
 
@@ -109,7 +109,7 @@ describe("admission — submitAgent outputSchema path (contract §12.1)", () => 
             execute: () => Effect.succeed("y"),
             admit: allowToolAdmitter,
             authority: "read",
-            execution: pureToolExecution(),
+            execution: deterministicToolExecution(),
           }),
         },
         outputSchema: SCHEMA,

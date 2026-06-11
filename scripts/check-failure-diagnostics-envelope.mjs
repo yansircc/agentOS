@@ -27,7 +27,7 @@ const requiredProtocolTerms = [
   "retryableForCategory",
   "publicMessageForCategory",
   "failureEnvelope",
-  "EFFECTFUL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON",
+  "EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON",
   "missing_execution_path",
 ];
 
@@ -91,7 +91,7 @@ const collectSelfTestFailures = () => {
         "  readonly publicMessage: string;",
         "  readonly internalFacts: FailureDiagnosticInternalFacts;",
         "}",
-        "export const EFFECTFUL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON = 'effectful_tool_execution_requires_receipt';",
+        "export const EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON = 'external_tool_execution_requires_receipt';",
         "const categoryForReason = () => 'missing_execution_path';",
         "const ownerForCategory = () => 'integrator';",
         "const retryableForCategory = () => false;",

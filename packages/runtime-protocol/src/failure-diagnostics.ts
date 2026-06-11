@@ -3,8 +3,8 @@ import type { LedgerEvent } from "@agent-os/kernel/types";
 import { validateEffectClaim } from "@agent-os/kernel/effect-claim";
 import {
   decodeRuntimeLedgerEvent,
-  EFFECTFUL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
-  EFFECTFUL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON,
+  EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
+  EXTERNAL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON,
   isRuntimeAbortEventKind,
   RUNTIME_EVENT_KIND,
   type RuntimeAbortEventKind,
@@ -113,8 +113,8 @@ const categoryForReason = (reason: string): FailureDiagnosticCategory => {
   if (reason === "invalid_args") return "invalid_args";
   if (reason === "unknown_tool") return "unknown_tool";
   if (
-    reason === EFFECTFUL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON ||
-    reason === EFFECTFUL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON
+    reason === EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON ||
+    reason === EXTERNAL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON
   ) {
     return "missing_execution_path";
   }
