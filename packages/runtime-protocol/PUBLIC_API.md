@@ -72,8 +72,13 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:CapabilityLease`
 - `.:ChatIngestedPayload`
 - `.:ChatIngestedPayloadSchema`
+- `.:ContinuationAnswer`
+- `.:ContinuationCause`
+- `.:ContinuationRef`
+- `.:ContinuationRefFromInterruptionResult`
 - `.:DecodeRuntimeLedgerEventResult`
 - `.:DecodedOutput`
+- `.:DecisionContinuationCause`
 - `.:DefineAgentCapabilitySpec`
 - `.:EMPTY_BARRIER_CURSOR`
 - `.:ExtensionHandlerKind`
@@ -98,6 +103,7 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:InternalSubmitSpec`
 - `.:IntentSettlementVocabularyIssue`
 - `.:InvalidateSpec`
+- `.:LedgerWitnessedScopedRef`
 - `.:LedgerCommitEventSpec`
 - `.:LedgerTruthIdentity`
 - `.:LiveInput`
@@ -120,6 +126,13 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:RuntimeEventPayloadByKind`
 - `.:RuntimeLedgerEvent`
 - `.:RuntimeLedgerEventByKind`
+- `.:RecoveryAttemptRecord`
+- `.:RecoveryBudget`
+- `.:RecoveryBudgetProjection`
+- `.:RecoveryFingerprint`
+- `.:RecoveryObservation`
+- `.:RecoveryTerminalCause`
+- `.:RecoveryVerdictContinuationCause`
 - `.:HandlerKind`
 - `.:MountedAgent`
 - `.:Stimulus`
@@ -157,8 +170,10 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:capabilityMaterial`
 - `.:capabilityProjection`
 - `.:chatIngestedEvent`
+- `.:continuationRefFromInterruptedEvent`
 - `.:createAgentCapabilityHandle`
 - `.:decideTier`
+- `.:decisionContinuationCause`
 - `.:defineAgentCapability`
 - `.:defineAgentBindings`
 - `.:defineAgentManifest`
@@ -166,6 +181,9 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:decodeRuntimeEventPayload`
 - `.:decodeRuntimeLedgerEvent`
 - `.:externalToolExecutionReceiptFromExecutedPayload`
+- `.:isContinuationCause`
+- `.:isContinuationRef`
+- `.:isRecoveryAttemptRecord`
 - `.:isRuntimeAbortEventKind`
 - `.:isRuntimeEventKind`
 - `.:llmResponseEvent`
@@ -179,6 +197,7 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:replayToolFromArtifact`
 - `.:replayToolResultFromSnapshot`
 - `.:submitBindingsForAgentCapability`
+- `.:submitResumeDecisionFromContinuationRef`
 - `.:toolExecutedEvent`
 - `.:toolResultSnapshotFromExecutedPayload`
 - `.:toolRejectedEvent`

@@ -4,7 +4,10 @@ import {
   agentRunInterruptedEvent,
   continuationRefFromInterruptedEvent,
   decodeRuntimeLedgerEvent,
+  decisionContinuationCause,
   isContinuationRef,
+  isContinuationCause,
+  isRecoveryAttemptRecord,
   submitResumeDecisionFromContinuationRef,
   type RuntimeEventCommitSpec,
 } from "../src";
@@ -109,5 +112,37 @@ describe("runtime continuation refs", () => {
       ok: false,
       reason: "interruption_missing_decision_binding",
     });
+  });
+
+  it("serializes decision and recovery verdict continuation causes without a live handle", () => {
+    const decisionCause = decisionContinuationCause({
+      decisionRef: "decision/approved",
+      resume: { approved: true },
+    });
+    expect(isContinuationCause(JSON.parse(JSON.stringify(decisionCause)))).toBe(true);
+
+    const recoveryCause = {
+      kind: "recovery_verdict" as const,
+      verdictRef: "verdict/invalid-args/1",
+      verdict: "recoverable" as const,
+      observation: {
+        publicMessage: "Tool arguments did not match the tool schema.",
+        diagnosticRefs: [{ eventId: 9, reason: "invalid_args" }],
+        attributes: [{ key: "tool", value: "write_file" }],
+      },
+      fingerprint: {
+        owner: "agentos" as const,
+        value: "failure:invalid_args:invalid_args:write_file:decode",
+      },
+    };
+    const wireCause = JSON.parse(JSON.stringify(recoveryCause)) as unknown;
+    expect(isContinuationCause(wireCause)).toBe(true);
+    expect(
+      isRecoveryAttemptRecord({
+        eventId: 10,
+        ts: 100,
+        cause: wireCause,
+      }),
+    ).toBe(true);
   });
 });

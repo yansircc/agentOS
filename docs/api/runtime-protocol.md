@@ -68,8 +68,13 @@
 - `.:CapabilityLease`
 - `.:ChatIngestedPayload`
 - `.:ChatIngestedPayloadSchema`
+- `.:ContinuationAnswer`
+- `.:ContinuationCause`
+- `.:ContinuationRef`
+- `.:ContinuationRefFromInterruptionResult`
 - `.:DecodeRuntimeLedgerEventResult`
 - `.:DecodedOutput`
+- `.:DecisionContinuationCause`
 - `.:DefineAgentCapabilitySpec`
 - `.:EMPTY_BARRIER_CURSOR`
 - `.:ExtensionHandlerKind`
@@ -94,6 +99,7 @@
 - `.:InternalSubmitSpec`
 - `.:IntentSettlementVocabularyIssue`
 - `.:InvalidateSpec`
+- `.:LedgerWitnessedScopedRef`
 - `.:LedgerCommitEventSpec`
 - `.:LedgerTruthIdentity`
 - `.:LiveInput`
@@ -116,6 +122,13 @@
 - `.:RuntimeEventPayloadByKind`
 - `.:RuntimeLedgerEvent`
 - `.:RuntimeLedgerEventByKind`
+- `.:RecoveryAttemptRecord`
+- `.:RecoveryBudget`
+- `.:RecoveryBudgetProjection`
+- `.:RecoveryFingerprint`
+- `.:RecoveryObservation`
+- `.:RecoveryTerminalCause`
+- `.:RecoveryVerdictContinuationCause`
 - `.:HandlerKind`
 - `.:MountedAgent`
 - `.:Stimulus`
@@ -153,8 +166,10 @@
 - `.:capabilityMaterial`
 - `.:capabilityProjection`
 - `.:chatIngestedEvent`
+- `.:continuationRefFromInterruptedEvent`
 - `.:createAgentCapabilityHandle`
 - `.:decideTier`
+- `.:decisionContinuationCause`
 - `.:defineAgentCapability`
 - `.:defineAgentBindings`
 - `.:defineAgentManifest`
@@ -162,6 +177,9 @@
 - `.:decodeRuntimeEventPayload`
 - `.:decodeRuntimeLedgerEvent`
 - `.:externalToolExecutionReceiptFromExecutedPayload`
+- `.:isContinuationCause`
+- `.:isContinuationRef`
+- `.:isRecoveryAttemptRecord`
 - `.:isRuntimeAbortEventKind`
 - `.:isRuntimeEventKind`
 - `.:llmResponseEvent`
@@ -175,6 +193,7 @@
 - `.:replayToolFromArtifact`
 - `.:replayToolResultFromSnapshot`
 - `.:submitBindingsForAgentCapability`
+- `.:submitResumeDecisionFromContinuationRef`
 - `.:toolExecutedEvent`
 - `.:toolResultSnapshotFromExecutedPayload`
 - `.:toolRejectedEvent`

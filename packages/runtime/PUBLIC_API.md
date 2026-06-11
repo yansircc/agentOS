@@ -43,6 +43,8 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:BoundaryCommitIdentity`
 - `.:BoundaryCommitRejected`
 - `.:BoundaryEvents`
+- `.:ContinuationProjection`
+- `.:ContinuationResumeDecisionResult`
 - `.:DEFAULT_LLM_CALL_TIMEOUT_MS`
 - `.:DEFAULT_TRIGGER_ACQUIRE_DEADLINE_MS`
 - `.:DEFAULT_TRIGGER_DRAIN_MAX_ITERATIONS`
@@ -117,6 +119,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:decodeStructuredOutputFromItems`
 - `.:defineProjection`
 - `.:drainTriggerPumpUntilQuiet`
+- `.:fingerprintFailureDiagnostic`
 - `.:getAttachedStreamHandler`
 - `.:getDurableTrigger`
 - `.:getProjection`
@@ -128,6 +131,9 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:projectRunStatus`
 - `.:projectRunTrace`
 - `.:projectRunsPage`
+- `.:projectContinuation`
+- `.:projectContinuationRefs`
+- `.:projectRecoveryAttemptBudget`
 - `.:projectSubmitResult`
 - `.:projectTelemetryEventTree`
 - `.:projectionDelete`
@@ -144,6 +150,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:settleToolAdmissionRejected`
 - `.:settleToolExecuted`
 - `.:settleToolExecutionRejected`
+- `.:submitResumeDecisionFromContinuationProjection`
 - `.:submitAgentEffect`
 - `.:toolErrorReason`
 - `.:toolExecutionRejectionKind`

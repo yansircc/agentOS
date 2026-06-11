@@ -7,11 +7,16 @@ import {
   agentRunStartedEvent,
   continuationRefFromInterruptedEvent,
   decodeRuntimeLedgerEvent,
+  type FailureDiagnostic,
+  type RecoveryAttemptRecord,
+  type RecoveryBudget,
   type RuntimeEventCommitSpec,
 } from "@agent-os/runtime-protocol";
 import {
+  fingerprintFailureDiagnostic,
   projectContinuation,
   projectContinuationRefs,
+  projectRecoveryAttemptBudget,
   submitResumeDecisionFromContinuationProjection,
 } from "../src/continuation";
 
@@ -184,6 +189,149 @@ describe("runtime continuation projection", () => {
         ...ref,
         interruptionEventId: ref.interruptionEventId + 1,
         afterEventId: ref.afterEventId + 1,
+      },
+    });
+  });
+
+  it("derives substrate recovery fingerprints from redacted failure diagnostics", () => {
+    const diagnostic: FailureDiagnostic = {
+      source: "tool",
+      eventId: 7,
+      phase: "decode",
+      reason: "invalid_args",
+      category: "invalid_args",
+      owner: "model",
+      retryable: true,
+      publicMessage: "Tool arguments did not match the tool schema.",
+      internalFacts: {
+        source: "tool",
+        eventId: 7,
+        phase: "decode",
+        reason: "invalid_args",
+        toolName: "write_file",
+      },
+      toolName: "write_file",
+    };
+
+    expect(fingerprintFailureDiagnostic(diagnostic)).toEqual({
+      owner: "agentos",
+      value: "failure:invalid_args:invalid_args:write_file:decode",
+    });
+  });
+
+  it("projects durable recovery hard budgets without trusting product fingerprints", () => {
+    const budget: RecoveryBudget = { hard: { maxAttempts: 2, deadlineTs: 500 } };
+    const attempts: ReadonlyArray<RecoveryAttemptRecord> = [
+      {
+        eventId: 10,
+        ts: 100,
+        cause: {
+          kind: "recovery_verdict",
+          verdictRef: "verdict/product/1",
+          verdict: "recoverable",
+          observation: { publicMessage: "Fragment contract failed." },
+          fingerprint: { owner: "product", value: "line-1" },
+        },
+      },
+      {
+        eventId: 11,
+        ts: 200,
+        cause: {
+          kind: "recovery_verdict",
+          verdictRef: "verdict/product/2",
+          verdict: "recoverable",
+          observation: { publicMessage: "Fragment contract failed again." },
+          fingerprint: { owner: "product", value: "line-2" },
+        },
+      },
+    ];
+
+    expect(projectRecoveryAttemptBudget(attempts, budget, 250)).toEqual({
+      status: "terminal",
+      attempts: 2,
+      deadlineTs: 500,
+      terminal: {
+        kind: "attempt_budget_exhausted",
+        attempts: 2,
+        maxAttempts: 2,
+      },
+    });
+  });
+
+  it("uses product fingerprints only as a soft same-failure stop", () => {
+    const budget: RecoveryBudget = {
+      hard: { maxAttempts: 5 },
+      soft: { maxSameFailure: 2 },
+    };
+    const attempts: ReadonlyArray<RecoveryAttemptRecord> = [
+      {
+        eventId: 10,
+        ts: 100,
+        cause: {
+          kind: "recovery_verdict",
+          verdictRef: "verdict/product/1",
+          verdict: "recoverable",
+          observation: { publicMessage: "Fragment contract failed." },
+          fingerprint: { owner: "product", value: "zeroy-fragment:php-in-html" },
+        },
+      },
+      {
+        eventId: 11,
+        ts: 200,
+        cause: {
+          kind: "recovery_verdict",
+          verdictRef: "verdict/product/2",
+          verdict: "recoverable",
+          observation: { publicMessage: "Fragment contract failed again." },
+          fingerprint: { owner: "product", value: "zeroy-fragment:php-in-html" },
+        },
+      },
+    ];
+
+    expect(projectRecoveryAttemptBudget(attempts, budget, 250)).toEqual({
+      status: "terminal",
+      attempts: 2,
+      terminal: {
+        kind: "same_failure_budget_exhausted",
+        fingerprint: { owner: "product", value: "zeroy-fragment:php-in-html" },
+        sameFailureCount: 2,
+        maxSameFailure: 2,
+      },
+    });
+  });
+
+  it("projects durable deadline and terminal verdict causes", () => {
+    expect(
+      projectRecoveryAttemptBudget([], { hard: { maxAttempts: 3, deadlineTs: 300 } }, 300),
+    ).toEqual({
+      status: "terminal",
+      attempts: 0,
+      deadlineTs: 300,
+      terminal: {
+        kind: "deadline_exhausted",
+        nowTs: 300,
+        deadlineTs: 300,
+      },
+    });
+
+    const attempts: ReadonlyArray<RecoveryAttemptRecord> = [
+      {
+        eventId: 10,
+        ts: 100,
+        cause: {
+          kind: "recovery_verdict",
+          verdictRef: "verdict/product/terminal",
+          verdict: "terminal",
+          observation: { publicMessage: "Fragment cannot satisfy the contract." },
+        },
+      },
+    ];
+    expect(projectRecoveryAttemptBudget(attempts, { hard: { maxAttempts: 3 } }, 150)).toEqual({
+      status: "terminal",
+      attempts: 1,
+      terminal: {
+        kind: "verdict_terminal",
+        verdictRef: "verdict/product/terminal",
       },
     });
   });

@@ -39,6 +39,8 @@
 - `.:BoundaryCommitIdentity`
 - `.:BoundaryCommitRejected`
 - `.:BoundaryEvents`
+- `.:ContinuationProjection`
+- `.:ContinuationResumeDecisionResult`
 - `.:DEFAULT_LLM_CALL_TIMEOUT_MS`
 - `.:DEFAULT_TRIGGER_ACQUIRE_DEADLINE_MS`
 - `.:DEFAULT_TRIGGER_DRAIN_MAX_ITERATIONS`
@@ -113,6 +115,7 @@
 - `.:decodeStructuredOutputFromItems`
 - `.:defineProjection`
 - `.:drainTriggerPumpUntilQuiet`
+- `.:fingerprintFailureDiagnostic`
 - `.:getAttachedStreamHandler`
 - `.:getDurableTrigger`
 - `.:getProjection`
@@ -124,6 +127,9 @@
 - `.:projectRunStatus`
 - `.:projectRunTrace`
 - `.:projectRunsPage`
+- `.:projectContinuation`
+- `.:projectContinuationRefs`
+- `.:projectRecoveryAttemptBudget`
 - `.:projectSubmitResult`
 - `.:projectTelemetryEventTree`
 - `.:projectionDelete`
@@ -140,6 +146,7 @@
 - `.:settleToolAdmissionRejected`
 - `.:settleToolExecuted`
 - `.:settleToolExecutionRejected`
+- `.:submitResumeDecisionFromContinuationProjection`
 - `.:submitAgentEffect`
 - `.:toolErrorReason`
 - `.:toolExecutionRejectionKind`

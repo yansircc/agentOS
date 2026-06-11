@@ -72,8 +72,13 @@ title: "@agent-os/runtime-protocol API"
 - `.:CapabilityLease`
 - `.:ChatIngestedPayload`
 - `.:ChatIngestedPayloadSchema`
+- `.:ContinuationAnswer`
+- `.:ContinuationCause`
+- `.:ContinuationRef`
+- `.:ContinuationRefFromInterruptionResult`
 - `.:DecodeRuntimeLedgerEventResult`
 - `.:DecodedOutput`
+- `.:DecisionContinuationCause`
 - `.:DefineAgentCapabilitySpec`
 - `.:EMPTY_BARRIER_CURSOR`
 - `.:ExtensionHandlerKind`
@@ -98,6 +103,7 @@ title: "@agent-os/runtime-protocol API"
 - `.:InternalSubmitSpec`
 - `.:IntentSettlementVocabularyIssue`
 - `.:InvalidateSpec`
+- `.:LedgerWitnessedScopedRef`
 - `.:LedgerCommitEventSpec`
 - `.:LedgerTruthIdentity`
 - `.:LiveInput`
@@ -120,6 +126,13 @@ title: "@agent-os/runtime-protocol API"
 - `.:RuntimeEventPayloadByKind`
 - `.:RuntimeLedgerEvent`
 - `.:RuntimeLedgerEventByKind`
+- `.:RecoveryAttemptRecord`
+- `.:RecoveryBudget`
+- `.:RecoveryBudgetProjection`
+- `.:RecoveryFingerprint`
+- `.:RecoveryObservation`
+- `.:RecoveryTerminalCause`
+- `.:RecoveryVerdictContinuationCause`
 - `.:HandlerKind`
 - `.:MountedAgent`
 - `.:Stimulus`
@@ -157,8 +170,10 @@ title: "@agent-os/runtime-protocol API"
 - `.:capabilityMaterial`
 - `.:capabilityProjection`
 - `.:chatIngestedEvent`
+- `.:continuationRefFromInterruptedEvent`
 - `.:createAgentCapabilityHandle`
 - `.:decideTier`
+- `.:decisionContinuationCause`
 - `.:defineAgentCapability`
 - `.:defineAgentBindings`
 - `.:defineAgentManifest`
@@ -166,6 +181,9 @@ title: "@agent-os/runtime-protocol API"
 - `.:decodeRuntimeEventPayload`
 - `.:decodeRuntimeLedgerEvent`
 - `.:externalToolExecutionReceiptFromExecutedPayload`
+- `.:isContinuationCause`
+- `.:isContinuationRef`
+- `.:isRecoveryAttemptRecord`
 - `.:isRuntimeAbortEventKind`
 - `.:isRuntimeEventKind`
 - `.:llmResponseEvent`
@@ -179,6 +197,7 @@ title: "@agent-os/runtime-protocol API"
 - `.:replayToolFromArtifact`
 - `.:replayToolResultFromSnapshot`
 - `.:submitBindingsForAgentCapability`
+- `.:submitResumeDecisionFromContinuationRef`
 - `.:toolExecutedEvent`
 - `.:toolResultSnapshotFromExecutedPayload`
 - `.:toolRejectedEvent`

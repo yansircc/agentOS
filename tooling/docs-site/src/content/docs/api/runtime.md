@@ -43,6 +43,8 @@ title: "@agent-os/runtime Public API Intent"
 - `.:BoundaryCommitIdentity`
 - `.:BoundaryCommitRejected`
 - `.:BoundaryEvents`
+- `.:ContinuationProjection`
+- `.:ContinuationResumeDecisionResult`
 - `.:DEFAULT_LLM_CALL_TIMEOUT_MS`
 - `.:DEFAULT_TRIGGER_ACQUIRE_DEADLINE_MS`
 - `.:DEFAULT_TRIGGER_DRAIN_MAX_ITERATIONS`
@@ -117,6 +119,7 @@ title: "@agent-os/runtime Public API Intent"
 - `.:decodeStructuredOutputFromItems`
 - `.:defineProjection`
 - `.:drainTriggerPumpUntilQuiet`
+- `.:fingerprintFailureDiagnostic`
 - `.:getAttachedStreamHandler`
 - `.:getDurableTrigger`
 - `.:getProjection`
@@ -128,6 +131,9 @@ title: "@agent-os/runtime Public API Intent"
 - `.:projectRunStatus`
 - `.:projectRunTrace`
 - `.:projectRunsPage`
+- `.:projectContinuation`
+- `.:projectContinuationRefs`
+- `.:projectRecoveryAttemptBudget`
 - `.:projectSubmitResult`
 - `.:projectTelemetryEventTree`
 - `.:projectionDelete`
@@ -144,6 +150,7 @@ title: "@agent-os/runtime Public API Intent"
 - `.:settleToolAdmissionRejected`
 - `.:settleToolExecuted`
 - `.:settleToolExecutionRejected`
+- `.:submitResumeDecisionFromContinuationProjection`
 - `.:submitAgentEffect`
 - `.:toolErrorReason`
 - `.:toolExecutionRejectionKind`
