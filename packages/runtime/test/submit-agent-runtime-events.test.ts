@@ -404,6 +404,18 @@ describe("submit-agent runtime event writes", () => {
       ]);
       expect(events.some((event) => event.kind === "tool.executed")).toBe(false);
       expect(JSON.stringify(events)).toContain(EFFECTFUL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON);
+      expect(projectFailureDiagnostics(events, 1)).toMatchObject({
+        diagnostics: [
+          {
+            source: "tool",
+            reason: EFFECTFUL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
+            category: "missing_execution_path",
+            owner: "integrator",
+            retryable: false,
+            publicMessage: "This tool requires a receipt-backed execution path before it can run.",
+          },
+        ],
+      });
     }),
   );
 

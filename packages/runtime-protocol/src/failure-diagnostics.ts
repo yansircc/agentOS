@@ -3,6 +3,8 @@ import type { LedgerEvent } from "@agent-os/kernel/types";
 import { validateEffectClaim } from "@agent-os/kernel/effect-claim";
 import {
   decodeRuntimeLedgerEvent,
+  EFFECTFUL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
+  EFFECTFUL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON,
   isRuntimeAbortEventKind,
   RUNTIME_EVENT_KIND,
   type RuntimeAbortEventKind,
@@ -12,11 +14,47 @@ import {
   type ToolRejectedDiagnosticsPhase,
 } from "./runtime-events";
 
+export type FailureDiagnosticCategory =
+  | "invalid_args"
+  | "unknown_tool"
+  | "missing_execution_path"
+  | "missing_material"
+  | "missing_runtime_capability"
+  | "rate_limited"
+  | "budget"
+  | "provider_failure"
+  | "tool_execution"
+  | "tool_rejected";
+
+export type FailureDiagnosticOwner =
+  | "model"
+  | "integrator"
+  | "tool_author"
+  | "runtime"
+  | "provider";
+
+export interface FailureDiagnosticInternalFacts {
+  readonly source: "tool" | "run";
+  readonly eventId: number;
+  readonly phase: ToolRejectedDiagnosticsPhase | "terminal";
+  readonly reason: string;
+  readonly terminalReason?: string;
+  readonly toolName?: string;
+  readonly toolCallId?: string;
+  readonly argumentSummary?: ToolArgumentSummary;
+  readonly schemaIssues?: ReadonlyArray<{ readonly path: string; readonly issue: string }>;
+}
+
 export interface FailureDiagnostic {
   readonly source: "tool" | "run";
   readonly eventId: number;
   readonly phase: ToolRejectedDiagnosticsPhase | "terminal";
   readonly reason: string;
+  readonly category: FailureDiagnosticCategory;
+  readonly owner: FailureDiagnosticOwner;
+  readonly retryable: boolean;
+  readonly publicMessage: string;
+  readonly internalFacts: FailureDiagnosticInternalFacts;
   readonly toolName?: string;
   readonly toolCallId?: string;
   readonly argumentSummary?: ToolArgumentSummary;
@@ -71,6 +109,113 @@ const terminalToolName = (payload: unknown): string | undefined =>
 const terminalCauseReason = (payload: unknown): string | undefined =>
   isRecord(payload) && typeof payload.cause === "string" ? payload.cause : undefined;
 
+const categoryForReason = (reason: string): FailureDiagnosticCategory => {
+  if (reason === "invalid_args") return "invalid_args";
+  if (reason === "unknown_tool") return "unknown_tool";
+  if (
+    reason === EFFECTFUL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON ||
+    reason === EFFECTFUL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON
+  ) {
+    return "missing_execution_path";
+  }
+  if (reason.startsWith("material_missing:")) return "missing_material";
+  if (
+    reason === "missing_emit_intent" ||
+    reason === "missing_await_projection" ||
+    reason === "undeclared_intent"
+  ) {
+    return "missing_runtime_capability";
+  }
+  if (reason === "rate_limited") return "rate_limited";
+  if (reason === "budget_time" || reason.startsWith("invalid_quota_")) return "budget";
+  if (
+    reason === "provider_timeout" ||
+    reason === "upstream_failure" ||
+    reason.startsWith("provider_http_failure")
+  ) {
+    return "provider_failure";
+  }
+  return "tool_execution";
+};
+
+const ownerForCategory = (category: FailureDiagnosticCategory): FailureDiagnosticOwner => {
+  switch (category) {
+    case "invalid_args":
+    case "unknown_tool":
+      return "model";
+    case "missing_execution_path":
+    case "missing_material":
+    case "missing_runtime_capability":
+      return "integrator";
+    case "rate_limited":
+    case "budget":
+      return "runtime";
+    case "provider_failure":
+      return "provider";
+    case "tool_execution":
+    case "tool_rejected":
+      return "tool_author";
+  }
+};
+
+const retryableForCategory = (category: FailureDiagnosticCategory): boolean => {
+  switch (category) {
+    case "invalid_args":
+    case "unknown_tool":
+    case "rate_limited":
+    case "provider_failure":
+      return true;
+    case "missing_execution_path":
+    case "missing_material":
+    case "missing_runtime_capability":
+    case "budget":
+    case "tool_execution":
+    case "tool_rejected":
+      return false;
+  }
+};
+
+const publicMessageForCategory = (category: FailureDiagnosticCategory): string => {
+  switch (category) {
+    case "invalid_args":
+      return "Tool arguments did not match the tool schema.";
+    case "unknown_tool":
+      return "The model requested a tool that is not available.";
+    case "missing_execution_path":
+      return "This tool requires a receipt-backed execution path before it can run.";
+    case "missing_material":
+      return "A required material binding is missing.";
+    case "missing_runtime_capability":
+      return "A required runtime capability is not bound.";
+    case "rate_limited":
+      return "The run exceeded a quota or rate limit.";
+    case "budget":
+      return "The run exhausted its configured budget.";
+    case "provider_failure":
+      return "The upstream provider failed or timed out.";
+    case "tool_execution":
+      return "Tool execution failed.";
+    case "tool_rejected":
+      return "The tool call was rejected.";
+  }
+};
+
+const failureEnvelope = (
+  facts: FailureDiagnosticInternalFacts,
+): Pick<
+  FailureDiagnostic,
+  "category" | "owner" | "retryable" | "publicMessage" | "internalFacts"
+> => {
+  const category = categoryForReason(facts.reason);
+  return {
+    category,
+    owner: ownerForCategory(category),
+    retryable: retryableForCategory(category),
+    publicMessage: publicMessageForCategory(category),
+    internalFacts: facts,
+  };
+};
+
 /**
  * Projects the diagnostic view for a failed run from ledger facts only.
  */
@@ -87,11 +232,23 @@ export const projectFailureDiagnostics = (
       continue;
     }
     const detail = event.payload.diagnostics;
-    diagnostics.push({
+    const reason = detail?.reason ?? claimReason(event.payload.claim) ?? "tool_rejected";
+    const facts: FailureDiagnosticInternalFacts = {
       source: "tool",
       eventId: event.id,
       phase: detail?.phase ?? "execution",
-      reason: detail?.reason ?? claimReason(event.payload.claim) ?? "tool_rejected",
+      reason,
+      toolName: event.payload.name,
+      toolCallId: event.payload.toolCallId,
+      ...(detail?.argumentSummary === undefined ? {} : { argumentSummary: detail.argumentSummary }),
+      ...(detail?.schemaIssues === undefined ? {} : { schemaIssues: detail.schemaIssues }),
+    };
+    diagnostics.push({
+      source: "tool",
+      eventId: event.id,
+      phase: facts.phase,
+      reason,
+      ...failureEnvelope(facts),
       toolName: event.payload.name,
       toolCallId: event.payload.toolCallId,
       ...(detail?.argumentSummary === undefined ? {} : { argumentSummary: detail.argumentSummary }),
@@ -117,11 +274,20 @@ export const projectFailureDiagnostics = (
         (diagnostic) => diagnostic.source === "tool" && diagnostic.toolName === toolName,
       );
     if (!alreadyExplained) {
+      const facts: FailureDiagnosticInternalFacts = {
+        source: "run",
+        eventId: terminal.id,
+        phase: "terminal",
+        reason: cause,
+        terminalReason,
+        ...(toolName === undefined ? {} : { toolName }),
+      };
       diagnostics.push({
         source: "run",
         eventId: terminal.id,
         phase: "terminal",
         reason: cause,
+        ...failureEnvelope(facts),
         ...(toolName === undefined ? {} : { toolName }),
       });
     }
