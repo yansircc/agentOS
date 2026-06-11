@@ -481,6 +481,17 @@ export const agUiRunAgentInputToSubmitSpec = (
     ...(defaults.outputSchema === undefined ? {} : { outputSchema: defaults.outputSchema }),
     ...(defaults.traceContext === undefined ? {} : { traceContext: defaults.traceContext }),
     ...(defaults.materials === undefined ? {} : { materials: defaults.materials }),
+    ...(defaults.resolvedMaterials === undefined
+      ? {}
+      : { resolvedMaterials: defaults.resolvedMaterials }),
+    ...(defaults.executionDomains === undefined
+      ? {}
+      : { executionDomains: defaults.executionDomains }),
+    ...(defaults.toolContext === undefined ? {} : { toolContext: defaults.toolContext }),
+    ...(defaults.toolIntents === undefined ? {} : { toolIntents: defaults.toolIntents }),
+    ...(defaults.receiptBackedTools === undefined
+      ? {}
+      : { receiptBackedTools: defaults.receiptBackedTools }),
     ...(defaults.decisionInterrupts === undefined
       ? {}
       : { decisionInterrupts: defaults.decisionInterrupts }),

@@ -23,6 +23,10 @@
   },
   "devDependencies": {
     "@agent-os/runtime": "workspace:*",
+    "@agent-os/workspace-binding": "workspace:*",
+    "@agent-os/workspace-env-cloudflare": "workspace:*",
+    "@agent-os/workspace-op": "workspace:*",
+    "@agent-os/workspace-op-local": "workspace:*",
     "@effect/vitest": "catalog:",
     "typescript": "catalog:",
     "vite-plus": "catalog:",

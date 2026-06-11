@@ -349,6 +349,7 @@ const mergeSubmitBindings = (
     },
   },
   toolIntents: [...(base.toolIntents ?? []), ...(run?.toolIntents ?? [])],
+  receiptBackedTools: { ...base.receiptBackedTools, ...run?.receiptBackedTools },
   context: run?.context ?? base.context,
   decisionInterrupts: run?.decisionInterrupts ?? base.decisionInterrupts,
 });
@@ -702,6 +703,7 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
       resolvedMaterials: { ...bindings.resolvedMaterials },
       toolContext: bindings.toolContext,
       toolIntents: [...this._toolIntents, ...(bindings.toolIntents ?? [])],
+      receiptBackedTools: { ...bindings.receiptBackedTools },
       effectAuthorityRef: spec.effectAuthorityRef,
       ...(spec.budget === undefined ? {} : { budget: spec.budget }),
       ...(spec.outputSchema === undefined ? {} : { outputSchema: spec.outputSchema }),
