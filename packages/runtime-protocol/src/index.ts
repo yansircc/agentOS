@@ -3,6 +3,7 @@ export * from "./admission-fingerprint";
 export * from "./admission-lease";
 export * from "./bindings";
 export * from "./capability";
+export * from "./continuation";
 export * from "./failure-diagnostics";
 export * from "./intent";
 export * from "./ledger";

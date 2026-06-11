@@ -36,6 +36,10 @@ import {
 import { Quota } from "../src/quota-service";
 import { submitAgentEffect } from "../src/submit-agent";
 import {
+  projectContinuation,
+  submitResumeDecisionFromContinuationProjection,
+} from "../src/continuation";
+import {
   RUNTIME_FACT_OWNER,
   decodeRuntimeLedgerEvent,
   EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
@@ -1381,6 +1385,11 @@ describe("submit-agent runtime event writes", () => {
         reason: "interrupted",
         runId: 1,
         interruptId: "decision:tool%3Asubmit-runtime-events%3A1%3A0%3Acall-1",
+        continuation: {
+          kind: "agent.run.continuation",
+          runId: 1,
+          interruptId: "decision:tool%3Asubmit-runtime-events%3A1%3A0%3Acall-1",
+        },
       });
       expect(executed).toBe(0);
       if (result.status !== "interrupted") {
@@ -1395,6 +1404,7 @@ describe("submit-agent runtime event writes", () => {
       expect(projectDecisionGate(events, result.gateRef)).toMatchObject({
         status: "requested",
       });
+      expect(JSON.parse(JSON.stringify(result.continuation))).toEqual(result.continuation);
     }),
   );
 
@@ -1456,14 +1466,14 @@ describe("submit-agent runtime event writes", () => {
       const resumed = yield* runSubmitWithServices(
         baseSpec({
           tools: { publish: tool },
-          resume: {
-            runId: first.result.runId,
-            turn: first.result.turn,
-            interruptId: first.result.interruptId,
-            gateRef: first.result.gateRef,
-            decisionRef: "decision/1",
-            resume: { approved: true },
-          },
+          resume: (() => {
+            const resume = submitResumeDecisionFromContinuationProjection(
+              projectContinuation(services.events, first.result.continuation),
+              { approved: true },
+            );
+            if (!resume.ok) expect.fail(`expected approved continuation: ${resume.reason}`);
+            return resume.resume;
+          })(),
         }),
         services,
       );
@@ -1484,21 +1494,11 @@ describe("submit-agent runtime event writes", () => {
         "agent.run.completed",
       ]);
 
-      const duplicate = yield* runSubmitWithServices(
-        baseSpec({
-          tools: { publish: tool },
-          resume: {
-            runId: first.result.runId,
-            turn: first.result.turn,
-            interruptId: first.result.interruptId,
-            gateRef: first.result.gateRef,
-            decisionRef: "decision/1",
-            resume: { approved: true },
-          },
-        }),
-        services,
+      const duplicate = submitResumeDecisionFromContinuationProjection(
+        projectContinuation(services.events, first.result.continuation),
+        { approved: true },
       );
-      expect(duplicate.result).toMatchObject({ ok: true, final: "published" });
+      expect(duplicate).toMatchObject({ ok: false, reason: "continuation_consumed" });
       expect(executed).toBe(1);
       expect(
         services.events.filter((event) => event.kind === DECISION_GATE_KIND.CONSUMED),

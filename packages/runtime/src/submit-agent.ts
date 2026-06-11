@@ -59,6 +59,7 @@ import {
   agentRunResumedEvent,
   agentRunStartedEvent,
   chatIngestedEvent,
+  continuationRefFromInterruptedEvent,
   decodeRuntimeLedgerEvent,
   EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
   llmResponseEvent,
@@ -386,17 +387,42 @@ const interruptedSubmitResultFromEvents = (
     readonly gateRef: string;
     readonly tokensUsed: number;
   },
-): SubmitResult => ({
-  ok: false,
-  status: "interrupted",
-  runId,
-  reason: "interrupted",
-  eventCount: events.length,
-  tokensUsed: spec.tokensUsed,
-  interruptId: spec.interruptId,
-  turn: spec.turn,
-  gateRef: spec.gateRef,
-});
+): SubmitResult => {
+  const interruption = matchingInterruptionEvent(events, {
+    runId,
+    turn: spec.turn,
+    interruptId: spec.interruptId,
+    gateRef: spec.gateRef,
+    decisionRef: "",
+    resume: undefined,
+  });
+  if (interruption === undefined) {
+    throw new TypeError("interrupted SubmitResult requires a matching interruption ledger fact");
+  }
+  const decoded = decodeRuntimeLedgerEvent(interruption);
+  if (
+    decoded._tag !== "runtime" ||
+    decoded.event.kind !== RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED
+  ) {
+    throw new TypeError("interrupted SubmitResult matched a non-interruption ledger fact");
+  }
+  const continuation = continuationRefFromInterruptedEvent(decoded.event);
+  if (!continuation.ok) {
+    throw new TypeError("interrupted SubmitResult requires a decision-bound interruption fact");
+  }
+  return {
+    ok: false,
+    status: "interrupted",
+    runId,
+    reason: "interrupted",
+    eventCount: events.length,
+    tokensUsed: spec.tokensUsed,
+    interruptId: spec.interruptId,
+    turn: spec.turn,
+    gateRef: spec.gateRef,
+    continuation: continuation.ref,
+  };
+};
 
 const decisionInterruptFor = (
   spec: InternalSubmitSpec,

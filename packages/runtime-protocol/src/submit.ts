@@ -10,6 +10,7 @@ import type { TraceContext } from "@agent-os/telemetry-protocol";
 import type { MaterialRef } from "@agent-os/kernel/material-ref";
 import type { ResolvedMaterial } from "@agent-os/kernel/ref-resolver";
 import type { BoundaryPackage } from "@agent-os/kernel/extensions";
+import type { ContinuationRef } from "./continuation";
 
 export interface SubmitToolIntent {
   readonly kind: string;
@@ -112,6 +113,7 @@ export type SubmitResult =
       readonly interruptId: string;
       readonly turn: TurnRef;
       readonly gateRef: string;
+      readonly continuation: ContinuationRef;
     }
   | {
       readonly ok: false;
