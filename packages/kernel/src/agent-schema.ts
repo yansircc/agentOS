@@ -98,15 +98,33 @@ const hasAnnotation = (ast: SchemaAST.Annotated, id: symbol): boolean =>
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const isStringPatternRefinement = (ast: SchemaAST.AST): boolean => {
-  if (ast._tag !== "Refinement" || ast.from._tag !== "StringKeyword") return false;
+const SUPPORTED_STRING_REFINEMENT_KEYS = new Set(["pattern", "minLength", "maxLength"]);
+
+const isSupportedStringRefinementValue = (key: string, value: unknown): boolean => {
+  if (key === "pattern") return typeof value === "string";
+  if (key === "minLength" || key === "maxLength") {
+    return typeof value === "number" && Number.isInteger(value) && value >= 0;
+  }
+  return false;
+};
+
+const isSupportedStringRefinementSource = (ast: SchemaAST.AST): boolean =>
+  ast._tag === "StringKeyword" || isSupportedStringRefinement(ast);
+
+const isSupportedStringRefinement = (ast: SchemaAST.AST): boolean => {
+  if (ast._tag !== "Refinement" || !isSupportedStringRefinementSource(ast.from)) return false;
   const annotation = SchemaAST.getJSONSchemaAnnotation(ast);
   if (Option.isNone(annotation)) return false;
   const jsonSchema = annotation.value;
+  if (!isRecord(jsonSchema)) return false;
+  const keys = Object.keys(jsonSchema);
   return (
-    isRecord(jsonSchema) &&
-    Object.keys(jsonSchema).every((key) => key === "pattern") &&
-    typeof jsonSchema.pattern === "string"
+    keys.length > 0 &&
+    keys.every(
+      (key) =>
+        SUPPORTED_STRING_REFINEMENT_KEYS.has(key) &&
+        isSupportedStringRefinementValue(key, jsonSchema[key]),
+    )
   );
 };
 
@@ -118,7 +136,7 @@ const annotationIssues = (
   for (const annotation of unsupportedAnnotationIds) {
     if (
       annotation.id === SchemaAST.JSONSchemaAnnotationId &&
-      isStringPatternRefinement(ast as SchemaAST.AST)
+      isSupportedStringRefinement(ast as SchemaAST.AST)
     ) {
       continue;
     }
@@ -195,7 +213,7 @@ const inspectAst = (ast: SchemaAST.AST, path: string): ReadonlyArray<AgentSchema
       return issues;
     }
     case "Refinement":
-      if (isStringPatternRefinement(ast)) return issues;
+      if (isSupportedStringRefinement(ast)) return issues;
       return [...issues, { path, issue: "refinement-unsupported" }];
     case "Transformation":
       return [...issues, { path, issue: "transformation-unsupported" }];

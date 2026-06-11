@@ -119,6 +119,27 @@ describe("AgentSchema profile spike", () => {
     expect(() => schema.decode({ ref: "https://preview.example" })).toThrow();
   });
 
+  it("supports bounded string refinements as closed schema semantics", () => {
+    const source = Schema.Struct({
+      content: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(8)),
+    });
+
+    expect(inspectAgentSchemaProfile(source)).toEqual([]);
+
+    const schema = defineAgentSchema(source);
+    expect(schema.jsonSchema).toEqual({
+      type: "object",
+      properties: {
+        content: { type: "string", minLength: 1, maxLength: 8 },
+      },
+      required: ["content"],
+      additionalProperties: false,
+    });
+    expect(schema.decode({ content: "chunk" })).toEqual({ content: "chunk" });
+    expect(() => schema.decode({ content: "" })).toThrow("minLength");
+    expect(() => schema.decode({ content: "too-long-content" })).toThrow("maxLength");
+  });
+
   it.effect("treats title description and examples as non-semantic annotations", () =>
     Effect.gen(function* () {
       const plain = defineAgentSchema(Schema.Struct({ alpha: Schema.String }));
@@ -148,7 +169,6 @@ describe("AgentSchema profile spike", () => {
 
   it("rejects unsupported Effect Schema features before boot", () => {
     const unsupported: ReadonlyArray<Schema.Schema.AnyNoContext> = [
-      Schema.Struct({ value: Schema.String.pipe(Schema.minLength(1)) }),
       Schema.Struct({
         value: Schema.transform(Schema.String, Schema.Number, {
           decode: (value) => value.length,

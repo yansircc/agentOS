@@ -16,7 +16,13 @@ export type JsonSchemaObject = {
 };
 
 export type JsonSchemaNode =
-  | { readonly type: "string"; readonly enum?: ReadonlyArray<string>; readonly pattern?: string }
+  | {
+      readonly type: "string";
+      readonly enum?: ReadonlyArray<string>;
+      readonly pattern?: string;
+      readonly minLength?: number;
+      readonly maxLength?: number;
+    }
   | { readonly type: "number" }
   | { readonly type: "boolean" }
   | { readonly type: "array"; readonly items: JsonSchemaNode }
@@ -83,6 +89,17 @@ const optionalStringArray = (
     return fail(path, "expected-string-array");
   }
   return ok(value as ReadonlyArray<string>);
+};
+
+const optionalNonNegativeInteger = (
+  value: unknown,
+  path: string,
+): JsonSchemaResult<number | undefined> => {
+  if (value === undefined) return ok(undefined);
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+    return fail(path, "expected-non-negative-integer");
+  }
+  return ok(value);
 };
 
 export const parseDialectNodeResult = (
@@ -162,12 +179,23 @@ export const parseDialectNodeResult = (
     case "string": {
       const unsupportedKey = firstUnsupportedKey(
         schema,
-        new Set(["type", "enum", "pattern", ...ANNOTATION_KEYS]),
+        new Set(["type", "enum", "pattern", "minLength", "maxLength", ...ANNOTATION_KEYS]),
         path,
       );
       if (unsupportedKey !== undefined) return { ok: false, issues: [unsupportedKey] };
       const enumeration = optionalStringArray(schema.enum, `${path}.enum`);
       if (!enumeration.ok) return failFrom(enumeration);
+      const minLength = optionalNonNegativeInteger(schema.minLength, `${path}.minLength`);
+      if (!minLength.ok) return failFrom(minLength);
+      const maxLength = optionalNonNegativeInteger(schema.maxLength, `${path}.maxLength`);
+      if (!maxLength.ok) return failFrom(maxLength);
+      if (
+        minLength.value !== undefined &&
+        maxLength.value !== undefined &&
+        minLength.value > maxLength.value
+      ) {
+        return fail(`${path}.minLength`, "exceeds-maxLength");
+      }
       const pattern = schema.pattern;
       if (pattern !== undefined) {
         if (typeof pattern !== "string") return fail(`${path}.pattern`, "expected-string");
@@ -181,6 +209,8 @@ export const parseDialectNodeResult = (
         type: "string",
         ...(enumeration.value === undefined ? {} : { enum: enumeration.value }),
         ...(pattern === undefined ? {} : { pattern }),
+        ...(minLength.value === undefined ? {} : { minLength: minLength.value }),
+        ...(maxLength.value === undefined ? {} : { maxLength: maxLength.value }),
       });
     }
     case "number": {
@@ -273,6 +303,12 @@ export const validateAgainstSchema = (value: unknown, schema: JsonSchemaNode): s
     } else if (s.type === "string") {
       if (typeof v !== "string") violations.push(`${path}:not-string`);
       else {
+        if (s.minLength !== undefined && v.length < s.minLength) {
+          violations.push(`${path}:minLength`);
+        }
+        if (s.maxLength !== undefined && v.length > s.maxLength) {
+          violations.push(`${path}:maxLength`);
+        }
         if (s.pattern !== undefined && !new RegExp(s.pattern).test(v)) {
           violations.push(`${path}:pattern`);
         }

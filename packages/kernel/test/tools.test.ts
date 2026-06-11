@@ -65,7 +65,7 @@ describe("defineTool", () => {
       defineTool({
         name: "lookup",
         description: "Lookup a symbolic key",
-        args: Schema.Struct({ key: Schema.String.pipe(Schema.minLength(1)) }),
+        args: Schema.Struct({ key: Schema.String.pipe(Schema.brand("LookupKey")) }),
         authority: "read",
         admit: allowToolAdmitter,
         execution: pureToolExecution(),
@@ -73,6 +73,40 @@ describe("defineTool", () => {
       }),
     ).toThrow("unsupported");
   });
+
+  it("supports bounded string tool argument contracts", () => {
+    const tool = defineTool({
+      name: "append_file",
+      description: "Append bounded content to a file",
+      args: Schema.Struct({
+        path: Schema.String,
+        content: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(8)),
+      }),
+      authority: "write",
+      admit: allowToolAdmitter,
+      execution: pureToolExecution(),
+      execute: ({ content }) => Effect.succeed({ bytes: content.length }),
+    });
+
+    expect(tool.definition.function.parameters.projections.canonical).toEqual({
+      type: "object",
+      properties: {
+        path: { type: "string" },
+        content: { type: "string", minLength: 1, maxLength: 8 },
+      },
+      required: ["path", "content"],
+      additionalProperties: false,
+    });
+    expect(tool.decode({ path: "input/editor.json", content: "chunk" })).toEqual({
+      path: "input/editor.json",
+      content: "chunk",
+    });
+    expect(() => tool.decode({ path: "input/editor.json", content: "" })).toThrow("minLength");
+    expect(() => tool.decode({ path: "input/editor.json", content: "too-long-content" })).toThrow(
+      "maxLength",
+    );
+  });
+
   it.effect("passes resolved materials through executeTool", () =>
     Effect.gen(function* () {
       let observedMaterials: unknown;

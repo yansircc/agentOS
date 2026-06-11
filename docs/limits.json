@@ -1,0 +1,263 @@
+{
+  "version": 1,
+  "classes": {
+    "contract": "describes the legal input or wire vocabulary; owned by the schema/protocol source",
+    "policy": "a bounded run-quality, cost, or polling default with an ordinary override surface",
+    "closed": "a substrate safety, spec, or backend-equivalence invariant; not an ordinary DX setting"
+  },
+  "limits": [
+    {
+      "id": "agent-schema.string-refinement-dialect",
+      "class": "contract",
+      "owner": "@agent-os/kernel AgentSchema dialect",
+      "sourcePaths": [
+        "packages/kernel/src/agent-schema.ts",
+        "packages/kernel/src/json-schema-dialect.ts"
+      ],
+      "value": "string semantic keys are closed to pattern, minLength, and maxLength",
+      "reason": "Tool argument legality is a schema contract and must be projected and locally validated from one dialect source."
+    },
+    {
+      "id": "workspace-env.tool-path-codec",
+      "class": "contract",
+      "owner": "@agent-os/workspace-env tool argument codec",
+      "sourcePaths": ["packages/execution-domains/workspace-env/src/index.ts"],
+      "value": "workspace paths reject empty, NUL, parent escape, and host path semantics",
+      "reason": "Path acceptance is part of the workspace tool argument contract, not a consumer adapter policy."
+    },
+    {
+      "id": "runtime.submit.max-turns",
+      "class": "policy",
+      "owner": "@agent-os/runtime submit loop",
+      "sourcePaths": [
+        "packages/runtime/src/submit-agent.ts",
+        "packages/runtime-protocol/src/submit.ts"
+      ],
+      "value": "default 5 turns",
+      "overrideSurface": "SubmitSpec.budget.maxTurns",
+      "reason": "Turn count changes run cost and quality for one submit; it does not change substrate safety."
+    },
+    {
+      "id": "runtime.submit.tool-retries",
+      "class": "policy",
+      "owner": "@agent-os/runtime submit loop",
+      "sourcePaths": [
+        "packages/runtime/src/submit-agent.ts",
+        "packages/runtime-protocol/src/submit.ts"
+      ],
+      "value": "default 2 retries",
+      "overrideSurface": "SubmitSpec.budget.toolRetries",
+      "reason": "Tool retry count is a per-run recovery budget."
+    },
+    {
+      "id": "runtime.submit.time-budget",
+      "class": "policy",
+      "owner": "@agent-os/runtime submit loop",
+      "sourcePaths": [
+        "packages/runtime/src/submit-agent.ts",
+        "packages/runtime-protocol/src/submit.ts"
+      ],
+      "value": "default unlimited submit time budget",
+      "overrideSurface": "SubmitSpec.budget.timeMs",
+      "reason": "Submit time is a per-run budget and is already represented in the submit DTO."
+    },
+    {
+      "id": "runtime.submit.token-budget",
+      "class": "policy",
+      "owner": "@agent-os/runtime submit loop",
+      "sourcePaths": [
+        "packages/runtime/src/submit-agent.ts",
+        "packages/runtime-protocol/src/submit.ts"
+      ],
+      "value": "default unlimited token budget",
+      "overrideSurface": "SubmitSpec.budget.tokens",
+      "reason": "Token budget is a run policy, not a schema or safety invariant."
+    },
+    {
+      "id": "runtime.projection-wait",
+      "class": "policy",
+      "owner": "@agent-os/runtime materialized projection wait",
+      "sourcePaths": ["packages/runtime/src/projection.ts"],
+      "value": "default 20 attempts at 50ms",
+      "overrideSurface": "ProjectionWaitSpec.maxAttempts and ProjectionWaitSpec.pollIntervalMs",
+      "reason": "Projection wait bounds read latency for one caller; callers can pick their own patience without changing projection truth."
+    },
+    {
+      "id": "runtime.durable-trigger-drain-iterations",
+      "class": "policy",
+      "owner": "@agent-os/runtime durable trigger pump",
+      "sourcePaths": ["packages/runtime/src/trigger.ts"],
+      "value": "default 32 drain iterations",
+      "overrideSurface": "drainDueTriggers options.maxIterations",
+      "reason": "Drain iteration count is an operational work budget for one pump invocation."
+    },
+    {
+      "id": "runtime.durable-trigger-acquire-deadline",
+      "class": "policy",
+      "owner": "@agent-os/runtime durable trigger",
+      "sourcePaths": ["packages/runtime/src/trigger.ts"],
+      "value": "default 60000ms acquire deadline",
+      "overrideSurface": "DurableTrigger.acquireDeadlineMs",
+      "reason": "Trigger acquire deadline is declared by the trigger implementation that owns the external step."
+    },
+    {
+      "id": "workspace-env.max-file-bytes",
+      "class": "policy",
+      "owner": "@agent-os/workspace-env standard tools",
+      "sourcePaths": ["packages/execution-domains/workspace-env/src/index.ts"],
+      "value": "default 256KiB file content bound",
+      "overrideSurface": "CreateWorkspaceToolsOptions.maxFileBytes",
+      "reason": "Workspace file preview/write size is an integration policy for one tool bundle."
+    },
+    {
+      "id": "workspace-env.max-command-chars",
+      "class": "policy",
+      "owner": "@agent-os/workspace-env standard tools",
+      "sourcePaths": ["packages/execution-domains/workspace-env/src/index.ts"],
+      "value": "default 2000 command characters",
+      "overrideSurface": "CreateWorkspaceToolsOptions.maxCommandChars",
+      "reason": "Command length is a workspace tool policy, not a substrate-wide safety proof."
+    },
+    {
+      "id": "workspace-env.exec-timeout",
+      "class": "policy",
+      "owner": "@agent-os/workspace-env standard tools",
+      "sourcePaths": ["packages/execution-domains/workspace-env/src/index.ts"],
+      "value": "default 30000ms exec timeout",
+      "overrideSurface": "CreateWorkspaceToolsOptions.execTimeoutMs",
+      "reason": "Workspace command timeout is selected by the workspace host/tool bundle."
+    },
+    {
+      "id": "workspace-env.max-output-bytes",
+      "class": "policy",
+      "owner": "@agent-os/workspace-env standard tools",
+      "sourcePaths": ["packages/execution-domains/workspace-env/src/index.ts"],
+      "value": "default 16384 output bytes",
+      "overrideSurface": "CreateWorkspaceToolsOptions.maxOutputBytes",
+      "reason": "Output projection size is a tool bundle policy and remains separate from actuator correctness."
+    },
+    {
+      "id": "workspace-env.search-window",
+      "class": "policy",
+      "owner": "@agent-os/workspace-env search tools",
+      "sourcePaths": ["packages/execution-domains/workspace-env/src/index.ts"],
+      "value": "default 100 matches and 4096 bytes per match",
+      "overrideSurface": "glob_files/grep_files tool args maxMatches and maxBytesPerMatch",
+      "reason": "Search result volume is caller-selected output shaping."
+    },
+    {
+      "id": "transport.sse-ledger-heartbeat",
+      "class": "policy",
+      "owner": "@agent-os/cloudflare-do ledger SSE transport",
+      "sourcePaths": ["packages/backends/cloudflare-do/src/ledger/stream.ts"],
+      "value": "default 15000ms heartbeat",
+      "overrideSurface": "StreamEventsOptions.heartbeatMs",
+      "reason": "Heartbeat cadence is a transport liveness policy for one stream consumer."
+    },
+    {
+      "id": "runtime.llm-call-provider-timeout",
+      "class": "closed",
+      "owner": "@agent-os/runtime LLM call protection",
+      "sourcePaths": ["packages/runtime/src/submit-agent.ts"],
+      "value": "provider call timeout defaults to 60000ms when submit time budget is absent",
+      "reason": "The provider timeout currently has no manifest/submit policy source; opening it needs a declared policy axis rather than changing a hot-path constant."
+    },
+    {
+      "id": "backend.dispatch-retry-policy",
+      "class": "closed",
+      "owner": "@agent-os/backend-protocol dispatch retry vocabulary",
+      "sourcePaths": ["packages/backends/protocol/src/index.ts"],
+      "value": "8 attempts, 1000ms initial delay, 60000ms max delay, multiplier 2",
+      "reason": "Dispatch retry shape is backend-neutral protocol semantics and must stay identical across production backends until a protocol policy axis exists."
+    },
+    {
+      "id": "backend.ledger-event-page-cap",
+      "class": "closed",
+      "owner": "@agent-os backend ledger readers",
+      "sourcePaths": [
+        "packages/backends/cloudflare-do/src/ledger/ledger.ts",
+        "packages/backends/cloudflare-do/src/storage/effect-sqlite-do.ts",
+        "packages/backends/in-memory/src/state.ts",
+        "packages/backends/node-postgres/src/index.ts"
+      ],
+      "value": "event reads are capped at 1000 rows per page",
+      "reason": "Page caps are backend equivalence and storage protection constraints; callers may request smaller pages but not redefine the cap per submit."
+    },
+    {
+      "id": "backend.materialized-projection-page-cap",
+      "class": "closed",
+      "owner": "@agent-os backend materialized projection readers",
+      "sourcePaths": [
+        "packages/backends/cloudflare-do/src/materialized-projections.ts",
+        "packages/backends/in-memory/src/state.ts"
+      ],
+      "value": "projection list reads are capped at 1000 rows per page",
+      "reason": "Projection page caps must remain backend-consistent until a protocol-level page policy exists."
+    },
+    {
+      "id": "sandbox.timeout-cap",
+      "class": "closed",
+      "owner": "@agent-os/sandbox policy",
+      "sourcePaths": [
+        "packages/execution-domains/sandbox/src/types.ts",
+        "packages/execution-domains/sandbox/src/policy.ts"
+      ],
+      "value": "global sandbox timeout cap 60000ms",
+      "capabilityGate": "StaticPolicyOptions.maxTimeoutMs may lower the cap for a sandbox host",
+      "reason": "The global cap protects sandbox runtime resources; ordinary callers can choose a request timeout only inside this cap."
+    },
+    {
+      "id": "sandbox.network-default-closed",
+      "class": "closed",
+      "owner": "@agent-os/sandbox policy",
+      "sourcePaths": [
+        "packages/execution-domains/sandbox/src/types.ts",
+        "packages/execution-domains/sandbox/src/policy.ts"
+      ],
+      "value": "network defaults to none",
+      "capabilityGate": "StaticPolicyOptions.allowNetwork explicit allowlist",
+      "reason": "Network access is a capability boundary, not a submit-time convenience flag."
+    },
+    {
+      "id": "dynamic-worker.timeout-cap",
+      "class": "closed",
+      "owner": "@agent-os/dynamic-worker policy",
+      "sourcePaths": [
+        "packages/providers/dynamic-worker/src/types.ts",
+        "packages/providers/dynamic-worker/src/policy.ts"
+      ],
+      "value": "global dynamic worker timeout cap 10000ms",
+      "capabilityGate": "DynamicWorkerStaticPolicyOptions.maxTimeoutMs may lower the cap for a host",
+      "reason": "Dynamic worker runtime duration is a provider safety invariant."
+    },
+    {
+      "id": "dynamic-worker.egress-default-closed",
+      "class": "closed",
+      "owner": "@agent-os/dynamic-worker policy",
+      "sourcePaths": [
+        "packages/providers/dynamic-worker/src/types.ts",
+        "packages/providers/dynamic-worker/src/policy.ts"
+      ],
+      "value": "egress defaults to none",
+      "capabilityGate": "DynamicWorkerStaticPolicyOptions.allowEgress explicit allowlist",
+      "reason": "External egress is a host capability boundary, not a run budget."
+    },
+    {
+      "id": "dynamic-worker.code-size-policy-cap",
+      "class": "closed",
+      "owner": "@agent-os/dynamic-worker static policy",
+      "sourcePaths": ["packages/providers/dynamic-worker/src/policy.ts"],
+      "value": "default static policy cap 64000 code bytes",
+      "capabilityGate": "DynamicWorkerStaticPolicyOptions.maxCodeBytes",
+      "reason": "Executable code size changes provider risk and must be set by the host policy, not by an agent submit."
+    },
+    {
+      "id": "telemetry.trace-context-spec",
+      "class": "closed",
+      "owner": "@agent-os/telemetry-protocol trace context vocabulary",
+      "sourcePaths": ["packages/telemetry-protocol/src/index.ts"],
+      "value": "W3C traceparent regex; tracestate max 512 chars and 32 members",
+      "reason": "Trace context shape is external protocol compliance and must not be relaxed as a DX setting."
+    }
+  ]
+}
