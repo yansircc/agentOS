@@ -74,7 +74,10 @@ const collectFailures = (root = repoRoot) => {
   ]);
 
   rejectPatterns(failures, fixture, files.fixture, [
-    [/externalExecutor|effectfulExecutor|pathPolicy/u, "fixture uses forbidden local bridge vocabulary"],
+    [
+      /externalExecutor|effectfulExecutor|pathPolicy/u,
+      "fixture uses forbidden local bridge vocabulary",
+    ],
     [/payload\.(?:result|args|content)/u, "fixture parses raw runtime payload fields"],
     [/content:\s*readResult\.content/u, "fixture projects raw read content to AG-UI"],
   ]);
@@ -163,14 +166,24 @@ const collectSelfTestFailures = () => {
       return [`workspace AG-UI integration positive fixture failed:\n${baseline.join("\n")}`];
     }
 
-    writeFixture(root, files.agui, positiveFixtures[files.agui].replace("defaults.receiptBackedTools", ""));
+    writeFixture(
+      root,
+      files.agui,
+      positiveFixtures[files.agui].replace("defaults.receiptBackedTools", ""),
+    );
     let rejected = collectFailures(root);
     if (!rejected.some((failure) => failure.includes("defaults.receiptBackedTools"))) {
-      return [`missing AG-UI receipt-backed pass-through was not rejected: ${JSON.stringify(rejected)}`];
+      return [
+        `missing AG-UI receipt-backed pass-through was not rejected: ${JSON.stringify(rejected)}`,
+      ];
     }
 
     writeFixture(root, files.agui, positiveFixtures[files.agui]);
-    writeFixture(root, files.fixture, `${positiveFixtures[files.fixture]}\nconst leak = payload.content;`);
+    writeFixture(
+      root,
+      files.fixture,
+      `${positiveFixtures[files.fixture]}\nconst leak = payload.content;`,
+    );
     rejected = collectFailures(root);
     if (!rejected.some((failure) => failure.includes("raw runtime payload"))) {
       return [`raw payload mutation was not rejected: ${JSON.stringify(rejected)}`];
@@ -180,7 +193,9 @@ const collectSelfTestFailures = () => {
     writeFixture(root, files.cloudflareDo, "const mergeSubmitBindings = () => ({});");
     rejected = collectFailures(root);
     if (!rejected.some((failure) => failure.includes("receiptBackedTools"))) {
-      return [`Cloudflare receipt-backed merge mutation was not rejected: ${JSON.stringify(rejected)}`];
+      return [
+        `Cloudflare receipt-backed merge mutation was not rejected: ${JSON.stringify(rejected)}`,
+      ];
     }
 
     return [];

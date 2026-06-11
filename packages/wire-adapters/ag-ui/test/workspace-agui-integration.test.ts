@@ -69,9 +69,7 @@ const runToolEffect = <A>(effect: Effect.Effect<A, unknown, unknown>): Promise<A
 
 describe("Cloudflare workspace tools to AG-UI integration fixture", () => {
   it("uses standard workspace binding, receipt-backed writes, diagnostics, and safe AG-UI egress", async () => {
-    const files = new Map<string, string>([
-      ["/workspace/project/src/input.txt", "READ_SECRET\n"],
-    ]);
+    const files = new Map<string, string>([["/workspace/project/src/input.txt", "READ_SECRET\n"]]);
     const writeFile = vi.fn<NonNullable<CloudflareWorkspaceEnvClient["writeFile"]>>(
       async (path, content) => {
         if (typeof content !== "string") throw new TypeError("fixture expects text content");
@@ -202,7 +200,7 @@ describe("Cloudflare workspace tools to AG-UI integration fixture", () => {
               },
               catch: (cause) => cause as never,
             }),
-          awaitProjection: <State,>(spec: ToolProjectionWaitSpec<State>) =>
+          awaitProjection: <State>(spec: ToolProjectionWaitSpec<State>) =>
             Effect.sync((): ToolProjectionRow<State> => {
               expect(spec.kind).toBe(WORKSPACE_OP_PROJECTION_KIND);
               expect(spec.factOwnerRef).toBe(WORKSPACE_OP_FACT_OWNER);
