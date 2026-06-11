@@ -29,22 +29,22 @@ const collectFailures = (root = repoRoot) => {
   const runtimeTests = read(root, runtimeTest);
 
   const snapshotBlock = blockFrom(protocol, "export interface ToolResultSnapshot");
-  if (!snapshotBlock.includes("readonly execution: DeterministicToolExecution")) {
-    failures.push(`${protocolFile}: ToolResultSnapshot must be pure-execution only`);
+  if (!snapshotBlock.includes("readonly execution: ToolExecution")) {
+    failures.push(`${protocolFile}: ToolResultSnapshot must record the resolved snapshot execution`);
   }
-  if (/readonly execution:\s*(ToolExecution|ExternalToolExecution)/u.test(snapshotBlock)) {
-    failures.push(`${protocolFile}: ToolResultSnapshot accepts non-pure execution`);
+  if (/readonly execution:\s*DeterministicToolExecution/u.test(snapshotBlock)) {
+    failures.push(`${protocolFile}: ToolResultSnapshot is still deterministic-only`);
   }
 
   const snapshotConstructor = blockFrom(
     protocol,
     "export const toolResultSnapshotFromExecutedPayload",
   );
-  if (!snapshotConstructor.includes("payload: DeterministicToolExecutedPayload")) {
-    failures.push(`${protocolFile}: raw snapshot constructor must accept DeterministicToolExecutedPayload`);
+  if (!snapshotConstructor.includes("resolved: ResolvedToolExecution")) {
+    failures.push(`${protocolFile}: raw snapshot constructor must accept resolved witness input`);
   }
-  if (/payload:\s*ToolExecutedPayload/u.test(snapshotConstructor)) {
-    failures.push(`${protocolFile}: raw snapshot constructor still accepts generic tool payloads`);
+  if (!snapshotConstructor.includes("execution: resolved.execution")) {
+    failures.push(`${protocolFile}: raw snapshot constructor must use resolved execution`);
   }
 
   const receiptBlock = blockFrom(protocol, "export interface ExternalToolExecutionReceipt");
@@ -76,7 +76,7 @@ const collectFailures = (root = repoRoot) => {
     "export const toolReplayArtifactFromExecutedPayload",
   );
   for (const term of [
-    'payload.execution.kind === "deterministic"',
+    'resolved.witness === "snapshot"',
     "toolResultSnapshotFromExecutedPayload",
     "externalToolExecutionReceiptFromExecutedPayload",
   ]) {
@@ -158,24 +158,25 @@ const collectSelfTestFailures = () => {
       root,
       protocolFile,
       [
-        "export type DeterministicToolExecution = { readonly kind: 'deterministic' };",
+        "export type ToolExecution = { readonly kind: 'deterministic' } | { readonly kind: 'external' };",
+        "export type ResolvedToolExecution = { readonly witness: 'snapshot' | 'receipt'; readonly execution: ToolExecution };",
         'export type ExternalReceiptAnchorRef = { readonly anchorKind: "external_receipt" };',
         "export interface ToolResultSnapshot {",
-        "  readonly execution: DeterministicToolExecution;",
+        "  readonly execution: ToolExecution;",
         "}",
         "export interface ExternalToolExecutionReceipt {",
         "  readonly receipt: ExternalReceiptAnchorRef;",
         "}",
         'export const EXTERNAL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON = "external_tool_replay_requires_receipt";',
-        "export const toolResultSnapshotFromExecutedPayload = (payload: DeterministicToolExecutedPayload) => payload;",
+        "export const toolResultSnapshotFromExecutedPayload = (payload, resolved: ResolvedToolExecution) => ({ ...payload, execution: resolved.execution });",
         "export const externalToolExecutionReceiptFromExecutedPayload = (payload) => {",
         '  if (payload.claim.anchorRef.anchorKind === "external_receipt") {',
         "    return { ok: true, artifact: { idempotencyKey: payload.claim.operationRef, receipt: payload.claim.anchorRef } };",
         "  }",
         "  return { ok: false, reason: EXTERNAL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON };",
         "};",
-        "export const toolReplayArtifactFromExecutedPayload = (payload) => {",
-        '  if (payload.execution.kind === "deterministic") return toolResultSnapshotFromExecutedPayload(payload);',
+        "export const toolReplayArtifactFromExecutedPayload = (payload, resolved) => {",
+        '  if (resolved.witness === "snapshot") return toolResultSnapshotFromExecutedPayload(payload, resolved);',
         "  return externalToolExecutionReceiptFromExecutedPayload(payload);",
         "};",
         "export const replayToolResultFromSnapshot = (snapshot) => snapshot.result;",
@@ -220,7 +221,7 @@ const collectSelfTestFailures = () => {
       protocolFile,
       [
         "export interface ToolResultSnapshot {",
-        "  readonly execution: ToolExecution;",
+        "  readonly execution: DeterministicToolExecution;",
         "}",
         "export interface ExternalToolExecutionReceipt {}",
         "export const toolResultSnapshotFromExecutedPayload = (payload: ToolExecutedPayload) => payload;",
@@ -241,7 +242,7 @@ const collectSelfTestFailures = () => {
     );
     const rejected = collectFailures(root);
     if (
-      !rejected.some((failure) => failure.includes("raw snapshot constructor")) ||
+      !rejected.some((failure) => failure.includes("deterministic-only")) ||
       !rejected.some((failure) => failure.includes("resume replay reads raw tool result"))
     ) {
       return [

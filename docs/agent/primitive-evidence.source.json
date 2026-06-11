@@ -62,6 +62,10 @@
       "tests": ["packages/kernel/test/tools.test.ts"]
     },
     {
+      "primitive": "primitive.kernel.ExecutionDomainReplayLaw",
+      "tests": ["packages/kernel/test/tools.test.ts"]
+    },
+    {
       "primitive": "primitive.kernel.ExecutionDomainRegistry",
       "tests": ["packages/kernel/test/tools.test.ts"]
     },

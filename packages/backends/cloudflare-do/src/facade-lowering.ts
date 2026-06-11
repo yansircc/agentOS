@@ -213,9 +213,13 @@ const executionDomainIssueLabel = (issue: ExecutionDomainRegistryIssue): string 
     case "invalid_declaration":
       return `invalid declaration at ${issue.index}`;
     case "duplicate_declaration":
-      return `duplicate ${issue.domain.kind}:${issue.domain.ref}`;
+      return `duplicate ${issue.domain.kind}:${issue.domain.ref}:${issue.access}`;
+    case "invalid_write_snapshot_law":
+      return `invalid write snapshot law for ${issue.domain.kind}:${issue.domain.ref}`;
     case "missing_declaration":
-      return `missing ${issue.domain.kind}:${issue.domain.ref} for ${issue.toolId}`;
+      return `missing ${issue.domain.kind}:${issue.domain.ref}:${issue.access} for ${issue.toolId}`;
+    case "access_mismatch":
+      return `missing ${issue.domain.kind}:${issue.domain.ref}:${issue.access} for ${issue.toolId}; declared ${issue.declaredAccesses.join(",")}`;
   }
 };
 
@@ -293,6 +297,7 @@ export function lowerAgentConfig<Env>(
         : defineAgentSubmitBindings({
             llmRoutes: { default: config.llms.default },
             tools,
+            executionDomains: config.domains ?? [],
           }),
   };
 }

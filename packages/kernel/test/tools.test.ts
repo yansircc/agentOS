@@ -8,6 +8,7 @@ import {
   executeTool,
   deterministicToolExecution,
   externalToolExecution,
+  resolveToolExecution,
   unsafeRunToolByName,
   validateExecutionDomainRegistry,
   validateToolRegistry,
@@ -208,8 +209,9 @@ describe("ExecutionDomainRegistry", () => {
     });
   });
 
-  it("rejects missing and duplicate external domain declarations", () => {
+  it("rejects missing and duplicate external domain replay laws", () => {
     const domain = { kind: "workspace" as const, ref: "workspace:default" };
+    const writeReceipt = { domain, replay: { access: "write" as const, witness: "receipt" as const } };
     const tool = defineTool({
       name: "write_file",
       description: "Write",
@@ -222,14 +224,75 @@ describe("ExecutionDomainRegistry", () => {
 
     expect(validateExecutionDomainRegistry({ write_file: tool }, { domains: [] })).toEqual({
       ok: false,
-      issues: [{ kind: "missing_declaration", toolId: "write_file", domain }],
+      issues: [{ kind: "missing_declaration", toolId: "write_file", domain, access: "write" }],
     });
 
     expect(
-      validateExecutionDomainRegistry({ write_file: tool }, { domains: [{ domain }, { domain }] }),
+      validateExecutionDomainRegistry(
+        { write_file: tool },
+        { domains: [writeReceipt, writeReceipt] },
+      ),
     ).toEqual({
       ok: false,
-      issues: [{ kind: "duplicate_declaration", domain }],
+      issues: [{ kind: "duplicate_declaration", domain, access: "write" }],
+    });
+  });
+
+  it("rejects access-mismatched and write snapshot replay laws", () => {
+    const domain = { kind: "workspace" as const, ref: "workspace:default" };
+    const tool = defineTool({
+      name: "write_file",
+      description: "Write",
+      args: Schema.Struct({ path: Schema.String }),
+      authority: "write",
+      admit: allowToolAdmitter,
+      execution: externalToolExecution("write", domain),
+      execute: ({ path }) => withToolWriteRequirement(Effect.succeed({ path })),
+    });
+
+    expect(
+      validateExecutionDomainRegistry(
+        { write_file: tool },
+        { domains: [{ domain, replay: { access: "read", witness: "snapshot" } }] },
+      ),
+    ).toEqual({
+      ok: false,
+      issues: [
+        {
+          kind: "access_mismatch",
+          toolId: "write_file",
+          domain,
+          access: "write",
+          declaredAccesses: ["read"],
+        },
+      ],
+    });
+
+    expect(
+      validateExecutionDomainRegistry(
+        { write_file: tool },
+        { domains: [{ domain, replay: { access: "write", witness: "snapshot" } }] },
+      ),
+    ).toEqual({
+      ok: false,
+      issues: [{ kind: "invalid_write_snapshot_law", domain }],
+    });
+  });
+
+  it("resolves replay witness only from the domain law", () => {
+    const domain = { kind: "workspace" as const, ref: "workspace:default" };
+
+    expect(
+      resolveToolExecution(externalToolExecution("read", domain), {
+        domains: [{ domain, replay: { access: "read", witness: "receipt" } }],
+      }),
+    ).toMatchObject({
+      ok: true,
+      resolved: {
+        kind: "external",
+        witness: "receipt",
+        execution: { kind: "external", access: "read", domain },
+      },
     });
   });
 
@@ -241,6 +304,7 @@ describe("ExecutionDomainRegistry", () => {
           domains: [
             {
               domain: { kind: "host", ref: "local" } as never,
+              replay: { access: "read", witness: "snapshot" },
             },
           ],
         },

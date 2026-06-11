@@ -15,7 +15,7 @@ import {
   type ScopeRef,
 } from "@agent-os/kernel/effect-claim";
 import type { AgentSchemaIssue } from "@agent-os/kernel/agent-schema";
-import type { ExecutionDomain, ToolExecution } from "@agent-os/kernel/tools";
+import type { ExecutionDomain, ResolvedToolExecution, ToolExecution } from "@agent-os/kernel/tools";
 import { TraceContextSchema, type TraceContext } from "@agent-os/telemetry-protocol";
 import { ABORT, type AbortKind } from "@agent-os/kernel/abort";
 
@@ -145,7 +145,7 @@ export interface ToolResultSnapshot {
   readonly toolCallId: string;
   readonly name: string;
   readonly args: unknown;
-  readonly execution: DeterministicToolExecution;
+  readonly execution: ToolExecution;
   readonly result: unknown;
   readonly claim: LivedClaim;
   readonly traceContext?: TraceContext;
@@ -653,7 +653,8 @@ const externalReceiptAnchorFromClaim = (claim: LivedClaim): ExternalReceiptAncho
     : null;
 
 export const toolResultSnapshotFromExecutedPayload = (
-  payload: DeterministicToolExecutedPayload,
+  payload: Omit<ToolExecutedPayload, "claim"> & { readonly claim: LivedClaim },
+  resolved: ResolvedToolExecution,
 ): ToolResultSnapshot => ({
   kind: "tool.result",
   version: TOOL_RESULT_SNAPSHOT_VERSION,
@@ -661,7 +662,7 @@ export const toolResultSnapshotFromExecutedPayload = (
   toolCallId: payload.toolCallId,
   name: payload.name,
   args: payload.args,
-  execution: payload.execution,
+  execution: resolved.execution,
   result: payload.result,
   claim: payload.claim,
   ...(payload.traceContext === undefined ? {} : { traceContext: payload.traceContext }),
@@ -669,6 +670,7 @@ export const toolResultSnapshotFromExecutedPayload = (
 
 export const externalToolExecutionReceiptFromExecutedPayload = (
   payload: ExternalToolExecutedPayload,
+  resolved: Extract<ResolvedToolExecution, { readonly kind: "external" }>,
 ): ExternalToolExecutionReceiptFromExecutedPayloadResult => {
   const receipt = externalReceiptAnchorFromClaim(payload.claim);
   if (receipt === null) {
@@ -688,7 +690,7 @@ export const externalToolExecutionReceiptFromExecutedPayload = (
       toolCallId: payload.toolCallId,
       name: payload.name,
       args: payload.args,
-      execution: payload.execution,
+      execution: resolved.execution,
       result: payload.result,
       claim: payload.claim,
       idempotencyKey: payload.claim.operationRef,
@@ -700,26 +702,32 @@ export const externalToolExecutionReceiptFromExecutedPayload = (
 
 export const toolReplayArtifactFromExecutedPayload = (
   payload: ToolExecutedPayload,
+  resolved: ResolvedToolExecution,
 ): ToolReplayArtifactFromExecutedPayloadResult => {
   const claim = livedClaimFromUnknown(payload.claim);
   if (claim === null) {
     return { ok: false, reason: TOOL_EXECUTION_CLAIM_MUST_BE_LIVED_REASON, claim: payload.claim };
   }
-  if (payload.execution.kind === "deterministic") {
+  if (resolved.witness === "snapshot") {
     return {
       ok: true,
       artifact: toolResultSnapshotFromExecutedPayload({
         ...payload,
-        execution: payload.execution,
         claim,
-      }),
+      }, resolved),
     };
+  }
+  if (payload.execution.kind === "deterministic") {
+    throw new TypeError("receipt replay witness requires external tool execution");
+  }
+  if (resolved.kind !== "external") {
+    throw new TypeError("receipt replay witness requires resolved external tool execution");
   }
   return externalToolExecutionReceiptFromExecutedPayload({
     ...payload,
     execution: payload.execution,
     claim,
-  });
+  }, resolved);
 };
 
 export const replayToolResultFromSnapshot = (

@@ -15,6 +15,7 @@
         "primitive.kernel.ExecutionDomain",
         "primitive.kernel.ExecutionDomainDeclaration",
         "primitive.kernel.ExecutionDomainRegistry",
+        "primitive.kernel.ExecutionDomainReplayLaw",
         "primitive.kernel.LivedClaim",
         "primitive.kernel.PreClaim",
         "primitive.kernel.RejectedClaim",

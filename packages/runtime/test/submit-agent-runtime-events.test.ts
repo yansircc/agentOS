@@ -19,6 +19,7 @@ import {
   defineTool,
   externalToolExecution,
   deterministicToolExecution,
+  resolveToolExecution,
   withToolWriteRequirement,
 } from "@agent-os/kernel/tools";
 import { ToolError } from "@agent-os/kernel/errors";
@@ -354,7 +355,16 @@ describe("submit-agent runtime event writes", () => {
         expect.fail("expected tool.executed runtime event");
       }
 
-      const artifact = toolReplayArtifactFromExecutedPayload(toolEvent.event.payload);
+      const resolvedExecution = resolveToolExecution(toolEvent.event.payload.execution, {
+        domains: [],
+      });
+      if (!resolvedExecution.ok) {
+        expect.fail("expected deterministic tool execution to resolve");
+      }
+      const artifact = toolReplayArtifactFromExecutedPayload(
+        toolEvent.event.payload,
+        resolvedExecution.resolved,
+      );
       if (!artifact.ok) {
         expect.fail("expected deterministic tool result snapshot artifact");
       }
@@ -385,21 +395,32 @@ describe("submit-agent runtime event writes", () => {
         }),
       });
 
-      const { result, events } = yield* runSubmit(baseSpec({ tools: { write_file: tool } }), [
-        response({
-          items: [
-            { type: "message", text: "write file" },
+      const { result, events } = yield* runSubmit(
+        baseSpec({
+          tools: { write_file: tool },
+          executionDomains: [
             {
-              type: "tool_call",
-              call: {
-                id: "call-1",
-                type: "function",
-                function: { name: "write_file", arguments: '{"path":"out.txt"}' },
-              },
+              domain: { kind: "workspace", ref: "workspace:default" },
+              replay: { access: "write", witness: "receipt" },
             },
           ],
         }),
-      ]);
+        [
+          response({
+            items: [
+              { type: "message", text: "write file" },
+              {
+                type: "tool_call",
+                call: {
+                  id: "call-1",
+                  type: "function",
+                  function: { name: "write_file", arguments: '{"path":"out.txt"}' },
+                },
+              },
+            ],
+          }),
+        ],
+      );
 
       expect(result).toMatchObject({ ok: false, reason: "tool_error" });
       expect(liveToolExecuteCalled).toBe(false);

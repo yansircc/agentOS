@@ -240,7 +240,7 @@ describe("defineAgentDO facade lowering", () => {
     });
 
     expect(() => lowerAgentConfig({ tools: [tool] }, env)).toThrow(
-      "missing workspace:workspace:default for write_file",
+      "missing workspace:workspace:default:write for write_file",
     );
   });
 
@@ -256,7 +256,10 @@ describe("defineAgentDO facade lowering", () => {
       execute: ({ path }) => withToolWriteRequirement(Effect.succeed({ path })),
     });
 
-    const lowered = lowerAgentConfig({ tools: [tool], domains: [{ domain }] }, env);
+    const lowered = lowerAgentConfig({
+      tools: [tool],
+      domains: [{ domain, replay: { access: "write", witness: "receipt" } }],
+    }, env);
 
     expect(lowered.submitBindings).toBe(null);
   });

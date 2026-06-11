@@ -88,7 +88,10 @@ import { Quota } from "./quota-service";
 import {
   decodeToolArgs,
   executeTool,
+  resolveToolExecution,
+  validateExecutionDomainRegistry,
   validateToolRegistry,
+  type ExecutionDomainDeclaration,
   type Tool,
   type ToolExecutionContextInput,
   type ToolProjectionWaitSpec,
@@ -500,6 +503,7 @@ const replayMessagesToInterruptedTool = (
   events: ReadonlyArray<LedgerEvent>,
   resume: NonNullable<InternalSubmitSpec["resume"]>,
   interruptedToolCallId: string,
+  executionDomains: ReadonlyArray<ExecutionDomainDeclaration>,
 ): Effect.Effect<
   {
     readonly messages: LlmMessage[];
@@ -564,7 +568,26 @@ const replayMessagesToInterruptedTool = (
           decodedTool._tag === "runtime" &&
           decodedTool.event.kind === RUNTIME_EVENT_KIND.TOOL_EXECUTED
         ) {
-          const artifact = toolReplayArtifactFromExecutedPayload(decodedTool.event.payload);
+          const resolvedExecution = resolveToolExecution(decodedTool.event.payload.execution, {
+            domains: executionDomains,
+          });
+          if (!resolvedExecution.ok) {
+            return yield* Effect.fail(
+              new SqlError({
+                cause: {
+                  reason: "tool_execution_witness_resolution_failed",
+                  issues: resolvedExecution.issues,
+                  runId: resume.runId,
+                  toolCallId: call.id,
+                  toolName: call.function.name,
+                },
+              }),
+            );
+          }
+          const artifact = toolReplayArtifactFromExecutedPayload(
+            decodedTool.event.payload,
+            resolvedExecution.resolved,
+          );
           if (!artifact.ok) {
             return yield* Effect.fail(
               new SqlError({
@@ -936,6 +959,22 @@ export const submitAgentEffect = (
         traceContext,
       );
     }
+    const domainRegistry = validateExecutionDomainRegistry(spec.tools, {
+      domains: spec.executionDomains ?? [],
+    });
+    if (!domainRegistry.ok) {
+      return yield* finalAbort(
+        ABORT.TOOL_ERROR,
+        {
+          reason: "invalid_execution_domain_registry",
+          issues: domainRegistry.issues,
+        },
+        identity,
+        started.id,
+        0,
+        traceContext,
+      );
+    }
 
     const initialMessages = yield* buildInitialMessages(spec);
 
@@ -1045,6 +1084,7 @@ export const submitAgentEffect = (
           priorEvents,
           spec.resume,
           decision.toolCallId,
+          spec.executionDomains ?? [],
         );
         messages = replayed.messages;
         resumedToolCall = replayed.call;

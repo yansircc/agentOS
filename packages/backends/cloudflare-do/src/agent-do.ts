@@ -339,6 +339,7 @@ const mergeSubmitBindings = (
 ): AgentSubmitBindings => ({
   llmRoutes: { ...base.llmRoutes, ...run?.llmRoutes },
   tools: { ...base.tools, ...run?.tools },
+  executionDomains: [...(base.executionDomains ?? []), ...(run?.executionDomains ?? [])],
   materials: { ...base.materials, ...run?.materials },
   resolvedMaterials: { ...base.resolvedMaterials, ...run?.resolvedMaterials },
   toolContext: {
@@ -696,6 +697,7 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
       ...(spec.system === undefined ? {} : { system: spec.system }),
       route,
       tools: { ...bindings.tools },
+      executionDomains: bindings.executionDomains,
       materials: { ...bindings.materials },
       resolvedMaterials: { ...bindings.resolvedMaterials },
       toolContext: bindings.toolContext,

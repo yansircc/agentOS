@@ -2,6 +2,12 @@ import { describe, expect, it } from "@effect/vitest";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import type { LivedClaim, RejectedClaim } from "@agent-os/kernel/effect-claim";
 import {
+  resolveToolExecution,
+  type ExecutionDomainDeclaration,
+  type ResolvedToolExecution,
+  type ToolExecution,
+} from "@agent-os/kernel/tools";
+import {
   agentRunAbortedEvent,
   agentRunCompletedEvent,
   agentRunInterruptedEvent,
@@ -34,6 +40,17 @@ const eventIdentity = (scopeId: string) => ({
 const traceContext = {
   traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
   tracestate: "vendor=value",
+};
+
+const resolvedToolExecution = (
+  execution: ToolExecution,
+  domains: ReadonlyArray<ExecutionDomainDeclaration> = [],
+): ResolvedToolExecution => {
+  const resolved = resolveToolExecution(execution, { domains });
+  if (!resolved.ok) {
+    throw new Error(`expected resolved tool execution: ${JSON.stringify(resolved.issues)}`);
+  }
+  return resolved.resolved;
 };
 
 const livedClaim: LivedClaim = {
@@ -216,7 +233,7 @@ describe("runtime event vocabulary", () => {
       ...payload,
       execution: { kind: "deterministic" },
       claim: livedClaim,
-    });
+    }, resolvedToolExecution({ kind: "deterministic" }));
     const replayed = replayToolResultFromSnapshot(snapshot);
 
     expect(replayed).toEqual({ ok: true, result: { ok: true }, claim: livedClaim });
@@ -225,22 +242,27 @@ describe("runtime event vocabulary", () => {
   });
 
   it("does not build a raw result snapshot for an external tool without a receipt", () => {
+    const execution = {
+      kind: "external",
+      access: "write",
+      domain: { kind: "workspace", ref: "workspace:default" },
+    } as const;
     const payload = toolExecutedEvent({
       ...runtimeIdentity,
       runId: 1,
       toolCallId: "call-1",
       name: "write_file",
       args: { path: "out.txt" },
-      execution: {
-        kind: "external",
-        access: "write",
-        domain: { kind: "workspace", ref: "workspace:default" },
-      },
+      execution,
       result: { written: true },
       claim: livedClaim,
     }).payload;
 
-    expect(toolReplayArtifactFromExecutedPayload(payload)).toEqual({
+    const resolved = resolvedToolExecution(execution, [
+      { domain: execution.domain, replay: { access: "write", witness: "receipt" } },
+    ]);
+
+    expect(toolReplayArtifactFromExecutedPayload(payload, resolved)).toEqual({
       ok: false,
       reason: EXTERNAL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON,
       execution: {
@@ -253,23 +275,28 @@ describe("runtime event vocabulary", () => {
   });
 
   it("replays receipt-backed external tool execution from the receipt artifact", () => {
+    const execution = {
+      kind: "external",
+      access: "write",
+      domain: { kind: "workspace", ref: "workspace:default" },
+    } as const;
     const payload = toolExecutedEvent({
       ...runtimeIdentity,
       runId: 1,
       toolCallId: "call-1",
       name: "write_file",
       args: { path: "out.txt" },
-      execution: {
-        kind: "external",
-        access: "write",
-        domain: { kind: "workspace", ref: "workspace:default" },
-      },
+      execution,
       result: { written: true },
       claim: receiptBackedLivedClaim,
       traceContext,
     }).payload;
 
-    const artifact = toolReplayArtifactFromExecutedPayload(payload);
+    const resolved = resolvedToolExecution(execution, [
+      { domain: execution.domain, replay: { access: "write", witness: "receipt" } },
+    ]);
+
+    const artifact = toolReplayArtifactFromExecutedPayload(payload, resolved);
     expect(artifact).toMatchObject({
       ok: true,
       artifact: {

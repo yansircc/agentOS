@@ -1,5 +1,9 @@
 import type { LlmRoute } from "@agent-os/llm-protocol";
-import type { Tool, ToolExecutionContextInput } from "@agent-os/kernel/tools";
+import type {
+  ExecutionDomainDeclaration,
+  Tool,
+  ToolExecutionContextInput,
+} from "@agent-os/kernel/tools";
 import type { AuthorityRef, ScopeRef } from "@agent-os/kernel/effect-claim";
 import type { AnyAgentSchemaSource } from "@agent-os/kernel/agent-schema";
 import type { TraceContext } from "@agent-os/telemetry-protocol";
@@ -28,6 +32,7 @@ export interface SubmitSpec {
   readonly system?: string;
   readonly route: LlmRoute;
   readonly tools: Record<string, Tool>;
+  readonly executionDomains?: ReadonlyArray<ExecutionDomainDeclaration>;
   readonly budget?: {
     readonly tokens?: number;
     readonly timeMs?: number;

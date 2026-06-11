@@ -99,6 +99,7 @@ export type ToolProjectionWaiter = <State = unknown>(
 
 export type ExecutionDomainKind = "host" | "sandbox" | "workspace" | "remote";
 export type ToolAccess = "read" | "write";
+export type ToolReplayWitness = "snapshot" | "receipt";
 
 /**
  * Declared execution locus for an external tool.
@@ -112,6 +113,19 @@ export interface ExecutionDomain {
   readonly kind: ExecutionDomainKind;
   readonly ref: string;
   readonly envAllowlist?: ReadonlyArray<string>;
+}
+
+/**
+ * Replay witness law for one execution-domain access mode.
+ *
+ * @agentosPrimitive primitive.kernel.ExecutionDomainReplayLaw
+ * @agentosInvariant invariant.algebra.type-or-boot-proof
+ * @agentosDocs docs/concepts/tool-execution-domain.md
+ * @public
+ */
+export interface ExecutionDomainReplayLaw {
+  readonly access: ToolAccess;
+  readonly witness: ToolReplayWitness;
 }
 
 /**
@@ -145,6 +159,7 @@ export type ToolExecutionRequirements<E extends ToolExecution> = E extends {
  */
 export interface ExecutionDomainDeclaration {
   readonly domain: ExecutionDomain;
+  readonly replay: ExecutionDomainReplayLaw;
 }
 
 /**
@@ -158,6 +173,19 @@ export interface ExecutionDomainDeclaration {
 export interface ExecutionDomainRegistry {
   readonly domains: ReadonlyArray<ExecutionDomainDeclaration>;
 }
+
+export type ResolvedToolExecution =
+  | {
+      readonly kind: "deterministic";
+      readonly execution: Extract<ToolExecution, { readonly kind: "deterministic" }>;
+      readonly witness: "snapshot";
+    }
+  | {
+      readonly kind: "external";
+      readonly execution: Extract<ToolExecution, { readonly kind: "external" }>;
+      readonly law: ExecutionDomainReplayLaw;
+      readonly witness: ToolReplayWitness;
+    };
 
 interface ToolContractShape {
   readonly toolId: string;
@@ -353,6 +381,21 @@ const isExecutionDomain = (value: unknown): value is ExecutionDomain => {
   return candidate.kind !== "host" || candidate.envAllowlist !== undefined;
 };
 
+const isToolReplayWitness = (value: unknown): value is ToolReplayWitness =>
+  value === "snapshot" || value === "receipt";
+
+const isExecutionDomainReplayLaw = (value: unknown): value is ExecutionDomainReplayLaw => {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as {
+    readonly access?: unknown;
+    readonly witness?: unknown;
+  };
+  return (
+    (candidate.access === "read" || candidate.access === "write") &&
+    isToolReplayWitness(candidate.witness)
+  );
+};
+
 const isToolExecution = (value: unknown): value is ToolExecution => {
   if (typeof value !== "object" || value === null) return false;
   const candidate = value as {
@@ -369,6 +412,8 @@ const isToolExecution = (value: unknown): value is ToolExecution => {
 };
 
 const executionDomainKey = (domain: ExecutionDomain): string => `${domain.kind}:${domain.ref}`;
+const executionDomainLawKey = (domain: ExecutionDomain, access: ToolAccess): string =>
+  `${executionDomainKey(domain)}:${access}`;
 
 export type ExecutionDomainRegistryIssue =
   | {
@@ -378,11 +423,24 @@ export type ExecutionDomainRegistryIssue =
   | {
       readonly kind: "duplicate_declaration";
       readonly domain: ExecutionDomain;
+      readonly access: ToolAccess;
+    }
+  | {
+      readonly kind: "invalid_write_snapshot_law";
+      readonly domain: ExecutionDomain;
     }
   | {
       readonly kind: "missing_declaration";
       readonly toolId: string;
       readonly domain: ExecutionDomain;
+      readonly access: ToolAccess;
+    }
+  | {
+      readonly kind: "access_mismatch";
+      readonly toolId: string;
+      readonly domain: ExecutionDomain;
+      readonly access: ToolAccess;
+      readonly declaredAccesses: ReadonlyArray<ToolAccess>;
     };
 
 export type ExecutionDomainRegistryValidation =
@@ -397,34 +455,125 @@ export const validateExecutionDomainRegistry = (
   registry: ExecutionDomainRegistry,
 ): ExecutionDomainRegistryValidation => {
   const issues: ExecutionDomainRegistryIssue[] = [];
-  const declared = new Map<string, ExecutionDomain>();
+  const declaredDomains = new Set<string>();
+  const declaredLaws = new Map<string, ExecutionDomainDeclaration>();
+  const declaredAccesses = new Map<string, Set<ToolAccess>>();
 
   registry.domains.forEach((declaration, index) => {
-    if (!isExecutionDomain(declaration.domain)) {
+    if (!isExecutionDomain(declaration.domain) || !isExecutionDomainReplayLaw(declaration.replay)) {
       issues.push({ kind: "invalid_declaration", index });
       return;
     }
-    const key = executionDomainKey(declaration.domain);
-    if (declared.has(key)) {
-      issues.push({ kind: "duplicate_declaration", domain: declaration.domain });
+    if (declaration.replay.access === "write" && declaration.replay.witness === "snapshot") {
+      issues.push({ kind: "invalid_write_snapshot_law", domain: declaration.domain });
       return;
     }
-    declared.set(key, declaration.domain);
+    const domainKey = executionDomainKey(declaration.domain);
+    const lawKey = executionDomainLawKey(declaration.domain, declaration.replay.access);
+    if (declaredLaws.has(lawKey)) {
+      issues.push({
+        kind: "duplicate_declaration",
+        domain: declaration.domain,
+        access: declaration.replay.access,
+      });
+      return;
+    }
+    declaredDomains.add(domainKey);
+    declaredLaws.set(lawKey, declaration);
+    const accessSet = declaredAccesses.get(domainKey) ?? new Set<ToolAccess>();
+    accessSet.add(declaration.replay.access);
+    declaredAccesses.set(domainKey, accessSet);
   });
+
+  if (issues.length > 0) {
+    return { ok: false, issues };
+  }
 
   for (const tool of Object.values(tools)) {
     if (tool.execution.kind === "deterministic") continue;
     const domain = tool.execution.domain;
-    if (!declared.has(executionDomainKey(domain))) {
+    const domainKey = executionDomainKey(domain);
+    if (!declaredDomains.has(domainKey)) {
       issues.push({
         kind: "missing_declaration",
         toolId: tool.contract.toolId,
         domain,
+        access: tool.execution.access,
+      });
+      continue;
+    }
+    if (!declaredLaws.has(executionDomainLawKey(domain, tool.execution.access))) {
+      issues.push({
+        kind: "access_mismatch",
+        toolId: tool.contract.toolId,
+        domain,
+        access: tool.execution.access,
+        declaredAccesses: [...(declaredAccesses.get(domainKey) ?? new Set<ToolAccess>())].sort(),
       });
     }
   }
 
   return issues.length === 0 ? { ok: true } : { ok: false, issues };
+};
+
+export type ToolExecutionResolution =
+  | { readonly ok: true; readonly resolved: ResolvedToolExecution }
+  | { readonly ok: false; readonly issues: ReadonlyArray<ExecutionDomainRegistryIssue> };
+
+export const resolveToolExecution = (
+  execution: ToolExecution,
+  registry: ExecutionDomainRegistry,
+): ToolExecutionResolution => {
+  if (execution.kind === "deterministic") {
+    return { ok: true, resolved: { kind: "deterministic", execution, witness: "snapshot" } };
+  }
+
+  const validation = validateExecutionDomainRegistry({}, registry);
+  if (!validation.ok) return validation;
+
+  const domainKey = executionDomainKey(execution.domain);
+  const declaredForDomain = registry.domains.filter(
+    (declaration) => executionDomainKey(declaration.domain) === domainKey,
+  );
+  if (declaredForDomain.length === 0) {
+    return {
+      ok: false,
+      issues: [
+        {
+          kind: "missing_declaration",
+          toolId: "<resolution>",
+          domain: execution.domain,
+          access: execution.access,
+        },
+      ],
+    };
+  }
+  const declaration = declaredForDomain.find(
+    (candidate) => candidate.replay.access === execution.access,
+  );
+  if (declaration === undefined) {
+    return {
+      ok: false,
+      issues: [
+        {
+          kind: "access_mismatch",
+          toolId: "<resolution>",
+          domain: execution.domain,
+          access: execution.access,
+          declaredAccesses: declaredForDomain.map((candidate) => candidate.replay.access).sort(),
+        },
+      ],
+    };
+  }
+  return {
+    ok: true,
+    resolved: {
+      kind: "external",
+      execution,
+      law: declaration.replay,
+      witness: declaration.replay.witness,
+    },
+  };
 };
 
 export const defineTool = <S extends Schema.Schema.AnyNoContext, R, E extends ToolExecution>(

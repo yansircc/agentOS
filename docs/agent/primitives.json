@@ -282,6 +282,23 @@
       }
     },
     {
+      "id": "primitive.kernel.ExecutionDomainReplayLaw",
+      "package": "@agent-os/kernel",
+      "packagePath": "packages/kernel",
+      "entrypoints": [".", "./tools"],
+      "symbol": "ExecutionDomainReplayLaw",
+      "exportKey": ".:ExecutionDomainReplayLaw",
+      "sourceFile": "packages/kernel/src/tools.ts",
+      "summary": "Replay witness law for one execution-domain access mode.",
+      "aliases": [],
+      "invariants": ["invariant.algebra.type-or-boot-proof"],
+      "decisions": [],
+      "docs": "docs/concepts/tool-execution-domain.md",
+      "testEvidence": {
+        "tests": ["packages/kernel/test/tools.test.ts"]
+      }
+    },
+    {
       "id": "primitive.kernel.FactOwnerRef",
       "package": "@agent-os/kernel",
       "packagePath": "packages/kernel",
