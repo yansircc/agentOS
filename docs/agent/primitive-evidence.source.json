@@ -190,6 +190,10 @@
       ]
     },
     {
+      "primitive": "primitive.runtime.runWorkspaceJobEffect",
+      "tests": ["packages/runtime/test/workspace-job.test.ts"]
+    },
+    {
       "primitive": "primitive.runtime.SubmitResult",
       "tests": [
         "packages/runtime/test/submit-agent-runtime-events.test.ts",
@@ -206,6 +210,26 @@
     {
       "primitive": "primitive.runtime.waitForProjection",
       "tests": ["packages/runtime/test/projection.test.ts"]
+    },
+    {
+      "primitive": "primitive.cloudflare-do.createCloudflareLedgerAgUiHistorySseResponse",
+      "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"]
+    },
+    {
+      "primitive": "primitive.cloudflare-do.createCloudflareLedgerAgUiSseResponse",
+      "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"]
+    },
+    {
+      "primitive": "primitive.cloudflare-do.createCloudflareWorkspaceEnvResolver",
+      "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"]
+    },
+    {
+      "primitive": "primitive.cloudflare-do.createCloudflareWorkspaceJobResponse",
+      "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"]
+    },
+    {
+      "primitive": "primitive.cloudflare-do.installCloudflareWorkspaceOperationProvider",
+      "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"]
     }
   ]
 }

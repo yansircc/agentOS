@@ -1,6 +1,13 @@
 /// <reference types="@cloudflare/workers-types" />
 
-import { defineAgentDO, type CloudflareAgentEnv } from "@agent-os/backend-cloudflare-do";
+import {
+  createCloudflareLedgerAgUiHistorySseResponse,
+  createCloudflareWorkspaceJobResponse,
+  createCloudflareWorkspaceEnvResolver,
+  defineAgentDO,
+  installCloudflareWorkspaceOperationProvider,
+  type CloudflareAgentEnv,
+} from "@agent-os/backend-cloudflare-do";
 import {
   durableObjectRpcClient,
   type DurableObjectRpcClient,
@@ -46,4 +53,54 @@ export const firstKind = (events: ReadonlyArray<LedgerEventRpc>): string | null 
 export const fixtureToolError = new ToolError({
   toolName: "fixture",
   cause: "consumer-visible constructor",
+});
+
+export const fixtureAgUiHistoryResponse = createCloudflareLedgerAgUiHistorySseResponse([]);
+
+export const fixtureWorkspaceJobResponse = createCloudflareWorkspaceJobResponse({
+  request: { headers: new Headers() },
+  runId: "fixture-run",
+  submit: () => Promise.resolve(),
+  waitUntil: () => undefined,
+  quickWaitForSubmission: () => Promise.resolve("submitted"),
+  readProjection: ({ runId }) =>
+    Promise.resolve({
+      status: "missing",
+      runId,
+    }),
+});
+
+export const fixtureWorkspaceResolver = createCloudflareWorkspaceEnvResolver({
+  binding: {
+    getSandbox: () => ({
+      exec: () => Promise.resolve({ exitCode: 0, stdout: "", stderr: "" }),
+    }),
+  },
+});
+
+export const fixtureWorkspaceOpInstall = installCloudflareWorkspaceOperationProvider({
+  env: {
+    domain: { kind: "sandbox", ref: "fixture" },
+    cwd: "/workspace",
+    resolvePath: (path: string): string => path,
+    readFile: () => Promise.resolve(""),
+    readFileBuffer: () => Promise.resolve(new Uint8Array()),
+    writeFile: () => Promise.resolve(),
+    stat: () => Promise.resolve({ type: "file" }),
+    readdir: () => Promise.resolve([]),
+    exists: () => Promise.resolve(true),
+    mkdir: () => Promise.resolve(),
+    rm: () => Promise.resolve(),
+    exec: () =>
+      Promise.resolve({
+        exitCode: 0,
+        stdout: "",
+        stderr: "",
+        stdoutBytes: 0,
+        stderrBytes: 0,
+        stdoutTruncated: false,
+        stderrTruncated: false,
+        durationMs: 0,
+      }),
+  },
 });

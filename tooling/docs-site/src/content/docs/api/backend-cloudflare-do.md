@@ -28,6 +28,17 @@ title: "@agent-os/backend-cloudflare-do Public API Intent"
 - `.:CloudflareAttachedStreamFactory`
 - `.:CloudflareAttachedStreamFactoryContext`
 - `.:CloudflareAttachedStreamSource`
+- `.:CloudflareWorkspaceEnvBinding`
+- `.:CloudflareWorkspaceEnvLease`
+- `.:CloudflareWorkspaceEnvResolver`
+- `.:CloudflareWorkspaceEnvResolverError`
+- `.:CloudflareWorkspaceEnvResolverInput`
+- `.:CloudflareWorkspaceEnvResolverOptions`
+- `.:CloudflareWorkspaceJobProjectionReader`
+- `.:CloudflareWorkspaceJobResponseOptions`
+- `.:CloudflareWorkspaceOperationInstall`
+- `.:CloudflareWorkspaceOperationInstallContext`
+- `.:CloudflareWorkspaceOperationProviderHandlers`
 - `.:CloudflareTriggerFactory`
 - `.:CloudflareTriggerFactoryContext`
 - `.:CloudflareTriggerSource`
@@ -38,6 +49,7 @@ title: "@agent-os/backend-cloudflare-do Public API Intent"
 - `.:DispatchTargetRegistry`
 - `.:GeminiGenerateContentSpec`
 - `.:HttpDispatchTargetSpec`
+- `.:InstallCloudflareWorkspaceOperationProviderOptions`
 - `.:LoweredMaterialBindings`
 - `.:OpenAIChatSpec`
 - `.:ProviderDispatchTargetSpec`
@@ -47,6 +59,10 @@ title: "@agent-os/backend-cloudflare-do Public API Intent"
 - `.:cloudflareAgentMountPort`
 - `.:credential`
 - `.:createAgentDurableObject`
+- `.:createCloudflareLedgerAgUiHistorySseResponse`
+- `.:createCloudflareLedgerAgUiSseResponse`
+- `.:createCloudflareWorkspaceJobResponse`
+- `.:createCloudflareWorkspaceEnvResolver`
 - `.:defineAgentDO`
 - `.:durableObjectDispatchTarget`
 - `.:durableObjectTarget`
@@ -54,6 +70,7 @@ title: "@agent-os/backend-cloudflare-do Public API Intent"
 - `.:externalResource`
 - `.:geminiGenerateContent`
 - `.:httpDispatchTarget`
+- `.:installCloudflareWorkspaceOperationProvider`
 - `.:lowerMaterialBindings`
 - `.:mountCloudflareAgent`
 - `.:openAIChat`

@@ -89,6 +89,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:Quota`
 - `.:RUN_BEARING_KINDS`
 - `.:Resources`
+- `.:RunWorkspaceJobSpec`
 - `.:Scheduler`
 - `.:StructuredDecodeResult`
 - `.:Tool`
@@ -108,6 +109,16 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:TriggerStuckRow`
 - `.:TriggerTx`
 - `.:UnregisteredProjectionKind`
+- `.:WorkspaceJobCandidateMissing`
+- `.:WorkspaceJobDataPlane`
+- `.:WorkspaceJobDataPlaneFailed`
+- `.:WorkspaceJobFinalizedArtifact`
+- `.:WorkspaceJobFinalizedArtifactBytes`
+- `.:WorkspaceJobRunIdMismatch`
+- `.:WorkspaceJobSeedFile`
+- `.:WorkspaceJobVerifier`
+- `.:WorkspaceJobVerifierFailed`
+- `.:WorkspaceJobVerifierResult`
 - `.:applyProjectionEvent`
 - `.:applyProjectionEventResult`
 - `.:attachedStreamParseFail`
@@ -146,6 +157,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:waitForProjection`
 - `.:runSynchronousAttachedStreamCommit`
 - `.:runSynchronousTriggerCommit`
+- `.:runWorkspaceJobEffect`
 - `.:scheduledEventTrigger`
 - `.:settleToolAdmissionRejected`
 - `.:settleToolExecuted`

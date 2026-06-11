@@ -14,6 +14,12 @@
       "rules": ["EFF025", "EFF402"]
     },
     {
+      "path": "src/workspace-job-facade.ts",
+      "owner": "@agent-os/backend-cloudflare-do/workspace-job-facade",
+      "reason": "terminal Cloudflare workspace-job HTTP facade owns projection response construction while result truth stays in workspace_job.result",
+      "rules": ["EFF402"]
+    },
+    {
       "path": "src/dispatch/payload.ts",
       "owner": "@agent-os/backend-cloudflare-do/dispatch",
       "reason": "dispatch outbox payload parsing is sync ledger-wire validation caught at the Effect boundary and mapped to SqlError",

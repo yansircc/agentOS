@@ -457,6 +457,34 @@
         "packages/backends/cloudflare-do/test/dispatch-contract.worker.test.ts",
         "packages/kernel/src/errors.ts"
       ]
+    },
+    {
+      "tag": "agent_os.workspace_job_candidate_missing",
+      "invariants": ["invariant.workspace-job.verified-terminal"],
+      "docs": "docs/packages/workspace-job.md",
+      "fix": "Treat a missing candidate as a workspace_job.failed terminal fact before finalization or verification can produce a deliverable.",
+      "sourceFiles": ["packages/runtime/src/workspace-job.ts"]
+    },
+    {
+      "tag": "agent_os.workspace_job_data_plane_failed",
+      "invariants": ["invariant.workspace-job.verified-terminal"],
+      "docs": "docs/packages/workspace-job.md",
+      "fix": "Keep seed, finalize, and cleanup failures inside the workspace job data-plane boundary and settle them through workspace_job.failed.",
+      "sourceFiles": ["packages/runtime/src/workspace-job.ts"]
+    },
+    {
+      "tag": "agent_os.workspace_job_run_id_mismatch",
+      "invariants": ["invariant.workspace-job.verified-terminal"],
+      "docs": "docs/packages/workspace-job.md",
+      "fix": "Reject finalized bytes whose run id does not match the requested workspace job before verifier checks can mark them deliverable.",
+      "sourceFiles": ["packages/runtime/src/workspace-job.ts"]
+    },
+    {
+      "tag": "agent_os.workspace_job_verifier_failed",
+      "invariants": ["invariant.workspace-job.verified-terminal"],
+      "docs": "docs/packages/workspace-job.md",
+      "fix": "Map verifier exceptions to workspace_job.failed; reserve verifier_rejected for successful product-domain verifier verdicts.",
+      "sourceFiles": ["packages/runtime/src/workspace-job.ts"]
     }
   ]
 }

@@ -41,6 +41,7 @@
       "@agent-os/staging-artifact": ["./packages/carriers/staging-artifact/src/index.ts"],
       "@agent-os/tenant-material": ["./packages/providers/tenant-material/src/index.ts"],
       "@agent-os/verification": ["./packages/carriers/verification/src/index.ts"],
+      "@agent-os/workspace-job": ["./packages/carriers/workspace-job/src/index.ts"],
       "@agent-os/workspace-op": ["./packages/carriers/workspace-op/src/index.ts"],
       "@agent-os/workspace-session": ["./packages/carriers/workspace-session/src/index.ts"],
       "@agent-os/attached-stream": ["./packages/composers/attached-stream/src/index.ts"],

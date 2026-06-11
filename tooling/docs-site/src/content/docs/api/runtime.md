@@ -89,6 +89,7 @@ title: "@agent-os/runtime Public API Intent"
 - `.:Quota`
 - `.:RUN_BEARING_KINDS`
 - `.:Resources`
+- `.:RunWorkspaceJobSpec`
 - `.:Scheduler`
 - `.:StructuredDecodeResult`
 - `.:Tool`
@@ -108,6 +109,16 @@ title: "@agent-os/runtime Public API Intent"
 - `.:TriggerStuckRow`
 - `.:TriggerTx`
 - `.:UnregisteredProjectionKind`
+- `.:WorkspaceJobCandidateMissing`
+- `.:WorkspaceJobDataPlane`
+- `.:WorkspaceJobDataPlaneFailed`
+- `.:WorkspaceJobFinalizedArtifact`
+- `.:WorkspaceJobFinalizedArtifactBytes`
+- `.:WorkspaceJobRunIdMismatch`
+- `.:WorkspaceJobSeedFile`
+- `.:WorkspaceJobVerifier`
+- `.:WorkspaceJobVerifierFailed`
+- `.:WorkspaceJobVerifierResult`
 - `.:applyProjectionEvent`
 - `.:applyProjectionEventResult`
 - `.:attachedStreamParseFail`
@@ -146,6 +157,7 @@ title: "@agent-os/runtime Public API Intent"
 - `.:waitForProjection`
 - `.:runSynchronousAttachedStreamCommit`
 - `.:runSynchronousTriggerCommit`
+- `.:runWorkspaceJobEffect`
 - `.:scheduledEventTrigger`
 - `.:settleToolAdmissionRejected`
 - `.:settleToolExecuted`

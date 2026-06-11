@@ -23,3 +23,4 @@ export {
 } from "./tool-settlement";
 export type { Tool, ToolDefinition } from "@agent-os/kernel/tools";
 export * from "./trigger";
+export * from "./workspace-job";

@@ -22,6 +22,7 @@
     { "path": "./packages/carriers/staging-artifact" },
     { "path": "./packages/providers/tenant-material" },
     { "path": "./packages/carriers/verification" },
+    { "path": "./packages/carriers/workspace-job" },
     { "path": "./packages/carriers/workspace-op" },
     { "path": "./packages/carriers/workspace-session" },
     { "path": "./packages/providers/dynamic-worker" },

@@ -22,6 +22,7 @@
     "test:runtime": "vp test run --configLoader runner --config vitest.cloudflare.config.ts"
   },
   "dependencies": {
+    "@agent-os/ag-ui": "workspace:*",
     "@agent-os/attached-stream": "workspace:*",
     "@agent-os/backend-protocol": "workspace:*",
     "@agent-os/kernel": "workspace:*",
@@ -30,6 +31,10 @@
     "@agent-os/runtime-protocol": "workspace:*",
     "@agent-os/sse-http": "workspace:*",
     "@agent-os/telemetry-protocol": "workspace:*",
+    "@agent-os/workspace-env": "workspace:*",
+    "@agent-os/workspace-env-cloudflare": "workspace:*",
+    "@agent-os/workspace-op": "workspace:*",
+    "@agent-os/workspace-op-local": "workspace:*",
     "@effect/experimental": "catalog:",
     "@effect/platform": "catalog:",
     "@effect/sql": "catalog:",

@@ -24,6 +24,17 @@
 - `.:CloudflareAttachedStreamFactory`
 - `.:CloudflareAttachedStreamFactoryContext`
 - `.:CloudflareAttachedStreamSource`
+- `.:CloudflareWorkspaceEnvBinding`
+- `.:CloudflareWorkspaceEnvLease`
+- `.:CloudflareWorkspaceEnvResolver`
+- `.:CloudflareWorkspaceEnvResolverError`
+- `.:CloudflareWorkspaceEnvResolverInput`
+- `.:CloudflareWorkspaceEnvResolverOptions`
+- `.:CloudflareWorkspaceJobProjectionReader`
+- `.:CloudflareWorkspaceJobResponseOptions`
+- `.:CloudflareWorkspaceOperationInstall`
+- `.:CloudflareWorkspaceOperationInstallContext`
+- `.:CloudflareWorkspaceOperationProviderHandlers`
 - `.:CloudflareTriggerFactory`
 - `.:CloudflareTriggerFactoryContext`
 - `.:CloudflareTriggerSource`
@@ -34,6 +45,7 @@
 - `.:DispatchTargetRegistry`
 - `.:GeminiGenerateContentSpec`
 - `.:HttpDispatchTargetSpec`
+- `.:InstallCloudflareWorkspaceOperationProviderOptions`
 - `.:LoweredMaterialBindings`
 - `.:OpenAIChatSpec`
 - `.:ProviderDispatchTargetSpec`
@@ -43,6 +55,10 @@
 - `.:cloudflareAgentMountPort`
 - `.:credential`
 - `.:createAgentDurableObject`
+- `.:createCloudflareLedgerAgUiHistorySseResponse`
+- `.:createCloudflareLedgerAgUiSseResponse`
+- `.:createCloudflareWorkspaceJobResponse`
+- `.:createCloudflareWorkspaceEnvResolver`
 - `.:defineAgentDO`
 - `.:durableObjectDispatchTarget`
 - `.:durableObjectTarget`
@@ -50,6 +66,7 @@
 - `.:externalResource`
 - `.:geminiGenerateContent`
 - `.:httpDispatchTarget`
+- `.:installCloudflareWorkspaceOperationProvider`
 - `.:lowerMaterialBindings`
 - `.:mountCloudflareAgent`
 - `.:openAIChat`

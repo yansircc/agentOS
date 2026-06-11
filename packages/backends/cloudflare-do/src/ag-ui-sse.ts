@@ -1,0 +1,56 @@
+import {
+  encodeAgUiLedgerEventEnvelopeSse,
+  projectLedgerEventsToAgUiEnvelopes,
+  projectLedgerSseToAgUiSse,
+  type AgUiLedgerEnvelopeProjectionSpec,
+} from "@agent-os/ag-ui";
+import type { LedgerEvent } from "@agent-os/kernel/types";
+import {
+  createSseHttpResponse,
+  createSseHttpTextResponse,
+  type SseHttpResponseOptions,
+  type SseHttpChunk,
+} from "@agent-os/sse-http";
+
+/**
+ * Cloudflare host composition for live ledger SSE -> AG-UI SSE.
+ *
+ * This helper is host-agnostic internally: it only composes the AG-UI
+ * projection with the Web Fetch SSE response wrapper. It intentionally lives
+ * in cloudflare-do for v1 to avoid a one-consumer transport package. If a
+ * second host needs the same helper, move the body to
+ * `transports/ag-ui-sse` and leave this export as a thin re-export.
+ *
+ * @agentosPrimitive primitive.cloudflare-do.createCloudflareLedgerAgUiSseResponse
+ * @agentosInvariant invariant.ag-ui.sse-axis
+ * @agentosDocs docs/packages/backend-cloudflare-do.md
+ * @public
+ */
+export const createCloudflareLedgerAgUiSseResponse = (
+  ledgerSse: AsyncIterable<SseHttpChunk>,
+  spec: AgUiLedgerEnvelopeProjectionSpec = {},
+  options: SseHttpResponseOptions = {},
+): Response => createSseHttpResponse(projectLedgerSseToAgUiSse(ledgerSse, spec), options);
+
+/**
+ * Cloudflare host composition for historical ledger rows -> AG-UI SSE.
+ *
+ * Raw ledger history remains the truth source; this function only materializes
+ * a transport response from a supplied snapshot.
+ *
+ * @agentosPrimitive primitive.cloudflare-do.createCloudflareLedgerAgUiHistorySseResponse
+ * @agentosInvariant invariant.ag-ui.sse-axis
+ * @agentosDocs docs/packages/backend-cloudflare-do.md
+ * @public
+ */
+export const createCloudflareLedgerAgUiHistorySseResponse = (
+  events: ReadonlyArray<LedgerEvent>,
+  spec: AgUiLedgerEnvelopeProjectionSpec = {},
+  options: Omit<SseHttpResponseOptions, "onCancel"> = {},
+): Response =>
+  createSseHttpTextResponse(
+    projectLedgerEventsToAgUiEnvelopes(events, spec)
+      .map((envelope) => encodeAgUiLedgerEventEnvelopeSse(envelope))
+      .join(""),
+    options,
+  );

@@ -1,0 +1,27 @@
+# @agent-os/workspace-job
+
+## Purpose
+
+Provider-neutral workspace job fact carrier for protected terminal artifact
+settlement.
+
+## Invariant
+
+Workspace-job owns `workspace_job.*` request, terminal settlement, failure, and
+projection vocabulary. It does not execute agent submits, workspace effects, or
+verifiers. Runtime and host packages must construct workspace-job facts through
+this carrier's exported constructors and settlement helpers.
+
+## Minimal Usage
+
+Emit `workspace_job.requested` with an idempotency key, then commit exactly one
+terminal fact: `workspace_job.verified`, `workspace_job.verifier_rejected`, or
+`workspace_job.failed`. Consumers read `projectWorkspaceJob` and never derive
+deliverability from product side storage.
+
+## Verification
+
+```sh
+cd packages/carriers/workspace-job
+vp test run
+```

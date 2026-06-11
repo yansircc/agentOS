@@ -31,6 +31,7 @@
     "@agent-os/llm-protocol": "workspace:*",
     "@agent-os/runtime-protocol": "workspace:*",
     "@agent-os/telemetry-protocol": "workspace:*",
+    "@agent-os/workspace-job": "workspace:*",
     "effect": "catalog:"
   },
   "devDependencies": {

@@ -220,6 +220,19 @@
       "published": true
     },
     {
+      "slug": "workspace-job",
+      "name": "@agent-os/workspace-job",
+      "path": "packages/carriers/workspace-job",
+      "status": "carrier",
+      "role": "workspace job terminal settlement vocabulary",
+      "boundary": "workspace job request, terminal artifact settlement, verifier rejection, failure, and projection vocabulary",
+      "need": "Workspace job carrier",
+      "readmeStatus": "Carrier package. It owns protected terminal artifact fact vocabulary, not workspace execution or verifier policy.",
+      "published": true,
+      "apiSource": "docs/api/workspace-job.md",
+      "apiStatus": "Carrier package. It owns workspace job fact and projection vocabulary; runtime and host packages execute the pipeline."
+    },
+    {
       "slug": "workspace-op-local",
       "name": "@agent-os/workspace-op-local",
       "path": "packages/providers/workspace-op-local",

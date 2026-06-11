@@ -67,6 +67,12 @@
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
     },
     {
+      "path": "packages/carriers/workspace-job",
+      "shape": ["library"],
+      "dependencyOwner": "workspace-root",
+      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+    },
+    {
       "path": "packages/carriers/workspace-op",
       "shape": ["library"],
       "dependencyOwner": "workspace-root",
@@ -305,6 +311,12 @@
       "path": "packages/backends/cloudflare-do/src/agent-do.ts",
       "owner": "@agent-os/backend-cloudflare-do",
       "reason": "terminal Cloudflare Durable Object facade owns streamEvents missing-scope Response construction",
+      "rules": ["EFF402"]
+    },
+    {
+      "path": "packages/backends/cloudflare-do/src/workspace-job-facade.ts",
+      "owner": "@agent-os/backend-cloudflare-do/workspace-job-facade",
+      "reason": "terminal Cloudflare workspace-job HTTP facade owns projection response construction while result truth stays in workspace_job.result",
       "rules": ["EFF402"]
     },
     {

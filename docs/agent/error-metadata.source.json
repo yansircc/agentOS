@@ -230,6 +230,30 @@
       "fix": "Decode trace context at the runtime boundary and reject malformed trace metadata before provider or ledger projection consumes it."
     },
     {
+      "tag": "agent_os.workspace_job_candidate_missing",
+      "invariants": ["invariant.workspace-job.verified-terminal"],
+      "docs": "docs/packages/workspace-job.md",
+      "fix": "Treat a missing candidate as a workspace_job.failed terminal fact before finalization or verification can produce a deliverable."
+    },
+    {
+      "tag": "agent_os.workspace_job_data_plane_failed",
+      "invariants": ["invariant.workspace-job.verified-terminal"],
+      "docs": "docs/packages/workspace-job.md",
+      "fix": "Keep seed, finalize, and cleanup failures inside the workspace job data-plane boundary and settle them through workspace_job.failed."
+    },
+    {
+      "tag": "agent_os.workspace_job_run_id_mismatch",
+      "invariants": ["invariant.workspace-job.verified-terminal"],
+      "docs": "docs/packages/workspace-job.md",
+      "fix": "Reject finalized bytes whose run id does not match the requested workspace job before verifier checks can mark them deliverable."
+    },
+    {
+      "tag": "agent_os.workspace_job_verifier_failed",
+      "invariants": ["invariant.workspace-job.verified-terminal"],
+      "docs": "docs/packages/workspace-job.md",
+      "fix": "Map verifier exceptions to workspace_job.failed; reserve verifier_rejected for successful product-domain verifier verdicts."
+    },
+    {
       "tag": "agent_os.llm_call_timed_out",
       "invariants": ["invariant.boundary.runtime-validation-external-only"],
       "docs": "docs/packages/runtime.md",

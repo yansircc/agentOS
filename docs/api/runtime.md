@@ -85,6 +85,7 @@
 - `.:Quota`
 - `.:RUN_BEARING_KINDS`
 - `.:Resources`
+- `.:RunWorkspaceJobSpec`
 - `.:Scheduler`
 - `.:StructuredDecodeResult`
 - `.:Tool`
@@ -104,6 +105,16 @@
 - `.:TriggerStuckRow`
 - `.:TriggerTx`
 - `.:UnregisteredProjectionKind`
+- `.:WorkspaceJobCandidateMissing`
+- `.:WorkspaceJobDataPlane`
+- `.:WorkspaceJobDataPlaneFailed`
+- `.:WorkspaceJobFinalizedArtifact`
+- `.:WorkspaceJobFinalizedArtifactBytes`
+- `.:WorkspaceJobRunIdMismatch`
+- `.:WorkspaceJobSeedFile`
+- `.:WorkspaceJobVerifier`
+- `.:WorkspaceJobVerifierFailed`
+- `.:WorkspaceJobVerifierResult`
 - `.:applyProjectionEvent`
 - `.:applyProjectionEventResult`
 - `.:attachedStreamParseFail`
@@ -142,6 +153,7 @@
 - `.:waitForProjection`
 - `.:runSynchronousAttachedStreamCommit`
 - `.:runSynchronousTriggerCommit`
+- `.:runWorkspaceJobEffect`
 - `.:scheduledEventTrigger`
 - `.:settleToolAdmissionRejected`
 - `.:settleToolExecuted`

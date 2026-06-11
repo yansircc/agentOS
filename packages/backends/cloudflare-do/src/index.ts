@@ -8,6 +8,10 @@
 
 export { createAgentDurableObject, type CloudflareAgentEnv } from "./agent-do";
 export { cloudflareAgentMountPort, mountCloudflareAgent } from "./mount";
+export * from "./ag-ui-sse";
+export * from "./workspace-job-facade";
+export * from "./workspace-env";
+export * from "./workspace-op";
 export type {
   AgentAttachedStreamCancelSpec,
   AgentAttachedStreamSpec,

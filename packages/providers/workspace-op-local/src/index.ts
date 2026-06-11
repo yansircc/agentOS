@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { Option } from "effect";
 import type { PreClaim } from "@agent-os/kernel/effect-claim";
 import {
@@ -57,7 +56,17 @@ const textEncoder = new TextEncoder();
 const failWorkspaceOperationLocalProvider = (message: string): never =>
   Option.getOrThrowWith(Option.none(), () => new TypeError(message));
 
-const hashText = (value: string): string => createHash("sha256").update(value).digest("hex");
+const sha256Hex = (value: string): Promise<string> => {
+  const subtle = typeof crypto === "undefined" ? undefined : crypto.subtle;
+  if (subtle === undefined) {
+    return failWorkspaceOperationLocalProvider("Web Crypto subtle digest is required");
+  }
+  return subtle.digest("SHA-256", textEncoder.encode(value)).then((digest) =>
+    Array.from(new Uint8Array(digest))
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join(""),
+  );
+};
 
 const stableJson = (value: unknown): string => {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
@@ -69,7 +78,7 @@ const stableJson = (value: unknown): string => {
     .join(",")}}`;
 };
 
-const hashJson = (value: unknown): string => hashText(stableJson(value));
+const hashJson = (value: unknown): Promise<string> => sha256Hex(stableJson(value));
 
 const utf8Bytes = (value: string): number => textEncoder.encode(value).byteLength;
 
@@ -144,16 +153,18 @@ const rejectedPayload = (
   }),
 });
 
-const boundedShellResult = (
+const boundedShellResult = async (
   request: WorkspaceOperationRequestedPayload,
   requestedEventId: number,
   command: string,
   cwd: string,
   result: WorkspaceExecResult,
   maxOutputBytes: number,
-): WorkspaceOperationCompletedPayload => {
+): Promise<WorkspaceOperationCompletedPayload> => {
   const stdout = truncateUtf8(result.stdout, maxOutputBytes);
   const stderr = truncateUtf8(result.stderr, maxOutputBytes);
+  const stdoutHash = await sha256Hex(result.stdout);
+  const stderrHash = await sha256Hex(result.stderr);
   const publicResult = {
     kind: "run_shell" as const,
     command,
@@ -165,8 +176,8 @@ const boundedShellResult = (
     stderrBytes: stderr.bytes,
     stdoutTruncated: result.stdoutTruncated || stdout.truncated,
     stderrTruncated: result.stderrTruncated || stderr.truncated,
-    stdoutHash: hashText(result.stdout),
-    stderrHash: hashText(result.stderr),
+    stdoutHash,
+    stderrHash,
     durationMs: result.durationMs,
   };
   return completedPayload(request, requestedEventId, {
@@ -175,7 +186,7 @@ const boundedShellResult = (
     workspaceRef: request.workspaceRef,
     toolName: "run_shell",
     idempotencyKey: operationRef(request.claim),
-    resultHash: hashJson(publicResult),
+    resultHash: await hashJson(publicResult),
     ...(request.toolCallId === undefined ? {} : { toolCallId: request.toolCallId }),
     command,
     cwd,
@@ -186,8 +197,8 @@ const boundedShellResult = (
     stderrBytes: stderr.bytes,
     stdoutTruncated: result.stdoutTruncated || stdout.truncated,
     stderrTruncated: result.stderrTruncated || stderr.truncated,
-    stdoutHash: hashText(result.stdout),
-    stderrHash: hashText(result.stderr),
+    stdoutHash,
+    stderrHash,
     durationMs: result.durationMs,
   });
 };
@@ -230,7 +241,7 @@ export const createWorkspaceOperationLocalProvider = (
               workspaceRef: request.workspaceRef,
               toolName: "write_file",
               idempotencyKey,
-              resultHash: hashJson(publicResult),
+              resultHash: await hashJson(publicResult),
               ...(request.toolCallId === undefined ? {} : { toolCallId: request.toolCallId }),
               path,
               bytesWritten: bytes,
@@ -260,7 +271,7 @@ export const createWorkspaceOperationLocalProvider = (
               workspaceRef: request.workspaceRef,
               toolName: "edit_file",
               idempotencyKey,
-              resultHash: hashJson(publicResult),
+              resultHash: await hashJson(publicResult),
               ...(request.toolCallId === undefined ? {} : { toolCallId: request.toolCallId }),
               path: result.path,
               replacementCount: result.replacementCount,
@@ -285,7 +296,7 @@ export const createWorkspaceOperationLocalProvider = (
               workspaceRef: request.workspaceRef,
               toolName: "delete_path",
               idempotencyKey,
-              resultHash: hashJson(publicResult),
+              resultHash: await hashJson(publicResult),
               ...(request.toolCallId === undefined ? {} : { toolCallId: request.toolCallId }),
               path,
               deleted: true,
@@ -314,7 +325,14 @@ export const createWorkspaceOperationLocalProvider = (
                   : Object.fromEntries(request.envRefs.map((entry) => [entry.name, entry.ref])),
               materialRefs: request.materialRefs,
             });
-            completed = boundedShellResult(request, event.id, command, cwd, result, maxOutputBytes);
+            completed = await boundedShellResult(
+              request,
+              event.id,
+              command,
+              cwd,
+              result,
+              maxOutputBytes,
+            );
             break;
           }
         }

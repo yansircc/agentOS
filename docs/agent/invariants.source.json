@@ -75,6 +75,44 @@
         "scripts/check-doc-structure.mjs",
         "scripts/check-public-api.mjs"
       ]
+    },
+    {
+      "id": "invariant.ag-ui.sse-axis",
+      "statement": "AG-UI owns AG-UI frame/envelope projection, generic SSE owns only codec and Response wrapping, and host packages compose the two without reversing the dependency.",
+      "docs": "docs/concepts/ag-ui-wire-adapter.md",
+      "decisions": [],
+      "tests": [
+        "scripts/check-ag-ui-sse-axis.mjs",
+        "packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"
+      ]
+    },
+    {
+      "id": "invariant.workspace-op.carrier-single-writer",
+      "statement": "Only the workspace-op carrier constructs workspace_op.* terminal payloads; host providers execute requested facts and commit through the carrier boundary capability.",
+      "docs": "docs/packages/workspace-op.md",
+      "decisions": [],
+      "tests": [
+        "packages/carriers/workspace-op/test/workspace-op.test.ts",
+        "packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"
+      ]
+    },
+    {
+      "id": "invariant.workspace-job.host-workspace-lifecycle",
+      "statement": "Cloudflare hosts resolve one provider-neutral WorkspaceEnv lease per scope/runId and keep Sandbox binding validation and cleanup outside product modules.",
+      "docs": "docs/packages/backend-cloudflare-do.md",
+      "decisions": [],
+      "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"]
+    },
+    {
+      "id": "invariant.workspace-job.verified-terminal",
+      "statement": "Workspace job deliverables are terminal projections over finalized bytes; candidate bytes, verifier verdicts, idempotency, and failures flow through one closed pipeline.",
+      "docs": "docs/packages/workspace-job.md",
+      "decisions": [],
+      "tests": [
+        "packages/carriers/workspace-job/test/workspace-job.test.ts",
+        "packages/runtime/test/workspace-job.test.ts",
+        "packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"
+      ]
     }
   ]
 }

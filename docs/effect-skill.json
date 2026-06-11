@@ -62,6 +62,12 @@
         "rules": ["EFF402"]
       },
       {
+        "path": "packages/backends/cloudflare-do/src/workspace-job-facade.ts",
+        "owner": "@agent-os/backend-cloudflare-do/workspace-job-facade",
+        "reason": "terminal Cloudflare workspace-job HTTP facade owns projection response construction while result truth stays in workspace_job.result",
+        "rules": ["EFF402"]
+      },
+      {
         "path": "packages/backends/cloudflare-do/src/ledger/stream.ts",
         "owner": "@agent-os/backend-cloudflare-do",
         "reason": "terminal ledger SSE adapter owns Response construction",
@@ -225,6 +231,12 @@
           "owner": "@agent-os/backend-cloudflare-do/cf-do",
           "reason": "Configured Cloudflare Durable Object facade is the terminal HTTP facade for streamEvents; missing named scope is a runtime invariant violation with no Effect return channel",
           "rules": ["EFF025", "EFF402"]
+        },
+        {
+          "path": "src/workspace-job-facade.ts",
+          "owner": "@agent-os/backend-cloudflare-do/workspace-job-facade",
+          "reason": "terminal Cloudflare workspace-job HTTP facade owns projection response construction while result truth stays in workspace_job.result",
+          "rules": ["EFF402"]
         },
         {
           "path": "src/dispatch/payload.ts",

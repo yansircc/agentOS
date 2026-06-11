@@ -10,6 +10,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../.
 const tsc = path.join(root, "node_modules/.bin/tsc");
 const fixtureDir = path.join(root, "packages/backends/cloudflare-do/test/consumer-fixture");
 const packageLinks = {
+  "ag-ui": "packages/wire-adapters/ag-ui",
   "attached-stream": "packages/composers/attached-stream",
   "backend-cloudflare-do": "packages/backends/cloudflare-do",
   "backend-protocol": "packages/backends/protocol",
@@ -22,6 +23,11 @@ const packageLinks = {
   "sse-http": "packages/transports/sse-http",
   "telemetry-protocol": "packages/telemetry-protocol",
   "turn-stream": "packages/composers/turn-stream",
+  "workspace-env": "packages/execution-domains/workspace-env",
+  "workspace-env-cloudflare": "packages/execution-domains/workspace-env-cloudflare",
+  "workspace-job": "packages/carriers/workspace-job",
+  "workspace-op": "packages/carriers/workspace-op",
+  "workspace-op-local": "packages/providers/workspace-op-local",
 };
 const dependencyLinks = ["@cloudflare", "@effect", "effect"];
 

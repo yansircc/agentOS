@@ -36,6 +36,9 @@ const collectFailures = (root = repoRoot) => {
   if (!/from\s+["']@agent-os\/sse-http["']/.test(agUiSource)) {
     failures.push(`${agUiSourcePath}: AG-UI adapter does not import the SSE transport codec`);
   }
+  if (/from\s+["']@agent-os\/ag-ui["']/.test(sseHttpSource)) {
+    failures.push(`${sseHttpSourcePath}: generic SSE transport must not import AG-UI`);
+  }
   if (agUiPackage.dependencies?.["@agent-os/sse-http"] !== "workspace:*") {
     failures.push(`${agUiPackagePath}: missing @agent-os/sse-http dependency`);
   }
@@ -46,6 +49,15 @@ const collectFailures = (root = repoRoot) => {
   ]) {
     if (!new RegExp(`export (?:async function\\*|const) ${exported}\\b`).test(sseHttpSource)) {
       failures.push(`${sseHttpSourcePath}: missing transport-owned ${exported}`);
+    }
+  }
+  for (const exported of [
+    "encodeAgUiLedgerEventEnvelopeSse",
+    "projectLedgerSseToAgUiEnvelopes",
+    "projectLedgerSseToAgUiSse",
+  ]) {
+    if (!new RegExp(`export (?:async function\\*|const) ${exported}\\b`).test(agUiSource)) {
+      failures.push(`${agUiSourcePath}: missing AG-UI-owned ${exported}`);
     }
   }
   return failures;
@@ -63,6 +75,9 @@ const writePositiveFixture = (root) => {
     agUiSourcePath,
     `import { decodeSseHttpEvents, encodeSseHttpJsonEvent } from "@agent-os/sse-http";
 export const encodeAgUi = (value) => encodeSseHttpJsonEvent("ag_ui", value);
+export const encodeAgUiLedgerEventEnvelopeSse = (value) => encodeSseHttpJsonEvent("ag_ui", value);
+export async function* projectLedgerSseToAgUiEnvelopes(chunks) { yield* project(chunks); }
+export async function* projectLedgerSseToAgUiSse(chunks) { yield* project(chunks); }
 export async function* project(chunks) {
   for await (const parsed of decodeSseHttpEvents(chunks)) {
     if (parsed.event !== "ledger") continue;

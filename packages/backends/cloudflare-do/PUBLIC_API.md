@@ -28,6 +28,17 @@ Status: Backend package. Public exports include the Cloudflare app facade, bindi
 - `.:CloudflareAttachedStreamFactory`
 - `.:CloudflareAttachedStreamFactoryContext`
 - `.:CloudflareAttachedStreamSource`
+- `.:CloudflareWorkspaceEnvBinding`
+- `.:CloudflareWorkspaceEnvLease`
+- `.:CloudflareWorkspaceEnvResolver`
+- `.:CloudflareWorkspaceEnvResolverError`
+- `.:CloudflareWorkspaceEnvResolverInput`
+- `.:CloudflareWorkspaceEnvResolverOptions`
+- `.:CloudflareWorkspaceJobProjectionReader`
+- `.:CloudflareWorkspaceJobResponseOptions`
+- `.:CloudflareWorkspaceOperationInstall`
+- `.:CloudflareWorkspaceOperationInstallContext`
+- `.:CloudflareWorkspaceOperationProviderHandlers`
 - `.:CloudflareTriggerFactory`
 - `.:CloudflareTriggerFactoryContext`
 - `.:CloudflareTriggerSource`
@@ -38,6 +49,7 @@ Status: Backend package. Public exports include the Cloudflare app facade, bindi
 - `.:DispatchTargetRegistry`
 - `.:GeminiGenerateContentSpec`
 - `.:HttpDispatchTargetSpec`
+- `.:InstallCloudflareWorkspaceOperationProviderOptions`
 - `.:LoweredMaterialBindings`
 - `.:OpenAIChatSpec`
 - `.:ProviderDispatchTargetSpec`
@@ -47,6 +59,10 @@ Status: Backend package. Public exports include the Cloudflare app facade, bindi
 - `.:cloudflareAgentMountPort`
 - `.:credential`
 - `.:createAgentDurableObject`
+- `.:createCloudflareLedgerAgUiHistorySseResponse`
+- `.:createCloudflareLedgerAgUiSseResponse`
+- `.:createCloudflareWorkspaceJobResponse`
+- `.:createCloudflareWorkspaceEnvResolver`
 - `.:defineAgentDO`
 - `.:durableObjectDispatchTarget`
 - `.:durableObjectTarget`
@@ -54,6 +70,7 @@ Status: Backend package. Public exports include the Cloudflare app facade, bindi
 - `.:externalResource`
 - `.:geminiGenerateContent`
 - `.:httpDispatchTarget`
+- `.:installCloudflareWorkspaceOperationProvider`
 - `.:lowerMaterialBindings`
 - `.:mountCloudflareAgent`
 - `.:openAIChat`

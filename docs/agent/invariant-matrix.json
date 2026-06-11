@@ -239,6 +239,63 @@
         "decisions/a52-documentation-substrate.md",
         "decisions/a53-tsdoc-api-reference.md"
       ]
+    },
+    {
+      "invariant": "invariant.ag-ui.sse-axis",
+      "statement": "AG-UI owns AG-UI frame/envelope projection, generic SSE owns only codec and Response wrapping, and host packages compose the two without reversing the dependency.",
+      "primitives": [
+        "primitive.cloudflare-do.createCloudflareLedgerAgUiHistorySseResponse",
+        "primitive.cloudflare-do.createCloudflareLedgerAgUiSseResponse"
+      ],
+      "errors": [],
+      "docs": ["docs/concepts/ag-ui-wire-adapter.md", "docs/packages/backend-cloudflare-do.md"],
+      "tests": [
+        "scripts/check-ag-ui-sse-axis.mjs",
+        "packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"
+      ],
+      "decisions": []
+    },
+    {
+      "invariant": "invariant.workspace-op.carrier-single-writer",
+      "statement": "Only the workspace-op carrier constructs workspace_op.* terminal payloads; host providers execute requested facts and commit through the carrier boundary capability.",
+      "primitives": ["primitive.cloudflare-do.installCloudflareWorkspaceOperationProvider"],
+      "errors": [],
+      "docs": ["docs/packages/backend-cloudflare-do.md", "docs/packages/workspace-op.md"],
+      "tests": [
+        "packages/carriers/workspace-op/test/workspace-op.test.ts",
+        "packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"
+      ],
+      "decisions": []
+    },
+    {
+      "invariant": "invariant.workspace-job.host-workspace-lifecycle",
+      "statement": "Cloudflare hosts resolve one provider-neutral WorkspaceEnv lease per scope/runId and keep Sandbox binding validation and cleanup outside product modules.",
+      "primitives": ["primitive.cloudflare-do.createCloudflareWorkspaceEnvResolver"],
+      "errors": [],
+      "docs": ["docs/packages/backend-cloudflare-do.md"],
+      "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"],
+      "decisions": []
+    },
+    {
+      "invariant": "invariant.workspace-job.verified-terminal",
+      "statement": "Workspace job deliverables are terminal projections over finalized bytes; candidate bytes, verifier verdicts, idempotency, and failures flow through one closed pipeline.",
+      "primitives": [
+        "primitive.cloudflare-do.createCloudflareWorkspaceJobResponse",
+        "primitive.runtime.runWorkspaceJobEffect"
+      ],
+      "errors": [
+        "agent_os.workspace_job_candidate_missing",
+        "agent_os.workspace_job_data_plane_failed",
+        "agent_os.workspace_job_run_id_mismatch",
+        "agent_os.workspace_job_verifier_failed"
+      ],
+      "docs": ["docs/packages/backend-cloudflare-do.md", "docs/packages/workspace-job.md"],
+      "tests": [
+        "packages/carriers/workspace-job/test/workspace-job.test.ts",
+        "packages/runtime/test/workspace-job.test.ts",
+        "packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"
+      ],
+      "decisions": []
     }
   ]
 }
