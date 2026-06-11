@@ -7,14 +7,17 @@
 - `.:AgUiCustomFrame`
 - `.:AgUiEventType`
 - `.:AgUiFrame`
-- `.:AgUiFrameProjection`
-- `.:AgUiFrameStore`
 - `.:AgUiActivity`
-- `.:AgUiFrameMapper`
+- `.:AgUiFrameProjection`
+- `.:AgUiFrameSafetyIssue`
+- `.:AgUiFrameSafetySpec`
+- `.:AgUiFrameStore`
 - `.:AgUiLedgerEnvelopeFrame`
 - `.:AgUiLedgerEnvelopeProjectionSpec`
 - `.:AgUiLedgerEventEnvelope`
 - `.:AgUiLedgerProjectionSpec`
+- `.:AgUiSafeLedgerEvent`
+- `.:AgUiSafeValue`
 - `.:AgUiSseChunk`
 - `.:AgUiContextSchema`
 - `.:AgUiMessageRole`
@@ -56,7 +59,7 @@
 - `.:projectRuntimeEventToAgUiFrames`
 - `.:projectToolToAgUiTool`
 - `.:projectToolsToAgUiTools`
-- `.:redactAgUiToolPayloadFrame`
+- `.:verifyAgUiFrameSafety`
 
 ## Experimental exports
 

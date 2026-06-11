@@ -11,14 +11,17 @@ title: "@agent-os/ag-ui Public API Intent"
 - `.:AgUiCustomFrame`
 - `.:AgUiEventType`
 - `.:AgUiFrame`
-- `.:AgUiFrameProjection`
-- `.:AgUiFrameStore`
 - `.:AgUiActivity`
-- `.:AgUiFrameMapper`
+- `.:AgUiFrameProjection`
+- `.:AgUiFrameSafetyIssue`
+- `.:AgUiFrameSafetySpec`
+- `.:AgUiFrameStore`
 - `.:AgUiLedgerEnvelopeFrame`
 - `.:AgUiLedgerEnvelopeProjectionSpec`
 - `.:AgUiLedgerEventEnvelope`
 - `.:AgUiLedgerProjectionSpec`
+- `.:AgUiSafeLedgerEvent`
+- `.:AgUiSafeValue`
 - `.:AgUiSseChunk`
 - `.:AgUiContextSchema`
 - `.:AgUiMessageRole`
@@ -60,7 +63,7 @@ title: "@agent-os/ag-ui Public API Intent"
 - `.:projectRuntimeEventToAgUiFrames`
 - `.:projectToolToAgUiTool`
 - `.:projectToolsToAgUiTools`
-- `.:redactAgUiToolPayloadFrame`
+- `.:verifyAgUiFrameSafety`
 
 ## Experimental exports
 

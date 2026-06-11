@@ -13,7 +13,8 @@ code sources and drifts from the ledger/runtime algebra.
 
 Decoded agentOS runtime events are the source for run frames. AG-UI frames are
 derived projections and are never written back to the ledger. Product-owned
-events can appear only through explicit `CUSTOM` extension projectors.
+events can appear only through explicit `CUSTOM` extension projectors that
+receive the package-owned safe ledger-event view, not the raw ledger event.
 
 AG-UI tool declarations are generated from `AgentSchema.projections.agUi`.
 AG-UI tool JSON Schema never creates `Tool.execution`, admission policy, quota,
@@ -35,12 +36,12 @@ ledger payloads.
 | `agent.run.started.id`           | `RUN_STARTED.runId`                                  |
 | runtime event `scope`            | `RUN_STARTED.threadId` unless caller overrides       |
 | `llm.response.items.message`     | `TEXT_MESSAGE_*`                                     |
-| `llm.response.items.tool_call`   | `TOOL_CALL_START`, `TOOL_CALL_ARGS`, `TOOL_CALL_END` |
+| `llm.response.items.tool_call`   | `TOOL_CALL_START`, summarized `TOOL_CALL_ARGS`, `TOOL_CALL_END` |
 | `llm.response.usage`             | `CUSTOM: agent-os.llm.usage`                         |
-| `tool.executed.result`           | `TOOL_CALL_RESULT.content`                           |
+| `tool.executed.result`           | summarized `TOOL_CALL_RESULT.content`                |
 | `agent.run.completed`            | `RUN_FINISHED`                                       |
 | `agent.aborted.*`                | `RUN_ERROR`                                          |
-| product/runtime extension events | explicit `CUSTOM` projector output                   |
+| product/runtime extension events | explicit safe `CUSTOM` projector output              |
 
 ### Redaction
 
@@ -48,9 +49,11 @@ AG-UI frames omit provider URLs, credentials, provider-native metadata, resolved
 material values, file bytes, and raw ledger payloads. Reasoning metadata is not
 forwarded; only an explicit `summaryRef` or a redacted marker is projected.
 
-Tool arguments and tool results are retained because AG-UI has native tool-call
-frames for them. A product that needs stronger redaction must redact at the
-tool/result owner before exposing the frame stream.
+Tool arguments, tool results, run input, and run output are projected as
+redacted summaries by default. The package also exposes
+`verifyAgUiFrameSafety()` as regression evidence for fixture-owned forbidden
+literals and patterns, but egress safety comes from the allow-list mappers, not
+from deny-list scanning.
 
 ### Compatibility Contract
 

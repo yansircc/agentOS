@@ -1,10 +1,5 @@
 import { Schema } from "effect";
-import {
-  scopeRefKey,
-  type AuthorityRef,
-  type FactOwnerRef,
-  type ScopeRef,
-} from "@agent-os/kernel/effect-claim";
+import { scopeRefKey } from "@agent-os/kernel/effect-claim";
 import type { Tool } from "@agent-os/kernel/tools";
 import { decodeLedgerEvent, type LedgerEvent } from "@agent-os/kernel/types";
 import type { SubmitSpec } from "@agent-os/runtime-protocol";
@@ -44,6 +39,14 @@ type BaseAgUiFrame<T extends AgUiEventType> = {
   readonly type: T;
   readonly timestamp?: number;
 };
+
+export type AgUiSafeValue =
+  | null
+  | boolean
+  | number
+  | string
+  | ReadonlyArray<AgUiSafeValue>
+  | { readonly [key: string]: AgUiSafeValue };
 
 export type AgUiMessageRole =
   | "developer"
@@ -146,13 +149,12 @@ export type AgUiRunStartedFrame = BaseAgUiFrame<"RUN_STARTED"> & {
   readonly threadId: string;
   readonly runId: string;
   readonly parentRunId?: string;
-  readonly input?: AgUiRunAgentInput;
 };
 
 export type AgUiRunFinishedFrame = BaseAgUiFrame<"RUN_FINISHED"> & {
   readonly threadId: string;
   readonly runId: string;
-  readonly result?: unknown;
+  readonly result?: AgUiSafeValue;
   readonly outcome?: { readonly type: "success" };
 };
 
@@ -211,7 +213,7 @@ export type AgUiReasoningFrame =
 
 export type AgUiCustomFrame = BaseAgUiFrame<"CUSTOM"> & {
   readonly name: string;
-  readonly value: unknown;
+  readonly value: AgUiSafeValue;
 };
 
 export type AgUiFrame =
@@ -231,14 +233,19 @@ export type AgUiFrame =
 export type AgUiRuntimeProjectionSpec = {
   readonly threadId?: string;
   readonly parentRunId?: string;
-  readonly includeRunInput?: boolean;
-  readonly inputForRun?: (
-    event: RuntimeLedgerEventByKind<"agent.run.started">,
-  ) => AgUiRunAgentInput;
+};
+
+export type AgUiSafeLedgerEvent = {
+  readonly id: number;
+  readonly ts: number;
+  readonly kind: string;
+  readonly scopeKey: string;
 };
 
 export type AgUiLedgerProjectionSpec = AgUiRuntimeProjectionSpec & {
-  readonly projectExtensionEvent?: (event: LedgerEvent) => ReadonlyArray<AgUiCustomFrame>;
+  readonly projectSafeExtensionEvent?: (
+    event: AgUiSafeLedgerEvent,
+  ) => ReadonlyArray<AgUiCustomFrame>;
 };
 
 export type AgUiSubmitDefaults = Omit<SubmitSpec, "intent" | "context"> & {
@@ -275,23 +282,13 @@ export type AgUiFrameStore = {
   readonly reset: (frames?: Iterable<AgUiFrame>) => void;
 };
 
-export type AgUiFrameMapper = (
-  frame: AgUiFrame,
-  event: LedgerEvent,
-) => AgUiFrame | null | undefined;
-
-export type AgUiLedgerEnvelopeProjectionSpec = AgUiLedgerProjectionSpec & {
-  readonly mapFrame?: AgUiFrameMapper;
-};
+export type AgUiLedgerEnvelopeProjectionSpec = AgUiLedgerProjectionSpec;
 
 export type AgUiLedgerEventEnvelope = {
   readonly id: number;
   readonly ts: number;
   readonly kind: string;
-  readonly scopeRef: ScopeRef;
   readonly scopeKey: string;
-  readonly factOwnerRef: FactOwnerRef;
-  readonly effectAuthorityRef: AuthorityRef;
   readonly agUiFrames: ReadonlyArray<AgUiFrame>;
 };
 
@@ -299,7 +296,6 @@ export type AgUiLedgerEnvelopeFrame = {
   readonly eventId: number;
   readonly eventTs: number;
   readonly eventKind: string;
-  readonly eventScopeRef: ScopeRef;
   readonly eventScopeKey: string;
   readonly frame: AgUiFrame;
 };
@@ -314,7 +310,7 @@ export type AgUiActivity =
       readonly at?: number;
       readonly message?: string;
       readonly code?: string;
-      readonly result?: unknown;
+      readonly result?: AgUiSafeValue;
     }
   | {
       readonly kind: "message";
@@ -349,7 +345,7 @@ export type AgUiActivity =
       readonly kind: "custom";
       readonly id: string;
       readonly name: string;
-      readonly value: unknown;
+      readonly value: AgUiSafeValue;
       readonly at?: number;
     };
 
@@ -365,10 +361,80 @@ const reasoningIdFor = (runId: number, turnIndex: number, ordinal: number): stri
 const toolResultMessageIdFor = (runId: number, toolCallId: string): string =>
   `agent-os:run:${runId}:tool-result:${toolCallId}`;
 
-const stringifyWireValue = (value: unknown): string => {
-  if (typeof value === "string") return value;
-  const encoded = JSON.stringify(value);
-  return encoded === undefined ? String(value) : encoded;
+const bytesOf = (value: string): number => new TextEncoder().encode(value).byteLength;
+
+const sortedOwnKeys = (value: Record<string, unknown>): ReadonlyArray<string> =>
+  Object.keys(value).sort((left, right) => left.localeCompare(right));
+
+const valueTypeOf = (value: unknown): string => {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "array";
+  return typeof value;
+};
+
+const redactedSummary = (
+  value: unknown,
+  reason: "tool_arguments" | "tool_result" | "run_output" | "run_input" | "provider_error",
+): AgUiSafeValue => {
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      return redactedSummary(parsed, reason);
+    } catch {
+      return {
+        redacted: true,
+        reason,
+        type: "string",
+        bytes: bytesOf(value),
+      };
+    }
+  }
+
+  if (Array.isArray(value)) {
+    return {
+      redacted: true,
+      reason,
+      type: "array",
+      items: value.length,
+    };
+  }
+
+  if (value !== null && typeof value === "object") {
+    return {
+      redacted: true,
+      reason,
+      type: "object",
+      keys: sortedOwnKeys(value as Record<string, unknown>),
+    };
+  }
+
+  return {
+    redacted: true,
+    reason,
+    type: valueTypeOf(value),
+  };
+};
+
+const redactedSummaryText = (
+  value: unknown,
+  reason: "tool_arguments" | "tool_result" | "run_output" | "run_input" | "provider_error",
+): string => JSON.stringify(redactedSummary(value, reason));
+
+const safeExtensionEventFor = (event: LedgerEvent): AgUiSafeLedgerEvent => ({
+  id: event.id,
+  ts: event.ts,
+  kind: event.kind,
+  scopeKey: scopeRefKey(event.scopeRef),
+});
+
+const isSafeRuntimeCustomValue = (value: AgUiSafeValue): AgUiSafeValue => value;
+
+const projectSafeToolArgs = (value: unknown): string => {
+  return redactedSummaryText(value, "tool_arguments");
+};
+
+const projectSafeToolResult = (value: unknown): string => {
+  return redactedSummaryText(value, "tool_result");
 };
 
 const latestUserText = (messages: ReadonlyArray<AgUiMessage>): string => {
@@ -498,7 +564,7 @@ const projectLlmResponse = (
           type: "TOOL_CALL_ARGS",
           timestamp: event.ts,
           toolCallId: item.call.id,
-          delta: item.call.function.arguments,
+          delta: projectSafeToolArgs(item.call.function.arguments),
         },
         {
           type: "TOOL_CALL_END",
@@ -515,7 +581,7 @@ const projectLlmResponse = (
         timestamp: event.ts,
         messageId: toolResultMessageIdFor(event.payload.turn.id, item.callId),
         toolCallId: item.callId,
-        content: item.content,
+        content: projectSafeToolResult(item.content),
         role: "tool",
       });
       continue;
@@ -549,18 +615,19 @@ const projectLlmResponse = (
         type: "CUSTOM",
         timestamp: event.ts,
         name: `agent-os.llm.${item.type}`,
-        value:
+        value: isSafeRuntimeCustomValue(
           item.type === "refusal"
             ? {
                 runId: event.payload.turn.id,
                 turnIndex: event.payload.turn.index,
-                reason: item.reason,
+                refusal: redactedSummary(item.reason, "provider_error"),
               }
             : {
                 runId: event.payload.turn.id,
                 turnIndex: event.payload.turn.index,
-                message: item.message,
+                error: redactedSummary(item.message, "provider_error"),
               },
+        ),
       });
     }
   }
@@ -572,7 +639,11 @@ const projectLlmResponse = (
     value: {
       runId: event.payload.turn.id,
       turnIndex: event.payload.turn.index,
-      usage: event.payload.usage,
+      usage: {
+        promptTokens: event.payload.usage.promptTokens,
+        completionTokens: event.payload.usage.completionTokens,
+        totalTokens: event.payload.usage.totalTokens,
+      },
     },
   });
   return frames;
@@ -584,7 +655,6 @@ export const projectRuntimeEventToAgUiFrames = (
 ): ReadonlyArray<AgUiFrame> => {
   switch (event.kind) {
     case RUNTIME_EVENT_KIND.AGENT_RUN_STARTED: {
-      const input = spec.inputForRun?.(event);
       return [
         {
           type: "RUN_STARTED",
@@ -592,7 +662,6 @@ export const projectRuntimeEventToAgUiFrames = (
           threadId: threadIdFor(event, spec),
           runId: String(event.id),
           ...(spec.parentRunId === undefined ? {} : { parentRunId: spec.parentRunId }),
-          ...(spec.includeRunInput === true && input !== undefined ? { input } : {}),
         },
       ];
     }
@@ -604,7 +673,7 @@ export const projectRuntimeEventToAgUiFrames = (
           name: "agent-os.chat.ingested",
           value: {
             runId: event.payload.runId,
-            intent: event.payload.intent,
+            intent: redactedSummary(event.payload.intent, "run_input"),
           },
         },
       ];
@@ -616,10 +685,10 @@ export const projectRuntimeEventToAgUiFrames = (
           name: "agent-os.run.interrupted",
           value: {
             runId: event.payload.runId,
-            turn: event.payload.turn,
+            turnIndex: event.payload.turn.index,
             interruptId: event.payload.interruptId,
             reason: event.payload.reason,
-            resumeSchema: event.payload.resumeSchema,
+            hasResumeSchema: true,
             tokensUsed: event.payload.tokensUsed,
           },
         },
@@ -632,7 +701,7 @@ export const projectRuntimeEventToAgUiFrames = (
           name: "agent-os.run.resumed",
           value: {
             runId: event.payload.runId,
-            turn: event.payload.turn,
+            turnIndex: event.payload.turn.index,
             interruptId: event.payload.interruptId,
             resumedAtEventId: event.payload.resumedAtEventId,
           },
@@ -647,7 +716,7 @@ export const projectRuntimeEventToAgUiFrames = (
           timestamp: event.ts,
           messageId: toolResultMessageIdFor(event.payload.runId, event.payload.toolCallId),
           toolCallId: event.payload.toolCallId,
-          content: stringifyWireValue(event.payload.result),
+          content: projectSafeToolResult(event.payload.result),
           role: "tool",
         },
       ];
@@ -670,8 +739,8 @@ export const projectRuntimeEventToAgUiFrames = (
           threadId: threadIdFor(event, spec),
           runId: String(event.payload.runId),
           result: {
-            final: event.payload.final,
-            output: event.payload.output,
+            final: redactedSummary(event.payload.final, "run_output"),
+            output: redactedSummary(event.payload.output, "run_output"),
             outputKind: event.payload.outputKind,
             tokensUsed: event.payload.tokensUsed,
           },
@@ -706,32 +775,9 @@ export const projectLedgerEventsToAgUiFrames = (
       frames.push(...projectRuntimeEventToAgUiFrames(decoded.event, spec));
       continue;
     }
-    frames.push(...(spec.projectExtensionEvent?.(decoded.event) ?? []));
+    frames.push(...(spec.projectSafeExtensionEvent?.(safeExtensionEventFor(decoded.event)) ?? []));
   }
   return frames;
-};
-
-export const redactAgUiToolPayloadFrame = (
-  frame: AgUiFrame,
-  replacement = "[redacted]",
-): AgUiFrame => {
-  if (frame.type === "TOOL_CALL_ARGS") return { ...frame, delta: replacement };
-  if (frame.type === "TOOL_CALL_RESULT") return { ...frame, content: replacement };
-  return frame;
-};
-
-const mapEnvelopeFrames = (
-  event: LedgerEvent,
-  frames: ReadonlyArray<AgUiFrame>,
-  mapFrame: AgUiFrameMapper | undefined,
-): ReadonlyArray<AgUiFrame> => {
-  if (mapFrame === undefined) return frames;
-  const mapped: AgUiFrame[] = [];
-  for (const frame of frames) {
-    const next = mapFrame(frame, event);
-    if (next !== null && next !== undefined) mapped.push(next);
-  }
-  return mapped;
 };
 
 /**
@@ -751,11 +797,8 @@ export const projectLedgerEventToAgUiEnvelope = (
     id: event.id,
     ts: event.ts,
     kind: event.kind,
-    scopeRef: event.scopeRef,
     scopeKey: scopeRefKey(event.scopeRef),
-    factOwnerRef: event.factOwnerRef,
-    effectAuthorityRef: event.effectAuthorityRef,
-    agUiFrames: mapEnvelopeFrames(event, agUiFrames, spec.mapFrame),
+    agUiFrames,
   };
 };
 
@@ -779,7 +822,6 @@ export const framesForAgUiLedgerEnvelope = (
     eventId: envelope.id,
     eventTs: envelope.ts,
     eventKind: envelope.kind,
-    eventScopeRef: envelope.scopeRef,
     eventScopeKey: envelope.scopeKey,
     frame,
   }));
@@ -787,6 +829,70 @@ export const framesForAgUiLedgerEnvelope = (
 export const framesForAgUiLedgerEnvelopes = (
   envelopes: ReadonlyArray<AgUiLedgerEventEnvelope>,
 ): ReadonlyArray<AgUiLedgerEnvelopeFrame> => envelopes.flatMap(framesForAgUiLedgerEnvelope);
+
+export type AgUiFrameSafetyIssue = {
+  readonly kind: "literal" | "pattern";
+  readonly frameIndex: number;
+  readonly path: string;
+  readonly match: string;
+};
+
+export type AgUiFrameSafetySpec = {
+  readonly forbiddenLiterals?: ReadonlyArray<string>;
+  readonly forbiddenPatterns?: ReadonlyArray<RegExp>;
+};
+
+const visitFrameValue = (
+  value: unknown,
+  path: string,
+  visit: (value: unknown, path: string) => void,
+): void => {
+  visit(value, path);
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => visitFrameValue(item, `${path}[${index}]`, visit));
+    return;
+  }
+  if (value !== null && typeof value === "object") {
+    for (const [key, item] of Object.entries(value)) {
+      visitFrameValue(item, `${path}.${key}`, visit);
+    }
+  }
+};
+
+/**
+ * Regression verifier for fixture-owned forbidden values.
+ *
+ * Projection safety is provided by package-owned allow-list mappers above. This
+ * scanner is intentionally secondary evidence: it catches regressions in tests
+ * and fixtures, but it is not the source of the egress invariant.
+ *
+ * @public
+ */
+export const verifyAgUiFrameSafety = (
+  frames: ReadonlyArray<AgUiFrame>,
+  spec: AgUiFrameSafetySpec = {},
+): ReadonlyArray<AgUiFrameSafetyIssue> => {
+  const literals = spec.forbiddenLiterals ?? [];
+  const patterns = spec.forbiddenPatterns ?? [];
+  const issues: AgUiFrameSafetyIssue[] = [];
+  frames.forEach((frame, frameIndex) => {
+    visitFrameValue(frame, "$", (value, path) => {
+      if (typeof value !== "string") return;
+      for (const literal of literals) {
+        if (literal.length > 0 && value.includes(literal)) {
+          issues.push({ kind: "literal", frameIndex, path, match: literal });
+        }
+      }
+      for (const pattern of patterns) {
+        pattern.lastIndex = 0;
+        if (pattern.test(value)) {
+          issues.push({ kind: "pattern", frameIndex, path, match: pattern.source });
+        }
+      }
+    });
+  });
+  return issues;
+};
 
 export const encodeAgUiLedgerEventEnvelopeSse = (
   envelope: AgUiLedgerEventEnvelope,

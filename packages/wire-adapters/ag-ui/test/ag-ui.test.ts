@@ -30,10 +30,10 @@ import {
   projectLedgerSseToAgUiEnvelopes,
   projectLedgerSseToAgUiSse,
   projectToolToAgUiTool,
-  redactAgUiToolPayloadFrame,
-  type AgUiActivity,
+  verifyAgUiFrameSafety,
   type AgUiFrame,
   type AgUiRunAgentInput,
+  type AgUiSafeValue,
 } from "../src/index";
 
 const scope = "ag-ui-test";
@@ -149,6 +149,16 @@ async function* chunksOf(text: string): AsyncGenerator<Uint8Array> {
   yield new TextEncoder().encode(text);
 }
 
+const summary = (
+  reason: "tool_arguments" | "tool_result" | "run_output" | "run_input",
+  extra: Readonly<Record<string, AgUiSafeValue>>,
+): AgUiSafeValue => ({ redacted: true, reason, ...extra });
+
+const summaryText = (
+  reason: "tool_arguments" | "tool_result" | "run_output" | "run_input",
+  extra: Readonly<Record<string, AgUiSafeValue>>,
+): string => JSON.stringify(summary(reason, extra));
+
 describe("@agent-os/ag-ui", () => {
   it("records the pinned AG-UI wire compatibility contract", () => {
     expect(AG_UI_WIRE_COMPATIBILITY).toEqual({
@@ -191,7 +201,7 @@ describe("@agent-os/ag-ui", () => {
         type: "CUSTOM",
         timestamp: 20,
         name: "agent-os.chat.ingested",
-        value: { runId: 1, intent: "find weather" },
+        value: { runId: 1, intent: summary("run_input", { type: "string", bytes: 12 }) },
       },
       {
         type: "TEXT_MESSAGE_START",
@@ -246,7 +256,7 @@ describe("@agent-os/ag-ui", () => {
         type: "TOOL_CALL_ARGS",
         timestamp: 30,
         toolCallId: "call-1",
-        delta: '{"city":"SF"}',
+        delta: summaryText("tool_arguments", { type: "object", keys: ["city"] }),
       },
       {
         type: "TOOL_CALL_END",
@@ -268,7 +278,7 @@ describe("@agent-os/ag-ui", () => {
         timestamp: 40,
         messageId: "agent-os:run:1:tool-result:call-1",
         toolCallId: "call-1",
-        content: '{"temperature":71}',
+        content: summaryText("tool_result", { type: "object", keys: ["temperature"] }),
         role: "tool",
       },
       {
@@ -277,8 +287,8 @@ describe("@agent-os/ag-ui", () => {
         threadId: "thread-1",
         runId: "1",
         result: {
-          final: "Done.",
-          output: "Done.",
+          final: summary("run_output", { type: "string", bytes: 5 }),
+          output: summary("run_output", { type: "string", bytes: 5 }),
           outputKind: "text",
           tokensUsed: 18,
         },
@@ -287,6 +297,8 @@ describe("@agent-os/ag-ui", () => {
     ]);
     expect(JSON.stringify(frames)).not.toContain("provider.invalid");
     expect(JSON.stringify(frames)).not.toContain("secret-token");
+    expect(JSON.stringify(frames)).not.toContain('"city":"SF"');
+    expect(JSON.stringify(frames)).not.toContain('"temperature":71');
     expect(projectAgUiFrames(frames)).toEqual({
       runId: "1",
       threadId: "thread-1",
@@ -303,8 +315,8 @@ describe("@agent-os/ag-ui", () => {
         {
           toolCallId: "call-1",
           name: "lookup",
-          args: '{"city":"SF"}',
-          result: '{"temperature":71}',
+          args: summaryText("tool_arguments", { type: "object", keys: ["city"] }),
+          result: summaryText("tool_result", { type: "object", keys: ["temperature"] }),
         },
       ],
       custom: [
@@ -312,7 +324,7 @@ describe("@agent-os/ag-ui", () => {
           type: "CUSTOM",
           timestamp: 20,
           name: "agent-os.chat.ingested",
-          value: { runId: 1, intent: "find weather" },
+          value: { runId: 1, intent: summary("run_input", { type: "string", bytes: 12 }) },
         },
         {
           type: "CUSTOM",
@@ -328,22 +340,23 @@ describe("@agent-os/ag-ui", () => {
     });
   });
 
-  it("projects a decoded ledger row into an AG-UI envelope with optional frame redaction", () => {
+  it("projects a decoded ledger row into an AG-UI envelope without raw ledger metadata", () => {
     const event = transcript()[2]!;
-    const envelope = projectLedgerEventToAgUiEnvelope(event, {
-      mapFrame: (frame) => redactAgUiToolPayloadFrame(frame, "[hidden]"),
-    });
+    const envelope = projectLedgerEventToAgUiEnvelope(event);
     expect(envelope).toMatchObject({
       id: 3,
       ts: 30,
       kind: "llm.response",
       scopeKey: "conversation:ag-ui-test",
     });
+    expect(envelope).not.toHaveProperty("scopeRef");
+    expect(envelope).not.toHaveProperty("factOwnerRef");
+    expect(envelope).not.toHaveProperty("effectAuthorityRef");
     expect(envelope.agUiFrames).toContainEqual({
       type: "TOOL_CALL_ARGS",
       timestamp: 30,
       toolCallId: "call-1",
-      delta: "[hidden]",
+      delta: summaryText("tool_arguments", { type: "object", keys: ["city"] }),
     });
     expect(framesForAgUiLedgerEnvelope(envelope).at(0)).toMatchObject({
       eventId: 3,
@@ -351,6 +364,7 @@ describe("@agent-os/ag-ui", () => {
       eventKind: "llm.response",
       eventScopeKey: "conversation:ag-ui-test",
     });
+    expect(framesForAgUiLedgerEnvelope(envelope).at(0)).not.toHaveProperty("eventScopeRef");
 
     const decoded = decodeLedgerEventToAgUiEnvelope({
       id: event.id,
@@ -362,6 +376,7 @@ describe("@agent-os/ag-ui", () => {
       payload: event.payload,
     });
     expect(decoded.agUiFrames.length).toBeGreaterThan(0);
+    expect(JSON.stringify(decoded)).not.toContain("secret-token");
     expect(() => decodeLedgerEventToAgUiEnvelope({ id: "3", payload: {} })).toThrow();
   });
 
@@ -391,7 +406,7 @@ describe("@agent-os/ag-ui", () => {
       projectLedgerEventsToAgUiFrames(transcript(), { threadId: "thread-1" }),
     );
     expect(activities).toEqual(
-      expect.arrayContaining<AgUiActivity>([
+      expect.arrayContaining([
         {
           kind: "message",
           id: "agent-os:run:1:turn:0:message:0",
@@ -406,8 +421,8 @@ describe("@agent-os/ag-ui", () => {
           id: "call-1",
           toolCallId: "call-1",
           name: "lookup",
-          args: '{"city":"SF"}',
-          result: '{"temperature":71}',
+          args: summaryText("tool_arguments", { type: "object", keys: ["city"] }),
+          result: summaryText("tool_result", { type: "object", keys: ["temperature"] }),
           status: "completed",
           startedAt: 30,
           updatedAt: 40,
@@ -457,7 +472,7 @@ describe("@agent-os/ag-ui", () => {
     ).toThrow();
   });
 
-  it("projects product events only through explicit custom extension mapping", () => {
+  it("projects product events only through explicit safe custom extension mapping", () => {
     const frames = projectLedgerEventsToAgUiFrames(
       [
         {
@@ -469,7 +484,7 @@ describe("@agent-os/ag-ui", () => {
         },
       ],
       {
-        projectExtensionEvent: (event) => [
+        projectSafeExtensionEvent: (event) => [
           {
             type: "CUSTOM",
             timestamp: event.ts,
@@ -488,6 +503,36 @@ describe("@agent-os/ag-ui", () => {
       },
     ]);
     expect(JSON.stringify(frames)).not.toContain("not exposed");
+  });
+
+  it("verifies fixture-owned forbidden literals as regression evidence only", () => {
+    const frames = projectLedgerEventsToAgUiFrames(transcript(), { threadId: "thread-1" });
+    expect(
+      verifyAgUiFrameSafety(frames, {
+        forbiddenLiterals: ["secret-token", '"city":"SF"', '"temperature":71'],
+        forbiddenPatterns: [/provider\.invalid/u],
+      }),
+    ).toEqual([]);
+    expect(
+      verifyAgUiFrameSafety(
+        [
+          {
+            type: "TOOL_CALL_RESULT",
+            messageId: "result-1",
+            toolCallId: "call-1",
+            content: "secret-token",
+          },
+        ],
+        { forbiddenLiterals: ["secret-token"] },
+      ),
+    ).toEqual([
+      {
+        kind: "literal",
+        frameIndex: 0,
+        path: "$.content",
+        match: "secret-token",
+      },
+    ]);
   });
 
   it("maps AG-UI RunAgentInput into submit without accepting AG-UI tools as source truth", () => {
@@ -640,10 +685,10 @@ describe("@agent-os/ag-ui", () => {
         name: "agent-os.run.interrupted",
         value: {
           runId: 1,
-          turn: { id: 1, index: 0 },
+          turnIndex: 0,
           interruptId: "approval-1",
           reason: "decision_required",
-          resumeSchema: { type: "object", required: ["approved"] },
+          hasResumeSchema: true,
           tokensUsed: 5,
         },
       },
@@ -653,7 +698,7 @@ describe("@agent-os/ag-ui", () => {
         name: "agent-os.run.resumed",
         value: {
           runId: 1,
-          turn: { id: 1, index: 0 },
+          turnIndex: 0,
           interruptId: "approval-1",
           resumedAtEventId: 2,
         },
