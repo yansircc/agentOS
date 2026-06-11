@@ -23,6 +23,18 @@ git diff --check
 intent validation, typecheck, and package tests. The explicit commands are
 still useful when isolating failures.
 
+## Release Gate
+
+```sh
+bun run check:release
+bun run check:full
+```
+
+`bun run check:release` adds internal package distribution validation to the
+standard gate. Use it before publishing or when changing package exports,
+release metadata, or distribution tooling. `bun run check:full` adds the docs
+site build and runtime harnesses for release-level integration.
+
 ## Documentation Gate
 
 Documentation facts follow two rules:

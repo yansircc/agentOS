@@ -31,17 +31,17 @@ ledger payloads.
 
 ### Field Retention
 
-| Source field                     | AG-UI frame                                          |
-| -------------------------------- | ---------------------------------------------------- |
-| `agent.run.started.id`           | `RUN_STARTED.runId`                                  |
-| runtime event `scope`            | `RUN_STARTED.threadId` unless caller overrides       |
-| `llm.response.items.message`     | `TEXT_MESSAGE_*`                                     |
+| Source field                     | AG-UI frame                                                     |
+| -------------------------------- | --------------------------------------------------------------- |
+| `agent.run.started.id`           | `RUN_STARTED.runId`                                             |
+| runtime event `scope`            | `RUN_STARTED.threadId` unless caller overrides                  |
+| `llm.response.items.message`     | `TEXT_MESSAGE_*`                                                |
 | `llm.response.items.tool_call`   | `TOOL_CALL_START`, summarized `TOOL_CALL_ARGS`, `TOOL_CALL_END` |
-| `llm.response.usage`             | `CUSTOM: agent-os.llm.usage`                         |
-| `tool.executed.result`           | summarized `TOOL_CALL_RESULT.content`                |
-| `agent.run.completed`            | `RUN_FINISHED`                                       |
-| `agent.aborted.*`                | `RUN_ERROR`                                          |
-| product/runtime extension events | explicit safe `CUSTOM` projector output              |
+| `llm.response.usage`             | `CUSTOM: agent-os.llm.usage`                                    |
+| `tool.executed.result`           | summarized `TOOL_CALL_RESULT.content`                           |
+| `agent.run.completed`            | `RUN_FINISHED`                                                  |
+| `agent.aborted.*`                | `RUN_ERROR`                                                     |
+| product/runtime extension events | explicit safe `CUSTOM` projector output                         |
 
 ### Redaction
 

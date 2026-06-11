@@ -173,7 +173,7 @@ describe("@agent-os/workspace-binding", () => {
               });
               return { id: 99 };
             }),
-          awaitProjection: <State,>(spec: ToolProjectionWaitSpec<State>) =>
+          awaitProjection: <State>(spec: ToolProjectionWaitSpec<State>) =>
             Effect.sync(() => {
               expect(spec.kind).toBe(WORKSPACE_OP_PROJECTION_KIND);
               expect(spec.factOwnerRef).toBe(WORKSPACE_OP_FACT_OWNER);
@@ -183,7 +183,7 @@ describe("@agent-os/workspace-binding", () => {
                 projectionKind: spec.kind,
                 identityKey: "99",
                 updatedEventId: 100,
-                state: ({
+                state: {
                   status: "completed",
                   requestedEventId: 99,
                   request: {} as never,
@@ -204,7 +204,7 @@ describe("@agent-os/workspace-binding", () => {
                     bytesWritten: 5,
                     resultHash: "sha256:abc",
                   },
-                } satisfies WorkspaceOperationProjection) as State,
+                } satisfies WorkspaceOperationProjection as State,
               };
             }),
         },

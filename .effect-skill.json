@@ -67,6 +67,12 @@
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
     },
     {
+      "path": "packages/carriers/workspace-op",
+      "shape": ["library"],
+      "dependencyOwner": "workspace-root",
+      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+    },
+    {
       "path": "packages/carriers/workspace-session",
       "shape": ["library"],
       "dependencyOwner": "workspace-root",
@@ -176,6 +182,12 @@
     },
     {
       "path": "packages/providers/tenant-material",
+      "shape": ["library"],
+      "dependencyOwner": "workspace-root",
+      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+    },
+    {
+      "path": "packages/providers/workspace-op-local",
       "shape": ["library"],
       "dependencyOwner": "workspace-root",
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"

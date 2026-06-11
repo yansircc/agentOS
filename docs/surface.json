@@ -206,6 +206,34 @@
       "published": true
     },
     {
+      "slug": "workspace-op",
+      "name": "@agent-os/workspace-op",
+      "path": "packages/carriers/workspace-op",
+      "status": "0.2.x public",
+      "role": "provider-neutral workspace operation facts, settlement, and projection",
+      "boundary": "workspace operation request/completion/rejection fact vocabulary and external-receipt settlement",
+      "need": "Workspace operation carrier",
+      "readmeStatus": "0.2.x active development. Public exports are listed in `PUBLIC_API.md` to prevent accidental exports; they are not frozen.",
+      "apiStatus": "0.2.x active development for provider-neutral workspace operation carrier algebra. Public exports are listed for accidental export control only; this is not an API freeze.",
+      "apiSource": "docs/api/workspace-op.md",
+      "primary": true,
+      "published": true
+    },
+    {
+      "slug": "workspace-op-local",
+      "name": "@agent-os/workspace-op-local",
+      "path": "packages/providers/workspace-op-local",
+      "status": "provider",
+      "role": "local WorkspaceEnv executor for workspace operation request facts",
+      "boundary": "local WorkspaceEnv execution to provider-neutral workspace operation completion or rejection facts",
+      "need": "Local workspace operation provider",
+      "readmeStatus": "Provider package. It materializes `@agent-os/workspace-op` request facts against a local `WorkspaceEnv`.",
+      "apiStatus": "Provider package. Public exports are limited to the local workspace operation provider factory and DTOs.",
+      "apiSource": "docs/api/workspace-op-local.md",
+      "primary": true,
+      "published": true
+    },
+    {
       "slug": "workspace-session-cloudflare",
       "name": "@agent-os/workspace-session-cloudflare",
       "path": "packages/providers/workspace-session-cloudflare",

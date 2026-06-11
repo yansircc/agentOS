@@ -30,7 +30,9 @@ const collectFailures = (root = repoRoot) => {
 
   const snapshotBlock = blockFrom(protocol, "export interface ToolResultSnapshot");
   if (!snapshotBlock.includes("readonly execution: ToolExecution")) {
-    failures.push(`${protocolFile}: ToolResultSnapshot must record the resolved snapshot execution`);
+    failures.push(
+      `${protocolFile}: ToolResultSnapshot must record the resolved snapshot execution`,
+    );
   }
   if (/readonly execution:\s*DeterministicToolExecution/u.test(snapshotBlock)) {
     failures.push(`${protocolFile}: ToolResultSnapshot is still deterministic-only`);
@@ -128,9 +130,7 @@ const collectFailures = (root = repoRoot) => {
     failures.push(`${protocolTest}: missing external no-raw-snapshot test`);
   }
   if (
-    !/replays receipt-backed external tool execution from the receipt artifact/u.test(
-      protocolTests,
-    )
+    !/replays receipt-backed external tool execution from the receipt artifact/u.test(protocolTests)
   ) {
     failures.push(`${protocolTest}: missing receipt-backed external replay test`);
   }

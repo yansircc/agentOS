@@ -45,7 +45,7 @@ const collectFailures = (root = repoRoot) => {
     'WORKSPACE_OP_PROJECTION_KIND = "workspace_op.status"',
     'claim: pre({ key: "claim" })',
     'claim: lived({ key: "claim", anchorKinds: ["external_receipt"] })',
-    'claim: rejected({',
+    "claim: rejected({",
   ]);
   requireTerms(failures, carrierEvents, files.carrierEvents, [
     "projectWorkspaceOperation",

@@ -1,4 +1,4 @@
-import { Predicate, Schema } from "effect";
+import { Option, Predicate, Schema } from "effect";
 import {
   LlmOutputItemSchema,
   LlmUsageSchema,
@@ -44,8 +44,7 @@ export const RUNTIME_EVENT_KIND = {
 export const TOOL_RESULT_SNAPSHOT_VERSION = "tool-result-snapshot-v1";
 export const EXTERNAL_TOOL_EXECUTION_RECEIPT_VERSION = "external-tool-execution-receipt-v1";
 export const RECEIPT_BACKED_TOOL_RESULT_VERSION = "receipt-backed-tool-result-v1";
-export const EXTERNAL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON =
-  "external_tool_replay_requires_receipt";
+export const EXTERNAL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON = "external_tool_replay_requires_receipt";
 export const TOOL_EXECUTION_CLAIM_MUST_BE_LIVED_REASON = "tool_execution_claim_must_be_lived";
 export const EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON =
   "external_tool_execution_requires_receipt";
@@ -122,10 +121,7 @@ export type ToolExecutedPayload = {
   readonly traceContext?: TraceContext;
 };
 
-export type DeterministicToolExecution = Extract<
-  ToolExecution,
-  { readonly kind: "deterministic" }
->;
+export type DeterministicToolExecution = Extract<ToolExecution, { readonly kind: "deterministic" }>;
 export type ExternalToolExecution = Extract<ToolExecution, { readonly kind: "external" }>;
 export type ExternalReceiptAnchorRef = AnchorRef & { readonly anchorKind: "external_receipt" };
 
@@ -662,6 +658,9 @@ const externalReceiptAnchorFromClaim = (claim: LivedClaim): ExternalReceiptAncho
     ? (claim.anchorRef as ExternalReceiptAnchorRef)
     : null;
 
+const failToolReplayArtifact = (message: string): never =>
+  Option.getOrThrowWith(Option.none(), () => new TypeError(message));
+
 export const receiptBackedToolResult = (spec: {
   readonly result: unknown;
   readonly claim: LivedClaim;
@@ -670,15 +669,16 @@ export const receiptBackedToolResult = (spec: {
 }): ReceiptBackedToolResult => {
   const receipt = spec.receipt ?? externalReceiptAnchorFromClaim(spec.claim);
   if (receipt === null || receipt.anchorKind !== "external_receipt") {
-    throw new TypeError("receipt-backed tool result requires external_receipt anchor");
+    return failToolReplayArtifact("receipt-backed tool result requires external_receipt anchor");
   }
+  const externalReceipt: ExternalReceiptAnchorRef = receipt;
   return {
     kind: "tool.receipt_backed_result",
     version: RECEIPT_BACKED_TOOL_RESULT_VERSION,
     result: spec.result,
     claim: spec.claim,
     idempotencyKey: spec.idempotencyKey ?? spec.claim.operationRef,
-    receipt,
+    receipt: externalReceipt,
   };
 };
 
@@ -772,23 +772,31 @@ export const toolReplayArtifactFromExecutedPayload = (
   if (resolved.witness === "snapshot") {
     return {
       ok: true,
-      artifact: toolResultSnapshotFromExecutedPayload({
-        ...payload,
-        claim,
-      }, resolved),
+      artifact: toolResultSnapshotFromExecutedPayload(
+        {
+          ...payload,
+          claim,
+        },
+        resolved,
+      ),
     };
   }
   if (payload.execution.kind === "deterministic") {
-    throw new TypeError("receipt replay witness requires external tool execution");
+    return failToolReplayArtifact("receipt replay witness requires external tool execution");
   }
   if (resolved.kind !== "external") {
-    throw new TypeError("receipt replay witness requires resolved external tool execution");
+    return failToolReplayArtifact(
+      "receipt replay witness requires resolved external tool execution",
+    );
   }
-  return externalToolExecutionReceiptFromExecutedPayload({
-    ...payload,
-    execution: payload.execution,
-    claim,
-  }, resolved);
+  return externalToolExecutionReceiptFromExecutedPayload(
+    {
+      ...payload,
+      execution: payload.execution,
+      claim,
+    },
+    resolved,
+  );
 };
 
 export const replayToolResultFromSnapshot = (

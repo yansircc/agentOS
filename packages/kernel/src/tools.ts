@@ -283,11 +283,7 @@ export interface Tool<
   readonly contract: ToolContract;
 }
 
-export interface DefineToolSpec<
-  S extends Schema.Schema.AnyNoContext,
-  R,
-  E extends ToolExecution,
-> {
+export interface DefineToolSpec<S extends Schema.Schema.AnyNoContext, R, E extends ToolExecution> {
   readonly name: string;
   readonly description: string;
   readonly args: S;
@@ -306,10 +302,7 @@ export interface DefineProductToolSpec<
   S extends Schema.Schema.AnyNoContext,
   R,
   E extends ToolExecution = ReturnType<typeof deterministicToolExecution>,
-> extends Omit<
-  DefineToolSpec<S, R, E>,
-  "execution"
-> {
+> extends Omit<DefineToolSpec<S, R, E>, "execution"> {
   readonly execution?: E;
 }
 

@@ -231,11 +231,14 @@ describe("runtime event vocabulary", () => {
       traceContext,
     }).payload;
 
-    const snapshot = toolResultSnapshotFromExecutedPayload({
-      ...payload,
-      execution: { kind: "deterministic" },
-      claim: livedClaim,
-    }, resolvedToolExecution({ kind: "deterministic" }));
+    const snapshot = toolResultSnapshotFromExecutedPayload(
+      {
+        ...payload,
+        execution: { kind: "deterministic" },
+        claim: livedClaim,
+      },
+      resolvedToolExecution({ kind: "deterministic" }),
+    );
     const replayed = replayToolResultFromSnapshot(snapshot);
 
     expect(replayed).toEqual({ ok: true, result: { ok: true }, claim: livedClaim });

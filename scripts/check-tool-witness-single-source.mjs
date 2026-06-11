@@ -53,10 +53,10 @@ const collectFailures = (root = repoRoot) => {
     "export const resolveToolExecution",
     "validateExecutionDomainRegistry",
     'declaration.replay.access === "write" && declaration.replay.witness === "snapshot"',
-    "kind: \"invalid_write_snapshot_law\"",
-    "kind: \"access_mismatch\"",
-    "kind: \"missing_declaration\"",
-    "kind: \"duplicate_declaration\"",
+    'kind: "invalid_write_snapshot_law"',
+    'kind: "access_mismatch"',
+    'kind: "missing_declaration"',
+    'kind: "duplicate_declaration"',
   ]);
 
   requireTerms(failures, runtimeProtocol, files.runtimeProtocol, [
@@ -69,8 +69,14 @@ const collectFailures = (root = repoRoot) => {
     "resolved.witness",
   ]);
   rejectPatterns(failures, runtimeProtocol, files.runtimeProtocol, [
-    [/toolReplayArtifactFromExecutedPayload\s*=\s*\(\s*payload:\s*ToolExecutedPayload\s*\)/u, "tool replay artifact can be built without resolved execution"],
-    [/payload\.execution\.kind === ["']deterministic["'][\s\S]{0,220}toolResultSnapshotFromExecutedPayload/u, "artifact builder derives snapshot witness from payload execution"],
+    [
+      /toolReplayArtifactFromExecutedPayload\s*=\s*\(\s*payload:\s*ToolExecutedPayload\s*\)/u,
+      "tool replay artifact can be built without resolved execution",
+    ],
+    [
+      /payload\.execution\.kind === ["']deterministic["'][\s\S]{0,220}toolResultSnapshotFromExecutedPayload/u,
+      "artifact builder derives snapshot witness from payload execution",
+    ],
   ]);
 
   requireTerms(failures, submit, files.submit, [
@@ -192,7 +198,11 @@ const collectSelfTestFailures = () => {
       return [`payload-derived witness mutation was not rejected: ${JSON.stringify(rejected)}`];
     }
 
-    writeFixture(root, files.runtime, "toolReplayArtifactFromExecutedPayload(payload, payload.execution);");
+    writeFixture(
+      root,
+      files.runtime,
+      "toolReplayArtifactFromExecutedPayload(payload, payload.execution);",
+    );
     rejected = collectFailures(root);
     if (!rejected.some((failure) => failure.includes("resolveToolExecution"))) {
       return [`runtime missing resolution mutation was not rejected: ${JSON.stringify(rejected)}`];

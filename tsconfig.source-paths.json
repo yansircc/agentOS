@@ -62,9 +62,7 @@
         "./packages/providers/image-resource-settlement/src/index.ts"
       ],
       "@agent-os/resource-cloudflare": ["./packages/providers/resource-cloudflare/src/index.ts"],
-      "@agent-os/workspace-op-local": [
-        "./packages/providers/workspace-op-local/src/index.ts"
-      ],
+      "@agent-os/workspace-op-local": ["./packages/providers/workspace-op-local/src/index.ts"],
       "@agent-os/sandbox-cloudflare": [
         "./packages/execution-domains/sandbox-cloudflare/src/index.ts"
       ],

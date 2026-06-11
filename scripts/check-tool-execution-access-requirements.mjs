@@ -102,7 +102,10 @@ const collectFailures = (root = repoRoot) => {
   ]);
   rejectPatterns(failures, runtime, files.runtime, [
     [/tool\.execution\.kind === ["']effectful["']/u, "submit guard still checks effectful"],
-    [/EFFECTFUL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON/u, "legacy effectful execution reason remains"],
+    [
+      /EFFECTFUL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON/u,
+      "legacy effectful execution reason remains",
+    ],
   ]);
 
   requireTerms(failures, workspaceEnv, files.workspaceEnv, [
@@ -110,7 +113,14 @@ const collectFailures = (root = repoRoot) => {
     'const writeExecution = externalToolExecution("write", env.domain)',
   ]);
   for (const name of ["read_file", "list_files", "glob_files", "grep_files"]) {
-    assertToolBlock(failures, workspaceEnv, files.workspaceEnv, name, "readExecution", "withToolReadRequirement");
+    assertToolBlock(
+      failures,
+      workspaceEnv,
+      files.workspaceEnv,
+      name,
+      "readExecution",
+      "withToolReadRequirement",
+    );
   }
   for (const name of ["write_file", "edit_file", "delete_path", "run_shell"]) {
     assertToolBlock(
@@ -204,7 +214,8 @@ const tools = {
   run_shell: defineTool({ name: "run_shell", execution: writeExecution, execute: () => withToolWriteRequirement(write()) }),
 };
 `,
-  [files.sandbox]: 'externalToolExecution("write", { kind: "sandbox", ref: "sandbox" }); withToolWriteRequirement(run);',
+  [files.sandbox]:
+    'externalToolExecution("write", { kind: "sandbox", ref: "sandbox" }); withToolWriteRequirement(run);',
   [files.workspaceBindingTest]: 'expect(value).toEqual({ kind: "external", access: "write" });',
   [files.kernelTest]: 'execution: { kind: "external", access: "write", domain }',
   [files.runtimeTest]: 'externalToolExecution("write", { kind: "workspace", ref: "workspace" });',
@@ -233,9 +244,16 @@ export const effectfulToolExecution = () => ({ kind: "effectful" });
     writeFixture(
       root,
       files.workspaceEnv,
-      positiveFixtures[files.workspaceEnv].replace('externalToolExecution("read"', "externalToolExecution("),
+      positiveFixtures[files.workspaceEnv].replace(
+        'externalToolExecution("read"',
+        "externalToolExecution(",
+      ),
     );
-    writeFixture(root, files.runtime, 'if (tool.execution.kind === "effectful") return EFFECTFUL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON;');
+    writeFixture(
+      root,
+      files.runtime,
+      'if (tool.execution.kind === "effectful") return EFFECTFUL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON;',
+    );
 
     const rejected = collectFailures(root);
     if (
@@ -243,7 +261,9 @@ export const effectfulToolExecution = () => ({ kind: "effectful" });
       !rejected.some(
         (failure) =>
           failure.includes("externalToolExecution call missing access") ||
-          failure.includes('missing const readExecution = externalToolExecution("read", env.domain)'),
+          failure.includes(
+            'missing const readExecution = externalToolExecution("read", env.domain)',
+          ),
       ) ||
       !rejected.some((failure) => failure.includes("submit guard still checks effectful"))
     ) {

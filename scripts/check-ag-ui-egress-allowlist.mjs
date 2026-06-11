@@ -137,7 +137,9 @@ export const leak = (item, event) => ({
       !rejected.some((failure) => failure.includes("raw tool call arguments")) ||
       !rejected.some((failure) => failure.includes("raw tool result"))
     ) {
-      return [`AG-UI egress allow-list mutation fixture was not rejected: ${JSON.stringify(rejected)}`];
+      return [
+        `AG-UI egress allow-list mutation fixture was not rejected: ${JSON.stringify(rejected)}`,
+      ];
     }
     return [];
   } finally {

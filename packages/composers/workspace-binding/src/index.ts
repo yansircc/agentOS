@@ -1,4 +1,4 @@
-import { Effect, Predicate } from "effect";
+import { Effect, Option, Predicate } from "effect";
 import { externalResourceMaterialRef, type MaterialRef } from "@agent-os/kernel/material-ref";
 import type { ResolvedMaterial } from "@agent-os/kernel/ref-resolver";
 import {
@@ -40,10 +40,10 @@ export interface WorkspaceToolExposurePolicy {
   readonly shellPolicy?: WorkspaceShellPolicy;
 }
 
-export interface BindWorkspaceToolsForRuntimeOptions extends Omit<
-  CreateWorkspaceToolsOptions,
-  "admit" | "requiredMaterials"
->, WorkspaceToolExposurePolicy {
+export interface BindWorkspaceToolsForRuntimeOptions
+  extends
+    Omit<CreateWorkspaceToolsOptions, "admit" | "requiredMaterials">,
+    WorkspaceToolExposurePolicy {
   readonly env: WorkspaceEnv;
   readonly admit: ToolAdmitter<unknown>;
   readonly workspaceMaterialRef?: MaterialRef;
@@ -80,9 +80,14 @@ const unique = <A extends string>(values: ReadonlyArray<A>): ReadonlyArray<A> =>
   ...new Set(values),
 ];
 
-const requireKnownProfile = (profile: WorkspaceToolExposureProfile): WorkspaceToolExposureProfile => {
+const failWorkspaceToolBinding = (message: string): never =>
+  Option.getOrThrowWith(Option.none(), () => new TypeError(message));
+
+const requireKnownProfile = (
+  profile: WorkspaceToolExposureProfile,
+): WorkspaceToolExposureProfile => {
   if (!(profile in WORKSPACE_TOOL_EXPOSURE_PROFILES)) {
-    throw new TypeError(`unknown workspace tool exposure profile: ${profile}`);
+    failWorkspaceToolBinding(`unknown workspace tool exposure profile: ${profile}`);
   }
   return profile;
 };
@@ -94,10 +99,10 @@ const selectedWorkspaceToolNames = (
   const mutationPolicy = policy.mutationPolicy ?? "disabled";
   const shellPolicy = policy.shellPolicy ?? "disabled";
   if (exposure.includes("mutation") && mutationPolicy === "disabled") {
-    throw new TypeError("workspace mutation tools require mutationPolicy: receipt-backed");
+    failWorkspaceToolBinding("workspace mutation tools require mutationPolicy: receipt-backed");
   }
   if (exposure.includes("shell") && shellPolicy === "disabled") {
-    throw new TypeError("workspace shell tools require shellPolicy: receipt-backed");
+    failWorkspaceToolBinding("workspace shell tools require shellPolicy: receipt-backed");
   }
   return unique(exposure.flatMap((profile) => WORKSPACE_TOOL_EXPOSURE_PROFILES[profile]));
 };
@@ -109,11 +114,11 @@ const selectTools = (
   const selected: Record<string, Tool> = {};
   for (const name of names) {
     if (!workspaceToolNames.has(name)) {
-      throw new TypeError(`workspace exposure profile references unknown tool: ${name}`);
+      failWorkspaceToolBinding(`workspace exposure profile references unknown tool: ${name}`);
     }
     const tool = tools[name];
     if (tool === undefined) {
-      throw new TypeError(`workspace tool missing from generated registry: ${name}`);
+      failWorkspaceToolBinding(`workspace tool missing from generated registry: ${name}`);
     }
     selected[name] = tool;
   }
@@ -139,7 +144,8 @@ const optionalStringArray = (
   record: Record<string, unknown>,
   key: string,
 ): ReadonlyArray<string> | undefined =>
-  Array.isArray(record[key]) && (record[key] as ReadonlyArray<unknown>).every((value) => typeof value === "string")
+  Array.isArray(record[key]) &&
+  (record[key] as ReadonlyArray<unknown>).every((value) => typeof value === "string")
     ? (record[key] as ReadonlyArray<string>)
     : undefined;
 
@@ -160,14 +166,7 @@ const workspaceOperationPayload = (
     workspaceRef: env.domain.ref,
     toolName,
   };
-  for (const key of [
-    "path",
-    "content",
-    "oldString",
-    "newString",
-    "command",
-    "cwd",
-  ] as const) {
+  for (const key of ["path", "content", "oldString", "newString", "command", "cwd"] as const) {
     const value = optionalString(args, key);
     if (value !== undefined) payload[key] = value;
   }
@@ -183,7 +182,12 @@ const workspaceOperationPayload = (
   if (materialRefs !== undefined) payload.materialRefs = materialRefs;
   if (Array.isArray(args.envRefs)) payload.envRefs = args.envRefs;
   const limits: Record<string, number> = {};
-  for (const key of ["maxFileBytes", "maxCommandChars", "execTimeoutMs", "maxOutputBytes"] as const) {
+  for (const key of [
+    "maxFileBytes",
+    "maxCommandChars",
+    "execTimeoutMs",
+    "maxOutputBytes",
+  ] as const) {
     const value = options[key];
     if (typeof value === "number") limits[key] = value;
   }
@@ -198,9 +202,8 @@ const receiptBackedWorkspaceTool = (
   options: Pick<
     BindWorkspaceToolsForRuntimeOptions,
     "maxFileBytes" | "maxCommandChars" | "execTimeoutMs" | "maxOutputBytes"
->,
-): Tool =>
-{
+  >,
+): Tool => {
   if (tool.execution.kind !== "external" || tool.execution.access !== "write") {
     throw new TypeError(`workspace receipt bridge requires external write tool: ${name}`);
   }
@@ -324,10 +327,20 @@ export const bindWorkspaceToolsForRuntime = (
     tools: runtimeTools,
     executionDomains: [
       ...(exposesRead
-        ? [{ domain: options.env.domain, replay: { access: "read" as const, witness: "snapshot" as const } }]
+        ? [
+            {
+              domain: options.env.domain,
+              replay: { access: "read" as const, witness: "snapshot" as const },
+            },
+          ]
         : []),
       ...(exposesWrite
-        ? [{ domain: options.env.domain, replay: { access: "write" as const, witness: "receipt" as const } }]
+        ? [
+            {
+              domain: options.env.domain,
+              replay: { access: "write" as const, witness: "receipt" as const },
+            },
+          ]
         : []),
     ],
     materials: { workspace },

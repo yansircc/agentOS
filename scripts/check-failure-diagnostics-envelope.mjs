@@ -32,13 +32,13 @@ const requiredProtocolTerms = [
 ];
 
 const requiredTestTerms = [
-  "category: \"invalid_args\"",
-  "owner: \"model\"",
-  "category: \"unknown_tool\"",
-  "category: \"missing_execution_path\"",
-  "owner: \"integrator\"",
+  'category: "invalid_args"',
+  'owner: "model"',
+  'category: "unknown_tool"',
+  'category: "missing_execution_path"',
+  'owner: "integrator"',
   "retryable: false",
-  "publicMessage: \"This tool requires a receipt-backed execution path before it can run.\"",
+  'publicMessage: "This tool requires a receipt-backed execution path before it can run."',
 ];
 
 const collectFailures = (root = repoRoot) => {
@@ -128,9 +128,7 @@ const collectSelfTestFailures = () => {
       !rejected.some((failure) => failure.includes("FailureDiagnosticCategory")) ||
       !rejected.some((failure) => failure.includes("SubmitResult"))
     ) {
-      return [
-        `failure diagnostics mutation fixture was not rejected: ${JSON.stringify(rejected)}`,
-      ];
+      return [`failure diagnostics mutation fixture was not rejected: ${JSON.stringify(rejected)}`];
     }
     return [];
   } finally {

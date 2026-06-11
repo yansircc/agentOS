@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { Option } from "effect";
 import type { PreClaim } from "@agent-os/kernel/effect-claim";
 import {
   rejectWorkspaceOperation,
@@ -53,8 +54,10 @@ const DEFAULT_MAX_OUTPUT_BYTES = 16_384;
 
 const textEncoder = new TextEncoder();
 
-const hashText = (value: string): string =>
-  createHash("sha256").update(value).digest("hex");
+const failWorkspaceOperationLocalProvider = (message: string): never =>
+  Option.getOrThrowWith(Option.none(), () => new TypeError(message));
+
+const hashText = (value: string): string => createHash("sha256").update(value).digest("hex");
 
 const stableJson = (value: unknown): string => {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
@@ -89,7 +92,7 @@ const truncateUtf8 = (
 
 const requirePath = (request: WorkspaceOperationRequestedPayload): string => {
   if (request.path === undefined || request.path.length === 0) {
-    throw new TypeError(`${request.toolName} requires path`);
+    return failWorkspaceOperationLocalProvider(`${request.toolName} requires path`);
   }
   return normalizeWorkspaceToolPath(request.path);
 };
@@ -100,7 +103,7 @@ const requireString = (
 ): string => {
   const value = request[key];
   if (value === undefined || value.length === 0) {
-    throw new TypeError(`${request.toolName} requires ${key}`);
+    return failWorkspaceOperationLocalProvider(`${request.toolName} requires ${key}`);
   }
   return value;
 };
@@ -212,7 +215,9 @@ export const createWorkspaceOperationLocalProvider = (
             const path = requirePath(request);
             const content = requireString(request, "content");
             const bytes = utf8Bytes(content);
-            if (bytes > maxFileBytes) throw new TypeError(`file exceeds ${maxFileBytes} bytes`);
+            if (bytes > maxFileBytes) {
+              failWorkspaceOperationLocalProvider(`file exceeds ${maxFileBytes} bytes`);
+            }
             await options.env.writeFile(path, content);
             const publicResult = {
               kind: "write_file" as const,
@@ -289,12 +294,16 @@ export const createWorkspaceOperationLocalProvider = (
           }
           case "run_shell": {
             const command = requireString(request, "command").trim();
-            if (command.length === 0) throw new TypeError("command required");
+            if (command.length === 0) {
+              failWorkspaceOperationLocalProvider("command required");
+            }
             if (command.length > maxCommandChars) {
-              throw new TypeError(`command exceeds ${maxCommandChars} characters`);
+              failWorkspaceOperationLocalProvider(`command exceeds ${maxCommandChars} characters`);
             }
             const cwd =
-              request.cwd === undefined ? "." : normalizeWorkspaceToolPath(request.cwd, { allowRoot: true });
+              request.cwd === undefined
+                ? "."
+                : normalizeWorkspaceToolPath(request.cwd, { allowRoot: true });
             const result = await options.env.exec(command, {
               cwd,
               timeoutMs: positiveNumberOr(request.timeoutMs, execTimeoutMs),

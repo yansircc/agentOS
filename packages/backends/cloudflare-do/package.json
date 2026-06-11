@@ -17,7 +17,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "bun run test:unit",
+    "test": "vp test run --configLoader runner",
     "test:unit": "vp test run --configLoader runner",
     "test:runtime": "vp test run --configLoader runner --config vitest.cloudflare.config.ts"
   },

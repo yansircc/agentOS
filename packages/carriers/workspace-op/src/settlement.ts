@@ -1,4 +1,9 @@
-import type { LivedClaim, PreClaim, RejectedClaim, RejectionRef } from "@agent-os/kernel/effect-claim";
+import type {
+  LivedClaim,
+  PreClaim,
+  RejectedClaim,
+  RejectionRef,
+} from "@agent-os/kernel/effect-claim";
 import { symbolicSettlementRef } from "@agent-os/kernel/settlement-contract";
 import { workspaceOpCarrier } from "./definition";
 

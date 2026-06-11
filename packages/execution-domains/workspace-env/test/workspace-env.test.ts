@@ -134,9 +134,7 @@ describe("@agent-os/workspace-env", () => {
       ["delete_path", "mutation", "write"],
       ["run_shell", "shell", "write"],
     ]);
-    expect(Object.keys(tools).sort()).toEqual(
-      WORKSPACE_TOOL_SPECS.map((spec) => spec.name).sort(),
-    );
+    expect(Object.keys(tools).sort()).toEqual(WORKSPACE_TOOL_SPECS.map((spec) => spec.name).sort());
   });
 
   it("walks workspace files deterministically and diffs pure snapshots", async () => {

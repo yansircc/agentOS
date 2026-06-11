@@ -1,0 +1,27 @@
+# @agent-os/workspace-op-local
+
+## Purpose
+
+Local provider that executes `@agent-os/workspace-op` request facts against a
+`WorkspaceEnv`.
+
+## Invariant
+
+Workspace-op-local owns only local execution of workspace operation requests. It
+does not define operation vocabulary, mint non-workspace claims, or bypass
+`WorkspaceEnv` path and command limits. The carrier owns facts and settlement;
+the provider returns completed or rejected payloads.
+
+## Minimal Usage
+
+Create a provider with `createWorkspaceOperationLocalProvider({ env })`, then
+pass a `workspace_op.requested` event to `execute`. Successful file and shell
+operations return completed payloads with hashes, previews, and receipt-backed
+claims; failed operations return rejected payloads.
+
+## Verification
+
+```sh
+cd packages/providers/workspace-op-local
+vp test run
+```

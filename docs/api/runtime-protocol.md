@@ -107,6 +107,8 @@
 - `.:RUNTIME_EVENT_KIND`
 - `.:RUNTIME_EVENT_KINDS`
 - `.:RUNTIME_FACT_OWNER`
+- `.:RECEIPT_BACKED_TOOL_RESULT_VERSION`
+- `.:ReceiptBackedToolResult`
 - `.:RuntimeAbortEventKind`
 - `.:RuntimeEventCommitSpec`
 - `.:RuntimeEventCommitSpecByKind`
@@ -120,6 +122,7 @@
 - `.:Strategy`
 - `.:SubmitDecisionInterrupt`
 - `.:SubmitDecisionInterruptReason`
+- `.:SubmitReceiptBackedToolBinding`
 - `.:SubmitResult`
 - `.:SubmitResumeDecision`
 - `.:SubmitSpec`
@@ -166,6 +169,8 @@
 - `.:mountAgent`
 - `.:projectLease`
 - `.:projectFailureDiagnostics`
+- `.:receiptBackedToolResult`
+- `.:receiptBackedToolResultFromUnknown`
 - `.:replayExternalToolExecutionFromReceipt`
 - `.:replayToolFromArtifact`
 - `.:replayToolResultFromSnapshot`

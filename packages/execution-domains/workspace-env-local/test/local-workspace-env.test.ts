@@ -83,6 +83,7 @@ describe("@agent-os/workspace-env-local", () => {
 
       expect(tools.run_shell?.execution).toEqual({
         kind: "external",
+        access: "write",
         domain: {
           kind: "host",
           ref: `local:${rootDir}`,

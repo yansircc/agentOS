@@ -1137,7 +1137,9 @@ const workspaceToolDefinitions = [
               const command = args.command.trim();
               if (command.length === 0) return failInput("command required");
               if (command.length > maxCommandChars) {
-                return failInput(`command exceeds ${maxCommandChars} character workspace tool limit`);
+                return failInput(
+                  `command exceeds ${maxCommandChars} character workspace tool limit`,
+                );
               }
               const result = await env.exec(command, {
                 cwd:
@@ -1174,13 +1176,14 @@ const workspaceToolDefinitions = [
   },
 ] as const satisfies ReadonlyArray<WorkspaceToolDefinition>;
 
-export const WORKSPACE_TOOL_SPECS: ReadonlyArray<WorkspaceToolSpec> =
-  workspaceToolDefinitions.map(({ name, category, access, description }) => ({
+export const WORKSPACE_TOOL_SPECS: ReadonlyArray<WorkspaceToolSpec> = workspaceToolDefinitions.map(
+  ({ name, category, access, description }) => ({
     name,
     category,
     access,
     description,
-  }));
+  }),
+);
 
 export const createWorkspaceTools = (
   env: WorkspaceEnv,

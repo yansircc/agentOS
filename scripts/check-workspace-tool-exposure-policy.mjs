@@ -92,11 +92,14 @@ const collectFailures = (root = repoRoot) => {
 
   requireTerms(failures, runtime, files.runtime, [
     "const resolvedExecution = resolveToolExecution(tool.execution",
-    "resolvedExecution.resolved.witness === \"receipt\"",
+    'resolvedExecution.resolved.witness === "receipt"',
     "EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON",
   ]);
   rejectPatterns(failures, runtime, files.runtime, [
-    [/if\s*\(\s*tool\.execution\.kind === ["']external["']\s*\)\s*\{/u, "runtime still rejects all external tools by kind"],
+    [
+      /if\s*\(\s*tool\.execution\.kind === ["']external["']\s*\)\s*\{/u,
+      "runtime still rejects all external tools by kind",
+    ],
   ]);
   requireTerms(failures, runtimeTest, files.runtimeTest, [
     "executes external read tools when the domain law uses snapshot witness",

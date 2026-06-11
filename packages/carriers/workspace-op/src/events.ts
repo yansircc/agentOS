@@ -4,9 +4,7 @@ import { validateEffectClaim } from "@agent-os/kernel/effect-claim";
 import { validateTerminalClaim } from "@agent-os/kernel/settlement-contract";
 import {
   WORKSPACE_OP_EVENTS,
-  WORKSPACE_OP_FACT_OWNER,
   WORKSPACE_OP_KIND,
-  WORKSPACE_OP_PROJECTION_KIND,
   workspaceOpSettlementContract,
 } from "./definition";
 export {
@@ -166,7 +164,9 @@ const requestFrom = (
     ...(booleanField(payload, "recursive") === undefined
       ? {}
       : { recursive: booleanField(payload, "recursive") }),
-    ...(booleanField(payload, "force") === undefined ? {} : { force: booleanField(payload, "force") }),
+    ...(booleanField(payload, "force") === undefined
+      ? {}
+      : { force: booleanField(payload, "force") }),
     ...(stringField(payload, "command") === undefined
       ? {}
       : { command: stringField(payload, "command") }),
@@ -185,7 +185,6 @@ const completedFrom = (
   const requestedEventId = numberField(payload, "requestedEventId");
   const operationRef = stringField(payload, "operationRef");
   const workspaceRef = stringField(payload, "workspaceRef");
-  const toolCallId = stringField(payload, "toolCallId");
   const toolName = operationNameFrom(payload.toolName);
   const idempotencyKey = stringField(payload, "idempotencyKey");
   const resultHash = stringField(payload, "resultHash");

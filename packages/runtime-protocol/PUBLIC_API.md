@@ -111,6 +111,8 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:RUNTIME_EVENT_KIND`
 - `.:RUNTIME_EVENT_KINDS`
 - `.:RUNTIME_FACT_OWNER`
+- `.:RECEIPT_BACKED_TOOL_RESULT_VERSION`
+- `.:ReceiptBackedToolResult`
 - `.:RuntimeAbortEventKind`
 - `.:RuntimeEventCommitSpec`
 - `.:RuntimeEventCommitSpecByKind`
@@ -124,6 +126,7 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:Strategy`
 - `.:SubmitDecisionInterrupt`
 - `.:SubmitDecisionInterruptReason`
+- `.:SubmitReceiptBackedToolBinding`
 - `.:SubmitResult`
 - `.:SubmitResumeDecision`
 - `.:SubmitSpec`
@@ -170,6 +173,8 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:mountAgent`
 - `.:projectLease`
 - `.:projectFailureDiagnostics`
+- `.:receiptBackedToolResult`
+- `.:receiptBackedToolResultFromUnknown`
 - `.:replayExternalToolExecutionFromReceipt`
 - `.:replayToolFromArtifact`
 - `.:replayToolResultFromSnapshot`

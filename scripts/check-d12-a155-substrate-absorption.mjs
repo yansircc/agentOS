@@ -71,8 +71,14 @@ const requiredTerms = [
   {
     file: "packages/kernel/src/tools.ts",
     terms: [
-      "export type ToolRequirements = never",
-      "export type ToolEffect<R> = Effect.Effect<R, ToolError, ToolRequirements>",
+      "export interface ToolExternalReadRequirement",
+      "export interface ToolExternalWriteRequirement",
+      "export type ToolRequirements = ToolExternalReadRequirement | ToolExternalWriteRequirement",
+      "export type ToolEffect<R, Requirements = never>",
+      "readonly [TOOL_EXTERNAL_REQUIREMENT_BRAND]: Requirements",
+      "export type ToolExecutionRequirements<E extends ToolExecution>",
+      "export const withToolReadRequirement",
+      "export const withToolWriteRequirement",
       "readonly emitIntent?: ToolIntentEmitter",
       "readonly awaitProjection?: ToolProjectionWaiter",
       ") => Effect.Effect<AdmitVerdict, ToolError, never>",
@@ -115,8 +121,9 @@ const requiredTerms = [
   {
     file: "scripts/check-tool-mutation-boundary.mjs",
     terms: [
-      "ToolRequirements must be never",
+      "ToolRequirements must be external access only",
       "ToolAdmitter requirements must be never",
+      "ToolExecute must return access-derived ToolEffect",
       "tool emitted mutation lifecycle fact",
     ],
   },

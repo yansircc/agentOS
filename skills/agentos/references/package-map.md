@@ -16,6 +16,8 @@
 | Resource lifecycle carrier           | `@agent-os/resource-carrier`             |
 | Cloudflare resource provider         | `@agent-os/resource-cloudflare`          |
 | Workspace/session facts              | `@agent-os/workspace-session`            |
+| Workspace operation carrier          | `@agent-os/workspace-op`                 |
+| Local workspace operation provider   | `@agent-os/workspace-op-local`           |
 | Cloudflare Sandbox workspace backend | `@agent-os/workspace-session-cloudflare` |
 | Cloudflare WorkspaceEnv adapter      | `@agent-os/workspace-env-cloudflare`     |
 | Local WorkspaceEnv adapter           | `@agent-os/workspace-env-local`          |

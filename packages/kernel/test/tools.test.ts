@@ -211,7 +211,10 @@ describe("ExecutionDomainRegistry", () => {
 
   it("rejects missing and duplicate external domain replay laws", () => {
     const domain = { kind: "workspace" as const, ref: "workspace:default" };
-    const writeReceipt = { domain, replay: { access: "write" as const, witness: "receipt" as const } };
+    const writeReceipt = {
+      domain,
+      replay: { access: "write" as const, witness: "receipt" as const },
+    };
     const tool = defineTool({
       name: "write_file",
       description: "Write",

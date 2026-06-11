@@ -32,6 +32,7 @@ const guardScripts = [
   "test:turn-stream-provider-wire-boundary",
   "test:decision-gate-lifecycle-boundary",
   "test:workspace-exec-material-ref-boundary",
+  "test:tool-execution-access-requirements",
   "test:d12-a155-substrate-absorption",
   "test:tool-mutation-boundary",
   "test:agent-manifest-intent-boundary",

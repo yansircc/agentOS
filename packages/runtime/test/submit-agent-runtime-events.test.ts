@@ -562,7 +562,9 @@ describe("submit-agent runtime event writes", () => {
         domains: [{ domain, replay: { access: "write", witness: "receipt" } }],
       });
       if (!resolved.ok) expect.fail("expected receipt execution to resolve");
-      expect(toolReplayArtifactFromExecutedPayload(toolEvent.event.payload, resolved.resolved)).toMatchObject({
+      expect(
+        toolReplayArtifactFromExecutedPayload(toolEvent.event.payload, resolved.resolved),
+      ).toMatchObject({
         ok: true,
         artifact: {
           kind: "tool.execution.receipt",

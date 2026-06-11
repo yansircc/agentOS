@@ -256,10 +256,13 @@ describe("defineAgentDO facade lowering", () => {
       execute: ({ path }) => withToolWriteRequirement(Effect.succeed({ path })),
     });
 
-    const lowered = lowerAgentConfig({
-      tools: [tool],
-      domains: [{ domain, replay: { access: "write", witness: "receipt" } }],
-    }, env);
+    const lowered = lowerAgentConfig(
+      {
+        tools: [tool],
+        domains: [{ domain, replay: { access: "write", witness: "receipt" } }],
+      },
+      env,
+    );
 
     expect(lowered.submitBindings).toBe(null);
   });

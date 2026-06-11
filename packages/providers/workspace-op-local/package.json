@@ -22,8 +22,12 @@
   },
   "devDependencies": {
     "@types/node": "^24.12.4",
+    "effect": "catalog:",
     "typescript": "catalog:",
     "vite-plus": "catalog:",
     "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "effect": "^3.21.0"
   }
 }

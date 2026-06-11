@@ -44,13 +44,16 @@ const blockFrom = (source, start) => {
 
 const requiredToolContracts = [
   {
-    label: "ToolRequirements must be never",
-    test: (source) => /export\s+type\s+ToolRequirements\s*=\s*never\s*;/u.test(source),
+    label: "ToolRequirements must be external access only",
+    test: (source) =>
+      /export\s+type\s+ToolRequirements\s*=\s*ToolExternalReadRequirement\s*\|\s*ToolExternalWriteRequirement\s*;/u.test(
+        source,
+      ),
   },
   {
-    label: "ToolEffect must depend on ToolRequirements",
+    label: "ToolEffect must depend on declared requirements",
     test: (source) =>
-      /export\s+type\s+ToolEffect\s*<\s*R\s*>\s*=\s*Effect\.Effect\s*<\s*R\s*,\s*ToolError\s*,\s*ToolRequirements\s*>\s*;/u.test(
+      /export\s+type\s+ToolEffect\s*<\s*R\s*,\s*Requirements\s*=\s*never\s*>[\s\S]*?Effect\.Effect\s*<\s*R\s*,\s*ToolError\s*,\s*Requirements\s*>/u.test(
         source,
       ),
   },
@@ -62,9 +65,19 @@ const requiredToolContracts = [
       ),
   },
   {
-    label: "ToolExecute must return ToolEffect",
+    label: "ToolExecute must return access-derived ToolEffect",
     test: (source) =>
       /export\s+type\s+ToolExecute[\s\S]*?ctx:\s*ToolExecutionContext[\s\S]*?\)\s*=>\s*ToolEffect\s*<\s*R\s*>/u.test(
+        source,
+      ) ||
+      /export\s+type\s+ToolExecute[\s\S]*?Requirements\s*=\s*never[\s\S]*?ctx:\s*ToolExecutionContext[\s\S]*?\)\s*=>\s*ToolEffect\s*<\s*R\s*,\s*Requirements\s*>/u.test(
+        source,
+      ),
+  },
+  {
+    label: "ToolExecutionRequirements must derive from execution access",
+    test: (source) =>
+      /export\s+type\s+ToolExecutionRequirements\s*<\s*E\s+extends\s+ToolExecution\s*>[\s\S]*?ToolExternalReadRequirement[\s\S]*?ToolExternalWriteRequirement[\s\S]*?:\s*never/u.test(
         source,
       ),
   },
@@ -202,18 +215,40 @@ export interface ToolExecutionContext {
 }
 
 export type ResolvedToolMaterials = Readonly<Record<string, ResolvedMaterial>>;
-export type ToolRequirements = never;
-export type ToolEffect<R> = Effect.Effect<R, ToolError, ToolRequirements>;
+declare const TOOL_EXTERNAL_REQUIREMENT_BRAND: unique symbol;
+export interface ToolExternalReadRequirement {
+  readonly _tag: "@agent-os/kernel/ToolExternalReadRequirement";
+}
+export interface ToolExternalWriteRequirement {
+  readonly _tag: "@agent-os/kernel/ToolExternalWriteRequirement";
+}
+export type ToolRequirements = ToolExternalReadRequirement | ToolExternalWriteRequirement;
+export type ToolEffect<R, Requirements = never> = [Requirements] extends [never]
+  ? Effect.Effect<R, ToolError, never>
+  : Effect.Effect<R, ToolError, Requirements> & {
+      readonly [TOOL_EXTERNAL_REQUIREMENT_BRAND]: Requirements;
+    };
+export type ToolExecution =
+  | { readonly kind: "deterministic" }
+  | { readonly kind: "external"; readonly access: "read" | "write"; readonly domain: unknown };
+export type ToolExecutionRequirements<E extends ToolExecution> = E extends {
+  readonly kind: "external";
+  readonly access: "read";
+}
+  ? ToolExternalReadRequirement
+  : E extends { readonly kind: "external"; readonly access: "write" }
+    ? ToolExternalWriteRequirement
+    : never;
 export interface ToolAdmitInput<A = unknown> {
   readonly args: A;
 }
 export type ToolAdmitter<A = unknown> = (
   input: ToolAdmitInput<A>,
 ) => Effect.Effect<AdmitVerdict, ToolError, never>;
-export type ToolExecute<A = unknown, R = unknown> = (
+export type ToolExecute<A = unknown, R = unknown, Requirements = never> = (
   args: A,
   ctx: ToolExecutionContext,
-) => ToolEffect<R>;
+) => ToolEffect<R, Requirements>;
 export const executeTool = (tool, args, _toolName, materials = {}, context = {}) =>
   Effect.gen(function* () {
     const program = yield* Effect.try({ try: () => tool.execute(args, { ...context, materials }) });
@@ -259,19 +294,19 @@ const collectSelfTestFailures = () => {
         name: "writer requirement",
         file: "packages/kernel/src/tools.ts",
         source: positiveToolsSource.replace(
-          "export type ToolRequirements = never;",
-          "export interface ToolRequirements { readonly ledger: Ledger }",
+          "export type ToolRequirements = ToolExternalReadRequirement | ToolExternalWriteRequirement;",
+          "export type ToolRequirements = ToolExternalReadRequirement | ToolExternalWriteRequirement | Ledger;",
         ),
         expected: "Ledger",
       },
       {
-        name: "non-never requirement",
+        name: "non-access requirement",
         file: "packages/kernel/src/tools.ts",
         source: positiveToolsSource.replace(
-          "export type ToolRequirements = never;",
+          "export type ToolRequirements = ToolExternalReadRequirement | ToolExternalWriteRequirement;",
           "export type ToolRequirements = unknown;",
         ),
-        expected: "ToolRequirements must be never",
+        expected: "ToolRequirements must be external access only",
       },
       {
         name: "effectful admitter",
