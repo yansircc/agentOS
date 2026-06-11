@@ -97,7 +97,7 @@ const collectFailures = (root = repoRoot) => {
   ]);
 
   requireTerms(failures, runtime, files.runtime, [
-    'tool.execution.kind === "external"',
+    'resolvedExecution.resolved.witness === "receipt"',
     "EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON",
   ]);
   rejectPatterns(failures, runtime, files.runtime, [
@@ -186,7 +186,7 @@ export const externalToolExecutionReceiptFromExecutedPayload = () => {};
 export const replayExternalToolExecutionFromReceipt = () => {};
 `,
   [files.runtime]: `
-if (tool.execution.kind === "external") {
+if (resolvedExecution.resolved.witness === "receipt") {
   return EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON;
 }
 `,

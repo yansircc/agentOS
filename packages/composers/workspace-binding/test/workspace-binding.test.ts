@@ -40,7 +40,7 @@ describe("@agent-os/workspace-binding", () => {
     });
   });
 
-  it("returns submit bindings without diagnostics, path policy, or external executor", () => {
+  it("defaults to read-only submit bindings with snapshot replay law", () => {
     const bindings = bindWorkspaceToolsForRuntime({
       env,
       authority: "test.workspace",
@@ -48,25 +48,61 @@ describe("@agent-os/workspace-binding", () => {
     });
 
     expect(Object.keys(bindings.tools ?? {}).sort()).toEqual([
-      "delete_path",
-      "edit_file",
       "glob_files",
       "grep_files",
       "list_files",
       "read_file",
-      "run_shell",
-      "write_file",
+    ]);
+    expect(bindings.executionDomains).toEqual([
+      { domain: env.domain, replay: { access: "read", witness: "snapshot" } },
     ]);
     expect(bindings.materials?.workspace).toEqual(workspaceEnvMaterialRef(env));
     expect(bindings.resolvedMaterials?.workspace).toBe(env);
     expect(bindings.tools).toBeDefined();
-    expect((bindings.tools!.write_file as { readonly execution?: unknown }).execution).toEqual({
+    expect((bindings.tools!.read_file as { readonly execution?: unknown }).execution).toEqual({
       kind: "external",
-      access: "write",
+      access: "read",
       domain: env.domain,
     });
     expect("diagnostics" in bindings).toBe(false);
     expect("pathPolicy" in bindings).toBe(false);
+    expect("externalExecutor" in bindings).toBe(false);
+  });
+
+  it("keeps mutation and shell tools disabled unless receipt-backed policy is explicit", () => {
+    expect(() =>
+      bindWorkspaceToolsForRuntime({
+        env,
+        authority: "test.workspace",
+        admit: () => Effect.succeed({ ok: true }),
+        exposure: ["read", "mutation"],
+      }),
+    ).toThrow("mutationPolicy");
+    expect(() =>
+      bindWorkspaceToolsForRuntime({
+        env,
+        authority: "test.workspace",
+        admit: () => Effect.succeed({ ok: true }),
+        exposure: ["shell"],
+      }),
+    ).toThrow("shellPolicy");
+
+    const bindings = bindWorkspaceToolsForRuntime({
+      env,
+      authority: "test.workspace",
+      admit: () => Effect.succeed({ ok: true }),
+      exposure: ["mutation"],
+      mutationPolicy: "receipt-backed",
+    });
+
+    expect(Object.keys(bindings.tools ?? {}).sort()).toEqual([
+      "delete_path",
+      "edit_file",
+      "write_file",
+    ]);
+    expect(bindings.executionDomains).toEqual([
+      { domain: env.domain, replay: { access: "write", witness: "receipt" } },
+    ]);
     expect("externalExecutor" in bindings).toBe(false);
   });
 });

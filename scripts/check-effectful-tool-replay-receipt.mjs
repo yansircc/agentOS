@@ -111,10 +111,10 @@ const collectFailures = (root = repoRoot) => {
     failures.push(`${runtimeFile}: resume replay reads raw tool result payload`);
   }
 
-  const guardIndex = runtime.indexOf('tool.execution.kind === "external"');
+  const guardIndex = runtime.indexOf('resolvedExecution.resolved.witness === "receipt"');
   const executeIndex = runtime.indexOf("return yield* executeTool", guardIndex);
   if (guardIndex < 0 || executeIndex < 0) {
-    failures.push(`${runtimeFile}: missing submit-time external receipt guard before execute`);
+    failures.push(`${runtimeFile}: missing submit-time receipt witness guard before execute`);
   }
   if (!runtime.includes("EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON")) {
     failures.push(`${runtimeFile}: missing shared external execution receipt reason`);
@@ -192,7 +192,7 @@ const collectSelfTestFailures = () => {
         "  return replayToolFromArtifact(artifact.artifact);",
         "}",
         "/** The single termination funnel */",
-        'if (tool.execution.kind === "external") {',
+        'if (resolvedExecution.resolved.witness === "receipt") {',
         "  return EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON;",
         "}",
         "return yield* executeTool(tool);",

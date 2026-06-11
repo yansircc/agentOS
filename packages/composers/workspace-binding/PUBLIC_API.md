@@ -7,6 +7,11 @@ Status: 0.2.x active development for workspace submit binding composition. Publi
 ## Public exports
 
 - `.:BindWorkspaceToolsForRuntimeOptions`
+- `.:WORKSPACE_TOOL_EXPOSURE_PROFILES`
+- `.:WorkspaceMutationPolicy`
+- `.:WorkspaceShellPolicy`
+- `.:WorkspaceToolExposurePolicy`
+- `.:WorkspaceToolExposureProfile`
 - `.:bindWorkspaceToolsForRuntime`
 - `.:workspaceEnvMaterialRef`
 

@@ -1455,7 +1455,20 @@ export const submitAgentEffect = (
             });
           }
 
-          if (tool.execution.kind === "external") {
+          const resolvedExecution = resolveToolExecution(tool.execution, {
+            domains: spec.executionDomains ?? [],
+          });
+          if (!resolvedExecution.ok) {
+            return yield* new ToolError({
+              toolName: call.function.name,
+              cause: {
+                reason: "tool_execution_witness_resolution_failed",
+                issues: resolvedExecution.issues,
+              },
+            });
+          }
+
+          if (resolvedExecution.resolved.witness === "receipt") {
             yield* logRuntimeLedgerEvent(
               ledger,
               toolRejectedEvent({

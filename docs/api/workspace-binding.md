@@ -3,6 +3,11 @@
 ## Public exports
 
 - `.:BindWorkspaceToolsForRuntimeOptions`
+- `.:WORKSPACE_TOOL_EXPOSURE_PROFILES`
+- `.:WorkspaceMutationPolicy`
+- `.:WorkspaceShellPolicy`
+- `.:WorkspaceToolExposurePolicy`
+- `.:WorkspaceToolExposureProfile`
 - `.:bindWorkspaceToolsForRuntime`
 - `.:workspaceEnvMaterialRef`
 

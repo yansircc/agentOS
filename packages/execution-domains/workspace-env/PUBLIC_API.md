@@ -12,6 +12,7 @@ Status: 0.2.x active development. Public exports are limited to WorkspaceEnv typ
 - `.:GlobWorkspaceFilesOptions`
 - `.:GrepWorkspaceFilesOptions`
 - `.:NormalizeWorkspaceToolPathOptions`
+- `.:WORKSPACE_TOOL_SPECS`
 - `.:WalkWorkspaceFilesOptions`
 - `.:WorkspaceDeletePathResult`
 - `.:WorkspaceEditFileResult`
@@ -34,8 +35,12 @@ Status: 0.2.x active development. Public exports are limited to WorkspaceEnv typ
 - `.:WorkspaceToolDeleteHookInput`
 - `.:WorkspaceToolExecHookInput`
 - `.:WorkspaceToolEnvRef`
+- `.:WorkspaceToolCategory`
 - `.:WorkspaceToolHooks`
+- `.:WorkspaceToolName`
+- `.:WorkspaceToolSpec`
 - `.:WorkspaceToolWriteHookInput`
+- `.:WorkspaceTools`
 - `.:WorkspaceWriteFileResult`
 - `.:createWorkspaceEnv`
 - `.:createWorkspaceTools`

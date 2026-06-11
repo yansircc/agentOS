@@ -11,6 +11,7 @@ import {
   grepWorkspaceFiles,
   normalizeWorkspaceToolPath,
   walkWorkspaceFiles,
+  WORKSPACE_TOOL_SPECS,
   type WorkspaceEnvBackend,
   type WorkspaceExecOptions,
   type WorkspaceExecResult,
@@ -114,6 +115,28 @@ describe("@agent-os/workspace-env", () => {
     expect(() =>
       normalizeWorkspaceToolPath("/workspace/input/editor.json", { cwd: "/workspace" }),
     ).toThrow("host-absolute");
+  });
+
+  it("declares workspace tool specs as the generator for tool names and access", () => {
+    const { env } = workspace();
+    const tools = createWorkspaceTools(env, {
+      authority: "test.workspace",
+      admit: allowToolAdmitter,
+    });
+
+    expect(WORKSPACE_TOOL_SPECS.map((spec) => [spec.name, spec.category, spec.access])).toEqual([
+      ["read_file", "read", "read"],
+      ["write_file", "mutation", "write"],
+      ["edit_file", "mutation", "write"],
+      ["list_files", "read", "read"],
+      ["glob_files", "read", "read"],
+      ["grep_files", "read", "read"],
+      ["delete_path", "mutation", "write"],
+      ["run_shell", "shell", "write"],
+    ]);
+    expect(Object.keys(tools).sort()).toEqual(
+      WORKSPACE_TOOL_SPECS.map((spec) => spec.name).sort(),
+    );
   });
 
   it("walks workspace files deterministically and diffs pure snapshots", async () => {

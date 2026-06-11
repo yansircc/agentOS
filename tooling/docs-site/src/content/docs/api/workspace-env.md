@@ -12,6 +12,7 @@ title: "@agent-os/workspace-env Public API Intent"
 - `.:GlobWorkspaceFilesOptions`
 - `.:GrepWorkspaceFilesOptions`
 - `.:NormalizeWorkspaceToolPathOptions`
+- `.:WORKSPACE_TOOL_SPECS`
 - `.:WalkWorkspaceFilesOptions`
 - `.:WorkspaceDeletePathResult`
 - `.:WorkspaceEditFileResult`
@@ -34,8 +35,12 @@ title: "@agent-os/workspace-env Public API Intent"
 - `.:WorkspaceToolDeleteHookInput`
 - `.:WorkspaceToolExecHookInput`
 - `.:WorkspaceToolEnvRef`
+- `.:WorkspaceToolCategory`
 - `.:WorkspaceToolHooks`
+- `.:WorkspaceToolName`
+- `.:WorkspaceToolSpec`
 - `.:WorkspaceToolWriteHookInput`
+- `.:WorkspaceTools`
 - `.:WorkspaceWriteFileResult`
 - `.:createWorkspaceEnv`
 - `.:createWorkspaceTools`

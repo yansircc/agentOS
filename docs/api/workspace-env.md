@@ -8,6 +8,7 @@
 - `.:GlobWorkspaceFilesOptions`
 - `.:GrepWorkspaceFilesOptions`
 - `.:NormalizeWorkspaceToolPathOptions`
+- `.:WORKSPACE_TOOL_SPECS`
 - `.:WalkWorkspaceFilesOptions`
 - `.:WorkspaceDeletePathResult`
 - `.:WorkspaceEditFileResult`
@@ -30,8 +31,12 @@
 - `.:WorkspaceToolDeleteHookInput`
 - `.:WorkspaceToolExecHookInput`
 - `.:WorkspaceToolEnvRef`
+- `.:WorkspaceToolCategory`
 - `.:WorkspaceToolHooks`
+- `.:WorkspaceToolName`
+- `.:WorkspaceToolSpec`
 - `.:WorkspaceToolWriteHookInput`
+- `.:WorkspaceTools`
 - `.:WorkspaceWriteFileResult`
 - `.:createWorkspaceEnv`
 - `.:createWorkspaceTools`

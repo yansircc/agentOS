@@ -20,6 +20,7 @@ import {
   externalToolExecution,
   deterministicToolExecution,
   resolveToolExecution,
+  withToolReadRequirement,
   withToolWriteRequirement,
 } from "@agent-os/kernel/tools";
 import { ToolError } from "@agent-os/kernel/errors";
@@ -444,6 +445,78 @@ describe("submit-agent runtime event writes", () => {
             publicMessage: "This tool requires a receipt-backed execution path before it can run.",
           },
         ],
+      });
+    }),
+  );
+
+  it.effect("executes external read tools when the domain law uses snapshot witness", () =>
+    Effect.gen(function* () {
+      let liveToolExecuteCalled = false;
+      const domain = { kind: "workspace" as const, ref: "workspace:default" };
+      const tool = defineTool({
+        name: "read_file",
+        description: "read file",
+        args: Schema.Struct({ path: Schema.String }),
+        execute: ({ path }) => {
+          liveToolExecuteCalled = true;
+          return withToolReadRequirement(Effect.succeed({ path, content: "snapshot" }));
+        },
+        authority: "read",
+        admit: () => Effect.succeed({ ok: true }),
+        execution: externalToolExecution("read", domain),
+      });
+
+      const { result, events } = yield* runSubmit(
+        baseSpec({
+          tools: { read_file: tool },
+          executionDomains: [{ domain, replay: { access: "read", witness: "snapshot" } }],
+        }),
+        [
+          response({
+            items: [
+              { type: "message", text: "read file" },
+              {
+                type: "tool_call",
+                call: {
+                  id: "call-1",
+                  type: "function",
+                  function: { name: "read_file", arguments: '{"path":"input/editor.json"}' },
+                },
+              },
+            ],
+          }),
+          response({ items: [{ type: "message", text: "done" }] }),
+        ],
+      );
+
+      expect(result).toMatchObject({ ok: true });
+      expect(liveToolExecuteCalled).toBe(true);
+      expect(decodedRuntimeKinds(events)).toContain("tool.executed");
+      expect(decodedRuntimeKinds(events)).not.toContain("tool.rejected");
+
+      const toolEvent = events
+        .map((event) => decodeRuntimeLedgerEvent(event))
+        .find((decoded) => decoded._tag === "runtime" && decoded.event.kind === "tool.executed");
+      if (toolEvent?._tag !== "runtime" || toolEvent.event.kind !== "tool.executed") {
+        expect.fail("expected tool.executed runtime event");
+      }
+      const resolved = resolveToolExecution(toolEvent.event.payload.execution, {
+        domains: [{ domain, replay: { access: "read", witness: "snapshot" } }],
+      });
+      if (!resolved.ok) {
+        expect.fail("expected external read tool execution to resolve");
+      }
+      const artifact = toolReplayArtifactFromExecutedPayload(
+        toolEvent.event.payload,
+        resolved.resolved,
+      );
+      expect(artifact).toMatchObject({
+        ok: true,
+        artifact: {
+          kind: "tool.result",
+          execution: { kind: "external", access: "read", domain },
+          result: { path: "input/editor.json", content: "snapshot" },
+        },
       });
     }),
   );
