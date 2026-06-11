@@ -1,5 +1,5 @@
 {
-  "name": "@agent-os/workspace-binding",
+  "name": "@agent-os/workspace-op",
   "version": "0.2.9",
   "private": true,
   "type": "module",
@@ -17,9 +17,6 @@
   },
   "dependencies": {
     "@agent-os/kernel": "workspace:*",
-    "@agent-os/runtime-protocol": "workspace:*",
-    "@agent-os/workspace-env": "workspace:*",
-    "@agent-os/workspace-op": "workspace:*",
     "effect": "catalog:"
   },
   "devDependencies": {

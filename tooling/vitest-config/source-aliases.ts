@@ -38,6 +38,7 @@ export const agentOsSourceAliasSpecs = [
   ["@agent-os/staging-artifact", "packages/carriers/staging-artifact/src/index.ts"],
   ["@agent-os/tenant-material", "packages/providers/tenant-material/src/index.ts"],
   ["@agent-os/verification", "packages/carriers/verification/src/index.ts"],
+  ["@agent-os/workspace-op", "packages/carriers/workspace-op/src/index.ts"],
   ["@agent-os/workspace-session", "packages/carriers/workspace-session/src/index.ts"],
   ["@agent-os/attached-stream", "packages/composers/attached-stream/src/index.ts"],
   ["@agent-os/ag-ui", "packages/wire-adapters/ag-ui/src/index.ts"],
@@ -57,6 +58,7 @@ export const agentOsSourceAliasSpecs = [
     "packages/providers/image-resource-settlement/src/index.ts",
   ],
   ["@agent-os/resource-cloudflare", "packages/providers/resource-cloudflare/src/index.ts"],
+  ["@agent-os/workspace-op-local", "packages/providers/workspace-op-local/src/index.ts"],
   ["@agent-os/sandbox-cloudflare", "packages/execution-domains/sandbox-cloudflare/src/index.ts"],
   [
     "@agent-os/workspace-env-cloudflare",

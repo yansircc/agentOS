@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Predicate, Schema } from "effect";
 import {
   LlmOutputItemSchema,
   LlmUsageSchema,
@@ -43,6 +43,7 @@ export const RUNTIME_EVENT_KIND = {
 
 export const TOOL_RESULT_SNAPSHOT_VERSION = "tool-result-snapshot-v1";
 export const EXTERNAL_TOOL_EXECUTION_RECEIPT_VERSION = "external-tool-execution-receipt-v1";
+export const RECEIPT_BACKED_TOOL_RESULT_VERSION = "receipt-backed-tool-result-v1";
 export const EXTERNAL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON =
   "external_tool_replay_requires_receipt";
 export const TOOL_EXECUTION_CLAIM_MUST_BE_LIVED_REASON = "tool_execution_claim_must_be_lived";
@@ -164,6 +165,15 @@ export interface ExternalToolExecutionReceipt {
   readonly idempotencyKey: string;
   readonly receipt: ExternalReceiptAnchorRef;
   readonly traceContext?: TraceContext;
+}
+
+export interface ReceiptBackedToolResult {
+  readonly kind: "tool.receipt_backed_result";
+  readonly version: typeof RECEIPT_BACKED_TOOL_RESULT_VERSION;
+  readonly result: unknown;
+  readonly claim: LivedClaim;
+  readonly idempotencyKey: string;
+  readonly receipt: ExternalReceiptAnchorRef;
 }
 
 export type ToolReplayArtifact = ToolResultSnapshot | ExternalToolExecutionReceipt;
@@ -651,6 +661,57 @@ const externalReceiptAnchorFromClaim = (claim: LivedClaim): ExternalReceiptAncho
   claim.anchorRef.anchorKind === "external_receipt"
     ? (claim.anchorRef as ExternalReceiptAnchorRef)
     : null;
+
+export const receiptBackedToolResult = (spec: {
+  readonly result: unknown;
+  readonly claim: LivedClaim;
+  readonly idempotencyKey?: string;
+  readonly receipt?: ExternalReceiptAnchorRef;
+}): ReceiptBackedToolResult => {
+  const receipt = spec.receipt ?? externalReceiptAnchorFromClaim(spec.claim);
+  if (receipt === null || receipt.anchorKind !== "external_receipt") {
+    throw new TypeError("receipt-backed tool result requires external_receipt anchor");
+  }
+  return {
+    kind: "tool.receipt_backed_result",
+    version: RECEIPT_BACKED_TOOL_RESULT_VERSION,
+    result: spec.result,
+    claim: spec.claim,
+    idempotencyKey: spec.idempotencyKey ?? spec.claim.operationRef,
+    receipt,
+  };
+};
+
+export const receiptBackedToolResultFromUnknown = (
+  value: unknown,
+): ReceiptBackedToolResult | null => {
+  if (!Predicate.isRecord(value)) return null;
+  if (value.kind !== "tool.receipt_backed_result") return null;
+  if (value.version !== RECEIPT_BACKED_TOOL_RESULT_VERSION) return null;
+  if (typeof value.idempotencyKey !== "string" || value.idempotencyKey.length === 0) return null;
+  const claim = livedClaimFromUnknown(value.claim);
+  if (claim === null) return null;
+  const receipt = externalReceiptAnchorFromClaim(claim);
+  if (receipt === null) return null;
+  const declaredReceipt = value.receipt;
+  if (
+    declaredReceipt !== undefined &&
+    (!Predicate.isRecord(declaredReceipt) ||
+      declaredReceipt.anchorId !== receipt.anchorId ||
+      declaredReceipt.anchorKind !== receipt.anchorKind ||
+      declaredReceipt.carrierRef !== receipt.carrierRef)
+  ) {
+    return null;
+  }
+  return {
+    kind: "tool.receipt_backed_result",
+    version: RECEIPT_BACKED_TOOL_RESULT_VERSION,
+    result: value.result,
+    claim,
+    idempotencyKey: value.idempotencyKey,
+    receipt,
+  };
+};
 
 export const toolResultSnapshotFromExecutedPayload = (
   payload: Omit<ToolExecutedPayload, "claim"> & { readonly claim: LivedClaim },

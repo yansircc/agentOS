@@ -20,6 +20,8 @@ import {
   RUNTIME_ABORT_EVENT_KINDS,
   replayToolFromArtifact,
   replayToolResultFromSnapshot,
+  receiptBackedToolResult,
+  receiptBackedToolResultFromUnknown,
   toolReplayArtifactFromExecutedPayload,
   toolExecutedEvent,
   toolResultSnapshotFromExecutedPayload,
@@ -316,6 +318,27 @@ describe("runtime event vocabulary", () => {
       idempotencyKey: receiptBackedLivedClaim.operationRef,
       receipt: receiptBackedLivedClaim.anchorRef,
     });
+  });
+
+  it("validates receipt-backed bridge results before runtime logs tool.executed", () => {
+    const result = receiptBackedToolResult({
+      result: { kind: "write_file", path: "out.txt", bytesWritten: 4 },
+      claim: receiptBackedLivedClaim,
+    });
+
+    expect(receiptBackedToolResultFromUnknown(result)).toEqual(result);
+    expect(
+      receiptBackedToolResultFromUnknown({
+        ...result,
+        claim: livedClaim,
+      }),
+    ).toBeNull();
+    expect(() =>
+      receiptBackedToolResult({
+        result: { ok: true },
+        claim: livedClaim,
+      }),
+    ).toThrow("external_receipt");
   });
 
   it("rejects missing required runtime payload fields", () => {

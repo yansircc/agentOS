@@ -1,5 +1,5 @@
 {
-  "name": "@agent-os/workspace-binding",
+  "name": "@agent-os/workspace-op-local",
   "version": "0.2.9",
   "private": true,
   "type": "module",
@@ -17,17 +17,13 @@
   },
   "dependencies": {
     "@agent-os/kernel": "workspace:*",
-    "@agent-os/runtime-protocol": "workspace:*",
     "@agent-os/workspace-env": "workspace:*",
-    "@agent-os/workspace-op": "workspace:*",
-    "effect": "catalog:"
+    "@agent-os/workspace-op": "workspace:*"
   },
   "devDependencies": {
+    "@types/node": "^24.12.4",
     "typescript": "catalog:",
     "vite-plus": "catalog:",
     "vitest": "catalog:"
-  },
-  "peerDependencies": {
-    "effect": "^3.21.0"
   }
 }

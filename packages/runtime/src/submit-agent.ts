@@ -64,6 +64,7 @@ import {
   llmResponseEvent,
   RUNTIME_FACT_OWNER,
   RUNTIME_EVENT_KIND,
+  receiptBackedToolResultFromUnknown,
   toolExecutedEvent,
   toolReplayArtifactFromExecutedPayload,
   toolRejectedEvent,
@@ -175,6 +176,40 @@ const schemaIssuesFromToolError = (
   );
   return issues.length === 0 ? undefined : issues;
 };
+
+const receiptBackedToolBindingReason = (
+  spec: InternalSubmitSpec,
+  toolName: string,
+): string | null => {
+  const binding = spec.receiptBackedTools?.[toolName];
+  if (binding === undefined) return EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON;
+  const declaredIntentKinds = new Set((spec.toolIntents ?? []).map((intent) => intent.kind));
+  return binding.intentKinds.every((kind) => declaredIntentKinds.has(kind))
+    ? null
+    : "receipt_backed_tool_missing_declared_intent";
+};
+
+const claimMatchesPreClaim = (
+  claim: {
+    readonly operationRef: string;
+    readonly scopeRef: PreClaim["scopeRef"];
+    readonly effectAuthorityRef: PreClaim["effectAuthorityRef"];
+    readonly originRef: PreClaim["originRef"];
+  },
+  preClaim: PreClaim,
+): boolean =>
+  claim.operationRef === preClaim.operationRef &&
+  claim.scopeRef.kind === preClaim.scopeRef.kind &&
+  claim.scopeRef.scopeId === preClaim.scopeRef.scopeId &&
+  (claim.scopeRef.kind !== "external" ||
+    (preClaim.scopeRef.kind === "external" &&
+      claim.scopeRef.systemRef === preClaim.scopeRef.systemRef)) &&
+  claim.effectAuthorityRef.authorityClass === preClaim.effectAuthorityRef.authorityClass &&
+  claim.effectAuthorityRef.authorityId === preClaim.effectAuthorityRef.authorityId &&
+  claim.effectAuthorityRef.version === preClaim.effectAuthorityRef.version &&
+  claim.originRef.originKind === preClaim.originRef.originKind &&
+  claim.originRef.originId === preClaim.originRef.originId &&
+  claim.originRef.version === preClaim.originRef.version;
 
 const payloadWithToolPreClaim = (
   contract: BoundaryContract,
@@ -1468,7 +1503,11 @@ export const submitAgentEffect = (
             });
           }
 
-          if (resolvedExecution.resolved.witness === "receipt") {
+          const receiptBindingReason =
+            resolvedExecution.resolved.witness === "receipt"
+              ? receiptBackedToolBindingReason(spec, call.function.name)
+              : null;
+          if (receiptBindingReason !== null) {
             yield* logRuntimeLedgerEvent(
               ledger,
               toolRejectedEvent({
@@ -1478,16 +1517,13 @@ export const submitAgentEffect = (
                 name: call.function.name,
                 args: call.function.arguments,
                 execution: tool.execution,
-                claim: settleToolExecutionRejected(
-                  claim,
-                  EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
-                ),
+                claim: settleToolExecutionRejected(claim, receiptBindingReason),
                 traceContext,
               }),
             );
             return yield* new ToolError({
               toolName: call.function.name,
-              cause: { reason: EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON },
+              cause: { reason: receiptBindingReason },
             });
           }
 
@@ -1636,7 +1672,59 @@ export const submitAgentEffect = (
             }),
           );
 
-          const resultStr = yield* safeStringify(result);
+          const terminal =
+            resolvedExecution.resolved.witness === "receipt"
+              ? receiptBackedToolResultFromUnknown(result)
+              : null;
+          if (resolvedExecution.resolved.witness === "receipt" && terminal === null) {
+            yield* logRuntimeLedgerEvent(
+              ledger,
+              toolRejectedEvent({
+                ...identity,
+                runId: started.id,
+                toolCallId: call.id,
+                name: call.function.name,
+                args: call.function.arguments,
+                execution: tool.execution,
+                claim: settleToolExecutionRejected(
+                  claim,
+                  EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
+                ),
+                traceContext,
+              }),
+            );
+            return yield* new ToolError({
+              toolName: call.function.name,
+              cause: { reason: EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON },
+            });
+          }
+          if (
+            terminal !== null &&
+            (!claimMatchesPreClaim(terminal.claim, claim) ||
+              terminal.receipt.anchorKind !== "external_receipt")
+          ) {
+            yield* logRuntimeLedgerEvent(
+              ledger,
+              toolRejectedEvent({
+                ...identity,
+                runId: started.id,
+                toolCallId: call.id,
+                name: call.function.name,
+                args: call.function.arguments,
+                execution: tool.execution,
+                claim: settleToolExecutionRejected(claim, "receipt_backed_tool_claim_mismatch"),
+                traceContext,
+              }),
+            );
+            return yield* new ToolError({
+              toolName: call.function.name,
+              cause: { reason: "receipt_backed_tool_claim_mismatch" },
+            });
+          }
+
+          const toolResult = terminal?.result ?? result;
+          const toolClaim = terminal?.claim ?? settleToolExecuted(claim, contract);
+          const resultStr = yield* safeStringify(toolResult);
           yield* logRuntimeLedgerEvent(
             ledger,
             toolExecutedEvent({
@@ -1646,8 +1734,8 @@ export const submitAgentEffect = (
               name: call.function.name,
               args: call.function.arguments,
               execution: tool.execution,
-              result,
-              claim: settleToolExecuted(claim, contract),
+              result: toolResult,
+              claim: toolClaim,
               traceContext,
             }),
           );

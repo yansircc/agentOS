@@ -5,7 +5,12 @@ import type { ExecutionDomainDeclaration, Tool } from "@agent-os/kernel/tools";
 import type { AnyAgentCapabilityDefinition } from "./capability";
 import type { HandlerKind } from "./manifest";
 import type { AgentIntent } from "./intent";
-import type { SubmitDecisionInterrupt, SubmitToolContext, SubmitToolIntent } from "./submit";
+import type {
+  SubmitDecisionInterrupt,
+  SubmitReceiptBackedToolBinding,
+  SubmitToolContext,
+  SubmitToolIntent,
+} from "./submit";
 
 export interface AgentHandlerContext {
   readonly intent: AgentIntent;
@@ -37,6 +42,7 @@ export interface AgentSubmitBindings {
   readonly resolvedMaterials?: Readonly<Record<string, ResolvedMaterial>>;
   readonly toolContext?: SubmitToolContext;
   readonly toolIntents?: ReadonlyArray<SubmitToolIntent>;
+  readonly receiptBackedTools?: Readonly<Record<string, SubmitReceiptBackedToolBinding>>;
   readonly context?: Record<string, unknown>;
   readonly decisionInterrupts?: ReadonlyArray<SubmitDecisionInterrupt>;
 }

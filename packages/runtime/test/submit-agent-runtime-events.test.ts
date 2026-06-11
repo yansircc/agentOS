@@ -41,6 +41,7 @@ import {
   EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
   projectFailureDiagnostics,
   replayToolFromArtifact,
+  receiptBackedToolResult,
   toolReplayArtifactFromExecutedPayload,
   type InternalSubmitSpec,
 } from "@agent-os/runtime-protocol";
@@ -445,6 +446,128 @@ describe("submit-agent runtime event writes", () => {
             publicMessage: "This tool requires a receipt-backed execution path before it can run.",
           },
         ],
+      });
+    }),
+  );
+
+  it.effect("records receipt-backed external tool execution from a declared bridge result", () =>
+    Effect.gen(function* () {
+      let bridgeExecuteCalled = false;
+      const domain = { kind: "workspace" as const, ref: "workspace:default" };
+      const receiptClaim = {
+        phase: "lived" as const,
+        operationRef: "tool:submit-runtime-events:1:0:call-1",
+        scopeRef: { kind: "conversation" as const, scopeId: scope },
+        effectAuthorityRef: { authorityClass: "write", authorityId: "tool:write_file" },
+        originRef: { originId: "run:1", originKind: "submit" },
+        anchorRef: {
+          anchorId: "workspace_op:receipt:tool:submit-runtime-events:1:0:call-1:7",
+          anchorKind: "external_receipt" as const,
+          carrierRef: "workspace_op:carrier:workspace-op",
+        },
+      };
+      const tool = defineTool({
+        name: "write_file",
+        description: "write file",
+        args: Schema.Struct({ path: Schema.String }),
+        execute: ({ path }) => {
+          bridgeExecuteCalled = true;
+          return withToolWriteRequirement(
+            Effect.succeed(
+              receiptBackedToolResult({
+                result: { kind: "write_file", path, bytesWritten: 5, resultHash: "sha256:abc" },
+                claim: receiptClaim,
+              }),
+            ),
+          );
+        },
+        authority: "write",
+        admit: () => Effect.succeed({ ok: true }),
+        execution: externalToolExecution("write", domain),
+      });
+
+      const { result, events } = yield* runSubmit(
+        baseSpec({
+          tools: { write_file: tool },
+          executionDomains: [{ domain, replay: { access: "write", witness: "receipt" } }],
+          toolIntents: [
+            {
+              kind: "workspace_op.requested",
+              boundaryPackage: boundaryPackage(
+                defineBoundaryContract({
+                  packageId: "@agent-os/workspace-op",
+                  kindPrefixes: ["workspace_op."],
+                  roles: ["generator", "reader"],
+                  events: {
+                    "workspace_op.requested": {
+                      payloadSchema: {
+                        type: "object",
+                        properties: { requestedBy: { type: "string" } },
+                        required: ["requestedBy"],
+                        additionalProperties: true,
+                      },
+                    },
+                  },
+                  effectAuthorityContracts: [],
+                  materialRequirements: [],
+                  settlement: defineSettlementContract({
+                    settlementId: "@agent-os/workspace-op",
+                    anchorKinds: ["external_receipt"],
+                    rejectionKinds: ["provider_rejected"],
+                  }),
+                  projection: { derivedFromLedger: true, shadowState: false },
+                }),
+                "0.2.9",
+              ),
+            },
+          ],
+          receiptBackedTools: {
+            write_file: {
+              kind: "intent_projection",
+              intentKinds: ["workspace_op.requested"],
+            },
+          },
+        }),
+        [
+          response({
+            items: [
+              { type: "message", text: "write file" },
+              {
+                type: "tool_call",
+                call: {
+                  id: "call-1",
+                  type: "function",
+                  function: { name: "write_file", arguments: '{"path":"out.txt"}' },
+                },
+              },
+            ],
+          }),
+          response({ items: [{ type: "message", text: "done" }] }),
+        ],
+      );
+
+      expect(result).toMatchObject({ ok: true, final: "done" });
+      expect(bridgeExecuteCalled).toBe(true);
+      const toolEvent = events
+        .map((event) => decodeRuntimeLedgerEvent(event))
+        .find((decoded) => decoded._tag === "runtime" && decoded.event.kind === "tool.executed");
+      if (toolEvent?._tag !== "runtime" || toolEvent.event.kind !== "tool.executed") {
+        expect.fail("expected tool.executed runtime event");
+      }
+      expect(toolEvent.event.payload).toMatchObject({
+        result: { kind: "write_file", path: "out.txt", bytesWritten: 5 },
+        claim: { phase: "lived", anchorRef: { anchorKind: "external_receipt" } },
+      });
+      const resolved = resolveToolExecution(toolEvent.event.payload.execution, {
+        domains: [{ domain, replay: { access: "write", witness: "receipt" } }],
+      });
+      if (!resolved.ok) expect.fail("expected receipt execution to resolve");
+      expect(toolReplayArtifactFromExecutedPayload(toolEvent.event.payload, resolved.resolved)).toMatchObject({
+        ok: true,
+        artifact: {
+          kind: "tool.execution.receipt",
+          receipt: { anchorKind: "external_receipt" },
+        },
       });
     }),
   );

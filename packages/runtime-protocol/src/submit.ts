@@ -16,6 +16,11 @@ export interface SubmitToolIntent {
   readonly boundaryPackage: BoundaryPackage;
 }
 
+export interface SubmitReceiptBackedToolBinding {
+  readonly kind: "intent_projection";
+  readonly intentKinds: ReadonlyArray<string>;
+}
+
 export type SubmitToolContext = Pick<ToolExecutionContextInput, "extensions">;
 
 /**
@@ -46,6 +51,7 @@ export interface SubmitSpec {
   readonly resolvedMaterials?: Readonly<Record<string, ResolvedMaterial>>;
   readonly toolContext?: SubmitToolContext;
   readonly toolIntents?: ReadonlyArray<SubmitToolIntent>;
+  readonly receiptBackedTools?: Readonly<Record<string, SubmitReceiptBackedToolBinding>>;
   readonly decisionInterrupts?: ReadonlyArray<SubmitDecisionInterrupt>;
   readonly resume?: SubmitResumeDecision;
 }
