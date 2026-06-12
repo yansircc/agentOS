@@ -16,6 +16,9 @@
 - `.:AgUiLedgerEnvelopeProjectionSpec`
 - `.:AgUiLedgerEventEnvelope`
 - `.:AgUiLedgerProjectionSpec`
+- `.:AgUiSafeExtensionPayloadField`
+- `.:AgUiSafeExtensionPayloadPath`
+- `.:AgUiSafeExtensionPayloadProjectionSpec`
 - `.:AgUiSafeLedgerEvent`
 - `.:AgUiSafeValue`
 - `.:AgUiSseChunk`
@@ -49,6 +52,7 @@
 - `.:encodeAgUiLedgerEventEnvelopeSse`
 - `.:framesForAgUiLedgerEnvelope`
 - `.:framesForAgUiLedgerEnvelopes`
+- `.:projectAgUiSafeExtensionPayload`
 - `.:projectAgUiFramesToActivities`
 - `.:projectAgUiFrames`
 - `.:projectLedgerEventToAgUiEnvelope`

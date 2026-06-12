@@ -240,9 +240,24 @@ export type AgUiSafeLedgerEvent = {
   readonly ts: number;
   readonly kind: string;
   readonly scopeKey: string;
+  readonly safePayload?: Readonly<Record<string, AgUiSafeValue>>;
 };
 
+export type AgUiSafeExtensionPayloadPath = string | ReadonlyArray<string>;
+
+export type AgUiSafeExtensionPayloadField =
+  | AgUiSafeExtensionPayloadPath
+  | {
+      readonly path: AgUiSafeExtensionPayloadPath;
+      readonly name?: string;
+    };
+
+export type AgUiSafeExtensionPayloadProjectionSpec = Readonly<
+  Record<string, ReadonlyArray<AgUiSafeExtensionPayloadField>>
+>;
+
 export type AgUiLedgerProjectionSpec = AgUiRuntimeProjectionSpec & {
+  readonly safeExtensionPayload?: AgUiSafeExtensionPayloadProjectionSpec;
   readonly projectSafeExtensionEvent?: (
     event: AgUiSafeLedgerEvent,
   ) => ReadonlyArray<AgUiCustomFrame>;
@@ -420,12 +435,109 @@ const redactedSummaryText = (
   reason: "tool_arguments" | "tool_result" | "run_output" | "run_input" | "provider_error",
 ): string => JSON.stringify(redactedSummary(value, reason));
 
-const safeExtensionEventFor = (event: LedgerEvent): AgUiSafeLedgerEvent => ({
-  id: event.id,
-  ts: event.ts,
-  kind: event.kind,
-  scopeKey: scopeRefKey(event.scopeRef),
-});
+const payloadPathSegments = (path: AgUiSafeExtensionPayloadPath): ReadonlyArray<string> =>
+  typeof path === "string" ? path.split(".").filter((segment) => segment.length > 0) : path;
+
+const isPayloadFieldObject = (
+  field: AgUiSafeExtensionPayloadField,
+): field is { readonly path: AgUiSafeExtensionPayloadPath; readonly name?: string } =>
+  typeof field === "object" && !Array.isArray(field);
+
+const payloadFieldPath = (field: AgUiSafeExtensionPayloadField): AgUiSafeExtensionPayloadPath =>
+  isPayloadFieldObject(field) ? field.path : field;
+
+const payloadFieldName = (field: AgUiSafeExtensionPayloadField): string | undefined =>
+  isPayloadFieldObject(field) ? field.name : undefined;
+
+const payloadValueAt = (payload: unknown, path: AgUiSafeExtensionPayloadPath): unknown => {
+  let current = payload;
+  for (const segment of payloadPathSegments(path)) {
+    if (current === null || typeof current !== "object" || !Object.hasOwn(current, segment)) {
+      return undefined;
+    }
+    current = (current as Record<string, unknown>)[segment];
+  }
+  return current;
+};
+
+const safeValueFromUnknown = (value: unknown): AgUiSafeValue | undefined => {
+  if (
+    value === null ||
+    typeof value === "boolean" ||
+    (typeof value === "number" && Number.isFinite(value)) ||
+    typeof value === "string"
+  ) {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    const items: AgUiSafeValue[] = [];
+    for (const item of value) {
+      const safeItem = safeValueFromUnknown(item);
+      if (safeItem === undefined) return undefined;
+      items.push(safeItem);
+    }
+    return items;
+  }
+
+  if (value !== null && typeof value === "object") {
+    const record: Record<string, AgUiSafeValue> = {};
+    for (const [key, item] of Object.entries(value)) {
+      const safeItem = safeValueFromUnknown(item);
+      if (safeItem === undefined) return undefined;
+      record[key] = safeItem;
+    }
+    return record;
+  }
+
+  return undefined;
+};
+
+const defaultPayloadFieldName = (path: AgUiSafeExtensionPayloadPath): string | undefined => {
+  const segments = payloadPathSegments(path);
+  return segments.at(-1);
+};
+
+/**
+ * Projects allowlisted ledger payload fields into a browser-safe value object.
+ *
+ * @public
+ */
+export const projectAgUiSafeExtensionPayload = (
+  payload: unknown,
+  fields: ReadonlyArray<AgUiSafeExtensionPayloadField>,
+): Readonly<Record<string, AgUiSafeValue>> | undefined => {
+  const projected: Record<string, AgUiSafeValue> = {};
+  for (const field of fields) {
+    const path = payloadFieldPath(field);
+    const name = payloadFieldName(field) ?? defaultPayloadFieldName(path);
+    if (name === undefined) continue;
+    const value = payloadValueAt(payload, path);
+    if (value === undefined) continue;
+    const safeValue = safeValueFromUnknown(value);
+    if (safeValue !== undefined) {
+      projected[name] = safeValue;
+    }
+  }
+  return Object.keys(projected).length > 0 ? projected : undefined;
+};
+
+const safeExtensionEventFor = (
+  event: LedgerEvent,
+  spec: AgUiLedgerProjectionSpec,
+): AgUiSafeLedgerEvent => {
+  const safePayload =
+    spec.safeExtensionPayload?.[event.kind] === undefined
+      ? undefined
+      : projectAgUiSafeExtensionPayload(event.payload, spec.safeExtensionPayload[event.kind]);
+  return {
+    id: event.id,
+    ts: event.ts,
+    kind: event.kind,
+    scopeKey: scopeRefKey(event.scopeRef),
+    ...(safePayload === undefined ? {} : { safePayload }),
+  };
+};
 
 const isSafeRuntimeCustomValue = (value: AgUiSafeValue): AgUiSafeValue => value;
 
@@ -786,7 +898,9 @@ export const projectLedgerEventsToAgUiFrames = (
       frames.push(...projectRuntimeEventToAgUiFrames(decoded.event, spec));
       continue;
     }
-    frames.push(...(spec.projectSafeExtensionEvent?.(safeExtensionEventFor(decoded.event)) ?? []));
+    frames.push(
+      ...(spec.projectSafeExtensionEvent?.(safeExtensionEventFor(decoded.event, spec)) ?? []),
+    );
   }
   return frames;
 };

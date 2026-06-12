@@ -20,6 +20,9 @@ title: "@agent-os/ag-ui Public API Intent"
 - `.:AgUiLedgerEnvelopeProjectionSpec`
 - `.:AgUiLedgerEventEnvelope`
 - `.:AgUiLedgerProjectionSpec`
+- `.:AgUiSafeExtensionPayloadField`
+- `.:AgUiSafeExtensionPayloadPath`
+- `.:AgUiSafeExtensionPayloadProjectionSpec`
 - `.:AgUiSafeLedgerEvent`
 - `.:AgUiSafeValue`
 - `.:AgUiSseChunk`
@@ -53,6 +56,7 @@ title: "@agent-os/ag-ui Public API Intent"
 - `.:encodeAgUiLedgerEventEnvelopeSse`
 - `.:framesForAgUiLedgerEnvelope`
 - `.:framesForAgUiLedgerEnvelopes`
+- `.:projectAgUiSafeExtensionPayload`
 - `.:projectAgUiFramesToActivities`
 - `.:projectAgUiFrames`
 - `.:projectLedgerEventToAgUiEnvelope`

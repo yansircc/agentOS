@@ -30,6 +30,11 @@ envelopes after runtime payloads decode:
 import { projectLedgerEventsToAgUiFrames, decodeLedgerEventToAgUiEnvelope } from "@agent-os/ag-ui";
 ```
 
+Extension event details must enter AG-UI through `safeExtensionPayload` field
+allowlists. The custom extension mapper receives only `AgUiSafeLedgerEvent`
+metadata plus that browser-safe projected payload; it does not receive raw
+ledger payloads.
+
 Use `projectToolToAgUiTool` to expose AG-UI tool declarations generated from
 `AgentSchema.projections.agUi`.
 

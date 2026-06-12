@@ -23,6 +23,7 @@ import {
   decodeLedgerEventToAgUiEnvelope,
   encodeAgUiLedgerEventEnvelopeSse,
   framesForAgUiLedgerEnvelope,
+  projectAgUiSafeExtensionPayload,
   projectAgUiFramesToActivities,
   projectAgUiFrames,
   projectLedgerEventToAgUiEnvelope,
@@ -480,16 +481,23 @@ describe("@agent-os/ag-ui", () => {
           ts: 1,
           ...eventIdentity(scope),
           kind: "workspace.file.observed",
-          payload: { path: "README.md", content: "not exposed" },
+          payload: {
+            path: "README.md",
+            content: "not exposed",
+            stats: { bytes: 12, secret: "nested secret" },
+          },
         },
       ],
       {
+        safeExtensionPayload: {
+          "workspace.file.observed": ["path", { path: "stats.bytes", name: "bytes" }],
+        },
         projectSafeExtensionEvent: (event) => [
           {
             type: "CUSTOM",
             timestamp: event.ts,
             name: event.kind,
-            value: { id: event.id, path: "README.md" },
+            value: { id: event.id, payload: event.safePayload ?? null },
           },
         ],
       },
@@ -499,10 +507,42 @@ describe("@agent-os/ag-ui", () => {
         type: "CUSTOM",
         timestamp: 1,
         name: "workspace.file.observed",
-        value: { id: 1, path: "README.md" },
+        value: { id: 1, payload: { path: "README.md", bytes: 12 } },
       },
     ]);
     expect(JSON.stringify(frames)).not.toContain("not exposed");
+    expect(JSON.stringify(frames)).not.toContain("nested secret");
+  });
+
+  it("projects extension payload fields by allowlist without exposing unlisted raw payload", () => {
+    const projected = projectAgUiSafeExtensionPayload(
+      {
+        toolName: "write_file",
+        path: "/output/result.json",
+        content: "raw terminal bytes",
+        terminalArtifact: {
+          schemaId: "zeroy.agent_result.v1",
+          bytes: 100,
+          sha256: "sha256:test",
+        },
+        unsafe: () => "not serializable",
+      },
+      [
+        "toolName",
+        "path",
+        { path: "terminalArtifact.schemaId", name: "schemaId" },
+        { path: "terminalArtifact.bytes", name: "bytes" },
+        "unsafe",
+      ],
+    );
+
+    expect(projected).toEqual({
+      toolName: "write_file",
+      path: "/output/result.json",
+      schemaId: "zeroy.agent_result.v1",
+      bytes: 100,
+    });
+    expect(JSON.stringify(projected)).not.toContain("raw terminal bytes");
   });
 
   it("verifies fixture-owned forbidden literals as regression evidence only", () => {

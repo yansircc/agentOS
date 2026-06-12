@@ -20,6 +20,9 @@ Status: 0.2.x active development for AG-UI wire projection. Public exports are l
 - `.:AgUiLedgerEnvelopeProjectionSpec`
 - `.:AgUiLedgerEventEnvelope`
 - `.:AgUiLedgerProjectionSpec`
+- `.:AgUiSafeExtensionPayloadField`
+- `.:AgUiSafeExtensionPayloadPath`
+- `.:AgUiSafeExtensionPayloadProjectionSpec`
 - `.:AgUiSafeLedgerEvent`
 - `.:AgUiSafeValue`
 - `.:AgUiSseChunk`
@@ -53,6 +56,7 @@ Status: 0.2.x active development for AG-UI wire projection. Public exports are l
 - `.:encodeAgUiLedgerEventEnvelopeSse`
 - `.:framesForAgUiLedgerEnvelope`
 - `.:framesForAgUiLedgerEnvelopes`
+- `.:projectAgUiSafeExtensionPayload`
 - `.:projectAgUiFramesToActivities`
 - `.:projectAgUiFrames`
 - `.:projectLedgerEventToAgUiEnvelope`
