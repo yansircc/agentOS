@@ -14,6 +14,7 @@ import {
   type AgentEventHandlerContext,
   type AgentEventHandlerRegistration,
   type AgentSubmitSpec,
+  type AgentWorkspaceJobSpec,
   type AgentTriggerCancelSpec,
   type AgentTriggerIntentSpec,
   type CloudflareAgentEnv,
@@ -33,6 +34,7 @@ import {
   type LlmRouteMap,
 } from "./facade-lowering";
 import { cloudflareDefaultTruthIdentityFromRoutingScope } from "./ledger/identity";
+import type { WorkspaceJobProjection } from "@agent-os/workspace-job";
 
 export interface AgentFacadeRuntimeClient {
   readonly emit: (event: string, data: unknown) => Promise<{ id: number }>;
@@ -48,6 +50,7 @@ export interface AgentFacadeRuntimeClient {
     data: unknown,
     options: { readonly at: number },
   ) => Promise<{ id: number }>;
+  readonly runWorkspaceJob: (spec: AgentWorkspaceJobSpec) => Promise<WorkspaceJobProjection>;
 }
 
 export interface AgentFacadeRuntimeClientWithSubmit extends AgentFacadeRuntimeClient {
@@ -212,6 +215,10 @@ export function defineAgentDO<Env extends CloudflareAgentEnv>(
         return this.submitWithBindings(spec, this._submitBindings);
       }
 
+      runWorkspaceJob(spec: AgentWorkspaceJobSpec): Promise<WorkspaceJobProjection> {
+        return this.runWorkspaceJobFull(spec);
+      }
+
       emit(event: string, data: unknown): Promise<{ id: number }> {
         return this.emitEventFull({ event, data });
       }
@@ -299,6 +306,10 @@ export function defineAgentDO<Env extends CloudflareAgentEnv>(
       options: { readonly at: number },
     ): Promise<{ id: number }> {
       return this.scheduleEventFull({ event, data, at: options.at });
+    }
+
+    runWorkspaceJob(spec: AgentWorkspaceJobSpec): Promise<WorkspaceJobProjection> {
+      return this.runWorkspaceJobFull(spec);
     }
   };
 }

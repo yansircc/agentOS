@@ -10,6 +10,7 @@ import {
 import {
   createWorkspaceOperationLocalProvider,
   type CreateWorkspaceOperationLocalProviderOptions,
+  type WorkspaceOperationLocalProvider,
 } from "@agent-os/workspace-op-local";
 
 export interface CloudflareWorkspaceOperationInstallContext {
@@ -31,10 +32,26 @@ export interface CloudflareWorkspaceOperationInstall {
   readonly eventHandlers: CloudflareWorkspaceOperationProviderHandlers["eventHandlers"];
 }
 
-export type InstallCloudflareWorkspaceOperationProviderOptions =
-  CreateWorkspaceOperationLocalProviderOptions & {
-    readonly boundaryVersion?: string;
-  };
+type WorkspaceEnv = CreateWorkspaceOperationLocalProviderOptions["env"];
+
+export interface CloudflareWorkspaceOperationEnvResolverInput {
+  readonly event: LedgerEventRpc;
+  readonly payload: WorkspaceOperationRequestedPayload;
+  readonly workspaceRef: string;
+  readonly runId?: string;
+}
+
+export type CloudflareWorkspaceOperationEnvResolver = (
+  input: CloudflareWorkspaceOperationEnvResolverInput,
+) => WorkspaceEnv | Promise<WorkspaceEnv>;
+
+export type InstallCloudflareWorkspaceOperationProviderOptions = Omit<
+  CreateWorkspaceOperationLocalProviderOptions,
+  "env"
+> & {
+  readonly env: WorkspaceEnv | CloudflareWorkspaceOperationEnvResolver;
+  readonly boundaryVersion?: string;
+};
 
 const DEFAULT_WORKSPACE_OP_BOUNDARY_VERSION = "0.2.9";
 
@@ -60,6 +77,27 @@ const workspaceOpCapability = (
   );
 };
 
+const runIdFromRequest = (request: WorkspaceOperationRequestedPayload): string | undefined => {
+  const origin = request.claim.originRef;
+  if (origin.originKind !== "submit" && origin.originKind !== "run") return undefined;
+  return origin.originId.startsWith("run:") ? origin.originId.slice(4) : origin.originId;
+};
+
+const isEnvResolver = (
+  env: InstallCloudflareWorkspaceOperationProviderOptions["env"],
+): env is CloudflareWorkspaceOperationEnvResolver => typeof env === "function";
+
+const providerOptions = (
+  options: InstallCloudflareWorkspaceOperationProviderOptions,
+  env: WorkspaceEnv,
+): CreateWorkspaceOperationLocalProviderOptions => ({
+  env,
+  ...(options.maxFileBytes === undefined ? {} : { maxFileBytes: options.maxFileBytes }),
+  ...(options.maxCommandChars === undefined ? {} : { maxCommandChars: options.maxCommandChars }),
+  ...(options.execTimeoutMs === undefined ? {} : { execTimeoutMs: options.execTimeoutMs }),
+  ...(options.maxOutputBytes === undefined ? {} : { maxOutputBytes: options.maxOutputBytes }),
+});
+
 /**
  * Installs workspace-op provider glue for Cloudflare DO hosts.
  *
@@ -79,7 +117,27 @@ export const installCloudflareWorkspaceOperationProvider = (
   const boundaryPackage = workspaceOpBoundaryPackage(
     options.boundaryVersion ?? DEFAULT_WORKSPACE_OP_BOUNDARY_VERSION,
   );
-  const provider = createWorkspaceOperationLocalProvider(options);
+  const providers = new Map<string, WorkspaceOperationLocalProvider>();
+  const providerFor = async (
+    event: LedgerEventRpc,
+    payload: WorkspaceOperationRequestedPayload,
+  ): Promise<WorkspaceOperationLocalProvider> => {
+    const runId = runIdFromRequest(payload);
+    const key = `${payload.workspaceRef}\u0000${runId ?? ""}`;
+    const existing = providers.get(key);
+    if (existing !== undefined) return existing;
+    const env = isEnvResolver(options.env)
+      ? await options.env({
+          event,
+          payload,
+          workspaceRef: payload.workspaceRef,
+          ...(runId === undefined ? {} : { runId }),
+        })
+      : options.env;
+    const provider = createWorkspaceOperationLocalProvider(providerOptions(options, env));
+    providers.set(key, provider);
+    return provider;
+  };
   return {
     extensions: [boundaryPackage],
     declaredIntents: [
@@ -94,6 +152,7 @@ export const installCloudflareWorkspaceOperationProvider = (
         handler: async (event) => {
           const request = requestedPayload(event);
           if (request === null) return;
+          const provider = await providerFor(event, request);
           const result = await provider.execute({ id: event.id, payload: request });
           const capability = workspaceOpCapability(context.capabilities);
           await capability.commit({

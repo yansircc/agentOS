@@ -35,7 +35,7 @@ import {
   WORKSPACE_JOB_KIND,
   workspaceJobRequestedPayload,
 } from "@agent-os/workspace-job";
-import { RUNTIME_FACT_OWNER, type InternalSubmitSpec } from "@agent-os/runtime-protocol";
+import { RUNTIME_FACT_OWNER, type SubmitSpec } from "@agent-os/runtime-protocol";
 
 const scope = "workspace-job-runtime";
 const identity = {
@@ -63,7 +63,7 @@ const testWireDescriptor = (route: LlmRoute): LlmWireDescriptor => ({
   },
 });
 
-const baseSubmitSpec = (): InternalSubmitSpec => ({
+const baseSubmitSpec = (): SubmitSpec => ({
   intent: "write code",
   context: { task: "generate" },
   route: {
@@ -73,8 +73,6 @@ const baseSubmitSpec = (): InternalSubmitSpec => ({
     modelId: "test-model",
   },
   tools: {},
-  scope,
-  scopeRef: identity.scopeRef,
   effectAuthorityRef: identity.effectAuthorityRef,
 });
 
@@ -221,6 +219,7 @@ const runJob = (spec: RunWorkspaceJobSpec, services: ReturnType<typeof makeServi
   );
 
 const makeJobSpec = (overrides: Partial<RunWorkspaceJobSpec> = {}): RunWorkspaceJobSpec => ({
+  scope,
   identity,
   runId: "job-1",
   idempotencyKey: "create-1",
@@ -345,40 +344,64 @@ describe("runWorkspaceJobEffect", () => {
     }),
   );
 
-  it.effect("returns the first running run for a duplicate idempotency key without submitting", () =>
+  it.effect("returns the existing running run for duplicate idempotency keys", () =>
     Effect.gen(function* () {
       const services = makeServices();
+      let seedWrites = 0;
+      let finalizeCalls = 0;
+      const existingClaim = makePreClaim({
+        operationRef: "workspace_job:job-1",
+        scopeRef: identity.scopeRef,
+        effectAuthorityRef: identity.effectAuthorityRef,
+        originRef: { originId: "create-1", originKind: "workspace_job" },
+      });
       services.events.push({
-        id: 100,
-        ts: 100,
+        id: 10,
+        ts: 10,
         kind: WORKSPACE_JOB_KIND.REQUESTED,
         scopeRef: identity.scopeRef,
         effectAuthorityRef: identity.effectAuthorityRef,
         factOwnerRef: WORKSPACE_JOB_FACT_OWNER,
         payload: workspaceJobRequestedPayload({
-          runId: "job-running",
+          runId: "job-1",
           idempotencyKey: "create-1",
           requestedBy: "zeroy",
           terminalSchemaId: "zeroy.agent_command_result.v1",
-          claim: makePreClaim({
-            operationRef: "workspace_job:job-running",
-            scopeRef: identity.scopeRef,
-            effectAuthorityRef: identity.effectAuthorityRef,
-            originRef: { originId: "create-1", originKind: "workspace_job" },
-          }),
+          claim: existingClaim,
         }),
       });
 
       const projection = yield* runJob(
-        makeJobSpec({ runId: "job-duplicate", idempotencyKey: "create-1" }),
+        makeJobSpec({
+          runId: "job-duplicate",
+          idempotencyKey: "create-1",
+          dataPlane: {
+            writeSeedFile: async () => {
+              seedWrites += 1;
+            },
+            finalize: async () => {
+              finalizeCalls += 1;
+              return {
+                artifactRef: "workspace-job://job-duplicate/output/result.json",
+                path: "/output/result.json",
+                schemaId: "zeroy.agent_command_result.v1",
+                bytes: "duplicate terminal bytes",
+              };
+            },
+          },
+        }),
         services,
       );
 
       expect(projection).toMatchObject({
         status: "running",
-        runId: "job-running",
+        runId: "job-1",
+        requestedEventId: 10,
+        request: { idempotencyKey: "create-1" },
       });
       expect(services.llmRequests).toHaveLength(0);
+      expect(seedWrites).toBe(0);
+      expect(finalizeCalls).toBe(0);
       expect(
         services.events.filter((event) => event.kind === WORKSPACE_JOB_KIND.REQUESTED),
       ).toHaveLength(1);

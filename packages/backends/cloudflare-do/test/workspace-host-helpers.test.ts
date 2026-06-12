@@ -123,6 +123,34 @@ describe("Cloudflare DO workspace host helpers", () => {
     expect(readRunIds).toEqual(["run-verified"]);
   });
 
+  it("renders workspace-job projections through a host wire-shape callback", async () => {
+    const response = await createCloudflareWorkspaceJobResponse({
+      request: { headers: new Headers() },
+      runId: "run-wire",
+      submit: () => Promise.resolve(workspaceJobProjection("verified", "wrong-run")),
+      waitUntil: () => undefined,
+      quickWaitForSubmission: () => Promise.resolve("submitted"),
+      readProjection: ({ runId }) => Promise.resolve(workspaceJobProjection("verified", runId)),
+      renderProjection: ({ projection, status, headers }) => {
+        headers.set("x-rendered", "agent-run-projection");
+        return new Response(
+          JSON.stringify({
+            runId: projection.runId,
+            status: projection.status === "verified" ? "completed" : projection.status,
+          }),
+          { status, headers },
+        );
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-rendered")).toBe("agent-run-projection");
+    await expect(response.json()).resolves.toEqual({
+      runId: "run-wire",
+      status: "completed",
+    });
+  });
+
   it("honors Prefer respond-async and detaches submission through waitUntil", async () => {
     const waited: Promise<unknown>[] = [];
     const running = new Promise(() => undefined);
@@ -340,5 +368,86 @@ describe("Cloudflare DO workspace host helpers", () => {
         reason: "write_file requires content",
       },
     });
+  });
+
+  it("resolves workspace-op env per requested workspace/run instead of install time", async () => {
+    const resolved: string[] = [];
+    const writes: string[] = [];
+    const install = installCloudflareWorkspaceOperationProvider({
+      env: ({ workspaceRef, runId }) => {
+        resolved.push(`${workspaceRef}:${runId ?? "none"}`);
+        return {
+          domain: { kind: "sandbox", ref: workspaceRef },
+          cwd: "/workspace",
+          resolvePath: (targetPath) => targetPath,
+          readFile: async () => "",
+          readFileBuffer: async () => new Uint8Array(),
+          writeFile: async (targetPath, content) => {
+            const text = typeof content === "string" ? content : new TextDecoder().decode(content);
+            writes.push(`${workspaceRef}:${targetPath}:${text}`);
+          },
+          stat: async () => ({ type: "file" }),
+          readdir: async () => [],
+          exists: async () => true,
+          mkdir: async () => undefined,
+          rm: async () => undefined,
+          exec: async () => ({
+            exitCode: 0,
+            stdout: "",
+            stderr: "",
+            stdoutBytes: 0,
+            stderrBytes: 0,
+            stdoutTruncated: false,
+            stderrTruncated: false,
+            durationMs: 0,
+          }),
+        };
+      },
+    });
+    const capability: ExtensionCapability = {
+      packageId: WORKSPACE_OP_FACT_OWNER,
+      kindPrefixes: ["workspace_op."],
+      version: "0.2.9",
+      commit: async () => ({ id: 1 }),
+      time: async () => ({ id: 0 }),
+    };
+    const [registration] = [
+      ...install.eventHandlers({ capabilities: new Map([[WORKSPACE_OP_FACT_OWNER, capability]]) }),
+    ];
+    const eventFor = (id: number, runId: string): LedgerEventRpc => {
+      const claim = makePreClaim({
+        operationRef: `tool:workspace:test:call-${id}`,
+        scopeRef: { kind: "conversation", scopeId: "workspace-op-helper" },
+        effectAuthorityRef: { authorityClass: "workspace", authorityId: "write_file" },
+        originRef: { originId: `run:${runId}`, originKind: "submit" },
+      });
+      return {
+        id,
+        ts: id * 10,
+        kind: WORKSPACE_OP_KIND.REQUESTED,
+        scopeRef: claim.scopeRef,
+        effectAuthorityRef: claim.effectAuthorityRef,
+        factOwnerRef: WORKSPACE_OP_FACT_OWNER,
+        payload: {
+          requestedBy: "@agent-os/workspace-binding",
+          workspaceRef: "workspace:dynamic",
+          toolName: "write_file",
+          path: `result-${id}.txt`,
+          content: `done-${id}`,
+          claim,
+        },
+      };
+    };
+
+    await registration!.handler(eventFor(10, "1"));
+    await registration!.handler(eventFor(11, "1"));
+    await registration!.handler(eventFor(12, "2"));
+
+    expect(resolved).toEqual(["workspace:dynamic:1", "workspace:dynamic:2"]);
+    expect(writes).toEqual([
+      "workspace:dynamic:result-10.txt:done-10",
+      "workspace:dynamic:result-11.txt:done-11",
+      "workspace:dynamic:result-12.txt:done-12",
+    ]);
   });
 });

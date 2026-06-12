@@ -89,8 +89,10 @@ import {
   Ledger,
   MaterializedProjections,
   TriggerPump,
+  runWorkspaceJobEffect,
   submitAgentEffect,
   validateBoundaryEventPayload,
+  type RunWorkspaceJobSpec,
   type TriggerCancelResult,
   type TriggerDrainResult,
   type TriggerDrainUntilQuietOptions,
@@ -138,6 +140,7 @@ import {
   RUN_BEARING_KINDS,
 } from "@agent-os/runtime/run-projector";
 import { makeCloudflareBackendCoreLayer, type CloudflareBackendCoreServices } from "./runtime-core";
+import type { WorkspaceJobProjection } from "@agent-os/workspace-job";
 import { commitDurableTriggerIntent } from "./due-work";
 import type { CloudflareTriggerSource } from "./trigger-factory";
 import type { CloudflareAttachedStreamSource } from "./stream-factory";
@@ -219,7 +222,10 @@ export interface AgentRuntimeClient extends AgentRuntimeReaderClient {
   readonly dispatchToScope: (spec: DispatchToScopeSpec) => Promise<DispatchToScopeResult>;
   readonly scheduleEvent: (spec: ScheduledEventSpec) => Promise<{ id: number }>;
   readonly submit: (spec: SubmitSpec) => Promise<SubmitResult>;
+  readonly runWorkspaceJob: (spec: AgentWorkspaceJobSpec) => Promise<WorkspaceJobProjection>;
 }
+
+export type AgentWorkspaceJobSpec = Omit<RunWorkspaceJobSpec, "scope" | "identity">;
 
 export interface AgentSubmitSpec {
   readonly intent: string;
@@ -731,6 +737,25 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
         RUNTIME_FACT_OWNER,
       );
       return this.runtimeFor(scope, identity).runPromise(submitAgentEffect(internalSpec));
+    });
+  }
+
+  protected runWorkspaceJobFull(spec: AgentWorkspaceJobSpec): Promise<WorkspaceJobProjection> {
+    return this.scopedPromise((scope) => {
+      const truthIdentity = this.defaultTruthIdentityForScope(scope);
+      if (truthIdentity instanceof UnsupportedScopeRef) {
+        return Promise.reject(truthIdentity);
+      }
+      const runtimeIdentity = eventIdentity(truthIdentity, RUNTIME_FACT_OWNER);
+      return this.runScopedEffect(
+        scope,
+        runWorkspaceJobEffect({
+          ...spec,
+          scope,
+          identity: truthIdentity,
+        }),
+        runtimeIdentity,
+      );
     });
   }
 
@@ -1248,6 +1273,10 @@ export const createAgentDurableObject = <Env extends CloudflareAgentEnv>(
 
     submit(spec: SubmitSpec): Promise<SubmitResult> {
       return this.submitFull(spec);
+    }
+
+    runWorkspaceJob(spec: AgentWorkspaceJobSpec): Promise<WorkspaceJobProjection> {
+      return this.runWorkspaceJobFull(spec);
     }
 
     emitEvent(spec: { event: string; data: unknown }): Promise<{ id: number }> {

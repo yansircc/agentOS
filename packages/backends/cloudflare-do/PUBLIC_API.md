@@ -20,6 +20,7 @@ Status: Backend package. Public exports include the Cloudflare app facade, bindi
 - `.:AgentRuntimeReaderClient`
 - `.:AgentRuntimeClient`
 - `.:AgentSubmitSpec`
+- `.:AgentWorkspaceJobSpec`
 - `.:AgentTriggerCancelSpec`
 - `.:AgentTriggerIntentSpec`
 - `.:AnthropicMessagesSpec`
@@ -36,6 +37,8 @@ Status: Backend package. Public exports include the Cloudflare app facade, bindi
 - `.:CloudflareWorkspaceEnvResolverOptions`
 - `.:CloudflareWorkspaceJobProjectionReader`
 - `.:CloudflareWorkspaceJobResponseOptions`
+- `.:CloudflareWorkspaceOperationEnvResolver`
+- `.:CloudflareWorkspaceOperationEnvResolverInput`
 - `.:CloudflareWorkspaceOperationInstall`
 - `.:CloudflareWorkspaceOperationInstallContext`
 - `.:CloudflareWorkspaceOperationProviderHandlers`

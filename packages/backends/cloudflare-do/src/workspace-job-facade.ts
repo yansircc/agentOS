@@ -16,6 +16,11 @@ export interface CloudflareWorkspaceJobResponseOptions extends CloudflareWorkspa
   readonly quickWaitMs?: number;
   readonly statusUrl?: string | URL;
   readonly statusForProjection?: (projection: WorkspaceJobProjection) => number;
+  readonly renderProjection?: (input: {
+    readonly projection: WorkspaceJobProjection;
+    readonly status: number;
+    readonly headers: Headers;
+  }) => Response | Promise<Response>;
 }
 
 const DEFAULT_WORKSPACE_JOB_QUICK_WAIT_MS = 1_500;
@@ -46,8 +51,9 @@ const projectionResponse = (
     readonly statusForProjection?: (projection: WorkspaceJobProjection) => number;
     readonly preferenceApplied?: boolean;
     readonly statusUrl?: string | URL;
+    readonly renderProjection?: CloudflareWorkspaceJobResponseOptions["renderProjection"];
   },
-): Response => {
+): Response | Promise<Response> => {
   const headers = new Headers({ "content-type": "application/json" });
   if (options.preferenceApplied === true) {
     headers.set("preference-applied", "respond-async");
@@ -55,10 +61,12 @@ const projectionResponse = (
   if (options.statusUrl !== undefined) {
     headers.set("location", String(options.statusUrl));
   }
-  return new Response(JSON.stringify({ projection }), {
-    status: options.statusForProjection?.(projection) ?? defaultStatusForProjection(projection),
-    headers,
-  });
+  const status =
+    options.statusForProjection?.(projection) ?? defaultStatusForProjection(projection);
+  if (options.renderProjection !== undefined) {
+    return options.renderProjection({ projection, status, headers });
+  }
+  return new Response(JSON.stringify({ projection }), { status, headers });
 };
 
 /**
@@ -87,6 +95,7 @@ export const createCloudflareWorkspaceJobResponse = (
         statusForProjection: options.statusForProjection,
         preferenceApplied: true,
         statusUrl: options.statusUrl,
+        renderProjection: options.renderProjection,
       }),
     );
   }
@@ -104,6 +113,7 @@ export const createCloudflareWorkspaceJobResponse = (
       projectionResponse(projection, {
         statusForProjection: options.statusForProjection,
         statusUrl: options.statusUrl,
+        renderProjection: options.renderProjection,
       }),
     );
 };

@@ -374,6 +374,12 @@
       "rules": ["EFF402"]
     },
     {
+      "path": "packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts",
+      "owner": "@agent-os/backend-cloudflare-do-tests",
+      "reason": "Cloudflare workspace host helper tests own Response construction to prove consumer wire-shape callbacks stay outside workspace_job projection truth",
+      "rules": ["EFF402"]
+    },
+    {
       "path": "packages/backends/cloudflare-do/test/test-worker.ts",
       "owner": "@agent-os/backend-cloudflare-do-tests",
       "reason": "Cloudflare worker test adapter owns Response construction",

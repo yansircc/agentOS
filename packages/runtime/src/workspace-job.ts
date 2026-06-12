@@ -12,7 +12,7 @@ import { Ledger } from "./ledger";
 import { MaterializedProjections } from "./projection";
 import { Quota } from "./quota-service";
 import { submitAgentEffect } from "./submit-agent";
-import type { InternalSubmitSpec, SubmitResult } from "@agent-os/runtime-protocol";
+import type { InternalSubmitSpec, SubmitResult, SubmitSpec } from "@agent-os/runtime-protocol";
 import type { LedgerTruthIdentity } from "@agent-os/runtime-protocol";
 import {
   WORKSPACE_JOB_KIND,
@@ -85,6 +85,7 @@ export interface WorkspaceJobVerifier {
 }
 
 export interface RunWorkspaceJobSpec {
+  readonly scope: string;
   readonly identity: LedgerTruthIdentity;
   readonly runId: string;
   readonly idempotencyKey: string;
@@ -96,7 +97,7 @@ export interface RunWorkspaceJobSpec {
   readonly buildSubmitSpec: (input: {
     readonly runId: string;
     readonly candidatePath: string;
-  }) => InternalSubmitSpec;
+  }) => SubmitSpec;
   readonly seedFiles?: ReadonlyArray<WorkspaceJobSeedFile>;
   readonly workspaceRef?: string;
   readonly inputRef?: string;
@@ -150,20 +151,13 @@ const effectMessage = (cause: unknown): string =>
 
 const submitFailure = (reason: string): WorkspaceJobFailure => ({
   phase: "submit",
-  class:
-    reason === "budget_time"
-      ? "timeout"
-      : reason === "interrupted"
-        ? "cancelled"
-        : "provider",
+  class: reason === "budget_time" ? "timeout" : reason === "interrupted" ? "cancelled" : "provider",
   code: `workspace_job.submit.${reason}`,
   message: reason,
   retryable: reason !== "interrupted",
 });
 
-const failureFromDataPlane = (
-  failure: WorkspaceJobDataPlaneFailed,
-): WorkspaceJobFailure => {
+const failureFromDataPlane = (failure: WorkspaceJobDataPlaneFailed): WorkspaceJobFailure => {
   const cause = failure.cause;
   if (cause instanceof WorkspaceJobCandidateMissing) {
     return {
@@ -399,12 +393,16 @@ export const runWorkspaceJobEffect = (
       return yield* failAndProject(failureFromDataPlane(seeded.left));
     }
 
-    const submitResult = yield* submitAgentEffect(
-      spec.buildSubmitSpec({
-        runId: spec.runId,
-        candidatePath: spec.candidatePath,
-      }),
-    );
+    const publicSubmitSpec = spec.buildSubmitSpec({
+      runId: spec.runId,
+      candidatePath: spec.candidatePath,
+    });
+    const submitSpec: InternalSubmitSpec = {
+      ...publicSubmitSpec,
+      scope: spec.scope,
+      scopeRef: spec.identity.scopeRef,
+    };
+    const submitResult = yield* submitAgentEffect(submitSpec);
     if (!submitResult.ok) {
       return yield* failAndProject(submitFailure(submitResult.reason));
     }

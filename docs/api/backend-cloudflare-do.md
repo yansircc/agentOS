@@ -16,6 +16,7 @@
 - `.:AgentRuntimeReaderClient`
 - `.:AgentRuntimeClient`
 - `.:AgentSubmitSpec`
+- `.:AgentWorkspaceJobSpec`
 - `.:AgentTriggerCancelSpec`
 - `.:AgentTriggerIntentSpec`
 - `.:AnthropicMessagesSpec`
@@ -32,6 +33,8 @@
 - `.:CloudflareWorkspaceEnvResolverOptions`
 - `.:CloudflareWorkspaceJobProjectionReader`
 - `.:CloudflareWorkspaceJobResponseOptions`
+- `.:CloudflareWorkspaceOperationEnvResolver`
+- `.:CloudflareWorkspaceOperationEnvResolverInput`
 - `.:CloudflareWorkspaceOperationInstall`
 - `.:CloudflareWorkspaceOperationInstallContext`
 - `.:CloudflareWorkspaceOperationProviderHandlers`

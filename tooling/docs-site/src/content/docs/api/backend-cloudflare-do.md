@@ -20,6 +20,7 @@ title: "@agent-os/backend-cloudflare-do Public API Intent"
 - `.:AgentRuntimeReaderClient`
 - `.:AgentRuntimeClient`
 - `.:AgentSubmitSpec`
+- `.:AgentWorkspaceJobSpec`
 - `.:AgentTriggerCancelSpec`
 - `.:AgentTriggerIntentSpec`
 - `.:AnthropicMessagesSpec`
@@ -36,6 +37,8 @@ title: "@agent-os/backend-cloudflare-do Public API Intent"
 - `.:CloudflareWorkspaceEnvResolverOptions`
 - `.:CloudflareWorkspaceJobProjectionReader`
 - `.:CloudflareWorkspaceJobResponseOptions`
+- `.:CloudflareWorkspaceOperationEnvResolver`
+- `.:CloudflareWorkspaceOperationEnvResolverInput`
 - `.:CloudflareWorkspaceOperationInstall`
 - `.:CloudflareWorkspaceOperationInstallContext`
 - `.:CloudflareWorkspaceOperationProviderHandlers`

@@ -21,6 +21,7 @@ export type {
   AgentRuntimeClient,
   AgentRuntimeReaderClient,
   AgentSubmitSpec,
+  AgentWorkspaceJobSpec,
   AgentTriggerCancelSpec,
   AgentTriggerIntentSpec,
 } from "./agent-do";

@@ -56,6 +56,12 @@
       "rules": ["EFF001", "EFF025"]
     },
     {
+      "path": "test/workspace-host-helpers.test.ts",
+      "owner": "@agent-os/backend-cloudflare-do/test-host-helpers",
+      "reason": "Cloudflare workspace host helper tests own Response construction to prove consumer wire-shape callbacks stay outside workspace_job projection truth",
+      "rules": ["EFF402"]
+    },
+    {
       "path": "test/test-worker.ts",
       "owner": "@agent-os/backend-cloudflare-do/test-worker",
       "reason": "Cloudflare test Worker entry is the terminal HTTP adapter for worker-pool contract tests",
