@@ -224,6 +224,10 @@
       "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"]
     },
     {
+      "primitive": "primitive.cloudflare-do.createCloudflareSandboxWorkspaceEnvResolver",
+      "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"]
+    },
+    {
       "primitive": "primitive.cloudflare-do.createCloudflareWorkspaceJobResponse",
       "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"]
     },

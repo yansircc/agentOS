@@ -270,7 +270,10 @@
     {
       "invariant": "invariant.workspace-job.host-workspace-lifecycle",
       "statement": "Cloudflare hosts resolve one provider-neutral WorkspaceEnv lease per scope/runId and keep Sandbox binding validation and cleanup outside product modules.",
-      "primitives": ["primitive.cloudflare-do.createCloudflareWorkspaceEnvResolver"],
+      "primitives": [
+        "primitive.cloudflare-do.createCloudflareSandboxWorkspaceEnvResolver",
+        "primitive.cloudflare-do.createCloudflareWorkspaceEnvResolver"
+      ],
       "errors": [],
       "docs": ["docs/packages/backend-cloudflare-do.md"],
       "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"],
@@ -278,7 +281,7 @@
     },
     {
       "invariant": "invariant.workspace-job.verified-terminal",
-      "statement": "Workspace job deliverables are terminal projections joined through workspace_job.terminal_finalized; candidate bytes, verifier verdicts, idempotency, and structured failures flow through one closed pipeline.",
+      "statement": "Workspace job deliverables are terminal projections joined through workspace_job.terminal_finalized; written, readback, hashed, verified, and delivered terminal bytes flow through one closed pipeline.",
       "primitives": [
         "primitive.cloudflare-do.createCloudflareWorkspaceJobResponse",
         "primitive.runtime.runWorkspaceJobEffect"

@@ -109,9 +109,10 @@
 - `.:WorkspaceJobDataPlane`
 - `.:WorkspaceJobDataPlaneFailed`
 - `.:WorkspaceJobFinalizedArtifact`
-- `.:WorkspaceJobFinalizedArtifactBytes`
 - `.:WorkspaceJobRunIdMismatch`
 - `.:WorkspaceJobSeedFile`
+- `.:WorkspaceJobTerminalArtifactBuild`
+- `.:WorkspaceJobTerminalArtifactWriteResult`
 - `.:WorkspaceJobVerifier`
 - `.:WorkspaceJobVerifierFailed`
 - `.:WorkspaceJobVerifierResult`

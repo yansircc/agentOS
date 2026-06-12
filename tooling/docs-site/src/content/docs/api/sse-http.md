@@ -16,6 +16,7 @@ title: "@agent-os/sse-http API"
 - `.:encodeSseHttpJsonEvent`
 - `.:parseSseHttpEventBlock`
 - `.:decodeSseHttpEvents`
+- `.:responseToSseHttpChunks`
 - `.:createSseHttpResponse`
 - `.:createSseHttpTextResponse`
 - `.:createBatchedSubmitRunStreamResponse`

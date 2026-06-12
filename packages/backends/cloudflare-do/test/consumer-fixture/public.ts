@@ -2,6 +2,7 @@
 
 import {
   createCloudflareLedgerAgUiHistorySseResponse,
+  createCloudflareSandboxWorkspaceEnvResolver,
   createCloudflareWorkspaceJobResponse,
   createCloudflareWorkspaceEnvResolver,
   defineAgentDO,
@@ -76,6 +77,19 @@ export const fixtureWorkspaceResolver = createCloudflareWorkspaceEnvResolver({
       exec: () => Promise.resolve({ exitCode: 0, stdout: "", stderr: "" }),
     }),
   },
+});
+
+const fixtureSandboxNamespace = {
+  idFromName: (name: string) => ({ name }) as unknown as DurableObjectId,
+  get: () => ({
+    setSandboxName: () => Promise.resolve(),
+    setTransport: () => Promise.resolve(),
+    execWithSessionToken: () => Promise.resolve({ exitCode: 0, stdout: "", stderr: "" }),
+  }),
+} as unknown as Parameters<typeof createCloudflareSandboxWorkspaceEnvResolver>[0]["binding"];
+
+export const fixtureSandboxWorkspaceResolver = createCloudflareSandboxWorkspaceEnvResolver({
+  binding: fixtureSandboxNamespace,
 });
 
 export const fixtureWorkspaceOpInstall = installCloudflareWorkspaceOperationProvider({

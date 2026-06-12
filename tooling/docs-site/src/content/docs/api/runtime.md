@@ -113,9 +113,10 @@ title: "@agent-os/runtime Public API Intent"
 - `.:WorkspaceJobDataPlane`
 - `.:WorkspaceJobDataPlaneFailed`
 - `.:WorkspaceJobFinalizedArtifact`
-- `.:WorkspaceJobFinalizedArtifactBytes`
 - `.:WorkspaceJobRunIdMismatch`
 - `.:WorkspaceJobSeedFile`
+- `.:WorkspaceJobTerminalArtifactBuild`
+- `.:WorkspaceJobTerminalArtifactWriteResult`
 - `.:WorkspaceJobVerifier`
 - `.:WorkspaceJobVerifierFailed`
 - `.:WorkspaceJobVerifierResult`

@@ -469,14 +469,14 @@
       "tag": "agent_os.workspace_job_data_plane_failed",
       "invariants": ["invariant.workspace-job.verified-terminal"],
       "docs": "docs/packages/workspace-job.md",
-      "fix": "Keep seed, finalize, and cleanup failures inside the workspace job data-plane boundary and settle them through workspace_job.failed.",
+      "fix": "Keep seed and terminal build/write/read failures inside the workspace job data-plane boundary and settle them through workspace_job.failed.",
       "sourceFiles": ["packages/runtime/src/workspace-job.ts"]
     },
     {
       "tag": "agent_os.workspace_job_run_id_mismatch",
       "invariants": ["invariant.workspace-job.verified-terminal"],
       "docs": "docs/packages/workspace-job.md",
-      "fix": "Reject finalized bytes whose run id does not match the requested workspace job before verifier checks can mark them deliverable.",
+      "fix": "Reject terminal builder output whose run id does not match the requested workspace job before verifier checks can mark it deliverable.",
       "sourceFiles": ["packages/runtime/src/workspace-job.ts"]
     },
     {

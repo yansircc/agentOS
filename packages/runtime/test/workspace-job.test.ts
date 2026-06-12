@@ -28,6 +28,7 @@ import {
   WorkspaceJobCandidateMissing,
   WorkspaceJobRunIdMismatch,
   runWorkspaceJobEffect,
+  type WorkspaceJobDataPlane,
   type RunWorkspaceJobSpec,
 } from "../src/workspace-job";
 import {
@@ -218,6 +219,30 @@ const runJob = (spec: RunWorkspaceJobSpec, services: ReturnType<typeof makeServi
     Effect.provideService(Admission, services.admission),
   );
 
+const makeDataPlane = (overrides: Partial<WorkspaceJobDataPlane> = {}): WorkspaceJobDataPlane => {
+  let stored: Uint8Array<ArrayBufferLike> = new Uint8Array();
+  return {
+    writeSeedFile: async () => undefined,
+    buildTerminalArtifact: async () => ({
+      schemaId: "zeroy.agent_command_result.v1",
+      bytes: "finalized delivery bytes",
+    }),
+    writeTerminalArtifact: async ({ runId, path, bytes }) => {
+      stored = bytes;
+      return { artifactRef: `workspace-job://${runId}${path}` };
+    },
+    readTerminalArtifact: async () => stored,
+    ...overrides,
+  };
+};
+
+const sha256Text = (value: string): Promise<string> =>
+  crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)).then((buffer) =>
+    Array.from(new Uint8Array(buffer))
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join(""),
+  );
+
 const makeJobSpec = (overrides: Partial<RunWorkspaceJobSpec> = {}): RunWorkspaceJobSpec => ({
   scope,
   identity,
@@ -226,17 +251,10 @@ const makeJobSpec = (overrides: Partial<RunWorkspaceJobSpec> = {}): RunWorkspace
   requestedBy: "zeroy",
   terminalSchemaId: "zeroy.agent_command_result.v1",
   candidatePath: "/output/code.fragment",
+  terminalArtifactPath: "/output/result.json",
   seedFiles: [{ path: "/work/context.json", content: "{}" }],
   buildSubmitSpec: () => baseSubmitSpec(),
-  dataPlane: {
-    writeSeedFile: async () => undefined,
-    finalize: async () => ({
-      artifactRef: "workspace-job://job-1/output/result.json",
-      path: "/output/result.json",
-      schemaId: "zeroy.agent_command_result.v1",
-      bytes: "finalized delivery bytes",
-    }),
-  },
+  dataPlane: makeDataPlane(),
   verifier: {
     verify: async ({ bytes }) => ({
       ok: true,
@@ -286,6 +304,67 @@ describe("runWorkspaceJobEffect", () => {
       }),
   );
 
+  it.effect("hashes and verifies readback bytes instead of builder bytes", () =>
+    Effect.gen(function* () {
+      const services = makeServices();
+      const writes: string[] = [];
+      const projection = yield* runJob(
+        makeJobSpec({
+          dataPlane: makeDataPlane({
+            buildTerminalArtifact: async () => ({
+              schemaId: "zeroy.agent_command_result.v1",
+              bytes: "builder-only bytes",
+            }),
+            writeTerminalArtifact: async ({ runId, path, bytes }) => {
+              writes.push(`${path}:${new TextDecoder().decode(bytes)}`);
+              return { artifactRef: `workspace-job://${runId}${path}` };
+            },
+            readTerminalArtifact: async () => "readback delivery bytes",
+          }),
+          verifier: {
+            verify: async ({ bytes }) => {
+              const text = new TextDecoder().decode(bytes);
+              const checks = [
+                {
+                  name: "readback-bytes",
+                  status:
+                    text === "readback delivery bytes" ? ("passed" as const) : ("failed" as const),
+                },
+              ];
+              if (text !== "readback delivery bytes") {
+                return {
+                  ok: false as const,
+                  reason: "readback bytes mismatch",
+                  checks,
+                };
+              }
+              return {
+                ok: true as const,
+                checks,
+              };
+            },
+          },
+        }),
+        services,
+      );
+      const readbackHash = yield* Effect.promise(() => sha256Text("readback delivery bytes"));
+      const builderHash = yield* Effect.promise(() => sha256Text("builder-only bytes"));
+
+      expect(writes).toEqual(["/output/result.json:builder-only bytes"]);
+      expect(projection).toMatchObject({
+        status: "verified",
+        terminalArtifact: {
+          path: "/output/result.json",
+          bytes: 23,
+          sha256: `sha256:${readbackHash}`,
+        },
+        checks: [{ name: "readback-bytes", status: "passed" }],
+      });
+      if (projection.status !== "verified") expect.fail("expected verified projection");
+      expect(projection.terminalArtifact.sha256).not.toBe(`sha256:${builderHash}`);
+    }),
+  );
+
   it.effect("commits verifier_rejected as a product verdict distinct from failed", () =>
     Effect.gen(function* () {
       const services = makeServices();
@@ -316,20 +395,17 @@ describe("runWorkspaceJobEffect", () => {
   it.effect("uses requested ledger facts as idempotent create truth", () =>
     Effect.gen(function* () {
       const services = makeServices();
-      let finalizeCalls = 0;
+      let buildCalls = 0;
       const spec = makeJobSpec({
-        dataPlane: {
-          writeSeedFile: async () => undefined,
-          finalize: async () => {
-            finalizeCalls += 1;
+        dataPlane: makeDataPlane({
+          buildTerminalArtifact: async () => {
+            buildCalls += 1;
             return {
-              artifactRef: "workspace-job://job-1/output/result.json",
-              path: "/output/result.json",
               schemaId: "zeroy.agent_command_result.v1",
               bytes: "finalized delivery bytes",
             };
           },
-        },
+        }),
       });
 
       const first = yield* runJob(spec, services);
@@ -337,7 +413,7 @@ describe("runWorkspaceJobEffect", () => {
 
       expect(first.status).toBe("verified");
       expect(second.status).toBe("verified");
-      expect(finalizeCalls).toBe(1);
+      expect(buildCalls).toBe(1);
       expect(
         services.events.filter((event) => event.kind === WORKSPACE_JOB_KIND.REQUESTED),
       ).toHaveLength(1);
@@ -348,7 +424,7 @@ describe("runWorkspaceJobEffect", () => {
     Effect.gen(function* () {
       const services = makeServices();
       let seedWrites = 0;
-      let finalizeCalls = 0;
+      let buildCalls = 0;
       const existingClaim = makePreClaim({
         operationRef: "workspace_job:job-1",
         scopeRef: identity.scopeRef,
@@ -375,20 +451,18 @@ describe("runWorkspaceJobEffect", () => {
         makeJobSpec({
           runId: "job-duplicate",
           idempotencyKey: "create-1",
-          dataPlane: {
+          dataPlane: makeDataPlane({
             writeSeedFile: async () => {
               seedWrites += 1;
             },
-            finalize: async () => {
-              finalizeCalls += 1;
+            buildTerminalArtifact: async () => {
+              buildCalls += 1;
               return {
-                artifactRef: "workspace-job://job-duplicate/output/result.json",
-                path: "/output/result.json",
                 schemaId: "zeroy.agent_command_result.v1",
                 bytes: "duplicate terminal bytes",
               };
             },
-          },
+          }),
         }),
         services,
       );
@@ -401,7 +475,7 @@ describe("runWorkspaceJobEffect", () => {
       });
       expect(services.llmRequests).toHaveLength(0);
       expect(seedWrites).toBe(0);
-      expect(finalizeCalls).toBe(0);
+      expect(buildCalls).toBe(0);
       expect(
         services.events.filter((event) => event.kind === WORKSPACE_JOB_KIND.REQUESTED),
       ).toHaveLength(1);
@@ -435,17 +509,86 @@ describe("runWorkspaceJobEffect", () => {
     }),
   );
 
+  it.effect("classifies terminal build, write, and read failures separately", () =>
+    Effect.gen(function* () {
+      const buildServices = makeServices();
+      const buildFailed = yield* runJob(
+        makeJobSpec({
+          dataPlane: makeDataPlane({
+            buildTerminalArtifact: async () => {
+              throw new Error("terminal builder rejected payload");
+            },
+          }),
+        }),
+        buildServices,
+      );
+      expect(buildFailed).toMatchObject({
+        status: "failed",
+        failed: {
+          failure: {
+            phase: "finalize",
+            class: "consumer_contract",
+            code: "workspace_job.terminal_build_failed",
+          },
+        },
+      });
+
+      const writeServices = makeServices();
+      const writeFailed = yield* runJob(
+        makeJobSpec({
+          dataPlane: makeDataPlane({
+            writeTerminalArtifact: async () => {
+              throw new Error("workspace write failed");
+            },
+          }),
+        }),
+        writeServices,
+      );
+      expect(writeFailed).toMatchObject({
+        status: "failed",
+        failed: {
+          failure: {
+            phase: "data_plane",
+            class: "provider",
+            code: "workspace_job.terminal_write_failed",
+          },
+        },
+      });
+
+      const readServices = makeServices();
+      const readFailed = yield* runJob(
+        makeJobSpec({
+          dataPlane: makeDataPlane({
+            readTerminalArtifact: async () => {
+              throw new Error("workspace read failed");
+            },
+          }),
+        }),
+        readServices,
+      );
+      expect(readFailed).toMatchObject({
+        status: "failed",
+        failed: {
+          failure: {
+            phase: "data_plane",
+            class: "provider",
+            code: "workspace_job.terminal_read_failed",
+          },
+        },
+      });
+    }),
+  );
+
   it.effect("classifies missing candidate and runId mismatch before verification", () =>
     Effect.gen(function* () {
       const missingServices = makeServices();
       const missing = yield* runJob(
         makeJobSpec({
-          dataPlane: {
-            writeSeedFile: async () => undefined,
-            finalize: async ({ candidatePath }) => {
+          dataPlane: makeDataPlane({
+            buildTerminalArtifact: async ({ candidatePath }) => {
               throw new WorkspaceJobCandidateMissing({ candidatePath });
             },
-          },
+          }),
         }),
         missingServices,
       );
@@ -463,15 +606,14 @@ describe("runWorkspaceJobEffect", () => {
       const mismatchServices = makeServices();
       const mismatch = yield* runJob(
         makeJobSpec({
-          dataPlane: {
-            writeSeedFile: async () => undefined,
-            finalize: async ({ runId }) => {
+          dataPlane: makeDataPlane({
+            buildTerminalArtifact: async ({ runId }) => {
               throw new WorkspaceJobRunIdMismatch({
                 expectedRunId: runId,
                 actualRunId: "other-run",
               });
             },
-          },
+          }),
         }),
         mismatchServices,
       );
@@ -515,18 +657,15 @@ describe("runWorkspaceJobEffect", () => {
                 content: JSON.stringify(command),
               },
             ],
-            dataPlane: {
-              writeSeedFile: async () => undefined,
-              finalize: async ({ runId, terminalSchemaId }) => ({
-                artifactRef: `workspace-job://${runId}/output/result.json`,
-                path: "/output/result.json",
+            dataPlane: makeDataPlane({
+              buildTerminalArtifact: async ({ runId, terminalSchemaId }) => ({
                 schemaId: terminalSchemaId,
                 bytes: JSON.stringify({
                   runId,
                   patch: { files: [{ path: "template-parts/hero.php", action: "update" }] },
                 }),
               }),
-            },
+            }),
             verifier: {
               verify: async ({ artifact, bytes }) => {
                 const payload = JSON.parse(new TextDecoder().decode(bytes)) as {

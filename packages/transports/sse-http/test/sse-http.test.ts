@@ -9,6 +9,7 @@ import {
   encodeSseHttpEvent,
   encodeSseHttpJsonEvent,
   parseSseHttpEventBlock,
+  responseToSseHttpChunks,
   SSE_HTTP_CONTENT_TYPE,
 } from "../src";
 import { decodeRunStreamData, projectRunStream, type LedgerEventRpc } from "@agent-os/run-stream";
@@ -120,6 +121,26 @@ describe("@agent-os/sse-http", () => {
     const response = createSseHttpTextResponse("event: ready\ndata: {}\n\n");
     expect(response.headers.get("content-type")).toBe(SSE_HTTP_CONTENT_TYPE);
     expect(await response.text()).toBe("event: ready\ndata: {}\n\n");
+  });
+
+  it("converts Web Fetch responses into generic SSE chunks", async () => {
+    const textResponse = new Response("event: one\ndata: 1\n\n");
+    await expect(
+      collectAsync(decodeSseHttpEvents(responseToSseHttpChunks(textResponse))),
+    ).resolves.toEqual([{ event: "one", data: "1" }]);
+
+    const stream = new ReadableStream<Uint8Array>({
+      start: (controller) => {
+        controller.enqueue(new TextEncoder().encode("event: two\n"));
+        controller.enqueue(new TextEncoder().encode("data: 2\n\n"));
+        controller.close();
+      },
+    });
+    await expect(
+      collectAsync(decodeSseHttpEvents(responseToSseHttpChunks(new Response(stream)))),
+    ).resolves.toEqual([{ event: "two", data: "2" }]);
+
+    await expect(collectAsync(responseToSseHttpChunks(new Response(null)))).resolves.toEqual([]);
   });
 
   it("creates a batched submit run stream response without composer host wrappers", async () => {

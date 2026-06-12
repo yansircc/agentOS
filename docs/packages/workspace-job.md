@@ -15,9 +15,12 @@ constructors and settlement helpers.
 
 ## Minimal Usage
 
-Emit `workspace_job.requested` with an idempotency key, commit
-`workspace_job.terminal_finalized` after the system finalizer writes delivery
-bytes, then commit exactly one terminal verdict: `workspace_job.verified`,
+Emit `workspace_job.requested` with an idempotency key, then run the closed
+runtime pipeline: build terminal bytes from the submitted candidate, write them
+to the declared terminal path, read the artifact back, hash the readback bytes,
+and pass those same readback bytes to the verifier. Commit
+`workspace_job.terminal_finalized` only from that readback metadata, then commit
+exactly one terminal verdict: `workspace_job.verified`,
 `workspace_job.verifier_rejected`, or `workspace_job.failed`.
 
 `verified` and `verifier_rejected` reference the `terminal_finalized` event id;
@@ -26,6 +29,11 @@ artifact metadata. `failed.failure` is structured by `{ phase, class, code,
 message, retryable? }` so consumers do not rebuild infra failure categories from
 strings. Consumers read `projectWorkspaceJob` and never derive deliverability
 from product side storage.
+
+Consumers may declare a terminal schema builder, but they do not choose the
+terminal path, artifact ref, digest, byte count, or verified projection. The
+runtime/data-plane boundary enforces `written bytes == readback bytes == hashed
+bytes == verified bytes == delivered bytes`.
 
 ## Verification
 

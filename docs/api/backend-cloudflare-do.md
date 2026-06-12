@@ -25,6 +25,11 @@
 - `.:CloudflareAttachedStreamFactory`
 - `.:CloudflareAttachedStreamFactoryContext`
 - `.:CloudflareAttachedStreamSource`
+- `.:CloudflareLedgerSseSource`
+- `.:CloudflareSandboxTransport`
+- `.:CloudflareSandboxWorkspaceClient`
+- `.:CloudflareSandboxWorkspaceNamespace`
+- `.:CloudflareSandboxWorkspaceEnvResolverOptions`
 - `.:CloudflareWorkspaceEnvBinding`
 - `.:CloudflareWorkspaceEnvLease`
 - `.:CloudflareWorkspaceEnvResolver`
@@ -60,6 +65,7 @@
 - `.:createAgentDurableObject`
 - `.:createCloudflareLedgerAgUiHistorySseResponse`
 - `.:createCloudflareLedgerAgUiSseResponse`
+- `.:createCloudflareSandboxWorkspaceEnvResolver`
 - `.:createCloudflareWorkspaceJobResponse`
 - `.:createCloudflareWorkspaceEnvResolver`
 - `.:defineAgentDO`

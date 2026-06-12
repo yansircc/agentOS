@@ -6,7 +6,7 @@ import { makePreClaim } from "@agent-os/kernel/effect-claim";
 import type { LedgerEvent, LedgerEventRpc } from "@agent-os/kernel/types";
 import type { ExtensionCapability } from "@agent-os/kernel/extensions";
 import { agentRunStartedEvent } from "@agent-os/runtime-protocol";
-import { decodeSseHttpEvents } from "@agent-os/sse-http";
+import { createSseHttpTextResponse, decodeSseHttpEvents } from "@agent-os/sse-http";
 import { WORKSPACE_OP_FACT_OWNER, WORKSPACE_OP_KIND } from "@agent-os/workspace-op";
 import type { WorkspaceJobProjection } from "@agent-os/workspace-job";
 import {
@@ -14,7 +14,10 @@ import {
   createCloudflareLedgerAgUiSseResponse,
 } from "../src/ag-ui-sse";
 import { createCloudflareWorkspaceJobResponse } from "../src/workspace-job-facade";
-import { createCloudflareWorkspaceEnvResolver } from "../src/workspace-env";
+import {
+  createCloudflareSandboxWorkspaceEnvResolver,
+  createCloudflareWorkspaceEnvResolver,
+} from "../src/workspace-env";
 import { installCloudflareWorkspaceOperationProvider } from "../src/workspace-op";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
@@ -100,6 +103,13 @@ describe("Cloudflare DO workspace host helpers", () => {
     const liveEvents = await eventData(live);
     expect(liveEvents).toHaveLength(1);
     expect(liveEvents[0]).toMatchObject({ event: "ag_ui" });
+
+    const liveFromResponse = createCloudflareLedgerAgUiSseResponse(
+      createSseHttpTextResponse(ledgerSse),
+    );
+    const liveResponseEvents = await eventData(liveFromResponse);
+    expect(liveResponseEvents).toHaveLength(1);
+    expect(liveResponseEvents[0]).toMatchObject({ event: "ag_ui" });
   });
 
   it("creates workspace-job responses only from the projection reader", async () => {
@@ -241,6 +251,89 @@ describe("Cloudflare DO workspace host helpers", () => {
     });
     await expect(invalid.resolve({ scope: "scope-1", runId: "bad" })).rejects.toThrow(
       "Cloudflare workspace client missing exec",
+    );
+  });
+
+  it("resolves Cloudflare Sandbox bindings with run-scoped leases and sessionless transport", async () => {
+    const requestedIds: string[] = [];
+    const sandboxNames: Array<{ name: string; normalizeId: boolean | undefined }> = [];
+    const transports: string[] = [];
+    const execCalls: Array<{ command: string; token: string; cwd: string | undefined }> = [];
+    const cleaned: string[] = [];
+    const stub = {
+      setSandboxName: async (name: string, normalizeId?: boolean) => {
+        sandboxNames.push({ name, normalizeId });
+      },
+      setTransport: async (transport: string) => {
+        transports.push(transport);
+      },
+      execWithSessionToken: async (
+        command: string,
+        token: string,
+        options?: { readonly cwd?: string },
+      ) => {
+        execCalls.push({ command, token, cwd: options?.cwd });
+        return { exitCode: 0, stdout: "ok", stderr: "", durationMs: 1 };
+      },
+    };
+    const namespace = {
+      idFromName: (name: string) => {
+        requestedIds.push(name);
+        return { name } as unknown as DurableObjectId;
+      },
+      get: (id: DurableObjectId) => {
+        expect(id).toMatchObject({ name: requestedIds.at(-1) });
+        return stub;
+      },
+    } as unknown as DurableObjectNamespace<never>;
+    const resolver = createCloudflareSandboxWorkspaceEnvResolver({
+      binding: namespace as unknown as Parameters<
+        typeof createCloudflareSandboxWorkspaceEnvResolver
+      >[0]["binding"],
+      cwd: "/workspace",
+      scopePrefix: "ZeroY",
+      transport: "rpc",
+      cleanup: ({ runId, sandboxId, workspaceRef }) => {
+        cleaned.push(`${runId}:${sandboxId}:${workspaceRef}`);
+      },
+    });
+
+    const first = await resolver.resolve({ scope: "Customer Site", runId: "Run-ABC-123" });
+    const second = await resolver.resolve({ scope: "Customer Site", runId: "Run-ABC-123" });
+    const third = await resolver.resolve({ scope: "Customer Site", runId: "Run-DEF-456" });
+
+    expect(first).toBe(second);
+    expect(third).not.toBe(first);
+    expect(first.sandboxId).toMatch(/^zeroy-wj-run-abc-123-[a-z0-9]+$/);
+    expect(first.sandboxId).not.toContain(":");
+    expect(first.sandboxId.length).toBeLessThanOrEqual(63);
+    expect(first.workspaceRef).toBe("ZeroY:cloudflare-sandbox:Customer Site:Run-ABC-123");
+    expect(first.env.domain.ref).toBe("ZeroY:cloudflare-sandbox:Customer Site:Run-ABC-123");
+    expect(requestedIds).toEqual([first.sandboxId, third.sandboxId]);
+    expect(sandboxNames).toEqual([
+      { name: first.sandboxId, normalizeId: true },
+      { name: third.sandboxId, normalizeId: true },
+    ]);
+    expect(transports).toEqual(["rpc", "rpc"]);
+
+    await first.env.exec("pwd", { timeoutMs: 100 });
+    expect(execCalls).toEqual([
+      { command: "pwd", token: "__DISABLE_SESSION__", cwd: "/workspace" },
+    ]);
+
+    await first.cleanup();
+    const afterCleanup = await resolver.resolve({ scope: "Customer Site", runId: "Run-ABC-123" });
+    expect(afterCleanup).not.toBe(first);
+    expect(cleaned).toEqual([
+      `Run-ABC-123:${first.sandboxId}:ZeroY:cloudflare-sandbox:Customer Site:Run-ABC-123`,
+    ]);
+    expect(requestedIds).toEqual([first.sandboxId, third.sandboxId, afterCleanup.sandboxId]);
+
+    const invalid = createCloudflareSandboxWorkspaceEnvResolver({
+      binding: {} as never,
+    });
+    await expect(invalid.resolve({ scope: "scope", runId: "run" })).rejects.toThrow(
+      "Cloudflare Sandbox binding missing Durable Object namespace methods",
     );
   });
 

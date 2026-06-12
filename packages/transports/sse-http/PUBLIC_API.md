@@ -16,6 +16,7 @@ Status: 0.2.x public-experimental. This package owns Web Fetch SSE response wrap
 - `.:encodeSseHttpJsonEvent`
 - `.:parseSseHttpEventBlock`
 - `.:decodeSseHttpEvents`
+- `.:responseToSseHttpChunks`
 - `.:createSseHttpResponse`
 - `.:createSseHttpTextResponse`
 - `.:createBatchedSubmitRunStreamResponse`

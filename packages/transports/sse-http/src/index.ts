@@ -98,6 +98,24 @@ export async function* decodeSseHttpEvents(
 }
 
 /**
+ * Converts a Web Fetch response body into generic SSE-over-HTTP chunks.
+ * @experimental
+ */
+export async function* responseToSseHttpChunks(response: Response): AsyncGenerator<SseHttpChunk> {
+  if (response.body === null) return;
+  const reader = response.body.getReader();
+  try {
+    while (true) {
+      const read = await reader.read();
+      if (read.done) return;
+      yield read.value;
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+/**
  * Creates a Web Fetch Server-Sent Events response from already-encoded chunks.
  * @experimental
  */

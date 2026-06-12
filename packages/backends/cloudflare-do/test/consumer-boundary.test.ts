@@ -29,7 +29,13 @@ const packageLinks = {
   "workspace-op": "packages/carriers/workspace-op",
   "workspace-op-local": "packages/providers/workspace-op-local",
 };
-const dependencyLinks = ["@cloudflare", "@effect", "effect"];
+const dependencyLinks = ["@effect", "effect"];
+const scopedDependencyLinks = {
+  "@cloudflare": [
+    "node_modules/@cloudflare",
+    "packages/backends/cloudflare-do/node_modules/@cloudflare",
+  ],
+};
 
 const isPackageRuntimeDependencyPath = (source: string): boolean =>
   source.split(path.sep).includes("node_modules");
@@ -45,6 +51,18 @@ const makeExternalFixture = () => {
   }
   for (const name of dependencyLinks) {
     fs.symlinkSync(path.join(root, "node_modules", name), path.join(dir, "node_modules", name));
+  }
+  for (const [scope, sources] of Object.entries(scopedDependencyLinks)) {
+    const targetScope = path.join(dir, "node_modules", scope);
+    fs.mkdirSync(targetScope, { recursive: true });
+    for (const source of sources) {
+      const sourceScope = path.join(root, source);
+      if (!fs.existsSync(sourceScope)) continue;
+      for (const entry of fs.readdirSync(sourceScope)) {
+        const target = path.join(targetScope, entry);
+        if (!fs.existsSync(target)) fs.symlinkSync(path.join(sourceScope, entry), target);
+      }
+    }
   }
   for (const file of fs.readdirSync(fixtureDir)) {
     const target = file.endsWith(".fixture") ? file.slice(0, -".fixture".length) : file;

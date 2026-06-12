@@ -126,6 +126,23 @@
       }
     },
     {
+      "id": "primitive.cloudflare-do.createCloudflareSandboxWorkspaceEnvResolver",
+      "package": "@agent-os/backend-cloudflare-do",
+      "packagePath": "packages/backends/cloudflare-do",
+      "entrypoints": ["."],
+      "symbol": "createCloudflareSandboxWorkspaceEnvResolver",
+      "exportKey": ".:createCloudflareSandboxWorkspaceEnvResolver",
+      "sourceFile": "packages/backends/cloudflare-do/src/workspace-env.ts",
+      "summary": "Resolves a run-scoped Cloudflare Sandbox binding into a WorkspaceEnv. This high-level host helper owns the Sandbox binding composition: products choose the Durable Object namespace, while agentOS fixes `scope/runId -> sandbox lease`, validates the binding/client shape, disables implicit default sessions, and pins one transport per run. The lower-level resolver remains available for tests or non-Sandbox hosts.",
+      "aliases": [],
+      "invariants": ["invariant.workspace-job.host-workspace-lifecycle"],
+      "decisions": [],
+      "docs": "docs/packages/backend-cloudflare-do.md",
+      "testEvidence": {
+        "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"]
+      }
+    },
+    {
       "id": "primitive.cloudflare-do.createCloudflareWorkspaceEnvResolver",
       "package": "@agent-os/backend-cloudflare-do",
       "packagePath": "packages/backends/cloudflare-do",

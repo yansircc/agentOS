@@ -40,11 +40,13 @@ export interface WorkspaceJobSeedFile {
   readonly content: string;
 }
 
-export interface WorkspaceJobFinalizedArtifactBytes {
-  readonly artifactRef: string;
-  readonly path: string;
+export interface WorkspaceJobTerminalArtifactBuild {
   readonly schemaId: string;
   readonly bytes: string | Uint8Array;
+}
+
+export interface WorkspaceJobTerminalArtifactWriteResult {
+  readonly artifactRef: string;
 }
 
 export interface WorkspaceJobFinalizedArtifact {
@@ -54,12 +56,23 @@ export interface WorkspaceJobFinalizedArtifact {
 
 export interface WorkspaceJobDataPlane {
   readonly writeSeedFile: (file: WorkspaceJobSeedFile) => Promise<void>;
-  readonly finalize: (input: {
+  readonly buildTerminalArtifact: (input: {
     readonly runId: string;
     readonly candidatePath: string;
     readonly terminalSchemaId: string;
     readonly submitResult: SubmitResult;
-  }) => Promise<WorkspaceJobFinalizedArtifactBytes>;
+  }) => Promise<WorkspaceJobTerminalArtifactBuild>;
+  readonly writeTerminalArtifact: (input: {
+    readonly runId: string;
+    readonly path: string;
+    readonly schemaId: string;
+    readonly bytes: Uint8Array;
+  }) => Promise<WorkspaceJobTerminalArtifactWriteResult>;
+  readonly readTerminalArtifact: (input: {
+    readonly runId: string;
+    readonly path: string;
+    readonly artifactRef: string;
+  }) => Promise<string | Uint8Array>;
   readonly cleanup?: (input: { readonly runId: string }) => Promise<void>;
 }
 
@@ -99,6 +112,7 @@ export interface RunWorkspaceJobSpec {
     readonly runId: string;
     readonly candidatePath: string;
   }) => SubmitSpec;
+  readonly terminalArtifactPath: string;
   readonly seedFiles?: ReadonlyArray<WorkspaceJobSeedFile>;
   readonly workspaceRef?: string;
   readonly inputRef?: string;
@@ -108,7 +122,7 @@ export interface RunWorkspaceJobSpec {
 export class WorkspaceJobDataPlaneFailed extends Data.TaggedError(
   "agent_os.workspace_job_data_plane_failed",
 )<{
-  readonly phase: "seed" | "finalize" | "cleanup";
+  readonly phase: "seed" | "terminal_build" | "terminal_write" | "terminal_read" | "cleanup";
   readonly cause: unknown;
 }> {}
 
@@ -185,10 +199,36 @@ const failureFromDataPlane = (failure: WorkspaceJobDataPlaneFailed): WorkspaceJo
       retryable: true,
     };
   }
+  if (failure.phase === "terminal_build") {
+    return {
+      phase: "finalize",
+      class: "consumer_contract",
+      code: workspaceJobFailureCode("terminal_build_failed"),
+      message: effectMessage(cause),
+    };
+  }
+  if (failure.phase === "terminal_write") {
+    return {
+      phase: "data_plane",
+      class: "provider",
+      code: workspaceJobFailureCode("terminal_write_failed"),
+      message: effectMessage(cause),
+      retryable: true,
+    };
+  }
+  if (failure.phase === "terminal_read") {
+    return {
+      phase: "data_plane",
+      class: "provider",
+      code: workspaceJobFailureCode("terminal_read_failed"),
+      message: effectMessage(cause),
+      retryable: true,
+    };
+  }
   return {
     phase: "data_plane",
     class: "provider",
-    code: workspaceJobFailureCode("data_plane_finalize_failed"),
+    code: workspaceJobFailureCode("data_plane_failed"),
     message: effectMessage(cause),
     retryable: true,
   };
@@ -280,26 +320,46 @@ const finalizeArtifact = (
   submitResult: SubmitResult,
 ): Effect.Effect<WorkspaceJobFinalizedArtifact, WorkspaceJobDataPlaneFailed> =>
   Effect.gen(function* () {
-    const finalized = yield* Effect.tryPromise({
+    const built = yield* Effect.tryPromise({
       try: () =>
-        spec.dataPlane.finalize({
+        spec.dataPlane.buildTerminalArtifact({
           runId: spec.runId,
           candidatePath: spec.candidatePath,
           terminalSchemaId: spec.terminalSchemaId,
           submitResult,
         }),
-      catch: (cause) => new WorkspaceJobDataPlaneFailed({ phase: "finalize", cause }),
+      catch: (cause) => new WorkspaceJobDataPlaneFailed({ phase: "terminal_build", cause }),
     });
-    const bytes = bytesOf(finalized.bytes);
-    const hash = yield* sha256Hex(bytes);
+    const builtBytes = bytesOf(built.bytes);
+    const written = yield* Effect.tryPromise({
+      try: () =>
+        spec.dataPlane.writeTerminalArtifact({
+          runId: spec.runId,
+          path: spec.terminalArtifactPath,
+          schemaId: built.schemaId,
+          bytes: builtBytes,
+        }),
+      catch: (cause) => new WorkspaceJobDataPlaneFailed({ phase: "terminal_write", cause }),
+    });
+    const readback = yield* Effect.tryPromise({
+      try: () =>
+        spec.dataPlane.readTerminalArtifact({
+          runId: spec.runId,
+          path: spec.terminalArtifactPath,
+          artifactRef: written.artifactRef,
+        }),
+      catch: (cause) => new WorkspaceJobDataPlaneFailed({ phase: "terminal_read", cause }),
+    });
+    const readbackBytes = bytesOf(readback);
+    const hash = yield* sha256Hex(readbackBytes);
     return {
-      bytes,
+      bytes: readbackBytes,
       artifact: {
-        artifactRef: finalized.artifactRef,
-        path: finalized.path,
-        schemaId: finalized.schemaId,
+        artifactRef: written.artifactRef,
+        path: spec.terminalArtifactPath,
+        schemaId: built.schemaId,
         sha256: `sha256:${hash}`,
-        bytes: bytes.byteLength,
+        bytes: readbackBytes.byteLength,
       },
     };
   });

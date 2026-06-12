@@ -29,6 +29,11 @@ Status: Backend package. Public exports include the Cloudflare app facade, bindi
 - `.:CloudflareAttachedStreamFactory`
 - `.:CloudflareAttachedStreamFactoryContext`
 - `.:CloudflareAttachedStreamSource`
+- `.:CloudflareLedgerSseSource`
+- `.:CloudflareSandboxTransport`
+- `.:CloudflareSandboxWorkspaceClient`
+- `.:CloudflareSandboxWorkspaceNamespace`
+- `.:CloudflareSandboxWorkspaceEnvResolverOptions`
 - `.:CloudflareWorkspaceEnvBinding`
 - `.:CloudflareWorkspaceEnvLease`
 - `.:CloudflareWorkspaceEnvResolver`
@@ -64,6 +69,7 @@ Status: Backend package. Public exports include the Cloudflare app facade, bindi
 - `.:createAgentDurableObject`
 - `.:createCloudflareLedgerAgUiHistorySseResponse`
 - `.:createCloudflareLedgerAgUiSseResponse`
+- `.:createCloudflareSandboxWorkspaceEnvResolver`
 - `.:createCloudflareWorkspaceJobResponse`
 - `.:createCloudflareWorkspaceEnvResolver`
 - `.:defineAgentDO`

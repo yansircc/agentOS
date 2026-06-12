@@ -8,9 +8,15 @@ import type { LedgerEvent } from "@agent-os/kernel/types";
 import {
   createSseHttpResponse,
   createSseHttpTextResponse,
+  responseToSseHttpChunks,
   type SseHttpResponseOptions,
   type SseHttpChunk,
 } from "@agent-os/sse-http";
+
+export type CloudflareLedgerSseSource = Response | AsyncIterable<SseHttpChunk>;
+
+const ledgerSseChunks = (source: CloudflareLedgerSseSource): AsyncIterable<SseHttpChunk> =>
+  source instanceof Response ? responseToSseHttpChunks(source) : source;
 
 /**
  * Cloudflare host composition for live ledger SSE -> AG-UI SSE.
@@ -27,10 +33,11 @@ import {
  * @public
  */
 export const createCloudflareLedgerAgUiSseResponse = (
-  ledgerSse: AsyncIterable<SseHttpChunk>,
+  ledgerSse: CloudflareLedgerSseSource,
   spec: AgUiLedgerEnvelopeProjectionSpec = {},
   options: SseHttpResponseOptions = {},
-): Response => createSseHttpResponse(projectLedgerSseToAgUiSse(ledgerSse, spec), options);
+): Response =>
+  createSseHttpResponse(projectLedgerSseToAgUiSse(ledgerSseChunks(ledgerSse), spec), options);
 
 /**
  * Cloudflare host composition for historical ledger rows -> AG-UI SSE.

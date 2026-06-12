@@ -80,6 +80,12 @@
         "rules": ["EFF001", "EFF002", "EFF003", "EFF004", "EFF402"]
       },
       {
+        "path": "packages/transports/sse-http/test/sse-http.test.ts",
+        "owner": "@agent-os/sse-http/test-transport",
+        "reason": "generic SSE-over-HTTP transport tests construct Fetch Response objects to prove response body chunk adaptation at the transport boundary",
+        "rules": ["EFF402"]
+      },
+      {
         "path": "packages/backends/cloudflare-do/src/storage/sql-row.ts",
         "owner": "@agent-os/backend-cloudflare-do-storage",
         "reason": "SQLite row adapter owns fail-fast host column shape assertion",

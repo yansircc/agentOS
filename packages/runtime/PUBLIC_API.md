@@ -113,9 +113,10 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:WorkspaceJobDataPlane`
 - `.:WorkspaceJobDataPlaneFailed`
 - `.:WorkspaceJobFinalizedArtifact`
-- `.:WorkspaceJobFinalizedArtifactBytes`
 - `.:WorkspaceJobRunIdMismatch`
 - `.:WorkspaceJobSeedFile`
+- `.:WorkspaceJobTerminalArtifactBuild`
+- `.:WorkspaceJobTerminalArtifactWriteResult`
 - `.:WorkspaceJobVerifier`
 - `.:WorkspaceJobVerifierFailed`
 - `.:WorkspaceJobVerifierResult`

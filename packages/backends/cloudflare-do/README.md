@@ -183,6 +183,20 @@ source workspace package paths. Use the public package entrypoints only; backend
 source subpaths remain outside the contract. Published packages include
 `dist` JavaScript and declaration files for `NodeNext` and Bundler consumers.
 
+Workspace jobs use Cloudflare host helpers instead of product-owned Sandbox
+glue. `createCloudflareSandboxWorkspaceEnvResolver({ binding, transport, cwd,
+scopePrefix, cleanup })` owns the Cloudflare Sandbox binding/client composition,
+validates the DO namespace and client shape, pins `normalizeId: true`, disables
+implicit default sessions, and returns one `WorkspaceEnv` lease per
+`scope/runId`. Products choose the binding and declare cleanup policy; they do
+not configure sandbox sessions/transports or mint workspace refs.
+
+AG-UI SSE responses are also host composition. `@agent-os/ag-ui` projects
+ledger events into AG-UI frames, `@agent-os/sse-http` stays a generic SSE
+transport, and `createCloudflareLedgerAgUiSseResponse` combines them for
+Cloudflare callers. It accepts either an already chunked ledger SSE stream or a
+Web `Response`; products do not need local ledger-response chunk adapters.
+
 ## Verification
 
 ```sh

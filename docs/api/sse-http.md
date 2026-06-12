@@ -12,6 +12,7 @@
 - `.:encodeSseHttpJsonEvent`
 - `.:parseSseHttpEventBlock`
 - `.:decodeSseHttpEvents`
+- `.:responseToSseHttpChunks`
 - `.:createSseHttpResponse`
 - `.:createSseHttpTextResponse`
 - `.:createBatchedSubmitRunStreamResponse`

@@ -29,6 +29,11 @@ title: "@agent-os/backend-cloudflare-do Public API Intent"
 - `.:CloudflareAttachedStreamFactory`
 - `.:CloudflareAttachedStreamFactoryContext`
 - `.:CloudflareAttachedStreamSource`
+- `.:CloudflareLedgerSseSource`
+- `.:CloudflareSandboxTransport`
+- `.:CloudflareSandboxWorkspaceClient`
+- `.:CloudflareSandboxWorkspaceNamespace`
+- `.:CloudflareSandboxWorkspaceEnvResolverOptions`
 - `.:CloudflareWorkspaceEnvBinding`
 - `.:CloudflareWorkspaceEnvLease`
 - `.:CloudflareWorkspaceEnvResolver`
@@ -64,6 +69,7 @@ title: "@agent-os/backend-cloudflare-do Public API Intent"
 - `.:createAgentDurableObject`
 - `.:createCloudflareLedgerAgUiHistorySseResponse`
 - `.:createCloudflareLedgerAgUiSseResponse`
+- `.:createCloudflareSandboxWorkspaceEnvResolver`
 - `.:createCloudflareWorkspaceJobResponse`
 - `.:createCloudflareWorkspaceEnvResolver`
 - `.:defineAgentDO`
