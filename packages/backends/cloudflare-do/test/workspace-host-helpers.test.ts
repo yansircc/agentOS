@@ -337,6 +337,41 @@ describe("Cloudflare DO workspace host helpers", () => {
     );
   });
 
+  it("allows hosts to declare the WorkspaceEnv ref carried by workspace operations", async () => {
+    const requestedIds: string[] = [];
+    const stub = {
+      setSandboxName: async () => undefined,
+      setTransport: async () => undefined,
+      execWithSessionToken: async () => ({
+        exitCode: 0,
+        stdout: "ok",
+        stderr: "",
+        durationMs: 1,
+      }),
+    };
+    const namespace = {
+      idFromName: (name: string) => {
+        requestedIds.push(name);
+        return { name } as unknown as DurableObjectId;
+      },
+      get: () => stub,
+    } as unknown as DurableObjectNamespace<never>;
+    const resolver = createCloudflareSandboxWorkspaceEnvResolver({
+      binding: namespace as unknown as Parameters<
+        typeof createCloudflareSandboxWorkspaceEnvResolver
+      >[0]["binding"],
+      scopePrefix: "ZeroY",
+      workspaceRef: ({ runId }) => runId,
+    });
+
+    const lease = await resolver.resolve({ scope: "Customer Site", runId: "Run-ABC-123" });
+
+    expect(lease.sandboxId).toMatch(/^zeroy-wj-run-abc-123-[a-z0-9]+$/);
+    expect(requestedIds).toEqual([lease.sandboxId]);
+    expect(lease.workspaceRef).toBe("Run-ABC-123");
+    expect(lease.env.domain.ref).toBe("Run-ABC-123");
+  });
+
   it("installs workspace-op provider handlers that commit only through boundary capability", async () => {
     let written: { path: string; content: string | Uint8Array } | null = null;
     const install = installCloudflareWorkspaceOperationProvider({

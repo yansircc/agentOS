@@ -54,6 +54,7 @@ export interface CloudflareSandboxWorkspaceEnvResolverOptions {
   readonly transport?: CloudflareSandboxTransport;
   readonly cwd?: string;
   readonly scopePrefix?: string;
+  readonly workspaceRef?: (input: CloudflareWorkspaceEnvResolverInput) => string;
   readonly cleanup?: (input: {
     readonly scope: string;
     readonly runId: string;
@@ -269,7 +270,8 @@ export const createCloudflareSandboxWorkspaceEnvResolver = (
       if (existing !== undefined) return existing;
 
       const sandboxId = scopedSandboxId(input, options.scopePrefix);
-      const workspaceRef = scopedWorkspaceRef(input, options.scopePrefix);
+      const workspaceRef =
+        options.workspaceRef?.(input) ?? scopedWorkspaceRef(input, options.scopePrefix);
       const binding = validateSandboxNamespace(options.binding);
       const client = validateSandboxClient(binding.get(binding.idFromName(sandboxId)));
       await client.setSandboxName(sandboxId, true);
