@@ -6,6 +6,23 @@ import {
   type CloudflareWorkspaceEnvClient,
 } from "../src";
 
+const encodeBase64 = (bytes: Uint8Array): string => {
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.slice(offset, offset + 0x8000));
+  }
+  return btoa(binary);
+};
+
+const decodeBase64 = (text: string): Uint8Array => {
+  const binary = atob(text.replace(/\s+/g, ""));
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
+};
+
 describe("@agent-os/workspace-env-cloudflare", () => {
   it("maps Cloudflare-compatible file and exec methods into WorkspaceEnv", async () => {
     const exec = vi.fn<CloudflareWorkspaceEnvClient["exec"]>(async (_command, _options) => ({
@@ -59,6 +76,63 @@ describe("@agent-os/workspace-env-cloudflare", () => {
       cwd: "/workspace/project",
       timeout: 12_000,
       timeoutMs: 12_000,
+    });
+  });
+
+  it("derives file read and write through sandbox shell when the client exposes only exec", async () => {
+    const files = new Map<string, Uint8Array>();
+    const exec = vi.fn<CloudflareWorkspaceEnvClient["exec"]>(async (command) => {
+      if (command.startsWith("mkdir -p ")) {
+        return { exitCode: 0, stdout: "", stderr: "", durationMs: 1 };
+      }
+      const writeMatch = command.match(
+        /^cat <<'AGENTOS_WORKSPACE_FILE' \| base64 -d > '([^']+)'\n([A-Za-z0-9+/=]*)\nAGENTOS_WORKSPACE_FILE$/,
+      );
+      if (writeMatch !== null) {
+        files.set(writeMatch[1], decodeBase64(writeMatch[2]));
+        return { exitCode: 0, stdout: "", stderr: "", durationMs: 1 };
+      }
+      const readMatch = command.match(/^base64 '([^']+)'$/);
+      if (readMatch !== null) {
+        const bytes = files.get(readMatch[1]);
+        return bytes === undefined
+          ? { exitCode: 1, stdout: "", stderr: "missing", durationMs: 1 }
+          : { exitCode: 0, stdout: encodeBase64(bytes), stderr: "", durationMs: 1 };
+      }
+      return { exitCode: 127, stdout: "", stderr: command, durationMs: 1 };
+    });
+    const env = makeCloudflareWorkspaceEnv({
+      client: { exec },
+      cwd: "/workspace/project",
+    });
+
+    await env.writeFile("src/a.txt", "hello");
+    await expect(env.readFile("src/a.txt")).resolves.toBe("hello");
+
+    const binary = new Uint8Array([0, 255, 1, 2, 128]);
+    await env.writeFile("src/b.bin", binary);
+    await expect(env.readFileBuffer("src/b.bin")).resolves.toEqual(binary);
+    await expect(env.readFile("missing.txt")).rejects.toEqual(
+      new CloudflareWorkspaceEnvError("Cloudflare workspace shell readFile failed: missing"),
+    );
+
+    expect(exec).toHaveBeenCalledWith("mkdir -p '/workspace/project/src'", {
+      cwd: undefined,
+      timeout: 5_000,
+      timeoutMs: 5_000,
+    });
+    expect(exec).toHaveBeenCalledWith(
+      expect.stringContaining("base64 -d > '/workspace/project/src/a.txt'"),
+      {
+        cwd: undefined,
+        timeout: 5_000,
+        timeoutMs: 5_000,
+      },
+    );
+    expect(exec).toHaveBeenCalledWith("base64 '/workspace/project/src/a.txt'", {
+      cwd: undefined,
+      timeout: 5_000,
+      timeoutMs: 5_000,
     });
   });
 

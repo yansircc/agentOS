@@ -228,6 +228,27 @@ const providerFileContent = (content: string | Uint8Array): string | ReadableStr
       })
     : content;
 
+const bytesOf = (content: string | Uint8Array): Uint8Array =>
+  typeof content === "string" ? new TextEncoder().encode(content) : content;
+
+const base64Encode = (bytes: Uint8Array): string => {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.slice(offset, offset + chunkSize));
+  }
+  return btoa(binary);
+};
+
+const base64Decode = (text: string): Uint8Array => {
+  const binary = atob(text.replace(/\s+/g, ""));
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
+};
+
 const nameOfFileInfo = (value: unknown): string | null => {
   if (typeof value === "string") return value;
   if (value === null || typeof value !== "object") return null;
@@ -253,6 +274,49 @@ const normalizeListFiles = (
 
 const normalizeExists = (result: boolean | CloudflareWorkspaceEnvExistsResult): boolean =>
   typeof result === "boolean" ? result : result.exists === true;
+
+const shellReadFileBytes = async (
+  client: CloudflareWorkspaceEnvClient,
+  path: string,
+  options?: WorkspaceOperationOptions,
+): Promise<Uint8Array> => {
+  const result = await execOrFail(client, `base64 ${shellQuote(path)}`, {
+    timeoutMs: 5_000,
+    signal: options?.signal,
+  });
+  if (result.exitCode !== 0) {
+    throw workspaceError(
+      `Cloudflare workspace shell readFile failed: ${result.stderr || result.stdout}`,
+    );
+  }
+  return base64Decode(result.stdout);
+};
+
+const shellWriteFile = async (
+  client: CloudflareWorkspaceEnvClient,
+  path: string,
+  content: string | Uint8Array,
+  options?: WorkspaceOperationOptions,
+): Promise<void> => {
+  const result = await execOrFail(
+    client,
+    [
+      `cat <<'AGENTOS_WORKSPACE_FILE' | base64 -d > ${shellQuote(path)}`,
+      base64Encode(bytesOf(content)),
+      "AGENTOS_WORKSPACE_FILE",
+    ].join("\n"),
+    {
+      timeoutMs: 5_000,
+      signal: options?.signal,
+      maxOutputBytes: 1_024,
+    },
+  );
+  if (result.exitCode !== 0) {
+    throw workspaceError(
+      `Cloudflare workspace shell writeFile failed: ${result.stderr || result.stdout}`,
+    );
+  }
+};
 
 const shellStat = async (
   client: CloudflareWorkspaceEnvClient,
@@ -296,7 +360,7 @@ const cloudflareBackend = (client: CloudflareWorkspaceEnvClient): WorkspaceEnvBa
   readFile: async (path, options) => {
     checkSignal(options?.signal);
     if (client.readFile === undefined) {
-      throw workspaceError("Cloudflare workspace client does not expose readFile");
+      return new TextDecoder().decode(await shellReadFileBytes(client, path, options));
     }
     const result = await client.readFile(path, { encoding: "utf-8" });
     checkSignal(options?.signal);
@@ -305,7 +369,7 @@ const cloudflareBackend = (client: CloudflareWorkspaceEnvClient): WorkspaceEnvBa
   readFileBuffer: async (path, options) => {
     checkSignal(options?.signal);
     if (client.readFile === undefined) {
-      throw workspaceError("Cloudflare workspace client does not expose readFileBuffer");
+      return shellReadFileBytes(client, path, options);
     }
     const result = await client.readFile(path, { encoding: "utf-8" });
     checkSignal(options?.signal);
@@ -314,7 +378,8 @@ const cloudflareBackend = (client: CloudflareWorkspaceEnvClient): WorkspaceEnvBa
   writeFile: async (path, content, options) => {
     checkSignal(options?.signal);
     if (client.writeFile === undefined) {
-      throw workspaceError("Cloudflare workspace client does not expose writeFile");
+      await shellWriteFile(client, path, content, options);
+      return;
     }
     await client.writeFile(path, providerFileContent(content), { encoding: "utf-8" });
     checkSignal(options?.signal);
