@@ -1,5 +1,4 @@
 import { describe, expect, it } from "@effect/vitest";
-import { makePreClaim } from "@agent-os/kernel/effect-claim";
 import {
   WORKSPACE_JOB_FACT_OWNER,
   WORKSPACE_JOB_KIND,
@@ -11,17 +10,19 @@ import {
   settleWorkspaceJobVerified,
   workspaceJobBoundaryPackage,
   workspaceJobFailedPayload,
+  workspaceJobFailureCode,
+  workspaceJobPreClaim,
   workspaceJobRequestedPayload,
   workspaceJobTerminalFinalizedPayload,
   workspaceJobVerifierRejectedPayload,
   workspaceJobVerifiedPayload,
 } from "../src";
 
-const claim = makePreClaim({
-  operationRef: "workspace_job:run-1",
+const claim = workspaceJobPreClaim({
+  runId: "run-1",
+  idempotencyKey: "run:1",
   scopeRef: { kind: "conversation", scopeId: "run-1" },
   effectAuthorityRef: { authorityClass: "workspace_job", authorityId: "@agent-os/runtime" },
-  originRef: { originId: "run:1", originKind: "workspace_job" },
 });
 
 const artifact = {
@@ -48,6 +49,16 @@ describe("@agent-os/workspace-job", () => {
       packageId: "@agent-os/workspace-job",
       kindPrefixes: ["workspace_job."],
     });
+  });
+
+  it("owns workspace-job claim refs and failure code generation", () => {
+    expect(claim).toMatchObject({
+      operationRef: "workspace_job:run-1",
+      originRef: { originId: "run:1", originKind: "workspace_job" },
+    });
+    expect(workspaceJobFailureCode("submit", "interrupted")).toBe(
+      "workspace_job.submit.interrupted",
+    );
   });
 
   it("projects requested rows as running and maps idempotency key to the first run", () => {
@@ -176,7 +187,7 @@ describe("@agent-os/workspace-job", () => {
           failure: {
             phase: "submit",
             class: "provider",
-            code: "workspace_job.submit_failed",
+            code: workspaceJobFailureCode("submit_failed"),
             message: "runtime crashed",
             retryable: true,
           },
@@ -200,7 +211,7 @@ describe("@agent-os/workspace-job", () => {
         failure: {
           phase: "submit",
           class: "provider",
-          code: "workspace_job.submit_failed",
+          code: workspaceJobFailureCode("submit_failed"),
         },
       },
     });

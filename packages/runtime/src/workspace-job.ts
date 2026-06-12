@@ -1,5 +1,4 @@
 import { Data, Effect } from "effect";
-import { makePreClaim } from "@agent-os/kernel/effect-claim";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import type { JsonStringifyError, SqlError } from "@agent-os/kernel/errors";
 import { RefResolverService } from "@agent-os/kernel/ref-resolver";
@@ -24,6 +23,8 @@ import {
   settleWorkspaceJobVerified,
   workspaceJobBoundaryContract,
   workspaceJobFailedPayload,
+  workspaceJobFailureCode,
+  workspaceJobPreClaim,
   workspaceJobRequestedPayload,
   workspaceJobTerminalFinalizedPayload,
   workspaceJobVerifierRejectedPayload,
@@ -152,7 +153,7 @@ const effectMessage = (cause: unknown): string =>
 const submitFailure = (reason: string): WorkspaceJobFailure => ({
   phase: "submit",
   class: reason === "budget_time" ? "timeout" : reason === "interrupted" ? "cancelled" : "provider",
-  code: `workspace_job.submit.${reason}`,
+  code: workspaceJobFailureCode("submit", reason),
   message: reason,
   retryable: reason !== "interrupted",
 });
@@ -163,7 +164,7 @@ const failureFromDataPlane = (failure: WorkspaceJobDataPlaneFailed): WorkspaceJo
     return {
       phase: "collect_candidate",
       class: "consumer_contract",
-      code: "workspace_job.candidate_missing",
+      code: workspaceJobFailureCode("candidate_missing"),
       message: `missing candidate: ${cause.candidatePath}`,
     };
   }
@@ -171,7 +172,7 @@ const failureFromDataPlane = (failure: WorkspaceJobDataPlaneFailed): WorkspaceJo
     return {
       phase: "finalize",
       class: "consumer_contract",
-      code: "workspace_job.run_id_mismatch",
+      code: workspaceJobFailureCode("run_id_mismatch"),
       message: `runId mismatch: expected ${cause.expectedRunId}, got ${cause.actualRunId}`,
     };
   }
@@ -179,7 +180,7 @@ const failureFromDataPlane = (failure: WorkspaceJobDataPlaneFailed): WorkspaceJo
     return {
       phase: "seed",
       class: "provider",
-      code: "workspace_job.seed_write_failed",
+      code: workspaceJobFailureCode("seed_write_failed"),
       message: effectMessage(cause),
       retryable: true,
     };
@@ -187,7 +188,7 @@ const failureFromDataPlane = (failure: WorkspaceJobDataPlaneFailed): WorkspaceJo
   return {
     phase: "data_plane",
     class: "provider",
-    code: "workspace_job.data_plane_finalize_failed",
+    code: workspaceJobFailureCode("data_plane_finalize_failed"),
     message: effectMessage(cause),
     retryable: true,
   };
@@ -196,7 +197,7 @@ const failureFromDataPlane = (failure: WorkspaceJobDataPlaneFailed): WorkspaceJo
 const verifierInfraFailure = (cause: unknown): WorkspaceJobFailure => ({
   phase: "verify_infra",
   class: "provider",
-  code: "workspace_job.verifier_failed",
+  code: workspaceJobFailureCode("verifier_failed"),
   message: effectMessage(cause),
   retryable: true,
 });
@@ -232,11 +233,11 @@ const commitFailed = (
   requestedEventId: number,
   failure: WorkspaceJobFailure,
 ): Effect.Effect<LedgerEvent, BoundaryCommitRejected | SqlError | JsonStringifyError> => {
-  const requestClaim = makePreClaim({
-    operationRef: `workspace_job:${spec.runId}`,
+  const requestClaim = workspaceJobPreClaim({
+    runId: spec.runId,
+    idempotencyKey: spec.idempotencyKey,
     scopeRef: spec.identity.scopeRef,
     effectAuthorityRef: spec.identity.effectAuthorityRef,
-    originRef: { originId: spec.idempotencyKey, originKind: "workspace_job" },
   });
   const claim = rejectWorkspaceJobFailed(requestClaim, {
     runId: spec.runId,
@@ -358,11 +359,11 @@ export const runWorkspaceJobEffect = (
       return currentProjection(before, existing.runId);
     }
 
-    const claim = makePreClaim({
-      operationRef: `workspace_job:${spec.runId}`,
+    const claim = workspaceJobPreClaim({
+      runId: spec.runId,
+      idempotencyKey: spec.idempotencyKey,
       scopeRef: spec.identity.scopeRef,
       effectAuthorityRef: spec.identity.effectAuthorityRef,
-      originRef: { originId: spec.idempotencyKey, originKind: "workspace_job" },
     });
     const requested = yield* commitWorkspaceJob(
       boundaryEvents,

@@ -10,7 +10,9 @@ title: "@agent-os/workspace-job Public API Intent"
 - `.:WORKSPACE_JOB_EVENT_PREFIX`
 - `.:WORKSPACE_JOB_FACT_OWNER`
 - `.:WORKSPACE_JOB_KIND`
+- `.:WORKSPACE_JOB_ORIGIN_KIND`
 - `.:WORKSPACE_JOB_PROJECTION_KIND`
+- `.:WORKSPACE_JOB_REF_NAMESPACE`
 - `.:WorkspaceJobFailure`
 - `.:WorkspaceJobFailedPayload`
 - `.:WorkspaceJobIdempotencyProjection`
@@ -32,6 +34,10 @@ title: "@agent-os/workspace-job Public API Intent"
 - `.:workspaceJobBoundaryPackage`
 - `.:workspaceJobCarrier`
 - `.:workspaceJobFailedPayload`
+- `.:workspaceJobFailureCode`
+- `.:workspaceJobOperationRef`
+- `.:workspaceJobOriginRef`
+- `.:workspaceJobPreClaim`
 - `.:workspaceJobRequestedPayload`
 - `.:workspaceJobSettlementContract`
 - `.:workspaceJobSettlementRef`

@@ -1,6 +1,12 @@
 import { Predicate } from "effect";
-import type { LivedClaim, PreClaim, RejectedClaim } from "@agent-os/kernel/effect-claim";
-import { validateEffectClaim } from "@agent-os/kernel/effect-claim";
+import type {
+  AuthorityRef,
+  LivedClaim,
+  PreClaim,
+  RejectedClaim,
+  ScopeRef,
+} from "@agent-os/kernel/effect-claim";
+import { makeOperationRef, makePreClaim, validateEffectClaim } from "@agent-os/kernel/effect-claim";
 import { validateTerminalClaim } from "@agent-os/kernel/settlement-contract";
 import {
   WORKSPACE_JOB_EVENTS,
@@ -31,6 +37,35 @@ export type WorkspaceJobFailedPayload = WorkspaceJobPayloads[(typeof WORKSPACE_J
 export type WorkspaceJobTerminalArtifact = WorkspaceJobTerminalFinalizedPayload["terminalArtifact"];
 export type WorkspaceJobVerificationCheck = WorkspaceJobVerifiedPayload["checks"][number];
 export type WorkspaceJobFailure = WorkspaceJobFailedPayload["failure"];
+
+export const WORKSPACE_JOB_REF_NAMESPACE = "workspace_job";
+export const WORKSPACE_JOB_ORIGIN_KIND = WORKSPACE_JOB_REF_NAMESPACE;
+
+export const workspaceJobOperationRef = (runId: string): string =>
+  makeOperationRef(WORKSPACE_JOB_REF_NAMESPACE, [runId]);
+
+export const workspaceJobOriginRef = (
+  idempotencyKey: string,
+): { readonly originId: string; readonly originKind: string } => ({
+  originId: idempotencyKey,
+  originKind: WORKSPACE_JOB_ORIGIN_KIND,
+});
+
+export const workspaceJobPreClaim = (spec: {
+  readonly runId: string;
+  readonly idempotencyKey: string;
+  readonly scopeRef: ScopeRef;
+  readonly effectAuthorityRef: AuthorityRef;
+}): PreClaim =>
+  makePreClaim({
+    operationRef: workspaceJobOperationRef(spec.runId),
+    scopeRef: spec.scopeRef,
+    effectAuthorityRef: spec.effectAuthorityRef,
+    originRef: workspaceJobOriginRef(spec.idempotencyKey),
+  });
+
+export const workspaceJobFailureCode = (...parts: ReadonlyArray<string | number>): string =>
+  [WORKSPACE_JOB_REF_NAMESPACE, ...parts.map(String)].join(".");
 
 export interface WorkspaceJobLedgerEvent {
   readonly id: number;
