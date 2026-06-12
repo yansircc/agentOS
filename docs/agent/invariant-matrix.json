@@ -278,7 +278,7 @@
     },
     {
       "invariant": "invariant.workspace-job.verified-terminal",
-      "statement": "Workspace job deliverables are terminal projections over finalized bytes; candidate bytes, verifier verdicts, idempotency, and failures flow through one closed pipeline.",
+      "statement": "Workspace job deliverables are terminal projections joined through workspace_job.terminal_finalized; candidate bytes, verifier verdicts, idempotency, and structured failures flow through one closed pipeline.",
       "primitives": [
         "primitive.cloudflare-do.createCloudflareWorkspaceJobResponse",
         "primitive.runtime.runWorkspaceJobEffect"

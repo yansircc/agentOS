@@ -105,7 +105,7 @@
     },
     {
       "id": "invariant.workspace-job.verified-terminal",
-      "statement": "Workspace job deliverables are terminal projections over finalized bytes; candidate bytes, verifier verdicts, idempotency, and failures flow through one closed pipeline.",
+      "statement": "Workspace job deliverables are terminal projections joined through workspace_job.terminal_finalized; candidate bytes, verifier verdicts, idempotency, and structured failures flow through one closed pipeline.",
       "docs": "docs/packages/workspace-job.md",
       "decisions": [],
       "tests": [

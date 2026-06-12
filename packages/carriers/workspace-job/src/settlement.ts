@@ -10,7 +10,7 @@ import { workspaceJobCarrier } from "./definition";
 export const workspaceJobSettlementRef = (...parts: ReadonlyArray<string | number>): string =>
   symbolicSettlementRef("workspace_job", parts);
 
-export const settleWorkspaceJobVerified = (
+export const settleWorkspaceJobTerminalFinalized = (
   claim: PreClaim,
   spec: {
     readonly runId: string;
@@ -18,12 +18,31 @@ export const settleWorkspaceJobVerified = (
     readonly artifactRef: string;
   },
 ): LivedClaim =>
+  workspaceJobCarrier.settle.terminal_finalized(claim, {
+    anchorId: workspaceJobSettlementRef(
+      "terminal_finalized",
+      spec.runId,
+      spec.requestedEventId,
+      spec.artifactRef,
+    ),
+    anchorKind: "carrier_proof",
+    carrierRef: workspaceJobSettlementRef("carrier", "workspace-job"),
+  });
+
+export const settleWorkspaceJobVerified = (
+  claim: PreClaim,
+  spec: {
+    readonly runId: string;
+    readonly requestedEventId: number;
+    readonly terminalFinalizedEventId: number;
+  },
+): LivedClaim =>
   workspaceJobCarrier.settle.verified(claim, {
     anchorId: workspaceJobSettlementRef(
       "verified",
       spec.runId,
       spec.requestedEventId,
-      spec.artifactRef,
+      spec.terminalFinalizedEventId,
     ),
     anchorKind: "carrier_proof",
     carrierRef: workspaceJobSettlementRef("carrier", "workspace-job"),
@@ -34,6 +53,7 @@ export const rejectWorkspaceJobByVerifier = (
   spec: {
     readonly runId: string;
     readonly requestedEventId: number;
+    readonly terminalFinalizedEventId: number;
     readonly rejectionKind?: Extract<
       RejectionRef["rejectionKind"],
       "validation_failed" | "policy_denied"
@@ -41,13 +61,19 @@ export const rejectWorkspaceJobByVerifier = (
   },
 ): RejectedClaim =>
   workspaceJobCarrier.reject.verifier_rejected(claim, {
-    rejectionId: workspaceJobSettlementRef("verifier_rejected", spec.runId, spec.requestedEventId),
+    rejectionId: workspaceJobSettlementRef(
+      "verifier_rejected",
+      spec.runId,
+      spec.requestedEventId,
+      spec.terminalFinalizedEventId,
+    ),
     rejectionKind: spec.rejectionKind ?? "validation_failed",
     reason: workspaceJobSettlementRef(
       "reason",
       "verifier_rejected",
       spec.runId,
       spec.requestedEventId,
+      spec.terminalFinalizedEventId,
     ),
   });
 

@@ -7,12 +7,14 @@
 - `.:WORKSPACE_JOB_FACT_OWNER`
 - `.:WORKSPACE_JOB_KIND`
 - `.:WORKSPACE_JOB_PROJECTION_KIND`
+- `.:WorkspaceJobFailure`
 - `.:WorkspaceJobFailedPayload`
 - `.:WorkspaceJobIdempotencyProjection`
 - `.:WorkspaceJobLedgerEvent`
 - `.:WorkspaceJobProjection`
 - `.:WorkspaceJobRequestedPayload`
 - `.:WorkspaceJobTerminalArtifact`
+- `.:WorkspaceJobTerminalFinalizedPayload`
 - `.:WorkspaceJobVerificationCheck`
 - `.:WorkspaceJobVerifiedPayload`
 - `.:WorkspaceJobVerifierRejectedPayload`
@@ -20,6 +22,7 @@
 - `.:projectWorkspaceJobByIdempotencyKey`
 - `.:rejectWorkspaceJobByVerifier`
 - `.:rejectWorkspaceJobFailed`
+- `.:settleWorkspaceJobTerminalFinalized`
 - `.:settleWorkspaceJobVerified`
 - `.:workspaceJobBoundaryContract`
 - `.:workspaceJobBoundaryPackage`
@@ -28,6 +31,7 @@
 - `.:workspaceJobRequestedPayload`
 - `.:workspaceJobSettlementContract`
 - `.:workspaceJobSettlementRef`
+- `.:workspaceJobTerminalFinalizedPayload`
 - `.:workspaceJobVerifiedPayload`
 - `.:workspaceJobVerifierRejectedPayload`
 

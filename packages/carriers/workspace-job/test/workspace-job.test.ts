@@ -7,10 +7,12 @@ import {
   projectWorkspaceJobByIdempotencyKey,
   rejectWorkspaceJobByVerifier,
   rejectWorkspaceJobFailed,
+  settleWorkspaceJobTerminalFinalized,
   settleWorkspaceJobVerified,
   workspaceJobBoundaryPackage,
   workspaceJobFailedPayload,
   workspaceJobRequestedPayload,
+  workspaceJobTerminalFinalizedPayload,
   workspaceJobVerifierRejectedPayload,
   workspaceJobVerifiedPayload,
 } from "../src";
@@ -72,14 +74,29 @@ describe("@agent-os/workspace-job", () => {
   });
 
   it("keeps verified, verifier_rejected, and failed terminal states distinct", () => {
-    const verifiedClaim = settleWorkspaceJobVerified(claim, {
+    const finalizedClaim = settleWorkspaceJobTerminalFinalized(claim, {
       runId: "run-1",
       requestedEventId: 10,
       artifactRef: artifact.artifactRef,
     });
+    const verifiedClaim = settleWorkspaceJobVerified(claim, {
+      runId: "run-1",
+      requestedEventId: 10,
+      terminalFinalizedEventId: 11,
+    });
+    const run2Artifact = {
+      ...artifact,
+      artifactRef: "workspace-job://run-2/output/result.json",
+    };
+    const run2FinalizedClaim = settleWorkspaceJobTerminalFinalized(claim, {
+      runId: "run-2",
+      requestedEventId: 20,
+      artifactRef: run2Artifact.artifactRef,
+    });
     const verifierRejectedClaim = rejectWorkspaceJobByVerifier(claim, {
       runId: "run-2",
       requestedEventId: 20,
+      terminalFinalizedEventId: 21,
     });
     const failedClaim = rejectWorkspaceJobFailed(claim, {
       runId: "run-3",
@@ -103,12 +120,23 @@ describe("@agent-os/workspace-job", () => {
       { id: 10, kind: WORKSPACE_JOB_KIND.REQUESTED, payload: requested },
       {
         id: 11,
-        kind: WORKSPACE_JOB_KIND.VERIFIED,
-        payload: workspaceJobVerifiedPayload({
+        kind: WORKSPACE_JOB_KIND.TERMINAL_FINALIZED,
+        payload: workspaceJobTerminalFinalizedPayload({
           requestedEventId: 10,
           runId: "run-1",
           idempotencyKey: "request-1",
           terminalArtifact: artifact,
+          claim: finalizedClaim,
+        }),
+      },
+      {
+        id: 12,
+        kind: WORKSPACE_JOB_KIND.VERIFIED,
+        payload: workspaceJobVerifiedPayload({
+          requestedEventId: 10,
+          terminalFinalizedEventId: 11,
+          runId: "run-1",
+          idempotencyKey: "request-1",
           checks: [{ name: "php-lint", status: "passed" }],
           claim: verifiedClaim,
         }),
@@ -116,15 +144,23 @@ describe("@agent-os/workspace-job", () => {
       { id: 20, kind: WORKSPACE_JOB_KIND.REQUESTED, payload: run2Requested },
       {
         id: 21,
-        kind: WORKSPACE_JOB_KIND.VERIFIER_REJECTED,
-        payload: workspaceJobVerifierRejectedPayload({
+        kind: WORKSPACE_JOB_KIND.TERMINAL_FINALIZED,
+        payload: workspaceJobTerminalFinalizedPayload({
           requestedEventId: 20,
           runId: "run-2",
           idempotencyKey: "request-2",
-          terminalArtifact: {
-            ...artifact,
-            artifactRef: "workspace-job://run-2/output/result.json",
-          },
+          terminalArtifact: run2Artifact,
+          claim: run2FinalizedClaim,
+        }),
+      },
+      {
+        id: 22,
+        kind: WORKSPACE_JOB_KIND.VERIFIER_REJECTED,
+        payload: workspaceJobVerifierRejectedPayload({
+          requestedEventId: 20,
+          terminalFinalizedEventId: 21,
+          runId: "run-2",
+          idempotencyKey: "request-2",
           checks: [{ name: "php-lint", status: "failed", message: "syntax error" }],
           claim: verifierRejectedClaim,
         }),
@@ -137,8 +173,13 @@ describe("@agent-os/workspace-job", () => {
           requestedEventId: 30,
           runId: "run-3",
           idempotencyKey: "request-3",
-          failureKind: "submit_failed",
-          reason: "runtime crashed",
+          failure: {
+            phase: "submit",
+            class: "provider",
+            code: "workspace_job.submit_failed",
+            message: "runtime crashed",
+            retryable: true,
+          },
           claim: failedClaim,
         }),
       },
@@ -155,7 +196,41 @@ describe("@agent-os/workspace-job", () => {
     });
     expect(projectWorkspaceJob(events, "run-3")).toMatchObject({
       status: "failed",
-      failed: { failureKind: "submit_failed" },
+      failed: {
+        failure: {
+          phase: "submit",
+          class: "provider",
+          code: "workspace_job.submit_failed",
+        },
+      },
+    });
+  });
+
+  it("does not project a verdict unless it references the finalized terminal artifact fact", () => {
+    const verifiedClaim = settleWorkspaceJobVerified(claim, {
+      runId: "run-1",
+      requestedEventId: 10,
+      terminalFinalizedEventId: 999,
+    });
+    const events = [
+      { id: 10, kind: WORKSPACE_JOB_KIND.REQUESTED, payload: requested },
+      {
+        id: 11,
+        kind: WORKSPACE_JOB_KIND.VERIFIED,
+        payload: workspaceJobVerifiedPayload({
+          requestedEventId: 10,
+          terminalFinalizedEventId: 999,
+          runId: "run-1",
+          idempotencyKey: "request-1",
+          checks: [{ name: "php-lint", status: "passed" }],
+          claim: verifiedClaim,
+        }),
+      },
+    ];
+
+    expect(projectWorkspaceJob(events, "run-1")).toMatchObject({
+      status: "running",
+      runId: "run-1",
     });
   });
 });

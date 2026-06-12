@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "@effect/vitest";
+import { makePreClaim } from "@agent-os/kernel/effect-claim";
 import {
   LlmTransport,
   type LlmRequest,
@@ -29,7 +30,11 @@ import {
   runWorkspaceJobEffect,
   type RunWorkspaceJobSpec,
 } from "../src/workspace-job";
-import { WORKSPACE_JOB_KIND } from "@agent-os/workspace-job";
+import {
+  WORKSPACE_JOB_FACT_OWNER,
+  WORKSPACE_JOB_KIND,
+  workspaceJobRequestedPayload,
+} from "@agent-os/workspace-job";
 import { RUNTIME_FACT_OWNER, type InternalSubmitSpec } from "@agent-os/runtime-protocol";
 
 const scope = "workspace-job-runtime";
@@ -268,7 +273,17 @@ describe("runWorkspaceJobEffect", () => {
         });
         if (projection.status !== "verified") expect.fail("expected verified projection");
         expect(projection.terminalArtifact.sha256).toMatch(/^sha256:[0-9a-f]{64}$/);
-        expect(services.events.map((event) => event.kind)).toContain(WORKSPACE_JOB_KIND.VERIFIED);
+        const eventKinds = services.events.map((event) => event.kind);
+        expect(eventKinds).toEqual(
+          expect.arrayContaining([
+            WORKSPACE_JOB_KIND.REQUESTED,
+            WORKSPACE_JOB_KIND.TERMINAL_FINALIZED,
+            WORKSPACE_JOB_KIND.VERIFIED,
+          ]),
+        );
+        expect(eventKinds.indexOf(WORKSPACE_JOB_KIND.TERMINAL_FINALIZED)).toBeLessThan(
+          eventKinds.indexOf(WORKSPACE_JOB_KIND.VERIFIED),
+        );
       }),
   );
 
@@ -330,6 +345,46 @@ describe("runWorkspaceJobEffect", () => {
     }),
   );
 
+  it.effect("returns the first running run for a duplicate idempotency key without submitting", () =>
+    Effect.gen(function* () {
+      const services = makeServices();
+      services.events.push({
+        id: 100,
+        ts: 100,
+        kind: WORKSPACE_JOB_KIND.REQUESTED,
+        scopeRef: identity.scopeRef,
+        effectAuthorityRef: identity.effectAuthorityRef,
+        factOwnerRef: WORKSPACE_JOB_FACT_OWNER,
+        payload: workspaceJobRequestedPayload({
+          runId: "job-running",
+          idempotencyKey: "create-1",
+          requestedBy: "zeroy",
+          terminalSchemaId: "zeroy.agent_command_result.v1",
+          claim: makePreClaim({
+            operationRef: "workspace_job:job-running",
+            scopeRef: identity.scopeRef,
+            effectAuthorityRef: identity.effectAuthorityRef,
+            originRef: { originId: "create-1", originKind: "workspace_job" },
+          }),
+        }),
+      });
+
+      const projection = yield* runJob(
+        makeJobSpec({ runId: "job-duplicate", idempotencyKey: "create-1" }),
+        services,
+      );
+
+      expect(projection).toMatchObject({
+        status: "running",
+        runId: "job-running",
+      });
+      expect(services.llmRequests).toHaveLength(0);
+      expect(
+        services.events.filter((event) => event.kind === WORKSPACE_JOB_KIND.REQUESTED),
+      ).toHaveLength(1);
+    }),
+  );
+
   it.effect("commits submit aborts as failed substrate failures", () =>
     Effect.gen(function* () {
       const services = makeServices();
@@ -345,7 +400,13 @@ describe("runWorkspaceJobEffect", () => {
 
       expect(projection).toMatchObject({
         status: "failed",
-        failed: { failureKind: "submit_failed" },
+        failed: {
+          failure: {
+            phase: "submit",
+            class: "provider",
+            code: "workspace_job.submit.retries",
+          },
+        },
       });
       expect(services.events.map((event) => event.kind)).toContain(WORKSPACE_JOB_KIND.FAILED);
     }),
@@ -367,7 +428,13 @@ describe("runWorkspaceJobEffect", () => {
       );
       expect(missing).toMatchObject({
         status: "failed",
-        failed: { failureKind: "missing_candidate" },
+        failed: {
+          failure: {
+            phase: "collect_candidate",
+            class: "consumer_contract",
+            code: "workspace_job.candidate_missing",
+          },
+        },
       });
 
       const mismatchServices = makeServices();
@@ -387,7 +454,13 @@ describe("runWorkspaceJobEffect", () => {
       );
       expect(mismatch).toMatchObject({
         status: "failed",
-        failed: { failureKind: "run_id_mismatch" },
+        failed: {
+          failure: {
+            phase: "finalize",
+            class: "consumer_contract",
+            code: "workspace_job.run_id_mismatch",
+          },
+        },
       });
       expect(mismatchServices.events.map((event) => event.kind)).not.toContain(
         WORKSPACE_JOB_KIND.VERIFIER_REJECTED,

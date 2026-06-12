@@ -11,12 +11,14 @@ title: "@agent-os/workspace-job Public API Intent"
 - `.:WORKSPACE_JOB_FACT_OWNER`
 - `.:WORKSPACE_JOB_KIND`
 - `.:WORKSPACE_JOB_PROJECTION_KIND`
+- `.:WorkspaceJobFailure`
 - `.:WorkspaceJobFailedPayload`
 - `.:WorkspaceJobIdempotencyProjection`
 - `.:WorkspaceJobLedgerEvent`
 - `.:WorkspaceJobProjection`
 - `.:WorkspaceJobRequestedPayload`
 - `.:WorkspaceJobTerminalArtifact`
+- `.:WorkspaceJobTerminalFinalizedPayload`
 - `.:WorkspaceJobVerificationCheck`
 - `.:WorkspaceJobVerifiedPayload`
 - `.:WorkspaceJobVerifierRejectedPayload`
@@ -24,6 +26,7 @@ title: "@agent-os/workspace-job Public API Intent"
 - `.:projectWorkspaceJobByIdempotencyKey`
 - `.:rejectWorkspaceJobByVerifier`
 - `.:rejectWorkspaceJobFailed`
+- `.:settleWorkspaceJobTerminalFinalized`
 - `.:settleWorkspaceJobVerified`
 - `.:workspaceJobBoundaryContract`
 - `.:workspaceJobBoundaryPackage`
@@ -32,6 +35,7 @@ title: "@agent-os/workspace-job Public API Intent"
 - `.:workspaceJobRequestedPayload`
 - `.:workspaceJobSettlementContract`
 - `.:workspaceJobSettlementRef`
+- `.:workspaceJobTerminalFinalizedPayload`
 - `.:workspaceJobVerifiedPayload`
 - `.:workspaceJobVerifierRejectedPayload`
 

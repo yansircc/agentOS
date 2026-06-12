@@ -28,12 +28,11 @@ export const rejectWorkspaceOperation = (
   spec: {
     readonly requestedEventId: number;
     readonly idempotencyKey: string;
-    readonly reason: string;
     readonly rejectionKind?: RejectionRef["rejectionKind"];
   },
 ): RejectedClaim =>
   workspaceOpCarrier.reject.rejected(claim, {
     rejectionId: workspaceOpSettlementRef("rejected", spec.idempotencyKey, spec.requestedEventId),
     rejectionKind: spec.rejectionKind ?? "provider_rejected",
-    reason: spec.reason,
+    reason: workspaceOpSettlementRef("reason", spec.idempotencyKey, spec.requestedEventId),
   });

@@ -20,14 +20,17 @@ type WorkspaceJobPayloads = typeof WORKSPACE_JOB_EVENTS;
 
 export type WorkspaceJobRequestedPayload =
   WorkspaceJobPayloads[(typeof WORKSPACE_JOB_KIND)["REQUESTED"]];
+export type WorkspaceJobTerminalFinalizedPayload =
+  WorkspaceJobPayloads[(typeof WORKSPACE_JOB_KIND)["TERMINAL_FINALIZED"]];
 export type WorkspaceJobVerifiedPayload =
   WorkspaceJobPayloads[(typeof WORKSPACE_JOB_KIND)["VERIFIED"]];
 export type WorkspaceJobVerifierRejectedPayload =
   WorkspaceJobPayloads[(typeof WORKSPACE_JOB_KIND)["VERIFIER_REJECTED"]];
 export type WorkspaceJobFailedPayload = WorkspaceJobPayloads[(typeof WORKSPACE_JOB_KIND)["FAILED"]];
 
-export type WorkspaceJobTerminalArtifact = WorkspaceJobVerifiedPayload["terminalArtifact"];
+export type WorkspaceJobTerminalArtifact = WorkspaceJobTerminalFinalizedPayload["terminalArtifact"];
 export type WorkspaceJobVerificationCheck = WorkspaceJobVerifiedPayload["checks"][number];
+export type WorkspaceJobFailure = WorkspaceJobFailedPayload["failure"];
 
 export interface WorkspaceJobLedgerEvent {
   readonly id: number;
@@ -52,6 +55,7 @@ export type WorkspaceJobProjection =
       readonly runId: string;
       readonly requestedEventId: number;
       readonly request: WorkspaceJobRequestedPayload;
+      readonly finalized: WorkspaceJobTerminalFinalizedPayload;
       readonly verified: WorkspaceJobVerifiedPayload;
       readonly terminalArtifact: WorkspaceJobTerminalArtifact;
       readonly checks: ReadonlyArray<WorkspaceJobVerificationCheck>;
@@ -61,6 +65,7 @@ export type WorkspaceJobProjection =
       readonly runId: string;
       readonly requestedEventId: number;
       readonly request: WorkspaceJobRequestedPayload;
+      readonly finalized: WorkspaceJobTerminalFinalizedPayload;
       readonly rejected: WorkspaceJobVerifierRejectedPayload;
       readonly terminalArtifact: WorkspaceJobTerminalArtifact;
       readonly checks: ReadonlyArray<WorkspaceJobVerificationCheck>;
@@ -106,33 +111,47 @@ export const workspaceJobRequestedPayload = (spec: {
   claim: spec.claim,
 });
 
-const terminalPayload = (spec: {
+export const workspaceJobTerminalFinalizedPayload = (spec: {
   readonly requestedEventId: number;
   readonly runId: string;
   readonly idempotencyKey: string;
   readonly terminalArtifact: WorkspaceJobTerminalArtifact;
-  readonly checks: ReadonlyArray<WorkspaceJobVerificationCheck>;
-  readonly summary?: string;
-}) => ({
+  readonly claim: LivedClaim;
+}): WorkspaceJobTerminalFinalizedPayload => ({
   requestedEventId: spec.requestedEventId,
   runId: spec.runId,
   idempotencyKey: spec.idempotencyKey,
   terminalArtifact: spec.terminalArtifact,
+  claim: spec.claim,
+});
+
+const terminalVerdictPayload = (spec: {
+  readonly requestedEventId: number;
+  readonly terminalFinalizedEventId: number;
+  readonly runId: string;
+  readonly idempotencyKey: string;
+  readonly checks: ReadonlyArray<WorkspaceJobVerificationCheck>;
+  readonly summary?: string;
+}) => ({
+  requestedEventId: spec.requestedEventId,
+  terminalFinalizedEventId: spec.terminalFinalizedEventId,
+  runId: spec.runId,
+  idempotencyKey: spec.idempotencyKey,
   checks: [...spec.checks],
   ...(spec.summary === undefined ? {} : { summary: spec.summary }),
 });
 
 export const workspaceJobVerifiedPayload = (
-  spec: Parameters<typeof terminalPayload>[0] & { readonly claim: LivedClaim },
+  spec: Parameters<typeof terminalVerdictPayload>[0] & { readonly claim: LivedClaim },
 ): WorkspaceJobVerifiedPayload => ({
-  ...terminalPayload(spec),
+  ...terminalVerdictPayload(spec),
   claim: spec.claim,
 });
 
 export const workspaceJobVerifierRejectedPayload = (
-  spec: Parameters<typeof terminalPayload>[0] & { readonly claim: RejectedClaim },
+  spec: Parameters<typeof terminalVerdictPayload>[0] & { readonly claim: RejectedClaim },
 ): WorkspaceJobVerifierRejectedPayload => ({
-  ...terminalPayload(spec),
+  ...terminalVerdictPayload(spec),
   claim: spec.claim,
 });
 
@@ -140,15 +159,13 @@ export const workspaceJobFailedPayload = (spec: {
   readonly requestedEventId: number;
   readonly runId: string;
   readonly idempotencyKey: string;
-  readonly failureKind: WorkspaceJobFailedPayload["failureKind"];
-  readonly reason: string;
+  readonly failure: WorkspaceJobFailure;
   readonly claim: RejectedClaim;
 }): WorkspaceJobFailedPayload => ({
   requestedEventId: spec.requestedEventId,
   runId: spec.runId,
   idempotencyKey: spec.idempotencyKey,
-  failureKind: spec.failureKind,
-  reason: spec.reason,
+  failure: spec.failure,
   claim: spec.claim,
 });
 
@@ -257,27 +274,19 @@ const requestedFrom = (
   };
 };
 
-const terminalFrom = <T extends "lived" | "rejected">(
+const terminalFinalizedFrom = (
   payload: Record<string, unknown>,
-  claimKind: T,
-):
-  | (Omit<WorkspaceJobVerifiedPayload, "claim"> & {
-      readonly claim: T extends "lived" ? LivedClaim : RejectedClaim;
-    })
-  | undefined => {
+): WorkspaceJobTerminalFinalizedPayload | undefined => {
   const requestedEventId = numberField(payload, "requestedEventId");
   const runId = stringField(payload, "runId");
   const idempotencyKey = stringField(payload, "idempotencyKey");
   const terminalArtifact = terminalArtifactFrom(payload.terminalArtifact);
-  const checks = checksFrom(payload.checks);
-  const claim =
-    claimKind === "lived" ? livedClaimFrom(payload.claim) : rejectedClaimFrom(payload.claim);
+  const claim = livedClaimFrom(payload.claim);
   if (
     requestedEventId === undefined ||
     runId === undefined ||
     idempotencyKey === undefined ||
     terminalArtifact === undefined ||
-    checks === undefined ||
     claim === undefined
   ) {
     return undefined;
@@ -287,6 +296,40 @@ const terminalFrom = <T extends "lived" | "rejected">(
     runId,
     idempotencyKey,
     terminalArtifact,
+    claim,
+  };
+};
+
+const terminalVerdictFrom = <T extends "lived" | "rejected">(
+  payload: Record<string, unknown>,
+  claimKind: T,
+):
+  | (Omit<WorkspaceJobVerifiedPayload, "claim"> & {
+      readonly claim: T extends "lived" ? LivedClaim : RejectedClaim;
+    })
+  | undefined => {
+  const requestedEventId = numberField(payload, "requestedEventId");
+  const terminalFinalizedEventId = numberField(payload, "terminalFinalizedEventId");
+  const runId = stringField(payload, "runId");
+  const idempotencyKey = stringField(payload, "idempotencyKey");
+  const checks = checksFrom(payload.checks);
+  const claim =
+    claimKind === "lived" ? livedClaimFrom(payload.claim) : rejectedClaimFrom(payload.claim);
+  if (
+    requestedEventId === undefined ||
+    terminalFinalizedEventId === undefined ||
+    runId === undefined ||
+    idempotencyKey === undefined ||
+    checks === undefined ||
+    claim === undefined
+  ) {
+    return undefined;
+  }
+  return {
+    requestedEventId,
+    terminalFinalizedEventId,
+    runId,
+    idempotencyKey,
     checks,
     ...(stringField(payload, "summary") === undefined
       ? {}
@@ -295,35 +338,69 @@ const terminalFrom = <T extends "lived" | "rejected">(
   };
 };
 
-const failureKindFrom = (value: unknown): WorkspaceJobFailedPayload["failureKind"] | undefined =>
-  value === "submit_failed" ||
-  value === "missing_candidate" ||
-  value === "run_id_mismatch" ||
-  value === "finalize_failed" ||
-  value === "verification_failed" ||
-  value === "data_plane_failed" ||
+const failurePhaseFrom = (value: unknown): WorkspaceJobFailure["phase"] | undefined =>
+  value === "request" ||
+  value === "seed" ||
+  value === "submit" ||
+  value === "collect_candidate" ||
+  value === "finalize" ||
+  value === "data_plane" ||
+  value === "verify_infra" ||
+  value === "projection"
+    ? value
+    : undefined;
+
+const failureClassFrom = (value: unknown): WorkspaceJobFailure["class"] | undefined =>
+  value === "substrate" ||
+  value === "provider" ||
+  value === "consumer_contract" ||
+  value === "timeout" ||
+  value === "cancelled" ||
   value === "unknown"
     ? value
     : undefined;
+
+const failureFrom = (value: unknown): WorkspaceJobFailure | undefined => {
+  if (!Predicate.isRecord(value)) return undefined;
+  const phase = failurePhaseFrom(value.phase);
+  const failureClass = failureClassFrom(value.class);
+  const code = stringField(value, "code");
+  const message = stringField(value, "message");
+  const retryable = value.retryable;
+  if (
+    phase === undefined ||
+    failureClass === undefined ||
+    code === undefined ||
+    message === undefined ||
+    (retryable !== undefined && typeof retryable !== "boolean")
+  ) {
+    return undefined;
+  }
+  return {
+    phase,
+    class: failureClass,
+    code,
+    message,
+    ...(retryable === undefined ? {} : { retryable }),
+  };
+};
 
 const failedFrom = (payload: Record<string, unknown>): WorkspaceJobFailedPayload | undefined => {
   const requestedEventId = numberField(payload, "requestedEventId");
   const runId = stringField(payload, "runId");
   const idempotencyKey = stringField(payload, "idempotencyKey");
-  const failureKind = failureKindFrom(payload.failureKind);
-  const reason = stringField(payload, "reason");
+  const failure = failureFrom(payload.failure);
   const claim = rejectedClaimFrom(payload.claim);
   if (
     requestedEventId === undefined ||
     runId === undefined ||
     idempotencyKey === undefined ||
-    failureKind === undefined ||
-    reason === undefined ||
+    failure === undefined ||
     claim === undefined
   ) {
     return undefined;
   }
-  return { requestedEventId, runId, idempotencyKey, failureKind, reason, claim };
+  return { requestedEventId, runId, idempotencyKey, failure, claim };
 };
 
 const sameOwner = (event: WorkspaceJobLedgerEvent): boolean =>
@@ -356,6 +433,9 @@ export const projectWorkspaceJob = (
 ): WorkspaceJobProjection => {
   let request: WorkspaceJobRequestedPayload | undefined;
   let requestedEventId: number | undefined;
+  let finalized:
+    | { readonly eventId: number; readonly payload: WorkspaceJobTerminalFinalizedPayload }
+    | undefined;
   let terminal: WorkspaceJobProjection | undefined;
 
   for (const event of events) {
@@ -369,35 +449,54 @@ export const projectWorkspaceJob = (
       continue;
     }
     if (request === undefined || requestedEventId === undefined || terminal !== undefined) continue;
+    if (event.kind === WORKSPACE_JOB_KIND.TERMINAL_FINALIZED && finalized === undefined) {
+      const next = terminalFinalizedFrom(event.payload);
+      if (next?.requestedEventId === requestedEventId && next.runId === runId) {
+        finalized = { eventId: event.id, payload: next };
+      }
+      continue;
+    }
     if (event.kind === WORKSPACE_JOB_KIND.VERIFIED) {
-      const verified = terminalFrom(event.payload, "lived") as
+      const verified = terminalVerdictFrom(event.payload, "lived") as
         | WorkspaceJobVerifiedPayload
         | undefined;
-      if (verified?.requestedEventId === requestedEventId && verified.runId === runId) {
+      if (
+        verified?.requestedEventId === requestedEventId &&
+        verified.runId === runId &&
+        finalized !== undefined &&
+        verified.terminalFinalizedEventId === finalized.eventId
+      ) {
         terminal = {
           status: "verified",
           runId,
           requestedEventId,
           request,
+          finalized: finalized.payload,
           verified,
-          terminalArtifact: verified.terminalArtifact,
+          terminalArtifact: finalized.payload.terminalArtifact,
           checks: verified.checks,
         };
       }
       continue;
     }
     if (event.kind === WORKSPACE_JOB_KIND.VERIFIER_REJECTED) {
-      const rejected = terminalFrom(event.payload, "rejected") as
+      const rejected = terminalVerdictFrom(event.payload, "rejected") as
         | WorkspaceJobVerifierRejectedPayload
         | undefined;
-      if (rejected?.requestedEventId === requestedEventId && rejected.runId === runId) {
+      if (
+        rejected?.requestedEventId === requestedEventId &&
+        rejected.runId === runId &&
+        finalized !== undefined &&
+        rejected.terminalFinalizedEventId === finalized.eventId
+      ) {
         terminal = {
           status: "verifier_rejected",
           runId,
           requestedEventId,
           request,
+          finalized: finalized.payload,
           rejected,
-          terminalArtifact: rejected.terminalArtifact,
+          terminalArtifact: finalized.payload.terminalArtifact,
           checks: rejected.checks,
         };
       }

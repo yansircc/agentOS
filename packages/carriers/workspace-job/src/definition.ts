@@ -38,24 +38,46 @@ const TerminalSchema = Schema.Struct({
   runId: NonEmptyString,
   idempotencyKey: NonEmptyString,
   terminalArtifact: TerminalArtifactSchema,
+});
+
+const TerminalVerdictSchema = Schema.Struct({
+  requestedEventId: Schema.Number,
+  terminalFinalizedEventId: Schema.Number,
+  runId: NonEmptyString,
+  idempotencyKey: NonEmptyString,
   checks: Schema.Array(VerificationCheckSchema),
   summary: Schema.optional(Schema.String),
+});
+
+const FailureSchema = Schema.Struct({
+  phase: Schema.Literal(
+    "request",
+    "seed",
+    "submit",
+    "collect_candidate",
+    "finalize",
+    "data_plane",
+    "verify_infra",
+    "projection",
+  ),
+  class: Schema.Literal(
+    "substrate",
+    "provider",
+    "consumer_contract",
+    "timeout",
+    "cancelled",
+    "unknown",
+  ),
+  code: NonEmptyString,
+  message: NonEmptyString,
+  retryable: Schema.optional(Schema.Boolean),
 });
 
 const FailedSchema = Schema.Struct({
   requestedEventId: Schema.Number,
   runId: NonEmptyString,
   idempotencyKey: NonEmptyString,
-  failureKind: Schema.Literal(
-    "submit_failed",
-    "missing_candidate",
-    "run_id_mismatch",
-    "finalize_failed",
-    "verification_failed",
-    "data_plane_failed",
-    "unknown",
-  ),
-  reason: NonEmptyString,
+  failure: FailureSchema,
 });
 
 export const workspaceJobCarrier = defineCarrier({
@@ -68,14 +90,19 @@ export const workspaceJobCarrier = defineCarrier({
       payload: RequestedSchema,
       claim: pre({ key: "claim" }),
     }),
+    terminal_finalized: event({
+      kind: "terminal_finalized",
+      payload: TerminalSchema,
+      claim: lived({ key: "claim", anchorKinds: ["carrier_proof"] }),
+    }),
     verified: event({
       kind: "verified",
-      payload: TerminalSchema,
+      payload: TerminalVerdictSchema,
       claim: lived({ key: "claim", anchorKinds: ["carrier_proof"] }),
     }),
     verifier_rejected: event({
       kind: "verifier_rejected",
-      payload: TerminalSchema,
+      payload: TerminalVerdictSchema,
       claim: rejected({
         key: "claim",
         rejectionKinds: ["validation_failed", "policy_denied"],

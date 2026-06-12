@@ -9,21 +9,29 @@ settlement.
 
 ## Public API Status
 
-Carrier package. It owns protected terminal artifact fact vocabulary, not workspace execution or verifier policy.
+Carrier package. It owns protected terminal artifact and verdict fact vocabulary, not workspace execution or verifier policy.
 
 ## Invariant
 
-Workspace-job owns `workspace_job.*` request, terminal settlement, failure, and
-projection vocabulary. It does not execute agent submits, workspace effects, or
-verifiers. Runtime and host packages must construct workspace-job facts through
-this carrier's exported constructors and settlement helpers.
+Workspace-job owns `workspace_job.*` request, finalized terminal artifact,
+verifier verdict, structured failure, and projection vocabulary. It does not
+execute agent submits, workspace effects, or verifiers. Runtime and host
+packages must construct workspace-job facts through this carrier's exported
+constructors and settlement helpers.
 
 ## Minimal Usage
 
-Emit `workspace_job.requested` with an idempotency key, then commit exactly one
-terminal fact: `workspace_job.verified`, `workspace_job.verifier_rejected`, or
-`workspace_job.failed`. Consumers read `projectWorkspaceJob` and never derive
-deliverability from product side storage.
+Emit `workspace_job.requested` with an idempotency key, commit
+`workspace_job.terminal_finalized` after the system finalizer writes delivery
+bytes, then commit exactly one terminal verdict: `workspace_job.verified`,
+`workspace_job.verifier_rejected`, or `workspace_job.failed`.
+
+`verified` and `verifier_rejected` reference the `terminal_finalized` event id;
+the projection only becomes deliverable when the verdict joins to the finalized
+artifact metadata. `failed.failure` is structured by `{ phase, class, code,
+message, retryable? }` so consumers do not rebuild infra failure categories from
+strings. Consumers read `projectWorkspaceJob` and never derive deliverability
+from product side storage.
 
 ## Verification
 

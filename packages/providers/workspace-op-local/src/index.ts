@@ -149,7 +149,6 @@ const rejectedPayload = (
   claim: rejectWorkspaceOperation(request.claim, {
     requestedEventId,
     idempotencyKey: operationRef(request.claim),
-    reason,
   }),
 });
 

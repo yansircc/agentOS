@@ -20,13 +20,15 @@ import {
   projectWorkspaceJobByIdempotencyKey,
   rejectWorkspaceJobByVerifier,
   rejectWorkspaceJobFailed,
+  settleWorkspaceJobTerminalFinalized,
   settleWorkspaceJobVerified,
   workspaceJobBoundaryContract,
   workspaceJobFailedPayload,
   workspaceJobRequestedPayload,
+  workspaceJobTerminalFinalizedPayload,
   workspaceJobVerifierRejectedPayload,
   workspaceJobVerifiedPayload,
-  type WorkspaceJobFailedPayload,
+  type WorkspaceJobFailure,
   type WorkspaceJobProjection,
   type WorkspaceJobTerminalArtifact,
   type WorkspaceJobVerificationCheck,
@@ -146,30 +148,64 @@ const sha256Hex = (bytes: Uint8Array): Effect.Effect<string> => {
 const effectMessage = (cause: unknown): string =>
   cause instanceof Error ? cause.message : String(cause);
 
+const submitFailure = (reason: string): WorkspaceJobFailure => ({
+  phase: "submit",
+  class:
+    reason === "budget_time"
+      ? "timeout"
+      : reason === "interrupted"
+        ? "cancelled"
+        : "provider",
+  code: `workspace_job.submit.${reason}`,
+  message: reason,
+  retryable: reason !== "interrupted",
+});
+
 const failureFromDataPlane = (
   failure: WorkspaceJobDataPlaneFailed,
-): {
-  readonly failureKind: WorkspaceJobFailedPayload["failureKind"];
-  readonly reason: string;
-} => {
+): WorkspaceJobFailure => {
   const cause = failure.cause;
   if (cause instanceof WorkspaceJobCandidateMissing) {
     return {
-      failureKind: "missing_candidate",
-      reason: `missing candidate: ${cause.candidatePath}`,
+      phase: "collect_candidate",
+      class: "consumer_contract",
+      code: "workspace_job.candidate_missing",
+      message: `missing candidate: ${cause.candidatePath}`,
     };
   }
   if (cause instanceof WorkspaceJobRunIdMismatch) {
     return {
-      failureKind: "run_id_mismatch",
-      reason: `runId mismatch: expected ${cause.expectedRunId}, got ${cause.actualRunId}`,
+      phase: "finalize",
+      class: "consumer_contract",
+      code: "workspace_job.run_id_mismatch",
+      message: `runId mismatch: expected ${cause.expectedRunId}, got ${cause.actualRunId}`,
+    };
+  }
+  if (failure.phase === "seed") {
+    return {
+      phase: "seed",
+      class: "provider",
+      code: "workspace_job.seed_write_failed",
+      message: effectMessage(cause),
+      retryable: true,
     };
   }
   return {
-    failureKind: failure.phase === "finalize" ? "finalize_failed" : "data_plane_failed",
-    reason: effectMessage(cause),
+    phase: "data_plane",
+    class: "provider",
+    code: "workspace_job.data_plane_finalize_failed",
+    message: effectMessage(cause),
+    retryable: true,
   };
 };
+
+const verifierInfraFailure = (cause: unknown): WorkspaceJobFailure => ({
+  phase: "verify_infra",
+  class: "provider",
+  code: "workspace_job.verifier_failed",
+  message: effectMessage(cause),
+  retryable: true,
+});
 
 const eventsFor = (
   ledger: ContextualLedger,
@@ -200,8 +236,7 @@ const commitFailed = (
   boundaryEvents: ContextualBoundaryEvents,
   spec: RunWorkspaceJobSpec,
   requestedEventId: number,
-  failureKind: WorkspaceJobFailedPayload["failureKind"],
-  reason: string,
+  failure: WorkspaceJobFailure,
 ): Effect.Effect<LedgerEvent, BoundaryCommitRejected | SqlError | JsonStringifyError> => {
   const requestClaim = makePreClaim({
     operationRef: `workspace_job:${spec.runId}`,
@@ -220,8 +255,7 @@ const commitFailed = (
       requestedEventId,
       runId: spec.runId,
       idempotencyKey: spec.idempotencyKey,
-      failureKind,
-      reason,
+      failure,
       claim,
     }),
   );
@@ -352,19 +386,17 @@ export const runWorkspaceJobEffect = (
     );
 
     const requestedEventId = requested.id;
-    const failAndProject = (
-      failureKind: WorkspaceJobFailedPayload["failureKind"],
-      reason: string,
-    ) =>
+    const failAndProject = (failure: WorkspaceJobFailure) =>
       Effect.gen(function* () {
-        yield* commitFailed(boundaryEvents, spec, requestedEventId, failureKind, reason);
+        yield* commitFailed(boundaryEvents, spec, requestedEventId, failure);
+        yield* cleanup(spec);
         const after = yield* eventsFor(ledger, spec.identity);
         return currentProjection(after, spec.runId);
       });
 
     const seeded = yield* Effect.either(writeSeedFiles(spec.dataPlane, spec.seedFiles ?? []));
     if (seeded._tag === "Left") {
-      return yield* failAndProject("data_plane_failed", effectMessage(seeded.left.cause));
+      return yield* failAndProject(failureFromDataPlane(seeded.left));
     }
 
     const submitResult = yield* submitAgentEffect(
@@ -374,34 +406,50 @@ export const runWorkspaceJobEffect = (
       }),
     );
     if (!submitResult.ok) {
-      return yield* failAndProject("submit_failed", submitResult.reason);
+      return yield* failAndProject(submitFailure(submitResult.reason));
     }
 
     const finalized = yield* Effect.either(finalizeArtifact(spec, submitResult));
     if (finalized._tag === "Left") {
-      const failure = failureFromDataPlane(finalized.left);
-      return yield* failAndProject(failure.failureKind, failure.reason);
+      return yield* failAndProject(failureFromDataPlane(finalized.left));
     }
+
+    const finalizedClaim = settleWorkspaceJobTerminalFinalized(claim, {
+      runId: spec.runId,
+      requestedEventId,
+      artifactRef: finalized.right.artifact.artifactRef,
+    });
+    const finalizedEvent = yield* commitWorkspaceJob(
+      boundaryEvents,
+      WORKSPACE_JOB_KIND.TERMINAL_FINALIZED,
+      workspaceJobTerminalFinalizedPayload({
+        requestedEventId,
+        runId: spec.runId,
+        idempotencyKey: spec.idempotencyKey,
+        terminalArtifact: finalized.right.artifact,
+        claim: finalizedClaim,
+      }),
+    );
 
     const verdict = yield* Effect.either(verifyArtifact(spec, finalized.right, submitResult));
     if (verdict._tag === "Left") {
-      return yield* failAndProject("verification_failed", effectMessage(verdict.left.cause));
+      return yield* failAndProject(verifierInfraFailure(verdict.left.cause));
     }
 
     if (verdict.right.ok) {
       const verifiedClaim = settleWorkspaceJobVerified(claim, {
         runId: spec.runId,
         requestedEventId,
-        artifactRef: finalized.right.artifact.artifactRef,
+        terminalFinalizedEventId: finalizedEvent.id,
       });
       yield* commitWorkspaceJob(
         boundaryEvents,
         WORKSPACE_JOB_KIND.VERIFIED,
         workspaceJobVerifiedPayload({
           requestedEventId,
+          terminalFinalizedEventId: finalizedEvent.id,
           runId: spec.runId,
           idempotencyKey: spec.idempotencyKey,
-          terminalArtifact: finalized.right.artifact,
           checks: verdict.right.checks,
           ...(verdict.right.summary === undefined ? {} : { summary: verdict.right.summary }),
           claim: verifiedClaim,
@@ -411,15 +459,16 @@ export const runWorkspaceJobEffect = (
       const rejectedClaim = rejectWorkspaceJobByVerifier(claim, {
         runId: spec.runId,
         requestedEventId,
+        terminalFinalizedEventId: finalizedEvent.id,
       });
       yield* commitWorkspaceJob(
         boundaryEvents,
         WORKSPACE_JOB_KIND.VERIFIER_REJECTED,
         workspaceJobVerifierRejectedPayload({
           requestedEventId,
+          terminalFinalizedEventId: finalizedEvent.id,
           runId: spec.runId,
           idempotencyKey: spec.idempotencyKey,
-          terminalArtifact: finalized.right.artifact,
           checks: verdict.right.checks,
           summary: verdict.right.reason,
           claim: rejectedClaim,

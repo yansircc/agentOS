@@ -306,5 +306,39 @@ describe("Cloudflare DO workspace host helpers", () => {
         bytesWritten: 4,
       },
     });
+
+    const rejectedClaim = makePreClaim({
+      operationRef: "tool:workspace:test:call-2",
+      scopeRef: { kind: "conversation", scopeId: "workspace-op-helper" },
+      effectAuthorityRef: { authorityClass: "workspace", authorityId: "write_file" },
+      originRef: { originId: "run:1", originKind: "submit" },
+    });
+    await registration!.handler({
+      id: 8,
+      ts: 80,
+      kind: WORKSPACE_OP_KIND.REQUESTED,
+      scopeRef: rejectedClaim.scopeRef,
+      effectAuthorityRef: rejectedClaim.effectAuthorityRef,
+      factOwnerRef: WORKSPACE_OP_FACT_OWNER,
+      payload: {
+        requestedBy: "@agent-os/workspace-binding",
+        workspaceRef: "workspace:test",
+        toolName: "write_file",
+        path: "missing-content.txt",
+        claim: rejectedClaim,
+      },
+    });
+
+    expect(committed).toHaveLength(2);
+    expect(committed[1]).toMatchObject({
+      event: WORKSPACE_OP_KIND.REJECTED,
+      data: {
+        requestedEventId: 8,
+        operationRef: rejectedClaim.operationRef,
+        workspaceRef: "workspace:test",
+        toolName: "write_file",
+        reason: "write_file requires content",
+      },
+    });
   });
 });
