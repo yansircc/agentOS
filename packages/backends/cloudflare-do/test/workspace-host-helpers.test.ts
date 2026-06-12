@@ -7,7 +7,11 @@ import type { LedgerEvent, LedgerEventRpc } from "@agent-os/kernel/types";
 import type { ExtensionCapability } from "@agent-os/kernel/extensions";
 import { agentRunStartedEvent } from "@agent-os/runtime-protocol";
 import { createSseHttpTextResponse, decodeSseHttpEvents } from "@agent-os/sse-http";
-import { WORKSPACE_OP_FACT_OWNER, WORKSPACE_OP_KIND } from "@agent-os/workspace-op";
+import {
+  WORKSPACE_OP_FACT_OWNER,
+  WORKSPACE_OP_KIND,
+  WORKSPACE_OP_PROJECTION_KIND,
+} from "@agent-os/workspace-op";
 import type { WorkspaceJobProjection } from "@agent-os/workspace-job";
 import {
   createCloudflareLedgerAgUiHistorySseResponse,
@@ -408,6 +412,9 @@ describe("Cloudflare DO workspace host helpers", () => {
     expect(install.declaredIntents).toEqual([
       { kind: WORKSPACE_OP_KIND.REQUESTED, boundaryPackageId: WORKSPACE_OP_FACT_OWNER },
     ]);
+    expect(install.projections.map((projection) => projection.kind)).toEqual([
+      WORKSPACE_OP_PROJECTION_KIND,
+    ]);
 
     const committed: Array<{ event: string; data: unknown }> = [];
     const capability: ExtensionCapability = {
@@ -449,6 +456,17 @@ describe("Cloudflare DO workspace host helpers", () => {
     };
     await registration!.handler(event);
 
+    const projection = install.projections[0]!;
+    expect(projection.identify(event)).toEqual({
+      _tag: "identity",
+      identity: { requestedEventId: 7 },
+    });
+    const requestedState = projection.initial({ requestedEventId: 7 }, event as LedgerEvent);
+    expect(requestedState).toMatchObject({
+      status: "requested",
+      requestedEventId: 7,
+    });
+
     expect(written).toEqual({ path: "result.txt", content: "done" });
     expect(committed).toHaveLength(1);
     expect(committed[0]).toMatchObject({
@@ -460,6 +478,35 @@ describe("Cloudflare DO workspace host helpers", () => {
         toolName: "write_file",
         path: "result.txt",
         bytesWritten: 4,
+      },
+    });
+    const completedEvent = {
+      ...event,
+      id: 11,
+      kind: WORKSPACE_OP_KIND.COMPLETED,
+      payload: committed[0]!.data,
+    };
+    expect(projection.identify(completedEvent as LedgerEvent)).toEqual({
+      _tag: "identity",
+      identity: { requestedEventId: 7 },
+    });
+    expect(
+      projection.reduce(requestedState, completedEvent as LedgerEvent, {
+        scopeRef: event.scopeRef,
+        scopeKey: "workspace-op-helper",
+        identity: { requestedEventId: 7 },
+        identityKey: "7",
+      }),
+    ).toMatchObject({
+      _tag: "put",
+      state: {
+        status: "completed",
+        requestedEventId: 7,
+        result: {
+          kind: "write_file",
+          path: "result.txt",
+          bytesWritten: 4,
+        },
       },
     });
 

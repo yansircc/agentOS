@@ -1,11 +1,22 @@
-import { Option } from "effect";
+import { Option, Predicate, Schema } from "effect";
 import { CapabilityRejected, type EventHandler, type LedgerEventRpc } from "@agent-os/kernel";
 import type { ExtensionCapability, ExtensionDeclaration } from "@agent-os/kernel/extensions";
 import {
+  defineProjection,
+  projectionIdentity,
+  projectionMalformed,
+  projectionPut,
+  projectionSkip,
+  type AnyMaterializedProjectionDefinition,
+} from "@agent-os/runtime";
+import {
   WORKSPACE_OP_FACT_OWNER,
   WORKSPACE_OP_KIND,
+  WORKSPACE_OP_PROJECTION_KIND,
+  projectWorkspaceOperation,
   workspaceOpBoundaryPackage,
   type WorkspaceOperationRequestedPayload,
+  type WorkspaceOperationProjection,
 } from "@agent-os/workspace-op";
 import {
   createWorkspaceOperationLocalProvider,
@@ -29,6 +40,7 @@ export interface CloudflareWorkspaceOperationInstall {
     readonly kind: string;
     readonly boundaryPackageId: string;
   }>;
+  readonly projections: ReadonlyArray<AnyMaterializedProjectionDefinition>;
   readonly eventHandlers: CloudflareWorkspaceOperationProviderHandlers["eventHandlers"];
 }
 
@@ -98,6 +110,86 @@ const providerOptions = (
   ...(options.maxOutputBytes === undefined ? {} : { maxOutputBytes: options.maxOutputBytes }),
 });
 
+const workspaceOperationProjectionState = Schema.Union(
+  Schema.Struct({
+    status: Schema.Literal("missing"),
+    requestedEventId: Schema.Number,
+  }),
+  Schema.Struct({
+    status: Schema.Literal("requested"),
+    requestedEventId: Schema.Number,
+    request: Schema.Unknown,
+  }),
+  Schema.Struct({
+    status: Schema.Literal("completed"),
+    requestedEventId: Schema.Number,
+    request: Schema.Unknown,
+    completed: Schema.Unknown,
+    result: Schema.Unknown,
+  }),
+  Schema.Struct({
+    status: Schema.Literal("rejected"),
+    requestedEventId: Schema.Number,
+    request: Schema.Unknown,
+    rejected: Schema.Unknown,
+  }),
+) as Schema.Schema<WorkspaceOperationProjection, unknown, never>;
+
+const requestEventFor = (
+  state: WorkspaceOperationProjection,
+): { readonly id: number; readonly kind: string; readonly payload: unknown } | null =>
+  state.status === "missing"
+    ? null
+    : {
+        id: state.requestedEventId,
+        kind: WORKSPACE_OP_KIND.REQUESTED,
+        payload: state.request,
+      };
+
+const isTerminalState = (
+  state: WorkspaceOperationProjection,
+): state is Extract<WorkspaceOperationProjection, { readonly status: "completed" | "rejected" }> =>
+  state.status === "completed" || state.status === "rejected";
+
+const workspaceOperationMaterializedProjection = (): AnyMaterializedProjectionDefinition =>
+  defineProjection<{ readonly requestedEventId: number }, WorkspaceOperationProjection>({
+    kind: WORKSPACE_OP_PROJECTION_KIND,
+    version: 1,
+    eventKinds: [
+      WORKSPACE_OP_KIND.REQUESTED,
+      WORKSPACE_OP_KIND.COMPLETED,
+      WORKSPACE_OP_KIND.REJECTED,
+    ],
+    identity: Schema.Struct({ requestedEventId: Schema.Number }),
+    state: workspaceOperationProjectionState,
+    identityKey: (identity) => String(identity.requestedEventId),
+    identify: (event) => {
+      if (event.factOwnerRef !== WORKSPACE_OP_FACT_OWNER) return projectionSkip();
+      if (event.kind === WORKSPACE_OP_KIND.REQUESTED) {
+        return projectionIdentity({ requestedEventId: event.id });
+      }
+      if (event.kind !== WORKSPACE_OP_KIND.COMPLETED && event.kind !== WORKSPACE_OP_KIND.REJECTED) {
+        return projectionSkip();
+      }
+      if (!Predicate.isRecord(event.payload)) {
+        return projectionMalformed("workspace_op terminal payload must be an object");
+      }
+      return typeof event.payload.requestedEventId === "number"
+        ? projectionIdentity({ requestedEventId: event.payload.requestedEventId })
+        : projectionMalformed("workspace_op terminal payload requires requestedEventId");
+    },
+    initial: (identity, event) => projectWorkspaceOperation([event], identity.requestedEventId),
+    reduce: (state, event) => {
+      if (isTerminalState(state)) return projectionPut(state);
+      if (event.kind === WORKSPACE_OP_KIND.REQUESTED) {
+        return projectionPut(projectWorkspaceOperation([event], event.id));
+      }
+      const request = requestEventFor(state);
+      if (request === null) return projectionPut(state);
+      return projectionPut(projectWorkspaceOperation([request, event], state.requestedEventId));
+    },
+  });
+
 /**
  * Installs workspace-op provider glue for Cloudflare DO hosts.
  *
@@ -146,6 +238,7 @@ export const installCloudflareWorkspaceOperationProvider = (
         boundaryPackageId: boundaryPackage.packageId,
       },
     ],
+    projections: [workspaceOperationMaterializedProjection()],
     eventHandlers: (context) => [
       {
         kind: WORKSPACE_OP_KIND.REQUESTED,
