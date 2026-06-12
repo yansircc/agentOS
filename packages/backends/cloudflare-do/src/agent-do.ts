@@ -255,6 +255,10 @@ export interface AgentEventHandlerContext<Runtime = AgentRuntimeClient> {
   readonly capabilities: ReadonlyMap<string, ExtensionCapability>;
 }
 
+export type CloudflareAgentProjectionSource<Env extends CloudflareAgentEnv> =
+  | ReadonlyArray<AnyMaterializedProjectionDefinition>
+  | ((env: Env) => ReadonlyArray<AnyMaterializedProjectionDefinition>);
+
 type CoreServices = CloudflareBackendCoreServices | LlmTransport | Admission | RefResolverService;
 
 const makeAgentRuntime = <Env extends CloudflareAgentEnv>(
@@ -304,7 +308,7 @@ export interface AgentDurableObjectConfig<
   readonly dispatchTargets?: (env: Env) => DispatchTargetRegistry;
   readonly triggers?: CloudflareTriggerSource<Env>;
   readonly streams?: CloudflareAttachedStreamSource<Env>;
-  readonly projections?: ReadonlyArray<AnyMaterializedProjectionDefinition>;
+  readonly projections?: CloudflareAgentProjectionSource<Env>;
   readonly scopeRefForScope?: (scope: string, env: Env) => ScopeRef | null;
   readonly eventHandlers?: (
     context: AgentEventHandlerContext<Runtime>,
@@ -389,6 +393,12 @@ const declaredToolIntents = (
     };
   });
 };
+
+const projectionsFor = <Env extends CloudflareAgentEnv>(
+  projections: CloudflareAgentProjectionSource<Env> | undefined,
+  env: Env,
+): ReadonlyArray<AnyMaterializedProjectionDefinition> =>
+  typeof projections === "function" ? projections(env) : (projections ?? []);
 
 export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentRuntimeReaderClient>
   extends DurableObject<Env>
@@ -1263,7 +1273,7 @@ export const createAgentDurableObject = <Env extends CloudflareAgentEnv>(
         dispatchTargets: config.dispatchTargets?.(env) ?? {},
         triggers: config.triggers ?? [],
         streams: config.streams ?? [],
-        projections: config.projections ?? [],
+        projections: projectionsFor(config.projections, env),
         scopeRefForScope:
           config.scopeRefForScope ??
           ((scope) => cloudflareDefaultTruthIdentityFromRoutingScope(scope).scopeRef),

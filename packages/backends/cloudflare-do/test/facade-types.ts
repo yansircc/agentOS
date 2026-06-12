@@ -34,6 +34,10 @@ const scheduleAt = 1_700_000_000_000;
 declare const llmTransport: (env: TestEnv) => Layer.Layer<LlmTransport, never, RefResolverService>;
 
 defineAgentDO<TestEnv>({
+  projections: (env) => {
+    void env.LLM_ENDPOINT;
+    return [];
+  },
   on: {
     "test.event": ({ agent }) => {
       void agent.emit("test.followup", {});
@@ -119,6 +123,12 @@ const _objectDeliverSubmitSpec: AgentSubmitSpec = {
 };
 
 const LowLevelDO = createAgentDurableObject<TestEnv>();
+createAgentDurableObject<TestEnv>({
+  projections: (env) => {
+    void env.LLM_KEY;
+    return [];
+  },
+});
 declare const lowLevelAgent: InstanceType<typeof LowLevelDO>;
 void lowLevelAgent.emitEvent({ event: "test.low", data: {} });
 // @ts-expect-error low-level clients do not expose facade emit alias

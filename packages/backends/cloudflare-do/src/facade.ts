@@ -17,13 +17,13 @@ import {
   type AgentWorkspaceJobSpec,
   type AgentTriggerCancelSpec,
   type AgentTriggerIntentSpec,
+  type CloudflareAgentProjectionSource,
   type CloudflareAgentEnv,
   type MaterializedAgentConfig,
 } from "./agent-do";
 import { mountCloudflareAgent } from "./mount";
 import type { CloudflareTriggerSource } from "./trigger-factory";
 import type { CloudflareAttachedStreamSource } from "./stream-factory";
-import type { AnyMaterializedProjectionDefinition } from "@agent-os/runtime";
 import { MissingLlmTransportLive } from "./llm";
 import {
   lowerAgentConfig,
@@ -96,7 +96,7 @@ interface DefineAgentDOConfigBase<
   ) => Iterable<AgentEventHandlerRegistration>;
   readonly triggers?: CloudflareTriggerSource<Env>;
   readonly streams?: CloudflareAttachedStreamSource<Env>;
-  readonly projections?: ReadonlyArray<AnyMaterializedProjectionDefinition>;
+  readonly projections?: CloudflareAgentProjectionSource<Env>;
 }
 
 export interface DefineAgentDOConfigWithSubmit<
@@ -127,6 +127,11 @@ const declaredIntentsFor = <Env extends CloudflareAgentEnv>(
   env: Env,
 ): ReadonlyArray<AgentDeclaredIntent> =>
   typeof declaredIntents === "function" ? declaredIntents(env) : (declaredIntents ?? []);
+
+const projectionsFor = <Env extends CloudflareAgentEnv>(
+  projections: DefineAgentDOConfig<Env>["projections"],
+  env: Env,
+) => (typeof projections === "function" ? projections(env) : (projections ?? []));
 
 const eventHandlersFor = <Env extends CloudflareAgentEnv, Runtime extends AgentFacadeRuntimeClient>(
   config: DefineAgentDOConfigBase<Env, Runtime>,
@@ -171,7 +176,7 @@ const materializedConfigForEnv = <
   dispatchTargets: lowered.dispatchTargets,
   triggers: config.triggers ?? [],
   streams: config.streams ?? [],
-  projections: config.projections ?? [],
+  projections: projectionsFor(config.projections, env),
   scopeRefForScope:
     config.scopeRefForScope ??
     ((scope) => cloudflareDefaultTruthIdentityFromRoutingScope(scope).scopeRef),
