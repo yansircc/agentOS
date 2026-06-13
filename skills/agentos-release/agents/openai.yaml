@@ -1,0 +1,6 @@
+interface:
+  display_name: "agentOS Release"
+  short_description: "Bump and publish agentOS npm packages"
+  default_prompt: "Use $agentos-release to bump, publish, resume, and verify the agentOS internal npm distribution."
+policy:
+  allow_implicit_invocation: true
