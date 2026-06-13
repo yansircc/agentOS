@@ -19,6 +19,7 @@
       "invariants": ["invariant.algebra.single-code-source"],
       "decisions": [],
       "docs": "docs/concepts/ag-ui-wire-adapter.md",
+      "capabilityKind": "projection",
       "testEvidence": {
         "tests": ["packages/wire-adapters/ag-ui-svelte/test/ag-ui-svelte.test.ts"]
       }
@@ -36,6 +37,7 @@
       "invariants": ["invariant.algebra.single-code-source"],
       "decisions": [],
       "docs": "docs/concepts/ag-ui-wire-adapter.md",
+      "capabilityKind": "projection",
       "testEvidence": {
         "tests": ["packages/wire-adapters/ag-ui/test/ag-ui.test.ts"]
       }
@@ -53,6 +55,7 @@
       "invariants": ["invariant.algebra.single-code-source"],
       "decisions": [],
       "docs": "docs/concepts/ag-ui-wire-adapter.md",
+      "capabilityKind": "projection",
       "testEvidence": {
         "tests": ["packages/wire-adapters/ag-ui/test/ag-ui.test.ts"]
       }
@@ -70,6 +73,7 @@
       "invariants": ["invariant.boundary.owner-owned-safe-projection"],
       "decisions": [],
       "docs": "docs/concepts/ag-ui-wire-adapter.md",
+      "capabilityKind": "projection",
       "testEvidence": {
         "tests": ["packages/wire-adapters/ag-ui/test/ag-ui.test.ts"]
       }
@@ -87,6 +91,7 @@
       "invariants": ["invariant.boundary.owner-owned-safe-projection"],
       "decisions": [],
       "docs": "docs/concepts/ag-ui-wire-adapter.md",
+      "capabilityKind": "projection",
       "testEvidence": {
         "tests": ["packages/wire-adapters/ag-ui/test/ag-ui.test.ts"]
       }
@@ -104,6 +109,7 @@
       "invariants": ["invariant.ag-ui.sse-axis"],
       "decisions": [],
       "docs": "docs/packages/backend-cloudflare-do.md",
+      "capabilityKind": "facade",
       "testEvidence": {
         "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"]
       }
@@ -121,6 +127,7 @@
       "invariants": ["invariant.ag-ui.sse-axis"],
       "decisions": [],
       "docs": "docs/packages/backend-cloudflare-do.md",
+      "capabilityKind": "facade",
       "testEvidence": {
         "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"]
       }
@@ -138,6 +145,7 @@
       "invariants": ["invariant.workspace-job.host-workspace-lifecycle"],
       "decisions": [],
       "docs": "docs/packages/backend-cloudflare-do.md",
+      "capabilityKind": "backend",
       "testEvidence": {
         "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"]
       }
@@ -155,6 +163,7 @@
       "invariants": ["invariant.workspace-job.host-workspace-lifecycle"],
       "decisions": [],
       "docs": "docs/packages/backend-cloudflare-do.md",
+      "capabilityKind": "backend",
       "testEvidence": {
         "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"]
       }
@@ -172,6 +181,7 @@
       "invariants": ["invariant.workspace-job.verified-terminal"],
       "decisions": [],
       "docs": "docs/packages/backend-cloudflare-do.md",
+      "capabilityKind": "facade",
       "testEvidence": {
         "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"]
       }
@@ -189,6 +199,7 @@
       "invariants": ["invariant.workspace-job.failure-observability-join"],
       "decisions": [],
       "docs": "docs/packages/backend-cloudflare-do.md",
+      "capabilityKind": "profile",
       "testEvidence": {
         "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"]
       }
@@ -206,6 +217,7 @@
       "invariants": ["invariant.workspace-op.carrier-single-writer"],
       "decisions": [],
       "docs": "docs/packages/backend-cloudflare-do.md",
+      "capabilityKind": "backend",
       "testEvidence": {
         "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"]
       }
@@ -223,6 +235,7 @@
       "invariants": ["invariant.algebra.single-code-source"],
       "decisions": [],
       "docs": "docs/concepts/agent-schema.md",
+      "capabilityKind": "kernel",
       "testEvidence": {
         "tests": ["packages/kernel/test/agent-schema.test.ts"]
       }
@@ -240,6 +253,7 @@
       "invariants": ["invariant.algebra.single-code-source"],
       "decisions": [],
       "docs": "docs/concepts/agent-schema.md",
+      "capabilityKind": "projection",
       "testEvidence": {
         "tests": ["packages/kernel/test/agent-schema.test.ts"]
       }
@@ -257,6 +271,7 @@
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
       "docs": "docs/concepts/durable-truth.md",
+      "capabilityKind": "kernel",
       "testEvidence": {
         "tests": ["packages/kernel/test/effect-claim.test.ts"]
       }
@@ -274,6 +289,7 @@
       "invariants": ["invariant.d10.namespace-integrity", "invariant.d10.truth-identity"],
       "decisions": [],
       "docs": "docs/boundary-contract.md",
+      "capabilityKind": "kernel",
       "testEvidence": {
         "tests": ["packages/kernel/test/boundary-contract.test.ts"]
       }
@@ -291,6 +307,7 @@
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
       "docs": "docs/concepts/materialized-projections.md",
+      "capabilityKind": "projection",
       "testEvidence": {
         "tests": ["packages/kernel/test/boundary-contract.test.ts"]
       }
@@ -308,6 +325,7 @@
       "invariants": ["invariant.algebra.type-or-boot-proof"],
       "decisions": [],
       "docs": "docs/concepts/tool-execution-domain.md",
+      "capabilityKind": "kernel",
       "testEvidence": {
         "tests": ["packages/kernel/test/tools.test.ts"]
       }
@@ -325,6 +343,7 @@
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
       "docs": "docs/boundary-contract.md",
+      "capabilityKind": "kernel",
       "testEvidence": {
         "tests": ["packages/kernel/test/material-ref.test.ts"]
       }
@@ -345,6 +364,7 @@
       ],
       "decisions": [],
       "docs": "docs/boundary-contract.md",
+      "capabilityKind": "kernel",
       "testEvidence": {
         "tests": ["packages/kernel/test/effect-claim.test.ts"]
       }
@@ -362,6 +382,7 @@
       "invariants": ["invariant.algebra.type-or-boot-proof"],
       "decisions": [],
       "docs": "docs/concepts/tool-execution-domain.md",
+      "capabilityKind": "kernel",
       "testEvidence": {
         "tests": ["packages/kernel/test/tools.test.ts"]
       }
@@ -379,6 +400,7 @@
       "invariants": ["invariant.algebra.type-or-boot-proof"],
       "decisions": [],
       "docs": "docs/concepts/tool-execution-domain.md",
+      "capabilityKind": "kernel",
       "testEvidence": {
         "tests": ["packages/kernel/test/tools.test.ts"]
       }
@@ -396,6 +418,7 @@
       "invariants": ["invariant.algebra.type-or-boot-proof"],
       "decisions": [],
       "docs": "docs/concepts/tool-execution-domain.md",
+      "capabilityKind": "kernel",
       "testEvidence": {
         "tests": ["packages/kernel/test/tools.test.ts"]
       }
@@ -413,6 +436,7 @@
       "invariants": ["invariant.algebra.type-or-boot-proof"],
       "decisions": [],
       "docs": "docs/concepts/tool-execution-domain.md",
+      "capabilityKind": "kernel",
       "testEvidence": {
         "tests": ["packages/kernel/test/tools.test.ts"]
       }
@@ -430,6 +454,7 @@
       "invariants": ["invariant.d10.namespace-integrity"],
       "decisions": [],
       "docs": "docs/boundary-contract.md",
+      "capabilityKind": "kernel",
       "testEvidence": {
         "tests": ["packages/kernel/test/effect-claim.test.ts"]
       }
@@ -447,6 +472,7 @@
       "invariants": ["invariant.d10.truth-identity", "invariant.d10.namespace-integrity"],
       "decisions": [],
       "docs": "docs/concepts/durable-truth.md",
+      "capabilityKind": "kernel",
       "testEvidence": {
         "tests": ["packages/runtime-protocol/test/runtime-events.test.ts"]
       }
@@ -464,6 +490,7 @@
       "invariants": ["invariant.algebra.type-or-boot-proof"],
       "decisions": [],
       "docs": "docs/boundary-contract.md",
+      "capabilityKind": "kernel",
       "testEvidence": {
         "tests": ["packages/kernel/test/effect-claim.test.ts"]
       }
@@ -481,6 +508,7 @@
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
       "docs": "docs/concepts/carriers-and-material.md",
+      "capabilityKind": "kernel",
       "testEvidence": {
         "tests": ["packages/kernel/test/material-ref.test.ts"]
       }
@@ -498,6 +526,7 @@
       "invariants": ["invariant.algebra.type-or-boot-proof"],
       "decisions": [],
       "docs": "docs/boundary-contract.md",
+      "capabilityKind": "kernel",
       "testEvidence": {
         "tests": ["packages/kernel/test/effect-claim.test.ts"]
       }
@@ -515,6 +544,7 @@
       "invariants": ["invariant.algebra.single-code-source"],
       "decisions": [],
       "docs": "docs/concepts/agent-schema.md",
+      "capabilityKind": "projection",
       "testEvidence": {
         "tests": ["packages/kernel/test/agent-schema.test.ts"]
       }
@@ -532,6 +562,7 @@
       "invariants": ["invariant.algebra.type-or-boot-proof"],
       "decisions": [],
       "docs": "docs/boundary-contract.md",
+      "capabilityKind": "kernel",
       "testEvidence": {
         "tests": ["packages/kernel/test/effect-claim.test.ts"]
       }
@@ -549,6 +580,7 @@
       "invariants": ["invariant.boundary.owner-owned-safe-projection"],
       "decisions": [],
       "docs": "docs/concepts/durable-truth.md",
+      "capabilityKind": "kernel",
       "testEvidence": {
         "tests": [
           "packages/wire-adapters/ag-ui/test/ag-ui.test.ts",
@@ -569,6 +601,7 @@
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
       "docs": "docs/concepts/durable-truth.md",
+      "capabilityKind": "kernel",
       "testEvidence": {
         "tests": [
           "packages/kernel/test/effect-claim.test.ts",
@@ -589,6 +622,7 @@
       "invariants": ["invariant.algebra.type-or-boot-proof"],
       "decisions": [],
       "docs": "docs/concepts/tool-execution-domain.md",
+      "capabilityKind": "kernel",
       "testEvidence": {
         "tests": ["packages/kernel/test/tools.test.ts"]
       }
@@ -606,6 +640,7 @@
       "invariants": ["invariant.algebra.type-or-boot-proof"],
       "decisions": [],
       "docs": "docs/concepts/tool-execution-domain.md",
+      "capabilityKind": "kernel",
       "testEvidence": {
         "tests": ["packages/kernel/test/tools.test.ts"]
       }
@@ -623,6 +658,7 @@
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
       "docs": "docs/concepts/tool-execution-domain.md",
+      "capabilityKind": "kernel",
       "testEvidence": {
         "tests": ["packages/kernel/test/tools.test.ts"]
       }
@@ -640,6 +676,7 @@
       "invariants": ["invariant.algebra.type-or-boot-proof"],
       "decisions": [],
       "docs": "docs/concepts/tool-execution-domain.md",
+      "capabilityKind": "kernel",
       "testEvidence": {
         "tests": ["packages/kernel/test/tools.test.ts"]
       }
@@ -657,6 +694,7 @@
       "invariants": ["invariant.algebra.type-or-boot-proof"],
       "decisions": [],
       "docs": "docs/concepts/tool-execution-domain.md",
+      "capabilityKind": "kernel",
       "testEvidence": {
         "tests": ["packages/kernel/test/tools.test.ts"]
       }
@@ -674,6 +712,7 @@
       "invariants": ["invariant.boundary.runtime-validation-external-only"],
       "decisions": [],
       "docs": "docs/packages/llm-protocol.md",
+      "capabilityKind": "package",
       "testEvidence": {
         "tests": ["packages/llm-protocol/test/llm-protocol.test.ts"]
       }
@@ -691,6 +730,7 @@
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
       "docs": "docs/concepts/materialized-projections.md",
+      "capabilityKind": "projection",
       "testEvidence": {
         "tests": ["packages/runtime/test/projection.test.ts"]
       }
@@ -708,6 +748,7 @@
       "invariants": ["invariant.ledger.single-commit-source", "invariant.d10.truth-identity"],
       "decisions": [],
       "docs": "docs/concepts/durable-truth.md",
+      "capabilityKind": "runtime",
       "testEvidence": {
         "tests": ["packages/backends/protocol/test/contract/runtime-backend-contract.ts"]
       }
@@ -725,6 +766,7 @@
       "invariants": ["invariant.ledger.single-commit-source"],
       "decisions": [],
       "docs": "docs/concepts/durable-truth.md",
+      "capabilityKind": "runtime",
       "testEvidence": {
         "tests": ["packages/runtime-protocol/test/runtime-events.test.ts"]
       }
@@ -742,6 +784,7 @@
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
       "docs": "docs/concepts/durable-truth.md",
+      "capabilityKind": "runtime",
       "testEvidence": {
         "tests": ["packages/backends/protocol/test/contract/runtime-backend-contract.ts"]
       }
@@ -759,6 +802,7 @@
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
       "docs": "docs/concepts/materialized-projections.md",
+      "capabilityKind": "projection",
       "testEvidence": {
         "tests": ["packages/runtime/test/projection.test.ts"]
       }
@@ -776,6 +820,7 @@
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
       "docs": "docs/concepts/materialized-projections.md",
+      "capabilityKind": "projection",
       "testEvidence": {
         "tests": [
           "packages/backends/cloudflare-do/test/materialized-projections.worker.test.ts",
@@ -796,6 +841,7 @@
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
       "docs": "docs/concepts/durable-truth.md",
+      "capabilityKind": "runtime",
       "testEvidence": {
         "tests": [
           "packages/runtime-protocol/test/failure-diagnostics.test.ts",
@@ -816,6 +862,7 @@
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
       "docs": "docs/concepts/materialized-projections.md",
+      "capabilityKind": "projection",
       "testEvidence": {
         "tests": ["packages/runtime/test/projection.test.ts"]
       }
@@ -833,6 +880,7 @@
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
       "docs": "docs/concepts/materialized-projections.md",
+      "capabilityKind": "projection",
       "testEvidence": {
         "tests": ["packages/runtime/test/projection.test.ts"]
       }
@@ -850,6 +898,7 @@
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
       "docs": "docs/concepts/materialized-projections.md",
+      "capabilityKind": "projection",
       "testEvidence": {
         "tests": ["packages/runtime/test/projection.test.ts"]
       }
@@ -867,6 +916,7 @@
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
       "docs": "docs/concepts/durable-truth.md",
+      "capabilityKind": "projection",
       "testEvidence": {
         "tests": ["packages/runtime/test/run-projector.test.ts"]
       }
@@ -884,6 +934,7 @@
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
       "docs": "docs/concepts/durable-truth.md",
+      "capabilityKind": "projection",
       "testEvidence": {
         "tests": ["packages/runtime/test/run-projector.test.ts"]
       }
@@ -901,6 +952,7 @@
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
       "docs": "docs/concepts/durable-truth.md",
+      "capabilityKind": "projection",
       "testEvidence": {
         "tests": [
           "packages/runtime/test/run-projector.test.ts",
@@ -921,6 +973,7 @@
       "invariants": ["invariant.workspace-job.failure-observability-join"],
       "decisions": [],
       "docs": "docs/packages/workspace-job.md",
+      "capabilityKind": "projection",
       "testEvidence": {
         "tests": ["packages/runtime/test/workspace-job.test.ts"]
       }
@@ -938,6 +991,7 @@
       "invariants": ["invariant.workspace-job.verified-terminal"],
       "decisions": [],
       "docs": "docs/packages/workspace-job.md",
+      "capabilityKind": "runtime",
       "testEvidence": {
         "tests": ["packages/runtime/test/workspace-job.test.ts"]
       }
@@ -955,6 +1009,7 @@
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
       "docs": "docs/concepts/durable-truth.md",
+      "capabilityKind": "runtime",
       "testEvidence": {
         "tests": [
           "packages/runtime-protocol/test/runtime-events.test.ts",
@@ -975,6 +1030,7 @@
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
       "docs": "docs/tutorials/streaming-chatbot.md",
+      "capabilityKind": "runtime",
       "testEvidence": {
         "tests": [
           "packages/runtime/test/submit-agent-runtime-events.test.ts",
@@ -995,6 +1051,7 @@
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],
       "docs": "docs/concepts/materialized-projections.md",
+      "capabilityKind": "projection",
       "testEvidence": {
         "tests": ["packages/runtime/test/projection.test.ts"]
       }

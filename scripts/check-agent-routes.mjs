@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { buildCapabilityRouteProjection } from "./lib/capability-routes.mjs";
-import { collectNamespaceModel } from "./check-event-namespaces.mjs";
+import { collectAgentDocsModel } from "./lib/agent-docs-model.mjs";
 
 const root = process.cwd();
 const selfTest = process.argv.includes("--self-test");
@@ -15,6 +15,7 @@ const baseContext = () => ({
     {
       id: "primitive.valid",
       package: "@agent-os/valid",
+      capabilityKind: "profile",
       invariants: ["invariant.valid"],
       docs: "docs/valid.md",
       testEvidence: { tests: ["packages/valid/test/valid.test.ts"] },
@@ -22,6 +23,7 @@ const baseContext = () => ({
     {
       id: "primitive.extra",
       package: "@agent-os/extra",
+      capabilityKind: "kernel",
       invariants: ["invariant.valid"],
       docs: "docs/extra.md",
       testEvidence: { tests: ["packages/extra/test/extra.test.ts"] },
@@ -32,6 +34,7 @@ const baseContext = () => ({
   namespaceOwners: [
     { prefix: "valid.", owner: "@agent-os/valid", filePath: "packages/valid/src/index.ts" },
   ],
+  recipes: [{ id: "recipe.valid", primitives: ["primitive.valid"] }],
 });
 
 const baseSource = () => ({
@@ -94,11 +97,45 @@ const selfTestFailures = () => {
   assertFails("generated fields in source", (source) => {
     source.rules[0].coordinationPackage = "@agent-os/valid";
   });
+  assertFails("top-level generated fields in source", (source) => {
+    source.coverage = { recipes: [] };
+  });
   assertFails("source prefix with multiple owners", (_source, context) => {
     context.namespaceOwners.push({
       prefix: "valid.",
       owner: "@agent-os/other",
       filePath: "packages/other/src/index.ts",
+    });
+  });
+  assertFails("multi-owner route without coordination kind", (_source, context) => {
+    context.primitives[0].capabilityKind = "kernel";
+    context.namespaceOwners.push({
+      prefix: "other.",
+      owner: "@agent-os/other",
+      filePath: "packages/other/src/index.ts",
+    });
+    _source.rules[0].sourceFactPrefixes = ["valid.", "other."];
+  });
+  assertFails("recipe without route or reason", (_source, context) => {
+    context.recipes = [{ id: "recipe.missing", primitives: ["primitive.uncovered"] }];
+  });
+  assertFails("recipe with route and reason", (_source, context) => {
+    context.recipes = [
+      {
+        id: "recipe.valid",
+        primitives: ["primitive.valid"],
+        noRouteReason: "already covered",
+      },
+    ];
+  });
+  assertFails("consumer primitive without route or reason", (_source, context) => {
+    context.primitives.push({
+      id: "primitive.uncovered",
+      package: "@agent-os/uncovered",
+      capabilityKind: "facade",
+      invariants: ["invariant.valid"],
+      docs: "docs/uncovered.md",
+      testEvidence: { tests: ["packages/uncovered/test/uncovered.test.ts"] },
     });
   });
 
@@ -107,19 +144,16 @@ const selfTestFailures = () => {
 
 const regularFailures = () => {
   const failures = [];
-  const primitivesJson = readJson("docs/agent/primitives.json");
-  const source = readJson("docs/agent/capability-rules.source.json");
-  const invariantsSource = readJson("docs/agent/invariants.source.json");
-  const rootPackage = readJson("package.json");
-  const namespaceModel = collectNamespaceModel(root);
-  failures.push(...namespaceModel.failures);
+  const model = collectAgentDocsModel(root);
+  failures.push(...model.failures);
 
   const projection = buildCapabilityRouteProjection({
-    source,
-    primitives: primitivesJson.primitives ?? [],
-    invariants: invariantsSource.invariants ?? [],
-    rootScripts: rootPackage.scripts ?? {},
-    namespaceOwners: namespaceModel.owners,
+    source: model.capabilityRulesSource,
+    recipes: model.recipesSource.recipes,
+    primitives: model.primitives,
+    invariants: model.invariantsSource.invariants,
+    rootScripts: model.rootScripts,
+    namespaceOwners: model.namespaceModel.owners,
   });
   failures.push(...projection.failures);
 
@@ -127,11 +161,13 @@ const regularFailures = () => {
     generatedBy: "scripts/generate-agent-docs.mjs",
     source: [
       "docs/agent/capability-rules.source.json",
+      "docs/agent/recipes.source.json",
       "exported TSDoc @agentosPrimitive tags",
       "BoundaryContract/event namespace declarations",
       "package.json scripts",
     ],
     routes: projection.routes,
+    coverage: projection.coverage,
   };
   const graphPath = path.join(root, "docs/agent/decision-graph.json");
   const actual = fs.existsSync(graphPath) ? readJson("docs/agent/decision-graph.json") : undefined;

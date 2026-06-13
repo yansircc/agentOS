@@ -9,13 +9,25 @@ Use this skill to integrate agentOS without re-inventing its substrate.
 
 ## Workflow
 
-1. Inspect the target repo before editing:
+1. Route the request before editing:
+   - in an agentOS checkout, read `docs/agent/decision-graph.md` or
+     `docs/agent/decision-graph.json` first;
+   - map the natural-language request to one route's `intents`;
+   - use only that route's allowed primitives, source fact owners, forbidden
+     writes, and gates as the initial substrate motion;
+   - if no route fits but an existing coordination primitive fits, add or update
+     `docs/agent/capability-rules.source.json`, then run
+     `bun run docs:generate` and `bun run check:agent-routes`;
+   - if no existing coordination primitive fits, report a substrate gap instead
+     of adding glue code or a docs-only route.
+
+2. Inspect the target repo before editing:
    - installed `@agent-os/*` packages;
    - local agent loop, tool gate, ledger, scheduler, material resolver, and
      streaming code;
    - package READMEs and `PUBLIC_API.md` files for exact installed exports.
 
-2. State the boundary before changes:
+3. State the boundary before changes:
 
    ```text
    stable axis:
@@ -23,7 +35,7 @@ Use this skill to integrate agentOS without re-inventing its substrate.
    invariant:
    ```
 
-3. Prefer the agentOS primitive:
+4. Prefer the agentOS primitive:
    - agent run loop -> Cloudflare backend `submit`;
    - tool identity/admission -> `defineTool`, AgentSchema arguments, and
      `ToolContract`;
@@ -34,7 +46,7 @@ Use this skill to integrate agentOS without re-inventing its substrate.
    - resource facts -> `@agent-os/resource-carrier`;
    - Cloudflare resource materialization -> `@agent-os/resource-cloudflare`;
 
-4. Keep the core invariant:
+5. Keep the core invariant:
    - `PreClaim` names effect identity only:
      `operationRef / scopeRef / authorityRef / originRef`;
    - `MaterialRef` names execution means;
@@ -43,10 +55,10 @@ Use this skill to integrate agentOS without re-inventing its substrate.
      error payloads;
    - skill identity stops at registration; runtime sees tools.
 
-5. Fail closed. Do not add env fallback, inferred credentials, shadow state,
+6. Fail closed. Do not add env fallback, inferred credentials, shadow state,
    duplicate run truth, or product vocabulary to agentOS-owned logic.
 
-6. Verify the class, not just the instance:
+7. Verify the class, not just the instance:
    - typecheck and tests for touched packages;
    - redaction scans for provider material;
    - ledger/projection assertions proving no second truth.

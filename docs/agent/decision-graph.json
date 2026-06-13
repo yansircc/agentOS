@@ -2,6 +2,7 @@
   "generatedBy": "scripts/generate-agent-docs.mjs",
   "source": [
     "docs/agent/capability-rules.source.json",
+    "docs/agent/recipes.source.json",
     "exported TSDoc @agentosPrimitive tags",
     "BoundaryContract/event namespace declarations",
     "package.json scripts"
@@ -14,6 +15,7 @@
         "convert runtime ledger SSE into AG-UI frames"
       ],
       "coordinationPackage": "@agent-os/ag-ui",
+      "coordinationCapabilityKind": "projection",
       "sourceFactPrefixes": ["agent.", "chat.", "llm.", "tool."],
       "sourceFactOwners": [
         {
@@ -64,6 +66,7 @@
       "allowedPrimitives": [
         "primitive.ag-ui.projectLedgerEventToAgUiEnvelope",
         "primitive.ag-ui.projectLedgerSseToAgUiSse",
+        "primitive.cloudflare-do.createCloudflareLedgerAgUiHistorySseResponse",
         "primitive.cloudflare-do.createCloudflareLedgerAgUiSseResponse",
         "primitive.runtime.SubmitResult",
         "primitive.runtime.SubmitSpec",
@@ -118,6 +121,10 @@
           "tests": ["packages/wire-adapters/ag-ui/test/ag-ui.test.ts"]
         },
         {
+          "primitive": "primitive.cloudflare-do.createCloudflareLedgerAgUiHistorySseResponse",
+          "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"]
+        },
+        {
           "primitive": "primitive.cloudflare-do.createCloudflareLedgerAgUiSseResponse",
           "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"]
         },
@@ -152,6 +159,7 @@
         "consume workspace-job failure observability without reading raw ledger payload"
       ],
       "coordinationPackage": "@agent-os/backend-cloudflare-do",
+      "coordinationCapabilityKind": "profile",
       "sourceFactPrefixes": ["agent.", "llm.", "tool.", "workspace_job.", "workspace_op."],
       "sourceFactOwners": [
         {
@@ -212,6 +220,7 @@
       ],
       "allowedPrimitives": [
         "primitive.ag-ui.projectLedgerSseToAgUiSse",
+        "primitive.cloudflare-do.createCloudflareLedgerAgUiHistorySseResponse",
         "primitive.cloudflare-do.createCloudflareLedgerAgUiSseResponse",
         "primitive.cloudflare-do.createCloudflareWorkspaceJobResponse",
         "primitive.cloudflare-do.installCloudflareWorkspaceJobProfile",
@@ -279,6 +288,10 @@
           "tests": ["packages/wire-adapters/ag-ui/test/ag-ui.test.ts"]
         },
         {
+          "primitive": "primitive.cloudflare-do.createCloudflareLedgerAgUiHistorySseResponse",
+          "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"]
+        },
+        {
           "primitive": "primitive.cloudflare-do.createCloudflareLedgerAgUiSseResponse",
           "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"]
         },
@@ -307,6 +320,7 @@
         "route effectful tool execution through declared tool authority"
       ],
       "coordinationPackage": "@agent-os/kernel",
+      "coordinationCapabilityKind": "kernel",
       "sourceFactPrefixes": ["tool."],
       "sourceFactOwners": [
         {
@@ -393,6 +407,7 @@
         "derive observable state from ledger facts without making projection state truth"
       ],
       "coordinationPackage": "@agent-os/runtime",
+      "coordinationCapabilityKind": "projection",
       "sourceFactPrefixes": ["agent."],
       "sourceFactOwners": [
         {
@@ -456,5 +471,54 @@
         }
       ]
     }
-  ]
+  ],
+  "coverage": {
+    "recipes": [
+      {
+        "id": "recipe.hello-ledger-event",
+        "routePrimitives": [],
+        "noRouteReason": "tutorial-only ledger identity exercise; product workflows should route through a higher-level primitive"
+      },
+      {
+        "id": "recipe.projection-reader",
+        "routePrimitives": ["primitive.runtime.defineProjection"]
+      },
+      {
+        "id": "recipe.streaming-chatbot",
+        "routePrimitives": ["primitive.ag-ui.projectLedgerSseToAgUiSse"]
+      },
+      {
+        "id": "recipe.tool-schema-authority",
+        "routePrimitives": ["primitive.kernel.defineProductTool"]
+      }
+    ],
+    "primitives": [
+      {
+        "id": "primitive.cloudflare-do.createCloudflareLedgerAgUiHistorySseResponse",
+        "capabilityKind": "facade",
+        "routePrimitives": [
+          "primitive.ag-ui.projectLedgerSseToAgUiSse",
+          "primitive.cloudflare-do.installCloudflareWorkspaceJobProfile"
+        ]
+      },
+      {
+        "id": "primitive.cloudflare-do.createCloudflareLedgerAgUiSseResponse",
+        "capabilityKind": "facade",
+        "routePrimitives": [
+          "primitive.ag-ui.projectLedgerSseToAgUiSse",
+          "primitive.cloudflare-do.installCloudflareWorkspaceJobProfile"
+        ]
+      },
+      {
+        "id": "primitive.cloudflare-do.createCloudflareWorkspaceJobResponse",
+        "capabilityKind": "facade",
+        "routePrimitives": ["primitive.cloudflare-do.installCloudflareWorkspaceJobProfile"]
+      },
+      {
+        "id": "primitive.cloudflare-do.installCloudflareWorkspaceJobProfile",
+        "capabilityKind": "profile",
+        "routePrimitives": ["primitive.cloudflare-do.installCloudflareWorkspaceJobProfile"]
+      }
+    ]
+  }
 }

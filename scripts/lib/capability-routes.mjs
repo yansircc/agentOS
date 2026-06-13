@@ -1,6 +1,8 @@
 export const generatedCapabilityRuleFields = new Set([
   "allowedPrimitivePackages",
+  "coordinationCapabilityKind",
   "coordinationPackage",
+  "coverage",
   "docs",
   "invariants",
   "sourceFactOwners",
@@ -9,10 +11,16 @@ export const generatedCapabilityRuleFields = new Set([
 
 const unique = (values) => [...new Set(values)].sort((left, right) => left.localeCompare(right));
 
+const coordinationCapabilityKinds = new Set(["composer", "facade", "profile", "projection"]);
+
+const consumerFacingCapabilityKinds = new Set(["composer", "facade", "profile"]);
+
 const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 
 const stringArray = (value) =>
   Array.isArray(value) && value.every((entry) => typeof entry === "string" && entry.length > 0);
+
+const authoredCapabilityRuleSourceFields = new Set(["schemaVersion", "rules"]);
 
 const resolvePrefixOwner = (prefix, namespaceOwners) => {
   const candidates = namespaceOwners.filter(
@@ -50,6 +58,7 @@ const primitiveEvidence = (primitive) => {
 
 export const buildCapabilityRouteProjection = ({
   source,
+  recipes = [],
   primitives,
   invariants,
   rootScripts,
@@ -62,6 +71,11 @@ export const buildCapabilityRouteProjection = ({
 
   if (!isObject(source)) {
     return { failures: ["capability rules source must be an object"], routes: [] };
+  }
+  for (const field of Object.keys(source)) {
+    if (!authoredCapabilityRuleSourceFields.has(field)) {
+      failures.push(`capability rules source must not author field ${field}`);
+    }
   }
   if (source.schemaVersion !== 1) failures.push("capability rules schemaVersion must be 1");
   if (!Array.isArray(source.rules)) failures.push("capability rules source must contain rules[]");
@@ -203,6 +217,19 @@ export const buildCapabilityRouteProjection = ({
         failures.push(`${rule.primitive} references unknown root script ${gate}`);
     }
 
+    const sourceOwnerNames = unique(sourceFactOwners.map((entry) => entry.owner));
+    if (
+      sourceOwnerNames.length > 1 &&
+      primitive !== undefined &&
+      !coordinationCapabilityKinds.has(primitive.capabilityKind)
+    ) {
+      failures.push(
+        `${rule.primitive} spans ${sourceOwnerNames.length} fact owners but coordination primitive kind ${JSON.stringify(
+          primitive.capabilityKind,
+        )} is not one of ${JSON.stringify([...coordinationCapabilityKinds])}`,
+      );
+    }
+
     if (
       primitive === undefined ||
       failures.some((failure) => failure.startsWith(`${rule.primitive} `))
@@ -223,6 +250,7 @@ export const buildCapabilityRouteProjection = ({
       primitive: rule.primitive,
       intents: rule.intents,
       coordinationPackage: primitive.package,
+      coordinationCapabilityKind: primitive.capabilityKind,
       sourceFactPrefixes: rule.sourceFactPrefixes,
       sourceFactOwners,
       allowedPrimitives,
@@ -241,11 +269,86 @@ export const buildCapabilityRouteProjection = ({
     });
   }
 
+  const coverage = buildCapabilityRouteCoverage({ routes, recipes, primitives });
+  failures.push(...coverage.failures);
+
   return {
     failures,
     routes:
       failures.length === 0
         ? routes.sort((left, right) => left.primitive.localeCompare(right.primitive))
         : [],
+    coverage: failures.length === 0 ? coverage.summary : { recipes: [], primitives: [] },
+  };
+};
+
+const routeMatchesRecipe = (route, recipe) => {
+  const recipePrimitives = new Set(recipe.primitives);
+  return (
+    recipePrimitives.has(route.primitive) ||
+    route.allowedPrimitives.some((primitive) => recipePrimitives.has(primitive))
+  );
+};
+
+const routePrimitivesForRecipe = (routes, recipe) =>
+  routes
+    .filter((route) => routeMatchesRecipe(route, recipe))
+    .map((route) => route.primitive)
+    .sort((left, right) => left.localeCompare(right));
+
+const buildCapabilityRouteCoverage = ({ routes, recipes, primitives }) => {
+  const failures = [];
+  const coveredPrimitiveIds = new Set(
+    routes.flatMap((route) => [route.primitive, ...route.allowedPrimitives]),
+  );
+  const recipeCoverage = recipes.map((recipe) => {
+    const routePrimitives = routePrimitivesForRecipe(routes, recipe);
+    const noRouteReason =
+      typeof recipe.noRouteReason === "string" ? recipe.noRouteReason.trim() : undefined;
+    if (routePrimitives.length === 0 && noRouteReason === undefined) {
+      failures.push(`${recipe.id} must have a capability route or noRouteReason`);
+    }
+    if (routePrimitives.length > 0 && noRouteReason !== undefined) {
+      failures.push(`${recipe.id} has both route coverage and noRouteReason`);
+    }
+    return {
+      id: recipe.id,
+      routePrimitives,
+      ...(noRouteReason === undefined ? {} : { noRouteReason }),
+    };
+  });
+
+  const primitiveCoverage = primitives
+    .filter((primitive) => consumerFacingCapabilityKinds.has(primitive.capabilityKind))
+    .map((primitive) => {
+      const routePrimitives = routes
+        .filter(
+          (route) =>
+            route.primitive === primitive.id || route.allowedPrimitives.includes(primitive.id),
+        )
+        .map((route) => route.primitive)
+        .sort((left, right) => left.localeCompare(right));
+      const noRouteReason =
+        typeof primitive.noRouteReason === "string" ? primitive.noRouteReason.trim() : undefined;
+      if (!coveredPrimitiveIds.has(primitive.id) && noRouteReason === undefined) {
+        failures.push(`${primitive.id} must have a capability route or noRouteReason`);
+      }
+      if (coveredPrimitiveIds.has(primitive.id) && noRouteReason !== undefined) {
+        failures.push(`${primitive.id} has both route coverage and noRouteReason`);
+      }
+      return {
+        id: primitive.id,
+        capabilityKind: primitive.capabilityKind,
+        routePrimitives,
+        ...(noRouteReason === undefined ? {} : { noRouteReason }),
+      };
+    });
+
+  return {
+    failures,
+    summary: {
+      recipes: recipeCoverage,
+      primitives: primitiveCoverage,
+    },
   };
 };

@@ -11,6 +11,7 @@
       "allowedPrimitives": [
         "primitive.ag-ui.projectLedgerEventToAgUiEnvelope",
         "primitive.ag-ui.projectLedgerSseToAgUiSse",
+        "primitive.cloudflare-do.createCloudflareLedgerAgUiHistorySseResponse",
         "primitive.cloudflare-do.createCloudflareLedgerAgUiSseResponse",
         "primitive.runtime.SubmitResult",
         "primitive.runtime.SubmitSpec",
@@ -42,6 +43,7 @@
       "sourceFactPrefixes": ["agent.", "llm.", "tool.", "workspace_job.", "workspace_op."],
       "allowedPrimitives": [
         "primitive.ag-ui.projectLedgerSseToAgUiSse",
+        "primitive.cloudflare-do.createCloudflareLedgerAgUiHistorySseResponse",
         "primitive.cloudflare-do.createCloudflareLedgerAgUiSseResponse",
         "primitive.cloudflare-do.createCloudflareWorkspaceJobResponse",
         "primitive.cloudflare-do.installCloudflareWorkspaceJobProfile",

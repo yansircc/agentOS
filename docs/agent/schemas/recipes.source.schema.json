@@ -44,6 +44,7 @@
           "minItems": 1
         },
         "tutorial": { "$ref": "#/$defs/path" },
+        "noRouteReason": { "type": "string", "minLength": 1 },
         "primitives": {
           "type": "array",
           "items": { "$ref": "#/$defs/id" },

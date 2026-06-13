@@ -9,6 +9,7 @@
         "Emit one durable fact and read it through the backend protocol"
       ],
       "tutorial": "docs/tutorials/hello-ledger-event.md",
+      "noRouteReason": "tutorial-only ledger identity exercise; product workflows should route through a higher-level primitive",
       "primitives": [
         "primitive.kernel.LedgerEvent",
         "primitive.kernel.ScopeRef",
