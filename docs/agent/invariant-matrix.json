@@ -70,8 +70,6 @@
         "primitive.ag-ui-svelte.agUiProjectionReadable",
         "primitive.ag-ui.projectAgUiFrames",
         "primitive.ag-ui.projectAgUiFramesToActivities",
-        "primitive.ag-ui.projectLedgerEventToAgUiEnvelope",
-        "primitive.ag-ui.projectLedgerSseToAgUiSse",
         "primitive.kernel.AgentSchema",
         "primitive.kernel.AgentSchemaProjections",
         "primitive.kernel.projectAgentSchema"
@@ -144,6 +142,22 @@
         "packages/runtime-protocol/test/runtime-events.test.ts"
       ],
       "decisions": ["decisions/a64-shape-first-over-n2.md"]
+    },
+    {
+      "invariant": "invariant.boundary.owner-owned-safe-projection",
+      "statement": "Browser-safe ledger event views are projected by the fact owner before any wire adapter or product renderer consumes them.",
+      "primitives": [
+        "primitive.ag-ui.projectLedgerEventToAgUiEnvelope",
+        "primitive.ag-ui.projectLedgerSseToAgUiSse",
+        "primitive.kernel.SafeLedgerEvent"
+      ],
+      "errors": [],
+      "docs": ["docs/concepts/ag-ui-wire-adapter.md", "docs/concepts/durable-truth.md"],
+      "tests": [
+        "packages/wire-adapters/ag-ui/test/ag-ui.test.ts",
+        "packages/wire-adapters/ag-ui/test/workspace-agui-integration.test.ts"
+      ],
+      "decisions": []
     },
     {
       "invariant": "invariant.d10.truth-identity",

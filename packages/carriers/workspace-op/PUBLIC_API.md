@@ -19,6 +19,7 @@ Status: 0.2.x active development for provider-neutral workspace operation carrie
 - `.:WorkspaceOperationRequestedPayload`
 - `.:WorkspaceOperationToolResult`
 - `.:projectWorkspaceOperation`
+- `.:projectWorkspaceOperationSafeLedgerEvent`
 - `.:rejectWorkspaceOperation`
 - `.:settleWorkspaceOperationCompleted`
 - `.:workspaceOpBoundaryContract`

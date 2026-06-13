@@ -23,9 +23,6 @@ export interface ScopeSummary {
 export interface ResolvedScope {
   readonly scope: string;
   readonly surface: ScopeSurface;
-  /** DurableObjectNamespace for introspectable scopes. Absent when
-   *  surface = "opaque" (ops-api will return 501 not_introspectable). */
-  readonly namespace?: DurableObjectNamespace;
 }
 
 /**

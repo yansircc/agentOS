@@ -108,6 +108,9 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:LedgerCommitEventSpec`
 - `.:LedgerTruthIdentity`
 - `.:LiveInput`
+- `.:LLM_STRUCTURED_EVENT_KINDS`
+- `.:LLM_STRUCTURED_EVIDENCE_EVENT`
+- `.:LLM_STRUCTURED_INVALIDATE_EVENT`
 - `.:LlmResponsePayload`
 - `.:LlmResponsePayloadSchema`
 - `.:LlmRoute`
@@ -193,6 +196,7 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:mountAgent`
 - `.:projectLease`
 - `.:projectFailureDiagnostics`
+- `.:projectRuntimeSafeLedgerEvent`
 - `.:receiptBackedToolResult`
 - `.:receiptBackedToolResultFromUnknown`
 - `.:replayExternalToolExecutionFromReceipt`

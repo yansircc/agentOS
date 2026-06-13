@@ -22,21 +22,25 @@ quota, and resources through `@agent-os/ops-api`.
 
 ## Steps
 
-1. Import the terminal ops adapter:
+1. Import the terminal ops adapter and the Cloudflare reader binder:
 
    ```ts
    import { mountOpsApi } from "@agent-os/ops-api";
+   import { cloudflareAgentDoOpsStubFor } from "@agent-os/backend-cloudflare-do";
    ```
 
 2. Define a scope resolver. It owns routing from an ops scope string to a
-   Durable Object namespace and name:
+   Cloudflare-resolved scope. The backend adapter owns Durable Object binding
+   and truth identity selection:
 
    ```ts
+   import type { CloudflareAgentDOResolvedScope } from "@agent-os/backend-cloudflare-do";
+
    const scopeResolver = {
      async list() {
        return [{ scope: "tutorial", label: "Tutorial", surface: "agent-do/v0.3" }];
      },
-     async resolve(scope: string) {
+     async resolve(scope: string): Promise<CloudflareAgentDOResolvedScope | null> {
        if (scope !== "tutorial") return null;
        return {
          scope,
@@ -64,7 +68,7 @@ quota, and resources through `@agent-os/ops-api`.
 4. Mount under an explicit path:
 
    ```ts
-   const opsApi = mountOpsApi({ scopeResolver, auth });
+   const opsApi = mountOpsApi({ scopeResolver, auth, stubFor: cloudflareAgentDoOpsStubFor });
 
    export default {
      fetch(request: Request) {

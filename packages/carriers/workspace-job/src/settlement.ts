@@ -29,6 +29,78 @@ export const settleWorkspaceJobTerminalFinalized = (
     carrierRef: workspaceJobSettlementRef("carrier", "workspace-job"),
   });
 
+export const settleWorkspaceJobSeedWritten = (
+  claim: PreClaim,
+  spec: {
+    readonly runId: string;
+    readonly requestedEventId: number;
+  },
+): LivedClaim =>
+  workspaceJobCarrier.settle.seed_written(claim, {
+    anchorId: workspaceJobSettlementRef("seed_written", spec.runId, spec.requestedEventId),
+    anchorKind: "carrier_proof",
+    carrierRef: workspaceJobSettlementRef("carrier", "workspace-job"),
+  });
+
+export const settleWorkspaceJobTerminalBuildAttempted = (
+  claim: PreClaim,
+  spec: {
+    readonly runId: string;
+    readonly requestedEventId: number;
+    readonly sha256: string;
+  },
+): LivedClaim =>
+  workspaceJobCarrier.settle.terminal_build_attempted(claim, {
+    anchorId: workspaceJobSettlementRef(
+      "terminal_build_attempted",
+      spec.runId,
+      spec.requestedEventId,
+      spec.sha256,
+    ),
+    anchorKind: "carrier_proof",
+    carrierRef: workspaceJobSettlementRef("carrier", "workspace-job"),
+  });
+
+export const settleWorkspaceJobArtifactWritten = (
+  claim: PreClaim,
+  spec: {
+    readonly runId: string;
+    readonly requestedEventId: number;
+    readonly artifactRef: string;
+  },
+): LivedClaim =>
+  workspaceJobCarrier.settle.artifact_written(claim, {
+    anchorId: workspaceJobSettlementRef(
+      "artifact_written",
+      spec.runId,
+      spec.requestedEventId,
+      spec.artifactRef,
+    ),
+    anchorKind: "carrier_proof",
+    carrierRef: workspaceJobSettlementRef("carrier", "workspace-job"),
+  });
+
+export const settleWorkspaceJobArtifactReadbackVerified = (
+  claim: PreClaim,
+  spec: {
+    readonly runId: string;
+    readonly requestedEventId: number;
+    readonly artifactRef: string;
+    readonly sha256: string;
+  },
+): LivedClaim =>
+  workspaceJobCarrier.settle.artifact_readback_verified(claim, {
+    anchorId: workspaceJobSettlementRef(
+      "artifact_readback_verified",
+      spec.runId,
+      spec.requestedEventId,
+      spec.artifactRef,
+      spec.sha256,
+    ),
+    anchorKind: "carrier_proof",
+    carrierRef: workspaceJobSettlementRef("carrier", "workspace-job"),
+  });
+
 export const settleWorkspaceJobVerified = (
   claim: PreClaim,
   spec: {

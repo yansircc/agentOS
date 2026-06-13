@@ -6,6 +6,7 @@ Status: Backend protocol package. Public exports are limited to storage-free bac
 
 ## Public exports
 
+- `.:BACKEND_PROTOCOL_EVENT_PREFIXES`
 - `.:DISPATCH_INBOUND_ACCEPTED`
 - `.:DISPATCH_EVENT_KINDS`
 - `.:DISPATCH_MAX_ATTEMPTS`

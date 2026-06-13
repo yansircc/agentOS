@@ -27,6 +27,7 @@
     "@agent-os/backend-protocol": "workspace:*",
     "@agent-os/kernel": "workspace:*",
     "@agent-os/llm-protocol": "workspace:*",
+    "@agent-os/ops-api": "workspace:*",
     "@agent-os/runtime": "workspace:*",
     "@agent-os/runtime-protocol": "workspace:*",
     "@agent-os/sse-http": "workspace:*",

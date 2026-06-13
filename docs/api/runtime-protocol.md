@@ -104,6 +104,9 @@
 - `.:LedgerCommitEventSpec`
 - `.:LedgerTruthIdentity`
 - `.:LiveInput`
+- `.:LLM_STRUCTURED_EVENT_KINDS`
+- `.:LLM_STRUCTURED_EVIDENCE_EVENT`
+- `.:LLM_STRUCTURED_INVALIDATE_EVENT`
 - `.:LlmResponsePayload`
 - `.:LlmResponsePayloadSchema`
 - `.:LlmRoute`
@@ -189,6 +192,7 @@
 - `.:mountAgent`
 - `.:projectLease`
 - `.:projectFailureDiagnostics`
+- `.:projectRuntimeSafeLedgerEvent`
 - `.:receiptBackedToolResult`
 - `.:receiptBackedToolResultFromUnknown`
 - `.:replayExternalToolExecutionFromReceipt`

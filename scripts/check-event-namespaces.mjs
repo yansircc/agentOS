@@ -166,6 +166,30 @@ const arrayLiteralStrings = (node, constants) => {
   });
 };
 
+const variableArrayStrings = (sourceFile, name) => {
+  const constants = localConstants(sourceFile);
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(declaration.name) || declaration.name.text !== name) continue;
+      return arrayLiteralStrings(unwrapExpression(declaration.initializer), constants);
+    }
+  }
+  return [];
+};
+
+const ownedProtocolEvents = (sourceFile, prefixes) => {
+  const values = [];
+  const constants = localConstants(sourceFile);
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      collectObjectStringValues(declaration.initializer, constants, values);
+    }
+  }
+  return values.filter((value) => prefixes.some((prefix) => value.startsWith(prefix)));
+};
+
 const carrierEventKinds = (eventsNode, prefix, constants) => {
   const events = objectLiteral(eventsNode);
   if (!events) return [];
@@ -198,6 +222,30 @@ const collectDeclarations = (sourceFile, filePath, vocabularyByPackage) => {
   const declarations = [];
 
   const visit = (node) => {
+    if (ts.isReturnStatement(node)) {
+      const spec = objectLiteral(node.expression);
+      if (spec) {
+        const packageIdNode = objectProperty(spec, "packageId", constants);
+        const prefixesNode = objectProperty(spec, "kindPrefixes", constants);
+        const versionNode = objectProperty(spec, "version", constants);
+        const packageId =
+          packageIdNode === undefined ? undefined : literalValue(packageIdNode, constants);
+        const prefixes = arrayLiteralStrings(prefixesNode, constants);
+        const version =
+          versionNode === undefined ? undefined : literalValue(versionNode, constants);
+        if (packageId !== undefined && version !== undefined && prefixes.length > 0) {
+          const packageValues = vocabularyByPackage.get(sourcePackageRoot(filePath)) ?? [];
+          declarations.push({
+            owner: packageId,
+            filePath,
+            prefixes,
+            events: packageValues.filter((value) =>
+              prefixes.some((prefix) => value.startsWith(prefix)),
+            ),
+          });
+        }
+      }
+    }
     if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
       const callName = node.expression.text;
       if (callName === "defineCarrier") {
@@ -272,6 +320,48 @@ const collectDeclarations = (sourceFile, filePath, vocabularyByPackage) => {
   return declarations;
 };
 
+const collectReservedDeclarations = (parsed) => {
+  const kernel = parsed.find(({ file }) =>
+    file.endsWith(path.join("packages", "kernel", "src", "errors.ts")),
+  );
+  const backendProtocol = parsed.find(({ file }) =>
+    file.endsWith(path.join("packages", "backends", "protocol", "src", "index.ts")),
+  );
+  const backendPrefixes =
+    backendProtocol === undefined
+      ? []
+      : variableArrayStrings(backendProtocol.sourceFile, "BACKEND_PROTOCOL_EVENT_PREFIXES");
+  const corePrefixes =
+    kernel === undefined ? [] : variableArrayStrings(kernel.sourceFile, "CORE_CLAIMED_PREFIXES");
+  const backendPrefixSet = new Set(backendPrefixes);
+  const coreOwnedPrefixes = corePrefixes.filter((prefix) => !backendPrefixSet.has(prefix));
+  const coreEvents = parsed.flatMap(({ sourceFile }) =>
+    ownedProtocolEvents(sourceFile, coreOwnedPrefixes),
+  );
+  return [
+    ...(kernel === undefined
+      ? []
+      : [
+          {
+            owner: "@agent-os/runtime-protocol",
+            filePath: kernel.file,
+            prefixes: coreOwnedPrefixes,
+            events: coreEvents,
+          },
+        ]),
+    ...(backendProtocol === undefined
+      ? []
+      : [
+          {
+            owner: "@agent-os/backend-protocol",
+            filePath: backendProtocol.file,
+            prefixes: backendPrefixes,
+            events: ownedProtocolEvents(backendProtocol.sourceFile, backendPrefixes),
+          },
+        ]),
+  ];
+};
+
 const isWriterCall = (call) => {
   const expression = call.expression;
   if (ts.isPropertyAccessExpression(expression)) return writerNames.has(expression.name.text);
@@ -342,9 +432,12 @@ const collectNamespaceFailures = (root) => {
     ),
   }));
   const vocabularyByPackage = packageVocabulary(parsed);
-  const declarations = parsed.flatMap(({ file, sourceFile }) =>
-    collectDeclarations(sourceFile, file, vocabularyByPackage),
-  );
+  const declarations = [
+    ...collectReservedDeclarations(parsed),
+    ...parsed.flatMap(({ file, sourceFile }) =>
+      collectDeclarations(sourceFile, file, vocabularyByPackage),
+    ),
+  ].filter((declaration) => declaration.prefixes.length > 0);
   const owners = declarations.flatMap((declaration) =>
     declaration.prefixes.map((prefix) => ({
       prefix,
@@ -355,6 +448,31 @@ const collectNamespaceFailures = (root) => {
   );
   const writes = parsed.flatMap(({ file, sourceFile }) => collectWriterKinds(sourceFile, file));
   const failures = [];
+
+  for (let leftIndex = 0; leftIndex < owners.length; leftIndex++) {
+    const left = owners[leftIndex];
+    for (let rightIndex = leftIndex + 1; rightIndex < owners.length; rightIndex++) {
+      const right = owners[rightIndex];
+      if (!left.prefix.startsWith(right.prefix) && !right.prefix.startsWith(left.prefix)) continue;
+      if (left.owner === right.owner && left.prefix === right.prefix) {
+        failures.push(
+          `${toRepoPath(left.filePath)} and ${toRepoPath(right.filePath)} duplicate owner ${
+            left.owner
+          } prefix ${JSON.stringify(left.prefix)}`,
+        );
+        continue;
+      }
+      if (left.owner !== right.owner) {
+        failures.push(
+          `${toRepoPath(left.filePath)}:${left.owner} prefix ${JSON.stringify(
+            left.prefix,
+          )} overlaps ${toRepoPath(right.filePath)}:${right.owner} prefix ${JSON.stringify(
+            right.prefix,
+          )}`,
+        );
+      }
+    }
+  }
 
   for (const write of writes) {
     const owner = owners.find((candidate) => write.kind.startsWith(candidate.prefix));
@@ -374,8 +492,23 @@ const collectNamespaceFailures = (root) => {
 const collectSelfTestFailures = () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-event-ns-"));
   try {
+    fs.mkdirSync(path.join(root, "packages/kernel/src"), { recursive: true });
+    fs.mkdirSync(path.join(root, "packages/backends/protocol/src"), { recursive: true });
     fs.mkdirSync(path.join(root, "packages/owner/src"), { recursive: true });
     fs.mkdirSync(path.join(root, "packages/writer/src"), { recursive: true });
+    fs.writeFileSync(
+      path.join(root, "packages/kernel/src/errors.ts"),
+      `
+export const CORE_CLAIMED_PREFIXES = ["agent.", "resource."] as const;
+`,
+    );
+    fs.writeFileSync(
+      path.join(root, "packages/backends/protocol/src/index.ts"),
+      `
+export const BACKEND_PROTOCOL_EVENT_PREFIXES = ["dispatch."] as const;
+export const DISPATCH_EVENT_KINDS = { REQUESTED: "dispatch.outbound.requested" } as const;
+`,
+    );
     fs.writeFileSync(
       path.join(root, "packages/owner/src/extension.ts"),
       `
@@ -386,7 +519,7 @@ export const OWNED_EVENTS = {
 } as const;
 export const owner = eventNamespace({
   packageId: "@agent-os/owner",
-  kindPrefixes: [OWNED],
+  kindPrefixes: [OWNED, "resource."],
   version: "0.1.0"
 });
 `,
@@ -400,9 +533,12 @@ tx.append({ kind: "other.bad", scope: "ok", payload: {} });
 `,
     );
     const failures = collectNamespaceFailures(root);
-    if (failures.length !== 1 || !failures[0].includes('"owned.bad"')) {
+    if (
+      failures.filter((failure) => failure.includes('"owned.bad"')).length !== 1 ||
+      !failures.some((failure) => failure.includes('"resource."'))
+    ) {
       return [
-        `event namespace self-test expected exactly one owned.bad failure; observed=${JSON.stringify(
+        `event namespace self-test expected owned.bad and resource overlap failures; observed=${JSON.stringify(
           failures,
         )}`,
       ];

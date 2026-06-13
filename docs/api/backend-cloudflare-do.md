@@ -21,6 +21,8 @@
 - `.:AgentTriggerIntentSpec`
 - `.:AnthropicMessagesSpec`
 - `.:CloudflareAgentEnv`
+- `.:CloudflareAgentDOIntrospectionRpc`
+- `.:CloudflareAgentDOResolvedScope`
 - `.:CloudflareAgentMountPort`
 - `.:CloudflareAttachedStreamFactory`
 - `.:CloudflareAttachedStreamFactoryContext`
@@ -66,6 +68,7 @@
 - `.:QueueDispatchTargetBinding`
 - `.:anthropicMessages`
 - `.:binding`
+- `.:cloudflareAgentDoOpsStubFor`
 - `.:cloudflareAgentMountPort`
 - `.:credential`
 - `.:createAgentDurableObject`

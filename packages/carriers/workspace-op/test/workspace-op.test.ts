@@ -40,6 +40,8 @@ describe("@agent-os/workspace-op", () => {
           toolName: "write_file",
           path: "out.txt",
           content: "redacted from completed payload",
+          envRefs: [{ name: "API_TOKEN", ref: "env:api-token" }],
+          materialRefs: ["credential:workspace-token"],
           claim,
         },
       },
@@ -74,6 +76,8 @@ describe("@agent-os/workspace-op", () => {
     if (projection.status !== "completed") expect.fail("expected completed projection");
     expect(projection.completed.claim.anchorRef.anchorKind).toBe("external_receipt");
     expect(workspaceOperationToolResult(projection.completed)).toEqual(projection.result);
+    expect(projection.request.envRefs).toEqual([{ name: "API_TOKEN", ref: "env:api-token" }]);
+    expect(projection.request.materialRefs).toEqual(["credential:workspace-token"]);
     expect("content" in projection.completed).toBe(false);
   });
 });

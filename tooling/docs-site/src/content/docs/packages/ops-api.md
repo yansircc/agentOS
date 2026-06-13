@@ -11,7 +11,8 @@ Ops HTTP API for runtime projections.
 ## Invariant
 
 Ops API is a terminal adapter. It may expose runtime-derived views, but it does
-not own ledger truth or substrate invariants.
+not own ledger truth, Durable Object binding, or substrate invariants. Concrete
+backends supply the already identity-bound reader adapter.
 
 ## Minimal Usage
 
@@ -19,6 +20,7 @@ Use this package from ops tooling, not from carrier or substrate packages.
 
 ```ts
 import { mountOpsApi } from "@agent-os/ops-api";
+import { cloudflareAgentDoOpsStubFor } from "@agent-os/backend-cloudflare-do";
 ```
 
 ## Verification

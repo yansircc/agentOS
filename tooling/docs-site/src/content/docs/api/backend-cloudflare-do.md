@@ -25,6 +25,8 @@ title: "@agent-os/backend-cloudflare-do Public API Intent"
 - `.:AgentTriggerIntentSpec`
 - `.:AnthropicMessagesSpec`
 - `.:CloudflareAgentEnv`
+- `.:CloudflareAgentDOIntrospectionRpc`
+- `.:CloudflareAgentDOResolvedScope`
 - `.:CloudflareAgentMountPort`
 - `.:CloudflareAttachedStreamFactory`
 - `.:CloudflareAttachedStreamFactoryContext`
@@ -70,6 +72,7 @@ title: "@agent-os/backend-cloudflare-do Public API Intent"
 - `.:QueueDispatchTargetBinding`
 - `.:anthropicMessages`
 - `.:binding`
+- `.:cloudflareAgentDoOpsStubFor`
 - `.:cloudflareAgentMountPort`
 - `.:credential`
 - `.:createAgentDurableObject`

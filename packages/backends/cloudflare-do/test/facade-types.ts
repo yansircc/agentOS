@@ -91,7 +91,6 @@ void agent.submit({
   bindings: defineAgentSubmitBindings({
     tools: { lookup: lookupTool },
     materials: { facade_token: credentialMaterialRef("facade-token") },
-    resolvedMaterials: { facade_token: "resolved-provider-material" },
     context: { input: {}, source: "run-binding" },
     decisionInterrupts: [{ toolName: "lookup", reason: "approval_required" }],
   }),

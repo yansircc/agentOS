@@ -15,6 +15,7 @@
 - `.:WorkspaceOperationRequestedPayload`
 - `.:WorkspaceOperationToolResult`
 - `.:projectWorkspaceOperation`
+- `.:projectWorkspaceOperationSafeLedgerEvent`
 - `.:rejectWorkspaceOperation`
 - `.:settleWorkspaceOperationCompleted`
 - `.:workspaceOpBoundaryContract`

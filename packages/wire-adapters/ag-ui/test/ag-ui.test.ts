@@ -1,5 +1,6 @@
 import { Effect, Schema } from "effect";
 import { describe, expect, it } from "@effect/vitest";
+import { safeLedgerEvent } from "@agent-os/kernel";
 import { defineTool, deterministicToolExecution } from "@agent-os/kernel/tools";
 import { makePreClaim } from "@agent-os/kernel/effect-claim";
 import type { LedgerEvent } from "@agent-os/kernel/types";
@@ -23,7 +24,6 @@ import {
   decodeLedgerEventToAgUiEnvelope,
   encodeAgUiLedgerEventEnvelopeSse,
   framesForAgUiLedgerEnvelope,
-  projectAgUiSafeExtensionPayload,
   projectAgUiFramesToActivities,
   projectAgUiFrames,
   projectLedgerEventToAgUiEnvelope,
@@ -257,7 +257,7 @@ describe("@agent-os/ag-ui", () => {
         type: "TOOL_CALL_ARGS",
         timestamp: 30,
         toolCallId: "call-1",
-        delta: summaryText("tool_arguments", { type: "object", keys: ["city"] }),
+        delta: summaryText("tool_arguments", { type: "string", bytes: 13 }),
       },
       {
         type: "TOOL_CALL_END",
@@ -316,7 +316,7 @@ describe("@agent-os/ag-ui", () => {
         {
           toolCallId: "call-1",
           name: "lookup",
-          args: summaryText("tool_arguments", { type: "object", keys: ["city"] }),
+          args: summaryText("tool_arguments", { type: "string", bytes: 13 }),
           result: summaryText("tool_result", { type: "object", keys: ["temperature"] }),
         },
       ],
@@ -357,7 +357,7 @@ describe("@agent-os/ag-ui", () => {
       type: "TOOL_CALL_ARGS",
       timestamp: 30,
       toolCallId: "call-1",
-      delta: summaryText("tool_arguments", { type: "object", keys: ["city"] }),
+      delta: summaryText("tool_arguments", { type: "string", bytes: 13 }),
     });
     expect(framesForAgUiLedgerEnvelope(envelope).at(0)).toMatchObject({
       eventId: 3,
@@ -422,7 +422,7 @@ describe("@agent-os/ag-ui", () => {
           id: "call-1",
           toolCallId: "call-1",
           name: "lookup",
-          args: summaryText("tool_arguments", { type: "object", keys: ["city"] }),
+          args: summaryText("tool_arguments", { type: "string", bytes: 13 }),
           result: summaryText("tool_result", { type: "object", keys: ["temperature"] }),
           status: "completed",
           startedAt: 30,
@@ -473,7 +473,7 @@ describe("@agent-os/ag-ui", () => {
     ).toThrow();
   });
 
-  it("projects product events only through explicit safe custom extension mapping", () => {
+  it("projects product events only through explicit owner safe event projectors", () => {
     const frames = projectLedgerEventsToAgUiFrames(
       [
         {
@@ -489,16 +489,11 @@ describe("@agent-os/ag-ui", () => {
         },
       ],
       {
-        safeExtensionPayload: {
-          "workspace.file.observed": ["path", { path: "stats.bytes", name: "bytes" }],
-        },
-        projectSafeExtensionEvent: (event) => [
-          {
-            type: "CUSTOM",
-            timestamp: event.ts,
-            name: event.kind,
-            value: { id: event.id, payload: event.safePayload ?? null },
-          },
+        safeEventProjectors: [
+          (event) =>
+            event.kind === "workspace.file.observed"
+              ? safeLedgerEvent(event, { path: "README.md", bytes: 12 })
+              : undefined,
         ],
       },
     );
@@ -507,42 +502,15 @@ describe("@agent-os/ag-ui", () => {
         type: "CUSTOM",
         timestamp: 1,
         name: "workspace.file.observed",
-        value: { id: 1, payload: { path: "README.md", bytes: 12 } },
+        value: {
+          id: 1,
+          kind: "workspace.file.observed",
+          safePayload: { path: "README.md", bytes: 12 },
+        },
       },
     ]);
     expect(JSON.stringify(frames)).not.toContain("not exposed");
     expect(JSON.stringify(frames)).not.toContain("nested secret");
-  });
-
-  it("projects extension payload fields by allowlist without exposing unlisted raw payload", () => {
-    const projected = projectAgUiSafeExtensionPayload(
-      {
-        toolName: "write_file",
-        path: "/output/result.json",
-        content: "raw terminal bytes",
-        terminalArtifact: {
-          schemaId: "zeroy.agent_result.v1",
-          bytes: 100,
-          sha256: "sha256:test",
-        },
-        unsafe: () => "not serializable",
-      },
-      [
-        "toolName",
-        "path",
-        { path: "terminalArtifact.schemaId", name: "schemaId" },
-        { path: "terminalArtifact.bytes", name: "bytes" },
-        "unsafe",
-      ],
-    );
-
-    expect(projected).toEqual({
-      toolName: "write_file",
-      path: "/output/result.json",
-      schemaId: "zeroy.agent_result.v1",
-      bytes: 100,
-    });
-    expect(JSON.stringify(projected)).not.toContain("raw terminal bytes");
   });
 
   it("verifies fixture-owned forbidden literals as regression evidence only", () => {
@@ -612,6 +580,7 @@ describe("@agent-os/ag-ui", () => {
       forwardedProps: { allowed: 1 },
     });
     expect(JSON.stringify(submit)).not.toContain("drop");
+    expect("resolvedMaterials" in submit).toBe(false);
   });
 
   it("rejects AG-UI resume input because it is not a runtime SubmitSpec.resume decision", () => {

@@ -211,6 +211,11 @@
 - `.:ExecutionDomainRegistryValidation`
 - `.:ResolvedToolMaterials`
 - `.:ResolvedToolExecution`
+- `.:RedactedSafeSummaryReason`
+- `.:SafeLedgerEvent`
+- `.:SafeLedgerEventProjector`
+- `.:SafeLedgerPayload`
+- `.:SafeLedgerValue`
 - `.:ToolAccess`
 - `.:ToolEffect`
 - `.:ToolExecution`
@@ -555,8 +560,12 @@ text`
 - `.:resolveStringMaterial`
 - `.:scopeRefKey`
 - `.:runtimeScopeKey`
+- `.:redactedSafeSummary`
+- `.:redactedSafeSummaryText`
 - `.:safeStringify`
 - `.:safeStringifyPretty`
+- `.:safeLedgerEvent`
+- `.:safeValueFromUnknown`
 - `.:settleLived`
 - `.:settleRejected`
 - `.:symbolicSettlementRef`

@@ -49,7 +49,6 @@ export interface SubmitSpec {
   readonly traceContext?: TraceContext;
   readonly effectAuthorityRef: AuthorityRef;
   readonly materials?: Readonly<Record<string, MaterialRef>>;
-  readonly resolvedMaterials?: Readonly<Record<string, ResolvedMaterial>>;
   readonly toolContext?: SubmitToolContext;
   readonly toolIntents?: ReadonlyArray<SubmitToolIntent>;
   readonly receiptBackedTools?: Readonly<Record<string, SubmitReceiptBackedToolBinding>>;
@@ -60,6 +59,7 @@ export interface SubmitSpec {
 export interface InternalSubmitSpec extends SubmitSpec {
   readonly scope: string;
   readonly scopeRef: ScopeRef;
+  readonly resolvedMaterials?: Readonly<Record<string, ResolvedMaterial>>;
 }
 
 export interface SubmitDecisionInterrupt {

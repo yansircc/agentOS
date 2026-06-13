@@ -134,7 +134,6 @@ export const CORE_CLAIMED_PREFIXES = [
   "tool.",
   "quota.",
   "resource_pool.",
-  "resource.",
   "durable_trigger.",
 ] as const;
 

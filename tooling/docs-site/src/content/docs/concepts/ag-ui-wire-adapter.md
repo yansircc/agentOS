@@ -15,10 +15,11 @@ code sources and drifts from the ledger/runtime algebra.
 
 ## Model
 
-Decoded agentOS runtime events are the source for run frames. AG-UI frames are
-derived projections and are never written back to the ledger. Product-owned
-events can appear only through explicit `CUSTOM` extension projectors that
-receive the package-owned safe ledger-event view, not the raw ledger event.
+Owner-owned `SafeLedgerEvent` projections are the source for AG-UI frames.
+Runtime, workspace-job, and workspace-op packages each decide their browser-safe
+payload. AG-UI frames are derived projections and are never written back to the
+ledger. Product-owned events can appear only when their owner supplies a safe
+event projector; AG-UI does not choose raw payload fields.
 
 AG-UI tool declarations are generated from `AgentSchema.projections.agUi`.
 AG-UI tool JSON Schema never creates `Tool.execution`, admission policy, quota,
@@ -35,17 +36,17 @@ ledger payloads.
 
 ### Field Retention
 
-| Source field                     | AG-UI frame                                                     |
-| -------------------------------- | --------------------------------------------------------------- |
-| `agent.run.started.id`           | `RUN_STARTED.runId`                                             |
-| runtime event `scope`            | `RUN_STARTED.threadId` unless caller overrides                  |
-| `llm.response.items.message`     | `TEXT_MESSAGE_*`                                                |
-| `llm.response.items.tool_call`   | `TOOL_CALL_START`, summarized `TOOL_CALL_ARGS`, `TOOL_CALL_END` |
-| `llm.response.usage`             | `CUSTOM: agent-os.llm.usage`                                    |
-| `tool.executed.result`           | summarized `TOOL_CALL_RESULT.content`                           |
-| `agent.run.completed`            | `RUN_FINISHED`                                                  |
-| `agent.aborted.*`                | `RUN_ERROR`                                                     |
-| product/runtime extension events | explicit safe `CUSTOM` projector output                         |
+| Source field                   | AG-UI frame                                                     |
+| ------------------------------ | --------------------------------------------------------------- |
+| `agent.run.started.id`         | `RUN_STARTED.runId`                                             |
+| runtime event `scope`          | `RUN_STARTED.threadId` unless caller overrides                  |
+| `llm.response.items.message`   | `TEXT_MESSAGE_*`                                                |
+| `llm.response.items.tool_call` | `TOOL_CALL_START`, summarized `TOOL_CALL_ARGS`, `TOOL_CALL_END` |
+| `llm.response.usage`           | `CUSTOM: agent-os.llm.usage`                                    |
+| `tool.executed.result`         | summarized `TOOL_CALL_RESULT.content`                           |
+| `agent.run.completed`          | `RUN_FINISHED`                                                  |
+| `agent.aborted.*`              | `RUN_ERROR`                                                     |
+| product/owner safe events      | `CUSTOM` frame from `safePayload`                               |
 
 ### Redaction
 
@@ -56,8 +57,8 @@ forwarded; only an explicit `summaryRef` or a redacted marker is projected.
 Tool arguments, tool results, run input, and run output are projected as
 redacted summaries by default. The package also exposes
 `verifyAgUiFrameSafety()` as regression evidence for fixture-owned forbidden
-literals and patterns, but egress safety comes from the allow-list mappers, not
-from deny-list scanning.
+literals and patterns, but egress safety comes from owner-owned safe event
+projectors, not from deny-list scanning.
 
 ### Compatibility Contract
 

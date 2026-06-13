@@ -15,6 +15,9 @@ const files = [
   "packages/backends/cloudflare-do/test/facade-types.ts",
   "packages/backends/cloudflare-do/test/test-worker.ts",
   "packages/runtime-protocol/src/bindings.ts",
+  "packages/runtime-protocol/src/capability.ts",
+  "packages/composers/workspace-binding/src/index.ts",
+  "packages/wire-adapters/ag-ui/src/index.ts",
 ];
 
 const forbidden = [
@@ -54,9 +57,9 @@ const collectFailures = (root = repoRoot) => {
       "packages/backends/cloudflare-do/src/agent-do.ts: submit binding context is not forwarded",
     );
   }
-  if (!/resolvedMaterials: \{ \.\.\.bindings\.resolvedMaterials \}/.test(agentDo)) {
+  if (/resolvedMaterials:\s*\{\s*\.\.\.bindings\.resolvedMaterials\s*\}/.test(agentDo)) {
     failures.push(
-      "packages/backends/cloudflare-do/src/agent-do.ts: submit binding resolvedMaterials is not forwarded",
+      "packages/backends/cloudflare-do/src/agent-do.ts: public submit binding forwards resolvedMaterials",
     );
   }
   if (!/decisionInterrupts: bindings\.decisionInterrupts/.test(agentDo)) {
@@ -76,7 +79,6 @@ const collectFailures = (root = repoRoot) => {
     );
   }
   for (const [field, message] of [
-    ["resolvedMaterials", "resolved material values"],
     ["context", "run context"],
     ["decisionInterrupts", "decision interrupts"],
   ]) {
@@ -87,9 +89,23 @@ const collectFailures = (root = repoRoot) => {
     }
   }
   const submit = read(root, "packages/runtime-protocol/src/submit.ts");
-  if (!/readonly resolvedMaterials\?: Readonly<Record<string, ResolvedMaterial>>/.test(submit)) {
+  const publicSubmitBody = submit.slice(
+    submit.indexOf("export interface SubmitSpec"),
+    submit.indexOf("export interface InternalSubmitSpec"),
+  );
+  if (/resolvedMaterials/.test(publicSubmitBody)) {
     failures.push(
-      "packages/runtime-protocol/src/submit.ts: SubmitSpec lacks submit-scoped resolvedMaterials",
+      "packages/runtime-protocol/src/submit.ts: public SubmitSpec exposes resolvedMaterials",
+    );
+  }
+  const internalSubmitBody = submit.slice(submit.indexOf("export interface InternalSubmitSpec"));
+  if (
+    !/readonly resolvedMaterials\?: Readonly<Record<string, ResolvedMaterial>>/.test(
+      internalSubmitBody,
+    )
+  ) {
+    failures.push(
+      "packages/runtime-protocol/src/submit.ts: InternalSubmitSpec lacks server-only resolvedMaterials",
     );
   }
   const runtime = read(root, "packages/runtime/src/submit-agent.ts");
@@ -105,11 +121,35 @@ const collectFailures = (root = repoRoot) => {
   if (!/defineAgentSubmitBindings/.test(facadeSubmitTest)) {
     failures.push("facade submit test does not prove run-scoped bindings");
   }
-  if (!/resolvedMaterials:/.test(facadeSubmitTest)) {
-    failures.push("facade submit test does not prove submit-scoped resolved materials");
+  if (/resolvedMaterials:\s*\{/.test(facadeSubmitTest)) {
+    failures.push("facade submit test injects public resolvedMaterials");
   }
   if (!/decisionInterrupts:/.test(facadeSubmitTest)) {
     failures.push("facade submit test does not prove submit-scoped decision interrupts");
+  }
+  const bindingsSource = read(root, "packages/runtime-protocol/src/bindings.ts");
+  if (/readonly resolvedMaterials\?/.test(bindingsSource)) {
+    failures.push(
+      "packages/runtime-protocol/src/bindings.ts: AgentSubmitBindings exposes resolvedMaterials",
+    );
+  }
+  const capability = read(root, "packages/runtime-protocol/src/capability.ts");
+  if (/options\.resolvedMaterials|resolvedMaterials:\s*resolvedMaterials/.test(capability)) {
+    failures.push(
+      "packages/runtime-protocol/src/capability.ts: capability binding emits resolvedMaterials",
+    );
+  }
+  const workspaceBinding = read(root, "packages/composers/workspace-binding/src/index.ts");
+  if (/resolvedWorkspace|resolvedMaterials:\s*\{\s*workspace/.test(workspaceBinding)) {
+    failures.push(
+      "packages/composers/workspace-binding/src/index.ts: workspace binding emits resolvedMaterials",
+    );
+  }
+  const agui = read(root, "packages/wire-adapters/ag-ui/src/index.ts");
+  if (/defaults\.resolvedMaterials|resolvedMaterials:\s*defaults\.resolvedMaterials/.test(agui)) {
+    failures.push(
+      "packages/wire-adapters/ag-ui/src/index.ts: AG-UI defaults forward resolvedMaterials",
+    );
   }
   return failures;
 };
@@ -134,7 +174,6 @@ const collectSelfTestFailures = () => {
       protected submitWithBindings() {
         return this.submitFull({
           context: bindings.context ?? { input: spec.input },
-          resolvedMaterials: { ...bindings.resolvedMaterials },
           decisionInterrupts: bindings.decisionInterrupts,
           resume: spec.resume,
         });
@@ -144,7 +183,6 @@ const collectSelfTestFailures = () => {
       root,
       "packages/runtime-protocol/src/bindings.ts",
       `export interface AgentSubmitBindings {
-        readonly resolvedMaterials?: Readonly<Record<string, ResolvedMaterial>>;
         readonly context?: Record<string, unknown>;
         readonly decisionInterrupts?: ReadonlyArray<SubmitDecisionInterrupt>;
       }`,
@@ -152,7 +190,7 @@ const collectSelfTestFailures = () => {
     writeFixture(
       root,
       "packages/runtime-protocol/src/submit.ts",
-      "export interface SubmitSpec { readonly resolvedMaterials?: Readonly<Record<string, ResolvedMaterial>>; }",
+      "export interface SubmitSpec { readonly materials?: unknown; }\nexport interface InternalSubmitSpec extends SubmitSpec { readonly resolvedMaterials?: Readonly<Record<string, ResolvedMaterial>>; }",
     );
     writeFixture(
       root,
@@ -162,7 +200,7 @@ const collectSelfTestFailures = () => {
     writeFixture(
       root,
       "packages/backends/cloudflare-do/test/facade-submit.worker.test.ts",
-      "defineAgentSubmitBindings({ tools: {}, resolvedMaterials: {}, decisionInterrupts: [] });",
+      "defineAgentSubmitBindings({ tools: {}, decisionInterrupts: [] });",
     );
     const baseline = collectFailures(root);
     if (baseline.length > 0) {
@@ -176,6 +214,26 @@ const collectSelfTestFailures = () => {
     const rejected = collectFailures(root);
     if (!rejected.some((failure) => failure.includes("_submitDefaults"))) {
       return [`facade bindings mutation fixture was not rejected: ${JSON.stringify(rejected)}`];
+    }
+    writeFixture(root, "packages/backends/cloudflare-do/src/facade.ts", "");
+    writeFixture(
+      root,
+      "packages/runtime-protocol/src/bindings.ts",
+      `export interface AgentSubmitBindings {
+        readonly resolvedMaterials?: Readonly<Record<string, ResolvedMaterial>>;
+        readonly context?: Record<string, unknown>;
+        readonly decisionInterrupts?: ReadonlyArray<SubmitDecisionInterrupt>;
+      }`,
+    );
+    const publicResolvedRejected = collectFailures(root);
+    if (
+      !publicResolvedRejected.some((failure) => failure.includes("AgentSubmitBindings exposes"))
+    ) {
+      return [
+        `public resolvedMaterials mutation fixture was not rejected: ${JSON.stringify(
+          publicResolvedRejected,
+        )}`,
+      ];
     }
     writeFixture(root, "packages/backends/cloudflare-do/src/facade.ts", "");
     writeFixture(

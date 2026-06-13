@@ -523,6 +523,14 @@ describe("§6.3 OpsAuth is mandatory", () => {
     expect(() => mountOpsApi(missingResolver)).toThrow(/scopeResolver is required/);
   });
 
+  it("mountOpsApi without a backend-owned reader adapter throws at construction", () => {
+    const missingStubFor = {
+      scopeResolver: new FakeResolver(new Map()),
+      auth: new FakeAuth([]),
+    } as unknown as MountOpsApiOptions;
+    expect(() => mountOpsApi(missingStubFor)).toThrow(/stubFor is required/);
+  });
+
   it("missing principal returns 401, never 200", async () => {
     const handler = makeHandler();
     const res = await get(handler, "/__ops/api/scopes");

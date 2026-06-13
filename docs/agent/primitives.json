@@ -67,7 +67,7 @@
       "sourceFile": "packages/wire-adapters/ag-ui/src/index.ts",
       "summary": "Projects one typed ledger event into a browser-safe AG-UI envelope.",
       "aliases": [],
-      "invariants": ["invariant.algebra.single-code-source"],
+      "invariants": ["invariant.boundary.owner-owned-safe-projection"],
       "decisions": [],
       "docs": "docs/concepts/ag-ui-wire-adapter.md",
       "testEvidence": {
@@ -84,7 +84,7 @@
       "sourceFile": "packages/wire-adapters/ag-ui/src/index.ts",
       "summary": "Transports ledger SSE events as AG-UI SSE envelopes.",
       "aliases": [],
-      "invariants": ["invariant.algebra.single-code-source"],
+      "invariants": ["invariant.boundary.owner-owned-safe-projection"],
       "decisions": [],
       "docs": "docs/concepts/ag-ui-wire-adapter.md",
       "testEvidence": {
@@ -534,6 +534,26 @@
       "docs": "docs/boundary-contract.md",
       "testEvidence": {
         "tests": ["packages/kernel/test/effect-claim.test.ts"]
+      }
+    },
+    {
+      "id": "primitive.kernel.SafeLedgerEvent",
+      "package": "@agent-os/kernel",
+      "packagePath": "packages/kernel",
+      "entrypoints": ["."],
+      "symbol": "SafeLedgerEvent",
+      "exportKey": ".:SafeLedgerEvent",
+      "sourceFile": "packages/kernel/src/safe-ledger-event.ts",
+      "summary": "Owner-owned browser read projection for one durable ledger event.",
+      "aliases": [],
+      "invariants": ["invariant.boundary.owner-owned-safe-projection"],
+      "decisions": [],
+      "docs": "docs/concepts/durable-truth.md",
+      "testEvidence": {
+        "tests": [
+          "packages/wire-adapters/ag-ui/test/ag-ui.test.ts",
+          "packages/wire-adapters/ag-ui/test/workspace-agui-integration.test.ts"
+        ]
       }
     },
     {

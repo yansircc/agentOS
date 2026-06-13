@@ -17,6 +17,7 @@ const packageLinks = {
   "decision-gate": "packages/carriers/decision-gate",
   kernel: "packages/kernel",
   "llm-protocol": "packages/llm-protocol",
+  "ops-api": "tooling/ops-api",
   runtime: "packages/runtime",
   "runtime-protocol": "packages/runtime-protocol",
   "run-stream": "packages/composers/run-stream",

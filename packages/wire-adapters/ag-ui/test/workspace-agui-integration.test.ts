@@ -119,7 +119,6 @@ describe("Cloudflare workspace tools to AG-UI integration fixture", () => {
           tools: bindings.tools ?? {},
           executionDomains: bindings.executionDomains,
           materials: bindings.materials,
-          resolvedMaterials: bindings.resolvedMaterials,
           toolContext: bindings.toolContext,
           toolIntents: bindings.toolIntents,
           receiptBackedTools: bindings.receiptBackedTools,
@@ -140,7 +139,7 @@ describe("Cloudflare workspace tools to AG-UI integration fixture", () => {
           { domain: env.domain, replay: { access: "read", witness: "snapshot" } },
           { domain: env.domain, replay: { access: "write", witness: "receipt" } },
         ]);
-        expect(submit.resolvedMaterials?.workspace).toBe(env);
+        expect("resolvedMaterials" in submit).toBe(false);
         expect(submit.toolIntents).toEqual([
           expect.objectContaining({ kind: WORKSPACE_OP_KIND.REQUESTED }),
         ]);
@@ -317,17 +316,6 @@ describe("Cloudflare workspace tools to AG-UI integration fixture", () => {
         ];
         const frames = projectLedgerEventsToAgUiFrames([...runtimeEvents, ...workspaceEvents], {
           threadId: input.threadId,
-          projectSafeExtensionEvent: (event) =>
-            event.kind.startsWith("workspace_op.")
-              ? [
-                  {
-                    type: "CUSTOM",
-                    timestamp: event.ts,
-                    name: event.kind,
-                    value: { id: event.id, kind: event.kind },
-                  },
-                ]
-              : [],
         });
 
         expect(projectAgUiFrames(frames)).toMatchObject({

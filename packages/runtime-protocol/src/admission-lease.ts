@@ -64,13 +64,20 @@ export type CapabilityLease =
 
 export type AdmissionImpact = "lease-bearing" | "reinforcement";
 
+export const LLM_STRUCTURED_EVIDENCE_EVENT = "llm.structured.evidence";
+export const LLM_STRUCTURED_INVALIDATE_EVENT = "llm.structured.invalidate";
+export const LLM_STRUCTURED_EVENT_KINDS = [
+  LLM_STRUCTURED_EVIDENCE_EVENT,
+  LLM_STRUCTURED_INVALIDATE_EVENT,
+] as const;
+
 // Reconstructed evidence-row / barrier-row from `events` table.
 // Exported (with `Row` suffix) so contract tests can construct projection
 // inputs without going through the IO layer. Apps should not import these.
 export type EvidenceRow = {
   readonly id: number;
   readonly ts: number;
-  readonly kind: "llm.structured.evidence";
+  readonly kind: typeof LLM_STRUCTURED_EVIDENCE_EVENT;
   readonly key: AttemptKey;
   readonly stimulusKind: "probe" | "live";
   readonly outcome: Outcome;
@@ -80,7 +87,7 @@ export type EvidenceRow = {
 export type BarrierRow = {
   readonly id: number;
   readonly ts: number;
-  readonly kind: "llm.structured.invalidate";
+  readonly kind: typeof LLM_STRUCTURED_INVALIDATE_EVENT;
   readonly key: Partial<AttemptKey>;
 };
 

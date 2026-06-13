@@ -40,11 +40,21 @@ import { projectWorkspaceJobObservability } from "../src/workspace-job-observabi
 import {
   WORKSPACE_JOB_FACT_OWNER,
   WORKSPACE_JOB_KIND,
+  settleWorkspaceJobArtifactReadbackVerified,
+  settleWorkspaceJobArtifactWritten,
+  settleWorkspaceJobSeedWritten,
+  settleWorkspaceJobTerminalFinalized,
+  workspaceJobArtifactReadbackVerifiedPayload,
+  workspaceJobArtifactWrittenPayload,
   workspaceJobRequestedPayload,
+  workspaceJobSeedWrittenPayload,
+  workspaceJobTerminalFinalizedPayload,
 } from "@agent-os/workspace-job";
 import {
   EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
   RUNTIME_FACT_OWNER,
+  agentRunCompletedEvent,
+  agentRunStartedEvent,
   type SubmitSpec,
 } from "@agent-os/runtime-protocol";
 
@@ -280,6 +290,78 @@ const makeJobSpec = (overrides: Partial<RunWorkspaceJobSpec> = {}): RunWorkspace
   ...overrides,
 });
 
+const workspaceJobEvent = (id: number, kind: string, payload: unknown): LedgerEvent => ({
+  id,
+  ts: id * 10,
+  kind,
+  scopeRef: identity.scopeRef,
+  effectAuthorityRef: identity.effectAuthorityRef,
+  factOwnerRef: WORKSPACE_JOB_FACT_OWNER,
+  payload,
+});
+
+const runtimeEvent = (
+  id: number,
+  spec: ReturnType<typeof agentRunStartedEvent> | ReturnType<typeof agentRunCompletedEvent>,
+): LedgerEvent => ({
+  id,
+  ts: id * 10,
+  kind: spec.kind,
+  scopeRef: spec.scopeRef,
+  effectAuthorityRef: spec.effectAuthorityRef,
+  factOwnerRef: RUNTIME_FACT_OWNER,
+  payload: spec.payload,
+});
+
+const seedRequestedAndSubmitFacts = (
+  services: ReturnType<typeof makeServices>,
+  submitRunId = 50,
+) => {
+  const claim = makePreClaim({
+    operationRef: "workspace_job:job-1",
+    scopeRef: identity.scopeRef,
+    effectAuthorityRef: identity.effectAuthorityRef,
+    originRef: { originId: "create-1", originKind: "workspace_job" },
+  });
+  services.events.push(
+    workspaceJobEvent(
+      10,
+      WORKSPACE_JOB_KIND.REQUESTED,
+      workspaceJobRequestedPayload({
+        runId: "job-1",
+        idempotencyKey: "create-1",
+        requestedBy: "zeroy",
+        terminalSchemaId: "zeroy.agent_command_result.v1",
+        claim,
+      }),
+    ),
+    runtimeEvent(submitRunId, agentRunStartedEvent({ ...identity, intent: "write code" })),
+    runtimeEvent(
+      submitRunId + 1,
+      agentRunCompletedEvent({
+        ...identity,
+        runId: submitRunId,
+        final: "done",
+        output: "done",
+        outputKind: "text",
+        tokensUsed: 2,
+      }),
+    ),
+    workspaceJobEvent(
+      60,
+      WORKSPACE_JOB_KIND.SEED_WRITTEN,
+      workspaceJobSeedWrittenPayload({
+        requestedEventId: 10,
+        runId: "job-1",
+        idempotencyKey: "create-1",
+        seedPaths: ["/work/context.json"],
+        claim: settleWorkspaceJobSeedWritten(claim, { runId: "job-1", requestedEventId: 10 }),
+      }),
+    ),
+  );
+  return { claim, submitRunId };
+};
+
 describe("runWorkspaceJobEffect", () => {
   it.effect(
     "verifies finalized bytes and commits a verified projection digest for delivery bytes",
@@ -430,7 +512,7 @@ describe("runWorkspaceJobEffect", () => {
     }),
   );
 
-  it.effect("returns the existing running run for duplicate idempotency keys", () =>
+  it.effect("resumes an existing requested job instead of returning bare running projection", () =>
     Effect.gen(function* () {
       const services = makeServices();
       let seedWrites = 0;
@@ -478,16 +560,272 @@ describe("runWorkspaceJobEffect", () => {
       );
 
       expect(projection).toMatchObject({
-        status: "running",
+        status: "verified",
         runId: "job-1",
         requestedEventId: 10,
         request: { idempotencyKey: "create-1" },
       });
-      expect(services.llmRequests).toHaveLength(0);
-      expect(seedWrites).toBe(0);
-      expect(buildCalls).toBe(0);
+      expect(services.llmRequests).toHaveLength(1);
+      expect(seedWrites).toBe(1);
+      expect(buildCalls).toBe(1);
       expect(
         services.events.filter((event) => event.kind === WORKSPACE_JOB_KIND.REQUESTED),
+      ).toHaveLength(1);
+    }),
+  );
+
+  it.effect("resumes after artifact write without rebuilding or rewriting artifact", () =>
+    Effect.gen(function* () {
+      const services = makeServices();
+      const { claim, submitRunId } = seedRequestedAndSubmitFacts(services);
+      const sha256 = `sha256:${yield* Effect.promise(() => sha256Text("finalized delivery bytes"))}`;
+      const artifactRef = "workspace-job://job-1/output/result.json";
+      services.events.push(
+        workspaceJobEvent(
+          61,
+          WORKSPACE_JOB_KIND.ARTIFACT_WRITTEN,
+          workspaceJobArtifactWrittenPayload({
+            requestedEventId: 10,
+            runId: "job-1",
+            idempotencyKey: "create-1",
+            path: "/output/result.json",
+            artifactRef,
+            submitRunId,
+            schemaId: "zeroy.agent_command_result.v1",
+            bytes: 24,
+            sha256,
+            claim: settleWorkspaceJobArtifactWritten(claim, {
+              runId: "job-1",
+              requestedEventId: 10,
+              artifactRef,
+            }),
+          }),
+        ),
+      );
+      let seedWrites = 0;
+      let buildCalls = 0;
+      let writeCalls = 0;
+      let readCalls = 0;
+
+      const projection = yield* runJob(
+        makeJobSpec({
+          dataPlane: makeDataPlane({
+            writeSeedFile: async () => {
+              seedWrites += 1;
+            },
+            buildTerminalArtifact: async () => {
+              buildCalls += 1;
+              return { schemaId: "zeroy.agent_command_result.v1", bytes: "rebuilt" };
+            },
+            writeTerminalArtifact: async () => {
+              writeCalls += 1;
+              return { artifactRef: "workspace-job://job-1/output/rewritten.json" };
+            },
+            readTerminalArtifact: async () => {
+              readCalls += 1;
+              return "finalized delivery bytes";
+            },
+          }),
+        }),
+        services,
+      );
+
+      expect(projection.status).toBe("verified");
+      expect(seedWrites).toBe(0);
+      expect(buildCalls).toBe(0);
+      expect(writeCalls).toBe(0);
+      expect(readCalls).toBe(1);
+      expect(
+        services.events.filter(
+          (event) => event.kind === WORKSPACE_JOB_KIND.ARTIFACT_READBACK_VERIFIED,
+        ),
+      ).toHaveLength(1);
+      expect(
+        services.events.filter((event) => event.kind === WORKSPACE_JOB_KIND.TERMINAL_FINALIZED),
+      ).toHaveLength(1);
+    }),
+  );
+
+  it.effect("resumes after artifact readback without duplicating readback fact", () =>
+    Effect.gen(function* () {
+      const services = makeServices();
+      const { claim, submitRunId } = seedRequestedAndSubmitFacts(services);
+      const sha256 = `sha256:${yield* Effect.promise(() => sha256Text("finalized delivery bytes"))}`;
+      const artifactRef = "workspace-job://job-1/output/result.json";
+      services.events.push(
+        workspaceJobEvent(
+          61,
+          WORKSPACE_JOB_KIND.ARTIFACT_WRITTEN,
+          workspaceJobArtifactWrittenPayload({
+            requestedEventId: 10,
+            runId: "job-1",
+            idempotencyKey: "create-1",
+            path: "/output/result.json",
+            artifactRef,
+            submitRunId,
+            schemaId: "zeroy.agent_command_result.v1",
+            bytes: 24,
+            sha256,
+            claim: settleWorkspaceJobArtifactWritten(claim, {
+              runId: "job-1",
+              requestedEventId: 10,
+              artifactRef,
+            }),
+          }),
+        ),
+        workspaceJobEvent(
+          62,
+          WORKSPACE_JOB_KIND.ARTIFACT_READBACK_VERIFIED,
+          workspaceJobArtifactReadbackVerifiedPayload({
+            requestedEventId: 10,
+            runId: "job-1",
+            idempotencyKey: "create-1",
+            path: "/output/result.json",
+            artifactRef,
+            submitRunId,
+            schemaId: "zeroy.agent_command_result.v1",
+            bytes: 24,
+            sha256,
+            claim: settleWorkspaceJobArtifactReadbackVerified(claim, {
+              runId: "job-1",
+              requestedEventId: 10,
+              artifactRef,
+              sha256,
+            }),
+          }),
+        ),
+      );
+      let buildCalls = 0;
+      let writeCalls = 0;
+      let readCalls = 0;
+
+      const projection = yield* runJob(
+        makeJobSpec({
+          dataPlane: makeDataPlane({
+            buildTerminalArtifact: async () => {
+              buildCalls += 1;
+              return { schemaId: "zeroy.agent_command_result.v1", bytes: "rebuilt" };
+            },
+            writeTerminalArtifact: async () => {
+              writeCalls += 1;
+              return { artifactRef: "workspace-job://job-1/output/rewritten.json" };
+            },
+            readTerminalArtifact: async () => {
+              readCalls += 1;
+              return "finalized delivery bytes";
+            },
+          }),
+        }),
+        services,
+      );
+
+      expect(projection.status).toBe("verified");
+      expect(buildCalls).toBe(0);
+      expect(writeCalls).toBe(0);
+      expect(readCalls).toBe(1);
+      expect(
+        services.events.filter(
+          (event) => event.kind === WORKSPACE_JOB_KIND.ARTIFACT_READBACK_VERIFIED,
+        ),
+      ).toHaveLength(1);
+      expect(
+        services.events.filter((event) => event.kind === WORKSPACE_JOB_KIND.TERMINAL_FINALIZED),
+      ).toHaveLength(1);
+    }),
+  );
+
+  it.effect("resumes after terminal finalize without duplicating finalized fact", () =>
+    Effect.gen(function* () {
+      const services = makeServices();
+      const { claim, submitRunId } = seedRequestedAndSubmitFacts(services);
+      const sha256 = `sha256:${yield* Effect.promise(() => sha256Text("finalized delivery bytes"))}`;
+      const artifactRef = "workspace-job://job-1/output/result.json";
+      const terminalArtifact = {
+        artifactRef,
+        path: "/output/result.json",
+        schemaId: "zeroy.agent_command_result.v1",
+        sha256,
+        bytes: 24,
+      };
+      services.events.push(
+        workspaceJobEvent(
+          61,
+          WORKSPACE_JOB_KIND.ARTIFACT_WRITTEN,
+          workspaceJobArtifactWrittenPayload({
+            requestedEventId: 10,
+            runId: "job-1",
+            idempotencyKey: "create-1",
+            path: terminalArtifact.path,
+            artifactRef,
+            submitRunId,
+            schemaId: terminalArtifact.schemaId,
+            bytes: terminalArtifact.bytes,
+            sha256,
+            claim: settleWorkspaceJobArtifactWritten(claim, {
+              runId: "job-1",
+              requestedEventId: 10,
+              artifactRef,
+            }),
+          }),
+        ),
+        workspaceJobEvent(
+          62,
+          WORKSPACE_JOB_KIND.ARTIFACT_READBACK_VERIFIED,
+          workspaceJobArtifactReadbackVerifiedPayload({
+            requestedEventId: 10,
+            runId: "job-1",
+            idempotencyKey: "create-1",
+            path: terminalArtifact.path,
+            artifactRef,
+            submitRunId,
+            schemaId: terminalArtifact.schemaId,
+            bytes: terminalArtifact.bytes,
+            sha256,
+            claim: settleWorkspaceJobArtifactReadbackVerified(claim, {
+              runId: "job-1",
+              requestedEventId: 10,
+              artifactRef,
+              sha256,
+            }),
+          }),
+        ),
+        workspaceJobEvent(
+          63,
+          WORKSPACE_JOB_KIND.TERMINAL_FINALIZED,
+          workspaceJobTerminalFinalizedPayload({
+            requestedEventId: 10,
+            runId: "job-1",
+            idempotencyKey: "create-1",
+            terminalArtifact,
+            claim: settleWorkspaceJobTerminalFinalized(claim, {
+              runId: "job-1",
+              requestedEventId: 10,
+              artifactRef,
+            }),
+          }),
+        ),
+      );
+      let readCalls = 0;
+
+      const projection = yield* runJob(
+        makeJobSpec({
+          dataPlane: makeDataPlane({
+            readTerminalArtifact: async () => {
+              readCalls += 1;
+              return "finalized delivery bytes";
+            },
+          }),
+        }),
+        services,
+      );
+
+      expect(projection.status).toBe("verified");
+      expect(readCalls).toBe(1);
+      expect(
+        services.events.filter((event) => event.kind === WORKSPACE_JOB_KIND.TERMINAL_FINALIZED),
+      ).toHaveLength(1);
+      expect(
+        services.events.filter((event) => event.kind === WORKSPACE_JOB_KIND.VERIFIED),
       ).toHaveLength(1);
     }),
   );

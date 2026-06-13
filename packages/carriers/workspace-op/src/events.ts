@@ -118,6 +118,30 @@ const numberField = (payload: Record<string, unknown>, key: string): number | un
 const booleanField = (payload: Record<string, unknown>, key: string): boolean | undefined =>
   typeof payload[key] === "boolean" ? payload[key] : undefined;
 
+const stringArrayField = (
+  payload: Record<string, unknown>,
+  key: string,
+): ReadonlyArray<string> | undefined => {
+  const value = payload[key];
+  if (!Array.isArray(value)) return undefined;
+  const out = value.filter((item): item is string => typeof item === "string" && item.length > 0);
+  return out.length === value.length ? out : undefined;
+};
+
+const envRefsField = (
+  payload: Record<string, unknown>,
+): NonNullable<WorkspaceOperationRequestedPayload["envRefs"]> | undefined => {
+  const value = payload.envRefs;
+  if (!Array.isArray(value)) return undefined;
+  const out = value.flatMap((item) => {
+    if (!Predicate.isRecord(item)) return [];
+    const name = typeof item.name === "string" && item.name.length > 0 ? item.name : undefined;
+    const ref = typeof item.ref === "string" && item.ref.length > 0 ? item.ref : undefined;
+    return name === undefined || ref === undefined ? [] : [{ name, ref }];
+  });
+  return out.length === value.length ? out : undefined;
+};
+
 const operationNameFrom = (value: unknown): WorkspaceOperationName | undefined =>
   value === "write_file" ||
   value === "edit_file" ||
@@ -174,6 +198,10 @@ const requestFrom = (
     ...(numberField(payload, "timeoutMs") === undefined
       ? {}
       : { timeoutMs: numberField(payload, "timeoutMs") }),
+    ...(envRefsField(payload) === undefined ? {} : { envRefs: envRefsField(payload) }),
+    ...(stringArrayField(payload, "materialRefs") === undefined
+      ? {}
+      : { materialRefs: stringArrayField(payload, "materialRefs") }),
     ...(Predicate.isRecord(payload.limits) ? { limits: payload.limits as never } : {}),
     claim,
   };

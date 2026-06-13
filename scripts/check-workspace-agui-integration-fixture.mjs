@@ -38,7 +38,6 @@ const collectFailures = (root = repoRoot) => {
 
   requireTerms(failures, agui, files.agui, [
     "defaults.executionDomains",
-    "defaults.resolvedMaterials",
     "defaults.toolContext",
     "defaults.toolIntents",
     "defaults.receiptBackedTools",
@@ -82,10 +81,15 @@ const collectFailures = (root = repoRoot) => {
     [/content:\s*readResult\.content/u, "fixture projects raw read content to AG-UI"],
   ]);
 
+  for (const dep of ["@agent-os/workspace-job", "@agent-os/workspace-op"]) {
+    if (aguiPackage.dependencies?.[dep] !== "workspace:*") {
+      failures.push(`${files.aguiPackage}: missing dependency ${dep}`);
+    }
+  }
+
   for (const dep of [
     "@agent-os/workspace-binding",
     "@agent-os/workspace-env-cloudflare",
-    "@agent-os/workspace-op",
     "@agent-os/workspace-op-local",
   ]) {
     if (aguiPackage.devDependencies?.[dep] !== "workspace:*") {
@@ -106,7 +110,6 @@ const positiveFixtures = {
   [files.agui]: `
 export const agUiRunAgentInputToSubmitSpec = (input, defaults) => ({
   executionDomains: defaults.executionDomains,
-  resolvedMaterials: defaults.resolvedMaterials,
   toolContext: defaults.toolContext,
   toolIntents: defaults.toolIntents,
   receiptBackedTools: defaults.receiptBackedTools,
@@ -146,10 +149,13 @@ EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON;
 const expected = { category: "missing_execution_path" };
 `,
   [files.aguiPackage]: JSON.stringify({
+    dependencies: {
+      "@agent-os/workspace-job": "workspace:*",
+      "@agent-os/workspace-op": "workspace:*",
+    },
     devDependencies: {
       "@agent-os/workspace-binding": "workspace:*",
       "@agent-os/workspace-env-cloudflare": "workspace:*",
-      "@agent-os/workspace-op": "workspace:*",
       "@agent-os/workspace-op-local": "workspace:*",
     },
   }),

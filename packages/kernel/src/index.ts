@@ -68,6 +68,7 @@ export * from "./errors";
 export * from "./quota";
 export * from "./ref-resolver";
 export * from "./runtime-scope";
+export * from "./safe-ledger-event";
 export * from "./settlement-contract";
 export * from "./tools";
 export * from "./types";

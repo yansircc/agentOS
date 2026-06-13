@@ -19,13 +19,14 @@
     "@agent-os/kernel": "workspace:*",
     "@agent-os/runtime-protocol": "workspace:*",
     "@agent-os/sse-http": "workspace:*",
+    "@agent-os/workspace-job": "workspace:*",
+    "@agent-os/workspace-op": "workspace:*",
     "effect": "catalog:"
   },
   "devDependencies": {
     "@agent-os/runtime": "workspace:*",
     "@agent-os/workspace-binding": "workspace:*",
     "@agent-os/workspace-env-cloudflare": "workspace:*",
-    "@agent-os/workspace-op": "workspace:*",
     "@agent-os/workspace-op-local": "workspace:*",
     "@effect/vitest": "catalog:",
     "typescript": "catalog:",

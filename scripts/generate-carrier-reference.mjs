@@ -23,6 +23,13 @@ const isCarrier = (value) =>
   typeof value.boundaryPackage === "function" &&
   typeof value.decode === "function";
 
+const isEventNamespace = (value) =>
+  isRecord(value) &&
+  typeof value.packageId === "string" &&
+  Array.isArray(value.kindPrefixes) &&
+  value.kindPrefixes.every((prefix) => typeof prefix === "string" && prefix.length > 0) &&
+  typeof value.version === "string";
+
 const escapeCell = (value) => String(value).replaceAll("|", "\\|").replaceAll("\n", "<br>");
 
 const table = (headers, rows) => {
@@ -140,6 +147,53 @@ const validateCarrier = (carrier, pkg) => {
   }
 };
 
+const validateNamespace = (namespace, pkg) => {
+  if (namespace.packageId !== pkg.name) {
+    failures.push(
+      `${pkg.name}: namespace packageId ${namespace.packageId} does not match surface name`,
+    );
+  }
+};
+
+const carrierModuleEntries = async (pkg) => {
+  const files = ["src/definition.ts", "src/extension.ts"]
+    .map((relative) => path.join(root, pkg.path, relative))
+    .filter((file) => fs.existsSync(file));
+  const entries = [];
+  for (const file of files) {
+    const mod = await import(pathToFileURL(file).href);
+    for (const [exportName, value] of Object.entries(mod)) {
+      entries.push({ exportName, value, file });
+    }
+  }
+  return entries;
+};
+
+const exportedNamespace = (entry, version) => {
+  if (isEventNamespace(entry.value)) return entry.value;
+  if (typeof entry.value !== "function" || !entry.exportName.endsWith("EventNamespace")) {
+    return undefined;
+  }
+  const value = entry.value(version);
+  return isEventNamespace(value) ? value : undefined;
+};
+
+/** @returns {string[]} */
+const namespaceEventKinds = (entries, prefixes) => {
+  /** @type {Set<string>} */
+  const events = new Set();
+  for (const entry of entries) {
+    if (!isRecord(entry.value)) continue;
+    if (!entry.exportName.endsWith("EVENTS") && !entry.exportName.endsWith("KIND")) continue;
+    for (const value of Object.values(entry.value)) {
+      if (typeof value === "string" && prefixes.some((prefix) => value.startsWith(prefix))) {
+        events.add(value);
+      }
+    }
+  }
+  return [...events].sort((left, right) => left.localeCompare(right));
+};
+
 const discoverCarriers = async () => {
   const carriers = [];
   const seenPackageIds = new Set();
@@ -149,43 +203,79 @@ const discoverCarriers = async () => {
   );
 
   for (const pkg of carrierPackages) {
-    const extension = path.join(root, pkg.path, "src/extension.ts");
-    const definition = path.join(root, pkg.path, "src/definition.ts");
-    if (!fs.existsSync(extension)) continue;
-
-    const mod = await import(pathToFileURL(extension).href);
-    const exportedCarriers = Object.entries(mod)
-      .filter(([, value]) => isCarrier(value))
-      .map(([exportName, carrier]) => ({ exportName, carrier }));
-
-    if (fs.existsSync(definition) && exportedCarriers.length === 0) {
-      failures.push(
-        `${pkg.name}: definition.ts exists but extension.ts exports no carrier-shaped value`,
-      );
-      continue;
+    const entries = await carrierModuleEntries(pkg);
+    const exportedCarriers = [];
+    const seenCarrierIds = new Set();
+    for (const entry of entries) {
+      if (!isCarrier(entry.value) || seenCarrierIds.has(entry.value.packageId)) continue;
+      seenCarrierIds.add(entry.value.packageId);
+      exportedCarriers.push({ exportName: entry.exportName, carrier: entry.value });
     }
+    const exportedNamespaces = [];
+    const seenNamespaceIds = new Set();
+    for (const entry of entries) {
+      const namespace = exportedNamespace(entry, pkg.version ?? "0.2.9");
+      if (namespace === undefined || seenNamespaceIds.has(namespace.packageId)) continue;
+      seenNamespaceIds.add(namespace.packageId);
+      exportedNamespaces.push({
+        exportName: entry.exportName,
+        namespace,
+        events: namespaceEventKinds(entries, namespace.kindPrefixes),
+      });
+    }
+
     if (exportedCarriers.length > 1) {
-      failures.push(`${pkg.name}: extension.ts exports multiple carrier-shaped values`);
+      failures.push(`${pkg.name}: exports multiple carrier-shaped values`);
       continue;
     }
-    if (exportedCarriers.length === 0) continue;
-
-    const entry = exportedCarriers[0];
-    validateCarrier(entry.carrier, pkg);
-
-    if (seenPackageIds.has(entry.carrier.packageId)) {
-      failures.push(`${entry.carrier.packageId}: duplicate carrier packageId`);
+    if (exportedCarriers.length === 0 && exportedNamespaces.length > 1) {
+      failures.push(`${pkg.name}: exports multiple namespace-shaped values`);
+      continue;
     }
-    seenPackageIds.add(entry.carrier.packageId);
+    if (exportedCarriers.length === 0 && exportedNamespaces.length === 0) {
+      failures.push(`${pkg.name}: carrier package exports no carrier or namespace declaration`);
+      continue;
+    }
 
-    for (const eventKind of Object.keys(entry.carrier.boundaryContract.events)) {
+    if (exportedCarriers.length === 1) {
+      const entry = exportedCarriers[0];
+      validateCarrier(entry.carrier, pkg);
+
+      if (seenPackageIds.has(entry.carrier.packageId)) {
+        failures.push(`${entry.carrier.packageId}: duplicate carrier packageId`);
+      }
+      seenPackageIds.add(entry.carrier.packageId);
+
+      for (const eventKind of Object.keys(entry.carrier.boundaryContract.events)) {
+        if (seenEventKinds.has(eventKind)) {
+          failures.push(`${entry.carrier.packageId}: duplicate event kind ${eventKind}`);
+        }
+        seenEventKinds.add(eventKind);
+      }
+
+      carriers.push({ kind: "carrier", pkg, exportName: entry.exportName, carrier: entry.carrier });
+      continue;
+    }
+
+    const entry = exportedNamespaces[0];
+    validateNamespace(entry.namespace, pkg);
+    if (seenPackageIds.has(entry.namespace.packageId)) {
+      failures.push(`${entry.namespace.packageId}: duplicate carrier packageId`);
+    }
+    seenPackageIds.add(entry.namespace.packageId);
+    for (const eventKind of entry.events) {
       if (seenEventKinds.has(eventKind)) {
-        failures.push(`${entry.carrier.packageId}: duplicate event kind ${eventKind}`);
+        failures.push(`${entry.namespace.packageId}: duplicate event kind ${eventKind}`);
       }
       seenEventKinds.add(eventKind);
     }
-
-    carriers.push({ pkg, exportName: entry.exportName, carrier: entry.carrier });
+    carriers.push({
+      kind: "namespace",
+      pkg,
+      exportName: entry.exportName,
+      namespace: entry.namespace,
+      events: entry.events,
+    });
   }
 
   return carriers.sort((left, right) => left.pkg.name.localeCompare(right.pkg.name));
@@ -225,11 +315,11 @@ const renderCarrier = ({ pkg, exportName, carrier }) => {
     "",
     "### Authority Requirements",
     "",
-    (boundary.authorityContracts ?? []).length === 0
+    (boundary.effectAuthorityContracts ?? []).length === 0
       ? "None."
       : table(
           ["Authority", "Class", "Required materials"],
-          authorityRows(boundary.authorityContracts),
+          authorityRows(boundary.effectAuthorityContracts),
         ),
     "",
     "### Material Requirements",
@@ -243,26 +333,64 @@ const renderCarrier = ({ pkg, exportName, carrier }) => {
   return sections.join("\n");
 };
 
+const renderNamespace = ({ pkg, exportName, namespace, events }) => {
+  const eventRows = events.map((eventKind) => [`\`${eventKind}\``, "namespace-only", "None."]);
+  return [
+    `## ${pkg.name}`,
+    "",
+    `Export: \`${exportName}\``,
+    "",
+    `Prefix: ${list(namespace.kindPrefixes)}`,
+    "",
+    "Roles: `reader`",
+    "",
+    "### Event Kinds",
+    "",
+    eventRows.length === 0 ? "None." : table(["Event kind", "Claim", "Payload fields"], eventRows),
+    "",
+    "### Settlement Vocabulary",
+    "",
+    "None.",
+    "",
+    "### Authority Requirements",
+    "",
+    "None.",
+    "",
+    "### Material Requirements",
+    "",
+    "None.",
+    "",
+  ].join("\n");
+};
+
 const renderReference = (carriers) => {
-  const summaryRows = carriers.map(({ pkg, carrier }) => [
-    `\`${pkg.name}\``,
-    `\`${carrier.prefix}\``,
-    String(Object.keys(carrier.boundaryContract.events).length),
-    list(carrier.boundaryContract.roles ?? []),
+  const summaryRows = carriers.map((entry) => [
+    `\`${entry.pkg.name}\``,
+    entry.kind === "carrier" ? `\`${entry.carrier.prefix}\`` : list(entry.namespace.kindPrefixes),
+    String(
+      entry.kind === "carrier"
+        ? Object.keys(entry.carrier.boundaryContract.events).length
+        : entry.events.length,
+    ),
+    entry.kind === "carrier" ? list(entry.carrier.boundaryContract.roles ?? []) : "`reader`",
   ]);
+
+  const sections = carriers.map((entry) =>
+    entry.kind === "carrier" ? renderCarrier(entry) : renderNamespace(entry),
+  );
 
   return [
     "# Carrier Reference",
     "",
     generatedNotice,
     "",
-    "Generated from carrier `defineCarrier` contracts. Package docs explain intent; this page owns event, schema, settlement, authority, and material reference facts.",
+    "Generated from carrier package declarations. Package docs explain intent; this page owns event, schema, settlement, authority, and material reference facts.",
     "",
     "## Carriers",
     "",
     table(["Package", "Prefix", "Events", "Roles"], summaryRows),
     "",
-    ...carriers.map(renderCarrier),
+    ...sections,
   ].join("\n");
 };
 

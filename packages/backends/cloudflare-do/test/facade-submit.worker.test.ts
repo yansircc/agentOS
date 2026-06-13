@@ -67,14 +67,14 @@ describe("defineAgentDO facade submit", () => {
     expect(events.some((event) => event.kind === "test.delivered")).toBe(false);
   });
 
-  it("passes run-scoped material refs and resolved material values through submit bindings", async () => {
+  it("passes run-scoped material refs through submit bindings and resolves them server-side", async () => {
     const scope = "facade-submit-material-bindings";
     const stub = testEnv.FACADE_SUBMIT_DO.get(testEnv.FACADE_SUBMIT_DO.idFromName(scope));
     const effectAuthorityRef = {
       authorityClass: "llm_route" as const,
       authorityId: "facade-submit-material-test",
     };
-    const tokenRef = credentialMaterialRef("facade-run-token", {
+    const tokenRef = credentialMaterialRef("facade-token", {
       provider: "facade",
       purpose: "apply",
     });
@@ -87,9 +87,6 @@ describe("defineAgentDO facade submit", () => {
         bindings: defineAgentSubmitBindings({
           tools: { apply: facadeApply },
           materials: { facade_token: tokenRef },
-          resolvedMaterials: {
-            facade_token: "facade-secret-that-must-stay-out-of-ledger-and-llm-requests",
-          },
         }),
         budget: { maxTurns: 2 },
       }),

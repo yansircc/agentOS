@@ -42,6 +42,16 @@
       ]
     },
     {
+      "id": "invariant.boundary.owner-owned-safe-projection",
+      "statement": "Browser-safe ledger event views are projected by the fact owner before any wire adapter or product renderer consumes them.",
+      "docs": "docs/concepts/ag-ui-wire-adapter.md",
+      "decisions": [],
+      "tests": [
+        "packages/wire-adapters/ag-ui/test/ag-ui.test.ts",
+        "packages/wire-adapters/ag-ui/test/workspace-agui-integration.test.ts"
+      ]
+    },
+    {
       "id": "invariant.d10.truth-identity",
       "statement": "For each scopeRef and effectAuthorityRef, ledger facts are the only durable truth and observable state is recomputed from those facts.",
       "docs": "docs/concepts/durable-truth.md",

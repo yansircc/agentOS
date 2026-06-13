@@ -4,9 +4,9 @@
  * mountOpsApi(opts) -> (req: Request) => Promise<Response>
  *
  * Routes all /__ops/api/* paths. Returns 405 for non-GET methods.
- * Auth, scope resolution, and opaque-surface gating all run before
- * RPC dispatch. Every response shape comes from Cloudflare backend RPC; no
- * server-side cross-scope composition.
+ * Auth, scope resolution, and opaque-surface gating all run before RPC dispatch.
+ * The reader adapter is supplied by the backend package; ops-api never casts a
+ * Durable Object stub or chooses a ledger identity.
  */
 
 import type { AttemptKey, CapabilityLease } from "@agent-os/runtime-protocol";
@@ -35,9 +35,9 @@ import type {
 } from "./types";
 
 // ============================================================
-// Cloudflare backend RPC surface that ops-api calls.
-//   This is a structural interface; the actual DurableObjectStub is
-//   cast to this shape. Test mocks satisfy the same interface.
+// Backend-bound reader surface that ops-api calls. A concrete backend owns the
+// ResolvedScope -> identity-bound reader adapter. Test mocks satisfy the same
+// interface.
 // ============================================================
 
 export interface AgentDOIntrospection {
@@ -58,10 +58,7 @@ export interface AgentDOIntrospection {
 export interface MountOpsApiOptions {
   readonly scopeResolver: ScopeResolver;
   readonly auth: OpsAuth;
-  /** Optional override of how to obtain a DO stub from a ResolvedScope.
-   *  Default: `namespace.get(namespace.idFromName(scope))` cast.
-   *  Test runners override with an in-memory factory. */
-  readonly stubFor?: (resolved: ResolvedScope) => AgentDOIntrospection | null;
+  readonly stubFor: (resolved: ResolvedScope) => AgentDOIntrospection | null;
 }
 
 const requireOptions = (opts: MountOpsApiOptions): void => {
@@ -71,18 +68,14 @@ const requireOptions = (opts: MountOpsApiOptions): void => {
   if (opts.auth === undefined || opts.auth === null) {
     throw new Error("@agent-os/ops-api: auth is required");
   }
-};
-
-const defaultStubFor = (resolved: ResolvedScope): AgentDOIntrospection | null => {
-  if (resolved.namespace === undefined) return null;
-  const id = resolved.namespace.idFromName(resolved.scope);
-  return resolved.namespace.get(id) as unknown as AgentDOIntrospection;
+  if (opts.stubFor === undefined || opts.stubFor === null) {
+    throw new Error("@agent-os/ops-api: stubFor is required");
+  }
 };
 
 export const mountOpsApi = (opts: MountOpsApiOptions): ((req: Request) => Promise<Response>) => {
   requireOptions(opts);
-  const stubFor = opts.stubFor ?? defaultStubFor;
-  return (req) => handle(req, opts, stubFor);
+  return (req) => handle(req, opts, opts.stubFor);
 };
 
 // ============================================================

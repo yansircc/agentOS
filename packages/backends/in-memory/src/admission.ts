@@ -8,6 +8,8 @@ import {
 } from "@agent-os/runtime";
 import {
   decideTier,
+  LLM_STRUCTURED_EVIDENCE_EVENT,
+  LLM_STRUCTURED_INVALIDATE_EVENT,
   projectLease,
   type AdmissionImpact,
   type AdmissionRow,
@@ -50,26 +52,26 @@ const projectAdmissionRows = (
     const eventIdentity = inMemoryRuntimeEventIdentity(inMemoryConversationTruthIdentity(scope));
     const rows: AdmissionRow[] = [];
     for (const event of state.eventSnapshot(eventIdentity)) {
-      if (event.kind === "llm.structured.evidence") {
+      if (event.kind === LLM_STRUCTURED_EVIDENCE_EVENT) {
         const payload = recordOf(event.payload, event.kind);
         if (!payload.ok) return payload;
         rows.push({
           id: event.id,
           ts: event.ts,
-          kind: "llm.structured.evidence",
+          kind: LLM_STRUCTURED_EVIDENCE_EVENT,
           key: payload.value.key as AttemptKey,
           stimulusKind: payload.value.stimulusKind as "probe" | "live",
           outcome: payload.value.outcome as Outcome,
           admissionImpact: payload.value.admissionImpact as AdmissionImpact,
         });
       }
-      if (event.kind === "llm.structured.invalidate") {
+      if (event.kind === LLM_STRUCTURED_INVALIDATE_EVENT) {
         const payload = recordOf(event.payload, event.kind);
         if (!payload.ok) return payload;
         rows.push({
           id: event.id,
           ts: event.ts,
-          kind: "llm.structured.invalidate",
+          kind: LLM_STRUCTURED_INVALIDATE_EVENT,
           key: payload.value.key as Partial<AttemptKey>,
         });
       }
@@ -169,7 +171,7 @@ export const InMemoryAdmissionLive = (
           yield* state.commitEvents([
             {
               ts: now,
-              kind: "llm.structured.evidence",
+              kind: LLM_STRUCTURED_EVIDENCE_EVENT,
               ...inMemoryConversationTruthIdentity(spec.scope),
               payload: evidencePayload,
             },
@@ -204,7 +206,7 @@ export const InMemoryAdmissionLive = (
           const [event] = yield* state.commitEvents([
             {
               ts,
-              kind: "llm.structured.invalidate",
+              kind: LLM_STRUCTURED_INVALIDATE_EVENT,
               ...inMemoryConversationTruthIdentity(spec.scope),
               payload: { key: spec.key, reason: spec.reason, by: spec.by },
             },

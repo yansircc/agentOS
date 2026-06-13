@@ -126,11 +126,10 @@ export type AgentCapabilityResolvedMaterials<Definition> = {
   >;
 };
 
-export type BindAgentCapabilityOptions<Definition> = {
-  readonly resolvedMaterials?: Partial<AgentCapabilityResolvedMaterials<Definition>>;
-} & (keyof AgentCapabilityMaterialsOf<Definition> extends never
-  ? { readonly materials?: AgentCapabilityMaterialRefs<Definition> }
-  : { readonly materials: AgentCapabilityMaterialRefs<Definition> });
+export type BindAgentCapabilityOptions<Definition> =
+  keyof AgentCapabilityMaterialsOf<Definition> extends never
+    ? { readonly materials?: AgentCapabilityMaterialRefs<Definition> }
+    : { readonly materials: AgentCapabilityMaterialRefs<Definition> };
 
 export interface AgentCapabilityRuntimeContext<Definition> {
   readonly materials: ResolvedToolMaterials & AgentCapabilityResolvedMaterials<Definition>;
@@ -245,15 +244,10 @@ export const submitBindingsForAgentCapability = <Definition extends AnyAgentCapa
   options: BindAgentCapabilityOptions<Definition>,
 ): AgentSubmitBindings => {
   const materialRefs: Record<string, MaterialRef> = {};
-  const resolvedMaterials: Record<string, ResolvedMaterial> = {};
   for (const [key, slot] of materialSlotEntries(definition)) {
     const ref = options.materials?.[key];
     if (ref !== undefined) {
       materialRefs[slot] = ref;
-    }
-    const resolved = options.resolvedMaterials?.[key];
-    if (resolved !== undefined) {
-      resolvedMaterials[slot] = resolved;
     }
   }
 
@@ -263,7 +257,6 @@ export const submitBindingsForAgentCapability = <Definition extends AnyAgentCapa
       boundaryPackage: intentBoundaryPackage(definition, key, intent),
     })),
     ...(Object.keys(materialRefs).length === 0 ? {} : { materials: materialRefs }),
-    ...(Object.keys(resolvedMaterials).length === 0 ? {} : { resolvedMaterials }),
   });
 };
 

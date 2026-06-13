@@ -351,7 +351,6 @@ const mergeSubmitBindings = (
   tools: { ...base.tools, ...run?.tools },
   executionDomains: [...(base.executionDomains ?? []), ...(run?.executionDomains ?? [])],
   materials: { ...base.materials, ...run?.materials },
-  resolvedMaterials: { ...base.resolvedMaterials, ...run?.resolvedMaterials },
   toolContext: {
     extensions: {
       ...base.toolContext?.extensions,
@@ -716,7 +715,6 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
       tools: { ...bindings.tools },
       executionDomains: bindings.executionDomains,
       materials: { ...bindings.materials },
-      resolvedMaterials: { ...bindings.resolvedMaterials },
       toolContext: bindings.toolContext,
       toolIntents: [...this._toolIntents, ...(bindings.toolIntents ?? [])],
       receiptBackedTools: { ...bindings.receiptBackedTools },

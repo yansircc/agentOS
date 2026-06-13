@@ -13,6 +13,7 @@ export * from "./workspace-job-facade";
 export * from "./workspace-job-profile";
 export * from "./workspace-env";
 export * from "./workspace-op";
+export * from "./ops-api";
 export type {
   AgentAttachedStreamCancelSpec,
   AgentAttachedStreamSpec,

@@ -19,6 +19,10 @@ import type {
   LedgerTruthIdentity,
   Outcome,
 } from "@agent-os/runtime-protocol";
+import {
+  LLM_STRUCTURED_EVIDENCE_EVENT,
+  LLM_STRUCTURED_INVALIDATE_EVENT,
+} from "@agent-os/runtime-protocol";
 import { eventIdentity, eventIdentityColumns } from "../ledger/identity";
 import type { FactOwnerRef } from "@agent-os/kernel/effect-claim";
 
@@ -83,7 +87,7 @@ export const loadAdmissionRows = (
       const columns = eventIdentityColumns(eventIdentity(identity, factOwnerRef));
       const raw = sql
         .exec(
-          "SELECT id, ts, kind, payload FROM events WHERE event_identity_key = ? AND (kind = 'llm.structured.evidence' OR kind = 'llm.structured.invalidate') ORDER BY id",
+          `SELECT id, ts, kind, payload FROM events WHERE event_identity_key = ? AND (kind = '${LLM_STRUCTURED_EVIDENCE_EVENT}' OR kind = '${LLM_STRUCTURED_INVALIDATE_EVENT}') ORDER BY id`,
           columns.event_identity_key,
         )
         .toArray();
@@ -93,23 +97,23 @@ export const loadAdmissionRows = (
         const ts = Number(r.ts);
         const kind = sqlText(r.kind, "events.kind");
         const parsed = JSON.parse(sqlText(r.payload, "events.payload")) as unknown;
-        if (kind === "llm.structured.evidence") {
+        if (kind === LLM_STRUCTURED_EVIDENCE_EVENT) {
           const ev = decodeEvidencePayloadSync(parsed);
           out.push({
             id,
             ts,
-            kind: "llm.structured.evidence",
+            kind: LLM_STRUCTURED_EVIDENCE_EVENT,
             key: ev.key as AttemptKey,
             stimulusKind: ev.stimulusKind,
             outcome: ev.outcome as Outcome,
             admissionImpact: ev.admissionImpact,
           });
-        } else if (kind === "llm.structured.invalidate") {
+        } else if (kind === LLM_STRUCTURED_INVALIDATE_EVENT) {
           const inv = decodeInvalidatePayloadSync(parsed);
           out.push({
             id,
             ts,
-            kind: "llm.structured.invalidate",
+            kind: LLM_STRUCTURED_INVALIDATE_EVENT,
             key: inv.key,
           });
         }

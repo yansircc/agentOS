@@ -13,16 +13,23 @@ const read = (root, file) => fs.readFileSync(path.join(root, file), "utf8");
 
 const requiredTokens = [
   "export type AgUiSafeLedgerEvent",
-  "readonly projectSafeExtensionEvent?:",
-  "const redactedSummary =",
-  "const projectSafeToolArgs =",
-  "const projectSafeToolResult =",
+  "export type AgUiSafeEventProjector",
+  "readonly safeEventProjectors?:",
+  "projectRuntimeSafeLedgerEvent",
+  "projectWorkspaceJobSafeLedgerEvent",
+  "projectWorkspaceOperationSafeLedgerEvent",
+  "export const projectSafeLedgerEventToAgUiFrames",
   "export const verifyAgUiFrameSafety =",
 ];
 
 const forbiddenTokens = [
   "AgUiFrameMapper",
   "projectExtensionEvent",
+  "projectSafeExtensionEvent",
+  "safeExtensionPayload",
+  "projectAgUiSafeExtensionPayload",
+  "decodeRuntimeLedgerEvent",
+  "projectRuntimeEventToAgUiFrames",
   "mapFrame",
   "redactAgUiToolPayloadFrame",
   "includeRunInput",
@@ -38,6 +45,10 @@ const forbiddenPatterns = [
   {
     pattern: /content:\s*(?:item\.content|event\.payload\.result)/u,
     description: "raw tool result projected to TOOL_CALL_RESULT",
+  },
+  {
+    pattern: /event\.payload/u,
+    description: "AG-UI adapter reads raw ledger payload instead of owner safe events",
   },
   {
     pattern: /final:\s*event\.payload\.final/u,
@@ -71,7 +82,7 @@ const collectFailures = (root = repoRoot) => {
 
   for (const token of requiredTokens) {
     if (!source.includes(token)) {
-      failures.push(`${adapterPath}: missing allow-list token ${token}`);
+      failures.push(`${adapterPath}: missing owner-safe projection token ${token}`);
     }
   }
 
@@ -97,18 +108,19 @@ const writeFixture = (root, relativePath, source) => {
 };
 
 const validAdapterFixture = `
+import { projectRuntimeSafeLedgerEvent } from "@agent-os/runtime-protocol";
+import { projectWorkspaceJobSafeLedgerEvent } from "@agent-os/workspace-job";
+import { projectWorkspaceOperationSafeLedgerEvent } from "@agent-os/workspace-op";
 export type AgUiSafeLedgerEvent = { readonly id: number };
+export type AgUiSafeEventProjector = (event: unknown) => AgUiSafeLedgerEvent | undefined;
 export type AgUiLedgerProjectionSpec = {
-  readonly projectSafeExtensionEvent?: (event: AgUiSafeLedgerEvent) => readonly unknown[];
+  readonly safeEventProjectors?: readonly AgUiSafeEventProjector[];
 };
-const redactedSummary = () => ({ redacted: true });
-const projectSafeToolArgs = () => "";
-const projectSafeToolResult = () => "";
 export const verifyAgUiFrameSafety = () => [];
-export const project = (event) => ({
-  delta: projectSafeToolArgs(event.payload.args),
-  content: projectSafeToolResult(event.payload.result),
-});
+export const projectSafeLedgerEventToAgUiFrames = (event) => [];
+void projectRuntimeSafeLedgerEvent;
+void projectWorkspaceJobSafeLedgerEvent;
+void projectWorkspaceOperationSafeLedgerEvent;
 `;
 
 const collectSelfTestFailures = () => {
@@ -135,11 +147,10 @@ export const leak = (item, event) => ({
     if (
       !rejected.some((failure) => failure.includes("AgUiFrameMapper")) ||
       !rejected.some((failure) => failure.includes("raw tool call arguments")) ||
-      !rejected.some((failure) => failure.includes("raw tool result"))
+      !rejected.some((failure) => failure.includes("raw tool result")) ||
+      !rejected.some((failure) => failure.includes("raw ledger payload"))
     ) {
-      return [
-        `AG-UI egress allow-list mutation fixture was not rejected: ${JSON.stringify(rejected)}`,
-      ];
+      return [`AG-UI owner-safe mutation fixture was not rejected: ${JSON.stringify(rejected)}`];
     }
     return [];
   } finally {
@@ -158,6 +169,6 @@ if (failures.length > 0) {
 
 console.log(
   process.argv.includes("--self-test")
-    ? "AG-UI egress allow-list self-test passed"
-    : "AG-UI egress allow-list passed",
+    ? "AG-UI owner-safe egress self-test passed"
+    : "AG-UI owner-safe egress passed",
 );

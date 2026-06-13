@@ -1,6 +1,5 @@
 import type { LlmRoute } from "@agent-os/llm-protocol";
 import type { MaterialRef } from "@agent-os/kernel/material-ref";
-import type { ResolvedMaterial } from "@agent-os/kernel/ref-resolver";
 import type { ExecutionDomainDeclaration, Tool } from "@agent-os/kernel/tools";
 import type { AnyAgentCapabilityDefinition } from "./capability";
 import type { HandlerKind } from "./manifest";
@@ -39,7 +38,6 @@ export interface AgentSubmitBindings {
   readonly tools?: Readonly<Record<string, Tool>>;
   readonly executionDomains?: ReadonlyArray<ExecutionDomainDeclaration>;
   readonly materials?: Readonly<Record<string, MaterialRef>>;
-  readonly resolvedMaterials?: Readonly<Record<string, ResolvedMaterial>>;
   readonly toolContext?: SubmitToolContext;
   readonly toolIntents?: ReadonlyArray<SubmitToolIntent>;
   readonly receiptBackedTools?: Readonly<Record<string, SubmitReceiptBackedToolBinding>>;

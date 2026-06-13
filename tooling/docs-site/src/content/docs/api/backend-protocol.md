@@ -6,6 +6,7 @@ title: "@agent-os/backend-protocol API"
 
 ## Public exports
 
+- `.:BACKEND_PROTOCOL_EVENT_PREFIXES`
 - `.:DISPATCH_INBOUND_ACCEPTED`
 - `.:DISPATCH_EVENT_KINDS`
 - `.:DISPATCH_MAX_ATTEMPTS`

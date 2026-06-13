@@ -1,6 +1,5 @@
 import { Effect, Option, Predicate } from "effect";
 import { externalResourceMaterialRef, type MaterialRef } from "@agent-os/kernel/material-ref";
-import type { ResolvedMaterial } from "@agent-os/kernel/ref-resolver";
 import {
   defineTool,
   withToolWriteRequirement,
@@ -47,7 +46,6 @@ export interface BindWorkspaceToolsForRuntimeOptions
   readonly env: WorkspaceEnv;
   readonly admit: ToolAdmitter<unknown>;
   readonly workspaceMaterialRef?: MaterialRef;
-  readonly resolvedWorkspace?: ResolvedMaterial;
   readonly toolContext?: SubmitToolContext;
   readonly toolIntents?: ReadonlyArray<SubmitToolIntent>;
 }
@@ -344,7 +342,6 @@ export const bindWorkspaceToolsForRuntime = (
         : []),
     ],
     materials: { workspace },
-    resolvedMaterials: { workspace: options.resolvedWorkspace ?? options.env },
     ...(options.toolContext === undefined ? {} : { toolContext: options.toolContext }),
     toolIntents:
       receiptBackedToolNames.length === 0

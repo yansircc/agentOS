@@ -87,7 +87,6 @@ describe("AgentCapability handles", () => {
     const materialRef = { kind: "credential" as const, ref: "wp-token", provider: "wordpress" };
     const bindings = submitBindingsForAgentCapability(surfaceEditCapability, {
       materials: { wp: materialRef },
-      resolvedMaterials: { wp: { bearer: "redacted", snapshot: "snap-1" } },
     });
 
     expect(bindings.toolIntents).toEqual([
@@ -97,9 +96,7 @@ describe("AgentCapability handles", () => {
       },
     ]);
     expect(bindings.materials).toEqual({ wp_token: materialRef });
-    expect(bindings.resolvedMaterials).toEqual({
-      wp_token: { bearer: "redacted", snapshot: "snap-1" },
-    });
+    expect("resolvedMaterials" in bindings).toBe(false);
   });
 
   it("keeps material refs closed over declared material aliases", () => {

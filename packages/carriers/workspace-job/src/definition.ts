@@ -73,6 +73,47 @@ const FailedSchema = Schema.Struct({
   submitRunId: Schema.optional(Schema.Number),
 });
 
+const SeedWrittenSchema = Schema.Struct({
+  requestedEventId: Schema.Number,
+  runId: NonEmptyString,
+  idempotencyKey: NonEmptyString,
+  seedPaths: Schema.Array(Schema.String),
+});
+
+const TerminalBuildAttemptedSchema = Schema.Struct({
+  requestedEventId: Schema.Number,
+  runId: NonEmptyString,
+  idempotencyKey: NonEmptyString,
+  submitRunId: Schema.Number,
+  schemaId: NonEmptyString,
+  bytes: Schema.Number,
+  sha256: NonEmptyString,
+});
+
+const ArtifactWrittenSchema = Schema.Struct({
+  requestedEventId: Schema.Number,
+  runId: NonEmptyString,
+  idempotencyKey: NonEmptyString,
+  path: NonEmptyString,
+  artifactRef: NonEmptyString,
+  submitRunId: Schema.Number,
+  schemaId: NonEmptyString,
+  bytes: Schema.Number,
+  sha256: NonEmptyString,
+});
+
+const ArtifactReadbackVerifiedSchema = Schema.Struct({
+  requestedEventId: Schema.Number,
+  runId: NonEmptyString,
+  idempotencyKey: NonEmptyString,
+  path: NonEmptyString,
+  artifactRef: NonEmptyString,
+  submitRunId: Schema.Number,
+  schemaId: NonEmptyString,
+  bytes: Schema.Number,
+  sha256: NonEmptyString,
+});
+
 export const workspaceJobCarrier = defineCarrier({
   packageId: WORKSPACE_JOB_FACT_OWNER,
   prefix: WORKSPACE_JOB_EVENT_PREFIX,
@@ -108,6 +149,26 @@ export const workspaceJobCarrier = defineCarrier({
         key: "claim",
         rejectionKinds: ["provider_rejected", "validation_failed", "resource_denied"],
       }),
+    }),
+    seed_written: event({
+      kind: "seed_written",
+      payload: SeedWrittenSchema,
+      claim: lived({ key: "claim", anchorKinds: ["carrier_proof"] }),
+    }),
+    terminal_build_attempted: event({
+      kind: "terminal_build_attempted",
+      payload: TerminalBuildAttemptedSchema,
+      claim: lived({ key: "claim", anchorKinds: ["carrier_proof"] }),
+    }),
+    artifact_written: event({
+      kind: "artifact_written",
+      payload: ArtifactWrittenSchema,
+      claim: lived({ key: "claim", anchorKinds: ["carrier_proof"] }),
+    }),
+    artifact_readback_verified: event({
+      kind: "artifact_readback_verified",
+      payload: ArtifactReadbackVerifiedSchema,
+      claim: lived({ key: "claim", anchorKinds: ["carrier_proof"] }),
     }),
   },
 });

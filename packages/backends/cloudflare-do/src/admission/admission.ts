@@ -27,6 +27,8 @@ import {
 } from "@agent-os/runtime";
 import {
   decideTier,
+  LLM_STRUCTURED_EVIDENCE_EVENT,
+  LLM_STRUCTURED_INVALIDATE_EVENT,
   projectLease,
   type AttemptKey,
   type AttemptResult,
@@ -159,7 +161,7 @@ export const AdmissionLive = (
             (tx) => {
               tx.append({
                 ts: now,
-                kind: "llm.structured.evidence",
+                kind: LLM_STRUCTURED_EVIDENCE_EVENT,
                 scopeRef: ownerIdentity.scopeRef,
                 effectAuthorityRef: ownerIdentity.effectAuthorityRef,
                 payload: evidencePayload,
@@ -208,7 +210,7 @@ export const AdmissionLive = (
             (tx) => {
               tx.append({
                 ts: now,
-                kind: "llm.structured.invalidate",
+                kind: LLM_STRUCTURED_INVALIDATE_EVENT,
                 scopeRef: ownerIdentity.scopeRef,
                 effectAuthorityRef: ownerIdentity.effectAuthorityRef,
                 payload,

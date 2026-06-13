@@ -473,16 +473,16 @@ export class NodePostgresBackend {
     eventKind: string,
     data: unknown,
   ): Promise<{ readonly id: number }> {
-    const [event] = await this.#appendEvents([
+    const event = await this.#appendEventAndDueWork(
       {
         ts: this.#now(),
         kind: DURABLE_TRIGGER_SCHEDULED_REQUESTED,
         identity,
         payload: scheduledEventIntentPayload(eventKind, data),
       },
-    ]);
-    if (event === undefined) throw new SqlError({ cause: "schedule commit returned no event" });
-    await this.#insertDueWork(identity, SCHEDULED_EVENT_TRIGGER_KIND, event.id, at);
+      SCHEDULED_EVENT_TRIGGER_KIND,
+      at,
+    );
     return { id: event.id };
   }
 
@@ -592,16 +592,16 @@ export class NodePostgresBackend {
         : { traceContext: copyTraceContext(traceContextResult.traceContext) }),
     };
     const now = this.#now();
-    const [event] = await this.#appendEvents([
+    const event = await this.#appendEventAndDueWork(
       {
         ts: now,
         kind: DISPATCH_EVENT_KINDS.OUTBOUND_REQUESTED,
         identity,
         payload: requested,
       },
-    ]);
-    if (event === undefined) throw new SqlError({ cause: "dispatch commit returned no event" });
-    await this.#insertDueWork(identity, DELIVERY_RETRY_TRIGGER_KIND, event.id, now);
+      DELIVERY_RETRY_TRIGGER_KIND,
+      now,
+    );
     await this.#drainDue(identity, now);
     return { outboundEventId: event.id };
   }
@@ -1371,6 +1371,69 @@ export class NodePostgresBackend {
     const row = rows[0];
     if (row === undefined) throw new SqlError({ cause: "due_work insert returned no row" });
     return row.id;
+  }
+
+  async #appendEventAndDueWork(
+    spec: {
+      readonly ts: number;
+      readonly kind: string;
+      readonly identity: BackendProtocolEventIdentity;
+      readonly payload: unknown;
+    },
+    dueKind: string,
+    fireAt: number,
+  ): Promise<LedgerEvent> {
+    const identityKey = backendProtocolEventIdentityKey(spec.identity);
+    const rows = await this.#sql.jsonArrayStatement<LedgerEvent>(`
+      WITH inserted_event AS (
+        INSERT INTO agentos_events (
+          ts, kind, truth_key, identity_key, scope_ref, fact_owner_ref, effect_authority_ref, payload
+        )
+        VALUES (
+          ${sqlNumber(spec.ts)},
+          ${sqlString(spec.kind)},
+          ${sqlString(backendProtocolTruthIdentityKey(spec.identity))},
+          ${sqlString(identityKey)},
+          ${sqlJson(spec.identity.scopeRef)},
+          ${sqlJson(spec.identity.factOwnerRef)},
+          ${sqlJson(spec.identity.effectAuthorityRef)},
+          ${sqlPayload(spec.payload)}
+        )
+        RETURNING
+          id::int AS "id",
+          ts AS "ts",
+          kind AS "kind",
+          scope_ref AS "scopeRef",
+          fact_owner_ref #>> '{}' AS "factOwnerRef",
+          effect_authority_ref AS "effectAuthorityRef",
+          payload AS "payload"
+      ),
+      inserted_due_work AS (
+        INSERT INTO agentos_due_work (
+          identity_key, identity, fire_at, kind, payload
+        )
+        SELECT
+          ${sqlString(identityKey)},
+          ${sqlJson(spec.identity)},
+          ${sqlNumber(fireAt)},
+          ${sqlString(dueKind)},
+          jsonb_build_object('intentEventId', inserted_event.id)
+        FROM inserted_event
+        RETURNING id
+      ),
+      agentos_json_rows AS (
+        SELECT inserted_event.*
+        FROM inserted_event
+        JOIN inserted_due_work ON true
+      )
+      SELECT COALESCE(json_agg(row_to_json(agentos_json_rows)), '[]'::json)::text
+      FROM agentos_json_rows
+    `);
+    const event = rows[0];
+    if (event === undefined)
+      throw new SqlError({ cause: "atomic event+due commit returned no event" });
+    await this.#fireMany([event]);
+    return event;
   }
 
   async #claimDue(identity: BackendProtocolEventIdentity, now: number): Promise<DueWorkRow | null> {

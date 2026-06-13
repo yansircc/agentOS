@@ -25,6 +25,8 @@ Status: Backend package. Public exports include the Cloudflare app facade, bindi
 - `.:AgentTriggerIntentSpec`
 - `.:AnthropicMessagesSpec`
 - `.:CloudflareAgentEnv`
+- `.:CloudflareAgentDOIntrospectionRpc`
+- `.:CloudflareAgentDOResolvedScope`
 - `.:CloudflareAgentMountPort`
 - `.:CloudflareAttachedStreamFactory`
 - `.:CloudflareAttachedStreamFactoryContext`
@@ -70,6 +72,7 @@ Status: Backend package. Public exports include the Cloudflare app facade, bindi
 - `.:QueueDispatchTargetBinding`
 - `.:anthropicMessages`
 - `.:binding`
+- `.:cloudflareAgentDoOpsStubFor`
 - `.:cloudflareAgentMountPort`
 - `.:credential`
 - `.:createAgentDurableObject`

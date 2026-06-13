@@ -108,6 +108,9 @@ title: "@agent-os/runtime-protocol API"
 - `.:LedgerCommitEventSpec`
 - `.:LedgerTruthIdentity`
 - `.:LiveInput`
+- `.:LLM_STRUCTURED_EVENT_KINDS`
+- `.:LLM_STRUCTURED_EVIDENCE_EVENT`
+- `.:LLM_STRUCTURED_INVALIDATE_EVENT`
 - `.:LlmResponsePayload`
 - `.:LlmResponsePayloadSchema`
 - `.:LlmRoute`
@@ -193,6 +196,7 @@ title: "@agent-os/runtime-protocol API"
 - `.:mountAgent`
 - `.:projectLease`
 - `.:projectFailureDiagnostics`
+- `.:projectRuntimeSafeLedgerEvent`
 - `.:receiptBackedToolResult`
 - `.:receiptBackedToolResultFromUnknown`
 - `.:replayExternalToolExecutionFromReceipt`

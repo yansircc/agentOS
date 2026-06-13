@@ -26,16 +26,16 @@ import { AgUiRunAgentInputSchema, decodeAgUiRunAgentInput } from "@agent-os/ag-u
 ```
 
 Project committed ledger events into AG-UI frames or cursor-preserving
-envelopes after runtime payloads decode:
+envelopes through owner-owned safe event projectors:
 
 ```ts
 import { projectLedgerEventsToAgUiFrames, decodeLedgerEventToAgUiEnvelope } from "@agent-os/ag-ui";
 ```
 
-Extension event details must enter AG-UI through `safeExtensionPayload` field
-allowlists. The custom extension mapper receives only `AgUiSafeLedgerEvent`
-metadata plus that browser-safe projected payload; it does not receive raw
-ledger payloads.
+agentOS-owned events enter AG-UI through package-owned `SafeLedgerEvent`
+projectors from `@agent-os/runtime-protocol`, `@agent-os/workspace-job`, and
+`@agent-os/workspace-op`. Product-owned events must provide their own
+`safeEventProjectors`; AG-UI does not select raw ledger payload fields.
 
 Use `projectToolToAgUiTool` to expose AG-UI tool declarations generated from
 `AgentSchema.projections.agUi`.

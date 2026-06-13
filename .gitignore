@@ -12,6 +12,3 @@ spikes/**
 !spikes/
 !spikes/_active/
 !spikes/_active/.gitkeep
-!spikes/vibe-like-agent-app/
-!spikes/vibe-like-agent-app/**
-spikes/vibe-like-agent-app/node_modules/

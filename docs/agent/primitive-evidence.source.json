@@ -105,6 +105,13 @@
       ]
     },
     {
+      "primitive": "primitive.kernel.SafeLedgerEvent",
+      "tests": [
+        "packages/wire-adapters/ag-ui/test/ag-ui.test.ts",
+        "packages/wire-adapters/ag-ui/test/workspace-agui-integration.test.ts"
+      ]
+    },
+    {
       "primitive": "primitive.kernel.Tool",
       "tests": ["packages/kernel/test/tools.test.ts"]
     },

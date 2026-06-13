@@ -33,6 +33,14 @@ export type WorkspaceJobVerifiedPayload =
 export type WorkspaceJobVerifierRejectedPayload =
   WorkspaceJobPayloads[(typeof WORKSPACE_JOB_KIND)["VERIFIER_REJECTED"]];
 export type WorkspaceJobFailedPayload = WorkspaceJobPayloads[(typeof WORKSPACE_JOB_KIND)["FAILED"]];
+export type WorkspaceJobSeedWrittenPayload =
+  WorkspaceJobPayloads[(typeof WORKSPACE_JOB_KIND)["SEED_WRITTEN"]];
+export type WorkspaceJobTerminalBuildAttemptedPayload =
+  WorkspaceJobPayloads[(typeof WORKSPACE_JOB_KIND)["TERMINAL_BUILD_ATTEMPTED"]];
+export type WorkspaceJobArtifactWrittenPayload =
+  WorkspaceJobPayloads[(typeof WORKSPACE_JOB_KIND)["ARTIFACT_WRITTEN"]];
+export type WorkspaceJobArtifactReadbackVerifiedPayload =
+  WorkspaceJobPayloads[(typeof WORKSPACE_JOB_KIND)["ARTIFACT_READBACK_VERIFIED"]];
 
 export type WorkspaceJobTerminalArtifact = WorkspaceJobTerminalFinalizedPayload["terminalArtifact"];
 export type WorkspaceJobVerificationCheck = WorkspaceJobVerifiedPayload["checks"][number];
@@ -126,6 +134,26 @@ export type WorkspaceJobIdempotencyProjection =
       readonly request: WorkspaceJobRequestedPayload;
     };
 
+export type WorkspaceJobStepProjection =
+  | {
+      readonly status: "missing";
+      readonly runId: string;
+    }
+  | {
+      readonly status: "found";
+      readonly runId: string;
+      readonly requestedEventId: number;
+      readonly request: WorkspaceJobRequestedPayload;
+      readonly seedWritten?: WorkspaceJobSeedWrittenPayload;
+      readonly terminalBuildAttempted?: WorkspaceJobTerminalBuildAttemptedPayload;
+      readonly artifactWritten?: WorkspaceJobArtifactWrittenPayload;
+      readonly artifactReadbackVerified?: WorkspaceJobArtifactReadbackVerifiedPayload;
+      readonly terminalFinalized?: {
+        readonly eventId: number;
+        readonly payload: WorkspaceJobTerminalFinalizedPayload;
+      };
+    };
+
 export const workspaceJobRequestedPayload = (spec: {
   readonly runId: string;
   readonly idempotencyKey: string;
@@ -206,6 +234,88 @@ export const workspaceJobFailedPayload = (spec: {
   claim: spec.claim,
 });
 
+export const workspaceJobSeedWrittenPayload = (spec: {
+  readonly requestedEventId: number;
+  readonly runId: string;
+  readonly idempotencyKey: string;
+  readonly seedPaths: ReadonlyArray<string>;
+  readonly claim: LivedClaim;
+}): WorkspaceJobSeedWrittenPayload => ({
+  requestedEventId: spec.requestedEventId,
+  runId: spec.runId,
+  idempotencyKey: spec.idempotencyKey,
+  seedPaths: [...spec.seedPaths],
+  claim: spec.claim,
+});
+
+export const workspaceJobTerminalBuildAttemptedPayload = (spec: {
+  readonly requestedEventId: number;
+  readonly runId: string;
+  readonly idempotencyKey: string;
+  readonly submitRunId: number;
+  readonly schemaId: string;
+  readonly bytes: number;
+  readonly sha256: string;
+  readonly claim: LivedClaim;
+}): WorkspaceJobTerminalBuildAttemptedPayload => ({
+  requestedEventId: spec.requestedEventId,
+  runId: spec.runId,
+  idempotencyKey: spec.idempotencyKey,
+  submitRunId: spec.submitRunId,
+  schemaId: spec.schemaId,
+  bytes: spec.bytes,
+  sha256: spec.sha256,
+  claim: spec.claim,
+});
+
+export const workspaceJobArtifactWrittenPayload = (spec: {
+  readonly requestedEventId: number;
+  readonly runId: string;
+  readonly idempotencyKey: string;
+  readonly path: string;
+  readonly artifactRef: string;
+  readonly submitRunId: number;
+  readonly schemaId: string;
+  readonly bytes: number;
+  readonly sha256: string;
+  readonly claim: LivedClaim;
+}): WorkspaceJobArtifactWrittenPayload => ({
+  requestedEventId: spec.requestedEventId,
+  runId: spec.runId,
+  idempotencyKey: spec.idempotencyKey,
+  path: spec.path,
+  artifactRef: spec.artifactRef,
+  submitRunId: spec.submitRunId,
+  schemaId: spec.schemaId,
+  bytes: spec.bytes,
+  sha256: spec.sha256,
+  claim: spec.claim,
+});
+
+export const workspaceJobArtifactReadbackVerifiedPayload = (spec: {
+  readonly requestedEventId: number;
+  readonly runId: string;
+  readonly idempotencyKey: string;
+  readonly path: string;
+  readonly artifactRef: string;
+  readonly submitRunId: number;
+  readonly schemaId: string;
+  readonly bytes: number;
+  readonly sha256: string;
+  readonly claim: LivedClaim;
+}): WorkspaceJobArtifactReadbackVerifiedPayload => ({
+  requestedEventId: spec.requestedEventId,
+  runId: spec.runId,
+  idempotencyKey: spec.idempotencyKey,
+  path: spec.path,
+  artifactRef: spec.artifactRef,
+  submitRunId: spec.submitRunId,
+  schemaId: spec.schemaId,
+  bytes: spec.bytes,
+  sha256: spec.sha256,
+  claim: spec.claim,
+});
+
 const preClaimFrom = (value: unknown): PreClaim | undefined => {
   const result = validateEffectClaim(value);
   return result.ok && result.claim.phase === "pre" ? result.claim : undefined;
@@ -228,6 +338,16 @@ const numberField = (payload: Record<string, unknown>, key: string): number | un
   typeof payload[key] === "number" && Number.isFinite(payload[key])
     ? (payload[key] as number)
     : undefined;
+
+const stringArrayField = (
+  payload: Record<string, unknown>,
+  key: string,
+): ReadonlyArray<string> | undefined => {
+  const value = payload[key];
+  if (!Array.isArray(value)) return undefined;
+  const out = value.filter((item): item is string => typeof item === "string");
+  return out.length === value.length ? out : undefined;
+};
 
 const terminalArtifactFrom = (value: unknown): WorkspaceJobTerminalArtifact | undefined => {
   if (!Predicate.isRecord(value)) return undefined;
@@ -435,6 +555,134 @@ const failedFrom = (payload: Record<string, unknown>): WorkspaceJobFailedPayload
   };
 };
 
+const seedWrittenFrom = (
+  payload: Record<string, unknown>,
+): WorkspaceJobSeedWrittenPayload | undefined => {
+  const requestedEventId = numberField(payload, "requestedEventId");
+  const runId = stringField(payload, "runId");
+  const idempotencyKey = stringField(payload, "idempotencyKey");
+  const seedPaths = stringArrayField(payload, "seedPaths");
+  const claim = livedClaimFrom(payload.claim);
+  if (
+    requestedEventId === undefined ||
+    runId === undefined ||
+    idempotencyKey === undefined ||
+    seedPaths === undefined ||
+    claim === undefined
+  ) {
+    return undefined;
+  }
+  return { requestedEventId, runId, idempotencyKey, seedPaths, claim };
+};
+
+const terminalBuildAttemptedFrom = (
+  payload: Record<string, unknown>,
+): WorkspaceJobTerminalBuildAttemptedPayload | undefined => {
+  const requestedEventId = numberField(payload, "requestedEventId");
+  const runId = stringField(payload, "runId");
+  const idempotencyKey = stringField(payload, "idempotencyKey");
+  const submitRunId = numberField(payload, "submitRunId");
+  const schemaId = stringField(payload, "schemaId");
+  const bytes = numberField(payload, "bytes");
+  const sha256 = stringField(payload, "sha256");
+  const claim = livedClaimFrom(payload.claim);
+  if (
+    requestedEventId === undefined ||
+    runId === undefined ||
+    idempotencyKey === undefined ||
+    submitRunId === undefined ||
+    schemaId === undefined ||
+    bytes === undefined ||
+    sha256 === undefined ||
+    claim === undefined
+  ) {
+    return undefined;
+  }
+  return { requestedEventId, runId, idempotencyKey, submitRunId, schemaId, bytes, sha256, claim };
+};
+
+const artifactWrittenFrom = (
+  payload: Record<string, unknown>,
+): WorkspaceJobArtifactWrittenPayload | undefined => {
+  const requestedEventId = numberField(payload, "requestedEventId");
+  const runId = stringField(payload, "runId");
+  const idempotencyKey = stringField(payload, "idempotencyKey");
+  const path = stringField(payload, "path");
+  const artifactRef = stringField(payload, "artifactRef");
+  const submitRunId = numberField(payload, "submitRunId");
+  const schemaId = stringField(payload, "schemaId");
+  const bytes = numberField(payload, "bytes");
+  const sha256 = stringField(payload, "sha256");
+  const claim = livedClaimFrom(payload.claim);
+  if (
+    requestedEventId === undefined ||
+    runId === undefined ||
+    idempotencyKey === undefined ||
+    path === undefined ||
+    artifactRef === undefined ||
+    submitRunId === undefined ||
+    schemaId === undefined ||
+    bytes === undefined ||
+    sha256 === undefined ||
+    claim === undefined
+  ) {
+    return undefined;
+  }
+  return {
+    requestedEventId,
+    runId,
+    idempotencyKey,
+    path,
+    artifactRef,
+    submitRunId,
+    schemaId,
+    bytes,
+    sha256,
+    claim,
+  };
+};
+
+const artifactReadbackVerifiedFrom = (
+  payload: Record<string, unknown>,
+): WorkspaceJobArtifactReadbackVerifiedPayload | undefined => {
+  const requestedEventId = numberField(payload, "requestedEventId");
+  const runId = stringField(payload, "runId");
+  const idempotencyKey = stringField(payload, "idempotencyKey");
+  const path = stringField(payload, "path");
+  const artifactRef = stringField(payload, "artifactRef");
+  const submitRunId = numberField(payload, "submitRunId");
+  const schemaId = stringField(payload, "schemaId");
+  const bytes = numberField(payload, "bytes");
+  const sha256 = stringField(payload, "sha256");
+  const claim = livedClaimFrom(payload.claim);
+  if (
+    requestedEventId === undefined ||
+    runId === undefined ||
+    idempotencyKey === undefined ||
+    path === undefined ||
+    artifactRef === undefined ||
+    submitRunId === undefined ||
+    schemaId === undefined ||
+    bytes === undefined ||
+    sha256 === undefined ||
+    claim === undefined
+  ) {
+    return undefined;
+  }
+  return {
+    requestedEventId,
+    runId,
+    idempotencyKey,
+    path,
+    artifactRef,
+    submitRunId,
+    schemaId,
+    bytes,
+    sha256,
+    claim,
+  };
+};
+
 const sameOwner = (event: WorkspaceJobLedgerEvent): boolean =>
   event.factOwnerRef === undefined || event.factOwnerRef === WORKSPACE_JOB_FACT_OWNER;
 
@@ -457,6 +705,90 @@ export const projectWorkspaceJobByIdempotencyKey = (
     }
   }
   return { status: "missing", idempotencyKey };
+};
+
+export const projectWorkspaceJobSteps = (
+  events: Iterable<WorkspaceJobLedgerEvent>,
+  runId: string,
+): WorkspaceJobStepProjection => {
+  let request: WorkspaceJobRequestedPayload | undefined;
+  let requestedEventId: number | undefined;
+  let seedWritten: WorkspaceJobSeedWrittenPayload | undefined;
+  let terminalBuildAttempted: WorkspaceJobTerminalBuildAttemptedPayload | undefined;
+  let artifactWritten: WorkspaceJobArtifactWrittenPayload | undefined;
+  let artifactReadbackVerified: WorkspaceJobArtifactReadbackVerifiedPayload | undefined;
+  let terminalFinalized:
+    | { readonly eventId: number; readonly payload: WorkspaceJobTerminalFinalizedPayload }
+    | undefined;
+
+  for (const event of events) {
+    if (!sameOwner(event) || !Predicate.isRecord(event.payload)) continue;
+    if (event.kind === WORKSPACE_JOB_KIND.REQUESTED && request === undefined) {
+      const next = requestedFrom(event.payload);
+      if (next?.runId === runId) {
+        request = next;
+        requestedEventId = event.id;
+      }
+      continue;
+    }
+    if (request === undefined || requestedEventId === undefined) continue;
+
+    if (event.kind === WORKSPACE_JOB_KIND.SEED_WRITTEN && seedWritten === undefined) {
+      const next = seedWrittenFrom(event.payload);
+      if (next?.requestedEventId === requestedEventId && next.runId === runId) {
+        seedWritten = next;
+      }
+      continue;
+    }
+    if (
+      event.kind === WORKSPACE_JOB_KIND.TERMINAL_BUILD_ATTEMPTED &&
+      terminalBuildAttempted === undefined
+    ) {
+      const next = terminalBuildAttemptedFrom(event.payload);
+      if (next?.requestedEventId === requestedEventId && next.runId === runId) {
+        terminalBuildAttempted = next;
+      }
+      continue;
+    }
+    if (event.kind === WORKSPACE_JOB_KIND.ARTIFACT_WRITTEN && artifactWritten === undefined) {
+      const next = artifactWrittenFrom(event.payload);
+      if (next?.requestedEventId === requestedEventId && next.runId === runId) {
+        artifactWritten = next;
+      }
+      continue;
+    }
+    if (
+      event.kind === WORKSPACE_JOB_KIND.ARTIFACT_READBACK_VERIFIED &&
+      artifactReadbackVerified === undefined
+    ) {
+      const next = artifactReadbackVerifiedFrom(event.payload);
+      if (next?.requestedEventId === requestedEventId && next.runId === runId) {
+        artifactReadbackVerified = next;
+      }
+      continue;
+    }
+    if (event.kind === WORKSPACE_JOB_KIND.TERMINAL_FINALIZED && terminalFinalized === undefined) {
+      const next = terminalFinalizedFrom(event.payload);
+      if (next?.requestedEventId === requestedEventId && next.runId === runId) {
+        terminalFinalized = { eventId: event.id, payload: next };
+      }
+    }
+  }
+
+  if (request === undefined || requestedEventId === undefined) {
+    return { status: "missing", runId };
+  }
+  return {
+    status: "found",
+    runId,
+    requestedEventId,
+    request,
+    ...(seedWritten === undefined ? {} : { seedWritten }),
+    ...(terminalBuildAttempted === undefined ? {} : { terminalBuildAttempted }),
+    ...(artifactWritten === undefined ? {} : { artifactWritten }),
+    ...(artifactReadbackVerified === undefined ? {} : { artifactReadbackVerified }),
+    ...(terminalFinalized === undefined ? {} : { terminalFinalized }),
+  };
 };
 
 export const projectWorkspaceJob = (

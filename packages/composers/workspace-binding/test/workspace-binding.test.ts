@@ -67,7 +67,7 @@ describe("@agent-os/workspace-binding", () => {
       { domain: env.domain, replay: { access: "read", witness: "snapshot" } },
     ]);
     expect(bindings.materials?.workspace).toEqual(workspaceEnvMaterialRef(env));
-    expect(bindings.resolvedMaterials?.workspace).toBe(env);
+    expect("resolvedMaterials" in bindings).toBe(false);
     expect(bindings.tools).toBeDefined();
     expect((bindings.tools!.read_file as { readonly execution?: unknown }).execution).toEqual({
       kind: "external",

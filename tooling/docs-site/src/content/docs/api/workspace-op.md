@@ -19,6 +19,7 @@ title: "@agent-os/workspace-op Public API Intent"
 - `.:WorkspaceOperationRequestedPayload`
 - `.:WorkspaceOperationToolResult`
 - `.:projectWorkspaceOperation`
+- `.:projectWorkspaceOperationSafeLedgerEvent`
 - `.:rejectWorkspaceOperation`
 - `.:settleWorkspaceOperationCompleted`
 - `.:workspaceOpBoundaryContract`
