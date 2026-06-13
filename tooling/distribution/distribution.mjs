@@ -16,6 +16,7 @@ const localChannelManifestPath = path.join(distRoot, "local-channel.json");
 const tarballHashLength = 12;
 let packageVersionOverride;
 const defaultLocalRegistryRoot = path.join(os.homedir(), ".agentos", "local-registry");
+const sourcePackageScope = "@agent-os";
 
 const runtimePackageRoots = ["packages", "tooling"];
 const cloudflarePackageNames = new Set([
@@ -39,6 +40,24 @@ const fail = (message) => {
 };
 
 const repoPath = (absolutePath) => path.relative(repoRoot, absolutePath).split(path.sep).join("/");
+
+const hasAncestorNodeModules = (dir) => {
+  let current = fs.realpathSync(dir);
+  while (true) {
+    if (fs.existsSync(path.join(current, "node_modules"))) return true;
+    const parent = path.dirname(current);
+    if (parent === current) return false;
+    current = parent;
+  }
+};
+
+const fixtureTempRoot = () => {
+  const configured = fs.realpathSync(os.tmpdir());
+  if (!hasAncestorNodeModules(configured)) return configured;
+  return fs.realpathSync("/tmp");
+};
+
+const mkdtempFixture = (prefix) => fs.mkdtempSync(path.join(fixtureTempRoot(), prefix));
 
 const readJson = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
 
@@ -75,6 +94,39 @@ const releaseVersion = () => {
   }
   return version;
 };
+
+const releaseConfig = () => rootPackage().agentOsRelease ?? {};
+
+const publishScope = () => {
+  const scope = process.env.AGENTOS_NPM_SCOPE ?? releaseConfig().npmScope ?? sourcePackageScope;
+  if (typeof scope !== "string" || !/^@[a-z0-9][a-z0-9._-]*$/u.test(scope)) {
+    fail("agentOsRelease.npmScope or AGENTOS_NPM_SCOPE must be a valid lowercase npm scope");
+  }
+  return scope;
+};
+
+const publishAccess = () => {
+  const access = process.env.AGENTOS_NPM_ACCESS ?? releaseConfig().npmAccess ?? "restricted";
+  if (access !== "public" && access !== "restricted") {
+    fail("agentOsRelease.npmAccess or AGENTOS_NPM_ACCESS must be public or restricted");
+  }
+  return access;
+};
+
+const isSourcePackageName = (name) => name.startsWith(`${sourcePackageScope}/`);
+
+const publicPackageName = (name) => {
+  if (!isSourcePackageName(name)) return name;
+  return `${publishScope()}/${name.slice(sourcePackageScope.length + 1)}`;
+};
+
+const publicSpecifier = (specifier) => {
+  if (specifier === sourcePackageScope) return publishScope();
+  if (!specifier.startsWith(`${sourcePackageScope}/`)) return specifier;
+  return `${publishScope()}${specifier.slice(sourcePackageScope.length)}`;
+};
+
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 
 const packageVersion = () => packageVersionOverride ?? releaseVersion();
 
@@ -214,9 +266,11 @@ const localRegistryUserconfig = (registry) => {
   fs.mkdirSync(path.dirname(userconfigPath), { recursive: true });
   fs.writeFileSync(
     userconfigPath,
-    [`@agent-os:registry=${registry}`, `${registryAuthKey(registry)}:_authToken=${token}`, ""].join(
-      "\n",
-    ),
+    [
+      `${publishScope()}:registry=${registry}`,
+      `${registryAuthKey(registry)}:_authToken=${token}`,
+      "",
+    ].join("\n"),
   );
   return userconfigPath;
 };
@@ -418,17 +472,22 @@ const resolveRelativeSpecifier = (sourceFile, specifier, ext) => {
   return specifier;
 };
 
+const resolveModuleSpecifier = (sourceFile, specifier, ext) => {
+  if (specifier.startsWith(".")) return resolveRelativeSpecifier(sourceFile, specifier, ext);
+  return publicSpecifier(specifier);
+};
+
 const rewriteModuleSpecifiers = (text, sourceFile, ext) =>
   text
-    .replace(/(\bfrom\s*["'])(\.[^"']+)(["'])/g, (_match, prefix, specifier, suffix) => {
-      return `${prefix}${resolveRelativeSpecifier(sourceFile, specifier, ext)}${suffix}`;
+    .replace(/(\bfrom\s*["'])([^"']+)(["'])/g, (_match, prefix, specifier, suffix) => {
+      return `${prefix}${resolveModuleSpecifier(sourceFile, specifier, ext)}${suffix}`;
     })
-    .replace(
-      /(\bimport\s*\(\s*["'])(\.[^"']+)(["']\s*\))/g,
-      (_match, prefix, specifier, suffix) => {
-        return `${prefix}${resolveRelativeSpecifier(sourceFile, specifier, ext)}${suffix}`;
-      },
-    );
+    .replace(/(\bimport\s*\(\s*["'])([^"']+)(["']\s*\))/g, (_match, prefix, specifier, suffix) => {
+      return `${prefix}${resolveModuleSpecifier(sourceFile, specifier, ext)}${suffix}`;
+    })
+    .replace(/(\bimport\s*["'])([^"']+)(["'])/g, (_match, prefix, specifier, suffix) => {
+      return `${prefix}${resolveModuleSpecifier(sourceFile, specifier, ext)}${suffix}`;
+    });
 
 const emitJs = (record) => {
   for (const file of sourceFiles(record)) {
@@ -492,8 +551,8 @@ const projectedDependencies = (record) => {
   const dependencies = {};
   for (const [name, value] of Object.entries(record.packageJson.dependencies ?? {})) {
     if (name === "effect") continue;
-    if (name.startsWith("@agent-os/")) {
-      dependencies[name] = version;
+    if (isSourcePackageName(name)) {
+      dependencies[publicPackageName(name)] = version;
       continue;
     }
     dependencies[name] = value === "catalog:" ? rootCatalog[name] : value;
@@ -527,10 +586,13 @@ const generatedManifest = (record) => {
     ]),
   );
   const manifest = {
-    name: record.packageJson.name,
+    name: publicPackageName(record.packageJson.name),
     version: packageVersion(),
     type: "module",
     license: "UNLICENSED",
+    publishConfig: {
+      access: publishAccess(),
+    },
     main: exportsValue["."]?.default,
     types: exportsValue["."]?.types,
     exports: exportsValue,
@@ -590,10 +652,15 @@ const writeInstallManifest = (entries) => {
   const sorted = entries
     .slice()
     .sort((left, right) =>
-      left.record.packageJson.name.localeCompare(right.record.packageJson.name),
+      publicPackageName(left.record.packageJson.name).localeCompare(
+        publicPackageName(right.record.packageJson.name),
+      ),
     );
   const dependencies = Object.fromEntries(
-    sorted.map((entry) => [entry.record.packageJson.name, tarballSpec(entry.file)]),
+    sorted.map((entry) => [
+      publicPackageName(entry.record.packageJson.name),
+      tarballSpec(entry.file),
+    ]),
   );
   writeJson(installManifestPath, {
     version: packageVersion(),
@@ -602,7 +669,7 @@ const writeInstallManifest = (entries) => {
     overrides: dependencies,
     tarballs: Object.fromEntries(
       sorted.map((entry) => [
-        entry.record.packageJson.name,
+        publicPackageName(entry.record.packageJson.name),
         {
           path: repoPath(entry.file),
           spec: tarballSpec(entry.file),
@@ -629,19 +696,39 @@ const assertStagingPackage = (record) => {
   if (/src\/|src\\/.test(manifestText) || /src\/index/.test(manifestText)) {
     issues.push("generated manifest leaks source entrypoints");
   }
+  if (manifestText.includes(`${sourcePackageScope}/`)) {
+    issues.push(`generated manifest leaks source package scope ${sourcePackageScope}`);
+  }
+  const publicNames = new Set(
+    publishedRecords().map((candidate) => publicPackageName(candidate.packageJson.name)),
+  );
   for (const dependencyName of Object.keys(manifest.dependencies ?? {})) {
-    if (
-      dependencyName.startsWith("@agent-os/") &&
-      !publishedRecords().some((candidate) => candidate.packageJson.name === dependencyName)
-    ) {
+    if (isSourcePackageName(dependencyName)) {
+      issues.push(`generated manifest depends on source package scope ${dependencyName}`);
+    }
+    if (dependencyName.startsWith(`${publishScope()}/`) && !publicNames.has(dependencyName)) {
       issues.push(`generated manifest depends on unpublished internal package ${dependencyName}`);
     }
   }
-  for (const file of allFiles(path.join(record.stageDir, "dist")).filter((candidate) =>
-    candidate.endsWith(".d.ts"),
+  const sourceModuleSpecifierPattern = new RegExp(
+    `(?:\\bfrom\\s*["']|\\bimport\\s*\\(\\s*["']|\\bimport\\s*["'])${escapeRegExp(
+      sourcePackageScope,
+    )}/`,
+    "u",
+  );
+  const publishedSourcePathPattern = new RegExp(`${escapeRegExp(publishScope())}/[^"']+/src/`, "u");
+  for (const file of allFiles(path.join(record.stageDir, "dist")).filter(
+    (candidate) => candidate.endsWith(".d.ts") || candidate.endsWith(".js"),
   )) {
     const text = fs.readFileSync(file, "utf8");
-    if (/\/src\/|src\/index|workspace:\*|["']workspace:|@agent-os\/[^"']+\/src\//.test(text)) {
+    if (sourceModuleSpecifierPattern.test(text)) {
+      issues.push(`${repoPath(file)} leaks source package module specifier ${sourcePackageScope}`);
+    }
+    if (
+      file.endsWith(".d.ts") &&
+      (/\/src\/|src\/index|workspace:\*|["']workspace:/.test(text) ||
+        publishedSourcePathPattern.test(text))
+    ) {
       issues.push(`${repoPath(file)} leaks source path in declaration output`);
     }
   }
@@ -692,14 +779,15 @@ const tarballsByPackage = () => {
   const byPackage = new Map();
   const version = packageVersion();
   for (const record of publishedRecords()) {
-    const packageNamePart = record.packageJson.name.replace(/^@/u, "").replace(/\//gu, "-");
+    const packageName = publicPackageName(record.packageJson.name);
+    const packageNamePart = packageName.replace(/^@/u, "").replace(/\//gu, "-");
     const prefix = `${packageNamePart}-${version}`;
     const tarball = allFiles(tarballRoot)
       .filter((entry) => path.basename(entry).startsWith(prefix) && entry.endsWith(".tgz"))
       .sort((left, right) => left.localeCompare(right))
       .at(-1);
-    if (tarball === undefined) fail(`${record.packageJson.name}: missing tarball`);
-    byPackage.set(record.packageJson.name, tarball);
+    if (tarball === undefined) fail(`${packageName}: missing tarball`);
+    byPackage.set(packageName, tarball);
   }
   return byPackage;
 };
@@ -726,11 +814,13 @@ const writeConsumerApp = (dir, extraDeps = {}) => {
   fs.writeFileSync(
     path.join(dir, "index.ts"),
     [
-      'import { makePreClaim } from "@agent-os/kernel/effect-claim";',
-      'import type { LedgerEventRpc } from "@agent-os/kernel/types";',
-      'import { triggerParseOk } from "@agent-os/runtime";',
-      'import { defineAgentDO, type CloudflareAgentEnv } from "@agent-os/backend-cloudflare-do";',
-      'import { mountOpsHtmx } from "@agent-os/ops-htmx";',
+      `import { makePreClaim } from "${publicSpecifier("@agent-os/kernel/effect-claim")}";`,
+      `import type { LedgerEventRpc } from "${publicSpecifier("@agent-os/kernel/types")}";`,
+      `import { triggerParseOk } from "${publicSpecifier("@agent-os/runtime")}";`,
+      `import { defineAgentDO, type CloudflareAgentEnv } from "${publicSpecifier(
+        "@agent-os/backend-cloudflare-do",
+      )}";`,
+      `import { mountOpsHtmx } from "${publicSpecifier("@agent-os/ops-htmx")}";`,
       "void makePreClaim;",
       "void triggerParseOk;",
       "void defineAgentDO;",
@@ -744,17 +834,17 @@ const writeConsumerApp = (dir, extraDeps = {}) => {
   fs.writeFileSync(
     path.join(dir, "smoke.mjs"),
     [
-      'import { ABORT } from "@agent-os/kernel";',
-      'import { triggerParseOk } from "@agent-os/runtime";',
-      'import { projectTurnStream } from "@agent-os/turn-stream";',
-      'import { mountOpsApi } from "@agent-os/ops-api";',
+      `import { ABORT } from "${publicSpecifier("@agent-os/kernel")}";`,
+      `import { triggerParseOk } from "${publicSpecifier("@agent-os/runtime")}";`,
+      `import { projectTurnStream } from "${publicSpecifier("@agent-os/turn-stream")}";`,
+      `import { mountOpsApi } from "${publicSpecifier("@agent-os/ops-api")}";`,
       "if (!ABORT || !triggerParseOk || !projectTurnStream || !mountOpsApi) throw new Error('missing import');",
     ].join("\n") + "\n",
   );
   fs.writeFileSync(
     path.join(dir, "cf-entry.ts"),
     [
-      'import { defineAgentDO } from "@agent-os/backend-cloudflare-do";',
+      `import { defineAgentDO } from "${publicSpecifier("@agent-os/backend-cloudflare-do")}";`,
       "export const AgentDO = defineAgentDO({ bindings: [] });",
     ].join("\n") + "\n",
   );
@@ -791,7 +881,7 @@ const npmInstall = (dir, omitPeer = false) => {
 };
 
 const assertPeerFailure = () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-peer-failure-"));
+  const dir = mkdtempFixture("agentos-peer-failure-");
   writeJson(path.join(dir, "package.json"), {
     name: "agentos-peer-failure",
     private: true,
@@ -803,11 +893,15 @@ const assertPeerFailure = () => {
   });
   fs.writeFileSync(
     path.join(dir, "index.ts"),
-    'import { triggerParseOk } from "@agent-os/runtime";\nvoid triggerParseOk;\n',
+    `import { makePreClaim } from "${publicSpecifier(
+      "@agent-os/kernel/effect-claim",
+    )}";\nvoid makePreClaim;\n`,
   );
   fs.writeFileSync(
     path.join(dir, "smoke.mjs"),
-    'import { triggerParseOk } from "@agent-os/runtime";\nvoid triggerParseOk;\n',
+    `import { makePreClaim } from "${publicSpecifier(
+      "@agent-os/kernel/effect-claim",
+    )}";\nvoid makePreClaim;\n`,
   );
   writeJson(path.join(dir, "tsconfig.json"), {
     compilerOptions: {
@@ -873,8 +967,13 @@ const negativeContractTests = () => {
     if (!paths.has(kernel.packagePath)) fail(`${kernel.packagePath}: missing published package`);
   });
   assertFails("deep source path in d.ts", () => {
-    const text = 'import type { X } from "@agent-os/runtime/src/internal-helper";\n';
-    if (/\/src\/|src\/index|workspace:\*|["']workspace:|@agent-os\/[^"']+\/src\//.test(text)) {
+    const text = `import type { X } from "${publicSpecifier(
+      "@agent-os/runtime/src/internal-helper",
+    )}";\n`;
+    if (
+      /\/src\/|src\/index|workspace:\*|["']workspace:/.test(text) ||
+      new RegExp(`${escapeRegExp(publishScope())}/[^"']+/src/`, "u").test(text)
+    ) {
       fail("declaration leaks source path");
     }
   });
@@ -901,7 +1000,7 @@ const testInternalConsumer = () => {
   packInternal();
   negativeContractTests();
   assertPeerFailure();
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-internal-consumer-"));
+  const dir = mkdtempFixture("agentos-internal-consumer-");
   writeConsumerApp(dir, {
     effect: catalog().effect,
     "@cloudflare/workers-types": catalog()["@cloudflare/workers-types"],
@@ -932,7 +1031,7 @@ const publishInternal = () => {
   if (registry === undefined || registry.trim().length === 0) {
     fail("AGENTOS_NPM_REGISTRY or NPM_CONFIG_REGISTRY is required for publish:internal");
   }
-  const access = process.env.AGENTOS_NPM_ACCESS ?? "restricted";
+  const access = publishAccess();
   for (const tarball of tarballsByPackage().values()) {
     run("npm", ["publish", tarball, "--registry", registry, "--access", access]);
   }
@@ -940,7 +1039,7 @@ const publishInternal = () => {
 
 const writeLocalChannelManifest = ({ registry, tag, version }) => {
   const names = publishedRecords()
-    .map((record) => record.packageJson.name)
+    .map((record) => publicPackageName(record.packageJson.name))
     .sort((left, right) => left.localeCompare(right));
   writeJson(localChannelManifestPath, {
     version,
@@ -948,7 +1047,7 @@ const writeLocalChannelManifest = ({ registry, tag, version }) => {
     tag,
     generatedBy: "tooling/distribution/distribution.mjs publish-local",
     dependencies: Object.fromEntries(names.map((name) => [name, tag])),
-    npmrc: [`@agent-os:registry=${registry}`],
+    npmrc: [`${publishScope()}:registry=${registry}`],
   });
 };
 
@@ -961,7 +1060,7 @@ const publishLocal = (rawArgs) => {
     "http://127.0.0.1:4873";
   const tag = args.tag ?? process.env.AGENTOS_LOCAL_TAG ?? "agentos-dev";
   const version = args.version ?? localPackageVersion(args.label);
-  const access = args.access ?? process.env.AGENTOS_NPM_ACCESS ?? "public";
+  const access = args.access ?? publishAccess();
   withPackageVersion(version, () => {
     packInternal();
     const userconfig =
@@ -1013,7 +1112,7 @@ const localRegistry = (rawArgs) => {
       "  npmjs:",
       "    url: https://registry.npmjs.org/",
       "packages:",
-      "  '@agent-os/*':",
+      `  '${publishScope()}/*':`,
       "    access: $all",
       "    publish: $all",
       "    unpublish: $all",

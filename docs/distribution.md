@@ -1,28 +1,32 @@
-# Internal npm Distribution
+# npm Distribution
 
-agentOS app repos consume published `@agent-os/*` packages, not source
-workspace packages. Source package manifests stay private and may keep
+agentOS app repos consume published `@yansirplus/*` packages from npm, not
+source workspace packages. Source package manifests stay private and may keep
 `workspace:` / `catalog:` for monorepo development. `tooling/distribution`
 generates publish-only package projections under `dist/internal-npm`.
 
 ## Install
 
-Configure a private registry through npm or environment:
-
-```sh
-export AGENTOS_NPM_REGISTRY=https://registry.example.invalid
-npm config set @agent-os:registry "$AGENTOS_NPM_REGISTRY"
-```
-
 Install agentOS packages plus required peers:
 
 ```sh
-bun add @agent-os/runtime @agent-os/backend-cloudflare-do effect
+bun add @yansirplus/runtime @yansirplus/backend-cloudflare-do effect
 ```
 
 Cloudflare-targeted packages also peer depend on
 `@cloudflare/workers-types`. Worker apps should install a compatible version
 from the release manifest before typechecking Cloudflare-facing code.
+
+## Publish
+
+```sh
+export AGENTOS_NPM_REGISTRY=https://registry.npmjs.org/
+bun run publish:internal
+```
+
+`package.json` `agentOsRelease.npmScope` owns the published npm scope.
+`agentOsRelease.npmAccess` owns the default publish access. Override them only
+for isolated tests with `AGENTOS_NPM_SCOPE` or `AGENTOS_NPM_ACCESS`.
 
 For first-party prepublish consumers, run:
 
@@ -34,7 +38,7 @@ bun run publish:local
 Then configure the consumer once:
 
 ```ini
-@agent-os:registry=http://127.0.0.1:4873
+@yansirplus:registry=http://127.0.0.1:4873
 ```
 
 Consumer `package.json` should depend on the logical channel, not a worktree
@@ -43,8 +47,8 @@ path:
 ```json
 {
   "dependencies": {
-    "@agent-os/runtime": "agentos-dev",
-    "@agent-os/backend-cloudflare-do": "agentos-dev"
+    "@yansirplus/runtime": "agentos-dev",
+    "@yansirplus/backend-cloudflare-do": "agentos-dev"
   }
 }
 ```

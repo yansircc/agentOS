@@ -117,7 +117,9 @@
   },
   "packageManager": "bun@1.3.14",
   "agentOsRelease": {
-    "version": "0.2.9"
+    "version": "0.2.9",
+    "npmScope": "@yansirplus",
+    "npmAccess": "public"
   },
   "agentos": {
     "backendNeutralityStatus": "backend-neutral",
