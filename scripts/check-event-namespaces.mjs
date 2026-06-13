@@ -3,12 +3,14 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import ts from "typescript";
+import { fileURLToPath } from "node:url";
 
 const repoRoot = process.cwd();
 const sourceRoots = ["packages"];
 const writerNames = new Set(["append", "insertEvent", "logLedgerEvent", "commit", "commitEvents"]);
 
-const toRepoPath = (file) => path.relative(repoRoot, file).split(path.sep).join("/");
+const toRepoPath = (file) =>
+  (path.isAbsolute(file) ? path.relative(repoRoot, file) : file).split(path.sep).join("/");
 
 const sourceFiles = (root) => {
   const files = [];
@@ -420,7 +422,7 @@ const collectWriterKinds = (sourceFile, filePath) => {
   return writes;
 };
 
-const collectNamespaceFailures = (root) => {
+export const collectNamespaceModel = (root) => {
   const files = sourceFiles(root);
   const parsed = files.map((file) => ({
     file,
@@ -442,7 +444,7 @@ const collectNamespaceFailures = (root) => {
     declaration.prefixes.map((prefix) => ({
       prefix,
       owner: declaration.owner,
-      filePath: declaration.filePath,
+      filePath: toRepoPath(declaration.filePath),
       declared: new Set(declaration.events),
     })),
   );
@@ -486,10 +488,12 @@ const collectNamespaceFailures = (root) => {
       )} but is not declared by ${toRepoPath(owner.filePath)}`,
     );
   }
-  return failures;
+  return { owners, writes, failures };
 };
 
-const collectSelfTestFailures = () => {
+export const collectNamespaceFailures = (root) => collectNamespaceModel(root).failures;
+
+export const collectSelfTestFailures = () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-event-ns-"));
   try {
     fs.mkdirSync(path.join(root, "packages/kernel/src"), { recursive: true });
@@ -549,14 +553,19 @@ tx.append({ kind: "other.bad", scope: "ok", payload: {} });
   }
 };
 
-const selfTest = process.argv.includes("--self-test");
-const failures = selfTest ? collectSelfTestFailures() : collectNamespaceFailures(repoRoot);
+const isCli =
+  process.argv[1] !== undefined && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
 
-if (failures.length > 0) {
-  console.error(failures.join("\n"));
-  process.exit(1);
+if (isCli) {
+  const selfTest = process.argv.includes("--self-test");
+  const failures = selfTest ? collectSelfTestFailures() : collectNamespaceFailures(repoRoot);
+
+  if (failures.length > 0) {
+    console.error(failures.join("\n"));
+    process.exit(1);
+  }
+
+  console.log(
+    selfTest ? "event namespace gate self-test passed" : "event namespace ownership gate passed",
+  );
 }
-
-console.log(
-  selfTest ? "event namespace gate self-test passed" : "event namespace ownership gate passed",
-);

@@ -2,7 +2,7 @@
 
 # @agent-os/attached-stream Public API
 
-Status: 0.2.x public-experimental for attached stream frame algebra. Public exports are listed for accidental export control only; this is not an API freeze.
+Status: 0.3.x public-experimental for attached stream frame algebra. Public exports are listed for accidental export control only; this is not an API freeze.
 
 ## Public exports
 

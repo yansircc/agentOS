@@ -8,7 +8,7 @@ Web Fetch Server-Sent Events codecs and response construction for agentOS stream
 
 ## Public API Status
 
-0.2.x public-experimental. Exports are listed in `PUBLIC_API.md` to prevent accidental exports; this is not an API freeze.
+0.3.x public-experimental. Exports are listed in `PUBLIC_API.md` to prevent accidental exports; this is not an API freeze.
 
 ## Invariant
 

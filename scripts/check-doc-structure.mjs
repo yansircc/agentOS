@@ -213,6 +213,7 @@ if (!exists("docs/reference/carriers.md")) {
 const agentGeneratedMarkdownFiles = [
   "docs/start-here.md",
   "docs/agent/primitives.md",
+  "docs/agent/decision-graph.md",
   "docs/agent/errors.md",
   "docs/agent/invariant-matrix.md",
 ];
@@ -234,6 +235,7 @@ for (const file of agentGeneratedMarkdownFiles) {
 const agentGeneratedJsonFiles = [
   "docs/agent/recipes.json",
   "docs/agent/primitives.json",
+  "docs/agent/decision-graph.json",
   "docs/agent/errors.json",
   "docs/agent/invariant-matrix.json",
 ];
@@ -255,6 +257,7 @@ for (const file of agentGeneratedJsonFiles) {
 
 const agentSourceFiles = [
   "docs/agent/recipes.source.json",
+  "docs/agent/capability-rules.source.json",
   "docs/agent/invariants.source.json",
   "docs/agent/error-metadata.source.json",
   "docs/agent/external-vocabulary.source.json",
@@ -266,6 +269,7 @@ for (const file of agentSourceFiles) {
 
 if (agentSourceFiles.every(exists)) {
   const recipesSource = readJson("docs/agent/recipes.source.json");
+  const capabilityRulesSource = readJson("docs/agent/capability-rules.source.json");
   const invariantsSource = readJson("docs/agent/invariants.source.json");
   const errorsSource = readJson("docs/agent/error-metadata.source.json");
   const externalVocabularySource = readJson("docs/agent/external-vocabulary.source.json");
@@ -273,6 +277,10 @@ if (agentSourceFiles.every(exists)) {
   ensureUnique(
     recipesSource.recipes.map((recipe) => recipe.id),
     "agent recipe id",
+  );
+  ensureUnique(
+    capabilityRulesSource.rules.map((rule) => rule.primitive),
+    "agent capability rule primitive",
   );
   ensureUnique(
     invariantsSource.invariants.map((invariant) => invariant.id),

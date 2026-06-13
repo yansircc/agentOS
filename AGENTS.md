@@ -55,7 +55,7 @@ Use lowercase subjects and choose the narrowest accurate type, such as `feat`,
 ## Repo Surface
 
 ```text
-docs/       public 0.2.x docs only
+docs/       public docs and generated projections
 packages/   substrate, carriers, backends, composition packages
 tooling/    repo-local or ops tooling, not substrate
 skills/     repo-shipped Codex skills
@@ -102,6 +102,7 @@ Start at [docs/start-here.md](docs/start-here.md). It is the generated route fro
 | ------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | Start route                                             | [docs/start-here.md](docs/start-here.md)                                           |
 | Primitive catalog                                       | [docs/agent/primitives.md](docs/agent/primitives.md)                               |
+| Decision graph                                          | [docs/agent/decision-graph.md](docs/agent/decision-graph.md)                       |
 | Error catalog                                           | [docs/agent/errors.md](docs/agent/errors.md)                                       |
 | Invariant matrix                                        | [docs/agent/invariant-matrix.md](docs/agent/invariant-matrix.md)                   |
 | Append and read a ledger event                          | [docs/tutorials/hello-ledger-event.md](docs/tutorials/hello-ledger-event.md)       |

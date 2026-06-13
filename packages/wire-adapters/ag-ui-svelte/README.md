@@ -8,7 +8,7 @@ Svelte stores for consuming AG-UI frames produced by `@agent-os/ag-ui`.
 
 ## Public API Status
 
-0.2.x active development. Public exports are listed in `PUBLIC_API.md` to prevent accidental exports; they are not frozen.
+0.3.x active development. Public exports are listed in `PUBLIC_API.md` to prevent accidental exports; they are not frozen.
 
 ## Invariant
 

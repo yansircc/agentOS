@@ -1,0 +1,138 @@
+{
+  "schemaVersion": 1,
+  "rules": [
+    {
+      "primitive": "primitive.ag-ui.projectLedgerSseToAgUiSse",
+      "intents": [
+        "stream an agent run to a browser UI",
+        "convert runtime ledger SSE into AG-UI frames"
+      ],
+      "sourceFactPrefixes": ["agent.", "chat.", "llm.", "tool."],
+      "allowedPrimitives": [
+        "primitive.ag-ui.projectLedgerEventToAgUiEnvelope",
+        "primitive.ag-ui.projectLedgerSseToAgUiSse",
+        "primitive.cloudflare-do.createCloudflareLedgerAgUiSseResponse",
+        "primitive.runtime.SubmitResult",
+        "primitive.runtime.SubmitSpec",
+        "primitive.runtime.projectRunStatus",
+        "primitive.runtime.projectRunTrace"
+      ],
+      "forbiddenWrites": [
+        {
+          "actor": "product",
+          "action": "read_raw_ledger_payload",
+          "target": { "kind": "eventPrefix", "value": "agent." },
+          "invariant": "invariant.boundary.owner-owned-safe-projection"
+        },
+        {
+          "actor": "ui",
+          "action": "treat_stream_as_durable_truth",
+          "target": { "kind": "surface", "value": "ag-ui-sse" },
+          "invariant": "invariant.d10.truth-identity"
+        }
+      ],
+      "gates": ["test:ag-ui-sse-axis", "test:substrate-consumer-guards"]
+    },
+    {
+      "primitive": "primitive.cloudflare-do.installCloudflareWorkspaceJobProfile",
+      "intents": [
+        "run a workspace job and stream observable result to UI",
+        "consume workspace-job failure observability without reading raw ledger payload"
+      ],
+      "sourceFactPrefixes": ["agent.", "llm.", "tool.", "workspace_job.", "workspace_op."],
+      "allowedPrimitives": [
+        "primitive.ag-ui.projectLedgerSseToAgUiSse",
+        "primitive.cloudflare-do.createCloudflareLedgerAgUiSseResponse",
+        "primitive.cloudflare-do.createCloudflareWorkspaceJobResponse",
+        "primitive.cloudflare-do.installCloudflareWorkspaceJobProfile",
+        "primitive.runtime.projectWorkspaceJobObservability",
+        "primitive.runtime.runWorkspaceJobEffect"
+      ],
+      "forbiddenWrites": [
+        {
+          "actor": "product",
+          "action": "write_terminal_fact",
+          "target": { "kind": "eventPrefix", "value": "workspace_job." },
+          "invariant": "invariant.d10.namespace-integrity"
+        },
+        {
+          "actor": "product",
+          "action": "read_raw_ledger_payload",
+          "target": { "kind": "eventPrefix", "value": "workspace_op." },
+          "invariant": "invariant.boundary.owner-owned-safe-projection"
+        },
+        {
+          "actor": "public_submit",
+          "action": "carry_resolved_provider_material",
+          "target": { "kind": "material", "value": "resolvedMaterials" },
+          "invariant": "invariant.d10.truth-identity"
+        }
+      ],
+      "gates": [
+        "check:cloudflare-profile",
+        "check:observability",
+        "check:workspace-job",
+        "test:substrate-consumer-guards"
+      ]
+    },
+    {
+      "primitive": "primitive.kernel.defineProductTool",
+      "intents": [
+        "add a product tool with schema, admission, and execution domain",
+        "route effectful tool execution through declared tool authority"
+      ],
+      "sourceFactPrefixes": ["tool."],
+      "allowedPrimitives": [
+        "primitive.kernel.AgentSchema",
+        "primitive.kernel.ExecutionDomain",
+        "primitive.kernel.Tool",
+        "primitive.kernel.ToolContract",
+        "primitive.kernel.defineProductTool"
+      ],
+      "forbiddenWrites": [
+        {
+          "actor": "product",
+          "action": "execute_without_declared_tool_contract",
+          "target": { "kind": "eventPrefix", "value": "tool." },
+          "invariant": "invariant.algebra.type-or-boot-proof"
+        },
+        {
+          "actor": "tool_handler",
+          "action": "store_provider_material_in_tool_payload",
+          "target": { "kind": "material", "value": "provider credentials" },
+          "invariant": "invariant.boundary.runtime-validation-external-only"
+        }
+      ],
+      "gates": ["test:tool-execution-access-requirements", "test:tool-mutation-boundary"]
+    },
+    {
+      "primitive": "primitive.runtime.defineProjection",
+      "intents": [
+        "build a materialized projection reader",
+        "derive observable state from ledger facts without making projection state truth"
+      ],
+      "sourceFactPrefixes": ["agent."],
+      "allowedPrimitives": [
+        "primitive.runtime.MaterializedProjectionDefinition",
+        "primitive.runtime.ProjectionReduceResult",
+        "primitive.runtime.defineProjection",
+        "primitive.runtime.waitForProjection"
+      ],
+      "forbiddenWrites": [
+        {
+          "actor": "projection",
+          "action": "become_source_of_truth",
+          "target": { "kind": "surface", "value": "materialized projection state" },
+          "invariant": "invariant.d10.truth-identity"
+        },
+        {
+          "actor": "consumer",
+          "action": "write_derived_state_back_to_ledger_fact",
+          "target": { "kind": "eventPrefix", "value": "agent." },
+          "invariant": "invariant.ledger.single-commit-source"
+        }
+      ],
+      "gates": ["check"]
+    }
+  ]
+}

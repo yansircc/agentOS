@@ -7,7 +7,7 @@ of the substrate.
 
 <!-- agentos:generated release-posture:start -->
 
-Current release posture: 0.2.x active development. PUBLIC_API.md files guard against accidental exports; they are not API or schema freezes.
+Current release posture: 0.3.x active development. PUBLIC_API.md files guard against accidental exports; they are not API or schema freezes.
 
 <!-- agentos:generated release-posture:end -->
 

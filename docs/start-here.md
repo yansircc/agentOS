@@ -10,6 +10,7 @@ Agent-facing docs are generated projections. Source facts live in `docs/agent/*.
 | ---------------- | ----------------------------------------------------------- |
 | Recipes          | [docs/agent/recipes.json](agent/recipes.json)               |
 | Primitives       | [docs/agent/primitives.md](agent/primitives.md)             |
+| Decision Graph   | [docs/agent/decision-graph.md](agent/decision-graph.md)     |
 | Errors           | [docs/agent/errors.md](agent/errors.md)                     |
 | Invariant Matrix | [docs/agent/invariant-matrix.md](agent/invariant-matrix.md) |
 

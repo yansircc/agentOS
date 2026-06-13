@@ -47,12 +47,7 @@ const parseArgs = (argv) => {
       args[arg.slice(2)] = true;
       continue;
     }
-    if (
-      arg === "--version" ||
-      arg === "--registry" ||
-      arg === "--access" ||
-      arg === "--otp"
-    ) {
+    if (arg === "--version" || arg === "--registry" || arg === "--access" || arg === "--otp") {
       const value = argv[index + 1];
       if (value === undefined || value.startsWith("--")) fail(`${arg} requires a value`);
       args[arg.slice(2)] = value;
@@ -141,7 +136,7 @@ const workspacePackageJsonPaths = () => {
 const bumpVersions = (version) => {
   assertSemver(version);
   const root = rootPackage();
-  root.agentOsRelease = { ...(root.agentOsRelease ?? {}), version };
+  root.agentOsRelease = { ...root.agentOsRelease, version };
   writeJson(rootPackagePath, root);
 
   let changed = 1;

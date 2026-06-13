@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-os.dev/schemas/agent/capability-rules.source.schema.json",
+  "title": "agentOS capability rules source",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "rules"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "rules": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/rule" },
+      "uniqueItems": true
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(\\.[a-z0-9][a-z0-9-]*)+$"
+    },
+    "prefix": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z0-9_]+)*\\.$"
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "value"],
+      "properties": {
+        "kind": { "type": "string", "enum": ["eventPrefix", "surface", "material"] },
+        "value": { "type": "string", "minLength": 1 }
+      }
+    },
+    "forbiddenWrite": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actor", "action", "target", "invariant"],
+      "properties": {
+        "actor": { "type": "string", "minLength": 1 },
+        "action": { "type": "string", "minLength": 1 },
+        "target": { "$ref": "#/$defs/target" },
+        "invariant": { "$ref": "#/$defs/id" }
+      }
+    },
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "primitive",
+        "intents",
+        "sourceFactPrefixes",
+        "allowedPrimitives",
+        "forbiddenWrites",
+        "gates"
+      ],
+      "properties": {
+        "primitive": { "$ref": "#/$defs/id" },
+        "intents": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1
+        },
+        "sourceFactPrefixes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/prefix" },
+          "minItems": 1
+        },
+        "allowedPrimitives": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/id" },
+          "minItems": 1
+        },
+        "forbiddenWrites": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/forbiddenWrite" }
+        },
+        "gates": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1
+        }
+      }
+    }
+  }
+}

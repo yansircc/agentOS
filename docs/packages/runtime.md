@@ -50,8 +50,8 @@ facts or enqueueing more intents; they do not import backend storage internals.
 not `await`, return a Promise/thenable, or enqueue fire-and-forget callbacks
 through `.then`, timers, or microtasks. All ledger and projection writes must
 finish before the callback returns. `AcquireCtx` intentionally has no numeric
-`attempt` field in 0.2.x; retry semantics are derived from ledger/domain state
-folds until a concrete adapter requires a stronger identity surface.
+`attempt` field; retry semantics are derived from ledger/domain state folds
+until a concrete adapter requires a stronger identity surface.
 
 Cancellation is cooperative. A trigger may fail acquire with
 `DurableTriggerAcquireCancelled`; the backend then runs the trigger-owned
@@ -78,7 +78,7 @@ is the only stream-owned settlement hook and is always explicit. `onDetach`
 must be declared as `"abort"` or `"continue"` so the substrate never silently
 chooses between cost-saving abort and background completion.
 
-Submit LLM calls are bounded by the run time budget. In 0.2.x submit is
+Submit LLM calls are bounded by the run time budget. Submit is currently
 non-streaming, so the boundary is a total provider-call timeout, not an idle
 stream timeout. If `budget.timeMs` is finite, the remaining run budget bounds
 each provider call and timeout settles as `agent.aborted.budget_time`. If no

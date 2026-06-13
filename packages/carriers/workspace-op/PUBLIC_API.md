@@ -2,7 +2,7 @@
 
 # @agent-os/workspace-op Public API
 
-Status: 0.2.x active development for provider-neutral workspace operation carrier algebra. Public exports are listed for accidental export control only; this is not an API freeze.
+Status: 0.3.x active development for provider-neutral workspace operation carrier algebra. Public exports are listed for accidental export control only; this is not an API freeze.
 
 ## Public exports
 

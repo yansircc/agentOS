@@ -4,6 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { sourceTsdocRecordsForPackage } from "./public-api-model.mjs";
+import { collectNamespaceModel } from "./check-event-namespaces.mjs";
+import { buildCapabilityRouteProjection } from "./lib/capability-routes.mjs";
 
 const root = process.cwd();
 const check = process.argv.includes("--check");
@@ -133,13 +135,16 @@ const ensurePath = (file, owner) => {
 };
 
 const surface = readJson("docs/surface.json");
+const rootPackage = readJson("package.json");
 const recipesSource = readJson("docs/agent/recipes.source.json");
+const capabilityRulesSource = readJson("docs/agent/capability-rules.source.json");
 const invariantsSource = readJson("docs/agent/invariants.source.json");
 const primitiveEvidenceSource = readJson("docs/agent/primitive-evidence.source.json");
 const errorsSource = readJson("docs/agent/error-metadata.source.json");
 const externalVocabularySource = readJson("docs/agent/external-vocabulary.source.json");
 
 ensureUnique(recipesSource.recipes, (recipe) => recipe.id, "recipe id");
+ensureUnique(capabilityRulesSource.rules, (rule) => rule.primitive, "capability rule primitive");
 ensureUnique(invariantsSource.invariants, (invariant) => invariant.id, "invariant id");
 ensureUnique(primitiveEvidenceSource.evidence, (entry) => entry.primitive, "primitive evidence id");
 ensureUnique(errorsSource.errors, (error) => error.tag, "error tag metadata");
@@ -398,6 +403,29 @@ const invariantMatrixJson = {
   invariants: invariantMatrix,
 };
 
+const namespaceModel = collectNamespaceModel(root);
+failures.push(...namespaceModel.failures);
+
+const capabilityProjection = buildCapabilityRouteProjection({
+  source: capabilityRulesSource,
+  primitives,
+  invariants: invariantsSource.invariants,
+  rootScripts: rootPackage.scripts ?? {},
+  namespaceOwners: namespaceModel.owners,
+});
+failures.push(...capabilityProjection.failures);
+
+const decisionGraphJson = {
+  generatedBy: "scripts/generate-agent-docs.mjs",
+  source: [
+    "docs/agent/capability-rules.source.json",
+    "exported TSDoc @agentosPrimitive tags",
+    "BoundaryContract/event namespace declarations",
+    "package.json scripts",
+  ],
+  routes: capabilityProjection.routes,
+};
+
 const startHere = [
   generatedNotice("docs/agent/*.source.json and exported TSDoc @agentosPrimitive tags"),
   "",
@@ -417,6 +445,14 @@ const startHere = [
       [
         "Primitives",
         mdLink("docs/start-here.md", "docs/agent/primitives.md", "docs/agent/primitives.md"),
+      ],
+      [
+        "Decision Graph",
+        mdLink(
+          "docs/start-here.md",
+          "docs/agent/decision-graph.md",
+          "docs/agent/decision-graph.md",
+        ),
       ],
       ["Errors", mdLink("docs/start-here.md", "docs/agent/errors.md", "docs/agent/errors.md")],
       [
@@ -457,6 +493,7 @@ const agentNavigation = [
     [
       ["Start route", "[docs/start-here.md](docs/start-here.md)"],
       ["Primitive catalog", "[docs/agent/primitives.md](docs/agent/primitives.md)"],
+      ["Decision graph", "[docs/agent/decision-graph.md](docs/agent/decision-graph.md)"],
       ["Error catalog", "[docs/agent/errors.md](docs/agent/errors.md)"],
       ["Invariant matrix", "[docs/agent/invariant-matrix.md](docs/agent/invariant-matrix.md)"],
       ...recipesSource.recipes.map((recipe) => [
@@ -509,6 +546,30 @@ const errorsMd = [
   "",
 ].join("\n");
 
+const decisionGraphMd = [
+  generatedNotice(
+    "docs/agent/capability-rules.source.json, exported TSDoc @agentosPrimitive tags, BoundaryContract/event namespace declarations, and package.json scripts",
+  ),
+  "",
+  "# Agent Decision Graph",
+  "",
+  "This is the generated owner compiler from natural-language intent to allowed substrate motion. Source rules name intent and constraints only; owner and package fields are generated.",
+  "",
+  table(
+    ["Primitive", "Intents", "Source Fact Owners", "Allowed Packages", "Gates"],
+    capabilityProjection.routes.map((route) => [
+      `\`${route.primitive}\``,
+      route.intents.join("; "),
+      route.sourceFactOwners
+        .map((entry) => `\`${String(entry.prefix)}\` -> \`${String(entry.owner)}\``)
+        .join(", "),
+      route.allowedPrimitivePackages.map((pkg) => `\`${String(pkg)}\``).join(", "),
+      route.gates.map((gate) => `\`${gate}\``).join(", "),
+    ]),
+  ),
+  "",
+].join("\n");
+
 const invariantMatrixMd = [
   generatedNotice(
     "docs/agent/invariants.source.json, exported TSDoc @agentosInvariant tags, and docs/agent/error-metadata.source.json",
@@ -535,6 +596,8 @@ if (failures.length === 0) {
   writeJson("docs/agent/recipes.json", recipesJson);
   writeJson("docs/agent/primitives.json", primitivesJson);
   write("docs/agent/primitives.md", primitivesMd);
+  writeJson("docs/agent/decision-graph.json", decisionGraphJson);
+  write("docs/agent/decision-graph.md", decisionGraphMd);
   writeJson("docs/agent/errors.json", errorsJson);
   write("docs/agent/errors.md", errorsMd);
   writeJson("docs/agent/invariant-matrix.json", invariantMatrixJson);
