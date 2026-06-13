@@ -60,16 +60,8 @@ const FailureSchema = Schema.Struct({
     "verify_infra",
     "projection",
   ),
-  class: Schema.Literal(
-    "substrate",
-    "provider",
-    "consumer_contract",
-    "timeout",
-    "cancelled",
-    "unknown",
-  ),
   code: NonEmptyString,
-  message: NonEmptyString,
+  reason: NonEmptyString,
   retryable: Schema.optional(Schema.Boolean),
 });
 
@@ -78,6 +70,7 @@ const FailedSchema = Schema.Struct({
   runId: NonEmptyString,
   idempotencyKey: NonEmptyString,
   failure: FailureSchema,
+  submitRunId: Schema.optional(Schema.Number),
 });
 
 export const workspaceJobCarrier = defineCarrier({

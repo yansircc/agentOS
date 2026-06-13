@@ -189,6 +189,14 @@ implicit default sessions, and returns one `WorkspaceEnv` lease per
 `scope/runId`. Products choose the binding and declare cleanup policy; they do
 not configure sandbox sessions/transports or mint workspace refs.
 
+Consumers that want the complete Cloudflare workspace-job bridge can install
+`installCloudflareWorkspaceJobProfile({ workspaceResolver, readProjection })`.
+The profile only composes existing helpers: workspace resolver, workspace-op
+provider install, AG-UI SSE response helpers, and workspace-job HTTP response.
+Its default response reader expects the runtime-owned sanitized observability
+projection, so consumer responses do not expose raw `submitRunId` or runtime
+numeric run ids.
+
 AG-UI SSE responses are also host composition. `@agent-os/ag-ui` projects
 ledger events into AG-UI frames, `@agent-os/sse-http` stays a generic SSE
 transport, and `createCloudflareLedgerAgUiSseResponse` combines them for

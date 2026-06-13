@@ -1,10 +1,19 @@
 import type { WorkspaceJobProjection } from "@agent-os/workspace-job";
 
-export interface CloudflareWorkspaceJobProjectionReader {
-  readonly readProjection: (input: { readonly runId: string }) => Promise<WorkspaceJobProjection>;
+export type CloudflareWorkspaceJobResponseProjection = Pick<
+  WorkspaceJobProjection,
+  "runId" | "status"
+>;
+
+export interface CloudflareWorkspaceJobProjectionReader<
+  Projection extends CloudflareWorkspaceJobResponseProjection = WorkspaceJobProjection,
+> {
+  readonly readProjection: (input: { readonly runId: string }) => Promise<Projection>;
 }
 
-export interface CloudflareWorkspaceJobResponseOptions extends CloudflareWorkspaceJobProjectionReader {
+export interface CloudflareWorkspaceJobResponseOptions<
+  Projection extends CloudflareWorkspaceJobResponseProjection = WorkspaceJobProjection,
+> extends CloudflareWorkspaceJobProjectionReader<Projection> {
   readonly request: Pick<Request, "headers">;
   readonly runId: string;
   readonly submit: () => Promise<unknown>;
@@ -15,9 +24,9 @@ export interface CloudflareWorkspaceJobResponseOptions extends CloudflareWorkspa
   }) => Promise<"submitted" | "timeout">;
   readonly quickWaitMs?: number;
   readonly statusUrl?: string | URL;
-  readonly statusForProjection?: (projection: WorkspaceJobProjection) => number;
+  readonly statusForProjection?: (projection: Projection) => number;
   readonly renderProjection?: (input: {
-    readonly projection: WorkspaceJobProjection;
+    readonly projection: Projection;
     readonly status: number;
     readonly headers: Headers;
   }) => Response | Promise<Response>;
@@ -32,7 +41,9 @@ const prefersRespondAsync = (headers: Headers): boolean =>
     .map((value) => value.trim().toLowerCase())
     .includes("respond-async") ?? false;
 
-const defaultStatusForProjection = (projection: WorkspaceJobProjection): number => {
+const defaultStatusForProjection = (
+  projection: CloudflareWorkspaceJobResponseProjection,
+): number => {
   switch (projection.status) {
     case "verified":
     case "verifier_rejected":
@@ -45,13 +56,13 @@ const defaultStatusForProjection = (projection: WorkspaceJobProjection): number 
   }
 };
 
-const projectionResponse = (
-  projection: WorkspaceJobProjection,
+const projectionResponse = <Projection extends CloudflareWorkspaceJobResponseProjection>(
+  projection: Projection,
   options: {
-    readonly statusForProjection?: (projection: WorkspaceJobProjection) => number;
+    readonly statusForProjection?: (projection: Projection) => number;
     readonly preferenceApplied?: boolean;
     readonly statusUrl?: string | URL;
-    readonly renderProjection?: CloudflareWorkspaceJobResponseOptions["renderProjection"];
+    readonly renderProjection?: CloudflareWorkspaceJobResponseOptions<Projection>["renderProjection"];
   },
 ): Response | Promise<Response> => {
   const headers = new Headers({ "content-type": "application/json" });
@@ -83,8 +94,10 @@ const projectionResponse = (
  * @agentosDocs docs/packages/backend-cloudflare-do.md
  * @public
  */
-export const createCloudflareWorkspaceJobResponse = (
-  options: CloudflareWorkspaceJobResponseOptions,
+export const createCloudflareWorkspaceJobResponse = <
+  Projection extends CloudflareWorkspaceJobResponseProjection = WorkspaceJobProjection,
+>(
+  options: CloudflareWorkspaceJobResponseOptions<Projection>,
 ): Promise<Response> => {
   const running = options.submit();
   const respondAsync = prefersRespondAsync(options.request.headers);

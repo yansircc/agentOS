@@ -113,6 +113,17 @@
         "packages/runtime/test/workspace-job.test.ts",
         "packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"
       ]
+    },
+    {
+      "id": "invariant.workspace-job.failure-observability-join",
+      "statement": "Workspace job failure explanation is derived by runtime composition from workspace-job terminal facts joined with runtime diagnostic projections; carrier facts remain terminal vocabulary and consumer projections do not expose runtime numeric run ids.",
+      "docs": "docs/packages/workspace-job.md",
+      "decisions": [],
+      "tests": [
+        "packages/carriers/workspace-job/test/workspace-job.test.ts",
+        "packages/runtime/test/workspace-job.test.ts",
+        "packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"
+      ]
     }
   ]
 }

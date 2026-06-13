@@ -24,3 +24,4 @@ export {
 export type { Tool, ToolDefinition } from "@agent-os/kernel/tools";
 export * from "./trigger";
 export * from "./workspace-job";
+export * from "./workspace-job-observability";

@@ -5,6 +5,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { makePreClaim } from "@agent-os/kernel/effect-claim";
 import type { LedgerEvent, LedgerEventRpc } from "@agent-os/kernel/types";
 import type { ExtensionCapability } from "@agent-os/kernel/extensions";
+import type { WorkspaceJobObservabilityProjection } from "@agent-os/runtime";
 import { agentRunStartedEvent } from "@agent-os/runtime-protocol";
 import { createSseHttpTextResponse, decodeSseHttpEvents } from "@agent-os/sse-http";
 import {
@@ -18,6 +19,7 @@ import {
   createCloudflareLedgerAgUiSseResponse,
 } from "../src/ag-ui-sse";
 import { createCloudflareWorkspaceJobResponse } from "../src/workspace-job-facade";
+import { installCloudflareWorkspaceJobProfile } from "../src/workspace-job-profile";
 import {
   createCloudflareSandboxWorkspaceEnvResolver,
   createCloudflareWorkspaceEnvResolver,
@@ -79,6 +81,76 @@ const workspaceJobProjection = (
       }),
     },
   }) as WorkspaceJobProjection;
+
+const failedObservabilityProjection = (runId = "run-1"): WorkspaceJobObservabilityProjection => ({
+  status: "failed",
+  runId,
+  requestedEventId: 1,
+  request: {
+    runId,
+    idempotencyKey: "idem-1",
+    requestedBy: "test",
+    terminalSchemaId: "schema:test",
+  },
+  failureExplanation: {
+    phase: "submit",
+    code: "workspace_job.submit.tool_error",
+    reason: "tool_error",
+    category: "missing_execution_path",
+    owner: "integrator",
+    retryable: false,
+    publicMessage: "This tool requires a receipt-backed execution path before it can run.",
+    diagnostics: [
+      {
+        source: "tool",
+        eventId: 5,
+        phase: "admit",
+        reason: "external_tool_execution_requires_receipt",
+        category: "missing_execution_path",
+        owner: "integrator",
+        retryable: false,
+        publicMessage: "This tool requires a receipt-backed execution path before it can run.",
+        internalFacts: {
+          source: "tool",
+          eventId: 5,
+          phase: "admit",
+          reason: "external_tool_execution_requires_receipt",
+          toolName: "write_file",
+          toolCallId: "call-1",
+          argumentSummary: { type: "object", keys: ["path"], bytes: 18 },
+        },
+        toolName: "write_file",
+        toolCallId: "call-1",
+        argumentSummary: { type: "object", keys: ["path"], bytes: 18 },
+      },
+    ],
+  },
+});
+
+const workspaceEnv = (ref: string) => ({
+  domain: { kind: "sandbox" as const, ref },
+  cwd: "/workspace",
+  resolvePath: (targetPath: string): string => targetPath,
+  readFile: () => Promise.resolve(""),
+  readFileBuffer: () => Promise.resolve(new Uint8Array()),
+  writeFile: () => Promise.resolve(),
+  stat: () => Promise.resolve({ type: "file" as const }),
+  readdir: () => Promise.resolve([]),
+  exists: () => Promise.resolve(true),
+  mkdir: () => Promise.resolve(),
+  rm: () => Promise.resolve(),
+  exec: () =>
+    Promise.resolve({
+      exitCode: 0,
+      stdout: "",
+      stderr: "",
+      stdoutBytes: 0,
+      stderrBytes: 0,
+      stdoutTruncated: false,
+      stderrTruncated: false,
+      durationMs: 0,
+    }),
+});
 
 describe("Cloudflare DO workspace host helpers", () => {
   it("keeps sse-http generic while host helper materializes AG-UI SSE responses", async () => {
@@ -209,6 +281,97 @@ describe("Cloudflare DO workspace host helpers", () => {
     await expect(response.json()).resolves.toMatchObject({
       projection: { status: "running", runId: "run-timeout" },
     });
+  });
+
+  it("installs a workspace-job profile over sanitized projection and existing host helpers", async () => {
+    const readRunIds: string[] = [];
+    const resolved: string[] = [];
+    const profile = installCloudflareWorkspaceJobProfile({
+      workspaceResolver: {
+        resolve: async ({ scope, runId }) => {
+          resolved.push(`${scope}:${runId}`);
+          return {
+            sandboxId: `sandbox:${scope}:${runId}`,
+            workspaceRef: `workspace:${scope}:${runId}`,
+            env: workspaceEnv(`workspace:${scope}:${runId}`),
+            cleanup: async () => undefined,
+          };
+        },
+      },
+      readProjection: ({ runId }) => {
+        readRunIds.push(runId);
+        return Promise.resolve(failedObservabilityProjection(runId));
+      },
+    });
+
+    const response = await profile.createWorkspaceJobResponse({
+      request: { headers: new Headers() },
+      runId: "job-failed",
+      submit: () =>
+        Promise.resolve({
+          ignoredRawProjection: { failed: { submitRunId: 42 } },
+        }),
+      waitUntil: () => undefined,
+      quickWaitForSubmission: () => Promise.resolve("submitted"),
+    });
+
+    expect(response.status).toBe(500);
+    const body = await response.json();
+    expect(body).toMatchObject({
+      projection: {
+        status: "failed",
+        runId: "job-failed",
+        failureExplanation: {
+          category: "missing_execution_path",
+          owner: "integrator",
+          diagnostics: [{ toolName: "write_file", argumentSummary: { keys: ["path"] } }],
+        },
+      },
+    });
+    expect(JSON.stringify(body)).not.toContain("submitRunId");
+    expect(JSON.stringify(body)).not.toContain("ignoredRawProjection");
+    expect(readRunIds).toEqual(["job-failed"]);
+
+    const capability: ExtensionCapability = {
+      packageId: WORKSPACE_OP_FACT_OWNER,
+      kindPrefixes: ["workspace_op."],
+      version: "0.2.9",
+      commit: async () => ({ id: 1 }),
+      time: async () => ({ id: 0 }),
+    };
+    const [registration] = [
+      ...profile.workspaceOperations.eventHandlers({
+        capabilities: new Map([[WORKSPACE_OP_FACT_OWNER, capability]]),
+      }),
+    ];
+    const claim = makePreClaim({
+      operationRef: "tool:workspace:test:call-profile",
+      scopeRef: { kind: "conversation", scopeId: "profile-scope" },
+      effectAuthorityRef: { authorityClass: "workspace", authorityId: "write_file" },
+      originRef: { originId: "run:42", originKind: "submit" },
+    });
+    await registration!.handler({
+      id: 20,
+      ts: 200,
+      kind: WORKSPACE_OP_KIND.REQUESTED,
+      scopeRef: claim.scopeRef,
+      effectAuthorityRef: claim.effectAuthorityRef,
+      factOwnerRef: WORKSPACE_OP_FACT_OWNER,
+      payload: {
+        requestedBy: "@agent-os/workspace-binding",
+        workspaceRef: "workspace:profile",
+        toolName: "write_file",
+        path: "profile.txt",
+        content: "done",
+        claim,
+      },
+    });
+    expect(resolved).toEqual(["profile-scope:42"]);
+
+    const history = profile.createAgUiHistorySseResponse([ledgerEvent()]);
+    expect(history.headers.get("content-type")).toContain("text/event-stream");
+    const historyEvents = await eventData(history);
+    expect(historyEvents[0]).toMatchObject({ event: "ag_ui" });
   });
 
   it("resolves one Cloudflare WorkspaceEnv lease per scope/run and validates bindings", async () => {

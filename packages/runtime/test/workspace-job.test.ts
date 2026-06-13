@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import { makePreClaim } from "@agent-os/kernel/effect-claim";
 import {
@@ -14,6 +14,11 @@ import { RefResolutionFailed, RefResolverService } from "@agent-os/kernel/ref-re
 import type { ResolvedMaterial } from "@agent-os/kernel/ref-resolver";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import type { BoundaryContract } from "@agent-os/kernel/boundary-contract";
+import {
+  defineTool,
+  externalToolExecution,
+  withToolWriteRequirement,
+} from "@agent-os/kernel/tools";
 import { commitBoundaryEvent } from "../src/boundary-commit";
 import { Admission } from "../src/admission";
 import { BoundaryEvents } from "../src/boundary-events";
@@ -31,12 +36,17 @@ import {
   type WorkspaceJobDataPlane,
   type RunWorkspaceJobSpec,
 } from "../src/workspace-job";
+import { projectWorkspaceJobObservability } from "../src/workspace-job-observability";
 import {
   WORKSPACE_JOB_FACT_OWNER,
   WORKSPACE_JOB_KIND,
   workspaceJobRequestedPayload,
 } from "@agent-os/workspace-job";
-import { RUNTIME_FACT_OWNER, type SubmitSpec } from "@agent-os/runtime-protocol";
+import {
+  EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
+  RUNTIME_FACT_OWNER,
+  type SubmitSpec,
+} from "@agent-os/runtime-protocol";
 
 const scope = "workspace-job-runtime";
 const identity = {
@@ -498,14 +508,166 @@ describe("runWorkspaceJobEffect", () => {
       expect(projection).toMatchObject({
         status: "failed",
         failed: {
+          submitRunId: expect.any(Number),
           failure: {
             phase: "submit",
-            class: "provider",
             code: "workspace_job.submit.retries",
+            reason: "retries",
           },
         },
       });
+      const observed = projectWorkspaceJobObservability(services.events, "job-1");
+      expect(observed).toMatchObject({
+        status: "failed",
+        failureExplanation: {
+          phase: "submit",
+          code: "workspace_job.submit.retries",
+          reason: "retries",
+          category: "provider_failure",
+          owner: "provider",
+          publicMessage: "The upstream provider failed or timed out.",
+        },
+      });
+      expect(JSON.stringify(observed)).not.toContain("submitRunId");
       expect(services.events.map((event) => event.kind)).toContain(WORKSPACE_JOB_KIND.FAILED);
+    }),
+  );
+
+  it.effect("keeps pre-submit seed failures uncorrelated and still observable", () =>
+    Effect.gen(function* () {
+      const services = makeServices();
+      const projection = yield* runJob(
+        makeJobSpec({
+          dataPlane: makeDataPlane({
+            writeSeedFile: async () => {
+              throw new Error("seed write failed");
+            },
+          }),
+        }),
+        services,
+      );
+
+      expect(projection).toMatchObject({
+        status: "failed",
+        failed: {
+          failure: {
+            phase: "seed",
+            code: "workspace_job.seed_write_failed",
+            reason: "seed_write_failed",
+            retryable: true,
+          },
+        },
+      });
+      if (projection.status !== "failed") expect.fail("expected failed projection");
+      expect(projection.failed.submitRunId).toBeUndefined();
+      expect(services.llmRequests).toHaveLength(0);
+
+      const observed = projectWorkspaceJobObservability(services.events, "job-1");
+      expect(observed).toMatchObject({
+        status: "failed",
+        failureExplanation: {
+          phase: "seed",
+          code: "workspace_job.seed_write_failed",
+          reason: "seed_write_failed",
+          category: "provider_failure",
+          owner: "provider",
+          retryable: true,
+          publicMessage: "The upstream provider failed or timed out.",
+          diagnostics: [],
+        },
+      });
+      expect(JSON.stringify(observed)).not.toContain("submitRunId");
+    }),
+  );
+
+  it.effect("joins exact submit run diagnostics without leaking submitRunId to consumers", () =>
+    Effect.gen(function* () {
+      const services = makeServices([
+        response(),
+        response({
+          items: [
+            { type: "message", text: "write file" },
+            {
+              type: "tool_call",
+              call: {
+                id: "call-1",
+                type: "function",
+                function: { name: "write_file", arguments: '{"path":"out.txt"}' },
+              },
+            },
+          ],
+        }),
+      ]);
+      const tool = defineTool({
+        name: "write_file",
+        description: "write file",
+        args: Schema.Struct({ path: Schema.String }),
+        execute: () => withToolWriteRequirement(Effect.succeed({ written: true })),
+        authority: "write",
+        admit: () => Effect.succeed({ ok: true }),
+        execution: externalToolExecution("write", {
+          kind: "workspace",
+          ref: "workspace:default",
+        }),
+      });
+
+      const first = yield* runJob(makeJobSpec({ runId: "job-ok", idempotencyKey: "ok" }), services);
+      expect(first.status).toBe("verified");
+      const failed = yield* runJob(
+        makeJobSpec({
+          runId: "job-failed",
+          idempotencyKey: "failed",
+          buildSubmitSpec: () => ({
+            ...baseSubmitSpec(),
+            tools: { write_file: tool },
+            executionDomains: [
+              {
+                domain: { kind: "workspace", ref: "workspace:default" },
+                replay: { access: "write", witness: "receipt" },
+              },
+            ],
+          }),
+        }),
+        services,
+      );
+      expect(failed).toMatchObject({
+        status: "failed",
+        failed: {
+          submitRunId: expect.any(Number),
+          failure: {
+            phase: "submit",
+            code: "workspace_job.submit.tool_error",
+            reason: "tool_error",
+          },
+        },
+      });
+      const observed = projectWorkspaceJobObservability(services.events, "job-failed");
+      expect(observed).toMatchObject({
+        status: "failed",
+        failureExplanation: {
+          reason: "tool_error",
+          category: "missing_execution_path",
+          owner: "integrator",
+          retryable: false,
+          publicMessage: "This tool requires a receipt-backed execution path before it can run.",
+          diagnostics: [
+            {
+              reason: EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
+              toolName: "write_file",
+              toolCallId: "call-1",
+            },
+          ],
+        },
+      });
+      expect(JSON.stringify(observed)).not.toContain("submitRunId");
+      expect(JSON.stringify(observed)).not.toContain("out.txt");
+      expect(JSON.stringify(observed)).toContain("path");
+
+      const firstObserved = projectWorkspaceJobObservability(services.events, "job-ok");
+      expect(firstObserved.status).toBe("verified");
+      expect(JSON.stringify(firstObserved)).not.toContain(
+        EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
+      );
     }),
   );
 
@@ -525,10 +687,11 @@ describe("runWorkspaceJobEffect", () => {
       expect(buildFailed).toMatchObject({
         status: "failed",
         failed: {
+          submitRunId: expect.any(Number),
           failure: {
             phase: "finalize",
-            class: "consumer_contract",
             code: "workspace_job.terminal_build_failed",
+            reason: "terminal_build_failed",
           },
         },
       });
@@ -547,10 +710,12 @@ describe("runWorkspaceJobEffect", () => {
       expect(writeFailed).toMatchObject({
         status: "failed",
         failed: {
+          submitRunId: expect.any(Number),
           failure: {
             phase: "data_plane",
-            class: "provider",
             code: "workspace_job.terminal_write_failed",
+            reason: "terminal_write_failed",
+            retryable: true,
           },
         },
       });
@@ -569,10 +734,12 @@ describe("runWorkspaceJobEffect", () => {
       expect(readFailed).toMatchObject({
         status: "failed",
         failed: {
+          submitRunId: expect.any(Number),
           failure: {
             phase: "data_plane",
-            class: "provider",
             code: "workspace_job.terminal_read_failed",
+            reason: "terminal_read_failed",
+            retryable: true,
           },
         },
       });
@@ -595,10 +762,11 @@ describe("runWorkspaceJobEffect", () => {
       expect(missing).toMatchObject({
         status: "failed",
         failed: {
+          submitRunId: expect.any(Number),
           failure: {
             phase: "collect_candidate",
-            class: "consumer_contract",
             code: "workspace_job.candidate_missing",
+            reason: "candidate_missing",
           },
         },
       });
@@ -620,10 +788,11 @@ describe("runWorkspaceJobEffect", () => {
       expect(mismatch).toMatchObject({
         status: "failed",
         failed: {
+          submitRunId: expect.any(Number),
           failure: {
             phase: "finalize",
-            class: "consumer_contract",
             code: "workspace_job.run_id_mismatch",
+            reason: "run_id_mismatch",
           },
         },
       });

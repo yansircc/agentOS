@@ -91,6 +91,7 @@
 - `.:ExternalToolReceiptReplayOutcome`
 - `.:FailureDiagnostic`
 - `.:FailureDiagnosticCategory`
+- `.:FailureDiagnosticEnvelope`
 - `.:FailureDiagnosticInternalFacts`
 - `.:FailureDiagnosticOwner`
 - `.:FailureDiagnostics`
@@ -177,6 +178,7 @@
 - `.:decodeRuntimeEventPayload`
 - `.:decodeRuntimeLedgerEvent`
 - `.:externalToolExecutionReceiptFromExecutedPayload`
+- `.:failureDiagnosticEnvelopeForReason`
 - `.:isContinuationCause`
 - `.:isContinuationRef`
 - `.:isRecoveryAttemptRecord`

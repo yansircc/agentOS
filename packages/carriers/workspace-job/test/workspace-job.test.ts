@@ -186,11 +186,11 @@ describe("@agent-os/workspace-job", () => {
           idempotencyKey: "request-3",
           failure: {
             phase: "submit",
-            class: "provider",
             code: workspaceJobFailureCode("submit_failed"),
-            message: "runtime crashed",
+            reason: "submit_failed",
             retryable: true,
           },
+          submitRunId: 7,
           claim: failedClaim,
         }),
       },
@@ -208,13 +208,23 @@ describe("@agent-os/workspace-job", () => {
     expect(projectWorkspaceJob(events, "run-3")).toMatchObject({
       status: "failed",
       failed: {
+        submitRunId: 7,
         failure: {
           phase: "submit",
-          class: "provider",
           code: workspaceJobFailureCode("submit_failed"),
+          reason: "submit_failed",
         },
       },
     });
+    const failedEvent = events.find((event) => event.kind === WORKSPACE_JOB_KIND.FAILED);
+    expect(failedEvent).toBeDefined();
+    const failedPayload = JSON.stringify(failedEvent?.payload);
+    expect(failedPayload).not.toContain("diagnostics");
+    expect(failedPayload).not.toContain("category");
+    expect(failedPayload).not.toContain("owner");
+    expect(failedPayload).not.toContain("publicMessage");
+    expect(failedPayload).not.toContain('"class"');
+    expect(failedPayload).not.toContain('"message"');
   });
 
   it("does not project a verdict unless it references the finalized terminal artifact fact", () => {

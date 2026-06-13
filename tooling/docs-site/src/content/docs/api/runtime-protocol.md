@@ -95,6 +95,7 @@ title: "@agent-os/runtime-protocol API"
 - `.:ExternalToolReceiptReplayOutcome`
 - `.:FailureDiagnostic`
 - `.:FailureDiagnosticCategory`
+- `.:FailureDiagnosticEnvelope`
 - `.:FailureDiagnosticInternalFacts`
 - `.:FailureDiagnosticOwner`
 - `.:FailureDiagnostics`
@@ -181,6 +182,7 @@ title: "@agent-os/runtime-protocol API"
 - `.:decodeRuntimeEventPayload`
 - `.:decodeRuntimeLedgerEvent`
 - `.:externalToolExecutionReceiptFromExecutedPayload`
+- `.:failureDiagnosticEnvelopeForReason`
 - `.:isContinuationCause`
 - `.:isContinuationRef`
 - `.:isRecoveryAttemptRecord`

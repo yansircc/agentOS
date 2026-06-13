@@ -108,7 +108,10 @@
 - `.:WorkspaceJobCandidateMissing`
 - `.:WorkspaceJobDataPlane`
 - `.:WorkspaceJobDataPlaneFailed`
+- `.:WorkspaceJobFailureExplanation`
 - `.:WorkspaceJobFinalizedArtifact`
+- `.:WorkspaceJobObservabilityProjection`
+- `.:WorkspaceJobObservabilityRequest`
 - `.:WorkspaceJobRunIdMismatch`
 - `.:WorkspaceJobSeedFile`
 - `.:WorkspaceJobTerminalArtifactBuild`
@@ -144,6 +147,7 @@
 - `.:projectRecoveryAttemptBudget`
 - `.:projectSubmitResult`
 - `.:projectTelemetryEventTree`
+- `.:projectWorkspaceJobObservability`
 - `.:projectionDelete`
 - `.:projectionFail`
 - `.:projectionIdentity`

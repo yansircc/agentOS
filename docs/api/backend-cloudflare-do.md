@@ -36,7 +36,12 @@
 - `.:CloudflareWorkspaceEnvResolverError`
 - `.:CloudflareWorkspaceEnvResolverInput`
 - `.:CloudflareWorkspaceEnvResolverOptions`
+- `.:CloudflareWorkspaceJobObservabilityProjectionReader`
+- `.:CloudflareWorkspaceJobProfile`
+- `.:CloudflareWorkspaceJobProfileError`
 - `.:CloudflareWorkspaceJobProjectionReader`
+- `.:CloudflareWorkspaceJobProfileResponseOptions`
+- `.:CloudflareWorkspaceJobResponseProjection`
 - `.:CloudflareWorkspaceJobResponseOptions`
 - `.:CloudflareWorkspaceOperationEnvResolver`
 - `.:CloudflareWorkspaceOperationEnvResolverInput`
@@ -53,6 +58,7 @@
 - `.:DispatchTargetRegistry`
 - `.:GeminiGenerateContentSpec`
 - `.:HttpDispatchTargetSpec`
+- `.:InstallCloudflareWorkspaceJobProfileOptions`
 - `.:InstallCloudflareWorkspaceOperationProviderOptions`
 - `.:LoweredMaterialBindings`
 - `.:OpenAIChatSpec`
@@ -75,6 +81,7 @@
 - `.:externalResource`
 - `.:geminiGenerateContent`
 - `.:httpDispatchTarget`
+- `.:installCloudflareWorkspaceJobProfile`
 - `.:installCloudflareWorkspaceOperationProvider`
 - `.:lowerMaterialBindings`
 - `.:mountCloudflareAgent`

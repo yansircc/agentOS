@@ -2,7 +2,7 @@
 
 # @agent-os/workspace-job Public API
 
-Status: Carrier package. It owns workspace job fact and projection vocabulary; runtime and host packages execute the pipeline.
+Status: Carrier package. It owns workspace job terminal fact and raw projection vocabulary; runtime and host packages execute the pipeline and consumer observability projection.
 
 ## Public exports
 

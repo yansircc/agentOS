@@ -40,7 +40,12 @@ title: "@agent-os/backend-cloudflare-do Public API Intent"
 - `.:CloudflareWorkspaceEnvResolverError`
 - `.:CloudflareWorkspaceEnvResolverInput`
 - `.:CloudflareWorkspaceEnvResolverOptions`
+- `.:CloudflareWorkspaceJobObservabilityProjectionReader`
+- `.:CloudflareWorkspaceJobProfile`
+- `.:CloudflareWorkspaceJobProfileError`
 - `.:CloudflareWorkspaceJobProjectionReader`
+- `.:CloudflareWorkspaceJobProfileResponseOptions`
+- `.:CloudflareWorkspaceJobResponseProjection`
 - `.:CloudflareWorkspaceJobResponseOptions`
 - `.:CloudflareWorkspaceOperationEnvResolver`
 - `.:CloudflareWorkspaceOperationEnvResolverInput`
@@ -57,6 +62,7 @@ title: "@agent-os/backend-cloudflare-do Public API Intent"
 - `.:DispatchTargetRegistry`
 - `.:GeminiGenerateContentSpec`
 - `.:HttpDispatchTargetSpec`
+- `.:InstallCloudflareWorkspaceJobProfileOptions`
 - `.:InstallCloudflareWorkspaceOperationProviderOptions`
 - `.:LoweredMaterialBindings`
 - `.:OpenAIChatSpec`
@@ -79,6 +85,7 @@ title: "@agent-os/backend-cloudflare-do Public API Intent"
 - `.:externalResource`
 - `.:geminiGenerateContent`
 - `.:httpDispatchTarget`
+- `.:installCloudflareWorkspaceJobProfile`
 - `.:installCloudflareWorkspaceOperationProvider`
 - `.:lowerMaterialBindings`
 - `.:mountCloudflareAgent`

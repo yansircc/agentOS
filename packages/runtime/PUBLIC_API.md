@@ -112,7 +112,10 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:WorkspaceJobCandidateMissing`
 - `.:WorkspaceJobDataPlane`
 - `.:WorkspaceJobDataPlaneFailed`
+- `.:WorkspaceJobFailureExplanation`
 - `.:WorkspaceJobFinalizedArtifact`
+- `.:WorkspaceJobObservabilityProjection`
+- `.:WorkspaceJobObservabilityRequest`
 - `.:WorkspaceJobRunIdMismatch`
 - `.:WorkspaceJobSeedFile`
 - `.:WorkspaceJobTerminalArtifactBuild`
@@ -148,6 +151,7 @@ Status: 0.2.x active development. Public exports are listed for accidental expor
 - `.:projectRecoveryAttemptBudget`
 - `.:projectSubmitResult`
 - `.:projectTelemetryEventTree`
+- `.:projectWorkspaceJobObservability`
 - `.:projectionDelete`
 - `.:projectionFail`
 - `.:projectionIdentity`

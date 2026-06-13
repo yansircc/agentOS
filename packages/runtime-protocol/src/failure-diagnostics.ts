@@ -45,15 +45,22 @@ export interface FailureDiagnosticInternalFacts {
   readonly schemaIssues?: ReadonlyArray<{ readonly path: string; readonly issue: string }>;
 }
 
+export interface FailureDiagnosticEnvelope {
+  readonly category: FailureDiagnosticCategory;
+  readonly owner: FailureDiagnosticOwner;
+  readonly retryable: boolean;
+  readonly publicMessage: string;
+}
+
 export interface FailureDiagnostic {
   readonly source: "tool" | "run";
   readonly eventId: number;
   readonly phase: ToolRejectedDiagnosticsPhase | "terminal";
   readonly reason: string;
-  readonly category: FailureDiagnosticCategory;
-  readonly owner: FailureDiagnosticOwner;
-  readonly retryable: boolean;
-  readonly publicMessage: string;
+  readonly category: FailureDiagnosticEnvelope["category"];
+  readonly owner: FailureDiagnosticEnvelope["owner"];
+  readonly retryable: FailureDiagnosticEnvelope["retryable"];
+  readonly publicMessage: FailureDiagnosticEnvelope["publicMessage"];
   readonly internalFacts: FailureDiagnosticInternalFacts;
   readonly toolName?: string;
   readonly toolCallId?: string;
@@ -127,13 +134,32 @@ const categoryForReason = (reason: string): FailureDiagnosticCategory => {
     return "missing_runtime_capability";
   }
   if (reason === "rate_limited") return "rate_limited";
-  if (reason === "budget_time" || reason.startsWith("invalid_quota_")) return "budget";
+  if (
+    reason === "budget_time" ||
+    reason === "budget_tokens" ||
+    reason.startsWith("invalid_quota_")
+  ) {
+    return "budget";
+  }
   if (
     reason === "provider_timeout" ||
     reason === "upstream_failure" ||
+    reason === "retries" ||
+    reason === "seed_write_failed" ||
+    reason === "terminal_write_failed" ||
+    reason === "terminal_read_failed" ||
+    reason === "data_plane_failed" ||
+    reason === "verifier_failed" ||
     reason.startsWith("provider_http_failure")
   ) {
     return "provider_failure";
+  }
+  if (
+    reason === "candidate_missing" ||
+    reason === "run_id_mismatch" ||
+    reason === "terminal_build_failed"
+  ) {
+    return "missing_runtime_capability";
   }
   return "tool_execution";
 };
@@ -200,18 +226,24 @@ const publicMessageForCategory = (category: FailureDiagnosticCategory): string =
   }
 };
 
+export const failureDiagnosticEnvelopeForReason = (reason: string): FailureDiagnosticEnvelope => {
+  const category = categoryForReason(reason);
+  return {
+    category,
+    owner: ownerForCategory(category),
+    retryable: retryableForCategory(category),
+    publicMessage: publicMessageForCategory(category),
+  };
+};
+
 const failureEnvelope = (
   facts: FailureDiagnosticInternalFacts,
 ): Pick<
   FailureDiagnostic,
   "category" | "owner" | "retryable" | "publicMessage" | "internalFacts"
 > => {
-  const category = categoryForReason(facts.reason);
   return {
-    category,
-    owner: ownerForCategory(category),
-    retryable: retryableForCategory(category),
-    publicMessage: publicMessageForCategory(category),
+    ...failureDiagnosticEnvelopeForReason(facts.reason),
     internalFacts: facts,
   };
 };

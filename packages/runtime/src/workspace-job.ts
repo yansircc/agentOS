@@ -161,14 +161,10 @@ const sha256Hex = (bytes: Uint8Array): Effect.Effect<string> => {
   );
 };
 
-const effectMessage = (cause: unknown): string =>
-  cause instanceof Error ? cause.message : String(cause);
-
 const submitFailure = (reason: string): WorkspaceJobFailure => ({
   phase: "submit",
-  class: reason === "budget_time" ? "timeout" : reason === "interrupted" ? "cancelled" : "provider",
   code: workspaceJobFailureCode("submit", reason),
-  message: reason,
+  reason,
   retryable: reason !== "interrupted",
 });
 
@@ -177,68 +173,60 @@ const failureFromDataPlane = (failure: WorkspaceJobDataPlaneFailed): WorkspaceJo
   if (cause instanceof WorkspaceJobCandidateMissing) {
     return {
       phase: "collect_candidate",
-      class: "consumer_contract",
       code: workspaceJobFailureCode("candidate_missing"),
-      message: `missing candidate: ${cause.candidatePath}`,
+      reason: "candidate_missing",
     };
   }
   if (cause instanceof WorkspaceJobRunIdMismatch) {
     return {
       phase: "finalize",
-      class: "consumer_contract",
       code: workspaceJobFailureCode("run_id_mismatch"),
-      message: `runId mismatch: expected ${cause.expectedRunId}, got ${cause.actualRunId}`,
+      reason: "run_id_mismatch",
     };
   }
   if (failure.phase === "seed") {
     return {
       phase: "seed",
-      class: "provider",
       code: workspaceJobFailureCode("seed_write_failed"),
-      message: effectMessage(cause),
+      reason: "seed_write_failed",
       retryable: true,
     };
   }
   if (failure.phase === "terminal_build") {
     return {
       phase: "finalize",
-      class: "consumer_contract",
       code: workspaceJobFailureCode("terminal_build_failed"),
-      message: effectMessage(cause),
+      reason: "terminal_build_failed",
     };
   }
   if (failure.phase === "terminal_write") {
     return {
       phase: "data_plane",
-      class: "provider",
       code: workspaceJobFailureCode("terminal_write_failed"),
-      message: effectMessage(cause),
+      reason: "terminal_write_failed",
       retryable: true,
     };
   }
   if (failure.phase === "terminal_read") {
     return {
       phase: "data_plane",
-      class: "provider",
       code: workspaceJobFailureCode("terminal_read_failed"),
-      message: effectMessage(cause),
+      reason: "terminal_read_failed",
       retryable: true,
     };
   }
   return {
     phase: "data_plane",
-    class: "provider",
     code: workspaceJobFailureCode("data_plane_failed"),
-    message: effectMessage(cause),
+    reason: "data_plane_failed",
     retryable: true,
   };
 };
 
-const verifierInfraFailure = (cause: unknown): WorkspaceJobFailure => ({
+const verifierInfraFailure = (_cause: unknown): WorkspaceJobFailure => ({
   phase: "verify_infra",
-  class: "provider",
   code: workspaceJobFailureCode("verifier_failed"),
-  message: effectMessage(cause),
+  reason: "verifier_failed",
   retryable: true,
 });
 
@@ -272,6 +260,7 @@ const commitFailed = (
   spec: RunWorkspaceJobSpec,
   requestedEventId: number,
   failure: WorkspaceJobFailure,
+  submitRunId?: number,
 ): Effect.Effect<LedgerEvent, BoundaryCommitRejected | SqlError | JsonStringifyError> => {
   const requestClaim = workspaceJobPreClaim({
     runId: spec.runId,
@@ -291,6 +280,7 @@ const commitFailed = (
       runId: spec.runId,
       idempotencyKey: spec.idempotencyKey,
       failure,
+      ...(submitRunId === undefined ? {} : { submitRunId }),
       claim,
     }),
   );
@@ -441,9 +431,9 @@ export const runWorkspaceJobEffect = (
     );
 
     const requestedEventId = requested.id;
-    const failAndProject = (failure: WorkspaceJobFailure) =>
+    const failAndProject = (failure: WorkspaceJobFailure, submitRunId?: number) =>
       Effect.gen(function* () {
-        yield* commitFailed(boundaryEvents, spec, requestedEventId, failure);
+        yield* commitFailed(boundaryEvents, spec, requestedEventId, failure, submitRunId);
         yield* cleanup(spec);
         const after = yield* eventsFor(ledger, spec.identity);
         return currentProjection(after, spec.runId);
@@ -465,12 +455,12 @@ export const runWorkspaceJobEffect = (
     };
     const submitResult = yield* submitAgentEffect(submitSpec);
     if (!submitResult.ok) {
-      return yield* failAndProject(submitFailure(submitResult.reason));
+      return yield* failAndProject(submitFailure(submitResult.reason), submitResult.runId);
     }
 
     const finalized = yield* Effect.either(finalizeArtifact(spec, submitResult));
     if (finalized._tag === "Left") {
-      return yield* failAndProject(failureFromDataPlane(finalized.left));
+      return yield* failAndProject(failureFromDataPlane(finalized.left), submitResult.runId);
     }
 
     const finalizedClaim = settleWorkspaceJobTerminalFinalized(claim, {
@@ -492,7 +482,7 @@ export const runWorkspaceJobEffect = (
 
     const verdict = yield* Effect.either(verifyArtifact(spec, finalized.right, submitResult));
     if (verdict._tag === "Left") {
-      return yield* failAndProject(verifierInfraFailure(verdict.left.cause));
+      return yield* failAndProject(verifierInfraFailure(verdict.left.cause), submitResult.runId);
     }
 
     if (verdict.right.ok) {

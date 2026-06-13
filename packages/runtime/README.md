@@ -93,6 +93,13 @@ time budget is supplied, a default provider-call timeout settles as
 non-streaming generations must set an explicit `budget.timeMs`; future
 streaming LLM transport should use idle timeout semantics instead.
 
+Workspace-job consumer observability is a runtime composition projection, not a
+carrier fact. `projectWorkspaceJobObservability(events, jobRunId)` joins the
+raw workspace-job terminal projection with runtime failure diagnostics through
+the internally recorded submit run correlation. The returned projection is
+sanitized: failed state exposes request summary and `failureExplanation`, but
+never exposes the runtime numeric run id or raw `submitRunId` join key.
+
 ## Minimal Usage
 
 Depend on runtime for consumer-facing runtime execution, admission service, and
@@ -117,6 +124,14 @@ Materialized projections are registered through the backend facade:
 
 ```ts
 import { defineProjection, type MaterializedProjections } from "@agent-os/runtime";
+```
+
+Workspace-job consumers that need user-visible failure explanation should read
+the runtime observability projection instead of calling
+`projectFailureDiagnostics(events, runId)` themselves:
+
+```ts
+import { projectWorkspaceJobObservability } from "@agent-os/runtime";
 ```
 
 Deterministic product-side tool actions use `unsafeRunToolByName`. The `unsafe`

@@ -12,10 +12,10 @@ settlement.
 ## Invariant
 
 Workspace-job owns `workspace_job.*` request, finalized terminal artifact,
-verifier verdict, structured failure, and projection vocabulary. It does not
-execute agent submits, workspace effects, or verifiers. Runtime and host
-packages must construct workspace-job facts through this carrier's exported
-constructors and settlement helpers.
+verifier verdict, terminal failure fact, and raw projection vocabulary. It does
+not execute agent submits, workspace effects, verifiers, or runtime diagnostic
+joins. Runtime and host packages must construct workspace-job facts through
+this carrier's exported constructors and settlement helpers.
 
 ## Minimal Usage
 
@@ -29,10 +29,12 @@ exactly one terminal verdict: `workspace_job.verified`,
 
 `verified` and `verifier_rejected` reference the `terminal_finalized` event id;
 the projection only becomes deliverable when the verdict joins to the finalized
-artifact metadata. `failed.failure` is structured by `{ phase, class, code,
-message, retryable? }` so consumers do not rebuild infra failure categories from
-strings. Consumers read `projectWorkspaceJob` and never derive deliverability
-from product side storage.
+artifact metadata. `failed.failure` is terminal vocabulary only:
+`{ phase, code, reason, retryable? }`. `workspace_job.failed` may carry
+`submitRunId` as a raw substrate/debug join key, but diagnostics, category,
+owner, and public message are not workspace-job facts. Consumer-facing failure
+explanation is derived in runtime composition from workspace-job facts joined
+with runtime diagnostic projections.
 
 Consumers may declare a terminal schema builder, but they do not choose the
 terminal path, artifact ref, digest, byte count, or verified projection. The

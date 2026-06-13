@@ -112,7 +112,10 @@ title: "@agent-os/runtime Public API Intent"
 - `.:WorkspaceJobCandidateMissing`
 - `.:WorkspaceJobDataPlane`
 - `.:WorkspaceJobDataPlaneFailed`
+- `.:WorkspaceJobFailureExplanation`
 - `.:WorkspaceJobFinalizedArtifact`
+- `.:WorkspaceJobObservabilityProjection`
+- `.:WorkspaceJobObservabilityRequest`
 - `.:WorkspaceJobRunIdMismatch`
 - `.:WorkspaceJobSeedFile`
 - `.:WorkspaceJobTerminalArtifactBuild`
@@ -148,6 +151,7 @@ title: "@agent-os/runtime Public API Intent"
 - `.:projectRecoveryAttemptBudget`
 - `.:projectSubmitResult`
 - `.:projectTelemetryEventTree`
+- `.:projectWorkspaceJobObservability`
 - `.:projectionDelete`
 - `.:projectionFail`
 - `.:projectionIdentity`

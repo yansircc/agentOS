@@ -40,7 +40,12 @@ Status: Backend package. Public exports include the Cloudflare app facade, bindi
 - `.:CloudflareWorkspaceEnvResolverError`
 - `.:CloudflareWorkspaceEnvResolverInput`
 - `.:CloudflareWorkspaceEnvResolverOptions`
+- `.:CloudflareWorkspaceJobObservabilityProjectionReader`
+- `.:CloudflareWorkspaceJobProfile`
+- `.:CloudflareWorkspaceJobProfileError`
 - `.:CloudflareWorkspaceJobProjectionReader`
+- `.:CloudflareWorkspaceJobProfileResponseOptions`
+- `.:CloudflareWorkspaceJobResponseProjection`
 - `.:CloudflareWorkspaceJobResponseOptions`
 - `.:CloudflareWorkspaceOperationEnvResolver`
 - `.:CloudflareWorkspaceOperationEnvResolverInput`
@@ -57,6 +62,7 @@ Status: Backend package. Public exports include the Cloudflare app facade, bindi
 - `.:DispatchTargetRegistry`
 - `.:GeminiGenerateContentSpec`
 - `.:HttpDispatchTargetSpec`
+- `.:InstallCloudflareWorkspaceJobProfileOptions`
 - `.:InstallCloudflareWorkspaceOperationProviderOptions`
 - `.:LoweredMaterialBindings`
 - `.:OpenAIChatSpec`
@@ -79,6 +85,7 @@ Status: Backend package. Public exports include the Cloudflare app facade, bindi
 - `.:externalResource`
 - `.:geminiGenerateContent`
 - `.:httpDispatchTarget`
+- `.:installCloudflareWorkspaceJobProfile`
 - `.:installCloudflareWorkspaceOperationProvider`
 - `.:lowerMaterialBindings`
 - `.:mountCloudflareAgent`

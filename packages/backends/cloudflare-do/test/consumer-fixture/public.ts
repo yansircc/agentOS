@@ -6,6 +6,7 @@ import {
   createCloudflareWorkspaceJobResponse,
   createCloudflareWorkspaceEnvResolver,
   defineAgentDO,
+  installCloudflareWorkspaceJobProfile,
   installCloudflareWorkspaceOperationProvider,
   type CloudflareAgentEnv,
 } from "@agent-os/backend-cloudflare-do";
@@ -117,4 +118,13 @@ export const fixtureWorkspaceOpInstall = installCloudflareWorkspaceOperationProv
         durationMs: 0,
       }),
   },
+});
+
+export const fixtureWorkspaceJobProfile = installCloudflareWorkspaceJobProfile({
+  workspaceResolver: fixtureSandboxWorkspaceResolver,
+  readProjection: ({ runId }) =>
+    Promise.resolve({
+      status: "missing",
+      runId,
+    }),
 });

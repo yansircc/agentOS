@@ -95,6 +95,7 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:ExternalToolReceiptReplayOutcome`
 - `.:FailureDiagnostic`
 - `.:FailureDiagnosticCategory`
+- `.:FailureDiagnosticEnvelope`
 - `.:FailureDiagnosticInternalFacts`
 - `.:FailureDiagnosticOwner`
 - `.:FailureDiagnostics`
@@ -181,6 +182,7 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:decodeRuntimeEventPayload`
 - `.:decodeRuntimeLedgerEvent`
 - `.:externalToolExecutionReceiptFromExecutedPayload`
+- `.:failureDiagnosticEnvelopeForReason`
 - `.:isContinuationCause`
 - `.:isContinuationRef`
 - `.:isRecoveryAttemptRecord`

@@ -177,6 +177,23 @@
       }
     },
     {
+      "id": "primitive.cloudflare-do.installCloudflareWorkspaceJobProfile",
+      "package": "@agent-os/backend-cloudflare-do",
+      "packagePath": "packages/backends/cloudflare-do",
+      "entrypoints": ["."],
+      "symbol": "installCloudflareWorkspaceJobProfile",
+      "exportKey": ".:installCloudflareWorkspaceJobProfile",
+      "sourceFile": "packages/backends/cloudflare-do/src/workspace-job-profile.ts",
+      "summary": "Installs the Cloudflare workspace-job consumer profile. The profile is a thin composition surface: workspace leases come from the supplied resolver, workspace-op provider glue is the existing installer, AG-UI responses are the existing SSE helpers, and job responses read the runtime-owned observability projection. It does not parse workspace-job facts or own failure classification.",
+      "aliases": [],
+      "invariants": ["invariant.workspace-job.failure-observability-join"],
+      "decisions": [],
+      "docs": "docs/packages/backend-cloudflare-do.md",
+      "testEvidence": {
+        "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"]
+      }
+    },
+    {
       "id": "primitive.cloudflare-do.installCloudflareWorkspaceOperationProvider",
       "package": "@agent-os/backend-cloudflare-do",
       "packagePath": "packages/backends/cloudflare-do",
@@ -869,6 +886,23 @@
           "packages/runtime/test/run-projector.test.ts",
           "packages/runtime/test/submit-agent-runtime-events.test.ts"
         ]
+      }
+    },
+    {
+      "id": "primitive.runtime.projectWorkspaceJobObservability",
+      "package": "@agent-os/runtime",
+      "packagePath": "packages/runtime",
+      "entrypoints": ["."],
+      "symbol": "projectWorkspaceJobObservability",
+      "exportKey": ".:projectWorkspaceJobObservability",
+      "sourceFile": "packages/runtime/src/workspace-job-observability.ts",
+      "summary": "Projects a consumer-safe workspace job view by joining workspace-job terminal facts with runtime diagnostic projections. The raw carrier projection may expose substrate/debug join keys; this projection never exposes them.",
+      "aliases": [],
+      "invariants": ["invariant.workspace-job.failure-observability-join"],
+      "decisions": [],
+      "docs": "docs/packages/workspace-job.md",
+      "testEvidence": {
+        "tests": ["packages/runtime/test/workspace-job.test.ts"]
       }
     },
     {

@@ -195,12 +195,14 @@ export const workspaceJobFailedPayload = (spec: {
   readonly runId: string;
   readonly idempotencyKey: string;
   readonly failure: WorkspaceJobFailure;
+  readonly submitRunId?: number;
   readonly claim: RejectedClaim;
 }): WorkspaceJobFailedPayload => ({
   requestedEventId: spec.requestedEventId,
   runId: spec.runId,
   idempotencyKey: spec.idempotencyKey,
   failure: spec.failure,
+  ...(spec.submitRunId === undefined ? {} : { submitRunId: spec.submitRunId }),
   claim: spec.claim,
 });
 
@@ -385,37 +387,24 @@ const failurePhaseFrom = (value: unknown): WorkspaceJobFailure["phase"] | undefi
     ? value
     : undefined;
 
-const failureClassFrom = (value: unknown): WorkspaceJobFailure["class"] | undefined =>
-  value === "substrate" ||
-  value === "provider" ||
-  value === "consumer_contract" ||
-  value === "timeout" ||
-  value === "cancelled" ||
-  value === "unknown"
-    ? value
-    : undefined;
-
 const failureFrom = (value: unknown): WorkspaceJobFailure | undefined => {
   if (!Predicate.isRecord(value)) return undefined;
   const phase = failurePhaseFrom(value.phase);
-  const failureClass = failureClassFrom(value.class);
   const code = stringField(value, "code");
-  const message = stringField(value, "message");
+  const reason = stringField(value, "reason");
   const retryable = value.retryable;
   if (
     phase === undefined ||
-    failureClass === undefined ||
     code === undefined ||
-    message === undefined ||
+    reason === undefined ||
     (retryable !== undefined && typeof retryable !== "boolean")
   ) {
     return undefined;
   }
   return {
     phase,
-    class: failureClass,
     code,
-    message,
+    reason,
     ...(retryable === undefined ? {} : { retryable }),
   };
 };
@@ -425,6 +414,7 @@ const failedFrom = (payload: Record<string, unknown>): WorkspaceJobFailedPayload
   const runId = stringField(payload, "runId");
   const idempotencyKey = stringField(payload, "idempotencyKey");
   const failure = failureFrom(payload.failure);
+  const submitRunId = numberField(payload, "submitRunId");
   const claim = rejectedClaimFrom(payload.claim);
   if (
     requestedEventId === undefined ||
@@ -435,7 +425,14 @@ const failedFrom = (payload: Record<string, unknown>): WorkspaceJobFailedPayload
   ) {
     return undefined;
   }
-  return { requestedEventId, runId, idempotencyKey, failure, claim };
+  return {
+    requestedEventId,
+    runId,
+    idempotencyKey,
+    failure,
+    ...(submitRunId === undefined ? {} : { submitRunId }),
+    claim,
+  };
 };
 
 const sameOwner = (event: WorkspaceJobLedgerEvent): boolean =>
