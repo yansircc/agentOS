@@ -1104,6 +1104,47 @@ describe("submit-agent runtime event writes", () => {
     }),
   );
 
+  it.effect("compacts executed tool arguments before the next provider request", () =>
+    Effect.gen(function* () {
+      const largeContent = `<main>${"export golf cart ".repeat(1_500)}</main>`;
+      const tool = defineTool({
+        name: "write_file",
+        description: "write a file",
+        args: Schema.Struct({ content: Schema.String }),
+        execute: (args) => Effect.succeed({ bytesWritten: args.content.length }),
+        authority: "write",
+        admit: () => Effect.succeed({ ok: true }),
+        execution: deterministicToolExecution(),
+      });
+
+      const { result, llmRequests } = yield* runSubmit(baseSpec({ tools: { write_file: tool } }), [
+        response({
+          items: [
+            { type: "message", text: "write mockup" },
+            {
+              type: "tool_call",
+              call: {
+                id: "call-1",
+                type: "function",
+                function: {
+                  name: "write_file",
+                  arguments: JSON.stringify({ content: largeContent }),
+                },
+              },
+            },
+          ],
+        }),
+        response({ items: [{ type: "message", text: "done" }] }),
+      ]);
+
+      expect(result).toMatchObject({ ok: true, status: "delivered" });
+      const secondRequestMessages = JSON.stringify(llmRequests[1]?.messages ?? []);
+      expect(secondRequestMessages).toContain("provider_history_tool_arguments");
+      expect(secondRequestMessages).toContain("bytesWritten");
+      expect(secondRequestMessages).not.toContain(largeContent.slice(0, 120));
+    }),
+  );
+
   it.effect("known tool JSON parse failure aborts when validation retry budget is exhausted", () =>
     Effect.gen(function* () {
       const tool = defineTool({

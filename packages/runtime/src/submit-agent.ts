@@ -555,6 +555,34 @@ const matchingInterruptionEvent = (
     );
   });
 
+const compactToolCallForProviderHistory = (call: LlmToolCall): LlmToolCall => ({
+  ...call,
+  function: {
+    ...call.function,
+    arguments: JSON.stringify({
+      redacted: true,
+      reason: "provider_history_tool_arguments",
+      toolName: call.function.name,
+      originalBytes: toolArgumentSummaryEncoder.encode(call.function.arguments).byteLength,
+    }),
+  },
+});
+
+const compactProviderHistoryToolCall = (messages: LlmMessage[], toolCallId: string): void => {
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index];
+    if (message?.role !== "assistant" || message.tool_calls === undefined) continue;
+    if (!message.tool_calls.some((call) => call.id === toolCallId)) continue;
+    messages[index] = {
+      ...message,
+      tool_calls: message.tool_calls.map((call) =>
+        call.id === toolCallId ? compactToolCallForProviderHistory(call) : call,
+      ),
+    };
+    return;
+  }
+};
+
 const replayMessagesToInterruptedTool = (
   initialMessages: ReadonlyArray<LlmMessage>,
   events: ReadonlyArray<LedgerEvent>,
@@ -659,6 +687,7 @@ const replayMessagesToInterruptedTool = (
           }
           const replayed = replayToolFromArtifact(artifact.artifact);
           const resultStr = yield* safeStringify(replayed.result);
+          compactProviderHistoryToolCall(messages, call.id);
           messages.push({
             role: "tool",
             tool_call_id: call.id,
@@ -1416,6 +1445,7 @@ export const submitAgentEffect = (
               return yield* parsed.left;
             }
             toolValidationFailures++;
+            compactProviderHistoryToolCall(messages, call.id);
             const feedback = yield* safeStringify({
               ok: false,
               error: "invalid_tool_arguments",
@@ -1461,6 +1491,7 @@ export const submitAgentEffect = (
               return yield* decoded.left;
             }
             toolValidationFailures++;
+            compactProviderHistoryToolCall(messages, call.id);
             const feedback = yield* safeStringify({
               ok: false,
               error: "invalid_tool_arguments",
@@ -1848,6 +1879,7 @@ export const submitAgentEffect = (
           if (requiredToolName !== null && call.function.name === requiredToolName) {
             requiredToolExecuted = true;
           }
+          compactProviderHistoryToolCall(messages, call.id);
           messages.push({
             role: "tool",
             tool_call_id: call.id,
