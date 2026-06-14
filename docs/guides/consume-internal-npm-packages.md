@@ -16,14 +16,14 @@ instead of sharing the agentOS source workspace lockfile.
 2. Use the published `@yansirplus/*` package names.
 3. Install required peers such as `effect`.
 4. For prepublish first-party work, run `bun run install:consumer --
-   /path/to/consumer` in agentOS. This overlays the generated `@yansirplus/*`
+/path/to/consumer` in agentOS. This overlays the generated `@yansirplus/*`
    package projection into the consumer `node_modules` without changing the
    consumer manifest or lockfile.
 5. Restore the consumer to registry truth with `bun run restore:consumer --
-   /path/to/consumer`.
+/path/to/consumer`.
 6. If the consumer must exercise registry or dist-tag behavior instead, run a
    local registry channel: `bun run registry:local`, then `bun run
-   publish:local` in agentOS.
+publish:local` in agentOS.
 7. Read `dist/internal-npm/local-channel.json`.
 8. Copy the required `dependencies` entries into the consumer app. Use the
    logical tag value, for example `agentos-dev`; do not copy worktree tarball

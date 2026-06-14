@@ -679,12 +679,7 @@ const consumerManifestFiles = (consumerRoot) =>
   ].map((name) => path.join(consumerRoot, name));
 
 const snapshotFiles = (files) =>
-  new Map(
-    files.map((file) => [
-      file,
-      fs.existsSync(file) ? fs.readFileSync(file) : undefined,
-    ]),
-  );
+  new Map(files.map((file) => [file, fs.existsSync(file) ? fs.readFileSync(file) : undefined]));
 
 const assertSnapshotUnchanged = (snapshot, context) => {
   const changed = [];
