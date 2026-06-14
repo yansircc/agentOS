@@ -183,11 +183,14 @@ source subpaths remain outside the contract. Published packages include
 
 Workspace jobs use Cloudflare host helpers instead of product-owned Sandbox
 glue. `createCloudflareSandboxWorkspaceEnvResolver({ binding, transport, cwd,
-scopePrefix, cleanup })` owns the Cloudflare Sandbox binding/client composition,
-validates the DO namespace and client shape, pins `normalizeId: true`, disables
-implicit default sessions, and returns one `WorkspaceEnv` lease per
-`scope/runId`. Products choose the binding and declare cleanup policy; they do
-not configure sandbox sessions/transports or mint workspace refs.
+scopePrefix, cleanup, shellFileOperationTimeoutMs })` owns the Cloudflare
+Sandbox binding/client composition, validates the DO namespace and client shape,
+pins `normalizeId: true`, disables implicit default sessions, and returns one
+`WorkspaceEnv` lease per `scope/runId`. Products choose the binding and declare
+cleanup policy; they do not configure sandbox sessions/transports or mint
+workspace refs. Shell-derived file operation timeout policy comes from
+`@agent-os/workspace-env-cloudflare`, and the resolver only forwards the single
+declared override.
 
 Consumers that want the complete Cloudflare workspace-job bridge can install
 `installCloudflareWorkspaceJobProfile({ workspaceResolver, readProjection })`.

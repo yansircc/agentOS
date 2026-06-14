@@ -23,6 +23,10 @@ cancellation is non-cooperative: caller `AbortSignal`s are checked before the
 provider call and again after it settles, but they are not passed through
 Sandbox RPC options because those options must stay structured-clone safe.
 
+Fallback shell-derived file operations use
+`DEFAULT_CLOUDFLARE_WORKSPACE_SHELL_FILE_OPERATION_TIMEOUT_MS` unless the host
+declares `shellFileOperationTimeoutMs` in `makeCloudflareWorkspaceEnv`.
+
 ## Verification
 
 ```sh

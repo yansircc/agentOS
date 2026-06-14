@@ -16,6 +16,7 @@ title: "@agent-os/workspace-env-cloudflare Public API Intent"
 - `.:CloudflareWorkspaceEnvListFilesResult`
 - `.:CloudflareWorkspaceEnvOptions`
 - `.:CloudflareWorkspaceEnvStatResult`
+- `.:DEFAULT_CLOUDFLARE_WORKSPACE_SHELL_FILE_OPERATION_TIMEOUT_MS`
 - `.:makeCloudflareWorkspaceEnv`
 
 ## Experimental exports

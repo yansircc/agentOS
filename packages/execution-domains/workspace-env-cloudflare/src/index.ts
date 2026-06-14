@@ -120,6 +120,7 @@ export interface CloudflareWorkspaceEnvOptions {
   readonly client: CloudflareWorkspaceEnvClient;
   readonly cwd?: string;
   readonly workspaceRef?: string;
+  readonly shellFileOperationTimeoutMs?: number;
 }
 
 export class CloudflareWorkspaceEnvError extends Error {
@@ -127,6 +128,7 @@ export class CloudflareWorkspaceEnvError extends Error {
 }
 
 const DEFAULT_CWD = "/workspace";
+export const DEFAULT_CLOUDFLARE_WORKSPACE_SHELL_FILE_OPERATION_TIMEOUT_MS = 30_000;
 
 const workspaceError = (message: string): CloudflareWorkspaceEnvError =>
   new CloudflareWorkspaceEnvError(message);
@@ -190,6 +192,20 @@ const normalizeExecResult = (
 };
 
 const shellQuote = (value: string): string => `'${value.replaceAll("'", "'\\''")}'`;
+
+interface CloudflareWorkspaceEnvBackendOptions {
+  readonly shellFileOperationTimeoutMs: number;
+}
+
+const shellOperationExecOptions = (
+  backendOptions: CloudflareWorkspaceEnvBackendOptions,
+  options: WorkspaceOperationOptions | undefined,
+  maxOutputBytes?: number,
+): WorkspaceExecOptions => ({
+  timeoutMs: backendOptions.shellFileOperationTimeoutMs,
+  signal: options?.signal,
+  ...(maxOutputBytes === undefined ? {} : { maxOutputBytes }),
+});
 
 const execOrFail = async (
   client: CloudflareWorkspaceEnvClient,
@@ -277,12 +293,12 @@ const normalizeExists = (result: boolean | CloudflareWorkspaceEnvExistsResult): 
 
 const shellReadFileBytes = async (
   client: CloudflareWorkspaceEnvClient,
+  backendOptions: CloudflareWorkspaceEnvBackendOptions,
   path: string,
   options?: WorkspaceOperationOptions,
 ): Promise<Uint8Array> => {
   const result = await execOrFail(client, `base64 ${shellQuote(path)}`, {
-    timeoutMs: 5_000,
-    signal: options?.signal,
+    ...shellOperationExecOptions(backendOptions, options),
   });
   if (result.exitCode !== 0) {
     throw workspaceError(
@@ -294,6 +310,7 @@ const shellReadFileBytes = async (
 
 const shellWriteFile = async (
   client: CloudflareWorkspaceEnvClient,
+  backendOptions: CloudflareWorkspaceEnvBackendOptions,
   path: string,
   content: string | Uint8Array,
   options?: WorkspaceOperationOptions,
@@ -305,11 +322,7 @@ const shellWriteFile = async (
       base64Encode(bytesOf(content)),
       "AGENTOS_WORKSPACE_FILE",
     ].join("\n"),
-    {
-      timeoutMs: 5_000,
-      signal: options?.signal,
-      maxOutputBytes: 1_024,
-    },
+    shellOperationExecOptions(backendOptions, options, 1_024),
   );
   if (result.exitCode !== 0) {
     throw workspaceError(
@@ -320,6 +333,7 @@ const shellWriteFile = async (
 
 const shellStat = async (
   client: CloudflareWorkspaceEnvClient,
+  backendOptions: CloudflareWorkspaceEnvBackendOptions,
   path: string,
   options?: WorkspaceOperationOptions,
 ): Promise<WorkspaceFileStat> => {
@@ -338,11 +352,7 @@ const shellStat = async (
       "  echo other;",
       "fi",
     ].join(" "),
-    {
-      timeoutMs: 5_000,
-      signal: options?.signal,
-      maxOutputBytes: 128,
-    },
+    shellOperationExecOptions(backendOptions, options, 128),
   );
   const [type, sizeText, mtimeText] = result.stdout.trim().split(/\s+/);
   if (type === "directory") return { type };
@@ -356,11 +366,16 @@ const shellStat = async (
   };
 };
 
-const cloudflareBackend = (client: CloudflareWorkspaceEnvClient): WorkspaceEnvBackend => ({
+const cloudflareBackend = (
+  client: CloudflareWorkspaceEnvClient,
+  backendOptions: CloudflareWorkspaceEnvBackendOptions,
+): WorkspaceEnvBackend => ({
   readFile: async (path, options) => {
     checkSignal(options?.signal);
     if (client.readFile === undefined) {
-      return new TextDecoder().decode(await shellReadFileBytes(client, path, options));
+      return new TextDecoder().decode(
+        await shellReadFileBytes(client, backendOptions, path, options),
+      );
     }
     const result = await client.readFile(path, { encoding: "utf-8" });
     checkSignal(options?.signal);
@@ -369,7 +384,7 @@ const cloudflareBackend = (client: CloudflareWorkspaceEnvClient): WorkspaceEnvBa
   readFileBuffer: async (path, options) => {
     checkSignal(options?.signal);
     if (client.readFile === undefined) {
-      return shellReadFileBytes(client, path, options);
+      return shellReadFileBytes(client, backendOptions, path, options);
     }
     const result = await client.readFile(path, { encoding: "utf-8" });
     checkSignal(options?.signal);
@@ -378,7 +393,7 @@ const cloudflareBackend = (client: CloudflareWorkspaceEnvClient): WorkspaceEnvBa
   writeFile: async (path, content, options) => {
     checkSignal(options?.signal);
     if (client.writeFile === undefined) {
-      await shellWriteFile(client, path, content, options);
+      await shellWriteFile(client, backendOptions, path, content, options);
       return;
     }
     await client.writeFile(path, providerFileContent(content), { encoding: "utf-8" });
@@ -386,7 +401,7 @@ const cloudflareBackend = (client: CloudflareWorkspaceEnvClient): WorkspaceEnvBa
   },
   stat: async (path, options) => {
     checkSignal(options?.signal);
-    return shellStat(client, path, options);
+    return shellStat(client, backendOptions, path, options);
   },
   readdir: async (path, options) => {
     checkSignal(options?.signal);
@@ -403,11 +418,7 @@ const cloudflareBackend = (client: CloudflareWorkspaceEnvClient): WorkspaceEnvBa
     const result = await execOrFail(
       client,
       `find ${shellQuote(path)} -maxdepth 1 -mindepth 1 -printf '%f\\n'`,
-      {
-        timeoutMs: 5_000,
-        signal: options?.signal,
-        maxOutputBytes: 16_384,
-      },
+      shellOperationExecOptions(backendOptions, options, 16_384),
     );
     return result.stdout
       .split("\n")
@@ -421,11 +432,11 @@ const cloudflareBackend = (client: CloudflareWorkspaceEnvClient): WorkspaceEnvBa
       checkSignal(options?.signal);
       return normalizeExists(result);
     }
-    const result = await execOrFail(client, `test -e ${shellQuote(path)}`, {
-      timeoutMs: 5_000,
-      signal: options?.signal,
-      maxOutputBytes: 128,
-    });
+    const result = await execOrFail(
+      client,
+      `test -e ${shellQuote(path)}`,
+      shellOperationExecOptions(backendOptions, options, 128),
+    );
     return result.exitCode === 0;
   },
   mkdir: async (path, options) => {
@@ -438,11 +449,7 @@ const cloudflareBackend = (client: CloudflareWorkspaceEnvClient): WorkspaceEnvBa
     await execOrFail(
       client,
       `${options?.recursive === false ? "mkdir" : "mkdir -p"} ${shellQuote(path)}`,
-      {
-        timeoutMs: 5_000,
-        signal: options?.signal,
-        maxOutputBytes: 128,
-      },
+      shellOperationExecOptions(backendOptions, options, 128),
     );
   },
   rm: async (path, options) => {
@@ -461,11 +468,11 @@ const cloudflareBackend = (client: CloudflareWorkspaceEnvClient): WorkspaceEnvBa
       return;
     }
     const flags = `${options?.force === true ? "f" : ""}${options?.recursive === true ? "r" : ""}`;
-    await execOrFail(client, `rm ${flags.length > 0 ? `-${flags} ` : ""}${shellQuote(path)}`, {
-      timeoutMs: 5_000,
-      signal: options?.signal,
-      maxOutputBytes: 128,
-    });
+    await execOrFail(
+      client,
+      `rm ${flags.length > 0 ? `-${flags} ` : ""}${shellQuote(path)}`,
+      shellOperationExecOptions(backendOptions, options, 128),
+    );
   },
   exec: (command, options) => execOrFail(client, command, options),
 });
@@ -477,5 +484,9 @@ export const makeCloudflareWorkspaceEnv = (options: CloudflareWorkspaceEnvOption
       kind: "sandbox",
       ref: options.workspaceRef ?? options.client.id ?? "cloudflare-workspace",
     },
-    backend: cloudflareBackend(options.client),
+    backend: cloudflareBackend(options.client, {
+      shellFileOperationTimeoutMs:
+        options.shellFileOperationTimeoutMs ??
+        DEFAULT_CLOUDFLARE_WORKSPACE_SHELL_FILE_OPERATION_TIMEOUT_MS,
+    }),
   });

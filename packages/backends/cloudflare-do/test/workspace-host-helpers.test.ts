@@ -453,7 +453,12 @@ describe("Cloudflare DO workspace host helpers", () => {
     const requestedIds: string[] = [];
     const sandboxNames: Array<{ name: string; normalizeId: boolean | undefined }> = [];
     const transports: string[] = [];
-    const execCalls: Array<{ command: string; token: string; cwd: string | undefined }> = [];
+    const execCalls: Array<{
+      command: string;
+      token: string;
+      cwd: string | undefined;
+      timeoutMs: number | undefined;
+    }> = [];
     const cleaned: string[] = [];
     const stub = {
       setSandboxName: async (name: string, normalizeId?: boolean) => {
@@ -465,9 +470,9 @@ describe("Cloudflare DO workspace host helpers", () => {
       execWithSessionToken: async (
         command: string,
         token: string,
-        options?: { readonly cwd?: string },
+        options?: { readonly cwd?: string; readonly timeoutMs?: number },
       ) => {
-        execCalls.push({ command, token, cwd: options?.cwd });
+        execCalls.push({ command, token, cwd: options?.cwd, timeoutMs: options?.timeoutMs });
         return { exitCode: 0, stdout: "ok", stderr: "", durationMs: 1 };
       },
     };
@@ -486,6 +491,7 @@ describe("Cloudflare DO workspace host helpers", () => {
         typeof createCloudflareSandboxWorkspaceEnvResolver
       >[0]["binding"],
       cwd: "/workspace",
+      shellFileOperationTimeoutMs: 42_000,
       scopePrefix: "ZeroY",
       transport: "rpc",
       cleanup: ({ runId, sandboxId, workspaceRef }) => {
@@ -513,8 +519,15 @@ describe("Cloudflare DO workspace host helpers", () => {
 
     await first.env.exec("pwd", { timeoutMs: 100 });
     expect(execCalls).toEqual([
-      { command: "pwd", token: "__DISABLE_SESSION__", cwd: "/workspace" },
+      { command: "pwd", token: "__DISABLE_SESSION__", cwd: "/workspace", timeoutMs: 100 },
     ]);
+    await expect(first.env.exists("ready.txt")).resolves.toBe(true);
+    expect(execCalls.at(-1)).toEqual({
+      command: "test -e '/workspace/ready.txt'",
+      token: "__DISABLE_SESSION__",
+      cwd: undefined,
+      timeoutMs: 42_000,
+    });
 
     await first.cleanup();
     const afterCleanup = await resolver.resolve({ scope: "Customer Site", runId: "Run-ABC-123" });

@@ -3,6 +3,7 @@ import {
   type CloudflareWorkspaceEnvClient,
   type CloudflareWorkspaceEnvExecOptions,
   type CloudflareWorkspaceEnvExecRawResult,
+  type CloudflareWorkspaceEnvOptions,
 } from "@agent-os/workspace-env-cloudflare";
 import type { WorkspaceEnv } from "@agent-os/workspace-env";
 
@@ -21,6 +22,7 @@ export interface CloudflareWorkspaceEnvBinding {
 export interface CloudflareWorkspaceEnvResolverOptions {
   readonly binding: CloudflareWorkspaceEnvBinding;
   readonly cwd?: string;
+  readonly shellFileOperationTimeoutMs?: CloudflareWorkspaceEnvOptions["shellFileOperationTimeoutMs"];
   readonly sandboxId?: (input: CloudflareWorkspaceEnvResolverInput) => string;
   readonly workspaceRef?: (input: CloudflareWorkspaceEnvResolverInput) => string;
   readonly cleanup?: (
@@ -53,6 +55,7 @@ export interface CloudflareSandboxWorkspaceEnvResolverOptions {
   readonly binding: CloudflareSandboxWorkspaceNamespace;
   readonly transport?: CloudflareSandboxTransport;
   readonly cwd?: string;
+  readonly shellFileOperationTimeoutMs?: CloudflareWorkspaceEnvOptions["shellFileOperationTimeoutMs"];
   readonly scopePrefix?: string;
   readonly workspaceRef?: (input: CloudflareWorkspaceEnvResolverInput) => string;
   readonly cleanup?: (input: {
@@ -224,6 +227,9 @@ export const createCloudflareWorkspaceEnvResolver = (
         client,
         cwd: options.cwd,
         workspaceRef,
+        ...(options.shellFileOperationTimeoutMs === undefined
+          ? {}
+          : { shellFileOperationTimeoutMs: options.shellFileOperationTimeoutMs }),
       });
       const lease = {
         sandboxId,
@@ -282,6 +288,9 @@ export const createCloudflareSandboxWorkspaceEnvResolver = (
         client: workspaceClient,
         cwd: options.cwd,
         workspaceRef,
+        ...(options.shellFileOperationTimeoutMs === undefined
+          ? {}
+          : { shellFileOperationTimeoutMs: options.shellFileOperationTimeoutMs }),
       });
       const lease = {
         sandboxId,

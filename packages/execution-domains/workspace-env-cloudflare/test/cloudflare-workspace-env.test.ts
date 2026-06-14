@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "@effect/vitest";
 
 import {
   CloudflareWorkspaceEnvError,
+  DEFAULT_CLOUDFLARE_WORKSPACE_SHELL_FILE_OPERATION_TIMEOUT_MS,
   makeCloudflareWorkspaceEnv,
   type CloudflareWorkspaceEnvClient,
 } from "../src";
@@ -118,22 +119,58 @@ describe("@agent-os/workspace-env-cloudflare", () => {
 
     expect(exec).toHaveBeenCalledWith("mkdir -p '/workspace/project/src'", {
       cwd: undefined,
-      timeout: 5_000,
-      timeoutMs: 5_000,
+      timeout: DEFAULT_CLOUDFLARE_WORKSPACE_SHELL_FILE_OPERATION_TIMEOUT_MS,
+      timeoutMs: DEFAULT_CLOUDFLARE_WORKSPACE_SHELL_FILE_OPERATION_TIMEOUT_MS,
     });
     expect(exec).toHaveBeenCalledWith(
       expect.stringContaining("base64 -d > '/workspace/project/src/a.txt'"),
       {
         cwd: undefined,
-        timeout: 5_000,
-        timeoutMs: 5_000,
+        timeout: DEFAULT_CLOUDFLARE_WORKSPACE_SHELL_FILE_OPERATION_TIMEOUT_MS,
+        timeoutMs: DEFAULT_CLOUDFLARE_WORKSPACE_SHELL_FILE_OPERATION_TIMEOUT_MS,
       },
     );
     expect(exec).toHaveBeenCalledWith("base64 '/workspace/project/src/a.txt'", {
       cwd: undefined,
-      timeout: 5_000,
-      timeoutMs: 5_000,
+      timeout: DEFAULT_CLOUDFLARE_WORKSPACE_SHELL_FILE_OPERATION_TIMEOUT_MS,
+      timeoutMs: DEFAULT_CLOUDFLARE_WORKSPACE_SHELL_FILE_OPERATION_TIMEOUT_MS,
     });
+  });
+
+  it("uses one configured timeout for shell-derived file operations", async () => {
+    const shellFileOperationTimeoutMs = 42_000;
+    const exec = vi.fn<CloudflareWorkspaceEnvClient["exec"]>(async (command) => {
+      if (command.startsWith("find ")) {
+        return { exitCode: 0, stdout: "b.ts\na.ts\n", stderr: "", durationMs: 1 };
+      }
+      if (command.startsWith("if [ -d ")) {
+        return { exitCode: 0, stdout: "file\t12\t1700000000\n", stderr: "", durationMs: 1 };
+      }
+      return { exitCode: 0, stdout: "", stderr: "", durationMs: 1 };
+    });
+    const env = makeCloudflareWorkspaceEnv({
+      client: { exec },
+      cwd: "/workspace/project",
+      shellFileOperationTimeoutMs,
+    });
+
+    await expect(env.readdir("src")).resolves.toEqual(["a.ts", "b.ts"]);
+    await expect(env.exists("src/a.ts")).resolves.toBe(true);
+    await env.mkdir("src/nested");
+    await env.rm("src/a.ts", { force: true });
+    await expect(env.stat("src/a.ts")).resolves.toEqual({
+      type: "file",
+      size: 12,
+      mtimeMs: 1_700_000_000_000,
+    });
+
+    expect(exec).toHaveBeenCalledTimes(5);
+    for (const [, options] of exec.mock.calls) {
+      expect(options).toMatchObject({
+        timeout: shellFileOperationTimeoutMs,
+        timeoutMs: shellFileOperationTimeoutMs,
+      });
+    }
   });
 
   it("rejects before invoking provider methods when signal is already aborted", async () => {
