@@ -833,6 +833,7 @@ export const submitAgentEffect = (
     }
 
     const priorEvents = spec.resume === undefined ? [] : yield* ledger.events(identity);
+    let toolValidationFailures = 0;
     const started =
       spec.resume === undefined
         ? yield* logRuntimeLedgerEvent(
@@ -1360,10 +1361,6 @@ export const submitAgentEffect = (
         }
 
         for (const call of responseToolCalls) {
-          // Parse OUTSIDE the retry block. unknown_tool / invalid_args are
-          // non-recoverable: retrying the same args won't make them valid,
-          // AND parsing before any quota grant means invalid LLM-emitted
-          // args never consume quota.
           const tool = spec.tools[call.function.name];
           if (tool === undefined) {
             return yield* new ToolError({
@@ -1415,7 +1412,26 @@ export const submitAgentEffect = (
                 traceContext,
               }),
             );
-            return yield* parsed.left;
+            if (toolValidationFailures >= toolRetries) {
+              return yield* parsed.left;
+            }
+            toolValidationFailures++;
+            const feedback = yield* safeStringify({
+              ok: false,
+              error: "invalid_tool_arguments",
+              phase: "parse",
+              reason: "invalid_args",
+              toolName: call.function.name,
+              message:
+                "Tool arguments were not valid JSON. Retry the same tool with valid JSON arguments.",
+            });
+            messages.push({
+              role: "tool",
+              tool_call_id: call.id,
+              name: call.function.name,
+              content: feedback,
+            });
+            continue;
           }
           const decoded = yield* Effect.either(
             decodeToolArgs(tool, parsed.right, call.function.name),
@@ -1441,7 +1457,27 @@ export const submitAgentEffect = (
                 traceContext,
               }),
             );
-            return yield* decoded.left;
+            if (toolValidationFailures >= toolRetries) {
+              return yield* decoded.left;
+            }
+            toolValidationFailures++;
+            const feedback = yield* safeStringify({
+              ok: false,
+              error: "invalid_tool_arguments",
+              phase: "decode",
+              reason: "invalid_args",
+              toolName: call.function.name,
+              message:
+                "Tool arguments did not match the tool schema. Retry the same tool with corrected JSON arguments.",
+              ...(schemaIssues === undefined ? {} : { schemaIssues }),
+            });
+            messages.push({
+              role: "tool",
+              tool_call_id: call.id,
+              name: call.function.name,
+              content: feedback,
+            });
+            continue;
           }
           const args = decoded.right;
 

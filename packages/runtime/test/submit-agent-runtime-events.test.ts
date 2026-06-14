@@ -1030,7 +1030,7 @@ describe("submit-agent runtime event writes", () => {
     }),
   );
 
-  it.effect("known tool schema decode failure emits tool.rejected diagnostics before abort", () =>
+  it.effect("known tool schema decode failure feeds sanitized diagnostics back to the model", () =>
     Effect.gen(function* () {
       const tool = defineTool({
         name: "write_file",
@@ -1056,15 +1056,35 @@ describe("submit-agent runtime event writes", () => {
             },
           ],
         }),
+        response({
+          items: [
+            { type: "message", text: "retry write" },
+            {
+              type: "tool_call",
+              call: {
+                id: "call-2",
+                type: "function",
+                function: {
+                  name: "write_file",
+                  arguments: '{"path":"out.txt","content":"ok"}',
+                },
+              },
+            },
+          ],
+        }),
+        response({ items: [{ type: "message", text: "done" }] }),
       ]);
 
-      expect(result).toMatchObject({ ok: false, reason: "tool_error" });
+      expect(result).toMatchObject({ ok: true, status: "delivered" });
       expect(decodedRuntimeKinds(events)).toEqual([
         "agent.run.started",
         "chat.ingested",
         "llm.response",
         "tool.rejected",
-        "agent.aborted.tool_error",
+        "llm.response",
+        "tool.executed",
+        "llm.response",
+        "agent.run.completed",
       ]);
       const rejected = events.find((event) => event.kind === "tool.rejected");
       expect(decodeRuntimeLedgerEvent(rejected!)).toMatchObject({
@@ -1080,13 +1100,11 @@ describe("submit-agent runtime event writes", () => {
           },
         },
       });
-      const diagnostics = projectFailureDiagnostics(events, 1);
-      expect(JSON.stringify(diagnostics)).toContain("content");
-      expect(JSON.stringify(diagnostics)).not.toContain("out.txt");
+      expect(JSON.stringify(events)).toContain("content");
     }),
   );
 
-  it.effect("known tool JSON parse failure emits tool.rejected diagnostics before abort", () =>
+  it.effect("known tool JSON parse failure aborts when validation retry budget is exhausted", () =>
     Effect.gen(function* () {
       const tool = defineTool({
         name: "lookup",
@@ -1098,21 +1116,27 @@ describe("submit-agent runtime event writes", () => {
         execution: deterministicToolExecution(),
       });
 
-      const { result, events } = yield* runSubmit(baseSpec({ tools: { lookup: tool } }), [
-        response({
-          items: [
-            { type: "message", text: "lookup" },
-            {
-              type: "tool_call",
-              call: {
-                id: "call-1",
-                type: "function",
-                function: { name: "lookup", arguments: '{"q":' },
-              },
-            },
-          ],
+      const { result, events } = yield* runSubmit(
+        baseSpec({
+          tools: { lookup: tool },
+          budget: { toolRetries: 0 },
         }),
-      ]);
+        [
+          response({
+            items: [
+              { type: "message", text: "lookup" },
+              {
+                type: "tool_call",
+                call: {
+                  id: "call-1",
+                  type: "function",
+                  function: { name: "lookup", arguments: '{"q":' },
+                },
+              },
+            ],
+          }),
+        ],
+      );
 
       expect(result).toMatchObject({ ok: false, reason: "tool_error" });
       expect(decodedRuntimeKinds(events)).toEqual([

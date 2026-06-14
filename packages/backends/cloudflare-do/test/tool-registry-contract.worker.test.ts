@@ -205,34 +205,38 @@ describe("tool registry generator", () => {
     const scope = "tool-registry-schema-decode";
     const id = testEnv.AGENT_DO.idFromName(scope);
     const stub = testEnv.AGENT_DO.get(id);
-    let admitted = false;
-    let executed = false;
+    let admitted = 0;
+    let executed = 0;
     const tool = defineTool({
       name: "lookup",
       description: "Lookup a value",
       args: Schema.Struct({ key: Schema.String }),
       authority: "read",
       admit: () => {
-        admitted = true;
+        admitted++;
         return Effect.succeed({ ok: true });
       },
       execution: deterministicToolExecution(),
       execute: () =>
         Effect.sync(() => {
-          executed = true;
+          executed++;
           return { value: 42 };
         }),
     });
 
     await runInDurableObject(stub, async (_inst, state) => {
-      const llm = stubLlmTransport([toolCallResp("lookup", '{"key":1}', "call-1")]);
+      const llm = stubLlmTransport([
+        toolCallResp("lookup", '{"key":1}', "call-1"),
+        toolCallResp("lookup", '{"key":"ok"}', "call-2"),
+        finalTextResp("done"),
+      ]);
       const identity = testEventIdentity(scope, toolRegistryAuthorityRef);
       const runtime = buildRuntime(state, llm, identity);
 
       const result = await runtime.runPromise(submitAgentEffect(makeSpec(scope, tool)));
-      expect(result.ok).toBe(false);
-      expect(admitted).toBe(false);
-      expect(executed).toBe(false);
+      expect(result.ok).toBe(true);
+      expect(admitted).toBe(1);
+      expect(executed).toBe(1);
 
       const events = await runtime.runPromise(
         Effect.gen(function* () {
@@ -240,12 +244,12 @@ describe("tool registry generator", () => {
           return yield* l.events(identity);
         }),
       );
-      expect(events.some((event) => event.kind === "tool.executed")).toBe(false);
+      expect(events.some((event) => event.kind === "tool.executed")).toBe(true);
       expect(events.some((event) => event.kind === "tool.rejected")).toBe(true);
       expect(
         JSON.stringify(events.find((event) => event.kind === "tool.rejected")?.payload),
       ).toContain("invalid_args");
-      expect(events.some((event) => event.kind === "agent.aborted.tool_error")).toBe(true);
+      expect(events.some((event) => event.kind === "agent.aborted.tool_error")).toBe(false);
 
       await runtime.dispose();
     });
