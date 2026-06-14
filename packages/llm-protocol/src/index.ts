@@ -176,10 +176,7 @@ export interface LlmSnapshotRequest {
   readonly messages: ReadonlyArray<LlmMessage>;
   readonly tools?: ReadonlyArray<LlmSnapshotToolDefinition>;
   readonly traceContext?: unknown;
-  readonly tool_choice?: {
-    readonly type: "function";
-    readonly function: { readonly name: string };
-  };
+  readonly tool_choice?: LlmToolChoice;
 }
 
 export interface LlmCallSnapshot {
@@ -268,11 +265,15 @@ export interface LlmRequest {
   readonly messages: ReadonlyArray<LlmMessage>;
   readonly tools?: ReadonlyArray<ToolDefinition>;
   readonly traceContext?: unknown;
-  readonly tool_choice?: {
-    readonly type: "function";
-    readonly function: { readonly name: string };
-  };
+  readonly tool_choice?: LlmToolChoice;
 }
+
+export type LlmToolChoice =
+  | "required"
+  | {
+      readonly type: "function";
+      readonly function: { readonly name: string };
+    };
 
 export const projectAgentSchemaForLlmTool = (schema: AgentSchema<unknown>): LlmJsonSchemaObject =>
   schema.projections.canonical;

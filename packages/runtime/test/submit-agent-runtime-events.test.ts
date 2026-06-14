@@ -655,6 +655,85 @@ describe("submit-agent runtime event writes", () => {
     }),
   );
 
+  it.effect("requires tool calls until the declared terminal tool executes", () =>
+    Effect.gen(function* () {
+      const readFile = defineTool({
+        name: "read_file",
+        description: "read file",
+        args: Schema.Struct({ path: Schema.String }),
+        execute: ({ path }) => Effect.succeed({ path, content: "input" }),
+        authority: "read",
+        admit: () => Effect.succeed({ ok: true }),
+        execution: deterministicToolExecution(),
+      });
+      const writeTerminal = defineTool({
+        name: "write_terminal",
+        description: "write terminal result",
+        args: Schema.Struct({ value: Schema.String }),
+        execute: ({ value }) => Effect.succeed({ ok: true, value }),
+        authority: "write",
+        admit: () => Effect.succeed({ ok: true }),
+        execution: deterministicToolExecution(),
+      });
+
+      const { result, events, llmRequests } = yield* runSubmit(
+        baseSpec({
+          tools: { read_file: readFile, write_terminal: writeTerminal },
+          toolPolicy: {
+            requiredUntilToolExecuted: { toolName: "write_terminal" },
+          },
+        }),
+        [
+          response({
+            items: [
+              {
+                type: "tool_call",
+                call: {
+                  id: "call-read",
+                  type: "function",
+                  function: { name: "read_file", arguments: '{"path":"input.json"}' },
+                },
+              },
+            ],
+          }),
+          response({
+            items: [
+              {
+                type: "tool_call",
+                call: {
+                  id: "call-write",
+                  type: "function",
+                  function: { name: "write_terminal", arguments: '{"value":"done"}' },
+                },
+              },
+            ],
+          }),
+          response({ items: [{ type: "message", text: "done" }] }),
+        ],
+      );
+
+      expect(result).toMatchObject({ ok: true, final: "done" });
+      expect(llmRequests.map((request) => request.tool_choice)).toEqual([
+        "required",
+        "required",
+        undefined,
+      ]);
+      expect(
+        events
+          .map((event) => decodeRuntimeLedgerEvent(event))
+          .filter(
+            (decoded) =>
+              decoded._tag === "runtime" && decoded.event.kind === "tool.executed",
+          )
+          .map((decoded) =>
+            decoded._tag === "runtime" && decoded.event.kind === "tool.executed"
+              ? decoded.event.payload.name
+              : "",
+          ),
+      ).toEqual(["read_file", "write_terminal"]);
+    }),
+  );
+
   it.effect("injects the tool pre-claim when emitting a declared intent with a claim slot", () =>
     Effect.gen(function* () {
       const intentPackage = boundaryPackage(

@@ -27,6 +27,7 @@ Status: LLM protocol package. Public exports are limited to provider-neutral LLM
 - `.:LlmSnapshotToolDefinition`
 - `.:LlmSnapshotRequest`
 - `.:LlmCallSnapshot`
+- `.:LlmToolChoice`
 - `.:llmSnapshotToolDefinitionFromToolDefinition`
 - `.:llmSnapshotRequestFromRequest`
 - `.:canonicalLlmSnapshotRequestJson`

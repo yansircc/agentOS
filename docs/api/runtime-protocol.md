@@ -144,6 +144,7 @@
 - `.:SubmitSpec`
 - `.:SubmitToolContext`
 - `.:SubmitToolIntent`
+- `.:SubmitToolPolicy`
 - `.:TOOL_EXECUTION_CLAIM_MUST_BE_LIVED_REASON`
 - `.:ToolArgumentSummary`
 - `.:ToolExecutedPayload`

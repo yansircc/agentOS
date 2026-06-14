@@ -28,6 +28,7 @@ export const internalSubmitSpec = (
     toolContext: spec.toolContext,
     toolIntents: spec.toolIntents,
     receiptBackedTools: spec.receiptBackedTools,
+    toolPolicy: spec.toolPolicy,
     decisionInterrupts: spec.decisionInterrupts,
     resume: spec.resume,
     scope: scope.scope,

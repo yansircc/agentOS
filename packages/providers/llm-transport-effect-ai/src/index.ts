@@ -566,7 +566,11 @@ export const normalizeEffectAiResponse = (
   });
 
 const toolChoiceForRequest = (request: LlmRequest): ToolChoice<string> | undefined =>
-  request.tool_choice === undefined ? undefined : { tool: request.tool_choice.function.name };
+  request.tool_choice === undefined
+    ? undefined
+    : request.tool_choice === "required"
+      ? "required"
+      : { tool: request.tool_choice.function.name };
 
 const withAbortSignal = <A, E, R>(
   effect: Effect.Effect<A, E, R>,

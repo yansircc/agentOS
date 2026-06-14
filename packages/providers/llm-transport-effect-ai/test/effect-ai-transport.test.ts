@@ -542,6 +542,38 @@ describe("@agent-os/llm-transport-effect-ai", () => {
       }),
   );
 
+  it.effect("passes required tool choice to the model", () =>
+    Effect.gen(function* () {
+      const model = fakeModel((options) => {
+        expect(options.disableToolCallResolution).toBe(true);
+        expect(options.toolChoice).toBe("required");
+        expect(options.toolkit).toBeDefined();
+        return Effect.succeed(
+          response([
+            makeResponsePart("tool-call", {
+              id: "call-1",
+              name: "lookup",
+              params: { q: "x" },
+              providerExecuted: false,
+            }),
+            finish({ inputTokens: 1, outputTokens: 2, totalTokens: 3 }),
+          ]),
+        );
+      });
+
+      const result = yield* callEffectAiLanguageModel(
+        model,
+        request({
+          tools: [lookupTool()],
+          tool_choice: "required",
+        }),
+      );
+
+      expect(result.items).toHaveLength(1);
+      expect(result.usage.totalTokens).toBe(3);
+    }),
+  );
+
   it.effect(
     "resolves provider material inside the transport layer and redacts it from output",
     () => {

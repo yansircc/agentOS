@@ -27,6 +27,7 @@ title: "@agent-os/llm-protocol API"
 - `.:LlmSnapshotToolDefinition`
 - `.:LlmSnapshotRequest`
 - `.:LlmCallSnapshot`
+- `.:LlmToolChoice`
 - `.:llmSnapshotToolDefinitionFromToolDefinition`
 - `.:llmSnapshotRequestFromRequest`
 - `.:canonicalLlmSnapshotRequestJson`

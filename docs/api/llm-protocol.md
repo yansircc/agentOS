@@ -23,6 +23,7 @@
 - `.:LlmSnapshotToolDefinition`
 - `.:LlmSnapshotRequest`
 - `.:LlmCallSnapshot`
+- `.:LlmToolChoice`
 - `.:llmSnapshotToolDefinitionFromToolDefinition`
 - `.:llmSnapshotRequestFromRequest`
 - `.:canonicalLlmSnapshotRequestJson`

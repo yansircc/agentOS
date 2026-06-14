@@ -37,6 +37,7 @@ import {
   type LlmToolCall,
   type LlmMessage,
   type LlmRoute,
+  type LlmToolChoice,
 } from "@agent-os/llm-protocol";
 import { LlmTransport } from "@agent-os/llm-protocol";
 import type { ToolDefinition } from "@agent-os/kernel/tools";
@@ -752,6 +753,32 @@ const timeoutAbortResult = (
 const isLlmCallTimedOut = (error: unknown): error is LlmCallTimedOut =>
   error instanceof LlmCallTimedOut;
 
+const requiredToolPolicyName = (spec: InternalSubmitSpec): string | null => {
+  const toolName = spec.toolPolicy?.requiredUntilToolExecuted?.toolName;
+  return typeof toolName === "string" && toolName.length > 0 ? toolName : null;
+};
+
+const hasExecutedTool = (
+  events: ReadonlyArray<LedgerEvent>,
+  runId: number,
+  toolName: string,
+): boolean =>
+  events.some((event) => {
+    const decoded = decodeRuntimeLedgerEvent(event);
+    return (
+      decoded._tag === "runtime" &&
+      decoded.event.kind === RUNTIME_EVENT_KIND.TOOL_EXECUTED &&
+      decoded.event.payload.runId === runId &&
+      decoded.event.payload.name === toolName
+    );
+  });
+
+const toolChoiceForRuntimePolicy = (input: {
+  readonly requiredToolName: string | null;
+  readonly requiredToolExecuted: boolean;
+}): LlmToolChoice | undefined =>
+  input.requiredToolName !== null && !input.requiredToolExecuted ? "required" : undefined;
+
 export const submitAgentEffect = (
   spec: InternalSubmitSpec,
 ): Effect.Effect<
@@ -1015,6 +1042,20 @@ export const submitAgentEffect = (
         traceContext,
       );
     }
+    const requiredToolName = requiredToolPolicyName(spec);
+    if (requiredToolName !== null && spec.tools[requiredToolName] === undefined) {
+      return yield* finalAbort(
+        ABORT.TOOL_ERROR,
+        {
+          reason: "invalid_tool_policy_unknown_tool",
+          toolName: requiredToolName,
+        },
+        identity,
+        started.id,
+        0,
+        traceContext,
+      );
+    }
     const domainRegistry = validateExecutionDomainRegistry(spec.tools, {
       domains: spec.executionDomains ?? [],
     });
@@ -1053,6 +1094,8 @@ export const submitAgentEffect = (
       const refs = yield* RefResolverService;
       let firstTurn = 0;
       let resumedToolCall: LlmToolCall | undefined;
+      let requiredToolExecuted =
+        requiredToolName === null ? true : hasExecutedTool(priorEvents, started.id, requiredToolName);
 
       if (spec.resume !== undefined) {
         const interruption = matchingInterruptionEvent(priorEvents, spec.resume);
@@ -1214,6 +1257,10 @@ export const submitAgentEffect = (
                   route: spec.route,
                   messages,
                   tools: toolDefs.length > 0 ? toolDefs : undefined,
+                  tool_choice: toolChoiceForRuntimePolicy({
+                    requiredToolName,
+                    requiredToolExecuted,
+                  }),
                   traceContext,
                 },
                 { signal: controller.signal },
@@ -1760,6 +1807,9 @@ export const submitAgentEffect = (
               traceContext,
             }),
           );
+          if (requiredToolName !== null && call.function.name === requiredToolName) {
+            requiredToolExecuted = true;
+          }
           messages.push({
             role: "tool",
             tool_call_id: call.id,

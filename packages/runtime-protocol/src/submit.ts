@@ -23,6 +23,20 @@ export interface SubmitReceiptBackedToolBinding {
 
 export type SubmitToolContext = Pick<ToolExecutionContextInput, "extensions">;
 
+export interface SubmitToolPolicy {
+  /**
+   * Force each LLM turn to return a tool call until this tool has executed.
+   *
+   * This is a runtime-owned policy for workflows whose terminal fact depends on
+   * a specific tool effect. It prevents pre-terminal prose from becoming the
+   * effective output channel while still allowing read/inspect tools before the
+   * terminal tool runs.
+   */
+  readonly requiredUntilToolExecuted?: {
+    readonly toolName: string;
+  };
+}
+
 /**
  * Runtime submit input for one agent run under an effect authority.
  *
@@ -51,6 +65,7 @@ export interface SubmitSpec {
   readonly toolContext?: SubmitToolContext;
   readonly toolIntents?: ReadonlyArray<SubmitToolIntent>;
   readonly receiptBackedTools?: Readonly<Record<string, SubmitReceiptBackedToolBinding>>;
+  readonly toolPolicy?: SubmitToolPolicy;
   readonly decisionInterrupts?: ReadonlyArray<SubmitDecisionInterrupt>;
   readonly resume?: SubmitResumeDecision;
 }
