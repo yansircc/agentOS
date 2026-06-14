@@ -1094,13 +1094,41 @@ describe("runWorkspaceJobEffect", () => {
     }),
   );
 
-  it.effect("keeps pre-submit seed failures uncorrelated and still observable", () =>
+  it.effect("retries transient seed write failures before submitting the agent run", () =>
     Effect.gen(function* () {
       const services = makeServices();
+      let seedWrites = 0;
       const projection = yield* runJob(
         makeJobSpec({
           dataPlane: makeDataPlane({
             writeSeedFile: async () => {
+              seedWrites += 1;
+              if (seedWrites === 1) throw new Error("transient seed write failed");
+            },
+          }),
+        }),
+        services,
+      );
+
+      expect(projection.status).toBe("verified");
+      expect(seedWrites).toBe(2);
+      expect(services.llmRequests).toHaveLength(1);
+      expect(
+        services.events.filter((event) => event.kind === WORKSPACE_JOB_KIND.SEED_WRITTEN),
+      ).toHaveLength(1);
+      expect(services.events.map((event) => event.kind)).not.toContain(WORKSPACE_JOB_KIND.FAILED);
+    }),
+  );
+
+  it.effect("keeps pre-submit seed failures uncorrelated and still observable", () =>
+    Effect.gen(function* () {
+      const services = makeServices();
+      let seedWrites = 0;
+      const projection = yield* runJob(
+        makeJobSpec({
+          dataPlane: makeDataPlane({
+            writeSeedFile: async () => {
+              seedWrites += 1;
               throw new Error("seed write failed");
             },
           }),
@@ -1121,6 +1149,7 @@ describe("runWorkspaceJobEffect", () => {
       });
       if (projection.status !== "failed") expect.fail("expected failed projection");
       expect(projection.failed.submitRunId).toBeUndefined();
+      expect(seedWrites).toBe(3);
       expect(services.llmRequests).toHaveLength(0);
 
       const observed = projectWorkspaceJobObservability(services.events, "job-1");

@@ -481,6 +481,8 @@ const currentProjection = (
   runId: string,
 ): WorkspaceJobProjection => projectWorkspaceJob(events, runId);
 
+const workspaceJobSeedWriteRetryTimes = 2;
+
 const writeSeedFiles = (
   dataPlane: WorkspaceJobDataPlane,
   files: ReadonlyArray<WorkspaceJobSeedFile>,
@@ -491,7 +493,7 @@ const writeSeedFiles = (
       Effect.tryPromise({
         try: () => dataPlane.writeSeedFile(file),
         catch: (cause) => new WorkspaceJobDataPlaneFailed({ phase: "seed", cause }),
-      }),
+      }).pipe(Effect.retry({ times: workspaceJobSeedWriteRetryTimes })),
     { discard: true },
   );
 
