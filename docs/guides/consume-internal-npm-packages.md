@@ -15,17 +15,38 @@ instead of sharing the agentOS source workspace lockfile.
 1. Install required packages with semver versions.
 2. Use the published `@yansirplus/*` package names.
 3. Install required peers such as `effect`.
-4. For prepublish first-party work, run a local registry channel:
-   `bun run registry:local`, then `bun run publish:local` in agentOS.
-5. Read `dist/internal-npm/local-channel.json`.
-6. Copy the required `dependencies` entries into the consumer app. Use the
+4. For prepublish first-party work, run `bun run install:consumer --
+   /path/to/consumer` in agentOS. This overlays the generated `@yansirplus/*`
+   package projection into the consumer `node_modules` without changing the
+   consumer manifest or lockfile.
+5. Restore the consumer to registry truth with `bun run restore:consumer --
+   /path/to/consumer`.
+6. If the consumer must exercise registry or dist-tag behavior instead, run a
+   local registry channel: `bun run registry:local`, then `bun run
+   publish:local` in agentOS.
+7. Read `dist/internal-npm/local-channel.json`.
+8. Copy the required `dependencies` entries into the consumer app. Use the
    logical tag value, for example `agentos-dev`; do not copy worktree tarball
    paths. Configure `@yansirplus:registry` once in the consumer `.npmrc` only
    when consuming the local channel.
-7. Run the app typecheck and tests under its own lockfile.
+9. Run the app typecheck and tests under its own lockfile.
 
-For first-party prepublish work, use the local channel instead of hand-writing
-tarball paths:
+For normal first-party prepublish work, use the direct consumer overlay instead
+of publishing npm versions or hand-writing tarball paths:
+
+```sh
+bun run install:consumer -- /path/to/consumer
+```
+
+The overlay writes `node_modules/.agentos-local.json`; the consumer
+`package.json` and lockfile remain the registry contract. Restore with:
+
+```sh
+bun run restore:consumer -- /path/to/consumer
+```
+
+Use the local channel only when package-manager registry behavior is the thing
+under test:
 
 ```sh
 bun run registry:local

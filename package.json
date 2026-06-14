@@ -84,7 +84,9 @@
     "test:internal-consumer": "node tooling/distribution/distribution.mjs test-consumer",
     "publish:internal": "node tooling/distribution/distribution.mjs publish",
     "registry:local": "node tooling/distribution/distribution.mjs local-registry",
-    "publish:local": "node tooling/distribution/distribution.mjs publish-local"
+    "publish:local": "node tooling/distribution/distribution.mjs publish-local",
+    "install:consumer": "node tooling/distribution/distribution.mjs install-consumer",
+    "restore:consumer": "node tooling/distribution/distribution.mjs restore-consumer"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "catalog:",

@@ -28,7 +28,26 @@ bun run publish:internal
 `agentOsRelease.npmAccess` owns the default publish access. Override them only
 for isolated tests with `AGENTOS_NPM_SCOPE` or `AGENTOS_NPM_ACCESS`.
 
-For first-party prepublish consumers, run:
+For first-party prepublish consumers that need to test current source without
+publishing an npm version, install the generated package projection directly
+into the consumer `node_modules`:
+
+```sh
+bun run install:consumer -- /path/to/consumer
+```
+
+`install:consumer` runs the same package projection and tarball pack path as a
+release, overlays the generated `@yansirplus/*` packages into the consumer
+`node_modules`, and writes `node_modules/.agentos-local.json` with the source
+revision and tarball hashes. It must not edit the consumer `package.json` or
+lockfile. Restore the consumer to registry truth with:
+
+```sh
+bun run restore:consumer -- /path/to/consumer
+```
+
+Use the local registry channel only when the consumer must exercise package
+manager registry resolution, dist-tags, or npmrc behavior:
 
 ```sh
 bun run registry:local

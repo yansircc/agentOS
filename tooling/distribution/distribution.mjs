@@ -13,6 +13,7 @@ const stagingRoot = path.join(distRoot, "packages");
 const tarballRoot = path.join(distRoot, "tarballs");
 const installManifestPath = path.join(distRoot, "install-manifest.json");
 const localChannelManifestPath = path.join(distRoot, "local-channel.json");
+const localConsumerMarkerName = ".agentos-local.json";
 const tarballHashLength = 12;
 let packageVersionOverride;
 const defaultLocalRegistryRoot = path.join(os.homedir(), ".agentos", "local-registry");
@@ -142,6 +143,7 @@ const withPackageVersion = (version, fn) => {
 
 const parseArgs = (args) => {
   const parsed = { _: [] };
+  const booleanKeys = new Set(["skip-pack", "no-install"]);
   for (let index = 0; index < args.length; index++) {
     const arg = args[index];
     if (!arg.startsWith("--")) {
@@ -154,6 +156,10 @@ const parseArgs = (args) => {
       continue;
     }
     const key = arg.slice(2);
+    if (booleanKeys.has(key)) {
+      parsed[key] = true;
+      continue;
+    }
     const next = args[index + 1];
     if (next !== undefined && !next.startsWith("--")) {
       parsed[key] = next;
@@ -165,6 +171,10 @@ const parseArgs = (args) => {
   return parsed;
 };
 
+const positionalArgs = (args) => args._ ?? [];
+
+const boolArg = (args, name) => args[name] === true || args[name] === "true";
+
 const gitValue = (args, fallback) => {
   const result = spawnSync("git", args, {
     cwd: repoRoot,
@@ -175,6 +185,8 @@ const gitValue = (args, fallback) => {
   const value = result.stdout.trim();
   return value.length === 0 ? fallback : value;
 };
+
+const gitStatusShort = () => gitValue(["status", "--short"], "");
 
 const prereleaseIdentifier = (value) =>
   value
@@ -647,6 +659,185 @@ const contentAddressedTarball = (file) => {
 };
 
 const tarballSpec = (file) => `file:${file}`;
+
+const fileSpecPath = (spec) => {
+  if (typeof spec !== "string" || !spec.startsWith("file:")) {
+    fail(`expected file: tarball spec; actual ${String(spec)}`);
+  }
+  return spec.slice("file:".length);
+};
+
+const consumerManifestFiles = (consumerRoot) =>
+  [
+    "package.json",
+    "bun.lock",
+    "bun.lockb",
+    "package-lock.json",
+    "npm-shrinkwrap.json",
+    "pnpm-lock.yaml",
+    "yarn.lock",
+  ].map((name) => path.join(consumerRoot, name));
+
+const snapshotFiles = (files) =>
+  new Map(
+    files.map((file) => [
+      file,
+      fs.existsSync(file) ? fs.readFileSync(file) : undefined,
+    ]),
+  );
+
+const assertSnapshotUnchanged = (snapshot, context) => {
+  const changed = [];
+  for (const [file, before] of snapshot.entries()) {
+    const after = fs.existsSync(file) ? fs.readFileSync(file) : undefined;
+    if (
+      before === undefined
+        ? after !== undefined
+        : after === undefined || !Buffer.from(before).equals(after)
+    ) {
+      changed.push(path.relative(path.dirname(file), file) || file);
+    }
+  }
+  if (changed.length > 0) {
+    fail(`${context} changed consumer manifest/lock files:\n${changed.join("\n")}`);
+  }
+};
+
+const resolveConsumerRoot = (value) => {
+  if (typeof value !== "string" || value.length === 0) {
+    fail("consumer path is required");
+  }
+  const consumerRoot = path.resolve(process.cwd(), value);
+  if (!fs.existsSync(path.join(consumerRoot, "package.json"))) {
+    fail(`${consumerRoot}: missing package.json`);
+  }
+  return consumerRoot;
+};
+
+const localConsumerMarkerPath = (consumerRoot) =>
+  path.join(consumerRoot, "node_modules", localConsumerMarkerName);
+
+const nodeModulesRoot = (consumerRoot) => {
+  const root = path.join(consumerRoot, "node_modules");
+  if (!fs.existsSync(root)) {
+    fail(`${consumerRoot}: missing node_modules; run the consumer package manager install first`);
+  }
+  return root;
+};
+
+const packageTargetDir = (nodeModules, packageName) =>
+  path.join(nodeModules, ...packageName.split("/"));
+
+const readInstallManifest = () => {
+  if (!fs.existsSync(installManifestPath)) {
+    fail(`${repoPath(installManifestPath)} is missing; run pack first`);
+  }
+  const manifest = readJson(installManifestPath);
+  if (manifest === null || typeof manifest !== "object" || manifest.tarballs === undefined) {
+    fail(`${repoPath(installManifestPath)} is not an install manifest`);
+  }
+  return manifest;
+};
+
+const tarballPackageEntries = (manifest) =>
+  Object.entries(manifest.tarballs)
+    .map(([packageName, entry]) => {
+      if (entry === null || typeof entry !== "object") {
+        fail(`${packageName}: invalid tarball manifest entry`);
+      }
+      const tarball = fileSpecPath(entry.spec);
+      if (!fs.existsSync(tarball)) {
+        fail(`${packageName}: tarball does not exist: ${tarball}`);
+      }
+      return {
+        packageName,
+        tarball,
+        sha256: entry.sha256,
+      };
+    })
+    .sort((left, right) => left.packageName.localeCompare(right.packageName));
+
+const unpackTarballInto = (tarball, target) => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-consumer-package-"));
+  try {
+    run("tar", ["-xzf", tarball, "-C", tmp], { capture: true });
+    const packageDir = path.join(tmp, "package");
+    if (!fs.existsSync(packageDir)) {
+      fail(`${tarball}: tarball did not contain package/`);
+    }
+    fs.rmSync(target, { recursive: true, force: true });
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.renameSync(packageDir, target);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+};
+
+const installConsumer = (rawArgs) => {
+  const args = parseArgs(rawArgs);
+  const consumerRoot = resolveConsumerRoot(positionalArgs(args)[0]);
+  const snapshot = snapshotFiles(consumerManifestFiles(consumerRoot));
+  if (!boolArg(args, "skip-pack")) packInternal();
+  const manifest = readInstallManifest();
+  const entries = tarballPackageEntries(manifest);
+  const nodeModules = nodeModulesRoot(consumerRoot);
+  const packages = {};
+  for (const entry of entries) {
+    const target = packageTargetDir(nodeModules, entry.packageName);
+    unpackTarballInto(entry.tarball, target);
+    packages[entry.packageName] = {
+      target: path.relative(consumerRoot, target).split(path.sep).join("/"),
+      tarball: entry.tarball,
+      sha256: entry.sha256,
+    };
+  }
+  writeJson(localConsumerMarkerPath(consumerRoot), {
+    schemaVersion: 1,
+    generatedBy: "tooling/distribution/distribution.mjs install-consumer",
+    installedAt: new Date().toISOString(),
+    consumerRoot,
+    source: {
+      repoRoot,
+      branch: gitValue(["branch", "--show-current"], "unknown"),
+      head: gitValue(["rev-parse", "HEAD"], "unknown"),
+      dirty: gitStatusShort().length > 0,
+    },
+    packageVersion: manifest.version,
+    packages,
+  });
+  assertSnapshotUnchanged(snapshot, "install-consumer");
+  console.log(
+    `installed ${entries.length} local agentOS packages into ${path.relative(repoRoot, consumerRoot) || consumerRoot}`,
+  );
+  console.log(
+    `wrote ${path.relative(consumerRoot, localConsumerMarkerPath(consumerRoot)).split(path.sep).join("/")}`,
+  );
+};
+
+const restoreConsumer = (rawArgs) => {
+  const args = parseArgs(rawArgs);
+  const consumerRoot = resolveConsumerRoot(positionalArgs(args)[0]);
+  const nodeModules = nodeModulesRoot(consumerRoot);
+  const markerPath = localConsumerMarkerPath(consumerRoot);
+  if (!fs.existsSync(markerPath)) {
+    fail(`${markerPath}: no local agentOS overlay marker`);
+  }
+  const marker = readJson(markerPath);
+  const packageNames = Object.keys(marker.packages ?? {}).sort((left, right) =>
+    left.localeCompare(right),
+  );
+  if (packageNames.length === 0) fail(`${markerPath}: marker does not list packages`);
+  const snapshot = snapshotFiles(consumerManifestFiles(consumerRoot));
+  for (const packageName of packageNames) {
+    fs.rmSync(packageTargetDir(nodeModules, packageName), { recursive: true, force: true });
+  }
+  fs.rmSync(markerPath, { force: true });
+  if (!boolArg(args, "no-install")) {
+    run("bun", ["install", "--frozen-lockfile"], { cwd: consumerRoot });
+  }
+  assertSnapshotUnchanged(snapshot, "restore-consumer");
+  console.log(`restored ${packageNames.length} local agentOS package overlays`);
+};
 
 const writeInstallManifest = (entries) => {
   const sorted = entries
@@ -1163,6 +1354,12 @@ switch (command) {
     break;
   case "local-registry":
     localRegistry(commandArgs);
+    break;
+  case "install-consumer":
+    installConsumer(commandArgs);
+    break;
+  case "restore-consumer":
+    restoreConsumer(commandArgs);
     break;
   default:
     fail(`unknown distribution command: ${command}`);
