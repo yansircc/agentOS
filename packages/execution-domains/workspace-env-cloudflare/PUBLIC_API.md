@@ -2,7 +2,7 @@
 
 # @agent-os/workspace-env-cloudflare Public API
 
-Status: 0.4.x active development. Public exports are limited to structural Cloudflare WorkspaceEnv adapter types and factories.
+Status: 0.5.x active development. Public exports are limited to structural Cloudflare WorkspaceEnv adapter types and factories.
 
 ## Public exports
 

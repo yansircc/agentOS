@@ -2,7 +2,7 @@
 
 # @agent-os/workspace-binding Public API
 
-Status: 0.4.x active development for workspace submit binding composition. Public exports are listed for accidental export control only; this is not an API freeze.
+Status: 0.5.x active development for workspace submit binding composition. Public exports are listed for accidental export control only; this is not an API freeze.
 
 ## Public exports
 

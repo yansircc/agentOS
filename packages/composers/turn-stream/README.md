@@ -8,7 +8,7 @@ Non-durable token and progress frame algebra.
 
 ## Public API Status
 
-0.4.x active development. Public exports are listed in `PUBLIC_API.md` to prevent accidental exports; they are not frozen.
+0.5.x active development. Public exports are listed in `PUBLIC_API.md` to prevent accidental exports; they are not frozen.
 
 ## Invariant
 

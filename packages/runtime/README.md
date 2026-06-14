@@ -10,7 +10,7 @@ algebra, durable trigger authoring, and ledger-derived projections.
 
 ## Public API Status
 
-0.4.x active development. Public exports are listed for package ownership; they are not frozen.
+0.5.x active development. Public exports are listed for package ownership; they are not frozen.
 
 ## Invariant
 

@@ -8,7 +8,7 @@ Effect AI provider adapter for the provider-neutral `LlmTransport` protocol port
 
 ## Public API Status
 
-0.4.x public-experimental. Exports are listed in `PUBLIC_API.md` to prevent accidental exports; this is not an API freeze.
+0.5.x public-experimental. Exports are listed in `PUBLIC_API.md` to prevent accidental exports; this is not an API freeze.
 
 ## Invariant
 
