@@ -13,6 +13,7 @@ Status: Carrier package. It owns workspace job terminal fact and raw projection 
 - `.:WORKSPACE_JOB_ORIGIN_KIND`
 - `.:WORKSPACE_JOB_PROJECTION_KIND`
 - `.:WORKSPACE_JOB_REF_NAMESPACE`
+- `.:WorkspaceJobAttempt`
 - `.:WorkspaceJobFailure`
 - `.:WorkspaceJobFailedPayload`
 - `.:WorkspaceJobArtifactReadbackVerifiedPayload`
@@ -30,6 +31,7 @@ Status: Carrier package. It owns workspace job terminal fact and raw projection 
 - `.:WorkspaceJobVerifiedPayload`
 - `.:WorkspaceJobVerifierRejectedPayload`
 - `.:projectWorkspaceJob`
+- `.:projectWorkspaceJobAttempt`
 - `.:projectWorkspaceJobByIdempotencyKey`
 - `.:projectWorkspaceJobSafeLedgerEvent`
 - `.:projectWorkspaceJobSteps`

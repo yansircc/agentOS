@@ -15,17 +15,25 @@ this carrier's exported constructors and settlement helpers.
 
 ## Minimal Usage
 
-Emit `workspace_job.requested` with an idempotency key, then run the closed
-runtime pipeline: build terminal bytes from the submitted candidate, write them
-to the declared terminal path, read the artifact back, hash the readback bytes,
-and pass those same readback bytes to the verifier. Commit
-`workspace_job.terminal_finalized` only from that readback metadata, then commit
-exactly one terminal verdict: `workspace_job.verified`,
-`workspace_job.verifier_rejected`, or `workspace_job.failed`.
+Emit `workspace_job.requested` with an idempotency key and optional attempt
+metadata, then run the closed runtime pipeline: build terminal bytes from the
+submitted candidate, write them to the declared terminal path, read the artifact
+back, hash the readback bytes, and pass those same readback bytes to the
+verifier. Commit `workspace_job.terminal_finalized` only from that readback
+metadata, then commit exactly one terminal attempt verdict:
+`workspace_job.verified`, `workspace_job.verifier_rejected`, or
+`workspace_job.failed`.
 
 `verified` and `verifier_rejected` reference the `terminal_finalized` event id;
 the projection only becomes deliverable when the verdict joins to the finalized
-artifact metadata. `failed.failure` is terminal vocabulary only:
+artifact metadata. When runtime recovery is declared, a verifier rejection is an
+attempt terminal state until the repair budget is exhausted. AgentOS owns
+attempt indexes, per-attempt idempotency keys, workspace reuse, and final job
+projection aggregation; consumers only declare verifier checks and repair submit
+spec construction. The job projection is derived from the latest requested
+attempt for the product run id.
+
+`failed.failure` is terminal vocabulary only:
 `{ phase, code, reason, retryable? }`. `workspace_job.failed` may carry
 `submitRunId` as a raw substrate/debug join key, but diagnostics, category,
 owner, and public message are not workspace-job facts. Consumer-facing failure

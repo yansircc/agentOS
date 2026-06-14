@@ -160,6 +160,9 @@
 - `.:waitForProjection`
 - `.:runSynchronousAttachedStreamCommit`
 - `.:runSynchronousTriggerCommit`
+- `.:WorkspaceJobAttemptContext`
+- `.:WorkspaceJobRecovery`
+- `.:WorkspaceJobRepairDecisionInput`
 - `.:runWorkspaceJobEffect`
 - `.:scheduledEventTrigger`
 - `.:settleToolAdmissionRejected`

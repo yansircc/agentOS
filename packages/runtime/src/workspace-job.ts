@@ -17,6 +17,7 @@ import { internalSubmitSpec } from "./internal-submit";
 import {
   WORKSPACE_JOB_KIND,
   projectWorkspaceJob,
+  projectWorkspaceJobAttempt,
   projectWorkspaceJobByIdempotencyKey,
   projectWorkspaceJobSteps,
   rejectWorkspaceJobByVerifier,
@@ -39,8 +40,10 @@ import {
   workspaceJobTerminalBuildAttemptedPayload,
   workspaceJobVerifierRejectedPayload,
   workspaceJobVerifiedPayload,
+  type WorkspaceJobAttempt,
   type WorkspaceJobFailure,
   type WorkspaceJobProjection,
+  type WorkspaceJobRequestedPayload,
   type WorkspaceJobStepProjection,
   type WorkspaceJobTerminalArtifact,
   type WorkspaceJobVerificationCheck,
@@ -124,6 +127,28 @@ export interface WorkspaceJobVerifier {
   }) => Promise<WorkspaceJobVerifierResult>;
 }
 
+export interface WorkspaceJobAttemptContext {
+  readonly runId: string;
+  readonly candidatePath: string;
+  readonly attempt: WorkspaceJobAttempt;
+}
+
+export interface WorkspaceJobRepairDecisionInput extends WorkspaceJobAttemptContext {
+  readonly previousAttempt: {
+    readonly requestedEventId: number;
+    readonly attempt: WorkspaceJobAttempt;
+    readonly terminalArtifact: WorkspaceJobTerminalArtifact;
+    readonly checks: ReadonlyArray<WorkspaceJobVerificationCheck>;
+    readonly reason: string;
+  };
+}
+
+export interface WorkspaceJobRecovery {
+  readonly maxAttempts: number;
+  readonly shouldRepair?: (input: WorkspaceJobRepairDecisionInput) => boolean | Promise<boolean>;
+  readonly buildRepairSubmitSpec: (input: WorkspaceJobRepairDecisionInput) => SubmitSpec;
+}
+
 export interface RunWorkspaceJobSpec {
   readonly scope: string;
   readonly identity: LedgerTruthIdentity;
@@ -134,16 +159,18 @@ export interface RunWorkspaceJobSpec {
   readonly candidatePath: string;
   readonly dataPlane: WorkspaceJobDataPlane;
   readonly verifier: WorkspaceJobVerifier;
-  readonly buildSubmitSpec: (input: {
-    readonly runId: string;
-    readonly candidatePath: string;
-  }) => SubmitSpec;
+  readonly buildSubmitSpec: (input: WorkspaceJobAttemptContext) => SubmitSpec;
+  readonly recovery?: WorkspaceJobRecovery;
   readonly terminalArtifactPath: string;
   readonly seedFiles?: ReadonlyArray<WorkspaceJobSeedFile>;
   readonly workspaceRef?: string;
   readonly inputRef?: string;
   readonly inputHash?: string;
 }
+
+type ActiveRunWorkspaceJobSpec = Omit<RunWorkspaceJobSpec, "recovery"> & {
+  readonly attempt: WorkspaceJobAttempt;
+};
 
 export class WorkspaceJobDataPlaneFailed extends Data.TaggedError(
   "agent_os.workspace_job_data_plane_failed",
@@ -192,6 +219,12 @@ const submitFailure = (reason: string): WorkspaceJobFailure => ({
   code: workspaceJobFailureCode("submit", reason),
   reason,
   retryable: reason !== "interrupted",
+});
+
+const requestFailure = (reason: string): WorkspaceJobFailure => ({
+  phase: "request",
+  code: workspaceJobFailureCode("request", reason),
+  reason,
 });
 
 const failureFromDataPlane = (failure: WorkspaceJobDataPlaneFailed): WorkspaceJobFailure => {
@@ -556,18 +589,120 @@ const verifyArtifact = (
     catch: (cause) => new WorkspaceJobVerifierFailed({ cause }),
   });
 
-/**
- * Runs a protected workspace job from product declarations to a carrier-owned
- * terminal projection. The verifier receives finalized artifact bytes; candidate
- * bytes are never the verification subject.
- *
- * @agentosPrimitive primitive.runtime.runWorkspaceJobEffect
- * @agentosInvariant invariant.workspace-job.verified-terminal
- * @agentosDocs docs/packages/workspace-job.md
- * @public
- */
-export const runWorkspaceJobEffect = (
+const initialAttempt = (maxAttempts: number): WorkspaceJobAttempt => ({
+  index: 1,
+  maxAttempts,
+  cause: "initial",
+});
+
+const attemptFromRequest = (request: WorkspaceJobRequestedPayload): WorkspaceJobAttempt =>
+  request.attempt ?? initialAttempt(1);
+
+const repairAttempt = (
+  previous: WorkspaceJobProjection & { readonly status: "verifier_rejected" },
+  maxAttempts: number,
+): WorkspaceJobAttempt => ({
+  index: attemptFromRequest(previous.request).index + 1,
+  maxAttempts,
+  cause: "verifier_repair",
+  repairOfRequestedEventId: previous.requestedEventId,
+});
+
+const recoveryMaxAttempts = (recovery: WorkspaceJobRecovery | undefined): number =>
+  recovery === undefined ? 1 : Math.max(1, Math.trunc(recovery.maxAttempts));
+
+const repairIdempotencyKey = (baseIdempotencyKey: string, attempt: WorkspaceJobAttempt): string =>
+  `${baseIdempotencyKey}:repair:${attempt.index}`;
+
+const repairReason = (
+  projection: WorkspaceJobProjection & { readonly status: "verifier_rejected" },
+): string => projection.rejected.summary ?? "verifier_rejected";
+
+const repairDecisionInput = (
+  projection: WorkspaceJobProjection & { readonly status: "verifier_rejected" },
+  candidatePath: string,
+  attempt: WorkspaceJobAttempt,
+): WorkspaceJobRepairDecisionInput => ({
+  runId: projection.runId,
+  candidatePath,
+  attempt,
+  previousAttempt: {
+    requestedEventId: projection.requestedEventId,
+    attempt: attemptFromRequest(projection.request),
+    terminalArtifact: projection.terminalArtifact,
+    checks: projection.checks,
+    reason: repairReason(projection),
+  },
+});
+
+const shouldRepair = (
+  recovery: WorkspaceJobRecovery,
+  input: WorkspaceJobRepairDecisionInput,
+): Effect.Effect<boolean, WorkspaceJobFailure> =>
+  Effect.tryPromise({
+    try: async () => recovery.shouldRepair?.(input) ?? true,
+    catch: () => requestFailure("repair_decision_failed"),
+  });
+
+const activeSpecForCurrentAttempt = (
   spec: RunWorkspaceJobSpec,
+  events: ReadonlyArray<LedgerEvent>,
+): ActiveRunWorkspaceJobSpec => {
+  const existing = projectWorkspaceJobByIdempotencyKey(events, spec.idempotencyKey);
+  const current = projectWorkspaceJob(
+    events,
+    existing.status === "found" ? existing.runId : spec.runId,
+  );
+  if (current.status !== "running") {
+    return {
+      ...spec,
+      attempt: initialAttempt(recoveryMaxAttempts(spec.recovery)),
+    };
+  }
+  const attempt = attemptFromRequest(current.request);
+  if (
+    attempt.cause !== "verifier_repair" ||
+    attempt.repairOfRequestedEventId === undefined ||
+    spec.recovery === undefined
+  ) {
+    return {
+      ...spec,
+      runId: current.runId,
+      idempotencyKey: current.request.idempotencyKey,
+      terminalSchemaId: current.request.terminalSchemaId,
+      attempt,
+    };
+  }
+  const previous = projectWorkspaceJobAttempt(
+    events,
+    current.runId,
+    attempt.repairOfRequestedEventId,
+  );
+  if (previous.status !== "verifier_rejected") {
+    return {
+      ...spec,
+      runId: current.runId,
+      idempotencyKey: current.request.idempotencyKey,
+      terminalSchemaId: current.request.terminalSchemaId,
+      attempt,
+    };
+  }
+  const input = repairDecisionInput(previous, spec.candidatePath, attempt);
+  return {
+    ...spec,
+    runId: current.runId,
+    idempotencyKey: current.request.idempotencyKey,
+    terminalSchemaId: current.request.terminalSchemaId,
+    attempt,
+    buildSubmitSpec: () => spec.recovery!.buildRepairSubmitSpec(input),
+  };
+};
+
+/**
+ * Runs one attempt of the protected workspace-job pipeline.
+ */
+const runWorkspaceJobAttemptEffect = (
+  spec: ActiveRunWorkspaceJobSpec,
 ): Effect.Effect<
   WorkspaceJobProjection,
   unknown,
@@ -589,18 +724,28 @@ export const runWorkspaceJobEffect = (
     let claim;
 
     if (existing.status === "found") {
-      activeSpec = {
-        ...spec,
-        runId: existing.runId,
-        idempotencyKey: existing.idempotencyKey,
-        terminalSchemaId: existing.request.terminalSchemaId,
-      };
       const projection = currentProjection(before, existing.runId);
       if (projection.status !== "running") {
         return projection;
       }
-      requestedEventId = existing.requestedEventId;
-      claim = existing.request.claim;
+      activeSpec = {
+        ...spec,
+        runId: projection.runId,
+        idempotencyKey: projection.request.idempotencyKey,
+        terminalSchemaId: projection.request.terminalSchemaId,
+        ...(projection.request.workspaceRef === undefined
+          ? {}
+          : { workspaceRef: projection.request.workspaceRef }),
+        ...(projection.request.inputRef === undefined
+          ? {}
+          : { inputRef: projection.request.inputRef }),
+        ...(projection.request.inputHash === undefined
+          ? {}
+          : { inputHash: projection.request.inputHash }),
+        attempt: attemptFromRequest(projection.request),
+      };
+      requestedEventId = projection.requestedEventId;
+      claim = projection.request.claim;
     } else {
       claim = workspaceJobPreClaim({
         runId: activeSpec.runId,
@@ -622,6 +767,7 @@ export const runWorkspaceJobEffect = (
             : { workspaceRef: activeSpec.workspaceRef }),
           ...(activeSpec.inputRef === undefined ? {} : { inputRef: activeSpec.inputRef }),
           ...(activeSpec.inputHash === undefined ? {} : { inputHash: activeSpec.inputHash }),
+          attempt: activeSpec.attempt,
         }),
       );
       requestedEventId = requested.id;
@@ -724,14 +870,26 @@ export const runWorkspaceJobEffect = (
       steps = projectWorkspaceJobSteps(events, activeSpec.runId);
     } else {
       if (submitResult === undefined) {
-        const publicSubmitSpec = activeSpec.buildSubmitSpec({
-          runId: activeSpec.runId,
-          candidatePath: activeSpec.candidatePath,
-        });
-        const submitSpec = internalSubmitSpec(publicSubmitSpec, {
-          scope: activeSpec.scope,
-          scopeRef: activeSpec.identity.scopeRef,
-        });
+        const submitSpecResult = yield* Effect.either(
+          Effect.try({
+            try: () => {
+              const publicSubmitSpec = activeSpec.buildSubmitSpec({
+                runId: activeSpec.runId,
+                candidatePath: activeSpec.candidatePath,
+                attempt: activeSpec.attempt,
+              });
+              return internalSubmitSpec(publicSubmitSpec, {
+                scope: activeSpec.scope,
+                scopeRef: activeSpec.identity.scopeRef,
+              });
+            },
+            catch: () => requestFailure("submit_spec_builder_failed"),
+          }),
+        );
+        if (submitSpecResult._tag === "Left") {
+          return yield* failAndProject(submitSpecResult.left);
+        }
+        const submitSpec = submitSpecResult.right;
         submitResult = yield* submitAgentEffect(submitSpec);
       }
       if (!submitResult.ok) {
@@ -854,4 +1012,78 @@ export const runWorkspaceJobEffect = (
 
     const after = yield* eventsFor(ledger, activeSpec.identity);
     return currentProjection(after, activeSpec.runId);
+  });
+
+/**
+ * Runs a protected workspace job from product declarations to a carrier-owned
+ * terminal projection. The verifier receives finalized artifact bytes; candidate
+ * bytes are never the verification subject. When recovery is declared,
+ * verifier_rejected is an attempt terminal state until the repair budget is
+ * exhausted; the job projection is derived from the latest attempt.
+ *
+ * @agentosPrimitive primitive.runtime.runWorkspaceJobEffect
+ * @agentosInvariant invariant.workspace-job.verified-terminal
+ * @agentosDocs docs/packages/workspace-job.md
+ * @public
+ */
+export const runWorkspaceJobEffect = (
+  spec: RunWorkspaceJobSpec,
+): Effect.Effect<
+  WorkspaceJobProjection,
+  unknown,
+  | Ledger
+  | BoundaryEvents
+  | MaterializedProjections
+  | LlmTransport
+  | Quota
+  | Admission
+  | RefResolverService
+> =>
+  Effect.gen(function* () {
+    const ledger = yield* Ledger;
+    const boundaryEvents = yield* BoundaryEventsTag;
+    const maxAttempts = recoveryMaxAttempts(spec.recovery);
+    const before = yield* eventsFor(ledger, spec.identity);
+    let activeSpec: ActiveRunWorkspaceJobSpec = activeSpecForCurrentAttempt(spec, before);
+
+    for (;;) {
+      const projection = yield* runWorkspaceJobAttemptEffect(activeSpec);
+      if (projection.status !== "verifier_rejected" || spec.recovery === undefined) {
+        return projection;
+      }
+
+      const nextAttempt = repairAttempt(projection, maxAttempts);
+      if (nextAttempt.index > maxAttempts) {
+        return projection;
+      }
+
+      const input = repairDecisionInput(projection, spec.candidatePath, nextAttempt);
+      const repairDecision = yield* Effect.either(shouldRepair(spec.recovery, input));
+      if (repairDecision._tag === "Left") {
+        yield* commitFailed(
+          boundaryEvents,
+          {
+            ...spec,
+            runId: projection.runId,
+            idempotencyKey: projection.request.idempotencyKey,
+            terminalSchemaId: projection.request.terminalSchemaId,
+          },
+          projection.requestedEventId,
+          repairDecision.left,
+        );
+        const after = yield* eventsFor(ledger, spec.identity);
+        return projectWorkspaceJob(after, projection.runId);
+      }
+      if (!repairDecision.right) {
+        return projection;
+      }
+
+      activeSpec = {
+        ...spec,
+        runId: projection.runId,
+        idempotencyKey: repairIdempotencyKey(spec.idempotencyKey, nextAttempt),
+        attempt: nextAttempt,
+        buildSubmitSpec: () => spec.recovery!.buildRepairSubmitSpec(input),
+      };
+    }
   });

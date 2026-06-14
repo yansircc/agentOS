@@ -45,6 +45,7 @@ export type WorkspaceJobArtifactReadbackVerifiedPayload =
 export type WorkspaceJobTerminalArtifact = WorkspaceJobTerminalFinalizedPayload["terminalArtifact"];
 export type WorkspaceJobVerificationCheck = WorkspaceJobVerifiedPayload["checks"][number];
 export type WorkspaceJobFailure = WorkspaceJobFailedPayload["failure"];
+export type WorkspaceJobAttempt = NonNullable<WorkspaceJobRequestedPayload["attempt"]>;
 
 export const WORKSPACE_JOB_REF_NAMESPACE = "workspace_job";
 export const WORKSPACE_JOB_ORIGIN_KIND = WORKSPACE_JOB_REF_NAMESPACE;
@@ -163,6 +164,7 @@ export const workspaceJobRequestedPayload = (spec: {
   readonly workspaceRef?: string;
   readonly inputRef?: string;
   readonly inputHash?: string;
+  readonly attempt?: WorkspaceJobAttempt;
 }): WorkspaceJobRequestedPayload => ({
   runId: spec.runId,
   idempotencyKey: spec.idempotencyKey,
@@ -171,6 +173,7 @@ export const workspaceJobRequestedPayload = (spec: {
   ...(spec.workspaceRef === undefined ? {} : { workspaceRef: spec.workspaceRef }),
   ...(spec.inputRef === undefined ? {} : { inputRef: spec.inputRef }),
   ...(spec.inputHash === undefined ? {} : { inputHash: spec.inputHash }),
+  ...(spec.attempt === undefined ? {} : { attempt: spec.attempt }),
   claim: spec.claim,
 });
 
@@ -349,6 +352,27 @@ const stringArrayField = (
   return out.length === value.length ? out : undefined;
 };
 
+const attemptFrom = (value: unknown): WorkspaceJobAttempt | undefined => {
+  if (!Predicate.isRecord(value)) return undefined;
+  const index = numberField(value, "index");
+  const maxAttempts = numberField(value, "maxAttempts");
+  const cause = value.cause;
+  const repairOfRequestedEventId = numberField(value, "repairOfRequestedEventId");
+  if (
+    index === undefined ||
+    maxAttempts === undefined ||
+    (cause !== "initial" && cause !== "verifier_repair")
+  ) {
+    return undefined;
+  }
+  return {
+    index,
+    maxAttempts,
+    cause,
+    ...(repairOfRequestedEventId === undefined ? {} : { repairOfRequestedEventId }),
+  };
+};
+
 const terminalArtifactFrom = (value: unknown): WorkspaceJobTerminalArtifact | undefined => {
   if (!Predicate.isRecord(value)) return undefined;
   const artifactRef = stringField(value, "artifactRef");
@@ -427,6 +451,9 @@ const requestedFrom = (
     ...(stringField(payload, "inputHash") === undefined
       ? {}
       : { inputHash: stringField(payload, "inputHash") }),
+    ...(attemptFrom(payload.attempt) === undefined
+      ? {}
+      : { attempt: attemptFrom(payload.attempt) }),
     claim,
   };
 };
@@ -723,11 +750,16 @@ export const projectWorkspaceJobSteps = (
 
   for (const event of events) {
     if (!sameOwner(event) || !Predicate.isRecord(event.payload)) continue;
-    if (event.kind === WORKSPACE_JOB_KIND.REQUESTED && request === undefined) {
+    if (event.kind === WORKSPACE_JOB_KIND.REQUESTED) {
       const next = requestedFrom(event.payload);
       if (next?.runId === runId) {
         request = next;
         requestedEventId = event.id;
+        seedWritten = undefined;
+        terminalBuildAttempted = undefined;
+        artifactWritten = undefined;
+        artifactReadbackVerified = undefined;
+        terminalFinalized = undefined;
       }
       continue;
     }
@@ -825,15 +857,18 @@ export const projectWorkspaceJob = (
 
   for (const event of events) {
     if (!sameOwner(event) || !Predicate.isRecord(event.payload)) continue;
-    if (event.kind === WORKSPACE_JOB_KIND.REQUESTED && request === undefined) {
+    if (event.kind === WORKSPACE_JOB_KIND.REQUESTED) {
       const next = requestedFrom(event.payload);
       if (next?.runId === runId) {
         request = next;
         requestedEventId = event.id;
+        finalized = undefined;
+        artifactReadback = undefined;
+        terminal = undefined;
       }
       continue;
     }
-    if (request === undefined || requestedEventId === undefined || terminal !== undefined) continue;
+    if (request === undefined || requestedEventId === undefined) continue;
     if (
       event.kind === WORKSPACE_JOB_KIND.ARTIFACT_READBACK_VERIFIED &&
       artifactReadback === undefined
@@ -912,4 +947,112 @@ export const projectWorkspaceJob = (
   if (terminal !== undefined) return terminal;
   if (request === undefined || requestedEventId === undefined) return { status: "missing", runId };
   return { status: "running", runId, requestedEventId, request };
+};
+
+export const projectWorkspaceJobAttempt = (
+  events: Iterable<WorkspaceJobLedgerEvent>,
+  runId: string,
+  targetRequestedEventId: number,
+): WorkspaceJobProjection => {
+  let request: WorkspaceJobRequestedPayload | undefined;
+  let finalized:
+    | { readonly eventId: number; readonly payload: WorkspaceJobTerminalFinalizedPayload }
+    | undefined;
+  let artifactReadback: WorkspaceJobArtifactReadbackVerifiedPayload | undefined;
+  let terminal: WorkspaceJobProjection | undefined;
+
+  for (const event of events) {
+    if (!sameOwner(event) || !Predicate.isRecord(event.payload)) continue;
+    if (event.kind === WORKSPACE_JOB_KIND.REQUESTED && event.id === targetRequestedEventId) {
+      const next = requestedFrom(event.payload);
+      if (next?.runId === runId) {
+        request = next;
+      }
+      continue;
+    }
+    if (request === undefined || terminal !== undefined) continue;
+    if (
+      event.kind === WORKSPACE_JOB_KIND.ARTIFACT_READBACK_VERIFIED &&
+      artifactReadback === undefined
+    ) {
+      const next = artifactReadbackVerifiedFrom(event.payload);
+      if (next?.requestedEventId === targetRequestedEventId && next.runId === runId) {
+        artifactReadback = next;
+      }
+      continue;
+    }
+    if (event.kind === WORKSPACE_JOB_KIND.TERMINAL_FINALIZED && finalized === undefined) {
+      const next = terminalFinalizedFrom(event.payload);
+      if (next?.requestedEventId === targetRequestedEventId && next.runId === runId) {
+        finalized = { eventId: event.id, payload: next };
+      }
+      continue;
+    }
+    if (event.kind === WORKSPACE_JOB_KIND.VERIFIED) {
+      const verified = terminalVerdictFrom(event.payload, "lived") as
+        | WorkspaceJobVerifiedPayload
+        | undefined;
+      if (
+        verified?.requestedEventId === targetRequestedEventId &&
+        verified.runId === runId &&
+        finalized !== undefined &&
+        artifactReadback !== undefined &&
+        terminalArtifactMatchesReadback(finalized.payload.terminalArtifact, artifactReadback) &&
+        verified.terminalFinalizedEventId === finalized.eventId
+      ) {
+        terminal = {
+          status: "verified",
+          runId,
+          requestedEventId: targetRequestedEventId,
+          request,
+          finalized: finalized.payload,
+          verified,
+          terminalArtifact: terminalArtifactFromReadback(artifactReadback),
+          checks: verified.checks,
+        };
+      }
+      continue;
+    }
+    if (event.kind === WORKSPACE_JOB_KIND.VERIFIER_REJECTED) {
+      const rejected = terminalVerdictFrom(event.payload, "rejected") as
+        | WorkspaceJobVerifierRejectedPayload
+        | undefined;
+      if (
+        rejected?.requestedEventId === targetRequestedEventId &&
+        rejected.runId === runId &&
+        finalized !== undefined &&
+        artifactReadback !== undefined &&
+        terminalArtifactMatchesReadback(finalized.payload.terminalArtifact, artifactReadback) &&
+        rejected.terminalFinalizedEventId === finalized.eventId
+      ) {
+        terminal = {
+          status: "verifier_rejected",
+          runId,
+          requestedEventId: targetRequestedEventId,
+          request,
+          finalized: finalized.payload,
+          rejected,
+          terminalArtifact: terminalArtifactFromReadback(artifactReadback),
+          checks: rejected.checks,
+        };
+      }
+      continue;
+    }
+    if (event.kind === WORKSPACE_JOB_KIND.FAILED) {
+      const failed = failedFrom(event.payload);
+      if (failed?.requestedEventId === targetRequestedEventId && failed.runId === runId) {
+        terminal = {
+          status: "failed",
+          runId,
+          requestedEventId: targetRequestedEventId,
+          request,
+          failed,
+        };
+      }
+    }
+  }
+
+  if (terminal !== undefined) return terminal;
+  if (request === undefined) return { status: "missing", runId };
+  return { status: "running", runId, requestedEventId: targetRequestedEventId, request };
 };

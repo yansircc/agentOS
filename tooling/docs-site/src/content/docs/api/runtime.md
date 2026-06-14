@@ -164,6 +164,9 @@ title: "@agent-os/runtime Public API Intent"
 - `.:waitForProjection`
 - `.:runSynchronousAttachedStreamCommit`
 - `.:runSynchronousTriggerCommit`
+- `.:WorkspaceJobAttemptContext`
+- `.:WorkspaceJobRecovery`
+- `.:WorkspaceJobRepairDecisionInput`
 - `.:runWorkspaceJobEffect`
 - `.:scheduledEventTrigger`
 - `.:settleToolAdmissionRejected`

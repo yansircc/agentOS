@@ -13,6 +13,7 @@ title: "@agent-os/workspace-job Public API Intent"
 - `.:WORKSPACE_JOB_ORIGIN_KIND`
 - `.:WORKSPACE_JOB_PROJECTION_KIND`
 - `.:WORKSPACE_JOB_REF_NAMESPACE`
+- `.:WorkspaceJobAttempt`
 - `.:WorkspaceJobFailure`
 - `.:WorkspaceJobFailedPayload`
 - `.:WorkspaceJobArtifactReadbackVerifiedPayload`
@@ -30,6 +31,7 @@ title: "@agent-os/workspace-job Public API Intent"
 - `.:WorkspaceJobVerifiedPayload`
 - `.:WorkspaceJobVerifierRejectedPayload`
 - `.:projectWorkspaceJob`
+- `.:projectWorkspaceJobAttempt`
 - `.:projectWorkspaceJobByIdempotencyKey`
 - `.:projectWorkspaceJobSafeLedgerEvent`
 - `.:projectWorkspaceJobSteps`

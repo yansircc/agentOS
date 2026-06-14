@@ -933,7 +933,7 @@
       "symbol": "runWorkspaceJobEffect",
       "exportKey": ".:runWorkspaceJobEffect",
       "sourceFile": "packages/runtime/src/workspace-job.ts",
-      "summary": "Runs a protected workspace job from product declarations to a carrier-owned terminal projection. The verifier receives finalized artifact bytes; candidate bytes are never the verification subject.",
+      "summary": "Runs a protected workspace job from product declarations to a carrier-owned terminal projection. The verifier receives finalized artifact bytes; candidate bytes are never the verification subject. When recovery is declared, verifier_rejected is an attempt terminal state until the repair budget is exhausted; the job projection is derived from the latest attempt.",
       "aliases": [],
       "invariants": ["invariant.workspace-job.verified-terminal"],
       "decisions": [],

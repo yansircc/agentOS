@@ -3,6 +3,7 @@ import {
   WORKSPACE_JOB_FACT_OWNER,
   WORKSPACE_JOB_KIND,
   projectWorkspaceJob,
+  projectWorkspaceJobAttempt,
   projectWorkspaceJobByIdempotencyKey,
   rejectWorkspaceJobByVerifier,
   rejectWorkspaceJobFailed,
@@ -83,6 +84,166 @@ describe("@agent-os/workspace-job", () => {
       status: "found",
       runId: "run-1",
       requestedEventId: 10,
+    });
+  });
+
+  it("projects the latest attempt as job truth while preserving per-attempt projection", () => {
+    const rejectedClaim = rejectWorkspaceJobByVerifier(claim, {
+      runId: "run-1",
+      requestedEventId: 10,
+      terminalFinalizedEventId: 12,
+    });
+    const verifiedClaim = settleWorkspaceJobVerified(claim, {
+      runId: "run-1",
+      requestedEventId: 20,
+      terminalFinalizedEventId: 22,
+    });
+    const retryArtifact = {
+      ...artifact,
+      artifactRef: "workspace-job://run-1/output/result-retry.json",
+      sha256: "sha256:retry-delivery-bytes",
+    };
+    const events = [
+      {
+        id: 10,
+        kind: WORKSPACE_JOB_KIND.REQUESTED,
+        payload: workspaceJobRequestedPayload({
+          ...requested,
+          idempotencyKey: "request-1",
+          attempt: { index: 1, maxAttempts: 2, cause: "initial" },
+          claim,
+        }),
+      },
+      {
+        id: 11,
+        kind: WORKSPACE_JOB_KIND.ARTIFACT_READBACK_VERIFIED,
+        payload: workspaceJobArtifactReadbackVerifiedPayload({
+          requestedEventId: 10,
+          runId: "run-1",
+          idempotencyKey: "request-1",
+          path: artifact.path,
+          artifactRef: artifact.artifactRef,
+          submitRunId: 7,
+          schemaId: artifact.schemaId,
+          bytes: artifact.bytes,
+          sha256: artifact.sha256,
+          claim: settleWorkspaceJobArtifactReadbackVerified(claim, {
+            runId: "run-1",
+            requestedEventId: 10,
+            artifactRef: artifact.artifactRef,
+            sha256: artifact.sha256,
+          }),
+        }),
+      },
+      {
+        id: 12,
+        kind: WORKSPACE_JOB_KIND.TERMINAL_FINALIZED,
+        payload: workspaceJobTerminalFinalizedPayload({
+          requestedEventId: 10,
+          runId: "run-1",
+          idempotencyKey: "request-1",
+          terminalArtifact: artifact,
+          claim: settleWorkspaceJobTerminalFinalized(claim, {
+            runId: "run-1",
+            requestedEventId: 10,
+            artifactRef: artifact.artifactRef,
+          }),
+        }),
+      },
+      {
+        id: 13,
+        kind: WORKSPACE_JOB_KIND.VERIFIER_REJECTED,
+        payload: workspaceJobVerifierRejectedPayload({
+          requestedEventId: 10,
+          terminalFinalizedEventId: 12,
+          runId: "run-1",
+          idempotencyKey: "request-1",
+          checks: [{ name: "php-lint", status: "failed" }],
+          summary: "php lint failed",
+          claim: rejectedClaim,
+        }),
+      },
+      {
+        id: 20,
+        kind: WORKSPACE_JOB_KIND.REQUESTED,
+        payload: workspaceJobRequestedPayload({
+          ...requested,
+          idempotencyKey: "request-1:repair:2",
+          attempt: {
+            index: 2,
+            maxAttempts: 2,
+            cause: "verifier_repair",
+            repairOfRequestedEventId: 10,
+          },
+          claim,
+        }),
+      },
+      {
+        id: 21,
+        kind: WORKSPACE_JOB_KIND.ARTIFACT_READBACK_VERIFIED,
+        payload: workspaceJobArtifactReadbackVerifiedPayload({
+          requestedEventId: 20,
+          runId: "run-1",
+          idempotencyKey: "request-1:repair:2",
+          path: retryArtifact.path,
+          artifactRef: retryArtifact.artifactRef,
+          submitRunId: 8,
+          schemaId: retryArtifact.schemaId,
+          bytes: retryArtifact.bytes,
+          sha256: retryArtifact.sha256,
+          claim: settleWorkspaceJobArtifactReadbackVerified(claim, {
+            runId: "run-1",
+            requestedEventId: 20,
+            artifactRef: retryArtifact.artifactRef,
+            sha256: retryArtifact.sha256,
+          }),
+        }),
+      },
+      {
+        id: 22,
+        kind: WORKSPACE_JOB_KIND.TERMINAL_FINALIZED,
+        payload: workspaceJobTerminalFinalizedPayload({
+          requestedEventId: 20,
+          runId: "run-1",
+          idempotencyKey: "request-1:repair:2",
+          terminalArtifact: retryArtifact,
+          claim: settleWorkspaceJobTerminalFinalized(claim, {
+            runId: "run-1",
+            requestedEventId: 20,
+            artifactRef: retryArtifact.artifactRef,
+          }),
+        }),
+      },
+      {
+        id: 23,
+        kind: WORKSPACE_JOB_KIND.VERIFIED,
+        payload: workspaceJobVerifiedPayload({
+          requestedEventId: 20,
+          terminalFinalizedEventId: 22,
+          runId: "run-1",
+          idempotencyKey: "request-1:repair:2",
+          checks: [{ name: "php-lint", status: "passed" }],
+          claim: verifiedClaim,
+        }),
+      },
+    ];
+
+    expect(projectWorkspaceJobAttempt(events, "run-1", 10)).toMatchObject({
+      status: "verifier_rejected",
+      checks: [{ name: "php-lint", status: "failed" }],
+    });
+    expect(projectWorkspaceJob(events, "run-1")).toMatchObject({
+      status: "verified",
+      requestedEventId: 20,
+      request: {
+        attempt: { index: 2, cause: "verifier_repair", repairOfRequestedEventId: 10 },
+      },
+      terminalArtifact: retryArtifact,
+    });
+    expect(projectWorkspaceJobByIdempotencyKey(events, "request-1:repair:2")).toMatchObject({
+      status: "found",
+      requestedEventId: 20,
+      runId: "run-1",
     });
   });
 

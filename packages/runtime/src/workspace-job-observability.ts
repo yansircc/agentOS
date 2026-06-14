@@ -2,6 +2,7 @@ import type { LedgerEvent } from "@agent-os/kernel/types";
 import {
   projectWorkspaceJob,
   type WorkspaceJobFailure,
+  type WorkspaceJobAttempt,
   type WorkspaceJobRequestedPayload,
   type WorkspaceJobTerminalArtifact,
   type WorkspaceJobVerificationCheck,
@@ -21,6 +22,7 @@ export interface WorkspaceJobObservabilityRequest {
   readonly workspaceRef?: string;
   readonly inputRef?: string;
   readonly inputHash?: string;
+  readonly attempt?: WorkspaceJobAttempt;
 }
 
 export interface WorkspaceJobFailureExplanation extends FailureDiagnosticEnvelope {
@@ -77,6 +79,7 @@ const requestSummary = (
   ...(request.workspaceRef === undefined ? {} : { workspaceRef: request.workspaceRef }),
   ...(request.inputRef === undefined ? {} : { inputRef: request.inputRef }),
   ...(request.inputHash === undefined ? {} : { inputHash: request.inputHash }),
+  ...(request.attempt === undefined ? {} : { attempt: request.attempt }),
 });
 
 const explanationEnvelope = (

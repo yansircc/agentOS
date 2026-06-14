@@ -115,7 +115,7 @@
     },
     {
       "id": "invariant.workspace-job.verified-terminal",
-      "statement": "Workspace job deliverables are terminal projections joined through workspace_job.terminal_finalized; written, readback, hashed, verified, and delivered terminal bytes flow through one closed pipeline.",
+      "statement": "Workspace job deliverables are terminal projections joined through workspace_job.terminal_finalized; written, readback, hashed, verified, and delivered terminal bytes flow through one closed pipeline, and verifier repair attempts are aggregated by agentOS before a job terminal projection is delivered.",
       "docs": "docs/packages/workspace-job.md",
       "decisions": [],
       "tests": [

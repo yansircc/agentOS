@@ -23,6 +23,13 @@ const VerificationCheckSchema = Schema.Struct({
   fingerprint: Schema.optional(NonEmptyString),
 });
 
+const AttemptSchema = Schema.Struct({
+  index: Schema.Number,
+  maxAttempts: Schema.Number,
+  cause: Schema.Literal("initial", "verifier_repair"),
+  repairOfRequestedEventId: Schema.optional(Schema.Number),
+});
+
 const RequestedSchema = Schema.Struct({
   runId: NonEmptyString,
   idempotencyKey: NonEmptyString,
@@ -31,6 +38,7 @@ const RequestedSchema = Schema.Struct({
   inputRef: Schema.optional(NonEmptyString),
   inputHash: Schema.optional(NonEmptyString),
   terminalSchemaId: NonEmptyString,
+  attempt: Schema.optional(AttemptSchema),
 });
 
 const TerminalSchema = Schema.Struct({

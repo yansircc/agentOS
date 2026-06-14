@@ -77,6 +77,9 @@ const safeRequestedPayload = (payload: Record<string, unknown>): SafeLedgerPaylo
   ...(stringField(payload, "inputHash") === undefined
     ? {}
     : { inputHash: stringField(payload, "inputHash")! }),
+  ...(safeValueFromUnknown(payload.attempt) === undefined
+    ? {}
+    : { attempt: safeValueFromUnknown(payload.attempt)! }),
 });
 
 const safeTerminalFinalizedPayload = (payload: Record<string, unknown>): SafeLedgerPayload => ({

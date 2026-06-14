@@ -164,6 +164,9 @@ Status: 0.4.x active development. Public exports are listed for accidental expor
 - `.:waitForProjection`
 - `.:runSynchronousAttachedStreamCommit`
 - `.:runSynchronousTriggerCommit`
+- `.:WorkspaceJobAttemptContext`
+- `.:WorkspaceJobRecovery`
+- `.:WorkspaceJobRepairDecisionInput`
 - `.:runWorkspaceJobEffect`
 - `.:scheduledEventTrigger`
 - `.:settleToolAdmissionRejected`
