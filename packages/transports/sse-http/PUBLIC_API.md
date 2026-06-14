@@ -2,7 +2,7 @@
 
 # @agent-os/sse-http Public API
 
-Status: 0.3.x public-experimental. This package owns Web Fetch SSE response wrappers; composers stay host-free.
+Status: 0.4.x public-experimental. This package owns Web Fetch SSE response wrappers; composers stay host-free.
 
 ## Public exports
 

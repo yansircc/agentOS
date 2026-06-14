@@ -2,7 +2,7 @@
 
 # @agent-os/turn-stream Public API
 
-Status: 0.3.x active development for frame algebra. Public exports are listed for accidental export control only; this is not an API freeze.
+Status: 0.4.x active development for frame algebra. Public exports are listed for accidental export control only; this is not an API freeze.
 
 ## Public exports
 

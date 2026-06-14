@@ -2,7 +2,7 @@
 
 # @agent-os/workspace-env Public API
 
-Status: 0.3.x active development. Public exports are limited to WorkspaceEnv types, normalization helpers, and standard workspace tool generator.
+Status: 0.4.x active development. Public exports are limited to WorkspaceEnv types, normalization helpers, and standard workspace tool generator.
 
 ## Public exports
 

@@ -10,7 +10,7 @@ scope refs, and shared ledger-visible types.
 
 ## Public API Status
 
-0.3.x active development. Public exports are listed for package ownership; they are not frozen.
+0.4.x active development. Public exports are listed for package ownership; they are not frozen.
 
 ## Invariant
 

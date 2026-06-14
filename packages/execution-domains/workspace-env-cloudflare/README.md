@@ -8,7 +8,7 @@ Cloudflare Sandbox-compatible adapter for `@agent-os/workspace-env`.
 
 ## Public API Status
 
-0.3.x active development. Provider-specific exports are listed in `PUBLIC_API.md`; this is not an API freeze.
+0.4.x active development. Provider-specific exports are listed in `PUBLIC_API.md`; this is not an API freeze.
 
 ## Invariant
 

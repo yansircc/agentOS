@@ -9,7 +9,7 @@ Gemini-style token deltas.
 
 ## Public API Status
 
-0.3.x public-experimental. Experimental exports are listed in `PUBLIC_API.md` to prevent accidental exports; they are not frozen.
+0.4.x public-experimental. Experimental exports are listed in `PUBLIC_API.md` to prevent accidental exports; they are not frozen.
 
 ## Invariant
 

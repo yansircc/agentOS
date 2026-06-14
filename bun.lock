@@ -29,13 +29,14 @@
     },
     "packages/backends/cloudflare-do": {
       "name": "@agent-os/backend-cloudflare-do",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/ag-ui": "workspace:*",
         "@agent-os/attached-stream": "workspace:*",
         "@agent-os/backend-protocol": "workspace:*",
         "@agent-os/kernel": "workspace:*",
         "@agent-os/llm-protocol": "workspace:*",
+        "@agent-os/ops-api": "workspace:*",
         "@agent-os/runtime": "workspace:*",
         "@agent-os/runtime-protocol": "workspace:*",
         "@agent-os/sse-http": "workspace:*",
@@ -67,7 +68,7 @@
     },
     "packages/backends/in-memory": {
       "name": "@agent-os/backend-in-memory",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/attached-stream": "workspace:*",
         "@agent-os/backend-protocol": "workspace:*",
@@ -90,7 +91,7 @@
     },
     "packages/backends/node-postgres": {
       "name": "@agent-os/backend-node-postgres",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/backend-protocol": "workspace:*",
         "@agent-os/kernel": "workspace:*",
@@ -111,7 +112,7 @@
     },
     "packages/backends/protocol": {
       "name": "@agent-os/backend-protocol",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/kernel": "workspace:*",
         "@agent-os/telemetry-protocol": "workspace:*",
@@ -129,7 +130,7 @@
     },
     "packages/carriers/decision-gate": {
       "name": "@agent-os/decision-gate",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/kernel": "workspace:*",
       },
@@ -145,7 +146,7 @@
     },
     "packages/carriers/deploy": {
       "name": "@agent-os/deploy",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/kernel": "workspace:*",
       },
@@ -161,7 +162,7 @@
     },
     "packages/carriers/git": {
       "name": "@agent-os/git-carrier",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/kernel": "workspace:*",
       },
@@ -177,7 +178,7 @@
     },
     "packages/carriers/image": {
       "name": "@agent-os/image",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/kernel": "workspace:*",
       },
@@ -194,7 +195,7 @@
     },
     "packages/carriers/resource": {
       "name": "@agent-os/resource-carrier",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/kernel": "workspace:*",
       },
@@ -210,7 +211,7 @@
     },
     "packages/carriers/staging-artifact": {
       "name": "@agent-os/staging-artifact",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/kernel": "workspace:*",
       },
@@ -226,7 +227,7 @@
     },
     "packages/carriers/verification": {
       "name": "@agent-os/verification",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/kernel": "workspace:*",
       },
@@ -242,7 +243,7 @@
     },
     "packages/carriers/workspace-job": {
       "name": "@agent-os/workspace-job",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/kernel": "workspace:*",
       },
@@ -258,7 +259,7 @@
     },
     "packages/carriers/workspace-op": {
       "name": "@agent-os/workspace-op",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/kernel": "workspace:*",
         "effect": "catalog:",
@@ -274,7 +275,7 @@
     },
     "packages/carriers/workspace-session": {
       "name": "@agent-os/workspace-session",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/kernel": "workspace:*",
       },
@@ -291,7 +292,7 @@
     },
     "packages/composers/attached-stream": {
       "name": "@agent-os/attached-stream",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "devDependencies": {
         "typescript": "catalog:",
         "vite-plus": "catalog:",
@@ -300,7 +301,7 @@
     },
     "packages/composers/run-stream": {
       "name": "@agent-os/run-stream",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/kernel": "workspace:*",
         "@agent-os/runtime-protocol": "workspace:*",
@@ -319,7 +320,7 @@
     },
     "packages/composers/turn-stream": {
       "name": "@agent-os/turn-stream",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "effect": "catalog:",
       },
@@ -334,7 +335,7 @@
     },
     "packages/composers/workspace-binding": {
       "name": "@agent-os/workspace-binding",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/kernel": "workspace:*",
         "@agent-os/runtime-protocol": "workspace:*",
@@ -353,7 +354,7 @@
     },
     "packages/execution-domains/sandbox": {
       "name": "@agent-os/sandbox",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/kernel": "workspace:*",
       },
@@ -370,7 +371,7 @@
     },
     "packages/execution-domains/sandbox-cloudflare": {
       "name": "@agent-os/sandbox-cloudflare",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/sandbox": "workspace:*",
       },
@@ -388,7 +389,7 @@
     },
     "packages/execution-domains/workspace-env": {
       "name": "@agent-os/workspace-env",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/kernel": "workspace:*",
         "effect": "catalog:",
@@ -405,7 +406,7 @@
     },
     "packages/execution-domains/workspace-env-cloudflare": {
       "name": "@agent-os/workspace-env-cloudflare",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/workspace-env": "workspace:*",
       },
@@ -423,7 +424,7 @@
     },
     "packages/execution-domains/workspace-env-local": {
       "name": "@agent-os/workspace-env-local",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/workspace-env": "workspace:*",
       },
@@ -438,7 +439,7 @@
     },
     "packages/kernel": {
       "name": "@agent-os/kernel",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "devDependencies": {
         "@effect/language-service": "catalog:",
         "@effect/vitest": "catalog:",
@@ -454,7 +455,7 @@
     },
     "packages/llm-protocol": {
       "name": "@agent-os/llm-protocol",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/kernel": "workspace:*",
         "effect": "catalog:",
@@ -472,7 +473,7 @@
     },
     "packages/providers/deploy-cloudflare": {
       "name": "@agent-os/deploy-cloudflare",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/deploy": "workspace:*",
         "@agent-os/kernel": "workspace:*",
@@ -492,7 +493,7 @@
     },
     "packages/providers/dynamic-worker": {
       "name": "@agent-os/dynamic-worker",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/kernel": "workspace:*",
       },
@@ -509,7 +510,7 @@
     },
     "packages/providers/image-resource-settlement": {
       "name": "@agent-os/image-resource-settlement",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "effect": "catalog:",
       },
@@ -525,7 +526,7 @@
     },
     "packages/providers/llm-transport-effect-ai": {
       "name": "@agent-os/llm-transport-effect-ai",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/kernel": "workspace:*",
         "@agent-os/llm-protocol": "workspace:*",
@@ -548,7 +549,7 @@
     },
     "packages/providers/llm-transport-http": {
       "name": "@agent-os/llm-transport-http",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/kernel": "workspace:*",
         "@agent-os/llm-protocol": "workspace:*",
@@ -567,7 +568,7 @@
     },
     "packages/providers/resource-cloudflare": {
       "name": "@agent-os/resource-cloudflare",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/kernel": "workspace:*",
         "@agent-os/resource-carrier": "workspace:*",
@@ -585,7 +586,7 @@
     },
     "packages/providers/tenant-material": {
       "name": "@agent-os/tenant-material",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/kernel": "workspace:*",
         "effect": "catalog:",
@@ -601,7 +602,7 @@
     },
     "packages/providers/workspace-op-local": {
       "name": "@agent-os/workspace-op-local",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/kernel": "workspace:*",
         "@agent-os/workspace-env": "workspace:*",
@@ -620,7 +621,7 @@
     },
     "packages/providers/workspace-session-cloudflare": {
       "name": "@agent-os/workspace-session-cloudflare",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/kernel": "workspace:*",
         "@agent-os/workspace-session": "workspace:*",
@@ -638,7 +639,7 @@
     },
     "packages/runtime": {
       "name": "@agent-os/runtime",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/attached-stream": "workspace:*",
         "@agent-os/backend-protocol": "workspace:*",
@@ -663,7 +664,7 @@
     },
     "packages/runtime-protocol": {
       "name": "@agent-os/runtime-protocol",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/kernel": "workspace:*",
         "@agent-os/llm-protocol": "workspace:*",
@@ -683,7 +684,7 @@
     },
     "packages/telemetry-protocol": {
       "name": "@agent-os/telemetry-protocol",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "devDependencies": {
         "@effect/language-service": "catalog:",
         "@effect/vitest": "catalog:",
@@ -698,7 +699,7 @@
     },
     "packages/transports/sse-http": {
       "name": "@agent-os/sse-http",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/attached-stream": "workspace:*",
         "@agent-os/run-stream": "workspace:*",
@@ -711,18 +712,19 @@
     },
     "packages/wire-adapters/ag-ui": {
       "name": "@agent-os/ag-ui",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/kernel": "workspace:*",
         "@agent-os/runtime-protocol": "workspace:*",
         "@agent-os/sse-http": "workspace:*",
+        "@agent-os/workspace-job": "workspace:*",
+        "@agent-os/workspace-op": "workspace:*",
         "effect": "catalog:",
       },
       "devDependencies": {
         "@agent-os/runtime": "workspace:*",
         "@agent-os/workspace-binding": "workspace:*",
         "@agent-os/workspace-env-cloudflare": "workspace:*",
-        "@agent-os/workspace-op": "workspace:*",
         "@agent-os/workspace-op-local": "workspace:*",
         "@effect/vitest": "catalog:",
         "typescript": "catalog:",
@@ -735,7 +737,7 @@
     },
     "packages/wire-adapters/ag-ui-react": {
       "name": "@agent-os/ag-ui-react",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/ag-ui": "workspace:*",
       },
@@ -752,7 +754,7 @@
     },
     "packages/wire-adapters/ag-ui-svelte": {
       "name": "@agent-os/ag-ui-svelte",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/ag-ui": "workspace:*",
       },
@@ -768,7 +770,7 @@
     },
     "packages/wire-adapters/telemetry-otlp": {
       "name": "@agent-os/telemetry-otlp",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/telemetry-protocol": "workspace:*",
       },
@@ -788,7 +790,7 @@
     },
     "tooling/docs-site": {
       "name": "@agent-os/docs-site",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@astrojs/starlight": "^0.39.3",
         "astro": "^6.4.3",
@@ -797,7 +799,7 @@
     },
     "tooling/ops-api": {
       "name": "@agent-os/ops-api",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/kernel": "workspace:*",
         "@agent-os/runtime-protocol": "workspace:*",
@@ -811,7 +813,7 @@
     },
     "tooling/ops-htmx": {
       "name": "@agent-os/ops-htmx",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@agent-os/kernel": "workspace:*",
         "@agent-os/ops-api": "workspace:*",

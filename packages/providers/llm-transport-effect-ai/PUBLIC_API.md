@@ -2,7 +2,7 @@
 
 # @agent-os/llm-transport-effect-ai Public API
 
-Status: 0.3.x public-experimental. Effect AI remains a provider projection layer and does not own runtime facts.
+Status: 0.4.x public-experimental. Effect AI remains a provider projection layer and does not own runtime facts.
 
 ## Public exports
 

@@ -2,7 +2,7 @@
 
 # @agent-os/workspace-env-local Public API
 
-Status: 0.3.x active development. Public exports are limited to local WorkspaceEnv adapter types and factories.
+Status: 0.4.x active development. Public exports are limited to local WorkspaceEnv adapter types and factories.
 
 ## Public exports
 

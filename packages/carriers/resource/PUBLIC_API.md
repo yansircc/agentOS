@@ -2,7 +2,7 @@
 
 # @agent-os/resource-carrier Public API
 
-Status: 0.3.x active development for provider-neutral resource carrier algebra. Public exports are listed for accidental export control only; this is not an API freeze.
+Status: 0.4.x active development for provider-neutral resource carrier algebra. Public exports are listed for accidental export control only; this is not an API freeze.
 
 ## Public exports
 
