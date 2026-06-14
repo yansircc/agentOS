@@ -1095,7 +1095,9 @@ export const submitAgentEffect = (
       let firstTurn = 0;
       let resumedToolCall: LlmToolCall | undefined;
       let requiredToolExecuted =
-        requiredToolName === null ? true : hasExecutedTool(priorEvents, started.id, requiredToolName);
+        requiredToolName === null
+          ? true
+          : hasExecutedTool(priorEvents, started.id, requiredToolName);
 
       if (spec.resume !== undefined) {
         const interruption = matchingInterruptionEvent(priorEvents, spec.resume);

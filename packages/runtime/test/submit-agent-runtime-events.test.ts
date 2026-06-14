@@ -721,10 +721,7 @@ describe("submit-agent runtime event writes", () => {
       expect(
         events
           .map((event) => decodeRuntimeLedgerEvent(event))
-          .filter(
-            (decoded) =>
-              decoded._tag === "runtime" && decoded.event.kind === "tool.executed",
-          )
+          .filter((decoded) => decoded._tag === "runtime" && decoded.event.kind === "tool.executed")
           .map((decoded) =>
             decoded._tag === "runtime" && decoded.event.kind === "tool.executed"
               ? decoded.event.payload.name
