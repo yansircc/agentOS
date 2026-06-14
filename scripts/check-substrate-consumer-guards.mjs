@@ -22,7 +22,6 @@ const guardScripts = [
   "test:node-postgres-runtime-import-boundary",
   "test:node-postgres-effect-governance",
   "test:backend-provider-axis-boundary",
-  "test:backend-neutral-backend-set-ssot",
   "test:backend-neutral-production-runtime-proof",
   "test:run-scoped-material-bindings",
   "test:effectful-tool-replay-receipt",

@@ -4,11 +4,10 @@ import type {
   Tool,
   ToolExecutionContextInput,
 } from "@agent-os/kernel/tools";
-import type { AuthorityRef, ScopeRef } from "@agent-os/kernel/effect-claim";
+import type { AuthorityRef } from "@agent-os/kernel/effect-claim";
 import type { AnyAgentSchemaSource } from "@agent-os/kernel/agent-schema";
 import type { TraceContext } from "@agent-os/telemetry-protocol";
 import type { MaterialRef } from "@agent-os/kernel/material-ref";
-import type { ResolvedMaterial } from "@agent-os/kernel/ref-resolver";
 import type { BoundaryPackage } from "@agent-os/kernel/extensions";
 import type { ContinuationRef } from "./continuation";
 
@@ -54,12 +53,6 @@ export interface SubmitSpec {
   readonly receiptBackedTools?: Readonly<Record<string, SubmitReceiptBackedToolBinding>>;
   readonly decisionInterrupts?: ReadonlyArray<SubmitDecisionInterrupt>;
   readonly resume?: SubmitResumeDecision;
-}
-
-export interface InternalSubmitSpec extends SubmitSpec {
-  readonly scope: string;
-  readonly scopeRef: ScopeRef;
-  readonly resolvedMaterials?: Readonly<Record<string, ResolvedMaterial>>;
 }
 
 export interface SubmitDecisionInterrupt {

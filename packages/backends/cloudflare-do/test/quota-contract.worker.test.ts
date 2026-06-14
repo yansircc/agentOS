@@ -25,8 +25,13 @@ import { QuotaLive } from "../src/quota";
 import { withQuota } from "../src/quota";
 import { ToolError } from "@agent-os/kernel/errors";
 import { LlmTransport } from "@agent-os/llm-protocol";
-import { MaterializedProjectionRegistry, submitAgentEffect } from "@agent-os/runtime";
-import type { InternalSubmitSpec } from "@agent-os/runtime-protocol";
+import {
+  MaterializedProjectionRegistry,
+  internalSubmitSpec,
+  submitAgentEffect,
+  type InternalSubmitSpec,
+} from "@agent-os/runtime";
+import type { SubmitSpec } from "@agent-os/runtime-protocol";
 import { defineTool, deterministicToolExecution, type Tool } from "@agent-os/kernel/tools";
 import type { EventHandler } from "@agent-os/kernel/types";
 import { finalTextResp, stubLlmTransport, toolCallResp } from "./_stub-ai";
@@ -61,7 +66,7 @@ const quotaAuthorityRef = {
   authorityId: "quota-contract",
 };
 
-const makeSpec = (scope: string, limit: number): InternalSubmitSpec => ({
+const makePublicSpec = (limit: number): SubmitSpec => ({
   intent: "what time is it",
   context: {},
   route: {
@@ -72,10 +77,21 @@ const makeSpec = (scope: string, limit: number): InternalSubmitSpec => ({
   } as const,
   tools: { get_current_time: makeQuotaTool(limit) },
   budget: { maxTurns: 3 },
-  scope,
-  scopeRef: { kind: "conversation", scopeId: scope },
   effectAuthorityRef: quotaAuthorityRef,
 });
+
+const makeSpec = (
+  scope: string,
+  limit: number,
+  overrides: Partial<SubmitSpec> = {},
+): InternalSubmitSpec =>
+  internalSubmitSpec(
+    {
+      ...makePublicSpec(limit),
+      ...overrides,
+    },
+    { scope, scopeRef: { kind: "conversation", scopeId: scope } },
+  );
 
 const buildRuntime = (
   state: DurableObjectState,
@@ -145,11 +161,10 @@ describe("quota state machine — deterministic", () => {
       const routeIdentity = testEventIdentity(scope, quotaAuthorityRef);
       const quotaIdentity = testEventIdentity(scope, retryingTool.contract.effectAuthorityRef);
       const runtime = buildRuntime(state, llm, routeIdentity);
-      const spec: InternalSubmitSpec = {
-        ...makeSpec(scope, 1),
+      const spec = makeSpec(scope, 1, {
         tools: { get_current_time: retryingTool },
         budget: { maxTurns: 3, toolRetries: 1 },
-      };
+      });
 
       const result = await runtime.runPromise(submitAgentEffect(spec));
 

@@ -52,6 +52,7 @@ title: "@agent-os/runtime Public API Intent"
 - `.:DurableTrigger`
 - `.:DurableTriggerCancellationMode`
 - `.:DurableTriggerRegistry`
+- `.:InternalSubmitSpec`
 - `.:Ledger`
 - `.:MakeAttachedStreamRegistryOptions`
 - `.:MakeAttachedStreamServiceSpec`
@@ -138,6 +139,7 @@ title: "@agent-os/runtime Public API Intent"
 - `.:getAttachedStreamHandler`
 - `.:getDurableTrigger`
 - `.:getProjection`
+- `.:internalSubmitSpec`
 - `.:makeAttachedStreamRegistry`
 - `.:makeAttachedStreamService`
 - `.:makeDurableTriggerRegistry`

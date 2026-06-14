@@ -2,11 +2,14 @@ import { Data } from "effect";
 import { CORE_CLAIMED_PREFIXES, CapabilityRejected, isCoreClaimedEventKind } from "./errors";
 import type { BoundaryContract } from "./boundary-contract";
 
+declare const boundaryPackageBrand: unique symbol;
+
 export interface BoundaryPackage {
   readonly packageId: string;
   readonly kindPrefixes: ReadonlyArray<string>;
   readonly version: string;
   readonly boundaryContract: BoundaryContract;
+  readonly [boundaryPackageBrand]: true;
 }
 
 export interface EventNamespace {

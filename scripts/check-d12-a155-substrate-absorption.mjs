@@ -124,15 +124,14 @@ const requiredTerms = [
       "ToolRequirements must be external access only",
       "ToolAdmitter requirements must be never",
       "ToolExecute must return access-derived ToolEffect",
-      "tool emitted mutation lifecycle fact",
     ],
   },
   {
-    file: "scripts/check-backend-neutral-mutation-golden.mjs",
+    file: "scripts/check-backend-neutral-production-runtime-proof.mjs",
     terms: [
-      "tool/UI input must emit typed Intent only",
-      "candidate lifecycle must be carrier settlement",
-      "dispatch terminal fact must be backed by external delivery receipt",
+      "runRuntimeBackendContractSuite",
+      "makeCloudflareProductionRuntimeContractDriver",
+      "production runtime proof must not use makeInMemoryDurableObjectState",
     ],
   },
 ];
@@ -253,57 +252,10 @@ const packageGateFailures = (root) => {
   return failures;
 };
 
-const goldenFailures = (root) => {
-  const failures = [];
-  const mutation = JSON.parse(read(root, "test/backend-neutral-mutation-golden.json"));
-  if (!Array.isArray(mutation)) {
-    failures.push("test/backend-neutral-mutation-golden.json: expected array");
-  } else {
-    const toolStep = mutation.find((step) => step.phase === "tool_intent");
-    const carrierStep = mutation.find((step) => step.phase === "carrier_settlement");
-    const dispatchStep = mutation.find((step) => step.phase === "dispatch_terminal");
-    if (toolStep?.actor !== "tool" || !String(toolStep?.eventKind).startsWith("agent.intent.")) {
-      failures.push(
-        "test/backend-neutral-mutation-golden.json: tool phase must be agent intent only",
-      );
-    }
-    if (
-      carrierStep?.actor !== "carrier" ||
-      !String(carrierStep?.eventKind).includes("candidate_lived")
-    ) {
-      failures.push(
-        "test/backend-neutral-mutation-golden.json: candidate lifecycle must be carrier-owned",
-      );
-    }
-    if (
-      dispatchStep?.actor !== "dispatch" ||
-      dispatchStep.deliveryReceipt?.anchorKind !== "external_receipt" ||
-      typeof dispatchStep.idempotencyKey !== "string"
-    ) {
-      failures.push(
-        "test/backend-neutral-mutation-golden.json: apply terminal must be dispatch receipt-owned",
-      );
-    }
-  }
-
-  for (const fixture of [
-    "test/backend-neutral-replay.json",
-    "test/backend-neutral-telemetry.json",
-  ]) {
-    const parsed = JSON.parse(read(root, fixture));
-    const text = JSON.stringify(parsed);
-    if (!text.includes("cloudflare-do") || !text.includes("node-postgres")) {
-      failures.push(`${fixture}: must cover both production backends`);
-    }
-  }
-  return failures;
-};
-
 const collectFailures = (root = repoRoot) => [
   ...requiredTermFailures(root),
   ...sourceScanFailures(root),
   ...packageGateFailures(root),
-  ...goldenFailures(root),
 ];
 
 const writeFixture = (root, rel, source) => {
@@ -327,39 +279,6 @@ const writePositiveFixture = (root) => {
     writeFixture(root, requirement.file, requirement.terms.join("\n"));
   }
   writeFixture(root, "package.json", JSON.stringify(positivePackageJson));
-  writeFixture(
-    root,
-    "test/backend-neutral-mutation-golden.json",
-    JSON.stringify([
-      {
-        phase: "tool_intent",
-        actor: "tool",
-        eventKind: "agent.intent.submitted",
-      },
-      {
-        phase: "carrier_settlement",
-        actor: "carrier",
-        eventKind: "example_product.surface_edit.candidate_lived",
-      },
-      {
-        phase: "dispatch_terminal",
-        actor: "dispatch",
-        eventKind: "dispatch.outbound.delivered",
-        idempotencyKey: "apply/example/1",
-        deliveryReceipt: { anchorKind: "external_receipt" },
-      },
-    ]),
-  );
-  writeFixture(
-    root,
-    "test/backend-neutral-replay.json",
-    JSON.stringify({ backends: ["cloudflare-do", "node-postgres"] }),
-  );
-  writeFixture(
-    root,
-    "test/backend-neutral-telemetry.json",
-    JSON.stringify({ backends: ["cloudflare-do", "node-postgres"] }),
-  );
 };
 
 const collectSelfTestFailures = () => {
@@ -403,19 +322,6 @@ const collectSelfTestFailures = () => {
           return JSON.stringify({ scripts });
         },
         expected: "root check must include",
-      },
-      {
-        name: "tool direct settlement",
-        file: "test/backend-neutral-mutation-golden.json",
-        mutate: () =>
-          JSON.stringify([
-            {
-              phase: "tool_intent",
-              actor: "tool",
-              eventKind: "example_product.surface_edit.apply_lived",
-            },
-          ]),
-        expected: "tool phase must be agent intent only",
       },
     ];
 

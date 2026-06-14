@@ -124,53 +124,6 @@ const validateToolContractShape = (source, failures) => {
   }
 };
 
-const isMutationLifecycleKind = (kind) =>
-  /(?:candidate|apply)_(?:lived|rejected)$/u.test(kind) ||
-  kind === "decision_gate.consumed" ||
-  kind.startsWith("dispatch.outbound.");
-
-const validateMutationGolden = (root) => {
-  const file = path.join(root, "test", "backend-neutral-mutation-golden.json");
-  const failures = [];
-  let flow;
-  try {
-    flow = JSON.parse(fs.readFileSync(file, "utf8"));
-  } catch (error) {
-    return [
-      `test/backend-neutral-mutation-golden.json: cannot read mutation golden: ${error.message}`,
-    ];
-  }
-  if (!Array.isArray(flow)) {
-    return ["test/backend-neutral-mutation-golden.json: golden fixture must be an array"];
-  }
-
-  const intentStep = flow.find((step) => step.phase === "tool_intent");
-  if (intentStep === undefined) {
-    failures.push("test/backend-neutral-mutation-golden.json: missing tool_intent phase");
-  } else {
-    if (intentStep.actor !== "tool") {
-      failures.push("test/backend-neutral-mutation-golden.json: tool_intent actor must be tool");
-    }
-    if (
-      typeof intentStep.eventKind !== "string" ||
-      !intentStep.eventKind.startsWith("agent.intent.")
-    ) {
-      failures.push(
-        "test/backend-neutral-mutation-golden.json: tool_intent must emit an agent intent kind",
-      );
-    }
-  }
-
-  for (const step of flow) {
-    if (step.actor === "tool" && isMutationLifecycleKind(String(step.eventKind))) {
-      failures.push(
-        `test/backend-neutral-mutation-golden.json: tool emitted mutation lifecycle fact ${step.eventKind}`,
-      );
-    }
-  }
-  return failures;
-};
-
 const collectFailures = (root) => {
   const source = read(root, "packages/kernel/src/tools.ts");
   const failures = [];
@@ -194,7 +147,6 @@ const collectFailures = (root) => {
       );
     }
   }
-  failures.push(...validateMutationGolden(root));
   return failures;
 };
 
@@ -256,28 +208,8 @@ export const executeTool = (tool, args, _toolName, materials = {}, context = {})
   });
 `;
 
-const positiveGolden = [
-  {
-    phase: "tool_intent",
-    actor: "tool",
-    eventKind: "agent.intent.submitted",
-    intentRef: "intent/example-surface-edit/1",
-  },
-  {
-    phase: "carrier_settlement",
-    actor: "carrier",
-    eventKind: "example_product.surface_edit.candidate_lived",
-  },
-  {
-    phase: "dispatch_terminal",
-    actor: "dispatch",
-    eventKind: "dispatch.outbound.delivered",
-  },
-];
-
 const writePositiveFixture = (root) => {
   writeFixture(root, "packages/kernel/src/tools.ts", positiveToolsSource);
-  writeFixture(root, "test/backend-neutral-mutation-golden.json", JSON.stringify(positiveGolden));
 };
 
 const collectSelfTestFailures = () => {
@@ -331,18 +263,6 @@ const collectSelfTestFailures = () => {
         file: "packages/kernel/src/tools.ts",
         source: `${positiveToolsSource}\nexport const forbidden = "apply_lived";\n`,
         expected: "apply_lived",
-      },
-      {
-        name: "golden direct tool mutation",
-        file: "test/backend-neutral-mutation-golden.json",
-        source: JSON.stringify([
-          {
-            phase: "tool_intent",
-            actor: "tool",
-            eventKind: "example_product.surface_edit.apply_lived",
-          },
-        ]),
-        expected: "tool emitted mutation lifecycle fact",
       },
     ];
 

@@ -68,6 +68,7 @@ import type {
   MaterializedProjectionRebuildResult,
   MaterializedProjectionRow,
   MaterializedProjectionStatus,
+  InternalSubmitSpec,
 } from "@agent-os/runtime";
 import type {
   AgentBindings,
@@ -76,7 +77,6 @@ import type {
   MountedAgent,
   AttemptKey,
   CapabilityLease,
-  InternalSubmitSpec,
   SubmitResult,
   SubmitSpec,
   SubmitToolIntent,
@@ -89,6 +89,7 @@ import {
   Ledger,
   MaterializedProjections,
   TriggerPump,
+  internalSubmitSpec,
   runWorkspaceJobEffect,
   submitAgentEffect,
   validateBoundaryEventPayload,
@@ -735,11 +736,10 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
       if (scopeRef === null) {
         return Promise.reject(new UnsupportedScopeRef({ scopeId: scope, position: "source" }));
       }
-      const internalSpec: InternalSubmitSpec = {
-        ...spec,
+      const internalSpec: InternalSubmitSpec = internalSubmitSpec(spec, {
         scope,
         scopeRef,
-      };
+      });
       const identity = eventIdentity(
         { scopeRef, effectAuthorityRef: spec.effectAuthorityRef },
         RUNTIME_FACT_OWNER,

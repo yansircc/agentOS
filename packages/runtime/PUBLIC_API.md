@@ -52,6 +52,7 @@ Status: 0.3.x active development. Public exports are listed for accidental expor
 - `.:DurableTrigger`
 - `.:DurableTriggerCancellationMode`
 - `.:DurableTriggerRegistry`
+- `.:InternalSubmitSpec`
 - `.:Ledger`
 - `.:MakeAttachedStreamRegistryOptions`
 - `.:MakeAttachedStreamServiceSpec`
@@ -138,6 +139,7 @@ Status: 0.3.x active development. Public exports are listed for accidental expor
 - `.:getAttachedStreamHandler`
 - `.:getDurableTrigger`
 - `.:getProjection`
+- `.:internalSubmitSpec`
 - `.:makeAttachedStreamRegistry`
 - `.:makeAttachedStreamService`
 - `.:makeDurableTriggerRegistry`

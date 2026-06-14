@@ -12,11 +12,17 @@ import { LlmTransport, type LlmRoute, type LlmWireDescriptor } from "@agent-os/l
 import {
   RUNTIME_FACT_OWNER,
   decodeRuntimeLedgerEvent,
-  type InternalSubmitSpec,
+  type SubmitSpec,
 } from "@agent-os/runtime-protocol";
 import { RefResolverEmpty } from "@agent-os/kernel/ref-resolver";
+import { internalSubmitSpec, type InternalSubmitSpec } from "../src/internal-submit";
 
-const makeSpec = (budget?: InternalSubmitSpec["budget"]): InternalSubmitSpec => ({
+const timeoutScope = {
+  scope: "timeout-scope",
+  scopeRef: { kind: "conversation" as const, scopeId: "timeout-scope" },
+};
+
+const makePublicSpec = (budget?: InternalSubmitSpec["budget"]): SubmitSpec => ({
   intent: "hang",
   context: {},
   route: {
@@ -27,15 +33,20 @@ const makeSpec = (budget?: InternalSubmitSpec["budget"]): InternalSubmitSpec => 
   },
   tools: {},
   ...(budget === undefined ? {} : { budget }),
-  scope: "timeout-scope",
-  scopeRef: { kind: "conversation", scopeId: "timeout-scope" },
   effectAuthorityRef: { authorityClass: "llm_route", authorityId: "timeout-route" },
 });
 
-const makeStructuredSpec = (budget?: InternalSubmitSpec["budget"]): InternalSubmitSpec => ({
-  ...makeSpec(budget),
-  outputSchema: Schema.Struct({ summary: Schema.String }),
-});
+const makeSpec = (budget?: InternalSubmitSpec["budget"]): InternalSubmitSpec =>
+  internalSubmitSpec(makePublicSpec(budget), timeoutScope);
+
+const makeStructuredSpec = (budget?: InternalSubmitSpec["budget"]): InternalSubmitSpec =>
+  internalSubmitSpec(
+    {
+      ...makePublicSpec(budget),
+      outputSchema: Schema.Struct({ summary: Schema.String }),
+    },
+    timeoutScope,
+  );
 
 const routeKind = (route: LlmRoute): string =>
   typeof route.kind === "string" ? route.kind : "unknown";

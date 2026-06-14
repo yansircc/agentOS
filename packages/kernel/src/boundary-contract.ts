@@ -234,12 +234,13 @@ export const defineBoundaryContract = <EventKind extends string>(
   contract: BoundaryContract<EventKind>,
 ): BoundaryContract<EventKind> => contract;
 
-export const boundaryPackage = (contract: BoundaryContract, version: string): BoundaryPackage => ({
-  packageId: contract.packageId,
-  kindPrefixes: contract.kindPrefixes,
-  version,
-  boundaryContract: contract,
-});
+export const boundaryPackage = (contract: BoundaryContract, version: string): BoundaryPackage =>
+  ({
+    packageId: contract.packageId,
+    kindPrefixes: contract.kindPrefixes,
+    version,
+    boundaryContract: contract,
+  }) as BoundaryPackage;
 
 export const validateBoundaryContract = (value: unknown): BoundaryContractValidation => {
   if (!Predicate.isRecord(value)) {

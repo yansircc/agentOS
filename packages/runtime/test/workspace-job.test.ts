@@ -363,6 +363,30 @@ const seedRequestedAndSubmitFacts = (
 };
 
 describe("runWorkspaceJobEffect", () => {
+  it.effect("keeps cleanup outside the shared runtime data plane", () =>
+    Effect.gen(function* () {
+      // @ts-expect-error cleanup is host-local; shared workspace-job runtime must not own it.
+      makeDataPlane({ cleanup: async () => undefined });
+
+      let cleanupCalled = false;
+      const services = makeServices();
+      yield* runJob(
+        makeJobSpec({
+          dataPlane: makeDataPlane({
+            cleanup: async () => {
+              cleanupCalled = true;
+            },
+          } as Partial<WorkspaceJobDataPlane> & {
+            readonly cleanup: (input: { readonly runId: string }) => Promise<void>;
+          }),
+        }),
+        services,
+      );
+
+      expect(cleanupCalled).toBe(false);
+    }),
+  );
+
   it.effect(
     "verifies finalized bytes and commits a verified projection digest for delivery bytes",
     () =>

@@ -421,6 +421,34 @@ describe("Cloudflare DO workspace host helpers", () => {
     );
   });
 
+  it("surfaces Cloudflare WorkspaceEnv cleanup failures and releases the lease", async () => {
+    const sandboxIds: string[] = [];
+    let cleanupCalls = 0;
+    const resolver = createCloudflareWorkspaceEnvResolver({
+      binding: {
+        getSandbox: (sandboxId) => {
+          sandboxIds.push(sandboxId);
+          return {
+            id: sandboxId,
+            exec: async () => ({ exitCode: 0, stdout: "ok", stderr: "" }),
+          };
+        },
+      },
+      cleanup: async () => {
+        cleanupCalls += 1;
+        throw new Error("cleanup failed");
+      },
+    });
+
+    const first = await resolver.resolve({ scope: "scope-1", runId: "run-1" });
+    await expect(first.cleanup()).rejects.toThrow("cleanup failed");
+    const second = await resolver.resolve({ scope: "scope-1", runId: "run-1" });
+
+    expect(second).not.toBe(first);
+    expect(cleanupCalls).toBe(1);
+    expect(sandboxIds).toEqual(["workspace-job:scope-1:run-1", "workspace-job:scope-1:run-1"]);
+  });
+
   it("resolves Cloudflare Sandbox bindings with run-scoped leases and sessionless transport", async () => {
     const requestedIds: string[] = [];
     const sandboxNames: Array<{ name: string; normalizeId: boolean | undefined }> = [];
@@ -502,6 +530,45 @@ describe("Cloudflare DO workspace host helpers", () => {
     await expect(invalid.resolve({ scope: "scope", runId: "run" })).rejects.toThrow(
       "Cloudflare Sandbox binding missing Durable Object namespace methods",
     );
+  });
+
+  it("surfaces Cloudflare Sandbox cleanup failures and releases the lease", async () => {
+    const requestedIds: string[] = [];
+    let cleanupCalls = 0;
+    const stub = {
+      setSandboxName: async () => undefined,
+      setTransport: async () => undefined,
+      execWithSessionToken: async () => ({
+        exitCode: 0,
+        stdout: "ok",
+        stderr: "",
+        durationMs: 1,
+      }),
+    };
+    const namespace = {
+      idFromName: (name: string) => {
+        requestedIds.push(name);
+        return { name } as unknown as DurableObjectId;
+      },
+      get: () => stub,
+    } as unknown as DurableObjectNamespace<never>;
+    const resolver = createCloudflareSandboxWorkspaceEnvResolver({
+      binding: namespace as unknown as Parameters<
+        typeof createCloudflareSandboxWorkspaceEnvResolver
+      >[0]["binding"],
+      cleanup: async () => {
+        cleanupCalls += 1;
+        throw new Error("sandbox cleanup failed");
+      },
+    });
+
+    const first = await resolver.resolve({ scope: "Customer Site", runId: "Run-ABC-123" });
+    await expect(first.cleanup()).rejects.toThrow("sandbox cleanup failed");
+    const second = await resolver.resolve({ scope: "Customer Site", runId: "Run-ABC-123" });
+
+    expect(second).not.toBe(first);
+    expect(cleanupCalls).toBe(1);
+    expect(requestedIds).toEqual([first.sandboxId, second.sandboxId]);
   });
 
   it("allows hosts to declare the WorkspaceEnv ref carried by workspace operations", async () => {

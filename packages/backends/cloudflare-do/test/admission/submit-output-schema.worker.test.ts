@@ -15,8 +15,7 @@ import { runInDurableObject } from "cloudflare:test";
 import type {} from "@effect/vitest";
 
 import { Ledger } from "../../src/ledger";
-import { submitAgentEffect } from "@agent-os/runtime";
-import type { InternalSubmitSpec } from "@agent-os/runtime-protocol";
+import { internalSubmitSpec, submitAgentEffect } from "@agent-os/runtime";
 import { defineTool, deterministicToolExecution } from "@agent-os/kernel/tools";
 import { stubLlmTransport } from "../_stub-ai";
 import { allowToolAdmitter } from "../_tool-fixture";
@@ -49,16 +48,17 @@ describe("admission — submitAgent outputSchema path (contract §12.1)", () => 
       const identity = testIdentity(scope, effectAuthorityRef);
       const runtime = makeRuntime(state, llm, identity);
 
-      const spec: InternalSubmitSpec = {
-        intent: "summarize",
-        context: {},
-        route,
-        tools: {},
-        outputSchema: SCHEMA,
-        scope,
-        scopeRef: { kind: "conversation", scopeId: scope },
-        effectAuthorityRef,
-      };
+      const spec = internalSubmitSpec(
+        {
+          intent: "summarize",
+          context: {},
+          route,
+          tools: {},
+          outputSchema: SCHEMA,
+          effectAuthorityRef,
+        },
+        { scope, scopeRef: { kind: "conversation", scopeId: scope } },
+      );
 
       const r = await runtime.runPromise(submitAgentEffect(spec));
       expect(r.ok).toBe(true);
@@ -97,26 +97,27 @@ describe("admission — submitAgent outputSchema path (contract §12.1)", () => 
       const identity = testIdentity(scope, effectAuthorityRef);
       const runtime = makeRuntime(state, llm, identity);
 
-      const spec: InternalSubmitSpec = {
-        intent: "x",
-        context: {},
-        route,
-        tools: {
-          someTool: defineTool({
-            name: "someTool",
-            description: "x",
-            args: Schema.Struct({}),
-            execute: () => Effect.succeed("y"),
-            admit: allowToolAdmitter,
-            authority: "read",
-            execution: deterministicToolExecution(),
-          }),
+      const spec = internalSubmitSpec(
+        {
+          intent: "x",
+          context: {},
+          route,
+          tools: {
+            someTool: defineTool({
+              name: "someTool",
+              description: "x",
+              args: Schema.Struct({}),
+              execute: () => Effect.succeed("y"),
+              admit: allowToolAdmitter,
+              authority: "read",
+              execution: deterministicToolExecution(),
+            }),
+          },
+          outputSchema: SCHEMA,
+          effectAuthorityRef,
         },
-        outputSchema: SCHEMA,
-        scope,
-        scopeRef: { kind: "conversation", scopeId: scope },
-        effectAuthorityRef,
-      };
+        { scope, scopeRef: { kind: "conversation", scopeId: scope } },
+      );
 
       const exit = await runtime.runPromiseExit(submitAgentEffect(spec));
       expect(Exit.isSuccess(exit)).toBe(true);
@@ -159,17 +160,18 @@ describe("admission — submitAgent outputSchema path (contract §12.1)", () => 
       const identity = testIdentity(scope, effectAuthorityRef);
       const runtime = makeRuntime(state, llm, identity);
 
-      const spec: InternalSubmitSpec = {
-        intent: "summarize",
-        context: {},
-        route,
-        tools: {},
-        outputSchema: SCHEMA,
-        budget: { tokens: 10 },
-        scope,
-        scopeRef: { kind: "conversation", scopeId: scope },
-        effectAuthorityRef,
-      };
+      const spec = internalSubmitSpec(
+        {
+          intent: "summarize",
+          context: {},
+          route,
+          tools: {},
+          outputSchema: SCHEMA,
+          budget: { tokens: 10 },
+          effectAuthorityRef,
+        },
+        { scope, scopeRef: { kind: "conversation", scopeId: scope } },
+      );
 
       const r = await runtime.runPromise(submitAgentEffect(spec));
       expect(r.ok).toBe(false);

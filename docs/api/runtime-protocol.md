@@ -97,7 +97,6 @@
 - `.:FailureDiagnostics`
 - `.:FINGERPRINT_ALGO_VERSION`
 - `.:ExternalReceiptAnchorRef`
-- `.:InternalSubmitSpec`
 - `.:IntentSettlementVocabularyIssue`
 - `.:InvalidateSpec`
 - `.:LedgerWitnessedScopedRef`

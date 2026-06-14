@@ -14,6 +14,8 @@ const files = [
   "packages/backends/cloudflare-do/test/facade-submit.worker.test.ts",
   "packages/backends/cloudflare-do/test/facade-types.ts",
   "packages/backends/cloudflare-do/test/test-worker.ts",
+  "packages/runtime/src/internal-submit.ts",
+  "packages/runtime/src/workspace-job.ts",
   "packages/runtime-protocol/src/bindings.ts",
   "packages/runtime-protocol/src/capability.ts",
   "packages/composers/workspace-binding/src/index.ts",
@@ -89,29 +91,59 @@ const collectFailures = (root = repoRoot) => {
     }
   }
   const submit = read(root, "packages/runtime-protocol/src/submit.ts");
-  const publicSubmitBody = submit.slice(
-    submit.indexOf("export interface SubmitSpec"),
-    submit.indexOf("export interface InternalSubmitSpec"),
-  );
-  if (/resolvedMaterials/.test(publicSubmitBody)) {
+  if (/export interface InternalSubmitSpec/.test(submit)) {
+    failures.push(
+      "packages/runtime-protocol/src/submit.ts: runtime protocol exports InternalSubmitSpec",
+    );
+  }
+  if (/resolvedMaterials/.test(submit)) {
     failures.push(
       "packages/runtime-protocol/src/submit.ts: public SubmitSpec exposes resolvedMaterials",
     );
   }
-  const internalSubmitBody = submit.slice(submit.indexOf("export interface InternalSubmitSpec"));
+  const internalSubmit = read(root, "packages/runtime/src/internal-submit.ts");
+  if (!/export const internalSubmitSpec/.test(internalSubmit)) {
+    failures.push(
+      "packages/runtime/src/internal-submit.ts: missing internalSubmitSpec constructor",
+    );
+  }
+  if (/\.\.\.\s*spec/.test(internalSubmit)) {
+    failures.push(
+      "packages/runtime/src/internal-submit.ts: internalSubmitSpec spreads public spec",
+    );
+  }
+  if (/resolvedMaterials/.test(internalSubmit)) {
+    failures.push(
+      "packages/runtime/src/internal-submit.ts: internalSubmitSpec copies resolvedMaterials",
+    );
+  }
   if (
-    !/readonly resolvedMaterials\?: Readonly<Record<string, ResolvedMaterial>>/.test(
-      internalSubmitBody,
+    !/intent: spec\.intent/.test(internalSubmit) ||
+    !/scopeRef: scope\.scopeRef/.test(internalSubmit)
+  ) {
+    failures.push(
+      "packages/runtime/src/internal-submit.ts: internalSubmitSpec lacks public field projection",
+    );
+  }
+  if (!/internalSubmitSpec\(spec,\s*\{[\s\S]*scope,[\s\S]*scopeRef/.test(agentDo)) {
+    failures.push(
+      "packages/backends/cloudflare-do/src/agent-do.ts: submitFull bypasses internalSubmitSpec",
+    );
+  }
+  const workspaceJob = read(root, "packages/runtime/src/workspace-job.ts");
+  if (
+    !/internalSubmitSpec\(publicSubmitSpec,\s*\{[\s\S]*scope: activeSpec\.scope,[\s\S]*scopeRef: activeSpec\.identity\.scopeRef/.test(
+      workspaceJob,
     )
   ) {
     failures.push(
-      "packages/runtime-protocol/src/submit.ts: InternalSubmitSpec lacks server-only resolvedMaterials",
+      "packages/runtime/src/workspace-job.ts: workspace-job bypasses internalSubmitSpec",
     );
   }
   const runtime = read(root, "packages/runtime/src/submit-agent.ts");
-  if (!/const runResolved = spec\.resolvedMaterials\?\.\[requirement\.slot\]/.test(runtime)) {
+  if (/spec\.resolvedMaterials/.test(runtime)) {
     failures.push(
-      "packages/runtime/src/submit-agent.ts: runtime does not read submit-scoped resolved materials",
+      "packages/runtime/src/submit-agent.ts: runtime trusts submit-scoped resolvedMaterials",
     );
   }
   const facadeSubmitTest = read(
@@ -166,6 +198,42 @@ const collectSelfTestFailures = () => {
     for (const file of files) writeFixture(root, file, "");
     writeFixture(
       root,
+      "packages/runtime-protocol/src/bindings.ts",
+      `export interface AgentSubmitBindings {
+        readonly context?: Record<string, unknown>;
+        readonly decisionInterrupts?: ReadonlyArray<SubmitDecisionInterrupt>;
+      }`,
+    );
+    writeFixture(
+      root,
+      "packages/runtime-protocol/src/submit.ts",
+      "export interface SubmitSpec { readonly materials?: unknown; }",
+    );
+    writeFixture(
+      root,
+      "packages/runtime/src/internal-submit.ts",
+      `export const internalSubmitSpec = (spec, scope) => ({
+        intent: spec.intent,
+        context: spec.context,
+        route: spec.route,
+        tools: spec.tools,
+        effectAuthorityRef: spec.effectAuthorityRef,
+        scope: scope.scope,
+        scopeRef: scope.scopeRef,
+      });`,
+    );
+    writeFixture(
+      root,
+      "packages/runtime/src/workspace-job.ts",
+      "const submitSpec = internalSubmitSpec(publicSubmitSpec, { scope: activeSpec.scope, scopeRef: activeSpec.identity.scopeRef });",
+    );
+    writeFixture(
+      root,
+      "packages/runtime/src/submit-agent.ts",
+      "const resolved = yield* refs.material(ref);",
+    );
+    writeFixture(
+      root,
       "packages/backends/cloudflare-do/src/agent-do.ts",
       `export interface AgentSubmitSpec {
         readonly bindings?: AgentSubmitBindings;
@@ -177,25 +245,11 @@ const collectSelfTestFailures = () => {
           decisionInterrupts: bindings.decisionInterrupts,
           resume: spec.resume,
         });
+      }
+      protected submitFull(spec) {
+        const internalSpec = internalSubmitSpec(spec, { scope, scopeRef });
+        return internalSpec;
       }`,
-    );
-    writeFixture(
-      root,
-      "packages/runtime-protocol/src/bindings.ts",
-      `export interface AgentSubmitBindings {
-        readonly context?: Record<string, unknown>;
-        readonly decisionInterrupts?: ReadonlyArray<SubmitDecisionInterrupt>;
-      }`,
-    );
-    writeFixture(
-      root,
-      "packages/runtime-protocol/src/submit.ts",
-      "export interface SubmitSpec { readonly materials?: unknown; }\nexport interface InternalSubmitSpec extends SubmitSpec { readonly resolvedMaterials?: Readonly<Record<string, ResolvedMaterial>>; }",
-    );
-    writeFixture(
-      root,
-      "packages/runtime/src/submit-agent.ts",
-      "const runResolved = spec.resolvedMaterials?.[requirement.slot];",
     );
     writeFixture(
       root,

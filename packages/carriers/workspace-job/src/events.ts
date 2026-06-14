@@ -791,6 +791,26 @@ export const projectWorkspaceJobSteps = (
   };
 };
 
+const terminalArtifactFromReadback = (
+  readback: WorkspaceJobArtifactReadbackVerifiedPayload,
+): WorkspaceJobTerminalArtifact => ({
+  artifactRef: readback.artifactRef,
+  path: readback.path,
+  schemaId: readback.schemaId,
+  bytes: readback.bytes,
+  sha256: readback.sha256,
+});
+
+const terminalArtifactMatchesReadback = (
+  terminalArtifact: WorkspaceJobTerminalArtifact,
+  readback: WorkspaceJobArtifactReadbackVerifiedPayload,
+): boolean =>
+  terminalArtifact.artifactRef === readback.artifactRef &&
+  terminalArtifact.path === readback.path &&
+  terminalArtifact.schemaId === readback.schemaId &&
+  terminalArtifact.bytes === readback.bytes &&
+  terminalArtifact.sha256 === readback.sha256;
+
 export const projectWorkspaceJob = (
   events: Iterable<WorkspaceJobLedgerEvent>,
   runId: string,
@@ -800,6 +820,7 @@ export const projectWorkspaceJob = (
   let finalized:
     | { readonly eventId: number; readonly payload: WorkspaceJobTerminalFinalizedPayload }
     | undefined;
+  let artifactReadback: WorkspaceJobArtifactReadbackVerifiedPayload | undefined;
   let terminal: WorkspaceJobProjection | undefined;
 
   for (const event of events) {
@@ -813,6 +834,16 @@ export const projectWorkspaceJob = (
       continue;
     }
     if (request === undefined || requestedEventId === undefined || terminal !== undefined) continue;
+    if (
+      event.kind === WORKSPACE_JOB_KIND.ARTIFACT_READBACK_VERIFIED &&
+      artifactReadback === undefined
+    ) {
+      const next = artifactReadbackVerifiedFrom(event.payload);
+      if (next?.requestedEventId === requestedEventId && next.runId === runId) {
+        artifactReadback = next;
+      }
+      continue;
+    }
     if (event.kind === WORKSPACE_JOB_KIND.TERMINAL_FINALIZED && finalized === undefined) {
       const next = terminalFinalizedFrom(event.payload);
       if (next?.requestedEventId === requestedEventId && next.runId === runId) {
@@ -828,6 +859,8 @@ export const projectWorkspaceJob = (
         verified?.requestedEventId === requestedEventId &&
         verified.runId === runId &&
         finalized !== undefined &&
+        artifactReadback !== undefined &&
+        terminalArtifactMatchesReadback(finalized.payload.terminalArtifact, artifactReadback) &&
         verified.terminalFinalizedEventId === finalized.eventId
       ) {
         terminal = {
@@ -837,7 +870,7 @@ export const projectWorkspaceJob = (
           request,
           finalized: finalized.payload,
           verified,
-          terminalArtifact: finalized.payload.terminalArtifact,
+          terminalArtifact: terminalArtifactFromReadback(artifactReadback),
           checks: verified.checks,
         };
       }
@@ -851,6 +884,8 @@ export const projectWorkspaceJob = (
         rejected?.requestedEventId === requestedEventId &&
         rejected.runId === runId &&
         finalized !== undefined &&
+        artifactReadback !== undefined &&
+        terminalArtifactMatchesReadback(finalized.payload.terminalArtifact, artifactReadback) &&
         rejected.terminalFinalizedEventId === finalized.eventId
       ) {
         terminal = {
@@ -860,7 +895,7 @@ export const projectWorkspaceJob = (
           request,
           finalized: finalized.payload,
           rejected,
-          terminalArtifact: finalized.payload.terminalArtifact,
+          terminalArtifact: terminalArtifactFromReadback(artifactReadback),
           checks: rejected.checks,
         };
       }

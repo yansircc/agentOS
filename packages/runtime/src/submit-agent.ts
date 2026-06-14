@@ -70,7 +70,6 @@ import {
   toolReplayArtifactFromExecutedPayload,
   toolRejectedEvent,
   replayToolFromArtifact,
-  type InternalSubmitSpec,
   type RuntimeEventCommitSpec,
   type SubmitDecisionInterrupt,
   type SubmitResult,
@@ -79,6 +78,7 @@ import {
   type TurnRef,
 } from "@agent-os/runtime-protocol";
 import type { LedgerCommitEventSpec, LedgerTruthIdentity } from "@agent-os/runtime-protocol";
+import type { InternalSubmitSpec } from "./internal-submit";
 import { Ledger } from "./ledger";
 import {
   RefResolverService,
@@ -503,11 +503,6 @@ const resolveToolMaterials = (
             "validation_failed",
           ),
         };
-      }
-      const runResolved = spec.resolvedMaterials?.[requirement.slot];
-      if (runResolved !== undefined && runResolved !== null) {
-        out[requirement.slot] = runResolved;
-        continue;
       }
       const resolved = yield* Effect.either(refs.material(ref));
       if (resolved._tag === "Left") {

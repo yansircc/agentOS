@@ -7,11 +7,7 @@ import { collectProductionBackendPackageSet } from "./backend-neutral-production
 const repoRoot = process.cwd();
 
 const allowedStatuses = new Set(["boundary-prepared", "backend-neutral"]);
-const requiredProofScripts = [
-  "test:backend-neutral-golden",
-  "test:backend-neutral-telemetry",
-  "test:backend-neutral-replay",
-];
+const requiredProofScripts = ["test:backend-neutral-production-runtime-proof"];
 
 const readRootPackage = (root) =>
   JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
@@ -45,6 +41,12 @@ export const collectBackendNeutralityFailures = (root = repoRoot) => {
     for (const script of requiredProofScripts) {
       if (rootPackage.scripts?.[script] === undefined) {
         fail(`backend-neutral requires root proof script ${script}`);
+      }
+    }
+    for (const backend of backendSet.productionBackends) {
+      const contractTest = path.join(root, backend, "test/backend-protocol-contract.test.ts");
+      if (!fs.existsSync(contractTest)) {
+        fail(`backend-neutral production backend lacks protocol contract test: ${backend}`);
       }
     }
   }
@@ -85,7 +87,9 @@ const collectSelfTestFailures = () => {
       !missingProof.some((failure) =>
         failure.includes("requires at least 2 production backends"),
       ) ||
-      !missingProof.some((failure) => failure.includes("test:backend-neutral-golden"))
+      !missingProof.some((failure) =>
+        failure.includes("test:backend-neutral-production-runtime-proof"),
+      )
     ) {
       return [
         `backend neutrality self-test did not reject backend-neutral without production backends/proofs; failures=${JSON.stringify(missingProof)}`,
@@ -94,6 +98,11 @@ const collectSelfTestFailures = () => {
 
     for (const backend of ["cloudflare-do", "node-postgres"]) {
       fs.mkdirSync(path.join(root, "packages/backends", backend, "src"), { recursive: true });
+      fs.mkdirSync(path.join(root, "packages/backends", backend, "test"), { recursive: true });
+      fs.writeFileSync(
+        path.join(root, "packages/backends", backend, "test/backend-protocol-contract.test.ts"),
+        "runRuntimeBackendContractSuite();",
+      );
     }
     writePackageJson(root, {
       scripts: Object.fromEntries(requiredProofScripts.map((script) => [script, "echo ok"])),

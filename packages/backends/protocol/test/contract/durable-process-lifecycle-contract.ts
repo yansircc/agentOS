@@ -119,6 +119,12 @@ const phaseFor = (
 ): DurableProcessLifecycleState["phase"] | undefined =>
   states.find((state) => state.intentEventId === intentEventId)?.phase;
 
+const stateFor = (
+  states: ReadonlyArray<DurableProcessLifecycleState>,
+  intentEventId: number,
+): DurableProcessLifecycleState | undefined =>
+  states.find((state) => state.intentEventId === intentEventId);
+
 export const runDurableProcessLifecycleContract = (
   name: string,
   makeDriver: DurableProcessLifecycleDriverFactory,
@@ -196,6 +202,12 @@ export const runDurableProcessLifecycleContract = (
             );
             blocking.releaseAcquire(0);
             yield* Effect.promise(() => firstDrain);
+            expect(
+              stateFor(yield* Effect.promise(() => driver.processes()), claimed.id),
+            ).toMatchObject({
+              phase: "completed_after_cancel_requested",
+              cancellation: { reason: "cancel while claimed" },
+            });
 
             const redriven = yield* Effect.promise(() =>
               driver.enqueue(blocking.trigger, { id: "redriven" }, 200),

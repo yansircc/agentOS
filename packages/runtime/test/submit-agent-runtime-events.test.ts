@@ -47,8 +47,9 @@ import {
   replayToolFromArtifact,
   receiptBackedToolResult,
   toolReplayArtifactFromExecutedPayload,
-  type InternalSubmitSpec,
+  type SubmitSpec,
 } from "@agent-os/runtime-protocol";
+import { internalSubmitSpec, type InternalSubmitSpec } from "../src/internal-submit";
 import { defineSettlementContract } from "@agent-os/kernel/settlement-contract";
 import { RefResolutionFailed, RefResolverService } from "@agent-os/kernel/ref-resolver";
 import type { ResolvedMaterial } from "@agent-os/kernel/ref-resolver";
@@ -70,7 +71,7 @@ const traceContext = {
   tracestate: "vendor=value",
 };
 
-const baseSpec = (overrides: Partial<InternalSubmitSpec> = {}): InternalSubmitSpec => ({
+const basePublicSpec = (overrides: Partial<SubmitSpec> = {}): SubmitSpec => ({
   intent: "answer",
   context: { topic: "runtime events" },
   route: {
@@ -80,11 +81,15 @@ const baseSpec = (overrides: Partial<InternalSubmitSpec> = {}): InternalSubmitSp
     modelId: "test-model",
   },
   tools: {},
-  scope,
-  scopeRef: { kind: "conversation", scopeId: scope },
   effectAuthorityRef: { authorityClass: "llm_route", authorityId: "test-route" },
   ...overrides,
 });
+
+const baseSpec = (overrides: Partial<SubmitSpec> = {}): InternalSubmitSpec =>
+  internalSubmitSpec(basePublicSpec(overrides), {
+    scope,
+    scopeRef: { kind: "conversation", scopeId: scope },
+  });
 
 const response = (override: Partial<LlmResponse> = {}): LlmResponse => ({
   items: [{ type: "message", text: "done" }],
@@ -1275,7 +1280,7 @@ describe("submit-agent runtime event writes", () => {
     }),
   );
 
-  it.effect("uses submit-scoped resolved material values without resolver lookup", () =>
+  it.effect("ignores smuggled submit-scoped resolved material values and uses the resolver", () =>
     Effect.gen(function* () {
       let executed = false;
       const tool = defineTool({
@@ -1303,30 +1308,36 @@ describe("submit-agent runtime event writes", () => {
         provider: "wordpress",
         purpose: "apply",
       });
+      const smuggledSubmitFields = {
+        tools: { apply: tool },
+        materials: { wp_token: tokenRef },
+        budget: { maxTurns: 2 },
+        resolvedMaterials: { wp_token: "attacker-material" },
+      } as Partial<SubmitSpec> & {
+        readonly resolvedMaterials: Readonly<Record<string, ResolvedMaterial>>;
+      };
 
-      const { result, events } = yield* runSubmit(
-        baseSpec({
-          tools: { apply: tool },
-          materials: { wp_token: tokenRef },
-          resolvedMaterials: { wp_token: "secret-token-value" },
-          budget: { maxTurns: 2 },
-        }),
-        [
-          response({
-            items: [
-              { type: "message", text: "use apply" },
-              {
-                type: "tool_call",
-                call: {
-                  id: "call-1",
-                  type: "function",
-                  function: { name: "apply", arguments: '{"title":"Hello"}' },
+      const { result, events } = yield* runSubmitWithServices(
+        baseSpec(smuggledSubmitFields),
+        makeServices(
+          [
+            response({
+              items: [
+                { type: "message", text: "use apply" },
+                {
+                  type: "tool_call",
+                  call: {
+                    id: "call-1",
+                    type: "function",
+                    function: { name: "apply", arguments: '{"title":"Hello"}' },
+                  },
                 },
-              },
-            ],
-          }),
-          response({ items: [{ type: "message", text: "applied" }] }),
-        ],
+              ],
+            }),
+            response({ items: [{ type: "message", text: "applied" }] }),
+          ],
+          { [materialRefKey(tokenRef)]: "secret-token-value" },
+        ),
       );
 
       expect(result).toMatchObject({ ok: true, final: "applied" });

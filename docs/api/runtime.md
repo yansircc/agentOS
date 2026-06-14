@@ -48,6 +48,7 @@
 - `.:DurableTrigger`
 - `.:DurableTriggerCancellationMode`
 - `.:DurableTriggerRegistry`
+- `.:InternalSubmitSpec`
 - `.:Ledger`
 - `.:MakeAttachedStreamRegistryOptions`
 - `.:MakeAttachedStreamServiceSpec`
@@ -134,6 +135,7 @@
 - `.:getAttachedStreamHandler`
 - `.:getDurableTrigger`
 - `.:getProjection`
+- `.:internalSubmitSpec`
 - `.:makeAttachedStreamRegistry`
 - `.:makeAttachedStreamService`
 - `.:makeDurableTriggerRegistry`

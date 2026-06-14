@@ -12,8 +12,13 @@ import { RefResolverLive } from "@agent-os/kernel/ref-resolver";
 import type { ResolvedMaterial } from "@agent-os/kernel/ref-resolver";
 import { ToolError } from "@agent-os/kernel/errors";
 import { LlmTransport } from "@agent-os/llm-protocol";
-import { MaterializedProjectionRegistry, submitAgentEffect } from "@agent-os/runtime";
-import type { InternalSubmitSpec } from "@agent-os/runtime-protocol";
+import {
+  MaterializedProjectionRegistry,
+  internalSubmitSpec,
+  submitAgentEffect,
+  type InternalSubmitSpec,
+} from "@agent-os/runtime";
+import type { SubmitSpec } from "@agent-os/runtime-protocol";
 import { defineTool, deterministicToolExecution, type Tool } from "@agent-os/kernel/tools";
 import {
   credentialMaterialRef,
@@ -39,7 +44,7 @@ const toolRegistryAuthorityRef = {
   authorityId: "tool-registry-contract",
 };
 
-const makeSpec = (scope: string, tool: Tool): InternalSubmitSpec => ({
+const makePublicSpec = (tool: Tool): SubmitSpec => ({
   intent: "lookup",
   context: {},
   route: {
@@ -50,10 +55,21 @@ const makeSpec = (scope: string, tool: Tool): InternalSubmitSpec => ({
   } as const,
   tools: { lookup: tool },
   budget: { maxTurns: 3 },
-  scope,
-  scopeRef: { kind: "conversation", scopeId: scope },
   effectAuthorityRef: toolRegistryAuthorityRef,
 });
+
+const makeSpec = (
+  scope: string,
+  tool: Tool,
+  overrides: Partial<SubmitSpec> = {},
+): InternalSubmitSpec =>
+  internalSubmitSpec(
+    {
+      ...makePublicSpec(tool),
+      ...overrides,
+    },
+    { scope, scopeRef: { kind: "conversation", scopeId: scope } },
+  );
 
 const buildRuntime = (
   state: DurableObjectState,
@@ -168,10 +184,7 @@ describe("tool registry generator", () => {
       );
 
       const result = await runtime.runPromise(
-        submitAgentEffect({
-          ...makeSpec(scope, tool),
-          materials: { wp_token: tokenRef },
-        }),
+        submitAgentEffect(makeSpec(scope, tool, { materials: { wp_token: tokenRef } })),
       );
 
       expect(result.ok).toBe(true);
@@ -488,10 +501,9 @@ describe("tool registry generator", () => {
       const llm = stubLlmTransport([toolCallResp("lookup", "{}", "call-1")]);
       const identity = testEventIdentity(scope, toolRegistryAuthorityRef);
       const runtime = buildRuntime(state, llm, identity);
-      const spec: InternalSubmitSpec = {
-        ...makeSpec(scope, hangingTool),
+      const spec = makeSpec(scope, hangingTool, {
         budget: { maxTurns: 3, timeMs: 50, toolRetries: 0 },
-      };
+      });
 
       const result = await runtime.runPromise(submitAgentEffect(spec));
       expect(result.ok).toBe(false);

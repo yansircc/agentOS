@@ -639,6 +639,12 @@ export type DurableProcessLifecycleState =
       readonly claim?: DurableProcessClaimState;
     })
   | (DurableProcessLifecycleBase & {
+      readonly phase: "completed_after_cancel_requested";
+      readonly completedAt: number;
+      readonly cancellation: DurableProcessCancellationState;
+      readonly claim?: DurableProcessClaimState;
+    })
+  | (DurableProcessLifecycleBase & {
       readonly phase: "cancelled";
       readonly completedAt: number;
       readonly cancellation: DurableProcessCancellationState & {
@@ -748,6 +754,18 @@ export const durableProcessLifecycleState = (
     };
   }
   if (snapshot.completedAt !== null) {
+    if (cancellation !== null) {
+      return {
+        ok: true,
+        state: {
+          ...base,
+          phase: "completed_after_cancel_requested",
+          completedAt: snapshot.completedAt,
+          cancellation,
+          ...(claim === null ? {} : { claim }),
+        },
+      };
+    }
     return {
       ok: true,
       state: {

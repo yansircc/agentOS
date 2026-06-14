@@ -4,6 +4,7 @@ import { afterAll, beforeAll } from "vite-plus/test";
 import { Effect } from "effect";
 import { bindingMaterialRef } from "@agent-os/kernel/material-ref";
 import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
+import { DISPATCH_EVENT_KINDS, DELIVERY_RETRY_TRIGGER_KIND } from "@agent-os/backend-protocol";
 import { NodePostgresBackend, type NodePostgresEventSubscription } from "../src";
 import { PsqlCli } from "../src/host";
 import {
@@ -121,6 +122,42 @@ describe("node-postgres event+due atomicity", () => {
     }
   };
 
+  const withBackend = async (
+    testName: string,
+    run: (
+      backend: NodePostgresBackend,
+      sql: PsqlCli,
+      restart: () => Promise<NodePostgresBackend>,
+    ) => Promise<void>,
+  ): Promise<void> => {
+    if (harness === undefined) throw new Error("postgres harness not started");
+    const { databaseUrl } = harness;
+    const schema = `agentos_atomic_${testName}_${randomUUID().replace(/-/g, "_")}`;
+    let backend = new NodePostgresBackend({
+      databaseUrl,
+      schema,
+      bindingRef,
+    });
+    const createdBackends = [backend];
+    await backend.initialize();
+    const sql = new PsqlCli({ databaseUrl, schema: backend.schema });
+    const restart = async (): Promise<NodePostgresBackend> => {
+      backend = new NodePostgresBackend({
+        databaseUrl,
+        schema,
+        bindingRef,
+      });
+      await backend.initialize();
+      createdBackends.push(backend);
+      return backend;
+    };
+    try {
+      await run(backend, sql, restart);
+    } finally {
+      await createdBackends[0]?.dispose();
+    }
+  };
+
   it("rolls back scheduled intent event when due-work insert fails", async () => {
     const identity = contractIdentity("schedule-atomic-rollback");
     await withDueInsertFailure("schedule", async (backend) => {
@@ -151,6 +188,108 @@ describe("node-postgres event+due atomicity", () => {
       ).rejects.toBeTruthy();
       expect(await backend.events(source)).toEqual([]);
       expect(await backend.pendingDueCount(source)).toBe(0);
+    });
+  });
+
+  it("rolls back scheduled fire when due completion fails", async () => {
+    const identity = contractIdentity("schedule-complete-atomic");
+    await withBackend("schedule_complete", async (backend, sql, restart) => {
+      await backend.schedule(identity, 100, "app.scheduled", { ok: true });
+      await sql.exec(`
+        CREATE OR REPLACE FUNCTION agentos_due_work_complete_fault()
+        RETURNS trigger
+        LANGUAGE plpgsql
+        AS $$
+        BEGIN
+          RAISE EXCEPTION 'fault-injected due_work completion failure';
+        END;
+        $$;
+        CREATE TRIGGER agentos_due_work_complete_fault
+        BEFORE UPDATE OF completed_at ON agentos_due_work
+        FOR EACH ROW
+        WHEN (OLD.completed_at IS NULL AND NEW.completed_at IS NOT NULL)
+        EXECUTE FUNCTION agentos_due_work_complete_fault();
+      `);
+
+      await expect(backend.fireDue(identity, 100)).rejects.toBeTruthy();
+      expect((await backend.events(identity)).map((event) => event.kind)).not.toContain(
+        "app.scheduled",
+      );
+      expect(await backend.pendingDueCount(identity)).toBe(1);
+
+      await sql.exec(`
+        DROP TRIGGER agentos_due_work_complete_fault ON agentos_due_work;
+        DROP FUNCTION agentos_due_work_complete_fault();
+      `);
+      const restarted = await restart();
+      await restarted.fireDue(identity, 60_101);
+      expect(
+        (await restarted.events(identity)).filter((event) => event.kind === "app.scheduled"),
+      ).toHaveLength(1);
+      expect(await restarted.pendingDueCount(identity)).toBe(0);
+    });
+  });
+
+  it("rolls back retry failure fact when next retry due insert fails", async () => {
+    const source = contractIdentity("dispatch-retry-atomic-source");
+    const target = contractIdentity("dispatch-retry-atomic-target");
+    await withBackend("dispatch_retry", async (backend, sql, restart) => {
+      backend.registerDispatchReceiver(target, () => Promise.reject("transient"));
+      await backend.dispatchToScope(source, {
+        target: {
+          scopeRef: target.scopeRef,
+          effectAuthorityRef: target.effectAuthorityRef,
+          bindingRef,
+        },
+        event: "app.retry",
+        data: { ok: true },
+        idempotencyKey: "dispatch-retry-atomic",
+      });
+      const firstFailed = (await backend.events(source)).filter(
+        (event) => event.kind === DISPATCH_EVENT_KINDS.OUTBOUND_FAILED,
+      );
+      expect(firstFailed).toHaveLength(1);
+      const firstFailure = firstFailed[0];
+      if (firstFailure === undefined) expect.fail("expected retry failure fact");
+      const retryAt = (firstFailure.payload as { readonly nextAttemptAt?: number }).nextAttemptAt;
+      expect(typeof retryAt).toBe("number");
+
+      await sql.exec(`
+        CREATE OR REPLACE FUNCTION agentos_retry_due_insert_fault()
+        RETURNS trigger
+        LANGUAGE plpgsql
+        AS $$
+        BEGIN
+          IF NEW.kind = '${DELIVERY_RETRY_TRIGGER_KIND}' THEN
+            RAISE EXCEPTION 'fault-injected retry due_work insert failure';
+          END IF;
+          RETURN NEW;
+        END;
+        $$;
+        CREATE TRIGGER agentos_retry_due_insert_fault
+        BEFORE INSERT ON agentos_due_work
+        FOR EACH ROW EXECUTE FUNCTION agentos_retry_due_insert_fault();
+      `);
+
+      await expect(backend.drainDispatchDue(source, retryAt!)).rejects.toBeTruthy();
+      const failedAfterFault = (await backend.events(source)).filter(
+        (event) => event.kind === DISPATCH_EVENT_KINDS.OUTBOUND_FAILED,
+      );
+      expect(failedAfterFault).toHaveLength(1);
+      expect(await backend.pendingDueCount(source)).toBe(1);
+
+      await sql.exec(`
+        DROP TRIGGER agentos_retry_due_insert_fault ON agentos_due_work;
+        DROP FUNCTION agentos_retry_due_insert_fault();
+      `);
+      const restarted = await restart();
+      restarted.registerDispatchReceiver(target, () => Promise.reject("transient-again"));
+      await restarted.drainDispatchDue(source, retryAt! + 60_001);
+      const failedAfterRestart = (await restarted.events(source)).filter(
+        (event) => event.kind === DISPATCH_EVENT_KINDS.OUTBOUND_FAILED,
+      );
+      expect(failedAfterRestart).toHaveLength(2);
+      expect(await restarted.pendingDueCount(source)).toBe(1);
     });
   });
 });

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
+import { boundaryPackage, defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
 import {
   capabilityIntent,
   defineAgentCapability,
@@ -33,11 +34,8 @@ const capability = defineAgentCapability({
   id: "runtime-protocol.test-capability",
   intents: {
     requested: capabilityIntent<{ readonly id: string }>()("runtime_protocol.requested", {
-      boundaryPackage: {
-        packageId: "@agent-os/runtime-protocol.test-capability",
-        kindPrefixes: ["runtime_protocol."],
-        version: "0.1.0",
-        boundaryContract: {
+      boundaryPackage: boundaryPackage(
+        defineBoundaryContract({
           packageId: "@agent-os/runtime-protocol.test-capability",
           kindPrefixes: ["runtime_protocol."],
           roles: ["generator"],
@@ -55,8 +53,9 @@ const capability = defineAgentCapability({
             rejectionKinds: ["validation_failed"],
           },
           projection: { derivedFromLedger: true, shadowState: false },
-        },
-      },
+        }),
+        "0.1.0",
+      ),
     }),
   },
 });

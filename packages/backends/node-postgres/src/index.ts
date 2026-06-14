@@ -48,7 +48,6 @@ import {
   dispatchBackoffMs,
   dispatchLedgerDeliveryReceipt,
   dispatchTargetDelivered,
-  durableTriggerDuePayload,
   emptyResourceProjection,
   parseDispatchLivedClaim,
   parseScheduledEventIntentPayload,
@@ -65,6 +64,7 @@ import {
   type DispatchEnvelope,
   type DispatchReceiverResult,
   type DispatchTargetAdapter,
+  type DispatchTargetResult,
   type GrantResult,
   type ProjectedResourceState,
   type ResourceProjection,
@@ -1028,15 +1028,18 @@ export class NodePostgresBackend {
       await this.#completeDue(row.id, now, row.claimToken);
       return;
     }
-    await this.#appendEvents([
-      {
-        ts: now,
-        kind: parsed.payload.eventKind,
-        identity: row.identity,
-        payload: parsed.payload.data,
-      },
-    ]);
-    await this.#completeDue(row.id, now, row.claimToken);
+    await this.#appendEventsAndCompleteDue(
+      [
+        {
+          ts: now,
+          kind: parsed.payload.eventKind,
+          identity: row.identity,
+          payload: parsed.payload.data,
+        },
+      ],
+      row,
+      now,
+    );
   }
 
   async #commitDispatchRetry(row: DueWorkRow, now: number): Promise<void> {
@@ -1068,11 +1071,17 @@ export class NodePostgresBackend {
       claim: requested.claim,
       ...(requested.traceContext === undefined ? {} : { traceContext: requested.traceContext }),
     };
+    let outcome: DispatchTargetResult | { readonly _tag: "failed"; readonly cause: unknown };
     try {
       if (target === undefined) throw "agent_os.dispatch_target_not_found";
-      const result = await target.deliver(envelope);
-      if (result._tag === "delivered") {
-        await this.#appendEvents([
+      outcome = await target.deliver(envelope);
+    } catch (cause) {
+      outcome = { _tag: "failed", cause };
+    }
+
+    if (outcome._tag === "delivered") {
+      await this.#appendEventsAndCompleteDue(
+        [
           {
             ts: now,
             kind: DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED,
@@ -1082,21 +1091,28 @@ export class NodePostgresBackend {
               target: requested.target,
               event: requested.event,
               idempotencyKey: requested.idempotencyKey,
-              deliveryReceipt: result.receipt,
+              deliveryReceipt: outcome.receipt,
               attempt: attempts,
               claim: settleDispatchOutboundDelivered(requested.claim, {
                 bindingKey,
-                deliveryReceipt: result.receipt,
+                deliveryReceipt: outcome.receipt,
               }),
               ...(requested.traceContext === undefined
                 ? {}
                 : { traceContext: requested.traceContext }),
             },
           },
-        ]);
-      } else {
-        const acknowledgement: DispatchEnqueueAcknowledgement = result.acknowledgement;
-        await this.#appendEvents([
+        ],
+        row,
+        now,
+      );
+      return;
+    }
+
+    if (outcome._tag === "enqueued") {
+      const acknowledgement: DispatchEnqueueAcknowledgement = outcome.acknowledgement;
+      await this.#appendEventsAndCompleteDue(
+        [
           {
             ts: now,
             kind: DISPATCH_EVENT_KINDS.OUTBOUND_ENQUEUED,
@@ -1113,13 +1129,17 @@ export class NodePostgresBackend {
                 : { traceContext: requested.traceContext }),
             },
           },
-        ]);
-      }
-      await this.#completeDue(row.id, now, row.claimToken);
-    } catch (cause) {
-      const terminal = attempts >= requested.retryPolicy.maxAttempts;
-      const nextAttemptAt = terminal ? null : now + dispatchBackoffMs(attempts);
-      await this.#appendEvents([
+        ],
+        row,
+        now,
+      );
+      return;
+    }
+
+    const terminal = attempts >= requested.retryPolicy.maxAttempts;
+    const nextAttemptAt = terminal ? null : now + dispatchBackoffMs(attempts);
+    await this.#appendEventsAndCompleteDue(
+      [
         {
           ts: now,
           kind: DISPATCH_EVENT_KINDS.OUTBOUND_FAILED,
@@ -1130,7 +1150,7 @@ export class NodePostgresBackend {
             event: requested.event,
             idempotencyKey: requested.idempotencyKey,
             attempt: attempts,
-            error: describeDispatchCause(cause),
+            error: describeDispatchCause(outcome.cause),
             terminal,
             ...(nextAttemptAt === null ? {} : { nextAttemptAt }),
             ...(requested.traceContext === undefined
@@ -1138,17 +1158,17 @@ export class NodePostgresBackend {
               : { traceContext: requested.traceContext }),
           },
         },
-      ]);
-      await this.#completeDue(row.id, now, row.claimToken);
-      if (nextAttemptAt !== null) {
-        await this.#insertDueWork(
-          row.identity,
-          DELIVERY_RETRY_TRIGGER_KIND,
-          intent.id,
-          nextAttemptAt,
-        );
-      }
-    }
+      ],
+      row,
+      now,
+      nextAttemptAt === null
+        ? undefined
+        : {
+            kind: DELIVERY_RETRY_TRIGGER_KIND,
+            intentEventId: intent.id,
+            fireAt: nextAttemptAt,
+          },
+    );
   }
 
   async #findAcceptedDeliveryId(
@@ -1341,38 +1361,6 @@ export class NodePostgresBackend {
     }
   }
 
-  async #insertDueWork(
-    identity: BackendProtocolEventIdentity,
-    kind: string,
-    intentEventId: number,
-    fireAt: number,
-  ): Promise<number> {
-    const identityKey = backendProtocolEventIdentityKey(identity);
-    const rows = await this.#sql.jsonArrayStatement<{ readonly id: number }>(`
-      WITH inserted AS (
-      INSERT INTO agentos_due_work (
-        identity_key, identity, fire_at, kind, payload
-      )
-      VALUES (
-        ${sqlString(identityKey)},
-        ${sqlJson(identity)},
-        ${sqlNumber(fireAt)},
-        ${sqlString(kind)},
-        ${sqlJson(durableTriggerDuePayload(intentEventId))}
-      )
-      RETURNING id::int AS id
-      ),
-      agentos_json_rows AS (
-        SELECT * FROM inserted
-      )
-      SELECT COALESCE(json_agg(row_to_json(agentos_json_rows)), '[]'::json)::text
-      FROM agentos_json_rows
-    `);
-    const row = rows[0];
-    if (row === undefined) throw new SqlError({ cause: "due_work insert returned no row" });
-    return row.id;
-  }
-
   async #appendEventAndDueWork(
     spec: {
       readonly ts: number;
@@ -1434,6 +1422,115 @@ export class NodePostgresBackend {
       throw new SqlError({ cause: "atomic event+due commit returned no event" });
     await this.#fireMany([event]);
     return event;
+  }
+
+  async #appendEventsAndCompleteDue(
+    specs: ReadonlyArray<{
+      readonly ts: number;
+      readonly kind: string;
+      readonly identity: BackendProtocolEventIdentity;
+      readonly payload: unknown;
+    }>,
+    row: DueWorkRow,
+    now: number,
+    nextDue?: {
+      readonly kind: string;
+      readonly intentEventId: number;
+      readonly fireAt: number;
+    },
+  ): Promise<ReadonlyArray<LedgerEvent>> {
+    const rows = await this.#sql.jsonArrayStatement<LedgerEvent>(`
+      WITH completed_due AS (
+        UPDATE agentos_due_work
+        SET completed_at = ${sqlNumber(now)}
+        WHERE id = ${sqlNumber(row.id)}
+          AND completed_at IS NULL
+          ${row.claimToken === null ? "" : `AND claim_token = ${sqlString(row.claimToken)}`}
+        RETURNING identity_key, identity
+      ),
+      input AS (
+        SELECT *
+        FROM jsonb_to_recordset(${sqlPayload(
+          specs.map((spec) => ({
+            ts: spec.ts,
+            kind: spec.kind,
+            truthKey: backendProtocolTruthIdentityKey(spec.identity),
+            identityKey: backendProtocolEventIdentityKey(spec.identity),
+            scopeRef: spec.identity.scopeRef,
+            factOwnerRef: spec.identity.factOwnerRef,
+            effectAuthorityRef: spec.identity.effectAuthorityRef,
+            payload: spec.payload,
+          })),
+        )})
+        AS x(
+          "ts" double precision,
+          "kind" text,
+          "truthKey" text,
+          "identityKey" text,
+          "scopeRef" jsonb,
+          "factOwnerRef" jsonb,
+          "effectAuthorityRef" jsonb,
+          "payload" jsonb
+        )
+      ),
+      inserted_events AS (
+        INSERT INTO agentos_events (
+          ts, kind, truth_key, identity_key, scope_ref, fact_owner_ref, effect_authority_ref, payload
+        )
+        SELECT
+          input."ts",
+          input."kind",
+          input."truthKey",
+          input."identityKey",
+          input."scopeRef",
+          input."factOwnerRef",
+          input."effectAuthorityRef",
+          input."payload"
+        FROM input
+        JOIN completed_due ON true
+        RETURNING
+          id::int AS "id",
+          ts AS "ts",
+          kind AS "kind",
+          scope_ref AS "scopeRef",
+          fact_owner_ref #>> '{}' AS "factOwnerRef",
+          effect_authority_ref AS "effectAuthorityRef",
+          payload AS "payload"
+      ),
+      due_input AS (
+        SELECT *
+        FROM jsonb_to_recordset(${sqlPayload(nextDue === undefined ? [] : [nextDue])})
+        AS x(
+          "fireAt" double precision,
+          "kind" text,
+          "intentEventId" bigint
+        )
+      ),
+      inserted_due_work AS (
+        INSERT INTO agentos_due_work (
+          identity_key, identity, fire_at, kind, payload
+        )
+        SELECT
+          completed_due.identity_key,
+          completed_due.identity,
+          due_input."fireAt",
+          due_input."kind",
+          jsonb_build_object('intentEventId', due_input."intentEventId")
+        FROM due_input
+        JOIN completed_due ON true
+        RETURNING id
+      ),
+      agentos_json_rows AS (
+        SELECT * FROM inserted_events ORDER BY id ASC
+      )
+      SELECT COALESCE(json_agg(row_to_json(agentos_json_rows)), '[]'::json)::text
+      FROM agentos_json_rows
+    `);
+    if (rows.length !== specs.length) {
+      throw new SqlError({ cause: "atomic due outcome commit returned partial event set" });
+    }
+    await this.#fireMany(rows);
+    return rows;
   }
 
   async #claimDue(identity: BackendProtocolEventIdentity, now: number): Promise<DueWorkRow | null> {

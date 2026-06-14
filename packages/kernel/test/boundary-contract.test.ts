@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  type BoundaryContract,
   type BoundaryEventContract,
   boundaryPackage,
   defineBoundaryContract,
   validateBoundaryContract,
 } from "../src/boundary-contract";
+import type { BoundaryPackage } from "../src/extensions";
 import { materialRequirement } from "../src/material-ref";
 import { defineSettlementContract } from "../src/settlement-contract";
 
@@ -81,6 +83,17 @@ describe("BoundaryContract", () => {
       version: "0.1.0",
       boundaryContract: contract,
     });
+  });
+
+  it("keeps boundary package construction sealed to the constructor", () => {
+    // @ts-expect-error BoundaryPackage is intentionally opaque; callers must use boundaryPackage().
+    const literal: BoundaryPackage = {
+      packageId: "@agent-os/example-carrier",
+      kindPrefixes: ["example."],
+      version: "0.1.0",
+      boundaryContract: contract as BoundaryContract,
+    };
+    expect(literal.packageId).toBe("@agent-os/example-carrier");
   });
 
   it("accepts a complete event-level boundary declaration", () => {

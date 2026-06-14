@@ -5,6 +5,7 @@ export * from "./boundary-commit";
 export * from "./continuation";
 export * from "./dispatch";
 export * from "./ledger";
+export * from "./internal-submit";
 export * from "./projection";
 export * from "./quota-service";
 export * from "./resources";

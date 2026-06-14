@@ -67,7 +67,9 @@ not replay arbitrary TypeScript or Effect process code as the source of truth.
 
 `DurableProcessLifecycleState` is a backend diagnostic over the current durable
 trigger substrate. It classifies `due_work` rows as `scheduled`, `claimed`,
-`cancel_requested`, `cancelled`, `completed`, or `redriven`.
+`cancel_requested`, `cancelled`, `completed`, `completed_after_cancel_requested`,
+or `redriven`. `completed_after_cancel_requested` means a cancel request was
+recorded, but the claimed work completed before cancellation was confirmed.
 
 That lifecycle view is useful for tests and operators, but it is not the
 higher-order durable process truth described here. It cannot be extended with

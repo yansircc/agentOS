@@ -11,8 +11,9 @@ import { Ledger } from "./ledger";
 import { MaterializedProjections } from "./projection";
 import { Quota } from "./quota-service";
 import { submitAgentEffect } from "./submit-agent";
-import type { InternalSubmitSpec, SubmitResult, SubmitSpec } from "@agent-os/runtime-protocol";
+import type { SubmitResult, SubmitSpec } from "@agent-os/runtime-protocol";
 import type { LedgerTruthIdentity } from "@agent-os/runtime-protocol";
+import { internalSubmitSpec } from "./internal-submit";
 import {
   WORKSPACE_JOB_KIND,
   projectWorkspaceJob,
@@ -99,7 +100,6 @@ export interface WorkspaceJobDataPlane {
     readonly path: string;
     readonly artifactRef: string;
   }) => Promise<string | Uint8Array>;
-  readonly cleanup?: (input: { readonly runId: string }) => Promise<void>;
 }
 
 export type WorkspaceJobVerifierResult =
@@ -148,7 +148,7 @@ export interface RunWorkspaceJobSpec {
 export class WorkspaceJobDataPlaneFailed extends Data.TaggedError(
   "agent_os.workspace_job_data_plane_failed",
 )<{
-  readonly phase: "seed" | "terminal_build" | "terminal_write" | "terminal_read" | "cleanup";
+  readonly phase: "seed" | "terminal_build" | "terminal_write" | "terminal_read";
   readonly cause: unknown;
 }> {}
 
@@ -556,13 +556,6 @@ const verifyArtifact = (
     catch: (cause) => new WorkspaceJobVerifierFailed({ cause }),
   });
 
-const cleanup = (spec: RunWorkspaceJobSpec): Effect.Effect<void> => {
-  if (spec.dataPlane.cleanup === undefined) return Effect.void;
-  return Effect.promise(() => spec.dataPlane.cleanup!({ runId: spec.runId })).pipe(
-    Effect.catchAll(() => Effect.void),
-  );
-};
-
 /**
  * Runs a protected workspace job from product declarations to a carrier-owned
  * terminal projection. The verifier receives finalized artifact bytes; candidate
@@ -637,7 +630,6 @@ export const runWorkspaceJobEffect = (
     const failAndProject = (failure: WorkspaceJobFailure, submitRunId?: number) =>
       Effect.gen(function* () {
         yield* commitFailed(boundaryEvents, activeSpec, requestedEventId, failure, submitRunId);
-        yield* cleanup(activeSpec);
         const after = yield* eventsFor(ledger, activeSpec.identity);
         return currentProjection(after, activeSpec.runId);
       });
@@ -736,11 +728,10 @@ export const runWorkspaceJobEffect = (
           runId: activeSpec.runId,
           candidatePath: activeSpec.candidatePath,
         });
-        const submitSpec: InternalSubmitSpec = {
-          ...publicSubmitSpec,
+        const submitSpec = internalSubmitSpec(publicSubmitSpec, {
           scope: activeSpec.scope,
           scopeRef: activeSpec.identity.scopeRef,
-        };
+        });
         submitResult = yield* submitAgentEffect(submitSpec);
       }
       if (!submitResult.ok) {
@@ -861,7 +852,6 @@ export const runWorkspaceJobEffect = (
       );
     }
 
-    yield* cleanup(activeSpec);
     const after = yield* eventsFor(ledger, activeSpec.identity);
     return currentProjection(after, activeSpec.runId);
   });

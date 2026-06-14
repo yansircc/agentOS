@@ -101,7 +101,6 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:FailureDiagnostics`
 - `.:FINGERPRINT_ALGO_VERSION`
 - `.:ExternalReceiptAnchorRef`
-- `.:InternalSubmitSpec`
 - `.:IntentSettlementVocabularyIssue`
 - `.:InvalidateSpec`
 - `.:LedgerWitnessedScopedRef`
