@@ -229,10 +229,21 @@ describe("@agent-os/workspace-env", () => {
     await env.writeFile("src/.hidden.ts", "alpha\n");
     await env.writeFile("src/bin.dat", "alpha\0beta");
     await env.writeFile("src/long.txt", `prefix ${"x".repeat(20)} needle`);
+    await env.writeFile("output/site.html", "<!DOCTYPE html>");
 
     await expect(globWorkspaceFiles(env, { root: "../outside", pattern: "**/*" })).rejects.toThrow(
       "cannot escape",
     );
+    await expect(globWorkspaceFiles(env, { pattern: "/output/*.html" })).resolves.toEqual({
+      root: ".",
+      pattern: "/output/*.html",
+      matches: ["output/site.html"],
+      truncated: false,
+      maxMatches: 100,
+    });
+    await expect(
+      globWorkspaceFiles(env, { root: "/src", pattern: "/output/*.html" }),
+    ).rejects.toThrow("inside root");
     await expect(globWorkspaceFiles(env, { root: "src", pattern: "**/*.ts" })).resolves.toEqual({
       root: "src",
       pattern: "**/*.ts",
@@ -447,7 +458,7 @@ describe("@agent-os/workspace-env", () => {
       );
       const glob = yield* unsafeRunToolByName(
         tools,
-        deterministicToolInvocation("glob_files", { root: "src", pattern: "*.ts" }),
+        deterministicToolInvocation("glob_files", { root: "/src", pattern: "*.ts" }),
       );
       const grep = yield* unsafeRunToolByName(
         tools,

@@ -501,6 +501,35 @@ const normalizeGlobPattern = (pattern: string): ReadonlyArray<string> => {
   return segments;
 };
 
+const normalizeGlobPatternForRoot = (
+  env: WorkspaceEnv,
+  pattern: string,
+  root: string,
+): ReadonlyArray<string> => {
+  const trimmed = pattern.trim().replaceAll("\\", "/");
+  if (!trimmed.startsWith("/")) return normalizeGlobPattern(pattern);
+
+  const workspacePattern = normalizeWorkspaceToolPath(trimmed, {
+    cwd: env.cwd,
+    label: "glob pattern",
+  });
+  const rootRelative = relativePath(env.cwd, root);
+  const patternForRoot =
+    rootRelative === "."
+      ? workspacePattern
+      : workspacePattern === rootRelative
+        ? "."
+        : workspacePattern.startsWith(`${rootRelative}/`)
+          ? workspacePattern.slice(rootRelative.length + 1)
+          : failInput("glob pattern must be inside root");
+  return normalizeGlobPattern(patternForRoot);
+};
+
+const resolveWorkspaceSearchRoot = (env: WorkspaceEnv, root: string | undefined): string =>
+  env.resolvePath(
+    root === undefined ? "." : normalizeToolPathForEnv(env, root, "root", { allowRoot: true }),
+  );
+
 const regexEscape = (value: string): string => value.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
 
 const globSegmentMatches = (pattern: string, segment: string): boolean => {
@@ -648,12 +677,12 @@ export const globWorkspaceFiles = async (
   env: WorkspaceEnv,
   options: GlobWorkspaceFilesOptions,
 ): Promise<WorkspaceGlobFilesResult> => {
-  const root = env.resolvePath(options.root ?? ".");
+  const root = resolveWorkspaceSearchRoot(env, options.root);
   const maxMatches = requirePositiveInteger(
     options.maxMatches ?? DEFAULT_MAX_SEARCH_MATCHES,
     "maxMatches",
   );
-  const patternSegments = normalizeGlobPattern(options.pattern);
+  const patternSegments = normalizeGlobPatternForRoot(env, options.pattern, root);
   const files = await walkWorkspaceFiles(env, {
     root,
     recursive: true,
