@@ -304,7 +304,11 @@ const runtimeToolContext = (
 const toolBudgetTimeCause = (
   elapsedMs: number,
   maxMs: number,
-): { readonly reason: "budget_time"; readonly elapsedMs: number; readonly maxMs: number } => ({
+): {
+  readonly reason: "budget_time";
+  readonly elapsedMs: number;
+  readonly maxMs: number;
+} => ({
   reason: "budget_time",
   elapsedMs,
   maxMs,
@@ -322,7 +326,10 @@ const isToolBudgetTimeError = (error: ToolError): boolean => {
 const toolBudgetTimePayload = (
   error: ToolError,
 ): { readonly elapsedMs: number; readonly maxMs: number } => {
-  const cause = error.cause as { readonly elapsedMs?: unknown; readonly maxMs?: unknown };
+  const cause = error.cause as {
+    readonly elapsedMs?: unknown;
+    readonly maxMs?: unknown;
+  };
   return {
     elapsedMs: typeof cause.elapsedMs === "number" ? cause.elapsedMs : 0,
     maxMs: typeof cause.maxMs === "number" ? cause.maxMs : 0,
@@ -357,7 +364,9 @@ const logRuntimeLedgerEvent = (
     const event = events[0];
     if (event === undefined) {
       return yield* Effect.fail(
-        new SqlError({ cause: new Error("ledger commit returned no events for single log") }),
+        new SqlError({
+          cause: new Error("ledger commit returned no events for single log"),
+        }),
       );
     }
     return event;
@@ -555,20 +564,43 @@ const matchingInterruptionEvent = (
     );
   });
 
-const compactToolCallForProviderHistory = (call: LlmToolCall): LlmToolCall => ({
-  ...call,
-  function: {
-    ...call.function,
-    arguments: JSON.stringify({
-      redacted: true,
-      reason: "provider_history_tool_arguments",
-      toolName: call.function.name,
-      originalBytes: toolArgumentSummaryEncoder.encode(call.function.arguments).byteLength,
-    }),
-  },
-});
+const MAX_PROVIDER_HISTORY_STRING_BYTES = 512;
 
-const compactProviderHistoryToolCall = (messages: LlmMessage[], toolCallId: string): void => {
+const compactProviderHistoryValue = (value: unknown): unknown => {
+  if (typeof value === "string") {
+    const bytes = toolArgumentSummaryEncoder.encode(value).byteLength;
+    if (bytes <= MAX_PROVIDER_HISTORY_STRING_BYTES) return value;
+    return `[agentOS redacted provider history string: ${bytes} bytes]`;
+  }
+  if (Array.isArray(value)) {
+    return value.map(compactProviderHistoryValue);
+  }
+  if (Predicate.isRecord(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [key, compactProviderHistoryValue(entry)]),
+    );
+  }
+  return value;
+};
+
+const providerHistoryArgumentsJson = (
+  tool: Tool,
+  toolName: string,
+  args: unknown,
+  originalArguments: string,
+): Effect.Effect<string, JsonStringifyError> =>
+  Effect.gen(function* () {
+    const compacted = compactProviderHistoryValue(args);
+    const decoded = yield* Effect.either(decodeToolArgs(tool, compacted, toolName));
+    if (decoded._tag === "Left") return originalArguments;
+    return yield* safeStringify(compacted);
+  });
+
+const compactProviderHistoryToolCall = (
+  messages: LlmMessage[],
+  toolCallId: string,
+  argumentsJson: string,
+): void => {
   for (let index = messages.length - 1; index >= 0; index--) {
     const message = messages[index];
     if (message?.role !== "assistant" || message.tool_calls === undefined) continue;
@@ -576,7 +608,15 @@ const compactProviderHistoryToolCall = (messages: LlmMessage[], toolCallId: stri
     messages[index] = {
       ...message,
       tool_calls: message.tool_calls.map((call) =>
-        call.id === toolCallId ? compactToolCallForProviderHistory(call) : call,
+        call.id === toolCallId
+          ? {
+              ...call,
+              function: {
+                ...call.function,
+                arguments: argumentsJson,
+              },
+            }
+          : call,
       ),
     };
     return;
@@ -687,7 +727,7 @@ const replayMessagesToInterruptedTool = (
           }
           const replayed = replayToolFromArtifact(artifact.artifact);
           const resultStr = yield* safeStringify(replayed.result);
-          compactProviderHistoryToolCall(messages, call.id);
+          compactProviderHistoryToolCall(messages, call.id, call.function.arguments);
           messages.push({
             role: "tool",
             tool_call_id: call.id,
@@ -723,7 +763,14 @@ const finalAbort = (
     const ledger = yield* Ledger;
     yield* logRuntimeLedgerEvent(
       ledger,
-      agentRunAbortedEvent({ ...identity, kind, runId, tokensUsed, payload, traceContext }),
+      agentRunAbortedEvent({
+        ...identity,
+        kind,
+        runId,
+        tokensUsed,
+        payload,
+        traceContext,
+      }),
     );
     const events = yield* ledger.events(identity);
     return yield* submitResultFromEvents(events, runId);
@@ -867,7 +914,11 @@ export const submitAgentEffect = (
       spec.resume === undefined
         ? yield* logRuntimeLedgerEvent(
             ledger,
-            agentRunStartedEvent({ ...identity, intent: spec.intent, traceContext }),
+            agentRunStartedEvent({
+              ...identity,
+              intent: spec.intent,
+              traceContext,
+            }),
           )
         : priorEvents.find(
             (event) =>
@@ -1445,7 +1496,7 @@ export const submitAgentEffect = (
               return yield* parsed.left;
             }
             toolValidationFailures++;
-            compactProviderHistoryToolCall(messages, call.id);
+            compactProviderHistoryToolCall(messages, call.id, call.function.arguments);
             const feedback = yield* safeStringify({
               ok: false,
               error: "invalid_tool_arguments",
@@ -1491,7 +1542,7 @@ export const submitAgentEffect = (
               return yield* decoded.left;
             }
             toolValidationFailures++;
-            compactProviderHistoryToolCall(messages, call.id);
+            compactProviderHistoryToolCall(messages, call.id, call.function.arguments);
             const feedback = yield* safeStringify({
               ok: false,
               error: "invalid_tool_arguments",
@@ -1694,7 +1745,10 @@ export const submitAgentEffect = (
                   if (!windowOk) {
                     return yield* new ToolError({
                       toolName: call.function.name,
-                      cause: { reason: "invalid_quota_window", windowMs: q.windowMs },
+                      cause: {
+                        reason: "invalid_quota_window",
+                        windowMs: q.windowMs,
+                      },
                     });
                   }
                   if (q.key !== undefined && q.key.length === 0) {
@@ -1832,7 +1886,9 @@ export const submitAgentEffect = (
             );
             return yield* new ToolError({
               toolName: call.function.name,
-              cause: { reason: EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON },
+              cause: {
+                reason: EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
+              },
             });
           }
           if (
@@ -1879,7 +1935,13 @@ export const submitAgentEffect = (
           if (requiredToolName !== null && call.function.name === requiredToolName) {
             requiredToolExecuted = true;
           }
-          compactProviderHistoryToolCall(messages, call.id);
+          const historyArguments = yield* providerHistoryArgumentsJson(
+            tool,
+            call.function.name,
+            args,
+            call.function.arguments,
+          );
+          compactProviderHistoryToolCall(messages, call.id, historyArguments);
           messages.push({
             role: "tool",
             tool_call_id: call.id,
@@ -1929,7 +1991,10 @@ export const submitAgentEffect = (
             }
             return yield* finalAbort(
               ABORT.TOOL_ERROR,
-              { toolName: e.toolName, cause: publicRuntimeCauseReason(e.cause) },
+              {
+                toolName: e.toolName,
+                cause: publicRuntimeCauseReason(e.cause),
+              },
               identity,
               started.id,
               tokensUsed,

@@ -81,7 +81,10 @@ const basePublicSpec = (overrides: Partial<SubmitSpec> = {}): SubmitSpec => ({
     modelId: "test-model",
   },
   tools: {},
-  effectAuthorityRef: { authorityClass: "llm_route", authorityId: "test-route" },
+  effectAuthorityRef: {
+    authorityClass: "llm_route",
+    authorityId: "test-route",
+  },
   ...overrides,
 });
 
@@ -165,7 +168,10 @@ const makeServices = (
             id,
             ts: id * 10,
             kind: event,
-            scopeRef: identity.scopeRef ?? { kind: "conversation", scopeId: scope },
+            scopeRef: identity.scopeRef ?? {
+              kind: "conversation",
+              scopeId: scope,
+            },
             effectAuthorityRef: identity.effectAuthorityRef ?? {
               authorityClass: "llm_route",
               authorityId: "test-route",
@@ -202,7 +208,12 @@ const makeServices = (
     material: (ref: MaterialRef) => {
       const value = materials[materialRefKey(ref)];
       return value === undefined
-        ? Effect.fail(new RefResolutionFailed({ kind: ref.kind, ref: materialRefKey(ref) }))
+        ? Effect.fail(
+            new RefResolutionFailed({
+              kind: ref.kind,
+              ref: materialRefKey(ref),
+            }),
+          )
         : Effect.succeed(value);
     },
   };
@@ -250,7 +261,17 @@ const makeServices = (
         rows: 0,
       }),
   };
-  return { events, llmRequests, ledger, boundaryEvents, llm, quota, refs, admission, projections };
+  return {
+    events,
+    llmRequests,
+    ledger,
+    boundaryEvents,
+    llm,
+    quota,
+    refs,
+    admission,
+    projections,
+  };
 };
 
 const runSubmit = (spec: InternalSubmitSpec, responses?: ReadonlyArray<LlmResponse>) => {
@@ -381,7 +402,10 @@ describe("submit-agent runtime event writes", () => {
       }
       const replayed = replayToolFromArtifact(artifact.artifact);
 
-      expect(replayed).toMatchObject({ ok: true, result: { value: "from-run" } });
+      expect(replayed).toMatchObject({
+        ok: true,
+        result: { value: "from-run" },
+      });
       expect(liveToolExecuteCalled).toBe(false);
       expect(liveTool.execute).toBeDefined();
     }),
@@ -425,7 +449,10 @@ describe("submit-agent runtime event writes", () => {
                 call: {
                   id: "call-1",
                   type: "function",
-                  function: { name: "write_file", arguments: '{"path":"out.txt"}' },
+                  function: {
+                    name: "write_file",
+                    arguments: '{"path":"out.txt"}',
+                  },
                 },
               },
             ],
@@ -467,7 +494,10 @@ describe("submit-agent runtime event writes", () => {
         phase: "lived" as const,
         operationRef: "tool:submit-runtime-events:1:0:call-1",
         scopeRef: { kind: "conversation" as const, scopeId: scope },
-        effectAuthorityRef: { authorityClass: "write", authorityId: "tool:write_file" },
+        effectAuthorityRef: {
+          authorityClass: "write",
+          authorityId: "tool:write_file",
+        },
         originRef: { originId: "run:1", originKind: "submit" },
         anchorRef: {
           anchorId: "workspace_op:receipt:tool:submit-runtime-events:1:0:call-1:7",
@@ -484,7 +514,12 @@ describe("submit-agent runtime event writes", () => {
           return withToolWriteRequirement(
             Effect.succeed(
               receiptBackedToolResult({
-                result: { kind: "write_file", path, bytesWritten: 5, resultHash: "sha256:abc" },
+                result: {
+                  kind: "write_file",
+                  path,
+                  bytesWritten: 5,
+                  resultHash: "sha256:abc",
+                },
                 claim: receiptClaim,
               }),
             ),
@@ -546,7 +581,10 @@ describe("submit-agent runtime event writes", () => {
                 call: {
                   id: "call-1",
                   type: "function",
-                  function: { name: "write_file", arguments: '{"path":"out.txt"}' },
+                  function: {
+                    name: "write_file",
+                    arguments: '{"path":"out.txt"}',
+                  },
                 },
               },
             ],
@@ -565,7 +603,10 @@ describe("submit-agent runtime event writes", () => {
       }
       expect(toolEvent.event.payload).toMatchObject({
         result: { kind: "write_file", path: "out.txt", bytesWritten: 5 },
-        claim: { phase: "lived", anchorRef: { anchorKind: "external_receipt" } },
+        claim: {
+          phase: "lived",
+          anchorRef: { anchorKind: "external_receipt" },
+        },
       });
       const resolved = resolveToolExecution(toolEvent.event.payload.execution, {
         domains: [{ domain, replay: { access: "write", witness: "receipt" } }],
@@ -614,7 +655,10 @@ describe("submit-agent runtime event writes", () => {
                 call: {
                   id: "call-1",
                   type: "function",
-                  function: { name: "read_file", arguments: '{"path":"input/editor.json"}' },
+                  function: {
+                    name: "read_file",
+                    arguments: '{"path":"input/editor.json"}',
+                  },
                 },
               },
             ],
@@ -691,7 +735,10 @@ describe("submit-agent runtime event writes", () => {
                 call: {
                   id: "call-read",
                   type: "function",
-                  function: { name: "read_file", arguments: '{"path":"input.json"}' },
+                  function: {
+                    name: "read_file",
+                    arguments: '{"path":"input.json"}',
+                  },
                 },
               },
             ],
@@ -703,7 +750,10 @@ describe("submit-agent runtime event writes", () => {
                 call: {
                   id: "call-write",
                   type: "function",
-                  function: { name: "write_terminal", arguments: '{"value":"done"}' },
+                  function: {
+                    name: "write_terminal",
+                    arguments: '{"value":"done"}',
+                  },
                 },
               },
             ],
@@ -818,8 +868,14 @@ describe("submit-agent runtime event writes", () => {
         claim: {
           phase: "pre",
           operationRef: "tool:submit-runtime-events:1:0:call-1",
-          scopeRef: { kind: "conversation", scopeId: "submit-runtime-events" },
-          effectAuthorityRef: { authorityClass: "write", authorityId: "tool:intent" },
+          scopeRef: {
+            kind: "conversation",
+            scopeId: "submit-runtime-events",
+          },
+          effectAuthorityRef: {
+            authorityClass: "write",
+            authorityId: "tool:intent",
+          },
           originRef: { originKind: "submit", originId: "run:1" },
         },
       });
@@ -881,7 +937,10 @@ describe("submit-agent runtime event writes", () => {
               call: {
                 id: "call-1",
                 type: "function",
-                function: { name: "await_projection", arguments: '{"id":"intent-1"}' },
+                function: {
+                  name: "await_projection",
+                  arguments: '{"id":"intent-1"}',
+                },
               },
             },
           ],
@@ -904,7 +963,10 @@ describe("submit-agent runtime event writes", () => {
         });
 
       const { result, events } = yield* runSubmitWithServices(
-        baseSpec({ tools: { await_projection: tool }, budget: { maxTurns: 2 } }),
+        baseSpec({
+          tools: { await_projection: tool },
+          budget: { maxTurns: 2 },
+        }),
         services,
       );
 
@@ -1051,7 +1113,10 @@ describe("submit-agent runtime event writes", () => {
               call: {
                 id: "call-1",
                 type: "function",
-                function: { name: "write_file", arguments: '{"path":"out.txt"}' },
+                function: {
+                  name: "write_file",
+                  arguments: '{"path":"out.txt"}',
+                },
               },
             },
           ],
@@ -1095,7 +1160,11 @@ describe("submit-agent runtime event writes", () => {
             diagnostics: {
               phase: "decode",
               reason: "invalid_args",
-              argumentSummary: { type: "object", keys: ["path"], truncated: false },
+              argumentSummary: {
+                type: "object",
+                keys: ["path"],
+                truncated: false,
+              },
             },
           },
         },
@@ -1138,9 +1207,23 @@ describe("submit-agent runtime event writes", () => {
       ]);
 
       expect(result).toMatchObject({ ok: true, status: "delivered" });
-      const secondRequestMessages = JSON.stringify(llmRequests[1]?.messages ?? []);
-      expect(secondRequestMessages).toContain("provider_history_tool_arguments");
+      const secondMessages = llmRequests[1]?.messages ?? [];
+      const secondRequestMessages = JSON.stringify(secondMessages);
+      const assistantMessage = secondMessages.find(
+        (message) =>
+          message.role === "assistant" && message.tool_calls?.some((call) => call.id === "call-1"),
+      );
+      const compactedArgumentsJson = assistantMessage?.tool_calls?.find(
+        (call) => call.id === "call-1",
+      )?.function.arguments;
+      expect(compactedArgumentsJson).toBeDefined();
+      const compactedArguments = JSON.parse(compactedArgumentsJson!);
+      expect(compactedArguments).toEqual({
+        content: expect.stringContaining("agentOS redacted provider history string"),
+      });
       expect(secondRequestMessages).toContain("bytesWritten");
+      expect(secondRequestMessages).not.toContain("provider_history_tool_arguments");
+      expect(secondRequestMessages).not.toContain("originalBytes");
       expect(secondRequestMessages).not.toContain(largeContent.slice(0, 120));
     }),
   );
@@ -1470,7 +1553,10 @@ describe("submit-agent runtime event writes", () => {
                   call: {
                     id: "call-1",
                     type: "function",
-                    function: { name: "apply", arguments: '{"title":"Hello"}' },
+                    function: {
+                      name: "apply",
+                      arguments: '{"title":"Hello"}',
+                    },
                   },
                 },
               ],
@@ -1599,7 +1685,10 @@ describe("submit-agent runtime event writes", () => {
         }),
         services,
       );
-      expect(first.result).toMatchObject({ ok: false, reason: "interrupted" });
+      expect(first.result).toMatchObject({
+        ok: false,
+        reason: "interrupted",
+      });
       if (first.result.status !== "interrupted") {
         throw new Error("expected interrupted result");
       }
@@ -1650,7 +1739,10 @@ describe("submit-agent runtime event writes", () => {
         projectContinuation(services.events, first.result.continuation),
         { approved: true },
       );
-      expect(duplicate).toMatchObject({ ok: false, reason: "continuation_consumed" });
+      expect(duplicate).toMatchObject({
+        ok: false,
+        reason: "continuation_consumed",
+      });
       expect(executed).toBe(1);
       expect(
         services.events.filter((event) => event.kind === DECISION_GATE_KIND.CONSUMED),
@@ -1731,7 +1823,10 @@ describe("submit-agent runtime event writes", () => {
         services,
       );
 
-      expect(resumed.result).toMatchObject({ ok: false, reason: "tool_error" });
+      expect(resumed.result).toMatchObject({
+        ok: false,
+        reason: "tool_error",
+      });
       expect(executed).toBe(0);
       expect(projectDecisionGate(services.events, first.result.gateRef)).toMatchObject({
         status: "rejected",
@@ -1748,7 +1843,10 @@ describe("submit-agent runtime event writes", () => {
         args: Schema.Struct({ question: Schema.String }),
         execute: (_args, ctx) => {
           observedResume = ctx.resume;
-          return Effect.succeed({ kind: "user_input_received", resume: ctx.resume });
+          return Effect.succeed({
+            kind: "user_input_received",
+            resume: ctx.resume,
+          });
         },
         authority: "read",
         admit: () => Effect.succeed({ ok: true }),
