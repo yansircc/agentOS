@@ -153,6 +153,9 @@ describe("@agent-os/workspace-env", () => {
     await expect(walkWorkspaceFiles(env, { root: "src", recursive: false })).resolves.toEqual([
       { path: "src/a.ts", size: 1 },
     ]);
+    await expect(walkWorkspaceFiles(env, { root: "/src", recursive: false })).resolves.toEqual([
+      { path: "src/a.ts", size: 1 },
+    ]);
     await expect(walkWorkspaceFiles(env, { includeHidden: true })).resolves.toEqual([
       { path: ".hidden.txt", size: 1 },
       { path: "src/.secret", size: 1 },
@@ -200,7 +203,7 @@ describe("@agent-os/workspace-env", () => {
 
     await expect(
       editWorkspaceFile(env, {
-        path: "note.txt",
+        path: "/note.txt",
         oldString: "one",
         newString: "1",
         expectCount: 2,
@@ -274,6 +277,20 @@ describe("@agent-os/workspace-env", () => {
       ["src/a.ts", 3, 1],
     ]);
     expect(literal.skippedBinaryPaths).toEqual(["src/bin.dat"]);
+
+    await expect(grepWorkspaceFiles(env, { root: "/src", pattern: "betamax" })).resolves.toEqual(
+      expect.objectContaining({
+        root: "src",
+        matches: [
+          expect.objectContaining({
+            path: "src/b.ts",
+            lineNumber: 1,
+            columnNumber: 1,
+            matchText: "betamax",
+          }),
+        ],
+      }),
+    );
 
     const regex = await grepWorkspaceFiles(env, {
       root: "src",
@@ -462,7 +479,7 @@ describe("@agent-os/workspace-env", () => {
       );
       const grep = yield* unsafeRunToolByName(
         tools,
-        deterministicToolInvocation("grep_files", { root: "src", pattern: "new" }),
+        deterministicToolInvocation("grep_files", { root: "/src", pattern: "new" }),
       );
 
       expect(edit).toEqual({ path: "src/app.ts", replacementCount: 1, bytesWritten: 21 });

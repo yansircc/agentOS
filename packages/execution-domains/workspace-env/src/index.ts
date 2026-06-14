@@ -449,6 +449,13 @@ const normalizeToolPathForEnv = (
   options: { readonly allowRoot?: boolean } = {},
 ): string => normalizeWorkspaceToolPath(input, { ...options, cwd: env.cwd, label });
 
+const resolveWorkspaceToolPath = (
+  env: WorkspaceEnv,
+  input: string,
+  label: string,
+  options: { readonly allowRoot?: boolean } = {},
+): string => env.resolvePath(normalizeToolPathForEnv(env, input, label, options));
+
 const hiddenPath = (path: string): boolean =>
   path !== "." && path.split("/").some((part) => part.startsWith("."));
 
@@ -526,9 +533,11 @@ const normalizeGlobPatternForRoot = (
 };
 
 const resolveWorkspaceSearchRoot = (env: WorkspaceEnv, root: string | undefined): string =>
-  env.resolvePath(
-    root === undefined ? "." : normalizeToolPathForEnv(env, root, "root", { allowRoot: true }),
-  );
+  root === undefined
+    ? env.resolvePath(".")
+    : resolveWorkspaceToolPath(env, root, "root", {
+        allowRoot: true,
+      });
 
 const regexEscape = (value: string): string => value.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
 
@@ -583,11 +592,17 @@ const regexpForGrep = (pattern: string): RegExp => {
 
 const containsNulByte = (bytes: Uint8Array): boolean => bytes.includes(0);
 
-export const walkWorkspaceFiles = async (
+interface WalkResolvedWorkspaceFilesOptions extends WorkspaceOperationOptions {
+  readonly root: string;
+  readonly recursive?: boolean;
+  readonly includeHidden?: boolean;
+}
+
+const walkResolvedWorkspaceFiles = async (
   env: WorkspaceEnv,
-  options: WalkWorkspaceFilesOptions = {},
+  options: WalkResolvedWorkspaceFilesOptions,
 ): Promise<ReadonlyArray<WorkspaceFileSnapshot>> => {
-  const root = env.resolvePath(options.root ?? ".");
+  const root = options.root;
   const recursive = options.recursive ?? true;
   const includeHidden = options.includeHidden ?? false;
   const snapshots: WorkspaceFileSnapshot[] = [];
@@ -625,6 +640,17 @@ export const walkWorkspaceFiles = async (
   return snapshots.sort((a, b) => a.path.localeCompare(b.path));
 };
 
+export const walkWorkspaceFiles = async (
+  env: WorkspaceEnv,
+  options: WalkWorkspaceFilesOptions = {},
+): Promise<ReadonlyArray<WorkspaceFileSnapshot>> =>
+  walkResolvedWorkspaceFiles(env, {
+    root: resolveWorkspaceSearchRoot(env, options.root),
+    recursive: options.recursive,
+    includeHidden: options.includeHidden,
+    signal: options.signal,
+  });
+
 export const diffWorkspaceFiles = (
   previousPaths: ReadonlyArray<string>,
   currentFiles: ReadonlyArray<WorkspaceFileSnapshot>,
@@ -657,7 +683,7 @@ export const editWorkspaceFile = async (
 ): Promise<WorkspaceEditFileResult> => {
   if (options.oldString.length === 0) return failInput("oldString must be non-empty");
   const expectCount = requirePositiveInteger(options.expectCount ?? 1, "expectCount");
-  const path = env.resolvePath(options.path);
+  const path = resolveWorkspaceToolPath(env, options.path, "path");
   const content = await env.readFile(path, { signal: options.signal });
   const pieces = content.split(options.oldString);
   const replacementCount = pieces.length - 1;
@@ -683,7 +709,7 @@ export const globWorkspaceFiles = async (
     "maxMatches",
   );
   const patternSegments = normalizeGlobPatternForRoot(env, options.pattern, root);
-  const files = await walkWorkspaceFiles(env, {
+  const files = await walkResolvedWorkspaceFiles(env, {
     root,
     recursive: true,
     includeHidden: options.includeHidden ?? false,
@@ -713,7 +739,7 @@ export const grepWorkspaceFiles = async (
   env: WorkspaceEnv,
   options: GrepWorkspaceFilesOptions,
 ): Promise<WorkspaceGrepFilesResult> => {
-  const root = env.resolvePath(options.root ?? ".");
+  const root = resolveWorkspaceSearchRoot(env, options.root);
   const mode = options.mode ?? "literal";
   if (mode !== "literal" && mode !== "regex")
     return failInput("grep mode must be literal or regex");
@@ -727,7 +753,7 @@ export const grepWorkspaceFiles = async (
     "maxBytesPerMatch",
   );
   const regex = mode === "regex" ? regexpForGrep(options.pattern) : undefined;
-  const files = await walkWorkspaceFiles(env, {
+  const files = await walkResolvedWorkspaceFiles(env, {
     root,
     recursive: true,
     includeHidden: options.includeHidden ?? false,
