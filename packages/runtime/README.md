@@ -84,14 +84,15 @@ is the only stream-owned settlement hook and is always explicit. `onDetach`
 must be declared as `"abort"` or `"continue"` so the substrate never silently
 chooses between cost-saving abort and background completion.
 
-Submit LLM calls are bounded by the run time budget. Submit is currently
-non-streaming, so the boundary is a total provider-call timeout, not an idle
-stream timeout. If `budget.timeMs` is finite, the remaining run budget bounds
-each provider call and timeout settles as `agent.aborted.budget_time`. If no
-time budget is supplied, a default provider-call timeout settles as
-`agent.aborted.upstream_failure` with cause `provider_timeout`. Long
-non-streaming generations must set an explicit `budget.timeMs`; future
-streaming LLM transport should use idle timeout semantics instead.
+Submit LLM calls have two independent time axes. `budget.timeMs` bounds the
+whole run lifecycle. `budget.llmCallTimeoutMs` bounds each individual provider
+call and defaults to `DEFAULT_LLM_CALL_TIMEOUT_MS`. Runtime uses the smaller of
+the remaining run time and the call timeout: remaining run exhaustion settles as
+`agent.aborted.budget_time`, while call timeout settles as
+`agent.aborted.upstream_failure` with cause `provider_timeout`. Submit is
+currently non-streaming, so the boundary is a total provider-call timeout, not
+an idle stream timeout; future streaming LLM transport should use idle timeout
+semantics instead.
 
 Workspace-job consumer observability is a runtime composition projection, not a
 carrier fact. `projectWorkspaceJobObservability(events, jobRunId)` joins the

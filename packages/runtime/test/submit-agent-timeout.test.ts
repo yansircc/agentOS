@@ -230,6 +230,51 @@ describe("submit agent LLM provider timeout", () => {
     }),
   );
 
+  it.effect("settles configured provider timeout independently from run budget", () =>
+    Effect.gen(function* () {
+      const llmCallTimeoutMs = DEFAULT_LLM_CALL_TIMEOUT_MS + 30_000;
+      const fiber = yield* runWithHungLlm(
+        makeSpec({
+          maxTurns: 1,
+          timeMs: llmCallTimeoutMs + 60_000,
+          llmCallTimeoutMs,
+        }),
+      ).pipe(Effect.fork);
+      yield* TestClock.adjust(`${llmCallTimeoutMs + 1} millis`);
+      const { result, events, aborted } = yield* Fiber.join(fiber);
+
+      expect(result).toMatchObject({ ok: false, reason: "upstream_failure" });
+      expect(aborted).toBe(true);
+      expect(events.some((event) => event.kind === "llm.response")).toBe(false);
+      const abortedEvent = events.find((event) => event.kind === "agent.aborted.upstream_failure");
+      expect(abortedEvent?.payload).toMatchObject({
+        cause: "provider_timeout",
+        timeoutMs: llmCallTimeoutMs,
+      });
+      for (const event of events) decodeRuntimeLedgerEvent(event);
+    }),
+  );
+
+  it.effect("caps configured provider timeout by remaining run budget", () =>
+    Effect.gen(function* () {
+      const fiber = yield* runWithHungLlm(
+        makeSpec({
+          maxTurns: 1,
+          timeMs: 10,
+          llmCallTimeoutMs: DEFAULT_LLM_CALL_TIMEOUT_MS + 30_000,
+        }),
+      ).pipe(Effect.fork);
+      yield* TestClock.adjust("11 millis");
+      const { result, events, aborted } = yield* Fiber.join(fiber);
+
+      expect(result).toMatchObject({ ok: false, reason: "budget_time" });
+      expect(aborted).toBe(true);
+      expect(events.some((event) => event.kind === "llm.response")).toBe(false);
+      expect(events.find((event) => event.kind === "agent.aborted.budget_time")).toBeDefined();
+      for (const event of events) decodeRuntimeLedgerEvent(event);
+    }),
+  );
+
   it.effect("settles timeout even when the provider cannot observe AbortSignal", () =>
     Effect.gen(function* () {
       const fiber = yield* runWithHungLlm(makeSpec({ maxTurns: 1 }), {

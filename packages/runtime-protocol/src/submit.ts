@@ -74,6 +74,14 @@ export interface SubmitSpec {
   readonly budget?: {
     readonly tokens?: number;
     readonly timeMs?: number;
+    /**
+     * Maximum wall-clock time for each individual LLM provider call.
+     *
+     * This is intentionally separate from timeMs: timeMs bounds the whole run,
+     * while llmCallTimeoutMs bounds one provider request. Runtime uses the
+     * smaller of remaining run time and this call timeout.
+     */
+    readonly llmCallTimeoutMs?: number;
     readonly maxTurns?: number;
     readonly toolRetries?: number;
   };

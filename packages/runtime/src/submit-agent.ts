@@ -793,6 +793,7 @@ const llmTimeoutFor = (
   startTime: number,
   now: number,
   budgetTimeMs: number,
+  llmCallTimeoutMs: number,
 ):
   | {
       readonly ok: true;
@@ -807,12 +808,17 @@ const llmTimeoutFor = (
   if (Number.isFinite(budgetTimeMs)) {
     const remaining = budgetTimeMs - elapsedMs;
     if (remaining <= 0) return { ok: false, elapsedMs };
-    if (remaining <= DEFAULT_LLM_CALL_TIMEOUT_MS) {
+    if (remaining <= llmCallTimeoutMs) {
       return { ok: true, mode: "budget", timeoutMs: remaining };
     }
   }
-  return { ok: true, mode: "provider", timeoutMs: DEFAULT_LLM_CALL_TIMEOUT_MS };
+  return { ok: true, mode: "provider", timeoutMs: llmCallTimeoutMs };
 };
+
+const llmCallTimeoutBudgetMs = (value: unknown): number =>
+  typeof value === "number" && Number.isFinite(value) && value > 0
+    ? Math.trunc(value)
+    : DEFAULT_LLM_CALL_TIMEOUT_MS;
 
 const timeoutAbortResult = (
   timeout: LlmCallTimedOut,
@@ -958,6 +964,7 @@ export const submitAgentEffect = (
     const startTime = yield* Clock.currentTimeMillis;
     const budgetTokens = spec.budget?.tokens ?? Number.POSITIVE_INFINITY;
     const budgetTimeMs = spec.budget?.timeMs ?? Number.POSITIVE_INFINITY;
+    const llmCallTimeoutMs = llmCallTimeoutBudgetMs(spec.budget?.llmCallTimeoutMs);
     const maxTurns = spec.budget?.maxTurns ?? 5;
     const toolRetries = Math.max(0, spec.budget?.toolRetries ?? 2);
     const scope = spec.scope;
@@ -1064,7 +1071,7 @@ export const submitAgentEffect = (
       const userText = `${spec.intent}\n\nContext:\n${ctxStr}`;
       const beforeCall = yield* Clock.currentTimeMillis;
       const tokensBeforeCall = yield* Ref.get(tokensUsedRef);
-      const timeout = llmTimeoutFor(startTime, beforeCall, budgetTimeMs);
+      const timeout = llmTimeoutFor(startTime, beforeCall, budgetTimeMs, llmCallTimeoutMs);
       if (!timeout.ok) {
         return yield* finalAbort(
           ABORT.BUDGET_TIME,
@@ -1395,7 +1402,7 @@ export const submitAgentEffect = (
         let newTokens = tokensBeforeCall;
 
         if (resumedThisTurn === undefined) {
-          const timeout = llmTimeoutFor(startTime, now, budgetTimeMs);
+          const timeout = llmTimeoutFor(startTime, now, budgetTimeMs, llmCallTimeoutMs);
           if (!timeout.ok) {
             return yield* finalAbort(
               ABORT.BUDGET_TIME,
