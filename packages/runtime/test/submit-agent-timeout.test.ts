@@ -210,6 +210,26 @@ describe("submit agent LLM provider timeout", () => {
     }),
   );
 
+  it.effect("settles provider timeout when submit has a large finite run budget", () =>
+    Effect.gen(function* () {
+      const fiber = yield* runWithHungLlm(
+        makeSpec({ maxTurns: 1, timeMs: DEFAULT_LLM_CALL_TIMEOUT_MS + 60_000 }),
+      ).pipe(Effect.fork);
+      yield* TestClock.adjust(`${DEFAULT_LLM_CALL_TIMEOUT_MS + 1} millis`);
+      const { result, events, aborted } = yield* Fiber.join(fiber);
+
+      expect(result).toMatchObject({ ok: false, reason: "upstream_failure" });
+      expect(aborted).toBe(true);
+      expect(events.some((event) => event.kind === "llm.response")).toBe(false);
+      const abortedEvent = events.find((event) => event.kind === "agent.aborted.upstream_failure");
+      expect(abortedEvent?.payload).toMatchObject({
+        cause: "provider_timeout",
+        timeoutMs: DEFAULT_LLM_CALL_TIMEOUT_MS,
+      });
+      for (const event of events) decodeRuntimeLedgerEvent(event);
+    }),
+  );
+
   it.effect("settles timeout even when the provider cannot observe AbortSignal", () =>
     Effect.gen(function* () {
       const fiber = yield* runWithHungLlm(makeSpec({ maxTurns: 1 }), {
@@ -222,6 +242,26 @@ describe("submit agent LLM provider timeout", () => {
       expect(aborted).toBe(false);
       expect(events.some((event) => event.kind === "llm.response")).toBe(false);
       expect(events.find((event) => event.kind === "agent.aborted.upstream_failure")).toBeDefined();
+      for (const event of events) decodeRuntimeLedgerEvent(event);
+    }),
+  );
+
+  it.effect("settles structured-output provider timeout with a large finite run budget", () =>
+    Effect.gen(function* () {
+      const fiber = yield* runWithHungLlm(
+        makeStructuredSpec({ timeMs: DEFAULT_LLM_CALL_TIMEOUT_MS + 60_000 }),
+      ).pipe(Effect.fork);
+      yield* TestClock.adjust(`${DEFAULT_LLM_CALL_TIMEOUT_MS + 1} millis`);
+      const { result, events, aborted } = yield* Fiber.join(fiber);
+
+      expect(result).toMatchObject({ ok: false, reason: "upstream_failure" });
+      expect(aborted).toBe(true);
+      expect(events.some((event) => event.kind === "agent.run.completed")).toBe(false);
+      const abortedEvent = events.find((event) => event.kind === "agent.aborted.upstream_failure");
+      expect(abortedEvent?.payload).toMatchObject({
+        cause: "provider_timeout",
+        timeoutMs: DEFAULT_LLM_CALL_TIMEOUT_MS,
+      });
       for (const event of events) decodeRuntimeLedgerEvent(event);
     }),
   );

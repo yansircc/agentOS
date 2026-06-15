@@ -807,7 +807,9 @@ const llmTimeoutFor = (
   if (Number.isFinite(budgetTimeMs)) {
     const remaining = budgetTimeMs - elapsedMs;
     if (remaining <= 0) return { ok: false, elapsedMs };
-    return { ok: true, mode: "budget", timeoutMs: remaining };
+    if (remaining <= DEFAULT_LLM_CALL_TIMEOUT_MS) {
+      return { ok: true, mode: "budget", timeoutMs: remaining };
+    }
   }
   return { ok: true, mode: "provider", timeoutMs: DEFAULT_LLM_CALL_TIMEOUT_MS };
 };
