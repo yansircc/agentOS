@@ -781,6 +781,66 @@ describe("submit-agent runtime event writes", () => {
     }),
   );
 
+  it.effect("does not complete from prose while a declared required tool is missing", () =>
+    Effect.gen(function* () {
+      const writeTerminal = defineTool({
+        name: "write_terminal",
+        description: "write terminal result",
+        args: Schema.Struct({ value: Schema.String }),
+        execute: ({ value }) => Effect.succeed({ ok: true, value }),
+        authority: "write",
+        admit: () => Effect.succeed({ ok: true }),
+        execution: deterministicToolExecution(),
+      });
+
+      const { result, events, llmRequests } = yield* runSubmit(
+        baseSpec({
+          tools: { write_terminal: writeTerminal },
+          toolPolicy: {
+            requiredUntilToolExecuted: { toolName: "write_terminal" },
+          },
+        }),
+        [
+          response({ items: [{ type: "message", text: "I am done without a tool." }] }),
+          response({
+            items: [
+              {
+                type: "tool_call",
+                call: {
+                  id: "call-write",
+                  type: "function",
+                  function: {
+                    name: "write_terminal",
+                    arguments: '{"value":"done"}',
+                  },
+                },
+              },
+            ],
+          }),
+          response({ items: [{ type: "message", text: "done" }] }),
+        ],
+      );
+
+      expect(result).toMatchObject({ ok: true, final: "done" });
+      expect(llmRequests.map((request) => request.tool_choice)).toEqual([
+        "required",
+        "required",
+        undefined,
+      ]);
+      expect(
+        events
+          .map((event) => decodeRuntimeLedgerEvent(event))
+          .filter(
+            (decoded) =>
+              decoded._tag === "runtime" &&
+              (decoded.event.kind === "tool.executed" ||
+                decoded.event.kind === "agent.run.completed"),
+          )
+          .map((decoded) => (decoded._tag === "runtime" ? decoded.event.kind : "unknown")),
+      ).toEqual(["tool.executed", "agent.run.completed"]);
+    }),
+  );
+
   it.effect("completes after every declared terminal tool executes", () =>
     Effect.gen(function* () {
       const readFile = defineTool({

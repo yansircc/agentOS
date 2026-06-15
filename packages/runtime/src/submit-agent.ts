@@ -1498,6 +1498,37 @@ export const submitAgentEffect = (
           });
 
           if (nextResponseToolCalls.length === 0) {
+            const remainingPolicyToolNames = remainingRequiredToolNames(
+              requiredToolNames,
+              executedToolNames,
+            );
+            if (remainingPolicyToolNames.length > 0) {
+              if (toolPolicyFailures >= toolRetries) {
+                return yield* new ToolError({
+                  toolName: remainingPolicyToolNames[0] as string,
+                  cause: {
+                    reason: "policy_required_tool_missing",
+                    remainingRequiredToolNames: remainingPolicyToolNames,
+                  },
+                });
+              }
+              toolPolicyFailures++;
+              messages.push({
+                role: "user",
+                content: yield* safeStringify({
+                  ok: false,
+                  error: "tool_policy_required_tool_missing",
+                  phase: "policy",
+                  remainingRequiredToolNames: remainingPolicyToolNames,
+                  expectedToolName: orderedCompleteAfterTools
+                    ? remainingPolicyToolNames[0]
+                    : undefined,
+                  message:
+                    "A required runtime policy tool has not executed. Continue by calling one of the remaining required tool names; prose-only completion is not accepted.",
+                }),
+              });
+              continue;
+            }
             yield* ledger.commit([
               agentRunCompletedEvent({
                 ...identity,
