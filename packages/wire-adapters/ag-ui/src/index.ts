@@ -695,6 +695,23 @@ export const projectSafeLedgerEventToAgUiFrames = (
     }
     case "tool.rejected": {
       const toolName = stringOf(payload.toolName) ?? "unknown";
+      const diagnostics = recordOf(payload.diagnostics);
+      const phase = stringOf(diagnostics?.phase);
+      if (phase === "policy") {
+        return [
+          {
+            type: "CUSTOM",
+            timestamp: event.ts,
+            name: "agent-os.tool.policy_rejected",
+            value: {
+              runId: payload.runId ?? event.id,
+              toolCallId: payload.toolCallId ?? null,
+              toolName,
+              diagnostics: diagnostics ?? null,
+            },
+          },
+        ];
+      }
       return [
         {
           type: "RUN_ERROR",

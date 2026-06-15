@@ -238,6 +238,7 @@ export interface AgentSubmitSpec {
   readonly budget?: SubmitSpec["budget"];
   readonly outputSchema?: SubmitSpec["outputSchema"];
   readonly traceContext?: SubmitSpec["traceContext"];
+  readonly toolPolicy?: SubmitSpec["toolPolicy"];
   readonly resume?: SubmitSpec["resume"];
 }
 
@@ -723,6 +724,7 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
       ...(spec.budget === undefined ? {} : { budget: spec.budget }),
       ...(spec.outputSchema === undefined ? {} : { outputSchema: spec.outputSchema }),
       ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
+      ...(spec.toolPolicy === undefined ? {} : { toolPolicy: spec.toolPolicy }),
       ...(bindings.decisionInterrupts === undefined
         ? {}
         : { decisionInterrupts: bindings.decisionInterrupts }),

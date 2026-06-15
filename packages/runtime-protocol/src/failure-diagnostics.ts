@@ -17,6 +17,7 @@ import {
 export type FailureDiagnosticCategory =
   | "invalid_args"
   | "unknown_tool"
+  | "runtime_policy"
   | "missing_execution_path"
   | "missing_material"
   | "missing_runtime_capability"
@@ -125,6 +126,9 @@ const terminalCauseReason = (payload: unknown): string | undefined =>
 const categoryForReason = (reason: string): FailureDiagnosticCategory => {
   if (reason === "invalid_args") return "invalid_args";
   if (reason === "unknown_tool") return "unknown_tool";
+  if (reason === "policy_tool_already_executed" || reason === "policy_tool_out_of_order") {
+    return "runtime_policy";
+  }
   if (
     reason === EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON ||
     reason === EXTERNAL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON
@@ -175,6 +179,8 @@ const ownerForCategory = (category: FailureDiagnosticCategory): FailureDiagnosti
     case "invalid_args":
     case "unknown_tool":
       return "model";
+    case "runtime_policy":
+      return "runtime";
     case "missing_execution_path":
     case "missing_material":
     case "missing_runtime_capability":
@@ -196,6 +202,7 @@ const retryableForCategory = (category: FailureDiagnosticCategory): boolean => {
     case "unknown_tool":
     case "rate_limited":
     case "provider_failure":
+    case "runtime_policy":
       return true;
     case "missing_execution_path":
     case "missing_material":
@@ -213,6 +220,8 @@ const publicMessageForCategory = (category: FailureDiagnosticCategory): string =
       return "Tool arguments did not match the tool schema.";
     case "unknown_tool":
       return "The model requested a tool that is not available.";
+    case "runtime_policy":
+      return "The model requested a tool that runtime policy already satisfied.";
     case "missing_execution_path":
       return "This tool requires a receipt-backed execution path before it can run.";
     case "missing_material":

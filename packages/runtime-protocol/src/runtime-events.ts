@@ -230,7 +230,16 @@ export type ToolRejectedPayload = {
   readonly traceContext?: TraceContext;
 };
 
-export type ToolRejectedDiagnosticsPhase = "parse" | "decode" | "material" | "admit" | "execution";
+export const TOOL_REJECTED_DIAGNOSTICS_PHASES = [
+  "parse",
+  "decode",
+  "policy",
+  "material",
+  "admit",
+  "execution",
+] as const;
+
+export type ToolRejectedDiagnosticsPhase = (typeof TOOL_REJECTED_DIAGNOSTICS_PHASES)[number];
 
 export interface ToolArgumentSummary {
   readonly type: string;
@@ -335,7 +344,7 @@ export const ToolRejectedPayloadSchema: Schema.Schema<ToolRejectedPayload> = Sch
   claim: Schema.Unknown,
   diagnostics: Schema.optional(
     Schema.Struct({
-      phase: Schema.Literal("parse", "decode", "material", "admit", "execution"),
+      phase: Schema.Literal(...TOOL_REJECTED_DIAGNOSTICS_PHASES),
       reason: nonEmptyString,
       argumentSummary: Schema.optional(
         Schema.Struct({

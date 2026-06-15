@@ -1,8 +1,11 @@
 import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
+import type {} from "@effect/vitest";
 
 import { credentialMaterialRef } from "@agent-os/kernel/material-ref";
+import { defineTool, deterministicToolExecution } from "@agent-os/kernel/tools";
 import { defineAgentSubmitBindings } from "@agent-os/runtime-protocol";
+import { Effect, Schema } from "effect";
 import {
   FACADE_INTENT_COMMAND_EVENT,
   facadeApply,
@@ -146,6 +149,74 @@ describe("defineAgentDO facade submit", () => {
     });
     expect(events.some((event) => event.kind === "agent.run.interrupted")).toBe(true);
     expect(events.some((event) => event.kind === "tool.executed")).toBe(false);
+  });
+
+  it("passes submit tool policy through facade lowering", async () => {
+    const scope = "facade-submit-tool-policy";
+    const stub = testEnv.FACADE_SUBMIT_DO.get(testEnv.FACADE_SUBMIT_DO.idFromName(scope));
+    const effectAuthorityRef = {
+      authorityClass: "llm_route" as const,
+      authorityId: "facade-submit-policy-test",
+    };
+    const writeFirst = defineTool({
+      name: "write_first",
+      description: "write first artifact",
+      args: Schema.Struct({ value: Schema.String }),
+      authority: "write",
+      admit: () => Effect.succeed({ ok: true as const }),
+      execution: deterministicToolExecution(),
+      execute: ({ value }) => Effect.succeed({ value }),
+    });
+    const writeSecond = defineTool({
+      name: "write_second",
+      description: "write second artifact",
+      args: Schema.Struct({ value: Schema.String }),
+      authority: "write",
+      admit: () => Effect.succeed({ ok: true as const }),
+      execution: deterministicToolExecution(),
+      execute: ({ value }) => Effect.succeed({ value }),
+    });
+
+    const result = await runInDurableObject(stub, (instance) =>
+      instance.submit({
+        intent: "write artifacts",
+        input: {},
+        effectAuthorityRef,
+        bindings: defineAgentSubmitBindings({
+          tools: { write_first: writeFirst, write_second: writeSecond },
+        }),
+        toolPolicy: {
+          completeAfterToolsExecuted: {
+            toolNames: ["write_first", "write_second"],
+            finalMessage: "facade artifacts written",
+          },
+        },
+        budget: { maxTurns: 5 },
+      }),
+    );
+
+    const events = await (
+      stub as unknown as {
+        readonly events: (
+          identity: ReturnType<typeof testTruthIdentity>,
+        ) => Promise<ReadonlyArray<{ readonly kind: string; readonly payload: unknown }>>;
+      }
+    ).events(testTruthIdentity(scope, effectAuthorityRef));
+
+    expect(result).toMatchObject({
+      ok: true,
+      final: "facade artifacts written",
+    });
+    expect(events.filter((event) => event.kind === "llm.response")).toHaveLength(2);
+    expect(
+      events
+        .filter((event) => event.kind === "tool.executed")
+        .map((event) =>
+          typeof event.payload === "object" && event.payload !== null
+            ? (event.payload as { readonly name?: string }).name
+            : null,
+        ),
+    ).toEqual(["write_first", "write_second"]);
   });
 
   it("passes declared intent emission and projection wait capabilities to run-scoped tools", async () => {

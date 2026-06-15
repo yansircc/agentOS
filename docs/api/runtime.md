@@ -168,6 +168,7 @@
 - `.:settleToolAdmissionRejected`
 - `.:settleToolExecuted`
 - `.:settleToolExecutionRejected`
+- `.:settleToolPolicyRejected`
 - `.:submitResumeDecisionFromContinuationProjection`
 - `.:submitAgentEffect`
 - `.:toolErrorReason`

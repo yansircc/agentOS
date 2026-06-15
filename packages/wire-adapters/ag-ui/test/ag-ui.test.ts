@@ -8,6 +8,7 @@ import {
   chatIngestedEvent,
   llmResponseEvent,
   toolExecutedEvent,
+  toolRejectedEvent,
   agentRunAbortedEvent,
   agentRunCompletedEvent,
   agentRunInterruptedEvent,
@@ -15,7 +16,7 @@ import {
   agentRunStartedEvent,
   type RuntimeEventCommitSpec,
 } from "@agent-os/runtime-protocol";
-import { settleToolExecuted } from "@agent-os/runtime";
+import { settleToolExecuted, settleToolPolicyRejected } from "@agent-os/runtime";
 import {
   AG_UI_WIRE_COMPATIBILITY,
   AgUiRunAgentInputSchema,
@@ -457,6 +458,41 @@ describe("@agent-os/ag-ui", () => {
       message: "agent.aborted.budget_tokens",
       code: "agent.aborted.budget_tokens",
     });
+  });
+
+  it("maps recoverable runtime policy tool rejections to custom frames", () => {
+    const frames = projectLedgerEventsToAgUiFrames([
+      commit(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "write files" })),
+      commit(
+        2,
+        toolRejectedEvent({
+          ...runtimeIdentity,
+          runId: 1,
+          toolCallId: "call-duplicate",
+          name: "write_html",
+          args: { type: "string", bytes: 2, truncated: false },
+          execution: deterministicToolExecution(),
+          claim: settleToolPolicyRejected(toolClaim, "policy_tool_already_executed"),
+          diagnostics: {
+            phase: "policy",
+            reason: "policy_tool_already_executed",
+          },
+        }),
+      ),
+    ]);
+
+    expect(frames.at(-1)).toMatchObject({
+      type: "CUSTOM",
+      name: "agent-os.tool.policy_rejected",
+      value: {
+        toolName: "write_html",
+        diagnostics: {
+          phase: "policy",
+          reason: "policy_tool_already_executed",
+        },
+      },
+    });
+    expect(projectAgUiFrames(frames).status).toBe("running");
   });
 
   it("fails malformed runtime payloads before AG-UI mapping", () => {

@@ -35,6 +35,25 @@ export interface SubmitToolPolicy {
   readonly requiredUntilToolExecuted?: {
     readonly toolName: string;
   };
+
+  /**
+   * Complete the submit run immediately after every listed tool has executed.
+   *
+   * Artifact-first workflows often use tool effects as the terminal evidence
+   * and do not need one more model prose turn after the files are written. The
+   * runtime treats these tools as required until they execute, then commits the
+   * run completion fact without another LLM call.
+   */
+  readonly completeAfterToolsExecuted?: {
+    readonly toolNames: ReadonlyArray<string>;
+    /**
+     * Treat toolNames as a listed sequence after the model starts terminal
+     * artifact writes. Non-policy tools may still run before the first listed
+     * tool; listed tools themselves must execute in order.
+     */
+    readonly ordered?: boolean;
+    readonly finalMessage?: string;
+  };
 }
 
 /**

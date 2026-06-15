@@ -172,6 +172,7 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:settleToolAdmissionRejected`
 - `.:settleToolExecuted`
 - `.:settleToolExecutionRejected`
+- `.:settleToolPolicyRejected`
 - `.:submitResumeDecisionFromContinuationProjection`
 - `.:submitAgentEffect`
 - `.:toolErrorReason`

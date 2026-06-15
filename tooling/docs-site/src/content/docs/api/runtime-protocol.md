@@ -150,6 +150,7 @@ title: "@agent-os/runtime-protocol API"
 - `.:SubmitToolIntent`
 - `.:SubmitToolPolicy`
 - `.:TOOL_EXECUTION_CLAIM_MUST_BE_LIVED_REASON`
+- `.:TOOL_REJECTED_DIAGNOSTICS_PHASES`
 - `.:ToolArgumentSummary`
 - `.:ToolExecutedPayload`
 - `.:ToolExecutedPayloadSchema`

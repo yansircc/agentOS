@@ -1051,6 +1051,50 @@ const facadeSubmitLlmTransport = Layer.succeed(LlmTransport, {
         },
       });
     }
+    if (routeOk && toolNames.includes("write_first") && toolNames.includes("write_second")) {
+      return Effect.succeed({
+        items: [
+          {
+            type: "tool_call" as const,
+            call: {
+              id: "call-write-first",
+              type: "function" as const,
+              function: {
+                name: "write_first",
+                arguments: '{"value":"first"}',
+              },
+            },
+          },
+        ],
+        usage: {
+          promptTokens: 3,
+          completionTokens: 2,
+          totalTokens: 5,
+        },
+      });
+    }
+    if (routeOk && toolNames.includes("write_second") && !toolNames.includes("write_first")) {
+      return Effect.succeed({
+        items: [
+          {
+            type: "tool_call" as const,
+            call: {
+              id: "call-write-second",
+              type: "function" as const,
+              function: {
+                name: "write_second",
+                arguments: '{"value":"second"}',
+              },
+            },
+          },
+        ],
+        usage: {
+          promptTokens: 3,
+          completionTokens: 2,
+          totalTokens: 5,
+        },
+      });
+    }
     return Effect.fail(
       new UpstreamFailure({
         cause: {

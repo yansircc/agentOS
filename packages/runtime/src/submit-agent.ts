@@ -115,6 +115,7 @@ import {
   settleToolAdmissionRejected,
   settleToolExecuted,
   settleToolExecutionRejected,
+  settleToolPolicyRejected,
   settleToolValidationRejected,
   toolAdmissionFailureCause,
   toolErrorReason,
@@ -140,6 +141,18 @@ class LlmCallTimedOut extends Data.TaggedError("agent_os.llm_call_timed_out")<{
 
 const toolDefinitionsOf = (tools: Record<string, Tool>): ReadonlyArray<ToolDefinition> =>
   Object.values(tools).map((t) => t.definition);
+
+const toolDefinitionsForRuntimePolicy = (
+  tools: Record<string, Tool>,
+  requiredToolNames: ReadonlyArray<string>,
+  executedToolNames: ReadonlySet<string>,
+): ReadonlyArray<ToolDefinition> => {
+  if (requiredToolNames.length === 0) return toolDefinitionsOf(tools);
+  const policyTools = new Set(requiredToolNames);
+  return Object.entries(tools)
+    .filter(([toolName]) => !policyTools.has(toolName) || !executedToolNames.has(toolName))
+    .map(([, tool]) => tool.definition);
+};
 
 const toolArgumentSummaryEncoder = new TextEncoder();
 
@@ -829,10 +842,23 @@ const timeoutAbortResult = (
 const isLlmCallTimedOut = (error: unknown): error is LlmCallTimedOut =>
   error instanceof LlmCallTimedOut;
 
-const requiredToolPolicyName = (spec: InternalSubmitSpec): string | null => {
+const singleRequiredToolPolicyName = (spec: InternalSubmitSpec): string | null => {
   const toolName = spec.toolPolicy?.requiredUntilToolExecuted?.toolName;
   return typeof toolName === "string" && toolName.length > 0 ? toolName : null;
 };
+
+const completeAfterToolPolicyNames = (spec: InternalSubmitSpec): ReadonlyArray<string> => {
+  const toolNames = spec.toolPolicy?.completeAfterToolsExecuted?.toolNames ?? [];
+  return [...new Set(toolNames.filter((toolName) => toolName.length > 0))];
+};
+
+const requiredToolPolicyNames = (spec: InternalSubmitSpec): ReadonlyArray<string> => [
+  ...new Set(
+    [singleRequiredToolPolicyName(spec), ...completeAfterToolPolicyNames(spec)].filter(
+      (toolName): toolName is string => toolName !== null,
+    ),
+  ),
+];
 
 const hasExecutedTool = (
   events: ReadonlyArray<LedgerEvent>,
@@ -850,10 +876,53 @@ const hasExecutedTool = (
   });
 
 const toolChoiceForRuntimePolicy = (input: {
-  readonly requiredToolName: string | null;
-  readonly requiredToolExecuted: boolean;
-}): LlmToolChoice | undefined =>
-  input.requiredToolName !== null && !input.requiredToolExecuted ? "required" : undefined;
+  readonly requiredToolNames: ReadonlyArray<string>;
+  readonly executedToolNames: ReadonlySet<string>;
+  readonly ordered: boolean;
+}): LlmToolChoice | undefined => {
+  const missing = input.requiredToolNames.filter(
+    (toolName) => !input.executedToolNames.has(toolName),
+  );
+  if (missing.length === 0) return undefined;
+  const hasExecutedPolicyTool = input.requiredToolNames.some((toolName) =>
+    input.executedToolNames.has(toolName),
+  );
+  if (!hasExecutedPolicyTool) return "required";
+  if (input.ordered || missing.length === 1) {
+    return { type: "function", function: { name: missing[0] as string } };
+  }
+  return "required";
+};
+
+const remainingRequiredToolNames = (
+  requiredToolNames: ReadonlyArray<string>,
+  executedToolNames: ReadonlySet<string>,
+): ReadonlyArray<string> =>
+  requiredToolNames.filter((toolName) => !executedToolNames.has(toolName));
+
+const allPolicyToolsExecuted = (
+  toolNames: ReadonlyArray<string>,
+  executedToolNames: ReadonlySet<string>,
+): boolean =>
+  toolNames.length > 0 && toolNames.every((toolName) => executedToolNames.has(toolName));
+
+const policyToolViolationReason = (input: {
+  readonly toolName: string;
+  readonly requiredToolNames: ReadonlyArray<string>;
+  readonly executedToolNames: ReadonlySet<string>;
+  readonly ordered: boolean;
+}): "policy_tool_already_executed" | "policy_tool_out_of_order" | null => {
+  if (!input.requiredToolNames.includes(input.toolName)) return null;
+  if (input.executedToolNames.has(input.toolName)) return "policy_tool_already_executed";
+  if (!input.ordered) return null;
+  const expectedToolName = remainingRequiredToolNames(
+    input.requiredToolNames,
+    input.executedToolNames,
+  )[0];
+  return expectedToolName !== undefined && input.toolName !== expectedToolName
+    ? "policy_tool_out_of_order"
+    : null;
+};
 
 export const submitAgentEffect = (
   spec: InternalSubmitSpec,
@@ -1123,13 +1192,18 @@ export const submitAgentEffect = (
         traceContext,
       );
     }
-    const requiredToolName = requiredToolPolicyName(spec);
-    if (requiredToolName !== null && spec.tools[requiredToolName] === undefined) {
+    const requiredToolNames = requiredToolPolicyNames(spec);
+    const completeAfterToolNames = completeAfterToolPolicyNames(spec);
+    const orderedCompleteAfterTools = spec.toolPolicy?.completeAfterToolsExecuted?.ordered === true;
+    const unknownPolicyToolName = requiredToolNames.find(
+      (toolName) => spec.tools[toolName] === undefined,
+    );
+    if (unknownPolicyToolName !== undefined) {
       return yield* finalAbort(
         ABORT.TOOL_ERROR,
         {
           reason: "invalid_tool_policy_unknown_tool",
-          toolName: requiredToolName,
+          toolName: unknownPolicyToolName,
         },
         identity,
         started.id,
@@ -1167,7 +1241,6 @@ export const submitAgentEffect = (
       Ledger | BoundaryEvents | MaterializedProjections | LlmTransport | Quota | RefResolverService
     > = Effect.gen(function* () {
       let messages: LlmMessage[] = [...initialMessages];
-      const toolDefs = toolDefinitionsOf(spec.tools);
       const quotaService = yield* Quota;
       const llm = yield* LlmTransport;
       const boundaryEvents = yield* BoundaryEvents;
@@ -1175,10 +1248,10 @@ export const submitAgentEffect = (
       const refs = yield* RefResolverService;
       let firstTurn = 0;
       let resumedToolCall: LlmToolCall | undefined;
-      let requiredToolExecuted =
-        requiredToolName === null
-          ? true
-          : hasExecutedTool(priorEvents, started.id, requiredToolName);
+      let toolPolicyFailures = 0;
+      const executedToolNames = new Set(
+        requiredToolNames.filter((toolName) => hasExecutedTool(priorEvents, started.id, toolName)),
+      );
 
       if (spec.resume !== undefined) {
         const interruption = matchingInterruptionEvent(priorEvents, spec.resume);
@@ -1333,6 +1406,11 @@ export const submitAgentEffect = (
           }
 
           const controller = new AbortController();
+          const toolDefs = toolDefinitionsForRuntimePolicy(
+            spec.tools,
+            requiredToolNames,
+            executedToolNames,
+          );
           const timedResp = yield* Effect.either(
             llm
               .call(
@@ -1341,8 +1419,9 @@ export const submitAgentEffect = (
                   messages,
                   tools: toolDefs.length > 0 ? toolDefs : undefined,
                   tool_choice: toolChoiceForRuntimePolicy({
-                    requiredToolName,
-                    requiredToolExecuted,
+                    requiredToolNames,
+                    executedToolNames,
+                    ordered: orderedCompleteAfterTools,
                   }),
                   traceContext,
                 },
@@ -1460,6 +1539,69 @@ export const submitAgentEffect = (
               originKind: "submit",
             },
           });
+          const policyViolationReason = policyToolViolationReason({
+            toolName: call.function.name,
+            requiredToolNames,
+            executedToolNames,
+            ordered: orderedCompleteAfterTools,
+          });
+          if (policyViolationReason !== null) {
+            yield* logRuntimeLedgerEvent(
+              ledger,
+              toolRejectedEvent({
+                ...identity,
+                runId: started.id,
+                toolCallId: call.id,
+                name: call.function.name,
+                args: summarizeToolArguments(call.function.arguments),
+                execution: tool.execution,
+                claim: settleToolPolicyRejected(claim, policyViolationReason),
+                diagnostics: {
+                  phase: "policy",
+                  reason: policyViolationReason,
+                  argumentSummary: summarizeToolArguments(call.function.arguments),
+                },
+                traceContext,
+              }),
+            );
+            if (toolPolicyFailures >= toolRetries) {
+              return yield* new ToolError({
+                toolName: call.function.name,
+                cause: {
+                  reason: policyViolationReason,
+                  remainingRequiredToolNames: remainingRequiredToolNames(
+                    requiredToolNames,
+                    executedToolNames,
+                  ),
+                },
+              });
+            }
+            toolPolicyFailures++;
+            compactProviderHistoryToolCall(messages, call.id, call.function.arguments);
+            const feedback = yield* safeStringify({
+              ok: false,
+              error: "tool_policy_rejected",
+              phase: "policy",
+              reason: policyViolationReason,
+              toolName: call.function.name,
+              remainingRequiredToolNames: remainingRequiredToolNames(
+                requiredToolNames,
+                executedToolNames,
+              ),
+              expectedToolName: orderedCompleteAfterTools
+                ? remainingRequiredToolNames(requiredToolNames, executedToolNames)[0]
+                : undefined,
+              message:
+                "This declared terminal tool call violates runtime policy. Continue with the remaining required tool names.",
+            });
+            messages.push({
+              role: "tool",
+              tool_call_id: call.id,
+              name: call.function.name,
+              content: feedback,
+            });
+            continue;
+          }
           const parsed = yield* Effect.either(
             Effect.try({
               try: () => JSON.parse(call.function.arguments) as unknown,
@@ -1932,8 +2074,8 @@ export const submitAgentEffect = (
               traceContext,
             }),
           );
-          if (requiredToolName !== null && call.function.name === requiredToolName) {
-            requiredToolExecuted = true;
+          if (requiredToolNames.includes(call.function.name)) {
+            executedToolNames.add(call.function.name);
           }
           const historyArguments = yield* providerHistoryArgumentsJson(
             tool,
@@ -1948,6 +2090,28 @@ export const submitAgentEffect = (
             name: call.function.name,
             content: resultStr,
           });
+          if (
+            completeAfterToolNames.length > 0 &&
+            allPolicyToolsExecuted(requiredToolNames, executedToolNames)
+          ) {
+            const final =
+              spec.toolPolicy?.completeAfterToolsExecuted?.finalMessage ??
+              "completed after declared tools executed";
+            yield* ledger.commit([
+              agentRunCompletedEvent({
+                ...identity,
+                runId: started.id,
+                final,
+                output: final,
+                outputKind: "text",
+                tokensUsed: newTokens,
+                turn: turnRefOf(started.id, turn),
+                traceContext,
+              }),
+            ]);
+            const events = yield* ledger.events(identity);
+            return yield* submitResultFromEvents(events, started.id);
+          }
         }
       }
 

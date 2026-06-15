@@ -111,6 +111,13 @@ export const settleToolAdmissionRejected = (
 ): RejectedClaim =>
   settleRejected(toolSettlementContract, claim, terminalAdmissionRejectionRef(claim, rejectionRef));
 
+export const settleToolPolicyRejected = (claim: PreClaim, reason: string): RejectedClaim =>
+  settleRejected(toolSettlementContract, claim, {
+    rejectionId: toolTerminalId("tool.rejected", claim),
+    rejectionKind: "policy_denied",
+    reason,
+  });
+
 export const settleToolExecutionRejected = (claim: PreClaim, reason: string): RejectedClaim =>
   settleRejected(toolSettlementContract, claim, {
     rejectionId: toolTerminalId("tool.rejected", claim),
