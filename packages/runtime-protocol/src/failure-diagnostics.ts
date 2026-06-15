@@ -42,7 +42,10 @@ export interface FailureDiagnosticInternalFacts {
   readonly toolName?: string;
   readonly toolCallId?: string;
   readonly argumentSummary?: ToolArgumentSummary;
-  readonly schemaIssues?: ReadonlyArray<{ readonly path: string; readonly issue: string }>;
+  readonly schemaIssues?: ReadonlyArray<{
+    readonly path: string;
+    readonly issue: string;
+  }>;
 }
 
 export interface FailureDiagnosticEnvelope {
@@ -65,7 +68,10 @@ export interface FailureDiagnostic {
   readonly toolName?: string;
   readonly toolCallId?: string;
   readonly argumentSummary?: ToolArgumentSummary;
-  readonly schemaIssues?: ReadonlyArray<{ readonly path: string; readonly issue: string }>;
+  readonly schemaIssues?: ReadonlyArray<{
+    readonly path: string;
+    readonly issue: string;
+  }>;
 }
 
 /**
@@ -297,32 +303,31 @@ export const projectFailureDiagnostics = (
   }
 
   const terminalReason = reasonOf(terminal.kind);
-  if (terminal.kind === ABORT.TOOL_ERROR) {
-    const cause = terminalCauseReason(terminal.payload) ?? terminalReason;
-    const toolName = terminalToolName(terminal.payload);
-    const alreadyExplained =
-      toolName !== undefined &&
-      diagnostics.some(
-        (diagnostic) => diagnostic.source === "tool" && diagnostic.toolName === toolName,
-      );
-    if (!alreadyExplained) {
-      const facts: FailureDiagnosticInternalFacts = {
-        source: "run",
-        eventId: terminal.id,
-        phase: "terminal",
-        reason: cause,
-        terminalReason,
-        ...(toolName === undefined ? {} : { toolName }),
-      };
-      diagnostics.push({
-        source: "run",
-        eventId: terminal.id,
-        phase: "terminal",
-        reason: cause,
-        ...failureEnvelope(facts),
-        ...(toolName === undefined ? {} : { toolName }),
-      });
-    }
+  const cause = terminalCauseReason(terminal.payload) ?? terminalReason;
+  const toolName =
+    terminal.kind === ABORT.TOOL_ERROR ? terminalToolName(terminal.payload) : undefined;
+  const alreadyExplained =
+    toolName !== undefined &&
+    diagnostics.some(
+      (diagnostic) => diagnostic.source === "tool" && diagnostic.toolName === toolName,
+    );
+  if (!alreadyExplained) {
+    const facts: FailureDiagnosticInternalFacts = {
+      source: "run",
+      eventId: terminal.id,
+      phase: "terminal",
+      reason: cause,
+      terminalReason,
+      ...(toolName === undefined ? {} : { toolName }),
+    };
+    diagnostics.push({
+      source: "run",
+      eventId: terminal.id,
+      phase: "terminal",
+      reason: cause,
+      ...failureEnvelope(facts),
+      ...(toolName === undefined ? {} : { toolName }),
+    });
   }
 
   return { runId, terminalReason, diagnostics };

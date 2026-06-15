@@ -20,7 +20,10 @@ const rejectedClaim = (reason: string): RejectedClaim => ({
   phase: "rejected",
   operationRef: "tool:failure-diagnostics-test:1:0:call-1",
   scopeRef: identity.scopeRef,
-  effectAuthorityRef: { authorityId: "tool:write_file", authorityClass: "write" },
+  effectAuthorityRef: {
+    authorityId: "tool:write_file",
+    authorityClass: "write",
+  },
   originRef: { originId: "run:1", originKind: "submit" },
   rejectionRef: {
     rejectionId: "tool.rejected:tool:failure-diagnostics-test:1:0:call-1",
@@ -55,7 +58,11 @@ describe("projectFailureDiagnostics", () => {
           diagnostics: {
             phase: "decode",
             reason: "invalid_args",
-            argumentSummary: { type: "object", keys: ["path"], truncated: false },
+            argumentSummary: {
+              type: "object",
+              keys: ["path"],
+              truncated: false,
+            },
             schemaIssues: [{ path: "$.content", issue: "required" }],
           },
         }),
@@ -92,7 +99,11 @@ describe("projectFailureDiagnostics", () => {
             reason: "invalid_args",
             toolName: "write_file",
             toolCallId: "call-1",
-            argumentSummary: { type: "object", keys: ["path"], truncated: false },
+            argumentSummary: {
+              type: "object",
+              keys: ["path"],
+              truncated: false,
+            },
             schemaIssues: [{ path: "$.content", issue: "required" }],
           },
           toolName: "write_file",
@@ -144,6 +155,52 @@ describe("projectFailureDiagnostics", () => {
         },
       ],
     });
+  });
+
+  it("projects symbolic provider cause from upstream terminal abort", () => {
+    const events = [
+      ledgerEvent(
+        1,
+        agentRunAbortedEvent({
+          ...identity,
+          kind: ABORT.UPSTREAM_FAILURE,
+          runId: 1,
+          tokensUsed: 0,
+          payload: {
+            cause: "provider_http_failure:openrouter:http_400:schema",
+            rawMessage: "InternalError.Algo.InvalidParameter secret provider detail",
+          },
+        }),
+      ),
+    ];
+
+    expect(projectFailureDiagnostics(events, 1)).toEqual({
+      runId: 1,
+      terminalReason: "upstream_failure",
+      diagnostics: [
+        {
+          source: "run",
+          eventId: 1,
+          phase: "terminal",
+          reason: "provider_http_failure:openrouter:http_400:schema",
+          category: "provider_failure",
+          owner: "provider",
+          retryable: true,
+          publicMessage: "The upstream provider failed or timed out.",
+          internalFacts: {
+            source: "run",
+            eventId: 1,
+            phase: "terminal",
+            reason: "provider_http_failure:openrouter:http_400:schema",
+            terminalReason: "upstream_failure",
+          },
+        },
+      ],
+    });
+    expect(JSON.stringify(projectFailureDiagnostics(events, 1))).not.toContain(
+      "InternalError.Algo",
+    );
+    expect(JSON.stringify(projectFailureDiagnostics(events, 1))).not.toContain("secret");
   });
 
   it("classifies missing receipt-backed execution path without hard-coded consumer owner", () => {
