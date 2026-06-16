@@ -24,6 +24,7 @@ export type FailureDiagnosticCategory =
   | "rate_limited"
   | "budget"
   | "provider_failure"
+  | "data_plane"
   | "tool_execution"
   | "tool_rejected";
 
@@ -155,14 +156,18 @@ const categoryForReason = (reason: string): FailureDiagnosticCategory => {
     reason === "provider_timeout" ||
     reason === "upstream_failure" ||
     reason === "retries" ||
-    reason === "seed_write_failed" ||
-    reason === "terminal_write_failed" ||
-    reason === "terminal_read_failed" ||
-    reason === "data_plane_failed" ||
     reason === "verifier_failed" ||
     reason.startsWith("provider_http_failure")
   ) {
     return "provider_failure";
+  }
+  if (
+    reason === "seed_write_failed" ||
+    reason === "terminal_write_failed" ||
+    reason === "terminal_read_failed" ||
+    reason === "data_plane_failed"
+  ) {
+    return "data_plane";
   }
   if (
     reason === "candidate_missing" ||
@@ -190,6 +195,8 @@ const ownerForCategory = (category: FailureDiagnosticCategory): FailureDiagnosti
       return "runtime";
     case "provider_failure":
       return "provider";
+    case "data_plane":
+      return "integrator";
     case "tool_execution":
     case "tool_rejected":
       return "tool_author";
@@ -202,6 +209,7 @@ const retryableForCategory = (category: FailureDiagnosticCategory): boolean => {
     case "unknown_tool":
     case "rate_limited":
     case "provider_failure":
+    case "data_plane":
     case "runtime_policy":
       return true;
     case "missing_execution_path":
@@ -234,6 +242,8 @@ const publicMessageForCategory = (category: FailureDiagnosticCategory): string =
       return "The run exhausted its configured budget.";
     case "provider_failure":
       return "The upstream provider failed or timed out.";
+    case "data_plane":
+      return "The workspace environment failed while preparing or reading files.";
     case "tool_execution":
       return "Tool execution failed.";
     case "tool_rejected":

@@ -1159,10 +1159,10 @@ describe("runWorkspaceJobEffect", () => {
           phase: "seed",
           code: "workspace_job.seed_write_failed",
           reason: "seed_write_failed",
-          category: "provider_failure",
-          owner: "provider",
+          category: "data_plane",
+          owner: "integrator",
           retryable: true,
-          publicMessage: "The upstream provider failed or timed out.",
+          publicMessage: "The workspace environment failed while preparing or reading files.",
           diagnostics: [],
         },
       });
@@ -1309,6 +1309,20 @@ describe("runWorkspaceJobEffect", () => {
           },
         },
       });
+      const observedWriteFailed = projectWorkspaceJobObservability(writeServices.events, "job-1");
+      expect(observedWriteFailed).toMatchObject({
+        status: "failed",
+        failureExplanation: {
+          phase: "data_plane",
+          code: "workspace_job.terminal_write_failed",
+          reason: "terminal_write_failed",
+          category: "data_plane",
+          owner: "integrator",
+          retryable: true,
+          publicMessage: "The workspace environment failed while preparing or reading files.",
+        },
+      });
+      expect(JSON.stringify(observedWriteFailed)).not.toContain("workspace write failed");
 
       const readServices = makeServices();
       const readFailed = yield* runJob(
@@ -1333,6 +1347,20 @@ describe("runWorkspaceJobEffect", () => {
           },
         },
       });
+      const observedReadFailed = projectWorkspaceJobObservability(readServices.events, "job-1");
+      expect(observedReadFailed).toMatchObject({
+        status: "failed",
+        failureExplanation: {
+          phase: "data_plane",
+          code: "workspace_job.terminal_read_failed",
+          reason: "terminal_read_failed",
+          category: "data_plane",
+          owner: "integrator",
+          retryable: true,
+          publicMessage: "The workspace environment failed while preparing or reading files.",
+        },
+      });
+      expect(JSON.stringify(observedReadFailed)).not.toContain("workspace read failed");
     }),
   );
 
