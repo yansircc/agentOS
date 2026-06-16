@@ -96,7 +96,23 @@ const explanationEnvelope = (
       publicMessage: primary.publicMessage,
     };
   }
-  return failureDiagnosticEnvelopeForReason(terminalReason ?? failure.reason);
+  return failureDiagnosticEnvelopeForReason(
+    stableEnvelopeReasonForWorkspaceJobFailure(failure) ?? terminalReason ?? failure.reason,
+  );
+};
+
+const dataPlaneFailureCodes = new Set([
+  "workspace_job.seed_write_failed",
+  "workspace_job.terminal_write_failed",
+  "workspace_job.terminal_read_failed",
+  "workspace_job.data_plane_failed",
+]);
+
+const stableEnvelopeReasonForWorkspaceJobFailure = (
+  failure: WorkspaceJobFailure,
+): string | undefined => {
+  if (!dataPlaneFailureCodes.has(failure.code)) return undefined;
+  return failure.code.slice("workspace_job.".length);
 };
 
 const failureExplanation = (

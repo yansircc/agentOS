@@ -1361,6 +1361,35 @@ describe("runWorkspaceJobEffect", () => {
         },
       });
       expect(JSON.stringify(observedReadFailed)).not.toContain("workspace read failed");
+      const rawReasonReadEvents = readServices.events.map((event) => {
+        if (event.kind !== WORKSPACE_JOB_KIND.FAILED) return event;
+        const payload = event.payload as {
+          readonly failure?: Record<string, unknown>;
+        } & Record<string, unknown>;
+        return {
+          ...event,
+          payload: {
+            ...payload,
+            failure: {
+              ...payload.failure,
+              reason: "AGENT_SANDBOX Durable Object namespace binding is required.",
+            },
+          },
+        };
+      });
+      const observedRawReason = projectWorkspaceJobObservability(rawReasonReadEvents, "job-1");
+      expect(observedRawReason).toMatchObject({
+        status: "failed",
+        failureExplanation: {
+          phase: "data_plane",
+          code: "workspace_job.terminal_read_failed",
+          reason: "AGENT_SANDBOX Durable Object namespace binding is required.",
+          category: "data_plane",
+          owner: "integrator",
+          retryable: true,
+          publicMessage: "The workspace environment failed while preparing or reading files.",
+        },
+      });
     }),
   );
 
