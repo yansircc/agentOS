@@ -40,6 +40,25 @@ fallback paths unless the report states:
 This repo currently has no real users. Prefer deletion and fast failure over
 compatibility.
 
+## Positive Contract Rule
+
+Acceptance is positive proof, not absence of suspicion.
+
+Do not accept data by proving only that it does not resemble known bad cases. For
+every boundary value, acceptance must be derived from the consumer contract:
+
+- schema for structured data;
+- parser or grammar for languages;
+- protocol state machine for lifecycle;
+- capability or authority check for permissions;
+- checksum, readback, or roundtrip for artifacts;
+- explicit owner projection for UI-visible facts.
+
+Blacklists, phrase lists, heuristic names, and "looks like" checks are not
+acceptance logic. They may only produce diagnostics after a positive contract has
+independently decided the value. If the positive contract is unavailable, fail
+closed and add the missing contract.
+
 ## Commit Messages
 
 All commits must use Conventional Commits:
