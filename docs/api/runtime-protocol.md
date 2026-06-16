@@ -106,6 +106,8 @@
 - `.:LLM_STRUCTURED_EVENT_KINDS`
 - `.:LLM_STRUCTURED_EVIDENCE_EVENT`
 - `.:LLM_STRUCTURED_INVALIDATE_EVENT`
+- `.:LlmRequestedPayload`
+- `.:LlmRequestedPayloadSchema`
 - `.:LlmResponsePayload`
 - `.:LlmResponsePayloadSchema`
 - `.:LlmRoute`
@@ -118,6 +120,8 @@
 - `.:RUNTIME_FACT_OWNER`
 - `.:RECEIPT_BACKED_TOOL_RESULT_VERSION`
 - `.:ReceiptBackedToolResult`
+- `.:RuntimeCompletedAfterToolsPayload`
+- `.:RuntimeCompletedAfterToolsPayloadSchema`
 - `.:RuntimeAbortEventKind`
 - `.:RuntimeEventCommitSpec`
 - `.:RuntimeEventCommitSpecByKind`
@@ -188,6 +192,7 @@
 - `.:isRecoveryAttemptRecord`
 - `.:isRuntimeAbortEventKind`
 - `.:isRuntimeEventKind`
+- `.:llmRequestedEvent`
 - `.:llmResponseEvent`
 - `.:makeAdmissionSchemaSpec`
 - `.:mountAgent`
@@ -201,6 +206,7 @@
 - `.:replayToolResultFromSnapshot`
 - `.:submitBindingsForAgentCapability`
 - `.:submitResumeDecisionFromContinuationRef`
+- `.:runtimeCompletedAfterToolsEvent`
 - `.:toolExecutedEvent`
 - `.:toolResultSnapshotFromExecutedPayload`
 - `.:toolRejectedEvent`

@@ -539,6 +539,18 @@ const projectSafeLlmResponse = (event: SafeLedgerEvent): ReadonlyArray<AgUiFrame
       if (toolCallId === undefined || toolName === undefined) continue;
       frames.push(
         {
+          type: "CUSTOM",
+          timestamp: event.ts,
+          name: "agent-os.tool.started",
+          value: {
+            runId,
+            turnIndex,
+            toolCallId,
+            toolName,
+            ...(item.io === undefined ? {} : { io: item.io }),
+          },
+        },
+        {
           type: "TOOL_CALL_START",
           timestamp: event.ts,
           toolCallId,
@@ -610,6 +622,17 @@ const projectSafeLlmResponse = (event: SafeLedgerEvent): ReadonlyArray<AgUiFrame
   frames.push({
     type: "CUSTOM",
     timestamp: event.ts,
+    name: "agent-os.llm.completed",
+    value: {
+      runId: typeof payload.runId === "number" ? payload.runId : runId,
+      turnIndex,
+      usage: payload.usage ?? null,
+    },
+  });
+
+  frames.push({
+    type: "CUSTOM",
+    timestamp: event.ts,
     name: "agent-os.llm.usage",
     value: {
       runId: typeof payload.runId === "number" ? payload.runId : runId,
@@ -677,19 +700,50 @@ export const projectSafeLedgerEventToAgUiFrames = (
           value: payload,
         },
       ];
+    case "llm.requested":
+      return [
+        {
+          type: "CUSTOM",
+          timestamp: event.ts,
+          name: "agent-os.llm.requested",
+          value: payload,
+        },
+      ];
     case "llm.response":
       return projectSafeLlmResponse(event);
+    case "runtime.completed_after_tools":
+      return [
+        {
+          type: "CUSTOM",
+          timestamp: event.ts,
+          name: "agent-os.runtime.completed_after_tools",
+          value: payload,
+        },
+      ];
     case "tool.executed": {
       const toolCallId = stringOf(payload.toolCallId);
       if (toolCallId === undefined) return [];
+      const toolName = stringOf(payload.toolName);
+      const runId = runIdString(payload.runId, event.id);
       return [
         {
           type: "TOOL_CALL_RESULT",
           timestamp: event.ts,
-          messageId: toolResultMessageIdFor(runIdString(payload.runId, event.id), toolCallId),
+          messageId: toolResultMessageIdFor(runId, toolCallId),
           toolCallId,
           content: safeJsonText(payload.result),
           role: "tool",
+        },
+        {
+          type: "CUSTOM",
+          timestamp: event.ts,
+          name: "agent-os.tool.completed",
+          value: {
+            runId,
+            toolCallId,
+            ...(toolName === undefined ? {} : { toolName }),
+            ...(payload.io === undefined ? {} : { io: payload.io }),
+          },
         },
       ];
     }

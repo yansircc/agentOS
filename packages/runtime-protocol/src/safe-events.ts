@@ -3,6 +3,7 @@ import { redactedSafeSummary, safeLedgerEvent, safeValueFromUnknown } from "@age
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import { validateEffectClaim } from "@agent-os/kernel/effect-claim";
 import { ABORT } from "@agent-os/kernel/abort";
+import { Either, pipe } from "effect";
 import {
   decodeRuntimeLedgerEvent,
   isRuntimeAbortEventKind,
@@ -21,6 +22,140 @@ const safeUsage = (usage: {
   completionTokens: usage.completionTokens,
   totalTokens: usage.totalTokens,
 });
+
+const utf8Bytes = (value: string): number => new TextEncoder().encode(value).byteLength;
+
+const recordFromUnknown = (value: unknown): Readonly<Record<string, unknown>> | undefined => {
+  if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+    return value as Readonly<Record<string, unknown>>;
+  }
+  if (typeof value !== "string") return undefined;
+  return pipe(
+    Either.try({ try: () => JSON.parse(value) as unknown, catch: () => undefined }),
+    Either.match({
+      onLeft: () => undefined,
+      onRight: (parsed) =>
+        parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
+          ? (parsed as Readonly<Record<string, unknown>>)
+          : undefined,
+    }),
+  );
+};
+
+const stringField = (
+  value: Readonly<Record<string, unknown>> | undefined,
+  key: string,
+): string | undefined => {
+  const field = value?.[key];
+  return typeof field === "string" && field.length > 0 ? field : undefined;
+};
+
+const numberField = (
+  value: Readonly<Record<string, unknown>> | undefined,
+  key: string,
+): number | undefined => {
+  const field = value?.[key];
+  return typeof field === "number" && Number.isFinite(field) ? field : undefined;
+};
+
+const toolActionFor = (toolName: string): "read" | "write" | "run" => {
+  if (toolName === "read_file" || toolName === "list_files") return "read";
+  if (
+    toolName.includes("write") ||
+    toolName.includes("append") ||
+    toolName.includes("edit") ||
+    toolName.includes("delete")
+  ) {
+    return "write";
+  }
+  return "run";
+};
+
+const toolIoItem = (input: {
+  readonly action: "read" | "write" | "run";
+  readonly path: string;
+  readonly bytes?: number;
+  readonly role?: string;
+}): SafeLedgerValue => ({
+  action: input.action,
+  path: input.path,
+  ...(input.bytes === undefined ? {} : { bytes: input.bytes }),
+  ...(input.role === undefined ? {} : { role: input.role }),
+});
+
+const pushUniqueIoItem = (
+  items: SafeLedgerValue[],
+  input: {
+    readonly action: "read" | "write" | "run";
+    readonly path?: string;
+    readonly bytes?: number;
+    readonly role?: string;
+  },
+): void => {
+  if (input.path === undefined) return;
+  const key = `${input.action}:${input.path}:${input.role ?? ""}`;
+  const exists = items.some((item) => {
+    if (item === null || typeof item !== "object" || Array.isArray(item)) return false;
+    const record = item as Readonly<Record<string, SafeLedgerValue>>;
+    const action = typeof record.action === "string" ? record.action : "";
+    const path = typeof record.path === "string" ? record.path : "";
+    const role = typeof record.role === "string" ? record.role : "";
+    return `${action}:${path}:${role}` === key;
+  });
+  if (!exists) {
+    items.push(toolIoItem({ ...input, path: input.path }));
+  }
+};
+
+const toolIoSummary = (
+  toolName: string,
+  args: unknown,
+  result?: unknown,
+): ReadonlyArray<SafeLedgerValue> => {
+  const action = toolActionFor(toolName);
+  const argRecord = recordFromUnknown(args);
+  const resultRecord = recordFromUnknown(result);
+  const items: SafeLedgerValue[] = [];
+
+  const path = stringField(resultRecord, "path") ?? stringField(argRecord, "path");
+  const bytes =
+    numberField(resultRecord, "bytesWritten") ??
+    numberField(resultRecord, "bytesRead") ??
+    (toolName === "read_file" && typeof resultRecord?.content === "string"
+      ? utf8Bytes(resultRecord.content)
+      : undefined);
+  pushUniqueIoItem(items, { action, path, bytes });
+
+  pushUniqueIoItem(items, {
+    action: "write",
+    path: stringField(resultRecord, "metadataPath"),
+    bytes: numberField(resultRecord, "metadataBytesWritten"),
+    role: "metadata",
+  });
+  pushUniqueIoItem(items, {
+    action: "write",
+    path: stringField(resultRecord, "htmlPath"),
+    bytes: numberField(resultRecord, "htmlBytes"),
+    role: "html",
+  });
+  pushUniqueIoItem(items, {
+    action: "write",
+    path: stringField(resultRecord, "designMdPath"),
+    bytes: numberField(resultRecord, "designMdBytes"),
+    role: "designMd",
+  });
+
+  return items;
+};
+
+const safeToolIoPayload = (
+  toolName: string,
+  args: unknown,
+  result?: unknown,
+): SafeLedgerValue | undefined => {
+  const io = toolIoSummary(toolName, args, result);
+  return io.length === 0 ? undefined : io;
+};
 
 const safeToolRejectionClaim = (claim: unknown): SafeLedgerValue | undefined => {
   const validation = validateEffectClaim(claim);
@@ -91,6 +226,14 @@ const projectRuntimeSafeEvent = (event: RuntimeLedgerEvent): SafeLedgerEvent => 
         interruptId: event.payload.interruptId,
         resumedAtEventId: event.payload.resumedAtEventId,
       });
+    case RUNTIME_EVENT_KIND.LLM_REQUESTED:
+      return safeLedgerEvent(event, {
+        runId: event.payload.runId,
+        turnIndex: event.payload.turn.index,
+        ...(event.payload.modelId === undefined ? {} : { modelId: event.payload.modelId }),
+        toolNames: event.payload.toolNames,
+        ...(event.payload.toolChoice === undefined ? {} : { toolChoice: event.payload.toolChoice }),
+      });
     case RUNTIME_EVENT_KIND.LLM_RESPONSE: {
       const items: SafeLedgerValue[] = [];
       for (const item of event.payload.items) {
@@ -99,11 +242,13 @@ const projectRuntimeSafeEvent = (event: RuntimeLedgerEvent): SafeLedgerEvent => 
           continue;
         }
         if (item.type === "tool_call") {
+          const io = safeToolIoPayload(item.call.function.name, item.call.function.arguments);
           items.push({
             type: "tool_call",
             toolCallId: item.call.id,
             toolName: item.call.function.name,
             args: redactedSafeSummary(item.call.function.arguments, "tool_arguments"),
+            ...(io === undefined ? {} : { io }),
           });
           continue;
         }
@@ -143,14 +288,24 @@ const projectRuntimeSafeEvent = (event: RuntimeLedgerEvent): SafeLedgerEvent => 
         usage: safeUsage(event.payload.usage),
       });
     }
-    case RUNTIME_EVENT_KIND.TOOL_EXECUTED:
+    case RUNTIME_EVENT_KIND.RUNTIME_COMPLETED_AFTER_TOOLS:
+      return safeLedgerEvent(event, {
+        runId: event.payload.runId,
+        turnIndex: event.payload.turn.index,
+        toolNames: event.payload.toolNames,
+        tokensUsed: event.payload.tokensUsed,
+      });
+    case RUNTIME_EVENT_KIND.TOOL_EXECUTED: {
+      const io = safeToolIoPayload(event.payload.name, event.payload.args, event.payload.result);
       return safeLedgerEvent(event, {
         runId: event.payload.runId,
         toolCallId: event.payload.toolCallId,
         toolName: event.payload.name,
         args: redactedSafeSummary(event.payload.args, "tool_arguments"),
         result: redactedSafeSummary(event.payload.result, "tool_result"),
+        ...(io === undefined ? {} : { io }),
       });
+    }
     case RUNTIME_EVENT_KIND.TOOL_REJECTED: {
       const claim = safeToolRejectionClaim(event.payload.claim);
       const diagnostics = safeValueFromUnknown(event.payload.diagnostics);

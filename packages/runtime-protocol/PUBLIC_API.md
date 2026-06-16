@@ -110,6 +110,8 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:LLM_STRUCTURED_EVENT_KINDS`
 - `.:LLM_STRUCTURED_EVIDENCE_EVENT`
 - `.:LLM_STRUCTURED_INVALIDATE_EVENT`
+- `.:LlmRequestedPayload`
+- `.:LlmRequestedPayloadSchema`
 - `.:LlmResponsePayload`
 - `.:LlmResponsePayloadSchema`
 - `.:LlmRoute`
@@ -122,6 +124,8 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:RUNTIME_FACT_OWNER`
 - `.:RECEIPT_BACKED_TOOL_RESULT_VERSION`
 - `.:ReceiptBackedToolResult`
+- `.:RuntimeCompletedAfterToolsPayload`
+- `.:RuntimeCompletedAfterToolsPayloadSchema`
 - `.:RuntimeAbortEventKind`
 - `.:RuntimeEventCommitSpec`
 - `.:RuntimeEventCommitSpecByKind`
@@ -192,6 +196,7 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:isRecoveryAttemptRecord`
 - `.:isRuntimeAbortEventKind`
 - `.:isRuntimeEventKind`
+- `.:llmRequestedEvent`
 - `.:llmResponseEvent`
 - `.:makeAdmissionSchemaSpec`
 - `.:mountAgent`
@@ -205,6 +210,7 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:replayToolResultFromSnapshot`
 - `.:submitBindingsForAgentCapability`
 - `.:submitResumeDecisionFromContinuationRef`
+- `.:runtimeCompletedAfterToolsEvent`
 - `.:toolExecutedEvent`
 - `.:toolResultSnapshotFromExecutedPayload`
 - `.:toolRejectedEvent`

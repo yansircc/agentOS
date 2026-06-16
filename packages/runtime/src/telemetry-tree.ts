@@ -54,6 +54,7 @@ const runIdForRuntimeEvent = (event: RuntimeLedgerEvent): number => {
     case RUNTIME_EVENT_KIND.CHAT_INGESTED:
     case RUNTIME_EVENT_KIND.TOOL_EXECUTED:
     case RUNTIME_EVENT_KIND.TOOL_REJECTED:
+    case RUNTIME_EVENT_KIND.RUNTIME_COMPLETED_AFTER_TOOLS:
     case RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED:
     case ABORT.BUDGET_TOKENS:
     case ABORT.BUDGET_TIME:
@@ -62,6 +63,7 @@ const runIdForRuntimeEvent = (event: RuntimeLedgerEvent): number => {
     case ABORT.RETRIES:
     case ABORT.CLIENT_DISCONNECT:
       return event.payload.runId;
+    case RUNTIME_EVENT_KIND.LLM_REQUESTED:
     case RUNTIME_EVENT_KIND.LLM_RESPONSE:
       return event.payload.turn.id;
   }

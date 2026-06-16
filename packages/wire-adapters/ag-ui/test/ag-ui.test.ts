@@ -6,7 +6,9 @@ import { makePreClaim } from "@agent-os/kernel/effect-claim";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import {
   chatIngestedEvent,
+  llmRequestedEvent,
   llmResponseEvent,
+  runtimeCompletedAfterToolsEvent,
   toolExecutedEvent,
   toolRejectedEvent,
   agentRunAbortedEvent,
@@ -249,6 +251,17 @@ describe("@agent-os/ag-ui", () => {
         messageId: "agent-os:run:1:turn:0:reasoning:0",
       },
       {
+        type: "CUSTOM",
+        timestamp: 30,
+        name: "agent-os.tool.started",
+        value: {
+          runId: "1",
+          turnIndex: 0,
+          toolCallId: "call-1",
+          toolName: "lookup",
+        },
+      },
+      {
         type: "TOOL_CALL_START",
         timestamp: 30,
         toolCallId: "call-1",
@@ -268,6 +281,16 @@ describe("@agent-os/ag-ui", () => {
       {
         type: "CUSTOM",
         timestamp: 30,
+        name: "agent-os.llm.completed",
+        value: {
+          runId: 1,
+          turnIndex: 0,
+          usage: { promptTokens: 7, completionTokens: 11, totalTokens: 18 },
+        },
+      },
+      {
+        type: "CUSTOM",
+        timestamp: 30,
         name: "agent-os.llm.usage",
         value: {
           runId: 1,
@@ -282,6 +305,16 @@ describe("@agent-os/ag-ui", () => {
         toolCallId: "call-1",
         content: summaryText("tool_result", { type: "object", keys: ["temperature"] }),
         role: "tool",
+      },
+      {
+        type: "CUSTOM",
+        timestamp: 40,
+        name: "agent-os.tool.completed",
+        value: {
+          runId: "1",
+          toolCallId: "call-1",
+          toolName: "lookup",
+        },
       },
       {
         type: "RUN_FINISHED",
@@ -331,6 +364,27 @@ describe("@agent-os/ag-ui", () => {
         {
           type: "CUSTOM",
           timestamp: 30,
+          name: "agent-os.tool.started",
+          value: {
+            runId: "1",
+            turnIndex: 0,
+            toolCallId: "call-1",
+            toolName: "lookup",
+          },
+        },
+        {
+          type: "CUSTOM",
+          timestamp: 30,
+          name: "agent-os.llm.completed",
+          value: {
+            runId: 1,
+            turnIndex: 0,
+            usage: { promptTokens: 7, completionTokens: 11, totalTokens: 18 },
+          },
+        },
+        {
+          type: "CUSTOM",
+          timestamp: 30,
           name: "agent-os.llm.usage",
           value: {
             runId: 1,
@@ -338,8 +392,157 @@ describe("@agent-os/ag-ui", () => {
             usage: { promptTokens: 7, completionTokens: 11, totalTokens: 18 },
           },
         },
+        {
+          type: "CUSTOM",
+          timestamp: 40,
+          name: "agent-os.tool.completed",
+          value: {
+            runId: "1",
+            toolCallId: "call-1",
+            toolName: "lookup",
+          },
+        },
       ],
     });
+  });
+
+  it("projects runtime LLM request and complete-after-tools facts as safe custom frames", () => {
+    const frames = projectLedgerEventsToAgUiFrames(
+      [
+        commit(
+          1,
+          llmRequestedEvent({
+            ...runtimeIdentity,
+            runId: 1,
+            turn: { id: 1, index: 0 },
+            modelId: "claude-sonnet-4-6",
+            toolNames: ["read_file", "write_editor_patch_candidate"],
+            toolChoice: "required",
+          }),
+        ),
+        commit(
+          2,
+          runtimeCompletedAfterToolsEvent({
+            ...runtimeIdentity,
+            runId: 1,
+            turn: { id: 1, index: 0 },
+            toolNames: ["write_editor_patch_candidate"],
+            tokensUsed: 42,
+          }),
+        ),
+      ],
+      { threadId: "thread-1" },
+    );
+
+    expect(frames).toEqual([
+      {
+        type: "CUSTOM",
+        timestamp: 10,
+        name: "agent-os.llm.requested",
+        value: {
+          runId: 1,
+          turnIndex: 0,
+          modelId: "claude-sonnet-4-6",
+          toolNames: ["read_file", "write_editor_patch_candidate"],
+          toolChoice: "required",
+        },
+      },
+      {
+        type: "CUSTOM",
+        timestamp: 20,
+        name: "agent-os.runtime.completed_after_tools",
+        value: {
+          runId: 1,
+          turnIndex: 0,
+          toolNames: ["write_editor_patch_candidate"],
+          tokensUsed: 42,
+        },
+      },
+    ]);
+    expect(JSON.stringify(frames)).not.toContain("prompt");
+    expect(JSON.stringify(frames)).not.toContain("arguments");
+  });
+
+  it("projects safe tool start and completion facts with file io summaries", () => {
+    const frames = projectLedgerEventsToAgUiFrames(
+      [
+        commit(
+          1,
+          llmResponseEvent({
+            ...runtimeIdentity,
+            turn: { id: 1, index: 0 },
+            items: [
+              {
+                type: "tool_call",
+                call: {
+                  id: "call-read",
+                  type: "function",
+                  function: {
+                    name: "read_file",
+                    arguments: '{"path":"/input/request.json"}',
+                  },
+                },
+              },
+            ],
+            usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+          }),
+        ),
+        commit(
+          2,
+          toolExecutedEvent({
+            ...runtimeIdentity,
+            runId: 1,
+            toolCallId: "call-write",
+            name: "write_editor_patch_candidate",
+            args: '{"content":"SECRET_CODE"}',
+            execution: deterministicToolExecution(),
+            result: { path: "/output/code.fragment", bytesWritten: 42 },
+            claim: settleToolExecuted(
+              toolClaim,
+              defineTool({
+                name: "write_editor_patch_candidate",
+                description: "write fixed candidate",
+                args: Schema.Struct({ content: Schema.String }),
+                authority: "tool",
+                execution: deterministicToolExecution(),
+                admit: () => Effect.succeed({ ok: true }),
+                execute: () => Effect.succeed({ path: "/output/code.fragment", bytesWritten: 42 }),
+              }).contract,
+            ),
+          }),
+        ),
+      ],
+      { threadId: "thread-1" },
+    );
+
+    expect(frames).toEqual(
+      expect.arrayContaining([
+        {
+          type: "CUSTOM",
+          timestamp: 10,
+          name: "agent-os.tool.started",
+          value: {
+            runId: "1",
+            turnIndex: 0,
+            toolCallId: "call-read",
+            toolName: "read_file",
+            io: [{ action: "read", path: "/input/request.json" }],
+          },
+        },
+        {
+          type: "CUSTOM",
+          timestamp: 20,
+          name: "agent-os.tool.completed",
+          value: {
+            runId: "1",
+            toolCallId: "call-write",
+            toolName: "write_editor_patch_candidate",
+            io: [{ action: "write", path: "/output/code.fragment", bytes: 42 }],
+          },
+        },
+      ]),
+    );
+    expect(JSON.stringify(frames)).not.toContain("SECRET_CODE");
   });
 
   it("projects a decoded ledger row into an AG-UI envelope without raw ledger metadata", () => {

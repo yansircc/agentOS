@@ -16,8 +16,10 @@ import {
   chatIngestedEvent,
   decodeRuntimeLedgerEvent,
   EXTERNAL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON,
+  llmRequestedEvent,
   llmResponseEvent,
   RUNTIME_ABORT_EVENT_KINDS,
+  runtimeCompletedAfterToolsEvent,
   replayToolFromArtifact,
   replayToolResultFromSnapshot,
   receiptBackedToolResult,
@@ -28,6 +30,7 @@ import {
   toolRejectedEvent,
   type RuntimeEventCommitSpec,
 } from "../src/runtime-events";
+import { projectRuntimeSafeLedgerEvent } from "../src/safe-events";
 
 const scope = "runtime-event-test";
 const runtimeIdentity = {
@@ -118,6 +121,15 @@ describe("runtime event vocabulary", () => {
         context: { topic: "runtime" },
         traceContext,
       }),
+      llmRequestedEvent({
+        ...runtimeIdentity,
+        runId: 1,
+        turn: { id: 1, index: 0 },
+        modelId: "test-model",
+        toolNames: ["read_file", "write_file"],
+        toolChoice: "required",
+        traceContext,
+      }),
       agentRunInterruptedEvent({
         ...runtimeIdentity,
         runId: 1,
@@ -184,6 +196,14 @@ describe("runtime event vocabulary", () => {
         tokensUsed: 3,
         traceContext,
       }),
+      runtimeCompletedAfterToolsEvent({
+        ...runtimeIdentity,
+        runId: 1,
+        turn: { id: 1, index: 0 },
+        toolNames: ["write_file"],
+        tokensUsed: 5,
+        traceContext,
+      }),
       ...RUNTIME_ABORT_EVENT_KINDS.map((kind) =>
         agentRunAbortedEvent({
           ...runtimeIdentity,
@@ -204,6 +224,119 @@ describe("runtime event vocabulary", () => {
         expect(decoded.event.payload).toEqual(spec.payload);
       }
     }
+  });
+
+  it("projects LLM and complete-after-tools runtime facts without prompt or args", () => {
+    const requested = ledgerEvent(
+      1,
+      llmRequestedEvent({
+        ...runtimeIdentity,
+        runId: 1,
+        turn: { id: 1, index: 0 },
+        modelId: "claude-sonnet-4-6",
+        toolNames: ["read_file", "write_editor_patch_candidate"],
+        toolChoice: "required",
+      }),
+    );
+    const completedAfterTools = ledgerEvent(
+      2,
+      runtimeCompletedAfterToolsEvent({
+        ...runtimeIdentity,
+        runId: 1,
+        turn: { id: 1, index: 0 },
+        toolNames: ["write_editor_patch_candidate"],
+        tokensUsed: 42,
+      }),
+    );
+
+    expect(projectRuntimeSafeLedgerEvent(requested)?.safePayload).toEqual({
+      runId: 1,
+      turnIndex: 0,
+      modelId: "claude-sonnet-4-6",
+      toolNames: ["read_file", "write_editor_patch_candidate"],
+      toolChoice: "required",
+    });
+    expect(projectRuntimeSafeLedgerEvent(completedAfterTools)?.safePayload).toEqual({
+      runId: 1,
+      turnIndex: 0,
+      toolNames: ["write_editor_patch_candidate"],
+      tokensUsed: 42,
+    });
+    expect(JSON.stringify(projectRuntimeSafeLedgerEvent(requested))).not.toContain("prompt");
+    expect(JSON.stringify(projectRuntimeSafeLedgerEvent(requested))).not.toContain("args");
+  });
+
+  it("projects safe tool io summaries without raw arguments or file content", () => {
+    const toolStarted = ledgerEvent(
+      1,
+      llmResponseEvent({
+        ...runtimeIdentity,
+        turn: { id: 1, index: 0 },
+        items: [
+          {
+            type: "tool_call",
+            call: {
+              id: "call-read",
+              type: "function",
+              function: {
+                name: "read_file",
+                arguments: '{"path":"/input/request.json"}',
+              },
+            },
+          },
+        ],
+        usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+      }),
+    );
+    const toolCompleted = ledgerEvent(
+      2,
+      toolExecutedEvent({
+        ...runtimeIdentity,
+        runId: 1,
+        toolCallId: "call-write",
+        name: "write_editor_patch_candidate",
+        args: '{"content":"SECRET_CODE"}',
+        execution: { kind: "deterministic" },
+        result: {
+          path: "/output/code.fragment",
+          bytesWritten: 42,
+          metadataPath: "/output/candidate-result.json",
+          metadataBytesWritten: 12,
+        },
+        claim: livedClaim,
+      }),
+    );
+
+    expect(projectRuntimeSafeLedgerEvent(toolStarted)?.safePayload).toMatchObject({
+      items: [
+        {
+          type: "tool_call",
+          toolCallId: "call-read",
+          toolName: "read_file",
+          io: [{ action: "read", path: "/input/request.json" }],
+        },
+      ],
+    });
+    expect(projectRuntimeSafeLedgerEvent(toolCompleted)?.safePayload).toMatchObject({
+      runId: 1,
+      toolCallId: "call-write",
+      toolName: "write_editor_patch_candidate",
+      io: [
+        { action: "write", path: "/output/code.fragment", bytes: 42 },
+        {
+          action: "write",
+          path: "/output/candidate-result.json",
+          bytes: 12,
+          role: "metadata",
+        },
+      ],
+    });
+    const safeText = JSON.stringify([
+      projectRuntimeSafeLedgerEvent(toolStarted),
+      projectRuntimeSafeLedgerEvent(toolCompleted),
+    ]);
+    expect(safeText).not.toContain("SECRET_CODE");
+    expect(safeText).not.toContain("content");
   });
 
   it("reports product deliver events as non-runtime unknown payloads", () => {

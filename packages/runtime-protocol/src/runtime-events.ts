@@ -29,9 +29,11 @@ export const RUNTIME_EVENT_KIND = {
   AGENT_RUN_INTERRUPTED: "agent.run.interrupted",
   AGENT_RUN_RESUMED: "agent.run.resumed",
   CHAT_INGESTED: "chat.ingested",
+  LLM_REQUESTED: "llm.requested",
   LLM_RESPONSE: "llm.response",
   TOOL_EXECUTED: "tool.executed",
   TOOL_REJECTED: "tool.rejected",
+  RUNTIME_COMPLETED_AFTER_TOOLS: "runtime.completed_after_tools",
   AGENT_RUN_COMPLETED: "agent.run.completed",
   AGENT_ABORTED_BUDGET_TOKENS: "agent.aborted.budget_tokens",
   AGENT_ABORTED_BUDGET_TIME: "agent.aborted.budget_time",
@@ -107,6 +109,18 @@ export type LlmResponsePayload = {
   };
   readonly items: ReadonlyArray<LlmOutputItem>;
   readonly usage: LlmUsage;
+  readonly traceContext?: TraceContext;
+};
+
+export type LlmRequestedPayload = {
+  readonly runId: number;
+  readonly turn: {
+    readonly id: number;
+    readonly index: number;
+  };
+  readonly modelId?: string;
+  readonly toolNames: ReadonlyArray<string>;
+  readonly toolChoice?: string;
   readonly traceContext?: TraceContext;
 };
 
@@ -268,6 +282,17 @@ export type AgentRunCompletedPayload = {
   readonly traceContext?: TraceContext;
 };
 
+export type RuntimeCompletedAfterToolsPayload = {
+  readonly runId: number;
+  readonly turn: {
+    readonly id: number;
+    readonly index: number;
+  };
+  readonly toolNames: ReadonlyArray<string>;
+  readonly tokensUsed: number;
+  readonly traceContext?: TraceContext;
+};
+
 export type AgentRunInterruptedPayload = {
   readonly runId: number;
   readonly turn: {
@@ -324,6 +349,15 @@ export const LlmResponsePayloadSchema: Schema.Schema<LlmResponsePayload> = Schem
   traceContext: Schema.optional(TraceContextSchema),
 });
 
+export const LlmRequestedPayloadSchema: Schema.Schema<LlmRequestedPayload> = Schema.Struct({
+  runId: positiveInt,
+  turn: TurnRefSchema,
+  modelId: Schema.optional(nonEmptyString),
+  toolNames: Schema.Array(nonEmptyString),
+  toolChoice: Schema.optional(nonEmptyString),
+  traceContext: Schema.optional(TraceContextSchema),
+}).pipe(Schema.filter((payload) => payload.runId === payload.turn.id));
+
 export const ToolExecutedPayloadSchema: Schema.Schema<ToolExecutedPayload> = Schema.Struct({
   runId: positiveInt,
   toolCallId: Schema.String,
@@ -373,6 +407,15 @@ export const AgentRunCompletedPayloadSchema: Schema.Schema<AgentRunCompletedPayl
     traceContext: Schema.optional(TraceContextSchema),
   });
 
+export const RuntimeCompletedAfterToolsPayloadSchema: Schema.Schema<RuntimeCompletedAfterToolsPayload> =
+  Schema.Struct({
+    runId: positiveInt,
+    turn: TurnRefSchema,
+    toolNames: Schema.Array(nonEmptyString),
+    tokensUsed: nonNegativeInt,
+    traceContext: Schema.optional(TraceContextSchema),
+  }).pipe(Schema.filter((payload) => payload.runId === payload.turn.id));
+
 export const AgentRunInterruptedPayloadSchema: Schema.Schema<AgentRunInterruptedPayload> =
   Schema.Struct({
     runId: positiveInt,
@@ -412,9 +455,11 @@ export type RuntimeEventPayloadByKind = {
   readonly [RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED]: AgentRunInterruptedPayload;
   readonly [RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED]: AgentRunResumedPayload;
   readonly [RUNTIME_EVENT_KIND.CHAT_INGESTED]: ChatIngestedPayload;
+  readonly [RUNTIME_EVENT_KIND.LLM_REQUESTED]: LlmRequestedPayload;
   readonly [RUNTIME_EVENT_KIND.LLM_RESPONSE]: LlmResponsePayload;
   readonly [RUNTIME_EVENT_KIND.TOOL_EXECUTED]: ToolExecutedPayload;
   readonly [RUNTIME_EVENT_KIND.TOOL_REJECTED]: ToolRejectedPayload;
+  readonly [RUNTIME_EVENT_KIND.RUNTIME_COMPLETED_AFTER_TOOLS]: RuntimeCompletedAfterToolsPayload;
   readonly [RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED]: AgentRunCompletedPayload;
   readonly [ABORT.BUDGET_TOKENS]: AgentRunAbortedPayload;
   readonly [ABORT.BUDGET_TIME]: AgentRunAbortedPayload;
@@ -481,6 +526,10 @@ const decodeRuntimePayload = <K extends RuntimeEventKind>(
       return Schema.decodeUnknownSync(ChatIngestedPayloadSchema)(
         payload,
       ) as RuntimeEventPayloadByKind[K];
+    case RUNTIME_EVENT_KIND.LLM_REQUESTED:
+      return Schema.decodeUnknownSync(LlmRequestedPayloadSchema)(
+        payload,
+      ) as RuntimeEventPayloadByKind[K];
     case RUNTIME_EVENT_KIND.LLM_RESPONSE:
       return Schema.decodeUnknownSync(LlmResponsePayloadSchema)(
         payload,
@@ -491,6 +540,10 @@ const decodeRuntimePayload = <K extends RuntimeEventKind>(
       ) as RuntimeEventPayloadByKind[K];
     case RUNTIME_EVENT_KIND.TOOL_REJECTED:
       return Schema.decodeUnknownSync(ToolRejectedPayloadSchema)(
+        payload,
+      ) as RuntimeEventPayloadByKind[K];
+    case RUNTIME_EVENT_KIND.RUNTIME_COMPLETED_AFTER_TOOLS:
+      return Schema.decodeUnknownSync(RuntimeCompletedAfterToolsPayloadSchema)(
         payload,
       ) as RuntimeEventPayloadByKind[K];
     case RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED:
@@ -631,6 +684,25 @@ export const llmResponseEvent = (
     turn: spec.turn,
     items: spec.items,
     usage: spec.usage,
+    ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
+  });
+
+export const llmRequestedEvent = (
+  spec: RuntimeEventIdentitySpec & {
+    readonly runId: number;
+    readonly turn: { readonly id: number; readonly index: number };
+    readonly modelId?: string;
+    readonly toolNames: ReadonlyArray<string>;
+    readonly toolChoice?: string;
+    readonly traceContext?: TraceContext;
+  },
+): RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.LLM_REQUESTED> =>
+  runtimeEvent(spec, RUNTIME_EVENT_KIND.LLM_REQUESTED, {
+    runId: spec.runId,
+    turn: spec.turn,
+    ...(spec.modelId === undefined ? {} : { modelId: spec.modelId }),
+    toolNames: spec.toolNames,
+    ...(spec.toolChoice === undefined ? {} : { toolChoice: spec.toolChoice }),
     ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
   });
 
@@ -872,6 +944,23 @@ export const agentRunCompletedEvent = (
     outputKind: spec.outputKind,
     tokensUsed: spec.tokensUsed,
     ...(spec.turn === undefined ? {} : { turn: spec.turn }),
+    ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
+  });
+
+export const runtimeCompletedAfterToolsEvent = (
+  spec: RuntimeEventIdentitySpec & {
+    readonly runId: number;
+    readonly turn: { readonly id: number; readonly index: number };
+    readonly toolNames: ReadonlyArray<string>;
+    readonly tokensUsed: number;
+    readonly traceContext?: TraceContext;
+  },
+): RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.RUNTIME_COMPLETED_AFTER_TOOLS> =>
+  runtimeEvent(spec, RUNTIME_EVENT_KIND.RUNTIME_COMPLETED_AFTER_TOOLS, {
+    runId: spec.runId,
+    turn: spec.turn,
+    toolNames: spec.toolNames,
+    tokensUsed: spec.tokensUsed,
     ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
   });
 

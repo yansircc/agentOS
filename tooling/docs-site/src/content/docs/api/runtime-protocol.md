@@ -110,6 +110,8 @@ title: "@agent-os/runtime-protocol API"
 - `.:LLM_STRUCTURED_EVENT_KINDS`
 - `.:LLM_STRUCTURED_EVIDENCE_EVENT`
 - `.:LLM_STRUCTURED_INVALIDATE_EVENT`
+- `.:LlmRequestedPayload`
+- `.:LlmRequestedPayloadSchema`
 - `.:LlmResponsePayload`
 - `.:LlmResponsePayloadSchema`
 - `.:LlmRoute`
@@ -122,6 +124,8 @@ title: "@agent-os/runtime-protocol API"
 - `.:RUNTIME_FACT_OWNER`
 - `.:RECEIPT_BACKED_TOOL_RESULT_VERSION`
 - `.:ReceiptBackedToolResult`
+- `.:RuntimeCompletedAfterToolsPayload`
+- `.:RuntimeCompletedAfterToolsPayloadSchema`
 - `.:RuntimeAbortEventKind`
 - `.:RuntimeEventCommitSpec`
 - `.:RuntimeEventCommitSpecByKind`
@@ -192,6 +196,7 @@ title: "@agent-os/runtime-protocol API"
 - `.:isRecoveryAttemptRecord`
 - `.:isRuntimeAbortEventKind`
 - `.:isRuntimeEventKind`
+- `.:llmRequestedEvent`
 - `.:llmResponseEvent`
 - `.:makeAdmissionSchemaSpec`
 - `.:mountAgent`
@@ -205,6 +210,7 @@ title: "@agent-os/runtime-protocol API"
 - `.:replayToolResultFromSnapshot`
 - `.:submitBindingsForAgentCapability`
 - `.:submitResumeDecisionFromContinuationRef`
+- `.:runtimeCompletedAfterToolsEvent`
 - `.:toolExecutedEvent`
 - `.:toolResultSnapshotFromExecutedPayload`
 - `.:toolRejectedEvent`

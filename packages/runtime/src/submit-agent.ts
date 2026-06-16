@@ -63,10 +63,12 @@ import {
   continuationRefFromInterruptedEvent,
   decodeRuntimeLedgerEvent,
   EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
+  llmRequestedEvent,
   llmResponseEvent,
   RUNTIME_FACT_OWNER,
   RUNTIME_EVENT_KIND,
   receiptBackedToolResultFromUnknown,
+  runtimeCompletedAfterToolsEvent,
   toolExecutedEvent,
   toolReplayArtifactFromExecutedPayload,
   toolRejectedEvent,
@@ -860,6 +862,9 @@ const completeAfterToolPolicyNames = (spec: InternalSubmitSpec): ReadonlyArray<s
   return [...new Set(toolNames.filter((toolName) => toolName.length > 0))];
 };
 
+const routeModelId = (route: LlmRoute): string | undefined =>
+  typeof route.modelId === "string" && route.modelId.length > 0 ? route.modelId : undefined;
+
 const requiredToolPolicyNames = (spec: InternalSubmitSpec): ReadonlyArray<string> => [
   ...new Set(
     [singleRequiredToolPolicyName(spec), ...completeAfterToolPolicyNames(spec)].filter(
@@ -882,6 +887,13 @@ const hasExecutedTool = (
       decoded.event.payload.name === toolName
     );
   });
+
+const safeToolChoiceSummary = (toolChoice: LlmToolChoice | undefined): string | undefined => {
+  if (toolChoice === undefined) return undefined;
+  if (typeof toolChoice === "string") return toolChoice;
+  const functionName = toolChoice.function.name;
+  return functionName.length > 0 ? `function:${functionName}` : "function";
+};
 
 const toolChoiceForRuntimePolicy = (input: {
   readonly requiredToolNames: ReadonlyArray<string>;
@@ -1420,6 +1432,25 @@ export const submitAgentEffect = (
             requiredToolNames,
             executedToolNames,
           );
+          const toolChoice = toolChoiceForRuntimePolicy({
+            requiredToolNames,
+            executedToolNames,
+            ordered: orderedCompleteAfterTools,
+          });
+          const modelId = routeModelId(spec.route);
+          const toolChoiceSummary = safeToolChoiceSummary(toolChoice);
+          yield* logRuntimeLedgerEvent(
+            ledger,
+            llmRequestedEvent({
+              ...identity,
+              runId: started.id,
+              turn: turnRefOf(started.id, turn),
+              ...(modelId === undefined ? {} : { modelId }),
+              toolNames: toolDefs.map((tool) => tool.function.name),
+              ...(toolChoiceSummary === undefined ? {} : { toolChoice: toolChoiceSummary }),
+              traceContext,
+            }),
+          );
           const timedResp = yield* Effect.either(
             llm
               .call(
@@ -1427,11 +1458,7 @@ export const submitAgentEffect = (
                   route: spec.route,
                   messages,
                   tools: toolDefs.length > 0 ? toolDefs : undefined,
-                  tool_choice: toolChoiceForRuntimePolicy({
-                    requiredToolNames,
-                    executedToolNames,
-                    ordered: orderedCompleteAfterTools,
-                  }),
+                  tool_choice: toolChoice,
                   traceContext,
                 },
                 { signal: controller.signal },
@@ -2138,6 +2165,14 @@ export const submitAgentEffect = (
               spec.toolPolicy?.completeAfterToolsExecuted?.finalMessage ??
               "completed after declared tools executed";
             yield* ledger.commit([
+              runtimeCompletedAfterToolsEvent({
+                ...identity,
+                runId: started.id,
+                turn: turnRefOf(started.id, turn),
+                toolNames: completeAfterToolNames,
+                tokensUsed: newTokens,
+                traceContext,
+              }),
               agentRunCompletedEvent({
                 ...identity,
                 runId: started.id,

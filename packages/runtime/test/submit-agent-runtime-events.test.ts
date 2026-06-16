@@ -46,6 +46,7 @@ import {
   projectFailureDiagnostics,
   replayToolFromArtifact,
   receiptBackedToolResult,
+  RUNTIME_EVENT_KIND,
   toolReplayArtifactFromExecutedPayload,
   type SubmitSpec,
 } from "@agent-os/runtime-protocol";
@@ -299,10 +300,18 @@ const runSubmitWithServices = (
   }));
 };
 
-const decodedRuntimeKinds = (events: ReadonlyArray<LedgerEvent>): ReadonlyArray<string> =>
+const decodedRuntimeBehaviorKinds = (events: ReadonlyArray<LedgerEvent>): ReadonlyArray<string> =>
   events.flatMap((event) => {
     const decoded = decodeRuntimeLedgerEvent(event);
-    return decoded._tag === "runtime" ? [decoded.event.kind] : [];
+    return decoded._tag === "runtime" && decoded.event.kind !== RUNTIME_EVENT_KIND.LLM_REQUESTED
+      ? [decoded.event.kind]
+      : [];
+  });
+
+const decodedRuntimeEvents = (events: ReadonlyArray<LedgerEvent>) =>
+  events.flatMap((event) => {
+    const decoded = decodeRuntimeLedgerEvent(event);
+    return decoded._tag === "runtime" ? [decoded.event] : [];
   });
 
 const expectRuntimePayloadsDecode = (events: ReadonlyArray<LedgerEvent>) => {
@@ -462,7 +471,7 @@ describe("submit-agent runtime event writes", () => {
 
       expect(result).toMatchObject({ ok: false, reason: "tool_error" });
       expect(liveToolExecuteCalled).toBe(false);
-      expect(decodedRuntimeKinds(events)).toEqual([
+      expect(decodedRuntimeBehaviorKinds(events)).toEqual([
         "agent.run.started",
         "chat.ingested",
         "llm.response",
@@ -669,8 +678,8 @@ describe("submit-agent runtime event writes", () => {
 
       expect(result).toMatchObject({ ok: true });
       expect(liveToolExecuteCalled).toBe(true);
-      expect(decodedRuntimeKinds(events)).toContain("tool.executed");
-      expect(decodedRuntimeKinds(events)).not.toContain("tool.rejected");
+      expect(decodedRuntimeBehaviorKinds(events)).toContain("tool.executed");
+      expect(decodedRuntimeBehaviorKinds(events)).not.toContain("tool.rejected");
 
       const toolEvent = events
         .map((event) => decodeRuntimeLedgerEvent(event))
@@ -943,6 +952,61 @@ describe("submit-agent runtime event writes", () => {
               : "",
           ),
       ).toEqual(["write_html", "write_design"]);
+      expect(
+        decodedRuntimeEvents(events)
+          .filter(
+            (event) =>
+              event.kind === RUNTIME_EVENT_KIND.LLM_REQUESTED ||
+              event.kind === RUNTIME_EVENT_KIND.LLM_RESPONSE ||
+              event.kind === RUNTIME_EVENT_KIND.TOOL_EXECUTED ||
+              event.kind === RUNTIME_EVENT_KIND.RUNTIME_COMPLETED_AFTER_TOOLS ||
+              event.kind === RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED,
+          )
+          .map((event) => event.kind),
+      ).toEqual([
+        RUNTIME_EVENT_KIND.LLM_REQUESTED,
+        RUNTIME_EVENT_KIND.LLM_RESPONSE,
+        RUNTIME_EVENT_KIND.TOOL_EXECUTED,
+        RUNTIME_EVENT_KIND.LLM_REQUESTED,
+        RUNTIME_EVENT_KIND.LLM_RESPONSE,
+        RUNTIME_EVENT_KIND.TOOL_EXECUTED,
+        RUNTIME_EVENT_KIND.RUNTIME_COMPLETED_AFTER_TOOLS,
+        RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED,
+      ]);
+      expect(
+        decodedRuntimeEvents(events)
+          .filter((event) => event.kind === RUNTIME_EVENT_KIND.LLM_REQUESTED)
+          .map((event) =>
+            event.kind === RUNTIME_EVENT_KIND.LLM_REQUESTED ? event.payload : undefined,
+          ),
+      ).toEqual([
+        expect.objectContaining({
+          runId: 1,
+          turn: { id: 1, index: 0 },
+          modelId: "test-model",
+          toolNames: ["read_file", "write_html", "write_design"],
+          toolChoice: "required",
+        }),
+        expect.objectContaining({
+          runId: 1,
+          turn: { id: 1, index: 1 },
+          modelId: "test-model",
+          toolNames: ["read_file", "write_design"],
+          toolChoice: "function:write_design",
+        }),
+      ]);
+      expect(
+        decodedRuntimeEvents(events).find(
+          (event) => event.kind === RUNTIME_EVENT_KIND.RUNTIME_COMPLETED_AFTER_TOOLS,
+        )?.payload,
+      ).toEqual(
+        expect.objectContaining({
+          runId: 1,
+          turn: { id: 1, index: 1 },
+          toolNames: ["write_html", "write_design"],
+          tokensUsed: 4,
+        }),
+      );
     }),
   );
 
@@ -1556,13 +1620,15 @@ describe("submit-agent runtime event writes", () => {
 
       expect(result).toMatchObject({ ok: true, final: "done" });
       expectRuntimePayloadsDecode(events);
-      expect(decodedRuntimeKinds(events)).toEqual([
+      expect(decodedRuntimeBehaviorKinds(events)).toEqual([
         "agent.run.started",
         "chat.ingested",
         "llm.response",
         "agent.run.completed",
       ]);
-      expect(decodeRuntimeLedgerEvent(events[3]!)).toMatchObject({
+      const completedEvent = events.find((event) => event.kind === "agent.run.completed");
+      expect(completedEvent).toBeDefined();
+      expect(decodeRuntimeLedgerEvent(completedEvent!)).toMatchObject({
         _tag: "runtime",
         event: {
           kind: "agent.run.completed",
@@ -1588,7 +1654,7 @@ describe("submit-agent runtime event writes", () => {
 
       expect(result).toMatchObject({ ok: true });
       expectRuntimePayloadsDecode(events);
-      expect(decodedRuntimeKinds(events)).toEqual([
+      expect(decodedRuntimeBehaviorKinds(events)).toEqual([
         "agent.run.started",
         "chat.ingested",
         "agent.run.completed",
@@ -1602,7 +1668,7 @@ describe("submit-agent runtime event writes", () => {
 
       expect(result).toMatchObject({ ok: false, reason: "budget_tokens" });
       expectRuntimePayloadsDecode(events);
-      expect(decodedRuntimeKinds(events)).toEqual([
+      expect(decodedRuntimeBehaviorKinds(events)).toEqual([
         "agent.run.started",
         "chat.ingested",
         "llm.response",
@@ -1648,7 +1714,7 @@ describe("submit-agent runtime event writes", () => {
 
       expect(result).toMatchObject({ ok: false, reason: "tool_error" });
       expectRuntimePayloadsDecode(events);
-      expect(decodedRuntimeKinds(events)).toEqual([
+      expect(decodedRuntimeBehaviorKinds(events)).toEqual([
         "agent.run.started",
         "chat.ingested",
         "llm.response",
@@ -1707,7 +1773,7 @@ describe("submit-agent runtime event writes", () => {
       ]);
 
       expect(result).toMatchObject({ ok: true, status: "delivered" });
-      expect(decodedRuntimeKinds(events)).toEqual([
+      expect(decodedRuntimeBehaviorKinds(events)).toEqual([
         "agent.run.started",
         "chat.ingested",
         "llm.response",
@@ -1829,7 +1895,7 @@ describe("submit-agent runtime event writes", () => {
       );
 
       expect(result).toMatchObject({ ok: false, reason: "tool_error" });
-      expect(decodedRuntimeKinds(events)).toEqual([
+      expect(decodedRuntimeBehaviorKinds(events)).toEqual([
         "agent.run.started",
         "chat.ingested",
         "llm.response",
@@ -1942,7 +2008,7 @@ describe("submit-agent runtime event writes", () => {
       expect(result).toMatchObject({ ok: true, final: "done" });
       expect(observedToken).toBe("secret-token-value");
       expect(JSON.stringify(events)).not.toContain("secret-token-value");
-      expect(decodedRuntimeKinds(events)).toEqual([
+      expect(decodedRuntimeBehaviorKinds(events)).toEqual([
         "agent.run.started",
         "chat.ingested",
         "llm.response",
@@ -2199,7 +2265,7 @@ describe("submit-agent runtime event writes", () => {
       if (result.status !== "interrupted") {
         throw new Error("expected interrupted result");
       }
-      expect(decodedRuntimeKinds(events)).toEqual([
+      expect(decodedRuntimeBehaviorKinds(events)).toEqual([
         "agent.run.started",
         "chat.ingested",
         "llm.response",
@@ -2290,7 +2356,7 @@ describe("submit-agent runtime event writes", () => {
       expect(projectDecisionGate(services.events, first.result.gateRef)).toMatchObject({
         status: "consumed",
       });
-      expect(decodedRuntimeKinds(services.events)).toEqual([
+      expect(decodedRuntimeBehaviorKinds(services.events)).toEqual([
         "agent.run.started",
         "chat.ingested",
         "llm.response",
