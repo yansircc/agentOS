@@ -47,12 +47,17 @@ import type {
   LlmUsage,
   LlmWireDescriptor,
 } from "@agent-os/llm-protocol";
-import { credentialMaterialRef, endpointMaterialRef } from "@agent-os/kernel/material-ref";
+import {
+  credentialMaterialRef,
+  endpointMaterialRef,
+  materialRefKey,
+} from "@agent-os/kernel/material-ref";
 import {
   RefResolutionFailed,
   RefResolverService,
-  resolveStringMaterial,
+  type ResolvedMaterialService,
 } from "@agent-os/kernel/ref-resolver";
+import { openLive } from "../../../kernel/src/internal/live-edge";
 import {
   ProviderHttpFailure,
   ProviderOutputDecodeError,
@@ -102,6 +107,11 @@ export interface EffectAiResolvedRoute<
   Route extends EffectAiSupportedRoute = EffectAiSupportedRoute,
 > {
   readonly route: Route;
+}
+
+interface EffectAiLiveRoute<
+  Route extends EffectAiSupportedRoute = EffectAiSupportedRoute,
+> extends EffectAiResolvedRoute<Route> {
   readonly endpoint: string;
   readonly credential: string;
 }
@@ -161,7 +171,7 @@ export type EffectAiAdapterError =
   | EffectAiAborted;
 
 export type EffectAiLanguageModelFactory<R = never> = (
-  input: EffectAiResolvedRoute<EffectAiLanguageModelRoute>,
+  input: EffectAiLiveRoute<EffectAiLanguageModelRoute>,
 ) => Effect.Effect<LanguageModelService, unknown, R>;
 
 export const EFFECT_AI_TRANSPORT_ADAPTER_VERSION = "effect-ai-transport-v1";
@@ -227,6 +237,8 @@ const withoutTrailingSlash = (value: string): string => value.replace(/\/$/, "")
 
 const credentialPlaceholder = (credentialRef: string): string => `\${credential:${credentialRef}}`;
 
+const endpointPlaceholder = (endpointRef: string): string => `\${endpoint:${endpointRef}}`;
+
 const chatBodySchema = (modelId: string): LlmWireDescriptor["bodySchema"] => ({
   type: "object",
   properties: {
@@ -249,7 +261,7 @@ const effectAiWireDescriptor = (resolved: EffectAiResolvedRoute): LlmWireDescrip
     case "openai-chat-compatible":
       return {
         method: "POST",
-        url: `${withoutTrailingSlash(resolved.endpoint)}/chat/completions`,
+        url: `${endpointPlaceholder(resolved.route.endpointRef)}/chat/completions`,
         headers: [
           ["accept", "application/json"],
           ["authorization", `Bearer ${credentialPlaceholder(resolved.route.credentialRef)}`],
@@ -260,7 +272,7 @@ const effectAiWireDescriptor = (resolved: EffectAiResolvedRoute): LlmWireDescrip
     case "anthropic-messages":
       return {
         method: "POST",
-        url: `${withoutTrailingSlash(resolved.endpoint)}/v1/messages`,
+        url: `${endpointPlaceholder(resolved.route.endpointRef)}/v1/messages`,
         headers: [
           ["anthropic-version", resolved.route.anthropicVersion ?? ANTHROPIC_DEFAULT_VERSION],
           ["content-type", "application/json"],
@@ -287,7 +299,7 @@ const effectAiRouteDescriptor = (resolved: EffectAiResolvedRoute): LlmTransportR
 
 const resolveEffectAiRouteForTransport = (
   route: LlmRoute,
-): Effect.Effect<EffectAiResolvedRoute, UpstreamFailure, RefResolverService> =>
+): Effect.Effect<EffectAiResolvedRoute, UpstreamFailure> =>
   resolveEffectAiRoute(route).pipe(Effect.mapError((cause) => new UpstreamFailure({ cause })));
 
 const parseJsonOrText = (
@@ -558,7 +570,7 @@ const openAiChatBodyFromRequest = (
 });
 
 const openAiChatRequest = (
-  resolved: EffectAiResolvedRoute<OpenAiChatCompatibleRoute>,
+  resolved: EffectAiLiveRoute<OpenAiChatCompatibleRoute>,
   request: LlmRequest,
 ): Effect.Effect<HttpClientRequest, HttpBodyError> =>
   httpPost(`${withoutTrailingSlash(resolved.endpoint)}/chat/completions`, {
@@ -665,7 +677,7 @@ const normalizeOpenAiChatCompatibleResponse = (
 
 const callOpenAiChatCompatible = (
   httpClient: HttpClientService,
-  resolved: EffectAiResolvedRoute<OpenAiChatCompatibleRoute>,
+  resolved: EffectAiLiveRoute<OpenAiChatCompatibleRoute>,
   request: LlmRequest,
   options: LlmCallOptions = {},
 ): Effect.Effect<LlmResponse, UpstreamFailure> =>
@@ -724,23 +736,45 @@ export const callEffectAiLanguageModel = (
 
 export const resolveEffectAiRoute = (
   route: LlmRoute,
-): Effect.Effect<
-  EffectAiResolvedRoute,
-  EffectAiUnsupportedRoute | RefResolutionFailed,
-  RefResolverService
-> =>
-  Effect.gen(function* () {
-    if (!isEffectAiSupportedRoute(route)) {
-      return yield* new EffectAiUnsupportedRoute({ kind: route.kind });
-    }
-    const refs = yield* RefResolverService;
-    const endpoint = yield* resolveStringMaterial(refs, endpointMaterialRef(route.endpointRef));
-    const credential = yield* resolveStringMaterial(
-      refs,
-      credentialMaterialRef(route.credentialRef),
-    );
-    return { route, endpoint, credential };
-  });
+): Effect.Effect<EffectAiResolvedRoute, EffectAiUnsupportedRoute> => {
+  if (!isEffectAiSupportedRoute(route)) {
+    return Effect.fail(new EffectAiUnsupportedRoute({ kind: route.kind }));
+  }
+  return Effect.succeed({ route });
+};
+
+const withStringMaterial = <A, E, R>(
+  refs: ResolvedMaterialService,
+  ref: ReturnType<typeof endpointMaterialRef> | ReturnType<typeof credentialMaterialRef>,
+  use: (value: string) => Effect.Effect<A, E, R>,
+): Effect.Effect<A, E | RefResolutionFailed, R> =>
+  Effect.acquireUseRelease(
+    refs.material(ref),
+    (handle): Effect.Effect<A, E | RefResolutionFailed, R> => {
+      const value = openLive(handle.value);
+      return typeof value === "string"
+        ? use(value)
+        : Effect.fail(
+            new RefResolutionFailed({
+              kind: ref.kind,
+              ref: materialRefKey(ref),
+              reason: "material_type_mismatch",
+            }),
+          );
+    },
+    (handle) => handle.dispose(),
+  );
+
+const withEffectAiLiveRoute = <A, E, R>(
+  refs: ResolvedMaterialService,
+  route: EffectAiSupportedRoute,
+  use: (resolved: EffectAiLiveRoute) => Effect.Effect<A, E, R>,
+): Effect.Effect<A, E | RefResolutionFailed, R> =>
+  withStringMaterial(refs, endpointMaterialRef(route.endpointRef), (endpoint) =>
+    withStringMaterial(refs, credentialMaterialRef(route.credentialRef), (credential) =>
+      use({ route, endpoint, credential }),
+    ),
+  );
 
 export const defaultEffectAiLanguageModelFactory: EffectAiLanguageModelFactory<
   HttpClientService | Scope.Scope
@@ -765,36 +799,41 @@ export const makeEffectAiLlmTransportLayer = <R>(
       const refs = yield* RefResolverService;
       const httpClient = yield* HttpClientTag;
       const context = yield* Effect.context<R>();
-      const resolveWithRefs = (route: LlmRoute) =>
-        resolveEffectAiRouteForTransport(route).pipe(
-          Effect.provideService(RefResolverService, refs),
-        );
       return {
-        resolveRoute: (route) => resolveWithRefs(route).pipe(Effect.map(effectAiRouteDescriptor)),
+        resolveRoute: (route) =>
+          resolveEffectAiRouteForTransport(route).pipe(Effect.map(effectAiRouteDescriptor)),
         call: (request, options) =>
           Effect.gen(function* () {
-            const resolved = yield* resolveWithRefs(request.route);
-            if (resolved.route.kind === "openai-chat-compatible") {
-              return yield* callOpenAiChatCompatible(
-                httpClient,
-                {
-                  route: resolved.route,
-                  endpoint: resolved.endpoint,
-                  credential: resolved.credential,
-                },
-                request,
-                options,
-              );
-            }
-            const model = yield* modelFactory({
-              route: resolved.route,
-              endpoint: resolved.endpoint,
-              credential: resolved.credential,
-            }).pipe(
-              Effect.provide(context),
-              Effect.mapError((cause) => new UpstreamFailure({ cause })),
+            const resolved = yield* resolveEffectAiRouteForTransport(request.route);
+            return yield* withEffectAiLiveRoute(refs, resolved.route, (liveRoute) =>
+              Effect.gen(function* () {
+                if (liveRoute.route.kind === "openai-chat-compatible") {
+                  return yield* callOpenAiChatCompatible(
+                    httpClient,
+                    {
+                      route: liveRoute.route,
+                      endpoint: liveRoute.endpoint,
+                      credential: liveRoute.credential,
+                    },
+                    request,
+                    options,
+                  );
+                }
+                const model = yield* modelFactory({
+                  route: liveRoute.route,
+                  endpoint: liveRoute.endpoint,
+                  credential: liveRoute.credential,
+                }).pipe(
+                  Effect.provide(context),
+                  Effect.mapError((cause) => new UpstreamFailure({ cause })),
+                );
+                return yield* callEffectAiLanguageModel(model, request, options);
+              }),
+            ).pipe(
+              Effect.mapError((cause) =>
+                cause instanceof UpstreamFailure ? cause : new UpstreamFailure({ cause }),
+              ),
             );
-            return yield* callEffectAiLanguageModel(model, request, options);
           }),
       };
     }),

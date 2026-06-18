@@ -20,6 +20,7 @@ import {
   defineTool,
   externalToolExecution,
   deterministicToolExecution,
+  isMaterialBrokerPlaceholder,
   resolveToolExecution,
   withToolReadRequirement,
   withToolWriteRequirement,
@@ -131,6 +132,10 @@ const testWireDescriptor = (route: LlmRoute): LlmWireDescriptor => ({
 const makeServices = (
   responses: ReadonlyArray<LlmResponse> = [response()],
   materials: Readonly<Record<string, ResolvedMaterial>> = {},
+  materialObserver: {
+    readonly onMaterial?: (ref: MaterialRef) => void;
+    readonly onDispose?: (ref: MaterialRef, material: ResolvedMaterial) => void;
+  } = {},
 ) => {
   const events: LedgerEvent[] = [];
   const llmRequests: LlmRequest[] = [];
@@ -212,9 +217,11 @@ const makeServices = (
   };
   const refs = RefResolverLive({
     material: (ref: MaterialRef) => {
+      materialObserver.onMaterial?.(ref);
       const value = materials[materialRefKey(ref)];
       return value === undefined ? null : value;
     },
+    dispose: ({ ref, material }) => materialObserver.onDispose?.(ref, material),
   });
   const admission = {
     attemptStructured: <O>() =>
@@ -2056,6 +2063,8 @@ describe("submit-agent runtime event writes", () => {
         purpose: "apply",
       });
       let observedToken: unknown;
+      const materialLookups: string[] = [];
+      const disposed: string[] = [];
       const tool = defineTool({
         name: "apply",
         description: "apply",
@@ -2073,7 +2082,10 @@ describe("submit-agent runtime event writes", () => {
             purpose: "apply",
           }),
         ],
-        admit: () => Effect.succeed({ ok: true }),
+        admit: () => {
+          expect(materialLookups).toEqual([]);
+          return Effect.succeed({ ok: true });
+        },
         execution: deterministicToolExecution(),
       });
 
@@ -2095,6 +2107,13 @@ describe("submit-agent runtime event writes", () => {
           response({ items: [{ type: "message", text: "done" }] }),
         ],
         { [materialRefKey(tokenRef)]: "secret-token-value" },
+        {
+          onMaterial: (ref) => materialLookups.push(materialRefKey(ref)),
+          onDispose: (ref, material) =>
+            disposed.push(
+              `${materialRefKey(ref)}:${typeof material === "string" ? material : JSON.stringify(material)}`,
+            ),
+        },
       );
 
       const { result, events } = yield* runSubmitWithServices(
@@ -2107,6 +2126,8 @@ describe("submit-agent runtime event writes", () => {
 
       expect(result).toMatchObject({ ok: true, final: "done" });
       expect(observedToken).toBe("secret-token-value");
+      expect(materialLookups).toEqual([materialRefKey(tokenRef)]);
+      expect(disposed).toEqual([`${materialRefKey(tokenRef)}:secret-token-value`]);
       expect(JSON.stringify(events)).not.toContain("secret-token-value");
       expect(decodedRuntimeBehaviorKinds(events)).toEqual([
         "agent.run.started",
@@ -2117,6 +2138,145 @@ describe("submit-agent runtime event writes", () => {
         "agent.run.completed",
       ]);
     }),
+  );
+
+  it.effect(
+    "passes broker placeholders to receipt-backed external tools without resolving raw material",
+    () =>
+      Effect.gen(function* () {
+        const tokenRef = credentialMaterialRef("WP_TOKEN", {
+          provider: "wordpress",
+          purpose: "apply",
+        });
+        const domain = { kind: "workspace" as const, ref: "workspace:default" };
+        const materialLookups: string[] = [];
+        let observedPlaceholder = false;
+        let observedReceipts: unknown;
+        const receiptClaim = {
+          phase: "lived" as const,
+          operationRef: "tool:submit-runtime-events:1:0:call-1",
+          scopeRef: { kind: "conversation" as const, scopeId: scope },
+          effectAuthorityRef: {
+            authorityClass: "write",
+            authorityId: "tool:apply",
+          },
+          originRef: { originId: "run:1", originKind: "submit" },
+          anchorRef: {
+            anchorId: "workspace_op:receipt:tool:submit-runtime-events:1:0:call-1:broker",
+            anchorKind: "external_receipt" as const,
+            carrierRef: "workspace_op:carrier:workspace-op",
+          },
+        };
+        const tool = defineTool({
+          name: "apply",
+          description: "apply",
+          args: Schema.Struct({ title: Schema.String }),
+          execute: (_args, ctx) => {
+            observedPlaceholder = isMaterialBrokerPlaceholder(ctx.materials.wp_token);
+            observedReceipts = ctx.materialBrokerReceipts;
+            return withToolWriteRequirement(
+              Effect.succeed(
+                receiptBackedToolResult({
+                  result: { applied: true },
+                  claim: receiptClaim,
+                }),
+              ),
+            );
+          },
+          authority: "write",
+          requiredMaterials: [
+            materialRequirement({
+              slot: "wp_token",
+              kind: "credential",
+              provider: "wordpress",
+              purpose: "apply",
+            }),
+          ],
+          admit: () => Effect.succeed({ ok: true }),
+          execution: externalToolExecution("write", domain),
+        });
+
+        const { result, events } = yield* runSubmitWithServices(
+          baseSpec({
+            tools: { apply: tool },
+            materials: { wp_token: tokenRef },
+            executionDomains: [
+              {
+                domain,
+                replay: { access: "write", witness: "receipt" },
+                broker: {
+                  mode: "trusted_substitution",
+                  materialKinds: ["credential"],
+                  outboundBoundary: "domain-owner-defined",
+                },
+              },
+            ],
+            toolIntents: [
+              {
+                kind: "workspace_op.requested",
+                boundaryPackage: boundaryPackage(
+                  defineBoundaryContract({
+                    packageId: "@agent-os/workspace-op",
+                    kindPrefixes: ["workspace_op."],
+                    roles: ["generator", "reader"],
+                    events: {
+                      "workspace_op.requested": {
+                        payloadSchema: {
+                          type: "object",
+                          properties: { requestedBy: { type: "string" } },
+                          required: ["requestedBy"],
+                          additionalProperties: true,
+                        },
+                      },
+                    },
+                    effectAuthorityContracts: [],
+                    materialRequirements: [],
+                    settlement: defineSettlementContract({
+                      settlementId: "@agent-os/workspace-op",
+                      anchorKinds: ["external_receipt"],
+                      rejectionKinds: ["provider_rejected"],
+                    }),
+                    projection: { derivedFromLedger: true, shadowState: false },
+                  }),
+                  "0.2.9",
+                ),
+              },
+            ],
+            receiptBackedTools: {
+              apply: {
+                kind: "intent_projection",
+                intentKinds: ["workspace_op.requested"],
+              },
+            },
+          }),
+          makeServices(
+            [
+              response({
+                items: [
+                  { type: "message", text: "use apply" },
+                  {
+                    type: "tool_call",
+                    call: {
+                      id: "call-1",
+                      type: "function",
+                      function: { name: "apply", arguments: '{"title":"Hello"}' },
+                    },
+                  },
+                ],
+              }),
+              response({ items: [{ type: "message", text: "done" }] }),
+            ],
+            { [materialRefKey(tokenRef)]: "secret-token-value" },
+            { onMaterial: (ref) => materialLookups.push(materialRefKey(ref)) },
+          ),
+        );
+
+        expect(result).toMatchObject({ ok: true, final: "done" });
+        expect(observedPlaceholder).toBe(true);
+        expect(observedReceipts).toMatchObject([{ slot: "wp_token", materialKind: "credential" }]);
+        expect(materialLookups).toEqual([]);
+        expect(JSON.stringify(events)).not.toContain("secret-token-value");
+      }),
   );
 
   it.effect("rejects a missing required material before tool execution", () =>

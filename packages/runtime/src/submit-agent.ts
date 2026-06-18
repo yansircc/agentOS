@@ -45,6 +45,7 @@ import {
   isMaterialRef,
   materialRefKey,
   materialRefSatisfiesRequirement,
+  type MaterialRef,
 } from "@agent-os/kernel/material-ref";
 import {
   InvalidTraceContext,
@@ -85,19 +86,23 @@ import type { InternalSubmitSpec } from "./internal-submit";
 import { Ledger } from "./ledger";
 import {
   RefResolverService,
-  resolveMaterial,
   type RefResolutionFailed,
   type ResolvedMaterial,
   type ResolvedMaterialService,
 } from "@agent-os/kernel/ref-resolver";
+import { openLive } from "../../kernel/src/internal/live-edge";
 import { Quota } from "./quota-service";
 import {
   decodeToolArgs,
   executeTool,
+  planMaterialBrokerSubstitution,
   resolveToolExecution,
   validateExecutionDomainRegistry,
   validateToolRegistry,
   type ExecutionDomainDeclaration,
+  type MaterialBrokerReceipt,
+  type MaterialBrokerSubstitutionIssue,
+  type ResolvedToolExecution,
   type Tool,
   type ToolExecutionContextInput,
   type ToolProjectionWaitSpec,
@@ -248,11 +253,13 @@ const runtimeToolContext = (
   projections: Context.Service.Shape<typeof MaterializedProjections>,
   claim: PreClaim,
   resume: unknown,
+  materialBrokerReceipts: ReadonlyArray<MaterialBrokerReceipt> = [],
 ): ToolExecutionContextInput => {
   const declaredIntents = new Map((spec.toolIntents ?? []).map((intent) => [intent.kind, intent]));
   return {
     ...spec.toolContext,
     ...(resume === undefined ? {} : { resume }),
+    ...(materialBrokerReceipts.length === 0 ? {} : { materialBrokerReceipts }),
     ...(declaredIntents.size === 0
       ? {}
       : {
@@ -460,74 +467,150 @@ const materialRejection = (
   reason,
 });
 
-const resolveToolMaterials = (
-  refs: ResolvedMaterialService,
+interface LocalToolMaterialRef {
+  readonly slot: string;
+  readonly ref: MaterialRef;
+}
+
+interface RuntimeToolMaterialPlan {
+  readonly materials: ResolvedToolMaterials;
+  readonly localRefs: ReadonlyArray<LocalToolMaterialRef>;
+  readonly brokerReceipts: ReadonlyArray<MaterialBrokerReceipt>;
+}
+
+const materialBrokerIssueLabel = (issue: MaterialBrokerSubstitutionIssue): string => {
+  switch (issue.kind) {
+    case "invalid_registry":
+      return "invalid_registry";
+    case "invalid_material_ref":
+      return "invalid_material_ref";
+    case "invalid_material_requirement":
+      return "invalid_material_requirement";
+    case "missing_broker_declaration":
+      return `missing_broker:${issue.domain.kind}:${issue.domain.ref}`;
+    case "unsupported_material_kind":
+      return `unsupported_kind:${issue.materialKind}`;
+    case "requirement_mismatch":
+      return `requirement_mismatch:${materialRefKey(issue.materialRef)}`;
+  }
+};
+
+const planToolMaterials = (
   spec: InternalSubmitSpec,
   tool: Tool,
   claim: { readonly operationRef: string },
-): Effect.Effect<
+  resolvedExecution: ResolvedToolExecution,
+):
   | {
       readonly ok: true;
-      readonly materials: ResolvedToolMaterials;
+      readonly plan: RuntimeToolMaterialPlan;
     }
   | {
       readonly ok: false;
       readonly rejectionRef: RejectionRef;
-    },
-  never
-> =>
-  Effect.gen(function* () {
-    const out: Record<string, ResolvedMaterial> = {};
-    for (const requirement of tool.contract.requiredMaterials) {
-      const ref = spec.materials?.[requirement.slot];
-      if (ref === undefined) {
-        if (requirement.required) {
-          return {
-            ok: false,
-            rejectionRef: materialRejection(
-              claim,
-              `material_missing:${requirement.slot}`,
-              "resource_denied",
-            ),
-          };
-        }
-        continue;
-      }
-      if (!isMaterialRef(ref)) {
+    } => {
+  const materials: Record<string, ResolvedMaterial> = {};
+  const localRefs: LocalToolMaterialRef[] = [];
+  const brokerReceipts: MaterialBrokerReceipt[] = [];
+
+  for (const requirement of tool.contract.requiredMaterials) {
+    const ref = spec.materials?.[requirement.slot];
+    if (ref === undefined) {
+      if (requirement.required) {
         return {
           ok: false,
           rejectionRef: materialRejection(
             claim,
-            `material_invalid:${requirement.slot}`,
-            "validation_failed",
-          ),
-        };
-      }
-      if (!materialRefSatisfiesRequirement(ref, requirement)) {
-        return {
-          ok: false,
-          rejectionRef: materialRejection(
-            claim,
-            `material_invalid:${requirement.slot}:${materialRefKey(ref)}`,
-            "validation_failed",
-          ),
-        };
-      }
-      const resolved = yield* Effect.result(resolveMaterial(refs, ref));
-      if (resolved._tag === "Failure") {
-        return {
-          ok: false,
-          rejectionRef: materialRejection(
-            claim,
-            `material_unresolved:${requirement.slot}:${materialRefKey(ref)}`,
+            `material_missing:${requirement.slot}`,
             "resource_denied",
           ),
         };
       }
-      out[requirement.slot] = resolved.success;
+      continue;
     }
-    return { ok: true, materials: out };
+    if (!isMaterialRef(ref)) {
+      return {
+        ok: false,
+        rejectionRef: materialRejection(
+          claim,
+          `material_invalid:${requirement.slot}`,
+          "validation_failed",
+        ),
+      };
+    }
+    if (!materialRefSatisfiesRequirement(ref, requirement)) {
+      return {
+        ok: false,
+        rejectionRef: materialRejection(
+          claim,
+          `material_invalid:${requirement.slot}:${materialRefKey(ref)}`,
+          "validation_failed",
+        ),
+      };
+    }
+    if (resolvedExecution.kind === "external") {
+      const brokerPlan = planMaterialBrokerSubstitution({
+        registry: { domains: spec.executionDomains ?? [] },
+        domain: resolvedExecution.execution.domain,
+        materialRef: ref,
+        requirement,
+      });
+      if (!brokerPlan.ok) {
+        return {
+          ok: false,
+          rejectionRef: materialRejection(
+            claim,
+            `material_broker_unavailable:${requirement.slot}:${brokerPlan.issues.map(materialBrokerIssueLabel).join(",")}`,
+            "resource_denied",
+          ),
+        };
+      }
+      materials[requirement.slot] = brokerPlan.plan.placeholder;
+      brokerReceipts.push(brokerPlan.plan.receipt);
+    } else {
+      localRefs.push({ slot: requirement.slot, ref });
+    }
+  }
+  return { ok: true, plan: { materials, localRefs, brokerReceipts } };
+};
+
+const materialResolutionToolError = (
+  toolName: string,
+  material: LocalToolMaterialRef,
+  failure: RefResolutionFailed,
+): ToolError =>
+  new ToolError({
+    toolName,
+    cause: {
+      reason:
+        failure.reason === "resolver_threw" ? "material_resolution_failed" : "material_unresolved",
+      slot: material.slot,
+      ref: materialRefKey(material.ref),
+    },
   });
+
+const withLocalResolvedToolMaterials = <A, E, R>(
+  refs: ResolvedMaterialService,
+  toolName: string,
+  localRefs: ReadonlyArray<LocalToolMaterialRef>,
+  use: (materials: ResolvedToolMaterials) => Effect.Effect<A, E, R>,
+): Effect.Effect<A, E | ToolError, R> => {
+  const loop = (
+    index: number,
+    materials: Record<string, ResolvedMaterial>,
+  ): Effect.Effect<A, E | ToolError, R> => {
+    const local = localRefs[index];
+    if (local === undefined) return use(materials);
+    return Effect.acquireUseRelease(
+      refs
+        .material(local.ref)
+        .pipe(Effect.mapError((failure) => materialResolutionToolError(toolName, local, failure))),
+      (handle) => loop(index + 1, { ...materials, [local.slot]: openLive(handle.value) }),
+      (handle) => handle.dispose(),
+    );
+  };
+  return loop(0, {});
+};
 
 const payloadRecord = (event: LedgerEvent): Readonly<Record<string, unknown>> | null =>
   Predicate.isObject(event.payload) ? event.payload : null;
@@ -1896,27 +1979,6 @@ export const submitAgentEffect = (
             });
           }
 
-          const resolvedMaterials = yield* resolveToolMaterials(refs, spec, tool, claim);
-          if (!resolvedMaterials.ok) {
-            yield* appendRuntimeDriverAction(ledger, {
-              kind: "reject_tool",
-              event: toolRejectedEvent({
-                ...identity,
-                runId: started.id,
-                toolCallId: call.id,
-                name: call.function.name,
-                args: call.function.arguments,
-                execution: tool.execution,
-                claim: settleToolAdmissionRejected(claim, resolvedMaterials.rejectionRef),
-                traceContext,
-              }),
-            });
-            return yield* new ToolError({
-              toolName: call.function.name,
-              cause: toolAdmissionFailureCause(resolvedMaterials.rejectionRef),
-            });
-          }
-
           const admissionProgram = yield* Effect.result(
             Effect.try({
               try: () =>
@@ -2006,6 +2068,27 @@ export const submitAgentEffect = (
             });
           }
 
+          const materialPlan = planToolMaterials(spec, tool, claim, resolvedExecution.resolved);
+          if (!materialPlan.ok) {
+            yield* appendRuntimeDriverAction(ledger, {
+              kind: "reject_tool",
+              event: toolRejectedEvent({
+                ...identity,
+                runId: started.id,
+                toolCallId: call.id,
+                name: call.function.name,
+                args: call.function.arguments,
+                execution: tool.execution,
+                claim: settleToolAdmissionRejected(claim, materialPlan.rejectionRef),
+                traceContext,
+              }),
+            });
+            return yield* new ToolError({
+              toolName: call.function.name,
+              cause: toolAdmissionFailureCause(materialPlan.rejectionRef),
+            });
+          }
+
           // Grant + execute are inside retry, but quota grants are keyed by
           // the semantic tool claim operationRef. Retrying the same claim
           // cannot double-charge quota; separate tool calls still consume
@@ -2073,18 +2156,25 @@ export const submitAgentEffect = (
                     });
                   }
                 }
-                return yield* executeTool(
-                  tool,
-                  args,
+                return yield* withLocalResolvedToolMaterials(
+                  refs,
                   call.function.name,
-                  resolvedMaterials.materials,
-                  runtimeToolContext(
-                    spec,
-                    boundaryEvents,
-                    projections,
-                    claim,
-                    call.id === resumedToolCallIdThisTurn ? spec.resume?.resume : undefined,
-                  ),
+                  materialPlan.plan.localRefs,
+                  (localMaterials) =>
+                    executeTool(
+                      tool,
+                      args,
+                      call.function.name,
+                      { ...materialPlan.plan.materials, ...localMaterials },
+                      runtimeToolContext(
+                        spec,
+                        boundaryEvents,
+                        projections,
+                        claim,
+                        call.id === resumedToolCallIdThisTurn ? spec.resume?.resume : undefined,
+                        materialPlan.plan.brokerReceipts,
+                      ),
+                    ),
                 );
               });
               if (!Number.isFinite(budgetTimeMs)) {

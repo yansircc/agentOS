@@ -114,7 +114,7 @@ const collectFailures = (root = repoRoot) => {
   }
 
   const guardIndex = runtime.indexOf('resolvedExecution.resolved.witness === "receipt"');
-  const executeIndex = runtime.indexOf("return yield* executeTool", guardIndex);
+  const executeIndex = runtime.indexOf("executeTool(", guardIndex);
   if (guardIndex < 0 || executeIndex < 0) {
     failures.push(`${runtimeFile}: missing submit-time receipt witness guard before execute`);
   }

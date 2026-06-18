@@ -55,6 +55,7 @@ const MATERIAL_BROKER_PLACEHOLDER_BRAND = Symbol("@agent-os/kernel/MaterialBroke
  */
 export interface ToolExecutionContext {
   readonly materials: ResolvedToolMaterials;
+  readonly materialBrokerReceipts?: ReadonlyArray<MaterialBrokerReceipt>;
   readonly resume?: unknown;
   readonly emitIntent?: ToolIntentEmitter;
   readonly awaitProjection?: ToolProjectionWaiter;

@@ -74,16 +74,16 @@ const optionsFor = (
   },
   resolver: {
     expectedDigest: () => Effect.succeed(digest),
-    target: () =>
-      Effect.succeed({
+    target: (_targetRef, use) =>
+      use({
         accountId: "raw-account-id",
         scriptName: "raw-script-name",
         apiToken: "secret-cloudflare-token",
       }),
     previousDeployRef: () => Effect.succeed(previousDeployRef),
-    productionEndpoint: () => Effect.succeed("https://raw-production.example"),
-    rollback: () =>
-      Effect.succeed({
+    productionEndpoint: (_productionRef, use) => use("https://raw-production.example"),
+    rollback: (_rollbackRef, use) =>
+      use({
         accountId: "raw-account-id",
         scriptName: "raw-script-name",
         apiToken: "secret-cloudflare-token",

@@ -349,8 +349,9 @@ describe("@agent-os/llm-transport-effect-ai", () => {
       const descriptor = yield* transport.resolveRoute(request().route);
       expect(descriptor.wireDescriptor).toMatchObject({
         method: "POST",
-        url: "https://provider.example/base/chat/completions",
+        url: "${endpoint:openai}/chat/completions",
       });
+      expect(JSON.stringify(descriptor.wireDescriptor)).not.toContain("https://provider.example");
       expect(JSON.stringify(descriptor.wireDescriptor)).not.toContain("sk-secret");
       expect(descriptor.providerOutputAdapterVersion).toBe("openai-chat-completions-output-v1");
       const result = yield* transport.call(request());

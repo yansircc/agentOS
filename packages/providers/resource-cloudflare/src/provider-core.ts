@@ -8,11 +8,7 @@ import {
   type ExternalResourceMaterialRef,
   type MaterialRef,
 } from "@agent-os/kernel/material-ref";
-import {
-  useRefResolverMaterial,
-  type RefResolutionFailed,
-  type RefResolver,
-} from "@agent-os/kernel/ref-resolver";
+import { type RefResolver } from "@agent-os/kernel/ref-resolver";
 
 import type {
   ResourceBindRequest,
@@ -268,106 +264,105 @@ const failureProofRef = (
 const isCloudflareCredentialRef = (ref: CredentialMaterialRef): boolean =>
   ref.provider === "cloudflare" && ref.purpose === "cloudflare_api";
 
-const requireCloudflareCredential = <Material, MutationInput>(
+const withResolverMaterial = <Material, MutationInput, Parsed, A, E, R>(
+  options: CloudflareResourceCarrierOptions<MutationInput>,
+  spec: CloudflareResourceSpec<Material, MutationInput>,
+  claim: PreClaim,
+  step: ResourceLifecycleStep,
+  ref: MaterialRef,
+  parse: (material: unknown) => Parsed | null,
+  unavailableReason: string,
+  resolutionFailedReason: string,
+  use: (material: Parsed) => Effect.Effect<A, E, R>,
+): Effect.Effect<A, E | ResourceFailure, R> =>
+  Effect.acquireUseRelease(
+    Effect.try({
+      try: () => options.resolver.material(ref),
+      catch: () => materialUnavailable(claim, spec.resourceKind, step, resolutionFailedReason),
+    }).pipe(
+      Effect.flatMap((material) =>
+        material === null
+          ? Effect.fail(materialUnavailable(claim, spec.resourceKind, step, unavailableReason))
+          : Effect.succeed(material),
+      ),
+    ),
+    (raw): Effect.Effect<A, E | ResourceFailure, R> => {
+      const parsed = parse(raw);
+      return parsed === null
+        ? Effect.fail(materialUnavailable(claim, spec.resourceKind, step, unavailableReason))
+        : use(parsed);
+    },
+    (raw) =>
+      Effect.sync(() => {
+        options.resolver.dispose?.({ ref, material: raw });
+      }),
+  );
+
+const withCloudflareCredential = <Material, MutationInput, A, E, R>(
   options: CloudflareResourceCarrierOptions<MutationInput>,
   spec: CloudflareResourceSpec<Material, MutationInput>,
   claim: PreClaim,
   step: ResourceLifecycleStep,
   credentialRef: CredentialMaterialRef,
-): Effect.Effect<string, ResourceFailure> =>
-  Effect.gen(function* () {
-    if (!isCloudflareCredentialRef(credentialRef)) {
-      return yield* Effect.fail(
-        materialUnavailable(
-          claim,
-          spec.resourceKind,
-          step,
-          "cloudflare_api credential material is required",
-        ),
-      );
-    }
-    const material = yield* useRefResolverMaterial(options.resolver, credentialRef, (value) =>
-      Effect.succeed(value),
-    ).pipe(
-      Effect.mapError((error: RefResolutionFailed) =>
-        materialUnavailable(
-          claim,
-          spec.resourceKind,
-          step,
-          error.reason === "resolver_threw"
-            ? "cloudflare_api credential resolution failed"
-            : "cloudflare_api credential material is unavailable",
-        ),
+  use: (token: string) => Effect.Effect<A, E, R>,
+): Effect.Effect<A, E | ResourceFailure, R> => {
+  if (!isCloudflareCredentialRef(credentialRef)) {
+    return Effect.fail(
+      materialUnavailable(
+        claim,
+        spec.resourceKind,
+        step,
+        "cloudflare_api credential material is required",
       ),
     );
-    if (typeof material !== "string" || material.length === 0) {
-      return yield* Effect.fail(
-        materialUnavailable(
-          claim,
-          spec.resourceKind,
-          step,
-          "cloudflare_api credential material is unavailable",
-        ),
-      );
-    }
-    return material;
-  });
+  }
+  return withResolverMaterial(
+    options,
+    spec,
+    claim,
+    step,
+    credentialRef,
+    (material) => (typeof material === "string" && material.length > 0 ? material : null),
+    "cloudflare_api credential material is unavailable",
+    "cloudflare_api credential resolution failed",
+    use,
+  );
+};
 
-const requireCloudflareAccount = <Material, MutationInput>(
+const withCloudflareAccount = <Material, MutationInput, A, E, R>(
   options: CloudflareResourceCarrierOptions<MutationInput>,
   spec: CloudflareResourceSpec<Material, MutationInput>,
   claim: PreClaim,
   step: ResourceLifecycleStep,
   accountRef: ExternalResourceMaterialRef,
-): Effect.Effect<CloudflareAccountMaterial, ResourceFailure> =>
-  Effect.gen(function* () {
-    if (accountRef.provider !== "cloudflare" || accountRef.resourceKind !== "account") {
-      return yield* Effect.fail(
-        materialUnavailable(
-          claim,
-          spec.resourceKind,
-          step,
-          "cloudflare account material is required",
-        ),
-      );
-    }
-    const material = yield* useRefResolverMaterial(options.resolver, accountRef, (value) =>
-      Effect.succeed(value),
-    ).pipe(
-      Effect.mapError((error: RefResolutionFailed) =>
-        materialUnavailable(
-          claim,
-          spec.resourceKind,
-          step,
-          error.reason === "resolver_threw"
-            ? "cloudflare account resolution failed"
-            : "cloudflare account material must contain accountId",
-        ),
+  use: (account: CloudflareAccountMaterial) => Effect.Effect<A, E, R>,
+): Effect.Effect<A, E | ResourceFailure, R> => {
+  if (accountRef.provider !== "cloudflare" || accountRef.resourceKind !== "account") {
+    return Effect.fail(
+      materialUnavailable(
+        claim,
+        spec.resourceKind,
+        step,
+        "cloudflare account material is required",
       ),
     );
-    if (!Predicate.isObject(material)) {
-      return yield* Effect.fail(
-        materialUnavailable(
-          claim,
-          spec.resourceKind,
-          step,
-          "cloudflare account material must contain accountId",
-        ),
-      );
-    }
-    const accountId = nonEmptyString(material.accountId);
-    if (accountId === null) {
-      return yield* Effect.fail(
-        materialUnavailable(
-          claim,
-          spec.resourceKind,
-          step,
-          "cloudflare account material must contain accountId",
-        ),
-      );
-    }
-    return { accountId };
-  });
+  }
+  return withResolverMaterial(
+    options,
+    spec,
+    claim,
+    step,
+    accountRef,
+    (material) => {
+      if (!Predicate.isObject(material)) return null;
+      const accountId = nonEmptyString(material.accountId);
+      return accountId === null ? null : { accountId };
+    },
+    "cloudflare account material must contain accountId",
+    "cloudflare account resolution failed",
+    use,
+  );
+};
 
 const requireResourceRef = <Material, MutationInput>(
   spec: CloudflareResourceSpec<Material, MutationInput>,
@@ -411,91 +406,31 @@ const requireBindingRef = <Material, MutationInput>(
   return Effect.succeed(bindingRef);
 };
 
-const requireResourceMaterial = <Material, MutationInput>(
+const withResourceMaterial = <Material, MutationInput, A, E, R>(
   options: CloudflareResourceCarrierOptions<MutationInput>,
   spec: CloudflareResourceSpec<Material, MutationInput>,
   claim: PreClaim,
   step: ResourceLifecycleStep,
   resourceRef: ExternalResourceMaterialRef,
-): Effect.Effect<Material, ResourceFailure> =>
-  Effect.gen(function* () {
-    const material = yield* useRefResolverMaterial(options.resolver, resourceRef, (value) =>
-      Effect.succeed(value),
-    ).pipe(
-      Effect.mapError((error: RefResolutionFailed) =>
-        materialUnavailable(
-          claim,
-          spec.resourceKind,
-          step,
-          error.reason === "resolver_threw"
-            ? `cloudflare_${spec.resourceKind}_resource_resolution_failed`
-            : `cloudflare_${spec.resourceKind}_resource_material_unavailable`,
-        ),
-      ),
-    );
-    const parsed = spec.parseResourceMaterial(material);
-    if (parsed === null) {
-      return yield* Effect.fail(
-        materialUnavailable(
-          claim,
-          spec.resourceKind,
-          step,
-          `cloudflare_${spec.resourceKind}_resource_material_unavailable`,
-        ),
-      );
-    }
-    const reason = spec.validateResolvedMaterial?.(step, parsed) ?? null;
-    if (reason !== null) {
-      return yield* Effect.fail(materialUnavailable(claim, spec.resourceKind, step, reason));
-    }
-    return parsed;
-  });
-
-const requireBindingMaterial = <Material, MutationInput>(
-  options: CloudflareResourceCarrierOptions<MutationInput>,
-  spec: CloudflareResourceSpec<Material, MutationInput>,
-  claim: PreClaim,
-  step: ResourceLifecycleStep,
-  bindingRef: BindingMaterialRef,
-): Effect.Effect<CloudflareBindingMaterial, ResourceFailure> =>
-  Effect.gen(function* () {
-    const material = yield* useRefResolverMaterial(options.resolver, bindingRef, (value) =>
-      Effect.succeed(value),
-    ).pipe(
-      Effect.mapError((error: RefResolutionFailed) =>
-        materialUnavailable(
-          claim,
-          spec.resourceKind,
-          step,
-          error.reason === "resolver_threw"
-            ? `cloudflare_${spec.resourceKind}_binding_resolution_failed`
-            : `cloudflare_${spec.resourceKind}_binding_material_unavailable`,
-        ),
-      ),
-    );
-    if (!Predicate.isObject(material)) {
-      return yield* Effect.fail(
-        materialUnavailable(
-          claim,
-          spec.resourceKind,
-          step,
-          `cloudflare_${spec.resourceKind}_binding_material_unavailable`,
-        ),
-      );
-    }
-    const bindingName = nonEmptyString(material.bindingName);
-    if (bindingName === null) {
-      return yield* Effect.fail(
-        materialUnavailable(
-          claim,
-          spec.resourceKind,
-          step,
-          `cloudflare_${spec.resourceKind}_binding_material_unavailable`,
-        ),
-      );
-    }
-    return { bindingName };
-  });
+  use: (material: Material) => Effect.Effect<A, E, R>,
+): Effect.Effect<A, E | ResourceFailure, R> =>
+  withResolverMaterial(
+    options,
+    spec,
+    claim,
+    step,
+    resourceRef,
+    spec.parseResourceMaterial,
+    `cloudflare_${spec.resourceKind}_resource_material_unavailable`,
+    `cloudflare_${spec.resourceKind}_resource_resolution_failed`,
+    (parsed): Effect.Effect<A, E | ResourceFailure, R> => {
+      const reason = spec.validateResolvedMaterial?.(step, parsed) ?? null;
+      if (reason !== null) {
+        return Effect.fail(materialUnavailable(claim, spec.resourceKind, step, reason));
+      }
+      return use(parsed);
+    },
+  );
 
 const cloudflareJson = <Material, MutationInput>(
   options: CloudflareResourceCarrierOptions<MutationInput>,
@@ -663,6 +598,24 @@ const requireMutationInput = <Material, MutationInput>(
     return input;
   });
 
+const withCloudflareAuth = <Material, MutationInput, A, E, R>(
+  options: CloudflareResourceCarrierOptions<MutationInput>,
+  spec: CloudflareResourceSpec<Material, MutationInput>,
+  claim: PreClaim,
+  step: ResourceLifecycleStep,
+  credentialRef: CredentialMaterialRef,
+  accountRef: ExternalResourceMaterialRef,
+  use: (input: {
+    readonly token: string;
+    readonly account: CloudflareAccountMaterial;
+  }) => Effect.Effect<A, E, R>,
+): Effect.Effect<A, E | ResourceFailure, R> =>
+  withCloudflareCredential(options, spec, claim, step, credentialRef, (token) =>
+    withCloudflareAccount(options, spec, claim, step, accountRef, (account) =>
+      use({ token, account }),
+    ),
+  );
+
 const livedPayloadClaim = (
   claim: PreClaim,
   resourceKind: CloudflareResourceKind,
@@ -694,81 +647,92 @@ export const makeCloudflareResourceCarrier = <Material, MutationInput>(
           );
         }
         const resourceRef = yield* requireProvisionResourceRef(spec, request.claim, request);
-        const provisionMaterial = spec.provisionRequiresMaterial
-          ? yield* requireResourceMaterial(options, spec, request.claim, "provision", resourceRef)
-          : undefined;
-        if (provisionMaterial !== undefined) {
-          const reason = spec.validateProvisionMaterial?.(provisionMaterial) ?? null;
-          if (reason !== null) {
-            return yield* Effect.fail(
-              materialUnavailable(request.claim, spec.resourceKind, "provision", reason),
-            );
-          }
-        }
-        const token = yield* requireCloudflareCredential(
-          options,
-          spec,
-          request.claim,
-          "provision",
-          request.credentialRef,
-        );
-        const account = yield* requireCloudflareAccount(
-          options,
-          spec,
-          request.claim,
-          "provision",
-          request.accountRef,
-        );
         if (request.bindingRef !== undefined) {
-          const bindingRef = yield* requireBindingRef(
+          yield* requireBindingRef(spec, request.claim, "provision", request.bindingRef);
+        }
+        const runProvision = (provisionMaterial: Material | undefined) =>
+          withCloudflareAuth(
+            options,
             spec,
             request.claim,
             "provision",
-            request.bindingRef,
+            request.credentialRef,
+            request.accountRef,
+            ({ token, account }) =>
+              Effect.gen(function* () {
+                const body = yield* cloudflareJson(
+                  options,
+                  spec,
+                  request.claim,
+                  "provision",
+                  token,
+                  spec.provisionRequest(account.accountId, {
+                    resourceName: request.resourceName,
+                    resourceMaterial: provisionMaterial,
+                  }),
+                );
+                yield* validateProviderResponse(spec, request.claim, "provision", body);
+                const material = spec.materialFromProvisionResult(
+                  {
+                    resourceName: request.resourceName,
+                    resourceMaterial: provisionMaterial,
+                  },
+                  body,
+                );
+                if (material === null) {
+                  return yield* Effect.fail(
+                    providerFailure(
+                      request.claim,
+                      spec.resourceKind,
+                      "provision",
+                      "ProvisionFailed",
+                      `cloudflare_${spec.resourceKind}_create_result_missing_material`,
+                    ),
+                  );
+                }
+                yield* recordProvisionedMaterial(
+                  options,
+                  spec,
+                  request.claim,
+                  resourceRef,
+                  material,
+                );
+                const anchorId = proofRef(spec.resourceKind, "provision", request.claim);
+                return {
+                  subjectRef: request.subjectRef,
+                  resourceKind: spec.resourceKind,
+                  resourceRef,
+                  accountRef: request.accountRef,
+                  ...(request.bindingRef === undefined ? {} : { bindingRef: request.bindingRef }),
+                  proofRef: anchorId,
+                  claim: livedPayloadClaim(
+                    request.claim,
+                    spec.resourceKind,
+                    "provision",
+                    carrierRef,
+                  ),
+                };
+              }),
           );
-          yield* requireBindingMaterial(options, spec, request.claim, "provision", bindingRef);
+        if (!spec.provisionRequiresMaterial) {
+          return yield* runProvision(undefined);
         }
-        const body = yield* cloudflareJson(
+        return yield* withResourceMaterial(
           options,
           spec,
           request.claim,
           "provision",
-          token,
-          spec.provisionRequest(account.accountId, {
-            resourceName: request.resourceName,
-            resourceMaterial: provisionMaterial,
-          }),
-        );
-        yield* validateProviderResponse(spec, request.claim, "provision", body);
-        const material = spec.materialFromProvisionResult(
-          {
-            resourceName: request.resourceName,
-            resourceMaterial: provisionMaterial,
-          },
-          body,
-        );
-        if (material === null) {
-          return yield* Effect.fail(
-            providerFailure(
-              request.claim,
-              spec.resourceKind,
-              "provision",
-              "ProvisionFailed",
-              `cloudflare_${spec.resourceKind}_create_result_missing_material`,
-            ),
-          );
-        }
-        yield* recordProvisionedMaterial(options, spec, request.claim, resourceRef, material);
-        const anchorId = proofRef(spec.resourceKind, "provision", request.claim);
-        return {
-          subjectRef: request.subjectRef,
-          resourceKind: spec.resourceKind,
           resourceRef,
-          accountRef: request.accountRef,
-          ...(request.bindingRef === undefined ? {} : { bindingRef: request.bindingRef }),
-          proofRef: anchorId,
-          claim: livedPayloadClaim(request.claim, spec.resourceKind, "provision", carrierRef),
-        };
+          (provisionMaterial) => {
+            const reason = spec.validateProvisionMaterial?.(provisionMaterial) ?? null;
+            if (reason !== null) {
+              return Effect.fail(
+                materialUnavailable(request.claim, spec.resourceKind, "provision", reason),
+              );
+            }
+            return runProvision(provisionMaterial);
+          },
+        );
       }),
 
     bind: (request: ResourceBindRequest) =>
@@ -785,45 +749,36 @@ export const makeCloudflareResourceCarrier = <Material, MutationInput>(
           "bind",
           request.bindingRef,
         );
-        const token = yield* requireCloudflareCredential(
+        return yield* withCloudflareAuth(
           options,
           spec,
           request.claim,
           "bind",
           request.credentialRef,
-        );
-        const account = yield* requireCloudflareAccount(
-          options,
-          spec,
-          request.claim,
-          "bind",
           request.accountRef,
+          ({ token, account }) =>
+            withResourceMaterial(options, spec, request.claim, "bind", resourceRef, (material) =>
+              Effect.gen(function* () {
+                const body = yield* cloudflareJson(
+                  options,
+                  spec,
+                  request.claim,
+                  "bind",
+                  token,
+                  spec.bindRequest(account.accountId, material),
+                );
+                yield* validateProviderResponse(spec, request.claim, "bind", body);
+                const anchorId = proofRef(spec.resourceKind, "bind", request.claim);
+                return {
+                  subjectRef: request.subjectRef,
+                  resourceRef,
+                  bindingRef,
+                  proofRef: anchorId,
+                  claim: livedPayloadClaim(request.claim, spec.resourceKind, "bind", carrierRef),
+                };
+              }),
+            ),
         );
-        const material = yield* requireResourceMaterial(
-          options,
-          spec,
-          request.claim,
-          "bind",
-          resourceRef,
-        );
-        yield* requireBindingMaterial(options, spec, request.claim, "bind", bindingRef);
-        const body = yield* cloudflareJson(
-          options,
-          spec,
-          request.claim,
-          "bind",
-          token,
-          spec.bindRequest(account.accountId, material),
-        );
-        yield* validateProviderResponse(spec, request.claim, "bind", body);
-        const anchorId = proofRef(spec.resourceKind, "bind", request.claim);
-        return {
-          subjectRef: request.subjectRef,
-          resourceRef,
-          bindingRef,
-          proofRef: anchorId,
-          claim: livedPayloadClaim(request.claim, spec.resourceKind, "bind", carrierRef),
-        };
       }),
 
     mutate: (request: ResourceMutationRequest) =>
@@ -844,34 +799,7 @@ export const makeCloudflareResourceCarrier = <Material, MutationInput>(
           "mutate",
           request.resourceRef,
         );
-        const bindingRef = yield* requireBindingRef(
-          spec,
-          request.claim,
-          "mutate",
-          request.bindingRef,
-        );
-        const token = yield* requireCloudflareCredential(
-          options,
-          spec,
-          request.claim,
-          "mutate",
-          request.credentialRef,
-        );
-        const account = yield* requireCloudflareAccount(
-          options,
-          spec,
-          request.claim,
-          "mutate",
-          request.accountRef,
-        );
-        const material = yield* requireResourceMaterial(
-          options,
-          spec,
-          request.claim,
-          "mutate",
-          resourceRef,
-        );
-        yield* requireBindingMaterial(options, spec, request.claim, "mutate", bindingRef);
+        yield* requireBindingRef(spec, request.claim, "mutate", request.bindingRef);
         const input = yield* requireMutationInput(
           options,
           spec,
@@ -879,25 +807,40 @@ export const makeCloudflareResourceCarrier = <Material, MutationInput>(
           request.mutationKind,
           request.inputRef,
         );
-        const body = yield* cloudflareJson(
+        return yield* withCloudflareAuth(
           options,
           spec,
           request.claim,
           "mutate",
-          token,
-          spec.mutationRequest(account.accountId, material, request.mutationKind, input),
+          request.credentialRef,
+          request.accountRef,
+          ({ token, account }) =>
+            withResourceMaterial(options, spec, request.claim, "mutate", resourceRef, (material) =>
+              Effect.gen(function* () {
+                const body = yield* cloudflareJson(
+                  options,
+                  spec,
+                  request.claim,
+                  "mutate",
+                  token,
+                  spec.mutationRequest(account.accountId, material, request.mutationKind, input),
+                );
+                yield* validateProviderResponse(spec, request.claim, "mutate", body);
+                const anchorId = proofRef(spec.resourceKind, "mutate", request.claim);
+                return {
+                  subjectRef: request.subjectRef,
+                  resourceRef,
+                  mutationKind: request.mutationKind,
+                  mutationRef: request.inputRef,
+                  proofRef: anchorId,
+                  ...(request.fingerprint === undefined
+                    ? {}
+                    : { fingerprint: request.fingerprint }),
+                  claim: livedPayloadClaim(request.claim, spec.resourceKind, "mutate", carrierRef),
+                };
+              }),
+            ),
         );
-        yield* validateProviderResponse(spec, request.claim, "mutate", body);
-        const anchorId = proofRef(spec.resourceKind, "mutate", request.claim);
-        return {
-          subjectRef: request.subjectRef,
-          resourceRef,
-          mutationKind: request.mutationKind,
-          mutationRef: request.inputRef,
-          proofRef: anchorId,
-          ...(request.fingerprint === undefined ? {} : { fingerprint: request.fingerprint }),
-          claim: livedPayloadClaim(request.claim, spec.resourceKind, "mutate", carrierRef),
-        };
       }),
 
     destroy: (request: ResourceDestroyRequest) =>
@@ -908,44 +851,36 @@ export const makeCloudflareResourceCarrier = <Material, MutationInput>(
           "destroy",
           request.resourceRef,
         );
-        const token = yield* requireCloudflareCredential(
+        return yield* withCloudflareAuth(
           options,
           spec,
           request.claim,
           "destroy",
           request.credentialRef,
-        );
-        const account = yield* requireCloudflareAccount(
-          options,
-          spec,
-          request.claim,
-          "destroy",
           request.accountRef,
+          ({ token, account }) =>
+            withResourceMaterial(options, spec, request.claim, "destroy", resourceRef, (material) =>
+              Effect.gen(function* () {
+                const body = yield* cloudflareJson(
+                  options,
+                  spec,
+                  request.claim,
+                  "destroy",
+                  token,
+                  spec.destroyRequest(account.accountId, material),
+                );
+                yield* validateProviderResponse(spec, request.claim, "destroy", body);
+                const anchorId = proofRef(spec.resourceKind, "destroy", request.claim);
+                return {
+                  subjectRef: request.subjectRef,
+                  resourceRef,
+                  proofRef: anchorId,
+                  reason: request.reason,
+                  claim: livedPayloadClaim(request.claim, spec.resourceKind, "destroy", carrierRef),
+                };
+              }),
+            ),
         );
-        const material = yield* requireResourceMaterial(
-          options,
-          spec,
-          request.claim,
-          "destroy",
-          resourceRef,
-        );
-        const body = yield* cloudflareJson(
-          options,
-          spec,
-          request.claim,
-          "destroy",
-          token,
-          spec.destroyRequest(account.accountId, material),
-        );
-        yield* validateProviderResponse(spec, request.claim, "destroy", body);
-        const anchorId = proofRef(spec.resourceKind, "destroy", request.claim);
-        return {
-          subjectRef: request.subjectRef,
-          resourceRef,
-          proofRef: anchorId,
-          reason: request.reason,
-          claim: livedPayloadClaim(request.claim, spec.resourceKind, "destroy", carrierRef),
-        };
       }),
   };
 };

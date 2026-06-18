@@ -14,12 +14,8 @@ import {
   materialRefKey,
   materialRequirement,
 } from "../src/material-ref";
-import {
-  RefResolverLive,
-  RefResolverService,
-  resolveMaterial,
-  resolveStringMaterial,
-} from "../src/ref-resolver";
+import { RefResolverLive, RefResolverService, RefResolutionFailed } from "../src/ref-resolver";
+import { openLive } from "../src/internal/live-edge";
 
 describe("MaterialRef algebra", () => {
   it("validates only symbolic material refs", () => {
@@ -223,17 +219,19 @@ describe("MaterialRef algebra", () => {
     const resolved = await runtime.runPromise(
       Effect.gen(function* () {
         const refs = yield* RefResolverService;
+        const endpoint = yield* refs.material(endpointMaterialRef("openrouter"));
+        const credential = yield* refs.material(credentialMaterialRef("OPENROUTER_KEY"));
+        const binding = yield* refs.material(
+          bindingMaterialRef({
+            provider: "cloudflare",
+            bindingKind: "d1",
+            ref: "APP_DB",
+          }),
+        );
         return {
-          endpoint: yield* resolveMaterial(refs, endpointMaterialRef("openrouter")),
-          credential: yield* resolveMaterial(refs, credentialMaterialRef("OPENROUTER_KEY")),
-          binding: yield* resolveMaterial(
-            refs,
-            bindingMaterialRef({
-              provider: "cloudflare",
-              bindingKind: "d1",
-              ref: "APP_DB",
-            }),
-          ),
+          endpoint: openLive(endpoint.value),
+          credential: openLive(credential.value),
+          binding: openLive(binding.value),
         };
       }),
     );
@@ -265,7 +263,22 @@ describe("MaterialRef algebra", () => {
         const handle = yield* refs.material(credentialMaterialRef("OPENROUTER_KEY"));
         const serialized = JSON.stringify(handle);
         yield* handle.dispose();
-        const opened = yield* resolveStringMaterial(refs, credentialMaterialRef("OPENROUTER_KEY"));
+        const opened = yield* Effect.acquireUseRelease(
+          refs.material(credentialMaterialRef("OPENROUTER_KEY")),
+          (nextHandle) => {
+            const value = openLive(nextHandle.value);
+            return typeof value === "string"
+              ? Effect.succeed(value)
+              : Effect.fail(
+                  new RefResolutionFailed({
+                    kind: "credential",
+                    ref: materialRefKey(credentialMaterialRef("OPENROUTER_KEY")),
+                    reason: "material_type_mismatch",
+                  }),
+                );
+          },
+          (nextHandle) => nextHandle.dispose(),
+        );
         return { serialized, opened };
       }),
     );
@@ -293,8 +306,24 @@ describe("MaterialRef algebra", () => {
     const result = await runtime.runPromise(
       Effect.gen(function* () {
         const refs = yield* RefResolverService;
+        const ref = endpointMaterialRef("not-a-string");
         return yield* Effect.result(
-          resolveStringMaterial(refs, endpointMaterialRef("not-a-string")),
+          Effect.acquireUseRelease(
+            refs.material(ref),
+            (handle) => {
+              const value = openLive(handle.value);
+              return typeof value === "string"
+                ? Effect.succeed(value)
+                : Effect.fail(
+                    new RefResolutionFailed({
+                      kind: ref.kind,
+                      ref: materialRefKey(ref),
+                      reason: "material_type_mismatch",
+                    }),
+                  );
+            },
+            (handle) => handle.dispose(),
+          ),
         );
       }),
     );

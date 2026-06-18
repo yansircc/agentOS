@@ -1,7 +1,7 @@
 import type { LlmRoute } from "@agent-os/llm-protocol";
 import { credentialMaterialRef, endpointMaterialRef } from "@agent-os/kernel/material-ref";
 import type { MaterialRef } from "@agent-os/kernel/material-ref";
-import { useRefResolverMaterialSync, type RefResolver } from "@agent-os/kernel/ref-resolver";
+import type { RefResolver } from "@agent-os/kernel/ref-resolver";
 import type {
   TurnDoneFrame,
   TurnErrorFrame,
@@ -568,27 +568,78 @@ export const adaptGeminiDeltaChunk = (
   return frames;
 };
 
-const resolvedStringMaterial = (resolver: RefResolver, ref: MaterialRef): string | null => {
-  const resolved = useRefResolverMaterialSync(resolver, ref, (value) =>
-    isNonEmptyString(value) ? value : null,
+interface StringMaterialLease {
+  readonly ref: MaterialRef;
+  readonly value: string;
+  readonly release: () => void;
+}
+
+interface RouteMaterialLeases {
+  readonly endpoint: StringMaterialLease;
+  readonly credential: StringMaterialLease;
+  readonly release: () => void;
+}
+
+const acquireStringMaterial = (
+  resolver: RefResolver,
+  ref: MaterialRef,
+  reason: string,
+):
+  | { readonly ok: true; readonly lease: StringMaterialLease }
+  | { readonly ok: false; readonly error: ProviderError } => {
+  const resolved = pipe(
+    Result.try({
+      try: () => resolver.material(ref),
+      catch: () => reason,
+    }),
+    Result.match({
+      onFailure: () => null,
+      onSuccess: (material) => material,
+    }),
   );
-  return resolved.ok ? resolved.value : null;
+  if (!isNonEmptyString(resolved)) return { ok: false, error: { reason } };
+  return {
+    ok: true,
+    lease: {
+      ref,
+      value: resolved,
+      release: () => resolver.dispose?.({ ref, material: resolved }),
+    },
+  };
 };
 
-const endpointFor = (
+const acquireRouteMaterialLeases = (
   resolver: RefResolver,
   route: HttpStreamingLlmRoute,
-): string | ProviderError => {
-  const endpoint = resolvedStringMaterial(resolver, endpointMaterialRef(route.endpointRef));
-  return endpoint ?? { reason: "llm_transport_http_missing_endpoint_material" };
-};
-
-const credentialFor = (
-  resolver: RefResolver,
-  route: HttpStreamingLlmRoute,
-): string | ProviderError => {
-  const credential = resolvedStringMaterial(resolver, credentialMaterialRef(route.credentialRef));
-  return credential ?? { reason: "llm_transport_http_missing_credential_material" };
+):
+  | { readonly ok: true; readonly leases: RouteMaterialLeases }
+  | { readonly ok: false; readonly error: ProviderError } => {
+  const endpoint = acquireStringMaterial(
+    resolver,
+    endpointMaterialRef(route.endpointRef),
+    "llm_transport_http_missing_endpoint_material",
+  );
+  if (!endpoint.ok) return endpoint;
+  const credential = acquireStringMaterial(
+    resolver,
+    credentialMaterialRef(route.credentialRef),
+    "llm_transport_http_missing_credential_material",
+  );
+  if (!credential.ok) {
+    endpoint.lease.release();
+    return credential;
+  }
+  return {
+    ok: true,
+    leases: {
+      endpoint: endpoint.lease,
+      credential: credential.lease,
+      release: () => {
+        credential.lease.release();
+        endpoint.lease.release();
+      },
+    },
+  };
 };
 
 const withoutTrailingSlash = (value: string): string => value.replace(/\/$/, "");
@@ -647,12 +698,8 @@ const encodeBody = (body: unknown): string | ProviderError => {
 const buildOpenAiRequest = (
   spec: StreamLlmTurnSpec,
   route: OpenAiChatCompatibleRoute,
+  materials: RouteMaterialLeases,
 ): ProviderRequestResult => {
-  const endpoint = endpointFor(spec.resolver, route);
-  if (typeof endpoint !== "string") return { ok: false, error: endpoint };
-  const credential = credentialFor(spec.resolver, route);
-  if (typeof credential !== "string") return { ok: false, error: credential };
-
   const body = encodeBody({
     model: route.modelId,
     messages: spec.messages,
@@ -665,11 +712,11 @@ const buildOpenAiRequest = (
     ok: true,
     request: {
       provider: "openai",
-      url: `${withoutTrailingSlash(endpoint)}/chat/completions`,
+      url: `${withoutTrailingSlash(materials.endpoint.value)}/chat/completions`,
       init: {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${credential}`,
+          Authorization: `Bearer ${materials.credential.value}`,
           Accept: TEXT_EVENT_STREAM,
           "Content-Type": "application/json",
         },
@@ -749,12 +796,8 @@ const buildAnthropicMessages = (
 const buildAnthropicRequest = (
   spec: StreamLlmTurnSpec,
   route: AnthropicMessagesRoute,
+  materials: RouteMaterialLeases,
 ): ProviderRequestResult => {
-  const endpoint = endpointFor(spec.resolver, route);
-  if (typeof endpoint !== "string") return { ok: false, error: endpoint };
-  const credential = credentialFor(spec.resolver, route);
-  if (typeof credential !== "string") return { ok: false, error: credential };
-
   const messages = buildAnthropicMessages(spec.messages);
   if (!messages.ok) return { ok: false, error: messages.error };
   const body = encodeBody({
@@ -769,11 +812,11 @@ const buildAnthropicRequest = (
     ok: true,
     request: {
       provider: "anthropic",
-      url: `${withoutTrailingSlash(endpoint)}/v1/messages`,
+      url: `${withoutTrailingSlash(materials.endpoint.value)}/v1/messages`,
       init: {
         method: "POST",
         headers: {
-          "x-api-key": credential,
+          "x-api-key": materials.credential.value,
           "anthropic-version": route.anthropicVersion ?? ANTHROPIC_DEFAULT_VERSION,
           Accept: TEXT_EVENT_STREAM,
           "Content-Type": "application/json",
@@ -860,12 +903,8 @@ const buildGeminiContents = (
 const buildGeminiRequest = (
   spec: StreamLlmTurnSpec,
   route: GeminiGenerateContentRoute,
+  materials: RouteMaterialLeases,
 ): ProviderRequestResult => {
-  const endpoint = endpointFor(spec.resolver, route);
-  if (typeof endpoint !== "string") return { ok: false, error: endpoint };
-  const credential = credentialFor(spec.resolver, route);
-  if (typeof credential !== "string") return { ok: false, error: credential };
-
   const geminiMessages = buildGeminiContents(spec.messages);
   if (!geminiMessages.ok) return { ok: false, error: geminiMessages.error };
   const { systemText, contents } = geminiMessages.value;
@@ -879,11 +918,11 @@ const buildGeminiRequest = (
     ok: true,
     request: {
       provider: "gemini",
-      url: `${withoutTrailingSlash(endpoint)}/v1beta/models/${route.modelId}:streamGenerateContent?alt=sse`,
+      url: `${withoutTrailingSlash(materials.endpoint.value)}/v1beta/models/${route.modelId}:streamGenerateContent?alt=sse`,
       init: {
         method: "POST",
         headers: {
-          "x-goog-api-key": credential,
+          "x-goog-api-key": materials.credential.value,
           Accept: TEXT_EVENT_STREAM,
           "Content-Type": "application/json",
         },
@@ -894,17 +933,20 @@ const buildGeminiRequest = (
   };
 };
 
-const buildProviderRequest = (spec: StreamLlmTurnSpec): ProviderRequestResult => {
+const buildProviderRequest = (
+  spec: StreamLlmTurnSpec,
+  materials: RouteMaterialLeases,
+): ProviderRequestResult => {
   if (!isHttpStreamingLlmRoute(spec.route)) {
     return { ok: false, error: { reason: "llm_transport_http_unsupported_route" } };
   }
   switch (spec.route.kind) {
     case "openai-chat-compatible":
-      return buildOpenAiRequest(spec, spec.route);
+      return buildOpenAiRequest(spec, spec.route, materials);
     case "anthropic-messages":
-      return buildAnthropicRequest(spec, spec.route);
+      return buildAnthropicRequest(spec, spec.route, materials);
     case "gemini-generate-content":
-      return buildGeminiRequest(spec, spec.route);
+      return buildGeminiRequest(spec, spec.route, materials);
   }
 };
 
@@ -1086,27 +1128,46 @@ export async function* streamLlmTurn(spec: StreamLlmTurnSpec): AsyncGenerator<Tu
     return;
   }
 
-  const request = buildProviderRequest(spec);
-  if (!request.ok) {
-    yield errorFrame(spec.turnRef, 0, request.error.reason);
+  if (!isHttpStreamingLlmRoute(spec.route)) {
+    yield errorFrame(spec.turnRef, 0, "llm_transport_http_unsupported_route");
     return;
   }
 
-  const response = await fetchProviderResponse(spec, request.request);
-  if (!response.ok) {
-    yield errorFrame(spec.turnRef, 0, response.reason);
+  const leases = acquireRouteMaterialLeases(spec.resolver, spec.route);
+  if (!leases.ok) {
+    yield errorFrame(spec.turnRef, 0, leases.error.reason);
     return;
   }
 
-  if (!response.response.ok) {
-    yield errorFrame(spec.turnRef, 0, `llm_transport_http_http_error_${response.response.status}`);
-    return;
-  }
+  try {
+    const request = buildProviderRequest(spec, leases.leases);
+    if (!request.ok) {
+      yield errorFrame(spec.turnRef, 0, request.error.reason);
+      return;
+    }
 
-  if (!responseIsSse(response.response)) {
-    yield errorFrame(spec.turnRef, 0, "llm_transport_http_response_not_sse");
-    return;
-  }
+    const response = await fetchProviderResponse(spec, request.request);
+    if (!response.ok) {
+      yield errorFrame(spec.turnRef, 0, response.reason);
+      return;
+    }
 
-  yield* emitStreamFrames(request.request, response.response, spec.turnRef, spec.signal);
+    if (!response.response.ok) {
+      yield errorFrame(
+        spec.turnRef,
+        0,
+        `llm_transport_http_http_error_${response.response.status}`,
+      );
+      return;
+    }
+
+    if (!responseIsSse(response.response)) {
+      yield errorFrame(spec.turnRef, 0, "llm_transport_http_response_not_sse");
+      return;
+    }
+
+    yield* emitStreamFrames(request.request, response.response, spec.turnRef, spec.signal);
+  } finally {
+    leases.leases.release();
+  }
 }

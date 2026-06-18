@@ -352,8 +352,8 @@ describe("@agent-os/llm-transport-http", () => {
       includedSeqs: [0, 1, 2, 3, 4],
     });
     expect(disposed).toEqual([
-      "endpoint:openai:https://provider.example",
       "credential:openai-key:sk-secret",
+      "endpoint:openai:https://provider.example",
     ]);
   });
 

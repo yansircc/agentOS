@@ -51,6 +51,7 @@ const importMatches = (specifier, forbidden) =>
   specifier === forbidden || specifier.startsWith(`${forbidden}/`);
 
 const regexForToken = (token) => new RegExp(token, "gu");
+const liveEdgeRawOpenTokens = new Set(["openLive", "openAead", "sealAead"]);
 
 const pathStarts = (prefix) => (repoPath) => repoPath.startsWith(prefix);
 const pathMatches = (pattern) => (repoPath) => pattern.test(repoPath);
@@ -65,6 +66,95 @@ const isLiveEdgeImporter = (repoPath) =>
   pathMatches(/^packages\/execution-domains\/[^/]+\/src\//u)(repoPath) ||
   pathMatches(/^packages\/transports\/[^/]+\/src\//u)(repoPath) ||
   pathMatches(/^packages\/wire-adapters\/[^/]+\/src\//u)(repoPath);
+
+const findMatchingBrace = (source, openIndex) => {
+  let depth = 0;
+  for (let index = openIndex; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === "{") depth += 1;
+    if (char === "}") {
+      depth -= 1;
+      if (depth === 0) return index;
+    }
+  }
+  return source.length - 1;
+};
+
+const collectLocalCallableBodies = (source) => {
+  const bodies = new Map();
+  const addConstBodies = (pattern) => {
+    for (const match of source.matchAll(pattern)) {
+      const name = match.groups?.name;
+      if (name === undefined || match.index === undefined) continue;
+      const equals = source.indexOf("=", match.index);
+      if (equals === -1) continue;
+      const bodyStart = equals + 1;
+      const firstBrace = source.indexOf("{", bodyStart);
+      const firstSemicolon = source.indexOf(";", bodyStart);
+      const bodyEnd =
+        firstBrace !== -1 && (firstSemicolon === -1 || firstBrace < firstSemicolon)
+          ? findMatchingBrace(source, firstBrace) + 1
+          : firstSemicolon === -1
+            ? source.length
+            : firstSemicolon;
+      bodies.set(name, {
+        exported: match.groups?.exported !== undefined,
+        index: match.index,
+        body: source.slice(bodyStart, bodyEnd),
+      });
+    }
+  };
+  addConstBodies(/(?<exported>export\s+)?const\s+(?<name>[A-Za-z_$][\w$]*)\s*=/gu);
+
+  for (const match of source.matchAll(
+    /(?<exported>export\s+)?function\s+(?<name>[A-Za-z_$][\w$]*)\s*\([^)]*\)\s*\{/gu,
+  )) {
+    const name = match.groups?.name;
+    if (name === undefined || match.index === undefined) continue;
+    const openIndex = source.indexOf("{", match.index);
+    const closeIndex = findMatchingBrace(source, openIndex);
+    bodies.set(name, {
+      exported: match.groups?.exported !== undefined,
+      index: match.index,
+      body: source.slice(openIndex, closeIndex + 1),
+    });
+  }
+  return bodies;
+};
+
+const bodyCalls = (body, name) => new RegExp(`\\b${name}\\s*\\(`, "u").test(body);
+
+const bodyCallsRawLiveOpen = (bodies, name, seen = new Set()) => {
+  if (seen.has(name)) return false;
+  seen.add(name);
+  const entry = bodies.get(name);
+  if (entry === undefined) return false;
+  for (const token of liveEdgeRawOpenTokens) {
+    if (bodyCalls(entry.body, token)) return true;
+  }
+  for (const candidate of bodies.keys()) {
+    if (bodyCalls(entry.body, candidate) && bodyCallsRawLiveOpen(bodies, candidate, seen)) {
+      return true;
+    }
+  }
+  return false;
+};
+
+const exportedLiveWrapperFailures = (repoPath, source) => {
+  if (!repoPath.startsWith("packages/kernel/src/")) return [];
+  if (repoPath.startsWith("packages/kernel/src/internal/")) return [];
+  const bodies = collectLocalCallableBodies(source);
+  const failures = [];
+  for (const [name, entry] of bodies) {
+    if (!entry.exported) continue;
+    if (bodyCallsRawLiveOpen(bodies, name)) {
+      failures.push(
+        `${repoPath}:${lineNumber(source, entry.index)}: live-edge-public-wrapper-boundary: exported ${name} opens Live/AEAD material through an internal raw opener`,
+      );
+    }
+  }
+  return failures;
+};
 
 const packageJson = (root) => {
   const file = path.join(root, "package.json");
@@ -428,6 +518,9 @@ export const collectBoundaryFailures = (root = repoRoot, options = {}) => {
         }
       }
     }
+    if (stages.has("boundary-prepared")) {
+      failures.push(...exportedLiveWrapperFailures(repoPath, source));
+    }
   }
 
   return failures;
@@ -563,6 +656,31 @@ const collectSelfTestFailures = () => {
         file: "packages/kernel/src/ref-resolver.ts",
         bad: 'export { captureLive } from "./internal/live-edge";\n',
         expected: "live-edge-public-export-boundary",
+      },
+      {
+        name: "kernel ref resolver exported openLive wrapper",
+        file: "packages/kernel/src/ref-resolver.ts",
+        bad:
+          'import { openLive } from "./internal/live-edge";\n' +
+          "export const resolveMaterial = (value) => openLive(value);\n",
+        expected: "live-edge-public-wrapper-boundary",
+      },
+      {
+        name: "kernel ref resolver exported indirect openLive wrapper",
+        file: "packages/kernel/src/ref-resolver.ts",
+        bad:
+          'import { openLive } from "./internal/live-edge";\n' +
+          "const privateOpen = (value) => openLive(value);\n" +
+          "export const resolveMaterial = (value) => privateOpen(value);\n",
+        expected: "live-edge-public-wrapper-boundary",
+      },
+      {
+        name: "kernel ref resolver exported sealAead wrapper",
+        file: "packages/kernel/src/ref-resolver.ts",
+        bad:
+          'import { sealAead } from "./internal/aead-sealed";\n' +
+          "export const sealMaterial = (value) => sealAead(value);\n",
+        expected: "live-edge-public-wrapper-boundary",
       },
       {
         name: "backend protocol runtime import",

@@ -98,10 +98,20 @@ describe("defineAgentDO facade lowering", () => {
   });
 
   it("lowers bindings into RefResolver and dispatch targets by MaterialRef shape", () => {
+    const resolved: string[] = [];
     const materialBindings = [
-      endpoint<TestEnv>("llm").from((e) => e.LLM_ENDPOINT),
-      credential<TestEnv>("llm-key").from((e) => e.LLM_KEY),
-      durableObjectTarget<TestEnv>("peer").from((e) => e.PEER_DO),
+      endpoint<TestEnv>("llm").from((e) => {
+        resolved.push("endpoint");
+        return e.LLM_ENDPOINT;
+      }),
+      credential<TestEnv>("llm-key").from((e) => {
+        resolved.push("credential");
+        return e.LLM_KEY;
+      }),
+      durableObjectTarget<TestEnv>("peer").from((e) => {
+        resolved.push("peer");
+        return e.PEER_DO;
+      }),
     ];
     const lowered = lowerAgentConfig(
       {
@@ -117,16 +127,20 @@ describe("defineAgentDO facade lowering", () => {
       env,
     );
 
+    expect(resolved).toEqual([]);
     expect(lowered.refResolver.material({ kind: "endpoint", ref: "llm" })).toBe(
       "https://llm.example",
     );
+    expect(resolved).toEqual(["endpoint"]);
     expect(
       lowerMaterialBindings(materialBindings, env).refResolver.material({
         kind: "endpoint",
         ref: "llm",
       }),
     ).toBe("https://llm.example");
+    expect(resolved).toEqual(["endpoint", "endpoint"]);
     expect(lowered.refResolver.material({ kind: "credential", ref: "llm-key" })).toBe("secret");
+    expect(resolved).toEqual(["endpoint", "endpoint", "credential"]);
     const peerKey = materialRefKey(
       bindingMaterialRef({
         provider: "cloudflare",

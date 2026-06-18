@@ -11,7 +11,7 @@ import { Context, Data, Effect, Layer } from "effect";
 import type { MaterialKind, MaterialRef } from "./material-ref";
 import { materialRefKey } from "./material-ref";
 import type { Live } from "./value-brands";
-import { captureLive, openLive } from "./internal/live-edge";
+import { captureLive } from "./internal/live-edge";
 
 export type ResolvedMaterial = NonNullable<unknown>;
 
@@ -30,10 +30,6 @@ export interface LiveResolvedMaterial {
   readonly value: Live<ResolvedMaterial>;
   readonly dispose: () => Effect.Effect<void>;
 }
-
-export type RefResolverMaterialUseResult<A> =
-  | { readonly ok: true; readonly value: A }
-  | { readonly ok: false; readonly failure: RefResolutionFailed };
 
 export class RefResolutionFailed extends Data.TaggedError("agent_os.ref_resolution_failed")<{
   readonly kind: MaterialKind;
@@ -102,61 +98,6 @@ export const withResolvedMaterial = <A, E, R>(
     (handle) => use(handle.value),
     (handle) => handle.dispose(),
   );
-
-export const resolveMaterial = (
-  refs: ResolvedMaterialService,
-  ref: MaterialRef,
-): Effect.Effect<ResolvedMaterial, RefResolutionFailed> =>
-  withResolvedMaterial(refs, ref, (value) => Effect.succeed(openLive(value)));
-
-export const resolveStringMaterial = (
-  refs: ResolvedMaterialService,
-  ref: MaterialRef,
-): Effect.Effect<string, RefResolutionFailed> =>
-  Effect.flatMap(resolveMaterial(refs, ref), (value) =>
-    typeof value === "string"
-      ? Effect.succeed(value)
-      : Effect.fail(
-          new RefResolutionFailed({
-            kind: ref.kind,
-            ref: materialRefKey(ref),
-            reason: "material_type_mismatch",
-          }),
-        ),
-  );
-
-export const useRefResolverMaterial = <A, E, R>(
-  resolver: RefResolver,
-  ref: MaterialRef,
-  use: (value: ResolvedMaterial) => Effect.Effect<A, E, R>,
-): Effect.Effect<A, E | RefResolutionFailed, R> =>
-  Effect.acquireUseRelease(
-    liveResolvedMaterialFromResolver(resolver, ref),
-    (handle) => use(openLive(handle.value)),
-    (handle) => handle.dispose(),
-  );
-
-export const useRefResolverMaterialSync = <A>(
-  resolver: RefResolver,
-  ref: MaterialRef,
-  use: (value: ResolvedMaterial) => A,
-): RefResolverMaterialUseResult<A> => {
-  const value = resolver.material(ref);
-  if (value === null) {
-    return {
-      ok: false,
-      failure: new RefResolutionFailed({
-        kind: ref.kind,
-        ref: materialRefKey(ref),
-        reason: "material_missing",
-      }),
-    };
-  }
-  const live = captureLive(value);
-  const used = use(openLive(live));
-  resolver.dispose?.({ ref, material: value });
-  return { ok: true, value: used };
-};
 
 export const RefResolverEmpty = RefResolverLive({
   material: () => null,

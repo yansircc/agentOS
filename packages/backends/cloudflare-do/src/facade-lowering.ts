@@ -163,6 +163,7 @@ export interface LoweredAgentConfigBase {
 export interface LoweredMaterialBindings {
   readonly refResolver: RefResolver;
   readonly dispatchTargets: DispatchTargetRegistry;
+  readonly materialKeys: ReadonlySet<string>;
 }
 
 export interface LoweredAgentConfigWithSubmit extends LoweredAgentConfigBase {
@@ -231,7 +232,7 @@ export const lowerMaterialBindings = <Env>(
   bindings: ReadonlyArray<AgentMaterialBinding<Env>> | undefined,
   env: Env,
 ): LoweredMaterialBindings => {
-  const materials = new Map<string, NonNullable<unknown>>();
+  const materialBindings = new Map<string, AgentMaterialBinding<Env>>();
   const dispatchTargets: Record<string, DispatchTargetAdapter> = {};
 
   for (const binding of bindings ?? []) {
@@ -239,24 +240,35 @@ export const lowerMaterialBindings = <Env>(
       return failAgentConfig("invalid material binding ref");
     }
     const key = materialRefKey(binding.ref);
-    if (materials.has(key)) {
+    if (materialBindings.has(key)) {
       return failAgentConfig(`duplicate material binding ${key}`);
     }
-    const value = requireResolvedMaterial(key, binding.resolve(env));
-    materials.set(key, value);
+    materialBindings.set(key, binding);
     if (isCloudflareDurableObjectBinding(binding.ref)) {
-      if (!isDispatchTargetNamespace(value)) {
-        return failAgentConfig(`dispatch target ${key} is not a DurableObjectNamespace`);
-      }
-      dispatchTargets[key] = durableObjectDispatchTarget(value);
+      dispatchTargets[key] = {
+        deliver: (envelope) => {
+          const value = requireResolvedMaterial(key, binding.resolve(env));
+          if (!isDispatchTargetNamespace(value)) {
+            return Promise.reject(
+              new TypeError(`dispatch target ${key} is not a DurableObjectNamespace`),
+            );
+          }
+          return durableObjectDispatchTarget(value).deliver(envelope);
+        },
+      };
     }
   }
 
   return {
     refResolver: {
-      material: (ref) => materials.get(materialRefKey(ref)) ?? null,
+      material: (ref) => {
+        const key = materialRefKey(ref);
+        const binding = materialBindings.get(key);
+        return binding === undefined ? null : requireResolvedMaterial(key, binding.resolve(env));
+      },
     },
     dispatchTargets,
+    materialKeys: new Set(materialBindings.keys()),
   };
 };
 
@@ -276,7 +288,7 @@ export function lowerAgentConfig<Env>(
 
   for (const [id, route] of Object.entries(config.llms ?? {})) {
     for (const ref of llmRouteMaterialRefs(route)) {
-      if (loweredMaterials.refResolver.material(ref) === null) {
+      if (!loweredMaterials.materialKeys.has(materialRefKey(ref))) {
         return failAgentConfig(`llm ${id} references unbound material ${materialRefLabel(ref)}`);
       }
     }
