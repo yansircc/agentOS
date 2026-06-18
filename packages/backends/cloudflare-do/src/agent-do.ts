@@ -75,7 +75,6 @@ import type {
   AgentManifest,
   AgentManifestProjection,
   AgentSubmitBindings,
-  MountedAgent,
   AttemptKey,
   CapabilityLease,
   SubmitResult,
@@ -102,11 +101,7 @@ import {
   type TriggerDrainUntilQuietResult,
 } from "@agent-os/runtime";
 import { LlmTransport } from "@agent-os/llm-protocol";
-import {
-  lowerSubmitRunInput,
-  projectAgentManifest,
-  RUNTIME_FACT_OWNER,
-} from "@agent-os/runtime-protocol";
+import { lowerSubmitRunInput, RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
 import {
   backendProtocolEventIdentityKey,
   QUOTA_EVENT_KIND,
@@ -152,7 +147,7 @@ import { commitDurableTriggerIntent } from "./due-work";
 import type { CloudflareTriggerSource } from "./trigger-factory";
 import type { CloudflareAttachedStreamSource } from "./stream-factory";
 import { createAttachedStreamResponse } from "./attached-stream-wire";
-import { mountCloudflareAgent } from "./mount";
+import { mountCloudflareAgent, type CloudflareAgentMount } from "./mount";
 import { commitLedgerTransaction } from "./ledger/commit";
 import {
   cloudflareDefaultTruthIdentityFromRoutingScope,
@@ -331,7 +326,7 @@ export interface MaterializedAgentConfig<
   Env extends CloudflareAgentEnv,
   Runtime = AgentRuntimeClient,
 > {
-  readonly mountedAgent: MountedAgent;
+  readonly mount: CloudflareAgentMount;
   readonly refResolver: RefResolver;
   readonly llmTransport: Layer.Layer<LlmTransport, never, RefResolverService>;
   readonly extensions: ReadonlyArray<ExtensionDeclaration>;
@@ -400,7 +395,7 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
   implements AgentRuntimeReaderClient
 {
   private readonly _handlers: Map<string, Set<EventHandler>> = new Map();
-  private readonly _mountedAgent: MountedAgent;
+  private readonly _mount: CloudflareAgentMount;
   private readonly _refResolver: RefResolver;
   private readonly _llmTransport: Layer.Layer<LlmTransport, never, RefResolverService>;
   private readonly _extensionValidation: ExtensionValidation;
@@ -418,7 +413,7 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
 
   constructor(ctx: DurableObjectState, env: Env, config: MaterializedAgentConfig<Env, Runtime>) {
     super(ctx, env);
-    this._mountedAgent = config.mountedAgent;
+    this._mount = config.mount;
     this._refResolver = config.refResolver;
     this._llmTransport = config.llmTransport;
     this._extensionValidation = validateExtensionDeclarations(config.extensions);
@@ -605,7 +600,7 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
   }
 
   info(): Promise<AgentManifestProjection> {
-    return Promise.resolve(projectAgentManifest(this._mountedAgent.manifest));
+    return Promise.resolve(this._mount.projectionSinks.info);
   }
 
   private extensionCommit(
@@ -1267,7 +1262,7 @@ export const createAgentDurableObject = <Env extends CloudflareAgentEnv>(
   {
     constructor(ctx: DurableObjectState, env: Env) {
       super(ctx, env, {
-        mountedAgent: mountCloudflareAgent(config.manifest, config.agentBindings),
+        mount: mountCloudflareAgent(config.manifest, config.agentBindings),
         refResolver: config.refResolver?.(env) ?? emptyRefResolver,
         llmTransport: config.llmTransport?.(env) ?? MissingLlmTransportLive,
         extensions: config.extensions?.(env) ?? [],

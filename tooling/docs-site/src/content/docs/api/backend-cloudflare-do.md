@@ -27,7 +27,10 @@ title: "@agent-os/backend-cloudflare-do Public API Intent"
 - `.:CloudflareAgentEnv`
 - `.:CloudflareAgentDOIntrospectionRpc`
 - `.:CloudflareAgentDOResolvedScope`
+- `.:CloudflareAgentDriverConfig`
+- `.:CloudflareAgentMount`
 - `.:CloudflareAgentMountPort`
+- `.:CloudflareAgentProjectionSinks`
 - `.:CloudflareAttachedStreamFactory`
 - `.:CloudflareAttachedStreamFactoryContext`
 - `.:CloudflareAttachedStreamSource`

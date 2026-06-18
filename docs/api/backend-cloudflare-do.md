@@ -23,7 +23,10 @@
 - `.:CloudflareAgentEnv`
 - `.:CloudflareAgentDOIntrospectionRpc`
 - `.:CloudflareAgentDOResolvedScope`
+- `.:CloudflareAgentDriverConfig`
+- `.:CloudflareAgentMount`
 - `.:CloudflareAgentMountPort`
+- `.:CloudflareAgentProjectionSinks`
 - `.:CloudflareAttachedStreamFactory`
 - `.:CloudflareAttachedStreamFactoryContext`
 - `.:CloudflareAttachedStreamSource`

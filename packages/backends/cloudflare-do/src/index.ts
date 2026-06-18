@@ -27,7 +27,12 @@ export type {
   AgentTriggerCancelSpec,
   AgentTriggerIntentSpec,
 } from "./agent-do";
-export type { CloudflareAgentMountPort } from "./mount";
+export type {
+  CloudflareAgentDriverConfig,
+  CloudflareAgentMount,
+  CloudflareAgentMountPort,
+  CloudflareAgentProjectionSinks,
+} from "./mount";
 export type {
   CloudflareAttachedStreamFactory,
   CloudflareAttachedStreamFactoryContext,

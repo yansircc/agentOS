@@ -88,16 +88,22 @@ describe("defineAgentDO facade lowering", () => {
       },
     });
 
-    const mounted = mountCloudflareAgent(manifest, bindings);
+    const mount = mountCloudflareAgent(manifest, bindings);
 
-    expect(mounted.manifest).toBe(manifest);
-    expect(mounted.bindings).toBe(bindings);
-    expect(mounted.port).toEqual(cloudflareAgentMountPort);
-    expect(mounted.port).toMatchObject({
+    expect(Object.keys(mount).sort()).toEqual(["driverConfig", "projectionSinks"]);
+    expect(Object.keys(mount.projectionSinks)).toEqual(["info"]);
+    expect(mount.driverConfig.manifest).toBe(manifest);
+    expect(mount.driverConfig.bindings).toBe(bindings);
+    expect(mount.driverConfig.port).toEqual(cloudflareAgentMountPort);
+    expect(mount.driverConfig.port).toMatchObject({
       backend: "cloudflare-do",
       backendProtocol: "@agent-os/backend-protocol",
       runtimeProtocol: "@agent-os/runtime-protocol",
       transport: "sse-http",
+    });
+    expect(mount.projectionSinks.info.source).toEqual({
+      kind: "AgentManifest",
+      agentId: "agent.cloudflare-mount-test",
     });
   });
 

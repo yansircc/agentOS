@@ -27,7 +27,10 @@ Status: Backend package. Public exports include the Cloudflare app facade, bindi
 - `.:CloudflareAgentEnv`
 - `.:CloudflareAgentDOIntrospectionRpc`
 - `.:CloudflareAgentDOResolvedScope`
+- `.:CloudflareAgentDriverConfig`
+- `.:CloudflareAgentMount`
 - `.:CloudflareAgentMountPort`
+- `.:CloudflareAgentProjectionSinks`
 - `.:CloudflareAttachedStreamFactory`
 - `.:CloudflareAttachedStreamFactoryContext`
 - `.:CloudflareAttachedStreamSource`
