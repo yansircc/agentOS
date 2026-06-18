@@ -38,10 +38,13 @@ title: "@agent-os/runtime-protocol API"
 - `.:AgentCapabilityProjectionState`
 - `.:AgentCapabilityProjectionsOf`
 - `.:AgentDefinitionExtension`
+- `.:AgentExecutionDomainRef`
 - `.:AgentHandler`
 - `.:AgentHandlerBindings`
 - `.:AgentHandlerContext`
 - `.:AgentHandlerResult`
+- `.:AgentInstructionsRef`
+- `.:AgentInteractionRef`
 - `.:AgentIntent`
 - `.:AgentIntentKind`
 - `.:AgentLlmRouteBindingRef`

@@ -18,6 +18,10 @@
       "types": "./src/agent-schema.ts",
       "default": "./src/agent-schema.ts"
     },
+    "./authored-value": {
+      "types": "./src/authored-value.ts",
+      "default": "./src/authored-value.ts"
+    },
     "./boundary-contract": {
       "types": "./src/boundary-contract.ts",
       "default": "./src/boundary-contract.ts"

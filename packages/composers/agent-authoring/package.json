@@ -1,0 +1,31 @@
+{
+  "name": "@agent-os/agent-authoring",
+  "version": "0.5.16",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vp test run --configLoader runner"
+  },
+  "dependencies": {
+    "@agent-os/kernel": "workspace:*",
+    "@agent-os/runtime-protocol": "workspace:*",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "effect": "^4.0.0-beta.84"
+  }
+}

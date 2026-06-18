@@ -30,9 +30,27 @@ export interface AgentLlmRouteBindingRef {
 
 export interface AgentToolBindingRef {
   readonly bindingRef: string;
+  readonly executionDomain?: string;
+  readonly interaction?: string;
+  readonly materialRefs?: ReadonlyArray<string>;
+  readonly effects?: ReadonlyArray<string>;
+  readonly receiptPolicy?: string;
 }
 
 export interface AgentCapabilityBindingRef {
+  readonly bindingRef: string;
+}
+
+export interface AgentInstructionsRef {
+  readonly path: string;
+  readonly digest: string;
+}
+
+export interface AgentExecutionDomainRef {
+  readonly bindingRef: string;
+}
+
+export interface AgentInteractionRef {
   readonly bindingRef: string;
 }
 
@@ -44,6 +62,7 @@ export interface AgentDefinitionExtension<K extends ExtensionHandlerKind = Exten
 export interface AgentManifest<K extends HandlerKind = HandlerKind> {
   readonly agentId: string;
   readonly version?: string;
+  readonly instructions?: AgentInstructionsRef;
   readonly scope: AgentScopeIdentityPolicy;
   readonly effectAuthorityRef: AuthorityRef;
   readonly handlers: ReadonlyArray<K>;
@@ -52,6 +71,8 @@ export interface AgentManifest<K extends HandlerKind = HandlerKind> {
   readonly tools?: Readonly<Record<string, AgentToolBindingRef>>;
   readonly capabilities?: Readonly<Record<string, AgentCapabilityBindingRef>>;
   readonly materials?: Readonly<Record<string, MaterialRef>>;
+  readonly executionDomains?: Readonly<Record<string, AgentExecutionDomainRef>>;
+  readonly interactions?: Readonly<Record<string, AgentInteractionRef>>;
   readonly outputSchema?: AgentSchemaSpec;
 }
 

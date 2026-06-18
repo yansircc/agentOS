@@ -5,6 +5,7 @@
     { "path": "./packages/llm-protocol" },
     { "path": "./packages/runtime-protocol" },
     { "path": "./packages/telemetry-protocol" },
+    { "path": "./packages/composers/agent-authoring" },
     { "path": "./packages/composers/attached-stream" },
     { "path": "./packages/composers/turn-stream" },
     { "path": "./packages/wire-adapters/ag-ui" },
