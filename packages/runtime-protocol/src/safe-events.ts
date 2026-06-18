@@ -3,6 +3,11 @@ import { redactedSafeSummary, safeLedgerEvent, safeValueFromUnknown } from "@age
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import { validateEffectClaim } from "@agent-os/kernel/effect-claim";
 import { ABORT } from "@agent-os/kernel/abort";
+import {
+  defineProjectionSpec,
+  project,
+  type ProjectionResult,
+} from "@agent-os/kernel/projection";
 import { Either, pipe } from "effect";
 import {
   decodeRuntimeLedgerEvent,
@@ -12,6 +17,16 @@ import {
   type RuntimeLedgerEvent,
   type RuntimeLedgerEventByKind,
 } from "./runtime-events";
+
+const RUNTIME_SAFE_LEDGER_EVENT_PROJECTION_SOURCE = {
+  kind: "ledger-vocabulary",
+  ref: "@agent-os/runtime-protocol/runtime-events",
+} as const;
+
+const projectionOutput = <Output>(result: ProjectionResult<Output>): Output => {
+  if (result._tag === "ok") return result.output;
+  throw new Error(`projection ${result.provenance.projection.id} failed: ${result.reason}`);
+};
 
 const safeUsage = (usage: {
   readonly promptTokens: number;
@@ -334,7 +349,16 @@ const projectRuntimeSafeEvent = (event: RuntimeLedgerEvent): SafeLedgerEvent => 
   }
 };
 
+const runtimeSafeLedgerEventProjection = defineProjectionSpec<RuntimeLedgerEvent, SafeLedgerEvent>({
+  id: "runtime-protocol.safe-ledger-event",
+  version: 1,
+  source: RUNTIME_SAFE_LEDGER_EVENT_PROJECTION_SOURCE,
+  project: (event, ctx) => ctx.ok(projectRuntimeSafeEvent(event)),
+});
+
 export const projectRuntimeSafeLedgerEvent = (event: LedgerEvent): SafeLedgerEvent | undefined => {
   const decoded = decodeRuntimeLedgerEvent(event);
-  return decoded._tag === "runtime" ? projectRuntimeSafeEvent(decoded.event) : undefined;
+  return decoded._tag === "runtime"
+    ? projectionOutput(project(runtimeSafeLedgerEventProjection, decoded.event))
+    : undefined;
 };

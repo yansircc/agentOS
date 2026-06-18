@@ -13,6 +13,11 @@ import type {
 } from "@agent-os/kernel/types";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import { ABORT, reasonOf, type AbortKind } from "@agent-os/kernel/abort";
+import {
+  defineProjectionSpec,
+  project,
+  type ProjectionResult,
+} from "@agent-os/kernel/projection";
 import { textFromLlmOutputItems } from "@agent-os/llm-protocol";
 import {
   decodeRuntimeLedgerEvent,
@@ -31,6 +36,16 @@ export const RUN_BEARING_KINDS: ReadonlyArray<string> = [
   RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED,
   ...Object.values(ABORT),
 ];
+
+const RUNTIME_LEDGER_PROJECTION_SOURCE = {
+  kind: "ledger-vocabulary",
+  ref: "@agent-os/runtime-protocol/runtime-events",
+} as const;
+
+const projectionOutput = <Output>(result: ProjectionResult<Output>): Output => {
+  if (result._tag === "ok") return result.output;
+  throw new Error(`projection ${result.provenance.projection.id} failed: ${result.reason}`);
+};
 
 const normalizeRunId = (runId: number | string): number => {
   const n = typeof runId === "number" ? runId : Number(runId);
@@ -181,6 +196,65 @@ const activeInterruptionFor = (
   return [...active.values()].sort((left, right) => right.id - left.id)[0];
 };
 
+type RunProjectionInput = {
+  readonly runtimeEvents: ReadonlyArray<RuntimeLedgerEvent>;
+  readonly runId: number;
+};
+
+const runTraceProjection = defineProjectionSpec<RunProjectionInput, RunTrace>({
+  id: "runtime.run-trace",
+  version: 1,
+  source: RUNTIME_LEDGER_PROJECTION_SOURCE,
+  project: ({ runtimeEvents, runId }, ctx) => {
+    const start = startFor(runtimeEvents, runId);
+    if (start === undefined) {
+      return ctx.ok({
+        runId,
+        startedAt: 0,
+        turns: [],
+        toolCalls: [],
+        terminal: null,
+      });
+    }
+
+    const turns: RunTurn[] = runtimeEvents
+      .filter(
+        (event): event is RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.LLM_RESPONSE> =>
+          event.kind === RUNTIME_EVENT_KIND.LLM_RESPONSE && event.payload.turn.id === runId,
+      )
+      .map((event) => ({
+        index: event.payload.turn.index,
+        at: event.ts,
+        text: textFromLlmOutputItems(event.payload.items),
+        usage: event.payload.usage,
+      }));
+
+    const toolCalls: RunToolCall[] = runtimeEvents
+      .filter(
+        (event): event is RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.TOOL_EXECUTED> =>
+          event.kind === RUNTIME_EVENT_KIND.TOOL_EXECUTED && event.payload.runId === runId,
+      )
+      .map((event) => ({
+        at: event.ts,
+        name: event.payload.name,
+        args: event.payload.args,
+        result: event.payload.result,
+      }));
+    const interruptions = interruptionsFor(runtimeEvents, runId);
+    const resumes = resumesFor(runtimeEvents, runId);
+
+    return ctx.ok({
+      runId,
+      startedAt: start.ts,
+      turns,
+      toolCalls,
+      ...(interruptions.length === 0 ? {} : { interruptions }),
+      ...(resumes.length === 0 ? {} : { resumes }),
+      terminal: runTerminal(runtimeEvents, runId),
+    });
+  },
+});
+
 /**
  * Projects runtime ledger facts into a run trace view.
  *
@@ -192,56 +266,52 @@ const activeInterruptionFor = (
 export const projectRunTrace = (
   events: ReadonlyArray<LedgerEvent>,
   rawRunId: number | string,
-): RunTrace => {
-  const runtimeEvents = runtimeEventsOf(events);
-  const runId = normalizeRunId(rawRunId);
-  const start = startFor(runtimeEvents, runId);
-  if (start === undefined) {
-    return {
-      runId,
-      startedAt: 0,
-      turns: [],
-      toolCalls: [],
-      terminal: null,
-    };
-  }
+): RunTrace =>
+  projectionOutput(
+    project(runTraceProjection, {
+      runtimeEvents: runtimeEventsOf(events),
+      runId: normalizeRunId(rawRunId),
+    }),
+  );
 
-  const turns: RunTurn[] = runtimeEvents
-    .filter(
-      (event): event is RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.LLM_RESPONSE> =>
-        event.kind === RUNTIME_EVENT_KIND.LLM_RESPONSE && event.payload.turn.id === runId,
-    )
-    .map((event) => ({
-      index: event.payload.turn.index,
-      at: event.ts,
-      text: textFromLlmOutputItems(event.payload.items),
-      usage: event.payload.usage,
-    }));
+const runStatusProjection = defineProjectionSpec<RunProjectionInput, RunStatus>({
+  id: "runtime.run-status",
+  version: 1,
+  source: RUNTIME_LEDGER_PROJECTION_SOURCE,
+  project: ({ runtimeEvents, runId }, ctx) => {
+    const start = startFor(runtimeEvents, runId);
+    const terminal = runTerminal(runtimeEvents, runId);
 
-  const toolCalls: RunToolCall[] = runtimeEvents
-    .filter(
-      (event): event is RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.TOOL_EXECUTED> =>
-        event.kind === RUNTIME_EVENT_KIND.TOOL_EXECUTED && event.payload.runId === runId,
-    )
-    .map((event) => ({
-      at: event.ts,
-      name: event.payload.name,
-      args: event.payload.args,
-      result: event.payload.result,
-    }));
-  const interruptions = interruptionsFor(runtimeEvents, runId);
-  const resumes = resumesFor(runtimeEvents, runId);
+    if (terminal?.kind === "delivered") {
+      return ctx.ok({ kind: "delivered", at: terminal.at, event: terminal.event });
+    }
+    if (terminal?.kind === "aborted") {
+      return ctx.ok({ kind: "aborted", at: terminal.at, abortKind: terminal.event });
+    }
 
-  return {
-    runId,
-    startedAt: start.ts,
-    turns,
-    toolCalls,
-    ...(interruptions.length === 0 ? {} : { interruptions }),
-    ...(resumes.length === 0 ? {} : { resumes }),
-    terminal: runTerminal(runtimeEvents, runId),
-  };
-};
+    const activeInterruption = activeInterruptionFor(runtimeEvents, runId);
+    if (activeInterruption !== undefined) {
+      return ctx.ok({
+        kind: "interrupted",
+        at: activeInterruption.ts,
+        event: RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED,
+        interruptId: activeInterruption.payload.interruptId,
+        reason: activeInterruption.payload.reason,
+      });
+    }
+
+    if (start !== undefined) {
+      return ctx.ok({ kind: "open_without_terminal", startedAt: start.ts });
+    }
+
+    const evidence = runtimeEvents.find((event) => runtimeRunId(event) === runId);
+    return ctx.ok({
+      kind: "orphaned",
+      startedAt: evidence?.ts ?? 0,
+      evidence: evidence?.kind ?? "no_run_evidence",
+    });
+  },
+});
 
 /**
  * Projects runtime ledger facts into a single run status.
@@ -254,41 +324,13 @@ export const projectRunTrace = (
 export const projectRunStatus = (
   events: ReadonlyArray<LedgerEvent>,
   rawRunId: number | string,
-): RunStatus => {
-  const runtimeEvents = runtimeEventsOf(events);
-  const runId = normalizeRunId(rawRunId);
-  const start = startFor(runtimeEvents, runId);
-  const terminal = runTerminal(runtimeEvents, runId);
-
-  if (terminal?.kind === "delivered") {
-    return { kind: "delivered", at: terminal.at, event: terminal.event };
-  }
-  if (terminal?.kind === "aborted") {
-    return { kind: "aborted", at: terminal.at, abortKind: terminal.event };
-  }
-
-  const activeInterruption = activeInterruptionFor(runtimeEvents, runId);
-  if (activeInterruption !== undefined) {
-    return {
-      kind: "interrupted",
-      at: activeInterruption.ts,
-      event: RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED,
-      interruptId: activeInterruption.payload.interruptId,
-      reason: activeInterruption.payload.reason,
-    };
-  }
-
-  if (start !== undefined) {
-    return { kind: "open_without_terminal", startedAt: start.ts };
-  }
-
-  const evidence = runtimeEvents.find((event) => runtimeRunId(event) === runId);
-  return {
-    kind: "orphaned",
-    startedAt: evidence?.ts ?? 0,
-    evidence: evidence?.kind ?? "no_run_evidence",
-  };
-};
+): RunStatus =>
+  projectionOutput(
+    project(runStatusProjection, {
+      runtimeEvents: runtimeEventsOf(events),
+      runId: normalizeRunId(rawRunId),
+    }),
+  );
 
 type TerminalAcc = {
   readonly kind: "delivered" | "aborted";
@@ -325,92 +367,153 @@ const summarizeStatus = (
   return { kind: "aborted", at: terminal.at, abortKind: terminal.event };
 };
 
+type RunsPageProjectionInput = {
+  readonly runtimeEvents: ReadonlyArray<RuntimeLedgerEvent>;
+  readonly spec: RunListSpec;
+};
+
+const runsPageProjection = defineProjectionSpec<RunsPageProjectionInput, RunListPage>({
+  id: "runtime.runs-page",
+  version: 1,
+  source: RUNTIME_LEDGER_PROJECTION_SOURCE,
+  project: ({ runtimeEvents, spec }, ctx) => {
+    type Acc = {
+      runId: number;
+      startedAt: number;
+      terminal: TerminalAcc | undefined;
+      interruptions: Map<string, InterruptionAcc>;
+    };
+
+    const byRun = new Map<number, Acc>();
+
+    for (const ev of runtimeEvents) {
+      if (ev.kind === RUNTIME_EVENT_KIND.AGENT_RUN_STARTED) {
+        if (!byRun.has(ev.id)) {
+          byRun.set(ev.id, {
+            runId: ev.id,
+            startedAt: ev.ts,
+            terminal: undefined,
+            interruptions: new Map(),
+          });
+        }
+        continue;
+      }
+      const runId = runtimeRunId(ev);
+      const acc = byRun.get(runId);
+      if (acc === undefined || acc.terminal !== undefined) continue;
+      if (ev.kind === RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED) {
+        acc.interruptions.set(interruptionKey(ev.payload), {
+          at: ev.ts,
+          interruptId: ev.payload.interruptId,
+          reason: ev.payload.reason,
+        });
+        continue;
+      }
+      if (ev.kind === RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED) {
+        acc.interruptions.delete(interruptionKey(ev.payload));
+        continue;
+      }
+      if (ev.kind === RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED) {
+        acc.terminal = {
+          kind: "delivered",
+          at: ev.ts,
+          event: ev.kind,
+        };
+        continue;
+      }
+      if (ev.kind.startsWith("agent.aborted.")) {
+        acc.terminal = { kind: "aborted", at: ev.ts, event: ev.kind };
+      }
+    }
+
+    const statusSet =
+      spec.statuses !== undefined && spec.statuses.length > 0
+        ? new Set<RunStatusKind>(spec.statuses)
+        : undefined;
+
+    const summaries: RunSummary[] = [];
+    for (const acc of byRun.values()) {
+      const activeInterruption = [...acc.interruptions.values()].sort((a, b) => b.at - a.at)[0];
+      const status = summarizeStatus(acc.startedAt, acc.terminal, activeInterruption);
+      if (statusSet !== undefined && !statusSet.has(status.kind)) continue;
+      const summary: RunSummary = {
+        runId: acc.runId,
+        startedAt: acc.startedAt,
+        status,
+        ...(acc.terminal !== undefined
+          ? { durationMs: Math.max(0, acc.terminal.at - acc.startedAt) }
+          : {}),
+      };
+      summaries.push(summary);
+    }
+
+    summaries.sort((a, b) => b.runId - a.runId);
+
+    const afterFiltered =
+      spec.afterRunId === undefined
+        ? summaries
+        : summaries.filter((s) => s.runId < spec.afterRunId!);
+
+    const limit = Math.max(0, spec.limit);
+    const page = afterFiltered.slice(0, limit);
+    const nextCursor =
+      afterFiltered.length > limit && page.length > 0 ? page[page.length - 1]!.runId : null;
+
+    return ctx.ok({ runs: page, nextCursor });
+  },
+});
+
 export const projectRunsPage = (
   events: ReadonlyArray<LedgerEvent>,
   spec: RunListSpec,
-): RunListPage => {
-  type Acc = {
-    runId: number;
-    startedAt: number;
-    terminal: TerminalAcc | undefined;
-    interruptions: Map<string, InterruptionAcc>;
-  };
+): RunListPage =>
+  projectionOutput(
+    project(runsPageProjection, {
+      runtimeEvents: runtimeEventsOf(events),
+      spec,
+    }),
+  );
 
-  const byRun = new Map<number, Acc>();
-
-  for (const ev of runtimeEventsOf(events)) {
-    if (ev.kind === RUNTIME_EVENT_KIND.AGENT_RUN_STARTED) {
-      if (!byRun.has(ev.id)) {
-        byRun.set(ev.id, {
-          runId: ev.id,
-          startedAt: ev.ts,
-          terminal: undefined,
-          interruptions: new Map(),
-        });
-      }
-      continue;
-    }
-    const runId = runtimeRunId(ev);
-    const acc = byRun.get(runId);
-    if (acc === undefined || acc.terminal !== undefined) continue;
-    if (ev.kind === RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED) {
-      acc.interruptions.set(interruptionKey(ev.payload), {
-        at: ev.ts,
-        interruptId: ev.payload.interruptId,
-        reason: ev.payload.reason,
-      });
-      continue;
-    }
-    if (ev.kind === RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED) {
-      acc.interruptions.delete(interruptionKey(ev.payload));
-      continue;
-    }
-    if (ev.kind === RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED) {
-      acc.terminal = {
-        kind: "delivered",
-        at: ev.ts,
-        event: ev.kind,
-      };
-      continue;
-    }
-    if (ev.kind.startsWith("agent.aborted.")) {
-      acc.terminal = { kind: "aborted", at: ev.ts, event: ev.kind };
-    }
-  }
-
-  const statusSet =
-    spec.statuses !== undefined && spec.statuses.length > 0
-      ? new Set<RunStatusKind>(spec.statuses)
-      : undefined;
-
-  const summaries: RunSummary[] = [];
-  for (const acc of byRun.values()) {
-    const activeInterruption = [...acc.interruptions.values()].sort((a, b) => b.at - a.at)[0];
-    const status = summarizeStatus(acc.startedAt, acc.terminal, activeInterruption);
-    if (statusSet !== undefined && !statusSet.has(status.kind)) continue;
-    const summary: RunSummary = {
-      runId: acc.runId,
-      startedAt: acc.startedAt,
-      status,
-      ...(acc.terminal !== undefined
-        ? { durationMs: Math.max(0, acc.terminal.at - acc.startedAt) }
-        : {}),
-    };
-    summaries.push(summary);
-  }
-
-  summaries.sort((a, b) => b.runId - a.runId);
-
-  const afterFiltered =
-    spec.afterRunId === undefined ? summaries : summaries.filter((s) => s.runId < spec.afterRunId!);
-
-  const limit = Math.max(0, spec.limit);
-  const page = afterFiltered.slice(0, limit);
-  const nextCursor =
-    afterFiltered.length > limit && page.length > 0 ? page[page.length - 1]!.runId : null;
-
-  return { runs: page, nextCursor };
+type SubmitResultProjectionInput = RunProjectionInput & {
+  readonly eventCount: number;
 };
+
+const submitResultProjection = defineProjectionSpec<
+  SubmitResultProjectionInput,
+  SubmitResult | null
+>({
+  id: "runtime.submit-result",
+  version: 1,
+  source: RUNTIME_LEDGER_PROJECTION_SOURCE,
+  project: ({ runtimeEvents, runId, eventCount }, ctx) => {
+    const terminal = runTerminal(runtimeEvents, runId);
+    if (terminal === null) {
+      return ctx.ok(null);
+    }
+    if (terminal.kind === "delivered") {
+      const payload = terminal.payload as RuntimeLedgerEventByKind<
+        typeof RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED
+      >["payload"];
+      return ctx.ok({
+        ok: true,
+        status: "delivered",
+        runId,
+        final: payload.final,
+        eventCount,
+        tokensUsed: payload.tokensUsed,
+      });
+    }
+    const payload = terminal.payload as RuntimeLedgerEventByKind<AbortKind>["payload"];
+    return ctx.ok({
+      ok: false,
+      status: "failed",
+      runId,
+      reason: reasonOf(terminal.event as AbortKind),
+      eventCount,
+      tokensUsed: payload.tokensUsed,
+    });
+  },
+});
 
 /**
  * Reconstructs SubmitResult from terminal runtime ledger facts.
@@ -423,33 +526,11 @@ export const projectRunsPage = (
 export const projectSubmitResult = (
   events: ReadonlyArray<LedgerEvent>,
   rawRunId: number | string,
-): SubmitResult | null => {
-  const runtimeEvents = runtimeEventsOf(events);
-  const runId = normalizeRunId(rawRunId);
-  const terminal = runTerminal(runtimeEvents, runId);
-  if (terminal === null) {
-    return null;
-  }
-  if (terminal.kind === "delivered") {
-    const payload = terminal.payload as RuntimeLedgerEventByKind<
-      typeof RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED
-    >["payload"];
-    return {
-      ok: true,
-      status: "delivered",
-      runId,
-      final: payload.final,
+): SubmitResult | null =>
+  projectionOutput(
+    project(submitResultProjection, {
+      runtimeEvents: runtimeEventsOf(events),
+      runId: normalizeRunId(rawRunId),
       eventCount: events.length,
-      tokensUsed: payload.tokensUsed,
-    };
-  }
-  const payload = terminal.payload as RuntimeLedgerEventByKind<AbortKind>["payload"];
-  return {
-    ok: false,
-    status: "failed",
-    runId,
-    reason: reasonOf(terminal.event as AbortKind),
-    eventCount: events.length,
-    tokensUsed: payload.tokensUsed,
-  };
-};
+    }),
+  );

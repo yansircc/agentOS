@@ -340,8 +340,10 @@ describe("runtime event vocabulary", () => {
   });
 
   it("reports product deliver events as non-runtime unknown payloads", () => {
-    const decoded = decodeRuntimeLedgerEvent(rawEvent(1, "answer.ready", { final: "done" }));
+    const event = rawEvent(1, "answer.ready", { final: "done" });
+    const decoded = decodeRuntimeLedgerEvent(event);
     expect(decoded).toMatchObject({ _tag: "non_runtime" });
+    expect(projectRuntimeSafeLedgerEvent(event)).toBeUndefined();
   });
 
   it("replay mode tool execute not called: deterministic tool result replays from snapshot", () => {
@@ -479,8 +481,12 @@ describe("runtime event vocabulary", () => {
 
   it("rejects missing required runtime payload fields", () => {
     expect(() => decodeRuntimeLedgerEvent(rawEvent(1, "agent.run.started", {}))).toThrow();
+    expect(() => projectRuntimeSafeLedgerEvent(rawEvent(1, "agent.run.started", {}))).toThrow();
     expect(() =>
       decodeRuntimeLedgerEvent(rawEvent(2, "llm.response", { turn: { id: 1, index: 0 } })),
+    ).toThrow();
+    expect(() =>
+      projectRuntimeSafeLedgerEvent(rawEvent(2, "llm.response", { turn: { id: 1, index: 0 } })),
     ).toThrow();
     expect(() =>
       decodeRuntimeLedgerEvent(rawEvent(3, "tool.executed", { runId: 1, name: "lookup" })),
