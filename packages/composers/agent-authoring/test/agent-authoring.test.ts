@@ -42,6 +42,19 @@ describe("agent authored tree compiler", () => {
     expect(result.value.provenance["/tools/weather/executionDomain"]).toBe(
       "default:framework-defaults@agentos/v1#/tools/weather/executionDomain",
     );
+    expect(result.value.provenance["/tools/weather/interaction"]).toBe(
+      "default:framework-defaults@agentos/v1#/tools/weather/interaction",
+    );
+    expect(result.value.provenance["/llmRoutes/default/bindingRef"]).toBe(
+      "default:framework-defaults@agentos/v1#/llmRoutes/default/bindingRef",
+    );
+    expect(result.value.provenance["/scope"]).toBe("default:framework-defaults@agentos/v1#/scope");
+    expect(result.value.provenance["/handlers"]).toBe(
+      "default:framework-defaults@agentos/v1#/handlers",
+    );
+    expect(result.value.provenance["/effectAuthorityRef"]).toBe(
+      "default:framework-defaults@agentos/v1#/effectAuthorityRef",
+    );
     expect(result.value.provenance["/agentId"]).toBe(
       "default:framework-defaults@agentos/v1#/agentId",
     );
@@ -90,6 +103,51 @@ describe("agent authored tree compiler", () => {
         { kind: "effectful_tool_missing_receipt_policy", toolId: "fetch" },
       ],
     });
+  });
+
+  it("rejects each missing effectful tool contract instead of defaulting it", () => {
+    const cases = [
+      {
+        declaration: {
+          effects: ["provider_call"],
+          executionDomain: "workspace",
+          interaction: "approval",
+          receiptPolicy: "required",
+        },
+        expected: [{ kind: "effectful_tool_missing_material", toolId: "effectful" }],
+      },
+      {
+        declaration: {
+          effects: ["network"],
+          interaction: "approval",
+          receiptPolicy: "required",
+        },
+        expected: [{ kind: "effectful_tool_missing_execution_domain", toolId: "effectful" }],
+      },
+      {
+        declaration: {
+          effects: ["network"],
+          executionDomain: "workspace",
+          receiptPolicy: "required",
+        },
+        expected: [{ kind: "effectful_tool_missing_interaction", toolId: "effectful" }],
+      },
+    ] as const;
+
+    for (const { declaration, expected } of cases) {
+      const result = compileAgentTree({
+        files: [
+          { path: "agent/instructions.md", kind: "markdown", text: "Run effectfully." },
+          {
+            path: "agent/tools/effectful.ts",
+            kind: "tool",
+            declaration,
+          },
+        ],
+      });
+
+      expect(result).toEqual({ ok: false, issues: expected });
+    }
   });
 
   it("rejects duplicate authored facts in one value layer", () => {
