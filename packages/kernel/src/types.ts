@@ -8,7 +8,7 @@
  * ScheduledEventSpec — argument to the runtime client scheduleEvent method.
  */
 
-import { Schema } from "effect";
+import { Option, Schema } from "effect";
 import {
   isFactOwnerRef,
   type AuthorityRef,
@@ -16,6 +16,8 @@ import {
   type ScopeRef,
 } from "./effect-claim";
 import type { BindingMaterialRef } from "./material-ref";
+import { recordedValue } from "./value-brands";
+import type { Recorded } from "./value-brands";
 
 export interface DeliveryReceipt {
   readonly anchorId: string;
@@ -83,6 +85,19 @@ export const LedgerEventSchema: Schema.Decoder<LedgerEvent> = Schema.Struct({
 });
 
 export const decodeLedgerEvent = Schema.decodeUnknownSync(LedgerEventSchema);
+
+export type RecordedLedgerEvent = LedgerEvent & Recorded<LedgerEvent>;
+
+const recordLedgerEvent = (event: LedgerEvent): RecordedLedgerEvent =>
+  recordedValue(event) as RecordedLedgerEvent;
+
+export const decodeRecordedLedgerEvent = (value: unknown): RecordedLedgerEvent =>
+  recordLedgerEvent(decodeLedgerEvent(value));
+
+export const decodeRecordedLedgerEventOption = (
+  value: unknown,
+): Option.Option<RecordedLedgerEvent> =>
+  Option.map(Schema.decodeUnknownOption(LedgerEventSchema)(value), recordLedgerEvent);
 
 export interface LedgerEventRpc {
   id: number;

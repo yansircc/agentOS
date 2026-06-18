@@ -21,6 +21,7 @@ title: "@agent-os/ag-ui Public API Intent"
 - `.:AgUiLedgerEventEnvelope`
 - `.:AgUiLedgerProjectionSpec`
 - `.:AgUiInputRequestResumeBinding`
+- `.:AgUiRecordedLedgerEvent`
 - `.:AgUiSafeEventFrameProjector`
 - `.:AgUiSafeEventProjector`
 - `.:AgUiSafeLedgerEvent`
@@ -53,6 +54,7 @@ title: "@agent-os/ag-ui Public API Intent"
 - `.:agUiRunAgentInputToSubmitInput`
 - `.:createAgUiFrameStore`
 - `.:decodeAgUiRunAgentInput`
+- `.:decodeAgUiRecordedLedgerEvent`
 - `.:decodeLedgerEventToAgUiEnvelope`
 - `.:encodeAgUiLedgerEventEnvelopeSse`
 - `.:framesForAgUiLedgerEnvelope`

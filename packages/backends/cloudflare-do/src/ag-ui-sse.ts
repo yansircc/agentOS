@@ -1,4 +1,5 @@
 import {
+  decodeAgUiRecordedLedgerEvent,
   encodeAgUiLedgerEventEnvelopeSse,
   projectLedgerEventsToAgUiEnvelopes,
   projectLedgerSseToAgUiSse,
@@ -56,7 +57,7 @@ export const createCloudflareLedgerAgUiHistorySseResponse = (
   options: Omit<SseHttpResponseOptions, "onCancel"> = {},
 ): Response =>
   createSseHttpTextResponse(
-    projectLedgerEventsToAgUiEnvelopes(events, spec)
+    projectLedgerEventsToAgUiEnvelopes(events.map(decodeAgUiRecordedLedgerEvent), spec)
       .map((envelope) => encodeAgUiLedgerEventEnvelopeSse(envelope))
       .join(""),
     options,

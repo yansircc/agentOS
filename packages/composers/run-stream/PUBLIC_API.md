@@ -8,8 +8,8 @@ Status: 0.5.x active development for frame algebra and batched/realtime composit
 
 - `.:ComposeRealtimeRunStreamSpec`
 - `.:ComposeRunStreamSpec`
-- `.:LedgerEventRpc`
 - `.:RealtimeRunStreamSource`
+- `.:RunStreamRecordedLedgerEvent`
 - `.:RunStreamErrorFrame`
 - `.:RunStreamFrame`
 - `.:RunStreamLedgerEventFrame`
@@ -21,6 +21,7 @@ Status: 0.5.x active development for frame algebra and batched/realtime composit
 - `.:SubmitResult`
 - `.:composeRealtimeRunStream`
 - `.:composeRunStream`
+- `.:decodeRunStreamRecordedLedgerEvent`
 - `.:decodeRunStreamData`
 - `.:encodeRunStreamSse`
 - `.:isRunStreamFrame`

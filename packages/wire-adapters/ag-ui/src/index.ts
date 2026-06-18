@@ -7,7 +7,7 @@ import type {
 } from "@agent-os/kernel";
 import { scopeRefKey } from "@agent-os/kernel/effect-claim";
 import type { Tool } from "@agent-os/kernel/tools";
-import { decodeLedgerEvent, type LedgerEvent } from "@agent-os/kernel/types";
+import { decodeRecordedLedgerEvent, type RecordedLedgerEvent } from "@agent-os/kernel/types";
 import {
   inputRequestKindFromReason,
   parseInputRequestResumePayload,
@@ -58,6 +58,7 @@ type BaseAgUiFrame<T extends AgUiEventType> = {
 
 export type AgUiSafeValue = SafeLedgerValue;
 export type AgUiSafeLedgerEvent = SafeLedgerEvent;
+export type AgUiRecordedLedgerEvent = RecordedLedgerEvent;
 export type AgUiSafeEventFrameProjector = (
   event: AgUiSafeLedgerEvent,
   spec: AgUiRuntimeProjectionSpec,
@@ -165,6 +166,9 @@ export const AgUiRunAgentInputSchema: Schema.Decoder<AgUiRunAgentInput> = Schema
 });
 
 export const decodeAgUiRunAgentInput = Schema.decodeUnknownSync(AgUiRunAgentInputSchema);
+
+export const decodeAgUiRecordedLedgerEvent = (value: unknown): AgUiRecordedLedgerEvent =>
+  decodeRecordedLedgerEvent(value);
 
 export type AgUiRunStartedFrame = BaseAgUiFrame<"RUN_STARTED"> & {
   readonly threadId: string;
@@ -419,7 +423,7 @@ const ownerSafeEventProjectors = (
 };
 
 const safeEventMatchesOwner = (
-  event: LedgerEvent,
+  event: AgUiRecordedLedgerEvent,
   factOwnerRef: string,
   safeEvent: AgUiSafeLedgerEvent,
 ): boolean =>
@@ -433,7 +437,7 @@ const safeEventMatchesOwner = (
   );
 
 const projectOwnerSafeLedgerEvent = (
-  event: LedgerEvent,
+  event: AgUiRecordedLedgerEvent,
   projectors: ReadonlyArray<AgUiSafeEventProjector>,
 ): OwnerProjectedSafeEvent | undefined => {
   for (const projector of projectors) {
@@ -1003,7 +1007,7 @@ export const projectSafeLedgerEventToAgUiFrames = (
 };
 
 export const projectLedgerEventsToAgUiFrames = (
-  events: ReadonlyArray<LedgerEvent>,
+  events: ReadonlyArray<AgUiRecordedLedgerEvent>,
   spec: AgUiLedgerProjectionSpec = {},
 ): ReadonlyArray<AgUiFrame> => {
   const frames: AgUiFrame[] = [];
@@ -1028,7 +1032,7 @@ export const projectLedgerEventsToAgUiFrames = (
  * @public
  */
 export const projectLedgerEventToAgUiEnvelope = (
-  event: LedgerEvent,
+  event: AgUiRecordedLedgerEvent,
   spec: AgUiLedgerEnvelopeProjectionSpec = {},
 ): AgUiLedgerEventEnvelope => {
   const agUiFrames = projectLedgerEventsToAgUiFrames([event], spec);
@@ -1044,10 +1048,11 @@ export const projectLedgerEventToAgUiEnvelope = (
 export const decodeLedgerEventToAgUiEnvelope = (
   value: unknown,
   spec: AgUiLedgerEnvelopeProjectionSpec = {},
-): AgUiLedgerEventEnvelope => projectLedgerEventToAgUiEnvelope(decodeLedgerEvent(value), spec);
+): AgUiLedgerEventEnvelope =>
+  projectLedgerEventToAgUiEnvelope(decodeAgUiRecordedLedgerEvent(value), spec);
 
 export const projectLedgerEventsToAgUiEnvelopes = (
-  events: ReadonlyArray<LedgerEvent>,
+  events: ReadonlyArray<AgUiRecordedLedgerEvent>,
   spec: AgUiLedgerEnvelopeProjectionSpec = {},
 ): ReadonlyArray<AgUiLedgerEventEnvelope> =>
   [...events]

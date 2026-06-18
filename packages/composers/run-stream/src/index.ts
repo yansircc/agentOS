@@ -1,4 +1,4 @@
-import { Predicate, Schema } from "effect";
+import { Option, Predicate } from "effect";
 import {
   isTurnStreamFrame,
   projectTurnStream,
@@ -6,16 +6,18 @@ import {
   type TurnStreamProjection,
 } from "@agent-os/turn-stream";
 import { defineProjectionSpec, project, projectionOutputOrFail } from "@agent-os/kernel/projection";
-import { LedgerEventSchema, type LedgerEventRpc } from "@agent-os/kernel/types";
+import { decodeRecordedLedgerEventOption, type RecordedLedgerEvent } from "@agent-os/kernel/types";
 import type { SubmitResult } from "@agent-os/runtime-protocol";
 
-export type { LedgerEventRpc } from "@agent-os/kernel/types";
+export { decodeRecordedLedgerEvent as decodeRunStreamRecordedLedgerEvent } from "@agent-os/kernel/types";
 export type { SubmitResult } from "@agent-os/runtime-protocol";
+
+export type RunStreamRecordedLedgerEvent = RecordedLedgerEvent;
 
 export interface RunStreamLedgerEventFrame {
   readonly kind: "ledger_event";
   readonly seq: number;
-  readonly event: LedgerEventRpc;
+  readonly event: RunStreamRecordedLedgerEvent;
 }
 
 export interface RunStreamTurnFrame {
@@ -52,7 +54,7 @@ export interface RunStreamOmittedFrame {
 export interface RunStreamProjection {
   readonly status: RunStreamStatus;
   readonly lastSeq: number;
-  readonly ledgerEvents: ReadonlyArray<LedgerEventRpc>;
+  readonly ledgerEvents: ReadonlyArray<RunStreamRecordedLedgerEvent>;
   readonly turnStreams: Readonly<Record<string, TurnStreamProjection>>;
   readonly result?: SubmitResult;
   readonly errorReason?: string;
@@ -65,7 +67,7 @@ interface RunStreamProjectionInput {
 
 export interface ComposeRunStreamSpec {
   readonly submit: SubmitResult;
-  readonly ledgerEvents: ReadonlyArray<LedgerEventRpc>;
+  readonly ledgerEvents: ReadonlyArray<RunStreamRecordedLedgerEvent>;
   readonly turnFrames?: ReadonlyArray<TurnStreamFrame>;
 }
 
@@ -74,7 +76,7 @@ export type RealtimeRunStreamSource<T> =
   | PromiseLike<AsyncIterable<T> | ReadonlyArray<T>>;
 
 export interface ComposeRealtimeRunStreamSpec {
-  readonly ledgerEvents: RealtimeRunStreamSource<LedgerEventRpc>;
+  readonly ledgerEvents: RealtimeRunStreamSource<RunStreamRecordedLedgerEvent>;
   readonly turnFrames?: RealtimeRunStreamSource<TurnStreamFrame>;
   readonly submitResult: PromiseLike<SubmitResult>;
   readonly signal?: AbortSignal;
@@ -91,10 +93,15 @@ const isAsyncIterable = <T>(value: unknown): value is AsyncIterable<T> =>
   typeof (value as { readonly [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] ===
     "function";
 
-const isFrameBase = (value: Record<string, unknown>): boolean =>
-  typeof value.seq === "number" && Number.isInteger(value.seq) && value.seq >= 0;
+const frameSeqOf = (value: Record<string, unknown>): number | null => {
+  const seq = value.seq;
+  return typeof seq === "number" && Number.isInteger(seq) && seq >= 0 ? seq : null;
+};
 
-const isLedgerEventRpc = Schema.is(LedgerEventSchema);
+const recordedLedgerEventFromUnknown = (value: unknown): RunStreamRecordedLedgerEvent | null => {
+  const decoded = decodeRecordedLedgerEventOption(value);
+  return Option.isSome(decoded) ? decoded.value : null;
+};
 
 const isSubmitResult = (value: unknown): value is SubmitResult => {
   if (!Predicate.isObject(value) || typeof value.runId !== "number") return false;
@@ -114,62 +121,76 @@ const isSubmitResult = (value: unknown): value is SubmitResult => {
   return false;
 };
 
-export const isRunStreamFrame = (value: unknown): value is RunStreamFrame => {
-  if (!Predicate.isObject(value) || !isFrameBase(value)) return false;
+const runStreamFrameFromUnknown = (value: unknown): RunStreamFrame | null => {
+  if (!Predicate.isObject(value)) return null;
+  const seq = frameSeqOf(value);
+  if (seq === null) return null;
   switch (value.kind) {
-    case "ledger_event":
-      return isLedgerEventRpc(value.event);
+    case "ledger_event": {
+      const event = recordedLedgerEventFromUnknown(value.event);
+      return event === null ? null : { kind: "ledger_event", seq, event };
+    }
     case "turn_frame":
-      return isTurnStreamFrame(value.frame);
+      return isTurnStreamFrame(value.frame)
+        ? { kind: "turn_frame", seq, frame: value.frame }
+        : null;
     case "submit_result":
-      return isSubmitResult(value.result);
+      return isSubmitResult(value.result)
+        ? { kind: "submit_result", seq, result: value.result }
+        : null;
     case "stream_error":
-      return typeof value.reason === "string";
+      return typeof value.reason === "string"
+        ? { kind: "stream_error", seq, reason: value.reason }
+        : null;
     default:
-      return false;
+      return null;
   }
 };
+
+export const isRunStreamFrame = (value: unknown): value is RunStreamFrame =>
+  runStreamFrameFromUnknown(value) !== null;
 
 const foldRunStream = (frames: Iterable<unknown>): RunStreamProjection => {
   let status: RunStreamStatus = "open";
   let lastSeq = -1;
   let result: SubmitResult | undefined;
   let errorReason: string | undefined;
-  const ledgerEvents: LedgerEventRpc[] = [];
+  const ledgerEvents: RunStreamRecordedLedgerEvent[] = [];
   const turnFramesByRef = new Map<string, TurnStreamFrame[]>();
   const omittedFrames: RunStreamOmittedFrame[] = [];
 
   for (const candidate of frames) {
-    if (!isRunStreamFrame(candidate)) {
+    const frame = runStreamFrameFromUnknown(candidate);
+    if (frame === null) {
       omittedFrames.push({ reason: "malformed" });
       continue;
     }
-    if (candidate.seq <= lastSeq) {
-      omittedFrames.push({ seq: candidate.seq, reason: "duplicate_or_out_of_order" });
+    if (frame.seq <= lastSeq) {
+      omittedFrames.push({ seq: frame.seq, reason: "duplicate_or_out_of_order" });
       continue;
     }
     if (status !== "open") {
-      omittedFrames.push({ seq: candidate.seq, reason: "after_terminal" });
+      omittedFrames.push({ seq: frame.seq, reason: "after_terminal" });
       continue;
     }
 
-    lastSeq = candidate.seq;
-    switch (candidate.kind) {
+    lastSeq = frame.seq;
+    switch (frame.kind) {
       case "ledger_event":
-        ledgerEvents.push(candidate.event);
+        ledgerEvents.push(frame.event);
         break;
       case "turn_frame": {
-        const framesForTurn = turnFramesByRef.get(candidate.frame.turnRef) ?? [];
-        framesForTurn.push(candidate.frame);
-        turnFramesByRef.set(candidate.frame.turnRef, framesForTurn);
+        const framesForTurn = turnFramesByRef.get(frame.frame.turnRef) ?? [];
+        framesForTurn.push(frame.frame);
+        turnFramesByRef.set(frame.frame.turnRef, framesForTurn);
         break;
       }
       case "submit_result":
-        result = candidate.result;
-        status = candidate.result.ok ? "succeeded" : "failed";
+        result = frame.result;
+        status = frame.result.ok ? "succeeded" : "failed";
         break;
       case "stream_error":
-        errorReason = candidate.reason;
+        errorReason = frame.reason;
         status = "error";
         break;
     }
@@ -201,7 +222,7 @@ const runStreamProjection = defineProjectionSpec<RunStreamProjectionInput, RunSt
       { kind: "wire-vocabulary", ref: "@agent-os/run-stream/frames" },
       { kind: "wire-vocabulary", ref: "@agent-os/turn-stream/frames" },
       { kind: "runtime-protocol", ref: "@agent-os/runtime-protocol/submit-result" },
-      { kind: "kernel-ledger-rpc", ref: "@agent-os/kernel/types/LedgerEventRpc" },
+      { kind: "kernel-ledger-recorded", ref: "@agent-os/kernel/types/LedgerEvent" },
     ],
   },
   project: ({ frames }, context) => context.ok(foldRunStream(frames)),
@@ -216,7 +237,7 @@ export const encodeRunStreamSse = (frame: RunStreamFrame): string =>
 export const decodeRunStreamData = (data: string): RunStreamFrame | null => {
   try {
     const parsed = JSON.parse(data) as unknown;
-    return isRunStreamFrame(parsed) ? parsed : null;
+    return runStreamFrameFromUnknown(parsed);
   } catch {
     return null;
   }
@@ -351,9 +372,8 @@ const frameFromRealtimeSource = (
   seq: number,
 ): RunStreamFrame | string => {
   if (source === "ledger") {
-    return isLedgerEventRpc(value)
-      ? { kind: "ledger_event", seq, event: value }
-      : invalidSourceValueReason(source);
+    const event = recordedLedgerEventFromUnknown(value);
+    return event === null ? invalidSourceValueReason(source) : { kind: "ledger_event", seq, event };
   }
 
   return isTurnStreamFrame(value)

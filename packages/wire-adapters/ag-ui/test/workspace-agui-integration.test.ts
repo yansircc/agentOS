@@ -1,7 +1,6 @@
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "@effect/vitest";
 import { makePreClaim } from "@agent-os/kernel/effect-claim";
-import type { LedgerEvent } from "@agent-os/kernel/types";
 import type { ToolProjectionRow, ToolProjectionWaitSpec } from "@agent-os/kernel/tools";
 import { settleToolExecuted, settleToolExecutionRejected } from "@agent-os/runtime";
 import {
@@ -33,9 +32,11 @@ import {
 } from "@agent-os/runtime-protocol";
 import {
   agUiRunAgentInputToSubmitInput,
+  decodeAgUiRecordedLedgerEvent,
   projectAgUiFrames,
   projectLedgerEventsToAgUiFrames,
   verifyAgUiFrameSafety,
+  type AgUiRecordedLedgerEvent,
   type AgUiRunAgentInput,
 } from "../src/index";
 
@@ -46,25 +47,27 @@ const runtimeIdentity = {
   effectAuthorityRef: { authorityClass: "llm_route", authorityId: "workspace-agui" },
 };
 
-const commit = (id: number, spec: RuntimeEventCommitSpec): LedgerEvent => ({
-  id,
-  ts: id * 10,
-  kind: spec.kind,
-  scopeRef: spec.scopeRef,
-  effectAuthorityRef: spec.effectAuthorityRef,
-  factOwnerRef: RUNTIME_FACT_OWNER,
-  payload: spec.payload,
-});
+const commit = (id: number, spec: RuntimeEventCommitSpec): AgUiRecordedLedgerEvent =>
+  decodeAgUiRecordedLedgerEvent({
+    id,
+    ts: id * 10,
+    kind: spec.kind,
+    scopeRef: spec.scopeRef,
+    effectAuthorityRef: spec.effectAuthorityRef,
+    factOwnerRef: RUNTIME_FACT_OWNER,
+    payload: spec.payload,
+  });
 
-const workspaceCommit = (id: number, kind: string, payload: unknown): LedgerEvent => ({
-  id,
-  ts: id * 10,
-  kind,
-  scopeRef: runtimeIdentity.scopeRef,
-  effectAuthorityRef: runtimeIdentity.effectAuthorityRef,
-  factOwnerRef: WORKSPACE_OP_FACT_OWNER,
-  payload,
-});
+const workspaceCommit = (id: number, kind: string, payload: unknown): AgUiRecordedLedgerEvent =>
+  decodeAgUiRecordedLedgerEvent({
+    id,
+    ts: id * 10,
+    kind,
+    scopeRef: runtimeIdentity.scopeRef,
+    effectAuthorityRef: runtimeIdentity.effectAuthorityRef,
+    factOwnerRef: WORKSPACE_OP_FACT_OWNER,
+    payload,
+  });
 
 describe("Cloudflare workspace tools to AG-UI integration fixture", () => {
   it.effect(
@@ -180,7 +183,7 @@ describe("Cloudflare workspace tools to AG-UI integration fixture", () => {
           originRef: { originId: "run:1", originKind: "submit" },
         });
         const provider = createWorkspaceOperationLocalProvider({ env });
-        const workspaceEvents: LedgerEvent[] = [];
+        const workspaceEvents: AgUiRecordedLedgerEvent[] = [];
         const writeResult = yield* writeTool.execute(
           { path: "/src/output.txt", content: "WRITE_SECRET" },
           {

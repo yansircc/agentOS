@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import * as kernel from "../src";
-import type { Authored, Live, Recorded, RecordedPayload, SafeLedgerPayload } from "../src";
+import type {
+  Authored,
+  Live,
+  Recorded,
+  RecordedLedgerEvent,
+  RecordedPayload,
+  SafeLedgerPayload,
+} from "../src";
 import { authoredValue, recordedPayload, recordedValue } from "../src/value-brands";
 
 describe("value domain brands", () => {
@@ -76,6 +83,27 @@ describe("value domain brands", () => {
     expect(() => recordedPayload({ bad: undefined })).toThrow("recorded payload value invalid");
     expect(() => recordedPayload({ bad: new Date(0) })).toThrow(
       "recorded payload object must be a JSON record",
+    );
+  });
+
+  it("decodes ledger rows into Recorded ledger facts", () => {
+    const fact = kernel.decodeRecordedLedgerEvent({
+      id: 1,
+      ts: 10,
+      kind: "agent.run.started",
+      scopeRef: { kind: "conversation", scopeId: "recorded-ledger" },
+      factOwnerRef: "@agent-os/test",
+      effectAuthorityRef: { authorityClass: "test", authorityId: "recorded-ledger" },
+      payload: { runId: 1 },
+    });
+    const recorded: RecordedLedgerEvent = fact;
+
+    expect(recorded.value.id).toBe(1);
+    expect(Object.prototype.propertyIsEnumerable.call(fact, "value")).toBe(false);
+    expect(JSON.stringify(fact)).not.toContain('"value"');
+    expect(() => kernel.decodeRecordedLedgerEvent({ id: "1", payload: {} })).toThrow();
+    expect(JSON.stringify(kernel.decodeRecordedLedgerEventOption({ id: "1", payload: {} }))).toBe(
+      '{"_id":"Option","_tag":"None"}',
     );
   });
 

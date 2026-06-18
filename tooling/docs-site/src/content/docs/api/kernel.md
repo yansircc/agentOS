@@ -268,6 +268,7 @@ title: "@agent-os/kernel Public API Intent"
 - `.:ResolvedToolExecution`
 - `.:RedactedSafeSummaryReason`
 - `.:Recorded`
+- `.:RecordedLedgerEvent`
 - `.:RecordedPayload`
 - `.:RecordedPayloadValue`
 - `.:SafeLedgerEvent`
@@ -385,6 +386,7 @@ text`
 - `./types:LedgerEventIdentity`
 - `./types:LedgerEventSchema`
 - `./types:LedgerEventRpc`
+- `./types:RecordedLedgerEvent`
 - `./types:QuotaState`
 - `.:DurableTriggerAcquireCancelled`
 - `.:DurableTriggerCommitReturnedThenable`
@@ -413,6 +415,8 @@ text`
 - `./types:ScheduledEventSpec`
 - `./types:StreamEventsOptions`
 - `./types:decodeLedgerEvent`
+- `./types:decodeRecordedLedgerEvent`
+- `./types:decodeRecordedLedgerEventOption`
 - `.:ABORT`
 - `.:ADMITTER_ERROR_REASON_PREFIX`
 - `.:AGENT_SCHEMA_FINGERPRINT_VERSION`
@@ -497,6 +501,7 @@ text`
 - `.:LedgerEventIdentity`
 - `.:LedgerEventSchema`
 - `.:LedgerEventRpc`
+- `.:RecordedLedgerEvent`
 - `.:LivedClaim`
 - `.:LiveResolvedMaterial`
 - `.:MaterialKind`
@@ -581,6 +586,8 @@ text`
 - `.:canonicalAgentSchemaJson`
 - `.:credentialMaterialRef`
 - `.:decodeLedgerEvent`
+- `.:decodeRecordedLedgerEvent`
+- `.:decodeRecordedLedgerEventOption`
 - `.:decodeToolArgs`
 - `.:defineBoundaryContract`
 - `.:defineCarrier`

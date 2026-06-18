@@ -8,8 +8,8 @@ title: "@agent-os/run-stream Public API Intent"
 
 - `.:ComposeRealtimeRunStreamSpec`
 - `.:ComposeRunStreamSpec`
-- `.:LedgerEventRpc`
 - `.:RealtimeRunStreamSource`
+- `.:RunStreamRecordedLedgerEvent`
 - `.:RunStreamErrorFrame`
 - `.:RunStreamFrame`
 - `.:RunStreamLedgerEventFrame`
@@ -21,6 +21,7 @@ title: "@agent-os/run-stream Public API Intent"
 - `.:SubmitResult`
 - `.:composeRealtimeRunStream`
 - `.:composeRunStream`
+- `.:decodeRunStreamRecordedLedgerEvent`
 - `.:decodeRunStreamData`
 - `.:encodeRunStreamSse`
 - `.:isRunStreamFrame`

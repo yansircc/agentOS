@@ -1,12 +1,13 @@
 import {
   composeRealtimeRunStream,
   composeRunStream,
+  decodeRunStreamRecordedLedgerEvent,
   decodeRunStreamData,
   encodeRunStreamSse,
   projectRunStream,
   type RunStreamFrame,
 } from "../src";
-import type { LedgerEventRpc, SubmitResult } from "../src";
+import type { RunStreamRecordedLedgerEvent, SubmitResult } from "../src";
 import type { TurnStreamFrame } from "@agent-os/turn-stream";
 
 const eventIdentity = (scopeId: string) => ({
@@ -15,13 +16,14 @@ const eventIdentity = (scopeId: string) => ({
   effectAuthorityRef: { authorityClass: "test", authorityId: scopeId },
 });
 
-const ledgerEvent = (id: number, kind = "agent.started"): LedgerEventRpc => ({
-  id,
-  ts: 1_700_000_000_000 + id,
-  kind,
-  ...eventIdentity("session/run-stream"),
-  payload: { id },
-});
+const ledgerEvent = (id: number, kind = "agent.started"): RunStreamRecordedLedgerEvent =>
+  decodeRunStreamRecordedLedgerEvent({
+    id,
+    ts: 1_700_000_000_000 + id,
+    kind,
+    ...eventIdentity("session/run-stream"),
+    payload: { id },
+  });
 
 const okResult: SubmitResult = {
   ok: true,
@@ -63,7 +65,8 @@ const collectRunFrames = async (
   return collected;
 };
 
-const emptyLedgerEvents = (): Promise<ReadonlyArray<LedgerEventRpc>> => Promise.resolve([]);
+const emptyLedgerEvents = (): Promise<ReadonlyArray<RunStreamRecordedLedgerEvent>> =>
+  Promise.resolve([]);
 
 describe("@agent-os/run-stream", () => {
   it("projects ordered ledger and turn frames into one run view", () => {
@@ -169,10 +172,10 @@ describe("@agent-os/run-stream", () => {
   });
 
   it("composes realtime frames in source arrival order before terminal submit_result", async () => {
-    const ledgerReady = deferred<LedgerEventRpc>();
+    const ledgerReady = deferred<RunStreamRecordedLedgerEvent>();
     const turnReady = deferred<TurnStreamFrame>();
     const submitReady = deferred<SubmitResult>();
-    async function* ledgerEvents(): AsyncGenerator<LedgerEventRpc> {
+    async function* ledgerEvents(): AsyncGenerator<RunStreamRecordedLedgerEvent> {
       yield await ledgerReady.promise;
     }
     async function* turnFrames(): AsyncGenerator<TurnStreamFrame> {
@@ -254,8 +257,8 @@ describe("@agent-os/run-stream", () => {
   });
 
   it("maps malformed realtime source values to stream_error", async () => {
-    async function* malformedLedgerEvents(): AsyncGenerator<LedgerEventRpc> {
-      yield { bad: true } as unknown as LedgerEventRpc;
+    async function* malformedLedgerEvents(): AsyncGenerator<RunStreamRecordedLedgerEvent> {
+      yield { bad: true } as unknown as RunStreamRecordedLedgerEvent;
     }
 
     expect(
@@ -270,9 +273,9 @@ describe("@agent-os/run-stream", () => {
 
   it("realtime composition only consumes passed sources and never writes ledger facts", async () => {
     const writeLedgerFact = vi.fn();
-    const ledgerReady = deferred<LedgerEventRpc>();
+    const ledgerReady = deferred<RunStreamRecordedLedgerEvent>();
     const submitReady = deferred<SubmitResult>();
-    async function* ledgerEvents(): AsyncGenerator<LedgerEventRpc> {
+    async function* ledgerEvents(): AsyncGenerator<RunStreamRecordedLedgerEvent> {
       yield await ledgerReady.promise;
     }
 

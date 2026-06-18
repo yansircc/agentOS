@@ -17,6 +17,7 @@
 - `.:AgUiLedgerEventEnvelope`
 - `.:AgUiLedgerProjectionSpec`
 - `.:AgUiInputRequestResumeBinding`
+- `.:AgUiRecordedLedgerEvent`
 - `.:AgUiSafeEventFrameProjector`
 - `.:AgUiSafeEventProjector`
 - `.:AgUiSafeLedgerEvent`
@@ -49,6 +50,7 @@
 - `.:agUiRunAgentInputToSubmitInput`
 - `.:createAgUiFrameStore`
 - `.:decodeAgUiRunAgentInput`
+- `.:decodeAgUiRecordedLedgerEvent`
 - `.:decodeLedgerEventToAgUiEnvelope`
 - `.:encodeAgUiLedgerEventEnvelopeSse`
 - `.:framesForAgUiLedgerEnvelope`

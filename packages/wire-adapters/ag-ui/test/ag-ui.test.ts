@@ -3,7 +3,6 @@ import { describe, expect, it } from "@effect/vitest";
 import { safeLedgerEvent } from "@agent-os/kernel";
 import { defineTool, deterministicToolExecution } from "@agent-os/kernel/tools";
 import { makePreClaim } from "@agent-os/kernel/effect-claim";
-import type { LedgerEvent } from "@agent-os/kernel/types";
 import {
   chatIngestedEvent,
   llmRequestedEvent,
@@ -26,6 +25,7 @@ import {
   AgUiRunAgentInputSchema,
   agUiRunAgentInputToSubmitInput,
   decodeAgUiRunAgentInput,
+  decodeAgUiRecordedLedgerEvent,
   decodeLedgerEventToAgUiEnvelope,
   encodeAgUiLedgerEventEnvelopeSse,
   framesForAgUiLedgerEnvelope,
@@ -38,6 +38,7 @@ import {
   projectToolToAgUiTool,
   verifyAgUiFrameSafety,
   type AgUiFrame,
+  type AgUiRecordedLedgerEvent,
   type AgUiRunAgentInput,
   type AgUiSafeValue,
 } from "../src/index";
@@ -55,15 +56,16 @@ const eventIdentity = (scopeId: string) => ({
   effectAuthorityRef: { authorityClass: "test", authorityId: scopeId },
 });
 
-const commit = (id: number, spec: RuntimeEventCommitSpec): LedgerEvent => ({
-  id,
-  ts: id * 10,
-  kind: spec.kind,
-  scopeRef: spec.scopeRef,
-  effectAuthorityRef: spec.effectAuthorityRef,
-  factOwnerRef: RUNTIME_FACT_OWNER,
-  payload: spec.payload,
-});
+const commit = (id: number, spec: RuntimeEventCommitSpec): AgUiRecordedLedgerEvent =>
+  decodeAgUiRecordedLedgerEvent({
+    id,
+    ts: id * 10,
+    kind: spec.kind,
+    scopeRef: spec.scopeRef,
+    effectAuthorityRef: spec.effectAuthorityRef,
+    factOwnerRef: RUNTIME_FACT_OWNER,
+    payload: spec.payload,
+  });
 
 const toolClaim = makePreClaim({
   operationRef: "tool:ag-ui-test:1:0:call-1",
@@ -91,7 +93,7 @@ const approvalInputRequest: InputRequestDescriptor = {
   },
 };
 
-const transcript = (): ReadonlyArray<LedgerEvent> => [
+const transcript = (): ReadonlyArray<AgUiRecordedLedgerEvent> => [
   commit(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "find weather" })),
   commit(
     2,
@@ -722,7 +724,7 @@ describe("@agent-os/ag-ui", () => {
   it("fails malformed runtime payloads before AG-UI mapping", () => {
     expect(() =>
       projectLedgerEventsToAgUiFrames([
-        {
+        decodeAgUiRecordedLedgerEvent({
           id: 1,
           ts: 1,
           scopeRef: { kind: "conversation", scopeId: scope },
@@ -730,7 +732,7 @@ describe("@agent-os/ag-ui", () => {
           factOwnerRef: RUNTIME_FACT_OWNER,
           kind: "tool.executed",
           payload: { runId: 1, name: "lookup" },
-        },
+        }),
       ]),
     ).toThrow();
   });
@@ -765,7 +767,7 @@ describe("@agent-os/ag-ui", () => {
   it("projects product events only through explicit owner safe event projectors", () => {
     const frames = projectLedgerEventsToAgUiFrames(
       [
-        {
+        decodeAgUiRecordedLedgerEvent({
           id: 1,
           ts: 1,
           ...eventIdentity(scope),
@@ -775,7 +777,7 @@ describe("@agent-os/ag-ui", () => {
             content: "not exposed",
             stats: { bytes: 12, secret: "nested secret" },
           },
-        },
+        }),
       ],
       {
         safeEventProjectors: [
@@ -808,13 +810,13 @@ describe("@agent-os/ag-ui", () => {
   it("does not apply built-in frame mappings to product owners", () => {
     const frames = projectLedgerEventsToAgUiFrames(
       [
-        {
+        decodeAgUiRecordedLedgerEvent({
           id: 1,
           ts: 1,
           ...eventIdentity(scope),
           kind: "agent.run.started",
           payload: { runId: 99, intent: "not runtime-owned" },
-        },
+        }),
       ],
       {
         safeEventProjectors: [
@@ -846,13 +848,13 @@ describe("@agent-os/ag-ui", () => {
   it("drops product frames that emit reserved agent-os custom names", () => {
     const frames = projectLedgerEventsToAgUiFrames(
       [
-        {
+        decodeAgUiRecordedLedgerEvent({
           id: 1,
           ts: 1,
           ...eventIdentity(scope),
           kind: "workspace.file.observed",
           payload: { path: "README.md" },
-        },
+        }),
       ],
       {
         safeEventProjectors: [

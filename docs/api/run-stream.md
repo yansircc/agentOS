@@ -4,8 +4,8 @@
 
 - `.:ComposeRealtimeRunStreamSpec`
 - `.:ComposeRunStreamSpec`
-- `.:LedgerEventRpc`
 - `.:RealtimeRunStreamSource`
+- `.:RunStreamRecordedLedgerEvent`
 - `.:RunStreamErrorFrame`
 - `.:RunStreamFrame`
 - `.:RunStreamLedgerEventFrame`
@@ -17,6 +17,7 @@
 - `.:SubmitResult`
 - `.:composeRealtimeRunStream`
 - `.:composeRunStream`
+- `.:decodeRunStreamRecordedLedgerEvent`
 - `.:decodeRunStreamData`
 - `.:encodeRunStreamSse`
 - `.:isRunStreamFrame`

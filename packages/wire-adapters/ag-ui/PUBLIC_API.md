@@ -21,6 +21,7 @@ Status: 0.5.x active development for AG-UI wire projection. Public exports are l
 - `.:AgUiLedgerEventEnvelope`
 - `.:AgUiLedgerProjectionSpec`
 - `.:AgUiInputRequestResumeBinding`
+- `.:AgUiRecordedLedgerEvent`
 - `.:AgUiSafeEventFrameProjector`
 - `.:AgUiSafeEventProjector`
 - `.:AgUiSafeLedgerEvent`
@@ -53,6 +54,7 @@ Status: 0.5.x active development for AG-UI wire projection. Public exports are l
 - `.:agUiRunAgentInputToSubmitInput`
 - `.:createAgUiFrameStore`
 - `.:decodeAgUiRunAgentInput`
+- `.:decodeAgUiRecordedLedgerEvent`
 - `.:decodeLedgerEventToAgUiEnvelope`
 - `.:encodeAgUiLedgerEventEnvelopeSse`
 - `.:framesForAgUiLedgerEnvelope`
