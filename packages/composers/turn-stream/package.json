@@ -16,6 +16,7 @@
     "test": "vp test run --configLoader runner"
   },
   "dependencies": {
+    "@agent-os/kernel": "workspace:*",
     "effect": "catalog:"
   },
   "devDependencies": {

@@ -5,6 +5,7 @@ import {
   type TurnStreamFrame,
   type TurnStreamProjection,
 } from "@agent-os/turn-stream";
+import { defineProjectionSpec, project, projectionOutputOrFail } from "@agent-os/kernel/projection";
 import { isSymbolicSettlementValue } from "@agent-os/kernel/settlement-contract";
 import {
   type EventQueryOptions,
@@ -61,6 +62,10 @@ export interface RunStreamProjection {
   readonly result?: SubmitResult;
   readonly errorReason?: string;
   readonly omittedFrames: ReadonlyArray<RunStreamOmittedFrame>;
+}
+
+interface RunStreamProjectionInput {
+  readonly frames: Iterable<unknown>;
 }
 
 export interface ComposeRunStreamSpec {
@@ -137,7 +142,7 @@ export const isRunStreamFrame = (value: unknown): value is RunStreamFrame => {
   }
 };
 
-export const projectRunStream = (frames: Iterable<unknown>): RunStreamProjection => {
+const foldRunStream = (frames: Iterable<unknown>): RunStreamProjection => {
   let status: RunStreamStatus = "open";
   let lastSeq = -1;
   let result: SubmitResult | undefined;
@@ -197,6 +202,25 @@ export const projectRunStream = (frames: Iterable<unknown>): RunStreamProjection
     omittedFrames,
   };
 };
+
+const runStreamProjection = defineProjectionSpec<RunStreamProjectionInput, RunStreamProjection>({
+  id: "run-stream.current",
+  version: 1,
+  source: {
+    kind: "source-set",
+    ref: "@agent-os/run-stream/projection-sources",
+    sources: [
+      { kind: "wire-vocabulary", ref: "@agent-os/run-stream/frames" },
+      { kind: "wire-vocabulary", ref: "@agent-os/turn-stream/frames" },
+      { kind: "runtime-protocol", ref: "@agent-os/runtime-protocol/submit-result" },
+      { kind: "kernel-ledger-rpc", ref: "@agent-os/kernel/types/LedgerEventRpc" },
+    ],
+  },
+  project: ({ frames }, context) => context.ok(foldRunStream(frames)),
+});
+
+export const projectRunStream = (frames: Iterable<unknown>): RunStreamProjection =>
+  projectionOutputOrFail(project(runStreamProjection, { frames }));
 
 export const encodeRunStreamSse = (frame: RunStreamFrame): string =>
   `event: ${frame.kind}\ndata: ${JSON.stringify(frame)}\n\n`;

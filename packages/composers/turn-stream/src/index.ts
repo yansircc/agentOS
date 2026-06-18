@@ -1,4 +1,6 @@
 import { Predicate } from "effect";
+import { defineProjectionSpec, project, projectionOutputOrFail } from "@agent-os/kernel/projection";
+
 export interface TurnTextDeltaFrame {
   readonly kind: "text_delta";
   readonly turnRef: string;
@@ -56,6 +58,11 @@ export interface TurnStreamProjection {
   readonly errorReason?: string;
 }
 
+interface TurnStreamProjectionInput {
+  readonly frames: Iterable<unknown>;
+  readonly turnRef: string;
+}
+
 const isFrameBase = (value: Record<string, unknown>): boolean =>
   typeof value.turnRef === "string" &&
   typeof value.seq === "number" &&
@@ -78,10 +85,7 @@ export const isTurnStreamFrame = (value: unknown): value is TurnStreamFrame => {
   }
 };
 
-export const projectTurnStream = (
-  frames: Iterable<unknown>,
-  turnRef: string,
-): TurnStreamProjection => {
+const foldTurnStream = (frames: Iterable<unknown>, turnRef: string): TurnStreamProjection => {
   let status: TurnStreamStatus = "open";
   let text = "";
   let lastSeq = -1;
@@ -138,6 +142,19 @@ export const projectTurnStream = (
     ...(errorReason === undefined ? {} : { errorReason }),
   };
 };
+
+const turnStreamProjection = defineProjectionSpec<TurnStreamProjectionInput, TurnStreamProjection>({
+  id: "turn-stream.current",
+  version: 1,
+  source: { kind: "wire-vocabulary", ref: "@agent-os/turn-stream/frames" },
+  project: ({ frames, turnRef }, context) => context.ok(foldTurnStream(frames, turnRef)),
+});
+
+export const projectTurnStream = (
+  frames: Iterable<unknown>,
+  turnRef: string,
+): TurnStreamProjection =>
+  projectionOutputOrFail(project(turnStreamProjection, { frames, turnRef }));
 
 export const encodeTurnStreamSse = (frame: TurnStreamFrame): string =>
   `event: ${frame.kind}\ndata: ${JSON.stringify(frame)}\n\n`;
