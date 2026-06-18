@@ -6,16 +6,11 @@ import {
   type TurnStreamProjection,
 } from "@agent-os/turn-stream";
 import { defineProjectionSpec, project, projectionOutputOrFail } from "@agent-os/kernel/projection";
-import { isSymbolicSettlementValue } from "@agent-os/kernel/settlement-contract";
-import {
-  type EventQueryOptions,
-  LedgerEventSchema,
-  type LedgerEventRpc,
-} from "@agent-os/kernel/types";
-import type { SubmitResult, SubmitSpec } from "@agent-os/runtime-protocol";
+import { LedgerEventSchema, type LedgerEventRpc } from "@agent-os/kernel/types";
+import type { SubmitResult } from "@agent-os/runtime-protocol";
 
 export type { LedgerEventRpc } from "@agent-os/kernel/types";
-export type { SubmitResult, SubmitSpec } from "@agent-os/runtime-protocol";
+export type { SubmitResult } from "@agent-os/runtime-protocol";
 
 export interface RunStreamLedgerEventFrame {
   readonly kind: "ledger_event";
@@ -72,13 +67,6 @@ export interface ComposeRunStreamSpec {
   readonly submit: SubmitResult;
   readonly ledgerEvents: ReadonlyArray<LedgerEventRpc>;
   readonly turnFrames?: ReadonlyArray<TurnStreamFrame>;
-}
-
-export interface ComposeBatchedSubmitRunStreamSpec {
-  readonly submitSpec: SubmitSpec;
-  readonly afterId?: number;
-  readonly submit: (spec: SubmitSpec) => Promise<SubmitResult>;
-  readonly events: (options?: EventQueryOptions) => Promise<ReadonlyArray<LedgerEventRpc>>;
 }
 
 export type RealtimeRunStreamSource<T> =
@@ -249,24 +237,7 @@ export const composeRunStream = (spec: ComposeRunStreamSpec): ReadonlyArray<RunS
   return frames;
 };
 
-const maxLedgerEventId = (events: ReadonlyArray<LedgerEventRpc>): number =>
-  events.reduce((max, event) => Math.max(max, event.id), 0);
-
 const errorReason = (cause: unknown): string => {
-  if (Predicate.isRecord(cause) && cause._tag === "agent_os.provider_http_failure") {
-    const provider =
-      typeof cause.provider === "string" && isSymbolicSettlementValue(cause.provider)
-        ? cause.provider
-        : "provider";
-    const status = typeof cause.status === "number" ? `http_${cause.status}` : "http_error";
-    const flags = Array.isArray(cause.flags)
-      ? cause.flags.filter((flag): flag is string => typeof flag === "string").join(":")
-      : "";
-    return ["provider_http_failure", provider, status, flags].filter(Boolean).join(":");
-  }
-  if (Predicate.isRecord(cause) && typeof cause.reason === "string") {
-    return isSymbolicSettlementValue(cause.reason) ? cause.reason : "object";
-  }
   if (Predicate.isRecord(cause) && typeof cause._tag === "string") return cause._tag;
   if (cause instanceof Error) return cause.name;
   return typeof cause;
@@ -502,25 +473,3 @@ export async function* composeRealtimeRunStream(
     await closeRealtimeSources(states);
   }
 }
-
-/** Batched bridge: submit completes before post-baseline ledger rows are read. */
-export const composeBatchedSubmitRunStream = async (
-  spec: ComposeBatchedSubmitRunStreamSpec,
-): Promise<ReadonlyArray<RunStreamFrame>> => {
-  const frames: RunStreamFrame[] = [];
-  let seq = 0;
-
-  try {
-    const baseline = spec.afterId ?? maxLedgerEventId(await spec.events());
-    const result = await spec.submit(spec.submitSpec);
-    for (const event of await spec.events({ afterId: baseline })) {
-      frames.push({ kind: "ledger_event", seq, event });
-      seq += 1;
-    }
-    frames.push({ kind: "submit_result", seq, result });
-  } catch (cause) {
-    frames.push({ kind: "stream_error", seq, reason: errorReason(cause) });
-  }
-
-  return frames;
-};

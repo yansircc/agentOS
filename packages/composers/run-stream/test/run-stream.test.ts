@@ -1,5 +1,4 @@
 import {
-  composeBatchedSubmitRunStream,
   composeRealtimeRunStream,
   composeRunStream,
   decodeRunStreamData,
@@ -7,7 +6,7 @@ import {
   projectRunStream,
   type RunStreamFrame,
 } from "../src";
-import type { LedgerEventRpc, SubmitResult, SubmitSpec } from "../src";
+import type { LedgerEventRpc, SubmitResult } from "../src";
 import type { TurnStreamFrame } from "@agent-os/turn-stream";
 
 const eventIdentity = (scopeId: string) => ({
@@ -40,20 +39,6 @@ const failedResult: SubmitResult = {
   reason: "agent.aborted.retries",
   eventCount: 3,
   tokensUsed: 4,
-};
-
-const submitSpec: SubmitSpec = {
-  intent: "Return a final answer.",
-  context: { source: "run-stream-test" },
-  route: {
-    kind: "openai-chat-compatible",
-    endpointRef: "test-endpoint",
-    credentialRef: "test-credential",
-    modelId: "test-model",
-  },
-  tools: {},
-  budget: { maxTurns: 1 },
-  effectAuthorityRef: { authorityClass: "llm_route", authorityId: "run-stream-test" },
 };
 
 const deferred = <T>(): {
@@ -181,90 +166,6 @@ describe("@agent-os/run-stream", () => {
     );
     expect(decodeRunStreamData(JSON.stringify(frame))).toEqual(frame);
     expect(decodeRunStreamData('{"kind":"ledger_event","seq":0}')).toBeNull();
-  });
-
-  it("composes a batched submit stream from post-baseline ledger rows and terminal result", async () => {
-    const operations: string[] = [];
-    const frames = await composeBatchedSubmitRunStream({
-      submitSpec,
-      events: async (options) => {
-        operations.push(options?.afterId === undefined ? "events:baseline" : "events:after=5");
-        return options?.afterId === undefined
-          ? [ledgerEvent(5, "seed.before")]
-          : [ledgerEvent(6, "agent.run.started"), ledgerEvent(7, "agent.run.completed")];
-      },
-      submit: async (spec) => {
-        operations.push(`submit:${spec.effectAuthorityRef.authorityId}`);
-        return okResult;
-      },
-    });
-
-    expect(operations).toEqual(["events:baseline", "submit:run-stream-test", "events:after=5"]);
-    expect(projectRunStream(frames)).toEqual({
-      status: "succeeded",
-      lastSeq: 2,
-      ledgerEvents: [ledgerEvent(6, "agent.run.started"), ledgerEvent(7, "agent.run.completed")],
-      turnStreams: {},
-      result: okResult,
-      omittedFrames: [],
-    });
-  });
-
-  it("uses explicit afterId without a baseline read", async () => {
-    const operations: string[] = [];
-    const frames = await composeBatchedSubmitRunStream({
-      submitSpec,
-      afterId: 41,
-      events: async (options) => {
-        operations.push(`events:after=${options?.afterId ?? "none"}`);
-        return [ledgerEvent(42, "agent.run.completed")];
-      },
-      submit: async () => {
-        operations.push("submit");
-        return okResult;
-      },
-    });
-
-    expect(operations).toEqual(["submit", "events:after=41"]);
-    expect(projectRunStream(frames).ledgerEvents).toEqual([ledgerEvent(42, "agent.run.completed")]);
-  });
-
-  it("emits failed submit results as terminal submit_result frames", async () => {
-    const frames = await composeBatchedSubmitRunStream({
-      submitSpec,
-      afterId: 0,
-      events: async () => [ledgerEvent(1, "agent.aborted.upstream_failure")],
-      submit: async () => failedResult,
-    });
-
-    expect(projectRunStream(frames)).toEqual({
-      status: "failed",
-      lastSeq: 1,
-      ledgerEvents: [ledgerEvent(1, "agent.aborted.upstream_failure")],
-      turnStreams: {},
-      result: failedResult,
-      omittedFrames: [],
-    });
-  });
-
-  it("maps bridge transport failures to stream_error frames", async () => {
-    const frames = await composeBatchedSubmitRunStream({
-      submitSpec,
-      afterId: 0,
-      events: async () => [],
-      submit: async () => {
-        throw new Error("submit transport failed");
-      },
-    });
-
-    expect(projectRunStream(frames)).toEqual({
-      status: "error",
-      lastSeq: 0,
-      ledgerEvents: [],
-      turnStreams: {},
-      errorReason: "Error",
-      omittedFrames: [],
-    });
   });
 
   it("composes realtime frames in source arrival order before terminal submit_result", async () => {

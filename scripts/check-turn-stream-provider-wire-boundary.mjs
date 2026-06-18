@@ -9,6 +9,9 @@ const repoRoot = path.resolve(scriptDir, "..");
 
 const composerSourcePath = "packages/composers/turn-stream/src/index.ts";
 const composerTestPath = "packages/composers/turn-stream/test/turn-stream.test.ts";
+const runStreamSourcePath = "packages/composers/run-stream/src/index.ts";
+const sseHttpSourcePath = "packages/transports/sse-http/src/index.ts";
+const effectSkillPath = "docs/effect-skill.json";
 const providerSourcePath = "packages/providers/llm-transport-http/src/index.ts";
 const providerTestPath = "packages/providers/llm-transport-http/test/llm-transport-http.test.ts";
 
@@ -39,6 +42,23 @@ const composerForbiddenTokens = [
   "finish_reason",
   "usageMetadata",
   "message_stop",
+];
+
+const runStreamForbiddenTokens = [
+  "ComposeBatchedSubmitRunStreamSpec",
+  "composeBatchedSubmitRunStream",
+  "SubmitSpec",
+  "submitSpec",
+  "agent_os.provider_http_failure",
+  "provider_http_failure",
+];
+
+const sseHttpForbiddenTokens = [
+  "createBatchedSubmitRunStreamResponse",
+  "ComposeBatchedSubmitRunStreamSpec",
+  "composeBatchedSubmitRunStream",
+  "SubmitSpec",
+  "submitSpec",
 ];
 
 const read = (root, file) => fs.readFileSync(path.join(root, file), "utf8");
@@ -78,6 +98,9 @@ const collectFailures = (root = repoRoot) => {
   const failures = [];
   const composerSource = read(root, composerSourcePath);
   const composerTest = read(root, composerTestPath);
+  const runStreamSource = read(root, runStreamSourcePath);
+  const sseHttpSource = read(root, sseHttpSourcePath);
+  const effectSkill = read(root, effectSkillPath);
   const providerSource = read(root, providerSourcePath);
   const providerTest = read(root, providerTestPath);
 
@@ -85,6 +108,28 @@ const collectFailures = (root = repoRoot) => {
     if (new RegExp(`\\b${token}\\b`, "u").test(composerSource)) {
       failures.push(`${composerSourcePath}: composer source owns provider wire token ${token}`);
     }
+  }
+
+  for (const token of runStreamForbiddenTokens) {
+    if (new RegExp(`\\b${token}\\b`, "u").test(runStreamSource)) {
+      failures.push(`${runStreamSourcePath}: run-stream owns driver/provider token ${token}`);
+    }
+  }
+  if (/\bspec\s*\.\s*submit\s*\(/u.test(runStreamSource)) {
+    failures.push(`${runStreamSourcePath}: run-stream calls submit through spec.submit`);
+  }
+  if (/\bspec\s*\.\s*events\b/u.test(runStreamSource)) {
+    failures.push(`${runStreamSourcePath}: run-stream reads ledger events through spec.events`);
+  }
+
+  for (const token of sseHttpForbiddenTokens) {
+    if (new RegExp(`\\b${token}\\b`, "u").test(sseHttpSource)) {
+      failures.push(`${sseHttpSourcePath}: sse-http exposes driver bridge token ${token}`);
+    }
+  }
+
+  if (/batched run-stream HTTP adapter/u.test(effectSkill)) {
+    failures.push(`${effectSkillPath}: stale run-stream HTTP adapter scanner exception`);
   }
 
   for (const adapter of adapterExports) {
@@ -165,6 +210,13 @@ const collectSelfTestFailures = () => {
   try {
     writeFixture(root, composerSourcePath, "export interface TurnStreamFrame {}\n");
     writeFixture(root, composerTestPath, 'import { projectTurnStream } from "../src";\n');
+    writeFixture(root, runStreamSourcePath, "export const projectRunStream = () => ({});\n");
+    writeFixture(
+      root,
+      sseHttpSourcePath,
+      "export const createSseHttpResponse = () => new Response();\n",
+    );
+    writeFixture(root, effectSkillPath, '{"scanner":{"exceptions":[]}}\n');
     writeFixture(root, providerSourcePath, providerFixture);
     writeFixture(root, providerTestPath, providerTestFixture);
     const baseline = collectFailures(root);
@@ -183,6 +235,61 @@ const collectSelfTestFailures = () => {
     if (!rejected.some((failure) => failure.includes("adaptOpenAiCompatibleDeltaChunk"))) {
       return [
         `turn-stream provider wire boundary mutation fixture was not rejected: ${JSON.stringify(rejected)}`,
+      ];
+    }
+
+    writeFixture(
+      root,
+      runStreamSourcePath,
+      [
+        "export interface ComposeBatchedSubmitRunStreamSpec { readonly submitSpec: SubmitSpec; }",
+        "export const composeBatchedSubmitRunStream = async (spec) => {",
+        "  await spec.submit(spec.submitSpec);",
+        "  await spec.events();",
+        "  return 'provider_http_failure';",
+        "};",
+      ].join("\n"),
+    );
+    const runStreamRejected = collectFailures(root);
+    if (
+      !runStreamRejected.some((failure) => failure.includes("composeBatchedSubmitRunStream")) ||
+      !runStreamRejected.some((failure) => failure.includes("spec.submit")) ||
+      !runStreamRejected.some((failure) => failure.includes("provider_http_failure"))
+    ) {
+      return [
+        `run-stream driver bridge mutation fixture was not rejected: ${JSON.stringify(
+          runStreamRejected,
+        )}`,
+      ];
+    }
+
+    writeFixture(root, runStreamSourcePath, "export const projectRunStream = () => ({});\n");
+    writeFixture(
+      root,
+      sseHttpSourcePath,
+      "export const createBatchedSubmitRunStreamResponse = (spec: ComposeBatchedSubmitRunStreamSpec) => spec;\n",
+    );
+    const sseRejected = collectFailures(root);
+    if (!sseRejected.some((failure) => failure.includes("createBatchedSubmitRunStreamResponse"))) {
+      return [
+        `sse-http driver bridge mutation fixture was not rejected: ${JSON.stringify(sseRejected)}`,
+      ];
+    }
+
+    writeFixture(
+      root,
+      sseHttpSourcePath,
+      "export const createSseHttpResponse = () => new Response();\n",
+    );
+    writeFixture(
+      root,
+      effectSkillPath,
+      '{"scanner":{"exceptions":[{"reason":"batched run-stream HTTP adapter owns Response construction"}]}}\n',
+    );
+    const exceptionRejected = collectFailures(root);
+    if (!exceptionRejected.some((failure) => failure.includes("stale run-stream HTTP adapter"))) {
+      return [
+        `stale scanner exception fixture was not rejected: ${JSON.stringify(exceptionRejected)}`,
       ];
     }
 

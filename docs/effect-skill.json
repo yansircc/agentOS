@@ -198,12 +198,6 @@
         "owner": "@agent-os/ops-htmx-tests",
         "reason": "ops-htmx HTTP contract tests own Request/Response construction",
         "rules": ["EFF402"]
-      },
-      {
-        "path": "packages/composers/run-stream/src/index.ts",
-        "owner": "@agent-os/run-stream",
-        "reason": "batched run-stream HTTP adapter owns Response construction",
-        "rules": ["EFF402"]
       }
     ]
   },

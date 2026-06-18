@@ -2,7 +2,6 @@
 
 ## Public exports
 
-- `.:ComposeBatchedSubmitRunStreamSpec`
 - `.:ComposeRealtimeRunStreamSpec`
 - `.:ComposeRunStreamSpec`
 - `.:LedgerEventRpc`
@@ -16,8 +15,6 @@
 - `.:RunStreamSubmitResultFrame`
 - `.:RunStreamTurnFrame`
 - `.:SubmitResult`
-- `.:SubmitSpec`
-- `.:composeBatchedSubmitRunStream`
 - `.:composeRealtimeRunStream`
 - `.:composeRunStream`
 - `.:decodeRunStreamData`

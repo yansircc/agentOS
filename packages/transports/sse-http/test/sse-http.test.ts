@@ -1,8 +1,6 @@
 import { describe, expect, it, vi } from "vite-plus/test";
-import type { SubmitResult, SubmitSpec } from "@agent-os/runtime-protocol";
 import {
   createAttachedStreamSseResponse,
-  createBatchedSubmitRunStreamResponse,
   createSseHttpResponse,
   createSseHttpTextResponse,
   decodeSseHttpEvents,
@@ -12,59 +10,7 @@ import {
   responseToSseHttpChunks,
   SSE_HTTP_CONTENT_TYPE,
 } from "../src";
-import { decodeRunStreamData, projectRunStream, type LedgerEventRpc } from "@agent-os/run-stream";
 import type { AttachedStreamOutboundFrame } from "@agent-os/attached-stream";
-
-const eventIdentity = (scopeId: string) => ({
-  scopeRef: { kind: "conversation" as const, scopeId },
-  factOwnerRef: "@agent-os/test",
-  effectAuthorityRef: { authorityClass: "test", authorityId: scopeId },
-});
-
-const ledgerEvent = (id: number, kind = "agent.run.completed"): LedgerEventRpc => ({
-  id,
-  ts: 1_700_000_000_000 + id,
-  kind,
-  ...eventIdentity("session/sse-http"),
-  payload: { id },
-});
-
-const okResult: SubmitResult = {
-  ok: true,
-  status: "delivered",
-  runId: 1,
-  final: "done",
-  eventCount: 2,
-  tokensUsed: 3,
-};
-
-const submitSpec: SubmitSpec = {
-  intent: "Return a final answer.",
-  context: { source: "sse-http-test" },
-  route: {
-    kind: "openai-chat-compatible",
-    endpointRef: "test-endpoint",
-    credentialRef: "test-credential",
-    modelId: "test-model",
-  },
-  tools: {},
-  budget: { maxTurns: 1 },
-  effectAuthorityRef: { authorityClass: "llm_route", authorityId: "sse-http-test" },
-};
-
-const frameDataFromSse = (text: string) =>
-  text
-    .split("\n\n")
-    .filter((raw) => raw.length > 0)
-    .map((raw) => {
-      const data = raw
-        .split("\n")
-        .find((line) => line.startsWith("data: "))
-        ?.slice(6);
-      const frame = data === undefined ? null : decodeRunStreamData(data);
-      expect(frame).not.toBeNull();
-      return frame!;
-    });
 
 const collectAsync = async <A>(source: AsyncIterable<A>): Promise<ReadonlyArray<A>> => {
   const values: A[] = [];
@@ -141,21 +87,6 @@ describe("@agent-os/sse-http", () => {
     ).resolves.toEqual([{ event: "two", data: "2" }]);
 
     await expect(collectAsync(responseToSseHttpChunks(new Response(null)))).resolves.toEqual([]);
-  });
-
-  it("creates a batched submit run stream response without composer host wrappers", async () => {
-    const response = await createBatchedSubmitRunStreamResponse({
-      submitSpec,
-      afterId: 0,
-      events: async () => [ledgerEvent(1)],
-      submit: async () => okResult,
-    });
-
-    expect(response.headers.get("content-type")).toBe(SSE_HTTP_CONTENT_TYPE);
-    const projection = projectRunStream(frameDataFromSse(await response.text()));
-    expect(projection.turnStreams).toEqual({});
-    expect(projection.status).toBe("succeeded");
-    expect(projection.result).toEqual(okResult);
   });
 
   it("wraps attached-stream output frames as SSE-over-HTTP", async () => {

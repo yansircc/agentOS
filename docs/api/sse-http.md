@@ -15,7 +15,6 @@
 - `.:responseToSseHttpChunks`
 - `.:createSseHttpResponse`
 - `.:createSseHttpTextResponse`
-- `.:createBatchedSubmitRunStreamResponse`
 - `.:createAttachedStreamSseResponse`
 
 ## Experimental exports

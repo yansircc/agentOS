@@ -19,7 +19,6 @@ title: "@agent-os/sse-http API"
 - `.:responseToSseHttpChunks`
 - `.:createSseHttpResponse`
 - `.:createSseHttpTextResponse`
-- `.:createBatchedSubmitRunStreamResponse`
 - `.:createAttachedStreamSseResponse`
 
 ## Experimental exports

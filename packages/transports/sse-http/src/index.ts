@@ -2,11 +2,6 @@ import {
   encodeAttachedStreamSse,
   type AttachedStreamOutboundFrame,
 } from "@agent-os/attached-stream";
-import {
-  composeBatchedSubmitRunStream,
-  encodeRunStreamSse,
-  type ComposeBatchedSubmitRunStreamSpec,
-} from "@agent-os/run-stream";
 
 export const SSE_HTTP_CONTENT_TYPE = "text/event-stream; charset=utf-8";
 
@@ -152,19 +147,6 @@ export const createSseHttpTextResponse = (
   body: string,
   options: Omit<SseHttpResponseOptions, "onCancel"> = {},
 ): Response => new Response(body, { headers: sseHeaders(options.headers) });
-
-/**
- * Moved transport wrapper for batched submit/run streams.
- * @experimental
- */
-export const createBatchedSubmitRunStreamResponse = async (
-  spec: ComposeBatchedSubmitRunStreamSpec,
-  options: Omit<SseHttpResponseOptions, "onCancel"> = {},
-): Promise<Response> =>
-  createSseHttpTextResponse(
-    (await composeBatchedSubmitRunStream(spec)).map(encodeRunStreamSse).join(""),
-    options,
-  );
 
 /**
  * SSE-over-HTTP wrapper for output-only attached streams.

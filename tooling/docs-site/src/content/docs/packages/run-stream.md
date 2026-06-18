@@ -16,8 +16,9 @@ It composes source frames into consumer frames and projections.
 
 ## Minimal Usage
 
-Use batched composition when terminal aggregation is enough. Use realtime
-composition when the caller supplies live ledger and turn-frame sources.
+Use `composeRunStream` when the caller already has ledger events, optional turn
+frames, and a terminal submit result. Use realtime composition when the caller
+supplies live ledger, turn-frame, and terminal-result sources.
 
 ```ts
 import { composeRealtimeRunStream } from "@agent-os/run-stream";

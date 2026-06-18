@@ -14,7 +14,7 @@ Composers and wire adapters own frame/envelope algebra. This package owns SSE-ov
 
 ## Minimal Usage
 
-Adapters call `encodeSseHttpJsonEvent` or `decodeSseHttpEvents` for SSE wire framing. Backends pass already-encoded stream chunks or composer frame sources to `createSseHttpResponse`, `createBatchedSubmitRunStreamResponse`, or `createAttachedStreamSseResponse`.
+Adapters call `encodeSseHttpJsonEvent` or `decodeSseHttpEvents` for SSE wire framing. Backends pass already-encoded stream chunks or output-frame sources to `createSseHttpResponse` or `createAttachedStreamSseResponse`.
 
 ## Verification
 

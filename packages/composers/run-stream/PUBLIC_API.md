@@ -6,7 +6,6 @@ Status: 0.5.x active development for frame algebra and batched/realtime composit
 
 ## Public exports
 
-- `.:ComposeBatchedSubmitRunStreamSpec`
 - `.:ComposeRealtimeRunStreamSpec`
 - `.:ComposeRunStreamSpec`
 - `.:LedgerEventRpc`
@@ -20,8 +19,6 @@ Status: 0.5.x active development for frame algebra and batched/realtime composit
 - `.:RunStreamSubmitResultFrame`
 - `.:RunStreamTurnFrame`
 - `.:SubmitResult`
-- `.:SubmitSpec`
-- `.:composeBatchedSubmitRunStream`
 - `.:composeRealtimeRunStream`
 - `.:composeRunStream`
 - `.:decodeRunStreamData`

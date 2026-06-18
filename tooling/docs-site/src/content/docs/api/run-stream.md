@@ -6,7 +6,6 @@ title: "@agent-os/run-stream Public API Intent"
 
 ## Public exports
 
-- `.:ComposeBatchedSubmitRunStreamSpec`
 - `.:ComposeRealtimeRunStreamSpec`
 - `.:ComposeRunStreamSpec`
 - `.:LedgerEventRpc`
@@ -20,8 +19,6 @@ title: "@agent-os/run-stream Public API Intent"
 - `.:RunStreamSubmitResultFrame`
 - `.:RunStreamTurnFrame`
 - `.:SubmitResult`
-- `.:SubmitSpec`
-- `.:composeBatchedSubmitRunStream`
 - `.:composeRealtimeRunStream`
 - `.:composeRunStream`
 - `.:decodeRunStreamData`

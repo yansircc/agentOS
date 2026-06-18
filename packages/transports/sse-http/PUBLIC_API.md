@@ -19,7 +19,6 @@ Status: 0.5.x public-experimental. This package owns Web Fetch SSE response wrap
 - `.:responseToSseHttpChunks`
 - `.:createSseHttpResponse`
 - `.:createSseHttpTextResponse`
-- `.:createBatchedSubmitRunStreamResponse`
 - `.:createAttachedStreamSseResponse`
 
 ## Experimental exports
