@@ -10,6 +10,7 @@ import type { TraceContext } from "@agent-os/telemetry-protocol";
 import type { MaterialRef } from "@agent-os/kernel/material-ref";
 import type { BoundaryPackage } from "@agent-os/kernel/extensions";
 import type { ContinuationRef } from "./continuation";
+import type { InputRequestDescriptor } from "./input-request";
 
 export interface SubmitToolIntent {
   readonly kind: string;
@@ -110,6 +111,7 @@ export interface SubmitDecisionInterrupt {
 export type SubmitDecisionInterruptReason =
   | "approval_required"
   | "user_input_required"
+  | "authorization_required"
   | (string & {});
 
 export interface SubmitResumeDecision {
@@ -149,6 +151,7 @@ export type SubmitResult =
       readonly turn: TurnRef;
       readonly gateRef: string;
       readonly continuation: ContinuationRef;
+      readonly inputRequest?: InputRequestDescriptor;
     }
   | {
       readonly ok: false;

@@ -63,6 +63,7 @@ import {
   continuationRefFromInterruptedEvent,
   decodeRuntimeLedgerEvent,
   EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
+  inputRequestRefFromInterruptedEvent,
   llmRequestedEvent,
   llmResponseEvent,
   RUNTIME_FACT_OWNER,
@@ -435,6 +436,7 @@ const interruptedSubmitResultFromEvents = (
   if (!continuation.ok) {
     throw new TypeError("interrupted SubmitResult requires a decision-bound interruption fact");
   }
+  const inputRequest = inputRequestRefFromInterruptedEvent(decoded.event);
   return {
     ok: false,
     status: "interrupted",
@@ -446,6 +448,7 @@ const interruptedSubmitResultFromEvents = (
     turn: spec.turn,
     gateRef: spec.gateRef,
     continuation: continuation.ref,
+    ...(inputRequest.ok ? { inputRequest: inputRequest.descriptor } : {}),
   };
 };
 

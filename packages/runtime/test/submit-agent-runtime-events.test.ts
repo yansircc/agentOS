@@ -40,6 +40,10 @@ import {
   submitResumeDecisionFromContinuationProjection,
 } from "../src/continuation";
 import {
+  projectInputRequest,
+  submitResumeDecisionFromInputRequestProjection,
+} from "../src/input-request";
+import {
   RUNTIME_FACT_OWNER,
   decodeRuntimeLedgerEvent,
   EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
@@ -2260,6 +2264,17 @@ describe("submit-agent runtime event writes", () => {
           runId: 1,
           interruptId: "decision:tool%3Asubmit-runtime-events%3A1%3A0%3Acall-1",
         },
+        inputRequest: {
+          kind: "approval",
+          subjectRef: "tool:submit-runtime-events:1:0:call-1",
+          toolCallId: "call-1",
+          toolName: "publish",
+          ref: {
+            kind: "agent.run.input_request",
+            runId: 1,
+            requestKind: "approval",
+          },
+        },
       });
       expect(executed).toBe(0);
       if (result.status !== "interrupted") {
@@ -2275,6 +2290,7 @@ describe("submit-agent runtime event writes", () => {
         status: "requested",
       });
       expect(JSON.parse(JSON.stringify(result.continuation))).toEqual(result.continuation);
+      expect(JSON.parse(JSON.stringify(result.inputRequest))).toEqual(result.inputRequest);
     }),
   );
 
@@ -2340,11 +2356,14 @@ describe("submit-agent runtime event writes", () => {
         baseSpec({
           tools: { publish: tool },
           resume: (() => {
-            const resume = submitResumeDecisionFromContinuationProjection(
-              projectContinuation(services.events, first.result.continuation),
-              { approved: true },
+            if (first.result.inputRequest === undefined) {
+              expect.fail("expected typed input request");
+            }
+            const resume = submitResumeDecisionFromInputRequestProjection(
+              projectInputRequest(services.events, first.result.inputRequest.ref),
+              { kind: "approval", approved: true },
             );
-            if (!resume.ok) expect.fail(`expected approved continuation: ${resume.reason}`);
+            if (!resume.ok) expect.fail(`expected approved input request: ${resume.reason}`);
             return resume.resume;
           })(),
         }),
@@ -2374,6 +2393,18 @@ describe("submit-agent runtime event writes", () => {
       expect(duplicate).toMatchObject({
         ok: false,
         reason: "continuation_consumed",
+      });
+      if (first.result.inputRequest === undefined) {
+        expect.fail("expected typed input request");
+      }
+      expect(
+        submitResumeDecisionFromInputRequestProjection(
+          projectInputRequest(services.events, first.result.inputRequest.ref),
+          { kind: "approval", approved: true },
+        ),
+      ).toMatchObject({
+        ok: false,
+        reason: "input_request_consumed",
       });
       expect(executed).toBe(1);
       expect(
@@ -2527,27 +2558,132 @@ describe("submit-agent runtime event writes", () => {
         },
       );
 
-      const resume = { answers: { site_style: "clean" } };
+      const answer = { kind: "question" as const, answers: { site_style: "clean" } };
       const resumed = yield* runSubmitWithServices(
         baseSpec({
           tools: { askUserQuestions: tool },
-          resume: {
-            runId: first.result.runId,
-            turn: first.result.turn,
-            interruptId: first.result.interruptId,
-            gateRef: first.result.gateRef,
-            decisionRef: "decision/answers",
-            resume,
-          },
+          resume: (() => {
+            if (first.result.inputRequest === undefined) {
+              expect.fail("expected typed input request");
+            }
+            const resume = submitResumeDecisionFromInputRequestProjection(
+              projectInputRequest(services.events, first.result.inputRequest.ref),
+              answer,
+            );
+            if (!resume.ok) expect.fail(`expected approved input request: ${resume.reason}`);
+            return resume.resume;
+          })(),
         }),
         services,
       );
 
       expect(resumed.result).toMatchObject({ ok: true, final: "answered" });
-      expect(observedResume).toEqual(resume);
+      expect(observedResume).toEqual(answer);
       const executed = services.events.find((event) => event.kind === "tool.executed");
       expect(executed?.payload).toMatchObject({
-        result: { kind: "user_input_received", resume },
+        result: { kind: "user_input_received", resume: answer },
+      });
+    }),
+  );
+
+  it.effect("passes authorization input requests as symbolic material refs", () =>
+    Effect.gen(function* () {
+      let observedResume: unknown;
+      const tool = defineTool({
+        name: "connectGithub",
+        description: "connect github",
+        args: Schema.Struct({ installation: Schema.String }),
+        execute: (_args, ctx) => {
+          observedResume = ctx.resume;
+          return Effect.succeed({
+            kind: "authorization_received",
+            resume: ctx.resume,
+          });
+        },
+        authority: "write",
+        admit: () => Effect.succeed({ ok: true }),
+        execution: deterministicToolExecution(),
+      });
+      const services = makeServices([
+        response({
+          items: [
+            { type: "message", text: "need auth" },
+            {
+              type: "tool_call",
+              call: {
+                id: "call-auth",
+                type: "function",
+                function: {
+                  name: "connectGithub",
+                  arguments: '{"installation":"install-1"}',
+                },
+              },
+            },
+          ],
+        }),
+        response({ items: [{ type: "message", text: "authorized" }] }),
+      ]);
+
+      const first = yield* runSubmitWithServices(
+        baseSpec({
+          tools: { connectGithub: tool },
+          decisionInterrupts: [{ toolName: "connectGithub", reason: "authorization_required" }],
+        }),
+        services,
+      );
+      if (first.result.status !== "interrupted") {
+        expect.fail("expected interrupted result");
+      }
+      expect(first.result.inputRequest).toMatchObject({
+        kind: "authorization",
+        toolCallId: "call-auth",
+        toolName: "connectGithub",
+        ref: {
+          kind: "agent.run.input_request",
+          requestKind: "authorization",
+        },
+      });
+
+      yield* services.boundaryEvents.commit(
+        decisionGateBoundaryContract,
+        DECISION_GATE_KIND.DECIDED,
+        {
+          gateRef: first.result.gateRef,
+          decisionRef: "decision/auth",
+          decision: "approved",
+          decidedBy: "operator/alice",
+        },
+      );
+
+      if (first.result.inputRequest === undefined) {
+        expect.fail("expected typed input request");
+      }
+      const authorization = {
+        kind: "authorization" as const,
+        authorization: {
+          kind: "material_ref" as const,
+          materialRef: { kind: "credential" as const, ref: "oauth/github/install-1" },
+        },
+      };
+      const resume = submitResumeDecisionFromInputRequestProjection(
+        projectInputRequest(services.events, first.result.inputRequest.ref),
+        authorization,
+      );
+      if (!resume.ok) expect.fail(`expected approved input request: ${resume.reason}`);
+
+      const resumed = yield* runSubmitWithServices(
+        baseSpec({
+          tools: { connectGithub: tool },
+          resume: resume.resume,
+        }),
+        services,
+      );
+
+      expect(resumed.result).toMatchObject({ ok: true, final: "authorized" });
+      expect(observedResume).toEqual(authorization);
+      const executed = services.events.find((event) => event.kind === "tool.executed");
+      expect(executed?.payload).toMatchObject({
+        result: { kind: "authorization_received", resume: authorization },
       });
     }),
   );
