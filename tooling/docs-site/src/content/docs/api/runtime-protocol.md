@@ -8,6 +8,7 @@ title: "@agent-os/runtime-protocol API"
 
 - `.:AdmissionImpact`
 - `.:AdmissionRow`
+- `.:RecordedAdmissionRow`
 - `.:AgentRunAbortedPayload`
 - `.:AgentRunAbortedPayloadSchema`
 - `.:AgentRunCompletedPayload`
@@ -66,6 +67,7 @@ title: "@agent-os/runtime-protocol API"
 - `.:AnyAgentCapabilityDefinition`
 - `.:BarrierCursor`
 - `.:BarrierRow`
+- `.:RecordedBarrierRow`
 - `.:BUILTIN_HANDLER_KINDS`
 - `.:BuiltinHandlerKind`
 - `.:BindAgentCapabilityOptions`
@@ -76,6 +78,7 @@ title: "@agent-os/runtime-protocol API"
 - `.:ContinuationCause`
 - `.:ContinuationRef`
 - `.:ContinuationRefFromInterruptionResult`
+- `.:RecordedContinuationRef`
 - `.:DecodeRuntimeLedgerEventResult`
 - `.:DecodedOutput`
 - `.:DecisionContinuationCause`
@@ -83,6 +86,7 @@ title: "@agent-os/runtime-protocol API"
 - `.:EMPTY_BARRIER_CURSOR`
 - `.:ExtensionHandlerKind`
 - `.:EvidenceRow`
+- `.:RecordedEvidenceRow`
 - `.:DeterministicToolExecutedPayload`
 - `.:DeterministicToolExecution`
 - `.:EXTERNAL_TOOL_EXECUTION_RECEIPT_VERSION`
@@ -112,6 +116,7 @@ title: "@agent-os/runtime-protocol API"
 - `.:InputRequestReason`
 - `.:InputRequestRef`
 - `.:InputRequestRefFromInterruptionResult`
+- `.:RecordedInputRequestRef`
 - `.:InputRequestResumePayload`
 - `.:LedgerWitnessedScopedRef`
 - `.:LedgerCommitEventSpec`
@@ -131,6 +136,7 @@ title: "@agent-os/runtime-protocol API"
 - `.:OutcomeClass`
 - `.:ProbeInput`
 - `.:ParseInputRequestResumeResult`
+- `.:ParsedRecordedSealedAuthorizationRef`
 - `.:ApprovalInputRequestResumePayload`
 - `.:AuthorizationGrantRef`
 - `.:AuthorizationInputRequestResumePayload`
@@ -240,6 +246,11 @@ title: "@agent-os/runtime-protocol API"
 - `.:projectFailureDiagnostics`
 - `.:projectRuntimeSafeLedgerEvent`
 - `.:parseInputRequestResumePayload`
+- `.:recordAdmissionRow`
+- `.:recordBarrierRow`
+- `.:recordEvidenceRow`
+- `.:recordedContinuationRefFromUnknown`
+- `.:recordedInputRequestRefFromUnknown`
 - `.:receiptBackedToolResult`
 - `.:receiptBackedToolResultFromUnknown`
 - `.:replayExternalToolExecutionFromReceipt`

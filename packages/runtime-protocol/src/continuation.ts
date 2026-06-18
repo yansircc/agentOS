@@ -1,7 +1,9 @@
 import { isScopeRef, type ScopeRef } from "@agent-os/kernel/effect-claim";
+import type { Recorded } from "@agent-os/kernel";
 import type { RuntimeLedgerEventByKind } from "./runtime-events";
 import { RUNTIME_EVENT_KIND } from "./runtime-events";
 import type { SubmitResumeDecision, TurnRef } from "./submit";
+import { recordRuntimeProtocolValue } from "./recorded";
 
 export interface LedgerWitnessedScopedRef<Kind extends string = string> {
   readonly kind: Kind;
@@ -17,8 +19,10 @@ export interface ContinuationRef extends LedgerWitnessedScopedRef<"agent.run.con
   readonly gateRef: string;
 }
 
+export type RecordedContinuationRef = ContinuationRef & Recorded<ContinuationRef>;
+
 export type ContinuationRefFromInterruptionResult =
-  | { readonly ok: true; readonly ref: ContinuationRef }
+  | { readonly ok: true; readonly ref: RecordedContinuationRef }
   | {
       readonly ok: false;
       readonly reason: "interruption_missing_decision_binding";
@@ -141,6 +145,11 @@ export const isContinuationRef = (value: unknown): value is ContinuationRef =>
   typeof (value as { readonly gateRef?: unknown }).gateRef === "string" &&
   (value as { readonly gateRef: string }).gateRef.length > 0;
 
+export const recordedContinuationRefFromUnknown = (
+  value: unknown,
+): RecordedContinuationRef | null =>
+  isContinuationRef(value) ? recordRuntimeProtocolValue(value) : null;
+
 const isRecoveryObservation = (value: unknown): value is RecoveryObservation => {
   if (typeof value !== "object" || value === null) return false;
   const observation = value as {
@@ -235,7 +244,7 @@ export const continuationRefFromInterruptedEvent = (
   }
   return {
     ok: true,
-    ref: {
+    ref: recordRuntimeProtocolValue({
       kind: "agent.run.continuation",
       scopeRef: event.scopeRef,
       afterEventId: event.id,
@@ -244,7 +253,7 @@ export const continuationRefFromInterruptedEvent = (
       interruptId: event.payload.interruptId,
       interruptionEventId: event.id,
       gateRef: decision.gateRef,
-    },
+    } satisfies ContinuationRef),
   };
 };
 

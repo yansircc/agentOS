@@ -11,6 +11,8 @@
  */
 
 import type { LlmRoute } from "@agent-os/llm-protocol";
+import type { Recorded } from "@agent-os/kernel";
+import { recordRuntimeProtocolValue } from "./recorded";
 
 export type Strategy = "forced-tool-call";
 
@@ -93,12 +95,25 @@ export type BarrierRow = {
 
 export type AdmissionRow = EvidenceRow | BarrierRow;
 
+export type RecordedEvidenceRow = EvidenceRow & Recorded<EvidenceRow>;
+export type RecordedBarrierRow = BarrierRow & Recorded<BarrierRow>;
+export type RecordedAdmissionRow = RecordedEvidenceRow | RecordedBarrierRow;
+
 export type BarrierCursor = {
   readonly ts: number;
   readonly id: number;
 };
 
 export const EMPTY_BARRIER_CURSOR: BarrierCursor = { ts: 0, id: 0 };
+
+export const recordEvidenceRow = (row: EvidenceRow): RecordedEvidenceRow =>
+  recordRuntimeProtocolValue(row);
+
+export const recordBarrierRow = (row: BarrierRow): RecordedBarrierRow =>
+  recordRuntimeProtocolValue(row);
+
+export const recordAdmissionRow = (row: AdmissionRow): RecordedAdmissionRow =>
+  row.kind === LLM_STRUCTURED_EVIDENCE_EVENT ? recordEvidenceRow(row) : recordBarrierRow(row);
 
 // LlmRoute is sourced from llm.ts but re-exported here for callers that
 // want to type-check projection inputs without taking a runtime import

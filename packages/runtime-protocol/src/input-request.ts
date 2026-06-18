@@ -1,10 +1,12 @@
 import { Predicate } from "effect";
 import { isScopeRef } from "@agent-os/kernel/effect-claim";
 import { isMaterialRef, type MaterialRef } from "@agent-os/kernel/material-ref";
+import type { Recorded } from "@agent-os/kernel";
 import type { LedgerWitnessedScopedRef } from "./continuation";
 import type { RuntimeLedgerEventByKind } from "./runtime-events";
 import { RUNTIME_EVENT_KIND } from "./runtime-events";
 import type { SubmitResumeDecision, TurnRef } from "./submit";
+import { recordRuntimeProtocolValue } from "./recorded";
 
 export const INPUT_REQUEST_REF_KIND = "agent.run.input_request" as const;
 
@@ -33,6 +35,8 @@ export interface InputRequestRef extends LedgerWitnessedScopedRef<typeof INPUT_R
   readonly requestKind: InputRequestKind;
 }
 
+export type RecordedInputRequestRef = InputRequestRef & Recorded<InputRequestRef>;
+
 export interface InputRequestDescriptor {
   readonly ref: InputRequestRef;
   readonly kind: InputRequestKind;
@@ -47,7 +51,7 @@ export interface InputRequestDescriptor {
 export type InputRequestRefFromInterruptionResult =
   | {
       readonly ok: true;
-      readonly ref: InputRequestRef;
+      readonly ref: RecordedInputRequestRef;
       readonly descriptor: InputRequestDescriptor;
     }
   | {
@@ -84,6 +88,9 @@ export interface RecordedSealedAuthorizationRef {
   readonly version: string;
 }
 
+export type ParsedRecordedSealedAuthorizationRef = RecordedSealedAuthorizationRef &
+  Recorded<RecordedSealedAuthorizationRef>;
+
 export type AuthorizationGrantRef =
   | {
       readonly kind: "material_ref";
@@ -91,7 +98,7 @@ export type AuthorizationGrantRef =
     }
   | {
       readonly kind: "recorded_sealed";
-      readonly sealed: RecordedSealedAuthorizationRef;
+      readonly sealed: ParsedRecordedSealedAuthorizationRef;
     };
 
 export interface AuthorizationInputRequestResumePayload {
@@ -149,6 +156,11 @@ export const isInputRequestRef = (value: unknown): value is InputRequestRef =>
     value.requestKind === INPUT_REQUEST_KIND.QUESTION ||
     value.requestKind === INPUT_REQUEST_KIND.AUTHORIZATION);
 
+export const recordedInputRequestRefFromUnknown = (
+  value: unknown,
+): RecordedInputRequestRef | null =>
+  isInputRequestRef(value) ? recordRuntimeProtocolValue(value) : null;
+
 export const inputRequestRefFromInterruptedEvent = (
   event: RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED>,
 ): InputRequestRefFromInterruptionResult => {
@@ -160,7 +172,7 @@ export const inputRequestRefFromInterruptedEvent = (
   if (requestKind === null) {
     return { ok: false, reason: "input_request_unsupported_reason" };
   }
-  const ref: InputRequestRef = {
+  const ref = recordRuntimeProtocolValue({
     kind: INPUT_REQUEST_REF_KIND,
     scopeRef: event.scopeRef,
     afterEventId: event.id,
@@ -170,7 +182,7 @@ export const inputRequestRefFromInterruptedEvent = (
     interruptionEventId: event.id,
     gateRef: decision.gateRef,
     requestKind,
-  };
+  } satisfies InputRequestRef);
   return {
     ok: true,
     ref,
@@ -200,7 +212,7 @@ const parseAuthorizationGrantRef = (value: unknown): AuthorizationGrantRef | nul
     return { kind: "material_ref", materialRef: value.materialRef };
   }
   if (value.kind === "recorded_sealed" && isRecordedSealedAuthorizationRef(value.sealed)) {
-    return { kind: "recorded_sealed", sealed: value.sealed };
+    return { kind: "recorded_sealed", sealed: recordRuntimeProtocolValue(value.sealed) };
   }
   return null;
 };

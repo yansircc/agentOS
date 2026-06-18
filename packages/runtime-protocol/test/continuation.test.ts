@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
+import type { Recorded } from "@agent-os/kernel";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import {
   agentRunInterruptedEvent,
@@ -8,7 +9,9 @@ import {
   isContinuationRef,
   isContinuationCause,
   isRecoveryAttemptRecord,
+  recordedContinuationRefFromUnknown,
   submitResumeDecisionFromContinuationRef,
+  type ContinuationRef,
   type RuntimeEventCommitSpec,
 } from "../src";
 
@@ -55,6 +58,10 @@ describe("runtime continuation refs", () => {
     }
 
     const result = continuationRefFromInterruptedEvent(decoded.event);
+    if (!result.ok) expect.fail("expected continuation ref");
+    const recordedRef: Recorded<ContinuationRef> = result.ref;
+    expect(recordedRef.value.gateRef).toBe("decision_gate:publish");
+    expect(Object.prototype.propertyIsEnumerable.call(result.ref, "value")).toBe(false);
     expect(result).toEqual({
       ok: true,
       ref: {
@@ -68,11 +75,14 @@ describe("runtime continuation refs", () => {
         gateRef: "decision_gate:publish",
       },
     });
-    if (!result.ok) expect.fail("expected continuation ref");
 
     const wire = JSON.parse(JSON.stringify(result.ref)) as unknown;
     expect(isContinuationRef(wire)).toBe(true);
     if (!isContinuationRef(wire)) expect.fail("expected JSON round-tripped continuation ref");
+    const reparsed = recordedContinuationRefFromUnknown(wire);
+    if (reparsed === null) expect.fail("expected recorded continuation ref");
+    expect(reparsed.value.gateRef).toBe("decision_gate:publish");
+    expect(Object.prototype.propertyIsEnumerable.call(reparsed, "value")).toBe(false);
 
     expect(
       submitResumeDecisionFromContinuationRef(wire, {

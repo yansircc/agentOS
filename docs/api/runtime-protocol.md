@@ -4,6 +4,7 @@
 
 - `.:AdmissionImpact`
 - `.:AdmissionRow`
+- `.:RecordedAdmissionRow`
 - `.:AgentRunAbortedPayload`
 - `.:AgentRunAbortedPayloadSchema`
 - `.:AgentRunCompletedPayload`
@@ -62,6 +63,7 @@
 - `.:AnyAgentCapabilityDefinition`
 - `.:BarrierCursor`
 - `.:BarrierRow`
+- `.:RecordedBarrierRow`
 - `.:BUILTIN_HANDLER_KINDS`
 - `.:BuiltinHandlerKind`
 - `.:BindAgentCapabilityOptions`
@@ -72,6 +74,7 @@
 - `.:ContinuationCause`
 - `.:ContinuationRef`
 - `.:ContinuationRefFromInterruptionResult`
+- `.:RecordedContinuationRef`
 - `.:DecodeRuntimeLedgerEventResult`
 - `.:DecodedOutput`
 - `.:DecisionContinuationCause`
@@ -79,6 +82,7 @@
 - `.:EMPTY_BARRIER_CURSOR`
 - `.:ExtensionHandlerKind`
 - `.:EvidenceRow`
+- `.:RecordedEvidenceRow`
 - `.:DeterministicToolExecutedPayload`
 - `.:DeterministicToolExecution`
 - `.:EXTERNAL_TOOL_EXECUTION_RECEIPT_VERSION`
@@ -108,6 +112,7 @@
 - `.:InputRequestReason`
 - `.:InputRequestRef`
 - `.:InputRequestRefFromInterruptionResult`
+- `.:RecordedInputRequestRef`
 - `.:InputRequestResumePayload`
 - `.:LedgerWitnessedScopedRef`
 - `.:LedgerCommitEventSpec`
@@ -127,6 +132,7 @@
 - `.:OutcomeClass`
 - `.:ProbeInput`
 - `.:ParseInputRequestResumeResult`
+- `.:ParsedRecordedSealedAuthorizationRef`
 - `.:ApprovalInputRequestResumePayload`
 - `.:AuthorizationGrantRef`
 - `.:AuthorizationInputRequestResumePayload`
@@ -236,6 +242,11 @@
 - `.:projectFailureDiagnostics`
 - `.:projectRuntimeSafeLedgerEvent`
 - `.:parseInputRequestResumePayload`
+- `.:recordAdmissionRow`
+- `.:recordBarrierRow`
+- `.:recordEvidenceRow`
+- `.:recordedContinuationRefFromUnknown`
+- `.:recordedInputRequestRefFromUnknown`
 - `.:receiptBackedToolResult`
 - `.:receiptBackedToolResultFromUnknown`
 - `.:replayExternalToolExecutionFromReceipt`

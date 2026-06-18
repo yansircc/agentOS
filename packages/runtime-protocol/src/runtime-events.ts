@@ -16,8 +16,10 @@ import {
 } from "@agent-os/kernel/effect-claim";
 import type { AgentSchemaIssue } from "@agent-os/kernel/agent-schema";
 import type { ExecutionDomain, ResolvedToolExecution, ToolExecution } from "@agent-os/kernel/tools";
+import type { Recorded } from "@agent-os/kernel";
 import { TraceContextSchema, type TraceContext } from "@agent-os/telemetry-protocol";
 import { ABORT, type AbortKind } from "@agent-os/kernel/abort";
+import { recordRuntimeProtocolValue } from "./recorded";
 
 const positiveInt = Schema.Int.pipe(Schema.check(Schema.isGreaterThanOrEqualTo(1)));
 const nonNegativeInt = Schema.Int.pipe(Schema.check(Schema.isGreaterThanOrEqualTo(0)));
@@ -541,7 +543,7 @@ export type RuntimeEventPayloadByKind = {
   readonly [ABORT.CLIENT_DISCONNECT]: AgentRunAbortedPayload;
 };
 
-export type RuntimeLedgerEventByKind<K extends RuntimeEventKind> = Omit<
+type RuntimeLedgerEventShapeByKind<K extends RuntimeEventKind> = Omit<
   LedgerEvent,
   "kind" | "payload"
 > & {
@@ -549,11 +551,15 @@ export type RuntimeLedgerEventByKind<K extends RuntimeEventKind> = Omit<
   readonly payload: RuntimeEventPayloadByKind[K];
 };
 
+export type RuntimeLedgerEventByKind<K extends RuntimeEventKind> = K extends RuntimeEventKind
+  ? RuntimeLedgerEventShapeByKind<K> & Recorded<RuntimeLedgerEventShapeByKind<K>>
+  : never;
+
 export type RuntimeLedgerEvent = {
   readonly [K in RuntimeEventKind]: RuntimeLedgerEventByKind<K>;
 }[RuntimeEventKind];
 
-export type RuntimeEventCommitSpecByKind<K extends RuntimeEventKind> = {
+type RuntimeEventCommitSpecShapeByKind<K extends RuntimeEventKind> = {
   readonly ts?: number;
   readonly kind: K;
   readonly payload: RuntimeEventPayloadByKind[K];
@@ -563,9 +569,18 @@ export type RuntimeEventCommitSpecByKind<K extends RuntimeEventKind> = {
   readonly scope?: never;
 };
 
+export type RuntimeEventCommitSpecByKind<K extends RuntimeEventKind> = K extends RuntimeEventKind
+  ? RuntimeEventCommitSpecShapeByKind<K> & Recorded<RuntimeEventCommitSpecShapeByKind<K>>
+  : never;
+
 export type RuntimeEventCommitSpec = {
   readonly [K in RuntimeEventKind]: RuntimeEventCommitSpecByKind<K>;
 }[RuntimeEventKind];
+
+const recordRuntimeEventCommitSpec = <K extends RuntimeEventKind>(
+  value: RuntimeEventCommitSpecShapeByKind<K>,
+): RuntimeEventCommitSpecByKind<K> =>
+  recordRuntimeProtocolValue(value) as RuntimeEventCommitSpecByKind<K>;
 
 export type DecodeRuntimeLedgerEventResult =
   | {
@@ -716,13 +731,14 @@ export const decodeRuntimeLedgerEvent = (event: LedgerEvent): DecodeRuntimeLedge
   if (!isRuntimeEventKind(event.kind)) {
     return { _tag: "non_runtime", event };
   }
+  const decodedEvent = recordRuntimeProtocolValue({
+    ...event,
+    kind: event.kind,
+    payload: decodeRuntimePayload(event.kind, event.payload),
+  } as RuntimeLedgerEventShapeByKind<typeof event.kind>);
   return {
     _tag: "runtime",
-    event: {
-      ...event,
-      kind: event.kind,
-      payload: decodeRuntimePayload(event.kind, event.payload),
-    } as RuntimeLedgerEvent,
+    event: decodedEvent as RuntimeLedgerEvent,
   };
 };
 
@@ -768,13 +784,14 @@ const decodeRuntimeLedgerEventSafe = (
   }
   const payload = decodeRuntimePayloadOption(event.kind, event.payload);
   if (Option.isNone(payload)) return null;
+  const decodedEvent = recordRuntimeProtocolValue({
+    ...event,
+    kind: event.kind,
+    payload: payload.value,
+  } as RuntimeLedgerEventShapeByKind<typeof event.kind>);
   return {
     _tag: "runtime",
-    event: {
-      ...event,
-      kind: event.kind,
-      payload: payload.value,
-    } as RuntimeLedgerEvent,
+    event: decodedEvent as RuntimeLedgerEvent,
   };
 };
 
@@ -979,12 +996,13 @@ const runtimeEvent = <K extends RuntimeEventKind>(
   identity: RuntimeEventIdentitySpec,
   kind: K,
   payload: RuntimeEventPayloadByKind[K],
-): RuntimeEventCommitSpecByKind<K> => ({
-  scopeRef: identity.scopeRef,
-  effectAuthorityRef: identity.effectAuthorityRef,
-  kind,
-  payload: decodeRuntimePayload(kind, payload),
-});
+): RuntimeEventCommitSpecByKind<K> =>
+  recordRuntimeEventCommitSpec({
+    scopeRef: identity.scopeRef,
+    effectAuthorityRef: identity.effectAuthorityRef,
+    kind,
+    payload: decodeRuntimePayload(kind, payload),
+  } as RuntimeEventCommitSpecShapeByKind<K>);
 
 type RuntimeEventIdentitySpec = {
   readonly scopeRef: ScopeRef;

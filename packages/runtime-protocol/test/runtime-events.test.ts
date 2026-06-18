@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
+import type { Recorded } from "@agent-os/kernel";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import type { LivedClaim, RejectedClaim } from "@agent-os/kernel/effect-claim";
 import {
@@ -267,6 +268,23 @@ describe("runtime event vocabulary", () => {
         expect(decoded.event.payload).toEqual(spec.payload);
       }
     }
+  });
+
+  it("mints Recorded runtime facts without changing the serialized shape", () => {
+    const spec = agentRunStartedEvent({ ...runtimeIdentity, intent: "answer" });
+    const recordedSpec: Recorded<typeof spec.value> = spec;
+
+    expect(recordedSpec.value.kind).toBe("agent.run.started");
+    expect(Object.prototype.propertyIsEnumerable.call(spec, "value")).toBe(false);
+    expect(JSON.stringify(spec)).not.toContain('"value"');
+
+    const decoded = decodeRuntimeLedgerEvent(ledgerEvent(1, spec));
+    if (decoded._tag !== "runtime") expect.fail("expected runtime event");
+    const recordedEvent: Recorded<typeof decoded.event.value> = decoded.event;
+
+    expect(recordedEvent.value.kind).toBe("agent.run.started");
+    expect(Object.prototype.propertyIsEnumerable.call(decoded.event, "value")).toBe(false);
+    expect(JSON.stringify(decoded.event)).not.toContain('"value"');
   });
 
   it("projects LLM and complete-after-tools runtime facts without prompt or args", () => {

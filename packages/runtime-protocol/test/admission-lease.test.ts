@@ -13,6 +13,7 @@
  */
 
 import { describe, expect, it } from "vite-plus/test";
+import type { Recorded } from "@agent-os/kernel";
 
 import {
   type AttemptKey,
@@ -21,6 +22,9 @@ import {
   type EvidenceRow,
   decideTier,
   projectLease,
+  recordAdmissionRow,
+  recordBarrierRow,
+  recordEvidenceRow,
 } from "../src/admission";
 
 describe("admission — decideTier truth table (contract §10)", () => {
@@ -187,6 +191,25 @@ describe("admission — projectLease pure projection (contract §7.2)", () => {
     ts,
     kind: "llm.structured.invalidate",
     key: k,
+  });
+
+  it("mints recorded admission rows without changing their serialized shape", () => {
+    const evidence = ev(1, 1000, { class: "Supported", tokensUsed: 3 });
+    const recordedEvidence: Recorded<EvidenceRow> = recordEvidenceRow(evidence);
+
+    expect(recordedEvidence.value.kind).toBe("llm.structured.evidence");
+    expect(Object.prototype.propertyIsEnumerable.call(recordedEvidence, "value")).toBe(false);
+    expect(JSON.stringify(recordedEvidence)).not.toContain('"value"');
+
+    const invalidation = barrier(2, 2000);
+    const recordedBarrier: Recorded<BarrierRow> = recordBarrierRow(invalidation);
+
+    expect(recordedBarrier.value.kind).toBe("llm.structured.invalidate");
+    expect(Object.prototype.propertyIsEnumerable.call(recordedBarrier, "value")).toBe(false);
+    expect(JSON.stringify(recordedBarrier)).not.toContain('"value"');
+
+    expect(recordAdmissionRow(evidence).value.kind).toBe("llm.structured.evidence");
+    expect(recordAdmissionRow(invalidation).value.kind).toBe("llm.structured.invalidate");
   });
 
   it("no events → unknown", () => {

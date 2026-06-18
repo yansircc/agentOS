@@ -8,6 +8,7 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 
 - `.:AdmissionImpact`
 - `.:AdmissionRow`
+- `.:RecordedAdmissionRow`
 - `.:AgentRunAbortedPayload`
 - `.:AgentRunAbortedPayloadSchema`
 - `.:AgentRunCompletedPayload`
@@ -66,6 +67,7 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:AnyAgentCapabilityDefinition`
 - `.:BarrierCursor`
 - `.:BarrierRow`
+- `.:RecordedBarrierRow`
 - `.:BUILTIN_HANDLER_KINDS`
 - `.:BuiltinHandlerKind`
 - `.:BindAgentCapabilityOptions`
@@ -76,6 +78,7 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:ContinuationCause`
 - `.:ContinuationRef`
 - `.:ContinuationRefFromInterruptionResult`
+- `.:RecordedContinuationRef`
 - `.:DecodeRuntimeLedgerEventResult`
 - `.:DecodedOutput`
 - `.:DecisionContinuationCause`
@@ -83,6 +86,7 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:EMPTY_BARRIER_CURSOR`
 - `.:ExtensionHandlerKind`
 - `.:EvidenceRow`
+- `.:RecordedEvidenceRow`
 - `.:DeterministicToolExecutedPayload`
 - `.:DeterministicToolExecution`
 - `.:EXTERNAL_TOOL_EXECUTION_RECEIPT_VERSION`
@@ -112,6 +116,7 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:InputRequestReason`
 - `.:InputRequestRef`
 - `.:InputRequestRefFromInterruptionResult`
+- `.:RecordedInputRequestRef`
 - `.:InputRequestResumePayload`
 - `.:LedgerWitnessedScopedRef`
 - `.:LedgerCommitEventSpec`
@@ -131,6 +136,7 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:OutcomeClass`
 - `.:ProbeInput`
 - `.:ParseInputRequestResumeResult`
+- `.:ParsedRecordedSealedAuthorizationRef`
 - `.:ApprovalInputRequestResumePayload`
 - `.:AuthorizationGrantRef`
 - `.:AuthorizationInputRequestResumePayload`
@@ -240,6 +246,11 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:projectFailureDiagnostics`
 - `.:projectRuntimeSafeLedgerEvent`
 - `.:parseInputRequestResumePayload`
+- `.:recordAdmissionRow`
+- `.:recordBarrierRow`
+- `.:recordEvidenceRow`
+- `.:recordedContinuationRefFromUnknown`
+- `.:recordedInputRequestRefFromUnknown`
 - `.:receiptBackedToolResult`
 - `.:receiptBackedToolResultFromUnknown`
 - `.:replayExternalToolExecutionFromReceipt`
