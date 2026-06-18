@@ -8,6 +8,7 @@ dist/
 .parallel/
 .claude/
 .cst/
+.agentos-audits/
 spikes/**
 !spikes/
 !spikes/_active/
