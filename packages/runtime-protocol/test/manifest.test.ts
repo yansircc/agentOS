@@ -6,6 +6,8 @@ import {
   defineAgentBindings,
   defineAgentManifest,
   mountAgent,
+  projectAgentManifest,
+  AGENT_MANIFEST_PROJECTION_TARGETS,
   validateAgentMount,
   type AgentBindings,
   type AgentManifest,
@@ -264,5 +266,70 @@ describe("AgentManifest mount algebra", () => {
       issues: [{ kind: "function_in_manifest", path: "manifest.llmRoutes.default.resolve" }],
       warnings: [],
     });
+  });
+
+  it("projects one manifest view for info, CLI, docs, and typed client consumers", () => {
+    const manifest = defineAgentManifest({
+      agentId: "agent.projection",
+      version: "1.2.3",
+      instructions: {
+        path: "agent/instructions.md",
+        digest: "sha256:projection",
+      },
+      scope: { kind: "conversation", idSource: "submit_scope" },
+      effectAuthorityRef,
+      handlers: ["tool_called", "user_message"] as const,
+      llmRoutes: {
+        zed: { bindingRef: "llm.zed" },
+        default: { bindingRef: "llm.default" },
+      },
+      tools: {
+        weather: {
+          bindingRef: "tool.weather",
+          executionDomain: "app-runtime",
+          interaction: "never",
+        },
+        lookup: {
+          bindingRef: "tool.lookup",
+          executionDomain: "workspace",
+          interaction: "approval",
+          effects: ["network"],
+          receiptPolicy: "required",
+        },
+      },
+      executionDomains: {
+        workspace: { bindingRef: "domain.workspace" },
+      },
+      interactions: {
+        approval: { bindingRef: "interaction.approval" },
+      },
+    });
+
+    const projection = projectAgentManifest(manifest);
+
+    expect(projection.schema).toBe("agentos.agent_manifest_projection.v1");
+    expect(projection.targets).toEqual([...AGENT_MANIFEST_PROJECTION_TARGETS]);
+    expect(projection.source).toEqual({
+      kind: "AgentManifest",
+      agentId: "agent.projection",
+      version: "1.2.3",
+    });
+    expect(projection.agent).toMatchObject({
+      agentId: "agent.projection",
+      instructions: {
+        path: "agent/instructions.md",
+        digest: "sha256:projection",
+      },
+    });
+    expect(projection.bindings.llmRoutes.map((entry) => entry.id)).toEqual(["default", "zed"]);
+    expect(projection.bindings.tools.map((entry) => entry.id)).toEqual(["lookup", "weather"]);
+    expect(projection.bindings.executionDomains).toEqual([
+      { id: "workspace", value: { bindingRef: "domain.workspace" } },
+    ]);
+    expect(projection.bindings.interactions).toEqual([
+      { id: "approval", value: { bindingRef: "interaction.approval" } },
+    ]);
+    expect("typedClient" in manifest).toBe(false);
+    expect("workerEntry" in manifest).toBe(false);
   });
 });

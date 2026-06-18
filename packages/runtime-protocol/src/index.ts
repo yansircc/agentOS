@@ -9,6 +9,7 @@ export * from "./input-request";
 export * from "./intent";
 export * from "./ledger";
 export * from "./manifest";
+export * from "./manifest-projection";
 export * from "./mount";
 export * from "./runtime-events";
 export * from "./safe-events";

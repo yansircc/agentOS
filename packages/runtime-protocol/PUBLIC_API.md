@@ -2,7 +2,7 @@
 
 # @agent-os/runtime-protocol Public API
 
-Status: Runtime protocol package. Public exports are limited to runtime DTOs, pure admission projections, ledger identity types, and runtime ledger event vocabulary.
+Status: Runtime protocol package. Public exports are limited to runtime DTOs, authored manifest DTOs, pure manifest/admission projections, ledger identity types, and runtime ledger event vocabulary.
 
 ## Public exports
 
@@ -20,6 +20,8 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:AgentRunStartedPayload`
 - `.:AgentRunStartedPayloadSchema`
 - `.:AGENT_INTENT_EVENT_KINDS`
+- `.:AGENT_MANIFEST_PROJECTION_SCHEMA`
+- `.:AGENT_MANIFEST_PROJECTION_TARGETS`
 - `.:AGENT_SETTLEMENT_EVENT_KINDS`
 - `.:AgentBindings`
 - `.:AgentCapabilityBindingRef`
@@ -50,6 +52,11 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:AgentLlmRouteBindingRef`
 - `.:AgentManifest`
 - `.:AgentManifestInput`
+- `.:AgentManifestProjection`
+- `.:AgentManifestProjectionAgent`
+- `.:AgentManifestProjectionBindings`
+- `.:AgentManifestProjectionEntry`
+- `.:AgentManifestProjectionTarget`
 - `.:AgentMountIssue`
 - `.:AgentMountPort`
 - `.:AgentMountValidation`
@@ -133,6 +140,7 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:Outcome`
 - `.:OutcomeClass`
 - `.:ProbeInput`
+- `.:ProjectAgentManifestOptions`
 - `.:ParseInputRequestResumeResult`
 - `.:ParsedRecordedSealedAuthorizationRef`
 - `.:ApprovalInputRequestResumePayload`
@@ -240,6 +248,7 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:lowerSubmitRunInput`
 - `.:makeAdmissionSchemaSpec`
 - `.:mountAgent`
+- `.:projectAgentManifest`
 - `.:projectLease`
 - `.:projectFailureDiagnostics`
 - `.:projectRuntimeSafeLedgerEvent`

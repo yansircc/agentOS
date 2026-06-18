@@ -16,6 +16,8 @@
 - `.:AgentRunStartedPayload`
 - `.:AgentRunStartedPayloadSchema`
 - `.:AGENT_INTENT_EVENT_KINDS`
+- `.:AGENT_MANIFEST_PROJECTION_SCHEMA`
+- `.:AGENT_MANIFEST_PROJECTION_TARGETS`
 - `.:AGENT_SETTLEMENT_EVENT_KINDS`
 - `.:AgentBindings`
 - `.:AgentCapabilityBindingRef`
@@ -46,6 +48,11 @@
 - `.:AgentLlmRouteBindingRef`
 - `.:AgentManifest`
 - `.:AgentManifestInput`
+- `.:AgentManifestProjection`
+- `.:AgentManifestProjectionAgent`
+- `.:AgentManifestProjectionBindings`
+- `.:AgentManifestProjectionEntry`
+- `.:AgentManifestProjectionTarget`
 - `.:AgentMountIssue`
 - `.:AgentMountPort`
 - `.:AgentMountValidation`
@@ -129,6 +136,7 @@
 - `.:Outcome`
 - `.:OutcomeClass`
 - `.:ProbeInput`
+- `.:ProjectAgentManifestOptions`
 - `.:ParseInputRequestResumeResult`
 - `.:ParsedRecordedSealedAuthorizationRef`
 - `.:ApprovalInputRequestResumePayload`
@@ -236,6 +244,7 @@
 - `.:lowerSubmitRunInput`
 - `.:makeAdmissionSchemaSpec`
 - `.:mountAgent`
+- `.:projectAgentManifest`
 - `.:projectLease`
 - `.:projectFailureDiagnostics`
 - `.:projectRuntimeSafeLedgerEvent`

@@ -73,6 +73,7 @@ import type {
 import type {
   AgentBindings,
   AgentManifest,
+  AgentManifestProjection,
   AgentSubmitBindings,
   MountedAgent,
   AttemptKey,
@@ -101,7 +102,11 @@ import {
   type TriggerDrainUntilQuietResult,
 } from "@agent-os/runtime";
 import { LlmTransport } from "@agent-os/llm-protocol";
-import { lowerSubmitRunInput, RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
+import {
+  lowerSubmitRunInput,
+  projectAgentManifest,
+  RUNTIME_FACT_OWNER,
+} from "@agent-os/runtime-protocol";
 import {
   backendProtocolEventIdentityKey,
   QUOTA_EVENT_KIND,
@@ -160,6 +165,7 @@ import {
 export interface CloudflareAgentEnv {}
 
 export interface AgentRuntimeReaderClient {
+  readonly info: () => Promise<AgentManifestProjection>;
   readonly events: (
     identity: BackendProtocolTruthIdentity,
     opts?: EventQueryOptions,
@@ -596,6 +602,10 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
       commit: (spec) => this.extensionCommit(pkg, spec.event, spec.data),
       time: (spec) => this.extensionTime(pkg, spec.at, spec.event, spec.data),
     };
+  }
+
+  info(): Promise<AgentManifestProjection> {
+    return Promise.resolve(projectAgentManifest(this._mountedAgent.manifest));
   }
 
   private extensionCommit(

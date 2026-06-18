@@ -10,7 +10,7 @@ Serializable runtime vocabulary shared across runtime services, concrete backend
 
 ## Invariant
 
-Runtime protocol is vocabulary only. It owns submit DTOs, admission lease/projection DTOs, runtime ledger event schemas, runtime fact-owner identity, and ledger identity types. It does not own Effect services, runtime control flow, backend storage, transport wrapping, or provider implementations.
+Runtime protocol is vocabulary only. It owns submit DTOs, admission lease/projection DTOs, authored agent manifest DTOs, manifest projection DTOs, runtime ledger event schemas, runtime fact-owner identity, and ledger identity types. It does not own Effect services, runtime control flow, backend storage, transport wrapping, generated clients, or provider implementations.
 
 `@agent-os/runtime` consumes this package as an interpreter layer. Backends and composers import protocol-owned symbols directly from this package; runtime must not re-export them as a compatibility shim.
 

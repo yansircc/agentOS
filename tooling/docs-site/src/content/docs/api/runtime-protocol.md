@@ -20,6 +20,8 @@ title: "@agent-os/runtime-protocol API"
 - `.:AgentRunStartedPayload`
 - `.:AgentRunStartedPayloadSchema`
 - `.:AGENT_INTENT_EVENT_KINDS`
+- `.:AGENT_MANIFEST_PROJECTION_SCHEMA`
+- `.:AGENT_MANIFEST_PROJECTION_TARGETS`
 - `.:AGENT_SETTLEMENT_EVENT_KINDS`
 - `.:AgentBindings`
 - `.:AgentCapabilityBindingRef`
@@ -50,6 +52,11 @@ title: "@agent-os/runtime-protocol API"
 - `.:AgentLlmRouteBindingRef`
 - `.:AgentManifest`
 - `.:AgentManifestInput`
+- `.:AgentManifestProjection`
+- `.:AgentManifestProjectionAgent`
+- `.:AgentManifestProjectionBindings`
+- `.:AgentManifestProjectionEntry`
+- `.:AgentManifestProjectionTarget`
 - `.:AgentMountIssue`
 - `.:AgentMountPort`
 - `.:AgentMountValidation`
@@ -133,6 +140,7 @@ title: "@agent-os/runtime-protocol API"
 - `.:Outcome`
 - `.:OutcomeClass`
 - `.:ProbeInput`
+- `.:ProjectAgentManifestOptions`
 - `.:ParseInputRequestResumeResult`
 - `.:ParsedRecordedSealedAuthorizationRef`
 - `.:ApprovalInputRequestResumePayload`
@@ -240,6 +248,7 @@ title: "@agent-os/runtime-protocol API"
 - `.:lowerSubmitRunInput`
 - `.:makeAdmissionSchemaSpec`
 - `.:mountAgent`
+- `.:projectAgentManifest`
 - `.:projectLease`
 - `.:projectFailureDiagnostics`
 - `.:projectRuntimeSafeLedgerEvent`

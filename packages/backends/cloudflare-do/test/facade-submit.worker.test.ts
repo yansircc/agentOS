@@ -3,6 +3,7 @@ import { runInDurableObject } from "cloudflare:test";
 import type {} from "@effect/vitest";
 
 import { credentialMaterialRef } from "@agent-os/kernel/material-ref";
+import { AGENT_MANIFEST_PROJECTION_TARGETS } from "@agent-os/runtime-protocol";
 import { FACADE_INTENT_COMMAND_EVENT, type FacadeSubmitTestDO } from "./test-worker";
 import { testTruthIdentity } from "./_identity";
 
@@ -17,6 +18,36 @@ const facadeSubmitAuthorityRef = {
 };
 
 describe("defineAgentDO facade submit", () => {
+  it("projects mounted agent manifest info without adding generated fields to the manifest", async () => {
+    const scope = "facade-submit-info";
+    const stub = testEnv.FACADE_SUBMIT_DO.get(testEnv.FACADE_SUBMIT_DO.idFromName(scope));
+
+    const info = await runInDurableObject(stub, (instance) => instance.info());
+
+    expect(info.schema).toBe("agentos.agent_manifest_projection.v1");
+    expect(info.targets).toEqual([...AGENT_MANIFEST_PROJECTION_TARGETS]);
+    expect(info.source).toMatchObject({
+      kind: "AgentManifest",
+      agentId: "agent.cloudflare-do",
+    });
+    expect(info.agent.handlers).toContain("user_message");
+    expect(info.bindings.llmRoutes).toEqual([
+      {
+        id: "default",
+        value: { bindingRef: "llm.default" },
+      },
+    ]);
+    expect(info.bindings.tools.map((entry) => entry.id)).toEqual([
+      "apply",
+      "intent",
+      "lookup",
+      "write_first",
+      "write_second",
+    ]);
+    expect("typedClient" in info.agent).toBe(false);
+    expect("workerEntry" in info.agent).toBe(false);
+  });
+
   it("uses llms.default and run-scoped tools through the explicit transport binding", async () => {
     const scope = "facade-submit-defaults";
     const stub = testEnv.FACADE_SUBMIT_DO.get(testEnv.FACADE_SUBMIT_DO.idFromName(scope));
