@@ -40,6 +40,8 @@ import {
   type AgentSchemaDecoder,
   type AgentSchemaIssue,
 } from "./agent-schema";
+import { authoredValue, recordedValue } from "./value-brands";
+import type { Authored, Recorded } from "./value-brands";
 
 const TOOL_CONTRACT_BRAND = Symbol("@agent-os/kernel/ToolContract");
 const DETERMINISTIC_TOOL_INVOCATION_BRAND = Symbol("@agent-os/kernel/DeterministicToolInvocation");
@@ -222,7 +224,7 @@ export interface MaterialBrokerSubstitutionPlan {
   readonly domain: ExecutionDomain;
   readonly placeholder: MaterialBrokerPlaceholder;
   readonly ownerSubstitution: MaterialBrokerOwnerSubstitution;
-  readonly receipt: MaterialBrokerReceipt;
+  readonly receipt: MaterialBrokerReceipt & Recorded<MaterialBrokerReceipt>;
 }
 
 export type ResolvedToolExecution =
@@ -324,14 +326,14 @@ export interface Tool<
   R = any,
   E extends ToolExecution = ToolExecution,
 > {
-  readonly definition: ToolDefinition;
+  readonly definition: ToolDefinition & Authored<ToolDefinition>;
   readonly argsSchema: AgentSchema<A>;
   readonly decode: ToolDecode<A>;
   readonly execute: ToolExecute<A, R, ToolExecutionRequirements<E>>;
   readonly admit: ToolAdmitter<A>;
   readonly execution: E;
   readonly quota?: QuotaSpec;
-  readonly contract: ToolContract;
+  readonly contract: ToolContract & Authored<ToolContract>;
 }
 
 export interface DefineToolSpec<S extends AgentSchemaDecoder<unknown>, R, E extends ToolExecution> {
@@ -357,36 +359,44 @@ export interface DefineProductToolSpec<
   readonly execution?: E;
 }
 
-const makeToolContract = (shape: ToolContractShape): ToolContract =>
-  Object.defineProperty({ ...shape }, TOOL_CONTRACT_BRAND, {
-    value: true,
-    enumerable: false,
-  }) as ToolContract;
+const makeToolContract = (shape: ToolContractShape): ToolContract & Authored<ToolContract> =>
+  authoredValue(
+    Object.defineProperty({ ...shape }, TOOL_CONTRACT_BRAND, {
+      value: true,
+      enumerable: false,
+    }) as ToolContract,
+  );
 
 export const deterministicToolInvocation = <A>(
   name: string,
   args: A,
-): DeterministicToolInvocation<A> =>
-  Object.defineProperty({ name, args }, DETERMINISTIC_TOOL_INVOCATION_BRAND, {
-    value: true,
-    enumerable: false,
-  }) as DeterministicToolInvocation<A>;
+): DeterministicToolInvocation<A> & Authored<DeterministicToolInvocation<A>> =>
+  authoredValue(
+    Object.defineProperty({ name, args }, DETERMINISTIC_TOOL_INVOCATION_BRAND, {
+      value: true,
+      enumerable: false,
+    }) as DeterministicToolInvocation<A>,
+  );
 
 const hasToolContractBrand = (contract: ToolContract): boolean =>
   contract[TOOL_CONTRACT_BRAND] === true;
 
-export const deterministicToolExecution = (): { readonly kind: "deterministic" } => ({
-  kind: "deterministic",
-});
+export const deterministicToolExecution = (): { readonly kind: "deterministic" } =>
+  authoredValue({ kind: "deterministic" });
 
 export const externalToolExecution = <A extends ToolAccess>(
   access: A,
   domain: ExecutionDomain,
-): { readonly kind: "external"; readonly access: A; readonly domain: ExecutionDomain } => ({
-  kind: "external",
-  access,
-  domain,
-});
+): {
+  readonly kind: "external";
+  readonly access: A;
+  readonly domain: ExecutionDomain;
+} =>
+  authoredValue({
+    kind: "external",
+    access,
+    domain,
+  });
 
 export const withToolReadRequirement = <R>(
   effect: Effect.Effect<R, ToolError, never>,
@@ -829,6 +839,16 @@ export const planMaterialBrokerSubstitution = (spec: {
   }
 
   const placeholder = materialBrokerPlaceholder(spec.domain, spec.materialRef, spec.requirement);
+  const receipt = recordedValue({
+    _tag: "@agent-os/kernel/MaterialBrokerReceipt",
+    domain: spec.domain,
+    slot: spec.requirement.slot,
+    materialKind: spec.materialRef.kind,
+    materialRef: materialBrokerRefProof(spec.materialRef),
+    placeholder,
+    broker: declaration.broker,
+  } satisfies MaterialBrokerReceipt);
+
   return {
     ok: true,
     plan: {
@@ -840,15 +860,7 @@ export const planMaterialBrokerSubstitution = (spec: {
         requirement: spec.requirement,
         outboundBoundary: declaration.broker.outboundBoundary,
       },
-      receipt: {
-        _tag: "@agent-os/kernel/MaterialBrokerReceipt",
-        domain: spec.domain,
-        slot: spec.requirement.slot,
-        materialKind: spec.materialRef.kind,
-        materialRef: materialBrokerRefProof(spec.materialRef),
-        placeholder,
-        broker: declaration.broker,
-      },
+      receipt,
     },
   };
 };
@@ -860,14 +872,14 @@ export const defineTool = <S extends AgentSchemaDecoder<unknown>, R, E extends T
   const toolId = spec.name;
   const admit = normalizeAdmitter(spec.admit);
   return {
-    definition: {
+    definition: authoredValue({
       type: "function",
       function: {
         name: spec.name,
         description: spec.description,
         parameters: argsSchema as AgentSchema<unknown>,
       },
-    },
+    } satisfies ToolDefinition),
     argsSchema,
     decode: argsSchema.decode,
     execute: spec.execute,

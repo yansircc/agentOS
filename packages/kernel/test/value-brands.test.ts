@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import * as kernel from "../src";
 import type { Authored, Live, Recorded, RecordedPayload, SafeLedgerPayload } from "../src";
+import { authoredValue, recordedPayload, recordedValue } from "../src/value-brands";
 
 describe("value domain brands", () => {
   it("keeps Authored, Recorded, and Live in separate type domains", () => {
@@ -39,10 +40,52 @@ describe("value domain brands", () => {
     expect(typeof assertTypeErrors).toBe("function");
   });
 
+  it("mints Authored and Recorded evidence without changing JSON shape", () => {
+    const intent = authoredValue({ kind: "tool", name: "lookup" });
+    const intentEvidence: Authored<{ readonly kind: string; readonly name: string }> = intent;
+
+    expect(intentEvidence.value.name).toBe("lookup");
+    expect(Object.prototype.propertyIsEnumerable.call(intent, "value")).toBe(false);
+    expect(JSON.stringify(intent)).toBe('{"kind":"tool","name":"lookup"}');
+
+    const fact = recordedValue({ kind: "ledger.event", id: 1 });
+    const factEvidence: Recorded<{ readonly kind: string; readonly id: number }> = fact;
+
+    expect(factEvidence.value.id).toBe(1);
+    expect(Object.prototype.propertyIsEnumerable.call(fact, "value")).toBe(false);
+    expect(JSON.stringify(fact)).toBe('{"kind":"ledger.event","id":1}');
+
+    expect(() => authoredValue({ kind: "payload", value: 1 })).toThrow(
+      "cannot overwrite an existing value field",
+    );
+    expect(authoredValue(intent).value.name).toBe("lookup");
+  });
+
+  it("mints RecordedPayload from JSON-compatible payloads only", () => {
+    const payload = recordedPayload({
+      scope: "run-1",
+      nested: { ok: true, count: 1, values: ["a", null] },
+    });
+    const recorded: RecordedPayload = payload;
+
+    expect(recorded.scope).toBe("run-1");
+    expect(JSON.stringify(recorded)).toBe(
+      '{"scope":"run-1","nested":{"ok":true,"count":1,"values":["a",null]}}',
+    );
+    expect(() => recordedPayload({ bad: Number.NaN })).toThrow("recorded payload number");
+    expect(() => recordedPayload({ bad: undefined })).toThrow("recorded payload value invalid");
+    expect(() => recordedPayload({ bad: new Date(0) })).toThrow(
+      "recorded payload object must be a JSON record",
+    );
+  });
+
   it("does not expose generic runtime constructors for value-domain brands", () => {
     expect("Authored" in kernel).toBe(false);
     expect("Recorded" in kernel).toBe(false);
     expect("Live" in kernel).toBe(false);
     expect("RecordedPayload" in kernel).toBe(false);
+    expect("authoredValue" in kernel).toBe(false);
+    expect("recordedValue" in kernel).toBe(false);
+    expect("recordedPayload" in kernel).toBe(false);
   });
 });

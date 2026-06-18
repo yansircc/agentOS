@@ -9,6 +9,8 @@
 import { Predicate } from "effect";
 import { ANCHOR_KINDS, REJECTION_KINDS } from "./claim-kinds";
 import { isNonEmptyString } from "./string-guards";
+import { authoredValue } from "./value-brands";
+import type { Authored } from "./value-brands";
 
 /**
  * Structured ledger scope identity.
@@ -228,7 +230,7 @@ export const makePreClaim = (spec: {
   readonly scopeRef: ScopeRef;
   readonly effectAuthorityRef: AuthorityRef;
   readonly originRef: OriginRef;
-}): PreClaim => ({ phase: "pre", ...spec });
+}): PreClaim & Authored<PreClaim> => authoredValue({ phase: "pre", ...spec });
 
 export const invalidAdmitterVerdictRejectionRef = (claim: PreClaim): RejectionRef => ({
   rejectionId: claim.operationRef,

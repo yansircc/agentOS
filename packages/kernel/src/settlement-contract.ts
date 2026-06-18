@@ -10,6 +10,8 @@ import {
 } from "./effect-claim";
 import { ANCHOR_KINDS, REJECTION_KINDS } from "./claim-kinds";
 import { isNonEmptyString } from "./string-guards";
+import { authoredValue, recordedValue } from "./value-brands";
+import type { Authored, Recorded } from "./value-brands";
 
 export const SYMBOLIC_SETTLEMENT_VALUE_PATTERN = "^[A-Za-z0-9_.:-]{1,128}$";
 const SYMBOLIC_SETTLEMENT_VALUE = new RegExp(SYMBOLIC_SETTLEMENT_VALUE_PATTERN);
@@ -27,7 +29,7 @@ export type SettlementContractIssue =
   | "rejection_kinds_invalid";
 
 export type SettlementContractValidation =
-  | { readonly ok: true; readonly contract: SettlementContract }
+  | { readonly ok: true; readonly contract: SettlementContract & Authored<SettlementContract> }
   | {
       readonly ok: false;
       readonly issues: ReadonlyArray<SettlementContractIssue>;
@@ -44,7 +46,12 @@ export type TerminalClaimIssue =
   | "reason_not_symbolic";
 
 export type TerminalClaimValidation =
-  | { readonly ok: true; readonly claim: LivedClaim | RejectedClaim }
+  | {
+      readonly ok: true;
+      readonly claim:
+        | (LivedClaim & Recorded<LivedClaim>)
+        | (RejectedClaim & Recorded<RejectedClaim>);
+    }
   | {
       readonly ok: false;
       readonly issues: ReadonlyArray<TerminalClaimIssue>;
@@ -125,19 +132,19 @@ export const validateSettlementContract = (value: unknown): SettlementContractVa
   if (issues.length > 0) {
     return { ok: false, issues };
   }
-  return { ok: true, contract: value as unknown as SettlementContract };
+  return { ok: true, contract: authoredValue(value as unknown as SettlementContract) };
 };
 
 export const defineSettlementContract = <Contract extends SettlementContract>(
   contract: Contract,
-): Contract => {
+): Contract & Authored<Contract> => {
   const validation = validateSettlementContract(contract);
   if (!validation.ok) {
     return failConstruction(
       `settlement contract ${contract.settlementId || "<unknown>"} invalid: ${validation.issues.join(",")}`,
     );
   }
-  return contract;
+  return authoredValue(contract);
 };
 
 export const validateTerminalClaim = (
@@ -157,7 +164,13 @@ export const validateTerminalClaim = (
   if (issues.length > 0) {
     return { ok: false, issues };
   }
-  return { ok: true, claim: validation.claim };
+  return {
+    ok: true,
+    claim:
+      validation.claim.phase === "lived"
+        ? recordedValue(validation.claim)
+        : recordedValue(validation.claim),
+  };
 };
 
 const terminalClaimFieldIssues = (
@@ -199,7 +212,7 @@ export const settleLived = (
   contract: SettlementContract,
   claim: PreClaim,
   anchorRef: AnchorRef,
-): LivedClaim => {
+): LivedClaim & Recorded<LivedClaim> => {
   const lived: LivedClaim = {
     phase: "lived",
     operationRef: claim.operationRef,
@@ -214,14 +227,14 @@ export const settleLived = (
       `settled lived claim violates ${contract.settlementId}: ${issues.join(",")}`,
     );
   }
-  return lived;
+  return recordedValue(lived);
 };
 
 export const settleRejected = (
   contract: SettlementContract,
   claim: PreClaim,
   rejectionRef: RejectionRef,
-): RejectedClaim => {
+): RejectedClaim & Recorded<RejectedClaim> => {
   const rejected: RejectedClaim = {
     phase: "rejected",
     operationRef: claim.operationRef,
@@ -236,5 +249,5 @@ export const settleRejected = (
       `settled rejected claim violates ${contract.settlementId}: ${issues.join(",")}`,
     );
   }
-  return rejected;
+  return recordedValue(rejected);
 };

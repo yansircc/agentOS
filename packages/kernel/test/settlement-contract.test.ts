@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import { makePreClaim } from "../src/effect-claim";
+import type { Authored, Recorded } from "../src";
 import {
   defineSettlementContract,
   isSymbolicSettlementValue,
@@ -26,6 +27,9 @@ describe("SettlementContract", () => {
   });
 
   it("validates settlement contract vocabulary", () => {
+    const authoredContract: Authored<typeof contract.value> = contract;
+    expect(authoredContract.value.settlementId).toBe("example");
+    expect(Object.prototype.propertyIsEnumerable.call(contract, "value")).toBe(false);
     expect(validateSettlementContract(contract)).toEqual({ ok: true, contract });
     expect(
       validateSettlementContract({
@@ -56,6 +60,9 @@ describe("SettlementContract", () => {
     });
 
     expect(validateTerminalClaim(contract, lived)).toEqual({ ok: true, claim: lived });
+    const recordedLived: Recorded<typeof lived.value> = lived;
+    expect(recordedLived.value.anchorRef.anchorId).toBe("proof:ok");
+    expect(Object.prototype.propertyIsEnumerable.call(lived, "value")).toBe(false);
     expect(() =>
       settleLived(contract, claim, {
         anchorId: "proof:ok",
@@ -81,6 +88,9 @@ describe("SettlementContract", () => {
       ok: true,
       claim: rejected,
     });
+    const recordedRejected: Recorded<typeof rejected.value> = rejected;
+    expect(recordedRejected.value.rejectionRef.rejectionId).toBe("policy:1");
+    expect(Object.prototype.propertyIsEnumerable.call(rejected, "value")).toBe(false);
     expect(() =>
       settleRejected(contract, claim, {
         rejectionId: "policy:1",

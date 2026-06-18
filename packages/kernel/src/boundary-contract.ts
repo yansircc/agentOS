@@ -11,6 +11,8 @@ import {
 import type { AnchorRef, ClaimRole, RejectionRef } from "./effect-claim";
 import { validateSettlementContract, type SettlementContract } from "./settlement-contract";
 import { isNonEmptyString } from "./string-guards";
+import { authoredValue } from "./value-brands";
+import type { Authored } from "./value-brands";
 
 export type BoundaryClaimPhase = "pre" | "lived" | "rejected";
 
@@ -90,7 +92,7 @@ export type BoundaryContractIssue =
   | "projection_invalid";
 
 export type BoundaryContractValidation =
-  | { readonly ok: true; readonly contract: BoundaryContract }
+  | { readonly ok: true; readonly contract: BoundaryContract & Authored<BoundaryContract> }
   | {
       readonly ok: false;
       readonly issues: ReadonlyArray<BoundaryContractIssue>;
@@ -232,7 +234,7 @@ const materialRequirementsAreBoundToAuthority = (
 
 export const defineBoundaryContract = <EventKind extends string>(
   contract: BoundaryContract<EventKind>,
-): BoundaryContract<EventKind> => contract;
+): BoundaryContract<EventKind> & Authored<BoundaryContract<EventKind>> => authoredValue(contract);
 
 export const boundaryPackage = (contract: BoundaryContract, version: string): BoundaryPackage =>
   ({
@@ -356,5 +358,5 @@ export const validateBoundaryContract = (value: unknown): BoundaryContractValida
   if (issues.length > 0) {
     return { ok: false, issues };
   }
-  return { ok: true, contract: value as unknown as BoundaryContract };
+  return { ok: true, contract: authoredValue(value as unknown as BoundaryContract) };
 };

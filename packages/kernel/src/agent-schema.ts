@@ -6,6 +6,8 @@ import {
   type JsonSchemaNode,
   type JsonSchemaObject,
 } from "./json-schema-dialect";
+import { authoredValue } from "./value-brands";
+import type { Authored } from "./value-brands";
 
 export const AGENT_SCHEMA_FINGERPRINT_VERSION = "agent-schema-v1";
 const AGENT_SCHEMA_BRAND = Symbol("@agent-os/kernel/AgentSchema");
@@ -412,10 +414,10 @@ export const projectAgentSchema = (schema: JsonSchemaObject): AgentSchemaProject
 
 export const defineAgentSchema = <S extends AgentSchemaDecoder<unknown>>(
   schema: S,
-): AgentSchema<S["Type"]> => {
+): AgentSchema<S["Type"]> & Authored<AgentSchema<S["Type"]>> => {
   const jsonSchema = agentSchemaToDialectSchema(schema);
   const decodeEffectSchema = Schema.decodeUnknownSync(schema);
-  return {
+  return authoredValue({
     [AGENT_SCHEMA_BRAND]: true,
     source: schema,
     jsonSchema,
@@ -438,7 +440,7 @@ export const defineAgentSchema = <S extends AgentSchemaDecoder<unknown>>(
       return decodeEffectSchema(value);
     },
     projections: projectAgentSchema(jsonSchema),
-  };
+  });
 };
 
 export const isAgentSchema = (value: unknown): value is AnyAgentSchema =>

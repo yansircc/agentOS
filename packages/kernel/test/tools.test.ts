@@ -19,6 +19,7 @@ import {
   type Tool,
 } from "../src/tools";
 import { credentialMaterialRef, isMaterialRef, materialRequirement } from "../src/material-ref";
+import type { Authored, Recorded } from "../src";
 
 const allowToolAdmitter = () => Effect.succeed({ ok: true as const });
 
@@ -34,6 +35,12 @@ describe("defineTool", () => {
       execute: ({ key }) => Effect.succeed({ value: key }),
     });
 
+    const authoredDefinition: Authored<typeof tool.definition.value> = tool.definition;
+    const authoredContract: Authored<typeof tool.contract.value> = tool.contract;
+    expect(authoredDefinition.value.function.name).toBe("lookup");
+    expect(authoredContract.value.toolId).toBe("lookup");
+    expect(Object.prototype.propertyIsEnumerable.call(tool.definition, "value")).toBe(false);
+    expect(Object.prototype.propertyIsEnumerable.call(tool.contract, "value")).toBe(false);
     expect(tool.definition.function.parameters).toBe(tool.argsSchema);
     expect(tool.definition).toMatchObject({
       type: "function",
@@ -418,6 +425,9 @@ describe("ExecutionDomainRegistry", () => {
         slot: "api_token",
         materialKind: "credential",
       });
+      const recordedReceipt: Recorded<typeof result.plan.receipt.value> = result.plan.receipt;
+      expect(recordedReceipt.value.slot).toBe("api_token");
+      expect(Object.prototype.propertyIsEnumerable.call(result.plan.receipt, "value")).toBe(false);
       expect(JSON.stringify(result.plan.receipt)).not.toContain("resolved-secret-value");
 
       const readResult = planMaterialBrokerSubstitution({

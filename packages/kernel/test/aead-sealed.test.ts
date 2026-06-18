@@ -16,14 +16,12 @@ import {
 import { captureLive, openLive } from "../src/internal/live-edge";
 import type { MaterialRef } from "../src/material-ref";
 import type { RecordedPayload } from "../src/value-brands";
+import { recordedPayload } from "../src/value-brands";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
 const bytes = (value: string): Uint8Array => encoder.encode(value);
-
-const recordedPayload = (value: Readonly<Record<string, unknown>>): RecordedPayload =>
-  value as RecordedPayload;
 
 const keyRef = credentialMaterialRef("tenant-a/aead-key", {
   provider: "local-test",

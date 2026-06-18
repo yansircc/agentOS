@@ -2,6 +2,7 @@ import { Effect, ManagedRuntime } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 
 import { makePreClaim } from "../src/effect-claim";
+import type { Authored } from "../src";
 import {
   bindingMaterialRef,
   credentialMaterialRef,
@@ -18,6 +19,32 @@ import { RefResolverLive, RefResolverService, RefResolutionFailed } from "../src
 import { openLive } from "../src/internal/live-edge";
 
 describe("MaterialRef algebra", () => {
+  it("mints material refs and requirements as authored declarations", () => {
+    const ref = credentialMaterialRef("CF_API_TOKEN", {
+      provider: "cloudflare",
+      purpose: "deploy",
+    });
+    const authoredRef: Authored<typeof ref.value> = ref;
+    expect(authoredRef.value.kind).toBe("credential");
+    expect(Object.prototype.propertyIsEnumerable.call(ref, "value")).toBe(false);
+    expect(JSON.stringify(ref)).toBe(
+      '{"kind":"credential","ref":"CF_API_TOKEN","provider":"cloudflare","purpose":"deploy"}',
+    );
+
+    const requirement = materialRequirement({
+      slot: "api_token",
+      kind: "credential",
+      provider: "cloudflare",
+      purpose: "deploy",
+    });
+    const authoredRequirement: Authored<typeof requirement.value> = requirement;
+    expect(authoredRequirement.value.slot).toBe("api_token");
+    expect(Object.prototype.propertyIsEnumerable.call(requirement, "value")).toBe(false);
+    expect(JSON.stringify(requirement)).toBe(
+      '{"slot":"api_token","kind":"credential","provider":"cloudflare","purpose":"deploy","required":true}',
+    );
+  });
+
   it("validates only symbolic material refs", () => {
     expect(isMaterialRef(credentialMaterialRef("CF_API_TOKEN"))).toBe(true);
     expect(isMaterialRef(endpointMaterialRef("openrouter"))).toBe(true);

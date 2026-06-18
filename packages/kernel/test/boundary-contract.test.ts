@@ -8,6 +8,7 @@ import {
   validateBoundaryContract,
 } from "../src/boundary-contract";
 import type { BoundaryPackage } from "../src/extensions";
+import type { Authored } from "../src";
 import { materialRequirement } from "../src/material-ref";
 import { defineSettlementContract } from "../src/settlement-contract";
 
@@ -77,6 +78,9 @@ describe("BoundaryContract", () => {
   });
 
   it("declares extension ownership from the boundary contract", () => {
+    const authoredContract: Authored<typeof contract.value> = contract;
+    expect(authoredContract.value.packageId).toBe("@agent-os/example-carrier");
+    expect(Object.prototype.propertyIsEnumerable.call(contract, "value")).toBe(false);
     expect(boundaryPackage(contract, "0.1.0")).toEqual({
       packageId: "@agent-os/example-carrier",
       kindPrefixes: ["example."],

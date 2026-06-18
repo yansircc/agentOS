@@ -1,6 +1,8 @@
 import { Predicate } from "effect";
 import { isAuthorityRef, type AuthorityRef } from "./effect-claim";
 import { isNonEmptyString } from "./string-guards";
+import { authoredValue } from "./value-brands";
+import type { Authored } from "./value-brands";
 
 export interface CredentialMaterialRef {
   readonly kind: "credential";
@@ -143,49 +145,55 @@ const EXTERNAL_RESOURCE_REQUIREMENT_KEYS = new Set([
 export const credentialMaterialRef = (
   ref: string,
   options: { readonly provider?: string; readonly purpose?: string } = {},
-): CredentialMaterialRef => ({
-  kind: "credential",
-  ref,
-  ...(options.provider === undefined ? {} : { provider: options.provider }),
-  ...(options.purpose === undefined ? {} : { purpose: options.purpose }),
-});
+): CredentialMaterialRef & Authored<CredentialMaterialRef> =>
+  authoredValue({
+    kind: "credential",
+    ref,
+    ...(options.provider === undefined ? {} : { provider: options.provider }),
+    ...(options.purpose === undefined ? {} : { purpose: options.purpose }),
+  });
 
 export const endpointMaterialRef = (
   ref: string,
   options: { readonly protocol?: string } = {},
-): EndpointMaterialRef => ({
-  kind: "endpoint",
-  ref,
-  ...(options.protocol === undefined ? {} : { protocol: options.protocol }),
-});
+): EndpointMaterialRef & Authored<EndpointMaterialRef> =>
+  authoredValue({
+    kind: "endpoint",
+    ref,
+    ...(options.protocol === undefined ? {} : { protocol: options.protocol }),
+  });
 
 export const bindingMaterialRef = (spec: {
   readonly provider: string;
   readonly bindingKind: string;
   readonly ref: string;
-}): BindingMaterialRef => ({
-  kind: "binding",
-  provider: spec.provider,
-  bindingKind: spec.bindingKind,
-  ref: spec.ref,
-});
+}): BindingMaterialRef & Authored<BindingMaterialRef> =>
+  authoredValue({
+    kind: "binding",
+    provider: spec.provider,
+    bindingKind: spec.bindingKind,
+    ref: spec.ref,
+  });
 
 export const externalResourceMaterialRef = (spec: {
   readonly provider: string;
   readonly resourceKind: string;
   readonly ref: string;
-}): ExternalResourceMaterialRef => ({
-  kind: "external_resource",
-  provider: spec.provider,
-  resourceKind: spec.resourceKind,
-  ref: spec.ref,
-});
+}): ExternalResourceMaterialRef & Authored<ExternalResourceMaterialRef> =>
+  authoredValue({
+    kind: "external_resource",
+    provider: spec.provider,
+    resourceKind: spec.resourceKind,
+    ref: spec.ref,
+  });
 
-export const materialRequirement = (spec: MaterialRequirementInput): MaterialRequirement =>
-  ({
+export const materialRequirement = (
+  spec: MaterialRequirementInput,
+): MaterialRequirement & Authored<MaterialRequirement> =>
+  authoredValue({
     ...spec,
     required: spec.required ?? true,
-  }) as MaterialRequirement;
+  } as MaterialRequirement);
 
 export const isMaterialRef = (value: unknown): value is MaterialRef => {
   if (!Predicate.isObject(value)) return false;

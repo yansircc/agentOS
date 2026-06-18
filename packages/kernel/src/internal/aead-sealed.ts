@@ -2,6 +2,7 @@ import { Data, Effect } from "effect";
 
 import type { MaterialRef } from "../material-ref";
 import type { Live, Recorded, RecordedPayload, RecordedPayloadValue } from "../value-brands";
+import { recordedPayload } from "../value-brands";
 import { captureLive, openLive } from "./live-edge";
 
 export const AEAD_SEALED_KIND = "aead.sealed";
@@ -158,7 +159,7 @@ const clonePayloadValue = (value: RecordedPayloadValue): RecordedPayloadValue =>
 };
 
 const cloneRecordedPayload = (payload: RecordedPayload): RecordedPayload =>
-  clonePayloadValue(payload) as RecordedPayload;
+  recordedPayload(clonePayloadValue(payload) as Readonly<Record<string, unknown>>);
 
 const aadBytes = (payload: RecordedPayload): Effect.Effect<Uint8Array, AeadSealedCodecFailure> => {
   const canonical = canonicalPayloadValue(payload);
