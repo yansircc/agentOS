@@ -1,7 +1,7 @@
 import type { LlmRoute } from "@agent-os/llm-protocol";
 import { credentialMaterialRef, endpointMaterialRef } from "@agent-os/kernel/material-ref";
 import type { MaterialRef } from "@agent-os/kernel/material-ref";
-import type { RefResolver } from "@agent-os/kernel/ref-resolver";
+import { useRefResolverMaterialSync, type RefResolver } from "@agent-os/kernel/ref-resolver";
 import type {
   TurnDoneFrame,
   TurnErrorFrame,
@@ -569,8 +569,10 @@ export const adaptGeminiDeltaChunk = (
 };
 
 const resolvedStringMaterial = (resolver: RefResolver, ref: MaterialRef): string | null => {
-  const value = resolver.material(ref);
-  return isNonEmptyString(value) ? value : null;
+  const resolved = useRefResolverMaterialSync(resolver, ref, (value) =>
+    isNonEmptyString(value) ? value : null,
+  );
+  return resolved.ok ? resolved.value : null;
 };
 
 const endpointFor = (

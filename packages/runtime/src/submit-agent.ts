@@ -85,6 +85,7 @@ import type { InternalSubmitSpec } from "./internal-submit";
 import { Ledger } from "./ledger";
 import {
   RefResolverService,
+  resolveMaterial,
   type RefResolutionFailed,
   type ResolvedMaterial,
   type ResolvedMaterialService,
@@ -512,7 +513,7 @@ const resolveToolMaterials = (
           ),
         };
       }
-      const resolved = yield* Effect.result(refs.material(ref));
+      const resolved = yield* Effect.result(resolveMaterial(refs, ref));
       if (resolved._tag === "Failure") {
         return {
           ok: false,

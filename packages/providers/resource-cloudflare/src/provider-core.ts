@@ -8,7 +8,11 @@ import {
   type ExternalResourceMaterialRef,
   type MaterialRef,
 } from "@agent-os/kernel/material-ref";
-import type { RefResolver } from "@agent-os/kernel/ref-resolver";
+import {
+  useRefResolverMaterial,
+  type RefResolutionFailed,
+  type RefResolver,
+} from "@agent-os/kernel/ref-resolver";
 
 import type {
   ResourceBindRequest,
@@ -282,16 +286,20 @@ const requireCloudflareCredential = <Material, MutationInput>(
         ),
       );
     }
-    const material = yield* Effect.try({
-      try: () => options.resolver.material(credentialRef),
-      catch: () =>
+    const material = yield* useRefResolverMaterial(options.resolver, credentialRef, (value) =>
+      Effect.succeed(value),
+    ).pipe(
+      Effect.mapError((error: RefResolutionFailed) =>
         materialUnavailable(
           claim,
           spec.resourceKind,
           step,
-          "cloudflare_api credential resolution failed",
+          error.reason === "resolver_threw"
+            ? "cloudflare_api credential resolution failed"
+            : "cloudflare_api credential material is unavailable",
         ),
-    });
+      ),
+    );
     if (typeof material !== "string" || material.length === 0) {
       return yield* Effect.fail(
         materialUnavailable(
@@ -323,11 +331,20 @@ const requireCloudflareAccount = <Material, MutationInput>(
         ),
       );
     }
-    const material = yield* Effect.try({
-      try: () => options.resolver.material(accountRef),
-      catch: () =>
-        materialUnavailable(claim, spec.resourceKind, step, "cloudflare account resolution failed"),
-    });
+    const material = yield* useRefResolverMaterial(options.resolver, accountRef, (value) =>
+      Effect.succeed(value),
+    ).pipe(
+      Effect.mapError((error: RefResolutionFailed) =>
+        materialUnavailable(
+          claim,
+          spec.resourceKind,
+          step,
+          error.reason === "resolver_threw"
+            ? "cloudflare account resolution failed"
+            : "cloudflare account material must contain accountId",
+        ),
+      ),
+    );
     if (!Predicate.isObject(material)) {
       return yield* Effect.fail(
         materialUnavailable(
@@ -402,16 +419,20 @@ const requireResourceMaterial = <Material, MutationInput>(
   resourceRef: ExternalResourceMaterialRef,
 ): Effect.Effect<Material, ResourceFailure> =>
   Effect.gen(function* () {
-    const material = yield* Effect.try({
-      try: () => options.resolver.material(resourceRef),
-      catch: () =>
+    const material = yield* useRefResolverMaterial(options.resolver, resourceRef, (value) =>
+      Effect.succeed(value),
+    ).pipe(
+      Effect.mapError((error: RefResolutionFailed) =>
         materialUnavailable(
           claim,
           spec.resourceKind,
           step,
-          `cloudflare_${spec.resourceKind}_resource_resolution_failed`,
+          error.reason === "resolver_threw"
+            ? `cloudflare_${spec.resourceKind}_resource_resolution_failed`
+            : `cloudflare_${spec.resourceKind}_resource_material_unavailable`,
         ),
-    });
+      ),
+    );
     const parsed = spec.parseResourceMaterial(material);
     if (parsed === null) {
       return yield* Effect.fail(
@@ -438,16 +459,20 @@ const requireBindingMaterial = <Material, MutationInput>(
   bindingRef: BindingMaterialRef,
 ): Effect.Effect<CloudflareBindingMaterial, ResourceFailure> =>
   Effect.gen(function* () {
-    const material = yield* Effect.try({
-      try: () => options.resolver.material(bindingRef),
-      catch: () =>
+    const material = yield* useRefResolverMaterial(options.resolver, bindingRef, (value) =>
+      Effect.succeed(value),
+    ).pipe(
+      Effect.mapError((error: RefResolutionFailed) =>
         materialUnavailable(
           claim,
           spec.resourceKind,
           step,
-          `cloudflare_${spec.resourceKind}_binding_resolution_failed`,
+          error.reason === "resolver_threw"
+            ? `cloudflare_${spec.resourceKind}_binding_resolution_failed`
+            : `cloudflare_${spec.resourceKind}_binding_material_unavailable`,
         ),
-    });
+      ),
+    );
     if (!Predicate.isObject(material)) {
       return yield* Effect.fail(
         materialUnavailable(

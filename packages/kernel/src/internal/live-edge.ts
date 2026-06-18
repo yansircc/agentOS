@@ -1,5 +1,12 @@
 import type { Live } from "../value-brands";
 
-export const captureLive = <T>(value: T): Live<T> => value as unknown as Live<T>;
+const LIVE_VALUE = Symbol("@agent-os/kernel/LiveValue");
 
-export const openLive = <T>(value: Live<T>): T => value as unknown as T;
+type LiveBox<T> = {
+  readonly [LIVE_VALUE]: T;
+};
+
+export const captureLive = <T>(value: T): Live<T> =>
+  Object.freeze(Object.defineProperty({}, LIVE_VALUE, { value, enumerable: false })) as Live<T>;
+
+export const openLive = <T>(value: Live<T>): T => (value as unknown as LiveBox<T>)[LIVE_VALUE];

@@ -57,7 +57,7 @@ import {
 } from "@agent-os/runtime-protocol";
 import { internalSubmitSpec, type InternalSubmitSpec } from "../src/internal-submit";
 import { defineSettlementContract } from "@agent-os/kernel/settlement-contract";
-import { RefResolutionFailed, RefResolverService } from "@agent-os/kernel/ref-resolver";
+import { RefResolverLive } from "@agent-os/kernel/ref-resolver";
 import type { ResolvedMaterial } from "@agent-os/kernel/ref-resolver";
 import {
   credentialMaterialRef,
@@ -210,19 +210,12 @@ const makeServices = (
   const quota = {
     tryGrant: () => Effect.succeed({ granted: true, consumed: 0, limit: 1 }),
   };
-  const refs = {
+  const refs = RefResolverLive({
     material: (ref: MaterialRef) => {
       const value = materials[materialRefKey(ref)];
-      return value === undefined
-        ? Effect.fail(
-            new RefResolutionFailed({
-              kind: ref.kind,
-              ref: materialRefKey(ref),
-            }),
-          )
-        : Effect.succeed(value);
+      return value === undefined ? null : value;
     },
-  };
+  });
   const admission = {
     attemptStructured: <O>() =>
       Effect.succeed({
@@ -295,7 +288,7 @@ const runSubmitWithServices = (
     Effect.provideService(MaterializedProjections, services.projections),
     Effect.provideService(LlmTransport, services.llm),
     Effect.provideService(Quota, services.quota),
-    Effect.provideService(RefResolverService, services.refs),
+    Effect.provide(services.refs),
     Effect.provideService(Admission, services.admission),
   );
   return Effect.map(effect, (result) => ({

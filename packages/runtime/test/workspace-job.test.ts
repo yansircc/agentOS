@@ -11,7 +11,7 @@ import {
 } from "@agent-os/llm-protocol";
 import type { MaterialRef } from "@agent-os/kernel/material-ref";
 import { materialRefKey } from "@agent-os/kernel/material-ref";
-import { RefResolutionFailed, RefResolverService } from "@agent-os/kernel/ref-resolver";
+import { RefResolverLive } from "@agent-os/kernel/ref-resolver";
 import type { ResolvedMaterial } from "@agent-os/kernel/ref-resolver";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import type { BoundaryContract } from "@agent-os/kernel/boundary-contract";
@@ -174,14 +174,12 @@ const makeServices = (
   const quota = {
     tryGrant: () => Effect.succeed({ granted: true, consumed: 0, limit: 1 }),
   };
-  const refs = {
+  const refs = RefResolverLive({
     material: (ref: MaterialRef) => {
       const value = materials[materialRefKey(ref)];
-      return value === undefined
-        ? Effect.fail(new RefResolutionFailed({ kind: ref.kind, ref: materialRefKey(ref) }))
-        : Effect.succeed(value);
+      return value === undefined ? null : value;
     },
-  };
+  });
   const admission = {
     attemptStructured: <O>() =>
       Effect.succeed({
@@ -236,7 +234,7 @@ const runJob = (spec: RunWorkspaceJobSpec, services: ReturnType<typeof makeServi
     Effect.provideService(MaterializedProjections, services.projections),
     Effect.provideService(LlmTransport, services.llm),
     Effect.provideService(Quota, services.quota),
-    Effect.provideService(RefResolverService, services.refs),
+    Effect.provide(services.refs),
     Effect.provideService(Admission, services.admission),
   );
 

@@ -195,14 +195,21 @@
 - `./projection:projectionOk`
 - `./projection:projectionOutputOrFail`
 - `./projection:runProjectionSink`
+- `./ref-resolver:LiveResolvedMaterial`
 - `./ref-resolver:RefResolutionFailed`
 - `./ref-resolver:RefResolver`
+- `./ref-resolver:RefResolverDisposeInput`
 - `./ref-resolver:RefResolverEmpty`
 - `./ref-resolver:RefResolverLive`
+- `./ref-resolver:RefResolverMaterialUseResult`
 - `./ref-resolver:RefResolverService`
 - `./ref-resolver:ResolvedMaterial`
 - `./ref-resolver:ResolvedMaterialService`
+- `./ref-resolver:resolveMaterial`
 - `./ref-resolver:resolveStringMaterial`
+- `./ref-resolver:useRefResolverMaterial`
+- `./ref-resolver:useRefResolverMaterialSync`
+- `./ref-resolver:withResolvedMaterial`
 - `./runtime-scope:RuntimeScopeKind`
 - `./runtime-scope:RuntimeScopeResolution`
 - `./runtime-scope:StatefulScopeRootResult`
@@ -492,6 +499,7 @@ text`
 - `.:LedgerEventSchema`
 - `.:LedgerEventRpc`
 - `.:LivedClaim`
+- `.:LiveResolvedMaterial`
 - `.:MaterialKind`
 - `.:MaterialRef`
 - `.:MaterialRequirement`
@@ -508,8 +516,10 @@ text`
 - `.:QuotaStateSpec`
 - `.:RefResolutionFailed`
 - `.:RefResolver`
+- `.:RefResolverDisposeInput`
 - `.:RefResolverEmpty`
 - `.:RefResolverLive`
+- `.:RefResolverMaterialUseResult`
 - `.:RefResolverService`
 - `.:RejectedClaim`
 - `.:RejectionRef`
@@ -626,6 +636,7 @@ text`
 - `.:reasonOf`
 - `.:rejectClaimedAppEvent`
 - `.:rejected`
+- `.:resolveMaterial`
 - `.:resolveRuntimeScope`
 - `.:resolveStatefulSessionRoot`
 - `.:resolveStringMaterial`
@@ -640,6 +651,8 @@ text`
 - `.:settleLived`
 - `.:settleRejected`
 - `.:symbolicSettlementRef`
+- `.:useRefResolverMaterial`
+- `.:useRefResolverMaterialSync`
 - `.:validateBoundaryPayload`
 - `.:validateBoundaryContract`
 - `.:validateEffectClaim`
@@ -647,6 +660,7 @@ text`
 - `.:validateSettlementContract`
 - `.:validateTerminalClaim`
 - `.:validateToolRegistry`
+- `.:withResolvedMaterial`
 - `.:withQuota`
 
 ## Experimental exports

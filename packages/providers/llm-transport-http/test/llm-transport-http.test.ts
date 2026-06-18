@@ -293,6 +293,11 @@ describe("@agent-os/llm-transport-http", () => {
 
   it("streams OpenAI-compatible SSE through existing turn delta frames", async () => {
     const seen: Array<{ readonly input: string; readonly init: RequestInit }> = [];
+    const disposed: string[] = [];
+    const materials: Readonly<Record<string, string>> = {
+      "endpoint:openai": "https://provider.example",
+      "credential:openai-key": "sk-secret",
+    };
     const fetch: LlmTransportFetch = async (input, init) => {
       seen.push({ input, init });
       return sse(
@@ -313,10 +318,14 @@ describe("@agent-os/llm-transport-http", () => {
     const frames = await collect(
       streamLlmTurn({
         route,
-        resolver: resolver({
-          "endpoint:openai": "https://provider.example",
-          "credential:openai-key": "sk-secret",
-        }),
+        resolver: {
+          material: (ref) => materials[`${ref.kind}:${ref.ref}`] ?? null,
+          dispose: ({ ref, material }) => {
+            const materialLabel =
+              typeof material === "string" ? material : JSON.stringify(material);
+            disposed.push(`${ref.kind}:${ref.ref}:${materialLabel}`);
+          },
+        },
         messages,
         turnRef: "turn-1",
         fetch,
@@ -342,6 +351,10 @@ describe("@agent-os/llm-transport-http", () => {
       text: "hello",
       includedSeqs: [0, 1, 2, 3, 4],
     });
+    expect(disposed).toEqual([
+      "endpoint:openai:https://provider.example",
+      "credential:openai-key:sk-secret",
+    ]);
   });
 
   it("fast-fails missing credential material without calling fetch", async () => {

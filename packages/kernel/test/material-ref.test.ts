@@ -14,7 +14,12 @@ import {
   materialRefKey,
   materialRequirement,
 } from "../src/material-ref";
-import { RefResolverLive, RefResolverService, resolveStringMaterial } from "../src/ref-resolver";
+import {
+  RefResolverLive,
+  RefResolverService,
+  resolveMaterial,
+  resolveStringMaterial,
+} from "../src/ref-resolver";
 
 describe("MaterialRef algebra", () => {
   it("validates only symbolic material refs", () => {
@@ -219,9 +224,10 @@ describe("MaterialRef algebra", () => {
       Effect.gen(function* () {
         const refs = yield* RefResolverService;
         return {
-          endpoint: yield* refs.material(endpointMaterialRef("openrouter")),
-          credential: yield* refs.material(credentialMaterialRef("OPENROUTER_KEY")),
-          binding: yield* refs.material(
+          endpoint: yield* resolveMaterial(refs, endpointMaterialRef("openrouter")),
+          credential: yield* resolveMaterial(refs, credentialMaterialRef("OPENROUTER_KEY")),
+          binding: yield* resolveMaterial(
+            refs,
             bindingMaterialRef({
               provider: "cloudflare",
               bindingKind: "d1",
@@ -237,6 +243,41 @@ describe("MaterialRef algebra", () => {
       credential: "secret",
       binding: { binding: "d1" },
     });
+
+    await runtime.dispose();
+  });
+
+  it("captures resolved material as non-serializable Live and disposes it after scoped use", async () => {
+    const disposed: string[] = [];
+    const runtime = ManagedRuntime.make(
+      RefResolverLive({
+        material: (ref) => (ref.kind === "credential" ? "secret" : null),
+        dispose: ({ ref, material }) => {
+          const materialLabel = typeof material === "string" ? material : JSON.stringify(material);
+          disposed.push(`${materialRefKey(ref)}:${materialLabel}`);
+        },
+      }),
+    );
+
+    const observed = await runtime.runPromise(
+      Effect.gen(function* () {
+        const refs = yield* RefResolverService;
+        const handle = yield* refs.material(credentialMaterialRef("OPENROUTER_KEY"));
+        const serialized = JSON.stringify(handle);
+        yield* handle.dispose();
+        const opened = yield* resolveStringMaterial(refs, credentialMaterialRef("OPENROUTER_KEY"));
+        return { serialized, opened };
+      }),
+    );
+
+    expect(observed).toEqual({
+      serialized: '{"ref":{"kind":"credential","ref":"OPENROUTER_KEY"},"value":{}}',
+      opened: "secret",
+    });
+    expect(disposed).toEqual([
+      "credential:_:OPENROUTER_KEY:secret",
+      "credential:_:OPENROUTER_KEY:secret",
+    ]);
 
     await runtime.dispose();
   });

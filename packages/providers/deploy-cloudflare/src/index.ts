@@ -21,7 +21,7 @@ import {
   type ExternalResourceMaterialRef,
   type MaterialRef,
 } from "@agent-os/kernel/material-ref";
-import type { RefResolver } from "@agent-os/kernel/ref-resolver";
+import { useRefResolverMaterial, type RefResolver } from "@agent-os/kernel/ref-resolver";
 
 export interface CloudflareWorkerBindingRef {
   readonly name: string;
@@ -589,14 +589,13 @@ const resolveMaterial = <A>(
   ref: MaterialRef,
   parse: (value: unknown) => A | null,
   reason: string,
-): Effect.Effect<A, CloudflareWorkerDeployResolutionFailure> => {
-  const value = resolver.material(ref);
-  if (value === null) return Effect.fail(materialResolutionFailure(ref, reason));
-  const material = parse(value);
-  return material === null
-    ? Effect.fail(materialResolutionFailure(ref, reason))
-    : Effect.succeed(material);
-};
+): Effect.Effect<A, CloudflareWorkerDeployResolutionFailure> =>
+  useRefResolverMaterial(resolver, ref, (value) => {
+    const material = parse(value);
+    return material === null
+      ? Effect.fail(materialResolutionFailure(ref, reason))
+      : Effect.succeed(material);
+  }).pipe(Effect.mapError(() => materialResolutionFailure(ref, reason)));
 
 const resolveCredentialToken = (
   options: CloudflareWorkerDeployResolverCompositionOptions,

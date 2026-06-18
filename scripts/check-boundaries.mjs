@@ -58,6 +58,7 @@ const pathMatches = (pattern) => (repoPath) => pattern.test(repoPath);
 const isLiveEdgeImporter = (repoPath) =>
   repoPath === "packages/kernel/src/internal/live-edge.ts" ||
   repoPath === "packages/kernel/src/internal/aead-sealed.ts" ||
+  repoPath === "packages/kernel/src/ref-resolver.ts" ||
   repoPath.startsWith("packages/runtime/src/") ||
   pathMatches(/^packages\/backends\/[^/]+\/src\//u)(repoPath) ||
   pathMatches(/^packages\/providers\/[^/]+\/src\//u)(repoPath) ||
@@ -106,6 +107,15 @@ const matrix = [
     stage: "boundary-prepared",
     include: (repoPath) => !isLiveEdgeImporter(repoPath),
     forbiddenImportPatterns: ["(?:^|/)internal/(?:aead-sealed|live-edge)$"],
+  },
+  {
+    id: "live-edge-public-export-boundary",
+    stage: "boundary-prepared",
+    include: pathStarts("packages/kernel/src/"),
+    forbiddenTokens: [
+      "export\\s+\\{[^}]*\\b(?:captureLive|openLive|sealAead|openAead)\\b",
+      "export\\s+\\*\\s+from\\s+[\"']\\./internal/(?:aead-sealed|live-edge)[\"']",
+    ],
   },
   {
     id: "kernel-final-vendor-telemetry-boundary",
@@ -454,6 +464,11 @@ const writePositiveFixture = (root) => {
     "packages/kernel/src/internal/aead-sealed.ts",
     "export const sealAead = <T>(value: T) => value;\n",
   );
+  writeFixture(
+    root,
+    "packages/kernel/src/ref-resolver.ts",
+    'import { captureLive } from "./internal/live-edge";\nconst resolver = captureLive;\nexport interface RefResolver {}\n',
+  );
   writeFixture(root, "packages/backends/protocol/src/index.ts", "export interface Port {}\n");
   writeFixture(
     root,
@@ -542,6 +557,12 @@ const collectSelfTestFailures = () => {
         file: "packages/kernel/src/index.ts",
         bad: 'export { sealAead } from "./internal/aead-sealed";\n',
         expected: "live-edge-import-boundary",
+      },
+      {
+        name: "kernel ref resolver live-edge re-export",
+        file: "packages/kernel/src/ref-resolver.ts",
+        bad: 'export { captureLive } from "./internal/live-edge";\n',
+        expected: "live-edge-public-export-boundary",
       },
       {
         name: "backend protocol runtime import",
