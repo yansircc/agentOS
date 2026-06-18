@@ -3,6 +3,13 @@
   "source": ["packages/**/*.ts agent_os.* tags", "docs/agent/error-metadata.source.json"],
   "errors": [
     {
+      "tag": "agent_os.aead_sealed_codec_failure",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/concepts/carriers-and-material.md",
+      "fix": "Seal live material through the owner AEAD codec, keep key material live, and reject malformed or mismatched sealed envelopes before opening.",
+      "sourceFiles": ["packages/kernel/src/internal/aead-sealed.ts"]
+    },
+    {
       "tag": "agent_os.backend_protocol_parse_failure",
       "invariants": ["invariant.boundary.runtime-validation-external-only"],
       "docs": "docs/packages/backend-protocol.md",

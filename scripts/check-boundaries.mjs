@@ -57,6 +57,7 @@ const pathMatches = (pattern) => (repoPath) => pattern.test(repoPath);
 
 const isLiveEdgeImporter = (repoPath) =>
   repoPath === "packages/kernel/src/internal/live-edge.ts" ||
+  repoPath === "packages/kernel/src/internal/aead-sealed.ts" ||
   repoPath.startsWith("packages/runtime/src/") ||
   pathMatches(/^packages\/backends\/[^/]+\/src\//u)(repoPath) ||
   pathMatches(/^packages\/providers\/[^/]+\/src\//u)(repoPath) ||
@@ -104,7 +105,7 @@ const matrix = [
     id: "live-edge-import-boundary",
     stage: "boundary-prepared",
     include: (repoPath) => !isLiveEdgeImporter(repoPath),
-    forbiddenImportPatterns: ["(?:^|/)internal/live-edge$"],
+    forbiddenImportPatterns: ["(?:^|/)internal/(?:aead-sealed|live-edge)$"],
   },
   {
     id: "kernel-final-vendor-telemetry-boundary",
@@ -448,6 +449,11 @@ const writePositiveFixture = (root) => {
     "packages/kernel/src/internal/live-edge.ts",
     "export const captureLive = <T>(value: T) => value;\n",
   );
+  writeFixture(
+    root,
+    "packages/kernel/src/internal/aead-sealed.ts",
+    "export const sealAead = <T>(value: T) => value;\n",
+  );
   writeFixture(root, "packages/backends/protocol/src/index.ts", "export interface Port {}\n");
   writeFixture(
     root,
@@ -529,6 +535,12 @@ const collectSelfTestFailures = () => {
         name: "kernel live-edge public export",
         file: "packages/kernel/src/index.ts",
         bad: 'export { captureLive } from "./internal/live-edge";\n',
+        expected: "live-edge-import-boundary",
+      },
+      {
+        name: "kernel aead sealed public export",
+        file: "packages/kernel/src/index.ts",
+        bad: 'export { sealAead } from "./internal/aead-sealed";\n',
         expected: "live-edge-import-boundary",
       },
       {

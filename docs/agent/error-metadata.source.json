@@ -62,6 +62,12 @@
       "fix": "Decode provider output through the runtime output-item schema instead of product-side fallback parsing."
     },
     {
+      "tag": "agent_os.aead_sealed_codec_failure",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/concepts/carriers-and-material.md",
+      "fix": "Seal live material through the owner AEAD codec, keep key material live, and reject malformed or mismatched sealed envelopes before opening."
+    },
+    {
       "tag": "agent_os.projection_application_error",
       "invariants": ["invariant.d10.truth-identity"],
       "docs": "docs/concepts/materialized-projections.md",

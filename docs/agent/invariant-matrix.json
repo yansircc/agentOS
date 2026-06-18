@@ -107,6 +107,7 @@
       "statement": "Runtime validation is only for unknown external input, not internally constructed states.",
       "primitives": ["primitive.kernel.EffectClaim", "primitive.llm_protocol.LlmTransport"],
       "errors": [
+        "agent_os.aead_sealed_codec_failure",
         "agent_os.backend_protocol_parse_failure",
         "agent_os.cloudflare_worker_bundle_resolution_failure",
         "agent_os.cloudflare_worker_deploy_resolution_failure",
