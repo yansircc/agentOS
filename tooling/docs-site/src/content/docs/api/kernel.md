@@ -204,6 +204,7 @@ title: "@agent-os/kernel Public API Intent"
 - `./settlement-contract:validateTerminalClaim`
 - `.:SYMBOLIC_SETTLEMENT_VALUE_PATTERN`
   `
+- `.:Authored`
 - `.:DeterministicToolInvocation`
 - `.:DefineProductToolSpec`
 - `.:ExecutionDomain`
@@ -213,9 +214,13 @@ title: "@agent-os/kernel Public API Intent"
 - `.:ExecutionDomainRegistry`
 - `.:ExecutionDomainRegistryIssue`
 - `.:ExecutionDomainRegistryValidation`
+- `.:Live`
 - `.:ResolvedToolMaterials`
 - `.:ResolvedToolExecution`
 - `.:RedactedSafeSummaryReason`
+- `.:Recorded`
+- `.:RecordedPayload`
+- `.:RecordedPayloadValue`
 - `.:SafeLedgerEvent`
 - `.:SafeLedgerEventProjector`
 - `.:SafeLedgerPayload`

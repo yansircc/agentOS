@@ -204,6 +204,7 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./settlement-contract:validateTerminalClaim`
 - `.:SYMBOLIC_SETTLEMENT_VALUE_PATTERN`
   `
+- `.:Authored`
 - `.:DeterministicToolInvocation`
 - `.:DefineProductToolSpec`
 - `.:ExecutionDomain`
@@ -213,9 +214,13 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:ExecutionDomainRegistry`
 - `.:ExecutionDomainRegistryIssue`
 - `.:ExecutionDomainRegistryValidation`
+- `.:Live`
 - `.:ResolvedToolMaterials`
 - `.:ResolvedToolExecution`
 - `.:RedactedSafeSummaryReason`
+- `.:Recorded`
+- `.:RecordedPayload`
+- `.:RecordedPayloadValue`
 - `.:SafeLedgerEvent`
 - `.:SafeLedgerEventProjector`
 - `.:SafeLedgerPayload`

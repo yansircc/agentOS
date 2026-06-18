@@ -200,6 +200,7 @@
 - `./settlement-contract:validateTerminalClaim`
 - `.:SYMBOLIC_SETTLEMENT_VALUE_PATTERN`
   `
+- `.:Authored`
 - `.:DeterministicToolInvocation`
 - `.:DefineProductToolSpec`
 - `.:ExecutionDomain`
@@ -209,9 +210,13 @@
 - `.:ExecutionDomainRegistry`
 - `.:ExecutionDomainRegistryIssue`
 - `.:ExecutionDomainRegistryValidation`
+- `.:Live`
 - `.:ResolvedToolMaterials`
 - `.:ResolvedToolExecution`
 - `.:RedactedSafeSummaryReason`
+- `.:Recorded`
+- `.:RecordedPayload`
+- `.:RecordedPayloadValue`
 - `.:SafeLedgerEvent`
 - `.:SafeLedgerEventProjector`
 - `.:SafeLedgerPayload`

@@ -72,3 +72,10 @@ export * from "./safe-ledger-event";
 export * from "./settlement-contract";
 export * from "./tools";
 export * from "./types";
+export type {
+  Authored,
+  Live,
+  Recorded,
+  RecordedPayload,
+  RecordedPayloadValue,
+} from "./value-brands";
