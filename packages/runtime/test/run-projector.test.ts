@@ -251,9 +251,15 @@ describe("runtime run projectors", () => {
           runId: 1,
           turn: { id: 1, index: 0 },
           interruptId: "approval-1",
-          reason: "decision_required",
+          reason: "approval_required",
           resumeSchema: { type: "object", required: ["approved"] },
           tokensUsed: 4,
+          decision: {
+            gateRef: "gate:approval-1",
+            subjectRef: "tool:lookup",
+            toolCallId: "call-1",
+            toolName: "lookup",
+          },
         }),
       ),
     ];
@@ -263,7 +269,7 @@ describe("runtime run projectors", () => {
       at: 20,
       event: "agent.run.interrupted",
       interruptId: "approval-1",
-      reason: "decision_required",
+      reason: "approval_required",
     });
     expect(projectRunTrace(rows, 1)).toMatchObject({
       runId: 1,
@@ -273,10 +279,30 @@ describe("runtime run projectors", () => {
           event: "agent.run.interrupted",
           interruptId: "approval-1",
           turn: { id: 1, index: 0 },
-          reason: "decision_required",
+          reason: "approval_required",
           resumeSchema: { type: "object", required: ["approved"] },
         },
       ],
+    });
+    expect(projectSubmitResult(rows, 1)).toMatchObject({
+      ok: false,
+      status: "interrupted",
+      runId: 1,
+      eventCount: 2,
+      tokensUsed: 4,
+      interruptId: "approval-1",
+      turn: { id: 1, index: 0 },
+      gateRef: "gate:approval-1",
+      continuation: {
+        kind: "agent.run.continuation",
+        runId: 1,
+        interruptionEventId: 2,
+      },
+      inputRequest: {
+        kind: "approval",
+        toolCallId: "call-1",
+        toolName: "lookup",
+      },
     });
 
     const resumedRows = [

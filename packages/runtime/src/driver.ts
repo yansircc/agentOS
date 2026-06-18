@@ -8,9 +8,13 @@ import {
 import { SqlError, type JsonStringifyError } from "@agent-os/kernel/errors";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import {
+  decodeRuntimeLedgerEvent,
   RUNTIME_EVENT_KIND,
   type RuntimeAbortEventKind,
+  type RuntimeEventCommitSpec,
   type RuntimeEventCommitSpecByKind,
+  type RuntimeEventKind,
+  type RuntimeLedgerEventByKind,
 } from "@agent-os/runtime-protocol";
 import type { LedgerCommitEventSpec } from "@agent-os/runtime-protocol";
 import type { BoundaryCommitRejected } from "./boundary-commit";
@@ -64,6 +68,18 @@ export type RuntimeDriverAction = {
   readonly [K in keyof RuntimeEventActionByKind]: RuntimeAppendAction<K>;
 }[keyof RuntimeEventActionByKind];
 
+type RuntimeCommittedEventForSpec<Spec> =
+  Spec extends RuntimeEventCommitSpecByKind<infer K> ? RuntimeLedgerEventByKind<K> : never;
+
+type RuntimeCommittedEventsForSpecs<
+  Specs extends readonly [RuntimeEventCommitSpec, ...RuntimeEventCommitSpec[]],
+> = {
+  readonly [Index in keyof Specs]: RuntimeCommittedEventForSpec<Specs[Index]>;
+} & { readonly length: Specs["length"] };
+
+type RuntimeCommittedEventForAction<K extends keyof RuntimeEventActionByKind> =
+  RuntimeCommittedEventForSpec<RuntimeEventActionByKind[K]>;
+
 export type ParkDriverAction = {
   readonly kind: "park";
   readonly request: DecisionGateRequestedPayload;
@@ -94,14 +110,21 @@ export type NextDriverAction =
   | ResumeDriverAction
   | CompleteAfterToolsDriverAction;
 
-export type RuntimeDriverActionResult = {
-  readonly kind: RuntimeDriverAction["kind"];
-  readonly event: LedgerEvent;
-};
+export type RuntimeDriverActionResult<
+  K extends RuntimeDriverAction["kind"] = RuntimeDriverAction["kind"],
+> = K extends keyof RuntimeEventActionByKind
+  ? {
+      readonly kind: K;
+      readonly event: RuntimeCommittedEventForAction<K>;
+    }
+  : never;
 
 export type CompleteAfterToolsDriverActionResult = {
   readonly kind: "complete_after_tools";
-  readonly events: readonly [LedgerEvent, LedgerEvent];
+  readonly events: readonly [
+    RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.RUNTIME_COMPLETED_AFTER_TOOLS>,
+    RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED>,
+  ];
 };
 
 export type DriverActionResult =
@@ -109,19 +132,41 @@ export type DriverActionResult =
   | {
       readonly kind: "park";
       readonly request: LedgerEvent;
-      readonly interruption: LedgerEvent;
+      readonly interruption: RuntimeLedgerEventByKind<
+        typeof RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED
+      >;
     }
   | {
       readonly kind: "resume";
       readonly consumed: LedgerEvent;
-      readonly resumed: LedgerEvent;
+      readonly resumed: RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED>;
     }
   | CompleteAfterToolsDriverActionResult;
 
-const commitOneRuntimeEvent = (
+const decodeCommittedRuntimeEvent = <K extends RuntimeEventKind>(
+  event: LedgerEvent,
+  expectedKind: K,
+): Effect.Effect<RuntimeLedgerEventByKind<K>, SqlError> =>
+  Effect.gen(function* () {
+    const decoded = decodeRuntimeLedgerEvent(event);
+    if (decoded._tag === "runtime" && decoded.event.kind === expectedKind) {
+      return decoded.event as RuntimeLedgerEventByKind<K>;
+    }
+    return yield* Effect.fail(
+      new SqlError({
+        cause: {
+          reason: "driver_ledger_commit_runtime_decode_mismatch",
+          expectedKind,
+          actualKind: event.kind,
+        },
+      }),
+    );
+  });
+
+const commitOneRuntimeEvent = <K extends RuntimeEventKind>(
   ledger: LedgerAppender,
-  spec: LedgerCommitEventSpec,
-): Effect.Effect<LedgerEvent, SqlError | JsonStringifyError> =>
+  spec: RuntimeEventCommitSpecByKind<K>,
+): Effect.Effect<RuntimeLedgerEventByKind<K>, SqlError | JsonStringifyError> =>
   Effect.gen(function* () {
     const events = yield* ledger.commit([spec]);
     const event = events[0];
@@ -132,18 +177,15 @@ const commitOneRuntimeEvent = (
         }),
       );
     }
-    return event;
-  });
+    return yield* decodeCommittedRuntimeEvent(event, spec.kind);
+  }) as Effect.Effect<RuntimeLedgerEventByKind<K>, SqlError | JsonStringifyError>;
 
 const commitRuntimeEvents = <
-  T extends readonly [LedgerCommitEventSpec, ...LedgerCommitEventSpec[]],
+  T extends readonly [RuntimeEventCommitSpec, ...RuntimeEventCommitSpec[]],
 >(
   ledger: LedgerAppender,
   specs: T,
-): Effect.Effect<
-  ReadonlyArray<LedgerEvent> & { readonly length: T["length"] },
-  SqlError | JsonStringifyError
-> =>
+): Effect.Effect<RuntimeCommittedEventsForSpecs<T>, SqlError | JsonStringifyError> =>
   Effect.gen(function* () {
     const events = yield* ledger.commit(specs);
     if (events.length !== specs.length) {
@@ -156,7 +198,11 @@ const commitRuntimeEvents = <
         }),
       );
     }
-    return events as ReadonlyArray<LedgerEvent> & { readonly length: T["length"] };
+    const decoded: RuntimeLedgerEventByKind<RuntimeEventKind>[] = [];
+    for (const [index, spec] of specs.entries()) {
+      decoded.push(yield* decodeCommittedRuntimeEvent(events[index] as LedgerEvent, spec.kind));
+    }
+    return decoded as unknown as RuntimeCommittedEventsForSpecs<T>;
   });
 
 export function appendRuntimeDriverAction(
@@ -177,10 +223,13 @@ export function appendRuntimeDriverAction(
   return Effect.gen(function* () {
     if (action.kind === "complete_after_tools") {
       const events = yield* commitRuntimeEvents(ledger, action.events);
-      return { kind: "complete_after_tools", events: [events[0], events[1]] };
+      return {
+        kind: "complete_after_tools",
+        events: [events[0], events[1]],
+      } as CompleteAfterToolsDriverActionResult;
     }
     const event = yield* commitOneRuntimeEvent(ledger, action.event);
-    return { kind: action.kind, event };
+    return { kind: action.kind, event } as RuntimeDriverActionResult;
   });
 }
 

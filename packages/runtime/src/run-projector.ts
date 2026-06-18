@@ -16,7 +16,9 @@ import { ABORT, reasonOf, type AbortKind } from "@agent-os/kernel/abort";
 import { defineProjectionSpec, project, projectionOutputOrFail } from "@agent-os/kernel/projection";
 import { textFromLlmOutputItems } from "@agent-os/llm-protocol";
 import {
+  continuationRefFromInterruptedEvent,
   decodeRuntimeLedgerEvent,
+  inputRequestRefFromInterruptedEvent,
   isRuntimeAbortEventKind,
   RUNTIME_EVENT_KIND,
   type RuntimeAbortEventKind,
@@ -480,10 +482,7 @@ const submitResultProjection = defineProjectionSpec<
   source: RUNTIME_LEDGER_PROJECTION_SOURCE,
   project: ({ runtimeEvents, runId, eventCount }, ctx) => {
     const terminal = runTerminal(runtimeEvents, runId);
-    if (terminal === null) {
-      return ctx.ok(null);
-    }
-    if (terminal.kind === "delivered") {
+    if (terminal?.kind === "delivered") {
       const payload = terminal.payload as RuntimeLedgerEventByKind<
         typeof RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED
       >["payload"];
@@ -496,14 +495,39 @@ const submitResultProjection = defineProjectionSpec<
         tokensUsed: payload.tokensUsed,
       });
     }
-    const payload = terminal.payload as RuntimeLedgerEventByKind<AbortKind>["payload"];
+    if (terminal?.kind === "aborted") {
+      const payload = terminal.payload as RuntimeLedgerEventByKind<AbortKind>["payload"];
+      return ctx.ok({
+        ok: false,
+        status: "failed",
+        runId,
+        reason: reasonOf(terminal.event as AbortKind),
+        eventCount,
+        tokensUsed: payload.tokensUsed,
+      });
+    }
+
+    const activeInterruption = activeInterruptionFor(runtimeEvents, runId);
+    if (activeInterruption === undefined) {
+      return ctx.ok(null);
+    }
+    const continuation = continuationRefFromInterruptedEvent(activeInterruption);
+    if (!continuation.ok) {
+      return ctx.failure(continuation.reason);
+    }
+    const inputRequest = inputRequestRefFromInterruptedEvent(activeInterruption);
     return ctx.ok({
       ok: false,
-      status: "failed",
+      status: "interrupted",
       runId,
-      reason: reasonOf(terminal.event as AbortKind),
+      reason: "interrupted",
       eventCount,
-      tokensUsed: payload.tokensUsed,
+      tokensUsed: activeInterruption.payload.tokensUsed,
+      interruptId: activeInterruption.payload.interruptId,
+      turn: activeInterruption.payload.turn,
+      gateRef: continuation.ref.gateRef,
+      continuation: continuation.ref,
+      ...(inputRequest.ok ? { inputRequest: inputRequest.descriptor } : {}),
     });
   },
 });

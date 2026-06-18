@@ -60,10 +60,8 @@ import {
   agentRunResumedEvent,
   agentRunStartedEvent,
   chatIngestedEvent,
-  continuationRefFromInterruptedEvent,
   decodeRuntimeLedgerEvent,
   EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
-  inputRequestRefFromInterruptedEvent,
   llmRequestedEvent,
   llmResponseEvent,
   RUNTIME_FACT_OWNER,
@@ -390,54 +388,6 @@ const submitResultFromEvents = (
       },
     }),
   );
-};
-
-const interruptedSubmitResultFromEvents = (
-  events: ReadonlyArray<LedgerEvent>,
-  runId: number,
-  spec: {
-    readonly interruptId: string;
-    readonly turn: TurnRef;
-    readonly gateRef: string;
-    readonly tokensUsed: number;
-  },
-): SubmitResult => {
-  const interruption = matchingInterruptionEvent(events, {
-    runId,
-    turn: spec.turn,
-    interruptId: spec.interruptId,
-    gateRef: spec.gateRef,
-    decisionRef: "",
-    resume: undefined,
-  });
-  if (interruption === undefined) {
-    throw new TypeError("interrupted SubmitResult requires a matching interruption ledger fact");
-  }
-  const decoded = decodeRuntimeLedgerEvent(interruption);
-  if (
-    decoded._tag !== "runtime" ||
-    decoded.event.kind !== RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED
-  ) {
-    throw new TypeError("interrupted SubmitResult matched a non-interruption ledger fact");
-  }
-  const continuation = continuationRefFromInterruptedEvent(decoded.event);
-  if (!continuation.ok) {
-    throw new TypeError("interrupted SubmitResult requires a decision-bound interruption fact");
-  }
-  const inputRequest = inputRequestRefFromInterruptedEvent(decoded.event);
-  return {
-    ok: false,
-    status: "interrupted",
-    runId,
-    reason: "interrupted",
-    eventCount: events.length,
-    tokensUsed: spec.tokensUsed,
-    interruptId: spec.interruptId,
-    turn: spec.turn,
-    gateRef: spec.gateRef,
-    continuation: continuation.ref,
-    ...(inputRequest.ok ? { inputRequest: inputRequest.descriptor } : {}),
-  };
 };
 
 const decisionInterruptFor = (
@@ -1153,8 +1103,8 @@ export const submitAgentEffect = (
         }),
       });
     } else {
-      const existingTerminal = projectSubmitResult(priorEvents, started.id);
-      if (existingTerminal !== null) return existingTerminal;
+      const existingResult = projectSubmitResult(priorEvents, started.id);
+      if (existingResult !== null && existingResult.status !== "interrupted") return existingResult;
     }
 
     const tokensUsedRef = yield* Ref.make(0);
@@ -1971,12 +1921,7 @@ export const submitAgentEffect = (
               },
             );
             const events = yield* ledger.events(identity);
-            return interruptedSubmitResultFromEvents(events, started.id, {
-              interruptId,
-              turn: turnRefOf(started.id, turn),
-              gateRef,
-              tokensUsed: newTokens,
-            });
+            return yield* submitResultFromEvents(events, started.id);
           }
 
           const admissionProgram = yield* Effect.result(
