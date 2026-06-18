@@ -69,6 +69,11 @@ are owned by:
 
 - `value-domain-retrofit.md`
 
+Phase 7 authored tree grammar, defaults, normalized manifest provenance, and
+conflict rules are owned by:
+
+- `authoring-freeze.md`
+
 The tasks are intentionally independent enough for separate worktrees after a78
 and a79. a86, a93, a87, a88, a89, a94, and a90 are ordered and should not run in
 parallel against the same schema/transport/provider-output/projection files. a80
