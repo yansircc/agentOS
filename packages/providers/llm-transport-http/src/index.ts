@@ -587,17 +587,19 @@ const acquireStringMaterial = (
 ):
   | { readonly ok: true; readonly lease: StringMaterialLease }
   | { readonly ok: false; readonly error: ProviderError } => {
-  const resolved = pipe(
-    Result.try({
-      try: () => resolver.material(ref),
-      catch: () => reason,
-    }),
-    Result.match({
+  const resolved = Result.match(
+    Result.try({ try: () => resolver.material(ref), catch: () => null }),
+    {
       onFailure: () => null,
       onSuccess: (material) => material,
-    }),
+    },
   );
-  if (!isNonEmptyString(resolved)) return { ok: false, error: { reason } };
+  if (!isNonEmptyString(resolved)) {
+    if (resolved !== null && resolved !== undefined) {
+      resolver.dispose?.({ ref, material: resolved });
+    }
+    return { ok: false, error: { reason } };
+  }
   return {
     ok: true,
     lease: {

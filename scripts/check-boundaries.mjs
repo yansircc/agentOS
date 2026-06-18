@@ -51,7 +51,8 @@ const importMatches = (specifier, forbidden) =>
   specifier === forbidden || specifier.startsWith(`${forbidden}/`);
 
 const regexForToken = (token) => new RegExp(token, "gu");
-const liveEdgeRawOpenTokens = new Set(["openLive", "openAead", "sealAead"]);
+const liveEdgeRawOpenExports = new Set(["openLive", "openAead", "sealAead"]);
+const liveEdgeInternalModules = new Set(["./internal/live-edge", "./internal/aead-sealed"]);
 
 const pathStarts = (prefix) => (repoPath) => repoPath.startsWith(prefix);
 const pathMatches = (pattern) => (repoPath) => pattern.test(repoPath);
@@ -122,18 +123,72 @@ const collectLocalCallableBodies = (source) => {
   return bodies;
 };
 
-const bodyCalls = (body, name) => new RegExp(`\\b${name}\\s*\\(`, "u").test(body);
+const bodyReferences = (body, name) => new RegExp(`\\b${name}\\b`, "u").test(body);
 
-const bodyCallsRawLiveOpen = (bodies, name, seen = new Set()) => {
+const rawLiveOpenSymbols = (source) => {
+  const symbols = new Set(liveEdgeRawOpenExports);
+  const namespaces = new Set();
+  for (const match of source.matchAll(
+    /\bimport\s*\{\s*([^}]+)\s*\}\s*from\s*["'](\.\/internal\/(?:live-edge|aead-sealed))["']/gu,
+  )) {
+    const specifiers = match[1];
+    const module = match[2];
+    if (!liveEdgeInternalModules.has(module)) continue;
+    for (const part of specifiers.split(",")) {
+      const tokens = part.trim().split(/\s+as\s+/u);
+      const imported = tokens[0]?.trim();
+      const local = (tokens[1] ?? imported)?.trim();
+      if (imported !== undefined && local !== undefined && liveEdgeRawOpenExports.has(imported)) {
+        symbols.add(local);
+      }
+    }
+  }
+  for (const match of source.matchAll(
+    /\bimport\s+\*\s+as\s+([A-Za-z_$][\w$]*)\s+from\s*["'](\.\/internal\/(?:live-edge|aead-sealed))["']/gu,
+  )) {
+    if (liveEdgeInternalModules.has(match[2])) namespaces.add(match[1]);
+  }
+  return { symbols, namespaces };
+};
+
+const collectLocalExportedNames = (source) => {
+  const names = new Map();
+  for (const match of source.matchAll(/\bexport\s*\{\s*([^}]+)\s*\}(?!\s*from\b)/gu)) {
+    const specifiers = match[1];
+    for (const part of specifiers.split(",")) {
+      const tokens = part.trim().split(/\s+as\s+/u);
+      const local = tokens[0]?.trim();
+      if (local !== undefined && local.length > 0) {
+        names.set(local, match.index ?? 0);
+      }
+    }
+  }
+  return names;
+};
+
+const bodyReferencesRawLiveOpen = (body, raw) => {
+  for (const symbol of raw.symbols) {
+    if (bodyReferences(body, symbol)) return true;
+  }
+  for (const namespace of raw.namespaces) {
+    for (const member of liveEdgeRawOpenExports) {
+      if (new RegExp(`\\b${namespace}\\s*\\.\\s*${member}\\b`, "u").test(body)) return true;
+    }
+  }
+  return false;
+};
+
+const bodyCallsRawLiveOpen = (bodies, raw, name, seen = new Set()) => {
   if (seen.has(name)) return false;
   seen.add(name);
   const entry = bodies.get(name);
   if (entry === undefined) return false;
-  for (const token of liveEdgeRawOpenTokens) {
-    if (bodyCalls(entry.body, token)) return true;
-  }
+  if (bodyReferencesRawLiveOpen(entry.body, raw)) return true;
   for (const candidate of bodies.keys()) {
-    if (bodyCalls(entry.body, candidate) && bodyCallsRawLiveOpen(bodies, candidate, seen)) {
+    if (
+      bodyReferences(entry.body, candidate) &&
+      bodyCallsRawLiveOpen(bodies, raw, candidate, seen)
+    ) {
       return true;
     }
   }
@@ -143,11 +198,20 @@ const bodyCallsRawLiveOpen = (bodies, name, seen = new Set()) => {
 const exportedLiveWrapperFailures = (repoPath, source) => {
   if (!repoPath.startsWith("packages/kernel/src/")) return [];
   if (repoPath.startsWith("packages/kernel/src/internal/")) return [];
+  const raw = rawLiveOpenSymbols(source);
   const bodies = collectLocalCallableBodies(source);
+  const exportedNames = collectLocalExportedNames(source);
   const failures = [];
+  for (const [name, index] of exportedNames) {
+    if (raw.symbols.has(name)) {
+      failures.push(
+        `${repoPath}:${lineNumber(source, index)}: live-edge-public-wrapper-boundary: exported ${name} exposes an internal raw Live/AEAD opener`,
+      );
+    }
+  }
   for (const [name, entry] of bodies) {
-    if (!entry.exported) continue;
-    if (bodyCallsRawLiveOpen(bodies, name)) {
+    if (!entry.exported && !exportedNames.has(name)) continue;
+    if (bodyCallsRawLiveOpen(bodies, raw, name)) {
       failures.push(
         `${repoPath}:${lineNumber(source, entry.index)}: live-edge-public-wrapper-boundary: exported ${name} opens Live/AEAD material through an internal raw opener`,
       );
@@ -672,6 +736,31 @@ const collectSelfTestFailures = () => {
           'import { openLive } from "./internal/live-edge";\n' +
           "const privateOpen = (value) => openLive(value);\n" +
           "export const resolveMaterial = (value) => privateOpen(value);\n",
+        expected: "live-edge-public-wrapper-boundary",
+      },
+      {
+        name: "kernel ref resolver exported aliased openLive wrapper",
+        file: "packages/kernel/src/ref-resolver.ts",
+        bad:
+          'import { openLive as unwrapLive } from "./internal/live-edge";\n' +
+          "export const resolveMaterial = (value) => unwrapLive(value);\n",
+        expected: "live-edge-public-wrapper-boundary",
+      },
+      {
+        name: "kernel ref resolver exported namespace openLive wrapper",
+        file: "packages/kernel/src/ref-resolver.ts",
+        bad:
+          'import * as liveEdge from "./internal/live-edge";\n' +
+          "export const resolveMaterial = (value) => liveEdge.openLive(value);\n",
+        expected: "live-edge-public-wrapper-boundary",
+      },
+      {
+        name: "kernel ref resolver exported value alias raw opener",
+        file: "packages/kernel/src/ref-resolver.ts",
+        bad:
+          'import { openLive as unwrapLive } from "./internal/live-edge";\n' +
+          "const privateOpen = unwrapLive;\n" +
+          "export { privateOpen as resolveMaterial };\n",
         expected: "live-edge-public-wrapper-boundary",
       },
       {

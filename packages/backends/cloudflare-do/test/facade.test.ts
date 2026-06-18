@@ -19,7 +19,11 @@ import {
   withToolWriteRequirement,
 } from "@agent-os/kernel/tools";
 import { Effect, Schema } from "effect";
-import { defineAgentBindings, defineAgentManifest } from "@agent-os/runtime-protocol";
+import {
+  defineAgentBindings,
+  defineAgentManifest,
+  lowerSubmitRunInput,
+} from "@agent-os/runtime-protocol";
 import type { DispatchTargetNamespace } from "../src/dispatch";
 import { httpDispatchTarget, providerDispatchTarget, queueDispatchTarget } from "../src/dispatch";
 
@@ -223,6 +227,53 @@ describe("defineAgentDO facade lowering", () => {
         env,
       ),
     ).toThrow("unbound material");
+  });
+
+  it("preserves non-default LLM routes for submit lowering", () => {
+    const lowered = lowerAgentConfig(
+      {
+        bindings: [
+          endpoint<TestEnv>("llm").from((e) => e.LLM_ENDPOINT),
+          credential<TestEnv>("llm-key").from((e) => e.LLM_KEY),
+        ],
+        llms: {
+          default: openAIChat({
+            model: "gpt-default",
+            endpoint: "llm",
+            credential: "llm-key",
+          }),
+          secondary: openAIChat({
+            model: "gpt-secondary",
+            endpoint: "llm",
+            credential: "llm-key",
+          }),
+        },
+      },
+      env,
+    );
+
+    expect(lowered.submitBindings?.llmRoutes?.secondary).toEqual({
+      kind: "openai-chat-compatible",
+      modelId: "gpt-secondary",
+      endpointRef: "llm",
+      credentialRef: "llm-key",
+    });
+    expect(
+      lowerSubmitRunInput({
+        input: { intent: "chat", context: { input: "hello" } },
+        bindings: lowered.submitBindings ?? {},
+        routeBindingRef: "secondary",
+        effectAuthorityRef: {
+          authorityClass: "agent",
+          authorityId: "cloudflare-facade-test",
+        },
+      }).route,
+    ).toEqual({
+      kind: "openai-chat-compatible",
+      modelId: "gpt-secondary",
+      endpointRef: "llm",
+      credentialRef: "llm-key",
+    });
   });
 
   it("allows deterministic tools without execution domain declarations", () => {

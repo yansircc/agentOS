@@ -390,6 +390,85 @@ describe("@agent-os/llm-transport-http", () => {
     ]);
   });
 
+  it("disposes invalid route materials before fast-failing without fetch", async () => {
+    let called = false;
+    const fetch: LlmTransportFetch = async () => {
+      called = true;
+      return sse("[DONE]");
+    };
+    const invalidEndpointDisposed: string[] = [];
+    const invalidEndpointFrames = await collect(
+      streamLlmTurn({
+        route: {
+          kind: "openai-chat-compatible",
+          endpointRef: "openai",
+          credentialRef: "openai-key",
+          modelId: "gpt-test",
+        },
+        resolver: {
+          material: (ref) => (ref.kind === "endpoint" ? { url: "https://provider.example" } : null),
+          dispose: ({ ref, material }) => {
+            invalidEndpointDisposed.push(`${ref.kind}:${ref.ref}:${JSON.stringify(material)}`);
+          },
+        },
+        messages,
+        turnRef: "turn-invalid-endpoint",
+        fetch,
+      }),
+    );
+
+    const invalidCredentialDisposed: string[] = [];
+    const invalidCredentialFrames = await collect(
+      streamLlmTurn({
+        route: {
+          kind: "openai-chat-compatible",
+          endpointRef: "openai",
+          credentialRef: "openai-key",
+          modelId: "gpt-test",
+        },
+        resolver: {
+          material: (ref) =>
+            ref.kind === "endpoint"
+              ? "https://provider.example"
+              : ref.kind === "credential"
+                ? { token: "sk-secret" }
+                : null,
+          dispose: ({ ref, material }) => {
+            invalidCredentialDisposed.push(
+              `${ref.kind}:${ref.ref}:${typeof material === "string" ? material : JSON.stringify(material)}`,
+            );
+          },
+        },
+        messages,
+        turnRef: "turn-invalid-credential",
+        fetch,
+      }),
+    );
+
+    expect(called).toBe(false);
+    expect(invalidEndpointFrames).toEqual([
+      {
+        kind: "error",
+        turnRef: "turn-invalid-endpoint",
+        seq: 0,
+        reason: "llm_transport_http_missing_endpoint_material",
+      },
+    ]);
+    expect(invalidEndpointDisposed).toEqual(['endpoint:openai:{"url":"https://provider.example"}']);
+    expect(invalidCredentialFrames).toEqual([
+      {
+        kind: "error",
+        turnRef: "turn-invalid-credential",
+        seq: 0,
+        reason: "llm_transport_http_missing_credential_material",
+      },
+    ]);
+    expect(invalidCredentialDisposed).toEqual([
+      'credential:openai-key:{"token":"sk-secret"}',
+      "endpoint:openai:https://provider.example",
+    ]);
+  });
+
   it("does not read or expose provider HTTP error bodies", async () => {
     const fetch: LlmTransportFetch = async () =>
       mockResponse({
