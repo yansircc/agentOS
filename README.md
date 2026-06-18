@@ -57,7 +57,7 @@ state to make a product flow appear complete.
 | `@agent-os/telemetry-otlp`               | OTLP projection adapter for agentOS telemetry and ledger facts                                                                                                                   |
 | `@agent-os/llm-protocol`                 | provider-neutral LLM request, response, route, and wire descriptor vocabulary                                                                                                    |
 | `@agent-os/backend-protocol`             | storage-free backend port DTOs, protocol constants, intent-pointer payload parsers, retry policy, dispatch protocol, resource/quota projection shapes, and handler fanout policy |
-| `@agent-os/backend-cloudflare-do`        | Cloudflare Durable Object app facade, backend, and workspace-job host composition for agentOS runtime                                                                            |
+| `@agent-os/backend-cloudflare-do`        | Cloudflare Durable Object backend, mount interpreter, and workspace-job host composition for agentOS runtime                                                                     |
 | `@agent-os/backend-node-postgres`        | Node/Postgres production backend interpreter for backend-protocol schedule, dispatch, resource, quota, replay, and telemetry parity gates                                        |
 | `@agent-os/resource-carrier`             | provider-neutral resource lifecycle facts, claims, settlement, and projection                                                                                                    |
 | `@agent-os/resource-cloudflare`          | Cloudflare D1/KV/R2/Queue/Workflow/Worker resource materializer                                                                                                                  |
@@ -90,47 +90,34 @@ surface.
 
 ## Minimal Use
 
-1. Define tools from one Effect Schema.
-2. Declare concrete endpoint, credential, binding, and resource material once
-   in `bindings`.
-3. Reference only symbolic material ids from routes and dispatch targets.
-4. Configure `llms.default` to expose facade `submit`; event-only facades keep
-   `emit`, `schedule`, and `dispatch` without a submit method.
+1. Author pre-runtime intent in one `agent/` tree.
+2. Compile that tree into one normalized manifest plus provenance.
+3. Mount the manifest through a backend adapter.
+4. Use generated clients and projections instead of hand-writing backend
+   submit specs.
 5. Read durable state from ledger events or derived projections.
 
 ```ts
-import { credential, defineAgentDO, endpoint, openAIChat } from "@agent-os/backend-cloudflare-do";
-import { defineTool } from "@agent-os/kernel/tools";
-import { Schema } from "effect";
+import { compileAgentTree } from "@agent-os/agent-authoring";
 
-const lookup = defineTool({
-  name: "lookup",
-  description: "Look up a symbolic key.",
-  args: Schema.Struct({ key: Schema.String }),
-  authority: "read",
-  admit: "allow",
-  execute: ({ key }) => ({ value: key }),
-});
-
-export const AgentDO = defineAgentDO<Env>({
-  bindings: [
-    endpoint("llm").from((env) => env.LLM_ENDPOINT),
-    credential("llm-key").from((env) => env.LLM_KEY),
-  ],
-  llms: {
-    default: openAIChat({
-      model: "gpt-4.1-mini",
-      endpoint: "llm",
-      credential: "llm-key",
-    }),
-  },
-  tools: [lookup],
-  on: {
-    "interview.answer": ({ data, agent }) => {
-      return agent.emit("interview.answer.recorded", data);
+const compiled = compileAgentTree({
+  files: [
+    {
+      path: "agent/instructions.md",
+      kind: "markdown",
+      text: "Answer with the current weather for the requested city.",
     },
-  },
+    {
+      path: "agent/tools/weather.ts",
+      kind: "tool",
+      declaration: { bindingRef: "tool.weather" },
+    },
+  ],
 });
+
+if (!compiled.ok) throw new Error(JSON.stringify(compiled.issues));
+
+const { manifest, provenance } = compiled.value;
 ```
 
 ## Documents

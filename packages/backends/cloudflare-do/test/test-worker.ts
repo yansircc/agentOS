@@ -8,16 +8,13 @@ import { DurableObject } from "cloudflare:workers";
 import { Cause, Effect, Exit, Layer, ManagedRuntime, Option, Schema, Predicate } from "effect";
 import { LlmTransport } from "@agent-os/llm-protocol";
 import {
-  credential,
   createAgentDurableObject,
-  defineAgentDO,
   durableObjectDispatchTarget,
-  endpoint,
-  openAIChat,
   type AgentEventHandlerContext,
   type AgentRuntimeClient,
   type CloudflareAgentEnv,
 } from "../src";
+import { credential, defineAgentDO, endpoint, openAIChat } from "../src/facade";
 import { withAgentDOTestingDrain } from "./_testing-drain";
 import { testTruthIdentity } from "./_identity";
 import {

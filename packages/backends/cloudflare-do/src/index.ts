@@ -22,7 +22,6 @@ export type {
   AgentEventHandlerRegistration,
   AgentRuntimeClient,
   AgentRuntimeReaderClient,
-  AgentSubmitSpec,
   AgentWorkspaceJobSpec,
   AgentTriggerCancelSpec,
   AgentTriggerIntentSpec,
@@ -43,33 +42,6 @@ export type {
   CloudflareTriggerFactoryContext,
   CloudflareTriggerSource,
 } from "./trigger-factory";
-export {
-  anthropicMessages,
-  binding,
-  credential,
-  defineAgentDO,
-  durableObjectTarget,
-  endpoint,
-  externalResource,
-  geminiGenerateContent,
-  lowerMaterialBindings,
-  openAIChat,
-} from "./facade";
-export type {
-  AgentDOClass,
-  AgentFacadeRuntimeClient,
-  AgentFacadeRuntimeClientWithSubmit,
-  AgentMaterialBinding,
-  AgentMaterialBindingBuilder,
-  AgentOnHandler,
-  AnthropicMessagesSpec,
-  DefineAgentDOConfig,
-  DefineAgentDOConfigWithSubmit,
-  DefineAgentDOConfigWithoutSubmit,
-  GeminiGenerateContentSpec,
-  LoweredMaterialBindings,
-  OpenAIChatSpec,
-} from "./facade";
 export {
   durableObjectDispatchTarget,
   httpDispatchTarget,

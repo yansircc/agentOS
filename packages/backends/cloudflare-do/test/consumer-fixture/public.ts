@@ -5,7 +5,7 @@ import {
   createCloudflareSandboxWorkspaceEnvResolver,
   createCloudflareWorkspaceJobResponse,
   createCloudflareWorkspaceEnvResolver,
-  defineAgentDO,
+  createAgentDurableObject,
   installCloudflareWorkspaceJobProfile,
   installCloudflareWorkspaceOperationProvider,
   type CloudflareAgentEnv,
@@ -35,8 +35,7 @@ const trigger = {
   commitCancelled: () => undefined,
 };
 
-export const FixtureDO = defineAgentDO<CloudflareAgentEnv>({
-  bindings: [],
+export const FixtureDO = createAgentDurableObject<CloudflareAgentEnv>({
   triggers: [trigger],
 });
 

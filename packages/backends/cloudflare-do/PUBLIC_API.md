@@ -2,7 +2,7 @@
 
 # @agent-os/backend-cloudflare-do Public API
 
-Status: Backend package. Public exports include the Cloudflare app facade, binding builders, route builders, Durable Object factory, and backend-specific configuration types.
+Status: Backend package. Public exports include the Durable Object factory, mount interpreter, backend runtime clients, workspace host helpers, dispatch targets, and backend-specific configuration types; app facade constructors and SubmitSpec hand-wiring are internal test substrate.
 
 ## Public exports
 
@@ -11,19 +11,11 @@ Status: Backend package. Public exports include the Cloudflare app facade, bindi
 - `.:AgentAttachedStreamSpec`
 - `.:AgentEventHandlerContext`
 - `.:AgentEventHandlerRegistration`
-- `.:AgentDOClass`
-- `.:AgentFacadeRuntimeClient`
-- `.:AgentFacadeRuntimeClientWithSubmit`
-- `.:AgentMaterialBinding`
-- `.:AgentMaterialBindingBuilder`
-- `.:AgentOnHandler`
 - `.:AgentRuntimeReaderClient`
 - `.:AgentRuntimeClient`
-- `.:AgentSubmitSpec`
 - `.:AgentWorkspaceJobSpec`
 - `.:AgentTriggerCancelSpec`
 - `.:AgentTriggerIntentSpec`
-- `.:AnthropicMessagesSpec`
 - `.:CloudflareAgentEnv`
 - `.:CloudflareAgentDOIntrospectionRpc`
 - `.:CloudflareAgentDOResolvedScope`
@@ -60,42 +52,26 @@ Status: Backend package. Public exports include the Cloudflare app facade, bindi
 - `.:CloudflareTriggerFactory`
 - `.:CloudflareTriggerFactoryContext`
 - `.:CloudflareTriggerSource`
-- `.:DefineAgentDOConfig`
-- `.:DefineAgentDOConfigWithSubmit`
-- `.:DefineAgentDOConfigWithoutSubmit`
 - `.:DispatchTargetNamespace`
 - `.:DispatchTargetRegistry`
-- `.:GeminiGenerateContentSpec`
 - `.:HttpDispatchTargetSpec`
 - `.:InstallCloudflareWorkspaceJobProfileOptions`
 - `.:InstallCloudflareWorkspaceOperationProviderOptions`
-- `.:LoweredMaterialBindings`
-- `.:OpenAIChatSpec`
 - `.:ProviderDispatchTargetSpec`
 - `.:QueueDispatchTargetBinding`
-- `.:anthropicMessages`
-- `.:binding`
 - `.:cloudflareAgentDoOpsStubFor`
 - `.:cloudflareAgentMountPort`
-- `.:credential`
 - `.:createAgentDurableObject`
 - `.:createCloudflareLedgerAgUiHistorySseResponse`
 - `.:createCloudflareLedgerAgUiSseResponse`
 - `.:createCloudflareSandboxWorkspaceEnvResolver`
 - `.:createCloudflareWorkspaceJobResponse`
 - `.:createCloudflareWorkspaceEnvResolver`
-- `.:defineAgentDO`
 - `.:durableObjectDispatchTarget`
-- `.:durableObjectTarget`
-- `.:endpoint`
-- `.:externalResource`
-- `.:geminiGenerateContent`
 - `.:httpDispatchTarget`
 - `.:installCloudflareWorkspaceJobProfile`
 - `.:installCloudflareWorkspaceOperationProvider`
-- `.:lowerMaterialBindings`
 - `.:mountCloudflareAgent`
-- `.:openAIChat`
 - `.:providerDispatchTarget`
 - `.:queueDispatchTarget`
 - `./do-rpc:DurableObjectRpcClient`

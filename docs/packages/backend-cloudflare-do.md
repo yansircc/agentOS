@@ -2,35 +2,39 @@
 
 ## Purpose
 
-Cloudflare Durable Object backend for agentOS: app facade, DO storage,
-transactions, alarms, SSE streaming, dispatch delivery, and Cloudflare binding
-materialization.
+Cloudflare Durable Object backend for agentOS: DO storage, transactions, alarms,
+SSE streaming, dispatch delivery, workspace-job host composition, backend mount
+interpretation, and Cloudflare binding materialization.
 
 ## Invariant
 
 Cloudflare-specific APIs stay in this backend. Shared kernel/runtime packages
 must not import Durable Object state, Worker bindings, or alarm APIs.
 
-Application code registers app-owned durable triggers only through the facade
-configuration. `defineAgentDO({ triggers })` is the Cloudflare DO construction
-surface for trigger registration. Pure triggers are registered as an array.
-Backend-bound triggers use `triggers(ctx)` where `ctx` exposes `env`, `scope`,
-and DO-local `sql`; they may close over `ctx.sql` for app-owned provider
-idempotency or custom tables. Materialized current state should use
-`defineAgentDO({ projections })` instead of trigger-local projection writes. The
-backend builds registries, validates duplicate kinds, and uses those same
-registries for submit, drain, stream, and projection operations. Apps must not
-import `runtime-core`, `due-work`, SQL helpers, inserted-event helpers, or
-backend state internals.
+App-facing authoring and typed-client construction live above this backend. The
+root backend package exposes the Durable Object factory, mount interpreter,
+runtime client types, dispatch targets, workspace host helpers, and backend
+configuration types. Package-local facade fixtures may remain for substrate
+tests, but facade constructors, binding builders, route builders, and
+app-submit specs are not public app entrypoints.
 
-`agent.enqueueTrigger({ triggerKind, payload, at })` is the app-facing trigger
-submit primitive. It is a public projection of the backend durable-trigger
+Backend configuration registers app-owned durable triggers, attached streams,
+and materialized projections as substrate declarations. Pure triggers are
+registered as arrays. Backend-bound trigger factories receive `env`, `scope`,
+and DO-local `sql`; they may close over `sql` for app-owned provider
+idempotency or custom tables. The backend builds registries, validates duplicate
+kinds, and uses those same registries for submit, drain, stream, and projection
+operations. Apps must not import `runtime-core`, `due-work`, SQL helpers,
+inserted-event helpers, or backend state internals.
+
+`agent.enqueueTrigger({ triggerKind, payload, at })` is the backend runtime
+client trigger submit primitive. It is a public projection of the durable-trigger
 commit path: registry lookup happens before any ledger, due-work, or alarm
 write.
 
-`defineAgentDO({ domains, tools })` boot-validates external tool execution
-domains. Deterministic tools need no domain declaration. External tools must
-reference a declared domain; duplicate declarations or host domains without explicit
+Backend submit bindings boot-validate external tool execution domains.
+Deterministic tools need no domain declaration. External tools must reference a
+declared domain; duplicate declarations or host domains without explicit
 environment allowlists fail during lowering, before submit.
 
 `agent.cancelTrigger({ triggerKind, intentEventId, reason })` is the app-facing
@@ -66,13 +70,13 @@ become substrate. Factories must be idempotent in resource acquisition: Durable
 Object eviction can cause `triggers(ctx)` to run again, and the backend does not
 promise a stable factory call count.
 
-`defineAgentDO({ projections })` registers materialized projection
-declarations. Every ledger insert applies matching projection reducers in the
-same Durable Object transaction. Reducer failure rolls back the ledger insert.
-`projectionStatus` reports version mismatch as `needs_rebuild`; `projectionRebuild`
-is explicit and replays rows from the ledger. There is no hidden auto-repair.
+Backend configuration registers materialized projection declarations. Every
+ledger insert applies matching projection reducers in the same Durable Object
+transaction. Reducer failure rolls back the ledger insert. `projectionStatus`
+reports version mismatch as `needs_rebuild`; `projectionRebuild` is explicit
+and replays rows from the ledger. There is no hidden auto-repair.
 
-`defineAgentDO({ streams })` registers attached stream handlers. `attachStream`
+Backend configuration registers attached stream handlers. `attachStream`
 returns WebSocket for `mode: "bidi"` and SSE for `mode: "output_only"`;
 `cancelStream({ streamRef, reason })` is the explicit output-only cancel
 surface. WebSocket/SSE disconnect only detaches transport. It does not write a
@@ -96,55 +100,38 @@ saga/compensation facts until a future coordination substrate exists.
 
 ## Minimal Usage
 
-Create a DO class from one app-facing facade config. `bindings` is the only
-material declaration surface; LLM routes reference symbolic ids.
+Create a DO class from one backend configuration. App-author manifests and typed
+clients are generated by the authoring layer; this backend consumes the
+resulting manifest/bindings and host material resolvers.
 
 ```ts
-import { credential, defineAgentDO, endpoint, openAIChat } from "@agent-os/backend-cloudflare-do";
-import { defineTool } from "@agent-os/kernel/tools";
-import { Schema } from "effect";
+import { createAgentDurableObject } from "@agent-os/backend-cloudflare-do";
 
-const lookup = defineTool({
-  name: "lookup",
-  description: "Look up a symbolic key.",
-  args: Schema.Struct({ key: Schema.String }),
-  authority: "read",
-  admit: () => ({ ok: true }),
-  execute: ({ key }) => ({ value: key }),
-});
-
-export const AgentDO = defineAgentDO<Env>({
-  bindings: [
-    endpoint("llm").from((env) => env.LLM_ENDPOINT),
-    credential("llm-key").from((env) => env.LLM_KEY),
-  ],
-  llms: {
-    default: openAIChat({
-      model: "gpt-4.1-mini",
-      endpoint: "llm",
-      credential: "llm-key",
-    }),
-  },
-  tools: [lookup],
+export const AgentDO = createAgentDurableObject<Env>({
+  manifest,
+  agentBindings,
+  refResolver: (env) => ({
+    material: (ref) => resolveHostMaterial(env, ref),
+  }),
+  llmTransport: (env) => makeLlmTransport(env),
 });
 ```
 
-App triggers use runtime trigger types and the same facade registration path as
-built-in triggers. Pure triggers pass as arrays:
+Durable triggers use runtime trigger types and the backend configuration path.
+Pure triggers pass as arrays:
 
 ```ts
-import { defineAgentDO } from "@agent-os/backend-cloudflare-do";
+import { createAgentDurableObject } from "@agent-os/backend-cloudflare-do";
 import type { AnyDurableTrigger } from "@agent-os/runtime";
 
 const appTriggers = [imageScanTrigger] satisfies ReadonlyArray<AnyDurableTrigger>;
 
-export const AgentDO = defineAgentDO<Env>({
-  bindings: [],
+export const AgentDO = createAgentDurableObject<Env>({
   triggers: appTriggers,
 });
 ```
 
-Materialized projections use runtime declarations and the facade registration
+Materialized projections use runtime declarations and backend configuration
 path:
 
 ```ts
@@ -162,15 +149,14 @@ const runs = defineProjection({
   reduce,
 });
 
-export const AgentDO = defineAgentDO<Env>({
-  bindings: [],
+export const AgentDO = createAgentDurableObject<Env>({
   projections: [runs],
 });
 ```
 
-Omit `llms` for event-only facades. They keep `emit`, `schedule`, `dispatch`,
-`on`, `bindings`, and extensions, but do not expose `submit`. Full
-`SubmitSpec` remains on the low-level `createAgentDurableObject` API.
+Full backend `SubmitSpec` remains on the low-level `createAgentDurableObject`
+API. App authors should consume generated clients instead of hand-writing
+backend submit specs.
 
 External consumer apps should install the published internal npm packages, not
 source workspace package paths. Use the public package entrypoints only; backend

@@ -3,15 +3,9 @@ import { credentialMaterialRef } from "@agent-os/kernel/material-ref";
 import type { LlmTransport } from "@agent-os/llm-protocol";
 import type { RefResolverService } from "@agent-os/kernel/ref-resolver";
 import type { Layer } from "effect";
-import {
-  credential,
-  createAgentDurableObject,
-  defineAgentDO,
-  endpoint,
-  openAIChat,
-  type AgentSubmitSpec,
-  type CloudflareAgentEnv,
-} from "../src";
+import { createAgentDurableObject, type CloudflareAgentEnv } from "../src";
+import { credential, defineAgentDO, endpoint, openAIChat } from "../src/facade";
+import type { AgentSubmitSpec } from "../src/agent-do";
 import { durableObjectRpcClient } from "../src/do-rpc";
 
 interface TestEnv extends CloudflareAgentEnv {
