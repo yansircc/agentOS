@@ -14,8 +14,7 @@ export interface Recorded<T> {
 }
 
 export interface Live<T> {
-  readonly value: T;
-  readonly [liveBrand]: "Live";
+  readonly [liveBrand]: { readonly Live: T };
 }
 
 export type RecordedPayloadValue =

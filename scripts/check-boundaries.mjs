@@ -55,6 +55,15 @@ const regexForToken = (token) => new RegExp(token, "gu");
 const pathStarts = (prefix) => (repoPath) => repoPath.startsWith(prefix);
 const pathMatches = (pattern) => (repoPath) => pattern.test(repoPath);
 
+const isLiveEdgeImporter = (repoPath) =>
+  repoPath === "packages/kernel/src/internal/live-edge.ts" ||
+  repoPath.startsWith("packages/runtime/src/") ||
+  pathMatches(/^packages\/backends\/[^/]+\/src\//u)(repoPath) ||
+  pathMatches(/^packages\/providers\/[^/]+\/src\//u)(repoPath) ||
+  pathMatches(/^packages\/execution-domains\/[^/]+\/src\//u)(repoPath) ||
+  pathMatches(/^packages\/transports\/[^/]+\/src\//u)(repoPath) ||
+  pathMatches(/^packages\/wire-adapters\/[^/]+\/src\//u)(repoPath);
+
 const packageJson = (root) => {
   const file = path.join(root, "package.json");
   return fs.existsSync(file) ? readJson(file) : {};
@@ -90,6 +99,12 @@ const matrix = [
       "cloudflare:workers",
     ],
     forbiddenTokens: ["\\bDurableObject\\b", "\\bResponse\\b", "\\bReadableStream\\b"],
+  },
+  {
+    id: "live-edge-import-boundary",
+    stage: "boundary-prepared",
+    include: (repoPath) => !isLiveEdgeImporter(repoPath),
+    forbiddenImportPatterns: ["(?:^|/)internal/live-edge$"],
   },
   {
     id: "kernel-final-vendor-telemetry-boundary",
@@ -383,6 +398,16 @@ export const collectBoundaryFailures = (root = repoRoot, options = {}) => {
           }
         }
       }
+      for (const forbiddenPattern of rule.forbiddenImportPatterns ?? []) {
+        const pattern = new RegExp(forbiddenPattern, "u");
+        for (const specifier of imports) {
+          if (pattern.test(specifier.value)) {
+            failures.push(
+              `${repoPath}:${lineNumber(source, specifier.index)}: ${rule.id}: forbidden import ${specifier.value}`,
+            );
+          }
+        }
+      }
       for (const token of rule.forbiddenTokens ?? []) {
         const pattern = regexForToken(token);
         for (const match of source.matchAll(pattern)) {
@@ -418,6 +443,11 @@ const writePositiveFixture = (root) => {
     ),
   );
   writeFixture(root, "packages/kernel/src/index.ts", "export const kernelValue = 1;\n");
+  writeFixture(
+    root,
+    "packages/kernel/src/internal/live-edge.ts",
+    "export const captureLive = <T>(value: T) => value;\n",
+  );
   writeFixture(root, "packages/backends/protocol/src/index.ts", "export interface Port {}\n");
   writeFixture(
     root,
@@ -425,6 +455,11 @@ const writePositiveFixture = (root) => {
     "export const ref = 1;\n",
   );
   writeFixture(root, "packages/runtime/src/index.ts", "export const runtimeValue = 1;\n");
+  writeFixture(
+    root,
+    "packages/runtime/src/driver.ts",
+    'import { captureLive } from "@agent-os/kernel/internal/live-edge";\nexport const driver = captureLive;\n',
+  );
   writeFixture(
     root,
     "packages/runtime-protocol/src/index.ts",
@@ -489,6 +524,12 @@ const collectSelfTestFailures = () => {
         file: "packages/kernel/src/index.ts",
         bad: 'import "@agent-os/runtime";\nexport const kernelValue = 1;\n',
         expected: "kernel-import-boundary",
+      },
+      {
+        name: "kernel live-edge public export",
+        file: "packages/kernel/src/index.ts",
+        bad: 'export { captureLive } from "./internal/live-edge";\n',
+        expected: "live-edge-import-boundary",
       },
       {
         name: "backend protocol runtime import",

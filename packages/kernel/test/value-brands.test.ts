@@ -23,7 +23,9 @@ describe("value domain brands", () => {
       const recordedFromLive: Recorded<Payload> = live;
       // @ts-expect-error Recorded truth cannot be reopened as Live material by type assignment.
       const liveFromRecorded: Live<Payload> = recorded;
-      return [recordedFromAuthored, recordedFromLive, liveFromRecorded];
+      // @ts-expect-error Live material has no public open slot.
+      const openedLive = live.value;
+      return [recordedFromAuthored, recordedFromLive, liveFromRecorded, openedLive];
     };
 
     expect(typeof assertTypeErrors).toBe("function");
