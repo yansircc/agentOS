@@ -301,6 +301,28 @@ const projectRuntimeSafeEvent = (event: RuntimeLedgerEvent): SafeLedgerEvent => 
         toolNames: event.payload.toolNames,
         tokensUsed: event.payload.tokensUsed,
       });
+    case RUNTIME_EVENT_KIND.RUNTIME_HISTORY_COMPACTED:
+      return safeLedgerEvent(event, {
+        runId: event.payload.runId,
+        turnIndex: event.payload.turn.index,
+        sourceEventId: event.payload.sourceEventId,
+        target: {
+          kind: event.payload.target.kind,
+          toolCallId: event.payload.target.toolCallId,
+          toolName: event.payload.target.toolName,
+        },
+        strategy: event.payload.strategy,
+        originalBytes: event.payload.originalBytes,
+        compactedBytes: event.payload.compactedBytes,
+      });
+    case RUNTIME_EVENT_KIND.RUNTIME_REKEYED:
+      return safeLedgerEvent(event, {
+        runId: event.payload.runId,
+        sourceEventId: event.payload.sourceEventId,
+        sourceKeyRef: event.payload.sourceKeyRef,
+        targetKeyRef: event.payload.targetKeyRef,
+        purpose: event.payload.purpose,
+      });
     case RUNTIME_EVENT_KIND.TOOL_EXECUTED: {
       const io = safeToolIoPayload(event.payload.name, event.payload.args, event.payload.result);
       return safeLedgerEvent(event, {

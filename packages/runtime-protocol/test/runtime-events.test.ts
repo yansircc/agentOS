@@ -20,6 +20,8 @@ import {
   llmResponseEvent,
   RUNTIME_ABORT_EVENT_KINDS,
   runtimeCompletedAfterToolsEvent,
+  runtimeHistoryCompactedEvent,
+  runtimeRekeyedEvent,
   replayToolFromArtifact,
   replayToolResultFromSnapshot,
   receiptBackedToolResult,
@@ -187,6 +189,26 @@ describe("runtime event vocabulary", () => {
         claim: rejectedClaim,
         traceContext,
       }),
+      runtimeHistoryCompactedEvent({
+        ...runtimeIdentity,
+        runId: 1,
+        turn: { id: 1, index: 0 },
+        sourceEventId: 6,
+        toolCallId: "call-1",
+        toolName: "lookup",
+        originalBytes: 2048,
+        compactedBytes: 96,
+        traceContext,
+      }),
+      runtimeRekeyedEvent({
+        ...runtimeIdentity,
+        runId: 1,
+        sourceEventId: 7,
+        sourceKeyRef: "key:old",
+        targetKeyRef: "key:new",
+        purpose: "replay-artifact",
+        traceContext,
+      }),
       agentRunCompletedEvent({
         ...runtimeIdentity,
         runId: 1,
@@ -264,6 +286,55 @@ describe("runtime event vocabulary", () => {
     });
     expect(JSON.stringify(projectRuntimeSafeLedgerEvent(requested))).not.toContain("prompt");
     expect(JSON.stringify(projectRuntimeSafeLedgerEvent(requested))).not.toContain("args");
+  });
+
+  it("projects compaction and rekey facts as append-only references", () => {
+    const compaction = ledgerEvent(
+      3,
+      runtimeHistoryCompactedEvent({
+        ...runtimeIdentity,
+        runId: 1,
+        turn: { id: 1, index: 0 },
+        sourceEventId: 2,
+        toolCallId: "call-1",
+        toolName: "write_file",
+        originalBytes: 4096,
+        compactedBytes: 128,
+      }),
+    );
+    const rekey = ledgerEvent(
+      4,
+      runtimeRekeyedEvent({
+        ...runtimeIdentity,
+        runId: 1,
+        sourceEventId: 3,
+        sourceKeyRef: "key:old",
+        targetKeyRef: "key:new",
+        purpose: "replay-artifact",
+      }),
+    );
+
+    expect(projectRuntimeSafeLedgerEvent(compaction)?.safePayload).toEqual({
+      runId: 1,
+      turnIndex: 0,
+      sourceEventId: 2,
+      target: {
+        kind: "tool_call_arguments",
+        toolCallId: "call-1",
+        toolName: "write_file",
+      },
+      strategy: "provider_history_string_redaction",
+      originalBytes: 4096,
+      compactedBytes: 128,
+    });
+    expect(projectRuntimeSafeLedgerEvent(rekey)?.safePayload).toEqual({
+      runId: 1,
+      sourceEventId: 3,
+      sourceKeyRef: "key:old",
+      targetKeyRef: "key:new",
+      purpose: "replay-artifact",
+    });
+    expect(JSON.stringify(projectRuntimeSafeLedgerEvent(compaction))).not.toContain("SECRET_CODE");
   });
 
   it("projects safe tool io summaries without raw arguments or file content", () => {
@@ -528,6 +599,30 @@ describe("runtime event vocabulary", () => {
         rawEvent(9, "agent.run.started", {
           intent: "answer",
           traceContext: { traceparent: "00-test" },
+        }),
+      ),
+    ).toThrow();
+    expect(() =>
+      decodeRuntimeLedgerEvent(
+        rawEvent(10, "runtime.history_compacted", {
+          runId: 1,
+          turn: { id: 1, index: 0 },
+          sourceEventId: 2,
+          target: { kind: "tool_call_arguments", toolCallId: "call-1", toolName: "lookup" },
+          strategy: "provider_history_string_redaction",
+          originalBytes: 64,
+          compactedBytes: 64,
+        }),
+      ),
+    ).toThrow();
+    expect(() =>
+      decodeRuntimeLedgerEvent(
+        rawEvent(11, "runtime.rekeyed", {
+          runId: 1,
+          sourceEventId: 10,
+          sourceKeyRef: "key:same",
+          targetKeyRef: "key:same",
+          purpose: "replay-artifact",
         }),
       ),
     ).toThrow();

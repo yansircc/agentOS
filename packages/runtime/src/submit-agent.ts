@@ -69,6 +69,7 @@ import {
   RUNTIME_EVENT_KIND,
   receiptBackedToolResultFromUnknown,
   runtimeCompletedAfterToolsEvent,
+  runtimeHistoryCompactedEvent,
   toolExecutedEvent,
   toolReplayArtifactFromExecutedPayload,
   toolRejectedEvent,
@@ -592,15 +593,28 @@ const providerHistoryArgumentsJson = (
     return yield* safeStringify(compacted);
   });
 
+type ProviderHistoryCompaction = {
+  readonly originalBytes: number;
+  readonly compactedBytes: number;
+};
+
 const compactProviderHistoryToolCall = (
   messages: LlmMessage[],
   toolCallId: string,
   argumentsJson: string,
-): void => {
+): ProviderHistoryCompaction | null => {
   for (let index = messages.length - 1; index >= 0; index--) {
     const message = messages[index];
     if (message?.role !== "assistant" || message.tool_calls === undefined) continue;
     if (!message.tool_calls.some((call) => call.id === toolCallId)) continue;
+    const existingCall = message.tool_calls.find((call) => call.id === toolCallId);
+    const originalArguments = existingCall?.function.arguments;
+    if (originalArguments === undefined || originalArguments === argumentsJson) {
+      return null;
+    }
+    const originalBytes = toolArgumentSummaryEncoder.encode(originalArguments).byteLength;
+    const compactedBytes = toolArgumentSummaryEncoder.encode(argumentsJson).byteLength;
+    if (compactedBytes >= originalBytes) return null;
     messages[index] = {
       ...message,
       tool_calls: message.tool_calls.map((call) =>
@@ -615,8 +629,9 @@ const compactProviderHistoryToolCall = (
           : call,
       ),
     };
-    return;
+    return { originalBytes, compactedBytes };
   }
+  return null;
 };
 
 const replayMessagesToInterruptedTool = (
@@ -629,6 +644,7 @@ const replayMessagesToInterruptedTool = (
   {
     readonly messages: LlmMessage[];
     readonly call: LlmToolCall;
+    readonly sourceEventId: number;
   },
   SqlError | JsonStringifyError
 > =>
@@ -671,7 +687,7 @@ const replayMessagesToInterruptedTool = (
 
       for (const call of responseToolCalls) {
         if (index === resume.turn.index && call.id === interruptedToolCallId) {
-          return { messages, call };
+          return { messages, call, sourceEventId: llmEvent.id };
         }
 
         const toolEvent = events.find((event) => {
@@ -1249,8 +1265,51 @@ export const submitAgentEffect = (
       const boundaryEvents = yield* BoundaryEvents;
       const projections = yield* MaterializedProjections;
       const refs = yield* RefResolverService;
+      const recordProviderHistoryCompaction = (input: {
+        readonly turn: TurnRef;
+        readonly sourceEventId: number | undefined;
+        readonly toolCallId: string;
+        readonly toolName: string;
+        readonly argumentsJson: string;
+      }): Effect.Effect<void, SqlError | JsonStringifyError> =>
+        Effect.gen(function* () {
+          const compaction = compactProviderHistoryToolCall(
+            messages,
+            input.toolCallId,
+            input.argumentsJson,
+          );
+          if (compaction === null) return;
+          if (input.sourceEventId === undefined) {
+            return yield* Effect.fail(
+              new SqlError({
+                cause: {
+                  reason: "provider_history_compaction_missing_source_event",
+                  runId: started.id,
+                  turn: input.turn,
+                  toolCallId: input.toolCallId,
+                  toolName: input.toolName,
+                },
+              }),
+            );
+          }
+          yield* appendRuntimeDriverAction(ledger, {
+            kind: "compact_history",
+            event: runtimeHistoryCompactedEvent({
+              ...identity,
+              runId: started.id,
+              turn: input.turn,
+              sourceEventId: input.sourceEventId,
+              toolCallId: input.toolCallId,
+              toolName: input.toolName,
+              originalBytes: compaction.originalBytes,
+              compactedBytes: compaction.compactedBytes,
+              traceContext,
+            }),
+          });
+        });
       let firstTurn = 0;
       let resumedToolCall: LlmToolCall | undefined;
+      let resumedToolCallSourceEventId: number | undefined;
       let toolPolicyFailures = 0;
       const executedToolNames = new Set(
         requiredToolNames.filter((toolName) => hasExecutedTool(priorEvents, started.id, toolName)),
@@ -1347,6 +1406,7 @@ export const submitAgentEffect = (
         );
         messages = replayed.messages;
         resumedToolCall = replayed.call;
+        resumedToolCallSourceEventId = replayed.sourceEventId;
         firstTurn = resume.turn.index;
         const priorTokens = priorEvents.reduce((sum, event) => {
           const decoded = decodeRuntimeLedgerEvent(event);
@@ -1390,10 +1450,16 @@ export const submitAgentEffect = (
         const tokensBeforeCall = yield* Ref.get(tokensUsedRef);
 
         const resumedThisTurn = resumedToolCall;
+        const resumedSourceEventIdThisTurn = resumedToolCallSourceEventId;
         resumedToolCall = undefined;
+        resumedToolCallSourceEventId = undefined;
         const resumedToolCallIdThisTurn = resumedThisTurn?.id;
         const responseToolCalls: LlmToolCall[] =
           resumedThisTurn === undefined ? [] : [resumedThisTurn];
+        const responseToolCallSourceEventIds = new Map<string, number>();
+        if (resumedThisTurn !== undefined && resumedSourceEventIdThisTurn !== undefined) {
+          responseToolCallSourceEventIds.set(resumedThisTurn.id, resumedSourceEventIdThisTurn);
+        }
         let newTokens = tokensBeforeCall;
 
         if (resumedThisTurn === undefined) {
@@ -1479,7 +1545,7 @@ export const submitAgentEffect = (
           newTokens = tokensBeforeCall + resp.usage.totalTokens;
           yield* Ref.set(tokensUsedRef, newTokens);
 
-          yield* appendRuntimeDriverAction(ledger, {
+          const recordedLlmResponse = yield* appendRuntimeDriverAction(ledger, {
             kind: "record_llm_response",
             event: llmResponseEvent({
               ...identity,
@@ -1489,6 +1555,9 @@ export const submitAgentEffect = (
               traceContext,
             }),
           });
+          for (const call of nextResponseToolCalls) {
+            responseToolCallSourceEventIds.set(call.id, recordedLlmResponse.event.id);
+          }
 
           if (newTokens > budgetTokens) {
             return yield* finalAbort(
@@ -1628,7 +1697,13 @@ export const submitAgentEffect = (
               });
             }
             toolPolicyFailures++;
-            compactProviderHistoryToolCall(messages, call.id, call.function.arguments);
+            yield* recordProviderHistoryCompaction({
+              turn: turnRefOf(started.id, turn),
+              sourceEventId: responseToolCallSourceEventIds.get(call.id),
+              toolCallId: call.id,
+              toolName: call.function.name,
+              argumentsJson: call.function.arguments,
+            });
             const feedback = yield* safeStringify({
               ok: false,
               error: "tool_policy_rejected",
@@ -1689,7 +1764,13 @@ export const submitAgentEffect = (
               return yield* parsed.left;
             }
             toolValidationFailures++;
-            compactProviderHistoryToolCall(messages, call.id, call.function.arguments);
+            yield* recordProviderHistoryCompaction({
+              turn: turnRefOf(started.id, turn),
+              sourceEventId: responseToolCallSourceEventIds.get(call.id),
+              toolCallId: call.id,
+              toolName: call.function.name,
+              argumentsJson: call.function.arguments,
+            });
             const feedback = yield* safeStringify({
               ok: false,
               error: "invalid_tool_arguments",
@@ -1735,7 +1816,13 @@ export const submitAgentEffect = (
               return yield* decoded.left;
             }
             toolValidationFailures++;
-            compactProviderHistoryToolCall(messages, call.id, call.function.arguments);
+            yield* recordProviderHistoryCompaction({
+              turn: turnRefOf(started.id, turn),
+              sourceEventId: responseToolCallSourceEventIds.get(call.id),
+              toolCallId: call.id,
+              toolName: call.function.name,
+              argumentsJson: call.function.arguments,
+            });
             const feedback = yield* safeStringify({
               ok: false,
               error: "invalid_tool_arguments",
@@ -2133,7 +2220,13 @@ export const submitAgentEffect = (
             args,
             call.function.arguments,
           );
-          compactProviderHistoryToolCall(messages, call.id, historyArguments);
+          yield* recordProviderHistoryCompaction({
+            turn: turnRefOf(started.id, turn),
+            sourceEventId: responseToolCallSourceEventIds.get(call.id),
+            toolCallId: call.id,
+            toolName: call.function.name,
+            argumentsJson: historyArguments,
+          });
           messages.push({
             role: "tool",
             tool_call_id: call.id,

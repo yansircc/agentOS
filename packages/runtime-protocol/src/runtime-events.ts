@@ -33,6 +33,8 @@ export const RUNTIME_EVENT_KIND = {
   LLM_RESPONSE: "llm.response",
   TOOL_EXECUTED: "tool.executed",
   TOOL_REJECTED: "tool.rejected",
+  RUNTIME_HISTORY_COMPACTED: "runtime.history_compacted",
+  RUNTIME_REKEYED: "runtime.rekeyed",
   RUNTIME_COMPLETED_AFTER_TOOLS: "runtime.completed_after_tools",
   AGENT_RUN_COMPLETED: "agent.run.completed",
   AGENT_ABORTED_BUDGET_TOKENS: "agent.aborted.budget_tokens",
@@ -293,6 +295,33 @@ export type RuntimeCompletedAfterToolsPayload = {
   readonly traceContext?: TraceContext;
 };
 
+export type RuntimeHistoryCompactedPayload = {
+  readonly runId: number;
+  readonly turn: {
+    readonly id: number;
+    readonly index: number;
+  };
+  readonly sourceEventId: number;
+  readonly target: {
+    readonly kind: "tool_call_arguments";
+    readonly toolCallId: string;
+    readonly toolName: string;
+  };
+  readonly strategy: "provider_history_string_redaction";
+  readonly originalBytes: number;
+  readonly compactedBytes: number;
+  readonly traceContext?: TraceContext;
+};
+
+export type RuntimeRekeyedPayload = {
+  readonly runId: number;
+  readonly sourceEventId: number;
+  readonly sourceKeyRef: string;
+  readonly targetKeyRef: string;
+  readonly purpose: string;
+  readonly traceContext?: TraceContext;
+};
+
 export type AgentRunInterruptedPayload = {
   readonly runId: number;
   readonly turn: {
@@ -416,6 +445,36 @@ export const RuntimeCompletedAfterToolsPayloadSchema: Schema.Schema<RuntimeCompl
     traceContext: Schema.optional(TraceContextSchema),
   }).pipe(Schema.filter((payload) => payload.runId === payload.turn.id));
 
+export const RuntimeHistoryCompactedPayloadSchema: Schema.Schema<RuntimeHistoryCompactedPayload> =
+  Schema.Struct({
+    runId: positiveInt,
+    turn: TurnRefSchema,
+    sourceEventId: positiveInt,
+    target: Schema.Struct({
+      kind: Schema.Literal("tool_call_arguments"),
+      toolCallId: nonEmptyString,
+      toolName: nonEmptyString,
+    }),
+    strategy: Schema.Literal("provider_history_string_redaction"),
+    originalBytes: positiveInt,
+    compactedBytes: nonNegativeInt,
+    traceContext: Schema.optional(TraceContextSchema),
+  }).pipe(
+    Schema.filter(
+      (payload) =>
+        payload.runId === payload.turn.id && payload.compactedBytes < payload.originalBytes,
+    ),
+  );
+
+export const RuntimeRekeyedPayloadSchema: Schema.Schema<RuntimeRekeyedPayload> = Schema.Struct({
+  runId: positiveInt,
+  sourceEventId: positiveInt,
+  sourceKeyRef: nonEmptyString,
+  targetKeyRef: nonEmptyString,
+  purpose: nonEmptyString,
+  traceContext: Schema.optional(TraceContextSchema),
+}).pipe(Schema.filter((payload) => payload.sourceKeyRef !== payload.targetKeyRef));
+
 export const AgentRunInterruptedPayloadSchema: Schema.Schema<AgentRunInterruptedPayload> =
   Schema.Struct({
     runId: positiveInt,
@@ -459,6 +518,8 @@ export type RuntimeEventPayloadByKind = {
   readonly [RUNTIME_EVENT_KIND.LLM_RESPONSE]: LlmResponsePayload;
   readonly [RUNTIME_EVENT_KIND.TOOL_EXECUTED]: ToolExecutedPayload;
   readonly [RUNTIME_EVENT_KIND.TOOL_REJECTED]: ToolRejectedPayload;
+  readonly [RUNTIME_EVENT_KIND.RUNTIME_HISTORY_COMPACTED]: RuntimeHistoryCompactedPayload;
+  readonly [RUNTIME_EVENT_KIND.RUNTIME_REKEYED]: RuntimeRekeyedPayload;
   readonly [RUNTIME_EVENT_KIND.RUNTIME_COMPLETED_AFTER_TOOLS]: RuntimeCompletedAfterToolsPayload;
   readonly [RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED]: AgentRunCompletedPayload;
   readonly [ABORT.BUDGET_TOKENS]: AgentRunAbortedPayload;
@@ -540,6 +601,14 @@ const decodeRuntimePayload = <K extends RuntimeEventKind>(
       ) as RuntimeEventPayloadByKind[K];
     case RUNTIME_EVENT_KIND.TOOL_REJECTED:
       return Schema.decodeUnknownSync(ToolRejectedPayloadSchema)(
+        payload,
+      ) as RuntimeEventPayloadByKind[K];
+    case RUNTIME_EVENT_KIND.RUNTIME_HISTORY_COMPACTED:
+      return Schema.decodeUnknownSync(RuntimeHistoryCompactedPayloadSchema)(
+        payload,
+      ) as RuntimeEventPayloadByKind[K];
+    case RUNTIME_EVENT_KIND.RUNTIME_REKEYED:
+      return Schema.decodeUnknownSync(RuntimeRekeyedPayloadSchema)(
         payload,
       ) as RuntimeEventPayloadByKind[K];
     case RUNTIME_EVENT_KIND.RUNTIME_COMPLETED_AFTER_TOOLS:
@@ -923,6 +992,52 @@ export const toolRejectedEvent = (
     execution: spec.execution,
     claim: spec.claim,
     ...(spec.diagnostics === undefined ? {} : { diagnostics: spec.diagnostics }),
+    ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
+  });
+
+export const runtimeHistoryCompactedEvent = (
+  spec: RuntimeEventIdentitySpec & {
+    readonly runId: number;
+    readonly turn: { readonly id: number; readonly index: number };
+    readonly sourceEventId: number;
+    readonly toolCallId: string;
+    readonly toolName: string;
+    readonly originalBytes: number;
+    readonly compactedBytes: number;
+    readonly traceContext?: TraceContext;
+  },
+): RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.RUNTIME_HISTORY_COMPACTED> =>
+  runtimeEvent(spec, RUNTIME_EVENT_KIND.RUNTIME_HISTORY_COMPACTED, {
+    runId: spec.runId,
+    turn: spec.turn,
+    sourceEventId: spec.sourceEventId,
+    target: {
+      kind: "tool_call_arguments",
+      toolCallId: spec.toolCallId,
+      toolName: spec.toolName,
+    },
+    strategy: "provider_history_string_redaction",
+    originalBytes: spec.originalBytes,
+    compactedBytes: spec.compactedBytes,
+    ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
+  });
+
+export const runtimeRekeyedEvent = (
+  spec: RuntimeEventIdentitySpec & {
+    readonly runId: number;
+    readonly sourceEventId: number;
+    readonly sourceKeyRef: string;
+    readonly targetKeyRef: string;
+    readonly purpose: string;
+    readonly traceContext?: TraceContext;
+  },
+): RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.RUNTIME_REKEYED> =>
+  runtimeEvent(spec, RUNTIME_EVENT_KIND.RUNTIME_REKEYED, {
+    runId: spec.runId,
+    sourceEventId: spec.sourceEventId,
+    sourceKeyRef: spec.sourceKeyRef,
+    targetKeyRef: spec.targetKeyRef,
+    purpose: spec.purpose,
     ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
   });
 

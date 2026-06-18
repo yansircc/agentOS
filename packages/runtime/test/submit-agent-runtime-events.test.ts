@@ -1822,27 +1822,56 @@ describe("submit-agent runtime event writes", () => {
         execution: deterministicToolExecution(),
       });
 
-      const { result, llmRequests } = yield* runSubmit(baseSpec({ tools: { write_file: tool } }), [
-        response({
-          items: [
-            { type: "message", text: "write mockup" },
-            {
-              type: "tool_call",
-              call: {
-                id: "call-1",
-                type: "function",
-                function: {
-                  name: "write_file",
-                  arguments: JSON.stringify({ content: largeContent }),
+      const { result, events, llmRequests } = yield* runSubmit(
+        baseSpec({ tools: { write_file: tool } }),
+        [
+          response({
+            items: [
+              { type: "message", text: "write mockup" },
+              {
+                type: "tool_call",
+                call: {
+                  id: "call-1",
+                  type: "function",
+                  function: {
+                    name: "write_file",
+                    arguments: JSON.stringify({ content: largeContent }),
+                  },
                 },
               },
-            },
-          ],
-        }),
-        response({ items: [{ type: "message", text: "done" }] }),
-      ]);
+            ],
+          }),
+          response({ items: [{ type: "message", text: "done" }] }),
+        ],
+      );
 
       expect(result).toMatchObject({ ok: true, status: "delivered" });
+      const runtimeEvents = decodedRuntimeEvents(events);
+      const compaction = runtimeEvents.find(
+        (event) => event.kind === RUNTIME_EVENT_KIND.RUNTIME_HISTORY_COMPACTED,
+      );
+      expect(compaction).toBeDefined();
+      if (compaction?.kind !== RUNTIME_EVENT_KIND.RUNTIME_HISTORY_COMPACTED) {
+        expect.fail("expected runtime.history_compacted event");
+      }
+      expect(compaction.payload).toMatchObject({
+        runId: 1,
+        turn: { id: 1, index: 0 },
+        target: {
+          kind: "tool_call_arguments",
+          toolCallId: "call-1",
+          toolName: "write_file",
+        },
+        strategy: "provider_history_string_redaction",
+      });
+      expect(compaction.payload.compactedBytes).toBeLessThan(compaction.payload.originalBytes);
+      expect(compaction.id).toBeGreaterThan(compaction.payload.sourceEventId);
+      const sourceEvent = runtimeEvents.find(
+        (event) => event.id === compaction.payload.sourceEventId,
+      );
+      expect(sourceEvent?.kind).toBe(RUNTIME_EVENT_KIND.LLM_RESPONSE);
+      expect(JSON.stringify(sourceEvent)).toContain(largeContent.slice(0, 120));
+
       const secondMessages = llmRequests[1]?.messages ?? [];
       const secondRequestMessages = JSON.stringify(secondMessages);
       const assistantMessage = secondMessages.find(

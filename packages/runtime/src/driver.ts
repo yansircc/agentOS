@@ -42,6 +42,10 @@ type RuntimeEventActionByKind = {
     typeof RUNTIME_EVENT_KIND.LLM_RESPONSE
   >;
   readonly reject_tool: RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.TOOL_REJECTED>;
+  readonly compact_history: RuntimeEventCommitSpecByKind<
+    typeof RUNTIME_EVENT_KIND.RUNTIME_HISTORY_COMPACTED
+  >;
+  readonly rekey: RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.RUNTIME_REKEYED>;
   readonly record_tool_result: RuntimeEventCommitSpecByKind<
     typeof RUNTIME_EVENT_KIND.TOOL_EXECUTED
   >;
