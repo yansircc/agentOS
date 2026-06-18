@@ -2,6 +2,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import {
+  checkProjectionSink,
+  defineProjectionSpec,
+  runProjectionSink,
+} from "../packages/kernel/src/projection.ts";
 
 const root = process.cwd();
 const check = process.argv.includes("--check");
@@ -397,13 +402,40 @@ const renderReference = (carriers) => {
 const carriers = await discoverCarriers();
 const expected = `${renderReference(carriers).replace(/\s+$/u, "")}\n`;
 const targetPath = path.join(root, target);
+const projection = defineProjectionSpec({
+  id: `docs.generate-carrier-reference:${target}`,
+  version: 1,
+  source: {
+    kind: "docs-generator",
+    ref: "scripts/generate-carrier-reference.mjs",
+  },
+  project: (output, ctx) => ctx.ok(output),
+});
+const sink = {
+  id: target,
+  read: () =>
+    fs.existsSync(targetPath)
+      ? { _tag: "found", output: fs.readFileSync(targetPath, "utf8") }
+      : { _tag: "missing" },
+  write: (output) => {
+    fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+    fs.writeFileSync(targetPath, output);
+  },
+  equals: (actual, projected) => actual === projected,
+};
 
 if (check) {
-  const actual = fs.existsSync(targetPath) ? fs.readFileSync(targetPath, "utf8") : "";
-  if (actual !== expected) failures.push(`${target} is stale`);
+  const result = await checkProjectionSink(projection, expected, sink);
+  if (result._tag === "projection_failed") {
+    failures.push(`${target} projection failed: ${result.result.reason}`);
+  } else if (result._tag === "stale") {
+    failures.push(`${target} is stale`);
+  }
 } else {
-  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-  fs.writeFileSync(targetPath, expected);
+  const result = await runProjectionSink(projection, expected, sink);
+  if (result._tag === "projection_failed") {
+    failures.push(`${target} projection failed: ${result.result.reason}`);
+  }
 }
 
 if (failures.length > 0) {
