@@ -9,7 +9,7 @@ import {
   projectionIdentity,
   projectionPut,
 } from "@agent-os/runtime";
-import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
+import { RUNTIME_FACT_OWNER, runtimeHistoryCompactedEvent } from "@agent-os/runtime-protocol";
 import type { AnyMaterializedProjectionDefinition, ProjectionRegistry } from "@agent-os/runtime";
 import type { BackendProtocolTruthIdentity } from "@agent-os/backend-protocol";
 import type { EventBusService } from "../src/ledger/event-bus";
@@ -172,6 +172,38 @@ describe("cloudflare-do ledger commit primitive", () => {
         expect(sql.exec("SELECT * FROM materialized_projection_rows").toArray()).toHaveLength(0);
         expect(fired).toEqual([]);
       }),
+  );
+
+  it.effect("rejects invalid runtime transitions before insert", () =>
+    Effect.gen(function* () {
+      const state = makeInMemoryDurableObjectState();
+      const sql = state.storage.sql;
+      ensureLedgerSchema(sql);
+      const fired: LedgerEvent[] = [];
+      const identity = truthIdentity("runtime-l0");
+
+      const exit = yield* Effect.exit(
+        commitLedgerTransaction(state, recordingBus(fired), runtimeOwner, (tx) => {
+          tx.append({
+            ts: 10,
+            ...runtimeHistoryCompactedEvent({
+              ...identity,
+              runId: 1,
+              turn: { id: 1, index: 0 },
+              sourceEventId: 1,
+              toolCallId: "call-1",
+              toolName: "lookup",
+              originalBytes: 256,
+              compactedBytes: 16,
+            }),
+          });
+        }),
+      );
+
+      expect(exit._tag).toBe("Failure");
+      expect(sql.exec("SELECT * FROM events").toArray()).toHaveLength(0);
+      expect(fired).toEqual([]);
+    }),
   );
 
   it.effect(

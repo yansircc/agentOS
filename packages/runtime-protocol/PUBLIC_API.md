@@ -153,6 +153,9 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:RuntimeEventPayloadByKind`
 - `.:RuntimeLedgerEvent`
 - `.:RuntimeLedgerEventByKind`
+- `.:RuntimeLedgerTransitionIssue`
+- `.:RuntimeLedgerTransitionIssueCode`
+- `.:RuntimeLedgerTransitionValidation`
 - `.:RecoveryAttemptRecord`
 - `.:RecoveryBudget`
 - `.:RecoveryBudgetProjection`
@@ -198,6 +201,7 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:agentRunResumedEvent`
 - `.:agentRunStartedEvent`
 - `.:assertAgentCapabilityRuntimeContext`
+- `.:assertRuntimeLedgerTransitions`
 - `.:capabilityIntent`
 - `.:capabilityMaterial`
 - `.:capabilityProjection`
@@ -248,6 +252,7 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:toolReplayArtifactFromExecutedPayload`
 - `.:validateAgentMount`
 - `.:validateIntentSettlementVocabulary`
+- `.:validateRuntimeLedgerTransitions`
 
 ## Experimental exports
 

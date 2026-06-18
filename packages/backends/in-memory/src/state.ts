@@ -45,7 +45,7 @@ import {
   type TriggerTx,
   UnregisteredProjectionKind,
 } from "@agent-os/runtime";
-import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
+import { assertRuntimeLedgerTransitions, RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
 import type { TelemetryFanoutDiagnostic } from "@agent-os/telemetry-protocol";
 import {
   authorityRefKey,
@@ -206,6 +206,23 @@ const eventMatches = (event: LedgerEvent, identity: BackendProtocolEventIdentity
 
 const eventDisplayScope = (identity: BackendProtocolEventIdentity): string =>
   backendProtocolEventIdentityKey(identity);
+
+const groupRuntimeEventsByIdentity = (
+  events: ReadonlyArray<LedgerEvent>,
+): Map<string, LedgerEvent[]> => {
+  const groups = new Map<string, LedgerEvent[]>();
+  for (const event of events) {
+    if (event.factOwnerRef !== RUNTIME_FACT_OWNER) continue;
+    const key = backendProtocolEventIdentityKey(eventIdentity(event));
+    const group = groups.get(key);
+    if (group === undefined) {
+      groups.set(key, [event]);
+    } else {
+      group.push(event);
+    }
+  }
+  return groups;
+};
 
 const eventMatchesQueryOptions = (
   event: LedgerEvent,
@@ -717,6 +734,19 @@ export class InMemoryBackendState {
           payload: spec.payload,
         }),
       );
+      yield* Effect.try({
+        try: () => {
+          for (const events of groupRuntimeEventsByIdentity(committed).values()) {
+            const first = events[0];
+            if (first === undefined) continue;
+            assertRuntimeLedgerTransitions({
+              history: this.rowsForEventIdentity(eventIdentity(first)),
+              events,
+            });
+          }
+        },
+        catch: (cause) => new SqlError({ cause }),
+      });
       const projectionState = yield* this.prepareProjectionState(committed);
       yield* Effect.sync(() => {
         this.nextEventId += committed.length;

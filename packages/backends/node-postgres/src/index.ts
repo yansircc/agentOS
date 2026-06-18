@@ -70,6 +70,7 @@ import {
   type ResourceProjection,
 } from "@agent-os/backend-protocol";
 import {
+  assertRuntimeLedgerTransitions,
   RUNTIME_FACT_OWNER,
   type LedgerCommitEventSpec,
   type LedgerTruthIdentity,
@@ -153,6 +154,23 @@ const eventToRpc = (event: LedgerEvent): LedgerEvent => ({
   effectAuthorityRef: event.effectAuthorityRef,
   payload: event.payload,
 });
+
+const groupRuntimeEventsByIdentityKey = (
+  events: ReadonlyArray<LedgerEvent>,
+): Map<string, LedgerEvent[]> => {
+  const groups = new Map<string, LedgerEvent[]>();
+  for (const event of events) {
+    if (event.factOwnerRef !== RUNTIME_FACT_OWNER) continue;
+    const key = backendProtocolEventIdentityKey(event);
+    const group = groups.get(key);
+    if (group === undefined) {
+      groups.set(key, [event]);
+    } else {
+      group.push(event);
+    }
+  }
+  return groups;
+};
 
 const validateSerializablePayload = (payload: unknown): void => {
   try {
@@ -1665,6 +1683,55 @@ export class NodePostgresBackend {
     `);
   }
 
+  async #eventsForIdentityKey(identityKey: string): Promise<ReadonlyArray<LedgerEvent>> {
+    return this.#sql.json<LedgerEvent>(`
+      ${eventRowSelect}
+      WHERE identity_key = ${sqlString(identityKey)}
+      ORDER BY id ASC
+    `);
+  }
+
+  async #maxEventId(): Promise<number> {
+    const rows = await this.#sql.json<{ readonly id: number }>(`
+      SELECT COALESCE(MAX(id), 0)::int AS "id"
+      FROM agentos_events
+    `);
+    return rows[0]?.id ?? 0;
+  }
+
+  async #assertRuntimeAppendTransitions(
+    specs: ReadonlyArray<{
+      readonly ts: number;
+      readonly kind: string;
+      readonly identity: BackendProtocolEventIdentity;
+      readonly payload: unknown;
+    }>,
+  ): Promise<void> {
+    try {
+      const maxEventId = await this.#maxEventId();
+      const candidates = specs.map(
+        (spec, index): LedgerEvent => ({
+          id: maxEventId + index + 1,
+          ts: spec.ts,
+          kind: spec.kind,
+          scopeRef: spec.identity.scopeRef,
+          factOwnerRef: spec.identity.factOwnerRef,
+          effectAuthorityRef: spec.identity.effectAuthorityRef,
+          payload: spec.payload,
+        }),
+      );
+      for (const [identityKey, events] of groupRuntimeEventsByIdentityKey(candidates)) {
+        assertRuntimeLedgerTransitions({
+          history: await this.#eventsForIdentityKey(identityKey),
+          events,
+        });
+      }
+    } catch (cause) {
+      if (cause instanceof SqlError) throw cause;
+      throw new SqlError({ cause });
+    }
+  }
+
   async #appendEvents(
     specs: ReadonlyArray<{
       readonly ts: number;
@@ -1673,6 +1740,7 @@ export class NodePostgresBackend {
       readonly payload: unknown;
     }>,
   ): Promise<ReadonlyArray<LedgerEvent>> {
+    await this.#assertRuntimeAppendTransitions(specs);
     const rows = await this.#sql.jsonArrayStatement<LedgerEvent>(`
       WITH input AS (
         SELECT *

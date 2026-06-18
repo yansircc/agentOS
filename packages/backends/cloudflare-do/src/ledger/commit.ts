@@ -2,6 +2,7 @@ import type { FactOwnerRef } from "@agent-os/kernel/effect-claim";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import { JsonStringifyError, SqlError } from "@agent-os/kernel/errors";
 import { Effect } from "effect";
+import { assertRuntimeLedgerTransitions, RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
 import { applyRegisteredMaterializedProjectionEvents } from "../materialized-projections";
 import type { EventBusService } from "./event-bus";
 import {
@@ -9,7 +10,9 @@ import {
   assertNoFactOwnerOverride,
   eventIdentity,
   eventIdentityColumns,
+  ledgerEventFromRow,
   truthIdentityFromCommitSpec,
+  type LedgerEventSqlRow,
 } from "./identity";
 import type { BackendProtocolTruthIdentity } from "@agent-os/backend-protocol";
 
@@ -234,6 +237,52 @@ const asEffectError = <E>(
   return classified ?? new SqlError({ cause });
 };
 
+const groupRuntimeEventsByIdentityKey = (
+  events: ReadonlyArray<LedgerEvent>,
+): Map<string, LedgerEvent[]> => {
+  const groups = new Map<string, LedgerEvent[]>();
+  for (const event of events) {
+    if (event.factOwnerRef !== RUNTIME_FACT_OWNER) continue;
+    const key = eventIdentityColumns(event).event_identity_key;
+    const group = groups.get(key);
+    if (group === undefined) {
+      groups.set(key, [event]);
+    } else {
+      group.push(event);
+    }
+  }
+  return groups;
+};
+
+const selectPriorEventsForIdentityKey = (
+  sql: SqlStorage,
+  eventIdentityKey: string,
+): ReadonlyArray<LedgerEvent> =>
+  sql
+    .exec(
+      `
+        SELECT *
+        FROM events
+        WHERE event_identity_key = ?
+        ORDER BY id ASC
+      `,
+      eventIdentityKey,
+    )
+    .toArray()
+    .map((row): LedgerEvent => ledgerEventFromRow(row as unknown as LedgerEventSqlRow));
+
+const assertRuntimeLedgerTransitionBatch = (
+  sql: SqlStorage,
+  events: ReadonlyArray<LedgerEvent>,
+): void => {
+  for (const [eventIdentityKey, group] of groupRuntimeEventsByIdentityKey(events)) {
+    assertRuntimeLedgerTransitions({
+      history: selectPriorEventsForIdentityKey(sql, eventIdentityKey),
+      events: group,
+    });
+  }
+};
+
 export const commitLedgerTransaction = <A, E = never>(
   storage: DurableObjectState,
   bus: EventBusService,
@@ -272,6 +321,7 @@ export const commitLedgerTransaction = <A, E = never>(
             byRef.set(recipe.ref.key, event);
             return event;
           });
+          assertRuntimeLedgerTransitionBatch(sql, events);
           const encoded = events.map((event) => encodePayload(event.payload));
           for (let index = 0; index < events.length; index++) {
             const event = events[index]!;

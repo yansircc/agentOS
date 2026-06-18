@@ -650,6 +650,227 @@ export const decodeRuntimeLedgerEvent = (event: LedgerEvent): DecodeRuntimeLedge
   };
 };
 
+export type RuntimeLedgerTransitionIssueCode =
+  | "runtime_payload_invalid"
+  | "runtime_source_event_not_before"
+  | "runtime_source_event_missing"
+  | "runtime_source_event_not_runtime"
+  | "runtime_source_payload_invalid"
+  | "runtime_compaction_source_kind_mismatch"
+  | "runtime_compaction_source_turn_mismatch"
+  | "runtime_resume_event_not_before";
+
+export type RuntimeLedgerTransitionIssue = {
+  readonly code: RuntimeLedgerTransitionIssueCode;
+  readonly eventId: number;
+  readonly eventKind: string;
+  readonly sourceEventId?: number;
+  readonly sourceKind?: string;
+  readonly message: string;
+};
+
+export type RuntimeLedgerTransitionValidation =
+  | {
+      readonly ok: true;
+    }
+  | {
+      readonly ok: false;
+      readonly issues: ReadonlyArray<RuntimeLedgerTransitionIssue>;
+    };
+
+const sourceEventIssue = (
+  code: RuntimeLedgerTransitionIssueCode,
+  event: RuntimeLedgerEvent,
+  sourceEventId: number,
+  message: string,
+  sourceKind?: string,
+): RuntimeLedgerTransitionIssue => ({
+  code,
+  eventId: event.id,
+  eventKind: event.kind,
+  sourceEventId,
+  ...(sourceKind === undefined ? {} : { sourceKind }),
+  message,
+});
+
+const transitionSourceEvent = (
+  priorById: ReadonlyMap<number, LedgerEvent>,
+  event: RuntimeLedgerEvent,
+  sourceEventId: number,
+  issues: RuntimeLedgerTransitionIssue[],
+): LedgerEvent | null => {
+  if (sourceEventId >= event.id) {
+    issues.push(
+      sourceEventIssue(
+        "runtime_source_event_not_before",
+        event,
+        sourceEventId,
+        "runtime source event must be committed before the referencing event",
+      ),
+    );
+    return null;
+  }
+  const source = priorById.get(sourceEventId);
+  if (source === undefined) {
+    issues.push(
+      sourceEventIssue(
+        "runtime_source_event_missing",
+        event,
+        sourceEventId,
+        "runtime source event must exist before the referencing event",
+      ),
+    );
+    return null;
+  }
+  return source;
+};
+
+const decodedRuntimeSourceEvent = (
+  priorById: ReadonlyMap<number, LedgerEvent>,
+  event: RuntimeLedgerEvent,
+  sourceEventId: number,
+  issues: RuntimeLedgerTransitionIssue[],
+): RuntimeLedgerEvent | null => {
+  const source = transitionSourceEvent(priorById, event, sourceEventId, issues);
+  if (source === null) return null;
+  try {
+    const decoded = decodeRuntimeLedgerEvent(source);
+    if (decoded._tag === "non_runtime") {
+      issues.push(
+        sourceEventIssue(
+          "runtime_source_event_not_runtime",
+          event,
+          sourceEventId,
+          "runtime transition source must be a runtime event",
+          source.kind,
+        ),
+      );
+      return null;
+    }
+    return decoded.event;
+  } catch {
+    issues.push(
+      sourceEventIssue(
+        "runtime_source_payload_invalid",
+        event,
+        sourceEventId,
+        "runtime transition source payload must decode as runtime event payload",
+        source.kind,
+      ),
+    );
+    return null;
+  }
+};
+
+const sameTurn = (
+  left: { readonly id: number; readonly index: number },
+  right: { readonly id: number; readonly index: number },
+): boolean => left.id === right.id && left.index === right.index;
+
+/**
+ * Runtime L0 transition interpreter.
+ *
+ * The payload schemas above validate event-local shape. This predicate validates
+ * cross-event laws for newly appended runtime facts against already-recorded
+ * facts plus earlier events in the same append batch.
+ */
+export const validateRuntimeLedgerTransitions = (input: {
+  readonly history: ReadonlyArray<LedgerEvent>;
+  readonly events: ReadonlyArray<LedgerEvent>;
+}): RuntimeLedgerTransitionValidation => {
+  const priorById = new Map(input.history.map((event) => [event.id, event] as const));
+  const issues: RuntimeLedgerTransitionIssue[] = [];
+
+  for (const candidate of input.events) {
+    let decoded: DecodeRuntimeLedgerEventResult;
+    try {
+      decoded = decodeRuntimeLedgerEvent(candidate);
+    } catch {
+      issues.push({
+        code: "runtime_payload_invalid",
+        eventId: candidate.id,
+        eventKind: candidate.kind,
+        message: "runtime event payload must decode before ledger append",
+      });
+      continue;
+    }
+    if (decoded._tag === "non_runtime") {
+      priorById.set(candidate.id, candidate);
+      continue;
+    }
+
+    const event = decoded.event;
+    switch (event.kind) {
+      case RUNTIME_EVENT_KIND.RUNTIME_HISTORY_COMPACTED: {
+        const source = decodedRuntimeSourceEvent(
+          priorById,
+          event,
+          event.payload.sourceEventId,
+          issues,
+        );
+        if (source !== null) {
+          if (source.kind !== RUNTIME_EVENT_KIND.LLM_RESPONSE) {
+            issues.push(
+              sourceEventIssue(
+                "runtime_compaction_source_kind_mismatch",
+                event,
+                event.payload.sourceEventId,
+                "runtime history compaction source must be the llm.response that carried the tool call arguments",
+                source.kind,
+              ),
+            );
+          } else if (!sameTurn(source.payload.turn, event.payload.turn)) {
+            issues.push(
+              sourceEventIssue(
+                "runtime_compaction_source_turn_mismatch",
+                event,
+                event.payload.sourceEventId,
+                "runtime history compaction source turn must match the compaction turn",
+                source.kind,
+              ),
+            );
+          }
+        }
+        break;
+      }
+      case RUNTIME_EVENT_KIND.RUNTIME_REKEYED: {
+        transitionSourceEvent(priorById, event, event.payload.sourceEventId, issues);
+        break;
+      }
+      case RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED: {
+        if (event.payload.resumedAtEventId >= event.id) {
+          issues.push({
+            code: "runtime_resume_event_not_before",
+            eventId: event.id,
+            eventKind: event.kind,
+            sourceEventId: event.payload.resumedAtEventId,
+            message: "agent.run.resumed must reference a consumed event committed before resume",
+          });
+        }
+        break;
+      }
+      default:
+        break;
+    }
+    priorById.set(event.id, event);
+  }
+
+  return issues.length === 0 ? { ok: true } : { ok: false, issues };
+};
+
+export const assertRuntimeLedgerTransitions = (input: {
+  readonly history: ReadonlyArray<LedgerEvent>;
+  readonly events: ReadonlyArray<LedgerEvent>;
+}): void => {
+  const validation = validateRuntimeLedgerTransitions(input);
+  if (validation.ok) return;
+  throw new TypeError(
+    `runtime ledger transition rejected: ${validation.issues
+      .map((issue) => `${issue.code}#${issue.eventId}`)
+      .join(", ")}`,
+  );
+};
+
 const runtimeEvent = <K extends RuntimeEventKind>(
   identity: RuntimeEventIdentitySpec,
   kind: K,

@@ -149,6 +149,9 @@
 - `.:RuntimeEventPayloadByKind`
 - `.:RuntimeLedgerEvent`
 - `.:RuntimeLedgerEventByKind`
+- `.:RuntimeLedgerTransitionIssue`
+- `.:RuntimeLedgerTransitionIssueCode`
+- `.:RuntimeLedgerTransitionValidation`
 - `.:RecoveryAttemptRecord`
 - `.:RecoveryBudget`
 - `.:RecoveryBudgetProjection`
@@ -194,6 +197,7 @@
 - `.:agentRunResumedEvent`
 - `.:agentRunStartedEvent`
 - `.:assertAgentCapabilityRuntimeContext`
+- `.:assertRuntimeLedgerTransitions`
 - `.:capabilityIntent`
 - `.:capabilityMaterial`
 - `.:capabilityProjection`
@@ -244,6 +248,7 @@
 - `.:toolReplayArtifactFromExecutedPayload`
 - `.:validateAgentMount`
 - `.:validateIntentSettlementVocabulary`
+- `.:validateRuntimeLedgerTransitions`
 
 ## Experimental exports
 

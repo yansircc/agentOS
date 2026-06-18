@@ -26,7 +26,7 @@ import {
   triggerParseOk,
   type DurableTrigger,
 } from "@agent-os/runtime";
-import { makeAdmissionSchemaSpec } from "@agent-os/runtime-protocol";
+import { makeAdmissionSchemaSpec, runtimeHistoryCompactedEvent } from "@agent-os/runtime-protocol";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import {
   createInMemoryBackendState,
@@ -79,6 +79,41 @@ describe("in-memory runtime backend", () => {
       expect(event?.id).toBe(1);
       expect(events.map((row) => row.kind)).toEqual(["example.recorded"]);
       expect(fired).toEqual(["1:example.recorded"]);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("LedgerLive rejects invalid runtime transitions before append", async () => {
+    const { runtime } = makeRuntime("runtime-l0-scope");
+    try {
+      const ledger = await runtime.runPromise(Ledger);
+
+      const exit = await runtime.runPromiseExit(
+        ledger.commit([
+          runtimeHistoryCompactedEvent({
+            ...truthIdentity("runtime-l0-scope"),
+            runId: 1,
+            turn: { id: 1, index: 0 },
+            sourceEventId: 1,
+            toolCallId: "call-1",
+            toolName: "lookup",
+            originalBytes: 256,
+            compactedBytes: 16,
+          }),
+        ]),
+      );
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        const failure = Cause.failureOption(exit.cause);
+        expect(Option.isSome(failure)).toBe(true);
+        if (Option.isSome(failure)) {
+          expect(failure.value).toMatchObject({ _tag: "agent_os.sql_error" });
+        }
+      }
+      const events = await runtime.runPromise(ledger.events(truthIdentity("runtime-l0-scope")));
+      expect(events).toEqual([]);
     } finally {
       await runtime.dispose();
     }

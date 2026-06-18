@@ -30,6 +30,7 @@ import {
   toolExecutedEvent,
   toolResultSnapshotFromExecutedPayload,
   toolRejectedEvent,
+  validateRuntimeLedgerTransitions,
   type RuntimeEventCommitSpec,
 } from "../src/runtime-events";
 import { projectRuntimeSafeLedgerEvent } from "../src/safe-events";
@@ -111,6 +112,26 @@ const rawEvent = (id: number, kind: string, payload: unknown): LedgerEvent => ({
   ...eventIdentity(scope),
   payload,
 });
+
+const llmResponseWithToolCall = (
+  turn: { readonly id: number; readonly index: number } = { id: 1, index: 0 },
+): RuntimeEventCommitSpec =>
+  llmResponseEvent({
+    ...runtimeIdentity,
+    turn,
+    items: [
+      { type: "message", text: "use lookup" },
+      {
+        type: "tool_call",
+        call: {
+          id: "call-1",
+          type: "function",
+          function: { name: "lookup", arguments: '{"q":"x"}' },
+        },
+      },
+    ],
+    usage: { promptTokens: 1, completionTokens: 2, totalTokens: 3 },
+  });
 
 describe("runtime event vocabulary", () => {
   it("round-trips every runtime constructor through the runtime decoder", () => {
@@ -548,6 +569,125 @@ describe("runtime event vocabulary", () => {
         claim: livedClaim,
       }),
     ).toThrow("external_receipt");
+  });
+
+  it("validates runtime transition sources against prior and same-batch events", () => {
+    const history = [ledgerEvent(1, llmResponseWithToolCall())];
+    const compaction = ledgerEvent(
+      2,
+      runtimeHistoryCompactedEvent({
+        ...runtimeIdentity,
+        runId: 1,
+        turn: { id: 1, index: 0 },
+        sourceEventId: 1,
+        toolCallId: "call-1",
+        toolName: "lookup",
+        originalBytes: 256,
+        compactedBytes: 16,
+      }),
+    );
+    const rekey = ledgerEvent(
+      3,
+      runtimeRekeyedEvent({
+        ...runtimeIdentity,
+        runId: 1,
+        sourceEventId: 2,
+        sourceKeyRef: "key:old",
+        targetKeyRef: "key:new",
+        purpose: "compacted-history",
+      }),
+    );
+
+    expect(validateRuntimeLedgerTransitions({ history, events: [compaction, rekey] })).toEqual({
+      ok: true,
+    });
+  });
+
+  it("rejects runtime transitions without a proven prior source", () => {
+    const wrongKind = ledgerEvent(
+      1,
+      agentRunStartedEvent({ ...runtimeIdentity, intent: "answer" }),
+    );
+    const wrongTurn = ledgerEvent(2, llmResponseWithToolCall({ id: 2, index: 0 }));
+    const events = [
+      ledgerEvent(
+        10,
+        runtimeHistoryCompactedEvent({
+          ...runtimeIdentity,
+          runId: 1,
+          turn: { id: 1, index: 0 },
+          sourceEventId: 3,
+          toolCallId: "call-1",
+          toolName: "lookup",
+          originalBytes: 256,
+          compactedBytes: 16,
+        }),
+      ),
+      ledgerEvent(
+        11,
+        runtimeHistoryCompactedEvent({
+          ...runtimeIdentity,
+          runId: 1,
+          turn: { id: 1, index: 0 },
+          sourceEventId: 11,
+          toolCallId: "call-1",
+          toolName: "lookup",
+          originalBytes: 256,
+          compactedBytes: 16,
+        }),
+      ),
+      ledgerEvent(
+        12,
+        runtimeHistoryCompactedEvent({
+          ...runtimeIdentity,
+          runId: 1,
+          turn: { id: 1, index: 0 },
+          sourceEventId: 1,
+          toolCallId: "call-1",
+          toolName: "lookup",
+          originalBytes: 256,
+          compactedBytes: 16,
+        }),
+      ),
+      ledgerEvent(
+        13,
+        runtimeHistoryCompactedEvent({
+          ...runtimeIdentity,
+          runId: 1,
+          turn: { id: 1, index: 0 },
+          sourceEventId: 2,
+          toolCallId: "call-1",
+          toolName: "lookup",
+          originalBytes: 256,
+          compactedBytes: 16,
+        }),
+      ),
+      ledgerEvent(
+        14,
+        agentRunResumedEvent({
+          ...runtimeIdentity,
+          runId: 1,
+          turn: { id: 1, index: 0 },
+          interruptId: "interrupt-1",
+          resume: { approved: true },
+          resumedAtEventId: 14,
+        }),
+      ),
+    ];
+    const validation = validateRuntimeLedgerTransitions({
+      history: [wrongKind, wrongTurn],
+      events,
+    });
+
+    expect(validation.ok).toBe(false);
+    if (validation.ok) return;
+    expect(validation.issues.map((issue) => issue.code)).toEqual([
+      "runtime_source_event_missing",
+      "runtime_source_event_not_before",
+      "runtime_compaction_source_kind_mismatch",
+      "runtime_compaction_source_turn_mismatch",
+      "runtime_resume_event_not_before",
+    ]);
   });
 
   it("rejects missing required runtime payload fields", () => {

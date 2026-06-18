@@ -153,6 +153,9 @@ title: "@agent-os/runtime-protocol API"
 - `.:RuntimeEventPayloadByKind`
 - `.:RuntimeLedgerEvent`
 - `.:RuntimeLedgerEventByKind`
+- `.:RuntimeLedgerTransitionIssue`
+- `.:RuntimeLedgerTransitionIssueCode`
+- `.:RuntimeLedgerTransitionValidation`
 - `.:RecoveryAttemptRecord`
 - `.:RecoveryBudget`
 - `.:RecoveryBudgetProjection`
@@ -198,6 +201,7 @@ title: "@agent-os/runtime-protocol API"
 - `.:agentRunResumedEvent`
 - `.:agentRunStartedEvent`
 - `.:assertAgentCapabilityRuntimeContext`
+- `.:assertRuntimeLedgerTransitions`
 - `.:capabilityIntent`
 - `.:capabilityMaterial`
 - `.:capabilityProjection`
@@ -248,6 +252,7 @@ title: "@agent-os/runtime-protocol API"
 - `.:toolReplayArtifactFromExecutedPayload`
 - `.:validateAgentMount`
 - `.:validateIntentSettlementVocabulary`
+- `.:validateRuntimeLedgerTransitions`
 
 ## Experimental exports
 
