@@ -18,7 +18,6 @@
 import { Clock, Context, Data, Duration, Effect, Predicate, Ref } from "effect";
 import {
   DECISION_GATE_KIND,
-  decisionGateBoundaryContract,
   projectDecisionGate,
   settleDecisionGateConsumed,
 } from "@agent-os/decision-gate";
@@ -74,14 +73,13 @@ import {
   toolReplayArtifactFromExecutedPayload,
   toolRejectedEvent,
   replayToolFromArtifact,
-  type RuntimeEventCommitSpec,
   type SubmitDecisionInterrupt,
   type SubmitResult,
   type ToolArgumentSummary,
   type ToolRejectedDiagnostics,
   type TurnRef,
 } from "@agent-os/runtime-protocol";
-import type { LedgerCommitEventSpec, LedgerTruthIdentity } from "@agent-os/runtime-protocol";
+import type { LedgerTruthIdentity } from "@agent-os/runtime-protocol";
 import type { InternalSubmitSpec } from "./internal-submit";
 import { Ledger } from "./ledger";
 import {
@@ -126,6 +124,7 @@ import {
 } from "./tool-settlement";
 import { BoundaryEvents } from "./boundary-events";
 import type { BoundaryCommitRejected } from "./boundary-commit";
+import { appendNextDriverAction, appendRuntimeDriverAction } from "./driver";
 import { MaterializedProjections, waitForProjection } from "./projection";
 import type { BoundaryContract } from "@agent-os/kernel/boundary-contract";
 
@@ -365,27 +364,6 @@ export const buildInitialMessages = (
       { role: "system", content: systemContent },
       { role: "user", content: spec.intent },
     ] satisfies ReadonlyArray<LlmMessage>;
-  });
-
-const logRuntimeLedgerEvent = (
-  ledger: {
-    readonly commit: (
-      events: ReadonlyArray<LedgerCommitEventSpec>,
-    ) => Effect.Effect<ReadonlyArray<LedgerEvent>, SqlError | JsonStringifyError>;
-  },
-  spec: RuntimeEventCommitSpec,
-): Effect.Effect<LedgerEvent, SqlError | JsonStringifyError> =>
-  Effect.gen(function* () {
-    const events = yield* ledger.commit([spec]);
-    const event = events[0];
-    if (event === undefined) {
-      return yield* Effect.fail(
-        new SqlError({
-          cause: new Error("ledger commit returned no events for single log"),
-        }),
-      );
-    }
-    return event;
   });
 
 const submitResultFromEvents = (
@@ -779,9 +757,9 @@ const finalAbort = (
 ): Effect.Effect<SubmitResult, SqlError | JsonStringifyError, Ledger> =>
   Effect.gen(function* () {
     const ledger = yield* Ledger;
-    yield* logRuntimeLedgerEvent(
-      ledger,
-      agentRunAbortedEvent({
+    yield* appendRuntimeDriverAction(ledger, {
+      kind: "abort",
+      event: agentRunAbortedEvent({
         ...identity,
         kind,
         runId,
@@ -789,7 +767,7 @@ const finalAbort = (
         payload,
         traceContext,
       }),
-    );
+    });
     const events = yield* ledger.events(identity);
     return yield* submitResultFromEvents(events, runId);
   });
@@ -1005,14 +983,14 @@ export const submitAgentEffect = (
     let toolValidationFailures = 0;
     const started =
       spec.resume === undefined
-        ? yield* logRuntimeLedgerEvent(
-            ledger,
-            agentRunStartedEvent({
+        ? (yield* appendRuntimeDriverAction(ledger, {
+            kind: "start",
+            event: agentRunStartedEvent({
               ...identity,
               intent: spec.intent,
               traceContext,
             }),
-          )
+          })).event
         : priorEvents.find(
             (event) =>
               event.id === spec.resume?.runId &&
@@ -1029,16 +1007,16 @@ export const submitAgentEffect = (
       );
     }
     if (spec.resume === undefined) {
-      yield* logRuntimeLedgerEvent(
-        ledger,
-        chatIngestedEvent({
+      yield* appendRuntimeDriverAction(ledger, {
+        kind: "ingest_chat",
+        event: chatIngestedEvent({
           ...identity,
           runId: started.id,
           intent: spec.intent,
           context: spec.context,
           traceContext,
         }),
-      );
+      });
     } else {
       const existingTerminal = projectSubmitResult(priorEvents, started.id);
       if (existingTerminal !== null) return existingTerminal;
@@ -1164,8 +1142,9 @@ export const submitAgentEffect = (
           );
         }
         const finalStr = yield* safeStringify(result.decoded);
-        yield* ledger.commit([
-          agentRunCompletedEvent({
+        yield* appendRuntimeDriverAction(ledger, {
+          kind: "complete",
+          event: agentRunCompletedEvent({
             ...identity,
             runId: started.id,
             final: finalStr,
@@ -1174,7 +1153,7 @@ export const submitAgentEffect = (
             tokensUsed: tokens,
             traceContext,
           }),
-        ]);
+        });
         const events = yield* ledger.events(identity);
         return yield* submitResultFromEvents(events, started.id);
       }
@@ -1278,14 +1257,15 @@ export const submitAgentEffect = (
       );
 
       if (spec.resume !== undefined) {
-        const interruption = matchingInterruptionEvent(priorEvents, spec.resume);
+        const resume = spec.resume;
+        const interruption = matchingInterruptionEvent(priorEvents, resume);
         if (interruption === undefined) {
           return yield* finalAbort(
             ABORT.TOOL_ERROR,
             {
               reason: "resume_missing_matching_interruption",
-              interruptId: spec.resume.interruptId,
-              gateRef: spec.resume.gateRef,
+              interruptId: resume.interruptId,
+              gateRef: resume.gateRef,
             },
             identity,
             started.id,
@@ -1304,7 +1284,7 @@ export const submitAgentEffect = (
             ABORT.TOOL_ERROR,
             {
               reason: "resume_interruption_missing_decision_binding",
-              interruptId: spec.resume.interruptId,
+              interruptId: resume.interruptId,
             },
             identity,
             started.id,
@@ -1313,10 +1293,10 @@ export const submitAgentEffect = (
           );
         }
 
-        const projection = projectDecisionGate(priorEvents, spec.resume.gateRef);
+        const projection = projectDecisionGate(priorEvents, resume.gateRef);
         if (
           projection.status !== "approved" ||
-          projection.decision?.decisionRef !== spec.resume.decisionRef ||
+          projection.decision?.decisionRef !== resume.decisionRef ||
           projection.request === undefined
         ) {
           return yield* finalAbort(
@@ -1328,8 +1308,8 @@ export const submitAgentEffect = (
                   : projection.status === "rejected"
                     ? "decision_gate_rejected"
                     : "decision_gate_not_approved",
-              gateRef: spec.resume.gateRef,
-              decisionRef: spec.resume.decisionRef,
+              gateRef: resume.gateRef,
+              decisionRef: resume.decisionRef,
               status: projection.status,
             },
             identity,
@@ -1340,16 +1320,16 @@ export const submitAgentEffect = (
         }
         const decisionEvent = matchingDecisionEvent(
           priorEvents,
-          spec.resume.gateRef,
-          spec.resume.decisionRef,
+          resume.gateRef,
+          resume.decisionRef,
         );
         if (decisionEvent === undefined) {
           return yield* finalAbort(
             ABORT.TOOL_ERROR,
             {
               reason: "decision_gate_approved_without_decision_event",
-              gateRef: spec.resume.gateRef,
-              decisionRef: spec.resume.decisionRef,
+              gateRef: resume.gateRef,
+              decisionRef: resume.decisionRef,
             },
             identity,
             started.id,
@@ -1361,47 +1341,47 @@ export const submitAgentEffect = (
         const replayed = yield* replayMessagesToInterruptedTool(
           initialMessages,
           priorEvents,
-          spec.resume,
+          resume,
           decision.toolCallId,
           spec.executionDomains ?? [],
         );
         messages = replayed.messages;
         resumedToolCall = replayed.call;
-        firstTurn = spec.resume.turn.index;
+        firstTurn = resume.turn.index;
         const priorTokens = priorEvents.reduce((sum, event) => {
           const decoded = decodeRuntimeLedgerEvent(event);
           return decoded._tag === "runtime" &&
             decoded.event.kind === RUNTIME_EVENT_KIND.LLM_RESPONSE &&
-            decoded.event.payload.turn.id === spec.resume?.runId
+            decoded.event.payload.turn.id === resume.runId
             ? sum + decoded.event.payload.usage.totalTokens
             : sum;
         }, 0);
         yield* Ref.set(tokensUsedRef, priorTokens);
 
-        const consumed = yield* boundaryEvents.commit(
-          decisionGateBoundaryContract,
-          DECISION_GATE_KIND.CONSUMED,
+        yield* appendNextDriverAction(
+          { ledger, boundaryEvents },
           {
-            gateRef: spec.resume.gateRef,
-            decisionRef: spec.resume.decisionRef,
-            consumedBy: `agent.run:${spec.resume.runId}`,
-            claim: settleDecisionGateConsumed(projection.request.claim, {
-              gateRef: spec.resume.gateRef,
-              eventId: decisionEvent.id,
-            }),
+            kind: "resume",
+            consumed: {
+              gateRef: resume.gateRef,
+              decisionRef: resume.decisionRef,
+              consumedBy: `agent.run:${resume.runId}`,
+              claim: settleDecisionGateConsumed(projection.request.claim, {
+                gateRef: resume.gateRef,
+                eventId: decisionEvent.id,
+              }),
+            },
+            resumed: (resumedAtEventId) =>
+              agentRunResumedEvent({
+                ...identity,
+                runId: resume.runId,
+                turn: resume.turn,
+                interruptId: resume.interruptId,
+                resume: resume.resume,
+                resumedAtEventId,
+                traceContext,
+              }),
           },
-        );
-        yield* logRuntimeLedgerEvent(
-          ledger,
-          agentRunResumedEvent({
-            ...identity,
-            runId: spec.resume.runId,
-            turn: spec.resume.turn,
-            interruptId: spec.resume.interruptId,
-            resume: spec.resume.resume,
-            resumedAtEventId: consumed.id,
-            traceContext,
-          }),
         );
       }
 
@@ -1442,9 +1422,9 @@ export const submitAgentEffect = (
           });
           const modelId = routeModelId(spec.route);
           const toolChoiceSummary = safeToolChoiceSummary(toolChoice);
-          yield* logRuntimeLedgerEvent(
-            ledger,
-            llmRequestedEvent({
+          yield* appendRuntimeDriverAction(ledger, {
+            kind: "request_llm",
+            event: llmRequestedEvent({
               ...identity,
               runId: started.id,
               turn: turnRefOf(started.id, turn),
@@ -1453,7 +1433,7 @@ export const submitAgentEffect = (
               ...(toolChoiceSummary === undefined ? {} : { toolChoice: toolChoiceSummary }),
               traceContext,
             }),
-          );
+          });
           const timedResp = yield* Effect.either(
             llm
               .call(
@@ -1499,16 +1479,16 @@ export const submitAgentEffect = (
           newTokens = tokensBeforeCall + resp.usage.totalTokens;
           yield* Ref.set(tokensUsedRef, newTokens);
 
-          yield* logRuntimeLedgerEvent(
-            ledger,
-            llmResponseEvent({
+          yield* appendRuntimeDriverAction(ledger, {
+            kind: "record_llm_response",
+            event: llmResponseEvent({
               ...identity,
               turn: turnRefOf(started.id, turn),
               items: resp.items,
               usage: resp.usage,
               traceContext,
             }),
-          );
+          });
 
           if (newTokens > budgetTokens) {
             return yield* finalAbort(
@@ -1559,8 +1539,9 @@ export const submitAgentEffect = (
               });
               continue;
             }
-            yield* ledger.commit([
-              agentRunCompletedEvent({
+            yield* appendRuntimeDriverAction(ledger, {
+              kind: "complete",
+              event: agentRunCompletedEvent({
                 ...identity,
                 runId: started.id,
                 final: nextResponseText,
@@ -1570,7 +1551,7 @@ export const submitAgentEffect = (
                 turn: turnRefOf(started.id, turn),
                 traceContext,
               }),
-            ]);
+            });
             const events = yield* ledger.events(identity);
             return yield* submitResultFromEvents(events, started.id);
           }
@@ -1616,9 +1597,9 @@ export const submitAgentEffect = (
             ordered: orderedCompleteAfterTools,
           });
           if (policyViolationReason !== null) {
-            yield* logRuntimeLedgerEvent(
-              ledger,
-              toolRejectedEvent({
+            yield* appendRuntimeDriverAction(ledger, {
+              kind: "reject_tool",
+              event: toolRejectedEvent({
                 ...identity,
                 runId: started.id,
                 toolCallId: call.id,
@@ -1633,7 +1614,7 @@ export const submitAgentEffect = (
                 },
                 traceContext,
               }),
-            );
+            });
             if (toolPolicyFailures >= toolRetries) {
               return yield* new ToolError({
                 toolName: call.function.name,
@@ -1686,9 +1667,9 @@ export const submitAgentEffect = (
             }),
           );
           if (parsed._tag === "Left") {
-            yield* logRuntimeLedgerEvent(
-              ledger,
-              toolRejectedEvent({
+            yield* appendRuntimeDriverAction(ledger, {
+              kind: "reject_tool",
+              event: toolRejectedEvent({
                 ...identity,
                 runId: started.id,
                 toolCallId: call.id,
@@ -1703,7 +1684,7 @@ export const submitAgentEffect = (
                 },
                 traceContext,
               }),
-            );
+            });
             if (toolValidationFailures >= toolRetries) {
               return yield* parsed.left;
             }
@@ -1731,9 +1712,9 @@ export const submitAgentEffect = (
           );
           if (decoded._tag === "Left") {
             const schemaIssues = schemaIssuesFromToolError(decoded.left);
-            yield* logRuntimeLedgerEvent(
-              ledger,
-              toolRejectedEvent({
+            yield* appendRuntimeDriverAction(ledger, {
+              kind: "reject_tool",
+              event: toolRejectedEvent({
                 ...identity,
                 runId: started.id,
                 toolCallId: call.id,
@@ -1749,7 +1730,7 @@ export const submitAgentEffect = (
                 },
                 traceContext,
               }),
-            );
+            });
             if (toolValidationFailures >= toolRetries) {
               return yield* decoded.left;
             }
@@ -1780,35 +1761,34 @@ export const submitAgentEffect = (
             const gateRef = decisionGateRefFor(interrupt, claim.operationRef);
             const interruptId = decisionInterruptIdFor(interrupt, claim.operationRef);
             const subjectRef = decisionSubjectRefFor(claim);
-            yield* boundaryEvents.commit(
-              decisionGateBoundaryContract,
-              DECISION_GATE_KIND.REQUESTED,
+            yield* appendNextDriverAction(
+              { ledger, boundaryEvents },
               {
-                gateRef,
-                subjectRef,
-                ...(interrupt.policyRef === undefined ? {} : { policyRef: interrupt.policyRef }),
-                ...(interrupt.summary === undefined ? {} : { summary: interrupt.summary }),
-                claim,
-              },
-            );
-            yield* logRuntimeLedgerEvent(
-              ledger,
-              agentRunInterruptedEvent({
-                ...identity,
-                runId: started.id,
-                turn: turnRefOf(started.id, turn),
-                interruptId,
-                reason: interrupt.reason,
-                resumeSchema: interrupt.resumeSchema ?? {},
-                tokensUsed: newTokens,
-                decision: {
+                kind: "park",
+                request: {
                   gateRef,
                   subjectRef,
-                  toolCallId: call.id,
-                  toolName: call.function.name,
+                  ...(interrupt.policyRef === undefined ? {} : { policyRef: interrupt.policyRef }),
+                  ...(interrupt.summary === undefined ? {} : { summary: interrupt.summary }),
+                  claim,
                 },
-                traceContext,
-              }),
+                interruption: agentRunInterruptedEvent({
+                  ...identity,
+                  runId: started.id,
+                  turn: turnRefOf(started.id, turn),
+                  interruptId,
+                  reason: interrupt.reason,
+                  resumeSchema: interrupt.resumeSchema ?? {},
+                  tokensUsed: newTokens,
+                  decision: {
+                    gateRef,
+                    subjectRef,
+                    toolCallId: call.id,
+                    toolName: call.function.name,
+                  },
+                  traceContext,
+                }),
+              },
             );
             const events = yield* ledger.events(identity);
             return interruptedSubmitResultFromEvents(events, started.id, {
@@ -1821,9 +1801,9 @@ export const submitAgentEffect = (
 
           const resolvedMaterials = yield* resolveToolMaterials(refs, spec, tool, claim);
           if (!resolvedMaterials.ok) {
-            yield* logRuntimeLedgerEvent(
-              ledger,
-              toolRejectedEvent({
+            yield* appendRuntimeDriverAction(ledger, {
+              kind: "reject_tool",
+              event: toolRejectedEvent({
                 ...identity,
                 runId: started.id,
                 toolCallId: call.id,
@@ -1833,7 +1813,7 @@ export const submitAgentEffect = (
                 claim: settleToolAdmissionRejected(claim, resolvedMaterials.rejectionRef),
                 traceContext,
               }),
-            );
+            });
             return yield* new ToolError({
               toolName: call.function.name,
               cause: toolAdmissionFailureCause(resolvedMaterials.rejectionRef),
@@ -1871,9 +1851,9 @@ export const submitAgentEffect = (
           const rejectedAdmission =
             normalizedAdmission.ok === false ? normalizedAdmission.rejectionRef : null;
           if (rejectedAdmission !== null) {
-            yield* logRuntimeLedgerEvent(
-              ledger,
-              toolRejectedEvent({
+            yield* appendRuntimeDriverAction(ledger, {
+              kind: "reject_tool",
+              event: toolRejectedEvent({
                 ...identity,
                 runId: started.id,
                 toolCallId: call.id,
@@ -1883,7 +1863,7 @@ export const submitAgentEffect = (
                 claim: settleToolAdmissionRejected(claim, rejectedAdmission),
                 traceContext,
               }),
-            );
+            });
             return yield* new ToolError({
               toolName: call.function.name,
               cause: toolAdmissionFailureCause(rejectedAdmission),
@@ -1908,9 +1888,9 @@ export const submitAgentEffect = (
               ? receiptBackedToolBindingReason(spec, call.function.name)
               : null;
           if (receiptBindingReason !== null) {
-            yield* logRuntimeLedgerEvent(
-              ledger,
-              toolRejectedEvent({
+            yield* appendRuntimeDriverAction(ledger, {
+              kind: "reject_tool",
+              event: toolRejectedEvent({
                 ...identity,
                 runId: started.id,
                 toolCallId: call.id,
@@ -1920,7 +1900,7 @@ export const submitAgentEffect = (
                 claim: settleToolExecutionRejected(claim, receiptBindingReason),
                 traceContext,
               }),
-            );
+            });
             return yield* new ToolError({
               toolName: call.function.name,
               cause: { reason: receiptBindingReason },
@@ -2057,9 +2037,9 @@ export const submitAgentEffect = (
               [ABORT.TOOL_ERROR]: (error) =>
                 Effect.gen(function* () {
                   const reason = toolErrorReason(error);
-                  yield* logRuntimeLedgerEvent(
-                    ledger,
-                    toolRejectedEvent({
+                  yield* appendRuntimeDriverAction(ledger, {
+                    kind: "reject_tool",
+                    event: toolRejectedEvent({
                       ...identity,
                       runId: started.id,
                       toolCallId: call.id,
@@ -2069,7 +2049,7 @@ export const submitAgentEffect = (
                       claim: settleToolExecutionRejected(claim, reason),
                       traceContext,
                     }),
-                  );
+                  });
                   return yield* error;
                 }),
             }),
@@ -2080,9 +2060,9 @@ export const submitAgentEffect = (
               ? receiptBackedToolResultFromUnknown(result)
               : null;
           if (resolvedExecution.resolved.witness === "receipt" && terminal === null) {
-            yield* logRuntimeLedgerEvent(
-              ledger,
-              toolRejectedEvent({
+            yield* appendRuntimeDriverAction(ledger, {
+              kind: "reject_tool",
+              event: toolRejectedEvent({
                 ...identity,
                 runId: started.id,
                 toolCallId: call.id,
@@ -2095,7 +2075,7 @@ export const submitAgentEffect = (
                 ),
                 traceContext,
               }),
-            );
+            });
             return yield* new ToolError({
               toolName: call.function.name,
               cause: {
@@ -2108,9 +2088,9 @@ export const submitAgentEffect = (
             (!claimMatchesPreClaim(terminal.claim, claim) ||
               terminal.receipt.anchorKind !== "external_receipt")
           ) {
-            yield* logRuntimeLedgerEvent(
-              ledger,
-              toolRejectedEvent({
+            yield* appendRuntimeDriverAction(ledger, {
+              kind: "reject_tool",
+              event: toolRejectedEvent({
                 ...identity,
                 runId: started.id,
                 toolCallId: call.id,
@@ -2120,7 +2100,7 @@ export const submitAgentEffect = (
                 claim: settleToolExecutionRejected(claim, "receipt_backed_tool_claim_mismatch"),
                 traceContext,
               }),
-            );
+            });
             return yield* new ToolError({
               toolName: call.function.name,
               cause: { reason: "receipt_backed_tool_claim_mismatch" },
@@ -2130,9 +2110,9 @@ export const submitAgentEffect = (
           const toolResult = terminal?.result ?? result;
           const toolClaim = terminal?.claim ?? settleToolExecuted(claim, contract);
           const resultStr = yield* safeStringify(toolResult);
-          yield* logRuntimeLedgerEvent(
-            ledger,
-            toolExecutedEvent({
+          yield* appendRuntimeDriverAction(ledger, {
+            kind: "record_tool_result",
+            event: toolExecutedEvent({
               ...identity,
               runId: started.id,
               toolCallId: call.id,
@@ -2143,7 +2123,7 @@ export const submitAgentEffect = (
               claim: toolClaim,
               traceContext,
             }),
-          );
+          });
           if (requiredToolNames.includes(call.function.name)) {
             executedToolNames.add(call.function.name);
           }
@@ -2167,26 +2147,29 @@ export const submitAgentEffect = (
             const final =
               spec.toolPolicy?.completeAfterToolsExecuted?.finalMessage ??
               "completed after declared tools executed";
-            yield* ledger.commit([
-              runtimeCompletedAfterToolsEvent({
-                ...identity,
-                runId: started.id,
-                turn: turnRefOf(started.id, turn),
-                toolNames: completeAfterToolNames,
-                tokensUsed: newTokens,
-                traceContext,
-              }),
-              agentRunCompletedEvent({
-                ...identity,
-                runId: started.id,
-                final,
-                output: final,
-                outputKind: "text",
-                tokensUsed: newTokens,
-                turn: turnRefOf(started.id, turn),
-                traceContext,
-              }),
-            ]);
+            yield* appendRuntimeDriverAction(ledger, {
+              kind: "complete_after_tools",
+              events: [
+                runtimeCompletedAfterToolsEvent({
+                  ...identity,
+                  runId: started.id,
+                  turn: turnRefOf(started.id, turn),
+                  toolNames: completeAfterToolNames,
+                  tokensUsed: newTokens,
+                  traceContext,
+                }),
+                agentRunCompletedEvent({
+                  ...identity,
+                  runId: started.id,
+                  final,
+                  output: final,
+                  outputKind: "text",
+                  tokensUsed: newTokens,
+                  turn: turnRefOf(started.id, turn),
+                  traceContext,
+                }),
+              ],
+            });
             const events = yield* ledger.events(identity);
             return yield* submitResultFromEvents(events, started.id);
           }
