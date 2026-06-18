@@ -149,6 +149,7 @@ export const isInputRequestRef = (value: unknown): value is InputRequestRef =>
   isPositiveInteger(value.afterEventId) &&
   isPositiveInteger(value.runId) &&
   isTurnRef(value.turn) &&
+  value.runId === value.turn.id &&
   isNonEmptyString(value.interruptId) &&
   isPositiveInteger(value.interruptionEventId) &&
   isNonEmptyString(value.gateRef) &&

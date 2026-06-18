@@ -139,6 +139,7 @@ export const isContinuationRef = (value: unknown): value is ContinuationRef =>
   isPositiveInteger((value as { readonly afterEventId?: unknown }).afterEventId) &&
   isPositiveInteger((value as { readonly runId?: unknown }).runId) &&
   isTurnRef((value as { readonly turn?: unknown }).turn) &&
+  (value as { readonly runId: number }).runId === (value as { readonly turn: TurnRef }).turn.id &&
   typeof (value as { readonly interruptId?: unknown }).interruptId === "string" &&
   (value as { readonly interruptId: string }).interruptId.length > 0 &&
   isPositiveInteger((value as { readonly interruptionEventId?: unknown }).interruptionEventId) &&

@@ -1190,6 +1190,26 @@ const parseFoldIntent = (raw: unknown) => {
   return triggerParseOk({ label: raw.label });
 };
 
+const rawCanonicalPayload = () => {
+  const payload = {
+    visible: "raw",
+    toJSON: () => ({ visible: "stored" }),
+  };
+  Object.defineProperty(payload, "secret", {
+    value: "not-recorded",
+    enumerable: false,
+  });
+  return payload;
+};
+
+const payloadObservation = (payload: unknown) => ({
+  visible:
+    typeof payload === "object" && payload !== null
+      ? (payload as { readonly visible?: unknown }).visible
+      : undefined,
+  hasSecret: typeof payload === "object" && payload !== null && "secret" in payload,
+});
+
 const foldTrigger = {
   kind: "test.fold",
   intentEventKind: "test.fold.requested",
@@ -1206,9 +1226,43 @@ const foldTrigger = {
   commitCancelled: () => undefined,
 } satisfies DurableTrigger<FoldIntent, FoldIntent>;
 
+const canonicalTxTrigger = {
+  kind: "test.trigger_canonical_tx",
+  intentEventKind: "test.trigger_canonical_tx.requested",
+  cancellation: "cooperative",
+  parseIntent: parseFoldIntent,
+  acquire: (intent: FoldIntent) => Effect.succeed(intent),
+  commit: (_outcome, tx) => {
+    const inserted = tx.insertEvent({
+      kind: "test.trigger_canonical_tx.done",
+      payload: rawCanonicalPayload(),
+    });
+    const enqueued = tx.enqueue({
+      triggerKind: "test.fold",
+      intentEventKind: "test.fold.requested",
+      payload: rawCanonicalPayload(),
+      fireAt: tx.now + 1000,
+    });
+    tx.insertEvent({
+      kind: "test.trigger_canonical_tx.observed",
+      payload: {
+        inserted: payloadObservation(inserted.payload),
+        enqueued: payloadObservation(enqueued.payload),
+        seen: tx
+          .events({
+            afterId: tx.intentEventId,
+            kinds: ["test.trigger_canonical_tx.done", "test.fold.requested"],
+          })
+          .map((event) => payloadObservation(event.payload)),
+      },
+    });
+  },
+  commitCancelled: () => undefined,
+} satisfies DurableTrigger<FoldIntent, FoldIntent>;
+
 export const TriggerFacadeTestDO = defineAgentDO<CloudflareAgentEnv>({
   bindings: [],
-  triggers: [foldTrigger],
+  triggers: [foldTrigger, canonicalTxTrigger],
 });
 export type TriggerFacadeTestDO = InstanceType<typeof TriggerFacadeTestDO>;
 
@@ -1534,6 +1588,31 @@ const attachedOutput = {
   },
 } satisfies AttachedStreamHandler<unknown, unknown>;
 
+const attachedCanonicalTx = {
+  kind: "test.attached_canonical_tx",
+  mode: "output_only",
+  cancellation: "cooperative",
+  onDetach: "abort",
+  parseStart: (raw) => attachedStreamParseOk(raw),
+  run: async function* () {
+    yield { kind: "completed", terminal: { ok: true } };
+  },
+  commitTerminal: (_terminal, tx) => {
+    const inserted = tx.insertEvent({
+      kind: "test.attached_canonical_tx.completed",
+      payload: rawCanonicalPayload(),
+    });
+    const seen = tx.events({ kinds: ["test.attached_canonical_tx.completed"] })[0];
+    tx.insertEvent({
+      kind: "test.attached_canonical_tx.observed",
+      payload: {
+        inserted: payloadObservation(inserted.payload),
+        seen: seen === undefined ? null : payloadObservation(seen.payload),
+      },
+    });
+  },
+} satisfies AttachedStreamHandler<unknown, unknown>;
+
 const waitForAbortSignal = (signal: AbortSignal): Promise<void> =>
   signal.aborted
     ? Promise.resolve()
@@ -1557,7 +1636,7 @@ const attachedCancellable = {
 
 export const AttachedStreamTestDO = defineAgentDO<CloudflareAgentEnv>({
   bindings: [],
-  streams: [attachedEcho, attachedOutput, attachedCancellable],
+  streams: [attachedEcho, attachedOutput, attachedCanonicalTx, attachedCancellable],
 });
 export type AttachedStreamTestDO = InstanceType<typeof AttachedStreamTestDO>;
 

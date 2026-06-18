@@ -103,6 +103,10 @@ describe("InputRequest protocol vocabulary", () => {
       expect(reparsed.value.requestKind).toBe(kind);
       expect(Object.prototype.propertyIsEnumerable.call(reparsed, "value")).toBe(false);
       expect(isInputRequestRef(result.ref)).toBe(true);
+      expect(isInputRequestRef({ ...result.ref, turn: { id: 2, index: 0 } })).toBe(false);
+      expect(
+        recordedInputRequestRefFromUnknown({ ...result.ref, turn: { id: 2, index: 0 } }),
+      ).toBeNull();
     }
   });
 

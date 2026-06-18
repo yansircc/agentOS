@@ -33,7 +33,11 @@ import {
   type ClaimedDueWorkRow,
   type DueWorkRow,
 } from "./due-work";
-import { commitLedgerTransaction, type LedgerTransactionBuilder } from "./ledger/commit";
+import {
+  canonicalLedgerPayload,
+  commitLedgerTransaction,
+  type LedgerTransactionBuilder,
+} from "./ledger/commit";
 import { ledgerEventFromRow, type LedgerEventSqlRow } from "./ledger/identity";
 import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
 
@@ -131,12 +135,13 @@ export const TriggerPumpLive = (
             });
           },
           insertEvent: (spec) => {
+            const payload = canonicalLedgerPayload(spec.payload).payload;
             const ref = builder.append({
               ts: spec.ts ?? now,
               kind: spec.kind,
               scopeRef: identity.scopeRef,
               effectAuthorityRef: identity.effectAuthorityRef,
-              payload: spec.payload,
+              payload,
             });
             const event = {
               id: builder.id(ref),
@@ -145,7 +150,7 @@ export const TriggerPumpLive = (
               scopeRef: identity.scopeRef,
               factOwnerRef: identity.factOwnerRef,
               effectAuthorityRef: identity.effectAuthorityRef,
-              payload: spec.payload,
+              payload,
             };
             written.push(event);
             return event;
@@ -154,12 +159,13 @@ export const TriggerPumpLive = (
             if (!registry.has(spec.triggerKind)) {
               return failTriggerTransaction(spec.triggerKind);
             }
+            const payload = canonicalLedgerPayload(spec.payload).payload;
             const ref = builder.append({
               ts: spec.ts ?? now,
               kind: spec.intentEventKind,
               scopeRef: identity.scopeRef,
               effectAuthorityRef: identity.effectAuthorityRef,
-              payload: spec.payload,
+              payload,
             });
             const event = {
               id: builder.id(ref),
@@ -168,7 +174,7 @@ export const TriggerPumpLive = (
               scopeRef: identity.scopeRef,
               factOwnerRef: identity.factOwnerRef,
               effectAuthorityRef: identity.effectAuthorityRef,
-              payload: spec.payload,
+              payload,
             };
             builder.afterInsert(() => {
               insertDurableTriggerDueWork(sql, spec.fireAt, spec.triggerKind, event.id);

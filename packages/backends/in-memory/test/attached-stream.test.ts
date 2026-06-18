@@ -33,7 +33,78 @@ const makeRuntime = (
   return { backend, runtime };
 };
 
+const rawCanonicalPayload = () => {
+  const payload = {
+    visible: "raw",
+    toJSON: () => ({ visible: "stored" }),
+  };
+  Object.defineProperty(payload, "secret", {
+    value: "not-recorded",
+    enumerable: false,
+  });
+  return payload;
+};
+
+const payloadObservation = (payload: unknown) => ({
+  visible:
+    typeof payload === "object" && payload !== null
+      ? (payload as { readonly visible?: unknown }).visible
+      : undefined,
+  hasSecret: typeof payload === "object" && payload !== null && "secret" in payload,
+});
+
 describe("in-memory attached streams", () => {
+  it("exposes canonical payloads through attached-stream tx pending surfaces", async () => {
+    let observed:
+      | {
+          readonly inserted: ReturnType<typeof payloadObservation>;
+          readonly seen: ReturnType<typeof payloadObservation> | undefined;
+        }
+      | undefined;
+    const handler = {
+      kind: "test.canonical_tx",
+      mode: "output_only",
+      cancellation: "cooperative",
+      onDetach: "abort",
+      parseStart: (raw) => attachedStreamParseOk(raw),
+      run: async function* () {
+        yield { kind: "completed", terminal: { ok: true } };
+      },
+      commitTerminal: (_terminal, tx) => {
+        const inserted = tx.insertEvent({
+          kind: "test.canonical_tx.completed",
+          payload: rawCanonicalPayload(),
+        });
+        const seen = tx.events({ kinds: ["test.canonical_tx.completed"] })[0];
+        observed = {
+          inserted: payloadObservation(inserted.payload),
+          seen: seen === undefined ? undefined : payloadObservation(seen.payload),
+        };
+      },
+    } satisfies AttachedStreamHandler<unknown, unknown>;
+
+    const { runtime } = makeRuntime("stream-canonical-tx", { streams: [handler] });
+    try {
+      const streams = await runtime.runPromise(AttachedStreams);
+      const ledger = await runtime.runPromise(Ledger);
+      const session = await runtime.runPromise(
+        streams.attach({ kind: "test.canonical_tx", payload: {} }),
+      );
+      await expect(session.output[Symbol.asyncIterator]().next()).resolves.toMatchObject({
+        value: { kind: "opened" },
+      });
+      await waitFor(async () => observed !== undefined);
+      expect(observed).toEqual({
+        inserted: { visible: "stored", hasSecret: false },
+        seen: { visible: "stored", hasSecret: false },
+      });
+      const events = await runtime.runPromise(ledger.events(truthIdentity("stream-canonical-tx")));
+      expect(events[0]?.payload).toEqual({ visible: "stored" });
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
   it("accepts bidi input and commits terminal facts explicitly", async () => {
     const echo = {
       kind: "test.echo",

@@ -144,6 +144,24 @@ describe("attached stream Cloudflare DO surface", () => {
     });
   });
 
+  it("exposes canonical payloads through attached-stream tx pending surfaces", async () => {
+    await withAttachedDO("attached-canonical-tx", async (stub, identity) => {
+      const response = await stub.attachStream({
+        kind: "test.attached_canonical_tx",
+        payload: {},
+      });
+      expect(response.headers.get("content-type")).toContain("text/event-stream");
+      const frames = await readSseFrames(response, 2);
+      expect(frames.map((frame) => frame.kind)).toEqual(["opened", "completed"]);
+      const events = await stub.events(identity);
+      const observed = events.find((event) => event.kind === "test.attached_canonical_tx.observed");
+      expect(observed?.payload).toEqual({
+        inserted: { visible: "stored", hasSecret: false },
+        seen: { visible: "stored", hasSecret: false },
+      });
+    });
+  });
+
   it("cancels output-only streams explicitly; reader cancel only detaches", async () => {
     await withAttachedDO("attached-cancel", async (stub, identity) => {
       const response = await stub.attachStream({

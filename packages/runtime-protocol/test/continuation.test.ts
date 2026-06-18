@@ -97,6 +97,8 @@ describe("runtime continuation refs", () => {
       decisionRef: "decision/approved",
       resume: { approved: true },
     });
+    expect(isContinuationRef({ ...wire, turn: { id: 4, index: 1 } })).toBe(false);
+    expect(recordedContinuationRefFromUnknown({ ...wire, turn: { id: 4, index: 1 } })).toBeNull();
   });
 
   it("does not fabricate a continuation ref for an interruption without a decision binding", () => {

@@ -10,7 +10,7 @@ import { SqlError } from "@agent-os/kernel/errors";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import { EventBus } from "./ledger/event-bus";
 import { selectLedgerEvents } from "./ledger/ledger";
-import { commitLedgerTransaction } from "./ledger/commit";
+import { canonicalLedgerPayload, commitLedgerTransaction } from "./ledger/commit";
 import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
 
 export const AttachedStreamsLive = (
@@ -65,12 +65,13 @@ export const AttachedStreamsLive = (
                     });
                   },
                   insertEvent: (spec) => {
+                    const payload = canonicalLedgerPayload(spec.payload).payload;
                     const ref = builder.append({
                       ts: spec.ts ?? streamCtx.now,
                       kind: spec.kind,
                       scopeRef: identity.scopeRef,
                       effectAuthorityRef: identity.effectAuthorityRef,
-                      payload: spec.payload,
+                      payload,
                     });
                     const event = {
                       id: builder.id(ref),
@@ -79,7 +80,7 @@ export const AttachedStreamsLive = (
                       scopeRef: identity.scopeRef,
                       factOwnerRef: identity.factOwnerRef,
                       effectAuthorityRef: identity.effectAuthorityRef,
-                      payload: spec.payload,
+                      payload,
                     };
                     written.push(event);
                     return event;

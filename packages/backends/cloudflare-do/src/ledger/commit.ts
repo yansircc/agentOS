@@ -216,7 +216,7 @@ const commitAllocatedEventIds = (sql: SqlStorage, nextId: number): void => {
   sql.exec("UPDATE ledger_sequences SET next_id = ? WHERE name = ?", nextId, "events");
 };
 
-const encodePayload = (
+export const canonicalLedgerPayload = (
   payload: unknown,
 ): { readonly encoded: string; readonly payload: unknown } => {
   try {
@@ -337,7 +337,7 @@ export const commitLedgerTransaction = <A, E = never>(
             byRef.set(recipe.ref.key, event);
             return event;
           });
-          const encoded = events.map((event) => encodePayload(event.payload));
+          const encoded = events.map((event) => canonicalLedgerPayload(event.payload));
           const committedEvents = events.map((event, index): LedgerEvent => {
             const committed = { ...event, payload: encoded[index]!.payload };
             byRef.set(builder.recipes[index]!.ref.key, committed);

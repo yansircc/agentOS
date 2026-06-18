@@ -77,6 +77,26 @@ const invalidRuntimeCompactionContent = (scope: string) => {
   return { kind: spec.kind, payload: spec.payload };
 };
 
+const rawCanonicalPayload = () => {
+  const payload = {
+    visible: "raw",
+    toJSON: () => ({ visible: "stored" }),
+  };
+  Object.defineProperty(payload, "secret", {
+    value: "not-recorded",
+    enumerable: false,
+  });
+  return payload;
+};
+
+const payloadObservation = (payload: unknown) => ({
+  visible:
+    typeof payload === "object" && payload !== null
+      ? (payload as { readonly visible?: unknown }).visible
+      : undefined,
+  hasSecret: typeof payload === "object" && payload !== null && "secret" in payload,
+});
+
 const expectSqlErrorFailure = (exit: Exit.Exit<unknown, unknown>): void => {
   expect(Exit.isFailure(exit)).toBe(true);
   if (Exit.isFailure(exit)) {
@@ -314,6 +334,89 @@ describe("in-memory runtime backend", () => {
           .filter((row) => row.kind === "test.chain.done")
           .map((row) => (row.payload as { readonly step: number }).step),
       ).toEqual([1, 2, 3]);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("exposes canonical payloads through trigger tx pending surfaces", async () => {
+    interface CanonicalIntent {
+      readonly id: string;
+    }
+    let observed:
+      | {
+          readonly inserted: ReturnType<typeof payloadObservation>;
+          readonly enqueued: ReturnType<typeof payloadObservation>;
+          readonly seen: ReadonlyArray<ReturnType<typeof payloadObservation>>;
+        }
+      | undefined;
+    const canonicalTrigger = {
+      kind: "test.trigger_canonical_tx",
+      intentEventKind: "test.trigger_canonical_tx.requested",
+      cancellation: "cooperative",
+      parseIntent: (raw) =>
+        typeof raw === "object" &&
+        raw !== null &&
+        typeof (raw as { readonly id?: unknown }).id === "string"
+          ? triggerParseOk({ id: (raw as { readonly id: string }).id })
+          : triggerParseFail("canonical intent malformed"),
+      acquire: (intent) => Effect.succeed(intent),
+      commit: (_intent, tx) => {
+        const inserted = tx.insertEvent({
+          kind: "test.trigger_canonical_tx.done",
+          payload: rawCanonicalPayload(),
+        });
+        const enqueued = tx.enqueue({
+          triggerKind: "test.trigger_canonical_tx",
+          intentEventKind: "test.trigger_canonical_tx.requested",
+          payload: rawCanonicalPayload(),
+          fireAt: tx.now + 1000,
+        });
+        observed = {
+          inserted: payloadObservation(inserted.payload),
+          enqueued: payloadObservation(enqueued.payload),
+          seen: tx
+            .events({
+              afterId: tx.intentEventId,
+              kinds: ["test.trigger_canonical_tx.done", "test.trigger_canonical_tx.requested"],
+            })
+            .map((event) => payloadObservation(event.payload)),
+        };
+      },
+      commitCancelled: () => undefined,
+    } satisfies DurableTrigger<CanonicalIntent, CanonicalIntent>;
+
+    const { backend, runtime } = makeRuntime("trigger-canonical-tx", {
+      triggers: [canonicalTrigger],
+    });
+    try {
+      const triggerPump = await runtime.runPromise(TriggerPump);
+      const ledger = await runtime.runPromise(Ledger);
+      const [event] = await runtime.runPromise(
+        ledger.commit([
+          {
+            kind: "test.trigger_canonical_tx.requested",
+            payload: { id: "intent-1" },
+            ...truthIdentity("trigger-canonical-tx"),
+          },
+        ]),
+      );
+      backend.state.addDueWork(
+        runtimeEventIdentity("trigger-canonical-tx"),
+        "test.trigger_canonical_tx",
+        event!.id,
+        10,
+      );
+
+      await expect(runtime.runPromise(triggerPump.drainDue(10))).resolves.toEqual({ drained: 1 });
+      expect(observed).toEqual({
+        inserted: { visible: "stored", hasSecret: false },
+        enqueued: { visible: "stored", hasSecret: false },
+        seen: [
+          { visible: "stored", hasSecret: false },
+          { visible: "stored", hasSecret: false },
+        ],
+      });
     } finally {
       await runtime.dispose();
     }

@@ -121,6 +121,35 @@ describe("defineAgentDO trigger facade", () => {
     ]);
   });
 
+  it("exposes canonical payloads through trigger tx pending surfaces", async () => {
+    const stub = testEnv.TRIGGER_FACADE_DO.get(
+      testEnv.TRIGGER_FACADE_DO.idFromName("trigger-facade-canonical-tx"),
+    );
+
+    const events = await runInDurableObject(stub, async (instance) => {
+      await instance.enqueueTrigger({
+        triggerKind: "test.trigger_canonical_tx",
+        payload: { label: "observe" },
+        at: 1,
+      });
+      const alarmInstance = instance as TriggerFacadeTestDO & {
+        readonly alarm: () => Promise<void>;
+      };
+      await alarmInstance.alarm();
+      return instance.events(testTruthIdentity("trigger-facade-canonical-tx"));
+    });
+
+    const observed = events.find((event) => event.kind === "test.trigger_canonical_tx.observed");
+    expect(observed?.payload).toEqual({
+      inserted: { visible: "stored", hasSecret: false },
+      enqueued: { visible: "stored", hasSecret: false },
+      seen: [
+        { visible: "stored", hasSecret: false },
+        { visible: "stored", hasSecret: false },
+      ],
+    });
+  });
+
   it("does not expose production drain methods on the default facade", async () => {
     const stub = testEnv.TRIGGER_FACADE_DO.get(
       testEnv.TRIGGER_FACADE_DO.idFromName("trigger-facade-no-prod-drain"),

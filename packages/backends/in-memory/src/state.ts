@@ -147,23 +147,26 @@ export interface InMemoryBackendStateOptions {
 const canonicalSerializablePayload = (
   payload: unknown,
 ): Effect.Effect<unknown, JsonStringifyError> =>
-  Effect.try({
-    try: () => JSON.stringify(payload),
-    catch: (cause) => new JsonStringifyError({ cause }),
-  }).pipe(
-    Effect.flatMap((serialized) =>
-      typeof serialized === "string"
-        ? Effect.try({
-            try: () => JSON.parse(serialized) as unknown,
-            catch: (cause) => new JsonStringifyError({ cause }),
-          })
-        : Effect.fail(
-            new JsonStringifyError({
-              cause: new TypeError("ledger event payload must be JSON serializable"),
-            }),
-          ),
-    ),
-  );
+  Effect.gen(function* () {
+    const serialized = yield* Effect.try({
+      try: () => JSON.stringify(payload),
+      catch: (cause) => new JsonStringifyError({ cause }),
+    });
+    if (typeof serialized !== "string") {
+      return yield* Effect.fail(
+        new JsonStringifyError({ cause: "ledger event payload must be JSON serializable" }),
+      );
+    }
+    return JSON.parse(serialized) as unknown;
+  });
+
+const canonicalSerializablePayloadSync = (payload: unknown): unknown =>
+  Effect.runSync(canonicalSerializablePayload(payload)); // eff-ignore EFF400 reason="in-memory transaction callbacks are synchronous and must observe the same canonical payload decoder"
+
+const canonicalLedgerEventSync = (event: LedgerEvent): LedgerEvent => ({
+  ...event,
+  payload: canonicalSerializablePayloadSync(event.payload),
+});
 
 const canonicalLedgerEvent = (event: LedgerEvent): Effect.Effect<LedgerEvent, JsonStringifyError> =>
   Effect.map(canonicalSerializablePayload(event.payload), (payload) => ({ ...event, payload }));
@@ -1114,7 +1117,7 @@ export class InMemoryBackendState {
           );
         },
         insertEvent: (spec) => {
-          const event: LedgerEvent = {
+          const event = canonicalLedgerEventSync({
             id: startId + written.length,
             ts: spec.ts ?? now,
             kind: spec.kind,
@@ -1122,14 +1125,14 @@ export class InMemoryBackendState {
             effectAuthorityRef: identity.effectAuthorityRef,
             factOwnerRef: identity.factOwnerRef,
             payload: spec.payload,
-          };
+          });
           written.push(event);
           return event;
         },
       };
       const commitFailure = yield* Effect.try({
         try: () => commit(terminal, tx),
-        catch: (cause) => new SqlError({ cause }),
+        catch: (cause) => (cause instanceof JsonStringifyError ? cause : new SqlError({ cause })),
       });
       if (commitFailure !== null) {
         return yield* Effect.fail(new SqlError({ cause: commitFailure }));
@@ -1200,7 +1203,7 @@ export class InMemoryBackendState {
           );
         },
         insertEvent: (spec) => {
-          const event: LedgerEvent = {
+          const event = canonicalLedgerEventSync({
             id: startId + written.length,
             ts: spec.ts ?? now,
             kind: spec.kind,
@@ -1208,24 +1211,12 @@ export class InMemoryBackendState {
             effectAuthorityRef: identity.effectAuthorityRef,
             factOwnerRef: identity.factOwnerRef,
             payload: spec.payload,
-          };
+          });
           written.push(event);
           return event;
         },
         enqueue: (spec) => {
-          if (!hasTrigger(spec.triggerKind)) {
-            rejected = new UnregisteredDurableTriggerKind({ kind: spec.triggerKind });
-            return {
-              id: startId + written.length,
-              ts: spec.ts ?? now,
-              kind: spec.intentEventKind,
-              scopeRef: identity.scopeRef,
-              effectAuthorityRef: identity.effectAuthorityRef,
-              factOwnerRef: identity.factOwnerRef,
-              payload: spec.payload,
-            };
-          }
-          const event: LedgerEvent = {
+          const event = canonicalLedgerEventSync({
             id: startId + written.length,
             ts: spec.ts ?? now,
             kind: spec.intentEventKind,
@@ -1233,7 +1224,11 @@ export class InMemoryBackendState {
             effectAuthorityRef: identity.effectAuthorityRef,
             factOwnerRef: identity.factOwnerRef,
             payload: spec.payload,
-          };
+          });
+          if (!hasTrigger(spec.triggerKind)) {
+            rejected = new UnregisteredDurableTriggerKind({ kind: spec.triggerKind });
+            return event;
+          }
           written.push(event);
           due.push({
             triggerKind: spec.triggerKind,
@@ -1278,7 +1273,10 @@ export class InMemoryBackendState {
       const commitFailure = yield* Effect.try({
         try: () => commit(tx),
         catch: (cause) =>
-          cause instanceof DurableTriggerCommitReturnedThenable ? cause : new SqlError({ cause }),
+          cause instanceof JsonStringifyError ||
+          cause instanceof DurableTriggerCommitReturnedThenable
+            ? cause
+            : new SqlError({ cause }),
       });
       if (commitFailure !== null) {
         return yield* Effect.fail(commitFailure);

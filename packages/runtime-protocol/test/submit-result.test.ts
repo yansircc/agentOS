@@ -7,7 +7,7 @@ const continuation = {
   scopeRef: { kind: "conversation" as const, scopeId: "submit-result" },
   afterEventId: 7,
   runId: 1,
-  turn: { id: 2, index: 0 },
+  turn: { id: 1, index: 0 },
   interruptId: "interrupt-1",
   interruptionEventId: 7,
   gateRef: "gate-1",
@@ -45,7 +45,7 @@ describe("SubmitResult decoder", () => {
       eventCount: 3,
       tokensUsed: 5,
       interruptId: "interrupt-1",
-      turn: { id: 2, index: 0 },
+      turn: { id: 1, index: 0 },
       gateRef: "gate-1",
       continuation,
       extra: "dropped",
@@ -59,7 +59,7 @@ describe("SubmitResult decoder", () => {
       eventCount: 3,
       tokensUsed: 5,
       interruptId: "interrupt-1",
-      turn: { id: 2, index: 0 },
+      turn: { id: 1, index: 0 },
       gateRef: "gate-1",
       continuation,
     });
@@ -68,6 +68,13 @@ describe("SubmitResult decoder", () => {
       decodeSubmitResult({
         ...interrupted,
         continuation: { ...continuation, gateRef: "other" },
+      }),
+    ).toBeNull();
+    expect(
+      decodeSubmitResult({
+        ...interrupted,
+        turn: { id: 2, index: 0 },
+        continuation: { ...continuation, turn: { id: 2, index: 0 } },
       }),
     ).toBeNull();
   });
