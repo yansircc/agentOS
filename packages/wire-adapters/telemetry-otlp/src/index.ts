@@ -13,13 +13,7 @@ export type OtlpAttributeValue = string | number | boolean;
 
 export interface OtlpProjectionSpan {
   readonly name: string;
-  readonly kind:
-    | "agent_run"
-    | "llm_call"
-    | "tool_execution"
-    | "dispatch_delivery"
-    | "durable_trigger"
-    | "verification_gate";
+  readonly kind: TelemetryEventKind;
   readonly traceId?: string;
   readonly spanId: string;
   readonly parentSpanId?: string;
@@ -83,25 +77,6 @@ const traceContextParts = (
   };
 };
 
-const isOtlpSpanKind = (
-  telemetryKind: TelemetryEventKind,
-): telemetryKind is OtlpProjectionSpan["kind"] => {
-  switch (telemetryKind) {
-    case "agent_run":
-    case "llm_call":
-    case "tool_execution":
-    case "dispatch_delivery":
-    case "durable_trigger":
-    case "verification_gate":
-      return true;
-    default:
-      return false;
-  }
-};
-
-const otlpSpanKind = (telemetryKind: TelemetryEventKind): OtlpProjectionSpan["kind"] | undefined =>
-  isOtlpSpanKind(telemetryKind) ? telemetryKind : undefined;
-
 const otlpStatus = (outcome: TelemetryOutcome | undefined): OtlpProjectionSpan["status"] => {
   switch (outcome) {
     case "ok":
@@ -145,14 +120,12 @@ const projectOtlpTree = (tree: TelemetryEventTree): OtlpProjection => {
   const spans: OtlpProjectionSpan[] = [];
 
   for (const node of tree.nodes) {
-    const kind = otlpSpanKind(node.telemetryKind);
-    if (kind === undefined) continue;
     const traceContext = traceContextParts(node.traceContext);
     const topologyParentSpanId =
       node.parentId === undefined ? undefined : spanIds.get(node.parentId);
     spans.push({
       name: node.name,
-      kind,
+      kind: node.telemetryKind,
       ...traceContext,
       spanId: spanIds.get(node.id) ?? spanIdForNode(node),
       ...(topologyParentSpanId === undefined ? {} : { parentSpanId: topologyParentSpanId }),

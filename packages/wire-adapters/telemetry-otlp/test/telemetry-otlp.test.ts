@@ -275,4 +275,40 @@ describe("OTLP trace projection", () => {
       endTimeUnixNano: 2_000_000,
     });
   });
+
+  it("projects extension telemetry kinds from the protocol tree", () => {
+    const projection = projectOtlpSpans({
+      nodes: [
+        {
+          id: "extension-node",
+          telemetryKind: "product.custom_step",
+          emitKind: "carrier",
+          name: "product.custom_step",
+          at: 7,
+          endedAt: 11,
+          outcome: "unset",
+          sourceEventIds: [42],
+          attributes: {
+            "agentos.extension.owner": "@agent-os/product",
+          },
+        },
+      ],
+    });
+
+    expect(projection.spans).toEqual([
+      {
+        name: "product.custom_step",
+        kind: "product.custom_step",
+        spanId: "3f6da73a28bd1d3d",
+        startTimeUnixNano: 7_000_000,
+        endTimeUnixNano: 11_000_000,
+        status: "UNSET",
+        attributes: {
+          "agentos.mapping.version": OTLP_GENAI_SEMCONV_MAPPING_VERSION,
+          "agentos.extension.owner": "@agent-os/product",
+        },
+        sourceEventIds: [42],
+      },
+    ]);
+  });
 });

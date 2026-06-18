@@ -9,10 +9,32 @@ const repoRoot = path.resolve(scriptDir, "..");
 
 const protocolFile = "packages/telemetry-protocol/src/index.ts";
 const runtimeTreeFile = "packages/runtime/src/telemetry-tree.ts";
+const otlpSourceDir = "packages/wire-adapters/telemetry-otlp/src";
 const otlpSourceFile = "packages/wire-adapters/telemetry-otlp/src/index.ts";
 const otlpTestFile = "packages/wire-adapters/telemetry-otlp/test/telemetry-otlp.test.ts";
+const otlpPackageDocFile = "docs/packages/telemetry-otlp.md";
+const otlpApiDocFile = "docs/api/telemetry-otlp.md";
 
 const read = (root, rel) => fs.readFileSync(path.join(root, rel), "utf8");
+
+const sourceFiles = (root, relativeDir) => {
+  const dir = path.join(root, relativeDir);
+  const files = [];
+  const visit = (current) => {
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        visit(full);
+        continue;
+      }
+      if (entry.isFile() && entry.name.endsWith(".ts")) {
+        files.push(path.relative(root, full));
+      }
+    }
+  };
+  visit(dir);
+  return files.sort((left, right) => left.localeCompare(right));
+};
 
 const forbiddenOtlpPatterns = [
   {
@@ -66,7 +88,13 @@ const collectFailures = (root = repoRoot) => {
   const protocol = read(root, protocolFile);
   const runtimeTree = read(root, runtimeTreeFile);
   const otlpSource = read(root, otlpSourceFile);
+  const otlpProductionSources = sourceFiles(root, otlpSourceDir).map((file) => ({
+    file,
+    source: read(root, file),
+  }));
+  const otlpSourceClosure = otlpProductionSources.map(({ source }) => source).join("\n");
   const otlpTest = read(root, otlpTestFile);
+  const otlpDocs = [read(root, otlpPackageDocFile), read(root, otlpApiDocFile)].join("\n");
 
   if (!/readonly\s+telemetryKind:\s+TelemetryEventKind/u.test(protocol)) {
     failures.push(`${protocolFile}: TelemetryEventNode must carry telemetryKind`);
@@ -100,14 +128,34 @@ const collectFailures = (root = repoRoot) => {
   if (!/projectOtlpSpans\s*=\s*\(\s*tree:\s*TelemetryEventTree/u.test(otlpSource)) {
     failures.push(`${otlpSourceFile}: projectOtlpSpans input must be TelemetryEventTree`);
   }
-  for (const { pattern, reason } of forbiddenOtlpPatterns) {
-    if (pattern.test(otlpSource)) {
-      failures.push(`${otlpSourceFile}: ${reason}`);
+  if (!/readonly\s+kind:\s+TelemetryEventKind/u.test(otlpSourceClosure)) {
+    failures.push(`${otlpSourceFile}: OTLP span kind must be derived from TelemetryEventKind`);
+  }
+  if (/\bisOtlpSpanKind\b|\botlpSpanKind\b/u.test(otlpSourceClosure)) {
+    failures.push(`${otlpSourceFile}: OTLP source must not maintain a local span kind whitelist`);
+  }
+  for (const { file, source } of otlpProductionSources) {
+    for (const { pattern, reason } of forbiddenOtlpPatterns) {
+      if (pattern.test(source)) {
+        failures.push(`${file}: ${reason}`);
+      }
     }
   }
 
   if (!/projectTelemetryEventTree/u.test(otlpTest) || !/projectOtlpSpans/u.test(otlpTest)) {
     failures.push(`${otlpTestFile}: tests must verify runtime tree to OTLP projection parity`);
+  }
+  if (
+    !/projects extension telemetry kinds from the protocol tree/u.test(otlpTest) ||
+    !/product\.custom_step/u.test(otlpTest)
+  ) {
+    failures.push(`${otlpTestFile}: tests must prove extension telemetry kinds are projected`);
+  }
+  if (/projectOtlpSpans\(events\)|committed ledger events|ledger facts/u.test(otlpDocs)) {
+    failures.push(`${otlpPackageDocFile}: docs still describe ledger-event input`);
+  }
+  if (!/projectOtlpSpans\(tree\)/u.test(otlpDocs) || !/TelemetryEventTree/u.test(otlpDocs)) {
+    failures.push(`${otlpPackageDocFile}: docs must describe TelemetryEventTree input`);
   }
 
   return failures;
@@ -150,11 +198,25 @@ const writePositiveFixture = (root) => {
     root,
     otlpSourceFile,
     [
-      'import type { TelemetryEventTree } from "@agent-os/telemetry-protocol";',
+      'import type { TelemetryEventKind, TelemetryEventTree } from "@agent-os/telemetry-protocol";',
+      "export interface OtlpProjectionSpan { readonly kind: TelemetryEventKind; }",
       "export const projectOtlpSpans = (tree: TelemetryEventTree) => tree.nodes;",
     ].join("\n"),
   );
-  writeFixture(root, otlpTestFile, "projectTelemetryEventTree(events); projectOtlpSpans(tree);");
+  writeFixture(
+    root,
+    otlpTestFile,
+    [
+      "projectTelemetryEventTree(events); projectOtlpSpans(tree);",
+      'it("projects extension telemetry kinds from the protocol tree", () => "product.custom_step");',
+    ].join("\n"),
+  );
+  writeFixture(
+    root,
+    otlpPackageDocFile,
+    "Call `projectOtlpSpans(tree)` with a `TelemetryEventTree`.\n",
+  );
+  writeFixture(root, otlpApiDocFile, "`TelemetryEventTree` input.\n");
 };
 
 const collectSelfTestFailures = () => {
@@ -165,6 +227,21 @@ const collectSelfTestFailures = () => {
     if (baseline.length > 0) {
       return [`telemetry OTLP tree positive fixture failed:\n${baseline.join("\n")}`];
     }
+
+    writeFixture(
+      root,
+      "packages/wire-adapters/telemetry-otlp/src/leak.ts",
+      'import type { LedgerEvent } from "@agent-os/kernel/types"; export type Leak = LedgerEvent;',
+    );
+    const closureLeak = collectFailures(root);
+    if (!closureLeak.some((failure) => failure.includes("raw ledger events"))) {
+      return [
+        `telemetry OTLP source-closure mutation was not rejected: ${JSON.stringify(closureLeak)}`,
+      ];
+    }
+    fs.rmSync(path.join(root, "packages/wire-adapters/telemetry-otlp/src/leak.ts"), {
+      force: true,
+    });
 
     writeFixture(
       root,
@@ -185,6 +262,41 @@ const collectSelfTestFailures = () => {
       return [
         `telemetry OTLP ledger-classifier mutation was not rejected: ${JSON.stringify(ledgerLeak)}`,
       ];
+    }
+
+    writePositiveFixture(root);
+    writeFixture(
+      root,
+      otlpSourceFile,
+      [
+        'import type { TelemetryEventTree } from "@agent-os/telemetry-protocol";',
+        'export interface OtlpProjectionSpan { readonly kind: "agent_run" | "llm_call"; }',
+        "const otlpSpanKind = (kind) => kind === 'agent_run' ? kind : undefined;",
+        "export const projectOtlpSpans = (tree: TelemetryEventTree) =>",
+        "  tree.nodes.filter((node) => otlpSpanKind(node.telemetryKind) !== undefined);",
+      ].join("\n"),
+    );
+    const localKindList = collectFailures(root);
+    if (
+      !localKindList.some((failure) => failure.includes("derived from TelemetryEventKind")) ||
+      !localKindList.some((failure) => failure.includes("local span kind whitelist"))
+    ) {
+      return [
+        `telemetry OTLP local-kind-list mutation was not rejected: ${JSON.stringify(
+          localKindList,
+        )}`,
+      ];
+    }
+
+    writePositiveFixture(root);
+    writeFixture(
+      root,
+      otlpPackageDocFile,
+      "Call `projectOtlpSpans(events)` with committed ledger events.\n",
+    );
+    const docLeak = collectFailures(root);
+    if (!docLeak.some((failure) => failure.includes("ledger-event input"))) {
+      return [`telemetry OTLP docs mutation was not rejected: ${JSON.stringify(docLeak)}`];
     }
 
     writePositiveFixture(root);

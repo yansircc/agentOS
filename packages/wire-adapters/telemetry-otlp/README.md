@@ -4,7 +4,7 @@
 
 ## Purpose
 
-OTLP projection adapter for agentOS telemetry and ledger facts.
+OTLP projection adapter for agentOS telemetry event trees.
 
 ## Public API Status
 
@@ -13,13 +13,13 @@ Telemetry wire adapter package. It maps agentOS telemetry semantics to OTLP span
 ## Invariant
 
 agentOS telemetry semantics are owned by `@agent-os/telemetry-protocol`.
-This package only maps committed telemetry-relevant facts into OTLP span DTOs
-and OpenTelemetry semantic-convention attributes.
+This package only maps `TelemetryEventTree` nodes into OTLP span DTOs and
+OpenTelemetry semantic-convention attributes.
 
 ## Minimal Usage
 
-Call `projectOtlpSpans(events)` with committed ledger events and send the
-returned spans to an OTLP exporter owned outside runtime core.
+Call `projectOtlpSpans(tree)` with a `TelemetryEventTree` and send the returned
+spans to an OTLP exporter owned outside runtime core.
 
 ## Verification
 
