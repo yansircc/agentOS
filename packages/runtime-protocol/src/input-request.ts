@@ -161,6 +161,34 @@ export const recordedInputRequestRefFromUnknown = (
 ): RecordedInputRequestRef | null =>
   isInputRequestRef(value) ? recordRuntimeProtocolValue(value) : null;
 
+export const inputRequestDescriptorFromUnknown = (
+  value: unknown,
+): InputRequestDescriptor | null => {
+  if (!Predicate.isObject(value)) return null;
+  const ref = recordedInputRequestRefFromUnknown(value.ref);
+  if (ref === null) return null;
+  if (value.kind !== ref.requestKind) return null;
+  if (
+    !isNonEmptyString(value.subjectRef) ||
+    !isNonEmptyString(value.toolCallId) ||
+    !isNonEmptyString(value.toolName)
+  ) {
+    return null;
+  }
+  if (value.policyRef !== undefined && !isNonEmptyString(value.policyRef)) return null;
+  if (value.summary !== undefined && typeof value.summary !== "string") return null;
+  return {
+    ref,
+    kind: ref.requestKind,
+    subjectRef: value.subjectRef,
+    toolCallId: value.toolCallId,
+    toolName: value.toolName,
+    ...(value.policyRef === undefined ? {} : { policyRef: value.policyRef }),
+    ...(value.summary === undefined ? {} : { summary: value.summary }),
+    resumeSchema: value.resumeSchema,
+  };
+};
+
 export const inputRequestRefFromInterruptedEvent = (
   event: RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED>,
 ): InputRequestRefFromInterruptionResult => {

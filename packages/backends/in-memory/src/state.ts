@@ -144,14 +144,19 @@ export interface InMemoryBackendStateOptions {
   readonly projections?: Iterable<AnyMaterializedProjectionDefinition>;
 }
 
-const validateSerializablePayload = (payload: unknown): Effect.Effect<void, JsonStringifyError> =>
+const canonicalSerializablePayload = (
+  payload: unknown,
+): Effect.Effect<unknown, JsonStringifyError> =>
   Effect.try({
     try: () => JSON.stringify(payload),
     catch: (cause) => new JsonStringifyError({ cause }),
   }).pipe(
     Effect.flatMap((serialized) =>
       typeof serialized === "string"
-        ? Effect.void
+        ? Effect.try({
+            try: () => JSON.parse(serialized) as unknown,
+            catch: (cause) => new JsonStringifyError({ cause }),
+          })
         : Effect.fail(
             new JsonStringifyError({
               cause: new TypeError("ledger event payload must be JSON serializable"),
@@ -159,6 +164,14 @@ const validateSerializablePayload = (payload: unknown): Effect.Effect<void, Json
           ),
     ),
   );
+
+const canonicalLedgerEvent = (event: LedgerEvent): Effect.Effect<LedgerEvent, JsonStringifyError> =>
+  Effect.map(canonicalSerializablePayload(event.payload), (payload) => ({ ...event, payload }));
+
+const canonicalLedgerEvents = (
+  events: ReadonlyArray<LedgerEvent>,
+): Effect.Effect<ReadonlyArray<LedgerEvent>, JsonStringifyError> =>
+  Effect.forEach(events, canonicalLedgerEvent);
 
 const normalizeNonNegativeInteger = (value: number | undefined, fallback: number): number =>
   value === undefined || !Number.isFinite(value) ? fallback : Math.max(0, Math.floor(value));
@@ -747,10 +760,7 @@ export class InMemoryBackendState {
     return Effect.gen({ self: this }, function* () {
       const startId = this.nextEventId;
       const specs = makeSpecs(startId);
-      yield* Effect.forEach(specs, (spec) => validateSerializablePayload(spec.payload), {
-        discard: true,
-      });
-      const committed = specs.map(
+      const events = specs.map(
         (spec, index): LedgerEvent => ({
           id: startId + index,
           ts: spec.ts ?? startId + index,
@@ -761,6 +771,7 @@ export class InMemoryBackendState {
           payload: spec.payload,
         }),
       );
+      const committed = yield* canonicalLedgerEvents(events);
       yield* this.assertRuntimeLedgerTransitionBatch(committed);
       const projectionState = yield* this.prepareProjectionState(committed);
       yield* Effect.sync(() => {
@@ -787,8 +798,7 @@ export class InMemoryBackendState {
     return Effect.gen({ self: this }, function* () {
       const trigger = yield* getDurableTrigger(registry, triggerKind);
       const spec = makeSpec(trigger);
-      yield* validateSerializablePayload(spec.payload);
-      const event: LedgerEvent = {
+      const event = yield* canonicalLedgerEvent({
         id: this.nextEventId,
         ts: spec.ts ?? this.nextEventId,
         kind: spec.kind,
@@ -796,7 +806,7 @@ export class InMemoryBackendState {
         effectAuthorityRef: identity.effectAuthorityRef,
         factOwnerRef: identity.factOwnerRef,
         payload: spec.payload,
-      };
+      });
       yield* this.assertRuntimeLedgerTransitionBatch([event]);
       const projectionState = yield* this.prepareProjectionState([event]);
       const identityKey = backendProtocolEventIdentityKey(identity);
@@ -1124,18 +1134,16 @@ export class InMemoryBackendState {
       if (commitFailure !== null) {
         return yield* Effect.fail(new SqlError({ cause: commitFailure }));
       }
-      yield* Effect.forEach(written, (event) => validateSerializablePayload(event.payload), {
-        discard: true,
-      });
-      yield* this.assertRuntimeLedgerTransitionBatch(written);
-      const projectionState = yield* this.prepareProjectionState(written);
+      const committed = yield* canonicalLedgerEvents(written);
+      yield* this.assertRuntimeLedgerTransitionBatch(committed);
+      const projectionState = yield* this.prepareProjectionState(committed);
       yield* Effect.sync(() => {
-        this.nextEventId += written.length;
-        this.appendRows(written);
+        this.nextEventId += committed.length;
+        this.appendRows(committed);
         this.replaceProjectionState(projectionState.rows, projectionState.meta);
       });
-      yield* this.fireMany(written);
-      return { events: written };
+      yield* this.fireMany(committed);
+      return { events: committed };
     });
   }
 
@@ -1278,14 +1286,12 @@ export class InMemoryBackendState {
       if (rejected !== null) {
         return yield* Effect.fail(rejected);
       }
-      yield* Effect.forEach(written, (event) => validateSerializablePayload(event.payload), {
-        discard: true,
-      });
-      yield* this.assertRuntimeLedgerTransitionBatch(written);
-      const projectionState = yield* this.prepareProjectionState(written);
+      const committed = yield* canonicalLedgerEvents(written);
+      yield* this.assertRuntimeLedgerTransitionBatch(committed);
+      const projectionState = yield* this.prepareProjectionState(committed);
       yield* Effect.sync(() => {
-        this.nextEventId += written.length;
-        this.appendRows(written);
+        this.nextEventId += committed.length;
+        this.appendRows(committed);
         this.replaceProjectionState(projectionState.rows, projectionState.meta);
         row.completedAt = now;
         if (options.cancelled === true) row.cancelledAt = now;
@@ -1310,8 +1316,8 @@ export class InMemoryBackendState {
         }
         for (const patch of outboxPatches) this.applyOutboxPatch(patch);
       });
-      yield* this.fireMany(written);
-      return { completed: true, events: written };
+      yield* this.fireMany(committed);
+      return { completed: true, events: committed };
     });
   }
 

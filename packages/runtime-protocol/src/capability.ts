@@ -1,16 +1,7 @@
 import type { BoundaryPackage } from "@agent-os/kernel/extensions";
 import type { AuthorityRef, FactOwnerRef, ScopeRef } from "@agent-os/kernel/effect-claim";
-import type { ToolError } from "@agent-os/kernel/errors";
 import type { MaterialRef } from "@agent-os/kernel/material-ref";
-import type { ResolvedMaterial } from "@agent-os/kernel/ref-resolver";
-import type {
-  ResolvedToolMaterials,
-  ToolExecutionContext,
-  ToolIntentEmitter,
-  ToolProjectionRow,
-  ToolProjectionWaiter,
-} from "@agent-os/kernel/tools";
-import { Option, type Effect } from "effect";
+import { Option } from "effect";
 import { defineAgentSubmitBindings, type AgentSubmitBindings } from "./bindings";
 
 export interface AgentCapabilityIntent<Kind extends string = string, Payload = unknown> {
@@ -32,7 +23,7 @@ export interface AgentCapabilityProjection<
   readonly _state?: State;
 }
 
-export interface AgentCapabilityMaterial<Slot extends string = string, Value = ResolvedMaterial> {
+export interface AgentCapabilityMaterial<Slot extends string = string, Value = unknown> {
   readonly slot: Slot;
   readonly _value?: Value;
 }
@@ -44,7 +35,7 @@ export type AgentCapabilityProjectionMap = Readonly<
   Record<string, AgentCapabilityProjection<string, unknown, unknown>>
 >;
 export type AgentCapabilityMaterialMap = Readonly<
-  Record<string, AgentCapabilityMaterial<string, ResolvedMaterial>>
+  Record<string, AgentCapabilityMaterial<string, unknown>>
 >;
 
 export interface DefineAgentCapabilitySpec<
@@ -113,61 +104,14 @@ export type AgentCapabilityProjectionIdentity<Projection> =
 export type AgentCapabilityProjectionState<Projection> =
   Projection extends AgentCapabilityProjection<string, unknown, infer State> ? State : never;
 
-export type AgentCapabilityMaterialValue<Material> =
-  Material extends AgentCapabilityMaterial<string, infer Value> ? Value : never;
-
 export type AgentCapabilityMaterialRefs<Definition> = {
   readonly [Key in keyof AgentCapabilityMaterialsOf<Definition>]: MaterialRef;
-};
-
-export type AgentCapabilityResolvedMaterials<Definition> = {
-  readonly [Key in keyof AgentCapabilityMaterialsOf<Definition>]: AgentCapabilityMaterialValue<
-    AgentCapabilityMaterialsOf<Definition>[Key]
-  >;
 };
 
 export type BindAgentCapabilityOptions<Definition> =
   keyof AgentCapabilityMaterialsOf<Definition> extends never
     ? { readonly materials?: AgentCapabilityMaterialRefs<Definition> }
     : { readonly materials: AgentCapabilityMaterialRefs<Definition> };
-
-export interface AgentCapabilityRuntimeContext<Definition> {
-  readonly materials: ResolvedToolMaterials & AgentCapabilityResolvedMaterials<Definition>;
-  readonly emitIntent: ToolIntentEmitter;
-  readonly awaitProjection: ToolProjectionWaiter;
-}
-
-export interface AgentCapabilityProjectionAwaitOptions<State> {
-  readonly maxAttempts?: number;
-  readonly pollIntervalMs?: number;
-  readonly ready?: (row: ToolProjectionRow<State>) => boolean;
-}
-
-export type AgentCapabilityHandle<Definition> = {
-  readonly id: Definition extends { readonly id: infer Id } ? Id : string;
-  readonly intents: {
-    readonly [Key in keyof AgentCapabilityIntentsOf<Definition>]: (
-      payload: AgentCapabilityIntentPayload<AgentCapabilityIntentsOf<Definition>[Key]>,
-    ) => ReturnType<ToolIntentEmitter>;
-  };
-  readonly projections: {
-    readonly [Key in keyof AgentCapabilityProjectionsOf<Definition>]: {
-      readonly await: (
-        identity: AgentCapabilityProjectionIdentity<AgentCapabilityProjectionsOf<Definition>[Key]>,
-        options?: AgentCapabilityProjectionAwaitOptions<
-          AgentCapabilityProjectionState<AgentCapabilityProjectionsOf<Definition>[Key]>
-        >,
-      ) => Effect.Effect<
-        ToolProjectionRow<
-          AgentCapabilityProjectionState<AgentCapabilityProjectionsOf<Definition>[Key]>
-        >,
-        ToolError,
-        never
-      >;
-    };
-  };
-  readonly materials: AgentCapabilityResolvedMaterials<Definition>;
-};
 
 export const capabilityIntent =
   <Payload = unknown>() =>
@@ -194,7 +138,7 @@ export const capabilityProjection =
   });
 
 export const capabilityMaterial =
-  <Value = ResolvedMaterial>() =>
+  <Value = unknown>() =>
   <const Slot extends string>(slot: Slot): AgentCapabilityMaterial<Slot, Value> => ({
     slot,
   });
@@ -258,71 +202,4 @@ export const submitBindingsForAgentCapability = <Definition extends AnyAgentCapa
     })),
     ...(Object.keys(materialRefs).length === 0 ? {} : { materials: materialRefs }),
   });
-};
-
-export const assertAgentCapabilityRuntimeContext = <
-  Definition extends AnyAgentCapabilityDefinition,
->(
-  definition: Definition,
-  toolContext: ToolExecutionContext,
-): AgentCapabilityRuntimeContext<Definition> => {
-  if (toolContext.emitIntent === undefined) {
-    return failAgentCapability(`agent capability ${definition.id} requires emitIntent`);
-  }
-  if (toolContext.awaitProjection === undefined) {
-    return failAgentCapability(`agent capability ${definition.id} requires awaitProjection`);
-  }
-  for (const [, slot] of materialSlotEntries(definition)) {
-    if (!(slot in toolContext.materials)) {
-      return failAgentCapability(
-        `agent capability ${definition.id} requires material slot ${slot}`,
-      );
-    }
-  }
-  return toolContext as AgentCapabilityRuntimeContext<Definition>;
-};
-
-export const createAgentCapabilityHandle = <Definition extends AnyAgentCapabilityDefinition>(
-  definition: Definition,
-  capabilityContext: AgentCapabilityRuntimeContext<Definition>,
-): AgentCapabilityHandle<Definition> => {
-  const intents: Record<string, unknown> = {};
-  for (const [key, intent] of Object.entries(definition.intents)) {
-    intents[key] = (payload: unknown) => capabilityContext.emitIntent(intent.kind, payload);
-  }
-
-  const projections: Record<string, unknown> = {};
-  for (const [key, projection] of Object.entries(definition.projections)) {
-    projections[key] = {
-      await: (identity: unknown, options: AgentCapabilityProjectionAwaitOptions<unknown> = {}) =>
-        capabilityContext.awaitProjection({
-          kind: projection.kind,
-          ...(projection.scopeRef === undefined ? {} : { scopeRef: projection.scopeRef }),
-          ...(projection.effectAuthorityRef === undefined
-            ? {}
-            : { effectAuthorityRef: projection.effectAuthorityRef }),
-          ...(projection.factOwnerRef === undefined
-            ? {}
-            : { factOwnerRef: projection.factOwnerRef }),
-          identity,
-          ...(options.maxAttempts === undefined ? {} : { maxAttempts: options.maxAttempts }),
-          ...(options.pollIntervalMs === undefined
-            ? {}
-            : { pollIntervalMs: options.pollIntervalMs }),
-          ...(options.ready === undefined ? {} : { ready: options.ready }),
-        }),
-    };
-  }
-
-  const materials: Record<string, ResolvedMaterial> = {};
-  for (const [key, slot] of materialSlotEntries(definition)) {
-    materials[String(key)] = capabilityContext.materials[slot];
-  }
-
-  return {
-    id: definition.id as AgentCapabilityHandle<Definition>["id"],
-    intents: intents as AgentCapabilityHandle<Definition>["intents"],
-    projections: projections as AgentCapabilityHandle<Definition>["projections"],
-    materials: materials as AgentCapabilityHandle<Definition>["materials"],
-  };
 };

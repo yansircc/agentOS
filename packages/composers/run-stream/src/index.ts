@@ -7,7 +7,7 @@ import {
 } from "@agent-os/turn-stream";
 import { defineProjectionSpec, project, projectionOutputOrFail } from "@agent-os/kernel/projection";
 import { decodeRecordedLedgerEventOption, type RecordedLedgerEvent } from "@agent-os/kernel/types";
-import type { SubmitResult } from "@agent-os/runtime-protocol";
+import { decodeSubmitResult, type SubmitResult } from "@agent-os/runtime-protocol";
 
 export { decodeRecordedLedgerEvent as decodeRunStreamRecordedLedgerEvent } from "@agent-os/kernel/types";
 export type { SubmitResult } from "@agent-os/runtime-protocol";
@@ -103,24 +103,6 @@ const recordedLedgerEventFromUnknown = (value: unknown): RunStreamRecordedLedger
   return Option.isSome(decoded) ? decoded.value : null;
 };
 
-const isSubmitResult = (value: unknown): value is SubmitResult => {
-  if (!Predicate.isObject(value) || typeof value.runId !== "number") return false;
-  if (typeof value.eventCount !== "number" || typeof value.tokensUsed !== "number") return false;
-  if (value.ok === true) return value.status === "delivered" && typeof value.final === "string";
-  if (value.ok === false && value.status === "failed") return typeof value.reason === "string";
-  if (value.ok === false && value.status === "interrupted") {
-    return (
-      value.reason === "interrupted" &&
-      typeof value.interruptId === "string" &&
-      typeof value.gateRef === "string" &&
-      Predicate.isObject(value.turn) &&
-      typeof value.turn.id === "number" &&
-      typeof value.turn.index === "number"
-    );
-  }
-  return false;
-};
-
 const runStreamFrameFromUnknown = (value: unknown): RunStreamFrame | null => {
   if (!Predicate.isObject(value)) return null;
   const seq = frameSeqOf(value);
@@ -135,9 +117,8 @@ const runStreamFrameFromUnknown = (value: unknown): RunStreamFrame | null => {
         ? { kind: "turn_frame", seq, frame: value.frame }
         : null;
     case "submit_result":
-      return isSubmitResult(value.result)
-        ? { kind: "submit_result", seq, result: value.result }
-        : null;
+      const result = decodeSubmitResult(value.result);
+      return result !== null ? { kind: "submit_result", seq, result } : null;
     case "stream_error":
       return typeof value.reason === "string"
         ? { kind: "stream_error", seq, reason: value.reason }
@@ -419,11 +400,12 @@ export async function* composeRealtimeRunStream(
     while (true) {
       if (submitSettled !== undefined) {
         if (submitSettled.kind === "submit_result") {
-          if (!isSubmitResult(submitSettled.result)) {
+          const result = decodeSubmitResult(submitSettled.result);
+          if (result === null) {
             yield { kind: "stream_error", seq, reason: "submit_result_malformed" };
             return;
           }
-          yield { kind: "submit_result", seq, result: submitSettled.result };
+          yield { kind: "submit_result", seq, result };
           return;
         }
         if (submitSettled.kind === "submit_failed") {
@@ -471,11 +453,12 @@ export async function* composeRealtimeRunStream(
           };
           return;
         case "submit_result":
-          if (!isSubmitResult(event.result)) {
+          const result = decodeSubmitResult(event.result);
+          if (result === null) {
             yield { kind: "stream_error", seq, reason: "submit_result_malformed" };
             return;
           }
-          yield { kind: "submit_result", seq, result: event.result };
+          yield { kind: "submit_result", seq, result };
           return;
         case "submit_failed":
           yield {

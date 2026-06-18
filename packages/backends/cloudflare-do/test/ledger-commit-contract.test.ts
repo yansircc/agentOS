@@ -129,6 +129,47 @@ describe("cloudflare-do ledger commit primitive", () => {
     }),
   );
 
+  it.effect("returns and fires canonical stored payloads", () =>
+    Effect.gen(function* () {
+      const state = makeInMemoryDurableObjectState();
+      const sql = state.storage.sql;
+      const fired: LedgerEvent[] = [];
+      const identity = truthIdentity("canonical-payload");
+      const rawPayload = {
+        visible: "raw",
+        toJSON: () => ({ visible: "stored" }),
+      };
+      Object.defineProperty(rawPayload, "secret", {
+        value: "not-recorded",
+        enumerable: false,
+      });
+
+      const committed = yield* commitLedgerTransaction(
+        state,
+        recordingBus(fired),
+        runtimeOwner,
+        (tx) => {
+          tx.append({
+            ts: 10,
+            kind: "canonical.payload",
+            scopeRef: identity.scopeRef,
+            effectAuthorityRef: identity.effectAuthorityRef,
+            payload: rawPayload,
+          });
+        },
+      );
+
+      expect(committed.events[0]?.payload).toEqual({ visible: "stored" });
+      expect(fired[0]?.payload).toEqual({ visible: "stored" });
+      const row = sql
+        .exec("SELECT payload FROM events WHERE kind = ?", "canonical.payload")
+        .one() as {
+        readonly payload: string;
+      };
+      expect(JSON.parse(row.payload)).toEqual({ visible: "stored" });
+    }),
+  );
+
   it.effect(
     "rolls back ledger rows, side effects, projections, and bus fire on reducer failure",
     () =>

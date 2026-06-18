@@ -171,6 +171,26 @@ describe("@agent-os/run-stream", () => {
     expect(decodeRunStreamData('{"kind":"ledger_event","seq":0}')).toBeNull();
   });
 
+  it("decodes submit_result frames through the runtime-protocol owner contract", () => {
+    const malformedInterrupted = {
+      kind: "submit_result",
+      seq: 0,
+      result: {
+        ok: false,
+        status: "interrupted",
+        runId: 1,
+        reason: "interrupted",
+        eventCount: 1,
+        tokensUsed: 0,
+        interruptId: "interrupt-1",
+        turn: { id: 1, index: 0 },
+        gateRef: "gate-1",
+      },
+    };
+
+    expect(decodeRunStreamData(JSON.stringify(malformedInterrupted))).toBeNull();
+  });
+
   it("composes realtime frames in source arrival order before terminal submit_result", async () => {
     const ledgerReady = deferred<RunStreamRecordedLedgerEvent>();
     const turnReady = deferred<TurnStreamFrame>();

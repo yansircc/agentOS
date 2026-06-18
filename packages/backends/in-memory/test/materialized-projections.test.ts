@@ -122,6 +122,42 @@ describe("in-memory materialized projections", () => {
     }
   });
 
+  it("applies projections and event snapshots over canonical stored payloads", async () => {
+    const scope = "projection-canonical-payload";
+    const projectionIdentitySpec = runtimeEventIdentity(scope);
+    const { runtime } = makeRuntime(scope);
+    try {
+      const ledger = await runtime.runPromise(Ledger);
+      const projections = await runtime.runPromise(MaterializedProjections);
+      const rawPayload = {
+        runId: "raw",
+        toJSON: () => ({ runId: "canonical" }),
+      };
+      Object.defineProperty(rawPayload, "secret", {
+        value: "not-recorded",
+        enumerable: false,
+      });
+
+      const committed = await runtime.runPromise(
+        ledger.commit([{ kind: "run.requested", payload: rawPayload, ...truthIdentity(scope) }]),
+      );
+
+      expect(committed[0]?.payload).toEqual({ runId: "canonical" });
+      const events = await runtime.runPromise(ledger.events(truthIdentity(scope)));
+      expect(events[0]?.payload).toEqual({ runId: "canonical" });
+      const row = await runtime.runPromise(
+        projections.get({
+          kind: "run.workflow",
+          ...projectionIdentitySpec,
+          identity: { runId: "canonical" },
+        }),
+      );
+      expect(row?.state).toEqual({ runId: "canonical", status: "requested" });
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
   it("rolls back the ledger commit when projection reduce fails", async () => {
     const scope = "projection-rollback";
     const projectionIdentitySpec = runtimeEventIdentity(scope);

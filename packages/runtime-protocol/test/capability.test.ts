@@ -1,16 +1,12 @@
 import { describe, expect, it } from "@effect/vitest";
 import { boundaryPackage, defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
-import type { ToolExecutionContext, ToolProjectionWaitSpec } from "@agent-os/kernel/tools";
-import { Effect } from "effect";
+import * as runtimeProtocol from "../src";
 import {
-  assertAgentCapabilityRuntimeContext,
   capabilityIntent,
   capabilityMaterial,
   capabilityProjection,
-  createAgentCapabilityHandle,
   defineAgentCapability,
   submitBindingsForAgentCapability,
-  type AgentCapabilityHandle,
 } from "../src";
 
 interface SurfaceEditIntent {
@@ -106,86 +102,9 @@ describe("AgentCapability handles", () => {
     });
   });
 
-  it.effect("derives intent and projection calls from the typed handle", () =>
-    Effect.gen(function* () {
-      const emitted: Array<{ readonly kind: string; readonly payload: unknown }> = [];
-      const waited: unknown[] = [];
-      const context: ToolExecutionContext = {
-        materials: { wp_token: { bearer: "secret", snapshot: "snap-1" } },
-        emitIntent: (kind, payload) => {
-          emitted.push({ kind, payload });
-          return Effect.succeed({ id: 42 });
-        },
-        awaitProjection: <State>(spec: ToolProjectionWaitSpec<State>) => {
-          waited.push(spec);
-          return Effect.succeed({
-            kind: spec.kind,
-            projectionKind: spec.kind,
-            identityKey: JSON.stringify(spec.identity),
-            state: { status: "candidate_lived" } as State,
-            updatedEventId: 43,
-          });
-        },
-      };
-      const capabilityContext = assertAgentCapabilityRuntimeContext(surfaceEditCapability, context);
-      const handle = createAgentCapabilityHandle(surfaceEditCapability, capabilityContext);
-
-      const emittedResult = yield* handle.intents.requestEdit({
-        ops: [{ op: "replace", path: "about.title" }],
-      });
-      const row = yield* handle.projections.candidate.await(
-        { surfaceRef: "home" },
-        { maxAttempts: 1 },
-      );
-
-      expect(emittedResult).toEqual({ id: 42 });
-      expect(emitted).toEqual([
-        {
-          kind: "surface_edit.intent.requested",
-          payload: { ops: [{ op: "replace", path: "about.title" }] },
-        },
-      ]);
-      expect(waited).toEqual([
-        {
-          kind: "surface_edit.candidate",
-          effectAuthorityRef,
-          factOwnerRef,
-          identity: { surfaceRef: "home" },
-          maxAttempts: 1,
-        },
-      ]);
-      expect(row.state).toEqual({ status: "candidate_lived" });
-      expect(handle.materials.wp).toEqual({ bearer: "secret", snapshot: "snap-1" });
-    }),
-  );
-
-  it("keeps handle calls closed over declared payload and identity types", () => {
-    const compileOnly = (handle: AgentCapabilityHandle<typeof surfaceEditCapability>) => {
-      const emitted = handle.intents.requestEdit({
-        ops: [{ op: "replace", path: "about.title" }],
-      });
-      const projected = handle.projections.candidate.await({ surfaceRef: "home" });
-
-      // @ts-expect-error intent payload is closed over the declared edit algebra.
-      const wrongPayload = handle.intents.requestEdit("change the About page");
-      // @ts-expect-error projection identity is closed over the declared identity algebra.
-      const wrongIdentity = handle.projections.candidate.await({ page: "home" });
-
-      void emitted;
-      void projected;
-      void wrongPayload;
-      void wrongIdentity;
-    };
-
-    expect(compileOnly).toBeDefined();
-  });
-
-  it("fails fast when a declared runtime capability is absent", () => {
-    expect(() =>
-      assertAgentCapabilityRuntimeContext(surfaceEditCapability, {
-        materials: { wp_token: { bearer: "secret", snapshot: "snap-1" } },
-      }),
-    ).toThrow("requires emitIntent");
+  it("does not expose runtime handles or resolved material from the protocol surface", () => {
+    expect("createAgentCapabilityHandle" in runtimeProtocol).toBe(false);
+    expect("assertAgentCapabilityRuntimeContext" in runtimeProtocol).toBe(false);
   });
 
   it("fails fast when an intent has no boundary package source", () => {

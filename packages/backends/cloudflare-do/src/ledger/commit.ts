@@ -216,13 +216,15 @@ const commitAllocatedEventIds = (sql: SqlStorage, nextId: number): void => {
   sql.exec("UPDATE ledger_sequences SET next_id = ? WHERE name = ?", nextId, "events");
 };
 
-const encodePayload = (payload: unknown): string => {
+const encodePayload = (
+  payload: unknown,
+): { readonly encoded: string; readonly payload: unknown } => {
   try {
     const encoded = JSON.stringify(payload);
     if (typeof encoded !== "string") {
       throw new TypeError("ledger event payload must be JSON serializable");
     }
-    return encoded;
+    return { encoded, payload: JSON.parse(encoded) as unknown };
   } catch (cause) {
     throw new JsonStringifyError({ cause });
   }
@@ -335,10 +337,15 @@ export const commitLedgerTransaction = <A, E = never>(
             byRef.set(recipe.ref.key, event);
             return event;
           });
-          assertRuntimeLedgerTransitionBatch(sql, events);
           const encoded = events.map((event) => encodePayload(event.payload));
+          const committedEvents = events.map((event, index): LedgerEvent => {
+            const committed = { ...event, payload: encoded[index]!.payload };
+            byRef.set(builder.recipes[index]!.ref.key, committed);
+            return committed;
+          });
+          assertRuntimeLedgerTransitionBatch(sql, committedEvents);
           for (let index = 0; index < events.length; index++) {
-            const event = events[index]!;
+            const event = committedEvents[index]!;
             const identityColumns = eventIdentityColumns(event);
             sql.exec(
               `
@@ -366,11 +373,11 @@ export const commitLedgerTransaction = <A, E = never>(
               identityColumns.effect_authority_ref,
               identityColumns.effect_authority_key,
               identityColumns.event_identity_key,
-              encoded[index]!,
+              encoded[index]!.encoded,
             );
           }
           const context: LedgerCommitContext = {
-            events,
+            events: committedEvents,
             id: idOf,
             event: (ref) => {
               const event = byRef.get(ref.key);
@@ -379,10 +386,10 @@ export const commitLedgerTransaction = <A, E = never>(
             },
           };
           for (const effect of builder.sideEffects) effect(context);
-          applyRegisteredMaterializedProjectionEvents(sql, events);
+          applyRegisteredMaterializedProjectionEvents(sql, committedEvents);
           return {
             value,
-            events,
+            events: committedEvents,
             id: context.id,
             event: context.event,
           };

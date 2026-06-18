@@ -1,4 +1,4 @@
-import { Data, Option } from "effect";
+import { Data, Option, Predicate } from "effect";
 import type { LlmRoute } from "@agent-os/llm-protocol";
 import type {
   ExecutionDomainDeclaration,
@@ -10,8 +10,8 @@ import type { AnyAgentSchemaSource } from "@agent-os/kernel/agent-schema";
 import type { TraceContext } from "@agent-os/telemetry-protocol";
 import type { MaterialRef } from "@agent-os/kernel/material-ref";
 import type { BoundaryPackage } from "@agent-os/kernel/extensions";
-import type { ContinuationRef } from "./continuation";
-import type { InputRequestDescriptor } from "./input-request";
+import { recordedContinuationRefFromUnknown, type ContinuationRef } from "./continuation";
+import { inputRequestDescriptorFromUnknown, type InputRequestDescriptor } from "./input-request";
 
 export class MissingSubmitRunBinding extends Data.TaggedError(
   "agent_os.missing_submit_run_binding",
@@ -306,3 +306,99 @@ export interface TurnRef {
   readonly id: number;
   readonly index: number;
 }
+
+const isPositiveInteger = (value: unknown): value is number =>
+  typeof value === "number" && Number.isInteger(value) && value >= 1;
+
+const isNonNegativeInteger = (value: unknown): value is number =>
+  typeof value === "number" && Number.isInteger(value) && value >= 0;
+
+const isNonEmptyString = (value: unknown): value is string =>
+  typeof value === "string" && value.length > 0;
+
+const isTurnRef = (value: unknown): value is TurnRef =>
+  Predicate.isObject(value) && isPositiveInteger(value.id) && isNonNegativeInteger(value.index);
+
+const turnRefsEqual = (left: TurnRef, right: TurnRef): boolean =>
+  left.id === right.id && left.index === right.index;
+
+export const decodeSubmitResult = (value: unknown): SubmitResult | null => {
+  if (!Predicate.isObject(value)) return null;
+  if (
+    !isPositiveInteger(value.runId) ||
+    !isNonNegativeInteger(value.eventCount) ||
+    !isNonNegativeInteger(value.tokensUsed)
+  ) {
+    return null;
+  }
+  if (value.ok === true && value.status === "delivered") {
+    return typeof value.final === "string"
+      ? {
+          ok: true,
+          status: "delivered",
+          runId: value.runId,
+          final: value.final,
+          eventCount: value.eventCount,
+          tokensUsed: value.tokensUsed,
+        }
+      : null;
+  }
+  if (value.ok === false && value.status === "failed") {
+    return typeof value.reason === "string"
+      ? {
+          ok: false,
+          status: "failed",
+          runId: value.runId,
+          reason: value.reason,
+          eventCount: value.eventCount,
+          tokensUsed: value.tokensUsed,
+        }
+      : null;
+  }
+  if (value.ok !== false || value.status !== "interrupted") return null;
+  if (
+    value.reason !== "interrupted" ||
+    !isNonEmptyString(value.interruptId) ||
+    !isNonEmptyString(value.gateRef) ||
+    !isTurnRef(value.turn)
+  ) {
+    return null;
+  }
+  const continuation = recordedContinuationRefFromUnknown(value.continuation);
+  if (continuation === null) return null;
+  if (
+    continuation.runId !== value.runId ||
+    !turnRefsEqual(continuation.turn, value.turn) ||
+    continuation.interruptId !== value.interruptId ||
+    continuation.gateRef !== value.gateRef
+  ) {
+    return null;
+  }
+  let inputRequest: InputRequestDescriptor | undefined;
+  if (value.inputRequest !== undefined) {
+    const parsedInputRequest = inputRequestDescriptorFromUnknown(value.inputRequest);
+    if (parsedInputRequest === null) return null;
+    if (
+      parsedInputRequest.ref.runId !== value.runId ||
+      !turnRefsEqual(parsedInputRequest.ref.turn, value.turn) ||
+      parsedInputRequest.ref.interruptId !== value.interruptId ||
+      parsedInputRequest.ref.gateRef !== value.gateRef
+    ) {
+      return null;
+    }
+    inputRequest = parsedInputRequest;
+  }
+  return {
+    ok: false,
+    status: "interrupted",
+    runId: value.runId,
+    reason: "interrupted",
+    eventCount: value.eventCount,
+    tokensUsed: value.tokensUsed,
+    interruptId: value.interruptId,
+    turn: value.turn,
+    gateRef: value.gateRef,
+    continuation,
+    ...(inputRequest === undefined ? {} : { inputRequest }),
+  };
+};
