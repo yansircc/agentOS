@@ -9,7 +9,11 @@ import {
   projectionIdentity,
   projectionPut,
 } from "@agent-os/runtime";
-import { RUNTIME_FACT_OWNER, runtimeHistoryCompactedEvent } from "@agent-os/runtime-protocol";
+import {
+  agentRunResumedEvent,
+  RUNTIME_FACT_OWNER,
+  runtimeHistoryCompactedEvent,
+} from "@agent-os/runtime-protocol";
 import type { AnyMaterializedProjectionDefinition, ProjectionRegistry } from "@agent-os/runtime";
 import type { BackendProtocolTruthIdentity } from "@agent-os/backend-protocol";
 import type { EventBusService } from "../src/ledger/event-bus";
@@ -42,6 +46,7 @@ const truthIdentity = (scopeId: string): BackendProtocolTruthIdentity => ({
 });
 
 const runtimeOwner = { factOwnerRef: RUNTIME_FACT_OWNER };
+const decisionGateOwner = { factOwnerRef: "@agent-os/decision-gate" };
 
 describe("cloudflare-do ledger commit primitive", () => {
   it.effect("applies projections over final symbolic payloads before bus fire", () =>
@@ -203,6 +208,63 @@ describe("cloudflare-do ledger commit primitive", () => {
       expect(exit._tag).toBe("Failure");
       expect(sql.exec("SELECT * FROM events").toArray()).toHaveLength(0);
       expect(fired).toEqual([]);
+    }),
+  );
+
+  it.effect("proves runtime resume against prior carrier-owned consumed facts", () =>
+    Effect.gen(function* () {
+      const state = makeInMemoryDurableObjectState();
+      const sql = state.storage.sql;
+      const fired: LedgerEvent[] = [];
+      const identity = truthIdentity("resume-carrier-l0");
+      const consumed = yield* commitLedgerTransaction(
+        state,
+        recordingBus(fired),
+        decisionGateOwner,
+        (tx) => {
+          tx.append({
+            ts: 10,
+            kind: "decision_gate.consumed",
+            scopeRef: identity.scopeRef,
+            effectAuthorityRef: identity.effectAuthorityRef,
+            payload: {
+              gateRef: "gate:1",
+              decisionRef: "decision:1",
+              consumedBy: "runtime",
+              claim: { phase: "lived" },
+            },
+          });
+        },
+      );
+      const resume = agentRunResumedEvent({
+        ...identity,
+        runId: 1,
+        turn: { id: 1, index: 0 },
+        interruptId: "interrupt-1",
+        resume: { approved: true },
+        resumedAtEventId: consumed.events[0]!.id,
+      });
+
+      yield* commitLedgerTransaction(state, recordingBus(fired), runtimeOwner, (tx) => {
+        tx.append({
+          ts: 20,
+          kind: resume.kind,
+          scopeRef: identity.scopeRef,
+          effectAuthorityRef: identity.effectAuthorityRef,
+          payload: resume.payload,
+        });
+      });
+
+      expect(
+        sql
+          .exec("SELECT kind FROM events ORDER BY id ASC")
+          .toArray()
+          .map((row) => (row as { readonly kind: string }).kind),
+      ).toEqual(["decision_gate.consumed", "agent.run.resumed"]);
+      expect(fired.map((event) => event.kind)).toEqual([
+        "decision_gate.consumed",
+        "agent.run.resumed",
+      ]);
     }),
   );
 

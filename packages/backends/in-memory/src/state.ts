@@ -207,21 +207,32 @@ const eventMatches = (event: LedgerEvent, identity: BackendProtocolEventIdentity
 const eventDisplayScope = (identity: BackendProtocolEventIdentity): string =>
   backendProtocolEventIdentityKey(identity);
 
-const groupRuntimeEventsByIdentity = (
+interface RuntimeTransitionEventGroup {
+  readonly identity: BackendProtocolTruthIdentity;
+  readonly events: LedgerEvent[];
+  hasRuntimeEvent: boolean;
+}
+
+const groupRuntimeTransitionEventsByTruthIdentity = (
   events: ReadonlyArray<LedgerEvent>,
-): Map<string, LedgerEvent[]> => {
-  const groups = new Map<string, LedgerEvent[]>();
+): ReadonlyArray<RuntimeTransitionEventGroup> => {
+  const groups = new Map<string, RuntimeTransitionEventGroup>();
   for (const event of events) {
-    if (event.factOwnerRef !== RUNTIME_FACT_OWNER) continue;
-    const key = backendProtocolEventIdentityKey(eventIdentity(event));
+    const identity = eventTruthIdentity(event);
+    const key = backendProtocolTruthIdentityKey(identity);
     const group = groups.get(key);
     if (group === undefined) {
-      groups.set(key, [event]);
+      groups.set(key, {
+        identity,
+        events: [event],
+        hasRuntimeEvent: event.factOwnerRef === RUNTIME_FACT_OWNER,
+      });
     } else {
-      group.push(event);
+      group.events.push(event);
+      group.hasRuntimeEvent ||= event.factOwnerRef === RUNTIME_FACT_OWNER;
     }
   }
-  return groups;
+  return Array.from(groups.values()).filter((group) => group.hasRuntimeEvent);
 };
 
 const eventMatchesQueryOptions = (
@@ -324,6 +335,22 @@ export class InMemoryBackendState {
         eventRows.push(event);
       }
     }
+  }
+
+  private assertRuntimeLedgerTransitionBatch(
+    events: ReadonlyArray<LedgerEvent>,
+  ): Effect.Effect<void, SqlError> {
+    return Effect.try({
+      try: () => {
+        for (const group of groupRuntimeTransitionEventsByTruthIdentity(events)) {
+          assertRuntimeLedgerTransitions({
+            history: this.rowsForTruthIdentity(group.identity),
+            events: group.events,
+          });
+        }
+      },
+      catch: (cause) => new SqlError({ cause }),
+    });
   }
 
   private rowsForTruthIdentity(identity: BackendProtocolTruthIdentity): ReadonlyArray<LedgerEvent> {
@@ -734,19 +761,7 @@ export class InMemoryBackendState {
           payload: spec.payload,
         }),
       );
-      yield* Effect.try({
-        try: () => {
-          for (const events of groupRuntimeEventsByIdentity(committed).values()) {
-            const first = events[0];
-            if (first === undefined) continue;
-            assertRuntimeLedgerTransitions({
-              history: this.rowsForEventIdentity(eventIdentity(first)),
-              events,
-            });
-          }
-        },
-        catch: (cause) => new SqlError({ cause }),
-      });
+      yield* this.assertRuntimeLedgerTransitionBatch(committed);
       const projectionState = yield* this.prepareProjectionState(committed);
       yield* Effect.sync(() => {
         this.nextEventId += committed.length;
@@ -782,6 +797,7 @@ export class InMemoryBackendState {
         factOwnerRef: identity.factOwnerRef,
         payload: spec.payload,
       };
+      yield* this.assertRuntimeLedgerTransitionBatch([event]);
       const projectionState = yield* this.prepareProjectionState([event]);
       const identityKey = backendProtocolEventIdentityKey(identity);
       const stagedOutbox = stageOutbox?.(event);
@@ -1111,6 +1127,7 @@ export class InMemoryBackendState {
       yield* Effect.forEach(written, (event) => validateSerializablePayload(event.payload), {
         discard: true,
       });
+      yield* this.assertRuntimeLedgerTransitionBatch(written);
       const projectionState = yield* this.prepareProjectionState(written);
       yield* Effect.sync(() => {
         this.nextEventId += written.length;
@@ -1264,6 +1281,7 @@ export class InMemoryBackendState {
       yield* Effect.forEach(written, (event) => validateSerializablePayload(event.payload), {
         discard: true,
       });
+      yield* this.assertRuntimeLedgerTransitionBatch(written);
       const projectionState = yield* this.prepareProjectionState(written);
       yield* Effect.sync(() => {
         this.nextEventId += written.length;

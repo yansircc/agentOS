@@ -237,36 +237,50 @@ const asEffectError = <E>(
   return classified ?? new SqlError({ cause });
 };
 
-const groupRuntimeEventsByIdentityKey = (
+interface RuntimeTransitionEventGroup {
+  readonly scopeKey: string;
+  readonly effectAuthorityKey: string;
+  readonly events: LedgerEvent[];
+  hasRuntimeEvent: boolean;
+}
+
+const groupRuntimeTransitionEventsByTruthIdentityKey = (
   events: ReadonlyArray<LedgerEvent>,
-): Map<string, LedgerEvent[]> => {
-  const groups = new Map<string, LedgerEvent[]>();
+): ReadonlyArray<RuntimeTransitionEventGroup> => {
+  const groups = new Map<string, RuntimeTransitionEventGroup>();
   for (const event of events) {
-    if (event.factOwnerRef !== RUNTIME_FACT_OWNER) continue;
-    const key = eventIdentityColumns(event).event_identity_key;
+    const columns = eventIdentityColumns(event);
+    const key = `${columns.scope_key}\n${columns.effect_authority_key}`;
     const group = groups.get(key);
     if (group === undefined) {
-      groups.set(key, [event]);
+      groups.set(key, {
+        scopeKey: columns.scope_key,
+        effectAuthorityKey: columns.effect_authority_key,
+        events: [event],
+        hasRuntimeEvent: event.factOwnerRef === RUNTIME_FACT_OWNER,
+      });
     } else {
-      group.push(event);
+      group.events.push(event);
+      group.hasRuntimeEvent ||= event.factOwnerRef === RUNTIME_FACT_OWNER;
     }
   }
-  return groups;
+  return Array.from(groups.values()).filter((group) => group.hasRuntimeEvent);
 };
 
-const selectPriorEventsForIdentityKey = (
+const selectPriorEventsForTruthIdentityKey = (
   sql: SqlStorage,
-  eventIdentityKey: string,
+  group: RuntimeTransitionEventGroup,
 ): ReadonlyArray<LedgerEvent> =>
   sql
     .exec(
       `
         SELECT *
         FROM events
-        WHERE event_identity_key = ?
+        WHERE scope_key = ? AND effect_authority_key = ?
         ORDER BY id ASC
       `,
-      eventIdentityKey,
+      group.scopeKey,
+      group.effectAuthorityKey,
     )
     .toArray()
     .map((row): LedgerEvent => ledgerEventFromRow(row as unknown as LedgerEventSqlRow));
@@ -275,10 +289,10 @@ const assertRuntimeLedgerTransitionBatch = (
   sql: SqlStorage,
   events: ReadonlyArray<LedgerEvent>,
 ): void => {
-  for (const [eventIdentityKey, group] of groupRuntimeEventsByIdentityKey(events)) {
+  for (const group of groupRuntimeTransitionEventsByTruthIdentityKey(events)) {
     assertRuntimeLedgerTransitions({
-      history: selectPriorEventsForIdentityKey(sql, eventIdentityKey),
-      events: group,
+      history: selectPriorEventsForTruthIdentityKey(sql, group),
+      events: group.events,
     });
   }
 };

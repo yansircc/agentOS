@@ -64,6 +64,7 @@ export const RUNTIME_EVENT_KINDS: ReadonlyArray<RuntimeEventKind> =
   Object.values(RUNTIME_EVENT_KIND);
 
 const runtimeEventKindSet = new Set<string>(RUNTIME_EVENT_KINDS);
+const DECISION_GATE_CONSUMED_EVENT_KIND = "decision_gate.consumed";
 
 export const isRuntimeEventKind = (kind: string): kind is RuntimeEventKind =>
   runtimeEventKindSet.has(kind);
@@ -733,7 +734,7 @@ export type RuntimeLedgerTransitionIssueCode =
   | "runtime_source_payload_invalid"
   | "runtime_compaction_source_kind_mismatch"
   | "runtime_compaction_source_turn_mismatch"
-  | "runtime_resume_event_not_before";
+  | "runtime_resume_consumed_event_kind_mismatch";
 
 export type RuntimeLedgerTransitionIssue = {
   readonly code: RuntimeLedgerTransitionIssueCode;
@@ -934,14 +935,22 @@ export const validateRuntimeLedgerTransitions = (input: {
         break;
       }
       case RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED: {
-        if (event.payload.resumedAtEventId >= event.id) {
-          issues.push({
-            code: "runtime_resume_event_not_before",
-            eventId: event.id,
-            eventKind: event.kind,
-            sourceEventId: event.payload.resumedAtEventId,
-            message: "agent.run.resumed must reference a consumed event committed before resume",
-          });
+        const source = transitionSourceEvent(
+          priorById,
+          event,
+          event.payload.resumedAtEventId,
+          issues,
+        );
+        if (source !== null && source.kind !== DECISION_GATE_CONSUMED_EVENT_KIND) {
+          issues.push(
+            sourceEventIssue(
+              "runtime_resume_consumed_event_kind_mismatch",
+              event,
+              event.payload.resumedAtEventId,
+              "agent.run.resumed must reference the decision_gate.consumed event that authorized resume",
+              source.kind,
+            ),
+          );
         }
         break;
       }

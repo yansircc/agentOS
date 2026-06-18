@@ -26,7 +26,11 @@ import {
   triggerParseOk,
   type DurableTrigger,
 } from "@agent-os/runtime";
-import { makeAdmissionSchemaSpec, runtimeHistoryCompactedEvent } from "@agent-os/runtime-protocol";
+import {
+  agentRunResumedEvent,
+  makeAdmissionSchemaSpec,
+  runtimeHistoryCompactedEvent,
+} from "@agent-os/runtime-protocol";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import {
   createInMemoryBackendState,
@@ -57,6 +61,31 @@ const makeRuntime = (
   const backend = createInMemoryRuntimeBackend({ ...options, identity: truthIdentity(scope) });
   const runtime = ManagedRuntime.make(backend.layer);
   return { backend, runtime };
+};
+
+const invalidRuntimeCompactionContent = (scope: string) => {
+  const spec = runtimeHistoryCompactedEvent({
+    ...truthIdentity(scope),
+    runId: 1,
+    turn: { id: 1, index: 0 },
+    sourceEventId: 1,
+    toolCallId: "call-1",
+    toolName: "lookup",
+    originalBytes: 256,
+    compactedBytes: 16,
+  });
+  return { kind: spec.kind, payload: spec.payload };
+};
+
+const expectSqlErrorFailure = (exit: Exit.Exit<unknown, unknown>): void => {
+  expect(Exit.isFailure(exit)).toBe(true);
+  if (Exit.isFailure(exit)) {
+    const failure = Cause.findErrorOption(exit.cause);
+    expect(Option.isSome(failure)).toBe(true);
+    if (Option.isSome(failure)) {
+      expect(failure.value).toMatchObject({ _tag: "agent_os.sql_error" });
+    }
+  }
 };
 
 describe("in-memory runtime backend", () => {
@@ -118,6 +147,112 @@ describe("in-memory runtime backend", () => {
       await runtime.dispose();
     }
   });
+
+  it.effect("runtime L0 can prove resume against prior carrier-owned consumed facts", () =>
+    Effect.gen(function* () {
+      const scope = "resume-carrier-l0";
+      const state = createInMemoryBackendState();
+      const [consumed] = yield* state.commitProtocolEvents([
+        {
+          ts: 10,
+          kind: "decision_gate.consumed",
+          ...truthIdentity(scope),
+          factOwnerRef: "@agent-os/decision-gate",
+          payload: {
+            gateRef: "gate:1",
+            decisionRef: "decision:1",
+            consumedBy: "runtime",
+            claim: { phase: "lived" },
+          },
+        },
+      ]);
+      const resumed = agentRunResumedEvent({
+        ...truthIdentity(scope),
+        runId: 1,
+        turn: { id: 1, index: 0 },
+        interruptId: "interrupt-1",
+        resume: { approved: true },
+        resumedAtEventId: consumed!.id,
+      });
+
+      yield* state.commitProtocolEvents([
+        {
+          ts: 20,
+          kind: resumed.kind,
+          ...runtimeEventIdentity(scope),
+          payload: resumed.payload,
+        },
+      ]);
+
+      expect(state.snapshot(truthIdentity(scope)).map((event) => event.kind)).toEqual([
+        "decision_gate.consumed",
+        "agent.run.resumed",
+      ]);
+    }),
+  );
+
+  it.effect("direct state append paths reject invalid runtime transitions before mutation", () =>
+    Effect.gen(function* () {
+      const registry = yield* makeDurableTriggerRegistry([scheduledEventTrigger]);
+
+      const intentScope = "trigger-intent-l0";
+      const intentState = createInMemoryBackendState();
+      const triggerIntentExit = yield* Effect.exit(
+        intentState.commitTriggerIntent(
+          runtimeEventIdentity(intentScope),
+          10,
+          registry,
+          scheduledEventTrigger.kind,
+          () => invalidRuntimeCompactionContent(intentScope),
+        ),
+      );
+      expectSqlErrorFailure(triggerIntentExit);
+      expect(intentState.snapshot(truthIdentity(intentScope))).toEqual([]);
+      expect(intentState.duePending(runtimeEventIdentity(intentScope), 10)).toEqual([]);
+
+      const attachedScope = "attached-stream-l0";
+      const attachedState = createInMemoryBackendState();
+      const attachedExit = yield* Effect.exit(
+        attachedState.commitAttachedStreamTerminal(
+          runtimeEventIdentity(attachedScope),
+          attachedScope,
+          "stream:1",
+          "test.stream",
+          10,
+          new AbortController().signal,
+          { kind: "completed", terminal: { ok: true } },
+          (_terminal, tx) => {
+            tx.insertEvent(invalidRuntimeCompactionContent(attachedScope));
+            return null;
+          },
+        ),
+      );
+      expectSqlErrorFailure(attachedExit);
+      expect(attachedState.snapshot(truthIdentity(attachedScope))).toEqual([]);
+
+      const triggerScope = "trigger-commit-l0";
+      const triggerState = createInMemoryBackendState();
+      triggerState.addDueWork(runtimeEventIdentity(triggerScope), "test.trigger", 1, 10);
+      const due = triggerState.duePending(runtimeEventIdentity(triggerScope), 10)[0];
+      expect(due).toBeDefined();
+      if (due === undefined) return;
+      const triggerExit = yield* Effect.exit(
+        triggerState.commitTrigger(
+          triggerScope,
+          due,
+          10,
+          () => true,
+          (tx) => {
+            tx.insertEvent(invalidRuntimeCompactionContent(triggerScope));
+            return null;
+          },
+        ),
+      );
+      expectSqlErrorFailure(triggerExit);
+      expect(triggerState.snapshot(truthIdentity(triggerScope))).toEqual([]);
+      expect(triggerState.duePending(runtimeEventIdentity(triggerScope), 10)).toHaveLength(1);
+    }),
+  );
 
   it("TriggerPump.drainUntilQuiet drains trigger chains without caller-managed passes", async () => {
     interface ChainIntent {

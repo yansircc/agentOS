@@ -572,7 +572,13 @@ describe("runtime event vocabulary", () => {
   });
 
   it("validates runtime transition sources against prior and same-batch events", () => {
-    const history = [ledgerEvent(1, llmResponseWithToolCall())];
+    const consumed = rawEvent(4, "decision_gate.consumed", {
+      gateRef: "gate:1",
+      decisionRef: "decision:1",
+      consumedBy: "runtime",
+      claim: { phase: "lived" },
+    });
+    const history = [ledgerEvent(1, llmResponseWithToolCall()), consumed];
     const compaction = ledgerEvent(
       2,
       runtimeHistoryCompactedEvent({
@@ -597,8 +603,21 @@ describe("runtime event vocabulary", () => {
         purpose: "compacted-history",
       }),
     );
+    const resume = ledgerEvent(
+      5,
+      agentRunResumedEvent({
+        ...runtimeIdentity,
+        runId: 1,
+        turn: { id: 1, index: 0 },
+        interruptId: "interrupt-1",
+        resume: { approved: true },
+        resumedAtEventId: consumed.id,
+      }),
+    );
 
-    expect(validateRuntimeLedgerTransitions({ history, events: [compaction, rekey] })).toEqual({
+    expect(
+      validateRuntimeLedgerTransitions({ history, events: [compaction, rekey, resume] }),
+    ).toEqual({
       ok: true,
     });
   });
@@ -673,6 +692,28 @@ describe("runtime event vocabulary", () => {
           resumedAtEventId: 14,
         }),
       ),
+      ledgerEvent(
+        15,
+        agentRunResumedEvent({
+          ...runtimeIdentity,
+          runId: 1,
+          turn: { id: 1, index: 0 },
+          interruptId: "interrupt-1",
+          resume: { approved: true },
+          resumedAtEventId: 9,
+        }),
+      ),
+      ledgerEvent(
+        16,
+        agentRunResumedEvent({
+          ...runtimeIdentity,
+          runId: 1,
+          turn: { id: 1, index: 0 },
+          interruptId: "interrupt-1",
+          resume: { approved: true },
+          resumedAtEventId: 1,
+        }),
+      ),
     ];
     const validation = validateRuntimeLedgerTransitions({
       history: [wrongKind, wrongTurn],
@@ -686,7 +727,9 @@ describe("runtime event vocabulary", () => {
       "runtime_source_event_not_before",
       "runtime_compaction_source_kind_mismatch",
       "runtime_compaction_source_turn_mismatch",
-      "runtime_resume_event_not_before",
+      "runtime_source_event_not_before",
+      "runtime_source_event_missing",
+      "runtime_resume_consumed_event_kind_mismatch",
     ]);
   });
 
