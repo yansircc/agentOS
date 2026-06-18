@@ -8,6 +8,8 @@ import {
   executeTool,
   deterministicToolExecution,
   externalToolExecution,
+  isMaterialBrokerPlaceholder,
+  planMaterialBrokerSubstitution,
   resolveToolExecution,
   unsafeRunToolByName,
   validateExecutionDomainRegistry,
@@ -16,6 +18,7 @@ import {
   type ToolCall,
   type Tool,
 } from "../src/tools";
+import { credentialMaterialRef, isMaterialRef, materialRequirement } from "../src/material-ref";
 
 const allowToolAdmitter = () => Effect.succeed({ ok: true as const });
 
@@ -318,6 +321,227 @@ describe("ExecutionDomainRegistry", () => {
     ).toEqual({
       ok: false,
       issues: [{ kind: "invalid_declaration", index: 0 }],
+    });
+  });
+
+  it("validates broker capability as a domain-owned declaration", () => {
+    const domain = { kind: "workspace" as const, ref: "workspace:default" };
+    const broker = {
+      mode: "trusted_substitution" as const,
+      materialKinds: ["credential" as const],
+      outboundBoundary: "domain-owner-defined" as const,
+    };
+
+    expect(
+      validateExecutionDomainRegistry(
+        {},
+        {
+          domains: [
+            { domain, replay: { access: "read", witness: "snapshot" }, broker },
+            { domain, replay: { access: "write", witness: "receipt" }, broker },
+          ],
+        },
+      ),
+    ).toEqual({
+      ok: false,
+      issues: [{ kind: "duplicate_material_broker_declaration", domain }],
+    });
+
+    expect(
+      validateExecutionDomainRegistry(
+        {},
+        {
+          domains: [
+            {
+              domain,
+              replay: { access: "read", witness: "snapshot" },
+              broker: {
+                mode: "trusted_substitution",
+                materialKinds: [],
+                outboundBoundary: "domain-owner-defined",
+              },
+            },
+          ],
+        },
+      ),
+    ).toEqual({
+      ok: false,
+      issues: [{ kind: "invalid_material_broker_declaration", index: 0 }],
+    });
+  });
+
+  it("plans broker substitution without exposing live material", () => {
+    const domain = { kind: "workspace" as const, ref: "workspace:default" };
+    const materialRef = credentialMaterialRef("CF_API_TOKEN", {
+      provider: "cloudflare",
+      purpose: "deploy",
+    });
+    const requirement = materialRequirement({
+      slot: "api_token",
+      kind: "credential",
+      provider: "cloudflare",
+      purpose: "deploy",
+    });
+
+    const result = planMaterialBrokerSubstitution({
+      registry: {
+        domains: [
+          {
+            domain,
+            replay: { access: "write", witness: "receipt" },
+            broker: {
+              mode: "trusted_substitution",
+              materialKinds: ["credential"],
+              outboundBoundary: "domain-owner-defined",
+            },
+          },
+        ],
+      },
+      domain,
+      materialRef,
+      requirement,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(isMaterialBrokerPlaceholder(result.plan.placeholder)).toBe(true);
+      expect(isMaterialBrokerPlaceholder(result.plan.placeholder.value)).toBe(false);
+      expect(isMaterialRef(result.plan.placeholder)).toBe(false);
+      expect(result.plan.ownerSubstitution).toMatchObject({
+        materialRef,
+        requirement,
+        outboundBoundary: "domain-owner-defined",
+      });
+      expect(result.plan.receipt).toMatchObject({
+        _tag: "@agent-os/kernel/MaterialBrokerReceipt",
+        domain,
+        slot: "api_token",
+        materialKind: "credential",
+      });
+      expect(JSON.stringify(result.plan.receipt)).not.toContain("resolved-secret-value");
+
+      const readResult = planMaterialBrokerSubstitution({
+        registry: {
+          domains: [
+            {
+              domain,
+              replay: { access: "write", witness: "receipt" },
+              broker: {
+                mode: "trusted_substitution",
+                materialKinds: ["credential"],
+                outboundBoundary: "domain-owner-defined",
+              },
+            },
+          ],
+        },
+        domain,
+        materialRef: credentialMaterialRef("CF_API_TOKEN", {
+          provider: "cloudflare",
+          purpose: "read",
+        }),
+        requirement: materialRequirement({
+          slot: "api_token",
+          kind: "credential",
+          provider: "cloudflare",
+        }),
+      });
+      expect(readResult.ok).toBe(true);
+      if (readResult.ok) {
+        expect(readResult.plan.receipt.materialRef).not.toBe(result.plan.receipt.materialRef);
+        expect(readResult.plan.placeholder.value).not.toBe(result.plan.placeholder.value);
+      }
+    }
+  });
+
+  it("fails closed when broker substitution is not declared or allowed", () => {
+    const domain = { kind: "workspace" as const, ref: "workspace:default" };
+    const materialRef = credentialMaterialRef("CF_API_TOKEN", {
+      provider: "cloudflare",
+      purpose: "deploy",
+    });
+    const requirement = materialRequirement({
+      slot: "api_token",
+      kind: "credential",
+      provider: "cloudflare",
+      purpose: "deploy",
+    });
+
+    expect(
+      planMaterialBrokerSubstitution({
+        registry: { domains: [{ domain, replay: { access: "write", witness: "receipt" } }] },
+        domain,
+        materialRef,
+        requirement,
+      }),
+    ).toEqual({
+      ok: false,
+      issues: [{ kind: "missing_broker_declaration", domain }],
+    });
+
+    expect(
+      planMaterialBrokerSubstitution({
+        registry: {
+          domains: [
+            {
+              domain,
+              replay: { access: "write", witness: "receipt" },
+              broker: {
+                mode: "trusted_substitution",
+                materialKinds: ["endpoint"],
+                outboundBoundary: "domain-owner-defined",
+              },
+            },
+          ],
+        },
+        domain,
+        materialRef,
+        requirement,
+      }),
+    ).toEqual({
+      ok: false,
+      issues: [
+        {
+          kind: "unsupported_material_kind",
+          domain,
+          materialKind: "credential",
+          supportedKinds: ["endpoint"],
+        },
+      ],
+    });
+
+    const readToken = credentialMaterialRef("CF_API_TOKEN", {
+      provider: "cloudflare",
+      purpose: "read",
+    });
+    expect(
+      planMaterialBrokerSubstitution({
+        registry: {
+          domains: [
+            {
+              domain,
+              replay: { access: "write", witness: "receipt" },
+              broker: {
+                mode: "trusted_substitution",
+                materialKinds: ["credential"],
+                outboundBoundary: "domain-owner-defined",
+              },
+            },
+          ],
+        },
+        domain,
+        materialRef: readToken,
+        requirement,
+      }),
+    ).toEqual({
+      ok: false,
+      issues: [
+        {
+          kind: "requirement_mismatch",
+          domain,
+          materialRef: readToken,
+          requirement,
+        },
+      ],
     });
   });
 });

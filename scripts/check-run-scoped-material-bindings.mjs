@@ -75,6 +75,69 @@ const collectFailures = (root = repoRoot) => {
   requirePattern(
     failures,
     root,
+    "packages/kernel/src/tools.ts",
+    /readonly broker\?: ExecutionDomainMaterialBrokerCapability/,
+    "ExecutionDomainDeclaration must own the optional MaterialRef broker capability",
+  );
+  requirePattern(
+    failures,
+    root,
+    "packages/kernel/src/tools.ts",
+    /duplicate_material_broker_declaration/,
+    "ExecutionDomainRegistry must reject duplicate per-domain broker declarations",
+  );
+  requirePattern(
+    failures,
+    root,
+    "packages/kernel/src/tools.ts",
+    /export const planMaterialBrokerSubstitution =/,
+    "kernel must expose one fail-closed MaterialRef broker planning helper",
+  );
+  requirePattern(
+    failures,
+    root,
+    "packages/kernel/src/tools.ts",
+    /materialRefSatisfiesRequirement\(spec\.materialRef, spec\.requirement\)/,
+    "broker planning must enforce MaterialRequirement before substitution",
+  );
+  requirePattern(
+    failures,
+    root,
+    "packages/kernel/test/tools.test.ts",
+    /missing_broker_declaration/,
+    "kernel tests must cover missing broker declaration",
+  );
+  requirePattern(
+    failures,
+    root,
+    "packages/kernel/test/tools.test.ts",
+    /unsupported_material_kind/,
+    "kernel tests must cover unsupported broker material kind",
+  );
+  requirePattern(
+    failures,
+    root,
+    "packages/kernel/test/tools.test.ts",
+    /requirement_mismatch/,
+    "kernel tests must cover broker requirement mismatch",
+  );
+  requirePattern(
+    failures,
+    root,
+    "packages/kernel/test/tools.test.ts",
+    /isMaterialBrokerPlaceholder\(result\.plan\.placeholder\.value\)\)\.toBe\(false\)/,
+    "kernel tests must prove placeholder strings are not accepted as broker placeholders",
+  );
+  requirePattern(
+    failures,
+    root,
+    "packages/kernel/test/tools.test.ts",
+    /JSON\.stringify\(result\.plan\.receipt\)\)\.not\.toContain\("resolved-secret-value"\)/,
+    "kernel tests must prove broker receipts do not contain live bytes",
+  );
+  requirePattern(
+    failures,
+    root,
     "packages/backends/cloudflare-do/test/facade-submit.worker.test.ts",
     /materials: \{ facade_token: tokenRef \}/,
     "facade submit worker test must prove run-scoped MaterialRef binding",
@@ -112,6 +175,8 @@ const fixtureFiles = [
   "packages/backends/cloudflare-do/test/facade-types.ts",
   "packages/runtime/test/submit-agent-runtime-events.test.ts",
   "packages/runtime/src/tool-settlement.ts",
+  "packages/kernel/src/tools.ts",
+  "packages/kernel/test/tools.test.ts",
 ];
 
 const positiveFixtures = {
@@ -162,6 +227,22 @@ it.effect("rejects non-symbolic material values before resolver lookup", () => {
 export const toolSettlementContract = {
   rejectionKinds: ["policy_denied", "provider_rejected", "resource_denied", "validation_failed"],
 };
+`,
+  "packages/kernel/src/tools.ts": `
+export interface ExecutionDomainDeclaration {
+  readonly broker?: ExecutionDomainMaterialBrokerCapability;
+}
+export const duplicate = "duplicate_material_broker_declaration";
+export const planMaterialBrokerSubstitution = (spec) => {
+  if (!materialRefSatisfiesRequirement(spec.materialRef, spec.requirement)) return { ok: false };
+};
+`,
+  "packages/kernel/test/tools.test.ts": `
+expect(planMaterialBrokerSubstitution({})).toEqual({ issues: [{ kind: "missing_broker_declaration" }] });
+expect(planMaterialBrokerSubstitution({})).toEqual({ issues: [{ kind: "unsupported_material_kind" }] });
+expect(planMaterialBrokerSubstitution({})).toEqual({ issues: [{ kind: "requirement_mismatch" }] });
+expect(isMaterialBrokerPlaceholder(result.plan.placeholder.value)).toBe(false);
+expect(JSON.stringify(result.plan.receipt)).not.toContain("resolved-secret-value");
 `,
 };
 
@@ -227,6 +308,23 @@ const collectSelfTestFailures = () => {
         `run-scoped material settlement mutation fixture was not rejected: ${JSON.stringify(
           settlementFailures,
         )}`,
+      ];
+    }
+
+    for (const file of fixtureFiles) writeFixture(root, file, positiveFixtures[file]);
+    writeFixture(
+      root,
+      "packages/kernel/src/tools.ts",
+      "export const planMaterialBrokerSubstitution = () => ({ ok: true });\n",
+    );
+    const brokerFailures = collectFailures(root);
+    if (
+      !brokerFailures.some((failure) =>
+        failure.includes("ExecutionDomainDeclaration must own the optional MaterialRef broker"),
+      )
+    ) {
+      return [
+        `run-scoped broker mutation fixture was not rejected: ${JSON.stringify(brokerFailures)}`,
       ];
     }
 

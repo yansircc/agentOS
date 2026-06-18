@@ -24,7 +24,14 @@ import {
   type PreClaim,
   type ScopeRef,
 } from "./effect-claim";
-import { isMaterialRequirement, type MaterialRequirement } from "./material-ref";
+import {
+  isMaterialRef,
+  isMaterialRequirement,
+  materialRefSatisfiesRequirement,
+  type MaterialKind,
+  type MaterialRef,
+  type MaterialRequirement,
+} from "./material-ref";
 import type { ResolvedMaterial } from "./ref-resolver";
 import type { QuotaSpec } from "./quota";
 import {
@@ -36,6 +43,7 @@ import {
 
 const TOOL_CONTRACT_BRAND = Symbol("@agent-os/kernel/ToolContract");
 const DETERMINISTIC_TOOL_INVOCATION_BRAND = Symbol("@agent-os/kernel/DeterministicToolInvocation");
+const MATERIAL_BROKER_PLACEHOLDER_BRAND = Symbol("@agent-os/kernel/MaterialBrokerPlaceholder");
 
 /**
  * Per-call execution context passed to a tool implementation.
@@ -133,6 +141,12 @@ export interface ExecutionDomainReplayLaw {
   readonly witness: ToolReplayWitness;
 }
 
+export interface ExecutionDomainMaterialBrokerCapability {
+  readonly mode: "trusted_substitution";
+  readonly materialKinds: ReadonlyArray<MaterialKind>;
+  readonly outboundBoundary: "domain-owner-defined";
+}
+
 /**
  * Tool execution declaration: deterministic tools stay local; external tools name access and domain.
  *
@@ -165,6 +179,7 @@ export type ToolExecutionRequirements<E extends ToolExecution> = E extends {
 export interface ExecutionDomainDeclaration {
   readonly domain: ExecutionDomain;
   readonly replay: ExecutionDomainReplayLaw;
+  readonly broker?: ExecutionDomainMaterialBrokerCapability;
 }
 
 /**
@@ -177,6 +192,36 @@ export interface ExecutionDomainDeclaration {
  */
 export interface ExecutionDomainRegistry {
   readonly domains: ReadonlyArray<ExecutionDomainDeclaration>;
+}
+
+export interface MaterialBrokerPlaceholder {
+  readonly _tag: "@agent-os/kernel/MaterialBrokerPlaceholder";
+  readonly value: string;
+  readonly [MATERIAL_BROKER_PLACEHOLDER_BRAND]: true;
+}
+
+export interface MaterialBrokerOwnerSubstitution {
+  readonly placeholder: MaterialBrokerPlaceholder;
+  readonly materialRef: MaterialRef;
+  readonly requirement: MaterialRequirement;
+  readonly outboundBoundary: "domain-owner-defined";
+}
+
+export interface MaterialBrokerReceipt {
+  readonly _tag: "@agent-os/kernel/MaterialBrokerReceipt";
+  readonly domain: ExecutionDomain;
+  readonly slot: string;
+  readonly materialKind: MaterialKind;
+  readonly materialRef: string;
+  readonly placeholder: MaterialBrokerPlaceholder;
+  readonly broker: ExecutionDomainMaterialBrokerCapability;
+}
+
+export interface MaterialBrokerSubstitutionPlan {
+  readonly domain: ExecutionDomain;
+  readonly placeholder: MaterialBrokerPlaceholder;
+  readonly ownerSubstitution: MaterialBrokerOwnerSubstitution;
+  readonly receipt: MaterialBrokerReceipt;
 }
 
 export type ResolvedToolExecution =
@@ -361,6 +406,12 @@ const normalizeAdmitter = <A>(admit: ToolAdmitter<A>): ToolAdmitter<A> =>
 const isExecutionDomainKind = (value: unknown): value is ExecutionDomainKind =>
   value === "host" || value === "sandbox" || value === "workspace" || value === "remote";
 
+const isMaterialKind = (value: unknown): value is MaterialKind =>
+  value === "credential" ||
+  value === "endpoint" ||
+  value === "binding" ||
+  value === "external_resource";
+
 const isExecutionDomain = (value: unknown): value is ExecutionDomain => {
   if (typeof value !== "object" || value === null) return false;
   const candidate = value as {
@@ -392,6 +443,24 @@ const isExecutionDomainReplayLaw = (value: unknown): value is ExecutionDomainRep
     (candidate.access === "read" || candidate.access === "write") &&
     isToolReplayWitness(candidate.witness)
   );
+};
+
+const isExecutionDomainMaterialBrokerCapability = (
+  value: unknown,
+): value is ExecutionDomainMaterialBrokerCapability => {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as {
+    readonly mode?: unknown;
+    readonly materialKinds?: unknown;
+    readonly outboundBoundary?: unknown;
+  };
+  if (candidate.mode !== "trusted_substitution") return false;
+  if (candidate.outboundBoundary !== "domain-owner-defined") return false;
+  if (!Array.isArray(candidate.materialKinds) || candidate.materialKinds.length === 0) {
+    return false;
+  }
+  if (!candidate.materialKinds.every(isMaterialKind)) return false;
+  return new Set(candidate.materialKinds).size === candidate.materialKinds.length;
 };
 
 const isToolExecution = (value: unknown): value is ToolExecution => {
@@ -428,6 +497,14 @@ export type ExecutionDomainRegistryIssue =
       readonly domain: ExecutionDomain;
     }
   | {
+      readonly kind: "invalid_material_broker_declaration";
+      readonly index: number;
+    }
+  | {
+      readonly kind: "duplicate_material_broker_declaration";
+      readonly domain: ExecutionDomain;
+    }
+  | {
       readonly kind: "missing_declaration";
       readonly toolId: string;
       readonly domain: ExecutionDomain;
@@ -456,10 +533,18 @@ export const validateExecutionDomainRegistry = (
   const declaredDomains = new Set<string>();
   const declaredLaws = new Map<string, ExecutionDomainDeclaration>();
   const declaredAccesses = new Map<string, Set<ToolAccess>>();
+  const declaredMaterialBrokers = new Map<string, ExecutionDomainDeclaration>();
 
   registry.domains.forEach((declaration, index) => {
     if (!isExecutionDomain(declaration.domain) || !isExecutionDomainReplayLaw(declaration.replay)) {
       issues.push({ kind: "invalid_declaration", index });
+      return;
+    }
+    if (
+      declaration.broker !== undefined &&
+      !isExecutionDomainMaterialBrokerCapability(declaration.broker)
+    ) {
+      issues.push({ kind: "invalid_material_broker_declaration", index });
       return;
     }
     if (declaration.replay.access === "write" && declaration.replay.witness === "snapshot") {
@@ -475,6 +560,16 @@ export const validateExecutionDomainRegistry = (
         access: declaration.replay.access,
       });
       return;
+    }
+    if (declaration.broker !== undefined) {
+      if (declaredMaterialBrokers.has(domainKey)) {
+        issues.push({
+          kind: "duplicate_material_broker_declaration",
+          domain: declaration.domain,
+        });
+        return;
+      }
+      declaredMaterialBrokers.set(domainKey, declaration);
     }
     declaredDomains.add(domainKey);
     declaredLaws.set(lawKey, declaration);
@@ -517,6 +612,38 @@ export const validateExecutionDomainRegistry = (
 export type ToolExecutionResolution =
   | { readonly ok: true; readonly resolved: ResolvedToolExecution }
   | { readonly ok: false; readonly issues: ReadonlyArray<ExecutionDomainRegistryIssue> };
+
+export type MaterialBrokerSubstitutionIssue =
+  | {
+      readonly kind: "invalid_registry";
+      readonly issues: ReadonlyArray<ExecutionDomainRegistryIssue>;
+    }
+  | {
+      readonly kind: "invalid_material_ref";
+    }
+  | {
+      readonly kind: "invalid_material_requirement";
+    }
+  | {
+      readonly kind: "missing_broker_declaration";
+      readonly domain: ExecutionDomain;
+    }
+  | {
+      readonly kind: "unsupported_material_kind";
+      readonly domain: ExecutionDomain;
+      readonly materialKind: MaterialKind;
+      readonly supportedKinds: ReadonlyArray<MaterialKind>;
+    }
+  | {
+      readonly kind: "requirement_mismatch";
+      readonly domain: ExecutionDomain;
+      readonly materialRef: MaterialRef;
+      readonly requirement: MaterialRequirement;
+    };
+
+export type MaterialBrokerSubstitutionPlanning =
+  | { readonly ok: true; readonly plan: MaterialBrokerSubstitutionPlan }
+  | { readonly ok: false; readonly issues: ReadonlyArray<MaterialBrokerSubstitutionIssue> };
 
 export const resolveToolExecution = (
   execution: ToolExecution,
@@ -570,6 +697,157 @@ export const resolveToolExecution = (
       execution,
       law: declaration.replay,
       witness: declaration.replay.witness,
+    },
+  };
+};
+
+const brokerDeclarationFor = (
+  domain: ExecutionDomain,
+  registry: ExecutionDomainRegistry,
+): ExecutionDomainDeclaration | undefined => {
+  const key = executionDomainKey(domain);
+  return registry.domains.find(
+    (declaration) =>
+      executionDomainKey(declaration.domain) === key && declaration.broker !== undefined,
+  );
+};
+
+const materialBrokerRefProofPart = (value: string | undefined): string =>
+  encodeURIComponent(value ?? "_");
+
+const materialBrokerRefProof = (ref: MaterialRef): string => {
+  switch (ref.kind) {
+    case "credential":
+      return [
+        ref.kind,
+        materialBrokerRefProofPart(ref.provider),
+        materialBrokerRefProofPart(ref.purpose),
+        materialBrokerRefProofPart(ref.ref),
+      ].join(":");
+    case "endpoint":
+      return [
+        ref.kind,
+        materialBrokerRefProofPart(ref.protocol),
+        materialBrokerRefProofPart(ref.ref),
+      ].join(":");
+    case "binding":
+      return [
+        ref.kind,
+        materialBrokerRefProofPart(ref.provider),
+        materialBrokerRefProofPart(ref.bindingKind),
+        materialBrokerRefProofPart(ref.ref),
+      ].join(":");
+    case "external_resource":
+      return [
+        ref.kind,
+        materialBrokerRefProofPart(ref.provider),
+        materialBrokerRefProofPart(ref.resourceKind),
+        materialBrokerRefProofPart(ref.ref),
+      ].join(":");
+  }
+};
+
+const materialBrokerPlaceholder = (
+  domain: ExecutionDomain,
+  ref: MaterialRef,
+  requirement: MaterialRequirement,
+): MaterialBrokerPlaceholder => {
+  const value = [
+    "agentos-material-placeholder",
+    encodeURIComponent(domain.kind),
+    encodeURIComponent(domain.ref),
+    encodeURIComponent(requirement.slot),
+    encodeURIComponent(materialBrokerRefProof(ref)),
+  ].join(":");
+  return Object.defineProperty(
+    {
+      _tag: "@agent-os/kernel/MaterialBrokerPlaceholder",
+      value,
+    },
+    MATERIAL_BROKER_PLACEHOLDER_BRAND,
+    { value: true, enumerable: false },
+  ) as MaterialBrokerPlaceholder;
+};
+
+export const isMaterialBrokerPlaceholder = (value: unknown): value is MaterialBrokerPlaceholder =>
+  typeof value === "object" &&
+  value !== null &&
+  (value as { readonly _tag?: unknown })._tag === "@agent-os/kernel/MaterialBrokerPlaceholder" &&
+  typeof (value as { readonly value?: unknown }).value === "string" &&
+  (value as MaterialBrokerPlaceholder)[MATERIAL_BROKER_PLACEHOLDER_BRAND] === true;
+
+export const planMaterialBrokerSubstitution = (spec: {
+  readonly registry: ExecutionDomainRegistry;
+  readonly domain: ExecutionDomain;
+  readonly materialRef: MaterialRef;
+  readonly requirement: MaterialRequirement;
+}): MaterialBrokerSubstitutionPlanning => {
+  const validation = validateExecutionDomainRegistry({}, spec.registry);
+  if (!validation.ok) {
+    return { ok: false, issues: [{ kind: "invalid_registry", issues: validation.issues }] };
+  }
+  if (!isMaterialRef(spec.materialRef)) {
+    return { ok: false, issues: [{ kind: "invalid_material_ref" }] };
+  }
+  if (!isMaterialRequirement(spec.requirement)) {
+    return { ok: false, issues: [{ kind: "invalid_material_requirement" }] };
+  }
+
+  const declaration = brokerDeclarationFor(spec.domain, spec.registry);
+  if (declaration?.broker === undefined) {
+    return {
+      ok: false,
+      issues: [{ kind: "missing_broker_declaration", domain: spec.domain }],
+    };
+  }
+  if (!declaration.broker.materialKinds.includes(spec.materialRef.kind)) {
+    return {
+      ok: false,
+      issues: [
+        {
+          kind: "unsupported_material_kind",
+          domain: spec.domain,
+          materialKind: spec.materialRef.kind,
+          supportedKinds: declaration.broker.materialKinds,
+        },
+      ],
+    };
+  }
+  if (!materialRefSatisfiesRequirement(spec.materialRef, spec.requirement)) {
+    return {
+      ok: false,
+      issues: [
+        {
+          kind: "requirement_mismatch",
+          domain: spec.domain,
+          materialRef: spec.materialRef,
+          requirement: spec.requirement,
+        },
+      ],
+    };
+  }
+
+  const placeholder = materialBrokerPlaceholder(spec.domain, spec.materialRef, spec.requirement);
+  return {
+    ok: true,
+    plan: {
+      domain: spec.domain,
+      placeholder,
+      ownerSubstitution: {
+        placeholder,
+        materialRef: spec.materialRef,
+        requirement: spec.requirement,
+        outboundBoundary: declaration.broker.outboundBoundary,
+      },
+      receipt: {
+        _tag: "@agent-os/kernel/MaterialBrokerReceipt",
+        domain: spec.domain,
+        slot: spec.requirement.slot,
+        materialKind: spec.materialRef.kind,
+        materialRef: materialBrokerRefProof(spec.materialRef),
+        placeholder,
+        broker: declaration.broker,
+      },
     },
   };
 };

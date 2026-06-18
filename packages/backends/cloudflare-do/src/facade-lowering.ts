@@ -216,6 +216,10 @@ const executionDomainIssueLabel = (issue: ExecutionDomainRegistryIssue): string 
       return `duplicate ${issue.domain.kind}:${issue.domain.ref}:${issue.access}`;
     case "invalid_write_snapshot_law":
       return `invalid write snapshot law for ${issue.domain.kind}:${issue.domain.ref}`;
+    case "invalid_material_broker_declaration":
+      return `invalid material broker declaration at ${issue.index}`;
+    case "duplicate_material_broker_declaration":
+      return `duplicate material broker declaration for ${issue.domain.kind}:${issue.domain.ref}`;
     case "missing_declaration":
       return `missing ${issue.domain.kind}:${issue.domain.ref}:${issue.access} for ${issue.toolId}`;
     case "access_mismatch":
