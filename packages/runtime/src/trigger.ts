@@ -96,10 +96,10 @@ export type AnyDurableTrigger = DurableTrigger<any, any, never>;
 
 export type TriggerRegistry = ReadonlyMap<string, AnyDurableTrigger>;
 
-export class DurableTriggerRegistry extends Context.Tag("@agent-os/DurableTriggerRegistry")<
+export class DurableTriggerRegistry extends Context.Service<
   DurableTriggerRegistry,
   TriggerRegistry
->() {}
+>()("@agent-os/DurableTriggerRegistry") {}
 
 export const getDurableTrigger = (
   registry: TriggerRegistry,
@@ -242,7 +242,7 @@ export const drainTriggerPumpUntilQuiet = <E>(
     return yield* Effect.fail(new DurableTriggerDrainLimitExceeded({ maxIterations, drained }));
   });
 
-export class TriggerPump extends Context.Tag("@agent-os/TriggerPump")<
+export class TriggerPump extends Context.Service<
   TriggerPump,
   {
     readonly drainDue: (
@@ -276,4 +276,4 @@ export class TriggerPump extends Context.Tag("@agent-os/TriggerPump")<
     >;
     readonly stuckTriggers: (now: number) => Effect.Effect<TriggerStuckResult, SqlError>;
   }
->() {}
+>()("@agent-os/TriggerPump") {}

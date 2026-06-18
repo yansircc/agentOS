@@ -13,7 +13,7 @@ const testPath = "packages/wire-adapters/ag-ui/test/ag-ui.test.ts";
 const read = (root, file) => fs.readFileSync(path.join(root, file), "utf8");
 
 const agUiSubmitFunctionBody = (source) => {
-  const marker = "export const agUiRunAgentInputToSubmitSpec =";
+  const marker = "export const agUiRunAgentInputToSubmitInput =";
   const start = source.indexOf(marker);
   if (start === -1) return "";
   const nextExport = source.indexOf("\nexport const", start + marker.length);
@@ -26,7 +26,7 @@ const collectFailures = (root = repoRoot) => {
   const testSource = read(root, testPath);
   const body = agUiSubmitFunctionBody(adapterSource);
   if (body.length === 0) {
-    failures.push(`${adapterPath}: missing agUiRunAgentInputToSubmitSpec`);
+    failures.push(`${adapterPath}: missing agUiRunAgentInputToSubmitInput`);
     return failures;
   }
   if (/AG-UI resume input cannot be lowered to SubmitSpec\.resume/.test(body)) {
@@ -57,7 +57,7 @@ const collectFailures = (root = repoRoot) => {
     failures.push(`${adapterPath}: AG-UI resume is still hidden in context.agUi`);
   }
   if (!/\.\.\.\(resume === undefined \? \{\} : \{ resume \}\)/.test(body)) {
-    failures.push(`${adapterPath}: runtime defaults.resume is not passed to SubmitSpec.resume`);
+    failures.push(`${adapterPath}: runtime defaults.resume is not passed to SubmitRunInput.resume`);
   }
   if (!/lowers AG-UI resume input through runtime InputRequest bindings/.test(testSource)) {
     failures.push(`${testPath}: missing AG-UI InputRequest lowering test`);
@@ -143,7 +143,7 @@ const submitResumeForAgUiInput = (input, defaults) => {
   return submitResumeDecisionFromInputRequestRef(parsed.resume);
 };
 
-export const agUiRunAgentInputToSubmitSpec = (input, defaults) => {
+export const agUiRunAgentInputToSubmitInput = (input, defaults) => {
   const resume = submitResumeForAgUiInput(input, defaults);
   return {
     ...(resume === undefined ? {} : { resume }),

@@ -20,7 +20,7 @@ import { RESOURCE_AUTHORITIES } from "@agent-os/resource-carrier";
 const expectFailure = <A>(exit: Exit.Exit<unknown, A>): A => {
   expect(Exit.isFailure(exit)).toBe(true);
   if (Exit.isFailure(exit)) {
-    const failure = Cause.failureOption(exit.cause);
+    const failure = Cause.findErrorOption(exit.cause);
     expect(Option.isSome(failure)).toBe(true);
     if (Option.isSome(failure)) {
       return failure.value;

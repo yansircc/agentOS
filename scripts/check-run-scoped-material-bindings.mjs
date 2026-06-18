@@ -33,9 +33,23 @@ const collectFailures = (root = repoRoot) => {
   requirePattern(
     failures,
     root,
+    "packages/runtime-protocol/src/submit.ts",
+    /materials: \{ \.\.\.spec\.bindings\.materials, \.\.\.spec\.input\.materials \}/,
+    "lowerSubmitRunInput must merge framework and run-scoped symbolic MaterialRef values into SubmitSpec.materials",
+  );
+  requirePattern(
+    failures,
+    root,
     "packages/backends/cloudflare-do/src/agent-do.ts",
-    /materials: \{ \.\.\.bindings\.materials \}/,
-    "submitWithBindings must forward run-scoped material refs into SubmitSpec.materials",
+    /\.\.\.\(spec\.materials === undefined \? \{\} : \{ materials: spec\.materials \}\)/,
+    "submitWithBindings must preserve run-scoped MaterialRef values in SubmitRunInput.materials",
+  );
+  requirePattern(
+    failures,
+    root,
+    "packages/backends/cloudflare-do/src/agent-do.ts",
+    /lowerSubmitRunInput\(\{[\s\S]*?input: runInput,[\s\S]*?bindings: \{[\s\S]*?\.\.\.baseBindings/s,
+    "submitWithBindings must lower run input with framework-owned submit bindings",
   );
   requirePattern(
     failures,
@@ -69,7 +83,7 @@ const collectFailures = (root = repoRoot) => {
     failures,
     root,
     "packages/backends/cloudflare-do/test/facade-types.ts",
-    /@ts-expect-error submit material bindings carry symbolic MaterialRef values[\s\S]*?materials: \{ facade_token: "resolved-provider-material" \}/,
+    /@ts-expect-error submit materials carry symbolic MaterialRef values[\s\S]*?materials: \{ facade_token: "resolved-provider-material" \}/,
     "facade type fixture must reject resolved provider material in submit bindings",
   );
   requirePattern(
@@ -91,6 +105,7 @@ const writeFixture = (root, relativePath, source) => {
 
 const fixtureFiles = [
   "packages/runtime-protocol/src/bindings.ts",
+  "packages/runtime-protocol/src/submit.ts",
   "packages/backends/cloudflare-do/src/agent-do.ts",
   "packages/runtime/src/submit-agent.ts",
   "packages/backends/cloudflare-do/test/facade-submit.worker.test.ts",
@@ -106,10 +121,21 @@ export interface AgentBindings { readonly materials?: Readonly<Record<string, Ma
 `,
   "packages/backends/cloudflare-do/src/agent-do.ts": `
 export class AgentDurableObject {
-  protected submitWithBindings(spec, bindings) {
-    return this.submitFull({ materials: { ...bindings.materials } });
+  protected submitWithBindings(spec, baseBindings) {
+    const runInput = {
+      ...(spec.materials === undefined ? {} : { materials: spec.materials }),
+    };
+    return this.submitFull(lowerSubmitRunInput({
+      input: runInput,
+      bindings: { ...baseBindings },
+    }));
   }
 }
+`,
+  "packages/runtime-protocol/src/submit.ts": `
+export const lowerSubmitRunInput = (spec) => ({
+  materials: { ...spec.bindings.materials, ...spec.input.materials },
+});
 `,
   "packages/runtime/src/submit-agent.ts": `
 import { isMaterialRef, materialRefKey, materialRefSatisfiesRequirement } from "@agent-os/kernel/material-ref";
@@ -125,7 +151,7 @@ defineAgentSubmitBindings({ materials: { facade_token: tokenRef } });
 `,
   "packages/backends/cloudflare-do/test/facade-types.ts": `
 defineAgentSubmitBindings({
-  // @ts-expect-error submit material bindings carry symbolic MaterialRef values
+  // @ts-expect-error submit materials carry symbolic MaterialRef values
   materials: { facade_token: "resolved-provider-material" },
 });
 `,

@@ -50,9 +50,11 @@ const requiredTerms = [
   {
     file: "packages/backends/cloudflare-do/src/agent-do.ts",
     terms: [
-      "readonly bindings?: AgentSubmitBindings",
       "protected submitWithBindings",
-      "mergeSubmitBindings",
+      "baseBindings: AgentSubmitBindings",
+      "const runInput: SubmitRunInput",
+      "lowerSubmitRunInput({",
+      "...baseBindings",
     ],
   },
   {
@@ -86,7 +88,13 @@ const requiredTerms = [
   },
   {
     file: "packages/runtime-protocol/src/submit.ts",
-    terms: ["export interface SubmitToolIntent", "readonly toolIntents?: ReadonlyArray"],
+    terms: [
+      "export interface SubmitRunInput",
+      "export interface SubmitRunBindings",
+      "export interface SubmitToolIntent",
+      "export const lowerSubmitRunInput",
+      "readonly toolIntents?: ReadonlyArray",
+    ],
   },
   {
     file: "packages/backends/protocol/src/index.ts",

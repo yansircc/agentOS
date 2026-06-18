@@ -1,4 +1,4 @@
-import { Effect, Schema } from "effect";
+import { Effect, Schema, SchemaGetter } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 
 import {
@@ -6,6 +6,7 @@ import {
   defineAgentSchema,
   fingerprintAgentSchema,
   inspectAgentSchemaProfile,
+  type AgentSchemaDecoder,
 } from "../src/agent-schema";
 
 describe("AgentSchema profile spike", () => {
@@ -17,8 +18,8 @@ describe("AgentSchema profile spike", () => {
           score: Schema.Number,
           accepted: Schema.Boolean,
           tags: Schema.Array(Schema.String),
-          mode: Schema.Literal("fast", "slow"),
-          scalar: Schema.Union(Schema.String, Schema.Number),
+          mode: Schema.Literals(["fast", "slow"]),
+          scalar: Schema.Union([Schema.String, Schema.Number]),
         }),
       );
 
@@ -75,12 +76,12 @@ describe("AgentSchema profile spike", () => {
       const a = defineAgentSchema(
         Schema.Struct({
           alpha: Schema.String,
-          beta: Schema.Literal("red", "green", "blue"),
+          beta: Schema.Literals(["red", "green", "blue"]),
         }),
       );
       const b = defineAgentSchema(
         Schema.Struct({
-          beta: Schema.Literal("blue", "green", "red"),
+          beta: Schema.Literals(["blue", "green", "red"]),
           alpha: Schema.String,
         }),
       );
@@ -101,7 +102,7 @@ describe("AgentSchema profile spike", () => {
   it("supports string pattern refinements as closed schema semantics", () => {
     const symbolicRefPattern = "^[A-Za-z0-9_.:-]{1,128}$";
     const source = Schema.Struct({
-      ref: Schema.String.pipe(Schema.pattern(new RegExp(symbolicRefPattern))),
+      ref: Schema.String.pipe(Schema.check(Schema.isPattern(new RegExp(symbolicRefPattern)))),
     });
 
     expect(inspectAgentSchemaProfile(source)).toEqual([]);
@@ -121,7 +122,10 @@ describe("AgentSchema profile spike", () => {
 
   it("supports bounded string refinements as closed schema semantics", () => {
     const source = Schema.Struct({
-      content: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(8)),
+      content: Schema.String.pipe(
+        Schema.check(Schema.isMinLength(1)),
+        Schema.check(Schema.isMaxLength(8)),
+      ),
     });
 
     expect(inspectAgentSchemaProfile(source)).toEqual([]);
@@ -145,7 +149,7 @@ describe("AgentSchema profile spike", () => {
       const plain = defineAgentSchema(Schema.Struct({ alpha: Schema.String }));
       const annotated = defineAgentSchema(
         Schema.Struct({
-          alpha: Schema.String.annotations({
+          alpha: Schema.String.annotate({
             title: "Alpha",
             description: "Displayed to humans only",
             examples: ["a"],
@@ -168,17 +172,21 @@ describe("AgentSchema profile spike", () => {
   );
 
   it("rejects unsupported Effect Schema features before boot", () => {
-    const unsupported: ReadonlyArray<Schema.Schema.AnyNoContext> = [
+    const unsupported: ReadonlyArray<AgentSchemaDecoder<unknown>> = [
       Schema.Struct({
-        value: Schema.transform(Schema.String, Schema.Number, {
-          decode: (value) => value.length,
-          encode: (value) => String(value),
-        }),
+        value: Schema.String.pipe(
+          Schema.decodeTo(Schema.Number, {
+            decode: SchemaGetter.transform((value) => value.length),
+            encode: SchemaGetter.transform((value) => String(value)),
+          }),
+        ),
       }),
       Schema.Struct({ value: Schema.suspend(() => Schema.String) }),
       Schema.Struct({ value: Schema.String.pipe(Schema.brand("NonEmpty")) }),
-      Schema.Struct({ value: Schema.optionalWith(Schema.String, { default: () => "x" }) }),
-      Schema.Struct({ value: Schema.Literal(1, 2) }),
+      Schema.Struct({
+        value: Schema.String.pipe(Schema.optional, Schema.withDecodingDefault(Effect.succeed("x"))),
+      }),
+      Schema.Struct({ value: Schema.Literals([1, 2]) }),
       Schema.String,
     ];
 

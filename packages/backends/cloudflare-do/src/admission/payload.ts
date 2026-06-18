@@ -34,7 +34,7 @@ const AttemptKeySchema = Schema.Struct({
   transportAdapterVersion: Schema.String,
 });
 
-const OutcomeSchema = Schema.Union(
+const OutcomeSchema = Schema.Union([
   Schema.Struct({ class: Schema.Literal("Supported"), tokensUsed: Schema.Number }),
   Schema.Struct({
     class: Schema.Literal("ProviderRejected"),
@@ -50,13 +50,13 @@ const OutcomeSchema = Schema.Union(
   }),
   Schema.Struct({ class: Schema.Literal("TransientError"), cause: Schema.String }),
   Schema.Struct({ class: Schema.Literal("ConfigError"), reason: Schema.String }),
-);
+]);
 
 export const EvidencePayloadSchema = Schema.Struct({
   key: AttemptKeySchema,
-  stimulusKind: Schema.Literal("probe", "live"),
+  stimulusKind: Schema.Literals(["probe", "live"]),
   outcome: OutcomeSchema,
-  admissionImpact: Schema.Literal("lease-bearing", "reinforcement"),
+  admissionImpact: Schema.Literals(["lease-bearing", "reinforcement"]),
   // adapterId is metadata; ignored by projection. Optional for forward-compat.
   adapterId: Schema.optional(Schema.String),
 });

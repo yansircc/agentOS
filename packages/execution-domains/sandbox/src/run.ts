@@ -20,13 +20,15 @@ export const runSandbox = (
     yield* policy({ request });
     const started = yield* Clock.currentTimeMillis;
     const result = yield* backend.run(request).pipe(
-      Effect.timeoutFail({
+      Effect.timeoutOrElse({
         duration: Duration.millis(request.timeoutMs),
-        onTimeout: () =>
-          new SandboxFailure({
-            code: "Timeout",
-            reason: `sandbox run exceeded ${request.timeoutMs}ms`,
-          }),
+        orElse: () =>
+          Effect.fail(
+            new SandboxFailure({
+              code: "Timeout",
+              reason: `sandbox run exceeded ${request.timeoutMs}ms`,
+            }),
+          ),
       }),
     );
     const ended = yield* Clock.currentTimeMillis;

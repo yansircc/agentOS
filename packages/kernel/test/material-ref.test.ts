@@ -252,15 +252,15 @@ describe("MaterialRef algebra", () => {
     const result = await runtime.runPromise(
       Effect.gen(function* () {
         const refs = yield* RefResolverService;
-        return yield* Effect.either(
+        return yield* Effect.result(
           resolveStringMaterial(refs, endpointMaterialRef("not-a-string")),
         );
       }),
     );
 
-    expect(result._tag).toBe("Left");
-    if (result._tag === "Left") {
-      expect(result.left).toMatchObject({
+    expect(result._tag).toBe("Failure");
+    if (result._tag === "Failure") {
+      expect(result.failure).toMatchObject({
         kind: "endpoint",
         ref: "endpoint:_:not-a-string",
       });

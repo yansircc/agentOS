@@ -116,7 +116,7 @@ const isNonEmptyString = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0;
 
 const isTurnRef = (value: unknown): value is TurnRef =>
-  Predicate.isRecord(value) &&
+  Predicate.isObject(value) &&
   isPositiveInteger(value.id) &&
   typeof value.index === "number" &&
   Number.isInteger(value.index) &&
@@ -136,7 +136,7 @@ export const inputRequestKindFromReason = (reason: string): InputRequestKind | n
 };
 
 export const isInputRequestRef = (value: unknown): value is InputRequestRef =>
-  Predicate.isRecord(value) &&
+  Predicate.isObject(value) &&
   value.kind === INPUT_REQUEST_REF_KIND &&
   isScopeRef(value.scopeRef) &&
   isPositiveInteger(value.afterEventId) &&
@@ -188,14 +188,14 @@ export const inputRequestRefFromInterruptedEvent = (
 const isRecordedSealedAuthorizationRef = (
   value: unknown,
 ): value is RecordedSealedAuthorizationRef =>
-  Predicate.isRecord(value) &&
+  Predicate.isObject(value) &&
   value.kind === "recorded_sealed" &&
   isNonEmptyString(value.ref) &&
   value.codec === "aead" &&
   isNonEmptyString(value.version);
 
 const parseAuthorizationGrantRef = (value: unknown): AuthorizationGrantRef | null => {
-  if (!Predicate.isRecord(value)) return null;
+  if (!Predicate.isObject(value)) return null;
   if (value.kind === "material_ref" && isMaterialRef(value.materialRef)) {
     return { kind: "material_ref", materialRef: value.materialRef };
   }
@@ -209,7 +209,7 @@ export const parseInputRequestResumePayload = (
   requestKind: InputRequestKind,
   value: unknown,
 ): ParseInputRequestResumeResult => {
-  if (!Predicate.isRecord(value)) return { ok: false, reason: "input_request_resume_malformed" };
+  if (!Predicate.isObject(value)) return { ok: false, reason: "input_request_resume_malformed" };
   if (value.kind !== requestKind) {
     return { ok: false, reason: "input_request_resume_kind_mismatch" };
   }
@@ -219,7 +219,7 @@ export const parseInputRequestResumePayload = (
         ? { ok: true, resume: { kind: "approval", approved: true } }
         : { ok: false, reason: "input_request_resume_malformed" };
     case INPUT_REQUEST_KIND.QUESTION:
-      return Predicate.isRecord(value.answers)
+      return Predicate.isObject(value.answers)
         ? { ok: true, resume: { kind: "question", answers: value.answers } }
         : { ok: false, reason: "input_request_resume_malformed" };
     case INPUT_REQUEST_KIND.AUTHORIZATION: {

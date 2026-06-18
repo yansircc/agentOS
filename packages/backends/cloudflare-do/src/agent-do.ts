@@ -513,7 +513,7 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
       .runPromiseExit(effect)
       .then((exit) => {
         if (Exit.isSuccess(exit)) return exit.value;
-        const failure = Cause.failureOption(exit.cause);
+        const failure = Cause.findErrorOption(exit.cause);
         if (Option.isSome(failure)) return Promise.reject(failure.value);
         return Promise.reject(exit.cause);
       });
@@ -1150,13 +1150,13 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
     return this.runScoped((_scope, identity) =>
       Effect.gen(function* () {
         const resources = yield* Resources;
-        return yield* resources.reserve(identity, spec).pipe(Effect.either);
+        return yield* resources.reserve(identity, spec).pipe(Effect.result);
       }),
     ).then((result) => {
-      if (result._tag === "Left") {
-        return Promise.reject(result.left);
+      if (result._tag === "Failure") {
+        return Promise.reject(result.failure);
       }
-      return result.right;
+      return result.success;
     });
   }
 
@@ -1164,11 +1164,11 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
     return this.runScoped((_scope, identity) =>
       Effect.gen(function* () {
         const resources = yield* Resources;
-        return yield* resources.consume(identity, spec).pipe(Effect.either);
+        return yield* resources.consume(identity, spec).pipe(Effect.result);
       }),
     ).then((result) => {
-      if (result._tag === "Left") {
-        return Promise.reject(result.left);
+      if (result._tag === "Failure") {
+        return Promise.reject(result.failure);
       }
     });
   }
@@ -1177,11 +1177,11 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
     return this.runScoped((_scope, identity) =>
       Effect.gen(function* () {
         const resources = yield* Resources;
-        return yield* resources.release(identity, spec).pipe(Effect.either);
+        return yield* resources.release(identity, spec).pipe(Effect.result);
       }),
     ).then((result) => {
-      if (result._tag === "Left") {
-        return Promise.reject(result.left);
+      if (result._tag === "Failure") {
+        return Promise.reject(result.failure);
       }
     });
   }

@@ -70,7 +70,7 @@ const isFrameBase = (value: Record<string, unknown>): boolean =>
   value.seq >= 0;
 
 export const isTurnStreamFrame = (value: unknown): value is TurnStreamFrame => {
-  if (!Predicate.isRecord(value) || !isFrameBase(value)) return false;
+  if (!Predicate.isObject(value) || !isFrameBase(value)) return false;
   switch (value.kind) {
     case "text_delta":
       return typeof value.text === "string";

@@ -1,4 +1,5 @@
-import { Effect, Schema } from "effect";
+import { Effect, Fiber, Schema } from "effect";
+import { TestClock } from "effect/testing";
 import { describe, expect, it } from "@effect/vitest";
 import { makePreClaim } from "@agent-os/kernel/effect-claim";
 import {
@@ -830,7 +831,7 @@ describe("runWorkspaceJobEffect", () => {
       let writeCalls = 0;
       let readCalls = 0;
 
-      const projection = yield* runJob(
+      const fiber = yield* runJob(
         makeJobSpec({
           dataPlane: makeDataPlane({
             writeSeedFile: async () => {
@@ -851,7 +852,12 @@ describe("runWorkspaceJobEffect", () => {
           }),
         }),
         services,
-      );
+      ).pipe(Effect.forkChild);
+
+      yield* Effect.yieldNow;
+      expect(seedWrites).toBe(0);
+      yield* TestClock.adjust("10 seconds");
+      const projection = yield* Fiber.join(fiber);
 
       expect(projection.status).toBe("verified");
       expect(seedWrites).toBe(0);
@@ -1098,7 +1104,7 @@ describe("runWorkspaceJobEffect", () => {
     Effect.gen(function* () {
       const services = makeServices();
       let seedWrites = 0;
-      const projection = yield* runJob(
+      const fiber = yield* runJob(
         makeJobSpec({
           dataPlane: makeDataPlane({
             writeSeedFile: async () => {
@@ -1108,7 +1114,12 @@ describe("runWorkspaceJobEffect", () => {
           }),
         }),
         services,
-      );
+      ).pipe(Effect.forkChild);
+
+      yield* Effect.yieldNow;
+      expect(seedWrites).toBe(1);
+      yield* TestClock.adjust("10 seconds");
+      const projection = yield* Fiber.join(fiber);
 
       expect(projection.status).toBe("verified");
       expect(seedWrites).toBe(2);
@@ -1124,7 +1135,7 @@ describe("runWorkspaceJobEffect", () => {
     Effect.gen(function* () {
       const services = makeServices();
       let seedWrites = 0;
-      const projection = yield* runJob(
+      const fiber = yield* runJob(
         makeJobSpec({
           dataPlane: makeDataPlane({
             writeSeedFile: async () => {
@@ -1134,7 +1145,12 @@ describe("runWorkspaceJobEffect", () => {
           }),
         }),
         services,
-      );
+      ).pipe(Effect.forkChild);
+
+      yield* Effect.yieldNow;
+      expect(seedWrites).toBe(1);
+      yield* TestClock.adjust("10 seconds");
+      const projection = yield* Fiber.join(fiber);
 
       expect(projection).toMatchObject({
         status: "failed",

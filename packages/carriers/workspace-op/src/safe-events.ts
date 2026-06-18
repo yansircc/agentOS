@@ -82,7 +82,7 @@ const safeRejectedPayload = (payload: Record<string, unknown>): SafeLedgerPayloa
 export const projectWorkspaceOperationSafeLedgerEvent = (
   event: LedgerEvent,
 ): SafeLedgerEvent | undefined => {
-  if (event.factOwnerRef !== WORKSPACE_OP_FACT_OWNER || !Predicate.isRecord(event.payload)) {
+  if (event.factOwnerRef !== WORKSPACE_OP_FACT_OWNER || !Predicate.isObject(event.payload)) {
     return undefined;
   }
   switch (event.kind) {

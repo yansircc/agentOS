@@ -22,10 +22,10 @@ export class RefResolutionFailed extends Data.TaggedError("agent_os.ref_resoluti
   readonly ref: string;
 }> {}
 
-export class RefResolverService extends Context.Tag("@agent-os/RefResolver")<
+export class RefResolverService extends Context.Service<
   RefResolverService,
   ResolvedMaterialService
->() {}
+>()("@agent-os/RefResolver") {}
 
 export interface ResolvedMaterialService {
   readonly material: (ref: MaterialRef) => Effect.Effect<ResolvedMaterial, RefResolutionFailed>;

@@ -328,7 +328,7 @@ const requireCloudflareAccount = <Material, MutationInput>(
       catch: () =>
         materialUnavailable(claim, spec.resourceKind, step, "cloudflare account resolution failed"),
     });
-    if (!Predicate.isRecord(material)) {
+    if (!Predicate.isObject(material)) {
       return yield* Effect.fail(
         materialUnavailable(
           claim,
@@ -448,7 +448,7 @@ const requireBindingMaterial = <Material, MutationInput>(
           `cloudflare_${spec.resourceKind}_binding_resolution_failed`,
         ),
     });
-    if (!Predicate.isRecord(material)) {
+    if (!Predicate.isObject(material)) {
       return yield* Effect.fail(
         materialUnavailable(
           claim,
@@ -529,7 +529,7 @@ const cloudflareJson = <Material, MutationInput>(
           `cloudflare_${spec.resourceKind}_response_json_invalid`,
         ),
     });
-    if (!Predicate.isRecord(body) || body.success !== true) {
+    if (!Predicate.isObject(body) || body.success !== true) {
       return yield* Effect.fail(
         providerFailure(
           claim,
@@ -937,14 +937,14 @@ const workerSubdomainMaterialKeys = new Set(["scriptName", "enabled", "previewsE
 
 export const accountMaterialFrom = (value: unknown): CloudflareAccountMaterial | null =>
   (() => {
-    if (!Predicate.isRecord(value) || !hasOnlyKeys(value, accountIdKeys)) return null;
+    if (!Predicate.isObject(value) || !hasOnlyKeys(value, accountIdKeys)) return null;
     const accountId = nonEmptyString(value.accountId);
     return accountId === null ? null : { accountId };
   })();
 
 export const d1MaterialFrom = (value: unknown): CloudflareD1Material | null =>
   (() => {
-    if (!Predicate.isRecord(value) || !hasOnlyKeys(value, d1MaterialKeys)) return null;
+    if (!Predicate.isObject(value) || !hasOnlyKeys(value, d1MaterialKeys)) return null;
     const databaseId = nonEmptyString(value.databaseId);
     if (databaseId === null || !optionalNonEmptyString(value.databaseName)) return null;
     return {
@@ -955,7 +955,7 @@ export const d1MaterialFrom = (value: unknown): CloudflareD1Material | null =>
 
 export const kvNamespaceMaterialFrom = (value: unknown): CloudflareKVNamespaceMaterial | null =>
   (() => {
-    if (!Predicate.isRecord(value) || !hasOnlyKeys(value, kvMaterialKeys)) return null;
+    if (!Predicate.isObject(value) || !hasOnlyKeys(value, kvMaterialKeys)) return null;
     const namespaceId = nonEmptyString(value.namespaceId);
     if (namespaceId === null || !optionalNonEmptyString(value.title)) return null;
     return {
@@ -966,14 +966,14 @@ export const kvNamespaceMaterialFrom = (value: unknown): CloudflareKVNamespaceMa
 
 export const r2BucketMaterialFrom = (value: unknown): CloudflareR2BucketMaterial | null =>
   (() => {
-    if (!Predicate.isRecord(value) || !hasOnlyKeys(value, r2MaterialKeys)) return null;
+    if (!Predicate.isObject(value) || !hasOnlyKeys(value, r2MaterialKeys)) return null;
     const bucketName = nonEmptyString(value.bucketName);
     return bucketName === null ? null : { bucketName };
   })();
 
 export const queueMaterialFrom = (value: unknown): CloudflareQueueMaterial | null =>
   (() => {
-    if (!Predicate.isRecord(value) || !hasOnlyKeys(value, queueMaterialKeys)) return null;
+    if (!Predicate.isObject(value) || !hasOnlyKeys(value, queueMaterialKeys)) return null;
     const queueId = nonEmptyString(value.queueId);
     if (queueId === null || !optionalNonEmptyString(value.queueName)) return null;
     return {
@@ -984,7 +984,7 @@ export const queueMaterialFrom = (value: unknown): CloudflareQueueMaterial | nul
 
 export const workflowMaterialFrom = (value: unknown): CloudflareWorkflowMaterial | null =>
   (() => {
-    if (!Predicate.isRecord(value) || !hasOnlyKeys(value, workflowMaterialKeys)) return null;
+    if (!Predicate.isObject(value) || !hasOnlyKeys(value, workflowMaterialKeys)) return null;
     const workflowName = nonEmptyString(value.workflowName);
     if (
       workflowName === null ||
@@ -1002,7 +1002,7 @@ export const workflowMaterialFrom = (value: unknown): CloudflareWorkflowMaterial
 
 export const workerScriptMaterialFrom = (value: unknown): CloudflareWorkerScriptMaterial | null =>
   (() => {
-    if (!Predicate.isRecord(value) || !hasOnlyKeys(value, workerScriptMaterialKeys)) return null;
+    if (!Predicate.isObject(value) || !hasOnlyKeys(value, workerScriptMaterialKeys)) return null;
     const scriptName = nonEmptyString(value.scriptName);
     if (scriptName === null || !optionalNonEmptyString(value.workerId)) return null;
     return {
@@ -1013,7 +1013,7 @@ export const workerScriptMaterialFrom = (value: unknown): CloudflareWorkerScript
 
 export const workerRouteMaterialFrom = (value: unknown): CloudflareWorkerRouteMaterial | null =>
   (() => {
-    if (!Predicate.isRecord(value) || !hasOnlyKeys(value, workerRouteMaterialKeys)) return null;
+    if (!Predicate.isObject(value) || !hasOnlyKeys(value, workerRouteMaterialKeys)) return null;
     const zoneId = nonEmptyString(value.zoneId);
     const pattern = nonEmptyString(value.pattern);
     if (
@@ -1036,7 +1036,7 @@ export const workerSubdomainMaterialFrom = (
   value: unknown,
 ): CloudflareWorkerSubdomainMaterial | null =>
   (() => {
-    if (!Predicate.isRecord(value) || !hasOnlyKeys(value, workerSubdomainMaterialKeys)) return null;
+    if (!Predicate.isObject(value) || !hasOnlyKeys(value, workerSubdomainMaterialKeys)) return null;
     const scriptName = nonEmptyString(value.scriptName);
     if (
       scriptName === null ||

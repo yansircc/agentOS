@@ -11,6 +11,7 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./abort:reasonOf`
 - `./agent-schema:AGENT_SCHEMA_FINGERPRINT_VERSION`
 - `./agent-schema:AgentSchema`
+- `./agent-schema:AgentSchemaDecoder`
 - `./agent-schema:AgentSchemaIssue`
 - `./agent-schema:AgentSchemaProfileError`
 - `./agent-schema:AgentSchemaProjections`
@@ -398,6 +399,7 @@ text`
 - `.:AbortKind`
 - `.:AdmitVerdict`
 - `.:AgentSchema`
+- `.:AgentSchemaDecoder`
 - `.:AgentSchemaIssue`
 - `.:AgentSchemaProfileError`
 - `.:AgentSchemaProjections`

@@ -4,7 +4,7 @@ import { SYMBOLIC_SETTLEMENT_VALUE_PATTERN } from "@agent-os/kernel/settlement-c
 
 export const STAGING_EVENT_PREFIX = "staging.";
 const StagingSymbolicRef = Schema.String.pipe(
-  Schema.pattern(new RegExp(SYMBOLIC_SETTLEMENT_VALUE_PATTERN)),
+  Schema.check(Schema.isPattern(new RegExp(SYMBOLIC_SETTLEMENT_VALUE_PATTERN))),
 );
 
 export const stagingArtifactCarrier = defineCarrier({
@@ -27,7 +27,7 @@ export const stagingArtifactCarrier = defineCarrier({
       payload: Schema.Struct({
         subjectRef: Schema.String,
         artifactRef: StagingSymbolicRef,
-        reason: Schema.Literal("published", "discarded", "expired"),
+        reason: Schema.Literals(["published", "discarded", "expired"]),
       }),
       claim: lived({ key: "claim", anchorKinds: ["carrier_proof"] }),
     }),

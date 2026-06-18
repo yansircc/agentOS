@@ -7,9 +7,9 @@ import type { LedgerEvent } from "@agent-os/kernel/types";
  * blocks used for read-decide-write atomicity.
  */
 
-import { SqlClient } from "@effect/sql/SqlClient";
 import { layer as sqliteDoLayer } from "@effect/sql-sqlite-do/SqliteClient";
 import { Effect } from "effect";
+import { SqlClient } from "effect/unstable/sql/SqlClient";
 import { SqlError } from "@agent-os/kernel/errors";
 import type { EventQueryOptions } from "@agent-os/kernel/types";
 import { ledgerEventFromRow, ledgerIdentityKeys, type LedgerEventSqlRow } from "../ledger/identity";

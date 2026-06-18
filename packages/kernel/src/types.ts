@@ -47,12 +47,12 @@ export type LedgerEventIdentity = Pick<
   "scopeRef" | "factOwnerRef" | "effectAuthorityRef"
 >;
 
-const ledgerEventId = Schema.Number.pipe(Schema.int(), Schema.greaterThanOrEqualTo(1));
-const ledgerEventTimestamp = Schema.Number.pipe(Schema.finite(), Schema.greaterThanOrEqualTo(0));
-const NonEmptyStringSchema: Schema.Schema<string> = Schema.String.pipe(
-  Schema.filter((value) => value.length > 0),
+const ledgerEventId = Schema.Int.pipe(Schema.check(Schema.isGreaterThanOrEqualTo(1)));
+const ledgerEventTimestamp = Schema.Finite.pipe(Schema.check(Schema.isGreaterThanOrEqualTo(0)));
+const NonEmptyStringSchema: Schema.Decoder<string> = Schema.String.pipe(
+  Schema.check(Schema.makeFilter((value) => value.length > 0)),
 );
-const ScopeRefSchema: Schema.Schema<ScopeRef> = Schema.Union(
+const ScopeRefSchema: Schema.Decoder<ScopeRef> = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("realm"), scopeId: NonEmptyStringSchema }),
   Schema.Struct({ kind: Schema.Literal("conversation"), scopeId: NonEmptyStringSchema }),
   Schema.Struct({ kind: Schema.Literal("session"), scopeId: NonEmptyStringSchema }),
@@ -62,17 +62,17 @@ const ScopeRefSchema: Schema.Schema<ScopeRef> = Schema.Union(
     scopeId: NonEmptyStringSchema,
     systemRef: NonEmptyStringSchema,
   }),
-);
-const AuthorityRefSchema: Schema.Schema<AuthorityRef> = Schema.Struct({
+]);
+const AuthorityRefSchema: Schema.Decoder<AuthorityRef> = Schema.Struct({
   authorityId: NonEmptyStringSchema,
   authorityClass: NonEmptyStringSchema,
   version: Schema.optional(NonEmptyStringSchema),
 });
-const FactOwnerRefSchema: Schema.Schema<FactOwnerRef> = NonEmptyStringSchema.pipe(
-  Schema.filter(isFactOwnerRef),
+const FactOwnerRefSchema: Schema.Decoder<FactOwnerRef> = NonEmptyStringSchema.pipe(
+  Schema.check(Schema.makeFilter(isFactOwnerRef)),
 );
 
-export const LedgerEventSchema: Schema.Schema<LedgerEvent> = Schema.Struct({
+export const LedgerEventSchema: Schema.Decoder<LedgerEvent> = Schema.Struct({
   id: ledgerEventId,
   ts: ledgerEventTimestamp,
   kind: Schema.String,

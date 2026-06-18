@@ -86,10 +86,10 @@ export type AnyAttachedStreamHandler = AttachedStreamHandler<any, any>;
 
 export type AttachedStreamRegistryMap = ReadonlyMap<string, AnyAttachedStreamHandler>;
 
-export class AttachedStreamRegistry extends Context.Tag("@agent-os/AttachedStreamRegistry")<
+export class AttachedStreamRegistry extends Context.Service<
   AttachedStreamRegistry,
   AttachedStreamRegistryMap
->() {}
+>()("@agent-os/AttachedStreamRegistry") {}
 
 export interface MakeAttachedStreamRegistryOptions {
   readonly reservedKinds?: Iterable<string>;
@@ -213,10 +213,9 @@ export interface AttachedStreamsService {
   ) => Effect.Effect<AttachedStreamCancelResult, AttachedStreamServiceError>;
 }
 
-export class AttachedStreams extends Context.Tag("@agent-os/AttachedStreams")<
-  AttachedStreams,
-  AttachedStreamsService
->() {}
+export class AttachedStreams extends Context.Service<AttachedStreams, AttachedStreamsService>()(
+  "@agent-os/AttachedStreams",
+) {}
 
 export interface AttachedStreamQueue<T> extends AsyncIterable<T> {
   readonly push: (value: T) => void;
@@ -519,15 +518,21 @@ export const makeAttachedStreamService = (
         }
         return Effect.fail(`attached stream ${handler.kind} returned non-iterable output`);
       }),
-      Effect.catchAll((cause) =>
-        handleRunFailure(record, handler, ctx, cause).pipe(
-          Effect.catchAll(() =>
-            Effect.sync(() => {
-              active.delete(record.session.streamRef);
-              closeRecord(record);
-            }),
+      Effect.catchIf(
+        (_cause: AttachedStreamServiceError): _cause is AttachedStreamServiceError => true,
+        (cause) =>
+          handleRunFailure(record, handler, ctx, cause).pipe(
+            Effect.catchIf(
+              (
+                _settlementCause: AttachedStreamServiceError,
+              ): _settlementCause is AttachedStreamServiceError => true,
+              () =>
+                Effect.sync(() => {
+                  active.delete(record.session.streamRef);
+                  closeRecord(record);
+                }),
+            ),
           ),
-        ),
       ),
     );
 
@@ -571,7 +576,7 @@ export const makeAttachedStreamService = (
         output.push(emit({ kind: "opened", mode: handler.mode }));
 
         const ctx = { scope: spec.scope, streamRef, now, signal: controller.signal };
-        yield* Effect.forkDaemon(driveHandler(record, handler, parsed.start, ctx));
+        yield* Effect.forkDetach(driveHandler(record, handler, parsed.start, ctx));
 
         return session;
       }),

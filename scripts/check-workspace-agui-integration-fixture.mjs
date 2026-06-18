@@ -12,6 +12,7 @@ const files = {
   aguiPackage: "packages/wire-adapters/ag-ui/package.json",
   fixture: "packages/wire-adapters/ag-ui/test/workspace-agui-integration.test.ts",
   cloudflareDo: "packages/backends/cloudflare-do/src/agent-do.ts",
+  runtimeProtocol: "packages/runtime-protocol/src/submit.ts",
 };
 
 const read = (root, file) => fs.readFileSync(path.join(root, file), "utf8");
@@ -34,25 +35,40 @@ const collectFailures = (root = repoRoot) => {
   const agui = read(root, files.agui);
   const fixture = read(root, files.fixture);
   const cloudflareDo = read(root, files.cloudflareDo);
+  const runtimeProtocol = read(root, files.runtimeProtocol);
   const aguiPackage = readJson(root, files.aguiPackage);
 
   requireTerms(failures, agui, files.agui, [
-    "defaults.executionDomains",
+    "agUiRunAgentInputToSubmitInput",
     "defaults.toolContext",
-    "defaults.toolIntents",
-    "defaults.receiptBackedTools",
+  ]);
+
+  rejectPatterns(failures, agui, files.agui, [
+    [
+      /defaults\.(?:executionDomains|toolIntents|receiptBackedTools)/u,
+      "AG-UI adapter owns framework binding facts instead of SubmitRunInput",
+    ],
+  ]);
+
+  requireTerms(failures, runtimeProtocol, files.runtimeProtocol, [
+    "mergeSubmitToolContext(spec.bindings.toolContext, spec.input.toolContext)",
+    "spec.bindings.executionDomains",
+    "spec.bindings.toolIntents",
+    "spec.bindings.receiptBackedTools",
   ]);
 
   requireTerms(failures, cloudflareDo, files.cloudflareDo, [
-    "receiptBackedTools: { ...base.receiptBackedTools, ...run?.receiptBackedTools }",
-    "receiptBackedTools: { ...bindings.receiptBackedTools }",
+    "lowerSubmitRunInput({",
+    "...baseBindings",
+    "toolIntents: [...this._toolIntents, ...(baseBindings.toolIntents ?? [])]",
   ]);
 
   requireTerms(failures, fixture, files.fixture, [
     "makeCloudflareWorkspaceEnv",
     "bindWorkspaceToolsForRuntime",
     "createWorkspaceOperationLocalProvider",
-    "agUiRunAgentInputToSubmitSpec",
+    "agUiRunAgentInputToSubmitInput",
+    "lowerSubmitRunInput",
     "projectLedgerEventsToAgUiFrames",
     "projectFailureDiagnostics",
     "verifyAgUiFrameSafety",
@@ -108,20 +124,27 @@ const writeFixture = (root, relativePath, source) => {
 
 const positiveFixtures = {
   [files.agui]: `
-export const agUiRunAgentInputToSubmitSpec = (input, defaults) => ({
-  executionDomains: defaults.executionDomains,
+export const agUiRunAgentInputToSubmitInput = (input, defaults) => ({
   toolContext: defaults.toolContext,
-  toolIntents: defaults.toolIntents,
-  receiptBackedTools: defaults.receiptBackedTools,
+});
+`,
+  [files.runtimeProtocol]: `
+const toolContext = mergeSubmitToolContext(spec.bindings.toolContext, spec.input.toolContext);
+export const lowerSubmitRunInput = (spec) => ({
+  executionDomains: spec.bindings.executionDomains,
+  toolIntents: spec.bindings.toolIntents,
+  receiptBackedTools: spec.bindings.receiptBackedTools,
 });
 `,
   [files.cloudflareDo]: `
-const mergeSubmitBindings = (base, run) => ({
-  receiptBackedTools: { ...base.receiptBackedTools, ...run?.receiptBackedTools },
-});
-this.submitFull({
-  receiptBackedTools: { ...bindings.receiptBackedTools },
-});
+this.submitFull(
+  lowerSubmitRunInput({
+    bindings: {
+      ...baseBindings,
+      toolIntents: [...this._toolIntents, ...(baseBindings.toolIntents ?? [])],
+    },
+  }),
+);
 `,
   [files.fixture]: `
 makeCloudflareWorkspaceEnv();
@@ -130,9 +153,10 @@ bindWorkspaceToolsForRuntime({
   mutationPolicy: "receipt-backed",
 });
 createWorkspaceOperationLocalProvider();
-agUiRunAgentInputToSubmitSpec(input, {
+const submitInput = agUiRunAgentInputToSubmitInput(input, {
   receiptBackedTools: bindings.receiptBackedTools,
 });
+lowerSubmitRunInput({ input: submitInput });
 projectLedgerEventsToAgUiFrames();
 projectFailureDiagnostics();
 verifyAgUiFrameSafety();
@@ -174,13 +198,15 @@ const collectSelfTestFailures = () => {
 
     writeFixture(
       root,
-      files.agui,
-      positiveFixtures[files.agui].replace("defaults.receiptBackedTools", ""),
+      files.runtimeProtocol,
+      positiveFixtures[files.runtimeProtocol].replace("spec.bindings.receiptBackedTools", ""),
     );
     let rejected = collectFailures(root);
-    if (!rejected.some((failure) => failure.includes("defaults.receiptBackedTools"))) {
+    if (!rejected.some((failure) => failure.includes("spec.bindings.receiptBackedTools"))) {
       return [
-        `missing AG-UI receipt-backed pass-through was not rejected: ${JSON.stringify(rejected)}`,
+        `missing runtime-protocol receipt-backed pass-through was not rejected: ${JSON.stringify(
+          rejected,
+        )}`,
       ];
     }
 
@@ -196,11 +222,17 @@ const collectSelfTestFailures = () => {
     }
 
     writeFixture(root, files.fixture, positiveFixtures[files.fixture]);
-    writeFixture(root, files.cloudflareDo, "const mergeSubmitBindings = () => ({});");
+    writeFixture(
+      root,
+      files.cloudflareDo,
+      "this.submitFull(lowerSubmitRunInput({ bindings: { toolIntents: [] } }));",
+    );
     rejected = collectFailures(root);
-    if (!rejected.some((failure) => failure.includes("receiptBackedTools"))) {
+    if (!rejected.some((failure) => failure.includes("...baseBindings"))) {
       return [
-        `Cloudflare receipt-backed merge mutation was not rejected: ${JSON.stringify(rejected)}`,
+        `Cloudflare base binding pass-through mutation was not rejected: ${JSON.stringify(
+          rejected,
+        )}`,
       ];
     }
 

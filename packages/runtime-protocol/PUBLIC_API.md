@@ -126,6 +126,7 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:LlmResponsePayloadSchema`
 - `.:LlmRoute`
 - `.:LowerSubmitRunInputSpec`
+- `.:MissingSubmitRunBinding`
 - `.:Outcome`
 - `.:OutcomeClass`
 - `.:ProbeInput`
@@ -155,6 +156,7 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:RuntimeLedgerEventByKind`
 - `.:RuntimeLedgerTransitionIssue`
 - `.:RuntimeLedgerTransitionIssueCode`
+- `.:RuntimeLedgerTransitionRejected`
 - `.:RuntimeLedgerTransitionValidation`
 - `.:RecoveryAttemptRecord`
 - `.:RecoveryBudget`
@@ -177,8 +179,11 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:SubmitRunInput`
 - `.:SubmitSpec`
 - `.:SubmitToolContext`
+- `.:SubmitToolExecutionRetryPolicy`
 - `.:SubmitToolIntent`
 - `.:SubmitToolPolicy`
+- `.:SubmitToolRetryDelayPolicy`
+- `.:SubmitToolRetryPolicy`
 - `.:TOOL_EXECUTION_CLAIM_MUST_BE_LIVED_REASON`
 - `.:TOOL_REJECTED_DIAGNOSTICS_PHASES`
 - `.:ToolArgumentSummary`

@@ -132,12 +132,12 @@ describe("durable trigger runtime algebra", () => {
       for (const field of ["cancellation", "commitCancelled"] as const) {
         const incomplete = { ...valid };
         delete (incomplete as Record<string, unknown>)[field];
-        const either = yield* Effect.either(
+        const either = yield* Effect.result(
           makeDurableTriggerRegistry([incomplete as unknown as DurableTrigger<unknown, unknown>]),
         );
         expect(either).toMatchObject({
-          _tag: "Left",
-          left: expect.stringContaining(field),
+          _tag: "Failure",
+          failure: expect.stringContaining(field),
         });
       }
     }),

@@ -1106,7 +1106,7 @@ const workspaceToolDefinitions = [
           pattern: Schema.String,
           root: Schema.optional(Schema.String),
           includeHidden: Schema.optional(Schema.Boolean),
-          mode: Schema.optional(Schema.Literal("literal", "regex")),
+          mode: Schema.optional(Schema.Literals(["literal", "regex"])),
           maxMatches: Schema.optional(Schema.Number),
           maxBytesPerMatch: Schema.optional(Schema.Number),
         }),

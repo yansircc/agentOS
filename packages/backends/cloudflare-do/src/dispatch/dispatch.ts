@@ -254,28 +254,28 @@ export const deliveryRetryTrigger = (
       const delivery = yield* Effect.tryPromise({
         try: () => target.deliver(envelope),
         catch: (cause) => cause,
-      }).pipe(Effect.either);
-      if (delivery._tag === "Right") {
-        if (delivery.right._tag === "delivered") {
+      }).pipe(Effect.result);
+      if (delivery._tag === "Success") {
+        if (delivery.success._tag === "delivered") {
           return {
             _tag: "delivered",
             outboundEventId: acquireCtx.intentEventId,
             requested,
-            deliveryReceipt: delivery.right.receipt,
+            deliveryReceipt: delivery.success.receipt,
           } as const;
         }
         return {
           _tag: "enqueued",
           outboundEventId: acquireCtx.intentEventId,
           requested,
-          enqueueAcknowledgement: delivery.right.acknowledgement,
+          enqueueAcknowledgement: delivery.success.acknowledgement,
         } as const;
       }
       return {
         _tag: "failed",
         outboundEventId: acquireCtx.intentEventId,
         requested,
-        cause: delivery.left,
+        cause: delivery.failure,
       } as const;
     }),
   commit: (outcome, tx) => {
@@ -386,7 +386,7 @@ export const DispatchLive = (
 ): Layer.Layer<Dispatch, SqlError, EventBus | TriggerPump | DurableTriggerRegistry> => {
   const sql = ctx.storage.sql;
 
-  return Layer.scoped(
+  return Layer.effect(
     Dispatch,
     Effect.gen(function* () {
       yield* ensureDispatchSchema(sql);

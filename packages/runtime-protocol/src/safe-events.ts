@@ -4,7 +4,7 @@ import type { LedgerEvent } from "@agent-os/kernel/types";
 import { validateEffectClaim } from "@agent-os/kernel/effect-claim";
 import { ABORT } from "@agent-os/kernel/abort";
 import { defineProjectionSpec, project, projectionOutputOrFail } from "@agent-os/kernel/projection";
-import { Either, pipe } from "effect";
+import { Result, pipe } from "effect";
 import {
   decodeRuntimeLedgerEvent,
   isRuntimeAbortEventKind,
@@ -37,10 +37,10 @@ const recordFromUnknown = (value: unknown): Readonly<Record<string, unknown>> | 
   }
   if (typeof value !== "string") return undefined;
   return pipe(
-    Either.try({ try: () => JSON.parse(value) as unknown, catch: () => undefined }),
-    Either.match({
-      onLeft: () => undefined,
-      onRight: (parsed) =>
+    Result.try({ try: () => JSON.parse(value) as unknown, catch: () => undefined }),
+    Result.match({
+      onFailure: () => undefined,
+      onSuccess: (parsed) =>
         parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
           ? (parsed as Readonly<Record<string, unknown>>)
           : undefined,

@@ -48,14 +48,16 @@ export const runDynamicWorker = (
     const started = yield* Clock.currentTimeMillis;
     const result = yield* backend.run(request).pipe(
       Effect.mapError(rejectFailure),
-      Effect.timeoutFail({
+      Effect.timeoutOrElse({
         duration: Duration.millis(request.timeoutMs),
-        onTimeout: () =>
-          rejectFailure(
-            new DynamicWorkerProviderFailure({
-              code: "Timeout",
-              reason: `dynamic worker run exceeded ${request.timeoutMs}ms`,
-            }),
+        orElse: () =>
+          Effect.fail(
+            rejectFailure(
+              new DynamicWorkerProviderFailure({
+                code: "Timeout",
+                reason: `dynamic worker run exceeded ${request.timeoutMs}ms`,
+              }),
+            ),
           ),
       }),
     );

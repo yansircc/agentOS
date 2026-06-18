@@ -1,4 +1,4 @@
-import { Context, Data, Duration, Effect, Either, Schema } from "effect";
+import { Context, Data, Duration, Effect, Result, Schema } from "effect";
 import {
   scopeRefKey,
   type AuthorityRef,
@@ -130,9 +130,9 @@ export interface MaterializedProjectionDefinition<Identity, State> {
   readonly version: number;
   readonly eventKinds: ReadonlyArray<string>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  readonly identity: Schema.Schema<Identity, any, never>;
+  readonly identity: Schema.Codec<Identity, any, never, never>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  readonly state: Schema.Schema<State, any, never>;
+  readonly state: Schema.Codec<State, any, never, never>;
   readonly identityKey: (identity: Identity) => string;
   readonly identify: (event: LedgerEvent) => ProjectionIdentifyResult<Identity>;
   readonly initial: (identity: Identity, event: LedgerEvent) => State;
@@ -164,9 +164,10 @@ export const defineProjection = <Identity, State>(
 
 export type ProjectionRegistry = ReadonlyMap<string, AnyMaterializedProjectionDefinition>;
 
-export class MaterializedProjectionRegistry extends Context.Tag(
-  "@agent-os/MaterializedProjectionRegistry",
-)<MaterializedProjectionRegistry, ProjectionRegistry>() {}
+export class MaterializedProjectionRegistry extends Context.Service<
+  MaterializedProjectionRegistry,
+  ProjectionRegistry
+>()("@agent-os/MaterializedProjectionRegistry") {}
 
 export class ProjectionRegistryError extends Data.TaggedError(
   "agent_os.projection_registry_error",
@@ -264,7 +265,7 @@ export interface MaterializedProjectionListSpec {
  * @agentosDocs docs/concepts/materialized-projections.md
  * @public
  */
-export class MaterializedProjections extends Context.Tag("@agent-os/MaterializedProjections")<
+export class MaterializedProjections extends Context.Service<
   MaterializedProjections,
   {
     readonly get: (
@@ -289,7 +290,7 @@ export class MaterializedProjections extends Context.Tag("@agent-os/Materialized
       | ProjectionReducerReturnedThenable
     >;
   }
->() {}
+>()("@agent-os/MaterializedProjections") {}
 
 export interface ProjectionWaitSpec<
   Identity = unknown,
@@ -507,16 +508,16 @@ const projectionApplyFailure = (
 const decodeProjectionValueResult = <A>(
   projection: AnyMaterializedProjectionDefinition,
   event: LedgerEvent,
-  schema: Schema.Schema<A, unknown, never>,
+  schema: Schema.Codec<A, unknown, never, never>,
   value: unknown,
 ): ProjectionApplyEventResult | { readonly _tag: "decoded"; readonly value: A } => {
-  const decoded = Schema.decodeUnknownEither(schema)(value);
-  return Either.match(decoded, {
-    onLeft: (cause): ProjectionApplyEventResult => ({
+  const decoded = Schema.decodeUnknownResult(schema)(value);
+  return Result.match(decoded, {
+    onFailure: (cause): ProjectionApplyEventResult => ({
       _tag: "failure",
       error: projectionApplyFailure(projection, event, "projection application failed", cause),
     }),
-    onRight: (decodedValue) => ({ _tag: "decoded", value: decodedValue }),
+    onSuccess: (decodedValue) => ({ _tag: "decoded", value: decodedValue }),
   });
 };
 
@@ -525,15 +526,15 @@ export const applyProjectionEventResult = (
   event: LedgerEvent,
   currentFor: ProjectionCurrentLookup,
 ): ProjectionApplyEventResult => {
-  const identifiedEither = Either.try({
+  const identifiedEither = Result.try({
     try: () => projection.identify(event),
     catch: (cause) =>
       projectionApplyFailure(projection, event, "projection application failed", cause),
   });
-  if (Either.isLeft(identifiedEither)) {
-    return { _tag: "failure", error: identifiedEither.left };
+  if (Result.isFailure(identifiedEither)) {
+    return { _tag: "failure", error: identifiedEither.failure };
   }
-  const identified = identifiedEither.right;
+  const identified = identifiedEither.success;
   if (isThenable(identified)) {
     return {
       _tag: "failure",
@@ -552,15 +553,15 @@ export const applyProjectionEventResult = (
   );
   if (identityResult._tag !== "decoded") return identityResult;
   const identity = identityResult.value;
-  const identityKeyEither = Either.try({
+  const identityKeyEither = Result.try({
     try: () => projection.identityKey(identity),
     catch: (cause) =>
       projectionApplyFailure(projection, event, "projection application failed", cause),
   });
-  if (Either.isLeft(identityKeyEither)) {
-    return { _tag: "failure", error: identityKeyEither.left };
+  if (Result.isFailure(identityKeyEither)) {
+    return { _tag: "failure", error: identityKeyEither.failure };
   }
-  const identityKey = identityKeyEither.right;
+  const identityKey = identityKeyEither.success;
   if (identityKey.trim().length === 0) {
     return {
       _tag: "failure",
@@ -570,16 +571,16 @@ export const applyProjectionEventResult = (
   const current = currentFor(identityKey);
   const currentStateUnknownEither =
     current === null
-      ? Either.try({
+      ? Result.try({
           try: () => projection.initial(identity, event),
           catch: (cause) =>
             projectionApplyFailure(projection, event, "projection application failed", cause),
         })
-      : Either.right(current.state);
-  if (Either.isLeft(currentStateUnknownEither)) {
-    return { _tag: "failure", error: currentStateUnknownEither.left };
+      : Result.succeed(current.state);
+  if (Result.isFailure(currentStateUnknownEither)) {
+    return { _tag: "failure", error: currentStateUnknownEither.failure };
   }
-  const currentStateUnknown = currentStateUnknownEither.right;
+  const currentStateUnknown = currentStateUnknownEither.success;
   if (isThenable(currentStateUnknown)) {
     return {
       _tag: "failure",
@@ -594,7 +595,7 @@ export const applyProjectionEventResult = (
   );
   if (currentStateResult._tag !== "decoded") return currentStateResult;
   const currentState = currentStateResult.value;
-  const reducedEither = Either.try({
+  const reducedEither = Result.try({
     try: () =>
       projection.reduce(currentState, event, {
         scopeRef: event.scopeRef,
@@ -605,10 +606,10 @@ export const applyProjectionEventResult = (
     catch: (cause) =>
       projectionApplyFailure(projection, event, "projection application failed", cause),
   });
-  if (Either.isLeft(reducedEither)) {
-    return { _tag: "failure", error: reducedEither.left };
+  if (Result.isFailure(reducedEither)) {
+    return { _tag: "failure", error: reducedEither.failure };
   }
-  const reduced = reducedEither.right;
+  const reduced = reducedEither.success;
   if (isThenable(reduced)) {
     return {
       _tag: "failure",

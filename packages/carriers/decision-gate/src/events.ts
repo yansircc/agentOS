@@ -128,7 +128,7 @@ export const projectDecisionGate = (
   let consumed: DecisionGateConsumedPayload | undefined;
 
   for (const event of events) {
-    if (!Predicate.isRecord(event.payload)) continue;
+    if (!Predicate.isObject(event.payload)) continue;
     if (event.payload.gateRef !== gateRef) continue;
     if (isTerminalLifecycle(decision, consumed)) continue;
     switch (event.kind) {

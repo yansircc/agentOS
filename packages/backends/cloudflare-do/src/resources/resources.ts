@@ -40,7 +40,7 @@ export const ResourcesLive = (
   ownerIdentity: BackendProtocolEventIdentity,
 ): Layer.Layer<Resources, SqlError, EventBus> => {
   const sql = ctx.storage.sql;
-  return Layer.scoped(
+  return Layer.effect(
     Resources,
     Effect.gen(function* () {
       const bus = yield* EventBus;

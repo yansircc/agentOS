@@ -43,7 +43,7 @@ const livedClaimFrom = (value: unknown): LivedClaim | undefined => {
 
 const gatePayloadFrom = (event: VerificationLedgerEvent): VerificationGateFact | null => {
   if (event.kind !== VERIFICATION_KIND.GATE_RECORDED) return null;
-  if (!Predicate.isRecord(event.payload)) return null;
+  if (!Predicate.isObject(event.payload)) return null;
   const { subjectRef, gate, status, proofRef, fingerprint, summary } = event.payload;
   if (typeof subjectRef !== "string") return null;
   if (typeof gate !== "string") return null;

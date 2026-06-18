@@ -341,7 +341,7 @@ const execFailureFrom = (
   request: WorkspaceSessionExecRequest,
   cause: unknown,
 ): WorkspaceSessionExecFailure => {
-  if (Predicate.isRecord(cause)) {
+  if (Predicate.isObject(cause)) {
     const code = execFailureCode(cause.code);
     const reason = typeof cause.reason === "string" ? cause.reason : messageOf(cause);
     if (code !== undefined) {
@@ -408,7 +408,7 @@ const failureFrom = (
   step: WorkspaceSessionFailure["step"],
   cause: unknown,
 ): WorkspaceSessionFailure => {
-  if (Predicate.isRecord(cause)) {
+  if (Predicate.isObject(cause)) {
     const code = providerFailureCode(cause.code);
     const reason = typeof cause.reason === "string" ? cause.reason : messageOf(cause);
     const proofRef = typeof cause.proofRef === "string" ? cause.proofRef : undefined;
@@ -584,7 +584,7 @@ const requiredOptionNumber = (
 const isProviderFailure = (
   value: unknown,
 ): value is CloudflareWorkspaceSessionRequiredProviderFailure =>
-  Predicate.isRecord(value) &&
+  Predicate.isObject(value) &&
   providerFailureCode(value.code) !== undefined &&
   typeof value.reason === "string";
 
@@ -592,7 +592,7 @@ const requireClient = (
   value: CloudflareWorkspaceSandboxClient,
   step: CloudflareWorkspaceSessionStep,
 ): CloudflareWorkspaceSandboxClient | CloudflareWorkspaceSessionRequiredProviderFailure =>
-  Predicate.isRecord(value)
+  Predicate.isObject(value)
     ? value
     : {
         code: "ProviderFailure",

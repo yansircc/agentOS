@@ -52,7 +52,7 @@ export const projectGitSubject = (
   const commitRefs: string[] = [];
 
   for (const event of events) {
-    if (!Predicate.isRecord(event.payload)) continue;
+    if (!Predicate.isObject(event.payload)) continue;
     if (event.payload.subjectRef !== subjectRef) continue;
     if (livedClaimFrom(event.payload.claim) === undefined) continue;
     switch (event.kind) {

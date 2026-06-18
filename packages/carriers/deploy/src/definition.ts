@@ -4,7 +4,7 @@ import { SYMBOLIC_SETTLEMENT_VALUE_PATTERN } from "@agent-os/kernel/settlement-c
 
 export const DEPLOY_EVENT_PREFIX = "deploy.";
 const DeploySymbolicRef = Schema.String.pipe(
-  Schema.pattern(new RegExp(SYMBOLIC_SETTLEMENT_VALUE_PATTERN)),
+  Schema.check(Schema.isPattern(new RegExp(SYMBOLIC_SETTLEMENT_VALUE_PATTERN))),
 );
 
 export const deployCarrier = defineCarrier({
@@ -37,7 +37,7 @@ export const deployCarrier = defineCarrier({
         subjectRef: Schema.String,
         productionRef: DeploySymbolicRef,
         readbackRef: DeploySymbolicRef,
-        status: Schema.Literal("passed", "failed"),
+        status: Schema.Literals(["passed", "failed"]),
       }),
       claim: lived({ key: "claim", anchorKinds: ["carrier_proof", "external_receipt"] }),
     }),
@@ -54,7 +54,7 @@ export const deployCarrier = defineCarrier({
       kind: "failed",
       payload: Schema.Struct({
         subjectRef: Schema.String,
-        step: Schema.Literal("preview", "promote", "readback", "rollback"),
+        step: Schema.Literals(["preview", "promote", "readback", "rollback"]),
         proofRef: DeploySymbolicRef,
         reason: Schema.String,
       }),

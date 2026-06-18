@@ -97,7 +97,7 @@ const isFrameBase = (value: Record<string, unknown>): boolean =>
 const isLedgerEventRpc = Schema.is(LedgerEventSchema);
 
 const isSubmitResult = (value: unknown): value is SubmitResult => {
-  if (!Predicate.isRecord(value) || typeof value.runId !== "number") return false;
+  if (!Predicate.isObject(value) || typeof value.runId !== "number") return false;
   if (typeof value.eventCount !== "number" || typeof value.tokensUsed !== "number") return false;
   if (value.ok === true) return value.status === "delivered" && typeof value.final === "string";
   if (value.ok === false && value.status === "failed") return typeof value.reason === "string";
@@ -106,7 +106,7 @@ const isSubmitResult = (value: unknown): value is SubmitResult => {
       value.reason === "interrupted" &&
       typeof value.interruptId === "string" &&
       typeof value.gateRef === "string" &&
-      Predicate.isRecord(value.turn) &&
+      Predicate.isObject(value.turn) &&
       typeof value.turn.id === "number" &&
       typeof value.turn.index === "number"
     );
@@ -115,7 +115,7 @@ const isSubmitResult = (value: unknown): value is SubmitResult => {
 };
 
 export const isRunStreamFrame = (value: unknown): value is RunStreamFrame => {
-  if (!Predicate.isRecord(value) || !isFrameBase(value)) return false;
+  if (!Predicate.isObject(value) || !isFrameBase(value)) return false;
   switch (value.kind) {
     case "ledger_event":
       return isLedgerEventRpc(value.event);
@@ -238,7 +238,7 @@ export const composeRunStream = (spec: ComposeRunStreamSpec): ReadonlyArray<RunS
 };
 
 const errorReason = (cause: unknown): string => {
-  if (Predicate.isRecord(cause) && typeof cause._tag === "string") return cause._tag;
+  if (Predicate.isObject(cause) && typeof cause._tag === "string") return cause._tag;
   if (cause instanceof Error) return cause.name;
   return typeof cause;
 };

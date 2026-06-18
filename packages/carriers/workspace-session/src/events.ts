@@ -80,7 +80,7 @@ const numberField = (payload: Record<string, unknown>, key: string): number | un
   typeof payload[key] === "number" && Number.isFinite(payload[key]) ? payload[key] : undefined;
 
 const retentionFrom = (value: unknown): WorkspaceSessionRetention | undefined => {
-  if (!Predicate.isRecord(value)) return undefined;
+  if (!Predicate.isObject(value)) return undefined;
   if (value.mode !== "ephemeral" && value.mode !== "persistent") {
     return undefined;
   }
@@ -183,7 +183,7 @@ export const projectWorkspaceSession = (
   const previews: WorkspaceSessionPreviewRef[] = [];
 
   for (const event of events) {
-    if (!Predicate.isRecord(event.payload)) continue;
+    if (!Predicate.isObject(event.payload)) continue;
     if (event.payload.subjectRef !== subjectRef) continue;
     switch (event.kind) {
       case WORKSPACE_SESSION_KIND.STARTED: {

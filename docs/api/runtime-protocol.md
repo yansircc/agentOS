@@ -122,6 +122,7 @@
 - `.:LlmResponsePayloadSchema`
 - `.:LlmRoute`
 - `.:LowerSubmitRunInputSpec`
+- `.:MissingSubmitRunBinding`
 - `.:Outcome`
 - `.:OutcomeClass`
 - `.:ProbeInput`
@@ -151,6 +152,7 @@
 - `.:RuntimeLedgerEventByKind`
 - `.:RuntimeLedgerTransitionIssue`
 - `.:RuntimeLedgerTransitionIssueCode`
+- `.:RuntimeLedgerTransitionRejected`
 - `.:RuntimeLedgerTransitionValidation`
 - `.:RecoveryAttemptRecord`
 - `.:RecoveryBudget`
@@ -173,8 +175,11 @@
 - `.:SubmitRunInput`
 - `.:SubmitSpec`
 - `.:SubmitToolContext`
+- `.:SubmitToolExecutionRetryPolicy`
 - `.:SubmitToolIntent`
 - `.:SubmitToolPolicy`
+- `.:SubmitToolRetryDelayPolicy`
+- `.:SubmitToolRetryPolicy`
 - `.:TOOL_EXECUTION_CLAIM_MUST_BE_LIVED_REASON`
 - `.:TOOL_REJECTED_DIAGNOSTICS_PHASES`
 - `.:ToolArgumentSummary`

@@ -113,9 +113,9 @@ export type AgUiRunAgentInput = {
   }>;
 };
 
-const unknownRecord = Schema.Record({ key: Schema.String, value: Schema.Unknown });
+const unknownRecord = Schema.Record(Schema.String, Schema.Unknown);
 
-export const AgUiMessageRoleSchema: Schema.Schema<AgUiMessageRole> = Schema.Literal(
+export const AgUiMessageRoleSchema: Schema.Decoder<AgUiMessageRole> = Schema.Literals([
   "developer",
   "system",
   "assistant",
@@ -123,36 +123,36 @@ export const AgUiMessageRoleSchema: Schema.Schema<AgUiMessageRole> = Schema.Lite
   "tool",
   "reasoning",
   "activity",
-);
+]);
 
-export const AgUiMessageSchema: Schema.Schema<AgUiMessage> = Schema.Struct({
+export const AgUiMessageSchema: Schema.Decoder<AgUiMessage> = Schema.Struct({
   id: Schema.String,
   role: AgUiMessageRoleSchema,
   content: Schema.optional(Schema.String),
   name: Schema.optional(Schema.String),
 });
 
-export const AgUiContextSchema: Schema.Schema<AgUiContext> = Schema.Struct({
+export const AgUiContextSchema: Schema.Decoder<AgUiContext> = Schema.Struct({
   description: Schema.String,
   value: Schema.String,
 });
 
-export const AgUiToolSchema: Schema.Schema<AgUiTool> = Schema.Struct({
+export const AgUiToolSchema: Schema.Decoder<AgUiTool> = Schema.Struct({
   name: Schema.String,
   description: Schema.String,
   parameters: Schema.optional(Schema.Unknown),
   metadata: Schema.optional(unknownRecord),
 });
 
-export const AgUiResumeEntrySchema: Schema.Schema<
+export const AgUiResumeEntrySchema: Schema.Decoder<
   AgUiRunAgentInput["resume"] extends ReadonlyArray<infer Entry> | undefined ? Entry : never
 > = Schema.Struct({
   interruptId: Schema.String,
-  status: Schema.Literal("resolved", "cancelled"),
+  status: Schema.Literals(["resolved", "cancelled"]),
   payload: Schema.optional(Schema.Unknown),
 });
 
-export const AgUiRunAgentInputSchema: Schema.Schema<AgUiRunAgentInput> = Schema.Struct({
+export const AgUiRunAgentInputSchema: Schema.Decoder<AgUiRunAgentInput> = Schema.Struct({
   threadId: Schema.String,
   runId: Schema.String,
   parentRunId: Schema.optional(Schema.String),

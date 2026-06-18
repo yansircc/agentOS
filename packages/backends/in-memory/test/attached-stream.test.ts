@@ -11,6 +11,11 @@ import { truthIdentity } from "./identity";
 
 const delay = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+const waitForAbortSignal = (signal: AbortSignal): Promise<void> =>
+  signal.aborted
+    ? Promise.resolve()
+    : new Promise((resolve) => signal.addEventListener("abort", () => resolve(), { once: true }));
+
 const waitFor = async (assertion: () => boolean | Promise<boolean>): Promise<void> => {
   for (let attempt = 0; attempt < 20; attempt += 1) {
     if (await assertion()) return;
@@ -139,7 +144,7 @@ describe("in-memory attached streams", () => {
       onDetach: "abort",
       parseStart: (raw) => attachedStreamParseOk(raw),
       run: async function* (_start, _input, ctx) {
-        await new Promise<void>((resolve) => ctx.signal.addEventListener("abort", () => resolve()));
+        await waitForAbortSignal(ctx.signal);
         yield { kind: "completed", terminal: { ignoredAbort: true } };
       },
       commitTerminal: (terminal, tx) => {
@@ -183,12 +188,8 @@ describe("in-memory attached streams", () => {
       onDetach: "abort",
       parseStart: (raw) => attachedStreamParseOk(raw),
       run: async function* (_start, _input, ctx) {
-        await new Promise<void>((resolve) =>
-          ctx.signal.addEventListener("abort", () => {
-            aborted = true;
-            resolve();
-          }),
-        );
+        await waitForAbortSignal(ctx.signal);
+        aborted = true;
         yield { kind: "cancelled", reason: "detached" };
       },
       commitTerminal: (terminal, tx) => {

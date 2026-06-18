@@ -88,7 +88,7 @@ export const TriggerPumpLive = (
   scope: string,
 ): Layer.Layer<TriggerPump, SqlError, EventBus | DurableTriggerRegistry> => {
   const sql = ctx.storage.sql;
-  return Layer.scoped(
+  return Layer.effect(
     TriggerPump,
     Effect.gen(function* () {
       yield* ensureDueWorkSchema(sql);
@@ -388,7 +388,7 @@ export const TriggerPumpLive = (
                 parsed.identity,
               )
             : yield* Effect.gen(function* () {
-                const failure = Cause.failureOption(exit.cause);
+                const failure = Cause.findErrorOption(exit.cause);
                 if (Option.isNone(failure)) {
                   return yield* Effect.fail(new SqlError({ cause: exit.cause }));
                 }

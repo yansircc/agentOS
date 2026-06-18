@@ -2,7 +2,7 @@ import { Context, Effect } from "effect";
 import type { JsonStringifyError, SqlError, UpstreamFailure } from "@agent-os/kernel/errors";
 import type { AttemptResult, AttemptSpec, InvalidateSpec } from "@agent-os/runtime-protocol";
 
-export class Admission extends Context.Tag("@agent-os/Admission")<
+export class Admission extends Context.Service<
   Admission,
   {
     readonly attemptStructured: <O>(
@@ -12,4 +12,4 @@ export class Admission extends Context.Tag("@agent-os/Admission")<
       spec: InvalidateSpec,
     ) => Effect.Effect<{ readonly barrierId: number }, SqlError | JsonStringifyError>;
   }
->() {}
+>()("@agent-os/Admission") {}

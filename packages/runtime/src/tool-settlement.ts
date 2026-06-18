@@ -35,7 +35,7 @@ export const toolExecutionRejectionKind = (reason: string): RejectionRef["reject
     : "provider_rejected";
 
 export const publicRuntimeCauseReason = (cause: unknown): string => {
-  if (Predicate.isRecord(cause) && cause._tag === "agent_os.provider_http_failure") {
+  if (Predicate.isObject(cause) && cause._tag === "agent_os.provider_http_failure") {
     const provider = symbolicReasonOr(String(cause.provider), "provider");
     const status = typeof cause.status === "number" ? `http_${cause.status}` : "http_error";
     const flags = Array.isArray(cause.flags)
@@ -46,10 +46,10 @@ export const publicRuntimeCauseReason = (cause: unknown): string => {
       : "";
     return ["provider_http_failure", provider, status, flags].filter(Boolean).join(":");
   }
-  if (Predicate.isRecord(cause) && typeof cause.reason === "string") {
+  if (Predicate.isObject(cause) && typeof cause.reason === "string") {
     return symbolicReasonOr(cause.reason, "object");
   }
-  if (Predicate.isRecord(cause) && typeof cause._tag === "string") {
+  if (Predicate.isObject(cause) && typeof cause._tag === "string") {
     return symbolicReasonOr(cause._tag, "object");
   }
   if (cause instanceof Error) return symbolicReasonOr(cause.name, "Error");

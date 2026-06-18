@@ -1,4 +1,5 @@
-import { Effect, Schema } from "effect";
+import { Effect, Fiber, Schema } from "effect";
+import { TestClock } from "effect/testing";
 import { describe, expect, it } from "@effect/vitest";
 import {
   llmCallSnapshotFromResponse,
@@ -1908,7 +1909,7 @@ describe("submit-agent runtime event writes", () => {
       const { result, events } = yield* runSubmit(
         baseSpec({
           tools: { lookup: tool },
-          budget: { toolRetries: 0 },
+          budget: { toolRetryPolicy: { correctionRetries: 0 } },
         }),
         [
           response({
@@ -1946,6 +1947,79 @@ describe("submit-agent runtime event writes", () => {
           },
         ],
       });
+    }),
+  );
+
+  it.effect("tool execution retry policy derives delayed execution retries", () =>
+    Effect.gen(function* () {
+      let attempts = 0;
+      const tool = defineTool({
+        name: "lookup",
+        description: "lookup",
+        args: Schema.Struct({ q: Schema.String }),
+        execute: () =>
+          Effect.gen(function* () {
+            attempts += 1;
+            if (attempts === 1) {
+              return yield* new ToolError({
+                toolName: "lookup",
+                cause: { reason: "transient_lookup_failure" },
+              });
+            }
+            return { ok: true };
+          }),
+        authority: "read",
+        admit: () => Effect.succeed({ ok: true }),
+        execution: deterministicToolExecution(),
+      });
+
+      const fiber = yield* runSubmit(
+        baseSpec({
+          tools: { lookup: tool },
+          budget: {
+            toolRetryPolicy: {
+              execution: {
+                maxRetries: 1,
+                delay: { kind: "fixed", delayMs: 1_000, jitter: false },
+              },
+            },
+          },
+        }),
+        [
+          response({
+            items: [
+              { type: "message", text: "lookup" },
+              {
+                type: "tool_call",
+                call: {
+                  id: "call-1",
+                  type: "function",
+                  function: { name: "lookup", arguments: '{"q":"x"}' },
+                },
+              },
+            ],
+          }),
+          response({ items: [{ type: "message", text: "done" }] }),
+        ],
+      ).pipe(Effect.forkChild);
+
+      yield* Effect.yieldNow;
+      expect(attempts).toBe(1);
+      yield* TestClock.adjust("999 millis");
+      expect(attempts).toBe(1);
+      yield* TestClock.adjust("1 millis");
+
+      const { result, events } = yield* Fiber.join(fiber);
+      expect(result).toMatchObject({ ok: true, status: "delivered" });
+      expect(attempts).toBe(2);
+      expect(decodedRuntimeBehaviorKinds(events)).toEqual([
+        "agent.run.started",
+        "chat.ingested",
+        "llm.response",
+        "tool.executed",
+        "llm.response",
+        "agent.run.completed",
+      ]);
     }),
   );
 

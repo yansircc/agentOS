@@ -93,7 +93,7 @@ export const selectLedgerEvents = (
 };
 
 export const LedgerLive = (storage: DurableObjectState): Layer.Layer<Ledger, SqlError, EventBus> =>
-  Layer.scoped(
+  Layer.effect(
     Ledger,
     Effect.gen(function* () {
       const sql = storage.storage.sql;

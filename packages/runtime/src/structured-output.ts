@@ -72,15 +72,15 @@ export const structuredOutputRequest = (spec: {
 
 const decodeToolArguments = (args: string): Effect.Effect<StructuredDecodeResult<unknown>> =>
   Effect.gen(function* () {
-    const parsed = yield* Effect.either(
+    const parsed = yield* Effect.result(
       Effect.try({
         try: () => JSON.parse(args) as unknown,
         catch: (error) => String(error).slice(0, 40),
       }),
     );
-    return parsed._tag === "Right"
-      ? { ok: true, decoded: parsed.right, tokensUsed: 0 }
-      : behaviorFailed(`args-parse-failed:${parsed.left}`);
+    return parsed._tag === "Success"
+      ? { ok: true, decoded: parsed.success, tokensUsed: 0 }
+      : behaviorFailed(`args-parse-failed:${parsed.failure}`);
   });
 
 export const decodeStructuredOutputFromItems = <O = Record<string, unknown>>(spec: {
@@ -104,19 +104,19 @@ export const decodeStructuredOutputFromItems = <O = Record<string, unknown>>(spe
     const parsed = yield* decodeToolArguments(toolCalls[0].function.arguments);
     if (!parsed.ok) return parsed;
 
-    const decoded = yield* Effect.either(
+    const decoded = yield* Effect.result(
       Effect.try({
         try: () => spec.schemaSpec.agentSchema.decode(parsed.decoded) as O,
         catch: (error) => (error instanceof Error ? error.name : typeof error),
       }),
     );
-    if (decoded._tag === "Left") {
-      return behaviorFailed(`decode-failed:${decoded.left}`);
+    if (decoded._tag === "Failure") {
+      return behaviorFailed(`decode-failed:${decoded.failure}`);
     }
 
     return {
       ok: true,
-      decoded: decoded.right,
+      decoded: decoded.success,
       tokensUsed: spec.usage.totalTokens,
     };
   });

@@ -17,7 +17,7 @@ import type {
 import type { ResourceProjection } from "@agent-os/backend-protocol";
 import type { LedgerTruthIdentity } from "@agent-os/runtime-protocol";
 
-export class Resources extends Context.Tag("@agent-os/Resources")<
+export class Resources extends Context.Service<
   Resources,
   {
     readonly grant: (
@@ -50,4 +50,4 @@ export class Resources extends Context.Tag("@agent-os/Resources")<
       key: string,
     ) => Effect.Effect<ResourceProjection, SqlError>;
   }
->() {}
+>()("@agent-os/Resources") {}

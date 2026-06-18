@@ -202,7 +202,7 @@ describe("@agent-os/ag-ui", () => {
     });
     expect(input.messages.at(0)?.content).toBe("ship");
 
-    const standard = Schema.standardSchemaV1(AgUiRunAgentInputSchema);
+    const standard = Schema.toStandardSchemaV1(AgUiRunAgentInputSchema);
     expect(standard["~standard"].validate(input)).toEqual({ value: input });
     expect(() =>
       decodeAgUiRunAgentInput({

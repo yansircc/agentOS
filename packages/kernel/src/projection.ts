@@ -1,4 +1,4 @@
-import { Data, Either } from "effect";
+import { Data, Result } from "effect";
 
 type MaybePromise<T> = T | PromiseLike<T>;
 
@@ -225,7 +225,7 @@ const sourceRefIssue = (source: ProjectionSourceRef): string | undefined => {
 };
 
 const failDefinition = (message: string): never =>
-  Either.getOrThrowWith(Either.left(new ProjectionDefinitionError({ message })), (error) => error);
+  Result.getOrThrowWith(Result.fail(new ProjectionDefinitionError({ message })), (error) => error);
 
 /**
  * Defines one projection spec and validates its boot-time identity contract.
@@ -334,14 +334,14 @@ export const project = <Input, Output>(
     failure: (reason, issues) => projectionFailure(provenance, reason, issues),
   };
 
-  const attempted = Either.try({
+  const attempted = Result.try({
     try: () => spec.project(input, context),
     catch: () => "projection_threw" as const,
   });
-  if (Either.isLeft(attempted)) {
+  if (Result.isFailure(attempted)) {
     return projectionFailure(provenance, "projection_threw");
   }
-  const result: unknown = attempted.right;
+  const result: unknown = attempted.success;
   if (isThenable(result)) {
     return projectionFailure(provenance, "projection_returned_thenable");
   }
@@ -363,15 +363,15 @@ const maybePromise = <Output>(
   evaluate: () => MaybePromise<Output>,
 ): Promise<Output> =>
   new Promise((resolve, reject) => {
-    const evaluated = Either.try({
+    const evaluated = Result.try({
       try: evaluate,
       catch: (cause) => new ProjectionSinkFailure({ sinkId, operation, cause }),
     });
-    if (Either.isLeft(evaluated)) {
-      reject(evaluated.left);
+    if (Result.isFailure(evaluated)) {
+      reject(evaluated.failure);
       return;
     }
-    const value = evaluated.right;
+    const value = evaluated.success;
     if (isThenable(value)) {
       value.then(resolve, (cause) =>
         reject(new ProjectionSinkFailure({ sinkId, operation, cause })),
@@ -439,8 +439,8 @@ export const runProjectionSink = <Input, Output>(
  */
 export const projectionOutputOrFail = <Output>(result: ProjectionResult<Output>): Output => {
   if (result._tag === "ok") return result.output;
-  return Either.getOrThrowWith(
-    Either.left(
+  return Result.getOrThrowWith(
+    Result.fail(
       new ProjectionRunFailed({
         message: result.reason,
         projectionId: result.provenance.projection.id,

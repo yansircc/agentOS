@@ -95,7 +95,7 @@ const makeSpec = (
 
 const buildRuntime = (
   state: DurableObjectState,
-  llm: Context.Tag.Service<typeof LlmTransport>,
+  llm: Context.Service.Shape<typeof LlmTransport>,
   identity: BackendProtocolEventIdentity,
 ) => {
   const handlers = new Map<string, Set<EventHandler>>();
@@ -163,7 +163,10 @@ describe("quota state machine — deterministic", () => {
       const runtime = buildRuntime(state, llm, routeIdentity);
       const spec = makeSpec(scope, 1, {
         tools: { get_current_time: retryingTool },
-        budget: { maxTurns: 3, toolRetries: 1 },
+        budget: {
+          maxTurns: 3,
+          toolRetryPolicy: { execution: { maxRetries: 1, delay: { kind: "none" } } },
+        },
       });
 
       const result = await runtime.runPromise(submitAgentEffect(spec));
@@ -294,7 +297,7 @@ describe("quota state machine — deterministic", () => {
 
       expect(Exit.isFailure(exit)).toBe(true);
       if (Exit.isFailure(exit)) {
-        const failure = Cause.failureOption(exit.cause);
+        const failure = Cause.findErrorOption(exit.cause);
         expect(Option.isSome(failure)).toBe(true);
         if (Option.isSome(failure)) {
           expect(failure.value._tag).toBe("agent_os.sql_error");

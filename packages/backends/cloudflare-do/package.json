@@ -36,9 +36,6 @@
     "@agent-os/workspace-env-cloudflare": "workspace:*",
     "@agent-os/workspace-op": "workspace:*",
     "@agent-os/workspace-op-local": "workspace:*",
-    "@effect/experimental": "catalog:",
-    "@effect/platform": "catalog:",
-    "@effect/sql": "catalog:",
     "@effect/sql-sqlite-do": "catalog:"
   },
   "devDependencies": {
@@ -54,6 +51,6 @@
   },
   "peerDependencies": {
     "@cloudflare/workers-types": "^4.20251201.0",
-    "effect": "^3.21.0"
+    "effect": "^4.0.0-beta.84"
   }
 }

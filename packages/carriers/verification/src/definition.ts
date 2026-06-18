@@ -13,7 +13,7 @@ export const verificationCarrier = defineCarrier({
       payload: Schema.Struct({
         subjectRef: Schema.String,
         gate: Schema.String,
-        status: Schema.Literal("passed", "failed"),
+        status: Schema.Literals(["passed", "failed"]),
         proofRef: Schema.String,
         fingerprint: Schema.String,
         summary: Schema.optional(Schema.String),

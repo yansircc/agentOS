@@ -5,7 +5,7 @@ import type {
   UnregisteredDurableTriggerKind,
 } from "@agent-os/kernel/errors";
 
-export class Scheduler extends Context.Tag("@agent-os/Scheduler")<
+export class Scheduler extends Context.Service<
   Scheduler,
   {
     readonly schedule: (
@@ -17,4 +17,4 @@ export class Scheduler extends Context.Tag("@agent-os/Scheduler")<
       SqlError | JsonStringifyError | UnregisteredDurableTriggerKind
     >;
   }
->() {}
+>()("@agent-os/Scheduler") {}

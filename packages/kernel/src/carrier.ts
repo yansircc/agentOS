@@ -1,5 +1,5 @@
-import { Option, Schema } from "effect";
-import { defineAgentSchema } from "./agent-schema";
+import { Option } from "effect";
+import { defineAgentSchema, type AgentSchemaDecoder } from "./agent-schema";
 import {
   boundaryPackage,
   type BoundaryContract,
@@ -41,9 +41,9 @@ type ClaimSlot =
     };
 
 export type CarrierEventPayload<
-  S extends Schema.Schema.AnyNoContext,
+  S extends AgentSchemaDecoder<unknown>,
   Slot extends ClaimSlot,
-> = Schema.Schema.Type<S> &
+> = S["Type"] &
   (Slot extends { readonly kind: "pre"; readonly key: infer Key extends string }
     ? { readonly [K in Key]: PreClaim }
     : Slot extends { readonly kind: "lived"; readonly key: infer Key extends string }
@@ -54,7 +54,7 @@ export type CarrierEventPayload<
 
 export interface CarrierEvent<
   Kind extends string,
-  S extends Schema.Schema.AnyNoContext,
+  S extends AgentSchemaDecoder<unknown>,
   Slot extends ClaimSlot,
 > {
   readonly kind: Kind;
@@ -65,7 +65,7 @@ export interface CarrierEvent<
 export type CarrierEventPayloads<
   Prefix extends string,
   Events extends Readonly<
-    Record<string, CarrierEvent<string, Schema.Schema.AnyNoContext, ClaimSlot>>
+    Record<string, CarrierEvent<string, AgentSchemaDecoder<unknown>, ClaimSlot>>
   >,
 > = {
   readonly [Name in keyof Events &
@@ -78,7 +78,7 @@ export type CarrierEventPayloads<
 export type CarrierKindView<
   Prefix extends string,
   Events extends Readonly<
-    Record<string, CarrierEvent<string, Schema.Schema.AnyNoContext, ClaimSlot>>
+    Record<string, CarrierEvent<string, AgentSchemaDecoder<unknown>, ClaimSlot>>
   >,
 > = {
   readonly [Name in keyof Events & string as Uppercase<Name>]: `${Prefix}${Events[Name]["kind"]}`;
@@ -86,7 +86,7 @@ export type CarrierKindView<
 
 export type CarrierHandlers<
   Events extends Readonly<
-    Record<string, CarrierEvent<string, Schema.Schema.AnyNoContext, ClaimSlot>>
+    Record<string, CarrierEvent<string, AgentSchemaDecoder<unknown>, ClaimSlot>>
   >,
 > = {
   readonly [Name in keyof Events & string]?: (input: {
@@ -99,7 +99,7 @@ export type CarrierHandlers<
 
 type LivedEventNames<
   Events extends Readonly<
-    Record<string, CarrierEvent<string, Schema.Schema.AnyNoContext, ClaimSlot>>
+    Record<string, CarrierEvent<string, AgentSchemaDecoder<unknown>, ClaimSlot>>
   >,
 > = {
   readonly [Name in keyof Events & string]: Events[Name]["claim"] extends { readonly kind: "lived" }
@@ -109,7 +109,7 @@ type LivedEventNames<
 
 type RejectedEventNames<
   Events extends Readonly<
-    Record<string, CarrierEvent<string, Schema.Schema.AnyNoContext, ClaimSlot>>
+    Record<string, CarrierEvent<string, AgentSchemaDecoder<unknown>, ClaimSlot>>
   >,
 > = {
   readonly [Name in keyof Events & string]: Events[Name]["claim"] extends {
@@ -133,7 +133,7 @@ export type CarrierRejectSpec = {
 
 export type CarrierSettleMap<
   Events extends Readonly<
-    Record<string, CarrierEvent<string, Schema.Schema.AnyNoContext, ClaimSlot>>
+    Record<string, CarrierEvent<string, AgentSchemaDecoder<unknown>, ClaimSlot>>
   >,
 > = {
   readonly [Name in LivedEventNames<Events>]: (
@@ -144,7 +144,7 @@ export type CarrierSettleMap<
 
 export type CarrierRejectMap<
   Events extends Readonly<
-    Record<string, CarrierEvent<string, Schema.Schema.AnyNoContext, ClaimSlot>>
+    Record<string, CarrierEvent<string, AgentSchemaDecoder<unknown>, ClaimSlot>>
   >,
 > = {
   readonly [Name in RejectedEventNames<Events>]: (
@@ -156,7 +156,7 @@ export type CarrierRejectMap<
 export interface Carrier<
   Prefix extends string,
   Events extends Readonly<
-    Record<string, CarrierEvent<string, Schema.Schema.AnyNoContext, ClaimSlot>>
+    Record<string, CarrierEvent<string, AgentSchemaDecoder<unknown>, ClaimSlot>>
   >,
 > {
   readonly packageId: string;
@@ -190,7 +190,7 @@ export interface Carrier<
 export interface DefineCarrierSpec<
   Prefix extends string,
   Events extends Readonly<
-    Record<string, CarrierEvent<string, Schema.Schema.AnyNoContext, ClaimSlot>>
+    Record<string, CarrierEvent<string, AgentSchemaDecoder<unknown>, ClaimSlot>>
   >,
 > {
   readonly packageId: string;
@@ -239,7 +239,7 @@ export const rejected = <
 
 export const event = <
   const Kind extends string,
-  S extends Schema.Schema.AnyNoContext,
+  S extends AgentSchemaDecoder<unknown>,
   const Slot extends ClaimSlot,
 >(spec: {
   readonly kind: Kind;
@@ -340,7 +340,7 @@ const decodePayload = (
 export const defineCarrier = <
   const Prefix extends string,
   const Events extends Readonly<
-    Record<string, CarrierEvent<string, Schema.Schema.AnyNoContext, ClaimSlot>>
+    Record<string, CarrierEvent<string, AgentSchemaDecoder<unknown>, ClaimSlot>>
   >,
 >(
   spec: DefineCarrierSpec<Prefix, Events>,

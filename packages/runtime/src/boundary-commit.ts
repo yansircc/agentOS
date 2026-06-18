@@ -105,7 +105,7 @@ export const validateBoundaryEventPayload = (
   if (eventContract === undefined) {
     return reject(contract, event, "event_outside_vocabulary");
   }
-  if (!Predicate.isRecord(payload)) {
+  if (!Predicate.isObject(payload)) {
     return reject(contract, event, "payload_must_be_object");
   }
   if (validateBoundaryPayload(eventContract, payloadForSchema(payload, eventContract)).length > 0) {

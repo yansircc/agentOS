@@ -31,7 +31,7 @@ const workflowMutationInputFrom = (
   mutationKind: string,
   value: unknown,
 ): CloudflareWorkflowMutationInput | null => {
-  if (mutationKind !== "workflow.create_instance" || !Predicate.isRecord(value)) return null;
+  if (mutationKind !== "workflow.create_instance" || !Predicate.isObject(value)) return null;
   const instanceId = value.instanceId === undefined ? undefined : nonEmptyString(value.instanceId);
   if (value.instanceId !== undefined && instanceId === null) return null;
   if (instanceId === null) return null;

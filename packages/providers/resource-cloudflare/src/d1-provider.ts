@@ -24,12 +24,12 @@ export type CloudflareD1ResourceCarrierOptions =
   CloudflareResourceCarrierOptions<CloudflareD1MutationInput>;
 
 const d1DatabaseIdFromCreate = (body: unknown): string | null => {
-  if (!Predicate.isRecord(body) || !Predicate.isRecord(body.result)) return null;
+  if (!Predicate.isObject(body) || !Predicate.isObject(body.result)) return null;
   return nonEmptyString(body.result.uuid);
 };
 
 const mutationInputFrom = (value: unknown): CloudflareD1MutationInput | null => {
-  if (!Predicate.isRecord(value)) return null;
+  if (!Predicate.isObject(value)) return null;
   const sql = nonEmptyString(value.sql);
   if (sql === null) return null;
   if (value.params !== undefined && !Array.isArray(value.params)) return null;
@@ -37,9 +37,9 @@ const mutationInputFrom = (value: unknown): CloudflareD1MutationInput | null => 
 };
 
 const querySucceeded = (body: unknown): boolean => {
-  if (!Predicate.isRecord(body)) return false;
+  if (!Predicate.isObject(body)) return false;
   if (!Array.isArray(body.result)) return true;
-  return body.result.every((item) => !Predicate.isRecord(item) || item.success !== false);
+  return body.result.every((item) => !Predicate.isObject(item) || item.success !== false);
 };
 
 const d1Spec: CloudflareResourceSpec<CloudflareD1Material, CloudflareD1MutationInput> = {

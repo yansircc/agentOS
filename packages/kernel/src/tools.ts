@@ -11,7 +11,7 @@
  * invalid LLM-emitted args never consume quota.
  */
 
-import { Effect, Option, Schema } from "effect";
+import { Effect, Option } from "effect";
 import { ToolError } from "./errors";
 import {
   type AdmitVerdict,
@@ -27,7 +27,12 @@ import {
 import { isMaterialRequirement, type MaterialRequirement } from "./material-ref";
 import type { ResolvedMaterial } from "./ref-resolver";
 import type { QuotaSpec } from "./quota";
-import { ensureAgentSchema, type AgentSchema, type AgentSchemaIssue } from "./agent-schema";
+import {
+  ensureAgentSchema,
+  type AgentSchema,
+  type AgentSchemaDecoder,
+  type AgentSchemaIssue,
+} from "./agent-schema";
 
 const TOOL_CONTRACT_BRAND = Symbol("@agent-os/kernel/ToolContract");
 const DETERMINISTIC_TOOL_INVOCATION_BRAND = Symbol("@agent-os/kernel/DeterministicToolInvocation");
@@ -283,23 +288,23 @@ export interface Tool<
   readonly contract: ToolContract;
 }
 
-export interface DefineToolSpec<S extends Schema.Schema.AnyNoContext, R, E extends ToolExecution> {
+export interface DefineToolSpec<S extends AgentSchemaDecoder<unknown>, R, E extends ToolExecution> {
   readonly name: string;
   readonly description: string;
   readonly args: S;
-  readonly execute: ToolExecute<Schema.Schema.Type<S>, R, ToolExecutionRequirements<E>>;
+  readonly execute: ToolExecute<S["Type"], R, ToolExecutionRequirements<E>>;
   readonly quota?: QuotaSpec;
   readonly authority: string;
   readonly authorityId?: string;
   readonly authorityVersion?: string;
   readonly requiredMaterials?: ReadonlyArray<MaterialRequirement>;
   readonly originRef?: OriginRef;
-  readonly admit: ToolAdmitter<Schema.Schema.Type<S>>;
+  readonly admit: ToolAdmitter<S["Type"]>;
   readonly execution: E;
 }
 
 export interface DefineProductToolSpec<
-  S extends Schema.Schema.AnyNoContext,
+  S extends AgentSchemaDecoder<unknown>,
   R,
   E extends ToolExecution = ReturnType<typeof deterministicToolExecution>,
 > extends Omit<DefineToolSpec<S, R, E>, "execution"> {
@@ -569,9 +574,9 @@ export const resolveToolExecution = (
   };
 };
 
-export const defineTool = <S extends Schema.Schema.AnyNoContext, R, E extends ToolExecution>(
+export const defineTool = <S extends AgentSchemaDecoder<unknown>, R, E extends ToolExecution>(
   spec: DefineToolSpec<S, R, E>,
-): Tool<Schema.Schema.Type<S>, R, E> => {
+): Tool<S["Type"], R, E> => {
   const argsSchema = ensureAgentSchema(spec.args);
   const toolId = spec.name;
   const admit = normalizeAdmitter(spec.admit);
@@ -614,12 +619,12 @@ export const defineTool = <S extends Schema.Schema.AnyNoContext, R, E extends To
  * @public
  */
 export const defineProductTool = <
-  S extends Schema.Schema.AnyNoContext,
+  S extends AgentSchemaDecoder<unknown>,
   R,
   E extends ToolExecution = ReturnType<typeof deterministicToolExecution>,
 >(
   spec: DefineProductToolSpec<S, R, E>,
-): Tool<Schema.Schema.Type<S>, R, E | ReturnType<typeof deterministicToolExecution>> =>
+): Tool<S["Type"], R, E | ReturnType<typeof deterministicToolExecution>> =>
   defineTool({
     ...spec,
     execution: spec.execution ?? deterministicToolExecution(),

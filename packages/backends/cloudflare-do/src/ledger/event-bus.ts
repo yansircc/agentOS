@@ -35,7 +35,7 @@ export interface EventBusService {
   }) => EventBusSubscription;
 }
 
-export class EventBus extends Context.Tag("@agent-os/EventBus")<EventBus, EventBusService>() {}
+export class EventBus extends Context.Service<EventBus, EventBusService>()("@agent-os/EventBus") {}
 
 const describeFanoutCause = (cause: unknown): string => {
   if (typeof cause === "string") return cause;

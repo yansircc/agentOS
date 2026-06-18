@@ -3,10 +3,7 @@ import { runInDurableObject } from "cloudflare:test";
 import type {} from "@effect/vitest";
 
 import { credentialMaterialRef } from "@agent-os/kernel/material-ref";
-import {
-  FACADE_INTENT_COMMAND_EVENT,
-  type FacadeSubmitTestDO,
-} from "./test-worker";
+import { FACADE_INTENT_COMMAND_EVENT, type FacadeSubmitTestDO } from "./test-worker";
 import { testTruthIdentity } from "./_identity";
 
 interface TestEnv {

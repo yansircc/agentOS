@@ -188,7 +188,7 @@ export const materialRequirement = (spec: MaterialRequirementInput): MaterialReq
   }) as MaterialRequirement;
 
 export const isMaterialRef = (value: unknown): value is MaterialRef => {
-  if (!Predicate.isRecord(value)) return false;
+  if (!Predicate.isObject(value)) return false;
   switch (value.kind) {
     case "credential":
       return (
@@ -223,7 +223,7 @@ export const isMaterialRef = (value: unknown): value is MaterialRef => {
 };
 
 export const isMaterialRequirement = (value: unknown): value is MaterialRequirement => {
-  if (!Predicate.isRecord(value)) {
+  if (!Predicate.isObject(value)) {
     return false;
   }
   if (!isNonEmptyString(value.slot) || typeof value.required !== "boolean") {
@@ -256,7 +256,7 @@ export const isMaterialRequirement = (value: unknown): value is MaterialRequirem
 };
 
 export const isEffectAuthorityContract = (value: unknown): value is EffectAuthorityContract =>
-  Predicate.isRecord(value) &&
+  Predicate.isObject(value) &&
   hasOnlyKeys(value, new Set(["effectAuthorityRef", "requiredMaterials"])) &&
   isAuthorityRef(value.effectAuthorityRef) &&
   Array.isArray(value.requiredMaterials) &&

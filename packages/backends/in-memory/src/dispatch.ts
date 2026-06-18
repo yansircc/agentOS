@@ -156,14 +156,14 @@ export const deliveryRetryTrigger = (
       const result = yield* Effect.tryPromise({
         try: () => target.deliver(envelope),
         catch: (cause) => cause,
-      }).pipe(Effect.either);
-      if (result._tag === "Right") {
-        if (result.right._tag === "delivered") {
+      }).pipe(Effect.result);
+      if (result._tag === "Success") {
+        if (result.success._tag === "delivered") {
           return {
             _tag: "delivered",
             outboundEventId: row.outboundEventId,
             requested,
-            receipt: result.right.receipt,
+            receipt: result.success.receipt,
             attempt,
           } as const;
         }
@@ -171,7 +171,7 @@ export const deliveryRetryTrigger = (
           _tag: "enqueued",
           outboundEventId: row.outboundEventId,
           requested,
-          acknowledgement: result.right.acknowledgement,
+          acknowledgement: result.success.acknowledgement,
           attempt,
         } as const;
       }
@@ -180,7 +180,7 @@ export const deliveryRetryTrigger = (
         outboundEventId: row.outboundEventId,
         requested,
         attempt,
-        cause: result.left,
+        cause: result.failure,
       } as const;
     }),
   commit: (outcome, tx) => {

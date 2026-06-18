@@ -1,3 +1,4 @@
+import { Data, Option } from "effect";
 import type { LlmRoute } from "@agent-os/llm-protocol";
 import type {
   ExecutionDomainDeclaration,
@@ -11,6 +12,13 @@ import type { MaterialRef } from "@agent-os/kernel/material-ref";
 import type { BoundaryPackage } from "@agent-os/kernel/extensions";
 import type { ContinuationRef } from "./continuation";
 import type { InputRequestDescriptor } from "./input-request";
+
+export class MissingSubmitRunBinding extends Data.TaggedError(
+  "agent_os.missing_submit_run_binding",
+)<{
+  readonly bindingKind: "llm_route";
+  readonly bindingRef: string;
+}> {}
 
 export interface SubmitToolIntent {
   readonly kind: string;
@@ -55,6 +63,32 @@ export interface SubmitToolPolicy {
     readonly ordered?: boolean;
     readonly finalMessage?: string;
   };
+}
+
+export type SubmitToolRetryDelayPolicy =
+  | {
+      readonly kind: "none";
+    }
+  | {
+      readonly kind: "fixed";
+      readonly delayMs: number;
+      readonly jitter?: boolean;
+    }
+  | {
+      readonly kind: "exponential";
+      readonly baseDelayMs: number;
+      readonly factor?: number;
+      readonly jitter?: boolean;
+    };
+
+export interface SubmitToolExecutionRetryPolicy {
+  readonly maxRetries?: number;
+  readonly delay?: SubmitToolRetryDelayPolicy;
+}
+
+export interface SubmitToolRetryPolicy {
+  readonly correctionRetries?: number;
+  readonly execution?: SubmitToolExecutionRetryPolicy;
 }
 
 /**
@@ -125,7 +159,14 @@ export const lowerSubmitRunInput = (spec: LowerSubmitRunInputSpec): SubmitSpec =
   const routeBindingRef = spec.routeBindingRef ?? "default";
   const route = spec.bindings.llmRoutes?.[routeBindingRef];
   if (route === undefined) {
-    throw new TypeError(`missing llm route binding ${routeBindingRef}`);
+    return Option.getOrThrowWith(
+      Option.none(),
+      () =>
+        new MissingSubmitRunBinding({
+          bindingKind: "llm_route",
+          bindingRef: routeBindingRef,
+        }),
+    );
   }
   const toolContext = mergeSubmitToolContext(spec.bindings.toolContext, spec.input.toolContext);
   return {
@@ -148,7 +189,8 @@ export const lowerSubmitRunInput = (spec: LowerSubmitRunInputSpec): SubmitSpec =
       ? {}
       : { receiptBackedTools: spec.bindings.receiptBackedTools }),
     ...(spec.input.toolPolicy === undefined ? {} : { toolPolicy: spec.input.toolPolicy }),
-    ...(spec.input.decisionInterrupts === undefined && spec.bindings.decisionInterrupts === undefined
+    ...(spec.input.decisionInterrupts === undefined &&
+    spec.bindings.decisionInterrupts === undefined
       ? {}
       : { decisionInterrupts: spec.input.decisionInterrupts ?? spec.bindings.decisionInterrupts }),
     ...(spec.input.resume === undefined ? {} : { resume: spec.input.resume }),
@@ -182,7 +224,7 @@ export interface SubmitSpec {
      */
     readonly llmCallTimeoutMs?: number;
     readonly maxTurns?: number;
-    readonly toolRetries?: number;
+    readonly toolRetryPolicy?: SubmitToolRetryPolicy;
   };
   readonly outputSchema?: AnyAgentSchemaSource;
   readonly traceContext?: TraceContext;

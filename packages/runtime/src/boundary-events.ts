@@ -13,7 +13,7 @@ import type { BoundaryCommitRejected } from "./boundary-commit";
  *
  * @public
  */
-export class BoundaryEvents extends Context.Tag("@agent-os/BoundaryEvents")<
+export class BoundaryEvents extends Context.Service<
   BoundaryEvents,
   {
     readonly commit: (
@@ -22,4 +22,4 @@ export class BoundaryEvents extends Context.Tag("@agent-os/BoundaryEvents")<
       payload: unknown,
     ) => Effect.Effect<LedgerEvent, BoundaryCommitRejected | SqlError | JsonStringifyError>;
   }
->() {}
+>()("@agent-os/BoundaryEvents") {}

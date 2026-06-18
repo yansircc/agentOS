@@ -25,7 +25,7 @@ const runWorkflowProjection = (version = 1): AnyMaterializedProjectionDefinition
     identity: Schema.Struct({ runId: Schema.String }),
     state: Schema.Struct({
       runId: Schema.String,
-      status: Schema.Literal("requested", "completed"),
+      status: Schema.Literals(["requested", "completed"]),
       handoff: Schema.optional(Schema.String),
     }),
     identityKey: (identity) => identity.runId,

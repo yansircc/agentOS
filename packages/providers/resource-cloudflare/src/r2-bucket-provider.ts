@@ -36,7 +36,7 @@ const r2MutationInputFrom = (
   mutationKind: string,
   value: unknown,
 ): CloudflareR2BucketMutationInput | null => {
-  if (!Predicate.isRecord(value)) return null;
+  if (!Predicate.isObject(value)) return null;
   const objectKey = nonEmptyString(value.objectKey);
   if (objectKey === null) return null;
   if (mutationKind === "r2_bucket.put_object") {

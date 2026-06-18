@@ -67,7 +67,7 @@ export const stubLlmWireDescriptor = (route: LlmRoute): LlmWireDescriptor => ({
 
 export const stubLlmTransport = (
   responses: ReadonlyArray<LlmResponse>,
-): Context.Tag.Service<typeof LlmTransport> => {
+): Context.Service.Shape<typeof LlmTransport> => {
   let i = 0;
   return {
     resolveRoute: (route) =>

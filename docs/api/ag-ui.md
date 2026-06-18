@@ -16,6 +16,7 @@
 - `.:AgUiLedgerEnvelopeProjectionSpec`
 - `.:AgUiLedgerEventEnvelope`
 - `.:AgUiLedgerProjectionSpec`
+- `.:AgUiInputRequestResumeBinding`
 - `.:AgUiSafeEventFrameProjector`
 - `.:AgUiSafeEventProjector`
 - `.:AgUiSafeLedgerEvent`

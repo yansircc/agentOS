@@ -9,7 +9,7 @@ import type {
   TurnStreamFrame,
   TurnTextDeltaFrame,
 } from "@agent-os/turn-stream";
-import { Either, Predicate, pipe } from "effect";
+import { Result, Predicate, pipe } from "effect";
 
 interface HttpStreamingRouteBase extends LlmRoute {
   readonly endpointRef: string;
@@ -260,7 +260,7 @@ const unsupportedReason = (provider: ProviderDeltaAdapter): string =>
 
 const numericMetadata = (value: unknown): unknown => {
   if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (!Predicate.isRecord(value)) return undefined;
+  if (!Predicate.isObject(value)) return undefined;
 
   const sanitized: Record<string, unknown> = {};
   for (const [key, entry] of Object.entries(value)) {
@@ -332,7 +332,7 @@ export const adaptOpenAiCompatibleDeltaChunk = (
   if (input.chunk === "[DONE]") {
     return [{ kind: "done", turnRef: input.turnRef, seq: input.seq }];
   }
-  if (!Predicate.isRecord(input.chunk)) {
+  if (!Predicate.isObject(input.chunk)) {
     return adapterErrorFrames(input.turnRef, input.seq, malformedReason(provider));
   }
 
@@ -356,12 +356,12 @@ export const adaptOpenAiCompatibleDeltaChunk = (
 
   for (const choice of choices ?? []) {
     let choiceRecognized = false;
-    if (!Predicate.isRecord(choice)) {
+    if (!Predicate.isObject(choice)) {
       return adapterErrorFrames(input.turnRef, input.seq, malformedReason(provider));
     }
 
     if ("delta" in choice) {
-      if (!Predicate.isRecord(choice.delta)) {
+      if (!Predicate.isObject(choice.delta)) {
         return adapterErrorFrames(input.turnRef, input.seq, malformedReason(provider));
       }
       const allowedDeltaKeys = new Set(["content", "role"]);
@@ -427,7 +427,7 @@ export const adaptAnthropicDeltaChunk = (
   input: TurnStreamDeltaAdapterInput<unknown>,
 ): ReadonlyArray<TurnStreamFrame> => {
   const provider: ProviderDeltaAdapter = "anthropic";
-  if (!Predicate.isRecord(input.chunk)) {
+  if (!Predicate.isObject(input.chunk)) {
     return adapterErrorFrames(input.turnRef, input.seq, malformedReason(provider));
   }
 
@@ -443,12 +443,12 @@ export const adaptAnthropicDeltaChunk = (
     case "content_block_stop":
       break;
     case "message_start": {
-      const usage = Predicate.isRecord(input.chunk.message) ? input.chunk.message.usage : undefined;
+      const usage = Predicate.isObject(input.chunk.message) ? input.chunk.message.usage : undefined;
       seq = appendUsageMetadata(frames, input.turnRef, seq, "anthropic", usage);
       break;
     }
     case "content_block_delta": {
-      if (!Predicate.isRecord(input.chunk.delta)) {
+      if (!Predicate.isObject(input.chunk.delta)) {
         return adapterErrorFrames(input.turnRef, input.seq, malformedReason(provider));
       }
       if (input.chunk.delta.type !== undefined && input.chunk.delta.type !== "text_delta") {
@@ -466,11 +466,11 @@ export const adaptAnthropicDeltaChunk = (
       break;
     }
     case "message_delta": {
-      if (input.chunk.delta !== undefined && !Predicate.isRecord(input.chunk.delta)) {
+      if (input.chunk.delta !== undefined && !Predicate.isObject(input.chunk.delta)) {
         return adapterErrorFrames(input.turnRef, input.seq, malformedReason(provider));
       }
       seq = appendUsageMetadata(frames, input.turnRef, seq, "anthropic", input.chunk.usage);
-      if (Predicate.isRecord(input.chunk.delta)) {
+      if (Predicate.isObject(input.chunk.delta)) {
         seq = appendFinishMetadata(
           frames,
           input.turnRef,
@@ -495,7 +495,7 @@ export const adaptGeminiDeltaChunk = (
   input: TurnStreamDeltaAdapterInput<unknown>,
 ): ReadonlyArray<TurnStreamFrame> => {
   const provider: ProviderDeltaAdapter = "gemini";
-  if (!Predicate.isRecord(input.chunk)) {
+  if (!Predicate.isObject(input.chunk)) {
     return adapterErrorFrames(input.turnRef, input.seq, malformedReason(provider));
   }
 
@@ -517,11 +517,11 @@ export const adaptGeminiDeltaChunk = (
   }
 
   for (const candidate of candidates ?? []) {
-    if (!Predicate.isRecord(candidate)) {
+    if (!Predicate.isObject(candidate)) {
       return adapterErrorFrames(input.turnRef, input.seq, malformedReason(provider));
     }
     const content = candidate.content;
-    if (content !== undefined && !Predicate.isRecord(content)) {
+    if (content !== undefined && !Predicate.isObject(content)) {
       return adapterErrorFrames(input.turnRef, input.seq, malformedReason(provider));
     }
     const parts = content === undefined ? [] : content.parts;
@@ -529,7 +529,7 @@ export const adaptGeminiDeltaChunk = (
       return adapterErrorFrames(input.turnRef, input.seq, malformedReason(provider));
     }
     for (const part of parts ?? []) {
-      if (!Predicate.isRecord(part)) {
+      if (!Predicate.isObject(part)) {
         return adapterErrorFrames(input.turnRef, input.seq, malformedReason(provider));
       }
       const allowedPartKeys = new Set(["text"]);
@@ -597,13 +597,13 @@ type JsonParseResult =
 
 const parseJson = (value: string, reason: string): JsonParseResult =>
   pipe(
-    Either.try({
+    Result.try({
       try: () => JSON.parse(value) as unknown,
       catch: () => reason,
     }),
-    Either.match({
-      onLeft: (failure) => ({ ok: false, reason: failure }),
-      onRight: (parsed) => ({ ok: true, value: parsed }),
+    Result.match({
+      onFailure: (failure) => ({ ok: false, reason: failure }),
+      onSuccess: (parsed) => ({ ok: true, value: parsed }),
     }),
   );
 
@@ -628,13 +628,13 @@ const parseJsonChunk = (
 
 const encodeBody = (body: unknown): string | ProviderError => {
   const encoded = pipe(
-    Either.try({
+    Result.try({
       try: () => JSON.stringify(body),
       catch: () => null,
     }),
-    Either.match({
-      onLeft: () => null,
-      onRight: (right) => right,
+    Result.match({
+      onFailure: () => null,
+      onSuccess: (right) => right,
     }),
   );
   return typeof encoded === "string"

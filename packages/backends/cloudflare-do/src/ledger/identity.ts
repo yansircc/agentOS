@@ -195,7 +195,7 @@ export const truthIdentityFromCommitSpec = (
   value: unknown,
   label: string,
 ): BackendProtocolTruthIdentity => {
-  if (!Predicate.isRecord(value)) {
+  if (!Predicate.isObject(value)) {
     throw new LegacyLedgerSchemaError({ table: "events", reason: `${label} must be an object` });
   }
   if ("scope" in value) {
@@ -221,7 +221,7 @@ export const eventIdentityFromQuerySpec = (
   label: string,
 ): BackendProtocolEventIdentity => {
   const truthIdentity = truthIdentityFromCommitSpec(value, label);
-  if (!Predicate.isRecord(value) || !isFactOwnerRef(value.factOwnerRef)) {
+  if (!Predicate.isObject(value) || !isFactOwnerRef(value.factOwnerRef)) {
     throw new LegacyLedgerSchemaError({
       table: "events",
       reason: `${label} missing factOwnerRef`,
@@ -231,7 +231,7 @@ export const eventIdentityFromQuerySpec = (
 };
 
 export const assertNoFactOwnerOverride = (value: unknown, label: string): void => {
-  if (Predicate.isRecord(value) && "factOwnerRef" in value) {
+  if (Predicate.isObject(value) && "factOwnerRef" in value) {
     throw new LegacyLedgerSchemaError({
       table: "events",
       reason: `${label} must not include caller-controlled factOwnerRef`,

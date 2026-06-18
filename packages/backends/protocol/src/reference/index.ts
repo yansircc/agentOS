@@ -14,10 +14,12 @@ export const fireBackendEventHandlers = (
         catch: (cause) => cause,
       }).pipe(
         Effect.timeout("5 seconds"),
-        Effect.catchAll((cause) =>
-          Effect.sync(() => {
-            console.error(`[agent-os] ${label} "${event.kind}" failed/timed:`, cause);
-          }),
+        Effect.catchIf(
+          (_cause: unknown): _cause is unknown => true,
+          (cause) =>
+            Effect.sync(() => {
+              console.error(`[agent-os] ${label} "${event.kind}" failed/timed:`, cause);
+            }),
         ),
       ),
     { concurrency: 1, discard: true },

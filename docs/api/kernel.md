@@ -7,6 +7,7 @@
 - `./abort:reasonOf`
 - `./agent-schema:AGENT_SCHEMA_FINGERPRINT_VERSION`
 - `./agent-schema:AgentSchema`
+- `./agent-schema:AgentSchemaDecoder`
 - `./agent-schema:AgentSchemaIssue`
 - `./agent-schema:AgentSchemaProfileError`
 - `./agent-schema:AgentSchemaProjections`
@@ -394,6 +395,7 @@ text`
 - `.:AbortKind`
 - `.:AdmitVerdict`
 - `.:AgentSchema`
+- `.:AgentSchemaDecoder`
 - `.:AgentSchemaIssue`
 - `.:AgentSchemaProfileError`
 - `.:AgentSchemaProjections`

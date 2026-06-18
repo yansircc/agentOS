@@ -17,7 +17,7 @@ import {
   type SandboxToolResult,
 } from "./types";
 
-const SandboxRunToolArgsSchema: Schema.Schema<SandboxRunToolArgs> = Schema.Struct({
+const SandboxRunToolArgsSchema: Schema.Decoder<SandboxRunToolArgs> = Schema.Struct({
   command: Schema.String,
   args: Schema.optional(Schema.Array(Schema.String)),
   cwd: Schema.optional(Schema.String),
@@ -92,17 +92,17 @@ export const makeSandboxRunTool = (
           });
           const started = yield* Clock.currentTimeMillis;
           const result = yield* runSandbox(options.backend, options.policy, request).pipe(
-            Effect.either,
+            Effect.result,
           );
           const ended = yield* Clock.currentTimeMillis;
-          if (result._tag === "Left") {
-            return failureToToolResult(result.left, ended - started, maxOutputBytes);
+          if (result._tag === "Failure") {
+            return failureToToolResult(result.failure, ended - started, maxOutputBytes);
           }
-          const stdout = truncateUtf8(result.right.stdout, maxOutputBytes);
-          const stderr = truncateUtf8(result.right.stderr, maxOutputBytes);
+          const stdout = truncateUtf8(result.success.stdout, maxOutputBytes);
+          const stderr = truncateUtf8(result.success.stderr, maxOutputBytes);
           return {
             ok: true,
-            exitCode: result.right.exitCode,
+            exitCode: result.success.exitCode,
             stdoutHead: stdout.head,
             stderrHead: stderr.head,
             stdoutBytes: stdout.bytes,
@@ -110,8 +110,8 @@ export const makeSandboxRunTool = (
             stdoutTruncated: stdout.truncated,
             stderrTruncated: stderr.truncated,
             artifacts: [],
-            durationMs: result.right.durationMs,
-            sandboxId: result.right.sandboxId,
+            durationMs: result.success.durationMs,
+            sandboxId: result.success.sandboxId,
           } satisfies SandboxToolResult;
         }),
       ),

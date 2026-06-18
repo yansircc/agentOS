@@ -1,4 +1,5 @@
-import { Effect, Fiber, TestClock } from "effect";
+import { Effect, Fiber } from "effect";
+import { TestClock } from "effect/testing";
 import { makePreClaim } from "@agent-os/kernel/effect-claim";
 import { describe, expect, it } from "@effect/vitest";
 
@@ -64,7 +65,7 @@ describe("@agent-os/dynamic-worker", () => {
           ),
       };
 
-      const result = yield* Effect.either(
+      const result = yield* Effect.result(
         runDynamicWorker(backend, staticPolicy(), {
           claim,
           code: "export default { fetch: () => fetch('https://api.example') }",
@@ -75,12 +76,12 @@ describe("@agent-os/dynamic-worker", () => {
       );
 
       expect(result).toMatchObject({
-        _tag: "Left",
-        left: {
+        _tag: "Failure",
+        failure: {
           _tag: "agent_os.dynamic_worker_policy_denied",
         },
       });
-      expect(result._tag === "Left" ? result.left.reason : "").toBe("egress is disabled");
+      expect(result._tag === "Failure" ? result.failure.reason : "").toBe("egress is disabled");
     }),
   );
 
@@ -90,25 +91,25 @@ describe("@agent-os/dynamic-worker", () => {
         run: () => Effect.never,
       };
 
-      const fiber = yield* Effect.either(
+      const fiber = yield* Effect.result(
         runDynamicWorker(backend, staticPolicy({ maxTimeoutMs: 5 }), {
           claim,
           code: "export default { fetch: async () => new Response('late') }",
           request: { url: "https://example.test/" },
           timeoutMs: 5,
         }),
-      ).pipe(Effect.fork);
+      ).pipe(Effect.forkChild);
       yield* TestClock.adjust("6 millis");
       const result = yield* Fiber.join(fiber);
 
       expect(result).toMatchObject({
-        _tag: "Left",
-        left: {
+        _tag: "Failure",
+        failure: {
           _tag: "agent_os.dynamic_worker_failure",
         },
       });
-      if (result._tag === "Left" && result.left._tag === "agent_os.dynamic_worker_failure") {
-        expect(result.left.code).toBe("Timeout");
+      if (result._tag === "Failure" && result.failure._tag === "agent_os.dynamic_worker_failure") {
+        expect(result.failure.code).toBe("Timeout");
       } else {
         expect.fail("expected DynamicWorkerFailure");
       }
@@ -258,7 +259,7 @@ describe("@agent-os/dynamic-worker", () => {
         },
       ]);
 
-      const denied = yield* Effect.either(
+      const denied = yield* Effect.result(
         runDynamicWorker(backend, staticPolicy(), {
           claim,
           code: "",
@@ -268,8 +269,8 @@ describe("@agent-os/dynamic-worker", () => {
       );
 
       expect(denied).toMatchObject({
-        _tag: "Left",
-        left: {
+        _tag: "Failure",
+        failure: {
           _tag: "agent_os.dynamic_worker_policy_denied",
           reason: "code must be non-empty",
           claim: {
@@ -284,7 +285,7 @@ describe("@agent-os/dynamic-worker", () => {
         },
       });
 
-      const failed = yield* Effect.either(
+      const failed = yield* Effect.result(
         runDynamicWorker(
           {
             run: () =>
@@ -306,8 +307,8 @@ describe("@agent-os/dynamic-worker", () => {
       );
 
       expect(failed).toMatchObject({
-        _tag: "Left",
-        left: {
+        _tag: "Failure",
+        failure: {
           _tag: "agent_os.dynamic_worker_failure",
           code: "ProviderFailure",
           claim: {
@@ -339,7 +340,7 @@ describe("@agent-os/dynamic-worker", () => {
           ),
       };
 
-      const failed = yield* Effect.either(
+      const failed = yield* Effect.result(
         runDynamicWorker(backend, staticPolicy(), {
           claim,
           code: "export default { fetch: () => new Response('ok') }",

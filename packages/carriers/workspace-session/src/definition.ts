@@ -4,7 +4,7 @@ import { defineCarrier, event, lived, rejected } from "@agent-os/kernel/carrier"
 export const WORKSPACE_SESSION_EVENT_PREFIX = "workspace_session.";
 
 const retentionSchema = Schema.Struct({
-  mode: Schema.Literal("ephemeral", "persistent"),
+  mode: Schema.Literals(["ephemeral", "persistent"]),
   leaseRef: Schema.optional(Schema.String),
   expiresAt: Schema.optional(Schema.String),
 });
@@ -62,7 +62,7 @@ export const workspaceSessionCarrier = defineCarrier({
       payload: Schema.Struct({
         subjectRef: Schema.String,
         sessionRef: Schema.String,
-        reason: Schema.Literal("completed", "expired", "aborted", "manual"),
+        reason: Schema.Literals(["completed", "expired", "aborted", "manual"]),
       }),
       claim: lived({ key: "claim", anchorKinds: ["carrier_proof"] }),
     }),
@@ -70,7 +70,7 @@ export const workspaceSessionCarrier = defineCarrier({
       kind: "failed",
       payload: Schema.Struct({
         subjectRef: Schema.String,
-        step: Schema.Literal("start", "restore", "backup", "preview", "destroy"),
+        step: Schema.Literals(["start", "restore", "backup", "preview", "destroy"]),
         proofRef: Schema.optional(Schema.String),
         reason: Schema.String,
       }),

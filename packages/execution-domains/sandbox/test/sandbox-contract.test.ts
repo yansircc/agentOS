@@ -1,5 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, Fiber, TestClock } from "effect";
+import { Effect, Fiber } from "effect";
+import { TestClock } from "effect/testing";
 
 import {
   makeSandboxRunTool,
@@ -57,12 +58,12 @@ describe("@agent-os/sandbox v0 contract", () => {
           timeoutMs: 1_000,
           network: { mode: "allowlist", hosts: ["example.com"] },
         },
-      ).pipe(Effect.either);
+      ).pipe(Effect.result);
 
-      expect(result._tag).toBe("Left");
-      if (result._tag === "Left") {
-        expect(result.left._tag).toBe("agent_os.sandbox_policy_denied");
-        expect(result.left.reason).toBe("network is disabled");
+      expect(result._tag).toBe("Failure");
+      if (result._tag === "Failure") {
+        expect(result.failure._tag).toBe("agent_os.sandbox_policy_denied");
+        expect(result.failure.reason).toBe("network is disabled");
       }
     }),
   );
@@ -85,12 +86,12 @@ describe("@agent-os/sandbox v0 contract", () => {
           timeoutMs: 1_000,
           network: { mode: "allowlist", hosts: ["blocked.com"] },
         },
-      ).pipe(Effect.either);
+      ).pipe(Effect.result);
 
-      expect(result._tag).toBe("Left");
-      if (result._tag === "Left") {
-        expect(result.left._tag).toBe("agent_os.sandbox_policy_denied");
-        expect(result.left.reason).toContain("blocked.com");
+      expect(result._tag).toBe("Failure");
+      if (result._tag === "Failure") {
+        expect(result.failure._tag).toBe("agent_os.sandbox_policy_denied");
+        expect(result.failure.reason).toContain("blocked.com");
       }
     }),
   );
@@ -101,14 +102,14 @@ describe("@agent-os/sandbox v0 contract", () => {
         backend(() => Effect.never),
         staticPolicy(),
         { command: "sleep", timeoutMs: 10 },
-      ).pipe(Effect.either, Effect.fork);
+      ).pipe(Effect.result, Effect.forkChild);
       yield* TestClock.adjust("11 millis");
       const result = yield* Fiber.join(fiber);
 
-      expect(result._tag).toBe("Left");
-      if (result._tag === "Left" && result.left._tag === "agent_os.sandbox_failure") {
-        expect(result.left.code).toBe("Timeout");
-        expect(result.left.reason).toContain("10ms");
+      expect(result._tag).toBe("Failure");
+      if (result._tag === "Failure" && result.failure._tag === "agent_os.sandbox_failure") {
+        expect(result.failure.code).toBe("Timeout");
+        expect(result.failure.reason).toContain("10ms");
       }
     }),
   );
@@ -127,12 +128,12 @@ describe("@agent-os/sandbox v0 contract", () => {
         ),
         staticPolicy(),
         { command: "ls", timeoutMs: 1_000 },
-      ).pipe(Effect.either);
+      ).pipe(Effect.result);
 
-      expect(result._tag).toBe("Left");
-      if (result._tag === "Left" && result.left._tag === "agent_os.sandbox_failure") {
-        expect(result.left.code).toBe("SandboxEvicted");
-        expect(result.left.sandboxId).toBe("sbx-dead");
+      expect(result._tag).toBe("Failure");
+      if (result._tag === "Failure" && result.failure._tag === "agent_os.sandbox_failure") {
+        expect(result.failure.code).toBe("SandboxEvicted");
+        expect(result.failure.sandboxId).toBe("sbx-dead");
       }
     }),
   );

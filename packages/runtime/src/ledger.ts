@@ -12,7 +12,7 @@ import type { LedgerCommitEventSpec, LedgerTruthIdentity } from "@agent-os/runti
  * @agentosDocs docs/concepts/durable-truth.md
  * @public
  */
-export class Ledger extends Context.Tag("@agent-os/Ledger")<
+export class Ledger extends Context.Service<
   Ledger,
   {
     readonly commit: (
@@ -27,4 +27,4 @@ export class Ledger extends Context.Tag("@agent-os/Ledger")<
       opts?: Pick<EventQueryOptions, "afterId" | "kinds" | "factOwnerRefs">,
     ) => Effect.Effect<ReadonlyArray<LedgerEvent>, SqlError>;
   }
->() {}
+>()("@agent-os/Ledger") {}

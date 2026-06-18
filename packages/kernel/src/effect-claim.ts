@@ -243,7 +243,7 @@ export const invalidAdmitterRejectionRef = (claim: PreClaim): RejectionRef => ({
 });
 
 const publicErrorName = (cause: unknown): string => {
-  if (Predicate.isRecord(cause) && typeof cause._tag === "string") return cause._tag;
+  if (Predicate.isObject(cause) && typeof cause._tag === "string") return cause._tag;
   if (cause instanceof Error) return cause.name;
   return typeof cause;
 };
@@ -255,7 +255,7 @@ export const admitterErrorRejectionRef = (claim: PreClaim, cause: unknown): Reje
 });
 
 export const isScopeRef = (value: unknown): value is ScopeRef => {
-  if (!Predicate.isRecord(value) || !isNonEmptyString(value.scopeId)) {
+  if (!Predicate.isObject(value) || !isNonEmptyString(value.scopeId)) {
     return false;
   }
   switch (value.kind) {
@@ -272,32 +272,32 @@ export const isScopeRef = (value: unknown): value is ScopeRef => {
 };
 
 export const isAuthorityRef = (value: unknown): value is AuthorityRef =>
-  Predicate.isRecord(value) &&
+  Predicate.isObject(value) &&
   isNonEmptyString(value.authorityId) &&
   isNonEmptyString(value.authorityClass) &&
   (value.version === undefined || isNonEmptyString(value.version));
 
 export const isOriginRef = (value: unknown): value is OriginRef =>
-  Predicate.isRecord(value) &&
+  Predicate.isObject(value) &&
   isNonEmptyString(value.originId) &&
   isNonEmptyString(value.originKind) &&
   optionalString(value.version);
 
 export const isAnchorRef = (value: unknown): value is AnchorRef =>
-  Predicate.isRecord(value) &&
+  Predicate.isObject(value) &&
   isNonEmptyString(value.anchorId) &&
   ANCHOR_KINDS.includes(value.anchorKind as AnchorRef["anchorKind"]) &&
   optionalString(value.carrierRef);
 
 export const isRejectionRef = (value: unknown): value is RejectionRef =>
-  Predicate.isRecord(value) &&
+  Predicate.isObject(value) &&
   isNonEmptyString(value.rejectionId) &&
   REJECTION_KINDS.includes(value.rejectionKind as RejectionRef["rejectionKind"]) &&
   optionalString(value.reason);
 
 export const normalizeAdmitVerdict = (claim: PreClaim, verdict: unknown): AdmitVerdict => {
-  if (Predicate.isRecord(verdict) && verdict.ok === true) return { ok: true };
-  if (Predicate.isRecord(verdict) && verdict.ok === false) {
+  if (Predicate.isObject(verdict) && verdict.ok === true) return { ok: true };
+  if (Predicate.isObject(verdict) && verdict.ok === false) {
     return isRejectionRef(verdict.rejectionRef)
       ? { ok: false, rejectionRef: verdict.rejectionRef }
       : { ok: false, rejectionRef: invalidAdmitterRejectionRef(claim) };
@@ -306,7 +306,7 @@ export const normalizeAdmitVerdict = (claim: PreClaim, verdict: unknown): AdmitV
 };
 
 export const validateEffectClaim = (value: unknown): ClaimValidation => {
-  if (!Predicate.isRecord(value)) {
+  if (!Predicate.isObject(value)) {
     return { ok: false, issues: ["claim_must_be_object"] };
   }
 

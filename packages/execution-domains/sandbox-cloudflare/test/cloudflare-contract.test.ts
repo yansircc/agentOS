@@ -1,5 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, Fiber, TestClock } from "effect";
+import { Effect, Fiber } from "effect";
+import { TestClock } from "effect/testing";
 
 import { runSandbox, staticPolicy } from "@agent-os/sandbox";
 import {
@@ -94,12 +95,12 @@ describe("@agent-os/sandbox-cloudflare backend", () => {
       const result = yield* runSandbox(backend, staticPolicy(), {
         command: "ls",
         timeoutMs: 1_000,
-      }).pipe(Effect.either);
+      }).pipe(Effect.result);
 
-      expect(result._tag).toBe("Left");
-      if (result._tag === "Left" && result.left._tag === "agent_os.sandbox_failure") {
-        expect(result.left.code).toBe("SandboxEvicted");
-        expect(result.left.sandboxId).toBe("cf-dead");
+      expect(result._tag).toBe("Failure");
+      if (result._tag === "Failure" && result.failure._tag === "agent_os.sandbox_failure") {
+        expect(result.failure.code).toBe("SandboxEvicted");
+        expect(result.failure.sandboxId).toBe("cf-dead");
       }
     }),
   );
@@ -125,13 +126,13 @@ describe("@agent-os/sandbox-cloudflare backend", () => {
       const fiber = yield* runSandbox(backend, staticPolicy(), {
         command: "sleep",
         timeoutMs: 10,
-      }).pipe(Effect.either, Effect.fork);
+      }).pipe(Effect.result, Effect.forkChild);
       yield* TestClock.adjust("11 millis");
       const result = yield* Fiber.join(fiber);
 
-      expect(result._tag).toBe("Left");
-      if (result._tag === "Left" && result.left._tag === "agent_os.sandbox_failure") {
-        expect(result.left.code).toBe("Timeout");
+      expect(result._tag).toBe("Failure");
+      if (result._tag === "Failure" && result.failure._tag === "agent_os.sandbox_failure") {
+        expect(result.failure.code).toBe("Timeout");
       }
       expect(signal).toBeInstanceOf(AbortSignal);
       expect(aborted).toBe(true);
@@ -152,12 +153,12 @@ describe("@agent-os/sandbox-cloudflare backend", () => {
         command: "cat",
         files: { "input.txt": "hello" },
         timeoutMs: 1_000,
-      }).pipe(Effect.either);
+      }).pipe(Effect.result);
 
-      expect(result._tag).toBe("Left");
-      if (result._tag === "Left" && result.left._tag === "agent_os.sandbox_failure") {
-        expect(result.left.code).toBe("ProviderFailure");
-        expect(result.left.reason).toContain("writeFile");
+      expect(result._tag).toBe("Failure");
+      if (result._tag === "Failure" && result.failure._tag === "agent_os.sandbox_failure") {
+        expect(result.failure.code).toBe("ProviderFailure");
+        expect(result.failure.reason).toContain("writeFile");
       }
     }),
   );

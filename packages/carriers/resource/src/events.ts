@@ -85,7 +85,7 @@ const destroyReasonFrom = (value: unknown): ResourceDestroyedPayload["reason"] |
     : undefined;
 
 const mutationPayloadFrom = (event: ResourceLedgerEvent): ResourceMutationFact | undefined => {
-  if (!Predicate.isRecord(event.payload)) return undefined;
+  if (!Predicate.isObject(event.payload)) return undefined;
   const subjectRef = stringField(event.payload, "subjectRef");
   const resourceRef = materialRefFrom(event.payload.resourceRef);
   const mutationKind = stringField(event.payload, "mutationKind");
@@ -191,7 +191,7 @@ export const projectResource = (
   const mutationEventIds: number[] = [];
 
   for (const event of events) {
-    if (!Predicate.isRecord(event.payload)) continue;
+    if (!Predicate.isObject(event.payload)) continue;
     if (event.payload.subjectRef !== subjectRef) continue;
     switch (event.kind) {
       case RESOURCE_KIND.RESOURCE_PROVISIONED: {

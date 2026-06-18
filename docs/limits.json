@@ -38,16 +38,17 @@
       "reason": "Turn count changes run cost and quality for one submit; it does not change substrate safety."
     },
     {
-      "id": "runtime.submit.tool-retries",
+      "id": "runtime.submit.tool-retry-policy",
       "class": "policy",
       "owner": "@agent-os/runtime submit loop",
       "sourcePaths": [
         "packages/runtime/src/submit-agent.ts",
+        "packages/runtime/src/submit-retry-policy.ts",
         "packages/runtime-protocol/src/submit.ts"
       ],
-      "value": "default 2 retries",
-      "overrideSurface": "SubmitSpec.budget.toolRetries",
-      "reason": "Tool retry count is a per-run recovery budget."
+      "value": "default 2 correction retries and 2 jittered exponential execution retries",
+      "overrideSurface": "SubmitSpec.budget.toolRetryPolicy",
+      "reason": "Tool retry correction and execution backoff are per-run recovery policy."
     },
     {
       "id": "runtime.submit.time-budget",

@@ -338,7 +338,7 @@ describe("admission — malformed payload becomes SqlError", () => {
 const expectSqlError = (exit: Exit.Exit<unknown, unknown>) => {
   expect(Exit.isFailure(exit)).toBe(true);
   if (Exit.isFailure(exit)) {
-    const failure = Cause.failureOption(exit.cause);
+    const failure = Cause.findErrorOption(exit.cause);
     expect(Option.isSome(failure)).toBe(true);
     if (Option.isSome(failure)) {
       expect((failure.value as { _tag: string })._tag).toBe("agent_os.sql_error");

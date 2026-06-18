@@ -1,4 +1,4 @@
-import { Context, Data, Effect, Either, Schema } from "effect";
+import { Context, Data, Effect, Result, Schema } from "effect";
 
 export const TRACE_CONTEXT_VERSION = "w3c-trace-context-v1";
 
@@ -17,8 +17,8 @@ export type TraceContextValidation =
   | { readonly ok: true; readonly traceContext: TraceContext }
   | { readonly ok: false; readonly reason: string };
 
-export const TraceparentSchema: Schema.Schema<string> = Schema.String.pipe(
-  Schema.pattern(TRACEPARENT_RE),
+export const TraceparentSchema: Schema.Decoder<string> = Schema.String.pipe(
+  Schema.check(Schema.isPattern(TRACEPARENT_RE)),
 );
 
 const isValidTracestate = (value: string): boolean => {
@@ -37,11 +37,11 @@ const isValidTracestate = (value: string): boolean => {
   return true;
 };
 
-export const TracestateSchema: Schema.Schema<string> = Schema.String.pipe(
-  Schema.filter(isValidTracestate),
+export const TracestateSchema: Schema.Decoder<string> = Schema.String.pipe(
+  Schema.check(Schema.makeFilter(isValidTracestate)),
 );
 
-export const TraceContextSchema: Schema.Schema<TraceContext> = Schema.Struct({
+export const TraceContextSchema: Schema.Decoder<TraceContext> = Schema.Struct({
   traceparent: TraceparentSchema,
   tracestate: Schema.optional(TracestateSchema),
 });
@@ -50,16 +50,16 @@ const traceContextIssue = (cause: unknown): string =>
   cause instanceof Error ? cause.message : "traceContext malformed";
 
 export const validateTraceContext = (value: unknown): TraceContextValidation => {
-  const decoded = Either.try({
+  const decoded = Result.try({
     try: () => Schema.decodeUnknownSync(TraceContextSchema)(value),
     catch: traceContextIssue,
   });
-  if (decoded._tag === "Left") {
-    return { ok: false, reason: decoded.left };
+  if (decoded._tag === "Failure") {
+    return { ok: false, reason: decoded.failure };
   }
   return {
     ok: true,
-    traceContext: decoded.right,
+    traceContext: decoded.success,
   };
 };
 
@@ -149,7 +149,9 @@ export interface TelemetryService {
   readonly eventTree: () => Effect.Effect<TelemetryEventTree>;
 }
 
-export class Telemetry extends Context.Tag("@agent-os/Telemetry")<Telemetry, TelemetryService>() {}
+export class Telemetry extends Context.Service<Telemetry, TelemetryService>()(
+  "@agent-os/Telemetry",
+) {}
 
 const volatileTelemetryAttributeKeys = new Set([
   "agentos.backend.host_id",

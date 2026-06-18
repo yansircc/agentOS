@@ -126,6 +126,7 @@ title: "@agent-os/runtime-protocol API"
 - `.:LlmResponsePayloadSchema`
 - `.:LlmRoute`
 - `.:LowerSubmitRunInputSpec`
+- `.:MissingSubmitRunBinding`
 - `.:Outcome`
 - `.:OutcomeClass`
 - `.:ProbeInput`
@@ -155,6 +156,7 @@ title: "@agent-os/runtime-protocol API"
 - `.:RuntimeLedgerEventByKind`
 - `.:RuntimeLedgerTransitionIssue`
 - `.:RuntimeLedgerTransitionIssueCode`
+- `.:RuntimeLedgerTransitionRejected`
 - `.:RuntimeLedgerTransitionValidation`
 - `.:RecoveryAttemptRecord`
 - `.:RecoveryBudget`
@@ -177,8 +179,11 @@ title: "@agent-os/runtime-protocol API"
 - `.:SubmitRunInput`
 - `.:SubmitSpec`
 - `.:SubmitToolContext`
+- `.:SubmitToolExecutionRetryPolicy`
 - `.:SubmitToolIntent`
 - `.:SubmitToolPolicy`
+- `.:SubmitToolRetryDelayPolicy`
+- `.:SubmitToolRetryPolicy`
 - `.:TOOL_EXECUTION_CLAIM_MUST_BE_LIVED_REASON`
 - `.:TOOL_REJECTED_DIAGNOSTICS_PHASES`
 - `.:ToolArgumentSummary`

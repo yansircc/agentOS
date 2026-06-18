@@ -51,7 +51,7 @@ const runProjection = defineProjection({
   identity: Schema.Struct({ runId: Schema.String }),
   state: Schema.Struct({
     runId: Schema.String,
-    status: Schema.Literal("requested", "completed"),
+    status: Schema.Literals(["requested", "completed"]),
   }),
   identityKey: (identity) => identity.runId,
   identify: (row) => {
@@ -152,7 +152,7 @@ describe("materialized projection runtime algebra", () => {
         applyProjectionEvent(thenable, event(3, "run.requested", { runId: "r1" }), () => null),
       );
       expect(Exit.isFailure(thenableExit)).toBe(true);
-      const cause = thenableExit._tag === "Failure" ? Exit.causeOption(thenableExit) : undefined;
+      const cause = thenableExit._tag === "Failure" ? thenableExit.cause : undefined;
       void cause;
     }),
   );
@@ -227,7 +227,7 @@ describe("materialized projection runtime algebra", () => {
       }).pipe(Effect.provideService(MaterializedProjections, service));
       expect(completed.updatedEventId).toBe(2);
 
-      const timedOut = yield* Effect.either(
+      const timedOut = yield* Effect.result(
         waitForProjection<RunIdentity, RunState>({
           kind: "run.workflow",
           ...eventIdentity("projection-scope"),
@@ -241,12 +241,12 @@ describe("materialized projection runtime algebra", () => {
           }),
         ),
       );
-      expect(timedOut._tag).toBe("Left");
-      if (timedOut._tag === "Left") {
-        expect(timedOut.left).toBeInstanceOf(ProjectionWaitTimedOut);
-        expect(timedOut.left._tag).toBe("agent_os.projection_wait_timed_out");
-        if (timedOut.left._tag === "agent_os.projection_wait_timed_out") {
-          expect(timedOut.left.reason).toBe("missing");
+      expect(timedOut._tag).toBe("Failure");
+      if (timedOut._tag === "Failure") {
+        expect(timedOut.failure).toBeInstanceOf(ProjectionWaitTimedOut);
+        expect(timedOut.failure._tag).toBe("agent_os.projection_wait_timed_out");
+        if (timedOut.failure._tag === "agent_os.projection_wait_timed_out") {
+          expect(timedOut.failure.reason).toBe("missing");
         }
       }
     }),

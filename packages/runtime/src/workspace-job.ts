@@ -1,4 +1,4 @@
-import { Data, Effect } from "effect";
+import { Data, Duration, Effect, Schedule } from "effect";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import type { JsonStringifyError, SqlError } from "@agent-os/kernel/errors";
 import { RefResolverService } from "@agent-os/kernel/ref-resolver";
@@ -481,7 +481,10 @@ const currentProjection = (
   runId: string,
 ): WorkspaceJobProjection => projectWorkspaceJob(events, runId);
 
-const workspaceJobSeedWriteRetryTimes = 2;
+const workspaceJobSeedWriteRetrySchedule = Schedule.exponential(Duration.millis(100)).pipe(
+  Schedule.both(Schedule.recurs(2)),
+  Schedule.jittered,
+);
 
 const writeSeedFiles = (
   dataPlane: WorkspaceJobDataPlane,
@@ -493,7 +496,7 @@ const writeSeedFiles = (
       Effect.tryPromise({
         try: () => dataPlane.writeSeedFile(file),
         catch: (cause) => new WorkspaceJobDataPlaneFailed({ phase: "seed", cause }),
-      }).pipe(Effect.retry({ times: workspaceJobSeedWriteRetryTimes })),
+      }).pipe(Effect.retry(workspaceJobSeedWriteRetrySchedule)),
     { discard: true },
   );
 
@@ -789,11 +792,11 @@ const runWorkspaceJobAttemptEffect = (
     }
 
     if (steps.seedWritten === undefined) {
-      const seeded = yield* Effect.either(
+      const seeded = yield* Effect.result(
         writeSeedFiles(activeSpec.dataPlane, activeSpec.seedFiles ?? []),
       );
-      if (seeded._tag === "Left") {
-        return yield* failAndProject(failureFromDataPlane(seeded.left));
+      if (seeded._tag === "Failure") {
+        return yield* failAndProject(failureFromDataPlane(seeded.failure));
       }
       yield* commitSeedWritten(boundaryEvents, activeSpec, requestedEventId);
       events = yield* eventsFor(ledger, activeSpec.identity);
@@ -826,7 +829,7 @@ const runWorkspaceJobAttemptEffect = (
     let finalized: WorkspaceJobFinalizedArtifact;
 
     if (steps.artifactReadbackVerified !== undefined) {
-      const read = yield* Effect.either(
+      const read = yield* Effect.result(
         readFinalizedArtifact(activeSpec, {
           path: steps.artifactReadbackVerified.path,
           artifactRef: steps.artifactReadbackVerified.artifactRef,
@@ -836,15 +839,15 @@ const runWorkspaceJobAttemptEffect = (
           submitRunId: steps.artifactReadbackVerified.submitRunId,
         }),
       );
-      if (read._tag === "Left") {
+      if (read._tag === "Failure") {
         return yield* failAndProject(
-          failureFromDataPlane(read.left),
+          failureFromDataPlane(read.failure),
           steps.artifactReadbackVerified.submitRunId,
         );
       }
-      finalized = read.right;
+      finalized = read.success;
     } else if (steps.artifactWritten !== undefined) {
-      const read = yield* Effect.either(
+      const read = yield* Effect.result(
         readFinalizedArtifact(activeSpec, {
           path: steps.artifactWritten.path,
           artifactRef: steps.artifactWritten.artifactRef,
@@ -854,13 +857,13 @@ const runWorkspaceJobAttemptEffect = (
           submitRunId: steps.artifactWritten.submitRunId,
         }),
       );
-      if (read._tag === "Left") {
+      if (read._tag === "Failure") {
         return yield* failAndProject(
-          failureFromDataPlane(read.left),
+          failureFromDataPlane(read.failure),
           steps.artifactWritten.submitRunId,
         );
       }
-      finalized = read.right;
+      finalized = read.success;
       yield* commitArtifactReadbackVerified(
         boundaryEvents,
         activeSpec,
@@ -872,7 +875,7 @@ const runWorkspaceJobAttemptEffect = (
       steps = projectWorkspaceJobSteps(events, activeSpec.runId);
     } else {
       if (submitResult === undefined) {
-        const submitSpecResult = yield* Effect.either(
+        const submitSpecResult = yield* Effect.result(
           Effect.try({
             try: () => {
               const publicSubmitSpec = activeSpec.buildSubmitSpec({
@@ -888,39 +891,39 @@ const runWorkspaceJobAttemptEffect = (
             catch: () => requestFailure("submit_spec_builder_failed"),
           }),
         );
-        if (submitSpecResult._tag === "Left") {
-          return yield* failAndProject(submitSpecResult.left);
+        if (submitSpecResult._tag === "Failure") {
+          return yield* failAndProject(submitSpecResult.failure);
         }
-        const submitSpec = submitSpecResult.right;
+        const submitSpec = submitSpecResult.success;
         submitResult = yield* submitAgentEffect(submitSpec);
       }
       if (!submitResult.ok) {
         return yield* failAndProject(submitFailure(submitResult.reason), submitResult.runId);
       }
 
-      const built = yield* Effect.either(buildTerminalArtifact(activeSpec, submitResult));
-      if (built._tag === "Left") {
-        return yield* failAndProject(failureFromDataPlane(built.left), submitResult.runId);
+      const built = yield* Effect.result(buildTerminalArtifact(activeSpec, submitResult));
+      if (built._tag === "Failure") {
+        return yield* failAndProject(failureFromDataPlane(built.failure), submitResult.runId);
       }
       yield* commitTerminalBuildAttempted(
         boundaryEvents,
         activeSpec,
         requestedEventId,
         submitResult.runId,
-        built.right,
+        built.success,
       );
-      const written = yield* Effect.either(
-        writeBuiltArtifact(activeSpec, submitResult, built.right),
+      const written = yield* Effect.result(
+        writeBuiltArtifact(activeSpec, submitResult, built.success),
       );
-      if (written._tag === "Left") {
-        return yield* failAndProject(failureFromDataPlane(written.left), submitResult.runId);
+      if (written._tag === "Failure") {
+        return yield* failAndProject(failureFromDataPlane(written.failure), submitResult.runId);
       }
-      yield* commitArtifactWritten(boundaryEvents, activeSpec, requestedEventId, written.right);
-      const read = yield* Effect.either(readFinalizedArtifact(activeSpec, written.right));
-      if (read._tag === "Left") {
-        return yield* failAndProject(failureFromDataPlane(read.left), submitResult.runId);
+      yield* commitArtifactWritten(boundaryEvents, activeSpec, requestedEventId, written.success);
+      const read = yield* Effect.result(readFinalizedArtifact(activeSpec, written.success));
+      if (read._tag === "Failure") {
+        return yield* failAndProject(failureFromDataPlane(read.failure), submitResult.runId);
       }
-      finalized = read.right;
+      finalized = read.success;
       yield* commitArtifactReadbackVerified(
         boundaryEvents,
         activeSpec,
@@ -967,12 +970,12 @@ const runWorkspaceJobAttemptEffect = (
           )
         : ({ id: steps.terminalFinalized.eventId } as LedgerEvent);
 
-    const verdict = yield* Effect.either(verifyArtifact(activeSpec, finalized, submitResult));
-    if (verdict._tag === "Left") {
-      return yield* failAndProject(verifierInfraFailure(verdict.left.cause), submitResult.runId);
+    const verdict = yield* Effect.result(verifyArtifact(activeSpec, finalized, submitResult));
+    if (verdict._tag === "Failure") {
+      return yield* failAndProject(verifierInfraFailure(verdict.failure.cause), submitResult.runId);
     }
 
-    if (verdict.right.ok) {
+    if (verdict.success.ok) {
       const verifiedClaim = settleWorkspaceJobVerified(claim, {
         runId: activeSpec.runId,
         requestedEventId,
@@ -986,8 +989,8 @@ const runWorkspaceJobAttemptEffect = (
           terminalFinalizedEventId: finalizedEvent.id,
           runId: activeSpec.runId,
           idempotencyKey: activeSpec.idempotencyKey,
-          checks: verdict.right.checks,
-          ...(verdict.right.summary === undefined ? {} : { summary: verdict.right.summary }),
+          checks: verdict.success.checks,
+          ...(verdict.success.summary === undefined ? {} : { summary: verdict.success.summary }),
           claim: verifiedClaim,
         }),
       );
@@ -1005,8 +1008,8 @@ const runWorkspaceJobAttemptEffect = (
           terminalFinalizedEventId: finalizedEvent.id,
           runId: activeSpec.runId,
           idempotencyKey: activeSpec.idempotencyKey,
-          checks: verdict.right.checks,
-          summary: verdict.right.reason,
+          checks: verdict.success.checks,
+          summary: verdict.success.reason,
           claim: rejectedClaim,
         }),
       );
@@ -1060,8 +1063,8 @@ export const runWorkspaceJobEffect = (
       }
 
       const input = repairDecisionInput(projection, spec.candidatePath, nextAttempt);
-      const repairDecision = yield* Effect.either(shouldRepair(spec.recovery, input));
-      if (repairDecision._tag === "Left") {
+      const repairDecision = yield* Effect.result(shouldRepair(spec.recovery, input));
+      if (repairDecision._tag === "Failure") {
         yield* commitFailed(
           boundaryEvents,
           {
@@ -1071,12 +1074,12 @@ export const runWorkspaceJobEffect = (
             terminalSchemaId: projection.request.terminalSchemaId,
           },
           projection.requestedEventId,
-          repairDecision.left,
+          repairDecision.failure,
         );
         const after = yield* eventsFor(ledger, spec.identity);
         return projectWorkspaceJob(after, projection.runId);
       }
-      if (!repairDecision.right) {
+      if (!repairDecision.success) {
         return projection;
       }
 

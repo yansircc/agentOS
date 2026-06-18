@@ -27,14 +27,14 @@ describe("attached stream runtime algebra", () => {
       for (const field of ["mode", "cancellation", "onDetach", "commitTerminal"] as const) {
         const incomplete = { ...valid };
         delete (incomplete as Record<string, unknown>)[field];
-        const either = yield* Effect.either(
+        const either = yield* Effect.result(
           makeAttachedStreamRegistry([
             incomplete as unknown as AttachedStreamHandler<unknown, unknown>,
           ]),
         );
         expect(either).toMatchObject({
-          _tag: "Left",
-          left: expect.stringContaining(field),
+          _tag: "Failure",
+          failure: expect.stringContaining(field),
         });
       }
     }),
@@ -47,14 +47,14 @@ describe("attached stream runtime algebra", () => {
       );
       expect(Exit.isFailure(duplicate)).toBe(true);
 
-      const conflict = yield* Effect.either(
+      const conflict = yield* Effect.result(
         makeAttachedStreamRegistry([handler("trigger.kind")], {
           reservedKinds: ["trigger.kind"],
         }),
       );
       expect(conflict).toMatchObject({
-        _tag: "Left",
-        left: expect.stringContaining("conflicts with durable trigger"),
+        _tag: "Failure",
+        failure: expect.stringContaining("conflicts with durable trigger"),
       });
     }),
   );

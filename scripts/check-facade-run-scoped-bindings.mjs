@@ -43,9 +43,14 @@ const collectFailures = (root = repoRoot) => {
     }
   }
   const agentDo = read(root, "packages/backends/cloudflare-do/src/agent-do.ts");
-  if (!/readonly bindings\?: AgentSubmitBindings/.test(agentDo)) {
+  if (!/readonly context\?: Record<string, unknown>/.test(agentDo)) {
     failures.push(
-      "packages/backends/cloudflare-do/src/agent-do.ts: AgentSubmitSpec lacks bindings",
+      "packages/backends/cloudflare-do/src/agent-do.ts: AgentSubmitSpec lacks run context",
+    );
+  }
+  if (!/readonly decisionInterrupts\?: SubmitRunInput\["decisionInterrupts"\]/.test(agentDo)) {
+    failures.push(
+      "packages/backends/cloudflare-do/src/agent-do.ts: AgentSubmitSpec lacks decision interrupts",
     );
   }
   if (!/readonly resume\?: SubmitSpec\["resume"\]/.test(agentDo)) {
@@ -54,9 +59,9 @@ const collectFailures = (root = repoRoot) => {
   if (!/submitWithBindings/.test(agentDo)) {
     failures.push("packages/backends/cloudflare-do/src/agent-do.ts: missing submitWithBindings");
   }
-  if (!/context: bindings\.context \?\? \{ input: spec\.input \}/.test(agentDo)) {
+  if (!/context: spec\.context \?\? \{ input: spec\.input \}/.test(agentDo)) {
     failures.push(
-      "packages/backends/cloudflare-do/src/agent-do.ts: submit binding context is not forwarded",
+      "packages/backends/cloudflare-do/src/agent-do.ts: submit run context is not forwarded",
     );
   }
   if (/resolvedMaterials:\s*\{\s*\.\.\.bindings\.resolvedMaterials\s*\}/.test(agentDo)) {
@@ -64,9 +69,9 @@ const collectFailures = (root = repoRoot) => {
       "packages/backends/cloudflare-do/src/agent-do.ts: public submit binding forwards resolvedMaterials",
     );
   }
-  if (!/decisionInterrupts: bindings\.decisionInterrupts/.test(agentDo)) {
+  if (!/decisionInterrupts: spec\.decisionInterrupts/.test(agentDo)) {
     failures.push(
-      "packages/backends/cloudflare-do/src/agent-do.ts: submit binding decisionInterrupts is not forwarded",
+      "packages/backends/cloudflare-do/src/agent-do.ts: submit run decisionInterrupts are not forwarded",
     );
   }
   if (!/resume: spec\.resume/.test(agentDo)) {
@@ -75,22 +80,26 @@ const collectFailures = (root = repoRoot) => {
     );
   }
   const bindings = read(root, "packages/runtime-protocol/src/bindings.ts");
-  if (!/export interface AgentSubmitBindings/.test(bindings)) {
+  if (!/export interface AgentSubmitBindings extends SubmitRunBindings/.test(bindings)) {
     failures.push(
       "packages/runtime-protocol/src/bindings.ts: AgentSubmitBindings is not an owned submit type",
     );
   }
-  for (const [field, message] of [
-    ["context", "run context"],
-    ["decisionInterrupts", "decision interrupts"],
-  ]) {
-    if (!new RegExp(`readonly ${field}\\?`).test(bindings)) {
-      failures.push(
-        `packages/runtime-protocol/src/bindings.ts: AgentSubmitBindings lacks ${message}`,
-      );
-    }
-  }
   const submit = read(root, "packages/runtime-protocol/src/submit.ts");
+  if (
+    !/export interface SubmitRunInput[\s\S]*readonly context: Record<string, unknown>/.test(submit)
+  ) {
+    failures.push("packages/runtime-protocol/src/submit.ts: SubmitRunInput lacks run context");
+  }
+  if (
+    !/export interface SubmitRunInput[\s\S]*readonly decisionInterrupts\?: ReadonlyArray<SubmitDecisionInterrupt>/.test(
+      submit,
+    )
+  ) {
+    failures.push(
+      "packages/runtime-protocol/src/submit.ts: SubmitRunInput lacks decision interrupts",
+    );
+  }
   if (/export interface InternalSubmitSpec/.test(submit)) {
     failures.push(
       "packages/runtime-protocol/src/submit.ts: runtime protocol exports InternalSubmitSpec",
@@ -150,7 +159,7 @@ const collectFailures = (root = repoRoot) => {
     root,
     "packages/backends/cloudflare-do/test/facade-submit.worker.test.ts",
   );
-  if (!/defineAgentSubmitBindings/.test(facadeSubmitTest)) {
+  if (!/materials: \{ facade_token: tokenRef \}/.test(facadeSubmitTest)) {
     failures.push("facade submit test does not prove run-scoped bindings");
   }
   if (/resolvedMaterials:\s*\{/.test(facadeSubmitTest)) {
@@ -199,15 +208,17 @@ const collectSelfTestFailures = () => {
     writeFixture(
       root,
       "packages/runtime-protocol/src/bindings.ts",
-      `export interface AgentSubmitBindings {
-        readonly context?: Record<string, unknown>;
-        readonly decisionInterrupts?: ReadonlyArray<SubmitDecisionInterrupt>;
-      }`,
+      `import type { SubmitRunBindings } from "./submit";
+      export interface AgentSubmitBindings extends SubmitRunBindings {}`,
     );
     writeFixture(
       root,
       "packages/runtime-protocol/src/submit.ts",
-      "export interface SubmitSpec { readonly materials?: unknown; }",
+      `export interface SubmitRunInput {
+        readonly context: Record<string, unknown>;
+        readonly decisionInterrupts?: ReadonlyArray<SubmitDecisionInterrupt>;
+      }
+      export interface SubmitSpec { readonly materials?: unknown; }`,
     );
     writeFixture(
       root,
@@ -236,13 +247,14 @@ const collectSelfTestFailures = () => {
       root,
       "packages/backends/cloudflare-do/src/agent-do.ts",
       `export interface AgentSubmitSpec {
-        readonly bindings?: AgentSubmitBindings;
+        readonly context?: Record<string, unknown>;
+        readonly decisionInterrupts?: SubmitRunInput["decisionInterrupts"];
         readonly resume?: SubmitSpec["resume"];
       }
       protected submitWithBindings() {
         return this.submitFull({
-          context: bindings.context ?? { input: spec.input },
-          decisionInterrupts: bindings.decisionInterrupts,
+          context: spec.context ?? { input: spec.input },
+          decisionInterrupts: spec.decisionInterrupts,
           resume: spec.resume,
         });
       }
@@ -254,7 +266,7 @@ const collectSelfTestFailures = () => {
     writeFixture(
       root,
       "packages/backends/cloudflare-do/test/facade-submit.worker.test.ts",
-      "defineAgentSubmitBindings({ tools: {}, decisionInterrupts: [] });",
+      "submit({ materials: { facade_token: tokenRef }, decisionInterrupts: [] });",
     );
     const baseline = collectFailures(root);
     if (baseline.length > 0) {
@@ -273,10 +285,8 @@ const collectSelfTestFailures = () => {
     writeFixture(
       root,
       "packages/runtime-protocol/src/bindings.ts",
-      `export interface AgentSubmitBindings {
+      `export interface AgentSubmitBindings extends SubmitRunBindings {
         readonly resolvedMaterials?: Readonly<Record<string, ResolvedMaterial>>;
-        readonly context?: Record<string, unknown>;
-        readonly decisionInterrupts?: ReadonlyArray<SubmitDecisionInterrupt>;
       }`,
     );
     const publicResolvedRejected = collectFailures(root);

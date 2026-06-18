@@ -1,4 +1,5 @@
-import { Effect, Fiber, Schema, TestClock } from "effect";
+import { Deferred, Effect, Fiber, Schema } from "effect";
+import { TestClock } from "effect/testing";
 import { describe, expect, it } from "@effect/vitest";
 
 import { Ledger } from "../src/ledger";
@@ -72,13 +73,20 @@ const testWireDescriptor = (route: LlmRoute): LlmWireDescriptor => ({
 
 const runWithHungLlm = (
   spec: InternalSubmitSpec,
-  options: { readonly providerObservesAbort?: boolean } = {},
+  options: {
+    readonly providerObservesAbort?: boolean;
+    readonly providerAttemptStarted?: Deferred.Deferred<void>;
+  } = {},
 ) =>
   Effect.gen(function* () {
     const events: LedgerEvent[] = [];
     let nextId = 1;
     let aborted = false;
     const providerObservesAbort = options.providerObservesAbort ?? true;
+    const markProviderAttemptStarted =
+      options.providerAttemptStarted === undefined
+        ? Effect.void
+        : Deferred.succeed(options.providerAttemptStarted, undefined).pipe(Effect.asVoid);
     const ledger = {
       commit: (
         specs: ReadonlyArray<{
@@ -118,9 +126,14 @@ const runWithHungLlm = (
           options?.signal?.addEventListener("abort", () => {
             aborted = true;
           });
-          return Effect.never;
         }
-        return Effect.promise(() => new Promise<never>(() => {}));
+        return markProviderAttemptStarted.pipe(
+          Effect.andThen(
+            providerObservesAbort
+              ? Effect.never
+              : Effect.promise(() => new Promise<never>(() => {})),
+          ),
+        );
       },
     };
     const quota = {
@@ -131,7 +144,7 @@ const runWithHungLlm = (
         input.signal?.addEventListener("abort", () => {
           aborted = true;
         });
-        return Effect.never;
+        return markProviderAttemptStarted.pipe(Effect.andThen(Effect.never));
       },
       invalidate: () => Effect.succeed({ barrierId: 1 }),
     };
@@ -172,15 +185,29 @@ const runWithHungLlm = (
       Effect.provideService(Quota, quota),
       Effect.provideService(Admission, admission),
       Effect.provide(RefResolverEmpty),
-      Effect.fork,
+      Effect.forkChild,
     );
     return { result: yield* Fiber.join(fiber), events, aborted };
+  });
+
+const forkHungLlmAfterProviderAttempt = (
+  spec: InternalSubmitSpec,
+  options: { readonly providerObservesAbort?: boolean } = {},
+) =>
+  Effect.gen(function* () {
+    const providerAttemptStarted = yield* Deferred.make<void>();
+    const fiber = yield* runWithHungLlm(spec, {
+      ...options,
+      providerAttemptStarted,
+    }).pipe(Effect.forkChild);
+    yield* Deferred.await(providerAttemptStarted);
+    return fiber;
   });
 
 describe("submit agent LLM provider timeout", () => {
   it.effect("settles budget timeout while the provider call is in-flight", () =>
     Effect.gen(function* () {
-      const fiber = yield* runWithHungLlm(makeSpec({ maxTurns: 1, timeMs: 10 })).pipe(Effect.fork);
+      const fiber = yield* forkHungLlmAfterProviderAttempt(makeSpec({ maxTurns: 1, timeMs: 10 }));
       yield* TestClock.adjust("11 millis");
       const { result, events, aborted } = yield* Fiber.join(fiber);
 
@@ -194,7 +221,7 @@ describe("submit agent LLM provider timeout", () => {
 
   it.effect("settles default provider timeout when submit has no time budget", () =>
     Effect.gen(function* () {
-      const fiber = yield* runWithHungLlm(makeSpec({ maxTurns: 1 })).pipe(Effect.fork);
+      const fiber = yield* forkHungLlmAfterProviderAttempt(makeSpec({ maxTurns: 1 }));
       yield* TestClock.adjust(`${DEFAULT_LLM_CALL_TIMEOUT_MS + 1} millis`);
       const { result, events, aborted } = yield* Fiber.join(fiber);
 
@@ -212,9 +239,9 @@ describe("submit agent LLM provider timeout", () => {
 
   it.effect("settles provider timeout when submit has a large finite run budget", () =>
     Effect.gen(function* () {
-      const fiber = yield* runWithHungLlm(
+      const fiber = yield* forkHungLlmAfterProviderAttempt(
         makeSpec({ maxTurns: 1, timeMs: DEFAULT_LLM_CALL_TIMEOUT_MS + 60_000 }),
-      ).pipe(Effect.fork);
+      );
       yield* TestClock.adjust(`${DEFAULT_LLM_CALL_TIMEOUT_MS + 1} millis`);
       const { result, events, aborted } = yield* Fiber.join(fiber);
 
@@ -233,13 +260,13 @@ describe("submit agent LLM provider timeout", () => {
   it.effect("settles configured provider timeout independently from run budget", () =>
     Effect.gen(function* () {
       const llmCallTimeoutMs = DEFAULT_LLM_CALL_TIMEOUT_MS + 30_000;
-      const fiber = yield* runWithHungLlm(
+      const fiber = yield* forkHungLlmAfterProviderAttempt(
         makeSpec({
           maxTurns: 1,
           timeMs: llmCallTimeoutMs + 60_000,
           llmCallTimeoutMs,
         }),
-      ).pipe(Effect.fork);
+      );
       yield* TestClock.adjust(`${llmCallTimeoutMs + 1} millis`);
       const { result, events, aborted } = yield* Fiber.join(fiber);
 
@@ -257,13 +284,13 @@ describe("submit agent LLM provider timeout", () => {
 
   it.effect("caps configured provider timeout by remaining run budget", () =>
     Effect.gen(function* () {
-      const fiber = yield* runWithHungLlm(
+      const fiber = yield* forkHungLlmAfterProviderAttempt(
         makeSpec({
           maxTurns: 1,
           timeMs: 10,
           llmCallTimeoutMs: DEFAULT_LLM_CALL_TIMEOUT_MS + 30_000,
         }),
-      ).pipe(Effect.fork);
+      );
       yield* TestClock.adjust("11 millis");
       const { result, events, aborted } = yield* Fiber.join(fiber);
 
@@ -277,9 +304,9 @@ describe("submit agent LLM provider timeout", () => {
 
   it.effect("settles timeout even when the provider cannot observe AbortSignal", () =>
     Effect.gen(function* () {
-      const fiber = yield* runWithHungLlm(makeSpec({ maxTurns: 1 }), {
+      const fiber = yield* forkHungLlmAfterProviderAttempt(makeSpec({ maxTurns: 1 }), {
         providerObservesAbort: false,
-      }).pipe(Effect.fork);
+      });
       yield* TestClock.adjust(`${DEFAULT_LLM_CALL_TIMEOUT_MS + 1} millis`);
       const { result, events, aborted } = yield* Fiber.join(fiber);
 
@@ -293,9 +320,9 @@ describe("submit agent LLM provider timeout", () => {
 
   it.effect("settles structured-output provider timeout with a large finite run budget", () =>
     Effect.gen(function* () {
-      const fiber = yield* runWithHungLlm(
+      const fiber = yield* forkHungLlmAfterProviderAttempt(
         makeStructuredSpec({ timeMs: DEFAULT_LLM_CALL_TIMEOUT_MS + 60_000 }),
-      ).pipe(Effect.fork);
+      );
       yield* TestClock.adjust(`${DEFAULT_LLM_CALL_TIMEOUT_MS + 1} millis`);
       const { result, events, aborted } = yield* Fiber.join(fiber);
 
@@ -313,7 +340,7 @@ describe("submit agent LLM provider timeout", () => {
 
   it.effect("settles structured-output provider timeout without leaving an open run", () =>
     Effect.gen(function* () {
-      const fiber = yield* runWithHungLlm(makeStructuredSpec({ timeMs: 10 })).pipe(Effect.fork);
+      const fiber = yield* forkHungLlmAfterProviderAttempt(makeStructuredSpec({ timeMs: 10 }));
       yield* TestClock.adjust("11 millis");
       const { result, events, aborted } = yield* Fiber.join(fiber);
 

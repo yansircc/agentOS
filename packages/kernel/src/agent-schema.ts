@@ -1,8 +1,9 @@
-import { Effect, JSONSchema, Option, Schema, SchemaAST } from "effect";
+import { Effect, Schema, SchemaAST } from "effect";
 
 import {
   parseDialectObject,
   validateAgainstSchema,
+  type JsonSchemaNode,
   type JsonSchemaObject,
 } from "./json-schema-dialect";
 
@@ -44,7 +45,7 @@ class AgentSchemaDecodeError extends Error {
  */
 export type AgentSchema<A = unknown> = {
   readonly [AGENT_SCHEMA_BRAND]: true;
-  readonly source: Schema.Schema.AnyNoContext;
+  readonly source: AgentSchemaDecoder<unknown>;
   readonly jsonSchema: JsonSchemaObject;
   readonly fingerprint: Effect.Effect<string>;
   readonly decode: (value: unknown) => A;
@@ -52,12 +53,11 @@ export type AgentSchema<A = unknown> = {
 };
 
 export type AnyAgentSchema = AgentSchema<unknown>;
+export type AgentSchemaDecoder<A = unknown> = Schema.Decoder<A, never>;
 
-export type AgentSchemaSource<A = unknown, I = unknown> =
-  | AgentSchema<A>
-  | Schema.Schema<A, I, never>;
+export type AgentSchemaSource<A = unknown> = AgentSchema<A> | AgentSchemaDecoder<A>;
 
-export type AnyAgentSchemaSource = AnyAgentSchema | Schema.Schema.AnyNoContext;
+export type AnyAgentSchemaSource = AnyAgentSchema | AgentSchemaDecoder<unknown>;
 
 export type AgentSchemaSpec<A = unknown> = {
   readonly agentSchema: AgentSchema<A>;
@@ -85,64 +85,93 @@ const STRIP_FINGERPRINT_KEYS = new Set([
   "default",
   "$comment",
 ]);
-const unsupportedAnnotationIds = [
-  { id: SchemaAST.BrandAnnotationId, issue: "brand-unsupported" },
-  { id: SchemaAST.DefaultAnnotationId, issue: "default-unsupported" },
-  { id: SchemaAST.JSONSchemaAnnotationId, issue: "raw-json-schema-annotation-unsupported" },
-  { id: SchemaAST.DecodingFallbackAnnotationId, issue: "decoding-fallback-unsupported" },
-] as const;
-
-const hasAnnotation = (ast: SchemaAST.Annotated, id: symbol): boolean =>
-  Option.isSome(SchemaAST.getAnnotation(ast, id));
-
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 const SUPPORTED_STRING_REFINEMENT_KEYS = new Set(["pattern", "minLength", "maxLength"]);
 
-const isSupportedStringRefinementValue = (key: string, value: unknown): boolean => {
-  if (key === "pattern") return typeof value === "string";
-  if (key === "minLength" || key === "maxLength") {
-    return typeof value === "number" && Number.isInteger(value) && value >= 0;
-  }
-  return false;
+type AstWithBase = SchemaAST.AST & {
+  readonly annotations?: Readonly<Record<string, unknown>>;
+  readonly checks?: ReadonlyArray<AstCheck>;
+  readonly context?: {
+    readonly isOptional?: boolean;
+    readonly defaultValue?: unknown;
+  };
+  readonly encoding?: unknown;
 };
 
-const isSupportedStringRefinementSource = (ast: SchemaAST.AST): boolean =>
-  ast._tag === "StringKeyword" || isSupportedStringRefinement(ast);
+type AstCheck = {
+  readonly _tag: string;
+  readonly checks?: ReadonlyArray<AstCheck>;
+  readonly annotations?: {
+    readonly meta?: unknown;
+  };
+};
 
-const isSupportedStringRefinement = (ast: SchemaAST.AST): boolean => {
-  if (ast._tag !== "Refinement" || !isSupportedStringRefinementSource(ast.from)) return false;
-  const annotation = SchemaAST.getJSONSchemaAnnotation(ast);
-  if (Option.isNone(annotation)) return false;
-  const jsonSchema = annotation.value;
-  if (!isRecord(jsonSchema)) return false;
-  const keys = Object.keys(jsonSchema);
-  return (
-    keys.length > 0 &&
-    keys.every(
-      (key) =>
-        SUPPORTED_STRING_REFINEMENT_KEYS.has(key) &&
-        isSupportedStringRefinementValue(key, jsonSchema[key]),
-    )
+const collectChecks = (checks: ReadonlyArray<AstCheck> | undefined): ReadonlyArray<AstCheck> => {
+  if (checks === undefined) return [];
+  return checks.flatMap((check) =>
+    check._tag === "FilterGroup" ? collectChecks(check.checks) : [check],
   );
 };
 
-const annotationIssues = (
-  ast: SchemaAST.Annotated,
-  path: string,
-): ReadonlyArray<AgentSchemaIssue> => {
+const stringCheckSemantic = (
+  check: AstCheck,
+):
+  | { readonly key: "pattern"; readonly value: string }
+  | {
+      readonly key: "minLength" | "maxLength";
+      readonly value: number;
+    }
+  | undefined => {
+  const meta = check.annotations?.meta;
+  if (!isRecord(meta) || typeof meta._tag !== "string") return undefined;
+  if (meta._tag === "isPattern" && meta.regExp instanceof RegExp) {
+    return { key: "pattern", value: meta.regExp.source };
+  }
+  if (
+    meta._tag === "isMinLength" &&
+    typeof meta.minLength === "number" &&
+    Number.isInteger(meta.minLength) &&
+    meta.minLength >= 0
+  ) {
+    return { key: "minLength", value: meta.minLength };
+  }
+  if (
+    meta._tag === "isMaxLength" &&
+    typeof meta.maxLength === "number" &&
+    Number.isInteger(meta.maxLength) &&
+    meta.maxLength >= 0
+  ) {
+    return { key: "maxLength", value: meta.maxLength };
+  }
+  return undefined;
+};
+
+const stringCheckIssues = (ast: AstWithBase, path: string): ReadonlyArray<AgentSchemaIssue> => {
   const issues: AgentSchemaIssue[] = [];
-  for (const annotation of unsupportedAnnotationIds) {
-    if (
-      annotation.id === SchemaAST.JSONSchemaAnnotationId &&
-      isSupportedStringRefinement(ast as SchemaAST.AST)
-    ) {
-      continue;
+  for (const check of collectChecks(ast.checks)) {
+    if (stringCheckSemantic(check) === undefined) {
+      issues.push({ path, issue: "refinement-unsupported" });
     }
-    if (hasAnnotation(ast, annotation.id)) {
-      issues.push({ path, issue: annotation.issue });
-    }
+  }
+  return issues;
+};
+
+const annotationIssues = (ast: SchemaAST.AST, path: string): ReadonlyArray<AgentSchemaIssue> => {
+  const node = ast as AstWithBase;
+  const issues: AgentSchemaIssue[] = [];
+  if (node.encoding !== undefined) {
+    issues.push({ path, issue: "transformation-unsupported" });
+  }
+  if (node.context?.defaultValue !== undefined) {
+    issues.push({ path, issue: "default-unsupported" });
+  }
+  if (Array.isArray(node.annotations?.brands) && node.annotations.brands.length > 0) {
+    issues.push({ path, issue: "brand-unsupported" });
+  }
+  if (node._tag !== "String" && collectChecks(node.checks).length > 0) {
+    issues.push({ path, issue: "refinement-unsupported" });
   }
   return issues;
 };
@@ -157,27 +186,32 @@ const inspectPropertyType = (
   property: SchemaAST.PropertySignature,
   path: string,
 ): ReadonlyArray<AgentSchemaIssue> => {
-  if (!property.isOptional) return inspectAst(property.type, path);
+  if (!isOptionalAst(property.type)) return inspectAst(property.type, path);
+  const issues: AgentSchemaIssue[] = [...annotationIssues(property.type, path)];
   if (property.type._tag !== "Union") return inspectAst(property.type, path);
-  const concreteTypes = property.type.types.filter((member) => member._tag !== "UndefinedKeyword");
-  if (concreteTypes.length === 0) return [{ path, issue: "optional-type-missing" }];
-  return concreteTypes.flatMap((member, index) =>
-    inspectAst(member, concreteTypes.length === 1 ? path : `${path}.union${index}`),
+  const concreteTypes = property.type.types.filter((member) => member._tag !== "Undefined");
+  if (concreteTypes.length === 0) return [...issues, { path, issue: "optional-type-missing" }];
+  issues.push(
+    ...concreteTypes.flatMap((member, index) =>
+      inspectAst(member, concreteTypes.length === 1 ? path : `${path}.union${index}`),
+    ),
   );
+  return issues;
 };
 
 const inspectAst = (ast: SchemaAST.AST, path: string): ReadonlyArray<AgentSchemaIssue> => {
   const issues: AgentSchemaIssue[] = [...annotationIssues(ast, path)];
   switch (ast._tag) {
-    case "StringKeyword":
-    case "NumberKeyword":
-    case "BooleanKeyword":
+    case "String":
+      return [...issues, ...stringCheckIssues(ast as AstWithBase, path)];
+    case "Number":
+    case "Boolean":
       return issues;
     case "Literal": {
       const issue = literalIssue(ast.literal);
       return issue === undefined ? issues : [...issues, { path, issue }];
     }
-    case "TypeLiteral": {
+    case "Objects": {
       if (ast.indexSignatures.length > 0) {
         issues.push({ path, issue: "index-signature-unsupported" });
       }
@@ -187,23 +221,18 @@ const inspectAst = (ast: SchemaAST.AST, path: string): ReadonlyArray<AgentSchema
           issues.push({ path, issue: "non-string-property-unsupported" });
           continue;
         }
-        issues.push(...annotationIssues(property, `${path}.${key}`));
         issues.push(...inspectPropertyType(property, `${path}.${key}`));
       }
       return issues;
     }
-    case "TupleType": {
+    case "Arrays": {
       if (ast.elements.length > 0 || ast.rest.length !== 1) {
         return [...issues, { path, issue: "tuple-unsupported" }];
       }
       const rest = ast.rest[0];
       return rest === undefined
         ? [...issues, { path, issue: "array-item-missing" }]
-        : [
-            ...issues,
-            ...annotationIssues(rest, `${path}[]`),
-            ...inspectAst(rest.type, `${path}[]`),
-          ];
+        : [...issues, ...inspectAst(rest, `${path}[]`)];
     }
     case "Union": {
       if (ast.types.length === 0) return [...issues, { path, issue: "empty-union-unsupported" }];
@@ -212,58 +241,119 @@ const inspectAst = (ast: SchemaAST.AST, path: string): ReadonlyArray<AgentSchema
       }
       return issues;
     }
-    case "Refinement":
-      if (isSupportedStringRefinement(ast)) return issues;
-      return [...issues, { path, issue: "refinement-unsupported" }];
-    case "Transformation":
-      return [...issues, { path, issue: "transformation-unsupported" }];
     case "Suspend":
       return [...issues, { path, issue: "recursive-schema-unsupported" }];
     case "TemplateLiteral":
       return [...issues, { path, issue: "template-literal-unsupported" }];
     case "Declaration":
       return [...issues, { path, issue: "declaration-schema-unsupported" }];
+    case "Null":
+      return [...issues, { path, issue: "null-literal-unsupported" }];
     case "UniqueSymbol":
-    case "UndefinedKeyword":
-    case "VoidKeyword":
-    case "NeverKeyword":
-    case "UnknownKeyword":
-    case "AnyKeyword":
-    case "BigIntKeyword":
-    case "SymbolKeyword":
+    case "Undefined":
+    case "Void":
+    case "Never":
+    case "Unknown":
+    case "Any":
+    case "BigInt":
+    case "Symbol":
     case "ObjectKeyword":
-    case "Enums":
+      return [...issues, { path, issue: `${ast._tag}-unsupported` }];
+    default:
       return [...issues, { path, issue: `${ast._tag}-unsupported` }];
   }
 };
 
 export const inspectAgentSchemaProfile = (
-  schema: Schema.Schema.AnyNoContext,
+  schema: AgentSchemaDecoder<unknown>,
 ): ReadonlyArray<AgentSchemaIssue> => {
   const rootIssues =
-    schema.ast._tag === "TypeLiteral" ? [] : [{ path: "$", issue: "root-object-required" }];
+    schema.ast._tag === "Objects" ? [] : [{ path: "$", issue: "root-object-required" }];
   return [...rootIssues, ...inspectAst(schema.ast, "$")];
 };
 
-export const assertAgentSchemaProfile = (schema: Schema.Schema.AnyNoContext): void => {
+export const assertAgentSchemaProfile = (schema: AgentSchemaDecoder<unknown>): void => {
   const issues = inspectAgentSchemaProfile(schema);
   if (issues.length > 0) throw new AgentSchemaProfileError(issues);
 };
 
-const agentSchemaToDialectSchema = (schema: Schema.Schema.AnyNoContext): JsonSchemaObject => {
+const agentSchemaToDialectSchema = (schema: AgentSchemaDecoder<unknown>): JsonSchemaObject => {
   assertAgentSchemaProfile(schema);
   return effectSchemaToDialectSchema(schema);
 };
 
-const effectSchemaToDialectSchema = (schema: Schema.Schema.AnyNoContext): JsonSchemaObject => {
-  if (
-    schema.ast._tag === "TypeLiteral" &&
-    schema.ast.propertySignatures.length === 0 &&
-    schema.ast.indexSignatures.length === 0
-  ) {
-    return { type: "object", properties: {}, required: [], additionalProperties: false };
+const isOptionalAst = (ast: SchemaAST.AST): boolean =>
+  ((ast as AstWithBase).context?.isOptional ?? false) === true;
+
+const withoutUndefined = (members: ReadonlyArray<SchemaAST.AST>): ReadonlyArray<SchemaAST.AST> =>
+  members.filter((member) => member._tag !== "Undefined");
+
+const stringConstraints = (
+  ast: AstWithBase,
+): Partial<Extract<JsonSchemaNode, { type: "string" }>> => {
+  const out: Record<string, string | number> = {};
+  for (const check of collectChecks(ast.checks)) {
+    const semantic = stringCheckSemantic(check);
+    if (semantic !== undefined && SUPPORTED_STRING_REFINEMENT_KEYS.has(semantic.key)) {
+      out[semantic.key] = semantic.value;
+    }
   }
-  return parseDialectObject(JSONSchema.make(schema));
+  return out;
+};
+
+const astToDialectNode = (ast: SchemaAST.AST): JsonSchemaObject["properties"][string] => {
+  switch (ast._tag) {
+    case "String":
+      return { type: "string", ...stringConstraints(ast as AstWithBase) };
+    case "Number":
+      return { type: "number" };
+    case "Boolean":
+      return { type: "boolean" };
+    case "Literal":
+      return { type: "string", enum: [ast.literal as string] };
+    case "Objects": {
+      const properties: Record<string, JsonSchemaObject["properties"][string]> = {};
+      const required: string[] = [];
+      for (const property of ast.propertySignatures) {
+        if (typeof property.name !== "string") continue;
+        const members =
+          property.type._tag === "Union" && isOptionalAst(property.type)
+            ? withoutUndefined(property.type.types)
+            : [property.type];
+        const node =
+          members.length === 1
+            ? astToDialectNode(members[0]!)
+            : { anyOf: members.map((member) => astToDialectNode(member)) };
+        properties[property.name] = node;
+        if (!isOptionalAst(property.type)) required.push(property.name);
+      }
+      return {
+        type: "object",
+        properties,
+        required,
+        additionalProperties: false,
+      };
+    }
+    case "Arrays":
+      return { type: "array", items: astToDialectNode(ast.rest[0]!) };
+    case "Union": {
+      const members = withoutUndefined(ast.types);
+      const literals = members.filter((member) => member._tag === "Literal");
+      if (literals.length === members.length) {
+        return {
+          type: "string",
+          enum: literals.map((member) => (member as SchemaAST.Literal).literal as string),
+        };
+      }
+      return { anyOf: members.map((member) => astToDialectNode(member)) };
+    }
+    default:
+      throw new AgentSchemaProfileError([{ path: "$", issue: `${ast._tag}-unsupported` }]);
+  }
+};
+
+const effectSchemaToDialectSchema = (schema: AgentSchemaDecoder<unknown>): JsonSchemaObject => {
+  return parseDialectObject(astToDialectNode(schema.ast));
 };
 
 const canonicalize = (node: unknown, parentKey?: string): unknown => {
@@ -320,7 +410,9 @@ export const projectAgentSchema = (schema: JsonSchemaObject): AgentSchemaProject
   canonical: schema,
 });
 
-export const defineAgentSchema = <A, I>(schema: Schema.Schema<A, I, never>): AgentSchema<A> => {
+export const defineAgentSchema = <S extends AgentSchemaDecoder<unknown>>(
+  schema: S,
+): AgentSchema<S["Type"]> => {
   const jsonSchema = agentSchemaToDialectSchema(schema);
   const decodeEffectSchema = Schema.decodeUnknownSync(schema);
   return {
@@ -355,13 +447,15 @@ export const isAgentSchema = (value: unknown): value is AnyAgentSchema =>
   (value as { readonly [AGENT_SCHEMA_BRAND]?: unknown })[AGENT_SCHEMA_BRAND] === true;
 
 export function ensureAgentSchema<A>(schema: AgentSchema<A>): AgentSchema<A>;
-export function ensureAgentSchema<A, I>(schema: Schema.Schema<A, I, never>): AgentSchema<A>;
-export function ensureAgentSchema<A, I>(
-  schema: AgentSchema<A> | Schema.Schema<A, I, never>,
+export function ensureAgentSchema<S extends AgentSchemaDecoder<unknown>>(
+  schema: S,
+): AgentSchema<S["Type"]>;
+export function ensureAgentSchema<A>(
+  schema: AgentSchema<A> | AgentSchemaDecoder<A>,
 ): AgentSchema<A> {
   return isAgentSchema(schema as unknown)
     ? (schema as AgentSchema<A>)
-    : defineAgentSchema(schema as Schema.Schema<A, I, never>);
+    : (defineAgentSchema(schema as AgentSchemaDecoder<A>) as AgentSchema<A>);
 }
 
 export const makeAgentSchemaSpec = <A>(schema: AgentSchema<A>): Effect.Effect<AgentSchemaSpec<A>> =>

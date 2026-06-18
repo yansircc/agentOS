@@ -28,7 +28,7 @@ const exampleCarrier = () =>
         kind: "decided",
         payload: Schema.Struct({
           subjectRef: Schema.String,
-          decision: Schema.Literal("approved", "rejected"),
+          decision: Schema.Literals(["approved", "rejected"]),
         }),
         claim: none(),
       }),
@@ -236,7 +236,7 @@ describe("defineCarrier", () => {
           recorded: event({
             kind: "recorded",
             payload: Schema.Struct({
-              value: Schema.Record({ key: Schema.String, value: Schema.Unknown }),
+              value: Schema.Record(Schema.String, Schema.Unknown),
             }),
             claim: none(),
           }),

@@ -14,7 +14,7 @@ export const SchedulerLive = (
   identity: BackendProtocolEventIdentity,
 ): Layer.Layer<Scheduler, SqlError, EventBus | DurableTriggerRegistry> => {
   const sql = ctx.storage.sql;
-  return Layer.scoped(
+  return Layer.effect(
     Scheduler,
     Effect.gen(function* () {
       yield* ensureDueWorkSchema(sql);

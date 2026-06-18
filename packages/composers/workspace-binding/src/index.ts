@@ -156,7 +156,7 @@ const workspaceOperationPayload = (
     "maxFileBytes" | "maxCommandChars" | "execTimeoutMs" | "maxOutputBytes"
   >,
 ): Record<string, unknown> => {
-  if (!Predicate.isRecord(args)) {
+  if (!Predicate.isObject(args)) {
     throw new TypeError("workspace operation args must be an object");
   }
   const payload: Record<string, unknown> = {

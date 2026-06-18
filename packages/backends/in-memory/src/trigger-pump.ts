@@ -114,7 +114,7 @@ export const InMemoryTriggerPumpLive = (
                   { claimToken: token, signal: controller.signal, acquireMode },
                 )
               : yield* Effect.gen(function* () {
-                  const failure = Cause.failureOption(exit.cause);
+                  const failure = Cause.findErrorOption(exit.cause);
                   if (Option.isNone(failure)) {
                     return yield* Effect.fail(new SqlError({ cause: exit.cause }));
                   }

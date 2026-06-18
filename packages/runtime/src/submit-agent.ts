@@ -128,6 +128,7 @@ import type { BoundaryCommitRejected } from "./boundary-commit";
 import { appendNextDriverAction, appendRuntimeDriverAction } from "./driver";
 import { MaterializedProjections, waitForProjection } from "./projection";
 import type { BoundaryContract } from "@agent-os/kernel/boundary-contract";
+import { normalizeSubmitToolRetryPolicy } from "./submit-retry-policy";
 
 export const DEFAULT_LLM_CALL_TIMEOUT_MS = 60_000;
 
@@ -170,7 +171,7 @@ const summarizeToolArguments = (value: unknown): ToolArgumentSummary => {
   if (Array.isArray(value)) {
     return { type: "array", keys: [], truncated: value.length > 0 };
   }
-  if (Predicate.isRecord(value)) {
+  if (Predicate.isObject(value)) {
     const keys = Object.keys(value).sort();
     return {
       type: "object",
@@ -185,10 +186,10 @@ const schemaIssuesFromToolError = (
   error: ToolError,
 ): ToolRejectedDiagnostics["schemaIssues"] | undefined => {
   const cause = error.cause;
-  if (!Predicate.isRecord(cause) || !Array.isArray(cause.schemaIssues)) return undefined;
+  if (!Predicate.isObject(cause) || !Array.isArray(cause.schemaIssues)) return undefined;
   const issues = cause.schemaIssues.filter(
     (issue): issue is { readonly path: string; readonly issue: string } =>
-      Predicate.isRecord(issue) &&
+      Predicate.isObject(issue) &&
       typeof issue.path === "string" &&
       typeof issue.issue === "string",
   );
@@ -237,13 +238,13 @@ const payloadWithToolPreClaim = (
 ): unknown => {
   const claimContract = contract.events[kind]?.claim;
   if (claimContract?.phase !== "pre") return payload;
-  return Predicate.isRecord(payload) ? { ...payload, [claimContract.key]: claim } : payload;
+  return Predicate.isObject(payload) ? { ...payload, [claimContract.key]: claim } : payload;
 };
 
 const runtimeToolContext = (
   spec: InternalSubmitSpec,
-  boundaryEvents: Context.Tag.Service<typeof BoundaryEvents>,
-  projections: Context.Tag.Service<typeof MaterializedProjections>,
+  boundaryEvents: Context.Service.Shape<typeof BoundaryEvents>,
+  projections: Context.Service.Shape<typeof MaterializedProjections>,
   claim: PreClaim,
   resume: unknown,
 ): ToolExecutionContextInput => {
@@ -511,8 +512,8 @@ const resolveToolMaterials = (
           ),
         };
       }
-      const resolved = yield* Effect.either(refs.material(ref));
-      if (resolved._tag === "Left") {
+      const resolved = yield* Effect.result(refs.material(ref));
+      if (resolved._tag === "Failure") {
         return {
           ok: false,
           rejectionRef: materialRejection(
@@ -522,13 +523,13 @@ const resolveToolMaterials = (
           ),
         };
       }
-      out[requirement.slot] = resolved.right;
+      out[requirement.slot] = resolved.success;
     }
     return { ok: true, materials: out };
   });
 
 const payloadRecord = (event: LedgerEvent): Readonly<Record<string, unknown>> | null =>
-  Predicate.isRecord(event.payload) ? event.payload : null;
+  Predicate.isObject(event.payload) ? event.payload : null;
 
 const matchingDecisionEvent = (
   events: ReadonlyArray<LedgerEvent>,
@@ -572,7 +573,7 @@ const compactProviderHistoryValue = (value: unknown): unknown => {
   if (Array.isArray(value)) {
     return value.map(compactProviderHistoryValue);
   }
-  if (Predicate.isRecord(value)) {
+  if (Predicate.isObject(value)) {
     return Object.fromEntries(
       Object.entries(value).map(([key, entry]) => [key, compactProviderHistoryValue(entry)]),
     );
@@ -588,8 +589,8 @@ const providerHistoryArgumentsJson = (
 ): Effect.Effect<string, JsonStringifyError> =>
   Effect.gen(function* () {
     const compacted = compactProviderHistoryValue(args);
-    const decoded = yield* Effect.either(decodeToolArgs(tool, compacted, toolName));
-    if (decoded._tag === "Left") return originalArguments;
+    const decoded = yield* Effect.result(decodeToolArgs(tool, compacted, toolName));
+    if (decoded._tag === "Failure") return originalArguments;
     return yield* safeStringify(compacted);
   });
 
@@ -849,6 +850,40 @@ const timeoutAbortResult = (
 const isLlmCallTimedOut = (error: unknown): error is LlmCallTimedOut =>
   error instanceof LlmCallTimedOut;
 
+type LlmTimeoutWindow = Extract<ReturnType<typeof llmTimeoutFor>, { readonly ok: true }>;
+
+const abortLlmController = (controller: AbortController, reason: string): Effect.Effect<void> =>
+  Effect.sync(() => {
+    if (!controller.signal.aborted) controller.abort(reason);
+  });
+
+const llmTimeoutError = (timeout: LlmTimeoutWindow, budgetTimeMs: number): LlmCallTimedOut =>
+  new LlmCallTimedOut({
+    mode: timeout.mode,
+    elapsedMs: timeout.mode === "budget" ? budgetTimeMs : timeout.timeoutMs,
+    timeoutMs: timeout.mode === "budget" ? budgetTimeMs : timeout.timeoutMs,
+  });
+
+const runTimedLlmAttempt = <A, E, R>(
+  timeout: LlmTimeoutWindow,
+  budgetTimeMs: number,
+  attempt: (signal: AbortSignal) => Effect.Effect<A, E, R>,
+): Effect.Effect<A, E | LlmCallTimedOut, R> =>
+  Effect.gen(function* () {
+    const controller = new AbortController();
+    return yield* attempt(controller.signal).pipe(
+      Effect.timeoutOrElse({
+        duration: Duration.millis(timeout.timeoutMs),
+        orElse: () =>
+          Effect.gen(function* () {
+            yield* abortLlmController(controller, "agent_os.llm_call_timeout");
+            return yield* Effect.fail(llmTimeoutError(timeout, budgetTimeMs));
+          }),
+      }),
+      Effect.onInterrupt(() => abortLlmController(controller, "llm_call_interrupted")),
+    );
+  });
+
 const singleRequiredToolPolicyName = (spec: InternalSubmitSpec): string | null => {
   const toolName = spec.toolPolicy?.requiredUntilToolExecuted?.toolName;
   return typeof toolName === "string" && toolName.length > 0 ? toolName : null;
@@ -975,7 +1010,7 @@ export const submitAgentEffect = (
     const budgetTimeMs = spec.budget?.timeMs ?? Number.POSITIVE_INFINITY;
     const llmCallTimeoutMs = llmCallTimeoutBudgetMs(spec.budget?.llmCallTimeoutMs);
     const maxTurns = spec.budget?.maxTurns ?? 5;
-    const toolRetries = Math.max(0, spec.budget?.toolRetries ?? 2);
+    const toolRetryPolicy = normalizeSubmitToolRetryPolicy(spec.budget?.toolRetryPolicy);
     const scope = spec.scope;
     const scopeRef = spec.scopeRef;
     const identity = {
@@ -1091,58 +1126,45 @@ export const submitAgentEffect = (
           traceContext,
         );
       }
-      const controller = new AbortController();
-      const attempted = yield* Effect.either(
-        admission
-          .attemptStructured<unknown>({
+      const attempted = yield* Effect.result(
+        runTimedLlmAttempt(timeout, budgetTimeMs, (signal) =>
+          admission.attemptStructured<unknown>({
             scope,
             route,
             schemaSpec,
             strategy: "forced-tool-call",
             traceContext,
-            signal: controller.signal,
+            signal,
             stimulus: {
               kind: "live",
               userInput: { userText },
             },
-          })
-          .pipe(
-            Effect.timeoutFail({
-              duration: Duration.millis(timeout.timeoutMs),
-              onTimeout: () => {
-                controller.abort("agent_os.llm_call_timeout");
-                return new LlmCallTimedOut({
-                  mode: timeout.mode,
-                  elapsedMs: timeout.mode === "budget" ? budgetTimeMs : timeout.timeoutMs,
-                  timeoutMs: timeout.mode === "budget" ? budgetTimeMs : timeout.timeoutMs,
-                });
-              },
-            }),
-          ),
+          }),
+        ),
       );
-      if (attempted._tag === "Left") {
-        if (isLlmCallTimedOut(attempted.left)) {
+      if (attempted._tag === "Failure") {
+        if (isLlmCallTimedOut(attempted.failure)) {
           return yield* timeoutAbortResult(
-            attempted.left,
+            attempted.failure,
             identity,
             started.id,
             tokensBeforeCall,
             traceContext,
           );
         }
-        if (attempted.left._tag === ABORT.UPSTREAM_FAILURE) {
+        if (attempted.failure._tag === ABORT.UPSTREAM_FAILURE) {
           return yield* finalAbort(
             ABORT.UPSTREAM_FAILURE,
-            { cause: publicRuntimeCauseReason(attempted.left.cause) },
+            { cause: publicRuntimeCauseReason(attempted.failure.cause) },
             identity,
             started.id,
             tokensBeforeCall,
             traceContext,
           );
         }
-        return yield* Effect.fail(attempted.left);
+        return yield* Effect.fail(attempted.failure);
       }
-      const result = attempted.right;
+      const result = attempted.success;
 
       if (result.ok) {
         const tokens = result.outcome.class === "Supported" ? result.outcome.tokensUsed : 0;
@@ -1475,7 +1497,6 @@ export const submitAgentEffect = (
             );
           }
 
-          const controller = new AbortController();
           const toolDefs = toolDefinitionsForRuntimePolicy(
             spec.tools,
             requiredToolNames,
@@ -1500,9 +1521,9 @@ export const submitAgentEffect = (
               traceContext,
             }),
           });
-          const timedResp = yield* Effect.either(
-            llm
-              .call(
+          const timedResp = yield* Effect.result(
+            runTimedLlmAttempt(timeout, budgetTimeMs, (signal) =>
+              llm.call(
                 {
                   route: spec.route,
                   messages,
@@ -1510,35 +1531,23 @@ export const submitAgentEffect = (
                   tool_choice: toolChoice,
                   traceContext,
                 },
-                { signal: controller.signal },
-              )
-              .pipe(
-                Effect.timeoutFail({
-                  duration: Duration.millis(timeout.timeoutMs),
-                  onTimeout: () => {
-                    controller.abort("agent_os.llm_call_timeout");
-                    return new LlmCallTimedOut({
-                      mode: timeout.mode,
-                      elapsedMs: timeout.mode === "budget" ? budgetTimeMs : timeout.timeoutMs,
-                      timeoutMs: timeout.mode === "budget" ? budgetTimeMs : timeout.timeoutMs,
-                    });
-                  },
-                }),
+                { signal },
               ),
+            ),
           );
-          if (timedResp._tag === "Left") {
-            if (isLlmCallTimedOut(timedResp.left)) {
+          if (timedResp._tag === "Failure") {
+            if (isLlmCallTimedOut(timedResp.failure)) {
               return yield* timeoutAbortResult(
-                timedResp.left,
+                timedResp.failure,
                 identity,
                 started.id,
                 tokensBeforeCall,
                 traceContext,
               );
             }
-            return yield* Effect.fail(timedResp.left);
+            return yield* Effect.fail(timedResp.failure);
           }
-          const resp = timedResp.right;
+          const resp = timedResp.success;
           const nextResponseText = textFromLlmOutputItems(resp.items);
           const nextResponseToolCalls = toolCallsFromLlmOutputItems(resp.items);
 
@@ -1582,7 +1591,7 @@ export const submitAgentEffect = (
               executedToolNames,
             );
             if (remainingPolicyToolNames.length > 0) {
-              if (toolPolicyFailures >= toolRetries) {
+              if (toolPolicyFailures >= toolRetryPolicy.correctionRetries) {
                 return yield* new ToolError({
                   toolName: remainingPolicyToolNames[0] as string,
                   cause: {
@@ -1684,7 +1693,7 @@ export const submitAgentEffect = (
                 traceContext,
               }),
             });
-            if (toolPolicyFailures >= toolRetries) {
+            if (toolPolicyFailures >= toolRetryPolicy.correctionRetries) {
               return yield* new ToolError({
                 toolName: call.function.name,
                 cause: {
@@ -1728,7 +1737,7 @@ export const submitAgentEffect = (
             });
             continue;
           }
-          const parsed = yield* Effect.either(
+          const parsed = yield* Effect.result(
             Effect.try({
               try: () => JSON.parse(call.function.arguments) as unknown,
               catch: (cause) =>
@@ -1741,7 +1750,7 @@ export const submitAgentEffect = (
                 }),
             }),
           );
-          if (parsed._tag === "Left") {
+          if (parsed._tag === "Failure") {
             yield* appendRuntimeDriverAction(ledger, {
               kind: "reject_tool",
               event: toolRejectedEvent({
@@ -1760,8 +1769,8 @@ export const submitAgentEffect = (
                 traceContext,
               }),
             });
-            if (toolValidationFailures >= toolRetries) {
-              return yield* parsed.left;
+            if (toolValidationFailures >= toolRetryPolicy.correctionRetries) {
+              return yield* parsed.failure;
             }
             toolValidationFailures++;
             yield* recordProviderHistoryCompaction({
@@ -1788,11 +1797,11 @@ export const submitAgentEffect = (
             });
             continue;
           }
-          const decoded = yield* Effect.either(
-            decodeToolArgs(tool, parsed.right, call.function.name),
+          const decoded = yield* Effect.result(
+            decodeToolArgs(tool, parsed.success, call.function.name),
           );
-          if (decoded._tag === "Left") {
-            const schemaIssues = schemaIssuesFromToolError(decoded.left);
+          if (decoded._tag === "Failure") {
+            const schemaIssues = schemaIssuesFromToolError(decoded.failure);
             yield* appendRuntimeDriverAction(ledger, {
               kind: "reject_tool",
               event: toolRejectedEvent({
@@ -1800,20 +1809,20 @@ export const submitAgentEffect = (
                 runId: started.id,
                 toolCallId: call.id,
                 name: call.function.name,
-                args: summarizeToolArguments(parsed.right),
+                args: summarizeToolArguments(parsed.success),
                 execution: tool.execution,
                 claim: settleToolValidationRejected(claim, "invalid_args"),
                 diagnostics: {
                   phase: "decode",
                   reason: "invalid_args",
-                  argumentSummary: summarizeToolArguments(parsed.right),
+                  argumentSummary: summarizeToolArguments(parsed.success),
                   ...(schemaIssues === undefined ? {} : { schemaIssues }),
                 },
                 traceContext,
               }),
             });
-            if (toolValidationFailures >= toolRetries) {
-              return yield* decoded.left;
+            if (toolValidationFailures >= toolRetryPolicy.correctionRetries) {
+              return yield* decoded.failure;
             }
             toolValidationFailures++;
             yield* recordProviderHistoryCompaction({
@@ -1841,7 +1850,7 @@ export const submitAgentEffect = (
             });
             continue;
           }
-          const args = decoded.right;
+          const args = decoded.success;
 
           const interrupt = decisionInterruptFor(spec, call.function.name);
           if (interrupt !== undefined && call.id !== resumedToolCallIdThisTurn) {
@@ -1907,7 +1916,7 @@ export const submitAgentEffect = (
             });
           }
 
-          const admissionProgram = yield* Effect.either(
+          const admissionProgram = yield* Effect.result(
             Effect.try({
               try: () =>
                 tool.admit({
@@ -1921,17 +1930,19 @@ export const submitAgentEffect = (
             }),
           );
           const admission =
-            admissionProgram._tag === "Left"
+            admissionProgram._tag === "Failure"
               ? {
                   ok: false as const,
-                  rejectionRef: admissionProgram.left,
+                  rejectionRef: admissionProgram.failure,
                 }
-              : yield* admissionProgram.right.pipe(
-                  Effect.catchAll((cause) =>
-                    Effect.succeed({
-                      ok: false as const,
-                      rejectionRef: admitterErrorRejectionRef(claim, cause),
-                    }),
+              : yield* admissionProgram.success.pipe(
+                  Effect.catchIf(
+                    () => true,
+                    (cause) =>
+                      Effect.succeed({
+                        ok: false as const,
+                        rejectionRef: admitterErrorRejectionRef(claim, cause),
+                      }),
                   ),
                 );
           const normalizedAdmission = normalizeAdmitVerdict(claim, admission);
@@ -2088,20 +2099,22 @@ export const submitAgentEffect = (
                 });
               }
               return yield* attempt.pipe(
-                Effect.timeoutFail({
+                Effect.timeoutOrElse({
                   duration: Duration.millis(remainingMs),
-                  onTimeout: () =>
-                    new ToolError({
-                      toolName: call.function.name,
-                      cause: toolBudgetTimeCause(budgetTimeMs, budgetTimeMs),
-                    }),
+                  orElse: () =>
+                    Effect.fail(
+                      new ToolError({
+                        toolName: call.function.name,
+                        cause: toolBudgetTimeCause(budgetTimeMs, budgetTimeMs),
+                      }),
+                    ),
                 }),
               );
             });
 
           const result = yield* attemptOnce.pipe(
             Effect.retry({
-              times: toolRetries,
+              schedule: toolRetryPolicy.executionRetrySchedule,
               while: (err) => {
                 // Don't retry rate_limited — quota state doesn't change
                 // between immediate retries.

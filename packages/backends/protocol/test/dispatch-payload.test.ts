@@ -1,4 +1,5 @@
-import { Effect, Fiber, TestClock } from "effect";
+import { Effect, Fiber } from "effect";
+import { TestClock } from "effect/testing";
 import { describe, expect, it } from "@effect/vitest";
 import { makePreClaim } from "@agent-os/kernel/effect-claim";
 import { bindingMaterialRef } from "@agent-os/kernel/material-ref";
@@ -572,7 +573,7 @@ describe("@agent-os/backend-protocol", () => {
           payload: { ok: true },
         },
         "test handler",
-      ).pipe(Effect.fork);
+      ).pipe(Effect.forkChild);
 
       yield* TestClock.adjust("6 seconds");
       yield* Fiber.join(fiber);

@@ -1,19 +1,20 @@
 import {
   GenerateTextResponse,
+  type GenerateTextOptions,
   type Service as LanguageModelService,
-} from "@effect/ai/LanguageModel";
+} from "effect/unstable/ai/LanguageModel";
 import {
   makePart as makeResponsePart,
   type Part as ResponsePart,
-  type Usage as ResponseUsage,
-} from "@effect/ai/Response";
-import type { Any as AnyTool } from "@effect/ai/Tool";
+  Usage as ResponseUsage,
+} from "effect/unstable/ai/Response";
+import type { Any as AnyTool } from "effect/unstable/ai/Tool";
 import {
   HttpClient as HttpClientTag,
   type HttpClient as HttpClientService,
-} from "@effect/platform/HttpClient";
-import type { HttpClientRequest } from "@effect/platform/HttpClientRequest";
-import type { HttpClientResponse } from "@effect/platform/HttpClientResponse";
+} from "effect/unstable/http/HttpClient";
+import type { HttpClientRequest } from "effect/unstable/http/HttpClientRequest";
+import type { HttpClientResponse } from "effect/unstable/http/HttpClientResponse";
 import { describe, expect, it } from "@effect/vitest";
 import { Cause, Effect, Exit, Fiber, Layer, Option, Schema, Stream } from "effect";
 import { ensureAgentSchema } from "@agent-os/kernel/agent-schema";
@@ -38,10 +39,34 @@ import {
   normalizeEffectAiResponse,
 } from "../src";
 
-const finish = (usage: ResponseUsage) =>
+const usage = (spec: {
+  readonly inputTokens: number | undefined;
+  readonly outputTokens: number | undefined;
+  readonly totalTokens?: number | undefined;
+}): ResponseUsage =>
+  new ResponseUsage({
+    inputTokens: {
+      uncached: undefined,
+      total: spec.inputTokens,
+      cacheRead: undefined,
+      cacheWrite: undefined,
+    },
+    outputTokens: {
+      total: spec.outputTokens,
+      text: undefined,
+      reasoning: undefined,
+    },
+  });
+
+const finish = (spec: {
+  readonly inputTokens: number | undefined;
+  readonly outputTokens: number | undefined;
+  readonly totalTokens?: number | undefined;
+}) =>
   makeResponsePart("finish", {
     reason: "stop",
-    usage,
+    usage: usage(spec),
+    response: undefined,
   });
 
 const response = (
@@ -107,7 +132,7 @@ const decodeRequestBody = (requestValue: HttpClientRequest): unknown => {
 const expectFailure = <E>(exit: Exit.Exit<unknown, E>): E => {
   expect(Exit.isFailure(exit)).toBe(true);
   if (Exit.isFailure(exit)) {
-    const failure = Cause.failureOption(exit.cause);
+    const failure = Cause.findErrorOption(exit.cause);
     expect(Option.isSome(failure)).toBe(true);
     if (Option.isSome(failure)) return failure.value;
   }
@@ -373,7 +398,6 @@ describe("@agent-os/llm-transport-effect-ai", () => {
               name: "lookup",
               params: { q: "x" },
               providerExecuted: false,
-              options: { google: { thoughtSignature: "sig-1" } },
             },
           ],
         },
@@ -394,20 +418,18 @@ describe("@agent-os/llm-transport-effect-ai", () => {
     }),
   );
 
-  it.effect(
-    "fails tool-result prompt conversion when Gemini would receive an empty tool name",
-    () =>
-      Effect.gen(function* () {
-        const exit = yield* Effect.exit(
-          effectAiPromptFromMessages([
-            { role: "tool", tool_call_id: "call-1", content: '{"ok":true}' },
-          ]),
-        );
-        expect(Exit.isFailure(exit)).toBe(true);
-        if (Exit.isFailure(exit)) {
-          expect(Exit.causeOption(exit).pipe((option) => option._tag)).toBe("Some");
-        }
-      }),
+  it.effect("fails tool-result prompt conversion when the tool result name is missing", () =>
+    Effect.gen(function* () {
+      const exit = yield* Effect.exit(
+        effectAiPromptFromMessages([
+          { role: "tool", tool_call_id: "call-1", content: '{"ok":true}' },
+        ]),
+      );
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        expect(exit.cause).toBeDefined();
+      }
+    }),
   );
 
   it.effect(
@@ -452,7 +474,6 @@ describe("@agent-os/llm-transport-effect-ai", () => {
           {
             type: "reasoning",
             redacted: true,
-            metadata: { google: { thoughtSignature: "reasoning-sig" } },
           },
           {
             type: "tool_call",
@@ -460,7 +481,6 @@ describe("@agent-os/llm-transport-effect-ai", () => {
               id: "call-1",
               type: "function",
               function: { name: "lookup", arguments: '{"q":"x"}' },
-              metadata: { google: { thoughtSignature: "sig-1" } },
             },
           },
         ],
@@ -481,8 +501,7 @@ describe("@agent-os/llm-transport-effect-ai", () => {
       );
       expect(Exit.isFailure(exit)).toBe(true);
       if (Exit.isFailure(exit)) {
-        const failure = Exit.causeOption(exit);
-        expect(failure._tag).toBe("Some");
+        expect(exit.cause).toBeDefined();
       }
     }),
   );
@@ -512,7 +531,7 @@ describe("@agent-os/llm-transport-effect-ai", () => {
     "calls the model with disableToolCallResolution and no caller LanguageModel context",
     () =>
       Effect.gen(function* () {
-        const model = fakeModel((options) => {
+        const model = fakeModel((options: GenerateTextOptions<Record<string, AnyTool>>) => {
           expect(options.disableToolCallResolution).toBe(true);
           expect(options.toolChoice).toEqual({ tool: "lookup" });
           expect(options.toolkit).toBeDefined();
@@ -544,7 +563,7 @@ describe("@agent-os/llm-transport-effect-ai", () => {
 
   it.effect("passes required tool choice to the model", () =>
     Effect.gen(function* () {
-      const model = fakeModel((options) => {
+      const model = fakeModel((options: GenerateTextOptions<Record<string, AnyTool>>) => {
         expect(options.disableToolCallResolution).toBe(true);
         expect(options.toolChoice).toBe("required");
         expect(options.toolkit).toBeDefined();
@@ -622,7 +641,7 @@ describe("@agent-os/llm-transport-effect-ai", () => {
     Effect.gen(function* () {
       const controller = new AbortController();
       const model = fakeModel(() => Effect.never);
-      const fiber = yield* Effect.fork(
+      const fiber = yield* Effect.forkChild(
         callEffectAiLanguageModel(model, request(), {
           signal: controller.signal,
         }),

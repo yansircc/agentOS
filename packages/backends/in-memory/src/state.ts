@@ -426,7 +426,7 @@ export class InMemoryBackendState {
     ) => ReadonlyArray<AnyMaterializedProjectionDefinition> = (eventKind) =>
       this.projectionDefinitionsForEvent(eventKind),
   ): Effect.Effect<void, ProjectionApplicationError | ProjectionReducerReturnedThenable> {
-    return Effect.gen(this, function* () {
+    return Effect.gen({ self: this }, function* () {
       for (const event of events) {
         const identity = eventIdentity(event);
         const displayScope = eventDisplayScope(identity);
@@ -477,7 +477,7 @@ export class InMemoryBackendState {
         meta: cloneProjectionMeta(this.projectionMeta),
       });
     }
-    return Effect.gen(this, function* () {
+    return Effect.gen({ self: this }, function* () {
       const registry = yield* this.projectionRegistryEffect().pipe(
         Effect.mapError((cause) => new SqlError({ cause })),
       );
@@ -501,7 +501,7 @@ export class InMemoryBackendState {
     readonly eventIdentity: BackendProtocolEventIdentity;
     readonly identity: unknown;
   }): Effect.Effect<MaterializedProjectionRow | null, SqlError | UnregisteredProjectionKind> {
-    return Effect.gen(this, function* () {
+    return Effect.gen({ self: this }, function* () {
       const registry = yield* this.projectionRegistryEffect().pipe(
         Effect.mapError((cause) => new SqlError({ cause })),
       );
@@ -527,7 +527,7 @@ export class InMemoryBackendState {
     ReadonlyArray<MaterializedProjectionRow>,
     SqlError | UnregisteredProjectionKind
   > {
-    return Effect.gen(this, function* () {
+    return Effect.gen({ self: this }, function* () {
       const registry = yield* this.projectionRegistryEffect().pipe(
         Effect.mapError((cause) => new SqlError({ cause })),
       );
@@ -549,7 +549,7 @@ export class InMemoryBackendState {
     readonly kind: string;
     readonly eventIdentity: BackendProtocolEventIdentity;
   }): Effect.Effect<MaterializedProjectionStatus, SqlError | UnregisteredProjectionKind> {
-    return Effect.gen(this, function* () {
+    return Effect.gen({ self: this }, function* () {
       const registry = yield* this.projectionRegistryEffect().pipe(
         Effect.mapError((cause) => new SqlError({ cause })),
       );
@@ -592,7 +592,7 @@ export class InMemoryBackendState {
     | ProjectionApplicationError
     | ProjectionReducerReturnedThenable
   > {
-    return Effect.gen(this, function* () {
+    return Effect.gen({ self: this }, function* () {
       const registry = yield* this.projectionRegistryEffect().pipe(
         Effect.mapError((cause) => new SqlError({ cause })),
       );
@@ -717,7 +717,7 @@ export class InMemoryBackendState {
   commitProtocolPrepared(
     makeSpecs: (nextEventId: number) => ReadonlyArray<InMemoryProtocolEventSpec>,
   ): Effect.Effect<ReadonlyArray<LedgerEvent>, JsonStringifyError | SqlError> {
-    return Effect.gen(this, function* () {
+    return Effect.gen({ self: this }, function* () {
       const startId = this.nextEventId;
       const specs = makeSpecs(startId);
       yield* Effect.forEach(specs, (spec) => validateSerializablePayload(spec.payload), {
@@ -769,7 +769,7 @@ export class InMemoryBackendState {
     }) => InMemoryEventContentSpec,
     stageOutbox?: (event: LedgerEvent) => DispatchOutboxRow,
   ): Effect.Effect<LedgerEvent, JsonStringifyError | SqlError | UnregisteredDurableTriggerKind> {
-    return Effect.gen(this, function* () {
+    return Effect.gen({ self: this }, function* () {
       const trigger = yield* getDurableTrigger(registry, triggerKind);
       const spec = makeSpec(trigger);
       yield* validateSerializablePayload(spec.payload);
@@ -826,7 +826,7 @@ export class InMemoryBackendState {
     { readonly id: number },
     JsonStringifyError | SqlError | UnregisteredDurableTriggerKind
   > {
-    return Effect.gen(this, function* () {
+    return Effect.gen({ self: this }, function* () {
       const payload = scheduledEventIntentPayload(eventKind, data);
       const committed = yield* this.commitTriggerIntent(
         identity,
@@ -1028,7 +1028,7 @@ export class InMemoryBackendState {
   durableProcessLifecycle(
     identity: BackendProtocolEventIdentity,
   ): Effect.Effect<ReadonlyArray<DurableProcessLifecycleState>, SqlError> {
-    return Effect.gen(this, function* () {
+    return Effect.gen({ self: this }, function* () {
       const identityKey = backendProtocolEventIdentityKey(identity);
       const states: DurableProcessLifecycleState[] = [];
       for (const row of [...this.dueWork]
@@ -1073,7 +1073,7 @@ export class InMemoryBackendState {
     terminal: AttachedStreamTerminal<Terminal>,
     commit: (terminal: AttachedStreamTerminal<Terminal>, tx: AttachedStreamTx) => string | null,
   ): Effect.Effect<{ readonly events: ReadonlyArray<LedgerEvent> }, JsonStringifyError | SqlError> {
-    return Effect.gen(this, function* () {
+    return Effect.gen({ self: this }, function* () {
       const startId = this.nextEventId;
       const written: LedgerEvent[] = [];
       const tx: AttachedStreamTx = {
@@ -1142,7 +1142,7 @@ export class InMemoryBackendState {
     | UnregisteredDurableTriggerKind
     | DurableTriggerCommitReturnedThenable
   > {
-    return Effect.gen(this, function* () {
+    return Effect.gen({ self: this }, function* () {
       if (row.completedAt !== null) return { completed: false, events: [] };
       if (options.claimToken !== undefined && row.claimToken !== options.claimToken) {
         return { completed: false, events: [] };

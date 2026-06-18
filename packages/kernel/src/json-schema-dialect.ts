@@ -106,7 +106,7 @@ export const parseDialectNodeResult = (
   value: unknown,
   path = "$",
 ): JsonSchemaResult<JsonSchemaNode> => {
-  const schema = Predicate.isRecord(value) ? value : undefined;
+  const schema = Predicate.isObject(value) ? value : undefined;
   if (schema === undefined) return fail(path, "expected-object");
   if (schema.anyOf !== undefined) {
     const unsupportedKey = firstUnsupportedKey(
@@ -142,7 +142,7 @@ export const parseDialectNodeResult = (
       );
       if (unsupportedKey !== undefined) return { ok: false, issues: [unsupportedKey] };
       const rawProperties = schema.properties;
-      if (!Predicate.isRecord(rawProperties)) return fail(`${path}.properties`, "expected-object");
+      if (!Predicate.isObject(rawProperties)) return fail(`${path}.properties`, "expected-object");
       const properties: Record<string, JsonSchemaNode> = {};
       for (const [key, node] of Object.entries(rawProperties)) {
         const property = parseDialectNodeResult(node, `${path}.properties.${key}`);

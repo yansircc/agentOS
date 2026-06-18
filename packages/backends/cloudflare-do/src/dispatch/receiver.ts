@@ -47,7 +47,7 @@ export const parseInboundAcceptedPayload = (
   raw: string,
 ): DispatchPayloadParseResult<InboundAcceptedPayload> => {
   const value = JSON.parse(raw) as unknown;
-  if (!Predicate.isRecord(value)) {
+  if (!Predicate.isObject(value)) {
     return parseFail("dispatch.inbound.accepted payload must be object");
   }
   if (

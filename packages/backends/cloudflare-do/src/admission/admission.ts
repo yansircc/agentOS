@@ -70,7 +70,7 @@ export const AdmissionLive = (
   ctx: DurableObjectState,
   ownerIdentity: BackendProtocolEventIdentity,
 ): Layer.Layer<Admission, never, EventBus | LlmTransport> =>
-  Layer.scoped(
+  Layer.effect(
     Admission,
     Effect.gen(function* () {
       const sql = ctx.storage.sql;
@@ -106,7 +106,7 @@ export const AdmissionLive = (
             };
           }
 
-          const responseEither = yield* Effect.either(
+          const responseEither = yield* Effect.result(
             llm.call(
               structuredOutputRequest({
                 route: spec.route,
@@ -121,16 +121,16 @@ export const AdmissionLive = (
           let outcome: Outcome;
           let decoded: DecodedOutput | undefined;
 
-          if (responseEither._tag === "Left") {
-            const classified = classifyStructuredCallFailure(responseEither.left);
+          if (responseEither._tag === "Failure") {
+            const classified = classifyStructuredCallFailure(responseEither.failure);
             if (classified.kind === "fail_before_evidence") {
               return yield* Effect.fail(classified.failure);
             }
             outcome = classified.outcome;
           } else {
             const d = yield* decodeStructuredOutputFromItems<DecodedOutput>({
-              items: responseEither.right.items,
-              usage: responseEither.right.usage,
+              items: responseEither.success.items,
+              usage: responseEither.success.usage,
               schemaSpec: spec.schemaSpec,
             });
             if (d.ok) {

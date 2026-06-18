@@ -538,19 +538,19 @@ const nonEmptyString = (value: unknown): string | null =>
   typeof value === "string" && value.length > 0 ? value : null;
 
 const accountMaterialFrom = (value: unknown): { readonly accountId: string } | null => {
-  if (!Predicate.isRecord(value)) return null;
+  if (!Predicate.isObject(value)) return null;
   const accountId = nonEmptyString(value.accountId);
   return accountId === null ? null : { accountId };
 };
 
 const targetMaterialFrom = (value: unknown): { readonly scriptName: string } | null => {
-  if (!Predicate.isRecord(value)) return null;
+  if (!Predicate.isObject(value)) return null;
   const scriptName = nonEmptyString(value.scriptName);
   return scriptName === null ? null : { scriptName };
 };
 
 const deployMaterialFrom = (value: unknown): CloudflareWorkerDeployMaterial | null => {
-  if (!Predicate.isRecord(value)) return null;
+  if (!Predicate.isObject(value)) return null;
   const accountId = nonEmptyString(value.accountId);
   const scriptName = nonEmptyString(value.scriptName);
   const artifactRef = nonEmptyString(value.artifactRef);
@@ -579,7 +579,7 @@ const deployMaterialFrom = (value: unknown): CloudflareWorkerDeployMaterial | nu
 };
 
 const recordMaterialFrom = (value: unknown): Record<string, unknown> | null =>
-  Predicate.isRecord(value) ? (value as Record<string, unknown>) : null;
+  Predicate.isObject(value) ? (value as Record<string, unknown>) : null;
 
 const materialResolutionFailure = (ref: MaterialRef, reason: string) =>
   new CloudflareWorkerDeployResolutionFailure({ ref: materialRefKey(ref), reason });

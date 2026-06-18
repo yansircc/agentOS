@@ -1,4 +1,4 @@
-import { Either, Predicate, Schema, pipe } from "effect";
+import { Result, Predicate, Schema, pipe } from "effect";
 import {
   authorityRefKey,
   factOwnerKey,
@@ -121,7 +121,7 @@ const protocolKeyPart = (part: string): string => encodeURIComponent(part).repla
 export const isBackendProtocolTruthIdentity = (
   value: unknown,
 ): value is BackendProtocolTruthIdentity =>
-  Predicate.isRecord(value) &&
+  Predicate.isObject(value) &&
   hasOnlyProtocolKeys(value, truthIdentityKeys) &&
   isScopeRef(value.scopeRef) &&
   isAuthorityRef(value.effectAuthorityRef);
@@ -129,7 +129,7 @@ export const isBackendProtocolTruthIdentity = (
 export const isBackendProtocolEventIdentity = (
   value: unknown,
 ): value is BackendProtocolEventIdentity =>
-  Predicate.isRecord(value) &&
+  Predicate.isObject(value) &&
   hasOnlyProtocolKeys(value, eventIdentityKeys) &&
   isScopeRef(value.scopeRef) &&
   isAuthorityRef(value.effectAuthorityRef) &&
@@ -138,7 +138,7 @@ export const isBackendProtocolEventIdentity = (
 export const isBackendProtocolProjectionKey = (
   value: unknown,
 ): value is BackendProtocolProjectionKey =>
-  Predicate.isRecord(value) &&
+  Predicate.isObject(value) &&
   hasOnlyProtocolKeys(value, projectionKeyKeys) &&
   isScopeRef(value.scopeRef) &&
   isAuthorityRef(value.effectAuthorityRef) &&
@@ -269,13 +269,13 @@ export const QUOTA_EVENT_KIND = {
 
 export const ResourceGrantPayloadSchema = Schema.Struct({
   key: Schema.String,
-  amount: Schema.Number.pipe(Schema.finite()),
+  amount: Schema.Finite,
   ref: Schema.String,
 });
 
 export const ResourceReservePayloadSchema = Schema.Struct({
   key: Schema.String,
-  amount: Schema.Number.pipe(Schema.finite()),
+  amount: Schema.Finite,
   ref: Schema.String,
   idempotencyKey: Schema.String,
   reservationId: Schema.String,
@@ -283,10 +283,10 @@ export const ResourceReservePayloadSchema = Schema.Struct({
 
 export const ResourceReserveRejectedPayloadSchema = Schema.Struct({
   key: Schema.String,
-  amount: Schema.Number.pipe(Schema.finite()),
+  amount: Schema.Finite,
   ref: Schema.String,
   idempotencyKey: Schema.String,
-  available: Schema.Number.pipe(Schema.finite()),
+  available: Schema.Finite,
 });
 
 export const ResourceTerminalPayloadSchema = Schema.Struct({
@@ -296,7 +296,7 @@ export const ResourceTerminalPayloadSchema = Schema.Struct({
 
 export const QuotaConsumedPayloadSchema = Schema.Struct({
   key: Schema.String,
-  amount: Schema.Number.pipe(Schema.finite()),
+  amount: Schema.Finite,
   toolName: Schema.String,
   operationRef: Schema.String,
 });
@@ -811,7 +811,7 @@ export const parseIntentPointerDuePayload = (
   value: unknown,
 ): ProtocolPayloadParseResult<IntentPointerDuePayload> => {
   if (
-    !Predicate.isRecord(value) ||
+    !Predicate.isObject(value) ||
     Object.keys(value).length !== 1 ||
     typeof value.intentEventId !== "number" ||
     !Number.isInteger(value.intentEventId) ||
@@ -835,7 +835,7 @@ export const parseScheduledEventIntentPayload = (
   raw: unknown,
 ): ProtocolPayloadParseResult<ScheduledEventIntentPayload> => {
   if (
-    !Predicate.isRecord(raw) ||
+    !Predicate.isObject(raw) ||
     Object.keys(raw).some((key) => key !== "eventKind" && key !== "data") ||
     typeof raw.eventKind !== "string"
   ) {
@@ -849,7 +849,7 @@ const RETRY_POLICY_KEYS = new Set(["maxAttempts", "initialDelayMs", "maxDelayMs"
 export const parseDurableTriggerRetryPolicy = (
   value: unknown,
 ): ProtocolPayloadParseResult<DurableTriggerRetryPolicy> => {
-  if (!Predicate.isRecord(value)) {
+  if (!Predicate.isObject(value)) {
     return { ok: false, cause: new TypeError("durable trigger retry policy malformed") };
   }
   for (const key of Object.keys(value)) {
@@ -1017,7 +1017,7 @@ export type BackendProtocolEventHandler = (
 export const parseBackendProtocolLedgerEventRpc = (
   value: unknown,
 ): BackendProtocolParseResult<BackendProtocolLedgerEventRpc> => {
-  if (!Predicate.isRecord(value)) {
+  if (!Predicate.isObject(value)) {
     return backendProtocolParseFail("ledger event must be object");
   }
   if ("scope" in value) {
@@ -1083,10 +1083,10 @@ export const parseDispatchBindingRef = (
 export const parseRequestedPayloadValue = (
   value: unknown,
 ): DispatchPayloadParseResult<DispatchRequestedPayload> => {
-  if (!Predicate.isRecord(value))
+  if (!Predicate.isObject(value))
     return parseFail("dispatch.outbound.requested payload must be object");
   const target = value.target;
-  if (!Predicate.isRecord(target)) return parseFail("dispatch target must be object");
+  if (!Predicate.isObject(target)) return parseFail("dispatch target must be object");
   if (typeof value.event !== "string" || typeof value.idempotencyKey !== "string") {
     return parseFail("dispatch.outbound.requested payload malformed");
   }
@@ -1129,13 +1129,13 @@ export const parseRequestedPayload = (
   raw: string,
 ): DispatchPayloadParseResult<DispatchRequestedPayload> =>
   pipe(
-    Either.try({
+    Result.try({
       try: () => JSON.parse(raw) as unknown,
       catch: (cause) => describeDispatchCause(cause),
     }),
-    Either.match({
-      onLeft: (reason) => parseFail(reason),
-      onRight: (parsed) => parseRequestedPayloadValue(parsed),
+    Result.match({
+      onFailure: (reason) => parseFail(reason),
+      onSuccess: (parsed) => parseRequestedPayloadValue(parsed),
     }),
   );
 
@@ -1145,7 +1145,7 @@ export const dispatchBackoffMs = (attempt: number): number =>
 export const describeDispatchCause = (cause: unknown): string => {
   if (typeof cause === "string") return cause;
   if (cause instanceof Error) return `${cause.name}: ${cause.message}`;
-  if (Predicate.isRecord(cause) && typeof cause._tag === "string") return cause._tag;
+  if (Predicate.isObject(cause) && typeof cause._tag === "string") return cause._tag;
   return Object.prototype.toString.call(cause);
 };
 

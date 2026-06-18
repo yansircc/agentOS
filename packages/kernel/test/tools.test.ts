@@ -83,7 +83,10 @@ describe("defineTool", () => {
       description: "Append bounded content to a file",
       args: Schema.Struct({
         path: Schema.String,
-        content: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(8)),
+        content: Schema.String.pipe(
+          Schema.check(Schema.isMinLength(1)),
+          Schema.check(Schema.isMaxLength(8)),
+        ),
       }),
       authority: "write",
       admit: allowToolAdmitter,
@@ -353,20 +356,20 @@ describe("unsafeRunToolByName", () => {
         execute: ({ key }) => Effect.succeed({ value: key }),
       });
 
-      const unknown = yield* Effect.either(
+      const unknown = yield* Effect.result(
         unsafeRunToolByName({ lookup: tool }, deterministicToolInvocation("missing", {})),
       );
-      expect(unknown._tag).toBe("Left");
-      if (unknown._tag === "Left") {
-        expect(unknown.left.cause).toEqual({ reason: "unknown_tool" });
+      expect(unknown._tag).toBe("Failure");
+      if (unknown._tag === "Failure") {
+        expect(unknown.failure.cause).toEqual({ reason: "unknown_tool" });
       }
 
-      const invalid = yield* Effect.either(
+      const invalid = yield* Effect.result(
         unsafeRunToolByName({ lookup: tool }, deterministicToolInvocation("lookup", { key: 1 })),
       );
-      expect(invalid._tag).toBe("Left");
-      if (invalid._tag === "Left") {
-        expect(invalid.left.cause).toEqual({
+      expect(invalid._tag).toBe("Failure");
+      if (invalid._tag === "Failure") {
+        expect(invalid.failure.cause).toEqual({
           reason: "invalid_args",
           decodeError: "AgentSchemaDecodeError",
           schemaIssues: [{ path: "$.key", issue: "not-string" }],

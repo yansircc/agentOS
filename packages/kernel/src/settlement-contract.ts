@@ -104,7 +104,7 @@ export const symbolicSettlementRef = (
 };
 
 export const validateSettlementContract = (value: unknown): SettlementContractValidation => {
-  if (!Predicate.isRecord(value)) {
+  if (!Predicate.isObject(value)) {
     return {
       ok: false,
       issues: ["settlement_id_invalid", "anchor_kinds_invalid", "rejection_kinds_invalid"],

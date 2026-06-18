@@ -44,7 +44,7 @@ const normalizeIdentity = (
 
 export const makeRuntime = (
   state: DurableObjectState,
-  llm: Context.Tag.Service<typeof LlmTransport>,
+  llm: Context.Service.Shape<typeof LlmTransport>,
   identityOrScope: string | BackendProtocolEventIdentity,
 ) => {
   const identity = normalizeIdentity(identityOrScope);
@@ -71,7 +71,7 @@ export const makeRuntime = (
 
 export const makeRuntimeWithRegistry = (
   state: DurableObjectState,
-  llm: Context.Tag.Service<typeof LlmTransport>,
+  llm: Context.Service.Shape<typeof LlmTransport>,
   identityOrScope: string | BackendProtocolEventIdentity,
   endpoints: Record<string, string>,
   credentials: Record<string, string>,

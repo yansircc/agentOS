@@ -115,7 +115,7 @@ export const InMemoryAdmissionLive = (
             };
           }
 
-          const response = yield* Effect.either(
+          const response = yield* Effect.result(
             llm.call(
               structuredOutputRequest({
                 route: spec.route,
@@ -127,8 +127,8 @@ export const InMemoryAdmissionLive = (
           );
 
           const decodedResult = yield* Effect.gen(function* () {
-            if (response._tag === "Left") {
-              const classified = classifyStructuredCallFailure(response.left);
+            if (response._tag === "Failure") {
+              const classified = classifyStructuredCallFailure(response.failure);
               if (classified.kind === "fail_before_evidence") {
                 return yield* Effect.fail(classified.failure);
               }
@@ -138,8 +138,8 @@ export const InMemoryAdmissionLive = (
               };
             }
             return yield* decodeStructuredOutputFromItems<O>({
-              items: response.right.items,
-              usage: response.right.usage,
+              items: response.success.items,
+              usage: response.success.usage,
               schemaSpec: spec.schemaSpec,
             }).pipe(
               Effect.map((decoded) =>

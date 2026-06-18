@@ -427,7 +427,7 @@ describe("@agent-os/workspace-env", () => {
         admit: allowToolAdmitter,
       });
 
-      const result = yield* Effect.either(
+      const result = yield* Effect.result(
         unsafeRunToolByName(
           tools,
           deterministicToolInvocation("write_file", {
@@ -437,9 +437,9 @@ describe("@agent-os/workspace-env", () => {
         ),
       );
 
-      expect(result._tag).toBe("Left");
-      if (result._tag === "Left") {
-        expect(String(result.left.cause)).toContain("host-absolute");
+      expect(result._tag).toBe("Failure");
+      if (result._tag === "Failure") {
+        expect(String(result.failure.cause)).toContain("host-absolute");
       }
     }),
   );
@@ -526,7 +526,7 @@ describe("@agent-os/workspace-env", () => {
         },
       });
 
-      const result = yield* Effect.either(
+      const result = yield* Effect.result(
         tools.write_file!.execute(
           {
             path: "a.txt",
@@ -535,9 +535,9 @@ describe("@agent-os/workspace-env", () => {
           { materials: {} },
         ),
       );
-      expect(result._tag).toBe("Left");
-      if (result._tag === "Left") {
-        expect(String(result.left.cause)).toContain("projection failed");
+      expect(result._tag).toBe("Failure");
+      if (result._tag === "Failure") {
+        expect(String(result.failure.cause)).toContain("projection failed");
       }
     }),
   );

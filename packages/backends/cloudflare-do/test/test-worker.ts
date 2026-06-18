@@ -670,7 +670,7 @@ const malformedCommand = (message: string): ExtensionCommandParseResult => ({
 });
 
 const parseExtensionCommand = (value: unknown): ExtensionCommandParseResult => {
-  if (!Predicate.isRecord(value) || typeof value.op !== "string") {
+  if (!Predicate.isObject(value) || typeof value.op !== "string") {
     return malformedCommand("extension command malformed");
   }
   const data = value.data;
@@ -691,7 +691,7 @@ const parseExtensionCommand = (value: unknown): ExtensionCommandParseResult => {
 };
 
 const errorPayload = (cause: unknown): Record<string, unknown> => {
-  if (Predicate.isRecord(cause)) {
+  if (Predicate.isObject(cause)) {
     return {
       ...(typeof cause._tag === "string" ? { _tag: cause._tag } : {}),
       ...(typeof cause.event === "string" ? { event: cause.event } : {}),
@@ -900,7 +900,7 @@ const facadeIntentProjection = defineProjection({
   state: Schema.Struct({ label: Schema.String, eventId: Schema.Number }),
   identityKey: (identity) => identity.label,
   identify: (event) => {
-    const payload = Predicate.isRecord(event.payload) ? event.payload : {};
+    const payload = Predicate.isObject(event.payload) ? event.payload : {};
     return typeof payload.label === "string"
       ? projectionIdentity({ label: payload.label })
       : projectionSkip();
@@ -1153,7 +1153,7 @@ export const FacadeSubmitTestDO = defineAgentDO<CloudflareAgentEnv>({
   extensions: [facadeIntentBoundaryPackage],
   on: {
     [FACADE_INTENT_COMMAND_EVENT]: async ({ data, capabilities }) => {
-      const payload = Predicate.isRecord(data) ? data : {};
+      const payload = Predicate.isObject(data) ? data : {};
       if (typeof payload.label !== "string") return;
       const capability = capabilities.get(facadeIntentBoundaryPackage.packageId);
       if (capability === undefined) {
@@ -1184,7 +1184,7 @@ interface FoldIntent {
 }
 
 const parseFoldIntent = (raw: unknown) => {
-  if (!Predicate.isRecord(raw) || typeof raw.label !== "string") {
+  if (!Predicate.isObject(raw) || typeof raw.label !== "string") {
     return triggerParseFail<FoldIntent>("fold intent malformed");
   }
   return triggerParseOk({ label: raw.label });
@@ -1226,7 +1226,7 @@ interface BoundaryIntent {
 }
 
 const parseBoundaryIntent = (raw: unknown) => {
-  if (!Predicate.isRecord(raw) || typeof raw.label !== "string") {
+  if (!Predicate.isObject(raw) || typeof raw.label !== "string") {
     return triggerParseFail<BoundaryIntent>("boundary intent malformed");
   }
   return triggerParseOk({ label: raw.label });
@@ -1277,7 +1277,7 @@ interface ChainIntent {
 }
 
 const parseChainIntent = (raw: unknown) => {
-  if (!Predicate.isRecord(raw) || typeof raw.step !== "number") {
+  if (!Predicate.isObject(raw) || typeof raw.step !== "number") {
     return triggerParseFail<ChainIntent>("chain intent malformed");
   }
   return triggerParseOk({ step: raw.step });
@@ -1316,7 +1316,7 @@ interface CancelIntent {
 }
 
 const parseCancelIntent = (raw: unknown) => {
-  if (!Predicate.isRecord(raw) || typeof raw.label !== "string") {
+  if (!Predicate.isObject(raw) || typeof raw.label !== "string") {
     return triggerParseFail<CancelIntent>("cancel intent malformed");
   }
   return triggerParseOk({ label: raw.label });
@@ -1534,6 +1534,11 @@ const attachedOutput = {
   },
 } satisfies AttachedStreamHandler<unknown, unknown>;
 
+const waitForAbortSignal = (signal: AbortSignal): Promise<void> =>
+  signal.aborted
+    ? Promise.resolve()
+    : new Promise((resolve) => signal.addEventListener("abort", () => resolve(), { once: true }));
+
 const attachedCancellable = {
   kind: "test.attached_cancellable",
   mode: "output_only",
@@ -1542,7 +1547,7 @@ const attachedCancellable = {
   parseStart: (raw) => attachedStreamParseOk(raw),
   run: async function* (_start, _input, ctx) {
     yield { kind: "progress", payload: { waiting: true } };
-    await new Promise<void>((resolve) => ctx.signal.addEventListener("abort", () => resolve()));
+    await waitForAbortSignal(ctx.signal);
     yield { kind: "cancelled", reason: String(ctx.signal.reason ?? "cancelled") };
   },
   commitTerminal: (terminal, tx) => {
@@ -1563,7 +1568,7 @@ const materializedRunProjection = defineProjection({
   identity: Schema.Struct({ runId: Schema.String }),
   state: Schema.Struct({
     runId: Schema.String,
-    status: Schema.Literal("requested", "completed"),
+    status: Schema.Literals(["requested", "completed"]),
     handoff: Schema.optional(Schema.String),
   }),
   identityKey: (identity) => identity.runId,
@@ -1629,7 +1634,7 @@ export class MaterializedProjectionTestDO extends MaterializedProjectionBaseDO {
       }),
     );
     if (Exit.isSuccess(exit)) return;
-    const failure = Cause.failureOption(exit.cause);
+    const failure = Cause.findErrorOption(exit.cause);
     if (Option.isSome(failure)) return Promise.reject(failure.value);
     return Promise.reject(exit.cause);
   }
@@ -1651,7 +1656,7 @@ export class MaterializedProjectionTestDO extends MaterializedProjectionBaseDO {
       ),
     );
     if (Exit.isSuccess(exit)) return exit.value;
-    const failure = Cause.failureOption(exit.cause);
+    const failure = Cause.findErrorOption(exit.cause);
     if (Option.isSome(failure)) return Promise.reject(failure.value);
     return Promise.reject(exit.cause);
   }

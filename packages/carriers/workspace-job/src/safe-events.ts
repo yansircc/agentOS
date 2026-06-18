@@ -16,7 +16,7 @@ const booleanField = (payload: Record<string, unknown>, key: string): boolean | 
   typeof payload[key] === "boolean" ? payload[key] : undefined;
 
 const safeArtifact = (value: unknown): SafeLedgerValue | undefined => {
-  if (!Predicate.isRecord(value)) return undefined;
+  if (!Predicate.isObject(value)) return undefined;
   const artifactRef = stringField(value, "artifactRef");
   const path = stringField(value, "path");
   const schemaId = stringField(value, "schemaId");
@@ -40,7 +40,7 @@ const safeChecksSummary = (value: unknown): SafeLedgerValue | undefined => {
   let passed = 0;
   let failed = 0;
   for (const item of value) {
-    if (!Predicate.isRecord(item)) return undefined;
+    if (!Predicate.isObject(item)) return undefined;
     const name = stringField(item, "name");
     const status = stringField(item, "status");
     if (name === undefined || (status !== "passed" && status !== "failed")) return undefined;
@@ -105,7 +105,7 @@ const safeVerdictPayload = (payload: Record<string, unknown>): SafeLedgerPayload
 });
 
 const safeFailedPayload = (payload: Record<string, unknown>): SafeLedgerPayload => {
-  const failure = Predicate.isRecord(payload.failure) ? payload.failure : {};
+  const failure = Predicate.isObject(payload.failure) ? payload.failure : {};
   return {
     requestedEventId: numberField(payload, "requestedEventId") ?? 0,
     runId: stringField(payload, "runId") ?? "unknown",
@@ -142,7 +142,7 @@ const safeStepPayload = (payload: Record<string, unknown>): SafeLedgerPayload =>
 export const projectWorkspaceJobSafeLedgerEvent = (
   event: LedgerEvent,
 ): SafeLedgerEvent | undefined => {
-  if (event.factOwnerRef !== WORKSPACE_JOB_FACT_OWNER || !Predicate.isRecord(event.payload)) {
+  if (event.factOwnerRef !== WORKSPACE_JOB_FACT_OWNER || !Predicate.isObject(event.payload)) {
     return undefined;
   }
   switch (event.kind) {

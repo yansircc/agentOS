@@ -86,12 +86,12 @@ const externalResourceMaterialRefSchema = Schema.Struct({
   ref: Schema.String,
 });
 
-const materialRefSchema = Schema.Union(
+const materialRefSchema = Schema.Union([
   credentialMaterialRefSchema,
   endpointMaterialRefSchema,
   bindingMaterialRefSchema,
   externalResourceMaterialRefSchema,
-);
+]);
 
 export const resourceCarrierDefinition = defineCarrier({
   packageId: "@agent-os/resource-carrier",
@@ -140,7 +140,7 @@ export const resourceCarrierDefinition = defineCarrier({
         subjectRef: Schema.String,
         resourceRef: materialRefSchema,
         proofRef: Schema.String,
-        reason: Schema.Literal("replaced", "expired", "aborted", "manual"),
+        reason: Schema.Literals(["replaced", "expired", "aborted", "manual"]),
       }),
       claim: lived({ key: "claim", anchorKinds: ["carrier_proof", "external_receipt"] }),
     }),
@@ -148,7 +148,7 @@ export const resourceCarrierDefinition = defineCarrier({
       kind: "failed",
       payload: Schema.Struct({
         subjectRef: Schema.String,
-        step: Schema.Literal("provision", "bind", "mutate", "destroy"),
+        step: Schema.Literals(["provision", "bind", "mutate", "destroy"]),
         proofRef: Schema.optional(Schema.String),
         reason: Schema.String,
       }),

@@ -3,7 +3,7 @@ import type { JsonStringifyError, SqlError } from "@agent-os/kernel/errors";
 import type { GrantResult } from "@agent-os/backend-protocol";
 import type { LedgerTruthIdentity } from "@agent-os/runtime-protocol";
 
-export class Quota extends Context.Tag("@agent-os/Quota")<
+export class Quota extends Context.Service<
   Quota,
   {
     readonly tryGrant: (
@@ -16,4 +16,4 @@ export class Quota extends Context.Tag("@agent-os/Quota")<
       operationRef: string,
     ) => Effect.Effect<GrantResult, SqlError | JsonStringifyError>;
   }
->() {}
+>()("@agent-os/Quota") {}

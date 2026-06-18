@@ -28,7 +28,7 @@ export type CloudflareQueueResourceCarrierOptions =
   CloudflareResourceCarrierOptions<CloudflareQueueMutationInput>;
 
 const queueIdFromCreate = (body: unknown): string | null => {
-  if (!Predicate.isRecord(body) || !Predicate.isRecord(body.result)) return null;
+  if (!Predicate.isObject(body) || !Predicate.isObject(body.result)) return null;
   return nonEmptyString(body.result.queue_id) ?? nonEmptyString(body.result.id);
 };
 
@@ -36,7 +36,7 @@ const queueMutationInputFrom = (
   mutationKind: string,
   value: unknown,
 ): CloudflareQueueMutationInput | null => {
-  if (!Predicate.isRecord(value)) return null;
+  if (!Predicate.isObject(value)) return null;
   if (mutationKind === "queue.send") {
     if (!("body" in value)) return null;
     if (

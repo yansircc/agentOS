@@ -19,7 +19,7 @@ import {
 export const FINGERPRINT_ALGO_VERSION = AGENT_SCHEMA_FINGERPRINT_VERSION;
 
 /** Build an AgentSchemaSpec from an AgentSchema source. */
-export const makeAdmissionSchemaSpec = <A, I>(
-  schema: AgentSchemaSource<A, I>,
+export const makeAdmissionSchemaSpec = <A>(
+  schema: AgentSchemaSource<A>,
 ): Effect.Effect<AgentSchemaSpec<A>> =>
   makeAgentSchemaSpec(isAgentSchema(schema) ? schema : ensureAgentSchema(schema));

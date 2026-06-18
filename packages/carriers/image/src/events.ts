@@ -38,7 +38,7 @@ export interface ImageJobProjection {
 }
 
 const jobIdFromPayload = (payload: unknown): string | undefined => {
-  if (!Predicate.isRecord(payload)) return undefined;
+  if (!Predicate.isObject(payload)) return undefined;
   return typeof payload.jobId === "string" ? payload.jobId : undefined;
 };
 
@@ -63,7 +63,7 @@ export const projectImageJobs = (
         break;
       case IMAGE_EVENTS.ARTIFACT_MATERIALIZED: {
         const artifacts =
-          Predicate.isRecord(event.payload) && "artifactRef" in event.payload
+          Predicate.isObject(event.payload) && "artifactRef" in event.payload
             ? [...current.artifacts, event.payload.artifactRef]
             : current.artifacts;
         jobs.set(jobId, { ...current, status: "materialized", artifacts });
@@ -73,7 +73,7 @@ export const projectImageJobs = (
         jobs.set(jobId, {
           ...current,
           status: "failed",
-          failure: Predicate.isRecord(event.payload) ? event.payload.failure : undefined,
+          failure: Predicate.isObject(event.payload) ? event.payload.failure : undefined,
         });
         break;
       case IMAGE_EVENTS.JOB_CANCELLED:

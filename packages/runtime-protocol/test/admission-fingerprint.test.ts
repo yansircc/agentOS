@@ -17,11 +17,11 @@ import { makeAdmissionSchemaSpec } from "../src/admission";
 describe("admission — canonical fingerprint (contract §4.1)", () => {
   const S1 = Schema.Struct({
     summary: Schema.String,
-    sentiment: Schema.Literal("positive", "negative", "neutral"),
+    sentiment: Schema.Literals(["positive", "negative", "neutral"]),
   });
   const S2 = Schema.Struct({
     summary: Schema.String,
-    sentiment: Schema.Literal("positive", "negative", "neutral"),
+    sentiment: Schema.Literals(["positive", "negative", "neutral"]),
     keywords: Schema.Array(Schema.String),
   });
   // S3 = S2 with reordered properties AND reordered `required` array.
@@ -29,7 +29,7 @@ describe("admission — canonical fingerprint (contract §4.1)", () => {
   // fingerprint MUST equal S2.
   const S3 = Schema.Struct({
     keywords: Schema.Array(Schema.String),
-    sentiment: Schema.Literal("neutral", "negative", "positive"),
+    sentiment: Schema.Literals(["neutral", "negative", "positive"]),
     summary: Schema.String,
   });
 

@@ -5,7 +5,7 @@ export const WORKSPACE_JOB_EVENT_PREFIX = "workspace_job.";
 export const WORKSPACE_JOB_FACT_OWNER = "@agent-os/workspace-job";
 export const WORKSPACE_JOB_PROJECTION_KIND = "workspace_job.result";
 
-const NonEmptyString = Schema.String.pipe(Schema.minLength(1));
+const NonEmptyString = Schema.String.pipe(Schema.check(Schema.isMinLength(1)));
 
 const TerminalArtifactSchema = Schema.Struct({
   artifactRef: NonEmptyString,
@@ -17,7 +17,7 @@ const TerminalArtifactSchema = Schema.Struct({
 
 const VerificationCheckSchema = Schema.Struct({
   name: NonEmptyString,
-  status: Schema.Literal("passed", "failed"),
+  status: Schema.Literals(["passed", "failed"]),
   message: Schema.optional(Schema.String),
   proofRef: Schema.optional(NonEmptyString),
   fingerprint: Schema.optional(NonEmptyString),
@@ -26,7 +26,7 @@ const VerificationCheckSchema = Schema.Struct({
 const AttemptSchema = Schema.Struct({
   index: Schema.Number,
   maxAttempts: Schema.Number,
-  cause: Schema.Literal("initial", "verifier_repair"),
+  cause: Schema.Literals(["initial", "verifier_repair"]),
   repairOfRequestedEventId: Schema.optional(Schema.Number),
 });
 
@@ -58,7 +58,7 @@ const TerminalVerdictSchema = Schema.Struct({
 });
 
 const FailureSchema = Schema.Struct({
-  phase: Schema.Literal(
+  phase: Schema.Literals([
     "request",
     "seed",
     "submit",
@@ -67,7 +67,7 @@ const FailureSchema = Schema.Struct({
     "data_plane",
     "verify_infra",
     "projection",
-  ),
+  ]),
   code: NonEmptyString,
   reason: NonEmptyString,
   retryable: Schema.optional(Schema.Boolean),

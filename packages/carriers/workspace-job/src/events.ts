@@ -353,7 +353,7 @@ const stringArrayField = (
 };
 
 const attemptFrom = (value: unknown): WorkspaceJobAttempt | undefined => {
-  if (!Predicate.isRecord(value)) return undefined;
+  if (!Predicate.isObject(value)) return undefined;
   const index = numberField(value, "index");
   const maxAttempts = numberField(value, "maxAttempts");
   const cause = value.cause;
@@ -374,7 +374,7 @@ const attemptFrom = (value: unknown): WorkspaceJobAttempt | undefined => {
 };
 
 const terminalArtifactFrom = (value: unknown): WorkspaceJobTerminalArtifact | undefined => {
-  if (!Predicate.isRecord(value)) return undefined;
+  if (!Predicate.isObject(value)) return undefined;
   const artifactRef = stringField(value, "artifactRef");
   const path = stringField(value, "path");
   const schemaId = stringField(value, "schemaId");
@@ -393,7 +393,7 @@ const terminalArtifactFrom = (value: unknown): WorkspaceJobTerminalArtifact | un
 };
 
 const checkFrom = (value: unknown): WorkspaceJobVerificationCheck | undefined => {
-  if (!Predicate.isRecord(value)) return undefined;
+  if (!Predicate.isObject(value)) return undefined;
   const name = stringField(value, "name");
   const status = value.status;
   if (name === undefined || (status !== "passed" && status !== "failed")) return undefined;
@@ -535,7 +535,7 @@ const failurePhaseFrom = (value: unknown): WorkspaceJobFailure["phase"] | undefi
     : undefined;
 
 const failureFrom = (value: unknown): WorkspaceJobFailure | undefined => {
-  if (!Predicate.isRecord(value)) return undefined;
+  if (!Predicate.isObject(value)) return undefined;
   const phase = failurePhaseFrom(value.phase);
   const code = stringField(value, "code");
   const reason = stringField(value, "reason");
@@ -719,7 +719,7 @@ export const projectWorkspaceJobByIdempotencyKey = (
 ): WorkspaceJobIdempotencyProjection => {
   for (const event of events) {
     if (!sameOwner(event) || event.kind !== WORKSPACE_JOB_KIND.REQUESTED) continue;
-    if (!Predicate.isRecord(event.payload)) continue;
+    if (!Predicate.isObject(event.payload)) continue;
     const request = requestedFrom(event.payload);
     if (request?.idempotencyKey === idempotencyKey) {
       return {
@@ -749,7 +749,7 @@ export const projectWorkspaceJobSteps = (
     | undefined;
 
   for (const event of events) {
-    if (!sameOwner(event) || !Predicate.isRecord(event.payload)) continue;
+    if (!sameOwner(event) || !Predicate.isObject(event.payload)) continue;
     if (event.kind === WORKSPACE_JOB_KIND.REQUESTED) {
       const next = requestedFrom(event.payload);
       if (next?.runId === runId) {
@@ -856,7 +856,7 @@ export const projectWorkspaceJob = (
   let terminal: WorkspaceJobProjection | undefined;
 
   for (const event of events) {
-    if (!sameOwner(event) || !Predicate.isRecord(event.payload)) continue;
+    if (!sameOwner(event) || !Predicate.isObject(event.payload)) continue;
     if (event.kind === WORKSPACE_JOB_KIND.REQUESTED) {
       const next = requestedFrom(event.payload);
       if (next?.runId === runId) {
@@ -962,7 +962,7 @@ export const projectWorkspaceJobAttempt = (
   let terminal: WorkspaceJobProjection | undefined;
 
   for (const event of events) {
-    if (!sameOwner(event) || !Predicate.isRecord(event.payload)) continue;
+    if (!sameOwner(event) || !Predicate.isObject(event.payload)) continue;
     if (event.kind === WORKSPACE_JOB_KIND.REQUESTED && event.id === targetRequestedEventId) {
       const next = requestedFrom(event.payload);
       if (next?.runId === runId) {

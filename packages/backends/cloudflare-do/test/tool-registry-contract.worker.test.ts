@@ -73,7 +73,7 @@ const makeSpec = (
 
 const buildRuntime = (
   state: DurableObjectState,
-  llm: Context.Tag.Service<typeof LlmTransport>,
+  llm: Context.Service.Shape<typeof LlmTransport>,
   identity: BackendProtocolEventIdentity,
   material: (ref: MaterialRef) => ResolvedMaterial | null = () => null,
 ) => {
@@ -506,7 +506,11 @@ describe("tool registry generator", () => {
       const identity = testEventIdentity(scope, toolRegistryAuthorityRef);
       const runtime = buildRuntime(state, llm, identity);
       const spec = makeSpec(scope, hangingTool, {
-        budget: { maxTurns: 3, timeMs: 50, toolRetries: 0 },
+        budget: {
+          maxTurns: 3,
+          timeMs: 50,
+          toolRetryPolicy: { execution: { maxRetries: 0, delay: { kind: "none" } } },
+        },
       });
 
       const result = await runtime.runPromise(submitAgentEffect(spec));

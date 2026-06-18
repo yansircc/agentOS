@@ -14,7 +14,7 @@ import type { DispatchToScopeResult, DispatchToScopeSpec } from "@agent-os/kerne
 import type { InvalidTraceContext } from "@agent-os/telemetry-protocol";
 import type { DispatchEnvelope, DispatchReceiverResult } from "@agent-os/backend-protocol";
 
-export class Dispatch extends Context.Tag("@agent-os/Dispatch")<
+export class Dispatch extends Context.Service<
   Dispatch,
   {
     readonly dispatchToScope: (
@@ -42,4 +42,4 @@ export class Dispatch extends Context.Tag("@agent-os/Dispatch")<
       | DispatchScopeMismatch
     >;
   }
->() {}
+>()("@agent-os/Dispatch") {}

@@ -80,7 +80,7 @@ const workspaceOpCapability = (
 ): ExtensionCapability => {
   const capability = capabilities.get(WORKSPACE_OP_FACT_OWNER);
   return Option.getOrThrowWith(
-    Option.fromNullable(capability),
+    Option.fromNullishOr(capability),
     () =>
       new CapabilityRejected({
         event: WORKSPACE_OP_KIND.COMPLETED,
@@ -110,7 +110,7 @@ const providerOptions = (
   ...(options.maxOutputBytes === undefined ? {} : { maxOutputBytes: options.maxOutputBytes }),
 });
 
-const workspaceOperationProjectionState = Schema.Union(
+const workspaceOperationProjectionState = Schema.Union([
   Schema.Struct({
     status: Schema.Literal("missing"),
     requestedEventId: Schema.Number,
@@ -133,7 +133,7 @@ const workspaceOperationProjectionState = Schema.Union(
     request: Schema.Unknown,
     rejected: Schema.Unknown,
   }),
-) as Schema.Schema<WorkspaceOperationProjection, unknown, never>;
+]) as Schema.Codec<WorkspaceOperationProjection, unknown, never, never>;
 
 const requestEventFor = (
   state: WorkspaceOperationProjection,
@@ -171,7 +171,7 @@ const workspaceOperationMaterializedProjection = (): AnyMaterializedProjectionDe
       if (event.kind !== WORKSPACE_OP_KIND.COMPLETED && event.kind !== WORKSPACE_OP_KIND.REJECTED) {
         return projectionSkip();
       }
-      if (!Predicate.isRecord(event.payload)) {
+      if (!Predicate.isObject(event.payload)) {
         return projectionMalformed("workspace_op terminal payload must be an object");
       }
       return typeof event.payload.requestedEventId === "number"

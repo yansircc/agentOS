@@ -16,14 +16,9 @@ export class PostgresHarnessError extends Data.TaggedError("agent_os.postgres_ha
 }> {}
 
 const readConfig = (name: string, fallback: string): Effect.Effect<string, PostgresHarnessError> =>
-  Effect.configProviderWith((provider) =>
-    provider
-      .load(Config.string(name).pipe(Config.withDefault(fallback)))
-      .pipe(
-        Effect.mapError(
-          (cause) => new PostgresHarnessError({ operation: `config:${name}`, cause }),
-        ),
-      ),
+  Config.string(name).pipe(
+    Config.withDefault(fallback),
+    Effect.mapError((cause) => new PostgresHarnessError({ operation: `config:${name}`, cause })),
   );
 
 const exec = (
@@ -38,7 +33,7 @@ const exec = (
   });
 
 const freePort = (): Effect.Effect<number, PostgresHarnessError> =>
-  Effect.async<number, PostgresHarnessError>((resume) => {
+  Effect.callback<number, PostgresHarnessError>((resume) => {
     const server = createServer();
     server.on("error", (cause) => {
       resume(Effect.fail(new PostgresHarnessError({ operation: "free_port", cause })));
@@ -82,10 +77,10 @@ const waitForPostgres = (databaseUrl: string): Effect.Effect<void, PostgresHarne
             cause: lastCause,
           });
         }
-        const ready = yield* Effect.either(psqlReady(databaseUrl));
-        if (ready._tag === "Right") return;
+        const ready = yield* Effect.result(psqlReady(databaseUrl));
+        if (ready._tag === "Success") return;
         yield* Effect.sleep(Duration.millis(500));
-        return yield* loop(ready.left);
+        return yield* loop(ready.failure);
       });
     yield* loop();
   });
@@ -124,10 +119,10 @@ export const startPostgresRuntimeHarnessEffect: Effect.Effect<
     dockerImage,
   ]);
   const databaseUrl = `postgres://postgres:postgres@127.0.0.1:${port}/agentos`;
-  const ready = yield* Effect.either(waitForPostgres(databaseUrl));
-  if (ready._tag === "Left") {
+  const ready = yield* Effect.result(waitForPostgres(databaseUrl));
+  if (ready._tag === "Failure") {
     yield* exec("docker", ["rm", "-f", name]).pipe(Effect.ignore);
-    return yield* ready.left;
+    return yield* ready.failure;
   }
   return {
     databaseUrl,

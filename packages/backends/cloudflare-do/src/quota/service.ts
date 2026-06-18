@@ -34,7 +34,7 @@ export const QuotaLive = (
   ctx: DurableObjectState,
   ownerIdentity: BackendProtocolEventIdentity,
 ): Layer.Layer<Quota, never, EventBus> =>
-  Layer.scoped(
+  Layer.effect(
     Quota,
     Effect.gen(function* () {
       const sql = ctx.storage.sql;

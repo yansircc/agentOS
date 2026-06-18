@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Data, Effect } from "effect";
 import {
   DECISION_GATE_KIND,
   decisionGateBoundaryContract,
@@ -14,6 +14,13 @@ import {
 } from "@agent-os/runtime-protocol";
 import type { LedgerCommitEventSpec } from "@agent-os/runtime-protocol";
 import type { BoundaryCommitRejected } from "./boundary-commit";
+
+class DriverLedgerCommitShapeMismatch extends Data.TaggedError(
+  "agent_os.driver_ledger_commit_shape_mismatch",
+)<{
+  readonly expected: number;
+  readonly actual: number;
+}> {}
 
 type LedgerAppender = {
   readonly commit: (
@@ -121,7 +128,7 @@ const commitOneRuntimeEvent = (
     if (event === undefined) {
       return yield* Effect.fail(
         new SqlError({
-          cause: new Error("ledger commit returned no events for single driver append"),
+          cause: new DriverLedgerCommitShapeMismatch({ expected: 1, actual: 0 }),
         }),
       );
     }
@@ -142,7 +149,10 @@ const commitRuntimeEvents = <
     if (events.length !== specs.length) {
       return yield* Effect.fail(
         new SqlError({
-          cause: new Error("ledger commit returned unexpected event count for driver append"),
+          cause: new DriverLedgerCommitShapeMismatch({
+            expected: specs.length,
+            actual: events.length,
+          }),
         }),
       );
     }

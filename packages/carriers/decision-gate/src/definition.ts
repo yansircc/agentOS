@@ -5,14 +5,14 @@ export const DECISION_GATE_EVENT_PREFIX = "decision_gate.";
 
 const rejectionRefSchema = Schema.Struct({
   rejectionId: Schema.String,
-  rejectionKind: Schema.Literal(
+  rejectionKind: Schema.Literals([
     "capability_denied",
     "policy_denied",
     "validation_failed",
     "unsupported",
     "resource_denied",
     "provider_rejected",
-  ),
+  ]),
   reason: Schema.optional(Schema.String),
 });
 
@@ -36,7 +36,7 @@ export const decisionGateCarrier = defineCarrier({
       payload: Schema.Struct({
         gateRef: Schema.String,
         decisionRef: Schema.String,
-        decision: Schema.Literal("approved", "rejected"),
+        decision: Schema.Literals(["approved", "rejected"]),
         decidedBy: Schema.String,
         reason: Schema.optional(Schema.String),
         rejectionRef: Schema.optional(rejectionRefSchema),

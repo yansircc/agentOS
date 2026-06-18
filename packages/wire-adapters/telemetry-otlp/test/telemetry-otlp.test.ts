@@ -236,14 +236,14 @@ describe("OTLP trace projection", () => {
 
   it.effect("fails closed before the OTLP adapter boundary on malformed source trace context", () =>
     Effect.gen(function* () {
-      const result = yield* Effect.either(
+      const result = yield* Effect.result(
         projectTelemetryEventTree([
           rawEvent(1, "dispatch.outbound.delivered", {
             traceContext: { traceparent: "00-test" },
           }),
         ]),
       );
-      expect(result._tag).toBe("Left");
+      expect(result._tag).toBe("Failure");
     }),
   );
 

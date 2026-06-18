@@ -40,6 +40,7 @@
       "statement": "Every ledger fact has one commit primitive as its source generator.",
       "primitives": ["primitive.runtime.Ledger", "primitive.runtime.LedgerCommitEventSpec"],
       "errors": [
+        "agent_os.driver_ledger_commit_shape_mismatch",
         "agent_os.durable_trigger_acquire_cancelled",
         "agent_os.durable_trigger_commit_returned_thenable",
         "agent_os.durable_trigger_drain_limit_exceeded",
@@ -48,6 +49,7 @@
         "agent_os.resource_insufficient",
         "agent_os.resource_reservation_closed",
         "agent_os.resource_reservation_not_found",
+        "agent_os.runtime_ledger_transition_rejected",
         "agent_os.sql_error",
         "agent_os.trigger_factory_error",
         "agent_os.unregistered_durable_trigger_kind"
@@ -196,6 +198,7 @@
         "agent_os.dispatch_scope_mismatch",
         "agent_os.dispatch_target_not_found",
         "agent_os.legacy_ledger_schema",
+        "agent_os.missing_submit_run_binding",
         "agent_os.projection_application_error",
         "agent_os.projection_reducer_returned_thenable",
         "agent_os.projection_registry_error",
@@ -212,6 +215,7 @@
         "docs/concepts/materialized-projections.md",
         "docs/concepts/tool-execution-domain.md",
         "docs/packages/backend-cloudflare-do.md",
+        "docs/packages/runtime-protocol.md",
         "docs/tutorials/streaming-chatbot.md"
       ],
       "tests": [

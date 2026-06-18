@@ -2,38 +2,36 @@ import {
   type GenerateTextResponse,
   type Service as LanguageModelService,
   type ToolChoice,
-} from "@effect/ai/LanguageModel";
+} from "effect/unstable/ai/LanguageModel";
 import type {
   AssistantMessagePartEncoded,
   MessageEncoded,
   ProviderOptions,
   RawInput,
-} from "@effect/ai/Prompt";
+} from "effect/unstable/ai/Prompt";
 import type {
   AnyPart as ResponseAnyPart,
   ProviderMetadata as ResponseProviderMetadata,
   ToolCallPart as ResponseToolCallPart,
   ToolResultPart as ResponseToolResultPart,
   Usage as ResponseUsage,
-} from "@effect/ai/Response";
-import { make as makeTool, type Any as AnyTool } from "@effect/ai/Tool";
-import type { WithHandler as ToolkitWithHandler } from "@effect/ai/Toolkit";
+} from "effect/unstable/ai/Response";
+import { dynamic as makeDynamicTool, type Any as AnyTool } from "effect/unstable/ai/Tool";
+import type { WithHandler as ToolkitWithHandler } from "effect/unstable/ai/Toolkit";
 import { AnthropicClient, make as makeAnthropicClient } from "@effect/ai-anthropic/AnthropicClient";
 import { make as makeAnthropicLanguageModel } from "@effect/ai-anthropic/AnthropicLanguageModel";
-import { GoogleClient, make as makeGoogleClient } from "@effect/ai-google/GoogleClient";
-import { make as makeGoogleLanguageModel } from "@effect/ai-google/GoogleLanguageModel";
 import {
   HttpClient as HttpClientTag,
   type HttpClient as HttpClientService,
-} from "@effect/platform/HttpClient";
-import type { HttpClientError } from "@effect/platform/HttpClientError";
-import type { HttpBodyError } from "@effect/platform/HttpBody";
+} from "effect/unstable/http/HttpClient";
+import type { HttpClientError } from "effect/unstable/http/HttpClientError";
+import type { HttpBodyError } from "effect/unstable/http/HttpBody";
 import {
   bodyJson as httpBodyJson,
   post as httpPost,
   type HttpClientRequest,
-} from "@effect/platform/HttpClientRequest";
-import { Context, Data, Effect, Layer, Schema } from "effect";
+} from "effect/unstable/http/HttpClientRequest";
+import { Data, Effect, Layer, Schema } from "effect";
 import * as Redacted from "effect/Redacted";
 import type * as Scope from "effect/Scope";
 import { LlmTransport, projectAgentSchemaForLlmTool } from "@agent-os/llm-protocol";
@@ -79,16 +77,9 @@ interface AnthropicMessagesRoute extends EffectAiRouteBase {
   readonly anthropicVersion?: string;
 }
 
-interface GeminiGenerateContentRoute extends EffectAiRouteBase {
-  readonly kind: "gemini-generate-content";
-}
+export type EffectAiSupportedRoute = OpenAiChatCompatibleRoute | AnthropicMessagesRoute;
 
-export type EffectAiSupportedRoute =
-  | OpenAiChatCompatibleRoute
-  | AnthropicMessagesRoute
-  | GeminiGenerateContentRoute;
-
-type EffectAiLanguageModelRoute = AnthropicMessagesRoute | GeminiGenerateContentRoute;
+type EffectAiLanguageModelRoute = AnthropicMessagesRoute;
 
 const hasRouteMaterial = (
   route: LlmRoute,
@@ -105,9 +96,7 @@ const hasRouteMaterial = (
 
 const isEffectAiSupportedRoute = (route: LlmRoute): route is EffectAiSupportedRoute =>
   hasRouteMaterial(route) &&
-  (route.kind === "openai-chat-compatible" ||
-    route.kind === "anthropic-messages" ||
-    route.kind === "gemini-generate-content");
+  (route.kind === "openai-chat-compatible" || route.kind === "anthropic-messages");
 
 export interface EffectAiResolvedRoute<
   Route extends EffectAiSupportedRoute = EffectAiSupportedRoute,
@@ -129,7 +118,7 @@ export class EffectAiPromptError extends Data.TaggedError("agent_os.effect_ai_pr
 }> {}
 
 export class EffectAiMissingUsage extends Data.TaggedError("agent_os.effect_ai_missing_usage")<{
-  readonly field: "inputTokens" | "outputTokens" | "totalTokens";
+  readonly field: "inputTokens.total" | "outputTokens.total";
 }> {}
 
 export class EffectAiProviderExecutedToolRejected extends Data.TaggedError(
@@ -279,32 +268,6 @@ const effectAiWireDescriptor = (resolved: EffectAiResolvedRoute): LlmWireDescrip
         ],
         bodySchema: chatBodySchema(resolved.route.modelId),
       };
-    case "gemini-generate-content":
-      return {
-        method: "POST",
-        url: `${withoutTrailingSlash(resolved.endpoint)}/v1beta/models/${encodeURIComponent(
-          resolved.route.modelId,
-        )}:generateContent`,
-        headers: [
-          ["content-type", "application/json"],
-          ["x-goog-api-key", credentialPlaceholder(resolved.route.credentialRef)],
-        ],
-        bodySchema: {
-          type: "object",
-          properties: {
-            contents: {
-              type: "array",
-              items: { type: "object", properties: {}, additionalProperties: true },
-            },
-            tools: {
-              type: "array",
-              items: { type: "object", properties: {}, additionalProperties: true },
-            },
-          },
-          required: ["contents"],
-          additionalProperties: true,
-        },
-      };
   }
 };
 
@@ -323,12 +286,9 @@ const effectAiRouteDescriptor = (resolved: EffectAiResolvedRoute): LlmTransportR
 });
 
 const resolveEffectAiRouteForTransport = (
-  refs: Context.Tag.Service<RefResolverService>,
   route: LlmRoute,
-): Effect.Effect<EffectAiResolvedRoute, UpstreamFailure> =>
-  resolveEffectAiRoute(refs, route).pipe(
-    Effect.mapError((cause) => new UpstreamFailure({ cause })),
-  );
+): Effect.Effect<EffectAiResolvedRoute, UpstreamFailure, RefResolverService> =>
+  resolveEffectAiRoute(route).pipe(Effect.mapError((cause) => new UpstreamFailure({ cause })));
 
 const parseJsonOrText = (
   value: string | null,
@@ -355,30 +315,13 @@ const stringifyJson = (
     catch: (cause) => new EffectAiJsonEncodeFailed({ part, name, cause }),
   });
 
-const googleThoughtSignature = (
-  metadata: Readonly<Record<string, unknown>> | undefined,
-): string | undefined => {
-  const google = metadata?.google;
-  if (typeof google !== "object" || google === null) return undefined;
-  const thoughtSignature = (google as { readonly thoughtSignature?: unknown }).thoughtSignature;
-  return typeof thoughtSignature === "string" && thoughtSignature.length > 0
-    ? thoughtSignature
-    : undefined;
-};
-
 const allowlistedPromptOptions = (
-  metadata: Readonly<Record<string, unknown>> | undefined,
-): ProviderOptions | undefined => {
-  const thoughtSignature = googleThoughtSignature(metadata);
-  return thoughtSignature === undefined ? undefined : { google: { thoughtSignature } };
-};
+  _metadata: Readonly<Record<string, unknown>> | undefined,
+): ProviderOptions | undefined => undefined;
 
 const allowlistedToolCallMetadata = (
-  metadata: ResponseProviderMetadata,
-): Readonly<Record<string, unknown>> | undefined => {
-  const thoughtSignature = googleThoughtSignature(metadata);
-  return thoughtSignature === undefined ? undefined : { google: { thoughtSignature } };
-};
+  _metadata: ResponseProviderMetadata,
+): Readonly<Record<string, unknown>> | undefined => undefined;
 
 export const effectAiPromptFromMessages = (
   messages: ReadonlyArray<LlmMessage>,
@@ -402,13 +345,14 @@ export const effectAiPromptFromMessages = (
             content.push({ type: "text", text: message.content });
           }
           for (const call of message.tool_calls ?? []) {
+            const options = allowlistedPromptOptions(call.metadata);
             content.push({
               type: "tool-call",
               id: call.id,
               name: call.function.name,
               params: yield* parseJsonOrText(call.function.arguments, call.id),
               providerExecuted: false,
-              options: allowlistedPromptOptions(call.metadata),
+              ...(options === undefined ? {} : { options }),
             });
           }
           return { role: "assistant", content };
@@ -439,12 +383,11 @@ export const effectAiPromptFromMessages = (
   });
 
 export const effectAiToolFromDefinition = (definition: ToolDefinition): AnyTool =>
-  makeTool(definition.function.name, {
+  makeDynamicTool(definition.function.name, {
     description: definition.function.description,
+    parameters: projectAgentSchemaForLlmTool(definition.function.parameters),
     success: Schema.Unknown,
-  }).setParameters(
-    definition.function.parameters.source as unknown as Schema.Struct<Schema.Struct.Fields>,
-  );
+  });
 
 export const effectAiToolkitFromToolDefinitions = (
   definitions: ReadonlyArray<ToolDefinition>,
@@ -464,19 +407,18 @@ export const effectAiToolkitFromToolDefinitions = (
 
 const normalizeUsage = (usage: ResponseUsage): Effect.Effect<LlmUsage, EffectAiMissingUsage> =>
   Effect.gen(function* () {
-    if (usage.inputTokens === undefined) {
-      return yield* new EffectAiMissingUsage({ field: "inputTokens" });
+    const promptTokens = usage.inputTokens.total;
+    const completionTokens = usage.outputTokens.total;
+    if (promptTokens === undefined) {
+      return yield* new EffectAiMissingUsage({ field: "inputTokens.total" });
     }
-    if (usage.outputTokens === undefined) {
-      return yield* new EffectAiMissingUsage({ field: "outputTokens" });
-    }
-    if (usage.totalTokens === undefined) {
-      return yield* new EffectAiMissingUsage({ field: "totalTokens" });
+    if (completionTokens === undefined) {
+      return yield* new EffectAiMissingUsage({ field: "outputTokens.total" });
     }
     return {
-      promptTokens: usage.inputTokens,
-      completionTokens: usage.outputTokens,
-      totalTokens: usage.totalTokens,
+      promptTokens,
+      completionTokens,
+      totalTokens: promptTokens + completionTokens,
     };
   });
 
@@ -490,6 +432,7 @@ const normalizeToolCall = (
         name: part.name,
       });
     }
+    const metadata = allowlistedToolCallMetadata(part.metadata);
     return {
       id: part.id,
       type: "function",
@@ -497,7 +440,7 @@ const normalizeToolCall = (
         name: part.name,
         arguments: yield* stringifyJson(part.params, "tool-call", part.name),
       },
-      metadata: allowlistedToolCallMetadata(part.metadata),
+      ...(metadata === undefined ? {} : { metadata }),
     };
   });
 
@@ -540,11 +483,14 @@ export const normalizeEffectAiResponse = (
           if (part.text.length > 0) items.push({ type: "message", text: part.text });
           break;
         case "reasoning":
-          items.push({
-            type: "reasoning",
-            redacted: true,
-            metadata: allowlistedToolCallMetadata(part.metadata),
-          });
+          {
+            const metadata = allowlistedToolCallMetadata(part.metadata);
+            items.push({
+              type: "reasoning",
+              redacted: true,
+              ...(metadata === undefined ? {} : { metadata }),
+            });
+          }
           break;
         case "tool-call":
           items.push({ type: "tool_call", call: yield* normalizeToolCall(part) });
@@ -577,7 +523,7 @@ const withAbortSignal = <A, E, R>(
   signal: AbortSignal | undefined,
 ): Effect.Effect<A, E | EffectAiAborted, R> => {
   if (signal === undefined) return effect;
-  const abort = Effect.async<never, EffectAiAborted>((resume) => {
+  const abort = Effect.callback<never, EffectAiAborted>((resume) => {
     if (signal.aborted) {
       resume(Effect.fail(new EffectAiAborted()));
       return;
@@ -755,26 +701,39 @@ export const callEffectAiLanguageModel = (
       request.tools === undefined || request.tools.length === 0
         ? undefined
         : effectAiToolkitFromToolDefinitions(request.tools);
-    const response = yield* withAbortSignal(
-      model.generateText({
-        prompt,
-        toolkit,
-        disableToolCallResolution: true,
-        toolChoice: toolChoiceForRequest(request),
-      }),
-      options.signal,
-    );
+    const response =
+      toolkit === undefined
+        ? yield* withAbortSignal(
+            model.generateText({
+              prompt,
+              disableToolCallResolution: true,
+            }),
+            options.signal,
+          )
+        : yield* withAbortSignal(
+            model.generateText({
+              prompt,
+              toolkit,
+              disableToolCallResolution: true,
+              toolChoice: toolChoiceForRequest(request),
+            }),
+            options.signal,
+          );
     return yield* normalizeEffectAiResponse(response);
   }).pipe(Effect.mapError((cause) => new UpstreamFailure({ cause })));
 
 export const resolveEffectAiRoute = (
-  refs: Context.Tag.Service<RefResolverService>,
   route: LlmRoute,
-): Effect.Effect<EffectAiResolvedRoute, EffectAiUnsupportedRoute | RefResolutionFailed> =>
+): Effect.Effect<
+  EffectAiResolvedRoute,
+  EffectAiUnsupportedRoute | RefResolutionFailed,
+  RefResolverService
+> =>
   Effect.gen(function* () {
     if (!isEffectAiSupportedRoute(route)) {
       return yield* new EffectAiUnsupportedRoute({ kind: route.kind });
     }
+    const refs = yield* RefResolverService;
     const endpoint = yield* resolveStringMaterial(refs, endpointMaterialRef(route.endpointRef));
     const credential = yield* resolveStringMaterial(
       refs,
@@ -787,27 +746,14 @@ export const defaultEffectAiLanguageModelFactory: EffectAiLanguageModelFactory<
   HttpClientService | Scope.Scope
 > = (input) =>
   Effect.gen(function* () {
-    switch (input.route.kind) {
-      case "anthropic-messages": {
-        const client = yield* makeAnthropicClient({
-          apiUrl: input.endpoint,
-          apiKey: Redacted.make(input.credential),
-          anthropicVersion: input.route.anthropicVersion ?? ANTHROPIC_DEFAULT_VERSION,
-        });
-        return yield* makeAnthropicLanguageModel({ model: input.route.modelId }).pipe(
-          Effect.provideService(AnthropicClient, client),
-        );
-      }
-      case "gemini-generate-content": {
-        const client = yield* makeGoogleClient({
-          apiUrl: input.endpoint,
-          apiKey: Redacted.make(input.credential),
-        });
-        return yield* makeGoogleLanguageModel({ model: input.route.modelId }).pipe(
-          Effect.provideService(GoogleClient, client),
-        );
-      }
-    }
+    const client = yield* makeAnthropicClient({
+      apiUrl: input.endpoint,
+      apiKey: Redacted.make(input.credential),
+      apiVersion: input.route.anthropicVersion ?? ANTHROPIC_DEFAULT_VERSION,
+    });
+    return yield* makeAnthropicLanguageModel({ model: input.route.modelId }).pipe(
+      Effect.provideService(AnthropicClient, client),
+    );
   });
 
 export const makeEffectAiLlmTransportLayer = <R>(
@@ -819,12 +765,15 @@ export const makeEffectAiLlmTransportLayer = <R>(
       const refs = yield* RefResolverService;
       const httpClient = yield* HttpClientTag;
       const context = yield* Effect.context<R>();
+      const resolveWithRefs = (route: LlmRoute) =>
+        resolveEffectAiRouteForTransport(route).pipe(
+          Effect.provideService(RefResolverService, refs),
+        );
       return {
-        resolveRoute: (route) =>
-          resolveEffectAiRouteForTransport(refs, route).pipe(Effect.map(effectAiRouteDescriptor)),
+        resolveRoute: (route) => resolveWithRefs(route).pipe(Effect.map(effectAiRouteDescriptor)),
         call: (request, options) =>
           Effect.gen(function* () {
-            const resolved = yield* resolveEffectAiRouteForTransport(refs, request.route);
+            const resolved = yield* resolveWithRefs(request.route);
             if (resolved.route.kind === "openai-chat-compatible") {
               return yield* callOpenAiChatCompatible(
                 httpClient,

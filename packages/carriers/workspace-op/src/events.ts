@@ -134,7 +134,7 @@ const envRefsField = (
   const value = payload.envRefs;
   if (!Array.isArray(value)) return undefined;
   const out = value.flatMap((item) => {
-    if (!Predicate.isRecord(item)) return [];
+    if (!Predicate.isObject(item)) return [];
     const name = typeof item.name === "string" && item.name.length > 0 ? item.name : undefined;
     const ref = typeof item.ref === "string" && item.ref.length > 0 ? item.ref : undefined;
     return name === undefined || ref === undefined ? [] : [{ name, ref }];
@@ -202,7 +202,7 @@ const requestFrom = (
     ...(stringArrayField(payload, "materialRefs") === undefined
       ? {}
       : { materialRefs: stringArrayField(payload, "materialRefs") }),
-    ...(Predicate.isRecord(payload.limits) ? { limits: payload.limits as never } : {}),
+    ...(Predicate.isObject(payload.limits) ? { limits: payload.limits as never } : {}),
     claim,
   };
 };
@@ -320,7 +320,7 @@ export const projectWorkspaceOperation = (
   let rejected: WorkspaceOperationRejectedPayload | undefined;
 
   for (const event of events) {
-    if (!Predicate.isRecord(event.payload)) continue;
+    if (!Predicate.isObject(event.payload)) continue;
     switch (event.kind) {
       case WORKSPACE_OP_KIND.REQUESTED:
         if (event.id === requestedEventId && request === undefined) {

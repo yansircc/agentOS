@@ -25,7 +25,7 @@ export type CloudflareWorkerScriptResourceCarrierOptions =
   CloudflareResourceCarrierOptions<CloudflareWorkerScriptMutationInput>;
 
 const workerIdFromCreate = (body: unknown): string | null => {
-  if (!Predicate.isRecord(body) || !Predicate.isRecord(body.result)) return null;
+  if (!Predicate.isObject(body) || !Predicate.isObject(body.result)) return null;
   return nonEmptyString(body.result.id);
 };
 

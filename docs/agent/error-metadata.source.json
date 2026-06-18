@@ -8,6 +8,12 @@
       "fix": "Keep SQL writes inside the backend-owned ledger commit primitive and return typed SqlError at the backend boundary."
     },
     {
+      "tag": "agent_os.driver_ledger_commit_shape_mismatch",
+      "invariants": ["invariant.ledger.single-commit-source"],
+      "docs": "docs/concepts/durable-truth.md",
+      "fix": "Keep driver append actions backed by ledger commits that return exactly the requested events; treat mismatched commit shape as a backend ledger failure."
+    },
+    {
       "tag": "agent_os.postgres_harness_error",
       "invariants": ["invariant.boundary.runtime-validation-external-only"],
       "docs": "docs/packages/backend-node-postgres.md",
@@ -24,6 +30,12 @@
       "invariants": ["invariant.d10.truth-identity"],
       "docs": "docs/concepts/durable-truth.md",
       "fix": "Delete old local backend state and initialize the D10 schema; no legacy row migration is supported."
+    },
+    {
+      "tag": "agent_os.missing_submit_run_binding",
+      "invariants": ["invariant.d10.truth-identity"],
+      "docs": "docs/packages/runtime-protocol.md",
+      "fix": "Provide the framework-owned LLM route binding before lowering app-authored SubmitRunInput; adapters must not synthesize route defaults."
     },
     {
       "tag": "agent_os.boundary_commit_rejected",
@@ -246,6 +258,12 @@
       "invariants": ["invariant.boundary.runtime-validation-external-only"],
       "docs": "docs/packages/runtime.md",
       "fix": "Decode trace context at the runtime boundary and reject malformed trace metadata before provider or ledger projection consumes it."
+    },
+    {
+      "tag": "agent_os.runtime_ledger_transition_rejected",
+      "invariants": ["invariant.ledger.single-commit-source"],
+      "docs": "docs/concepts/durable-truth.md",
+      "fix": "Commit runtime events in an order that satisfies runtime transition laws; referenced runtime source events must already exist and match the expected kind and turn."
     },
     {
       "tag": "agent_os.workspace_job_candidate_missing",

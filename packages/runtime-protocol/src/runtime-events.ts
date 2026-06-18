@@ -1,4 +1,4 @@
-import { Option, Predicate, Schema } from "effect";
+import { Data, Option, Predicate, Schema } from "effect";
 import {
   LlmOutputItemSchema,
   LlmUsageSchema,
@@ -19,10 +19,12 @@ import type { ExecutionDomain, ResolvedToolExecution, ToolExecution } from "@age
 import { TraceContextSchema, type TraceContext } from "@agent-os/telemetry-protocol";
 import { ABORT, type AbortKind } from "@agent-os/kernel/abort";
 
-const positiveInt = Schema.Number.pipe(Schema.int(), Schema.greaterThanOrEqualTo(1));
-const nonNegativeInt = Schema.Number.pipe(Schema.int(), Schema.greaterThanOrEqualTo(0));
-const nonEmptyString = Schema.String.pipe(Schema.filter((value) => value.length > 0));
-const unknownRecord = Schema.Record({ key: Schema.String, value: Schema.Unknown });
+const positiveInt = Schema.Int.pipe(Schema.check(Schema.isGreaterThanOrEqualTo(1)));
+const nonNegativeInt = Schema.Int.pipe(Schema.check(Schema.isGreaterThanOrEqualTo(0)));
+const nonEmptyString = Schema.String.pipe(
+  Schema.check(Schema.makeFilter((value) => value.length > 0)),
+);
+const unknownRecord = Schema.Record(Schema.String, Schema.Unknown);
 
 export const RUNTIME_EVENT_KIND = {
   AGENT_RUN_STARTED: "agent.run.started",
@@ -69,7 +71,7 @@ export const isRuntimeEventKind = (kind: string): kind is RuntimeEventKind =>
 export const isRuntimeAbortEventKind = (kind: string): kind is RuntimeAbortEventKind =>
   (RUNTIME_ABORT_EVENT_KINDS as ReadonlyArray<string>).includes(kind);
 
-const TurnRefSchema: Schema.Schema<{
+const TurnRefSchema: Schema.Decoder<{
   readonly id: number;
   readonly index: number;
 }> = Schema.Struct({
@@ -77,20 +79,20 @@ const TurnRefSchema: Schema.Schema<{
   index: nonNegativeInt,
 });
 
-const ExecutionDomainSchema: Schema.Schema<ExecutionDomain> = Schema.Struct({
-  kind: Schema.Literal("host", "sandbox", "workspace", "remote"),
+const ExecutionDomainSchema: Schema.Decoder<ExecutionDomain> = Schema.Struct({
+  kind: Schema.Literals(["host", "sandbox", "workspace", "remote"]),
   ref: Schema.String,
   envAllowlist: Schema.optional(Schema.Array(Schema.String)),
 });
 
-const ToolExecutionSchema: Schema.Schema<ToolExecution> = Schema.Union(
+const ToolExecutionSchema: Schema.Decoder<ToolExecution> = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("deterministic") }),
   Schema.Struct({
     kind: Schema.Literal("external"),
-    access: Schema.Literal("read", "write"),
+    access: Schema.Literals(["read", "write"]),
     domain: ExecutionDomainSchema,
   }),
-);
+]);
 
 export type AgentRunStartedPayload = {
   readonly intent: string;
@@ -359,35 +361,35 @@ export type AgentRunAbortedPayload = {
   readonly traceContext?: TraceContext;
 } & Readonly<Record<string, unknown>>;
 
-export const AgentRunStartedPayloadSchema: Schema.Schema<AgentRunStartedPayload> = Schema.Struct({
+export const AgentRunStartedPayloadSchema: Schema.Decoder<AgentRunStartedPayload> = Schema.Struct({
   intent: Schema.String,
   traceContext: Schema.optional(TraceContextSchema),
 });
 
-export const ChatIngestedPayloadSchema: Schema.Schema<ChatIngestedPayload> = Schema.Struct({
+export const ChatIngestedPayloadSchema: Schema.Decoder<ChatIngestedPayload> = Schema.Struct({
   runId: positiveInt,
   intent: Schema.String,
   context: Schema.Unknown,
   traceContext: Schema.optional(TraceContextSchema),
 });
 
-export const LlmResponsePayloadSchema: Schema.Schema<LlmResponsePayload> = Schema.Struct({
+export const LlmResponsePayloadSchema: Schema.Decoder<LlmResponsePayload> = Schema.Struct({
   turn: TurnRefSchema,
   items: Schema.Array(LlmOutputItemSchema),
   usage: LlmUsageSchema,
   traceContext: Schema.optional(TraceContextSchema),
 });
 
-export const LlmRequestedPayloadSchema: Schema.Schema<LlmRequestedPayload> = Schema.Struct({
+export const LlmRequestedPayloadSchema: Schema.Decoder<LlmRequestedPayload> = Schema.Struct({
   runId: positiveInt,
   turn: TurnRefSchema,
   modelId: Schema.optional(nonEmptyString),
   toolNames: Schema.Array(nonEmptyString),
   toolChoice: Schema.optional(nonEmptyString),
   traceContext: Schema.optional(TraceContextSchema),
-}).pipe(Schema.filter((payload) => payload.runId === payload.turn.id));
+}).pipe(Schema.check(Schema.makeFilter((payload) => payload.runId === payload.turn.id)));
 
-export const ToolExecutedPayloadSchema: Schema.Schema<ToolExecutedPayload> = Schema.Struct({
+export const ToolExecutedPayloadSchema: Schema.Decoder<ToolExecutedPayload> = Schema.Struct({
   runId: positiveInt,
   toolCallId: Schema.String,
   name: Schema.String,
@@ -398,7 +400,7 @@ export const ToolExecutedPayloadSchema: Schema.Schema<ToolExecutedPayload> = Sch
   traceContext: Schema.optional(TraceContextSchema),
 });
 
-export const ToolRejectedPayloadSchema: Schema.Schema<ToolRejectedPayload> = Schema.Struct({
+export const ToolRejectedPayloadSchema: Schema.Decoder<ToolRejectedPayload> = Schema.Struct({
   runId: positiveInt,
   toolCallId: Schema.String,
   name: Schema.String,
@@ -407,7 +409,7 @@ export const ToolRejectedPayloadSchema: Schema.Schema<ToolRejectedPayload> = Sch
   claim: Schema.Unknown,
   diagnostics: Schema.optional(
     Schema.Struct({
-      phase: Schema.Literal(...TOOL_REJECTED_DIAGNOSTICS_PHASES),
+      phase: Schema.Literals(TOOL_REJECTED_DIAGNOSTICS_PHASES),
       reason: nonEmptyString,
       argumentSummary: Schema.optional(
         Schema.Struct({
@@ -425,27 +427,27 @@ export const ToolRejectedPayloadSchema: Schema.Schema<ToolRejectedPayload> = Sch
   traceContext: Schema.optional(TraceContextSchema),
 });
 
-export const AgentRunCompletedPayloadSchema: Schema.Schema<AgentRunCompletedPayload> =
+export const AgentRunCompletedPayloadSchema: Schema.Decoder<AgentRunCompletedPayload> =
   Schema.Struct({
     runId: positiveInt,
     final: Schema.String,
     output: Schema.Unknown,
-    outputKind: Schema.Literal("text", "json"),
+    outputKind: Schema.Literals(["text", "json"]),
     tokensUsed: nonNegativeInt,
     turn: Schema.optional(TurnRefSchema),
     traceContext: Schema.optional(TraceContextSchema),
   });
 
-export const RuntimeCompletedAfterToolsPayloadSchema: Schema.Schema<RuntimeCompletedAfterToolsPayload> =
+export const RuntimeCompletedAfterToolsPayloadSchema: Schema.Decoder<RuntimeCompletedAfterToolsPayload> =
   Schema.Struct({
     runId: positiveInt,
     turn: TurnRefSchema,
     toolNames: Schema.Array(nonEmptyString),
     tokensUsed: nonNegativeInt,
     traceContext: Schema.optional(TraceContextSchema),
-  }).pipe(Schema.filter((payload) => payload.runId === payload.turn.id));
+  }).pipe(Schema.check(Schema.makeFilter((payload) => payload.runId === payload.turn.id)));
 
-export const RuntimeHistoryCompactedPayloadSchema: Schema.Schema<RuntimeHistoryCompactedPayload> =
+export const RuntimeHistoryCompactedPayloadSchema: Schema.Decoder<RuntimeHistoryCompactedPayload> =
   Schema.Struct({
     runId: positiveInt,
     turn: TurnRefSchema,
@@ -460,22 +462,26 @@ export const RuntimeHistoryCompactedPayloadSchema: Schema.Schema<RuntimeHistoryC
     compactedBytes: nonNegativeInt,
     traceContext: Schema.optional(TraceContextSchema),
   }).pipe(
-    Schema.filter(
-      (payload) =>
-        payload.runId === payload.turn.id && payload.compactedBytes < payload.originalBytes,
+    Schema.check(
+      Schema.makeFilter(
+        (payload) =>
+          payload.runId === payload.turn.id && payload.compactedBytes < payload.originalBytes,
+      ),
     ),
   );
 
-export const RuntimeRekeyedPayloadSchema: Schema.Schema<RuntimeRekeyedPayload> = Schema.Struct({
+export const RuntimeRekeyedPayloadSchema: Schema.Decoder<RuntimeRekeyedPayload> = Schema.Struct({
   runId: positiveInt,
   sourceEventId: positiveInt,
   sourceKeyRef: nonEmptyString,
   targetKeyRef: nonEmptyString,
   purpose: nonEmptyString,
   traceContext: Schema.optional(TraceContextSchema),
-}).pipe(Schema.filter((payload) => payload.sourceKeyRef !== payload.targetKeyRef));
+}).pipe(
+  Schema.check(Schema.makeFilter((payload) => payload.sourceKeyRef !== payload.targetKeyRef)),
+);
 
-export const AgentRunInterruptedPayloadSchema: Schema.Schema<AgentRunInterruptedPayload> =
+export const AgentRunInterruptedPayloadSchema: Schema.Decoder<AgentRunInterruptedPayload> =
   Schema.Struct({
     runId: positiveInt,
     turn: TurnRefSchema,
@@ -492,22 +498,26 @@ export const AgentRunInterruptedPayloadSchema: Schema.Schema<AgentRunInterrupted
       }),
     ),
     traceContext: Schema.optional(TraceContextSchema),
-  }).pipe(Schema.filter((payload) => payload.runId === payload.turn.id));
+  }).pipe(Schema.check(Schema.makeFilter((payload) => payload.runId === payload.turn.id)));
 
-export const AgentRunResumedPayloadSchema: Schema.Schema<AgentRunResumedPayload> = Schema.Struct({
+export const AgentRunResumedPayloadSchema: Schema.Decoder<AgentRunResumedPayload> = Schema.Struct({
   runId: positiveInt,
   turn: TurnRefSchema,
   interruptId: nonEmptyString,
   resume: Schema.Unknown,
   resumedAtEventId: positiveInt,
   traceContext: Schema.optional(TraceContextSchema),
-}).pipe(Schema.filter((payload) => payload.runId === payload.turn.id));
+}).pipe(Schema.check(Schema.makeFilter((payload) => payload.runId === payload.turn.id)));
 
-export const AgentRunAbortedPayloadSchema: Schema.Schema<AgentRunAbortedPayload> = Schema.Struct({
-  runId: positiveInt,
-  tokensUsed: nonNegativeInt,
-  traceContext: Schema.optional(TraceContextSchema),
-}).pipe(Schema.extend(unknownRecord));
+export const AgentRunAbortedPayloadSchema: Schema.Decoder<AgentRunAbortedPayload> =
+  Schema.StructWithRest(
+    Schema.Struct({
+      runId: positiveInt,
+      tokensUsed: nonNegativeInt,
+      traceContext: Schema.optional(TraceContextSchema),
+    }),
+    [unknownRecord],
+  );
 
 export type RuntimeEventPayloadByKind = {
   readonly [RUNTIME_EVENT_KIND.AGENT_RUN_STARTED]: AgentRunStartedPayload;
@@ -631,6 +641,71 @@ const decodeRuntimePayload = <K extends RuntimeEventKind>(
   }
 };
 
+const decodeRuntimePayloadOption = <K extends RuntimeEventKind>(
+  kind: K,
+  payload: unknown,
+): Option.Option<RuntimeEventPayloadByKind[K]> => {
+  switch (kind) {
+    case RUNTIME_EVENT_KIND.AGENT_RUN_STARTED:
+      return Schema.decodeUnknownOption(AgentRunStartedPayloadSchema)(payload) as Option.Option<
+        RuntimeEventPayloadByKind[K]
+      >;
+    case RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED:
+      return Schema.decodeUnknownOption(AgentRunInterruptedPayloadSchema)(payload) as Option.Option<
+        RuntimeEventPayloadByKind[K]
+      >;
+    case RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED:
+      return Schema.decodeUnknownOption(AgentRunResumedPayloadSchema)(payload) as Option.Option<
+        RuntimeEventPayloadByKind[K]
+      >;
+    case RUNTIME_EVENT_KIND.CHAT_INGESTED:
+      return Schema.decodeUnknownOption(ChatIngestedPayloadSchema)(payload) as Option.Option<
+        RuntimeEventPayloadByKind[K]
+      >;
+    case RUNTIME_EVENT_KIND.LLM_REQUESTED:
+      return Schema.decodeUnknownOption(LlmRequestedPayloadSchema)(payload) as Option.Option<
+        RuntimeEventPayloadByKind[K]
+      >;
+    case RUNTIME_EVENT_KIND.LLM_RESPONSE:
+      return Schema.decodeUnknownOption(LlmResponsePayloadSchema)(payload) as Option.Option<
+        RuntimeEventPayloadByKind[K]
+      >;
+    case RUNTIME_EVENT_KIND.TOOL_EXECUTED:
+      return Schema.decodeUnknownOption(ToolExecutedPayloadSchema)(payload) as Option.Option<
+        RuntimeEventPayloadByKind[K]
+      >;
+    case RUNTIME_EVENT_KIND.TOOL_REJECTED:
+      return Schema.decodeUnknownOption(ToolRejectedPayloadSchema)(payload) as Option.Option<
+        RuntimeEventPayloadByKind[K]
+      >;
+    case RUNTIME_EVENT_KIND.RUNTIME_HISTORY_COMPACTED:
+      return Schema.decodeUnknownOption(RuntimeHistoryCompactedPayloadSchema)(
+        payload,
+      ) as Option.Option<RuntimeEventPayloadByKind[K]>;
+    case RUNTIME_EVENT_KIND.RUNTIME_REKEYED:
+      return Schema.decodeUnknownOption(RuntimeRekeyedPayloadSchema)(payload) as Option.Option<
+        RuntimeEventPayloadByKind[K]
+      >;
+    case RUNTIME_EVENT_KIND.RUNTIME_COMPLETED_AFTER_TOOLS:
+      return Schema.decodeUnknownOption(RuntimeCompletedAfterToolsPayloadSchema)(
+        payload,
+      ) as Option.Option<RuntimeEventPayloadByKind[K]>;
+    case RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED:
+      return Schema.decodeUnknownOption(AgentRunCompletedPayloadSchema)(payload) as Option.Option<
+        RuntimeEventPayloadByKind[K]
+      >;
+    case ABORT.BUDGET_TOKENS:
+    case ABORT.BUDGET_TIME:
+    case ABORT.TOOL_ERROR:
+    case ABORT.UPSTREAM_FAILURE:
+    case ABORT.RETRIES:
+    case ABORT.CLIENT_DISCONNECT:
+      return Schema.decodeUnknownOption(AgentRunAbortedPayloadSchema)(payload) as Option.Option<
+        RuntimeEventPayloadByKind[K]
+      >;
+  }
+};
+
 export const decodeRuntimeEventPayload = <K extends RuntimeEventKind>(
   kind: K,
   payload: unknown,
@@ -677,6 +752,30 @@ export type RuntimeLedgerTransitionValidation =
       readonly ok: false;
       readonly issues: ReadonlyArray<RuntimeLedgerTransitionIssue>;
     };
+
+export class RuntimeLedgerTransitionRejected extends Data.TaggedError(
+  "agent_os.runtime_ledger_transition_rejected",
+)<{
+  readonly issues: ReadonlyArray<RuntimeLedgerTransitionIssue>;
+}> {}
+
+const decodeRuntimeLedgerEventSafe = (
+  event: LedgerEvent,
+): DecodeRuntimeLedgerEventResult | null => {
+  if (!isRuntimeEventKind(event.kind)) {
+    return { _tag: "non_runtime", event };
+  }
+  const payload = decodeRuntimePayloadOption(event.kind, event.payload);
+  if (Option.isNone(payload)) return null;
+  return {
+    _tag: "runtime",
+    event: {
+      ...event,
+      kind: event.kind,
+      payload: payload.value,
+    } as RuntimeLedgerEvent,
+  };
+};
 
 const sourceEventIssue = (
   code: RuntimeLedgerTransitionIssueCode,
@@ -733,22 +832,8 @@ const decodedRuntimeSourceEvent = (
 ): RuntimeLedgerEvent | null => {
   const source = transitionSourceEvent(priorById, event, sourceEventId, issues);
   if (source === null) return null;
-  try {
-    const decoded = decodeRuntimeLedgerEvent(source);
-    if (decoded._tag === "non_runtime") {
-      issues.push(
-        sourceEventIssue(
-          "runtime_source_event_not_runtime",
-          event,
-          sourceEventId,
-          "runtime transition source must be a runtime event",
-          source.kind,
-        ),
-      );
-      return null;
-    }
-    return decoded.event;
-  } catch {
+  const decoded = decodeRuntimeLedgerEventSafe(source);
+  if (decoded === null) {
     issues.push(
       sourceEventIssue(
         "runtime_source_payload_invalid",
@@ -760,6 +845,19 @@ const decodedRuntimeSourceEvent = (
     );
     return null;
   }
+  if (decoded._tag === "non_runtime") {
+    issues.push(
+      sourceEventIssue(
+        "runtime_source_event_not_runtime",
+        event,
+        sourceEventId,
+        "runtime transition source must be a runtime event",
+        source.kind,
+      ),
+    );
+    return null;
+  }
+  return decoded.event;
 };
 
 const sameTurn = (
@@ -782,10 +880,8 @@ export const validateRuntimeLedgerTransitions = (input: {
   const issues: RuntimeLedgerTransitionIssue[] = [];
 
   for (const candidate of input.events) {
-    let decoded: DecodeRuntimeLedgerEventResult;
-    try {
-      decoded = decodeRuntimeLedgerEvent(candidate);
-    } catch {
+    const decoded = decodeRuntimeLedgerEventSafe(candidate);
+    if (decoded === null) {
       issues.push({
         code: "runtime_payload_invalid",
         eventId: candidate.id,
@@ -864,10 +960,9 @@ export const assertRuntimeLedgerTransitions = (input: {
 }): void => {
   const validation = validateRuntimeLedgerTransitions(input);
   if (validation.ok) return;
-  throw new TypeError(
-    `runtime ledger transition rejected: ${validation.issues
-      .map((issue) => `${issue.code}#${issue.eventId}`)
-      .join(", ")}`,
+  return Option.getOrThrowWith(
+    Option.none(),
+    () => new RuntimeLedgerTransitionRejected({ issues: validation.issues }),
   );
 };
 
@@ -1056,7 +1151,7 @@ export const receiptBackedToolResult = (spec: {
 export const receiptBackedToolResultFromUnknown = (
   value: unknown,
 ): ReceiptBackedToolResult | null => {
-  if (!Predicate.isRecord(value)) return null;
+  if (!Predicate.isObject(value)) return null;
   if (value.kind !== "tool.receipt_backed_result") return null;
   if (value.version !== RECEIPT_BACKED_TOOL_RESULT_VERSION) return null;
   if (typeof value.idempotencyKey !== "string" || value.idempotencyKey.length === 0) return null;
@@ -1067,7 +1162,7 @@ export const receiptBackedToolResultFromUnknown = (
   const declaredReceipt = value.receipt;
   if (
     declaredReceipt !== undefined &&
-    (!Predicate.isRecord(declaredReceipt) ||
+    (!Predicate.isObject(declaredReceipt) ||
       declaredReceipt.anchorId !== receipt.anchorId ||
       declaredReceipt.anchorKind !== receipt.anchorKind ||
       declaredReceipt.carrierRef !== receipt.carrierRef)

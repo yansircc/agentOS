@@ -113,15 +113,15 @@ const valuesOwnedByPrefix = (
 ): boolean => values.every((value) => prefixes.some((prefix) => value.startsWith(prefix)));
 
 const isJsonSchemaObject = (value: unknown): value is JsonSchemaObject =>
-  Predicate.isRecord(value) &&
+  Predicate.isObject(value) &&
   value.type === "object" &&
-  Predicate.isRecord(value.properties) &&
+  Predicate.isObject(value.properties) &&
   (value.required === undefined ||
     (Array.isArray(value.required) && value.required.every(isNonEmptyString))) &&
   (value.additionalProperties === undefined || typeof value.additionalProperties === "boolean");
 
 const isBoundaryEventClaimContract = (value: unknown): value is BoundaryEventClaimContract =>
-  Predicate.isRecord(value) &&
+  Predicate.isObject(value) &&
   isNonEmptyString(value.key) &&
   typeof value.phase === "string" &&
   CLAIM_PHASES.has(value.phase as BoundaryClaimPhase) &&
@@ -133,7 +133,7 @@ const isBoundaryEventClaimContract = (value: unknown): value is BoundaryEventCla
         value.anchorKinds === undefined);
 
 const isBoundaryEventContract = (value: unknown): value is BoundaryEventContract =>
-  Predicate.isRecord(value) &&
+  Predicate.isObject(value) &&
   isJsonSchemaObject(value.payloadSchema) &&
   (value.claim === undefined || isBoundaryEventClaimContract(value.claim));
 
@@ -145,7 +145,7 @@ export const validateBoundaryPayload = (
 const eventEntries = (
   events: unknown,
 ): ReadonlyArray<readonly [string, BoundaryEventContract]> | null => {
-  if (!Predicate.isRecord(events)) return null;
+  if (!Predicate.isObject(events)) return null;
   const entries = Object.entries(events);
   if (entries.length === 0) return null;
   const out: Array<readonly [string, BoundaryEventContract]> = [];
@@ -243,7 +243,7 @@ export const boundaryPackage = (contract: BoundaryContract, version: string): Bo
   }) as BoundaryPackage;
 
 export const validateBoundaryContract = (value: unknown): BoundaryContractValidation => {
-  if (!Predicate.isRecord(value)) {
+  if (!Predicate.isObject(value)) {
     return {
       ok: false,
       issues: [
@@ -346,7 +346,7 @@ export const validateBoundaryContract = (value: unknown): BoundaryContractValida
   }
 
   if (
-    !Predicate.isRecord(value.projection) ||
+    !Predicate.isObject(value.projection) ||
     value.projection.derivedFromLedger !== true ||
     value.projection.shadowState !== false
   ) {

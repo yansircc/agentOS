@@ -5,14 +5,14 @@ export const WORKSPACE_OP_EVENT_PREFIX = "workspace_op.";
 export const WORKSPACE_OP_FACT_OWNER = "@agent-os/workspace-op";
 export const WORKSPACE_OP_PROJECTION_KIND = "workspace_op.status";
 
-const NonEmptyString = Schema.String.pipe(Schema.minLength(1));
+const NonEmptyString = Schema.String.pipe(Schema.check(Schema.isMinLength(1)));
 
-const WorkspaceOperationNameSchema = Schema.Literal(
+const WorkspaceOperationNameSchema = Schema.Literals([
   "write_file",
   "edit_file",
   "delete_path",
   "run_shell",
-);
+]);
 
 const WorkspaceOperationLimitsSchema = Schema.Struct({
   maxFileBytes: Schema.optional(Schema.Number),

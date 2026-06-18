@@ -42,7 +42,7 @@ export interface LlmTransportRouteDescriptor {
  * @agentosDocs docs/packages/llm-protocol.md
  * @public
  */
-export class LlmTransport extends Context.Tag("@agent-os/LlmTransport")<
+export class LlmTransport extends Context.Service<
   LlmTransport,
   {
     readonly resolveRoute: (
@@ -53,7 +53,7 @@ export class LlmTransport extends Context.Tag("@agent-os/LlmTransport")<
       options?: LlmCallOptions,
     ) => Effect.Effect<LlmResponse, UpstreamFailure>;
   }
->() {}
+>()("@agent-os/LlmTransport") {}
 
 export const llmRouteMaterialRefs = (route: LlmRoute): ReadonlyArray<MaterialRef> => [
   ...(typeof route.endpointRef === "string"
@@ -64,8 +64,8 @@ export const llmRouteMaterialRefs = (route: LlmRoute): ReadonlyArray<MaterialRef
     : []),
 ];
 
-const unknownRecord = Schema.Record({ key: Schema.String, value: Schema.Unknown });
-const nonNegativeInt = Schema.Number.pipe(Schema.int(), Schema.greaterThanOrEqualTo(0));
+const unknownRecord = Schema.Record(Schema.String, Schema.Unknown);
+const nonNegativeInt = Schema.Int.pipe(Schema.check(Schema.isGreaterThanOrEqualTo(0)));
 
 export interface LlmToolCall {
   readonly id: string;
@@ -91,13 +91,13 @@ export interface LlmUsage {
   readonly totalTokens: number;
 }
 
-export const LlmUsageSchema: Schema.Schema<LlmUsage> = Schema.Struct({
+export const LlmUsageSchema: Schema.Decoder<LlmUsage> = Schema.Struct({
   promptTokens: nonNegativeInt,
   completionTokens: nonNegativeInt,
   totalTokens: nonNegativeInt,
 });
 
-export const LlmToolCallSchema: Schema.Schema<LlmToolCall> = Schema.Struct({
+export const LlmToolCallSchema: Schema.Decoder<LlmToolCall> = Schema.Struct({
   id: Schema.String,
   type: Schema.Literal("function"),
   function: Schema.Struct({
@@ -127,7 +127,7 @@ export type LlmOutputItem =
   | { readonly type: "refusal"; readonly reason: string }
   | { readonly type: "error"; readonly message: string };
 
-export const LlmOutputItemSchema: Schema.Schema<LlmOutputItem> = Schema.Union(
+export const LlmOutputItemSchema: Schema.Decoder<LlmOutputItem> = Schema.Union([
   Schema.Struct({
     type: Schema.Literal("message"),
     text: Schema.String,
@@ -156,7 +156,7 @@ export const LlmOutputItemSchema: Schema.Schema<LlmOutputItem> = Schema.Union(
     type: Schema.Literal("error"),
     message: Schema.String,
   }),
-);
+]);
 
 export interface LlmResponse {
   readonly items: ReadonlyArray<LlmOutputItem>;
