@@ -17,6 +17,7 @@ import {
   agentRunResumedEvent,
   agentRunStartedEvent,
   RUNTIME_FACT_OWNER,
+  type InputRequestDescriptor,
   type RuntimeEventCommitSpec,
 } from "@agent-os/runtime-protocol";
 import { settleToolExecuted, settleToolPolicyRejected } from "@agent-os/runtime";
@@ -70,6 +71,25 @@ const toolClaim = makePreClaim({
   effectAuthorityRef: { authorityId: "tool:lookup", authorityClass: "tool" },
   originRef: { originId: "run:1", originKind: "submit" },
 });
+
+const approvalInputRequest: InputRequestDescriptor = {
+  kind: "approval",
+  subjectRef: "tool:publish",
+  toolCallId: "call-1",
+  toolName: "publish",
+  resumeSchema: { type: "object", required: ["approved"] },
+  ref: {
+    kind: "agent.run.input_request",
+    scopeRef: { kind: "conversation", scopeId: scope },
+    afterEventId: 2,
+    runId: 1,
+    turn: { id: 1, index: 0 },
+    interruptId: "i1",
+    interruptionEventId: 2,
+    gateRef: "decision-gate:i1",
+    requestKind: "approval",
+  },
+};
 
 const transcript = (): ReadonlyArray<LedgerEvent> => [
   commit(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "find weather" })),
@@ -925,14 +945,46 @@ describe("@agent-os/ag-ui", () => {
     expect("resolvedMaterials" in submit).toBe(false);
   });
 
-  it("rejects AG-UI resume input because it is not a runtime SubmitSpec.resume decision", () => {
+  it("lowers AG-UI resume input through runtime InputRequest bindings", () => {
+    const submit = agUiRunAgentInputToSubmitSpec(
+      {
+        threadId: "thread-1",
+        runId: "client-run-1",
+        messages: [],
+        resume: [{ interruptId: "i1", status: "resolved", payload: { approved: true } }],
+      },
+      {
+        route: {
+          kind: "openai-chat-compatible",
+          endpointRef: "endpoint:openai",
+          credentialRef: "credential:openai",
+          modelId: "model",
+        },
+        tools: {},
+        effectAuthorityRef: { authorityClass: "llm_route", authorityId: "ag-ui-test" },
+        inputRequests: [{ request: approvalInputRequest, decisionRef: "decision:i1" }],
+      },
+    );
+
+    expect(submit.resume).toEqual({
+      runId: 1,
+      turn: { id: 1, index: 0 },
+      interruptId: "i1",
+      gateRef: "decision-gate:i1",
+      decisionRef: "decision:i1",
+      resume: { kind: "approval", approved: true },
+    });
+    expect(submit.context.agUi).not.toHaveProperty("resume");
+  });
+
+  it("rejects AG-UI resume input without a runtime InputRequest binding", () => {
     expect(() =>
       agUiRunAgentInputToSubmitSpec(
         {
           threadId: "thread-1",
           runId: "client-run-1",
           messages: [],
-          resume: [{ interruptId: "i1", status: "resolved", payload: { approved: true } }],
+          resume: [{ interruptId: "missing", status: "resolved", payload: { approved: true } }],
         },
         {
           route: {
@@ -943,9 +995,10 @@ describe("@agent-os/ag-ui", () => {
           },
           tools: {},
           effectAuthorityRef: { authorityClass: "llm_route", authorityId: "ag-ui-test" },
+          inputRequests: [{ request: approvalInputRequest, decisionRef: "decision:i1" }],
         },
       ),
-    ).toThrow("AG-UI resume input cannot be lowered to SubmitSpec.resume");
+    ).toThrow("AG-UI resume input has no unique runtime InputRequest binding");
   });
 
   it("passes through runtime resume decisions supplied by defaults", () => {
@@ -1059,6 +1112,54 @@ describe("@agent-os/ag-ui", () => {
       runId: "1",
       threadId: "conversation:ag-ui-test",
       status: "running",
+    });
+  });
+
+  it("projects runtime InputRequest facts into AG-UI interrupted frames", () => {
+    const frames = projectLedgerEventsToAgUiFrames([
+      commit(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "approve" })),
+      commit(
+        2,
+        agentRunInterruptedEvent({
+          ...runtimeIdentity,
+          runId: 1,
+          turn: { id: 1, index: 0 },
+          interruptId: "approval-1",
+          reason: "approval_required",
+          resumeSchema: { type: "object", required: ["approved"] },
+          tokensUsed: 5,
+          decision: {
+            gateRef: "decision-gate:approval-1",
+            subjectRef: "tool:publish",
+            toolCallId: "call-1",
+            toolName: "publish",
+          },
+        }),
+      ),
+    ]);
+
+    expect(frames[1]).toMatchObject({
+      type: "CUSTOM",
+      name: "agent-os.run.interrupted",
+      value: {
+        inputRequest: {
+          kind: "approval",
+          subjectRef: "tool:publish",
+          toolCallId: "call-1",
+          toolName: "publish",
+          ref: {
+            kind: "agent.run.input_request",
+            scopeKey: "conversation:ag-ui-test",
+            afterEventId: 2,
+            runId: 1,
+            turnIndex: 0,
+            interruptId: "approval-1",
+            interruptionEventId: 2,
+            gateRef: "decision-gate:approval-1",
+            requestKind: "approval",
+          },
+        },
+      },
     });
   });
 

@@ -9,9 +9,14 @@ import { scopeRefKey } from "@agent-os/kernel/effect-claim";
 import type { Tool } from "@agent-os/kernel/tools";
 import { decodeLedgerEvent, type LedgerEvent } from "@agent-os/kernel/types";
 import {
+  inputRequestKindFromReason,
+  parseInputRequestResumePayload,
   projectRuntimeSafeLedgerEvent,
   RUNTIME_FACT_OWNER,
+  submitResumeDecisionFromInputRequestRef,
+  type InputRequestDescriptor,
   type SubmitSpec,
+  type SubmitResumeDecision,
 } from "@agent-os/runtime-protocol";
 import {
   projectWorkspaceJobSafeLedgerEvent,
@@ -255,10 +260,16 @@ export type AgUiLedgerProjectionSpec = AgUiRuntimeProjectionSpec & {
   readonly safeEventProjectors?: ReadonlyArray<AgUiSafeEventProjector>;
 };
 
+export type AgUiInputRequestResumeBinding = {
+  readonly request: InputRequestDescriptor;
+  readonly decisionRef: string;
+};
+
 export type AgUiSubmitDefaults = Omit<SubmitSpec, "intent" | "context"> & {
   readonly system?: string;
   readonly context?: Record<string, unknown>;
   readonly forwardedPropAllowlist?: ReadonlyArray<string>;
+  readonly inputRequests?: ReadonlyArray<AgUiInputRequestResumeBinding>;
 };
 
 export type AgUiFrameProjection = {
@@ -459,6 +470,49 @@ const payloadOf = (event: SafeLedgerEvent): SafeLedgerPayload => event.safePaylo
 
 const safeJsonText = (value: AgUiSafeValue | undefined): string => JSON.stringify(value ?? null);
 
+const safeInputRequestForInterrupted = (
+  event: SafeLedgerEvent,
+  payload: SafeLedgerPayload,
+): AgUiSafeValue | undefined => {
+  const reason = stringOf(payload.reason);
+  const requestKind = reason === undefined ? null : inputRequestKindFromReason(reason);
+  const decision = recordOf(payload.decision);
+  const interruptId = stringOf(payload.interruptId);
+  const gateRef = stringOf(decision?.gateRef);
+  const subjectRef = stringOf(decision?.subjectRef);
+  const toolCallId = stringOf(decision?.toolCallId);
+  const toolName = stringOf(decision?.toolName);
+  if (
+    requestKind === null ||
+    interruptId === undefined ||
+    gateRef === undefined ||
+    subjectRef === undefined ||
+    toolCallId === undefined ||
+    toolName === undefined
+  ) {
+    return undefined;
+  }
+  const runId = numberOf(payload.runId) ?? event.id;
+  const turnIndex = numberOf(payload.turnIndex) ?? 0;
+  return {
+    kind: requestKind,
+    subjectRef,
+    toolCallId,
+    toolName,
+    ref: {
+      kind: "agent.run.input_request",
+      scopeKey: event.scopeKey,
+      afterEventId: event.id,
+      runId,
+      turnIndex,
+      interruptId,
+      interruptionEventId: event.id,
+      gateRef,
+      requestKind,
+    },
+  };
+};
+
 const threadIdForSafe = (event: SafeLedgerEvent, spec: AgUiRuntimeProjectionSpec): string =>
   spec.threadId ?? event.scopeKey;
 
@@ -500,15 +554,73 @@ const selectedForwardedProps = (
   return selected;
 };
 
+const unknownObject = (value: unknown): Readonly<Record<string, unknown>> | undefined =>
+  typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Readonly<Record<string, unknown>>)
+    : undefined;
+
+const payloadWithRuntimeKind = (kind: InputRequestDescriptor["kind"], value: unknown): unknown => {
+  const record = unknownObject(value);
+  if (record === undefined || record.kind !== undefined) return value;
+  return { kind, ...record };
+};
+
+const singleResumeEntry = (
+  resume: ReadonlyArray<NonNullable<AgUiRunAgentInput["resume"]>[number]>,
+): NonNullable<AgUiRunAgentInput["resume"]>[number] | undefined => {
+  if (resume.length === 0) return undefined;
+  if (resume.length !== 1) {
+    throw new TypeError("AG-UI resume input must contain exactly one resume entry");
+  }
+  return resume[0];
+};
+
+const inputRequestBindingFor = (
+  bindings: ReadonlyArray<AgUiInputRequestResumeBinding> | undefined,
+  interruptId: string,
+): AgUiInputRequestResumeBinding => {
+  const matches = (bindings ?? []).filter(
+    (binding) => binding.request.ref.interruptId === interruptId,
+  );
+  if (matches.length !== 1) {
+    throw new TypeError("AG-UI resume input has no unique runtime InputRequest binding");
+  }
+  return matches[0]!;
+};
+
+const submitResumeForAgUiInput = (
+  input: AgUiRunAgentInput,
+  defaults: AgUiSubmitDefaults,
+): SubmitResumeDecision | undefined => {
+  const entry = singleResumeEntry(input.resume ?? []);
+  if (entry === undefined) return defaults.resume;
+  if (defaults.resume !== undefined) {
+    throw new TypeError("AG-UI resume input cannot be combined with defaults.resume");
+  }
+  if (entry.status !== "resolved") {
+    throw new TypeError(
+      "AG-UI resume input must be resolved before it can become SubmitSpec.resume",
+    );
+  }
+  const binding = inputRequestBindingFor(defaults.inputRequests, entry.interruptId);
+  const parsed = parseInputRequestResumePayload(
+    binding.request.kind,
+    payloadWithRuntimeKind(binding.request.kind, entry.payload),
+  );
+  if (!parsed.ok) {
+    throw new TypeError(`AG-UI resume input failed InputRequest contract: ${parsed.reason}`);
+  }
+  return submitResumeDecisionFromInputRequestRef(binding.request.ref, {
+    decisionRef: binding.decisionRef,
+    resume: parsed.resume,
+  });
+};
+
 export const agUiRunAgentInputToSubmitSpec = (
   input: AgUiRunAgentInput,
   defaults: AgUiSubmitDefaults,
 ): SubmitSpec => {
-  if ((input.resume ?? []).length > 0) {
-    throw new TypeError(
-      "AG-UI resume input cannot be lowered to SubmitSpec.resume; pass a runtime resume decision through defaults.resume",
-    );
-  }
+  const resume = submitResumeForAgUiInput(input, defaults);
   const forwardedProps = selectedForwardedProps(input, defaults.forwardedPropAllowlist);
   return {
     route: defaults.route,
@@ -529,7 +641,7 @@ export const agUiRunAgentInputToSubmitSpec = (
     ...(defaults.decisionInterrupts === undefined
       ? {}
       : { decisionInterrupts: defaults.decisionInterrupts }),
-    ...(defaults.resume === undefined ? {} : { resume: defaults.resume }),
+    ...(resume === undefined ? {} : { resume }),
     effectAuthorityRef: defaults.effectAuthorityRef,
     intent: latestUserText(input.messages),
     context: {
@@ -766,15 +878,20 @@ export const projectSafeLedgerEventToAgUiFrames = (
           },
         },
       ];
-    case "agent.run.interrupted":
+    case "agent.run.interrupted": {
+      const inputRequest = safeInputRequestForInterrupted(event, payload);
       return [
         {
           type: "CUSTOM",
           timestamp: event.ts,
           name: "agent-os.run.interrupted",
-          value: payload,
+          value: {
+            ...payload,
+            ...(inputRequest === undefined ? {} : { inputRequest }),
+          },
         },
       ];
+    }
     case "agent.run.resumed":
       return [
         {

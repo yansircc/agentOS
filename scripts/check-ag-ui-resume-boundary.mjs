@@ -29,19 +29,44 @@ const collectFailures = (root = repoRoot) => {
     failures.push(`${adapterPath}: missing agUiRunAgentInputToSubmitSpec`);
     return failures;
   }
-  if (!/AG-UI resume input cannot be lowered to SubmitSpec\.resume/.test(body)) {
-    failures.push(`${adapterPath}: non-empty AG-UI resume input is not rejected`);
+  if (/AG-UI resume input cannot be lowered to SubmitSpec\.resume/.test(body)) {
+    failures.push(`${adapterPath}: projection-only AG-UI resume unsupported blocker remains`);
+  }
+  if (!/inputRequests\?: ReadonlyArray<AgUiInputRequestResumeBinding>/.test(adapterSource)) {
+    failures.push(`${adapterPath}: AG-UI resume lacks runtime InputRequest bindings`);
+  }
+  if (!/submitResumeForAgUiInput/.test(body)) {
+    failures.push(`${adapterPath}: AG-UI resume input is not lowered through a named boundary`);
+  }
+  if (!/parseInputRequestResumePayload/.test(adapterSource)) {
+    failures.push(`${adapterPath}: AG-UI resume input bypasses InputRequest positive parser`);
+  }
+  if (!/submitResumeDecisionFromInputRequestRef/.test(adapterSource)) {
+    failures.push(`${adapterPath}: AG-UI resume input is not lowered from InputRequest refs`);
+  }
+  if (!/AG-UI resume input has no unique runtime InputRequest binding/.test(adapterSource)) {
+    failures.push(`${adapterPath}: AG-UI resume input does not fail closed without binding`);
+  }
+  if (!/safeInputRequestForInterrupted/.test(adapterSource)) {
+    failures.push(`${adapterPath}: AG-UI does not project runtime InputRequest frames`);
+  }
+  if (!/inputRequestKindFromReason/.test(adapterSource)) {
+    failures.push(`${adapterPath}: AG-UI InputRequest projection does not use runtime vocabulary`);
   }
   if (/\bagUi\s*:\s*{[\s\S]*?\bresume\s*:/m.test(body)) {
     failures.push(`${adapterPath}: AG-UI resume is still hidden in context.agUi`);
   }
-  if (
-    !/\.\.\.\(defaults\.resume === undefined \? \{\} : \{ resume: defaults\.resume \}\)/.test(body)
-  ) {
+  if (!/\.\.\.\(resume === undefined \? \{\} : \{ resume \}\)/.test(body)) {
     failures.push(`${adapterPath}: runtime defaults.resume is not passed to SubmitSpec.resume`);
   }
-  if (!/rejects AG-UI resume input/.test(testSource)) {
-    failures.push(`${testPath}: missing rejection test for AG-UI resume input`);
+  if (!/lowers AG-UI resume input through runtime InputRequest bindings/.test(testSource)) {
+    failures.push(`${testPath}: missing AG-UI InputRequest lowering test`);
+  }
+  if (!/rejects AG-UI resume input without a runtime InputRequest binding/.test(testSource)) {
+    failures.push(`${testPath}: missing fail-closed AG-UI resume binding test`);
+  }
+  if (!/projects runtime InputRequest facts into AG-UI interrupted frames/.test(testSource)) {
+    failures.push(`${testPath}: missing AG-UI InputRequest frame projection test`);
   }
   if (!/passes through runtime resume decisions supplied by defaults/.test(testSource)) {
     failures.push(`${testPath}: missing defaults.resume pass-through test`);
@@ -91,6 +116,11 @@ export type AgUiLedgerProjectionSpec = {
   readonly safeEventProjectors?: ReadonlyArray<AgUiSafeEventProjector>;
 };
 
+export type AgUiInputRequestResumeBinding = {};
+export type AgUiSubmitDefaults = {
+  readonly inputRequests?: ReadonlyArray<AgUiInputRequestResumeBinding>;
+};
+
 const ownerSafeEventProjectors = (projector) => {
   const duplicateOwnerRefs = new Set();
   return !BUILT_IN_SAFE_EVENT_PROJECTOR_OWNERS.has(projector.factOwnerRef) &&
@@ -101,12 +131,22 @@ const ownerAgUiFrames = (frames) => {
   return frames.filter((frame) => frame.type !== "CUSTOM" || !frame.name.startsWith("agent-os."));
 };
 
-export const agUiRunAgentInputToSubmitSpec = (input, defaults) => {
-  if ((input.resume ?? []).length > 0) {
-    throw new TypeError("AG-UI resume input cannot be lowered to SubmitSpec.resume; pass a runtime resume decision through defaults.resume");
+const safeInputRequestForInterrupted = () => inputRequestKindFromReason("approval_required");
+const parseInputRequestResumePayload = () => ({ ok: true, resume: {} });
+const submitResumeDecisionFromInputRequestRef = () => ({});
+const submitResumeForAgUiInput = (input, defaults) => {
+  if ((input.resume ?? []).length === 0) return defaults.resume;
+  if ((defaults.inputRequests ?? []).length !== 1) {
+    throw new TypeError("AG-UI resume input has no unique runtime InputRequest binding");
   }
+  const parsed = parseInputRequestResumePayload();
+  return submitResumeDecisionFromInputRequestRef(parsed.resume);
+};
+
+export const agUiRunAgentInputToSubmitSpec = (input, defaults) => {
+  const resume = submitResumeForAgUiInput(input, defaults);
   return {
-    ...(defaults.resume === undefined ? {} : { resume: defaults.resume }),
+    ...(resume === undefined ? {} : { resume }),
     context: { agUi: { threadId: input.threadId } },
   };
 };
@@ -115,8 +155,10 @@ export const next = 1;
 `;
 
 const validTestFixture = `
-it("rejects AG-UI resume input because it is not a runtime SubmitSpec.resume decision", () => {});
+it("lowers AG-UI resume input through runtime InputRequest bindings", () => {});
+it("rejects AG-UI resume input without a runtime InputRequest binding", () => {});
 it("passes through runtime resume decisions supplied by defaults", () => {});
+it("projects runtime InputRequest facts into AG-UI interrupted frames", () => {});
 it("does not apply built-in frame mappings to product owners", () => {});
 it("drops product frames that emit reserved agent-os custom names", () => {});
 `;
@@ -143,6 +185,21 @@ const collectSelfTestFailures = () => {
     if (!rejected.some((failure) => failure.includes("context.agUi"))) {
       return [
         `AG-UI resume boundary mutation fixture was not rejected: ${JSON.stringify(rejected)}`,
+      ];
+    }
+
+    writeFixture(
+      root,
+      adapterPath,
+      validAdapterFixture.replace(
+        "const resume = submitResumeForAgUiInput(input, defaults);",
+        'if ((input.resume ?? []).length > 0) throw new TypeError("AG-UI resume input cannot be lowered to SubmitSpec.resume");\n  const resume = defaults.resume;',
+      ),
+    );
+    const oldBlockerRejected = collectFailures(root);
+    if (!oldBlockerRejected.some((failure) => failure.includes("unsupported blocker"))) {
+      return [
+        `AG-UI old resume blocker fixture was not rejected: ${JSON.stringify(oldBlockerRejected)}`,
       ];
     }
 
