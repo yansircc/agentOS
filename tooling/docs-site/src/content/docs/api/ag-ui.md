@@ -20,6 +20,7 @@ title: "@agent-os/ag-ui Public API Intent"
 - `.:AgUiLedgerEnvelopeProjectionSpec`
 - `.:AgUiLedgerEventEnvelope`
 - `.:AgUiLedgerProjectionSpec`
+- `.:AgUiSafeEventFrameProjector`
 - `.:AgUiSafeEventProjector`
 - `.:AgUiSafeLedgerEvent`
 - `.:AgUiSafeValue`

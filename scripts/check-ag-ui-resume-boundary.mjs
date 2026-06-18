@@ -46,6 +46,32 @@ const collectFailures = (root = repoRoot) => {
   if (!/passes through runtime resume decisions supplied by defaults/.test(testSource)) {
     failures.push(`${testPath}: missing defaults.resume pass-through test`);
   }
+  if (
+    /readonly safeEventProjectors\?: ReadonlyArray<SafeLedgerEventProjector>/.test(adapterSource)
+  ) {
+    failures.push(`${adapterPath}: AG-UI custom safe projectors are not owner-keyed`);
+  }
+  if (/readonly projectSafeEvent\?:/.test(adapterSource)) {
+    failures.push(`${adapterPath}: AG-UI exposes a global safe-event frame projector`);
+  }
+  if (!/readonly factOwnerRef: string/.test(adapterSource)) {
+    failures.push(`${adapterPath}: missing owner-keyed safe event projector contract`);
+  }
+  if (!/BUILT_IN_SAFE_EVENT_PROJECTOR_OWNERS\.has\(projector\.factOwnerRef\)/.test(adapterSource)) {
+    failures.push(`${adapterPath}: custom safe projectors can override built-in owners`);
+  }
+  if (!/duplicateOwnerRefs/.test(adapterSource)) {
+    failures.push(`${adapterPath}: duplicate custom safe projector owners are not rejected`);
+  }
+  if (!/frame\.name\.startsWith\("agent-os\."\)/.test(adapterSource)) {
+    failures.push(`${adapterPath}: product projectors can emit reserved agent-os frame names`);
+  }
+  if (!/does not apply built-in frame mappings to product owners/.test(testSource)) {
+    failures.push(`${testPath}: missing product-owner frame mapping regression test`);
+  }
+  if (!/drops product frames that emit reserved agent-os custom names/.test(testSource)) {
+    failures.push(`${testPath}: missing reserved agent-os frame name regression test`);
+  }
   return failures;
 };
 
@@ -55,7 +81,27 @@ const writeFixture = (root, relativePath, source) => {
   fs.writeFileSync(file, source);
 };
 
-const validAdapterFixture = `export const agUiRunAgentInputToSubmitSpec = (input, defaults) => {
+const validAdapterFixture = `export type AgUiSafeEventProjector = {
+  readonly factOwnerRef: string;
+  readonly projectSafeEvent: unknown;
+  readonly projectFrames?: unknown;
+};
+
+export type AgUiLedgerProjectionSpec = {
+  readonly safeEventProjectors?: ReadonlyArray<AgUiSafeEventProjector>;
+};
+
+const ownerSafeEventProjectors = (projector) => {
+  const duplicateOwnerRefs = new Set();
+  return !BUILT_IN_SAFE_EVENT_PROJECTOR_OWNERS.has(projector.factOwnerRef) &&
+    !duplicateOwnerRefs.has(projector.factOwnerRef);
+};
+
+const ownerAgUiFrames = (frames) => {
+  return frames.filter((frame) => frame.type !== "CUSTOM" || !frame.name.startsWith("agent-os."));
+};
+
+export const agUiRunAgentInputToSubmitSpec = (input, defaults) => {
   if ((input.resume ?? []).length > 0) {
     throw new TypeError("AG-UI resume input cannot be lowered to SubmitSpec.resume; pass a runtime resume decision through defaults.resume");
   }
@@ -71,6 +117,8 @@ export const next = 1;
 const validTestFixture = `
 it("rejects AG-UI resume input because it is not a runtime SubmitSpec.resume decision", () => {});
 it("passes through runtime resume decisions supplied by defaults", () => {});
+it("does not apply built-in frame mappings to product owners", () => {});
+it("drops product frames that emit reserved agent-os custom names", () => {});
 `;
 
 const collectSelfTestFailures = () => {
@@ -95,6 +143,45 @@ const collectSelfTestFailures = () => {
     if (!rejected.some((failure) => failure.includes("context.agUi"))) {
       return [
         `AG-UI resume boundary mutation fixture was not rejected: ${JSON.stringify(rejected)}`,
+      ];
+    }
+
+    writeFixture(
+      root,
+      adapterPath,
+      validAdapterFixture.replace(
+        "readonly safeEventProjectors?: ReadonlyArray<AgUiSafeEventProjector>;",
+        [
+          "readonly safeEventProjectors?: ReadonlyArray<SafeLedgerEventProjector>;",
+          "readonly projectSafeEvent?: (event) => ReadonlyArray<unknown>;",
+        ].join("\n  "),
+      ),
+    );
+    const unownedProjectorRejected = collectFailures(root);
+    if (
+      !unownedProjectorRejected.some((failure) => failure.includes("not owner-keyed")) ||
+      !unownedProjectorRejected.some((failure) =>
+        failure.includes("global safe-event frame projector"),
+      )
+    ) {
+      return [
+        `AG-UI unowned projector fixture was not rejected: ${JSON.stringify(
+          unownedProjectorRejected,
+        )}`,
+      ];
+    }
+
+    writeFixture(
+      root,
+      adapterPath,
+      validAdapterFixture.replace('!frame.name.startsWith("agent-os.")', "true"),
+    );
+    const reservedNameRejected = collectFailures(root);
+    if (
+      !reservedNameRejected.some((failure) => failure.includes("reserved agent-os frame names"))
+    ) {
+      return [
+        `AG-UI reserved frame fixture was not rejected: ${JSON.stringify(reservedNameRejected)}`,
       ];
     }
     return [];

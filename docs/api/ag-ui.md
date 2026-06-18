@@ -16,6 +16,7 @@
 - `.:AgUiLedgerEnvelopeProjectionSpec`
 - `.:AgUiLedgerEventEnvelope`
 - `.:AgUiLedgerProjectionSpec`
+- `.:AgUiSafeEventFrameProjector`
 - `.:AgUiSafeEventProjector`
 - `.:AgUiSafeLedgerEvent`
 - `.:AgUiSafeValue`

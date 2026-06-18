@@ -53,7 +53,16 @@ type BaseAgUiFrame<T extends AgUiEventType> = {
 
 export type AgUiSafeValue = SafeLedgerValue;
 export type AgUiSafeLedgerEvent = SafeLedgerEvent;
-export type AgUiSafeEventProjector = SafeLedgerEventProjector;
+export type AgUiSafeEventFrameProjector = (
+  event: AgUiSafeLedgerEvent,
+  spec: AgUiRuntimeProjectionSpec,
+) => ReadonlyArray<AgUiFrame>;
+
+export type AgUiSafeEventProjector = {
+  readonly factOwnerRef: string;
+  readonly projectSafeEvent: SafeLedgerEventProjector;
+  readonly projectFrames?: AgUiSafeEventFrameProjector;
+};
 
 export type AgUiMessageRole =
   | "developer"
@@ -243,8 +252,7 @@ export type AgUiRuntimeProjectionSpec = {
 };
 
 export type AgUiLedgerProjectionSpec = AgUiRuntimeProjectionSpec & {
-  readonly safeEventProjectors?: ReadonlyArray<SafeLedgerEventProjector>;
-  readonly projectSafeEvent?: (event: AgUiSafeLedgerEvent) => ReadonlyArray<AgUiFrame>;
+  readonly safeEventProjectors?: ReadonlyArray<AgUiSafeEventProjector>;
 };
 
 export type AgUiSubmitDefaults = Omit<SubmitSpec, "intent" | "context"> & {
@@ -348,32 +356,85 @@ export type AgUiActivity =
       readonly at?: number;
     };
 
-const DEFAULT_SAFE_EVENT_PROJECTORS: ReadonlyArray<SafeLedgerEventProjector> = [
-  projectRuntimeSafeLedgerEvent,
-  projectWorkspaceJobSafeLedgerEvent,
-  projectWorkspaceOperationSafeLedgerEvent,
-];
-
-const DEFAULT_SAFE_EVENT_PROJECTOR_OWNERS = new Set<string>([
+const BUILT_IN_SAFE_EVENT_PROJECTOR_OWNERS = new Set<string>([
   RUNTIME_FACT_OWNER,
   WORKSPACE_JOB_FACT_OWNER,
   WORKSPACE_OP_FACT_OWNER,
 ]);
 
+const BUILT_IN_SAFE_EVENT_PROJECTORS: ReadonlyArray<AgUiSafeEventProjector> = [
+  {
+    factOwnerRef: RUNTIME_FACT_OWNER,
+    projectSafeEvent: projectRuntimeSafeLedgerEvent,
+    projectFrames: (event, spec) => projectSafeLedgerEventToAgUiFrames(event, spec),
+  },
+  {
+    factOwnerRef: WORKSPACE_JOB_FACT_OWNER,
+    projectSafeEvent: projectWorkspaceJobSafeLedgerEvent,
+    projectFrames: (event, spec) => projectSafeLedgerEventToAgUiFrames(event, spec),
+  },
+  {
+    factOwnerRef: WORKSPACE_OP_FACT_OWNER,
+    projectSafeEvent: projectWorkspaceOperationSafeLedgerEvent,
+    projectFrames: (event, spec) => projectSafeLedgerEventToAgUiFrames(event, spec),
+  },
+];
+
+type OwnerProjectedSafeEvent = {
+  readonly factOwnerRef: string;
+  readonly safeEvent: AgUiSafeLedgerEvent;
+  readonly projectFrames?: AgUiSafeEventFrameProjector;
+};
+
+const ownerSafeEventProjectors = (
+  spec: AgUiLedgerProjectionSpec,
+): ReadonlyArray<AgUiSafeEventProjector> => {
+  const seen = new Set<string>();
+  const duplicateOwnerRefs = new Set<string>();
+  for (const projector of spec.safeEventProjectors ?? []) {
+    if (seen.has(projector.factOwnerRef)) {
+      duplicateOwnerRefs.add(projector.factOwnerRef);
+    }
+    seen.add(projector.factOwnerRef);
+  }
+  return [
+    ...BUILT_IN_SAFE_EVENT_PROJECTORS,
+    ...(spec.safeEventProjectors ?? []).filter(
+      (projector) =>
+        !BUILT_IN_SAFE_EVENT_PROJECTOR_OWNERS.has(projector.factOwnerRef) &&
+        !duplicateOwnerRefs.has(projector.factOwnerRef),
+    ),
+  ];
+};
+
+const safeEventMatchesOwner = (
+  event: LedgerEvent,
+  factOwnerRef: string,
+  safeEvent: AgUiSafeLedgerEvent,
+): boolean =>
+  !(
+    safeEvent.id !== event.id ||
+    safeEvent.ts !== event.ts ||
+    safeEvent.kind !== event.kind ||
+    safeEvent.scopeKey !== scopeRefKey(event.scopeRef) ||
+    safeEvent.factOwnerRef !== factOwnerRef ||
+    safeEvent.factOwnerRef !== event.factOwnerRef
+  );
+
 const projectOwnerSafeLedgerEvent = (
   event: LedgerEvent,
-  spec: AgUiLedgerProjectionSpec,
-): SafeLedgerEvent | undefined => {
-  if (DEFAULT_SAFE_EVENT_PROJECTOR_OWNERS.has(event.factOwnerRef)) {
-    for (const projector of DEFAULT_SAFE_EVENT_PROJECTORS) {
-      const projected = projector(event);
-      if (projected !== undefined) return projected;
-    }
-    return undefined;
-  }
-  for (const projector of spec.safeEventProjectors ?? []) {
-    const projected = projector(event);
-    if (projected !== undefined) return projected;
+  projectors: ReadonlyArray<AgUiSafeEventProjector>,
+): OwnerProjectedSafeEvent | undefined => {
+  for (const projector of projectors) {
+    if (projector.factOwnerRef !== event.factOwnerRef) continue;
+    const safeEvent = projector.projectSafeEvent(event);
+    if (safeEvent === undefined) return undefined;
+    if (!safeEventMatchesOwner(event, projector.factOwnerRef, safeEvent)) return undefined;
+    return {
+      factOwnerRef: projector.factOwnerRef,
+      safeEvent,
+      ...(projector.projectFrames === undefined ? {} : { projectFrames: projector.projectFrames }),
+    };
   }
   return undefined;
 };
@@ -660,10 +721,27 @@ const defaultCustomFrame = (event: SafeLedgerEvent): AgUiCustomFrame => ({
   },
 });
 
+const projectCustomSafeLedgerEventToAgUiFrames = (
+  event: AgUiSafeLedgerEvent,
+): ReadonlyArray<AgUiFrame> => [defaultCustomFrame(event)];
+
+const ownerAgUiFrames = (
+  factOwnerRef: string,
+  frames: ReadonlyArray<AgUiFrame>,
+): ReadonlyArray<AgUiFrame> =>
+  BUILT_IN_SAFE_EVENT_PROJECTOR_OWNERS.has(factOwnerRef)
+    ? frames
+    : frames.filter((frame) => frame.type !== "CUSTOM" || !frame.name.startsWith("agent-os."));
+
 export const projectSafeLedgerEventToAgUiFrames = (
   event: AgUiSafeLedgerEvent,
   spec: AgUiRuntimeProjectionSpec = {},
 ): ReadonlyArray<AgUiFrame> => {
+  if (!BUILT_IN_SAFE_EVENT_PROJECTOR_OWNERS.has(event.factOwnerRef)) {
+    const frames = projectCustomSafeLedgerEventToAgUiFrames(event);
+    return ownerAgUiFrames(event.factOwnerRef, frames);
+  }
+
   const payload = payloadOf(event);
   switch (event.kind) {
     case "agent.run.started":
@@ -821,13 +899,14 @@ export const projectLedgerEventsToAgUiFrames = (
   spec: AgUiLedgerProjectionSpec = {},
 ): ReadonlyArray<AgUiFrame> => {
   const frames: AgUiFrame[] = [];
+  const projectors = ownerSafeEventProjectors(spec);
   for (const event of [...events].sort((left, right) => left.id - right.id)) {
-    const safeEvent = projectOwnerSafeLedgerEvent(event, spec);
-    if (safeEvent === undefined) continue;
-    frames.push(
-      ...(spec.projectSafeEvent?.(safeEvent) ??
-        projectSafeLedgerEventToAgUiFrames(safeEvent, spec)),
-    );
+    const projected = projectOwnerSafeLedgerEvent(event, projectors);
+    if (projected === undefined) continue;
+    const eventFrames =
+      projected.projectFrames?.(projected.safeEvent, spec) ??
+      projectCustomSafeLedgerEventToAgUiFrames(projected.safeEvent);
+    frames.push(...ownerAgUiFrames(projected.factOwnerRef, eventFrames));
   }
   return frames;
 };

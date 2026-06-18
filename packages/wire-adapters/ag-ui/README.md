@@ -35,7 +35,9 @@ import { projectLedgerEventsToAgUiFrames, decodeLedgerEventToAgUiEnvelope } from
 agentOS-owned events enter AG-UI through package-owned `SafeLedgerEvent`
 projectors from `@agent-os/runtime-protocol`, `@agent-os/workspace-job`, and
 `@agent-os/workspace-op`. Product-owned events must provide their own
-`safeEventProjectors`; AG-UI does not select raw ledger payload fields.
+owner-keyed `safeEventProjectors` with a `factOwnerRef`; AG-UI does not select
+raw ledger payload fields and product frame projectors cannot emit reserved
+`agent-os.*` custom frame names.
 
 Use `projectToolToAgUiTool` to expose AG-UI tool declarations generated from
 `AgentSchema.projections.agUi`.

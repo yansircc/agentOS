@@ -720,10 +720,13 @@ describe("@agent-os/ag-ui", () => {
       [commit(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "owned runtime" }))],
       {
         safeEventProjectors: [
-          (event) =>
-            safeLedgerEvent(event, {
-              secret: "consumer override must not run for runtime owner",
-            }),
+          {
+            factOwnerRef: "@agent-os/product",
+            projectSafeEvent: (event) =>
+              safeLedgerEvent(event, {
+                secret: "consumer override must not run for runtime owner",
+              }),
+          },
         ],
       },
     );
@@ -756,10 +759,13 @@ describe("@agent-os/ag-ui", () => {
       ],
       {
         safeEventProjectors: [
-          (event) =>
-            event.kind === "workspace.file.observed"
-              ? safeLedgerEvent(event, { path: "README.md", bytes: 12 })
-              : undefined,
+          {
+            factOwnerRef: "@agent-os/test",
+            projectSafeEvent: (event) =>
+              event.kind === "workspace.file.observed"
+                ? safeLedgerEvent(event, { path: "README.md", bytes: 12 })
+                : undefined,
+          },
         ],
       },
     );
@@ -777,6 +783,76 @@ describe("@agent-os/ag-ui", () => {
     ]);
     expect(JSON.stringify(frames)).not.toContain("not exposed");
     expect(JSON.stringify(frames)).not.toContain("nested secret");
+  });
+
+  it("does not apply built-in frame mappings to product owners", () => {
+    const frames = projectLedgerEventsToAgUiFrames(
+      [
+        {
+          id: 1,
+          ts: 1,
+          ...eventIdentity(scope),
+          kind: "agent.run.started",
+          payload: { runId: 99, intent: "not runtime-owned" },
+        },
+      ],
+      {
+        safeEventProjectors: [
+          {
+            factOwnerRef: "@agent-os/test",
+            projectSafeEvent: (event) =>
+              event.kind === "agent.run.started"
+                ? safeLedgerEvent(event, { runId: 99, intent: "safe product event" })
+                : undefined,
+          },
+        ],
+      },
+    );
+
+    expect(frames).toEqual([
+      {
+        type: "CUSTOM",
+        timestamp: 1,
+        name: "agent.run.started",
+        value: {
+          id: 1,
+          kind: "agent.run.started",
+          safePayload: { runId: 99, intent: "safe product event" },
+        },
+      },
+    ]);
+  });
+
+  it("drops product frames that emit reserved agent-os custom names", () => {
+    const frames = projectLedgerEventsToAgUiFrames(
+      [
+        {
+          id: 1,
+          ts: 1,
+          ...eventIdentity(scope),
+          kind: "workspace.file.observed",
+          payload: { path: "README.md" },
+        },
+      ],
+      {
+        safeEventProjectors: [
+          {
+            factOwnerRef: "@agent-os/test",
+            projectSafeEvent: (event) => safeLedgerEvent(event, { path: "README.md" }),
+            projectFrames: (event) => [
+              {
+                type: "CUSTOM",
+                timestamp: event.ts,
+                name: "agent-os.tool.started",
+                value: { path: "README.md" },
+              },
+            ],
+          },
+        ],
+      },
+    );
+
+    expect(frames).toEqual([]);
   });
 
   it("verifies fixture-owned forbidden literals as regression evidence only", () => {
