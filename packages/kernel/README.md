@@ -5,8 +5,8 @@
 ## Purpose
 
 Pure agentOS algebra: effect claims, carrier declarations, BoundaryContract
-declarations, symbolic material refs, tool contracts, context packs, runtime
-scope refs, and shared ledger-visible types.
+declarations, symbolic material refs, projection derivation contracts, tool
+contracts, context packs, runtime scope refs, and shared ledger-visible types.
 
 ## Public API Status
 
@@ -14,9 +14,9 @@ scope refs, and shared ledger-visible types.
 
 ## Invariant
 
-Kernel code has no platform or backend imports. It can validate and name facts,
-but cannot commit, schedule, dispatch, resolve concrete material, or construct
-runtime responses.
+Kernel code has no platform or backend imports. It can validate, name facts,
+and derive views, but cannot commit, schedule, dispatch, resolve concrete
+material, or construct runtime responses.
 
 ## Minimal Usage
 

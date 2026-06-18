@@ -50,7 +50,7 @@ state to make a product flow appear complete.
 
 | Package                                  | Role                                                                                                                                                                             |
 | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@agent-os/kernel`                       | pure claim, boundary, material, AgentSchema, JSON Schema dialect, tool, context, and type algebra                                                                                |
+| `@agent-os/kernel`                       | pure claim, boundary, material, projection, AgentSchema, JSON Schema dialect, tool, context, and type algebra                                                                    |
 | `@agent-os/runtime`                      | Effect Tag runtime programs, runtime services, projections, workspace-job observability joins, and backend-neutral durable trigger authoring algebra                             |
 | `@agent-os/runtime-protocol`             | runtime-owned serializable submit, admission, ledger identity, and runtime event vocabulary                                                                                      |
 | `@agent-os/telemetry-protocol`           | trace context and backend-neutral telemetry event tree vocabulary                                                                                                                |

@@ -50,6 +50,10 @@
       "types": "./src/quota.ts",
       "default": "./src/quota.ts"
     },
+    "./projection": {
+      "types": "./src/projection.ts",
+      "default": "./src/projection.ts"
+    },
     "./ref-resolver": {
       "types": "./src/ref-resolver.ts",
       "default": "./src/ref-resolver.ts"

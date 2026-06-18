@@ -12,6 +12,7 @@
       "@agent-os/kernel/extensions": ["./packages/kernel/src/extensions.ts"],
       "@agent-os/kernel/material-ref": ["./packages/kernel/src/material-ref.ts"],
       "@agent-os/kernel/quota": ["./packages/kernel/src/quota.ts"],
+      "@agent-os/kernel/projection": ["./packages/kernel/src/projection.ts"],
       "@agent-os/kernel/ref-resolver": ["./packages/kernel/src/ref-resolver.ts"],
       "@agent-os/kernel/runtime-scope": ["./packages/kernel/src/runtime-scope.ts"],
       "@agent-os/kernel/settlement-contract": ["./packages/kernel/src/settlement-contract.ts"],

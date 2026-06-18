@@ -66,6 +66,7 @@ export * from "./context";
 export * from "./effect-claim";
 export * from "./errors";
 export * from "./quota";
+export * from "./projection";
 export * from "./ref-resolver";
 export * from "./runtime-scope";
 export * from "./safe-ledger-event";
