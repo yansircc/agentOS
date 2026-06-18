@@ -35,6 +35,17 @@ export interface OtlpProjection {
   readonly spans: ReadonlyArray<OtlpProjectionSpan>;
 }
 
+interface OtlpProjectionSourceRef {
+  readonly kind: "telemetry-protocol";
+  readonly ref: "@agent-os/telemetry-protocol/TelemetryEventTree";
+}
+
+interface OtlpProjectionSinkMapping {
+  readonly id: "telemetry-otlp.spans";
+  readonly source: OtlpProjectionSourceRef;
+  readonly project: (tree: TelemetryEventTree) => OtlpProjection;
+}
+
 const tsNanos = (ts: number | undefined): number => Math.max(0, Math.floor(ts ?? 0)) * 1_000_000;
 
 const spanIdFromNumber = (id: number, salt = 0): string =>
@@ -129,7 +140,7 @@ const otlpAttributes = (node: TelemetryEventNode): Readonly<Record<string, OtlpA
   return attributes;
 };
 
-export const projectOtlpSpans = (tree: TelemetryEventTree): OtlpProjection => {
+const projectOtlpTree = (tree: TelemetryEventTree): OtlpProjection => {
   const spanIds = new Map(tree.nodes.map((node) => [node.id, spanIdForNode(node)]));
   const spans: OtlpProjectionSpan[] = [];
 
@@ -162,3 +173,15 @@ export const projectOtlpSpans = (tree: TelemetryEventTree): OtlpProjection => {
     }),
   };
 };
+
+const otlpProjectionSinkMapping: OtlpProjectionSinkMapping = {
+  id: "telemetry-otlp.spans",
+  source: {
+    kind: "telemetry-protocol",
+    ref: "@agent-os/telemetry-protocol/TelemetryEventTree",
+  },
+  project: projectOtlpTree,
+};
+
+export const projectOtlpSpans = (tree: TelemetryEventTree): OtlpProjection =>
+  otlpProjectionSinkMapping.project(tree);
