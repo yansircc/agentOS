@@ -53,6 +53,8 @@ title: "@agent-os/runtime Public API Intent"
 - `.:DurableTriggerCancellationMode`
 - `.:DurableTriggerRegistry`
 - `.:InternalSubmitSpec`
+- `.:InputRequestProjection`
+- `.:InputRequestResumeDecisionResult`
 - `.:Ledger`
 - `.:MakeAttachedStreamRegistryOptions`
 - `.:MakeAttachedStreamServiceSpec`
@@ -145,6 +147,8 @@ title: "@agent-os/runtime Public API Intent"
 - `.:makeDurableTriggerRegistry`
 - `.:makeProjectionRegistry`
 - `.:makeProjectionRegistryResult`
+- `.:projectInputRequest`
+- `.:projectInputRequests`
 - `.:projectRunStatus`
 - `.:projectRunTrace`
 - `.:projectRunsPage`
@@ -173,6 +177,7 @@ title: "@agent-os/runtime Public API Intent"
 - `.:settleToolExecuted`
 - `.:settleToolExecutionRejected`
 - `.:settleToolPolicyRejected`
+- `.:submitResumeDecisionFromInputRequestProjection`
 - `.:submitResumeDecisionFromContinuationProjection`
 - `.:submitAgentEffect`
 - `.:toolErrorReason`

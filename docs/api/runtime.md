@@ -49,6 +49,8 @@
 - `.:DurableTriggerCancellationMode`
 - `.:DurableTriggerRegistry`
 - `.:InternalSubmitSpec`
+- `.:InputRequestProjection`
+- `.:InputRequestResumeDecisionResult`
 - `.:Ledger`
 - `.:MakeAttachedStreamRegistryOptions`
 - `.:MakeAttachedStreamServiceSpec`
@@ -141,6 +143,8 @@
 - `.:makeDurableTriggerRegistry`
 - `.:makeProjectionRegistry`
 - `.:makeProjectionRegistryResult`
+- `.:projectInputRequest`
+- `.:projectInputRequests`
 - `.:projectRunStatus`
 - `.:projectRunTrace`
 - `.:projectRunsPage`
@@ -169,6 +173,7 @@
 - `.:settleToolExecuted`
 - `.:settleToolExecutionRejected`
 - `.:settleToolPolicyRejected`
+- `.:submitResumeDecisionFromInputRequestProjection`
 - `.:submitResumeDecisionFromContinuationProjection`
 - `.:submitAgentEffect`
 - `.:toolErrorReason`

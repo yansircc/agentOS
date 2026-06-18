@@ -6,6 +6,7 @@ export * from "./continuation";
 export * from "./dispatch";
 export * from "./ledger";
 export * from "./internal-submit";
+export * from "./input-request";
 export * from "./projection";
 export * from "./quota-service";
 export * from "./resources";

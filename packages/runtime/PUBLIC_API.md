@@ -53,6 +53,8 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:DurableTriggerCancellationMode`
 - `.:DurableTriggerRegistry`
 - `.:InternalSubmitSpec`
+- `.:InputRequestProjection`
+- `.:InputRequestResumeDecisionResult`
 - `.:Ledger`
 - `.:MakeAttachedStreamRegistryOptions`
 - `.:MakeAttachedStreamServiceSpec`
@@ -145,6 +147,8 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:makeDurableTriggerRegistry`
 - `.:makeProjectionRegistry`
 - `.:makeProjectionRegistryResult`
+- `.:projectInputRequest`
+- `.:projectInputRequests`
 - `.:projectRunStatus`
 - `.:projectRunTrace`
 - `.:projectRunsPage`
@@ -173,6 +177,7 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:settleToolExecuted`
 - `.:settleToolExecutionRejected`
 - `.:settleToolPolicyRejected`
+- `.:submitResumeDecisionFromInputRequestProjection`
 - `.:submitResumeDecisionFromContinuationProjection`
 - `.:submitAgentEffect`
 - `.:toolErrorReason`
