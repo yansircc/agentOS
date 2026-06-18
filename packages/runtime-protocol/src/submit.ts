@@ -58,7 +58,105 @@ export interface SubmitToolPolicy {
 }
 
 /**
- * Runtime submit input for one agent run under an effect authority.
+ * App-authored submit input for one agent run.
+ *
+ * This is the narrow shape produced by app-facing adapters. It intentionally
+ * cannot provide route, tool registry, execution domains, or effect authority;
+ * those facts are supplied by framework-owned bindings during lowering.
+ *
+ * @public
+ */
+export interface SubmitRunInput {
+  readonly intent: string;
+  readonly context: Record<string, unknown>;
+  readonly system?: string;
+  readonly budget?: {
+    readonly tokens?: number;
+    readonly timeMs?: number;
+    readonly llmCallTimeoutMs?: number;
+    readonly maxTurns?: number;
+    readonly toolRetries?: number;
+  };
+  readonly outputSchema?: AnyAgentSchemaSource;
+  readonly traceContext?: TraceContext;
+  readonly materials?: Readonly<Record<string, MaterialRef>>;
+  readonly toolContext?: SubmitToolContext;
+  readonly toolPolicy?: SubmitToolPolicy;
+  readonly decisionInterrupts?: ReadonlyArray<SubmitDecisionInterrupt>;
+  readonly resume?: SubmitResumeDecision;
+}
+
+export interface SubmitRunBindings {
+  readonly llmRoutes?: Readonly<Record<string, LlmRoute>>;
+  readonly tools?: Readonly<Record<string, Tool>>;
+  readonly executionDomains?: ReadonlyArray<ExecutionDomainDeclaration>;
+  readonly materials?: Readonly<Record<string, MaterialRef>>;
+  readonly toolContext?: SubmitToolContext;
+  readonly toolIntents?: ReadonlyArray<SubmitToolIntent>;
+  readonly receiptBackedTools?: Readonly<Record<string, SubmitReceiptBackedToolBinding>>;
+  readonly decisionInterrupts?: ReadonlyArray<SubmitDecisionInterrupt>;
+}
+
+export interface LowerSubmitRunInputSpec {
+  readonly input: SubmitRunInput;
+  readonly bindings: SubmitRunBindings;
+  readonly routeBindingRef?: string;
+  readonly effectAuthorityRef: AuthorityRef;
+}
+
+const mergeSubmitToolContext = (
+  base: SubmitToolContext | undefined,
+  input: SubmitToolContext | undefined,
+): SubmitToolContext | undefined => {
+  const extensions = {
+    ...base?.extensions,
+    ...input?.extensions,
+  };
+  return Object.keys(extensions).length === 0 ? undefined : { extensions };
+};
+
+/**
+ * Framework-owned lowering from app-authored input plus pre-runtime bindings to
+ * the full runtime driver input.
+ *
+ * @public
+ */
+export const lowerSubmitRunInput = (spec: LowerSubmitRunInputSpec): SubmitSpec => {
+  const routeBindingRef = spec.routeBindingRef ?? "default";
+  const route = spec.bindings.llmRoutes?.[routeBindingRef];
+  if (route === undefined) {
+    throw new TypeError(`missing llm route binding ${routeBindingRef}`);
+  }
+  const toolContext = mergeSubmitToolContext(spec.bindings.toolContext, spec.input.toolContext);
+  return {
+    intent: spec.input.intent,
+    context: spec.input.context,
+    ...(spec.input.system === undefined ? {} : { system: spec.input.system }),
+    route,
+    tools: { ...spec.bindings.tools },
+    ...(spec.bindings.executionDomains === undefined
+      ? {}
+      : { executionDomains: spec.bindings.executionDomains }),
+    ...(spec.input.budget === undefined ? {} : { budget: spec.input.budget }),
+    ...(spec.input.outputSchema === undefined ? {} : { outputSchema: spec.input.outputSchema }),
+    ...(spec.input.traceContext === undefined ? {} : { traceContext: spec.input.traceContext }),
+    effectAuthorityRef: spec.effectAuthorityRef,
+    materials: { ...spec.bindings.materials, ...spec.input.materials },
+    ...(toolContext === undefined ? {} : { toolContext }),
+    ...(spec.bindings.toolIntents === undefined ? {} : { toolIntents: spec.bindings.toolIntents }),
+    ...(spec.bindings.receiptBackedTools === undefined
+      ? {}
+      : { receiptBackedTools: spec.bindings.receiptBackedTools }),
+    ...(spec.input.toolPolicy === undefined ? {} : { toolPolicy: spec.input.toolPolicy }),
+    ...(spec.input.decisionInterrupts === undefined && spec.bindings.decisionInterrupts === undefined
+      ? {}
+      : { decisionInterrupts: spec.input.decisionInterrupts ?? spec.bindings.decisionInterrupts }),
+    ...(spec.input.resume === undefined ? {} : { resume: spec.input.resume }),
+  };
+};
+
+/**
+ * Runtime driver input for one agent run under an effect authority.
  *
  * @agentosPrimitive primitive.runtime.SubmitSpec
  * @agentosInvariant invariant.d10.truth-identity

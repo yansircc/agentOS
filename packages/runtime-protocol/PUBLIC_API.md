@@ -125,6 +125,7 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:LlmResponsePayload`
 - `.:LlmResponsePayloadSchema`
 - `.:LlmRoute`
+- `.:LowerSubmitRunInputSpec`
 - `.:Outcome`
 - `.:OutcomeClass`
 - `.:ProbeInput`
@@ -141,6 +142,10 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:ReceiptBackedToolResult`
 - `.:RuntimeCompletedAfterToolsPayload`
 - `.:RuntimeCompletedAfterToolsPayloadSchema`
+- `.:RuntimeHistoryCompactedPayload`
+- `.:RuntimeHistoryCompactedPayloadSchema`
+- `.:RuntimeRekeyedPayload`
+- `.:RuntimeRekeyedPayloadSchema`
 - `.:RuntimeAbortEventKind`
 - `.:RuntimeEventCommitSpec`
 - `.:RuntimeEventCommitSpecByKind`
@@ -165,6 +170,8 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:SubmitReceiptBackedToolBinding`
 - `.:SubmitResult`
 - `.:SubmitResumeDecision`
+- `.:SubmitRunBindings`
+- `.:SubmitRunInput`
 - `.:SubmitSpec`
 - `.:SubmitToolContext`
 - `.:SubmitToolIntent`
@@ -217,6 +224,7 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:isRuntimeEventKind`
 - `.:llmRequestedEvent`
 - `.:llmResponseEvent`
+- `.:lowerSubmitRunInput`
 - `.:makeAdmissionSchemaSpec`
 - `.:mountAgent`
 - `.:projectLease`
@@ -232,6 +240,8 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, pu
 - `.:submitResumeDecisionFromInputRequestRef`
 - `.:submitResumeDecisionFromContinuationRef`
 - `.:runtimeCompletedAfterToolsEvent`
+- `.:runtimeHistoryCompactedEvent`
+- `.:runtimeRekeyedEvent`
 - `.:toolExecutedEvent`
 - `.:toolResultSnapshotFromExecutedPayload`
 - `.:toolRejectedEvent`

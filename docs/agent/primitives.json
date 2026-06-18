@@ -1025,7 +1025,7 @@
       "symbol": "SubmitSpec",
       "exportKey": ".:SubmitSpec",
       "sourceFile": "packages/runtime-protocol/src/submit.ts",
-      "summary": "Runtime submit input for one agent run under an effect authority.",
+      "summary": "Runtime driver input for one agent run under an effect authority.",
       "aliases": [],
       "invariants": ["invariant.d10.truth-identity"],
       "decisions": [],

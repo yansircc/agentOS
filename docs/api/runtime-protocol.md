@@ -121,6 +121,7 @@
 - `.:LlmResponsePayload`
 - `.:LlmResponsePayloadSchema`
 - `.:LlmRoute`
+- `.:LowerSubmitRunInputSpec`
 - `.:Outcome`
 - `.:OutcomeClass`
 - `.:ProbeInput`
@@ -137,6 +138,10 @@
 - `.:ReceiptBackedToolResult`
 - `.:RuntimeCompletedAfterToolsPayload`
 - `.:RuntimeCompletedAfterToolsPayloadSchema`
+- `.:RuntimeHistoryCompactedPayload`
+- `.:RuntimeHistoryCompactedPayloadSchema`
+- `.:RuntimeRekeyedPayload`
+- `.:RuntimeRekeyedPayloadSchema`
 - `.:RuntimeAbortEventKind`
 - `.:RuntimeEventCommitSpec`
 - `.:RuntimeEventCommitSpecByKind`
@@ -161,6 +166,8 @@
 - `.:SubmitReceiptBackedToolBinding`
 - `.:SubmitResult`
 - `.:SubmitResumeDecision`
+- `.:SubmitRunBindings`
+- `.:SubmitRunInput`
 - `.:SubmitSpec`
 - `.:SubmitToolContext`
 - `.:SubmitToolIntent`
@@ -213,6 +220,7 @@
 - `.:isRuntimeEventKind`
 - `.:llmRequestedEvent`
 - `.:llmResponseEvent`
+- `.:lowerSubmitRunInput`
 - `.:makeAdmissionSchemaSpec`
 - `.:mountAgent`
 - `.:projectLease`
@@ -228,6 +236,8 @@
 - `.:submitResumeDecisionFromInputRequestRef`
 - `.:submitResumeDecisionFromContinuationRef`
 - `.:runtimeCompletedAfterToolsEvent`
+- `.:runtimeHistoryCompactedEvent`
+- `.:runtimeRekeyedEvent`
 - `.:toolExecutedEvent`
 - `.:toolResultSnapshotFromExecutedPayload`
 - `.:toolRejectedEvent`

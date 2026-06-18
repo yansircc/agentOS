@@ -125,6 +125,7 @@ title: "@agent-os/runtime-protocol API"
 - `.:LlmResponsePayload`
 - `.:LlmResponsePayloadSchema`
 - `.:LlmRoute`
+- `.:LowerSubmitRunInputSpec`
 - `.:Outcome`
 - `.:OutcomeClass`
 - `.:ProbeInput`
@@ -141,6 +142,10 @@ title: "@agent-os/runtime-protocol API"
 - `.:ReceiptBackedToolResult`
 - `.:RuntimeCompletedAfterToolsPayload`
 - `.:RuntimeCompletedAfterToolsPayloadSchema`
+- `.:RuntimeHistoryCompactedPayload`
+- `.:RuntimeHistoryCompactedPayloadSchema`
+- `.:RuntimeRekeyedPayload`
+- `.:RuntimeRekeyedPayloadSchema`
 - `.:RuntimeAbortEventKind`
 - `.:RuntimeEventCommitSpec`
 - `.:RuntimeEventCommitSpecByKind`
@@ -165,6 +170,8 @@ title: "@agent-os/runtime-protocol API"
 - `.:SubmitReceiptBackedToolBinding`
 - `.:SubmitResult`
 - `.:SubmitResumeDecision`
+- `.:SubmitRunBindings`
+- `.:SubmitRunInput`
 - `.:SubmitSpec`
 - `.:SubmitToolContext`
 - `.:SubmitToolIntent`
@@ -217,6 +224,7 @@ title: "@agent-os/runtime-protocol API"
 - `.:isRuntimeEventKind`
 - `.:llmRequestedEvent`
 - `.:llmResponseEvent`
+- `.:lowerSubmitRunInput`
 - `.:makeAdmissionSchemaSpec`
 - `.:mountAgent`
 - `.:projectLease`
@@ -232,6 +240,8 @@ title: "@agent-os/runtime-protocol API"
 - `.:submitResumeDecisionFromInputRequestRef`
 - `.:submitResumeDecisionFromContinuationRef`
 - `.:runtimeCompletedAfterToolsEvent`
+- `.:runtimeHistoryCompactedEvent`
+- `.:runtimeRekeyedEvent`
 - `.:toolExecutedEvent`
 - `.:toolResultSnapshotFromExecutedPayload`
 - `.:toolRejectedEvent`

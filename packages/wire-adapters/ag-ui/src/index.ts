@@ -15,7 +15,7 @@ import {
   RUNTIME_FACT_OWNER,
   submitResumeDecisionFromInputRequestRef,
   type InputRequestDescriptor,
-  type SubmitSpec,
+  type SubmitRunInput,
   type SubmitResumeDecision,
 } from "@agent-os/runtime-protocol";
 import {
@@ -265,7 +265,7 @@ export type AgUiInputRequestResumeBinding = {
   readonly decisionRef: string;
 };
 
-export type AgUiSubmitDefaults = Omit<SubmitSpec, "intent" | "context"> & {
+export type AgUiSubmitDefaults = Omit<SubmitRunInput, "intent" | "context"> & {
   readonly system?: string;
   readonly context?: Record<string, unknown>;
   readonly forwardedPropAllowlist?: ReadonlyArray<string>;
@@ -616,33 +616,24 @@ const submitResumeForAgUiInput = (
   });
 };
 
-export const agUiRunAgentInputToSubmitSpec = (
+export const agUiRunAgentInputToSubmitInput = (
   input: AgUiRunAgentInput,
   defaults: AgUiSubmitDefaults,
-): SubmitSpec => {
+): SubmitRunInput => {
   const resume = submitResumeForAgUiInput(input, defaults);
   const forwardedProps = selectedForwardedProps(input, defaults.forwardedPropAllowlist);
   return {
-    route: defaults.route,
-    tools: defaults.tools,
     ...(defaults.system === undefined ? {} : { system: defaults.system }),
     ...(defaults.budget === undefined ? {} : { budget: defaults.budget }),
     ...(defaults.outputSchema === undefined ? {} : { outputSchema: defaults.outputSchema }),
     ...(defaults.traceContext === undefined ? {} : { traceContext: defaults.traceContext }),
     ...(defaults.materials === undefined ? {} : { materials: defaults.materials }),
-    ...(defaults.executionDomains === undefined
-      ? {}
-      : { executionDomains: defaults.executionDomains }),
     ...(defaults.toolContext === undefined ? {} : { toolContext: defaults.toolContext }),
-    ...(defaults.toolIntents === undefined ? {} : { toolIntents: defaults.toolIntents }),
-    ...(defaults.receiptBackedTools === undefined
-      ? {}
-      : { receiptBackedTools: defaults.receiptBackedTools }),
+    ...(defaults.toolPolicy === undefined ? {} : { toolPolicy: defaults.toolPolicy }),
     ...(defaults.decisionInterrupts === undefined
       ? {}
       : { decisionInterrupts: defaults.decisionInterrupts }),
     ...(resume === undefined ? {} : { resume }),
-    effectAuthorityRef: defaults.effectAuthorityRef,
     intent: latestUserText(input.messages),
     context: {
       ...defaults.context,

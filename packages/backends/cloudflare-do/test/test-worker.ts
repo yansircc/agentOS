@@ -845,6 +845,26 @@ export const facadeApply = defineTool({
     }),
 });
 
+export const facadeWriteFirst = defineTool({
+  name: "write_first",
+  description: "write first artifact",
+  args: Schema.Struct({ value: Schema.String }),
+  authority: "write",
+  admit: () => Effect.succeed({ ok: true as const }),
+  execution: deterministicToolExecution(),
+  execute: ({ value }) => Effect.succeed({ value }),
+});
+
+export const facadeWriteSecond = defineTool({
+  name: "write_second",
+  description: "write second artifact",
+  args: Schema.Struct({ value: Schema.String }),
+  authority: "write",
+  admit: () => Effect.succeed({ ok: true as const }),
+  execution: deterministicToolExecution(),
+  execute: ({ value }) => Effect.succeed({ value }),
+});
+
 const facadeIntentBoundaryPackage = boundaryPackage(
   defineBoundaryContract({
     packageId: "@agent-os/facade-intent-test",
@@ -957,6 +977,7 @@ const facadeSubmitLlmTransport = Layer.succeed(LlmTransport, {
   call: (request) => {
     const route = request.route;
     const toolNames = request.tools?.map((tool) => tool.function.name) ?? [];
+    const messageText = request.messages.map((message) => message.content ?? "").join("\n");
     const requestJson = JSON.stringify(request);
     if (requestJson.includes(FACADE_SECRET)) {
       return Effect.fail(
@@ -968,7 +989,7 @@ const facadeSubmitLlmTransport = Layer.succeed(LlmTransport, {
       );
     }
     const routeOk = route.kind === "openai-chat-compatible" && route.modelId === "gpt-4.1-mini";
-    if (routeOk && toolNames.length === 1 && toolNames[0] === "lookup") {
+    if (routeOk && messageText.includes("lookup")) {
       return Effect.succeed({
         items: [{ type: "message" as const, text: "facade done" }],
         usage: {
@@ -978,7 +999,7 @@ const facadeSubmitLlmTransport = Layer.succeed(LlmTransport, {
         },
       });
     }
-    if (routeOk && toolNames.length === 1 && toolNames[0] === "apply") {
+    if (routeOk && messageText.includes("apply")) {
       const hasToolResult = request.messages.some(
         (message) =>
           message.role === "tool" && message.content?.includes('"materialMatched":true') === true,
@@ -1014,7 +1035,7 @@ const facadeSubmitLlmTransport = Layer.succeed(LlmTransport, {
         },
       });
     }
-    if (routeOk && toolNames.length === 1 && toolNames[0] === "intent") {
+    if (routeOk && messageText.includes("intent")) {
       const hasToolResult = request.messages.some(
         (message) =>
           message.role === "tool" &&
@@ -1051,7 +1072,32 @@ const facadeSubmitLlmTransport = Layer.succeed(LlmTransport, {
         },
       });
     }
-    if (routeOk && toolNames.includes("write_first") && toolNames.includes("write_second")) {
+    if (routeOk && messageText.includes("write artifacts")) {
+      const hasFirstWrite = request.messages.some(
+        (message) => message.role === "tool" && message.content?.includes('"value":"first"'),
+      );
+      if (hasFirstWrite) {
+        return Effect.succeed({
+          items: [
+            {
+              type: "tool_call" as const,
+              call: {
+                id: "call-write-second",
+                type: "function" as const,
+                function: {
+                  name: "write_second",
+                  arguments: '{"value":"second"}',
+                },
+              },
+            },
+          ],
+          usage: {
+            promptTokens: 3,
+            completionTokens: 2,
+            totalTokens: 5,
+          },
+        });
+      }
       return Effect.succeed({
         items: [
           {
@@ -1062,28 +1108,6 @@ const facadeSubmitLlmTransport = Layer.succeed(LlmTransport, {
               function: {
                 name: "write_first",
                 arguments: '{"value":"first"}',
-              },
-            },
-          },
-        ],
-        usage: {
-          promptTokens: 3,
-          completionTokens: 2,
-          totalTokens: 5,
-        },
-      });
-    }
-    if (routeOk && toolNames.includes("write_second") && !toolNames.includes("write_first")) {
-      return Effect.succeed({
-        items: [
-          {
-            type: "tool_call" as const,
-            call: {
-              id: "call-write-second",
-              type: "function" as const,
-              function: {
-                name: "write_second",
-                arguments: '{"value":"second"}',
               },
             },
           },
@@ -1125,6 +1149,7 @@ export const FacadeSubmitTestDO = defineAgentDO<CloudflareAgentEnv>({
     }),
   },
   llmTransport: () => facadeSubmitLlmTransport,
+  tools: [facadeLookup, facadeApply, facadeIntent, facadeWriteFirst, facadeWriteSecond],
   extensions: [facadeIntentBoundaryPackage],
   on: {
     [FACADE_INTENT_COMMAND_EVENT]: async ({ data, capabilities }) => {

@@ -22,6 +22,7 @@ import {
   agentRunCompletedEvent,
   agentRunStartedEvent,
   chatIngestedEvent,
+  lowerSubmitRunInput,
   llmResponseEvent,
   projectFailureDiagnostics,
   RUNTIME_FACT_OWNER,
@@ -31,7 +32,7 @@ import {
   type RuntimeEventCommitSpec,
 } from "@agent-os/runtime-protocol";
 import {
-  agUiRunAgentInputToSubmitSpec,
+  agUiRunAgentInputToSubmitInput,
   projectAgUiFrames,
   projectLedgerEventsToAgUiFrames,
   verifyAgUiFrameSafety,
@@ -110,21 +111,28 @@ describe("Cloudflare workspace tools to AG-UI integration fixture", () => {
           forwardedProps: { allowedTrace: "trace-1", droppedSecret: "UI_SECRET" },
         };
 
-        const submit = agUiRunAgentInputToSubmitSpec(input, {
-          route: {
-            kind: "openai-chat-compatible",
-            endpointRef: "endpoint:test",
-            credentialRef: "credential:test",
-            modelId: "model",
-          },
-          tools: bindings.tools ?? {},
-          executionDomains: bindings.executionDomains,
-          materials: bindings.materials,
-          toolContext: bindings.toolContext,
-          toolIntents: bindings.toolIntents,
-          receiptBackedTools: bindings.receiptBackedTools,
-          effectAuthorityRef: runtimeIdentity.effectAuthorityRef,
+        const submitInput = agUiRunAgentInputToSubmitInput(input, {
           forwardedPropAllowlist: ["allowedTrace"],
+        });
+        const submit = lowerSubmitRunInput({
+          input: submitInput,
+          bindings: {
+            llmRoutes: {
+              default: {
+                kind: "openai-chat-compatible",
+                endpointRef: "endpoint:test",
+                credentialRef: "credential:test",
+                modelId: "model",
+              },
+            },
+            tools: bindings.tools ?? {},
+            executionDomains: bindings.executionDomains,
+            materials: bindings.materials,
+            toolContext: bindings.toolContext,
+            toolIntents: bindings.toolIntents,
+            receiptBackedTools: bindings.receiptBackedTools,
+          },
+          effectAuthorityRef: runtimeIdentity.effectAuthorityRef,
         });
 
         expect(Object.keys(submit.tools).sort()).toEqual([

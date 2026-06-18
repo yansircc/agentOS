@@ -78,6 +78,7 @@ import type {
   AttemptKey,
   CapabilityLease,
   SubmitResult,
+  SubmitRunInput,
   SubmitSpec,
   SubmitToolIntent,
 } from "@agent-os/runtime-protocol";
@@ -100,7 +101,7 @@ import {
   type TriggerDrainUntilQuietResult,
 } from "@agent-os/runtime";
 import { LlmTransport } from "@agent-os/llm-protocol";
-import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
+import { lowerSubmitRunInput, RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
 import {
   backendProtocolEventIdentityKey,
   QUOTA_EVENT_KIND,
@@ -231,14 +232,16 @@ export type AgentWorkspaceJobSpec = Omit<RunWorkspaceJobSpec, "scope" | "identit
 export interface AgentSubmitSpec {
   readonly intent: string;
   readonly input: unknown;
-  readonly effectAuthorityRef: AuthorityRef;
-  readonly bindings?: AgentSubmitBindings;
   readonly llmRouteBindingRef?: string;
+  readonly context?: Record<string, unknown>;
   readonly system?: string;
   readonly budget?: SubmitSpec["budget"];
   readonly outputSchema?: SubmitSpec["outputSchema"];
   readonly traceContext?: SubmitSpec["traceContext"];
+  readonly materials?: SubmitRunInput["materials"];
+  readonly toolContext?: SubmitRunInput["toolContext"];
   readonly toolPolicy?: SubmitSpec["toolPolicy"];
+  readonly decisionInterrupts?: SubmitRunInput["decisionInterrupts"];
   readonly resume?: SubmitSpec["resume"];
 }
 
@@ -345,24 +348,9 @@ const emptyRefResolver: RefResolver = {
 const rejectAgentConfig = (message: string): never =>
   Option.getOrThrowWith(Option.none(), () => new TypeError(message));
 
-const mergeSubmitBindings = (
-  base: AgentSubmitBindings,
-  run: AgentSubmitBindings | undefined,
-): AgentSubmitBindings => ({
-  llmRoutes: { ...base.llmRoutes, ...run?.llmRoutes },
-  tools: { ...base.tools, ...run?.tools },
-  executionDomains: [...(base.executionDomains ?? []), ...(run?.executionDomains ?? [])],
-  materials: { ...base.materials, ...run?.materials },
-  toolContext: {
-    extensions: {
-      ...base.toolContext?.extensions,
-      ...run?.toolContext?.extensions,
-    },
-  },
-  toolIntents: [...(base.toolIntents ?? []), ...(run?.toolIntents ?? [])],
-  receiptBackedTools: { ...base.receiptBackedTools, ...run?.receiptBackedTools },
-  context: run?.context ?? base.context,
-  decisionInterrupts: run?.decisionInterrupts ?? base.decisionInterrupts,
+const submitEffectAuthorityRef = (routeBindingRef: string): AuthorityRef => ({
+  authorityClass: "llm_route",
+  authorityId: routeBindingRef,
 });
 
 const declaredToolIntents = (
@@ -703,33 +691,37 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
     spec: AgentSubmitSpec,
     baseBindings: AgentSubmitBindings,
   ): Promise<SubmitResult> {
-    const bindings = mergeSubmitBindings(baseBindings, spec.bindings);
     const routeBindingRef = spec.llmRouteBindingRef ?? "default";
-    const route = bindings.llmRoutes?.[routeBindingRef];
-    if (route === undefined) {
-      return Promise.reject(new TypeError(`missing llm route binding ${routeBindingRef}`));
-    }
-    return this.submitFull({
+    const runInput: SubmitRunInput = {
       intent: spec.intent,
-      context: bindings.context ?? { input: spec.input },
+      context: spec.context ?? { input: spec.input },
       ...(spec.system === undefined ? {} : { system: spec.system }),
-      route,
-      tools: { ...bindings.tools },
-      executionDomains: bindings.executionDomains,
-      materials: { ...bindings.materials },
-      toolContext: bindings.toolContext,
-      toolIntents: [...this._toolIntents, ...(bindings.toolIntents ?? [])],
-      receiptBackedTools: { ...bindings.receiptBackedTools },
-      effectAuthorityRef: spec.effectAuthorityRef,
       ...(spec.budget === undefined ? {} : { budget: spec.budget }),
       ...(spec.outputSchema === undefined ? {} : { outputSchema: spec.outputSchema }),
       ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
+      ...(spec.materials === undefined ? {} : { materials: spec.materials }),
+      ...(spec.toolContext === undefined ? {} : { toolContext: spec.toolContext }),
       ...(spec.toolPolicy === undefined ? {} : { toolPolicy: spec.toolPolicy }),
-      ...(bindings.decisionInterrupts === undefined
+      ...(spec.decisionInterrupts === undefined
         ? {}
-        : { decisionInterrupts: bindings.decisionInterrupts }),
+        : { decisionInterrupts: spec.decisionInterrupts }),
       ...(spec.resume === undefined ? {} : { resume: spec.resume }),
-    });
+    };
+    try {
+      return this.submitFull(
+        lowerSubmitRunInput({
+          input: runInput,
+          bindings: {
+            ...baseBindings,
+            toolIntents: [...this._toolIntents, ...(baseBindings.toolIntents ?? [])],
+          },
+          routeBindingRef,
+          effectAuthorityRef: submitEffectAuthorityRef(routeBindingRef),
+        }),
+      );
+    } catch (cause) {
+      return Promise.reject(cause);
+    }
   }
 
   protected submitFull(spec: SubmitSpec): Promise<SubmitResult> {

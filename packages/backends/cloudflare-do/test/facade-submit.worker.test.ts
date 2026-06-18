@@ -3,14 +3,8 @@ import { runInDurableObject } from "cloudflare:test";
 import type {} from "@effect/vitest";
 
 import { credentialMaterialRef } from "@agent-os/kernel/material-ref";
-import { defineTool, deterministicToolExecution } from "@agent-os/kernel/tools";
-import { defineAgentSubmitBindings } from "@agent-os/runtime-protocol";
-import { Effect, Schema } from "effect";
 import {
   FACADE_INTENT_COMMAND_EVENT,
-  facadeApply,
-  facadeIntent,
-  facadeLookup,
   type FacadeSubmitTestDO,
 } from "./test-worker";
 import { testTruthIdentity } from "./_identity";
@@ -20,25 +14,21 @@ interface TestEnv {
 }
 
 const testEnv = env as unknown as TestEnv;
+const facadeSubmitAuthorityRef = {
+  authorityClass: "llm_route" as const,
+  authorityId: "default",
+};
 
 describe("defineAgentDO facade submit", () => {
   it("uses llms.default and run-scoped tools through the explicit transport binding", async () => {
     const scope = "facade-submit-defaults";
     const stub = testEnv.FACADE_SUBMIT_DO.get(testEnv.FACADE_SUBMIT_DO.idFromName(scope));
-    const effectAuthorityRef = {
-      authorityClass: "llm_route" as const,
-      authorityId: "facade-submit-test",
-    };
 
     const result = await runInDurableObject(stub, (instance) =>
       instance.submit({
         intent: "lookup",
         input: { key: "abc" },
-        effectAuthorityRef,
-        bindings: defineAgentSubmitBindings({
-          tools: { lookup: facadeLookup },
-          context: { input: { key: "abc" }, source: "run-binding" },
-        }),
+        context: { input: { key: "abc" }, source: "run-input" },
         budget: { maxTurns: 1 },
       }),
     );
@@ -49,7 +39,7 @@ describe("defineAgentDO facade submit", () => {
           identity: ReturnType<typeof testTruthIdentity>,
         ) => Promise<ReadonlyArray<{ readonly kind: string; readonly payload: unknown }>>;
       }
-    ).events(testTruthIdentity(scope, effectAuthorityRef));
+    ).events(testTruthIdentity(scope, facadeSubmitAuthorityRef));
 
     expect(result.ok, JSON.stringify({ result, events })).toBe(true);
     if (result.ok) {
@@ -73,10 +63,6 @@ describe("defineAgentDO facade submit", () => {
   it("passes run-scoped material refs through submit bindings and resolves them server-side", async () => {
     const scope = "facade-submit-material-bindings";
     const stub = testEnv.FACADE_SUBMIT_DO.get(testEnv.FACADE_SUBMIT_DO.idFromName(scope));
-    const effectAuthorityRef = {
-      authorityClass: "llm_route" as const,
-      authorityId: "facade-submit-material-test",
-    };
     const tokenRef = credentialMaterialRef("facade-token", {
       provider: "facade",
       purpose: "apply",
@@ -86,11 +72,7 @@ describe("defineAgentDO facade submit", () => {
       instance.submit({
         intent: "apply",
         input: { key: "abc" },
-        effectAuthorityRef,
-        bindings: defineAgentSubmitBindings({
-          tools: { apply: facadeApply },
-          materials: { facade_token: tokenRef },
-        }),
+        materials: { facade_token: tokenRef },
         budget: { maxTurns: 2 },
       }),
     );
@@ -101,7 +83,7 @@ describe("defineAgentDO facade submit", () => {
           identity: ReturnType<typeof testTruthIdentity>,
         ) => Promise<ReadonlyArray<{ readonly kind: string; readonly payload: unknown }>>;
       }
-    ).events(testTruthIdentity(scope, effectAuthorityRef));
+    ).events(testTruthIdentity(scope, facadeSubmitAuthorityRef));
 
     expect(result.ok, JSON.stringify({ result, events })).toBe(true);
     const toolExecuted = events.find((event) => event.kind === "tool.executed");
@@ -116,20 +98,12 @@ describe("defineAgentDO facade submit", () => {
   it("passes decision interrupts through submit bindings before tool execution", async () => {
     const scope = "facade-submit-decision-interrupts";
     const stub = testEnv.FACADE_SUBMIT_DO.get(testEnv.FACADE_SUBMIT_DO.idFromName(scope));
-    const effectAuthorityRef = {
-      authorityClass: "llm_route" as const,
-      authorityId: "facade-submit-decision-test",
-    };
 
     const result = await runInDurableObject(stub, (instance) =>
       instance.submit({
         intent: "apply",
         input: { key: "abc" },
-        effectAuthorityRef,
-        bindings: defineAgentSubmitBindings({
-          tools: { apply: facadeApply },
-          decisionInterrupts: [{ toolName: "apply", reason: "approval_required" }],
-        }),
+        decisionInterrupts: [{ toolName: "apply", reason: "approval_required" }],
         budget: { maxTurns: 1 },
       }),
     );
@@ -140,7 +114,7 @@ describe("defineAgentDO facade submit", () => {
           identity: ReturnType<typeof testTruthIdentity>,
         ) => Promise<ReadonlyArray<{ readonly kind: string; readonly payload: unknown }>>;
       }
-    ).events(testTruthIdentity(scope, effectAuthorityRef));
+    ).events(testTruthIdentity(scope, facadeSubmitAuthorityRef));
 
     expect(result).toMatchObject({
       ok: false,
@@ -154,37 +128,11 @@ describe("defineAgentDO facade submit", () => {
   it("passes submit tool policy through facade lowering", async () => {
     const scope = "facade-submit-tool-policy";
     const stub = testEnv.FACADE_SUBMIT_DO.get(testEnv.FACADE_SUBMIT_DO.idFromName(scope));
-    const effectAuthorityRef = {
-      authorityClass: "llm_route" as const,
-      authorityId: "facade-submit-policy-test",
-    };
-    const writeFirst = defineTool({
-      name: "write_first",
-      description: "write first artifact",
-      args: Schema.Struct({ value: Schema.String }),
-      authority: "write",
-      admit: () => Effect.succeed({ ok: true as const }),
-      execution: deterministicToolExecution(),
-      execute: ({ value }) => Effect.succeed({ value }),
-    });
-    const writeSecond = defineTool({
-      name: "write_second",
-      description: "write second artifact",
-      args: Schema.Struct({ value: Schema.String }),
-      authority: "write",
-      admit: () => Effect.succeed({ ok: true as const }),
-      execution: deterministicToolExecution(),
-      execute: ({ value }) => Effect.succeed({ value }),
-    });
 
     const result = await runInDurableObject(stub, (instance) =>
       instance.submit({
         intent: "write artifacts",
         input: {},
-        effectAuthorityRef,
-        bindings: defineAgentSubmitBindings({
-          tools: { write_first: writeFirst, write_second: writeSecond },
-        }),
         toolPolicy: {
           completeAfterToolsExecuted: {
             toolNames: ["write_first", "write_second"],
@@ -201,7 +149,7 @@ describe("defineAgentDO facade submit", () => {
           identity: ReturnType<typeof testTruthIdentity>,
         ) => Promise<ReadonlyArray<{ readonly kind: string; readonly payload: unknown }>>;
       }
-    ).events(testTruthIdentity(scope, effectAuthorityRef));
+    ).events(testTruthIdentity(scope, facadeSubmitAuthorityRef));
 
     expect(result).toMatchObject({
       ok: true,
@@ -222,19 +170,11 @@ describe("defineAgentDO facade submit", () => {
   it("passes declared intent emission and projection wait capabilities to run-scoped tools", async () => {
     const scope = "facade-submit-tool-context-capabilities";
     const stub = testEnv.FACADE_SUBMIT_DO.get(testEnv.FACADE_SUBMIT_DO.idFromName(scope));
-    const effectAuthorityRef = {
-      authorityClass: "llm_route" as const,
-      authorityId: "facade-submit-intent-test",
-    };
 
     const result = await runInDurableObject(stub, (instance) =>
       instance.submit({
         intent: "intent",
         input: { label: "abc" },
-        effectAuthorityRef,
-        bindings: defineAgentSubmitBindings({
-          tools: { intent: facadeIntent },
-        }),
         budget: { maxTurns: 2 },
       }),
     );
@@ -245,7 +185,7 @@ describe("defineAgentDO facade submit", () => {
           identity: ReturnType<typeof testTruthIdentity>,
         ) => Promise<ReadonlyArray<{ readonly kind: string; readonly payload: unknown }>>;
       }
-    ).events(testTruthIdentity(scope, effectAuthorityRef));
+    ).events(testTruthIdentity(scope, facadeSubmitAuthorityRef));
 
     expect(result.ok, JSON.stringify({ result, events })).toBe(true);
     if (result.ok) {

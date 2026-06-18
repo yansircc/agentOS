@@ -1,6 +1,5 @@
 import type { SubmitSpec } from "@agent-os/runtime-protocol";
 import { credentialMaterialRef } from "@agent-os/kernel/material-ref";
-import { defineAgentSubmitBindings } from "@agent-os/runtime-protocol";
 import type { LlmTransport } from "@agent-os/llm-protocol";
 import type { RefResolverService } from "@agent-os/kernel/ref-resolver";
 import type { Layer } from "effect";
@@ -51,7 +50,6 @@ defineAgentDO<TestEnv>({
       void agent.submit({
         intent: "run",
         input: {},
-        effectAuthorityRef: { authorityClass: "llm_route", authorityId: "route" },
       });
     },
   },
@@ -75,7 +73,6 @@ const LlmDO = defineAgentDO<TestEnv>({
 declare const agent: InstanceType<typeof LlmDO>;
 declare const facadeSpec: AgentSubmitSpec;
 declare const fullSpec: SubmitSpec;
-declare const lookupTool: NonNullable<NonNullable<AgentSubmitSpec["bindings"]>["tools"]>[string];
 
 void agent.emit("test.followup", {});
 // @ts-expect-error facade clients do not expose low-level emitEvent
@@ -88,12 +85,9 @@ void agent.scheduleEvent({ event: "test.followup", data: {}, at: scheduleAt });
 void agent.submit(facadeSpec);
 void agent.submit({
   ...facadeSpec,
-  bindings: defineAgentSubmitBindings({
-    tools: { lookup: lookupTool },
-    materials: { facade_token: credentialMaterialRef("facade-token") },
-    context: { input: {}, source: "run-binding" },
-    decisionInterrupts: [{ toolName: "lookup", reason: "approval_required" }],
-  }),
+  materials: { facade_token: credentialMaterialRef("facade-token") },
+  context: { input: {}, source: "run-input" },
+  decisionInterrupts: [{ toolName: "lookup", reason: "approval_required" }],
   resume: {
     runId: 1,
     turn: { id: 1, index: 0 },
@@ -105,10 +99,8 @@ void agent.submit({
 });
 void agent.submit({
   ...facadeSpec,
-  bindings: defineAgentSubmitBindings({
-    // @ts-expect-error submit material bindings carry symbolic MaterialRef values
-    materials: { facade_token: "resolved-provider-material" },
-  }),
+  // @ts-expect-error submit materials carry symbolic MaterialRef values
+  materials: { facade_token: "resolved-provider-material" },
 });
 // @ts-expect-error facade submit does not accept full SubmitSpec
 void agent.submit(fullSpec);
@@ -116,7 +108,6 @@ void agent.submit(fullSpec);
 const _objectDeliverSubmitSpec: AgentSubmitSpec = {
   intent: "run",
   input: {},
-  effectAuthorityRef: { authorityClass: "llm_route", authorityId: "route" },
   // @ts-expect-error facade submit does not accept app deliver event names
   deliver: "test.done",
 };

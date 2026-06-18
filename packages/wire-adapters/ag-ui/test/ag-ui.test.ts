@@ -24,7 +24,7 @@ import { settleToolExecuted, settleToolPolicyRejected } from "@agent-os/runtime"
 import {
   AG_UI_WIRE_COMPATIBILITY,
   AgUiRunAgentInputSchema,
-  agUiRunAgentInputToSubmitSpec,
+  agUiRunAgentInputToSubmitInput,
   decodeAgUiRunAgentInput,
   decodeLedgerEventToAgUiEnvelope,
   encodeAgUiLedgerEventEnvelopeSse,
@@ -918,19 +918,13 @@ describe("@agent-os/ag-ui", () => {
       tools: [{ name: "client-tool", description: "not source", parameters: { type: "object" } }],
       forwardedProps: { allowed: 1, secret: "drop" },
     };
-    const submit = agUiRunAgentInputToSubmitSpec(input, {
-      route: {
-        kind: "openai-chat-compatible",
-        endpointRef: "endpoint:openai",
-        credentialRef: "credential:openai",
-        modelId: "model",
-      },
-      tools: {},
-      effectAuthorityRef: { authorityClass: "llm_route", authorityId: "ag-ui-test" },
+    const submit = agUiRunAgentInputToSubmitInput(input, {
       forwardedPropAllowlist: ["allowed"],
     });
     expect(submit.intent).toBe("ship it");
-    expect(submit.tools).toEqual({});
+    expect("tools" in submit).toBe(false);
+    expect("route" in submit).toBe(false);
+    expect("effectAuthorityRef" in submit).toBe(false);
     expect(submit.context.agUi).toEqual({
       threadId: "thread-1",
       clientRunId: "client-run-1",
@@ -946,7 +940,7 @@ describe("@agent-os/ag-ui", () => {
   });
 
   it("lowers AG-UI resume input through runtime InputRequest bindings", () => {
-    const submit = agUiRunAgentInputToSubmitSpec(
+    const submit = agUiRunAgentInputToSubmitInput(
       {
         threadId: "thread-1",
         runId: "client-run-1",
@@ -954,14 +948,6 @@ describe("@agent-os/ag-ui", () => {
         resume: [{ interruptId: "i1", status: "resolved", payload: { approved: true } }],
       },
       {
-        route: {
-          kind: "openai-chat-compatible",
-          endpointRef: "endpoint:openai",
-          credentialRef: "credential:openai",
-          modelId: "model",
-        },
-        tools: {},
-        effectAuthorityRef: { authorityClass: "llm_route", authorityId: "ag-ui-test" },
         inputRequests: [{ request: approvalInputRequest, decisionRef: "decision:i1" }],
       },
     );
@@ -979,7 +965,7 @@ describe("@agent-os/ag-ui", () => {
 
   it("rejects AG-UI resume input without a runtime InputRequest binding", () => {
     expect(() =>
-      agUiRunAgentInputToSubmitSpec(
+      agUiRunAgentInputToSubmitInput(
         {
           threadId: "thread-1",
           runId: "client-run-1",
@@ -987,14 +973,6 @@ describe("@agent-os/ag-ui", () => {
           resume: [{ interruptId: "missing", status: "resolved", payload: { approved: true } }],
         },
         {
-          route: {
-            kind: "openai-chat-compatible",
-            endpointRef: "endpoint:openai",
-            credentialRef: "credential:openai",
-            modelId: "model",
-          },
-          tools: {},
-          effectAuthorityRef: { authorityClass: "llm_route", authorityId: "ag-ui-test" },
           inputRequests: [{ request: approvalInputRequest, decisionRef: "decision:i1" }],
         },
       ),
@@ -1002,21 +980,13 @@ describe("@agent-os/ag-ui", () => {
   });
 
   it("passes through runtime resume decisions supplied by defaults", () => {
-    const submit = agUiRunAgentInputToSubmitSpec(
+    const submit = agUiRunAgentInputToSubmitInput(
       {
         threadId: "thread-1",
         runId: "client-run-1",
         messages: [],
       },
       {
-        route: {
-          kind: "openai-chat-compatible",
-          endpointRef: "endpoint:openai",
-          credentialRef: "credential:openai",
-          modelId: "model",
-        },
-        tools: {},
-        effectAuthorityRef: { authorityClass: "llm_route", authorityId: "ag-ui-test" },
         resume: {
           runId: 1,
           turn: { id: 1, index: 0 },

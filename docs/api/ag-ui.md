@@ -34,6 +34,7 @@
 - `.:AgUiRunStartedFrame`
 - `.:AgUiRuntimeProjectionSpec`
 - `.:AgUiResumeEntrySchema`
+- `.:AgUiInputRequestResumeBinding`
 - `.:AgUiSubmitDefaults`
 - `.:AgUiTextMessageContentFrame`
 - `.:AgUiTextMessageEndFrame`
@@ -44,7 +45,7 @@
 - `.:AgUiToolCallEndFrame`
 - `.:AgUiToolCallResultFrame`
 - `.:AgUiToolCallStartFrame`
-- `.:agUiRunAgentInputToSubmitSpec`
+- `.:agUiRunAgentInputToSubmitInput`
 - `.:createAgUiFrameStore`
 - `.:decodeAgUiRunAgentInput`
 - `.:decodeLedgerEventToAgUiEnvelope`
