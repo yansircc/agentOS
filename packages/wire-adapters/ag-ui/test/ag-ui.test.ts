@@ -16,6 +16,7 @@ import {
   agentRunInterruptedEvent,
   agentRunResumedEvent,
   agentRunStartedEvent,
+  RUNTIME_FACT_OWNER,
   type RuntimeEventCommitSpec,
 } from "@agent-os/runtime-protocol";
 import { settleToolExecuted, settleToolPolicyRejected } from "@agent-os/runtime";
@@ -59,7 +60,7 @@ const commit = (id: number, spec: RuntimeEventCommitSpec): LedgerEvent => ({
   kind: spec.kind,
   scopeRef: spec.scopeRef,
   effectAuthorityRef: spec.effectAuthorityRef,
-  factOwnerRef: "@agent-os/test",
+  factOwnerRef: RUNTIME_FACT_OWNER,
   payload: spec.payload,
 });
 
@@ -704,12 +705,38 @@ describe("@agent-os/ag-ui", () => {
         {
           id: 1,
           ts: 1,
-          ...eventIdentity(scope),
+          scopeRef: { kind: "conversation", scopeId: scope },
+          effectAuthorityRef: { authorityClass: "test", authorityId: scope },
+          factOwnerRef: RUNTIME_FACT_OWNER,
           kind: "tool.executed",
           payload: { runId: 1, name: "lookup" },
         },
       ]),
     ).toThrow();
+  });
+
+  it("does not let product projectors override default owner safe projections", () => {
+    const frames = projectLedgerEventsToAgUiFrames(
+      [commit(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "owned runtime" }))],
+      {
+        safeEventProjectors: [
+          (event) =>
+            safeLedgerEvent(event, {
+              secret: "consumer override must not run for runtime owner",
+            }),
+        ],
+      },
+    );
+
+    expect(frames).toEqual([
+      {
+        type: "RUN_STARTED",
+        timestamp: 10,
+        threadId: "conversation:ag-ui-test",
+        runId: "1",
+      },
+    ]);
+    expect(JSON.stringify(frames)).not.toContain("consumer override");
   });
 
   it("projects product events only through explicit owner safe event projectors", () => {

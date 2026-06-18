@@ -24,6 +24,7 @@ import {
   chatIngestedEvent,
   llmResponseEvent,
   projectFailureDiagnostics,
+  RUNTIME_FACT_OWNER,
   receiptBackedToolResultFromUnknown,
   toolExecutedEvent,
   toolRejectedEvent,
@@ -50,7 +51,7 @@ const commit = (id: number, spec: RuntimeEventCommitSpec): LedgerEvent => ({
   kind: spec.kind,
   scopeRef: spec.scopeRef,
   effectAuthorityRef: spec.effectAuthorityRef,
-  factOwnerRef: "@agent-os/test",
+  factOwnerRef: RUNTIME_FACT_OWNER,
   payload: spec.payload,
 });
 

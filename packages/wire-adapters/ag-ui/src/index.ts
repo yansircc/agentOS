@@ -8,9 +8,19 @@ import type {
 import { scopeRefKey } from "@agent-os/kernel/effect-claim";
 import type { Tool } from "@agent-os/kernel/tools";
 import { decodeLedgerEvent, type LedgerEvent } from "@agent-os/kernel/types";
-import { projectRuntimeSafeLedgerEvent, type SubmitSpec } from "@agent-os/runtime-protocol";
-import { projectWorkspaceJobSafeLedgerEvent } from "@agent-os/workspace-job";
-import { projectWorkspaceOperationSafeLedgerEvent } from "@agent-os/workspace-op";
+import {
+  projectRuntimeSafeLedgerEvent,
+  RUNTIME_FACT_OWNER,
+  type SubmitSpec,
+} from "@agent-os/runtime-protocol";
+import {
+  projectWorkspaceJobSafeLedgerEvent,
+  WORKSPACE_JOB_FACT_OWNER,
+} from "@agent-os/workspace-job";
+import {
+  projectWorkspaceOperationSafeLedgerEvent,
+  WORKSPACE_OP_FACT_OWNER,
+} from "@agent-os/workspace-op";
 import { decodeSseHttpEvents, encodeSseHttpJsonEvent, type SseHttpChunk } from "@agent-os/sse-http";
 
 export const AG_UI_WIRE_COMPATIBILITY = {
@@ -344,27 +354,23 @@ const DEFAULT_SAFE_EVENT_PROJECTORS: ReadonlyArray<SafeLedgerEventProjector> = [
   projectWorkspaceOperationSafeLedgerEvent,
 ];
 
-const AGENT_OS_OWNED_PREFIXES = [
-  "agent.",
-  "chat.",
-  "llm.",
-  "tool.",
-  "workspace_job.",
-  "workspace_op.",
-] as const;
-
-const isAgentOsOwnedKind = (kind: string): boolean =>
-  AGENT_OS_OWNED_PREFIXES.some((prefix) => kind.startsWith(prefix));
+const DEFAULT_SAFE_EVENT_PROJECTOR_OWNERS = new Set<string>([
+  RUNTIME_FACT_OWNER,
+  WORKSPACE_JOB_FACT_OWNER,
+  WORKSPACE_OP_FACT_OWNER,
+]);
 
 const projectOwnerSafeLedgerEvent = (
   event: LedgerEvent,
   spec: AgUiLedgerProjectionSpec,
 ): SafeLedgerEvent | undefined => {
-  for (const projector of DEFAULT_SAFE_EVENT_PROJECTORS) {
-    const projected = projector(event);
-    if (projected !== undefined) return projected;
+  if (DEFAULT_SAFE_EVENT_PROJECTOR_OWNERS.has(event.factOwnerRef)) {
+    for (const projector of DEFAULT_SAFE_EVENT_PROJECTORS) {
+      const projected = projector(event);
+      if (projected !== undefined) return projected;
+    }
+    return undefined;
   }
-  if (isAgentOsOwnedKind(event.kind)) return undefined;
   for (const projector of spec.safeEventProjectors ?? []) {
     const projected = projector(event);
     if (projected !== undefined) return projected;
