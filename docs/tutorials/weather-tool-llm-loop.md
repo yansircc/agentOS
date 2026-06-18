@@ -2,93 +2,81 @@
 
 ## Goal
 
-Define one weather tool and let an LLM turn call it before producing a final
-answer.
+Declare one weather tool and one LLM route in the authored tree so the generated
+runtime can call the tool before producing a final answer.
 
 ## What You Build
 
-A Cloudflare agent facade with `get_current_weather`, one LLM route, and a
-submit call that returns a tool-informed answer.
+An authored `get_current_weather` tool declaration with a symbolic binding ref
+and a default LLM route ref.
 
 ## Prerequisites
 
-- [Hello ledger event](hello-ledger-event.md)
+- [Authoring minimal agent](cloudflare-do-minimal-app.md)
 - [Usage surfaces](../usage-surfaces.md)
-- [Cloudflare DO backend](../packages/backend-cloudflare-do.md)
+- [Agent authoring package](../packages/agent-authoring.md)
 
 ## Steps
 
-1. Define the weather tool:
+1. Add a default LLM route to `agent/agent.json`:
 
-   ```ts
-   import { defineTool } from "@agent-os/kernel/tools";
-   import { Schema } from "effect";
-
-   const getCurrentWeather = defineTool({
-     name: "get_current_weather",
-     description: "Get the current weather for a city.",
-     args: Schema.Struct({ city: Schema.String }),
-     authority: "weather.read",
-     admit: () => ({ ok: true }),
-     execute: ({ city }) => ({
-       city,
-       temperatureC: 22,
-       condition: "sunny",
-     }),
-   });
+   ```json
+   {
+     "handlers": ["user_message"],
+     "llmRoutes": {
+       "default": { "bindingRef": "llm.default" }
+     }
+   }
    ```
 
-2. Register the tool in the same `defineAgentDO` facade as the LLM route:
+2. Add `agent/tools/get_current_weather.ts`:
 
    ```ts
-   export const AgentDO = defineAgentDO<Env>({
-     bindings: [
-       endpoint<Env>("llm").from((env) => env.LLM_ENDPOINT),
-       credential<Env>("llm-key").from((env) => env.LLM_KEY),
+   export const declaration = {
+     bindingRef: "tool.get_current_weather",
+   };
+   ```
+
+3. Compile the tree:
+
+   ```ts
+   const compiled = compileAgentTree({
+     files: [
+       { path: "agent/instructions.md", kind: "markdown", text: instructions },
+       { path: "agent/agent.json", kind: "json", value: agentJson },
+       {
+         path: "agent/tools/get_current_weather.ts",
+         kind: "tool",
+         declaration: { bindingRef: "tool.get_current_weather" },
+       },
      ],
-     llms: {
-       default: openAIChat({
-         model: "gpt-4.1-mini",
-         endpoint: "llm",
-         credential: "llm-key",
-       }),
-     },
-     tools: [getCurrentWeather],
-     scopeRefForScope: (scope) => ({ kind: "conversation", scopeId: scope }),
    });
    ```
 
-3. Submit a user turn through the facade:
+4. Mount the generated manifest and generated bindings through the backend
+   adapter in the framework build output.
+
+5. Submit a user turn through the generated client:
 
    ```ts
-   const result = await agent.submit({
-     intent: "What is the weather in Lisbon?",
-     input: {},
-     deliver: "weather.answer.ready",
-     budget: { maxTurns: 3 },
+   await agent.submit({
+     message: "What is the weather in Lisbon?",
    });
    ```
-
-4. Keep weather facts in the tool implementation. Do not put provider material,
-   API keys, raw provider responses, or resolved endpoint URLs into ledger
-   events.
 
 ## Checkpoint
 
-The deterministic local proof for this tutorial used a fake LLM transport and
-verified this sequence:
+The manifest contains only symbolic refs:
 
 ```text
-request 1 includes get_current_weather
-LLM returns get_current_weather({ city: "Lisbon" })
-runtime executes the tool
-request 2 includes the tool result
-LLM returns "Lisbon is sunny and 22 C."
-weather.answer.ready is delivered
+handlers: user_message
+llmRoutes.default.bindingRef: llm.default
+tools.get_current_weather.bindingRef: tool.get_current_weather
 ```
 
-A live provider checkpoint is a separate opt-in smoke: run it only after the
-provider endpoint, credential, and model are declared from one source.
+Tool implementation, provider credentials, and live route clients stay outside
+the authored manifest. The ledger records runtime facts after the generated
+driver runs.
 
 ## Next
 

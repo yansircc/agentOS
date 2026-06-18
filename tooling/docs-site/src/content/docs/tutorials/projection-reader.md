@@ -6,12 +6,11 @@ title: "Projection Reader"
 
 ## Goal
 
-Turn ledger events into a deterministic read model without writing shadow
-state.
+Turn ledger events into a deterministic read model without writing shadow state.
 
 ## What You Build
 
-A tiny decision-gate projection over hand-built events. The same pattern applies
+A tiny decision-gate projection over recorded events. The same pattern applies
 to app projections: durable facts are the source, projections are derived.
 
 ## Prerequisites
@@ -26,24 +25,29 @@ to app projections: durable facts are the source, projections are derived.
 
    ```ts
    import { DECISION_GATE_KIND, projectDecisionGate } from "@agent-os/decision-gate";
-   import { makePreClaim } from "@agent-os/kernel/effect-claim";
    ```
 
 2. Build the smallest event history for one gate:
 
    ```ts
-   const claim = makePreClaim({
-     operationRef: "publish:subject-1",
-     scopeRef: { kind: "artifact", scopeId: "artifact/subject-1" },
-     effectAuthorityRef: { authorityId: "publish.subject", authorityClass: "effect" },
-     originRef: { originId: "agent/run-1", originKind: "agent_run" },
-   });
-
    const events = [
      {
        id: 1,
        kind: DECISION_GATE_KIND.REQUESTED,
-       payload: { gateRef: "gate/1", subjectRef: "subject-1", claim },
+       payload: {
+         gateRef: "gate/1",
+         subjectRef: "subject-1",
+         claim: {
+           phase: "pre",
+           operationRef: "publish:subject-1",
+           scopeRef: { kind: "artifact", scopeId: "artifact/subject-1" },
+           effectAuthorityRef: {
+             authorityId: "publish.subject",
+             authorityClass: "effect",
+           },
+           originRef: { originId: "agent/run-1", originKind: "agent_run" },
+         },
+       },
      },
      {
        id: 2,

@@ -2,83 +2,79 @@
 
 ## Goal
 
-Define a tool whose input schema, authority, and admitter are one contract.
+Declare a tool whose authority and effect policy are visible before runtime.
 
 ## What You Build
 
-A `lookup_weather` tool that validates args with Effect Schema, declares a
-single authority class, and rejects unsupported cities before execution.
+An authored `lookup_weather` tool that is effectful, so the compiler requires
+material, execution domain, interaction, and receipt policy declarations.
 
 ## Prerequisites
 
 - [Usage surfaces](../usage-surfaces.md)
-- [Kernel package](../packages/kernel.md)
+- [Agent authoring package](../packages/agent-authoring.md)
 - [Weather tool LLM loop](weather-tool-llm-loop.md)
 
 ## Steps
 
-1. Define the tool args:
+1. Add `agent/materials/weather-api.json`:
 
-   ```ts
-   import { Schema } from "effect";
-   import { defineTool } from "@agent-os/kernel/tools";
-
-   const WeatherArgs = Schema.Struct({
-     city: Schema.String,
-     unit: Schema.Literal("celsius", "fahrenheit"),
-   });
+   ```json
+   {
+     "kind": "credential",
+     "provider": "weather",
+     "purpose": "read",
+     "ref": "weather-api"
+   }
    ```
 
-2. Bind schema, authority, admission, and execution together:
+2. Add `agent/domains/weather-read.json`:
 
-   ```ts
-   const lookupWeather = defineTool({
-     name: "lookup_weather",
-     description: "Return a deterministic tutorial weather reading.",
-     args: WeatherArgs,
-     authority: "weather.read",
-     authorityId: "tool:lookup_weather",
-     admit: ({ city }) =>
-       city.length > 0
-         ? { ok: true }
-         : { ok: false, reason: "city_required", rejectionRef: "weather/city_required" },
-     execute: ({ city, unit }) => ({
-       city,
-       unit,
-       temperature: unit === "celsius" ? 22 : 72,
-       condition: "sunny",
-     }),
-   });
+   ```json
+   {
+     "kind": "external-service",
+     "ref": "weather",
+     "access": "read"
+   }
    ```
 
-3. Register the tool in the agent facade:
+3. Add `agent/interactions/approval.json`:
 
-   ```ts
-   export const AgentDO = defineAgentDO<Env>({
-     bindings: [
-       /* material bindings */
-     ],
-     llms: { default: chatRoute },
-     tools: [lookupWeather],
-     scopeRefForScope: (scope) => ({ kind: "conversation", scopeId: scope }),
-   });
+   ```json
+   {
+     "kind": "approval",
+     "reason": "external weather lookup"
+   }
    ```
 
-4. Keep the authority stable. If the tool starts writing data or spending
-   budget, create a new authority class instead of overloading `weather.read`.
+4. Declare the effectful tool in `agent/tools/lookup_weather.ts`:
+
+   ```ts
+   export const declaration = {
+     bindingRef: "tool.lookup_weather",
+     effects: ["material", "network"],
+     materialRefs: ["weather-api"],
+     executionDomain: "weather-read",
+     interaction: "approval",
+     receiptPolicy: "external-receipt",
+   };
+   ```
+
+5. Compile the tree and fail closed on missing facts:
+
+   ```ts
+   const result = compileAgentTree(tree);
+
+   if (!result.ok) {
+     throw new Error(JSON.stringify(result.issues));
+   }
+   ```
 
 ## Checkpoint
 
-The tool contract has one authority and an admitter role:
-
-```text
-toolId: lookup_weather
-effectAuthorityRef.authorityClass: weather.read
-roles: generator, admitter
-```
-
-Invalid args fail before `execute`. Rejected authority is explicit; it is not a
-hidden exception from the tool implementation.
+Removing `interaction`, `executionDomain`, `materialRefs`, or `receiptPolicy`
+from the effectful tool is a compiler error. Pure tools may receive versioned
+defaults with provenance; effectful tools do not get silent authority defaults.
 
 ## Next
 

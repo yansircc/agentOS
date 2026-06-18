@@ -34,7 +34,7 @@ settlement.
    meaning, random ids, or background dispatch directly from commit callbacks.
    Commit must be deterministic from the acquired outcome and transaction
    inputs.
-8. Register the trigger with `defineAgentDO({ triggers: [trigger] })`.
+8. Register the trigger in generated or backend-owned configuration.
 9. Submit work with `agent.enqueueTrigger(...)`.
 
 Cancellation is cooperative. If cancellation arrives before acquire, the trigger

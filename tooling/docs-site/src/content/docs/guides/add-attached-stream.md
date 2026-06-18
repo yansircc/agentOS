@@ -7,7 +7,7 @@ title: "Add An Attached Stream"
 ## Outcome
 
 You can register an attached stream handler and expose live output through the
-Cloudflare DO facade.
+backend stream configuration.
 
 ## Prerequisites
 
@@ -23,7 +23,7 @@ Cloudflare DO facade.
 3. Choose `cancellation` and `onDetach` explicitly.
 4. Yield `output` or `progress` frames from `run`.
 5. Yield one terminal frame and write durable facts in `commitTerminal`.
-6. Register the handler with `defineAgentDO({ streams: [handler] })`.
+6. Register the handler in generated or backend-owned stream configuration.
 
 ## References
 

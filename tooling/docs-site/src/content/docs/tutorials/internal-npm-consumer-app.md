@@ -10,9 +10,8 @@ Consume agentOS as packed npm packages instead of source workspace paths.
 
 ## What You Build
 
-A tiny downstream TypeScript app that installs a packed `@agent-os/kernel`
-tarball plus the explicit `effect` peer, then typechecks and runs a smoke
-import.
+A tiny downstream TypeScript app that installs packed public packages, then
+typechecks a smoke import from the authoring surface.
 
 ## Prerequisites
 
@@ -28,10 +27,10 @@ import.
    bun run pack:internal
    ```
 
-2. In a separate consumer app, install one packed package and its peer:
+2. In a separate consumer app, install one packed package and its peers:
 
    ```sh
-   npm install /path/to/dist/internal-npm/tarballs/agent-os-kernel-0.2.9.tgz effect@^3.21.0
+   npm install /path/to/dist/internal-npm/tarballs/agent-os-agent-authoring-0.5.16.tgz effect@^4
    npm install -D typescript
    ```
 
@@ -53,20 +52,13 @@ import.
 4. Import only package entrypoints:
 
    ```ts
-   import { Effect } from "effect";
-   import { ABORT, reasonOf } from "@agent-os/kernel";
-   import { makePreClaim } from "@agent-os/kernel/effect-claim";
+   import { compileAgentTree } from "@agent-os/agent-authoring";
 
-   const claim = makePreClaim({
-     operationRef: "operation:tutorial",
-     scopeRef: { kind: "session", scopeId: "session:tutorial" },
-     effectAuthorityRef: { authorityId: "tutorial.proof", authorityClass: "effect" },
-     originRef: { originId: "internal-npm-consumer", originKind: "tutorial" },
+   const result = compileAgentTree({
+     files: [{ path: "agent/instructions.md", kind: "markdown", text: "Say hello." }],
    });
 
-   await Effect.runPromise(
-     Effect.succeed({ reason: reasonOf(ABORT.TOOL_ERROR), phase: claim.phase }),
-   );
+   if (!result.ok) throw new Error(JSON.stringify(result.issues));
    ```
 
 5. Run:
@@ -79,9 +71,9 @@ import.
    A minimal `smoke.mjs` can import the packed package at runtime:
 
    ```js
-   const kernel = await import("@agent-os/kernel");
+   const authoring = await import("@agent-os/agent-authoring");
 
-   if (kernel.reasonOf(kernel.ABORT.TOOL_ERROR) !== "tool_error") {
+   if (typeof authoring.compileAgentTree !== "function") {
      throw new Error("agentOS packed consumer proof failed");
    }
    ```
@@ -93,12 +85,12 @@ The installed package manifest points at `dist`:
 ```text
 main: ./dist/index.js
 types: ./dist/index.d.ts
-exports ./effect-claim -> ./dist/effect-claim.js
-peerDependencies.effect: ^3.21.0
+exports . -> ./dist/index.js
+peerDependencies.effect: ^4
 ```
 
 The consumer typecheck and smoke import pass without `workspace:`, `file:`,
-`packages/*`, or `@agent-os/*/src` imports.
+`packages/*`, or package source imports.
 
 ## Next
 

@@ -50,7 +50,13 @@ runtime. The same handler shape maps to SSE in the Cloudflare backend.
    } satisfies AttachedStreamHandler<unknown, { readonly ok?: true }>;
    ```
 
-2. Register it with the in-memory runtime or `defineAgentDO({ streams })`.
+2. Register it with the in-memory runtime or backend stream configuration:
+
+   ```ts
+   export const AgentDO = createAgentDurableObject<Env>({
+     streams: [outputOnly],
+   });
+   ```
 
 3. Attach and collect outbound frames:
 

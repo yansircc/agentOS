@@ -2,85 +2,65 @@
 
 ## Goal
 
-Declare provider endpoint and credential material without leaking resolved
-values into ledger facts.
+Declare provider material symbolically without leaking resolved values into
+authored files, manifests, projections, or ledger facts.
 
 ## What You Build
 
-One `defineAgentDO` binding set with symbolic refs for an OpenAI-compatible LLM
-route.
+One authored material ref and one LLM route binding ref. The actual provider
+endpoint and credential are resolved only by the backend adapter.
 
 ## Prerequisites
 
 - [Distribution boundary](../concepts/distribution-boundary.md)
 - [Usage surfaces](../usage-surfaces.md)
-- [Cloudflare DO minimal app](cloudflare-do-minimal-app.md)
+- [Authoring minimal agent](cloudflare-do-minimal-app.md)
 
 ## Steps
 
-1. Define the environment shape:
+1. Add `agent/materials/openai-key.json`:
 
-   ```ts
-   import {
-     credential,
-     endpoint,
-     openAIChat,
-     type CloudflareAgentEnv,
-   } from "@agent-os/backend-cloudflare-do";
-
-   interface Env extends CloudflareAgentEnv {
-     readonly OPENAI_BASE_URL: string;
-     readonly OPENAI_API_KEY: string;
+   ```json
+   {
+     "kind": "credential",
+     "provider": "openai",
+     "purpose": "chat",
+     "ref": "openai-key"
    }
    ```
 
-2. Declare material refs at construction:
+2. Add the default route to `agent/agent.json`:
 
-   ```ts
-   const bindings = [
-     endpoint<Env>("llm").from((env) => env.OPENAI_BASE_URL),
-     credential<Env>("llm-key", { provider: "openai", purpose: "chat" }).from(
-       (env) => env.OPENAI_API_KEY,
-     ),
-   ];
+   ```json
+   {
+     "llmRoutes": {
+       "default": { "bindingRef": "llm.default" }
+     }
+   }
    ```
 
-3. Build the route from symbolic refs:
+3. Let the framework backend adapter own live resolution:
 
    ```ts
-   const chatRoute = openAIChat({
-     model: "gpt-4.1-mini",
-     endpoint: "llm",
-     credential: "llm-key",
-   });
+   const materialResolver = {
+     material: (ref) => resolveMaterialFromEnv(env, ref),
+   };
    ```
 
-4. Use the route in `defineAgentDO`:
-
-   ```ts
-   export const AgentDO = defineAgentDO<Env>({
-     bindings,
-     llms: { default: chatRoute },
-     tools: [],
-     scopeRefForScope: (scope) => ({ kind: "conversation", scopeId: scope }),
-   });
-   ```
-
-5. Store real values in Cloudflare bindings or local ignored `.dev.vars`.
+4. Store real values in Cloudflare bindings or local ignored `.dev.vars`.
    Report only `set` or `missing` in logs.
 
 ## Checkpoint
 
-Ledger-visible payloads contain symbolic route and credential refs:
+Authored and ledger-visible payloads contain symbolic refs:
 
 ```text
-endpoint: llm
-credential: llm-key
-model: gpt-4.1-mini
+materials.openai-key.ref: openai-key
+llmRoutes.default.bindingRef: llm.default
 ```
 
-They must not contain raw URLs, provider tokens, account IDs, or resolved
-provider response bodies.
+They must not contain raw URLs, provider tokens, account IDs, resolved clients,
+or provider response bodies.
 
 ## Next
 

@@ -12,7 +12,7 @@ observe the terminal cancellation fact.
 ## What You Build
 
 An app-owned trigger with `acquire`, `commit`, and `commitCancelled`, registered
-through the Cloudflare DO facade.
+through backend configuration generated or owned by the framework.
 
 ## Prerequisites
 
@@ -43,11 +43,10 @@ through the Cloudflare DO facade.
    } satisfies DurableTrigger<TutorialIntent, TutorialOutcome>;
    ```
 
-2. Register it:
+2. Register it in backend configuration:
 
    ```ts
-   export const AgentDO = defineAgentDO<Env>({
-     bindings: [],
+   export const AgentDO = createAgentDurableObject<Env>({
      triggers: [trigger],
    });
    ```
