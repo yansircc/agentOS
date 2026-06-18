@@ -13,11 +13,7 @@ import type {
 } from "@agent-os/kernel/types";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import { ABORT, reasonOf, type AbortKind } from "@agent-os/kernel/abort";
-import {
-  defineProjectionSpec,
-  project,
-  type ProjectionResult,
-} from "@agent-os/kernel/projection";
+import { defineProjectionSpec, project, projectionOutputOrFail } from "@agent-os/kernel/projection";
 import { textFromLlmOutputItems } from "@agent-os/llm-protocol";
 import {
   decodeRuntimeLedgerEvent,
@@ -41,11 +37,6 @@ const RUNTIME_LEDGER_PROJECTION_SOURCE = {
   kind: "ledger-vocabulary",
   ref: "@agent-os/runtime-protocol/runtime-events",
 } as const;
-
-const projectionOutput = <Output>(result: ProjectionResult<Output>): Output => {
-  if (result._tag === "ok") return result.output;
-  throw new Error(`projection ${result.provenance.projection.id} failed: ${result.reason}`);
-};
 
 const normalizeRunId = (runId: number | string): number => {
   const n = typeof runId === "number" ? runId : Number(runId);
@@ -267,7 +258,7 @@ export const projectRunTrace = (
   events: ReadonlyArray<LedgerEvent>,
   rawRunId: number | string,
 ): RunTrace =>
-  projectionOutput(
+  projectionOutputOrFail(
     project(runTraceProjection, {
       runtimeEvents: runtimeEventsOf(events),
       runId: normalizeRunId(rawRunId),
@@ -325,7 +316,7 @@ export const projectRunStatus = (
   events: ReadonlyArray<LedgerEvent>,
   rawRunId: number | string,
 ): RunStatus =>
-  projectionOutput(
+  projectionOutputOrFail(
     project(runStatusProjection, {
       runtimeEvents: runtimeEventsOf(events),
       runId: normalizeRunId(rawRunId),
@@ -467,7 +458,7 @@ export const projectRunsPage = (
   events: ReadonlyArray<LedgerEvent>,
   spec: RunListSpec,
 ): RunListPage =>
-  projectionOutput(
+  projectionOutputOrFail(
     project(runsPageProjection, {
       runtimeEvents: runtimeEventsOf(events),
       spec,
@@ -527,7 +518,7 @@ export const projectSubmitResult = (
   events: ReadonlyArray<LedgerEvent>,
   rawRunId: number | string,
 ): SubmitResult | null =>
-  projectionOutput(
+  projectionOutputOrFail(
     project(submitResultProjection, {
       runtimeEvents: runtimeEventsOf(events),
       runId: normalizeRunId(rawRunId),

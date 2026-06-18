@@ -1,13 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import * as kernel from "../src";
-import type {
-  Authored,
-  Live,
-  Recorded,
-  RecordedPayload,
-  SafeLedgerPayload,
-} from "../src";
+import type { Authored, Live, Recorded, RecordedPayload, SafeLedgerPayload } from "../src";
 
 describe("value domain brands", () => {
   it("keeps Authored, Recorded, and Live in separate type domains", () => {

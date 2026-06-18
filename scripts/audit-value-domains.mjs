@@ -17,7 +17,8 @@ const skippedPrefixes = [
 const patterns = [
   {
     id: "value-domain-token",
-    reason: "Authored/Recorded/Live vocabulary should be source-owned, not free prose or ad hoc aliases.",
+    reason:
+      "Authored/Recorded/Live vocabulary should be source-owned, not free prose or ad hoc aliases.",
     regex: /\b(?:Authored|Recorded|Live)(?:<|\b)/gu,
   },
   {
@@ -32,12 +33,14 @@ const patterns = [
   },
   {
     id: "live-material-token",
-    reason: "Resolved material, credentials, secrets, and env reads belong at Live adapter/driver edges.",
+    reason:
+      "Resolved material, credentials, secrets, and env reads belong at Live adapter/driver edges.",
     regex: /\b(?:ResolvedMaterial|credential|credentials|secret|secrets|process\.env)\b/giu,
   },
   {
     id: "runtime-fact-in-intent-token",
-    reason: "Continuation refs, snapshots, and trigger time are runtime facts, not authored intent.",
+    reason:
+      "Continuation refs, snapshots, and trigger time are runtime facts, not authored intent.",
     regex: /\b(?:ContinuationRef|snapshot|snapshotRef|triggerTime|hasRun)\b/gu,
   },
 ];
@@ -68,11 +71,12 @@ for (const file of trackedFiles) {
   }
 }
 
-suspects.sort((left, right) =>
-  left.file.localeCompare(right.file) ||
-  left.line - right.line ||
-  left.pattern.localeCompare(right.pattern) ||
-  left.token.localeCompare(right.token),
+suspects.sort(
+  (left, right) =>
+    left.file.localeCompare(right.file) ||
+    left.line - right.line ||
+    left.pattern.localeCompare(right.pattern) ||
+    left.token.localeCompare(right.token),
 );
 
 const report = {
@@ -82,8 +86,7 @@ const report = {
   scannedFiles: trackedFiles.length,
   suspectCount: suspects.length,
   reportPath,
-  note:
-    "Diagnostic only. This report is not a baseline, allowlist, root check, or positive boundary contract.",
+  note: "Diagnostic only. This report is not a baseline, allowlist, root check, or positive boundary contract.",
   suspects,
 };
 

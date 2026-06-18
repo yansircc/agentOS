@@ -1,4 +1,6 @@
-type MaybePromise<T> = T | Promise<T>;
+import { Data, Either } from "effect";
+
+type MaybePromise<T> = T | PromiseLike<T>;
 
 /**
  * Declared owner of the source consumed by one projection run.
@@ -9,6 +11,7 @@ export interface ProjectionSourceRef {
   readonly kind: string;
   readonly ref: string;
   readonly hash?: string;
+  readonly sources?: ReadonlyArray<ProjectionSourceRef>;
 }
 
 /**
@@ -158,19 +161,71 @@ export type ProjectionSinkRunResult<Output> =
       readonly previous: ProjectionSinkReadResult<Output>;
     };
 
+/**
+ * Invalid projection declaration.
+ *
+ * @public
+ */
+export class ProjectionDefinitionError extends Data.TaggedError(
+  "agent_os.projection_definition_error",
+)<{
+  readonly message: string;
+}> {}
+
+/**
+ * Projection result unwrapped through a fail-fast public DTO facade.
+ *
+ * @public
+ */
+export class ProjectionRunFailed extends Data.TaggedError("agent_os.projection_run_failed")<{
+  readonly message: string;
+  readonly projectionId: string;
+  readonly reason: string;
+}> {}
+
+/**
+ * Projection sink read/write failure.
+ *
+ * @public
+ */
+export class ProjectionSinkFailure extends Data.TaggedError("agent_os.projection_sink_failure")<{
+  readonly sinkId: string;
+  readonly operation: "read" | "write";
+  readonly cause: unknown;
+}> {}
+
 const isNonEmptyString = (value: string): boolean => value.trim().length > 0;
 
-const assertSourceRef = (source: ProjectionSourceRef): void => {
+const sourceRefIssue = (source: ProjectionSourceRef): string | undefined => {
   if (!isNonEmptyString(source.kind)) {
-    throw new TypeError("projection source kind must be non-empty");
+    return "projection source kind must be non-empty";
   }
   if (!isNonEmptyString(source.ref)) {
-    throw new TypeError("projection source ref must be non-empty");
+    return "projection source ref must be non-empty";
   }
   if (source.hash !== undefined && !isNonEmptyString(source.hash)) {
-    throw new TypeError("projection source hash must be non-empty when present");
+    return "projection source hash must be non-empty when present";
   }
+  if (source.kind !== "source-set" && source.sources !== undefined) {
+    return "projection source children require source-set kind";
+  }
+  if (
+    source.kind === "source-set" &&
+    (source.sources === undefined || source.sources.length === 0)
+  ) {
+    return "projection source-set must include at least one source";
+  }
+  for (const child of source.sources ?? []) {
+    const issue = sourceRefIssue(child);
+    if (issue !== undefined) {
+      return `${source.ref}: ${issue}`;
+    }
+  }
+  return undefined;
 };
+
+const failDefinition = (message: string): never =>
+  Either.getOrThrowWith(Either.left(new ProjectionDefinitionError({ message })), (error) => error);
 
 /**
  * Defines one projection spec and validates its boot-time identity contract.
@@ -181,12 +236,15 @@ export const defineProjectionSpec = <Input, Output>(
   spec: ProjectionSpec<Input, Output>,
 ): ProjectionSpec<Input, Output> => {
   if (!isNonEmptyString(spec.id)) {
-    throw new TypeError("projection id must be non-empty");
+    return failDefinition("projection id must be non-empty");
   }
   if (!Number.isInteger(spec.version) || spec.version < 1) {
-    throw new TypeError("projection version must be a positive integer");
+    return failDefinition("projection version must be a positive integer");
   }
-  assertSourceRef(spec.source);
+  const sourceIssue = sourceRefIssue(spec.source);
+  if (sourceIssue !== undefined) {
+    return failDefinition(sourceIssue);
+  }
   return spec;
 };
 
@@ -243,13 +301,22 @@ export const ProjectionResult = {
 const isProjectionResult = <Output>(value: unknown): value is ProjectionResult<Output> =>
   value !== null &&
   typeof value === "object" &&
-  ("_tag" in value && (value._tag === "ok" || value._tag === "failure"));
+  "_tag" in value &&
+  (value._tag === "ok" || value._tag === "failure");
 
 const isThenable = (value: unknown): value is PromiseLike<unknown> =>
   value !== null &&
   (typeof value === "object" || typeof value === "function") &&
   "then" in value &&
   typeof value.then === "function";
+
+const normalizeProjectionResult = <Output>(
+  result: ProjectionResult<Output>,
+  provenance: ProjectionProvenance,
+): ProjectionResult<Output> =>
+  result._tag === "ok"
+    ? projectionOk(provenance, result.output)
+    : projectionFailure(provenance, result.reason, result.issues);
 
 /**
  * Runs a pure projection and returns an explicit result.
@@ -267,49 +334,80 @@ export const project = <Input, Output>(
     failure: (reason, issues) => projectionFailure(provenance, reason, issues),
   };
 
-  try {
-    const result: unknown = spec.project(input, context);
-    if (isThenable(result)) {
-      return projectionFailure(provenance, "projection_returned_thenable");
-    }
-    if (!isProjectionResult<Output>(result)) {
-      return projectionFailure(provenance, "projection_result_invalid");
-    }
-    return result;
-  } catch {
+  const attempted = Either.try({
+    try: () => spec.project(input, context),
+    catch: () => "projection_threw" as const,
+  });
+  if (Either.isLeft(attempted)) {
     return projectionFailure(provenance, "projection_threw");
   }
+  const result: unknown = attempted.right;
+  if (isThenable(result)) {
+    return projectionFailure(provenance, "projection_returned_thenable");
+  }
+  if (!isProjectionResult<Output>(result)) {
+    return projectionFailure(provenance, "projection_result_invalid");
+  }
+  return normalizeProjectionResult(result, provenance);
 };
 
 const defaultEquals = <Output>(actual: Output, expected: Output): boolean =>
   Object.is(actual, expected);
+
+const resolvedPromise = <Output>(value: Output): Promise<Output> =>
+  new Promise((resolve) => resolve(value));
+
+const maybePromise = <Output>(
+  operation: "read" | "write",
+  sinkId: string,
+  evaluate: () => MaybePromise<Output>,
+): Promise<Output> =>
+  new Promise((resolve, reject) => {
+    const evaluated = Either.try({
+      try: evaluate,
+      catch: (cause) => new ProjectionSinkFailure({ sinkId, operation, cause }),
+    });
+    if (Either.isLeft(evaluated)) {
+      reject(evaluated.left);
+      return;
+    }
+    const value = evaluated.right;
+    if (isThenable(value)) {
+      value.then(resolve, (cause) =>
+        reject(new ProjectionSinkFailure({ sinkId, operation, cause })),
+      );
+      return;
+    }
+    resolve(value);
+  });
 
 /**
  * Checks whether a sink already holds the derived projection output.
  *
  * @public
  */
-export const checkProjectionSink = async <Input, Output>(
+export const checkProjectionSink = <Input, Output>(
   spec: ProjectionSpec<Input, Output>,
   input: Input,
   sink: ProjectionSink<Output>,
 ): Promise<ProjectionSinkCheckResult<Output>> => {
   const result = project(spec, input);
   if (result._tag === "failure") {
-    return { _tag: "projection_failed", result };
+    return resolvedPromise({ _tag: "projection_failed", result });
   }
 
-  const current = await sink.read();
-  if (current._tag === "found" && (sink.equals ?? defaultEquals)(current.output, result.output)) {
-    return { _tag: "current", result, actual: current.output };
-  }
+  return maybePromise("read", sink.id, sink.read).then((current) => {
+    if (current._tag === "found" && (sink.equals ?? defaultEquals)(current.output, result.output)) {
+      return { _tag: "current", result, actual: current.output };
+    }
 
-  return {
-    _tag: "stale",
-    result,
-    expected: result.output,
-    actual: current,
-  };
+    return {
+      _tag: "stale",
+      result,
+      expected: result.output,
+      actual: current,
+    };
+  });
 };
 
 /**
@@ -317,20 +415,38 @@ export const checkProjectionSink = async <Input, Output>(
  *
  * @public
  */
-export const runProjectionSink = async <Input, Output>(
+export const runProjectionSink = <Input, Output>(
   spec: ProjectionSpec<Input, Output>,
   input: Input,
   sink: ProjectionSink<Output>,
-): Promise<ProjectionSinkRunResult<Output>> => {
-  const checked = await checkProjectionSink(spec, input, sink);
-  if (checked._tag !== "stale") {
-    return checked;
-  }
+): Promise<ProjectionSinkRunResult<Output>> =>
+  checkProjectionSink(spec, input, sink).then((checked) => {
+    if (checked._tag !== "stale") {
+      return checked;
+    }
 
-  await sink.write(checked.expected);
-  return {
-    _tag: "updated",
-    result: checked.result,
-    previous: checked.actual,
-  };
+    return maybePromise("write", sink.id, () => sink.write(checked.expected)).then(() => ({
+      _tag: "updated",
+      result: checked.result,
+      previous: checked.actual,
+    }));
+  });
+
+/**
+ * Unwraps a projection result through a fail-fast DTO facade.
+ *
+ * @public
+ */
+export const projectionOutputOrFail = <Output>(result: ProjectionResult<Output>): Output => {
+  if (result._tag === "ok") return result.output;
+  return Either.getOrThrowWith(
+    Either.left(
+      new ProjectionRunFailed({
+        message: result.reason,
+        projectionId: result.provenance.projection.id,
+        reason: result.reason,
+      }),
+    ),
+    (error) => error,
+  );
 };

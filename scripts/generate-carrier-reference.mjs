@@ -402,13 +402,15 @@ const renderReference = (carriers) => {
 const carriers = await discoverCarriers();
 const expected = `${renderReference(carriers).replace(/\s+$/u, "")}\n`;
 const targetPath = path.join(root, target);
+const carrierReferenceSourceFacts = {
+  kind: "source-set",
+  ref: "docs.generate-carrier-reference.source-facts",
+  sources: [{ kind: "carrier-declaration", ref: "defineCarrier declarations under packages/**" }],
+};
 const projection = defineProjectionSpec({
   id: `docs.generate-carrier-reference:${target}`,
   version: 1,
-  source: {
-    kind: "docs-generator",
-    ref: "scripts/generate-carrier-reference.mjs",
-  },
+  source: carrierReferenceSourceFacts,
   project: (output, ctx) => ctx.ok(output),
 });
 const sink = {

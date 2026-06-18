@@ -279,6 +279,13 @@
       "sourceFiles": ["packages/runtime/src/projection.ts"]
     },
     {
+      "tag": "agent_os.projection_definition_error",
+      "invariants": ["invariant.algebra.single-code-source"],
+      "docs": "docs/concepts/materialized-projections.md",
+      "fix": "Declare projection identity and source provenance at the owning spec before the projection engine derives any view.",
+      "sourceFiles": ["packages/kernel/src/projection.ts"]
+    },
+    {
       "tag": "agent_os.projection_reducer_returned_thenable",
       "invariants": ["invariant.d10.truth-identity"],
       "docs": "docs/concepts/materialized-projections.md",
@@ -294,6 +301,20 @@
       "docs": "docs/concepts/materialized-projections.md",
       "fix": "Build a projection registry with unique projection kinds and valid projection definitions.",
       "sourceFiles": ["packages/runtime/src/projection.ts"]
+    },
+    {
+      "tag": "agent_os.projection_run_failed",
+      "invariants": ["invariant.algebra.single-code-source"],
+      "docs": "docs/concepts/materialized-projections.md",
+      "fix": "Handle projection failures as fail-closed derivation failures instead of inventing fallback output.",
+      "sourceFiles": ["packages/kernel/src/projection.ts"]
+    },
+    {
+      "tag": "agent_os.projection_sink_failure",
+      "invariants": ["invariant.docs.agent-projection"],
+      "docs": "docs/concepts/materialized-projections.md",
+      "fix": "Keep sink read and write failures at the sink boundary; projection functions must stay pure source-to-view derivations.",
+      "sourceFiles": ["packages/kernel/src/projection.ts"]
     },
     {
       "tag": "agent_os.projection_wait_timed_out",

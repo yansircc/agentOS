@@ -7,6 +7,7 @@ import {
   checkProjectionSink,
   defineProjectionSpec,
   project,
+  projectionOutputOrFail,
   runProjectionSink,
 } from "../src/projection";
 
@@ -76,6 +77,39 @@ describe("projection engine", () => {
     });
   });
 
+  it("normalizes projector-owned provenance back to the spec-owned source", () => {
+    const forged = defineProjectionSpec<unknown, WordSummary>({
+      id: "docs.forged",
+      version: 1,
+      source: { kind: "file", ref: "docs/source.json" },
+      project: () =>
+        ({
+          _tag: "ok",
+          output: { count: 1, first: "safe" },
+          provenance: {
+            projection: { id: "docs.evil", version: 999 },
+            source: { kind: "file", ref: "other-source.json" },
+          },
+          leaked: "not part of ProjectionOk",
+        }) as unknown as ReturnType<ProjectionSpec<unknown, WordSummary>["project"]>,
+    });
+
+    expect(project(forged, {})).toEqual({
+      _tag: "ok",
+      output: { count: 1, first: "safe" },
+      provenance: {
+        projection: {
+          id: "docs.forged",
+          version: 1,
+        },
+        source: {
+          kind: "file",
+          ref: "docs/source.json",
+        },
+      },
+    });
+  });
+
   it("validates projection identity at definition time", () => {
     expect(() =>
       defineProjectionSpec({
@@ -103,6 +137,28 @@ describe("projection engine", () => {
         project: (_input: unknown, ctx) => ctx.ok({}),
       }),
     ).toThrow("projection source kind must be non-empty");
+
+    expect(() =>
+      defineProjectionSpec({
+        id: "docs.invalid",
+        version: 1,
+        source: {
+          kind: "file",
+          ref: "docs/source.json",
+          sources: [{ kind: "file", ref: "docs/other-source.json" }],
+        },
+        project: (_input: unknown, ctx) => ctx.ok({}),
+      }),
+    ).toThrow("projection source children require source-set kind");
+
+    expect(() =>
+      defineProjectionSpec({
+        id: "docs.invalid",
+        version: 1,
+        source: { kind: "source-set", ref: "docs/source-set" },
+        project: (_input: unknown, ctx) => ctx.ok({}),
+      }),
+    ).toThrow("projection source-set must include at least one source");
   });
 
   it("reports invalid projector returns as explicit failures", () => {
@@ -245,6 +301,16 @@ describe("projection engine", () => {
       result: project(wordSummaryProjection, []),
     });
     expect(writes).toEqual([]);
+  });
+
+  it("unwraps projection output through a fail-fast DTO facade", () => {
+    expect(projectionOutputOrFail(project(wordSummaryProjection, ["alpha"]))).toEqual({
+      count: 1,
+      first: "alpha",
+    });
+    expect(() => projectionOutputOrFail(project(wordSummaryProjection, []))).toThrow(
+      "source_empty",
+    );
   });
 
   it("does not expose provider, ledger mutation, or Live opening in projection context", () => {

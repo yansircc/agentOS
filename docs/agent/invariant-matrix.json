@@ -80,11 +80,14 @@
         "agent_os.effect_ai_provider_executed_tool_rejected",
         "agent_os.effect_ai_tool_handler_called",
         "agent_os.effect_ai_unsupported_output_part",
+        "agent_os.projection_definition_error",
+        "agent_os.projection_run_failed",
         "agent_os.provider_output_decode_error"
       ],
       "docs": [
         "docs/concepts/ag-ui-wire-adapter.md",
         "docs/concepts/agent-schema.md",
+        "docs/concepts/materialized-projections.md",
         "docs/packages/llm-transport-effect-ai.md",
         "docs/verification.md"
       ],
@@ -242,8 +245,8 @@
       "invariant": "invariant.docs.agent-projection",
       "statement": "Agent-facing docs indexes are projections; source JSON and exported TSDoc own routable ids.",
       "primitives": [],
-      "errors": [],
-      "docs": ["docs/verification.md"],
+      "errors": ["agent_os.projection_sink_failure"],
+      "docs": ["docs/concepts/materialized-projections.md", "docs/verification.md"],
       "tests": [
         "scripts/generate-docs.mjs",
         "scripts/check-doc-structure.mjs",

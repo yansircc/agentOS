@@ -47,14 +47,23 @@ const generatedNotice = (source) =>
 
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 
+const docsSourceFacts = {
+  kind: "source-set",
+  ref: "docs.generate-docs.source-facts",
+  sources: [
+    { kind: "file", ref: "package.json" },
+    { kind: "file", ref: "docs/surface.json" },
+    { kind: "directory", ref: "docs/packages" },
+    { kind: "directory", ref: "docs/api" },
+    { kind: "tsdoc", ref: "exported public API TSDoc" },
+  ],
+};
+
 const fileProjection = (file) =>
   defineProjectionSpec({
     id: `docs.generate-docs:${file}`,
     version: 1,
-    source: {
-      kind: "docs-generator",
-      ref: "scripts/generate-docs.mjs",
-    },
+    source: docsSourceFacts,
     project: (text, ctx) => ctx.ok(`${text.replace(/\s+$/u, "")}\n`),
   });
 
