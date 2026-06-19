@@ -22,7 +22,9 @@ import {
 } from "@agent-os/backend-protocol";
 import { sqlText } from "../storage/sql-row";
 
-export class LegacyLedgerSchemaError extends Data.TaggedError("agent_os.legacy_ledger_schema")<{
+export class CloudflareLedgerSchemaError extends Data.TaggedError(
+  "agent_os.cloudflare_ledger_schema_error",
+)<{
   readonly table: string;
   readonly reason: string;
 }> {}
@@ -50,9 +52,9 @@ export const sameCloudflareTruthIdentity = (
 export const cloudflareTruthIdentity = (
   value: BackendProtocolTruthIdentity,
   label: string,
-): BackendProtocolTruthIdentity | LegacyLedgerSchemaError => {
+): BackendProtocolTruthIdentity | CloudflareLedgerSchemaError => {
   if (!isBackendProtocolTruthIdentity(value)) {
-    return new LegacyLedgerSchemaError({
+    return new CloudflareLedgerSchemaError({
       table: "events",
       reason: `${label} missing structured truth identity`,
     });
@@ -199,16 +201,16 @@ export const truthIdentityFromCommitSpec = (
   label: string,
 ): BackendProtocolTruthIdentity => {
   if (!Predicate.isObject(value)) {
-    throw new LegacyLedgerSchemaError({ table: "events", reason: `${label} must be an object` });
+    throw new CloudflareLedgerSchemaError({ table: "events", reason: `${label} must be an object` });
   }
   if ("scope" in value) {
-    throw new LegacyLedgerSchemaError({
+    throw new CloudflareLedgerSchemaError({
       table: "events",
       reason: `${label} must not include legacy scope`,
     });
   }
   if (!isScopeRef(value.scopeRef) || !isAuthorityRef(value.effectAuthorityRef)) {
-    throw new LegacyLedgerSchemaError({
+    throw new CloudflareLedgerSchemaError({
       table: "events",
       reason: `${label} missing structured truth identity`,
     });
@@ -225,7 +227,7 @@ export const eventIdentityFromQuerySpec = (
 ): BackendProtocolEventIdentity => {
   const truthIdentity = truthIdentityFromCommitSpec(value, label);
   if (!Predicate.isObject(value) || !isFactOwnerRef(value.factOwnerRef)) {
-    throw new LegacyLedgerSchemaError({
+    throw new CloudflareLedgerSchemaError({
       table: "events",
       reason: `${label} missing factOwnerRef`,
     });
@@ -235,7 +237,7 @@ export const eventIdentityFromQuerySpec = (
 
 export const assertNoFactOwnerOverride = (value: unknown, label: string): void => {
   if (Predicate.isObject(value) && "factOwnerRef" in value) {
-    throw new LegacyLedgerSchemaError({
+    throw new CloudflareLedgerSchemaError({
       table: "events",
       reason: `${label} must not include caller-controlled factOwnerRef`,
     });

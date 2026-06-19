@@ -199,10 +199,10 @@
       ],
       "errors": [
         "agent_os.boundary_commit_rejected",
+        "agent_os.cloudflare_ledger_schema_error",
         "agent_os.dispatch_binding_ref_malformed",
         "agent_os.dispatch_scope_mismatch",
         "agent_os.dispatch_target_not_found",
-        "agent_os.legacy_ledger_schema",
         "agent_os.missing_submit_run_binding",
         "agent_os.projection_application_error",
         "agent_os.projection_reducer_returned_thenable",

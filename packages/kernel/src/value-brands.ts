@@ -62,14 +62,6 @@ export type RecordableValue<T extends object> = T & Recordable<T>;
 export type RecordedValue<T extends object> = T & Recorded<T>;
 export type DerivedValue<T extends object> = T & Derived<T>;
 
-export interface OwnerRecordableMint {
-  readonly recordable: <T extends object>(value: T) => RecordableValue<T>;
-}
-
-export interface LedgerRecordedMint {
-  readonly recorded: <T extends object>(value: RecordableValue<T>) => RecordedValue<T>;
-}
-
 const failConstruction = (message: string): never =>
   Option.getOrThrowWith(Option.none(), () => new TypeError(message));
 
@@ -129,14 +121,6 @@ export const recordedValue = <T extends object>(value: T): RecordedValue<T> =>
 
 export const derivedValue = <T extends object>(value: T): DerivedValue<T> =>
   domainValue(value, derivedBrand, "Derived") as DerivedValue<T>;
-
-export const ownerRecordableMint: OwnerRecordableMint = {
-  recordable: recordableValue,
-};
-
-export const ledgerRecordedMint: LedgerRecordedMint = {
-  recorded: (value) => recordedValue(value.value),
-};
 
 const cloneRecordedPayloadValue = (value: unknown): RecordedPayloadValue => {
   if (value === null || typeof value === "boolean" || typeof value === "string") return value;

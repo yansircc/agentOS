@@ -6,7 +6,7 @@ import { assertRuntimeLedgerTransitions, RUNTIME_FACT_OWNER } from "@agent-os/ru
 import { applyRegisteredMaterializedProjectionEvents } from "../materialized-projections";
 import type { EventBusService } from "./event-bus";
 import {
-  LegacyLedgerSchemaError,
+  CloudflareLedgerSchemaError,
   assertNoFactOwnerOverride,
   eventIdentity,
   eventIdentityColumns,
@@ -135,7 +135,7 @@ const tableColumns = (sql: SqlStorage, table: string): ReadonlySet<string> =>
 
 const ensureNoLegacyLedgerSchema = (columns: ReadonlySet<string>): void => {
   if (columns.has("scope")) {
-    throw new LegacyLedgerSchemaError({
+    throw new CloudflareLedgerSchemaError({
       table: "events",
       reason: "legacy scope column is invalid",
     });
@@ -155,7 +155,7 @@ const ensureNoLegacyLedgerSchema = (columns: ReadonlySet<string>): void => {
   ];
   for (const column of required) {
     if (!columns.has(column)) {
-      throw new LegacyLedgerSchemaError({
+      throw new CloudflareLedgerSchemaError({
         table: "events",
         reason: `missing identity column ${column}`,
       });

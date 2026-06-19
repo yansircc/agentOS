@@ -40,6 +40,13 @@
       ]
     },
     {
+      "tag": "agent_os.cloudflare_ledger_schema_error",
+      "invariants": ["invariant.d10.truth-identity"],
+      "docs": "docs/concepts/durable-truth.md",
+      "fix": "Use the Cloudflare D10 ledger schema with structured scopeRef, effectAuthorityRef, factOwnerRef, and identity keys; old scope columns and malformed identity specs fail closed.",
+      "sourceFiles": ["packages/backends/cloudflare-do/src/ledger/identity.ts"]
+    },
+    {
       "tag": "agent_os.cloudflare_worker_bundle_resolution_failure",
       "invariants": ["invariant.boundary.runtime-validation-external-only"],
       "docs": "docs/packages/deploy-cloudflare.md",
@@ -266,13 +273,6 @@
       "docs": "docs/concepts/durable-truth.md",
       "fix": "Encode final payloads before commit side effects consume them; reject unstringifiable payloads before projection application.",
       "sourceFiles": ["packages/kernel/src/errors.ts"]
-    },
-    {
-      "tag": "agent_os.legacy_ledger_schema",
-      "invariants": ["invariant.d10.truth-identity"],
-      "docs": "docs/concepts/durable-truth.md",
-      "fix": "Delete old local backend state and initialize the D10 schema; no legacy row migration is supported.",
-      "sourceFiles": ["packages/backends/cloudflare-do/src/ledger/identity.ts"]
     },
     {
       "tag": "agent_os.llm_call_timed_out",

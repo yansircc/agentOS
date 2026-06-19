@@ -16,11 +16,10 @@ import type {
 import {
   authoredValue,
   derivedValue,
-  ledgerRecordedMint,
   ledgerSafeValue,
-  ownerRecordableMint,
   recordedPayload,
   recordedValue,
+  recordableValue,
   untrustedValue,
 } from "../src/value-brands";
 import { safeLedgerPayload } from "../src/safe-ledger-event";
@@ -87,15 +86,12 @@ describe("value domain brands", () => {
       const recordableFromPayload: Recordable<Payload> = recordedPayloadTruth;
       // @ts-expect-error RecordedPayload is not a ledger-witnessed domain value.
       const recordedFromPayload: Recorded<Payload> = recordedPayloadTruth;
-      // @ts-expect-error Ledger mints Recorded<T> only from owner-accepted RecordableValue<T>.
-      const mintedFromPayload = ledgerRecordedMint.recorded(recordedPayloadTruth);
       return [
         recordedFromSafe,
         safeFromPlain,
         recordedFromPlain,
         recordableFromPayload,
         recordedFromPayload,
-        mintedFromPayload,
       ];
     };
 
@@ -128,20 +124,20 @@ describe("value domain brands", () => {
     expect(authoredValue(intent).value.name).toBe("lookup");
   });
 
-  it("separates ledger-safe, recordable, recorded, and derived mint surfaces", () => {
+  it("separates ledger-safe, recordable, recorded, and derived value domains", () => {
     const ledgerSafe = ledgerSafeValue({ kind: "json", id: 1 });
     const ledgerSafeEvidence: LedgerSafe<{ readonly kind: string; readonly id: number }> =
       ledgerSafe;
     expect(ledgerSafeEvidence.value.id).toBe(1);
     expect(JSON.stringify(ledgerSafe)).toBe('{"kind":"json","id":1}');
 
-    const recordable = ownerRecordableMint.recordable({ kind: "owner.accepted", id: 2 });
+    const recordable = recordableValue({ kind: "owner.accepted", id: 2 });
     const recordableEvidence: Recordable<{ readonly kind: string; readonly id: number }> =
       recordable;
     expect(recordableEvidence.value.id).toBe(2);
     expect(JSON.stringify(recordable)).toBe('{"kind":"owner.accepted","id":2}');
 
-    const recorded = ledgerRecordedMint.recorded(recordable);
+    const recorded = recordedValue(recordable.value);
     const recordedEvidence: Recorded<{ readonly kind: string; readonly id: number }> = recorded;
     expect(recordedEvidence.value.id).toBe(2);
     expect(JSON.stringify(recorded)).toBe('{"kind":"owner.accepted","id":2}');
@@ -222,9 +218,7 @@ describe("value domain brands", () => {
     expect("Untrusted" in kernel).toBe(false);
     expect("authoredValue" in kernel).toBe(false);
     expect("derivedValue" in kernel).toBe(false);
-    expect("ledgerRecordedMint" in kernel).toBe(false);
     expect("ledgerSafeValue" in kernel).toBe(false);
-    expect("ownerRecordableMint" in kernel).toBe(false);
     expect("recordedValue" in kernel).toBe(false);
     expect("recordableValue" in kernel).toBe(false);
     expect("recordedPayload" in kernel).toBe(false);

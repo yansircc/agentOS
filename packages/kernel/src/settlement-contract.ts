@@ -12,7 +12,7 @@ import {
 } from "./effect-claim";
 import { ANCHOR_KINDS, INDETERMINATE_KINDS, REJECTION_KINDS } from "./claim-kinds";
 import { isNonEmptyString } from "./string-guards";
-import { authoredValue, ownerRecordableMint } from "./value-brands";
+import { authoredValue, recordableValue } from "./value-brands";
 import type { Authored, Recordable } from "./value-brands";
 
 export const SYMBOLIC_SETTLEMENT_VALUE_PATTERN = "^[A-Za-z0-9_.:-]{1,128}$";
@@ -49,12 +49,14 @@ export type TerminalClaimIssue =
   | "rejection_id_not_symbolic"
   | "reason_not_symbolic";
 
+type TerminalRecordableClaim =
+  | (LivedClaim & Recordable<LivedClaim>)
+  | (RejectedClaim & Recordable<RejectedClaim>);
+
 export type TerminalClaimValidation =
   | {
       readonly ok: true;
-      readonly claim:
-        | (LivedClaim & Recordable<LivedClaim>)
-        | (RejectedClaim & Recordable<RejectedClaim>);
+      readonly claim: TerminalRecordableClaim;
     }
   | {
       readonly ok: false;
@@ -100,9 +102,27 @@ const arrayOf = <T>(
 const failConstruction = (message: string): never =>
   Option.getOrThrowWith(Option.none(), () => new TypeError(message));
 
-const recordableSettlementClaim = <Claim extends LivedClaim | RejectedClaim | IndeterminateClaim>(
-  claim: Claim,
-): Claim & Recordable<Claim> => ownerRecordableMint.recordable(claim);
+function recordableSettlementClaim(claim: LivedClaim): LivedClaim & Recordable<LivedClaim>;
+function recordableSettlementClaim(
+  claim: RejectedClaim,
+): RejectedClaim & Recordable<RejectedClaim>;
+function recordableSettlementClaim(
+  claim: LivedClaim | RejectedClaim,
+): TerminalRecordableClaim;
+function recordableSettlementClaim(
+  claim: IndeterminateClaim,
+): IndeterminateClaim & Recordable<IndeterminateClaim>;
+function recordableSettlementClaim(
+  claim: LivedClaim | RejectedClaim | IndeterminateClaim,
+):
+  | (LivedClaim & Recordable<LivedClaim>)
+  | (RejectedClaim & Recordable<RejectedClaim>)
+  | (IndeterminateClaim & Recordable<IndeterminateClaim>) {
+  return recordableValue(claim) as
+    | (LivedClaim & Recordable<LivedClaim>)
+    | (RejectedClaim & Recordable<RejectedClaim>)
+    | (IndeterminateClaim & Recordable<IndeterminateClaim>);
+}
 
 export const isSymbolicSettlementValue = (value: string): boolean =>
   SYMBOLIC_SETTLEMENT_VALUE.test(value);
@@ -201,13 +221,7 @@ export const validateTerminalClaim = (
   if (issues.length > 0) {
     return { ok: false, issues };
   }
-  return {
-    ok: true,
-    claim:
-      validation.claim.phase === "lived"
-        ? recordableSettlementClaim(validation.claim)
-        : recordableSettlementClaim(validation.claim),
-  };
+  return { ok: true, claim: recordableSettlementClaim(validation.claim) };
 };
 
 const terminalClaimFieldIssues = (

@@ -18,7 +18,7 @@ import {
 import { captureLive, openLive } from "../src/live-edge";
 import type { MaterialRef } from "../src/material-ref";
 import type { RecordedPayload } from "../src/value-brands";
-import { ledgerRecordedMint, recordableValue, recordedPayload } from "../src/value-brands";
+import { recordedPayload, recordedValue } from "../src/value-brands";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -63,7 +63,7 @@ const sealFixture = (
   });
 
 const recordedEnvelope = (envelope: SealedEnvelope): RecordedSealedEnvelope =>
-  ledgerRecordedMint.recorded(recordableValue(envelope)) as RecordedSealedEnvelope;
+  recordedValue(envelope) as RecordedSealedEnvelope;
 
 describe("Recordable<SealedEnvelope> AEAD codec", () => {
   it.effect(
@@ -72,7 +72,7 @@ describe("Recordable<SealedEnvelope> AEAD codec", () => {
       Effect.gen(function* () {
         const aad = recordedPayload({ scope: "run-1", slot: "private-state" });
         const sealed = yield* sealFixture({ aad });
-        const recorded = ledgerRecordedMint.recorded(sealed);
+        const recorded = recordedValue(sealed.value) as RecordedSealedEnvelope;
         const opened = yield* openAead({
           sealed: recorded,
           key: captureLive(keyBytes("0123456789abcdef0123456789abcdef")),
@@ -99,7 +99,7 @@ describe("Recordable<SealedEnvelope> AEAD codec", () => {
       const aad = recordedPayload({ scope: "run-1", slot: "private-state" });
       const sealed = yield* sealFixture({ aad });
       const recordable: RecordableSealedEnvelope = sealed;
-      const recorded = ledgerRecordedMint.recorded(sealed);
+      const recorded = recordedValue(sealed.value) as RecordedSealedEnvelope;
       const recordedEvidence: RecordedSealedEnvelope = recorded;
 
       const assertTypeErrors = () => {
@@ -125,7 +125,7 @@ describe("Recordable<SealedEnvelope> AEAD codec", () => {
     Effect.gen(function* () {
       const aad = recordedPayload({ scope: "run-1", slot: "private-state" });
       const sealed = yield* sealFixture({ aad });
-      const recorded = ledgerRecordedMint.recorded(sealed);
+      const recorded = recordedValue(sealed.value) as RecordedSealedEnvelope;
       const wrongKey = yield* Effect.exit(
         openAead({
           sealed: recorded,

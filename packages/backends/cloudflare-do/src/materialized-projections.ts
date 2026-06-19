@@ -17,7 +17,7 @@ import {
 } from "@agent-os/runtime";
 import { sqlText } from "./storage/sql-row";
 import {
-  LegacyLedgerSchemaError,
+  CloudflareLedgerSchemaError,
   eventIdentityFromQuerySpec,
   ledgerEventFromRow,
   projectionIdentityColumns,
@@ -84,7 +84,7 @@ export const ensureMaterializedProjectionSchema = (sql: SqlStorage): void => {
       .map((row) => String((row as { readonly name?: unknown }).name)),
   );
   if (existingRows.has("scope")) {
-    throw new LegacyLedgerSchemaError({
+    throw new CloudflareLedgerSchemaError({
       table: "materialized_projection_rows",
       reason: "legacy scope column is invalid",
     });
@@ -96,7 +96,7 @@ export const ensureMaterializedProjectionSchema = (sql: SqlStorage): void => {
       .map((row) => String((row as { readonly name?: unknown }).name)),
   );
   if (existingMeta.has("scope")) {
-    throw new LegacyLedgerSchemaError({
+    throw new CloudflareLedgerSchemaError({
       table: "materialized_projection_meta",
       reason: "legacy scope column is invalid",
     });

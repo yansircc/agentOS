@@ -164,8 +164,8 @@ import {
   cloudflareDefaultTruthIdentityFromRoutingScope,
   cloudflareRouteKeyFromScopeRef,
   cloudflareTruthIdentity,
+  CloudflareLedgerSchemaError,
   eventIdentity,
-  LegacyLedgerSchemaError,
 } from "./ledger/identity";
 
 export interface AgentRuntimeReaderClient {
@@ -493,7 +493,7 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
   ): Promise<T> {
     return this.scopedPromise((scope) => {
       const identity = cloudflareTruthIdentity(truthIdentity, "agent runtime query identity");
-      if (identity instanceof LegacyLedgerSchemaError) {
+      if (identity instanceof CloudflareLedgerSchemaError) {
         return Promise.reject(identity);
       }
       if (cloudflareRouteKeyFromScopeRef(identity.scopeRef) !== scope) {
@@ -836,7 +836,7 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
     }
     try {
       const truthIdentity = cloudflareTruthIdentity(identity, "agent runtime stream identity");
-      if (truthIdentity instanceof LegacyLedgerSchemaError) {
+      if (truthIdentity instanceof CloudflareLedgerSchemaError) {
         return new Response(JSON.stringify({ error: truthIdentity._tag }), { status: 400 });
       }
       if (cloudflareRouteKeyFromScopeRef(truthIdentity.scopeRef) !== scope) {

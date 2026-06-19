@@ -32,10 +32,10 @@
       "fix": "Encode final payloads before commit side effects consume them; reject unstringifiable payloads before projection application."
     },
     {
-      "tag": "agent_os.legacy_ledger_schema",
+      "tag": "agent_os.cloudflare_ledger_schema_error",
       "invariants": ["invariant.d10.truth-identity"],
       "docs": "docs/concepts/durable-truth.md",
-      "fix": "Delete old local backend state and initialize the D10 schema; no legacy row migration is supported."
+      "fix": "Use the Cloudflare D10 ledger schema with structured scopeRef, effectAuthorityRef, factOwnerRef, and identity keys; old scope columns and malformed identity specs fail closed."
     },
     {
       "tag": "agent_os.missing_submit_run_binding",
