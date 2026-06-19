@@ -243,6 +243,8 @@
 - `.:llmResponseEvent`
 - `.:lowerSubmitRunInput`
 - `.:makeAdmissionSchemaSpec`
+- `.:manifestScopeRef`
+- `.:manifestTruthIdentity`
 - `.:mountAgent`
 - `.:projectAgentManifest`
 - `.:projectLease`

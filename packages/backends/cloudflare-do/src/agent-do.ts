@@ -100,7 +100,11 @@ import {
   type TriggerDrainUntilQuietResult,
 } from "@agent-os/runtime";
 import { LlmTransport } from "@agent-os/llm-protocol";
-import { lowerSubmitRunInput, RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
+import {
+  lowerSubmitRunInput,
+  manifestScopeRef,
+  RUNTIME_FACT_OWNER,
+} from "@agent-os/runtime-protocol";
 import {
   backendProtocolEventIdentityKey,
   QUOTA_EVENT_KIND,
@@ -1276,7 +1280,9 @@ export const createAgentDurableObject = <Env extends CloudflareAgentEnv>(
         projections: projectionsFor(config.projections, env),
         scopeRefForScope:
           config.scopeRefForScope ??
-          ((scope) => cloudflareDefaultTruthIdentityFromRoutingScope(scope).scopeRef),
+          (config.manifest.scope.idSource === "manifest"
+            ? () => manifestScopeRef(config.manifest)
+            : (scope) => cloudflareDefaultTruthIdentityFromRoutingScope(scope).scopeRef),
         eventHandlers: config.eventHandlers,
       });
     }

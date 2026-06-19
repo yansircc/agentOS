@@ -247,6 +247,8 @@ title: "@agent-os/runtime-protocol API"
 - `.:llmResponseEvent`
 - `.:lowerSubmitRunInput`
 - `.:makeAdmissionSchemaSpec`
+- `.:manifestScopeRef`
+- `.:manifestTruthIdentity`
 - `.:mountAgent`
 - `.:projectAgentManifest`
 - `.:projectLease`

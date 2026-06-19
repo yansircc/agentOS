@@ -5,6 +5,8 @@ import {
   defineAgentCapability,
   defineAgentBindings,
   defineAgentManifest,
+  manifestScopeRef,
+  manifestTruthIdentity,
   mountAgent,
   projectAgentManifest,
   AGENT_MANIFEST_PROJECTION_TARGETS,
@@ -185,7 +187,7 @@ describe("AgentManifest mount algebra", () => {
   it("keeps extension handler kinds closed by manifest extension declarations", () => {
     const extensionManifest = defineAgentManifest({
       agentId: "agent.extension",
-      scope: { kind: "extension", idSource: "extension", stableScopeId: "ext:review" },
+      scope: { kind: "conversation", idSource: "extension", stableScopeId: "ext:review" },
       effectAuthorityRef,
       handlers: ["review.comment_added"] as const,
       extensions: [{ extensionId: "review", handlerKinds: ["review.comment_added"] as const }],
@@ -331,5 +333,39 @@ describe("AgentManifest mount algebra", () => {
     ]);
     expect("typedClient" in manifest).toBe(false);
     expect("workerEntry" in manifest).toBe(false);
+  });
+});
+
+describe("manifest-owned runtime identity", () => {
+  it("derives scopeRef and truth identity from a manifest-sourced scope", () => {
+    const manifest = defineAgentManifest({
+      agentId: "agent.identity",
+      scope: { kind: "session", idSource: "manifest", stableScopeId: "demo" },
+      effectAuthorityRef,
+      handlers: ["user_message"] as const,
+    });
+    expect(manifestScopeRef(manifest)).toEqual({ kind: "session", scopeId: "demo" });
+    expect(manifestTruthIdentity(manifest)).toEqual({
+      scopeRef: { kind: "session", scopeId: "demo" },
+      effectAuthorityRef,
+    });
+  });
+
+  it("fails closed when scope is not manifest-owned or lacks a stable id", () => {
+    const submitScoped = defineAgentManifest({
+      agentId: "agent.submit",
+      scope: { kind: "conversation", idSource: "submit_scope" },
+      effectAuthorityRef,
+      handlers: ["user_message"] as const,
+    });
+    expect(() => manifestScopeRef(submitScoped)).toThrow(/not "manifest"/);
+
+    const missingId = defineAgentManifest({
+      agentId: "agent.missing",
+      scope: { kind: "conversation", idSource: "manifest" },
+      effectAuthorityRef,
+      handlers: ["user_message"] as const,
+    });
+    expect(() => manifestScopeRef(missingId)).toThrow(/stableScopeId/);
   });
 });

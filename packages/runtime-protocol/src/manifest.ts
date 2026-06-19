@@ -1,6 +1,7 @@
-import type { AuthorityRef } from "@agent-os/kernel/effect-claim";
+import type { AuthorityRef, ScopeRef } from "@agent-os/kernel/effect-claim";
 import type { MaterialRef } from "@agent-os/kernel/material-ref";
 import type { AgentSchemaSpec } from "@agent-os/kernel/agent-schema";
+import type { LedgerTruthIdentity } from "./ledger";
 
 export const BUILTIN_HANDLER_KINDS = [
   "user_message",
@@ -16,7 +17,13 @@ export type ExtensionHandlerKind<
 > = `${ExtensionId}.${Kind}`;
 export type HandlerKind = BuiltinHandlerKind | ExtensionHandlerKind;
 
-export type AgentScopeKind = "conversation" | "extension" | "tenant" | "workspace";
+/**
+ * Authored scope identity uses the kernel {@link ScopeRef} vocabulary directly,
+ * so there is one scope vocabulary instead of an authoring/runtime bridge.
+ * `external` is excluded because it needs a `systemRef` that a `stableScopeId`
+ * cannot carry.
+ */
+export type AgentScopeKind = Exclude<ScopeRef["kind"], "external">;
 
 export interface AgentScopeIdentityPolicy {
   readonly kind: AgentScopeKind;
@@ -86,3 +93,39 @@ export type AgentManifestInput<Kinds extends readonly HandlerKind[]> = Omit<
 export const defineAgentManifest = <const Kinds extends readonly HandlerKind[]>(
   manifest: AgentManifestInput<Kinds>,
 ): AgentManifest<Kinds[number]> => manifest;
+
+/**
+ * Derive the kernel {@link ScopeRef} owned by a manifest. Fail-closed: only
+ * `idSource: "manifest"` with a non-empty `stableScopeId` has a manifest-owned
+ * runtime scope; anything else throws because the scope is not the manifest's to
+ * project.
+ *
+ * @public
+ */
+export const manifestScopeRef = (manifest: AgentManifest): ScopeRef => {
+  const { scope } = manifest;
+  if (scope.idSource !== "manifest") {
+    throw new TypeError(
+      `manifestScopeRef: scope.idSource is "${scope.idSource}", not "manifest"; runtime scope is not manifest-owned`,
+    );
+  }
+  if (scope.stableScopeId === undefined || scope.stableScopeId.length === 0) {
+    throw new TypeError(
+      `manifestScopeRef: scope.idSource="manifest" requires a non-empty stableScopeId`,
+    );
+  }
+  return { kind: scope.kind, scopeId: scope.stableScopeId };
+};
+
+/**
+ * Single-source the runtime truth identity from a compiled manifest so a
+ * consumer never hand-builds `{ scopeRef, effectAuthorityRef }`. The runtime
+ * ledger injects `factOwnerRef`; consumers that need a full event identity add
+ * it through the backend, not by hand.
+ *
+ * @public
+ */
+export const manifestTruthIdentity = (manifest: AgentManifest): LedgerTruthIdentity => ({
+  scopeRef: manifestScopeRef(manifest),
+  effectAuthorityRef: manifest.effectAuthorityRef,
+});

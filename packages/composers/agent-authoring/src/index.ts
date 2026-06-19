@@ -256,12 +256,7 @@ const parseScope = (
   }
   assertAllowedFields(state, path, value, new Set(["kind", "idSource", "stableScopeId"]));
   const kind = value.kind;
-  if (
-    kind !== "conversation" &&
-    kind !== "extension" &&
-    kind !== "tenant" &&
-    kind !== "workspace"
-  ) {
+  if (kind !== "realm" && kind !== "conversation" && kind !== "session" && kind !== "artifact") {
     invalidAuthoredValue(state, path, "/scope/kind", "scope_kind_invalid");
     return null;
   }

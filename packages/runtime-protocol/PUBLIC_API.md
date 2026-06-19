@@ -247,6 +247,8 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, au
 - `.:llmResponseEvent`
 - `.:lowerSubmitRunInput`
 - `.:makeAdmissionSchemaSpec`
+- `.:manifestScopeRef`
+- `.:manifestTruthIdentity`
 - `.:mountAgent`
 - `.:projectAgentManifest`
 - `.:projectLease`
