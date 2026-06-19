@@ -12,7 +12,7 @@ import {
   sourceTsdocModes,
   sourceTsdocRecordsForPackage,
   validateSourceTsdocRecords,
-} from "../check/public-api-model.mjs";
+} from "../lib/public-api-model.mjs";
 
 const root = process.cwd();
 const check = process.argv.includes("--check");

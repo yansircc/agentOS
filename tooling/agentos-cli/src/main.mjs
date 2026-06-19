@@ -1,39 +1,144 @@
 #!/usr/bin/env node
 import { listGuards, runGroup, runGuard } from "./runner.mjs";
 
-const usage = (message) => {
-  if (message !== undefined) console.error(message);
-  console.error("usage: agentos <check|generate> <target>");
-  console.error("check targets: all, docs, effect-manifests, release, guard <rule-id>, guards");
-  console.error("generate targets: docs, effect-manifests, site");
-  process.exit(message === undefined ? 0 : 1);
+const version = "0.5.16";
+
+const helpText = `agentOS repository CLI ${version}
+
+Usage:
+  agentos --help
+  agentos --version
+  agentos check all
+  agentos check docs
+  agentos check effect-manifests
+  agentos check release
+  agentos check site
+  agentos check guard-coverage
+  agentos check guard <rule-id>
+  agentos check guards
+  agentos generate docs
+  agentos generate effect-manifests
+  agentos generate site
+  agentos generate site --watch
+`;
+
+const printHelp = () => {
+  process.stdout.write(helpText);
 };
 
-const [command, target, extra] = process.argv.slice(2);
+const fail = (message) => {
+  process.stderr.write(`${message}\n\n`);
+  if (
+    message.startsWith("agentos:") ||
+    message.startsWith("agentos check:") ||
+    message.startsWith("agentos generate:")
+  ) {
+    printHelp();
+  }
+  process.exitCode = 1;
+};
+
+const expectNoExtraArgs = (args, command) => {
+  if (args.length > 0) {
+    throw new Error(`${command}: unexpected argument ${args.join(" ")}`);
+  }
+};
+
+const runCheck = async (args) => {
+  const [command, ...rest] = args;
+  switch (command) {
+    case "all":
+      expectNoExtraArgs(rest, "agentos check all");
+      await runGroup("all");
+      return;
+    case "docs":
+      expectNoExtraArgs(rest, "agentos check docs");
+      await runGroup("check-docs");
+      return;
+    case "effect-manifests":
+      expectNoExtraArgs(rest, "agentos check effect-manifests");
+      await runGroup("check-effect-manifests");
+      return;
+    case "release":
+      expectNoExtraArgs(rest, "agentos check release");
+      await runGroup("release");
+      return;
+    case "site":
+      expectNoExtraArgs(rest, "agentos check site");
+      await runGroup("check-site");
+      return;
+    case "guard-coverage":
+      expectNoExtraArgs(rest, "agentos check guard-coverage");
+      await runGroup("guard-coverage");
+      return;
+    case "guard": {
+      const [ruleId, ...extra] = rest;
+      if (ruleId === undefined) throw new Error("agentos check guard: missing <rule-id>");
+      expectNoExtraArgs(extra, "agentos check guard");
+      await runGuard(ruleId);
+      return;
+    }
+    case "guards":
+      expectNoExtraArgs(rest, "agentos check guards");
+      for (const id of listGuards()) console.log(id);
+      return;
+    default:
+      throw new Error(
+        "agentos check: choose one of all, docs, effect-manifests, release, site, guard-coverage, guard, guards",
+      );
+  }
+};
+
+const runGenerate = async (args) => {
+  const [command, ...rest] = args;
+  switch (command) {
+    case "docs":
+      expectNoExtraArgs(rest, "agentos generate docs");
+      await runGroup("generate-docs");
+      return;
+    case "effect-manifests":
+      expectNoExtraArgs(rest, "agentos generate effect-manifests");
+      await runGroup("generate-effect-manifests");
+      return;
+    case "site":
+      if (rest[0] === "--watch") {
+        expectNoExtraArgs(rest.slice(1), "agentos generate site --watch");
+        await runGroup("generate-site-watch");
+      } else {
+        expectNoExtraArgs(rest, "agentos generate site");
+        await runGroup("generate-site");
+      }
+      return;
+    default:
+      throw new Error("agentos generate: choose one of docs, effect-manifests, site");
+  }
+};
+
+const main = async () => {
+  const args = process.argv.slice(2);
+  const [command, ...rest] = args;
+  if (command === undefined || command === "--help" || command === "-h") {
+    printHelp();
+    return;
+  }
+  if (command === "--version" || command === "-v") {
+    console.log(version);
+    return;
+  }
+  switch (command) {
+    case "check":
+      await runCheck(rest);
+      return;
+    case "generate":
+      await runGenerate(rest);
+      return;
+    default:
+      throw new Error("agentos: choose one of check, generate");
+  }
+};
 
 try {
-  if (command === "generate") {
-    if (target === "docs" && extra === undefined) runGroup("generate-docs");
-    else if (target === "effect-manifests" && extra === undefined)
-      runGroup("generate-effect-manifests");
-    else if (target === "site" && extra === undefined) runGroup("generate-site");
-    else usage(`unknown generate target: ${target ?? "<missing>"}`);
-  } else if (command === "check") {
-    if (target === "all" && extra === undefined) runGroup("all");
-    else if (target === "docs" && extra === undefined) runGroup("check-docs");
-    else if (target === "effect-manifests" && extra === undefined)
-      runGroup("check-effect-manifests");
-    else if (target === "release" && extra === undefined) runGroup("release");
-    else if (target === "guard") {
-      if (extra === undefined) usage("missing guard rule id");
-      runGuard(extra);
-    } else if (target === "guards" && extra === undefined) {
-      for (const id of listGuards()) console.log(id);
-    } else usage(`unknown check target: ${target ?? "<missing>"}`);
-  } else {
-    usage(command === undefined ? undefined : `unknown command: ${command}`);
-  }
+  await main();
 } catch (error) {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exit(1);
+  fail(error instanceof Error ? error.message : String(error));
 }

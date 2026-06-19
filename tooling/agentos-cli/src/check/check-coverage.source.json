@@ -1,0 +1,1014 @@
+{
+  "schemaVersion": 1,
+  "invariant": "Every pre-migration checker assertion has an explicit post-migration verdict owner.",
+  "engines": ["manifestRule", "packageCommand", "algorithmic", "algorithmic-helper"],
+  "entries": [
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-ag-ui-egress-allowlist.mjs"
+      },
+      "owner": "@agent-os/ag-ui",
+      "ruleId": "ag-ui-egress-allowlist",
+      "target": {
+        "kind": "packageCommand",
+        "ruleId": "ag-ui-egress-allowlist"
+      },
+      "assertions": [
+        {
+          "failureCondition": "AG-UI egress exposes only owner-safe envelope and frame facts",
+          "negativeWitness": "package-owned test fails when the owned contract is violated"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-ag-ui-resume-boundary.mjs"
+      },
+      "owner": "@agent-os/ag-ui",
+      "ruleId": "ag-ui-resume-boundary",
+      "target": {
+        "kind": "packageCommand",
+        "ruleId": "ag-ui-resume-boundary"
+      },
+      "assertions": [
+        {
+          "failureCondition": "ag-ui-resume-boundary: post-migration verdict must reject violations owned by @agent-os/ag-ui",
+          "negativeWitness": "package-owned test fails when the owned contract is violated"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-ag-ui-sse-axis.mjs"
+      },
+      "owner": "@agent-os/ag-ui",
+      "ruleId": "ag-ui-sse-axis",
+      "target": {
+        "kind": "packageCommand",
+        "ruleId": "ag-ui-sse-axis"
+      },
+      "assertions": [
+        {
+          "failureCondition": "ag-ui-sse-axis: post-migration verdict must reject violations owned by @agent-os/ag-ui",
+          "negativeWitness": "package-owned test fails when the owned contract is violated"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-agent-doc-primitive-evidence.mjs"
+      },
+      "owner": "docs/agent/primitive-evidence.source.json",
+      "ruleId": "agent-doc-primitive-evidence",
+      "target": {
+        "kind": "manifestRule",
+        "ruleId": "agent-doc-primitive-evidence",
+        "engine": "generatedProjection"
+      },
+      "assertions": [
+        {
+          "failureCondition": "agent-doc-primitive-evidence: post-migration verdict must reject violations owned by docs/agent/primitive-evidence.source.json",
+          "negativeWitness": "manifest rule fails closed when its source projection is stale or invalid"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-agent-manifest-intent-boundary.mjs"
+      },
+      "owner": "@agent-os/runtime-protocol",
+      "ruleId": "agent-manifest-intent-boundary",
+      "target": {
+        "kind": "packageCommand",
+        "ruleId": "agent-manifest-intent-boundary"
+      },
+      "assertions": [
+        {
+          "failureCondition": "agent-manifest-intent-boundary: post-migration verdict must reject violations owned by @agent-os/runtime-protocol",
+          "negativeWitness": "package-owned test fails when the owned contract is violated"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-agent-routes.mjs"
+      },
+      "owner": "docs/agent/capability-rules.source.json",
+      "ruleId": "agent-routes",
+      "target": {
+        "kind": "manifestRule",
+        "ruleId": "agent-routes",
+        "engine": "generatedProjection"
+      },
+      "assertions": [
+        {
+          "failureCondition": "agent decision graph must derive from primitive and rule sources",
+          "negativeWitness": "manifest rule fails closed when its source projection is stale or invalid"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-backend-neutral-production-runtime-proof.mjs"
+      },
+      "owner": "package.json agentos.backendNeutrality",
+      "ruleId": "backend-neutral-production-runtime-proof",
+      "target": {
+        "kind": "algorithmic",
+        "ruleId": "backend-neutral-production-runtime-proof",
+        "checker": "backend-neutrality"
+      },
+      "assertions": [
+        {
+          "failureCondition": "backend-neutral-production-runtime-proof: post-migration verdict must reject violations owned by package.json agentos.backendNeutrality",
+          "negativeWitness": "algorithmic projection rejects the source mutation described by this rule diagnostic"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-backend-neutrality.mjs"
+      },
+      "owner": "package.json agentos.backendNeutrality",
+      "ruleId": "backend-neutrality",
+      "target": {
+        "kind": "algorithmic",
+        "ruleId": "backend-neutrality",
+        "checker": "backend-neutrality"
+      },
+      "assertions": [
+        {
+          "failureCondition": "production backend set must stay declared once",
+          "negativeWitness": "algorithmic projection rejects the source mutation described by this rule diagnostic"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-backend-provider-axis-boundary.mjs"
+      },
+      "owner": "packages/backends",
+      "ruleId": "backend-provider-axis-boundary",
+      "target": {
+        "kind": "packageCommand",
+        "ruleId": "backend-provider-axis-boundary"
+      },
+      "assertions": [
+        {
+          "failureCondition": "backend-provider-axis-boundary: post-migration verdict must reject violations owned by packages/backends",
+          "negativeWitness": "package-owned test fails when the owned contract is violated"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-boundaries.mjs"
+      },
+      "owner": "BoundaryContract checklist",
+      "ruleId": "boundaries",
+      "target": {
+        "kind": "algorithmic",
+        "ruleId": "boundaries",
+        "checker": "boundaries"
+      },
+      "assertions": [
+        {
+          "failureCondition": "live edge and boundary contract surfaces stay closed",
+          "negativeWitness": "algorithmic projection rejects the source mutation described by this rule diagnostic"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-carrier-projection-source-truth.mjs"
+      },
+      "owner": "defineCarrier declarations",
+      "ruleId": "carrier-projection-source-truth",
+      "target": {
+        "kind": "manifestRule",
+        "ruleId": "carrier-projection-source-truth",
+        "engine": "generatedProjection"
+      },
+      "assertions": [
+        {
+          "failureCondition": "carrier-projection-source-truth: post-migration verdict must reject violations owned by defineCarrier declarations",
+          "negativeWitness": "manifest rule fails closed when its source projection is stale or invalid"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-d12-a155-substrate-absorption.mjs"
+      },
+      "owner": "D12/A155 substrate absorption contract",
+      "ruleId": "d12-a155-substrate-absorption",
+      "target": {
+        "kind": "algorithmic",
+        "ruleId": "d12-a155-substrate-absorption",
+        "checker": "d12-a155-substrate-absorption"
+      },
+      "assertions": [
+        {
+          "failureCondition": "d12-a155-substrate-absorption: post-migration verdict must reject violations owned by D12/A155 substrate absorption contract",
+          "negativeWitness": "algorithmic projection rejects the source mutation described by this rule diagnostic"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-decision-gate-lifecycle-boundary.mjs"
+      },
+      "owner": "@agent-os/decision-gate",
+      "ruleId": "decision-gate-lifecycle-boundary",
+      "target": {
+        "kind": "packageCommand",
+        "ruleId": "decision-gate-lifecycle-boundary"
+      },
+      "assertions": [
+        {
+          "failureCondition": "decision-gate-lifecycle-boundary: post-migration verdict must reject violations owned by @agent-os/decision-gate",
+          "negativeWitness": "package-owned test fails when the owned contract is violated"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-dispatch-delivery-receipt-authority.mjs"
+      },
+      "owner": "@agent-os/backend-protocol",
+      "ruleId": "dispatch-delivery-receipt-authority",
+      "target": {
+        "kind": "packageCommand",
+        "ruleId": "dispatch-delivery-receipt-authority"
+      },
+      "assertions": [
+        {
+          "failureCondition": "dispatch-delivery-receipt-authority: post-migration verdict must reject violations owned by @agent-os/backend-protocol",
+          "negativeWitness": "package-owned test fails when the owned contract is violated"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-dispatch-idempotency-receipt.mjs"
+      },
+      "owner": "@agent-os/backend-protocol",
+      "ruleId": "dispatch-idempotency-receipt",
+      "target": {
+        "kind": "packageCommand",
+        "ruleId": "dispatch-idempotency-receipt"
+      },
+      "assertions": [
+        {
+          "failureCondition": "dispatch-idempotency-receipt: post-migration verdict must reject violations owned by @agent-os/backend-protocol",
+          "negativeWitness": "package-owned test fails when the owned contract is violated"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-doc-structure.mjs"
+      },
+      "owner": "docs source facts and generated docs projections",
+      "ruleId": "docs-structure",
+      "target": {
+        "kind": "manifestRule",
+        "ruleId": "docs-structure",
+        "engine": "generatedProjection"
+      },
+      "assertions": [
+        {
+          "failureCondition": "generated docs structure must match declared source facts and generator ownership",
+          "negativeWitness": "manifest rule fails closed when its source projection is stale or invalid"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-docs-site-build.mjs"
+      },
+      "owner": "tooling/docs-site build projection",
+      "ruleId": "docs-site-build",
+      "target": {
+        "kind": "algorithmic",
+        "ruleId": "docs-site-build",
+        "checker": "docs-site-build"
+      },
+      "assertions": [
+        {
+          "failureCondition": "docs site build output must contain generated content artifacts",
+          "negativeWitness": "algorithmic projection rejects the source mutation described by this rule diagnostic"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-effectful-tool-replay-receipt.mjs"
+      },
+      "owner": "@agent-os/runtime-protocol",
+      "ruleId": "effectful-tool-replay-receipt",
+      "target": {
+        "kind": "packageCommand",
+        "ruleId": "effectful-tool-replay-receipt"
+      },
+      "assertions": [
+        {
+          "failureCondition": "effectful-tool-replay-receipt: post-migration verdict must reject violations owned by @agent-os/runtime-protocol",
+          "negativeWitness": "package-owned test fails when the owned contract is violated"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-event-namespaces.mjs"
+      },
+      "owner": "BoundaryContract declarations",
+      "ruleId": "event-namespaces",
+      "target": {
+        "kind": "algorithmic",
+        "ruleId": "event-namespaces",
+        "checker": "event-namespaces"
+      },
+      "assertions": [
+        {
+          "failureCondition": "event kind prefixes must have exactly one owner",
+          "negativeWitness": "algorithmic projection rejects the source mutation described by this rule diagnostic"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-facade-handler-capability-boundary.mjs"
+      },
+      "owner": "@agent-os/backend-cloudflare-do",
+      "ruleId": "facade-handler-capability-boundary",
+      "target": {
+        "kind": "packageCommand",
+        "ruleId": "facade-handler-capability-boundary"
+      },
+      "assertions": [
+        {
+          "failureCondition": "facade-handler-capability-boundary: post-migration verdict must reject violations owned by @agent-os/backend-cloudflare-do",
+          "negativeWitness": "package-owned test fails when the owned contract is violated"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-facade-run-scoped-bindings.mjs"
+      },
+      "owner": "@agent-os/backend-cloudflare-do",
+      "ruleId": "facade-run-scoped-bindings",
+      "target": {
+        "kind": "packageCommand",
+        "ruleId": "facade-run-scoped-bindings"
+      },
+      "assertions": [
+        {
+          "failureCondition": "facade-run-scoped-bindings: post-migration verdict must reject violations owned by @agent-os/backend-cloudflare-do",
+          "negativeWitness": "package-owned test fails when the owned contract is violated"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-intent-settlement-boundary.mjs"
+      },
+      "owner": "@agent-os/runtime-protocol",
+      "ruleId": "intent-settlement-boundary",
+      "target": {
+        "kind": "packageCommand",
+        "ruleId": "intent-settlement-boundary"
+      },
+      "assertions": [
+        {
+          "failureCondition": "intent-settlement-boundary: post-migration verdict must reject violations owned by @agent-os/runtime-protocol",
+          "negativeWitness": "package-owned test fails when the owned contract is violated"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-limit-registry.mjs"
+      },
+      "owner": "kernel limit registry",
+      "ruleId": "limit-registry",
+      "target": {
+        "kind": "algorithmic",
+        "ruleId": "limit-registry",
+        "checker": "limit-registry"
+      },
+      "assertions": [
+        {
+          "failureCondition": "limit declarations must use the registry instead of local strings",
+          "negativeWitness": "algorithmic projection rejects the source mutation described by this rule diagnostic"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-node-postgres-effect-governance.mjs"
+      },
+      "owner": "@agent-os/backend-node-postgres",
+      "ruleId": "node-postgres-effect-governance",
+      "target": {
+        "kind": "packageCommand",
+        "ruleId": "node-postgres-effect-governance"
+      },
+      "assertions": [
+        {
+          "failureCondition": "node-postgres-effect-governance: post-migration verdict must reject violations owned by @agent-os/backend-node-postgres",
+          "negativeWitness": "package-owned test fails when the owned contract is violated"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-node-postgres-runtime-import-boundary.mjs"
+      },
+      "owner": "@agent-os/backend-node-postgres",
+      "ruleId": "node-postgres-runtime-import-boundary",
+      "target": {
+        "kind": "packageCommand",
+        "ruleId": "node-postgres-runtime-import-boundary"
+      },
+      "assertions": [
+        {
+          "failureCondition": "node-postgres-runtime-import-boundary: post-migration verdict must reject violations owned by @agent-os/backend-node-postgres",
+          "negativeWitness": "package-owned test fails when the owned contract is violated"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-product-resource-boundary.mjs"
+      },
+      "owner": "@agent-os/resource-carrier",
+      "ruleId": "product-resource-boundary",
+      "target": {
+        "kind": "packageCommand",
+        "ruleId": "product-resource-boundary"
+      },
+      "assertions": [
+        {
+          "failureCondition": "product-resource-boundary: post-migration verdict must reject violations owned by @agent-os/resource-carrier",
+          "negativeWitness": "package-owned test fails when the owned contract is violated"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-projection-wait-primitive.mjs"
+      },
+      "owner": "@agent-os/runtime",
+      "ruleId": "projection-wait-primitive",
+      "target": {
+        "kind": "packageCommand",
+        "ruleId": "projection-wait-primitive"
+      },
+      "assertions": [
+        {
+          "failureCondition": "projection-wait-primitive: post-migration verdict must reject violations owned by @agent-os/runtime",
+          "negativeWitness": "package-owned test fails when the owned contract is violated"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-public-api.mjs"
+      },
+      "owner": "docs/surface.json",
+      "ruleId": "public-api",
+      "target": {
+        "kind": "algorithmic",
+        "ruleId": "public-api",
+        "checker": "public-api"
+      },
+      "assertions": [
+        {
+          "failureCondition": "public package exports must match generated PUBLIC_API projections",
+          "negativeWitness": "algorithmic projection rejects the source mutation described by this rule diagnostic"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "mainlineChecker",
+        "path": "tooling/agentos-cli/src/check/check-client-boundaries.mjs"
+      },
+      "owner": "tooling/refactor/a78-a94/client-app-kit-boundary.md and docs/surface.json",
+      "ruleId": "client-boundaries",
+      "target": {
+        "kind": "algorithmic",
+        "ruleId": "client-boundaries",
+        "checker": "client-boundaries"
+      },
+      "assertions": [
+        {
+          "failureCondition": "client-boundaries: post-rebase verdict must reject client/app-kit boundary drift owned by docs/surface.json and the boundary freeze doc",
+          "negativeWitness": "algorithmic projection rejects source mutations to framework imports, framework-local read models, retired AG-UI framework package surfaces, and missing boundary freeze markers"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-replay-dispatch-snapshot.mjs"
+      },
+      "owner": "@agent-os/backend-protocol",
+      "ruleId": "replay-dispatch-snapshot",
+      "target": {
+        "kind": "packageCommand",
+        "ruleId": "replay-dispatch-snapshot"
+      },
+      "assertions": [
+        {
+          "failureCondition": "replay-dispatch-snapshot: post-migration verdict must reject violations owned by @agent-os/backend-protocol",
+          "negativeWitness": "package-owned test fails when the owned contract is violated"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-replay-llm-snapshot.mjs"
+      },
+      "owner": "@agent-os/llm-protocol",
+      "ruleId": "replay-llm-snapshot",
+      "target": {
+        "kind": "packageCommand",
+        "ruleId": "replay-llm-snapshot"
+      },
+      "assertions": [
+        {
+          "failureCondition": "replay-llm-snapshot: post-migration verdict must reject violations owned by @agent-os/llm-protocol",
+          "negativeWitness": "package-owned test fails when the owned contract is violated"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-replay-tool-snapshot.mjs"
+      },
+      "owner": "@agent-os/runtime-protocol",
+      "ruleId": "replay-tool-snapshot",
+      "target": {
+        "kind": "packageCommand",
+        "ruleId": "replay-tool-snapshot"
+      },
+      "assertions": [
+        {
+          "failureCondition": "replay-tool-snapshot: post-migration verdict must reject violations owned by @agent-os/runtime-protocol",
+          "negativeWitness": "package-owned test fails when the owned contract is violated"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-repo-tooling-surface.mjs"
+      },
+      "owner": "root package.json and tooling/agentos-cli",
+      "ruleId": "repo-tooling-surface",
+      "target": {
+        "kind": "algorithmic",
+        "ruleId": "repo-tooling-surface",
+        "checker": "repo-tooling-surface"
+      },
+      "assertions": [
+        {
+          "failureCondition": "root command surface must stay collapsed to the private CLI and approved distribution/runtime commands; scripts/ must remain reserved for parallel-dev shell helpers; tooling CLI must not import packages/* source",
+          "negativeWitness": "algorithmic projection rejects the source mutation described by this rule diagnostic"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-resource-quota-protocol-ownership.mjs"
+      },
+      "owner": "@agent-os/backend-protocol",
+      "ruleId": "resource-quota-protocol-ownership",
+      "target": {
+        "kind": "packageCommand",
+        "ruleId": "resource-quota-protocol-ownership"
+      },
+      "assertions": [
+        {
+          "failureCondition": "resource-quota-protocol-ownership: post-migration verdict must reject violations owned by @agent-os/backend-protocol",
+          "negativeWitness": "package-owned test fails when the owned contract is violated"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-resource-reservation-concurrency.mjs"
+      },
+      "owner": "@agent-os/backend-protocol",
+      "ruleId": "resource-reservation-concurrency",
+      "target": {
+        "kind": "packageCommand",
+        "ruleId": "resource-reservation-concurrency"
+      },
+      "assertions": [
+        {
+          "failureCondition": "resource-reservation-concurrency: post-migration verdict must reject violations owned by @agent-os/backend-protocol",
+          "negativeWitness": "package-owned test fails when the owned contract is violated"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-run-scoped-material-bindings.mjs"
+      },
+      "owner": "@agent-os/runtime",
+      "ruleId": "run-scoped-material-bindings",
+      "target": {
+        "kind": "packageCommand",
+        "ruleId": "run-scoped-material-bindings"
+      },
+      "assertions": [
+        {
+          "failureCondition": "run-scoped-material-bindings: post-migration verdict must reject violations owned by @agent-os/runtime",
+          "negativeWitness": "package-owned test fails when the owned contract is violated"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-source-aliases.mjs"
+      },
+      "owner": "tooling/vitest-config/source-aliases.ts",
+      "ruleId": "source-aliases",
+      "target": {
+        "kind": "algorithmic",
+        "ruleId": "source-aliases",
+        "checker": "source-aliases"
+      },
+      "assertions": [
+        {
+          "failureCondition": "source alias declarations must not fork package ownership",
+          "negativeWitness": "algorithmic projection rejects the source mutation described by this rule diagnostic"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-spike-hygiene.mjs"
+      },
+      "owner": "AGENTS.md Repo Surface",
+      "ruleId": "spike-hygiene",
+      "target": {
+        "kind": "algorithmic",
+        "ruleId": "spike-hygiene",
+        "checker": "spike-hygiene"
+      },
+      "assertions": [
+        {
+          "failureCondition": "spikes must remain ignored local pressure tests",
+          "negativeWitness": "algorithmic projection rejects the source mutation described by this rule diagnostic"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-telemetry-neutral.mjs"
+      },
+      "owner": "@agent-os/telemetry-protocol",
+      "ruleId": "telemetry-neutral",
+      "target": {
+        "kind": "packageCommand",
+        "ruleId": "telemetry-neutral"
+      },
+      "assertions": [
+        {
+          "failureCondition": "telemetry-neutral: post-migration verdict must reject violations owned by @agent-os/telemetry-protocol",
+          "negativeWitness": "package-owned test fails when the owned contract is violated"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-telemetry-otlp-tree-parity.mjs"
+      },
+      "owner": "@agent-os/telemetry-otlp",
+      "ruleId": "telemetry-otlp-tree-parity",
+      "target": {
+        "kind": "packageCommand",
+        "ruleId": "telemetry-otlp-tree-parity"
+      },
+      "assertions": [
+        {
+          "failureCondition": "telemetry-otlp-tree-parity: post-migration verdict must reject violations owned by @agent-os/telemetry-otlp",
+          "negativeWitness": "package-owned test fails when the owned contract is violated"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-tool-execution-access-requirements.mjs"
+      },
+      "owner": "@agent-os/kernel",
+      "ruleId": "tool-execution-access-requirements",
+      "target": {
+        "kind": "packageCommand",
+        "ruleId": "tool-execution-access-requirements"
+      },
+      "assertions": [
+        {
+          "failureCondition": "tool-execution-access-requirements: post-migration verdict must reject violations owned by @agent-os/kernel",
+          "negativeWitness": "package-owned test fails when the owned contract is violated"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-tool-mutation-boundary.mjs"
+      },
+      "owner": "@agent-os/kernel",
+      "ruleId": "tool-mutation-boundary",
+      "target": {
+        "kind": "packageCommand",
+        "ruleId": "tool-mutation-boundary"
+      },
+      "assertions": [
+        {
+          "failureCondition": "tool-mutation-boundary: post-migration verdict must reject violations owned by @agent-os/kernel",
+          "negativeWitness": "package-owned test fails when the owned contract is violated"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-turn-stream-provider-wire-boundary.mjs"
+      },
+      "owner": "@agent-os/turn-stream",
+      "ruleId": "turn-stream-provider-wire-boundary",
+      "target": {
+        "kind": "packageCommand",
+        "ruleId": "turn-stream-provider-wire-boundary"
+      },
+      "assertions": [
+        {
+          "failureCondition": "turn-stream-provider-wire-boundary: post-migration verdict must reject violations owned by @agent-os/turn-stream",
+          "negativeWitness": "package-owned test fails when the owned contract is violated"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/check-workspace-exec-material-ref-boundary.mjs"
+      },
+      "owner": "@agent-os/workspace-env",
+      "ruleId": "workspace-exec-material-ref-boundary",
+      "target": {
+        "kind": "packageCommand",
+        "ruleId": "workspace-exec-material-ref-boundary"
+      },
+      "assertions": [
+        {
+          "failureCondition": "workspace-exec-material-ref-boundary: post-migration verdict must reject violations owned by @agent-os/workspace-env",
+          "negativeWitness": "package-owned test fails when the owned contract is violated"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/cloudflare-profile.mjs"
+      },
+      "owner": "@agent-os/backend-cloudflare-do",
+      "ruleId": "cloudflare-profile",
+      "target": {
+        "kind": "packageCommand",
+        "ruleId": "cloudflare-profile"
+      },
+      "assertions": [
+        {
+          "failureCondition": "Cloudflare profile composes host helpers without taking carrier truth",
+          "negativeWitness": "package-owned test fails when the owned contract is violated"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/observability.mjs"
+      },
+      "owner": "@agent-os/runtime",
+      "ruleId": "observability",
+      "target": {
+        "kind": "packageCommand",
+        "ruleId": "observability"
+      },
+      "assertions": [
+        {
+          "failureCondition": "workspace-job failure explanation must be a runtime join",
+          "negativeWitness": "package-owned test fails when the owned contract is violated"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "package-test",
+        "id": "failure-diagnostics-envelope"
+      },
+      "owner": "@agent-os/runtime-protocol",
+      "ruleId": "failure-diagnostics-envelope",
+      "target": {
+        "kind": "packageCommand",
+        "ruleId": "failure-diagnostics-envelope"
+      },
+      "assertions": [
+        {
+          "failureCondition": "failure diagnostics are projected from protocol categories, not SubmitResult",
+          "negativeWitness": "package-owned test fails when the owned contract is violated"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "package-test",
+        "id": "tool-witness-single-source"
+      },
+      "owner": "@agent-os/kernel",
+      "ruleId": "tool-witness-single-source",
+      "target": {
+        "kind": "packageCommand",
+        "ruleId": "tool-witness-single-source"
+      },
+      "assertions": [
+        {
+          "failureCondition": "tool replay witness is derived from execution domain law",
+          "negativeWitness": "package-owned test fails when the owned contract is violated"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "package-test",
+        "id": "workspace-agui-integration-fixture"
+      },
+      "owner": "@agent-os/ag-ui",
+      "ruleId": "workspace-agui-integration-fixture",
+      "target": {
+        "kind": "packageCommand",
+        "ruleId": "workspace-agui-integration-fixture"
+      },
+      "assertions": [
+        {
+          "failureCondition": "workspace AG-UI integration consumes owner-safe projections",
+          "negativeWitness": "package-owned test fails when the owned contract is violated"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "package-test",
+        "id": "workspace-op-receipt-boundary"
+      },
+      "owner": "@agent-os/workspace-op",
+      "ruleId": "workspace-op-receipt-boundary",
+      "target": {
+        "kind": "packageCommand",
+        "ruleId": "workspace-op-receipt-boundary"
+      },
+      "assertions": [
+        {
+          "failureCondition": "workspace-op terminals are carrier receipts, not inline runtime tool facts",
+          "negativeWitness": "package-owned test fails when the owned contract is violated"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "package-test",
+        "id": "workspace-tool-exposure-policy"
+      },
+      "owner": "@agent-os/workspace-binding",
+      "ruleId": "workspace-tool-exposure-policy",
+      "target": {
+        "kind": "packageCommand",
+        "ruleId": "workspace-tool-exposure-policy"
+      },
+      "assertions": [
+        {
+          "failureCondition": "workspace tool exposure defaults to read-only and opts in to receipt-backed mutations",
+          "negativeWitness": "package-owned test fails when the owned contract is violated"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/transaction-sync.mjs"
+      },
+      "owner": "backend protocol transaction contract",
+      "ruleId": "transaction-sync",
+      "target": {
+        "kind": "algorithmic",
+        "ruleId": "transaction-sync",
+        "checker": "transaction-sync"
+      },
+      "assertions": [
+        {
+          "failureCondition": "transactionSync must remain sync-only substrate",
+          "negativeWitness": "algorithmic projection rejects the source mutation described by this rule diagnostic"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
+        "path": "tooling/agentos-cli/src/check/workspace-job.mjs"
+      },
+      "owner": "@agent-os/workspace-job",
+      "ruleId": "workspace-job",
+      "target": {
+        "kind": "packageCommand",
+        "ruleId": "workspace-job"
+      },
+      "assertions": [
+        {
+          "failureCondition": "workspace-job terminal vocabulary remains carrier-owned",
+          "negativeWitness": "package-owned test fails when the owned contract is violated"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationCheckerHelper",
+        "path": "tooling/agentos-cli/src/check/backend-neutral-production-backends.mjs"
+      },
+      "owner": "tooling/agentos-cli algorithmic checker bundle",
+      "ruleId": "backend-neutrality",
+      "target": {
+        "kind": "algorithmic-helper",
+        "checkers": ["backend-neutrality"]
+      },
+      "assertions": [
+        {
+          "failureCondition": "helper remains consumed by backend-neutrality algorithmic checker(s)",
+          "negativeWitness": "shared projection helper remains referenced by retained algorithmic checkers"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "currentCheckerHelper",
+        "path": "tooling/agentos-cli/src/lib/public-api-model.mjs"
+      },
+      "owner": "tooling/agentos-cli algorithmic checker bundle",
+      "ruleId": "public-api",
+      "target": {
+        "kind": "algorithmic-helper",
+        "checkers": ["public-api"]
+      },
+      "assertions": [
+        {
+          "failureCondition": "helper remains consumed by public-api algorithmic checker(s)",
+          "negativeWitness": "shared projection helper remains referenced by retained algorithmic checkers"
+        }
+      ]
+    }
+  ]
+}

@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { runRuleAcceptance, validateRuleAcceptance } from "./check/manifest-rules.mjs";
 
 export const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -20,7 +21,7 @@ const requiredRuleFields = [
   "owner",
   "invariantId",
   "kind",
-  "positiveAcceptance",
+  "acceptance",
   "diagnostics",
   "paths",
   "commandGroup",
@@ -29,7 +30,7 @@ const requiredRuleFields = [
 const validateBoundaryRules = (value) => {
   const failures = [];
   if (!isRecord(value)) failures.push("boundary rules source must be an object");
-  if (value.schemaVersion !== 1) failures.push("boundary rules schemaVersion must be 1");
+  if (value.schemaVersion !== 2) failures.push("boundary rules schemaVersion must be 2");
   if (!isRecord(value.commandGroups)) failures.push("boundary rules must define commandGroups");
   if (!Array.isArray(value.rules)) failures.push("boundary rules must define rules[]");
 
@@ -73,19 +74,7 @@ const validateBoundaryRules = (value) => {
     } else {
       seenRules.add(rule.id);
     }
-    if (!isRecord(rule.positiveAcceptance)) {
-      failures.push(`${label} positiveAcceptance must be an object`);
-    } else if (!Array.isArray(rule.positiveAcceptance.commands)) {
-      failures.push(`${label} positiveAcceptance.commands must be an array`);
-    } else if (rule.positiveAcceptance.commands.length === 0) {
-      failures.push(`${label} positiveAcceptance.commands must not be empty`);
-    } else {
-      for (const command of rule.positiveAcceptance.commands) {
-        if (typeof command !== "string" || command.length === 0) {
-          failures.push(`${label} positiveAcceptance command must be non-empty string`);
-        }
-      }
-    }
+    validateRuleAcceptance(rule, failures);
     if (!Array.isArray(rule.diagnostics)) failures.push(`${label} diagnostics must be an array`);
     if (!Array.isArray(rule.paths)) failures.push(`${label} paths must be an array`);
     if (typeof rule.commandGroup !== "string" || !(rule.commandGroup in commandGroups)) {
@@ -101,6 +90,9 @@ const validateBoundaryRules = (value) => {
 const ruleById = (manifest, id) => manifest.rules.find((rule) => rule.id === id);
 
 const runShellCommand = (command) => {
+  if (/\s--fix(?:\s|$)/u.test(command)) {
+    throw new Error(`${command}: check commands must not run fix mode`);
+  }
   console.log(`$ ${command}`);
   const result = spawnSync("sh", ["-c", command], {
     cwd: repoRoot,
@@ -115,7 +107,7 @@ const runShellCommand = (command) => {
   }
 };
 
-const runSteps = (manifest, steps, stack = []) => {
+const runSteps = async (manifest, steps, stack = []) => {
   for (const step of steps) {
     if (step.type === "command") {
       runShellCommand(step.command);
@@ -127,28 +119,26 @@ const runSteps = (manifest, steps, stack = []) => {
       }
       const group = manifest.commandGroups[step.id];
       if (group === undefined) throw new Error(`unknown command group ${step.id}`);
-      runSteps(manifest, group, [...stack, step.id]);
+      await runSteps(manifest, group, [...stack, step.id]);
       continue;
     }
     if (step.type === "rule") {
-      runGuard(step.id, manifest);
+      await runGuard(step.id, manifest);
       continue;
     }
   }
 };
 
-export const runGroup = (id, manifest = loadBoundaryRules()) => {
+export const runGroup = async (id, manifest = loadBoundaryRules()) => {
   const steps = manifest.commandGroups[id];
   if (steps === undefined) throw new Error(`unknown command group ${id}`);
-  runSteps(manifest, steps, [id]);
+  await runSteps(manifest, steps, [id]);
 };
 
-export const runGuard = (id, manifest = loadBoundaryRules()) => {
+export const runGuard = async (id, manifest = loadBoundaryRules()) => {
   const rule = ruleById(manifest, id);
   if (rule === undefined) throw new Error(`unknown boundary rule ${id}`);
-  for (const command of rule.positiveAcceptance.commands) {
-    runShellCommand(command);
-  }
+  await runRuleAcceptance(rule);
 };
 
 export const listGuards = (manifest = loadBoundaryRules()) =>
