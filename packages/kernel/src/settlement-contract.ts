@@ -103,12 +103,8 @@ const failConstruction = (message: string): never =>
   Option.getOrThrowWith(Option.none(), () => new TypeError(message));
 
 function recordableSettlementClaim(claim: LivedClaim): LivedClaim & Recordable<LivedClaim>;
-function recordableSettlementClaim(
-  claim: RejectedClaim,
-): RejectedClaim & Recordable<RejectedClaim>;
-function recordableSettlementClaim(
-  claim: LivedClaim | RejectedClaim,
-): TerminalRecordableClaim;
+function recordableSettlementClaim(claim: RejectedClaim): RejectedClaim & Recordable<RejectedClaim>;
+function recordableSettlementClaim(claim: LivedClaim | RejectedClaim): TerminalRecordableClaim;
 function recordableSettlementClaim(
   claim: IndeterminateClaim,
 ): IndeterminateClaim & Recordable<IndeterminateClaim>;

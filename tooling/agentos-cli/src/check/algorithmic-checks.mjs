@@ -1058,8 +1058,10 @@ const publicExportNames = (apiSource) =>
   ]);
 
 const roleSurvivalPackageMatches = (record, rule) =>
-  !((rule.excludePaths ?? []).includes(record.path) ||
-    (rule.excludePathPrefixes ?? []).some((prefix) => packagePathMatches(record.path, prefix))) &&
+  !(
+    (rule.excludePaths ?? []).includes(record.path) ||
+    (rule.excludePathPrefixes ?? []).some((prefix) => packagePathMatches(record.path, prefix))
+  ) &&
   ((rule.paths ?? []).includes(record.path) ||
     (rule.pathPrefixes ?? []).some((prefix) => packagePathMatches(record.path, prefix)));
 

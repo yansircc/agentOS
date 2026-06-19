@@ -534,11 +534,7 @@
           },
           {
             "fromRole": "projection-sink",
-            "allowedTargetRoles": [
-              "law-contract-owner",
-              "capability-protocol",
-              "projection-sink"
-            ]
+            "allowedTargetRoles": ["law-contract-owner", "capability-protocol", "projection-sink"]
           },
           {
             "fromRole": "provider-bundle",

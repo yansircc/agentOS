@@ -201,7 +201,10 @@ export const truthIdentityFromCommitSpec = (
   label: string,
 ): BackendProtocolTruthIdentity => {
   if (!Predicate.isObject(value)) {
-    throw new CloudflareLedgerSchemaError({ table: "events", reason: `${label} must be an object` });
+    throw new CloudflareLedgerSchemaError({
+      table: "events",
+      reason: `${label} must be an object`,
+    });
   }
   if ("scope" in value) {
     throw new CloudflareLedgerSchemaError({
