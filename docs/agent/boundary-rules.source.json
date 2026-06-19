@@ -238,6 +238,10 @@
       },
       {
         "type": "rule",
+        "id": "substrate-import-dag"
+      },
+      {
+        "type": "rule",
         "id": "event-namespaces"
       },
       {
@@ -419,6 +423,71 @@
         "engine": "algorithmic",
         "checker": "client-boundaries",
         "reason": "client/app-kit boundary spans workspace packages, docs/surface.json, and source imports, so it remains an explicit source projection checker"
+      }
+    },
+    {
+      "id": "substrate-import-dag",
+      "owner": "docs/agent/boundary-rules.source.json",
+      "invariantId": "invariant.algebra.single-code-source",
+      "kind": "repo-boundary",
+      "diagnostics": [
+        "workspace package imports must remain acyclic",
+        "foundational substrate packages must not import downstream runtime, adapter, provider, client, or tooling surfaces"
+      ],
+      "paths": [
+        "docs/agent/boundary-rules.source.json",
+        "packages/**/src/**/*.ts",
+        "tooling/**/src/**/*.ts"
+      ],
+      "commandGroup": "all",
+      "constraints": {
+        "forbiddenEdges": [
+          {
+            "fromPackageNames": ["@agent-os/kernel"],
+            "forbiddenTargetPackagePathPrefixes": ["packages", "tooling"]
+          },
+          {
+            "fromPackageNames": [
+              "@agent-os/attached-stream",
+              "@agent-os/backend-protocol",
+              "@agent-os/llm-protocol",
+              "@agent-os/runtime-protocol",
+              "@agent-os/telemetry-protocol"
+            ],
+            "forbiddenTargetPackagePathPrefixes": [
+              "packages/runtime",
+              "packages/backends",
+              "packages/carriers",
+              "packages/composers",
+              "packages/execution-domains",
+              "packages/providers",
+              "packages/transports",
+              "packages/wire-adapters",
+              "packages/client",
+              "tooling"
+            ],
+            "allowedTargetPackageNames": ["@agent-os/backend-protocol"]
+          },
+          {
+            "fromPackageNames": ["@agent-os/runtime"],
+            "forbiddenTargetPackagePathPrefixes": [
+              "packages/backends",
+              "packages/composers",
+              "packages/execution-domains",
+              "packages/providers",
+              "packages/transports",
+              "packages/wire-adapters",
+              "packages/client",
+              "tooling"
+            ],
+            "allowedTargetPackageNames": ["@agent-os/attached-stream", "@agent-os/backend-protocol"]
+          }
+        ]
+      },
+      "acceptance": {
+        "engine": "algorithmic",
+        "checker": "substrate-import-dag",
+        "reason": "substrate import layering requires package source import graph traversal plus the source-owned forbidden edge constraints in this rule"
       }
     },
     {

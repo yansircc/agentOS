@@ -32,6 +32,14 @@ describe("admission — canonical fingerprint (contract §4.1)", () => {
     sentiment: Schema.Literals(["neutral", "negative", "positive"]),
     summary: Schema.String,
   });
+  // S4 = S2 with one property renamed but the same value type and property
+  // count. Fingerprint identity includes structural field names, not only
+  // value domains.
+  const S4 = Schema.Struct({
+    headline: Schema.String,
+    sentiment: Schema.Literals(["positive", "negative", "neutral"]),
+    keywords: Schema.Array(Schema.String),
+  });
 
   it.effect("stability: same schema yields byte-equal fingerprint across calls", () =>
     Effect.gen(function* () {
@@ -55,6 +63,14 @@ describe("admission — canonical fingerprint (contract §4.1)", () => {
       const fS1 = yield* makeAdmissionSchemaSpec(S1);
       const fS2 = yield* makeAdmissionSchemaSpec(S2);
       expect(fS1.fingerprint).not.toBe(fS2.fingerprint);
+    }),
+  );
+
+  it.effect("renaming property: S2 != S4 (field identity is structural)", () =>
+    Effect.gen(function* () {
+      const fS2 = yield* makeAdmissionSchemaSpec(S2);
+      const fS4 = yield* makeAdmissionSchemaSpec(S4);
+      expect(fS4.fingerprint).not.toBe(fS2.fingerprint);
     }),
   );
 });

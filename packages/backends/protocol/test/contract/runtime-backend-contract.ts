@@ -739,12 +739,10 @@ export const runRuntimeBackendContractSuite = (
             failed: 0,
           });
           const redrainedEvents = yield* promise(() => driver.events(senderIdentity));
-          expect(
-            payloadsOf(redrainedEvents, DISPATCH_EVENT_KINDS.OUTBOUND_FAILED),
-          ).toHaveLength(1);
-          expect(
-            payloadsOf(redrainedEvents, DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED),
-          ).toHaveLength(1);
+          expect(payloadsOf(redrainedEvents, DISPATCH_EVENT_KINDS.OUTBOUND_FAILED)).toHaveLength(1);
+          expect(payloadsOf(redrainedEvents, DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED)).toHaveLength(
+            1,
+          );
         }),
       ),
     );

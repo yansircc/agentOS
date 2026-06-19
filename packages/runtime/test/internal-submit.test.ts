@@ -15,6 +15,21 @@ const publicSpec = (): SubmitSpec => ({
   effectAuthorityRef: { authorityClass: "llm_route", authorityId: "test-route" },
 });
 
+const toolRetryPolicy = {
+  correctionRetries: 1,
+  execution: {
+    maxRetries: 2,
+    delay: { kind: "fixed" as const, delayMs: 250, jitter: false },
+  },
+};
+
+const toolPolicy = {
+  completeAfterToolsExecuted: {
+    toolNames: ["write_terminal"],
+    finalMessage: "done",
+  },
+};
+
 describe("internalSubmitSpec", () => {
   it("rebuilds internal submit from the public allowlist", () => {
     const spec = internalSubmitSpec(publicSpec(), {
@@ -42,6 +57,32 @@ describe("internalSubmitSpec", () => {
     });
 
     expect("resolvedMaterials" in spec).toBe(false);
+  });
+
+  it("rebuilds policy-bearing budget from the SubmitSpec allowlist", () => {
+    const smuggled = {
+      ...publicSpec(),
+      budget: {
+        maxTurns: 4,
+        toolRetryPolicy,
+        toolRetries: 99,
+      },
+      toolPolicy,
+    } as SubmitSpec & {
+      readonly budget: NonNullable<SubmitSpec["budget"]> & { readonly toolRetries: number };
+    };
+
+    const spec = internalSubmitSpec(smuggled, {
+      scope: "scope-1",
+      scopeRef: { kind: "conversation", scopeId: "scope-1" },
+    });
+
+    expect(spec.budget).toEqual({
+      maxTurns: 4,
+      toolRetryPolicy,
+    });
+    expect("toolRetries" in spec.budget!).toBe(false);
+    expect(spec.toolPolicy).toEqual(toolPolicy);
   });
 
   it("keeps internal submit construction sealed to the constructor", () => {

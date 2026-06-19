@@ -1033,21 +1033,32 @@ describe("runWorkspaceJobEffect", () => {
         ),
       );
       let readCalls = 0;
+      let verifyCalls = 0;
 
-      const projection = yield* runJob(
-        makeJobSpec({
-          dataPlane: makeDataPlane({
-            readTerminalArtifact: async () => {
-              readCalls += 1;
-              return "finalized delivery bytes";
-            },
-          }),
+      const spec = makeJobSpec({
+        dataPlane: makeDataPlane({
+          readTerminalArtifact: async () => {
+            readCalls += 1;
+            return "finalized delivery bytes";
+          },
         }),
-        services,
-      );
+        verifier: {
+          verify: async () => {
+            verifyCalls += 1;
+            return {
+              ok: true,
+              checks: [{ name: "delivery-bytes", status: "passed" }],
+            };
+          },
+        },
+      });
+      const projection = yield* runJob(spec, services);
+      const replayed = yield* runJob(spec, services);
 
       expect(projection.status).toBe("verified");
+      expect(replayed.status).toBe("verified");
       expect(readCalls).toBe(1);
+      expect(verifyCalls).toBe(1);
       expect(
         services.events.filter((event) => event.kind === WORKSPACE_JOB_KIND.TERMINAL_FINALIZED),
       ).toHaveLength(1);

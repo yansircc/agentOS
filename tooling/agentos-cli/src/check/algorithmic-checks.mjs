@@ -302,6 +302,115 @@ const clientImportSpecifiers = (source) => {
 const clientImportMatches = (specifier, packageName) =>
   specifier === packageName || specifier.startsWith(`${packageName}/`);
 
+const packagePathMatches = (packagePath, prefix) =>
+  packagePath === prefix || packagePath.startsWith(`${prefix}/`);
+
+const packageMatchesConstraint = (record, names = [], pathPrefixes = []) =>
+  names.includes(record.name) ||
+  pathPrefixes.some((prefix) => packagePathMatches(record.path, prefix));
+
+const packageFromInternalSpecifier = (recordsByName, specifier) => {
+  if (!specifier.startsWith("@agent-os/")) return undefined;
+  const [scope, name] = specifier.split("/");
+  if (scope !== "@agent-os" || name === undefined) return undefined;
+  return recordsByName.get(`${scope}/${name}`);
+};
+
+const packageSourceImportEdges = (records) => {
+  const recordsByName = new Map(records.map((record) => [record.name, record]));
+  const edges = [];
+  for (const from of records) {
+    for (const file of walk(`${from.path}/src`).filter((entry) =>
+      /\.(?:ts|tsx|mts|cts|js|mjs)$/u.test(entry),
+    )) {
+      const source = read(file);
+      for (const specifier of clientImportSpecifiers(source)) {
+        const to = packageFromInternalSpecifier(recordsByName, specifier);
+        if (to !== undefined && to.name !== from.name) {
+          edges.push({ from, to, file, specifier });
+        }
+      }
+    }
+  }
+  return edges;
+};
+
+const packageImportCycles = (records, edges) => {
+  const graph = new Map(records.map((record) => [record.name, []]));
+  for (const edge of edges) graph.get(edge.from.name)?.push(edge.to.name);
+  for (const targets of graph.values()) targets.sort(compare);
+
+  const visiting = new Set();
+  const visited = new Set();
+  const stack = [];
+  const cycles = [];
+  const visit = (name) => {
+    if (visited.has(name)) return;
+    if (visiting.has(name)) {
+      const index = stack.indexOf(name);
+      cycles.push([...stack.slice(index), name]);
+      return;
+    }
+    visiting.add(name);
+    stack.push(name);
+    for (const target of graph.get(name) ?? []) visit(target);
+    stack.pop();
+    visiting.delete(name);
+    visited.add(name);
+  };
+  for (const record of records) visit(record.name);
+  return cycles;
+};
+
+const checkSubstrateImportDag = () => {
+  const constraints = ruleConstraints("substrate-import-dag");
+  const records = workspacePackageRecords().filter(
+    (record) => typeof record.name === "string" && record.name.startsWith("@agent-os/"),
+  );
+  const edges = packageSourceImportEdges(records);
+  const failures = [];
+
+  for (const cycle of packageImportCycles(records, edges)) {
+    failures.push(`substrate-import-dag: package cycle ${cycle.join(" -> ")}`);
+  }
+
+  for (const edge of edges) {
+    for (const constraint of constraints.forbiddenEdges ?? []) {
+      if (
+        !packageMatchesConstraint(
+          edge.from,
+          constraint.fromPackageNames ?? [],
+          constraint.fromPackagePathPrefixes ?? [],
+        )
+      ) {
+        continue;
+      }
+      if (
+        packageMatchesConstraint(
+          edge.to,
+          constraint.allowedTargetPackageNames ?? [],
+          constraint.allowedTargetPackagePathPrefixes ?? [],
+        )
+      ) {
+        continue;
+      }
+      if (
+        packageMatchesConstraint(
+          edge.to,
+          constraint.forbiddenTargetPackageNames ?? [],
+          constraint.forbiddenTargetPackagePathPrefixes ?? [],
+        )
+      ) {
+        failures.push(
+          `${edge.file}: substrate-import-dag: ${edge.from.name} must not import downstream package ${edge.specifier} (${edge.to.path})`,
+        );
+      }
+    }
+  }
+
+  failIfAny("substrate import DAG", failures);
+};
+
 const clientSectionBody = (source, heading) => {
   const start = source.indexOf(`## ${heading}`);
   if (start === -1) return "";
@@ -874,6 +983,7 @@ const checkerById = new Map([
   ["repo-tooling-surface", checkRepoToolingSurface],
   ["source-aliases", checkSourceAliases],
   ["spike-hygiene", checkSpikeHygiene],
+  ["substrate-import-dag", checkSubstrateImportDag],
   ["transaction-sync", checkTransactionSync],
 ]);
 

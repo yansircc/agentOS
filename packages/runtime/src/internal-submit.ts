@@ -9,6 +9,20 @@ export interface InternalSubmitSpec extends SubmitSpec {
   readonly [internalSubmitSpecBrand]: true;
 }
 
+const internalSubmitBudget = (
+  budget: SubmitSpec["budget"] | undefined,
+): SubmitSpec["budget"] | undefined => {
+  if (budget === undefined) return undefined;
+  const sealed: NonNullable<SubmitSpec["budget"]> = {
+    ...(budget.tokens === undefined ? {} : { tokens: budget.tokens }),
+    ...(budget.timeMs === undefined ? {} : { timeMs: budget.timeMs }),
+    ...(budget.llmCallTimeoutMs === undefined ? {} : { llmCallTimeoutMs: budget.llmCallTimeoutMs }),
+    ...(budget.maxTurns === undefined ? {} : { maxTurns: budget.maxTurns }),
+    ...(budget.toolRetryPolicy === undefined ? {} : { toolRetryPolicy: budget.toolRetryPolicy }),
+  };
+  return Object.keys(sealed).length === 0 ? undefined : sealed;
+};
+
 export const internalSubmitSpec = (
   spec: SubmitSpec,
   scope: { readonly scope: string; readonly scopeRef: ScopeRef },
@@ -20,7 +34,7 @@ export const internalSubmitSpec = (
     route: spec.route,
     tools: spec.tools,
     executionDomains: spec.executionDomains,
-    budget: spec.budget,
+    budget: internalSubmitBudget(spec.budget),
     outputSchema: spec.outputSchema,
     traceContext: spec.traceContext,
     effectAuthorityRef: spec.effectAuthorityRef,

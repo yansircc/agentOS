@@ -417,6 +417,25 @@
     {
       "source": {
         "kind": "preMigrationChecker",
+        "path": "docs/agent/boundary-rules.source.json"
+      },
+      "owner": "docs/agent/boundary-rules.source.json",
+      "ruleId": "substrate-import-dag",
+      "target": {
+        "kind": "algorithmic",
+        "ruleId": "substrate-import-dag",
+        "checker": "substrate-import-dag"
+      },
+      "assertions": [
+        {
+          "failureCondition": "workspace package imports become cyclic or a foundational substrate package imports a downstream surface forbidden by the source-owned edge constraints",
+          "negativeWitness": "algorithmic projection rejects the source mutation described by this rule diagnostic"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "preMigrationChecker",
         "path": "tooling/agentos-cli/src/check/check-event-namespaces.mjs"
       },
       "owner": "BoundaryContract declarations",

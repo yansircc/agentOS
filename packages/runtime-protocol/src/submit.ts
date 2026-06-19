@@ -109,7 +109,7 @@ export interface SubmitRunInput {
     readonly timeMs?: number;
     readonly llmCallTimeoutMs?: number;
     readonly maxTurns?: number;
-    readonly toolRetries?: number;
+    readonly toolRetryPolicy?: SubmitToolRetryPolicy;
   };
   readonly outputSchema?: AnyAgentSchemaSource;
   readonly traceContext?: TraceContext;
@@ -149,6 +149,20 @@ const mergeSubmitToolContext = (
   return Object.keys(extensions).length === 0 ? undefined : { extensions };
 };
 
+const lowerSubmitBudget = (
+  budget: SubmitRunInput["budget"] | undefined,
+): SubmitSpec["budget"] | undefined => {
+  if (budget === undefined) return undefined;
+  const lowered: NonNullable<SubmitSpec["budget"]> = {
+    ...(budget.tokens === undefined ? {} : { tokens: budget.tokens }),
+    ...(budget.timeMs === undefined ? {} : { timeMs: budget.timeMs }),
+    ...(budget.llmCallTimeoutMs === undefined ? {} : { llmCallTimeoutMs: budget.llmCallTimeoutMs }),
+    ...(budget.maxTurns === undefined ? {} : { maxTurns: budget.maxTurns }),
+    ...(budget.toolRetryPolicy === undefined ? {} : { toolRetryPolicy: budget.toolRetryPolicy }),
+  };
+  return Object.keys(lowered).length === 0 ? undefined : lowered;
+};
+
 /**
  * Framework-owned lowering from app-authored input plus pre-runtime bindings to
  * the full runtime driver input.
@@ -169,6 +183,7 @@ export const lowerSubmitRunInput = (spec: LowerSubmitRunInputSpec): SubmitSpec =
     );
   }
   const toolContext = mergeSubmitToolContext(spec.bindings.toolContext, spec.input.toolContext);
+  const budget = lowerSubmitBudget(spec.input.budget);
   return {
     intent: spec.input.intent,
     context: spec.input.context,
@@ -178,7 +193,7 @@ export const lowerSubmitRunInput = (spec: LowerSubmitRunInputSpec): SubmitSpec =
     ...(spec.bindings.executionDomains === undefined
       ? {}
       : { executionDomains: spec.bindings.executionDomains }),
-    ...(spec.input.budget === undefined ? {} : { budget: spec.input.budget }),
+    ...(budget === undefined ? {} : { budget }),
     ...(spec.input.outputSchema === undefined ? {} : { outputSchema: spec.input.outputSchema }),
     ...(spec.input.traceContext === undefined ? {} : { traceContext: spec.input.traceContext }),
     effectAuthorityRef: spec.effectAuthorityRef,

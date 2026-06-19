@@ -72,13 +72,27 @@ describe("value domain brands", () => {
 
   it("keeps RecordedPayload independent from browser-safe projections", () => {
     const safePayload: SafeLedgerPayload = { value: "visible-to-browser" };
+    const recordedPayloadTruth = undefined as unknown as RecordedPayload;
+    type Payload = { readonly kind: string; readonly id: number };
 
     const assertTypeErrors = () => {
       // @ts-expect-error SafeLedgerPayload is a projection, not Recorded payload truth.
       const recordedFromSafe: RecordedPayload = safePayload;
       // @ts-expect-error Plain JSON does not carry the source-owned RecordedPayload brand.
       const recordedFromPlain: RecordedPayload = { value: "truth" };
-      return [recordedFromSafe, recordedFromPlain];
+      // @ts-expect-error RecordedPayload is opaque payload truth, not owner-accepted Recordable<T>.
+      const recordableFromPayload: Recordable<Payload> = recordedPayloadTruth;
+      // @ts-expect-error RecordedPayload is not a ledger-witnessed domain value.
+      const recordedFromPayload: Recorded<Payload> = recordedPayloadTruth;
+      // @ts-expect-error Ledger mints Recorded<T> only from owner-accepted RecordableValue<T>.
+      const mintedFromPayload = ledgerRecordedMint.recorded(recordedPayloadTruth);
+      return [
+        recordedFromSafe,
+        recordedFromPlain,
+        recordableFromPayload,
+        recordedFromPayload,
+        mintedFromPayload,
+      ];
     };
 
     expect(typeof assertTypeErrors).toBe("function");
