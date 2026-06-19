@@ -39,10 +39,10 @@ AG-UI frames instead of raw ledger payloads.
 12. Decode agentOS-owned runtime facts with `decodeRuntimeLedgerEvent` or use
     `projectRunTrace` / `projectRunsPage`. Runtime payload fallback parsers in
     product code are a boundary failure.
-13. For UI protocols, project typed runtime facts with `@agent-os/ag-ui` and
-    consume the framework binding (`@agent-os/ag-ui-react` or
-    `@agent-os/ag-ui-svelte`). AG-UI frames are derived edge frames, not ledger
-    facts.
+13. For UI protocols, project typed runtime facts with `@agent-os/ag-ui` only
+    when an AG-UI edge stream is required. React/Svelte products consume
+    `@agent-os/client-react` or `@agent-os/client-svelte`; AG-UI frames are
+    derived edge frames, not ledger facts or canonical client state.
 14. Expose product API JSON as a redacted run projection or redacted AG-UI frame
     stream. Do not expose raw ledger payloads, provider-native metadata,
     resolved material values, credentials, tokens, or full file bytes.

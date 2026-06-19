@@ -1,0 +1,31 @@
+# @agent-os/client
+
+## Purpose
+
+Framework-neutral agent client store contract and typed command surface.
+
+## Invariant
+
+The client core owns transport-neutral state and command orchestration. It
+consumes runtime-protocol Recorded projections and injected transports; it does
+not import React, Svelte, AG-UI framework adapters, or product UI code.
+
+## Minimal Usage
+
+```ts
+import { createAgentClientStore, selectAgentClientSnapshot } from "@agent-os/client";
+
+const store = createAgentClientStore({ status: "idle" });
+const status = selectAgentClientSnapshot(store, (snapshot) => snapshot.status);
+```
+
+The store contract is the bridge point for framework packages. The full
+streaming state machine is implemented in the client-core phase; this package
+already owns the canonical framework-neutral store shape.
+
+## Verification
+
+```sh
+cd packages/client/core
+vp test run
+```

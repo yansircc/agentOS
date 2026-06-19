@@ -85,6 +85,24 @@
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
     },
     {
+      "path": "packages/client/core",
+      "shape": ["library"],
+      "dependencyOwner": "workspace-root",
+      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+    },
+    {
+      "path": "packages/client/react",
+      "shape": ["library"],
+      "dependencyOwner": "workspace-root",
+      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+    },
+    {
+      "path": "packages/client/svelte",
+      "shape": ["library"],
+      "dependencyOwner": "workspace-root",
+      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+    },
+    {
       "path": "packages/composers/agent-authoring",
       "shape": ["library"],
       "dependencyOwner": "workspace-root",
@@ -236,18 +254,6 @@
     },
     {
       "path": "packages/wire-adapters/ag-ui",
-      "shape": ["library"],
-      "dependencyOwner": "workspace-root",
-      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-    },
-    {
-      "path": "packages/wire-adapters/ag-ui-react",
-      "shape": ["library"],
-      "dependencyOwner": "workspace-root",
-      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-    },
-    {
-      "path": "packages/wire-adapters/ag-ui-svelte",
       "shape": ["library"],
       "dependencyOwner": "workspace-root",
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"

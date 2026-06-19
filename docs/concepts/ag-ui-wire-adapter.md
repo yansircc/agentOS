@@ -29,10 +29,10 @@ material refs, or settlement authority.
 `@agent-os/ag-ui` owns all AG-UI frame mapping, field retention, redaction,
 submit input lowering, and core frame reduction.
 
-`@agent-os/ag-ui-react` and `@agent-os/ag-ui-svelte` are retired framework
-bindings. React and Svelte consumption belongs in `@agent-os/client-react` and
-`@agent-os/client-svelte`, which bridge the transport-neutral client store.
-They must expose canonical Recorded read-models, not AG-UI as core state.
+React and Svelte consumption belongs in `@agent-os/client-react` and
+`@agent-os/client-svelte`, which bridge the transport-neutral client store. The
+old AG-UI framework packages are not public surfaces. Framework bridges must
+expose canonical Recorded read-models, not AG-UI as core state.
 
 ### Field Retention
 

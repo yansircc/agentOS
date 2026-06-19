@@ -69,7 +69,6 @@
       "invariant": "invariant.algebra.single-code-source",
       "statement": "Every algebra has one code source; projections and docs derive from that source.",
       "primitives": [
-        "primitive.ag-ui-svelte.agUiProjectionReadable",
         "primitive.ag-ui.projectAgUiFrames",
         "primitive.ag-ui.projectAgUiFramesToActivities",
         "primitive.kernel.AgentSchema",

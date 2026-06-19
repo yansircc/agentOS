@@ -2,10 +2,6 @@
   "schemaVersion": 1,
   "evidence": [
     {
-      "primitive": "primitive.ag-ui-svelte.agUiProjectionReadable",
-      "tests": ["packages/wire-adapters/ag-ui-svelte/test/ag-ui-svelte.test.ts"]
-    },
-    {
       "primitive": "primitive.ag-ui.projectAgUiFrames",
       "tests": ["packages/wire-adapters/ag-ui/test/ag-ui.test.ts"]
     },

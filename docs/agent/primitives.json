@@ -7,24 +7,6 @@
   ],
   "primitives": [
     {
-      "id": "primitive.ag-ui-svelte.agUiProjectionReadable",
-      "package": "@agent-os/ag-ui-svelte",
-      "packagePath": "packages/wire-adapters/ag-ui-svelte",
-      "entrypoints": ["."],
-      "symbol": "agUiProjectionReadable",
-      "exportKey": ".:agUiProjectionReadable",
-      "sourceFile": "packages/wire-adapters/ag-ui-svelte/src/index.ts",
-      "summary": "Svelte readable wrapper over the core AG-UI frame projection.",
-      "aliases": [],
-      "invariants": ["invariant.algebra.single-code-source"],
-      "decisions": [],
-      "docs": "docs/concepts/ag-ui-wire-adapter.md",
-      "capabilityKind": "projection",
-      "testEvidence": {
-        "tests": ["packages/wire-adapters/ag-ui-svelte/test/ag-ui-svelte.test.ts"]
-      }
-    },
-    {
       "id": "primitive.ag-ui.projectAgUiFrames",
       "package": "@agent-os/ag-ui",
       "packagePath": "packages/wire-adapters/ag-ui",

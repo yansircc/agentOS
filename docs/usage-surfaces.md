@@ -63,9 +63,9 @@ the client state and typed command invoker; they do not own UI components,
 timeline/file-review shapes, runtime event decoders, or transport logic.
 
 `@agent-os/ag-ui` remains a framework-neutral opt-in wire projection over the
-canonical read-model. It is not the client core state model. The legacy
-`@agent-os/ag-ui-react` and `@agent-os/ag-ui-svelte` framework packages are
-retired in favor of `@agent-os/client-react` and `@agent-os/client-svelte`.
+canonical read-model. It is not the client core state model. React and Svelte
+framework bindings are `@agent-os/client-react` and
+`@agent-os/client-svelte`.
 
 Workspace app-kit surfaces split by generator:
 

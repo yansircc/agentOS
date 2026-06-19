@@ -8,6 +8,7 @@
     "packages/telemetry-protocol",
     "packages/llm-protocol",
     "packages/backends/*",
+    "packages/client/*",
     "packages/carriers/*",
     "packages/execution-domains/*",
     "packages/providers/*",
