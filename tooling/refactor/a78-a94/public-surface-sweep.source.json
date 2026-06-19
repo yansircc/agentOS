@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "invariant": "public surfaces survive only when they are source-owned, role-owned, and not deprecated compatibility aliases",
+  "requiredAlgorithmicChecks": ["public-api", "convergence-roles", "client-boundaries"],
+  "deprecatedExports": {
+    "policy": "forbidden",
+    "reason": "this repo has no real users; deprecated public exports are compatibility shims"
+  },
+  "retiredPackages": ["@agent-os/ag-ui-react", "@agent-os/ag-ui-svelte"],
+  "retainedProjectionVocabulary": [
+    {
+      "export": "@agent-os/kernel:SafeLedgerPayload",
+      "role": "projection-sink",
+      "reason": "browser-safe projection payload; not the Recorded payload truth vocabulary"
+    },
+    {
+      "export": "@agent-os/kernel:SafeLedgerPayloadShape",
+      "role": "projection-sink",
+      "reason": "shape helper for SafeLedgerPayload projection sinks"
+    },
+    {
+      "export": "@agent-os/ag-ui:AG_UI_WIRE_COMPATIBILITY",
+      "role": "projection-sink",
+      "reason": "versioned wire projection contract, not a legacy compatibility shim"
+    }
+  ]
+}

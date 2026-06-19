@@ -480,6 +480,32 @@
       }
     },
     {
+      "id": "convergence-public-surface",
+      "owner": "CST 421 and tooling/refactor/a78-a94/public-surface-sweep.source.json",
+      "invariantId": "invariant.algebra.single-code-source",
+      "kind": "repo-boundary",
+      "diagnostics": [
+        "deprecated exports are compatibility shims and must not survive",
+        "retired public framework packages must not remain in workspace or docs/surface",
+        "retained projection vocabulary must be source-owned with explicit reason"
+      ],
+      "paths": [
+        "tooling/refactor/a78-a94/public-surface-sweep.source.json",
+        "tooling/refactor/a78-a94/role-survival.source.json",
+        "docs/surface.json",
+        "docs/api/*.md",
+        "packages/**/PUBLIC_API.md",
+        "packages/**/package.json",
+        "tooling/agentos-cli/src/check/algorithmic-checks.mjs"
+      ],
+      "commandGroup": "all",
+      "acceptance": {
+        "engine": "algorithmic",
+        "checker": "convergence-public-surface",
+        "reason": "public surface sweep composes public-api, role-survival, client-boundary, and explicit deprecated/retired surface rules"
+      }
+    },
+    {
       "id": "substrate-import-dag",
       "owner": "docs/agent/boundary-rules.source.json",
       "invariantId": "invariant.algebra.single-code-source",

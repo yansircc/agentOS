@@ -1226,6 +1226,85 @@ const checkConvergenceRoles = () => {
   );
 };
 
+const publicSurfaceSweepManifest = () =>
+  readJson("tooling/refactor/a78-a94/public-surface-sweep.source.json");
+
+const packagePublicSymbols = (pkg) => {
+  if (typeof pkg.apiSource !== "string") return new Set();
+  return publicExportNames(pkg.apiSource);
+};
+
+const packageExportsSymbol = (exports, symbolName) =>
+  [...exports].some((entry) => String(entry).endsWith(`:${symbolName}`));
+
+const checkConvergencePublicSurface = () => {
+  checkPublicApi();
+  checkConvergenceRoles();
+  checkClientBoundaries();
+
+  const manifest = publicSurfaceSweepManifest();
+  const failures = [];
+  if (manifest.schemaVersion !== 1) {
+    failures.push("public surface sweep manifest schemaVersion must be 1");
+  }
+  if (manifest.deprecatedExports?.policy !== "forbidden") {
+    failures.push("deprecatedExports policy must be forbidden");
+  }
+
+  const surfacePackages = readJson("docs/surface.json").packages ?? [];
+  const surfaceByName = new Map(surfacePackages.map((pkg) => [pkg.name, pkg]));
+  const retiredPackages = new Set(manifest.retiredPackages ?? []);
+  for (const record of workspacePackageRecords()) {
+    if (retiredPackages.has(record.name)) {
+      failures.push(`${record.name}: retired package remains in workspace`);
+    }
+  }
+  for (const pkg of surfacePackages) {
+    if (retiredPackages.has(pkg.name)) {
+      failures.push(`${pkg.name}: retired package remains in docs/surface.json`);
+    }
+  }
+
+  let deprecatedSectionCount = 0;
+  for (const pkg of surfacePackages) {
+    if (!isRecord(pkg) || typeof pkg.apiSource !== "string") continue;
+    const source = read(pkg.apiSource);
+    const body = clientSectionBody(source, "Deprecated exports").trim();
+    if (body.length > 0) {
+      deprecatedSectionCount += 1;
+      if (body !== "None.") failures.push(`${pkg.apiSource}: deprecated exports must be None.`);
+    }
+  }
+
+  for (const retained of manifest.retainedProjectionVocabulary ?? []) {
+    if (!isRecord(retained)) {
+      failures.push("retainedProjectionVocabulary entries must be objects");
+      continue;
+    }
+    if (!convergenceRoleIds.has(retained.role)) {
+      failures.push(`${retained.export}: retained projection vocabulary has invalid role`);
+    }
+    if (typeof retained.reason !== "string" || retained.reason.length === 0) {
+      failures.push(`${retained.export}: retained projection vocabulary requires reason`);
+    }
+    const [packageName, symbolName] =
+      typeof retained.export === "string" ? retained.export.split(":") : [];
+    const pkg = surfaceByName.get(packageName);
+    if (pkg === undefined || symbolName === undefined) {
+      failures.push(`${retained.export}: retained projection vocabulary must name package:symbol`);
+      continue;
+    }
+    if (!packageExportsSymbol(packagePublicSymbols(pkg), symbolName)) {
+      failures.push(`${retained.export}: retained projection vocabulary is not publicly exported`);
+    }
+  }
+
+  failIfAny("convergence public surface", failures);
+  console.log(
+    `convergence public surface covered ${surfacePackages.length} package surfaces and ${deprecatedSectionCount} deprecated-export sections`,
+  );
+};
+
 const checkDocsSiteBuild = () => {
   const contentRoot = path.join(repoRoot, "tooling/docs-site/src/content/docs");
   const distRoot = path.join(repoRoot, "tooling/docs-site/dist");
@@ -1255,6 +1334,7 @@ const checkerById = new Map([
   ["boundaries", checkBoundaryProjection],
   ["client-boundaries", checkClientBoundaries],
   ["convergence-boundary", checkConvergenceBoundary],
+  ["convergence-public-surface", checkConvergencePublicSurface],
   ["convergence-roles", checkConvergenceRoles],
   ["d12-a155-substrate-absorption", checkBoundaryProjection],
   ["docs-site-build", checkDocsSiteBuild],

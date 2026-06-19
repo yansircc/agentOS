@@ -725,6 +725,25 @@
         "kind": "mainlineChecker",
         "path": "tooling/agentos-cli/src/check/algorithmic-checks.mjs"
       },
+      "owner": "CST 421 and tooling/refactor/a78-a94/public-surface-sweep.source.json",
+      "ruleId": "convergence-public-surface",
+      "target": {
+        "kind": "algorithmic",
+        "ruleId": "convergence-public-surface",
+        "checker": "convergence-public-surface"
+      },
+      "assertions": [
+        {
+          "failureCondition": "convergence-public-surface: deprecated exports, retired framework packages, or unowned retained projection vocabulary remain public",
+          "negativeWitness": "algorithmic projection rejects non-empty Deprecated exports sections, retained @agent-os/ag-ui-react/@agent-os/ag-ui-svelte surfaces, and retained projection vocabulary without an existing public export and source-owned reason"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "mainlineChecker",
+        "path": "tooling/agentos-cli/src/check/algorithmic-checks.mjs"
+      },
       "owner": "CST 419 and tooling/refactor/a78-a94/role-survival.source.json",
       "ruleId": "convergence-roles",
       "target": {
