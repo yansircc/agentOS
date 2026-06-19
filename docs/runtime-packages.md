@@ -56,6 +56,7 @@ prevent accidental exports; they are not stability or schema-freeze promises.
 | `@agent-os/image-resource-settlement`    | yes       | provider helper        | provider-side Effect helper for resource consume/release; image carrier owns only vocabulary and projections                                                                   |
 | `@agent-os/ops-api`                      | yes       | tooling                | terminal ops API adapter, not substrate truth                                                                                                                                  |
 | `@agent-os/ops-htmx`                     | yes       | tooling                | terminal ops UI adapter, not substrate truth                                                                                                                                   |
+| `@agent-os/agentos-cli`                  | no        | private tooling        | host tooling command runner; consumes source files and package scripts without importing substrate packages as runtime dependencies                                            |
 | `@agent-os/docs-site`                    | no        | tooling                | static documentation site projection, not documentation fact source                                                                                                            |
 
 <!-- agentos:generated runtime-package-map:end -->
