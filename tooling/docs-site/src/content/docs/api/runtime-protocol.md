@@ -20,6 +20,8 @@ title: "@agent-os/runtime-protocol API"
 - `.:AgentRunStartedPayload`
 - `.:AgentRunStartedPayloadSchema`
 - `.:AGENT_INTENT_EVENT_KINDS`
+- `.:AGENT_MANIFEST_IDENTITY_FACET_KINDS`
+- `.:AGENT_MANIFEST_IDENTITY_VERSION`
 - `.:AGENT_MANIFEST_PROJECTION_SCHEMA`
 - `.:AGENT_MANIFEST_PROJECTION_TARGETS`
 - `.:AGENT_SETTLEMENT_EVENT_KINDS`
@@ -51,6 +53,8 @@ title: "@agent-os/runtime-protocol API"
 - `.:AgentIntentKind`
 - `.:AgentLlmRouteBindingRef`
 - `.:AgentManifest`
+- `.:AgentManifestIdentityFacet`
+- `.:AgentManifestIdentityFacetKind`
 - `.:AgentManifestInput`
 - `.:AgentManifestProjection`
 - `.:AgentManifestProjectionAgent`
