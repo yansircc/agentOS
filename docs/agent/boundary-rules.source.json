@@ -103,6 +103,7 @@
       { "type": "group", "id": "check-effect-manifests" },
       { "type": "rule", "id": "repo-tooling-surface" },
       { "type": "rule", "id": "public-api" },
+      { "type": "rule", "id": "client-boundaries" },
       { "type": "rule", "id": "event-namespaces" },
       { "type": "rule", "id": "transaction-sync" },
       { "type": "rule", "id": "limit-registry" },
@@ -195,6 +196,31 @@
       },
       "diagnostics": ["public package exports must match generated PUBLIC_API projections"],
       "paths": ["docs/surface.json", "packages/**/package.json"],
+      "commandGroup": "all"
+    },
+    {
+      "id": "client-boundaries",
+      "owner": "tooling/refactor/a78-a94/client-app-kit-boundary.md and docs/surface.json",
+      "invariantId": "invariant.client.projection-sink-boundary",
+      "kind": "repo-boundary",
+      "positiveAcceptance": {
+        "commands": [
+          "node tooling/agentos-cli/src/check/check-client-boundaries.mjs --self-test",
+          "node tooling/agentos-cli/src/check/check-client-boundaries.mjs"
+        ]
+      },
+      "diagnostics": [
+        "client core must remain transport-neutral and framework-free",
+        "client framework packages must expose hooks/stores only, not components or UI read-model DTOs",
+        "ag-ui framework packages must retire once client framework bridges exist"
+      ],
+      "paths": [
+        "tooling/refactor/a78-a94/client-app-kit-boundary.md",
+        "docs/surface.json",
+        "packages/client/**",
+        "packages/composers/workspace-agent/**",
+        "packages/wire-adapters/ag-ui*/**"
+      ],
       "commandGroup": "all"
     },
     {
