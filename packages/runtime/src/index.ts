@@ -26,5 +26,6 @@ export {
 } from "./tool-settlement";
 export type { Tool, ToolDefinition } from "@agent-os/kernel/tools";
 export * from "./trigger";
+export * from "./witness-port";
 export * from "./workspace-job";
 export * from "./workspace-job-observability";

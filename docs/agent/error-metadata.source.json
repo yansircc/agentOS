@@ -50,6 +50,12 @@
       "fix": "Commit through the owning BoundaryContract with matching event vocabulary, scopeRef, effectAuthorityRef, and claim identity."
     },
     {
+      "tag": "agent_os.witness_port_rejected",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/boundary-contract.md",
+      "fix": "Resolve provider witness state into a symbolic IndeterminateRef only; settle and commit it through the owning SettlementContract and BoundaryEvents path."
+    },
+    {
       "tag": "agent_os.capability_rejected",
       "invariants": ["invariant.d10.namespace-integrity"],
       "docs": "docs/boundary-contract.md",

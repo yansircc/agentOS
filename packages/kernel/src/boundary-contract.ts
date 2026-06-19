@@ -1,5 +1,5 @@
 import { Predicate } from "effect";
-import { ANCHOR_KINDS, REJECTION_KINDS } from "./claim-kinds";
+import { ANCHOR_KINDS, INDETERMINATE_KINDS, REJECTION_KINDS } from "./claim-kinds";
 import type { BoundaryPackage } from "./extensions";
 import { validateAgainstSchema, type JsonSchemaObject } from "./json-schema-dialect";
 import {
@@ -8,13 +8,13 @@ import {
   type EffectAuthorityContract,
   type MaterialRequirement,
 } from "./material-ref";
-import type { AnchorRef, ClaimRole, RejectionRef } from "./effect-claim";
+import type { AnchorRef, ClaimRole, IndeterminateRef, RejectionRef } from "./effect-claim";
 import { validateSettlementContract, type SettlementContract } from "./settlement-contract";
 import { isNonEmptyString } from "./string-guards";
 import { authoredValue } from "./value-brands";
 import type { Authored } from "./value-brands";
 
-export type BoundaryClaimPhase = "pre" | "lived" | "rejected";
+export type BoundaryClaimPhase = "pre" | "lived" | "rejected" | "indeterminate";
 
 export type BoundaryEventClaimContract =
   | {
@@ -30,6 +30,11 @@ export type BoundaryEventClaimContract =
       readonly key: string;
       readonly phase: "rejected";
       readonly rejectionKinds: ReadonlyArray<RejectionRef["rejectionKind"]>;
+    }
+  | {
+      readonly key: string;
+      readonly phase: "indeterminate";
+      readonly indeterminateKinds: ReadonlyArray<IndeterminateRef["indeterminateKind"]>;
     };
 
 export interface BoundaryEventContract {
@@ -99,9 +104,10 @@ export type BoundaryContractValidation =
     };
 
 const CLAIM_ROLES = new Set<ClaimRole>(["generator", "admitter", "resolver", "reader"]);
-const CLAIM_PHASES = new Set<BoundaryClaimPhase>(["pre", "lived", "rejected"]);
+const CLAIM_PHASES = new Set<BoundaryClaimPhase>(["pre", "lived", "rejected", "indeterminate"]);
 const ANCHOR_KIND_SET = new Set<AnchorRef["anchorKind"]>(ANCHOR_KINDS);
 const REJECTION_KIND_SET = new Set<RejectionRef["rejectionKind"]>(REJECTION_KINDS);
+const INDETERMINATE_KIND_SET = new Set<IndeterminateRef["indeterminateKind"]>(INDETERMINATE_KINDS);
 
 const nonEmptyStringArray = (value: unknown): value is ReadonlyArray<string> =>
   Array.isArray(value) && value.length > 0 && value.every(isNonEmptyString);
@@ -128,11 +134,20 @@ const isBoundaryEventClaimContract = (value: unknown): value is BoundaryEventCla
   typeof value.phase === "string" &&
   CLAIM_PHASES.has(value.phase as BoundaryClaimPhase) &&
   (value.phase === "pre"
-    ? value.anchorKinds === undefined && value.rejectionKinds === undefined
+    ? value.anchorKinds === undefined &&
+      value.rejectionKinds === undefined &&
+      value.indeterminateKinds === undefined
     : value.phase === "lived"
-      ? nonEmptyArrayOf(value.anchorKinds, ANCHOR_KIND_SET) && value.rejectionKinds === undefined
-      : nonEmptyArrayOf(value.rejectionKinds, REJECTION_KIND_SET) &&
-        value.anchorKinds === undefined);
+      ? nonEmptyArrayOf(value.anchorKinds, ANCHOR_KIND_SET) &&
+        value.rejectionKinds === undefined &&
+        value.indeterminateKinds === undefined
+      : value.phase === "rejected"
+        ? nonEmptyArrayOf(value.rejectionKinds, REJECTION_KIND_SET) &&
+          value.anchorKinds === undefined &&
+          value.indeterminateKinds === undefined
+        : nonEmptyArrayOf(value.indeterminateKinds, INDETERMINATE_KIND_SET) &&
+          value.anchorKinds === undefined &&
+          value.rejectionKinds === undefined);
 
 const isBoundaryEventContract = (value: unknown): value is BoundaryEventContract =>
   Predicate.isObject(value) &&
@@ -176,8 +191,13 @@ const eventClaimVocabularyIsInSettlement = (
     if (claim.phase === "lived") {
       return claim.anchorKinds.every((anchorKind) => settlement.anchorKinds.includes(anchorKind));
     }
-    return claim.rejectionKinds.every((rejectionKind) =>
-      settlement.rejectionKinds.includes(rejectionKind),
+    if (claim.phase === "rejected") {
+      return claim.rejectionKinds.every((rejectionKind) =>
+        settlement.rejectionKinds.includes(rejectionKind),
+      );
+    }
+    return claim.indeterminateKinds.every((indeterminateKind) =>
+      settlement.indeterminateKinds.includes(indeterminateKind),
     );
   });
 

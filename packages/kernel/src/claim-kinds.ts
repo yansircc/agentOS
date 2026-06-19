@@ -1,4 +1,4 @@
-import type { AnchorRef, RejectionRef } from "./effect-claim";
+import type { AnchorRef, IndeterminateRef, RejectionRef } from "./effect-claim";
 
 export const ANCHOR_KINDS = [
   "ledger_event",
@@ -15,3 +15,10 @@ export const REJECTION_KINDS = [
   "resource_denied",
   "provider_rejected",
 ] as const satisfies ReadonlyArray<RejectionRef["rejectionKind"]>;
+
+export const INDETERMINATE_KINDS = [
+  "provider_pending",
+  "reconcile_required",
+  "retry_pending",
+  "witness_unavailable",
+] as const satisfies ReadonlyArray<IndeterminateRef["indeterminateKind"]>;

@@ -518,6 +518,13 @@
       ]
     },
     {
+      "tag": "agent_os.witness_port_rejected",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/boundary-contract.md",
+      "fix": "Resolve provider witness state into a symbolic IndeterminateRef only; settle and commit it through the owning SettlementContract and BoundaryEvents path.",
+      "sourceFiles": ["packages/runtime/src/witness-port.ts"]
+    },
+    {
       "tag": "agent_os.workspace_job_candidate_missing",
       "invariants": ["invariant.workspace-job.verified-terminal"],
       "docs": "docs/packages/workspace-job.md",

@@ -128,6 +128,11 @@ title: "@agent-os/runtime Public API Intent"
 - `.:WorkspaceJobVerifier`
 - `.:WorkspaceJobVerifierFailed`
 - `.:WorkspaceJobVerifierResult`
+- `.:WitnessPort`
+- `.:WitnessPortIssue`
+- `.:WitnessPortRejected`
+- `.:WitnessPortService`
+- `.:WitnessRequest`
 - `.:applyProjectionEvent`
 - `.:applyProjectionEventResult`
 - `.:attachedStreamParseFail`
@@ -149,6 +154,7 @@ title: "@agent-os/runtime Public API Intent"
 - `.:makeDurableTriggerRegistry`
 - `.:makeProjectionRegistry`
 - `.:makeProjectionRegistryResult`
+- `.:makeWitnessPort`
 - `.:projectInputRequest`
 - `.:projectInputRequests`
 - `.:projectRunStatus`

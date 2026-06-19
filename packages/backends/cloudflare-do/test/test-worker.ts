@@ -573,6 +573,7 @@ const streamOwnerSettlementContract = defineSettlementContract({
   settlementId: "@agent-os/stream-owner-test",
   anchorKinds: [],
   rejectionKinds: [],
+  indeterminateKinds: [],
 });
 
 const streamOwnerBoundaryContract = defineBoundaryContract({
@@ -644,6 +645,7 @@ const proofSettlementContract = defineSettlementContract({
   settlementId: "@agent-os/proof",
   anchorKinds: ["carrier_proof"],
   rejectionKinds: [],
+  indeterminateKinds: [],
 });
 
 const proofBoundaryContract = defineBoundaryContract({
@@ -934,6 +936,7 @@ const facadeIntentBoundaryPackage = boundaryPackage(
       settlementId: "facade.intent.test",
       anchorKinds: ["ledger_event"],
       rejectionKinds: ["validation_failed"],
+      indeterminateKinds: [],
     }),
     projection: { derivedFromLedger: true, shadowState: false },
   }),

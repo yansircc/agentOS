@@ -338,7 +338,7 @@
       "symbol": "EffectClaim",
       "exportKey": ".:EffectClaim",
       "sourceFile": "packages/kernel/src/effect-claim.ts",
-      "summary": "Type-proof lifecycle union for pre, lived, and rejected effect claims.",
+      "summary": "Type-proof lifecycle union for pre, lived, rejected, and indeterminate effect claims.",
       "aliases": [],
       "invariants": [
         "invariant.algebra.type-or-boot-proof",
@@ -439,6 +439,27 @@
       "capabilityKind": "kernel",
       "testEvidence": {
         "tests": ["packages/kernel/test/effect-claim.test.ts"]
+      }
+    },
+    {
+      "id": "primitive.kernel.IndeterminateClaim",
+      "package": "@agent-os/kernel",
+      "packagePath": "packages/kernel",
+      "entrypoints": [".", "./effect-claim"],
+      "symbol": "IndeterminateClaim",
+      "exportKey": ".:IndeterminateClaim",
+      "sourceFile": "packages/kernel/src/effect-claim.ts",
+      "summary": "Effect claim settled to a non-terminal witness state.",
+      "aliases": [],
+      "invariants": ["invariant.algebra.type-or-boot-proof"],
+      "decisions": [],
+      "docs": "docs/boundary-contract.md",
+      "capabilityKind": "kernel",
+      "testEvidence": {
+        "tests": [
+          "packages/kernel/test/effect-claim.test.ts",
+          "packages/kernel/test/settlement-contract.test.ts"
+        ]
       }
     },
     {

@@ -7,7 +7,7 @@
  */
 
 import { Predicate } from "effect";
-import { ANCHOR_KINDS, REJECTION_KINDS } from "./claim-kinds";
+import { ANCHOR_KINDS, INDETERMINATE_KINDS, REJECTION_KINDS } from "./claim-kinds";
 import { isNonEmptyString } from "./string-guards";
 import { authoredValue } from "./value-brands";
 import type { Authored } from "./value-brands";
@@ -72,6 +72,17 @@ export interface RejectionRef {
   readonly reason?: string;
 }
 
+export interface IndeterminateRef {
+  readonly indeterminateId: string;
+  readonly indeterminateKind:
+    | "provider_pending"
+    | "reconcile_required"
+    | "retry_pending"
+    | "witness_unavailable";
+  readonly reason?: string;
+  readonly carrierRef?: string;
+}
+
 interface ClaimBase {
   readonly operationRef: OperationRef;
   readonly scopeRef: ScopeRef;
@@ -91,6 +102,7 @@ export interface PreClaim extends ClaimBase {
   readonly phase: "pre";
   readonly anchorRef?: never;
   readonly rejectionRef?: never;
+  readonly indeterminateRef?: never;
 }
 
 /**
@@ -105,6 +117,7 @@ export interface LivedClaim extends ClaimBase {
   readonly phase: "lived";
   readonly anchorRef: AnchorRef;
   readonly rejectionRef?: never;
+  readonly indeterminateRef?: never;
 }
 
 /**
@@ -119,10 +132,26 @@ export interface RejectedClaim extends ClaimBase {
   readonly phase: "rejected";
   readonly anchorRef?: never;
   readonly rejectionRef: RejectionRef;
+  readonly indeterminateRef?: never;
 }
 
 /**
- * Type-proof lifecycle union for pre, lived, and rejected effect claims.
+ * Effect claim settled to a non-terminal witness state.
+ *
+ * @agentosPrimitive primitive.kernel.IndeterminateClaim
+ * @agentosInvariant invariant.algebra.type-or-boot-proof
+ * @agentosDocs docs/boundary-contract.md
+ * @public
+ */
+export interface IndeterminateClaim extends ClaimBase {
+  readonly phase: "indeterminate";
+  readonly anchorRef?: never;
+  readonly rejectionRef?: never;
+  readonly indeterminateRef: IndeterminateRef;
+}
+
+/**
+ * Type-proof lifecycle union for pre, lived, rejected, and indeterminate effect claims.
  *
  * @agentosPrimitive primitive.kernel.EffectClaim
  * @agentosInvariant invariant.algebra.type-or-boot-proof
@@ -130,7 +159,7 @@ export interface RejectedClaim extends ClaimBase {
  * @agentosDocs docs/boundary-contract.md
  * @public
  */
-export type EffectClaim = PreClaim | LivedClaim | RejectedClaim;
+export type EffectClaim = PreClaim | LivedClaim | RejectedClaim | IndeterminateClaim;
 
 /**
  * Runtime roles around EffectClaim. Writer authority is intentionally not a
@@ -159,10 +188,16 @@ export type ClaimValidationIssue =
   | "anchor_ref_invalid"
   | "rejection_ref_invalid"
   | "pre_claim_has_terminal_ref"
+  | "pre_claim_has_indeterminate"
   | "lived_claim_missing_anchor"
   | "lived_claim_has_rejection"
+  | "lived_claim_has_indeterminate"
   | "rejected_claim_missing_rejection"
-  | "rejected_claim_has_anchor";
+  | "rejected_claim_has_anchor"
+  | "rejected_claim_has_indeterminate"
+  | "indeterminate_claim_missing_ref"
+  | "indeterminate_claim_has_anchor"
+  | "indeterminate_claim_has_rejection";
 
 export type ClaimValidation =
   | { readonly ok: true; readonly claim: EffectClaim }
@@ -297,6 +332,13 @@ export const isRejectionRef = (value: unknown): value is RejectionRef =>
   REJECTION_KINDS.includes(value.rejectionKind as RejectionRef["rejectionKind"]) &&
   optionalString(value.reason);
 
+export const isIndeterminateRef = (value: unknown): value is IndeterminateRef =>
+  Predicate.isObject(value) &&
+  isNonEmptyString(value.indeterminateId) &&
+  INDETERMINATE_KINDS.includes(value.indeterminateKind as IndeterminateRef["indeterminateKind"]) &&
+  optionalString(value.reason) &&
+  optionalString(value.carrierRef);
+
 export const normalizeAdmitVerdict = (claim: PreClaim, verdict: unknown): AdmitVerdict => {
   if (Predicate.isObject(verdict) && verdict.ok === true) return { ok: true };
   if (Predicate.isObject(verdict) && verdict.ok === false) {
@@ -313,7 +355,12 @@ export const validateEffectClaim = (value: unknown): ClaimValidation => {
   }
 
   const issues: ClaimValidationIssue[] = [];
-  if (value.phase !== "pre" && value.phase !== "lived" && value.phase !== "rejected") {
+  if (
+    value.phase !== "pre" &&
+    value.phase !== "lived" &&
+    value.phase !== "rejected" &&
+    value.phase !== "indeterminate"
+  ) {
     issues.push("phase_invalid");
   }
   if (!isNonEmptyString(value.operationRef)) {
@@ -333,6 +380,9 @@ export const validateEffectClaim = (value: unknown): ClaimValidation => {
     if (value.anchorRef !== undefined || value.rejectionRef !== undefined) {
       issues.push("pre_claim_has_terminal_ref");
     }
+    if (value.indeterminateRef !== undefined) {
+      issues.push("pre_claim_has_indeterminate");
+    }
   }
 
   if (value.phase === "lived") {
@@ -342,6 +392,9 @@ export const validateEffectClaim = (value: unknown): ClaimValidation => {
     if (value.rejectionRef !== undefined) {
       issues.push("lived_claim_has_rejection");
     }
+    if (value.indeterminateRef !== undefined) {
+      issues.push("lived_claim_has_indeterminate");
+    }
   }
 
   if (value.phase === "rejected") {
@@ -350,6 +403,21 @@ export const validateEffectClaim = (value: unknown): ClaimValidation => {
     }
     if (value.anchorRef !== undefined) {
       issues.push("rejected_claim_has_anchor");
+    }
+    if (value.indeterminateRef !== undefined) {
+      issues.push("rejected_claim_has_indeterminate");
+    }
+  }
+
+  if (value.phase === "indeterminate") {
+    if (!isIndeterminateRef(value.indeterminateRef)) {
+      issues.push("indeterminate_claim_missing_ref");
+    }
+    if (value.anchorRef !== undefined) {
+      issues.push("indeterminate_claim_has_anchor");
+    }
+    if (value.rejectionRef !== undefined) {
+      issues.push("indeterminate_claim_has_rejection");
     }
   }
 

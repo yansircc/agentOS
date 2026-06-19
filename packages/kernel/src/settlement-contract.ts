@@ -3,12 +3,14 @@ import { Option, Predicate } from "effect";
 import {
   validateEffectClaim,
   type AnchorRef,
+  type IndeterminateClaim,
+  type IndeterminateRef,
   type LivedClaim,
   type PreClaim,
   type RejectedClaim,
   type RejectionRef,
 } from "./effect-claim";
-import { ANCHOR_KINDS, REJECTION_KINDS } from "./claim-kinds";
+import { ANCHOR_KINDS, INDETERMINATE_KINDS, REJECTION_KINDS } from "./claim-kinds";
 import { isNonEmptyString } from "./string-guards";
 import { authoredValue, ownerRecordableMint } from "./value-brands";
 import type { Authored, Recordable } from "./value-brands";
@@ -21,12 +23,14 @@ export interface SettlementContract {
   readonly settlementId: string;
   readonly anchorKinds: ReadonlyArray<AnchorRef["anchorKind"]>;
   readonly rejectionKinds: ReadonlyArray<RejectionRef["rejectionKind"]>;
+  readonly indeterminateKinds: ReadonlyArray<IndeterminateRef["indeterminateKind"]>;
 }
 
 export type SettlementContractIssue =
   | "settlement_id_invalid"
   | "anchor_kinds_invalid"
-  | "rejection_kinds_invalid";
+  | "rejection_kinds_invalid"
+  | "indeterminate_kinds_invalid";
 
 export type SettlementContractValidation =
   | { readonly ok: true; readonly contract: SettlementContract & Authored<SettlementContract> }
@@ -57,6 +61,24 @@ export type TerminalClaimValidation =
       readonly issues: ReadonlyArray<TerminalClaimIssue>;
     };
 
+export type IndeterminateClaimIssue =
+  | "claim_invalid"
+  | "claim_not_indeterminate"
+  | "indeterminate_kind_outside_contract"
+  | "indeterminate_id_not_symbolic"
+  | "reason_not_symbolic"
+  | "carrier_ref_not_symbolic";
+
+export type IndeterminateClaimValidation =
+  | {
+      readonly ok: true;
+      readonly claim: IndeterminateClaim & Recordable<IndeterminateClaim>;
+    }
+  | {
+      readonly ok: false;
+      readonly issues: ReadonlyArray<IndeterminateClaimIssue>;
+    };
+
 const noDuplicates = <T>(values: ReadonlyArray<T>): boolean =>
   new Set(values).size === values.length;
 
@@ -65,6 +87,9 @@ const isAnchorKind = (value: unknown): value is AnchorRef["anchorKind"] =>
 
 const isRejectionKind = (value: unknown): value is RejectionRef["rejectionKind"] =>
   REJECTION_KINDS.includes(value as RejectionRef["rejectionKind"]);
+
+const isIndeterminateKind = (value: unknown): value is IndeterminateRef["indeterminateKind"] =>
+  INDETERMINATE_KINDS.includes(value as IndeterminateRef["indeterminateKind"]);
 
 const arrayOf = <T>(
   value: unknown,
@@ -75,7 +100,7 @@ const arrayOf = <T>(
 const failConstruction = (message: string): never =>
   Option.getOrThrowWith(Option.none(), () => new TypeError(message));
 
-const recordableTerminalClaim = <Claim extends LivedClaim | RejectedClaim>(
+const recordableSettlementClaim = <Claim extends LivedClaim | RejectedClaim | IndeterminateClaim>(
   claim: Claim,
 ): Claim & Recordable<Claim> => ownerRecordableMint.recordable(claim);
 
@@ -118,7 +143,12 @@ export const validateSettlementContract = (value: unknown): SettlementContractVa
   if (!Predicate.isObject(value)) {
     return {
       ok: false,
-      issues: ["settlement_id_invalid", "anchor_kinds_invalid", "rejection_kinds_invalid"],
+      issues: [
+        "settlement_id_invalid",
+        "anchor_kinds_invalid",
+        "rejection_kinds_invalid",
+        "indeterminate_kinds_invalid",
+      ],
     };
   }
 
@@ -131,6 +161,9 @@ export const validateSettlementContract = (value: unknown): SettlementContractVa
   }
   if (!arrayOf(value.rejectionKinds, isRejectionKind)) {
     issues.push("rejection_kinds_invalid");
+  }
+  if (!arrayOf(value.indeterminateKinds, isIndeterminateKind)) {
+    issues.push("indeterminate_kinds_invalid");
   }
 
   if (issues.length > 0) {
@@ -159,7 +192,7 @@ export const validateTerminalClaim = (
   if (!validation.ok) {
     return { ok: false, issues: ["claim_invalid"] };
   }
-  if (validation.claim.phase === "pre") {
+  if (validation.claim.phase === "pre" || validation.claim.phase === "indeterminate") {
     return { ok: false, issues: ["claim_not_terminal"] };
   }
 
@@ -172,8 +205,8 @@ export const validateTerminalClaim = (
     ok: true,
     claim:
       validation.claim.phase === "lived"
-        ? recordableTerminalClaim(validation.claim)
-        : recordableTerminalClaim(validation.claim),
+        ? recordableSettlementClaim(validation.claim)
+        : recordableSettlementClaim(validation.claim),
   };
 };
 
@@ -212,6 +245,51 @@ const terminalClaimFieldIssues = (
   return issues;
 };
 
+const indeterminateClaimFieldIssues = (
+  contract: SettlementContract,
+  claim: IndeterminateClaim,
+): ReadonlyArray<IndeterminateClaimIssue> => {
+  const issues: IndeterminateClaimIssue[] = [];
+  if (!contract.indeterminateKinds.includes(claim.indeterminateRef.indeterminateKind)) {
+    issues.push("indeterminate_kind_outside_contract");
+  }
+  if (!isSymbolicSettlementValue(claim.indeterminateRef.indeterminateId)) {
+    issues.push("indeterminate_id_not_symbolic");
+  }
+  if (
+    claim.indeterminateRef.reason !== undefined &&
+    !isSymbolicSettlementValue(claim.indeterminateRef.reason)
+  ) {
+    issues.push("reason_not_symbolic");
+  }
+  if (
+    claim.indeterminateRef.carrierRef !== undefined &&
+    !isSymbolicSettlementValue(claim.indeterminateRef.carrierRef)
+  ) {
+    issues.push("carrier_ref_not_symbolic");
+  }
+  return issues;
+};
+
+export const validateIndeterminateClaim = (
+  contract: SettlementContract,
+  claim: unknown,
+): IndeterminateClaimValidation => {
+  const validation = validateEffectClaim(claim);
+  if (!validation.ok) {
+    return { ok: false, issues: ["claim_invalid"] };
+  }
+  if (validation.claim.phase !== "indeterminate") {
+    return { ok: false, issues: ["claim_not_indeterminate"] };
+  }
+
+  const issues = indeterminateClaimFieldIssues(contract, validation.claim);
+  if (issues.length > 0) {
+    return { ok: false, issues };
+  }
+  return { ok: true, claim: recordableSettlementClaim(validation.claim) };
+};
+
 export const settleLived = (
   contract: SettlementContract,
   claim: PreClaim,
@@ -231,7 +309,7 @@ export const settleLived = (
       `settled lived claim violates ${contract.settlementId}: ${issues.join(",")}`,
     );
   }
-  return recordableTerminalClaim(lived);
+  return recordableSettlementClaim(lived);
 };
 
 export const settleRejected = (
@@ -253,5 +331,27 @@ export const settleRejected = (
       `settled rejected claim violates ${contract.settlementId}: ${issues.join(",")}`,
     );
   }
-  return recordableTerminalClaim(rejected);
+  return recordableSettlementClaim(rejected);
+};
+
+export const settleIndeterminate = (
+  contract: SettlementContract,
+  claim: PreClaim,
+  indeterminateRef: IndeterminateRef,
+): IndeterminateClaim & Recordable<IndeterminateClaim> => {
+  const indeterminate: IndeterminateClaim = {
+    phase: "indeterminate",
+    operationRef: claim.operationRef,
+    scopeRef: claim.scopeRef,
+    effectAuthorityRef: claim.effectAuthorityRef,
+    originRef: claim.originRef,
+    indeterminateRef,
+  };
+  const issues = indeterminateClaimFieldIssues(contract, indeterminate);
+  if (issues.length > 0) {
+    return failConstruction(
+      `settled indeterminate claim violates ${contract.settlementId}: ${issues.join(",")}`,
+    );
+  }
+  return recordableSettlementClaim(indeterminate);
 };

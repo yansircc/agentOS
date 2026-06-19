@@ -11,6 +11,7 @@ import { decodeRecordedLedgerEvent, type LedgerEvent } from "@agent-os/kernel/ty
 import { materialRequirement } from "@agent-os/kernel/material-ref";
 import {
   defineSettlementContract,
+  settleIndeterminate,
   settleLived,
   settleRejected,
 } from "@agent-os/kernel/settlement-contract";
@@ -26,6 +27,7 @@ const settlement = defineSettlementContract({
   settlementId: "@agent-os/slot-vocab",
   anchorKinds: ["ledger_event", "carrier_proof"],
   rejectionKinds: ["policy_denied", "provider_rejected"],
+  indeterminateKinds: ["provider_pending", "reconcile_required"],
 });
 
 const contract = defineBoundaryContract({
@@ -49,6 +51,22 @@ const contract = defineBoundaryContract({
       payloadSchema: emptyPayload,
       claim: { key: "claim", phase: "rejected", rejectionKinds: ["provider_rejected"] },
     },
+    "slot.pending": {
+      payloadSchema: emptyPayload,
+      claim: {
+        key: "claim",
+        phase: "indeterminate",
+        indeterminateKinds: ["provider_pending"],
+      },
+    },
+    "slot.reconcile": {
+      payloadSchema: emptyPayload,
+      claim: {
+        key: "claim",
+        phase: "indeterminate",
+        indeterminateKinds: ["reconcile_required"],
+      },
+    },
   },
   effectAuthorityContracts: [],
   materialRequirements: [],
@@ -69,6 +87,12 @@ const claim = makePreClaim({
 const livedClaim = settleLived(settlement, claim, {
   anchorKind: "ledger_event",
   anchorId: "event:1",
+});
+
+const indeterminateClaim = settleIndeterminate(settlement, claim, {
+  indeterminateKind: "provider_pending",
+  indeterminateId: "pending:1",
+  reason: "provider_pending",
 });
 
 const eventFor = (spec: {
@@ -103,6 +127,11 @@ describe("boundary commit validation", () => {
       rejectionId: "provider:1",
       reason: "provider_rejected",
     });
+    const reconcileRequiredClaim = settleIndeterminate(settlement, claim, {
+      indeterminateKind: "reconcile_required",
+      indeterminateId: "reconcile:1",
+      reason: "reconcile_required",
+    });
 
     expect(
       validateBoundaryEventPayload(contract, "slot.ledgered", {
@@ -112,6 +141,11 @@ describe("boundary commit validation", () => {
     expect(
       validateBoundaryEventPayload(contract, "slot.denied", {
         claim: providerRejectedClaim,
+      }),
+    ).toMatchObject({ issue: "claim_settlement_invalid" });
+    expect(
+      validateBoundaryEventPayload(contract, "slot.pending", {
+        claim: reconcileRequiredClaim,
       }),
     ).toMatchObject({ issue: "claim_settlement_invalid" });
   });
@@ -135,6 +169,34 @@ describe("boundary commit validation", () => {
 
       expect(result).toMatchObject({
         kind: "slot.ledgered",
+        factOwnerRef: "@agent-os/slot-vocab",
+        scopeRef: claim.scopeRef,
+        effectAuthorityRef: claim.effectAuthorityRef,
+      });
+    }),
+  );
+
+  it.effect("admits indeterminate claims through the same boundary identity path", () =>
+    Effect.gen(function* () {
+      const result = yield* commitBoundaryEvent(
+        contract,
+        "slot.pending",
+        { claim: indeterminateClaim },
+        (identity) => {
+          expect(identity).toEqual({
+            kind: "slot.pending",
+            factOwnerRef: "@agent-os/slot-vocab",
+            scopeRef: claim.scopeRef,
+            effectAuthorityRef: claim.effectAuthorityRef,
+          });
+          return Effect.succeed(
+            recordedEventFor({ kind: "slot.pending", claim: indeterminateClaim }),
+          );
+        },
+      );
+
+      expect(result).toMatchObject({
+        kind: "slot.pending",
         factOwnerRef: "@agent-os/slot-vocab",
         scopeRef: claim.scopeRef,
         effectAuthorityRef: claim.effectAuthorityRef,

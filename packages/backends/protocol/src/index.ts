@@ -212,6 +212,7 @@ export const dispatchSettlementContract = defineSettlementContract({
   settlementId: "@agent-os/dispatch",
   anchorKinds: ["ledger_event", "external_receipt"],
   rejectionKinds: [],
+  indeterminateKinds: [],
 });
 
 export const dispatchCarrierRef = (key: string): string => symbolicSettlementRef("dispatch", [key]);

@@ -56,6 +56,7 @@ const capability = defineAgentCapability({
             settlementId: "runtime-protocol.test-capability",
             anchorKinds: ["ledger_event"],
             rejectionKinds: ["validation_failed"],
+            indeterminateKinds: [],
           },
           projection: { derivedFromLedger: true, shadowState: false },
         }),

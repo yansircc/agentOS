@@ -50,6 +50,8 @@ title: "@agent-os/kernel Public API Intent"
 - `./carrier:CarrierEventPayload`
 - `./carrier:CarrierEventPayloads`
 - `./carrier:CarrierHandlers`
+- `./carrier:CarrierIndeterminateMap`
+- `./carrier:CarrierIndeterminateSpec`
 - `./carrier:CarrierKindView`
 - `./carrier:CarrierRejectMap`
 - `./carrier:CarrierRejectSpec`
@@ -58,6 +60,7 @@ title: "@agent-os/kernel Public API Intent"
 - `./carrier:DefineCarrierSpec`
 - `./carrier:defineCarrier`
 - `./carrier:event`
+- `./carrier:indeterminate`
 - `./carrier:lived`
 - `./carrier:none`
 - `./carrier:pre`
@@ -81,6 +84,8 @@ title: "@agent-os/kernel Public API Intent"
 - `./effect-claim:FactOwnerRef`
 - `./effect-claim:INVALID_ADMITTER_REJECTION_REF_REASON`
 - `./effect-claim:INVALID_ADMITTER_VERDICT_REASON`
+- `./effect-claim:IndeterminateClaim`
+- `./effect-claim:IndeterminateRef`
 - `./effect-claim:LivedClaim`
 - `./effect-claim:OperationRef`
 - `./effect-claim:OriginRef`
@@ -96,6 +101,7 @@ title: "@agent-os/kernel Public API Intent"
 - `./effect-claim:isAnchorRef`
 - `./effect-claim:isAuthorityRef`
 - `./effect-claim:isFactOwnerRef`
+- `./effect-claim:isIndeterminateRef`
 - `./effect-claim:isOriginRef`
 - `./effect-claim:isRejectionRef`
 - `./effect-claim:isScopeRef`
@@ -227,18 +233,24 @@ title: "@agent-os/kernel Public API Intent"
 - `./settlement-contract:SettlementContract`
 - `./settlement-contract:SettlementContractIssue`
 - `./settlement-contract:SettlementContractValidation`
+- `./settlement-contract:IndeterminateClaimIssue`
+- `./settlement-contract:IndeterminateClaimValidation`
 - `./settlement-contract:TerminalClaimIssue`
 - `./settlement-contract:TerminalClaimValidation`
 - `./settlement-contract:defineSettlementContract`
 - `./settlement-contract:isSymbolicSettlementValue`
+- `./settlement-contract:settleIndeterminate`
 - `./settlement-contract:settleLived`
 - `./settlement-contract:settleRejected`
 - `./settlement-contract:symbolicSettlementRef`
 - `./settlement-contract:validateSettlementContract`
+- `./settlement-contract:validateIndeterminateClaim`
 - `./settlement-contract:validateTerminalClaim`
 - `.:SYMBOLIC_SETTLEMENT_VALUE_PATTERN`
   `
 - `.:Authored`
+- `.:CarrierIndeterminateMap`
+- `.:CarrierIndeterminateSpec`
 - `.:Derived`
 - `.:DeterministicToolInvocation`
 - `.:DefineProductToolSpec`
@@ -250,6 +262,10 @@ title: "@agent-os/kernel Public API Intent"
 - `.:ExecutionDomainRegistry`
 - `.:ExecutionDomainRegistryIssue`
 - `.:ExecutionDomainRegistryValidation`
+- `.:IndeterminateClaim`
+- `.:IndeterminateClaimIssue`
+- `.:IndeterminateClaimValidation`
+- `.:IndeterminateRef`
 - `.:LedgerSafe`
 - `.:Live`
 - `.:MaterialBrokerOwnerSubstitution`
@@ -309,6 +325,8 @@ title: "@agent-os/kernel Public API Intent"
 - `.:defineProductTool`
 - `.:defineProjectionSpec`
 - `.:externalToolExecution`
+- `.:indeterminate`
+- `.:isIndeterminateRef`
 - `.:isMaterialBrokerPlaceholder`
 - `.:planMaterialBrokerSubstitution`
 - `.:project`
@@ -317,7 +335,9 @@ title: "@agent-os/kernel Public API Intent"
 - `.:projectionOutputOrFail`
 - `.:resolveToolExecution`
 - `.:runProjectionSink`
+- `.:settleIndeterminate`
 - `.:unsafeRunToolByName`
+- `.:validateIndeterminateClaim`
 - `.:validateExecutionDomainRegistry`
 - `.:withToolReadRequirement`
 - `.:withToolWriteRequirement`

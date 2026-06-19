@@ -6,9 +6,11 @@ import { captureLive } from "../src/live-edge";
 import {
   defineSettlementContract,
   isSymbolicSettlementValue,
+  settleIndeterminate,
   settleLived,
   settleRejected,
   symbolicSettlementRef,
+  validateIndeterminateClaim,
   validateSettlementContract,
   validateTerminalClaim,
 } from "../src/settlement-contract";
@@ -19,6 +21,7 @@ describe("SettlementContract", () => {
     settlementId: "example",
     anchorKinds: ["carrier_proof"],
     rejectionKinds: ["policy_denied"],
+    indeterminateKinds: ["provider_pending"],
   });
 
   const claim = makePreClaim({
@@ -38,10 +41,11 @@ describe("SettlementContract", () => {
         settlementId: "broken",
         anchorKinds: ["carrier_proof", "not_anchor"],
         rejectionKinds: ["policy_denied", "not_rejection"],
+        indeterminateKinds: ["provider_pending", "not_indeterminate"],
       }),
     ).toEqual({
       ok: false,
-      issues: ["anchor_kinds_invalid", "rejection_kinds_invalid"],
+      issues: ["anchor_kinds_invalid", "rejection_kinds_invalid", "indeterminate_kinds_invalid"],
     });
   });
 
@@ -109,6 +113,46 @@ describe("SettlementContract", () => {
       settleRejected(contract, claim, {
         rejectionId: "policy:1",
         rejectionKind: "policy_denied",
+        reason: "not symbolic",
+      }),
+    ).toThrow(/reason_not_symbolic/);
+  });
+
+  it("constructs indeterminate non-terminal claims only through contract vocabulary", () => {
+    const indeterminate = settleIndeterminate(contract, claim, {
+      indeterminateId: "pending:1",
+      indeterminateKind: "provider_pending",
+      reason: "provider_pending",
+      carrierRef: "provider:openai",
+    });
+
+    expect(validateIndeterminateClaim(contract, indeterminate)).toEqual({
+      ok: true,
+      claim: indeterminate,
+    });
+    expect(validateTerminalClaim(contract, indeterminate)).toEqual({
+      ok: false,
+      issues: ["claim_not_terminal"],
+    });
+    const recordableIndeterminate: Recordable<typeof indeterminate.value> = indeterminate;
+    expect(recordableIndeterminate.value.indeterminateRef.indeterminateId).toBe("pending:1");
+    expect(Object.prototype.propertyIsEnumerable.call(indeterminate, "value")).toBe(false);
+    expect(() =>
+      settleIndeterminate(contract, claim, {
+        indeterminateId: "pending:1",
+        indeterminateKind: "reconcile_required",
+      }),
+    ).toThrow(/indeterminate_kind_outside_contract/);
+    expect(() =>
+      settleIndeterminate(contract, claim, {
+        indeterminateId: "pending://bad",
+        indeterminateKind: "provider_pending",
+      }),
+    ).toThrow(/indeterminate_id_not_symbolic/);
+    expect(() =>
+      settleIndeterminate(contract, claim, {
+        indeterminateId: "pending:1",
+        indeterminateKind: "provider_pending",
         reason: "not symbolic",
       }),
     ).toThrow(/reason_not_symbolic/);

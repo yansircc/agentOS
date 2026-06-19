@@ -3,6 +3,7 @@ import {
   authorityRefKey,
   validateEffectClaim,
   type EffectClaim,
+  type IndeterminateClaim,
   type FactOwnerRef,
   type LivedClaim,
   type RejectedClaim,
@@ -14,7 +15,10 @@ import {
   type BoundaryEventContract,
 } from "@agent-os/kernel/boundary-contract";
 import type { JsonStringifyError } from "@agent-os/kernel/errors";
-import { validateTerminalClaim } from "@agent-os/kernel/settlement-contract";
+import {
+  validateIndeterminateClaim,
+  validateTerminalClaim,
+} from "@agent-os/kernel/settlement-contract";
 import type { LedgerEvent, RecordedLedgerEvent } from "@agent-os/kernel/types";
 import type { RuntimeStorageError } from "./ledger";
 
@@ -72,9 +76,9 @@ const payloadForSchema = (
   return out;
 };
 
-const terminalClaimMatchesEventSlot = (
+const settlementClaimMatchesEventSlot = (
   eventContract: BoundaryEventContract,
-  claim: LivedClaim | RejectedClaim,
+  claim: LivedClaim | RejectedClaim | IndeterminateClaim,
 ): boolean => {
   const claimContract = eventContract.claim;
   if (claimContract === undefined || claimContract.phase === "pre") return true;
@@ -83,6 +87,9 @@ const terminalClaimMatchesEventSlot = (
   }
   if (claimContract.phase === "rejected" && claim.phase === "rejected") {
     return claimContract.rejectionKinds.includes(claim.rejectionRef.rejectionKind);
+  }
+  if (claimContract.phase === "indeterminate" && claim.phase === "indeterminate") {
+    return claimContract.indeterminateKinds.includes(claim.indeterminateRef.indeterminateKind);
   }
   return true;
 };
@@ -130,10 +137,13 @@ export const validateBoundaryEventPayload = (
     return reject(contract, event, "claim_phase_invalid");
   }
   if (validation.claim.phase !== "pre") {
-    const terminalValidation = validateTerminalClaim(contract.settlement, validation.claim);
+    const settlementValidation =
+      validation.claim.phase === "indeterminate"
+        ? validateIndeterminateClaim(contract.settlement, validation.claim)
+        : validateTerminalClaim(contract.settlement, validation.claim);
     if (
-      !terminalValidation.ok ||
-      !terminalClaimMatchesEventSlot(eventContract, terminalValidation.claim)
+      !settlementValidation.ok ||
+      !settlementClaimMatchesEventSlot(eventContract, settlementValidation.claim)
     ) {
       return reject(contract, event, "claim_settlement_invalid");
     }

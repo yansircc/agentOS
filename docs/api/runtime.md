@@ -124,6 +124,11 @@
 - `.:WorkspaceJobVerifier`
 - `.:WorkspaceJobVerifierFailed`
 - `.:WorkspaceJobVerifierResult`
+- `.:WitnessPort`
+- `.:WitnessPortIssue`
+- `.:WitnessPortRejected`
+- `.:WitnessPortService`
+- `.:WitnessRequest`
 - `.:applyProjectionEvent`
 - `.:applyProjectionEventResult`
 - `.:attachedStreamParseFail`
@@ -145,6 +150,7 @@
 - `.:makeDurableTriggerRegistry`
 - `.:makeProjectionRegistry`
 - `.:makeProjectionRegistryResult`
+- `.:makeWitnessPort`
 - `.:projectInputRequest`
 - `.:projectInputRequests`
 - `.:projectRunStatus`

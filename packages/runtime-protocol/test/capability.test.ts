@@ -55,6 +55,7 @@ const surfaceEditBoundary = defineBoundaryContract({
     settlementId: "surface-edit",
     anchorKinds: ["ledger_event"],
     rejectionKinds: ["validation_failed"],
+    indeterminateKinds: [],
   },
   projection: { derivedFromLedger: true, shadowState: false },
 });

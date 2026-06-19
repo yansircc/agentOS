@@ -1,7 +1,7 @@
 import { Schema } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 
-import { defineCarrier, event, lived, none, pre, rejected } from "../src/carrier";
+import { defineCarrier, event, indeterminate, lived, none, pre, rejected } from "../src/carrier";
 import { makePreClaim } from "../src/effect-claim";
 
 const claim = makePreClaim({
@@ -46,6 +46,13 @@ const exampleCarrier = () =>
         }),
         claim: rejected({ key: "claim", rejectionKinds: ["policy_denied"] }),
       }),
+      pending: event({
+        kind: "pending",
+        payload: Schema.Struct({
+          subjectRef: Schema.String,
+        }),
+        claim: indeterminate({ key: "claim", indeterminateKinds: ["provider_pending"] }),
+      }),
     },
   });
 
@@ -60,6 +67,7 @@ describe("defineCarrier", () => {
       "example.decided",
       "example.consumed",
       "example.failed",
+      "example.pending",
     ]);
     expect(carrier.boundaryContract.events["example.decided"]?.claim).toBeUndefined();
     expect(carrier.boundaryContract.events["example.requested"]?.claim).toEqual({
@@ -68,6 +76,7 @@ describe("defineCarrier", () => {
     });
     expect(carrier.settlementContract.anchorKinds).toEqual(["ledger_event"]);
     expect(carrier.settlementContract.rejectionKinds).toEqual(["policy_denied"]);
+    expect(carrier.settlementContract.indeterminateKinds).toEqual(["provider_pending"]);
     expect("projection" in carrier).toBe(false);
   });
 
@@ -80,6 +89,10 @@ describe("defineCarrier", () => {
     const rejectedClaim = carrier.reject.failed(claim, {
       rejectionId: "policy:1",
       reason: "policy_denied",
+    });
+    const indeterminateClaim = carrier.indeterminate.pending(claim, {
+      indeterminateId: "pending:1",
+      reason: "provider_pending",
     });
 
     expect(
@@ -117,6 +130,15 @@ describe("defineCarrier", () => {
     ).toEqual({
       subjectRef: "subject:1",
       claim: rejectedClaim,
+    });
+    expect(
+      carrier.decode("example.pending", {
+        subjectRef: "subject:1",
+        claim: indeterminateClaim,
+      }),
+    ).toEqual({
+      subjectRef: "subject:1",
+      claim: indeterminateClaim,
     });
   });
 
@@ -166,6 +188,16 @@ describe("defineCarrier", () => {
           payload: Schema.Struct({ subjectRef: Schema.String }),
           claim: rejected({ key: "claim", rejectionKinds: ["provider_rejected"] }),
         }),
+        providerPending: event({
+          kind: "provider-pending",
+          payload: Schema.Struct({ subjectRef: Schema.String }),
+          claim: indeterminate({ key: "claim", indeterminateKinds: ["provider_pending"] }),
+        }),
+        reconcileRequired: event({
+          kind: "reconcile-required",
+          payload: Schema.Struct({ subjectRef: Schema.String }),
+          claim: indeterminate({ key: "claim", indeterminateKinds: ["reconcile_required"] }),
+        }),
       },
     });
 
@@ -173,6 +205,9 @@ describe("defineCarrier", () => {
     const providerRejectedClaim = carrier.reject.failed(claim, {
       rejectionId: "provider:1",
       reason: "provider_rejected",
+    });
+    const reconcileRequiredClaim = carrier.indeterminate.reconcileRequired(claim, {
+      indeterminateId: "reconcile:1",
     });
 
     expect(() =>
@@ -185,6 +220,12 @@ describe("defineCarrier", () => {
       carrier.decode("slot.denied", {
         subjectRef: "subject:1",
         claim: providerRejectedClaim,
+      }),
+    ).toThrow(/outside event vocabulary/);
+    expect(() =>
+      carrier.decode("slot.provider-pending", {
+        subjectRef: "subject:1",
+        claim: reconcileRequiredClaim,
       }),
     ).toThrow(/outside event vocabulary/);
   });
@@ -250,14 +291,17 @@ describe("defineCarrier", () => {
 
     carrier.settle.consumed(claim, { anchorId: "event:1" });
     carrier.reject.failed(claim, { rejectionId: "policy:1" });
+    carrier.indeterminate.pending(claim, { indeterminateId: "pending:1" });
     const assertTypeErrors = () => {
       // @ts-expect-error none events do not expose lived constructors.
       const noDecidedSettle = carrier.settle.decided;
       // @ts-expect-error pre events do not expose rejected constructors.
       const noRequestedReject = carrier.reject.requested;
+      // @ts-expect-error terminal events do not expose indeterminate constructors.
+      const noConsumedIndeterminate = carrier.indeterminate.consumed;
       // @ts-expect-error unknown handler keys are rejected.
       const noUnknownHandler = carrier.handlers({ unknown: () => undefined });
-      return [noDecidedSettle, noRequestedReject, noUnknownHandler];
+      return [noDecidedSettle, noRequestedReject, noConsumedIndeterminate, noUnknownHandler];
     };
     expect(typeof assertTypeErrors).toBe("function");
   });

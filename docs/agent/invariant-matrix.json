@@ -16,6 +16,7 @@
         "primitive.kernel.ExecutionDomainDeclaration",
         "primitive.kernel.ExecutionDomainRegistry",
         "primitive.kernel.ExecutionDomainReplayLaw",
+        "primitive.kernel.IndeterminateClaim",
         "primitive.kernel.LivedClaim",
         "primitive.kernel.PreClaim",
         "primitive.kernel.RejectedClaim",
@@ -126,7 +127,8 @@
         "agent_os.provider_http_failure",
         "agent_os.ref_resolution_failed",
         "agent_os.sandbox_failure",
-        "agent_os.tenant_credential_resolver_configuration_error"
+        "agent_os.tenant_credential_resolver_configuration_error",
+        "agent_os.witness_port_rejected"
       ],
       "docs": [
         "docs/boundary-contract.md",

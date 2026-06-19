@@ -37,6 +37,7 @@ describe("BoundaryContract", () => {
     settlementId: "@agent-os/example-carrier",
     anchorKinds: ["carrier_proof", "ledger_event"],
     rejectionKinds: ["policy_denied", "provider_rejected"],
+    indeterminateKinds: ["provider_pending"],
   });
 
   const contract = defineBoundaryContract({
@@ -55,6 +56,14 @@ describe("BoundaryContract", () => {
       "example.failed": {
         payloadSchema: emptyPayload,
         claim: { key: "claim", phase: "rejected", rejectionKinds: ["policy_denied"] },
+      },
+      "example.pending": {
+        payloadSchema: emptyPayload,
+        claim: {
+          key: "claim",
+          phase: "indeterminate",
+          indeterminateKinds: ["provider_pending"],
+        },
       },
       "example.noted": {
         payloadSchema: recordedPayload,
@@ -172,6 +181,14 @@ describe("BoundaryContract", () => {
             payloadSchema: emptyPayload,
             claim: { key: "claim", phase: "rejected", rejectionKinds: ["resource_denied"] },
           },
+          "example.pending": {
+            payloadSchema: emptyPayload,
+            claim: {
+              key: "claim",
+              phase: "indeterminate",
+              indeterminateKinds: ["reconcile_required"],
+            },
+          },
         },
       }),
     ).toEqual({
@@ -229,6 +246,7 @@ describe("BoundaryContract", () => {
           settlementId: "",
           anchorKinds: ["not_anchor"],
           rejectionKinds: ["policy_denied"],
+          indeterminateKinds: [],
         },
         projection: {
           derivedFromLedger: true,

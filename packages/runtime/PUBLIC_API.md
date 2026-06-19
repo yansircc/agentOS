@@ -128,6 +128,11 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:WorkspaceJobVerifier`
 - `.:WorkspaceJobVerifierFailed`
 - `.:WorkspaceJobVerifierResult`
+- `.:WitnessPort`
+- `.:WitnessPortIssue`
+- `.:WitnessPortRejected`
+- `.:WitnessPortService`
+- `.:WitnessRequest`
 - `.:applyProjectionEvent`
 - `.:applyProjectionEventResult`
 - `.:attachedStreamParseFail`
@@ -149,6 +154,7 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:makeDurableTriggerRegistry`
 - `.:makeProjectionRegistry`
 - `.:makeProjectionRegistryResult`
+- `.:makeWitnessPort`
 - `.:projectInputRequest`
 - `.:projectInputRequests`
 - `.:projectRunStatus`

@@ -9,6 +9,8 @@ import {
 } from "./boundary-contract";
 import {
   validateEffectClaim,
+  type IndeterminateClaim,
+  type IndeterminateRef,
   type PreClaim,
   type AnchorRef,
   type LivedClaim,
@@ -21,8 +23,10 @@ import type { EffectAuthorityContract, MaterialRequirement } from "./material-re
 import type { Recordable } from "./value-brands";
 import {
   defineSettlementContract,
+  settleIndeterminate,
   settleLived,
   settleRejected,
+  validateIndeterminateClaim,
   validateTerminalClaim,
   type SettlementContract,
 } from "./settlement-contract";
@@ -39,6 +43,11 @@ type ClaimSlot =
       readonly kind: "rejected";
       readonly key: string;
       readonly rejectionKinds: ReadonlyArray<RejectionRef["rejectionKind"]>;
+    }
+  | {
+      readonly kind: "indeterminate";
+      readonly key: string;
+      readonly indeterminateKinds: ReadonlyArray<IndeterminateRef["indeterminateKind"]>;
     };
 
 export type CarrierEventPayload<
@@ -51,7 +60,9 @@ export type CarrierEventPayload<
       ? { readonly [K in Key]: LivedClaim }
       : Slot extends { readonly kind: "rejected"; readonly key: infer Key extends string }
         ? { readonly [K in Key]: RejectedClaim }
-        : {});
+        : Slot extends { readonly kind: "indeterminate"; readonly key: infer Key extends string }
+          ? { readonly [K in Key]: IndeterminateClaim }
+          : {});
 
 export interface CarrierEvent<
   Kind extends string,
@@ -120,6 +131,18 @@ type RejectedEventNames<
     : never;
 }[keyof Events & string];
 
+type IndeterminateEventNames<
+  Events extends Readonly<
+    Record<string, CarrierEvent<string, AgentSchemaDecoder<unknown>, ClaimSlot>>
+  >,
+> = {
+  readonly [Name in keyof Events & string]: Events[Name]["claim"] extends {
+    readonly kind: "indeterminate";
+  }
+    ? Name
+    : never;
+}[keyof Events & string];
+
 export type CarrierSettleSpec = {
   readonly anchorId: string;
   readonly anchorKind?: AnchorRef["anchorKind"];
@@ -130,6 +153,13 @@ export type CarrierRejectSpec = {
   readonly rejectionId: string;
   readonly rejectionKind?: RejectionRef["rejectionKind"];
   readonly reason?: string;
+};
+
+export type CarrierIndeterminateSpec = {
+  readonly indeterminateId: string;
+  readonly indeterminateKind?: IndeterminateRef["indeterminateKind"];
+  readonly reason?: string;
+  readonly carrierRef?: string;
 };
 
 export type CarrierSettleMap<
@@ -154,6 +184,17 @@ export type CarrierRejectMap<
   ) => RejectedClaim & Recordable<RejectedClaim>;
 };
 
+export type CarrierIndeterminateMap<
+  Events extends Readonly<
+    Record<string, CarrierEvent<string, AgentSchemaDecoder<unknown>, ClaimSlot>>
+  >,
+> = {
+  readonly [Name in IndeterminateEventNames<Events>]: (
+    claim: PreClaim,
+    spec: CarrierIndeterminateSpec,
+  ) => IndeterminateClaim & Recordable<IndeterminateClaim>;
+};
+
 export interface Carrier<
   Prefix extends string,
   Events extends Readonly<
@@ -169,6 +210,7 @@ export interface Carrier<
   readonly boundaryPackage: (version: string) => BoundaryPackage;
   readonly settle: CarrierSettleMap<Events>;
   readonly reject: CarrierRejectMap<Events>;
+  readonly indeterminate: CarrierIndeterminateMap<Events>;
   readonly decode: (
     event: keyof CarrierEventPayloads<Prefix, Events> & string,
     payload: unknown,
@@ -238,6 +280,22 @@ export const rejected = <
   rejectionKinds: spec.rejectionKinds,
 });
 
+export const indeterminate = <
+  const Key extends string,
+  const Kinds extends ReadonlyArray<IndeterminateRef["indeterminateKind"]>,
+>(spec: {
+  readonly key: Key;
+  readonly indeterminateKinds: Kinds;
+}): {
+  readonly kind: "indeterminate";
+  readonly key: Key;
+  readonly indeterminateKinds: Kinds;
+} => ({
+  kind: "indeterminate",
+  key: spec.key,
+  indeterminateKinds: spec.indeterminateKinds,
+});
+
 export const event = <
   const Kind extends string,
   S extends AgentSchemaDecoder<unknown>,
@@ -271,18 +329,27 @@ const boundaryClaimFor = (slot: ClaimSlot): BoundaryEventContract["claim"] => {
       return { key: slot.key, phase: "lived", anchorKinds: slot.anchorKinds };
     case "rejected":
       return { key: slot.key, phase: "rejected", rejectionKinds: slot.rejectionKinds };
+    case "indeterminate":
+      return {
+        key: slot.key,
+        phase: "indeterminate",
+        indeterminateKinds: slot.indeterminateKinds,
+      };
   }
 };
 
 const claimMatchesSlotVocabulary = (
   slot: ClaimSlot,
-  claim: LivedClaim | RejectedClaim,
+  claim: LivedClaim | RejectedClaim | IndeterminateClaim,
 ): boolean => {
   if (slot.kind === "lived" && claim.phase === "lived") {
     return slot.anchorKinds.includes(claim.anchorRef.anchorKind);
   }
   if (slot.kind === "rejected" && claim.phase === "rejected") {
     return slot.rejectionKinds.includes(claim.rejectionRef.rejectionKind);
+  }
+  if (slot.kind === "indeterminate" && claim.phase === "indeterminate") {
+    return slot.indeterminateKinds.includes(claim.indeterminateRef.indeterminateKind);
   }
   return true;
 };
@@ -318,7 +385,9 @@ const decodePayload = (
   const claimValidation =
     claim.kind === "pre"
       ? validateEffectClaim(claimValue)
-      : validateTerminalClaim(settlementContract, claimValue);
+      : claim.kind === "indeterminate"
+        ? validateIndeterminateClaim(settlementContract, claimValue)
+        : validateTerminalClaim(settlementContract, claimValue);
   if (!claimValidation.ok) {
     return failCarrier(`carrier event ${eventKind} claim slot ${claim.key} invalid`);
   }
@@ -329,7 +398,10 @@ const decodePayload = (
   }
   if (
     claim.kind !== "pre" &&
-    !claimMatchesSlotVocabulary(claim, claimValidation.claim as LivedClaim | RejectedClaim)
+    !claimMatchesSlotVocabulary(
+      claim,
+      claimValidation.claim as LivedClaim | RejectedClaim | IndeterminateClaim,
+    )
   ) {
     return failCarrier(
       `carrier event ${eventKind} claim slot ${claim.key} outside event vocabulary`,
@@ -354,8 +426,10 @@ export const defineCarrier = <
   const slots = new Map<string, ClaimSlot>();
   const anchorKinds = new Set<AnchorRef["anchorKind"]>();
   const rejectionKinds = new Set<RejectionRef["rejectionKind"]>();
+  const indeterminateKinds = new Set<IndeterminateRef["indeterminateKind"]>();
   const settle: Record<string, unknown> = {};
   const reject: Record<string, unknown> = {};
+  const indeterminateClaims: Record<string, unknown> = {};
 
   for (const [name, carrierEvent] of Object.entries(spec.events)) {
     const eventKind = `${spec.prefix}${carrierEvent.kind}`;
@@ -403,12 +477,29 @@ export const defineCarrier = <
           ...(rejectionSpec.reason === undefined ? {} : { reason: rejectionSpec.reason }),
         });
     }
+
+    if (carrierEvent.claim.kind === "indeterminate") {
+      for (const indeterminateKind of carrierEvent.claim.indeterminateKinds) {
+        indeterminateKinds.add(indeterminateKind);
+      }
+      const slot = carrierEvent.claim;
+      indeterminateClaims[name] = (claim: PreClaim, indeterminateSpec: CarrierIndeterminateSpec) =>
+        settleIndeterminate(settlementContract, claim, {
+          indeterminateId: indeterminateSpec.indeterminateId,
+          indeterminateKind: indeterminateSpec.indeterminateKind ?? slot.indeterminateKinds[0]!,
+          ...(indeterminateSpec.reason === undefined ? {} : { reason: indeterminateSpec.reason }),
+          ...(indeterminateSpec.carrierRef === undefined
+            ? {}
+            : { carrierRef: indeterminateSpec.carrierRef }),
+        });
+    }
   }
 
   const settlementContract = defineSettlementContract({
     settlementId: spec.packageId,
     anchorKinds: [...anchorKinds],
     rejectionKinds: [...rejectionKinds],
+    indeterminateKinds: [...indeterminateKinds],
   });
 
   const boundaryContract = {
@@ -443,6 +534,7 @@ export const defineCarrier = <
     boundaryPackage: (version) => boundaryPackage(boundaryContract, version),
     settle: settle as CarrierSettleMap<Events>,
     reject: reject as CarrierRejectMap<Events>,
+    indeterminate: indeterminateClaims as CarrierIndeterminateMap<Events>,
     decode: (eventKind, payload) => {
       const schema = schemas.get(eventKind);
       const slot = slots.get(eventKind);

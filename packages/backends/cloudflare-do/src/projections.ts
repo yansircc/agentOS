@@ -11,6 +11,8 @@ import {
   type AuthorityRef,
   type EffectClaim,
   type FactOwnerRef,
+  type IndeterminateClaim,
+  type IndeterminateRef,
   type LivedClaim,
   type OriginRef,
   type PreClaim,
@@ -62,7 +64,16 @@ export interface RejectedClaimTraceEntry extends ClaimTraceBase {
   readonly rejectionRef: RejectionRef;
 }
 
-export type ClaimTraceEntry = PreClaimTraceEntry | LivedClaimTraceEntry | RejectedClaimTraceEntry;
+export interface IndeterminateClaimTraceEntry extends ClaimTraceBase {
+  readonly phase: IndeterminateClaim["phase"];
+  readonly indeterminateRef: IndeterminateRef;
+}
+
+export type ClaimTraceEntry =
+  | PreClaimTraceEntry
+  | LivedClaimTraceEntry
+  | RejectedClaimTraceEntry
+  | IndeterminateClaimTraceEntry;
 
 interface FailurePlaneBase {
   readonly eventId: number;
@@ -122,6 +133,12 @@ const claimTraceEntry = (event: LedgerEvent, claim: EffectClaim): ClaimTraceEntr
         ...base,
         phase: "rejected",
         rejectionRef: claim.rejectionRef,
+      };
+    case "indeterminate":
+      return {
+        ...base,
+        phase: "indeterminate",
+        indeterminateRef: claim.indeterminateRef,
       };
   }
 };

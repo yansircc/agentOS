@@ -5,6 +5,7 @@ import {
   makePreClaim,
   validateEffectClaim,
   type EffectClaim,
+  type IndeterminateClaim,
   type LivedClaim,
   type PreClaim,
   type RejectedClaim,
@@ -42,6 +43,18 @@ describe("EffectClaim calculus", () => {
       ok: false,
       issues: ["pre_claim_has_terminal_ref"],
     });
+    expect(
+      validateEffectClaim({
+        ...pre,
+        indeterminateRef: {
+          indeterminateId: "pending:1",
+          indeterminateKind: "provider_pending",
+        },
+      }),
+    ).toEqual({
+      ok: false,
+      issues: ["pre_claim_has_indeterminate"],
+    });
   });
 
   it("settles lived and rejected claims as disjoint terminal states", () => {
@@ -62,11 +75,23 @@ describe("EffectClaim calculus", () => {
         rejectionKind: "policy_denied" as const,
       },
     };
+    const indeterminate = {
+      ...pre,
+      phase: "indeterminate" as const,
+      indeterminateRef: {
+        indeterminateId: "pending:1",
+        indeterminateKind: "provider_pending" as const,
+      },
+    };
 
     expect(validateEffectClaim(lived)).toEqual({ ok: true, claim: lived });
     expect(validateEffectClaim(rejected)).toEqual({
       ok: true,
       claim: rejected,
+    });
+    expect(validateEffectClaim(indeterminate)).toEqual({
+      ok: true,
+      claim: indeterminate,
     });
     expect(
       validateEffectClaim({
@@ -76,6 +101,15 @@ describe("EffectClaim calculus", () => {
     ).toEqual({
       ok: false,
       issues: ["lived_claim_has_rejection"],
+    });
+    expect(
+      validateEffectClaim({
+        ...indeterminate,
+        anchorRef: lived.anchorRef,
+      }),
+    ).toEqual({
+      ok: false,
+      issues: ["indeterminate_claim_has_anchor"],
     });
   });
 
@@ -103,6 +137,20 @@ describe("EffectClaim calculus", () => {
       },
     };
 
+    const indeterminateWithAnchor: IndeterminateClaim = {
+      ...pre,
+      phase: "indeterminate",
+      indeterminateRef: {
+        indeterminateId: "pending:1",
+        indeterminateKind: "provider_pending",
+      },
+      // @ts-expect-error indeterminate claims cannot carry terminal anchors.
+      anchorRef: {
+        anchorId: "thread/t1:7",
+        anchorKind: "ledger_event",
+      },
+    };
+
     // @ts-expect-error rejected claims require rejectionRef.
     const rejectedWithoutRejection: RejectedClaim = {
       ...pre,
@@ -125,6 +173,7 @@ describe("EffectClaim calculus", () => {
 
     void preWithAnchor;
     void livedWithRejection;
+    void indeterminateWithAnchor;
     void rejectedWithoutRejection;
     void rejectedWithAnchor;
   });

@@ -18,6 +18,7 @@ export const dynamicWorkerSettlementContract = defineSettlementContract({
   settlementId: "@agent-os/dynamic-worker",
   anchorKinds: ["carrier_proof"],
   rejectionKinds: ["policy_denied", "resource_denied", "provider_rejected"],
+  indeterminateKinds: [],
 });
 
 export const dynamicWorkerCarrierRef = "dynamic-worker" as const;

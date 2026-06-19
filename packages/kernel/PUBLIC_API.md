@@ -50,6 +50,8 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./carrier:CarrierEventPayload`
 - `./carrier:CarrierEventPayloads`
 - `./carrier:CarrierHandlers`
+- `./carrier:CarrierIndeterminateMap`
+- `./carrier:CarrierIndeterminateSpec`
 - `./carrier:CarrierKindView`
 - `./carrier:CarrierRejectMap`
 - `./carrier:CarrierRejectSpec`
@@ -58,6 +60,7 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./carrier:DefineCarrierSpec`
 - `./carrier:defineCarrier`
 - `./carrier:event`
+- `./carrier:indeterminate`
 - `./carrier:lived`
 - `./carrier:none`
 - `./carrier:pre`
@@ -81,6 +84,8 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./effect-claim:FactOwnerRef`
 - `./effect-claim:INVALID_ADMITTER_REJECTION_REF_REASON`
 - `./effect-claim:INVALID_ADMITTER_VERDICT_REASON`
+- `./effect-claim:IndeterminateClaim`
+- `./effect-claim:IndeterminateRef`
 - `./effect-claim:LivedClaim`
 - `./effect-claim:OperationRef`
 - `./effect-claim:OriginRef`
@@ -96,6 +101,7 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./effect-claim:isAnchorRef`
 - `./effect-claim:isAuthorityRef`
 - `./effect-claim:isFactOwnerRef`
+- `./effect-claim:isIndeterminateRef`
 - `./effect-claim:isOriginRef`
 - `./effect-claim:isRejectionRef`
 - `./effect-claim:isScopeRef`
@@ -227,18 +233,24 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./settlement-contract:SettlementContract`
 - `./settlement-contract:SettlementContractIssue`
 - `./settlement-contract:SettlementContractValidation`
+- `./settlement-contract:IndeterminateClaimIssue`
+- `./settlement-contract:IndeterminateClaimValidation`
 - `./settlement-contract:TerminalClaimIssue`
 - `./settlement-contract:TerminalClaimValidation`
 - `./settlement-contract:defineSettlementContract`
 - `./settlement-contract:isSymbolicSettlementValue`
+- `./settlement-contract:settleIndeterminate`
 - `./settlement-contract:settleLived`
 - `./settlement-contract:settleRejected`
 - `./settlement-contract:symbolicSettlementRef`
 - `./settlement-contract:validateSettlementContract`
+- `./settlement-contract:validateIndeterminateClaim`
 - `./settlement-contract:validateTerminalClaim`
 - `.:SYMBOLIC_SETTLEMENT_VALUE_PATTERN`
   `
 - `.:Authored`
+- `.:CarrierIndeterminateMap`
+- `.:CarrierIndeterminateSpec`
 - `.:Derived`
 - `.:DeterministicToolInvocation`
 - `.:DefineProductToolSpec`
@@ -250,6 +262,10 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:ExecutionDomainRegistry`
 - `.:ExecutionDomainRegistryIssue`
 - `.:ExecutionDomainRegistryValidation`
+- `.:IndeterminateClaim`
+- `.:IndeterminateClaimIssue`
+- `.:IndeterminateClaimValidation`
+- `.:IndeterminateRef`
 - `.:LedgerSafe`
 - `.:Live`
 - `.:MaterialBrokerOwnerSubstitution`
@@ -309,6 +325,8 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:defineProductTool`
 - `.:defineProjectionSpec`
 - `.:externalToolExecution`
+- `.:indeterminate`
+- `.:isIndeterminateRef`
 - `.:isMaterialBrokerPlaceholder`
 - `.:planMaterialBrokerSubstitution`
 - `.:project`
@@ -317,7 +335,9 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:projectionOutputOrFail`
 - `.:resolveToolExecution`
 - `.:runProjectionSink`
+- `.:settleIndeterminate`
 - `.:unsafeRunToolByName`
+- `.:validateIndeterminateClaim`
 - `.:validateExecutionDomainRegistry`
 - `.:withToolReadRequirement`
 - `.:withToolWriteRequirement`
