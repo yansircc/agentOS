@@ -1,5 +1,5 @@
 {
-  "generatedBy": "scripts/generate-agent-docs.mjs",
+  "generatedBy": "tooling/agentos-cli/src/generate/generate-agent-docs.mjs",
   "source": ["packages/**/*.ts agent_os.* tags", "docs/agent/error-metadata.source.json"],
   "errors": [
     {

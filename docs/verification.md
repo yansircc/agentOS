@@ -8,7 +8,7 @@ Run from the repo root or an assigned parallel worktree.
 bun run check
 bun run docs:check
 bun run effect-manifests:check
-bun run check:public-api
+bun run agentos -- check guard public-api
 bun run typecheck
 bun run test
 effect-skill-scan /Users/yansir/code/52/agentOS --strict --json --profile

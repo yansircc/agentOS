@@ -17,9 +17,18 @@
       "packages/backends/cloudflare-do": {
         "dependencyOwner": "package-local",
         "dependencyOwnerReason": "Cloudflare DO backend owns platform adapter dependency declarations"
+      },
+      "tooling/agentos-cli": {
+        "scan": false,
+        "scanExclusionReason": "private host tooling owns fixed Effect CLI v3 dependencies isolated from substrate catalog dependencies; it is not substrate application code"
       }
     },
     "hostTooling": [
+      {
+        "path": "tooling/agentos-cli/**",
+        "owner": "@agent-os/agentos-cli",
+        "reason": "private repo CLI host tooling is isolated from substrate Effect v4 package rules"
+      },
       {
         "path": ".parallel/**",
         "owner": "@parallel-dev",

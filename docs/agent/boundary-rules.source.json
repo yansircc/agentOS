@@ -1,0 +1,839 @@
+{
+  "schemaVersion": 1,
+  "commandGroups": {
+    "generate-docs": [
+      { "type": "command", "command": "node tooling/agentos-cli/src/generate/generate-docs.mjs" },
+      {
+        "type": "command",
+        "command": "node tooling/agentos-cli/src/generate/generate-agent-docs.mjs"
+      },
+      {
+        "type": "command",
+        "command": "bun tooling/agentos-cli/src/generate/generate-carrier-reference.mjs"
+      },
+      {
+        "type": "command",
+        "command": "node tooling/agentos-cli/src/generate/project-docs-site.mjs"
+      }
+    ],
+    "generate-effect-manifests": [
+      {
+        "type": "command",
+        "command": "node tooling/agentos-cli/src/generate/generate-effect-skill-manifests.mjs"
+      }
+    ],
+    "generate-site": [
+      {
+        "type": "command",
+        "command": "node tooling/agentos-cli/src/generate/project-docs-site.mjs"
+      }
+    ],
+    "check-docs": [
+      {
+        "type": "command",
+        "command": "node tooling/agentos-cli/src/generate/generate-docs.mjs --check"
+      },
+      {
+        "type": "command",
+        "command": "node tooling/agentos-cli/src/generate/generate-agent-docs.mjs --check"
+      },
+      { "type": "rule", "id": "agent-routes" },
+      {
+        "type": "command",
+        "command": "bun tooling/agentos-cli/src/generate/generate-carrier-reference.mjs --check"
+      },
+      {
+        "type": "command",
+        "command": "node tooling/agentos-cli/src/check/check-doc-structure.mjs"
+      },
+      {
+        "type": "command",
+        "command": "node tooling/agentos-cli/src/generate/project-docs-site.mjs --check"
+      }
+    ],
+    "check-effect-manifests": [
+      {
+        "type": "command",
+        "command": "node tooling/agentos-cli/src/generate/generate-effect-skill-manifests.mjs --check"
+      }
+    ],
+    "substrate-consumer": [
+      { "type": "rule", "id": "ag-ui-resume-boundary" },
+      { "type": "rule", "id": "ag-ui-sse-axis" },
+      { "type": "rule", "id": "facade-handler-capability-boundary" },
+      { "type": "rule", "id": "agent-doc-primitive-evidence" },
+      { "type": "rule", "id": "resource-quota-protocol-ownership" },
+      { "type": "rule", "id": "resource-reservation-concurrency" },
+      { "type": "rule", "id": "node-postgres-runtime-import-boundary" },
+      { "type": "rule", "id": "node-postgres-effect-governance" },
+      { "type": "rule", "id": "backend-provider-axis-boundary" },
+      { "type": "rule", "id": "backend-neutral-production-runtime-proof" },
+      { "type": "rule", "id": "run-scoped-material-bindings" },
+      { "type": "rule", "id": "effectful-tool-replay-receipt" },
+      { "type": "rule", "id": "dispatch-delivery-receipt-authority" },
+      { "type": "rule", "id": "telemetry-otlp-tree-parity" },
+      { "type": "rule", "id": "carrier-projection-source-truth" },
+      { "type": "rule", "id": "turn-stream-provider-wire-boundary" },
+      { "type": "rule", "id": "decision-gate-lifecycle-boundary" },
+      { "type": "rule", "id": "workspace-exec-material-ref-boundary" },
+      { "type": "rule", "id": "tool-execution-access-requirements" },
+      { "type": "rule", "id": "d12-a155-substrate-absorption" },
+      { "type": "rule", "id": "tool-mutation-boundary" },
+      { "type": "rule", "id": "agent-manifest-intent-boundary" },
+      { "type": "rule", "id": "intent-settlement-boundary" },
+      { "type": "rule", "id": "facade-run-scoped-bindings" },
+      { "type": "rule", "id": "replay-dispatch-snapshot" },
+      { "type": "rule", "id": "replay-llm-snapshot" },
+      { "type": "rule", "id": "replay-tool-snapshot" },
+      { "type": "rule", "id": "telemetry-neutral" },
+      { "type": "rule", "id": "product-resource-boundary" },
+      { "type": "rule", "id": "projection-wait-primitive" },
+      { "type": "rule", "id": "dispatch-idempotency-receipt" }
+    ],
+    "package-owned": [
+      { "type": "rule", "id": "failure-diagnostics-envelope" },
+      { "type": "rule", "id": "tool-witness-single-source" },
+      { "type": "rule", "id": "workspace-tool-exposure-policy" },
+      { "type": "rule", "id": "workspace-op-receipt-boundary" },
+      { "type": "rule", "id": "workspace-agui-integration-fixture" }
+    ],
+    "all": [
+      { "type": "command", "command": "vp check" },
+      { "type": "group", "id": "check-docs" },
+      { "type": "group", "id": "check-effect-manifests" },
+      { "type": "rule", "id": "repo-tooling-surface" },
+      { "type": "rule", "id": "public-api" },
+      { "type": "rule", "id": "event-namespaces" },
+      { "type": "rule", "id": "transaction-sync" },
+      { "type": "rule", "id": "limit-registry" },
+      { "type": "rule", "id": "workspace-job" },
+      { "type": "rule", "id": "observability" },
+      { "type": "rule", "id": "cloudflare-profile" },
+      { "type": "group", "id": "substrate-consumer" },
+      { "type": "group", "id": "package-owned" },
+      { "type": "rule", "id": "ag-ui-egress-allowlist" },
+      { "type": "rule", "id": "boundaries" },
+      { "type": "rule", "id": "backend-neutrality" },
+      { "type": "rule", "id": "source-aliases" },
+      { "type": "rule", "id": "spike-hygiene" }
+    ],
+    "release": [
+      { "type": "group", "id": "all" },
+      { "type": "command", "command": "node tooling/distribution/distribution.mjs check" }
+    ]
+  },
+  "rules": [
+    {
+      "id": "repo-tooling-surface",
+      "owner": "root package.json and tooling/agentos-cli",
+      "invariantId": "invariant.algebra.single-code-source",
+      "kind": "repo-tooling",
+      "positiveAcceptance": {
+        "commands": ["node tooling/agentos-cli/src/check/check-repo-tooling-surface.mjs"]
+      },
+      "diagnostics": [
+        "root command surface must stay collapsed to the private CLI and approved distribution/runtime commands",
+        "scripts/ must remain reserved for parallel-dev shell helpers",
+        "tooling CLI must not import packages/* source"
+      ],
+      "paths": [
+        "package.json",
+        "scripts/**",
+        "tooling/agentos-cli/src/**/*.mjs",
+        "docs/agent/boundary-rules.source.json"
+      ],
+      "commandGroup": "all",
+      "constraints": {
+        "rootScripts": [
+          "agentos",
+          "build:internal-packages",
+          "check",
+          "check:distribution",
+          "check:full",
+          "check:release",
+          "check:runtime",
+          "docs:check",
+          "docs:generate",
+          "docs:project",
+          "docs:project:watch",
+          "docs:site:build",
+          "docs:site:check",
+          "docs:site:dev",
+          "effect-manifests:check",
+          "effect-manifests:generate",
+          "install:consumer",
+          "pack:internal",
+          "publish:internal",
+          "publish:local",
+          "registry:local",
+          "restore:consumer",
+          "test",
+          "test:internal-consumer",
+          "typecheck"
+        ],
+        "allowedPrefixedRootScripts": [
+          "check:distribution",
+          "check:full",
+          "check:release",
+          "check:runtime",
+          "test:internal-consumer"
+        ],
+        "scriptsDirectoryAllowPrefixes": ["scripts/parallel-dev/"],
+        "scriptsDirectoryAllowedExtensions": [".sh"],
+        "forbiddenPackageSpecPrefixes": ["@agent-os/"],
+        "forbiddenLegacyScriptReferencePattern": "scripts/(generate|check|audit|project|public-api|lib|backend-neutral|agent-doc|effect|carrier|source|spike|ag-ui|workspace|tool|failure|doc-)",
+        "legacyReferenceScanRoots": ["AGENTS.md", "README.md", "docs", "tooling/refactor"]
+      }
+    },
+    {
+      "id": "public-api",
+      "owner": "docs/surface.json",
+      "invariantId": "invariant.algebra.single-code-source",
+      "kind": "projection",
+      "positiveAcceptance": {
+        "commands": ["node tooling/agentos-cli/src/check/check-public-api.mjs"]
+      },
+      "diagnostics": ["public package exports must match generated PUBLIC_API projections"],
+      "paths": ["docs/surface.json", "packages/**/package.json"],
+      "commandGroup": "all"
+    },
+    {
+      "id": "event-namespaces",
+      "owner": "BoundaryContract declarations",
+      "invariantId": "invariant.d10.namespace-integrity",
+      "kind": "repo-boundary",
+      "positiveAcceptance": {
+        "commands": ["node tooling/agentos-cli/src/check/check-event-namespaces.mjs"]
+      },
+      "diagnostics": ["event kind prefixes must have exactly one owner"],
+      "paths": ["packages/**/src/**/*.ts"],
+      "commandGroup": "all"
+    },
+    {
+      "id": "agent-routes",
+      "owner": "docs/agent/capability-rules.source.json",
+      "invariantId": "invariant.docs.agent-projection",
+      "kind": "projection",
+      "positiveAcceptance": {
+        "commands": ["node tooling/agentos-cli/src/check/check-agent-routes.mjs"]
+      },
+      "diagnostics": ["agent decision graph must derive from primitive and rule sources"],
+      "paths": ["docs/agent/*.source.json", "docs/agent/boundary-rules.source.json"],
+      "commandGroup": "check-docs"
+    },
+    {
+      "id": "transaction-sync",
+      "owner": "backend protocol transaction contract",
+      "invariantId": "invariant.ledger.single-commit-source",
+      "kind": "repo-boundary",
+      "positiveAcceptance": {
+        "commands": ["node tooling/agentos-cli/src/check/check-transaction-sync-sync-only.mjs"]
+      },
+      "diagnostics": ["transactionSync must remain sync-only substrate"],
+      "paths": ["packages/backends/**/src/**/*.ts"],
+      "commandGroup": "all"
+    },
+    {
+      "id": "limit-registry",
+      "owner": "kernel limit registry",
+      "invariantId": "invariant.algebra.single-code-source",
+      "kind": "repo-boundary",
+      "positiveAcceptance": {
+        "commands": ["node tooling/agentos-cli/src/check/check-limit-registry.mjs"]
+      },
+      "diagnostics": ["limit declarations must use the registry instead of local strings"],
+      "paths": ["packages/**/src/**/*.ts"],
+      "commandGroup": "all"
+    },
+    {
+      "id": "workspace-job",
+      "owner": "@agent-os/workspace-job",
+      "invariantId": "invariant.workspace-job.verified-terminal",
+      "kind": "carrier",
+      "positiveAcceptance": {
+        "commands": [
+          "bun run --cwd packages/carriers/workspace-job test",
+          "node tooling/agentos-cli/src/check/check-workspace-job-failure-vocabulary.mjs"
+        ]
+      },
+      "diagnostics": ["workspace-job terminal vocabulary remains carrier-owned"],
+      "paths": ["packages/carriers/workspace-job", "packages/runtime/test/workspace-job.test.ts"],
+      "commandGroup": "all"
+    },
+    {
+      "id": "observability",
+      "owner": "@agent-os/runtime",
+      "invariantId": "invariant.workspace-job.failure-observability-join",
+      "kind": "projection",
+      "positiveAcceptance": {
+        "commands": [
+          "bun run --cwd packages/runtime test -- test/workspace-job.test.ts",
+          "node tooling/agentos-cli/src/check/check-workspace-job-observability.mjs"
+        ]
+      },
+      "diagnostics": ["workspace-job failure explanation must be a runtime join"],
+      "paths": ["packages/runtime/src", "packages/runtime/test/workspace-job.test.ts"],
+      "commandGroup": "all"
+    },
+    {
+      "id": "cloudflare-profile",
+      "owner": "@agent-os/backend-cloudflare-do",
+      "invariantId": "invariant.workspace-job.host-workspace-lifecycle",
+      "kind": "profile",
+      "positiveAcceptance": {
+        "commands": [
+          "bun run --cwd packages/backends/cloudflare-do test -- test/workspace-host-helpers.test.ts",
+          "node tooling/agentos-cli/src/check/check-cloudflare-workspace-job-profile.mjs"
+        ]
+      },
+      "diagnostics": ["Cloudflare profile composes host helpers without taking carrier truth"],
+      "paths": ["packages/backends/cloudflare-do"],
+      "commandGroup": "all"
+    },
+    {
+      "id": "ag-ui-egress-allowlist",
+      "owner": "@agent-os/ag-ui",
+      "invariantId": "invariant.boundary.owner-owned-safe-projection",
+      "kind": "wire-egress",
+      "positiveAcceptance": {
+        "commands": [
+          "bun run --cwd packages/wire-adapters/ag-ui test -- test/ag-ui.test.ts",
+          "node tooling/agentos-cli/src/check/check-ag-ui-egress-allowlist.mjs"
+        ]
+      },
+      "diagnostics": ["AG-UI egress exposes only owner-safe envelope and frame facts"],
+      "paths": [
+        "packages/wire-adapters/ag-ui/src/index.ts",
+        "packages/wire-adapters/ag-ui/test/ag-ui.test.ts"
+      ],
+      "commandGroup": "all"
+    },
+    {
+      "id": "boundaries",
+      "owner": "BoundaryContract checklist",
+      "invariantId": "invariant.d10.namespace-integrity",
+      "kind": "repo-boundary",
+      "positiveAcceptance": {
+        "commands": ["node tooling/agentos-cli/src/check/check-boundaries.mjs"]
+      },
+      "diagnostics": ["live edge and boundary contract surfaces stay closed"],
+      "paths": ["packages/kernel/src", "packages/**/src"],
+      "commandGroup": "all"
+    },
+    {
+      "id": "backend-neutrality",
+      "owner": "package.json agentos.backendNeutrality",
+      "invariantId": "invariant.algebra.single-code-source",
+      "kind": "repo-boundary",
+      "positiveAcceptance": {
+        "commands": ["node tooling/agentos-cli/src/check/check-backend-neutrality.mjs"]
+      },
+      "diagnostics": ["production backend set must stay declared once"],
+      "paths": ["package.json", "packages/backends"],
+      "commandGroup": "all"
+    },
+    {
+      "id": "source-aliases",
+      "owner": "tooling/vitest-config/source-aliases.ts",
+      "invariantId": "invariant.algebra.single-code-source",
+      "kind": "repo-boundary",
+      "positiveAcceptance": {
+        "commands": ["bun tooling/agentos-cli/src/check/check-source-aliases.mjs"]
+      },
+      "diagnostics": ["source alias declarations must not fork package ownership"],
+      "paths": ["tooling/vitest-config/source-aliases.ts", "tsconfig.source-paths.json"],
+      "commandGroup": "all"
+    },
+    {
+      "id": "spike-hygiene",
+      "owner": "AGENTS.md Repo Surface",
+      "invariantId": "invariant.algebra.single-code-source",
+      "kind": "repo-boundary",
+      "positiveAcceptance": {
+        "commands": ["node tooling/agentos-cli/src/check/check-spike-hygiene.mjs"]
+      },
+      "diagnostics": ["spikes must remain ignored local pressure tests"],
+      "paths": ["spikes"],
+      "commandGroup": "all"
+    },
+    {
+      "id": "failure-diagnostics-envelope",
+      "owner": "@agent-os/runtime-protocol",
+      "invariantId": "invariant.boundary.owner-owned-safe-projection",
+      "kind": "package-test",
+      "positiveAcceptance": {
+        "commands": [
+          "bun run --cwd packages/runtime-protocol test -- test/failure-diagnostics.test.ts",
+          "bun run --cwd packages/runtime test -- test/submit-agent-runtime-events.test.ts"
+        ]
+      },
+      "diagnostics": [
+        "failure diagnostics are projected from protocol categories, not SubmitResult"
+      ],
+      "paths": ["packages/runtime-protocol/test/failure-diagnostics.test.ts"],
+      "commandGroup": "package-owned"
+    },
+    {
+      "id": "tool-witness-single-source",
+      "owner": "@agent-os/kernel",
+      "invariantId": "invariant.algebra.type-or-boot-proof",
+      "kind": "package-test",
+      "positiveAcceptance": {
+        "commands": [
+          "bun run --cwd packages/kernel test -- test/tools.test.ts",
+          "bun run --cwd packages/runtime-protocol test -- test/runtime-events.test.ts",
+          "bun run --cwd packages/runtime test -- test/submit-agent-runtime-events.test.ts"
+        ]
+      },
+      "diagnostics": ["tool replay witness is derived from execution domain law"],
+      "paths": [
+        "packages/kernel/test/tools.test.ts",
+        "packages/runtime-protocol/test/runtime-events.test.ts"
+      ],
+      "commandGroup": "package-owned"
+    },
+    {
+      "id": "workspace-tool-exposure-policy",
+      "owner": "@agent-os/workspace-binding",
+      "invariantId": "invariant.algebra.type-or-boot-proof",
+      "kind": "package-test",
+      "positiveAcceptance": {
+        "commands": [
+          "bun run --cwd packages/execution-domains/workspace-env test -- test/workspace-env.test.ts",
+          "bun run --cwd packages/composers/workspace-binding test -- test/workspace-binding.test.ts",
+          "bun run --cwd packages/runtime test -- test/submit-agent-runtime-events.test.ts"
+        ]
+      },
+      "diagnostics": [
+        "workspace tool exposure defaults to read-only and opts in to receipt-backed mutations"
+      ],
+      "paths": ["packages/composers/workspace-binding/test/workspace-binding.test.ts"],
+      "commandGroup": "package-owned"
+    },
+    {
+      "id": "workspace-op-receipt-boundary",
+      "owner": "@agent-os/workspace-op",
+      "invariantId": "invariant.workspace-op.carrier-single-writer",
+      "kind": "package-test",
+      "positiveAcceptance": {
+        "commands": [
+          "bun run --cwd packages/carriers/workspace-op test -- test/workspace-op.test.ts",
+          "bun run --cwd packages/providers/workspace-op-local test",
+          "bun run --cwd packages/composers/workspace-binding test -- test/workspace-binding.test.ts"
+        ]
+      },
+      "diagnostics": ["workspace-op terminals are carrier receipts, not inline runtime tool facts"],
+      "paths": ["packages/carriers/workspace-op/test/workspace-op.test.ts"],
+      "commandGroup": "package-owned"
+    },
+    {
+      "id": "workspace-agui-integration-fixture",
+      "owner": "@agent-os/ag-ui",
+      "invariantId": "invariant.boundary.owner-owned-safe-projection",
+      "kind": "package-test",
+      "positiveAcceptance": {
+        "commands": [
+          "bun run --cwd packages/wire-adapters/ag-ui test -- test/workspace-agui-integration.test.ts"
+        ]
+      },
+      "diagnostics": ["workspace AG-UI integration consumes owner-safe projections"],
+      "paths": ["packages/wire-adapters/ag-ui/test/workspace-agui-integration.test.ts"],
+      "commandGroup": "package-owned"
+    },
+    {
+      "id": "ag-ui-resume-boundary",
+      "owner": "@agent-os/ag-ui",
+      "invariantId": "invariant.boundary.owner-owned-safe-projection",
+      "kind": "repo-boundary",
+      "positiveAcceptance": {
+        "commands": ["node tooling/agentos-cli/src/check/check-ag-ui-resume-boundary.mjs"]
+      },
+      "diagnostics": [],
+      "paths": ["packages/wire-adapters/ag-ui/src/index.ts"],
+      "commandGroup": "substrate-consumer"
+    },
+    {
+      "id": "ag-ui-sse-axis",
+      "owner": "@agent-os/ag-ui",
+      "invariantId": "invariant.ag-ui.sse-axis",
+      "kind": "repo-boundary",
+      "positiveAcceptance": {
+        "commands": ["node tooling/agentos-cli/src/check/check-ag-ui-sse-axis.mjs"]
+      },
+      "diagnostics": [],
+      "paths": [
+        "packages/wire-adapters/ag-ui/src/index.ts",
+        "packages/transports/sse-http/src/index.ts"
+      ],
+      "commandGroup": "substrate-consumer"
+    },
+    {
+      "id": "facade-handler-capability-boundary",
+      "owner": "@agent-os/backend-cloudflare-do",
+      "invariantId": "invariant.d10.truth-identity",
+      "kind": "repo-boundary",
+      "positiveAcceptance": {
+        "commands": [
+          "node tooling/agentos-cli/src/check/check-facade-handler-capability-boundary.mjs"
+        ]
+      },
+      "diagnostics": [],
+      "paths": ["packages/backends/cloudflare-do/src"],
+      "commandGroup": "substrate-consumer"
+    },
+    {
+      "id": "agent-doc-primitive-evidence",
+      "owner": "docs/agent/primitive-evidence.source.json",
+      "invariantId": "invariant.docs.agent-projection",
+      "kind": "projection",
+      "positiveAcceptance": {
+        "commands": ["node tooling/agentos-cli/src/check/check-agent-doc-primitive-evidence.mjs"]
+      },
+      "diagnostics": [],
+      "paths": ["docs/agent/primitive-evidence.source.json"],
+      "commandGroup": "substrate-consumer"
+    },
+    {
+      "id": "resource-quota-protocol-ownership",
+      "owner": "@agent-os/backend-protocol",
+      "invariantId": "invariant.d10.truth-identity",
+      "kind": "repo-boundary",
+      "positiveAcceptance": {
+        "commands": [
+          "node tooling/agentos-cli/src/check/check-resource-quota-protocol-ownership.mjs"
+        ]
+      },
+      "diagnostics": [],
+      "paths": ["packages/backends/protocol/src"],
+      "commandGroup": "substrate-consumer"
+    },
+    {
+      "id": "resource-reservation-concurrency",
+      "owner": "@agent-os/backend-protocol",
+      "invariantId": "invariant.d10.truth-identity",
+      "kind": "repo-boundary",
+      "positiveAcceptance": {
+        "commands": [
+          "node tooling/agentos-cli/src/check/check-resource-reservation-concurrency.mjs"
+        ]
+      },
+      "diagnostics": [],
+      "paths": ["packages/backends/protocol/src"],
+      "commandGroup": "substrate-consumer"
+    },
+    {
+      "id": "node-postgres-runtime-import-boundary",
+      "owner": "@agent-os/backend-node-postgres",
+      "invariantId": "invariant.algebra.single-code-source",
+      "kind": "repo-boundary",
+      "positiveAcceptance": {
+        "commands": [
+          "node tooling/agentos-cli/src/check/check-node-postgres-runtime-import-boundary.mjs"
+        ]
+      },
+      "diagnostics": [],
+      "paths": ["packages/backends/node-postgres/src"],
+      "commandGroup": "substrate-consumer"
+    },
+    {
+      "id": "node-postgres-effect-governance",
+      "owner": "@agent-os/backend-node-postgres",
+      "invariantId": "invariant.algebra.single-code-source",
+      "kind": "repo-boundary",
+      "positiveAcceptance": {
+        "commands": ["node tooling/agentos-cli/src/check/check-node-postgres-effect-governance.mjs"]
+      },
+      "diagnostics": [],
+      "paths": ["packages/backends/node-postgres/src"],
+      "commandGroup": "substrate-consumer"
+    },
+    {
+      "id": "backend-provider-axis-boundary",
+      "owner": "packages/backends",
+      "invariantId": "invariant.algebra.single-code-source",
+      "kind": "repo-boundary",
+      "positiveAcceptance": {
+        "commands": ["node tooling/agentos-cli/src/check/check-backend-provider-axis-boundary.mjs"]
+      },
+      "diagnostics": [],
+      "paths": ["packages/backends", "packages/providers"],
+      "commandGroup": "substrate-consumer"
+    },
+    {
+      "id": "backend-neutral-production-runtime-proof",
+      "owner": "package.json agentos.backendNeutrality",
+      "invariantId": "invariant.algebra.single-code-source",
+      "kind": "repo-boundary",
+      "positiveAcceptance": {
+        "commands": [
+          "node tooling/agentos-cli/src/check/check-backend-neutral-production-runtime-proof.mjs"
+        ]
+      },
+      "diagnostics": [],
+      "paths": ["packages/backends"],
+      "commandGroup": "substrate-consumer"
+    },
+    {
+      "id": "run-scoped-material-bindings",
+      "owner": "@agent-os/runtime",
+      "invariantId": "invariant.d10.truth-identity",
+      "kind": "repo-boundary",
+      "positiveAcceptance": {
+        "commands": ["node tooling/agentos-cli/src/check/check-run-scoped-material-bindings.mjs"]
+      },
+      "diagnostics": [],
+      "paths": ["packages/runtime/src"],
+      "commandGroup": "substrate-consumer"
+    },
+    {
+      "id": "effectful-tool-replay-receipt",
+      "owner": "@agent-os/runtime-protocol",
+      "invariantId": "invariant.algebra.type-or-boot-proof",
+      "kind": "repo-boundary",
+      "positiveAcceptance": {
+        "commands": ["node tooling/agentos-cli/src/check/check-effectful-tool-replay-receipt.mjs"]
+      },
+      "diagnostics": [],
+      "paths": ["packages/runtime-protocol/src"],
+      "commandGroup": "substrate-consumer"
+    },
+    {
+      "id": "dispatch-delivery-receipt-authority",
+      "owner": "@agent-os/backend-protocol",
+      "invariantId": "invariant.ledger.single-commit-source",
+      "kind": "repo-boundary",
+      "positiveAcceptance": {
+        "commands": [
+          "node tooling/agentos-cli/src/check/check-dispatch-delivery-receipt-authority.mjs"
+        ]
+      },
+      "diagnostics": [],
+      "paths": ["packages/backends/protocol/src"],
+      "commandGroup": "substrate-consumer"
+    },
+    {
+      "id": "telemetry-otlp-tree-parity",
+      "owner": "@agent-os/telemetry-otlp",
+      "invariantId": "invariant.algebra.single-code-source",
+      "kind": "repo-boundary",
+      "positiveAcceptance": {
+        "commands": ["node tooling/agentos-cli/src/check/check-telemetry-otlp-tree-parity.mjs"]
+      },
+      "diagnostics": [],
+      "paths": ["packages/wire-adapters/telemetry-otlp"],
+      "commandGroup": "substrate-consumer"
+    },
+    {
+      "id": "carrier-projection-source-truth",
+      "owner": "defineCarrier declarations",
+      "invariantId": "invariant.d10.namespace-integrity",
+      "kind": "repo-boundary",
+      "positiveAcceptance": {
+        "commands": ["node tooling/agentos-cli/src/check/check-carrier-projection-source-truth.mjs"]
+      },
+      "diagnostics": [],
+      "paths": ["packages/carriers"],
+      "commandGroup": "substrate-consumer"
+    },
+    {
+      "id": "turn-stream-provider-wire-boundary",
+      "owner": "@agent-os/turn-stream",
+      "invariantId": "invariant.boundary.owner-owned-safe-projection",
+      "kind": "repo-boundary",
+      "positiveAcceptance": {
+        "commands": [
+          "node tooling/agentos-cli/src/check/check-turn-stream-provider-wire-boundary.mjs"
+        ]
+      },
+      "diagnostics": [],
+      "paths": ["packages/composers/turn-stream", "packages/providers"],
+      "commandGroup": "substrate-consumer"
+    },
+    {
+      "id": "decision-gate-lifecycle-boundary",
+      "owner": "@agent-os/decision-gate",
+      "invariantId": "invariant.d10.truth-identity",
+      "kind": "repo-boundary",
+      "positiveAcceptance": {
+        "commands": [
+          "node tooling/agentos-cli/src/check/check-decision-gate-lifecycle-boundary.mjs"
+        ]
+      },
+      "diagnostics": [],
+      "paths": ["packages/carriers/decision-gate"],
+      "commandGroup": "substrate-consumer"
+    },
+    {
+      "id": "workspace-exec-material-ref-boundary",
+      "owner": "@agent-os/workspace-env",
+      "invariantId": "invariant.boundary.runtime-validation-external-only",
+      "kind": "repo-boundary",
+      "positiveAcceptance": {
+        "commands": [
+          "node tooling/agentos-cli/src/check/check-workspace-exec-material-ref-boundary.mjs"
+        ]
+      },
+      "diagnostics": [],
+      "paths": ["packages/execution-domains/workspace-env"],
+      "commandGroup": "substrate-consumer"
+    },
+    {
+      "id": "tool-execution-access-requirements",
+      "owner": "@agent-os/kernel",
+      "invariantId": "invariant.algebra.type-or-boot-proof",
+      "kind": "repo-boundary",
+      "positiveAcceptance": {
+        "commands": [
+          "node tooling/agentos-cli/src/check/check-tool-execution-access-requirements.mjs"
+        ]
+      },
+      "diagnostics": [],
+      "paths": ["packages/kernel/src/tools.ts"],
+      "commandGroup": "substrate-consumer"
+    },
+    {
+      "id": "d12-a155-substrate-absorption",
+      "owner": "D12/A155 substrate absorption contract",
+      "invariantId": "invariant.algebra.single-code-source",
+      "kind": "repo-boundary",
+      "positiveAcceptance": {
+        "commands": ["node tooling/agentos-cli/src/check/check-d12-a155-substrate-absorption.mjs"]
+      },
+      "diagnostics": [],
+      "paths": ["packages", "tooling/agentos-cli/src/check"],
+      "commandGroup": "substrate-consumer"
+    },
+    {
+      "id": "tool-mutation-boundary",
+      "owner": "@agent-os/kernel",
+      "invariantId": "invariant.algebra.type-or-boot-proof",
+      "kind": "repo-boundary",
+      "positiveAcceptance": {
+        "commands": ["node tooling/agentos-cli/src/check/check-tool-mutation-boundary.mjs"]
+      },
+      "diagnostics": [],
+      "paths": ["packages/kernel/src"],
+      "commandGroup": "substrate-consumer"
+    },
+    {
+      "id": "agent-manifest-intent-boundary",
+      "owner": "@agent-os/runtime-protocol",
+      "invariantId": "invariant.boundary.runtime-validation-external-only",
+      "kind": "repo-boundary",
+      "positiveAcceptance": {
+        "commands": ["node tooling/agentos-cli/src/check/check-agent-manifest-intent-boundary.mjs"]
+      },
+      "diagnostics": [],
+      "paths": ["packages/runtime-protocol/src"],
+      "commandGroup": "substrate-consumer"
+    },
+    {
+      "id": "intent-settlement-boundary",
+      "owner": "@agent-os/runtime-protocol",
+      "invariantId": "invariant.boundary.runtime-validation-external-only",
+      "kind": "repo-boundary",
+      "positiveAcceptance": {
+        "commands": ["node tooling/agentos-cli/src/check/check-intent-settlement-boundary.mjs"]
+      },
+      "diagnostics": [],
+      "paths": ["packages/runtime-protocol/src"],
+      "commandGroup": "substrate-consumer"
+    },
+    {
+      "id": "facade-run-scoped-bindings",
+      "owner": "@agent-os/backend-cloudflare-do",
+      "invariantId": "invariant.d10.truth-identity",
+      "kind": "repo-boundary",
+      "positiveAcceptance": {
+        "commands": ["node tooling/agentos-cli/src/check/check-facade-run-scoped-bindings.mjs"]
+      },
+      "diagnostics": [],
+      "paths": ["packages/backends/cloudflare-do/src"],
+      "commandGroup": "substrate-consumer"
+    },
+    {
+      "id": "replay-dispatch-snapshot",
+      "owner": "@agent-os/backend-protocol",
+      "invariantId": "invariant.d10.truth-identity",
+      "kind": "repo-boundary",
+      "positiveAcceptance": {
+        "commands": ["node tooling/agentos-cli/src/check/check-replay-dispatch-snapshot.mjs"]
+      },
+      "diagnostics": [],
+      "paths": ["packages/backends/protocol/src"],
+      "commandGroup": "substrate-consumer"
+    },
+    {
+      "id": "replay-llm-snapshot",
+      "owner": "@agent-os/llm-protocol",
+      "invariantId": "invariant.boundary.runtime-validation-external-only",
+      "kind": "repo-boundary",
+      "positiveAcceptance": {
+        "commands": ["node tooling/agentos-cli/src/check/check-replay-llm-snapshot.mjs"]
+      },
+      "diagnostics": [],
+      "paths": ["packages/llm-protocol/src"],
+      "commandGroup": "substrate-consumer"
+    },
+    {
+      "id": "replay-tool-snapshot",
+      "owner": "@agent-os/runtime-protocol",
+      "invariantId": "invariant.boundary.runtime-validation-external-only",
+      "kind": "repo-boundary",
+      "positiveAcceptance": {
+        "commands": ["node tooling/agentos-cli/src/check/check-replay-tool-snapshot.mjs"]
+      },
+      "diagnostics": [],
+      "paths": ["packages/runtime-protocol/src"],
+      "commandGroup": "substrate-consumer"
+    },
+    {
+      "id": "telemetry-neutral",
+      "owner": "@agent-os/telemetry-protocol",
+      "invariantId": "invariant.algebra.single-code-source",
+      "kind": "repo-boundary",
+      "positiveAcceptance": {
+        "commands": ["node tooling/agentos-cli/src/check/check-telemetry-neutral.mjs"]
+      },
+      "diagnostics": [],
+      "paths": ["packages/telemetry-protocol", "packages/wire-adapters/telemetry-otlp"],
+      "commandGroup": "substrate-consumer"
+    },
+    {
+      "id": "product-resource-boundary",
+      "owner": "@agent-os/resource-carrier",
+      "invariantId": "invariant.d10.namespace-integrity",
+      "kind": "repo-boundary",
+      "positiveAcceptance": {
+        "commands": ["node tooling/agentos-cli/src/check/check-product-resource-boundary.mjs"]
+      },
+      "diagnostics": [],
+      "paths": ["packages/carriers/resource", "packages/providers/resource-cloudflare"],
+      "commandGroup": "substrate-consumer"
+    },
+    {
+      "id": "projection-wait-primitive",
+      "owner": "@agent-os/runtime",
+      "invariantId": "invariant.d10.truth-identity",
+      "kind": "repo-boundary",
+      "positiveAcceptance": {
+        "commands": ["node tooling/agentos-cli/src/check/check-projection-wait-primitive.mjs"]
+      },
+      "diagnostics": [],
+      "paths": ["packages/runtime/src"],
+      "commandGroup": "substrate-consumer"
+    },
+    {
+      "id": "dispatch-idempotency-receipt",
+      "owner": "@agent-os/backend-protocol",
+      "invariantId": "invariant.ledger.single-commit-source",
+      "kind": "repo-boundary",
+      "positiveAcceptance": {
+        "commands": ["node tooling/agentos-cli/src/check/check-dispatch-idempotency-receipt.mjs"]
+      },
+      "diagnostics": [],
+      "paths": ["packages/backends/protocol/src"],
+      "commandGroup": "substrate-consumer"
+    }
+  ]
+}

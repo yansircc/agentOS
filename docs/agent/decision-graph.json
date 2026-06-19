@@ -1,11 +1,11 @@
 {
-  "generatedBy": "scripts/generate-agent-docs.mjs",
+  "generatedBy": "tooling/agentos-cli/src/generate/generate-agent-docs.mjs",
   "source": [
     "docs/agent/capability-rules.source.json",
     "docs/agent/recipes.source.json",
     "exported TSDoc @agentosPrimitive tags",
     "BoundaryContract/event namespace declarations",
-    "package.json scripts"
+    "docs/agent/boundary-rules.source.json"
   ],
   "routes": [
     {
@@ -99,7 +99,7 @@
           "invariant": "invariant.d10.truth-identity"
         }
       ],
-      "gates": ["test:ag-ui-sse-axis", "test:substrate-consumer-guards"],
+      "gates": ["ag-ui-sse-axis", "ag-ui-egress-allowlist"],
       "invariants": [
         "invariant.ag-ui.sse-axis",
         "invariant.boundary.owner-owned-safe-projection",
@@ -262,10 +262,10 @@
         }
       ],
       "gates": [
-        "check:cloudflare-profile",
-        "check:observability",
-        "check:workspace-job",
-        "test:substrate-consumer-guards"
+        "cloudflare-profile",
+        "observability",
+        "workspace-job",
+        "workspace-agui-integration-fixture"
       ],
       "invariants": [
         "invariant.ag-ui.sse-axis",
@@ -363,7 +363,7 @@
           "invariant": "invariant.boundary.runtime-validation-external-only"
         }
       ],
-      "gates": ["test:tool-execution-access-requirements", "test:tool-mutation-boundary"],
+      "gates": ["tool-execution-access-requirements", "tool-mutation-boundary"],
       "invariants": [
         "invariant.algebra.single-code-source",
         "invariant.algebra.type-or-boot-proof",

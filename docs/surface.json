@@ -637,6 +637,18 @@
       "apiStatus": "Tooling package. It is an ops UI adapter and not a substrate package."
     },
     {
+      "slug": "agentos-cli",
+      "name": "@agent-os/agentos-cli",
+      "path": "tooling/agentos-cli",
+      "status": "private tooling",
+      "role": "repo-local CLI for generated projections and boundary rule checks",
+      "boundary": "host tooling command runner; consumes source files and package scripts without importing substrate packages as runtime dependencies",
+      "need": "Single internal command entrypoint",
+      "readmeStatus": "Private tooling package. It hosts the repo CLI and is not published.",
+      "primary": false,
+      "published": false
+    },
+    {
       "slug": "docs-site",
       "name": "@agent-os/docs-site",
       "path": "tooling/docs-site",

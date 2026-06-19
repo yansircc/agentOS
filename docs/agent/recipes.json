@@ -1,5 +1,5 @@
 {
-  "generatedBy": "scripts/generate-agent-docs.mjs",
+  "generatedBy": "tooling/agentos-cli/src/generate/generate-agent-docs.mjs",
   "source": "docs/agent/recipes.source.json",
   "recipes": [
     {

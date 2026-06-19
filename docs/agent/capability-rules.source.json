@@ -32,7 +32,7 @@
           "invariant": "invariant.d10.truth-identity"
         }
       ],
-      "gates": ["test:ag-ui-sse-axis", "test:substrate-consumer-guards"]
+      "gates": ["ag-ui-sse-axis", "ag-ui-egress-allowlist"]
     },
     {
       "primitive": "primitive.cloudflare-do.installCloudflareWorkspaceJobProfile",
@@ -71,10 +71,10 @@
         }
       ],
       "gates": [
-        "check:cloudflare-profile",
-        "check:observability",
-        "check:workspace-job",
-        "test:substrate-consumer-guards"
+        "cloudflare-profile",
+        "observability",
+        "workspace-job",
+        "workspace-agui-integration-fixture"
       ]
     },
     {
@@ -105,7 +105,7 @@
           "invariant": "invariant.boundary.runtime-validation-external-only"
         }
       ],
-      "gates": ["test:tool-execution-access-requirements", "test:tool-mutation-boundary"]
+      "gates": ["tool-execution-access-requirements", "tool-mutation-boundary"]
     },
     {
       "primitive": "primitive.runtime.defineProjection",

@@ -17,7 +17,7 @@ Current failure:
 
 ## Key Changes
 
-- Add `scripts/check-event-namespaces.mjs`, expose it as `check:event-namespaces`, and include it in root `bun run check`.
+- Add the `event-namespaces` boundary rule in `docs/agent/boundary-rules.source.json`, implement its guard at `tooling/agentos-cli/src/check/check-event-namespaces.mjs`, and include it in `agentos check all`.
 - The gate uses the TypeScript compiler API to collect owned prefixes from carrier/boundary declarations and literal event kinds passed to ledger writer APIs (`commit`, `tx.append`, `insertEvent`, `logLedgerEvent`, and backend-specific commit builders).
 - The gate fails when a writer emits a literal event kind under an owned prefix unless that event kind is declared by that owner.
 - Cleanly split concepts:

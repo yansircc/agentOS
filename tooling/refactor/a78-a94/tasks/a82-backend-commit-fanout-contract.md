@@ -23,7 +23,7 @@ Current failures:
   - sink exceptions do not roll back committed ledger state and do not reject the commit result.
 - App event handlers may remain failure-bearing if they are part of explicit product handler semantics; raw stream/SSE sinks must not be.
 - Keep Cloudflare transaction semantics: SQL commit/projection/side effects happen inside `transactionSync`; bus fires only after commit.
-- Add `scripts/check-transaction-sync-sync-only.mjs`:
+- Add the `transaction-sync` boundary rule in `docs/agent/boundary-rules.source.json` and implement its guard at `tooling/agentos-cli/src/check/check-transaction-sync-sync-only.mjs`:
   - fail on `transactionSync(async ...)`;
   - fail on returned thenables, `.then`, timers, and microtask scheduling inside
     transaction builders;
@@ -47,7 +47,7 @@ Current failures:
 ## Gates
 
 Full root gates. `check:runtime` is mandatory. Add the transaction-sync
-sync-only script to `bun run check`.
+sync-only guard to `agentos check all`.
 
 ## Assumptions
 

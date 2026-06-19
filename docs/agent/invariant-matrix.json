@@ -1,5 +1,5 @@
 {
-  "generatedBy": "scripts/generate-agent-docs.mjs",
+  "generatedBy": "tooling/agentos-cli/src/generate/generate-agent-docs.mjs",
   "source": [
     "docs/agent/invariants.source.json",
     "exported TSDoc @agentosInvariant tags",
@@ -95,7 +95,7 @@
       ],
       "tests": [
         "packages/runtime-protocol/test/runtime-events.test.ts",
-        "scripts/check-public-api.mjs"
+        "tooling/agentos-cli/src/check/check-public-api.mjs"
       ],
       "decisions": [
         "decisions/a52-documentation-substrate.md",
@@ -253,9 +253,9 @@
       "errors": ["agent_os.projection_sink_failure"],
       "docs": ["docs/concepts/materialized-projections.md", "docs/verification.md"],
       "tests": [
-        "scripts/generate-docs.mjs",
-        "scripts/check-doc-structure.mjs",
-        "scripts/check-public-api.mjs"
+        "tooling/agentos-cli/src/generate/generate-docs.mjs",
+        "tooling/agentos-cli/src/check/check-doc-structure.mjs",
+        "tooling/agentos-cli/src/check/check-public-api.mjs"
       ],
       "decisions": [
         "decisions/a52-documentation-substrate.md",
@@ -272,7 +272,7 @@
       "errors": [],
       "docs": ["docs/concepts/ag-ui-wire-adapter.md", "docs/packages/backend-cloudflare-do.md"],
       "tests": [
-        "scripts/check-ag-ui-sse-axis.mjs",
+        "tooling/agentos-cli/src/check/check-ag-ui-sse-axis.mjs",
         "packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"
       ],
       "decisions": []
