@@ -722,6 +722,25 @@
     },
     {
       "source": {
+        "kind": "mainlineChecker",
+        "path": "tooling/agentos-cli/src/check/algorithmic-checks.mjs"
+      },
+      "owner": "CST 419 and tooling/refactor/a78-a94/role-survival.source.json",
+      "ruleId": "convergence-roles",
+      "target": {
+        "kind": "algorithmic",
+        "ruleId": "convergence-roles",
+        "checker": "convergence-roles"
+      },
+      "assertions": [
+        {
+          "failureCondition": "convergence-roles: every package, export, script, doc surface, and public vocabulary must project to exactly one v3 role",
+          "negativeWitness": "algorithmic projection rejects unowned package paths, unowned scripts, stale doc/API surfaces, uncovered docs/agent source vocabularies, and package paths matching zero or multiple packageRoleRules"
+        }
+      ]
+    },
+    {
+      "source": {
         "kind": "preMigrationChecker",
         "path": "tooling/agentos-cli/src/check/check-replay-dispatch-snapshot.mjs"
       },

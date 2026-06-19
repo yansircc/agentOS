@@ -452,6 +452,34 @@
       }
     },
     {
+      "id": "convergence-roles",
+      "owner": "CST 419 and tooling/refactor/a78-a94/role-survival.source.json",
+      "invariantId": "invariant.algebra.single-code-source",
+      "kind": "repo-boundary",
+      "diagnostics": [
+        "every package, export, script, doc surface, and public vocabulary must project to exactly one v3 role",
+        "role none means delete; multiple roles mean split or merge",
+        "role-survival.source.json is the only role survival source"
+      ],
+      "paths": [
+        "tooling/refactor/a78-a94/role-survival.source.json",
+        "docs/surface.json",
+        "docs/agent/*.source.json",
+        "docs/api/*.md",
+        "docs/packages/*.md",
+        "packages/**/package.json",
+        "packages/**/PUBLIC_API.md",
+        "tooling/**/package.json",
+        "tooling/agentos-cli/src/check/algorithmic-checks.mjs"
+      ],
+      "commandGroup": "all",
+      "acceptance": {
+        "engine": "algorithmic",
+        "checker": "convergence-roles",
+        "reason": "role survival is a positive projection from role-survival.source.json over the actual package/export/script/doc/vocabulary inventory"
+      }
+    },
+    {
       "id": "substrate-import-dag",
       "owner": "docs/agent/boundary-rules.source.json",
       "invariantId": "invariant.algebra.single-code-source",
