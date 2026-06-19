@@ -10,6 +10,7 @@ const readJson = (relativePath) =>
   JSON.parse(fs.readFileSync(path.join(repoRoot, relativePath), "utf8"));
 
 const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 
 const failures = [];
 const fail = (message) => failures.push(message);
@@ -26,6 +27,80 @@ if (!Array.isArray(coverage.entries) || coverage.entries.length === 0) {
 const rules = new Map((rulesSource.rules ?? []).map((rule) => [rule.id, rule]));
 const algorithmicCheckers = new Set(listAlgorithmicCheckers());
 const coveredRuleIds = new Set();
+const genericPackageNegativeWitness =
+  "package-owned test fails when the owned contract is violated";
+
+const packageCommandScopes = (commands) => {
+  if (!Array.isArray(commands)) return [];
+  return commands.flatMap((command) => {
+    if (typeof command !== "string") return [];
+    const match = command.match(/^bun run --cwd (packages\/[^\s]+) test(?: -- ([^\s]+))?$/u);
+    if (match === null) return [];
+    return [
+      {
+        packagePath: match[1],
+        testPath:
+          typeof match[2] === "string"
+            ? `${match[1]}/${match[2]}`.split(path.sep).join("/")
+            : undefined,
+      },
+    ];
+  });
+};
+
+const witnessCoveredByCommand = (witnessFile, scopes) =>
+  scopes.some((scope) =>
+    scope.testPath === undefined
+      ? witnessFile.startsWith(`${scope.packagePath}/`)
+      : witnessFile === scope.testPath,
+  );
+
+const assertPackageWitnesses = (label, assertionIndex, assertion, rule) => {
+  const witnesses = assertion.packageWitnesses;
+  if (!Array.isArray(witnesses) || witnesses.length === 0) {
+    fail(`${label}: assertions[${assertionIndex}] packageCommand requires packageWitnesses`);
+    return;
+  }
+
+  const scopes = packageCommandScopes(rule.acceptance?.commands);
+  if (scopes.length === 0) {
+    fail(`${label}: packageCommand rule has no parseable package test commands`);
+    return;
+  }
+
+  for (const [witnessIndex, witness] of witnesses.entries()) {
+    const witnessLabel = `${label}: assertions[${assertionIndex}].packageWitnesses[${witnessIndex}]`;
+    if (!isRecord(witness)) {
+      fail(`${witnessLabel} must be an object`);
+      continue;
+    }
+    if (typeof witness.file !== "string" || !witness.file.startsWith("packages/")) {
+      fail(`${witnessLabel}.file must be a package test path`);
+      continue;
+    }
+    if (typeof witness.name !== "string" || witness.name.length === 0) {
+      fail(`${witnessLabel}.name must be non-empty`);
+      continue;
+    }
+    if (!witnessCoveredByCommand(witness.file, scopes)) {
+      fail(`${witnessLabel}.file is not covered by ${rule.id} packageCommand`);
+    }
+
+    const absolutePath = path.join(repoRoot, witness.file);
+    if (!fs.existsSync(absolutePath)) {
+      fail(`${witnessLabel}.file does not exist`);
+      continue;
+    }
+    const source = fs.readFileSync(absolutePath, "utf8");
+    const testNamePattern = new RegExp(
+      `\\b(?:describe|it|test)(?:\\.effect)?\\(\\s*(["'\`])${escapeRegExp(witness.name)}\\1`,
+      "u",
+    );
+    if (!testNamePattern.test(source)) {
+      fail(`${witnessLabel}.name was not found as a test or describe name`);
+    }
+  }
+};
 
 for (const [index, entry] of (coverage.entries ?? []).entries()) {
   const label =
@@ -52,6 +127,9 @@ for (const [index, entry] of (coverage.entries ?? []).entries()) {
       }
       if (typeof assertion.negativeWitness !== "string" || assertion.negativeWitness.length === 0) {
         fail(`${label}: assertions[${assertionIndex}] missing negativeWitness`);
+      }
+      if (assertion.negativeWitness === genericPackageNegativeWitness) {
+        fail(`${label}: assertions[${assertionIndex}] has generic package negativeWitness`);
       }
     }
   }
@@ -82,6 +160,12 @@ for (const [index, entry] of (coverage.entries ?? []).entries()) {
       fail(`${label}: packageCommand target references unknown rule ${entry.target.ruleId}`);
     } else if (rule.acceptance?.engine !== "packageCommand") {
       fail(`${label}: packageCommand target rule must use packageCommand acceptance`);
+    } else {
+      for (const [assertionIndex, assertion] of (entry.assertions ?? []).entries()) {
+        if (isRecord(assertion)) {
+          assertPackageWitnesses(label, assertionIndex, assertion, rule);
+        }
+      }
     }
   }
 

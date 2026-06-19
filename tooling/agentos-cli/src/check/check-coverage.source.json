@@ -17,7 +17,17 @@
       "assertions": [
         {
           "failureCondition": "AG-UI egress exposes only owner-safe envelope and frame facts",
-          "negativeWitness": "package-owned test fails when the owned contract is violated"
+          "negativeWitness": "packages/wire-adapters/ag-ui/test/ag-ui.test.ts: \"does not let product projectors override default owner safe projections\"; packages/wire-adapters/ag-ui/test/ag-ui.test.ts: \"drops product frames that emit reserved agent-os custom names\"",
+          "packageWitnesses": [
+            {
+              "file": "packages/wire-adapters/ag-ui/test/ag-ui.test.ts",
+              "name": "does not let product projectors override default owner safe projections"
+            },
+            {
+              "file": "packages/wire-adapters/ag-ui/test/ag-ui.test.ts",
+              "name": "drops product frames that emit reserved agent-os custom names"
+            }
+          ]
         }
       ]
     },
@@ -35,7 +45,13 @@
       "assertions": [
         {
           "failureCondition": "ag-ui-resume-boundary: post-migration verdict must reject violations owned by @agent-os/ag-ui",
-          "negativeWitness": "package-owned test fails when the owned contract is violated"
+          "negativeWitness": "packages/wire-adapters/ag-ui/test/ag-ui.test.ts: \"rejects AG-UI resume input without a runtime InputRequest binding\"",
+          "packageWitnesses": [
+            {
+              "file": "packages/wire-adapters/ag-ui/test/ag-ui.test.ts",
+              "name": "rejects AG-UI resume input without a runtime InputRequest binding"
+            }
+          ]
         }
       ]
     },
@@ -53,7 +69,13 @@
       "assertions": [
         {
           "failureCondition": "ag-ui-sse-axis: post-migration verdict must reject violations owned by @agent-os/ag-ui",
-          "negativeWitness": "package-owned test fails when the owned contract is violated"
+          "negativeWitness": "packages/wire-adapters/ag-ui/test/ag-ui.test.ts: \"projects ledger SSE into AG-UI envelopes and AG-UI SSE chunks\"",
+          "packageWitnesses": [
+            {
+              "file": "packages/wire-adapters/ag-ui/test/ag-ui.test.ts",
+              "name": "projects ledger SSE into AG-UI envelopes and AG-UI SSE chunks"
+            }
+          ]
         }
       ]
     },
@@ -90,7 +112,17 @@
       "assertions": [
         {
           "failureCondition": "agent-manifest-intent-boundary: post-migration verdict must reject violations owned by @agent-os/runtime-protocol",
-          "negativeWitness": "package-owned test fails when the owned contract is violated"
+          "negativeWitness": "packages/runtime-protocol/test/manifest.test.ts: \"rejects function-valued fields in AgentManifest at mount time\"; packages/runtime-protocol/test/manifest.test.ts: \"keeps extension handler kinds closed by manifest extension declarations\"",
+          "packageWitnesses": [
+            {
+              "file": "packages/runtime-protocol/test/manifest.test.ts",
+              "name": "rejects function-valued fields in AgentManifest at mount time"
+            },
+            {
+              "file": "packages/runtime-protocol/test/manifest.test.ts",
+              "name": "keeps extension handler kinds closed by manifest extension declarations"
+            }
+          ]
         }
       ]
     },
@@ -165,7 +197,21 @@
       "assertions": [
         {
           "failureCondition": "backend-provider-axis-boundary: post-migration verdict must reject violations owned by packages/backends",
-          "negativeWitness": "package-owned test fails when the owned contract is violated"
+          "negativeWitness": "packages/backends/in-memory/test/backend-protocol-contract.test.ts: \"in-memory backend protocol driver\"; packages/backends/cloudflare-do/test/backend-protocol-contract.test.ts: \"cloudflare-do backend protocol driver\"; packages/backends/node-postgres/test/backend-protocol-contract.test.ts: \"node-postgres backend protocol driver\"",
+          "packageWitnesses": [
+            {
+              "file": "packages/backends/in-memory/test/backend-protocol-contract.test.ts",
+              "name": "in-memory backend protocol driver"
+            },
+            {
+              "file": "packages/backends/cloudflare-do/test/backend-protocol-contract.test.ts",
+              "name": "cloudflare-do backend protocol driver"
+            },
+            {
+              "file": "packages/backends/node-postgres/test/backend-protocol-contract.test.ts",
+              "name": "node-postgres backend protocol driver"
+            }
+          ]
         }
       ]
     },
@@ -240,7 +286,17 @@
       "assertions": [
         {
           "failureCondition": "decision-gate-lifecycle-boundary: post-migration verdict must reject violations owned by @agent-os/decision-gate",
-          "negativeWitness": "package-owned test fails when the owned contract is violated"
+          "negativeWitness": "packages/carriers/decision-gate/test/decision-gate.test.ts: \"does not approve a gate from a decision without a request\"; packages/carriers/decision-gate/test/decision-gate.test.ts: \"keeps a consumed gate terminal across later requested and decided facts\"",
+          "packageWitnesses": [
+            {
+              "file": "packages/carriers/decision-gate/test/decision-gate.test.ts",
+              "name": "does not approve a gate from a decision without a request"
+            },
+            {
+              "file": "packages/carriers/decision-gate/test/decision-gate.test.ts",
+              "name": "keeps a consumed gate terminal across later requested and decided facts"
+            }
+          ]
         }
       ]
     },
@@ -258,7 +314,13 @@
       "assertions": [
         {
           "failureCondition": "dispatch-delivery-receipt-authority: post-migration verdict must reject violations owned by @agent-os/backend-protocol",
-          "negativeWitness": "package-owned test fails when the owned contract is violated"
+          "negativeWitness": "packages/backends/protocol/test/dispatch-payload.test.ts: \"settles outbound delivery against target-owned receipts\"",
+          "packageWitnesses": [
+            {
+              "file": "packages/backends/protocol/test/dispatch-payload.test.ts",
+              "name": "settles outbound delivery against target-owned receipts"
+            }
+          ]
         }
       ]
     },
@@ -276,7 +338,13 @@
       "assertions": [
         {
           "failureCondition": "dispatch-idempotency-receipt: post-migration verdict must reject violations owned by @agent-os/backend-protocol",
-          "negativeWitness": "package-owned test fails when the owned contract is violated"
+          "negativeWitness": "packages/backends/protocol/test/dispatch-payload.test.ts: \"receipt-before-terminal proof ties terminal delivery to idempotency receipt\"",
+          "packageWitnesses": [
+            {
+              "file": "packages/backends/protocol/test/dispatch-payload.test.ts",
+              "name": "receipt-before-terminal proof ties terminal delivery to idempotency receipt"
+            }
+          ]
         }
       ]
     },
@@ -332,7 +400,17 @@
       "assertions": [
         {
           "failureCondition": "effectful-tool-replay-receipt: post-migration verdict must reject violations owned by @agent-os/runtime-protocol",
-          "negativeWitness": "package-owned test fails when the owned contract is violated"
+          "negativeWitness": "packages/runtime-protocol/test/runtime-events.test.ts: \"replays receipt-backed external tool execution from the receipt artifact\"; packages/runtime-protocol/test/runtime-events.test.ts: \"validates receipt-backed bridge results before runtime logs tool.executed\"",
+          "packageWitnesses": [
+            {
+              "file": "packages/runtime-protocol/test/runtime-events.test.ts",
+              "name": "replays receipt-backed external tool execution from the receipt artifact"
+            },
+            {
+              "file": "packages/runtime-protocol/test/runtime-events.test.ts",
+              "name": "validates receipt-backed bridge results before runtime logs tool.executed"
+            }
+          ]
         }
       ]
     },
@@ -369,7 +447,17 @@
       "assertions": [
         {
           "failureCondition": "facade-handler-capability-boundary: post-migration verdict must reject violations owned by @agent-os/backend-cloudflare-do",
-          "negativeWitness": "package-owned test fails when the owned contract is violated"
+          "negativeWitness": "packages/backends/cloudflare-do/test/facade.test.ts: \"fails before submit when external tools reference undeclared domains\"; packages/backends/cloudflare-do/test/facade.test.ts: \"passes lowering when external tool domains are declared\"",
+          "packageWitnesses": [
+            {
+              "file": "packages/backends/cloudflare-do/test/facade.test.ts",
+              "name": "fails before submit when external tools reference undeclared domains"
+            },
+            {
+              "file": "packages/backends/cloudflare-do/test/facade.test.ts",
+              "name": "passes lowering when external tool domains are declared"
+            }
+          ]
         }
       ]
     },
@@ -387,7 +475,17 @@
       "assertions": [
         {
           "failureCondition": "facade-run-scoped-bindings: post-migration verdict must reject violations owned by @agent-os/backend-cloudflare-do",
-          "negativeWitness": "package-owned test fails when the owned contract is violated"
+          "negativeWitness": "packages/backends/cloudflare-do/test/facade.test.ts: \"lowers bindings into RefResolver and dispatch targets by MaterialRef shape\"; packages/backends/cloudflare-do/test/facade.test.ts: \"preserves non-default LLM routes for submit lowering\"",
+          "packageWitnesses": [
+            {
+              "file": "packages/backends/cloudflare-do/test/facade.test.ts",
+              "name": "lowers bindings into RefResolver and dispatch targets by MaterialRef shape"
+            },
+            {
+              "file": "packages/backends/cloudflare-do/test/facade.test.ts",
+              "name": "preserves non-default LLM routes for submit lowering"
+            }
+          ]
         }
       ]
     },
@@ -405,7 +503,17 @@
       "assertions": [
         {
           "failureCondition": "intent-settlement-boundary: post-migration verdict must reject violations owned by @agent-os/runtime-protocol",
-          "negativeWitness": "package-owned test fails when the owned contract is violated"
+          "negativeWitness": "packages/runtime-protocol/test/intent.test.ts: \"detects overlap between intent and settlement vocabularies\"; packages/runtime-protocol/test/intent.test.ts: \"rejects fake-generic mutation and state lifecycle names\"",
+          "packageWitnesses": [
+            {
+              "file": "packages/runtime-protocol/test/intent.test.ts",
+              "name": "detects overlap between intent and settlement vocabularies"
+            },
+            {
+              "file": "packages/runtime-protocol/test/intent.test.ts",
+              "name": "rejects fake-generic mutation and state lifecycle names"
+            }
+          ]
         }
       ]
     },
@@ -442,7 +550,17 @@
       "assertions": [
         {
           "failureCondition": "node-postgres-effect-governance: post-migration verdict must reject violations owned by @agent-os/backend-node-postgres",
-          "negativeWitness": "package-owned test fails when the owned contract is violated"
+          "negativeWitness": "packages/backends/node-postgres/test/backend-protocol-contract.test.ts: \"node-postgres event+due atomicity\"; packages/backends/node-postgres/test/backend-protocol-contract.test.ts: \"rolls back outbound dispatch event when delivery due-work insert fails\"",
+          "packageWitnesses": [
+            {
+              "file": "packages/backends/node-postgres/test/backend-protocol-contract.test.ts",
+              "name": "node-postgres event+due atomicity"
+            },
+            {
+              "file": "packages/backends/node-postgres/test/backend-protocol-contract.test.ts",
+              "name": "rolls back outbound dispatch event when delivery due-work insert fails"
+            }
+          ]
         }
       ]
     },
@@ -460,7 +578,17 @@
       "assertions": [
         {
           "failureCondition": "node-postgres-runtime-import-boundary: post-migration verdict must reject violations owned by @agent-os/backend-node-postgres",
-          "negativeWitness": "package-owned test fails when the owned contract is violated"
+          "negativeWitness": "packages/backends/node-postgres/test/backend-protocol-contract.test.ts: \"node-postgres backend protocol driver\"; packages/backends/node-postgres/test/backend-protocol-contract.test.ts: \"rolls back scheduled intent event when due-work insert fails\"",
+          "packageWitnesses": [
+            {
+              "file": "packages/backends/node-postgres/test/backend-protocol-contract.test.ts",
+              "name": "node-postgres backend protocol driver"
+            },
+            {
+              "file": "packages/backends/node-postgres/test/backend-protocol-contract.test.ts",
+              "name": "rolls back scheduled intent event when due-work insert fails"
+            }
+          ]
         }
       ]
     },
@@ -478,7 +606,17 @@
       "assertions": [
         {
           "failureCondition": "product-resource-boundary: post-migration verdict must reject violations owned by @agent-os/resource-carrier",
-          "negativeWitness": "package-owned test fails when the owned contract is violated"
+          "negativeWitness": "packages/carriers/resource/test/projection.test.ts: \"does not project lifecycle state from bound, mutation, or destroyed events without provision\"; packages/providers/resource-cloudflare/test/resource-carriers.test.ts: \"fast-fails unsupported mutation before material resolution or fetch\"",
+          "packageWitnesses": [
+            {
+              "file": "packages/carriers/resource/test/projection.test.ts",
+              "name": "does not project lifecycle state from bound, mutation, or destroyed events without provision"
+            },
+            {
+              "file": "packages/providers/resource-cloudflare/test/resource-carriers.test.ts",
+              "name": "fast-fails unsupported mutation before material resolution or fetch"
+            }
+          ]
         }
       ]
     },
@@ -496,7 +634,13 @@
       "assertions": [
         {
           "failureCondition": "projection-wait-primitive: post-migration verdict must reject violations owned by @agent-os/runtime",
-          "negativeWitness": "package-owned test fails when the owned contract is violated"
+          "negativeWitness": "packages/runtime/test/projection.test.ts: \"waits until the ready predicate matches and fails with a typed timeout\"",
+          "packageWitnesses": [
+            {
+              "file": "packages/runtime/test/projection.test.ts",
+              "name": "waits until the ready predicate matches and fails with a typed timeout"
+            }
+          ]
         }
       ]
     },
@@ -552,7 +696,13 @@
       "assertions": [
         {
           "failureCondition": "replay-dispatch-snapshot: post-migration verdict must reject violations owned by @agent-os/backend-protocol",
-          "negativeWitness": "package-owned test fails when the owned contract is violated"
+          "negativeWitness": "packages/backends/protocol/test/dispatch-payload.test.ts: \"replay mode DispatchTargetAdapter not called: dispatch delivery replays from receipt snapshot\"",
+          "packageWitnesses": [
+            {
+              "file": "packages/backends/protocol/test/dispatch-payload.test.ts",
+              "name": "replay mode DispatchTargetAdapter not called: dispatch delivery replays from receipt snapshot"
+            }
+          ]
         }
       ]
     },
@@ -570,7 +720,17 @@
       "assertions": [
         {
           "failureCondition": "replay-llm-snapshot: post-migration verdict must reject violations owned by @agent-os/llm-protocol",
-          "negativeWitness": "package-owned test fails when the owned contract is violated"
+          "negativeWitness": "packages/llm-protocol/test/llm-protocol.test.ts: \"replay mode live LLM provider adapter not called when call snapshot is present\"; packages/llm-protocol/test/llm-protocol.test.ts: \"snapshots an LLM call without route fields and replays the response\"",
+          "packageWitnesses": [
+            {
+              "file": "packages/llm-protocol/test/llm-protocol.test.ts",
+              "name": "replay mode live LLM provider adapter not called when call snapshot is present"
+            },
+            {
+              "file": "packages/llm-protocol/test/llm-protocol.test.ts",
+              "name": "snapshots an LLM call without route fields and replays the response"
+            }
+          ]
         }
       ]
     },
@@ -588,7 +748,17 @@
       "assertions": [
         {
           "failureCondition": "replay-tool-snapshot: post-migration verdict must reject violations owned by @agent-os/runtime-protocol",
-          "negativeWitness": "package-owned test fails when the owned contract is violated"
+          "negativeWitness": "packages/runtime-protocol/test/runtime-events.test.ts: \"replay mode tool execute not called: deterministic tool result replays from snapshot\"; packages/runtime-protocol/test/runtime-events.test.ts: \"does not build a raw result snapshot for an external tool without a receipt\"",
+          "packageWitnesses": [
+            {
+              "file": "packages/runtime-protocol/test/runtime-events.test.ts",
+              "name": "replay mode tool execute not called: deterministic tool result replays from snapshot"
+            },
+            {
+              "file": "packages/runtime-protocol/test/runtime-events.test.ts",
+              "name": "does not build a raw result snapshot for an external tool without a receipt"
+            }
+          ]
         }
       ]
     },
@@ -625,7 +795,13 @@
       "assertions": [
         {
           "failureCondition": "resource-quota-protocol-ownership: post-migration verdict must reject violations owned by @agent-os/backend-protocol",
-          "negativeWitness": "package-owned test fails when the owned contract is violated"
+          "negativeWitness": "packages/backends/protocol/test/dispatch-payload.test.ts: \"owns quota payload codecs, idempotent grant usage, and malformed fact failure\"",
+          "packageWitnesses": [
+            {
+              "file": "packages/backends/protocol/test/dispatch-payload.test.ts",
+              "name": "owns quota payload codecs, idempotent grant usage, and malformed fact failure"
+            }
+          ]
         }
       ]
     },
@@ -643,7 +819,13 @@
       "assertions": [
         {
           "failureCondition": "resource-reservation-concurrency: post-migration verdict must reject violations owned by @agent-os/backend-protocol",
-          "negativeWitness": "package-owned test fails when the owned contract is violated"
+          "negativeWitness": "packages/backends/protocol/test/dispatch-payload.test.ts: \"owns resource payload codecs and projection fold\"",
+          "packageWitnesses": [
+            {
+              "file": "packages/backends/protocol/test/dispatch-payload.test.ts",
+              "name": "owns resource payload codecs and projection fold"
+            }
+          ]
         }
       ]
     },
@@ -661,7 +843,17 @@
       "assertions": [
         {
           "failureCondition": "run-scoped-material-bindings: post-migration verdict must reject violations owned by @agent-os/runtime",
-          "negativeWitness": "package-owned test fails when the owned contract is violated"
+          "negativeWitness": "packages/runtime/test/submit-agent-runtime-events.test.ts: \"rejects non-symbolic material values before resolver lookup\"; packages/runtime/test/submit-agent-runtime-events.test.ts: \"ignores smuggled submit-scoped resolved material values and uses the resolver\"",
+          "packageWitnesses": [
+            {
+              "file": "packages/runtime/test/submit-agent-runtime-events.test.ts",
+              "name": "rejects non-symbolic material values before resolver lookup"
+            },
+            {
+              "file": "packages/runtime/test/submit-agent-runtime-events.test.ts",
+              "name": "ignores smuggled submit-scoped resolved material values and uses the resolver"
+            }
+          ]
         }
       ]
     },
@@ -717,7 +909,17 @@
       "assertions": [
         {
           "failureCondition": "telemetry-neutral: post-migration verdict must reject violations owned by @agent-os/telemetry-protocol",
-          "negativeWitness": "package-owned test fails when the owned contract is violated"
+          "negativeWitness": "packages/telemetry-protocol/test/telemetry-event-tree.test.ts: \"canonicalizes timing, generated ids, and backend host ids while preserving semantics\"; packages/wire-adapters/telemetry-otlp/test/telemetry-otlp.test.ts: \"maps telemetry trees without reading ledger payloads\"",
+          "packageWitnesses": [
+            {
+              "file": "packages/telemetry-protocol/test/telemetry-event-tree.test.ts",
+              "name": "canonicalizes timing, generated ids, and backend host ids while preserving semantics"
+            },
+            {
+              "file": "packages/wire-adapters/telemetry-otlp/test/telemetry-otlp.test.ts",
+              "name": "maps telemetry trees without reading ledger payloads"
+            }
+          ]
         }
       ]
     },
@@ -735,7 +937,17 @@
       "assertions": [
         {
           "failureCondition": "telemetry-otlp-tree-parity: post-migration verdict must reject violations owned by @agent-os/telemetry-otlp",
-          "negativeWitness": "package-owned test fails when the owned contract is violated"
+          "negativeWitness": "packages/wire-adapters/telemetry-otlp/test/telemetry-otlp.test.ts: \"projects extension telemetry kinds from the protocol tree\"; packages/wire-adapters/telemetry-otlp/test/telemetry-otlp.test.ts: \"fails closed before the OTLP adapter boundary on malformed source trace context\"",
+          "packageWitnesses": [
+            {
+              "file": "packages/wire-adapters/telemetry-otlp/test/telemetry-otlp.test.ts",
+              "name": "projects extension telemetry kinds from the protocol tree"
+            },
+            {
+              "file": "packages/wire-adapters/telemetry-otlp/test/telemetry-otlp.test.ts",
+              "name": "fails closed before the OTLP adapter boundary on malformed source trace context"
+            }
+          ]
         }
       ]
     },
@@ -753,7 +965,17 @@
       "assertions": [
         {
           "failureCondition": "tool-execution-access-requirements: post-migration verdict must reject violations owned by @agent-os/kernel",
-          "negativeWitness": "package-owned test fails when the owned contract is violated"
+          "negativeWitness": "packages/kernel/test/tools.test.ts: \"rejects access-mismatched and write snapshot replay laws\"; packages/kernel/test/tools.test.ts: \"rejects host declarations without an env allowlist\"",
+          "packageWitnesses": [
+            {
+              "file": "packages/kernel/test/tools.test.ts",
+              "name": "rejects access-mismatched and write snapshot replay laws"
+            },
+            {
+              "file": "packages/kernel/test/tools.test.ts",
+              "name": "rejects host declarations without an env allowlist"
+            }
+          ]
         }
       ]
     },
@@ -771,7 +993,17 @@
       "assertions": [
         {
           "failureCondition": "tool-mutation-boundary: post-migration verdict must reject violations owned by @agent-os/kernel",
-          "negativeWitness": "package-owned test fails when the owned contract is violated"
+          "negativeWitness": "packages/kernel/test/tools.test.ts: \"keeps execution out of the claim contract\"; packages/kernel/test/tools.test.ts: \"rejects LLM tool-call envelopes at type level\"",
+          "packageWitnesses": [
+            {
+              "file": "packages/kernel/test/tools.test.ts",
+              "name": "keeps execution out of the claim contract"
+            },
+            {
+              "file": "packages/kernel/test/tools.test.ts",
+              "name": "rejects LLM tool-call envelopes at type level"
+            }
+          ]
         }
       ]
     },
@@ -789,7 +1021,17 @@
       "assertions": [
         {
           "failureCondition": "turn-stream-provider-wire-boundary: post-migration verdict must reject violations owned by @agent-os/turn-stream",
-          "negativeWitness": "package-owned test fails when the owned contract is violated"
+          "negativeWitness": "packages/composers/turn-stream/test/turn-stream.test.ts: \"preserves provider error terminal frames without ledger writes\"; packages/composers/turn-stream/test/turn-stream.test.ts: \"encodes and decodes data-only SSE frames\"",
+          "packageWitnesses": [
+            {
+              "file": "packages/composers/turn-stream/test/turn-stream.test.ts",
+              "name": "preserves provider error terminal frames without ledger writes"
+            },
+            {
+              "file": "packages/composers/turn-stream/test/turn-stream.test.ts",
+              "name": "encodes and decodes data-only SSE frames"
+            }
+          ]
         }
       ]
     },
@@ -807,7 +1049,17 @@
       "assertions": [
         {
           "failureCondition": "workspace-exec-material-ref-boundary: post-migration verdict must reject violations owned by @agent-os/workspace-env",
-          "negativeWitness": "package-owned test fails when the owned contract is violated"
+          "negativeWitness": "packages/execution-domains/workspace-env/test/workspace-env.test.ts: \"generates workspace tools from one actuator\"; packages/execution-domains/workspace-env/test/workspace-env.test.ts: \"rejects host absolute workspace tool paths before actuator resolution\"",
+          "packageWitnesses": [
+            {
+              "file": "packages/execution-domains/workspace-env/test/workspace-env.test.ts",
+              "name": "generates workspace tools from one actuator"
+            },
+            {
+              "file": "packages/execution-domains/workspace-env/test/workspace-env.test.ts",
+              "name": "rejects host absolute workspace tool paths before actuator resolution"
+            }
+          ]
         }
       ]
     },
@@ -825,7 +1077,17 @@
       "assertions": [
         {
           "failureCondition": "Cloudflare profile composes host helpers without taking carrier truth",
-          "negativeWitness": "package-owned test fails when the owned contract is violated"
+          "negativeWitness": "packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts: \"installs a workspace-job profile over sanitized projection and existing host helpers\"; packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts: \"creates workspace-job responses only from the projection reader\"",
+          "packageWitnesses": [
+            {
+              "file": "packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts",
+              "name": "installs a workspace-job profile over sanitized projection and existing host helpers"
+            },
+            {
+              "file": "packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts",
+              "name": "creates workspace-job responses only from the projection reader"
+            }
+          ]
         }
       ]
     },
@@ -843,7 +1105,17 @@
       "assertions": [
         {
           "failureCondition": "workspace-job failure explanation must be a runtime join",
-          "negativeWitness": "package-owned test fails when the owned contract is violated"
+          "negativeWitness": "packages/runtime/test/workspace-job.test.ts: \"joins exact submit run diagnostics without leaking submitRunId to consumers\"; packages/runtime/test/workspace-job.test.ts: \"keeps pre-submit seed failures uncorrelated and still observable\"",
+          "packageWitnesses": [
+            {
+              "file": "packages/runtime/test/workspace-job.test.ts",
+              "name": "joins exact submit run diagnostics without leaking submitRunId to consumers"
+            },
+            {
+              "file": "packages/runtime/test/workspace-job.test.ts",
+              "name": "keeps pre-submit seed failures uncorrelated and still observable"
+            }
+          ]
         }
       ]
     },
@@ -861,7 +1133,17 @@
       "assertions": [
         {
           "failureCondition": "failure diagnostics are projected from protocol categories, not SubmitResult",
-          "negativeWitness": "package-owned test fails when the owned contract is violated"
+          "negativeWitness": "packages/runtime-protocol/test/failure-diagnostics.test.ts: \"folds structured tool rejection diagnostics without exposing raw args\"; packages/runtime-protocol/test/failure-diagnostics.test.ts: \"classifies missing receipt-backed execution path without hard-coded consumer owner\"",
+          "packageWitnesses": [
+            {
+              "file": "packages/runtime-protocol/test/failure-diagnostics.test.ts",
+              "name": "folds structured tool rejection diagnostics without exposing raw args"
+            },
+            {
+              "file": "packages/runtime-protocol/test/failure-diagnostics.test.ts",
+              "name": "classifies missing receipt-backed execution path without hard-coded consumer owner"
+            }
+          ]
         }
       ]
     },
@@ -879,7 +1161,17 @@
       "assertions": [
         {
           "failureCondition": "tool replay witness is derived from execution domain law",
-          "negativeWitness": "package-owned test fails when the owned contract is violated"
+          "negativeWitness": "packages/kernel/test/tools.test.ts: \"resolves replay witness only from the domain law\"; packages/runtime-protocol/test/runtime-events.test.ts: \"validates receipt-backed bridge results before runtime logs tool.executed\"",
+          "packageWitnesses": [
+            {
+              "file": "packages/kernel/test/tools.test.ts",
+              "name": "resolves replay witness only from the domain law"
+            },
+            {
+              "file": "packages/runtime-protocol/test/runtime-events.test.ts",
+              "name": "validates receipt-backed bridge results before runtime logs tool.executed"
+            }
+          ]
         }
       ]
     },
@@ -897,7 +1189,13 @@
       "assertions": [
         {
           "failureCondition": "workspace AG-UI integration consumes owner-safe projections",
-          "negativeWitness": "package-owned test fails when the owned contract is violated"
+          "negativeWitness": "packages/wire-adapters/ag-ui/test/workspace-agui-integration.test.ts: \"uses standard workspace binding, receipt-backed writes, diagnostics, and safe AG-UI egress\"",
+          "packageWitnesses": [
+            {
+              "file": "packages/wire-adapters/ag-ui/test/workspace-agui-integration.test.ts",
+              "name": "uses standard workspace binding, receipt-backed writes, diagnostics, and safe AG-UI egress"
+            }
+          ]
         }
       ]
     },
@@ -915,7 +1213,13 @@
       "assertions": [
         {
           "failureCondition": "workspace-op terminals are carrier receipts, not inline runtime tool facts",
-          "negativeWitness": "package-owned test fails when the owned contract is violated"
+          "negativeWitness": "packages/carriers/workspace-op/test/workspace-op.test.ts: \"projects requested and external-receipt completed workspace operation state\"",
+          "packageWitnesses": [
+            {
+              "file": "packages/carriers/workspace-op/test/workspace-op.test.ts",
+              "name": "projects requested and external-receipt completed workspace operation state"
+            }
+          ]
         }
       ]
     },
@@ -933,7 +1237,17 @@
       "assertions": [
         {
           "failureCondition": "workspace tool exposure defaults to read-only and opts in to receipt-backed mutations",
-          "negativeWitness": "package-owned test fails when the owned contract is violated"
+          "negativeWitness": "packages/composers/workspace-binding/test/workspace-binding.test.ts: \"keeps mutation and shell tools disabled unless receipt-backed policy is explicit\"; packages/composers/workspace-binding/test/workspace-binding.test.ts: \"turns mutation tools into workspace-op intent/projection bridges\"",
+          "packageWitnesses": [
+            {
+              "file": "packages/composers/workspace-binding/test/workspace-binding.test.ts",
+              "name": "keeps mutation and shell tools disabled unless receipt-backed policy is explicit"
+            },
+            {
+              "file": "packages/composers/workspace-binding/test/workspace-binding.test.ts",
+              "name": "turns mutation tools into workspace-op intent/projection bridges"
+            }
+          ]
         }
       ]
     },
@@ -970,7 +1284,17 @@
       "assertions": [
         {
           "failureCondition": "workspace-job terminal vocabulary remains carrier-owned",
-          "negativeWitness": "package-owned test fails when the owned contract is violated"
+          "negativeWitness": "packages/carriers/workspace-job/test/workspace-job.test.ts: \"keeps verified, verifier_rejected, and failed terminal states distinct\"; packages/carriers/workspace-job/test/workspace-job.test.ts: \"does not project a verdict unless it references the finalized terminal artifact fact\"",
+          "packageWitnesses": [
+            {
+              "file": "packages/carriers/workspace-job/test/workspace-job.test.ts",
+              "name": "keeps verified, verifier_rejected, and failed terminal states distinct"
+            },
+            {
+              "file": "packages/carriers/workspace-job/test/workspace-job.test.ts",
+              "name": "does not project a verdict unless it references the finalized terminal artifact fact"
+            }
+          ]
         }
       ]
     },
