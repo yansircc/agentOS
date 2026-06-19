@@ -127,6 +127,12 @@
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
     },
     {
+      "path": "packages/composers/workspace-agent",
+      "shape": ["library"],
+      "dependencyOwner": "workspace-root",
+      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+    },
+    {
       "path": "packages/composers/workspace-binding",
       "shape": ["library"],
       "dependencyOwner": "workspace-root",

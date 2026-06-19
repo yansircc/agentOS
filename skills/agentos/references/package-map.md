@@ -32,6 +32,7 @@
 | Agent client core                       | `@agent-os/client`                       |
 | React agent client bridge               | `@agent-os/client-react`                 |
 | Svelte agent client bridge              | `@agent-os/client-svelte`                |
+| Workspace agent app-kit                 | `@agent-os/workspace-agent`              |
 | Consumer run stream                     | `@agent-os/run-stream`                   |
 | Workspace submit binding                | `@agent-os/workspace-binding`            |
 | SSE-over-HTTP transport                 | `@agent-os/sse-http`                     |

@@ -50,6 +50,7 @@
       "@agent-os/workspace-session": ["./packages/carriers/workspace-session/src/index.ts"],
       "@agent-os/agent-authoring": ["./packages/composers/agent-authoring/src/index.ts"],
       "@agent-os/attached-stream": ["./packages/composers/attached-stream/src/index.ts"],
+      "@agent-os/workspace-agent": ["./packages/composers/workspace-agent/src/index.ts"],
       "@agent-os/ag-ui": ["./packages/wire-adapters/ag-ui/src/index.ts"],
       "@agent-os/client": ["./packages/client/core/src/index.ts"],
       "@agent-os/client-react": ["./packages/client/react/src/index.ts"],

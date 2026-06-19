@@ -8,6 +8,7 @@
     { "path": "./packages/composers/agent-authoring" },
     { "path": "./packages/composers/attached-stream" },
     { "path": "./packages/composers/turn-stream" },
+    { "path": "./packages/composers/workspace-agent" },
     { "path": "./packages/wire-adapters/ag-ui" },
     { "path": "./packages/client/core" },
     { "path": "./packages/client/react" },

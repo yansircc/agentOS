@@ -1,0 +1,44 @@
+# @agent-os/workspace-agent
+
+## Purpose
+
+Workspace agent app-kit contracts for projection reads, typed commands,
+generated mount shape, and authored reconcile policy.
+
+## Invariant
+
+Workspace-agent owns mechanism, not product policy. Projection reads are
+replayable read-model surfaces, commands route through the generic client
+`rpcInvoker`, generated mount shape is exactly one driver plus projection sinks,
+and product reconcile code keeps Live workspace access outside manifests and
+ledger facts.
+
+## Minimal Usage
+
+```ts
+import {
+  WORKSPACE_AGENT_COMMAND,
+  WORKSPACE_AGENT_PROJECTION,
+  createWorkspaceAgentClient,
+  defineWorkspaceAgentMount,
+} from "@agent-os/workspace-agent";
+
+const client = createWorkspaceAgentClient({ streamSource, rpcInvoker });
+await client.invoke(WORKSPACE_AGENT_COMMAND.READ_FILE, { path: "/workspace/a.txt" });
+
+const mount = defineWorkspaceAgentMount({
+  driver: { kind: "driver_mount", client },
+  projectionSinks: [{ kind: "projection_sink", name: WORKSPACE_AGENT_PROJECTION.RUN_EVENTS }],
+});
+```
+
+`readFile` is intentionally a command because it reads Live workspace material.
+File metadata projections can be replayed; file bytes are not projected unless a
+product explicitly authors that policy.
+
+## Verification
+
+```sh
+cd packages/composers/workspace-agent
+vp test run
+```
