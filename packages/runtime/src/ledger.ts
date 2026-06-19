@@ -1,7 +1,64 @@
-import { Context, Effect } from "effect";
-import type { JsonStringifyError, SqlError } from "@agent-os/kernel/errors";
-import type { EventQueryOptions, LedgerEvent } from "@agent-os/kernel/types";
+import { Context, Data, Effect } from "effect";
+import { JsonStringifyError } from "@agent-os/kernel/errors";
+import {
+  decodeRecordedLedgerEvent,
+  type EventQueryOptions,
+  type LedgerEvent,
+  type RecordedLedgerEvent,
+} from "@agent-os/kernel/types";
 import type { LedgerCommitEventSpec, LedgerTruthIdentity } from "@agent-os/runtime-protocol";
+
+export type RuntimeStorageOperation =
+  | "admission"
+  | "attached_stream"
+  | "boundary_event"
+  | "dispatch"
+  | "driver"
+  | "ledger_commit"
+  | "ledger_events"
+  | "ledger_stream_snapshot"
+  | "projection"
+  | "quota"
+  | "resource"
+  | "scheduler"
+  | "submit"
+  | "trigger"
+  | "workspace_job";
+
+export class RuntimeStorageError extends Data.TaggedError("agent_os.runtime_storage_error")<{
+  readonly operation: RuntimeStorageOperation;
+  readonly cause: unknown;
+}> {}
+
+export const runtimeStorageError = (
+  operation: RuntimeStorageOperation,
+  cause: unknown,
+): RuntimeStorageError =>
+  cause instanceof RuntimeStorageError ? cause : new RuntimeStorageError({ operation, cause });
+
+export const runtimeStorageOrJsonError = (
+  operation: RuntimeStorageOperation,
+  cause: unknown,
+): RuntimeStorageError | JsonStringifyError =>
+  cause instanceof JsonStringifyError ? cause : runtimeStorageError(operation, cause);
+
+export const recordLedgerPortEvents = (
+  operation: RuntimeStorageOperation,
+  events: ReadonlyArray<LedgerEvent>,
+): Effect.Effect<ReadonlyArray<RecordedLedgerEvent>, RuntimeStorageError> =>
+  Effect.try({
+    try: () => events.map(decodeRecordedLedgerEvent),
+    catch: (cause) => runtimeStorageError(operation, cause),
+  });
+
+export const recordLedgerPortEvent = (
+  operation: RuntimeStorageOperation,
+  event: LedgerEvent,
+): Effect.Effect<RecordedLedgerEvent, RuntimeStorageError> =>
+  Effect.try({
+    try: () => decodeRecordedLedgerEvent(event),
+    catch: (cause) => runtimeStorageError(operation, cause),
+  });
 
 /**
  * Backend-neutral ledger service for atomic fact commits and exact identity reads.
@@ -17,14 +74,17 @@ export class Ledger extends Context.Service<
   {
     readonly commit: (
       events: ReadonlyArray<LedgerCommitEventSpec>,
-    ) => Effect.Effect<ReadonlyArray<LedgerEvent>, SqlError | JsonStringifyError>;
+    ) => Effect.Effect<
+      ReadonlyArray<RecordedLedgerEvent>,
+      RuntimeStorageError | JsonStringifyError
+    >;
     readonly events: (
       identity: LedgerTruthIdentity,
       opts?: EventQueryOptions,
-    ) => Effect.Effect<ReadonlyArray<LedgerEvent>, SqlError>;
+    ) => Effect.Effect<ReadonlyArray<RecordedLedgerEvent>, RuntimeStorageError>;
     readonly streamSnapshot: (
       identity: LedgerTruthIdentity,
       opts?: Pick<EventQueryOptions, "afterId" | "kinds" | "factOwnerRefs">,
-    ) => Effect.Effect<ReadonlyArray<LedgerEvent>, SqlError>;
+    ) => Effect.Effect<ReadonlyArray<RecordedLedgerEvent>, RuntimeStorageError>;
   }
 >()("@agent-os/Ledger") {}

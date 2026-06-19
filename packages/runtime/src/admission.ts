@@ -1,15 +1,19 @@
 import { Context, Effect } from "effect";
-import type { JsonStringifyError, SqlError, UpstreamFailure } from "@agent-os/kernel/errors";
+import type { JsonStringifyError, UpstreamFailure } from "@agent-os/kernel/errors";
 import type { AttemptResult, AttemptSpec, InvalidateSpec } from "@agent-os/runtime-protocol";
+import type { RuntimeStorageError } from "./ledger";
 
 export class Admission extends Context.Service<
   Admission,
   {
     readonly attemptStructured: <O>(
       spec: AttemptSpec,
-    ) => Effect.Effect<AttemptResult<O>, SqlError | JsonStringifyError | UpstreamFailure>;
+    ) => Effect.Effect<
+      AttemptResult<O>,
+      RuntimeStorageError | JsonStringifyError | UpstreamFailure
+    >;
     readonly invalidate: (
       spec: InvalidateSpec,
-    ) => Effect.Effect<{ readonly barrierId: number }, SqlError | JsonStringifyError>;
+    ) => Effect.Effect<{ readonly barrierId: number }, RuntimeStorageError | JsonStringifyError>;
   }
 >()("@agent-os/Admission") {}

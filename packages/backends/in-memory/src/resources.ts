@@ -4,9 +4,13 @@ import {
   ResourceInsufficient,
   ResourceReservationClosed,
   ResourceReservationNotFound,
-  SqlError,
 } from "@agent-os/kernel/errors";
-import { Resources } from "@agent-os/runtime";
+import {
+  Resources,
+  runtimeStorageError,
+  runtimeStorageOrJsonError,
+  type RuntimeStorageError,
+} from "@agent-os/runtime";
 import type { LedgerTruthIdentity } from "@agent-os/runtime-protocol";
 import {
   emptyResourceProjection,
@@ -24,10 +28,10 @@ const positiveAmount = (amount: number): Effect.Effect<void, InvalidResourceAmou
 const loadResourceState = (
   state: InMemoryBackendState,
   identity: LedgerTruthIdentity,
-): Effect.Effect<ProjectedResourceState, SqlError> =>
+): Effect.Effect<ProjectedResourceState, RuntimeStorageError> =>
   Effect.try({
     try: () => projectResourceEvents(state.eventSnapshot(inMemoryRuntimeEventIdentity(identity))),
-    catch: (cause) => new SqlError({ cause }),
+    catch: (cause) => runtimeStorageError("resource", cause),
   });
 
 export const InMemoryResourcesLive = (state: InMemoryBackendState): Layer.Layer<Resources> =>
@@ -36,14 +40,16 @@ export const InMemoryResourcesLive = (state: InMemoryBackendState): Layer.Layer<
       Effect.gen(function* () {
         yield* positiveAmount(spec.amount);
         const ts = yield* Clock.currentTimeMillis;
-        const [event] = yield* state.commitEvents([
-          {
-            ts,
-            kind: RESOURCE_EVENT_KIND.GRANTED,
-            ...identity,
-            payload: { key: spec.key, amount: spec.amount, ref: spec.ref },
-          },
-        ]);
+        const [event] = yield* state
+          .commitEvents([
+            {
+              ts,
+              kind: RESOURCE_EVENT_KIND.GRANTED,
+              ...identity,
+              payload: { key: spec.key, amount: spec.amount, ref: spec.ref },
+            },
+          ])
+          .pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("resource", cause)));
         return { eventId: event!.id };
       }),
 
@@ -57,20 +63,22 @@ export const InMemoryResourcesLive = (state: InMemoryBackendState): Layer.Layer<
 
         const current = projected.byKey.get(spec.key) ?? emptyResourceProjection();
         if (current.available < spec.amount) {
-          yield* state.commitEvents([
-            {
-              ts,
-              kind: RESOURCE_EVENT_KIND.RESERVE_REJECTED,
-              ...identity,
-              payload: {
-                key: spec.key,
-                amount: spec.amount,
-                ref: spec.ref,
-                idempotencyKey: spec.idempotencyKey,
-                available: current.available,
+          yield* state
+            .commitEvents([
+              {
+                ts,
+                kind: RESOURCE_EVENT_KIND.RESERVE_REJECTED,
+                ...identity,
+                payload: {
+                  key: spec.key,
+                  amount: spec.amount,
+                  ref: spec.ref,
+                  idempotencyKey: spec.idempotencyKey,
+                  available: current.available,
+                },
               },
-            },
-          ]);
+            ])
+            .pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("resource", cause)));
           return yield* Effect.fail(
             new ResourceInsufficient({
               key: spec.key,
@@ -81,20 +89,22 @@ export const InMemoryResourcesLive = (state: InMemoryBackendState): Layer.Layer<
         }
 
         const reservationId = crypto.randomUUID();
-        yield* state.commitEvents([
-          {
-            ts,
-            kind: RESOURCE_EVENT_KIND.RESERVED,
-            ...identity,
-            payload: {
-              key: spec.key,
-              amount: spec.amount,
-              ref: spec.ref,
-              idempotencyKey: spec.idempotencyKey,
-              reservationId,
+        yield* state
+          .commitEvents([
+            {
+              ts,
+              kind: RESOURCE_EVENT_KIND.RESERVED,
+              ...identity,
+              payload: {
+                key: spec.key,
+                amount: spec.amount,
+                ref: spec.ref,
+                idempotencyKey: spec.idempotencyKey,
+                reservationId,
+              },
             },
-          },
-        ]);
+          ])
+          .pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("resource", cause)));
         return { reservationId };
       }),
 
@@ -117,14 +127,16 @@ export const InMemoryResourcesLive = (state: InMemoryBackendState): Layer.Layer<
             }),
           );
         }
-        yield* state.commitEvents([
-          {
-            ts,
-            kind: RESOURCE_EVENT_KIND.CONSUMED,
-            ...identity,
-            payload: { reservationId: spec.reservationId, ref: spec.ref },
-          },
-        ]);
+        yield* state
+          .commitEvents([
+            {
+              ts,
+              kind: RESOURCE_EVENT_KIND.CONSUMED,
+              ...identity,
+              payload: { reservationId: spec.reservationId, ref: spec.ref },
+            },
+          ])
+          .pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("resource", cause)));
       }),
 
     release: (identity, spec) =>
@@ -146,14 +158,16 @@ export const InMemoryResourcesLive = (state: InMemoryBackendState): Layer.Layer<
             }),
           );
         }
-        yield* state.commitEvents([
-          {
-            ts,
-            kind: RESOURCE_EVENT_KIND.RELEASED,
-            ...identity,
-            payload: { reservationId: spec.reservationId, ref: spec.ref },
-          },
-        ]);
+        yield* state
+          .commitEvents([
+            {
+              ts,
+              kind: RESOURCE_EVENT_KIND.RELEASED,
+              ...identity,
+              payload: { reservationId: spec.reservationId, ref: spec.ref },
+            },
+          ])
+          .pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("resource", cause)));
       }),
 
     project: (identity, key) =>

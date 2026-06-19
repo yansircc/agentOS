@@ -2,6 +2,8 @@ import { Effect, Layer } from "effect";
 import {
   BoundaryEvents,
   commitBoundaryEvent,
+  recordLedgerPortEvent,
+  runtimeStorageOrJsonError,
   type BoundaryCommitIdentity,
 } from "@agent-os/runtime";
 import type { BoundaryContract } from "@agent-os/kernel/boundary-contract";
@@ -16,17 +18,19 @@ export const InMemoryBoundaryEventsLive = (
     commit: (contract: BoundaryContract, event: string, payload: unknown) =>
       commitBoundaryEvent(contract, event, payload, (identity: BoundaryCommitIdentity) =>
         Effect.gen(function* () {
-          const committed = yield* state.commitProtocolEvents([
-            {
-              kind: event,
-              scopeRef: identity.scopeRef ?? fallbackIdentity.scopeRef,
-              effectAuthorityRef:
-                identity.effectAuthorityRef ?? fallbackIdentity.effectAuthorityRef,
-              factOwnerRef: identity.factOwnerRef,
-              payload,
-            },
-          ]);
-          return committed[0]!;
+          const committed = yield* state
+            .commitProtocolEvents([
+              {
+                kind: event,
+                scopeRef: identity.scopeRef ?? fallbackIdentity.scopeRef,
+                effectAuthorityRef:
+                  identity.effectAuthorityRef ?? fallbackIdentity.effectAuthorityRef,
+                factOwnerRef: identity.factOwnerRef,
+                payload,
+              },
+            ])
+            .pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("boundary_event", cause)));
+          return yield* recordLedgerPortEvent("boundary_event", committed[0]!);
         }),
       ),
   });

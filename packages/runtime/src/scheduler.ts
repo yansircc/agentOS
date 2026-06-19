@@ -1,9 +1,6 @@
 import { Context, Effect } from "effect";
-import type {
-  JsonStringifyError,
-  SqlError,
-  UnregisteredDurableTriggerKind,
-} from "@agent-os/kernel/errors";
+import type { JsonStringifyError, UnregisteredDurableTriggerKind } from "@agent-os/kernel/errors";
+import type { RuntimeStorageError } from "./ledger";
 
 export class Scheduler extends Context.Service<
   Scheduler,
@@ -14,7 +11,7 @@ export class Scheduler extends Context.Service<
       data: unknown,
     ) => Effect.Effect<
       { id: number },
-      SqlError | JsonStringifyError | UnregisteredDurableTriggerKind
+      RuntimeStorageError | JsonStringifyError | UnregisteredDurableTriggerKind
     >;
   }
 >()("@agent-os/Scheduler") {}

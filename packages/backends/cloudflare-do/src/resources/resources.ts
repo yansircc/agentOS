@@ -17,10 +17,9 @@ import {
   ResourceInsufficient,
   ResourceReservationClosed,
   ResourceReservationNotFound,
-  SqlError,
 } from "@agent-os/kernel/errors";
 import { EventBus } from "../ledger";
-import { Resources } from "@agent-os/runtime";
+import { Resources, runtimeStorageError, runtimeStorageOrJsonError } from "@agent-os/runtime";
 import { commitLedgerTransaction } from "../ledger/commit";
 import { RESOURCE_EVENT_KIND, type BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
 
@@ -38,7 +37,7 @@ const assertPositiveAmount = (amount: number): Effect.Effect<void, InvalidResour
 export const ResourcesLive = (
   ctx: DurableObjectState,
   ownerIdentity: BackendProtocolEventIdentity,
-): Layer.Layer<Resources, SqlError, EventBus> => {
+): Layer.Layer<Resources, never, EventBus> => {
   const sql = ctx.storage.sql;
   return Layer.effect(
     Resources,
@@ -69,7 +68,7 @@ export const ResourcesLive = (
                 });
                 return granted;
               },
-            );
+            ).pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("resource", cause)));
             return { eventId: committed.id(committed.value) };
           }),
 
@@ -134,7 +133,7 @@ export const ResourcesLive = (
                   reservationId,
                 };
               },
-            );
+            ).pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("resource", cause)));
 
             if (tx.value.status === "insufficient") {
               return yield* Effect.fail(
@@ -176,7 +175,7 @@ export const ResourcesLive = (
                 });
                 return { status: "written" as const };
               },
-            );
+            ).pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("resource", cause)));
             if (tx.value.status === "missing") {
               return yield* Effect.fail(
                 new ResourceReservationNotFound({
@@ -222,7 +221,7 @@ export const ResourcesLive = (
                 });
                 return { status: "written" as const };
               },
-            );
+            ).pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("resource", cause)));
             if (tx.value.status === "missing") {
               return yield* Effect.fail(
                 new ResourceReservationNotFound({
@@ -245,7 +244,7 @@ export const ResourcesLive = (
             try: () =>
               loadState(sql, identity, ownerIdentity.factOwnerRef).byKey.get(key) ??
               emptyProjection(),
-            catch: (cause) => new SqlError({ cause }),
+            catch: (cause) => runtimeStorageError("resource", cause),
           }),
       };
     }),

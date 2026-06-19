@@ -5,7 +5,6 @@ import {
   DurableTriggerDrainLimitExceeded,
   UnregisteredDurableTriggerKind,
   type JsonStringifyError,
-  type SqlError,
 } from "@agent-os/kernel";
 import type { EventQueryOptions, LedgerEvent } from "@agent-os/kernel/types";
 import {
@@ -15,6 +14,7 @@ import {
   parseScheduledEventIntentPayload,
   type ScheduledEventIntentPayload,
 } from "@agent-os/backend-protocol";
+import type { RuntimeStorageError } from "./ledger";
 
 export interface TriggerEventSpec {
   readonly kind: string;
@@ -249,7 +249,7 @@ export class TriggerPump extends Context.Service<
       now: number,
     ) => Effect.Effect<
       TriggerDrainResult,
-      | SqlError
+      | RuntimeStorageError
       | JsonStringifyError
       | UnregisteredDurableTriggerKind
       | DurableTriggerCommitReturnedThenable
@@ -259,7 +259,7 @@ export class TriggerPump extends Context.Service<
       options?: TriggerDrainUntilQuietOptions,
     ) => Effect.Effect<
       TriggerDrainUntilQuietResult,
-      | SqlError
+      | RuntimeStorageError
       | JsonStringifyError
       | UnregisteredDurableTriggerKind
       | DurableTriggerCommitReturnedThenable
@@ -269,11 +269,11 @@ export class TriggerPump extends Context.Service<
       spec: TriggerCancelSpec,
     ) => Effect.Effect<
       TriggerCancelResult,
-      | SqlError
+      | RuntimeStorageError
       | JsonStringifyError
       | UnregisteredDurableTriggerKind
       | DurableTriggerCommitReturnedThenable
     >;
-    readonly stuckTriggers: (now: number) => Effect.Effect<TriggerStuckResult, SqlError>;
+    readonly stuckTriggers: (now: number) => Effect.Effect<TriggerStuckResult, RuntimeStorageError>;
   }
 >()("@agent-os/TriggerPump") {}

@@ -90,10 +90,13 @@ import {
   MaterializedProjections,
   TriggerPump,
   internalSubmitSpec,
+  recordLedgerPortEvent,
   runWorkspaceJobEffect,
+  runtimeStorageOrJsonError,
   submitAgentEffect,
   validateBoundaryEventPayload,
   type RunWorkspaceJobSpec,
+  type RuntimeStorageError,
   type TriggerCancelResult,
   type TriggerDrainResult,
   type TriggerDrainUntilQuietOptions,
@@ -286,7 +289,10 @@ const makeAgentRuntime = <Env extends CloudflareAgentEnv>(
   appTriggers: CloudflareTriggerSource<Env>,
   appStreams: CloudflareAttachedStreamSource<Env>,
   appProjections: ReadonlyArray<AnyMaterializedProjectionDefinition>,
-): ManagedRuntime.ManagedRuntime<CoreServices, SqlError | TriggerFactoryError> => {
+): ManagedRuntime.ManagedRuntime<
+  CoreServices,
+  SqlError | TriggerFactoryError | RuntimeStorageError
+> => {
   const backendCoreLayer = makeCloudflareBackendCoreLayer(
     ctx,
     env,
@@ -412,7 +418,10 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
   private readonly _projections: ReadonlyArray<AnyMaterializedProjectionDefinition>;
   private readonly _runtimes = new Map<
     string,
-    ManagedRuntime.ManagedRuntime<CoreServices, SqlError | TriggerFactoryError>
+    ManagedRuntime.ManagedRuntime<
+      CoreServices,
+      SqlError | TriggerFactoryError | RuntimeStorageError
+    >
   >();
 
   constructor(ctx: DurableObjectState, env: Env, config: MaterializedAgentConfig<Env, Runtime>) {
@@ -464,7 +473,10 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
   private runtimeFor(
     scope: string,
     identity: BackendProtocolEventIdentity,
-  ): ManagedRuntime.ManagedRuntime<CoreServices, SqlError | TriggerFactoryError> {
+  ): ManagedRuntime.ManagedRuntime<
+    CoreServices,
+    SqlError | TriggerFactoryError | RuntimeStorageError
+  > {
     const key = backendProtocolEventIdentityKey(identity);
     const existing = this._runtimes.get(key);
     if (existing !== undefined) return existing;
@@ -650,8 +662,8 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
                 });
                 return ref;
               },
-            );
-            return committed.event(committed.value);
+            ).pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("boundary_event", cause)));
+            return yield* recordLedgerPortEvent("boundary_event", committed.event(committed.value));
           }),
         );
         return { id: ev.id };

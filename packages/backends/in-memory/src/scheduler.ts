@@ -3,7 +3,7 @@ import {
   SCHEDULED_EVENT_TRIGGER_KIND,
   type BackendProtocolTruthIdentity,
 } from "@agent-os/backend-protocol";
-import { DurableTriggerRegistry, Scheduler } from "@agent-os/runtime";
+import { DurableTriggerRegistry, Scheduler, runtimeStorageOrJsonError } from "@agent-os/runtime";
 import { inMemoryRuntimeEventIdentity, type InMemoryBackendState } from "./state";
 
 export const InMemorySchedulerLive = (
@@ -18,15 +18,17 @@ export const InMemorySchedulerLive = (
         schedule: (at, eventKind, data) =>
           Effect.gen(function* () {
             const now = yield* Clock.currentTimeMillis;
-            return yield* state.schedule(
-              inMemoryRuntimeEventIdentity(identity),
-              now,
-              at,
-              registry,
-              SCHEDULED_EVENT_TRIGGER_KIND,
-              eventKind,
-              data,
-            );
+            return yield* state
+              .schedule(
+                inMemoryRuntimeEventIdentity(identity),
+                now,
+                at,
+                registry,
+                SCHEDULED_EVENT_TRIGGER_KIND,
+                eventKind,
+                data,
+              )
+              .pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("scheduler", cause)));
           }),
       };
     }),

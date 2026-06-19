@@ -1,13 +1,13 @@
 import { Data, Duration, Effect, Schedule } from "effect";
-import type { LedgerEvent } from "@agent-os/kernel/types";
-import type { JsonStringifyError, SqlError } from "@agent-os/kernel/errors";
+import type { LedgerEvent, RecordedLedgerEvent } from "@agent-os/kernel/types";
+import type { JsonStringifyError } from "@agent-os/kernel/errors";
 import { RefResolverService } from "@agent-os/kernel/ref-resolver";
 import { LlmTransport } from "@agent-os/llm-protocol";
 import type { BoundaryCommitRejected } from "./boundary-commit";
 import type { BoundaryEvents } from "./boundary-events";
 import { BoundaryEvents as BoundaryEventsTag } from "./boundary-events";
 import { Admission } from "./admission";
-import { Ledger } from "./ledger";
+import { Ledger, type RuntimeStorageError } from "./ledger";
 import { MaterializedProjections } from "./projection";
 import { Quota } from "./quota-service";
 import { submitAgentEffect } from "./submit-agent";
@@ -292,27 +292,33 @@ const verifierInfraFailure = (_cause: unknown): WorkspaceJobFailure => ({
 const eventsFor = (
   ledger: ContextualLedger,
   identity: LedgerTruthIdentity,
-): Effect.Effect<ReadonlyArray<LedgerEvent>, SqlError> => ledger.events(identity);
+): Effect.Effect<ReadonlyArray<RecordedLedgerEvent>, RuntimeStorageError> =>
+  ledger.events(identity);
 
 type ContextualLedger = {
   readonly events: (
     identity: LedgerTruthIdentity,
-  ) => Effect.Effect<ReadonlyArray<LedgerEvent>, SqlError>;
+  ) => Effect.Effect<ReadonlyArray<RecordedLedgerEvent>, RuntimeStorageError>;
 };
 type ContextualBoundaryEvents = {
   readonly commit: (
     contract: typeof workspaceJobBoundaryContract,
     event: string,
     payload: unknown,
-  ) => Effect.Effect<LedgerEvent, BoundaryCommitRejected | SqlError | JsonStringifyError>;
+  ) => Effect.Effect<
+    RecordedLedgerEvent,
+    BoundaryCommitRejected | RuntimeStorageError | JsonStringifyError
+  >;
 };
 
 const commitWorkspaceJob = (
   boundaryEvents: ContextualBoundaryEvents,
   event: (typeof WORKSPACE_JOB_KIND)[keyof typeof WORKSPACE_JOB_KIND],
   payload: unknown,
-): Effect.Effect<LedgerEvent, BoundaryCommitRejected | SqlError | JsonStringifyError> =>
-  boundaryEvents.commit(workspaceJobBoundaryContract, event, payload);
+): Effect.Effect<
+  RecordedLedgerEvent,
+  BoundaryCommitRejected | RuntimeStorageError | JsonStringifyError
+> => boundaryEvents.commit(workspaceJobBoundaryContract, event, payload);
 
 const commitFailed = (
   boundaryEvents: ContextualBoundaryEvents,
@@ -320,7 +326,10 @@ const commitFailed = (
   requestedEventId: number,
   failure: WorkspaceJobFailure,
   submitRunId?: number,
-): Effect.Effect<LedgerEvent, BoundaryCommitRejected | SqlError | JsonStringifyError> => {
+): Effect.Effect<
+  RecordedLedgerEvent,
+  BoundaryCommitRejected | RuntimeStorageError | JsonStringifyError
+> => {
   const requestClaim = workspaceJobPreClaim({
     runId: spec.runId,
     idempotencyKey: spec.idempotencyKey,
@@ -349,7 +358,10 @@ const commitSeedWritten = (
   boundaryEvents: ContextualBoundaryEvents,
   spec: RunWorkspaceJobSpec,
   requestedEventId: number,
-): Effect.Effect<LedgerEvent, BoundaryCommitRejected | SqlError | JsonStringifyError> => {
+): Effect.Effect<
+  RecordedLedgerEvent,
+  BoundaryCommitRejected | RuntimeStorageError | JsonStringifyError
+> => {
   const claim = settleWorkspaceJobSeedWritten(
     workspaceJobPreClaim({
       runId: spec.runId,
@@ -378,7 +390,10 @@ const commitTerminalBuildAttempted = (
   requestedEventId: number,
   submitRunId: number,
   built: WorkspaceJobBuiltArtifact,
-): Effect.Effect<LedgerEvent, BoundaryCommitRejected | SqlError | JsonStringifyError> => {
+): Effect.Effect<
+  RecordedLedgerEvent,
+  BoundaryCommitRejected | RuntimeStorageError | JsonStringifyError
+> => {
   const claim = settleWorkspaceJobTerminalBuildAttempted(
     workspaceJobPreClaim({
       runId: spec.runId,
@@ -409,7 +424,10 @@ const commitArtifactWritten = (
   spec: RunWorkspaceJobSpec,
   requestedEventId: number,
   written: WorkspaceJobWrittenArtifact,
-): Effect.Effect<LedgerEvent, BoundaryCommitRejected | SqlError | JsonStringifyError> => {
+): Effect.Effect<
+  RecordedLedgerEvent,
+  BoundaryCommitRejected | RuntimeStorageError | JsonStringifyError
+> => {
   const claim = settleWorkspaceJobArtifactWritten(
     workspaceJobPreClaim({
       runId: spec.runId,
@@ -443,7 +461,10 @@ const commitArtifactReadbackVerified = (
   requestedEventId: number,
   artifact: WorkspaceJobFinalizedArtifact,
   submitRunId: number,
-): Effect.Effect<LedgerEvent, BoundaryCommitRejected | SqlError | JsonStringifyError> => {
+): Effect.Effect<
+  RecordedLedgerEvent,
+  BoundaryCommitRejected | RuntimeStorageError | JsonStringifyError
+> => {
   const claim = settleWorkspaceJobArtifactReadbackVerified(
     workspaceJobPreClaim({
       runId: spec.runId,

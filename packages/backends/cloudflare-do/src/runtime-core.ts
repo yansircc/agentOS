@@ -15,6 +15,7 @@ import {
   makeAttachedStreamRegistry,
   scheduledEventTrigger,
   type AnyMaterializedProjectionDefinition,
+  type RuntimeStorageError,
 } from "@agent-os/runtime";
 import { SqlError, TriggerFactoryError } from "@agent-os/kernel/errors";
 import {
@@ -63,7 +64,10 @@ export const makeCloudflareBackendCoreLayer = <Env>(
   appTriggers: CloudflareTriggerSource<Env> = [],
   appStreams: CloudflareAttachedStreamSource<Env> = [],
   appProjections: ReadonlyArray<AnyMaterializedProjectionDefinition> = [],
-): Layer.Layer<CloudflareBackendCoreServices, SqlError | TriggerFactoryError> => {
+): Layer.Layer<
+  CloudflareBackendCoreServices,
+  SqlError | TriggerFactoryError | RuntimeStorageError
+> => {
   const eventBusLayer = EventBusLive(handlers);
   const projectionRegistryLayer = Layer.effect(
     MaterializedProjectionRegistry,

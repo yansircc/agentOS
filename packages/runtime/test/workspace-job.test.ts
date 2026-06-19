@@ -13,7 +13,7 @@ import type { MaterialRef } from "@agent-os/kernel/material-ref";
 import { materialRefKey } from "@agent-os/kernel/material-ref";
 import { RefResolverLive } from "@agent-os/kernel/ref-resolver";
 import type { ResolvedMaterial } from "@agent-os/kernel/ref-resolver";
-import type { LedgerEvent } from "@agent-os/kernel/types";
+import { decodeRecordedLedgerEvent, type LedgerEvent } from "@agent-os/kernel/types";
 import type { BoundaryContract } from "@agent-os/kernel/boundary-contract";
 import {
   defineTool,
@@ -130,10 +130,10 @@ const makeServices = (
           } satisfies LedgerEvent;
         });
         events.push(...committed);
-        return committed;
+        return committed.map(decodeRecordedLedgerEvent);
       }),
-    events: () => Effect.succeed(events),
-    streamSnapshot: () => Effect.succeed(events),
+    events: () => Effect.succeed(events.map(decodeRecordedLedgerEvent)),
+    streamSnapshot: () => Effect.succeed(events.map(decodeRecordedLedgerEvent)),
   };
   const boundaryEvents = {
     commit: (contract: BoundaryContract, event: string, payload: unknown) =>
@@ -150,7 +150,7 @@ const makeServices = (
             payload,
           } satisfies LedgerEvent;
           events.push(committed);
-          return committed;
+          return decodeRecordedLedgerEvent(committed);
         }),
       ),
   };

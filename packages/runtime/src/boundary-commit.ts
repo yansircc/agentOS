@@ -13,9 +13,10 @@ import {
   type BoundaryContract,
   type BoundaryEventContract,
 } from "@agent-os/kernel/boundary-contract";
-import type { JsonStringifyError, SqlError } from "@agent-os/kernel/errors";
+import type { JsonStringifyError } from "@agent-os/kernel/errors";
 import { validateTerminalClaim } from "@agent-os/kernel/settlement-contract";
-import type { LedgerEvent } from "@agent-os/kernel/types";
+import type { LedgerEvent, RecordedLedgerEvent } from "@agent-os/kernel/types";
+import type { RuntimeStorageError } from "./ledger";
 
 type BoundaryCommitIssue =
   | "event_outside_vocabulary"
@@ -147,8 +148,26 @@ export const validateBoundaryEventPayload = (
   return null;
 };
 
-const sameJson = (left: unknown, right: unknown): boolean =>
-  JSON.stringify(left) === JSON.stringify(right);
+const sameJson = (left: unknown, right: unknown): boolean => {
+  if (left === right) return true;
+  if (typeof left !== typeof right) return false;
+  if (left === null || right === null) return left === right;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
+      return false;
+    }
+    return left.every((value, index) => sameJson(value, right[index]));
+  }
+  if (typeof left === "object" && typeof right === "object") {
+    const leftRecord = left as Readonly<Record<string, unknown>>;
+    const rightRecord = right as Readonly<Record<string, unknown>>;
+    const leftKeys = Object.keys(leftRecord).sort();
+    const rightKeys = Object.keys(rightRecord).sort();
+    if (!sameJson(leftKeys, rightKeys)) return false;
+    return leftKeys.every((key) => sameJson(leftRecord[key], rightRecord[key]));
+  }
+  return false;
+};
 
 export const boundaryCommitIdentity = (
   contract: BoundaryContract,
@@ -205,8 +224,11 @@ export const commitBoundaryEvent = (
   payload: unknown,
   commit: (
     identity: BoundaryCommitIdentity,
-  ) => Effect.Effect<LedgerEvent, SqlError | JsonStringifyError>,
-): Effect.Effect<LedgerEvent, BoundaryCommitRejected | SqlError | JsonStringifyError> =>
+  ) => Effect.Effect<RecordedLedgerEvent, RuntimeStorageError | JsonStringifyError>,
+): Effect.Effect<
+  RecordedLedgerEvent,
+  BoundaryCommitRejected | RuntimeStorageError | JsonStringifyError
+> =>
   Effect.gen(function* () {
     const rejected = validateBoundaryEventPayload(contract, event, payload);
     if (rejected !== null) {

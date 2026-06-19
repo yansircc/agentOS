@@ -406,6 +406,17 @@
       "sourceFiles": ["packages/runtime-protocol/src/runtime-events.ts"]
     },
     {
+      "tag": "agent_os.runtime_storage_error",
+      "invariants": ["invariant.ledger.single-commit-source"],
+      "docs": "docs/concepts/durable-truth.md",
+      "fix": "Map backend storage failures into the runtime-owned storage error at the runtime service boundary; keep backend-specific storage errors inside backend adapters.",
+      "sourceFiles": [
+        "packages/backends/in-memory/test/runtime-tags.test.ts",
+        "packages/backends/protocol/test/contract/runtime-backend-contract.ts",
+        "packages/runtime/src/ledger.ts"
+      ]
+    },
+    {
       "tag": "agent_os.sandbox_failure",
       "invariants": ["invariant.boundary.runtime-validation-external-only"],
       "docs": "docs/packages/sandbox.md",
@@ -447,7 +458,7 @@
         "packages/backends/cloudflare-do/test/materialized-projections.worker.test.ts",
         "packages/backends/cloudflare-do/test/quota-contract.worker.test.ts",
         "packages/backends/in-memory/test/runtime-tags.test.ts",
-        "packages/backends/protocol/test/contract/runtime-backend-contract.ts",
+        "packages/backends/node-postgres/test/backend-protocol-contract.test.ts",
         "packages/kernel/src/errors.ts"
       ]
     },

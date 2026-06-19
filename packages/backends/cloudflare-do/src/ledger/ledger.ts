@@ -9,8 +9,13 @@ import type { EventQueryOptions, LedgerEvent, LedgerEventRpc } from "@agent-os/k
  */
 
 import { Clock, Effect, Layer } from "effect";
-import { SqlError } from "@agent-os/kernel/errors";
-import { Ledger } from "@agent-os/runtime";
+import {
+  Ledger,
+  recordLedgerPortEvents,
+  runtimeStorageError,
+  runtimeStorageOrJsonError,
+  type RuntimeStorageError,
+} from "@agent-os/runtime";
 import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
 import { EventBus } from "./event-bus";
 import { commitLedgerTransaction, ensureLedgerSchema } from "./commit";
@@ -92,14 +97,16 @@ export const selectLedgerEvents = (
     .map((r): LedgerEvent => ledgerEventFromRow(r as unknown as LedgerEventSqlRow));
 };
 
-export const LedgerLive = (storage: DurableObjectState): Layer.Layer<Ledger, SqlError, EventBus> =>
+export const LedgerLive = (
+  storage: DurableObjectState,
+): Layer.Layer<Ledger, RuntimeStorageError, EventBus> =>
   Layer.effect(
     Ledger,
     Effect.gen(function* () {
       const sql = storage.storage.sql;
       yield* Effect.try({
         try: () => ensureLedgerSchema(sql),
-        catch: (cause) => new SqlError({ cause }),
+        catch: (cause) => runtimeStorageError("ledger_events", cause),
       });
       const bus = yield* EventBus;
 
@@ -126,36 +133,42 @@ export const LedgerLive = (storage: DurableObjectState): Layer.Layer<Ledger, Sql
                   });
                 }
               },
-            );
-            return result.events;
+            ).pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("ledger_commit", cause)));
+            return yield* recordLedgerPortEvents("ledger_commit", result.events);
           }),
         events: (identity, opts = {}) =>
-          Effect.try({
-            try: () => {
-              const truthIdentity = truthIdentityFromCommitSpec(identity, "ledger events query");
-              const limit =
-                opts.limit === undefined
-                  ? DEFAULT_EVENT_LIMIT
-                  : Math.max(
-                      0,
-                      Math.min(
-                        MAX_EVENT_LIMIT,
-                        normalizeNonNegativeInteger(opts.limit, DEFAULT_EVENT_LIMIT),
-                      ),
-                    );
-              return selectLedgerEvents(sql, truthIdentity, { ...opts, limit });
-            },
-            catch: (cause) => new SqlError({ cause }),
+          Effect.gen(function* () {
+            const events = yield* Effect.try({
+              try: () => {
+                const truthIdentity = truthIdentityFromCommitSpec(identity, "ledger events query");
+                const limit =
+                  opts.limit === undefined
+                    ? DEFAULT_EVENT_LIMIT
+                    : Math.max(
+                        0,
+                        Math.min(
+                          MAX_EVENT_LIMIT,
+                          normalizeNonNegativeInteger(opts.limit, DEFAULT_EVENT_LIMIT),
+                        ),
+                      );
+                return selectLedgerEvents(sql, truthIdentity, { ...opts, limit });
+              },
+              catch: (cause) => runtimeStorageError("ledger_events", cause),
+            });
+            return yield* recordLedgerPortEvents("ledger_events", events);
           }),
         streamSnapshot: (identity, opts = {}) =>
-          Effect.try({
-            try: () =>
-              selectLedgerEvents(
-                sql,
-                truthIdentityFromCommitSpec(identity, "ledger stream query"),
-                opts,
-              ),
-            catch: (cause) => new SqlError({ cause }),
+          Effect.gen(function* () {
+            const events = yield* Effect.try({
+              try: () =>
+                selectLedgerEvents(
+                  sql,
+                  truthIdentityFromCommitSpec(identity, "ledger stream query"),
+                  opts,
+                ),
+              catch: (cause) => runtimeStorageError("ledger_stream_snapshot", cause),
+            });
+            return yield* recordLedgerPortEvents("ledger_stream_snapshot", events);
           }),
       };
     }),

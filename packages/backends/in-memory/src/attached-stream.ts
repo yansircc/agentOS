@@ -3,9 +3,10 @@ import {
   AttachedStreamRegistry,
   AttachedStreams,
   makeAttachedStreamService,
+  runtimeStorageOrJsonError,
   runSynchronousAttachedStreamCommit,
+  type RuntimeStorageError,
 } from "@agent-os/runtime";
-import type { SqlError } from "@agent-os/kernel";
 import type { BackendProtocolTruthIdentity } from "@agent-os/backend-protocol";
 import { inMemoryRuntimeEventIdentity, type InMemoryBackendState } from "./state";
 
@@ -13,7 +14,7 @@ export const InMemoryAttachedStreamsLive = (
   state: InMemoryBackendState,
   identity: BackendProtocolTruthIdentity,
   scopeLabel: string,
-): Layer.Layer<AttachedStreams, SqlError, AttachedStreamRegistry> => {
+): Layer.Layer<AttachedStreams, RuntimeStorageError, AttachedStreamRegistry> => {
   let nextStreamId = 1;
   return Layer.effect(
     AttachedStreams,
@@ -39,7 +40,10 @@ export const InMemoryAttachedStreamsLive = (
                   handler.commitTerminal(value, tx),
                 ),
             )
-            .pipe(Effect.map(({ events }) => ({ eventIds: events.map((event) => event.id) }))),
+            .pipe(
+              Effect.mapError((cause) => runtimeStorageOrJsonError("attached_stream", cause)),
+              Effect.map(({ events }) => ({ eventIds: events.map((event) => event.id) })),
+            ),
       });
     }),
   );

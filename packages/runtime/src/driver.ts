@@ -5,8 +5,8 @@ import {
   type DecisionGateConsumedPayload,
   type DecisionGateRequestedPayload,
 } from "@agent-os/decision-gate";
-import { SqlError, type JsonStringifyError } from "@agent-os/kernel/errors";
-import type { LedgerEvent } from "@agent-os/kernel/types";
+import type { JsonStringifyError } from "@agent-os/kernel/errors";
+import type { RecordedLedgerEvent } from "@agent-os/kernel/types";
 import {
   decodeRuntimeLedgerEvent,
   RUNTIME_EVENT_KIND,
@@ -18,6 +18,7 @@ import {
 } from "@agent-os/runtime-protocol";
 import type { LedgerCommitEventSpec } from "@agent-os/runtime-protocol";
 import type { BoundaryCommitRejected } from "./boundary-commit";
+import { runtimeStorageError, type RuntimeStorageError } from "./ledger";
 
 class DriverLedgerCommitShapeMismatch extends Data.TaggedError(
   "agent_os.driver_ledger_commit_shape_mismatch",
@@ -29,7 +30,7 @@ class DriverLedgerCommitShapeMismatch extends Data.TaggedError(
 type LedgerAppender = {
   readonly commit: (
     events: ReadonlyArray<LedgerCommitEventSpec>,
-  ) => Effect.Effect<ReadonlyArray<LedgerEvent>, SqlError | JsonStringifyError>;
+  ) => Effect.Effect<ReadonlyArray<RecordedLedgerEvent>, RuntimeStorageError | JsonStringifyError>;
 };
 
 type BoundaryEventAppender = {
@@ -37,7 +38,10 @@ type BoundaryEventAppender = {
     contract: typeof decisionGateBoundaryContract,
     event: string,
     payload: unknown,
-  ) => Effect.Effect<LedgerEvent, BoundaryCommitRejected | SqlError | JsonStringifyError>;
+  ) => Effect.Effect<
+    RecordedLedgerEvent,
+    BoundaryCommitRejected | RuntimeStorageError | JsonStringifyError
+  >;
 };
 
 type RuntimeAppendAction<K extends keyof RuntimeEventActionByKind> = {
@@ -131,29 +135,29 @@ export type DriverActionResult =
   | RuntimeDriverActionResult
   | {
       readonly kind: "park";
-      readonly request: LedgerEvent;
+      readonly request: RecordedLedgerEvent;
       readonly interruption: RuntimeLedgerEventByKind<
         typeof RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED
       >;
     }
   | {
       readonly kind: "resume";
-      readonly consumed: LedgerEvent;
+      readonly consumed: RecordedLedgerEvent;
       readonly resumed: RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED>;
     }
   | CompleteAfterToolsDriverActionResult;
 
 const decodeCommittedRuntimeEvent = <K extends RuntimeEventKind>(
-  event: LedgerEvent,
+  event: RecordedLedgerEvent,
   expectedKind: K,
-): Effect.Effect<RuntimeLedgerEventByKind<K>, SqlError> =>
+): Effect.Effect<RuntimeLedgerEventByKind<K>, RuntimeStorageError> =>
   Effect.gen(function* () {
     const decoded = decodeRuntimeLedgerEvent(event);
     if (decoded._tag === "runtime" && decoded.event.kind === expectedKind) {
       return decoded.event as RuntimeLedgerEventByKind<K>;
     }
     return yield* Effect.fail(
-      new SqlError({
+      runtimeStorageError("driver", {
         cause: {
           reason: "driver_ledger_commit_runtime_decode_mismatch",
           expectedKind,
@@ -166,41 +170,45 @@ const decodeCommittedRuntimeEvent = <K extends RuntimeEventKind>(
 const commitOneRuntimeEvent = <K extends RuntimeEventKind>(
   ledger: LedgerAppender,
   spec: RuntimeEventCommitSpecByKind<K>,
-): Effect.Effect<RuntimeLedgerEventByKind<K>, SqlError | JsonStringifyError> =>
+): Effect.Effect<RuntimeLedgerEventByKind<K>, RuntimeStorageError | JsonStringifyError> =>
   Effect.gen(function* () {
     const events = yield* ledger.commit([spec]);
     const event = events[0];
     if (event === undefined) {
       return yield* Effect.fail(
-        new SqlError({
-          cause: new DriverLedgerCommitShapeMismatch({ expected: 1, actual: 0 }),
-        }),
+        runtimeStorageError(
+          "driver",
+          new DriverLedgerCommitShapeMismatch({ expected: 1, actual: 0 }),
+        ),
       );
     }
     return yield* decodeCommittedRuntimeEvent(event, spec.kind);
-  }) as Effect.Effect<RuntimeLedgerEventByKind<K>, SqlError | JsonStringifyError>;
+  }) as Effect.Effect<RuntimeLedgerEventByKind<K>, RuntimeStorageError | JsonStringifyError>;
 
 const commitRuntimeEvents = <
   T extends readonly [RuntimeEventCommitSpec, ...RuntimeEventCommitSpec[]],
 >(
   ledger: LedgerAppender,
   specs: T,
-): Effect.Effect<RuntimeCommittedEventsForSpecs<T>, SqlError | JsonStringifyError> =>
+): Effect.Effect<RuntimeCommittedEventsForSpecs<T>, RuntimeStorageError | JsonStringifyError> =>
   Effect.gen(function* () {
     const events = yield* ledger.commit(specs);
     if (events.length !== specs.length) {
       return yield* Effect.fail(
-        new SqlError({
-          cause: new DriverLedgerCommitShapeMismatch({
+        runtimeStorageError(
+          "driver",
+          new DriverLedgerCommitShapeMismatch({
             expected: specs.length,
             actual: events.length,
           }),
-        }),
+        ),
       );
     }
     const decoded: RuntimeLedgerEventByKind<RuntimeEventKind>[] = [];
     for (const [index, spec] of specs.entries()) {
-      decoded.push(yield* decodeCommittedRuntimeEvent(events[index] as LedgerEvent, spec.kind));
+      decoded.push(
+        yield* decodeCommittedRuntimeEvent(events[index] as RecordedLedgerEvent, spec.kind),
+      );
     }
     return decoded as unknown as RuntimeCommittedEventsForSpecs<T>;
   });
@@ -208,17 +216,17 @@ const commitRuntimeEvents = <
 export function appendRuntimeDriverAction(
   ledger: LedgerAppender,
   action: RuntimeDriverAction,
-): Effect.Effect<RuntimeDriverActionResult, SqlError | JsonStringifyError>;
+): Effect.Effect<RuntimeDriverActionResult, RuntimeStorageError | JsonStringifyError>;
 export function appendRuntimeDriverAction(
   ledger: LedgerAppender,
   action: CompleteAfterToolsDriverAction,
-): Effect.Effect<CompleteAfterToolsDriverActionResult, SqlError | JsonStringifyError>;
+): Effect.Effect<CompleteAfterToolsDriverActionResult, RuntimeStorageError | JsonStringifyError>;
 export function appendRuntimeDriverAction(
   ledger: LedgerAppender,
   action: RuntimeDriverAction | CompleteAfterToolsDriverAction,
 ): Effect.Effect<
   RuntimeDriverActionResult | CompleteAfterToolsDriverActionResult,
-  SqlError | JsonStringifyError
+  RuntimeStorageError | JsonStringifyError
 > {
   return Effect.gen(function* () {
     if (action.kind === "complete_after_tools") {
@@ -239,7 +247,10 @@ export const appendNextDriverAction = (
     readonly boundaryEvents: BoundaryEventAppender;
   },
   action: NextDriverAction,
-): Effect.Effect<DriverActionResult, BoundaryCommitRejected | SqlError | JsonStringifyError> =>
+): Effect.Effect<
+  DriverActionResult,
+  BoundaryCommitRejected | RuntimeStorageError | JsonStringifyError
+> =>
   Effect.gen(function* () {
     switch (action.kind) {
       case "park": {

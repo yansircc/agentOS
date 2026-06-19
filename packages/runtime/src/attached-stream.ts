@@ -6,9 +6,10 @@ import type {
   AttachedStreamOutboundFrame,
 } from "@agent-os/attached-stream";
 import { attachedStreamOutboundFrame } from "@agent-os/attached-stream";
-import type { JsonStringifyError, SqlError } from "@agent-os/kernel";
+import type { JsonStringifyError } from "@agent-os/kernel";
 import type { EventQueryOptions, LedgerEvent } from "@agent-os/kernel/types";
 import type { TriggerEventSpec } from "./trigger";
+import type { RuntimeStorageError } from "./ledger";
 
 export type AttachedStreamCancellationMode = "cooperative" | "ignored";
 export type AttachedStreamDetachMode = "abort" | "continue";
@@ -60,7 +61,7 @@ export type AttachedStreamOutputSource<Terminal = unknown> =
       | Iterable<AttachedStreamHandlerOutput<Terminal>>
     >;
 
-export type AttachedStreamServiceError = string | JsonStringifyError | SqlError;
+export type AttachedStreamServiceError = string | JsonStringifyError | RuntimeStorageError;
 
 export interface AttachedStreamHandler<Start, Terminal = unknown> {
   readonly kind: string;

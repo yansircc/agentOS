@@ -5,8 +5,8 @@ import {
   type FactOwnerRef,
   type ScopeRef,
 } from "@agent-os/kernel/effect-claim";
-import type { SqlError } from "@agent-os/kernel/errors";
 import type { LedgerEvent } from "@agent-os/kernel/types";
+import type { RuntimeStorageError } from "./ledger";
 
 export type ProjectionStatus = "current" | "needs_rebuild";
 
@@ -270,21 +270,27 @@ export class MaterializedProjections extends Context.Service<
   {
     readonly get: (
       spec: MaterializedProjectionGetSpec,
-    ) => Effect.Effect<MaterializedProjectionRow | null, SqlError | UnregisteredProjectionKind>;
+    ) => Effect.Effect<
+      MaterializedProjectionRow | null,
+      RuntimeStorageError | UnregisteredProjectionKind
+    >;
     readonly list: (
       spec: MaterializedProjectionListSpec,
     ) => Effect.Effect<
       ReadonlyArray<MaterializedProjectionRow>,
-      SqlError | UnregisteredProjectionKind
+      RuntimeStorageError | UnregisteredProjectionKind
     >;
     readonly status: (
       spec: MaterializedProjectionEventIdentity & { readonly kind: string },
-    ) => Effect.Effect<MaterializedProjectionStatus, SqlError | UnregisteredProjectionKind>;
+    ) => Effect.Effect<
+      MaterializedProjectionStatus,
+      RuntimeStorageError | UnregisteredProjectionKind
+    >;
     readonly rebuild: (
       spec: MaterializedProjectionEventIdentity & { readonly kind: string },
     ) => Effect.Effect<
       MaterializedProjectionRebuildResult,
-      | SqlError
+      | RuntimeStorageError
       | UnregisteredProjectionKind
       | ProjectionApplicationError
       | ProjectionReducerReturnedThenable
@@ -330,7 +336,7 @@ export const waitForProjection = <Identity = unknown, State = unknown>(
   spec: ProjectionWaitSpec<Identity, State>,
 ): Effect.Effect<
   MaterializedProjectionRow<Identity, State>,
-  SqlError | UnregisteredProjectionKind | ProjectionWaitTimedOut,
+  RuntimeStorageError | UnregisteredProjectionKind | ProjectionWaitTimedOut,
   MaterializedProjections
 > =>
   Effect.gen(function* () {
@@ -345,7 +351,7 @@ export const waitForProjection = <Identity = unknown, State = unknown>(
       attempt: number,
     ): Effect.Effect<
       MaterializedProjectionRow<Identity, State>,
-      SqlError | UnregisteredProjectionKind | ProjectionWaitTimedOut
+      RuntimeStorageError | UnregisteredProjectionKind | ProjectionWaitTimedOut
     > =>
       Effect.gen(function* () {
         const row = (yield* projections.get(spec)) as MaterializedProjectionRow<

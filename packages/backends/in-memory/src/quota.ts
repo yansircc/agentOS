@@ -1,6 +1,5 @@
 import { Clock, Effect, Layer } from "effect";
-import { SqlError } from "@agent-os/kernel/errors";
-import { Quota } from "@agent-os/runtime";
+import { Quota, runtimeStorageError, runtimeStorageOrJsonError } from "@agent-os/runtime";
 import {
   projectQuotaGrantUsage,
   QUOTA_EVENT_KIND,
@@ -22,7 +21,7 @@ export const InMemoryQuotaLive = (state: InMemoryBackendState): Layer.Layer<Quot
               windowStart,
               operationRef,
             }),
-          catch: (cause) => new SqlError({ cause }),
+          catch: (cause) => runtimeStorageError("quota", cause),
         });
 
         if (usage.alreadyGranted) {
@@ -31,25 +30,29 @@ export const InMemoryQuotaLive = (state: InMemoryBackendState): Layer.Layer<Quot
 
         const consumed = usage.consumed;
         if (consumed + amount > limit) {
-          yield* state.commitEvents([
-            {
-              ts: now,
-              kind: QUOTA_EVENT_KIND.RATE_LIMITED,
-              ...identity,
-              payload: { key, attempted: amount, consumed, limit, windowMs, toolName },
-            },
-          ]);
+          yield* state
+            .commitEvents([
+              {
+                ts: now,
+                kind: QUOTA_EVENT_KIND.RATE_LIMITED,
+                ...identity,
+                payload: { key, attempted: amount, consumed, limit, windowMs, toolName },
+              },
+            ])
+            .pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("quota", cause)));
           return { granted: false, consumed, limit } satisfies GrantResult;
         }
 
-        yield* state.commitEvents([
-          {
-            ts: now,
-            kind: QUOTA_EVENT_KIND.CONSUMED,
-            ...identity,
-            payload: { key, amount, toolName, operationRef },
-          },
-        ]);
+        yield* state
+          .commitEvents([
+            {
+              ts: now,
+              kind: QUOTA_EVENT_KIND.CONSUMED,
+              ...identity,
+              payload: { key, amount, toolName, operationRef },
+            },
+          ])
+          .pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("quota", cause)));
         return { granted: true, consumed, limit } satisfies GrantResult;
       }),
   });

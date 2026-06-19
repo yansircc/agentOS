@@ -1,5 +1,4 @@
 import { Effect, Layer, Schema } from "effect";
-import { SqlError } from "@agent-os/kernel/errors";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import {
   MaterializedProjectionRegistry,
@@ -7,12 +6,14 @@ import {
   ProjectionApplicationError,
   applyProjectionEventResult,
   getProjection,
+  runtimeStorageError,
   type AnyMaterializedProjectionDefinition,
   type MaterializedProjectionRebuildResult,
   type MaterializedProjectionRow,
   type MaterializedProjectionStatus,
   type ProjectionReducerReturnedThenable,
   type ProjectionRegistry,
+  type RuntimeStorageError,
 } from "@agent-os/runtime";
 import { sqlText } from "./storage/sql-row";
 import {
@@ -476,7 +477,7 @@ const countRows = (sql: SqlStorage, identity: BackendProtocolEventIdentity, kind
 
 export const CloudflareMaterializedProjectionsLive = (
   ctx: DurableObjectState,
-): Layer.Layer<MaterializedProjections, SqlError, MaterializedProjectionRegistry> =>
+): Layer.Layer<MaterializedProjections, RuntimeStorageError, MaterializedProjectionRegistry> =>
   Layer.effect(
     MaterializedProjections,
     Effect.gen(function* () {
@@ -511,7 +512,7 @@ export const CloudflareMaterializedProjectionsLive = (
                   .toArray()[0] as Record<string, unknown> | undefined;
                 return row === undefined ? null : parseProjectionRow(row);
               },
-              catch: (cause) => new SqlError({ cause }),
+              catch: (cause) => runtimeStorageError("projection", cause),
             });
           }),
         list: (spec) =>
@@ -559,7 +560,7 @@ export const CloudflareMaterializedProjectionsLive = (
                         .toArray();
                 return rows.map((row) => parseProjectionRow(row as Record<string, unknown>));
               },
-              catch: (cause) => new SqlError({ cause }),
+              catch: (cause) => runtimeStorageError("projection", cause),
             });
           }),
         status: (spec) =>
@@ -572,7 +573,7 @@ export const CloudflareMaterializedProjectionsLive = (
                   projection,
                   eventIdentityFromQuerySpec(spec, "projection status spec"),
                 ),
-              catch: (cause) => new SqlError({ cause }),
+              catch: (cause) => runtimeStorageError("projection", cause),
             });
           }),
         rebuild: (spec) =>
@@ -654,7 +655,7 @@ export const CloudflareMaterializedProjectionsLive = (
                     rows: countRows(sql, identity, spec.kind),
                   };
                 }),
-              catch: (cause) => new SqlError({ cause }),
+              catch: (cause) => runtimeStorageError("projection", cause),
             });
           }),
       };

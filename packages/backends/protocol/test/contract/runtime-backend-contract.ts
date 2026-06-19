@@ -133,6 +133,7 @@ export type RuntimeBackendContractDriverFactory = () =>
 
 export interface RuntimeBackendContractSuiteOptions {
   readonly runtimeFactOwner: FactOwnerRef;
+  readonly storageErrorTag?: string;
 }
 
 const contractEventIdentity = (
@@ -243,6 +244,7 @@ export const runRuntimeBackendContractSuite = (
   makeDriver: RuntimeBackendContractDriverFactory,
   options: RuntimeBackendContractSuiteOptions,
 ): void => {
+  const storageErrorTag = options.storageErrorTag ?? "agent_os.runtime_storage_error";
   const contractIdentity = (scopeId: string): BackendProtocolEventIdentity =>
     contractEventIdentity(scopeId, options.runtimeFactOwner);
 
@@ -253,7 +255,7 @@ export const runRuntimeBackendContractSuite = (
     promise(
       () =>
         expect(input).rejects.toMatchObject({
-          name: expect.stringContaining(tag),
+          _tag: tag,
         }) as Promise<void>,
     );
 
@@ -982,7 +984,7 @@ export const runRuntimeBackendContractSuite = (
               "tool-a",
               "op-3",
             ),
-            "agent_os.sql_error",
+            storageErrorTag,
           );
 
           const events = yield* promise(() => driver.events(quotaIdentity));

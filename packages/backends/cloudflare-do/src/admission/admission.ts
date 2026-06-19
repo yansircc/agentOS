@@ -23,7 +23,10 @@ import {
   Admission,
   classifyStructuredCallFailure,
   decodeStructuredOutputFromItems,
+  runtimeStorageError,
+  runtimeStorageOrJsonError,
   structuredOutputRequest,
+  type RuntimeStorageError,
 } from "@agent-os/runtime";
 import {
   decideTier,
@@ -40,7 +43,7 @@ import {
 } from "@agent-os/runtime-protocol";
 import { LlmTransport, llmWireDescriptorFingerprint } from "@agent-os/llm-protocol";
 import { EventBus } from "../ledger";
-import { JsonStringifyError, SqlError, UpstreamFailure } from "@agent-os/kernel/errors";
+import { JsonStringifyError, UpstreamFailure } from "@agent-os/kernel/errors";
 import { commitLedgerTransaction } from "../ledger/commit";
 import { loadAdmissionRows } from "./payload";
 import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
@@ -79,7 +82,10 @@ export const AdmissionLive = (
 
       const attemptStructured = <O>(
         spec: AttemptSpec,
-      ): Effect.Effect<AttemptResult<O>, SqlError | JsonStringifyError | UpstreamFailure> =>
+      ): Effect.Effect<
+        AttemptResult<O>,
+        RuntimeStorageError | JsonStringifyError | UpstreamFailure
+      > =>
         Effect.gen(function* () {
           const now = yield* Clock.currentTimeMillis;
           const descriptor = yield* llm.resolveRoute(spec.route);
@@ -92,7 +98,11 @@ export const AdmissionLive = (
           };
 
           // Step 2: project lease.
-          const rows = yield* loadAdmissionRows(sql, ownerIdentity, ownerIdentity.factOwnerRef);
+          const rows = yield* loadAdmissionRows(
+            sql,
+            ownerIdentity,
+            ownerIdentity.factOwnerRef,
+          ).pipe(Effect.mapError((cause) => runtimeStorageError("admission", cause)));
           const { lease: preLease, latestBarrier } = projectLease(rows, key, now);
 
           // Step 3: gate.
@@ -167,10 +177,14 @@ export const AdmissionLive = (
                 payload: evidencePayload,
               });
             },
-          );
+          ).pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("admission", cause)));
 
           // Post-projection (read-only, for the return value's lease shape).
-          const postRows = yield* loadAdmissionRows(sql, ownerIdentity, ownerIdentity.factOwnerRef);
+          const postRows = yield* loadAdmissionRows(
+            sql,
+            ownerIdentity,
+            ownerIdentity.factOwnerRef,
+          ).pipe(Effect.mapError((cause) => runtimeStorageError("admission", cause)));
           const { lease: postLease } = projectLease(postRows, key, now);
 
           if (outcome.class === "Supported" && decoded !== undefined) {
@@ -194,7 +208,7 @@ export const AdmissionLive = (
 
       const invalidate = (
         spec: InvalidateSpec,
-      ): Effect.Effect<{ readonly barrierId: number }, SqlError | JsonStringifyError> =>
+      ): Effect.Effect<{ readonly barrierId: number }, RuntimeStorageError | JsonStringifyError> =>
         Effect.gen(function* () {
           const now = yield* Clock.currentTimeMillis;
           const payload = {
@@ -216,11 +230,11 @@ export const AdmissionLive = (
                 payload,
               });
             },
-          );
+          ).pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("admission", cause)));
           const event = result.events[0];
           if (event === undefined) {
             return yield* Effect.fail(
-              new SqlError({ cause: { reason: "invalidate_commit_returned_no_event" } }),
+              runtimeStorageError("admission", { reason: "invalidate_commit_returned_no_event" }),
             );
           }
 

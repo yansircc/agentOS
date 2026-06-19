@@ -10,8 +10,10 @@ import type { LedgerEvent } from "@agent-os/kernel/types";
 import {
   DEFAULT_TRIGGER_ACQUIRE_DEADLINE_MS,
   DurableTriggerRegistry,
+  RuntimeStorageError,
   TriggerPump,
   drainTriggerPumpUntilQuiet,
+  runtimeStorageError,
   runSynchronousTriggerCommit,
   type AnyDurableTrigger,
   type TriggerCancelResult,
@@ -90,12 +92,27 @@ const readIntentEvent = (
 export const TriggerPumpLive = (
   ctx: DurableObjectState,
   scope: string,
-): Layer.Layer<TriggerPump, SqlError, EventBus | DurableTriggerRegistry> => {
+): Layer.Layer<TriggerPump, RuntimeStorageError, EventBus | DurableTriggerRegistry> => {
   const sql = ctx.storage.sql;
+  const triggerError = (
+    cause: unknown,
+  ):
+    | RuntimeStorageError
+    | JsonStringifyError
+    | UnregisteredDurableTriggerKind
+    | DurableTriggerCommitReturnedThenable =>
+    cause instanceof JsonStringifyError ||
+    cause instanceof UnregisteredDurableTriggerKind ||
+    cause instanceof DurableTriggerCommitReturnedThenable ||
+    cause instanceof RuntimeStorageError
+      ? cause
+      : runtimeStorageError("trigger", cause);
   return Layer.effect(
     TriggerPump,
     Effect.gen(function* () {
-      yield* ensureDueWorkSchema(sql);
+      yield* ensureDueWorkSchema(sql).pipe(
+        Effect.mapError((cause) => runtimeStorageError("trigger", cause)),
+      );
       const bus = yield* EventBus;
       const registry = yield* DurableTriggerRegistry;
       const activeClaims = new Map<
@@ -504,15 +521,17 @@ export const TriggerPumpLive = (
           yield* armNextDue(ctx, sql);
           return { drained };
         });
+      const drainDueService = (now: number) => drainDue(now).pipe(Effect.mapError(triggerError));
       return {
-        drainDue,
-        drainUntilQuiet: (now, options) => drainTriggerPumpUntilQuiet(drainDue, now, options),
-        cancelTrigger,
+        drainDue: drainDueService,
+        drainUntilQuiet: (now, options) =>
+          drainTriggerPumpUntilQuiet(drainDueService, now, options),
+        cancelTrigger: (spec) => cancelTrigger(spec).pipe(Effect.mapError(triggerError)),
         stuckTriggers: (now) =>
           Effect.gen(function* () {
             const stuck = yield* listStuckDueWork(sql, now);
             return { stuck };
-          }),
+          }).pipe(Effect.mapError((cause) => runtimeStorageError("trigger", cause))),
       };
     }),
   );

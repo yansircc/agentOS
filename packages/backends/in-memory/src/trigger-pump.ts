@@ -1,7 +1,8 @@
 import { Cause, Clock, Effect, Exit, Layer, Option } from "effect";
 import {
   DurableTriggerAcquireCancelled,
-  SqlError,
+  DurableTriggerCommitReturnedThenable,
+  JsonStringifyError,
   UnregisteredDurableTriggerKind,
 } from "@agent-os/kernel/errors";
 import {
@@ -10,6 +11,9 @@ import {
   TriggerPump,
   drainTriggerPumpUntilQuiet,
   runSynchronousTriggerCommit,
+  runtimeStorageError,
+  runtimeStorageOrJsonError,
+  type RuntimeStorageError,
   type AnyDurableTrigger,
   type TriggerCancellation,
 } from "@agent-os/runtime";
@@ -29,11 +33,23 @@ const cancellationFor = (row: {
   ...(row.cancelRequestedAt === null ? {} : { requestedAt: row.cancelRequestedAt }),
 });
 
+const triggerStorageError = (
+  cause: unknown,
+):
+  | RuntimeStorageError
+  | JsonStringifyError
+  | UnregisteredDurableTriggerKind
+  | DurableTriggerCommitReturnedThenable => {
+  if (cause instanceof UnregisteredDurableTriggerKind) return cause;
+  if (cause instanceof DurableTriggerCommitReturnedThenable) return cause;
+  return runtimeStorageOrJsonError("trigger", cause);
+};
+
 export const InMemoryTriggerPumpLive = (
   state: InMemoryBackendState,
   truthIdentity: BackendProtocolTruthIdentity,
   scopeLabel: string,
-): Layer.Layer<TriggerPump, SqlError, DurableTriggerRegistry> =>
+): Layer.Layer<TriggerPump, never, DurableTriggerRegistry> =>
   Layer.effect(
     TriggerPump,
     Effect.gen(function* () {
@@ -57,17 +73,16 @@ export const InMemoryTriggerPumpLive = (
         );
         if (intentEvent === null) {
           return Effect.fail(
-            new SqlError({
-              cause: new TypeError(
-                `durable trigger intent event missing: ${row.payload.intentEventId}`,
-              ),
-            }),
+            runtimeStorageError(
+              "trigger",
+              new TypeError(`durable trigger intent event missing: ${row.payload.intentEventId}`),
+            ),
           );
         }
         const parsedIntent = trigger.parseIntent(intentEvent.payload);
         return parsedIntent.ok
           ? Effect.succeed(parsedIntent.intent)
-          : Effect.fail(new SqlError({ cause: parsedIntent.reason }));
+          : Effect.fail(runtimeStorageError("trigger", parsedIntent.reason));
       };
       const drainDue = (now: number) =>
         Effect.gen(function* () {
@@ -102,40 +117,49 @@ export const InMemoryTriggerPumpLive = (
             const active = activeClaims.get(row.id);
             if (active?.token === token) activeClaims.delete(row.id);
             const committed = Exit.isSuccess(exit)
-              ? yield* state.commitTrigger(
-                  scopeLabel,
-                  row,
-                  now,
-                  (kind) => registry.has(kind),
-                  (tx) =>
-                    runSynchronousTriggerCommit(scopeLabel, row.kind, () =>
-                      trigger.commit(exit.value, tx),
-                    ),
-                  { claimToken: token, signal: controller.signal, acquireMode },
-                )
-              : yield* Effect.gen(function* () {
-                  const failure = Cause.findErrorOption(exit.cause);
-                  if (Option.isNone(failure)) {
-                    return yield* Effect.fail(new SqlError({ cause: exit.cause }));
-                  }
-                  if (!(failure.value instanceof DurableTriggerAcquireCancelled)) {
-                    return yield* Effect.fail(new SqlError({ cause: failure.value }));
-                  }
-                  if (failure.value.reason !== undefined && row.cancelReason === null) {
-                    row.cancelReason = failure.value.reason;
-                    row.cancelRequestedAt ??= now;
-                  }
-                  return yield* state.commitTrigger(
+              ? yield* state
+                  .commitTrigger(
                     scopeLabel,
                     row,
                     now,
                     (kind) => registry.has(kind),
                     (tx) =>
                       runSynchronousTriggerCommit(scopeLabel, row.kind, () =>
-                        trigger.commitCancelled(intent, cancellationFor(row), tx),
+                        trigger.commit(exit.value, tx),
                       ),
-                    { claimToken: token, cancelled: true, signal: controller.signal, acquireMode },
-                  );
+                    { claimToken: token, signal: controller.signal, acquireMode },
+                  )
+                  .pipe(Effect.mapError(triggerStorageError))
+              : yield* Effect.gen(function* () {
+                  const failure = Cause.findErrorOption(exit.cause);
+                  if (Option.isNone(failure)) {
+                    return yield* Effect.fail(runtimeStorageError("trigger", exit.cause));
+                  }
+                  if (!(failure.value instanceof DurableTriggerAcquireCancelled)) {
+                    return yield* Effect.fail(runtimeStorageError("trigger", failure.value));
+                  }
+                  if (failure.value.reason !== undefined && row.cancelReason === null) {
+                    row.cancelReason = failure.value.reason;
+                    row.cancelRequestedAt ??= now;
+                  }
+                  return yield* state
+                    .commitTrigger(
+                      scopeLabel,
+                      row,
+                      now,
+                      (kind) => registry.has(kind),
+                      (tx) =>
+                        runSynchronousTriggerCommit(scopeLabel, row.kind, () =>
+                          trigger.commitCancelled(intent, cancellationFor(row), tx),
+                        ),
+                      {
+                        claimToken: token,
+                        cancelled: true,
+                        signal: controller.signal,
+                        acquireMode,
+                      },
+                    )
+                    .pipe(Effect.mapError(triggerStorageError));
                 });
             if (committed.completed) drained += 1;
           }
@@ -163,17 +187,19 @@ export const InMemoryTriggerPumpLive = (
             const intent = yield* parseIntent(trigger, row);
             if (row.claimToken === null) {
               state.requestCancellation(row, now, spec.reason);
-              const committed = yield* state.commitTrigger(
-                scopeLabel,
-                row,
-                now,
-                (kind) => registry.has(kind),
-                (tx) =>
-                  runSynchronousTriggerCommit(scopeLabel, row.kind, () =>
-                    trigger.commitCancelled(intent, cancellationFor(row), tx),
-                  ),
-                { requireUnclaimed: true, cancelled: true },
-              );
+              const committed = yield* state
+                .commitTrigger(
+                  scopeLabel,
+                  row,
+                  now,
+                  (kind) => registry.has(kind),
+                  (tx) =>
+                    runSynchronousTriggerCommit(scopeLabel, row.kind, () =>
+                      trigger.commitCancelled(intent, cancellationFor(row), tx),
+                    ),
+                  { requireUnclaimed: true, cancelled: true },
+                )
+                .pipe(Effect.mapError(triggerStorageError));
               if (committed.completed) cancelled += 1;
             } else if (state.requestCancellation(row, now, spec.reason)) {
               requested += 1;

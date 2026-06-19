@@ -1,8 +1,9 @@
 import { Context, Effect } from "effect";
 import type { BoundaryContract } from "@agent-os/kernel/boundary-contract";
-import type { JsonStringifyError, SqlError } from "@agent-os/kernel/errors";
-import type { LedgerEvent } from "@agent-os/kernel/types";
+import type { JsonStringifyError } from "@agent-os/kernel/errors";
+import type { RecordedLedgerEvent } from "@agent-os/kernel/types";
 import type { BoundaryCommitRejected } from "./boundary-commit";
+import type { RuntimeStorageError } from "./ledger";
 
 /**
  * Runtime access to package-owned boundary event commits.
@@ -20,6 +21,9 @@ export class BoundaryEvents extends Context.Service<
       contract: BoundaryContract,
       event: string,
       payload: unknown,
-    ) => Effect.Effect<LedgerEvent, BoundaryCommitRejected | SqlError | JsonStringifyError>;
+    ) => Effect.Effect<
+      RecordedLedgerEvent,
+      BoundaryCommitRejected | RuntimeStorageError | JsonStringifyError
+    >;
   }
 >()("@agent-os/BoundaryEvents") {}

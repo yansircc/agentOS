@@ -83,6 +83,7 @@ const makeNodePostgresContractDriver = async (): Promise<RuntimeBackendContractD
 describe("node-postgres backend protocol driver", () => {
   runRuntimeBackendContractSuite("node-postgres", makeNodePostgresContractDriver, {
     runtimeFactOwner: RUNTIME_FACT_OWNER,
+    storageErrorTag: "agent_os.sql_error",
   });
   runDispatchReceiveConcurrencyContract("node-postgres", makeNodePostgresContractDriver, {
     runtimeFactOwner: RUNTIME_FACT_OWNER,

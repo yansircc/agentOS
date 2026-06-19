@@ -1,10 +1,13 @@
 import { Clock, Effect, Layer } from "effect";
-import { JsonStringifyError, SqlError, UpstreamFailure } from "@agent-os/kernel/errors";
+import { JsonStringifyError, UpstreamFailure } from "@agent-os/kernel/errors";
 import {
   Admission,
   classifyStructuredCallFailure,
   decodeStructuredOutputFromItems,
+  runtimeStorageError,
+  runtimeStorageOrJsonError,
   structuredOutputRequest,
+  type RuntimeStorageError,
 } from "@agent-os/runtime";
 import {
   decideTier,
@@ -47,7 +50,7 @@ const outcomeFromLease = (lease: CapabilityLease & { readonly status: "unsupport
 const projectAdmissionRows = (
   state: InMemoryBackendState,
   scope: string,
-): Effect.Effect<ReadonlyArray<AdmissionRow>, SqlError> =>
+): Effect.Effect<ReadonlyArray<AdmissionRow>, RuntimeStorageError> =>
   Effect.sync(() => {
     const eventIdentity = inMemoryRuntimeEventIdentity(inMemoryConversationTruthIdentity(scope));
     const rows: AdmissionRow[] = [];
@@ -79,7 +82,9 @@ const projectAdmissionRows = (
     return decodeOk(rows);
   }).pipe(
     Effect.flatMap((result) =>
-      result.ok ? Effect.succeed(result.value) : Effect.fail(new SqlError({ cause: result.cause })),
+      result.ok
+        ? Effect.succeed(result.value)
+        : Effect.fail(runtimeStorageError("admission", result.cause)),
     ),
   );
 
@@ -92,7 +97,10 @@ export const InMemoryAdmissionLive = (
       const llm = yield* LlmTransport;
       const attemptStructured = <O>(
         spec: AttemptSpec,
-      ): Effect.Effect<AttemptResult<O>, SqlError | JsonStringifyError | UpstreamFailure> =>
+      ): Effect.Effect<
+        AttemptResult<O>,
+        RuntimeStorageError | JsonStringifyError | UpstreamFailure
+      > =>
         Effect.gen(function* () {
           const now = yield* Clock.currentTimeMillis;
           const descriptor = yield* llm.resolveRoute(spec.route);
@@ -168,14 +176,16 @@ export const InMemoryAdmissionLive = (
             admissionImpact,
             adapterId: descriptor.providerOutputAdapterId,
           };
-          yield* state.commitEvents([
-            {
-              ts: now,
-              kind: LLM_STRUCTURED_EVIDENCE_EVENT,
-              ...inMemoryConversationTruthIdentity(spec.scope),
-              payload: evidencePayload,
-            },
-          ]);
+          yield* state
+            .commitEvents([
+              {
+                ts: now,
+                kind: LLM_STRUCTURED_EVIDENCE_EVENT,
+                ...inMemoryConversationTruthIdentity(spec.scope),
+                payload: evidencePayload,
+              },
+            ])
+            .pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("admission", cause)));
 
           const postRows = yield* projectAdmissionRows(state, spec.scope);
           const { lease } = projectLease(postRows, key, now);
@@ -200,17 +210,19 @@ export const InMemoryAdmissionLive = (
 
       const invalidate = (
         spec: InvalidateSpec,
-      ): Effect.Effect<{ readonly barrierId: number }, SqlError | JsonStringifyError> =>
+      ): Effect.Effect<{ readonly barrierId: number }, RuntimeStorageError | JsonStringifyError> =>
         Effect.gen(function* () {
           const ts = yield* Clock.currentTimeMillis;
-          const [event] = yield* state.commitEvents([
-            {
-              ts,
-              kind: LLM_STRUCTURED_INVALIDATE_EVENT,
-              ...inMemoryConversationTruthIdentity(spec.scope),
-              payload: { key: spec.key, reason: spec.reason, by: spec.by },
-            },
-          ]);
+          const [event] = yield* state
+            .commitEvents([
+              {
+                ts,
+                kind: LLM_STRUCTURED_INVALIDATE_EVENT,
+                ...inMemoryConversationTruthIdentity(spec.scope),
+                payload: { key: spec.key, reason: spec.reason, by: spec.by },
+              },
+            ])
+            .pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("admission", cause)));
           return { barrierId: event!.id };
         });
 

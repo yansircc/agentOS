@@ -1,7 +1,13 @@
 import { Clock, Effect, Layer } from "effect";
-import { SqlError } from "@agent-os/kernel/errors";
+import { UnregisteredDurableTriggerKind } from "@agent-os/kernel/errors";
 import { SCHEDULED_EVENT_TRIGGER_KIND } from "@agent-os/backend-protocol";
-import { DurableTriggerRegistry, Scheduler } from "@agent-os/runtime";
+import {
+  DurableTriggerRegistry,
+  Scheduler,
+  runtimeStorageError,
+  runtimeStorageOrJsonError,
+  type RuntimeStorageError,
+} from "@agent-os/runtime";
 import { EventBus } from "./ledger";
 import { enqueueScheduledEvent, ensureDueWorkSchema } from "./due-work";
 import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
@@ -12,12 +18,18 @@ export const SchedulerLive = (
   ctx: DurableObjectState,
   scope: string,
   identity: BackendProtocolEventIdentity,
-): Layer.Layer<Scheduler, SqlError, EventBus | DurableTriggerRegistry> => {
+): Layer.Layer<Scheduler, RuntimeStorageError, EventBus | DurableTriggerRegistry> => {
   const sql = ctx.storage.sql;
+  const schedulerError = (cause: unknown) =>
+    cause instanceof UnregisteredDurableTriggerKind
+      ? cause
+      : runtimeStorageOrJsonError("scheduler", cause);
   return Layer.effect(
     Scheduler,
     Effect.gen(function* () {
-      yield* ensureDueWorkSchema(sql);
+      yield* ensureDueWorkSchema(sql).pipe(
+        Effect.mapError((cause) => runtimeStorageError("scheduler", cause)),
+      );
       const bus = yield* EventBus;
       const registry = yield* DurableTriggerRegistry;
 
@@ -39,7 +51,7 @@ export const SchedulerLive = (
               data,
             );
             return { id: intent.id };
-          }),
+          }).pipe(Effect.mapError(schedulerError)),
       };
     }),
   );

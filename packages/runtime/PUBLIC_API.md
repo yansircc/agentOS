@@ -92,6 +92,8 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:Quota`
 - `.:RUN_BEARING_KINDS`
 - `.:Resources`
+- `.:RuntimeStorageError`
+- `.:RuntimeStorageOperation`
 - `.:RunWorkspaceJobSpec`
 - `.:Scheduler`
 - `.:StructuredDecodeResult`
@@ -165,9 +167,13 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:projectionMalformed`
 - `.:projectionPut`
 - `.:projectionSkip`
+- `.:recordLedgerPortEvent`
+- `.:recordLedgerPortEvents`
 - `.:waitForProjection`
 - `.:runSynchronousAttachedStreamCommit`
 - `.:runSynchronousTriggerCommit`
+- `.:runtimeStorageError`
+- `.:runtimeStorageOrJsonError`
 - `.:WorkspaceJobAttemptContext`
 - `.:WorkspaceJobRecovery`
 - `.:WorkspaceJobRepairDecisionInput`

@@ -8,7 +8,7 @@ import { MaterializedProjections } from "../src/projection";
 import { Quota } from "../src/quota-service";
 import { Admission } from "../src/admission";
 import { DEFAULT_LLM_CALL_TIMEOUT_MS, submitAgentEffect } from "../src/submit-agent";
-import type { LedgerEvent } from "@agent-os/kernel/types";
+import { decodeRecordedLedgerEvent, type LedgerEvent } from "@agent-os/kernel/types";
 import { LlmTransport, type LlmRoute, type LlmWireDescriptor } from "@agent-os/llm-protocol";
 import {
   RUNTIME_FACT_OWNER,
@@ -107,10 +107,10 @@ const runWithHungLlm = (
             payload: spec.payload,
           }));
           events.push(...committed);
-          return committed;
+          return committed.map(decodeRecordedLedgerEvent);
         }),
-      events: () => Effect.succeed(events),
-      streamSnapshot: () => Effect.succeed(events),
+      events: () => Effect.succeed(events.map(decodeRecordedLedgerEvent)),
+      streamSnapshot: () => Effect.succeed(events.map(decodeRecordedLedgerEvent)),
     };
     const llm = {
       resolveRoute: (route: LlmRoute) =>

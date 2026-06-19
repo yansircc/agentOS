@@ -50,6 +50,7 @@
         "agent_os.resource_reservation_closed",
         "agent_os.resource_reservation_not_found",
         "agent_os.runtime_ledger_transition_rejected",
+        "agent_os.runtime_storage_error",
         "agent_os.sql_error",
         "agent_os.trigger_factory_error",
         "agent_os.unregistered_durable_trigger_kind"

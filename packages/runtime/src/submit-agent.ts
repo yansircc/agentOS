@@ -8,8 +8,8 @@
  *
  * All recoverable failures (UpstreamFailure, ToolError) are caught and
  * funneled through finalAbort, which logs an agent.aborted.* ledger event
- * before returning SubmitResult{ok:false}. Only SqlError | JsonStringifyError
- * escape (irrecoverable infra failures).
+ * before returning SubmitResult{ok:false}. Only RuntimeStorageError |
+ * JsonStringifyError escape (irrecoverable infra failures).
  *
  * submitAgentEffect is module-private. Apps call Cloudflare backend.submit(spec)
  * which injects scope from ctx.id.name (SSoT) and runs this effect.
@@ -25,7 +25,6 @@ import {
   JsonStringifyError,
   safeStringify,
   safeStringifyPretty,
-  SqlError,
   ToolError,
   UpstreamFailure,
 } from "@agent-os/kernel/errors";
@@ -81,7 +80,7 @@ import {
 } from "@agent-os/runtime-protocol";
 import type { LedgerTruthIdentity } from "@agent-os/runtime-protocol";
 import type { InternalSubmitSpec } from "./internal-submit";
-import { Ledger } from "./ledger";
+import { Ledger, runtimeStorageError, type RuntimeStorageError } from "./ledger";
 import {
   RefResolverService,
   type RefResolutionFailed,
@@ -377,15 +376,13 @@ export const buildInitialMessages = (
 const submitResultFromEvents = (
   events: ReadonlyArray<LedgerEvent>,
   runId: number,
-): Effect.Effect<SubmitResult, SqlError> => {
+): Effect.Effect<SubmitResult, RuntimeStorageError> => {
   const result = projectSubmitResult(events, runId);
   if (result !== null) return Effect.succeed(result);
   return Effect.fail(
-    new SqlError({
-      cause: {
-        reason: "missing_terminal_ledger_fact",
-        runId,
-      },
+    runtimeStorageError("submit", {
+      reason: "missing_terminal_ledger_fact",
+      runId,
     }),
   );
 };
@@ -681,7 +678,7 @@ const replayMessagesToInterruptedTool = (
     readonly call: LlmToolCall;
     readonly sourceEventId: number;
   },
-  SqlError | JsonStringifyError
+  RuntimeStorageError | JsonStringifyError
 > =>
   Effect.gen(function* () {
     const messages: LlmMessage[] = [...initialMessages];
@@ -698,19 +695,17 @@ const replayMessagesToInterruptedTool = (
       });
       if (llmEvent === undefined) {
         return yield* Effect.fail(
-          new SqlError({
-            cause: {
-              reason: "resume_missing_llm_turn",
-              runId: resume.runId,
-              turnIndex: index,
-            },
+          runtimeStorageError("submit", {
+            reason: "resume_missing_llm_turn",
+            runId: resume.runId,
+            turnIndex: index,
           }),
         );
       }
 
       const decoded = decodeRuntimeLedgerEvent(llmEvent);
       if (decoded._tag !== "runtime" || decoded.event.kind !== RUNTIME_EVENT_KIND.LLM_RESPONSE) {
-        return yield* Effect.fail(new SqlError({ cause: { reason: "resume_bad_llm_turn" } }));
+        return yield* Effect.fail(runtimeStorageError("submit", { reason: "resume_bad_llm_turn" }));
       }
       const responseText = textFromLlmOutputItems(decoded.event.payload.items);
       const responseToolCalls = toolCallsFromLlmOutputItems(decoded.event.payload.items);
@@ -745,14 +740,12 @@ const replayMessagesToInterruptedTool = (
           });
           if (!resolvedExecution.ok) {
             return yield* Effect.fail(
-              new SqlError({
-                cause: {
-                  reason: "tool_execution_witness_resolution_failed",
-                  issues: resolvedExecution.issues,
-                  runId: resume.runId,
-                  toolCallId: call.id,
-                  toolName: call.function.name,
-                },
+              runtimeStorageError("submit", {
+                reason: "tool_execution_witness_resolution_failed",
+                issues: resolvedExecution.issues,
+                runId: resume.runId,
+                toolCallId: call.id,
+                toolName: call.function.name,
               }),
             );
           }
@@ -762,13 +755,11 @@ const replayMessagesToInterruptedTool = (
           );
           if (!artifact.ok) {
             return yield* Effect.fail(
-              new SqlError({
-                cause: {
-                  reason: artifact.reason,
-                  runId: resume.runId,
-                  toolCallId: call.id,
-                  toolName: call.function.name,
-                },
+              runtimeStorageError("submit", {
+                reason: artifact.reason,
+                runId: resume.runId,
+                toolCallId: call.id,
+                toolName: call.function.name,
               }),
             );
           }
@@ -786,12 +777,10 @@ const replayMessagesToInterruptedTool = (
     }
 
     return yield* Effect.fail(
-      new SqlError({
-        cause: {
-          reason: "resume_missing_interrupted_tool_call",
-          runId: resume.runId,
-          interruptId: resume.interruptId,
-        },
+      runtimeStorageError("submit", {
+        reason: "resume_missing_interrupted_tool_call",
+        runId: resume.runId,
+        interruptId: resume.interruptId,
       }),
     );
   });
@@ -805,7 +794,7 @@ const finalAbort = (
   runId: number,
   tokensUsed: number,
   traceContext?: TraceContext,
-): Effect.Effect<SubmitResult, SqlError | JsonStringifyError, Ledger> =>
+): Effect.Effect<SubmitResult, RuntimeStorageError | JsonStringifyError, Ledger> =>
   Effect.gen(function* () {
     const ledger = yield* Ledger;
     yield* appendRuntimeDriverAction(ledger, {
@@ -860,7 +849,7 @@ const timeoutAbortResult = (
   runId: number,
   tokensUsed: number,
   traceContext?: TraceContext,
-): Effect.Effect<SubmitResult, SqlError | JsonStringifyError, Ledger> => {
+): Effect.Effect<SubmitResult, RuntimeStorageError | JsonStringifyError, Ledger> => {
   if (timeout.mode === "budget") {
     return finalAbort(
       ABORT.BUDGET_TIME,
@@ -1014,7 +1003,7 @@ export const submitAgentEffect = (
   spec: InternalSubmitSpec,
 ): Effect.Effect<
   SubmitResult,
-  | SqlError
+  | RuntimeStorageError
   | JsonStringifyError
   | InvalidTraceContext
   | RefResolutionFailed
@@ -1054,12 +1043,10 @@ export const submitAgentEffect = (
 
     if (spec.resume !== undefined && spec.resume.turn.id !== spec.resume.runId) {
       return yield* Effect.fail(
-        new SqlError({
-          cause: {
-            reason: "resume_turn_run_mismatch",
-            runId: spec.resume.runId,
-            turn: spec.resume.turn,
-          },
+        runtimeStorageError("submit", {
+          reason: "resume_turn_run_mismatch",
+          runId: spec.resume.runId,
+          turn: spec.resume.turn,
         }),
       );
     }
@@ -1083,11 +1070,9 @@ export const submitAgentEffect = (
           );
     if (started === undefined) {
       return yield* Effect.fail(
-        new SqlError({
-          cause: {
-            reason: "resume_missing_run_started",
-            runId: spec.resume?.runId,
-          },
+        runtimeStorageError("submit", {
+          reason: "resume_missing_run_started",
+          runId: spec.resume?.runId,
         }),
       );
     }
@@ -1307,7 +1292,7 @@ export const submitAgentEffect = (
 
     const loop: Effect.Effect<
       SubmitResult,
-      | SqlError
+      | RuntimeStorageError
       | JsonStringifyError
       | UpstreamFailure
       | ToolError
@@ -1327,7 +1312,7 @@ export const submitAgentEffect = (
         readonly toolCallId: string;
         readonly toolName: string;
         readonly argumentsJson: string;
-      }): Effect.Effect<void, SqlError | JsonStringifyError> =>
+      }): Effect.Effect<void, RuntimeStorageError | JsonStringifyError> =>
         Effect.gen(function* () {
           const compaction = compactProviderHistoryToolCall(
             messages,
@@ -1337,14 +1322,12 @@ export const submitAgentEffect = (
           if (compaction === null) return;
           if (input.sourceEventId === undefined) {
             return yield* Effect.fail(
-              new SqlError({
-                cause: {
-                  reason: "provider_history_compaction_missing_source_event",
-                  runId: started.id,
-                  turn: input.turn,
-                  toolCallId: input.toolCallId,
-                  toolName: input.toolName,
-                },
+              runtimeStorageError("submit", {
+                reason: "provider_history_compaction_missing_source_event",
+                runId: started.id,
+                turn: input.turn,
+                toolCallId: input.toolCallId,
+                toolName: input.toolName,
               }),
             );
           }
@@ -2038,115 +2021,117 @@ export const submitAgentEffect = (
           // the semantic tool claim operationRef. Retrying the same claim
           // cannot double-charge quota; separate tool calls still consume
           // separate quota.
-          const attemptOnce: Effect.Effect<unknown, ToolError | SqlError | JsonStringifyError> =
-            Effect.gen(function* () {
-              const attempt = Effect.gen(function* () {
-                if (tool.quota !== undefined) {
-                  const q = tool.quota;
-                  const amount = q.amount ?? 1;
-                  if (!Number.isFinite(amount) || amount < 0) {
-                    return yield* new ToolError({
-                      toolName: call.function.name,
-                      cause: { reason: "invalid_quota_amount", amount },
-                    });
-                  }
-                  if (!Number.isFinite(q.limit) || q.limit < 0) {
-                    return yield* new ToolError({
-                      toolName: call.function.name,
-                      cause: { reason: "invalid_quota_limit", limit: q.limit },
-                    });
-                  }
-                  // windowMs accepts POSITIVE_INFINITY (unbounded billing
-                  // window) but not NaN or negative.
-                  const windowOk =
-                    q.windowMs === Number.POSITIVE_INFINITY ||
-                    (Number.isFinite(q.windowMs) && q.windowMs >= 0);
-                  if (!windowOk) {
-                    return yield* new ToolError({
-                      toolName: call.function.name,
-                      cause: {
-                        reason: "invalid_quota_window",
-                        windowMs: q.windowMs,
-                      },
-                    });
-                  }
-                  if (q.key !== undefined && q.key.length === 0) {
-                    return yield* new ToolError({
-                      toolName: call.function.name,
-                      cause: { reason: "invalid_quota_key", key: q.key },
-                    });
-                  }
-                  const key = q.key ?? call.function.name;
-                  const grant = yield* quotaService.tryGrant(
-                    {
-                      scopeRef,
-                      effectAuthorityRef: contract.effectAuthorityRef,
-                    },
-                    key,
-                    amount,
-                    q.windowMs,
-                    q.limit,
-                    call.function.name,
-                    claim.operationRef,
-                  );
-                  if (!grant.granted) {
-                    return yield* new ToolError({
-                      toolName: call.function.name,
-                      cause: {
-                        reason: "rate_limited",
-                        key,
-                        consumed: grant.consumed,
-                        limit: grant.limit,
-                      },
-                    });
-                  }
+          const attemptOnce: Effect.Effect<
+            unknown,
+            ToolError | RuntimeStorageError | JsonStringifyError
+          > = Effect.gen(function* () {
+            const attempt = Effect.gen(function* () {
+              if (tool.quota !== undefined) {
+                const q = tool.quota;
+                const amount = q.amount ?? 1;
+                if (!Number.isFinite(amount) || amount < 0) {
+                  return yield* new ToolError({
+                    toolName: call.function.name,
+                    cause: { reason: "invalid_quota_amount", amount },
+                  });
                 }
-                return yield* withLocalResolvedToolMaterials(
-                  refs,
+                if (!Number.isFinite(q.limit) || q.limit < 0) {
+                  return yield* new ToolError({
+                    toolName: call.function.name,
+                    cause: { reason: "invalid_quota_limit", limit: q.limit },
+                  });
+                }
+                // windowMs accepts POSITIVE_INFINITY (unbounded billing
+                // window) but not NaN or negative.
+                const windowOk =
+                  q.windowMs === Number.POSITIVE_INFINITY ||
+                  (Number.isFinite(q.windowMs) && q.windowMs >= 0);
+                if (!windowOk) {
+                  return yield* new ToolError({
+                    toolName: call.function.name,
+                    cause: {
+                      reason: "invalid_quota_window",
+                      windowMs: q.windowMs,
+                    },
+                  });
+                }
+                if (q.key !== undefined && q.key.length === 0) {
+                  return yield* new ToolError({
+                    toolName: call.function.name,
+                    cause: { reason: "invalid_quota_key", key: q.key },
+                  });
+                }
+                const key = q.key ?? call.function.name;
+                const grant = yield* quotaService.tryGrant(
+                  {
+                    scopeRef,
+                    effectAuthorityRef: contract.effectAuthorityRef,
+                  },
+                  key,
+                  amount,
+                  q.windowMs,
+                  q.limit,
                   call.function.name,
-                  materialPlan.plan.localRefs,
-                  (localMaterials) =>
-                    executeTool(
-                      tool,
-                      args,
-                      call.function.name,
-                      { ...materialPlan.plan.materials, ...localMaterials },
-                      runtimeToolContext(
-                        spec,
-                        boundaryEvents,
-                        projections,
-                        claim,
-                        call.id === resumedToolCallIdThisTurn ? spec.resume?.resume : undefined,
-                        materialPlan.plan.brokerReceipts,
-                      ),
-                    ),
+                  claim.operationRef,
                 );
-              });
-              if (!Number.isFinite(budgetTimeMs)) {
-                return yield* attempt;
+                if (!grant.granted) {
+                  return yield* new ToolError({
+                    toolName: call.function.name,
+                    cause: {
+                      reason: "rate_limited",
+                      key,
+                      consumed: grant.consumed,
+                      limit: grant.limit,
+                    },
+                  });
+                }
               }
-              const now = yield* Clock.currentTimeMillis;
-              const elapsedMs = now - startTime;
-              const remainingMs = budgetTimeMs - elapsedMs;
-              if (remainingMs <= 0) {
-                return yield* new ToolError({
-                  toolName: call.function.name,
-                  cause: toolBudgetTimeCause(elapsedMs, budgetTimeMs),
-                });
-              }
-              return yield* attempt.pipe(
-                Effect.timeoutOrElse({
-                  duration: Duration.millis(remainingMs),
-                  orElse: () =>
-                    Effect.fail(
-                      new ToolError({
-                        toolName: call.function.name,
-                        cause: toolBudgetTimeCause(budgetTimeMs, budgetTimeMs),
-                      }),
+              return yield* withLocalResolvedToolMaterials(
+                refs,
+                call.function.name,
+                materialPlan.plan.localRefs,
+                (localMaterials) =>
+                  executeTool(
+                    tool,
+                    args,
+                    call.function.name,
+                    { ...materialPlan.plan.materials, ...localMaterials },
+                    runtimeToolContext(
+                      spec,
+                      boundaryEvents,
+                      projections,
+                      claim,
+                      call.id === resumedToolCallIdThisTurn ? spec.resume?.resume : undefined,
+                      materialPlan.plan.brokerReceipts,
                     ),
-                }),
+                  ),
               );
             });
+            if (!Number.isFinite(budgetTimeMs)) {
+              return yield* attempt;
+            }
+            const now = yield* Clock.currentTimeMillis;
+            const elapsedMs = now - startTime;
+            const remainingMs = budgetTimeMs - elapsedMs;
+            if (remainingMs <= 0) {
+              return yield* new ToolError({
+                toolName: call.function.name,
+                cause: toolBudgetTimeCause(elapsedMs, budgetTimeMs),
+              });
+            }
+            return yield* attempt.pipe(
+              Effect.timeoutOrElse({
+                duration: Duration.millis(remainingMs),
+                orElse: () =>
+                  Effect.fail(
+                    new ToolError({
+                      toolName: call.function.name,
+                      cause: toolBudgetTimeCause(budgetTimeMs, budgetTimeMs),
+                    }),
+                  ),
+              }),
+            );
+          });
 
           const result = yield* attemptOnce.pipe(
             Effect.retry({

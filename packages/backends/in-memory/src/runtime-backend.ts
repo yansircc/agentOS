@@ -32,6 +32,7 @@ import {
   type AnyAttachedStreamHandler,
   type AnyDurableTrigger,
   type AnyMaterializedProjectionDefinition,
+  type RuntimeStorageError,
 } from "@agent-os/runtime";
 import { LlmTransport } from "@agent-os/llm-protocol";
 import {
@@ -83,7 +84,7 @@ export interface InMemoryRuntimeLayerOptions {
 
 export interface InMemoryRuntimeBackend {
   readonly state: InMemoryBackendState;
-  readonly layer: Layer.Layer<InMemoryRuntimeServices, SqlError>;
+  readonly layer: Layer.Layer<InMemoryRuntimeServices, SqlError | RuntimeStorageError>;
 }
 
 export const createInMemoryRuntimeBackend = (
@@ -155,4 +156,5 @@ export const createInMemoryRuntimeBackend = (
 
 export const makeInMemoryRuntimeLayer = (
   options: InMemoryRuntimeLayerOptions,
-): Layer.Layer<InMemoryRuntimeServices, SqlError> => createInMemoryRuntimeBackend(options).layer;
+): Layer.Layer<InMemoryRuntimeServices, SqlError | RuntimeStorageError> =>
+  createInMemoryRuntimeBackend(options).layer;

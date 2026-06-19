@@ -7,7 +7,7 @@ import {
 } from "@agent-os/kernel/boundary-contract";
 import type { EffectClaim } from "@agent-os/kernel/effect-claim";
 import { makePreClaim } from "@agent-os/kernel/effect-claim";
-import type { LedgerEvent } from "@agent-os/kernel/types";
+import { decodeRecordedLedgerEvent, type LedgerEvent } from "@agent-os/kernel/types";
 import { materialRequirement } from "@agent-os/kernel/material-ref";
 import {
   defineSettlementContract,
@@ -87,6 +87,11 @@ const eventFor = (spec: {
   payload: { claim: spec.claim ?? livedClaim },
 });
 
+const recordedEventFor = (spec: Parameters<typeof eventFor>[0]) =>
+  decodeRecordedLedgerEvent(eventFor(spec));
+
+const recordedEvent = (event: LedgerEvent) => decodeRecordedLedgerEvent(event);
+
 describe("boundary commit validation", () => {
   it("rejects terminal claims outside the event-local slot vocabulary", () => {
     const carrierProofClaim = settleLived(settlement, claim, {
@@ -124,7 +129,7 @@ describe("boundary commit validation", () => {
             scopeRef: claim.scopeRef,
             effectAuthorityRef: claim.effectAuthorityRef,
           });
-          return Effect.succeed(eventFor({ claim: livedClaim }));
+          return Effect.succeed(recordedEventFor({ claim: livedClaim }));
         },
       );
 
@@ -143,26 +148,28 @@ describe("boundary commit validation", () => {
       Effect.gen(function* () {
         const owner = yield* Effect.result(
           commitBoundaryEvent(contract, "slot.ledgered", { claim: livedClaim }, () =>
-            Effect.succeed(eventFor({ claim: livedClaim, factOwnerRef: "@other/package" })),
+            Effect.succeed(recordedEventFor({ claim: livedClaim, factOwnerRef: "@other/package" })),
           ),
         );
         const kind = yield* Effect.result(
           commitBoundaryEvent(contract, "slot.ledgered", { claim: livedClaim }, () =>
-            Effect.succeed(eventFor({ claim: livedClaim, kind: "slot.other" })),
+            Effect.succeed(recordedEventFor({ claim: livedClaim, kind: "slot.other" })),
           ),
         );
         const scope = yield* Effect.result(
           commitBoundaryEvent(contract, "slot.ledgered", { claim: livedClaim }, () =>
-            Effect.succeed({
-              ...eventFor({ claim: livedClaim }),
-              scopeRef: { kind: "conversation", scopeId: "thread:2" },
-            }),
+            Effect.succeed(
+              recordedEvent({
+                ...eventFor({ claim: livedClaim }),
+                scopeRef: { kind: "conversation", scopeId: "thread:2" },
+              }),
+            ),
           ),
         );
         const authority = yield* Effect.result(
           commitBoundaryEvent(contract, "slot.ledgered", { claim: livedClaim }, () =>
             Effect.succeed(
-              eventFor({
+              recordedEventFor({
                 claim: livedClaim,
                 effectAuthorityRef: { authorityClass: "effect", authorityId: "other.record" },
               }),
@@ -220,7 +227,7 @@ describe("boundary commit validation", () => {
       const result = yield* Effect.result(
         commitBoundaryEvent(authorityContract, "slot.ledgered", { claim: undeclaredClaim }, () => {
           committed = true;
-          return Effect.succeed(eventFor({ claim: undeclaredClaim }));
+          return Effect.succeed(recordedEventFor({ claim: undeclaredClaim }));
         }),
       );
 

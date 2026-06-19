@@ -1,7 +1,7 @@
 import { Effect, Exit } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import type { Recorded } from "@agent-os/kernel";
-import type { LedgerEvent } from "@agent-os/kernel/types";
+import { decodeRecordedLedgerEvent, type LedgerEvent } from "@agent-os/kernel/types";
 import {
   RUNTIME_EVENT_KIND,
   agentRunStartedEvent,
@@ -24,6 +24,9 @@ const eventFromSpec = (id: number, spec: RuntimeEventCommitSpec): LedgerEvent =>
   payload: spec.payload,
 });
 
+const recordedEventFromSpec = (id: number, spec: RuntimeEventCommitSpec) =>
+  decodeRecordedLedgerEvent(eventFromSpec(id, spec));
+
 describe("runtime driver value-domain boundary", () => {
   it.effect("returns decoded Recorded runtime events from driver appends", () =>
     Effect.gen(function* () {
@@ -32,7 +35,9 @@ describe("runtime driver value-domain boundary", () => {
         {
           commit: (specs) =>
             Effect.succeed(
-              specs.map((spec, index) => eventFromSpec(index + 1, spec as RuntimeEventCommitSpec)),
+              specs.map((spec, index) =>
+                recordedEventFromSpec(index + 1, spec as RuntimeEventCommitSpec),
+              ),
             ),
         },
         { kind: "start", event },
@@ -54,10 +59,10 @@ describe("runtime driver value-domain boundary", () => {
           {
             commit: () =>
               Effect.succeed([
-                {
+                decodeRecordedLedgerEvent({
                   ...eventFromSpec(1, event),
                   kind: "other.event",
-                },
+                }),
               ]),
           },
           { kind: "start", event },

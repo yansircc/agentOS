@@ -158,7 +158,7 @@ describe("in-memory runtime backend", () => {
         const failure = Cause.findErrorOption(exit.cause);
         expect(Option.isSome(failure)).toBe(true);
         if (Option.isSome(failure)) {
-          expect(failure.value).toMatchObject({ _tag: "agent_os.sql_error" });
+          expect(failure.value).toMatchObject({ _tag: "agent_os.runtime_storage_error" });
         }
       }
       const events = await runtime.runPromise(ledger.events(truthIdentity("runtime-l0-scope")));
@@ -773,7 +773,7 @@ describe("in-memory runtime backend", () => {
         const failure = Cause.findErrorOption(exit.cause);
         expect(Option.isSome(failure)).toBe(true);
         if (Option.isSome(failure)) {
-          expect(failure.value._tag).toBe("agent_os.sql_error");
+          expect(failure.value._tag).toBe("agent_os.runtime_storage_error");
         }
       }
     } finally {

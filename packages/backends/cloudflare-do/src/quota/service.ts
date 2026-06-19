@@ -15,7 +15,7 @@
  */
 
 import { Clock, Effect, Layer } from "effect";
-import { Quota } from "@agent-os/runtime";
+import { Quota, runtimeStorageOrJsonError } from "@agent-os/runtime";
 import {
   decodeQuotaConsumedPayloadSync,
   QUOTA_EVENT_KIND,
@@ -73,7 +73,7 @@ export const QuotaLive = (
                 for (const r of rows) {
                   // Decode through owned schema. JSON.parse failure OR
                   // shape mismatch both throw → tx rolls back → Effect.try
-                  // wraps as SqlError. Single owned failure path; no
+                  // wraps as storage failure. Single owned failure path; no
                   // silent skip, no NaN propagation, no undercount.
                   const p = decodeQuotaConsumedPayloadSync(
                     JSON.parse(sqlText(r.payload, "events.payload")),
@@ -123,7 +123,7 @@ export const QuotaLive = (
                   consumed,
                 };
               },
-            );
+            ).pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("quota", cause)));
 
             return {
               granted: txResult.value.granted,

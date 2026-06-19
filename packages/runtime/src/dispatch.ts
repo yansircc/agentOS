@@ -6,13 +6,13 @@ import type {
   DispatchTargetNotFound,
   JsonStringifyError,
   ScopeMissingError,
-  SqlError,
   UnregisteredDurableTriggerKind,
   UnsupportedScopeRef,
 } from "@agent-os/kernel/errors";
 import type { DispatchToScopeResult, DispatchToScopeSpec } from "@agent-os/kernel/types";
 import type { InvalidTraceContext } from "@agent-os/telemetry-protocol";
 import type { DispatchEnvelope, DispatchReceiverResult } from "@agent-os/backend-protocol";
+import type { RuntimeStorageError } from "./ledger";
 
 export class Dispatch extends Context.Service<
   Dispatch,
@@ -21,7 +21,7 @@ export class Dispatch extends Context.Service<
       spec: DispatchToScopeSpec,
     ) => Effect.Effect<
       DispatchToScopeResult,
-      | SqlError
+      | RuntimeStorageError
       | JsonStringifyError
       | DispatchTargetNotFound
       | InvalidTraceContext
@@ -34,7 +34,7 @@ export class Dispatch extends Context.Service<
       envelope: DispatchEnvelope,
     ) => Effect.Effect<
       DispatchReceiverResult,
-      | SqlError
+      | RuntimeStorageError
       | JsonStringifyError
       | InvalidTraceContext
       | CapabilityRejected

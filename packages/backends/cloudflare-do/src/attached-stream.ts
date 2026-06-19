@@ -3,10 +3,10 @@ import {
   AttachedStreamRegistry,
   AttachedStreams,
   makeAttachedStreamService,
+  runtimeStorageOrJsonError,
   runSynchronousAttachedStreamCommit,
   type AttachedStreamTx,
 } from "@agent-os/runtime";
-import { SqlError } from "@agent-os/kernel/errors";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import { EventBus } from "./ledger/event-bus";
 import { selectLedgerEvents } from "./ledger/ledger";
@@ -17,7 +17,7 @@ export const AttachedStreamsLive = (
   ctx: DurableObjectState,
   scope: string,
   identity: BackendProtocolEventIdentity,
-): Layer.Layer<AttachedStreams, SqlError, AttachedStreamRegistry | EventBus> => {
+): Layer.Layer<AttachedStreams, never, AttachedStreamRegistry | EventBus> => {
   let nextStreamId = 1;
   return Layer.effect(
     AttachedStreams,
@@ -94,7 +94,7 @@ export const AttachedStreamsLive = (
               (cause) => (typeof cause === "string" ? cause : null),
             );
             return { eventIds: committed.events.map((event) => event.id) };
-          }),
+          }).pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("attached_stream", cause))),
       });
     }),
   );

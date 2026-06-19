@@ -1,9 +1,11 @@
 import { Clock, Effect, Layer } from "effect";
 import {
   CapabilityRejected,
+  DurableTriggerCommitReturnedThenable,
   DispatchScopeMismatch,
   DispatchTargetNotFound,
-  SqlError,
+  JsonStringifyError,
+  UnregisteredDurableTriggerKind,
   UnsupportedScopeRef,
   isCoreClaimedEventKind,
 } from "@agent-os/kernel/errors";
@@ -19,9 +21,12 @@ import {
   Dispatch,
   DurableTriggerRegistry,
   TriggerPump,
+  runtimeStorageError,
+  runtimeStorageOrJsonError,
   triggerParseFail,
   triggerParseOk,
   type DurableTrigger,
+  type RuntimeStorageError,
 } from "@agent-os/runtime";
 import {
   DELIVERY_RETRY_TRIGGER_KIND,
@@ -69,6 +74,18 @@ const targetFor = (
 
 const targetScopeLabel = (target: BackendProtocolDispatchTarget): string =>
   backendProtocolTruthIdentityKey(target);
+
+const dispatchStorageError = (
+  cause: unknown,
+):
+  | RuntimeStorageError
+  | JsonStringifyError
+  | UnregisteredDurableTriggerKind
+  | DurableTriggerCommitReturnedThenable => {
+  if (cause instanceof UnregisteredDurableTriggerKind) return cause;
+  if (cause instanceof DurableTriggerCommitReturnedThenable) return cause;
+  return runtimeStorageOrJsonError("dispatch", cause);
+};
 
 const findAcceptedDeliveryId = (
   state: InMemoryBackendState,
@@ -298,7 +315,7 @@ export const InMemoryDispatchLive = (
             }
             if (!isAuthorityRef(spec.target.effectAuthorityRef)) {
               return yield* Effect.fail(
-                new SqlError({ cause: "dispatch target effectAuthorityRef malformed" }),
+                runtimeStorageError("dispatch", "dispatch target effectAuthorityRef malformed"),
               );
             }
 
@@ -339,26 +356,28 @@ export const InMemoryDispatchLive = (
               claim,
               ...(traceContext === undefined ? {} : { traceContext }),
             };
-            const event = yield* state.commitTriggerIntent(
-              eventIdentity,
-              now,
-              registry,
-              DELIVERY_RETRY_TRIGGER_KIND,
-              (trigger) => ({
-                ts: now,
-                kind: trigger.intentEventKind,
-                payload: requested,
-              }),
-              (event) => ({
-                outboundEventId: event.id,
-                sourceScope: scopeLabel,
-                sourceIdentity: eventIdentity,
-                requested,
-                attempts: 0,
-                successEventId: null,
-                lastError: null,
-              }),
-            );
+            const event = yield* state
+              .commitTriggerIntent(
+                eventIdentity,
+                now,
+                registry,
+                DELIVERY_RETRY_TRIGGER_KIND,
+                (trigger) => ({
+                  ts: now,
+                  kind: trigger.intentEventKind,
+                  payload: requested,
+                }),
+                (event) => ({
+                  outboundEventId: event.id,
+                  sourceScope: scopeLabel,
+                  sourceIdentity: eventIdentity,
+                  requested,
+                  attempts: 0,
+                  successEventId: null,
+                  lastError: null,
+                }),
+              )
+              .pipe(Effect.mapError(dispatchStorageError));
             yield* triggerPump.drainDue(now);
             return { outboundEventId: event.id };
           }),
@@ -378,7 +397,7 @@ export const InMemoryDispatchLive = (
 
             const accepted = findAcceptedDeliveryId(state, eventIdentity, envelope);
             if (!accepted.ok) {
-              return yield* Effect.fail(new SqlError({ cause: accepted.cause }));
+              return yield* Effect.fail(runtimeStorageError("dispatch", accepted.cause));
             }
             if (accepted.value !== null) {
               return {
@@ -401,37 +420,39 @@ export const InMemoryDispatchLive = (
               );
             }
             const traceContext = copyTraceContext(traceContextResult.traceContext);
-            const events = yield* state.commitPrepared((nextId) => {
-              const deliveredEventId = nextId + 1;
-              const claim = settleDispatchInboundAccepted(envelope.claim, {
-                sourceScope: envelope.sourceScope,
-                targetScope: scopeLabel,
-                deliveredEventId,
-              });
-              return [
-                {
-                  ts: now,
-                  kind: DISPATCH_INBOUND_ACCEPTED,
-                  scopeRef: identity.scopeRef,
-                  effectAuthorityRef: identity.effectAuthorityRef,
-                  payload: {
-                    sourceScope: envelope.sourceScope,
-                    outboundEventId: envelope.outboundEventId,
-                    idempotencyKey: envelope.idempotencyKey,
-                    deliveredEventId,
-                    claim,
-                    ...(traceContext === undefined ? {} : { traceContext }),
+            const events = yield* state
+              .commitPrepared((nextId) => {
+                const deliveredEventId = nextId + 1;
+                const claim = settleDispatchInboundAccepted(envelope.claim, {
+                  sourceScope: envelope.sourceScope,
+                  targetScope: scopeLabel,
+                  deliveredEventId,
+                });
+                return [
+                  {
+                    ts: now,
+                    kind: DISPATCH_INBOUND_ACCEPTED,
+                    scopeRef: identity.scopeRef,
+                    effectAuthorityRef: identity.effectAuthorityRef,
+                    payload: {
+                      sourceScope: envelope.sourceScope,
+                      outboundEventId: envelope.outboundEventId,
+                      idempotencyKey: envelope.idempotencyKey,
+                      deliveredEventId,
+                      claim,
+                      ...(traceContext === undefined ? {} : { traceContext }),
+                    },
                   },
-                },
-                {
-                  ts: now,
-                  kind: envelope.event,
-                  scopeRef: identity.scopeRef,
-                  effectAuthorityRef: identity.effectAuthorityRef,
-                  payload: envelope.data,
-                },
-              ];
-            });
+                  {
+                    ts: now,
+                    kind: envelope.event,
+                    scopeRef: identity.scopeRef,
+                    effectAuthorityRef: identity.effectAuthorityRef,
+                    payload: envelope.data,
+                  },
+                ];
+              })
+              .pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("dispatch", cause)));
             return {
               deliveredEventId: events[1]!.id,
               receipt: dispatchLedgerDeliveryReceipt({

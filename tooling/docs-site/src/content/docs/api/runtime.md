@@ -92,6 +92,8 @@ title: "@agent-os/runtime Public API Intent"
 - `.:Quota`
 - `.:RUN_BEARING_KINDS`
 - `.:Resources`
+- `.:RuntimeStorageError`
+- `.:RuntimeStorageOperation`
 - `.:RunWorkspaceJobSpec`
 - `.:Scheduler`
 - `.:StructuredDecodeResult`
@@ -165,9 +167,13 @@ title: "@agent-os/runtime Public API Intent"
 - `.:projectionMalformed`
 - `.:projectionPut`
 - `.:projectionSkip`
+- `.:recordLedgerPortEvent`
+- `.:recordLedgerPortEvents`
 - `.:waitForProjection`
 - `.:runSynchronousAttachedStreamCommit`
 - `.:runSynchronousTriggerCommit`
+- `.:runtimeStorageError`
+- `.:runtimeStorageOrJsonError`
 - `.:WorkspaceJobAttemptContext`
 - `.:WorkspaceJobRecovery`
 - `.:WorkspaceJobRepairDecisionInput`

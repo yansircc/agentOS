@@ -8,6 +8,12 @@
       "fix": "Keep SQL writes inside the backend-owned ledger commit primitive and return typed SqlError at the backend boundary."
     },
     {
+      "tag": "agent_os.runtime_storage_error",
+      "invariants": ["invariant.ledger.single-commit-source"],
+      "docs": "docs/concepts/durable-truth.md",
+      "fix": "Map backend storage failures into the runtime-owned storage error at the runtime service boundary; keep backend-specific storage errors inside backend adapters."
+    },
+    {
       "tag": "agent_os.driver_ledger_commit_shape_mismatch",
       "invariants": ["invariant.ledger.single-commit-source"],
       "docs": "docs/concepts/durable-truth.md",

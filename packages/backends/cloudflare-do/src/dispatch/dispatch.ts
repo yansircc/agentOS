@@ -15,8 +15,11 @@ import {
   CapabilityRejected,
   DispatchScopeMismatch,
   DispatchTargetNotFound,
-  SqlError,
+  DurableTriggerCommitReturnedThenable,
+  JsonStringifyError,
+  ScopeMissingError,
   UnsupportedScopeRef,
+  UnregisteredDurableTriggerKind,
   isCoreClaimedEventKind,
 } from "@agent-os/kernel/errors";
 import { InvalidTraceContext, validateOptionalTraceContext } from "@agent-os/telemetry-protocol";
@@ -25,7 +28,9 @@ import { materialRefKey } from "@agent-os/kernel/material-ref";
 import {
   Dispatch,
   DurableTriggerRegistry,
+  RuntimeStorageError,
   TriggerPump,
+  runtimeStorageError,
   triggerParseFail,
   triggerParseOk,
 } from "@agent-os/runtime";
@@ -383,14 +388,56 @@ export const DispatchLive = (
   scope: string,
   identity: BackendProtocolEventIdentity,
   targets: DispatchTargetRegistry,
-): Layer.Layer<Dispatch, SqlError, EventBus | TriggerPump | DurableTriggerRegistry> => {
+): Layer.Layer<Dispatch, RuntimeStorageError, EventBus | TriggerPump | DurableTriggerRegistry> => {
   const sql = ctx.storage.sql;
+  const dispatchToScopeError = (
+    cause: unknown,
+  ):
+    | RuntimeStorageError
+    | JsonStringifyError
+    | UnsupportedScopeRef
+    | UnregisteredDurableTriggerKind
+    | DurableTriggerCommitReturnedThenable
+    | CapabilityRejected
+    | DispatchTargetNotFound
+    | InvalidTraceContext =>
+    cause instanceof JsonStringifyError ||
+    cause instanceof UnsupportedScopeRef ||
+    cause instanceof UnregisteredDurableTriggerKind ||
+    cause instanceof DurableTriggerCommitReturnedThenable ||
+    cause instanceof CapabilityRejected ||
+    cause instanceof DispatchTargetNotFound ||
+    cause instanceof InvalidTraceContext ||
+    cause instanceof RuntimeStorageError
+      ? cause
+      : runtimeStorageError("dispatch", cause);
+  const receiveError = (
+    cause: unknown,
+  ):
+    | RuntimeStorageError
+    | JsonStringifyError
+    | InvalidTraceContext
+    | CapabilityRejected
+    | ScopeMissingError
+    | DispatchScopeMismatch =>
+    cause instanceof JsonStringifyError ||
+    cause instanceof InvalidTraceContext ||
+    cause instanceof CapabilityRejected ||
+    cause instanceof ScopeMissingError ||
+    cause instanceof DispatchScopeMismatch ||
+    cause instanceof RuntimeStorageError
+      ? cause
+      : runtimeStorageError("dispatch", cause);
 
   return Layer.effect(
     Dispatch,
     Effect.gen(function* () {
-      yield* ensureDispatchSchema(sql);
-      yield* ensureDueWorkSchema(sql);
+      yield* ensureDispatchSchema(sql).pipe(
+        Effect.mapError((cause) => runtimeStorageError("dispatch", cause)),
+      );
+      yield* ensureDueWorkSchema(sql).pipe(
+        Effect.mapError((cause) => runtimeStorageError("dispatch", cause)),
+      );
       const bus = yield* EventBus;
       const triggerPump = yield* TriggerPump;
       const registry = yield* DurableTriggerRegistry;
@@ -491,7 +538,7 @@ export const DispatchLive = (
 
             yield* triggerPump.drainDue(now);
             return { outboundEventId: requestedEvent.id };
-          }),
+          }).pipe(Effect.mapError(dispatchToScopeError)),
 
         receive: (envelope) =>
           Effect.gen(function* () {
@@ -590,7 +637,7 @@ export const DispatchLive = (
             );
 
             if (result.value.failure !== null) {
-              return yield* Effect.fail(new SqlError({ cause: result.value.failure }));
+              return yield* Effect.fail(runtimeStorageError("dispatch", result.value.failure));
             }
             const deliveredEventId = result.value.duplicate
               ? result.value.deliveredEventId
@@ -602,7 +649,7 @@ export const DispatchLive = (
                 deliveredEventId,
               }),
             };
-          }),
+          }).pipe(Effect.mapError(receiveError)),
       };
     }),
   );

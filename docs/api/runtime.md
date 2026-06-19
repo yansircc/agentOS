@@ -88,6 +88,8 @@
 - `.:Quota`
 - `.:RUN_BEARING_KINDS`
 - `.:Resources`
+- `.:RuntimeStorageError`
+- `.:RuntimeStorageOperation`
 - `.:RunWorkspaceJobSpec`
 - `.:Scheduler`
 - `.:StructuredDecodeResult`
@@ -161,9 +163,13 @@
 - `.:projectionMalformed`
 - `.:projectionPut`
 - `.:projectionSkip`
+- `.:recordLedgerPortEvent`
+- `.:recordLedgerPortEvents`
 - `.:waitForProjection`
 - `.:runSynchronousAttachedStreamCommit`
 - `.:runSynchronousTriggerCommit`
+- `.:runtimeStorageError`
+- `.:runtimeStorageOrJsonError`
 - `.:WorkspaceJobAttemptContext`
 - `.:WorkspaceJobRecovery`
 - `.:WorkspaceJobRepairDecisionInput`

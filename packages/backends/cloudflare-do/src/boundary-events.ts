@@ -2,6 +2,8 @@ import { Clock, Effect, Layer } from "effect";
 import {
   BoundaryEvents,
   commitBoundaryEvent,
+  recordLedgerPortEvent,
+  runtimeStorageOrJsonError,
   type BoundaryCommitIdentity,
 } from "@agent-os/runtime";
 import type { BoundaryContract } from "@agent-os/kernel/boundary-contract";
@@ -35,8 +37,13 @@ export const BoundaryEventsLive = (
                       identity.effectAuthorityRef ?? fallbackIdentity.effectAuthorityRef,
                     payload,
                   }),
+              ).pipe(
+                Effect.mapError((cause) => runtimeStorageOrJsonError("boundary_event", cause)),
               );
-              return committed.event(committed.value);
+              return yield* recordLedgerPortEvent(
+                "boundary_event",
+                committed.event(committed.value),
+              );
             }),
           ),
       };
