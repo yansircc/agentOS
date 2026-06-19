@@ -409,8 +409,8 @@
       "role": "transport-neutral agent client store and typed command surface",
       "boundary": "framework-neutral client state machine surface; consumes runtime-protocol Recorded projections and injected transports, with no React, Svelte, AG-UI, or product UI dependency",
       "need": "Agent client core",
-      "readmeStatus": "{releaseLine} active development. Public exports are listed in `PUBLIC_API.md` to prevent accidental exports; the state-machine implementation is still being built.",
-      "apiStatus": "{releaseLine} active development for the canonical agent client core. Public exports are limited to framework-neutral store contracts and selector helpers until the state-machine task expands this package.",
+      "readmeStatus": "{releaseLine} active development. Public exports are listed in `PUBLIC_API.md` to prevent accidental exports; the package owns the transport-neutral client state machine.",
+      "apiStatus": "{releaseLine} active development for the canonical agent client core. Public exports cover framework-neutral stores, transport injection contracts, Recorded runtime-event snapshots, symbolic ref lifecycle, and generic command invocation.",
       "apiSource": "docs/api/client.md",
       "primary": true,
       "published": true

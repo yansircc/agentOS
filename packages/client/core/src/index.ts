@@ -1,3 +1,15 @@
+import {
+  continuationRefFromInterruptedEvent,
+  inputRequestRefFromInterruptedEvent,
+  RUNTIME_ABORT_EVENT_KINDS,
+  RUNTIME_EVENT_KIND,
+  type InputRequestDescriptor,
+  type RecordedContinuationRef,
+  type RecordedInputRequestRef,
+  type RuntimeLedgerEvent,
+  type RuntimeLedgerEventByKind,
+} from "@agent-os/runtime-protocol";
+
 export type AgentClientListener = () => void;
 export type AgentClientUnsubscribe = () => void;
 
@@ -40,3 +52,374 @@ export const selectAgentClientSnapshot = <Snapshot, Selected>(
   store: AgentClientStore<Snapshot>,
   selector: AgentClientSelector<Snapshot, Selected>,
 ): Selected => selector(store.getSnapshot());
+
+export type AgentClientConnectionStatus = "idle" | "connecting" | "open" | "closed" | "failed";
+export type AgentClientRunStatus = "idle" | "running" | "interrupted" | "completed" | "aborted";
+
+export interface AgentClientConnectionSnapshot {
+  readonly status: AgentClientConnectionStatus;
+  readonly error?: string;
+}
+
+export interface AgentClientInputRequestSnapshot {
+  readonly ref: RecordedInputRequestRef;
+  readonly descriptor: InputRequestDescriptor;
+  readonly status: "pending" | "resumed";
+  readonly resumedAtEventId?: number;
+}
+
+export interface AgentClientRunSnapshot {
+  readonly status: AgentClientRunStatus;
+  readonly runId?: number;
+  readonly activeContinuationRef?: RecordedContinuationRef;
+  readonly pendingContinuations: ReadonlyArray<RecordedContinuationRef>;
+  readonly inputRequests: ReadonlyArray<AgentClientInputRequestSnapshot>;
+}
+
+export interface AgentClientSnapshot {
+  readonly events: ReadonlyArray<RuntimeLedgerEvent>;
+  readonly lastEventId?: number;
+  readonly connection: AgentClientConnectionSnapshot;
+  readonly run: AgentClientRunSnapshot;
+}
+
+export interface AgentClientStreamCursor {
+  readonly afterEventId?: number;
+}
+
+export interface AgentClientStreamOptions {
+  readonly signal?: AbortSignal;
+}
+
+export interface AgentClientStreamSource {
+  open(
+    cursor: AgentClientStreamCursor,
+    options?: AgentClientStreamOptions,
+  ): AsyncIterable<RuntimeLedgerEvent>;
+}
+
+export interface AgentClientCommandOptions {
+  readonly signal?: AbortSignal;
+}
+
+export interface AgentClientCommandSpec<Input = unknown, Output = unknown> {
+  readonly input: Input;
+  readonly output: Output;
+}
+
+export type AgentClientCommandMap = {
+  readonly [command: string]: AgentClientCommandSpec;
+};
+
+export type AgentClientRpcInvoker<Commands extends AgentClientCommandMap = AgentClientCommandMap> =
+  <Name extends Extract<keyof Commands, string>>(
+    name: Name,
+    input: Commands[Name]["input"],
+    options?: AgentClientCommandOptions,
+  ) => Promise<Commands[Name]["output"]>;
+
+export interface CreateAgentClientOptions<
+  Commands extends AgentClientCommandMap = AgentClientCommandMap,
+> {
+  readonly initialEvents?: ReadonlyArray<RuntimeLedgerEvent>;
+  readonly streamSource?: AgentClientStreamSource;
+  readonly rpcInvoker?: AgentClientRpcInvoker<Commands>;
+}
+
+export interface AgentClientController<
+  Commands extends AgentClientCommandMap = AgentClientCommandMap,
+> extends AgentClientStore<AgentClientSnapshot> {
+  readonly invoke: AgentClientRpcInvoker<Commands>;
+  appendEvents(events: ReadonlyArray<RuntimeLedgerEvent>): void;
+  connect(options?: AgentClientStreamOptions): Promise<void>;
+  disconnect(): void;
+}
+
+const INITIAL_CONNECTION: AgentClientConnectionSnapshot = { status: "idle" };
+const INITIAL_RUN: AgentClientRunSnapshot = {
+  status: "idle",
+  pendingContinuations: [],
+  inputRequests: [],
+};
+
+export const createInitialAgentClientSnapshot = (
+  events: ReadonlyArray<RuntimeLedgerEvent> = [],
+): AgentClientSnapshot =>
+  appendRuntimeEventsToSnapshot(
+    {
+      events: [],
+      connection: INITIAL_CONNECTION,
+      run: INITIAL_RUN,
+    },
+    events,
+  );
+
+const isInterruptedEvent = (
+  event: RuntimeLedgerEvent,
+): event is RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED> =>
+  event.kind === RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED;
+
+const isResumedEvent = (
+  event: RuntimeLedgerEvent,
+): event is RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED> =>
+  event.kind === RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED;
+
+const isTerminalAbortEvent = (event: RuntimeLedgerEvent): boolean =>
+  RUNTIME_ABORT_EVENT_KINDS.includes(event.kind as (typeof RUNTIME_ABORT_EVENT_KINDS)[number]);
+
+const runIdFromEvent = (event: RuntimeLedgerEvent): number | undefined => {
+  switch (event.kind) {
+    case RUNTIME_EVENT_KIND.AGENT_RUN_STARTED:
+      return event.id;
+    case RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED:
+    case RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED:
+    case RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED:
+    case RUNTIME_EVENT_KIND.CHAT_INGESTED:
+    case RUNTIME_EVENT_KIND.LLM_REQUESTED:
+    case RUNTIME_EVENT_KIND.TOOL_EXECUTED:
+    case RUNTIME_EVENT_KIND.TOOL_REJECTED:
+    case RUNTIME_EVENT_KIND.RUNTIME_COMPLETED_AFTER_TOOLS:
+    case RUNTIME_EVENT_KIND.RUNTIME_HISTORY_COMPACTED:
+    case RUNTIME_EVENT_KIND.RUNTIME_REKEYED:
+      return event.payload.runId;
+    case RUNTIME_EVENT_KIND.LLM_RESPONSE:
+      return event.payload.turn.id;
+    default:
+      return isTerminalAbortEvent(event) ? event.payload.runId : undefined;
+  }
+};
+
+const refKey = (ref: {
+  readonly kind: string;
+  readonly scopeRef: unknown;
+  readonly afterEventId: number;
+}): string => `${ref.kind}:${JSON.stringify(ref.scopeRef)}:${ref.afterEventId}`;
+
+const eventMatchesResume = (
+  event: RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED>,
+  ref: { readonly runId: number; readonly interruptId: string },
+): boolean => event.payload.runId === ref.runId && event.payload.interruptId === ref.interruptId;
+
+const applyRuntimeEvent = (
+  run: AgentClientRunSnapshot,
+  event: RuntimeLedgerEvent,
+): AgentClientRunSnapshot => {
+  const runId = runIdFromEvent(event);
+  const baseRun = runId === undefined ? run : { ...run, runId };
+
+  if (isInterruptedEvent(event)) {
+    const continuation = continuationRefFromInterruptedEvent(event);
+    const inputRequest = inputRequestRefFromInterruptedEvent(event);
+    const pendingContinuations =
+      continuation.ok &&
+      !baseRun.pendingContinuations.some((ref) => refKey(ref) === refKey(continuation.ref))
+        ? [...baseRun.pendingContinuations, continuation.ref]
+        : baseRun.pendingContinuations;
+    const inputRequests =
+      inputRequest.ok &&
+      !baseRun.inputRequests.some((request) => refKey(request.ref) === refKey(inputRequest.ref))
+        ? [
+            ...baseRun.inputRequests,
+            {
+              ref: inputRequest.ref,
+              descriptor: inputRequest.descriptor,
+              status: "pending" as const,
+            },
+          ]
+        : baseRun.inputRequests;
+    const { activeContinuationRef: _staleActiveContinuationRef, ...runWithoutActive } = baseRun;
+    return {
+      ...runWithoutActive,
+      status: "interrupted",
+      ...(continuation.ok ? { activeContinuationRef: continuation.ref } : {}),
+      pendingContinuations,
+      inputRequests,
+    };
+  }
+
+  if (isResumedEvent(event)) {
+    const pendingContinuations = baseRun.pendingContinuations.filter(
+      (ref) => !eventMatchesResume(event, ref),
+    );
+    const inputRequests = baseRun.inputRequests.map((request) =>
+      eventMatchesResume(event, request.ref)
+        ? { ...request, status: "resumed" as const, resumedAtEventId: event.id }
+        : request,
+    );
+    const activeContinuationRef =
+      baseRun.activeContinuationRef !== undefined &&
+      eventMatchesResume(event, baseRun.activeContinuationRef)
+        ? undefined
+        : baseRun.activeContinuationRef;
+    if (activeContinuationRef === undefined) {
+      const { activeContinuationRef: _consumedActiveContinuationRef, ...runWithoutActive } =
+        baseRun;
+      return {
+        ...runWithoutActive,
+        status: "running",
+        pendingContinuations,
+        inputRequests,
+      };
+    }
+    return {
+      ...baseRun,
+      status: "running",
+      activeContinuationRef,
+      pendingContinuations,
+      inputRequests,
+    };
+  }
+
+  if (
+    event.kind === RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED ||
+    event.kind === RUNTIME_EVENT_KIND.RUNTIME_COMPLETED_AFTER_TOOLS
+  ) {
+    const { activeContinuationRef: _completedActiveContinuationRef, ...runWithoutActive } = baseRun;
+    return { ...runWithoutActive, status: "completed", pendingContinuations: [] };
+  }
+
+  if (isTerminalAbortEvent(event)) {
+    const { activeContinuationRef: _abortedActiveContinuationRef, ...runWithoutActive } = baseRun;
+    return { ...runWithoutActive, status: "aborted", pendingContinuations: [] };
+  }
+
+  return runId === undefined ? baseRun : { ...baseRun, status: "running" };
+};
+
+export const appendRuntimeEventsToSnapshot = (
+  snapshot: AgentClientSnapshot,
+  events: ReadonlyArray<RuntimeLedgerEvent>,
+): AgentClientSnapshot => {
+  if (events.length === 0) return snapshot;
+  const seenEventIds = new Set(snapshot.events.map((event) => event.id));
+  const nextEvents: RuntimeLedgerEvent[] = [...snapshot.events];
+  let nextRun = snapshot.run;
+  let lastEventId = snapshot.lastEventId;
+  let changed = false;
+
+  for (const event of events) {
+    if (seenEventIds.has(event.id)) continue;
+    seenEventIds.add(event.id);
+    nextEvents.push(event);
+    nextRun = applyRuntimeEvent(nextRun, event);
+    lastEventId = lastEventId === undefined ? event.id : Math.max(lastEventId, event.id);
+    changed = true;
+  }
+
+  if (!changed) return snapshot;
+  return {
+    ...snapshot,
+    events: nextEvents,
+    lastEventId,
+    run: nextRun,
+  };
+};
+
+export const isCurrentContinuationRef = (
+  snapshot: AgentClientSnapshot,
+  ref: RecordedContinuationRef,
+): boolean =>
+  snapshot.run.pendingContinuations.some((candidate) => refKey(candidate) === refKey(ref));
+
+export const isCurrentInputRequestRef = (
+  snapshot: AgentClientSnapshot,
+  ref: RecordedInputRequestRef,
+): boolean =>
+  snapshot.run.inputRequests.some(
+    (request) => request.status === "pending" && refKey(request.ref) === refKey(ref),
+  );
+
+const connectionSnapshot = (
+  status: AgentClientConnectionStatus,
+  error?: unknown,
+): AgentClientConnectionSnapshot =>
+  error === undefined ? { status } : { status, error: errorMessage(error) };
+
+const errorMessage = (error: unknown): string => {
+  if (typeof error === "string") return error;
+  if (error instanceof Error) return error.message;
+  return "unknown_error";
+};
+
+const setConnection = (
+  snapshot: AgentClientSnapshot,
+  status: AgentClientConnectionStatus,
+  error?: unknown,
+): AgentClientSnapshot => ({
+  ...snapshot,
+  connection: connectionSnapshot(status, error),
+});
+
+export const createAgentClient = <Commands extends AgentClientCommandMap = AgentClientCommandMap>(
+  options: CreateAgentClientOptions<Commands> = {},
+): AgentClientController<Commands> => {
+  const store = createAgentClientStore(createInitialAgentClientSnapshot(options.initialEvents));
+  let activeStreamAbort: AbortController | undefined;
+
+  const setSnapshot = (snapshot: AgentClientSnapshot) => {
+    store.setSnapshot(snapshot);
+  };
+
+  const appendEvents = (events: ReadonlyArray<RuntimeLedgerEvent>) => {
+    setSnapshot(appendRuntimeEventsToSnapshot(store.getSnapshot(), events));
+  };
+
+  const invoke: AgentClientRpcInvoker<Commands> = (name, input, commandOptions) => {
+    if (options.rpcInvoker === undefined) {
+      return Promise.reject(new Error(`missing rpcInvoker for command ${name}`));
+    }
+    return options.rpcInvoker(name, input, commandOptions);
+  };
+
+  return {
+    subscribe(listener) {
+      return store.subscribe(listener);
+    },
+    getSnapshot() {
+      return store.getSnapshot();
+    },
+    invoke,
+    appendEvents,
+    async connect(connectOptions) {
+      if (options.streamSource === undefined) {
+        throw new Error("missing streamSource");
+      }
+      if (connectOptions?.signal?.aborted === true) {
+        setSnapshot(setConnection(store.getSnapshot(), "closed"));
+        return;
+      }
+
+      activeStreamAbort?.abort();
+      const streamAbort = new AbortController();
+      activeStreamAbort = streamAbort;
+      const abortFromCaller = () => streamAbort.abort(connectOptions?.signal?.reason);
+      connectOptions?.signal?.addEventListener("abort", abortFromCaller, { once: true });
+
+      try {
+        setSnapshot(setConnection(store.getSnapshot(), "connecting"));
+        const cursor = { afterEventId: store.getSnapshot().lastEventId };
+        const stream = options.streamSource.open(cursor, { signal: streamAbort.signal });
+        setSnapshot(setConnection(store.getSnapshot(), "open"));
+        for await (const event of stream) {
+          if (streamAbort.signal.aborted) break;
+          appendEvents([event]);
+        }
+        setSnapshot(setConnection(store.getSnapshot(), "closed"));
+      } catch (error) {
+        if (streamAbort.signal.aborted) {
+          setSnapshot(setConnection(store.getSnapshot(), "closed"));
+        } else {
+          setSnapshot(setConnection(store.getSnapshot(), "failed", error));
+        }
+      } finally {
+        connectOptions?.signal?.removeEventListener("abort", abortFromCaller);
+        if (activeStreamAbort === streamAbort) activeStreamAbort = undefined;
+      }
+    },
+    disconnect() {
+      activeStreamAbort?.abort();
+      activeStreamAbort = undefined;
+      setSnapshot(setConnection(store.getSnapshot(), "closed"));
+    },
+  };
+};

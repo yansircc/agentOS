@@ -2,16 +2,36 @@
 
 # @agent-os/client Public API
 
-Status: 0.5.x active development for the canonical agent client core. Public exports are limited to framework-neutral store contracts and selector helpers until the state-machine task expands this package.
+Status: 0.5.x active development for the canonical agent client core. Public exports cover framework-neutral stores, transport injection contracts, Recorded runtime-event snapshots, symbolic ref lifecycle, and generic command invocation.
 
 ## Public exports
 
+- `.:AgentClientCommandMap`
+- `.:AgentClientCommandOptions`
+- `.:AgentClientCommandSpec`
+- `.:AgentClientConnectionSnapshot`
+- `.:AgentClientConnectionStatus`
+- `.:AgentClientController`
+- `.:AgentClientInputRequestSnapshot`
 - `.:AgentClientListener`
+- `.:AgentClientRpcInvoker`
+- `.:AgentClientRunSnapshot`
+- `.:AgentClientRunStatus`
 - `.:AgentClientSelector`
+- `.:AgentClientSnapshot`
 - `.:AgentClientStore`
 - `.:AgentClientStoreController`
+- `.:AgentClientStreamCursor`
+- `.:AgentClientStreamOptions`
+- `.:AgentClientStreamSource`
 - `.:AgentClientUnsubscribe`
+- `.:CreateAgentClientOptions`
+- `.:appendRuntimeEventsToSnapshot`
+- `.:createAgentClient`
+- `.:createInitialAgentClientSnapshot`
 - `.:createAgentClientStore`
+- `.:isCurrentContinuationRef`
+- `.:isCurrentInputRequestRef`
 - `.:selectAgentClientSnapshot`
 
 ## Experimental exports

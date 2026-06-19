@@ -17,15 +17,16 @@ not import React, Svelte, AG-UI framework adapters, or product UI code.
 ## Minimal Usage
 
 ```ts
-import { createAgentClientStore, selectAgentClientSnapshot } from "@agent-os/client";
+import { createAgentClient, selectAgentClientSnapshot } from "@agent-os/client";
 
-const store = createAgentClientStore({ status: "idle" });
-const status = selectAgentClientSnapshot(store, (snapshot) => snapshot.status);
+const agent = createAgentClient({ streamSource, rpcInvoker });
+const status = selectAgentClientSnapshot(agent, (snapshot) => snapshot.run.status);
 ```
 
-The store contract is the bridge point for framework packages. The full
-streaming state machine is implemented in the client-core phase; this package
-already owns the canonical framework-neutral store shape.
+The store contract is the bridge point for framework packages. The client core
+owns reconnect/replay state, Recorded runtime-event snapshots, symbolic
+ContinuationRef/InputRequestRef lifecycle, and a generic command invoker; browser
+direct transports and server bridges supply only `streamSource` and `rpcInvoker`.
 
 ## Verification
 
