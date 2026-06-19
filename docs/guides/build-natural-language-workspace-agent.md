@@ -26,10 +26,11 @@ AG-UI frames instead of raw ledger payloads.
    Product code must not author raw JSON Schema for these tool contracts.
 6. Use `walkWorkspaceFiles` and `diffWorkspaceFiles` for scan/diff. The product
    still owns its `workspace.file.*` event vocabulary and projection shape.
-7. Configure `submit` with a provider route such as `openAIChat({ endpoint,
-credential, model })` or an `LlmTransport` route exposed by the backend.
-8. Bind endpoint and credential through material refs; do not parse provider
-   responses in product code.
+7. Configure the authored agent with a symbolic LLM route binding such as
+   `llm.default`; the backend resolves that binding through an `LlmTransport`
+   provider route.
+8. Bind endpoint and credential through material refs; do not place resolved
+   provider URLs or credentials in authored files or product projections.
 9. Let the model select product-owned tools through `submit`; do not use
    `unsafeRunToolByName` for LLM-selected tool calls.
 10. Store workspace metadata in ledger facts and materialized projections.
@@ -48,6 +49,7 @@ credential, model })` or an `LlmTransport` route exposed by the backend.
 
 ## References
 
+- [Usage surfaces](../usage-surfaces.md)
+- [Agent authoring package](../packages/agent-authoring.md)
 - [Runtime API](../api/runtime.md)
-- [Kernel API](../api/kernel.md)
 - [Cloudflare DO API](../api/backend-cloudflare-do.md)

@@ -28,9 +28,12 @@ Cloudflare Worker.
 
    ```text
    Worker fetch
-     -> AgentDO facade
+     -> generated typed client
+        -> authored agent tree
+        -> manifest/backend mount
         -> tools: lookup_weather
-        -> llms.default: openAIChat(endpointRef, credentialRef)
+        -> llms.default: bindingRef llm.default
+        -> materials: symbolic endpoint/credential refs
         -> streams: tutorial.streaming_chatbot
         -> triggers: tutorial.cancelable
    ```
@@ -49,9 +52,9 @@ Cloudflare Worker.
 3. Wire HTTP routes:
 
    ```text
-   POST /turn         -> AgentDO.submit
-   GET  /events       -> AgentDO.streamEvents
-   WS   /chat         -> AgentDO.attachStream(mode: bidi)
+   POST /turn         -> generatedClient.submit
+   GET  /events       -> generatedClient.streamEvents
+   WS   /chat         -> generatedClient.attachStream(mode: bidi)
    GET  /__ops/api/*  -> mountOpsApi
    ```
 
