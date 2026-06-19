@@ -16,6 +16,7 @@ import {
 } from "@agent-os/kernel/errors";
 import type { RefResolutionFailed } from "@agent-os/kernel/ref-resolver";
 import type { Outcome, Stimulus } from "@agent-os/runtime-protocol";
+import { publicRuntimeCauseReason } from "./failure-classification";
 
 export type StructuredDecodeResult<O = Record<string, unknown>> =
   | {
@@ -125,16 +126,6 @@ export type StructuredCallFailureClassification =
   | { readonly kind: "record_evidence"; readonly outcome: Outcome }
   | { readonly kind: "fail_before_evidence"; readonly failure: UpstreamFailure };
 
-const publicReason = (cause: unknown): string => {
-  if (cause instanceof Error && typeof cause.message === "string" && cause.message.length > 0) {
-    return cause.message.slice(0, 200);
-  }
-  if (typeof cause === "string") return cause.slice(0, 200);
-  const tagged = cause as { readonly _tag?: unknown; readonly cause?: unknown };
-  if (typeof tagged._tag === "string") return tagged._tag.slice(0, 200);
-  return String(cause).slice(0, 200);
-};
-
 const effectAiAdapterTag = (cause: unknown): string | undefined => {
   const tag = (cause as { readonly _tag?: unknown })._tag;
   return typeof tag === "string" && tag.startsWith("agent_os.effect_ai_") ? tag : undefined;
@@ -151,7 +142,7 @@ const classifyProviderHttpFailure = (failure: ProviderHttpFailure): Outcome => {
   if (flags.has("schema")) {
     return {
       class: "SchemaUnsupported",
-      reason: `${failure.provider}:${failure.status}:${failure.code ?? failure.type ?? "schema"}`,
+      reason: publicRuntimeCauseReason(failure),
     };
   }
   if (
@@ -162,13 +153,13 @@ const classifyProviderHttpFailure = (failure: ProviderHttpFailure): Outcome => {
   ) {
     return {
       class: "TransientError",
-      cause: `${failure.provider}:${failure.status}:${failure.code ?? failure.type ?? "provider"}`,
+      cause: publicRuntimeCauseReason(failure),
     };
   }
   return {
     class: "ProviderRejected",
     status: failure.status,
-    body: `${failure.provider}:${failure.code ?? failure.type ?? "provider_rejected"}`,
+    body: publicRuntimeCauseReason(failure),
   };
 };
 
@@ -203,6 +194,6 @@ export const classifyStructuredCallFailure = (
 
   return {
     kind: "record_evidence",
-    outcome: { class: "TransientError", cause: publicReason(cause) },
+    outcome: { class: "TransientError", cause: publicRuntimeCauseReason(cause) },
   };
 };

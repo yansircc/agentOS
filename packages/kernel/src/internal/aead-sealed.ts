@@ -1,8 +1,14 @@
 import { Data, Effect } from "effect";
 
 import type { MaterialRef } from "../material-ref";
-import type { Live, Recorded, RecordedPayload, RecordedPayloadValue } from "../value-brands";
-import { recordedPayload, recordedValue } from "../value-brands";
+import type {
+  Live,
+  Recordable,
+  Recorded,
+  RecordedPayload,
+  RecordedPayloadValue,
+} from "../value-brands";
+import { recordedPayload, recordableValue } from "../value-brands";
 import { captureLive, openLive } from "../live-edge";
 
 export const AEAD_SEALED_KIND = "aead.sealed";
@@ -39,7 +45,8 @@ export interface SealedEnvelope {
   readonly ciphertext: string;
 }
 
-export type RecordedSealedEnvelope = Recorded<SealedEnvelope>;
+export type RecordableSealedEnvelope = SealedEnvelope & Recordable<SealedEnvelope>;
+export type RecordedSealedEnvelope = SealedEnvelope & Recorded<SealedEnvelope>;
 export type AeadKeyMaterial = CryptoKey | Uint8Array;
 export type AeadPlaintext = string | Uint8Array;
 
@@ -256,7 +263,7 @@ const validateEnvelope = (
 
 export const sealAead = (
   input: SealAeadInput,
-): Effect.Effect<RecordedSealedEnvelope, AeadSealedCodecFailure> =>
+): Effect.Effect<RecordableSealedEnvelope, AeadSealedCodecFailure> =>
   Effect.gen(function* () {
     const crypto = yield* cryptoOrFail(input.crypto);
     const nonce = new Uint8Array(12);
@@ -287,7 +294,7 @@ export const sealAead = (
       aad: cloneRecordedPayload(input.aad),
       ciphertext: encodeBase64Url(new Uint8Array(encrypted)),
     };
-    return recordedValue(envelope) as RecordedSealedEnvelope;
+    return recordableValue(envelope) as RecordableSealedEnvelope;
   });
 
 export const openAead = (

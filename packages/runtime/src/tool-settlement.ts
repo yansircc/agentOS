@@ -1,4 +1,3 @@
-import { Predicate } from "effect";
 import {
   invalidAdmitterRejectionRef,
   type LivedClaim,
@@ -16,6 +15,7 @@ import {
   symbolicSettlementRef,
   validateTerminalClaim,
 } from "@agent-os/kernel/settlement-contract";
+import { publicRuntimeCauseReason } from "./failure-classification";
 
 export const toolSettlementContract = defineSettlementContract({
   settlementId: "@agent-os/runtime.tool",
@@ -33,28 +33,6 @@ export const toolExecutionRejectionKind = (reason: string): RejectionRef["reject
   reason === "budget_time" || reason === "rate_limited" || reason.startsWith("invalid_quota_")
     ? "resource_denied"
     : "provider_rejected";
-
-export const publicRuntimeCauseReason = (cause: unknown): string => {
-  if (Predicate.isObject(cause) && cause._tag === "agent_os.provider_http_failure") {
-    const provider = symbolicReasonOr(String(cause.provider), "provider");
-    const status = typeof cause.status === "number" ? `http_${cause.status}` : "http_error";
-    const flags = Array.isArray(cause.flags)
-      ? cause.flags
-          .filter((flag): flag is string => typeof flag === "string")
-          .map((flag) => symbolicReasonOr(flag, "flag"))
-          .join(":")
-      : "";
-    return ["provider_http_failure", provider, status, flags].filter(Boolean).join(":");
-  }
-  if (Predicate.isObject(cause) && typeof cause.reason === "string") {
-    return symbolicReasonOr(cause.reason, "object");
-  }
-  if (Predicate.isObject(cause) && typeof cause._tag === "string") {
-    return symbolicReasonOr(cause._tag, "object");
-  }
-  if (cause instanceof Error) return symbolicReasonOr(cause.name, "Error");
-  return symbolicReasonOr(typeof cause, "unknown");
-};
 
 export const toolErrorReason = (error: ToolError): string => {
   const cause = error.cause;

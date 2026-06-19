@@ -124,8 +124,8 @@ import {
   settleToolValidationRejected,
   toolAdmissionFailureCause,
   toolErrorReason,
-  publicRuntimeCauseReason,
 } from "./tool-settlement";
+import { publicRuntimeCauseReason } from "./failure-classification";
 import { BoundaryEvents } from "./boundary-events";
 import type { BoundaryCommitRejected } from "./boundary-commit";
 import { appendNextDriverAction, appendRuntimeDriverAction } from "./driver";

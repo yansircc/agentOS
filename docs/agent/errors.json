@@ -352,7 +352,10 @@
       "invariants": ["invariant.boundary.runtime-validation-external-only"],
       "docs": "docs/concepts/agent-schema.md",
       "fix": "Handle provider transport failures at the LLM transport boundary and let submit record the runtime terminal fact.",
-      "sourceFiles": ["packages/kernel/src/errors.ts", "packages/runtime/src/tool-settlement.ts"]
+      "sourceFiles": [
+        "packages/kernel/src/errors.ts",
+        "packages/runtime/src/failure-classification.ts"
+      ]
     },
     {
       "tag": "agent_os.provider_output_decode_error",

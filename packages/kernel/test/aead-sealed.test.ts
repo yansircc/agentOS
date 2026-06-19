@@ -11,12 +11,14 @@ import {
   openAead,
   sealAead,
   type AeadSealedFailureReason,
+  type RecordableSealedEnvelope,
   type RecordedSealedEnvelope,
+  type SealedEnvelope,
 } from "../src/internal/aead-sealed";
 import { captureLive, openLive } from "../src/live-edge";
 import type { MaterialRef } from "../src/material-ref";
 import type { RecordedPayload } from "../src/value-brands";
-import { recordedPayload } from "../src/value-brands";
+import { ledgerRecordedMint, recordableValue, recordedPayload } from "../src/value-brands";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -60,15 +62,19 @@ const sealFixture = (
     aad: overrides.aad ?? recordedPayload({ scope: "run-1", slot: "private-state" }),
   });
 
-describe("Recorded<SealedEnvelope> AEAD codec", () => {
+const recordedEnvelope = (envelope: SealedEnvelope): RecordedSealedEnvelope =>
+  ledgerRecordedMint.recorded(recordableValue(envelope)) as RecordedSealedEnvelope;
+
+describe("Recordable<SealedEnvelope> AEAD codec", () => {
   it.effect(
-    "seals live plaintext into recorded metadata and opens only with matching key ref and AAD",
+    "seals live plaintext into recordable metadata and opens only after ledger witness",
     () =>
       Effect.gen(function* () {
         const aad = recordedPayload({ scope: "run-1", slot: "private-state" });
         const sealed = yield* sealFixture({ aad });
+        const recorded = ledgerRecordedMint.recorded(sealed);
         const opened = yield* openAead({
-          sealed,
+          sealed: recorded,
           key: captureLive(keyBytes("0123456789abcdef0123456789abcdef")),
           keyRef,
           expectedAad: aad,
@@ -88,13 +94,41 @@ describe("Recorded<SealedEnvelope> AEAD codec", () => {
       }),
   );
 
+  it.effect("does not let the AEAD codec mint Recorded without a ledger witness", () =>
+    Effect.gen(function* () {
+      const aad = recordedPayload({ scope: "run-1", slot: "private-state" });
+      const sealed = yield* sealFixture({ aad });
+      const recordable: RecordableSealedEnvelope = sealed;
+      const recorded = ledgerRecordedMint.recorded(sealed);
+      const recordedEvidence: RecordedSealedEnvelope = recorded;
+
+      const assertTypeErrors = () => {
+        // @ts-expect-error A sealed envelope is Recordable, not Recorded, until ledger append/read.
+        const recordedWithoutLedger: RecordedSealedEnvelope = sealed;
+        const openedWithoutLedger = openAead({
+          // @ts-expect-error Opening requires a ledger-witnessed Recorded sealed envelope.
+          sealed,
+          key: captureLive(keyBytes("0123456789abcdef0123456789abcdef")),
+          keyRef,
+          expectedAad: aad,
+        });
+        return [recordedWithoutLedger, openedWithoutLedger];
+      };
+
+      expect(recordable.value.kind).toBe(AEAD_SEALED_KIND);
+      expect(recordedEvidence.value.kind).toBe(AEAD_SEALED_KIND);
+      expect(typeof assertTypeErrors).toBe("function");
+    }),
+  );
+
   it.effect("fails closed for wrong key, wrong AAD, and wrong key ref", () =>
     Effect.gen(function* () {
       const aad = recordedPayload({ scope: "run-1", slot: "private-state" });
       const sealed = yield* sealFixture({ aad });
+      const recorded = ledgerRecordedMint.recorded(sealed);
       const wrongKey = yield* Effect.exit(
         openAead({
-          sealed,
+          sealed: recorded,
           key: captureLive(keyBytes("abcdef0123456789abcdef0123456789")),
           keyRef,
           expectedAad: aad,
@@ -102,7 +136,7 @@ describe("Recorded<SealedEnvelope> AEAD codec", () => {
       );
       const wrongAad = yield* Effect.exit(
         openAead({
-          sealed,
+          sealed: recorded,
           key: captureLive(keyBytes("0123456789abcdef0123456789abcdef")),
           keyRef,
           expectedAad: recordedPayload({ scope: "run-2", slot: "private-state" }),
@@ -110,7 +144,7 @@ describe("Recorded<SealedEnvelope> AEAD codec", () => {
       );
       const wrongKeyRef = yield* Effect.exit(
         openAead({
-          sealed,
+          sealed: recorded,
           key: captureLive(keyBytes("0123456789abcdef0123456789abcdef")),
           keyRef: credentialMaterialRef("tenant-a/aead-key", {
             provider: "local-test",
@@ -130,15 +164,12 @@ describe("Recorded<SealedEnvelope> AEAD codec", () => {
     Effect.gen(function* () {
       const aad = recordedPayload({ scope: "run-1", slot: "private-state" });
       const sealed = yield* sealFixture({ aad });
-      const unsupportedVersion: RecordedSealedEnvelope = {
-        value: { ...sealed.value, version: 2 as typeof AEAD_SEALED_VERSION },
-      } as RecordedSealedEnvelope;
-      const malformedNonce: RecordedSealedEnvelope = {
-        value: { ...sealed.value, nonce: "not base64url!" },
-      } as RecordedSealedEnvelope;
-      const malformedCiphertext: RecordedSealedEnvelope = {
-        value: { ...sealed.value, ciphertext: "abc" },
-      } as RecordedSealedEnvelope;
+      const unsupportedVersion = recordedEnvelope({
+        ...sealed.value,
+        version: 2 as typeof AEAD_SEALED_VERSION,
+      });
+      const malformedNonce = recordedEnvelope({ ...sealed.value, nonce: "not base64url!" });
+      const malformedCiphertext = recordedEnvelope({ ...sealed.value, ciphertext: "abc" });
 
       expectAeadFailure(
         yield* Effect.exit(
