@@ -2,13 +2,15 @@
 
 ## Purpose
 
-Framework-neutral AG-UI wire projection for typed agentOS runtime events and
-AgentSchema tool declarations.
+Framework-neutral AG-UI wire projection for runtime-protocol Recorded events,
+projection DTOs, and AgentSchema tool declarations.
 
 ## Invariant
 
 AG-UI frames are edge protocol projections. They never write ledger facts,
-replace agentOS tool algebra, or become runtime source truth.
+replace agentOS tool algebra, become runtime source truth, or become the
+canonical client read-model. Client state is runtime-protocol Recorded
+vocabulary; AG-UI is an opt-in sink over it.
 
 ## Minimal Usage
 
@@ -36,8 +38,10 @@ raw ledger payload fields and product frame projectors cannot emit reserved
 Use `projectToolToAgUiTool` to expose AG-UI tool declarations generated from
 `AgentSchema.projections.agUi`.
 
-Use `projectAgUiFramesToActivities` for a neutral activity feed. React and
-Svelte adapters consume that projection without parsing ledger payloads.
+Use `projectAgUiFramesToActivities` for a neutral activity feed when AG-UI wire
+frames are the chosen edge protocol. Framework-specific consumption belongs in
+`@agent-os/client-react` and `@agent-os/client-svelte`, not in AG-UI-owned
+framework packages.
 
 ## Verification
 

@@ -2,6 +2,14 @@
 
 ## Public exports
 
+None.
+
+## Experimental exports
+
+None.
+
+## Deprecated exports
+
 - `.:AgUiFrame`
 - `.:AgUiActivity`
 - `.:AgUiFrameProjection`
@@ -10,14 +18,6 @@
 - `.:useAgUiActivities`
 - `.:useAgUiFrameStore`
 - `.:useAgUiProjection`
-
-## Experimental exports
-
-None.
-
-## Deprecated exports
-
-None.
 
 ## Internal-only exports
 

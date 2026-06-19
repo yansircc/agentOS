@@ -2,9 +2,17 @@
 
 # @agent-os/ag-ui-react Public API
 
-Status: 0.5.x active development for React AG-UI consumption helpers. Public exports are listed for accidental export control only; this is not an API freeze.
+Status: Retired public API intent. Exports remain declared only while the package still exists; they are scheduled for deletion rather than compatibility preservation.
 
 ## Public exports
+
+None.
+
+## Experimental exports
+
+None.
+
+## Deprecated exports
 
 - `.:AgUiFrame`
 - `.:AgUiActivity`
@@ -14,14 +22,6 @@ Status: 0.5.x active development for React AG-UI consumption helpers. Public exp
 - `.:useAgUiActivities`
 - `.:useAgUiFrameStore`
 - `.:useAgUiProjection`
-
-## Experimental exports
-
-None.
-
-## Deprecated exports
-
-None.
 
 ## Internal-only exports
 

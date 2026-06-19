@@ -4,18 +4,21 @@ AG-UI is an edge protocol adapter over agentOS runtime facts.
 
 ## Problem
 
-UI clients need AG-UI-compatible run streams, but AG-UI must not become a
-second runtime model. If products parse `LedgerEvent.payload` directly or each
-UI framework maps runtime events on its own, the event vocabulary has multiple
-code sources and drifts from the ledger/runtime algebra.
+UI clients sometimes need AG-UI-compatible run streams, but AG-UI must not
+become a second runtime model or the canonical client state model. If products
+parse `LedgerEvent.payload` directly or each UI framework maps runtime events
+on its own, the event vocabulary has multiple code sources and drifts from the
+ledger/runtime algebra.
 
 ## Model
 
-Owner-owned `SafeLedgerEvent` projections are the source for AG-UI frames.
-Runtime, workspace-job, and workspace-op packages each decide their browser-safe
-payload. AG-UI frames are derived projections and are never written back to the
-ledger. Product-owned events can appear only when their owner supplies a safe
-event projector; AG-UI does not choose raw payload fields.
+The canonical client read-model is runtime-protocol Recorded events and
+projection DTOs. Owner-owned `SafeLedgerEvent` projections are the source for
+AG-UI frames when an AG-UI edge protocol sink is requested. Runtime,
+workspace-job, and workspace-op packages each decide their browser-safe payload.
+AG-UI frames are derived projections and are never written back to the ledger.
+Product-owned events can appear only when their owner supplies a safe event
+projector; AG-UI does not choose raw payload fields.
 
 AG-UI tool declarations are generated from `AgentSchema.projections.agUi`.
 AG-UI tool JSON Schema never creates `Tool.execution`, admission policy, quota,
@@ -23,12 +26,13 @@ material refs, or settlement authority.
 
 ### Bindings
 
-`@agent-os/ag-ui` owns all frame mapping, field retention, redaction, submit
-input lowering, and core frame reduction.
+`@agent-os/ag-ui` owns all AG-UI frame mapping, field retention, redaction,
+submit input lowering, and core frame reduction.
 
-`@agent-os/ag-ui-react` and `@agent-os/ag-ui-svelte` are thin consumers over the
-same frame stream. They must not import runtime event decoders or inspect raw
-ledger payloads.
+`@agent-os/ag-ui-react` and `@agent-os/ag-ui-svelte` are retired framework
+bindings. React and Svelte consumption belongs in `@agent-os/client-react` and
+`@agent-os/client-svelte`, which bridge the transport-neutral client store.
+They must expose canonical Recorded read-models, not AG-UI as core state.
 
 ### Field Retention
 
@@ -72,8 +76,9 @@ HTTP/client boundary without changing runtime facts.
 ## Non-Goals
 
 This adapter does not add a new ledger vocabulary, replace attached streams,
-execute tools through AG-UI, or derive execution domains, quota, admission, or
-material refs from client-provided AG-UI tool declarations.
+define the framework client state machine, execute tools through AG-UI, or
+derive execution domains, quota, admission, or material refs from
+client-provided AG-UI tool declarations.
 
 It also does not promote product-owned workspace file events into substrate
 runtime events. Product events remain extension frames until a separate carrier

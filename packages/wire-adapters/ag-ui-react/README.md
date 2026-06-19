@@ -4,16 +4,18 @@
 
 ## Purpose
 
-React hooks and stores for consuming AG-UI frames produced by `@agent-os/ag-ui`.
+Legacy React hooks and stores for consuming AG-UI frames produced by
+`@agent-os/ag-ui`.
 
 ## Public API Status
 
-0.5.x active development. Public exports are listed in `PUBLIC_API.md` to prevent accidental exports; they are not frozen.
+Retired by the client package migration. Do not add new usage; framework binding moves to `@agent-os/client-react` and this package is deleted by the collapse phase.
 
 ## Invariant
 
-React bindings consume AG-UI frames only. They do not parse ledger payloads,
-decode runtime events, or own AG-UI frame mapping semantics.
+This package is retired by the canonical client migration. It must not gain new
+surface area. React binding ownership moves to `@agent-os/client-react`, which
+bridges the framework-neutral `@agent-os/client` store.
 
 ## Minimal Usage
 
@@ -21,8 +23,8 @@ decode runtime events, or own AG-UI frame mapping semantics.
 import { useAgUiActivities, useAgUiProjection } from "@agent-os/ag-ui-react";
 ```
 
-Use `createAgUiReactFrameStore` when a product wants appendable frame state.
-Use `useAgUiActivities` for a neutral activity feed derived from AG-UI frames.
+Existing exports remain declared only until the package is deleted by the
+frontend package collapse phase. New consumers should not target this package.
 
 ## Verification
 

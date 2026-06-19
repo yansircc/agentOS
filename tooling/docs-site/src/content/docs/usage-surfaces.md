@@ -11,15 +11,18 @@ views from projections.
 
 ## Calling Surfaces
 
-| Surface            | Package                                  | Audience               | First facts                                        |
-| ------------------ | ---------------------------------------- | ---------------------- | -------------------------------------------------- |
-| App authoring      | `@agent-os/agent-authoring`              | App authors            | `agent/instructions.md`, `agent/tools/*.ts`        |
-| Generated client   | app framework output                     | App authors            | typed submit, stream, and info calls               |
-| Backend mount      | `@agent-os/backend-cloudflare-do`        | Backend authors        | Durable Object factory, manifest mount             |
-| Runtime substrate  | `@agent-os/runtime`                      | Backend authors        | Effect Tags, submit protocol, projections          |
-| Backend protocol   | `@agent-os/backend-protocol`             | Backend authors        | shared dispatch/scheduler/resource/quota semantics |
-| Carriers/providers | `@agent-os/*` carrier/provider packages  | Domain package authors | boundary packages, provider materializers          |
-| Composers/tooling  | `@agent-os/run-stream`, tooling packages | Ops and UI authors     | projections, manifests, install-time registries    |
+| Surface            | Package                                    | Audience               | First facts                                        |
+| ------------------ | ------------------------------------------ | ---------------------- | -------------------------------------------------- |
+| App authoring      | `@agent-os/agent-authoring`                | App authors            | `agent/instructions.md`, `agent/tools/*.ts`        |
+| Generated client   | app framework output                       | App authors            | typed submit, projection subscriptions, commands   |
+| Client core        | `@agent-os/client`                         | App UI/headless code   | transport-neutral store and typed command invoker  |
+| Framework bridge   | `@agent-os/client-react` / `client-svelte` | App UI authors         | framework reactivity over canonical client state   |
+| Workspace app-kit  | `@agent-os/workspace-agent`                | Workspace app authors  | workspace projections, commands, generated mount   |
+| Backend mount      | `@agent-os/backend-cloudflare-do`          | Backend authors        | Durable Object factory, manifest mount             |
+| Runtime substrate  | `@agent-os/runtime`                        | Backend authors        | Effect Tags, submit protocol, projections          |
+| Backend protocol   | `@agent-os/backend-protocol`               | Backend authors        | shared dispatch/scheduler/resource/quota semantics |
+| Carriers/providers | `@agent-os/*` carrier/provider packages    | Domain package authors | boundary packages, provider materializers          |
+| Composers/tooling  | `@agent-os/run-stream`, tooling packages   | Ops and UI authors     | projections, manifests, install-time registries    |
 
 ## Minimal App Concepts
 
@@ -51,3 +54,29 @@ Effectful tools must explicitly declare material, execution domain,
 interaction, and receipt/replay policy. The compiler may supply versioned
 defaults for pure tools, but it must fail closed instead of backfilling missing
 effectful authority.
+
+## Client Boundary
+
+The canonical client read-model is runtime-protocol Recorded event and
+projection vocabulary. `@agent-os/client` owns one transport-neutral state
+machine over injected stream and command transports. Browser-direct and
+server-bridge consumers use the same state machine.
+
+Framework packages stop at reactivity bridges. They expose hooks or stores over
+the client state and typed command invoker; they do not own UI components,
+timeline/file-review shapes, runtime event decoders, or transport logic.
+
+`@agent-os/ag-ui` remains a framework-neutral opt-in wire projection over the
+canonical read-model. It is not the client core state model. The legacy
+`@agent-os/ag-ui-react` and `@agent-os/ag-ui-svelte` framework packages are
+retired in favor of `@agent-os/client-react` and `@agent-os/client-svelte`.
+
+Workspace app-kit surfaces split by generator:
+
+- workspace state, file metadata, run stream, input requests, and agent info are
+  projection reads;
+- submit, input-request resume, live file reads, reset, destroy, and custom
+  authored RPC are commands.
+
+Product UI starts after these surfaces. Rendering timeline rows, file review
+panels, and layout is product code or demo code, not framework substrate.

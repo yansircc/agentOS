@@ -6,6 +6,14 @@ title: "@agent-os/ag-ui-react Public API Intent"
 
 ## Public exports
 
+None.
+
+## Experimental exports
+
+None.
+
+## Deprecated exports
+
 - `.:AgUiFrame`
 - `.:AgUiActivity`
 - `.:AgUiFrameProjection`
@@ -14,14 +22,6 @@ title: "@agent-os/ag-ui-react Public API Intent"
 - `.:useAgUiActivities`
 - `.:useAgUiFrameStore`
 - `.:useAgUiProjection`
-
-## Experimental exports
-
-None.
-
-## Deprecated exports
-
-None.
 
 ## Internal-only exports
 

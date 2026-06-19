@@ -2,13 +2,7 @@
 
 ## Public exports
 
-- `.:AgUiFrame`
-- `.:AgUiActivity`
-- `.:AgUiFrameProjection`
-- `.:AgUiFrameStore`
-- `.:agUiActivitiesReadable`
-- `.:agUiProjectionReadable`
-- `.:createAgUiSvelteFrameStore`
+None.
 
 ## Experimental exports
 
@@ -16,7 +10,13 @@ None.
 
 ## Deprecated exports
 
-None.
+- `.:AgUiFrame`
+- `.:AgUiActivity`
+- `.:AgUiFrameProjection`
+- `.:AgUiFrameStore`
+- `.:agUiActivitiesReadable`
+- `.:agUiProjectionReadable`
+- `.:createAgUiSvelteFrameStore`
 
 ## Internal-only exports
 

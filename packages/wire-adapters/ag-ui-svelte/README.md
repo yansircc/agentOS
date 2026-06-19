@@ -4,16 +4,17 @@
 
 ## Purpose
 
-Svelte stores for consuming AG-UI frames produced by `@agent-os/ag-ui`.
+Legacy Svelte stores for consuming AG-UI frames produced by `@agent-os/ag-ui`.
 
 ## Public API Status
 
-0.5.x active development. Public exports are listed in `PUBLIC_API.md` to prevent accidental exports; they are not frozen.
+Retired by the client package migration. Do not add new usage; framework binding moves to `@agent-os/client-svelte` and this package is deleted by the collapse phase.
 
 ## Invariant
 
-Svelte bindings consume AG-UI frames only. They do not parse ledger payloads,
-decode runtime events, or own AG-UI frame mapping semantics.
+This package is retired by the canonical client migration. It must not gain new
+surface area. Svelte binding ownership moves to `@agent-os/client-svelte`, which
+bridges the framework-neutral `@agent-os/client` store.
 
 ## Minimal Usage
 
@@ -21,9 +22,8 @@ decode runtime events, or own AG-UI frame mapping semantics.
 import { agUiActivitiesReadable, createAgUiSvelteFrameStore } from "@agent-os/ag-ui-svelte";
 ```
 
-`createAgUiSvelteFrameStore` exposes both the frame projection and the neutral
-activity feed. `agUiActivitiesReadable` wraps a fixed frame array when no
-appendable store is needed.
+Existing exports remain declared only until the package is deleted by the
+frontend package collapse phase. New consumers should not target this package.
 
 ## Verification
 
