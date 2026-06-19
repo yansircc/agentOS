@@ -164,20 +164,23 @@ test "$(pwd)" = "$PARALLEL_WORKTREE" || { echo "wrong worktree: $(pwd)"; exit 1;
 ```
 
 For CST-backed tasks, do not run `cst take` inside a worker worktree. Claim the
-task centrally while creating the worktree:
+task centrally while creating the worktree; the helper binds the CST task
+envelope to the worker worktree as the private execution surface:
 
 ```sh
 scripts/parallel-dev/create-cst-agent.sh <task-id> aNN short-task HEAD
 cd .parallel/worktrees/aNN-short-task
 source <printed-agent-dir>/env.sh
 test "$(pwd)" = "$PARALLEL_WORKTREE" || { echo "wrong worktree: $(pwd)"; exit 1; }
-cst show "$PARALLEL_CST_TASK_ID"
+cst worker-status "$PARALLEL_CST_TASK_ID" --human
 ```
 
 The generated `env.sh` injects a `cst()` wrapper that reads/writes the central
-source checkout store. It blocks `cst take` and `cst run` inside the worker:
-run verification commands directly in `$PARALLEL_WORKTREE`, then record
-evidence or completion through the central wrapper.
+source checkout store through explicit `--store`. It blocks `cst take` and
+low-level `cst run` inside the worker. Use `cst worker-status` to read the
+ledger-derived legal frontier and `cst worker-run --action <action-id>` to run a
+bound action. When no frontier action exists, review evidence and external notes
+are still recorded through the central wrapper.
 
 Before editing, write the intended write-set and invariant to the printed
 agent `task.md`.

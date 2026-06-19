@@ -6,9 +6,10 @@ usage() {
 usage: scripts/parallel-dev/create-cst-agent.sh <task-id> <agent-id> <slug> [base-ref]
 
 Creates one CST-claimed parallel worker:
-  1. takes <task-id> in the source checkout
-  2. creates an isolated git worktree through create-agent.sh
-  3. writes CST claim metadata and a central-store cst() wrapper into env.sh
+  1. creates an isolated git worktree through create-agent.sh
+  2. binds <task-id> to that worktree as a private CST execution surface
+  3. takes <task-id> in the source checkout
+  4. writes CST claim metadata and a central-store cst() wrapper into env.sh
 
 The worker must source the generated env.sh before running any cst command.
 USAGE
@@ -54,6 +55,9 @@ fi
 
 claim_taken=0
 setup_complete=0
+agent_dir=""
+worktree=""
+branch=""
 
 cleanup_on_error() {
   status=$?
@@ -61,23 +65,17 @@ cleanup_on_error() {
     echo "setup failed; releasing CST task $task_id" >&2
     (cd "$repo_root" && cst release "$task_id" >/dev/null) || true
   fi
+  if [[ "$setup_complete" -ne 1 && -n "$worktree" && -d "$worktree" ]]; then
+    echo "setup failed; removing worker worktree $worktree" >&2
+    git worktree remove --force "$worktree" >/dev/null 2>&1 || true
+  fi
+  if [[ "$setup_complete" -ne 1 && -n "$branch" ]] && git rev-parse --verify --quiet "refs/heads/${branch}" >/dev/null; then
+    echo "setup failed; deleting worker branch $branch" >&2
+    git branch -D "$branch" >/dev/null 2>&1 || true
+  fi
   exit "$status"
 }
 trap cleanup_on_error ERR
-
-claim_json="$(cst take "$task_id")"
-claim_taken=1
-
-claim_node_id="$(node -e 'const fs=require("fs"); const j=JSON.parse(fs.readFileSync(0,"utf8")); process.stdout.write(String(j.node_id));' <<<"$claim_json")"
-attempt_id="$(node -e 'const fs=require("fs"); const j=JSON.parse(fs.readFileSync(0,"utf8")); process.stdout.write(j.attempt_id);' <<<"$claim_json")"
-claim_event_id="$(node -e 'const fs=require("fs"); const j=JSON.parse(fs.readFileSync(0,"utf8")); process.stdout.write(j.event_id);' <<<"$claim_json")"
-lease_id="$(node -e 'const fs=require("fs"); const j=JSON.parse(fs.readFileSync(0,"utf8")); process.stdout.write(j.lease_id);' <<<"$claim_json")"
-lease_expires_at="$(node -e 'const fs=require("fs"); const j=JSON.parse(fs.readFileSync(0,"utf8")); process.stdout.write(j.lease_expires_at);' <<<"$claim_json")"
-
-if [[ "$claim_node_id" != "$task_id" ]]; then
-  echo "cst take returned task $claim_node_id, expected $task_id" >&2
-  exit 1
-fi
 
 create_output="$(scripts/parallel-dev/create-agent.sh "$agent_id" "$slug" "$base_ref")"
 printf '%s\n' "$create_output"
@@ -91,6 +89,20 @@ if [[ -z "$agent_dir" || -z "$worktree" || -z "$branch" ]]; then
   exit 1
 fi
 
+claim_json="$(cst take "$task_id" --exec-cwd "$worktree" --private-exec-cwd)"
+claim_taken=1
+
+claim_node_id="$(node -e 'const fs=require("fs"); const j=JSON.parse(fs.readFileSync(0,"utf8")); process.stdout.write(String(j.node_id));' <<<"$claim_json")"
+attempt_id="$(node -e 'const fs=require("fs"); const j=JSON.parse(fs.readFileSync(0,"utf8")); process.stdout.write(j.attempt_id);' <<<"$claim_json")"
+claim_event_id="$(node -e 'const fs=require("fs"); const j=JSON.parse(fs.readFileSync(0,"utf8")); process.stdout.write(j.event_id);' <<<"$claim_json")"
+lease_id="$(node -e 'const fs=require("fs"); const j=JSON.parse(fs.readFileSync(0,"utf8")); process.stdout.write(j.lease_id);' <<<"$claim_json")"
+lease_expires_at="$(node -e 'const fs=require("fs"); const j=JSON.parse(fs.readFileSync(0,"utf8")); process.stdout.write(j.lease_expires_at);' <<<"$claim_json")"
+
+if [[ "$claim_node_id" != "$task_id" ]]; then
+  echo "cst take returned task $claim_node_id, expected $task_id" >&2
+  exit 1
+fi
+
 cat > "$agent_dir/cst.json" <<JSON
 {
   "taskId": $task_id,
@@ -99,6 +111,8 @@ cat > "$agent_dir/cst.json" <<JSON
   "leaseId": "$lease_id",
   "leaseExpiresAt": "$lease_expires_at",
   "sourceRoot": "$repo_root",
+  "execCwd": "$worktree",
+  "execSurface": "private",
   "workerCstMode": "central-source-root"
 }
 JSON
@@ -112,9 +126,10 @@ export PARALLEL_CST_ATTEMPT_ID="$attempt_id"
 export PARALLEL_CST_CLAIM_EVENT_ID="$claim_event_id"
 export PARALLEL_CST_LEASE_ID="$lease_id"
 export PARALLEL_CST_LEASE_EXPIRES_AT="$lease_expires_at"
+export PARALLEL_CST_EXEC_CWD="$worktree"
 
 parallel_cst() {
-  (cd "\$PARALLEL_CST_SOURCE_ROOT" && command cst "\$@")
+  command cst --store "\$PARALLEL_CST_SOURCE_ROOT" "\$@"
 }
 
 cst() {
@@ -124,7 +139,7 @@ cst() {
       return 2
       ;;
     run)
-      echo "cst run executes in the central source checkout; run gates directly in \$PARALLEL_WORKTREE and record evidence instead" >&2
+      echo "low-level cst run is not the worker handoff; use cst worker-status and cst worker-run --action <action-id>" >&2
       return 2
       ;;
   esac
@@ -133,6 +148,14 @@ cst() {
 
 parallel_cst_show() {
   parallel_cst show "\$PARALLEL_CST_TASK_ID"
+}
+
+parallel_cst_status() {
+  parallel_cst worker-status "\$PARALLEL_CST_TASK_ID" "\$@"
+}
+
+parallel_cst_run_action() {
+  parallel_cst worker-run "\$PARALLEL_CST_TASK_ID" "\$@"
 }
 
 parallel_cst_done() {
@@ -154,10 +177,18 @@ cat >> "$agent_dir/task.md" <<EOF
 - lease id: $lease_id
 - lease expires at: $lease_expires_at
 - central CST source: $repo_root/.cst/events.jsonl
+- worker exec cwd: $worktree
 
 Do not run \`cst take\` for this assignment. Source \`$agent_dir/env.sh\` and
-use the injected \`cst()\` wrapper, which operates on the central source
-checkout instead of the worker branch-local CST snapshot.
+use the injected \`cst()\` wrapper, which passes an explicit central
+\`--store\` instead of trusting the worker branch-local CST snapshot.
+
+Start from the ledger-derived worker frontier:
+
+\`\`\`sh
+cst worker-status "\$PARALLEL_CST_TASK_ID" --human
+cst worker-run "\$PARALLEL_CST_TASK_ID" --action <action-id>
+\`\`\`
 EOF
 
 cat >> "$agent_dir/startup.md" <<EOF
@@ -172,17 +203,18 @@ central source checkout:
 \`\`\`sh
 source "$agent_dir/env.sh"
 type cst
-cst show "\$PARALLEL_CST_TASK_ID"
+cst worker-status "\$PARALLEL_CST_TASK_ID" --human
 \`\`\`
 
 Rules:
 
 - Do not run \`cst take\` in this worker.
-- Do not run \`cst run\` for worktree verification. It would execute in the
-  central source checkout. Run verification commands directly in
-  \`$worktree\`, then record evidence through the central wrapper.
+- Do not run low-level \`cst run\` for worktree verification. Read
+  \`cst worker-status\`, then execute a current bound action with
+  \`cst worker-run --action <action-id>\`.
 - Do not trust a branch-local \`.cst/events.jsonl\` snapshot.
-- Record evidence and completion through the central wrapper:
+- When no frontier action exists, record review evidence or external notes
+  through the central wrapper:
 
   \`\`\`sh
   cst evidence "\$PARALLEL_CST_TASK_ID" --kind note --summary "..."
@@ -212,5 +244,5 @@ CST assignment:
 next:
   cd "$worktree"
   source "$agent_dir/env.sh"
-  cst show "\$PARALLEL_CST_TASK_ID"
+  cst worker-status "\$PARALLEL_CST_TASK_ID" --human
 EOF
