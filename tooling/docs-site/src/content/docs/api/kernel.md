@@ -239,6 +239,7 @@ title: "@agent-os/kernel Public API Intent"
 - `.:SYMBOLIC_SETTLEMENT_VALUE_PATTERN`
   `
 - `.:Authored`
+- `.:Derived`
 - `.:DeterministicToolInvocation`
 - `.:DefineProductToolSpec`
 - `.:ExecutionDomain`
@@ -249,6 +250,7 @@ title: "@agent-os/kernel Public API Intent"
 - `.:ExecutionDomainRegistry`
 - `.:ExecutionDomainRegistryIssue`
 - `.:ExecutionDomainRegistryValidation`
+- `.:LedgerSafe`
 - `.:Live`
 - `.:MaterialBrokerOwnerSubstitution`
 - `.:MaterialBrokerPlaceholder`
@@ -275,6 +277,7 @@ title: "@agent-os/kernel Public API Intent"
 - `.:ResolvedToolMaterials`
 - `.:ResolvedToolExecution`
 - `.:RedactedSafeSummaryReason`
+- `.:Recordable`
 - `.:Recorded`
 - `.:RecordedLedgerEvent`
 - `.:RecordedPayload`
@@ -299,6 +302,7 @@ title: "@agent-os/kernel Public API Intent"
 - `.:ToolProjectionWaitSpec`
 - `.:ToolProjectionWaiter`
 - `.:ToolRequirements`
+- `.:Untrusted`
 - `.:deterministicToolExecution`
 - `.:deterministicToolInvocation`
 - `.:checkProjectionSink`

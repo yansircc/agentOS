@@ -75,8 +75,12 @@ export * from "./tools";
 export * from "./types";
 export type {
   Authored,
+  Derived,
+  LedgerSafe,
   Live,
+  Recordable,
   Recorded,
   RecordedPayload,
   RecordedPayloadValue,
+  Untrusted,
 } from "./value-brands";

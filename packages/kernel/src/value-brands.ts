@@ -1,18 +1,42 @@
 import { Option } from "effect";
 
+const untrustedBrand: unique symbol = Symbol("@agent-os/kernel/Untrusted");
 const authoredBrand: unique symbol = Symbol("@agent-os/kernel/Authored");
+const ledgerSafeBrand: unique symbol = Symbol("@agent-os/kernel/LedgerSafe");
+const recordableBrand: unique symbol = Symbol("@agent-os/kernel/Recordable");
 const recordedBrand: unique symbol = Symbol("@agent-os/kernel/Recorded");
+const derivedBrand: unique symbol = Symbol("@agent-os/kernel/Derived");
 const liveBrand: unique symbol = Symbol("@agent-os/kernel/Live");
 const recordedPayloadBrand: unique symbol = Symbol("@agent-os/kernel/RecordedPayload");
+
+export interface Untrusted<T> {
+  readonly value: T;
+  readonly [untrustedBrand]: "Untrusted";
+}
 
 export interface Authored<T> {
   readonly value: T;
   readonly [authoredBrand]: "Authored";
 }
 
+export interface LedgerSafe<T> {
+  readonly value: T;
+  readonly [ledgerSafeBrand]: "LedgerSafe";
+}
+
+export interface Recordable<T> {
+  readonly value: T;
+  readonly [recordableBrand]: "Recordable";
+}
+
 export interface Recorded<T> {
   readonly value: T;
   readonly [recordedBrand]: "Recorded";
+}
+
+export interface Derived<T> {
+  readonly value: T;
+  readonly [derivedBrand]: "Derived";
 }
 
 export interface Live<T> {
@@ -31,23 +55,43 @@ export type RecordedPayload = Readonly<Record<string, RecordedPayloadValue>> & {
   readonly [recordedPayloadBrand]: "RecordedPayload";
 };
 
+export type UntrustedValue<T extends object> = T & Untrusted<T>;
 export type AuthoredValue<T extends object> = T & Authored<T>;
+export type LedgerSafeValue<T extends object> = T & LedgerSafe<T>;
+export type RecordableValue<T extends object> = T & Recordable<T>;
 export type RecordedValue<T extends object> = T & Recorded<T>;
+export type DerivedValue<T extends object> = T & Derived<T>;
+
+export interface OwnerRecordableMint {
+  readonly recordable: <T extends object>(value: T) => RecordableValue<T>;
+}
+
+export interface LedgerRecordedMint {
+  readonly recorded: <T extends object>(value: RecordableValue<T>) => RecordedValue<T>;
+}
 
 const failConstruction = (message: string): never =>
   Option.getOrThrowWith(Option.none(), () => new TypeError(message));
 
+const domainBrands = [
+  untrustedBrand,
+  authoredBrand,
+  ledgerSafeBrand,
+  recordableBrand,
+  recordedBrand,
+  derivedBrand,
+] as const;
+
 const cloneObjectWithDescriptors = <T extends object>(value: T): T => {
   const descriptors = Object.getOwnPropertyDescriptors(value);
-  const existingDomainBrand =
-    Object.getOwnPropertyDescriptor(value, authoredBrand) !== undefined ||
-    Object.getOwnPropertyDescriptor(value, recordedBrand) !== undefined;
+  const existingDomainBrand = domainBrands.some(
+    (brand) => Object.getOwnPropertyDescriptor(value, brand) !== undefined,
+  );
   if (descriptors.value !== undefined && !existingDomainBrand) {
     return failConstruction("value-domain evidence cannot overwrite an existing value field");
   }
   Reflect.deleteProperty(descriptors, "value");
-  Reflect.deleteProperty(descriptors, authoredBrand);
-  Reflect.deleteProperty(descriptors, recordedBrand);
+  for (const brand of domainBrands) Reflect.deleteProperty(descriptors, brand);
   return Object.defineProperties(Object.create(Object.getPrototypeOf(value)) as T, descriptors);
 };
 
@@ -56,18 +100,42 @@ const isJsonRecord = (value: object): value is Readonly<Record<string, unknown>>
   return prototype === Object.prototype || prototype === null;
 };
 
-export const authoredValue = <T extends object>(value: T): AuthoredValue<T> => {
-  const authored = cloneObjectWithDescriptors(value) as T & { readonly value: T };
-  Object.defineProperty(authored, "value", { value, enumerable: false });
-  Object.defineProperty(authored, authoredBrand, { value: "Authored", enumerable: false });
-  return authored as AuthoredValue<T>;
+const domainValue = <T extends object, Brand extends string>(
+  value: T,
+  brand: (typeof domainBrands)[number],
+  brandName: Brand,
+): T & { readonly value: T } => {
+  const branded = cloneObjectWithDescriptors(value) as T & { readonly value: T };
+  Object.defineProperty(branded, "value", { value, enumerable: false });
+  Object.defineProperty(branded, brand, { value: brandName, enumerable: false });
+  return branded;
 };
 
-export const recordedValue = <T extends object>(value: T): RecordedValue<T> => {
-  const recorded = cloneObjectWithDescriptors(value) as T & { readonly value: T };
-  Object.defineProperty(recorded, "value", { value, enumerable: false });
-  Object.defineProperty(recorded, recordedBrand, { value: "Recorded", enumerable: false });
-  return recorded as RecordedValue<T>;
+export const untrustedValue = <T extends object>(value: T): UntrustedValue<T> =>
+  domainValue(value, untrustedBrand, "Untrusted") as UntrustedValue<T>;
+
+export const authoredValue = <T extends object>(value: T): AuthoredValue<T> => {
+  return domainValue(value, authoredBrand, "Authored") as AuthoredValue<T>;
+};
+
+export const ledgerSafeValue = <T extends object>(value: T): LedgerSafeValue<T> =>
+  domainValue(value, ledgerSafeBrand, "LedgerSafe") as LedgerSafeValue<T>;
+
+export const recordableValue = <T extends object>(value: T): RecordableValue<T> =>
+  domainValue(value, recordableBrand, "Recordable") as RecordableValue<T>;
+
+export const recordedValue = <T extends object>(value: T): RecordedValue<T> =>
+  domainValue(value, recordedBrand, "Recorded") as RecordedValue<T>;
+
+export const derivedValue = <T extends object>(value: T): DerivedValue<T> =>
+  domainValue(value, derivedBrand, "Derived") as DerivedValue<T>;
+
+export const ownerRecordableMint: OwnerRecordableMint = {
+  recordable: recordableValue,
+};
+
+export const ledgerRecordedMint: LedgerRecordedMint = {
+  recorded: (value) => recordedValue(value.value),
 };
 
 const cloneRecordedPayloadValue = (value: unknown): RecordedPayloadValue => {

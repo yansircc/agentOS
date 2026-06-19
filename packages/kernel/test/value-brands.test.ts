@@ -3,31 +3,68 @@ import { describe, expect, it } from "vite-plus/test";
 import * as kernel from "../src";
 import type {
   Authored,
+  Derived,
+  LedgerSafe,
   Live,
+  Recordable,
   Recorded,
   RecordedLedgerEvent,
   RecordedPayload,
   SafeLedgerPayload,
+  Untrusted,
 } from "../src";
-import { authoredValue, recordedPayload, recordedValue } from "../src/value-brands";
+import {
+  authoredValue,
+  derivedValue,
+  ledgerRecordedMint,
+  ledgerSafeValue,
+  ownerRecordableMint,
+  recordedPayload,
+  recordedValue,
+  untrustedValue,
+} from "../src/value-brands";
 
 describe("value domain brands", () => {
-  it("keeps Authored, Recorded, and Live in separate type domains", () => {
+  it("keeps value domains in separate type domains", () => {
     type Payload = { readonly value: string };
+    const untrusted = undefined as unknown as Untrusted<Payload>;
     const authored = undefined as unknown as Authored<Payload>;
+    const ledgerSafe = undefined as unknown as LedgerSafe<Payload>;
+    const recordable = undefined as unknown as Recordable<Payload>;
     const recorded = undefined as unknown as Recorded<Payload>;
+    const derived = undefined as unknown as Derived<Payload>;
     const live = undefined as unknown as Live<Payload>;
 
     const assertTypeErrors = () => {
+      // @ts-expect-error Untrusted input is not authored intent until an owner parser accepts it.
+      const authoredFromUntrusted: Authored<Payload> = untrusted;
       // @ts-expect-error Authored intent cannot be used as Recorded truth.
       const recordedFromAuthored: Recorded<Payload> = authored;
+      // @ts-expect-error Ledger-safe shape is not owner-accepted recordable truth.
+      const recordableFromLedgerSafe: Recordable<Payload> = ledgerSafe;
+      // @ts-expect-error Recordable truth is not yet ledger-witnessed Recorded truth.
+      const recordedFromRecordable: Recorded<Payload> = recordable;
+      // @ts-expect-error Recorded truth is not a derived projection.
+      const derivedFromRecorded: Derived<Payload> = recorded;
+      // @ts-expect-error Derived projections are not recorded truth.
+      const recordedFromDerived: Recorded<Payload> = derived;
       // @ts-expect-error Live material cannot be used as Recorded truth without an owner codec.
       const recordedFromLive: Recorded<Payload> = live;
       // @ts-expect-error Recorded truth cannot be reopened as Live material by type assignment.
       const liveFromRecorded: Live<Payload> = recorded;
       // @ts-expect-error Live material has no public open slot.
       const openedLive = live.value;
-      return [recordedFromAuthored, recordedFromLive, liveFromRecorded, openedLive];
+      return [
+        authoredFromUntrusted,
+        recordedFromAuthored,
+        recordableFromLedgerSafe,
+        recordedFromRecordable,
+        derivedFromRecorded,
+        recordedFromDerived,
+        recordedFromLive,
+        liveFromRecorded,
+        openedLive,
+      ];
     };
 
     expect(typeof assertTypeErrors).toBe("function");
@@ -48,6 +85,11 @@ describe("value domain brands", () => {
   });
 
   it("mints Authored and Recorded evidence without changing JSON shape", () => {
+    const inbound = untrustedValue({ kind: "raw", name: "lookup" });
+    const untrustedEvidence: Untrusted<{ readonly kind: string; readonly name: string }> = inbound;
+    expect(untrustedEvidence.value.name).toBe("lookup");
+    expect(JSON.stringify(inbound)).toBe('{"kind":"raw","name":"lookup"}');
+
     const intent = authoredValue({ kind: "tool", name: "lookup" });
     const intentEvidence: Authored<{ readonly kind: string; readonly name: string }> = intent;
 
@@ -66,6 +108,30 @@ describe("value domain brands", () => {
       "cannot overwrite an existing value field",
     );
     expect(authoredValue(intent).value.name).toBe("lookup");
+  });
+
+  it("separates ledger-safe, recordable, recorded, and derived mint surfaces", () => {
+    const ledgerSafe = ledgerSafeValue({ kind: "json", id: 1 });
+    const ledgerSafeEvidence: LedgerSafe<{ readonly kind: string; readonly id: number }> =
+      ledgerSafe;
+    expect(ledgerSafeEvidence.value.id).toBe(1);
+    expect(JSON.stringify(ledgerSafe)).toBe('{"kind":"json","id":1}');
+
+    const recordable = ownerRecordableMint.recordable({ kind: "owner.accepted", id: 2 });
+    const recordableEvidence: Recordable<{ readonly kind: string; readonly id: number }> =
+      recordable;
+    expect(recordableEvidence.value.id).toBe(2);
+    expect(JSON.stringify(recordable)).toBe('{"kind":"owner.accepted","id":2}');
+
+    const recorded = ledgerRecordedMint.recorded(recordable);
+    const recordedEvidence: Recorded<{ readonly kind: string; readonly id: number }> = recorded;
+    expect(recordedEvidence.value.id).toBe(2);
+    expect(JSON.stringify(recorded)).toBe('{"kind":"owner.accepted","id":2}');
+
+    const derived = derivedValue({ kind: "projection", id: 3 });
+    const derivedEvidence: Derived<{ readonly kind: string; readonly id: number }> = derived;
+    expect(derivedEvidence.value.id).toBe(3);
+    expect(JSON.stringify(derived)).toBe('{"kind":"projection","id":3}');
   });
 
   it("mints RecordedPayload from JSON-compatible payloads only", () => {
@@ -109,11 +175,21 @@ describe("value domain brands", () => {
 
   it("does not expose generic runtime constructors for value-domain brands", () => {
     expect("Authored" in kernel).toBe(false);
+    expect("Derived" in kernel).toBe(false);
+    expect("LedgerSafe" in kernel).toBe(false);
     expect("Recorded" in kernel).toBe(false);
+    expect("Recordable" in kernel).toBe(false);
     expect("Live" in kernel).toBe(false);
     expect("RecordedPayload" in kernel).toBe(false);
+    expect("Untrusted" in kernel).toBe(false);
     expect("authoredValue" in kernel).toBe(false);
+    expect("derivedValue" in kernel).toBe(false);
+    expect("ledgerRecordedMint" in kernel).toBe(false);
+    expect("ledgerSafeValue" in kernel).toBe(false);
+    expect("ownerRecordableMint" in kernel).toBe(false);
     expect("recordedValue" in kernel).toBe(false);
+    expect("recordableValue" in kernel).toBe(false);
     expect("recordedPayload" in kernel).toBe(false);
+    expect("untrustedValue" in kernel).toBe(false);
   });
 });

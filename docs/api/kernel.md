@@ -235,6 +235,7 @@
 - `.:SYMBOLIC_SETTLEMENT_VALUE_PATTERN`
   `
 - `.:Authored`
+- `.:Derived`
 - `.:DeterministicToolInvocation`
 - `.:DefineProductToolSpec`
 - `.:ExecutionDomain`
@@ -245,6 +246,7 @@
 - `.:ExecutionDomainRegistry`
 - `.:ExecutionDomainRegistryIssue`
 - `.:ExecutionDomainRegistryValidation`
+- `.:LedgerSafe`
 - `.:Live`
 - `.:MaterialBrokerOwnerSubstitution`
 - `.:MaterialBrokerPlaceholder`
@@ -271,6 +273,7 @@
 - `.:ResolvedToolMaterials`
 - `.:ResolvedToolExecution`
 - `.:RedactedSafeSummaryReason`
+- `.:Recordable`
 - `.:Recorded`
 - `.:RecordedLedgerEvent`
 - `.:RecordedPayload`
@@ -295,6 +298,7 @@
 - `.:ToolProjectionWaitSpec`
 - `.:ToolProjectionWaiter`
 - `.:ToolRequirements`
+- `.:Untrusted`
 - `.:deterministicToolExecution`
 - `.:deterministicToolInvocation`
 - `.:checkProjectionSink`

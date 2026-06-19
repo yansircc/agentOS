@@ -239,6 +239,7 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:SYMBOLIC_SETTLEMENT_VALUE_PATTERN`
   `
 - `.:Authored`
+- `.:Derived`
 - `.:DeterministicToolInvocation`
 - `.:DefineProductToolSpec`
 - `.:ExecutionDomain`
@@ -249,6 +250,7 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:ExecutionDomainRegistry`
 - `.:ExecutionDomainRegistryIssue`
 - `.:ExecutionDomainRegistryValidation`
+- `.:LedgerSafe`
 - `.:Live`
 - `.:MaterialBrokerOwnerSubstitution`
 - `.:MaterialBrokerPlaceholder`
@@ -275,6 +277,7 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:ResolvedToolMaterials`
 - `.:ResolvedToolExecution`
 - `.:RedactedSafeSummaryReason`
+- `.:Recordable`
 - `.:Recorded`
 - `.:RecordedLedgerEvent`
 - `.:RecordedPayload`
@@ -299,6 +302,7 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:ToolProjectionWaitSpec`
 - `.:ToolProjectionWaiter`
 - `.:ToolRequirements`
+- `.:Untrusted`
 - `.:deterministicToolExecution`
 - `.:deterministicToolInvocation`
 - `.:checkProjectionSink`
