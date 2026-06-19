@@ -729,6 +729,22 @@ export const runRuntimeBackendContractSuite = (
           });
           expect(receiveAttempts).toBe(2);
           expect(yield* promise(() => driver.pendingDueCount(contractIdentity("sender")))).toBe(0);
+
+          expect(
+            yield* promise(() =>
+              driver.drainDispatchDue(contractIdentity("sender"), failed[0]!.nextAttemptAt!),
+            ),
+          ).toEqual({
+            delivered: 0,
+            failed: 0,
+          });
+          const redrainedEvents = yield* promise(() => driver.events(senderIdentity));
+          expect(
+            payloadsOf(redrainedEvents, DISPATCH_EVENT_KINDS.OUTBOUND_FAILED),
+          ).toHaveLength(1);
+          expect(
+            payloadsOf(redrainedEvents, DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED),
+          ).toHaveLength(1);
         }),
       ),
     );
@@ -831,6 +847,21 @@ export const runRuntimeBackendContractSuite = (
                 },
               });
               expect(enqueued[0]).not.toHaveProperty("deliveryReceipt");
+              expect(
+                yield* promise(() =>
+                  driver.drainDispatchDue(sourceIdentity, failed[0]!.nextAttemptAt!),
+                ),
+              ).toEqual({
+                delivered: 0,
+                failed: 0,
+              });
+              const redrainedEvents = yield* promise(() => driver.events(sourceIdentity));
+              expect(
+                payloadsOf(redrainedEvents, DISPATCH_EVENT_KINDS.OUTBOUND_FAILED),
+              ).toHaveLength(1);
+              expect(
+                payloadsOf(redrainedEvents, DISPATCH_EVENT_KINDS.OUTBOUND_ENQUEUED),
+              ).toHaveLength(1);
               expect(
                 yield* promise(() => driver.events(contractIdentity(target.targetScope))),
               ).toEqual([]);

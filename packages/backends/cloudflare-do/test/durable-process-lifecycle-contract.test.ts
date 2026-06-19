@@ -70,6 +70,10 @@ const makeDriver = (triggers: ReadonlyArray<AnyDurableTrigger>): DurableProcessL
       await runtime.runPromise(triggerPump.cancelTrigger({ triggerKind, intentEventId, reason }));
     },
     processes: () => runtime.runPromise(selectDurableProcessLifecycle(sql)),
+    events: async () => {
+      const ledger = await runtime.runPromise(Ledger);
+      return runtime.runPromise(ledger.events(identity));
+    },
     dispose: () => runtime.dispose(),
   };
 };

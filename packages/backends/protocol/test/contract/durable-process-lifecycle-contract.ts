@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import type { DurableProcessLifecycleState } from "@agent-os/backend-protocol";
+import type { LedgerEvent } from "@agent-os/kernel/types";
 import {
   triggerParseFail,
   triggerParseOk,
@@ -21,6 +22,7 @@ export interface DurableProcessLifecycleDriver {
   readonly drainDue: (now: number) => Promise<void>;
   readonly cancel: (triggerKind: string, intentEventId: number, reason?: string) => Promise<void>;
   readonly processes: () => Promise<ReadonlyArray<DurableProcessLifecycleState>>;
+  readonly events: () => Promise<ReadonlyArray<LedgerEvent>>;
   readonly dispose: () => Promise<void>;
 }
 
@@ -125,6 +127,9 @@ const stateFor = (
 ): DurableProcessLifecycleState | undefined =>
   states.find((state) => state.intentEventId === intentEventId);
 
+const payloadsOf = <T>(events: ReadonlyArray<LedgerEvent>, kind: string): ReadonlyArray<T> =>
+  events.filter((event) => event.kind === kind).map((event) => event.payload as T);
+
 export const runDurableProcessLifecycleContract = (
   name: string,
   makeDriver: DurableProcessLifecycleDriverFactory,
@@ -223,6 +228,19 @@ export const runDurableProcessLifecycleContract = (
             yield* Effect.promise(() => redriveSecondDrain);
             blocking.releaseAcquire(1);
             yield* Effect.promise(() => redriveFirstDrain);
+
+            expect(
+              stateFor(yield* Effect.promise(() => driver.processes()), redriven.id),
+            ).toMatchObject({
+              phase: "completed",
+              redriveCount: 1,
+            });
+            yield* Effect.promise(() => driver.drainDue(202));
+            const redrivenDone = payloadsOf<{ readonly id: string; readonly mode: string }>(
+              yield* Effect.promise(() => driver.events()),
+              "lifecycle.blocking.done",
+            ).filter((payload) => payload.id === "redriven");
+            expect(redrivenDone).toEqual([{ id: "redriven", mode: "redrive" }]);
           }),
         );
       }),

@@ -599,13 +599,22 @@ describe("@agent-os/backend-protocol", () => {
         deliveredEventId: 9,
       }),
       attempt: 2,
+      claim: settleDispatchOutboundDelivered(claim, {
+        bindingKey: "binding:cloudflare:queue:image-jobs",
+        deliveryReceipt: dispatchLedgerDeliveryReceipt({
+          targetScope: "receiver",
+          deliveredEventId: 9,
+        }),
+      }),
       traceContext,
     };
 
     const snapshot = dispatchReplaySnapshotFromDeliveredPayload(delivered);
     const replayed = replayDispatchDeliveryFromSnapshot(snapshot);
 
+    expect(snapshot).not.toHaveProperty("claim");
     expect(replayed).toEqual({ receipt: delivered.deliveryReceipt });
+    expect(replayDispatchDeliveryFromSnapshot(snapshot)).toEqual(replayed);
     expect(liveDispatchTargetAdapterCalled).toBe(false);
     expect(liveDispatchTargetAdapter.deliver).toBeDefined();
   });
