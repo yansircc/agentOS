@@ -1,11 +1,12 @@
 import type { Effect } from "effect";
-import type { PreClaim, RejectedClaim } from "@agent-os/kernel/effect-claim";
+import type { IndeterminateClaim, PreClaim, RejectedClaim } from "@agent-os/kernel/effect-claim";
 
 import type {
   DeployFailedPayload,
   DeployPreviewRecordedPayload,
   DeployProductionPromotedPayload,
   DeployProductionReadbackPayload,
+  DeployReconcileRequiredPayload,
   DeployRollbackRecordedPayload,
 } from "./events";
 
@@ -47,17 +48,32 @@ export interface DeployFailure {
   readonly claim: RejectedClaim;
 }
 
+export interface DeployReconcileRequired {
+  readonly code: "ReconcileRequired";
+  readonly reason: string;
+  readonly proofRef: string;
+  readonly claim: IndeterminateClaim;
+}
+
+export type DeployProviderIssue = DeployFailure | DeployReconcileRequired;
+
 export interface DeployCarrier {
   readonly preview: (
     request: DeployPreviewRequest,
-  ) => Effect.Effect<DeployPreviewRecordedPayload, DeployFailure>;
+  ) => Effect.Effect<DeployPreviewRecordedPayload | DeployReconcileRequiredPayload, DeployFailure>;
   readonly promote: (
     request: DeployPromoteRequest,
-  ) => Effect.Effect<DeployProductionPromotedPayload, DeployFailure>;
+  ) => Effect.Effect<
+    DeployProductionPromotedPayload | DeployReconcileRequiredPayload,
+    DeployFailure
+  >;
   readonly readback: (
     request: DeployReadbackRequest,
-  ) => Effect.Effect<DeployProductionReadbackPayload | DeployFailedPayload, DeployFailure>;
+  ) => Effect.Effect<
+    DeployProductionReadbackPayload | DeployFailedPayload | DeployReconcileRequiredPayload,
+    DeployFailure
+  >;
   readonly rollback: (
     request: DeployRollbackRequest,
-  ) => Effect.Effect<DeployRollbackRecordedPayload, DeployFailure>;
+  ) => Effect.Effect<DeployRollbackRecordedPayload | DeployReconcileRequiredPayload, DeployFailure>;
 }

@@ -686,12 +686,20 @@ export const runRuntimeBackendContractSuite = (
             readonly attempt: number;
             readonly terminal: boolean;
             readonly nextAttemptAt?: number;
+            readonly claim?: unknown;
           }>(firstEvents, DISPATCH_EVENT_KINDS.OUTBOUND_FAILED);
           expect(failed).toHaveLength(1);
           expect(failed[0]).toMatchObject({
             outboundEventId: result.outboundEventId,
             attempt: 1,
             terminal: false,
+            claim: {
+              phase: "indeterminate",
+              indeterminateRef: {
+                indeterminateKind: "retry_pending",
+                reason: "retry_pending",
+              },
+            },
           });
           expect(typeof failed[0]?.nextAttemptAt).toBe("number");
           expect(yield* promise(() => driver.nextDueAt(contractIdentity("sender")))).toBe(
@@ -801,7 +809,7 @@ export const runRuntimeBackendContractSuite = (
                 readonly outboundEventId: number;
                 readonly enqueueAcknowledgement: unknown;
                 readonly deliveryReceipt?: unknown;
-                readonly claim?: unknown;
+                readonly claim: unknown;
                 readonly attempt: number;
               }>(senderEvents, DISPATCH_EVENT_KINDS.OUTBOUND_ENQUEUED);
               expect(enqueued).toHaveLength(1);
@@ -814,9 +822,15 @@ export const runRuntimeBackendContractSuite = (
                   acknowledgementKind: "external_enqueue",
                 },
                 attempt: 2,
+                claim: {
+                  phase: "indeterminate",
+                  indeterminateRef: {
+                    indeterminateKind: "provider_pending",
+                    reason: "provider_pending",
+                  },
+                },
               });
               expect(enqueued[0]).not.toHaveProperty("deliveryReceipt");
-              expect(enqueued[0]).not.toHaveProperty("claim");
               expect(
                 yield* promise(() => driver.events(contractIdentity(target.targetScope))),
               ).toEqual([]);

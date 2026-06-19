@@ -19,8 +19,11 @@ title: "@agent-os/deploy Public API Intent"
 - `.:DeployProductionPromotedPayload`
 - `.:DeployProductionReadbackPayload`
 - `.:DeployProjection`
+- `.:DeployProviderIssue`
 - `.:DeployPromoteRequest`
 - `.:DeployReadbackRequest`
+- `.:DeployReconcileRequired`
+- `.:DeployReconcileRequiredPayload`
 - `.:DeployRollbackRecordedPayload`
 - `.:DeployRollbackRequest`
 - `.:deployBoundaryContract`
@@ -29,6 +32,7 @@ title: "@agent-os/deploy Public API Intent"
 - `.:deploySettlementRef`
 - `.:projectDeploy`
 - `.:settleDeployLived`
+- `.:settleDeployIndeterminate`
 - `.:settleDeployRejected`
 
 ## Experimental exports

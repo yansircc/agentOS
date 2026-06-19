@@ -227,6 +227,16 @@
       ]
     },
     {
+      "tag": "agent_os.image_resource_settlement_reconcile_required",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/image-resource-settlement.md",
+      "fix": "Treat consume/release settlement failures as provider-local reconcile signals; callers that own a carrier boundary must translate them into indeterminate settlement facts.",
+      "sourceFiles": [
+        "packages/providers/image-resource-settlement/src/index.ts",
+        "packages/providers/image-resource-settlement/test/image-resource-settlement.test.ts"
+      ]
+    },
+    {
       "tag": "agent_os.invalid_resource_amount",
       "invariants": ["invariant.algebra.type-or-boot-proof"],
       "docs": "docs/packages/resource-carrier.md",
@@ -535,7 +545,7 @@
       "tag": "agent_os.workspace_job_data_plane_failed",
       "invariants": ["invariant.workspace-job.verified-terminal"],
       "docs": "docs/packages/workspace-job.md",
-      "fix": "Keep seed and terminal build/write/read failures inside the workspace job data-plane boundary and settle them through workspace_job.failed.",
+      "fix": "Keep seed and terminal build/write/read failures inside the workspace job data-plane boundary; retryable witness gaps settle through workspace_job.reconcile_required while non-retryable finalization defects settle through workspace_job.failed.",
       "sourceFiles": ["packages/runtime/src/workspace-job.ts"]
     },
     {
@@ -549,7 +559,7 @@
       "tag": "agent_os.workspace_job_verifier_failed",
       "invariants": ["invariant.workspace-job.verified-terminal"],
       "docs": "docs/packages/workspace-job.md",
-      "fix": "Map verifier exceptions to workspace_job.failed; reserve verifier_rejected for successful product-domain verifier verdicts.",
+      "fix": "Map verifier exceptions to workspace_job.reconcile_required; reserve verifier_rejected for successful product-domain verifier verdicts.",
       "sourceFiles": ["packages/runtime/src/workspace-job.ts"]
     }
   ]

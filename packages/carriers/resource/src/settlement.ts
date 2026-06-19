@@ -1,5 +1,7 @@
 import type {
   AnchorRef,
+  IndeterminateClaim,
+  IndeterminateRef,
   LivedClaim,
   PreClaim,
   RejectedClaim,
@@ -54,4 +56,18 @@ export const settleResourceRejected = (
     rejectionId: spec.proofRef ?? resourceSettlementRef(claim.operationRef, "rejected"),
     rejectionKind: spec.rejectionKind ?? resourceRejectionKind(spec.code),
     reason: isSymbolicSettlementValue(spec.reason) ? spec.reason : `resource_${spec.code}`,
+  });
+
+export const settleResourceIndeterminate = (
+  claim: PreClaim,
+  spec: {
+    readonly proofRef: string;
+    readonly reason: string;
+    readonly indeterminateKind?: IndeterminateRef["indeterminateKind"];
+  },
+): IndeterminateClaim =>
+  resourceCarrierDefinition.indeterminate.reconcile_required(claim, {
+    indeterminateId: spec.proofRef,
+    indeterminateKind: spec.indeterminateKind ?? "reconcile_required",
+    reason: isSymbolicSettlementValue(spec.reason) ? spec.reason : "resource_reconcile_required",
   });

@@ -6,6 +6,8 @@ Status: Provider helper package. Public exports are limited to image resource se
 
 ## Public exports
 
+- `.:ImageResourceSettlementPhase`
+- `.:ImageResourceSettlementReconcileRequired`
 - `.:withImageResourceSettlement`
 
 ## Experimental exports

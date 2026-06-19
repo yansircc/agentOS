@@ -1,4 +1,6 @@
 import type {
+  IndeterminateClaim,
+  IndeterminateRef,
   LivedClaim,
   PreClaim,
   RejectedClaim,
@@ -7,6 +9,7 @@ import type {
 import {
   defineSettlementContract,
   isSymbolicSettlementValue,
+  settleIndeterminate,
   settleLived,
   settleRejected,
   symbolicSettlementRef,
@@ -18,7 +21,7 @@ export const dynamicWorkerSettlementContract = defineSettlementContract({
   settlementId: "@agent-os/dynamic-worker",
   anchorKinds: ["carrier_proof"],
   rejectionKinds: ["policy_denied", "resource_denied", "provider_rejected"],
-  indeterminateKinds: [],
+  indeterminateKinds: ["provider_pending", "reconcile_required", "witness_unavailable"],
 });
 
 export const dynamicWorkerCarrierRef = "dynamic-worker" as const;
@@ -73,5 +76,25 @@ export const settleDynamicWorkerLived = (
   settleLived(dynamicWorkerSettlementContract, claim, {
     anchorId: dynamicWorkerSettlementRef(spec.workerId),
     anchorKind: "carrier_proof",
+    carrierRef: dynamicWorkerCarrierRef,
+  });
+
+export const settleDynamicWorkerIndeterminate = (
+  claim: PreClaim,
+  spec: {
+    readonly indeterminateId: string;
+    readonly indeterminateKind?: IndeterminateRef["indeterminateKind"];
+    readonly reason?: string;
+  },
+): IndeterminateClaim =>
+  settleIndeterminate(dynamicWorkerSettlementContract, claim, {
+    indeterminateId: dynamicWorkerSettlementRef(spec.indeterminateId),
+    indeterminateKind: spec.indeterminateKind ?? "provider_pending",
+    reason:
+      spec.reason === undefined
+        ? "provider_pending"
+        : isSymbolicSettlementValue(spec.reason)
+          ? spec.reason
+          : dynamicWorkerSettlementRef(spec.indeterminateKind ?? "provider_pending"),
     carrierRef: dynamicWorkerCarrierRef,
   });

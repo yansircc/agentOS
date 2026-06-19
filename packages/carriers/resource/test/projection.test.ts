@@ -6,6 +6,7 @@ import {
   resourceBoundaryPackage,
   resourceSettlementRef,
   projectResource,
+  settleResourceIndeterminate,
   settleResourceLived,
   settleResourceRejected,
 } from "../src";
@@ -62,6 +63,13 @@ const rejectedResourceClaim = settleResourceRejected(resourceClaim("mutate"), {
   proofRef: rejectedResourceProofRef,
   rejectionKind: "provider_rejected",
   reason: "resource_rejected_statement",
+});
+
+const reconcileResourceProofRef = resourceSettlementRef("database", "reconcile");
+
+const reconcileResourceClaim = settleResourceIndeterminate(resourceClaim("mutate"), {
+  proofRef: reconcileResourceProofRef,
+  reason: "resource_reconcile_required",
 });
 
 const resourceProofRef = (...parts: ReadonlyArray<string | number>): string =>
@@ -288,6 +296,41 @@ describe("@agent-os/resource-carrier", () => {
         },
       },
     ]);
+  });
+
+  it("projects resource reconcile-required as indeterminate state", () => {
+    expect(
+      projectResource(
+        [
+          {
+            id: 1,
+            kind: RESOURCE_KIND.RECONCILE_REQUIRED,
+            payload: {
+              subjectRef: "res-1",
+              step: "mutate",
+              proofRef: reconcileResourceProofRef,
+              reason: "resource_reconcile_required",
+              claim: reconcileResourceClaim,
+            },
+          },
+        ],
+        "res-1",
+      ),
+    ).toMatchObject({
+      status: "reconcile_required",
+      reconcile: {
+        subjectRef: "res-1",
+        step: "mutate",
+        proofRef: reconcileResourceProofRef,
+        reason: "resource_reconcile_required",
+        claim: {
+          phase: "indeterminate",
+          indeterminateRef: {
+            indeterminateKind: "reconcile_required",
+          },
+        },
+      },
+    });
   });
 
   it("skips carrier facts that do not settle a claim", () => {

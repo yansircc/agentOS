@@ -19,8 +19,11 @@ Status: Carrier package. Provider-specific deploy backends are separate material
 - `.:DeployProductionPromotedPayload`
 - `.:DeployProductionReadbackPayload`
 - `.:DeployProjection`
+- `.:DeployProviderIssue`
 - `.:DeployPromoteRequest`
 - `.:DeployReadbackRequest`
+- `.:DeployReconcileRequired`
+- `.:DeployReconcileRequiredPayload`
 - `.:DeployRollbackRecordedPayload`
 - `.:DeployRollbackRequest`
 - `.:deployBoundaryContract`
@@ -29,6 +32,7 @@ Status: Carrier package. Provider-specific deploy backends are separate material
 - `.:deploySettlementRef`
 - `.:projectDeploy`
 - `.:settleDeployLived`
+- `.:settleDeployIndeterminate`
 - `.:settleDeployRejected`
 
 ## Experimental exports

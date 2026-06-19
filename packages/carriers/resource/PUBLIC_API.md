@@ -18,6 +18,8 @@ Status: 0.5.x active development for provider-neutral resource carrier algebra. 
 - `.:ResourceEventKind`
 - `.:ResourceFailedPayload`
 - `.:ResourceFailure`
+- `.:ResourceFailureCode`
+- `.:ResourceIndeterminateFailure`
 - `.:ResourceLedgerEvent`
 - `.:ResourceLifecycleStep`
 - `.:ResourceMutationFact`
@@ -26,15 +28,19 @@ Status: 0.5.x active development for provider-neutral resource carrier algebra. 
 - `.:ResourceProjection`
 - `.:ResourceProvisionRequest`
 - `.:ResourceProvisionedPayload`
+- `.:ResourceReconcileRequiredPayload`
+- `.:ResourceRejectedFailure`
 - `.:projectResource`
 - `.:resourceEffectAuthorityContracts`
 - `.:resourceBoundaryContract`
 - `.:resourceBoundaryPackage`
 - `.:resourceCarrierDefinition`
+- `.:resourceFailureEventKind`
 - `.:resourceFailedPayload`
 - `.:resourceRejectionKind`
 - `.:resourceSettlementRef`
 - `.:settleResourceLived`
+- `.:settleResourceIndeterminate`
 - `.:settleResourceRejected`
 
 ## Experimental exports

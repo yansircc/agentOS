@@ -307,10 +307,10 @@ describe("@agent-os/resource-cloudflare D1 carrier", () => {
         step: "provision",
         reason: "cloudflare_api credential material is unavailable",
         claim: {
-          phase: "rejected",
-          rejectionRef: {
-            rejectionKind: "resource_denied",
-            reason: "resource_MaterialUnavailable",
+          phase: "indeterminate",
+          indeterminateRef: {
+            indeterminateKind: "reconcile_required",
+            reason: "resource:reason:material_unavailable:d1:provision",
           },
         },
       });
@@ -351,6 +351,13 @@ describe("@agent-os/resource-cloudflare D1 carrier", () => {
         code: "MaterialUnavailable",
         step: "mutate",
         reason: "cloudflare_d1_mutation_input_unavailable",
+        claim: {
+          phase: "indeterminate",
+          indeterminateRef: {
+            indeterminateKind: "reconcile_required",
+            reason: "resource:reason:material_unavailable:d1:mutate",
+          },
+        },
       });
       expect(fetch).not.toHaveBeenCalled();
     }),

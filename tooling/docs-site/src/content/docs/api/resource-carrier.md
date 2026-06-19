@@ -18,6 +18,8 @@ title: "@agent-os/resource-carrier Public API Intent"
 - `.:ResourceEventKind`
 - `.:ResourceFailedPayload`
 - `.:ResourceFailure`
+- `.:ResourceFailureCode`
+- `.:ResourceIndeterminateFailure`
 - `.:ResourceLedgerEvent`
 - `.:ResourceLifecycleStep`
 - `.:ResourceMutationFact`
@@ -26,15 +28,19 @@ title: "@agent-os/resource-carrier Public API Intent"
 - `.:ResourceProjection`
 - `.:ResourceProvisionRequest`
 - `.:ResourceProvisionedPayload`
+- `.:ResourceReconcileRequiredPayload`
+- `.:ResourceRejectedFailure`
 - `.:projectResource`
 - `.:resourceEffectAuthorityContracts`
 - `.:resourceBoundaryContract`
 - `.:resourceBoundaryPackage`
 - `.:resourceCarrierDefinition`
+- `.:resourceFailureEventKind`
 - `.:resourceFailedPayload`
 - `.:resourceRejectionKind`
 - `.:resourceSettlementRef`
 - `.:settleResourceLived`
+- `.:settleResourceIndeterminate`
 - `.:settleResourceRejected`
 
 ## Experimental exports

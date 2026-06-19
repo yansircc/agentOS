@@ -1,5 +1,7 @@
 import type {
   AnchorRef,
+  IndeterminateClaim,
+  IndeterminateRef,
   LivedClaim,
   PreClaim,
   RejectedClaim,
@@ -40,4 +42,18 @@ export const settleDeployRejected = (
     rejectionId: spec.proofRef,
     rejectionKind: spec.rejectionKind ?? "provider_rejected",
     reason: isSymbolicSettlementValue(spec.reason) ? spec.reason : "deploy_failed",
+  });
+
+export const settleDeployIndeterminate = (
+  claim: PreClaim,
+  spec: {
+    readonly proofRef: string;
+    readonly reason: string;
+    readonly indeterminateKind?: IndeterminateRef["indeterminateKind"];
+  },
+): IndeterminateClaim =>
+  deployCarrier.indeterminate.reconcile_required(claim, {
+    indeterminateId: spec.proofRef,
+    indeterminateKind: spec.indeterminateKind ?? "reconcile_required",
+    reason: isSymbolicSettlementValue(spec.reason) ? spec.reason : "deploy_reconcile_required",
   });

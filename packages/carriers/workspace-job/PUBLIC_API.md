@@ -21,12 +21,14 @@ Status: Carrier package. It owns workspace job terminal fact and raw projection 
 - `.:WorkspaceJobIdempotencyProjection`
 - `.:WorkspaceJobLedgerEvent`
 - `.:WorkspaceJobProjection`
+- `.:WorkspaceJobReconcileRequiredPayload`
 - `.:WorkspaceJobRequestedPayload`
 - `.:WorkspaceJobSeedWrittenPayload`
 - `.:WorkspaceJobStepProjection`
 - `.:WorkspaceJobTerminalBuildAttemptedPayload`
 - `.:WorkspaceJobTerminalArtifact`
 - `.:WorkspaceJobTerminalFinalizedPayload`
+- `.:WorkspaceJobTerminalFailure`
 - `.:WorkspaceJobVerificationCheck`
 - `.:WorkspaceJobVerifiedPayload`
 - `.:WorkspaceJobVerifierRejectedPayload`
@@ -37,6 +39,7 @@ Status: Carrier package. It owns workspace job terminal fact and raw projection 
 - `.:projectWorkspaceJobSteps`
 - `.:rejectWorkspaceJobByVerifier`
 - `.:rejectWorkspaceJobFailed`
+- `.:settleWorkspaceJobReconcileRequired`
 - `.:settleWorkspaceJobArtifactReadbackVerified`
 - `.:settleWorkspaceJobArtifactWritten`
 - `.:settleWorkspaceJobSeedWritten`
@@ -51,6 +54,7 @@ Status: Carrier package. It owns workspace job terminal fact and raw projection 
 - `.:workspaceJobOperationRef`
 - `.:workspaceJobOriginRef`
 - `.:workspaceJobPreClaim`
+- `.:workspaceJobReconcileRequiredPayload`
 - `.:workspaceJobRequestedPayload`
 - `.:workspaceJobSettlementContract`
 - `.:workspaceJobSettlementRef`

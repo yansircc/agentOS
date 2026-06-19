@@ -1,5 +1,12 @@
 import { Schema } from "effect";
-import { defineCarrier, event, lived, pre, rejected } from "@agent-os/kernel/carrier";
+import {
+  defineCarrier,
+  event,
+  indeterminate,
+  lived,
+  pre,
+  rejected,
+} from "@agent-os/kernel/carrier";
 
 export const WORKSPACE_JOB_EVENT_PREFIX = "workspace_job.";
 export const WORKSPACE_JOB_FACT_OWNER = "@agent-os/workspace-job";
@@ -57,7 +64,7 @@ const TerminalVerdictSchema = Schema.Struct({
   summary: Schema.optional(Schema.String),
 });
 
-const FailureSchema = Schema.Struct({
+const FailureShape = {
   phase: Schema.Literals([
     "request",
     "seed",
@@ -70,10 +77,24 @@ const FailureSchema = Schema.Struct({
   ]),
   code: NonEmptyString,
   reason: NonEmptyString,
+} as const;
+
+const FailureSchema = Schema.Struct({
+  ...FailureShape,
   retryable: Schema.optional(Schema.Boolean),
 });
 
+const TerminalFailureSchema = Schema.Struct(FailureShape);
+
 const FailedSchema = Schema.Struct({
+  requestedEventId: Schema.Number,
+  runId: NonEmptyString,
+  idempotencyKey: NonEmptyString,
+  failure: TerminalFailureSchema,
+  submitRunId: Schema.optional(Schema.Number),
+});
+
+const ReconcileRequiredSchema = Schema.Struct({
   requestedEventId: Schema.Number,
   runId: NonEmptyString,
   idempotencyKey: NonEmptyString,
@@ -156,6 +177,14 @@ export const workspaceJobCarrier = defineCarrier({
       claim: rejected({
         key: "claim",
         rejectionKinds: ["provider_rejected", "validation_failed", "resource_denied"],
+      }),
+    }),
+    reconcile_required: event({
+      kind: "reconcile_required",
+      payload: ReconcileRequiredSchema,
+      claim: indeterminate({
+        key: "claim",
+        indeterminateKinds: ["reconcile_required", "witness_unavailable", "retry_pending"],
       }),
     }),
     seed_written: event({

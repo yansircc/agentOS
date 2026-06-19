@@ -10,6 +10,7 @@ import {
   validateEffectClaim,
   type AuthorityRef,
   type FactOwnerRef,
+  type IndeterminateClaim,
   type LivedClaim,
   type PreClaim,
   type ScopeRef,
@@ -17,8 +18,10 @@ import {
 import { isMaterialRef, type BindingMaterialRef } from "@agent-os/kernel/material-ref";
 import {
   defineSettlementContract,
+  settleIndeterminate,
   settleLived,
   symbolicSettlementRef,
+  validateIndeterminateClaim,
   validateTerminalClaim,
 } from "@agent-os/kernel/settlement-contract";
 import type {
@@ -212,7 +215,7 @@ export const dispatchSettlementContract = defineSettlementContract({
   settlementId: "@agent-os/dispatch",
   anchorKinds: ["ledger_event", "external_receipt"],
   rejectionKinds: [],
-  indeterminateKinds: [],
+  indeterminateKinds: ["provider_pending", "retry_pending"],
 });
 
 export const dispatchCarrierRef = (key: string): string => symbolicSettlementRef("dispatch", [key]);
@@ -571,6 +574,35 @@ export const settleDispatchOutboundDelivered = (
     carrierRef: dispatchCarrierRef(spec.bindingKey),
   });
 
+export const settleDispatchOutboundEnqueued = (
+  claim: PreClaim,
+  spec: {
+    readonly bindingKey: string;
+    readonly acknowledgement: DispatchEnqueueAcknowledgement;
+  },
+): IndeterminateClaim =>
+  settleIndeterminate(dispatchSettlementContract, claim, {
+    indeterminateId: spec.acknowledgement.acknowledgementId,
+    indeterminateKind: "provider_pending",
+    reason: "provider_pending",
+    carrierRef: dispatchCarrierRef(spec.bindingKey),
+  });
+
+export const settleDispatchOutboundRetryPending = (
+  claim: PreClaim,
+  spec: {
+    readonly bindingKey: string;
+    readonly outboundEventId: number;
+    readonly attempt: number;
+  },
+): IndeterminateClaim =>
+  settleIndeterminate(dispatchSettlementContract, claim, {
+    indeterminateId: symbolicSettlementRef("dispatch.retry", [spec.outboundEventId, spec.attempt]),
+    indeterminateKind: "retry_pending",
+    reason: "retry_pending",
+    carrierRef: dispatchCarrierRef(spec.bindingKey),
+  });
+
 export const settleDispatchInboundAccepted = (
   claim: PreClaim,
   spec: {
@@ -592,6 +624,17 @@ export const parseDispatchLivedClaim = (
   const validation = validateTerminalClaim(dispatchSettlementContract, value);
   if (!validation.ok || validation.claim.phase !== "lived") {
     return parseFail(`${label} claim must be a dispatch LivedClaim`);
+  }
+  return parseOk(validation.claim);
+};
+
+export const parseDispatchIndeterminateClaim = (
+  value: unknown,
+  label: string,
+): DispatchPayloadParseResult<IndeterminateClaim> => {
+  const validation = validateIndeterminateClaim(dispatchSettlementContract, value);
+  if (!validation.ok || validation.claim.phase !== "indeterminate") {
+    return parseFail(`${label} claim must be a dispatch IndeterminateClaim`);
   }
   return parseOk(validation.claim);
 };
@@ -962,6 +1005,7 @@ export interface DispatchOutboundEnqueuedPayload {
   readonly idempotencyKey: string;
   readonly enqueueAcknowledgement: DispatchEnqueueAcknowledgement;
   readonly attempt: number;
+  readonly claim: IndeterminateClaim;
   readonly traceContext?: TraceContext;
 }
 
@@ -1004,6 +1048,7 @@ export interface DispatchOutboundFailedPayload {
   readonly error: string;
   readonly terminal: boolean;
   readonly nextAttemptAt?: number;
+  readonly claim?: IndeterminateClaim;
   readonly traceContext?: TraceContext;
 }
 

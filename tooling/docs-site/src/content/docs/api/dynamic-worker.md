@@ -9,6 +9,7 @@ title: "@agent-os/dynamic-worker Public API Intent"
 - `.:DEFAULT_MAX_BODY_BYTES`
 - `.:DYNAMIC_WORKER_MAX_TIMEOUT_MS`
 - `.:DynamicWorkerBackend`
+- `.:DynamicWorkerBackendResult`
 - `.:DynamicWorkerBinding`
 - `.:DynamicWorkerEgress`
 - `.:DynamicWorkerFailure`
@@ -19,9 +20,12 @@ title: "@agent-os/dynamic-worker Public API Intent"
 - `.:DynamicWorkerPolicyDenied`
 - `.:DynamicWorkerPolicyRequest`
 - `.:DynamicWorkerPolicyViolation`
+- `.:DynamicWorkerProviderPending`
 - `.:DynamicWorkerProviderFailure`
 - `.:DynamicWorkerRawResult`
+- `.:DynamicWorkerRunIndeterminate`
 - `.:DynamicWorkerRunRequest`
+- `.:DynamicWorkerRunResult`
 - `.:DynamicWorkerRunSuccess`
 - `.:DynamicWorkerStaticPolicyOptions`
 - `.:dynamicWorkerCarrierRef`
@@ -31,6 +35,7 @@ title: "@agent-os/dynamic-worker Public API Intent"
 - `.:dynamicWorkerSettlementRef`
 - `.:runDynamicWorker`
 - `.:settleDynamicWorkerLived`
+- `.:settleDynamicWorkerIndeterminate`
 - `.:settleDynamicWorkerPolicyDenied`
 - `.:settleDynamicWorkerProviderFailure`
 - `.:settleDynamicWorkerRejected`

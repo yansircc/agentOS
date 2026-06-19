@@ -154,6 +154,7 @@ export const projectWorkspaceJobSafeLedgerEvent = (
     case WORKSPACE_JOB_KIND.VERIFIER_REJECTED:
       return safeLedgerEvent(event, safeVerdictPayload(event.payload));
     case WORKSPACE_JOB_KIND.FAILED:
+    case WORKSPACE_JOB_KIND.RECONCILE_REQUIRED:
       return safeLedgerEvent(event, safeFailedPayload(event.payload));
     case WORKSPACE_JOB_KIND.SEED_WRITTEN:
     case WORKSPACE_JOB_KIND.TERMINAL_BUILD_ATTEMPTED:

@@ -1,6 +1,9 @@
 import { Predicate } from "effect";
-import type { LivedClaim, RejectedClaim } from "@agent-os/kernel/effect-claim";
-import { validateTerminalClaim } from "@agent-os/kernel/settlement-contract";
+import type { IndeterminateClaim, LivedClaim, RejectedClaim } from "@agent-os/kernel/effect-claim";
+import {
+  validateIndeterminateClaim,
+  validateTerminalClaim,
+} from "@agent-os/kernel/settlement-contract";
 import { DEPLOY_EVENTS, DEPLOY_KIND, deploySettlementContract } from "./definition";
 export { DEPLOY_EVENTS, DEPLOY_KIND } from "./definition";
 
@@ -18,6 +21,9 @@ export type DeployRollbackRecordedPayload =
   DeployPayloads[(typeof DEPLOY_KIND)["ROLLBACK_RECORDED"]];
 
 export type DeployFailedPayload = DeployPayloads[(typeof DEPLOY_KIND)["FAILED"]];
+
+export type DeployReconcileRequiredPayload =
+  DeployPayloads[(typeof DEPLOY_KIND)["RECONCILE_REQUIRED"]];
 
 export type DeployEventKind = keyof typeof DEPLOY_EVENTS;
 
@@ -41,8 +47,10 @@ export interface DeployProjection {
     | "promoted"
     | "live_verified"
     | "failed"
+    | "reconcile_required"
     | "rolled_back";
   readonly failure?: DeployFailedPayload;
+  readonly reconcile?: DeployReconcileRequiredPayload;
 }
 
 const stringField = (payload: Record<string, unknown>, key: string): string | undefined =>
@@ -58,11 +66,38 @@ const rejectedClaimFrom = (value: unknown): RejectedClaim | undefined => {
   return result.ok && result.claim.phase === "rejected" ? result.claim : undefined;
 };
 
+const indeterminateClaimFrom = (value: unknown): IndeterminateClaim | undefined => {
+  const result = validateIndeterminateClaim(deploySettlementContract, value);
+  return result.ok && result.claim.phase === "indeterminate" ? result.claim : undefined;
+};
+
 const failureFrom = (payload: Record<string, unknown>): DeployFailedPayload | undefined => {
   const subjectRef = stringField(payload, "subjectRef");
   const proofRef = stringField(payload, "proofRef");
   const reason = stringField(payload, "reason");
   const claim = rejectedClaimFrom(payload.claim);
+  const step = payload.step;
+  if (
+    subjectRef === undefined ||
+    proofRef === undefined ||
+    reason === undefined ||
+    claim === undefined
+  ) {
+    return undefined;
+  }
+  if (step !== "preview" && step !== "promote" && step !== "readback" && step !== "rollback") {
+    return undefined;
+  }
+  return { subjectRef, step, proofRef, reason, claim };
+};
+
+const reconcileFrom = (
+  payload: Record<string, unknown>,
+): DeployReconcileRequiredPayload | undefined => {
+  const subjectRef = stringField(payload, "subjectRef");
+  const proofRef = stringField(payload, "proofRef");
+  const reason = stringField(payload, "reason");
+  const claim = indeterminateClaimFrom(payload.claim);
   const step = payload.step;
   if (
     subjectRef === undefined ||
@@ -96,6 +131,7 @@ export const projectDeploy = (
   let rollbackRef: string | undefined;
   let status: DeployProjection["status"] = "missing";
   let failure: DeployProjection["failure"];
+  let reconcile: DeployProjection["reconcile"];
 
   for (const event of events) {
     if (!Predicate.isObject(event.payload)) continue;
@@ -115,6 +151,7 @@ export const projectDeploy = (
         artifactRef = nextArtifactRef;
         status = "previewed";
         failure = undefined;
+        reconcile = undefined;
         break;
       }
       case DEPLOY_KIND.PRODUCTION_PROMOTED: {
@@ -133,6 +170,7 @@ export const projectDeploy = (
         rollbackRef = stringField(event.payload, "rollbackRef");
         status = "promoted";
         failure = undefined;
+        reconcile = undefined;
         break;
       }
       case DEPLOY_KIND.PRODUCTION_READBACK: {
@@ -150,6 +188,7 @@ export const projectDeploy = (
         }
         readbackRef = nextReadbackRef;
         status = event.payload.status === "passed" ? "live_verified" : "failed";
+        reconcile = undefined;
         break;
       }
       case DEPLOY_KIND.ROLLBACK_RECORDED: {
@@ -167,13 +206,23 @@ export const projectDeploy = (
         deployRef = restoredDeployRef;
         status = "rolled_back";
         failure = undefined;
+        reconcile = undefined;
         break;
       }
       case DEPLOY_KIND.FAILED: {
         const nextFailure = failureFrom(event.payload);
         if (nextFailure === undefined) break;
         failure = nextFailure;
+        reconcile = undefined;
         status = "failed";
+        break;
+      }
+      case DEPLOY_KIND.RECONCILE_REQUIRED: {
+        const nextReconcile = reconcileFrom(event.payload);
+        if (nextReconcile === undefined) break;
+        reconcile = nextReconcile;
+        failure = undefined;
+        status = "reconcile_required";
         break;
       }
     }
@@ -189,5 +238,6 @@ export const projectDeploy = (
     rollbackRef,
     status,
     failure,
+    reconcile,
   };
 };

@@ -3,6 +3,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { makePreClaim } from "@agent-os/kernel/effect-claim";
 
 import {
+  CloudflareWorkerDeployResolutionFailure,
   cloudflareWorkerDeployBundleDigest,
   makeCloudflareWorkerDeployCarrier,
   type CloudflareWorkerDeployBundle,
@@ -216,6 +217,43 @@ describe("@agent-os/deploy-cloudflare DeployCarrier", () => {
         { url: "https://raw-production.example", init: { method: "GET", headers: {} } },
       ]);
       expect(serialized(readback)).not.toContain("https://raw-production.example");
+    }),
+  );
+
+  it.effect("returns reconcile-required when readback material is unavailable", () =>
+    Effect.gen(function* () {
+      const digest = yield* cloudflareWorkerDeployBundleDigest(bundle);
+      const carrier = makeCloudflareWorkerDeployCarrier({
+        ...optionsFor(digest, async () => jsonResponse(200, { success: true })),
+        resolver: {
+          ...optionsFor(digest, async () => jsonResponse(200, { success: true })).resolver,
+          productionEndpoint: (ref) =>
+            Effect.fail(
+              new CloudflareWorkerDeployResolutionFailure({
+                ref,
+                reason: "missing_endpoint_material",
+              }),
+            ),
+        },
+      });
+
+      const readback = yield* carrier.readback({
+        claim: claimFor("readback"),
+        subjectRef: "site-1",
+        productionRef,
+      });
+
+      expect(readback).toMatchObject({
+        subjectRef: "site-1",
+        step: "readback",
+        reason: "deploy:reason:cloudflare_worker_deploy_material_resolution_failed",
+        claim: {
+          phase: "indeterminate",
+          indeterminateRef: {
+            indeterminateKind: "reconcile_required",
+          },
+        },
+      });
     }),
   );
 

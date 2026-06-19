@@ -45,6 +45,7 @@ title: "@agent-os/backend-protocol API"
 - `.:isBackendProtocolTruthIdentity`
 - `.:parseBackendProtocolLedgerEventRpc`
 - `.:parseDispatchBindingRef`
+- `.:parseDispatchIndeterminateClaim`
 - `.:parseDurableTriggerRetryPolicy`
 - `.:parseIntentPointerDuePayload`
 - `.:parseRequestedPayload`
@@ -115,6 +116,8 @@ title: "@agent-os/backend-protocol API"
 - `.:scheduledEventIntentPayload`
 - `.:settleDispatchInboundAccepted`
 - `.:settleDispatchOutboundDelivered`
+- `.:settleDispatchOutboundEnqueued`
+- `.:settleDispatchOutboundRetryPending`
 - `./reference:fireBackendEventHandlers`
 
 ## Experimental exports

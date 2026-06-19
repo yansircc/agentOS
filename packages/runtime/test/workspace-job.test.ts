@@ -1071,8 +1071,8 @@ describe("runWorkspaceJobEffect", () => {
       );
 
       expect(projection).toMatchObject({
-        status: "failed",
-        failed: {
+        status: "reconcile_required",
+        reconcile: {
           submitRunId: expect.any(Number),
           failure: {
             phase: "submit",
@@ -1083,7 +1083,7 @@ describe("runWorkspaceJobEffect", () => {
       });
       const observed = projectWorkspaceJobObservability(services.events, "job-1");
       expect(observed).toMatchObject({
-        status: "failed",
+        status: "reconcile_required",
         failureExplanation: {
           phase: "submit",
           code: "workspace_job.submit.retries",
@@ -1094,7 +1094,10 @@ describe("runWorkspaceJobEffect", () => {
         },
       });
       expect(JSON.stringify(observed)).not.toContain("submitRunId");
-      expect(services.events.map((event) => event.kind)).toContain(WORKSPACE_JOB_KIND.FAILED);
+      expect(services.events.map((event) => event.kind)).not.toContain(WORKSPACE_JOB_KIND.FAILED);
+      expect(services.events.map((event) => event.kind)).toContain(
+        WORKSPACE_JOB_KIND.RECONCILE_REQUIRED,
+      );
     }),
   );
 
@@ -1151,8 +1154,8 @@ describe("runWorkspaceJobEffect", () => {
       const projection = yield* Fiber.join(fiber);
 
       expect(projection).toMatchObject({
-        status: "failed",
-        failed: {
+        status: "reconcile_required",
+        reconcile: {
           failure: {
             phase: "seed",
             code: "workspace_job.seed_write_failed",
@@ -1161,14 +1164,16 @@ describe("runWorkspaceJobEffect", () => {
           },
         },
       });
-      if (projection.status !== "failed") expect.fail("expected failed projection");
-      expect(projection.failed.submitRunId).toBeUndefined();
+      if (projection.status !== "reconcile_required") {
+        expect.fail("expected reconcile_required projection");
+      }
+      expect(projection.reconcile.submitRunId).toBeUndefined();
       expect(seedWrites).toBe(3);
       expect(services.llmRequests).toHaveLength(0);
 
       const observed = projectWorkspaceJobObservability(services.events, "job-1");
       expect(observed).toMatchObject({
-        status: "failed",
+        status: "reconcile_required",
         failureExplanation: {
           phase: "seed",
           code: "workspace_job.seed_write_failed",
@@ -1181,6 +1186,10 @@ describe("runWorkspaceJobEffect", () => {
         },
       });
       expect(JSON.stringify(observed)).not.toContain("submitRunId");
+      expect(services.events.map((event) => event.kind)).not.toContain(WORKSPACE_JOB_KIND.FAILED);
+      expect(services.events.map((event) => event.kind)).toContain(
+        WORKSPACE_JOB_KIND.RECONCILE_REQUIRED,
+      );
     }),
   );
 
@@ -1312,8 +1321,8 @@ describe("runWorkspaceJobEffect", () => {
         writeServices,
       );
       expect(writeFailed).toMatchObject({
-        status: "failed",
-        failed: {
+        status: "reconcile_required",
+        reconcile: {
           submitRunId: expect.any(Number),
           failure: {
             phase: "data_plane",
@@ -1325,7 +1334,7 @@ describe("runWorkspaceJobEffect", () => {
       });
       const observedWriteFailed = projectWorkspaceJobObservability(writeServices.events, "job-1");
       expect(observedWriteFailed).toMatchObject({
-        status: "failed",
+        status: "reconcile_required",
         failureExplanation: {
           phase: "data_plane",
           code: "workspace_job.terminal_write_failed",
@@ -1337,6 +1346,12 @@ describe("runWorkspaceJobEffect", () => {
         },
       });
       expect(JSON.stringify(observedWriteFailed)).not.toContain("workspace write failed");
+      expect(writeServices.events.map((event) => event.kind)).not.toContain(
+        WORKSPACE_JOB_KIND.FAILED,
+      );
+      expect(writeServices.events.map((event) => event.kind)).toContain(
+        WORKSPACE_JOB_KIND.RECONCILE_REQUIRED,
+      );
 
       const readServices = makeServices();
       const readFailed = yield* runJob(
@@ -1350,8 +1365,8 @@ describe("runWorkspaceJobEffect", () => {
         readServices,
       );
       expect(readFailed).toMatchObject({
-        status: "failed",
-        failed: {
+        status: "reconcile_required",
+        reconcile: {
           submitRunId: expect.any(Number),
           failure: {
             phase: "data_plane",
@@ -1363,7 +1378,7 @@ describe("runWorkspaceJobEffect", () => {
       });
       const observedReadFailed = projectWorkspaceJobObservability(readServices.events, "job-1");
       expect(observedReadFailed).toMatchObject({
-        status: "failed",
+        status: "reconcile_required",
         failureExplanation: {
           phase: "data_plane",
           code: "workspace_job.terminal_read_failed",
@@ -1376,7 +1391,7 @@ describe("runWorkspaceJobEffect", () => {
       });
       expect(JSON.stringify(observedReadFailed)).not.toContain("workspace read failed");
       const rawReasonReadEvents = readServices.events.map((event) => {
-        if (event.kind !== WORKSPACE_JOB_KIND.FAILED) return event;
+        if (event.kind !== WORKSPACE_JOB_KIND.RECONCILE_REQUIRED) return event;
         const payload = event.payload as {
           readonly failure?: Record<string, unknown>;
         } & Record<string, unknown>;
@@ -1393,7 +1408,7 @@ describe("runWorkspaceJobEffect", () => {
       });
       const observedRawReason = projectWorkspaceJobObservability(rawReasonReadEvents, "job-1");
       expect(observedRawReason).toMatchObject({
-        status: "failed",
+        status: "reconcile_required",
         failureExplanation: {
           phase: "data_plane",
           code: "workspace_job.terminal_read_failed",
@@ -1404,6 +1419,12 @@ describe("runWorkspaceJobEffect", () => {
           publicMessage: "The workspace environment failed while preparing or reading files.",
         },
       });
+      expect(readServices.events.map((event) => event.kind)).not.toContain(
+        WORKSPACE_JOB_KIND.FAILED,
+      );
+      expect(readServices.events.map((event) => event.kind)).toContain(
+        WORKSPACE_JOB_KIND.RECONCILE_REQUIRED,
+      );
     }),
   );
 

@@ -53,6 +53,42 @@ describe("@agent-os/dynamic-worker", () => {
     }),
   );
 
+  it.effect("keeps provider-pending output as non-terminal witness", () =>
+    Effect.gen(function* () {
+      const backend: DynamicWorkerBackend = {
+        run: () =>
+          Effect.succeed({
+            _tag: "pending",
+            witnessId: "provider:run:1",
+            reason: "provider_pending",
+            workerId: "dw-pending",
+          }),
+      };
+
+      const result = yield* runDynamicWorker(backend, staticPolicy(), {
+        claim,
+        code: "export default { fetch: () => new Response('ok') }",
+        request: { url: "https://example.test/" },
+        timeoutMs: 1000,
+      });
+
+      expect(result).toMatchObject({
+        _tag: "pending",
+        workerId: "dw-pending",
+        claim: {
+          phase: "indeterminate",
+          operationRef: claim.operationRef,
+          indeterminateRef: {
+            indeterminateId: dynamicWorkerSettlementRef("provider:run:1"),
+            indeterminateKind: "provider_pending",
+            reason: "provider_pending",
+            carrierRef: "dynamic-worker",
+          },
+        },
+      });
+    }),
+  );
+
   it.effect("keeps egress closed unless policy allowlists hosts", () =>
     Effect.gen(function* () {
       const backend: DynamicWorkerBackend = {

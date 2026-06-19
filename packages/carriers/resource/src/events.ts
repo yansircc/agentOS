@@ -1,6 +1,9 @@
 import { Predicate } from "effect";
-import type { LivedClaim, RejectedClaim } from "@agent-os/kernel/effect-claim";
-import { validateTerminalClaim } from "@agent-os/kernel/settlement-contract";
+import type { IndeterminateClaim, LivedClaim, RejectedClaim } from "@agent-os/kernel/effect-claim";
+import {
+  validateIndeterminateClaim,
+  validateTerminalClaim,
+} from "@agent-os/kernel/settlement-contract";
 import {
   isMaterialRef,
   type BindingMaterialRef,
@@ -27,6 +30,9 @@ export type ResourceDestroyedPayload =
 
 export type ResourceFailedPayload = ResourcePayloads[(typeof RESOURCE_KIND)["FAILED"]];
 
+export type ResourceReconcileRequiredPayload =
+  ResourcePayloads[(typeof RESOURCE_KIND)["RECONCILE_REQUIRED"]];
+
 export type ResourceEventKind = keyof typeof RESOURCE_EVENTS;
 
 export interface ResourceLedgerEvent {
@@ -41,7 +47,7 @@ export interface ResourceMutationFact extends ResourceMutationRecordedPayload {
 
 export interface ResourceProjection {
   readonly subjectRef: string;
-  readonly status: "missing" | "active" | "mutated" | "destroyed" | "failed";
+  readonly status: "missing" | "active" | "mutated" | "destroyed" | "failed" | "reconcile_required";
   readonly lastEventKind?: ResourceEventKind;
   readonly resourceKind?: string;
   readonly resourceRef?: MaterialRef;
@@ -50,6 +56,7 @@ export interface ResourceProjection {
   readonly latestMutation?: ResourceMutationFact;
   readonly mutationEventIds: ReadonlyArray<number>;
   readonly failure?: ResourceFailedPayload;
+  readonly reconcile?: ResourceReconcileRequiredPayload;
 }
 
 const stringField = (payload: Record<string, unknown>, key: string): string | undefined =>
@@ -63,6 +70,11 @@ const livedClaimFrom = (value: unknown): LivedClaim | undefined => {
 const rejectedClaimFrom = (value: unknown): RejectedClaim | undefined => {
   const result = validateTerminalClaim(resourceSettlementContract, value);
   return result.ok && result.claim.phase === "rejected" ? result.claim : undefined;
+};
+
+const indeterminateClaimFrom = (value: unknown): IndeterminateClaim | undefined => {
+  const result = validateIndeterminateClaim(resourceSettlementContract, value);
+  return result.ok && result.claim.phase === "indeterminate" ? result.claim : undefined;
 };
 
 const externalResourceRefFrom = (value: unknown): ExternalResourceMaterialRef | undefined =>
@@ -138,6 +150,32 @@ const failedPayloadFrom = (payload: Record<string, unknown>): ResourceFailedPayl
   };
 };
 
+const reconcilePayloadFrom = (
+  payload: Record<string, unknown>,
+): ResourceReconcileRequiredPayload | undefined => {
+  const subjectRef = stringField(payload, "subjectRef");
+  const step = lifecycleStepFrom(payload.step);
+  const reason = stringField(payload, "reason");
+  const proofRef = stringField(payload, "proofRef");
+  const claim = indeterminateClaimFrom(payload.claim);
+  if (
+    subjectRef === undefined ||
+    step === undefined ||
+    reason === undefined ||
+    proofRef === undefined ||
+    claim === undefined
+  ) {
+    return undefined;
+  }
+  return {
+    subjectRef,
+    step,
+    proofRef,
+    reason,
+    claim,
+  };
+};
+
 const materialRefEquals = (left: MaterialRef | undefined, right: MaterialRef): boolean => {
   if (left === undefined || left.kind !== right.kind) return false;
   switch (left.kind) {
@@ -188,6 +226,7 @@ export const projectResource = (
   let bindingRef: BindingMaterialRef | undefined;
   let latestMutation: ResourceMutationFact | undefined;
   let failure: ResourceFailedPayload | undefined;
+  let reconcile: ResourceReconcileRequiredPayload | undefined;
   const mutationEventIds: number[] = [];
 
   for (const event of events) {
@@ -215,6 +254,7 @@ export const projectResource = (
         status = "active";
         lastEventKind = event.kind;
         failure = undefined;
+        reconcile = undefined;
         break;
       }
       case RESOURCE_KIND.RESOURCE_BOUND: {
@@ -237,6 +277,7 @@ export const projectResource = (
         status = "active";
         lastEventKind = event.kind;
         failure = undefined;
+        reconcile = undefined;
         break;
       }
       case RESOURCE_KIND.MUTATION_RECORDED: {
@@ -256,6 +297,7 @@ export const projectResource = (
         status = "mutated";
         lastEventKind = event.kind;
         failure = undefined;
+        reconcile = undefined;
         break;
       }
       case RESOURCE_KIND.RESOURCE_DESTROYED: {
@@ -278,13 +320,24 @@ export const projectResource = (
         status = "destroyed";
         lastEventKind = event.kind;
         failure = undefined;
+        reconcile = undefined;
         break;
       }
       case RESOURCE_KIND.FAILED: {
         const nextFailure = failedPayloadFrom(event.payload);
         if (nextFailure === undefined) break;
         failure = nextFailure;
+        reconcile = undefined;
         status = "failed";
+        lastEventKind = event.kind;
+        break;
+      }
+      case RESOURCE_KIND.RECONCILE_REQUIRED: {
+        const nextReconcile = reconcilePayloadFrom(event.payload);
+        if (nextReconcile === undefined) break;
+        reconcile = nextReconcile;
+        failure = undefined;
+        status = "reconcile_required";
         lastEventKind = event.kind;
         break;
       }
@@ -302,5 +355,6 @@ export const projectResource = (
     latestMutation,
     mutationEventIds,
     failure,
+    reconcile,
   };
 };

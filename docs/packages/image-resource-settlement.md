@@ -17,6 +17,11 @@ Use `withImageResourceSettlement(effect, settlement)` in provider code that has
 already acquired an image resource reservation and must consume it on success or
 release it on failure.
 
+Settlement consume/release failures are normalized to
+`ImageResourceSettlementReconcileRequired`. The helper does not append ledger
+facts; callers that own a carrier boundary translate that signal into their
+package-owned indeterminate settlement vocabulary.
+
 ## Verification
 
 ```sh

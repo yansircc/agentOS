@@ -17,12 +17,14 @@
 - `.:WorkspaceJobIdempotencyProjection`
 - `.:WorkspaceJobLedgerEvent`
 - `.:WorkspaceJobProjection`
+- `.:WorkspaceJobReconcileRequiredPayload`
 - `.:WorkspaceJobRequestedPayload`
 - `.:WorkspaceJobSeedWrittenPayload`
 - `.:WorkspaceJobStepProjection`
 - `.:WorkspaceJobTerminalBuildAttemptedPayload`
 - `.:WorkspaceJobTerminalArtifact`
 - `.:WorkspaceJobTerminalFinalizedPayload`
+- `.:WorkspaceJobTerminalFailure`
 - `.:WorkspaceJobVerificationCheck`
 - `.:WorkspaceJobVerifiedPayload`
 - `.:WorkspaceJobVerifierRejectedPayload`
@@ -33,6 +35,7 @@
 - `.:projectWorkspaceJobSteps`
 - `.:rejectWorkspaceJobByVerifier`
 - `.:rejectWorkspaceJobFailed`
+- `.:settleWorkspaceJobReconcileRequired`
 - `.:settleWorkspaceJobArtifactReadbackVerified`
 - `.:settleWorkspaceJobArtifactWritten`
 - `.:settleWorkspaceJobSeedWritten`
@@ -47,6 +50,7 @@
 - `.:workspaceJobOperationRef`
 - `.:workspaceJobOriginRef`
 - `.:workspaceJobPreClaim`
+- `.:workspaceJobReconcileRequiredPayload`
 - `.:workspaceJobRequestedPayload`
 - `.:workspaceJobSettlementContract`
 - `.:workspaceJobSettlementRef`

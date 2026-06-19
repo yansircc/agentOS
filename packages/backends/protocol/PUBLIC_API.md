@@ -45,6 +45,7 @@ Status: Backend protocol package. Public exports are limited to storage-free bac
 - `.:isBackendProtocolTruthIdentity`
 - `.:parseBackendProtocolLedgerEventRpc`
 - `.:parseDispatchBindingRef`
+- `.:parseDispatchIndeterminateClaim`
 - `.:parseDurableTriggerRetryPolicy`
 - `.:parseIntentPointerDuePayload`
 - `.:parseRequestedPayload`
@@ -115,6 +116,8 @@ Status: Backend protocol package. Public exports are limited to storage-free bac
 - `.:scheduledEventIntentPayload`
 - `.:settleDispatchInboundAccepted`
 - `.:settleDispatchOutboundDelivered`
+- `.:settleDispatchOutboundEnqueued`
+- `.:settleDispatchOutboundRetryPending`
 - `./reference:fireBackendEventHandlers`
 
 ## Experimental exports

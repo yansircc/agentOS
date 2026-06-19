@@ -315,6 +315,13 @@ const assertNegativeContract = (testCase: ResourceCase) => {
         expect(failure).toMatchObject({
           code: "MaterialUnavailable",
           step: "mutate",
+          claim: {
+            phase: "indeterminate",
+            indeterminateRef: {
+              indeterminateKind: "reconcile_required",
+              reason: `resource:reason:material_unavailable:${testCase.resourceKind}:mutate`,
+            },
+          },
         });
       }),
     );

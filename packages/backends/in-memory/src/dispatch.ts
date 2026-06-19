@@ -42,7 +42,9 @@ import {
   parseRequestedPayloadValue,
   parseDispatchLivedClaim,
   settleDispatchInboundAccepted,
+  settleDispatchOutboundEnqueued,
   settleDispatchOutboundDelivered,
+  settleDispatchOutboundRetryPending,
   type BackendProtocolDispatchTarget,
   type BackendProtocolTruthIdentity,
   type DispatchDeliveryReceipt,
@@ -223,6 +225,7 @@ export const deliveryRetryTrigger = (
     }
 
     if (outcome._tag === "enqueued") {
+      const bindingKey = materialRefKey(outcome.requested.target.bindingRef);
       tx.insertEvent({
         kind: DISPATCH_EVENT_KINDS.OUTBOUND_ENQUEUED,
         payload: {
@@ -232,6 +235,10 @@ export const deliveryRetryTrigger = (
           idempotencyKey: outcome.requested.idempotencyKey,
           enqueueAcknowledgement: outcome.acknowledgement,
           attempt: outcome.attempt,
+          claim: settleDispatchOutboundEnqueued(outcome.requested.claim, {
+            bindingKey,
+            acknowledgement: outcome.acknowledgement,
+          }),
           ...(outcome.requested.traceContext === undefined
             ? {}
             : { traceContext: outcome.requested.traceContext }),
@@ -245,6 +252,7 @@ export const deliveryRetryTrigger = (
       ? null
       : tx.now + durableTriggerBackoffMs(outcome.requested.retryPolicy, outcome.attempt);
     const error = describeDispatchCause(outcome.cause);
+    const bindingKey = materialRefKey(outcome.requested.target.bindingRef);
     tx.insertEvent({
       kind: DISPATCH_EVENT_KINDS.OUTBOUND_FAILED,
       payload: {
@@ -256,6 +264,15 @@ export const deliveryRetryTrigger = (
         error,
         terminal,
         ...(nextAttemptAt === null ? {} : { nextAttemptAt }),
+        ...(terminal
+          ? {}
+          : {
+              claim: settleDispatchOutboundRetryPending(outcome.requested.claim, {
+                bindingKey,
+                outboundEventId: outcome.outboundEventId,
+                attempt: outcome.attempt,
+              }),
+            }),
       },
     });
     if (nextAttemptAt !== null) tx.reschedule(nextAttemptAt, outcome.outboundEventId);

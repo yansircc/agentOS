@@ -21,6 +21,7 @@ import type {
 import type { ResourceLifecycleStep } from "@agent-os/resource-carrier";
 import {
   resourceSettlementRef,
+  settleResourceIndeterminate,
   settleResourceLived,
   settleResourceRejected,
 } from "@agent-os/resource-carrier";
@@ -217,7 +218,19 @@ const materialUnavailable = (
   resourceKind: CloudflareResourceKind,
   step: ResourceLifecycleStep,
   reason: string,
-): ResourceFailure => providerFailure(claim, resourceKind, step, "MaterialUnavailable", reason);
+): ResourceFailure => {
+  const proofRef = failureProofRef(resourceKind, step, claim);
+  return {
+    code: "MaterialUnavailable",
+    step,
+    reason,
+    proofRef,
+    claim: settleResourceIndeterminate(claim, {
+      proofRef,
+      reason: resourceSettlementRef("reason", "material_unavailable", resourceKind, step),
+    }),
+  };
+};
 
 const unsupportedResource = (
   claim: PreClaim,

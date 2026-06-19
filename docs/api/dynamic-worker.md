@@ -5,6 +5,7 @@
 - `.:DEFAULT_MAX_BODY_BYTES`
 - `.:DYNAMIC_WORKER_MAX_TIMEOUT_MS`
 - `.:DynamicWorkerBackend`
+- `.:DynamicWorkerBackendResult`
 - `.:DynamicWorkerBinding`
 - `.:DynamicWorkerEgress`
 - `.:DynamicWorkerFailure`
@@ -15,9 +16,12 @@
 - `.:DynamicWorkerPolicyDenied`
 - `.:DynamicWorkerPolicyRequest`
 - `.:DynamicWorkerPolicyViolation`
+- `.:DynamicWorkerProviderPending`
 - `.:DynamicWorkerProviderFailure`
 - `.:DynamicWorkerRawResult`
+- `.:DynamicWorkerRunIndeterminate`
 - `.:DynamicWorkerRunRequest`
+- `.:DynamicWorkerRunResult`
 - `.:DynamicWorkerRunSuccess`
 - `.:DynamicWorkerStaticPolicyOptions`
 - `.:dynamicWorkerCarrierRef`
@@ -27,6 +31,7 @@
 - `.:dynamicWorkerSettlementRef`
 - `.:runDynamicWorker`
 - `.:settleDynamicWorkerLived`
+- `.:settleDynamicWorkerIndeterminate`
 - `.:settleDynamicWorkerPolicyDenied`
 - `.:settleDynamicWorkerProviderFailure`
 - `.:settleDynamicWorkerRejected`

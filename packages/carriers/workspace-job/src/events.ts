@@ -1,13 +1,17 @@
 import { Predicate } from "effect";
 import type {
   AuthorityRef,
+  IndeterminateClaim,
   LivedClaim,
   PreClaim,
   RejectedClaim,
   ScopeRef,
 } from "@agent-os/kernel/effect-claim";
 import { makeOperationRef, makePreClaim, validateEffectClaim } from "@agent-os/kernel/effect-claim";
-import { validateTerminalClaim } from "@agent-os/kernel/settlement-contract";
+import {
+  validateIndeterminateClaim,
+  validateTerminalClaim,
+} from "@agent-os/kernel/settlement-contract";
 import {
   WORKSPACE_JOB_EVENTS,
   WORKSPACE_JOB_FACT_OWNER,
@@ -33,6 +37,8 @@ export type WorkspaceJobVerifiedPayload =
 export type WorkspaceJobVerifierRejectedPayload =
   WorkspaceJobPayloads[(typeof WORKSPACE_JOB_KIND)["VERIFIER_REJECTED"]];
 export type WorkspaceJobFailedPayload = WorkspaceJobPayloads[(typeof WORKSPACE_JOB_KIND)["FAILED"]];
+export type WorkspaceJobReconcileRequiredPayload =
+  WorkspaceJobPayloads[(typeof WORKSPACE_JOB_KIND)["RECONCILE_REQUIRED"]];
 export type WorkspaceJobSeedWrittenPayload =
   WorkspaceJobPayloads[(typeof WORKSPACE_JOB_KIND)["SEED_WRITTEN"]];
 export type WorkspaceJobTerminalBuildAttemptedPayload =
@@ -44,7 +50,8 @@ export type WorkspaceJobArtifactReadbackVerifiedPayload =
 
 export type WorkspaceJobTerminalArtifact = WorkspaceJobTerminalFinalizedPayload["terminalArtifact"];
 export type WorkspaceJobVerificationCheck = WorkspaceJobVerifiedPayload["checks"][number];
-export type WorkspaceJobFailure = WorkspaceJobFailedPayload["failure"];
+export type WorkspaceJobTerminalFailure = WorkspaceJobFailedPayload["failure"];
+export type WorkspaceJobFailure = WorkspaceJobReconcileRequiredPayload["failure"];
 export type WorkspaceJobAttempt = NonNullable<WorkspaceJobRequestedPayload["attempt"]>;
 
 export const WORKSPACE_JOB_REF_NAMESPACE = "workspace_job";
@@ -120,6 +127,13 @@ export type WorkspaceJobProjection =
       readonly requestedEventId: number;
       readonly request: WorkspaceJobRequestedPayload;
       readonly failed: WorkspaceJobFailedPayload;
+    }
+  | {
+      readonly status: "reconcile_required";
+      readonly runId: string;
+      readonly requestedEventId: number;
+      readonly request: WorkspaceJobRequestedPayload;
+      readonly reconcile: WorkspaceJobReconcileRequiredPayload;
     };
 
 export type WorkspaceJobIdempotencyProjection =
@@ -225,10 +239,26 @@ export const workspaceJobFailedPayload = (spec: {
   readonly requestedEventId: number;
   readonly runId: string;
   readonly idempotencyKey: string;
-  readonly failure: WorkspaceJobFailure;
+  readonly failure: WorkspaceJobTerminalFailure;
   readonly submitRunId?: number;
   readonly claim: RejectedClaim;
 }): WorkspaceJobFailedPayload => ({
+  requestedEventId: spec.requestedEventId,
+  runId: spec.runId,
+  idempotencyKey: spec.idempotencyKey,
+  failure: spec.failure,
+  ...(spec.submitRunId === undefined ? {} : { submitRunId: spec.submitRunId }),
+  claim: spec.claim,
+});
+
+export const workspaceJobReconcileRequiredPayload = (spec: {
+  readonly requestedEventId: number;
+  readonly runId: string;
+  readonly idempotencyKey: string;
+  readonly failure: WorkspaceJobFailure;
+  readonly submitRunId?: number;
+  readonly claim: IndeterminateClaim;
+}): WorkspaceJobReconcileRequiredPayload => ({
   requestedEventId: spec.requestedEventId,
   runId: spec.runId,
   idempotencyKey: spec.idempotencyKey,
@@ -332,6 +362,11 @@ const livedClaimFrom = (value: unknown): LivedClaim | undefined => {
 const rejectedClaimFrom = (value: unknown): RejectedClaim | undefined => {
   const result = validateTerminalClaim(workspaceJobSettlementContract, value);
   return result.ok && result.claim.phase === "rejected" ? result.claim : undefined;
+};
+
+const indeterminateClaimFrom = (value: unknown): IndeterminateClaim | undefined => {
+  const result = validateIndeterminateClaim(workspaceJobSettlementContract, value);
+  return result.ok && result.claim.phase === "indeterminate" ? result.claim : undefined;
 };
 
 const stringField = (payload: Record<string, unknown>, key: string): string | undefined =>
@@ -563,6 +598,36 @@ const failedFrom = (payload: Record<string, unknown>): WorkspaceJobFailedPayload
   const failure = failureFrom(payload.failure);
   const submitRunId = numberField(payload, "submitRunId");
   const claim = rejectedClaimFrom(payload.claim);
+  const hasRetryableField = Predicate.isObject(payload.failure) && "retryable" in payload.failure;
+  if (
+    requestedEventId === undefined ||
+    runId === undefined ||
+    idempotencyKey === undefined ||
+    failure === undefined ||
+    claim === undefined ||
+    hasRetryableField
+  ) {
+    return undefined;
+  }
+  return {
+    requestedEventId,
+    runId,
+    idempotencyKey,
+    failure: { phase: failure.phase, code: failure.code, reason: failure.reason },
+    ...(submitRunId === undefined ? {} : { submitRunId }),
+    claim,
+  };
+};
+
+const reconcileRequiredFrom = (
+  payload: Record<string, unknown>,
+): WorkspaceJobReconcileRequiredPayload | undefined => {
+  const requestedEventId = numberField(payload, "requestedEventId");
+  const runId = stringField(payload, "runId");
+  const idempotencyKey = stringField(payload, "idempotencyKey");
+  const failure = failureFrom(payload.failure);
+  const submitRunId = numberField(payload, "submitRunId");
+  const claim = indeterminateClaimFrom(payload.claim);
   if (
     requestedEventId === undefined ||
     runId === undefined ||
@@ -941,6 +1006,13 @@ export const projectWorkspaceJob = (
       if (failed?.requestedEventId === requestedEventId && failed.runId === runId) {
         terminal = { status: "failed", runId, requestedEventId, request, failed };
       }
+      continue;
+    }
+    if (event.kind === WORKSPACE_JOB_KIND.RECONCILE_REQUIRED) {
+      const reconcile = reconcileRequiredFrom(event.payload);
+      if (reconcile?.requestedEventId === requestedEventId && reconcile.runId === runId) {
+        terminal = { status: "reconcile_required", runId, requestedEventId, request, reconcile };
+      }
     }
   }
 
@@ -1047,6 +1119,19 @@ export const projectWorkspaceJobAttempt = (
           requestedEventId: targetRequestedEventId,
           request,
           failed,
+        };
+      }
+      continue;
+    }
+    if (event.kind === WORKSPACE_JOB_KIND.RECONCILE_REQUIRED) {
+      const reconcile = reconcileRequiredFrom(event.payload);
+      if (reconcile?.requestedEventId === targetRequestedEventId && reconcile.runId === runId) {
+        terminal = {
+          status: "reconcile_required",
+          runId,
+          requestedEventId: targetRequestedEventId,
+          request,
+          reconcile,
         };
       }
     }

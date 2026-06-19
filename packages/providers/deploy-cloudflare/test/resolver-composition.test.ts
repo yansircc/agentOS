@@ -1,5 +1,10 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "@effect/vitest";
+import type {
+  DeployProductionPromotedPayload,
+  DeployReconcileRequiredPayload,
+  DeployRollbackRecordedPayload,
+} from "@agent-os/deploy";
 import { makePreClaim } from "@agent-os/kernel/effect-claim";
 import {
   credentialMaterialRef,
@@ -80,6 +85,43 @@ const jsonResponse = (status: number, body: unknown) => ({
 });
 
 const serialized = (value: unknown): string => JSON.stringify(value);
+
+const expectPromoted = (
+  payload: DeployProductionPromotedPayload | DeployReconcileRequiredPayload,
+): DeployProductionPromotedPayload => {
+  expect(payload).toMatchObject({
+    claim: { phase: "lived" },
+    deployRef: expect.any(String),
+    productionRef: expect.any(String),
+  });
+  if (
+    payload.claim.phase === "lived" &&
+    "deployRef" in payload &&
+    typeof payload.deployRef === "string" &&
+    "productionRef" in payload &&
+    typeof payload.productionRef === "string"
+  ) {
+    return payload;
+  }
+  throw new Error("expected deploy production_promoted payload");
+};
+
+const expectRollback = (
+  payload: DeployRollbackRecordedPayload | DeployReconcileRequiredPayload,
+): DeployRollbackRecordedPayload => {
+  expect(payload).toMatchObject({
+    claim: { phase: "lived" },
+    restoredDeployRef: expect.any(String),
+  });
+  if (
+    payload.claim.phase === "lived" &&
+    "restoredDeployRef" in payload &&
+    typeof payload.restoredDeployRef === "string"
+  ) {
+    return payload;
+  }
+  throw new Error("expected deploy rollback_recorded payload");
+};
 
 describe("@agent-os/deploy-cloudflare resolver composition", () => {
   it.effect(
@@ -176,12 +218,14 @@ describe("@agent-os/deploy-cloudflare resolver composition", () => {
           artifactRef,
           targetRef,
         });
-        const promoted = yield* carrier.promote({
-          claim: claimFor("promote"),
-          subjectRef: "site-1",
-          artifactRef,
-          productionTargetRef: targetRef,
-        });
+        const promoted = expectPromoted(
+          yield* carrier.promote({
+            claim: claimFor("promote"),
+            subjectRef: "site-1",
+            artifactRef,
+            productionTargetRef: targetRef,
+          }),
+        );
         materials.set(
           materialRefKey(cloudflareWorkerProductionEndpointMaterialRef(promoted.productionRef)),
           "https://raw-production.example",
@@ -191,11 +235,13 @@ describe("@agent-os/deploy-cloudflare resolver composition", () => {
           subjectRef: "site-1",
           productionRef: promoted.productionRef,
         });
-        const rolledBack = yield* carrier.rollback({
-          claim: claimFor("rollback"),
-          subjectRef: "site-1",
-          rollbackRef: previousDeployRef,
-        });
+        const rolledBack = expectRollback(
+          yield* carrier.rollback({
+            claim: claimFor("rollback"),
+            subjectRef: "site-1",
+            rollbackRef: previousDeployRef,
+          }),
+        );
 
         expect(requests.map((request) => request.url)).toEqual([
           "https://api.cloudflare.com/client/v4/accounts/raw-account-id/workers/scripts/raw-script-name",

@@ -1,6 +1,7 @@
 import { Data, Effect, Predicate } from "effect";
 import {
   deploySettlementRef,
+  settleDeployIndeterminate,
   settleDeployLived,
   settleDeployRejected,
   type DeployCarrier,
@@ -8,6 +9,7 @@ import {
   type DeployPreviewRequest,
   type DeployPromoteRequest,
   type DeployReadbackRequest,
+  type DeployReconcileRequiredPayload,
   type DeployRollbackRequest,
 } from "@agent-os/deploy";
 import {
@@ -365,6 +367,50 @@ const failed = (
     }),
   };
 };
+
+const reconcileRequiredPayload = (
+  request:
+    | DeployPreviewRequest
+    | DeployPromoteRequest
+    | DeployReadbackRequest
+    | DeployRollbackRequest,
+  step: "preview" | "promote" | "readback" | "rollback",
+  reason: string,
+): DeployReconcileRequiredPayload => {
+  const ref = proofRef(step, `${request.subjectRef}:${reason}:reconcile`);
+  return {
+    subjectRef: request.subjectRef,
+    step,
+    proofRef: ref,
+    reason: deploySettlementRef("reason", reason),
+    claim: settleDeployIndeterminate(request.claim, {
+      proofRef: ref,
+      reason: deploySettlementRef("reason", reason),
+    }),
+  };
+};
+
+const catchDeployReconcileRequired =
+  (
+    request:
+      | DeployPreviewRequest
+      | DeployPromoteRequest
+      | DeployReadbackRequest
+      | DeployRollbackRequest,
+    step: "preview" | "promote" | "readback" | "rollback",
+  ) =>
+  <A, E, R>(
+    effect: Effect.Effect<A, E | CloudflareWorkerDeployResolutionFailure, R>,
+  ): Effect.Effect<A | DeployReconcileRequiredPayload, E, R> =>
+    Effect.catchTag(effect, "agent_os.cloudflare_worker_deploy_resolution_failure", () =>
+      Effect.succeed(
+        reconcileRequiredPayload(
+          request,
+          step,
+          "cloudflare_worker_deploy_material_resolution_failed",
+        ),
+      ),
+    );
 
 const mapBundleResolutionFailure =
   (
@@ -862,7 +908,10 @@ export const makeCloudflareWorkerDeployCarrier = (
               }),
             ),
           )
-          .pipe(Effect.mapError(mapDeployResolutionFailureOnly(request, "promote")));
+          .pipe(
+            catchDeployReconcileRequired(request, "promote"),
+            Effect.mapError(mapDeployResolutionFailureOnly(request, "promote")),
+          );
       }),
 
     readback: (request) =>
@@ -892,7 +941,10 @@ export const makeCloudflareWorkerDeployCarrier = (
             };
           }),
         )
-        .pipe(Effect.mapError(mapDeployResolutionFailureOnly(request, "readback"))),
+        .pipe(
+          catchDeployReconcileRequired(request, "readback"),
+          Effect.mapError(mapDeployResolutionFailureOnly(request, "readback")),
+        ),
 
     rollback: (request) =>
       options.resolver
@@ -933,6 +985,9 @@ export const makeCloudflareWorkerDeployCarrier = (
             };
           }),
         )
-        .pipe(Effect.mapError(mapDeployResolutionFailureOnly(request, "rollback"))),
+        .pipe(
+          catchDeployReconcileRequired(request, "rollback"),
+          Effect.mapError(mapDeployResolutionFailureOnly(request, "rollback")),
+        ),
   };
 };

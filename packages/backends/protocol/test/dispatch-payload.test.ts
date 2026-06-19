@@ -40,7 +40,9 @@ import {
   projectResourceState,
   replayDispatchDeliveryFromSnapshot,
   scheduledEventIntentPayload,
+  settleDispatchOutboundEnqueued,
   settleDispatchOutboundDelivered,
+  settleDispatchOutboundRetryPending,
   type DispatchTargetAdapter,
 } from "../src";
 import { fireBackendEventHandlers } from "../src/reference";
@@ -431,6 +433,10 @@ describe("@agent-os/backend-protocol", () => {
 
   it("settles outbound delivery against target-owned receipts", () => {
     expect(dispatchSettlementContract.anchorKinds).toEqual(["ledger_event", "external_receipt"]);
+    expect(dispatchSettlementContract.indeterminateKinds).toEqual([
+      "provider_pending",
+      "retry_pending",
+    ]);
     expect(
       dispatchLedgerDeliveryReceipt({ targetScope: "receiver", deliveredEventId: 42 }),
     ).toEqual({
@@ -469,6 +475,35 @@ describe("@agent-os/backend-protocol", () => {
     expect(dispatchTargetEnqueued(acknowledgement)).toEqual({
       _tag: "enqueued",
       acknowledgement,
+    });
+    expect(
+      settleDispatchOutboundEnqueued(claim, {
+        bindingKey: "binding:cloudflare:queue:image-jobs",
+        acknowledgement,
+      }),
+    ).toMatchObject({
+      phase: "indeterminate",
+      indeterminateRef: {
+        indeterminateId: "dispatch.queue.enqueued:image-jobs:job-1",
+        indeterminateKind: "provider_pending",
+        reason: "provider_pending",
+        carrierRef: "dispatch:binding:cloudflare:queue:image-jobs",
+      },
+    });
+    expect(
+      settleDispatchOutboundRetryPending(claim, {
+        bindingKey: "binding:cloudflare:queue:image-jobs",
+        outboundEventId: 7,
+        attempt: 1,
+      }),
+    ).toMatchObject({
+      phase: "indeterminate",
+      indeterminateRef: {
+        indeterminateId: "dispatch.retry:7:1",
+        indeterminateKind: "retry_pending",
+        reason: "retry_pending",
+        carrierRef: "dispatch:binding:cloudflare:queue:image-jobs",
+      },
     });
   });
 

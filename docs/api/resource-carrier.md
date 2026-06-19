@@ -14,6 +14,8 @@
 - `.:ResourceEventKind`
 - `.:ResourceFailedPayload`
 - `.:ResourceFailure`
+- `.:ResourceFailureCode`
+- `.:ResourceIndeterminateFailure`
 - `.:ResourceLedgerEvent`
 - `.:ResourceLifecycleStep`
 - `.:ResourceMutationFact`
@@ -22,15 +24,19 @@
 - `.:ResourceProjection`
 - `.:ResourceProvisionRequest`
 - `.:ResourceProvisionedPayload`
+- `.:ResourceReconcileRequiredPayload`
+- `.:ResourceRejectedFailure`
 - `.:projectResource`
 - `.:resourceEffectAuthorityContracts`
 - `.:resourceBoundaryContract`
 - `.:resourceBoundaryPackage`
 - `.:resourceCarrierDefinition`
+- `.:resourceFailureEventKind`
 - `.:resourceFailedPayload`
 - `.:resourceRejectionKind`
 - `.:resourceSettlementRef`
 - `.:settleResourceLived`
+- `.:settleResourceIndeterminate`
 - `.:settleResourceRejected`
 
 ## Experimental exports

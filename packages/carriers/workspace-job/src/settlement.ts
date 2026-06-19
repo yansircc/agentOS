@@ -1,4 +1,6 @@
 import type {
+  IndeterminateClaim,
+  IndeterminateRef,
   LivedClaim,
   PreClaim,
   RejectedClaim,
@@ -161,4 +163,31 @@ export const rejectWorkspaceJobFailed = (
     rejectionId: workspaceJobSettlementRef("failed", spec.runId, spec.requestedEventId),
     rejectionKind: spec.rejectionKind ?? "provider_rejected",
     reason: workspaceJobSettlementRef("reason", "failed", spec.runId, spec.requestedEventId),
+  });
+
+export const settleWorkspaceJobReconcileRequired = (
+  claim: PreClaim,
+  spec: {
+    readonly runId: string;
+    readonly requestedEventId: number;
+    readonly indeterminateKind?: Extract<
+      IndeterminateRef["indeterminateKind"],
+      "reconcile_required" | "witness_unavailable" | "retry_pending"
+    >;
+  },
+): IndeterminateClaim =>
+  workspaceJobCarrier.indeterminate.reconcile_required(claim, {
+    indeterminateId: workspaceJobSettlementRef(
+      "reconcile_required",
+      spec.runId,
+      spec.requestedEventId,
+    ),
+    indeterminateKind: spec.indeterminateKind ?? "reconcile_required",
+    reason: workspaceJobSettlementRef(
+      "reason",
+      "reconcile_required",
+      spec.runId,
+      spec.requestedEventId,
+    ),
+    carrierRef: workspaceJobSettlementRef("carrier", "workspace-job"),
   });

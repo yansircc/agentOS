@@ -67,6 +67,13 @@ export type WorkspaceJobObservabilityProjection =
       readonly requestedEventId: number;
       readonly request: WorkspaceJobObservabilityRequest;
       readonly failureExplanation: WorkspaceJobFailureExplanation;
+    }
+  | {
+      readonly status: "reconcile_required";
+      readonly runId: string;
+      readonly requestedEventId: number;
+      readonly request: WorkspaceJobObservabilityRequest;
+      readonly failureExplanation: WorkspaceJobFailureExplanation;
     };
 
 const requestSummary = (
@@ -186,6 +193,23 @@ export const projectWorkspaceJobObservability = (
         request: requestSummary(projection.request),
         failureExplanation: failureExplanation(
           projection.failed.failure,
+          diagnostics?.diagnostics ?? [],
+          diagnostics?.terminalReason,
+        ),
+      };
+    }
+    case "reconcile_required": {
+      const diagnostics =
+        projection.reconcile.submitRunId === undefined
+          ? null
+          : projectFailureDiagnostics(events, projection.reconcile.submitRunId);
+      return {
+        status: "reconcile_required",
+        runId: projection.runId,
+        requestedEventId: projection.requestedEventId,
+        request: requestSummary(projection.request),
+        failureExplanation: failureExplanation(
+          projection.reconcile.failure,
           diagnostics?.diagnostics ?? [],
           diagnostics?.terminalReason,
         ),

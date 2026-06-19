@@ -296,6 +296,13 @@ describe("@agent-os/resource-cloudflare Worker resources", () => {
         code: "MaterialUnavailable",
         step: "destroy",
         reason: "cloudflare_worker_route_material_requires_route_id",
+        claim: {
+          phase: "indeterminate",
+          indeterminateRef: {
+            indeterminateKind: "reconcile_required",
+            reason: "resource:reason:material_unavailable:worker_route:destroy",
+          },
+        },
       });
     }),
   );

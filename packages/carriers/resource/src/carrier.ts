@@ -1,5 +1,5 @@
 import type { Effect } from "effect";
-import type { PreClaim, RejectedClaim } from "@agent-os/kernel/effect-claim";
+import type { IndeterminateClaim, PreClaim, RejectedClaim } from "@agent-os/kernel/effect-claim";
 import type {
   CredentialMaterialRef,
   BindingMaterialRef,
@@ -14,7 +14,9 @@ import type {
   ResourceLifecycleStep,
   ResourceMutationRecordedPayload,
   ResourceProvisionedPayload,
+  ResourceReconcileRequiredPayload,
 } from "./events";
+import { RESOURCE_KIND } from "./definition";
 
 export interface ResourceProvisionRequest {
   readonly claim: PreClaim;
@@ -57,21 +59,37 @@ export interface ResourceDestroyRequest {
   readonly reason: ResourceDestroyedPayload["reason"];
 }
 
-export interface ResourceFailure {
-  readonly code:
-    | "MaterialUnavailable"
-    | "PolicyDenied"
-    | "ProvisionFailed"
-    | "BindingFailed"
-    | "MutationFailed"
-    | "DestroyFailed"
-    | "ProviderFailure"
-    | "UnsupportedResource";
+export type ResourceFailureCode =
+  | "MaterialUnavailable"
+  | "PolicyDenied"
+  | "ProvisionFailed"
+  | "BindingFailed"
+  | "MutationFailed"
+  | "DestroyFailed"
+  | "ProviderFailure"
+  | "UnsupportedResource";
+
+interface ResourceFailureBase {
+  readonly code: ResourceFailureCode;
   readonly step: ResourceLifecycleStep;
   readonly reason: string;
+}
+
+export interface ResourceRejectedFailure extends ResourceFailureBase {
   readonly proofRef?: string;
   readonly claim: RejectedClaim;
 }
+
+export interface ResourceIndeterminateFailure extends ResourceFailureBase {
+  readonly proofRef: string;
+  readonly claim: IndeterminateClaim;
+}
+
+export type ResourceFailure = ResourceRejectedFailure | ResourceIndeterminateFailure;
+
+const isResourceIndeterminateFailure = (
+  failure: ResourceFailure,
+): failure is ResourceIndeterminateFailure => failure.claim.phase === "indeterminate";
 
 export interface ResourceCarrier {
   readonly provision: (
@@ -91,10 +109,26 @@ export interface ResourceCarrier {
 export const resourceFailedPayload = (
   failure: ResourceFailure,
   subjectRef: string,
-): ResourceFailedPayload => ({
-  subjectRef,
-  step: failure.step,
-  reason: failure.reason,
-  claim: failure.claim,
-  ...(failure.proofRef === undefined ? {} : { proofRef: failure.proofRef }),
-});
+): ResourceFailedPayload | ResourceReconcileRequiredPayload => {
+  if (isResourceIndeterminateFailure(failure)) {
+    return {
+      subjectRef,
+      step: failure.step,
+      reason: failure.reason,
+      proofRef: failure.proofRef,
+      claim: failure.claim,
+    };
+  }
+  return {
+    subjectRef,
+    step: failure.step,
+    reason: failure.reason,
+    claim: failure.claim,
+    ...(failure.proofRef === undefined ? {} : { proofRef: failure.proofRef }),
+  };
+};
+
+export const resourceFailureEventKind = (
+  failure: ResourceFailure,
+): typeof RESOURCE_KIND.FAILED | typeof RESOURCE_KIND.RECONCILE_REQUIRED =>
+  failure.claim.phase === "indeterminate" ? RESOURCE_KIND.RECONCILE_REQUIRED : RESOURCE_KIND.FAILED;

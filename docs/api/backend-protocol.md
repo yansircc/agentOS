@@ -41,6 +41,7 @@
 - `.:isBackendProtocolTruthIdentity`
 - `.:parseBackendProtocolLedgerEventRpc`
 - `.:parseDispatchBindingRef`
+- `.:parseDispatchIndeterminateClaim`
 - `.:parseDurableTriggerRetryPolicy`
 - `.:parseIntentPointerDuePayload`
 - `.:parseRequestedPayload`
@@ -111,6 +112,8 @@
 - `.:scheduledEventIntentPayload`
 - `.:settleDispatchInboundAccepted`
 - `.:settleDispatchOutboundDelivered`
+- `.:settleDispatchOutboundEnqueued`
+- `.:settleDispatchOutboundRetryPending`
 - `./reference:fireBackendEventHandlers`
 
 ## Experimental exports

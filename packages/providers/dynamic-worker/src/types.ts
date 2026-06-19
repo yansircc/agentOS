@@ -1,5 +1,11 @@
 import { Data, Effect } from "effect";
-import type { LivedClaim, PreClaim, RejectedClaim } from "@agent-os/kernel/effect-claim";
+import type {
+  IndeterminateClaim,
+  IndeterminateRef,
+  LivedClaim,
+  PreClaim,
+  RejectedClaim,
+} from "@agent-os/kernel/effect-claim";
 import type { RuntimeScopeResolution } from "@agent-os/kernel/runtime-scope";
 
 export const DYNAMIC_WORKER_MAX_TIMEOUT_MS = 10_000;
@@ -68,10 +74,27 @@ export interface DynamicWorkerRawResult {
   readonly metrics?: Readonly<Record<string, unknown>>;
 }
 
+export interface DynamicWorkerProviderPending {
+  readonly _tag: "pending";
+  readonly witnessId: string;
+  readonly reason?: string;
+  readonly workerId?: string;
+  readonly indeterminateKind?: IndeterminateRef["indeterminateKind"];
+}
+
+export type DynamicWorkerBackendResult = DynamicWorkerRawResult | DynamicWorkerProviderPending;
+
 export interface DynamicWorkerRunSuccess extends DynamicWorkerRawResult {
   readonly durationMs: number;
   readonly claim: LivedClaim;
 }
+
+export interface DynamicWorkerRunIndeterminate extends DynamicWorkerProviderPending {
+  readonly durationMs: number;
+  readonly claim: IndeterminateClaim;
+}
+
+export type DynamicWorkerRunResult = DynamicWorkerRunSuccess | DynamicWorkerRunIndeterminate;
 
 export class DynamicWorkerFailure extends Data.TaggedError("agent_os.dynamic_worker_failure")<{
   readonly code: Exclude<DynamicWorkerFailureCode, "PolicyDenied">;
@@ -123,5 +146,5 @@ export interface DynamicWorkerStaticPolicyOptions {
 export interface DynamicWorkerBackend {
   readonly run: (
     request: DynamicWorkerRunRequest,
-  ) => Effect.Effect<DynamicWorkerRawResult, DynamicWorkerProviderFailure>;
+  ) => Effect.Effect<DynamicWorkerBackendResult, DynamicWorkerProviderFailure>;
 }

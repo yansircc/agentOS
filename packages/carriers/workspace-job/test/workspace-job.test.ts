@@ -8,13 +8,16 @@ import {
   rejectWorkspaceJobByVerifier,
   rejectWorkspaceJobFailed,
   settleWorkspaceJobArtifactReadbackVerified,
+  settleWorkspaceJobReconcileRequired,
   settleWorkspaceJobTerminalFinalized,
   settleWorkspaceJobVerified,
   workspaceJobArtifactReadbackVerifiedPayload,
   workspaceJobBoundaryPackage,
+  workspaceJobCarrier,
   workspaceJobFailedPayload,
   workspaceJobFailureCode,
   workspaceJobPreClaim,
+  workspaceJobReconcileRequiredPayload,
   workspaceJobRequestedPayload,
   workspaceJobTerminalFinalizedPayload,
   workspaceJobVerifierRejectedPayload,
@@ -395,7 +398,6 @@ describe("@agent-os/workspace-job", () => {
             phase: "submit",
             code: workspaceJobFailureCode("submit_failed"),
             reason: "submit_failed",
-            retryable: true,
           },
           submitRunId: 7,
           claim: failedClaim,
@@ -432,6 +434,62 @@ describe("@agent-os/workspace-job", () => {
     expect(failedPayload).not.toContain("publicMessage");
     expect(failedPayload).not.toContain('"class"');
     expect(failedPayload).not.toContain('"message"');
+  });
+
+  it("projects retryable workspace job failures as reconcile-required indeterminate facts", () => {
+    const reconcileClaim = settleWorkspaceJobReconcileRequired(claim, {
+      runId: "run-1",
+      requestedEventId: 10,
+    });
+    const failure = {
+      phase: "data_plane" as const,
+      code: workspaceJobFailureCode("terminal_read_failed"),
+      reason: "terminal_read_failed",
+      retryable: true,
+    };
+    const retryableFailedPayload = {
+      requestedEventId: 10,
+      runId: "run-1",
+      idempotencyKey: "request-1",
+      failure,
+      submitRunId: 7,
+      claim: rejectWorkspaceJobFailed(claim, {
+        runId: "run-1",
+        requestedEventId: 10,
+      }),
+    };
+    expect(() =>
+      workspaceJobCarrier.decode(WORKSPACE_JOB_KIND.FAILED, retryableFailedPayload),
+    ).toThrow(/payload violates schema/);
+
+    const events = [
+      { id: 10, kind: WORKSPACE_JOB_KIND.REQUESTED, payload: requested },
+      {
+        id: 11,
+        kind: WORKSPACE_JOB_KIND.RECONCILE_REQUIRED,
+        payload: workspaceJobReconcileRequiredPayload({
+          requestedEventId: 10,
+          runId: "run-1",
+          idempotencyKey: "request-1",
+          failure,
+          submitRunId: 7,
+          claim: reconcileClaim,
+        }),
+      },
+    ];
+
+    expect(projectWorkspaceJob(events, "run-1")).toMatchObject({
+      status: "reconcile_required",
+      requestedEventId: 10,
+      reconcile: {
+        submitRunId: 7,
+        failure,
+        claim: {
+          phase: "indeterminate",
+          indeterminateRef: { indeterminateKind: "reconcile_required" },
+        },
+      },
+    });
   });
 
   it("does not project a verdict unless it references the finalized terminal artifact fact", () => {

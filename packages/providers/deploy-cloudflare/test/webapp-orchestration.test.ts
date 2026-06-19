@@ -1,6 +1,11 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "@effect/vitest";
-import { DEPLOY_KIND, projectDeploy } from "@agent-os/deploy";
+import {
+  DEPLOY_KIND,
+  projectDeploy,
+  type DeployProductionPromotedPayload,
+  type DeployReconcileRequiredPayload,
+} from "@agent-os/deploy";
 import { makePreClaim } from "@agent-os/kernel/effect-claim";
 import {
   credentialMaterialRef,
@@ -94,6 +99,26 @@ const jsonResponse = (status: number, body: unknown) => ({
 });
 
 const serialized = (value: unknown): string => JSON.stringify(value);
+
+const expectPromoted = (
+  payload: DeployProductionPromotedPayload | DeployReconcileRequiredPayload,
+): DeployProductionPromotedPayload => {
+  expect(payload).toMatchObject({
+    claim: { phase: "lived" },
+    deployRef: expect.any(String),
+    productionRef: expect.any(String),
+  });
+  if (
+    payload.claim.phase === "lived" &&
+    "deployRef" in payload &&
+    typeof payload.deployRef === "string" &&
+    "productionRef" in payload &&
+    typeof payload.productionRef === "string"
+  ) {
+    return payload;
+  }
+  throw new Error("expected deploy production_promoted payload");
+};
 
 describe("@agent-os/deploy-cloudflare webapp orchestration contract", () => {
   it.effect(
@@ -228,12 +253,14 @@ describe("@agent-os/deploy-cloudflare webapp orchestration contract", () => {
           artifactRef: stagingProjection.artifactRef ?? "",
           targetRef,
         });
-        const promoted = yield* carrier.promote({
-          claim: claimFor("@agent-os/deploy.promote"),
-          subjectRef,
-          artifactRef: stagingProjection.artifactRef ?? "",
-          productionTargetRef: targetRef,
-        });
+        const promoted = expectPromoted(
+          yield* carrier.promote({
+            claim: claimFor("@agent-os/deploy.promote"),
+            subjectRef,
+            artifactRef: stagingProjection.artifactRef ?? "",
+            productionTargetRef: targetRef,
+          }),
+        );
         materials.set(
           materialRefKey(cloudflareWorkerProductionEndpointMaterialRef(promoted.productionRef)),
           "https://raw-production-v2.example",

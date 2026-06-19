@@ -2,6 +2,8 @@
 
 ## Public exports
 
+- `.:ImageResourceSettlementPhase`
+- `.:ImageResourceSettlementReconcileRequired`
 - `.:withImageResourceSettlement`
 
 ## Experimental exports

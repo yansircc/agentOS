@@ -50,6 +50,7 @@ const defaultStatusForProjection = (
       return 200;
     case "failed":
       return 500;
+    case "reconcile_required":
     case "missing":
     case "running":
       return 202;

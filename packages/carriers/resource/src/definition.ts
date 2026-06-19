@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { defineCarrier, event, lived, rejected } from "@agent-os/kernel/carrier";
+import { defineCarrier, event, indeterminate, lived, rejected } from "@agent-os/kernel/carrier";
 import { materialRequirement, type EffectAuthorityContract } from "@agent-os/kernel/material-ref";
 
 export const RESOURCE_EVENT_PREFIX = "resource.";
@@ -155,6 +155,19 @@ export const resourceCarrierDefinition = defineCarrier({
       claim: rejected({
         key: "claim",
         rejectionKinds: ["unsupported", "resource_denied", "policy_denied", "provider_rejected"],
+      }),
+    }),
+    reconcile_required: event({
+      kind: "reconcile_required",
+      payload: Schema.Struct({
+        subjectRef: Schema.String,
+        step: Schema.Literals(["provision", "bind", "mutate", "destroy"]),
+        proofRef: Schema.String,
+        reason: Schema.String,
+      }),
+      claim: indeterminate({
+        key: "claim",
+        indeterminateKinds: ["reconcile_required", "witness_unavailable"],
       }),
     }),
   },

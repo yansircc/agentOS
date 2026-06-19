@@ -6,6 +6,8 @@ title: "@agent-os/image-resource-settlement API"
 
 ## Public exports
 
+- `.:ImageResourceSettlementPhase`
+- `.:ImageResourceSettlementReconcileRequired`
 - `.:withImageResourceSettlement`
 
 ## Experimental exports

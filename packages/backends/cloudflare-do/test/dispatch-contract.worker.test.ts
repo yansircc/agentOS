@@ -672,11 +672,20 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
         readonly attempt: number;
         readonly nextAttemptAt: number;
         readonly error: string;
+        readonly claim: unknown;
       };
       expect(payload.outboundEventId).toBe(outboundEventId);
       expect(payload.attempt).toBe(1);
       expect(payload.nextAttemptAt).toBeGreaterThan(Date.now() - 1_000);
       expect(payload.error).toContain("dead dispatch target");
+      expect(payload.claim).toMatchObject({
+        phase: "indeterminate",
+        indeterminateRef: {
+          indeterminateKind: "retry_pending",
+          reason: "retry_pending",
+        },
+      });
+      expect(validateEffectClaim(payload.claim).ok).toBe(true);
 
       const due = state.storage.sql
         .exec(

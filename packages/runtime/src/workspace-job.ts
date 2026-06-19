@@ -24,6 +24,7 @@ import {
   rejectWorkspaceJobFailed,
   settleWorkspaceJobArtifactReadbackVerified,
   settleWorkspaceJobArtifactWritten,
+  settleWorkspaceJobReconcileRequired,
   settleWorkspaceJobSeedWritten,
   settleWorkspaceJobTerminalFinalized,
   settleWorkspaceJobTerminalBuildAttempted,
@@ -34,6 +35,7 @@ import {
   workspaceJobFailedPayload,
   workspaceJobFailureCode,
   workspaceJobPreClaim,
+  workspaceJobReconcileRequiredPayload,
   workspaceJobRequestedPayload,
   workspaceJobSeedWrittenPayload,
   workspaceJobTerminalFinalizedPayload,
@@ -214,11 +216,13 @@ const sha256Hex = (bytes: Uint8Array): Effect.Effect<string> => {
   );
 };
 
+const retryableSubmitFailureReasons = new Set(["upstream_failure", "retries"]);
+
 const submitFailure = (reason: string): WorkspaceJobFailure => ({
   phase: "submit",
   code: workspaceJobFailureCode("submit", reason),
   reason,
-  retryable: reason !== "interrupted",
+  retryable: retryableSubmitFailureReasons.has(reason),
 });
 
 const requestFailure = (reason: string): WorkspaceJobFailure => ({
@@ -336,6 +340,24 @@ const commitFailed = (
     scopeRef: spec.identity.scopeRef,
     effectAuthorityRef: spec.identity.effectAuthorityRef,
   });
+  if (failure.retryable === true) {
+    const claim = settleWorkspaceJobReconcileRequired(requestClaim, {
+      runId: spec.runId,
+      requestedEventId,
+    });
+    return commitWorkspaceJob(
+      boundaryEvents,
+      WORKSPACE_JOB_KIND.RECONCILE_REQUIRED,
+      workspaceJobReconcileRequiredPayload({
+        requestedEventId,
+        runId: spec.runId,
+        idempotencyKey: spec.idempotencyKey,
+        failure,
+        ...(submitRunId === undefined ? {} : { submitRunId }),
+        claim,
+      }),
+    );
+  }
   const claim = rejectWorkspaceJobFailed(requestClaim, {
     runId: spec.runId,
     requestedEventId,
@@ -347,7 +369,7 @@ const commitFailed = (
       requestedEventId,
       runId: spec.runId,
       idempotencyKey: spec.idempotencyKey,
-      failure,
+      failure: { phase: failure.phase, code: failure.code, reason: failure.reason },
       ...(submitRunId === undefined ? {} : { submitRunId }),
       claim,
     }),

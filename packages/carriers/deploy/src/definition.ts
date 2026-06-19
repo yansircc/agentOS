@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { defineCarrier, event, lived, rejected } from "@agent-os/kernel/carrier";
+import { defineCarrier, event, indeterminate, lived, rejected } from "@agent-os/kernel/carrier";
 import { SYMBOLIC_SETTLEMENT_VALUE_PATTERN } from "@agent-os/kernel/settlement-contract";
 
 export const DEPLOY_EVENT_PREFIX = "deploy.";
@@ -61,6 +61,19 @@ export const deployCarrier = defineCarrier({
       claim: rejected({
         key: "claim",
         rejectionKinds: ["provider_rejected", "policy_denied", "validation_failed"],
+      }),
+    }),
+    reconcile_required: event({
+      kind: "reconcile_required",
+      payload: Schema.Struct({
+        subjectRef: Schema.String,
+        step: Schema.Literals(["preview", "promote", "readback", "rollback"]),
+        proofRef: DeploySymbolicRef,
+        reason: DeploySymbolicRef,
+      }),
+      claim: indeterminate({
+        key: "claim",
+        indeterminateKinds: ["reconcile_required", "witness_unavailable"],
       }),
     }),
   },

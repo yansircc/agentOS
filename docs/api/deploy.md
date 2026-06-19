@@ -15,8 +15,11 @@
 - `.:DeployProductionPromotedPayload`
 - `.:DeployProductionReadbackPayload`
 - `.:DeployProjection`
+- `.:DeployProviderIssue`
 - `.:DeployPromoteRequest`
 - `.:DeployReadbackRequest`
+- `.:DeployReconcileRequired`
+- `.:DeployReconcileRequiredPayload`
 - `.:DeployRollbackRecordedPayload`
 - `.:DeployRollbackRequest`
 - `.:deployBoundaryContract`
@@ -25,6 +28,7 @@
 - `.:deploySettlementRef`
 - `.:projectDeploy`
 - `.:settleDeployLived`
+- `.:settleDeployIndeterminate`
 - `.:settleDeployRejected`
 
 ## Experimental exports

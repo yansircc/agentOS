@@ -56,7 +56,9 @@ import {
   projectResourceEvents,
   scheduledEventIntentPayload,
   settleDispatchInboundAccepted,
+  settleDispatchOutboundEnqueued,
   settleDispatchOutboundDelivered,
+  settleDispatchOutboundRetryPending,
   type BackendProtocolEventIdentity,
   type BackendProtocolProjectionKey,
   type BackendProtocolTruthIdentity,
@@ -1142,6 +1144,10 @@ export class NodePostgresBackend {
               idempotencyKey: requested.idempotencyKey,
               enqueueAcknowledgement: acknowledgement,
               attempt: attempts,
+              claim: settleDispatchOutboundEnqueued(requested.claim, {
+                bindingKey,
+                acknowledgement,
+              }),
               ...(requested.traceContext === undefined
                 ? {}
                 : { traceContext: requested.traceContext }),
@@ -1171,6 +1177,15 @@ export class NodePostgresBackend {
             error: describeDispatchCause(outcome.cause),
             terminal,
             ...(nextAttemptAt === null ? {} : { nextAttemptAt }),
+            ...(terminal
+              ? {}
+              : {
+                  claim: settleDispatchOutboundRetryPending(requested.claim, {
+                    bindingKey,
+                    outboundEventId: intent.id,
+                    attempt: attempts,
+                  }),
+                }),
             ...(requested.traceContext === undefined
               ? {}
               : { traceContext: requested.traceContext }),

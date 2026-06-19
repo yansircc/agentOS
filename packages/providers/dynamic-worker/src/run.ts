@@ -9,21 +9,28 @@ import {
   DynamicWorkerPolicyDenied,
   type DynamicWorkerPolicyViolation,
   DynamicWorkerProviderFailure,
+  type DynamicWorkerProviderPending,
   type DynamicWorkerRunRequest,
-  type DynamicWorkerRunSuccess,
+  type DynamicWorkerRunResult,
 } from "./types";
 import {
   dynamicWorkerFailureReason,
+  settleDynamicWorkerIndeterminate,
   settleDynamicWorkerLived,
   settleDynamicWorkerPolicyDenied,
   settleDynamicWorkerProviderFailure,
 } from "./settlement";
 
+const isProviderPending = (value: unknown): value is DynamicWorkerProviderPending =>
+  typeof value === "object" &&
+  value !== null &&
+  (value as { readonly _tag?: unknown })._tag === "pending";
+
 export const runDynamicWorker = (
   backend: DynamicWorkerBackend,
   policy: DynamicWorkerPolicy,
   request: DynamicWorkerRunRequest,
-): Effect.Effect<DynamicWorkerRunSuccess, DynamicWorkerFailure | DynamicWorkerPolicyDenied> =>
+): Effect.Effect<DynamicWorkerRunResult, DynamicWorkerFailure | DynamicWorkerPolicyDenied> =>
   Effect.gen(function* () {
     const rejectPolicy = (denied: DynamicWorkerPolicyViolation): DynamicWorkerPolicyDenied =>
       new DynamicWorkerPolicyDenied({
@@ -62,6 +69,19 @@ export const runDynamicWorker = (
       }),
     );
     const ended = yield* Clock.currentTimeMillis;
+    if (isProviderPending(result)) {
+      return {
+        ...result,
+        durationMs: ended - started,
+        claim: settleDynamicWorkerIndeterminate(request.claim, {
+          indeterminateId: result.witnessId,
+          ...(result.indeterminateKind === undefined
+            ? {}
+            : { indeterminateKind: result.indeterminateKind }),
+          ...(result.reason === undefined ? {} : { reason: result.reason }),
+        }),
+      };
+    }
     return {
       ...result,
       durationMs: ended - started,
