@@ -725,6 +725,25 @@
         "kind": "mainlineChecker",
         "path": "tooling/agentos-cli/src/check/algorithmic-checks.mjs"
       },
+      "owner": "CST 423, tooling/refactor/a78-a94/role-survival.source.json, and docs/agent/boundary-rules.source.json",
+      "ruleId": "convergence-import-dag",
+      "target": {
+        "kind": "algorithmic",
+        "ruleId": "convergence-import-dag",
+        "checker": "convergence-import-dag"
+      },
+      "assertions": [
+        {
+          "failureCondition": "convergence-import-dag: workspace package imports become cyclic, package roles are unowned or multiply owned, or a package imports a role not allowed by the source-owned role-edge DAG",
+          "negativeWitness": "algorithmic projection rejects role-survival package role drift and package import edges outside the roleEdges table owned by docs/agent/boundary-rules.source.json"
+        }
+      ]
+    },
+    {
+      "source": {
+        "kind": "mainlineChecker",
+        "path": "tooling/agentos-cli/src/check/algorithmic-checks.mjs"
+      },
       "owner": "CST 421 and tooling/refactor/a78-a94/public-surface-sweep.source.json",
       "ruleId": "convergence-public-surface",
       "target": {

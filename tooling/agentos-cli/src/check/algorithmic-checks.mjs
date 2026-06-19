@@ -362,18 +362,7 @@ const packageImportCycles = (records, edges) => {
   return cycles;
 };
 
-const checkSubstrateImportDag = () => {
-  const constraints = ruleConstraints("substrate-import-dag");
-  const records = workspacePackageRecords().filter(
-    (record) => typeof record.name === "string" && record.name.startsWith("@agent-os/"),
-  );
-  const edges = packageSourceImportEdges(records);
-  const failures = [];
-
-  for (const cycle of packageImportCycles(records, edges)) {
-    failures.push(`substrate-import-dag: package cycle ${cycle.join(" -> ")}`);
-  }
-
+const checkForbiddenPackageEdges = ({ ruleId, constraints, edges, failures }) => {
   for (const edge of edges) {
     for (const constraint of constraints.forbiddenEdges ?? []) {
       if (
@@ -402,14 +391,111 @@ const checkSubstrateImportDag = () => {
         )
       ) {
         failures.push(
-          `${edge.file}: substrate-import-dag: ${edge.from.name} must not import downstream package ${edge.specifier} (${edge.to.path})`,
+          `${edge.file}: ${ruleId}: ${edge.from.name} must not import downstream package ${edge.specifier} (${edge.to.path})`,
         );
       }
     }
   }
-
-  failIfAny("substrate import DAG", failures);
 };
+
+const convergenceRoleForPackage = (record, failures) => {
+  const rules = Array.isArray(convergenceRoleManifest().packageRoleRules)
+    ? convergenceRoleManifest().packageRoleRules
+    : [];
+  const matchingRules = rules.filter((rule) => roleSurvivalPackageMatches(record, rule));
+  if (matchingRules.length !== 1) {
+    failures.push(
+      `${record.path}: expected exactly one convergence role for import DAG, matched ${matchingRules.length}`,
+    );
+    return undefined;
+  }
+  const role = matchingRules[0].role;
+  if (!convergenceRoleIds.has(role)) {
+    failures.push(`${record.path}: invalid convergence role ${role}`);
+    return undefined;
+  }
+  return role;
+};
+
+const checkRoleImportEdges = ({ ruleId, constraints, records, edges, failures }) => {
+  const roleByPackageName = new Map();
+  for (const record of records) {
+    const role = convergenceRoleForPackage(record, failures);
+    if (role !== undefined) roleByPackageName.set(record.name, role);
+  }
+
+  const allowedTargetRolesByFromRole = new Map();
+  for (const [index, edge] of (constraints.roleEdges ?? []).entries()) {
+    const label = `${ruleId}.constraints.roleEdges[${index}]`;
+    if (!isRecord(edge)) {
+      failures.push(`${label} must be an object`);
+      continue;
+    }
+    if (!convergenceRoleIds.has(edge.fromRole)) {
+      failures.push(`${label}: invalid fromRole ${edge.fromRole}`);
+      continue;
+    }
+    if (!Array.isArray(edge.allowedTargetRoles)) {
+      failures.push(`${label}: allowedTargetRoles must be an array`);
+      continue;
+    }
+    const allowed = new Set();
+    for (const role of edge.allowedTargetRoles) {
+      if (!convergenceRoleIds.has(role)) {
+        failures.push(`${label}: invalid allowed target role ${role}`);
+        continue;
+      }
+      allowed.add(role);
+    }
+    allowedTargetRolesByFromRole.set(edge.fromRole, allowed);
+  }
+
+  for (const role of convergenceRoleIds) {
+    if (!allowedTargetRolesByFromRole.has(role)) {
+      failures.push(`${ruleId}.constraints.roleEdges: missing fromRole ${role}`);
+    }
+  }
+
+  for (const edge of edges) {
+    const fromRole = roleByPackageName.get(edge.from.name);
+    const toRole = roleByPackageName.get(edge.to.name);
+    if (fromRole === undefined || toRole === undefined) continue;
+    const allowed = allowedTargetRolesByFromRole.get(fromRole);
+    if (allowed === undefined || allowed.has(toRole)) continue;
+    failures.push(
+      `${edge.file}: ${ruleId}: ${edge.from.name} (${fromRole}) must not import ${edge.specifier} (${edge.to.name}; ${toRole})`,
+    );
+  }
+};
+
+const checkPackageImportDag = ({ ruleId, label }) => {
+  const constraints = ruleConstraints(ruleId);
+  const records = workspacePackageRecords().filter(
+    (record) => typeof record.name === "string" && record.name.startsWith("@agent-os/"),
+  );
+  const edges = packageSourceImportEdges(records);
+  const failures = [];
+
+  for (const cycle of packageImportCycles(records, edges)) {
+    failures.push(`${ruleId}: package cycle ${cycle.join(" -> ")}`);
+  }
+
+  checkForbiddenPackageEdges({ ruleId, constraints, edges, failures });
+  if (constraints.roleEdges !== undefined) {
+    checkRoleImportEdges({ ruleId, constraints, records, edges, failures });
+  }
+
+  failIfAny(label, failures);
+};
+
+const checkSubstrateImportDag = () =>
+  checkPackageImportDag({ ruleId: "substrate-import-dag", label: "substrate import DAG" });
+
+const checkConvergenceImportDag = () =>
+  checkPackageImportDag({
+    ruleId: "convergence-import-dag",
+    label: "convergence import DAG",
+  });
 
 const clientSectionBody = (source, heading) => {
   const start = source.indexOf(`## ${heading}`);
@@ -972,8 +1058,10 @@ const publicExportNames = (apiSource) =>
   ]);
 
 const roleSurvivalPackageMatches = (record, rule) =>
-  (rule.paths ?? []).includes(record.path) ||
-  (rule.pathPrefixes ?? []).some((prefix) => packagePathMatches(record.path, prefix));
+  !((rule.excludePaths ?? []).includes(record.path) ||
+    (rule.excludePathPrefixes ?? []).some((prefix) => packagePathMatches(record.path, prefix))) &&
+  ((rule.paths ?? []).includes(record.path) ||
+    (rule.pathPrefixes ?? []).some((prefix) => packagePathMatches(record.path, prefix)));
 
 const roleSurvivalArrayAt = (file, pointer) => {
   const value = readJson(file)[pointer];
@@ -1010,6 +1098,12 @@ const checkRoleSurvivalPackages = ({ manifest, failures }) => {
     if (!convergenceRoleIds.has(rule.role)) failures.push(`${label}: invalid role ${rule.role}`);
     if (!Array.isArray(rule.paths)) failures.push(`${label}: paths must be an array`);
     if (!Array.isArray(rule.pathPrefixes)) failures.push(`${label}: pathPrefixes must be an array`);
+    if (rule.excludePaths !== undefined && !Array.isArray(rule.excludePaths)) {
+      failures.push(`${label}: excludePaths must be an array when present`);
+    }
+    if (rule.excludePathPrefixes !== undefined && !Array.isArray(rule.excludePathPrefixes)) {
+      failures.push(`${label}: excludePathPrefixes must be an array when present`);
+    }
     if (typeof rule.reason !== "string" || rule.reason.length === 0) {
       failures.push(`${label}: missing reason`);
     }
@@ -1334,6 +1428,7 @@ const checkerById = new Map([
   ["boundaries", checkBoundaryProjection],
   ["client-boundaries", checkClientBoundaries],
   ["convergence-boundary", checkConvergenceBoundary],
+  ["convergence-import-dag", checkConvergenceImportDag],
   ["convergence-public-surface", checkConvergencePublicSurface],
   ["convergence-roles", checkConvergenceRoles],
   ["d12-a155-substrate-absorption", checkBoundaryProjection],

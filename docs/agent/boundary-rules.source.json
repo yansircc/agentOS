@@ -506,6 +506,68 @@
       }
     },
     {
+      "id": "convergence-import-dag",
+      "owner": "CST 423, tooling/refactor/a78-a94/role-survival.source.json, and docs/agent/boundary-rules.source.json",
+      "invariantId": "invariant.algebra.single-code-source",
+      "kind": "repo-boundary",
+      "diagnostics": [
+        "every workspace package import must remain acyclic",
+        "role-survival.source.json is the only package role source for DAG buckets",
+        "role edges must flow toward owned laws, protocols, projections, providers, or repo-local tooling without importing downstream roles"
+      ],
+      "paths": [
+        "tooling/refactor/a78-a94/role-survival.source.json",
+        "docs/agent/boundary-rules.source.json",
+        "packages/**/src/**/*.ts",
+        "tooling/**/src/**/*.ts"
+      ],
+      "commandGroup": "all",
+      "constraints": {
+        "roleEdges": [
+          {
+            "fromRole": "law-contract-owner",
+            "allowedTargetRoles": ["law-contract-owner"]
+          },
+          {
+            "fromRole": "capability-protocol",
+            "allowedTargetRoles": ["law-contract-owner", "capability-protocol"]
+          },
+          {
+            "fromRole": "projection-sink",
+            "allowedTargetRoles": [
+              "law-contract-owner",
+              "capability-protocol",
+              "projection-sink"
+            ]
+          },
+          {
+            "fromRole": "provider-bundle",
+            "allowedTargetRoles": [
+              "law-contract-owner",
+              "capability-protocol",
+              "projection-sink",
+              "provider-bundle"
+            ]
+          },
+          {
+            "fromRole": "repo-local-tooling",
+            "allowedTargetRoles": [
+              "law-contract-owner",
+              "capability-protocol",
+              "projection-sink",
+              "provider-bundle",
+              "repo-local-tooling"
+            ]
+          }
+        ]
+      },
+      "acceptance": {
+        "engine": "algorithmic",
+        "checker": "convergence-import-dag",
+        "reason": "post-v3 import layering is a projection from role-survival package roles plus the source-owned role-edge DAG constraints"
+      }
+    },
+    {
       "id": "substrate-import-dag",
       "owner": "docs/agent/boundary-rules.source.json",
       "invariantId": "invariant.algebra.single-code-source",
