@@ -1,5 +1,5 @@
 import { Predicate } from "effect";
-import type { SafeLedgerEvent, SafeLedgerPayload } from "@agent-os/kernel";
+import type { SafeLedgerEvent, SafeLedgerPayloadShape } from "@agent-os/kernel";
 import { safeLedgerEvent, safeValueFromUnknown } from "@agent-os/kernel";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import { validateTerminalClaim } from "@agent-os/kernel/settlement-contract";
@@ -17,7 +17,7 @@ const numberField = (payload: Record<string, unknown>, key: string): number | un
     ? (payload[key] as number)
     : undefined;
 
-const safeClaimRejection = (claim: unknown): SafeLedgerPayload | undefined => {
+const safeClaimRejection = (claim: unknown): SafeLedgerPayloadShape | undefined => {
   const validation = validateTerminalClaim(workspaceOpSettlementContract, claim);
   if (!validation.ok || validation.claim.phase !== "rejected") return undefined;
   return {
@@ -28,7 +28,7 @@ const safeClaimRejection = (claim: unknown): SafeLedgerPayload | undefined => {
   };
 };
 
-const safeRequestPayload = (payload: Record<string, unknown>): SafeLedgerPayload => ({
+const safeRequestPayload = (payload: Record<string, unknown>): SafeLedgerPayloadShape => ({
   toolName: stringField(payload, "toolName") ?? "unknown",
   ...(stringField(payload, "toolCallId") === undefined
     ? {}
@@ -46,7 +46,7 @@ const safeRequestPayload = (payload: Record<string, unknown>): SafeLedgerPayload
     : { materialRefs: safeValueFromUnknown(payload.materialRefs)! }),
 });
 
-const safeCompletedPayload = (payload: Record<string, unknown>): SafeLedgerPayload => ({
+const safeCompletedPayload = (payload: Record<string, unknown>): SafeLedgerPayloadShape => ({
   requestedEventId: numberField(payload, "requestedEventId") ?? 0,
   toolName: stringField(payload, "toolName") ?? "unknown",
   ...(stringField(payload, "toolCallId") === undefined
@@ -67,7 +67,7 @@ const safeCompletedPayload = (payload: Record<string, unknown>): SafeLedgerPaylo
     : { durationMs: numberField(payload, "durationMs")! }),
 });
 
-const safeRejectedPayload = (payload: Record<string, unknown>): SafeLedgerPayload => ({
+const safeRejectedPayload = (payload: Record<string, unknown>): SafeLedgerPayloadShape => ({
   requestedEventId: numberField(payload, "requestedEventId") ?? 0,
   toolName: stringField(payload, "toolName") ?? "unknown",
   reason: stringField(payload, "reason") ?? "rejected",

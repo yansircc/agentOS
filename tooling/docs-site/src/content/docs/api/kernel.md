@@ -113,8 +113,10 @@ title: "@agent-os/kernel Public API Intent"
 - `./effect-claim:validateEffectClaim`
 - `./errors:ABORT`
 - `./errors:AbortKind`
+- `./errors:CORE_CLAIMED_EVENT_NAMESPACES`
 - `./errors:CORE_CLAIMED_PREFIXES`
 - `./errors:CapabilityRejected`
+- `./errors:CoreClaimedEventNamespace`
 - `./errors:DispatchBindingRefMalformed`
 - `./errors:DispatchScopeMismatch`
 - `./errors:DispatchTargetNotFound`
@@ -137,6 +139,7 @@ title: "@agent-os/kernel Public API Intent"
 - `./errors:UnregisteredDurableTriggerKind`
 - `./errors:UnsupportedScopeRef`
 - `./errors:UpstreamFailure`
+- `./errors:coreClaimedEventNamespacePrefixes`
 - `./errors:isClaimedEventKind`
 - `./errors:isCoreClaimedEventKind`
 - `./errors:reasonOf`
@@ -301,6 +304,7 @@ title: "@agent-os/kernel Public API Intent"
 - `.:SafeLedgerEvent`
 - `.:SafeLedgerEventProjector`
 - `.:SafeLedgerPayload`
+- `.:SafeLedgerPayloadShape`
 - `.:SafeLedgerValue`
 - `.:ToolAccess`
 - `.:ToolEffect`
@@ -473,6 +477,7 @@ text`
 - `.:BoundaryContractValidation`
 - `.:BoundaryPackage`
 - `.:BoundaryProjectionContract`
+- `.:CORE_CLAIMED_EVENT_NAMESPACES`
 - `.:CORE_CLAIMED_PREFIXES`
 - `.:CapabilityRejected`
 - `.:Carrier`
@@ -489,6 +494,7 @@ text`
 - `.:ClaimValidation`
 - `.:ClaimValidationIssue`
 - `.:CommitterMap`
+- `.:CoreClaimedEventNamespace`
 - `.:ContextFact`
 - `.:ContextOmitReason`
 - `.:ContextOmittedRef`
@@ -647,6 +653,7 @@ text`
 - `.:isAuthorityRef`
 - `.:isBoundaryPackage`
 - `.:isFactOwnerRef`
+- `.:coreClaimedEventNamespacePrefixes`
 - `.:isClaimedEventKind`
 - `.:isCoreClaimedEventKind`
 - `.:isMaterialRef`
@@ -681,6 +688,7 @@ text`
 - `.:redactedSafeSummaryText`
 - `.:safeStringify`
 - `.:safeStringifyPretty`
+- `.:safeLedgerPayload`
 - `.:safeLedgerEvent`
 - `.:safeValueFromUnknown`
 - `.:settleLived`

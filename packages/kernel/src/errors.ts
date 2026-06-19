@@ -123,19 +123,32 @@ export class ResourceReservationClosed extends Data.TaggedError(
   readonly status: "consumed" | "released";
 }> {}
 
+export interface CoreClaimedEventNamespace {
+  readonly packageId: string;
+  readonly kindPrefixes: ReadonlyArray<string>;
+}
+
 /** Event kind prefixes owned by substrate capabilities. App-facing write
  *  paths (`emitEvent`, `scheduleEvent`, `submit.deliver.event`,
  *  `dispatchToScope.event`) cannot write to these. */
-export const CORE_CLAIMED_PREFIXES = [
-  "agent.",
-  "chat.",
-  "dispatch.",
-  "llm.",
-  "tool.",
-  "quota.",
-  "resource_pool.",
-  "durable_trigger.",
-] as const;
+export const CORE_CLAIMED_EVENT_NAMESPACES = [
+  {
+    packageId: "@agent-os/runtime-protocol",
+    kindPrefixes: ["agent.", "chat.", "llm.", "runtime.", "tool."],
+  },
+  {
+    packageId: "@agent-os/backend-protocol",
+    kindPrefixes: ["dispatch.", "durable_trigger.", "quota.", "resource_pool."],
+  },
+] as const satisfies ReadonlyArray<CoreClaimedEventNamespace>;
+
+export const CORE_CLAIMED_PREFIXES = CORE_CLAIMED_EVENT_NAMESPACES.flatMap(
+  (namespace) => namespace.kindPrefixes,
+);
+
+export const coreClaimedEventNamespacePrefixes = (packageId: string): ReadonlyArray<string> =>
+  CORE_CLAIMED_EVENT_NAMESPACES.find((namespace) => namespace.packageId === packageId)
+    ?.kindPrefixes ?? [];
 
 export const isCoreClaimedEventKind = (event: string): boolean =>
   CORE_CLAIMED_PREFIXES.some((p) => event.startsWith(p));

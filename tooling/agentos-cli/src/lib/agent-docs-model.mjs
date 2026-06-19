@@ -178,6 +178,35 @@ const variableArrayStrings = (sourceFile, name) => {
   return [];
 };
 
+const variableNamespaceDeclarations = (sourceFile, name) => {
+  const constants = localConstants(sourceFile);
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(declaration.name) || declaration.name.text !== name) continue;
+      const initializer = unwrapExpression(declaration.initializer);
+      if (!initializer || !ts.isArrayLiteralExpression(initializer)) return [];
+      return initializer.elements.flatMap((element) => {
+        const namespace = objectLiteral(element);
+        if (namespace === undefined) return [];
+        const packageId = literalValue(
+          objectProperty(namespace, "packageId", constants),
+          constants,
+        );
+        const prefixesNode = objectProperty(namespace, "kindPrefixes", constants);
+        const prefixes = arrayLiteralStrings(
+          prefixesNode === undefined ? undefined : unwrapExpression(prefixesNode),
+          constants,
+        );
+        return packageId === undefined || prefixes.length === 0
+          ? []
+          : [{ owner: packageId, prefixes }];
+      });
+    }
+  }
+  return [];
+};
+
 const ownedProtocolEvents = (sourceFile, prefixes) => {
   const values = [];
   const constants = localConstants(sourceFile);
@@ -327,28 +356,48 @@ const collectReservedDeclarations = (parsed) => {
   const backendProtocol = parsed.find(({ file }) =>
     file.endsWith(path.join("packages", "backends", "protocol", "src", "index.ts")),
   );
+  const namespaceDeclarations =
+    kernel === undefined
+      ? []
+      : variableNamespaceDeclarations(kernel.sourceFile, "CORE_CLAIMED_EVENT_NAMESPACES");
   const backendPrefixes =
-    backendProtocol === undefined
+    namespaceDeclarations.find((namespace) => namespace.owner === "@agent-os/backend-protocol")
+      ?.prefixes ??
+    (backendProtocol === undefined
       ? []
-      : variableArrayStrings(backendProtocol.sourceFile, "BACKEND_PROTOCOL_EVENT_PREFIXES");
-  const corePrefixes =
-    kernel === undefined ? [] : variableArrayStrings(kernel.sourceFile, "CORE_CLAIMED_PREFIXES");
-  const backendPrefixSet = new Set(backendPrefixes);
-  const coreOwnedPrefixes = corePrefixes.filter((prefix) => !backendPrefixSet.has(prefix));
-  const coreEvents = parsed.flatMap(({ sourceFile }) =>
-    ownedProtocolEvents(sourceFile, coreOwnedPrefixes),
-  );
-  return [
-    ...(kernel === undefined
-      ? []
-      : [
+      : variableArrayStrings(backendProtocol.sourceFile, "BACKEND_PROTOCOL_EVENT_PREFIXES"));
+  const coreNamespaces =
+    namespaceDeclarations.length === 0
+      ? [
           {
             owner: "@agent-os/runtime-protocol",
-            filePath: kernel.file,
-            prefixes: coreOwnedPrefixes,
-            events: coreEvents,
+            prefixes:
+              kernel === undefined
+                ? []
+                : variableArrayStrings(kernel.sourceFile, "CORE_CLAIMED_PREFIXES").filter(
+                    (prefix) => !new Set(backendPrefixes).has(prefix),
+                  ),
           },
-        ]),
+        ]
+      : namespaceDeclarations.filter(
+          (namespace) => namespace.owner !== "@agent-os/backend-protocol",
+        );
+  return [
+    ...coreNamespaces.flatMap((namespace) => {
+      const events = parsed.flatMap(({ sourceFile }) =>
+        ownedProtocolEvents(sourceFile, namespace.prefixes),
+      );
+      return kernel === undefined || namespace.prefixes.length === 0
+        ? []
+        : [
+            {
+              owner: namespace.owner,
+              filePath: kernel.file,
+              prefixes: namespace.prefixes,
+              events,
+            },
+          ];
+    }),
     ...(backendProtocol === undefined
       ? []
       : [

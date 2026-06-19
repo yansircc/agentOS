@@ -256,7 +256,7 @@
           "action": "carry_resolved_provider_material",
           "target": {
             "kind": "material",
-            "value": "resolvedMaterials"
+            "value": "resolved provider material"
           },
           "invariant": "invariant.d10.truth-identity"
         }

@@ -1,5 +1,5 @@
 import { Predicate } from "effect";
-import type { SafeLedgerEvent, SafeLedgerPayload, SafeLedgerValue } from "@agent-os/kernel";
+import type { SafeLedgerEvent, SafeLedgerPayloadShape, SafeLedgerValue } from "@agent-os/kernel";
 import { safeLedgerEvent, safeValueFromUnknown } from "@agent-os/kernel";
 import type { LedgerEvent } from "@agent-os/kernel/types";
 import { WORKSPACE_JOB_FACT_OWNER, WORKSPACE_JOB_KIND } from "./definition";
@@ -63,7 +63,7 @@ const safeChecksSummary = (value: unknown): SafeLedgerValue | undefined => {
   return { total: checks.length, passed, failed, checks };
 };
 
-const safeRequestedPayload = (payload: Record<string, unknown>): SafeLedgerPayload => ({
+const safeRequestedPayload = (payload: Record<string, unknown>): SafeLedgerPayloadShape => ({
   runId: stringField(payload, "runId") ?? "unknown",
   idempotencyKey: stringField(payload, "idempotencyKey") ?? "unknown",
   requestedBy: stringField(payload, "requestedBy") ?? "unknown",
@@ -82,7 +82,9 @@ const safeRequestedPayload = (payload: Record<string, unknown>): SafeLedgerPaylo
     : { attempt: safeValueFromUnknown(payload.attempt)! }),
 });
 
-const safeTerminalFinalizedPayload = (payload: Record<string, unknown>): SafeLedgerPayload => ({
+const safeTerminalFinalizedPayload = (
+  payload: Record<string, unknown>,
+): SafeLedgerPayloadShape => ({
   requestedEventId: numberField(payload, "requestedEventId") ?? 0,
   runId: stringField(payload, "runId") ?? "unknown",
   idempotencyKey: stringField(payload, "idempotencyKey") ?? "unknown",
@@ -91,7 +93,7 @@ const safeTerminalFinalizedPayload = (payload: Record<string, unknown>): SafeLed
     : { artifact: safeArtifact(payload.terminalArtifact)! }),
 });
 
-const safeVerdictPayload = (payload: Record<string, unknown>): SafeLedgerPayload => ({
+const safeVerdictPayload = (payload: Record<string, unknown>): SafeLedgerPayloadShape => ({
   requestedEventId: numberField(payload, "requestedEventId") ?? 0,
   terminalFinalizedEventId: numberField(payload, "terminalFinalizedEventId") ?? 0,
   runId: stringField(payload, "runId") ?? "unknown",
@@ -104,7 +106,7 @@ const safeVerdictPayload = (payload: Record<string, unknown>): SafeLedgerPayload
     : { summary: stringField(payload, "summary")! }),
 });
 
-const safeFailedPayload = (payload: Record<string, unknown>): SafeLedgerPayload => {
+const safeFailedPayload = (payload: Record<string, unknown>): SafeLedgerPayloadShape => {
   const failure = Predicate.isObject(payload.failure) ? payload.failure : {};
   return {
     requestedEventId: numberField(payload, "requestedEventId") ?? 0,
@@ -119,7 +121,7 @@ const safeFailedPayload = (payload: Record<string, unknown>): SafeLedgerPayload 
   };
 };
 
-const safeStepPayload = (payload: Record<string, unknown>): SafeLedgerPayload => ({
+const safeStepPayload = (payload: Record<string, unknown>): SafeLedgerPayloadShape => ({
   requestedEventId: numberField(payload, "requestedEventId") ?? 0,
   runId: stringField(payload, "runId") ?? "unknown",
   idempotencyKey: stringField(payload, "idempotencyKey") ?? "unknown",

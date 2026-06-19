@@ -15,6 +15,7 @@ import {
   type PreClaim,
   type ScopeRef,
 } from "@agent-os/kernel/effect-claim";
+import { coreClaimedEventNamespacePrefixes } from "@agent-os/kernel/errors";
 import { isMaterialRef, type BindingMaterialRef } from "@agent-os/kernel/material-ref";
 import {
   defineSettlementContract,
@@ -45,12 +46,9 @@ export const DURABLE_TRIGGER_SCHEDULED_REQUESTED = "durable_trigger.scheduled.re
 export const DURABLE_TRIGGER_SCHEDULED_CANCELLED = "durable_trigger.scheduled.cancelled";
 export const DELIVERY_RETRY_TRIGGER_KIND = "delivery_retry";
 
-export const BACKEND_PROTOCOL_EVENT_PREFIXES = [
-  "dispatch.",
-  "durable_trigger.",
-  "quota.",
-  "resource_pool.",
-] as const;
+export const BACKEND_PROTOCOL_EVENT_PREFIXES = coreClaimedEventNamespacePrefixes(
+  "@agent-os/backend-protocol",
+);
 
 export interface BackendProtocolTruthIdentity {
   readonly scopeRef: ScopeRef;

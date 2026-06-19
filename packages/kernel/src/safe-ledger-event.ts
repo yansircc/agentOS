@@ -1,20 +1,21 @@
+import { Option } from "effect";
 import { scopeRefKey } from "./effect-claim";
 import type { LedgerEvent } from "./types";
+import type { RecordedPayloadValue } from "./value-brands";
+
+const safeLedgerPayloadBrand: unique symbol = Symbol("@agent-os/kernel/SafeLedgerPayload");
 
 /**
  * Browser-safe JSON value emitted by a ledger fact owner.
  *
  * @public
  */
-export type SafeLedgerValue =
-  | null
-  | boolean
-  | number
-  | string
-  | ReadonlyArray<SafeLedgerValue>
-  | { readonly [key: string]: SafeLedgerValue };
+export type SafeLedgerValue = RecordedPayloadValue;
 
-export type SafeLedgerPayload = Readonly<Record<string, SafeLedgerValue>>;
+export type SafeLedgerPayloadShape = Readonly<Record<string, SafeLedgerValue>>;
+export type SafeLedgerPayload = SafeLedgerPayloadShape & {
+  readonly [safeLedgerPayloadBrand]: "SafeLedgerPayload";
+};
 
 /**
  * Owner-owned browser read projection for one durable ledger event.
@@ -44,20 +45,29 @@ export type RedactedSafeSummaryReason =
 
 export const safeLedgerEvent = (
   event: LedgerEvent,
-  safePayload?: SafeLedgerPayload,
+  safePayload?: Readonly<Record<string, unknown>> | SafeLedgerPayload,
 ): SafeLedgerEvent => ({
   id: event.id,
   ts: event.ts,
   kind: event.kind,
   scopeKey: scopeRefKey(event.scopeRef),
   factOwnerRef: event.factOwnerRef,
-  ...(safePayload === undefined ? {} : { safePayload }),
+  ...(safePayload === undefined ? {} : { safePayload: safeLedgerPayload(safePayload) }),
 });
 
 const bytesOf = (value: string): number => new TextEncoder().encode(value).byteLength;
 
 const sortedOwnKeys = (value: Record<string, unknown>): ReadonlyArray<string> =>
   Object.keys(value).sort((left, right) => left.localeCompare(right));
+
+const failSafePayload = (message: string): never => {
+  return Option.getOrThrowWith(Option.none(), () => new TypeError(message));
+};
+
+const isJsonRecord = (value: object): value is Readonly<Record<string, unknown>> => {
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+};
 
 const valueTypeOf = (value: unknown): string => {
   if (value === null) return "null";
@@ -86,6 +96,7 @@ export const safeValueFromUnknown = (value: unknown): SafeLedgerValue | undefine
   }
 
   if (value !== null && typeof value === "object") {
+    if (!isJsonRecord(value)) return undefined;
     const record: Record<string, SafeLedgerValue> = {};
     for (const [key, item] of Object.entries(value)) {
       const safeItem = safeValueFromUnknown(item);
@@ -96,6 +107,19 @@ export const safeValueFromUnknown = (value: unknown): SafeLedgerValue | undefine
   }
 
   return undefined;
+};
+
+export const safeLedgerPayload = (value: Readonly<Record<string, unknown>>): SafeLedgerPayload => {
+  const payload = safeValueFromUnknown(value);
+  if (payload === undefined) return failSafePayload("safe ledger payload must be JSON-safe");
+  if (payload === null || typeof payload !== "object" || Array.isArray(payload)) {
+    return failSafePayload("safe ledger payload must be an object");
+  }
+  Object.defineProperty(payload, safeLedgerPayloadBrand, {
+    value: "SafeLedgerPayload",
+    enumerable: false,
+  });
+  return payload as SafeLedgerPayload;
 };
 
 export const redactedSafeSummary = (

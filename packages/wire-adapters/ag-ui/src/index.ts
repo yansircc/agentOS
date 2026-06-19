@@ -2,7 +2,7 @@ import { Schema } from "effect";
 import type {
   SafeLedgerEvent,
   SafeLedgerEventProjector,
-  SafeLedgerPayload,
+  SafeLedgerPayloadShape,
   SafeLedgerValue,
 } from "@agent-os/kernel";
 import { scopeRefKey } from "@agent-os/kernel/effect-claim";
@@ -470,13 +470,13 @@ const recordOf = (
 const arrayOf = (value: AgUiSafeValue | undefined): ReadonlyArray<AgUiSafeValue> | undefined =>
   Array.isArray(value) ? value : undefined;
 
-const payloadOf = (event: SafeLedgerEvent): SafeLedgerPayload => event.safePayload ?? {};
+const payloadOf = (event: SafeLedgerEvent): SafeLedgerPayloadShape => event.safePayload ?? {};
 
 const safeJsonText = (value: AgUiSafeValue | undefined): string => JSON.stringify(value ?? null);
 
 const safeInputRequestForInterrupted = (
   event: SafeLedgerEvent,
-  payload: SafeLedgerPayload,
+  payload: SafeLedgerPayloadShape,
 ): AgUiSafeValue | undefined => {
   const reason = stringOf(payload.reason);
   const requestKind = reason === undefined ? null : inputRequestKindFromReason(reason);

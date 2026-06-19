@@ -1,5 +1,9 @@
 import { Data } from "effect";
-import { CORE_CLAIMED_PREFIXES, CapabilityRejected, isCoreClaimedEventKind } from "./errors";
+import {
+  CORE_CLAIMED_EVENT_NAMESPACES,
+  CapabilityRejected,
+  isCoreClaimedEventKind,
+} from "./errors";
 import type { BoundaryContract } from "./boundary-contract";
 
 declare const boundaryPackageBrand: unique symbol;
@@ -99,10 +103,12 @@ export const validateExtensionDeclarations = (
   declarations: ReadonlyArray<ExtensionDeclaration>,
 ): ExtensionValidation => {
   const seen: Array<{ readonly owner: string; readonly prefix: string }> =
-    CORE_CLAIMED_PREFIXES.map((prefix) => ({
-      owner: "@agent-os/runtime",
-      prefix,
-    }));
+    CORE_CLAIMED_EVENT_NAMESPACES.flatMap((namespace) =>
+      namespace.kindPrefixes.map((prefix) => ({
+        owner: namespace.packageId,
+        prefix,
+      })),
+    );
   const packageIds = new Set<string>();
   const out: string[] = [];
 

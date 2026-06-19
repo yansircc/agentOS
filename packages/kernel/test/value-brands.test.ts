@@ -23,6 +23,7 @@ import {
   recordedValue,
   untrustedValue,
 } from "../src/value-brands";
+import { safeLedgerPayload } from "../src/safe-ledger-event";
 
 describe("value domain brands", () => {
   it("keeps value domains in separate type domains", () => {
@@ -71,13 +72,15 @@ describe("value domain brands", () => {
   });
 
   it("keeps RecordedPayload independent from browser-safe projections", () => {
-    const safePayload: SafeLedgerPayload = { value: "visible-to-browser" };
+    const safePayload: SafeLedgerPayload = safeLedgerPayload({ value: "visible-to-browser" });
     const recordedPayloadTruth = undefined as unknown as RecordedPayload;
     type Payload = { readonly kind: string; readonly id: number };
 
     const assertTypeErrors = () => {
       // @ts-expect-error SafeLedgerPayload is a projection, not Recorded payload truth.
       const recordedFromSafe: RecordedPayload = safePayload;
+      // @ts-expect-error Plain JSON is not owner-minted browser-safe projection payload.
+      const safeFromPlain: SafeLedgerPayload = { value: "visible-to-browser" };
       // @ts-expect-error Plain JSON does not carry the source-owned RecordedPayload brand.
       const recordedFromPlain: RecordedPayload = { value: "truth" };
       // @ts-expect-error RecordedPayload is opaque payload truth, not owner-accepted Recordable<T>.
@@ -88,6 +91,7 @@ describe("value domain brands", () => {
       const mintedFromPayload = ledgerRecordedMint.recorded(recordedPayloadTruth);
       return [
         recordedFromSafe,
+        safeFromPlain,
         recordedFromPlain,
         recordableFromPayload,
         recordedFromPayload,
@@ -163,6 +167,26 @@ describe("value domain brands", () => {
     expect(() => recordedPayload({ bad: undefined })).toThrow("recorded payload value invalid");
     expect(() => recordedPayload({ bad: new Date(0) })).toThrow(
       "recorded payload object must be a JSON record",
+    );
+  });
+
+  it("mints SafeLedgerPayload through the browser-safe projection contract", () => {
+    const payload = safeLedgerPayload({
+      path: "README.md",
+      nested: { ok: true, bytes: 12 },
+    });
+    const safe: SafeLedgerPayload = payload;
+
+    expect(safe.path).toBe("README.md");
+    expect(JSON.stringify(safe)).toBe('{"path":"README.md","nested":{"ok":true,"bytes":12}}');
+    expect(() => safeLedgerPayload({ bad: Number.NaN })).toThrow(
+      "safe ledger payload must be JSON-safe",
+    );
+    expect(() => safeLedgerPayload({ bad: undefined })).toThrow(
+      "safe ledger payload must be JSON-safe",
+    );
+    expect(() => safeLedgerPayload({ bad: new Date(0) })).toThrow(
+      "safe ledger payload must be JSON-safe",
     );
   });
 

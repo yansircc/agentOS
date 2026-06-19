@@ -78,6 +78,7 @@ describe("emitEvent — substrate now-write primitive", () => {
       "quota.consumed",
       "llm.response",
       "tool.executed",
+      "runtime.completed_after_tools",
       "quota.exceeded",
       "resource_pool.granted",
     ];
