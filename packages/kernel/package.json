@@ -62,6 +62,10 @@
       "types": "./src/ref-resolver.ts",
       "default": "./src/ref-resolver.ts"
     },
+    "./recorded-value": {
+      "types": "./src/recorded-value.ts",
+      "default": "./src/recorded-value.ts"
+    },
     "./runtime-scope": {
       "types": "./src/runtime-scope.ts",
       "default": "./src/runtime-scope.ts"

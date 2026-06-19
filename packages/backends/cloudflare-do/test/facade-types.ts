@@ -1,4 +1,5 @@
 import type { SubmitSpec } from "@agent-os/runtime-protocol";
+import { defineAgentBindings, defineAgentManifest } from "@agent-os/runtime-protocol";
 import { credentialMaterialRef } from "@agent-os/kernel/material-ref";
 import type { LlmTransport } from "@agent-os/llm-protocol";
 import type { RefResolverService } from "@agent-os/kernel/ref-resolver";
@@ -26,7 +27,24 @@ interface ProductRpc {
 const scheduleAt = 1_700_000_000_000;
 declare const llmTransport: (env: TestEnv) => Layer.Layer<LlmTransport, never, RefResolverService>;
 
+const typeTestManifest = defineAgentManifest({
+  agentId: "type-test.cloudflare-do",
+  scope: { kind: "conversation", idSource: "submit_scope" },
+  effectAuthorityRef: { authorityClass: "agent", authorityId: "type-test.cloudflare-do" },
+  handlers: [] as const,
+});
+
+const typeTestBindings = defineAgentBindings<never>({
+  handlers: {},
+});
+
+const typeTestMountConfig = {
+  manifest: typeTestManifest,
+  agentBindings: typeTestBindings,
+};
+
 defineAgentDO<TestEnv>({
+  ...typeTestMountConfig,
   projections: (env) => {
     void env.LLM_ENDPOINT;
     return [];
@@ -50,6 +68,18 @@ defineAgentDO<TestEnv>({
 });
 
 const LlmDO = defineAgentDO<TestEnv>({
+  manifest: defineAgentManifest({
+    agentId: "type-test.submit",
+    scope: { kind: "conversation", idSource: "submit_scope" },
+    effectAuthorityRef: { authorityClass: "agent", authorityId: "type-test.submit" },
+    handlers: ["user_message"] as const,
+    llmRoutes: { default: { bindingRef: "llm.default" } },
+  }),
+  agentBindings: defineAgentBindings<"user_message">({
+    handlers: {
+      user_message: () => ({ ok: true }),
+    },
+  }),
   bindings: [
     endpoint<TestEnv>("llm").from((env) => env.LLM_ENDPOINT),
     credential<TestEnv>("llm-key").from((env) => env.LLM_KEY),
@@ -106,8 +136,9 @@ const _objectDeliverSubmitSpec: AgentSubmitSpec = {
   deliver: "test.done",
 };
 
-const LowLevelDO = createAgentDurableObject<TestEnv>();
+const LowLevelDO = createAgentDurableObject<TestEnv>(typeTestMountConfig);
 createAgentDurableObject<TestEnv>({
+  ...typeTestMountConfig,
   projections: (env) => {
     void env.LLM_KEY;
     return [];
@@ -115,6 +146,9 @@ createAgentDurableObject<TestEnv>({
 });
 declare const lowLevelAgent: InstanceType<typeof LowLevelDO>;
 void lowLevelAgent.emitEvent({ event: "test.low", data: {} });
+void lowLevelAgent.submit(facadeSpec);
+// @ts-expect-error low-level submit uses authored AgentSubmitSpec, not raw SubmitSpec
+void lowLevelAgent.submit(fullSpec);
 // @ts-expect-error low-level clients do not expose facade emit alias
 void lowLevelAgent.emit("test.low", {});
 // @ts-expect-error low-level clients do not expose facade dispatch alias

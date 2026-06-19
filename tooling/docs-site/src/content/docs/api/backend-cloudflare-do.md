@@ -13,6 +13,7 @@ title: "@agent-os/backend-cloudflare-do Public API Intent"
 - `.:AgentEventHandlerRegistration`
 - `.:AgentRuntimeReaderClient`
 - `.:AgentRuntimeClient`
+- `.:AgentSubmitSpec`
 - `.:AgentWorkspaceJobSpec`
 - `.:AgentTriggerCancelSpec`
 - `.:AgentTriggerIntentSpec`

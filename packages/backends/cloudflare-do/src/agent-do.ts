@@ -71,7 +71,6 @@ import type {
   InternalSubmitSpec,
 } from "@agent-os/runtime";
 import type {
-  AgentBindings,
   AgentManifest,
   AgentManifestProjection,
   AgentSubmitBindings,
@@ -147,7 +146,11 @@ import { commitDurableTriggerIntent } from "./due-work";
 import type { CloudflareTriggerSource } from "./trigger-factory";
 import type { CloudflareAttachedStreamSource } from "./stream-factory";
 import { createAttachedStreamResponse } from "./attached-stream-wire";
-import { mountCloudflareAgent, type CloudflareAgentMount } from "./mount";
+import {
+  mountCloudflareAgent,
+  type CloudflareAgentBindings,
+  type CloudflareAgentMount,
+} from "./mount";
 import { commitLedgerTransaction } from "./ledger/commit";
 import {
   cloudflareDefaultTruthIdentityFromRoutingScope,
@@ -224,7 +227,7 @@ export interface AgentRuntimeClient extends AgentRuntimeReaderClient {
   ) => Promise<AttachedStreamCancelResult>;
   readonly dispatchToScope: (spec: DispatchToScopeSpec) => Promise<DispatchToScopeResult>;
   readonly scheduleEvent: (spec: ScheduledEventSpec) => Promise<{ id: number }>;
-  readonly submit: (spec: SubmitSpec) => Promise<SubmitResult>;
+  readonly submit: (spec: AgentSubmitSpec) => Promise<SubmitResult>;
   readonly runWorkspaceJob: (spec: AgentWorkspaceJobSpec) => Promise<WorkspaceJobProjection>;
 }
 
@@ -305,8 +308,8 @@ export interface AgentDurableObjectConfig<
   Env extends CloudflareAgentEnv,
   Runtime = AgentRuntimeClient,
 > {
-  readonly manifest?: AgentManifest;
-  readonly agentBindings?: AgentBindings;
+  readonly manifest: AgentManifest;
+  readonly agentBindings: CloudflareAgentBindings;
   readonly refResolver?: (env: Env) => RefResolver;
   readonly llmTransport?: (env: Env) => Layer.Layer<LlmTransport, never, RefResolverService>;
   readonly extensions?: (env: Env) => ReadonlyArray<ExtensionDeclaration>;
@@ -395,7 +398,7 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
   implements AgentRuntimeReaderClient
 {
   private readonly _handlers: Map<string, Set<EventHandler>> = new Map();
-  private readonly _mount: CloudflareAgentMount;
+  protected readonly _mount: CloudflareAgentMount;
   private readonly _refResolver: RefResolver;
   private readonly _llmTransport: Layer.Layer<LlmTransport, never, RefResolverService>;
   private readonly _extensionValidation: ExtensionValidation;
@@ -1254,7 +1257,7 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
 }
 
 export const createAgentDurableObject = <Env extends CloudflareAgentEnv>(
-  config: AgentDurableObjectConfig<Env> = {},
+  config: AgentDurableObjectConfig<Env>,
 ) =>
   class ConfiguredAgentDurableObject
     extends AgentDurableObject<Env, AgentRuntimeClient>
@@ -1278,8 +1281,8 @@ export const createAgentDurableObject = <Env extends CloudflareAgentEnv>(
       });
     }
 
-    submit(spec: SubmitSpec): Promise<SubmitResult> {
-      return this.submitFull(spec);
+    submit(spec: AgentSubmitSpec): Promise<SubmitResult> {
+      return this.submitWithBindings(spec, this._mount.driverConfig.bindings);
     }
 
     runWorkspaceJob(spec: AgentWorkspaceJobSpec): Promise<WorkspaceJobProjection> {

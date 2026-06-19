@@ -22,6 +22,7 @@ export type {
   AgentEventHandlerRegistration,
   AgentRuntimeClient,
   AgentRuntimeReaderClient,
+  AgentSubmitSpec,
   AgentWorkspaceJobSpec,
   AgentTriggerCancelSpec,
   AgentTriggerIntentSpec,

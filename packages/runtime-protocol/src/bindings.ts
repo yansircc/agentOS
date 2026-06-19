@@ -19,7 +19,7 @@ export type AgentHandlerBindings<K extends HandlerKind> = Readonly<
   Record<K, AgentHandler> & Partial<Record<HandlerKind, AgentHandler>>
 >;
 
-export interface AgentBindings<K extends HandlerKind = HandlerKind> {
+export interface AgentBindings<K extends HandlerKind = never> {
   readonly handlers: AgentHandlerBindings<K>;
   readonly llmRoutes?: Readonly<Record<string, LlmRoute>>;
   readonly tools?: Readonly<Record<string, Tool>>;

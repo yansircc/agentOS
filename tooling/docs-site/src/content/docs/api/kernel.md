@@ -31,6 +31,9 @@ title: "@agent-os/kernel Public API Intent"
 - `./authored-value:Authored`
 - `./authored-value:AuthoredValue`
 - `./authored-value:authoredValue`
+- `./recorded-value:Recorded`
+- `./recorded-value:RecordedValue`
+- `./recorded-value:recordedValue`
 - `./boundary-contract:BoundaryClaimPhase`
 - `./boundary-contract:BoundaryContract`
 - `./boundary-contract:BoundaryContractIssue`

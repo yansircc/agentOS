@@ -13,6 +13,7 @@ Status: Backend package. Public exports include the Durable Object factory, moun
 - `.:AgentEventHandlerRegistration`
 - `.:AgentRuntimeReaderClient`
 - `.:AgentRuntimeClient`
+- `.:AgentSubmitSpec`
 - `.:AgentWorkspaceJobSpec`
 - `.:AgentTriggerCancelSpec`
 - `.:AgentTriggerIntentSpec`

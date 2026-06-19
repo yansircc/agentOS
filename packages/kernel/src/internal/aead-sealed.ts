@@ -2,7 +2,7 @@ import { Data, Effect } from "effect";
 
 import type { MaterialRef } from "../material-ref";
 import type { Live, Recorded, RecordedPayload, RecordedPayloadValue } from "../value-brands";
-import { recordedPayload } from "../value-brands";
+import { recordedPayload, recordedValue } from "../value-brands";
 import { captureLive, openLive } from "./live-edge";
 
 export const AEAD_SEALED_KIND = "aead.sealed";
@@ -287,7 +287,7 @@ export const sealAead = (
       aad: cloneRecordedPayload(input.aad),
       ciphertext: encodeBase64Url(new Uint8Array(encrypted)),
     };
-    return { value: envelope } as RecordedSealedEnvelope;
+    return recordedValue(envelope) as RecordedSealedEnvelope;
   });
 
 export const openAead = (

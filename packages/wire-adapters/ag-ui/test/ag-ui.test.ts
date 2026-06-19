@@ -947,7 +947,13 @@ describe("@agent-os/ag-ui", () => {
         threadId: "thread-1",
         runId: "client-run-1",
         messages: [],
-        resume: [{ interruptId: "i1", status: "resolved", payload: { approved: true } }],
+        resume: [
+          {
+            interruptId: "i1",
+            status: "resolved",
+            payload: { kind: "approval", approved: true },
+          },
+        ],
       },
       {
         inputRequests: [{ request: approvalInputRequest, decisionRef: "decision:i1" }],

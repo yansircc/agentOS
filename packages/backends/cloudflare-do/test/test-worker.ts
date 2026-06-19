@@ -83,7 +83,11 @@ import {
   DISPATCH_EVENT_KINDS,
   dispatchTargetDelivered,
 } from "@agent-os/backend-protocol";
-import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
+import {
+  defineAgentBindings,
+  defineAgentManifest,
+  RUNTIME_FACT_OWNER,
+} from "@agent-os/runtime-protocol";
 import type { TelemetryFanoutDiagnostic } from "@agent-os/telemetry-protocol";
 import { CloudflareMaterializedProjectionsLive } from "../src/materialized-projections";
 import { commitLedgerTransaction } from "../src/ledger/commit";
@@ -95,6 +99,22 @@ import { findNextDue } from "../src/due-work";
 const allowToolAdmitter = () => Effect.succeed({ ok: true as const });
 
 export class TestAgentDO extends DurableObject {}
+
+const testAgentManifest = defineAgentManifest({
+  agentId: "test.cloudflare-do",
+  scope: { kind: "conversation", idSource: "submit_scope" },
+  effectAuthorityRef: { authorityClass: "agent", authorityId: "test.cloudflare-do" },
+  handlers: [] as const,
+});
+
+const testAgentBindings = defineAgentBindings<never>({
+  handlers: {},
+});
+
+const testAgentMountConfig = {
+  manifest: testAgentManifest,
+  agentBindings: testAgentBindings,
+};
 
 export const BACKEND_PROTOCOL_CONTRACT_BINDING_REF = bindingMaterialRef({
   provider: "cloudflare",
@@ -446,6 +466,7 @@ export class BackendProtocolContractTestDO extends DurableObject<BackendProtocol
 }
 
 export const EmitTestDO = createAgentDurableObject<CloudflareAgentEnv>({
+  ...testAgentMountConfig,
   eventHandlers: ({ runtime }) => [
     {
       kind: "interview.answer",
@@ -482,6 +503,7 @@ const dispatchBindingKey = (ref: string): string =>
   );
 
 export const DispatchTestDO = createAgentDurableObject<DispatchEnv>({
+  ...testAgentMountConfig,
   dispatchTargets: (env) => ({
     [dispatchBindingKey("peer")]: dispatchTarget(env),
     [dispatchBindingKey("dead")]: DEAD_TARGET,
@@ -552,6 +574,7 @@ const streamOwnerBoundaryContract = defineBoundaryContract({
 });
 
 export const StreamTestDO = createAgentDurableObject<CloudflareAgentEnv>({
+  ...testAgentMountConfig,
   extensions: () => [boundaryPackage(streamOwnerBoundaryContract, "0.1.0")],
   eventHandlers: ({ capabilities }) => [
     {
@@ -797,6 +820,7 @@ const extensionCommandHandlers = ({
 ];
 
 export const ExtensionTestDO = createAgentDurableObject<CloudflareAgentEnv>({
+  ...testAgentMountConfig,
   extensions: () => [
     eventNamespace({
       packageId: "@agent-os/image",
@@ -1129,7 +1153,32 @@ const facadeSubmitLlmTransport = Layer.succeed(LlmTransport, {
   },
 });
 
+const facadeSubmitManifest = defineAgentManifest({
+  agentId: "agent.cloudflare-do",
+  scope: { kind: "conversation", idSource: "submit_scope" },
+  effectAuthorityRef: { authorityClass: "agent", authorityId: "cloudflare-do" },
+  handlers: ["user_message"] as const,
+  llmRoutes: {
+    default: { bindingRef: "llm.default" },
+  },
+  tools: {
+    lookup: { bindingRef: "tool.lookup" },
+    apply: { bindingRef: "tool.apply" },
+    intent: { bindingRef: "tool.intent" },
+    write_first: { bindingRef: "tool.write_first" },
+    write_second: { bindingRef: "tool.write_second" },
+  },
+});
+
+const facadeSubmitAgentBindings = defineAgentBindings<"user_message">({
+  handlers: {
+    user_message: () => ({ ok: true }),
+  },
+});
+
 export const FacadeSubmitTestDO = defineAgentDO<CloudflareAgentEnv>({
+  manifest: facadeSubmitManifest,
+  agentBindings: facadeSubmitAgentBindings,
   bindings: [
     endpoint<CloudflareAgentEnv>("llm").from(() => "https://stub.openai.test/v1"),
     credential<CloudflareAgentEnv>("llm-key").from(() => "stub-key"),
@@ -1258,12 +1307,14 @@ const canonicalTxTrigger = {
 } satisfies DurableTrigger<FoldIntent, FoldIntent>;
 
 export const TriggerFacadeTestDO = defineAgentDO<CloudflareAgentEnv>({
+  ...testAgentMountConfig,
   bindings: [],
   triggers: [foldTrigger, canonicalTxTrigger],
 });
 export type TriggerFacadeTestDO = InstanceType<typeof TriggerFacadeTestDO>;
 
 export const TriggerFactoryErrorTestDO = defineAgentDO<CloudflareAgentEnv>({
+  ...testAgentMountConfig,
   bindings: [],
   triggers: () => {
     JSON.parse("{");
@@ -1284,6 +1335,7 @@ const parseBoundaryIntent = (raw: unknown) => {
 };
 
 export const TriggerBoundaryTestDO = defineAgentDO<CloudflareAgentEnv>({
+  ...testAgentMountConfig,
   bindings: [],
   triggers: (ctx) => {
     ctx.sql.exec("CREATE TABLE IF NOT EXISTS test_projection (label TEXT NOT NULL)");
@@ -1356,6 +1408,7 @@ const chainTrigger = {
 
 export const TriggerTestingDrainTestDO = withAgentDOTestingDrain(
   defineAgentDO<CloudflareAgentEnv>({
+    ...testAgentMountConfig,
     bindings: [],
     triggers: [chainTrigger],
   }),
@@ -1388,6 +1441,7 @@ const acquireCancelled = (
 
 export const TriggerCancelTestDO = withAgentDOTestingDrain(
   defineAgentDO<CloudflareAgentEnv>({
+    ...testAgentMountConfig,
     bindings: [],
     triggers: (ctx) => {
       ctx.sql.exec(`
@@ -1632,6 +1686,7 @@ const attachedCancellable = {
 } satisfies AttachedStreamHandler<unknown, unknown>;
 
 export const AttachedStreamTestDO = defineAgentDO<CloudflareAgentEnv>({
+  ...testAgentMountConfig,
   bindings: [],
   streams: [attachedEcho, attachedOutput, attachedCanonicalTx, attachedCancellable],
 });
@@ -1679,6 +1734,7 @@ const materializedRunFailingRebuildProjection = defineProjection({
 });
 
 const MaterializedProjectionBaseDO = defineAgentDO<CloudflareAgentEnv>({
+  ...testAgentMountConfig,
   bindings: [],
   projections: [materializedRunProjection],
 });

@@ -7,12 +7,7 @@ import type {
   HandlerKind,
   MountedAgent,
 } from "@agent-os/runtime-protocol";
-import {
-  defineAgentBindings,
-  defineAgentManifest,
-  mountAgent,
-  projectAgentManifest,
-} from "@agent-os/runtime-protocol";
+import { mountAgent, projectAgentManifest } from "@agent-os/runtime-protocol";
 
 export interface CloudflareAgentMountPort {
   readonly backend: "cloudflare-do";
@@ -30,12 +25,14 @@ export const cloudflareAgentMountPort: CloudflareAgentMountPort = {
 
 export interface CloudflareAgentDriverConfig {
   readonly manifest: AgentManifest;
-  readonly bindings: Omit<AgentBindings<never>, "handlers"> & {
-    readonly handlers: Readonly<Partial<Record<HandlerKind, AgentHandler>>>;
-  };
+  readonly bindings: CloudflareAgentBindings;
   readonly port: CloudflareAgentMountPort;
   readonly warnings: ReadonlyArray<AgentMountWarning>;
 }
+
+export type CloudflareAgentBindings = Omit<AgentBindings<never>, "handlers"> & {
+  readonly handlers: Readonly<Partial<Record<HandlerKind, AgentHandler>>>;
+};
 
 export interface CloudflareAgentProjectionSinks {
   readonly info: AgentManifestProjection;
@@ -46,24 +43,13 @@ export interface CloudflareAgentMount {
   readonly projectionSinks: CloudflareAgentProjectionSinks;
 }
 
-export const defaultCloudflareAgentManifest = defineAgentManifest({
-  agentId: "agent.cloudflare-do",
-  scope: { kind: "conversation", idSource: "submit_scope" },
-  effectAuthorityRef: { authorityClass: "agent", authorityId: "cloudflare-do" },
-  handlers: [] as const,
-});
-
-const defaultCloudflareAgentBindings = defineAgentBindings<never>({
-  handlers: {},
-});
-
-export const mountCloudflareAgent = <K extends HandlerKind = never>(
-  manifest: AgentManifest<K> = defaultCloudflareAgentManifest as AgentManifest<K>,
-  bindings: AgentBindings<K> = defaultCloudflareAgentBindings as AgentBindings<K>,
+export const mountCloudflareAgent = (
+  manifest: AgentManifest,
+  bindings: CloudflareAgentBindings,
 ): CloudflareAgentMount => {
-  const mounted: MountedAgent<K, CloudflareAgentMountPort> = mountAgent(
-    manifest,
-    bindings,
+  const mounted: MountedAgent<HandlerKind, CloudflareAgentMountPort> = mountAgent(
+    manifest as AgentManifest<HandlerKind>,
+    bindings as AgentBindings<HandlerKind>,
     cloudflareAgentMountPort,
   );
   return {

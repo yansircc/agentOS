@@ -2,13 +2,7 @@ import type { ExtensionDeclaration } from "@agent-os/kernel/extensions";
 import type { ScopeRef } from "@agent-os/kernel/effect-claim";
 import type { DispatchToScopeResult, DispatchToScopeSpec } from "@agent-os/kernel/types";
 import type { AttachedStreamCancelResult, TriggerCancelResult } from "@agent-os/runtime";
-import {
-  defineAgentBindings,
-  defineAgentManifest,
-  type AgentBindings,
-  type AgentManifest,
-  type SubmitResult,
-} from "@agent-os/runtime-protocol";
+import { type AgentManifest, type SubmitResult } from "@agent-os/runtime-protocol";
 import type { LlmTransport } from "@agent-os/llm-protocol";
 import type { RefResolverService } from "@agent-os/kernel/ref-resolver";
 import type { Layer } from "effect";
@@ -27,7 +21,7 @@ import {
   type CloudflareAgentEnv,
   type MaterializedAgentConfig,
 } from "./agent-do";
-import { defaultCloudflareAgentManifest, mountCloudflareAgent } from "./mount";
+import { mountCloudflareAgent, type CloudflareAgentBindings } from "./mount";
 import type { CloudflareTriggerSource } from "./trigger-factory";
 import type { CloudflareAttachedStreamSource } from "./stream-factory";
 import { MissingLlmTransportLive } from "./llm";
@@ -85,8 +79,8 @@ interface DefineAgentDOConfigBase<
   Env extends CloudflareAgentEnv,
   Runtime extends AgentFacadeRuntimeClient,
 > extends Omit<AgentLoweringConfig<Env>, "llms"> {
-  readonly manifest?: AgentManifest;
-  readonly agentBindings?: AgentBindings;
+  readonly manifest: AgentManifest;
+  readonly agentBindings: CloudflareAgentBindings;
   readonly llmTransport?: (env: Env) => Layer.Layer<LlmTransport, never, RefResolverService>;
   readonly on?: Readonly<Record<string, AgentOnHandler<Env, Runtime>>>;
   readonly extensions?:
@@ -139,57 +133,11 @@ const projectionsFor = <Env extends CloudflareAgentEnv>(
   env: Env,
 ) => (typeof projections === "function" ? projections(env) : (projections ?? []));
 
-const facadeSubmitAgentBindings = defineAgentBindings<"user_message">({
-  handlers: {
-    user_message: () => ({ ok: true }),
-  },
-});
-
-const hasRecordEntries = (record: Readonly<Record<string, unknown>>): boolean =>
-  Object.keys(record).length > 0;
-
-const llmRouteManifestRefs = (
-  bindings: LoweredAgentConfigWithSubmit["submitBindings"],
-): Record<string, { readonly bindingRef: string }> =>
-  Object.fromEntries(
-    Object.keys(bindings.llmRoutes ?? {}).map((id) => [id, { bindingRef: `llm.${id}` }]),
-  );
-
-const toolManifestRefs = <Env extends CloudflareAgentEnv>(
-  tools: AgentLoweringConfig<Env>["tools"],
-): Record<string, { readonly bindingRef: string }> =>
-  Object.fromEntries(
-    (tools ?? []).map((tool) => {
-      const name = tool.definition.function.name;
-      return [name, { bindingRef: `tool.${name}` }];
-    }),
-  );
-
 const mountForConfig = <Env extends CloudflareAgentEnv, Runtime extends AgentFacadeRuntimeClient>(
   config: DefineAgentDOConfigBase<Env, Runtime>,
-  lowered: LoweredAgentConfig,
+  _lowered: LoweredAgentConfig,
 ) => {
-  if (config.manifest !== undefined) {
-    return mountCloudflareAgent(config.manifest, config.agentBindings);
-  }
-  const tools = toolManifestRefs(config.tools);
-  if (lowered.submitBindings === null) {
-    const manifest = defineAgentManifest({
-      ...defaultCloudflareAgentManifest,
-      handlers: [] as const,
-      ...(hasRecordEntries(tools) ? { tools } : {}),
-    });
-    return mountCloudflareAgent(manifest);
-  }
-
-  const llmRoutes = llmRouteManifestRefs(lowered.submitBindings);
-  const manifest = defineAgentManifest({
-    ...defaultCloudflareAgentManifest,
-    handlers: ["user_message"] as const,
-    ...(hasRecordEntries(llmRoutes) ? { llmRoutes } : {}),
-    ...(hasRecordEntries(tools) ? { tools } : {}),
-  });
-  return mountCloudflareAgent(manifest, facadeSubmitAgentBindings);
+  return mountCloudflareAgent(config.manifest, config.agentBindings);
 };
 
 const eventHandlersFor = <Env extends CloudflareAgentEnv, Runtime extends AgentFacadeRuntimeClient>(

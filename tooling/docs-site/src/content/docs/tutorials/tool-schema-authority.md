@@ -36,9 +36,7 @@ material, execution domain, interaction, and receipt policy declarations.
 
    ```json
    {
-     "kind": "external-service",
-     "ref": "weather",
-     "access": "read"
+     "bindingRef": "workspace.readonly"
    }
    ```
 
@@ -46,8 +44,7 @@ material, execution domain, interaction, and receipt policy declarations.
 
    ```json
    {
-     "kind": "approval",
-     "reason": "external weather lookup"
+     "bindingRef": "approval.required"
    }
    ```
 

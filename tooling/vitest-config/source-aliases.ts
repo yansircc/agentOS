@@ -14,6 +14,7 @@ export const agentOsSourceAliasSpecs = [
   ["@agent-os/kernel/quota", "packages/kernel/src/quota.ts"],
   ["@agent-os/kernel/projection", "packages/kernel/src/projection.ts"],
   ["@agent-os/kernel/ref-resolver", "packages/kernel/src/ref-resolver.ts"],
+  ["@agent-os/kernel/recorded-value", "packages/kernel/src/recorded-value.ts"],
   ["@agent-os/kernel/runtime-scope", "packages/kernel/src/runtime-scope.ts"],
   ["@agent-os/kernel/settlement-contract", "packages/kernel/src/settlement-contract.ts"],
   ["@agent-os/kernel/tools", "packages/kernel/src/tools.ts"],

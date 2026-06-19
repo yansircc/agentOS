@@ -558,17 +558,6 @@ const selectedForwardedProps = (
   return selected;
 };
 
-const unknownObject = (value: unknown): Readonly<Record<string, unknown>> | undefined =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Readonly<Record<string, unknown>>)
-    : undefined;
-
-const payloadWithRuntimeKind = (kind: InputRequestDescriptor["kind"], value: unknown): unknown => {
-  const record = unknownObject(value);
-  if (record === undefined || record.kind !== undefined) return value;
-  return { kind, ...record };
-};
-
 const singleResumeEntry = (
   resume: ReadonlyArray<NonNullable<AgUiRunAgentInput["resume"]>[number]>,
 ): NonNullable<AgUiRunAgentInput["resume"]>[number] | undefined => {
@@ -607,10 +596,7 @@ const submitResumeForAgUiInput = (
     );
   }
   const binding = inputRequestBindingFor(defaults.inputRequests, entry.interruptId);
-  const parsed = parseInputRequestResumePayload(
-    binding.request.kind,
-    payloadWithRuntimeKind(binding.request.kind, entry.payload),
-  );
+  const parsed = parseInputRequestResumePayload(binding.request.kind, entry.payload);
   if (!parsed.ok) {
     throw new TypeError(`AG-UI resume input failed InputRequest contract: ${parsed.reason}`);
   }

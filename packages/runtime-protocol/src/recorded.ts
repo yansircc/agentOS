@@ -1,14 +1,7 @@
-import type { Recorded } from "@agent-os/kernel";
+import { recordedValue, type RecordedValue } from "@agent-os/kernel/recorded-value";
 
-export type RuntimeProtocolRecorded<T extends object> = T & Recorded<T>;
+export type RuntimeProtocolRecorded<T extends object> = RecordedValue<T>;
 
 export const recordRuntimeProtocolValue = <T extends object>(
   value: T,
-): RuntimeProtocolRecorded<T> => {
-  const recorded = { ...value } as T & { readonly value: T };
-  Object.defineProperty(recorded, "value", {
-    value,
-    enumerable: false,
-  });
-  return recorded as RuntimeProtocolRecorded<T>;
-};
+): RuntimeProtocolRecorded<T> => recordedValue(value);

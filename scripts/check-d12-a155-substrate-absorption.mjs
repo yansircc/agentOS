@@ -59,7 +59,7 @@ const requiredTerms = [
   },
   {
     file: "packages/backends/cloudflare-do/src/facade.ts",
-    terms: ["readonly manifest?: AgentManifest", "readonly agentBindings?: AgentBindings"],
+    terms: ["readonly manifest: AgentManifest", "readonly agentBindings: CloudflareAgentBindings"],
   },
   {
     file: "packages/runtime/src/projection.ts",
@@ -148,6 +148,10 @@ const obsoletePatterns = [
   /context\.emitIntent/u,
   /_submitDefaults/u,
   /submitWithDefaults/u,
+  /defaultCloudflareAgentManifest/u,
+  /llmRouteManifestRefs/u,
+  /toolManifestRefs/u,
+  /facadeSubmitAgentBindings/u,
   /@agent-os\/kernel\/(?:llm|trace-context)/u,
 ];
 

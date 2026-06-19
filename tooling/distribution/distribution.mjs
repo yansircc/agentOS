@@ -127,6 +127,8 @@ const publicSpecifier = (specifier) => {
   return `${publishScope()}${specifier.slice(sourcePackageScope.length)}`;
 };
 
+const rewritePublicSpecifiers = (text) => text.replaceAll(sourcePackageScope, publishScope());
+
 const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 
 const packageVersion = () => packageVersionOverride ?? releaseVersion();
@@ -623,8 +625,26 @@ const copyPackageDocs = (record) => {
   for (const name of ["README.md", "PUBLIC_API.md"]) {
     const source = path.join(record.packageDir, name);
     if (fs.existsSync(source)) {
-      fs.copyFileSync(source, path.join(record.stageDir, name));
+      fs.writeFileSync(
+        path.join(record.stageDir, name),
+        rewritePublicSpecifiers(fs.readFileSync(source, "utf8")),
+      );
     }
+  }
+};
+
+const assertStagedPackageDocsUsePublicScope = () => {
+  const offenders = [];
+  for (const record of publishedRecords()) {
+    for (const name of ["README.md", "PUBLIC_API.md"]) {
+      const file = path.join(record.stageDir, name);
+      if (!fs.existsSync(file)) continue;
+      const text = fs.readFileSync(file, "utf8");
+      if (text.includes(`${sourcePackageScope}/`)) offenders.push(path.relative(root, file));
+    }
+  }
+  if (offenders.length > 0) {
+    fail(`staged package docs contain source package scope:\n${offenders.join("\n")}`);
   }
 };
 
@@ -640,6 +660,7 @@ const buildInternalPackages = () => {
     copyPackageDocs(record);
     writeJson(path.join(record.stageDir, "package.json"), generatedManifest(record));
   }
+  assertStagedPackageDocsUsePublicScope();
   console.log(`built ${publishedRecords().length} internal npm package projections`);
 };
 
@@ -1026,8 +1047,18 @@ const writeConsumerApp = (dir, extraDeps = {}) => {
   fs.writeFileSync(
     path.join(dir, "cf-entry.ts"),
     [
+      `import { compileAgentTree } from "${publicSpecifier("@agent-os/agent-authoring")}";`,
       `import { createAgentDurableObject } from "${publicSpecifier("@agent-os/backend-cloudflare-do")}";`,
-      "export const AgentDO = createAgentDurableObject({ bindings: [] });",
+      `import { defineAgentBindings } from "${publicSpecifier("@agent-os/runtime-protocol")}";`,
+      "const compiled = compileAgentTree({",
+      "  files: [{ path: 'agent/instructions.md', kind: 'markdown', text: 'Say hello.' }],",
+      "});",
+      "if (!compiled.ok) throw new Error(JSON.stringify(compiled.issues));",
+      "const agentBindings = defineAgentBindings<never>({ handlers: {} });",
+      "export const AgentDO = createAgentDurableObject({",
+      "  manifest: compiled.value.manifest,",
+      "  agentBindings,",
+      "});",
     ].join("\n") + "\n",
   );
   writeJson(path.join(dir, "tsconfig.nodenext.json"), {
@@ -1039,7 +1070,7 @@ const writeConsumerApp = (dir, extraDeps = {}) => {
       skipLibCheck: true,
       types: ["@cloudflare/workers-types"],
     },
-    include: ["index.ts"],
+    include: ["index.ts", "cf-entry.ts"],
   });
   writeJson(path.join(dir, "tsconfig.bundler.json"), {
     compilerOptions: {
@@ -1050,7 +1081,7 @@ const writeConsumerApp = (dir, extraDeps = {}) => {
       skipLibCheck: true,
       types: ["@cloudflare/workers-types"],
     },
-    include: ["index.ts"],
+    include: ["index.ts", "cf-entry.ts"],
   });
 };
 

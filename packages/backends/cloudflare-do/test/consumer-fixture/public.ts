@@ -14,6 +14,7 @@ import {
   durableObjectRpcClient,
   type DurableObjectRpcClient,
 } from "@agent-os/backend-cloudflare-do/do-rpc";
+import { defineAgentBindings, defineAgentManifest } from "@agent-os/runtime-protocol";
 import { triggerParseOk, type TriggerTx } from "@agent-os/runtime";
 import { Effect } from "effect";
 import { ToolError } from "@agent-os/kernel/errors";
@@ -36,6 +37,15 @@ const trigger = {
 };
 
 export const FixtureDO = createAgentDurableObject<CloudflareAgentEnv>({
+  manifest: defineAgentManifest({
+    agentId: "fixture.cloudflare-do",
+    scope: { kind: "conversation", idSource: "submit_scope" },
+    effectAuthorityRef: { authorityClass: "agent", authorityId: "fixture.cloudflare-do" },
+    handlers: [] as const,
+  }),
+  agentBindings: defineAgentBindings<never>({
+    handlers: {},
+  }),
   triggers: [trigger],
 });
 

@@ -1,6 +1,7 @@
 import type { Authored } from "@agent-os/kernel";
+import { isAgentSchema } from "@agent-os/kernel/agent-schema";
 import { authoredValue } from "@agent-os/kernel/authored-value";
-import type { AuthorityRef } from "@agent-os/kernel/effect-claim";
+import { isAuthorityRef, type AuthorityRef } from "@agent-os/kernel/effect-claim";
 import { isMaterialRef, type MaterialRef } from "@agent-os/kernel/material-ref";
 import type { AgentSchemaSpec } from "@agent-os/kernel/agent-schema";
 import type {
@@ -11,8 +12,8 @@ import type {
   AgentManifest,
   AgentScopeIdentityPolicy,
   AgentToolBindingRef,
-  HandlerKind,
 } from "@agent-os/runtime-protocol";
+import { BUILTIN_HANDLER_KINDS, type HandlerKind } from "@agent-os/runtime-protocol";
 
 export const AUTHORING_DEFAULTS_VERSION = "framework-defaults@agentos/v1" as const;
 
@@ -105,6 +106,12 @@ export type CompileAgentTreeIssue =
   | { readonly kind: "missing_required_file"; readonly path: "agent/instructions.md" }
   | { readonly kind: "empty_instructions"; readonly path: string }
   | { readonly kind: "invalid_json_file"; readonly path: string; readonly reason: string }
+  | {
+      readonly kind: "invalid_authored_value";
+      readonly path: string;
+      readonly field: string;
+      readonly reason: string;
+    }
   | { readonly kind: "unknown_field"; readonly path: string; readonly field: string }
   | {
       readonly kind: "identity_field_forbidden";
@@ -150,6 +157,202 @@ const pathOrigin = (path: string): AgentManifestOrigin => `path:${authoredPath(p
 
 const isRecord = (value: unknown): value is JsonRecord =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+const isNonEmptyString = (value: unknown): value is string =>
+  typeof value === "string" && value.length > 0;
+
+const isManifestMapId = (value: string): boolean =>
+  value.length > 0 && !value.includes("/") && value !== "." && value !== "..";
+
+const isExtensionHandlerKind = (value: string): boolean => {
+  const separator = value.indexOf(".");
+  return separator > 0 && separator < value.length - 1;
+};
+
+const isHandlerKind = (value: unknown): value is HandlerKind =>
+  typeof value === "string" &&
+  ((BUILTIN_HANDLER_KINDS as ReadonlyArray<string>).includes(value) ||
+    isExtensionHandlerKind(value));
+
+const invalidAuthoredValue = (
+  state: CompilerState,
+  path: string,
+  field: string,
+  reason: string,
+): void => {
+  state.issues.push({ kind: "invalid_authored_value", path, field, reason });
+};
+
+const parseStringField = (
+  state: CompilerState,
+  path: string,
+  field: string,
+  value: unknown,
+): string | null => {
+  if (!isNonEmptyString(value)) {
+    invalidAuthoredValue(state, path, field, "non_empty_string_required");
+    return null;
+  }
+  return value;
+};
+
+const parseOptionalStringField = (
+  state: CompilerState,
+  path: string,
+  field: string,
+  value: unknown,
+): string | undefined => {
+  if (value === undefined) return undefined;
+  return parseStringField(state, path, field, value) ?? undefined;
+};
+
+const parseStringArrayField = (
+  state: CompilerState,
+  path: string,
+  field: string,
+  value: unknown,
+): ReadonlyArray<string> | null => {
+  if (!Array.isArray(value)) {
+    invalidAuthoredValue(state, path, field, "array_required");
+    return null;
+  }
+  const out: string[] = [];
+  for (let index = 0; index < value.length; index += 1) {
+    const item = parseStringField(state, path, `${field}[${index}]`, value[index]);
+    if (item !== null) out.push(item);
+  }
+  return out;
+};
+
+const parseHandlers = (
+  state: CompilerState,
+  path: string,
+  value: unknown,
+): ReadonlyArray<HandlerKind> | null => {
+  if (!Array.isArray(value)) {
+    invalidAuthoredValue(state, path, "/handlers", "array_required");
+    return null;
+  }
+  const handlers: HandlerKind[] = [];
+  for (let index = 0; index < value.length; index += 1) {
+    const item = value[index];
+    if (!isHandlerKind(item)) {
+      invalidAuthoredValue(state, path, `/handlers/${index}`, "handler_kind_invalid");
+      continue;
+    }
+    handlers.push(item);
+  }
+  return handlers;
+};
+
+const parseScope = (
+  state: CompilerState,
+  path: string,
+  value: unknown,
+): AgentScopeIdentityPolicy | null => {
+  if (!isRecord(value)) {
+    invalidAuthoredValue(state, path, "/scope", "object_required");
+    return null;
+  }
+  assertAllowedFields(state, path, value, new Set(["kind", "idSource", "stableScopeId"]));
+  const kind = value.kind;
+  if (
+    kind !== "conversation" &&
+    kind !== "extension" &&
+    kind !== "tenant" &&
+    kind !== "workspace"
+  ) {
+    invalidAuthoredValue(state, path, "/scope/kind", "scope_kind_invalid");
+    return null;
+  }
+  const idSource = value.idSource;
+  if (idSource !== "submit_scope" && idSource !== "manifest" && idSource !== "extension") {
+    invalidAuthoredValue(state, path, "/scope/idSource", "scope_id_source_invalid");
+    return null;
+  }
+  const stableScopeId = parseOptionalStringField(
+    state,
+    path,
+    "/scope/stableScopeId",
+    value.stableScopeId,
+  );
+  return {
+    kind,
+    idSource,
+    ...(stableScopeId === undefined ? {} : { stableScopeId }),
+  };
+};
+
+const parseBindingRefObject = <A extends { readonly bindingRef: string }>(
+  state: CompilerState,
+  path: string,
+  field: string,
+  value: unknown,
+): A | null => {
+  if (!isRecord(value)) {
+    invalidAuthoredValue(state, path, field, "object_required");
+    return null;
+  }
+  assertAllowedFields(state, path, value, new Set(["bindingRef"]));
+  const bindingRef = parseStringField(state, path, `${field}/bindingRef`, value.bindingRef);
+  return bindingRef === null ? null : ({ bindingRef } as A);
+};
+
+const parseRecordMap = <A>(
+  state: CompilerState,
+  path: string,
+  field: string,
+  value: unknown,
+  parse: (id: string, child: unknown) => A | null,
+): Readonly<Record<string, A>> | null => {
+  if (!isRecord(value)) {
+    invalidAuthoredValue(state, path, field, "object_required");
+    return null;
+  }
+  const out: Record<string, A> = {};
+  for (const [id, child] of Object.entries(value)) {
+    if (!isManifestMapId(id)) {
+      invalidAuthoredValue(state, path, `${field}/${id}`, "id_invalid");
+      continue;
+    }
+    const parsed = parse(id, child);
+    if (parsed !== null) out[id] = parsed;
+  }
+  return out;
+};
+
+const parseMaterialRef = (
+  state: CompilerState,
+  path: string,
+  field: string,
+  value: unknown,
+): MaterialRef | null => {
+  if (!isMaterialRef(value)) {
+    invalidAuthoredValue(state, path, field, "material_ref_invalid");
+    return null;
+  }
+  return value;
+};
+
+const parseOutputSchema = (
+  state: CompilerState,
+  path: string,
+  value: unknown,
+): AgentSchemaSpec | null => {
+  if (!isRecord(value)) {
+    invalidAuthoredValue(state, path, "/outputSchema", "object_required");
+    return null;
+  }
+  assertAllowedFields(state, path, value, new Set(["agentSchema", "fingerprint"]));
+  if (!isAgentSchema(value.agentSchema) || !isNonEmptyString(value.fingerprint)) {
+    invalidAuthoredValue(state, path, "/outputSchema", "agent_schema_spec_invalid");
+    return null;
+  }
+  return {
+    agentSchema: value.agentSchema,
+    fingerprint: value.fingerprint,
+  };
+};
 
 const hasFunction = (value: unknown, seen = new Set<object>()): boolean => {
   if (typeof value === "function") return true;
@@ -361,46 +564,58 @@ const recordToolFacts = (
   }
   assertAllowedFields(state, path, declarationRecord, toolAllowedFields);
   assertNoRuntimeFactFields(state, path, declarationRecord);
+  const bindingRef = parseOptionalStringField(state, path, "/bindingRef", declaration.bindingRef);
+  const executionDomain = parseOptionalStringField(
+    state,
+    path,
+    "/executionDomain",
+    declaration.executionDomain,
+  );
+  const interaction = parseOptionalStringField(
+    state,
+    path,
+    "/interaction",
+    declaration.interaction,
+  );
+  const materialRefs =
+    declaration.materialRefs === undefined
+      ? undefined
+      : parseStringArrayField(state, path, "/materialRefs", declaration.materialRefs);
+  const effects =
+    declaration.effects === undefined
+      ? undefined
+      : parseStringArrayField(state, path, "/effects", declaration.effects);
+  const receiptPolicy = parseOptionalStringField(
+    state,
+    path,
+    "/receiptPolicy",
+    declaration.receiptPolicy,
+  );
   putAuthored(
     state,
     `/tools/${toolId}/bindingRef`,
-    declaration.bindingRef ?? `tool.${toolId}`,
-    declaration.bindingRef === undefined ? pathOrigin(path) : originFor("bindingRef"),
+    bindingRef ?? `tool.${toolId}`,
+    bindingRef === undefined ? pathOrigin(path) : originFor("bindingRef"),
   );
-  if (declaration.executionDomain !== undefined) {
+  if (executionDomain !== undefined) {
     putAuthored(
       state,
       `/tools/${toolId}/executionDomain`,
-      declaration.executionDomain,
+      executionDomain,
       originFor("executionDomain"),
     );
   }
-  if (declaration.interaction !== undefined) {
-    putAuthored(
-      state,
-      `/tools/${toolId}/interaction`,
-      declaration.interaction,
-      originFor("interaction"),
-    );
+  if (interaction !== undefined) {
+    putAuthored(state, `/tools/${toolId}/interaction`, interaction, originFor("interaction"));
   }
-  if (declaration.materialRefs !== undefined) {
-    putAuthored(
-      state,
-      `/tools/${toolId}/materialRefs`,
-      declaration.materialRefs,
-      originFor("materialRefs"),
-    );
+  if (materialRefs !== undefined) {
+    putAuthored(state, `/tools/${toolId}/materialRefs`, materialRefs, originFor("materialRefs"));
   }
-  if (declaration.effects !== undefined) {
-    putAuthored(state, `/tools/${toolId}/effects`, declaration.effects, originFor("effects"));
+  if (effects !== undefined) {
+    putAuthored(state, `/tools/${toolId}/effects`, effects, originFor("effects"));
   }
-  if (declaration.receiptPolicy !== undefined) {
-    putAuthored(
-      state,
-      `/tools/${toolId}/receiptPolicy`,
-      declaration.receiptPolicy,
-      originFor("receiptPolicy"),
-    );
+  if (receiptPolicy !== undefined) {
+    putAuthored(state, `/tools/${toolId}/receiptPolicy`, receiptPolicy, originFor("receiptPolicy"));
   }
 };
 
@@ -411,25 +626,98 @@ const recordAgentJson = (state: CompilerState, path: string, value: unknown): vo
   }
   assertAllowedFields(state, path, value, agentAllowedFields);
   assertNoRuntimeFactFields(state, path, value);
-  const agent = value as AuthoredAgentJson;
-  if (agent.agentId !== undefined)
-    putAuthored(state, "/agentId", agent.agentId, authorOrigin(path, "/agentId"));
-  if (agent.version !== undefined)
-    putAuthored(state, "/version", agent.version, authorOrigin(path, "/version"));
-  if (agent.scope !== undefined)
-    putAuthored(state, "/scope", agent.scope, authorOrigin(path, "/scope"));
-  if (agent.effectAuthorityRef !== undefined) {
+  const agentId = parseOptionalStringField(state, path, "/agentId", value.agentId);
+  const version = parseOptionalStringField(state, path, "/version", value.version);
+  const scope = value.scope === undefined ? undefined : parseScope(state, path, value.scope);
+  const effectAuthorityRef =
+    value.effectAuthorityRef === undefined
+      ? undefined
+      : isAuthorityRef(value.effectAuthorityRef)
+        ? value.effectAuthorityRef
+        : null;
+  if (value.effectAuthorityRef !== undefined && effectAuthorityRef === null) {
+    invalidAuthoredValue(state, path, "/effectAuthorityRef", "authority_ref_invalid");
+  }
+  const handlers =
+    value.handlers === undefined ? undefined : parseHandlers(state, path, value.handlers);
+  const llmRoutes =
+    value.llmRoutes === undefined
+      ? undefined
+      : parseRecordMap<AgentLlmRouteBindingRef>(
+          state,
+          path,
+          "/llmRoutes",
+          value.llmRoutes,
+          (_route, child) =>
+            parseBindingRefObject<AgentLlmRouteBindingRef>(state, path, "/llmRoutes", child),
+        );
+  const outputSchema =
+    value.outputSchema === undefined
+      ? undefined
+      : parseOutputSchema(state, path, value.outputSchema);
+  const materials =
+    value.materials === undefined
+      ? undefined
+      : parseRecordMap<MaterialRef>(state, path, "/materials", value.materials, (_id, child) =>
+          parseMaterialRef(state, path, "/materials", child),
+        );
+  const executionDomains =
+    value.executionDomains === undefined
+      ? undefined
+      : parseRecordMap<AgentExecutionDomainRef>(
+          state,
+          path,
+          "/executionDomains",
+          value.executionDomains,
+          (_domainId, child) =>
+            parseBindingRefObject<AgentExecutionDomainRef>(state, path, "/executionDomains", child),
+        );
+  const interactions =
+    value.interactions === undefined
+      ? undefined
+      : parseRecordMap<AgentInteractionRef>(
+          state,
+          path,
+          "/interactions",
+          value.interactions,
+          (_interactionId, child) =>
+            parseBindingRefObject<AgentInteractionRef>(state, path, "/interactions", child),
+        );
+  const tools =
+    value.tools === undefined
+      ? undefined
+      : parseRecordMap<AuthoredToolDeclaration>(
+          state,
+          path,
+          "/tools",
+          value.tools,
+          (_toolId, child) => {
+            if (!isRecord(child)) {
+              invalidAuthoredValue(state, path, "/tools", "object_required");
+              return null;
+            }
+            return child as AuthoredToolDeclaration;
+          },
+        );
+  if (agentId !== undefined)
+    putAuthored(state, "/agentId", agentId, authorOrigin(path, "/agentId"));
+  if (version !== undefined)
+    putAuthored(state, "/version", version, authorOrigin(path, "/version"));
+  if (scope !== undefined && scope !== null) {
+    putAuthored(state, "/scope", scope, authorOrigin(path, "/scope"));
+  }
+  if (effectAuthorityRef !== undefined && effectAuthorityRef !== null) {
     putAuthored(
       state,
       "/effectAuthorityRef",
-      agent.effectAuthorityRef,
+      effectAuthorityRef,
       authorOrigin(path, "/effectAuthorityRef"),
     );
   }
-  if (agent.handlers !== undefined)
-    putAuthored(state, "/handlers", agent.handlers, authorOrigin(path, "/handlers"));
-  if (agent.llmRoutes !== undefined) {
-    for (const [route, ref] of Object.entries(agent.llmRoutes)) {
+  if (handlers !== undefined && handlers !== null)
+    putAuthored(state, "/handlers", handlers, authorOrigin(path, "/handlers"));
+  if (llmRoutes !== undefined && llmRoutes !== null) {
+    for (const [route, ref] of Object.entries(llmRoutes)) {
       putAuthored(
         state,
         `/llmRoutes/${route}/bindingRef`,
@@ -438,11 +726,11 @@ const recordAgentJson = (state: CompilerState, path: string, value: unknown): vo
       );
     }
   }
-  if (agent.outputSchema !== undefined) {
-    putAuthored(state, "/outputSchema", agent.outputSchema, authorOrigin(path, "/outputSchema"));
+  if (outputSchema !== undefined && outputSchema !== null) {
+    putAuthored(state, "/outputSchema", outputSchema, authorOrigin(path, "/outputSchema"));
   }
-  if (agent.materials !== undefined) {
-    for (const [materialId, materialRef] of Object.entries(agent.materials)) {
+  if (materials !== undefined && materials !== null) {
+    for (const [materialId, materialRef] of Object.entries(materials)) {
       putAuthored(
         state,
         `/materials/${materialId}`,
@@ -451,8 +739,8 @@ const recordAgentJson = (state: CompilerState, path: string, value: unknown): vo
       );
     }
   }
-  if (agent.executionDomains !== undefined) {
-    for (const [domainId, domainRef] of Object.entries(agent.executionDomains)) {
+  if (executionDomains !== undefined && executionDomains !== null) {
+    for (const [domainId, domainRef] of Object.entries(executionDomains)) {
       putAuthored(
         state,
         `/executionDomains/${domainId}/bindingRef`,
@@ -461,8 +749,8 @@ const recordAgentJson = (state: CompilerState, path: string, value: unknown): vo
       );
     }
   }
-  if (agent.interactions !== undefined) {
-    for (const [interactionId, interactionRef] of Object.entries(agent.interactions)) {
+  if (interactions !== undefined && interactions !== null) {
+    for (const [interactionId, interactionRef] of Object.entries(interactions)) {
       putAuthored(
         state,
         `/interactions/${interactionId}/bindingRef`,
@@ -471,8 +759,8 @@ const recordAgentJson = (state: CompilerState, path: string, value: unknown): vo
       );
     }
   }
-  if (agent.tools !== undefined) {
-    for (const [toolId, declaration] of Object.entries(agent.tools)) {
+  if (tools !== undefined && tools !== null) {
+    for (const [toolId, declaration] of Object.entries(tools)) {
       recordToolFacts(state, toolId, path, declaration, (field) =>
         authorOrigin(path, `/tools/${toolId}/${field}`),
       );
@@ -515,10 +803,13 @@ const recordJsonFile = (state: CompilerState, path: string, value: unknown): voi
         state.issues.push({ kind: "identity_field_forbidden", path, field: "kind" });
       }
       assertAllowedFields(state, path, value, domainAllowedFields);
+      const domainBindingRef = Object.prototype.hasOwnProperty.call(value, "bindingRef")
+        ? parseStringField(state, path, "/bindingRef", value.bindingRef)
+        : id;
       putAuthored(
         state,
         `/executionDomains/${id}/bindingRef`,
-        typeof value.bindingRef === "string" ? value.bindingRef : id,
+        domainBindingRef ?? id,
         Object.prototype.hasOwnProperty.call(value, "bindingRef")
           ? authorOrigin(path, "/bindingRef")
           : pathOrigin(path),
@@ -529,10 +820,13 @@ const recordJsonFile = (state: CompilerState, path: string, value: unknown): voi
         state.issues.push({ kind: "identity_field_forbidden", path, field: "kind" });
       }
       assertAllowedFields(state, path, value, interactionAllowedFields);
+      const interactionBindingRef = Object.prototype.hasOwnProperty.call(value, "bindingRef")
+        ? parseStringField(state, path, "/bindingRef", value.bindingRef)
+        : id;
       putAuthored(
         state,
         `/interactions/${id}/bindingRef`,
-        typeof value.bindingRef === "string" ? value.bindingRef : id,
+        interactionBindingRef ?? id,
         Object.prototype.hasOwnProperty.call(value, "bindingRef")
           ? authorOrigin(path, "/bindingRef")
           : pathOrigin(path),

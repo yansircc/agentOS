@@ -9,6 +9,7 @@
 - `.:AgentEventHandlerRegistration`
 - `.:AgentRuntimeReaderClient`
 - `.:AgentRuntimeClient`
+- `.:AgentSubmitSpec`
 - `.:AgentWorkspaceJobSpec`
 - `.:AgentTriggerCancelSpec`
 - `.:AgentTriggerIntentSpec`

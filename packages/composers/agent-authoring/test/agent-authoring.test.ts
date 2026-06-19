@@ -82,6 +82,140 @@ describe("agent authored tree compiler", () => {
     });
   });
 
+  it("rejects malformed agent.json value domains instead of casting them into manifest facts", () => {
+    const result = compileAgentTree({
+      files: [
+        { path: "instructions.md", kind: "markdown", text: "run" },
+        {
+          path: "agent.json",
+          kind: "json",
+          value: {
+            scope: { kind: "conversation", idSource: "bogus" },
+            effectAuthorityRef: { authorityId: "", authorityClass: 123 },
+            handlers: [123],
+            llmRoutes: { default: { bindingRef: 123 } },
+            materials: { weather: { kind: "credential", ref: "" } },
+            executionDomains: { workspace: { bindingRef: 123 } },
+            interactions: { approval: { bindingRef: 123 } },
+            tools: {
+              weather: {
+                bindingRef: 123,
+                materialRefs: ["weather", 1],
+                effects: ["network", 1],
+              },
+            },
+            outputSchema: { fingerprint: "not-a-schema" },
+          },
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) expect.fail("malformed agent.json compiled successfully");
+    expect(result.issues).toContainEqual({
+      kind: "invalid_authored_value",
+      path: "agent.json",
+      field: "/scope/idSource",
+      reason: "scope_id_source_invalid",
+    });
+    expect(result.issues).toContainEqual({
+      kind: "invalid_authored_value",
+      path: "agent.json",
+      field: "/effectAuthorityRef",
+      reason: "authority_ref_invalid",
+    });
+    expect(result.issues).toContainEqual({
+      kind: "invalid_authored_value",
+      path: "agent.json",
+      field: "/handlers/0",
+      reason: "handler_kind_invalid",
+    });
+    expect(result.issues).toContainEqual({
+      kind: "invalid_authored_value",
+      path: "agent.json",
+      field: "/llmRoutes/bindingRef",
+      reason: "non_empty_string_required",
+    });
+    expect(result.issues).toContainEqual({
+      kind: "invalid_authored_value",
+      path: "agent.json",
+      field: "/materials",
+      reason: "material_ref_invalid",
+    });
+    expect(result.issues).toContainEqual({
+      kind: "invalid_authored_value",
+      path: "agent.json",
+      field: "/executionDomains/bindingRef",
+      reason: "non_empty_string_required",
+    });
+    expect(result.issues).toContainEqual({
+      kind: "invalid_authored_value",
+      path: "agent.json",
+      field: "/interactions/bindingRef",
+      reason: "non_empty_string_required",
+    });
+    expect(result.issues).toContainEqual({
+      kind: "invalid_authored_value",
+      path: "agent.json",
+      field: "/bindingRef",
+      reason: "non_empty_string_required",
+    });
+    expect(result.issues).toContainEqual({
+      kind: "invalid_authored_value",
+      path: "agent.json",
+      field: "/materialRefs[1]",
+      reason: "non_empty_string_required",
+    });
+    expect(result.issues).toContainEqual({
+      kind: "invalid_authored_value",
+      path: "agent.json",
+      field: "/effects[1]",
+      reason: "non_empty_string_required",
+    });
+    expect(result.issues).toContainEqual({
+      kind: "invalid_authored_value",
+      path: "agent.json",
+      field: "/outputSchema",
+      reason: "agent_schema_spec_invalid",
+    });
+  });
+
+  it("rejects explicit non-string domain and interaction binding refs", () => {
+    const result = compileAgentTree({
+      files: [
+        { path: "instructions.md", kind: "markdown", text: "run" },
+        {
+          path: "domains/workspace.json",
+          kind: "json",
+          value: { bindingRef: 123 },
+        },
+        {
+          path: "interactions/approval.json",
+          kind: "json",
+          value: { bindingRef: "" },
+        },
+      ],
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      issues: [
+        {
+          kind: "invalid_authored_value",
+          path: "domains/workspace.json",
+          field: "/bindingRef",
+          reason: "non_empty_string_required",
+        },
+        {
+          kind: "invalid_authored_value",
+          path: "interactions/approval.json",
+          field: "/bindingRef",
+          reason: "non_empty_string_required",
+        },
+      ],
+    });
+  });
+
   it("rejects effectful tools instead of filling dangerous defaults", () => {
     const result = compileAgentTree({
       files: [
