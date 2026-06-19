@@ -13,9 +13,14 @@ submit code must not consume Effect AI response classes or provider-native JSON.
 
 ## Minimal Usage
 
-Provide `makeEffectAiLlmTransportLayer` with a `RefResolverService`. Provider
-endpoint and credential material are resolved inside the transport layer and
-must not appear in ledger facts, projections, logs, or public API payloads.
+For OpenAI-compatible chat-completions routes, provide
+`OpenAiCompatibleLlmTransportLive` with a `RefResolverService`. Provider endpoint
+and credential material are resolved inside the transport layer and must not
+appear in ledger facts, projections, logs, or public API payloads.
+
+`makeEffectAiLlmTransportLayer` remains the lower provider adapter for advanced
+Effect AI LanguageModel routes. It requires an HTTP client service and is not
+the direct Durable Object consumer surface.
 
 Toolkits generated for Effect AI always use
 `disableToolCallResolution: true`. Provider-executed tool calls or results fail

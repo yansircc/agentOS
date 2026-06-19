@@ -10,6 +10,7 @@ export const agentOsSourceAliasSpecs = [
   ["@agent-os/kernel/effect-claim", "packages/kernel/src/effect-claim.ts"],
   ["@agent-os/kernel/errors", "packages/kernel/src/errors.ts"],
   ["@agent-os/kernel/extensions", "packages/kernel/src/extensions.ts"],
+  ["@agent-os/kernel/live-edge", "packages/kernel/src/live-edge.ts"],
   ["@agent-os/kernel/material-ref", "packages/kernel/src/material-ref.ts"],
   ["@agent-os/kernel/quota", "packages/kernel/src/quota.ts"],
   ["@agent-os/kernel/projection", "packages/kernel/src/projection.ts"],

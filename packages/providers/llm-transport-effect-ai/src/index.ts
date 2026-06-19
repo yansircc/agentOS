@@ -20,6 +20,7 @@ import { dynamic as makeDynamicTool, type Any as AnyTool } from "effect/unstable
 import type { WithHandler as ToolkitWithHandler } from "effect/unstable/ai/Toolkit";
 import { AnthropicClient, make as makeAnthropicClient } from "@effect/ai-anthropic/AnthropicClient";
 import { make as makeAnthropicLanguageModel } from "@effect/ai-anthropic/AnthropicLanguageModel";
+import { FetchHttpClient } from "effect/unstable/http";
 import {
   HttpClient as HttpClientTag,
   type HttpClient as HttpClientService,
@@ -57,7 +58,7 @@ import {
   RefResolverService,
   type ResolvedMaterialService,
 } from "@agent-os/kernel/ref-resolver";
-import { openLive } from "../../../kernel/src/internal/live-edge";
+import { openLive } from "@agent-os/kernel/live-edge";
 import {
   ProviderHttpFailure,
   ProviderOutputDecodeError,
@@ -301,6 +302,18 @@ const resolveEffectAiRouteForTransport = (
   route: LlmRoute,
 ): Effect.Effect<EffectAiResolvedRoute, UpstreamFailure> =>
   resolveEffectAiRoute(route).pipe(Effect.mapError((cause) => new UpstreamFailure({ cause })));
+
+const resolveOpenAiChatCompatibleRouteForTransport = (
+  route: LlmRoute,
+): Effect.Effect<EffectAiResolvedRoute<OpenAiChatCompatibleRoute>, UpstreamFailure> =>
+  resolveEffectAiRoute(route).pipe(
+    Effect.flatMap((resolved) =>
+      resolved.route.kind === "openai-chat-compatible"
+        ? Effect.succeed({ route: resolved.route })
+        : Effect.fail(new EffectAiUnsupportedRoute({ kind: resolved.route.kind })),
+    ),
+    Effect.mapError((cause) => new UpstreamFailure({ cause })),
+  );
 
 const parseJsonOrText = (
   value: string | null,
@@ -765,10 +778,10 @@ const withStringMaterial = <A, E, R>(
     (handle) => handle.dispose(),
   );
 
-const withEffectAiLiveRoute = <A, E, R>(
+const withEffectAiLiveRoute = <Route extends EffectAiSupportedRoute, A, E, R>(
   refs: ResolvedMaterialService,
-  route: EffectAiSupportedRoute,
-  use: (resolved: EffectAiLiveRoute) => Effect.Effect<A, E, R>,
+  route: Route,
+  use: (resolved: EffectAiLiveRoute<Route>) => Effect.Effect<A, E, R>,
 ): Effect.Effect<A, E | RefResolutionFailed, R> =>
   withStringMaterial(refs, endpointMaterialRef(route.endpointRef), (endpoint) =>
     withStringMaterial(refs, credentialMaterialRef(route.credentialRef), (credential) =>
@@ -838,3 +851,53 @@ export const makeEffectAiLlmTransportLayer = <R>(
       };
     }),
   );
+
+/**
+ * OpenAI-compatible chat-completions provider for the provider-neutral
+ * {@link LlmTransport} port. Consumers provide material refs through
+ * `RefResolverService`; provider HTTP execution is owned by this package.
+ *
+ * @public
+ */
+export const makeOpenAiCompatibleLlmTransportLayer = (): Layer.Layer<
+  LlmTransport,
+  never,
+  RefResolverService | HttpClientService
+> =>
+  Layer.effect(
+    LlmTransport,
+    Effect.gen(function* () {
+      const refs = yield* RefResolverService;
+      const httpClient = yield* HttpClientTag;
+      return {
+        resolveRoute: (route) =>
+          resolveOpenAiChatCompatibleRouteForTransport(route).pipe(
+            Effect.map(effectAiRouteDescriptor),
+          ),
+        call: (request, options) =>
+          Effect.gen(function* () {
+            const resolved = yield* resolveOpenAiChatCompatibleRouteForTransport(request.route);
+            return yield* withEffectAiLiveRoute(refs, resolved.route, (liveRoute) =>
+              callOpenAiChatCompatible(httpClient, liveRoute, request, options),
+            ).pipe(
+              Effect.mapError((cause) =>
+                cause instanceof UpstreamFailure ? cause : new UpstreamFailure({ cause }),
+              ),
+            );
+          }),
+      };
+    }),
+  );
+
+/**
+ * Fetch-runtime OpenAI-compatible chat-completions live layer. This is the
+ * Cloudflare Worker / browser-fetch surface a Durable Object consumer can pass
+ * directly as `llmTransport`.
+ *
+ * @public
+ */
+export const OpenAiCompatibleLlmTransportLive: Layer.Layer<
+  LlmTransport,
+  never,
+  RefResolverService
+> = makeOpenAiCompatibleLlmTransportLayer().pipe(Layer.provide(FetchHttpClient.layer));

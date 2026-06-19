@@ -156,6 +156,8 @@ title: "@agent-os/kernel Public API Intent"
 - `./extensions:payload`
 - `./extensions:rejectClaimedAppEvent`
 - `./extensions:validateExtensionDeclarations`
+- `./live-edge:captureLive`
+- `./live-edge:openLive`
 - `./material-ref:EffectAuthorityContract`
 - `./material-ref:BindingMaterialRef`
 - `./material-ref:BindingMaterialRequirement`

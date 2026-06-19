@@ -156,6 +156,8 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./extensions:payload`
 - `./extensions:rejectClaimedAppEvent`
 - `./extensions:validateExtensionDeclarations`
+- `./live-edge:captureLive`
+- `./live-edge:openLive`
 - `./material-ref:EffectAuthorityContract`
 - `./material-ref:BindingMaterialRef`
 - `./material-ref:BindingMaterialRequirement`

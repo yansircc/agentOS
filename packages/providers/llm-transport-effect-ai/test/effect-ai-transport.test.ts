@@ -26,16 +26,19 @@ import {
   type LlmRequest,
 } from "@agent-os/llm-protocol";
 import type { ToolDefinition } from "@agent-os/kernel/tools";
-import { RefResolverLive } from "@agent-os/kernel/ref-resolver";
+import { RefResolverLive, type RefResolverService } from "@agent-os/kernel/ref-resolver";
 import { ProviderHttpFailure, UpstreamFailure } from "@agent-os/kernel/errors";
 import {
   callEffectAiLanguageModel,
   effectAiPromptFromMessages,
   effectAiToolkitFromToolDefinitions,
+  OpenAiCompatibleLlmTransportLive,
   EffectAiMissingUsage,
   EffectAiPromptError,
+  EffectAiUnsupportedRoute,
   type EffectAiLanguageModelFactory,
   makeEffectAiLlmTransportLayer,
+  makeOpenAiCompatibleLlmTransportLayer,
   normalizeEffectAiResponse,
 } from "../src";
 
@@ -120,6 +123,9 @@ const httpClientLive = (client: HttpClientService) => Layer.succeed(HttpClientTa
 const resolverLive = RefResolverLive({
   material: (ref) => (ref.kind === "endpoint" ? "https://provider.example/base" : "sk-secret"),
 });
+
+const _doCompatibleOpenAiLayer: Layer.Layer<LlmTransport, never, RefResolverService> =
+  OpenAiCompatibleLlmTransportLive;
 
 const decodeRequestBody = (requestValue: HttpClientRequest): unknown => {
   const body = requestValue.body;
@@ -365,6 +371,52 @@ describe("@agent-os/llm-transport-effect-ai", () => {
       Effect.provide(resolverLive),
     );
   });
+
+  it.effect("openai-compatible layer owns provider HTTP and rejects other route kinds", () =>
+    Effect.gen(function* () {
+      let captured: HttpClientRequest | undefined;
+      const client = fakeHttpClient((providerRequest) => {
+        captured = providerRequest;
+        return Effect.succeed(
+          httpResponse(200, {
+            choices: [{ message: { content: "ok" } }],
+            usage: { prompt_tokens: 1, completion_tokens: 2, total_tokens: 3 },
+          }),
+        );
+      });
+
+      const result = yield* Effect.gen(function* () {
+        const transport = yield* LlmTransport;
+        return yield* transport.call(request());
+      }).pipe(
+        Effect.provide(makeOpenAiCompatibleLlmTransportLayer()),
+        Effect.provide(httpClientLive(client)),
+        Effect.provide(resolverLive),
+      );
+
+      expect(result.items).toEqual([{ type: "message", text: "ok" }]);
+      expect(captured?.url).toBe("https://provider.example/base/chat/completions");
+
+      const exit = yield* Effect.exit(
+        Effect.gen(function* () {
+          const transport = yield* LlmTransport;
+          return yield* transport.resolveRoute({
+            kind: "anthropic-messages",
+            endpointRef: "openai",
+            credentialRef: "openai-key",
+            modelId: "claude-test",
+          });
+        }).pipe(
+          Effect.provide(makeOpenAiCompatibleLlmTransportLayer()),
+          Effect.provide(httpClientLive(client)),
+          Effect.provide(resolverLive),
+        ),
+      );
+      const failure = expectFailure(exit);
+      expect(failure).toBeInstanceOf(UpstreamFailure);
+      expect(failure.cause).toBeInstanceOf(EffectAiUnsupportedRoute);
+    }),
+  );
 
   it.effect("projects agentOS messages to Effect AI prompt without raw provider shapes", () =>
     Effect.gen(function* () {

@@ -1049,6 +1049,7 @@ const writeConsumerApp = (dir, extraDeps = {}) => {
     [
       `import { compileAgentTree } from "${publicSpecifier("@agent-os/agent-authoring")}";`,
       `import { createAgentDurableObject } from "${publicSpecifier("@agent-os/backend-cloudflare-do")}";`,
+      `import { OpenAiCompatibleLlmTransportLive } from "${publicSpecifier("@agent-os/llm-transport-effect-ai")}";`,
       `import { defineAgentBindings } from "${publicSpecifier("@agent-os/runtime-protocol")}";`,
       "const compiled = compileAgentTree({",
       "  files: [{ path: 'agent/instructions.md', kind: 'markdown', text: 'Say hello.' }],",
@@ -1058,6 +1059,7 @@ const writeConsumerApp = (dir, extraDeps = {}) => {
       "export const AgentDO = createAgentDurableObject({",
       "  manifest: compiled.value.manifest,",
       "  agentBindings,",
+      "  llmTransport: () => OpenAiCompatibleLlmTransportLive,",
       "});",
     ].join("\n") + "\n",
   );

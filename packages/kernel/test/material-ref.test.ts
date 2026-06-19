@@ -16,7 +16,7 @@ import {
   materialRequirement,
 } from "../src/material-ref";
 import { RefResolverLive, RefResolverService, RefResolutionFailed } from "../src/ref-resolver";
-import { openLive } from "../src/internal/live-edge";
+import { openLive } from "../src/live-edge";
 
 describe("MaterialRef algebra", () => {
   it("mints material refs and requirements as authored declarations", () => {

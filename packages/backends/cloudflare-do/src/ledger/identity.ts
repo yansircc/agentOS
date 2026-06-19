@@ -30,10 +30,13 @@ export class LegacyLedgerSchemaError extends Data.TaggedError("agent_os.legacy_l
 export const CLOUDFLARE_FACT_OWNER_REF: FactOwnerRef = "@agent-os/backend-cloudflare-do";
 export const BACKEND_PROTOCOL_FACT_OWNER_REF: FactOwnerRef = "@agent-os/backend-protocol";
 
+type CloudflareRoutingScopeKind = Exclude<ScopeRef["kind"], "external">;
+
 export const cloudflareDefaultTruthIdentityFromRoutingScope = (
   scope: string,
+  kind: CloudflareRoutingScopeKind = "conversation",
 ): BackendProtocolTruthIdentity => ({
-  scopeRef: { kind: "conversation", scopeId: scope },
+  scopeRef: { kind, scopeId: scope },
   effectAuthorityRef: { authorityClass: "effect", authorityId: scope },
 });
 

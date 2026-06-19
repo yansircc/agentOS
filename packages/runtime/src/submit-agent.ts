@@ -88,7 +88,7 @@ import {
   type ResolvedMaterial,
   type ResolvedMaterialService,
 } from "@agent-os/kernel/ref-resolver";
-import { openLive } from "../../kernel/src/internal/live-edge";
+import { openLive } from "@agent-os/kernel/live-edge";
 import { Quota } from "./quota-service";
 import {
   decodeToolArgs,

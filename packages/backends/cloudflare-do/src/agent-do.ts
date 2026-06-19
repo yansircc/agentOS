@@ -102,7 +102,7 @@ import {
 import { LlmTransport } from "@agent-os/llm-protocol";
 import {
   lowerSubmitRunInput,
-  manifestScopeRef,
+  manifestTruthIdentity,
   RUNTIME_FACT_OWNER,
 } from "@agent-os/runtime-protocol";
 import {
@@ -136,7 +136,7 @@ import {
   rejectClaimedAppEvent,
   validateExtensionDeclarations,
 } from "@agent-os/kernel/extensions";
-import { isScopeRef, type AuthorityRef, type ScopeRef } from "@agent-os/kernel/effect-claim";
+import { isScopeRef, type AuthorityRef } from "@agent-os/kernel/effect-claim";
 import { projectAdmissionLease, projectQuotaState, projectResourceState } from "./projections";
 import {
   projectRunsPage,
@@ -322,7 +322,6 @@ export interface AgentDurableObjectConfig<
   readonly triggers?: CloudflareTriggerSource<Env>;
   readonly streams?: CloudflareAttachedStreamSource<Env>;
   readonly projections?: CloudflareAgentProjectionSource<Env>;
-  readonly scopeRefForScope?: (scope: string, env: Env) => ScopeRef | null;
   readonly eventHandlers?: (
     context: AgentEventHandlerContext<Runtime>,
     env: Env,
@@ -342,7 +341,6 @@ export interface MaterializedAgentConfig<
   readonly triggers: CloudflareTriggerSource<Env>;
   readonly streams: CloudflareAttachedStreamSource<Env>;
   readonly projections: ReadonlyArray<AnyMaterializedProjectionDefinition>;
-  readonly scopeRefForScope: (scope: string, env: Env) => ScopeRef | null;
   readonly eventHandlers?: (
     context: AgentEventHandlerContext<Runtime>,
     env: Env,
@@ -412,7 +410,6 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
   private readonly _triggers: CloudflareTriggerSource<Env>;
   private readonly _streams: CloudflareAttachedStreamSource<Env>;
   private readonly _projections: ReadonlyArray<AnyMaterializedProjectionDefinition>;
-  private readonly _scopeRefForScope: (scope: string, env: Env) => ScopeRef | null;
   private readonly _runtimes = new Map<
     string,
     ManagedRuntime.ManagedRuntime<CoreServices, SqlError | TriggerFactoryError>
@@ -430,7 +427,6 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
     this._triggers = config.triggers;
     this._streams = config.streams;
     this._projections = config.projections;
-    this._scopeRefForScope = config.scopeRefForScope;
 
     for (const registration of config.eventHandlers?.(
       { runtime: this as unknown as Runtime, capabilities: this._capabilities },
@@ -443,14 +439,17 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
   private defaultTruthIdentityForScope(
     scope: string,
   ): BackendProtocolTruthIdentity | UnsupportedScopeRef {
-    const scopeRef = this._scopeRefForScope(scope, this.env);
-    if (scopeRef === null) {
+    const manifest = this._mount.driverConfig.manifest;
+    if (manifest.scope.idSource === "manifest") {
+      const identity = manifestTruthIdentity(manifest);
+      return cloudflareRouteKeyFromScopeRef(identity.scopeRef) === scope
+        ? identity
+        : new UnsupportedScopeRef({ scopeId: identity.scopeRef.scopeId, position: "source" });
+    }
+    if (manifest.scope.idSource === "extension") {
       return new UnsupportedScopeRef({ scopeId: scope, position: "source" });
     }
-    return {
-      scopeRef,
-      effectAuthorityRef: { authorityClass: "effect", authorityId: scope },
-    };
+    return cloudflareDefaultTruthIdentityFromRoutingScope(scope, manifest.scope.kind);
   }
 
   private defaultEventIdentityForScope(
@@ -738,16 +737,16 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
 
   protected submitFull(spec: SubmitSpec): Promise<SubmitResult> {
     return this.scopedPromise((scope) => {
-      const scopeRef = this._scopeRefForScope(scope, this.env);
-      if (scopeRef === null) {
-        return Promise.reject(new UnsupportedScopeRef({ scopeId: scope, position: "source" }));
+      const truthIdentity = this.defaultTruthIdentityForScope(scope);
+      if (truthIdentity instanceof UnsupportedScopeRef) {
+        return Promise.reject(truthIdentity);
       }
       const internalSpec: InternalSubmitSpec = internalSubmitSpec(spec, {
         scope,
-        scopeRef,
+        scopeRef: truthIdentity.scopeRef,
       });
       const identity = eventIdentity(
-        { scopeRef, effectAuthorityRef: spec.effectAuthorityRef },
+        { scopeRef: truthIdentity.scopeRef, effectAuthorityRef: spec.effectAuthorityRef },
         RUNTIME_FACT_OWNER,
       );
       return this.runtimeFor(scope, identity).runPromise(submitAgentEffect(internalSpec));
@@ -1278,11 +1277,6 @@ export const createAgentDurableObject = <Env extends CloudflareAgentEnv>(
         triggers: config.triggers ?? [],
         streams: config.streams ?? [],
         projections: projectionsFor(config.projections, env),
-        scopeRefForScope:
-          config.scopeRefForScope ??
-          (config.manifest.scope.idSource === "manifest"
-            ? () => manifestScopeRef(config.manifest)
-            : (scope) => cloudflareDefaultTruthIdentityFromRoutingScope(scope).scopeRef),
         eventHandlers: config.eventHandlers,
       });
     }

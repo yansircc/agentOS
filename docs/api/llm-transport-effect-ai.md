@@ -19,12 +19,14 @@ None.
 - `.:EffectAiUnsupportedOutputPart`
 - `.:EffectAiUnsupportedRoute`
 - `.:EFFECT_AI_TRANSPORT_ADAPTER_VERSION`
+- `.:OpenAiCompatibleLlmTransportLive`
 - `.:callEffectAiLanguageModel`
 - `.:defaultEffectAiLanguageModelFactory`
 - `.:effectAiPromptFromMessages`
 - `.:effectAiToolFromDefinition`
 - `.:effectAiToolkitFromToolDefinitions`
 - `.:makeEffectAiLlmTransportLayer`
+- `.:makeOpenAiCompatibleLlmTransportLayer`
 - `.:normalizeEffectAiResponse`
 - `.:resolveEffectAiRoute`
 

@@ -11,7 +11,7 @@ import { Context, Data, Effect, Layer } from "effect";
 import type { MaterialKind, MaterialRef } from "./material-ref";
 import { materialRefKey } from "./material-ref";
 import type { Live } from "./value-brands";
-import { captureLive } from "./internal/live-edge";
+import { captureLive } from "./live-edge";
 
 export type ResolvedMaterial = NonNullable<unknown>;
 

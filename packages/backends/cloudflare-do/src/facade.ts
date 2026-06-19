@@ -1,5 +1,4 @@
 import type { ExtensionDeclaration } from "@agent-os/kernel/extensions";
-import type { ScopeRef } from "@agent-os/kernel/effect-claim";
 import type { DispatchToScopeResult, DispatchToScopeSpec } from "@agent-os/kernel/types";
 import type { AttachedStreamCancelResult, TriggerCancelResult } from "@agent-os/runtime";
 import { type AgentManifest, type SubmitResult } from "@agent-os/runtime-protocol";
@@ -33,7 +32,6 @@ import {
   type LoweredAgentConfigWithoutSubmit,
   type LlmRouteMap,
 } from "./facade-lowering";
-import { cloudflareDefaultTruthIdentityFromRoutingScope } from "./ledger/identity";
 import type { WorkspaceJobProjection } from "@agent-os/workspace-job";
 
 export interface AgentFacadeRuntimeClient {
@@ -89,7 +87,6 @@ interface DefineAgentDOConfigBase<
   readonly declaredIntents?:
     | ReadonlyArray<AgentDeclaredIntent>
     | ((env: Env) => ReadonlyArray<AgentDeclaredIntent>);
-  readonly scopeRefForScope?: (scope: string, env: Env) => ScopeRef | null;
   readonly eventHandlers?: (
     context: AgentEventHandlerContext<Runtime>,
     env: Env,
@@ -185,9 +182,6 @@ const materializedConfigForEnv = <
     triggers: config.triggers ?? [],
     streams: config.streams ?? [],
     projections: projectionsFor(config.projections, env),
-    scopeRefForScope:
-      config.scopeRefForScope ??
-      ((scope) => cloudflareDefaultTruthIdentityFromRoutingScope(scope).scopeRef),
     eventHandlers: (context, eventEnv) => eventHandlersFor(config, context, eventEnv),
   };
 };

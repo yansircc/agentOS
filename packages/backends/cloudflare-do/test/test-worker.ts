@@ -1221,7 +1221,6 @@ export const FacadeSubmitTestDO = defineAgentDO<CloudflareAgentEnv>({
     },
   ],
   projections: [facadeIntentProjection],
-  scopeRefForScope: (scope) => ({ kind: "conversation", scopeId: scope }),
 });
 export type FacadeSubmitTestDO = InstanceType<typeof FacadeSubmitTestDO>;
 

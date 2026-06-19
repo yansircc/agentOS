@@ -13,7 +13,7 @@ import {
   type AeadSealedFailureReason,
   type RecordedSealedEnvelope,
 } from "../src/internal/aead-sealed";
-import { captureLive, openLive } from "../src/internal/live-edge";
+import { captureLive, openLive } from "../src/live-edge";
 import type { MaterialRef } from "../src/material-ref";
 import type { RecordedPayload } from "../src/value-brands";
 import { recordedPayload } from "../src/value-brands";

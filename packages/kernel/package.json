@@ -46,6 +46,10 @@
       "types": "./src/extensions.ts",
       "default": "./src/extensions.ts"
     },
+    "./live-edge": {
+      "types": "./src/live-edge.ts",
+      "default": "./src/live-edge.ts"
+    },
     "./material-ref": {
       "types": "./src/material-ref.ts",
       "default": "./src/material-ref.ts"
