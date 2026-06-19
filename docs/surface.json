@@ -342,7 +342,7 @@
       "apiStatus": "{releaseLine} experimental for compiling authored agent trees into manifest/provenance facts. Public exports are listed for accidental export control only; this is not an API freeze.",
       "apiSource": "docs/api/agent-authoring.md",
       "primary": true,
-      "published": false
+      "published": true
     },
     {
       "slug": "attached-stream",

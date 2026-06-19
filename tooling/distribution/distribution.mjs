@@ -1000,38 +1000,34 @@ const writeConsumerApp = (dir, extraDeps = {}) => {
   fs.writeFileSync(
     path.join(dir, "index.ts"),
     [
-      `import { makePreClaim } from "${publicSpecifier("@agent-os/kernel/effect-claim")}";`,
-      `import type { LedgerEventRpc } from "${publicSpecifier("@agent-os/kernel/types")}";`,
+      `import { compileAgentTree } from "${publicSpecifier("@agent-os/agent-authoring")}";`,
       `import { triggerParseOk } from "${publicSpecifier("@agent-os/runtime")}";`,
-      `import { defineAgentDO, type CloudflareAgentEnv } from "${publicSpecifier(
-        "@agent-os/backend-cloudflare-do",
-      )}";`,
       `import { mountOpsHtmx } from "${publicSpecifier("@agent-os/ops-htmx")}";`,
-      "void makePreClaim;",
       "void triggerParseOk;",
-      "void defineAgentDO;",
       "void mountOpsHtmx;",
-      "const _events: ReadonlyArray<LedgerEventRpc> = [];",
-      "const _env: CloudflareAgentEnv | null = null;",
-      "void _events;",
-      "void _env;",
+      "const compiled = compileAgentTree({",
+      "  files: [{ path: 'agent/instructions.md', kind: 'markdown', text: 'Say hello.' }],",
+      "});",
+      "if (!compiled.ok) throw new Error(JSON.stringify(compiled.issues));",
+      "void compiled.value.manifest;",
     ].join("\n") + "\n",
   );
   fs.writeFileSync(
     path.join(dir, "smoke.mjs"),
     [
+      `import { compileAgentTree } from "${publicSpecifier("@agent-os/agent-authoring")}";`,
       `import { ABORT } from "${publicSpecifier("@agent-os/kernel")}";`,
       `import { triggerParseOk } from "${publicSpecifier("@agent-os/runtime")}";`,
       `import { projectTurnStream } from "${publicSpecifier("@agent-os/turn-stream")}";`,
       `import { mountOpsApi } from "${publicSpecifier("@agent-os/ops-api")}";`,
-      "if (!ABORT || !triggerParseOk || !projectTurnStream || !mountOpsApi) throw new Error('missing import');",
+      "if (!compileAgentTree || !ABORT || !triggerParseOk || !projectTurnStream || !mountOpsApi) throw new Error('missing import');",
     ].join("\n") + "\n",
   );
   fs.writeFileSync(
     path.join(dir, "cf-entry.ts"),
     [
-      `import { defineAgentDO } from "${publicSpecifier("@agent-os/backend-cloudflare-do")}";`,
-      "export const AgentDO = defineAgentDO({ bindings: [] });",
+      `import { createAgentDurableObject } from "${publicSpecifier("@agent-os/backend-cloudflare-do")}";`,
+      "export const AgentDO = createAgentDurableObject({ bindings: [] });",
     ].join("\n") + "\n",
   );
   writeJson(path.join(dir, "tsconfig.nodenext.json"), {
