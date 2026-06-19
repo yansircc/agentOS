@@ -18,6 +18,7 @@ import {
 import { type BoundaryPackage } from "./extensions";
 import { validateAgainstSchema, type JsonSchemaObject } from "./json-schema-dialect";
 import type { EffectAuthorityContract, MaterialRequirement } from "./material-ref";
+import type { Recordable } from "./value-brands";
 import {
   defineSettlementContract,
   settleLived,
@@ -139,7 +140,7 @@ export type CarrierSettleMap<
   readonly [Name in LivedEventNames<Events>]: (
     claim: PreClaim,
     spec: CarrierSettleSpec,
-  ) => LivedClaim;
+  ) => LivedClaim & Recordable<LivedClaim>;
 };
 
 export type CarrierRejectMap<
@@ -150,7 +151,7 @@ export type CarrierRejectMap<
   readonly [Name in RejectedEventNames<Events>]: (
     claim: PreClaim,
     spec: CarrierRejectSpec,
-  ) => RejectedClaim;
+  ) => RejectedClaim & Recordable<RejectedClaim>;
 };
 
 export interface Carrier<

@@ -10,8 +10,8 @@ import {
 } from "./effect-claim";
 import { ANCHOR_KINDS, REJECTION_KINDS } from "./claim-kinds";
 import { isNonEmptyString } from "./string-guards";
-import { authoredValue, recordedValue } from "./value-brands";
-import type { Authored, Recorded } from "./value-brands";
+import { authoredValue, ownerRecordableMint } from "./value-brands";
+import type { Authored, Recordable } from "./value-brands";
 
 export const SYMBOLIC_SETTLEMENT_VALUE_PATTERN = "^[A-Za-z0-9_.:-]{1,128}$";
 const SYMBOLIC_SETTLEMENT_VALUE = new RegExp(SYMBOLIC_SETTLEMENT_VALUE_PATTERN);
@@ -49,8 +49,8 @@ export type TerminalClaimValidation =
   | {
       readonly ok: true;
       readonly claim:
-        | (LivedClaim & Recorded<LivedClaim>)
-        | (RejectedClaim & Recorded<RejectedClaim>);
+        | (LivedClaim & Recordable<LivedClaim>)
+        | (RejectedClaim & Recordable<RejectedClaim>);
     }
   | {
       readonly ok: false;
@@ -74,6 +74,10 @@ const arrayOf = <T>(
 
 const failConstruction = (message: string): never =>
   Option.getOrThrowWith(Option.none(), () => new TypeError(message));
+
+const recordableTerminalClaim = <Claim extends LivedClaim | RejectedClaim>(
+  claim: Claim,
+): Claim & Recordable<Claim> => ownerRecordableMint.recordable(claim);
 
 export const isSymbolicSettlementValue = (value: string): boolean =>
   SYMBOLIC_SETTLEMENT_VALUE.test(value);
@@ -168,8 +172,8 @@ export const validateTerminalClaim = (
     ok: true,
     claim:
       validation.claim.phase === "lived"
-        ? recordedValue(validation.claim)
-        : recordedValue(validation.claim),
+        ? recordableTerminalClaim(validation.claim)
+        : recordableTerminalClaim(validation.claim),
   };
 };
 
@@ -212,7 +216,7 @@ export const settleLived = (
   contract: SettlementContract,
   claim: PreClaim,
   anchorRef: AnchorRef,
-): LivedClaim & Recorded<LivedClaim> => {
+): LivedClaim & Recordable<LivedClaim> => {
   const lived: LivedClaim = {
     phase: "lived",
     operationRef: claim.operationRef,
@@ -227,14 +231,14 @@ export const settleLived = (
       `settled lived claim violates ${contract.settlementId}: ${issues.join(",")}`,
     );
   }
-  return recordedValue(lived);
+  return recordableTerminalClaim(lived);
 };
 
 export const settleRejected = (
   contract: SettlementContract,
   claim: PreClaim,
   rejectionRef: RejectionRef,
-): RejectedClaim & Recorded<RejectedClaim> => {
+): RejectedClaim & Recordable<RejectedClaim> => {
   const rejected: RejectedClaim = {
     phase: "rejected",
     operationRef: claim.operationRef,
@@ -249,5 +253,5 @@ export const settleRejected = (
       `settled rejected claim violates ${contract.settlementId}: ${issues.join(",")}`,
     );
   }
-  return recordedValue(rejected);
+  return recordableTerminalClaim(rejected);
 };

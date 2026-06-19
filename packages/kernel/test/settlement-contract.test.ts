@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import { makePreClaim } from "../src/effect-claim";
-import type { Authored, Recorded } from "../src";
+import type { Authored, Live, Recordable, Untrusted } from "../src";
+import { captureLive } from "../src/live-edge";
 import {
   defineSettlementContract,
   isSymbolicSettlementValue,
@@ -11,6 +12,7 @@ import {
   validateSettlementContract,
   validateTerminalClaim,
 } from "../src/settlement-contract";
+import { untrustedValue } from "../src/value-brands";
 
 describe("SettlementContract", () => {
   const contract = defineSettlementContract({
@@ -60,8 +62,8 @@ describe("SettlementContract", () => {
     });
 
     expect(validateTerminalClaim(contract, lived)).toEqual({ ok: true, claim: lived });
-    const recordedLived: Recorded<typeof lived.value> = lived;
-    expect(recordedLived.value.anchorRef.anchorId).toBe("proof:ok");
+    const recordableLived: Recordable<typeof lived.value> = lived;
+    expect(recordableLived.value.anchorRef.anchorId).toBe("proof:ok");
     expect(Object.prototype.propertyIsEnumerable.call(lived, "value")).toBe(false);
     expect(() =>
       settleLived(contract, claim, {
@@ -88,8 +90,8 @@ describe("SettlementContract", () => {
       ok: true,
       claim: rejected,
     });
-    const recordedRejected: Recorded<typeof rejected.value> = rejected;
-    expect(recordedRejected.value.rejectionRef.rejectionId).toBe("policy:1");
+    const recordableRejected: Recordable<typeof rejected.value> = rejected;
+    expect(recordableRejected.value.rejectionRef.rejectionId).toBe("policy:1");
     expect(Object.prototype.propertyIsEnumerable.call(rejected, "value")).toBe(false);
     expect(() =>
       settleRejected(contract, claim, {
@@ -125,6 +127,47 @@ describe("SettlementContract", () => {
     ).toEqual({
       ok: false,
       issues: ["anchor_kind_outside_contract"],
+    });
+  });
+
+  it("does not let Untrusted or Live values escape as terminal settlement truth", () => {
+    const livedShape = {
+      phase: "lived" as const,
+      operationRef: claim.operationRef,
+      scopeRef: claim.scopeRef,
+      effectAuthorityRef: claim.effectAuthorityRef,
+      originRef: claim.originRef,
+      anchorRef: {
+        anchorId: "proof:ok",
+        anchorKind: "carrier_proof" as const,
+      },
+    };
+    const untrustedLived = untrustedValue(livedShape);
+    const liveLived = captureLive(livedShape);
+
+    const assertTypeErrors = () => {
+      // @ts-expect-error Untrusted terminal shape is not owner-accepted Recordable truth.
+      const recordableFromUntrusted: Recordable<typeof livedShape> = untrustedLived;
+      // @ts-expect-error Live terminal material is not a claim shape.
+      const claimFromLive: typeof livedShape = liveLived;
+      // @ts-expect-error Live terminal material is not owner-accepted Recordable truth.
+      const recordableFromLive: Recordable<typeof livedShape> = liveLived;
+      const untrustedEvidence: Untrusted<typeof livedShape> = untrustedLived;
+      const liveEvidence: Live<typeof livedShape> = liveLived;
+      return [
+        recordableFromUntrusted,
+        claimFromLive,
+        recordableFromLive,
+        untrustedEvidence,
+        liveEvidence,
+      ];
+    };
+
+    expect(typeof assertTypeErrors).toBe("function");
+    expect(validateTerminalClaim(contract, untrustedLived)).toMatchObject({ ok: true });
+    expect(validateTerminalClaim(contract, liveLived)).toEqual({
+      ok: false,
+      issues: ["claim_invalid"],
     });
   });
 });
