@@ -1,4 +1,5 @@
 import type {
+  EventQueryOptions,
   LedgerEvent,
   ResourceGrantResult,
   ResourceGrantSpec,
@@ -47,6 +48,16 @@ export interface RuntimeBackendDispatchSpec {
   readonly traceContext?: TraceContext;
 }
 
+export type RuntimeBackendLedgerCommitSpec = {
+  readonly ts?: number;
+  readonly kind: string;
+  readonly payload: unknown;
+  readonly scopeRef: BackendProtocolEventIdentity["scopeRef"];
+  readonly effectAuthorityRef: BackendProtocolEventIdentity["effectAuthorityRef"];
+  readonly factOwnerRef?: never;
+  readonly scope?: never;
+};
+
 export interface RuntimeBackendContractDriver {
   readonly bindingRef: BindingMaterialRef;
   readonly registerDispatchReceiver: (
@@ -73,7 +84,17 @@ export interface RuntimeBackendContractDriver {
     kind: string,
     payload: unknown,
   ) => Promise<LedgerEvent>;
-  readonly events: (identity: BackendProtocolEventIdentity) => Promise<ReadonlyArray<LedgerEvent>>;
+  readonly commit: (
+    events: ReadonlyArray<RuntimeBackendLedgerCommitSpec>,
+  ) => Promise<ReadonlyArray<LedgerEvent>>;
+  readonly events: (
+    identity: BackendProtocolEventIdentity,
+    opts?: EventQueryOptions,
+  ) => Promise<ReadonlyArray<LedgerEvent>>;
+  readonly streamSnapshot: (
+    identity: BackendProtocolEventIdentity,
+    opts?: Pick<EventQueryOptions, "afterId" | "kinds" | "factOwnerRefs">,
+  ) => Promise<ReadonlyArray<LedgerEvent>>;
   readonly schedule: (
     identity: BackendProtocolEventIdentity,
     at: number,
@@ -215,6 +236,21 @@ const payloadsOf = <T>(events: ReadonlyArray<LedgerEvent>, kind: string): Readon
 const kindsOf = (events: ReadonlyArray<LedgerEvent>): ReadonlyArray<string> =>
   events.map((event) => event.kind);
 
+const ledgerSpec = (
+  identity: BackendProtocolEventIdentity,
+  kind: string,
+  payload: unknown = {},
+  ts?: number,
+): RuntimeBackendLedgerCommitSpec => {
+  const spec = {
+    kind,
+    payload,
+    scopeRef: identity.scopeRef,
+    effectAuthorityRef: identity.effectAuthorityRef,
+  };
+  return ts === undefined ? spec : { ...spec, ts };
+};
+
 const expectEventIdentity = (
   event: LedgerEvent | undefined,
   identity: BackendProtocolEventIdentity,
@@ -259,6 +295,9 @@ export const runRuntimeBackendContractSuite = (
         }) as Promise<void>,
     );
 
+  const expectRejectEffect = (input: Promise<unknown>): Effect.Effect<void> =>
+    promise(() => expect(input).rejects.toBeTruthy() as Promise<void>);
+
   const withDriver = (
     fn: (driver: RuntimeBackendContractDriver) => Effect.Effect<void>,
   ): Effect.Effect<void> =>
@@ -268,6 +307,212 @@ export const runRuntimeBackendContractSuite = (
     });
 
   describe(name + " runtime backend protocol contract", () => {
+    it.effect("satisfies the ledger prefix law for cursor, limit, kind, and stream reads", () =>
+      withDriver((driver) =>
+        Effect.gen(function* () {
+          const identity = contractIdentity("ledger-prefix");
+          const committed = yield* promise(() =>
+            driver.commit([
+              ledgerSpec(identity, "ledger_law.prefix.a", { n: 1 }),
+              ledgerSpec(identity, "ledger_law.prefix.b", { n: 2 }),
+              ledgerSpec(identity, "ledger_law.prefix.c", { n: 3 }),
+            ]),
+          );
+
+          expect(kindsOf(committed)).toEqual([
+            "ledger_law.prefix.a",
+            "ledger_law.prefix.b",
+            "ledger_law.prefix.c",
+          ]);
+          expectEventsIdentity(committed, identity);
+          expect(yield* promise(() => driver.events(identity))).toEqual(committed);
+          expect(yield* promise(() => driver.events(identity, { limit: 2 }))).toEqual(
+            committed.slice(0, 2),
+          );
+          expect(
+            yield* promise(() => driver.events(identity, { afterId: committed[0]!.id })),
+          ).toEqual(committed.slice(1));
+          expect(
+            yield* promise(() => driver.events(identity, { kinds: ["ledger_law.prefix.c"] })),
+          ).toEqual([committed[2]]);
+          expect(
+            yield* promise(() =>
+              driver.streamSnapshot(identity, {
+                afterId: committed[0]!.id,
+                kinds: ["ledger_law.prefix.b", "ledger_law.prefix.c"],
+                factOwnerRefs: [options.runtimeFactOwner],
+              }),
+            ),
+          ).toEqual(committed.slice(1));
+        }),
+      ),
+    );
+
+    it.effect("satisfies the ledger batch atomicity law", () =>
+      withDriver((driver) =>
+        Effect.gen(function* () {
+          const identity = contractIdentity("ledger-batch-atomic");
+          yield* expectRejectEffect(
+            driver.commit([
+              ledgerSpec(identity, "ledger_law.batch.before", { ok: true }),
+              ledgerSpec(identity, "ledger_law.batch.invalid", { value: BigInt(1) }),
+              ledgerSpec(identity, "ledger_law.batch.after", { ok: true }),
+            ]),
+          );
+          expect(yield* promise(() => driver.events(identity))).toEqual([]);
+
+          const committed = yield* promise(() =>
+            driver.commit([
+              ledgerSpec(identity, "ledger_law.batch.one", { ok: 1 }),
+              ledgerSpec(identity, "ledger_law.batch.two", { ok: 2 }),
+            ]),
+          );
+          expect(committed).toHaveLength(2);
+          expect(committed[1]!.id).toBe(committed[0]!.id + 1);
+          expect(yield* promise(() => driver.events(identity))).toEqual(committed);
+        }),
+      ),
+    );
+
+    it.effect("satisfies the ledger durable ack law", () =>
+      withDriver((driver) =>
+        Effect.gen(function* () {
+          const identity = contractIdentity("ledger-durable-ack");
+          const committed = yield* promise(() =>
+            driver.commit([
+              ledgerSpec(identity, "ledger_law.ack", {
+                nested: { ok: true },
+                list: [1, 2, 3],
+              }),
+            ]),
+          );
+          const ack = committed[0];
+          expect(ack).toBeDefined();
+          expect(ack).toMatchObject({
+            id: expect.any(Number),
+            ts: expect.any(Number),
+            kind: "ledger_law.ack",
+            payload: { nested: { ok: true }, list: [1, 2, 3] },
+          });
+          expectEventIdentity(ack, identity);
+          expect(
+            yield* promise(() => driver.events(identity, { afterId: ack!.id - 1, limit: 1 })),
+          ).toEqual([ack]);
+        }),
+      ),
+    );
+
+    it.effect("satisfies the ledger per-truth ordering law", () =>
+      withDriver((driver) =>
+        Effect.gen(function* () {
+          const alpha = contractIdentity("ledger-order-alpha");
+          const beta = contractIdentity("ledger-order-beta");
+          yield* promise(() =>
+            driver.commit([
+              ledgerSpec(alpha, "ledger_law.order.alpha.1", { value: "a1" }),
+              ledgerSpec(alpha, "ledger_law.order.alpha.2", { value: "a2" }),
+            ]),
+          );
+          yield* promise(() =>
+            driver.commit([
+              ledgerSpec(beta, "ledger_law.order.beta.1", { value: "b1" }),
+              ledgerSpec(beta, "ledger_law.order.beta.2", { value: "b2" }),
+            ]),
+          );
+
+          const alphaEvents = yield* promise(() => driver.events(alpha));
+          const betaEvents = yield* promise(() => driver.events(beta));
+          expect(kindsOf(alphaEvents)).toEqual([
+            "ledger_law.order.alpha.1",
+            "ledger_law.order.alpha.2",
+          ]);
+          expect(kindsOf(betaEvents)).toEqual([
+            "ledger_law.order.beta.1",
+            "ledger_law.order.beta.2",
+          ]);
+          expect(alphaEvents[0]!.id).toBeLessThan(alphaEvents[1]!.id);
+          expect(betaEvents[0]!.id).toBeLessThan(betaEvents[1]!.id);
+        }),
+      ),
+    );
+
+    it.effect("satisfies the ledger owner integrity law", () =>
+      withDriver((driver) =>
+        Effect.gen(function* () {
+          const identity = contractIdentity("ledger-owner-integrity");
+          const callerOwner = "@agent-os/caller-owned-test";
+          const [event] = yield* promise(() =>
+            driver.commit([
+              {
+                ...ledgerSpec(identity, "ledger_law.owner", { ok: true }),
+                factOwnerRef: callerOwner,
+              } as unknown as RuntimeBackendLedgerCommitSpec,
+            ]),
+          );
+
+          expectEventIdentity(event, identity);
+          expect(event?.factOwnerRef).toBe(options.runtimeFactOwner);
+          expect(
+            yield* promise(() => driver.events(identity, { factOwnerRefs: [callerOwner] })),
+          ).toEqual([]);
+          expect(
+            yield* promise(() =>
+              driver.events(identity, { factOwnerRefs: [options.runtimeFactOwner] }),
+            ),
+          ).toEqual([event]);
+        }),
+      ),
+    );
+
+    it.effect("satisfies the ledger idempotent append law for empty batches", () =>
+      withDriver((driver) =>
+        Effect.gen(function* () {
+          const identity = contractIdentity("ledger-idempotent-empty");
+          expect(yield* promise(() => driver.commit([]))).toEqual([]);
+          expect(yield* promise(() => driver.commit([]))).toEqual([]);
+          expect(yield* promise(() => driver.events(identity))).toEqual([]);
+
+          const first = yield* promise(() =>
+            driver.commit([
+              ledgerSpec(identity, "ledger_law.idempotent.non_empty", { attempt: 1 }),
+            ]),
+          );
+          const second = yield* promise(() =>
+            driver.commit([
+              ledgerSpec(identity, "ledger_law.idempotent.non_empty", { attempt: 1 }),
+            ]),
+          );
+          expect(first).toHaveLength(1);
+          expect(second).toHaveLength(1);
+          expect(second[0]!.id).toBeGreaterThan(first[0]!.id);
+          expect(kindsOf(yield* promise(() => driver.events(identity)))).toEqual([
+            "ledger_law.idempotent.non_empty",
+            "ledger_law.idempotent.non_empty",
+          ]);
+        }),
+      ),
+    );
+
+    it.effect("satisfies the ledger read-your-writes law", () =>
+      withDriver((driver) =>
+        Effect.gen(function* () {
+          const identity = contractIdentity("ledger-read-your-writes");
+          const first = yield* promise(() =>
+            driver.commit([ledgerSpec(identity, "ledger_law.read.first", { value: 1 })]),
+          );
+          expect(yield* promise(() => driver.events(identity))).toEqual(first);
+
+          const second = yield* promise(() =>
+            driver.commit([ledgerSpec(identity, "ledger_law.read.second", { value: 2 })]),
+          );
+          expect(yield* promise(() => driver.events(identity))).toEqual([...first, ...second]);
+          expect(
+            yield* promise(() => driver.streamSnapshot(identity, { afterId: first[0]!.id })),
+          ).toEqual(second);
+        }),
+      ),
+    );
+
     it.effect("fires scheduled due events exactly once", () =>
       withDriver((driver) =>
         Effect.gen(function* () {

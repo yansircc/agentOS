@@ -33,6 +33,11 @@ const truthIdentity = (identity: BackendProtocolTruthIdentity): BackendProtocolT
   effectAuthorityRef: identity.effectAuthorityRef,
 });
 
+const emptyTruthIdentity: BackendProtocolTruthIdentity = {
+  scopeRef: { kind: "conversation", scopeId: "empty" },
+  effectAuthorityRef: { authorityClass: "effect", authorityId: "empty" },
+};
+
 const makeInMemoryContractDriver = (): RuntimeBackendContractDriver => {
   const state = createInMemoryBackendState();
   const receiverTargets = new Map<string, DispatchReceiver>();
@@ -117,10 +122,20 @@ const makeInMemoryContractDriver = (): RuntimeBackendContractDriver => {
       if (event === undefined) throw new Error("ledger commit returned no event");
       return event;
     },
-    events: async (identity) => {
+    commit: async (events) => {
+      const handle = runtime(events[0] ?? emptyTruthIdentity);
+      const ledger = await handle.runPromise(Ledger);
+      return handle.runPromise(ledger.commit(events));
+    },
+    events: async (identity, opts) => {
       const handle = runtime(identity);
       const ledger = await handle.runPromise(Ledger);
-      return handle.runPromise(ledger.events(identity));
+      return handle.runPromise(ledger.events(identity, opts));
+    },
+    streamSnapshot: async (identity, opts) => {
+      const handle = runtime(identity);
+      const ledger = await handle.runPromise(Ledger);
+      return handle.runPromise(ledger.streamSnapshot(identity, opts));
     },
     schedule: async (identity, at, eventKind, data) => {
       const handle = runtime(identity);

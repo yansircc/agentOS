@@ -63,7 +63,7 @@ describe("materialized projections — Cloudflare DO", () => {
 
     await runInDurableObject(stub, async (instance) => {
       await expect(instance.emit("run.failed", { runId: "r1" })).rejects.toMatchObject({
-        _tag: "agent_os.sql_error",
+        _tag: "agent_os.runtime_storage_error",
       });
       const events: LedgerEventRpc[] = await instance.events(testTruthIdentity(scope));
       expect(events).toEqual([]);
@@ -97,7 +97,7 @@ describe("materialized projections — Cloudflare DO", () => {
       await expect(
         instance.rebuildWithFailingProjection({ kind: "run.workflow", ...identity }),
       ).rejects.toMatchObject({
-        _tag: "agent_os.sql_error",
+        _tag: "agent_os.runtime_storage_error",
       });
 
       expect(

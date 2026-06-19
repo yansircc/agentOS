@@ -60,6 +60,7 @@ import { defineTool, deterministicToolExecution } from "@agent-os/kernel/tools";
 import { UpstreamFailure } from "@agent-os/kernel/errors";
 import type {
   DispatchToScopeSpec,
+  EventQueryOptions,
   EventHandler,
   LedgerEvent,
   ResourceGrantResult,
@@ -87,6 +88,7 @@ import {
   defineAgentBindings,
   defineAgentManifest,
   RUNTIME_FACT_OWNER,
+  type LedgerCommitEventSpec,
 } from "@agent-os/runtime-protocol";
 import type { TelemetryFanoutDiagnostic } from "@agent-os/telemetry-protocol";
 import { CloudflareMaterializedProjectionsLive } from "../src/materialized-projections";
@@ -268,10 +270,35 @@ export class BackendProtocolContractTestDO extends DurableObject<BackendProtocol
     });
   }
 
-  async events(identity: BackendProtocolEventIdentity): Promise<ReadonlyArray<LedgerEvent>> {
+  async commit(events: ReadonlyArray<LedgerCommitEventSpec>): Promise<ReadonlyArray<LedgerEvent>> {
+    const identity = events[0] ?? {
+      scopeRef: { kind: "conversation" as const, scopeId: "empty" },
+      effectAuthorityRef: { authorityClass: "effect" as const, authorityId: "empty" },
+      factOwnerRef: RUNTIME_FACT_OWNER,
+    };
+    return this.withRuntime({ ...identity, factOwnerRef: RUNTIME_FACT_OWNER }, async (runtime) => {
+      const ledger = await runtime.runPromise(Ledger);
+      return runtime.runPromise(ledger.commit(events));
+    });
+  }
+
+  async events(
+    identity: BackendProtocolEventIdentity,
+    opts?: EventQueryOptions,
+  ): Promise<ReadonlyArray<LedgerEvent>> {
     return this.withRuntime(identity, async (runtime) => {
       const ledger = await runtime.runPromise(Ledger);
-      return runtime.runPromise(ledger.events(identity));
+      return runtime.runPromise(ledger.events(identity, opts));
+    });
+  }
+
+  async streamSnapshot(
+    identity: BackendProtocolEventIdentity,
+    opts?: Pick<EventQueryOptions, "afterId" | "kinds" | "factOwnerRefs">,
+  ): Promise<ReadonlyArray<LedgerEvent>> {
+    return this.withRuntime(identity, async (runtime) => {
+      const ledger = await runtime.runPromise(Ledger);
+      return runtime.runPromise(ledger.streamSnapshot(identity, opts));
     });
   }
 

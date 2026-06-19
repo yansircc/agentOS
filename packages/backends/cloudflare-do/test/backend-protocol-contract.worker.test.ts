@@ -33,6 +33,12 @@ const testEnv = env as unknown as TestEnv;
 const routeKey = (identity: BackendProtocolEventIdentity): string =>
   cloudflareRouteKeyFromScopeRef(identity.scopeRef);
 
+const emptyEventIdentity: BackendProtocolEventIdentity = {
+  scopeRef: { kind: "conversation", scopeId: "empty" },
+  effectAuthorityRef: { authorityClass: "effect", authorityId: "empty" },
+  factOwnerRef: RUNTIME_FACT_OWNER,
+};
+
 const makeCloudflareProductionRuntimeContractDriver = (): RuntimeBackendContractDriver => {
   const idPrefix = `backend-protocol-contract-${crypto.randomUUID()}-`;
   const knownRoutes = new Set<string>();
@@ -103,7 +109,17 @@ const makeCloudflareProductionRuntimeContractDriver = (): RuntimeBackendContract
     },
     log: (identity, kind, payload) =>
       withInstance(identity, (instance) => instance.log(identity, kind, payload)),
-    events: (identity) => withInstance(identity, (instance) => instance.events(identity)),
+    commit: (events) => {
+      const identity =
+        events[0] === undefined
+          ? emptyEventIdentity
+          : { ...events[0], factOwnerRef: RUNTIME_FACT_OWNER };
+      return withInstance(identity, (instance) => instance.commit(events));
+    },
+    events: (identity, opts) =>
+      withInstance(identity, (instance) => instance.events(identity, opts)),
+    streamSnapshot: (identity, opts) =>
+      withInstance(identity, (instance) => instance.streamSnapshot(identity, opts)),
     schedule: (identity, at, eventKind, data) =>
       withInstance(identity, (instance) => instance.schedule(identity, at, eventKind, data)),
     fireDue: (identity, now) =>

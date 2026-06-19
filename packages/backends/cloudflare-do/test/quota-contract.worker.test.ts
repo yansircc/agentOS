@@ -248,7 +248,7 @@ describe("quota state machine — deterministic", () => {
     });
   });
 
-  it("malformed quota.consumed payload → SqlError escapes Promise (validates a304601 P2 fix)", async () => {
+  it("malformed quota.consumed payload -> RuntimeStorageError escapes Promise", async () => {
     const scope = "quota-malformed-payload";
     const id = testEnv.AGENT_DO.idFromName(scope);
     const stub = testEnv.AGENT_DO.get(id);
@@ -268,7 +268,8 @@ describe("quota state machine — deterministic", () => {
       //   - matches the key the tool will look up
       // Without the v0.2.9 P2 fix, this row would silently be parsed as
       // `consumed += NaN`, polluting the running total. With the fix,
-      // Schema.decodeUnknownSync throws → tx rollback → SqlError escapes.
+      // Schema.decodeUnknownSync throws, the transaction rolls back, and the
+      // runtime ledger port maps storage internals to RuntimeStorageError.
       await runtime.runPromise(
         Effect.gen(function* () {
           const ledger = yield* Ledger;
@@ -290,9 +291,8 @@ describe("quota state machine — deterministic", () => {
 
       // Now run a submit that consumes quota. The Quota.tryGrant
       // transactionSync will SELECT the malformed row, decode fails,
-      // transactionSync rolls back, Effect.try wraps the throw as
-      // SqlError. SqlError is NOT caught by submitAgentEffect.catchTags
-      // → surfaces as a Cause.Fail in the Exit.
+      // transactionSync rolls back. RuntimeStorageError is not caught by
+      // submitAgentEffect.catchTags, so it surfaces as a Cause.Fail.
       const exit = await runtime.runPromiseExit(submitAgentEffect(makeSpec(scope, 2)));
 
       expect(Exit.isFailure(exit)).toBe(true);
@@ -300,7 +300,7 @@ describe("quota state machine — deterministic", () => {
         const failure = Cause.findErrorOption(exit.cause);
         expect(Option.isSome(failure)).toBe(true);
         if (Option.isSome(failure)) {
-          expect(failure.value._tag).toBe("agent_os.sql_error");
+          expect(failure.value._tag).toBe("agent_os.runtime_storage_error");
         }
       }
 

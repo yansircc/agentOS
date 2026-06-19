@@ -245,8 +245,8 @@ describe("admission — IO contract: attemptStructured", () => {
   });
 });
 
-describe("admission — malformed payload becomes SqlError", () => {
-  it("evidence row missing key field escapes as SqlError", async () => {
+describe("admission malformed payload storage failures", () => {
+  it("evidence row missing key field escapes as RuntimeStorageError", async () => {
     const scope = "admission-malformed-evidence";
     const id = testEnv.AGENT_DO.idFromName(scope);
     const stub = testEnv.AGENT_DO.get(id);
@@ -287,12 +287,12 @@ describe("admission — malformed payload becomes SqlError", () => {
         }),
       );
 
-      expectSqlError(exit);
+      expectRuntimeStorageError(exit);
       await runtime.dispose();
     });
   });
 
-  it("invalidate row with non-object key escapes as SqlError", async () => {
+  it("invalidate row with non-object key escapes as RuntimeStorageError", async () => {
     const scope = "admission-malformed-invalidate";
     const id = testEnv.AGENT_DO.idFromName(scope);
     const stub = testEnv.AGENT_DO.get(id);
@@ -329,19 +329,19 @@ describe("admission — malformed payload becomes SqlError", () => {
         }),
       );
 
-      expectSqlError(exit);
+      expectRuntimeStorageError(exit);
       await runtime.dispose();
     });
   });
 });
 
-const expectSqlError = (exit: Exit.Exit<unknown, unknown>) => {
+const expectRuntimeStorageError = (exit: Exit.Exit<unknown, unknown>) => {
   expect(Exit.isFailure(exit)).toBe(true);
   if (Exit.isFailure(exit)) {
     const failure = Cause.findErrorOption(exit.cause);
     expect(Option.isSome(failure)).toBe(true);
     if (Option.isSome(failure)) {
-      expect((failure.value as { _tag: string })._tag).toBe("agent_os.sql_error");
+      expect((failure.value as { _tag: string })._tag).toBe("agent_os.runtime_storage_error");
     }
   }
 };

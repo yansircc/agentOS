@@ -31,6 +31,12 @@ const bindingRef = bindingMaterialRef({
 
 const bindingKey = materialRefKey(bindingRef);
 
+const emptyEventIdentity: BackendProtocolEventIdentity = {
+  scopeRef: { kind: "conversation", scopeId: "empty" },
+  effectAuthorityRef: { authorityClass: "effect", authorityId: "empty" },
+  factOwnerRef: RUNTIME_FACT_OWNER,
+};
+
 const makeCloudflareDoContractDriver = (): RuntimeBackendContractDriver => {
   const handlers = new Map<string, Set<EventHandler>>();
   const states = new Map<string, DurableObjectState>();
@@ -155,10 +161,24 @@ const makeCloudflareDoContractDriver = (): RuntimeBackendContractDriver => {
       if (event === undefined) throw new Error("ledger commit returned no event");
       return event;
     },
-    events: async (identity) => {
+    commit: async (events) => {
+      const identity =
+        events[0] === undefined
+          ? emptyEventIdentity
+          : { ...events[0], factOwnerRef: RUNTIME_FACT_OWNER };
       const handle = runtimeFor(identity);
       const ledger = await handle.runPromise(Ledger);
-      return handle.runPromise(ledger.events(identity));
+      return handle.runPromise(ledger.commit(events));
+    },
+    events: async (identity, opts) => {
+      const handle = runtimeFor(identity);
+      const ledger = await handle.runPromise(Ledger);
+      return handle.runPromise(ledger.events(identity, opts));
+    },
+    streamSnapshot: async (identity, opts) => {
+      const handle = runtimeFor(identity);
+      const ledger = await handle.runPromise(Ledger);
+      return handle.runPromise(ledger.streamSnapshot(identity, opts));
     },
     schedule: async (identity, at, eventKind, data) => {
       const handle = runtimeFor(identity);
