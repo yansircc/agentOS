@@ -947,6 +947,12 @@ const checkSpikeHygiene = () => {
   );
 };
 
+const checkConvergenceBoundary = () => {
+  checkClientBoundaries();
+  checkSpikeHygiene();
+  console.log("convergence boundary passed");
+};
+
 const checkDocsSiteBuild = () => {
   const contentRoot = path.join(repoRoot, "tooling/docs-site/src/content/docs");
   const distRoot = path.join(repoRoot, "tooling/docs-site/dist");
@@ -975,6 +981,7 @@ const checkerById = new Map([
   ["backend-neutrality", checkBackendNeutrality],
   ["boundaries", checkBoundaryProjection],
   ["client-boundaries", checkClientBoundaries],
+  ["convergence-boundary", checkConvergenceBoundary],
   ["d12-a155-substrate-absorption", checkBoundaryProjection],
   ["docs-site-build", checkDocsSiteBuild],
   ["event-namespaces", checkEventNamespaces],

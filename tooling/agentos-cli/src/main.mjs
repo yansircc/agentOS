@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { hasAlgorithmicChecker, runAlgorithmicChecker } from "./check/algorithmic-checks.mjs";
 import { listGuards, runGroup, runGuard } from "./runner.mjs";
 
 const version = "0.5.16";
@@ -14,6 +15,7 @@ Usage:
   agentos check release
   agentos check site
   agentos check guard-coverage
+  agentos check <algorithmic-check-id>
   agentos check guard <rule-id>
   agentos check guards
   agentos generate docs
@@ -83,8 +85,13 @@ const runCheck = async (args) => {
       for (const id of listGuards()) console.log(id);
       return;
     default:
+      if (command !== undefined && hasAlgorithmicChecker(command)) {
+        expectNoExtraArgs(rest, `agentos check ${command}`);
+        await runAlgorithmicChecker(command);
+        return;
+      }
       throw new Error(
-        "agentos check: choose one of all, docs, effect-manifests, release, site, guard-coverage, guard, guards",
+        "agentos check: choose one of all, docs, effect-manifests, release, site, guard-coverage, guard, guards, or an algorithmic checker id",
       );
   }
 };

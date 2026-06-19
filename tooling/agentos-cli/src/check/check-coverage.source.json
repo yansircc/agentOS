@@ -703,6 +703,25 @@
     },
     {
       "source": {
+        "kind": "mainlineChecker",
+        "path": "tooling/agentos-cli/src/check/algorithmic-checks.mjs"
+      },
+      "owner": "CST 418 and tooling/refactor/a78-a94/client-app-kit-boundary.md",
+      "ruleId": "convergence-boundary",
+      "target": {
+        "kind": "algorithmic",
+        "ruleId": "convergence-boundary",
+        "checker": "convergence-boundary"
+      },
+      "assertions": [
+        {
+          "failureCondition": "convergence-boundary: post-v3 downstream surfaces must stay outside substrate truth ownership and spikes must remain local-only",
+          "negativeWitness": "algorithmic projection rejects source mutations caught by client-boundaries or spike-hygiene before role-survival deletion decisions run"
+        }
+      ]
+    },
+    {
+      "source": {
         "kind": "preMigrationChecker",
         "path": "tooling/agentos-cli/src/check/check-replay-dispatch-snapshot.mjs"
       },
