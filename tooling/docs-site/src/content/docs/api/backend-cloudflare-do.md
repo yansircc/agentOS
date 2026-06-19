@@ -9,6 +9,7 @@ title: "@agent-os/backend-cloudflare-do Public API Intent"
 - `.:AgentDurableObjectConfig`
 - `.:AgentAttachedStreamCancelSpec`
 - `.:AgentAttachedStreamSpec`
+- `.:AgentDeclaredIntent`
 - `.:AgentEventHandlerContext`
 - `.:AgentEventHandlerRegistration`
 - `.:AgentRuntimeReaderClient`
@@ -20,10 +21,12 @@ title: "@agent-os/backend-cloudflare-do Public API Intent"
 - `.:CloudflareAgentEnv`
 - `.:CloudflareAgentDOIntrospectionRpc`
 - `.:CloudflareAgentDOResolvedScope`
+- `.:CloudflareAgentDeploymentSpec`
 - `.:CloudflareAgentDriverConfig`
 - `.:CloudflareAgentMount`
 - `.:CloudflareAgentMountPort`
 - `.:CloudflareAgentProjectionSinks`
+- `.:CloudflareAgentProjectionSource`
 - `.:CloudflareAttachedStreamFactory`
 - `.:CloudflareAttachedStreamFactoryContext`
 - `.:CloudflareAttachedStreamSource`
@@ -58,6 +61,7 @@ title: "@agent-os/backend-cloudflare-do Public API Intent"
 - `.:HttpDispatchTargetSpec`
 - `.:InstallCloudflareWorkspaceJobProfileOptions`
 - `.:InstallCloudflareWorkspaceOperationProviderOptions`
+- `.:MaterializedAgentConfig`
 - `.:ProviderDispatchTargetSpec`
 - `.:QueueDispatchTargetBinding`
 - `.:cloudflareAgentDoOpsStubFor`
@@ -72,6 +76,7 @@ title: "@agent-os/backend-cloudflare-do Public API Intent"
 - `.:httpDispatchTarget`
 - `.:installCloudflareWorkspaceJobProfile`
 - `.:installCloudflareWorkspaceOperationProvider`
+- `.:materializeCloudflareAgentDeployment`
 - `.:mountCloudflareAgent`
 - `.:providerDispatchTarget`
 - `.:queueDispatchTarget`

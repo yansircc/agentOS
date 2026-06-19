@@ -71,7 +71,6 @@ import type {
   InternalSubmitSpec,
 } from "@agent-os/runtime";
 import type {
-  AgentManifest,
   AgentManifestProjection,
   AgentSubmitBindings,
   AttemptKey,
@@ -120,7 +119,6 @@ import { Dispatch, type DispatchEnvelope, type DispatchTargetRegistry } from "./
 import { EventBus, createEventStreamResponse, eventToRpc } from "./ledger";
 import { Scheduler } from "./scheduler";
 import { Resources } from "./resources";
-import { MissingLlmTransportLive } from "./llm";
 import { isMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
 import { AdmissionLive } from "./admission";
 import {
@@ -153,11 +151,14 @@ import { commitDurableTriggerIntent } from "./due-work";
 import type { CloudflareTriggerSource } from "./trigger-factory";
 import type { CloudflareAttachedStreamSource } from "./stream-factory";
 import { createAttachedStreamResponse } from "./attached-stream-wire";
+import type { CloudflareAgentMount } from "./mount";
 import {
-  mountCloudflareAgent,
-  type CloudflareAgentBindings,
-  type CloudflareAgentMount,
-} from "./mount";
+  materializeCloudflareAgentConfig,
+  type AgentDeclaredIntent,
+  type AgentDurableObjectConfig,
+  type CloudflareAgentEnv,
+  type MaterializedAgentConfig,
+} from "./deployment";
 import { commitLedgerTransaction } from "./ledger/commit";
 import {
   cloudflareDefaultTruthIdentityFromRoutingScope,
@@ -166,8 +167,6 @@ import {
   eventIdentity,
   LegacyLedgerSchemaError,
 } from "./ledger/identity";
-
-export interface CloudflareAgentEnv {}
 
 export interface AgentRuntimeReaderClient {
   readonly info: () => Promise<AgentManifestProjection>;
@@ -256,25 +255,6 @@ export interface AgentSubmitSpec {
   readonly resume?: SubmitSpec["resume"];
 }
 
-export interface AgentDeclaredIntent {
-  readonly kind: string;
-  readonly boundaryPackageId: string;
-}
-
-export interface AgentEventHandlerRegistration {
-  readonly kind: string;
-  readonly handler: EventHandler;
-}
-
-export interface AgentEventHandlerContext<Runtime = AgentRuntimeClient> {
-  readonly runtime: Runtime;
-  readonly capabilities: ReadonlyMap<string, ExtensionCapability>;
-}
-
-export type CloudflareAgentProjectionSource<Env extends CloudflareAgentEnv> =
-  | ReadonlyArray<AnyMaterializedProjectionDefinition>
-  | ((env: Env) => ReadonlyArray<AnyMaterializedProjectionDefinition>);
-
 type CoreServices = CloudflareBackendCoreServices | LlmTransport | Admission | RefResolverService;
 
 const makeAgentRuntime = <Env extends CloudflareAgentEnv>(
@@ -314,49 +294,6 @@ const makeAgentRuntime = <Env extends CloudflareAgentEnv>(
   );
 };
 
-export interface AgentDurableObjectConfig<
-  Env extends CloudflareAgentEnv,
-  Runtime = AgentRuntimeClient,
-> {
-  readonly manifest: AgentManifest;
-  readonly agentBindings: CloudflareAgentBindings;
-  readonly refResolver?: (env: Env) => RefResolver;
-  readonly llmTransport?: (env: Env) => Layer.Layer<LlmTransport, never, RefResolverService>;
-  readonly extensions?: (env: Env) => ReadonlyArray<ExtensionDeclaration>;
-  readonly declaredIntents?: (env: Env) => ReadonlyArray<AgentDeclaredIntent>;
-  readonly dispatchTargets?: (env: Env) => DispatchTargetRegistry;
-  readonly triggers?: CloudflareTriggerSource<Env>;
-  readonly streams?: CloudflareAttachedStreamSource<Env>;
-  readonly projections?: CloudflareAgentProjectionSource<Env>;
-  readonly eventHandlers?: (
-    context: AgentEventHandlerContext<Runtime>,
-    env: Env,
-  ) => Iterable<AgentEventHandlerRegistration>;
-}
-
-export interface MaterializedAgentConfig<
-  Env extends CloudflareAgentEnv,
-  Runtime = AgentRuntimeClient,
-> {
-  readonly mount: CloudflareAgentMount;
-  readonly refResolver: RefResolver;
-  readonly llmTransport: Layer.Layer<LlmTransport, never, RefResolverService>;
-  readonly extensions: ReadonlyArray<ExtensionDeclaration>;
-  readonly declaredIntents: ReadonlyArray<AgentDeclaredIntent>;
-  readonly dispatchTargets: DispatchTargetRegistry;
-  readonly triggers: CloudflareTriggerSource<Env>;
-  readonly streams: CloudflareAttachedStreamSource<Env>;
-  readonly projections: ReadonlyArray<AnyMaterializedProjectionDefinition>;
-  readonly eventHandlers?: (
-    context: AgentEventHandlerContext<Runtime>,
-    env: Env,
-  ) => Iterable<AgentEventHandlerRegistration>;
-}
-
-const emptyRefResolver: RefResolver = {
-  material: () => null,
-};
-
 const rejectAgentConfig = (message: string): never =>
   Option.getOrThrowWith(Option.none(), () => new TypeError(message));
 
@@ -394,12 +331,6 @@ const declaredToolIntents = (
     };
   });
 };
-
-const projectionsFor = <Env extends CloudflareAgentEnv>(
-  projections: CloudflareAgentProjectionSource<Env> | undefined,
-  env: Env,
-): ReadonlyArray<AnyMaterializedProjectionDefinition> =>
-  typeof projections === "function" ? projections(env) : (projections ?? []);
 
 export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentRuntimeReaderClient>
   extends DurableObject<Env>
@@ -1272,25 +1203,14 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
 }
 
 export const createAgentDurableObject = <Env extends CloudflareAgentEnv>(
-  config: AgentDurableObjectConfig<Env>,
+  config: AgentDurableObjectConfig<Env, AgentRuntimeClient>,
 ) =>
   class ConfiguredAgentDurableObject
     extends AgentDurableObject<Env, AgentRuntimeClient>
     implements AgentRuntimeClient
   {
     constructor(ctx: DurableObjectState, env: Env) {
-      super(ctx, env, {
-        mount: mountCloudflareAgent(config.manifest, config.agentBindings),
-        refResolver: config.refResolver?.(env) ?? emptyRefResolver,
-        llmTransport: config.llmTransport?.(env) ?? MissingLlmTransportLive,
-        extensions: config.extensions?.(env) ?? [],
-        declaredIntents: config.declaredIntents?.(env) ?? [],
-        dispatchTargets: config.dispatchTargets?.(env) ?? {},
-        triggers: config.triggers ?? [],
-        streams: config.streams ?? [],
-        projections: projectionsFor(config.projections, env),
-        eventHandlers: config.eventHandlers,
-      });
+      super(ctx, env, materializeCloudflareAgentConfig(config.manifest, config, env));
     }
 
     submit(spec: AgentSubmitSpec): Promise<SubmitResult> {

@@ -5,6 +5,7 @@
 - `.:AgentDurableObjectConfig`
 - `.:AgentAttachedStreamCancelSpec`
 - `.:AgentAttachedStreamSpec`
+- `.:AgentDeclaredIntent`
 - `.:AgentEventHandlerContext`
 - `.:AgentEventHandlerRegistration`
 - `.:AgentRuntimeReaderClient`
@@ -16,10 +17,12 @@
 - `.:CloudflareAgentEnv`
 - `.:CloudflareAgentDOIntrospectionRpc`
 - `.:CloudflareAgentDOResolvedScope`
+- `.:CloudflareAgentDeploymentSpec`
 - `.:CloudflareAgentDriverConfig`
 - `.:CloudflareAgentMount`
 - `.:CloudflareAgentMountPort`
 - `.:CloudflareAgentProjectionSinks`
+- `.:CloudflareAgentProjectionSource`
 - `.:CloudflareAttachedStreamFactory`
 - `.:CloudflareAttachedStreamFactoryContext`
 - `.:CloudflareAttachedStreamSource`
@@ -54,6 +57,7 @@
 - `.:HttpDispatchTargetSpec`
 - `.:InstallCloudflareWorkspaceJobProfileOptions`
 - `.:InstallCloudflareWorkspaceOperationProviderOptions`
+- `.:MaterializedAgentConfig`
 - `.:ProviderDispatchTargetSpec`
 - `.:QueueDispatchTargetBinding`
 - `.:cloudflareAgentDoOpsStubFor`
@@ -68,6 +72,7 @@
 - `.:httpDispatchTarget`
 - `.:installCloudflareWorkspaceJobProfile`
 - `.:installCloudflareWorkspaceOperationProvider`
+- `.:materializeCloudflareAgentDeployment`
 - `.:mountCloudflareAgent`
 - `.:providerDispatchTarget`
 - `.:queueDispatchTarget`

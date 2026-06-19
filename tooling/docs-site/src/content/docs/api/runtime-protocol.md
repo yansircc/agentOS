@@ -92,6 +92,7 @@ title: "@agent-os/runtime-protocol API"
 - `.:DecodedOutput`
 - `.:DecisionContinuationCause`
 - `.:DefineAgentCapabilitySpec`
+- `.:DeploymentSpec`
 - `.:EMPTY_BARRIER_CURSOR`
 - `.:ExtensionHandlerKind`
 - `.:EvidenceRow`
@@ -114,6 +115,8 @@ title: "@agent-os/runtime-protocol API"
 - `.:FailureDiagnostics`
 - `.:FINGERPRINT_ALGO_VERSION`
 - `.:ExternalReceiptAnchorRef`
+- `.:INSTALLATION_RECEIPT_EVENT_KIND`
+- `.:INSTALLATION_RECEIPT_VERSION`
 - `.:IntentSettlementVocabularyIssue`
 - `.:InvalidateSpec`
 - `.:INPUT_REQUEST_KIND`
@@ -127,6 +130,7 @@ title: "@agent-os/runtime-protocol API"
 - `.:InputRequestRefFromInterruptionResult`
 - `.:RecordedInputRequestRef`
 - `.:InputRequestResumePayload`
+- `.:InstallationReceipt`
 - `.:LedgerWitnessedScopedRef`
 - `.:LedgerCommitEventSpec`
 - `.:LedgerTruthIdentity`
@@ -241,6 +245,9 @@ title: "@agent-os/runtime-protocol API"
 - `.:inputRequestKindFromReason`
 - `.:inputRequestDescriptorFromUnknown`
 - `.:inputRequestRefFromInterruptedEvent`
+- `.:installationReceiptEvent`
+- `.:installationReceiptFromDeployment`
+- `.:installationReceiptFromLedgerEvent`
 - `.:isContinuationCause`
 - `.:isContinuationRef`
 - `.:isInputRequestRef`
@@ -255,6 +262,7 @@ title: "@agent-os/runtime-protocol API"
 - `.:manifestTruthIdentity`
 - `.:mountAgent`
 - `.:projectAgentManifest`
+- `.:projectInstallationReceipt`
 - `.:projectLease`
 - `.:projectFailureDiagnostics`
 - `.:projectRuntimeSafeLedgerEvent`

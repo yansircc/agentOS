@@ -88,6 +88,7 @@
 - `.:DecodedOutput`
 - `.:DecisionContinuationCause`
 - `.:DefineAgentCapabilitySpec`
+- `.:DeploymentSpec`
 - `.:EMPTY_BARRIER_CURSOR`
 - `.:ExtensionHandlerKind`
 - `.:EvidenceRow`
@@ -110,6 +111,8 @@
 - `.:FailureDiagnostics`
 - `.:FINGERPRINT_ALGO_VERSION`
 - `.:ExternalReceiptAnchorRef`
+- `.:INSTALLATION_RECEIPT_EVENT_KIND`
+- `.:INSTALLATION_RECEIPT_VERSION`
 - `.:IntentSettlementVocabularyIssue`
 - `.:InvalidateSpec`
 - `.:INPUT_REQUEST_KIND`
@@ -123,6 +126,7 @@
 - `.:InputRequestRefFromInterruptionResult`
 - `.:RecordedInputRequestRef`
 - `.:InputRequestResumePayload`
+- `.:InstallationReceipt`
 - `.:LedgerWitnessedScopedRef`
 - `.:LedgerCommitEventSpec`
 - `.:LedgerTruthIdentity`
@@ -237,6 +241,9 @@
 - `.:inputRequestKindFromReason`
 - `.:inputRequestDescriptorFromUnknown`
 - `.:inputRequestRefFromInterruptedEvent`
+- `.:installationReceiptEvent`
+- `.:installationReceiptFromDeployment`
+- `.:installationReceiptFromLedgerEvent`
 - `.:isContinuationCause`
 - `.:isContinuationRef`
 - `.:isInputRequestRef`
@@ -251,6 +258,7 @@
 - `.:manifestTruthIdentity`
 - `.:mountAgent`
 - `.:projectAgentManifest`
+- `.:projectInstallationReceipt`
 - `.:projectLease`
 - `.:projectFailureDiagnostics`
 - `.:projectRuntimeSafeLedgerEvent`

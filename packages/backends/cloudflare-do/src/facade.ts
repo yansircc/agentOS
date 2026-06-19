@@ -9,17 +9,19 @@ import {
   AgentDurableObject,
   type AgentAttachedStreamCancelSpec,
   type AgentAttachedStreamSpec,
-  type AgentDeclaredIntent,
-  type AgentEventHandlerContext,
-  type AgentEventHandlerRegistration,
   type AgentSubmitSpec,
   type AgentWorkspaceJobSpec,
   type AgentTriggerCancelSpec,
   type AgentTriggerIntentSpec,
-  type CloudflareAgentProjectionSource,
-  type CloudflareAgentEnv,
-  type MaterializedAgentConfig,
 } from "./agent-do";
+import type {
+  AgentDeclaredIntent,
+  AgentEventHandlerContext,
+  AgentEventHandlerRegistration,
+  CloudflareAgentEnv,
+  CloudflareAgentProjectionSource,
+  MaterializedAgentConfig,
+} from "./deployment";
 import { mountCloudflareAgent, type CloudflareAgentBindings } from "./mount";
 import type { CloudflareTriggerSource } from "./trigger-factory";
 import type { CloudflareAttachedStreamSource } from "./stream-factory";

@@ -6,7 +6,8 @@
  * from @agent-os/runtime. Do not re-export those packages here.
  */
 
-export { createAgentDurableObject, type CloudflareAgentEnv } from "./agent-do";
+export { createAgentDurableObject } from "./agent-do";
+export { materializeCloudflareAgentDeployment } from "./deployment";
 export { cloudflareAgentMountPort, mountCloudflareAgent } from "./mount";
 export * from "./ag-ui-sse";
 export * from "./workspace-job-facade";
@@ -17,9 +18,6 @@ export * from "./ops-api";
 export type {
   AgentAttachedStreamCancelSpec,
   AgentAttachedStreamSpec,
-  AgentDurableObjectConfig,
-  AgentEventHandlerContext,
-  AgentEventHandlerRegistration,
   AgentRuntimeClient,
   AgentRuntimeReaderClient,
   AgentSubmitSpec,
@@ -27,6 +25,16 @@ export type {
   AgentTriggerCancelSpec,
   AgentTriggerIntentSpec,
 } from "./agent-do";
+export type {
+  AgentDeclaredIntent,
+  AgentDurableObjectConfig,
+  AgentEventHandlerContext,
+  AgentEventHandlerRegistration,
+  CloudflareAgentDeploymentSpec,
+  CloudflareAgentEnv,
+  CloudflareAgentProjectionSource,
+  MaterializedAgentConfig,
+} from "./deployment";
 export type {
   CloudflareAgentDriverConfig,
   CloudflareAgentMount,

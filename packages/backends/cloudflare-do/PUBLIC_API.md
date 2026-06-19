@@ -9,6 +9,7 @@ Status: Backend package. Public exports include the Durable Object factory, moun
 - `.:AgentDurableObjectConfig`
 - `.:AgentAttachedStreamCancelSpec`
 - `.:AgentAttachedStreamSpec`
+- `.:AgentDeclaredIntent`
 - `.:AgentEventHandlerContext`
 - `.:AgentEventHandlerRegistration`
 - `.:AgentRuntimeReaderClient`
@@ -20,10 +21,12 @@ Status: Backend package. Public exports include the Durable Object factory, moun
 - `.:CloudflareAgentEnv`
 - `.:CloudflareAgentDOIntrospectionRpc`
 - `.:CloudflareAgentDOResolvedScope`
+- `.:CloudflareAgentDeploymentSpec`
 - `.:CloudflareAgentDriverConfig`
 - `.:CloudflareAgentMount`
 - `.:CloudflareAgentMountPort`
 - `.:CloudflareAgentProjectionSinks`
+- `.:CloudflareAgentProjectionSource`
 - `.:CloudflareAttachedStreamFactory`
 - `.:CloudflareAttachedStreamFactoryContext`
 - `.:CloudflareAttachedStreamSource`
@@ -58,6 +61,7 @@ Status: Backend package. Public exports include the Durable Object factory, moun
 - `.:HttpDispatchTargetSpec`
 - `.:InstallCloudflareWorkspaceJobProfileOptions`
 - `.:InstallCloudflareWorkspaceOperationProviderOptions`
+- `.:MaterializedAgentConfig`
 - `.:ProviderDispatchTargetSpec`
 - `.:QueueDispatchTargetBinding`
 - `.:cloudflareAgentDoOpsStubFor`
@@ -72,6 +76,7 @@ Status: Backend package. Public exports include the Durable Object factory, moun
 - `.:httpDispatchTarget`
 - `.:installCloudflareWorkspaceJobProfile`
 - `.:installCloudflareWorkspaceOperationProvider`
+- `.:materializeCloudflareAgentDeployment`
 - `.:mountCloudflareAgent`
 - `.:providerDispatchTarget`
 - `.:queueDispatchTarget`
