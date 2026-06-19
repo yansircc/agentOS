@@ -94,7 +94,7 @@
       ],
       "tests": [
         "packages/runtime-protocol/test/runtime-events.test.ts",
-        "tooling/agentos-cli/src/check/check-public-api.mjs"
+        "tooling/agentos-cli/src/check/algorithmic-checks.mjs"
       ],
       "decisions": [
         "decisions/a52-documentation-substrate.md",
@@ -253,8 +253,8 @@
       "docs": ["docs/concepts/materialized-projections.md", "docs/verification.md"],
       "tests": [
         "tooling/agentos-cli/src/generate/generate-docs.mjs",
-        "tooling/agentos-cli/src/check/check-doc-structure.mjs",
-        "tooling/agentos-cli/src/check/check-public-api.mjs"
+        "tooling/agentos-cli/src/check/check-coverage.source.json",
+        "tooling/agentos-cli/src/check/algorithmic-checks.mjs"
       ],
       "decisions": [
         "decisions/a52-documentation-substrate.md",
@@ -271,7 +271,7 @@
       "errors": [],
       "docs": ["docs/concepts/ag-ui-wire-adapter.md", "docs/packages/backend-cloudflare-do.md"],
       "tests": [
-        "tooling/agentos-cli/src/check/check-ag-ui-sse-axis.mjs",
+        "tooling/agentos-cli/src/check/algorithmic-checks.mjs",
         "packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"
       ],
       "decisions": []

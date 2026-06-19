@@ -271,6 +271,12 @@
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
     },
     {
+      "path": "tooling/agentos-cli",
+      "shape": ["library"],
+      "dependencyOwner": "workspace-root",
+      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
+    },
+    {
       "path": "tooling/docs-site",
       "shape": ["library"],
       "dependencyOwner": "workspace-root",
@@ -290,11 +296,6 @@
     }
   ],
   "hostTooling": [
-    {
-      "path": "tooling/agentos-cli/**",
-      "owner": "@agent-os/agentos-cli",
-      "reason": "private repo CLI host tooling is isolated from substrate Effect v4 package rules"
-    },
     {
       "path": ".parallel/**",
       "owner": "@parallel-dev",
