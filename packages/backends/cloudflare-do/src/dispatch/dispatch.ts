@@ -5,8 +5,8 @@
  *   - sender intent truth   : `events.kind = dispatch.outbound.requested`
  *   - external enqueue ack  : `events.kind = dispatch.outbound.enqueued`
  *   - receiver acceptance   : `events.kind = dispatch.inbound.accepted`
- *   - `dispatch_outbox`     : mechanical pending-delivery buffer; caches
- *                              attempts / last_error / success_event_id
+ *   - retry/delivery state  : derived from sender `dispatch.outbound.*`
+ *                              ledger facts
  *
  */
 
@@ -48,6 +48,7 @@ import {
   DISPATCH_RETRY_POLICY,
   copyTraceContext,
   describeDispatchCause,
+  dispatchDeliveryHistoryState,
   dispatchExternalEnqueueAcknowledgement,
   dispatchLedgerDeliveryReceipt,
   dispatchTargetDelivered,
@@ -63,7 +64,6 @@ import {
   type DispatchRequestedPayload,
   type DispatchTargetAdapter,
 } from "@agent-os/backend-protocol";
-import { ensureDispatchSchema, selectPendingOutboxByIntent } from "./outbox";
 import { findAccepted, type InboundAcceptedPayload } from "./receiver";
 import { commitDurableTriggerIntent, ensureDueWorkSchema } from "../due-work";
 import { commitLedgerTransaction, type LedgerPayloadContext } from "../ledger/commit";
@@ -197,31 +197,30 @@ export const providerDispatchTarget = (
 });
 
 type DeliveryRetryOutcome =
+  | { readonly _tag: "skipped" }
   | {
       readonly _tag: "delivered";
       readonly outboundEventId: number;
       readonly requested: DispatchRequestedPayload;
       readonly deliveryReceipt: DispatchDeliveryReceipt;
+      readonly attempt: number;
     }
   | {
       readonly _tag: "enqueued";
       readonly outboundEventId: number;
       readonly requested: DispatchRequestedPayload;
       readonly enqueueAcknowledgement: DispatchEnqueueAcknowledgement;
+      readonly attempt: number;
     }
   | {
       readonly _tag: "failed";
       readonly outboundEventId: number;
       readonly requested: DispatchRequestedPayload;
       readonly cause: unknown;
+      readonly attempt: number;
     };
 
-type CloudflareDispatchTriggerTx = {
-  readonly afterLedgerInsert: (effect: () => void) => void;
-};
-
 export const deliveryRetryTrigger = (
-  sql: SqlStorage,
   scope: string,
   targets: DispatchTargetRegistry,
 ): DurableTrigger<DispatchRequestedPayload, DeliveryRetryOutcome> => ({
@@ -234,6 +233,18 @@ export const deliveryRetryTrigger = (
   },
   acquire: (requested, acquireCtx) =>
     Effect.gen(function* () {
+      const history = dispatchDeliveryHistoryState(
+        acquireCtx.events({
+          kinds: [
+            DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED,
+            DISPATCH_EVENT_KINDS.OUTBOUND_ENQUEUED,
+            DISPATCH_EVENT_KINDS.OUTBOUND_FAILED,
+          ],
+        }),
+        acquireCtx.intentEventId,
+      );
+      if (history.successCount > 0) return { _tag: "skipped" } as const;
+      const attempt = history.attemptCount + 1;
       const bindingKey = materialRefKey(requested.target.bindingRef);
       const target = targets[bindingKey];
       if (target === undefined) {
@@ -242,6 +253,7 @@ export const deliveryRetryTrigger = (
           outboundEventId: acquireCtx.intentEventId,
           requested,
           cause: new DispatchTargetNotFound({ bindingRef: bindingKey }),
+          attempt,
         } as const;
       }
 
@@ -267,6 +279,7 @@ export const deliveryRetryTrigger = (
             outboundEventId: acquireCtx.intentEventId,
             requested,
             deliveryReceipt: delivery.success.receipt,
+            attempt,
           } as const;
         }
         return {
@@ -274,6 +287,7 @@ export const deliveryRetryTrigger = (
           outboundEventId: acquireCtx.intentEventId,
           requested,
           enqueueAcknowledgement: delivery.success.acknowledgement,
+          attempt,
         } as const;
       }
       return {
@@ -281,16 +295,15 @@ export const deliveryRetryTrigger = (
         outboundEventId: acquireCtx.intentEventId,
         requested,
         cause: delivery.failure,
+        attempt,
       } as const;
     }),
   commit: (outcome, tx) => {
-    const row = selectPendingOutboxByIntent(sql, outcome.outboundEventId);
-    if (row === null) return;
-    const attempt = row.attempts + 1;
+    if (outcome._tag === "skipped") return;
 
     if (outcome._tag === "delivered") {
       const bindingKey = materialRefKey(outcome.requested.target.bindingRef);
-      const event = tx.insertEvent({
+      tx.insertEvent({
         kind: DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED,
         payload: {
           outboundEventId: outcome.outboundEventId,
@@ -298,7 +311,7 @@ export const deliveryRetryTrigger = (
           event: outcome.requested.event,
           idempotencyKey: outcome.requested.idempotencyKey,
           deliveryReceipt: outcome.deliveryReceipt,
-          attempt,
+          attempt: outcome.attempt,
           ...(outcome.requested.claim === undefined
             ? {}
             : {
@@ -312,19 +325,11 @@ export const deliveryRetryTrigger = (
             : { traceContext: outcome.requested.traceContext }),
         },
       });
-      (tx as unknown as CloudflareDispatchTriggerTx).afterLedgerInsert(() => {
-        sql.exec(
-          "UPDATE dispatch_outbox SET success_event_id = ?, attempts = ?, last_error = NULL WHERE outbound_event_id = ?",
-          event.id,
-          attempt,
-          outcome.outboundEventId,
-        );
-      });
       return;
     }
 
     if (outcome._tag === "enqueued") {
-      const event = tx.insertEvent({
+      tx.insertEvent({
         kind: DISPATCH_EVENT_KINDS.OUTBOUND_ENQUEUED,
         payload: {
           outboundEventId: outcome.outboundEventId,
@@ -332,28 +337,20 @@ export const deliveryRetryTrigger = (
           event: outcome.requested.event,
           idempotencyKey: outcome.requested.idempotencyKey,
           enqueueAcknowledgement: outcome.enqueueAcknowledgement,
-          attempt,
+          attempt: outcome.attempt,
           ...(outcome.requested.traceContext === undefined
             ? {}
             : { traceContext: outcome.requested.traceContext }),
         },
       });
-      (tx as unknown as CloudflareDispatchTriggerTx).afterLedgerInsert(() => {
-        sql.exec(
-          "UPDATE dispatch_outbox SET success_event_id = ?, attempts = ?, last_error = NULL WHERE outbound_event_id = ?",
-          event.id,
-          attempt,
-          outcome.outboundEventId,
-        );
-      });
       return;
     }
 
     const error = describeDispatchCause(outcome.cause);
-    const terminal = attempt >= outcome.requested.retryPolicy.maxAttempts;
+    const terminal = outcome.attempt >= outcome.requested.retryPolicy.maxAttempts;
     const nextAttemptAt = terminal
       ? null
-      : tx.now + durableTriggerBackoffMs(outcome.requested.retryPolicy, attempt);
+      : tx.now + durableTriggerBackoffMs(outcome.requested.retryPolicy, outcome.attempt);
     tx.insertEvent({
       kind: DISPATCH_EVENT_KINDS.OUTBOUND_FAILED,
       payload: {
@@ -361,7 +358,7 @@ export const deliveryRetryTrigger = (
         target: outcome.requested.target,
         event: outcome.requested.event,
         idempotencyKey: outcome.requested.idempotencyKey,
-        attempt,
+        attempt: outcome.attempt,
         error,
         terminal,
         ...(nextAttemptAt === null ? {} : { nextAttemptAt }),
@@ -370,12 +367,6 @@ export const deliveryRetryTrigger = (
           : { traceContext: outcome.requested.traceContext }),
       },
     });
-    sql.exec(
-      "UPDATE dispatch_outbox SET attempts = ?, last_error = ? WHERE outbound_event_id = ?",
-      attempt,
-      error,
-      outcome.outboundEventId,
-    );
     if (nextAttemptAt !== null) {
       tx.reschedule(nextAttemptAt, outcome.outboundEventId);
     }
@@ -432,9 +423,6 @@ export const DispatchLive = (
   return Layer.effect(
     Dispatch,
     Effect.gen(function* () {
-      yield* ensureDispatchSchema(sql).pipe(
-        Effect.mapError((cause) => runtimeStorageError("dispatch", cause)),
-      );
       yield* ensureDueWorkSchema(sql).pipe(
         Effect.mapError((cause) => runtimeStorageError("dispatch", cause)),
       );
@@ -525,12 +513,6 @@ export const DispatchLive = (
                   scopeRef: identity.scopeRef,
                   effectAuthorityRef: identity.effectAuthorityRef,
                   payload: requestedPayload,
-                });
-                tx.afterInsert(({ id }) => {
-                  sql.exec(
-                    "INSERT INTO dispatch_outbox (outbound_event_id) VALUES (?)",
-                    id(outbound),
-                  );
                 });
                 return outbound;
               },

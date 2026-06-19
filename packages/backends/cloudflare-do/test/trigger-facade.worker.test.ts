@@ -121,7 +121,7 @@ describe("defineAgentDO trigger facade", () => {
     ]);
   });
 
-  it("exposes canonical payloads through trigger tx pending surfaces", async () => {
+  it("exposes canonical payloads through trigger tx append results", async () => {
     const stub = testEnv.TRIGGER_FACADE_DO.get(
       testEnv.TRIGGER_FACADE_DO.idFromName("trigger-facade-canonical-tx"),
     );
@@ -143,10 +143,6 @@ describe("defineAgentDO trigger facade", () => {
     expect(observed?.payload).toEqual({
       inserted: { visible: "stored", hasSecret: false },
       enqueued: { visible: "stored", hasSecret: false },
-      seen: [
-        { visible: "stored", hasSecret: false },
-        { visible: "stored", hasSecret: false },
-      ],
     });
   });
 

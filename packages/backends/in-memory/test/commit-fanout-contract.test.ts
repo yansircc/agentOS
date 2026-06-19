@@ -23,7 +23,7 @@ const failingDispatchDeliveredProjection = defineProjection({
 });
 
 describe("in-memory backend commit/fanout contract", () => {
-  it("does not publish dispatch outbox patches when projection commit fails", async () => {
+  it("does not publish dispatch delivery facts when projection commit fails", async () => {
     const state = createInMemoryBackendState();
     const bindingRef = bindingMaterialRef({
       provider: "test",
@@ -77,13 +77,6 @@ describe("in-memory backend commit/fanout contract", () => {
         .snapshot(truthIdentity("sender"))
         .find((event) => event.kind === DISPATCH_EVENT_KINDS.OUTBOUND_REQUESTED);
       expect(outbound).toBeDefined();
-      const outbox = state.pendingOutboxByIntent(outbound!.id);
-      expect(outbox).toMatchObject({
-        outboundEventId: outbound!.id,
-        attempts: 0,
-        successEventId: null,
-        lastError: null,
-      });
       expect(
         state
           .snapshot(truthIdentity("sender"))

@@ -32,6 +32,7 @@ title: "@agent-os/backend-protocol API"
 - `.:decodeResourceTerminalPayloadSync`
 - `.:describeDispatchCause`
 - `.:dispatchBackoffMs`
+- `.:dispatchDeliveryHistoryState`
 - `.:dispatchExternalEnqueueAcknowledgement`
 - `.:durableProcessLifecycleState`
 - `.:dispatchPayloadParseFailure`
@@ -75,6 +76,7 @@ title: "@agent-os/backend-protocol API"
 - `.:DispatchPayloadParseFailure`
 - `.:DispatchPayloadParseResult`
 - `.:DispatchDeliveryResult`
+- `.:DispatchDeliveryHistoryState`
 - `.:DispatchDeliveryReceipt`
 - `.:DispatchEnvelope`
 - `.:DispatchReceiver`

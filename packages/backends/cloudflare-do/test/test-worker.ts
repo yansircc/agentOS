@@ -1287,16 +1287,19 @@ const foldTrigger = {
   intentEventKind: "test.fold.requested",
   cancellation: "cooperative",
   parseIntent: parseFoldIntent,
-  acquire: (intent: FoldIntent) => Effect.succeed(intent),
+  acquire: (intent: FoldIntent, ctx) =>
+    Effect.succeed({
+      intent,
+      seen: ctx.events({ kinds: ["test.fold.done"] }).length,
+    }),
   commit: (outcome, tx) => {
-    const seen = tx.events({ kinds: ["test.fold.done"] }).length;
     tx.insertEvent({
       kind: "test.fold.done",
-      payload: { label: outcome.label, seen },
+      payload: { label: outcome.intent.label, seen: outcome.seen },
     });
   },
   commitCancelled: () => undefined,
-} satisfies DurableTrigger<FoldIntent, FoldIntent>;
+} satisfies DurableTrigger<FoldIntent, { readonly intent: FoldIntent; readonly seen: number }>;
 
 const canonicalTxTrigger = {
   kind: "test.trigger_canonical_tx",
@@ -1320,12 +1323,6 @@ const canonicalTxTrigger = {
       payload: {
         inserted: payloadObservation(inserted.payload),
         enqueued: payloadObservation(enqueued.payload),
-        seen: tx
-          .events({
-            afterId: tx.intentEventId,
-            kinds: ["test.trigger_canonical_tx.done", "test.fold.requested"],
-          })
-          .map((event) => payloadObservation(event.payload)),
       },
     });
   },

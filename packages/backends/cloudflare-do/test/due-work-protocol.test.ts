@@ -271,8 +271,6 @@ describe("due-work alarm protocol", () => {
         expect(last.terminal).toBe(true);
         expect(last.nextAttemptAt).toBeUndefined();
 
-        const outbox = sql.exec("SELECT attempts FROM dispatch_outbox").toArray();
-        expect(Number(outbox[0]?.attempts)).toBe(DISPATCH_MAX_ATTEMPTS);
         expect(
           sql.exec("SELECT * FROM due_work WHERE completed_at IS NULL").toArray(),
         ).toHaveLength(0);

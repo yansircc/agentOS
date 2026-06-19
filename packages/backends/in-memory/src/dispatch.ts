@@ -36,6 +36,7 @@ import {
   backendProtocolTruthIdentityKey,
   copyTraceContext,
   describeDispatchCause,
+  dispatchDeliveryHistoryState,
   dispatchLedgerDeliveryReceipt,
   durableTriggerBackoffMs,
   parseRequestedPayloadValue,
@@ -53,19 +54,6 @@ import {
 import { inMemoryRuntimeEventIdentity, type InMemoryBackendState } from "./state";
 import { decodeOk, finiteNumberField, recordOf, type DecodeResult } from "./decode";
 import type { DispatchRequestedPayload, InMemoryDispatchTargetRegistry } from "./dispatch-types";
-
-type InMemoryDispatchTriggerTx = {
-  readonly markOutboxSucceeded: (spec: {
-    readonly outboundEventId: number;
-    readonly successEventId: number;
-    readonly attempts: number;
-  }) => void;
-  readonly markOutboxFailed: (spec: {
-    readonly outboundEventId: number;
-    readonly attempts: number;
-    readonly lastError: string;
-  }) => void;
-};
 
 const targetFor = (
   targets: InMemoryDispatchTargetRegistry,
@@ -146,23 +134,32 @@ export const deliveryRetryTrigger = (
   },
   acquire: (requested, ctx) =>
     Effect.gen(function* () {
-      const row = state.pendingOutboxByIntent(ctx.intentEventId);
-      if (row === null) return { _tag: "skipped" } as const;
-      const attempt = row.attempts + 1;
+      const history = dispatchDeliveryHistoryState(
+        ctx.events({
+          kinds: [
+            DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED,
+            DISPATCH_EVENT_KINDS.OUTBOUND_ENQUEUED,
+            DISPATCH_EVENT_KINDS.OUTBOUND_FAILED,
+          ],
+        }),
+        ctx.intentEventId,
+      );
+      if (history.successCount > 0) return { _tag: "skipped" } as const;
+      const attempt = history.attemptCount + 1;
       const bindingKey = materialRefKey(requested.target.bindingRef);
       const target = targetFor(targets, bindingKey);
       if (target === undefined) {
         return {
           _tag: "failed",
-          outboundEventId: row.outboundEventId,
+          outboundEventId: ctx.intentEventId,
           requested,
           attempt,
           cause: "agent_os.dispatch_target_not_found",
         } as const;
       }
       const envelope: DispatchEnvelope = {
-        sourceScope: row.sourceScope,
-        outboundEventId: row.outboundEventId,
+        sourceScope: ctx.scope,
+        outboundEventId: ctx.intentEventId,
         targetScope: targetScopeLabel(requested.target),
         event: requested.event,
         data: requested.data,
@@ -178,7 +175,7 @@ export const deliveryRetryTrigger = (
         if (result.success._tag === "delivered") {
           return {
             _tag: "delivered",
-            outboundEventId: row.outboundEventId,
+            outboundEventId: ctx.intentEventId,
             requested,
             receipt: result.success.receipt,
             attempt,
@@ -186,7 +183,7 @@ export const deliveryRetryTrigger = (
         }
         return {
           _tag: "enqueued",
-          outboundEventId: row.outboundEventId,
+          outboundEventId: ctx.intentEventId,
           requested,
           acknowledgement: result.success.acknowledgement,
           attempt,
@@ -194,7 +191,7 @@ export const deliveryRetryTrigger = (
       }
       return {
         _tag: "failed",
-        outboundEventId: row.outboundEventId,
+        outboundEventId: ctx.intentEventId,
         requested,
         attempt,
         cause: result.failure,
@@ -204,7 +201,7 @@ export const deliveryRetryTrigger = (
     if (outcome._tag === "skipped") return;
     if (outcome._tag === "delivered") {
       const bindingKey = materialRefKey(outcome.requested.target.bindingRef);
-      const event = tx.insertEvent({
+      tx.insertEvent({
         kind: DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED,
         payload: {
           outboundEventId: outcome.outboundEventId,
@@ -222,16 +219,11 @@ export const deliveryRetryTrigger = (
             : { traceContext: outcome.requested.traceContext }),
         },
       });
-      (tx as unknown as InMemoryDispatchTriggerTx).markOutboxSucceeded({
-        outboundEventId: outcome.outboundEventId,
-        successEventId: event.id,
-        attempts: outcome.attempt,
-      });
       return;
     }
 
     if (outcome._tag === "enqueued") {
-      const event = tx.insertEvent({
+      tx.insertEvent({
         kind: DISPATCH_EVENT_KINDS.OUTBOUND_ENQUEUED,
         payload: {
           outboundEventId: outcome.outboundEventId,
@@ -244,11 +236,6 @@ export const deliveryRetryTrigger = (
             ? {}
             : { traceContext: outcome.requested.traceContext }),
         },
-      });
-      (tx as unknown as InMemoryDispatchTriggerTx).markOutboxSucceeded({
-        outboundEventId: outcome.outboundEventId,
-        successEventId: event.id,
-        attempts: outcome.attempt,
       });
       return;
     }
@@ -270,11 +257,6 @@ export const deliveryRetryTrigger = (
         terminal,
         ...(nextAttemptAt === null ? {} : { nextAttemptAt }),
       },
-    });
-    (tx as unknown as InMemoryDispatchTriggerTx).markOutboxFailed({
-      outboundEventId: outcome.outboundEventId,
-      attempts: outcome.attempt,
-      lastError: error,
     });
     if (nextAttemptAt !== null) tx.reschedule(nextAttemptAt, outcome.outboundEventId);
   },
@@ -366,15 +348,6 @@ export const InMemoryDispatchLive = (
                   ts: now,
                   kind: trigger.intentEventKind,
                   payload: requested,
-                }),
-                (event) => ({
-                  outboundEventId: event.id,
-                  sourceScope: scopeLabel,
-                  sourceIdentity: eventIdentity,
-                  requested,
-                  attempts: 0,
-                  successEventId: null,
-                  lastError: null,
                 }),
               )
               .pipe(Effect.mapError(dispatchStorageError));

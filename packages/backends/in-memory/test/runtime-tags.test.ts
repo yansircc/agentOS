@@ -339,7 +339,7 @@ describe("in-memory runtime backend", () => {
     }
   });
 
-  it("exposes canonical payloads through trigger tx pending surfaces", async () => {
+  it("exposes canonical payloads through trigger tx append results", async () => {
     interface CanonicalIntent {
       readonly id: string;
     }
@@ -347,7 +347,6 @@ describe("in-memory runtime backend", () => {
       | {
           readonly inserted: ReturnType<typeof payloadObservation>;
           readonly enqueued: ReturnType<typeof payloadObservation>;
-          readonly seen: ReadonlyArray<ReturnType<typeof payloadObservation>>;
         }
       | undefined;
     const canonicalTrigger = {
@@ -375,12 +374,6 @@ describe("in-memory runtime backend", () => {
         observed = {
           inserted: payloadObservation(inserted.payload),
           enqueued: payloadObservation(enqueued.payload),
-          seen: tx
-            .events({
-              afterId: tx.intentEventId,
-              kinds: ["test.trigger_canonical_tx.done", "test.trigger_canonical_tx.requested"],
-            })
-            .map((event) => payloadObservation(event.payload)),
         };
       },
       commitCancelled: () => undefined,
@@ -412,10 +405,6 @@ describe("in-memory runtime backend", () => {
       expect(observed).toEqual({
         inserted: { visible: "stored", hasSecret: false },
         enqueued: { visible: "stored", hasSecret: false },
-        seen: [
-          { visible: "stored", hasSecret: false },
-          { visible: "stored", hasSecret: false },
-        ],
       });
     } finally {
       await runtime.dispose();

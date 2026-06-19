@@ -1119,8 +1119,8 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
   /** Dispatch an app event to another configured agent scope.
    *
    *  Delivery truth is split across the two ledgers:
-   *  - sender records dispatch.outbound.requested and a dispatch_outbox row
-   *    in one transactionSync;
+   *  - sender records dispatch.outbound.requested;
+   *  - sender retry state is derived from dispatch.outbound.* facts;
    *  - receiver records dispatch.inbound.accepted + the requested app event
    *    in one transactionSync;
    *  - receiver dedupe is (sourceScope, idempotencyKey), not outboundEventId.

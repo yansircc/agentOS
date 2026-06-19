@@ -32,6 +32,7 @@ Status: Backend protocol package. Public exports are limited to storage-free bac
 - `.:decodeResourceTerminalPayloadSync`
 - `.:describeDispatchCause`
 - `.:dispatchBackoffMs`
+- `.:dispatchDeliveryHistoryState`
 - `.:dispatchExternalEnqueueAcknowledgement`
 - `.:durableProcessLifecycleState`
 - `.:dispatchPayloadParseFailure`
@@ -75,6 +76,7 @@ Status: Backend protocol package. Public exports are limited to storage-free bac
 - `.:DispatchPayloadParseFailure`
 - `.:DispatchPayloadParseResult`
 - `.:DispatchDeliveryResult`
+- `.:DispatchDeliveryHistoryState`
 - `.:DispatchDeliveryReceipt`
 - `.:DispatchEnvelope`
 - `.:DispatchReceiver`

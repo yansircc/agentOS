@@ -23,6 +23,9 @@ export interface AcquireCtx {
   readonly intentEventId: number;
   readonly signal: AbortSignal;
   readonly acquireMode: "normal" | "redrive";
+  readonly events: (
+    opts?: Pick<EventQueryOptions, "afterId" | "kinds">,
+  ) => ReadonlyArray<LedgerEvent>;
 }
 
 export interface TriggerCancellation {
@@ -46,10 +49,12 @@ export const triggerParseFail = <Intent = never>(reason: string): TriggerParseRe
   reason,
 });
 
-export interface TriggerTx extends AcquireCtx {
-  readonly events: (
-    opts?: Pick<EventQueryOptions, "afterId" | "kinds">,
-  ) => ReadonlyArray<LedgerEvent>;
+export interface TriggerTx {
+  readonly scope: string;
+  readonly now: number;
+  readonly dueWorkId: number;
+  readonly intentEventId: number;
+  readonly acquireMode: "normal" | "redrive";
   readonly insertEvent: (spec: TriggerEventSpec) => LedgerEvent;
   readonly enqueue: (spec: TriggerIntentSpec) => LedgerEvent;
   readonly reschedule: (fireAt: number, intentEventId?: number) => void;

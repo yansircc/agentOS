@@ -6,7 +6,7 @@ import {
   SqlError,
   UnregisteredDurableTriggerKind,
 } from "@agent-os/kernel/errors";
-import type { LedgerEvent } from "@agent-os/kernel/types";
+import type { EventQueryOptions, LedgerEvent } from "@agent-os/kernel/types";
 import {
   DEFAULT_TRIGGER_ACQUIRE_DEADLINE_MS,
   DurableTriggerRegistry,
@@ -120,12 +120,29 @@ export const TriggerPumpLive = (
         { readonly token: string; readonly controller: AbortController }
       >();
 
+      const eventsFor =
+        (identity: BackendProtocolEventIdentity) =>
+        (opts: Pick<EventQueryOptions, "afterId" | "kinds"> = {}): ReadonlyArray<LedgerEvent> => {
+          const afterId =
+            opts.afterId === undefined || !Number.isFinite(opts.afterId)
+              ? 0
+              : Math.max(0, Math.floor(opts.afterId));
+          const kinds =
+            opts.kinds === undefined
+              ? undefined
+              : new Set(Array.from(new Set(opts.kinds)).filter((kind) => kind.length > 0));
+          return selectLedgerEvents(sql, identity, opts).filter((event) => {
+            if (event.id <= afterId) return false;
+            if (kinds !== undefined && kinds.size > 0 && !kinds.has(event.kind)) return false;
+            return true;
+          });
+        };
+
       const txFor = (
         row: DueWorkRow,
         now: number,
         builder: LedgerTransactionBuilder,
         written: LedgerEvent[],
-        signal: AbortSignal,
         acquireMode: "normal" | "redrive",
         identity: BackendProtocolEventIdentity,
       ): TriggerTx =>
@@ -134,23 +151,7 @@ export const TriggerPumpLive = (
           now,
           dueWorkId: row.id,
           intentEventId: row.payload.intentEventId,
-          signal,
           acquireMode,
-          events: (opts = {}) => {
-            const afterId =
-              opts.afterId === undefined || !Number.isFinite(opts.afterId)
-                ? 0
-                : Math.max(0, Math.floor(opts.afterId));
-            const kinds =
-              opts.kinds === undefined
-                ? undefined
-                : new Set(Array.from(new Set(opts.kinds)).filter((kind) => kind.length > 0));
-            return [...selectLedgerEvents(sql, identity, opts), ...written].filter((event) => {
-              if (event.id <= afterId) return false;
-              if (kinds !== undefined && kinds.size > 0 && !kinds.has(event.kind)) return false;
-              return true;
-            });
-          },
           insertEvent: (spec) => {
             const payload = canonicalLedgerPayload(spec.payload).payload;
             const ref = builder.append({
@@ -204,10 +205,7 @@ export const TriggerPumpLive = (
               insertDurableTriggerDueWork(sql, fireAt, row.kind, intentEventId);
             });
           },
-          afterLedgerInsert: (effect: () => void) => {
-            builder.afterInsert(effect);
-          },
-        }) as TriggerTx & { readonly afterLedgerInsert: (effect: () => void) => void };
+        }) satisfies TriggerTx;
 
       const parseIntent = (
         trigger: AnyDurableTrigger,
@@ -241,7 +239,6 @@ export const TriggerPumpLive = (
         row: ClaimedDueWorkRow,
         now: number,
         outcome: unknown,
-        signal: AbortSignal,
         acquireMode: "normal" | "redrive",
         identity: BackendProtocolEventIdentity,
       ): Effect.Effect<
@@ -272,7 +269,7 @@ export const TriggerPumpLive = (
                 .toArray();
               if (stillOwned.length === 0) return { owned: false as const };
               const written: LedgerEvent[] = [];
-              const tx = txFor(row, now, builder, written, signal, acquireMode, identity);
+              const tx = txFor(row, now, builder, written, acquireMode, identity);
               const commitFailure = runSynchronousTriggerCommit(scope, row.kind, () =>
                 trigger.commit(outcome, tx),
               );
@@ -294,7 +291,6 @@ export const TriggerPumpLive = (
         mode: {
           readonly claimToken?: string;
           readonly requireUnclaimed?: boolean;
-          readonly signal: AbortSignal;
           readonly acquireMode: "normal" | "redrive";
         },
       ): Effect.Effect<
@@ -331,7 +327,7 @@ export const TriggerPumpLive = (
                 .toArray();
               if (stillOwned.length === 0) return { owned: false as const };
               const written: LedgerEvent[] = [];
-              const tx = txFor(row, now, builder, written, mode.signal, mode.acquireMode, identity);
+              const tx = txFor(row, now, builder, written, mode.acquireMode, identity);
               const commitFailure = runSynchronousTriggerCommit(scope, row.kind, () =>
                 trigger.commitCancelled(intent, cancellationFor(row), tx),
               );
@@ -393,6 +389,7 @@ export const TriggerPumpLive = (
               intentEventId: claimed.payload.intentEventId,
               signal: controller.signal,
               acquireMode: claimed.redriveCount > 0 ? "redrive" : "normal",
+              events: eventsFor(parsed.identity),
             }),
           );
           const active = activeClaims.get(row.id);
@@ -401,15 +398,7 @@ export const TriggerPumpLive = (
           }
           const acquireMode = claimed.redriveCount > 0 ? "redrive" : "normal";
           const events = Exit.isSuccess(exit)
-            ? yield* commitNormal(
-                trigger,
-                claimed,
-                now,
-                exit.value,
-                controller.signal,
-                acquireMode,
-                parsed.identity,
-              )
+            ? yield* commitNormal(trigger, claimed, now, exit.value, acquireMode, parsed.identity)
             : yield* Effect.gen(function* () {
                 const failure = Cause.findErrorOption(exit.cause);
                 if (Option.isNone(failure)) {
@@ -435,7 +424,6 @@ export const TriggerPumpLive = (
                   parsed.identity,
                   {
                     claimToken: claimed.claimToken,
-                    signal: controller.signal,
                     acquireMode,
                   },
                 );
@@ -486,7 +474,6 @@ export const TriggerPumpLive = (
                 parsed.identity,
                 {
                   requireUnclaimed: true,
-                  signal: new AbortController().signal,
                   acquireMode: row.redriveCount > 0 ? "redrive" : "normal",
                 },
               );

@@ -53,7 +53,6 @@ import {
   type AuthorityRef,
   type ScopeRef,
 } from "@agent-os/kernel/effect-claim";
-import type { DispatchOutboxRow } from "./dispatch-types";
 
 const DEFAULT_EVENT_LIMIT = 1000;
 const MAX_EVENT_LIMIT = 1000;
@@ -123,21 +122,6 @@ interface InMemoryProjectionMeta {
   lastRebuiltEventId: number | null;
   updatedAt: number | null;
 }
-
-type InMemoryOutboxPatch =
-  | { readonly _tag: "add"; readonly row: DispatchOutboxRow }
-  | {
-      readonly _tag: "success";
-      readonly outboundEventId: number;
-      readonly successEventId: number;
-      readonly attempts: number;
-    }
-  | {
-      readonly _tag: "failed";
-      readonly outboundEventId: number;
-      readonly attempts: number;
-      readonly lastError: string;
-    };
 
 export interface InMemoryBackendStateOptions {
   readonly handlers?: Iterable<InMemoryEventHandlerRegistration>;
@@ -319,7 +303,6 @@ export class InMemoryBackendState {
   private readonly telemetryDiagnosticsLog: TelemetryFanoutDiagnostic[] = [];
   private readonly handlers = new Map<string, Set<EventHandler>>();
   private readonly dueWork: InMemoryDueWorkRow[] = [];
-  private readonly outbox = new Map<number, DispatchOutboxRow>();
   private projectionRegistry: ProjectionRegistry;
   private projectionRegistryError: ProjectionRegistryError | null = null;
   private readonly projectionRows = new Map<string, MaterializedProjectionRow>();
@@ -796,7 +779,6 @@ export class InMemoryBackendState {
       readonly kind: string;
       readonly intentEventKind: string;
     }) => InMemoryEventContentSpec,
-    stageOutbox?: (event: LedgerEvent) => DispatchOutboxRow,
   ): Effect.Effect<LedgerEvent, JsonStringifyError | SqlError | UnregisteredDurableTriggerKind> {
     return Effect.gen({ self: this }, function* () {
       const trigger = yield* getDurableTrigger(registry, triggerKind);
@@ -813,7 +795,6 @@ export class InMemoryBackendState {
       yield* this.assertRuntimeLedgerTransitionBatch([event]);
       const projectionState = yield* this.prepareProjectionState([event]);
       const identityKey = backendProtocolEventIdentityKey(identity);
-      const stagedOutbox = stageOutbox?.(event);
       const committed = yield* Effect.sync(() => {
         this.nextEventId += 1;
         this.appendRows([event]);
@@ -835,7 +816,6 @@ export class InMemoryBackendState {
           cancelReason: null,
           cancelledAt: null,
         });
-        if (stagedOutbox !== undefined) this.applyOutboxPatch({ _tag: "add", row: stagedOutbox });
         return event;
       });
       yield* this.fireMany([committed]);
@@ -930,26 +910,6 @@ export class InMemoryBackendState {
     if (row !== undefined && row.completedAt === null) {
       row.completedAt = completedAt;
     }
-  }
-
-  addOutbox(row: DispatchOutboxRow): void {
-    this.outbox.set(row.outboundEventId, row);
-  }
-
-  private applyOutboxPatch(patch: InMemoryOutboxPatch): void {
-    if (patch._tag === "add") {
-      this.outbox.set(patch.row.outboundEventId, patch.row);
-      return;
-    }
-    const row = this.outbox.get(patch.outboundEventId);
-    if (row === undefined || row.successEventId !== null) return;
-    row.attempts = patch.attempts;
-    if (patch._tag === "success") {
-      row.successEventId = patch.successEventId;
-      row.lastError = null;
-      return;
-    }
-    row.lastError = patch.lastError;
   }
 
   addDueWork(
@@ -1086,12 +1046,6 @@ export class InMemoryBackendState {
     });
   }
 
-  pendingOutboxByIntent(intentEventId: number): DispatchOutboxRow | null {
-    const row = this.outbox.get(intentEventId);
-    if (row === undefined || row.successEventId !== null) return null;
-    return row;
-  }
-
   commitAttachedStreamTerminal<Terminal>(
     identity: BackendProtocolEventIdentity,
     scopeLabel: string,
@@ -1160,7 +1114,6 @@ export class InMemoryBackendState {
       readonly claimToken?: string;
       readonly requireUnclaimed?: boolean;
       readonly cancelled?: boolean;
-      readonly signal?: AbortSignal;
       readonly acquireMode?: "normal" | "redrive";
     } = {},
   ): Effect.Effect<
@@ -1188,20 +1141,12 @@ export class InMemoryBackendState {
         readonly fireAt: number;
         readonly intentEventId: number;
       }> = [];
-      const outboxPatches: InMemoryOutboxPatch[] = [];
       const tx: TriggerTx = {
         scope: scopeLabel,
         now,
         dueWorkId: row.id,
         intentEventId: row.payload.intentEventId,
-        signal: options.signal ?? new AbortController().signal,
         acquireMode: options.acquireMode ?? "normal",
-        events: (opts = {}) => {
-          const committed = this.eventSnapshot(identity, opts);
-          return [...committed, ...written].filter(
-            (event) => eventMatches(event, identity) && eventMatchesQueryOptions(event, opts),
-          );
-        },
         insertEvent: (spec) => {
           const event = canonicalLedgerEventSync({
             id: startId + written.length,
@@ -1244,31 +1189,6 @@ export class InMemoryBackendState {
             intentEventId,
           });
         },
-        markOutboxSucceeded: (spec: {
-          readonly outboundEventId: number;
-          readonly successEventId: number;
-          readonly attempts: number;
-        }) => {
-          outboxPatches.push({ _tag: "success", ...spec });
-        },
-        markOutboxFailed: (spec: {
-          readonly outboundEventId: number;
-          readonly attempts: number;
-          readonly lastError: string;
-        }) => {
-          outboxPatches.push({ _tag: "failed", ...spec });
-        },
-      } as TriggerTx & {
-        readonly markOutboxSucceeded: (spec: {
-          readonly outboundEventId: number;
-          readonly successEventId: number;
-          readonly attempts: number;
-        }) => void;
-        readonly markOutboxFailed: (spec: {
-          readonly outboundEventId: number;
-          readonly attempts: number;
-          readonly lastError: string;
-        }) => void;
       };
       const commitFailure = yield* Effect.try({
         try: () => commit(tx),
@@ -1312,7 +1232,6 @@ export class InMemoryBackendState {
             cancelledAt: null,
           });
         }
-        for (const patch of outboxPatches) this.applyOutboxPatch(patch);
       });
       yield* this.fireMany(committed);
       return { completed: true, events: committed };

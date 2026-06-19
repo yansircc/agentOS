@@ -11,7 +11,7 @@ import type {
  * dispatchToScope — deterministic contract tests.
  *
  * Validates P1 of contract:
- *   - sender outbound event + dispatch_outbox row are atomic mechanics;
+ *   - sender outbound and delivery/retry facts are ledger truth;
  *   - receiver writes dispatch.inbound.accepted + app event in one tx;
  *   - receiver dedupe SSoT is (sourceScope, idempotencyKey);
  *   - app payload is not wrapped with dispatch metadata;
@@ -213,7 +213,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
     expect(after).toBe(before + 1);
   });
 
-  it("commits sender outbound event and dispatch_outbox row in one transaction", async () => {
+  it("commits sender outbound and delivery facts as ledger truth", async () => {
     const sender = stubFor("dispatch-sender-atomic");
     const receiver = stubFor("dispatch-receiver-atomic");
 
@@ -230,19 +230,13 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
       const outbound = state.storage.sql
         .exec("SELECT id, kind, payload FROM events WHERE kind = 'dispatch.outbound.requested'")
         .toArray();
-      const outbox = state.storage.sql
-        .exec("SELECT outbound_event_id, success_event_id FROM dispatch_outbox")
-        .toArray();
       const outboundDelivered = state.storage.sql
         .exec("SELECT id, payload FROM events WHERE kind = 'dispatch.outbound.delivered'")
         .toArray();
 
       expect(outbound).toHaveLength(1);
-      expect(outbox).toHaveLength(1);
       expect(outboundDelivered).toHaveLength(1);
       expect(Number(outbound[0]?.id)).toBe(result.outboundEventId);
-      expect(Number(outbox[0]?.outbound_event_id)).toBe(result.outboundEventId);
-      expect(Number(outbox[0]?.success_event_id)).toBe(Number(outboundDelivered[0]?.id));
       const payload = JSON.parse(sqlText(outbound[0]?.payload, "events.payload")) as {
         readonly claim: unknown;
       };
@@ -299,7 +293,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
     expect(receiverEvents.some((event) => event.kind === "test.delivered")).toBe(true);
   });
 
-  it("keeps outbox delivered FK local when receiver ledger ids diverge", async () => {
+  it("records sender delivery receipt when receiver ledger ids diverge", async () => {
     const sender = stubFor("dispatch-sender-diverged-ledger");
     const receiver = stubFor("dispatch-receiver-diverged-ledger");
 
@@ -324,18 +318,14 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
       const senderDelivered = state.storage.sql
         .exec("SELECT id, payload FROM events WHERE kind = 'dispatch.outbound.delivered'")
         .toArray();
-      const outbox = state.storage.sql
-        .exec("SELECT outbound_event_id, success_event_id FROM dispatch_outbox")
-        .toArray();
 
       expect(senderDelivered).toHaveLength(1);
-      expect(outbox).toHaveLength(1);
-      expect(Number(outbox[0]?.outbound_event_id)).toBe(result.outboundEventId);
-      expect(Number(outbox[0]?.success_event_id)).toBe(Number(senderDelivered[0]?.id));
 
       const payload = JSON.parse(sqlText(senderDelivered[0]?.payload, "events.payload")) as {
+        readonly outboundEventId: number;
         readonly deliveryReceipt: unknown;
       };
+      expect(payload.outboundEventId).toBe(result.outboundEventId);
       expect(payload.deliveryReceipt).toEqual(
         dispatchLedgerDeliveryReceipt({
           targetScope: "dispatch-receiver-diverged-ledger",
@@ -568,9 +558,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
       expect(caught?.bindingRef).toBe(missingBindingKey);
 
       const events = rowsOrEmpty(state, "SELECT * FROM events");
-      const outbox = rowsOrEmpty(state, "SELECT * FROM dispatch_outbox");
       expect(events).toHaveLength(0);
-      expect(outbox).toHaveLength(0);
     });
   });
 
@@ -600,9 +588,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
       });
 
       const events = rowsOrEmpty(state, "SELECT * FROM events");
-      const outbox = rowsOrEmpty(state, "SELECT * FROM dispatch_outbox");
       expect(events).toHaveLength(0);
-      expect(outbox).toHaveLength(0);
     });
   });
 
@@ -634,9 +620,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
       });
 
       const events = rowsOrEmpty(state, "SELECT * FROM events");
-      const outbox = rowsOrEmpty(state, "SELECT * FROM dispatch_outbox");
       expect(events).toHaveLength(0);
-      expect(outbox).toHaveLength(0);
     });
   });
 
@@ -664,9 +648,7 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
       expect(caught?.event).toBe("llm.response");
 
       const events = rowsOrEmpty(state, "SELECT * FROM events");
-      const outbox = rowsOrEmpty(state, "SELECT * FROM dispatch_outbox");
       expect(events).toHaveLength(0);
-      expect(outbox).toHaveLength(0);
     });
   });
 
@@ -695,19 +677,6 @@ describe("dispatchToScope — cross-scope durable delivery primitive", () => {
       expect(payload.attempt).toBe(1);
       expect(payload.nextAttemptAt).toBeGreaterThan(Date.now() - 1_000);
       expect(payload.error).toContain("dead dispatch target");
-
-      const outbox = state.storage.sql
-        .exec(
-          "SELECT outbound_event_id, success_event_id, attempts, last_error FROM dispatch_outbox",
-        )
-        .toArray();
-      expect(outbox).toHaveLength(1);
-      expect(Number(outbox[0]?.outbound_event_id)).toBe(outboundEventId);
-      expect(outbox[0]?.success_event_id).toBeNull();
-      expect(Number(outbox[0]?.attempts)).toBe(1);
-      expect(sqlText(outbox[0]?.last_error, "dispatch_outbox.last_error")).toContain(
-        "dead dispatch target",
-      );
 
       const due = state.storage.sql
         .exec(

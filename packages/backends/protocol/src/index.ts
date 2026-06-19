@@ -170,6 +170,44 @@ export const DISPATCH_EVENT_KINDS = {
   INBOUND_ACCEPTED: DISPATCH_INBOUND_ACCEPTED,
 } as const;
 
+export interface DispatchDeliveryHistoryState {
+  readonly successCount: number;
+  readonly attemptCount: number;
+}
+
+const dispatchDeliveryHistoryKinds = new Set<string>([
+  DISPATCH_EVENT_KINDS.OUTBOUND_ENQUEUED,
+  DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED,
+  DISPATCH_EVENT_KINDS.OUTBOUND_FAILED,
+]);
+
+export const dispatchDeliveryHistoryState = (
+  events: Iterable<Pick<LedgerEvent, "kind" | "payload">>,
+  outboundEventId: number,
+): DispatchDeliveryHistoryState => {
+  let successCount = 0;
+  let attemptCount = 0;
+  for (const event of events) {
+    if (!dispatchDeliveryHistoryKinds.has(event.kind)) continue;
+    const payload = event.payload;
+    if (
+      !Predicate.isObject(payload) ||
+      typeof payload.outboundEventId !== "number" ||
+      payload.outboundEventId !== outboundEventId
+    ) {
+      continue;
+    }
+    attemptCount += 1;
+    if (
+      event.kind === DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED ||
+      event.kind === DISPATCH_EVENT_KINDS.OUTBOUND_ENQUEUED
+    ) {
+      successCount += 1;
+    }
+  }
+  return { successCount, attemptCount };
+};
+
 export const dispatchSettlementContract = defineSettlementContract({
   settlementId: "@agent-os/dispatch",
   anchorKinds: ["ledger_event", "external_receipt"],

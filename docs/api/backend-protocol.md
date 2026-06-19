@@ -28,6 +28,7 @@
 - `.:decodeResourceTerminalPayloadSync`
 - `.:describeDispatchCause`
 - `.:dispatchBackoffMs`
+- `.:dispatchDeliveryHistoryState`
 - `.:dispatchExternalEnqueueAcknowledgement`
 - `.:durableProcessLifecycleState`
 - `.:dispatchPayloadParseFailure`
@@ -71,6 +72,7 @@
 - `.:DispatchPayloadParseFailure`
 - `.:DispatchPayloadParseResult`
 - `.:DispatchDeliveryResult`
+- `.:DispatchDeliveryHistoryState`
 - `.:DispatchDeliveryReceipt`
 - `.:DispatchEnvelope`
 - `.:DispatchReceiver`

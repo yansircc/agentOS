@@ -445,23 +445,6 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
       return new InMemorySqlCursor([{ m: values.length === 0 ? null : Math.min(...values) }]);
     }
 
-    if (
-      sql ===
-      "SELECT o.outbound_event_id, o.attempts FROM dispatch_outbox o WHERE o.outbound_event_id = ? AND o.success_event_id IS NULL"
-    ) {
-      const outboundEventId = args[0];
-      const outbox = this.table("dispatch_outbox").rows.find(
-        (row) => row.outbound_event_id === outboundEventId && row.success_event_id === null,
-      );
-      if (outbox === undefined) return new InMemorySqlCursor([]);
-      return new InMemorySqlCursor([
-        {
-          outbound_event_id: outbox.outbound_event_id,
-          attempts: outbox.attempts,
-        },
-      ]);
-    }
-
     const maxMatch = /^SELECT COALESCE\(MAX\(([a-z_]+)\), 0\) AS ([a-z_]+) FROM ([a-z_]+)$/i.exec(
       sql,
     );
@@ -511,11 +494,6 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
   }
 
   private applyDefaults(tableName: string, row: Row): void {
-    if (tableName === "dispatch_outbox") {
-      if (row.success_event_id === undefined) row.success_event_id = null;
-      if (row.attempts === undefined) row.attempts = 0;
-      if (row.last_error === undefined) row.last_error = null;
-    }
     if (tableName === "due_work" && row.completed_at === undefined) {
       row.completed_at = null;
     }

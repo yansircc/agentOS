@@ -78,7 +78,7 @@ export const makeCloudflareBackendCoreLayer = <Env>(
   const materializedProjectionLayer = CloudflareMaterializedProjectionsLive(ctx).pipe(
     Layer.provide(projectionRegistryLayer),
   );
-  const dispatchRetryTrigger = deliveryRetryTrigger(ctx.storage.sql, scope, dispatchTargets);
+  const dispatchRetryTrigger = deliveryRetryTrigger(scope, dispatchTargets);
   const triggerRegistryLayer = Layer.effect(
     DurableTriggerRegistry,
     Effect.gen(function* () {

@@ -19,6 +19,7 @@ import {
   backendProtocolTruthIdentityKey,
   describeDispatchCause,
   dispatchBackoffMs,
+  dispatchDeliveryHistoryState,
   dispatchExternalEnqueueAcknowledgement,
   dispatchFailedHasNoDeliveryReceipt,
   dispatchLedgerDeliveryReceipt,
@@ -469,6 +470,28 @@ describe("@agent-os/backend-protocol", () => {
       _tag: "enqueued",
       acknowledgement,
     });
+  });
+
+  it("derives dispatch retry state from outbound ledger facts", () => {
+    expect(
+      dispatchDeliveryHistoryState(
+        [
+          {
+            kind: DISPATCH_EVENT_KINDS.OUTBOUND_FAILED,
+            payload: { outboundEventId: 7, attempt: 1 },
+          },
+          {
+            kind: DISPATCH_EVENT_KINDS.OUTBOUND_FAILED,
+            payload: { outboundEventId: 8, attempt: 1 },
+          },
+          {
+            kind: DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED,
+            payload: { outboundEventId: 7, attempt: 2 },
+          },
+        ],
+        7,
+      ),
+    ).toEqual({ attemptCount: 2, successCount: 1 });
   });
 
   it("receipt-before-terminal proof ties terminal delivery to idempotency receipt", () => {

@@ -112,6 +112,7 @@ export const InMemoryTriggerPumpLive = (
                 intentEventId: row.payload.intentEventId,
                 signal: controller.signal,
                 acquireMode,
+                events: (opts) => state.eventSnapshot(identity, opts),
               }),
             );
             const active = activeClaims.get(row.id);
@@ -127,7 +128,7 @@ export const InMemoryTriggerPumpLive = (
                       runSynchronousTriggerCommit(scopeLabel, row.kind, () =>
                         trigger.commit(exit.value, tx),
                       ),
-                    { claimToken: token, signal: controller.signal, acquireMode },
+                    { claimToken: token, acquireMode },
                   )
                   .pipe(Effect.mapError(triggerStorageError))
               : yield* Effect.gen(function* () {
@@ -155,7 +156,6 @@ export const InMemoryTriggerPumpLive = (
                       {
                         claimToken: token,
                         cancelled: true,
-                        signal: controller.signal,
                         acquireMode,
                       },
                     )

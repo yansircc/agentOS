@@ -59,6 +59,7 @@ describe("durable trigger runtime algebra", () => {
           intentEventId: 3,
           signal: new AbortController().signal,
           acquireMode: "normal",
+          events: () => [],
         },
       );
       expect(outcome).toEqual({ ok: false, reason: "provider unavailable" });
@@ -92,6 +93,7 @@ describe("durable trigger runtime algebra", () => {
           intentEventId: 3,
           signal: controller.signal,
           acquireMode: "redrive",
+          events: () => [],
         },
       );
 
@@ -119,6 +121,7 @@ describe("durable trigger runtime algebra", () => {
         intentEventId: 3,
         signal: new AbortController().signal,
         acquireMode: "normal",
+        events: () => [],
       });
       expect(outcome).toEqual(intent);
       expect(DURABLE_TRIGGER_SCHEDULED_CANCELLED).toBe("durable_trigger.scheduled.cancelled");
