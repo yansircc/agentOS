@@ -1,4 +1,4 @@
-import type { Recorded } from "@agent-os/kernel";
+import type { Derived, Recordable, Recorded } from "@agent-os/kernel";
 import type { AgentClientStreamSource, AgentClientCommandSpec } from "@agent-os/client";
 import { createAgentClient, type AgentClientController } from "@agent-os/client";
 import type {
@@ -58,7 +58,7 @@ export interface WorkspaceAgentStateProjectionShape {
 }
 
 export type WorkspaceAgentStateProjection = WorkspaceAgentStateProjectionShape &
-  Recorded<WorkspaceAgentStateProjectionShape>;
+  Derived<WorkspaceAgentStateProjectionShape>;
 
 export interface WorkspaceAgentFilesProjectionShape {
   readonly schema: typeof WORKSPACE_AGENT_PROJECTION_SCHEMA.FILES;
@@ -68,7 +68,7 @@ export interface WorkspaceAgentFilesProjectionShape {
 }
 
 export type WorkspaceAgentFilesProjection = WorkspaceAgentFilesProjectionShape &
-  Recorded<WorkspaceAgentFilesProjectionShape>;
+  Derived<WorkspaceAgentFilesProjectionShape>;
 
 export type WorkspaceAgentProjectionValueByName = {
   readonly [WORKSPACE_AGENT_PROJECTION.STATE]: WorkspaceAgentStateProjection;
@@ -183,8 +183,8 @@ export const defineWorkspaceAgentMount = (
 
 export interface WorkspaceAgentReconcileContext<Projection, Fact extends object> {
   readonly sandbox: WorkspaceEnv;
-  readonly projection: Projection;
-  readonly append: (fact: Fact & Recorded<Fact>) => Promise<void>;
+  readonly projection: Projection & Derived<Projection>;
+  readonly append: (fact: Fact & Recordable<Fact>) => Promise<Fact & Recorded<Fact>>;
   readonly signal?: AbortSignal;
 }
 

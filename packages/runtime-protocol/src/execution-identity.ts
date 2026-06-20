@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Option, Schema } from "effect";
 
 export const EXECUTION_IDENTITY_VERSION = "agent-execution-identity-v1" as const;
 
@@ -56,9 +56,5 @@ export const ExecutionIdentitySchema: Schema.Decoder<ExecutionIdentity> = Schema
 });
 
 export const executionIdentityFromUnknown = (value: unknown): ExecutionIdentity | null => {
-  try {
-    return Schema.decodeUnknownSync(ExecutionIdentitySchema)(value);
-  } catch {
-    return null;
-  }
+  return Option.getOrNull(Schema.decodeUnknownOption(ExecutionIdentitySchema)(value));
 };
