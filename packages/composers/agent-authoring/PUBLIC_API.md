@@ -49,6 +49,7 @@ Status: 0.5.x experimental for compiling authored agent trees into manifest/prov
 - `.:StaticTargetGeneratedFilePath`
 - `.:StaticTargetLink`
 - `.:StaticTargetLinkIssue`
+- `.:StaticTargetLinkOptions`
 - `.:StaticTargetLinkResult`
 - `.:StaticTargetModuleImport`
 - `.:StaticTargetModuleImportKind`

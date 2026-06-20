@@ -691,6 +691,35 @@ describe("agent authored tree compiler", () => {
 
     const clientTypes = generatedText(linked, ".agentos/generated/client.d.ts");
     expect(clientTypes).toContain('} from "./client";');
+
+    const publicLinked = linkWorkspaceStaticTarget(normalized.value, {
+      packageScope: "@yansirplus",
+    });
+    expect(publicLinked.ok).toBe(true);
+    if (!publicLinked.ok) expect.fail(JSON.stringify(publicLinked.issues));
+    expect(publicLinked.value.moduleGraph).toContainEqual({
+      kind: "target-runtime",
+      source: "@yansirplus/backend-cloudflare-do",
+      imports: ["createAgentDurableObject"],
+    });
+    expect(publicLinked.value.moduleGraph).toContainEqual({
+      kind: "client-framework",
+      source: "@yansirplus/client-svelte",
+      imports: ["clientReadable", "selectClientReadable"],
+    });
+    expect(generatedText(publicLinked, ".agentos/generated/target.ts")).toContain(
+      'import { createAgentDurableObject } from "@yansirplus/backend-cloudflare-do";',
+    );
+    const publicClient = generatedText(publicLinked, ".agentos/generated/client.ts");
+    expect(publicClient).toContain(
+      'import { createWorkspaceAgentClientBridge } from "@yansirplus/workspace-agent";',
+    );
+    expect(publicClient).not.toContain("@agent-os/");
+
+    expect(linkWorkspaceStaticTarget(normalized.value, { packageScope: "agent-os" })).toEqual({
+      ok: false,
+      issues: [{ kind: "invalid_static_package_scope", scope: "agent-os" }],
+    });
   });
 
   it("emits byte-stable generated files and changes the module graph when tool imports change", () => {

@@ -18,6 +18,7 @@ const tarballHashLength = 12;
 let packageVersionOverride;
 const defaultLocalRegistryRoot = path.join(os.homedir(), ".agentos", "local-registry");
 const sourcePackageScope = "@agent-os";
+const publicPackageScopePlaceholder = "__AGENTOS_PUBLIC_PACKAGE_SCOPE__";
 
 const runtimePackageRoots = ["packages", "tooling"];
 const cloudflarePackageNames = new Set([
@@ -128,6 +129,8 @@ const publicSpecifier = (specifier) => {
 };
 
 const rewritePublicSpecifiers = (text) => text.replaceAll(sourcePackageScope, publishScope());
+const rewritePublicScopePlaceholders = (text) =>
+  text.replaceAll(publicPackageScopePlaceholder, publishScope());
 
 const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 
@@ -518,7 +521,10 @@ const emitJs = (record) => {
       },
     });
     fs.mkdirSync(path.dirname(out), { recursive: true });
-    fs.writeFileSync(out, rewriteModuleSpecifiers(transpiled.outputText, file, ".js"));
+    fs.writeFileSync(
+      out,
+      rewritePublicScopePlaceholders(rewriteModuleSpecifiers(transpiled.outputText, file, ".js")),
+    );
   }
 };
 
@@ -538,7 +544,10 @@ const emitDeclarations = (record) => {
       },
     });
     fs.mkdirSync(path.dirname(out), { recursive: true });
-    fs.writeFileSync(out, rewriteModuleSpecifiers(result.outputText, file, ".d.ts"));
+    fs.writeFileSync(
+      out,
+      rewritePublicScopePlaceholders(rewriteModuleSpecifiers(result.outputText, file, ".d.ts")),
+    );
   }
 };
 

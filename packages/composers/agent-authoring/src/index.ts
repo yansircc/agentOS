@@ -1277,7 +1277,15 @@ export type StaticTargetLinkIssue =
   | {
       readonly kind: "unsupported_static_llm_route";
       readonly route: AgentOsConfigLlmRoute;
+    }
+  | {
+      readonly kind: "invalid_static_package_scope";
+      readonly scope: string;
     };
+
+export interface StaticTargetLinkOptions {
+  readonly packageScope?: string;
+}
 
 export type StaticTargetLinkResult =
   | { readonly ok: true; readonly value: StaticTargetLink }
@@ -1713,15 +1721,24 @@ const jsString = (value: string): string => JSON.stringify(value);
 
 const importToolPath = (toolName: string): string => `../../agent/tools/${toolName}`;
 
-const STATIC_TARGET_MODULES = {
-  cloudflareDoRuntime: "@agent-os/backend-cloudflare-do",
-  openAiCompatibleTransport: "@agent-os/llm-transport-effect-ai",
-  workspaceAgentHost: "@agent-os/workspace-agent",
-  clientCore: "@agent-os/client",
-  clientSvelte: "@agent-os/client-svelte",
-  runtimeProtocol: "@agent-os/runtime-protocol",
+const SOURCE_PACKAGE_SCOPE = "@agent-os";
+const INJECTED_PUBLIC_PACKAGE_SCOPE = "__AGENTOS_PUBLIC_PACKAGE_SCOPE__";
+const packageScopePattern = /^@[a-z0-9][a-z0-9._-]*$/u;
+const DEFAULT_STATIC_TARGET_PACKAGE_SCOPE = packageScopePattern.test(INJECTED_PUBLIC_PACKAGE_SCOPE)
+  ? INJECTED_PUBLIC_PACKAGE_SCOPE
+  : SOURCE_PACKAGE_SCOPE;
+
+const publicPackageSpecifier = (scope: string, name: string): string => `${scope}/${name}`;
+
+const staticTargetModules = (scope: string) => ({
+  cloudflareDoRuntime: publicPackageSpecifier(scope, "backend-cloudflare-do"),
+  openAiCompatibleTransport: publicPackageSpecifier(scope, "llm-transport-effect-ai"),
+  workspaceAgentHost: publicPackageSpecifier(scope, "workspace-agent"),
+  clientCore: publicPackageSpecifier(scope, "client"),
+  clientSvelte: publicPackageSpecifier(scope, "client-svelte"),
+  runtimeProtocol: publicPackageSpecifier(scope, "runtime-protocol"),
   svelteStore: "svelte/store",
-} as const;
+});
 
 const renderNamedImport = (names: ReadonlyArray<string>, source: string): string =>
   `import { ${names.join(", ")} } ${"from"} ${jsString(source)};`;
@@ -1741,6 +1758,7 @@ const generatedToolImports = (
 const renderStaticTarget = (
   normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
   toolNames: ReadonlyArray<string>,
+  modules: ReturnType<typeof staticTargetModules>,
 ): string => {
   const toolImports = toolNames
     .map((toolName, index) => `import tool_${index} from ${jsString(importToolPath(toolName))};`)
@@ -1757,16 +1775,13 @@ const renderStaticTarget = (
   const imports = [
     `import semanticDeclarations from "./manifest.json";`,
     `import deploymentProvenance from "./deployment.json";`,
-    renderNamedImport(["createAgentDurableObject"], STATIC_TARGET_MODULES.cloudflareDoRuntime),
-    renderNamedImport(
-      ["OpenAiCompatibleLlmTransportLive"],
-      STATIC_TARGET_MODULES.openAiCompatibleTransport,
-    ),
+    renderNamedImport(["createAgentDurableObject"], modules.cloudflareDoRuntime),
+    renderNamedImport(["OpenAiCompatibleLlmTransportLive"], modules.openAiCompatibleTransport),
     renderNamedImport(
       ["defineWorkspaceAgentMount", "WORKSPACE_AGENT_PROJECTION"],
-      STATIC_TARGET_MODULES.workspaceAgentHost,
+      modules.workspaceAgentHost,
     ),
-    renderTypeImport(["AgentManifest"], STATIC_TARGET_MODULES.runtimeProtocol),
+    renderTypeImport(["AgentManifest"], modules.runtimeProtocol),
     ...(toolImports.length === 0 ? [] : [toolImports]),
   ].join("\n");
   return `${imports}
@@ -1809,10 +1824,11 @@ export class ${normalized.target.durableObject.className} extends createAgentDur
 
 const generatedClientModuleImports = (
   client: AgentOsConfigClient,
+  modules: ReturnType<typeof staticTargetModules>,
 ): ReadonlyArray<StaticTargetModuleImport> => [
   {
     kind: "workspace-client",
-    source: STATIC_TARGET_MODULES.workspaceAgentHost,
+    source: modules.workspaceAgentHost,
     imports: [
       "createWorkspaceAgentClientBridge",
       "CreateWorkspaceAgentClientOptions",
@@ -1823,29 +1839,32 @@ const generatedClientModuleImports = (
     ? [
         {
           kind: "client-core" as const,
-          source: STATIC_TARGET_MODULES.clientCore,
+          source: modules.clientCore,
           imports: ["AgentClientSnapshot"],
         },
         {
           kind: "client-framework" as const,
-          source: STATIC_TARGET_MODULES.clientSvelte,
+          source: modules.clientSvelte,
           imports: ["clientReadable", "selectClientReadable"],
         },
         {
           kind: "client-framework" as const,
-          source: STATIC_TARGET_MODULES.svelteStore,
+          source: modules.svelteStore,
           imports: ["Readable"],
         },
       ]
     : []),
 ];
 
-const renderStaticClient = (normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>): string => {
+const renderStaticClient = (
+  normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
+  modules: ReturnType<typeof staticTargetModules>,
+): string => {
   if (normalized.client.kind === AGENTOS_CONFIG_CLIENT.BROWSER_DIRECT_V1) {
-    return `${renderNamedImport(["createWorkspaceAgentClientBridge"], STATIC_TARGET_MODULES.workspaceAgentHost)}
+    return `${renderNamedImport(["createWorkspaceAgentClientBridge"], modules.workspaceAgentHost)}
 ${renderTypeImport(
   ["CreateWorkspaceAgentClientOptions", "WorkspaceAgentClientBridge"],
-  STATIC_TARGET_MODULES.workspaceAgentHost,
+  modules.workspaceAgentHost,
 )}
 
 export type GeneratedAgentClientOptions = CreateWorkspaceAgentClientOptions;
@@ -1857,14 +1876,14 @@ export const createAgentOSClient = (
 `;
   }
 
-  return `${renderNamedImport(["createWorkspaceAgentClientBridge"], STATIC_TARGET_MODULES.workspaceAgentHost)}
-${renderNamedImport(["clientReadable", "selectClientReadable"], STATIC_TARGET_MODULES.clientSvelte)}
-${renderTypeImport(["AgentClientSnapshot"], STATIC_TARGET_MODULES.clientCore)}
+  return `${renderNamedImport(["createWorkspaceAgentClientBridge"], modules.workspaceAgentHost)}
+${renderNamedImport(["clientReadable", "selectClientReadable"], modules.clientSvelte)}
+${renderTypeImport(["AgentClientSnapshot"], modules.clientCore)}
 ${renderTypeImport(
   ["CreateWorkspaceAgentClientOptions", "WorkspaceAgentClientBridge"],
-  STATIC_TARGET_MODULES.workspaceAgentHost,
+  modules.workspaceAgentHost,
 )}
-${renderTypeImport(["Readable"], STATIC_TARGET_MODULES.svelteStore)}
+${renderTypeImport(["Readable"], modules.svelteStore)}
 
 export type GeneratedAgentClientOptions = CreateWorkspaceAgentClientOptions;
 
@@ -1902,7 +1921,16 @@ export { createAgentOSClient } from "./client";
 
 export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
   normalized: NormalizedAgentOsConfig<AuthoredAgentManifest<K>>,
+  options: StaticTargetLinkOptions = {},
 ): StaticTargetLinkResult => {
+  const packageScope = options.packageScope ?? DEFAULT_STATIC_TARGET_PACKAGE_SCOPE;
+  if (!packageScopePattern.test(packageScope)) {
+    return {
+      ok: false,
+      issues: [{ kind: "invalid_static_package_scope", scope: packageScope }],
+    };
+  }
+  const modules = staticTargetModules(packageScope);
   if (normalized.target.kind !== AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1) {
     return {
       ok: false,
@@ -1930,21 +1958,21 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
     { kind: "semantic-json", source: "./deployment.json", imports: ["default as deployment"] },
     {
       kind: "target-runtime",
-      source: STATIC_TARGET_MODULES.cloudflareDoRuntime,
+      source: modules.cloudflareDoRuntime,
       imports: ["createAgentDurableObject"],
     },
     {
       kind: "provider-runtime",
-      source: STATIC_TARGET_MODULES.openAiCompatibleTransport,
+      source: modules.openAiCompatibleTransport,
       imports: ["OpenAiCompatibleLlmTransportLive"],
     },
     {
       kind: "workspace-host",
-      source: STATIC_TARGET_MODULES.workspaceAgentHost,
+      source: modules.workspaceAgentHost,
       imports: ["defineWorkspaceAgentMount", "WORKSPACE_AGENT_PROJECTION"],
     },
     ...generatedToolImports(toolNames),
-    ...generatedClientModuleImports(normalized.client),
+    ...generatedClientModuleImports(normalized.client, modules),
   ];
   return {
     ok: true,
@@ -1969,11 +1997,12 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
           renderStaticTarget(
             normalized as NormalizedAgentOsConfig<AuthoredAgentManifest>,
             toolNames,
+            modules,
           ),
         ),
         generatedPath(
           ".agentos/generated/client.ts",
-          renderStaticClient(normalized as NormalizedAgentOsConfig<AuthoredAgentManifest>),
+          renderStaticClient(normalized as NormalizedAgentOsConfig<AuthoredAgentManifest>, modules),
         ),
         generatedPath(".agentos/generated/client.d.ts", renderStaticClientTypes()),
       ],

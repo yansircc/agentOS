@@ -49,6 +49,7 @@ title: "@agent-os/agent-authoring Public API Intent"
 - `.:StaticTargetGeneratedFilePath`
 - `.:StaticTargetLink`
 - `.:StaticTargetLinkIssue`
+- `.:StaticTargetLinkOptions`
 - `.:StaticTargetLinkResult`
 - `.:StaticTargetModuleImport`
 - `.:StaticTargetModuleImportKind`

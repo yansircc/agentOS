@@ -45,6 +45,7 @@
 - `.:StaticTargetGeneratedFilePath`
 - `.:StaticTargetLink`
 - `.:StaticTargetLinkIssue`
+- `.:StaticTargetLinkOptions`
 - `.:StaticTargetLinkResult`
 - `.:StaticTargetModuleImport`
 - `.:StaticTargetModuleImportKind`
