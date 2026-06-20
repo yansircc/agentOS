@@ -491,6 +491,32 @@ const generatedExportEntry = (target) => {
   fail(`export target must be a source .ts module or package JSON asset: ${target}`);
 };
 
+const projectedBinTarget = (target) => {
+  if (!isSourceTsExportTarget(target)) {
+    fail(`bin target must be a source .ts file: ${target}`);
+  }
+  return srcTargetToDist(target, "js");
+};
+
+const projectedBin = (record) => {
+  const bin = record.packageJson.bin;
+  if (bin === undefined) return undefined;
+  if (typeof bin === "string") return projectedBinTarget(bin);
+  if (bin === null || typeof bin !== "object" || Array.isArray(bin)) {
+    fail(`${record.packagePath}: package bin must be a string or record`);
+  }
+  return Object.fromEntries(
+    Object.entries(bin)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([name, target]) => {
+        if (typeof target !== "string") {
+          fail(`${record.packagePath}: package bin ${name} must target a source .ts file`);
+        }
+        return [name, projectedBinTarget(target)];
+      }),
+  );
+};
+
 const resolveRelativeSpecifier = (sourceFile, specifier, ext) => {
   if (!specifier.startsWith(".") || specifier.endsWith(".js") || specifier.endsWith(".json")) {
     return specifier;
@@ -650,6 +676,7 @@ const generatedManifest = (record) => {
     },
     main: exportsValue["."]?.default,
     types: exportsValue["."]?.types,
+    bin: projectedBin(record),
     exports: exportsValue,
     files: [
       "dist",

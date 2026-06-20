@@ -9,7 +9,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "isolatedModules": true,
-    "types": ["vitest/globals"],
+    "types": ["node", "vitest/globals"],
     "exactOptionalPropertyTypes": false,
     "noUncheckedIndexedAccess": false
   },

@@ -5,7 +5,8 @@
 ## Purpose
 
 Composition package that compiles an authored `agent/` tree into one normalized
-`AgentManifest<Authored>` plus provenance.
+`AgentManifest<Authored>` plus provenance and ships the `agentos build`
+filesystem wrapper for that compiler.
 
 ## Public API Status
 
@@ -13,9 +14,10 @@ Composition package that compiles an authored `agent/` tree into one normalized
 
 ## Invariant
 
-Agent-authoring is a pure projection over pre-runtime intent. It does not read
-the filesystem, import tool modules, mount backends, create clients, resolve
-materials, or write runtime ledger facts.
+The exported library API is a pure projection over pre-runtime intent. The
+package bin is the filesystem IO wrapper that reads authored files and writes
+generated projections before runtime starts. Neither surface mounts backends,
+resolves live material, or writes runtime ledger facts.
 
 ## Minimal Usage
 
@@ -27,6 +29,11 @@ import { compileAgentTree } from "@agent-os/agent-authoring";
 ```
 
 Filesystem loading and backend mounting stay outside this package.
+Use the package bin when the app author wants the standard file convention:
+
+```sh
+agentos build
+```
 
 ## Verification
 
