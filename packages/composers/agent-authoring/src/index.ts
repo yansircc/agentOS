@@ -1212,6 +1212,72 @@ export type NormalizeAgentOsConfigResult<M extends AgentManifest = AgentManifest
   | { readonly ok: true; readonly value: NormalizedAgentOsConfig<M> }
   | { readonly ok: false; readonly issues: ReadonlyArray<AgentOsConfigIssue> };
 
+export type StaticTargetGeneratedFilePath =
+  | ".agentos/generated/manifest.json"
+  | ".agentos/generated/deployment.json"
+  | ".agentos/generated/provenance.json"
+  | ".agentos/generated/fingerprints.json"
+  | ".agentos/generated/target.ts";
+
+export interface StaticTargetGeneratedFile {
+  readonly path: StaticTargetGeneratedFilePath;
+  readonly text: string;
+}
+
+export type StaticTargetModuleImportKind =
+  | "target-runtime"
+  | "provider-runtime"
+  | "workspace-host"
+  | "semantic-json"
+  | "authored-tool";
+
+export interface StaticTargetModuleImport {
+  readonly kind: StaticTargetModuleImportKind;
+  readonly source: string;
+  readonly imports: ReadonlyArray<string>;
+}
+
+export interface CanonicalDeploymentIR {
+  readonly target: typeof AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1;
+  readonly llmRoute: typeof AGENTOS_CONFIG_LLM_ROUTE.OPENAI_CHAT_COMPATIBLE;
+  readonly client: AgentOsConfigClientKind;
+  readonly workspaceTopology: AgentOsConfigWorkspaceTopology;
+  readonly toolNames: ReadonlyArray<string>;
+}
+
+export interface MountIR {
+  readonly driver: {
+    readonly kind: "cloudflare-do";
+    readonly className: string;
+    readonly binding: string;
+  };
+  readonly projectionSinks: ReadonlyArray<
+    "agent.info" | "runtime.events" | "runtime.input_requests"
+  >;
+  readonly providerResourceId: ProviderResourceId;
+}
+
+export interface StaticTargetLink {
+  readonly files: ReadonlyArray<StaticTargetGeneratedFile>;
+  readonly moduleGraph: ReadonlyArray<StaticTargetModuleImport>;
+  readonly canonicalDeployment: CanonicalDeploymentIR;
+  readonly mount: MountIR;
+}
+
+export type StaticTargetLinkIssue =
+  | {
+      readonly kind: "unsupported_static_target";
+      readonly target: AgentOsConfigTargetKind;
+    }
+  | {
+      readonly kind: "unsupported_static_llm_route";
+      readonly route: AgentOsConfigLlmRoute;
+    };
+
+export type StaticTargetLinkResult =
+  | { readonly ok: true; readonly value: StaticTargetLink }
+  | { readonly ok: false; readonly issues: ReadonlyArray<StaticTargetLinkIssue> };
+
 const configAuthorOrigin = (factKey: AgentOsConfigFactKey): AgentOsConfigOrigin =>
   `author:agentos.config.jsonc#${factKey}`;
 
@@ -1617,6 +1683,210 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
         providerResourceId,
       },
       origins,
+    },
+  };
+};
+
+const generatedPath = <Path extends StaticTargetGeneratedFilePath>(path: Path, text: string) => ({
+  path,
+  text,
+});
+
+const stableJsonValue = (value: unknown): unknown => {
+  if (value === null || typeof value !== "object") return value;
+  if (Array.isArray(value)) return value.map(stableJsonValue);
+  const record = value as Readonly<Record<string, unknown>>;
+  const sorted: Record<string, unknown> = {};
+  for (const key of Object.keys(record).sort()) sorted[key] = stableJsonValue(record[key]);
+  return sorted;
+};
+
+const stableJson = (value: unknown): string =>
+  `${JSON.stringify(stableJsonValue(value), null, 2)}\n`;
+
+const jsString = (value: string): string => JSON.stringify(value);
+
+const importToolPath = (toolName: string): string => `../../agent/tools/${toolName}`;
+
+const STATIC_TARGET_MODULES = {
+  cloudflareDoRuntime: "@agent-os/backend-cloudflare-do",
+  openAiCompatibleTransport: "@agent-os/llm-transport-effect-ai",
+  workspaceAgentHost: "@agent-os/workspace-agent",
+  runtimeProtocol: "@agent-os/runtime-protocol",
+} as const;
+
+const renderNamedImport = (names: ReadonlyArray<string>, source: string): string =>
+  `import { ${names.join(", ")} } ${"from"} ${jsString(source)};`;
+
+const renderTypeImport = (names: ReadonlyArray<string>, source: string): string =>
+  `import type { ${names.join(", ")} } ${"from"} ${jsString(source)};`;
+
+const generatedToolImports = (
+  toolNames: ReadonlyArray<string>,
+): ReadonlyArray<StaticTargetModuleImport> =>
+  toolNames.map((toolName, index) => ({
+    kind: "authored-tool",
+    source: importToolPath(toolName),
+    imports: [`default as tool_${index}`],
+  }));
+
+const renderStaticTarget = (
+  normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
+  toolNames: ReadonlyArray<string>,
+): string => {
+  const toolImports = toolNames
+    .map((toolName, index) => `import tool_${index} from ${jsString(importToolPath(toolName))};`)
+    .join("\n");
+  const toolRecord =
+    toolNames.length === 0
+      ? "{}"
+      : `{\n${toolNames
+          .map((toolName, index) => `  ${jsString(toolName)}: tool_${index},`)
+          .join("\n")}\n}`;
+  const handlerRecord = `{\n${normalized.deployment.manifest.handlers
+    .map((handler) => `  ${jsString(handler)}: generatedHandler,`)
+    .join("\n")}\n}`;
+  const imports = [
+    `import semanticDeclarations from "./manifest.json";`,
+    `import deploymentProvenance from "./deployment.json";`,
+    renderNamedImport(["createAgentDurableObject"], STATIC_TARGET_MODULES.cloudflareDoRuntime),
+    renderNamedImport(
+      ["OpenAiCompatibleLlmTransportLive"],
+      STATIC_TARGET_MODULES.openAiCompatibleTransport,
+    ),
+    renderNamedImport(
+      ["defineWorkspaceAgentMount", "WORKSPACE_AGENT_PROJECTION"],
+      STATIC_TARGET_MODULES.workspaceAgentHost,
+    ),
+    renderTypeImport(["AgentManifest"], STATIC_TARGET_MODULES.runtimeProtocol),
+    ...(toolImports.length === 0 ? [] : [toolImports]),
+  ].join("\n");
+  return `${imports}
+
+export const targetDeclarations = semanticDeclarations;
+export const targetDeployment = deploymentProvenance;
+
+const semanticManifest = semanticDeclarations as AgentManifest;
+const generatedHandler = () => undefined;
+
+const generatedTools = ${toolRecord};
+
+export const workspaceMount = defineWorkspaceAgentMount({
+  driver: { kind: "driver_mount", client: undefined as never },
+  projectionSinks: [
+    { kind: "projection_sink", name: WORKSPACE_AGENT_PROJECTION.AGENT_INFO },
+    { kind: "projection_sink", name: WORKSPACE_AGENT_PROJECTION.RUN_EVENTS },
+    { kind: "projection_sink", name: WORKSPACE_AGENT_PROJECTION.INPUT_REQUESTS },
+  ],
+});
+
+export class ${normalized.target.durableObject.className} extends createAgentDurableObject({
+  manifest: semanticManifest,
+  agentBindings: {
+    handlers: ${handlerRecord},
+    llmRoutes: {
+      default: {
+        kind: "openai-chat-compatible",
+        endpointRef: ${jsString(normalized.llm.endpointRef)},
+        credentialRef: ${jsString(normalized.llm.credentialRef)},
+        modelId: ${jsString(normalized.llm.modelRef)},
+      },
+    },
+    tools: generatedTools,
+  },
+  llmTransport: () => OpenAiCompatibleLlmTransportLive,
+}) {}
+`;
+};
+
+export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
+  normalized: NormalizedAgentOsConfig<AuthoredAgentManifest<K>>,
+): StaticTargetLinkResult => {
+  if (normalized.target.kind !== AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1) {
+    return {
+      ok: false,
+      issues: [{ kind: "unsupported_static_target", target: normalized.target.kind }],
+    };
+  }
+  if (normalized.llm.route !== AGENTOS_CONFIG_LLM_ROUTE.OPENAI_CHAT_COMPATIBLE) {
+    return {
+      ok: false,
+      issues: [{ kind: "unsupported_static_llm_route", route: normalized.llm.route }],
+    };
+  }
+  const toolNames = Object.keys(normalized.deployment.manifest.tools ?? {}).sort();
+  const deploymentJson = {
+    deploymentId: normalized.deployment.deploymentId,
+    backend: normalized.deployment.backend,
+    adapter: normalized.deployment.adapter,
+    codec: normalized.deployment.codec,
+    ...(normalized.deployment.providerStrategy === undefined
+      ? {}
+      : { providerStrategy: normalized.deployment.providerStrategy }),
+  };
+  const moduleGraph: ReadonlyArray<StaticTargetModuleImport> = [
+    { kind: "semantic-json", source: "./manifest.json", imports: ["default as declarations"] },
+    { kind: "semantic-json", source: "./deployment.json", imports: ["default as deployment"] },
+    {
+      kind: "target-runtime",
+      source: STATIC_TARGET_MODULES.cloudflareDoRuntime,
+      imports: ["createAgentDurableObject"],
+    },
+    {
+      kind: "provider-runtime",
+      source: STATIC_TARGET_MODULES.openAiCompatibleTransport,
+      imports: ["OpenAiCompatibleLlmTransportLive"],
+    },
+    {
+      kind: "workspace-host",
+      source: STATIC_TARGET_MODULES.workspaceAgentHost,
+      imports: ["defineWorkspaceAgentMount", "WORKSPACE_AGENT_PROJECTION"],
+    },
+    ...generatedToolImports(toolNames),
+  ];
+  return {
+    ok: true,
+    value: {
+      files: [
+        generatedPath(
+          ".agentos/generated/manifest.json",
+          stableJson(normalized.deployment.manifest),
+        ),
+        generatedPath(".agentos/generated/deployment.json", stableJson(deploymentJson)),
+        generatedPath(".agentos/generated/provenance.json", stableJson(normalized.origins)),
+        generatedPath(
+          ".agentos/generated/fingerprints.json",
+          stableJson({
+            deployment: digestText(stableJson(deploymentJson)),
+            manifest: digestText(stableJson(normalized.deployment.manifest)),
+            targetModuleGraph: digestText(stableJson(moduleGraph)),
+          }),
+        ),
+        generatedPath(
+          ".agentos/generated/target.ts",
+          renderStaticTarget(
+            normalized as NormalizedAgentOsConfig<AuthoredAgentManifest>,
+            toolNames,
+          ),
+        ),
+      ],
+      moduleGraph,
+      canonicalDeployment: {
+        target: normalized.target.kind,
+        llmRoute: normalized.llm.route,
+        client: normalized.client.kind,
+        workspaceTopology: normalized.workspace.topology,
+        toolNames,
+      },
+      mount: {
+        driver: {
+          kind: "cloudflare-do",
+          className: normalized.target.durableObject.className,
+          binding: normalized.target.durableObject.binding,
+        },
+        projectionSinks: ["agent.info", "runtime.events", "runtime.input_requests"],
+        providerResourceId: normalized.workspace.providerResourceId,
+      },
     },
   };
 };

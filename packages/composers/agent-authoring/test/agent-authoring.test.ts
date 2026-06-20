@@ -8,9 +8,28 @@ import {
   WORKSPACE_TOPOLOGY,
   compileAgentTree,
   decodeAgentOsConfig,
+  linkWorkspaceStaticTarget,
   normalizeAgentOsConfig,
   type AgentOsConfigV1,
 } from "../src";
+
+type StaticTargetGeneratedPath =
+  | ".agentos/generated/manifest.json"
+  | ".agentos/generated/deployment.json"
+  | ".agentos/generated/provenance.json"
+  | ".agentos/generated/fingerprints.json"
+  | ".agentos/generated/target.ts";
+
+const generatedText = (
+  result: ReturnType<typeof linkWorkspaceStaticTarget>,
+  path: StaticTargetGeneratedPath,
+): string => {
+  expect(result.ok).toBe(true);
+  if (!result.ok) expect.fail(JSON.stringify(result.issues));
+  const file = result.value.files.find((item) => item.path === path);
+  expect(file).toBeDefined();
+  return file?.text ?? "";
+};
 
 describe("agent authored tree compiler", () => {
   it("compiles a minimal authored tree to AgentManifest<Authored> with provenance", () => {
@@ -504,6 +523,194 @@ describe("agent authored tree compiler", () => {
         reason: "scope_not_manifest_owned",
       },
     ]);
+  });
+
+  it("links a closed workspace target as static imports plus semantic JSON data", () => {
+    const compiled = compileAgentTree({
+      files: [
+        { path: "agent/instructions.md", kind: "markdown", text: "Run workspace tasks." },
+        {
+          path: "agent/agent.json",
+          kind: "json",
+          value: {
+            agentId: "agent.workspace",
+            scope: { kind: "session", idSource: "manifest", stableScopeId: "workspace-ledger" },
+          },
+        },
+        { path: "agent/tools/write_file.ts", kind: "tool", declaration: {} },
+        { path: "agent/tools/read_file.ts", kind: "tool", declaration: {} },
+      ],
+    });
+    expect(compiled.ok).toBe(true);
+    if (!compiled.ok) expect.fail(JSON.stringify(compiled.issues));
+
+    const normalized = normalizeAgentOsConfig(
+      {
+        profile: AGENTOS_CONFIG_PROFILE.WORKSPACE_V1,
+        agent: "./agent",
+        deployment: { id: "web-cursor-demo", version: "0.1.0" },
+        target: {
+          kind: AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1,
+          durableObject: { className: "AgentOS", binding: "AGENT_OS" },
+        },
+        client: { kind: AGENTOS_CONFIG_CLIENT.SVELTE_KIT_REMOTE_V1 },
+        llm: {
+          route: AGENTOS_CONFIG_LLM_ROUTE.OPENAI_CHAT_COMPATIBLE,
+          endpointRef: "openrouter",
+          credentialRef: "openrouter-key",
+          modelRef: "openrouter-default-text-model",
+        },
+        workspace: {
+          binding: "Sandbox",
+          root: "/workspace",
+        },
+      },
+      compiled.value,
+    );
+    expect(normalized.ok).toBe(true);
+    if (!normalized.ok) expect.fail(JSON.stringify(normalized.issues));
+
+    const linked = linkWorkspaceStaticTarget(normalized.value);
+
+    expect(linked.ok).toBe(true);
+    if (!linked.ok) expect.fail(JSON.stringify(linked.issues));
+    expect(linked.value.moduleGraph).toEqual([
+      { kind: "semantic-json", source: "./manifest.json", imports: ["default as declarations"] },
+      { kind: "semantic-json", source: "./deployment.json", imports: ["default as deployment"] },
+      {
+        kind: "target-runtime",
+        source: "@agent-os/backend-cloudflare-do",
+        imports: ["createAgentDurableObject"],
+      },
+      {
+        kind: "provider-runtime",
+        source: "@agent-os/llm-transport-effect-ai",
+        imports: ["OpenAiCompatibleLlmTransportLive"],
+      },
+      {
+        kind: "workspace-host",
+        source: "@agent-os/workspace-agent",
+        imports: ["defineWorkspaceAgentMount", "WORKSPACE_AGENT_PROJECTION"],
+      },
+      {
+        kind: "authored-tool",
+        source: "../../agent/tools/read_file",
+        imports: ["default as tool_0"],
+      },
+      {
+        kind: "authored-tool",
+        source: "../../agent/tools/write_file",
+        imports: ["default as tool_1"],
+      },
+    ]);
+    expect(linked.value.canonicalDeployment).toEqual({
+      target: AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1,
+      llmRoute: AGENTOS_CONFIG_LLM_ROUTE.OPENAI_CHAT_COMPATIBLE,
+      client: AGENTOS_CONFIG_CLIENT.SVELTE_KIT_REMOTE_V1,
+      workspaceTopology: {
+        kind: WORKSPACE_TOPOLOGY.PER_SCOPE,
+        allocator: "workspace-per-scope-v1",
+      },
+      toolNames: ["read_file", "write_file"],
+    });
+    expect(linked.value.mount).toMatchObject({
+      driver: { kind: "cloudflare-do", className: "AgentOS", binding: "AGENT_OS" },
+      projectionSinks: ["agent.info", "runtime.events", "runtime.input_requests"],
+    });
+
+    const target = generatedText(linked, ".agentos/generated/target.ts");
+    expect(target).toContain('import semanticDeclarations from "./manifest.json";');
+    expect(target).toContain('import deploymentProvenance from "./deployment.json";');
+    expect(target).toContain(
+      'import { createAgentDurableObject } from "@agent-os/backend-cloudflare-do";',
+    );
+    expect(target).toContain(
+      'import { OpenAiCompatibleLlmTransportLive } from "@agent-os/llm-transport-effect-ai";',
+    );
+    expect(target).toContain('import tool_0 from "../../agent/tools/read_file";');
+    expect(target).toContain('import tool_1 from "../../agent/tools/write_file";');
+    expect(target).toContain("manifest: semanticManifest");
+    expect(target).toContain("llmTransport: () => OpenAiCompatibleLlmTransportLive");
+    expect(target).toContain('"read_file": tool_0');
+    expect(target).toContain('"write_file": tool_1');
+
+    const durableObjectConfig = target.slice(target.indexOf("extends createAgentDurableObject({"));
+    expect(durableObjectConfig).not.toContain("deploymentProvenance");
+    expect(durableObjectConfig).not.toContain("targetDeployment");
+    expect(target).not.toContain("makeRuntime({");
+    expect(target).not.toContain("dynamic import");
+    expect(target).not.toContain("workspaceExtension(");
+    expect(target).not.toContain("extensions:");
+  });
+
+  it("emits byte-stable generated files and changes the module graph when tool imports change", () => {
+    const compile = (tools: ReadonlyArray<string>) => {
+      const compiled = compileAgentTree({
+        files: [
+          { path: "agent/instructions.md", kind: "markdown", text: "Run workspace tasks." },
+          {
+            path: "agent/agent.json",
+            kind: "json",
+            value: {
+              agentId: "agent.workspace",
+              scope: { kind: "session", idSource: "manifest", stableScopeId: "workspace-ledger" },
+            },
+          },
+          ...tools.map((tool) => ({
+            path: `agent/tools/${tool}.ts`,
+            kind: "tool" as const,
+            declaration: {},
+          })),
+        ],
+      });
+      expect(compiled.ok).toBe(true);
+      if (!compiled.ok) expect.fail(JSON.stringify(compiled.issues));
+      const normalized = normalizeAgentOsConfig(
+        {
+          profile: AGENTOS_CONFIG_PROFILE.WORKSPACE_V1,
+          agent: "./agent",
+          deployment: { id: "web-cursor-demo" },
+          target: {
+            kind: AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1,
+            durableObject: { className: "AgentOS", binding: "AGENT_OS" },
+          },
+          client: { kind: AGENTOS_CONFIG_CLIENT.BROWSER_DIRECT_V1 },
+          llm: {
+            route: AGENTOS_CONFIG_LLM_ROUTE.OPENAI_CHAT_COMPATIBLE,
+            endpointRef: "openrouter",
+            credentialRef: "openrouter-key",
+            modelRef: "model",
+          },
+          workspace: {
+            binding: "Sandbox",
+            root: "/workspace",
+          },
+        },
+        compiled.value,
+      );
+      expect(normalized.ok).toBe(true);
+      if (!normalized.ok) expect.fail(JSON.stringify(normalized.issues));
+      const linked = linkWorkspaceStaticTarget(normalized.value);
+      expect(linked.ok).toBe(true);
+      if (!linked.ok) expect.fail(JSON.stringify(linked.issues));
+      return linked.value;
+    };
+
+    const first = compile(["read_file"]);
+    const second = compile(["read_file"]);
+    const withExtraTool = compile(["read_file", "write_file"]);
+
+    expect(first.files).toEqual(second.files);
+    expect(first.moduleGraph).toEqual(second.moduleGraph);
+    expect(first.moduleGraph).not.toEqual(withExtraTool.moduleGraph);
+    expect(withExtraTool.moduleGraph).toContainEqual({
+      kind: "authored-tool",
+      source: "../../agent/tools/write_file",
+      imports: ["default as tool_1"],
+    });
+    expect(generatedText({ ok: true, value: first }, ".agentos/generated/fingerprints.json")).toBe(
+      generatedText({ ok: true, value: second }, ".agentos/generated/fingerprints.json"),
+    );
   });
 
   it("rejects config runtime facts and executable values instead of normalizing them", () => {

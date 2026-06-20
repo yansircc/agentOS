@@ -37,16 +37,26 @@ title: "@agent-os/agent-authoring Public API Intent"
 - `.:AuthoredToolDeclaration`
 - `.:AuthoredToolEffect`
 - `.:AuthoredToolFile`
+- `.:CanonicalDeploymentIR`
 - `.:CompileAgentTreeIssue`
 - `.:CompileAgentTreeResult`
 - `.:CompiledAgentManifest`
 - `.:DecodeAgentOsConfigResult`
+- `.:MountIR`
 - `.:NormalizedAgentOsConfig`
 - `.:NormalizeAgentOsConfigResult`
+- `.:StaticTargetGeneratedFile`
+- `.:StaticTargetGeneratedFilePath`
+- `.:StaticTargetLink`
+- `.:StaticTargetLinkIssue`
+- `.:StaticTargetLinkResult`
+- `.:StaticTargetModuleImport`
+- `.:StaticTargetModuleImportKind`
 - `.:WORKSPACE_TOPOLOGY`
 - `.:WorkspaceTopologyKind`
 - `.:compileAgentTree`
 - `.:decodeAgentOsConfig`
+- `.:linkWorkspaceStaticTarget`
 - `.:normalizeAgentOsConfig`
 
 ## Experimental exports

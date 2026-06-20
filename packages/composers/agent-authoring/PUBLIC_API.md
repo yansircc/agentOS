@@ -37,16 +37,26 @@ Status: 0.5.x experimental for compiling authored agent trees into manifest/prov
 - `.:AuthoredToolDeclaration`
 - `.:AuthoredToolEffect`
 - `.:AuthoredToolFile`
+- `.:CanonicalDeploymentIR`
 - `.:CompileAgentTreeIssue`
 - `.:CompileAgentTreeResult`
 - `.:CompiledAgentManifest`
 - `.:DecodeAgentOsConfigResult`
+- `.:MountIR`
 - `.:NormalizedAgentOsConfig`
 - `.:NormalizeAgentOsConfigResult`
+- `.:StaticTargetGeneratedFile`
+- `.:StaticTargetGeneratedFilePath`
+- `.:StaticTargetLink`
+- `.:StaticTargetLinkIssue`
+- `.:StaticTargetLinkResult`
+- `.:StaticTargetModuleImport`
+- `.:StaticTargetModuleImportKind`
 - `.:WORKSPACE_TOPOLOGY`
 - `.:WorkspaceTopologyKind`
 - `.:compileAgentTree`
 - `.:decodeAgentOsConfig`
+- `.:linkWorkspaceStaticTarget`
 - `.:normalizeAgentOsConfig`
 
 ## Experimental exports
