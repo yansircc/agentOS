@@ -7,42 +7,6 @@
   ],
   "primitives": [
     {
-      "id": "primitive.ag-ui.projectAgUiFrames",
-      "package": "@agent-os/ag-ui",
-      "packagePath": "packages/wire-adapters/ag-ui",
-      "entrypoints": ["."],
-      "symbol": "projectAgUiFrames",
-      "exportKey": ".:projectAgUiFrames",
-      "sourceFile": "packages/wire-adapters/ag-ui/src/index.ts",
-      "summary": "Folds AG-UI frames into a neutral run projection.",
-      "aliases": [],
-      "invariants": ["invariant.algebra.single-code-source"],
-      "decisions": [],
-      "docs": "docs/concepts/ag-ui-wire-adapter.md",
-      "capabilityKind": "projection",
-      "testEvidence": {
-        "tests": ["packages/wire-adapters/ag-ui/test/ag-ui.test.ts"]
-      }
-    },
-    {
-      "id": "primitive.ag-ui.projectAgUiFramesToActivities",
-      "package": "@agent-os/ag-ui",
-      "packagePath": "packages/wire-adapters/ag-ui",
-      "entrypoints": ["."],
-      "symbol": "projectAgUiFramesToActivities",
-      "exportKey": ".:projectAgUiFramesToActivities",
-      "sourceFile": "packages/wire-adapters/ag-ui/src/index.ts",
-      "summary": "Folds AG-UI frames into a UI-neutral activity list.",
-      "aliases": [],
-      "invariants": ["invariant.algebra.single-code-source"],
-      "decisions": [],
-      "docs": "docs/concepts/ag-ui-wire-adapter.md",
-      "capabilityKind": "projection",
-      "testEvidence": {
-        "tests": ["packages/wire-adapters/ag-ui/test/ag-ui.test.ts"]
-      }
-    },
-    {
       "id": "primitive.ag-ui.projectLedgerEventToAgUiEnvelope",
       "package": "@agent-os/ag-ui",
       "packagePath": "packages/wire-adapters/ag-ui",

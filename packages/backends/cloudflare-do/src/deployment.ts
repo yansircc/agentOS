@@ -74,7 +74,6 @@ export interface MaterializedAgentConfig<Env extends CloudflareAgentEnv, Runtime
   readonly dispatchTargets: DispatchTargetRegistry;
   readonly triggers: CloudflareTriggerSource<Env>;
   readonly streams: CloudflareAttachedStreamSource<Env>;
-  readonly projections: ReadonlyArray<AnyMaterializedProjectionDefinition>;
   readonly eventHandlers?: (
     context: AgentEventHandlerContext<Runtime>,
     env: Env,
@@ -95,18 +94,20 @@ export const materializeCloudflareAgentConfig = <Env extends CloudflareAgentEnv,
   manifest: AgentManifest,
   config: AgentRuntimeConfig<Env, Runtime>,
   env: Env,
-): MaterializedAgentConfig<Env, Runtime> => ({
-  mount: mountCloudflareAgent(manifest, config.agentBindings),
-  refResolver: config.refResolver?.(env) ?? emptyRefResolver,
-  llmTransport: config.llmTransport?.(env) ?? MissingLlmTransportLive,
-  extensions: config.extensions?.(env) ?? [],
-  declaredIntents: config.declaredIntents?.(env) ?? [],
-  dispatchTargets: config.dispatchTargets?.(env) ?? {},
-  triggers: config.triggers ?? [],
-  streams: config.streams ?? [],
-  projections: projectionsFor(config.projections, env),
-  eventHandlers: config.eventHandlers,
-});
+): MaterializedAgentConfig<Env, Runtime> => {
+  const materialized = projectionsFor(config.projections, env);
+  return {
+    mount: mountCloudflareAgent(manifest, config.agentBindings, { materialized }),
+    refResolver: config.refResolver?.(env) ?? emptyRefResolver,
+    llmTransport: config.llmTransport?.(env) ?? MissingLlmTransportLive,
+    extensions: config.extensions?.(env) ?? [],
+    declaredIntents: config.declaredIntents?.(env) ?? [],
+    dispatchTargets: config.dispatchTargets?.(env) ?? {},
+    triggers: config.triggers ?? [],
+    streams: config.streams ?? [],
+    eventHandlers: config.eventHandlers,
+  };
+};
 
 export const materializeCloudflareAgentDeployment = <
   Env extends CloudflareAgentEnv,

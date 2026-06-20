@@ -12,11 +12,6 @@ interface TestEnv {
 }
 
 const testEnv = env as unknown as TestEnv;
-const facadeSubmitAuthorityRef = {
-  authorityClass: "llm_route" as const,
-  authorityId: "default",
-};
-
 describe("defineAgentDO facade submit", () => {
   it("projects mounted agent manifest info without adding generated fields to the manifest", async () => {
     const scope = "facade-submit-info";
@@ -67,7 +62,7 @@ describe("defineAgentDO facade submit", () => {
           identity: ReturnType<typeof testTruthIdentity>,
         ) => Promise<ReadonlyArray<{ readonly kind: string; readonly payload: unknown }>>;
       }
-    ).events(testTruthIdentity(scope, facadeSubmitAuthorityRef));
+    ).events(testTruthIdentity(scope));
 
     expect(result.ok, JSON.stringify({ result, events })).toBe(true);
     if (result.ok) {
@@ -111,7 +106,7 @@ describe("defineAgentDO facade submit", () => {
           identity: ReturnType<typeof testTruthIdentity>,
         ) => Promise<ReadonlyArray<{ readonly kind: string; readonly payload: unknown }>>;
       }
-    ).events(testTruthIdentity(scope, facadeSubmitAuthorityRef));
+    ).events(testTruthIdentity(scope));
 
     expect(result.ok, JSON.stringify({ result, events })).toBe(true);
     const toolExecuted = events.find((event) => event.kind === "tool.executed");
@@ -142,7 +137,7 @@ describe("defineAgentDO facade submit", () => {
           identity: ReturnType<typeof testTruthIdentity>,
         ) => Promise<ReadonlyArray<{ readonly kind: string; readonly payload: unknown }>>;
       }
-    ).events(testTruthIdentity(scope, facadeSubmitAuthorityRef));
+    ).events(testTruthIdentity(scope));
 
     expect(result).toMatchObject({
       ok: false,
@@ -177,7 +172,7 @@ describe("defineAgentDO facade submit", () => {
           identity: ReturnType<typeof testTruthIdentity>,
         ) => Promise<ReadonlyArray<{ readonly kind: string; readonly payload: unknown }>>;
       }
-    ).events(testTruthIdentity(scope, facadeSubmitAuthorityRef));
+    ).events(testTruthIdentity(scope));
 
     expect(result).toMatchObject({
       ok: true,
@@ -213,7 +208,7 @@ describe("defineAgentDO facade submit", () => {
           identity: ReturnType<typeof testTruthIdentity>,
         ) => Promise<ReadonlyArray<{ readonly kind: string; readonly payload: unknown }>>;
       }
-    ).events(testTruthIdentity(scope, facadeSubmitAuthorityRef));
+    ).events(testTruthIdentity(scope));
 
     expect(result.ok, JSON.stringify({ result, events })).toBe(true);
     if (result.ok) {

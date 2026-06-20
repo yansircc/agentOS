@@ -80,7 +80,7 @@ describe("Cloudflare deployment installation", () => {
     expect(materialized.extensions).toEqual([]);
     expect(materialized.declaredIntents).toEqual([]);
     expect(materialized.dispatchTargets).toEqual({});
-    expect(materialized.projections).toEqual([]);
+    expect(materialized.mount.projectionSinks.materialized).toEqual([]);
   });
 
   it.effect("appends and reads InstallationReceipt through the Ledger port", () =>

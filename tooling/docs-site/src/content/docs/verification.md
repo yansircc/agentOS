@@ -30,10 +30,11 @@ bun run check:release
 bun run check:full
 ```
 
-`bun run check:release` adds internal package distribution validation to the
-standard gate. Use it before publishing or when changing package exports,
-release metadata, or distribution tooling. `bun run check:full` adds the docs
-site build and runtime harnesses for release-level integration.
+`bun run check:release` adds internal package distribution validation, the
+internal consumer smoke, and the Effect scanner to the standard gate. Use it
+before publishing or when changing package exports, release metadata, or
+distribution tooling. `bun run check:full` adds the docs site build and runtime
+harnesses for release-level integration.
 
 ## Documentation Gate
 

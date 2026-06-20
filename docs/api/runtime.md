@@ -195,6 +195,7 @@
 - `.:triggerParseOk`
 - `.:turnRefOf`
 - `.:validateBoundaryEventPayload`
+- `.:validateCommittedBoundaryEvent`
 
 ## Experimental exports
 

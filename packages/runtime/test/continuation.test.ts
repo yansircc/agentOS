@@ -126,6 +126,7 @@ describe("runtime continuation projection", () => {
     });
     expect(
       submitResumeDecisionFromContinuationProjection(projectContinuation(approvedEvents, ref), {
+        kind: "approval",
         approved: true,
       }),
     ).toEqual({
@@ -136,7 +137,7 @@ describe("runtime continuation projection", () => {
         interruptId: "decision:publish",
         gateRef: "decision_gate:publish",
         decisionRef: "decision/1",
-        resume: { approved: true },
+        resume: { kind: "approval", approved: true },
       },
     });
 
@@ -166,6 +167,7 @@ describe("runtime continuation projection", () => {
     });
     expect(
       submitResumeDecisionFromContinuationProjection(projectContinuation(consumedEvents, ref), {
+        kind: "approval",
         approved: true,
       }),
     ).toMatchObject({

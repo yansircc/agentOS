@@ -33,7 +33,6 @@ import {
 import {
   agUiRunAgentInputToSubmitInput,
   decodeAgUiRecordedLedgerEvent,
-  projectAgUiFrames,
   projectLedgerEventsToAgUiFrames,
   verifyAgUiFrameSafety,
   type AgUiRecordedLedgerEvent,
@@ -330,15 +329,25 @@ describe("Cloudflare workspace tools to AG-UI integration fixture", () => {
           threadId: input.threadId,
         });
 
-        expect(projectAgUiFrames(frames)).toMatchObject({
-          runId: "1",
-          threadId: "thread-workspace",
-          status: "completed",
-          toolCalls: expect.arrayContaining([
-            expect.objectContaining({ toolCallId: "read-call", name: "read_file" }),
-            expect.objectContaining({ toolCallId: "write-call", name: "write_file" }),
+        expect(frames).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              type: "TOOL_CALL_START",
+              toolCallId: "read-call",
+              toolCallName: "read_file",
+            }),
+            expect.objectContaining({
+              type: "TOOL_CALL_START",
+              toolCallId: "write-call",
+              toolCallName: "write_file",
+            }),
+            expect.objectContaining({
+              type: "RUN_FINISHED",
+              threadId: "thread-workspace",
+              runId: "1",
+            }),
           ]),
-        });
+        );
         expect(
           verifyAgUiFrameSafety(frames, {
             forbiddenLiterals: ["READ_SECRET", "WRITE_SECRET", "UI_SECRET", "external_receipt"],

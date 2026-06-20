@@ -42,6 +42,17 @@ type BoundaryEventAppender = {
     RecordedLedgerEvent,
     BoundaryCommitRejected | RuntimeStorageError | JsonStringifyError
   >;
+  readonly commitWithRuntimeEvents: (
+    contract: typeof decisionGateBoundaryContract,
+    event: string,
+    payload: unknown,
+    runtimeEvents: (
+      boundaryEventId: number,
+    ) => readonly [RuntimeEventCommitSpec, ...RuntimeEventCommitSpec[]],
+  ) => Effect.Effect<
+    readonly [RecordedLedgerEvent, ...RecordedLedgerEvent[]],
+    BoundaryCommitRejected | RuntimeStorageError | JsonStringifyError
+  >;
 };
 
 type RuntimeAppendAction<K extends keyof RuntimeEventActionByKind> = {
@@ -254,21 +265,31 @@ export const appendNextDriverAction = (
   Effect.gen(function* () {
     switch (action.kind) {
       case "park": {
-        const request = yield* services.boundaryEvents.commit(
+        const events = yield* services.boundaryEvents.commitWithRuntimeEvents(
           decisionGateBoundaryContract,
           DECISION_GATE_KIND.REQUESTED,
           action.request,
+          () => [action.interruption],
         );
-        const interruption = yield* commitOneRuntimeEvent(services.ledger, action.interruption);
+        const request = events[0];
+        const interruption = yield* decodeCommittedRuntimeEvent(
+          events[1] as RecordedLedgerEvent,
+          action.interruption.kind,
+        );
         return { kind: "park", request, interruption };
       }
       case "resume": {
-        const consumed = yield* services.boundaryEvents.commit(
+        const events = yield* services.boundaryEvents.commitWithRuntimeEvents(
           decisionGateBoundaryContract,
           DECISION_GATE_KIND.CONSUMED,
           action.consumed,
+          (consumedEventId) => [action.resumed(consumedEventId)],
         );
-        const resumed = yield* commitOneRuntimeEvent(services.ledger, action.resumed(consumed.id));
+        const consumed = events[0];
+        const resumed = yield* decodeCommittedRuntimeEvent(
+          events[1] as RecordedLedgerEvent,
+          RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED,
+        );
         return { kind: "resume", consumed, resumed };
       }
       case "complete_after_tools": {

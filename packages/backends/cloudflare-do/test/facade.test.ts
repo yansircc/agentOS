@@ -91,7 +91,7 @@ describe("defineAgentDO facade lowering", () => {
     const mount = mountCloudflareAgent(manifest, bindings);
 
     expect(Object.keys(mount).sort()).toEqual(["driverConfig", "projectionSinks"]);
-    expect(Object.keys(mount.projectionSinks)).toEqual(["info"]);
+    expect(Object.keys(mount.projectionSinks).sort()).toEqual(["info", "materialized"]);
     expect(mount.driverConfig.manifest).toBe(manifest);
     expect(mount.driverConfig.bindings).toBe(bindings);
     expect(mount.driverConfig.port).toEqual(cloudflareAgentMountPort);
@@ -105,6 +105,7 @@ describe("defineAgentDO facade lowering", () => {
       kind: "AgentManifest",
       agentId: "agent.cloudflare-mount-test",
     });
+    expect(mount.projectionSinks.materialized).toEqual([]);
   });
 
   it("lowers bindings into RefResolver and dispatch targets by MaterialRef shape", () => {

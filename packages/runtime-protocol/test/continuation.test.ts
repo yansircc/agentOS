@@ -87,7 +87,7 @@ describe("runtime continuation refs", () => {
     expect(
       submitResumeDecisionFromContinuationRef(wire, {
         decisionRef: "decision/approved",
-        resume: { approved: true },
+        resume: { kind: "approval", approved: true },
       }),
     ).toEqual({
       runId: 3,
@@ -95,7 +95,7 @@ describe("runtime continuation refs", () => {
       interruptId: "decision:publish",
       gateRef: "decision_gate:publish",
       decisionRef: "decision/approved",
-      resume: { approved: true },
+      resume: { kind: "approval", approved: true },
     });
     expect(isContinuationRef({ ...wire, turn: { id: 4, index: 1 } })).toBe(false);
     expect(recordedContinuationRefFromUnknown({ ...wire, turn: { id: 4, index: 1 } })).toBeNull();
@@ -129,7 +129,7 @@ describe("runtime continuation refs", () => {
   it("serializes decision and recovery verdict continuation causes without a live handle", () => {
     const decisionCause = decisionContinuationCause({
       decisionRef: "decision/approved",
-      resume: { approved: true },
+      resume: { kind: "approval", approved: true },
     });
     expect(isContinuationCause(JSON.parse(JSON.stringify(decisionCause)))).toBe(true);
 

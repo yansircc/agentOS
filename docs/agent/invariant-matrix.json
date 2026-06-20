@@ -71,8 +71,6 @@
       "invariant": "invariant.algebra.single-code-source",
       "statement": "Every algebra has one code source; projections and docs derive from that source.",
       "primitives": [
-        "primitive.ag-ui.projectAgUiFrames",
-        "primitive.ag-ui.projectAgUiFramesToActivities",
         "primitive.kernel.AgentSchema",
         "primitive.kernel.AgentSchemaProjections",
         "primitive.kernel.projectAgentSchema"
@@ -88,7 +86,6 @@
         "agent_os.provider_output_decode_error"
       ],
       "docs": [
-        "docs/concepts/ag-ui-wire-adapter.md",
         "docs/concepts/agent-schema.md",
         "docs/concepts/materialized-projections.md",
         "docs/packages/llm-transport-effect-ai.md",

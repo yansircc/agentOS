@@ -238,6 +238,22 @@
       },
       {
         "type": "rule",
+        "id": "convergence-boundary"
+      },
+      {
+        "type": "rule",
+        "id": "convergence-roles"
+      },
+      {
+        "type": "rule",
+        "id": "convergence-public-surface"
+      },
+      {
+        "type": "rule",
+        "id": "convergence-import-dag"
+      },
+      {
+        "type": "rule",
         "id": "substrate-import-dag"
       },
       {

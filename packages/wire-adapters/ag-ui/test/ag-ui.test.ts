@@ -29,8 +29,6 @@ import {
   decodeLedgerEventToAgUiEnvelope,
   encodeAgUiLedgerEventEnvelopeSse,
   framesForAgUiLedgerEnvelope,
-  projectAgUiFramesToActivities,
-  projectAgUiFrames,
   projectLedgerEventToAgUiEnvelope,
   projectLedgerEventsToAgUiFrames,
   projectLedgerSseToAgUiEnvelopes,
@@ -357,76 +355,6 @@ describe("@agent-os/ag-ui", () => {
     expect(JSON.stringify(frames)).not.toContain("secret-token");
     expect(JSON.stringify(frames)).not.toContain('"city":"SF"');
     expect(JSON.stringify(frames)).not.toContain('"temperature":71');
-    expect(projectAgUiFrames(frames)).toEqual({
-      runId: "1",
-      threadId: "thread-1",
-      status: "completed",
-      text: "Checking.",
-      textMessages: [
-        {
-          messageId: "agent-os:run:1:turn:0:message:0",
-          role: "assistant",
-          text: "Checking.",
-        },
-      ],
-      toolCalls: [
-        {
-          toolCallId: "call-1",
-          name: "lookup",
-          args: summaryText("tool_arguments", { type: "string", bytes: 13 }),
-          result: summaryText("tool_result", { type: "object", keys: ["temperature"] }),
-        },
-      ],
-      custom: [
-        {
-          type: "CUSTOM",
-          timestamp: 20,
-          name: "agent-os.chat.ingested",
-          value: { runId: 1, intent: summary("run_input", { type: "string", bytes: 12 }) },
-        },
-        {
-          type: "CUSTOM",
-          timestamp: 30,
-          name: "agent-os.tool.started",
-          value: {
-            runId: "1",
-            turnIndex: 0,
-            toolCallId: "call-1",
-            toolName: "lookup",
-          },
-        },
-        {
-          type: "CUSTOM",
-          timestamp: 30,
-          name: "agent-os.llm.completed",
-          value: {
-            runId: 1,
-            turnIndex: 0,
-            usage: { promptTokens: 7, completionTokens: 11, totalTokens: 18 },
-          },
-        },
-        {
-          type: "CUSTOM",
-          timestamp: 30,
-          name: "agent-os.llm.usage",
-          value: {
-            runId: 1,
-            turnIndex: 0,
-            usage: { promptTokens: 7, completionTokens: 11, totalTokens: 18 },
-          },
-        },
-        {
-          type: "CUSTOM",
-          timestamp: 40,
-          name: "agent-os.tool.completed",
-          value: {
-            runId: "1",
-            toolCallId: "call-1",
-            toolName: "lookup",
-          },
-        },
-      ],
-    });
   });
 
   it("projects runtime LLM request and complete-after-tools facts as safe custom frames", () => {
@@ -486,7 +414,7 @@ describe("@agent-os/ag-ui", () => {
     expect(JSON.stringify(frames)).not.toContain("arguments");
   });
 
-  it("projects safe tool start and completion facts with file io summaries", () => {
+  it("projects safe tool start and completion facts without heuristic file io summaries", () => {
     const frames = projectLedgerEventsToAgUiFrames(
       [
         commit(
@@ -549,7 +477,6 @@ describe("@agent-os/ag-ui", () => {
             turnIndex: 0,
             toolCallId: "call-read",
             toolName: "read_file",
-            io: [{ action: "read", path: "/input/request.json" }],
           },
         },
         {
@@ -560,11 +487,11 @@ describe("@agent-os/ag-ui", () => {
             runId: "1",
             toolCallId: "call-write",
             toolName: "write_editor_patch_candidate",
-            io: [{ action: "write", path: "/output/code.fragment", bytes: 42 }],
           },
         },
       ]),
     );
+    expect(JSON.stringify(frames)).not.toContain('"io"');
     expect(JSON.stringify(frames)).not.toContain("SECRET_CODE");
   });
 
@@ -629,39 +556,6 @@ describe("@agent-os/ag-ui", () => {
     expect(chunks[0]).toContain("event: ag_ui");
   });
 
-  it("projects AG-UI frames into neutral activities without web-cursor run semantics", () => {
-    const activities = projectAgUiFramesToActivities(
-      projectLedgerEventsToAgUiFrames(transcript(), { threadId: "thread-1" }),
-    );
-    expect(activities).toEqual(
-      expect.arrayContaining([
-        {
-          kind: "message",
-          id: "agent-os:run:1:turn:0:message:0",
-          role: "assistant",
-          text: "Checking.",
-          startedAt: 30,
-          updatedAt: 30,
-          endedAt: 30,
-        },
-        {
-          kind: "tool_call",
-          id: "call-1",
-          toolCallId: "call-1",
-          name: "lookup",
-          args: summaryText("tool_arguments", { type: "string", bytes: 13 }),
-          result: summaryText("tool_result", { type: "object", keys: ["temperature"] }),
-          status: "completed",
-          startedAt: 30,
-          updatedAt: 40,
-          completedAt: 40,
-        },
-      ]),
-    );
-    expect(activities.some((activity) => activity.kind === "reasoning")).toBe(true);
-    expect(activities.some((activity) => activity.kind === "custom")).toBe(true);
-  });
-
   it("maps aborts to AG-UI run errors with the run id retained", () => {
     const frames = projectLedgerEventsToAgUiFrames([
       commit(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "too much" })),
@@ -718,7 +612,7 @@ describe("@agent-os/ag-ui", () => {
         },
       },
     });
-    expect(projectAgUiFrames(frames).status).toBe("running");
+    expect(frames.some((frame) => frame.type === "RUN_ERROR")).toBe(false);
   });
 
   it("fails malformed runtime payloads before AG-UI mapping", () => {
@@ -1001,7 +895,7 @@ describe("@agent-os/ag-ui", () => {
           interruptId: "i1",
           gateRef: "decision-gate:i1",
           decisionRef: "decision:i1",
-          resume: { approved: true },
+          resume: { kind: "approval", approved: true },
         },
       },
     );
@@ -1012,7 +906,7 @@ describe("@agent-os/ag-ui", () => {
       interruptId: "i1",
       gateRef: "decision-gate:i1",
       decisionRef: "decision:i1",
-      resume: { approved: true },
+      resume: { kind: "approval", approved: true },
     });
     expect(submit.context.agUi).toEqual({
       threadId: "thread-1",
@@ -1048,7 +942,7 @@ describe("@agent-os/ag-ui", () => {
           runId: 1,
           turn: { id: 1, index: 0 },
           interruptId: "approval-1",
-          resume: { approved: true },
+          resume: { kind: "approval", approved: true },
           resumedAtEventId: 2,
         }),
       ),
@@ -1086,10 +980,16 @@ describe("@agent-os/ag-ui", () => {
         },
       },
     ]);
-    expect(projectAgUiFrames(frames)).toMatchObject({
-      runId: "1",
-      threadId: "conversation:ag-ui-test",
-      status: "running",
+    expect(frames).toContainEqual({
+      type: "CUSTOM",
+      timestamp: 30,
+      name: "agent-os.run.resumed",
+      value: {
+        runId: 1,
+        turnIndex: 0,
+        interruptId: "approval-1",
+        resumedAtEventId: 2,
+      },
     });
   });
 

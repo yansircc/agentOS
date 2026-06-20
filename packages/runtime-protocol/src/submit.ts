@@ -11,7 +11,11 @@ import type { TraceContext } from "@agent-os/telemetry-protocol";
 import type { MaterialRef } from "@agent-os/kernel/material-ref";
 import type { BoundaryPackage } from "@agent-os/kernel/extensions";
 import { recordedContinuationRefFromUnknown, type ContinuationRef } from "./continuation";
-import { inputRequestDescriptorFromUnknown, type InputRequestDescriptor } from "./input-request";
+import {
+  inputRequestDescriptorFromUnknown,
+  type InputRequestDescriptor,
+  type InputRequestResumePayload,
+} from "./input-request";
 
 export class MissingSubmitRunBinding extends Data.TaggedError(
   "agent_os.missing_submit_run_binding",
@@ -275,7 +279,7 @@ export interface SubmitResumeDecision {
   readonly interruptId: string;
   readonly gateRef: string;
   readonly decisionRef: string;
-  readonly resume: unknown;
+  readonly resume: InputRequestResumePayload;
 }
 
 /**

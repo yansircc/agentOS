@@ -2,14 +2,6 @@
   "schemaVersion": 1,
   "evidence": [
     {
-      "primitive": "primitive.ag-ui.projectAgUiFrames",
-      "tests": ["packages/wire-adapters/ag-ui/test/ag-ui.test.ts"]
-    },
-    {
-      "primitive": "primitive.ag-ui.projectAgUiFramesToActivities",
-      "tests": ["packages/wire-adapters/ag-ui/test/ag-ui.test.ts"]
-    },
-    {
       "primitive": "primitive.ag-ui.projectLedgerEventToAgUiEnvelope",
       "tests": ["packages/wire-adapters/ag-ui/test/ag-ui.test.ts"]
     },

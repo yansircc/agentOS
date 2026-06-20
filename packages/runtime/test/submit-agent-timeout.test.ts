@@ -150,6 +150,8 @@ const runWithHungLlm = (
     };
     const boundaryEvents = {
       commit: () => Effect.die(new Error("boundary events are not used in timeout tests")),
+      commitWithRuntimeEvents: () =>
+        Effect.die(new Error("boundary events are not used in timeout tests")),
     };
     const projections = {
       get: () => Effect.succeed(null),

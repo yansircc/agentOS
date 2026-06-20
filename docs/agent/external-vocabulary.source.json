@@ -5,10 +5,7 @@
       "id": "external.ag-ui",
       "name": "AG-UI",
       "docs": "docs/concepts/ag-ui-wire-adapter.md",
-      "mapsTo": [
-        "primitive.ag-ui.projectLedgerEventToAgUiEnvelope",
-        "primitive.ag-ui.projectAgUiFrames"
-      ],
+      "mapsTo": ["primitive.ag-ui.projectLedgerEventToAgUiEnvelope"],
       "notes": [
         "AG-UI is an edge protocol projection; ledger facts and runtime events remain agentOS-owned truth."
       ]

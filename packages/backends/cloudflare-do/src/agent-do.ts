@@ -137,7 +137,7 @@ import {
   rejectClaimedAppEvent,
   validateExtensionDeclarations,
 } from "@agent-os/kernel/extensions";
-import { isScopeRef, type AuthorityRef } from "@agent-os/kernel/effect-claim";
+import { isScopeRef } from "@agent-os/kernel/effect-claim";
 import { projectAdmissionLease, projectQuotaState, projectResourceState } from "./projections";
 import {
   projectRunsPage,
@@ -297,11 +297,6 @@ const makeAgentRuntime = <Env extends CloudflareAgentEnv>(
 const rejectAgentConfig = (message: string): never =>
   Option.getOrThrowWith(Option.none(), () => new TypeError(message));
 
-const submitEffectAuthorityRef = (routeBindingRef: string): AuthorityRef => ({
-  authorityClass: "llm_route",
-  authorityId: routeBindingRef,
-});
-
 const declaredToolIntents = (
   extensions: ReadonlyArray<ExtensionDeclaration>,
   declaredIntents: ReadonlyArray<AgentDeclaredIntent>,
@@ -366,7 +361,7 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
     this._dispatchTargets = config.dispatchTargets;
     this._triggers = config.triggers;
     this._streams = config.streams;
-    this._projections = config.projections;
+    this._projections = config.mount.projectionSinks.materialized;
 
     for (const registration of config.eventHandlers?.(
       { runtime: this as unknown as Runtime, capabilities: this._capabilities },
@@ -661,21 +656,29 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
         : { decisionInterrupts: spec.decisionInterrupts }),
       ...(spec.resume === undefined ? {} : { resume: spec.resume }),
     };
-    try {
-      return this.submitFull(
-        lowerSubmitRunInput({
-          input: runInput,
-          bindings: {
-            ...baseBindings,
-            toolIntents: [...this._toolIntents, ...(baseBindings.toolIntents ?? [])],
-          },
-          routeBindingRef,
-          effectAuthorityRef: submitEffectAuthorityRef(routeBindingRef),
-        }),
-      );
-    } catch (cause) {
-      return Promise.reject(cause);
-    }
+    return this.scopedPromise((scope) => {
+      const truthIdentity = this.defaultTruthIdentityForScope(scope);
+      if (truthIdentity instanceof UnsupportedScopeRef) {
+        return Promise.reject(truthIdentity);
+      }
+      try {
+        return this.submitFullScoped(
+          scope,
+          truthIdentity,
+          lowerSubmitRunInput({
+            input: runInput,
+            bindings: {
+              ...baseBindings,
+              toolIntents: [...this._toolIntents, ...(baseBindings.toolIntents ?? [])],
+            },
+            routeBindingRef,
+            effectAuthorityRef: truthIdentity.effectAuthorityRef,
+          }),
+        );
+      } catch (cause) {
+        return Promise.reject(cause);
+      }
+    });
   }
 
   protected submitFull(spec: SubmitSpec): Promise<SubmitResult> {
@@ -684,16 +687,25 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
       if (truthIdentity instanceof UnsupportedScopeRef) {
         return Promise.reject(truthIdentity);
       }
-      const internalSpec: InternalSubmitSpec = internalSubmitSpec(spec, {
-        scope,
-        scopeRef: truthIdentity.scopeRef,
-      });
-      const identity = eventIdentity(
-        { scopeRef: truthIdentity.scopeRef, effectAuthorityRef: spec.effectAuthorityRef },
-        RUNTIME_FACT_OWNER,
-      );
-      return this.runtimeFor(scope, identity).runPromise(submitAgentEffect(internalSpec));
+      return this.submitFullScoped(scope, truthIdentity, spec);
     });
+  }
+
+  private submitFullScoped(
+    scope: string,
+    truthIdentity: BackendProtocolTruthIdentity,
+    spec: SubmitSpec,
+  ): Promise<SubmitResult> {
+    const scopedSpec: SubmitSpec = {
+      ...spec,
+      effectAuthorityRef: truthIdentity.effectAuthorityRef,
+    };
+    const internalSpec: InternalSubmitSpec = internalSubmitSpec(scopedSpec, {
+      scope,
+      scopeRef: truthIdentity.scopeRef,
+    });
+    const identity = eventIdentity(truthIdentity, RUNTIME_FACT_OWNER);
+    return this.runtimeFor(scope, identity).runPromise(submitAgentEffect(internalSpec));
   }
 
   protected runWorkspaceJobFull(spec: AgentWorkspaceJobSpec): Promise<WorkspaceJobProjection> {

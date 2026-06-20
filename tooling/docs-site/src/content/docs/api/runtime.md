@@ -199,6 +199,7 @@ title: "@agent-os/runtime Public API Intent"
 - `.:triggerParseOk`
 - `.:turnRefOf`
 - `.:validateBoundaryEventPayload`
+- `.:validateCommittedBoundaryEvent`
 
 ## Experimental exports
 

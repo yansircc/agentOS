@@ -118,7 +118,7 @@ void agent.submit({
     interruptId: "decision:lookup",
     gateRef: "gate:lookup",
     decisionRef: "decision:approved",
-    resume: { approved: true },
+    resume: { kind: "approval", approved: true },
   },
 });
 void agent.submit({

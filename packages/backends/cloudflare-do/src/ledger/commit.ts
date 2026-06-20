@@ -7,7 +7,6 @@ import { applyRegisteredMaterializedProjectionEvents } from "../materialized-pro
 import type { EventBusService } from "./event-bus";
 import {
   CloudflareLedgerSchemaError,
-  assertNoFactOwnerOverride,
   eventIdentity,
   eventIdentityColumns,
   ledgerEventFromRow,
@@ -37,7 +36,7 @@ type LedgerEventRecipeBase = {
   readonly scopeRef: BackendProtocolTruthIdentity["scopeRef"];
   readonly effectAuthorityRef: BackendProtocolTruthIdentity["effectAuthorityRef"];
   readonly scope?: never;
-  readonly factOwnerRef?: never;
+  readonly factOwnerRef?: FactOwnerRef;
 };
 
 export type LedgerEventRecipe =
@@ -321,7 +320,6 @@ export const commitLedgerTransaction = <A, E = never>(
             return event === undefined ? builder.id(ref) : event.id;
           };
           const events = builder.recipes.map((recipe): LedgerEvent => {
-            assertNoFactOwnerOverride(recipe, "ledger event recipe");
             const truthIdentity = truthIdentityFromCommitSpec(recipe, "ledger event recipe");
             const payload =
               recipe.buildPayload === undefined
@@ -331,7 +329,7 @@ export const commitLedgerTransaction = <A, E = never>(
               id: recipe.id,
               ts: recipe.ts,
               kind: recipe.kind,
-              ...eventIdentity(truthIdentity, owner.factOwnerRef),
+              ...eventIdentity(truthIdentity, recipe.factOwnerRef ?? owner.factOwnerRef),
               payload,
             };
             byRef.set(recipe.ref.key, event);

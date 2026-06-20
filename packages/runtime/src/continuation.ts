@@ -12,6 +12,7 @@ import {
   RUNTIME_EVENT_KIND,
   type ContinuationRef,
   type FailureDiagnostic,
+  type InputRequestResumePayload,
   type RecoveryAttemptRecord,
   type RecoveryBudget,
   type RecoveryBudgetProjection,
@@ -318,7 +319,7 @@ export const projectContinuationRefs = (
 
 export const submitResumeDecisionFromContinuationProjection = (
   projection: ContinuationProjection,
-  resume: unknown,
+  resume: InputRequestResumePayload,
 ): ContinuationResumeDecisionResult => {
   switch (projection.status) {
     case "approved":

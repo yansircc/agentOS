@@ -191,7 +191,7 @@ describe("in-memory runtime backend", () => {
         runId: 1,
         turn: { id: 1, index: 0 },
         interruptId: "interrupt-1",
-        resume: { approved: true },
+        resume: { kind: "approval", approved: true },
         resumedAtEventId: consumed!.id,
       });
 

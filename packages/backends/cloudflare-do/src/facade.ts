@@ -135,8 +135,11 @@ const projectionsFor = <Env extends CloudflareAgentEnv>(
 const mountForConfig = <Env extends CloudflareAgentEnv, Runtime extends AgentFacadeRuntimeClient>(
   config: DefineAgentDOConfigBase<Env, Runtime>,
   _lowered: LoweredAgentConfig,
+  env: Env,
 ) => {
-  return mountCloudflareAgent(config.manifest, config.agentBindings);
+  return mountCloudflareAgent(config.manifest, config.agentBindings, {
+    materialized: projectionsFor(config.projections, env),
+  });
 };
 
 const eventHandlersFor = <Env extends CloudflareAgentEnv, Runtime extends AgentFacadeRuntimeClient>(
@@ -175,7 +178,7 @@ const materializedConfigForEnv = <
   env: Env,
 ): MaterializedAgentConfig<Env, Runtime> => {
   return {
-    mount: mountForConfig(config, lowered),
+    mount: mountForConfig(config, lowered, env),
     refResolver: lowered.refResolver,
     llmTransport: config.llmTransport?.(env) ?? MissingLlmTransportLive,
     extensions: extensionsFor(config.extensions, env),
@@ -183,7 +186,6 @@ const materializedConfigForEnv = <
     dispatchTargets: lowered.dispatchTargets,
     triggers: config.triggers ?? [],
     streams: config.streams ?? [],
-    projections: projectionsFor(config.projections, env),
     eventHandlers: (context, eventEnv) => eventHandlersFor(config, context, eventEnv),
   };
 };

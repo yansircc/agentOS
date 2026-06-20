@@ -28,7 +28,12 @@ import {
 import { ToolError } from "@agent-os/kernel/errors";
 import { Admission } from "../src/admission";
 import { BoundaryEvents } from "../src/boundary-events";
-import { commitBoundaryEvent } from "../src/boundary-commit";
+import {
+  boundaryCommitIdentity,
+  commitBoundaryEvent,
+  validateBoundaryEventPayload,
+  validateCommittedBoundaryEvent,
+} from "../src/boundary-commit";
 import { Ledger } from "../src/ledger";
 import {
   MaterializedProjections,
@@ -194,6 +199,67 @@ const makeServices = (
           return decodeRecordedLedgerEvent(committed);
         }),
       ),
+    commitWithRuntimeEvents: (
+      contract: BoundaryContract,
+      event: string,
+      payload: unknown,
+      runtimeEvents: (boundaryEventId: number) => ReadonlyArray<{
+        readonly kind: string;
+        readonly payload: unknown;
+        readonly scopeRef: LedgerEvent["scopeRef"];
+        readonly effectAuthorityRef: LedgerEvent["effectAuthorityRef"];
+        readonly ts?: number;
+      }>,
+    ) =>
+      Effect.gen(function* () {
+        const rejected = validateBoundaryEventPayload(contract, event, payload);
+        if (rejected !== null) {
+          return yield* Effect.fail(rejected);
+        }
+        const objectPayload = payload as Readonly<Record<string, unknown>>;
+        const identity = boundaryCommitIdentity(contract, event, objectPayload);
+        const boundaryId = nextId++;
+        const boundaryEvent = {
+          id: boundaryId,
+          ts: boundaryId * 10,
+          kind: event,
+          scopeRef: identity.scopeRef ?? {
+            kind: "conversation",
+            scopeId: scope,
+          },
+          effectAuthorityRef: identity.effectAuthorityRef ?? {
+            authorityClass: "llm_route",
+            authorityId: "test-route",
+          },
+          factOwnerRef: identity.factOwnerRef,
+          payload,
+        } satisfies LedgerEvent;
+        const committedRejected = validateCommittedBoundaryEvent(
+          contract,
+          event,
+          objectPayload,
+          boundaryEvent,
+        );
+        if (committedRejected !== null) {
+          return yield* Effect.fail(committedRejected);
+        }
+        const committedRuntimeEvents = runtimeEvents(boundaryId).map((spec) => {
+          const id = nextId++;
+          return {
+            id,
+            ts: spec.ts ?? id * 10,
+            kind: spec.kind,
+            scopeRef: spec.scopeRef,
+            effectAuthorityRef: spec.effectAuthorityRef,
+            factOwnerRef: RUNTIME_FACT_OWNER,
+            payload: spec.payload,
+          } satisfies LedgerEvent;
+        });
+        const committed = [boundaryEvent, ...committedRuntimeEvents];
+        events.push(...committed);
+        const recorded = committed.map(decodeRecordedLedgerEvent);
+        return [recorded[0]!, ...recorded.slice(1)] as const;
+      }),
   };
   const llm = {
     resolveRoute: (route: LlmRoute) =>
@@ -2548,6 +2614,11 @@ describe("submit-agent runtime event writes", () => {
       expect(projectDecisionGate(events, result.gateRef)).toMatchObject({
         status: "requested",
       });
+      const requested = events.find((event) => event.kind === DECISION_GATE_KIND.REQUESTED);
+      const interrupted = decodedRuntimeEvents(events).find(
+        (event) => event.kind === RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED,
+      );
+      expect(interrupted?.id).toBe((requested?.id ?? 0) + 1);
       expect(JSON.parse(JSON.stringify(result.continuation))).toEqual(result.continuation);
       expect(JSON.parse(JSON.stringify(result.inputRequest))).toEqual(result.inputRequest);
     }),
@@ -2647,7 +2718,7 @@ describe("submit-agent runtime event writes", () => {
 
       const duplicate = submitResumeDecisionFromContinuationProjection(
         projectContinuation(services.events, first.result.continuation),
-        { approved: true },
+        { kind: "approval", approved: true },
       );
       expect(duplicate).toMatchObject({
         ok: false,
@@ -2669,6 +2740,12 @@ describe("submit-agent runtime event writes", () => {
       expect(
         services.events.filter((event) => event.kind === DECISION_GATE_KIND.CONSUMED),
       ).toHaveLength(1);
+      const consumed = services.events.find((event) => event.kind === DECISION_GATE_KIND.CONSUMED);
+      const runResumed = decodedRuntimeEvents(services.events).find(
+        (event) => event.kind === RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED,
+      );
+      expect(runResumed?.id).toBe((consumed?.id ?? 0) + 1);
+      expect(runResumed?.payload.resumedAtEventId).toBe(consumed?.id);
     }),
   );
 
@@ -2739,7 +2816,7 @@ describe("submit-agent runtime event writes", () => {
             interruptId: first.result.interruptId,
             gateRef: first.result.gateRef,
             decisionRef: "decision/2",
-            resume: { approved: false },
+            resume: { kind: "approval", approved: true },
           },
         }),
         services,
@@ -2944,6 +3021,88 @@ describe("submit-agent runtime event writes", () => {
       expect(executed?.payload).toMatchObject({
         result: { kind: "authorization_received", resume: authorization },
       });
+    }),
+  );
+
+  it.effect("rejects raw authorization resumes before they enter the ledger", () =>
+    Effect.gen(function* () {
+      const tool = defineTool({
+        name: "connectGithub",
+        description: "connect github",
+        args: Schema.Struct({ installation: Schema.String }),
+        execute: () => Effect.succeed({ ok: true }),
+        authority: "write",
+        admit: () => Effect.succeed({ ok: true }),
+        execution: deterministicToolExecution(),
+      });
+      const services = makeServices([
+        response({
+          items: [
+            { type: "message", text: "need auth" },
+            {
+              type: "tool_call",
+              call: {
+                id: "call-auth",
+                type: "function",
+                function: {
+                  name: "connectGithub",
+                  arguments: '{"installation":"install-1"}',
+                },
+              },
+            },
+          ],
+        }),
+      ]);
+
+      const first = yield* runSubmitWithServices(
+        baseSpec({
+          tools: { connectGithub: tool },
+          decisionInterrupts: [{ toolName: "connectGithub", reason: "authorization_required" }],
+        }),
+        services,
+      );
+      if (first.result.status !== "interrupted") {
+        expect.fail("expected interrupted result");
+      }
+
+      yield* services.boundaryEvents.commit(
+        decisionGateBoundaryContract,
+        DECISION_GATE_KIND.DECIDED,
+        {
+          gateRef: first.result.gateRef,
+          decisionRef: "decision/auth",
+          decision: "approved",
+          decidedBy: "operator/alice",
+        },
+      );
+
+      const rawSecret = "SECRET_TOKEN";
+      const resumed = yield* runSubmitWithServices(
+        baseSpec({
+          tools: { connectGithub: tool },
+          resume: {
+            runId: first.result.runId,
+            turn: first.result.turn,
+            interruptId: first.result.interruptId,
+            gateRef: first.result.gateRef,
+            decisionRef: "decision/auth",
+            resume: {
+              kind: "authorization",
+              access_token: rawSecret,
+            },
+          } as unknown as NonNullable<SubmitSpec["resume"]>,
+        }),
+        services,
+      );
+
+      expect(resumed.result).toMatchObject({ ok: false, reason: "tool_error" });
+      const serializedEvents = JSON.stringify(services.events);
+      expect(serializedEvents).not.toContain(rawSecret);
+      expect(
+        decodedRuntimeEvents(services.events).some(
+          (event) => event.kind === RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED,
+        ),
+      ).toBe(false);
     }),
   );
 

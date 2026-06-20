@@ -169,7 +169,7 @@ describe("runtime event vocabulary", () => {
         runId: 1,
         turn: { id: 1, index: 0 },
         interruptId: "interrupt-1",
-        resume: { approved: true },
+        resume: { kind: "approval", approved: true },
         resumedAtEventId: 3,
         traceContext,
       }),
@@ -376,7 +376,7 @@ describe("runtime event vocabulary", () => {
     expect(JSON.stringify(projectRuntimeSafeLedgerEvent(compaction))).not.toContain("SECRET_CODE");
   });
 
-  it("projects safe tool io summaries without raw arguments or file content", () => {
+  it("does not infer safe tool io from tool names or product-shaped fields", () => {
     const toolStarted = ledgerEvent(
       1,
       llmResponseEvent({
@@ -423,7 +423,6 @@ describe("runtime event vocabulary", () => {
           type: "tool_call",
           toolCallId: "call-read",
           toolName: "read_file",
-          io: [{ action: "read", path: "/input/request.json" }],
         },
       ],
     });
@@ -431,16 +430,11 @@ describe("runtime event vocabulary", () => {
       runId: 1,
       toolCallId: "call-write",
       toolName: "write_editor_patch_candidate",
-      io: [
-        { action: "write", path: "/output/code.fragment", bytes: 42 },
-        {
-          action: "write",
-          path: "/output/candidate-result.json",
-          bytes: 12,
-          role: "metadata",
-        },
-      ],
     });
+    expect(projectRuntimeSafeLedgerEvent(toolStarted)?.safePayload).not.toHaveProperty(
+      "items.0.io",
+    );
+    expect(projectRuntimeSafeLedgerEvent(toolCompleted)?.safePayload).not.toHaveProperty("io");
     const safeText = JSON.stringify([
       projectRuntimeSafeLedgerEvent(toolStarted),
       projectRuntimeSafeLedgerEvent(toolCompleted),
@@ -628,7 +622,7 @@ describe("runtime event vocabulary", () => {
         runId: 1,
         turn: { id: 1, index: 0 },
         interruptId: "interrupt-1",
-        resume: { approved: true },
+        resume: { kind: "approval", approved: true },
         resumedAtEventId: consumed.id,
       }),
     );
@@ -706,7 +700,7 @@ describe("runtime event vocabulary", () => {
           runId: 1,
           turn: { id: 1, index: 0 },
           interruptId: "interrupt-1",
-          resume: { approved: true },
+          resume: { kind: "approval", approved: true },
           resumedAtEventId: 14,
         }),
       ),
@@ -717,7 +711,7 @@ describe("runtime event vocabulary", () => {
           runId: 1,
           turn: { id: 1, index: 0 },
           interruptId: "interrupt-1",
-          resume: { approved: true },
+          resume: { kind: "approval", approved: true },
           resumedAtEventId: 9,
         }),
       ),
@@ -728,7 +722,7 @@ describe("runtime event vocabulary", () => {
           runId: 1,
           turn: { id: 1, index: 0 },
           interruptId: "interrupt-1",
-          resume: { approved: true },
+          resume: { kind: "approval", approved: true },
           resumedAtEventId: 1,
         }),
       ),

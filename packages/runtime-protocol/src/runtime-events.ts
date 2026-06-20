@@ -20,6 +20,11 @@ import type { Recorded } from "@agent-os/kernel";
 import { TraceContextSchema, type TraceContext } from "@agent-os/telemetry-protocol";
 import { ABORT, type AbortKind } from "@agent-os/kernel/abort";
 import { recordRuntimeProtocolValue } from "./recorded";
+import {
+  parseInputRequestResumePayload,
+  type InputRequestKind,
+  type InputRequestResumePayload,
+} from "./input-request";
 
 const positiveInt = Schema.Int.pipe(Schema.check(Schema.isGreaterThanOrEqualTo(1)));
 const nonNegativeInt = Schema.Int.pipe(Schema.check(Schema.isGreaterThanOrEqualTo(0)));
@@ -27,6 +32,19 @@ const nonEmptyString = Schema.String.pipe(
   Schema.check(Schema.makeFilter((value) => value.length > 0)),
 );
 const unknownRecord = Schema.Record(Schema.String, Schema.Unknown);
+
+const INPUT_REQUEST_KINDS = new Set<InputRequestKind>(["approval", "question", "authorization"]);
+
+const isInputRequestKind = (value: unknown): value is InputRequestKind =>
+  typeof value === "string" && INPUT_REQUEST_KINDS.has(value as InputRequestKind);
+
+const isInputRequestResumePayload = (value: unknown): value is InputRequestResumePayload =>
+  Predicate.isObject(value) &&
+  isInputRequestKind(value.kind) &&
+  parseInputRequestResumePayload(value.kind, value).ok;
+
+const InputRequestResumePayloadSchema: Schema.Decoder<InputRequestResumePayload> =
+  Schema.declare<InputRequestResumePayload>(isInputRequestResumePayload);
 
 export const RUNTIME_EVENT_KIND = {
   AGENT_RUN_STARTED: "agent.run.started",
@@ -353,7 +371,7 @@ export type AgentRunResumedPayload = {
     readonly index: number;
   };
   readonly interruptId: string;
-  readonly resume: unknown;
+  readonly resume: InputRequestResumePayload;
   readonly resumedAtEventId: number;
   readonly traceContext?: TraceContext;
 };
@@ -507,7 +525,7 @@ export const AgentRunResumedPayloadSchema: Schema.Decoder<AgentRunResumedPayload
   runId: positiveInt,
   turn: TurnRefSchema,
   interruptId: nonEmptyString,
-  resume: Schema.Unknown,
+  resume: InputRequestResumePayloadSchema,
   resumedAtEventId: positiveInt,
   traceContext: Schema.optional(TraceContextSchema),
 }).pipe(Schema.check(Schema.makeFilter((payload) => payload.runId === payload.turn.id)));
@@ -1070,7 +1088,7 @@ export const agentRunResumedEvent = (
     readonly runId: number;
     readonly turn: { readonly id: number; readonly index: number };
     readonly interruptId: string;
-    readonly resume: unknown;
+    readonly resume: InputRequestResumePayload;
     readonly resumedAtEventId: number;
     readonly traceContext?: TraceContext;
   },

@@ -199,7 +199,7 @@ export const boundaryCommitIdentity = (
   };
 };
 
-const validateCommittedBoundaryEvent = (
+export const validateCommittedBoundaryEvent = (
   contract: BoundaryContract,
   event: string,
   payload: Readonly<Record<string, unknown>>,

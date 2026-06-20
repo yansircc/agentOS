@@ -11,10 +11,8 @@ terms are useful for orientation, but they do not own agentOS facts.
 
 AG-UI is an edge protocol projection. In agentOS, the runtime-owned source facts
 remain ledger events, and the browser-facing projection is named by
-`primitive.ag-ui.projectLedgerEventToAgUiEnvelope`,
-`primitive.ag-ui.projectAgUiFrames`, and other AG-UI package-owned projection
-primitives. Framework client bindings are React/Svelte bridges over
-`@agent-os/client`, not separate AG-UI primitives.
+`primitive.ag-ui.projectLedgerEventToAgUiEnvelope`. Framework client bindings
+are React/Svelte bridges over `@agent-os/client`, not separate AG-UI primitives.
 
 ## Effect Schema
 

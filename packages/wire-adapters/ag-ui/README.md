@@ -44,10 +44,8 @@ raw ledger payload fields and product frame projectors cannot emit reserved
 Use `projectToolToAgUiTool` to expose AG-UI tool declarations generated from
 `AgentSchema.projections.agUi`.
 
-Use `projectAgUiFramesToActivities` for a neutral activity feed when AG-UI wire
-frames are the chosen edge protocol. Framework-specific consumption belongs in
-`@agent-os/client-react` and `@agent-os/client-svelte`, not in AG-UI-owned
-framework packages.
+Framework-specific consumption belongs in `@agent-os/client-react` and
+`@agent-os/client-svelte`, not in AG-UI-owned framework packages.
 
 ## Verification
 

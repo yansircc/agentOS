@@ -199,6 +199,7 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:triggerParseOk`
 - `.:turnRefOf`
 - `.:validateBoundaryEventPayload`
+- `.:validateCommittedBoundaryEvent`
 
 ## Experimental exports
 

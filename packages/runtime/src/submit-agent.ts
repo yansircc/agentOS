@@ -61,8 +61,10 @@ import {
   chatIngestedEvent,
   decodeRuntimeLedgerEvent,
   EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
+  inputRequestRefFromInterruptedEvent,
   llmRequestedEvent,
   llmResponseEvent,
+  parseInputRequestResumePayload,
   RUNTIME_FACT_OWNER,
   RUNTIME_EVENT_KIND,
   receiptBackedToolResultFromUnknown,
@@ -72,6 +74,7 @@ import {
   toolReplayArtifactFromExecutedPayload,
   toolRejectedEvent,
   replayToolFromArtifact,
+  type InputRequestResumePayload,
   type SubmitDecisionInterrupt,
   type SubmitResult,
   type ToolArgumentSummary,
@@ -1349,6 +1352,7 @@ export const submitAgentEffect = (
       let firstTurn = 0;
       let resumedToolCall: LlmToolCall | undefined;
       let resumedToolCallSourceEventId: number | undefined;
+      let admittedResume: InputRequestResumePayload | undefined;
       let toolPolicyFailures = 0;
       const executedToolNames = new Set(
         requiredToolNames.filter((toolName) => hasExecutedTool(priorEvents, started.id, toolName)),
@@ -1372,11 +1376,25 @@ export const submitAgentEffect = (
           );
         }
         const decodedInterruption = decodeRuntimeLedgerEvent(interruption);
-        const decision =
+        const runtimeInterruption =
           decodedInterruption._tag === "runtime" &&
           decodedInterruption.event.kind === RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED
-            ? decodedInterruption.event.payload.decision
+            ? decodedInterruption.event
             : undefined;
+        if (runtimeInterruption === undefined) {
+          return yield* finalAbort(
+            ABORT.TOOL_ERROR,
+            {
+              reason: "resume_matching_interruption_not_runtime",
+              interruptId: resume.interruptId,
+            },
+            identity,
+            started.id,
+            0,
+            traceContext,
+          );
+        }
+        const decision = runtimeInterruption.payload.decision;
         if (decision === undefined) {
           return yield* finalAbort(
             ABORT.TOOL_ERROR,
@@ -1390,6 +1408,42 @@ export const submitAgentEffect = (
             traceContext,
           );
         }
+        const inputRequest = inputRequestRefFromInterruptedEvent(runtimeInterruption);
+        if (!inputRequest.ok) {
+          return yield* finalAbort(
+            ABORT.TOOL_ERROR,
+            {
+              reason: inputRequest.reason,
+              interruptId: resume.interruptId,
+              gateRef: resume.gateRef,
+            },
+            identity,
+            started.id,
+            0,
+            traceContext,
+          );
+        }
+        const parsedResume = parseInputRequestResumePayload(
+          inputRequest.ref.requestKind,
+          resume.resume,
+        );
+        if (!parsedResume.ok) {
+          return yield* finalAbort(
+            ABORT.TOOL_ERROR,
+            {
+              reason: parsedResume.reason,
+              interruptId: resume.interruptId,
+              gateRef: resume.gateRef,
+              requestKind: inputRequest.ref.requestKind,
+            },
+            identity,
+            started.id,
+            0,
+            traceContext,
+          );
+        }
+        const admittedResumeForDecision = parsedResume.resume;
+        admittedResume = admittedResumeForDecision;
 
         const projection = projectDecisionGate(priorEvents, resume.gateRef);
         if (
@@ -1476,7 +1530,7 @@ export const submitAgentEffect = (
                 runId: resume.runId,
                 turn: resume.turn,
                 interruptId: resume.interruptId,
-                resume: resume.resume,
+                resume: admittedResumeForDecision,
                 resumedAtEventId,
                 traceContext,
               }),
@@ -2101,7 +2155,7 @@ export const submitAgentEffect = (
                       boundaryEvents,
                       projections,
                       claim,
-                      call.id === resumedToolCallIdThisTurn ? spec.resume?.resume : undefined,
+                      call.id === resumedToolCallIdThisTurn ? admittedResume : undefined,
                       materialPlan.plan.brokerReceipts,
                     ),
                   ),

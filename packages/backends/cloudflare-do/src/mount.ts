@@ -1,3 +1,4 @@
+import type { AnyMaterializedProjectionDefinition } from "@agent-os/runtime";
 import type {
   AgentBindings,
   AgentHandler,
@@ -36,6 +37,7 @@ export type CloudflareAgentBindings = Omit<AgentBindings<never>, "handlers"> & {
 
 export interface CloudflareAgentProjectionSinks {
   readonly info: AgentManifestProjection;
+  readonly materialized: ReadonlyArray<AnyMaterializedProjectionDefinition>;
 }
 
 export interface CloudflareAgentMount {
@@ -43,9 +45,14 @@ export interface CloudflareAgentMount {
   readonly projectionSinks: CloudflareAgentProjectionSinks;
 }
 
+export interface CloudflareAgentProjectionSinkConfig {
+  readonly materialized?: ReadonlyArray<AnyMaterializedProjectionDefinition>;
+}
+
 export const mountCloudflareAgent = (
   manifest: AgentManifest,
   bindings: CloudflareAgentBindings,
+  projectionSinkConfig: CloudflareAgentProjectionSinkConfig = {},
 ): CloudflareAgentMount => {
   const mounted: MountedAgent<HandlerKind, CloudflareAgentMountPort> = mountAgent(
     manifest as AgentManifest<HandlerKind>,
@@ -61,6 +68,7 @@ export const mountCloudflareAgent = (
     },
     projectionSinks: {
       info: projectAgentManifest(mounted.manifest),
+      materialized: projectionSinkConfig.materialized ?? [],
     },
   };
 };
