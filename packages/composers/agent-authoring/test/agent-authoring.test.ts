@@ -735,8 +735,15 @@ describe("agent authored tree compiler", () => {
     expect(remote).toContain(
       'import { decodeSseHttpEvents, responseToSseHttpChunks } from "@agent-os/sse-http";',
     );
+    expect(remote).toContain(
+      'type AgentOSSubmitRunInput = Parameters<AgentOSRemote["submitRunInput"]>[0];',
+    );
+    expect(remote).toContain(
+      "const submitInputFromUnknown = (value: unknown): { readonly input: AgentOSSubmitRunInput }",
+    );
     expect(remote).toContain("export const invokeAgentCommand = command(");
     expect(remote).toContain("runtime.submitRunInput(submitInputFromUnknown(input).input)");
+    expect(remote).toContain("iterator.return(undefined)");
     expect(remote).toContain("runtime.readWorkspaceFile(readFileInputFromUnknown(input))");
     expect(remote).toContain("export const runEventStream = query.live(");
     expect(remote).toContain('platformEnv["AGENT_OS"] as DurableObjectNamespace');

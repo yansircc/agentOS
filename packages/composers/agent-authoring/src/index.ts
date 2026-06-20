@@ -2119,7 +2119,6 @@ ${renderTypeImport(
     "WorkspaceAgentDestroyCommandInput",
     "WorkspaceAgentReadFileCommandInput",
     "WorkspaceAgentResetCommandInput",
-    "WorkspaceAgentSubmitCommandInput",
   ],
   modules.workspaceAgentHost,
 )}
@@ -2165,15 +2164,18 @@ const agentOS = (platformEnv: AgentOSTargetEnv) =>
     agentTruthIdentity.scopeRef.scopeId,
   );
 
+type AgentOSRemote = ReturnType<typeof agentOS>;
+type AgentOSSubmitRunInput = Parameters<AgentOSRemote["submitRunInput"]>[0];
+
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
-const submitInputFromUnknown = (value: unknown): WorkspaceAgentSubmitCommandInput => {
+const submitInputFromUnknown = (value: unknown): { readonly input: AgentOSSubmitRunInput } => {
   if (!isRecord(value) || !isRecord(value.input)) error(400, "invalid submit command input");
   if (typeof value.input.intent !== "string" || !isRecord(value.input.context)) {
     error(400, "invalid submit run input");
   }
-  return { input: value.input as unknown as SubmitRunInput };
+  return { input: value.input as unknown as AgentOSSubmitRunInput };
 };
 
 const readFileInputFromUnknown = (value: unknown): WorkspaceAgentReadFileCommandInput => {
@@ -2233,7 +2235,7 @@ const runtimeEventsFromSse = (response: Response): AsyncIterable<RuntimeLedgerEv
         return: () =>
           iterator.return === undefined
             ? Promise.resolve({ done: true, value: undefined })
-            : iterator.return().then(() => ({ done: true, value: undefined })),
+            : iterator.return(undefined).then(() => ({ done: true, value: undefined })),
       };
     },
   };
