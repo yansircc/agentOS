@@ -133,7 +133,13 @@ title: "@agent-os/runtime-protocol API"
 - `.:InputRequestRefFromInterruptionResult`
 - `.:RecordedInputRequestRef`
 - `.:InputRequestResumePayload`
+- `.:INSTALLATION_INTENT_VERSION`
+- `.:INSTALLATION_OBSERVATION_VERSION`
 - `.:InstallationReceipt`
+- `.:InstallationBootCheck`
+- `.:InstallationIntent`
+- `.:InstallationObservation`
+- `.:InstallationObservationInput`
 - `.:LedgerWitnessedScopedRef`
 - `.:LedgerCommitEventSpec`
 - `.:LedgerTruthIdentity`
@@ -250,9 +256,11 @@ title: "@agent-os/runtime-protocol API"
 - `.:inputRequestKindFromReason`
 - `.:inputRequestDescriptorFromUnknown`
 - `.:inputRequestRefFromInterruptedEvent`
+- `.:installationIntentFromDeployment`
+- `.:installationObservation`
 - `.:installationReceiptEvent`
-- `.:installationReceiptFromDeployment`
 - `.:installationReceiptFromLedgerEvent`
+- `.:installationReceiptFromObservation`
 - `.:isContinuationCause`
 - `.:isContinuationRef`
 - `.:isInputRequestRef`

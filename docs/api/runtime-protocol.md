@@ -129,7 +129,13 @@
 - `.:InputRequestRefFromInterruptionResult`
 - `.:RecordedInputRequestRef`
 - `.:InputRequestResumePayload`
+- `.:INSTALLATION_INTENT_VERSION`
+- `.:INSTALLATION_OBSERVATION_VERSION`
 - `.:InstallationReceipt`
+- `.:InstallationBootCheck`
+- `.:InstallationIntent`
+- `.:InstallationObservation`
+- `.:InstallationObservationInput`
 - `.:LedgerWitnessedScopedRef`
 - `.:LedgerCommitEventSpec`
 - `.:LedgerTruthIdentity`
@@ -246,9 +252,11 @@
 - `.:inputRequestKindFromReason`
 - `.:inputRequestDescriptorFromUnknown`
 - `.:inputRequestRefFromInterruptedEvent`
+- `.:installationIntentFromDeployment`
+- `.:installationObservation`
 - `.:installationReceiptEvent`
-- `.:installationReceiptFromDeployment`
 - `.:installationReceiptFromLedgerEvent`
+- `.:installationReceiptFromObservation`
 - `.:isContinuationCause`
 - `.:isContinuationRef`
 - `.:isInputRequestRef`

@@ -4,9 +4,13 @@ import {
   defineAgentManifest,
   EXECUTION_IDENTITY_VERSION,
   executionIdentityFromDeployment,
+  installationIntentFromDeployment,
+  installationObservation,
   installationReceiptEvent,
-  installationReceiptFromDeployment,
   installationReceiptFromLedgerEvent,
+  installationReceiptFromObservation,
+  INSTALLATION_INTENT_VERSION,
+  INSTALLATION_OBSERVATION_VERSION,
   INSTALLATION_RECEIPT_EVENT_KIND,
   INSTALLATION_RECEIPT_VERSION,
   projectInstallationReceipt,
@@ -33,42 +37,87 @@ const deployment = {
   providerStrategy: "effect-ai",
 };
 
-describe("DeploymentSpec installation receipt", () => {
-  it("derives a ledger append spec from manifest truth identity plus execution identity", () => {
-    const event = installationReceiptEvent(deployment);
+const observedInstallation = (override: Partial<ReturnType<typeof installationObservation>> = {}) =>
+  installationObservation({
+    intent: installationIntentFromDeployment(deployment),
+    observedAtMs: 1_700_000_000_000,
+    runtimeVersion: "runtime-protocol-test",
+    adapterVersion: "cloudflare-do-test",
+    artifactDigest: "sha256:test-worker",
+    bootChecks: [
+      { name: "target_module_loaded", status: "passed", observedValue: "AgentOS" },
+      { name: "adapter_versions_observed", status: "passed" },
+    ],
+    ...override,
+  });
+
+describe("DeploymentSpec installation intent and receipt", () => {
+  it("derives installation intent from deployment declarations without minting a receipt", () => {
+    const intent = installationIntentFromDeployment(deployment);
+
+    expect(intent).toEqual({
+      version: INSTALLATION_INTENT_VERSION,
+      deploymentId: "deployment:worker:test",
+      agentId: "agent.deployment-test",
+      agentVersion: "1.0.0",
+      backend: "cloudflare-do",
+      adapter: "sse-http",
+      codec: "ledger-v1",
+      providerStrategy: "effect-ai",
+      truthIdentity: {
+        scopeRef: { kind: "session", scopeId: "deploy-session" },
+        effectAuthorityRef: { authorityClass: "agent", authorityId: "deployment-test" },
+      },
+      executionIdentity: {
+        version: EXECUTION_IDENTITY_VERSION,
+        manifest: { agentId: "agent.deployment-test", version: "1.0.0" },
+        deployment: {
+          deploymentId: "deployment:worker:test",
+          backend: "cloudflare-do",
+          adapter: "sse-http",
+          codec: "ledger-v1",
+          providerStrategy: "effect-ai",
+        },
+      },
+    });
+    expect(JSON.stringify(intent)).not.toContain("secret");
+    expect(JSON.stringify(intent)).not.toContain("https://");
+  });
+
+  it("derives a receipt append spec only from boot-time observation", () => {
+    const observation = observedInstallation();
+    const event = installationReceiptEvent(observation);
 
     expect(event).toMatchObject({
       kind: INSTALLATION_RECEIPT_EVENT_KIND,
       scopeRef: { kind: "session", scopeId: "deploy-session" },
+      effectAuthorityRef: { authorityClass: "agent", authorityId: "deployment-test" },
       payload: {
         version: INSTALLATION_RECEIPT_VERSION,
-        deploymentId: "deployment:worker:test",
-        agentId: "agent.deployment-test",
-        agentVersion: "1.0.0",
-        backend: "cloudflare-do",
-        adapter: "sse-http",
-        codec: "ledger-v1",
-        providerStrategy: "effect-ai",
-        executionIdentity: {
-          version: EXECUTION_IDENTITY_VERSION,
-          manifest: { agentId: "agent.deployment-test", version: "1.0.0" },
-          deployment: {
-            deploymentId: "deployment:worker:test",
-            backend: "cloudflare-do",
-            adapter: "sse-http",
-            codec: "ledger-v1",
-            providerStrategy: "effect-ai",
-          },
+        intent: { version: INSTALLATION_INTENT_VERSION, deploymentId: "deployment:worker:test" },
+        observation: {
+          version: INSTALLATION_OBSERVATION_VERSION,
+          observedAtMs: 1_700_000_000_000,
+          runtimeVersion: "runtime-protocol-test",
+          adapterVersion: "cloudflare-do-test",
+          artifactDigest: "sha256:test-worker",
+          bootChecks: [
+            { name: "target_module_loaded", status: "passed", observedValue: "AgentOS" },
+            { name: "adapter_versions_observed", status: "passed" },
+          ],
         },
       },
     });
-    expect(event.effectAuthorityRef).toEqual({
-      authorityClass: "agent",
-      authorityId: "deployment-test",
-    });
     expect(event).not.toHaveProperty("factOwnerRef");
-    expect(JSON.stringify(event)).not.toContain("secret");
-    expect(JSON.stringify(event)).not.toContain("https://");
+  });
+
+  it("does not accept a deployment spec as receipt event input", () => {
+    const preBootReceipt = () => {
+      // @ts-expect-error build-time DeploymentSpec cannot mint InstallationReceipt.
+      installationReceiptEvent(deployment);
+    };
+
+    expect(preBootReceipt).toBeDefined();
   });
 
   it("keeps ledger truth key stable when deployment provenance changes", () => {
@@ -80,23 +129,31 @@ describe("DeploymentSpec installation receipt", () => {
       providerStrategy: "effect-ai-structured",
     };
 
-    const baseEvent = installationReceiptEvent(deployment);
-    const changedEvent = installationReceiptEvent(changed);
+    const baseIntent = installationIntentFromDeployment(deployment);
+    const changedIntent = installationIntentFromDeployment(changed);
 
-    expect({
-      scopeRef: changedEvent.scopeRef,
-      effectAuthorityRef: changedEvent.effectAuthorityRef,
-    }).toEqual({
-      scopeRef: baseEvent.scopeRef,
-      effectAuthorityRef: baseEvent.effectAuthorityRef,
-    });
+    expect(changedIntent.truthIdentity).toEqual(baseIntent.truthIdentity);
     expect(executionIdentityFromDeployment(changed)).not.toEqual(
       executionIdentityFromDeployment(deployment),
     );
   });
 
+  it("rejects observations without positive boot checks", () => {
+    expect(() =>
+      installationObservation({
+        intent: installationIntentFromDeployment(deployment),
+        observedAtMs: 1_700_000_000_000,
+        runtimeVersion: "runtime-protocol-test",
+        adapterVersion: "cloudflare-do-test",
+        bootChecks: [],
+      }),
+    ).toThrow(/bootChecks/);
+  });
+
   it("reads the latest matching receipt from recorded ledger events", () => {
-    const event = installationReceiptEvent(deployment);
+    const observation = observedInstallation();
+    const event = installationReceiptEvent(observation);
+    const receipt = installationReceiptFromObservation(observation);
     const recorded = decodeRecordedLedgerEvent({
       id: 2,
       ts: 1_700_000_000_000,
@@ -106,29 +163,31 @@ describe("DeploymentSpec installation receipt", () => {
       factOwnerRef: RUNTIME_FACT_OWNER,
       payload: event.payload,
     });
-    const other = decodeRecordedLedgerEvent({
-      id: 1,
-      ts: 1_700_000_000_000,
-      kind: event.kind,
-      scopeRef: event.scopeRef,
-      effectAuthorityRef: event.effectAuthorityRef,
-      factOwnerRef: RUNTIME_FACT_OWNER,
-      payload: {
-        ...installationReceiptFromDeployment(deployment),
+    const otherObservation = observedInstallation({
+      intent: {
+        ...installationIntentFromDeployment(deployment),
         deploymentId: "deployment:worker:other",
       },
     });
+    const otherEvent = installationReceiptEvent(otherObservation);
+    const other = decodeRecordedLedgerEvent({
+      id: 1,
+      ts: 1_700_000_000_000,
+      kind: otherEvent.kind,
+      scopeRef: otherEvent.scopeRef,
+      effectAuthorityRef: otherEvent.effectAuthorityRef,
+      factOwnerRef: RUNTIME_FACT_OWNER,
+      payload: otherEvent.payload,
+    });
 
-    expect(installationReceiptFromLedgerEvent(recorded)).toEqual(
-      installationReceiptFromDeployment(deployment),
-    );
+    expect(installationReceiptFromLedgerEvent(recorded)).toEqual(receipt);
     expect(projectInstallationReceipt([other, recorded], "deployment:worker:test")).toEqual(
-      installationReceiptFromDeployment(deployment),
+      receipt,
     );
   });
 
   it("fails closed when the receipt payload identity does not match the ledger row", () => {
-    const event = installationReceiptEvent(deployment);
+    const event = installationReceiptEvent(observedInstallation());
     const recorded = decodeRecordedLedgerEvent({
       id: 1,
       ts: 1_700_000_000_000,
@@ -143,10 +202,11 @@ describe("DeploymentSpec installation receipt", () => {
     expect(projectInstallationReceipt([recorded], "deployment:worker:test")).toBeNull();
   });
 
-  it("fails closed when execution identity is malformed", () => {
-    const event = installationReceiptEvent(deployment);
-    const receipt = installationReceiptFromDeployment(deployment);
-    const recorded = decodeRecordedLedgerEvent({
+  it("fails closed when execution identity or boot checks are malformed", () => {
+    const observation = observedInstallation();
+    const event = installationReceiptEvent(observation);
+    const receipt = installationReceiptFromObservation(observation);
+    const malformedExecutionIdentity = decodeRecordedLedgerEvent({
       id: 1,
       ts: 1_700_000_000_000,
       kind: event.kind,
@@ -155,13 +215,29 @@ describe("DeploymentSpec installation receipt", () => {
       factOwnerRef: RUNTIME_FACT_OWNER,
       payload: {
         ...receipt,
-        executionIdentity: {
-          ...receipt.executionIdentity,
-          deployment: { ...receipt.executionIdentity.deployment, codec: "" },
+        intent: {
+          ...receipt.intent,
+          executionIdentity: {
+            ...receipt.intent.executionIdentity,
+            deployment: { ...receipt.intent.executionIdentity.deployment, codec: "" },
+          },
         },
       },
     });
+    const malformedBootChecks = decodeRecordedLedgerEvent({
+      id: 2,
+      ts: 1_700_000_000_000,
+      kind: event.kind,
+      scopeRef: event.scopeRef,
+      effectAuthorityRef: event.effectAuthorityRef,
+      factOwnerRef: RUNTIME_FACT_OWNER,
+      payload: {
+        ...receipt,
+        observation: { ...receipt.observation, bootChecks: [] },
+      },
+    });
 
-    expect(installationReceiptFromLedgerEvent(recorded)).toBeNull();
+    expect(installationReceiptFromLedgerEvent(malformedExecutionIdentity)).toBeNull();
+    expect(installationReceiptFromLedgerEvent(malformedBootChecks)).toBeNull();
   });
 });

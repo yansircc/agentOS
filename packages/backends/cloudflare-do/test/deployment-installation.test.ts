@@ -5,8 +5,10 @@ import { Ledger } from "@agent-os/runtime";
 import {
   defineAgentBindings,
   defineAgentManifest,
+  installationIntentFromDeployment,
+  installationObservation,
   installationReceiptEvent,
-  installationReceiptFromDeployment,
+  installationReceiptFromObservation,
   INSTALLATION_RECEIPT_EVENT_KIND,
   projectInstallationReceipt,
   RUNTIME_FACT_OWNER,
@@ -51,6 +53,19 @@ const deployment: DeploymentSpec<typeof manifest> = {
   providerStrategy: "effect-ai",
 };
 
+const observedInstallation = () =>
+  installationObservation({
+    intent: installationIntentFromDeployment(deployment),
+    observedAtMs: 1_700_000_000_000,
+    runtimeVersion: "cloudflare-do-test-runtime",
+    adapterVersion: "cloudflare-do-test-adapter",
+    artifactDigest: "sha256:test-worker",
+    bootChecks: [
+      { name: "target_module_loaded", status: "passed", observedValue: "AgentOS" },
+      { name: "adapter_versions_observed", status: "passed" },
+    ],
+  });
+
 describe("Cloudflare deployment installation", () => {
   it("materializes a deployment spec into the existing mount and layer inputs", () => {
     const endpointRef = endpointMaterialRef("llm");
@@ -82,7 +97,8 @@ describe("Cloudflare deployment installation", () => {
   it.effect("appends and reads InstallationReceipt through the Ledger port", () =>
     Effect.gen(function* () {
       const state = makeInMemoryDurableObjectState();
-      const event = installationReceiptEvent(deployment);
+      const observation = observedInstallation();
+      const event = installationReceiptEvent(observation);
       const truthIdentity = {
         scopeRef: event.scopeRef,
         effectAuthorityRef: event.effectAuthorityRef,
@@ -107,7 +123,7 @@ describe("Cloudflare deployment installation", () => {
 
       expect(result.committed).toHaveLength(1);
       expect(projectInstallationReceipt(result.read, deployment.deploymentId)).toEqual(
-        installationReceiptFromDeployment(deployment),
+        installationReceiptFromObservation(observation),
       );
       expect(JSON.stringify(result.read)).not.toContain("https://");
       expect(JSON.stringify(result.read)).not.toContain("secret");
