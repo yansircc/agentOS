@@ -18,6 +18,7 @@
   "dependencies": {
     "@agent-os/kernel": "workspace:*",
     "@agent-os/runtime-protocol": "workspace:*",
+    "@agent-os/workspace-env": "workspace:*",
     "effect": "catalog:"
   },
   "devDependencies": {

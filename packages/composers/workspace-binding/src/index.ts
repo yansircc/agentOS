@@ -35,6 +35,7 @@ export type WorkspaceShellPolicy = "disabled" | "receipt-backed";
 
 export interface WorkspaceToolExposurePolicy {
   readonly exposure?: ReadonlyArray<WorkspaceToolExposureProfile>;
+  readonly toolNames?: ReadonlyArray<WorkspaceToolName>;
   readonly mutationPolicy?: WorkspaceMutationPolicy;
   readonly shellPolicy?: WorkspaceShellPolicy;
 }
@@ -93,6 +94,29 @@ const requireKnownProfile = (
 const selectedWorkspaceToolNames = (
   policy: WorkspaceToolExposurePolicy,
 ): ReadonlyArray<WorkspaceToolName> => {
+  if (policy.toolNames !== undefined) {
+    for (const name of policy.toolNames) {
+      if (!workspaceToolNames.has(name)) {
+        failWorkspaceToolBinding(`unknown workspace tool: ${name}`);
+      }
+    }
+    const selectedNames = unique(policy.toolNames);
+    const mutationPolicy = policy.mutationPolicy ?? "disabled";
+    const shellPolicy = policy.shellPolicy ?? "disabled";
+    if (
+      selectedNames.some((name) => WORKSPACE_TOOL_EXPOSURE_PROFILES.mutation.includes(name)) &&
+      mutationPolicy === "disabled"
+    ) {
+      failWorkspaceToolBinding("workspace mutation tools require mutationPolicy: receipt-backed");
+    }
+    if (
+      selectedNames.some((name) => WORKSPACE_TOOL_EXPOSURE_PROFILES.shell.includes(name)) &&
+      shellPolicy === "disabled"
+    ) {
+      failWorkspaceToolBinding("workspace shell tools require shellPolicy: receipt-backed");
+    }
+    return selectedNames;
+  }
   const exposure = unique(policy.exposure ?? ["read"]).map(requireKnownProfile);
   const mutationPolicy = policy.mutationPolicy ?? "disabled";
   const shellPolicy = policy.shellPolicy ?? "disabled";

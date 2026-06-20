@@ -582,7 +582,7 @@ describe("agent authored tree compiler", () => {
       {
         kind: "target-runtime",
         source: "@agent-os/backend-cloudflare-do",
-        imports: ["createAgentDurableObject"],
+        imports: ["createAgentDurableObject", "installCloudflareWorkspaceOperationProvider"],
       },
       {
         kind: "provider-runtime",
@@ -595,14 +595,24 @@ describe("agent authored tree compiler", () => {
         imports: ["defineWorkspaceAgentMount", "WORKSPACE_AGENT_PROJECTION"],
       },
       {
-        kind: "authored-tool",
-        source: "../../agent/tools/read_file",
-        imports: ["default as tool_0"],
+        kind: "workspace-binding",
+        source: "@agent-os/workspace-binding",
+        imports: ["bindWorkspaceToolsForRuntime"],
       },
       {
-        kind: "authored-tool",
-        source: "../../agent/tools/write_file",
-        imports: ["default as tool_1"],
+        kind: "execution-domain-runtime",
+        source: "@agent-os/workspace-env-cloudflare",
+        imports: ["makeCloudflareWorkspaceEnv"],
+      },
+      {
+        kind: "platform-runtime",
+        source: "@cloudflare/sandbox",
+        imports: ["getSandbox", "Sandbox", "SandboxTransport"],
+      },
+      {
+        kind: "effect-runtime",
+        source: "effect",
+        imports: ["Effect"],
       },
       {
         kind: "workspace-client",
@@ -648,25 +658,38 @@ describe("agent authored tree compiler", () => {
     expect(target).toContain('import semanticDeclarations from "./manifest.json";');
     expect(target).toContain('import deploymentProvenance from "./deployment.json";');
     expect(target).toContain(
-      'import { createAgentDurableObject } from "@agent-os/backend-cloudflare-do";',
+      'import { createAgentDurableObject, installCloudflareWorkspaceOperationProvider } from "@agent-os/backend-cloudflare-do";',
     );
     expect(target).toContain(
       'import { OpenAiCompatibleLlmTransportLive } from "@agent-os/llm-transport-effect-ai";',
     );
-    expect(target).toContain('import tool_0 from "../../agent/tools/read_file";');
-    expect(target).toContain('import tool_1 from "../../agent/tools/write_file";');
+    expect(target).toContain(
+      'import { bindWorkspaceToolsForRuntime } from "@agent-os/workspace-binding";',
+    );
+    expect(target).toContain(
+      'import { makeCloudflareWorkspaceEnv } from "@agent-os/workspace-env-cloudflare";',
+    );
+    expect(target).toContain('import { getSandbox } from "@cloudflare/sandbox";');
+    expect(target).not.toContain('import tool_0 from "../../agent/tools/read_file";');
+    expect(target).not.toContain('import tool_1 from "../../agent/tools/write_file";');
     expect(target).toContain("manifest: semanticManifest");
     expect(target).toContain("llmTransport: () => OpenAiCompatibleLlmTransportLive");
-    expect(target).toContain('"read_file": tool_0');
-    expect(target).toContain('"write_file": tool_1');
+    expect(target).toContain(
+      'const generatedWorkspaceToolNames = ["read_file", "write_file"] as const;',
+    );
+    expect(target).toContain("bindWorkspaceToolsForRuntime({");
+    expect(target).toContain("toolNames: generatedWorkspaceToolNames");
+    expect(target).toContain('mutationPolicy: "receipt-backed"');
+    expect(target).toContain("installCloudflareWorkspaceOperationProvider({");
+    expect(target).toContain("workspaceOperationInstallFor(env).extensions");
+    expect(target).toContain("override submit(spec: AgentSubmitSpec): Promise<SubmitResult>");
 
-    const durableObjectConfig = target.slice(target.indexOf("extends createAgentDurableObject({"));
+    const durableObjectConfig = target.slice(target.indexOf("createAgentDurableObject<"));
     expect(durableObjectConfig).not.toContain("deploymentProvenance");
     expect(durableObjectConfig).not.toContain("targetDeployment");
     expect(target).not.toContain("makeRuntime({");
     expect(target).not.toContain("dynamic import");
     expect(target).not.toContain("workspaceExtension(");
-    expect(target).not.toContain("extensions:");
 
     const client = generatedText(linked, ".agentos/generated/client.ts");
     expect(client).toContain(
@@ -700,7 +723,7 @@ describe("agent authored tree compiler", () => {
     expect(publicLinked.value.moduleGraph).toContainEqual({
       kind: "target-runtime",
       source: "@yansirplus/backend-cloudflare-do",
-      imports: ["createAgentDurableObject"],
+      imports: ["createAgentDurableObject", "installCloudflareWorkspaceOperationProvider"],
     });
     expect(publicLinked.value.moduleGraph).toContainEqual({
       kind: "client-framework",
@@ -708,7 +731,7 @@ describe("agent authored tree compiler", () => {
       imports: ["clientReadable", "selectClientReadable"],
     });
     expect(generatedText(publicLinked, ".agentos/generated/target.ts")).toContain(
-      'import { createAgentDurableObject } from "@yansirplus/backend-cloudflare-do";',
+      'import { createAgentDurableObject, installCloudflareWorkspaceOperationProvider } from "@yansirplus/backend-cloudflare-do";',
     );
     const publicClient = generatedText(publicLinked, ".agentos/generated/client.ts");
     expect(publicClient).toContain(
@@ -777,15 +800,15 @@ describe("agent authored tree compiler", () => {
 
     const first = compile(["read_file"]);
     const second = compile(["read_file"]);
-    const withExtraTool = compile(["read_file", "write_file"]);
+    const withExtraTool = compile(["read_file", "custom_tool"]);
 
     expect(first.files).toEqual(second.files);
     expect(first.moduleGraph).toEqual(second.moduleGraph);
     expect(first.moduleGraph).not.toEqual(withExtraTool.moduleGraph);
     expect(withExtraTool.moduleGraph).toContainEqual({
       kind: "authored-tool",
-      source: "../../agent/tools/write_file",
-      imports: ["default as tool_1"],
+      source: "../../agent/tools/custom_tool",
+      imports: ["default as tool_0"],
     });
     expect(withExtraTool.moduleGraph).not.toContainEqual({
       kind: "client-framework",

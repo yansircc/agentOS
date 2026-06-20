@@ -25,6 +25,7 @@ import {
   type DeploymentSpec,
   type HandlerKind,
 } from "@agent-os/runtime-protocol";
+import { WORKSPACE_TOOL_SPECS, type WorkspaceToolName } from "@agent-os/workspace-env";
 
 export const AUTHORING_DEFAULTS_VERSION = "framework-defaults@agentos/v1" as const;
 
@@ -1229,10 +1230,14 @@ export interface StaticTargetGeneratedFile {
 export type StaticTargetModuleImportKind =
   | "target-runtime"
   | "provider-runtime"
+  | "execution-domain-runtime"
   | "workspace-host"
+  | "workspace-binding"
+  | "platform-runtime"
   | "workspace-client"
   | "client-core"
   | "client-framework"
+  | "effect-runtime"
   | "semantic-json"
   | "authored-tool";
 
@@ -1721,6 +1726,17 @@ const jsString = (value: string): string => JSON.stringify(value);
 
 const importToolPath = (toolName: string): string => `../../agent/tools/${toolName}`;
 
+const workspaceToolNames = new Set(WORKSPACE_TOOL_SPECS.map((spec) => spec.name));
+const workspaceMutationToolNames = new Set<WorkspaceToolName>([
+  "write_file",
+  "edit_file",
+  "delete_path",
+]);
+const workspaceShellToolNames = new Set<WorkspaceToolName>(["run_shell"]);
+
+const isWorkspaceToolName = (name: string): name is WorkspaceToolName =>
+  workspaceToolNames.has(name as WorkspaceToolName);
+
 const SOURCE_PACKAGE_SCOPE = "@agent-os";
 const INJECTED_PUBLIC_PACKAGE_SCOPE = "__AGENTOS_PUBLIC_PACKAGE_SCOPE__";
 const packageScopePattern = /^@[a-z0-9][a-z0-9._-]*$/u;
@@ -1734,9 +1750,13 @@ const staticTargetModules = (scope: string) => ({
   cloudflareDoRuntime: publicPackageSpecifier(scope, "backend-cloudflare-do"),
   openAiCompatibleTransport: publicPackageSpecifier(scope, "llm-transport-effect-ai"),
   workspaceAgentHost: publicPackageSpecifier(scope, "workspace-agent"),
+  workspaceBinding: publicPackageSpecifier(scope, "workspace-binding"),
+  workspaceEnvCloudflare: publicPackageSpecifier(scope, "workspace-env-cloudflare"),
   clientCore: publicPackageSpecifier(scope, "client"),
   clientSvelte: publicPackageSpecifier(scope, "client-svelte"),
   runtimeProtocol: publicPackageSpecifier(scope, "runtime-protocol"),
+  cloudflareSandbox: "@cloudflare/sandbox",
+  effect: "effect",
   svelteStore: "svelte/store",
 });
 
@@ -1760,28 +1780,49 @@ const renderStaticTarget = (
   toolNames: ReadonlyArray<string>,
   modules: ReturnType<typeof staticTargetModules>,
 ): string => {
-  const toolImports = toolNames
+  const workspaceToolList = toolNames.filter(isWorkspaceToolName);
+  const customToolNames = toolNames.filter((toolName) => !isWorkspaceToolName(toolName));
+  const toolImports = customToolNames
     .map((toolName, index) => `import tool_${index} from ${jsString(importToolPath(toolName))};`)
     .join("\n");
-  const toolRecord =
-    toolNames.length === 0
+  const customToolRecord =
+    customToolNames.length === 0
       ? "{}"
-      : `{\n${toolNames
+      : `{\n${customToolNames
           .map((toolName, index) => `  ${jsString(toolName)}: tool_${index},`)
           .join("\n")}\n}`;
+  const workspaceToolArray = `[${workspaceToolList.map(jsString).join(", ")}] as const`;
+  const usesMutationTools = workspaceToolList.some((toolName) =>
+    workspaceMutationToolNames.has(toolName),
+  );
+  const usesShellTools = workspaceToolList.some((toolName) =>
+    workspaceShellToolNames.has(toolName),
+  );
   const handlerRecord = `{\n${normalized.deployment.manifest.handlers
     .map((handler) => `  ${jsString(handler)}: generatedHandler,`)
     .join("\n")}\n}`;
   const imports = [
     `import semanticDeclarations from "./manifest.json";`,
     `import deploymentProvenance from "./deployment.json";`,
-    renderNamedImport(["createAgentDurableObject"], modules.cloudflareDoRuntime),
+    renderNamedImport(
+      ["createAgentDurableObject", "installCloudflareWorkspaceOperationProvider"],
+      modules.cloudflareDoRuntime,
+    ),
     renderNamedImport(["OpenAiCompatibleLlmTransportLive"], modules.openAiCompatibleTransport),
     renderNamedImport(
       ["defineWorkspaceAgentMount", "WORKSPACE_AGENT_PROJECTION"],
       modules.workspaceAgentHost,
     ),
-    renderTypeImport(["AgentManifest"], modules.runtimeProtocol),
+    renderNamedImport(["bindWorkspaceToolsForRuntime"], modules.workspaceBinding),
+    renderNamedImport(["makeCloudflareWorkspaceEnv"], modules.workspaceEnvCloudflare),
+    renderNamedImport(["getSandbox"], modules.cloudflareSandbox),
+    renderNamedImport(["Effect"], modules.effect),
+    renderTypeImport(
+      ["AgentManifest", "AgentSubmitBindings", "SubmitResult"],
+      modules.runtimeProtocol,
+    ),
+    renderTypeImport(["AgentSubmitSpec"], modules.cloudflareDoRuntime),
+    renderTypeImport(["Sandbox", "SandboxTransport"], modules.cloudflareSandbox),
     ...(toolImports.length === 0 ? [] : [toolImports]),
   ].join("\n");
   return `${imports}
@@ -1792,7 +1833,88 @@ export const targetDeployment = deploymentProvenance;
 const semanticManifest = semanticDeclarations as AgentManifest;
 const generatedHandler = () => undefined;
 
-const generatedTools = ${toolRecord};
+type AgentOSTargetEnv = {
+  readonly [binding: string]: unknown;
+  readonly SANDBOX_TRANSPORT?: SandboxTransport;
+  readonly OPENROUTER_KEY?: string;
+  readonly OPENROUTER_ENDPOINT?: string;
+};
+
+const generatedWorkspaceToolNames = ${workspaceToolArray};
+const generatedCustomTools = ${customToolRecord};
+
+const workspaceNamespaceFor = (env: AgentOSTargetEnv): DurableObjectNamespace<Sandbox> =>
+  env[${jsString(normalized.workspace.binding)}] as DurableObjectNamespace<Sandbox>;
+
+const workspaceSandboxFor = (env: AgentOSTargetEnv): Sandbox =>
+  getSandbox(workspaceNamespaceFor(env), ${jsString(normalized.workspace.providerResourceId)}, {
+    normalizeId: true,
+    sleepAfter: "10m",
+    transport: env.SANDBOX_TRANSPORT ?? "rpc",
+  });
+
+const workspaceEnvFor = (env: AgentOSTargetEnv) =>
+  makeCloudflareWorkspaceEnv({
+    client: workspaceSandboxFor(env),
+    cwd: ${jsString(normalized.workspace.root)},
+    workspaceRef: ${jsString(normalized.workspace.providerResourceId)},
+  });
+
+const allowWorkspaceTool = () => Effect.succeed({ ok: true as const });
+
+const workspaceOperationInstallFor = (env: AgentOSTargetEnv) =>
+  installCloudflareWorkspaceOperationProvider({
+    env: workspaceEnvFor(env),
+  });
+
+const openRouterEndpoint = (env: AgentOSTargetEnv): string =>
+  env.OPENROUTER_ENDPOINT ?? "https://openrouter.ai/api/v1";
+
+const materialValue = (
+  env: AgentOSTargetEnv,
+  ref: { readonly kind: string; readonly ref: string },
+): NonNullable<unknown> | null => {
+  if (ref.kind === "endpoint" && ref.ref === ${jsString(normalized.llm.endpointRef)}) {
+    return openRouterEndpoint(env);
+  }
+  if (ref.kind === "credential" && ref.ref === ${jsString(normalized.llm.credentialRef)}) {
+    return env.OPENROUTER_KEY === undefined || env.OPENROUTER_KEY.length === 0
+      ? null
+      : env.OPENROUTER_KEY;
+  }
+  return null;
+};
+
+const generatedWorkspaceBindingsFor = (env: AgentOSTargetEnv): AgentSubmitBindings =>
+  generatedWorkspaceToolNames.length === 0
+    ? {}
+    : bindWorkspaceToolsForRuntime({
+        env: workspaceEnvFor(env),
+        authority: "agentos.workspace.static-target",
+        admit: allowWorkspaceTool,
+        toolNames: generatedWorkspaceToolNames,
+        mutationPolicy: ${usesMutationTools ? '"receipt-backed"' : '"disabled"'},
+        shellPolicy: ${usesShellTools ? '"receipt-backed"' : '"disabled"'},
+      });
+
+const generatedSubmitBindingsFor = (env: AgentOSTargetEnv): AgentSubmitBindings => {
+  const workspaceBindings = generatedWorkspaceBindingsFor(env);
+  return {
+    ...workspaceBindings,
+    llmRoutes: {
+      default: {
+        kind: "openai-chat-compatible",
+        endpointRef: ${jsString(normalized.llm.endpointRef)},
+        credentialRef: ${jsString(normalized.llm.credentialRef)},
+        modelId: ${jsString(normalized.llm.modelRef)},
+      },
+    },
+    tools: {
+      ...(workspaceBindings.tools ?? {}),
+      ...generatedCustomTools,
+    },
+  };
+};
 
 export const workspaceMount = defineWorkspaceAgentMount({
   driver: { kind: "driver_mount", client: undefined as never },
@@ -1803,22 +1925,33 @@ export const workspaceMount = defineWorkspaceAgentMount({
   ],
 });
 
-export class ${normalized.target.durableObject.className} extends createAgentDurableObject({
+const Base${normalized.target.durableObject.className} = createAgentDurableObject<AgentOSTargetEnv>({
   manifest: semanticManifest,
   agentBindings: {
     handlers: ${handlerRecord},
-    llmRoutes: {
-      default: {
-        kind: "openai-chat-compatible",
-        endpointRef: ${jsString(normalized.llm.endpointRef)},
-        credentialRef: ${jsString(normalized.llm.credentialRef)},
-        modelId: ${jsString(normalized.llm.modelRef)},
-      },
-    },
-    tools: generatedTools,
   },
+  refResolver: (env) => ({
+    material: (ref) => materialValue(env, ref),
+  }),
   llmTransport: () => OpenAiCompatibleLlmTransportLive,
-}) {}
+  extensions: (env) => workspaceOperationInstallFor(env).extensions,
+  declaredIntents: (env) => workspaceOperationInstallFor(env).declaredIntents,
+  projections: (env) => workspaceOperationInstallFor(env).projections,
+  eventHandlers: (context, env) => workspaceOperationInstallFor(env).eventHandlers(context),
+});
+
+export class ${normalized.target.durableObject.className} extends Base${normalized.target.durableObject.className} {
+  private readonly targetEnv: AgentOSTargetEnv;
+
+  constructor(ctx: DurableObjectState, env: AgentOSTargetEnv) {
+    super(ctx, env);
+    this.targetEnv = env;
+  }
+
+  override submit(spec: AgentSubmitSpec): Promise<SubmitResult> {
+    return this.submitWithBindings(spec, generatedSubmitBindingsFor(this.targetEnv));
+  }
+}
 `;
 };
 
@@ -1959,7 +2092,7 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
     {
       kind: "target-runtime",
       source: modules.cloudflareDoRuntime,
-      imports: ["createAgentDurableObject"],
+      imports: ["createAgentDurableObject", "installCloudflareWorkspaceOperationProvider"],
     },
     {
       kind: "provider-runtime",
@@ -1971,7 +2104,27 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
       source: modules.workspaceAgentHost,
       imports: ["defineWorkspaceAgentMount", "WORKSPACE_AGENT_PROJECTION"],
     },
-    ...generatedToolImports(toolNames),
+    ...generatedToolImports(toolNames.filter((toolName) => !isWorkspaceToolName(toolName))),
+    {
+      kind: "workspace-binding",
+      source: modules.workspaceBinding,
+      imports: ["bindWorkspaceToolsForRuntime"],
+    },
+    {
+      kind: "execution-domain-runtime",
+      source: modules.workspaceEnvCloudflare,
+      imports: ["makeCloudflareWorkspaceEnv"],
+    },
+    {
+      kind: "platform-runtime",
+      source: modules.cloudflareSandbox,
+      imports: ["getSandbox", "Sandbox", "SandboxTransport"],
+    },
+    {
+      kind: "effect-runtime",
+      source: modules.effect,
+      imports: ["Effect"],
+    },
     ...generatedClientModuleImports(normalized.client, modules),
   ];
   return {
