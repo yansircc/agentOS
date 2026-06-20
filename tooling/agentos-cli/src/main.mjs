@@ -56,7 +56,7 @@ const runBuild = async (args) => {
     new URL("../../../packages/composers/agent-authoring/src/build-cli.ts", import.meta.url),
   );
   await new Promise((resolve, reject) => {
-    const child = spawn("bun", [runner, ...args], { stdio: "inherit" });
+    const child = spawn("bun", [runner, "build", ...args], { stdio: "inherit" });
     child.on("error", (error) => {
       reject(new Error(`agentos build: failed to start bun: ${error.message}`));
     });

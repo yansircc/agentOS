@@ -1,3 +1,9 @@
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { describe, expect, it } from "@effect/vitest";
 
 import {
@@ -38,6 +44,9 @@ const generatedJson = <T>(
   result: ReturnType<typeof linkWorkspaceStaticTarget>,
   path: StaticTargetGeneratedPath,
 ): T => JSON.parse(generatedText(result, path)) as T;
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
+const buildCli = path.join(repoRoot, "packages/composers/agent-authoring/src/build-cli.ts");
 
 describe("agent authored tree compiler", () => {
   it("compiles a minimal authored tree to AgentManifest<Authored> with provenance", () => {
@@ -944,5 +953,95 @@ describe("agent authored tree compiler", () => {
       path: "agentos.config.jsonc",
       field: "deriveTarget",
     });
+  });
+
+  it("exposes build as the package-owned agentos subcommand", () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), "agent-authoring-build-cli-"));
+    try {
+      writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
+      mkdirSync(path.join(root, "agent/tools"), { recursive: true });
+      writeFileSync(path.join(root, "agent/instructions.md"), "Operate on workspace files.");
+      writeFileSync(
+        path.join(root, "agent/agent.json"),
+        JSON.stringify(
+          {
+            agentId: "fixture-agent",
+            scope: {
+              kind: "session",
+              idSource: "manifest",
+              stableScopeId: "fixture-scope",
+            },
+            effectAuthorityRef: {
+              authorityClass: "effect",
+              authorityId: "fixture-agent",
+            },
+            materials: {
+              workspace: {
+                kind: "external_resource",
+                provider: "agent-os",
+                resourceKind: "workspace-env",
+                ref: "cloudflare-sandbox:fixture-scope",
+              },
+            },
+            executionDomains: {
+              workspace: { bindingRef: "workspace" },
+            },
+          },
+          null,
+          2,
+        ),
+      );
+      writeFileSync(
+        path.join(root, "agent/tools/read_file.ts"),
+        [
+          "export const declaration = {",
+          '  bindingRef: "read_file",',
+          '  executionDomain: "workspace",',
+          '  interaction: "never",',
+          '  materialRefs: ["workspace"],',
+          '  effects: ["workspace_read"],',
+          '  receiptPolicy: "workspace.snapshot",',
+          "} as const;",
+          "",
+        ].join("\n"),
+      );
+      writeFileSync(
+        path.join(root, "agentos.config.jsonc"),
+        [
+          "{",
+          '  "$schema": "./node_modules/@agent-os/config/schema.json",',
+          '  "profile": "workspace@1",',
+          '  "agent": "./agent",',
+          '  "deployment": { "id": "fixture-deployment", "version": "0.1.0" },',
+          '  "target": {',
+          '    "kind": "cloudflare-do@1",',
+          '    "durableObject": { "className": "AgentOS", "binding": "AGENT_OS" }',
+          "  },",
+          '  "client": { "kind": "svelte-kit-remote@1" },',
+          '  "llm": {',
+          '    "route": "openai-chat-compatible",',
+          '    "endpointRef": "openrouter",',
+          '    "credentialRef": "openrouter-key",',
+          '    "modelRef": "openrouter-default-text-model"',
+          "  },",
+          '  "workspace": { "binding": "Sandbox", "root": "/workspace" }',
+          "}",
+          "",
+        ].join("\n"),
+      );
+
+      const result = spawnSync("bun", [buildCli, "build", "--cwd", root], {
+        encoding: "utf8",
+      });
+
+      expect(result.status, result.stderr).toBe(0);
+      expect(result.stdout).toContain("generated 8 agentOS files");
+      const manifest = JSON.parse(
+        readFileSync(path.join(root, ".agentos/generated/manifest.json"), "utf8"),
+      ) as { readonly agentId?: string };
+      expect(manifest.agentId).toBe("fixture-agent");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

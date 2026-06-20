@@ -17,15 +17,17 @@ interface BuildArgs {
   readonly cwd: string;
   readonly config: string;
   readonly packageScope?: string;
-  readonly help?: boolean;
 }
 
-const parseArgs = (rawArgs: ReadonlyArray<string>): BuildArgs => {
+type CliArgs =
+  | { readonly command: "help" }
+  | { readonly command: "build"; readonly args: BuildArgs };
+
+const parseBuildArgs = (rawArgs: ReadonlyArray<string>): BuildArgs => {
   const args: {
     cwd: string;
     config: string;
     packageScope?: string;
-    help?: boolean;
   } = {
     cwd: process.cwd(),
     config: "agentos.config.jsonc",
@@ -48,15 +50,19 @@ const parseArgs = (rawArgs: ReadonlyArray<string>): BuildArgs => {
         args.packageScope = rawArgs[index + 1];
         index += 1;
         break;
-      case "--help":
-      case "-h":
-        args.help = true;
-        break;
       default:
         throw new Error(`unexpected argument ${arg}`);
     }
   }
   return args;
+};
+
+const parseArgs = (rawArgs: ReadonlyArray<string>): CliArgs => {
+  const [command, ...rest] = rawArgs;
+  if (command === undefined || command === "--help" || command === "-h") return { command: "help" };
+  if (command !== "build") throw new Error("choose one of build");
+  if (rest.includes("--help") || rest.includes("-h")) return { command: "help" };
+  return { command: "build", args: parseBuildArgs(rest) };
 };
 
 const help = `Usage:
@@ -251,11 +257,12 @@ const writeGeneratedFiles = async (
 };
 
 const main = async (): Promise<void> => {
-  const args = parseArgs(process.argv.slice(2));
-  if (args.help) {
+  const parsed = parseArgs(process.argv.slice(2));
+  if (parsed.command === "help") {
     process.stdout.write(help);
     return;
   }
+  const args = parsed.args;
   if (process.versions.bun === undefined) {
     throw new Error(
       "agentos build must run under Bun because authored tools are TypeScript modules",
