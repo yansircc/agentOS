@@ -2071,11 +2071,6 @@ const generatedClientModuleImports = (
         },
         {
           kind: "client-transport" as const,
-          source: modules.svelteKitKit,
-          imports: ["error"],
-        },
-        {
-          kind: "client-transport" as const,
           source: modules.sseHttp,
           imports: ["decodeSseHttpEvents", "responseToSseHttpChunks"],
         },
@@ -2102,7 +2097,6 @@ const renderSvelteKitRemote = (
   normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
   modules: ReturnType<typeof staticTargetModules>,
 ): string => `${renderNamedImport(["command", "getRequestEvent", "query"], modules.svelteKitServer)}
-${renderNamedImport(["error"], modules.svelteKitKit)}
 ${renderNamedImport(["durableObjectRpcClient"], `${modules.cloudflareDoRuntime}/do-rpc`)}
 ${renderNamedImport(["decodeSseHttpEvents", "responseToSseHttpChunks"], modules.sseHttp)}
 ${renderNamedImport(["Schema"], modules.effect)}
@@ -2152,10 +2146,34 @@ const commandInput = Schema.toStandardSchemaV1(
 );
 const agentTruthIdentity = manifestTruthIdentity(manifest as AgentManifest);
 
-const env = (): AgentOSTargetEnv => {
+type GeneratedFailure = {
+  readonly ok: false;
+  readonly status: number;
+  readonly message: string;
+};
+
+type GeneratedResult<Value> =
+  | { readonly ok: true; readonly value: Value }
+  | GeneratedFailure;
+
+const fail = (status: number, message: string): GeneratedFailure => ({
+  ok: false,
+  status,
+  message,
+});
+
+const rejectFailure = (failure: GeneratedFailure): Promise<never> =>
+  Promise.reject(
+    Object.assign(Error(failure.message), {
+      status: failure.status,
+      body: { message: failure.message },
+    }),
+  );
+
+const env = (): GeneratedResult<AgentOSTargetEnv> => {
   const platformEnv = getRequestEvent().platform?.env;
-  if (platformEnv === undefined) error(500, "Cloudflare platform env missing");
-  return platformEnv as AgentOSTargetEnv;
+  if (platformEnv === undefined) return fail(500, "Cloudflare platform env missing");
+  return { ok: true, value: platformEnv as AgentOSTargetEnv };
 };
 
 const agentOS = (platformEnv: AgentOSTargetEnv) =>
@@ -2170,37 +2188,46 @@ type AgentOSSubmitRunInput = Parameters<AgentOSRemote["submitRunInput"]>[0];
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
-const submitInputFromUnknown = (value: unknown): { readonly input: AgentOSSubmitRunInput } => {
-  if (!isRecord(value) || !isRecord(value.input)) error(400, "invalid submit command input");
+const submitInputFromUnknown = (
+  value: unknown,
+): GeneratedResult<{ readonly input: AgentOSSubmitRunInput }> => {
+  if (!isRecord(value) || !isRecord(value.input)) return fail(400, "invalid submit command input");
   if (typeof value.input.intent !== "string" || !isRecord(value.input.context)) {
-    error(400, "invalid submit run input");
+    return fail(400, "invalid submit run input");
   }
-  return { input: value.input as unknown as AgentOSSubmitRunInput };
+  return { ok: true, value: { input: value.input as unknown as AgentOSSubmitRunInput } };
 };
 
-const readFileInputFromUnknown = (value: unknown): WorkspaceAgentReadFileCommandInput => {
+const readFileInputFromUnknown = (
+  value: unknown,
+): GeneratedResult<WorkspaceAgentReadFileCommandInput> => {
   if (!isRecord(value) || typeof value.path !== "string") {
-    error(400, "invalid readFile command input");
+    return fail(400, "invalid readFile command input");
   }
   if (value.encoding !== undefined && value.encoding !== "utf-8") {
-    error(400, "unsupported readFile encoding");
+    return fail(400, "unsupported readFile encoding");
   }
   return {
-    path: value.path,
-    ...(value.encoding === undefined ? {} : { encoding: value.encoding }),
+    ok: true,
+    value: {
+      path: value.path,
+      ...(value.encoding === undefined ? {} : { encoding: value.encoding }),
+    },
   };
 };
 
-const resetInputFromUnknown = (value: unknown): WorkspaceAgentResetCommandInput => {
-  if (value === undefined) return {};
-  if (!isRecord(value)) error(400, "invalid reset command input");
-  return typeof value.reason === "string" ? { reason: value.reason } : {};
+const resetInputFromUnknown = (value: unknown): GeneratedResult<WorkspaceAgentResetCommandInput> => {
+  if (value === undefined) return { ok: true, value: {} };
+  if (!isRecord(value)) return fail(400, "invalid reset command input");
+  return { ok: true, value: typeof value.reason === "string" ? { reason: value.reason } : {} };
 };
 
-const destroyInputFromUnknown = (value: unknown): WorkspaceAgentDestroyCommandInput => {
-  if (value === undefined) return {};
-  if (!isRecord(value)) error(400, "invalid destroy command input");
-  return typeof value.reason === "string" ? { reason: value.reason } : {};
+const destroyInputFromUnknown = (
+  value: unknown,
+): GeneratedResult<WorkspaceAgentDestroyCommandInput> => {
+  if (value === undefined) return { ok: true, value: {} };
+  if (!isRecord(value)) return fail(400, "invalid destroy command input");
+  return { ok: true, value: typeof value.reason === "string" ? { reason: value.reason } : {} };
 };
 
 const runtimeEventFromLedger = (
@@ -2242,25 +2269,39 @@ const runtimeEventsFromSse = (response: Response): AsyncIterable<RuntimeLedgerEv
 };
 
 export const invokeAgentCommand = command(commandInput, ({ name, input }): Promise<unknown> => {
-  const runtime = agentOS(env());
+  const platformEnv = env();
+  if (!platformEnv.ok) return rejectFailure(platformEnv);
+  const runtime = agentOS(platformEnv.value);
   if (name === WORKSPACE_AGENT_COMMAND.SUBMIT) {
-    return runtime.submitRunInput(submitInputFromUnknown(input).input);
+    const submitInput = submitInputFromUnknown(input);
+    return submitInput.ok
+      ? runtime.submitRunInput(submitInput.value.input)
+      : rejectFailure(submitInput);
   }
   if (name === WORKSPACE_AGENT_COMMAND.READ_FILE) {
-    return runtime.readWorkspaceFile(readFileInputFromUnknown(input));
+    const readFileInput = readFileInputFromUnknown(input);
+    return readFileInput.ok
+      ? runtime.readWorkspaceFile(readFileInput.value)
+      : rejectFailure(readFileInput);
   }
   if (name === WORKSPACE_AGENT_COMMAND.RESET) {
-    return runtime.resetWorkspace(resetInputFromUnknown(input));
+    const resetInput = resetInputFromUnknown(input);
+    return resetInput.ok ? runtime.resetWorkspace(resetInput.value) : rejectFailure(resetInput);
   }
   if (name === WORKSPACE_AGENT_COMMAND.DESTROY) {
-    return runtime.destroyWorkspace(destroyInputFromUnknown(input));
+    const destroyInput = destroyInputFromUnknown(input);
+    return destroyInput.ok
+      ? runtime.destroyWorkspace(destroyInput.value)
+      : rejectFailure(destroyInput);
   }
-  error(501, \`unsupported generated workspace command \${name}\`);
+  return rejectFailure(fail(501, \`unsupported generated workspace command \${name}\`));
 });
 
 export const runEventStream = query.live(optionalAfterIdInput, (input) => {
   const afterId = input.afterId ?? 0;
-  return agentOS(env())
+  const platformEnv = env();
+  if (!platformEnv.ok) return rejectFailure(platformEnv);
+  return agentOS(platformEnv.value)
     .streamEvents(agentTruthIdentity, afterId > 0 ? { afterId } : {})
     .then(runtimeEventsFromSse);
 });

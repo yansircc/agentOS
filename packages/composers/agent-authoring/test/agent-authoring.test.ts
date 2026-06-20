@@ -641,11 +641,6 @@ describe("agent authored tree compiler", () => {
       },
       {
         kind: "client-transport",
-        source: "@sveltejs/kit",
-        imports: ["error"],
-      },
-      {
-        kind: "client-transport",
         source: "@agent-os/sse-http",
         imports: ["decodeSseHttpEvents", "responseToSseHttpChunks"],
       },
@@ -735,19 +730,22 @@ describe("agent authored tree compiler", () => {
     expect(remote).toContain(
       'import { decodeSseHttpEvents, responseToSseHttpChunks } from "@agent-os/sse-http";',
     );
+    expect(remote).toContain("const fail = (status: number, message: string): GeneratedFailure =>");
+    expect(remote).toContain(
+      "const rejectFailure = (failure: GeneratedFailure): Promise<never> =>",
+    );
     expect(remote).toContain(
       'type AgentOSSubmitRunInput = Parameters<AgentOSRemote["submitRunInput"]>[0];',
     );
-    expect(remote).toContain(
-      "const submitInputFromUnknown = (value: unknown): { readonly input: AgentOSSubmitRunInput }",
-    );
+    expect(remote).toContain("): GeneratedResult<{ readonly input: AgentOSSubmitRunInput }> =>");
     expect(remote).toContain("export const invokeAgentCommand = command(");
-    expect(remote).toContain("runtime.submitRunInput(submitInputFromUnknown(input).input)");
+    expect(remote).toContain("runtime.submitRunInput(submitInput.value.input)");
     expect(remote).toContain("iterator.return(undefined)");
-    expect(remote).toContain("runtime.readWorkspaceFile(readFileInputFromUnknown(input))");
+    expect(remote).toContain("runtime.readWorkspaceFile(readFileInput.value)");
     expect(remote).toContain("export const runEventStream = query.live(");
     expect(remote).toContain('platformEnv["AGENT_OS"] as DurableObjectNamespace');
     expect(remote).not.toContain("AgentSubmitSpec");
+    expect(remote).not.toContain('from "@sveltejs/kit"');
     expect(remote).not.toContain("getSandbox");
 
     const deployment = generatedJson<{
