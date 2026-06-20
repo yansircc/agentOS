@@ -29,6 +29,8 @@ Status: 0.5.x active development for the workspace-agent host contract. Public e
 - `.:WorkspaceAgentProjectionValueByName`
 - `.:WorkspaceAgentReadFileCommandInput`
 - `.:WorkspaceAgentReadFileCommandOutput`
+- `.:WorkspaceAgentReadStateCommandInput`
+- `.:WorkspaceAgentReadStateCommandOutput`
 - `.:WorkspaceAgentReconcile`
 - `.:WorkspaceAgentReconcileContext`
 - `.:WorkspaceAgentResetCommandInput`

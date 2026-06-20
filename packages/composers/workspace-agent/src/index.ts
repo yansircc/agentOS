@@ -37,6 +37,7 @@ export type WorkspaceAgentProjectionName =
 export const WORKSPACE_AGENT_COMMAND = {
   SUBMIT: "submit",
   RESUME_INPUT_REQUEST: "resumeInputRequest",
+  READ_STATE: "readState",
   READ_FILE: "readFile",
   RESET: "reset",
   DESTROY: "destroy",
@@ -105,6 +106,15 @@ export interface WorkspaceAgentResumeInputRequestCommandInput {
   readonly answer: InputRequestAnswer;
 }
 
+export interface WorkspaceAgentReadStateCommandInput {
+  readonly includeHidden?: boolean;
+}
+
+export interface WorkspaceAgentReadStateCommandOutput {
+  readonly workspaceRef: string;
+  readonly files: ReadonlyArray<WorkspaceAgentFileEntry>;
+}
+
 export interface WorkspaceAgentReadFileCommandInput {
   readonly path: string;
   readonly encoding?: "utf-8";
@@ -140,6 +150,10 @@ export type WorkspaceAgentCommandMap = {
   readonly [WORKSPACE_AGENT_COMMAND.RESUME_INPUT_REQUEST]: AgentClientCommandSpec<
     WorkspaceAgentResumeInputRequestCommandInput,
     SubmitResult
+  >;
+  readonly [WORKSPACE_AGENT_COMMAND.READ_STATE]: AgentClientCommandSpec<
+    WorkspaceAgentReadStateCommandInput,
+    WorkspaceAgentReadStateCommandOutput
   >;
   readonly [WORKSPACE_AGENT_COMMAND.READ_FILE]: AgentClientCommandSpec<
     WorkspaceAgentReadFileCommandInput,
@@ -193,6 +207,10 @@ export interface WorkspaceAgentClientBridge {
   ): Promise<
     WorkspaceAgentCommandMap[typeof WORKSPACE_AGENT_COMMAND.RESUME_INPUT_REQUEST]["output"]
   >;
+  readState(
+    input?: WorkspaceAgentReadStateCommandInput,
+    options?: AgentClientCommandOptions,
+  ): Promise<WorkspaceAgentReadStateCommandOutput>;
   readFile(
     input: WorkspaceAgentReadFileCommandInput,
     options?: AgentClientCommandOptions,
@@ -222,6 +240,9 @@ export const createWorkspaceAgentClientBridge = (
     },
     resumeInputRequest(input, commandOptions) {
       return client.invoke(WORKSPACE_AGENT_COMMAND.RESUME_INPUT_REQUEST, input, commandOptions);
+    },
+    readState(input = {}, commandOptions) {
+      return client.invoke(WORKSPACE_AGENT_COMMAND.READ_STATE, input, commandOptions);
     },
     readFile(input, commandOptions) {
       return client.invoke(WORKSPACE_AGENT_COMMAND.READ_FILE, input, commandOptions);

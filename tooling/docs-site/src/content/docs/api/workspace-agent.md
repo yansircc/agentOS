@@ -29,6 +29,8 @@ title: "@agent-os/workspace-agent Public API Intent"
 - `.:WorkspaceAgentProjectionValueByName`
 - `.:WorkspaceAgentReadFileCommandInput`
 - `.:WorkspaceAgentReadFileCommandOutput`
+- `.:WorkspaceAgentReadStateCommandInput`
+- `.:WorkspaceAgentReadStateCommandOutput`
 - `.:WorkspaceAgentReconcile`
 - `.:WorkspaceAgentReconcileContext`
 - `.:WorkspaceAgentResetCommandInput`

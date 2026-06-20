@@ -25,6 +25,12 @@ describe("@agent-os/workspace-agent", () => {
   it("creates a typed workspace client over the generic rpcInvoker", async () => {
     const client = createWorkspaceAgentClient({
       rpcInvoker: async (name, input) => {
+        if (name === WORKSPACE_AGENT_COMMAND.READ_STATE) {
+          return {
+            workspaceRef: "workspace:test",
+            files: [{ path: "a.txt", kind: "file" as const, size: 5 }],
+          };
+        }
         if (name === WORKSPACE_AGENT_COMMAND.READ_FILE) {
           const readInput = input as { readonly path: string };
           return { path: readInput.path, content: "hello" };
@@ -33,6 +39,10 @@ describe("@agent-os/workspace-agent", () => {
       },
     });
 
+    await expect(client.invoke(WORKSPACE_AGENT_COMMAND.READ_STATE, {})).resolves.toEqual({
+      workspaceRef: "workspace:test",
+      files: [{ path: "a.txt", kind: "file", size: 5 }],
+    });
     await expect(
       client.invoke(WORKSPACE_AGENT_COMMAND.READ_FILE, { path: "/workspace/a.txt" }),
     ).resolves.toEqual({ path: "/workspace/a.txt", content: "hello" });
@@ -44,6 +54,9 @@ describe("@agent-os/workspace-agent", () => {
     const bridge = createWorkspaceAgentClientBridge({
       rpcInvoker: async (name, input) => {
         calls.push({ name, input });
+        if (name === WORKSPACE_AGENT_COMMAND.READ_STATE) {
+          return { workspaceRef: "workspace:test", files: [] };
+        }
         if (name === WORKSPACE_AGENT_COMMAND.READ_FILE) {
           const readInput = input as { readonly path: string };
           return { path: readInput.path, content: "hello" };
@@ -72,9 +85,16 @@ describe("@agent-os/workspace-agent", () => {
           gateRef: "gate-1",
           requestKind: "question",
         }),
-        answer: { decisionRef: "decision-1", resume: { kind: "question", answers: { ok: true } } },
+        answer: {
+          decisionRef: "decision-1",
+          resume: { kind: "question", answers: { ok: true } },
+        },
       }),
     ).resolves.toEqual({ ok: true });
+    await expect(bridge.readState()).resolves.toEqual({
+      workspaceRef: "workspace:test",
+      files: [],
+    });
     await expect(bridge.reset()).resolves.toEqual({ ok: true });
     await expect(bridge.destroy({ reason: "done" })).resolves.toEqual({ ok: true });
     await expect(bridge.custom({ method: "ping", input: { ok: true } })).resolves.toEqual({
@@ -111,6 +131,7 @@ describe("@agent-os/workspace-agent", () => {
           },
         },
       },
+      { name: WORKSPACE_AGENT_COMMAND.READ_STATE, input: {} },
       { name: WORKSPACE_AGENT_COMMAND.RESET, input: {} },
       { name: WORKSPACE_AGENT_COMMAND.DESTROY, input: { reason: "done" } },
       { name: WORKSPACE_AGENT_COMMAND.CUSTOM, input: { method: "ping", input: { ok: true } } },

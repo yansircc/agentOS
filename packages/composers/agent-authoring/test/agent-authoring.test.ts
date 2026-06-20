@@ -681,7 +681,13 @@ describe("agent authored tree compiler", () => {
     });
     expect(linked.value.mount).toMatchObject({
       driver: { kind: "cloudflare-do", className: "AgentOS", binding: "AGENT_OS" },
-      projectionSinks: ["agent.info", "runtime.events", "runtime.input_requests"],
+      projectionSinks: [
+        "agent.info",
+        "workspace.state",
+        "workspace.files",
+        "runtime.events",
+        "runtime.input_requests",
+      ],
     });
 
     const target = generatedText(linked, ".agentos/generated/target.ts");
@@ -714,6 +720,9 @@ describe("agent authored tree compiler", () => {
     expect(target).toContain("workspaceOperationInstallFor(env).extensions");
     expect(target).toContain("override submit(spec: AgentSubmitSpec): Promise<SubmitResult>");
     expect(target).toContain("submitRunInput(input: SubmitRunInput): Promise<SubmitResult>");
+    expect(target).toContain("readWorkspaceState(");
+    expect(target).toContain("workspaceFileEntryFor");
+    expect(target).toContain("includeHidden: input.includeHidden ?? true");
     expect(target).toContain("readWorkspaceFile(");
     expect(target).toContain("resetWorkspace(): Promise<WorkspaceAgentMutationCommandOutput>");
     expect(target).toContain("destroyWorkspace(): Promise<WorkspaceAgentMutationCommandOutput>");
@@ -749,6 +758,7 @@ describe("agent authored tree compiler", () => {
     expect(remote).toContain("): GeneratedResult<{ readonly input: AgentOSSubmitRunInput }> =>");
     expect(remote).toContain("export const invokeAgentCommand = command(");
     expect(remote).toContain("runtime.submitRunInput(submitInput.value.input)");
+    expect(remote).toContain("runtime.readWorkspaceState(readStateInput.value)");
     expect(remote).toContain("iterator.return(undefined)");
     expect(remote).toContain("runtime.readWorkspaceFile(readFileInput.value)");
     expect(remote).toContain("export const runEventStream = query.live(");

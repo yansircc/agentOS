@@ -25,6 +25,8 @@
 - `.:WorkspaceAgentProjectionValueByName`
 - `.:WorkspaceAgentReadFileCommandInput`
 - `.:WorkspaceAgentReadFileCommandOutput`
+- `.:WorkspaceAgentReadStateCommandInput`
+- `.:WorkspaceAgentReadStateCommandOutput`
 - `.:WorkspaceAgentReconcile`
 - `.:WorkspaceAgentReconcileContext`
 - `.:WorkspaceAgentResetCommandInput`

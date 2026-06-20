@@ -1274,7 +1274,11 @@ export interface MountIR {
     readonly binding: string;
   };
   readonly projectionSinks: ReadonlyArray<
-    "agent.info" | "runtime.events" | "runtime.input_requests"
+    | "agent.info"
+    | "workspace.state"
+    | "workspace.files"
+    | "runtime.events"
+    | "runtime.input_requests"
   >;
   readonly providerResourceId: ProviderResourceId;
 }
@@ -1839,7 +1843,10 @@ const renderStaticTarget = (
     renderTypeImport(["AgentSubmitSpec"], modules.cloudflareDoRuntime),
     renderTypeImport(
       [
+        "WorkspaceAgentFileEntry",
         "WorkspaceAgentMutationCommandOutput",
+        "WorkspaceAgentReadStateCommandInput",
+        "WorkspaceAgentReadStateCommandOutput",
         "WorkspaceAgentReadFileCommandInput",
         "WorkspaceAgentReadFileCommandOutput",
       ],
@@ -1900,6 +1907,40 @@ const relativeWorkspacePath = (path: string): string =>
   path.startsWith(${jsString(`${normalized.workspace.root}/`)})
     ? path.slice(${normalized.workspace.root.length + 1})
     : path;
+
+type WorkspaceListFile = {
+  readonly type?: string;
+  readonly relativePath?: string;
+  readonly absolutePath?: string;
+  readonly size?: number;
+  readonly mtimeMs?: number;
+  readonly sha256?: string;
+};
+
+const workspaceFileKind = (type: string | undefined): WorkspaceAgentFileEntry["kind"] =>
+  type === "file" || type === "directory" ? type : "other";
+
+const workspaceFileEntryFor = (value: unknown): WorkspaceAgentFileEntry | null => {
+  if (typeof value === "string") {
+    return { path: relativeWorkspacePath(value), kind: "file" };
+  }
+  if (value === null || typeof value !== "object") return null;
+  const file = value as WorkspaceListFile;
+  const path =
+    typeof file.relativePath === "string" && file.relativePath.length > 0
+      ? file.relativePath
+      : typeof file.absolutePath === "string" && file.absolutePath.length > 0
+        ? relativeWorkspacePath(file.absolutePath)
+        : "";
+  if (path.length === 0) return null;
+  return {
+    path,
+    kind: workspaceFileKind(file.type),
+    ...(typeof file.size === "number" ? { size: file.size } : {}),
+    ...(typeof file.mtimeMs === "number" ? { mtimeMs: file.mtimeMs } : {}),
+    ...(typeof file.sha256 === "string" ? { sha256: file.sha256 } : {}),
+  };
+};
 
 const workspaceEnvFor = (env: AgentOSTargetEnv) =>
   makeCloudflareWorkspaceEnv({
@@ -1983,6 +2024,8 @@ export const workspaceMount = defineWorkspaceAgentMount({
   driver: { kind: "driver_mount", client: undefined as never },
   projectionSinks: [
     { kind: "projection_sink", name: WORKSPACE_AGENT_PROJECTION.AGENT_INFO },
+    { kind: "projection_sink", name: WORKSPACE_AGENT_PROJECTION.STATE },
+    { kind: "projection_sink", name: WORKSPACE_AGENT_PROJECTION.FILES },
     { kind: "projection_sink", name: WORKSPACE_AGENT_PROJECTION.RUN_EVENTS },
     { kind: "projection_sink", name: WORKSPACE_AGENT_PROJECTION.INPUT_REQUESTS },
   ],
@@ -2020,6 +2063,27 @@ export class ${normalized.target.durableObject.className} extends Base${normaliz
       submitSpecFromRunInput(input),
       generatedSubmitBindingsFor(this.targetEnv),
     );
+  }
+
+  readWorkspaceState(
+    input: WorkspaceAgentReadStateCommandInput = {},
+  ): Promise<WorkspaceAgentReadStateCommandOutput> {
+    const sandbox = workspaceSandboxFor(this.targetEnv);
+    return sandbox
+      .mkdir(${jsString(normalized.workspace.root)}, { recursive: true })
+      .then(() =>
+        sandbox.listFiles(${jsString(normalized.workspace.root)}, {
+          recursive: true,
+          includeHidden: input.includeHidden ?? true,
+        }),
+      )
+      .then((listed) => ({
+        workspaceRef: ${jsString(normalized.workspace.providerResourceId)},
+        files: listed.files
+          .map(workspaceFileEntryFor)
+          .filter((file): file is WorkspaceAgentFileEntry => file !== null)
+          .sort((left, right) => left.path.localeCompare(right.path)),
+      }));
   }
 
   readWorkspaceFile(
@@ -2122,6 +2186,7 @@ ${renderTypeImport(
     "WorkspaceAgentCommandMap",
     "WorkspaceAgentDestroyCommandInput",
     "WorkspaceAgentReadFileCommandInput",
+    "WorkspaceAgentReadStateCommandInput",
     "WorkspaceAgentResetCommandInput",
   ],
   modules.workspaceAgentHost,
@@ -2137,6 +2202,9 @@ type AgentOSRpc = Pick<AgentRuntimeClient, "events" | "streamEvents"> & {
   readonly readWorkspaceFile: (
     input: WorkspaceAgentReadFileCommandInput,
   ) => Promise<WorkspaceAgentCommandMap[typeof WORKSPACE_AGENT_COMMAND.READ_FILE]["output"]>;
+  readonly readWorkspaceState: (
+    input?: WorkspaceAgentReadStateCommandInput,
+  ) => Promise<WorkspaceAgentCommandMap[typeof WORKSPACE_AGENT_COMMAND.READ_STATE]["output"]>;
   readonly resetWorkspace: (
     input?: WorkspaceAgentResetCommandInput,
   ) => Promise<WorkspaceAgentCommandMap[typeof WORKSPACE_AGENT_COMMAND.RESET]["output"]>;
@@ -2206,6 +2274,23 @@ const submitInputFromUnknown = (
     return fail(400, "invalid submit run input");
   }
   return { ok: true, value: { input: value.input as unknown as AgentOSSubmitRunInput } };
+};
+
+const readStateInputFromUnknown = (
+  value: unknown,
+): GeneratedResult<WorkspaceAgentReadStateCommandInput> => {
+  if (value === undefined) return { ok: true, value: {} };
+  if (!isRecord(value)) return fail(400, "invalid readState command input");
+  if (value.includeHidden !== undefined && typeof value.includeHidden !== "boolean") {
+    return fail(400, "invalid readState includeHidden");
+  }
+  return {
+    ok: true,
+    value:
+      value.includeHidden === undefined
+        ? {}
+        : { includeHidden: value.includeHidden },
+  };
 };
 
 const readFileInputFromUnknown = (
@@ -2287,6 +2372,12 @@ export const invokeAgentCommand = command(commandInput, ({ name, input }): Promi
     return submitInput.ok
       ? runtime.submitRunInput(submitInput.value.input)
       : rejectFailure(submitInput);
+  }
+  if (name === WORKSPACE_AGENT_COMMAND.READ_STATE) {
+    const readStateInput = readStateInputFromUnknown(input);
+    return readStateInput.ok
+      ? runtime.readWorkspaceState(readStateInput.value)
+      : rejectFailure(readStateInput);
   }
   if (name === WORKSPACE_AGENT_COMMAND.READ_FILE) {
     const readFileInput = readFileInputFromUnknown(input);
@@ -2544,7 +2635,13 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
           className: normalized.target.durableObject.className,
           binding: normalized.target.durableObject.binding,
         },
-        projectionSinks: ["agent.info", "runtime.events", "runtime.input_requests"],
+        projectionSinks: [
+          "agent.info",
+          "workspace.state",
+          "workspace.files",
+          "runtime.events",
+          "runtime.input_requests",
+        ],
         providerResourceId: normalized.workspace.providerResourceId,
       },
     },
