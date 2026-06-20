@@ -1083,6 +1083,16 @@ const checkGeneratedStaticTargetLinking = () => {
     "export const linkWorkspaceStaticTarget =",
     "const renderAgentOsConfigSchema =",
   );
+  const renderSvelteKitRemoteSource = sliceBetweenMarkers(
+    source,
+    "const renderSvelteKitRemote =",
+    "const renderStaticClient =",
+  );
+  const renderStaticClientSource = sliceBetweenMarkers(
+    source,
+    "const renderStaticClient =",
+    "const renderStaticClientTypes =",
+  );
   if (renderStaticTargetSource.length === 0) {
     failures.push(`${sourcePath}: generated-static-target-linking: missing renderStaticTarget`);
   }
@@ -1090,6 +1100,12 @@ const checkGeneratedStaticTargetLinking = () => {
     failures.push(
       `${sourcePath}: generated-static-target-linking: missing linkWorkspaceStaticTarget`,
     );
+  }
+  if (renderSvelteKitRemoteSource.length === 0) {
+    failures.push(`${sourcePath}: generated-static-target-linking: missing renderSvelteKitRemote`);
+  }
+  if (renderStaticClientSource.length === 0) {
+    failures.push(`${sourcePath}: generated-static-target-linking: missing renderStaticClient`);
   }
 
   const requiredStaticWiringMarkers = [
@@ -1106,6 +1122,8 @@ const checkGeneratedStaticTargetLinking = () => {
     "llmTransport: () => OpenAiCompatibleLlmTransportLive",
     "extensions: (env) => workspaceOperationInstallFor(env).extensions",
     "override submit(spec: AgentSubmitSpec): Promise<SubmitResult>",
+    "submitRunInput(input: SubmitRunInput): Promise<SubmitResult>",
+    "readWorkspaceFile(",
   ];
   for (const marker of requiredStaticWiringMarkers) {
     if (!renderStaticTargetSource.includes(marker)) {
@@ -1125,6 +1143,7 @@ const checkGeneratedStaticTargetLinking = () => {
     '"execution-domain-runtime"',
     '"platform-runtime"',
     '"client-core"',
+    '"client-transport"',
     '"client-framework"',
   ];
   for (const marker of requiredModuleKinds) {
@@ -1162,6 +1181,47 @@ const checkGeneratedStaticTargetLinking = () => {
         `${sourcePath}: generated-static-target-linking: closed target must not contain ${forbidden}`,
       );
     }
+  }
+
+  const requiredRemoteBridgeMarkers = [
+    'renderNamedImport(["command", "getRequestEvent", "query"], modules.svelteKitServer)',
+    "durableObjectRpcClient",
+    "decodeSseHttpEvents",
+    "responseToSseHttpChunks",
+    "manifestTruthIdentity",
+    "submitRunInput",
+    "readWorkspaceFile",
+    "streamEvents",
+    "export const invokeAgentCommand = command(",
+    "export const runEventStream = query.live(",
+  ];
+  for (const marker of requiredRemoteBridgeMarkers) {
+    if (!renderSvelteKitRemoteSource.includes(marker)) {
+      failures.push(
+        `${sourcePath}: generated-static-target-linking: renderSvelteKitRemote missing bridge marker ${marker}`,
+      );
+    }
+  }
+
+  const requiredClientBridgeMarkers = [
+    'import { invokeAgentCommand, runEventStream } from "./sveltekit.remote";',
+    "streamSource: options.streamSource ?? generatedStreamSource",
+    "rpcInvoker: options.rpcInvoker ?? generatedRpcInvoker",
+    "clientReadable(bridge.client)",
+    "selectClientReadable(bridge.client",
+  ];
+  for (const marker of requiredClientBridgeMarkers) {
+    if (!renderStaticClientSource.includes(marker)) {
+      failures.push(
+        `${sourcePath}: generated-static-target-linking: renderStaticClient missing generated bridge marker ${marker}`,
+      );
+    }
+  }
+
+  if (!linkWorkspaceStaticTargetSource.includes('".agentos/generated/sveltekit.remote.ts"')) {
+    failures.push(
+      `${sourcePath}: generated-static-target-linking: SvelteKit target must emit sveltekit.remote.ts`,
+    );
   }
 
   failIfAny("generated static target linking", failures);

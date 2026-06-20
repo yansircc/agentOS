@@ -1219,6 +1219,7 @@ export type StaticTargetGeneratedFilePath =
   | ".agentos/generated/provenance.json"
   | ".agentos/generated/fingerprints.json"
   | ".agentos/generated/target.ts"
+  | ".agentos/generated/sveltekit.remote.ts"
   | ".agentos/generated/client.ts"
   | ".agentos/generated/client.d.ts";
 
@@ -1237,6 +1238,7 @@ export type StaticTargetModuleImportKind =
   | "workspace-client"
   | "client-core"
   | "client-framework"
+  | "client-transport"
   | "effect-runtime"
   | "semantic-json"
   | "authored-tool";
@@ -1755,7 +1757,10 @@ const staticTargetModules = (scope: string) => ({
   clientCore: publicPackageSpecifier(scope, "client"),
   clientSvelte: publicPackageSpecifier(scope, "client-svelte"),
   runtimeProtocol: publicPackageSpecifier(scope, "runtime-protocol"),
+  sseHttp: publicPackageSpecifier(scope, "sse-http"),
   cloudflareSandbox: "@cloudflare/sandbox",
+  svelteKitServer: "$app/server",
+  svelteKitKit: "@sveltejs/kit",
   effect: "effect",
   svelteStore: "svelte/store",
 });
@@ -1818,10 +1823,18 @@ const renderStaticTarget = (
     renderNamedImport(["getSandbox"], modules.cloudflareSandbox),
     renderNamedImport(["Effect"], modules.effect),
     renderTypeImport(
-      ["AgentManifest", "AgentSubmitBindings", "SubmitResult"],
+      ["AgentManifest", "AgentSubmitBindings", "SubmitResult", "SubmitRunInput"],
       modules.runtimeProtocol,
     ),
     renderTypeImport(["AgentSubmitSpec"], modules.cloudflareDoRuntime),
+    renderTypeImport(
+      [
+        "WorkspaceAgentMutationCommandOutput",
+        "WorkspaceAgentReadFileCommandInput",
+        "WorkspaceAgentReadFileCommandOutput",
+      ],
+      modules.workspaceAgentHost,
+    ),
     renderTypeImport(["Sandbox", "SandboxTransport"], modules.cloudflareSandbox),
     ...(toolImports.length === 0 ? [] : [toolImports]),
   ].join("\n");
@@ -1852,6 +1865,31 @@ const workspaceSandboxFor = (env: AgentOSTargetEnv): Sandbox =>
     sleepAfter: "10m",
     transport: env.SANDBOX_TRANSPORT ?? "rpc",
   });
+
+type WorkspacePathResult =
+  | { readonly ok: true; readonly path: string }
+  | { readonly ok: false; readonly message: string };
+
+const workspacePathFor = (path: string): WorkspacePathResult => {
+  const parts = path
+    .split("/")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+  if (parts.some((part) => part === "." || part === "..")) {
+    return { ok: false, message: "path escapes workspace" };
+  }
+  return {
+    ok: true,
+    path: parts.length === 0 ? ${jsString(normalized.workspace.root)} : ${jsString(
+      `${normalized.workspace.root}/`,
+    )} + parts.join("/"),
+  };
+};
+
+const relativeWorkspacePath = (path: string): string =>
+  path.startsWith(${jsString(`${normalized.workspace.root}/`)})
+    ? path.slice(${normalized.workspace.root.length + 1})
+    : path;
 
 const workspaceEnvFor = (env: AgentOSTargetEnv) =>
   makeCloudflareWorkspaceEnv({
@@ -1916,6 +1954,21 @@ const generatedSubmitBindingsFor = (env: AgentOSTargetEnv): AgentSubmitBindings 
   };
 };
 
+const submitSpecFromRunInput = (input: SubmitRunInput): AgentSubmitSpec => ({
+  input,
+  intent: input.intent,
+  context: input.context,
+  ...(input.system === undefined ? {} : { system: input.system }),
+  ...(input.budget === undefined ? {} : { budget: input.budget }),
+  ...(input.outputSchema === undefined ? {} : { outputSchema: input.outputSchema }),
+  ...(input.traceContext === undefined ? {} : { traceContext: input.traceContext }),
+  ...(input.materials === undefined ? {} : { materials: input.materials }),
+  ...(input.toolContext === undefined ? {} : { toolContext: input.toolContext }),
+  ...(input.toolPolicy === undefined ? {} : { toolPolicy: input.toolPolicy }),
+  ...(input.decisionInterrupts === undefined ? {} : { decisionInterrupts: input.decisionInterrupts }),
+  ...(input.resume === undefined ? {} : { resume: input.resume }),
+});
+
 export const workspaceMount = defineWorkspaceAgentMount({
   driver: { kind: "driver_mount", client: undefined as never },
   projectionSinks: [
@@ -1951,6 +2004,42 @@ export class ${normalized.target.durableObject.className} extends Base${normaliz
   override submit(spec: AgentSubmitSpec): Promise<SubmitResult> {
     return this.submitWithBindings(spec, generatedSubmitBindingsFor(this.targetEnv));
   }
+
+  submitRunInput(input: SubmitRunInput): Promise<SubmitResult> {
+    return this.submitWithBindings(
+      submitSpecFromRunInput(input),
+      generatedSubmitBindingsFor(this.targetEnv),
+    );
+  }
+
+  readWorkspaceFile(
+    input: WorkspaceAgentReadFileCommandInput,
+  ): Promise<WorkspaceAgentReadFileCommandOutput> {
+    const path = workspacePathFor(input.path);
+    if (!path.ok) return Promise.reject(new TypeError(path.message));
+    return workspaceSandboxFor(this.targetEnv)
+      .readFile(path.path, {
+        encoding: input.encoding ?? "utf-8",
+      })
+      .then((file) => ({
+        path: relativeWorkspacePath(path.path),
+        content: file.content,
+      }));
+  }
+
+  resetWorkspace(): Promise<WorkspaceAgentMutationCommandOutput> {
+    const sandbox = workspaceSandboxFor(this.targetEnv);
+    return sandbox
+      .destroy()
+      .then(() => sandbox.mkdir(${jsString(normalized.workspace.root)}, { recursive: true }))
+      .then(() => ({ ok: true as const }));
+  }
+
+  destroyWorkspace(): Promise<WorkspaceAgentMutationCommandOutput> {
+    return workspaceSandboxFor(this.targetEnv)
+      .destroy()
+      .then(() => ({ ok: true as const }));
+  }
 }
 `;
 };
@@ -1971,6 +2060,26 @@ const generatedClientModuleImports = (
   ...(client.kind === AGENTOS_CONFIG_CLIENT.SVELTE_KIT_REMOTE_V1
     ? [
         {
+          kind: "client-transport" as const,
+          source: "./sveltekit.remote",
+          imports: ["invokeAgentCommand", "runEventStream"],
+        },
+        {
+          kind: "client-transport" as const,
+          source: modules.svelteKitServer,
+          imports: ["command", "getRequestEvent", "query"],
+        },
+        {
+          kind: "client-transport" as const,
+          source: modules.svelteKitKit,
+          imports: ["error"],
+        },
+        {
+          kind: "client-transport" as const,
+          source: modules.sseHttp,
+          imports: ["decodeSseHttpEvents", "responseToSseHttpChunks"],
+        },
+        {
           kind: "client-core" as const,
           source: modules.clientCore,
           imports: ["AgentClientSnapshot"],
@@ -1988,6 +2097,172 @@ const generatedClientModuleImports = (
       ]
     : []),
 ];
+
+const renderSvelteKitRemote = (
+  normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
+  modules: ReturnType<typeof staticTargetModules>,
+): string => `${renderNamedImport(["command", "getRequestEvent", "query"], modules.svelteKitServer)}
+${renderNamedImport(["error"], modules.svelteKitKit)}
+${renderNamedImport(["durableObjectRpcClient"], `${modules.cloudflareDoRuntime}/do-rpc`)}
+${renderNamedImport(["decodeSseHttpEvents", "responseToSseHttpChunks"], modules.sseHttp)}
+${renderNamedImport(["Schema"], modules.effect)}
+${renderNamedImport(["WORKSPACE_AGENT_COMMAND"], modules.workspaceAgentHost)}
+${renderNamedImport(["decodeRuntimeLedgerEvent", "manifestTruthIdentity"], modules.runtimeProtocol)}
+${renderTypeImport(["AgentRuntimeClient"], modules.cloudflareDoRuntime)}
+${renderTypeImport(
+  ["AgentManifest", "RuntimeLedgerEvent", "SubmitResult", "SubmitRunInput"],
+  modules.runtimeProtocol,
+)}
+${renderTypeImport(
+  [
+    "WorkspaceAgentCommandMap",
+    "WorkspaceAgentDestroyCommandInput",
+    "WorkspaceAgentReadFileCommandInput",
+    "WorkspaceAgentResetCommandInput",
+    "WorkspaceAgentSubmitCommandInput",
+  ],
+  modules.workspaceAgentHost,
+)}
+import manifest from "./manifest.json";
+
+type AgentOSTargetEnv = {
+  readonly [binding: string]: unknown;
+};
+
+type AgentOSRpc = Pick<AgentRuntimeClient, "events" | "streamEvents"> & {
+  readonly submitRunInput: (input: SubmitRunInput) => Promise<SubmitResult>;
+  readonly readWorkspaceFile: (
+    input: WorkspaceAgentReadFileCommandInput,
+  ) => Promise<WorkspaceAgentCommandMap[typeof WORKSPACE_AGENT_COMMAND.READ_FILE]["output"]>;
+  readonly resetWorkspace: (
+    input?: WorkspaceAgentResetCommandInput,
+  ) => Promise<WorkspaceAgentCommandMap[typeof WORKSPACE_AGENT_COMMAND.RESET]["output"]>;
+  readonly destroyWorkspace: (
+    input?: WorkspaceAgentDestroyCommandInput,
+  ) => Promise<WorkspaceAgentCommandMap[typeof WORKSPACE_AGENT_COMMAND.DESTROY]["output"]>;
+};
+
+const optionalAfterIdInput = Schema.toStandardSchemaV1(
+  Schema.Struct({ afterId: Schema.optional(Schema.Number) }),
+);
+const commandInput = Schema.toStandardSchemaV1(
+  Schema.Struct({
+    name: Schema.String,
+    input: Schema.Unknown,
+  }),
+);
+const agentTruthIdentity = manifestTruthIdentity(manifest as AgentManifest);
+
+const env = (): AgentOSTargetEnv => {
+  const platformEnv = getRequestEvent().platform?.env;
+  if (platformEnv === undefined) error(500, "Cloudflare platform env missing");
+  return platformEnv as AgentOSTargetEnv;
+};
+
+const agentOS = (platformEnv: AgentOSTargetEnv) =>
+  durableObjectRpcClient<AgentOSRpc>(
+    platformEnv[${jsString(normalized.target.durableObject.binding)}] as DurableObjectNamespace,
+    agentTruthIdentity.scopeRef.scopeId,
+  );
+
+const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
+const submitInputFromUnknown = (value: unknown): WorkspaceAgentSubmitCommandInput => {
+  if (!isRecord(value) || !isRecord(value.input)) error(400, "invalid submit command input");
+  if (typeof value.input.intent !== "string" || !isRecord(value.input.context)) {
+    error(400, "invalid submit run input");
+  }
+  return { input: value.input as unknown as SubmitRunInput };
+};
+
+const readFileInputFromUnknown = (value: unknown): WorkspaceAgentReadFileCommandInput => {
+  if (!isRecord(value) || typeof value.path !== "string") {
+    error(400, "invalid readFile command input");
+  }
+  if (value.encoding !== undefined && value.encoding !== "utf-8") {
+    error(400, "unsupported readFile encoding");
+  }
+  return {
+    path: value.path,
+    ...(value.encoding === undefined ? {} : { encoding: value.encoding }),
+  };
+};
+
+const resetInputFromUnknown = (value: unknown): WorkspaceAgentResetCommandInput => {
+  if (value === undefined) return {};
+  if (!isRecord(value)) error(400, "invalid reset command input");
+  return typeof value.reason === "string" ? { reason: value.reason } : {};
+};
+
+const destroyInputFromUnknown = (value: unknown): WorkspaceAgentDestroyCommandInput => {
+  if (value === undefined) return {};
+  if (!isRecord(value)) error(400, "invalid destroy command input");
+  return typeof value.reason === "string" ? { reason: value.reason } : {};
+};
+
+const runtimeEventFromLedger = (
+  event: Parameters<typeof decodeRuntimeLedgerEvent>[0],
+): RuntimeLedgerEvent | null => {
+  const decoded = decodeRuntimeLedgerEvent(event);
+  return decoded._tag === "runtime" ? decoded.event : null;
+};
+
+const emptyRuntimeEvents = (): AsyncIterable<RuntimeLedgerEvent> => ({
+  [Symbol.asyncIterator]() {
+    return {
+      next: () => Promise.resolve({ done: true as const, value: undefined }),
+    };
+  },
+});
+
+const runtimeEventsFromSse = (response: Response): AsyncIterable<RuntimeLedgerEvent> => {
+  if (response.body === null) return emptyRuntimeEvents();
+  const source = decodeSseHttpEvents(responseToSseHttpChunks(response));
+  return {
+    [Symbol.asyncIterator]() {
+      const iterator = source[Symbol.asyncIterator]();
+      const next = (): Promise<IteratorResult<RuntimeLedgerEvent>> =>
+        iterator.next().then((result) => {
+          if (result.done === true) return { done: true, value: undefined };
+          const runtimeEvent = runtimeEventFromLedger(JSON.parse(result.value.data));
+          return runtimeEvent === null ? next() : { done: false, value: runtimeEvent };
+        });
+      return {
+        next,
+        return: () =>
+          iterator.return === undefined
+            ? Promise.resolve({ done: true, value: undefined })
+            : iterator.return().then(() => ({ done: true, value: undefined })),
+      };
+    },
+  };
+};
+
+export const invokeAgentCommand = command(commandInput, ({ name, input }): Promise<unknown> => {
+  const runtime = agentOS(env());
+  if (name === WORKSPACE_AGENT_COMMAND.SUBMIT) {
+    return runtime.submitRunInput(submitInputFromUnknown(input).input);
+  }
+  if (name === WORKSPACE_AGENT_COMMAND.READ_FILE) {
+    return runtime.readWorkspaceFile(readFileInputFromUnknown(input));
+  }
+  if (name === WORKSPACE_AGENT_COMMAND.RESET) {
+    return runtime.resetWorkspace(resetInputFromUnknown(input));
+  }
+  if (name === WORKSPACE_AGENT_COMMAND.DESTROY) {
+    return runtime.destroyWorkspace(destroyInputFromUnknown(input));
+  }
+  error(501, \`unsupported generated workspace command \${name}\`);
+});
+
+export const runEventStream = query.live(optionalAfterIdInput, (input) => {
+  const afterId = input.afterId ?? 0;
+  return agentOS(env())
+    .streamEvents(agentTruthIdentity, afterId > 0 ? { afterId } : {})
+    .then(runtimeEventsFromSse);
+});
+`;
 
 const renderStaticClient = (
   normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
@@ -2010,10 +2285,11 @@ export const createAgentOSClient = (
   }
 
   return `${renderNamedImport(["createWorkspaceAgentClientBridge"], modules.workspaceAgentHost)}
+import { invokeAgentCommand, runEventStream } from "./sveltekit.remote";
 ${renderNamedImport(["clientReadable", "selectClientReadable"], modules.clientSvelte)}
 ${renderTypeImport(["AgentClientSnapshot"], modules.clientCore)}
 ${renderTypeImport(
-  ["CreateWorkspaceAgentClientOptions", "WorkspaceAgentClientBridge"],
+  ["CreateWorkspaceAgentClientOptions", "WorkspaceAgentClient", "WorkspaceAgentClientBridge"],
   modules.workspaceAgentHost,
 )}
 ${renderTypeImport(["Readable"], modules.svelteStore)}
@@ -2028,10 +2304,24 @@ export interface GeneratedAgentClient extends WorkspaceAgentClientBridge {
   readonly inputRequests: Readable<AgentClientSnapshot["run"]["inputRequests"]>;
 }
 
+const generatedStreamSource: NonNullable<GeneratedAgentClientOptions["streamSource"]> = {
+  open: (cursor) =>
+    runEventStream({
+      ...(cursor.afterEventId === undefined ? {} : { afterId: cursor.afterEventId }),
+    }),
+};
+
+const generatedRpcInvoker: WorkspaceAgentClient["invoke"] = (name, input) =>
+  invokeAgentCommand({ name, input }) as ReturnType<WorkspaceAgentClient["invoke"]>;
+
 export const createAgentOSClient = (
   options: GeneratedAgentClientOptions = {},
 ): GeneratedAgentClient => {
-  const bridge = createWorkspaceAgentClientBridge(options);
+  const bridge = createWorkspaceAgentClientBridge({
+    ...options,
+    streamSource: options.streamSource ?? generatedStreamSource,
+    rpcInvoker: options.rpcInvoker ?? generatedRpcInvoker,
+  });
   return {
     ...bridge,
     snapshot: clientReadable(bridge.client),
@@ -2160,6 +2450,17 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
             modules,
           ),
         ),
+        ...(normalized.client.kind === AGENTOS_CONFIG_CLIENT.SVELTE_KIT_REMOTE_V1
+          ? [
+              generatedPath(
+                ".agentos/generated/sveltekit.remote.ts",
+                renderSvelteKitRemote(
+                  normalized as NormalizedAgentOsConfig<AuthoredAgentManifest>,
+                  modules,
+                ),
+              ),
+            ]
+          : []),
         generatedPath(
           ".agentos/generated/client.ts",
           renderStaticClient(normalized as NormalizedAgentOsConfig<AuthoredAgentManifest>, modules),

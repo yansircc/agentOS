@@ -19,6 +19,7 @@ type StaticTargetGeneratedPath =
   | ".agentos/generated/provenance.json"
   | ".agentos/generated/fingerprints.json"
   | ".agentos/generated/target.ts"
+  | ".agentos/generated/sveltekit.remote.ts"
   | ".agentos/generated/client.ts"
   | ".agentos/generated/client.d.ts";
 
@@ -629,6 +630,26 @@ describe("agent authored tree compiler", () => {
         ],
       },
       {
+        kind: "client-transport",
+        source: "./sveltekit.remote",
+        imports: ["invokeAgentCommand", "runEventStream"],
+      },
+      {
+        kind: "client-transport",
+        source: "$app/server",
+        imports: ["command", "getRequestEvent", "query"],
+      },
+      {
+        kind: "client-transport",
+        source: "@sveltejs/kit",
+        imports: ["error"],
+      },
+      {
+        kind: "client-transport",
+        source: "@agent-os/sse-http",
+        imports: ["decodeSseHttpEvents", "responseToSseHttpChunks"],
+      },
+      {
         kind: "client-core",
         source: "@agent-os/client",
         imports: ["AgentClientSnapshot"],
@@ -688,6 +709,10 @@ describe("agent authored tree compiler", () => {
     expect(target).toContain("installCloudflareWorkspaceOperationProvider({");
     expect(target).toContain("workspaceOperationInstallFor(env).extensions");
     expect(target).toContain("override submit(spec: AgentSubmitSpec): Promise<SubmitResult>");
+    expect(target).toContain("submitRunInput(input: SubmitRunInput): Promise<SubmitResult>");
+    expect(target).toContain("readWorkspaceFile(");
+    expect(target).toContain("resetWorkspace(): Promise<WorkspaceAgentMutationCommandOutput>");
+    expect(target).toContain("destroyWorkspace(): Promise<WorkspaceAgentMutationCommandOutput>");
     expect(target).toContain(
       'getSandbox(workspaceNamespaceFor(env), "agentos-provider-resource:workspace:v1:web-cursor-demo:Sandbox:per_scope:workspace-per-scope-v1:session%3Aworkspace-ledger"',
     );
@@ -701,6 +726,22 @@ describe("agent authored tree compiler", () => {
     expect(target).not.toContain("makeRuntime({");
     expect(target).not.toContain("dynamic import");
     expect(target).not.toContain("workspaceExtension(");
+
+    const remote = generatedText(linked, ".agentos/generated/sveltekit.remote.ts");
+    expect(remote).toContain('import { command, getRequestEvent, query } from "$app/server";');
+    expect(remote).toContain(
+      'import { durableObjectRpcClient } from "@agent-os/backend-cloudflare-do/do-rpc";',
+    );
+    expect(remote).toContain(
+      'import { decodeSseHttpEvents, responseToSseHttpChunks } from "@agent-os/sse-http";',
+    );
+    expect(remote).toContain("export const invokeAgentCommand = command(");
+    expect(remote).toContain("runtime.submitRunInput(submitInputFromUnknown(input).input)");
+    expect(remote).toContain("runtime.readWorkspaceFile(readFileInputFromUnknown(input))");
+    expect(remote).toContain("export const runEventStream = query.live(");
+    expect(remote).toContain('platformEnv["AGENT_OS"] as DurableObjectNamespace');
+    expect(remote).not.toContain("AgentSubmitSpec");
+    expect(remote).not.toContain("getSandbox");
 
     const deployment = generatedJson<{
       readonly workspace?: {
@@ -728,18 +769,21 @@ describe("agent authored tree compiler", () => {
       'import { createWorkspaceAgentClientBridge } from "@agent-os/workspace-agent";',
     );
     expect(client).toContain(
+      'import { invokeAgentCommand, runEventStream } from "./sveltekit.remote";',
+    );
+    expect(client).toContain(
       'import { clientReadable, selectClientReadable } from "@agent-os/client-svelte";',
     );
     expect(client).toContain('import type { AgentClientSnapshot } from "@agent-os/client";');
     expect(client).toContain('import type { Readable } from "svelte/store";');
-    expect(client).toContain("createWorkspaceAgentClientBridge(options)");
+    expect(client).toContain("streamSource: options.streamSource ?? generatedStreamSource");
+    expect(client).toContain("rpcInvoker: options.rpcInvoker ?? generatedRpcInvoker");
     expect(client).toContain("snapshot: clientReadable(bridge.client)");
     expect(client).toContain(
       "events: selectClientReadable(bridge.client, (snapshot) => snapshot.events)",
     );
     expect(client).toContain("inputRequests: selectClientReadable(");
     expect(client).not.toContain("new EventSource");
-    expect(client).not.toContain("query.live");
     expect(client).not.toContain("appendRuntimeEventsToSnapshot");
     expect(client).not.toContain("createAgentClient(");
     expect(client).not.toContain("@agent-os/ag-ui");
