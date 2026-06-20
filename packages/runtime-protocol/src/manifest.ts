@@ -94,6 +94,39 @@ export const defineAgentManifest = <const Kinds extends readonly HandlerKind[]>(
   manifest: AgentManifestInput<Kinds>,
 ): AgentManifest<Kinds[number]> => manifest;
 
+export type ManifestScopeRefResult =
+  | { readonly ok: true; readonly value: ScopeRef }
+  | {
+      readonly ok: false;
+      readonly reason: "scope_not_manifest_owned" | "stable_scope_id_missing";
+      readonly message: string;
+    };
+
+/**
+ * Non-throwing form of manifest-owned scope projection for compiler surfaces
+ * that need to return structured diagnostics instead of exceptions.
+ *
+ * @public
+ */
+export const manifestScopeRefResult = (manifest: AgentManifest): ManifestScopeRefResult => {
+  const { scope } = manifest;
+  if (scope.idSource !== "manifest") {
+    return {
+      ok: false,
+      reason: "scope_not_manifest_owned",
+      message: `manifestScopeRef: scope.idSource is "${scope.idSource}", not "manifest"; runtime scope is not manifest-owned`,
+    };
+  }
+  if (scope.stableScopeId === undefined || scope.stableScopeId.length === 0) {
+    return {
+      ok: false,
+      reason: "stable_scope_id_missing",
+      message: `manifestScopeRef: scope.idSource="manifest" requires a non-empty stableScopeId`,
+    };
+  }
+  return { ok: true, value: { kind: scope.kind, scopeId: scope.stableScopeId } };
+};
+
 /**
  * Derive the kernel {@link ScopeRef} owned by a manifest. Fail-closed: only
  * `idSource: "manifest"` with a non-empty `stableScopeId` has a manifest-owned
@@ -103,18 +136,9 @@ export const defineAgentManifest = <const Kinds extends readonly HandlerKind[]>(
  * @public
  */
 export const manifestScopeRef = (manifest: AgentManifest): ScopeRef => {
-  const { scope } = manifest;
-  if (scope.idSource !== "manifest") {
-    throw new TypeError(
-      `manifestScopeRef: scope.idSource is "${scope.idSource}", not "manifest"; runtime scope is not manifest-owned`,
-    );
-  }
-  if (scope.stableScopeId === undefined || scope.stableScopeId.length === 0) {
-    throw new TypeError(
-      `manifestScopeRef: scope.idSource="manifest" requires a non-empty stableScopeId`,
-    );
-  }
-  return { kind: scope.kind, scopeId: scope.stableScopeId };
+  const result = manifestScopeRefResult(manifest);
+  if (result.ok) return result.value;
+  throw new TypeError(result.message);
 };
 
 /**

@@ -153,6 +153,7 @@ title: "@agent-os/runtime-protocol API"
 - `.:LlmResponsePayloadSchema`
 - `.:LlmRoute`
 - `.:LowerSubmitRunInputSpec`
+- `.:ManifestScopeRefResult`
 - `.:MissingSubmitRunBinding`
 - `.:Outcome`
 - `.:OutcomeClass`
@@ -163,6 +164,7 @@ title: "@agent-os/runtime-protocol API"
 - `.:ApprovalInputRequestResumePayload`
 - `.:AuthorizationGrantRef`
 - `.:AuthorizationInputRequestResumePayload`
+- `.:ProviderResourceId`
 - `.:QuestionInputRequestResumePayload`
 - `.:RUNTIME_ABORT_EVENT_KINDS`
 - `.:RUNTIME_EVENT_KIND`
@@ -229,6 +231,12 @@ title: "@agent-os/runtime-protocol API"
 - `.:ToolResultReplayOutcome`
 - `.:ToolResultSnapshot`
 - `.:TurnRef`
+- `.:WORKSPACE_TOPOLOGY`
+- `.:WorkspaceBindingRef`
+- `.:WorkspaceProviderResourceIdentity`
+- `.:WorkspaceProviderResourceInput`
+- `.:WorkspaceTopology`
+- `.:WorkspaceTopologyKind`
 - `.:agentRunAbortedEvent`
 - `.:agentRunCompletedEvent`
 - `.:agentRunInterruptedEvent`
@@ -272,6 +280,7 @@ title: "@agent-os/runtime-protocol API"
 - `.:lowerSubmitRunInput`
 - `.:makeAdmissionSchemaSpec`
 - `.:manifestScopeRef`
+- `.:manifestScopeRefResult`
 - `.:manifestTruthIdentity`
 - `.:mountAgent`
 - `.:projectAgentManifest`
@@ -279,6 +288,7 @@ title: "@agent-os/runtime-protocol API"
 - `.:projectLease`
 - `.:projectFailureDiagnostics`
 - `.:projectRuntimeSafeLedgerEvent`
+- `.:providerResourceId`
 - `.:parseInputRequestResumePayload`
 - `.:recordAdmissionRow`
 - `.:recordBarrierRow`
@@ -303,6 +313,9 @@ title: "@agent-os/runtime-protocol API"
 - `.:validateAgentMount`
 - `.:validateIntentSettlementVocabulary`
 - `.:validateRuntimeLedgerTransitions`
+- `.:workspaceBindingRef`
+- `.:workspaceProviderResourceId`
+- `.:workspaceProviderResourceIdentity`
 
 ## Experimental exports
 

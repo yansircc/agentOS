@@ -153,6 +153,7 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, au
 - `.:LlmResponsePayloadSchema`
 - `.:LlmRoute`
 - `.:LowerSubmitRunInputSpec`
+- `.:ManifestScopeRefResult`
 - `.:MissingSubmitRunBinding`
 - `.:Outcome`
 - `.:OutcomeClass`
@@ -163,6 +164,7 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, au
 - `.:ApprovalInputRequestResumePayload`
 - `.:AuthorizationGrantRef`
 - `.:AuthorizationInputRequestResumePayload`
+- `.:ProviderResourceId`
 - `.:QuestionInputRequestResumePayload`
 - `.:RUNTIME_ABORT_EVENT_KINDS`
 - `.:RUNTIME_EVENT_KIND`
@@ -229,6 +231,12 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, au
 - `.:ToolResultReplayOutcome`
 - `.:ToolResultSnapshot`
 - `.:TurnRef`
+- `.:WORKSPACE_TOPOLOGY`
+- `.:WorkspaceBindingRef`
+- `.:WorkspaceProviderResourceIdentity`
+- `.:WorkspaceProviderResourceInput`
+- `.:WorkspaceTopology`
+- `.:WorkspaceTopologyKind`
 - `.:agentRunAbortedEvent`
 - `.:agentRunCompletedEvent`
 - `.:agentRunInterruptedEvent`
@@ -272,6 +280,7 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, au
 - `.:lowerSubmitRunInput`
 - `.:makeAdmissionSchemaSpec`
 - `.:manifestScopeRef`
+- `.:manifestScopeRefResult`
 - `.:manifestTruthIdentity`
 - `.:mountAgent`
 - `.:projectAgentManifest`
@@ -279,6 +288,7 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, au
 - `.:projectLease`
 - `.:projectFailureDiagnostics`
 - `.:projectRuntimeSafeLedgerEvent`
+- `.:providerResourceId`
 - `.:parseInputRequestResumePayload`
 - `.:recordAdmissionRow`
 - `.:recordBarrierRow`
@@ -303,6 +313,9 @@ Status: Runtime protocol package. Public exports are limited to runtime DTOs, au
 - `.:validateAgentMount`
 - `.:validateIntentSettlementVocabulary`
 - `.:validateRuntimeLedgerTransitions`
+- `.:workspaceBindingRef`
+- `.:workspaceProviderResourceId`
+- `.:workspaceProviderResourceIdentity`
 
 ## Experimental exports
 

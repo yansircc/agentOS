@@ -12,14 +12,24 @@ import type {
   AgentManifest,
   AgentScopeIdentityPolicy,
   AgentToolBindingRef,
+  ProviderResourceId,
+  WorkspaceBindingRef,
+  WorkspaceTopology,
 } from "@agent-os/runtime-protocol";
 import {
   BUILTIN_HANDLER_KINDS,
+  WORKSPACE_TOPOLOGY,
+  manifestScopeRefResult,
+  workspaceBindingRef,
+  workspaceProviderResourceId,
   type DeploymentSpec,
   type HandlerKind,
 } from "@agent-os/runtime-protocol";
 
 export const AUTHORING_DEFAULTS_VERSION = "framework-defaults@agentos/v1" as const;
+
+export { WORKSPACE_TOPOLOGY } from "@agent-os/runtime-protocol";
+export type { WorkspaceTopologyKind } from "@agent-os/runtime-protocol";
 
 type JsonRecord = Readonly<Record<string, unknown>>;
 
@@ -1110,12 +1120,6 @@ export const AGENTOS_CONFIG_LLM_ROUTE = {
 export type AgentOsConfigLlmRoute =
   (typeof AGENTOS_CONFIG_LLM_ROUTE)[keyof typeof AGENTOS_CONFIG_LLM_ROUTE];
 
-export const WORKSPACE_TOPOLOGY = {
-  PER_SCOPE: "per_scope",
-} as const;
-
-export type WorkspaceTopologyKind = (typeof WORKSPACE_TOPOLOGY)[keyof typeof WORKSPACE_TOPOLOGY];
-
 export interface AgentOsConfigDeployment {
   readonly id: string;
   readonly version?: string;
@@ -1142,10 +1146,7 @@ export interface AgentOsConfigLlm {
   readonly modelRef: string;
 }
 
-export interface AgentOsConfigWorkspaceTopology {
-  readonly kind: typeof WORKSPACE_TOPOLOGY.PER_SCOPE;
-  readonly allocator: string;
-}
+export type AgentOsConfigWorkspaceTopology = WorkspaceTopology;
 
 export interface AgentOsConfigWorkspace {
   readonly binding: string;
@@ -1181,7 +1182,12 @@ export type AgentOsConfigIssue =
       readonly reason: string;
     }
   | { readonly kind: "runtime_fact_forbidden"; readonly path: string; readonly field: string }
-  | { readonly kind: "function_in_config"; readonly path: string };
+  | { readonly kind: "function_in_config"; readonly path: string }
+  | {
+      readonly kind: "workspace_scope_not_manifest_owned";
+      readonly path: "agent/agent.json#/scope";
+      readonly reason: "scope_not_manifest_owned" | "stable_scope_id_missing";
+    };
 
 export type DecodeAgentOsConfigResult =
   | { readonly ok: true; readonly value: AgentOsConfigV1 }
@@ -1196,6 +1202,8 @@ export interface NormalizedAgentOsConfig<M extends AgentManifest = AgentManifest
   readonly llm: AgentOsConfigLlm;
   readonly workspace: AgentOsConfigWorkspace & {
     readonly topology: AgentOsConfigWorkspaceTopology;
+    readonly bindingRef: WorkspaceBindingRef;
+    readonly providerResourceId: ProviderResourceId;
   };
   readonly origins: Readonly<Record<AgentOsConfigFactKey, AgentOsConfigOrigin>>;
 }
@@ -1531,6 +1539,26 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
   if (!decoded.ok) return decoded;
   const value = decoded.value;
   const topology = value.workspace.topology ?? defaultWorkspaceTopology();
+  const scopeRef = manifestScopeRefResult(compiled.manifest);
+  if (!scopeRef.ok) {
+    return {
+      ok: false,
+      issues: [
+        {
+          kind: "workspace_scope_not_manifest_owned",
+          path: "agent/agent.json#/scope",
+          reason: scopeRef.reason,
+        },
+      ],
+    };
+  }
+  const bindingRef = workspaceBindingRef(value.workspace.binding);
+  const providerResourceId = workspaceProviderResourceId({
+    deploymentNamespace: value.deployment.id,
+    workspaceBindingRef: bindingRef,
+    topology,
+    scopeRef: scopeRef.value,
+  });
   const origins: Record<AgentOsConfigFactKey, AgentOsConfigOrigin> = {
     "/profile": configAuthorOrigin("/profile"),
     "/agent": configAuthorOrigin("/agent"),
@@ -1547,6 +1575,7 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
     "/llm/credentialRef": configAuthorOrigin("/llm/credentialRef"),
     "/llm/modelRef": configAuthorOrigin("/llm/modelRef"),
     "/workspace/binding": configAuthorOrigin("/workspace/binding"),
+    "/workspace/bindingRef": `derived:/workspace/binding`,
     "/workspace/root": configAuthorOrigin("/workspace/root"),
     "/workspace/topology/kind":
       value.workspace.topology === undefined
@@ -1560,6 +1589,7 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
     "/deployment/adapter": `derived:/target/kind`,
     "/deployment/codec": workspaceMacroOrigin("/deployment/codec"),
     "/deployment/providerStrategy": `derived:/llm/route`,
+    "/workspace/providerResourceId": `derived:/deployment/id+/workspace/binding+/workspace/topology+/agent/scope`,
   };
   return {
     ok: true,
@@ -1581,8 +1611,10 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
       llm: value.llm,
       workspace: {
         binding: value.workspace.binding,
+        bindingRef,
         root: value.workspace.root,
         topology,
+        providerResourceId,
       },
       origins,
     },

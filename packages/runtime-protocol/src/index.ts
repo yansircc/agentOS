@@ -16,3 +16,4 @@ export * from "./mount";
 export * from "./runtime-events";
 export * from "./safe-events";
 export * from "./submit";
+export * from "./workspace-topology";

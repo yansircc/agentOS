@@ -149,6 +149,7 @@
 - `.:LlmResponsePayloadSchema`
 - `.:LlmRoute`
 - `.:LowerSubmitRunInputSpec`
+- `.:ManifestScopeRefResult`
 - `.:MissingSubmitRunBinding`
 - `.:Outcome`
 - `.:OutcomeClass`
@@ -159,6 +160,7 @@
 - `.:ApprovalInputRequestResumePayload`
 - `.:AuthorizationGrantRef`
 - `.:AuthorizationInputRequestResumePayload`
+- `.:ProviderResourceId`
 - `.:QuestionInputRequestResumePayload`
 - `.:RUNTIME_ABORT_EVENT_KINDS`
 - `.:RUNTIME_EVENT_KIND`
@@ -225,6 +227,12 @@
 - `.:ToolResultReplayOutcome`
 - `.:ToolResultSnapshot`
 - `.:TurnRef`
+- `.:WORKSPACE_TOPOLOGY`
+- `.:WorkspaceBindingRef`
+- `.:WorkspaceProviderResourceIdentity`
+- `.:WorkspaceProviderResourceInput`
+- `.:WorkspaceTopology`
+- `.:WorkspaceTopologyKind`
 - `.:agentRunAbortedEvent`
 - `.:agentRunCompletedEvent`
 - `.:agentRunInterruptedEvent`
@@ -268,6 +276,7 @@
 - `.:lowerSubmitRunInput`
 - `.:makeAdmissionSchemaSpec`
 - `.:manifestScopeRef`
+- `.:manifestScopeRefResult`
 - `.:manifestTruthIdentity`
 - `.:mountAgent`
 - `.:projectAgentManifest`
@@ -275,6 +284,7 @@
 - `.:projectLease`
 - `.:projectFailureDiagnostics`
 - `.:projectRuntimeSafeLedgerEvent`
+- `.:providerResourceId`
 - `.:parseInputRequestResumePayload`
 - `.:recordAdmissionRow`
 - `.:recordBarrierRow`
@@ -299,6 +309,9 @@
 - `.:validateAgentMount`
 - `.:validateIntentSettlementVocabulary`
 - `.:validateRuntimeLedgerTransitions`
+- `.:workspaceBindingRef`
+- `.:workspaceProviderResourceId`
+- `.:workspaceProviderResourceIdentity`
 
 ## Experimental exports
 

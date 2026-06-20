@@ -334,6 +334,14 @@ describe("agent authored tree compiler", () => {
     const compiled = compileAgentTree({
       files: [
         { path: "agent/instructions.md", kind: "markdown", text: "Run workspace tasks." },
+        {
+          path: "agent/agent.json",
+          kind: "json",
+          value: {
+            agentId: "agent.workspace",
+            scope: { kind: "session", idSource: "manifest", stableScopeId: "workspace-ledger" },
+          },
+        },
         { path: "agent/tools/read_file.ts", kind: "tool", declaration: {} },
       ],
     });
@@ -379,6 +387,11 @@ describe("agent authored tree compiler", () => {
       kind: WORKSPACE_TOPOLOGY.PER_SCOPE,
       allocator: "workspace-per-scope-v1",
     });
+    expect(normalized.value.workspace.bindingRef).toBe("Sandbox");
+    expect(normalized.value.workspace.providerResourceId).toBe(
+      "agentos-provider-resource:workspace:v1:web-cursor-demo:Sandbox:per_scope:workspace-per-scope-v1:session%3Aworkspace-ledger",
+    );
+    expect(normalized.value.workspace.providerResourceId).not.toBe("workspace-ledger");
     expect(normalized.value.origins["/deployment/id"]).toBe(
       "author:agentos.config.jsonc#/deployment/id",
     );
@@ -386,11 +399,24 @@ describe("agent authored tree compiler", () => {
       "macro(workspace@1)#/workspace/topology/kind",
     );
     expect(normalized.value.origins["/deployment/backend"]).toBe("derived:/target/kind");
+    expect(normalized.value.origins["/workspace/providerResourceId"]).toBe(
+      "derived:/deployment/id+/workspace/binding+/workspace/topology+/agent/scope",
+    );
   });
 
   it("accepts explicit workspace topology as authored data instead of macro default", () => {
     const compiled = compileAgentTree({
-      files: [{ path: "agent/instructions.md", kind: "markdown", text: "Run." }],
+      files: [
+        { path: "agent/instructions.md", kind: "markdown", text: "Run." },
+        {
+          path: "agent/agent.json",
+          kind: "json",
+          value: {
+            agentId: "agent.workspace.explicit",
+            scope: { kind: "session", idSource: "manifest", stableScopeId: "explicit-ledger" },
+          },
+        },
+      ],
     });
     expect(compiled.ok).toBe(true);
     if (!compiled.ok) expect.fail(JSON.stringify(compiled.issues));
@@ -426,6 +452,58 @@ describe("agent authored tree compiler", () => {
     expect(normalized.value.origins["/workspace/topology/allocator"]).toBe(
       "author:agentos.config.jsonc#/workspace/topology/allocator",
     );
+  });
+
+  it("fails config normalization when workspace topology cannot derive a manifest-owned scope", () => {
+    const compiled = compileAgentTree({
+      files: [
+        { path: "agent/instructions.md", kind: "markdown", text: "Run." },
+        {
+          path: "agent/agent.json",
+          kind: "json",
+          value: {
+            agentId: "agent.submit-scoped",
+            scope: { kind: "conversation", idSource: "submit_scope" },
+          },
+        },
+      ],
+    });
+    expect(compiled.ok).toBe(true);
+    if (!compiled.ok) expect.fail(JSON.stringify(compiled.issues));
+
+    const normalized = normalizeAgentOsConfig(
+      {
+        profile: AGENTOS_CONFIG_PROFILE.WORKSPACE_V1,
+        agent: "./agent",
+        deployment: { id: "workspace-submit-scoped" },
+        target: {
+          kind: AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1,
+          durableObject: { className: "AgentOS", binding: "AGENT_OS" },
+        },
+        client: { kind: AGENTOS_CONFIG_CLIENT.BROWSER_DIRECT_V1 },
+        llm: {
+          route: AGENTOS_CONFIG_LLM_ROUTE.OPENAI_CHAT_COMPATIBLE,
+          endpointRef: "openrouter",
+          credentialRef: "openrouter-key",
+          modelRef: "model",
+        },
+        workspace: {
+          binding: "Sandbox",
+          root: "/workspace",
+        },
+      },
+      compiled.value,
+    );
+
+    expect(normalized.ok).toBe(false);
+    if (normalized.ok) expect.fail("submit-scoped workspace config normalized successfully");
+    expect(normalized.issues).toEqual([
+      {
+        kind: "workspace_scope_not_manifest_owned",
+        path: "agent/agent.json#/scope",
+        reason: "scope_not_manifest_owned",
+      },
+    ]);
   });
 
   it("rejects config runtime facts and executable values instead of normalizing them", () => {
