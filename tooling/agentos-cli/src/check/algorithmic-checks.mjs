@@ -698,7 +698,7 @@ const checkClientCanonicalSurface = ({ surfacePackages, failures }) => {
 };
 
 const checkClientBoundaryDoc = (failures) => {
-  const boundaryPath = "tooling/refactor/a78-a94/client-app-kit-boundary.md";
+  const boundaryPath = "tooling/refactor/a78-a94/client-workspace-host-boundary.md";
   if (!fs.existsSync(path.join(repoRoot, boundaryPath))) {
     failures.push(
       `${boundaryPath}: client-boundary-contract: missing source-owned boundary freeze`,
@@ -746,7 +746,7 @@ const checkClientBoundaries = () => {
       record.name === clientBoundaryPackages.clientCore
         ? "client core"
         : record.name === clientBoundaryPackages.workspaceAgent
-          ? "workspace app-kit"
+          ? "workspace host"
           : "framework bridge";
     checkClientFrameworkImports({ record, kind, failures });
     if (
@@ -1062,8 +1062,114 @@ const checkSpikeHygiene = () => {
   );
 };
 
+const sliceBetweenMarkers = (source, startMarker, endMarker) => {
+  const start = source.indexOf(startMarker);
+  if (start === -1) return "";
+  const end = source.indexOf(endMarker, start);
+  return end === -1 ? source.slice(start) : source.slice(start, end);
+};
+
+const checkGeneratedStaticTargetLinking = () => {
+  const failures = [];
+  const sourcePath = "packages/composers/agent-authoring/src/index.ts";
+  const source = read(sourcePath);
+  const renderStaticTargetSource = sliceBetweenMarkers(
+    source,
+    "const renderStaticTarget =",
+    "const generatedClientModuleImports =",
+  );
+  const linkWorkspaceStaticTargetSource = sliceBetweenMarkers(
+    source,
+    "export const linkWorkspaceStaticTarget =",
+    "const renderAgentOsConfigSchema =",
+  );
+  if (renderStaticTargetSource.length === 0) {
+    failures.push(`${sourcePath}: generated-static-target-linking: missing renderStaticTarget`);
+  }
+  if (linkWorkspaceStaticTargetSource.length === 0) {
+    failures.push(
+      `${sourcePath}: generated-static-target-linking: missing linkWorkspaceStaticTarget`,
+    );
+  }
+
+  const requiredStaticWiringMarkers = [
+    'import semanticDeclarations from "./manifest.json";',
+    'import deploymentProvenance from "./deployment.json";',
+    "createAgentDurableObject",
+    "installCloudflareWorkspaceOperationProvider",
+    "OpenAiCompatibleLlmTransportLive",
+    "defineWorkspaceAgentMount",
+    "bindWorkspaceToolsForRuntime",
+    "makeCloudflareWorkspaceEnv",
+    "getSandbox",
+    "generatedCustomTools",
+    "llmTransport: () => OpenAiCompatibleLlmTransportLive",
+    "extensions: (env) => workspaceOperationInstallFor(env).extensions",
+    "override submit(spec: AgentSubmitSpec): Promise<SubmitResult>",
+  ];
+  for (const marker of requiredStaticWiringMarkers) {
+    if (!renderStaticTargetSource.includes(marker)) {
+      failures.push(
+        `${sourcePath}: generated-static-target-linking: renderStaticTarget missing static marker ${marker}`,
+      );
+    }
+  }
+
+  const requiredModuleKinds = [
+    '"semantic-json"',
+    '"target-runtime"',
+    '"provider-runtime"',
+    '"workspace-host"',
+    '"authored-tool"',
+    '"workspace-binding"',
+    '"execution-domain-runtime"',
+    '"platform-runtime"',
+    '"client-core"',
+    '"client-framework"',
+  ];
+  for (const marker of requiredModuleKinds) {
+    if (!source.includes(`kind: ${marker}`) && !source.includes(`| ${marker}`)) {
+      failures.push(
+        `${sourcePath}: generated-static-target-linking: module graph missing ${marker}`,
+      );
+    }
+  }
+
+  const durableObjectConfigStart = renderStaticTargetSource.indexOf("createAgentDurableObject<");
+  const durableObjectConfig =
+    durableObjectConfigStart === -1 ? "" : renderStaticTargetSource.slice(durableObjectConfigStart);
+  if (durableObjectConfig.length === 0) {
+    failures.push(
+      `${sourcePath}: generated-static-target-linking: target must call createAgentDurableObject`,
+    );
+  }
+  for (const forbidden of ["deploymentProvenance", "targetDeployment"]) {
+    if (durableObjectConfig.includes(forbidden)) {
+      failures.push(
+        `${sourcePath}: generated-static-target-linking: runtime wiring must not consume ${forbidden}`,
+      );
+    }
+  }
+  for (const forbidden of [
+    "makeRuntime({",
+    "workspaceExtension(",
+    "dynamic import",
+    "await import(",
+    "import(",
+  ]) {
+    if (renderStaticTargetSource.includes(forbidden)) {
+      failures.push(
+        `${sourcePath}: generated-static-target-linking: closed target must not contain ${forbidden}`,
+      );
+    }
+  }
+
+  failIfAny("generated static target linking", failures);
+};
+
 const checkConvergenceBoundary = () => {
   checkClientBoundaries();
+  checkGeneratedStaticTargetLinking();
   checkSpikeHygiene();
   console.log("convergence boundary passed");
 };
@@ -1466,6 +1572,7 @@ const checkerById = new Map([
   ["docs-site-build", checkDocsSiteBuild],
   ["event-namespaces", checkEventNamespaces],
   ["limit-registry", checkLimitRegistry],
+  ["generated-static-target-linking", checkGeneratedStaticTargetLinking],
   ["public-api", checkPublicApi],
   ["repo-tooling-surface", checkRepoToolingSurface],
   ["source-aliases", checkSourceAliases],

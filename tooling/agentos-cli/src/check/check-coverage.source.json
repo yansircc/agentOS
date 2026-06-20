@@ -687,7 +687,7 @@
         "kind": "mainlineChecker",
         "path": "tooling/agentos-cli/src/check/check-client-boundaries.mjs"
       },
-      "owner": "tooling/refactor/a78-a94/client-app-kit-boundary.md and docs/surface.json",
+      "owner": "tooling/refactor/a78-a94/client-workspace-host-boundary.md and docs/surface.json",
       "ruleId": "client-boundaries",
       "target": {
         "kind": "algorithmic",
@@ -696,7 +696,7 @@
       },
       "assertions": [
         {
-          "failureCondition": "client-boundaries: post-rebase verdict must reject client/app-kit boundary drift owned by docs/surface.json and the boundary freeze doc",
+          "failureCondition": "client-boundaries: post-rebase verdict must reject client/workspace-host boundary drift owned by docs/surface.json and the boundary freeze doc",
           "negativeWitness": "algorithmic projection rejects source mutations to framework imports, framework-local read models, retired AG-UI framework package surfaces, and missing boundary freeze markers"
         }
       ]
@@ -706,7 +706,7 @@
         "kind": "mainlineChecker",
         "path": "tooling/agentos-cli/src/check/algorithmic-checks.mjs"
       },
-      "owner": "CST 418 and tooling/refactor/a78-a94/client-app-kit-boundary.md",
+      "owner": "CST 418, CST 455, tooling/refactor/a78-a94/client-workspace-host-boundary.md, and packages/composers/agent-authoring/src/index.ts",
       "ruleId": "convergence-boundary",
       "target": {
         "kind": "algorithmic",
@@ -715,8 +715,8 @@
       },
       "assertions": [
         {
-          "failureCondition": "convergence-boundary: post-v3 downstream surfaces must stay outside substrate truth ownership and spikes must remain local-only",
-          "negativeWitness": "algorithmic projection rejects source mutations caught by client-boundaries or spike-hygiene before role-survival deletion decisions run"
+          "failureCondition": "convergence-boundary: post-v3 downstream surfaces must stay outside substrate truth ownership, generated closed targets must not choose implementation wiring from manifest/deployment JSON at runtime, and spikes must remain local-only",
+          "negativeWitness": "algorithmic projection rejects source mutations caught by client-boundaries, generated-static-target-linking, or spike-hygiene before role-survival deletion decisions run"
         }
       ]
     },

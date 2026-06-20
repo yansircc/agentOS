@@ -419,7 +419,7 @@
     },
     {
       "id": "client-boundaries",
-      "owner": "tooling/refactor/a78-a94/client-app-kit-boundary.md and docs/surface.json",
+      "owner": "tooling/refactor/a78-a94/client-workspace-host-boundary.md and docs/surface.json",
       "invariantId": "invariant.client.projection-sink-boundary",
       "kind": "repo-boundary",
       "diagnostics": [
@@ -428,7 +428,7 @@
         "ag-ui framework packages must retire once client framework bridges exist"
       ],
       "paths": [
-        "tooling/refactor/a78-a94/client-app-kit-boundary.md",
+        "tooling/refactor/a78-a94/client-workspace-host-boundary.md",
         "docs/surface.json",
         "packages/client/**",
         "packages/composers/workspace-agent/**",
@@ -438,24 +438,27 @@
       "acceptance": {
         "engine": "algorithmic",
         "checker": "client-boundaries",
-        "reason": "client/app-kit boundary spans workspace packages, docs/surface.json, and source imports, so it remains an explicit source projection checker"
+        "reason": "client/workspace-host boundary spans workspace packages, docs/surface.json, and source imports, so it remains an explicit source projection checker"
       }
     },
     {
       "id": "convergence-boundary",
-      "owner": "CST 418 and tooling/refactor/a78-a94/client-app-kit-boundary.md",
+      "owner": "CST 418, CST 455, tooling/refactor/a78-a94/client-workspace-host-boundary.md, and packages/composers/agent-authoring/src/index.ts",
       "invariantId": "invariant.client.projection-sink-boundary",
       "kind": "repo-boundary",
       "diagnostics": [
         "post-v3 downstream surfaces must stay outside substrate truth ownership",
-        "client/app-kit packages must satisfy client-boundaries",
+        "client/workspace-host packages must satisfy client-boundaries",
+        "closed target implementation wiring must be static imports and factory composition, not runtime selection from manifest/deployment JSON",
         "spikes must remain ignored local pressure tests"
       ],
       "paths": [
-        "tooling/refactor/a78-a94/client-app-kit-boundary.md",
+        "tooling/refactor/a78-a94/client-workspace-host-boundary.md",
         "docs/surface.json",
         "packages/client/**",
         "packages/composers/workspace-agent/**",
+        "packages/composers/agent-authoring/src/index.ts",
+        "packages/composers/agent-authoring/test/agent-authoring.test.ts",
         "spikes/**",
         "tooling/agentos-cli/src/check/algorithmic-checks.mjs",
         "tooling/agentos-cli/src/main.mjs"
@@ -464,7 +467,7 @@
       "acceptance": {
         "engine": "algorithmic",
         "checker": "convergence-boundary",
-        "reason": "post-v3 boundary freeze is the conjunction of client/app-kit boundary and spike hygiene until role-survival owns package deletion decisions"
+        "reason": "post-v3 boundary freeze is the conjunction of client/workspace-host boundary, generated static-target linking, and spike hygiene until role-survival owns package deletion decisions"
       }
     },
     {

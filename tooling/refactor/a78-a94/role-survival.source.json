@@ -15,7 +15,7 @@
     },
     {
       "id": "projection-sink",
-      "meaning": "derives authored, wire, stream, client, or app-kit views from owned facts"
+      "meaning": "derives authored, wire, stream, client, or workspace host views from owned facts"
     },
     {
       "id": "repo-local-tooling",
@@ -70,7 +70,7 @@
         "tooling/ops-api"
       ],
       "pathPrefixes": ["packages/client", "packages/transports", "packages/wire-adapters"],
-      "reason": "these packages derive authored, stream, wire, client, or app-kit views without owning runtime truth"
+      "reason": "these packages derive authored, stream, wire, client, or workspace host views without owning runtime truth"
     },
     {
       "role": "repo-local-tooling",

@@ -6,54 +6,122 @@ title: "Build A Natural-Language Workspace Agent"
 
 ## Outcome
 
-User intent reaches agentOS `submit`, the AgentOS Durable Object constructs
-request-local workspace tools, workspace metadata is read through ledger
-projections, and the product UI consumes typed/redacted run projections or
-AG-UI frames instead of raw ledger payloads.
+An app author writes one authored agent tree plus deployment JSONC. agentOS
+compiles that pre-runtime intent into generated target files, mounts a
+Cloudflare Durable Object through static target linking, and gives product UI a
+typed client over runtime projections and commands.
 
-## Prerequisites
+The first path is:
 
-- [Durable truth](/concepts/durable-truth/)
-- [Materialized projections](/concepts/materialized-projections/)
-- [Cloudflare DO backend](/packages/backend-cloudflare-do/)
+```text
+agent/
+  instructions.md
+  agent.json
+  tools/
+  workspace/reconcile.ts
+agentos.config.jsonc
+.agentos/generated/
+src/app/
+```
 
-## Steps
+Only `agent/` and `agentos.config.jsonc` are required. `workspace/reconcile.ts`
+is optional authored policy. `src/app/` is product UI only.
 
-1. Expose one Worker HTTP route that accepts a natural-language prompt.
-2. Send only serializable intent and context to an AgentOS Durable Object RPC.
-3. Construct workspace tools inside the AgentOS Durable Object, not in the
-   Worker caller.
-4. Use `createWorkspaceTools` from `@agent-os/workspace-env` with a concrete
-   workspace adapter such as `@agent-os/workspace-env-cloudflare`.
-5. Let the shared workspace tools provide `read_file`, `write_file`,
-   `edit_file`, `glob_files`, `grep_files`, `delete_path`, and `run_shell`.
-   Product code must not author raw JSON Schema for these tool contracts.
-6. Use `walkWorkspaceFiles` and `diffWorkspaceFiles` for scan/diff. The product
-   still owns its `workspace.file.*` event vocabulary and projection shape.
-7. Configure the authored agent with a symbolic LLM route binding such as
-   `llm.default`; the backend resolves that binding through an `LlmTransport`
-   provider route.
-8. Bind endpoint and credential through material refs; do not place resolved
-   provider URLs or credentials in authored files or product projections.
-9. Let the model select product-owned tools through `submit`; do not use
-   `unsafeRunToolByName` for LLM-selected tool calls.
-10. Store workspace metadata in ledger facts and materialized projections.
-11. Keep file bytes, provider URLs, credentials, and tokens out of ledger and
-    projection state.
-12. Decode agentOS-owned runtime facts with `decodeRuntimeLedgerEvent` or use
-    `projectRunTrace` / `projectRunsPage`. Runtime payload fallback parsers in
-    product code are a boundary failure.
-13. For UI protocols, project typed runtime facts with `@agent-os/ag-ui` only
-    when an AG-UI edge stream is required. React/Svelte products consume
-    `@agent-os/client-react` or `@agent-os/client-svelte`; AG-UI frames are
-    derived edge frames, not ledger facts or canonical client state.
-14. Expose product API JSON as a redacted run projection or redacted AG-UI frame
-    stream. Do not expose raw ledger payloads, provider-native metadata,
-    resolved material values, credentials, tokens, or full file bytes.
+## Authoring Tree
+
+`agent/instructions.md` is required and owns the natural-language operating
+instructions. `agent/agent.json` owns scalar pre-runtime intent such as the
+agent id and scope policy. `agent/tools/*.ts` owns tool declarations; path
+segments are identities.
+
+Authored files may contain symbolic refs such as LLM route refs, material refs,
+workspace command names, interaction policy, and reconcile policy. They must not
+contain resolved credentials, provider URLs, sandbox handles, continuation refs,
+snapshots, actual trigger times, or ledger events.
+
+## Deployment JSONC
+
+`agentos.config.jsonc` selects the deployment recipe as typed data:
+
+```jsonc
+{
+  "$schema": "./node_modules/@agent-os/agent-authoring/schema.json",
+  "profile": "workspace@1",
+  "agent": "./agent",
+  "deployment": {
+    "id": "web-cursor-demo",
+    "version": "0.1.0",
+  },
+  "target": {
+    "kind": "cloudflare-do@1",
+    "durableObject": {
+      "className": "AgentOS",
+      "binding": "AGENT_OS",
+    },
+  },
+  "client": {
+    "kind": "svelte-kit-remote@1",
+  },
+  "llm": {
+    "route": "openai-chat-compatible",
+    "endpointRef": "openrouter",
+    "credentialRef": "openrouter-key",
+    "modelRef": "openrouter-default-text-model",
+  },
+  "workspace": {
+    "binding": "Sandbox",
+    "root": "/workspace",
+    "topology": {
+      "kind": "per_scope",
+      "allocator": "workspace-per-scope-v1",
+    },
+  },
+}
+```
+
+The config is not executable TypeScript. It cannot read env, clock, random, or
+IO. The normalized deployment is a pure function of the authored files and this
+JSONC data.
+
+## Generated Surface
+
+`agentos build` or an app-local generation script writes `.agentos/generated/`.
+The directory is derived output and should be ignored by git. Delete it and
+rebuild to reproduce the same files from the same authored source.
+
+The generated target is a static residual program:
+
+- provider/backend/workspace wiring is expressed by static imports and factory
+  composition;
+- `manifest.json` carries semantic declarations;
+- `deployment.json` carries deployment/provenance data such as generated
+  workspace resource ids;
+- runtime code must not choose provider, backend, tool, or capability
+  implementations by interpreting strings from JSON.
+
+## Client Boundary
+
+Generated `client.ts` rides on `@agent-os/client` and the selected framework
+bridge. Browser-direct streams and server bridges inject `streamSource` and
+`rpcInvoker`; they do not copy the client state machine.
+
+Product UI starts after the generated client. Timeline rows, file review
+panels, layout, and product-specific visual state belong in `src/app/`.
+
+## Workspace Boundary
+
+Workspace state, file metadata, run events, input requests, and agent info are
+projection reads. Submit, input-request resume, live file reads, reset, destroy,
+and custom product RPC are commands.
+
+`agent/workspace/reconcile.ts` is the only authored runtime policy hook. It
+receives Live sandbox material, Derived projection input, and an append function
+that accepts only Recordable facts owned by the runtime/carrier contract.
 
 ## References
 
 - [Usage surfaces](/usage-surfaces/)
 - [Agent authoring package](/packages/agent-authoring/)
-- [Runtime API](/api/runtime/)
-- [Cloudflare DO API](/api/backend-cloudflare-do/)
+- [Workspace agent host](/packages/workspace-agent/)
+- [Client core](/packages/client/)
+- [Cloudflare DO backend](/packages/backend-cloudflare-do/)

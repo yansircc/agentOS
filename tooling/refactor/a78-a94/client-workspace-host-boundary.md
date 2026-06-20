@@ -1,8 +1,9 @@
-# Client And Workspace App-Kit Boundary Freeze
+# Client And Workspace Preset Host Boundary Freeze
 
-This file is the source owner for the workspace app-kit and canonical client
-boundary used by the client/app-kit campaign. Implementation tasks may cite this
-file; CST task text must not become a second contract table.
+This file is the source owner for the hidden workspace preset host and canonical
+client boundary used by the client/workspace-host campaign. Implementation
+tasks may cite this file; CST task text must not become a second contract
+table.
 
 ## Axes
 
@@ -56,7 +57,7 @@ vocabulary, runtime event decoding, or transport-specific logic.
 boundary. Useful bridge behavior moves into `@agent-os/client-react` and
 `@agent-os/client-svelte`. There is no compatibility shim package.
 
-`@agent-os/workspace-agent` owns the workspace app-kit mechanism:
+`@agent-os/workspace-agent` owns the hidden workspace preset host mechanism:
 
 - workspace file/state projections;
 - scan/diff/emit helpers;
@@ -88,7 +89,7 @@ recorded by the runtime/projection stream.
 
 ## Workspace Surface Split
 
-Workspace app-kit public operations are split by generator.
+Workspace preset host public operations are split by generator.
 
 Projection reads are replayable/read-model surfaces:
 
@@ -109,7 +110,7 @@ Commands use `rpcInvoker`:
 
 `readFile` is a command because file bytes are live sandbox material at read
 time, not a durable projection fact. Products may choose to project selected
-file content later, but the app-kit must not do that by default.
+file content later, but the workspace host must not do that by default.
 
 ## Generated Mount
 

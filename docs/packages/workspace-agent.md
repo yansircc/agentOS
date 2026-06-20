@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Workspace agent app-kit contracts for projection reads, typed commands,
+Workspace preset host contracts for projection reads, typed commands,
 generated mount shape, and authored reconcile policy.
 
 ## Invariant

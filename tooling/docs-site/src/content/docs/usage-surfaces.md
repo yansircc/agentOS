@@ -17,7 +17,7 @@ views from projections.
 | Generated client   | app framework output                       | App authors            | typed submit, projection subscriptions, commands   |
 | Client core        | `@agent-os/client`                         | App UI/headless code   | transport-neutral store and typed command invoker  |
 | Framework bridge   | `@agent-os/client-react` / `client-svelte` | App UI authors         | framework reactivity over canonical client state   |
-| Workspace app-kit  | `@agent-os/workspace-agent`                | Workspace app authors  | workspace projections, commands, generated mount   |
+| Workspace preset   | `@agent-os/workspace-agent`                | Generated target host  | workspace projections, commands, generated mount   |
 | Backend mount      | `@agent-os/backend-cloudflare-do`          | Backend authors        | Durable Object factory, manifest mount             |
 | Runtime substrate  | `@agent-os/runtime`                        | Backend authors        | Effect Tags, submit protocol, projections          |
 | Backend protocol   | `@agent-os/backend-protocol`               | Backend authors        | shared dispatch/scheduler/resource/quota semantics |
@@ -71,7 +71,7 @@ canonical read-model. It is not the client core state model. React and Svelte
 framework bindings are `@agent-os/client-react` and
 `@agent-os/client-svelte`.
 
-Workspace app-kit surfaces split by generator:
+Workspace preset host surfaces split by generator:
 
 - workspace state, file metadata, run stream, input requests, and agent info are
   projection reads;

@@ -4,12 +4,12 @@
 
 ## Purpose
 
-Workspace agent app-kit contracts for projection reads, typed commands,
+Workspace preset host contracts for projection reads, typed commands,
 generated mount shape, and authored reconcile policy.
 
 ## Public API Status
 
-0.5.x active development. Public exports are listed in `PUBLIC_API.md` to prevent accidental app-kit surface drift.
+0.5.x active development. Public exports are listed in `PUBLIC_API.md` to prevent accidental workspace host surface drift.
 
 ## Invariant
 

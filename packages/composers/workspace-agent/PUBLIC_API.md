@@ -2,7 +2,7 @@
 
 # @agent-os/workspace-agent Public API
 
-Status: 0.5.x active development for the workspace-agent app-kit contract. Public exports cover projection names, command map, generated mount shape, client factory, and typed reconcile boundary.
+Status: 0.5.x active development for the workspace-agent host contract. Public exports cover projection names, command map, generated mount shape, client factory, and typed reconcile boundary.
 
 ## Public exports
 
