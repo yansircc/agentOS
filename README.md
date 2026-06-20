@@ -93,42 +93,35 @@ surface.
 
 ## Minimal Use
 
-1. Author pre-runtime intent in one `agent/` tree.
-2. Compile that tree into one normalized manifest plus provenance.
-3. Mount the manifest through a backend adapter.
-4. Use generated clients and projections instead of hand-writing backend
-   submit specs.
-5. Read durable state from ledger events or derived projections.
+Author pre-runtime intent as files, not runtime wiring:
 
-```ts
-import { compileAgentTree } from "@agent-os/agent-authoring";
+```text
+agent/
+  instructions.md
+  agent.json
+  tools/
+  workspace/reconcile.ts      # optional product policy
 
-const compiled = compileAgentTree({
-  files: [
-    {
-      path: "agent/instructions.md",
-      kind: "markdown",
-      text: "Answer with the current weather for the requested city.",
-    },
-    {
-      path: "agent/tools/weather.ts",
-      kind: "tool",
-      declaration: { bindingRef: "tool.weather" },
-    },
-  ],
-});
-
-if (!compiled.ok) throw new Error(JSON.stringify(compiled.issues));
-
-const { manifest, provenance } = compiled.value;
+agentos.config.jsonc          # typed deployment data
+.agentos/generated/           # ignored compiler projection
+src/app/                      # optional product UI only
 ```
+
+`agentos.config.jsonc` selects the versioned workspace macro, target, client
+bridge, LLM route refs, and workspace topology as typed data. The generated
+surface owns target wiring and the typed client; product code should not
+hand-write backend `SubmitSpec`, Durable Object wiring, identity glue, or stream
+glue.
+
+Start at
+[Build a natural-language workspace agent](docs/guides/build-natural-language-workspace-agent.md).
 
 ## Documents
 
 - [Runtime Packages](docs/runtime-packages.md)
 - [Usage Surfaces](docs/usage-surfaces.md)
 - [Boundary Contract](docs/boundary-contract.md)
-- [Runtime Packages](docs/runtime-packages.md)
+- [Start Here](docs/start-here.md)
 - [Verification](docs/verification.md)
 
 ## Verification
