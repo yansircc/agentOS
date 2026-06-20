@@ -3,6 +3,25 @@
 ## Public exports
 
 - `.:AUTHORING_DEFAULTS_VERSION`
+- `.:AGENTOS_CONFIG_CLIENT`
+- `.:AGENTOS_CONFIG_LLM_ROUTE`
+- `.:AGENTOS_CONFIG_PROFILE`
+- `.:AGENTOS_CONFIG_TARGET`
+- `.:AgentOsConfigClient`
+- `.:AgentOsConfigClientKind`
+- `.:AgentOsConfigCloudflareDoTarget`
+- `.:AgentOsConfigDeployment`
+- `.:AgentOsConfigFactKey`
+- `.:AgentOsConfigIssue`
+- `.:AgentOsConfigLlm`
+- `.:AgentOsConfigLlmRoute`
+- `.:AgentOsConfigOrigin`
+- `.:AgentOsConfigProfile`
+- `.:AgentOsConfigTarget`
+- `.:AgentOsConfigTargetKind`
+- `.:AgentOsConfigV1`
+- `.:AgentOsConfigWorkspace`
+- `.:AgentOsConfigWorkspaceTopology`
 - `.:AgentManifestFactKey`
 - `.:AgentManifestOrigin`
 - `.:AuthoredAgentJson`
@@ -17,7 +36,14 @@
 - `.:CompileAgentTreeIssue`
 - `.:CompileAgentTreeResult`
 - `.:CompiledAgentManifest`
+- `.:DecodeAgentOsConfigResult`
+- `.:NormalizedAgentOsConfig`
+- `.:NormalizeAgentOsConfigResult`
+- `.:WORKSPACE_TOPOLOGY`
+- `.:WorkspaceTopologyKind`
 - `.:compileAgentTree`
+- `.:decodeAgentOsConfig`
+- `.:normalizeAgentOsConfig`
 
 ## Experimental exports
 

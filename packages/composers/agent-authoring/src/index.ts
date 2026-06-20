@@ -13,7 +13,11 @@ import type {
   AgentScopeIdentityPolicy,
   AgentToolBindingRef,
 } from "@agent-os/runtime-protocol";
-import { BUILTIN_HANDLER_KINDS, type HandlerKind } from "@agent-os/runtime-protocol";
+import {
+  BUILTIN_HANDLER_KINDS,
+  type DeploymentSpec,
+  type HandlerKind,
+} from "@agent-os/runtime-protocol";
 
 export const AUTHORING_DEFAULTS_VERSION = "framework-defaults@agentos/v1" as const;
 
@@ -1073,6 +1077,514 @@ export const compileAgentTree = <K extends HandlerKind = HandlerKind>(
     value: {
       manifest: authoredValue(manifest) as AuthoredAgentManifest<K>,
       provenance: buildProvenance(state),
+    },
+  };
+};
+
+export const AGENTOS_CONFIG_PROFILE = {
+  WORKSPACE_V1: "workspace@1",
+} as const;
+
+export type AgentOsConfigProfile =
+  (typeof AGENTOS_CONFIG_PROFILE)[keyof typeof AGENTOS_CONFIG_PROFILE];
+
+export const AGENTOS_CONFIG_TARGET = {
+  CLOUDFLARE_DO_V1: "cloudflare-do@1",
+} as const;
+
+export type AgentOsConfigTargetKind =
+  (typeof AGENTOS_CONFIG_TARGET)[keyof typeof AGENTOS_CONFIG_TARGET];
+
+export const AGENTOS_CONFIG_CLIENT = {
+  SVELTE_KIT_REMOTE_V1: "svelte-kit-remote@1",
+  BROWSER_DIRECT_V1: "browser-direct@1",
+} as const;
+
+export type AgentOsConfigClientKind =
+  (typeof AGENTOS_CONFIG_CLIENT)[keyof typeof AGENTOS_CONFIG_CLIENT];
+
+export const AGENTOS_CONFIG_LLM_ROUTE = {
+  OPENAI_CHAT_COMPATIBLE: "openai-chat-compatible",
+} as const;
+
+export type AgentOsConfigLlmRoute =
+  (typeof AGENTOS_CONFIG_LLM_ROUTE)[keyof typeof AGENTOS_CONFIG_LLM_ROUTE];
+
+export const WORKSPACE_TOPOLOGY = {
+  PER_SCOPE: "per_scope",
+} as const;
+
+export type WorkspaceTopologyKind = (typeof WORKSPACE_TOPOLOGY)[keyof typeof WORKSPACE_TOPOLOGY];
+
+export interface AgentOsConfigDeployment {
+  readonly id: string;
+  readonly version?: string;
+}
+
+export interface AgentOsConfigCloudflareDoTarget {
+  readonly kind: typeof AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1;
+  readonly durableObject: {
+    readonly className: string;
+    readonly binding: string;
+  };
+}
+
+export type AgentOsConfigTarget = AgentOsConfigCloudflareDoTarget;
+
+export interface AgentOsConfigClient {
+  readonly kind: AgentOsConfigClientKind;
+}
+
+export interface AgentOsConfigLlm {
+  readonly route: AgentOsConfigLlmRoute;
+  readonly endpointRef: string;
+  readonly credentialRef: string;
+  readonly modelRef: string;
+}
+
+export interface AgentOsConfigWorkspaceTopology {
+  readonly kind: typeof WORKSPACE_TOPOLOGY.PER_SCOPE;
+  readonly allocator: string;
+}
+
+export interface AgentOsConfigWorkspace {
+  readonly binding: string;
+  readonly root: string;
+  readonly topology?: AgentOsConfigWorkspaceTopology;
+}
+
+export interface AgentOsConfigV1 {
+  readonly $schema?: string;
+  readonly profile: AgentOsConfigProfile;
+  readonly agent: string;
+  readonly deployment: AgentOsConfigDeployment;
+  readonly target: AgentOsConfigTarget;
+  readonly client: AgentOsConfigClient;
+  readonly llm: AgentOsConfigLlm;
+  readonly workspace: AgentOsConfigWorkspace;
+}
+
+export type AgentOsConfigFactKey = `/${string}`;
+
+export type AgentOsConfigOrigin =
+  | `author:agentos.config.jsonc#${AgentOsConfigFactKey}`
+  | `macro(${typeof AGENTOS_CONFIG_PROFILE.WORKSPACE_V1})#${AgentOsConfigFactKey}`
+  | `derived:${string}`;
+
+export type AgentOsConfigIssue =
+  | { readonly kind: "config_not_object"; readonly path: "agentos.config.jsonc" }
+  | { readonly kind: "unknown_field"; readonly path: string; readonly field: string }
+  | {
+      readonly kind: "invalid_config_value";
+      readonly path: string;
+      readonly field: string;
+      readonly reason: string;
+    }
+  | { readonly kind: "runtime_fact_forbidden"; readonly path: string; readonly field: string }
+  | { readonly kind: "function_in_config"; readonly path: string };
+
+export type DecodeAgentOsConfigResult =
+  | { readonly ok: true; readonly value: AgentOsConfigV1 }
+  | { readonly ok: false; readonly issues: ReadonlyArray<AgentOsConfigIssue> };
+
+export interface NormalizedAgentOsConfig<M extends AgentManifest = AgentManifest> {
+  readonly config: AgentOsConfigV1;
+  readonly deployment: DeploymentSpec<M>;
+  readonly deploymentVersion?: string;
+  readonly target: AgentOsConfigTarget;
+  readonly client: AgentOsConfigClient;
+  readonly llm: AgentOsConfigLlm;
+  readonly workspace: AgentOsConfigWorkspace & {
+    readonly topology: AgentOsConfigWorkspaceTopology;
+  };
+  readonly origins: Readonly<Record<AgentOsConfigFactKey, AgentOsConfigOrigin>>;
+}
+
+export type NormalizeAgentOsConfigResult<M extends AgentManifest = AgentManifest> =
+  | { readonly ok: true; readonly value: NormalizedAgentOsConfig<M> }
+  | { readonly ok: false; readonly issues: ReadonlyArray<AgentOsConfigIssue> };
+
+const configAuthorOrigin = (factKey: AgentOsConfigFactKey): AgentOsConfigOrigin =>
+  `author:agentos.config.jsonc#${factKey}`;
+
+const workspaceMacroOrigin = (factKey: AgentOsConfigFactKey): AgentOsConfigOrigin =>
+  `macro(${AGENTOS_CONFIG_PROFILE.WORKSPACE_V1})#${factKey}`;
+
+const configAllowedFields = new Set([
+  "$schema",
+  "profile",
+  "agent",
+  "deployment",
+  "target",
+  "client",
+  "llm",
+  "workspace",
+]);
+
+const deploymentAllowedFields = new Set(["id", "version"]);
+const targetAllowedFields = new Set(["kind", "durableObject"]);
+const durableObjectAllowedFields = new Set(["className", "binding"]);
+const clientAllowedFields = new Set(["kind"]);
+const llmAllowedFields = new Set(["route", "endpointRef", "credentialRef", "modelRef"]);
+const workspaceAllowedFields = new Set(["binding", "root", "topology"]);
+const topologyAllowedFields = new Set(["kind", "allocator"]);
+
+const configRuntimeFactFields = new Set([
+  "continuation",
+  "continuationRef",
+  "inputRequestRef",
+  "snapshot",
+  "actualTriggerTime",
+  "resumePayload",
+  "resolvedMaterial",
+  "secret",
+  "credential",
+  "triggerTime",
+]);
+
+const issueInvalidConfigValue = (
+  issues: AgentOsConfigIssue[],
+  path: string,
+  field: string,
+  reason: string,
+): void => {
+  issues.push({ kind: "invalid_config_value", path, field, reason });
+};
+
+const assertConfigAllowedFields = (
+  issues: AgentOsConfigIssue[],
+  path: string,
+  value: JsonRecord,
+  allowed: ReadonlySet<string>,
+): void => {
+  for (const field of Object.keys(value)) {
+    if (!allowed.has(field)) issues.push({ kind: "unknown_field", path, field });
+  }
+};
+
+const assertNoConfigRuntimeFacts = (
+  issues: AgentOsConfigIssue[],
+  path: string,
+  value: JsonRecord,
+): void => {
+  const visit = (record: JsonRecord, fieldPrefix: string): void => {
+    for (const [field, child] of Object.entries(record)) {
+      const fieldPath = fieldPrefix.length === 0 ? field : `${fieldPrefix}.${field}`;
+      if (configRuntimeFactFields.has(field)) {
+        issues.push({ kind: "runtime_fact_forbidden", path, field: fieldPath });
+      }
+      if (typeof child === "function") {
+        issues.push({ kind: "function_in_config", path: `${path}.${fieldPath}` });
+      }
+      if (isRecord(child)) visit(child, fieldPath);
+      if (Array.isArray(child)) {
+        for (let index = 0; index < child.length; index += 1) {
+          const item = child[index];
+          if (isRecord(item)) visit(item, `${fieldPath}[${index}]`);
+          if (typeof item === "function") {
+            issues.push({ kind: "function_in_config", path: `${path}.${fieldPath}[${index}]` });
+          }
+        }
+      }
+    }
+  };
+  visit(value, "");
+};
+
+const configStringField = (
+  issues: AgentOsConfigIssue[],
+  path: string,
+  field: string,
+  value: unknown,
+): string | null => {
+  if (isNonEmptyString(value)) return value;
+  issueInvalidConfigValue(issues, path, field, "non_empty_string_required");
+  return null;
+};
+
+const configOptionalStringField = (
+  issues: AgentOsConfigIssue[],
+  path: string,
+  field: string,
+  value: unknown,
+): string | undefined => {
+  if (value === undefined) return undefined;
+  return configStringField(issues, path, field, value) ?? undefined;
+};
+
+const configRequiredRecord = (
+  issues: AgentOsConfigIssue[],
+  path: string,
+  field: string,
+  value: unknown,
+): JsonRecord | null => {
+  if (isRecord(value)) return value;
+  issueInvalidConfigValue(issues, path, field, "object_required");
+  return null;
+};
+
+const decodeDeploymentConfig = (
+  issues: AgentOsConfigIssue[],
+  value: unknown,
+): AgentOsConfigDeployment | null => {
+  const record = configRequiredRecord(issues, "agentos.config.jsonc", "/deployment", value);
+  if (record === null) return null;
+  assertConfigAllowedFields(issues, "/deployment", record, deploymentAllowedFields);
+  const id = configStringField(issues, "/deployment", "/deployment/id", record.id);
+  const version = configOptionalStringField(
+    issues,
+    "/deployment",
+    "/deployment/version",
+    record.version,
+  );
+  return id === null ? null : { id, ...(version === undefined ? {} : { version }) };
+};
+
+const decodeTargetConfig = (
+  issues: AgentOsConfigIssue[],
+  value: unknown,
+): AgentOsConfigTarget | null => {
+  const record = configRequiredRecord(issues, "agentos.config.jsonc", "/target", value);
+  if (record === null) return null;
+  assertConfigAllowedFields(issues, "/target", record, targetAllowedFields);
+  if (record.kind !== AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1) {
+    issueInvalidConfigValue(issues, "/target", "/target/kind", "target_kind_invalid");
+    return null;
+  }
+  const durableObject = configRequiredRecord(
+    issues,
+    "/target",
+    "/target/durableObject",
+    record.durableObject,
+  );
+  if (durableObject === null) return null;
+  assertConfigAllowedFields(
+    issues,
+    "/target/durableObject",
+    durableObject,
+    durableObjectAllowedFields,
+  );
+  const className = configStringField(
+    issues,
+    "/target/durableObject",
+    "/target/durableObject/className",
+    durableObject.className,
+  );
+  const binding = configStringField(
+    issues,
+    "/target/durableObject",
+    "/target/durableObject/binding",
+    durableObject.binding,
+  );
+  return className === null || binding === null
+    ? null
+    : {
+        kind: AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1,
+        durableObject: { className, binding },
+      };
+};
+
+const decodeClientConfig = (
+  issues: AgentOsConfigIssue[],
+  value: unknown,
+): AgentOsConfigClient | null => {
+  const record = configRequiredRecord(issues, "agentos.config.jsonc", "/client", value);
+  if (record === null) return null;
+  assertConfigAllowedFields(issues, "/client", record, clientAllowedFields);
+  if (
+    record.kind !== AGENTOS_CONFIG_CLIENT.SVELTE_KIT_REMOTE_V1 &&
+    record.kind !== AGENTOS_CONFIG_CLIENT.BROWSER_DIRECT_V1
+  ) {
+    issueInvalidConfigValue(issues, "/client", "/client/kind", "client_kind_invalid");
+    return null;
+  }
+  return { kind: record.kind };
+};
+
+const decodeLlmConfig = (issues: AgentOsConfigIssue[], value: unknown): AgentOsConfigLlm | null => {
+  const record = configRequiredRecord(issues, "agentos.config.jsonc", "/llm", value);
+  if (record === null) return null;
+  assertConfigAllowedFields(issues, "/llm", record, llmAllowedFields);
+  if (record.route !== AGENTOS_CONFIG_LLM_ROUTE.OPENAI_CHAT_COMPATIBLE) {
+    issueInvalidConfigValue(issues, "/llm", "/llm/route", "llm_route_invalid");
+    return null;
+  }
+  const endpointRef = configStringField(issues, "/llm", "/llm/endpointRef", record.endpointRef);
+  const credentialRef = configStringField(
+    issues,
+    "/llm",
+    "/llm/credentialRef",
+    record.credentialRef,
+  );
+  const modelRef = configStringField(issues, "/llm", "/llm/modelRef", record.modelRef);
+  return endpointRef === null || credentialRef === null || modelRef === null
+    ? null
+    : {
+        route: AGENTOS_CONFIG_LLM_ROUTE.OPENAI_CHAT_COMPATIBLE,
+        endpointRef,
+        credentialRef,
+        modelRef,
+      };
+};
+
+const decodeWorkspaceTopologyConfig = (
+  issues: AgentOsConfigIssue[],
+  value: unknown,
+): AgentOsConfigWorkspaceTopology | null => {
+  const record = configRequiredRecord(issues, "/workspace", "/workspace/topology", value);
+  if (record === null) return null;
+  assertConfigAllowedFields(issues, "/workspace/topology", record, topologyAllowedFields);
+  if (record.kind !== WORKSPACE_TOPOLOGY.PER_SCOPE) {
+    issueInvalidConfigValue(
+      issues,
+      "/workspace/topology",
+      "/workspace/topology/kind",
+      "workspace_topology_kind_invalid",
+    );
+    return null;
+  }
+  const allocator = configStringField(
+    issues,
+    "/workspace/topology",
+    "/workspace/topology/allocator",
+    record.allocator,
+  );
+  return allocator === null ? null : { kind: WORKSPACE_TOPOLOGY.PER_SCOPE, allocator };
+};
+
+const decodeWorkspaceConfig = (
+  issues: AgentOsConfigIssue[],
+  value: unknown,
+): AgentOsConfigWorkspace | null => {
+  const record = configRequiredRecord(issues, "agentos.config.jsonc", "/workspace", value);
+  if (record === null) return null;
+  assertConfigAllowedFields(issues, "/workspace", record, workspaceAllowedFields);
+  const binding = configStringField(issues, "/workspace", "/workspace/binding", record.binding);
+  const root = configStringField(issues, "/workspace", "/workspace/root", record.root);
+  const topology =
+    record.topology === undefined
+      ? undefined
+      : decodeWorkspaceTopologyConfig(issues, record.topology);
+  return binding === null || root === null || topology === null
+    ? null
+    : { binding, root, ...(topology === undefined ? {} : { topology }) };
+};
+
+export const decodeAgentOsConfig = (value: unknown): DecodeAgentOsConfigResult => {
+  const issues: AgentOsConfigIssue[] = [];
+  if (!isRecord(value))
+    return { ok: false, issues: [{ kind: "config_not_object", path: "agentos.config.jsonc" }] };
+  assertConfigAllowedFields(issues, "agentos.config.jsonc", value, configAllowedFields);
+  assertNoConfigRuntimeFacts(issues, "agentos.config.jsonc", value);
+
+  const schema = configOptionalStringField(
+    issues,
+    "agentos.config.jsonc",
+    "/$schema",
+    value.$schema,
+  );
+  if (value.profile !== AGENTOS_CONFIG_PROFILE.WORKSPACE_V1) {
+    issueInvalidConfigValue(issues, "agentos.config.jsonc", "/profile", "profile_invalid");
+  }
+  const agent = configStringField(issues, "agentos.config.jsonc", "/agent", value.agent);
+  const deployment = decodeDeploymentConfig(issues, value.deployment);
+  const target = decodeTargetConfig(issues, value.target);
+  const client = decodeClientConfig(issues, value.client);
+  const llm = decodeLlmConfig(issues, value.llm);
+  const workspace = decodeWorkspaceConfig(issues, value.workspace);
+  if (
+    issues.length > 0 ||
+    agent === null ||
+    deployment === null ||
+    target === null ||
+    client === null ||
+    llm === null ||
+    workspace === null
+  ) {
+    return { ok: false, issues };
+  }
+  return {
+    ok: true,
+    value: {
+      ...(schema === undefined ? {} : { $schema: schema }),
+      profile: AGENTOS_CONFIG_PROFILE.WORKSPACE_V1,
+      agent,
+      deployment,
+      target,
+      client,
+      llm,
+      workspace,
+    },
+  };
+};
+
+const defaultWorkspaceTopology = (): AgentOsConfigWorkspaceTopology => ({
+  kind: WORKSPACE_TOPOLOGY.PER_SCOPE,
+  allocator: "workspace-per-scope-v1",
+});
+
+export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
+  config: AgentOsConfigV1,
+  compiled: CompiledAgentManifest<K>,
+): NormalizeAgentOsConfigResult<AuthoredAgentManifest<K>> => {
+  const decoded = decodeAgentOsConfig(config);
+  if (!decoded.ok) return decoded;
+  const value = decoded.value;
+  const topology = value.workspace.topology ?? defaultWorkspaceTopology();
+  const origins: Record<AgentOsConfigFactKey, AgentOsConfigOrigin> = {
+    "/profile": configAuthorOrigin("/profile"),
+    "/agent": configAuthorOrigin("/agent"),
+    "/deployment/id": configAuthorOrigin("/deployment/id"),
+    ...(value.deployment.version === undefined
+      ? {}
+      : { "/deployment/version": configAuthorOrigin("/deployment/version") }),
+    "/target/kind": configAuthorOrigin("/target/kind"),
+    "/target/durableObject/className": configAuthorOrigin("/target/durableObject/className"),
+    "/target/durableObject/binding": configAuthorOrigin("/target/durableObject/binding"),
+    "/client/kind": configAuthorOrigin("/client/kind"),
+    "/llm/route": configAuthorOrigin("/llm/route"),
+    "/llm/endpointRef": configAuthorOrigin("/llm/endpointRef"),
+    "/llm/credentialRef": configAuthorOrigin("/llm/credentialRef"),
+    "/llm/modelRef": configAuthorOrigin("/llm/modelRef"),
+    "/workspace/binding": configAuthorOrigin("/workspace/binding"),
+    "/workspace/root": configAuthorOrigin("/workspace/root"),
+    "/workspace/topology/kind":
+      value.workspace.topology === undefined
+        ? workspaceMacroOrigin("/workspace/topology/kind")
+        : configAuthorOrigin("/workspace/topology/kind"),
+    "/workspace/topology/allocator":
+      value.workspace.topology === undefined
+        ? workspaceMacroOrigin("/workspace/topology/allocator")
+        : configAuthorOrigin("/workspace/topology/allocator"),
+    "/deployment/backend": `derived:/target/kind`,
+    "/deployment/adapter": `derived:/target/kind`,
+    "/deployment/codec": workspaceMacroOrigin("/deployment/codec"),
+    "/deployment/providerStrategy": `derived:/llm/route`,
+  };
+  return {
+    ok: true,
+    value: {
+      config: value,
+      deployment: {
+        deploymentId: value.deployment.id,
+        manifest: compiled.manifest,
+        backend: "cloudflare-do",
+        adapter: AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1,
+        codec: "agentos-json@1",
+        providerStrategy: value.llm.route,
+      },
+      ...(value.deployment.version === undefined
+        ? {}
+        : { deploymentVersion: value.deployment.version }),
+      target: value.target,
+      client: value.client,
+      llm: value.llm,
+      workspace: {
+        binding: value.workspace.binding,
+        root: value.workspace.root,
+        topology,
+      },
+      origins,
     },
   };
 };
