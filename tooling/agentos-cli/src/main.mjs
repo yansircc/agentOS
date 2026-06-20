@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
+
 import { hasAlgorithmicChecker, runAlgorithmicChecker } from "./check/algorithmic-checks.mjs";
 import { listGuards, runGroup, runGuard } from "./runner.mjs";
 
@@ -9,6 +12,7 @@ const helpText = `agentOS repository CLI ${version}
 Usage:
   agentos --help
   agentos --version
+  agentos build [--cwd <path>] [--config <path>] [--package-scope <scope>]
   agentos check all
   agentos check docs
   agentos check effect-manifests
@@ -32,6 +36,7 @@ const fail = (message) => {
   process.stderr.write(`${message}\n\n`);
   if (
     message.startsWith("agentos:") ||
+    message.startsWith("agentos build:") ||
     message.startsWith("agentos check:") ||
     message.startsWith("agentos generate:")
   ) {
@@ -44,6 +49,27 @@ const expectNoExtraArgs = (args, command) => {
   if (args.length > 0) {
     throw new Error(`${command}: unexpected argument ${args.join(" ")}`);
   }
+};
+
+const runBuild = async (args) => {
+  const runner = fileURLToPath(new URL("./build/build-agent.mjs", import.meta.url));
+  await new Promise((resolve, reject) => {
+    const child = spawn("bun", [runner, ...args], { stdio: "inherit" });
+    child.on("error", (error) => {
+      reject(new Error(`agentos build: failed to start bun: ${error.message}`));
+    });
+    child.on("exit", (code, signal) => {
+      if (signal !== null) {
+        reject(new Error(`agentos build: build runner terminated by ${signal}`));
+        return;
+      }
+      if (code !== 0) {
+        reject(new Error(`agentos build: build runner failed with exit code ${code ?? 1}`));
+        return;
+      }
+      resolve();
+    });
+  });
 };
 
 const runCheck = async (args) => {
@@ -133,6 +159,9 @@ const main = async () => {
     return;
   }
   switch (command) {
+    case "build":
+      await runBuild(rest);
+      return;
     case "check":
       await runCheck(rest);
       return;
@@ -140,7 +169,7 @@ const main = async () => {
       await runGenerate(rest);
       return;
     default:
-      throw new Error("agentos: choose one of check, generate");
+      throw new Error("agentos: choose one of build, check, generate");
   }
 };
 

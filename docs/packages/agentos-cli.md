@@ -2,8 +2,8 @@
 
 ## Purpose
 
-`@agent-os/agentos-cli` is the private repo-local command entrypoint for
-generated projections and boundary rule checks.
+`@agent-os/agentos-cli` is the repo-local command entrypoint for generated
+projections, authored agent builds, and boundary rule checks.
 
 ## Invariant
 
@@ -15,6 +15,7 @@ facts, public API intent, carrier declarations, or substrate runtime behavior.
 ```sh
 bun run agentos -- check all
 bun run agentos -- check guard public-api
+bun run agentos -- build --cwd /path/to/app
 bun run agentos -- generate docs
 ```
 

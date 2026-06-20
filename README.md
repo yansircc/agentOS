@@ -104,7 +104,7 @@ agent/
 
 agentos.config.jsonc          # typed deployment data
 .agentos/generated/           # ignored compiler projection
-src/app/                      # optional product UI only
+app/                          # optional product UI only
 ```
 
 `agentos.config.jsonc` selects the versioned workspace macro, target, client

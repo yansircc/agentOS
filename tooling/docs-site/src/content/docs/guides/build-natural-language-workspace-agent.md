@@ -21,11 +21,11 @@ agent/
   workspace/reconcile.ts
 agentos.config.jsonc
 .agentos/generated/
-src/app/
+app/
 ```
 
 Only `agent/` and `agentos.config.jsonc` are required. `workspace/reconcile.ts`
-is optional authored policy. `src/app/` is product UI only.
+is optional authored policy. `app/` is product UI only.
 
 ## Authoring Tree
 
@@ -85,9 +85,9 @@ JSONC data.
 
 ## Generated Surface
 
-`agentos build` or an app-local generation script writes `.agentos/generated/`.
-The directory is derived output and should be ignored by git. Delete it and
-rebuild to reproduce the same files from the same authored source.
+`agentos build` writes `.agentos/generated/`. The directory is derived output
+and should be ignored by git. Delete it and rebuild to reproduce the same files
+from the same authored source.
 
 The generated target is a static residual program:
 
@@ -106,7 +106,7 @@ bridge. Browser-direct streams and server bridges inject `streamSource` and
 `rpcInvoker`; they do not copy the client state machine.
 
 Product UI starts after the generated client. Timeline rows, file review
-panels, layout, and product-specific visual state belong in `src/app/`.
+panels, layout, and product-specific visual state belong in `app/`.
 
 ## Workspace Boundary
 
