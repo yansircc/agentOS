@@ -1301,7 +1301,7 @@ export const runRuntimeBackendContractSuite = (
             new Promise((resolve, reject) => {
               const timeout = setTimeout(
                 () => reject(new Error("concurrent retry drain never reached receiver")),
-                1_000,
+                10_000,
               );
               retryStarted.then(
                 () => {

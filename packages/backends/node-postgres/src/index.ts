@@ -223,6 +223,8 @@ const eventRowSelect = `
   FROM agentos_events
 `;
 
+const ledgerWriteLockKey = (identityKey: string): string => `agentos:ledger:${identityKey}`;
+
 const resourceLockKey = (identityKey: string): string => `agentos:resource:${identityKey}`;
 
 const resourceProjectionCtes = (identityKey: string): string => `
@@ -303,6 +305,7 @@ export class NodePostgresBackend {
   readonly #sinks = new Set<EventSink>();
   readonly #diagnostics: TelemetryFanoutDiagnostic[] = [];
   readonly #targets = new Map<string, DispatchTargetAdapter>();
+  readonly #dueDrainLocks = new Map<string, Promise<void>>();
   readonly #now: NodePostgresNow;
 
   constructor(options: NodePostgresBackendOptions) {
@@ -510,7 +513,7 @@ export class NodePostgresBackend {
     identity: BackendProtocolEventIdentity,
     now: number,
   ): Promise<{ readonly fired: number }> {
-    const result = await this.#drainDue(identity, now);
+    const result = await this.#drainDueLocked(identity, now);
     return { fired: result.drained };
   }
 
@@ -519,7 +522,7 @@ export class NodePostgresBackend {
     now: number,
   ): Promise<{ readonly delivered: number; readonly failed: number }> {
     const before = await this.#events(identity);
-    const result = await this.#drainDue(identity, now);
+    const result = await this.#drainDueLocked(identity, now);
     if (result.drained === 0) return { delivered: 0, failed: 0 };
     const after = await this.#events(identity);
     const slice = after.slice(before.length);
@@ -622,7 +625,7 @@ export class NodePostgresBackend {
       DELIVERY_RETRY_TRIGGER_KIND,
       now,
     );
-    await this.#drainDue(identity, now);
+    await this.#drainDueLocked(identity, now);
     return { outboundEventId: event.id };
   }
 
@@ -1032,7 +1035,7 @@ export class NodePostgresBackend {
         drained += 1;
         continue;
       }
-      await this.#completeDue(row.id, now, row.claimToken);
+      await this.#completeDue(row, now);
       drained += 1;
     }
   }
@@ -1040,12 +1043,12 @@ export class NodePostgresBackend {
   async #commitScheduled(row: DueWorkRow, now: number): Promise<void> {
     const [intent] = await this.#eventById(row.identity, row.payload.intentEventId);
     if (intent === undefined) {
-      await this.#completeDue(row.id, now, row.claimToken);
+      await this.#completeDue(row, now);
       return;
     }
     const parsed = parseScheduledEventIntentPayload(intent.payload);
     if (!parsed.ok) {
-      await this.#completeDue(row.id, now, row.claimToken);
+      await this.#completeDue(row, now);
       return;
     }
     await this.#appendEventsAndCompleteDue(
@@ -1065,17 +1068,17 @@ export class NodePostgresBackend {
   async #commitDispatchRetry(row: DueWorkRow, now: number): Promise<void> {
     const intent = row.dispatchIntent;
     if (intent === null) {
-      await this.#completeDue(row.id, now, row.claimToken);
+      await this.#completeDue(row, now);
       return;
     }
     const parsed = parseRequestedPayloadValue(intent.payload);
     if (!parsed.ok) {
-      await this.#completeDue(row.id, now, row.claimToken);
+      await this.#completeDue(row, now);
       return;
     }
     const requested = parsed.value;
     if (row.dispatchSuccessCount > 0) {
-      await this.#completeDue(row.id, now, row.claimToken);
+      await this.#completeDue(row, now);
       return;
     }
     const attempts = row.dispatchAttemptCount + 1;
@@ -1406,6 +1409,9 @@ export class NodePostgresBackend {
   ): Promise<LedgerEvent> {
     const identityKey = backendProtocolEventIdentityKey(spec.identity);
     const rows = await this.#sql.jsonArrayStatement<LedgerEvent>(`
+      BEGIN;
+      SELECT pg_advisory_xact_lock(hashtextextended(${sqlString(ledgerWriteLockKey(identityKey))}, 0));
+
       WITH inserted_event AS (
         INSERT INTO agentos_events (
           ts, kind, truth_key, identity_key, scope_ref, fact_owner_ref, effect_authority_ref, payload
@@ -1448,7 +1454,8 @@ export class NodePostgresBackend {
         JOIN inserted_due_work ON true
       )
       SELECT COALESCE(json_agg(row_to_json(agentos_json_rows)), '[]'::json)::text
-      FROM agentos_json_rows
+      FROM agentos_json_rows;
+      COMMIT
     `);
     const event = rows[0];
     if (event === undefined)
@@ -1473,6 +1480,9 @@ export class NodePostgresBackend {
     },
   ): Promise<ReadonlyArray<LedgerEvent>> {
     const rows = await this.#sql.jsonArrayStatement<LedgerEvent>(`
+      BEGIN;
+      SELECT pg_advisory_xact_lock(hashtextextended(${sqlString(ledgerWriteLockKey(row.identityKey))}, 0));
+
       WITH completed_due AS (
         UPDATE agentos_due_work
         SET completed_at = ${sqlNumber(now)}
@@ -1557,7 +1567,8 @@ export class NodePostgresBackend {
         SELECT * FROM inserted_events ORDER BY id ASC
       )
       SELECT COALESCE(json_agg(row_to_json(agentos_json_rows)), '[]'::json)::text
-      FROM agentos_json_rows
+      FROM agentos_json_rows;
+      COMMIT
     `);
     if (rows.length !== specs.length) {
       throw new SqlError({ cause: "atomic due outcome commit returned partial event set" });
@@ -1567,13 +1578,18 @@ export class NodePostgresBackend {
   }
 
   async #claimDue(identity: BackendProtocolEventIdentity, now: number): Promise<DueWorkRow | null> {
+    const identityKey = backendProtocolEventIdentityKey(identity);
     const token = randomUUID();
     const deadlineAt = now + 60_000;
     const rows = await this.#sql.jsonArrayStatement<DueWorkRow>(`
-      WITH candidate AS (
+      WITH lock AS (
+        SELECT pg_try_advisory_xact_lock(hashtextextended(${sqlString(ledgerWriteLockKey(identityKey))}, 0)) AS acquired
+      ),
+      candidate AS (
         SELECT id, claim_token
         FROM agentos_due_work
-        WHERE identity_key = ${sqlString(backendProtocolEventIdentityKey(identity))}
+        JOIN lock ON lock.acquired
+        WHERE identity_key = ${sqlString(identityKey)}
           AND completed_at IS NULL
           AND fire_at <= ${sqlNumber(now)}
           AND (claim_token IS NULL OR claim_deadline_at <= ${sqlNumber(now)})
@@ -1611,12 +1627,12 @@ export class NodePostgresBackend {
           SELECT (claimed."payload" ->> 'intentEventId')::bigint
           FROM claimed
         )
-        AND identity_key = ${sqlString(backendProtocolEventIdentityKey(identity))}
+        AND identity_key = ${sqlString(identityKey)}
       )
       , related AS (
         SELECT kind
         FROM agentos_events
-        WHERE identity_key = ${sqlString(backendProtocolEventIdentityKey(identity))}
+        WHERE identity_key = ${sqlString(identityKey)}
           AND kind = ANY(ARRAY[
             ${sqlString(DISPATCH_EVENT_KINDS.OUTBOUND_ENQUEUED)},
             ${sqlString(DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED)},
@@ -1648,13 +1664,40 @@ export class NodePostgresBackend {
     return rows[0] ?? null;
   }
 
-  async #completeDue(id: number, now: number, token: string | null): Promise<void> {
+  async #drainDueLocked(
+    identity: BackendProtocolEventIdentity,
+    now: number,
+  ): Promise<{ readonly drained: number }> {
+    const identityKey = backendProtocolEventIdentityKey(identity);
+    const previous = this.#dueDrainLocks.get(identityKey) ?? Promise.resolve();
+    let release!: () => void;
+    const current = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const chained = previous.catch(() => undefined).then(() => current);
+    this.#dueDrainLocks.set(identityKey, chained);
+    await previous.catch(() => undefined);
+    try {
+      return await this.#drainDue(identity, now);
+    } finally {
+      release();
+      if (this.#dueDrainLocks.get(identityKey) === chained) {
+        this.#dueDrainLocks.delete(identityKey);
+      }
+    }
+  }
+
+  async #completeDue(row: DueWorkRow, now: number): Promise<void> {
     await this.#sql.exec(`
+      BEGIN;
+      SELECT pg_advisory_xact_lock(hashtextextended(${sqlString(ledgerWriteLockKey(row.identityKey))}, 0));
+
       UPDATE agentos_due_work
       SET completed_at = ${sqlNumber(now)}
-      WHERE id = ${sqlNumber(id)}
+      WHERE id = ${sqlNumber(row.id)}
         AND completed_at IS NULL
-        ${token === null ? "" : `AND claim_token = ${sqlString(token)}`};
+        ${row.claimToken === null ? "" : `AND claim_token = ${sqlString(row.claimToken)}`};
+      COMMIT
     `);
   }
 
