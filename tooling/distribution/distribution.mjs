@@ -465,11 +465,30 @@ const exportEntries = (record) => {
     .sort(([left], [right]) => left.localeCompare(right));
 };
 
+const isSourceTsExportTarget = (target) => target.startsWith("./src/") && target.endsWith(".ts");
+
+const isJsonAssetExportTarget = (target) =>
+  target.startsWith("./") &&
+  !target.includes("..") &&
+  !target.startsWith("./src/") &&
+  target.endsWith(".json");
+
 const srcTargetToDist = (target, ext) => {
   if (!target.startsWith("./src/") || !target.endsWith(".ts")) {
     fail(`export target must be a source .ts file: ${target}`);
   }
   return `./dist/${target.slice("./src/".length, -".ts".length)}.${ext}`;
+};
+
+const generatedExportEntry = (target) => {
+  if (isSourceTsExportTarget(target)) {
+    return {
+      types: srcTargetToDist(target, "d.ts"),
+      default: srcTargetToDist(target, "js"),
+    };
+  }
+  if (isJsonAssetExportTarget(target)) return { default: target };
+  fail(`export target must be a source .ts module or package JSON asset: ${target}`);
 };
 
 const resolveRelativeSpecifier = (sourceFile, specifier, ext) => {
@@ -551,6 +570,24 @@ const emitDeclarations = (record) => {
   }
 };
 
+const exportedJsonAssets = (record) =>
+  exportEntries(record)
+    .map(([, target]) => target)
+    .filter(isJsonAssetExportTarget);
+
+const copyExportedAssets = (record) => {
+  for (const target of exportedJsonAssets(record)) {
+    const rel = target.slice("./".length);
+    const source = path.join(record.packageDir, rel);
+    const out = path.join(record.stageDir, rel);
+    if (!fs.existsSync(source) || !fs.statSync(source).isFile()) {
+      fail(`${record.packagePath}: exported asset does not exist: ${target}`);
+    }
+    fs.mkdirSync(path.dirname(out), { recursive: true });
+    fs.copyFileSync(source, out);
+  }
+};
+
 const allFiles = (dir) => {
   if (!fs.existsSync(dir)) return [];
   const files = [];
@@ -600,14 +637,9 @@ const projectedPeerDependencies = (record) => {
 const generatedManifest = (record) => {
   const entries = exportEntries(record);
   const exportsValue = Object.fromEntries(
-    entries.map(([exportPath, target]) => [
-      exportPath,
-      {
-        types: srcTargetToDist(target, "d.ts"),
-        default: srcTargetToDist(target, "js"),
-      },
-    ]),
+    entries.map(([exportPath, target]) => [exportPath, generatedExportEntry(target)]),
   );
+  const exportedAssets = exportedJsonAssets(record).map((target) => target.slice("./".length));
   const manifest = {
     name: publicPackageName(record.packageJson.name),
     version: packageVersion(),
@@ -621,6 +653,7 @@ const generatedManifest = (record) => {
     exports: exportsValue,
     files: [
       "dist",
+      ...exportedAssets,
       ...(fs.existsSync(path.join(record.packageDir, "README.md")) ? ["README.md"] : []),
       ...(fs.existsSync(path.join(record.packageDir, "PUBLIC_API.md")) ? ["PUBLIC_API.md"] : []),
     ],
@@ -666,6 +699,7 @@ const buildInternalPackages = () => {
     fs.mkdirSync(record.stageDir, { recursive: true });
     emitJs(record);
     emitDeclarations(record);
+    copyExportedAssets(record);
     copyPackageDocs(record);
     writeJson(path.join(record.stageDir, "package.json"), generatedManifest(record));
   }

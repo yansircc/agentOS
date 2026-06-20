@@ -345,6 +345,20 @@
       "published": true
     },
     {
+      "slug": "config",
+      "name": "@agent-os/config",
+      "path": "packages/composers/config",
+      "status": "{releaseLine} experimental",
+      "role": "typed agentos.config.jsonc schema and config vocabulary surface",
+      "boundary": "config data contract only; reuses agent-authoring config decoding and owns no runtime policy, target linking, filesystem loading, or ledger facts",
+      "need": "agentOS config schema",
+      "readmeStatus": "{releaseLine} experimental config surface. Public exports are listed for accidental export control only; this package owns the JSONC schema entrypoint.",
+      "apiStatus": "{releaseLine} experimental for `agentos.config.jsonc` schema and config vocabulary. Public exports are listed for accidental export control only; this is not an API freeze.",
+      "apiSource": "docs/api/config.md",
+      "primary": true,
+      "published": true
+    },
+    {
       "slug": "attached-stream",
       "name": "@agent-os/attached-stream",
       "path": "packages/composers/attached-stream",

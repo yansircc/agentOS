@@ -46,6 +46,8 @@ export const agentOsSourceAliasSpecs = [
   ["@agent-os/workspace-op", "packages/carriers/workspace-op/src/index.ts"],
   ["@agent-os/workspace-session", "packages/carriers/workspace-session/src/index.ts"],
   ["@agent-os/agent-authoring", "packages/composers/agent-authoring/src/index.ts"],
+  ["@agent-os/config", "packages/composers/config/src/index.ts"],
+  ["@agent-os/config/schema.json", "packages/composers/config/schema.json"],
   ["@agent-os/attached-stream", "packages/composers/attached-stream/src/index.ts"],
   ["@agent-os/workspace-agent", "packages/composers/workspace-agent/src/index.ts"],
   ["@agent-os/ag-ui", "packages/wire-adapters/ag-ui/src/index.ts"],

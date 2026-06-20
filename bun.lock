@@ -333,6 +333,7 @@
       "dependencies": {
         "@agent-os/kernel": "workspace:*",
         "@agent-os/runtime-protocol": "workspace:*",
+        "@agent-os/workspace-env": "workspace:*",
         "effect": "catalog:",
       },
       "devDependencies": {
@@ -347,6 +348,18 @@
     "packages/composers/attached-stream": {
       "name": "@agent-os/attached-stream",
       "version": "0.5.16",
+      "devDependencies": {
+        "typescript": "catalog:",
+        "vite-plus": "catalog:",
+        "vitest": "catalog:",
+      },
+    },
+    "packages/composers/config": {
+      "name": "@agent-os/config",
+      "version": "0.5.16",
+      "dependencies": {
+        "@agent-os/agent-authoring": "workspace:*",
+      },
       "devDependencies": {
         "typescript": "catalog:",
         "vite-plus": "catalog:",
@@ -909,6 +922,8 @@
     "@agent-os/client-react": ["@agent-os/client-react@workspace:packages/client/react"],
 
     "@agent-os/client-svelte": ["@agent-os/client-svelte@workspace:packages/client/svelte"],
+
+    "@agent-os/config": ["@agent-os/config@workspace:packages/composers/config"],
 
     "@agent-os/decision-gate": ["@agent-os/decision-gate@workspace:packages/carriers/decision-gate"],
 

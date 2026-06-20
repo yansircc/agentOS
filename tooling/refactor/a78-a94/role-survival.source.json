@@ -64,6 +64,7 @@
       "role": "projection-sink",
       "paths": [
         "packages/composers/agent-authoring",
+        "packages/composers/config",
         "packages/composers/run-stream",
         "packages/composers/workspace-agent",
         "packages/composers/workspace-binding",

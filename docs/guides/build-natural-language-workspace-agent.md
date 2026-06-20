@@ -41,7 +41,7 @@ snapshots, actual trigger times, or ledger events.
 
 ```jsonc
 {
-  "$schema": "./node_modules/@agent-os/agent-authoring/schema.json",
+  "$schema": "./node_modules/@agent-os/config/schema.json",
   "profile": "workspace@1",
   "agent": "./agent",
   "deployment": {

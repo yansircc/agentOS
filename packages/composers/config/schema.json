@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-os.dev/schemas/agentos.config.v1.schema.json",
+  "title": "agentOS config",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["profile", "agent", "deployment", "target", "client", "llm", "workspace"],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "profile": {
+      "const": "workspace@1"
+    },
+    "agent": {
+      "type": "string",
+      "minLength": 1
+    },
+    "deployment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "durableObject"],
+      "properties": {
+        "kind": {
+          "const": "cloudflare-do@1"
+        },
+        "durableObject": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["className", "binding"],
+          "properties": {
+            "className": {
+              "type": "string",
+              "minLength": 1
+            },
+            "binding": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "client": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "enum": ["svelte-kit-remote@1", "browser-direct@1"]
+        }
+      }
+    },
+    "llm": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["route", "endpointRef", "credentialRef", "modelRef"],
+      "properties": {
+        "route": {
+          "const": "openai-chat-compatible"
+        },
+        "endpointRef": {
+          "type": "string",
+          "minLength": 1
+        },
+        "credentialRef": {
+          "type": "string",
+          "minLength": 1
+        },
+        "modelRef": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "workspace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["binding", "root"],
+      "properties": {
+        "binding": {
+          "type": "string",
+          "minLength": 1
+        },
+        "root": {
+          "type": "string",
+          "minLength": 1
+        },
+        "topology": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "allocator"],
+          "properties": {
+            "kind": {
+              "const": "per_scope"
+            },
+            "allocator": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    }
+  }
+}

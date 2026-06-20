@@ -25,6 +25,7 @@
 | HTTP LLM token streaming                | `@agent-os/llm-transport-http`           |
 | Effect AI LLM transport proof           | `@agent-os/llm-transport-effect-ai`      |
 | Low-friction agent authoring projection | `@agent-os/agent-authoring`              |
+| agentOS config schema                   | `@agent-os/config`                       |
 | Attached live stream frames             | `@agent-os/attached-stream`              |
 | Token/progress frames                   | `@agent-os/turn-stream`                  |
 | Workspace actuator and tools            | `@agent-os/workspace-env`                |
