@@ -11,6 +11,7 @@ Status: 0.5.x active development for the workspace-agent app-kit contract. Publi
 - `.:WORKSPACE_AGENT_PROJECTION`
 - `.:WORKSPACE_AGENT_PROJECTION_SCHEMA`
 - `.:WorkspaceAgentClient`
+- `.:WorkspaceAgentClientBridge`
 - `.:WorkspaceAgentCommandMap`
 - `.:WorkspaceAgentCommandName`
 - `.:WorkspaceAgentCustomCommandInput`
@@ -35,6 +36,7 @@ Status: 0.5.x active development for the workspace-agent app-kit contract. Publi
 - `.:WorkspaceAgentStateProjection`
 - `.:WorkspaceAgentStateProjectionShape`
 - `.:WorkspaceAgentSubmitCommandInput`
+- `.:createWorkspaceAgentClientBridge`
 - `.:createWorkspaceAgentClient`
 - `.:defineReconcile`
 - `.:defineWorkspaceAgentMount`

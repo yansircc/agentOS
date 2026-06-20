@@ -18,7 +18,9 @@ type StaticTargetGeneratedPath =
   | ".agentos/generated/deployment.json"
   | ".agentos/generated/provenance.json"
   | ".agentos/generated/fingerprints.json"
-  | ".agentos/generated/target.ts";
+  | ".agentos/generated/target.ts"
+  | ".agentos/generated/client.ts"
+  | ".agentos/generated/client.d.ts";
 
 const generatedText = (
   result: ReturnType<typeof linkWorkspaceStaticTarget>,
@@ -602,6 +604,30 @@ describe("agent authored tree compiler", () => {
         source: "../../agent/tools/write_file",
         imports: ["default as tool_1"],
       },
+      {
+        kind: "workspace-client",
+        source: "@agent-os/workspace-agent",
+        imports: [
+          "createWorkspaceAgentClientBridge",
+          "CreateWorkspaceAgentClientOptions",
+          "WorkspaceAgentClientBridge",
+        ],
+      },
+      {
+        kind: "client-core",
+        source: "@agent-os/client",
+        imports: ["AgentClientSnapshot"],
+      },
+      {
+        kind: "client-framework",
+        source: "@agent-os/client-svelte",
+        imports: ["clientReadable", "selectClientReadable"],
+      },
+      {
+        kind: "client-framework",
+        source: "svelte/store",
+        imports: ["Readable"],
+      },
     ]);
     expect(linked.value.canonicalDeployment).toEqual({
       target: AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1,
@@ -641,6 +667,30 @@ describe("agent authored tree compiler", () => {
     expect(target).not.toContain("dynamic import");
     expect(target).not.toContain("workspaceExtension(");
     expect(target).not.toContain("extensions:");
+
+    const client = generatedText(linked, ".agentos/generated/client.ts");
+    expect(client).toContain(
+      'import { createWorkspaceAgentClientBridge } from "@agent-os/workspace-agent";',
+    );
+    expect(client).toContain(
+      'import { clientReadable, selectClientReadable } from "@agent-os/client-svelte";',
+    );
+    expect(client).toContain('import type { AgentClientSnapshot } from "@agent-os/client";');
+    expect(client).toContain('import type { Readable } from "svelte/store";');
+    expect(client).toContain("createWorkspaceAgentClientBridge(options)");
+    expect(client).toContain("snapshot: clientReadable(bridge.client)");
+    expect(client).toContain(
+      "events: selectClientReadable(bridge.client, (snapshot) => snapshot.events)",
+    );
+    expect(client).toContain("inputRequests: selectClientReadable(");
+    expect(client).not.toContain("new EventSource");
+    expect(client).not.toContain("query.live");
+    expect(client).not.toContain("appendRuntimeEventsToSnapshot");
+    expect(client).not.toContain("createAgentClient(");
+    expect(client).not.toContain("@agent-os/ag-ui");
+
+    const clientTypes = generatedText(linked, ".agentos/generated/client.d.ts");
+    expect(clientTypes).toContain('} from "./client";');
   });
 
   it("emits byte-stable generated files and changes the module graph when tool imports change", () => {
@@ -708,6 +758,14 @@ describe("agent authored tree compiler", () => {
       source: "../../agent/tools/write_file",
       imports: ["default as tool_1"],
     });
+    expect(withExtraTool.moduleGraph).not.toContainEqual({
+      kind: "client-framework",
+      source: "@agent-os/client-svelte",
+      imports: ["clientReadable", "selectClientReadable"],
+    });
+    expect(
+      generatedText({ ok: true, value: withExtraTool }, ".agentos/generated/client.ts"),
+    ).not.toContain("@agent-os/client-svelte");
     expect(generatedText({ ok: true, value: first }, ".agentos/generated/fingerprints.json")).toBe(
       generatedText({ ok: true, value: second }, ".agentos/generated/fingerprints.json"),
     );

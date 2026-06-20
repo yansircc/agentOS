@@ -1217,7 +1217,9 @@ export type StaticTargetGeneratedFilePath =
   | ".agentos/generated/deployment.json"
   | ".agentos/generated/provenance.json"
   | ".agentos/generated/fingerprints.json"
-  | ".agentos/generated/target.ts";
+  | ".agentos/generated/target.ts"
+  | ".agentos/generated/client.ts"
+  | ".agentos/generated/client.d.ts";
 
 export interface StaticTargetGeneratedFile {
   readonly path: StaticTargetGeneratedFilePath;
@@ -1228,6 +1230,9 @@ export type StaticTargetModuleImportKind =
   | "target-runtime"
   | "provider-runtime"
   | "workspace-host"
+  | "workspace-client"
+  | "client-core"
+  | "client-framework"
   | "semantic-json"
   | "authored-tool";
 
@@ -1712,7 +1717,10 @@ const STATIC_TARGET_MODULES = {
   cloudflareDoRuntime: "@agent-os/backend-cloudflare-do",
   openAiCompatibleTransport: "@agent-os/llm-transport-effect-ai",
   workspaceAgentHost: "@agent-os/workspace-agent",
+  clientCore: "@agent-os/client",
+  clientSvelte: "@agent-os/client-svelte",
   runtimeProtocol: "@agent-os/runtime-protocol",
+  svelteStore: "svelte/store",
 } as const;
 
 const renderNamedImport = (names: ReadonlyArray<string>, source: string): string =>
@@ -1799,6 +1807,99 @@ export class ${normalized.target.durableObject.className} extends createAgentDur
 `;
 };
 
+const generatedClientModuleImports = (
+  client: AgentOsConfigClient,
+): ReadonlyArray<StaticTargetModuleImport> => [
+  {
+    kind: "workspace-client",
+    source: STATIC_TARGET_MODULES.workspaceAgentHost,
+    imports: [
+      "createWorkspaceAgentClientBridge",
+      "CreateWorkspaceAgentClientOptions",
+      "WorkspaceAgentClientBridge",
+    ],
+  },
+  ...(client.kind === AGENTOS_CONFIG_CLIENT.SVELTE_KIT_REMOTE_V1
+    ? [
+        {
+          kind: "client-core" as const,
+          source: STATIC_TARGET_MODULES.clientCore,
+          imports: ["AgentClientSnapshot"],
+        },
+        {
+          kind: "client-framework" as const,
+          source: STATIC_TARGET_MODULES.clientSvelte,
+          imports: ["clientReadable", "selectClientReadable"],
+        },
+        {
+          kind: "client-framework" as const,
+          source: STATIC_TARGET_MODULES.svelteStore,
+          imports: ["Readable"],
+        },
+      ]
+    : []),
+];
+
+const renderStaticClient = (normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>): string => {
+  if (normalized.client.kind === AGENTOS_CONFIG_CLIENT.BROWSER_DIRECT_V1) {
+    return `${renderNamedImport(["createWorkspaceAgentClientBridge"], STATIC_TARGET_MODULES.workspaceAgentHost)}
+${renderTypeImport(
+  ["CreateWorkspaceAgentClientOptions", "WorkspaceAgentClientBridge"],
+  STATIC_TARGET_MODULES.workspaceAgentHost,
+)}
+
+export type GeneratedAgentClientOptions = CreateWorkspaceAgentClientOptions;
+export type GeneratedAgentClient = WorkspaceAgentClientBridge;
+
+export const createAgentOSClient = (
+  options: GeneratedAgentClientOptions = {},
+): GeneratedAgentClient => createWorkspaceAgentClientBridge(options);
+`;
+  }
+
+  return `${renderNamedImport(["createWorkspaceAgentClientBridge"], STATIC_TARGET_MODULES.workspaceAgentHost)}
+${renderNamedImport(["clientReadable", "selectClientReadable"], STATIC_TARGET_MODULES.clientSvelte)}
+${renderTypeImport(["AgentClientSnapshot"], STATIC_TARGET_MODULES.clientCore)}
+${renderTypeImport(
+  ["CreateWorkspaceAgentClientOptions", "WorkspaceAgentClientBridge"],
+  STATIC_TARGET_MODULES.workspaceAgentHost,
+)}
+${renderTypeImport(["Readable"], STATIC_TARGET_MODULES.svelteStore)}
+
+export type GeneratedAgentClientOptions = CreateWorkspaceAgentClientOptions;
+
+export interface GeneratedAgentClient extends WorkspaceAgentClientBridge {
+  readonly snapshot: Readable<AgentClientSnapshot>;
+  readonly events: Readable<AgentClientSnapshot["events"]>;
+  readonly connection: Readable<AgentClientSnapshot["connection"]>;
+  readonly run: Readable<AgentClientSnapshot["run"]>;
+  readonly inputRequests: Readable<AgentClientSnapshot["run"]["inputRequests"]>;
+}
+
+export const createAgentOSClient = (
+  options: GeneratedAgentClientOptions = {},
+): GeneratedAgentClient => {
+  const bridge = createWorkspaceAgentClientBridge(options);
+  return {
+    ...bridge,
+    snapshot: clientReadable(bridge.client),
+    events: selectClientReadable(bridge.client, (snapshot) => snapshot.events),
+    connection: selectClientReadable(bridge.client, (snapshot) => snapshot.connection),
+    run: selectClientReadable(bridge.client, (snapshot) => snapshot.run),
+    inputRequests: selectClientReadable(bridge.client, (snapshot) => snapshot.run.inputRequests),
+  };
+};
+`;
+};
+
+const renderStaticClientTypes = (): string => `export type {
+  GeneratedAgentClient,
+  GeneratedAgentClientOptions,
+} from "./client";
+
+export { createAgentOSClient } from "./client";
+`;
+
 export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
   normalized: NormalizedAgentOsConfig<AuthoredAgentManifest<K>>,
 ): StaticTargetLinkResult => {
@@ -1843,6 +1944,7 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
       imports: ["defineWorkspaceAgentMount", "WORKSPACE_AGENT_PROJECTION"],
     },
     ...generatedToolImports(toolNames),
+    ...generatedClientModuleImports(normalized.client),
   ];
   return {
     ok: true,
@@ -1869,6 +1971,11 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
             toolNames,
           ),
         ),
+        generatedPath(
+          ".agentos/generated/client.ts",
+          renderStaticClient(normalized as NormalizedAgentOsConfig<AuthoredAgentManifest>),
+        ),
+        generatedPath(".agentos/generated/client.d.ts", renderStaticClientTypes()),
       ],
       moduleGraph,
       canonicalDeployment: {

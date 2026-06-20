@@ -7,6 +7,7 @@
 - `.:WORKSPACE_AGENT_PROJECTION`
 - `.:WORKSPACE_AGENT_PROJECTION_SCHEMA`
 - `.:WorkspaceAgentClient`
+- `.:WorkspaceAgentClientBridge`
 - `.:WorkspaceAgentCommandMap`
 - `.:WorkspaceAgentCommandName`
 - `.:WorkspaceAgentCustomCommandInput`
@@ -31,6 +32,7 @@
 - `.:WorkspaceAgentStateProjection`
 - `.:WorkspaceAgentStateProjectionShape`
 - `.:WorkspaceAgentSubmitCommandInput`
+- `.:createWorkspaceAgentClientBridge`
 - `.:createWorkspaceAgentClient`
 - `.:defineReconcile`
 - `.:defineWorkspaceAgentMount`

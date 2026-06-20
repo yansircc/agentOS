@@ -1,5 +1,9 @@
 import type { Derived, Recordable, Recorded } from "@agent-os/kernel";
-import type { AgentClientStreamSource, AgentClientCommandSpec } from "@agent-os/client";
+import type {
+  AgentClientCommandOptions,
+  AgentClientCommandSpec,
+  AgentClientStreamSource,
+} from "@agent-os/client";
 import { createAgentClient, type AgentClientController } from "@agent-os/client";
 import type {
   AgentManifestProjection,
@@ -166,6 +170,63 @@ export interface CreateWorkspaceAgentClientOptions {
 export const createWorkspaceAgentClient = (
   options: CreateWorkspaceAgentClientOptions = {},
 ): WorkspaceAgentClient => createAgentClient<WorkspaceAgentCommandMap>(options);
+
+export interface WorkspaceAgentClientBridge {
+  readonly client: WorkspaceAgentClient;
+  submit(
+    input: SubmitRunInput,
+    options?: AgentClientCommandOptions,
+  ): Promise<WorkspaceAgentCommandMap[typeof WORKSPACE_AGENT_COMMAND.SUBMIT]["output"]>;
+  resumeInputRequest(
+    input: WorkspaceAgentResumeInputRequestCommandInput,
+    options?: AgentClientCommandOptions,
+  ): Promise<
+    WorkspaceAgentCommandMap[typeof WORKSPACE_AGENT_COMMAND.RESUME_INPUT_REQUEST]["output"]
+  >;
+  readFile(
+    input: WorkspaceAgentReadFileCommandInput,
+    options?: AgentClientCommandOptions,
+  ): Promise<WorkspaceAgentReadFileCommandOutput>;
+  reset(
+    input?: WorkspaceAgentResetCommandInput,
+    options?: AgentClientCommandOptions,
+  ): Promise<WorkspaceAgentMutationCommandOutput>;
+  destroy(
+    input?: WorkspaceAgentDestroyCommandInput,
+    options?: AgentClientCommandOptions,
+  ): Promise<WorkspaceAgentMutationCommandOutput>;
+  custom(
+    input: WorkspaceAgentCustomCommandInput,
+    options?: AgentClientCommandOptions,
+  ): Promise<unknown>;
+}
+
+export const createWorkspaceAgentClientBridge = (
+  options: CreateWorkspaceAgentClientOptions = {},
+): WorkspaceAgentClientBridge => {
+  const client = createWorkspaceAgentClient(options);
+  return {
+    client,
+    submit(input, commandOptions) {
+      return client.invoke(WORKSPACE_AGENT_COMMAND.SUBMIT, { input }, commandOptions);
+    },
+    resumeInputRequest(input, commandOptions) {
+      return client.invoke(WORKSPACE_AGENT_COMMAND.RESUME_INPUT_REQUEST, input, commandOptions);
+    },
+    readFile(input, commandOptions) {
+      return client.invoke(WORKSPACE_AGENT_COMMAND.READ_FILE, input, commandOptions);
+    },
+    reset(input = {}, commandOptions) {
+      return client.invoke(WORKSPACE_AGENT_COMMAND.RESET, input, commandOptions);
+    },
+    destroy(input = {}, commandOptions) {
+      return client.invoke(WORKSPACE_AGENT_COMMAND.DESTROY, input, commandOptions);
+    },
+    custom(input, commandOptions) {
+      return client.invoke(WORKSPACE_AGENT_COMMAND.CUSTOM, input, commandOptions);
+    },
+  };
+};
 
 export interface WorkspaceAgentDriverMount {
   readonly kind: "driver_mount";

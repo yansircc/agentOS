@@ -5,6 +5,7 @@ import {
   WORKSPACE_AGENT_COMMAND,
   WORKSPACE_AGENT_PROJECTION,
   createWorkspaceAgentClient,
+  createWorkspaceAgentClientBridge,
   defineReconcile,
   defineWorkspaceAgentMount,
   isWorkspaceAgentCommandName,
@@ -36,6 +37,84 @@ describe("@agent-os/workspace-agent", () => {
       client.invoke(WORKSPACE_AGENT_COMMAND.READ_FILE, { path: "/workspace/a.txt" }),
     ).resolves.toEqual({ path: "/workspace/a.txt", content: "hello" });
     await expect(client.invoke(WORKSPACE_AGENT_COMMAND.RESET, {})).resolves.toEqual({ ok: true });
+  });
+
+  it("creates typed command helpers without owning a second client state machine", async () => {
+    const calls: Array<{ readonly name: string; readonly input: unknown }> = [];
+    const bridge = createWorkspaceAgentClientBridge({
+      rpcInvoker: async (name, input) => {
+        calls.push({ name, input });
+        if (name === WORKSPACE_AGENT_COMMAND.READ_FILE) {
+          const readInput = input as { readonly path: string };
+          return { path: readInput.path, content: "hello" };
+        }
+        return { ok: true };
+      },
+    });
+
+    await expect(bridge.readFile({ path: "/workspace/a.txt" })).resolves.toEqual({
+      path: "/workspace/a.txt",
+      content: "hello",
+    });
+    await expect(bridge.submit({ intent: "ship", context: { prompt: "go" } })).resolves.toEqual({
+      ok: true,
+    });
+    await expect(
+      bridge.resumeInputRequest({
+        ref: recordedValue({
+          kind: "agent.run.input_request",
+          scopeRef: { kind: "session", scopeId: "workspace-ledger" },
+          runId: 1,
+          turn: { id: 1, index: 0 },
+          interruptId: "interrupt-1",
+          interruptionEventId: 2,
+          afterEventId: 2,
+          gateRef: "gate-1",
+          requestKind: "question",
+        }),
+        answer: { decisionRef: "decision-1", resume: { kind: "question", answers: { ok: true } } },
+      }),
+    ).resolves.toEqual({ ok: true });
+    await expect(bridge.reset()).resolves.toEqual({ ok: true });
+    await expect(bridge.destroy({ reason: "done" })).resolves.toEqual({ ok: true });
+    await expect(bridge.custom({ method: "ping", input: { ok: true } })).resolves.toEqual({
+      ok: true,
+    });
+
+    expect(bridge.client.getSnapshot().events).toEqual([]);
+    expect(calls).toEqual([
+      {
+        name: WORKSPACE_AGENT_COMMAND.READ_FILE,
+        input: { path: "/workspace/a.txt" },
+      },
+      {
+        name: WORKSPACE_AGENT_COMMAND.SUBMIT,
+        input: { input: { intent: "ship", context: { prompt: "go" } } },
+      },
+      {
+        name: WORKSPACE_AGENT_COMMAND.RESUME_INPUT_REQUEST,
+        input: {
+          ref: {
+            kind: "agent.run.input_request",
+            scopeRef: { kind: "session", scopeId: "workspace-ledger" },
+            runId: 1,
+            turn: { id: 1, index: 0 },
+            interruptId: "interrupt-1",
+            interruptionEventId: 2,
+            afterEventId: 2,
+            gateRef: "gate-1",
+            requestKind: "question",
+          },
+          answer: {
+            decisionRef: "decision-1",
+            resume: { kind: "question", answers: { ok: true } },
+          },
+        },
+      },
+      { name: WORKSPACE_AGENT_COMMAND.RESET, input: {} },
+      { name: WORKSPACE_AGENT_COMMAND.DESTROY, input: { reason: "done" } },
+      { name: WORKSPACE_AGENT_COMMAND.CUSTOM, input: { method: "ping", input: { ok: true } } },
+    ]);
   });
 
   it("defines generated mount as exactly one driver plus projection sinks", () => {
