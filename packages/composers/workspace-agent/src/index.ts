@@ -167,6 +167,16 @@ export interface CreateWorkspaceAgentClientOptions {
   readonly initialEvents?: ReadonlyArray<RuntimeLedgerEvent>;
 }
 
+/**
+ * Create the workspace-agent typed command client over the shared
+ * transport-neutral client state machine. Generated framework bridges inject
+ * stream and RPC transports; this package does not own UI components.
+ *
+ * @agentosPrimitive primitive.workspace-agent.createWorkspaceAgentClient
+ * @agentosInvariant invariant.docs.agent-projection
+ * @agentosInvariant invariant.boundary.owner-owned-safe-projection
+ * @agentosDocs docs/guides/build-natural-language-workspace-agent.md
+ */
 export const createWorkspaceAgentClient = (
   options: CreateWorkspaceAgentClientOptions = {},
 ): WorkspaceAgentClient => createAgentClient<WorkspaceAgentCommandMap>(options);

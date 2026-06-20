@@ -117,17 +117,18 @@ commit.
 
 Start at [docs/start-here.md](docs/start-here.md). It is the generated route from intent to primitive, invariant, error, docs, and tests.
 
-| Intent                                                  | Route                                                                              |
-| ------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Start route                                             | [docs/start-here.md](docs/start-here.md)                                           |
-| Primitive catalog                                       | [docs/agent/primitives.md](docs/agent/primitives.md)                               |
-| Decision graph                                          | [docs/agent/decision-graph.md](docs/agent/decision-graph.md)                       |
-| Error catalog                                           | [docs/agent/errors.md](docs/agent/errors.md)                                       |
-| Invariant matrix                                        | [docs/agent/invariant-matrix.md](docs/agent/invariant-matrix.md)                   |
-| Append and read a ledger event                          | [docs/tutorials/hello-ledger-event.md](docs/tutorials/hello-ledger-event.md)       |
-| Build a materialized projection reader                  | [docs/tutorials/projection-reader.md](docs/tutorials/projection-reader.md)         |
-| Stream an agent run                                     | [docs/tutorials/streaming-chatbot.md](docs/tutorials/streaming-chatbot.md)         |
-| Add a tool with schema, admission, and execution domain | [docs/tutorials/tool-schema-authority.md](docs/tutorials/tool-schema-authority.md) |
+| Intent                                                  | Route                                                                                                          |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Start route                                             | [docs/start-here.md](docs/start-here.md)                                                                       |
+| Primitive catalog                                       | [docs/agent/primitives.md](docs/agent/primitives.md)                                                           |
+| Decision graph                                          | [docs/agent/decision-graph.md](docs/agent/decision-graph.md)                                                   |
+| Error catalog                                           | [docs/agent/errors.md](docs/agent/errors.md)                                                                   |
+| Invariant matrix                                        | [docs/agent/invariant-matrix.md](docs/agent/invariant-matrix.md)                                               |
+| Build a natural-language workspace agent                | [docs/guides/build-natural-language-workspace-agent.md](docs/guides/build-natural-language-workspace-agent.md) |
+| Append and read a ledger event                          | [docs/tutorials/hello-ledger-event.md](docs/tutorials/hello-ledger-event.md)                                   |
+| Build a materialized projection reader                  | [docs/tutorials/projection-reader.md](docs/tutorials/projection-reader.md)                                     |
+| Stream an agent run                                     | [docs/tutorials/streaming-chatbot.md](docs/tutorials/streaming-chatbot.md)                                     |
+| Add a tool with schema, admission, and execution domain | [docs/tutorials/tool-schema-authority.md](docs/tutorials/tool-schema-authority.md)                             |
 
 <!-- agent-docs-navigation:end -->
 

@@ -3,6 +3,31 @@
   "source": "docs/agent/recipes.source.json",
   "recipes": [
     {
+      "id": "recipe.natural-language-workspace-agent",
+      "title": "Build a natural-language workspace agent",
+      "intents": [
+        "compile an authored workspace agent into a static target",
+        "generate a typed client from agentos.config.jsonc"
+      ],
+      "tutorial": "docs/guides/build-natural-language-workspace-agent.md",
+      "primitives": [
+        "primitive.agent-authoring.compileAgentTree",
+        "primitive.agent-authoring.linkWorkspaceStaticTarget",
+        "primitive.workspace-agent.createWorkspaceAgentClient"
+      ],
+      "commands": [
+        "bun run --cwd packages/composers/agent-authoring test",
+        "bun run --cwd packages/composers/workspace-agent test",
+        "bun run check:distribution"
+      ],
+      "evidence": [
+        "packages/composers/agent-authoring/test/agent-authoring.test.ts",
+        "packages/composers/workspace-agent/test/workspace-agent.test.ts",
+        "tooling/agentos-cli/src/check/algorithmic-checks.mjs"
+      ],
+      "next": ["recipe.tool-schema-authority", "recipe.projection-reader"]
+    },
+    {
       "id": "recipe.hello-ledger-event",
       "title": "Append and read a ledger event",
       "intents": [

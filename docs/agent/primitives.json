@@ -43,6 +43,42 @@
       }
     },
     {
+      "id": "primitive.agent-authoring.compileAgentTree",
+      "package": "@agent-os/agent-authoring",
+      "packagePath": "packages/composers/agent-authoring",
+      "entrypoints": ["."],
+      "symbol": "compileAgentTree",
+      "exportKey": ".:compileAgentTree",
+      "sourceFile": "packages/composers/agent-authoring/src/index.ts",
+      "summary": "Compile an authored `agent/` tree into one normalized manifest plus provenance. This is the app-author entrypoint; runtime facts and provider material are rejected before they can become manifest truth.",
+      "aliases": [],
+      "invariants": ["invariant.docs.agent-projection", "invariant.algebra.single-code-source"],
+      "decisions": [],
+      "docs": "docs/guides/build-natural-language-workspace-agent.md",
+      "capabilityKind": "composer",
+      "testEvidence": {
+        "tests": ["packages/composers/agent-authoring/test/agent-authoring.test.ts"]
+      }
+    },
+    {
+      "id": "primitive.agent-authoring.linkWorkspaceStaticTarget",
+      "package": "@agent-os/agent-authoring",
+      "packagePath": "packages/composers/agent-authoring",
+      "entrypoints": ["."],
+      "symbol": "linkWorkspaceStaticTarget",
+      "exportKey": ".:linkWorkspaceStaticTarget",
+      "sourceFile": "packages/composers/agent-authoring/src/index.ts",
+      "summary": "Link normalized workspace authoring intent to a closed-target residual program. Implementation wiring is static imports and factory composition; manifest and deployment JSON remain semantic/provenance data only.",
+      "aliases": [],
+      "invariants": ["invariant.docs.agent-projection", "invariant.algebra.single-code-source"],
+      "decisions": [],
+      "docs": "docs/guides/build-natural-language-workspace-agent.md",
+      "capabilityKind": "composer",
+      "testEvidence": {
+        "tests": ["packages/composers/agent-authoring/test/agent-authoring.test.ts"]
+      }
+    },
+    {
       "id": "primitive.cloudflare-do.createCloudflareLedgerAgUiHistorySseResponse",
       "package": "@agent-os/backend-cloudflare-do",
       "packagePath": "packages/backends/cloudflare-do",
@@ -1021,6 +1057,27 @@
       "capabilityKind": "projection",
       "testEvidence": {
         "tests": ["packages/runtime/test/projection.test.ts"]
+      }
+    },
+    {
+      "id": "primitive.workspace-agent.createWorkspaceAgentClient",
+      "package": "@agent-os/workspace-agent",
+      "packagePath": "packages/composers/workspace-agent",
+      "entrypoints": ["."],
+      "symbol": "createWorkspaceAgentClient",
+      "exportKey": ".:createWorkspaceAgentClient",
+      "sourceFile": "packages/composers/workspace-agent/src/index.ts",
+      "summary": "Create the workspace-agent typed command client over the shared transport-neutral client state machine. Generated framework bridges inject stream and RPC transports; this package does not own UI components.",
+      "aliases": [],
+      "invariants": [
+        "invariant.docs.agent-projection",
+        "invariant.boundary.owner-owned-safe-projection"
+      ],
+      "decisions": [],
+      "docs": "docs/guides/build-natural-language-workspace-agent.md",
+      "capabilityKind": "composer",
+      "testEvidence": {
+        "tests": ["packages/composers/workspace-agent/test/workspace-agent.test.ts"]
       }
     }
   ]

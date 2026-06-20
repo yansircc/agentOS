@@ -71,6 +71,8 @@
       "invariant": "invariant.algebra.single-code-source",
       "statement": "Every algebra has one code source; projections and docs derive from that source.",
       "primitives": [
+        "primitive.agent-authoring.compileAgentTree",
+        "primitive.agent-authoring.linkWorkspaceStaticTarget",
         "primitive.kernel.AgentSchema",
         "primitive.kernel.AgentSchemaProjections",
         "primitive.kernel.projectAgentSchema"
@@ -88,6 +90,7 @@
       "docs": [
         "docs/concepts/agent-schema.md",
         "docs/concepts/materialized-projections.md",
+        "docs/guides/build-natural-language-workspace-agent.md",
         "docs/packages/llm-transport-effect-ai.md",
         "docs/verification.md"
       ],
@@ -156,10 +159,15 @@
       "primitives": [
         "primitive.ag-ui.projectLedgerEventToAgUiEnvelope",
         "primitive.ag-ui.projectLedgerSseToAgUiSse",
-        "primitive.kernel.SafeLedgerEvent"
+        "primitive.kernel.SafeLedgerEvent",
+        "primitive.workspace-agent.createWorkspaceAgentClient"
       ],
       "errors": [],
-      "docs": ["docs/concepts/ag-ui-wire-adapter.md", "docs/concepts/durable-truth.md"],
+      "docs": [
+        "docs/concepts/ag-ui-wire-adapter.md",
+        "docs/concepts/durable-truth.md",
+        "docs/guides/build-natural-language-workspace-agent.md"
+      ],
       "tests": [
         "packages/wire-adapters/ag-ui/test/ag-ui.test.ts",
         "packages/wire-adapters/ag-ui/test/workspace-agui-integration.test.ts"
@@ -250,9 +258,17 @@
     {
       "invariant": "invariant.docs.agent-projection",
       "statement": "Agent-facing docs indexes are projections; source JSON and exported TSDoc own routable ids.",
-      "primitives": [],
+      "primitives": [
+        "primitive.agent-authoring.compileAgentTree",
+        "primitive.agent-authoring.linkWorkspaceStaticTarget",
+        "primitive.workspace-agent.createWorkspaceAgentClient"
+      ],
       "errors": ["agent_os.projection_sink_failure"],
-      "docs": ["docs/concepts/materialized-projections.md", "docs/verification.md"],
+      "docs": [
+        "docs/concepts/materialized-projections.md",
+        "docs/guides/build-natural-language-workspace-agent.md",
+        "docs/verification.md"
+      ],
       "tests": [
         "tooling/agentos-cli/src/generate/generate-docs.mjs",
         "tooling/agentos-cli/src/check/check-coverage.source.json",

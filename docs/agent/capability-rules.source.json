@@ -2,6 +2,35 @@
   "schemaVersion": 1,
   "rules": [
     {
+      "primitive": "primitive.agent-authoring.linkWorkspaceStaticTarget",
+      "intents": [
+        "compile an authored workspace agent into a static target",
+        "generate a typed client from agentos.config.jsonc"
+      ],
+      "sourceFactPrefixes": ["agent.", "llm.", "tool.", "workspace_op."],
+      "allowedPrimitives": [
+        "primitive.agent-authoring.compileAgentTree",
+        "primitive.agent-authoring.linkWorkspaceStaticTarget",
+        "primitive.workspace-agent.createWorkspaceAgentClient",
+        "primitive.cloudflare-do.installCloudflareWorkspaceJobProfile"
+      ],
+      "forbiddenWrites": [
+        {
+          "actor": "generated_target",
+          "action": "choose_implementation_from_manifest_json",
+          "target": { "kind": "surface", "value": "manifest.json" },
+          "invariant": "invariant.algebra.single-code-source"
+        },
+        {
+          "actor": "product",
+          "action": "hand_write_generated_target_wiring",
+          "target": { "kind": "surface", "value": ".agentos/generated" },
+          "invariant": "invariant.docs.agent-projection"
+        }
+      ],
+      "gates": ["convergence-boundary", "public-api", "spike-hygiene"]
+    },
+    {
       "primitive": "primitive.ag-ui.projectLedgerSseToAgUiSse",
       "intents": [
         "stream an agent run to a browser UI",

@@ -153,6 +153,125 @@
       ]
     },
     {
+      "primitive": "primitive.agent-authoring.linkWorkspaceStaticTarget",
+      "intents": [
+        "compile an authored workspace agent into a static target",
+        "generate a typed client from agentos.config.jsonc"
+      ],
+      "coordinationPackage": "@agent-os/agent-authoring",
+      "coordinationCapabilityKind": "composer",
+      "sourceFactPrefixes": ["agent.", "llm.", "tool.", "workspace_op."],
+      "sourceFactOwners": [
+        {
+          "prefix": "agent.",
+          "owner": "@agent-os/runtime-protocol",
+          "declarations": [
+            {
+              "prefix": "agent.",
+              "owner": "@agent-os/runtime-protocol",
+              "filePath": "packages/kernel/src/errors.ts"
+            }
+          ]
+        },
+        {
+          "prefix": "llm.",
+          "owner": "@agent-os/runtime-protocol",
+          "declarations": [
+            {
+              "prefix": "llm.",
+              "owner": "@agent-os/runtime-protocol",
+              "filePath": "packages/kernel/src/errors.ts"
+            }
+          ]
+        },
+        {
+          "prefix": "tool.",
+          "owner": "@agent-os/runtime-protocol",
+          "declarations": [
+            {
+              "prefix": "tool.",
+              "owner": "@agent-os/runtime-protocol",
+              "filePath": "packages/kernel/src/errors.ts"
+            }
+          ]
+        },
+        {
+          "prefix": "workspace_op.",
+          "owner": "@agent-os/workspace-op",
+          "declarations": [
+            {
+              "prefix": "workspace_op.",
+              "owner": "@agent-os/workspace-op",
+              "filePath": "packages/carriers/workspace-op/src/definition.ts"
+            }
+          ]
+        }
+      ],
+      "allowedPrimitives": [
+        "primitive.agent-authoring.compileAgentTree",
+        "primitive.agent-authoring.linkWorkspaceStaticTarget",
+        "primitive.workspace-agent.createWorkspaceAgentClient",
+        "primitive.cloudflare-do.installCloudflareWorkspaceJobProfile"
+      ],
+      "allowedPrimitivePackages": [
+        "@agent-os/agent-authoring",
+        "@agent-os/backend-cloudflare-do",
+        "@agent-os/workspace-agent"
+      ],
+      "forbiddenWrites": [
+        {
+          "actor": "generated_target",
+          "action": "choose_implementation_from_manifest_json",
+          "target": {
+            "kind": "surface",
+            "value": "manifest.json"
+          },
+          "invariant": "invariant.algebra.single-code-source"
+        },
+        {
+          "actor": "product",
+          "action": "hand_write_generated_target_wiring",
+          "target": {
+            "kind": "surface",
+            "value": ".agentos/generated"
+          },
+          "invariant": "invariant.docs.agent-projection"
+        }
+      ],
+      "gates": ["convergence-boundary", "public-api", "spike-hygiene"],
+      "invariants": [
+        "invariant.algebra.single-code-source",
+        "invariant.boundary.owner-owned-safe-projection",
+        "invariant.docs.agent-projection",
+        "invariant.workspace-job.failure-observability-join"
+      ],
+      "docs": [
+        "docs/concepts/ag-ui-wire-adapter.md",
+        "docs/guides/build-natural-language-workspace-agent.md",
+        "docs/packages/backend-cloudflare-do.md",
+        "docs/packages/workspace-job.md",
+        "docs/verification.md"
+      ],
+      "testEvidence": [
+        {
+          "primitive": "primitive.agent-authoring.compileAgentTree",
+          "tests": ["packages/composers/agent-authoring/test/agent-authoring.test.ts"]
+        },
+        {
+          "primitive": "primitive.agent-authoring.linkWorkspaceStaticTarget",
+          "tests": ["packages/composers/agent-authoring/test/agent-authoring.test.ts"]
+        },
+        {
+          "primitive": "primitive.workspace-agent.createWorkspaceAgentClient",
+          "tests": ["packages/composers/workspace-agent/test/workspace-agent.test.ts"]
+        },
+        {
+          "primitive": "primitive.cloudflare-do.installCloudflareWorkspaceJobProfile",
+          "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"]
+        }
+      ]
+    },
+    {
       "primitive": "primitive.cloudflare-do.installCloudflareWorkspaceJobProfile",
       "intents": [
         "run a workspace job and stream observable result to UI",
@@ -475,6 +594,10 @@
   "coverage": {
     "recipes": [
       {
+        "id": "recipe.natural-language-workspace-agent",
+        "routePrimitives": ["primitive.agent-authoring.linkWorkspaceStaticTarget"]
+      },
+      {
         "id": "recipe.hello-ledger-event",
         "routePrimitives": [],
         "noRouteReason": "tutorial-only ledger identity exercise; product workflows should route through a higher-level primitive"
@@ -493,6 +616,16 @@
       }
     ],
     "primitives": [
+      {
+        "id": "primitive.agent-authoring.compileAgentTree",
+        "capabilityKind": "composer",
+        "routePrimitives": ["primitive.agent-authoring.linkWorkspaceStaticTarget"]
+      },
+      {
+        "id": "primitive.agent-authoring.linkWorkspaceStaticTarget",
+        "capabilityKind": "composer",
+        "routePrimitives": ["primitive.agent-authoring.linkWorkspaceStaticTarget"]
+      },
       {
         "id": "primitive.cloudflare-do.createCloudflareLedgerAgUiHistorySseResponse",
         "capabilityKind": "facade",
@@ -517,7 +650,15 @@
       {
         "id": "primitive.cloudflare-do.installCloudflareWorkspaceJobProfile",
         "capabilityKind": "profile",
-        "routePrimitives": ["primitive.cloudflare-do.installCloudflareWorkspaceJobProfile"]
+        "routePrimitives": [
+          "primitive.agent-authoring.linkWorkspaceStaticTarget",
+          "primitive.cloudflare-do.installCloudflareWorkspaceJobProfile"
+        ]
+      },
+      {
+        "id": "primitive.workspace-agent.createWorkspaceAgentClient",
+        "capabilityKind": "composer",
+        "routePrimitives": ["primitive.agent-authoring.linkWorkspaceStaticTarget"]
       }
     ]
   }

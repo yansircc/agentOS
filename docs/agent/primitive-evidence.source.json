@@ -2,6 +2,14 @@
   "schemaVersion": 1,
   "evidence": [
     {
+      "primitive": "primitive.agent-authoring.compileAgentTree",
+      "tests": ["packages/composers/agent-authoring/test/agent-authoring.test.ts"]
+    },
+    {
+      "primitive": "primitive.agent-authoring.linkWorkspaceStaticTarget",
+      "tests": ["packages/composers/agent-authoring/test/agent-authoring.test.ts"]
+    },
+    {
       "primitive": "primitive.ag-ui.projectLedgerEventToAgUiEnvelope",
       "tests": ["packages/wire-adapters/ag-ui/test/ag-ui.test.ts"]
     },
@@ -137,6 +145,10 @@
     {
       "primitive": "primitive.runtime.Ledger",
       "tests": ["packages/backends/protocol/test/contract/runtime-backend-contract.ts"]
+    },
+    {
+      "primitive": "primitive.workspace-agent.createWorkspaceAgentClient",
+      "tests": ["packages/composers/workspace-agent/test/workspace-agent.test.ts"]
     },
     {
       "primitive": "primitive.runtime.LedgerCommitEventSpec",

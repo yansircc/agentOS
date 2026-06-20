@@ -1044,6 +1044,16 @@ const buildProvenance = (
   return provenance;
 };
 
+/**
+ * Compile an authored `agent/` tree into one normalized manifest plus
+ * provenance. This is the app-author entrypoint; runtime facts and provider
+ * material are rejected before they can become manifest truth.
+ *
+ * @agentosPrimitive primitive.agent-authoring.compileAgentTree
+ * @agentosInvariant invariant.docs.agent-projection
+ * @agentosInvariant invariant.algebra.single-code-source
+ * @agentosDocs docs/guides/build-natural-language-workspace-agent.md
+ */
 export const compileAgentTree = <K extends HandlerKind = HandlerKind>(
   tree: AuthoredAgentTree,
 ): CompileAgentTreeResult<K> => {
@@ -2385,6 +2395,16 @@ const renderStaticClientTypes = (): string => `export type {
 export { createAgentOSClient } from "./client";
 `;
 
+/**
+ * Link normalized workspace authoring intent to a closed-target residual
+ * program. Implementation wiring is static imports and factory composition;
+ * manifest and deployment JSON remain semantic/provenance data only.
+ *
+ * @agentosPrimitive primitive.agent-authoring.linkWorkspaceStaticTarget
+ * @agentosInvariant invariant.docs.agent-projection
+ * @agentosInvariant invariant.algebra.single-code-source
+ * @agentosDocs docs/guides/build-natural-language-workspace-agent.md
+ */
 export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
   normalized: NormalizedAgentOsConfig<AuthoredAgentManifest<K>>,
   options: StaticTargetLinkOptions = {},
