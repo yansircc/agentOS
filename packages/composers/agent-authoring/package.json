@@ -3,7 +3,7 @@
   "version": "0.5.16",
   "private": true,
   "bin": {
-    "agentos": "./src/build-cli.ts"
+    "agentos": "./bin/build-cli.ts"
   },
   "type": "module",
   "main": "./src/index.ts",

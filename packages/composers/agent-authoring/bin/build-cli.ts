@@ -11,7 +11,7 @@ import {
   normalizeAgentOsConfig,
   type AuthoredAgentTree,
   type AuthoredToolDeclaration,
-} from "./index";
+} from "../src/index";
 
 interface BuildArgs {
   readonly cwd: string;

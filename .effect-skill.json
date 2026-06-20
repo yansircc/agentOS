@@ -326,6 +326,12 @@
       "rules": ["EFF001"]
     },
     {
+      "path": "packages/composers/agent-authoring/bin/build-cli.ts",
+      "owner": "@agent-os/agent-authoring/build-host",
+      "reason": "terminal authoring build host owns filesystem projection IO, JSONC config reads, TypeScript authored tool module loading, build-time cache-busting import URLs, and process-facing argument failure mapping before runtime starts",
+      "rules": ["EFF020", "EFF021", "EFF024", "EFF025", "EFF026", "EFF404"]
+    },
+    {
       "path": "packages/execution-domains/workspace-env/src/index.ts",
       "owner": "@agent-os/workspace-env/js-actuator-facade",
       "reason": "WorkspaceEnv is the public Promise/synchronous path facade for workspace actuators; it owns fail-fast AbortSignal and path validation errors before provider side effects",

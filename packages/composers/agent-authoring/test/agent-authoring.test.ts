@@ -46,7 +46,7 @@ const generatedJson = <T>(
 ): T => JSON.parse(generatedText(result, path)) as T;
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
-const buildCli = path.join(repoRoot, "packages/composers/agent-authoring/src/build-cli.ts");
+const buildCli = path.join(repoRoot, "packages/composers/agent-authoring/bin/build-cli.ts");
 
 describe("agent authored tree compiler", () => {
   it("compiles a minimal authored tree to AgentManifest<Authored> with provenance", () => {

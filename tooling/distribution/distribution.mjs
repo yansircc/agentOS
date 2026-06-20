@@ -357,6 +357,32 @@ const sourceFiles = (record) => {
   return files.sort((left, right) => left.localeCompare(right));
 };
 
+const isBinTsTarget = (target) => target.startsWith("./bin/") && target.endsWith(".ts");
+
+const packageBinTargets = (record) => {
+  const bin = record.packageJson.bin;
+  if (bin === undefined) return [];
+  if (typeof bin === "string") return [bin];
+  if (bin === null || typeof bin !== "object" || Array.isArray(bin)) {
+    fail(`${record.packagePath}: package bin must be a string or record`);
+  }
+  return Object.values(bin).map((target) => {
+    if (typeof target !== "string") {
+      fail(`${record.packagePath}: package bin targets must be strings`);
+    }
+    return target;
+  });
+};
+
+const binSourceFiles = (record) =>
+  [
+    ...new Set(
+      packageBinTargets(record)
+        .filter(isBinTsTarget)
+        .map((target) => path.join(record.packageDir, target.slice("./".length))),
+    ),
+  ].sort((left, right) => left.localeCompare(right));
+
 const packageImportsEffect = (record) =>
   sourceFiles(record).some((file) =>
     /\bfrom\s+["']effect["']|\bimport\s*\(\s*["']effect["']\s*\)/.test(
@@ -480,6 +506,13 @@ const srcTargetToDist = (target, ext) => {
   return `./dist/${target.slice("./src/".length, -".ts".length)}.${ext}`;
 };
 
+const binTargetToDist = (target) => {
+  if (!isBinTsTarget(target)) {
+    fail(`bin target must be a bin .ts file: ${target}`);
+  }
+  return `./dist/bin/${target.slice("./bin/".length, -".ts".length)}.js`;
+};
+
 const generatedExportEntry = (target) => {
   if (isSourceTsExportTarget(target)) {
     return {
@@ -492,10 +525,9 @@ const generatedExportEntry = (target) => {
 };
 
 const projectedBinTarget = (target) => {
-  if (!isSourceTsExportTarget(target)) {
-    fail(`bin target must be a source .ts file: ${target}`);
-  }
-  return srcTargetToDist(target, "js");
+  if (isSourceTsExportTarget(target)) return srcTargetToDist(target, "js");
+  if (isBinTsTarget(target)) return binTargetToDist(target);
+  fail(`bin target must be a source or bin .ts file: ${target}`);
 };
 
 const projectedBin = (record) => {
@@ -510,51 +542,99 @@ const projectedBin = (record) => {
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([name, target]) => {
         if (typeof target !== "string") {
-          fail(`${record.packagePath}: package bin ${name} must target a source .ts file`);
+          fail(`${record.packagePath}: package bin ${name} must target a source or bin .ts file`);
         }
         return [name, projectedBinTarget(target)];
       }),
   );
 };
 
-const resolveRelativeSpecifier = (sourceFile, specifier, ext) => {
-  if (!specifier.startsWith(".") || specifier.endsWith(".js") || specifier.endsWith(".json")) {
-    return specifier;
+const distJsForSourceFile = (record, file) => {
+  const srcRel = path.relative(path.join(record.packageDir, "src"), file);
+  if (!srcRel.startsWith("..") && !path.isAbsolute(srcRel)) {
+    return path.join(record.stageDir, "dist", srcRel.replace(/(?:\.d)?\.ts$/u, ".js"));
   }
-  const base = path.resolve(path.dirname(sourceFile), specifier);
-  if (fs.existsSync(`${base}.ts`) || fs.existsSync(`${base}.d.ts`)) {
-    return `${specifier}.js`;
+  const binRel = path.relative(path.join(record.packageDir, "bin"), file);
+  if (!binRel.startsWith("..") && !path.isAbsolute(binRel)) {
+    return path.join(record.stageDir, "dist", "bin", binRel.replace(/(?:\.d)?\.ts$/u, ".js"));
   }
-  if (fs.existsSync(path.join(base, "index.ts")) || fs.existsSync(path.join(base, "index.d.ts"))) {
-    return `${specifier.replace(/\/$/u, "")}/index.js`;
-  }
-  if (ext === ".d.ts" && fs.existsSync(`${base}.d.ts`)) {
-    return `${specifier}.js`;
-  }
-  return specifier;
+  return undefined;
 };
 
-const resolveModuleSpecifier = (sourceFile, specifier, ext) => {
-  if (specifier.startsWith(".")) return resolveRelativeSpecifier(sourceFile, specifier, ext);
+const resolveRelativeTargetFile = (sourceFile, specifier, declarationOutput) => {
+  if (!specifier.startsWith(".") || specifier.endsWith(".js") || specifier.endsWith(".json")) {
+    return undefined;
+  }
+  const base = path.resolve(path.dirname(sourceFile), specifier);
+  if (fs.existsSync(`${base}.ts`)) {
+    return `${base}.ts`;
+  }
+  if (fs.existsSync(path.join(base, "index.ts"))) {
+    return path.join(base, "index.ts");
+  }
+  if (declarationOutput && fs.existsSync(`${base}.d.ts`)) {
+    return `${base}.d.ts`;
+  }
+  if (declarationOutput && fs.existsSync(path.join(base, "index.d.ts"))) {
+    return path.join(base, "index.d.ts");
+  }
+  return undefined;
+};
+
+const relativeJsSpecifier = (fromOutFile, toOutFile) => {
+  const relative = path.relative(path.dirname(fromOutFile), toOutFile).split(path.sep).join("/");
+  return relative.startsWith(".") ? relative : `./${relative}`;
+};
+
+const resolveRelativeSpecifier = (record, sourceFile, outFile, specifier, declarationOutput) => {
+  const targetFile = resolveRelativeTargetFile(sourceFile, specifier, declarationOutput);
+  if (targetFile === undefined) return specifier;
+  const targetOutFile = distJsForSourceFile(record, targetFile);
+  if (targetOutFile === undefined) return specifier;
+  return relativeJsSpecifier(outFile, targetOutFile);
+};
+
+const resolveModuleSpecifier = (record, sourceFile, outFile, specifier, declarationOutput) => {
+  if (specifier.startsWith(".")) {
+    return resolveRelativeSpecifier(record, sourceFile, outFile, specifier, declarationOutput);
+  }
   return publicSpecifier(specifier);
 };
 
-const rewriteModuleSpecifiers = (text, sourceFile, ext) =>
+const rewriteModuleSpecifiers = (record, text, sourceFile, outFile, declarationOutput) =>
   text
     .replace(/(\bfrom\s*["'])([^"']+)(["'])/g, (_match, prefix, specifier, suffix) => {
-      return `${prefix}${resolveModuleSpecifier(sourceFile, specifier, ext)}${suffix}`;
+      return `${prefix}${resolveModuleSpecifier(
+        record,
+        sourceFile,
+        outFile,
+        specifier,
+        declarationOutput,
+      )}${suffix}`;
     })
     .replace(/(\bimport\s*\(\s*["'])([^"']+)(["']\s*\))/g, (_match, prefix, specifier, suffix) => {
-      return `${prefix}${resolveModuleSpecifier(sourceFile, specifier, ext)}${suffix}`;
+      return `${prefix}${resolveModuleSpecifier(
+        record,
+        sourceFile,
+        outFile,
+        specifier,
+        declarationOutput,
+      )}${suffix}`;
     })
     .replace(/(\bimport\s*["'])([^"']+)(["'])/g, (_match, prefix, specifier, suffix) => {
-      return `${prefix}${resolveModuleSpecifier(sourceFile, specifier, ext)}${suffix}`;
+      return `${prefix}${resolveModuleSpecifier(
+        record,
+        sourceFile,
+        outFile,
+        specifier,
+        declarationOutput,
+      )}${suffix}`;
     });
 
 const emitJs = (record) => {
-  for (const file of sourceFiles(record)) {
-    const rel = path.relative(path.join(record.packageDir, "src"), file);
-    const out = path.join(record.stageDir, "dist", rel.replace(/\.ts$/u, ".js"));
+  for (const file of [...sourceFiles(record), ...binSourceFiles(record)]) {
+    const out = distJsForSourceFile(record, file);
+    if (out === undefined) fail(`${record.packagePath}: cannot emit ${repoPath(file)}`);
     const source = fs.readFileSync(file, "utf8");
     const transpiled = ts.transpileModule(source, {
       fileName: file,
@@ -568,7 +648,9 @@ const emitJs = (record) => {
     fs.mkdirSync(path.dirname(out), { recursive: true });
     fs.writeFileSync(
       out,
-      rewritePublicScopePlaceholders(rewriteModuleSpecifiers(transpiled.outputText, file, ".js")),
+      rewritePublicScopePlaceholders(
+        rewriteModuleSpecifiers(record, transpiled.outputText, file, out, false),
+      ),
     );
   }
 };
@@ -591,7 +673,9 @@ const emitDeclarations = (record) => {
     fs.mkdirSync(path.dirname(out), { recursive: true });
     fs.writeFileSync(
       out,
-      rewritePublicScopePlaceholders(rewriteModuleSpecifiers(result.outputText, file, ".d.ts")),
+      rewritePublicScopePlaceholders(
+        rewriteModuleSpecifiers(record, result.outputText, file, out, true),
+      ),
     );
   }
 };
