@@ -33,6 +33,11 @@ const generatedText = (
   return file?.text ?? "";
 };
 
+const generatedJson = <T>(
+  result: ReturnType<typeof linkWorkspaceStaticTarget>,
+  path: StaticTargetGeneratedPath,
+): T => JSON.parse(generatedText(result, path)) as T;
+
 describe("agent authored tree compiler", () => {
   it("compiles a minimal authored tree to AgentManifest<Authored> with provenance", () => {
     const result = compileAgentTree({
@@ -683,6 +688,12 @@ describe("agent authored tree compiler", () => {
     expect(target).toContain("installCloudflareWorkspaceOperationProvider({");
     expect(target).toContain("workspaceOperationInstallFor(env).extensions");
     expect(target).toContain("override submit(spec: AgentSubmitSpec): Promise<SubmitResult>");
+    expect(target).toContain(
+      'getSandbox(workspaceNamespaceFor(env), "agentos-provider-resource:workspace:v1:web-cursor-demo:Sandbox:per_scope:workspace-per-scope-v1:session%3Aworkspace-ledger"',
+    );
+    expect(target).toContain(
+      'workspaceRef: "agentos-provider-resource:workspace:v1:web-cursor-demo:Sandbox:per_scope:workspace-per-scope-v1:session%3Aworkspace-ledger"',
+    );
 
     const durableObjectConfig = target.slice(target.indexOf("createAgentDurableObject<"));
     expect(durableObjectConfig).not.toContain("deploymentProvenance");
@@ -690,6 +701,27 @@ describe("agent authored tree compiler", () => {
     expect(target).not.toContain("makeRuntime({");
     expect(target).not.toContain("dynamic import");
     expect(target).not.toContain("workspaceExtension(");
+
+    const deployment = generatedJson<{
+      readonly workspace?: {
+        readonly binding?: string;
+        readonly bindingRef?: string;
+        readonly root?: string;
+        readonly topology?: unknown;
+        readonly providerResourceId?: string;
+      };
+    }>(linked, ".agentos/generated/deployment.json");
+    expect(deployment.workspace).toEqual({
+      binding: "Sandbox",
+      bindingRef: "Sandbox",
+      root: "/workspace",
+      topology: {
+        kind: WORKSPACE_TOPOLOGY.PER_SCOPE,
+        allocator: "workspace-per-scope-v1",
+      },
+      providerResourceId:
+        "agentos-provider-resource:workspace:v1:web-cursor-demo:Sandbox:per_scope:workspace-per-scope-v1:session%3Aworkspace-ledger",
+    });
 
     const client = generatedText(linked, ".agentos/generated/client.ts");
     expect(client).toContain(

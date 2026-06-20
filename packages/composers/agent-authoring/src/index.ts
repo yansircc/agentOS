@@ -2085,6 +2085,13 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
     ...(normalized.deployment.providerStrategy === undefined
       ? {}
       : { providerStrategy: normalized.deployment.providerStrategy }),
+    workspace: {
+      binding: normalized.workspace.binding,
+      bindingRef: normalized.workspace.bindingRef,
+      root: normalized.workspace.root,
+      topology: normalized.workspace.topology,
+      providerResourceId: normalized.workspace.providerResourceId,
+    },
   };
   const moduleGraph: ReadonlyArray<StaticTargetModuleImport> = [
     { kind: "semantic-json", source: "./manifest.json", imports: ["default as declarations"] },
