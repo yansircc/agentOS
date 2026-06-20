@@ -1,5 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
-import type { AgentSchemaSpec } from "@agent-os/kernel/agent-schema";
+import { Schema } from "effect";
+import { defineAgentSchema, type AgentSchemaSpec } from "@agent-os/kernel/agent-schema";
 import { boundaryPackage, defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
 import {
   capabilityIntent,
@@ -20,6 +21,11 @@ const effectAuthorityRef = {
   authorityClass: "agent" as const,
   authorityId: "manifest-test",
 };
+
+const outputSchemaSpec = (fingerprint: string): AgentSchemaSpec => ({
+  agentSchema: defineAgentSchema(Schema.Struct({ summary: Schema.String })),
+  fingerprint,
+});
 
 const baseManifest = defineAgentManifest({
   agentId: "agent.manifest-test",
@@ -307,10 +313,6 @@ describe("AgentManifest mount algebra", () => {
       interactions: {
         approval: { bindingRef: "interaction.approval" },
       },
-      identityFacets: [
-        { kind: "deployment", key: "worker", digest: "deploy-v1" },
-        { kind: "adapter", key: "llm", digest: "adapter-v1" },
-      ],
     });
 
     const projection = projectAgentManifest(manifest);
@@ -328,10 +330,6 @@ describe("AgentManifest mount algebra", () => {
         path: "agent/instructions.md",
         digest: "sha256:projection",
       },
-      identityFacets: [
-        { kind: "deployment", key: "worker", digest: "deploy-v1" },
-        { kind: "adapter", key: "llm", digest: "adapter-v1" },
-      ],
     });
     expect(projection.bindings.llmRoutes.map((entry) => entry.id)).toEqual(["default", "zed"]);
     expect(projection.bindings.tools.map((entry) => entry.id)).toEqual(["lookup", "weather"]);
@@ -380,18 +378,13 @@ describe("manifest-owned runtime identity", () => {
     expect(() => manifestScopeRef(missingId)).toThrow(/stableScopeId/);
   });
 
-  it("folds replay-affecting identity facets into effectAuthorityRef.version", () => {
+  it("keeps execution provenance out of manifest truth authority", () => {
     const manifest = defineAgentManifest({
-      agentId: "agent.identity.facets",
+      agentId: "agent.identity.provenance",
       scope: { kind: "session", idSource: "manifest", stableScopeId: "demo" },
       effectAuthorityRef: { ...effectAuthorityRef, version: "base.v1" },
       handlers: ["user_message"] as const,
-      identityFacets: [
-        { kind: "provider_strategy", key: "structured", digest: "strategy-v1" },
-        { kind: "deployment", key: "worker", digest: "deploy-v1" },
-        { kind: "codec", key: "aead", digest: "codec-v1" },
-        { kind: "adapter", key: "llm", digest: "adapter-v1" },
-      ],
+      outputSchema: outputSchemaSpec("agent-schema-v1:sha256:output"),
     });
 
     expect(manifestTruthIdentity(manifest)).toEqual({
@@ -399,94 +392,29 @@ describe("manifest-owned runtime identity", () => {
       effectAuthorityRef: {
         authorityClass: "agent",
         authorityId: "manifest-test",
-        version:
-          "agent-manifest-identity-v1|base=some:base%2Ev1|facet=adapter:llm:adapter-v1|facet=codec:aead:codec-v1|facet=deployment:worker:deploy-v1|facet=provider_strategy:structured:strategy-v1",
+        version: "base.v1",
       },
     });
   });
 
-  it("makes identity facet order irrelevant and digest changes load-bearing", () => {
+  it("does not partition ledger truth when output schema fingerprint changes", () => {
     const left = defineAgentManifest({
       agentId: "agent.identity.left",
       scope: { kind: "session", idSource: "manifest", stableScopeId: "demo" },
       effectAuthorityRef,
       handlers: ["user_message"] as const,
-      identityFacets: [
-        { kind: "adapter", key: "llm", digest: "adapter-v1" },
-        { kind: "deployment", key: "worker", digest: "deploy-v1" },
-      ],
+      outputSchema: outputSchemaSpec("agent-schema-v1:sha256:output-v1"),
     });
     const right = defineAgentManifest({
       agentId: "agent.identity.right",
       scope: { kind: "session", idSource: "manifest", stableScopeId: "demo" },
       effectAuthorityRef,
       handlers: ["user_message"] as const,
-      identityFacets: [
-        { kind: "deployment", key: "worker", digest: "deploy-v1" },
-        { kind: "adapter", key: "llm", digest: "adapter-v1" },
-      ],
-    });
-    const changed = defineAgentManifest({
-      agentId: "agent.identity.changed",
-      scope: { kind: "session", idSource: "manifest", stableScopeId: "demo" },
-      effectAuthorityRef,
-      handlers: ["user_message"] as const,
-      identityFacets: [
-        { kind: "deployment", key: "worker", digest: "deploy-v2" },
-        { kind: "adapter", key: "llm", digest: "adapter-v1" },
-      ],
+      outputSchema: outputSchemaSpec("agent-schema-v1:sha256:output-v2"),
     });
 
     expect(manifestTruthIdentity(left).effectAuthorityRef).toEqual(
       manifestTruthIdentity(right).effectAuthorityRef,
     );
-    expect(manifestTruthIdentity(left).effectAuthorityRef.version).not.toBe(
-      manifestTruthIdentity(changed).effectAuthorityRef.version,
-    );
-  });
-
-  it("consumes outputSchema.fingerprint as the schema identity facet", () => {
-    const outputSchema = {
-      fingerprint: "agent-schema-v1:sha256:output",
-    } as AgentSchemaSpec;
-    const manifest = defineAgentManifest({
-      agentId: "agent.identity.schema",
-      scope: { kind: "session", idSource: "manifest", stableScopeId: "demo" },
-      effectAuthorityRef,
-      handlers: ["user_message"] as const,
-      outputSchema,
-    });
-
-    expect(manifestTruthIdentity(manifest).effectAuthorityRef.version).toBe(
-      "agent-manifest-identity-v1|base=none|facet=schema:output:agent-schema-v1%3Asha256%3Aoutput",
-    );
-  });
-
-  it("fails closed on duplicate identity facet keys", () => {
-    const manifest = defineAgentManifest({
-      agentId: "agent.identity.duplicate",
-      scope: { kind: "session", idSource: "manifest", stableScopeId: "demo" },
-      effectAuthorityRef,
-      handlers: ["user_message"] as const,
-      identityFacets: [
-        { kind: "deployment", key: "worker", digest: "deploy-v1" },
-        { kind: "deployment", key: "worker", digest: "deploy-v2" },
-      ],
-    });
-
-    expect(() => manifestTruthIdentity(manifest)).toThrow(/duplicate identity facet/);
-  });
-
-  it("fails closed when explicit schema facets duplicate outputSchema ownership", () => {
-    const manifest = defineAgentManifest({
-      agentId: "agent.identity.schema-duplicate",
-      scope: { kind: "session", idSource: "manifest", stableScopeId: "demo" },
-      effectAuthorityRef,
-      handlers: ["user_message"] as const,
-      identityFacets: [{ kind: "schema", key: "output", digest: "manual-schema" }],
-      outputSchema: { fingerprint: "agent-schema-v1:sha256:output" } as AgentSchemaSpec,
-    });
-
-    expect(() => manifestTruthIdentity(manifest)).toThrow(/duplicate identity facet schema:output/);
   });
 });

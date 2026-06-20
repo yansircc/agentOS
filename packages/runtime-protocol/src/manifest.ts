@@ -3,24 +3,6 @@ import type { MaterialRef } from "@agent-os/kernel/material-ref";
 import type { AgentSchemaSpec } from "@agent-os/kernel/agent-schema";
 import type { LedgerTruthIdentity } from "./ledger";
 
-export const AGENT_MANIFEST_IDENTITY_VERSION = "agent-manifest-identity-v1" as const;
-
-export const AGENT_MANIFEST_IDENTITY_FACET_KINDS = [
-  "deployment",
-  "adapter",
-  "codec",
-  "schema",
-  "provider_strategy",
-] as const;
-
-export type AgentManifestIdentityFacetKind = (typeof AGENT_MANIFEST_IDENTITY_FACET_KINDS)[number];
-
-export interface AgentManifestIdentityFacet {
-  readonly kind: AgentManifestIdentityFacetKind;
-  readonly key: string;
-  readonly digest: string;
-}
-
 export const BUILTIN_HANDLER_KINDS = [
   "user_message",
   "tool_called",
@@ -92,7 +74,6 @@ export interface AgentManifest<K extends HandlerKind = HandlerKind> {
   readonly effectAuthorityRef: AuthorityRef;
   readonly handlers: ReadonlyArray<K>;
   readonly extensions?: ReadonlyArray<AgentDefinitionExtension>;
-  readonly identityFacets?: ReadonlyArray<AgentManifestIdentityFacet>;
   readonly llmRoutes?: Readonly<Record<string, AgentLlmRouteBindingRef>>;
   readonly tools?: Readonly<Record<string, AgentToolBindingRef>>;
   readonly capabilities?: Readonly<Record<string, AgentCapabilityBindingRef>>;
@@ -136,91 +117,6 @@ export const manifestScopeRef = (manifest: AgentManifest): ScopeRef => {
   return { kind: scope.kind, scopeId: scope.stableScopeId };
 };
 
-const isNonEmptyString = (value: unknown): value is string =>
-  typeof value === "string" && value.length > 0;
-
-const isAgentManifestIdentityFacetKind = (
-  value: unknown,
-): value is AgentManifestIdentityFacetKind =>
-  typeof value === "string" &&
-  AGENT_MANIFEST_IDENTITY_FACET_KINDS.includes(value as AgentManifestIdentityFacetKind);
-
-const encodeIdentityPart = (value: string): string =>
-  encodeURIComponent(value).replace(/\./g, "%2E");
-
-const identityFacetKey = (facet: AgentManifestIdentityFacet): string =>
-  `${facet.kind}\u0000${facet.key}`;
-
-const validateIdentityFacet = (facet: AgentManifestIdentityFacet, index: number): void => {
-  if (!isAgentManifestIdentityFacetKind(facet.kind)) {
-    throw new TypeError(`manifestTruthIdentity: identityFacets[${index}].kind is invalid`);
-  }
-  if (!isNonEmptyString(facet.key)) {
-    throw new TypeError(`manifestTruthIdentity: identityFacets[${index}].key must be non-empty`);
-  }
-  if (!isNonEmptyString(facet.digest)) {
-    throw new TypeError(`manifestTruthIdentity: identityFacets[${index}].digest must be non-empty`);
-  }
-};
-
-const manifestIdentityFacets = (
-  manifest: AgentManifest,
-): ReadonlyArray<AgentManifestIdentityFacet> => [
-  ...(manifest.identityFacets ?? []),
-  ...(manifest.outputSchema === undefined
-    ? []
-    : [
-        {
-          kind: "schema" as const,
-          key: "output",
-          digest: manifest.outputSchema.fingerprint,
-        },
-      ]),
-];
-
-const canonicalManifestIdentityFacets = (
-  manifest: AgentManifest,
-): ReadonlyArray<AgentManifestIdentityFacet> => {
-  const seen = new Map<string, AgentManifestIdentityFacet>();
-  const facets = manifestIdentityFacets(manifest);
-  facets.forEach((facet, index) => {
-    validateIdentityFacet(facet, index);
-    const key = identityFacetKey(facet);
-    if (seen.has(key)) {
-      throw new TypeError(
-        `manifestTruthIdentity: duplicate identity facet ${facet.kind}:${facet.key}`,
-      );
-    }
-    seen.set(key, facet);
-  });
-  return [...facets].sort((left, right) => {
-    const byKind = left.kind.localeCompare(right.kind);
-    if (byKind !== 0) return byKind;
-    return left.key.localeCompare(right.key);
-  });
-};
-
-const manifestIdentityAuthorityRef = (manifest: AgentManifest): AuthorityRef => {
-  const facets = canonicalManifestIdentityFacets(manifest);
-  if (facets.length === 0) return manifest.effectAuthorityRef;
-
-  const baseVersion =
-    manifest.effectAuthorityRef.version === undefined
-      ? "base=none"
-      : `base=some:${encodeIdentityPart(manifest.effectAuthorityRef.version)}`;
-  const facetParts = facets.map(
-    (facet) =>
-      `facet=${encodeIdentityPart(facet.kind)}:${encodeIdentityPart(facet.key)}:${encodeIdentityPart(
-        facet.digest,
-      )}`,
-  );
-
-  return {
-    ...manifest.effectAuthorityRef,
-    version: [AGENT_MANIFEST_IDENTITY_VERSION, baseVersion, ...facetParts].join("|"),
-  };
-};
-
 /**
  * Single-source the runtime truth identity from a compiled manifest so a
  * consumer never hand-builds `{ scopeRef, effectAuthorityRef }`. The runtime
@@ -231,5 +127,5 @@ const manifestIdentityAuthorityRef = (manifest: AgentManifest): AuthorityRef => 
  */
 export const manifestTruthIdentity = (manifest: AgentManifest): LedgerTruthIdentity => ({
   scopeRef: manifestScopeRef(manifest),
-  effectAuthorityRef: manifestIdentityAuthorityRef(manifest),
+  effectAuthorityRef: manifest.effectAuthorityRef,
 });

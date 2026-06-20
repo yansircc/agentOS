@@ -53,6 +53,7 @@ import {
 import {
   RUNTIME_FACT_OWNER,
   decodeRuntimeLedgerEvent,
+  EXECUTION_IDENTITY_VERSION,
   EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
   projectFailureDiagnostics,
   replayToolFromArtifact,
@@ -82,6 +83,16 @@ const traceContext = {
   traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
   tracestate: "vendor=value",
 };
+const executionIdentity = {
+  version: EXECUTION_IDENTITY_VERSION,
+  manifest: { agentId: "agent.submit-runtime-events", version: "1.0.0" },
+  deployment: {
+    deploymentId: "deployment:submit-runtime-events",
+    backend: "in-memory",
+    adapter: "runtime-test",
+    codec: "ledger-v1",
+  },
+} satisfies NonNullable<SubmitSpec["executionIdentity"]>;
 
 const basePublicSpec = (overrides: Partial<SubmitSpec> = {}): SubmitSpec => ({
   intent: "answer",
@@ -1689,7 +1700,7 @@ describe("submit-agent runtime event writes", () => {
 
   it.effect("standard submit emits constructor-backed runtime facts", () =>
     Effect.gen(function* () {
-      const { result, events } = yield* runSubmit(baseSpec());
+      const { result, events } = yield* runSubmit(baseSpec({ executionIdentity }));
 
       expect(result).toMatchObject({ ok: true, final: "done" });
       expectRuntimePayloadsDecode(events);
@@ -1713,6 +1724,9 @@ describe("submit-agent runtime event writes", () => {
             tokensUsed: 2,
           },
         },
+      });
+      expect(events.find((event) => event.kind === "agent.run.started")?.payload).toMatchObject({
+        executionIdentity,
       });
     }),
   );

@@ -9,6 +9,13 @@ import type { AgentManifest } from "./manifest";
 import { manifestTruthIdentity } from "./manifest";
 import type { LedgerCommitEventSpec, LedgerTruthIdentity } from "./ledger";
 import { Option } from "effect";
+import {
+  EXECUTION_IDENTITY_VERSION,
+  executionIdentityFromUnknown,
+  type ExecutionIdentity,
+  type ExecutionIdentityDeployment,
+  type ExecutionIdentityManifest,
+} from "./execution-identity";
 
 export const INSTALLATION_RECEIPT_EVENT_KIND = "agent.installation.receipt" as const;
 export const INSTALLATION_RECEIPT_VERSION = "agent-installation-receipt-v1" as const;
@@ -32,6 +39,7 @@ export interface InstallationReceipt {
   readonly codec: string;
   readonly providerStrategy?: string;
   readonly truthIdentity: LedgerTruthIdentity;
+  readonly executionIdentity: ExecutionIdentity;
 }
 
 const isNonEmptyString = (value: unknown): value is string =>
@@ -45,8 +53,44 @@ const requireDeploymentField = (label: string, value: string): string => {
   );
 };
 
+const executionIdentityManifestFromDeployment = (
+  spec: DeploymentSpec,
+): ExecutionIdentityManifest => ({
+  agentId: requireDeploymentField("manifest.agentId", spec.manifest.agentId),
+  ...(spec.manifest.version === undefined ? {} : { version: spec.manifest.version }),
+  ...(spec.manifest.outputSchema === undefined
+    ? {}
+    : { outputSchemaFingerprint: spec.manifest.outputSchema.fingerprint }),
+});
+
+const executionIdentityDeploymentFromDeployment = (
+  spec: DeploymentSpec,
+): ExecutionIdentityDeployment => ({
+  deploymentId: requireDeploymentField("deploymentId", spec.deploymentId),
+  backend: requireDeploymentField("backend", spec.backend),
+  adapter: requireDeploymentField("adapter", spec.adapter),
+  codec: requireDeploymentField("codec", spec.codec),
+  ...(spec.providerStrategy === undefined
+    ? {}
+    : { providerStrategy: requireDeploymentField("providerStrategy", spec.providerStrategy) }),
+});
+
+/**
+ * Derive execution provenance from the deployment surface without changing the
+ * ledger truth key. This records which linked program ran; it does not grant
+ * authority.
+ *
+ * @public
+ */
+export const executionIdentityFromDeployment = (spec: DeploymentSpec): ExecutionIdentity => ({
+  version: EXECUTION_IDENTITY_VERSION,
+  manifest: executionIdentityManifestFromDeployment(spec),
+  deployment: executionIdentityDeploymentFromDeployment(spec),
+});
+
 export const installationReceiptFromDeployment = (spec: DeploymentSpec): InstallationReceipt => {
   const truthIdentity = manifestTruthIdentity(spec.manifest);
+  const executionIdentity = executionIdentityFromDeployment(spec);
   return {
     version: INSTALLATION_RECEIPT_VERSION,
     deploymentId: requireDeploymentField("deploymentId", spec.deploymentId),
@@ -59,6 +103,7 @@ export const installationReceiptFromDeployment = (spec: DeploymentSpec): Install
       ? {}
       : { providerStrategy: requireDeploymentField("providerStrategy", spec.providerStrategy) }),
     truthIdentity,
+    executionIdentity,
   };
 };
 
@@ -89,6 +134,16 @@ const installationReceiptFromPayload = (value: unknown): InstallationReceipt | n
   if (record.providerStrategy !== undefined && !isNonEmptyString(record.providerStrategy)) {
     return null;
   }
+  const executionIdentity = record.executionIdentity;
+  if (
+    typeof executionIdentity !== "object" ||
+    executionIdentity === null ||
+    Array.isArray(executionIdentity)
+  ) {
+    return null;
+  }
+  const parsedExecutionIdentity = executionIdentityFromUnknown(executionIdentity);
+  if (parsedExecutionIdentity === null) return null;
   const truthIdentity = record.truthIdentity;
   if (typeof truthIdentity !== "object" || truthIdentity === null || Array.isArray(truthIdentity)) {
     return null;
@@ -110,6 +165,7 @@ const installationReceiptFromPayload = (value: unknown): InstallationReceipt | n
       scopeRef: identityRecord.scopeRef,
       effectAuthorityRef: identityRecord.effectAuthorityRef,
     },
+    executionIdentity: parsedExecutionIdentity,
   };
 };
 

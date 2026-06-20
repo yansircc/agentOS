@@ -2,6 +2,8 @@ import { describe, expect, it } from "@effect/vitest";
 import { decodeRecordedLedgerEvent } from "@agent-os/kernel/types";
 import {
   defineAgentManifest,
+  EXECUTION_IDENTITY_VERSION,
+  executionIdentityFromDeployment,
   installationReceiptEvent,
   installationReceiptFromDeployment,
   installationReceiptFromLedgerEvent,
@@ -20,10 +22,6 @@ const manifest = defineAgentManifest({
     authorityId: "deployment-test",
   },
   handlers: ["user_message"] as const,
-  identityFacets: [
-    { kind: "deployment", key: "worker", digest: "deploy-v1" },
-    { kind: "adapter", key: "cloudflare-do", digest: "adapter-v1" },
-  ],
 });
 
 const deployment = {
@@ -36,7 +34,7 @@ const deployment = {
 };
 
 describe("DeploymentSpec installation receipt", () => {
-  it("derives a ledger append spec from manifest-owned deployment identity", () => {
+  it("derives a ledger append spec from manifest truth identity plus execution identity", () => {
     const event = installationReceiptEvent(deployment);
 
     expect(event).toMatchObject({
@@ -51,12 +49,50 @@ describe("DeploymentSpec installation receipt", () => {
         adapter: "sse-http",
         codec: "ledger-v1",
         providerStrategy: "effect-ai",
+        executionIdentity: {
+          version: EXECUTION_IDENTITY_VERSION,
+          manifest: { agentId: "agent.deployment-test", version: "1.0.0" },
+          deployment: {
+            deploymentId: "deployment:worker:test",
+            backend: "cloudflare-do",
+            adapter: "sse-http",
+            codec: "ledger-v1",
+            providerStrategy: "effect-ai",
+          },
+        },
       },
     });
-    expect(event.effectAuthorityRef.version).toContain("facet=deployment:worker:deploy-v1");
+    expect(event.effectAuthorityRef).toEqual({
+      authorityClass: "agent",
+      authorityId: "deployment-test",
+    });
     expect(event).not.toHaveProperty("factOwnerRef");
     expect(JSON.stringify(event)).not.toContain("secret");
     expect(JSON.stringify(event)).not.toContain("https://");
+  });
+
+  it("keeps ledger truth key stable when deployment provenance changes", () => {
+    const changed = {
+      ...deployment,
+      deploymentId: "deployment:worker:test-v2",
+      adapter: "sse-http-v2",
+      codec: "ledger-v2",
+      providerStrategy: "effect-ai-structured",
+    };
+
+    const baseEvent = installationReceiptEvent(deployment);
+    const changedEvent = installationReceiptEvent(changed);
+
+    expect({
+      scopeRef: changedEvent.scopeRef,
+      effectAuthorityRef: changedEvent.effectAuthorityRef,
+    }).toEqual({
+      scopeRef: baseEvent.scopeRef,
+      effectAuthorityRef: baseEvent.effectAuthorityRef,
+    });
+    expect(executionIdentityFromDeployment(changed)).not.toEqual(
+      executionIdentityFromDeployment(deployment),
+    );
   });
 
   it("reads the latest matching receipt from recorded ledger events", () => {
@@ -105,5 +141,27 @@ describe("DeploymentSpec installation receipt", () => {
 
     expect(installationReceiptFromLedgerEvent(recorded)).toBeNull();
     expect(projectInstallationReceipt([recorded], "deployment:worker:test")).toBeNull();
+  });
+
+  it("fails closed when execution identity is malformed", () => {
+    const event = installationReceiptEvent(deployment);
+    const receipt = installationReceiptFromDeployment(deployment);
+    const recorded = decodeRecordedLedgerEvent({
+      id: 1,
+      ts: 1_700_000_000_000,
+      kind: event.kind,
+      scopeRef: event.scopeRef,
+      effectAuthorityRef: event.effectAuthorityRef,
+      factOwnerRef: RUNTIME_FACT_OWNER,
+      payload: {
+        ...receipt,
+        executionIdentity: {
+          ...receipt.executionIdentity,
+          deployment: { ...receipt.executionIdentity.deployment, codec: "" },
+        },
+      },
+    });
+
+    expect(installationReceiptFromLedgerEvent(recorded)).toBeNull();
   });
 });

@@ -16,6 +16,7 @@ import {
   type InputRequestDescriptor,
   type InputRequestResumePayload,
 } from "./input-request";
+import type { ExecutionIdentity } from "./execution-identity";
 
 export class MissingSubmitRunBinding extends Data.TaggedError(
   "agent_os.missing_submit_run_binding",
@@ -133,6 +134,7 @@ export interface SubmitRunBindings {
   readonly toolIntents?: ReadonlyArray<SubmitToolIntent>;
   readonly receiptBackedTools?: Readonly<Record<string, SubmitReceiptBackedToolBinding>>;
   readonly decisionInterrupts?: ReadonlyArray<SubmitDecisionInterrupt>;
+  readonly executionIdentity?: ExecutionIdentity;
 }
 
 export interface LowerSubmitRunInputSpec {
@@ -213,6 +215,9 @@ export const lowerSubmitRunInput = (spec: LowerSubmitRunInputSpec): SubmitSpec =
       ? {}
       : { decisionInterrupts: spec.input.decisionInterrupts ?? spec.bindings.decisionInterrupts }),
     ...(spec.input.resume === undefined ? {} : { resume: spec.input.resume }),
+    ...(spec.bindings.executionIdentity === undefined
+      ? {}
+      : { executionIdentity: spec.bindings.executionIdentity }),
   };
 };
 
@@ -255,6 +260,7 @@ export interface SubmitSpec {
   readonly toolPolicy?: SubmitToolPolicy;
   readonly decisionInterrupts?: ReadonlyArray<SubmitDecisionInterrupt>;
   readonly resume?: SubmitResumeDecision;
+  readonly executionIdentity?: ExecutionIdentity;
 }
 
 export interface SubmitDecisionInterrupt {

@@ -1,6 +1,17 @@
 import { describe, expect, it } from "@effect/vitest";
-import type { SubmitSpec } from "@agent-os/runtime-protocol";
+import { EXECUTION_IDENTITY_VERSION, type SubmitSpec } from "@agent-os/runtime-protocol";
 import { internalSubmitSpec, type InternalSubmitSpec } from "../src/internal-submit";
+
+const executionIdentity = {
+  version: EXECUTION_IDENTITY_VERSION,
+  manifest: { agentId: "agent.internal-submit", version: "1.0.0" },
+  deployment: {
+    deploymentId: "deployment:internal-submit",
+    backend: "in-memory",
+    adapter: "runtime-test",
+    codec: "ledger-v1",
+  },
+} satisfies NonNullable<SubmitSpec["executionIdentity"]>;
 
 const publicSpec = (): SubmitSpec => ({
   intent: "answer",
@@ -83,6 +94,18 @@ describe("internalSubmitSpec", () => {
     });
     expect("toolRetries" in spec.budget!).toBe(false);
     expect(spec.toolPolicy).toEqual(toolPolicy);
+  });
+
+  it("preserves execution identity as runtime evidence", () => {
+    const spec = internalSubmitSpec(
+      { ...publicSpec(), executionIdentity },
+      {
+        scope: "scope-1",
+        scopeRef: { kind: "conversation", scopeId: "scope-1" },
+      },
+    );
+
+    expect(spec.executionIdentity).toEqual(executionIdentity);
   });
 
   it("keeps internal submit construction sealed to the constructor", () => {

@@ -34,6 +34,7 @@ import {
   validateRuntimeLedgerTransitions,
   type RuntimeEventCommitSpec,
 } from "../src/runtime-events";
+import { EXECUTION_IDENTITY_VERSION, type ExecutionIdentity } from "../src/execution-identity";
 import { projectRuntimeSafeLedgerEvent } from "../src/safe-events";
 
 const scope = "runtime-event-test";
@@ -49,6 +50,21 @@ const eventIdentity = (scopeId: string) => ({
 const traceContext = {
   traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
   tracestate: "vendor=value",
+};
+const executionIdentity: ExecutionIdentity = {
+  version: EXECUTION_IDENTITY_VERSION,
+  manifest: {
+    agentId: "agent.runtime-event-test",
+    version: "1.0.0",
+    outputSchemaFingerprint: "agent-schema-v1:sha256:runtime-output",
+  },
+  deployment: {
+    deploymentId: "deployment:runtime-event-test",
+    backend: "cloudflare-do",
+    adapter: "sse-http",
+    codec: "ledger-v1",
+    providerStrategy: "effect-ai",
+  },
 };
 
 const resolvedToolExecution = (
@@ -137,7 +153,12 @@ const llmResponseWithToolCall = (
 describe("runtime event vocabulary", () => {
   it("round-trips every runtime constructor through the runtime decoder", () => {
     const specs: RuntimeEventCommitSpec[] = [
-      agentRunStartedEvent({ ...runtimeIdentity, intent: "answer", traceContext }),
+      agentRunStartedEvent({
+        ...runtimeIdentity,
+        intent: "answer",
+        executionIdentity,
+        traceContext,
+      }),
       chatIngestedEvent({
         ...runtimeIdentity,
         runId: 1,
@@ -285,6 +306,29 @@ describe("runtime event vocabulary", () => {
     expect(recordedEvent.value.kind).toBe("agent.run.started");
     expect(Object.prototype.propertyIsEnumerable.call(decoded.event, "value")).toBe(false);
     expect(JSON.stringify(decoded.event)).not.toContain('"value"');
+  });
+
+  it("carries execution identity on run start and rejects malformed provenance", () => {
+    const spec = agentRunStartedEvent({ ...runtimeIdentity, intent: "answer", executionIdentity });
+
+    expect(spec.payload.executionIdentity).toEqual(executionIdentity);
+    expect(decodeRuntimeLedgerEvent(ledgerEvent(1, spec))).toMatchObject({
+      _tag: "runtime",
+      event: {
+        payload: { executionIdentity },
+      },
+    });
+    expect(() =>
+      decodeRuntimeLedgerEvent(
+        rawEvent(1, "agent.run.started", {
+          intent: "answer",
+          executionIdentity: {
+            ...executionIdentity,
+            deployment: { ...executionIdentity.deployment, adapter: "" },
+          },
+        }),
+      ),
+    ).toThrow();
   });
 
   it("projects LLM and complete-after-tools runtime facts without prompt or args", () => {

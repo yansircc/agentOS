@@ -34,10 +34,6 @@ const manifest = defineAgentManifest({
     authorityId: "cloudflare-deployment",
   },
   handlers: ["user_message"] as const,
-  identityFacets: [
-    { kind: "deployment", key: "worker", digest: "deploy-v1" },
-    { kind: "adapter", key: "cloudflare-do", digest: "adapter-v1" },
-  ],
 });
 
 const agentBindings = defineAgentBindings<(typeof manifest.handlers)[number]>({

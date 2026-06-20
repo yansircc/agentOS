@@ -1063,6 +1063,7 @@ export const submitAgentEffect = (
             event: agentRunStartedEvent({
               ...identity,
               intent: spec.intent,
+              executionIdentity: spec.executionIdentity,
               traceContext,
             }),
           })).event

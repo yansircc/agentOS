@@ -5,7 +5,6 @@ import type {
   AgentCapabilityBindingRef,
   AgentDefinitionExtension,
   AgentExecutionDomainRef,
-  AgentManifestIdentityFacet,
   AgentInstructionsRef,
   AgentInteractionRef,
   AgentLlmRouteBindingRef,
@@ -34,7 +33,6 @@ export interface AgentManifestProjectionAgent<K extends HandlerKind = HandlerKin
   readonly effectAuthorityRef: AuthorityRef;
   readonly handlers: ReadonlyArray<K>;
   readonly extensions?: ReadonlyArray<AgentDefinitionExtension>;
-  readonly identityFacets?: ReadonlyArray<AgentManifestIdentityFacet>;
   readonly outputSchema?: AgentSchemaSpec;
 }
 
@@ -89,7 +87,6 @@ export const projectAgentManifest = <K extends HandlerKind>(
     ...(manifest.version === undefined ? {} : { version: manifest.version }),
     ...(manifest.instructions === undefined ? {} : { instructions: manifest.instructions }),
     ...(manifest.extensions === undefined ? {} : { extensions: manifest.extensions }),
-    ...(manifest.identityFacets === undefined ? {} : { identityFacets: manifest.identityFacets }),
     ...(manifest.outputSchema === undefined ? {} : { outputSchema: manifest.outputSchema }),
   };
   return {

@@ -16,8 +16,6 @@
 - `.:AgentRunStartedPayload`
 - `.:AgentRunStartedPayloadSchema`
 - `.:AGENT_INTENT_EVENT_KINDS`
-- `.:AGENT_MANIFEST_IDENTITY_FACET_KINDS`
-- `.:AGENT_MANIFEST_IDENTITY_VERSION`
 - `.:AGENT_MANIFEST_PROJECTION_SCHEMA`
 - `.:AGENT_MANIFEST_PROJECTION_TARGETS`
 - `.:AGENT_SETTLEMENT_EVENT_KINDS`
@@ -49,8 +47,6 @@
 - `.:AgentIntentKind`
 - `.:AgentLlmRouteBindingRef`
 - `.:AgentManifest`
-- `.:AgentManifestIdentityFacet`
-- `.:AgentManifestIdentityFacetKind`
 - `.:AgentManifestInput`
 - `.:AgentManifestProjection`
 - `.:AgentManifestProjectionAgent`
@@ -90,7 +86,14 @@
 - `.:DefineAgentCapabilitySpec`
 - `.:DeploymentSpec`
 - `.:EMPTY_BARRIER_CURSOR`
+- `.:EXECUTION_IDENTITY_VERSION`
 - `.:ExtensionHandlerKind`
+- `.:ExecutionIdentity`
+- `.:ExecutionIdentityDeployment`
+- `.:ExecutionIdentityDeploymentSchema`
+- `.:ExecutionIdentityManifest`
+- `.:ExecutionIdentityManifestSchema`
+- `.:ExecutionIdentitySchema`
 - `.:EvidenceRow`
 - `.:RecordedEvidenceRow`
 - `.:DeterministicToolExecutedPayload`
@@ -237,6 +240,8 @@
 - `.:decodeRuntimeLedgerEvent`
 - `.:decodeSubmitResult`
 - `.:externalToolExecutionReceiptFromExecutedPayload`
+- `.:executionIdentityFromDeployment`
+- `.:executionIdentityFromUnknown`
 - `.:failureDiagnosticEnvelopeForReason`
 - `.:inputRequestKindFromReason`
 - `.:inputRequestDescriptorFromUnknown`

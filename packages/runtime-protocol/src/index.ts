@@ -5,6 +5,7 @@ export * from "./bindings";
 export * from "./capability";
 export * from "./continuation";
 export * from "./deployment";
+export * from "./execution-identity";
 export * from "./failure-diagnostics";
 export * from "./input-request";
 export * from "./intent";

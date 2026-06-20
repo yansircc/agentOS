@@ -25,6 +25,7 @@ import {
   type InputRequestKind,
   type InputRequestResumePayload,
 } from "./input-request";
+import { ExecutionIdentitySchema, type ExecutionIdentity } from "./execution-identity";
 
 const positiveInt = Schema.Int.pipe(Schema.check(Schema.isGreaterThanOrEqualTo(1)));
 const nonNegativeInt = Schema.Int.pipe(Schema.check(Schema.isGreaterThanOrEqualTo(0)));
@@ -117,6 +118,7 @@ const ToolExecutionSchema: Schema.Decoder<ToolExecution> = Schema.Union([
 
 export type AgentRunStartedPayload = {
   readonly intent: string;
+  readonly executionIdentity?: ExecutionIdentity;
   readonly traceContext?: TraceContext;
 };
 
@@ -384,6 +386,7 @@ export type AgentRunAbortedPayload = {
 
 export const AgentRunStartedPayloadSchema: Schema.Decoder<AgentRunStartedPayload> = Schema.Struct({
   intent: Schema.String,
+  executionIdentity: Schema.optional(ExecutionIdentitySchema),
   traceContext: Schema.optional(TraceContextSchema),
 });
 
@@ -1328,11 +1331,13 @@ type RuntimeEventIdentitySpec = {
 export const agentRunStartedEvent = (
   spec: RuntimeEventIdentitySpec & {
     readonly intent: string;
+    readonly executionIdentity?: ExecutionIdentity;
     readonly traceContext?: TraceContext;
   },
 ): RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.AGENT_RUN_STARTED> =>
   runtimeEvent(spec, RUNTIME_EVENT_KIND.AGENT_RUN_STARTED, {
     intent: spec.intent,
+    ...(spec.executionIdentity === undefined ? {} : { executionIdentity: spec.executionIdentity }),
     ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
   });
 

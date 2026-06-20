@@ -45,6 +45,7 @@ export const internalSubmitSpec = (
     toolPolicy: spec.toolPolicy,
     decisionInterrupts: spec.decisionInterrupts,
     resume: spec.resume,
+    executionIdentity: spec.executionIdentity,
     scope: scope.scope,
     scopeRef: scope.scopeRef,
   }) as InternalSubmitSpec;
