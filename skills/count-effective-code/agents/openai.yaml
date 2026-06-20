@@ -1,0 +1,6 @@
+interface:
+  display_name: "Count Effective Code"
+  short_description: "Measure SLOC, churn, and hotspots"
+  default_prompt: "Use $count-effective-code to measure effective code size for this repo with source/test/tooling buckets, deltas, churn, and hotspots."
+policy:
+  allow_implicit_invocation: true
