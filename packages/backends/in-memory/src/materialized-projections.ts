@@ -1,6 +1,5 @@
 import { Effect, Layer } from "effect";
 import {
-  backendProtocolEventIdentityKey,
   isBackendProtocolEventIdentity,
   type BackendProtocolEventIdentity,
   type BackendProtocolTruthIdentity,
@@ -11,28 +10,25 @@ import {
   runtimeStorageError,
   type RuntimeStorageError,
 } from "@agent-os/runtime";
-import { inMemoryRuntimeEventIdentity, type InMemoryBackendState } from "./state";
+import type { InMemoryBackendState } from "./state";
 
 const projectionStorageError = (cause: unknown): RuntimeStorageError | UnregisteredProjectionKind =>
   cause instanceof UnregisteredProjectionKind ? cause : runtimeStorageError("projection", cause);
 
 export const InMemoryMaterializedProjectionsLive = (
   state: InMemoryBackendState,
-  identity: BackendProtocolTruthIdentity,
+  _identity: BackendProtocolTruthIdentity,
 ): Layer.Layer<MaterializedProjections> => {
-  const eventIdentity = inMemoryRuntimeEventIdentity(identity);
-  const eventIdentityKey = backendProtocolEventIdentityKey(eventIdentity);
-  const requireRuntimeProjectionIdentity = (
+  const projectionIdentity = (
     spec: Pick<BackendProtocolEventIdentity, "scopeRef" | "effectAuthorityRef" | "factOwnerRef">,
-  ): Effect.Effect<void, RuntimeStorageError> => {
+  ): Effect.Effect<BackendProtocolEventIdentity, RuntimeStorageError> => {
     const specIdentity = {
       scopeRef: spec.scopeRef,
       effectAuthorityRef: spec.effectAuthorityRef,
       factOwnerRef: spec.factOwnerRef,
     };
-    return isBackendProtocolEventIdentity(specIdentity) &&
-      backendProtocolEventIdentityKey(specIdentity) === eventIdentityKey
-      ? Effect.void
+    return isBackendProtocolEventIdentity(specIdentity)
+      ? Effect.succeed(specIdentity)
       : Effect.fail(
           runtimeStorageError("projection", "materialized projection identity malformed"),
         );
@@ -40,32 +36,32 @@ export const InMemoryMaterializedProjectionsLive = (
 
   return Layer.succeed(MaterializedProjections, {
     get: (spec) =>
-      requireRuntimeProjectionIdentity(spec).pipe(
-        Effect.andThen(() =>
+      projectionIdentity(spec).pipe(
+        Effect.andThen((eventIdentity) =>
           state
             .projectionGet({ ...spec, eventIdentity })
             .pipe(Effect.mapError(projectionStorageError)),
         ),
       ),
     list: (spec) =>
-      requireRuntimeProjectionIdentity(spec).pipe(
-        Effect.andThen(() =>
+      projectionIdentity(spec).pipe(
+        Effect.andThen((eventIdentity) =>
           state
             .projectionList({ ...spec, eventIdentity })
             .pipe(Effect.mapError(projectionStorageError)),
         ),
       ),
     status: (spec) =>
-      requireRuntimeProjectionIdentity(spec).pipe(
-        Effect.andThen(() =>
+      projectionIdentity(spec).pipe(
+        Effect.andThen((eventIdentity) =>
           state
             .projectionStatus({ ...spec, eventIdentity })
             .pipe(Effect.mapError(projectionStorageError)),
         ),
       ),
     rebuild: (spec) =>
-      requireRuntimeProjectionIdentity(spec).pipe(
-        Effect.andThen(() =>
+      projectionIdentity(spec).pipe(
+        Effect.andThen((eventIdentity) =>
           state
             .projectionRebuild({ ...spec, eventIdentity })
             .pipe(Effect.mapError(projectionStorageError)),

@@ -584,20 +584,40 @@ describe("runtime event vocabulary", () => {
   });
 
   it("validates runtime transition sources against prior and same-batch events", () => {
+    const started = ledgerEvent(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "answer" }));
+    const response = ledgerEvent(2, llmResponseWithToolCall());
+    const interrupted = ledgerEvent(
+      3,
+      agentRunInterruptedEvent({
+        ...runtimeIdentity,
+        runId: 1,
+        turn: { id: 1, index: 0 },
+        interruptId: "interrupt-1",
+        reason: "decision_required",
+        resumeSchema: { type: "object" },
+        tokensUsed: 3,
+        decision: {
+          gateRef: "gate:1",
+          subjectRef: "tool:lookup",
+          toolCallId: "call-1",
+          toolName: "lookup",
+        },
+      }),
+    );
     const consumed = rawEvent(4, "decision_gate.consumed", {
       gateRef: "gate:1",
       decisionRef: "decision:1",
       consumedBy: "runtime",
       claim: { phase: "lived" },
     });
-    const history = [ledgerEvent(1, llmResponseWithToolCall()), consumed];
+    const history = [started, response, interrupted, consumed];
     const compaction = ledgerEvent(
-      2,
+      5,
       runtimeHistoryCompactedEvent({
         ...runtimeIdentity,
         runId: 1,
         turn: { id: 1, index: 0 },
-        sourceEventId: 1,
+        sourceEventId: 2,
         toolCallId: "call-1",
         toolName: "lookup",
         originalBytes: 256,
@@ -605,18 +625,18 @@ describe("runtime event vocabulary", () => {
       }),
     );
     const rekey = ledgerEvent(
-      3,
+      6,
       runtimeRekeyedEvent({
         ...runtimeIdentity,
         runId: 1,
-        sourceEventId: 2,
+        sourceEventId: compaction.id,
         sourceKeyRef: "key:old",
         targetKeyRef: "key:new",
         purpose: "compacted-history",
       }),
     );
     const resume = ledgerEvent(
-      5,
+      7,
       agentRunResumedEvent({
         ...runtimeIdentity,
         runId: 1,
@@ -740,8 +760,202 @@ describe("runtime event vocabulary", () => {
       "runtime_compaction_source_kind_mismatch",
       "runtime_compaction_source_turn_mismatch",
       "runtime_source_event_not_before",
+      "runtime_resume_interruption_missing",
       "runtime_source_event_missing",
+      "runtime_resume_interruption_missing",
       "runtime_resume_consumed_event_kind_mismatch",
+      "runtime_resume_interruption_missing",
+    ]);
+  });
+
+  it("rejects resume without a prior started and interrupted run state", () => {
+    const consumed = rawEvent(1, "decision_gate.consumed", {
+      gateRef: "gate:1",
+      decisionRef: "decision:1",
+      consumedBy: "runtime",
+      claim: { phase: "lived" },
+    });
+    const resume = ledgerEvent(
+      2,
+      agentRunResumedEvent({
+        ...runtimeIdentity,
+        runId: 1,
+        turn: { id: 1, index: 0 },
+        interruptId: "interrupt-1",
+        resume: { kind: "approval", approved: true },
+        resumedAtEventId: consumed.id,
+      }),
+    );
+
+    const validation = validateRuntimeLedgerTransitions({ history: [consumed], events: [resume] });
+
+    expect(validation.ok).toBe(false);
+    if (validation.ok) return;
+    expect(validation.issues.map((issue) => issue.code)).toEqual([
+      "runtime_run_missing_start",
+      "runtime_resume_interruption_missing",
+    ]);
+  });
+
+  it("rejects runtime facts after terminal run state", () => {
+    const started = ledgerEvent(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "answer" }));
+    const completed = ledgerEvent(
+      2,
+      agentRunCompletedEvent({
+        ...runtimeIdentity,
+        runId: started.id,
+        final: "done",
+        output: "done",
+        outputKind: "text",
+        tokensUsed: 1,
+      }),
+    );
+    const aborted = ledgerEvent(
+      3,
+      agentRunAbortedEvent({
+        ...runtimeIdentity,
+        kind: RUNTIME_ABORT_EVENT_KINDS[0]!,
+        runId: started.id,
+        tokensUsed: 1,
+        payload: { reason: "late" },
+      }),
+    );
+
+    const validation = validateRuntimeLedgerTransitions({
+      history: [started, completed],
+      events: [aborted],
+    });
+
+    expect(validation.ok).toBe(false);
+    if (validation.ok) return;
+    expect(validation.issues.map((issue) => issue.code)).toEqual([
+      "runtime_run_duplicate_terminal",
+    ]);
+  });
+
+  it("rejects duplicate starts and duplicate interruption resumes", () => {
+    const started = ledgerEvent(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "answer" }));
+    const interrupted = ledgerEvent(
+      2,
+      agentRunInterruptedEvent({
+        ...runtimeIdentity,
+        runId: started.id,
+        turn: { id: started.id, index: 0 },
+        interruptId: "interrupt-1",
+        reason: "decision_required",
+        resumeSchema: { type: "object" },
+        tokensUsed: 1,
+      }),
+    );
+    const consumed = rawEvent(3, "decision_gate.consumed", {
+      gateRef: "gate:1",
+      decisionRef: "decision:1",
+      consumedBy: "runtime",
+      claim: { phase: "lived" },
+    });
+    const resumed = ledgerEvent(
+      4,
+      agentRunResumedEvent({
+        ...runtimeIdentity,
+        runId: started.id,
+        turn: { id: started.id, index: 0 },
+        interruptId: "interrupt-1",
+        resume: { kind: "approval", approved: true },
+        resumedAtEventId: consumed.id,
+      }),
+    );
+    const secondConsumed = rawEvent(5, "decision_gate.consumed", {
+      gateRef: "gate:1",
+      decisionRef: "decision:2",
+      consumedBy: "runtime",
+      claim: { phase: "lived" },
+    });
+    const secondResume = ledgerEvent(
+      6,
+      agentRunResumedEvent({
+        ...runtimeIdentity,
+        runId: started.id,
+        turn: { id: started.id, index: 0 },
+        interruptId: "interrupt-1",
+        resume: { kind: "approval", approved: true },
+        resumedAtEventId: secondConsumed.id,
+      }),
+    );
+    const duplicateStart = ledgerEvent(
+      started.id,
+      agentRunStartedEvent({ ...runtimeIdentity, intent: "duplicate" }),
+    );
+
+    const duplicateStartValidation = validateRuntimeLedgerTransitions({
+      history: [started],
+      events: [duplicateStart],
+    });
+    expect(duplicateStartValidation.ok).toBe(false);
+    if (!duplicateStartValidation.ok) {
+      expect(duplicateStartValidation.issues.map((issue) => issue.code)).toEqual([
+        "runtime_run_duplicate_start",
+      ]);
+    }
+
+    const duplicateResumeValidation = validateRuntimeLedgerTransitions({
+      history: [started, interrupted, consumed, resumed],
+      events: [secondConsumed, secondResume],
+    });
+    expect(duplicateResumeValidation.ok).toBe(false);
+    if (!duplicateResumeValidation.ok) {
+      expect(duplicateResumeValidation.issues.map((issue) => issue.code)).toEqual([
+        "runtime_resume_interruption_already_consumed",
+      ]);
+    }
+  });
+
+  it("rejects resume authorized by the wrong consumed gate", () => {
+    const started = ledgerEvent(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "answer" }));
+    const interrupted = ledgerEvent(
+      2,
+      agentRunInterruptedEvent({
+        ...runtimeIdentity,
+        runId: started.id,
+        turn: { id: started.id, index: 0 },
+        interruptId: "interrupt-1",
+        reason: "decision_required",
+        resumeSchema: { type: "object" },
+        tokensUsed: 1,
+        decision: {
+          gateRef: "gate:expected",
+          subjectRef: "tool:lookup",
+          toolCallId: "call-1",
+          toolName: "lookup",
+        },
+      }),
+    );
+    const consumed = rawEvent(3, "decision_gate.consumed", {
+      gateRef: "gate:other",
+      decisionRef: "decision:1",
+      consumedBy: "runtime",
+      claim: { phase: "lived" },
+    });
+    const resume = ledgerEvent(
+      4,
+      agentRunResumedEvent({
+        ...runtimeIdentity,
+        runId: started.id,
+        turn: { id: started.id, index: 0 },
+        interruptId: "interrupt-1",
+        resume: { kind: "approval", approved: true },
+        resumedAtEventId: consumed.id,
+      }),
+    );
+
+    const validation = validateRuntimeLedgerTransitions({
+      history: [started, interrupted, consumed],
+      events: [resume],
+    });
+
+    expect(validation.ok).toBe(false);
+    if (validation.ok) return;
+    expect(validation.issues.map((issue) => issue.code)).toEqual([
+      "runtime_resume_consumed_gate_mismatch",
     ]);
   });
 

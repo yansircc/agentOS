@@ -10,7 +10,9 @@ import {
   projectionPut,
 } from "@agent-os/runtime";
 import {
+  agentRunInterruptedEvent,
   agentRunResumedEvent,
+  agentRunStartedEvent,
   RUNTIME_FACT_OWNER,
   runtimeHistoryCompactedEvent,
 } from "@agent-os/runtime-protocol";
@@ -258,6 +260,38 @@ describe("cloudflare-do ledger commit primitive", () => {
       const sql = state.storage.sql;
       const fired: LedgerEvent[] = [];
       const identity = truthIdentity("resume-carrier-l0");
+      const run = yield* commitLedgerTransaction(state, recordingBus(fired), runtimeOwner, (tx) => {
+        const started = agentRunStartedEvent({ ...identity, intent: "answer" });
+        const interrupted = agentRunInterruptedEvent({
+          ...identity,
+          runId: 1,
+          turn: { id: 1, index: 0 },
+          interruptId: "interrupt-1",
+          reason: "decision_required",
+          resumeSchema: { type: "object" },
+          tokensUsed: 1,
+          decision: {
+            gateRef: "gate:1",
+            subjectRef: "tool:lookup",
+            toolCallId: "call-1",
+            toolName: "lookup",
+          },
+        });
+        tx.append({
+          ts: 8,
+          kind: started.kind,
+          scopeRef: identity.scopeRef,
+          effectAuthorityRef: identity.effectAuthorityRef,
+          payload: started.payload,
+        });
+        tx.append({
+          ts: 9,
+          kind: interrupted.kind,
+          scopeRef: identity.scopeRef,
+          effectAuthorityRef: identity.effectAuthorityRef,
+          payload: interrupted.payload,
+        });
+      });
       const consumed = yield* commitLedgerTransaction(
         state,
         recordingBus(fired),
@@ -279,8 +313,8 @@ describe("cloudflare-do ledger commit primitive", () => {
       );
       const resume = agentRunResumedEvent({
         ...identity,
-        runId: 1,
-        turn: { id: 1, index: 0 },
+        runId: run.events[0]!.id,
+        turn: { id: run.events[0]!.id, index: 0 },
         interruptId: "interrupt-1",
         resume: { kind: "approval", approved: true },
         resumedAtEventId: consumed.events[0]!.id,
@@ -301,8 +335,15 @@ describe("cloudflare-do ledger commit primitive", () => {
           .exec("SELECT kind FROM events ORDER BY id ASC")
           .toArray()
           .map((row) => (row as { readonly kind: string }).kind),
-      ).toEqual(["decision_gate.consumed", "agent.run.resumed"]);
+      ).toEqual([
+        "agent.run.started",
+        "agent.run.interrupted",
+        "decision_gate.consumed",
+        "agent.run.resumed",
+      ]);
       expect(fired.map((event) => event.kind)).toEqual([
+        "agent.run.started",
+        "agent.run.interrupted",
         "decision_gate.consumed",
         "agent.run.resumed",
       ]);

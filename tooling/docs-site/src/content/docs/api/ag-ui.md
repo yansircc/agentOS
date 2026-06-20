@@ -37,7 +37,6 @@ title: "@agent-os/ag-ui Public API Intent"
 - `.:AgUiRunStartedFrame`
 - `.:AgUiRuntimeProjectionSpec`
 - `.:AgUiResumeEntrySchema`
-- `.:AgUiInputRequestResumeBinding`
 - `.:AgUiSubmitDefaults`
 - `.:AgUiTextMessageContentFrame`
 - `.:AgUiTextMessageEndFrame`

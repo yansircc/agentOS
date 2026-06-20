@@ -40,7 +40,7 @@ raw ledger payload fields and product frame projectors cannot emit reserved
 `agent-os.*` custom frame names.
 
 Use `projectToolToAgUiTool` to expose AG-UI tool declarations generated from
-`AgentSchema.projections.agUi`.
+`AgentSchema.projections.canonical`.
 
 Framework-specific consumption belongs in `@agent-os/client-react` and
 `@agent-os/client-svelte`, not in AG-UI-owned framework packages.

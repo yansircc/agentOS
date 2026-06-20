@@ -33,7 +33,6 @@
 - `.:AgUiRunStartedFrame`
 - `.:AgUiRuntimeProjectionSpec`
 - `.:AgUiResumeEntrySchema`
-- `.:AgUiInputRequestResumeBinding`
 - `.:AgUiSubmitDefaults`
 - `.:AgUiTextMessageContentFrame`
 - `.:AgUiTextMessageEndFrame`

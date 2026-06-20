@@ -1,5 +1,6 @@
 import { ManagedRuntime, Schema } from "effect";
 import { describe, expect, it } from "@effect/vitest";
+import { backendProtocolEventIdentityKey } from "@agent-os/backend-protocol";
 import {
   Ledger,
   MaterializedProjections,
@@ -117,6 +118,85 @@ describe("in-memory materialized projections", () => {
         status: "current",
         lastAppliedEventId: 2,
       });
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("reads and rebuilds projections under the caller fact owner identity", async () => {
+    const scope = "projection-owner-parity";
+    const ownerIdentity = {
+      ...truthIdentity(scope),
+      factOwnerRef: "@agent-os/workspace-op",
+    };
+    const projectionIdentitySpec = runtimeEventIdentity(scope);
+    const { backend, runtime } = makeRuntime(scope);
+    try {
+      const projections = await runtime.runPromise(MaterializedProjections);
+
+      await runtime.runPromise(
+        backend.state.commitProtocolEvents([
+          { ts: 1, kind: "run.requested", payload: { runId: "owned" }, ...ownerIdentity },
+          {
+            ts: 2,
+            kind: "run.requested",
+            payload: { runId: "runtime" },
+            ...projectionIdentitySpec,
+          },
+          {
+            ts: 3,
+            kind: "run.completed",
+            payload: { runId: "owned", handoff: "ready" },
+            ...ownerIdentity,
+          },
+        ]),
+      );
+
+      const ownerRow = await runtime.runPromise(
+        projections.get({
+          kind: "run.workflow",
+          ...ownerIdentity,
+          identity: { runId: "owned" },
+        }),
+      );
+      expect(ownerRow?.scope).toBe(backendProtocolEventIdentityKey(ownerIdentity));
+      expect(ownerRow?.state).toEqual({ runId: "owned", status: "completed", handoff: "ready" });
+
+      await expect(
+        runtime.runPromise(projections.list({ kind: "run.workflow", ...ownerIdentity })),
+      ).resolves.toMatchObject([{ identityKey: "owned" }]);
+      await expect(
+        runtime.runPromise(projections.list({ kind: "run.workflow", ...projectionIdentitySpec })),
+      ).resolves.toMatchObject([{ identityKey: "runtime" }]);
+
+      backend.state.setProjectionRegistryResult(
+        makeProjectionRegistryResult([runWorkflowProjection(2)]),
+      );
+      await expect(
+        runtime.runPromise(projections.status({ kind: "run.workflow", ...ownerIdentity })),
+      ).resolves.toMatchObject({ version: 2, status: "needs_rebuild" });
+
+      const rebuilt = await runtime.runPromise(
+        projections.rebuild({ kind: "run.workflow", ...ownerIdentity }),
+      );
+      expect(rebuilt).toMatchObject({
+        kind: "run.workflow",
+        scope: backendProtocolEventIdentityKey(ownerIdentity),
+        version: 2,
+        status: "current",
+        rows: 1,
+        lastAppliedEventId: 3,
+        lastRebuiltEventId: 3,
+      });
+      await expect(
+        runtime.runPromise(
+          projections.get({
+            kind: "run.workflow",
+            ...projectionIdentitySpec,
+            identity: { runId: "runtime" },
+          }),
+        ),
+      ).resolves.toMatchObject({ version: 1 });
     } finally {
       await runtime.dispose();
     }

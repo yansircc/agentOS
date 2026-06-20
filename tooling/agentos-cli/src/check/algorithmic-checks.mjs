@@ -59,14 +59,32 @@ const failIfAny = (label, failures) => {
   throw new Error(failures.join("\n"));
 };
 
-const manifestNames = (file, section) => {
+const manifestEntries = (file, section) => {
   const source = fs.readFileSync(file, "utf8");
   const start = source.indexOf(`## ${section}`);
-  if (start === -1) return new Set();
+  if (start === -1) return [];
   const rest = source.slice(start + section.length + 3);
   const next = rest.search(/^## /mu);
   const body = next === -1 ? rest : rest.slice(0, next);
-  return new Set([...body.matchAll(/`([^`:]+):([^`]+)`/gu)].map((match) => match[0].slice(1, -1)));
+  return [...body.matchAll(/`([^`:]+):([^`]+)`/gu)].map((match) => ({
+    name: match[0].slice(1, -1),
+    section,
+    line: source.slice(0, start + section.length + 3 + match.index).split("\n").length,
+  }));
+};
+
+const manifestNames = (file, section) =>
+  new Set(manifestEntries(file, section).map((entry) => entry.name));
+
+const duplicateManifestEntries = (file, sections) => {
+  const entries = sections.flatMap((section) => manifestEntries(file, section));
+  const byName = new Map();
+  for (const entry of entries) {
+    byName.set(entry.name, [...(byName.get(entry.name) ?? []), entry]);
+  }
+  return [...byName.entries()]
+    .filter(([, occurrences]) => occurrences.length > 1)
+    .map(([name, occurrences]) => ({ name, occurrences }));
 };
 
 const targetPackages = () => {
@@ -108,11 +126,22 @@ const checkPublicApi = () => {
       failures.push(`${target.name}: unsupported apiSourceMode ${mode}`);
     }
 
-    const declaredPublic = new Set([
-      ...manifestNames(manifest, "Public exports"),
-      ...manifestNames(manifest, "Experimental exports"),
-      ...manifestNames(manifest, "Deprecated exports"),
-    ]);
+    const publicSections = ["Public exports", "Experimental exports", "Deprecated exports"];
+    for (const duplicate of duplicateManifestEntries(manifest, [
+      ...publicSections,
+      "Internal-only exports",
+    ])) {
+      const refs = duplicate.occurrences
+        .map((entry) => `${entry.section}:${entry.line}`)
+        .join(", ");
+      failures.push(
+        `${target.name}: ${target.apiSource} declares duplicate API entry ${duplicate.name} at ${refs}`,
+      );
+    }
+
+    const declaredPublic = new Set(
+      publicSections.flatMap((section) => [...manifestNames(manifest, section)]),
+    );
     const internal = manifestNames(manifest, "Internal-only exports");
     const actual = exportedNamesForPackage(repoRoot, target)
       .map((record) => record.key)

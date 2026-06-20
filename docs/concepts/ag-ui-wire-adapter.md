@@ -20,14 +20,14 @@ AG-UI frames are derived projections and are never written back to the ledger.
 Product-owned events can appear only when their owner supplies a safe event
 projector; AG-UI does not choose raw payload fields.
 
-AG-UI tool declarations are generated from `AgentSchema.projections.agUi`.
+AG-UI tool declarations are generated from `AgentSchema.projections.canonical`.
 AG-UI tool JSON Schema never creates `Tool.execution`, admission policy, quota,
 material refs, or settlement authority.
 
 ### Bindings
 
-`@agent-os/ag-ui` owns all AG-UI frame mapping, field retention, redaction,
-submit input lowering, and core frame reduction.
+`@agent-os/ag-ui` owns all AG-UI frame mapping, field retention, redaction, and
+submit input lowering.
 
 React and Svelte consumption belongs in `@agent-os/client-react` and
 `@agent-os/client-svelte`, which bridge the transport-neutral client store. The

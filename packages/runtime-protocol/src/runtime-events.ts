@@ -762,6 +762,15 @@ export const decodeRuntimeLedgerEvent = (event: LedgerEvent): DecodeRuntimeLedge
 
 export type RuntimeLedgerTransitionIssueCode =
   | "runtime_payload_invalid"
+  | "runtime_interrupt_duplicate"
+  | "runtime_resume_consumed_gate_mismatch"
+  | "runtime_resume_interruption_already_consumed"
+  | "runtime_resume_interruption_missing"
+  | "runtime_resume_interruption_turn_mismatch"
+  | "runtime_run_already_terminal"
+  | "runtime_run_duplicate_start"
+  | "runtime_run_duplicate_terminal"
+  | "runtime_run_missing_start"
   | "runtime_source_event_not_before"
   | "runtime_source_event_missing"
   | "runtime_source_event_not_runtime"
@@ -901,6 +910,131 @@ const sameTurn = (
   right: { readonly id: number; readonly index: number },
 ): boolean => left.id === right.id && left.index === right.index;
 
+type RuntimeRunInterruptionState = {
+  readonly eventId: number;
+  readonly turn: { readonly id: number; readonly index: number };
+  readonly decision?: { readonly gateRef: string };
+  consumedEventId?: number;
+};
+
+type RuntimeRunState = {
+  startedEventId?: number;
+  terminalEventId?: number;
+  terminalKind?: string;
+  readonly interruptions: Map<string, RuntimeRunInterruptionState>;
+};
+
+const makeRuntimeRunState = (): RuntimeRunState => ({
+  interruptions: new Map(),
+});
+
+const runtimeRunId = (event: RuntimeLedgerEvent): number => {
+  switch (event.kind) {
+    case RUNTIME_EVENT_KIND.AGENT_RUN_STARTED:
+      return event.id;
+    case RUNTIME_EVENT_KIND.LLM_RESPONSE:
+      return event.payload.turn.id;
+    case RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED:
+    case RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED:
+    case RUNTIME_EVENT_KIND.CHAT_INGESTED:
+    case RUNTIME_EVENT_KIND.LLM_REQUESTED:
+    case RUNTIME_EVENT_KIND.TOOL_EXECUTED:
+    case RUNTIME_EVENT_KIND.TOOL_REJECTED:
+    case RUNTIME_EVENT_KIND.RUNTIME_HISTORY_COMPACTED:
+    case RUNTIME_EVENT_KIND.RUNTIME_REKEYED:
+    case RUNTIME_EVENT_KIND.RUNTIME_COMPLETED_AFTER_TOOLS:
+    case RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED:
+    case ABORT.BUDGET_TOKENS:
+    case ABORT.BUDGET_TIME:
+    case ABORT.TOOL_ERROR:
+    case ABORT.UPSTREAM_FAILURE:
+    case ABORT.RETRIES:
+    case ABORT.CLIENT_DISCONNECT:
+      return event.payload.runId;
+  }
+};
+
+const isRunTerminalKind = (kind: RuntimeEventKind): boolean =>
+  kind === RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED || isRuntimeAbortEventKind(kind);
+
+const runTransitionIssue = (
+  code: RuntimeLedgerTransitionIssueCode,
+  event: RuntimeLedgerEvent,
+  message: string,
+  sourceEventId?: number,
+  sourceKind?: string,
+): RuntimeLedgerTransitionIssue => ({
+  code,
+  eventId: event.id,
+  eventKind: event.kind,
+  ...(sourceEventId === undefined ? {} : { sourceEventId }),
+  ...(sourceKind === undefined ? {} : { sourceKind }),
+  message,
+});
+
+const runStateFor = (states: Map<number, RuntimeRunState>, runId: number): RuntimeRunState => {
+  const existing = states.get(runId);
+  if (existing !== undefined) return existing;
+  const state = makeRuntimeRunState();
+  states.set(runId, state);
+  return state;
+};
+
+const consumedGateRef = (event: LedgerEvent): string | null => {
+  if (!Predicate.isObject(event.payload)) return null;
+  const gateRef = (event.payload as { readonly gateRef?: unknown }).gateRef;
+  return typeof gateRef === "string" && gateRef.length > 0 ? gateRef : null;
+};
+
+const consumedDecisionRef = (event: LedgerEvent): string | null => {
+  if (!Predicate.isObject(event.payload)) return null;
+  const decisionRef = (event.payload as { readonly decisionRef?: unknown }).decisionRef;
+  return typeof decisionRef === "string" && decisionRef.length > 0 ? decisionRef : null;
+};
+
+const applyHistoricalRuntimeRunEvent = (
+  states: Map<number, RuntimeRunState>,
+  event: RuntimeLedgerEvent,
+): void => {
+  const runId = runtimeRunId(event);
+  const state = runStateFor(states, runId);
+  switch (event.kind) {
+    case RUNTIME_EVENT_KIND.AGENT_RUN_STARTED:
+      state.startedEventId ??= event.id;
+      break;
+    case RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED:
+      if (!state.interruptions.has(event.payload.interruptId)) {
+        state.interruptions.set(event.payload.interruptId, {
+          eventId: event.id,
+          turn: event.payload.turn,
+          ...(event.payload.decision === undefined
+            ? {}
+            : { decision: { gateRef: event.payload.decision.gateRef } }),
+        });
+      }
+      break;
+    case RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED: {
+      const interruption = state.interruptions.get(event.payload.interruptId);
+      if (interruption !== undefined && sameTurn(interruption.turn, event.payload.turn)) {
+        interruption.consumedEventId ??= event.payload.resumedAtEventId;
+      }
+      break;
+    }
+    case RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED:
+    case ABORT.BUDGET_TOKENS:
+    case ABORT.BUDGET_TIME:
+    case ABORT.TOOL_ERROR:
+    case ABORT.UPSTREAM_FAILURE:
+    case ABORT.RETRIES:
+    case ABORT.CLIENT_DISCONNECT:
+      state.terminalEventId ??= event.id;
+      state.terminalKind ??= event.kind;
+      break;
+    default:
+      break;
+  }
+};
+
 /**
  * Runtime L0 transition interpreter.
  *
@@ -913,7 +1047,15 @@ export const validateRuntimeLedgerTransitions = (input: {
   readonly events: ReadonlyArray<LedgerEvent>;
 }): RuntimeLedgerTransitionValidation => {
   const priorById = new Map(input.history.map((event) => [event.id, event] as const));
+  const runStates = new Map<number, RuntimeRunState>();
   const issues: RuntimeLedgerTransitionIssue[] = [];
+
+  for (const historical of input.history) {
+    const decoded = decodeRuntimeLedgerEventSafe(historical);
+    if (decoded?._tag === "runtime") {
+      applyHistoricalRuntimeRunEvent(runStates, decoded.event);
+    }
+  }
 
   for (const candidate of input.events) {
     const decoded = decodeRuntimeLedgerEventSafe(candidate);
@@ -932,6 +1074,64 @@ export const validateRuntimeLedgerTransitions = (input: {
     }
 
     const event = decoded.event;
+    const runId = runtimeRunId(event);
+    const runState = runStateFor(runStates, runId);
+    const hasStarted = runState.startedEventId !== undefined;
+    const hasTerminal = runState.terminalEventId !== undefined;
+
+    switch (event.kind) {
+      case RUNTIME_EVENT_KIND.AGENT_RUN_STARTED:
+        if (hasStarted) {
+          issues.push(
+            runTransitionIssue(
+              "runtime_run_duplicate_start",
+              event,
+              "agent.run.started must be the first and only start fact for a run",
+              runState.startedEventId,
+            ),
+          );
+        } else if (hasTerminal) {
+          issues.push(
+            runTransitionIssue(
+              "runtime_run_already_terminal",
+              event,
+              "runtime run cannot start after a terminal fact",
+              runState.terminalEventId,
+              runState.terminalKind,
+            ),
+          );
+        } else {
+          runState.startedEventId = event.id;
+        }
+        break;
+      default:
+        if (!hasStarted) {
+          issues.push(
+            runTransitionIssue(
+              "runtime_run_missing_start",
+              event,
+              "runtime run-bound event requires a prior agent.run.started fact",
+            ),
+          );
+        }
+        if (hasTerminal) {
+          issues.push(
+            runTransitionIssue(
+              isRunTerminalKind(event.kind)
+                ? "runtime_run_duplicate_terminal"
+                : "runtime_run_already_terminal",
+              event,
+              isRunTerminalKind(event.kind)
+                ? "runtime run cannot record more than one terminal fact"
+                : "runtime run-bound event cannot be recorded after a terminal fact",
+              runState.terminalEventId,
+              runState.terminalKind,
+            ),
+          );
+        }
+        break;
+    }
+
     switch (event.kind) {
       case RUNTIME_EVENT_KIND.RUNTIME_HISTORY_COMPACTED: {
         const source = decodedRuntimeSourceEvent(
@@ -987,8 +1187,104 @@ export const validateRuntimeLedgerTransitions = (input: {
             ),
           );
         }
+        const interruption = runState.interruptions.get(event.payload.interruptId);
+        if (interruption === undefined) {
+          issues.push(
+            runTransitionIssue(
+              "runtime_resume_interruption_missing",
+              event,
+              "agent.run.resumed must match a prior agent.run.interrupted fact for the same run",
+            ),
+          );
+        } else {
+          if (!sameTurn(interruption.turn, event.payload.turn)) {
+            issues.push(
+              runTransitionIssue(
+                "runtime_resume_interruption_turn_mismatch",
+                event,
+                "agent.run.resumed turn must match the interrupted turn",
+                interruption.eventId,
+                RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED,
+              ),
+            );
+          }
+          if (interruption.consumedEventId !== undefined) {
+            issues.push(
+              runTransitionIssue(
+                "runtime_resume_interruption_already_consumed",
+                event,
+                "agent.run.resumed cannot consume the same interruption more than once",
+                interruption.consumedEventId,
+                DECISION_GATE_CONSUMED_EVENT_KIND,
+              ),
+            );
+          }
+          if (
+            source !== null &&
+            source.kind === DECISION_GATE_CONSUMED_EVENT_KIND &&
+            interruption.decision !== undefined &&
+            (consumedGateRef(source) !== interruption.decision.gateRef ||
+              consumedDecisionRef(source) === null)
+          ) {
+            issues.push(
+              runTransitionIssue(
+                "runtime_resume_consumed_gate_mismatch",
+                event,
+                "agent.run.resumed must reference the decision_gate.consumed fact for the interrupted gate",
+                source.id,
+                source.kind,
+              ),
+            );
+          }
+          if (
+            sameTurn(interruption.turn, event.payload.turn) &&
+            interruption.consumedEventId === undefined &&
+            source !== null &&
+            source.kind === DECISION_GATE_CONSUMED_EVENT_KIND &&
+            (interruption.decision === undefined ||
+              (consumedGateRef(source) === interruption.decision.gateRef &&
+                consumedDecisionRef(source) !== null))
+          ) {
+            interruption.consumedEventId = event.payload.resumedAtEventId;
+          }
+        }
         break;
       }
+      case RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED: {
+        const existing = runState.interruptions.get(event.payload.interruptId);
+        if (existing !== undefined) {
+          issues.push(
+            runTransitionIssue(
+              "runtime_interrupt_duplicate",
+              event,
+              "agent.run.interrupted interruptId must be unique within a run",
+              existing.eventId,
+              RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED,
+            ),
+          );
+        } else if (hasStarted && !hasTerminal) {
+          runState.interruptions.set(event.payload.interruptId, {
+            eventId: event.id,
+            turn: event.payload.turn,
+            ...(event.payload.decision === undefined
+              ? {}
+              : { decision: { gateRef: event.payload.decision.gateRef } }),
+          });
+        }
+        break;
+      }
+      case RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED:
+      case ABORT.BUDGET_TOKENS:
+      case ABORT.BUDGET_TIME:
+      case ABORT.TOOL_ERROR:
+      case ABORT.UPSTREAM_FAILURE:
+      case ABORT.RETRIES:
+      case ABORT.CLIENT_DISCONNECT:
+        if (hasStarted && !hasTerminal) {
+          runState.terminalEventId = event.id;
+          runState.terminalKind = event.kind;
+        }
+        break;
       default:
         break;
     }

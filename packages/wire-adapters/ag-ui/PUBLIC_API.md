@@ -37,7 +37,6 @@ Status: 0.5.x active development for AG-UI wire projection. Public exports are l
 - `.:AgUiRunStartedFrame`
 - `.:AgUiRuntimeProjectionSpec`
 - `.:AgUiResumeEntrySchema`
-- `.:AgUiInputRequestResumeBinding`
 - `.:AgUiSubmitDefaults`
 - `.:AgUiTextMessageContentFrame`
 - `.:AgUiTextMessageEndFrame`

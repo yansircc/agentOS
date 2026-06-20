@@ -27,7 +27,9 @@ import {
   type DurableTrigger,
 } from "@agent-os/runtime";
 import {
+  agentRunInterruptedEvent,
   agentRunResumedEvent,
+  agentRunStartedEvent,
   makeAdmissionSchemaSpec,
   runtimeHistoryCompactedEvent,
 } from "@agent-os/runtime-protocol";
@@ -172,9 +174,35 @@ describe("in-memory runtime backend", () => {
     Effect.gen(function* () {
       const scope = "resume-carrier-l0";
       const state = createInMemoryBackendState();
-      const [consumed] = yield* state.commitProtocolEvents([
+      const [started, interrupted] = yield* state.commitProtocolEvents([
         {
           ts: 10,
+          ...runtimeEventIdentity(scope),
+          ...agentRunStartedEvent({ ...truthIdentity(scope), intent: "answer" }),
+        },
+        {
+          ts: 11,
+          ...runtimeEventIdentity(scope),
+          ...agentRunInterruptedEvent({
+            ...truthIdentity(scope),
+            runId: 1,
+            turn: { id: 1, index: 0 },
+            interruptId: "interrupt-1",
+            reason: "decision_required",
+            resumeSchema: { type: "object" },
+            tokensUsed: 1,
+            decision: {
+              gateRef: "gate:1",
+              subjectRef: "tool:lookup",
+              toolCallId: "call-1",
+              toolName: "lookup",
+            },
+          }),
+        },
+      ]);
+      const [consumed] = yield* state.commitProtocolEvents([
+        {
+          ts: 12,
           kind: "decision_gate.consumed",
           ...truthIdentity(scope),
           factOwnerRef: "@agent-os/decision-gate",
@@ -188,8 +216,8 @@ describe("in-memory runtime backend", () => {
       ]);
       const resumed = agentRunResumedEvent({
         ...truthIdentity(scope),
-        runId: 1,
-        turn: { id: 1, index: 0 },
+        runId: started!.id,
+        turn: { id: started!.id, index: 0 },
         interruptId: "interrupt-1",
         resume: { kind: "approval", approved: true },
         resumedAtEventId: consumed!.id,
@@ -205,9 +233,14 @@ describe("in-memory runtime backend", () => {
       ]);
 
       expect(state.snapshot(truthIdentity(scope)).map((event) => event.kind)).toEqual([
+        "agent.run.started",
+        "agent.run.interrupted",
         "decision_gate.consumed",
         "agent.run.resumed",
       ]);
+      expect(interrupted?.payload).toMatchObject({
+        decision: { gateRef: "gate:1" },
+      });
     }),
   );
 
