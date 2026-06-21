@@ -17,7 +17,6 @@
       "summary": "Projects one typed ledger event into a browser-safe AG-UI envelope.",
       "aliases": [],
       "invariants": ["invariant.boundary.owner-owned-safe-projection"],
-      "decisions": [],
       "docs": "docs/concepts/ag-ui-wire-adapter.md",
       "capabilityKind": "projection",
       "testEvidence": {
@@ -35,7 +34,6 @@
       "summary": "Transports ledger SSE events as AG-UI SSE envelopes.",
       "aliases": [],
       "invariants": ["invariant.boundary.owner-owned-safe-projection"],
-      "decisions": [],
       "docs": "docs/concepts/ag-ui-wire-adapter.md",
       "capabilityKind": "projection",
       "testEvidence": {
@@ -53,7 +51,6 @@
       "summary": "Compile an authored `agent/` tree into one normalized manifest plus provenance. This is the app-author entrypoint; runtime facts and provider material are rejected before they can become manifest truth.",
       "aliases": [],
       "invariants": ["invariant.docs.agent-projection", "invariant.algebra.single-code-source"],
-      "decisions": [],
       "docs": "docs/guides/build-natural-language-workspace-agent.md",
       "capabilityKind": "composer",
       "testEvidence": {
@@ -71,7 +68,6 @@
       "summary": "Link normalized workspace authoring intent to a closed-target residual program. Implementation wiring is static imports and factory composition; manifest and deployment JSON remain semantic/provenance data only.",
       "aliases": [],
       "invariants": ["invariant.docs.agent-projection", "invariant.algebra.single-code-source"],
-      "decisions": [],
       "docs": "docs/guides/build-natural-language-workspace-agent.md",
       "capabilityKind": "composer",
       "testEvidence": {
@@ -89,7 +85,6 @@
       "summary": "Cloudflare host composition for historical ledger rows -> AG-UI SSE. Raw ledger history remains the truth source; this function only materializes a transport response from a supplied snapshot.",
       "aliases": [],
       "invariants": ["invariant.ag-ui.sse-axis"],
-      "decisions": [],
       "docs": "docs/packages/backend-cloudflare-do.md",
       "capabilityKind": "facade",
       "testEvidence": {
@@ -107,7 +102,6 @@
       "summary": "Cloudflare host composition for live ledger SSE -> AG-UI SSE. This helper is host-agnostic internally: it only composes the AG-UI projection with the Web Fetch SSE response wrapper. It intentionally lives in cloudflare-do for v1 to avoid a one-consumer transport package. If a second host needs the same helper, move the body to `transports/ag-ui-sse` and leave this export as a thin re-export.",
       "aliases": [],
       "invariants": ["invariant.ag-ui.sse-axis"],
-      "decisions": [],
       "docs": "docs/packages/backend-cloudflare-do.md",
       "capabilityKind": "facade",
       "testEvidence": {
@@ -125,7 +119,6 @@
       "summary": "Resolves a run-scoped Cloudflare Sandbox binding into a WorkspaceEnv. This high-level host helper owns the Sandbox binding composition: products choose the Durable Object namespace, while agentOS fixes `scope/runId -> sandbox lease`, validates the binding/client shape, disables implicit default sessions, and pins one transport per run. The lower-level resolver remains available for tests or non-Sandbox hosts.",
       "aliases": [],
       "invariants": ["invariant.workspace-job.host-workspace-lifecycle"],
-      "decisions": [],
       "docs": "docs/packages/backend-cloudflare-do.md",
       "capabilityKind": "backend",
       "testEvidence": {
@@ -143,7 +136,6 @@
       "summary": "Resolves a run-scoped Cloudflare Sandbox workspace into a WorkspaceEnv. The resolver owns the host lifecycle axis: `scope/runId` determines the sandbox id, so a run receives one sandbox lease and products receive only the provider-neutral WorkspaceEnv.",
       "aliases": [],
       "invariants": ["invariant.workspace-job.host-workspace-lifecycle"],
-      "decisions": [],
       "docs": "docs/packages/backend-cloudflare-do.md",
       "capabilityKind": "backend",
       "testEvidence": {
@@ -161,7 +153,6 @@
       "summary": "Cloudflare host response facade for workspace jobs. The helper owns only HTTP timing semantics: `Prefer: respond-async`, quick wait, and JSON response materialization. It never stores results or idempotency state; response bodies are read from the supplied `workspace_job.result` projection reader. The host supplies the quick-wait clock port because this package's shared helper must not own timer runtime.",
       "aliases": [],
       "invariants": ["invariant.workspace-job.verified-terminal"],
-      "decisions": [],
       "docs": "docs/packages/backend-cloudflare-do.md",
       "capabilityKind": "facade",
       "testEvidence": {
@@ -179,7 +170,6 @@
       "summary": "Installs the Cloudflare workspace-job consumer profile. The profile is a thin composition surface: workspace leases come from the supplied resolver, workspace-op provider glue is the existing installer, AG-UI responses are the existing SSE helpers, and job responses read the runtime-owned observability projection. It does not parse workspace-job facts or own failure classification.",
       "aliases": [],
       "invariants": ["invariant.workspace-job.failure-observability-join"],
-      "decisions": [],
       "docs": "docs/packages/backend-cloudflare-do.md",
       "capabilityKind": "profile",
       "testEvidence": {
@@ -197,7 +187,6 @@
       "summary": "Installs workspace-op provider glue for Cloudflare DO hosts. Products still declare the WorkspaceEnv and tool exposure policy. This helper owns the host-side reducer/provider commit loop: requested facts are executed by the local provider and completed/rejected facts are committed only through the workspace-op boundary capability.",
       "aliases": [],
       "invariants": ["invariant.workspace-op.carrier-single-writer"],
-      "decisions": [],
       "docs": "docs/packages/backend-cloudflare-do.md",
       "capabilityKind": "backend",
       "testEvidence": {
@@ -215,7 +204,6 @@
       "summary": "Agent-facing schema wrapper derived from one Effect Schema source.",
       "aliases": [],
       "invariants": ["invariant.algebra.single-code-source"],
-      "decisions": [],
       "docs": "docs/concepts/agent-schema.md",
       "capabilityKind": "kernel",
       "testEvidence": {
@@ -233,7 +221,6 @@
       "summary": "Schema projections derived from AgentSchema.",
       "aliases": [],
       "invariants": ["invariant.algebra.single-code-source"],
-      "decisions": [],
       "docs": "docs/concepts/agent-schema.md",
       "capabilityKind": "projection",
       "testEvidence": {
@@ -251,7 +238,6 @@
       "summary": "Effect or capability authority participating in ledger truth identity.",
       "aliases": ["effectAuthorityRef"],
       "invariants": ["invariant.d10.truth-identity"],
-      "decisions": [],
       "docs": "docs/concepts/durable-truth.md",
       "capabilityKind": "kernel",
       "testEvidence": {
@@ -269,7 +255,6 @@
       "summary": "Five-axis boundary declaration for claim-bearing packages: vocabulary, authority, material, settlement, and projection. Event keys are the vocabulary. Claim slots are event-local so non-claim extension facts do not need to lie as terminal claim events.",
       "aliases": [],
       "invariants": ["invariant.d10.namespace-integrity", "invariant.d10.truth-identity"],
-      "decisions": [],
       "docs": "docs/boundary-contract.md",
       "capabilityKind": "kernel",
       "testEvidence": {
@@ -287,7 +272,6 @@
       "summary": "Boundary axis declaring that observable state is derived from ledger facts.",
       "aliases": [],
       "invariants": ["invariant.d10.truth-identity"],
-      "decisions": [],
       "docs": "docs/concepts/materialized-projections.md",
       "capabilityKind": "projection",
       "testEvidence": {
@@ -305,7 +289,6 @@
       "summary": "Defines a product-owned tool with the same Effect-native execution contract as `defineTool`, defaulting to deterministic execution when no domain is required.",
       "aliases": [],
       "invariants": ["invariant.algebra.type-or-boot-proof"],
-      "decisions": [],
       "docs": "docs/concepts/tool-execution-domain.md",
       "capabilityKind": "kernel",
       "testEvidence": {
@@ -323,7 +306,6 @@
       "summary": "Effect authority declaration and its required material slots.",
       "aliases": ["effectAuthorityContract"],
       "invariants": ["invariant.d10.truth-identity"],
-      "decisions": [],
       "docs": "docs/boundary-contract.md",
       "capabilityKind": "kernel",
       "testEvidence": {
@@ -344,7 +326,6 @@
         "invariant.algebra.type-or-boot-proof",
         "invariant.boundary.runtime-validation-external-only"
       ],
-      "decisions": [],
       "docs": "docs/boundary-contract.md",
       "capabilityKind": "kernel",
       "testEvidence": {
@@ -362,7 +343,6 @@
       "summary": "Declared execution locus for an external tool.",
       "aliases": [],
       "invariants": ["invariant.algebra.type-or-boot-proof"],
-      "decisions": [],
       "docs": "docs/concepts/tool-execution-domain.md",
       "capabilityKind": "kernel",
       "testEvidence": {
@@ -380,7 +360,6 @@
       "summary": "Boot-time execution-domain declaration consumed by registry validation.",
       "aliases": [],
       "invariants": ["invariant.algebra.type-or-boot-proof"],
-      "decisions": [],
       "docs": "docs/concepts/tool-execution-domain.md",
       "capabilityKind": "kernel",
       "testEvidence": {
@@ -398,7 +377,6 @@
       "summary": "Boot-proof registry for all external tool execution domains.",
       "aliases": [],
       "invariants": ["invariant.algebra.type-or-boot-proof"],
-      "decisions": [],
       "docs": "docs/concepts/tool-execution-domain.md",
       "capabilityKind": "kernel",
       "testEvidence": {
@@ -416,7 +394,6 @@
       "summary": "Replay witness law for one execution-domain access mode.",
       "aliases": [],
       "invariants": ["invariant.algebra.type-or-boot-proof"],
-      "decisions": [],
       "docs": "docs/concepts/tool-execution-domain.md",
       "capabilityKind": "kernel",
       "testEvidence": {
@@ -434,7 +411,6 @@
       "summary": "Package-owned fact namespace injected by commit boundaries.",
       "aliases": [],
       "invariants": ["invariant.d10.namespace-integrity"],
-      "decisions": [],
       "docs": "docs/boundary-contract.md",
       "capabilityKind": "kernel",
       "testEvidence": {
@@ -452,7 +428,6 @@
       "summary": "Effect claim settled to a non-terminal witness state.",
       "aliases": [],
       "invariants": ["invariant.algebra.type-or-boot-proof"],
-      "decisions": [],
       "docs": "docs/boundary-contract.md",
       "capabilityKind": "kernel",
       "testEvidence": {
@@ -473,7 +448,6 @@
       "summary": "Canonical durable ledger fact row.",
       "aliases": [],
       "invariants": ["invariant.d10.truth-identity", "invariant.d10.namespace-integrity"],
-      "decisions": [],
       "docs": "docs/concepts/durable-truth.md",
       "capabilityKind": "kernel",
       "testEvidence": {
@@ -491,7 +465,6 @@
       "summary": "Effect claim settled by one terminal anchor.",
       "aliases": [],
       "invariants": ["invariant.algebra.type-or-boot-proof"],
-      "decisions": [],
       "docs": "docs/boundary-contract.md",
       "capabilityKind": "kernel",
       "testEvidence": {
@@ -509,7 +482,6 @@
       "summary": "Symbolic material reference kept out of durable claims and browser projections.",
       "aliases": [],
       "invariants": ["invariant.d10.truth-identity"],
-      "decisions": [],
       "docs": "docs/concepts/carriers-and-material.md",
       "capabilityKind": "kernel",
       "testEvidence": {
@@ -527,7 +499,6 @@
       "summary": "Non-terminal effect claim before admission settles it.",
       "aliases": [],
       "invariants": ["invariant.algebra.type-or-boot-proof"],
-      "decisions": [],
       "docs": "docs/boundary-contract.md",
       "capabilityKind": "kernel",
       "testEvidence": {
@@ -545,7 +516,6 @@
       "summary": "Derives schema projections from one canonical schema.",
       "aliases": [],
       "invariants": ["invariant.algebra.single-code-source"],
-      "decisions": [],
       "docs": "docs/concepts/agent-schema.md",
       "capabilityKind": "projection",
       "testEvidence": {
@@ -563,7 +533,6 @@
       "summary": "Effect claim settled by one terminal rejection.",
       "aliases": [],
       "invariants": ["invariant.algebra.type-or-boot-proof"],
-      "decisions": [],
       "docs": "docs/boundary-contract.md",
       "capabilityKind": "kernel",
       "testEvidence": {
@@ -581,7 +550,6 @@
       "summary": "Owner-owned browser read projection for one durable ledger event.",
       "aliases": [],
       "invariants": ["invariant.boundary.owner-owned-safe-projection"],
-      "decisions": [],
       "docs": "docs/concepts/durable-truth.md",
       "capabilityKind": "kernel",
       "testEvidence": {
@@ -602,7 +570,6 @@
       "summary": "Structured ledger scope identity.",
       "aliases": [],
       "invariants": ["invariant.d10.truth-identity"],
-      "decisions": [],
       "docs": "docs/concepts/durable-truth.md",
       "capabilityKind": "kernel",
       "testEvidence": {
@@ -623,7 +590,6 @@
       "summary": "Public app-facing tool definition consumed by submit loops.",
       "aliases": [],
       "invariants": ["invariant.algebra.type-or-boot-proof"],
-      "decisions": [],
       "docs": "docs/concepts/tool-execution-domain.md",
       "capabilityKind": "kernel",
       "testEvidence": {
@@ -641,7 +607,6 @@
       "summary": "Input passed to non-LLM tool admission with claim, args, contract, and execution metadata.",
       "aliases": [],
       "invariants": ["invariant.algebra.type-or-boot-proof"],
-      "decisions": [],
       "docs": "docs/concepts/tool-execution-domain.md",
       "capabilityKind": "kernel",
       "testEvidence": {
@@ -659,7 +624,6 @@
       "summary": "Admission and authority contract for a tool, excluding execution locus.",
       "aliases": [],
       "invariants": ["invariant.d10.truth-identity"],
-      "decisions": [],
       "docs": "docs/concepts/tool-execution-domain.md",
       "capabilityKind": "kernel",
       "testEvidence": {
@@ -677,7 +641,6 @@
       "summary": "Tool execution declaration: deterministic tools stay local; external tools name access and domain.",
       "aliases": [],
       "invariants": ["invariant.algebra.type-or-boot-proof"],
-      "decisions": [],
       "docs": "docs/concepts/tool-execution-domain.md",
       "capabilityKind": "kernel",
       "testEvidence": {
@@ -695,7 +658,6 @@
       "summary": "Per-call execution context passed to a tool implementation.",
       "aliases": [],
       "invariants": ["invariant.algebra.type-or-boot-proof"],
-      "decisions": [],
       "docs": "docs/concepts/tool-execution-domain.md",
       "capabilityKind": "kernel",
       "testEvidence": {
@@ -713,7 +675,6 @@
       "summary": "Provider-neutral port for resolving and calling an LLM route.",
       "aliases": [],
       "invariants": ["invariant.boundary.runtime-validation-external-only"],
-      "decisions": [],
       "docs": "docs/packages/llm-protocol.md",
       "capabilityKind": "package",
       "testEvidence": {
@@ -731,7 +692,6 @@
       "summary": "Defines one materialized projection without adding a second truth source.",
       "aliases": [],
       "invariants": ["invariant.d10.truth-identity"],
-      "decisions": [],
       "docs": "docs/concepts/materialized-projections.md",
       "capabilityKind": "projection",
       "testEvidence": {
@@ -749,7 +709,6 @@
       "summary": "Backend-neutral ledger service for atomic fact commits and exact identity reads.",
       "aliases": [],
       "invariants": ["invariant.ledger.single-commit-source", "invariant.d10.truth-identity"],
-      "decisions": [],
       "docs": "docs/concepts/durable-truth.md",
       "capabilityKind": "runtime",
       "testEvidence": {
@@ -767,7 +726,6 @@
       "summary": "Runtime-owned event commit spec; factOwnerRef is injected by the ledger service.",
       "aliases": [],
       "invariants": ["invariant.ledger.single-commit-source"],
-      "decisions": [],
       "docs": "docs/concepts/durable-truth.md",
       "capabilityKind": "runtime",
       "testEvidence": {
@@ -785,7 +743,6 @@
       "summary": "Exact runtime ledger identity used by reads and streams.",
       "aliases": [],
       "invariants": ["invariant.d10.truth-identity"],
-      "decisions": [],
       "docs": "docs/concepts/durable-truth.md",
       "capabilityKind": "runtime",
       "testEvidence": {
@@ -803,7 +760,6 @@
       "summary": "Pure materialized projection definition over ledger facts.",
       "aliases": [],
       "invariants": ["invariant.d10.truth-identity"],
-      "decisions": [],
       "docs": "docs/concepts/materialized-projections.md",
       "capabilityKind": "projection",
       "testEvidence": {
@@ -821,7 +777,6 @@
       "summary": "Backend-neutral service for projection reads, status, and rebuild.",
       "aliases": [],
       "invariants": ["invariant.d10.truth-identity"],
-      "decisions": [],
       "docs": "docs/concepts/materialized-projections.md",
       "capabilityKind": "projection",
       "testEvidence": {
@@ -842,7 +797,6 @@
       "summary": "Redacted failure diagnostics derived from runtime ledger facts.",
       "aliases": [],
       "invariants": ["invariant.d10.truth-identity"],
-      "decisions": [],
       "docs": "docs/concepts/durable-truth.md",
       "capabilityKind": "runtime",
       "testEvidence": {
@@ -863,7 +817,6 @@
       "summary": "Event-to-projection identity decision made before reduction.",
       "aliases": [],
       "invariants": ["invariant.d10.truth-identity"],
-      "decisions": [],
       "docs": "docs/concepts/materialized-projections.md",
       "capabilityKind": "projection",
       "testEvidence": {
@@ -881,7 +834,6 @@
       "summary": "Canonical projection reduction context derived from the consumed ledger event.",
       "aliases": [],
       "invariants": ["invariant.d10.truth-identity"],
-      "decisions": [],
       "docs": "docs/concepts/materialized-projections.md",
       "capabilityKind": "projection",
       "testEvidence": {
@@ -899,7 +851,6 @@
       "summary": "Synchronous reducer result for one materialized projection row.",
       "aliases": [],
       "invariants": ["invariant.d10.truth-identity"],
-      "decisions": [],
       "docs": "docs/concepts/materialized-projections.md",
       "capabilityKind": "projection",
       "testEvidence": {
@@ -917,7 +868,6 @@
       "summary": "Projects runtime ledger facts into a single run status.",
       "aliases": [],
       "invariants": ["invariant.d10.truth-identity"],
-      "decisions": [],
       "docs": "docs/concepts/durable-truth.md",
       "capabilityKind": "projection",
       "testEvidence": {
@@ -935,7 +885,6 @@
       "summary": "Projects runtime ledger facts into a run trace view.",
       "aliases": [],
       "invariants": ["invariant.d10.truth-identity"],
-      "decisions": [],
       "docs": "docs/concepts/durable-truth.md",
       "capabilityKind": "projection",
       "testEvidence": {
@@ -953,7 +902,6 @@
       "summary": "Reconstructs SubmitResult from terminal runtime ledger facts.",
       "aliases": [],
       "invariants": ["invariant.d10.truth-identity"],
-      "decisions": [],
       "docs": "docs/concepts/durable-truth.md",
       "capabilityKind": "projection",
       "testEvidence": {
@@ -974,7 +922,6 @@
       "summary": "Projects a consumer-safe workspace job view by joining workspace-job terminal facts with runtime diagnostic projections. The raw carrier projection may expose substrate/debug join keys; this projection never exposes them.",
       "aliases": [],
       "invariants": ["invariant.workspace-job.failure-observability-join"],
-      "decisions": [],
       "docs": "docs/packages/workspace-job.md",
       "capabilityKind": "projection",
       "testEvidence": {
@@ -992,7 +939,6 @@
       "summary": "Runs a protected workspace job from product declarations to a carrier-owned terminal projection. The verifier receives finalized artifact bytes; candidate bytes are never the verification subject. When recovery is declared, verifier_rejected is an attempt terminal state until the repair budget is exhausted; the job projection is derived from the latest attempt.",
       "aliases": [],
       "invariants": ["invariant.workspace-job.verified-terminal"],
-      "decisions": [],
       "docs": "docs/packages/workspace-job.md",
       "capabilityKind": "runtime",
       "testEvidence": {
@@ -1010,7 +956,6 @@
       "summary": "Terminal return projection reconstructed from runtime ledger facts.",
       "aliases": [],
       "invariants": ["invariant.d10.truth-identity"],
-      "decisions": [],
       "docs": "docs/concepts/durable-truth.md",
       "capabilityKind": "runtime",
       "testEvidence": {
@@ -1031,7 +976,6 @@
       "summary": "Runtime driver input for one agent run under an effect authority.",
       "aliases": [],
       "invariants": ["invariant.d10.truth-identity"],
-      "decisions": [],
       "docs": "docs/tutorials/streaming-chatbot.md",
       "capabilityKind": "runtime",
       "testEvidence": {
@@ -1052,7 +996,6 @@
       "summary": "Waits until a ledger-derived projection row exists and satisfies an optional pure readiness predicate.",
       "aliases": [],
       "invariants": ["invariant.d10.truth-identity"],
-      "decisions": [],
       "docs": "docs/concepts/materialized-projections.md",
       "capabilityKind": "projection",
       "testEvidence": {
@@ -1073,7 +1016,6 @@
         "invariant.docs.agent-projection",
         "invariant.boundary.owner-owned-safe-projection"
       ],
-      "decisions": [],
       "docs": "docs/guides/build-natural-language-workspace-agent.md",
       "capabilityKind": "composer",
       "testEvidence": {

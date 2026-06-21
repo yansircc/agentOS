@@ -20,7 +20,7 @@
     },
     "path": {
       "type": "string",
-      "pattern": "^(docs|decisions|packages|scripts|tooling|skills)/.+$"
+      "pattern": "^(docs|packages|scripts|tooling|skills)/.+$"
     },
     "error": {
       "type": "object",

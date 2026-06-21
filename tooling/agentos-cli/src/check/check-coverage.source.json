@@ -687,7 +687,7 @@
         "kind": "mainlineChecker",
         "path": "tooling/agentos-cli/src/check/check-client-boundaries.mjs"
       },
-      "owner": "tooling/refactor/a78-a94/client-workspace-host-boundary.md and docs/surface.json",
+      "owner": "tooling/agentos-cli/src/check/sources/client-workspace-host-boundary.md and docs/surface.json",
       "ruleId": "client-boundaries",
       "target": {
         "kind": "algorithmic",
@@ -706,7 +706,7 @@
         "kind": "mainlineChecker",
         "path": "tooling/agentos-cli/src/check/algorithmic-checks.mjs"
       },
-      "owner": "CST 418, CST 455, tooling/refactor/a78-a94/client-workspace-host-boundary.md, and packages/composers/agent-authoring/src/index.ts",
+      "owner": "CST 418, CST 455, tooling/agentos-cli/src/check/sources/client-workspace-host-boundary.md, and packages/composers/agent-authoring/src/index.ts",
       "ruleId": "convergence-boundary",
       "target": {
         "kind": "algorithmic",
@@ -725,7 +725,7 @@
         "kind": "mainlineChecker",
         "path": "tooling/agentos-cli/src/check/algorithmic-checks.mjs"
       },
-      "owner": "CST 423, tooling/refactor/a78-a94/role-survival.source.json, and docs/agent/boundary-rules.source.json",
+      "owner": "CST 423, tooling/agentos-cli/src/check/sources/role-survival.source.json, and docs/agent/boundary-rules.source.json",
       "ruleId": "convergence-import-dag",
       "target": {
         "kind": "algorithmic",
@@ -744,7 +744,7 @@
         "kind": "mainlineChecker",
         "path": "tooling/agentos-cli/src/check/algorithmic-checks.mjs"
       },
-      "owner": "CST 421 and tooling/refactor/a78-a94/public-surface-sweep.source.json",
+      "owner": "CST 421 and tooling/agentos-cli/src/check/sources/public-surface-sweep.source.json",
       "ruleId": "convergence-public-surface",
       "target": {
         "kind": "algorithmic",
@@ -763,7 +763,7 @@
         "kind": "mainlineChecker",
         "path": "tooling/agentos-cli/src/check/algorithmic-checks.mjs"
       },
-      "owner": "CST 419 and tooling/refactor/a78-a94/role-survival.source.json",
+      "owner": "CST 419 and tooling/agentos-cli/src/check/sources/role-survival.source.json",
       "ruleId": "convergence-roles",
       "target": {
         "kind": "algorithmic",
@@ -973,8 +973,8 @@
     },
     {
       "source": {
-        "kind": "preMigrationChecker",
-        "path": "tooling/agentos-cli/src/check/check-spike-hygiene.mjs"
+        "kind": "mainlineChecker",
+        "path": "tooling/agentos-cli/src/check/algorithmic-checks.mjs"
       },
       "owner": "AGENTS.md Repo Surface",
       "ruleId": "spike-hygiene",
@@ -985,7 +985,7 @@
       },
       "assertions": [
         {
-          "failureCondition": "spikes must remain ignored local pressure tests",
+          "failureCondition": "spikes must remain an ignored local namespace with zero tracked files",
           "negativeWitness": "algorithmic projection rejects the source mutation described by this rule diagnostic"
         }
       ]

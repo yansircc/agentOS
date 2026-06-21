@@ -78,7 +78,7 @@ docs/       public docs and generated projections
 packages/   substrate, carriers, backends, composition packages
 tooling/    repo-local or ops tooling, not substrate
 skills/     repo-shipped Codex skills
-spikes/     ignored local pressure tests only
+spikes/     ignored local pressure-test namespace; no tracked files
 ```
 
 Do not add tracked examples, spike apps, or development notes unless explicitly

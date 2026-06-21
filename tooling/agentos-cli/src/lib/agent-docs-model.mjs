@@ -616,7 +616,6 @@ const collectPrimitiveAnnotations = ({ root, surface, invariantIds, failures }) 
 
       const docs = tagValues(record, "agentosDocs");
       const invariants = tagValues(record, "agentosInvariant");
-      const decisions = tagValues(record, "agentosDecision");
       if (docs.length !== 1) {
         failures.push(`${pkg.name}:${record.key} must have exactly one @agentosDocs tag`);
       }
@@ -630,9 +629,6 @@ const collectPrimitiveAnnotations = ({ root, surface, invariantIds, failures }) 
         }
       }
       for (const doc of docs) ensurePath(root, failures, doc, `${pkg.name}:${record.key}`);
-      for (const decision of decisions) {
-        ensurePath(root, failures, decision, `${pkg.name}:${record.key}`);
-      }
 
       const primitive = {
         id: primitiveIds[0],
@@ -645,7 +641,6 @@ const collectPrimitiveAnnotations = ({ root, surface, invariantIds, failures }) 
         summary: record.summary,
         aliases: tagValues(record, "agentosAlias"),
         invariants,
-        decisions,
         docs: docs[0] ?? "",
       };
       const noRouteReasons = tagValues(record, "agentosNoRouteReason");
@@ -789,7 +784,6 @@ const buildInvariantMatrix = ({ root, failures, invariantsSource, primitives, er
       errors: invariantErrors,
       docs,
       tests: invariant.tests,
-      decisions: invariant.decisions,
     };
     if (row.docs.length === 0) failures.push(`${row.invariant} has no docs mapping`);
     for (const test of row.tests) ensurePath(root, failures, test, row.invariant);
@@ -833,7 +827,6 @@ export const collectAgentDocsModel = (root) => {
   const invariantIds = new Set(invariantsSource.invariants.map((invariant) => invariant.id));
   for (const invariant of invariantsSource.invariants) {
     ensurePath(root, failures, invariant.docs, invariant.id);
-    for (const decision of invariant.decisions) ensurePath(root, failures, decision, invariant.id);
     for (const test of invariant.tests) ensurePath(root, failures, test, invariant.id);
   }
 

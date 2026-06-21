@@ -24,7 +24,7 @@
     "test/**/*",
     "vitest.config.ts",
     "vitest.cloudflare.config.ts",
-    "../../../types/vite-plus-test-config/index.d.ts"
+    "../../../tooling/types/vite-plus-test-config/index.d.ts"
   ],
   "exclude": ["test/consumer-fixture/**/*"],
   "extends": "../../../tsconfig.source-paths.json"

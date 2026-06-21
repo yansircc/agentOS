@@ -35,15 +35,14 @@ modules inside the scoped spike until promotion is explicit.
    until repeated cross-app boilerplate is proven.
 10. Keep ops generic: projection status/rebuild, stuck triggers, and active
     streams. Product-specific ops stays in the spike.
-11. Record each module status under `spikes/vibe-like-agent-app/docs/`.
+11. Keep spike notes outside tracked source unless a module is promoted.
 12. Gate promotion on numeric acceptance metrics:
     prompt to first frame under 2s p95, workspace mutation to projection under
     500ms p95, cancel to abort under 1s p95, 1k-event rebuild under 2s, and
     attached-stream detach to DO release under 30s.
-13. Promote a module only through a decision that moves code from `spikes/` to
-    `packages/`.
-14. Keep the exception, sunset, promotion, and retirement mechanics in
-    `decisions/a58-first-party-consumer-exception.md`.
+13. Promote a module only by moving code from ignored spike workspace to
+    `packages/`, updating `docs/surface.json`, and adding distribution, docs,
+    and API projections if the package is published.
 
 ## References
 

@@ -197,7 +197,7 @@ cat > "$agent_dir/startup.md" <<EOF
 8. Ignored spike tests should use the core-owned Vitest binary:
 
    \`\`\`sh
-   scripts/parallel-dev/run-spike-vitest.sh spikes/_active/<agent-id>-<case>/vitest.config.ts
+   scripts/parallel-dev/run-spike-vitest.sh spikes/<agent-id>-<case>/vitest.config.ts
    \`\`\`
 
    Dependency directories may be symlinked from \`$repo_root\`; treat them as

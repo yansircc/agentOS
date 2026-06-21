@@ -308,14 +308,9 @@
       "reason": "local isolated worktrees and agent run artifacts are not part of the scanned repo surface"
     },
     {
-      "path": "spikes/_active/**",
+      "path": "spikes/**",
       "owner": "@parallel-dev",
       "reason": "ignored pressure-test code is local throwaway, not package source"
-    },
-    {
-      "path": "spikes/**/.wrangler/**",
-      "owner": "@wrangler",
-      "reason": "Wrangler generated bundles from retired pressure tests are not repo source"
     }
   ],
   "allowedAdapters": [

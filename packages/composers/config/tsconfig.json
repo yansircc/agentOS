@@ -19,7 +19,7 @@
     "test/**/*",
     "schema.json",
     "vitest.config.ts",
-    "../../../types/vite-plus-test-config/index.d.ts"
+    "../../../tooling/types/vite-plus-test-config/index.d.ts"
   ],
   "extends": "../../../tsconfig.source-paths.json"
 }

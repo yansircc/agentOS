@@ -20,20 +20,16 @@
     },
     "path": {
       "type": "string",
-      "pattern": "^(docs|decisions|packages|scripts|tooling|skills)/.+$"
+      "pattern": "^(docs|packages|scripts|tooling|skills)/.+$"
     },
     "invariant": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "statement", "docs", "decisions", "tests"],
+      "required": ["id", "statement", "docs", "tests"],
       "properties": {
         "id": { "$ref": "#/$defs/id" },
         "statement": { "type": "string", "minLength": 1 },
         "docs": { "$ref": "#/$defs/path" },
-        "decisions": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/path" }
-        },
         "tests": {
           "type": "array",
           "items": { "$ref": "#/$defs/path" }

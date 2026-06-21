@@ -419,7 +419,7 @@
     },
     {
       "id": "client-boundaries",
-      "owner": "tooling/refactor/a78-a94/client-workspace-host-boundary.md and docs/surface.json",
+      "owner": "tooling/agentos-cli/src/check/sources/client-workspace-host-boundary.md and docs/surface.json",
       "invariantId": "invariant.client.projection-sink-boundary",
       "kind": "repo-boundary",
       "diagnostics": [
@@ -428,7 +428,7 @@
         "ag-ui framework packages must retire once client framework bridges exist"
       ],
       "paths": [
-        "tooling/refactor/a78-a94/client-workspace-host-boundary.md",
+        "tooling/agentos-cli/src/check/sources/client-workspace-host-boundary.md",
         "docs/surface.json",
         "packages/client/**",
         "packages/composers/workspace-agent/**",
@@ -443,23 +443,23 @@
     },
     {
       "id": "convergence-boundary",
-      "owner": "CST 418, CST 455, tooling/refactor/a78-a94/client-workspace-host-boundary.md, and packages/composers/agent-authoring/src/index.ts",
+      "owner": "CST 418, CST 455, tooling/agentos-cli/src/check/sources/client-workspace-host-boundary.md, and packages/composers/agent-authoring/src/index.ts",
       "invariantId": "invariant.client.projection-sink-boundary",
       "kind": "repo-boundary",
       "diagnostics": [
         "post-v3 downstream surfaces must stay outside substrate truth ownership",
         "client/workspace-host packages must satisfy client-boundaries",
         "closed target implementation wiring must be static imports and factory composition, not runtime selection from manifest/deployment JSON",
-        "spikes must remain ignored local pressure tests"
+        "spikes must remain an ignored local namespace with zero tracked files"
       ],
       "paths": [
-        "tooling/refactor/a78-a94/client-workspace-host-boundary.md",
+        "tooling/agentos-cli/src/check/sources/client-workspace-host-boundary.md",
         "docs/surface.json",
         "packages/client/**",
         "packages/composers/workspace-agent/**",
         "packages/composers/agent-authoring/src/index.ts",
         "packages/composers/agent-authoring/test/agent-authoring.test.ts",
-        "spikes/**",
+        ".gitignore",
         "tooling/agentos-cli/src/check/algorithmic-checks.mjs",
         "tooling/agentos-cli/src/main.mjs"
       ],
@@ -472,7 +472,7 @@
     },
     {
       "id": "convergence-roles",
-      "owner": "CST 419 and tooling/refactor/a78-a94/role-survival.source.json",
+      "owner": "CST 419 and tooling/agentos-cli/src/check/sources/role-survival.source.json",
       "invariantId": "invariant.algebra.single-code-source",
       "kind": "repo-boundary",
       "diagnostics": [
@@ -481,7 +481,7 @@
         "role-survival.source.json is the only role survival source"
       ],
       "paths": [
-        "tooling/refactor/a78-a94/role-survival.source.json",
+        "tooling/agentos-cli/src/check/sources/role-survival.source.json",
         "docs/surface.json",
         "docs/agent/*.source.json",
         "docs/api/*.md",
@@ -500,7 +500,7 @@
     },
     {
       "id": "convergence-public-surface",
-      "owner": "CST 421 and tooling/refactor/a78-a94/public-surface-sweep.source.json",
+      "owner": "CST 421 and tooling/agentos-cli/src/check/sources/public-surface-sweep.source.json",
       "invariantId": "invariant.algebra.single-code-source",
       "kind": "repo-boundary",
       "diagnostics": [
@@ -509,8 +509,8 @@
         "retained projection vocabulary must be source-owned with explicit reason"
       ],
       "paths": [
-        "tooling/refactor/a78-a94/public-surface-sweep.source.json",
-        "tooling/refactor/a78-a94/role-survival.source.json",
+        "tooling/agentos-cli/src/check/sources/public-surface-sweep.source.json",
+        "tooling/agentos-cli/src/check/sources/role-survival.source.json",
         "docs/surface.json",
         "docs/api/*.md",
         "packages/**/PUBLIC_API.md",
@@ -526,7 +526,7 @@
     },
     {
       "id": "convergence-import-dag",
-      "owner": "CST 423, tooling/refactor/a78-a94/role-survival.source.json, and docs/agent/boundary-rules.source.json",
+      "owner": "CST 423, tooling/agentos-cli/src/check/sources/role-survival.source.json, and docs/agent/boundary-rules.source.json",
       "invariantId": "invariant.algebra.single-code-source",
       "kind": "repo-boundary",
       "diagnostics": [
@@ -535,7 +535,7 @@
         "role edges must flow toward owned laws, protocols, projections, providers, or repo-local tooling without importing downstream roles"
       ],
       "paths": [
-        "tooling/refactor/a78-a94/role-survival.source.json",
+        "tooling/agentos-cli/src/check/sources/role-survival.source.json",
         "docs/agent/boundary-rules.source.json",
         "packages/**/src/**/*.ts",
         "tooling/**/src/**/*.ts"
@@ -825,8 +825,8 @@
       "owner": "AGENTS.md Repo Surface",
       "invariantId": "invariant.algebra.single-code-source",
       "kind": "repo-boundary",
-      "diagnostics": ["spikes must remain ignored local pressure tests"],
-      "paths": ["spikes"],
+      "diagnostics": ["spikes must remain an ignored local namespace with zero tracked files"],
+      "paths": [".gitignore"],
       "commandGroup": "all",
       "acceptance": {
         "engine": "algorithmic",

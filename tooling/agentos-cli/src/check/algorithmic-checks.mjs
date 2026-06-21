@@ -698,7 +698,7 @@ const checkClientCanonicalSurface = ({ surfacePackages, failures }) => {
 };
 
 const checkClientBoundaryDoc = (failures) => {
-  const boundaryPath = "tooling/refactor/a78-a94/client-workspace-host-boundary.md";
+  const boundaryPath = "tooling/agentos-cli/src/check/sources/client-workspace-host-boundary.md";
   if (!fs.existsSync(path.join(repoRoot, boundaryPath))) {
     failures.push(
       `${boundaryPath}: client-boundary-contract: missing source-owned boundary freeze`,
@@ -1052,8 +1052,8 @@ const checkSpikeHygiene = () => {
   const tracked = execFileSync("git", ["ls-files", "spikes"], { cwd: repoRoot, encoding: "utf8" })
     .split("\n")
     .map((line) => line.trim())
-    .filter(Boolean);
-  const allowed = new Set(["spikes/_active/.gitkeep"]);
+    .filter((file) => file.length > 0 && fs.existsSync(path.join(repoRoot, file)));
+  const allowed = new Set();
   failIfAny(
     "spike hygiene",
     tracked
@@ -1243,7 +1243,7 @@ const convergenceRoleIds = new Set([
 ]);
 
 const convergenceRoleManifest = () =>
-  readJson("tooling/refactor/a78-a94/role-survival.source.json");
+  readJson("tooling/agentos-cli/src/check/sources/role-survival.source.json");
 
 const publicExportNames = (apiSource) =>
   new Set([
@@ -1518,7 +1518,7 @@ const checkConvergenceRoles = () => {
 };
 
 const publicSurfaceSweepManifest = () =>
-  readJson("tooling/refactor/a78-a94/public-surface-sweep.source.json");
+  readJson("tooling/agentos-cli/src/check/sources/public-surface-sweep.source.json");
 
 const packagePublicSymbols = (pkg) => {
   if (typeof pkg.apiSource !== "string") return new Set();

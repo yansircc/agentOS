@@ -10,6 +10,3 @@ dist/
 .cst/
 .agentos-audits/
 spikes/**
-!spikes/
-!spikes/_active/
-!spikes/_active/.gitkeep
