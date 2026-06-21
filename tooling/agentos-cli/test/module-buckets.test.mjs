@@ -1,10 +1,23 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import {
   moduleAmbientForPath,
   moduleBucketFindingsForEdges,
   moduleBucketForPath,
+  moduleBucketRegistryFindings,
 } from "../src/check/algorithmic-checks.mjs";
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
+
+void test("module bucket architecture source is valid", () => {
+  const registry = JSON.parse(
+    fs.readFileSync(path.join(repoRoot, "architecture/module-buckets.json"), "utf8"),
+  );
+  assert.deepEqual(moduleBucketRegistryFindings(registry), []);
+});
 
 void test("module bucket classifier marks product paths as ejection candidates", () => {
   assert.equal(moduleBucketForPath("tooling/ops-api/src/index.ts"), "product");

@@ -1,0 +1,336 @@
+{
+  "schemaVersion": 1,
+  "policy": {
+    "classification": "first matching rule wins",
+    "ambientIsolation": "module labels and profile gates enforce ambient separation; packages are not security boundaries",
+    "productBucket": "product is an ejection marker, not a final substrate bucket"
+  },
+  "buckets": [
+    {
+      "id": "axioms",
+      "rank": 0,
+      "description": "shared vocabulary, value brands, schemas, and substrate axioms"
+    },
+    {
+      "id": "ledger",
+      "rank": 1,
+      "description": "durable ledger write, read, and storage mechanics"
+    },
+    {
+      "id": "projection",
+      "rank": 2,
+      "description": "ledger-derived readers, folds, carriers, and wire projections"
+    },
+    {
+      "id": "adapter",
+      "rank": 3,
+      "description": "target, provider, framework, transport, and implementation adapters"
+    },
+    {
+      "id": "product",
+      "rank": 4,
+      "description": "consumer/product code that must be ejected before final substrate packaging",
+      "ejection": true
+    }
+  ],
+  "ambients": [
+    {
+      "id": "neutral",
+      "allowedImports": ["neutral"]
+    },
+    {
+      "id": "browser",
+      "allowedImports": ["neutral", "browser"]
+    },
+    {
+      "id": "node",
+      "allowedImports": ["neutral", "node"]
+    },
+    {
+      "id": "cloudflare-worker",
+      "allowedImports": ["neutral", "cloudflare-worker"]
+    },
+    {
+      "id": "product",
+      "allowedImports": ["neutral", "browser", "node", "cloudflare-worker", "product"]
+    }
+  ],
+  "bucketRules": [
+    {
+      "id": "product-ops-tooling",
+      "match": "prefix",
+      "value": "tooling/ops-",
+      "bucket": "product"
+    },
+    {
+      "id": "product-docs-site",
+      "match": "prefix",
+      "value": "tooling/docs-site/",
+      "bucket": "product"
+    },
+    {
+      "id": "product-path-segment",
+      "match": "contains",
+      "value": "/product/",
+      "bucket": "product"
+    },
+    {
+      "id": "kernel-axioms",
+      "match": "prefix",
+      "value": "packages/kernel/",
+      "bucket": "axioms"
+    },
+    {
+      "id": "runtime-protocol-axioms",
+      "match": "prefix",
+      "value": "packages/runtime-protocol/",
+      "bucket": "axioms"
+    },
+    {
+      "id": "telemetry-protocol-axioms",
+      "match": "prefix",
+      "value": "packages/telemetry-protocol/",
+      "bucket": "axioms"
+    },
+    {
+      "id": "llm-protocol-axioms",
+      "match": "prefix",
+      "value": "packages/llm-protocol/",
+      "bucket": "axioms"
+    },
+    {
+      "id": "backend-protocol-axioms",
+      "match": "prefix",
+      "value": "packages/backends/protocol/",
+      "bucket": "axioms"
+    },
+    {
+      "id": "runtime-ledger",
+      "match": "prefix",
+      "value": "packages/runtime/",
+      "bucket": "ledger"
+    },
+    {
+      "id": "backend-ledger",
+      "match": "prefix",
+      "value": "packages/backends/",
+      "bucket": "ledger"
+    },
+    {
+      "id": "ledger-path",
+      "match": "contains",
+      "value": "/ledger/",
+      "bucket": "ledger"
+    },
+    {
+      "id": "storage-path",
+      "match": "contains",
+      "value": "/storage/",
+      "bucket": "ledger"
+    },
+    {
+      "id": "state-file",
+      "match": "contains",
+      "value": "/state.ts",
+      "bucket": "ledger"
+    },
+    {
+      "id": "commit-file",
+      "match": "contains",
+      "value": "/commit.ts",
+      "bucket": "ledger"
+    },
+    {
+      "id": "projection-name",
+      "match": "contains",
+      "value": "projection",
+      "bucket": "projection"
+    },
+    {
+      "id": "projector-name",
+      "match": "contains",
+      "value": "projector",
+      "bucket": "projection"
+    },
+    {
+      "id": "safe-events-name",
+      "match": "contains",
+      "value": "safe-events",
+      "bucket": "projection"
+    },
+    {
+      "id": "carrier-packages",
+      "match": "prefix",
+      "value": "packages/carriers/",
+      "bucket": "projection"
+    },
+    {
+      "id": "wire-adapter-packages",
+      "match": "prefix",
+      "value": "packages/wire-adapters/",
+      "bucket": "projection"
+    },
+    {
+      "id": "default-adapter",
+      "match": "all",
+      "bucket": "adapter"
+    }
+  ],
+  "ambientRules": [
+    {
+      "id": "product-ops-tooling",
+      "match": "prefix",
+      "value": "tooling/ops-",
+      "ambient": "product"
+    },
+    {
+      "id": "product-docs-site",
+      "match": "prefix",
+      "value": "tooling/docs-site/",
+      "ambient": "product"
+    },
+    {
+      "id": "product-path-segment",
+      "match": "contains",
+      "value": "/product/",
+      "ambient": "product"
+    },
+    {
+      "id": "node-postgres",
+      "match": "prefix",
+      "value": "packages/backends/node-postgres/",
+      "ambient": "node"
+    },
+    {
+      "id": "workspace-op-local",
+      "match": "prefix",
+      "value": "packages/providers/workspace-op-local/",
+      "ambient": "node"
+    },
+    {
+      "id": "workspace-env-local",
+      "match": "prefix",
+      "value": "packages/execution-domains/workspace-env-local/",
+      "ambient": "node"
+    },
+    {
+      "id": "agentos-cli",
+      "match": "prefix",
+      "value": "tooling/agentos-cli/",
+      "ambient": "node"
+    },
+    {
+      "id": "distribution-tooling",
+      "match": "prefix",
+      "value": "tooling/distribution/",
+      "ambient": "node"
+    },
+    {
+      "id": "cloudflare-do",
+      "match": "prefix",
+      "value": "packages/backends/cloudflare-do/",
+      "ambient": "cloudflare-worker"
+    },
+    {
+      "id": "deploy-cloudflare",
+      "match": "prefix",
+      "value": "packages/providers/deploy-cloudflare/",
+      "ambient": "cloudflare-worker"
+    },
+    {
+      "id": "dynamic-worker",
+      "match": "prefix",
+      "value": "packages/providers/dynamic-worker/",
+      "ambient": "cloudflare-worker"
+    },
+    {
+      "id": "resource-cloudflare",
+      "match": "prefix",
+      "value": "packages/providers/resource-cloudflare/",
+      "ambient": "cloudflare-worker"
+    },
+    {
+      "id": "workspace-session-cloudflare",
+      "match": "prefix",
+      "value": "packages/providers/workspace-session-cloudflare/",
+      "ambient": "cloudflare-worker"
+    },
+    {
+      "id": "sandbox-cloudflare",
+      "match": "prefix",
+      "value": "packages/execution-domains/sandbox-cloudflare/",
+      "ambient": "cloudflare-worker"
+    },
+    {
+      "id": "workspace-env-cloudflare",
+      "match": "prefix",
+      "value": "packages/execution-domains/workspace-env-cloudflare/",
+      "ambient": "cloudflare-worker"
+    },
+    {
+      "id": "client-packages",
+      "match": "prefix",
+      "value": "packages/client/",
+      "ambient": "browser"
+    },
+    {
+      "id": "ag-ui-wire-adapter",
+      "match": "prefix",
+      "value": "packages/wire-adapters/ag-ui/",
+      "ambient": "browser"
+    },
+    {
+      "id": "ops-htmx",
+      "match": "prefix",
+      "value": "tooling/ops-htmx/",
+      "ambient": "browser"
+    },
+    {
+      "id": "default-neutral",
+      "match": "all",
+      "ambient": "neutral"
+    }
+  ],
+  "externalAmbients": [
+    {
+      "id": "node-builtins",
+      "match": "prefix",
+      "value": "node:",
+      "ambient": "node"
+    },
+    {
+      "id": "pg",
+      "match": "specifier-or-subpath",
+      "value": "pg",
+      "ambient": "node"
+    },
+    {
+      "id": "cloudflare-workers-types",
+      "match": "specifier",
+      "value": "@cloudflare/workers-types",
+      "ambient": "cloudflare-worker"
+    },
+    {
+      "id": "cloudflare-builtins",
+      "match": "prefix",
+      "value": "cloudflare:",
+      "ambient": "cloudflare-worker"
+    },
+    {
+      "id": "react",
+      "match": "specifier-or-subpath",
+      "value": "react",
+      "ambient": "browser"
+    },
+    {
+      "id": "svelte",
+      "match": "specifier-or-subpath",
+      "value": "svelte",
+      "ambient": "browser"
+    }
+  ],
+  "reportMode": {
+    "enforcement": "report until backlog is zero, then switch to enforce",
+    "findingKinds": ["bucket-dag", "ambient-dag", "external-ambient", "product-ejection"]
+  }
+}

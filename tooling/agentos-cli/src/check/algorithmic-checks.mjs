@@ -960,117 +960,295 @@ const checkOwnerIds = () => {
   failIfAny("owner ids", [...registryFindings, ...declarationFindings]);
 };
 
-export const moduleBucketForPath = (file) => {
-  if (
-    file.startsWith("tooling/ops-") ||
-    file.startsWith("tooling/docs-site/") ||
-    file.includes("/product/")
-  ) {
-    return "product";
-  }
-  if (
-    file.startsWith("packages/kernel/") ||
-    file.startsWith("packages/runtime-protocol/") ||
-    file.startsWith("packages/telemetry-protocol/") ||
-    file.startsWith("packages/llm-protocol/") ||
-    file.startsWith("packages/backends/protocol/")
-  ) {
-    return "axioms";
-  }
-  if (
-    file.startsWith("packages/runtime/") ||
-    file.startsWith("packages/backends/") ||
-    file.includes("/ledger/") ||
-    file.includes("/storage/") ||
-    file.includes("/state.ts") ||
-    file.includes("/commit.ts")
-  ) {
-    return "ledger";
-  }
-  if (
-    file.includes("projection") ||
-    file.includes("projector") ||
-    file.includes("safe-events") ||
-    file.startsWith("packages/carriers/") ||
-    file.startsWith("packages/wire-adapters/")
-  ) {
-    return "projection";
-  }
-  return "adapter";
+const moduleBucketRegistryPath = "architecture/module-buckets.json";
+let moduleBucketRegistryCache;
+const moduleBucketRegistry = () => {
+  moduleBucketRegistryCache ??= readJson(moduleBucketRegistryPath);
+  return moduleBucketRegistryCache;
 };
 
-export const moduleAmbientForPath = (file) => {
-  if (file.startsWith("tooling/ops-")) return "product";
-  if (
-    file.startsWith("packages/backends/node-postgres/") ||
-    file.startsWith("packages/providers/workspace-op-local/") ||
-    file.startsWith("packages/execution-domains/workspace-env-local/") ||
-    file.startsWith("tooling/agentos-cli/") ||
-    file.startsWith("tooling/distribution/")
-  ) {
-    return "node";
-  }
-  if (
-    file.startsWith("packages/backends/cloudflare-do/") ||
-    file.startsWith("packages/providers/deploy-cloudflare/") ||
-    file.startsWith("packages/providers/dynamic-worker/") ||
-    file.startsWith("packages/providers/resource-cloudflare/") ||
-    file.startsWith("packages/providers/workspace-session-cloudflare/") ||
-    file.startsWith("packages/execution-domains/sandbox-cloudflare/") ||
-    file.startsWith("packages/execution-domains/workspace-env-cloudflare/")
-  ) {
-    return "cloudflare-worker";
-  }
-  if (
-    file.startsWith("packages/client/") ||
-    file.startsWith("packages/wire-adapters/ag-ui/") ||
-    file.startsWith("tooling/ops-htmx/")
-  ) {
-    return "browser";
-  }
-  return "neutral";
+const pathRuleMatches = (file, rule) => {
+  if (!isRecord(rule) || typeof rule.match !== "string") return false;
+  if (rule.match === "all") return true;
+  if (typeof rule.value !== "string") return false;
+  if (rule.match === "prefix") return file.startsWith(rule.value);
+  if (rule.match === "contains") return file.includes(rule.value);
+  if (rule.match === "suffix") return file.endsWith(rule.value);
+  if (rule.match === "regex") return new RegExp(rule.value, "u").test(file);
+  return false;
 };
 
-const moduleBucketRank = new Map([
-  ["axioms", 0],
-  ["ledger", 1],
-  ["projection", 2],
-  ["adapter", 3],
-  ["product", 4],
-]);
+const specifierRuleMatches = (specifier, rule) => {
+  if (!isRecord(rule) || typeof rule.match !== "string" || typeof rule.value !== "string") {
+    return false;
+  }
+  if (rule.match === "specifier") return specifier === rule.value;
+  if (rule.match === "prefix") return specifier.startsWith(rule.value);
+  if (rule.match === "specifier-or-subpath") {
+    return specifier === rule.value || specifier.startsWith(`${rule.value}/`);
+  }
+  return false;
+};
 
-const allowedAmbientImports = new Map([
-  ["neutral", new Set(["neutral"])],
-  ["browser", new Set(["neutral", "browser"])],
-  ["node", new Set(["neutral", "node"])],
-  ["cloudflare-worker", new Set(["neutral", "cloudflare-worker"])],
-  ["product", new Set(["neutral", "browser", "node", "cloudflare-worker", "product"])],
-]);
+const moduleRuleClassification = (file, rules, property) => {
+  for (const rule of rules) {
+    if (pathRuleMatches(file, rule)) return rule[property];
+  }
+  throw new Error(`${moduleBucketRegistryPath}: no ${property} rule matches ${file}`);
+};
+
+export const moduleBucketForPath = (file) =>
+  moduleRuleClassification(file, moduleBucketRegistry().bucketRules, "bucket");
+
+export const moduleAmbientForPath = (file) =>
+  moduleRuleClassification(file, moduleBucketRegistry().ambientRules, "ambient");
+
+const moduleBucketRank = () =>
+  new Map(moduleBucketRegistry().buckets.map((bucket) => [bucket.id, bucket.rank]));
+
+const allowedAmbientImports = () =>
+  new Map(
+    moduleBucketRegistry().ambients.map((ambient) => [ambient.id, new Set(ambient.allowedImports)]),
+  );
+
+const ejectionBuckets = () =>
+  new Set(
+    moduleBucketRegistry()
+      .buckets.filter((bucket) => bucket.ejection === true)
+      .map((bucket) => bucket.id),
+  );
 
 const externalAmbientForSpecifier = (specifier) => {
-  if (specifier.startsWith("node:")) return "node";
-  if (specifier === "pg" || specifier.startsWith("pg/")) return "node";
-  if (specifier === "@cloudflare/workers-types" || specifier.startsWith("cloudflare:")) {
-    return "cloudflare-worker";
-  }
-  if (
-    specifier === "react" ||
-    specifier.startsWith("react/") ||
-    specifier === "svelte" ||
-    specifier.startsWith("svelte/")
-  ) {
-    return "browser";
+  for (const rule of moduleBucketRegistry().externalAmbients) {
+    if (specifierRuleMatches(specifier, rule)) return rule.ambient;
   }
   return undefined;
 };
 
+const modulePathRuleMatchKinds = new Set(["all", "prefix", "contains", "suffix", "regex"]);
+const moduleSpecifierRuleMatchKinds = new Set(["specifier", "prefix", "specifier-or-subpath"]);
+const moduleBucketFindingKinds = new Set([
+  "bucket-dag",
+  "ambient-dag",
+  "external-ambient",
+  "product-ejection",
+]);
+
+const stringArray = (value) =>
+  Array.isArray(value) && value.every((entry) => typeof entry === "string" && entry.length > 0);
+
+const validateModulePathRules = ({ label, rules, property, allowedValues, findings }) => {
+  if (!Array.isArray(rules) || rules.length === 0) {
+    findings.push(`${moduleBucketRegistryPath}:${label}: must be a non-empty array`);
+    return;
+  }
+  const seen = new Set();
+  let hasCatchAll = false;
+  for (const [index, rule] of rules.entries()) {
+    const ruleLabel = `${moduleBucketRegistryPath}:${label}[${index}]`;
+    if (!isRecord(rule)) {
+      findings.push(`${ruleLabel}: rule must be an object`);
+      continue;
+    }
+    if (typeof rule.id !== "string" || rule.id.length === 0) {
+      findings.push(`${ruleLabel}: id must be a non-empty string`);
+    } else if (seen.has(rule.id)) {
+      findings.push(`${ruleLabel}: duplicate id ${rule.id}`);
+    } else {
+      seen.add(rule.id);
+    }
+    if (!modulePathRuleMatchKinds.has(rule.match)) {
+      findings.push(
+        `${ruleLabel}: match must be one of ${[...modulePathRuleMatchKinds].join(", ")}`,
+      );
+    }
+    if (rule.match === "all") {
+      hasCatchAll = true;
+    } else if (typeof rule.value !== "string" || rule.value.length === 0) {
+      findings.push(`${ruleLabel}: value must be a non-empty string`);
+    }
+    if (rule.match === "regex" && typeof rule.value === "string") {
+      try {
+        new RegExp(rule.value, "u");
+      } catch (error) {
+        findings.push(`${ruleLabel}: regex is invalid: ${error.message}`);
+      }
+    }
+    if (typeof rule[property] !== "string" || !allowedValues.has(rule[property])) {
+      findings.push(`${ruleLabel}: ${property} must reference a declared ${property}`);
+    }
+  }
+  if (!hasCatchAll) {
+    findings.push(`${moduleBucketRegistryPath}:${label}: final catch-all rule is required`);
+  }
+};
+
+export const moduleBucketRegistryFindings = (registry) => {
+  const findings = [];
+  if (!isRecord(registry)) return [`${moduleBucketRegistryPath}: registry must be a JSON object`];
+  if (registry.schemaVersion !== 1) {
+    findings.push(`${moduleBucketRegistryPath}: schemaVersion must be 1`);
+  }
+  if (!isRecord(registry.policy)) {
+    findings.push(`${moduleBucketRegistryPath}: policy object is required`);
+  } else {
+    for (const key of ["classification", "ambientIsolation", "productBucket"]) {
+      if (typeof registry.policy[key] !== "string" || registry.policy[key].length === 0) {
+        findings.push(`${moduleBucketRegistryPath}: policy.${key} must be a non-empty string`);
+      }
+    }
+  }
+
+  const bucketIds = new Set();
+  if (!Array.isArray(registry.buckets) || registry.buckets.length === 0) {
+    findings.push(`${moduleBucketRegistryPath}: buckets must be a non-empty array`);
+  } else {
+    const ranks = new Set();
+    for (const [index, bucket] of registry.buckets.entries()) {
+      const label = `${moduleBucketRegistryPath}:buckets[${index}]`;
+      if (!isRecord(bucket)) {
+        findings.push(`${label}: bucket must be an object`);
+        continue;
+      }
+      if (typeof bucket.id !== "string" || bucket.id.length === 0) {
+        findings.push(`${label}: id must be a non-empty string`);
+      } else if (bucketIds.has(bucket.id)) {
+        findings.push(`${label}: duplicate id ${bucket.id}`);
+      } else {
+        bucketIds.add(bucket.id);
+      }
+      if (!Number.isInteger(bucket.rank) || bucket.rank < 0) {
+        findings.push(`${label}: rank must be a non-negative integer`);
+      } else if (ranks.has(bucket.rank)) {
+        findings.push(`${label}: duplicate rank ${bucket.rank}`);
+      } else {
+        ranks.add(bucket.rank);
+      }
+      if (typeof bucket.description !== "string" || bucket.description.length === 0) {
+        findings.push(`${label}: description must be a non-empty string`);
+      }
+      if ("ejection" in bucket && typeof bucket.ejection !== "boolean") {
+        findings.push(`${label}: ejection must be boolean when present`);
+      }
+    }
+  }
+
+  const ambientIds = new Set();
+  if (!Array.isArray(registry.ambients) || registry.ambients.length === 0) {
+    findings.push(`${moduleBucketRegistryPath}: ambients must be a non-empty array`);
+  } else {
+    for (const [index, ambient] of registry.ambients.entries()) {
+      const label = `${moduleBucketRegistryPath}:ambients[${index}]`;
+      if (!isRecord(ambient)) {
+        findings.push(`${label}: ambient must be an object`);
+        continue;
+      }
+      if (typeof ambient.id !== "string" || ambient.id.length === 0) {
+        findings.push(`${label}: id must be a non-empty string`);
+      } else if (ambientIds.has(ambient.id)) {
+        findings.push(`${label}: duplicate id ${ambient.id}`);
+      } else {
+        ambientIds.add(ambient.id);
+      }
+      if (!stringArray(ambient.allowedImports)) {
+        findings.push(`${label}: allowedImports must be a non-empty string array`);
+      }
+    }
+    for (const [index, ambient] of registry.ambients.entries()) {
+      if (!isRecord(ambient) || !Array.isArray(ambient.allowedImports)) continue;
+      for (const target of ambient.allowedImports) {
+        if (!ambientIds.has(target)) {
+          findings.push(
+            `${moduleBucketRegistryPath}:ambients[${index}]: allowedImports references unknown ambient ${target}`,
+          );
+        }
+      }
+    }
+  }
+
+  validateModulePathRules({
+    label: "bucketRules",
+    rules: registry.bucketRules,
+    property: "bucket",
+    allowedValues: bucketIds,
+    findings,
+  });
+  validateModulePathRules({
+    label: "ambientRules",
+    rules: registry.ambientRules,
+    property: "ambient",
+    allowedValues: ambientIds,
+    findings,
+  });
+
+  if (!Array.isArray(registry.externalAmbients)) {
+    findings.push(`${moduleBucketRegistryPath}: externalAmbients must be an array`);
+  } else {
+    const seen = new Set();
+    for (const [index, rule] of registry.externalAmbients.entries()) {
+      const label = `${moduleBucketRegistryPath}:externalAmbients[${index}]`;
+      if (!isRecord(rule)) {
+        findings.push(`${label}: rule must be an object`);
+        continue;
+      }
+      if (typeof rule.id !== "string" || rule.id.length === 0) {
+        findings.push(`${label}: id must be a non-empty string`);
+      } else if (seen.has(rule.id)) {
+        findings.push(`${label}: duplicate id ${rule.id}`);
+      } else {
+        seen.add(rule.id);
+      }
+      if (!moduleSpecifierRuleMatchKinds.has(rule.match)) {
+        findings.push(
+          `${label}: match must be one of ${[...moduleSpecifierRuleMatchKinds].join(", ")}`,
+        );
+      }
+      if (typeof rule.value !== "string" || rule.value.length === 0) {
+        findings.push(`${label}: value must be a non-empty string`);
+      }
+      if (typeof rule.ambient !== "string" || !ambientIds.has(rule.ambient)) {
+        findings.push(`${label}: ambient must reference a declared ambient`);
+      }
+    }
+  }
+
+  if (!isRecord(registry.reportMode)) {
+    findings.push(`${moduleBucketRegistryPath}: reportMode object is required`);
+  } else {
+    if (
+      typeof registry.reportMode.enforcement !== "string" ||
+      registry.reportMode.enforcement.length === 0
+    ) {
+      findings.push(
+        `${moduleBucketRegistryPath}: reportMode.enforcement must be a non-empty string`,
+      );
+    }
+    if (!stringArray(registry.reportMode.findingKinds)) {
+      findings.push(
+        `${moduleBucketRegistryPath}: reportMode.findingKinds must be a non-empty string array`,
+      );
+    } else {
+      for (const kind of registry.reportMode.findingKinds) {
+        if (!moduleBucketFindingKinds.has(kind)) {
+          findings.push(
+            `${moduleBucketRegistryPath}: reportMode.findingKinds contains unknown kind ${kind}`,
+          );
+        }
+      }
+    }
+  }
+  return findings;
+};
+
 export const moduleBucketFindingsForEdges = (edges) => {
   const findings = [];
+  const rankByBucket = moduleBucketRank();
+  const importsByAmbient = allowedAmbientImports();
   for (const edge of edges) {
     const fromBucket = moduleBucketForPath(edge.fromFile);
     const toBucket = moduleBucketForPath(edge.toFile);
-    const fromRank = moduleBucketRank.get(fromBucket);
-    const toRank = moduleBucketRank.get(toBucket);
+    const fromRank = rankByBucket.get(fromBucket);
+    const toRank = rankByBucket.get(toBucket);
     if (fromRank !== undefined && toRank !== undefined && fromRank < toRank) {
       findings.push({
         kind: "bucket-dag",
@@ -1083,7 +1261,7 @@ export const moduleBucketFindingsForEdges = (edges) => {
 
     const fromAmbient = moduleAmbientForPath(edge.fromFile);
     const toAmbient = moduleAmbientForPath(edge.toFile);
-    if (!(allowedAmbientImports.get(fromAmbient) ?? new Set()).has(toAmbient)) {
+    if (!(importsByAmbient.get(fromAmbient) ?? new Set()).has(toAmbient)) {
       findings.push({
         kind: "ambient-dag",
         file: edge.fromFile,
@@ -1098,6 +1276,7 @@ export const moduleBucketFindingsForEdges = (edges) => {
 
 const moduleBucketExternalFindings = (records) => {
   const findings = [];
+  const importsByAmbient = allowedAmbientImports();
   for (const record of records) {
     for (const file of walk(`${record.path}/src`).filter((entry) =>
       /\.(?:ts|tsx|mts|cts)$/u.test(entry),
@@ -1107,7 +1286,7 @@ const moduleBucketExternalFindings = (records) => {
       for (const importRecord of importSpecifierRecords(source, file)) {
         const targetAmbient = externalAmbientForSpecifier(importRecord.specifier);
         if (targetAmbient === undefined) continue;
-        if ((allowedAmbientImports.get(ambient) ?? new Set()).has(targetAmbient)) continue;
+        if ((importsByAmbient.get(ambient) ?? new Set()).has(targetAmbient)) continue;
         findings.push({
           kind: "external-ambient",
           file,
@@ -1121,9 +1300,10 @@ const moduleBucketExternalFindings = (records) => {
   return findings;
 };
 
-const moduleProductFindings = (graph) =>
-  graph.files
-    .filter((entry) => moduleBucketForPath(entry.file) === "product")
+const moduleProductFindings = (graph) => {
+  const ejection = ejectionBuckets();
+  return graph.files
+    .filter((entry) => ejection.has(moduleBucketForPath(entry.file)))
     .map((entry) => ({
       kind: "product-ejection",
       file: entry.file,
@@ -1131,6 +1311,7 @@ const moduleProductFindings = (graph) =>
       specifier: entry.package.name,
       message: "product bucket module must be ejected from final substrate",
     }));
+};
 
 const checkModuleBuckets = (args = []) => {
   const reportOnly = args.length === 1 && args[0] === "--report-only";
@@ -1181,6 +1362,22 @@ const checkModuleBuckets = (args = []) => {
     return;
   }
   failIfAny("module buckets", lines);
+};
+
+const architectureSourceFindings = () => {
+  const workspacePackageNames = new Set(
+    graphWorkspacePackageRecords(repoRoot)
+      .map((record) => record.name)
+      .filter((name) => typeof name === "string" && name.startsWith("@agent-os/")),
+  );
+  return [
+    ...ownerIdRegistryFindings({ registry: ownerIdRegistry(), workspacePackageNames }),
+    ...moduleBucketRegistryFindings(moduleBucketRegistry()),
+  ];
+};
+
+const checkArchitectureSources = () => {
+  failIfAny("architecture sources", architectureSourceFindings());
 };
 
 const distributionInstallScriptNames = new Set(["install", "postinstall", "preinstall", "prepare"]);
@@ -2912,6 +3109,7 @@ const checkDocsSiteBuild = () => {
 const checkBoundaryProjection = () => runCommand("vp check", { cwd: repoRoot });
 
 const checkerById = new Map([
+  ["architecture-sources", checkArchitectureSources],
   ["backend-neutrality", checkBackendNeutrality],
   ["boundaries", checkBoundaryProjection],
   ["client-boundaries", checkClientBoundaries],
