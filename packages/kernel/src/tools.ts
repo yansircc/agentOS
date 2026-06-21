@@ -489,9 +489,9 @@ const isToolExecution = (value: unknown): value is ToolExecution => {
   );
 };
 
-const executionDomainKey = (domain: ExecutionDomain): string => `${domain.kind}:${domain.ref}`;
+const executionDomainKey = (domain: ExecutionDomain): string => domain.kind + ":" + domain.ref;
 const executionDomainLawKey = (domain: ExecutionDomain, access: ToolAccess): string =>
-  `${executionDomainKey(domain)}:${access}`;
+  executionDomainKey(domain) + ":" + access;
 
 export type ExecutionDomainRegistryIssue =
   | {
@@ -889,7 +889,7 @@ export const defineTool = <S extends AgentSchemaDecoder<unknown>, R, E extends T
     contract: makeToolContract({
       toolId,
       effectAuthorityRef: {
-        authorityId: spec.authorityId ?? `tool:${toolId}`,
+        authorityId: spec.authorityId ?? "tool:" + toolId,
         authorityClass: spec.authority,
         ...(spec.authorityVersion === undefined ? {} : { version: spec.authorityVersion }),
       },
@@ -1058,45 +1058,49 @@ export const parseToolCall = (
   tools: Record<string, Tool>,
   call: ToolCall,
 ): Effect.Effect<{ readonly tool: Tool; readonly args: unknown }, ToolError> =>
-  Effect.gen(function* () {
-    const tool = tools[call.function.name];
-    if (tool === undefined) {
-      return yield* new ToolError({
-        toolName: call.function.name,
-        cause: { reason: "unknown_tool" },
-      });
-    }
-    const args = yield* Effect.try({
-      try: () => JSON.parse(call.function.arguments) as unknown,
-      catch: (cause) =>
-        new ToolError({
+  Effect.withSpan("agentos.kernel.tools.parse_tool_call")(
+    Effect.gen(function* () {
+      const tool = tools[call.function.name];
+      if (tool === undefined) {
+        return yield* new ToolError({
           toolName: call.function.name,
-          cause: {
-            reason: "invalid_args",
-            parseError: cause instanceof Error ? cause.name : typeof cause,
-          },
-        }),
-    });
-    return { tool, args };
-  });
+          cause: { reason: "unknown_tool" },
+        });
+      }
+      const args = yield* Effect.try({
+        try: () => JSON.parse(call.function.arguments) as unknown,
+        catch: (cause) =>
+          new ToolError({
+            toolName: call.function.name,
+            cause: {
+              reason: "invalid_args",
+              parseError: cause instanceof Error ? cause.name : typeof cause,
+            },
+          }),
+      });
+      return { tool, args };
+    }),
+  );
 
 export const decodeToolArgs = (
   tool: Tool,
   args: unknown,
   toolName: string,
 ): Effect.Effect<unknown, ToolError> =>
-  Effect.try({
-    try: () => tool.decode(args),
-    catch: (cause) =>
-      new ToolError({
-        toolName,
-        cause: {
-          reason: "invalid_args",
-          decodeError: cause instanceof Error ? cause.name : typeof cause,
-          ...schemaDecodeIssueCause(cause),
-        },
-      }),
-  });
+  Effect.withSpan("agentos.kernel.tools.decode_tool_args")(
+    Effect.try({
+      try: () => tool.decode(args),
+      catch: (cause) =>
+        new ToolError({
+          toolName,
+          cause: {
+            reason: "invalid_args",
+            decodeError: cause instanceof Error ? cause.name : typeof cause,
+            ...schemaDecodeIssueCause(cause),
+          },
+        }),
+    }),
+  );
 
 const schemaDecodeIssueCause = (
   cause: unknown,
@@ -1123,13 +1127,15 @@ export const executeTool = (
   materials: ResolvedToolMaterials = {},
   context: ToolExecutionContextInput = {},
 ): Effect.Effect<unknown, ToolError> =>
-  Effect.gen(function* () {
-    const program = yield* Effect.try({
-      try: () => tool.execute(args, { ...context, materials }),
-      catch: (cause) => new ToolError({ toolName, cause }),
-    });
-    return yield* program;
-  });
+  Effect.withSpan("agentos.kernel.tools.execute_tool")(
+    Effect.gen(function* () {
+      const program = yield* Effect.try({
+        try: () => tool.execute(args, { ...context, materials }),
+        catch: (cause) => new ToolError({ toolName, cause }),
+      });
+      return yield* program;
+    }),
+  );
 
 /**
  * Unsafe deterministic product-side tool execution.
@@ -1142,14 +1148,16 @@ export const unsafeRunToolByName = (
   tools: Record<string, Tool>,
   invocation: DeterministicToolInvocation,
 ): Effect.Effect<unknown, ToolError> =>
-  Effect.gen(function* () {
-    const tool = tools[invocation.name];
-    if (tool === undefined) {
-      return yield* new ToolError({
-        toolName: invocation.name,
-        cause: { reason: "unknown_tool" },
-      });
-    }
-    const decoded = yield* decodeToolArgs(tool, invocation.args, invocation.name);
-    return yield* executeTool(tool, decoded, invocation.name);
-  });
+  Effect.withSpan("agentos.kernel.tools.unsafe_run_by_name")(
+    Effect.gen(function* () {
+      const tool = tools[invocation.name];
+      if (tool === undefined) {
+        return yield* new ToolError({
+          toolName: invocation.name,
+          cause: { reason: "unknown_tool" },
+        });
+      }
+      const decoded = yield* decodeToolArgs(tool, invocation.args, invocation.name);
+      return yield* executeTool(tool, decoded, invocation.name);
+    }),
+  );

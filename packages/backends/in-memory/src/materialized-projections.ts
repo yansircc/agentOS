@@ -42,6 +42,7 @@ export const InMemoryMaterializedProjectionsLive = (
             .projectionGet({ ...spec, eventIdentity })
             .pipe(Effect.mapError(projectionStorageError)),
         ),
+        Effect.withSpan("agentos.in_memory.projection.get"),
       ),
     list: (spec) =>
       projectionIdentity(spec).pipe(
@@ -50,6 +51,7 @@ export const InMemoryMaterializedProjectionsLive = (
             .projectionList({ ...spec, eventIdentity })
             .pipe(Effect.mapError(projectionStorageError)),
         ),
+        Effect.withSpan("agentos.in_memory.projection.list"),
       ),
     status: (spec) =>
       projectionIdentity(spec).pipe(
@@ -58,6 +60,7 @@ export const InMemoryMaterializedProjectionsLive = (
             .projectionStatus({ ...spec, eventIdentity })
             .pipe(Effect.mapError(projectionStorageError)),
         ),
+        Effect.withSpan("agentos.in_memory.projection.status"),
       ),
     rebuild: (spec) =>
       projectionIdentity(spec).pipe(
@@ -66,6 +69,7 @@ export const InMemoryMaterializedProjectionsLive = (
             .projectionRebuild({ ...spec, eventIdentity })
             .pipe(Effect.mapError(projectionStorageError)),
         ),
+        Effect.withSpan("agentos.in_memory.projection.rebuild"),
       ),
   });
 };

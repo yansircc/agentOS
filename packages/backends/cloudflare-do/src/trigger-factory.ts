@@ -20,9 +20,10 @@ export const resolveCloudflareTriggerSource = <Env>(
   source: CloudflareTriggerSource<Env>,
   ctx: CloudflareTriggerFactoryContext<Env>,
 ): Effect.Effect<ReadonlyArray<AnyDurableTrigger>, TriggerFactoryError> =>
-  typeof source !== "function"
+  (typeof source !== "function"
     ? Effect.succeed(source)
     : Effect.try({
         try: () => source(ctx),
         catch: (cause) => new TriggerFactoryError({ scope: ctx.scope, cause }),
-      });
+      })
+  ).pipe(Effect.withSpan("agentos.cloudflare_do.trigger.resolve_source"));

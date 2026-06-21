@@ -85,35 +85,37 @@ export const makeSandboxRunTool = (
     }),
     execute: (args) =>
       withToolWriteRequirement(
-        Effect.gen(function* () {
-          const request = yield* Effect.try({
-            try: () => requestFromToolArgs(args, { timeoutMs, maxOutputBytes, network }),
-            catch: (cause) => new ToolError({ toolName: options.name ?? "sandbox_run", cause }),
-          });
-          const started = yield* Clock.currentTimeMillis;
-          const result = yield* runSandbox(options.backend, options.policy, request).pipe(
-            Effect.result,
-          );
-          const ended = yield* Clock.currentTimeMillis;
-          if (result._tag === "Failure") {
-            return failureToToolResult(result.failure, ended - started, maxOutputBytes);
-          }
-          const stdout = truncateUtf8(result.success.stdout, maxOutputBytes);
-          const stderr = truncateUtf8(result.success.stderr, maxOutputBytes);
-          return {
-            ok: true,
-            exitCode: result.success.exitCode,
-            stdoutHead: stdout.head,
-            stderrHead: stderr.head,
-            stdoutBytes: stdout.bytes,
-            stderrBytes: stderr.bytes,
-            stdoutTruncated: stdout.truncated,
-            stderrTruncated: stderr.truncated,
-            artifacts: [],
-            durationMs: result.success.durationMs,
-            sandboxId: result.success.sandboxId,
-          } satisfies SandboxToolResult;
-        }),
+        Effect.withSpan("agentos.sandbox.tool.execute")(
+          Effect.gen(function* () {
+            const request = yield* Effect.try({
+              try: () => requestFromToolArgs(args, { timeoutMs, maxOutputBytes, network }),
+              catch: (cause) => new ToolError({ toolName: options.name ?? "sandbox_run", cause }),
+            });
+            const started = yield* Clock.currentTimeMillis;
+            const result = yield* runSandbox(options.backend, options.policy, request).pipe(
+              Effect.result,
+            );
+            const ended = yield* Clock.currentTimeMillis;
+            if (result._tag === "Failure") {
+              return failureToToolResult(result.failure, ended - started, maxOutputBytes);
+            }
+            const stdout = truncateUtf8(result.success.stdout, maxOutputBytes);
+            const stderr = truncateUtf8(result.success.stderr, maxOutputBytes);
+            return {
+              ok: true,
+              exitCode: result.success.exitCode,
+              stdoutHead: stdout.head,
+              stderrHead: stderr.head,
+              stdoutBytes: stdout.bytes,
+              stderrBytes: stderr.bytes,
+              stdoutTruncated: stdout.truncated,
+              stderrTruncated: stderr.truncated,
+              artifacts: [],
+              durationMs: result.success.durationMs,
+              sandboxId: result.success.sandboxId,
+            } satisfies SandboxToolResult;
+          }),
+        ),
       ),
   });
 };

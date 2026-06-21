@@ -1,4 +1,5 @@
-import { Context, Data, Effect, Result, Schema } from "effect";
+import { Context, Data, Result, Schema } from "effect";
+import type { Effect as EffectType } from "effect";
 
 export const TRACE_CONTEXT_VERSION = "w3c-trace-context-v1";
 
@@ -145,8 +146,8 @@ export interface TelemetryEventTree {
 }
 
 export interface TelemetryService {
-  readonly emit: (node: TelemetryEventNode) => Effect.Effect<void>;
-  readonly eventTree: () => Effect.Effect<TelemetryEventTree>;
+  readonly emit: (node: TelemetryEventNode) => EffectType.Effect<void>;
+  readonly eventTree: () => EffectType.Effect<TelemetryEventTree>;
 }
 
 export class Telemetry extends Context.Service<Telemetry, TelemetryService>()(

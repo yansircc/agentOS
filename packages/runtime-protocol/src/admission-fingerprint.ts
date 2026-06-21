@@ -6,7 +6,7 @@
  * owned by @agent-os/llm-protocol after provider resolution.
  */
 
-import { Effect } from "effect";
+import type { Effect as EffectType } from "effect";
 import {
   AGENT_SCHEMA_FINGERPRINT_VERSION,
   ensureAgentSchema,
@@ -21,5 +21,5 @@ export const FINGERPRINT_ALGO_VERSION = AGENT_SCHEMA_FINGERPRINT_VERSION;
 /** Build an AgentSchemaSpec from an AgentSchema source. */
 export const makeAdmissionSchemaSpec = <A>(
   schema: AgentSchemaSource<A>,
-): Effect.Effect<AgentSchemaSpec<A>> =>
+): EffectType.Effect<AgentSchemaSpec<A>> =>
   makeAgentSchemaSpec(isAgentSchema(schema) ? schema : ensureAgentSchema(schema));

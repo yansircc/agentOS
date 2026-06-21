@@ -196,10 +196,10 @@ export const safeStringify = (value: unknown): Effect.Effect<string, JsonStringi
   Effect.try({
     try: () => JSON.stringify(value),
     catch: (cause) => new JsonStringifyError({ cause }),
-  });
+  }).pipe(Effect.withSpan("agentos.kernel.errors.safe_stringify"));
 
 export const safeStringifyPretty = (value: unknown): Effect.Effect<string, JsonStringifyError> =>
   Effect.try({
     try: () => JSON.stringify(value, null, 2),
     catch: (cause) => new JsonStringifyError({ cause }),
-  });
+  }).pipe(Effect.withSpan("agentos.kernel.errors.safe_stringify_pretty"));

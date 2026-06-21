@@ -72,17 +72,19 @@ export const structuredOutputRequest = (spec: {
 };
 
 const decodeToolArguments = (args: string): Effect.Effect<StructuredDecodeResult<unknown>> =>
-  Effect.gen(function* () {
-    const parsed = yield* Effect.result(
-      Effect.try({
-        try: () => JSON.parse(args) as unknown,
-        catch: (error) => String(error).slice(0, 40),
-      }),
-    );
-    return parsed._tag === "Success"
-      ? { ok: true, decoded: parsed.success, tokensUsed: 0 }
-      : behaviorFailed(`args-parse-failed:${parsed.failure}`);
-  });
+  Effect.withSpan("agentos.runtime.structured_output.decode_tool_arguments")(
+    Effect.gen(function* () {
+      const parsed = yield* Effect.result(
+        Effect.try({
+          try: () => JSON.parse(args) as unknown,
+          catch: (error) => String(error).slice(0, 40),
+        }),
+      );
+      return parsed._tag === "Success"
+        ? { ok: true, decoded: parsed.success, tokensUsed: 0 }
+        : behaviorFailed(`args-parse-failed:${parsed.failure}`);
+    }),
+  );
 
 export const decodeStructuredOutputFromItems = <O = Record<string, unknown>>(spec: {
   readonly items: ReadonlyArray<LlmOutputItem>;
@@ -90,37 +92,39 @@ export const decodeStructuredOutputFromItems = <O = Record<string, unknown>>(spe
   readonly schemaSpec: AgentSchemaSpec;
   readonly toolName?: string;
 }): Effect.Effect<StructuredDecodeResult<O>> =>
-  Effect.gen(function* () {
-    const toolName = spec.toolName ?? STRUCTURED_OUTPUT_TOOL_NAME;
-    const toolCalls = toolCallsFromLlmOutputItems(spec.items);
+  Effect.withSpan("agentos.runtime.structured_output.decode_items")(
+    Effect.gen(function* () {
+      const toolName = spec.toolName ?? STRUCTURED_OUTPUT_TOOL_NAME;
+      const toolCalls = toolCallsFromLlmOutputItems(spec.items);
 
-    if (toolCalls.length !== 1 || toolCalls[0]?.function.name !== toolName) {
-      return behaviorFailed(
-        toolCalls.length === 0
-          ? "no-tool-call"
-          : `unexpected-tool-calls:${toolCalls.length}:${toolCalls[0]?.function.name ?? "?"}`,
+      if (toolCalls.length !== 1 || toolCalls[0]?.function.name !== toolName) {
+        return behaviorFailed(
+          toolCalls.length === 0
+            ? "no-tool-call"
+            : `unexpected-tool-calls:${toolCalls.length}:${toolCalls[0]?.function.name ?? "?"}`,
+        );
+      }
+
+      const parsed = yield* decodeToolArguments(toolCalls[0].function.arguments);
+      if (!parsed.ok) return parsed;
+
+      const decoded = yield* Effect.result(
+        Effect.try({
+          try: () => spec.schemaSpec.agentSchema.decode(parsed.decoded) as O,
+          catch: (error) => (error instanceof Error ? error.name : typeof error),
+        }),
       );
-    }
+      if (decoded._tag === "Failure") {
+        return behaviorFailed(`decode-failed:${decoded.failure}`);
+      }
 
-    const parsed = yield* decodeToolArguments(toolCalls[0].function.arguments);
-    if (!parsed.ok) return parsed;
-
-    const decoded = yield* Effect.result(
-      Effect.try({
-        try: () => spec.schemaSpec.agentSchema.decode(parsed.decoded) as O,
-        catch: (error) => (error instanceof Error ? error.name : typeof error),
-      }),
-    );
-    if (decoded._tag === "Failure") {
-      return behaviorFailed(`decode-failed:${decoded.failure}`);
-    }
-
-    return {
-      ok: true,
-      decoded: decoded.success,
-      tokensUsed: spec.usage.totalTokens,
-    };
-  });
+      return {
+        ok: true,
+        decoded: decoded.success,
+        tokensUsed: spec.usage.totalTokens,
+      };
+    }),
+  );
 
 export type StructuredCallFailureClassification =
   | { readonly kind: "record_evidence"; readonly outcome: Outcome }

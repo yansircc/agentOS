@@ -115,11 +115,11 @@ export const InMemoryAdmissionLive = (
           const { lease: preLease, latestBarrier } = projectLease(preRows, key, now);
           if (preLease.status === "unsupported" && now < preLease.retryAfter) {
             return {
-              ok: false,
+              ok: false as const,
               outcome: outcomeFromLease(preLease),
               lease: preLease,
-              admissionImpact: "lease-bearing",
-              shortCircuited: true,
+              admissionImpact: "lease-bearing" as const,
+              shortCircuited: true as const,
             };
           }
 
@@ -191,22 +191,22 @@ export const InMemoryAdmissionLive = (
           const { lease } = projectLease(postRows, key, now);
           if (outcome.class === "Supported" && decoded !== undefined) {
             return {
-              ok: true,
+              ok: true as const,
               decoded,
               outcome,
               lease,
               admissionImpact,
-              shortCircuited: false,
+              shortCircuited: false as const,
             };
           }
           return {
-            ok: false,
+            ok: false as const,
             outcome,
             lease,
             admissionImpact,
-            shortCircuited: false,
+            shortCircuited: false as const,
           };
-        });
+        }).pipe(Effect.withSpan("agentos.in_memory.admission.attempt_structured"));
 
       const invalidate = (
         spec: InvalidateSpec,
@@ -224,7 +224,7 @@ export const InMemoryAdmissionLive = (
             ])
             .pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("admission", cause)));
           return { barrierId: event!.id };
-        });
+        }).pipe(Effect.withSpan("agentos.in_memory.admission.invalidate"));
 
       return { attemptStructured, invalidate };
     }),

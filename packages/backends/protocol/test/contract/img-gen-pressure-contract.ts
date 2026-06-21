@@ -178,48 +178,50 @@ export const runImgGenPressureContract = (
 ): void => {
   describe(name + " img-gen durable trigger pressure", () => {
     it.effect("drains scan intents into repair facts and chained intents", () =>
-      Effect.gen(function* () {
-        const triggers = createImgGenPressureTriggers({
-          staleOutboxIds: ["outbox-1"],
-          staleRunningJobIds: ["job-1"],
-          orphanR2Keys: ["r2/orphan.png"],
-          stalePlanningRequestIds: ["request-1"],
-        });
-        yield* Effect.scoped(
-          Effect.gen(function* () {
-            const driver = yield* Effect.acquireRelease(
-              Effect.promise(() => Promise.resolve(makeDriver(triggers))),
-              (driver) => Effect.promise(() => driver.dispose()),
-            );
-            for (const trigger of triggers.filter((candidate) =>
-              candidate.kind.startsWith("img.scan."),
-            )) {
-              yield* Effect.promise(() => driver.enqueue(trigger, { scanId: trigger.kind }, 100));
-            }
-            yield* Effect.promise(() => driver.drainDue(100));
-            yield* Effect.promise(() => driver.drainDue(100));
+      Effect.withSpan("agentos.test.img_gen_pressure.contract")(
+        Effect.gen(function* () {
+          const triggers = createImgGenPressureTriggers({
+            staleOutboxIds: ["outbox-1"],
+            staleRunningJobIds: ["job-1"],
+            orphanR2Keys: ["r2/orphan.png"],
+            stalePlanningRequestIds: ["request-1"],
+          });
+          yield* Effect.scoped(
+            Effect.gen(function* () {
+              const driver = yield* Effect.acquireRelease(
+                Effect.promise(() => Promise.resolve(makeDriver(triggers))),
+                (driver) => Effect.promise(() => driver.dispose()),
+              );
+              for (const trigger of triggers.filter((candidate) =>
+                candidate.kind.startsWith("img.scan."),
+              )) {
+                yield* Effect.promise(() => driver.enqueue(trigger, { scanId: trigger.kind }, 100));
+              }
+              yield* Effect.promise(() => driver.drainDue(100));
+              yield* Effect.promise(() => driver.drainDue(100));
 
-            const kinds = sorted(kindsOf(yield* Effect.promise(() => driver.events())));
-            expect(kinds).toEqual(
-              sorted([
-                "artifact.delete.drained",
-                "artifact.delete.requested",
-                "artifact.orphan.scan.requested",
-                "image.job.retry.drained",
-                "image.job.retry.requested",
-                "image.job.retry_scheduled",
-                "image.outbox.redrive.requested",
-                "image.outbox.scan.requested",
-                "image.running.scan.requested",
-                "planning.redrive.requested",
-                "planning.scan.requested",
-              ]),
-            );
-            expect(kinds).not.toContain("planning.program.invoked");
-            expect(kinds).not.toContain("r2.deleted");
-          }),
-        );
-      }),
+              const kinds = sorted(kindsOf(yield* Effect.promise(() => driver.events())));
+              expect(kinds).toEqual(
+                sorted([
+                  "artifact.delete.drained",
+                  "artifact.delete.requested",
+                  "artifact.orphan.scan.requested",
+                  "image.job.retry.drained",
+                  "image.job.retry.requested",
+                  "image.job.retry_scheduled",
+                  "image.outbox.redrive.requested",
+                  "image.outbox.scan.requested",
+                  "image.running.scan.requested",
+                  "planning.redrive.requested",
+                  "planning.scan.requested",
+                ]),
+              );
+              expect(kinds).not.toContain("planning.program.invoked");
+              expect(kinds).not.toContain("r2.deleted");
+            }),
+          );
+        }),
+      ),
     );
   });
 };

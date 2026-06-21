@@ -114,26 +114,28 @@ export const makeAttachedStreamRegistry = (
   handlers: Iterable<AnyAttachedStreamHandler>,
   options: MakeAttachedStreamRegistryOptions = {},
 ): Effect.Effect<AttachedStreamRegistryMap, string> =>
-  Effect.gen(function* () {
-    const reserved = new Set(options.reservedKinds ?? []);
-    const registry = new Map<string, AnyAttachedStreamHandler>();
-    for (const handler of handlers) {
-      const missing = requiredAttachedStreamField(handler);
-      if (missing !== null) {
-        return yield* Effect.fail(`attached stream ${handler.kind} missing ${missing}`);
+  Effect.withSpan("agentos.runtime.attached_stream.make_registry")(
+    Effect.gen(function* () {
+      const reserved = new Set(options.reservedKinds ?? []);
+      const registry = new Map<string, AnyAttachedStreamHandler>();
+      for (const handler of handlers) {
+        const missing = requiredAttachedStreamField(handler);
+        if (missing !== null) {
+          return yield* Effect.fail(`attached stream ${handler.kind} missing ${missing}`);
+        }
+        if (reserved.has(handler.kind)) {
+          return yield* Effect.fail(
+            `attached stream kind conflicts with durable trigger: ${handler.kind}`,
+          );
+        }
+        if (registry.has(handler.kind)) {
+          return yield* Effect.fail(`duplicate attached stream kind: ${handler.kind}`);
+        }
+        registry.set(handler.kind, handler);
       }
-      if (reserved.has(handler.kind)) {
-        return yield* Effect.fail(
-          `attached stream kind conflicts with durable trigger: ${handler.kind}`,
-        );
-      }
-      if (registry.has(handler.kind)) {
-        return yield* Effect.fail(`duplicate attached stream kind: ${handler.kind}`);
-      }
-      registry.set(handler.kind, handler);
-    }
-    return registry;
-  });
+      return registry;
+    }),
+  );
 
 export const getAttachedStreamHandler = (
   registry: AttachedStreamRegistryMap,
@@ -539,48 +541,50 @@ export const makeAttachedStreamService = (
 
   return {
     attach: (startSpec) =>
-      Effect.gen(function* () {
-        const handler = yield* getAttachedStreamHandler(spec.registry, startSpec.kind);
-        const parsed = handler.parseStart(startSpec.payload);
-        if (!parsed.ok) return yield* Effect.fail(parsed.reason);
-        const now = startSpec.ts ?? (yield* spec.now());
-        const streamRef = spec.makeStreamRef();
-        const input = createAttachedStreamQueue<AttachedStreamInboundFrame>();
-        const output = createAttachedStreamQueue<AttachedStreamOutboundFrame>();
-        const controller = new AbortController();
-        let outSeq = 0;
-        const emit = (body: AttachedStreamOutboundBody): AttachedStreamOutboundFrame => {
-          const frame = attachedStreamOutboundFrame(streamRef, outSeq, body);
-          outSeq += 1;
-          return frame;
-        };
-        const session: AttachedStreamSession = {
-          streamRef,
-          kind: handler.kind,
-          mode: handler.mode,
-          output,
-          send: (frame) => send(streamRef, frame),
-          cancel: (reason) => cancel(streamRef, reason),
-          detach: () => detach(streamRef),
-        };
-        const record = {
-          session,
-          input,
-          output,
-          controller,
-          emit,
-          detached: false,
-          detachedAbort: false,
-          terminal: false,
-        };
-        active.set(streamRef, record);
-        output.push(emit({ kind: "opened", mode: handler.mode }));
+      Effect.withSpan("agentos.runtime.attached_stream.attach")(
+        Effect.gen(function* () {
+          const handler = yield* getAttachedStreamHandler(spec.registry, startSpec.kind);
+          const parsed = handler.parseStart(startSpec.payload);
+          if (!parsed.ok) return yield* Effect.fail(parsed.reason);
+          const now = startSpec.ts ?? (yield* spec.now());
+          const streamRef = spec.makeStreamRef();
+          const input = createAttachedStreamQueue<AttachedStreamInboundFrame>();
+          const output = createAttachedStreamQueue<AttachedStreamOutboundFrame>();
+          const controller = new AbortController();
+          let outSeq = 0;
+          const emit = (body: AttachedStreamOutboundBody): AttachedStreamOutboundFrame => {
+            const frame = attachedStreamOutboundFrame(streamRef, outSeq, body);
+            outSeq += 1;
+            return frame;
+          };
+          const session: AttachedStreamSession = {
+            streamRef,
+            kind: handler.kind,
+            mode: handler.mode,
+            output,
+            send: (frame) => send(streamRef, frame),
+            cancel: (reason) => cancel(streamRef, reason),
+            detach: () => detach(streamRef),
+          };
+          const record = {
+            session,
+            input,
+            output,
+            controller,
+            emit,
+            detached: false,
+            detachedAbort: false,
+            terminal: false,
+          };
+          active.set(streamRef, record);
+          output.push(emit({ kind: "opened", mode: handler.mode }));
 
-        const ctx = { scope: spec.scope, streamRef, now, signal: controller.signal };
-        yield* Effect.forkDetach(driveHandler(record, handler, parsed.start, ctx));
+          const ctx = { scope: spec.scope, streamRef, now, signal: controller.signal };
+          yield* Effect.forkDetach(driveHandler(record, handler, parsed.start, ctx));
 
-        return session;
-      }),
+          return session;
+        }),
+      ),
     cancelStream: (cancelSpec) => cancel(cancelSpec.streamRef, cancelSpec.reason),
   };
 };

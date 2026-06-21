@@ -31,60 +31,62 @@ export const runDynamicWorker = (
   policy: DynamicWorkerPolicy,
   request: DynamicWorkerRunRequest,
 ): Effect.Effect<DynamicWorkerRunResult, DynamicWorkerFailure | DynamicWorkerPolicyDenied> =>
-  Effect.gen(function* () {
-    const rejectPolicy = (denied: DynamicWorkerPolicyViolation): DynamicWorkerPolicyDenied =>
-      new DynamicWorkerPolicyDenied({
-        reason: denied.reason,
-        claim: settleDynamicWorkerPolicyDenied(request.claim, denied.reason),
-      });
-    const rejectFailure = (failure: DynamicWorkerProviderFailure): DynamicWorkerFailure =>
-      new DynamicWorkerFailure({
-        code: failure.code,
-        reason: dynamicWorkerFailureReason(failure),
-        ...(failure.status === undefined ? {} : { status: failure.status }),
-        ...(failure.workerId === undefined ? {} : { workerId: failure.workerId }),
-        claim: settleDynamicWorkerProviderFailure(request.claim, failure),
-      });
+  Effect.withSpan("agentos.dynamic_worker.run")(
+    Effect.gen(function* () {
+      const rejectPolicy = (denied: DynamicWorkerPolicyViolation): DynamicWorkerPolicyDenied =>
+        new DynamicWorkerPolicyDenied({
+          reason: denied.reason,
+          claim: settleDynamicWorkerPolicyDenied(request.claim, denied.reason),
+        });
+      const rejectFailure = (failure: DynamicWorkerProviderFailure): DynamicWorkerFailure =>
+        new DynamicWorkerFailure({
+          code: failure.code,
+          reason: dynamicWorkerFailureReason(failure),
+          ...(failure.status === undefined ? {} : { status: failure.status }),
+          ...(failure.workerId === undefined ? {} : { workerId: failure.workerId }),
+          claim: settleDynamicWorkerProviderFailure(request.claim, failure),
+        });
 
-    yield* validateDynamicWorkerRequest(request).pipe(Effect.mapError(rejectPolicy));
-    const runtimeScope = resolveRuntimeScope(request.claim.scopeRef);
-    yield* policy({
-      request,
-      runtimeScope,
-    }).pipe(Effect.mapError(rejectPolicy));
-    const started = yield* Clock.currentTimeMillis;
-    const result = yield* backend.run(request).pipe(
-      Effect.mapError(rejectFailure),
-      Effect.timeoutOrElse({
-        duration: Duration.millis(request.timeoutMs),
-        orElse: () =>
-          Effect.fail(
-            rejectFailure(
-              new DynamicWorkerProviderFailure({
-                code: "Timeout",
-                reason: `dynamic worker run exceeded ${request.timeoutMs}ms`,
-              }),
+      yield* validateDynamicWorkerRequest(request).pipe(Effect.mapError(rejectPolicy));
+      const runtimeScope = resolveRuntimeScope(request.claim.scopeRef);
+      yield* policy({
+        request,
+        runtimeScope,
+      }).pipe(Effect.mapError(rejectPolicy));
+      const started = yield* Clock.currentTimeMillis;
+      const result = yield* backend.run(request).pipe(
+        Effect.mapError(rejectFailure),
+        Effect.timeoutOrElse({
+          duration: Duration.millis(request.timeoutMs),
+          orElse: () =>
+            Effect.fail(
+              rejectFailure(
+                new DynamicWorkerProviderFailure({
+                  code: "Timeout",
+                  reason: `dynamic worker run exceeded ${request.timeoutMs}ms`,
+                }),
+              ),
             ),
-          ),
-      }),
-    );
-    const ended = yield* Clock.currentTimeMillis;
-    if (isProviderPending(result)) {
+        }),
+      );
+      const ended = yield* Clock.currentTimeMillis;
+      if (isProviderPending(result)) {
+        return {
+          ...result,
+          durationMs: ended - started,
+          claim: settleDynamicWorkerIndeterminate(request.claim, {
+            indeterminateId: result.witnessId,
+            ...(result.indeterminateKind === undefined
+              ? {}
+              : { indeterminateKind: result.indeterminateKind }),
+            ...(result.reason === undefined ? {} : { reason: result.reason }),
+          }),
+        };
+      }
       return {
         ...result,
         durationMs: ended - started,
-        claim: settleDynamicWorkerIndeterminate(request.claim, {
-          indeterminateId: result.witnessId,
-          ...(result.indeterminateKind === undefined
-            ? {}
-            : { indeterminateKind: result.indeterminateKind }),
-          ...(result.reason === undefined ? {} : { reason: result.reason }),
-        }),
+        claim: settleDynamicWorkerLived(request.claim, { workerId: result.workerId }),
       };
-    }
-    return {
-      ...result,
-      durationMs: ended - started,
-      claim: settleDynamicWorkerLived(request.claim, { workerId: result.workerId }),
-    };
-  });
+    }),
+  );

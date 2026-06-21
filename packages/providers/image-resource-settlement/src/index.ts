@@ -22,19 +22,21 @@ export const withImageResourceSettlement = <A, E, R, CE, CR, RE, RR>(
     readonly release: (error: E) => Effect.Effect<void, RE, RR>;
   },
 ): Effect.Effect<A, E | ImageResourceSettlementReconcileRequired, R | CR | RR> =>
-  Effect.matchEffect(effect, {
-    onFailure: (error) =>
-      settlement.release(error).pipe(
-        Effect.mapError(
-          (cause) => new ImageResourceSettlementReconcileRequired({ phase: "release", cause }),
+  Effect.withSpan("agentos.image_resource_settlement.with_settlement")(
+    Effect.matchEffect(effect, {
+      onFailure: (error) =>
+        settlement.release(error).pipe(
+          Effect.mapError(
+            (cause) => new ImageResourceSettlementReconcileRequired({ phase: "release", cause }),
+          ),
+          Effect.andThen(Effect.fail(error)),
         ),
-        Effect.andThen(Effect.fail(error)),
-      ),
-    onSuccess: (value) =>
-      settlement.consume(value).pipe(
-        Effect.mapError(
-          (cause) => new ImageResourceSettlementReconcileRequired({ phase: "consume", cause }),
+      onSuccess: (value) =>
+        settlement.consume(value).pipe(
+          Effect.mapError(
+            (cause) => new ImageResourceSettlementReconcileRequired({ phase: "consume", cause }),
+          ),
+          Effect.as(value),
         ),
-        Effect.as(value),
-      ),
-  });
+    }),
+  );

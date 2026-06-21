@@ -239,17 +239,19 @@ export function appendRuntimeDriverAction(
   RuntimeDriverActionResult | CompleteAfterToolsDriverActionResult,
   RuntimeStorageError | JsonStringifyError
 > {
-  return Effect.gen(function* () {
-    if (action.kind === "complete_after_tools") {
-      const events = yield* commitRuntimeEvents(ledger, action.events);
-      return {
-        kind: "complete_after_tools",
-        events: [events[0], events[1]],
-      } as CompleteAfterToolsDriverActionResult;
-    }
-    const event = yield* commitOneRuntimeEvent(ledger, action.event);
-    return { kind: action.kind, event } as RuntimeDriverActionResult;
-  });
+  return Effect.withSpan("agentos.runtime.driver.append_runtime_action")(
+    Effect.gen(function* () {
+      if (action.kind === "complete_after_tools") {
+        const events = yield* commitRuntimeEvents(ledger, action.events);
+        return {
+          kind: "complete_after_tools",
+          events: [events[0], events[1]],
+        } as CompleteAfterToolsDriverActionResult;
+      }
+      const event = yield* commitOneRuntimeEvent(ledger, action.event);
+      return { kind: action.kind, event } as RuntimeDriverActionResult;
+    }),
+  );
 }
 
 export const appendNextDriverAction = (
@@ -262,41 +264,43 @@ export const appendNextDriverAction = (
   DriverActionResult,
   BoundaryCommitRejected | RuntimeStorageError | JsonStringifyError
 > =>
-  Effect.gen(function* () {
-    switch (action.kind) {
-      case "park": {
-        const events = yield* services.boundaryEvents.commitWithRuntimeEvents(
-          decisionGateBoundaryContract,
-          DECISION_GATE_KIND.REQUESTED,
-          action.request,
-          () => [action.interruption],
-        );
-        const request = events[0];
-        const interruption = yield* decodeCommittedRuntimeEvent(
-          events[1] as RecordedLedgerEvent,
-          action.interruption.kind,
-        );
-        return { kind: "park", request, interruption };
+  Effect.withSpan("agentos.runtime.driver.append_next_action")(
+    Effect.gen(function* () {
+      switch (action.kind) {
+        case "park": {
+          const events = yield* services.boundaryEvents.commitWithRuntimeEvents(
+            decisionGateBoundaryContract,
+            DECISION_GATE_KIND.REQUESTED,
+            action.request,
+            () => [action.interruption],
+          );
+          const request = events[0];
+          const interruption = yield* decodeCommittedRuntimeEvent(
+            events[1] as RecordedLedgerEvent,
+            action.interruption.kind,
+          );
+          return { kind: "park", request, interruption };
+        }
+        case "resume": {
+          const events = yield* services.boundaryEvents.commitWithRuntimeEvents(
+            decisionGateBoundaryContract,
+            DECISION_GATE_KIND.CONSUMED,
+            action.consumed,
+            (consumedEventId) => [action.resumed(consumedEventId)],
+          );
+          const consumed = events[0];
+          const resumed = yield* decodeCommittedRuntimeEvent(
+            events[1] as RecordedLedgerEvent,
+            RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED,
+          );
+          return { kind: "resume", consumed, resumed };
+        }
+        case "complete_after_tools": {
+          return yield* appendRuntimeDriverAction(services.ledger, action);
+        }
+        default: {
+          return yield* appendRuntimeDriverAction(services.ledger, action);
+        }
       }
-      case "resume": {
-        const events = yield* services.boundaryEvents.commitWithRuntimeEvents(
-          decisionGateBoundaryContract,
-          DECISION_GATE_KIND.CONSUMED,
-          action.consumed,
-          (consumedEventId) => [action.resumed(consumedEventId)],
-        );
-        const consumed = events[0];
-        const resumed = yield* decodeCommittedRuntimeEvent(
-          events[1] as RecordedLedgerEvent,
-          RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED,
-        );
-        return { kind: "resume", consumed, resumed };
-      }
-      case "complete_after_tools": {
-        return yield* appendRuntimeDriverAction(services.ledger, action);
-      }
-      default: {
-        return yield* appendRuntimeDriverAction(services.ledger, action);
-      }
-    }
-  });
+    }),
+  );

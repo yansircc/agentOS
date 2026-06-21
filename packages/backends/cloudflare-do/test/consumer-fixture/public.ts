@@ -29,7 +29,8 @@ const trigger = {
   intentEventKind: "fixture.trigger.requested",
   cancellation: "cooperative" as const,
   parseIntent: () => triggerParseOk<Intent>({ ok: true }),
-  acquire: (intent: Intent) => Effect.succeed(intent),
+  acquire: (intent: Intent) =>
+    Effect.withSpan("agentos.test.consumer_fixture.trigger_acquire")(Effect.succeed(intent)),
   commit: (outcome: Intent, tx: TriggerTx) => {
     tx.insertEvent({ kind: "fixture.trigger.done", payload: outcome });
   },

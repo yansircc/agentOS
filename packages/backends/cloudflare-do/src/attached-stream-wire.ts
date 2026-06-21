@@ -5,9 +5,9 @@ import {
 } from "@agent-os/attached-stream";
 import type { AttachedStreamSession } from "@agent-os/runtime";
 import { createAttachedStreamSseResponse } from "@agent-os/sse-http";
-import { Effect } from "effect";
+import type { Effect as EffectType } from "effect";
 
-type AttachedStreamEffectRunner = <A, E>(effect: Effect.Effect<A, E>) => Promise<A>;
+type AttachedStreamEffectRunner = <A, E>(effect: EffectType.Effect<A, E>) => Promise<A>;
 
 const attachedStreamWebSocketResponse = (
   session: AttachedStreamSession,

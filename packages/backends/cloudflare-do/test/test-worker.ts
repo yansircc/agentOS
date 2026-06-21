@@ -98,7 +98,8 @@ import { cloudflareRouteKeyFromScopeRef } from "../src/ledger/identity";
 import { makeCloudflareBackendCoreLayer } from "../src/runtime-core";
 import { findNextDue } from "../src/due-work";
 
-const allowToolAdmitter = () => Effect.succeed({ ok: true as const });
+const allowToolAdmitter = () =>
+  Effect.withSpan("agentos.test.cloudflare_do.allow_tool")(Effect.succeed({ ok: true as const }));
 
 export class TestAgentDO extends DurableObject {}
 

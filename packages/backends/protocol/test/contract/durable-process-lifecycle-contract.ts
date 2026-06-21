@@ -136,114 +136,118 @@ export const runDurableProcessLifecycleContract = (
 ): void => {
   describe(name + " durable process lifecycle", () => {
     it.effect("classifies scheduled completed and cancelled terminal states", () =>
-      Effect.gen(function* () {
-        yield* Effect.scoped(
-          Effect.gen(function* () {
-            const driver = yield* Effect.acquireRelease(
-              Effect.promise(() => Promise.resolve(makeDriver([completedTrigger]))),
-              (driver) => Effect.promise(() => driver.dispose()),
-            );
+      Effect.withSpan("agentos.test.durable_process_lifecycle.terminal_states")(
+        Effect.gen(function* () {
+          yield* Effect.scoped(
+            Effect.gen(function* () {
+              const driver = yield* Effect.acquireRelease(
+                Effect.promise(() => Promise.resolve(makeDriver([completedTrigger]))),
+                (driver) => Effect.promise(() => driver.dispose()),
+              );
 
-            const scheduled = yield* Effect.promise(() =>
-              driver.enqueue(completedTrigger, { id: "scheduled" }, 10),
-            );
-            expect(phaseFor(yield* Effect.promise(() => driver.processes()), scheduled.id)).toBe(
-              "scheduled",
-            );
+              const scheduled = yield* Effect.promise(() =>
+                driver.enqueue(completedTrigger, { id: "scheduled" }, 10),
+              );
+              expect(phaseFor(yield* Effect.promise(() => driver.processes()), scheduled.id)).toBe(
+                "scheduled",
+              );
 
-            yield* Effect.promise(() => driver.drainDue(10));
-            expect(phaseFor(yield* Effect.promise(() => driver.processes()), scheduled.id)).toBe(
-              "completed",
-            );
-            yield* Effect.promise(() =>
-              driver.cancel(completedTrigger.kind, scheduled.id, "cancel after completed"),
-            );
-            yield* Effect.promise(() => driver.drainDue(10));
-            expect(phaseFor(yield* Effect.promise(() => driver.processes()), scheduled.id)).toBe(
-              "completed",
-            );
+              yield* Effect.promise(() => driver.drainDue(10));
+              expect(phaseFor(yield* Effect.promise(() => driver.processes()), scheduled.id)).toBe(
+                "completed",
+              );
+              yield* Effect.promise(() =>
+                driver.cancel(completedTrigger.kind, scheduled.id, "cancel after completed"),
+              );
+              yield* Effect.promise(() => driver.drainDue(10));
+              expect(phaseFor(yield* Effect.promise(() => driver.processes()), scheduled.id)).toBe(
+                "completed",
+              );
 
-            const cancelled = yield* Effect.promise(() =>
-              driver.enqueue(completedTrigger, { id: "cancelled" }, 20),
-            );
-            yield* Effect.promise(() =>
-              driver.cancel(completedTrigger.kind, cancelled.id, "cancel before acquire"),
-            );
-            expect(phaseFor(yield* Effect.promise(() => driver.processes()), cancelled.id)).toBe(
-              "cancelled",
-            );
-            yield* Effect.promise(() => driver.drainDue(20));
-            expect(phaseFor(yield* Effect.promise(() => driver.processes()), cancelled.id)).toBe(
-              "cancelled",
-            );
-          }),
-        );
-      }),
+              const cancelled = yield* Effect.promise(() =>
+                driver.enqueue(completedTrigger, { id: "cancelled" }, 20),
+              );
+              yield* Effect.promise(() =>
+                driver.cancel(completedTrigger.kind, cancelled.id, "cancel before acquire"),
+              );
+              expect(phaseFor(yield* Effect.promise(() => driver.processes()), cancelled.id)).toBe(
+                "cancelled",
+              );
+              yield* Effect.promise(() => driver.drainDue(20));
+              expect(phaseFor(yield* Effect.promise(() => driver.processes()), cancelled.id)).toBe(
+                "cancelled",
+              );
+            }),
+          );
+        }),
+      ),
     );
 
     it.effect("classifies claimed cancel-requested and redriven active states", () =>
-      Effect.gen(function* () {
-        const blocking = createBlockingTrigger();
-        yield* Effect.scoped(
-          Effect.gen(function* () {
-            const driver = yield* Effect.acquireRelease(
-              Effect.promise(() => Promise.resolve(makeDriver([blocking.trigger]))),
-              (driver) => Effect.promise(() => driver.dispose()),
-            );
+      Effect.withSpan("agentos.test.durable_process_lifecycle.active_states")(
+        Effect.gen(function* () {
+          const blocking = createBlockingTrigger();
+          yield* Effect.scoped(
+            Effect.gen(function* () {
+              const driver = yield* Effect.acquireRelease(
+                Effect.promise(() => Promise.resolve(makeDriver([blocking.trigger]))),
+                (driver) => Effect.promise(() => driver.dispose()),
+              );
 
-            const claimed = yield* Effect.promise(() =>
-              driver.enqueue(blocking.trigger, { id: "claimed" }, 100),
-            );
-            const firstDrain = driver.drainDue(100);
-            yield* Effect.promise(() => blocking.waitForAcquire(1));
-            expect(phaseFor(yield* Effect.promise(() => driver.processes()), claimed.id)).toBe(
-              "claimed",
-            );
-            yield* Effect.promise(() =>
-              driver.cancel(blocking.trigger.kind, claimed.id, "cancel while claimed"),
-            );
-            expect(phaseFor(yield* Effect.promise(() => driver.processes()), claimed.id)).toBe(
-              "cancel_requested",
-            );
-            blocking.releaseAcquire(0);
-            yield* Effect.promise(() => firstDrain);
-            expect(
-              stateFor(yield* Effect.promise(() => driver.processes()), claimed.id),
-            ).toMatchObject({
-              phase: "completed_after_cancel_requested",
-              cancellation: { reason: "cancel while claimed" },
-            });
+              const claimed = yield* Effect.promise(() =>
+                driver.enqueue(blocking.trigger, { id: "claimed" }, 100),
+              );
+              const firstDrain = driver.drainDue(100);
+              yield* Effect.promise(() => blocking.waitForAcquire(1));
+              expect(phaseFor(yield* Effect.promise(() => driver.processes()), claimed.id)).toBe(
+                "claimed",
+              );
+              yield* Effect.promise(() =>
+                driver.cancel(blocking.trigger.kind, claimed.id, "cancel while claimed"),
+              );
+              expect(phaseFor(yield* Effect.promise(() => driver.processes()), claimed.id)).toBe(
+                "cancel_requested",
+              );
+              blocking.releaseAcquire(0);
+              yield* Effect.promise(() => firstDrain);
+              expect(
+                stateFor(yield* Effect.promise(() => driver.processes()), claimed.id),
+              ).toMatchObject({
+                phase: "completed_after_cancel_requested",
+                cancellation: { reason: "cancel while claimed" },
+              });
 
-            const redriven = yield* Effect.promise(() =>
-              driver.enqueue(blocking.trigger, { id: "redriven" }, 200),
-            );
-            const redriveFirstDrain = driver.drainDue(200);
-            yield* Effect.promise(() => blocking.waitForAcquire(2));
-            const redriveSecondDrain = driver.drainDue(202);
-            yield* Effect.promise(() => blocking.waitForAcquire(3));
-            expect(phaseFor(yield* Effect.promise(() => driver.processes()), redriven.id)).toBe(
-              "redriven",
-            );
-            blocking.releaseAcquire(2);
-            yield* Effect.promise(() => redriveSecondDrain);
-            blocking.releaseAcquire(1);
-            yield* Effect.promise(() => redriveFirstDrain);
+              const redriven = yield* Effect.promise(() =>
+                driver.enqueue(blocking.trigger, { id: "redriven" }, 200),
+              );
+              const redriveFirstDrain = driver.drainDue(200);
+              yield* Effect.promise(() => blocking.waitForAcquire(2));
+              const redriveSecondDrain = driver.drainDue(202);
+              yield* Effect.promise(() => blocking.waitForAcquire(3));
+              expect(phaseFor(yield* Effect.promise(() => driver.processes()), redriven.id)).toBe(
+                "redriven",
+              );
+              blocking.releaseAcquire(2);
+              yield* Effect.promise(() => redriveSecondDrain);
+              blocking.releaseAcquire(1);
+              yield* Effect.promise(() => redriveFirstDrain);
 
-            expect(
-              stateFor(yield* Effect.promise(() => driver.processes()), redriven.id),
-            ).toMatchObject({
-              phase: "completed",
-              redriveCount: 1,
-            });
-            yield* Effect.promise(() => driver.drainDue(202));
-            const redrivenDone = payloadsOf<{ readonly id: string; readonly mode: string }>(
-              yield* Effect.promise(() => driver.events()),
-              "lifecycle.blocking.done",
-            ).filter((payload) => payload.id === "redriven");
-            expect(redrivenDone).toEqual([{ id: "redriven", mode: "redrive" }]);
-          }),
-        );
-      }),
+              expect(
+                stateFor(yield* Effect.promise(() => driver.processes()), redriven.id),
+              ).toMatchObject({
+                phase: "completed",
+                redriveCount: 1,
+              });
+              yield* Effect.promise(() => driver.drainDue(202));
+              const redrivenDone = payloadsOf<{ readonly id: string; readonly mode: string }>(
+                yield* Effect.promise(() => driver.events()),
+                "lifecycle.blocking.done",
+              ).filter((payload) => payload.id === "redriven");
+              expect(redrivenDone).toEqual([{ id: "redriven", mode: "redrive" }]);
+            }),
+          );
+        }),
+      ),
     );
   });
 };

@@ -1,4 +1,4 @@
-import type { Effect } from "effect";
+import type { Effect as EffectType } from "effect";
 import type { PreClaim, RejectedClaim } from "@agent-os/kernel/effect-claim";
 
 import type {
@@ -113,22 +113,22 @@ export interface WorkspaceSessionFailure {
 export interface WorkspaceSessionCarrier {
   readonly start: (
     request: WorkspaceSessionStartRequest,
-  ) => Effect.Effect<WorkspaceSessionStartedPayload, WorkspaceSessionFailure>;
+  ) => EffectType.Effect<WorkspaceSessionStartedPayload, WorkspaceSessionFailure>;
   readonly restore: (
     request: WorkspaceSessionRestoreRequest,
-  ) => Effect.Effect<WorkspaceSessionRestoredPayload, WorkspaceSessionFailure>;
+  ) => EffectType.Effect<WorkspaceSessionRestoredPayload, WorkspaceSessionFailure>;
   readonly backup: (
     request: WorkspaceSessionBackupRequest,
-  ) => Effect.Effect<WorkspaceSessionBackedUpPayload, WorkspaceSessionFailure>;
+  ) => EffectType.Effect<WorkspaceSessionBackedUpPayload, WorkspaceSessionFailure>;
   readonly allocatePreview: (
     request: WorkspaceSessionPreviewRequest,
-  ) => Effect.Effect<WorkspaceSessionPreviewAllocatedPayload, WorkspaceSessionFailure>;
+  ) => EffectType.Effect<WorkspaceSessionPreviewAllocatedPayload, WorkspaceSessionFailure>;
   readonly exec: (
     request: WorkspaceSessionExecRequest,
-  ) => Effect.Effect<WorkspaceSessionExecResult, WorkspaceSessionExecFailure>;
+  ) => EffectType.Effect<WorkspaceSessionExecResult, WorkspaceSessionExecFailure>;
   readonly destroy: (
     request: WorkspaceSessionDestroyRequest,
-  ) => Effect.Effect<WorkspaceSessionDestroyedPayload, WorkspaceSessionFailure>;
+  ) => EffectType.Effect<WorkspaceSessionDestroyedPayload, WorkspaceSessionFailure>;
 }
 
 export const workspaceSessionFailedPayload = (

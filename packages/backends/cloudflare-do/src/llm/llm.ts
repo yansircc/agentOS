@@ -24,6 +24,12 @@ const missingLlmTransport = () =>
 
 export const MissingLlmTransportLive: Layer.Layer<LlmTransport, never, RefResolverService> =
   Layer.succeed(LlmTransport, {
-    resolveRoute: () => Effect.fail(missingLlmTransport()),
-    call: () => Effect.fail(missingLlmTransport()),
+    resolveRoute: () =>
+      Effect.fail(missingLlmTransport()).pipe(
+        Effect.withSpan("agentos.cloudflare_do.llm.missing.resolve_route"),
+      ),
+    call: () =>
+      Effect.fail(missingLlmTransport()).pipe(
+        Effect.withSpan("agentos.cloudflare_do.llm.missing.call"),
+      ),
   });

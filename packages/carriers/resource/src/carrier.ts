@@ -1,4 +1,4 @@
-import type { Effect } from "effect";
+import type { Effect as EffectType } from "effect";
 import type { IndeterminateClaim, PreClaim, RejectedClaim } from "@agent-os/kernel/effect-claim";
 import type {
   CredentialMaterialRef,
@@ -94,16 +94,16 @@ const isResourceIndeterminateFailure = (
 export interface ResourceCarrier {
   readonly provision: (
     request: ResourceProvisionRequest,
-  ) => Effect.Effect<ResourceProvisionedPayload, ResourceFailure>;
+  ) => EffectType.Effect<ResourceProvisionedPayload, ResourceFailure>;
   readonly bind: (
     request: ResourceBindRequest,
-  ) => Effect.Effect<ResourceBoundPayload, ResourceFailure>;
+  ) => EffectType.Effect<ResourceBoundPayload, ResourceFailure>;
   readonly mutate: (
     request: ResourceMutationRequest,
-  ) => Effect.Effect<ResourceMutationRecordedPayload, ResourceFailure>;
+  ) => EffectType.Effect<ResourceMutationRecordedPayload, ResourceFailure>;
   readonly destroy: (
     request: ResourceDestroyRequest,
-  ) => Effect.Effect<ResourceDestroyedPayload, ResourceFailure>;
+  ) => EffectType.Effect<ResourceDestroyedPayload, ResourceFailure>;
 }
 
 export const resourceFailedPayload = (

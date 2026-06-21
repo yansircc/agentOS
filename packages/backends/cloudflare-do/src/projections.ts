@@ -221,4 +221,4 @@ export const projectAdmissionLease = (
     const rows = yield* loadAdmissionRows(sql, identity, factOwnerRef);
     const { lease } = projectLease(rows, key, now);
     return lease.status === "unknown" ? null : lease;
-  });
+  }).pipe(Effect.withSpan("agentos.cloudflare_do.projection.admission_lease"));

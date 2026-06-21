@@ -51,7 +51,7 @@ export const InMemoryResourcesLive = (state: InMemoryBackendState): Layer.Layer<
           ])
           .pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("resource", cause)));
         return { eventId: event!.id };
-      }),
+      }).pipe(Effect.withSpan("agentos.in_memory.resources.grant")),
 
     reserve: (identity, spec) =>
       Effect.gen(function* () {
@@ -106,7 +106,7 @@ export const InMemoryResourcesLive = (state: InMemoryBackendState): Layer.Layer<
           ])
           .pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("resource", cause)));
         return { reservationId };
-      }),
+      }).pipe(Effect.withSpan("agentos.in_memory.resources.reserve")),
 
     consume: (identity, spec) =>
       Effect.gen(function* () {
@@ -137,7 +137,7 @@ export const InMemoryResourcesLive = (state: InMemoryBackendState): Layer.Layer<
             },
           ])
           .pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("resource", cause)));
-      }),
+      }).pipe(Effect.withSpan("agentos.in_memory.resources.consume")),
 
     release: (identity, spec) =>
       Effect.gen(function* () {
@@ -168,11 +168,11 @@ export const InMemoryResourcesLive = (state: InMemoryBackendState): Layer.Layer<
             },
           ])
           .pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("resource", cause)));
-      }),
+      }).pipe(Effect.withSpan("agentos.in_memory.resources.release")),
 
     project: (identity, key) =>
       Effect.map(
         loadResourceState(state, identity),
         (projected) => projected.byKey.get(key) ?? emptyResourceProjection(),
-      ),
+      ).pipe(Effect.withSpan("agentos.in_memory.resources.project")),
   });

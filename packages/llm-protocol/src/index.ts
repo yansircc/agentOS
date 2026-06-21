@@ -1,4 +1,5 @@
-import { Context, Effect, Schema } from "effect";
+import { Context, Schema } from "effect";
+import type { Effect as EffectType } from "effect";
 import type { AgentSchema } from "@agent-os/kernel/agent-schema";
 import type { UpstreamFailure } from "@agent-os/kernel/errors";
 import type { MaterialRef } from "@agent-os/kernel/material-ref";
@@ -47,11 +48,11 @@ export class LlmTransport extends Context.Service<
   {
     readonly resolveRoute: (
       route: LlmRoute,
-    ) => Effect.Effect<LlmTransportRouteDescriptor, UpstreamFailure>;
+    ) => EffectType.Effect<LlmTransportRouteDescriptor, UpstreamFailure>;
     readonly call: (
       request: LlmRequest,
       options?: LlmCallOptions,
-    ) => Effect.Effect<LlmResponse, UpstreamFailure>;
+    ) => EffectType.Effect<LlmResponse, UpstreamFailure>;
   }
 >()("@agent-os/LlmTransport") {}
 

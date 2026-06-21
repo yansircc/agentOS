@@ -239,22 +239,24 @@ export const commitBoundaryEvent = (
   RecordedLedgerEvent,
   BoundaryCommitRejected | RuntimeStorageError | JsonStringifyError
 > =>
-  Effect.gen(function* () {
-    const rejected = validateBoundaryEventPayload(contract, event, payload);
-    if (rejected !== null) {
-      return yield* Effect.fail(rejected);
-    }
-    const objectPayload = payload as Readonly<Record<string, unknown>>;
-    const identity = boundaryCommitIdentity(contract, event, objectPayload);
-    const committed = yield* commit(identity);
-    const committedRejected = validateCommittedBoundaryEvent(
-      contract,
-      event,
-      objectPayload,
-      committed,
-    );
-    if (committedRejected !== null) {
-      return yield* Effect.fail(committedRejected);
-    }
-    return committed;
-  });
+  Effect.withSpan("agentos.runtime.boundary_commit.commit")(
+    Effect.gen(function* () {
+      const rejected = validateBoundaryEventPayload(contract, event, payload);
+      if (rejected !== null) {
+        return yield* Effect.fail(rejected);
+      }
+      const objectPayload = payload as Readonly<Record<string, unknown>>;
+      const identity = boundaryCommitIdentity(contract, event, objectPayload);
+      const committed = yield* commit(identity);
+      const committedRejected = validateCommittedBoundaryEvent(
+        contract,
+        event,
+        objectPayload,
+        committed,
+      );
+      if (committedRejected !== null) {
+        return yield* Effect.fail(committedRejected);
+      }
+      return committed;
+    }),
+  );

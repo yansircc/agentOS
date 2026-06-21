@@ -29,7 +29,7 @@ export const InMemorySchedulerLive = (
                 data,
               )
               .pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("scheduler", cause)));
-          }),
+          }).pipe(Effect.withSpan("agentos.in_memory.scheduler.schedule")),
       };
     }),
   );

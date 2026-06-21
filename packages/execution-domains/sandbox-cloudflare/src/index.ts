@@ -128,40 +128,42 @@ export const makeCloudflareSandboxBackend = (
   options: CloudflareSandboxBackendOptions,
 ): SandboxBackend => ({
   run: (request) =>
-    Effect.gen(function* () {
-      const client = yield* Effect.tryPromise({
-        try: () => Promise.resolve(options.getSandbox(request)),
-        catch: (cause: unknown): SandboxFailure => classifyCloudflareFailure(cause),
-      });
-      const sandboxId = options.sandboxId?.(client, request) ?? client.id ?? "cloudflare";
+    Effect.withSpan("agentos.sandbox.cloudflare.run")(
+      Effect.gen(function* () {
+        const client = yield* Effect.tryPromise({
+          try: () => Promise.resolve(options.getSandbox(request)),
+          catch: (cause: unknown): SandboxFailure => classifyCloudflareFailure(cause),
+        });
+        const sandboxId = options.sandboxId?.(client, request) ?? client.id ?? "cloudflare";
 
-      for (const [path, content] of Object.entries(request.files ?? {})) {
-        const writeFile = client.writeFile;
-        if (writeFile === undefined) {
-          return yield* Effect.fail(
-            new SandboxFailure({
-              code: "ProviderFailure",
-              reason: "Cloudflare sandbox client does not expose writeFile",
-              sandboxId,
-            }),
-          );
+        for (const [path, content] of Object.entries(request.files ?? {})) {
+          const writeFile = client.writeFile;
+          if (writeFile === undefined) {
+            return yield* Effect.fail(
+              new SandboxFailure({
+                code: "ProviderFailure",
+                reason: "Cloudflare sandbox client does not expose writeFile",
+                sandboxId,
+              }),
+            );
+          }
+          yield* Effect.tryPromise({
+            try: () => writeFile(path, fileContent(content)),
+            catch: (cause: unknown): SandboxFailure => classifyCloudflareFailure(cause, sandboxId),
+          });
         }
-        yield* Effect.tryPromise({
-          try: () => writeFile(path, fileContent(content)),
+
+        const raw = yield* Effect.tryPromise({
+          try: (signal) =>
+            client.exec(request.command, {
+              args: request.args,
+              cwd: request.cwd,
+              timeoutMs: request.timeoutMs,
+              signal,
+            }),
           catch: (cause: unknown): SandboxFailure => classifyCloudflareFailure(cause, sandboxId),
         });
-      }
-
-      const raw = yield* Effect.tryPromise({
-        try: (signal) =>
-          client.exec(request.command, {
-            args: request.args,
-            cwd: request.cwd,
-            timeoutMs: request.timeoutMs,
-            signal,
-          }),
-        catch: (cause: unknown): SandboxFailure => classifyCloudflareFailure(cause, sandboxId),
-      });
-      return normalizeExecResult(raw, sandboxId);
-    }),
+        return normalizeExecResult(raw, sandboxId);
+      }),
+    ),
 });

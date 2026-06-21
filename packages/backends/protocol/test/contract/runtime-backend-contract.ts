@@ -301,10 +301,12 @@ export const runRuntimeBackendContractSuite = (
   const withDriver = (
     fn: (driver: RuntimeBackendContractDriver) => Effect.Effect<void>,
   ): Effect.Effect<void> =>
-    Effect.gen(function* () {
-      const driver = yield* promise(() => makeDriver());
-      yield* fn(driver).pipe(Effect.ensuring(promise(() => driver.dispose())));
-    });
+    Effect.withSpan("agentos.test.runtime_backend.with_driver")(
+      Effect.gen(function* () {
+        const driver = yield* promise(() => makeDriver());
+        yield* fn(driver).pipe(Effect.ensuring(promise(() => driver.dispose())));
+      }),
+    );
 
   describe(name + " runtime backend protocol contract", () => {
     it.effect("satisfies the ledger prefix law for cursor, limit, kind, and stream reads", () =>
@@ -1384,10 +1386,12 @@ export const runDispatchReceiveConcurrencyContract = (
   const withDriver = (
     fn: (driver: RuntimeBackendContractDriver) => Effect.Effect<void>,
   ): Effect.Effect<void> =>
-    Effect.gen(function* () {
-      const driver = yield* promise(() => makeDriver());
-      yield* fn(driver).pipe(Effect.ensuring(promise(() => driver.dispose())));
-    });
+    Effect.withSpan("agentos.test.dispatch_receive_concurrency.with_driver")(
+      Effect.gen(function* () {
+        const driver = yield* promise(() => makeDriver());
+        yield* fn(driver).pipe(Effect.ensuring(promise(() => driver.dispose())));
+      }),
+    );
 
   describe(name + " dispatch receive concurrency contract", () => {
     it.effect("linearizes concurrent dispatch receives by source and idempotency key", () =>

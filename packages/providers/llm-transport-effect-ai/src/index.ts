@@ -236,9 +236,10 @@ const usageDecodeFailure = (field: string): ProviderOutputDecodeError =>
 
 const withoutTrailingSlash = (value: string): string => value.replace(/\/$/, "");
 
-const credentialPlaceholder = (credentialRef: string): string => `\${credential:${credentialRef}}`;
+const credentialPlaceholder = (credentialRef: string): string =>
+  "${credential:" + credentialRef + "}";
 
-const endpointPlaceholder = (endpointRef: string): string => `\${endpoint:${endpointRef}}`;
+const endpointPlaceholder = (endpointRef: string): string => "${endpoint:" + endpointRef + "}";
 
 const chatBodySchema = (modelId: string): LlmWireDescriptor["bodySchema"] => ({
   type: "object",
@@ -262,10 +263,10 @@ const effectAiWireDescriptor = (resolved: EffectAiResolvedRoute): LlmWireDescrip
     case "openai-chat-compatible":
       return {
         method: "POST",
-        url: `${endpointPlaceholder(resolved.route.endpointRef)}/chat/completions`,
+        url: endpointPlaceholder(resolved.route.endpointRef) + "/chat/completions",
         headers: [
           ["accept", "application/json"],
-          ["authorization", `Bearer ${credentialPlaceholder(resolved.route.credentialRef)}`],
+          ["authorization", "Bearer " + credentialPlaceholder(resolved.route.credentialRef)],
           ["content-type", "application/json"],
         ],
         bodySchema: chatBodySchema(resolved.route.modelId),
@@ -273,7 +274,7 @@ const effectAiWireDescriptor = (resolved: EffectAiResolvedRoute): LlmWireDescrip
     case "anthropic-messages":
       return {
         method: "POST",
-        url: `${endpointPlaceholder(resolved.route.endpointRef)}/v1/messages`,
+        url: endpointPlaceholder(resolved.route.endpointRef) + "/v1/messages",
         headers: [
           ["anthropic-version", resolved.route.anthropicVersion ?? ANTHROPIC_DEFAULT_VERSION],
           ["content-type", "application/json"],
@@ -288,13 +289,13 @@ const effectAiRouteDescriptor = (resolved: EffectAiResolvedRoute): LlmTransportR
   wireDescriptor: effectAiWireDescriptor(resolved),
   providerOutputAdapterId:
     resolved.route.kind === "openai-chat-compatible"
-      ? `${resolved.route.kind}@${OPENAI_CHAT_PROVIDER_OUTPUT_ADAPTER_VERSION}`
-      : `${resolved.route.kind}@${EFFECT_AI_PROVIDER_OUTPUT_ADAPTER_VERSION}`,
+      ? resolved.route.kind + "@" + OPENAI_CHAT_PROVIDER_OUTPUT_ADAPTER_VERSION
+      : resolved.route.kind + "@" + EFFECT_AI_PROVIDER_OUTPUT_ADAPTER_VERSION,
   providerOutputAdapterVersion:
     resolved.route.kind === "openai-chat-compatible"
       ? OPENAI_CHAT_PROVIDER_OUTPUT_ADAPTER_VERSION
       : EFFECT_AI_PROVIDER_OUTPUT_ADAPTER_VERSION,
-  transportAdapterId: `effect-ai@${EFFECT_AI_TRANSPORT_ADAPTER_VERSION}`,
+  transportAdapterId: "effect-ai@" + EFFECT_AI_TRANSPORT_ADAPTER_VERSION,
   transportAdapterVersion: EFFECT_AI_TRANSPORT_ADAPTER_VERSION,
 });
 
@@ -351,61 +352,63 @@ const allowlistedToolCallMetadata = (
 export const effectAiPromptFromMessages = (
   messages: ReadonlyArray<LlmMessage>,
 ): Effect.Effect<RawInput, EffectAiPromptError> =>
-  Effect.forEach(messages, (message): Effect.Effect<MessageEncoded, EffectAiPromptError> => {
-    switch (message.role) {
-      case "system":
-        return Effect.succeed({
-          role: "system",
-          content: message.content ?? "",
-        });
-      case "user":
-        return Effect.succeed({
-          role: "user",
-          content: [{ type: "text", text: message.content ?? "" }],
-        });
-      case "assistant":
-        return Effect.gen(function* () {
-          const content: AssistantMessagePartEncoded[] = [];
-          if (message.content !== null && message.content !== "") {
-            content.push({ type: "text", text: message.content });
-          }
-          for (const call of message.tool_calls ?? []) {
-            const options = allowlistedPromptOptions(call.metadata);
-            content.push({
-              type: "tool-call",
-              id: call.id,
-              name: call.function.name,
-              params: yield* parseJsonOrText(call.function.arguments, call.id),
-              providerExecuted: false,
-              ...(options === undefined ? {} : { options }),
-            });
-          }
-          return { role: "assistant", content };
-        });
-      case "tool":
-        return Effect.gen(function* () {
-          if (message.name === undefined || message.name.length === 0) {
-            return yield* new EffectAiPromptError({
-              reason: "tool_result_name_missing",
-              toolCallId: message.tool_call_id,
-            });
-          }
-          return {
-            role: "tool",
-            content: [
-              {
-                type: "tool-result",
-                id: message.tool_call_id ?? "",
-                name: message.name,
-                isFailure: false,
-                result: yield* parseJsonOrText(message.content, message.tool_call_id),
+  Effect.withSpan("agentos.llm_transport.effect_ai.prompt_from_messages")(
+    Effect.forEach(messages, (message): Effect.Effect<MessageEncoded, EffectAiPromptError> => {
+      switch (message.role) {
+        case "system":
+          return Effect.succeed({
+            role: "system",
+            content: message.content ?? "",
+          });
+        case "user":
+          return Effect.succeed({
+            role: "user",
+            content: [{ type: "text", text: message.content ?? "" }],
+          });
+        case "assistant":
+          return Effect.gen(function* () {
+            const content: AssistantMessagePartEncoded[] = [];
+            if (message.content !== null && message.content !== "") {
+              content.push({ type: "text", text: message.content });
+            }
+            for (const call of message.tool_calls ?? []) {
+              const options = allowlistedPromptOptions(call.metadata);
+              content.push({
+                type: "tool-call",
+                id: call.id,
+                name: call.function.name,
+                params: yield* parseJsonOrText(call.function.arguments, call.id),
                 providerExecuted: false,
-              },
-            ],
-          };
-        });
-    }
-  });
+                ...(options === undefined ? {} : { options }),
+              });
+            }
+            return { role: "assistant", content };
+          });
+        case "tool":
+          return Effect.gen(function* () {
+            if (message.name === undefined || message.name.length === 0) {
+              return yield* new EffectAiPromptError({
+                reason: "tool_result_name_missing",
+                toolCallId: message.tool_call_id,
+              });
+            }
+            return {
+              role: "tool",
+              content: [
+                {
+                  type: "tool-result",
+                  id: message.tool_call_id ?? "",
+                  name: message.name,
+                  isFailure: false,
+                  result: yield* parseJsonOrText(message.content, message.tool_call_id),
+                  providerExecuted: false,
+                },
+              ],
+            };
+          });
+      }
+    }),
+  );
 
 export const effectAiToolFromDefinition = (definition: ToolDefinition): AnyTool =>
   makeDynamicTool(definition.function.name, {
@@ -499,42 +502,44 @@ export const normalizeEffectAiResponse = (
   | EffectAiUnsupportedOutputPart
   | EffectAiJsonEncodeFailed
 > =>
-  Effect.gen(function* () {
-    const usage = yield* normalizeUsage(response.usage);
-    const items: LlmOutputItem[] = [];
-    for (const part of response.content as ReadonlyArray<ResponseAnyPart>) {
-      switch (part.type) {
-        case "text":
-          if (part.text.length > 0) items.push({ type: "message", text: part.text });
-          break;
-        case "reasoning":
-          {
-            const metadata = allowlistedToolCallMetadata(part.metadata);
-            items.push({
-              type: "reasoning",
-              redacted: true,
-              ...(metadata === undefined ? {} : { metadata }),
-            });
-          }
-          break;
-        case "tool-call":
-          items.push({ type: "tool_call", call: yield* normalizeToolCall(part) });
-          break;
-        case "tool-result":
-          items.push(yield* normalizeToolResult(part));
-          break;
-        case "error":
-          items.push({ type: "error", message: String(part.error) });
-          break;
-        case "finish":
-        case "response-metadata":
-          break;
-        default:
-          return yield* new EffectAiUnsupportedOutputPart({ part: part.type });
+  Effect.withSpan("agentos.llm_transport.effect_ai.normalize_response")(
+    Effect.gen(function* () {
+      const usage = yield* normalizeUsage(response.usage);
+      const items: LlmOutputItem[] = [];
+      for (const part of response.content as ReadonlyArray<ResponseAnyPart>) {
+        switch (part.type) {
+          case "text":
+            if (part.text.length > 0) items.push({ type: "message", text: part.text });
+            break;
+          case "reasoning":
+            {
+              const metadata = allowlistedToolCallMetadata(part.metadata);
+              items.push({
+                type: "reasoning",
+                redacted: true,
+                ...(metadata === undefined ? {} : { metadata }),
+              });
+            }
+            break;
+          case "tool-call":
+            items.push({ type: "tool_call", call: yield* normalizeToolCall(part) });
+            break;
+          case "tool-result":
+            items.push(yield* normalizeToolResult(part));
+            break;
+          case "error":
+            items.push({ type: "error", message: String(part.error) });
+            break;
+          case "finish":
+          case "response-metadata":
+            break;
+          default:
+            return yield* new EffectAiUnsupportedOutputPart({ part: part.type });
+        }
       }
-    }
-    return { items, usage };
-  });
+      return { items, usage };
+    }),
+  );
 
 const toolChoiceForRequest = (request: LlmRequest): ToolChoice<string> | undefined =>
   request.tool_choice === undefined
@@ -720,40 +725,46 @@ export const callEffectAiLanguageModel = (
   request: LlmRequest,
   options: LlmCallOptions = {},
 ): Effect.Effect<LlmResponse, UpstreamFailure> =>
-  Effect.gen(function* () {
-    const prompt = yield* effectAiPromptFromMessages(request.messages);
-    const toolkit =
-      request.tools === undefined || request.tools.length === 0
-        ? undefined
-        : effectAiToolkitFromToolDefinitions(request.tools);
-    const response =
-      toolkit === undefined
-        ? yield* withAbortSignal(
-            model.generateText({
-              prompt,
-              disableToolCallResolution: true,
-            }),
-            options.signal,
-          )
-        : yield* withAbortSignal(
-            model.generateText({
-              prompt,
-              toolkit,
-              disableToolCallResolution: true,
-              toolChoice: toolChoiceForRequest(request),
-            }),
-            options.signal,
-          );
-    return yield* normalizeEffectAiResponse(response);
-  }).pipe(Effect.mapError((cause) => new UpstreamFailure({ cause })));
+  Effect.withSpan("agentos.llm_transport.effect_ai.call_model")(
+    Effect.gen(function* () {
+      const prompt = yield* effectAiPromptFromMessages(request.messages);
+      const toolkit =
+        request.tools === undefined || request.tools.length === 0
+          ? undefined
+          : effectAiToolkitFromToolDefinitions(request.tools);
+      const response =
+        toolkit === undefined
+          ? yield* withAbortSignal(
+              model.generateText({
+                prompt,
+                disableToolCallResolution: true,
+              }),
+              options.signal,
+            )
+          : yield* withAbortSignal(
+              model.generateText({
+                prompt,
+                toolkit,
+                disableToolCallResolution: true,
+                toolChoice: toolChoiceForRequest(request),
+              }),
+              options.signal,
+            );
+      return yield* normalizeEffectAiResponse(response);
+    }).pipe(Effect.mapError((cause) => new UpstreamFailure({ cause }))),
+  );
 
 export const resolveEffectAiRoute = (
   route: LlmRoute,
 ): Effect.Effect<EffectAiResolvedRoute, EffectAiUnsupportedRoute> => {
   if (!isEffectAiSupportedRoute(route)) {
-    return Effect.fail(new EffectAiUnsupportedRoute({ kind: route.kind }));
+    return Effect.withSpan("agentos.llm_transport.effect_ai.resolve_route")(
+      Effect.fail(new EffectAiUnsupportedRoute({ kind: route.kind })),
+    );
   }
-  return Effect.succeed({ route });
+  return Effect.withSpan("agentos.llm_transport.effect_ai.resolve_route")(
+    Effect.succeed({ route }),
+  );
 };
 
 const withStringMaterial = <A, E, R>(
@@ -792,64 +803,68 @@ const withEffectAiLiveRoute = <Route extends EffectAiSupportedRoute, A, E, R>(
 export const defaultEffectAiLanguageModelFactory: EffectAiLanguageModelFactory<
   HttpClientService | Scope.Scope
 > = (input) =>
-  Effect.gen(function* () {
-    const client = yield* makeAnthropicClient({
-      apiUrl: input.endpoint,
-      apiKey: Redacted.make(input.credential),
-      apiVersion: input.route.anthropicVersion ?? ANTHROPIC_DEFAULT_VERSION,
-    });
-    return yield* makeAnthropicLanguageModel({ model: input.route.modelId }).pipe(
-      Effect.provideService(AnthropicClient, client),
-    );
-  });
+  Effect.withSpan("agentos.llm_transport.effect_ai.default_model_factory")(
+    Effect.gen(function* () {
+      const client = yield* makeAnthropicClient({
+        apiUrl: input.endpoint,
+        apiKey: Redacted.make(input.credential),
+        apiVersion: input.route.anthropicVersion ?? ANTHROPIC_DEFAULT_VERSION,
+      });
+      return yield* makeAnthropicLanguageModel({ model: input.route.modelId }).pipe(
+        Effect.provideService(AnthropicClient, client),
+      );
+    }),
+  );
 
 export const makeEffectAiLlmTransportLayer = <R>(
   modelFactory: EffectAiLanguageModelFactory<R> = defaultEffectAiLanguageModelFactory as never,
 ): Layer.Layer<LlmTransport, never, RefResolverService | HttpClientService | R> =>
   Layer.effect(
     LlmTransport,
-    Effect.gen(function* () {
-      const refs = yield* RefResolverService;
-      const httpClient = yield* HttpClientTag;
-      const context = yield* Effect.context<R>();
-      return {
-        resolveRoute: (route) =>
-          resolveEffectAiRouteForTransport(route).pipe(Effect.map(effectAiRouteDescriptor)),
-        call: (request, options) =>
-          Effect.gen(function* () {
-            const resolved = yield* resolveEffectAiRouteForTransport(request.route);
-            return yield* withEffectAiLiveRoute(refs, resolved.route, (liveRoute) =>
-              Effect.gen(function* () {
-                if (liveRoute.route.kind === "openai-chat-compatible") {
-                  return yield* callOpenAiChatCompatible(
-                    httpClient,
-                    {
-                      route: liveRoute.route,
-                      endpoint: liveRoute.endpoint,
-                      credential: liveRoute.credential,
-                    },
-                    request,
-                    options,
+    Effect.withSpan("agentos.llm_transport.effect_ai.layer")(
+      Effect.gen(function* () {
+        const refs = yield* RefResolverService;
+        const httpClient = yield* HttpClientTag;
+        const context = yield* Effect.context<R>();
+        return {
+          resolveRoute: (route) =>
+            resolveEffectAiRouteForTransport(route).pipe(Effect.map(effectAiRouteDescriptor)),
+          call: (request, options) =>
+            Effect.gen(function* () {
+              const resolved = yield* resolveEffectAiRouteForTransport(request.route);
+              return yield* withEffectAiLiveRoute(refs, resolved.route, (liveRoute) =>
+                Effect.gen(function* () {
+                  if (liveRoute.route.kind === "openai-chat-compatible") {
+                    return yield* callOpenAiChatCompatible(
+                      httpClient,
+                      {
+                        route: liveRoute.route,
+                        endpoint: liveRoute.endpoint,
+                        credential: liveRoute.credential,
+                      },
+                      request,
+                      options,
+                    );
+                  }
+                  const model = yield* modelFactory({
+                    route: liveRoute.route,
+                    endpoint: liveRoute.endpoint,
+                    credential: liveRoute.credential,
+                  }).pipe(
+                    Effect.provide(context),
+                    Effect.mapError((cause) => new UpstreamFailure({ cause })),
                   );
-                }
-                const model = yield* modelFactory({
-                  route: liveRoute.route,
-                  endpoint: liveRoute.endpoint,
-                  credential: liveRoute.credential,
-                }).pipe(
-                  Effect.provide(context),
-                  Effect.mapError((cause) => new UpstreamFailure({ cause })),
-                );
-                return yield* callEffectAiLanguageModel(model, request, options);
-              }),
-            ).pipe(
-              Effect.mapError((cause) =>
-                cause instanceof UpstreamFailure ? cause : new UpstreamFailure({ cause }),
-              ),
-            );
-          }),
-      };
-    }),
+                  return yield* callEffectAiLanguageModel(model, request, options);
+                }),
+              ).pipe(
+                Effect.mapError((cause) =>
+                  cause instanceof UpstreamFailure ? cause : new UpstreamFailure({ cause }),
+                ),
+              );
+            }),
+        };
+      }),
+    ),
   );
 
 /**
@@ -866,27 +881,29 @@ export const makeOpenAiCompatibleLlmTransportLayer = (): Layer.Layer<
 > =>
   Layer.effect(
     LlmTransport,
-    Effect.gen(function* () {
-      const refs = yield* RefResolverService;
-      const httpClient = yield* HttpClientTag;
-      return {
-        resolveRoute: (route) =>
-          resolveOpenAiChatCompatibleRouteForTransport(route).pipe(
-            Effect.map(effectAiRouteDescriptor),
-          ),
-        call: (request, options) =>
-          Effect.gen(function* () {
-            const resolved = yield* resolveOpenAiChatCompatibleRouteForTransport(request.route);
-            return yield* withEffectAiLiveRoute(refs, resolved.route, (liveRoute) =>
-              callOpenAiChatCompatible(httpClient, liveRoute, request, options),
-            ).pipe(
-              Effect.mapError((cause) =>
-                cause instanceof UpstreamFailure ? cause : new UpstreamFailure({ cause }),
-              ),
-            );
-          }),
-      };
-    }),
+    Effect.withSpan("agentos.llm_transport.openai_compatible.layer")(
+      Effect.gen(function* () {
+        const refs = yield* RefResolverService;
+        const httpClient = yield* HttpClientTag;
+        return {
+          resolveRoute: (route) =>
+            resolveOpenAiChatCompatibleRouteForTransport(route).pipe(
+              Effect.map(effectAiRouteDescriptor),
+            ),
+          call: (request, options) =>
+            Effect.gen(function* () {
+              const resolved = yield* resolveOpenAiChatCompatibleRouteForTransport(request.route);
+              return yield* withEffectAiLiveRoute(refs, resolved.route, (liveRoute) =>
+                callOpenAiChatCompatible(httpClient, liveRoute, request, options),
+              ).pipe(
+                Effect.mapError((cause) =>
+                  cause instanceof UpstreamFailure ? cause : new UpstreamFailure({ cause }),
+                ),
+              );
+            }),
+        };
+      }),
+    ),
   );
 
 /**

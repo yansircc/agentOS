@@ -147,34 +147,36 @@ export const summarizeTenantCredentialRecord = (
 export const createTenantCredentialResolver = (
   options: TenantCredentialResolverOptions,
 ): Effect.Effect<RefResolver, TenantCredentialResolverConfigurationError> =>
-  Effect.map(validateOptions(options), () => ({
-    material: (ref: MaterialRef): TenantCredentialMaterial | null => {
-      if (!isCredentialRef(ref)) return null;
-      if (!isNonEmptyString(ref.provider)) return null;
-      if (!isNonEmptyString(ref.purpose)) return null;
+  Effect.withSpan("agentos.tenant_material.create_resolver")(
+    Effect.map(validateOptions(options), () => ({
+      material: (ref: MaterialRef): TenantCredentialMaterial | null => {
+        if (!isCredentialRef(ref)) return null;
+        if (!isNonEmptyString(ref.provider)) return null;
+        if (!isNonEmptyString(ref.purpose)) return null;
 
-      const lookup: TenantCredentialLookup = {
-        tenantId: options.tenantId,
-        ref: ref.ref,
-        provider: ref.provider,
-        purpose: ref.purpose,
-      };
-      const record = options.store.get(lookup);
-      if (record === null) return null;
+        const lookup: TenantCredentialLookup = {
+          tenantId: options.tenantId,
+          ref: ref.ref,
+          provider: ref.provider,
+          purpose: ref.purpose,
+        };
+        const record = options.store.get(lookup);
+        if (record === null) return null;
 
-      if (matchesLookup(record, lookup) !== null) return null;
+        if (matchesLookup(record, lookup) !== null) return null;
 
-      return toResolvedMaterial(
-        options.decrypt({
-          encryptedBytes: record.encryptedBytes,
-          context: {
-            tenantId: record.tenantId,
-            ref: record.ref,
-            provider: record.provider,
-            purpose: record.purpose,
-            ...(record.metadata === undefined ? {} : { metadata: record.metadata }),
-          },
-        }),
-      );
-    },
-  }));
+        return toResolvedMaterial(
+          options.decrypt({
+            encryptedBytes: record.encryptedBytes,
+            context: {
+              tenantId: record.tenantId,
+              ref: record.ref,
+              provider: record.provider,
+              purpose: record.purpose,
+              ...(record.metadata === undefined ? {} : { metadata: record.metadata }),
+            },
+          }),
+        );
+      },
+    })),
+  );

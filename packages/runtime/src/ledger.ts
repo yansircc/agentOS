@@ -49,7 +49,7 @@ export const recordLedgerPortEvents = (
   Effect.try({
     try: () => events.map(decodeRecordedLedgerEvent),
     catch: (cause) => runtimeStorageError(operation, cause),
-  });
+  }).pipe(Effect.withSpan("agentos.runtime.ledger.record_events"));
 
 export const recordLedgerPortEvent = (
   operation: RuntimeStorageOperation,
@@ -58,7 +58,7 @@ export const recordLedgerPortEvent = (
   Effect.try({
     try: () => decodeRecordedLedgerEvent(event),
     catch: (cause) => runtimeStorageError(operation, cause),
-  });
+  }).pipe(Effect.withSpan("agentos.runtime.ledger.record_event"));
 
 /**
  * Backend-neutral ledger service for atomic fact commits and exact identity reads.

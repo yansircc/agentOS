@@ -50,7 +50,7 @@ export const BoundaryEventsLive = (
                 "boundary_event",
                 committed.event(committed.value),
               );
-            }),
+            }).pipe(Effect.withSpan("agentos.cloudflare_do.boundary_event.commit")),
           ),
         commitWithRuntimeEvents: (
           contract: BoundaryContract,
@@ -111,7 +111,9 @@ export const BoundaryEventsLive = (
               return yield* Effect.fail(runtimeStorageError("boundary_event", "empty commit"));
             }
             return [first, ...recorded.slice(1)] as const;
-          }),
+          }).pipe(
+            Effect.withSpan("agentos.cloudflare_do.boundary_event.commit_with_runtime_events"),
+          ),
       };
     }),
   );

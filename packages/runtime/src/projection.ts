@@ -339,42 +339,44 @@ export const waitForProjection = <Identity = unknown, State = unknown>(
   RuntimeStorageError | UnregisteredProjectionKind | ProjectionWaitTimedOut,
   MaterializedProjections
 > =>
-  Effect.gen(function* () {
-    const projections = yield* MaterializedProjections;
-    const maxAttempts = positiveIntegerOr(spec.maxAttempts, DEFAULT_PROJECTION_WAIT_MAX_ATTEMPTS);
-    const pollIntervalMs = nonNegativeIntegerOr(
-      spec.pollIntervalMs,
-      DEFAULT_PROJECTION_WAIT_POLL_INTERVAL_MS,
-    );
+  Effect.withSpan("agentos.runtime.projection.wait")(
+    Effect.gen(function* () {
+      const projections = yield* MaterializedProjections;
+      const maxAttempts = positiveIntegerOr(spec.maxAttempts, DEFAULT_PROJECTION_WAIT_MAX_ATTEMPTS);
+      const pollIntervalMs = nonNegativeIntegerOr(
+        spec.pollIntervalMs,
+        DEFAULT_PROJECTION_WAIT_POLL_INTERVAL_MS,
+      );
 
-    const loop = (
-      attempt: number,
-    ): Effect.Effect<
-      MaterializedProjectionRow<Identity, State>,
-      RuntimeStorageError | UnregisteredProjectionKind | ProjectionWaitTimedOut
-    > =>
-      Effect.gen(function* () {
-        const row = (yield* projections.get(spec)) as MaterializedProjectionRow<
-          Identity,
-          State
-        > | null;
-        if (row !== null && (spec.ready === undefined || spec.ready(row))) return row;
-        if (attempt >= maxAttempts) {
-          return yield* new ProjectionWaitTimedOut({
-            projectionKind: spec.kind,
-            maxAttempts,
-            reason: row === null ? "missing" : "not_ready",
-            ...(row === null ? {} : { lastObservedEventId: row.updatedEventId }),
-          });
-        }
-        if (pollIntervalMs > 0) {
-          yield* Effect.sleep(Duration.millis(pollIntervalMs));
-        }
-        return yield* loop(attempt + 1);
-      });
+      const loop = (
+        attempt: number,
+      ): Effect.Effect<
+        MaterializedProjectionRow<Identity, State>,
+        RuntimeStorageError | UnregisteredProjectionKind | ProjectionWaitTimedOut
+      > =>
+        Effect.gen(function* () {
+          const row = (yield* projections.get(spec)) as MaterializedProjectionRow<
+            Identity,
+            State
+          > | null;
+          if (row !== null && (spec.ready === undefined || spec.ready(row))) return row;
+          if (attempt >= maxAttempts) {
+            return yield* new ProjectionWaitTimedOut({
+              projectionKind: spec.kind,
+              maxAttempts,
+              reason: row === null ? "missing" : "not_ready",
+              ...(row === null ? {} : { lastObservedEventId: row.updatedEventId }),
+            });
+          }
+          if (pollIntervalMs > 0) {
+            yield* Effect.sleep(Duration.millis(pollIntervalMs));
+          }
+          return yield* loop(attempt + 1);
+        });
 
-    return yield* loop(1);
-  });
+      return yield* loop(1);
+    }),
+  );
 
 const projectionRegistrySuccess = (
   registry: ProjectionRegistry,
@@ -440,10 +442,14 @@ export const makeProjectionRegistryResult = (
 export const makeProjectionRegistry = (
   projections: Iterable<AnyMaterializedProjectionDefinition>,
 ): Effect.Effect<ProjectionRegistry, ProjectionRegistryError> =>
-  Effect.suspend(() => {
-    const result = makeProjectionRegistryResult(projections);
-    return result._tag === "success" ? Effect.succeed(result.registry) : Effect.fail(result.error);
-  });
+  Effect.withSpan("agentos.runtime.projection.make_registry")(
+    Effect.suspend(() => {
+      const result = makeProjectionRegistryResult(projections);
+      return result._tag === "success"
+        ? Effect.succeed(result.registry)
+        : Effect.fail(result.error);
+    }),
+  );
 
 export const getProjection = (
   registry: ProjectionRegistry,
@@ -452,7 +458,7 @@ export const getProjection = (
   const projection = registry.get(kind);
   return projection === undefined
     ? Effect.fail(new UnregisteredProjectionKind({ kind }))
-    : Effect.succeed(projection);
+    : Effect.succeed(projection).pipe(Effect.withSpan("agentos.runtime.projection.get"));
 };
 
 const isThenable = (value: unknown): boolean =>

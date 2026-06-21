@@ -1,4 +1,5 @@
-import { Data, Effect } from "effect";
+import { Data } from "effect";
+import type { Effect as EffectType } from "effect";
 import type {
   IndeterminateClaim,
   IndeterminateRef,
@@ -134,7 +135,7 @@ export interface DynamicWorkerPolicyRequest {
 
 export type DynamicWorkerPolicy = (
   request: DynamicWorkerPolicyRequest,
-) => Effect.Effect<void, DynamicWorkerPolicyViolation>;
+) => EffectType.Effect<void, DynamicWorkerPolicyViolation>;
 
 export interface DynamicWorkerStaticPolicyOptions {
   readonly allowEgress?: false | ReadonlyArray<string>;
@@ -146,5 +147,5 @@ export interface DynamicWorkerStaticPolicyOptions {
 export interface DynamicWorkerBackend {
   readonly run: (
     request: DynamicWorkerRunRequest,
-  ) => Effect.Effect<DynamicWorkerBackendResult, DynamicWorkerProviderFailure>;
+  ) => EffectType.Effect<DynamicWorkerBackendResult, DynamicWorkerProviderFailure>;
 }

@@ -50,34 +50,36 @@ const liveResolvedMaterialFromResolver = (
   resolver: RefResolver,
   ref: MaterialRef,
 ): Effect.Effect<LiveResolvedMaterial, RefResolutionFailed> =>
-  Effect.gen(function* () {
-    const value = yield* Effect.try({
-      try: () => resolver.material(ref),
-      catch: () =>
-        new RefResolutionFailed({
-          kind: ref.kind,
-          ref: materialRefKey(ref),
-          reason: "resolver_threw",
-        }),
-    });
-    if (value === null) {
-      return yield* Effect.fail(
-        new RefResolutionFailed({
-          kind: ref.kind,
-          ref: materialRefKey(ref),
-          reason: "material_missing",
-        }),
-      );
-    }
-    return {
-      ref,
-      value: captureLive(value),
-      dispose: () =>
-        Effect.sync(() => {
-          resolver.dispose?.({ ref, material: value });
-        }),
-    };
-  });
+  Effect.withSpan("agentos.kernel.ref_resolver.material")(
+    Effect.gen(function* () {
+      const value = yield* Effect.try({
+        try: () => resolver.material(ref),
+        catch: () =>
+          new RefResolutionFailed({
+            kind: ref.kind,
+            ref: materialRefKey(ref),
+            reason: "resolver_threw",
+          }),
+      });
+      if (value === null) {
+        return yield* Effect.fail(
+          new RefResolutionFailed({
+            kind: ref.kind,
+            ref: materialRefKey(ref),
+            reason: "material_missing",
+          }),
+        );
+      }
+      return {
+        ref,
+        value: captureLive(value),
+        dispose: () =>
+          Effect.sync(() => {
+            resolver.dispose?.({ ref, material: value });
+          }),
+      };
+    }),
+  );
 
 export const RefResolverLive = (resolver: RefResolver): Layer.Layer<RefResolverService> => {
   const material = (ref: MaterialRef): Effect.Effect<LiveResolvedMaterial, RefResolutionFailed> =>
@@ -93,10 +95,12 @@ export const withResolvedMaterial = <A, E, R>(
   ref: MaterialRef,
   use: (value: Live<ResolvedMaterial>) => Effect.Effect<A, E, R>,
 ): Effect.Effect<A, E | RefResolutionFailed, R> =>
-  Effect.acquireUseRelease(
-    refs.material(ref),
-    (handle) => use(handle.value),
-    (handle) => handle.dispose(),
+  Effect.withSpan("agentos.kernel.ref_resolver.with_resolved_material")(
+    Effect.acquireUseRelease(
+      refs.material(ref),
+      (handle) => use(handle.value),
+      (handle) => handle.dispose(),
+    ),
   );
 
 export const RefResolverEmpty = RefResolverLive({

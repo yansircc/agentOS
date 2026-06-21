@@ -70,7 +70,7 @@ export const ResourcesLive = (
               },
             ).pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("resource", cause)));
             return { eventId: committed.id(committed.value) };
-          }),
+          }).pipe(Effect.withSpan("agentos.cloudflare_do.resources.grant")),
 
         reserve: (identity, spec) =>
           Effect.gen(function* () {
@@ -145,7 +145,7 @@ export const ResourcesLive = (
               );
             }
             return { reservationId: tx.value.reservationId };
-          }),
+          }).pipe(Effect.withSpan("agentos.cloudflare_do.resources.reserve")),
 
         consume: (identity, spec) =>
           Effect.gen(function* () {
@@ -191,7 +191,7 @@ export const ResourcesLive = (
                 }),
               );
             }
-          }),
+          }).pipe(Effect.withSpan("agentos.cloudflare_do.resources.consume")),
 
         release: (identity, spec) =>
           Effect.gen(function* () {
@@ -237,7 +237,7 @@ export const ResourcesLive = (
                 }),
               );
             }
-          }),
+          }).pipe(Effect.withSpan("agentos.cloudflare_do.resources.release")),
 
         project: (identity, key) =>
           Effect.try({
@@ -245,7 +245,7 @@ export const ResourcesLive = (
               loadState(sql, identity, ownerIdentity.factOwnerRef).byKey.get(key) ??
               emptyProjection(),
             catch: (cause) => runtimeStorageError("resource", cause),
-          }),
+          }).pipe(Effect.withSpan("agentos.cloudflare_do.resources.project")),
       };
     }),
   );

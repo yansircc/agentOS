@@ -45,34 +45,36 @@ export const selectLedgerEventsWithEffectSql = (
   identity: BackendProtocolTruthIdentity,
   opts: Pick<EventQueryOptions, "afterId" | "limit"> = {},
 ): Effect.Effect<ReadonlyArray<LedgerEvent>, SqlError, SqlClient> =>
-  Effect.gen(function* () {
-    const sql = yield* SqlClient;
-    const afterId = normalizeNonNegativeInteger(opts.afterId, 0);
-    const limit = normalizeLimit(opts.limit);
-    const keys = ledgerIdentityKeys({ ...identity, factOwnerRef: RUNTIME_FACT_OWNER });
-    const rows = yield* sql<EffectSqlLedgerEventRow>`
-      SELECT
-        id,
-        ts,
-        kind,
-        scope_ref,
-        scope_key,
-        fact_owner_ref,
-        fact_owner_key,
-        effect_authority_ref,
-        effect_authority_key,
-        event_identity_key,
-        payload
-      FROM events
-      WHERE scope_key = ${keys.scopeKey}
-        AND effect_authority_key = ${keys.effectAuthorityKey}
-        AND id > ${afterId}
-      ORDER BY id ASC
-      LIMIT ${limit}
-    `.pipe(Effect.mapError((cause) => new SqlError({ cause })));
+  Effect.withSpan("agentos.cloudflare_do.effect_sqlite.select_ledger_events")(
+    Effect.gen(function* () {
+      const sql = yield* SqlClient;
+      const afterId = normalizeNonNegativeInteger(opts.afterId, 0);
+      const limit = normalizeLimit(opts.limit);
+      const keys = ledgerIdentityKeys({ ...identity, factOwnerRef: RUNTIME_FACT_OWNER });
+      const rows = yield* sql<EffectSqlLedgerEventRow>`
+        SELECT
+          id,
+          ts,
+          kind,
+          scope_ref,
+          scope_key,
+          fact_owner_ref,
+          fact_owner_key,
+          effect_authority_ref,
+          effect_authority_key,
+          event_identity_key,
+          payload
+        FROM events
+        WHERE scope_key = ${keys.scopeKey}
+          AND effect_authority_key = ${keys.effectAuthorityKey}
+          AND id > ${afterId}
+        ORDER BY id ASC
+        LIMIT ${limit}
+      `.pipe(Effect.mapError((cause) => new SqlError({ cause })));
 
-    return yield* Effect.try({
-      try: () => rows.map((row) => ledgerEventFromRow(row as unknown as LedgerEventSqlRow)),
-      catch: (cause) => new SqlError({ cause }),
-    });
-  });
+      return yield* Effect.try({
+        try: () => rows.map((row) => ledgerEventFromRow(row as unknown as LedgerEventSqlRow)),
+        catch: (cause) => new SqlError({ cause }),
+      });
+    }),
+  );

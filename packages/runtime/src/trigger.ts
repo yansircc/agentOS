@@ -160,20 +160,22 @@ const requiredTriggerField = (
 export const makeDurableTriggerRegistry = (
   triggers: Iterable<AnyDurableTrigger>,
 ): Effect.Effect<TriggerRegistry, string> =>
-  Effect.gen(function* () {
-    const registry = new Map<string, AnyDurableTrigger>();
-    for (const trigger of triggers) {
-      const missing = requiredTriggerField(trigger);
-      if (missing !== null) {
-        return yield* Effect.fail(`durable trigger ${trigger.kind} missing ${missing}`);
+  Effect.withSpan("agentos.runtime.trigger.make_registry")(
+    Effect.gen(function* () {
+      const registry = new Map<string, AnyDurableTrigger>();
+      for (const trigger of triggers) {
+        const missing = requiredTriggerField(trigger);
+        if (missing !== null) {
+          return yield* Effect.fail(`durable trigger ${trigger.kind} missing ${missing}`);
+        }
+        if (registry.has(trigger.kind)) {
+          return yield* Effect.fail(`duplicate durable trigger kind: ${trigger.kind}`);
+        }
+        registry.set(trigger.kind, trigger);
       }
-      if (registry.has(trigger.kind)) {
-        return yield* Effect.fail(`duplicate durable trigger kind: ${trigger.kind}`);
-      }
-      registry.set(trigger.kind, trigger);
-    }
-    return registry;
-  });
+      return registry;
+    }),
+  );
 
 const isThenable = (value: unknown): boolean =>
   (typeof value === "object" || typeof value === "function") &&
@@ -234,18 +236,20 @@ export const drainTriggerPumpUntilQuiet = <E>(
   now: number,
   options: TriggerDrainUntilQuietOptions = {},
 ): Effect.Effect<TriggerDrainUntilQuietResult, DurableTriggerDrainLimitExceeded | E> =>
-  Effect.gen(function* () {
-    const maxIterations = options.maxIterations ?? DEFAULT_TRIGGER_DRAIN_MAX_ITERATIONS;
-    let drained = 0;
-    for (let iteration = 1; iteration <= maxIterations; iteration += 1) {
-      const result = yield* drainDue(now);
-      if (result.drained === 0) {
-        return { drained, iterations: iteration };
+  Effect.withSpan("agentos.runtime.trigger.drain_until_quiet")(
+    Effect.gen(function* () {
+      const maxIterations = options.maxIterations ?? DEFAULT_TRIGGER_DRAIN_MAX_ITERATIONS;
+      let drained = 0;
+      for (let iteration = 1; iteration <= maxIterations; iteration += 1) {
+        const result = yield* drainDue(now);
+        if (result.drained === 0) {
+          return { drained, iterations: iteration };
+        }
+        drained += result.drained;
       }
-      drained += result.drained;
-    }
-    return yield* Effect.fail(new DurableTriggerDrainLimitExceeded({ maxIterations, drained }));
-  });
+      return yield* Effect.fail(new DurableTriggerDrainLimitExceeded({ maxIterations, drained }));
+    }),
+  );
 
 export class TriggerPump extends Context.Service<
   TriggerPump,

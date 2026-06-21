@@ -130,7 +130,7 @@ export const QuotaLive = (
               consumed: txResult.value.consumed,
               limit,
             } satisfies GrantResult;
-          }),
+          }).pipe(Effect.withSpan("agentos.cloudflare_do.quota.try_grant")),
       };
     }),
   );

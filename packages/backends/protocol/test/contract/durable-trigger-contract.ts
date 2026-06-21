@@ -1,4 +1,4 @@
-import type { Effect } from "effect";
+import type { Effect as EffectType } from "effect";
 import type { DurableTriggerAcquireCancelled } from "@agent-os/kernel/errors";
 import type { EventQueryOptions, LedgerEvent } from "@agent-os/kernel/types";
 
@@ -69,7 +69,7 @@ export interface DurableTrigger<Intent, Outcome, R = never> {
   readonly acquire: (
     intent: Intent,
     ctx: AcquireCtx,
-  ) => Effect.Effect<Outcome, DurableTriggerAcquireCancelled, R>;
+  ) => EffectType.Effect<Outcome, DurableTriggerAcquireCancelled, R>;
   readonly commit: (outcome: Outcome, tx: TriggerTx) => void;
   readonly commitCancelled: (
     intent: Intent,

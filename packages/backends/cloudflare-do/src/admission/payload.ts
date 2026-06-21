@@ -121,4 +121,4 @@ export const loadAdmissionRows = (
       return out;
     },
     catch: (cause) => new SqlError({ cause }),
-  });
+  }).pipe(Effect.withSpan("agentos.cloudflare_do.admission.load_rows"));

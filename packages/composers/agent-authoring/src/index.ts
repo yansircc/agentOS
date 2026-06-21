@@ -2417,7 +2417,10 @@ const workspaceEnvFor = (env: AgentOSTargetEnv) =>
     workspaceRef: ${jsString(normalized.workspace.providerResourceId)},
   });
 
-const allowWorkspaceTool = () => Effect.succeed({ ok: true as const });
+const allowWorkspaceTool = () =>
+  Effect.succeed({ ok: true as const }).pipe(
+    Effect.withSpan("agentos.generated.workspace.allow_tool"),
+  );
 
 const workspaceOperationInstallFor = (env: AgentOSTargetEnv) =>
   installCloudflareWorkspaceOperationProvider({

@@ -36,18 +36,20 @@ export const makeWitnessPort = (
   resolve: (request: WitnessRequest) => Effect.Effect<unknown, unknown>,
 ): WitnessPortService => ({
   witness: (request) =>
-    Effect.gen(function* () {
-      if (!isWitnessRequest(request)) {
-        return yield* Effect.fail(reject("request_invalid"));
-      }
-      const indeterminateRef = yield* resolve(request).pipe(
-        Effect.mapError(() => reject("resolver_failed")),
-      );
-      if (!isIndeterminateRef(indeterminateRef)) {
-        return yield* Effect.fail(reject("indeterminate_ref_invalid"));
-      }
-      return indeterminateRef;
-    }),
+    Effect.withSpan("agentos.runtime.witness_port.witness")(
+      Effect.gen(function* () {
+        if (!isWitnessRequest(request)) {
+          return yield* Effect.fail(reject("request_invalid"));
+        }
+        const indeterminateRef = yield* resolve(request).pipe(
+          Effect.mapError(() => reject("resolver_failed")),
+        );
+        if (!isIndeterminateRef(indeterminateRef)) {
+          return yield* Effect.fail(reject("indeterminate_ref_invalid"));
+        }
+        return indeterminateRef;
+      }),
+    ),
 });
 
 /**

@@ -233,10 +233,12 @@ const hex = (bytes: ArrayBuffer): string =>
 export const cloudflareWorkerDeployBundleDigest = (
   bundle: CloudflareWorkerDeployBundle,
 ): Effect.Effect<string> =>
-  Effect.promise(() =>
-    crypto.subtle
-      .digest("SHA-256", arrayBufferOf(encodeCloudflareWorkerDeployBundle(bundle)))
-      .then((digest) => `sha256:${hex(digest)}`),
+  Effect.withSpan("agentos.cloudflare.deploy.bundle_digest")(
+    Effect.promise(() =>
+      crypto.subtle
+        .digest("SHA-256", arrayBufferOf(encodeCloudflareWorkerDeployBundle(bundle)))
+        .then((digest) => `sha256:${hex(digest)}`),
+    ),
   );
 
 export const validateCloudflareWorkerDeployBundle = (
@@ -271,17 +273,19 @@ export const validateCloudflareWorkerDeployBundleDigest = (
   bundle: CloudflareWorkerDeployBundle,
   expectedDigest: string,
 ): Effect.Effect<CloudflareWorkerBundleDigestValidation> =>
-  Effect.map(cloudflareWorkerDeployBundleDigest(bundle), (actualDigest) =>
-    actualDigest === expectedDigest
-      ? { ok: true as const, digest: actualDigest }
-      : { ok: false as const, expectedDigest, actualDigest },
+  Effect.withSpan("agentos.cloudflare.deploy.validate_bundle_digest")(
+    Effect.map(cloudflareWorkerDeployBundleDigest(bundle), (actualDigest) =>
+      actualDigest === expectedDigest
+        ? { ok: true as const, digest: actualDigest }
+        : { ok: false as const, expectedDigest, actualDigest },
+    ),
   );
 
 export const resolveCloudflareWorkerDeployBundle = (
   resolver: CloudflareWorkerBundleResolver,
   artifactRef: string,
 ): Effect.Effect<CloudflareWorkerDeployBundle, CloudflareWorkerBundleResolutionFailure> =>
-  resolver.resolve(artifactRef);
+  Effect.withSpan("agentos.cloudflare.deploy.resolve_bundle")(resolver.resolve(artifactRef));
 
 export const cloudflareWorkerTargetMaterialRef = (targetRef: string): ExternalResourceMaterialRef =>
   externalResourceMaterialRef({
@@ -829,165 +833,173 @@ export const makeCloudflareWorkerDeployCarrier = (
 
   return {
     preview: (request) =>
-      Effect.gen(function* () {
-        yield* requireValidBundle(options, request, "preview", request.targetRef);
-        const previewRef = proofRef(
-          "preview",
-          `${request.subjectRef}:${request.artifactRef}:${request.targetRef}`,
-        );
-        return {
-          subjectRef: request.subjectRef,
-          previewRef,
-          artifactRef: request.artifactRef,
-          claim: livedClaim(request, previewRef, carrierRef),
-        };
-      }),
+      Effect.withSpan("agentos.cloudflare.deploy.preview")(
+        Effect.gen(function* () {
+          yield* requireValidBundle(options, request, "preview", request.targetRef);
+          const previewRef = proofRef(
+            "preview",
+            `${request.subjectRef}:${request.artifactRef}:${request.targetRef}`,
+          );
+          return {
+            subjectRef: request.subjectRef,
+            previewRef,
+            artifactRef: request.artifactRef,
+            claim: livedClaim(request, previewRef, carrierRef),
+          };
+        }),
+      ),
 
     promote: (request) =>
-      Effect.gen(function* () {
-        const bundle = yield* requireValidBundle(
-          options,
-          request,
-          "promote",
-          request.productionTargetRef,
-        );
-        return yield* options.resolver
-          .target(request.productionTargetRef, (target) =>
-            withResolvedBindings(options, request, bundle, (bindings) =>
-              Effect.gen(function* () {
-                const body = yield* cloudflareJson(
-                  options,
-                  request,
-                  "promote",
-                  target.apiToken,
-                  ["accounts", target.accountId, "workers", "scripts", target.scriptName],
-                  {
-                    method: "PUT",
-                    body: workerUploadBody(bundle, bindings),
-                  },
-                );
-                const versionId =
-                  stringFromResult(body, "id") ?? stringFromResult(body, "version_id");
-                const deploymentId = stringFromResult(body, "deployment_id");
-                const deployRef = proofRef(
-                  "promote",
-                  `${request.subjectRef}:${request.artifactRef}:${request.productionTargetRef}`,
-                );
-                const productionRef = deploySettlementRef(
-                  "cloudflare",
-                  "production",
-                  proofToken(`${request.subjectRef}:${request.productionTargetRef}`),
-                );
-                const rollbackRef =
-                  options.resolver.previousDeployRef === undefined
-                    ? null
-                    : yield* options.resolver
-                        .previousDeployRef(request.productionTargetRef)
-                        .pipe(Effect.mapError(mapDeployResolutionFailure(request, "promote")));
-                yield* recordMaterial(options, request, deployRef, {
-                  accountId: target.accountId,
-                  scriptName: target.scriptName,
-                  artifactRef: request.artifactRef,
-                  targetRef: request.productionTargetRef,
-                  ...(versionId === undefined ? {} : { versionId }),
-                  ...(deploymentId === undefined ? {} : { deploymentId }),
-                } satisfies CloudflareWorkerDeployMaterial);
-                yield* recordMaterial(options, request, productionRef, {
-                  targetRef: request.productionTargetRef,
-                  deployRef,
-                  accountId: target.accountId,
-                  scriptName: target.scriptName,
-                } satisfies CloudflareWorkerProductionMaterial);
-                return {
-                  subjectRef: request.subjectRef,
-                  deployRef,
-                  productionRef,
-                  ...(rollbackRef === null ? {} : { rollbackRef }),
-                  claim: livedClaim(request, deployRef, carrierRef),
-                };
-              }),
-            ),
-          )
-          .pipe(
-            catchDeployReconcileRequired(request, "promote"),
-            Effect.mapError(mapDeployResolutionFailureOnly(request, "promote")),
+      Effect.withSpan("agentos.cloudflare.deploy.promote")(
+        Effect.gen(function* () {
+          const bundle = yield* requireValidBundle(
+            options,
+            request,
+            "promote",
+            request.productionTargetRef,
           );
-      }),
+          return yield* options.resolver
+            .target(request.productionTargetRef, (target) =>
+              withResolvedBindings(options, request, bundle, (bindings) =>
+                Effect.gen(function* () {
+                  const body = yield* cloudflareJson(
+                    options,
+                    request,
+                    "promote",
+                    target.apiToken,
+                    ["accounts", target.accountId, "workers", "scripts", target.scriptName],
+                    {
+                      method: "PUT",
+                      body: workerUploadBody(bundle, bindings),
+                    },
+                  );
+                  const versionId =
+                    stringFromResult(body, "id") ?? stringFromResult(body, "version_id");
+                  const deploymentId = stringFromResult(body, "deployment_id");
+                  const deployRef = proofRef(
+                    "promote",
+                    `${request.subjectRef}:${request.artifactRef}:${request.productionTargetRef}`,
+                  );
+                  const productionRef = deploySettlementRef(
+                    "cloudflare",
+                    "production",
+                    proofToken(`${request.subjectRef}:${request.productionTargetRef}`),
+                  );
+                  const rollbackRef =
+                    options.resolver.previousDeployRef === undefined
+                      ? null
+                      : yield* options.resolver
+                          .previousDeployRef(request.productionTargetRef)
+                          .pipe(Effect.mapError(mapDeployResolutionFailure(request, "promote")));
+                  yield* recordMaterial(options, request, deployRef, {
+                    accountId: target.accountId,
+                    scriptName: target.scriptName,
+                    artifactRef: request.artifactRef,
+                    targetRef: request.productionTargetRef,
+                    ...(versionId === undefined ? {} : { versionId }),
+                    ...(deploymentId === undefined ? {} : { deploymentId }),
+                  } satisfies CloudflareWorkerDeployMaterial);
+                  yield* recordMaterial(options, request, productionRef, {
+                    targetRef: request.productionTargetRef,
+                    deployRef,
+                    accountId: target.accountId,
+                    scriptName: target.scriptName,
+                  } satisfies CloudflareWorkerProductionMaterial);
+                  return {
+                    subjectRef: request.subjectRef,
+                    deployRef,
+                    productionRef,
+                    ...(rollbackRef === null ? {} : { rollbackRef }),
+                    claim: livedClaim(request, deployRef, carrierRef),
+                  };
+                }),
+              ),
+            )
+            .pipe(
+              catchDeployReconcileRequired(request, "promote"),
+              Effect.mapError(mapDeployResolutionFailureOnly(request, "promote")),
+            );
+        }),
+      ),
 
     readback: (request) =>
-      options.resolver
-        .productionEndpoint(request.productionRef, (endpoint) =>
-          Effect.gen(function* () {
-            const response = yield* Effect.tryPromise({
-              try: () => options.fetch(endpoint, { method: "GET", headers: {} }),
-              catch: () => failed(request, "readback", "cloudflare_worker_readback_fetch_failed"),
-            });
-            const readbackRef = proofRef(
-              "readback",
-              `${request.subjectRef}:${request.productionRef}:${response.status}`,
-            );
-            if (!response.ok) {
-              return readbackFailedPayload(
-                request,
-                `cloudflare_worker_readback_http_${response.status}`,
+      Effect.withSpan("agentos.cloudflare.deploy.readback")(
+        options.resolver
+          .productionEndpoint(request.productionRef, (endpoint) =>
+            Effect.gen(function* () {
+              const response = yield* Effect.tryPromise({
+                try: () => options.fetch(endpoint, { method: "GET", headers: {} }),
+                catch: () => failed(request, "readback", "cloudflare_worker_readback_fetch_failed"),
+              });
+              const readbackRef = proofRef(
+                "readback",
+                `${request.subjectRef}:${request.productionRef}:${response.status}`,
               );
-            }
-            return {
-              subjectRef: request.subjectRef,
-              productionRef: request.productionRef,
-              readbackRef,
-              status: "passed" as const,
-              claim: livedClaim(request, readbackRef, carrierRef),
-            };
-          }),
-        )
-        .pipe(
-          catchDeployReconcileRequired(request, "readback"),
-          Effect.mapError(mapDeployResolutionFailureOnly(request, "readback")),
-        ),
+              if (!response.ok) {
+                return readbackFailedPayload(
+                  request,
+                  `cloudflare_worker_readback_http_${response.status}`,
+                );
+              }
+              return {
+                subjectRef: request.subjectRef,
+                productionRef: request.productionRef,
+                readbackRef,
+                status: "passed" as const,
+                claim: livedClaim(request, readbackRef, carrierRef),
+              };
+            }),
+          )
+          .pipe(
+            catchDeployReconcileRequired(request, "readback"),
+            Effect.mapError(mapDeployResolutionFailureOnly(request, "readback")),
+          ),
+      ),
 
     rollback: (request) =>
-      options.resolver
-        .rollback(request.rollbackRef, (material) =>
-          Effect.gen(function* () {
-            const body = yield* cloudflareJson(
-              options,
-              request,
-              "rollback",
-              material.apiToken,
-              [
-                "accounts",
-                material.accountId,
-                "workers",
-                "scripts",
-                material.scriptName,
-                "deployments",
-              ],
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  strategy: "percentage",
-                  versions: [{ version_id: material.versionId, percentage: 100 }],
-                }),
-              },
-            );
-            const restoredDeployRef = material.restoredDeployRef;
-            const rollbackRef = proofRef(
-              "rollback",
-              `${request.subjectRef}:${request.rollbackRef}:${stringFromResult(body, "id") ?? ""}`,
-            );
-            return {
-              subjectRef: request.subjectRef,
-              rollbackRef,
-              restoredDeployRef,
-              claim: livedClaim(request, rollbackRef, carrierRef),
-            };
-          }),
-        )
-        .pipe(
-          catchDeployReconcileRequired(request, "rollback"),
-          Effect.mapError(mapDeployResolutionFailureOnly(request, "rollback")),
-        ),
+      Effect.withSpan("agentos.cloudflare.deploy.rollback")(
+        options.resolver
+          .rollback(request.rollbackRef, (material) =>
+            Effect.gen(function* () {
+              const body = yield* cloudflareJson(
+                options,
+                request,
+                "rollback",
+                material.apiToken,
+                [
+                  "accounts",
+                  material.accountId,
+                  "workers",
+                  "scripts",
+                  material.scriptName,
+                  "deployments",
+                ],
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    strategy: "percentage",
+                    versions: [{ version_id: material.versionId, percentage: 100 }],
+                  }),
+                },
+              );
+              const restoredDeployRef = material.restoredDeployRef;
+              const rollbackRef = proofRef(
+                "rollback",
+                `${request.subjectRef}:${request.rollbackRef}:${stringFromResult(body, "id") ?? ""}`,
+              );
+              return {
+                subjectRef: request.subjectRef,
+                rollbackRef,
+                restoredDeployRef,
+                claim: livedClaim(request, rollbackRef, carrierRef),
+              };
+            }),
+          )
+          .pipe(
+            catchDeployReconcileRequired(request, "rollback"),
+            Effect.mapError(mapDeployResolutionFailureOnly(request, "rollback")),
+          ),
+      ),
   };
 };

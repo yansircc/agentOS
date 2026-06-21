@@ -92,7 +92,7 @@ export const makeCloudflareBackendCoreLayer = <Env>(
         dispatchRetryTrigger,
         ...resolvedAppTriggers,
       ]).pipe(Effect.mapError((cause) => new SqlError({ cause })));
-    }),
+    }).pipe(Effect.withSpan("agentos.cloudflare_do.runtime_core.trigger_registry")),
   );
   const triggerLayer = TriggerPumpLive(ctx, scope).pipe(
     Layer.provide(Layer.mergeAll(eventBusLayer, triggerRegistryLayer)),
@@ -109,7 +109,7 @@ export const makeCloudflareBackendCoreLayer = <Env>(
       return yield* makeAttachedStreamRegistry(resolvedAppStreams, {
         reservedKinds: triggerRegistry.keys(),
       }).pipe(Effect.mapError((cause) => new SqlError({ cause })));
-    }),
+    }).pipe(Effect.withSpan("agentos.cloudflare_do.runtime_core.stream_registry")),
   ).pipe(Layer.provide(triggerRegistryLayer));
   const attachedStreamLayer = AttachedStreamsLive(ctx, scope, identity).pipe(
     Layer.provide(Layer.mergeAll(eventBusLayer, streamRegistryLayer)),

@@ -108,11 +108,11 @@ export const AdmissionLive = (
           // Step 3: gate.
           if (preLease.status === "unsupported" && now < preLease.retryAfter) {
             return {
-              ok: false,
+              ok: false as const,
               outcome: reconstructOutcomeFromLease(preLease),
               lease: preLease,
               admissionImpact: "lease-bearing" as const,
-              shortCircuited: true,
+              shortCircuited: true as const,
             };
           }
 
@@ -189,22 +189,22 @@ export const AdmissionLive = (
 
           if (outcome.class === "Supported" && decoded !== undefined) {
             return {
-              ok: true,
+              ok: true as const,
               decoded: decoded as O,
               outcome,
               lease: postLease,
               admissionImpact,
-              shortCircuited: false,
+              shortCircuited: false as const,
             };
           }
           return {
-            ok: false,
+            ok: false as const,
             outcome,
             lease: postLease,
             admissionImpact,
-            shortCircuited: false,
+            shortCircuited: false as const,
           };
-        });
+        }).pipe(Effect.withSpan("agentos.cloudflare_do.admission.attempt_structured"));
 
       const invalidate = (
         spec: InvalidateSpec,
@@ -239,7 +239,7 @@ export const AdmissionLive = (
           }
 
           return { barrierId: event.id };
-        });
+        }).pipe(Effect.withSpan("agentos.cloudflare_do.admission.invalidate"));
 
       return { attemptStructured, invalidate };
     }),

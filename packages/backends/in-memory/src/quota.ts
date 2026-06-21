@@ -54,5 +54,5 @@ export const InMemoryQuotaLive = (state: InMemoryBackendState): Layer.Layer<Quot
           ])
           .pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("quota", cause)));
         return { granted: true, consumed, limit } satisfies GrantResult;
-      }),
+      }).pipe(Effect.withSpan("agentos.in_memory.quota.try_grant")),
   });

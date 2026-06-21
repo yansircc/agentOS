@@ -51,7 +51,10 @@ export const SchedulerLive = (
               data,
             );
             return { id: intent.id };
-          }).pipe(Effect.mapError(schedulerError)),
+          }).pipe(
+            Effect.mapError(schedulerError),
+            Effect.withSpan("agentos.cloudflare_do.scheduler.schedule"),
+          ),
       };
     }),
   );

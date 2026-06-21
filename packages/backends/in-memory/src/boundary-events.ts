@@ -37,7 +37,7 @@ export const InMemoryBoundaryEventsLive = (
             ])
             .pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("boundary_event", cause)));
           return yield* recordLedgerPortEvent("boundary_event", committed[0]!);
-        }),
+        }).pipe(Effect.withSpan("agentos.in_memory.boundary_event.commit")),
       ),
     commitWithRuntimeEvents: (
       contract: BoundaryContract,
@@ -89,5 +89,5 @@ export const InMemoryBoundaryEventsLive = (
           return yield* Effect.fail(runtimeStorageError("boundary_event", "empty commit"));
         }
         return [first, ...recorded.slice(1)] as const;
-      }),
+      }).pipe(Effect.withSpan("agentos.in_memory.boundary_event.commit_with_runtime_events")),
   });

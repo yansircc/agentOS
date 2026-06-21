@@ -1,4 +1,5 @@
-import { Data, Effect } from "effect";
+import { Data } from "effect";
+import type { Effect as EffectType } from "effect";
 import type { ToolAdmitter } from "@agent-os/kernel/tools";
 
 export const SANDBOX_MAX_TIMEOUT_MS = 60_000;
@@ -111,7 +112,7 @@ export interface SandboxPolicyRequest {
 
 export type SandboxPolicy = (
   request: SandboxPolicyRequest,
-) => Effect.Effect<void, SandboxPolicyDenied>;
+) => EffectType.Effect<void, SandboxPolicyDenied>;
 
 export interface StaticPolicyOptions {
   readonly allowNetwork?: false | ReadonlyArray<string>;
@@ -119,7 +120,7 @@ export interface StaticPolicyOptions {
 }
 
 export interface SandboxBackend {
-  readonly run: (request: SandboxRunRequest) => Effect.Effect<SandboxRawResult, SandboxFailure>;
+  readonly run: (request: SandboxRunRequest) => EffectType.Effect<SandboxRawResult, SandboxFailure>;
 }
 
 export interface SandboxRunToolArgs {

@@ -138,7 +138,7 @@ const canonicalPayloadValue = (value: unknown): CanonicalJson => {
     if (invalid !== undefined) return { ok: false, reason: "invalid_aad" };
     return {
       ok: true,
-      value: `[${encoded.map((item) => (item.ok ? item.value : "")).join(",")}]`,
+      value: "[" + encoded.map((item) => (item.ok ? item.value : "")).join(",") + "]",
     };
   }
   if (typeof value === "object" && value !== null) {
@@ -147,9 +147,9 @@ const canonicalPayloadValue = (value: unknown): CanonicalJson => {
     for (const key of Object.keys(record).sort()) {
       const encoded = canonicalPayloadValue(record[key]);
       if (!encoded.ok) return encoded;
-      fields.push(`${JSON.stringify(key)}:${encoded.value}`);
+      fields.push(JSON.stringify(key) + ":" + encoded.value);
     }
-    return { ok: true, value: `{${fields.join(",")}}` };
+    return { ok: true, value: "{" + fields.join(",") + "}" };
   }
   return { ok: false, reason: "invalid_aad" };
 };
@@ -226,7 +226,7 @@ const decodeBase64Url = (
     return { ok: false, reason };
   }
   const padding = value.length % 4 === 0 ? "" : "=".repeat(4 - (value.length % 4));
-  const binary = atob(`${value}${padding}`.replaceAll("-", "+").replaceAll("_", "/"));
+  const binary = atob((value + padding).replaceAll("-", "+").replaceAll("_", "/"));
   const bytes = new Uint8Array(binary.length);
   for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
   return { ok: true, value: bytes };
@@ -264,60 +264,64 @@ const validateEnvelope = (
 export const sealAead = (
   input: SealAeadInput,
 ): Effect.Effect<RecordableSealedEnvelope, AeadSealedCodecFailure> =>
-  Effect.gen(function* () {
-    const crypto = yield* cryptoOrFail(input.crypto);
-    const nonce = new Uint8Array(12);
-    crypto.getRandomValues(nonce);
-    const key = yield* importAesKey(crypto, openLive(input.key), "encrypt");
-    const additionalData = yield* aadBytes(input.aad);
-    const plaintext = bytesOf(openLive(input.plaintext));
-    const encrypted = yield* Effect.tryPromise({
-      try: () =>
-        crypto.subtle.encrypt(
-          {
-            name: AEAD_SEALED_ALGORITHM,
-            iv: arrayBufferOf(nonce),
-            additionalData: arrayBufferOf(additionalData),
-          },
-          key,
-          arrayBufferOf(plaintext),
-        ),
-      catch: () => fail("authentication_failed"),
-    });
-    const envelope: SealedEnvelope = {
-      kind: AEAD_SEALED_KIND,
-      codec: AEAD_SEALED_CODEC,
-      version: AEAD_SEALED_VERSION,
-      algorithm: AEAD_SEALED_ALGORITHM,
-      keyRef: input.keyRef,
-      nonce: encodeBase64Url(nonce),
-      aad: cloneRecordedPayload(input.aad),
-      ciphertext: encodeBase64Url(new Uint8Array(encrypted)),
-    };
-    return recordableValue(envelope) as RecordableSealedEnvelope;
-  });
+  Effect.withSpan("agentos.kernel.aead.seal")(
+    Effect.gen(function* () {
+      const crypto = yield* cryptoOrFail(input.crypto);
+      const nonce = new Uint8Array(12);
+      crypto.getRandomValues(nonce);
+      const key = yield* importAesKey(crypto, openLive(input.key), "encrypt");
+      const additionalData = yield* aadBytes(input.aad);
+      const plaintext = bytesOf(openLive(input.plaintext));
+      const encrypted = yield* Effect.tryPromise({
+        try: () =>
+          crypto.subtle.encrypt(
+            {
+              name: AEAD_SEALED_ALGORITHM,
+              iv: arrayBufferOf(nonce),
+              additionalData: arrayBufferOf(additionalData),
+            },
+            key,
+            arrayBufferOf(plaintext),
+          ),
+        catch: () => fail("authentication_failed"),
+      });
+      const envelope: SealedEnvelope = {
+        kind: AEAD_SEALED_KIND,
+        codec: AEAD_SEALED_CODEC,
+        version: AEAD_SEALED_VERSION,
+        algorithm: AEAD_SEALED_ALGORITHM,
+        keyRef: input.keyRef,
+        nonce: encodeBase64Url(nonce),
+        aad: cloneRecordedPayload(input.aad),
+        ciphertext: encodeBase64Url(new Uint8Array(encrypted)),
+      };
+      return recordableValue(envelope) as RecordableSealedEnvelope;
+    }),
+  );
 
 export const openAead = (
   input: OpenAeadInput,
 ): Effect.Effect<Live<Uint8Array>, AeadSealedCodecFailure> =>
-  Effect.gen(function* () {
-    const crypto = yield* subtleCryptoOrFail(input.crypto);
-    const envelope = input.sealed.value;
-    const decoded = yield* validateEnvelope(envelope, input.keyRef, input.expectedAad);
-    const additionalData = yield* aadBytes(input.expectedAad);
-    const key = yield* importAesKey(crypto, openLive(input.key), "decrypt");
-    const plaintext = yield* Effect.tryPromise({
-      try: () =>
-        crypto.subtle.decrypt(
-          {
-            name: AEAD_SEALED_ALGORITHM,
-            iv: arrayBufferOf(decoded.nonce),
-            additionalData: arrayBufferOf(additionalData),
-          },
-          key,
-          arrayBufferOf(decoded.ciphertext),
-        ),
-      catch: () => fail("authentication_failed"),
-    });
-    return captureLive(new Uint8Array(plaintext));
-  });
+  Effect.withSpan("agentos.kernel.aead.open")(
+    Effect.gen(function* () {
+      const crypto = yield* subtleCryptoOrFail(input.crypto);
+      const envelope = input.sealed.value;
+      const decoded = yield* validateEnvelope(envelope, input.keyRef, input.expectedAad);
+      const additionalData = yield* aadBytes(input.expectedAad);
+      const key = yield* importAesKey(crypto, openLive(input.key), "decrypt");
+      const plaintext = yield* Effect.tryPromise({
+        try: () =>
+          crypto.subtle.decrypt(
+            {
+              name: AEAD_SEALED_ALGORITHM,
+              iv: arrayBufferOf(decoded.nonce),
+              additionalData: arrayBufferOf(additionalData),
+            },
+            key,
+            arrayBufferOf(decoded.ciphertext),
+          ),
+        catch: () => fail("authentication_failed"),
+      });
+      return captureLive(new Uint8Array(plaintext));
+    }),
+  );

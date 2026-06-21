@@ -20,9 +20,10 @@ export const resolveCloudflareAttachedStreamSource = <Env>(
   source: CloudflareAttachedStreamSource<Env>,
   ctx: CloudflareAttachedStreamFactoryContext<Env>,
 ): Effect.Effect<ReadonlyArray<AnyAttachedStreamHandler>, TriggerFactoryError> =>
-  typeof source !== "function"
+  (typeof source !== "function"
     ? Effect.succeed(source)
     : Effect.try({
         try: () => source(ctx),
         catch: (cause) => new TriggerFactoryError({ scope: ctx.scope, cause }),
-      });
+      })
+  ).pipe(Effect.withSpan("agentos.cloudflare_do.attached_stream.resolve_source"));

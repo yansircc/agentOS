@@ -106,7 +106,10 @@ export const createInMemoryRuntimeBackend = (
       scheduledEventTrigger,
       dispatchRetryTrigger,
       ...(options.triggers ?? []),
-    ]).pipe(Effect.mapError((cause) => new SqlError({ cause }))),
+    ]).pipe(
+      Effect.mapError((cause) => new SqlError({ cause })),
+      Effect.withSpan("agentos.in_memory.runtime_backend.trigger_registry"),
+    ),
   );
   const streamRegistryLayer = Layer.effect(
     AttachedStreamRegistry,
@@ -116,11 +119,17 @@ export const createInMemoryRuntimeBackend = (
         dispatchRetryTrigger.kind,
         ...(options.triggers ?? []).map((trigger) => trigger.kind),
       ],
-    }).pipe(Effect.mapError((cause) => new SqlError({ cause }))),
+    }).pipe(
+      Effect.mapError((cause) => new SqlError({ cause })),
+      Effect.withSpan("agentos.in_memory.runtime_backend.stream_registry"),
+    ),
   );
   const projectionRegistryLayer = Layer.effect(
     MaterializedProjectionRegistry,
-    makeProjectionRegistry(projections).pipe(Effect.mapError((cause) => new SqlError({ cause }))),
+    makeProjectionRegistry(projections).pipe(
+      Effect.mapError((cause) => new SqlError({ cause })),
+      Effect.withSpan("agentos.in_memory.runtime_backend.projection_registry"),
+    ),
   );
   const materializedProjectionLayer = InMemoryMaterializedProjectionsLive(state, options.identity);
   const scopeLabel = backendProtocolTruthIdentityKey(options.identity);

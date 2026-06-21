@@ -21,9 +21,13 @@ export const InMemoryLedgerLive = (state: InMemoryBackendState): Layer.Layer<Led
           )
           .pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("ledger_commit", cause)));
         return yield* recordLedgerPortEvents("ledger_commit", committed);
-      }),
+      }).pipe(Effect.withSpan("agentos.in_memory.ledger.commit")),
     events: (identity, opts = {}) =>
-      recordLedgerPortEvents("ledger_events", state.snapshot(identity, opts)),
+      recordLedgerPortEvents("ledger_events", state.snapshot(identity, opts)).pipe(
+        Effect.withSpan("agentos.in_memory.ledger.events"),
+      ),
     streamSnapshot: (identity, opts = {}) =>
-      recordLedgerPortEvents("ledger_stream_snapshot", state.streamSnapshot(identity, opts)),
+      recordLedgerPortEvents("ledger_stream_snapshot", state.streamSnapshot(identity, opts)).pipe(
+        Effect.withSpan("agentos.in_memory.ledger.stream_snapshot"),
+      ),
   });

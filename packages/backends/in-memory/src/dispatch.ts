@@ -370,7 +370,7 @@ export const InMemoryDispatchLive = (
               .pipe(Effect.mapError(dispatchStorageError));
             yield* triggerPump.drainDue(now);
             return { outboundEventId: event.id };
-          }),
+          }).pipe(Effect.withSpan("agentos.in_memory.dispatch.dispatch_to_scope")),
 
         receive: (envelope) =>
           Effect.gen(function* () {
@@ -450,7 +450,7 @@ export const InMemoryDispatchLive = (
                 deliveredEventId: events[1]!.id,
               }),
             };
-          }),
+          }).pipe(Effect.withSpan("agentos.in_memory.dispatch.receive")),
       };
     }),
   );
