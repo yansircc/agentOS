@@ -25,7 +25,14 @@ import {
   type DeploymentSpec,
   type HandlerKind,
 } from "@agent-os/runtime-protocol";
-import { WORKSPACE_TOOL_SPECS, type WorkspaceToolName } from "@agent-os/workspace-env";
+import {
+  WORKSPACE_TOOL_DEFAULT_DECLARATIONS,
+  WORKSPACE_TOOL_EXPOSURE_PROFILES,
+  WORKSPACE_TOOL_NAMES,
+  type WorkspaceToolDefaultDeclaration,
+  type WorkspaceToolInteractionFloor,
+  type WorkspaceToolName,
+} from "@agent-os/workspace-env";
 
 export const AUTHORING_DEFAULTS_VERSION = "framework-defaults@agentos/v1" as const;
 
@@ -40,7 +47,8 @@ export type AgentManifestOrigin =
   | `path:${string}`
   | `author:${string}#${string}`
   | `scaffold:${string}@${string}#${string}`
-  | `default:${typeof AUTHORING_DEFAULTS_VERSION}#${string}`;
+  | `default:${typeof AUTHORING_DEFAULTS_VERSION}#${string}`
+  | `macro(workspace@1)#${string}`;
 
 export interface AuthoredAgentTree {
   readonly files: ReadonlyArray<AuthoredAgentTreeFile>;
@@ -83,6 +91,12 @@ export interface AuthoredToolFile {
   readonly declaration?: AuthoredToolDeclaration;
 }
 
+export interface AuthoredWorkspaceDefaultToolOverride {
+  readonly interaction?: WorkspaceToolInteractionFloor;
+}
+
+export type AuthoredWorkspaceDefaultToolControl = false | AuthoredWorkspaceDefaultToolOverride;
+
 export interface AuthoredAgentJson {
   readonly agentId?: string;
   readonly version?: string;
@@ -90,7 +104,7 @@ export interface AuthoredAgentJson {
   readonly effectAuthorityRef?: AuthorityRef;
   readonly handlers?: ReadonlyArray<HandlerKind>;
   readonly llmRoutes?: Readonly<Record<string, AgentLlmRouteBindingRef>>;
-  readonly tools?: Readonly<Record<string, AuthoredToolDeclaration>>;
+  readonly tools?: Readonly<Record<string, AuthoredWorkspaceDefaultToolControl>>;
   readonly materials?: Readonly<Record<string, MaterialRef>>;
   readonly executionDomains?: Readonly<Record<string, AgentExecutionDomainRef>>;
   readonly interactions?: Readonly<Record<string, AgentInteractionRef>>;
@@ -103,6 +117,10 @@ export type AuthoredAgentManifest<K extends HandlerKind = HandlerKind> = AgentMa
 export interface CompiledAgentManifest<K extends HandlerKind = HandlerKind> {
   readonly manifest: AuthoredAgentManifest<K>;
   readonly provenance: Readonly<Record<AgentManifestFactKey, AgentManifestOrigin>>;
+  readonly workspaceToolControls: Readonly<
+    Partial<Record<WorkspaceToolName, WorkspaceDefaultToolControl>>
+  >;
+  readonly toolFilePaths: Readonly<Record<string, string>>;
 }
 
 export type CompileAgentTreeIssue =
@@ -137,6 +155,29 @@ export type CompileAgentTreeIssue =
   | { readonly kind: "effectful_tool_missing_execution_domain"; readonly toolId: string }
   | { readonly kind: "effectful_tool_missing_interaction"; readonly toolId: string }
   | { readonly kind: "effectful_tool_missing_receipt_policy"; readonly toolId: string }
+  | {
+      readonly kind: "unknown_workspace_default_tool_control";
+      readonly path: string;
+      readonly toolId: string;
+    }
+  | {
+      readonly kind: "workspace_default_tool_control_field_forbidden";
+      readonly path: string;
+      readonly toolId: string;
+      readonly field: string;
+    }
+  | {
+      readonly kind: "workspace_default_tool_interaction_weakened";
+      readonly path: string;
+      readonly toolId: string;
+      readonly floor: WorkspaceToolInteractionFloor;
+      readonly attempted: WorkspaceToolInteractionFloor;
+    }
+  | {
+      readonly kind: "workspace_default_tool_shadowed";
+      readonly path: string;
+      readonly toolId: string;
+    }
   | { readonly kind: "runtime_fact_forbidden"; readonly path: string; readonly field: string }
   | { readonly kind: "function_in_manifest"; readonly path: string };
 
@@ -158,10 +199,25 @@ interface CompilerState {
   readonly issues: CompileAgentTreeIssue[];
   readonly pathKeys: Map<string, string>;
   readonly toolIds: Set<string>;
+  readonly toolFilePaths: Map<string, string>;
+  readonly workspaceToolControls: Map<WorkspaceToolName, WorkspaceDefaultToolControl>;
 }
+
+export type WorkspaceDefaultToolControl =
+  | { readonly kind: "disabled"; readonly origin: AgentManifestOrigin }
+  | {
+      readonly kind: "override";
+      readonly interaction?: {
+        readonly value: WorkspaceToolInteractionFloor;
+        readonly origin: AgentManifestOrigin;
+      };
+    };
 
 const defaultOrigin = (factKey: AgentManifestFactKey): AgentManifestOrigin =>
   `default:${AUTHORING_DEFAULTS_VERSION}#${factKey}`;
+
+const workspaceManifestMacroOrigin = (factKey: AgentManifestFactKey): AgentManifestOrigin =>
+  `macro(workspace@1)#${factKey}`;
 
 const authoredPath = (path: string): string => (path.startsWith("agent/") ? path : `agent/${path}`);
 
@@ -551,6 +607,14 @@ const agentAllowedFields = new Set([
 ]);
 
 const materialEffectNames = new Set(["material", "provider_call"]);
+const workspaceToolNames = new Set<WorkspaceToolName>(WORKSPACE_TOOL_NAMES);
+const workspaceDefaultToolByName = new Map<WorkspaceToolName, WorkspaceToolDefaultDeclaration>(
+  WORKSPACE_TOOL_DEFAULT_DECLARATIONS.map((tool) => [tool.name, tool]),
+);
+const workspaceInteractionRank: Readonly<Record<WorkspaceToolInteractionFloor, number>> = {
+  never: 0,
+  approval: 1,
+};
 
 const isEffectfulTool = (tool: Pick<AgentToolBindingRef, "effects" | "materialRefs">): boolean =>
   (tool.effects?.length ?? 0) > 0 || (tool.materialRefs?.length ?? 0) > 0;
@@ -558,6 +622,92 @@ const isEffectfulTool = (tool: Pick<AgentToolBindingRef, "effects" | "materialRe
 const requiresMaterial = (tool: Pick<AgentToolBindingRef, "effects" | "materialRefs">): boolean =>
   tool.materialRefs !== undefined ||
   (tool.effects?.some((effect) => materialEffectNames.has(effect)) ?? false);
+
+const isWorkspaceToolName = (name: string): name is WorkspaceToolName =>
+  workspaceToolNames.has(name as WorkspaceToolName);
+
+const parseWorkspaceDefaultToolInteraction = (
+  state: CompilerState,
+  path: string,
+  toolId: WorkspaceToolName,
+  value: unknown,
+): WorkspaceToolInteractionFloor | null => {
+  if (value !== "never" && value !== "approval") {
+    invalidAuthoredValue(state, path, `/tools/${toolId}/interaction`, "interaction_invalid");
+    return null;
+  }
+  return value;
+};
+
+const recordWorkspaceDefaultToolControl = (
+  state: CompilerState,
+  path: string,
+  toolId: string,
+  control: AuthoredWorkspaceDefaultToolControl,
+): void => {
+  if (!isWorkspaceToolName(toolId)) {
+    state.issues.push({ kind: "unknown_workspace_default_tool_control", path, toolId });
+    return;
+  }
+  if (control === false) {
+    state.workspaceToolControls.set(toolId, {
+      kind: "disabled",
+      origin: authorOrigin(path, `/tools/${toolId}`),
+    });
+    return;
+  }
+  if (!isRecord(control)) {
+    invalidAuthoredValue(state, path, `/tools/${toolId}`, "object_or_false_required");
+    return;
+  }
+  for (const field of Object.keys(control)) {
+    if (field !== "interaction") {
+      state.issues.push({
+        kind: "workspace_default_tool_control_field_forbidden",
+        path,
+        toolId,
+        field,
+      });
+    }
+  }
+  const defaultTool = workspaceDefaultToolByName.get(toolId);
+  if (defaultTool === undefined) {
+    state.issues.push({ kind: "unknown_workspace_default_tool_control", path, toolId });
+    return;
+  }
+  const next: Extract<WorkspaceDefaultToolControl, { readonly kind: "override" }> = {
+    kind: "override",
+  };
+  if (Object.prototype.hasOwnProperty.call(control, "interaction")) {
+    const attempted = parseWorkspaceDefaultToolInteraction(
+      state,
+      path,
+      toolId,
+      control.interaction,
+    );
+    if (attempted !== null) {
+      if (workspaceInteractionRank[attempted] < workspaceInteractionRank[defaultTool.interaction]) {
+        state.issues.push({
+          kind: "workspace_default_tool_interaction_weakened",
+          path,
+          toolId,
+          floor: defaultTool.interaction,
+          attempted,
+        });
+      } else {
+        state.workspaceToolControls.set(toolId, {
+          ...next,
+          interaction: {
+            value: attempted,
+            origin: authorOrigin(path, `/tools/${toolId}/interaction`),
+          },
+        });
+      }
+    }
+  } else {
+    state.workspaceToolControls.set(toolId, next);
+  }
+};
 
 const recordToolFacts = (
   state: CompilerState,
@@ -693,22 +843,24 @@ const recordAgentJson = (state: CompilerState, path: string, value: unknown): vo
           (_interactionId, child) =>
             parseBindingRefObject<AgentInteractionRef>(state, path, "/interactions", child),
         );
-  const tools =
-    value.tools === undefined
-      ? undefined
-      : parseRecordMap<AuthoredToolDeclaration>(
+  if (value.tools !== undefined) {
+    if (!isRecord(value.tools)) {
+      invalidAuthoredValue(state, path, "/tools", "object_required");
+    } else {
+      for (const [toolId, child] of Object.entries(value.tools)) {
+        if (!isManifestMapId(toolId)) {
+          invalidAuthoredValue(state, path, `/tools/${toolId}`, "id_invalid");
+          continue;
+        }
+        recordWorkspaceDefaultToolControl(
           state,
           path,
-          "/tools",
-          value.tools,
-          (_toolId, child) => {
-            if (!isRecord(child)) {
-              invalidAuthoredValue(state, path, "/tools", "object_required");
-              return null;
-            }
-            return child as AuthoredToolDeclaration;
-          },
+          toolId,
+          child as AuthoredWorkspaceDefaultToolControl,
         );
+      }
+    }
+  }
   if (agentId !== undefined)
     putAuthored(state, "/agentId", agentId, authorOrigin(path, "/agentId"));
   if (version !== undefined)
@@ -766,13 +918,6 @@ const recordAgentJson = (state: CompilerState, path: string, value: unknown): vo
         `/interactions/${interactionId}/bindingRef`,
         interactionRef.bindingRef,
         authorOrigin(path, `/interactions/${interactionId}/bindingRef`),
-      );
-    }
-  }
-  if (tools !== undefined && tools !== null) {
-    for (const [toolId, declaration] of Object.entries(tools)) {
-      recordToolFacts(state, toolId, path, declaration, (field) =>
-        authorOrigin(path, `/tools/${toolId}/${field}`),
       );
     }
   }
@@ -875,6 +1020,7 @@ const recordToolFile = (
     state.issues.push({ kind: "unsupported_path", path, reason: "empty_path_identity" });
     return;
   }
+  state.toolFilePaths.set(toolId, path);
   recordToolFacts(state, toolId, path, declaration ?? {}, (field) => authorOrigin(path, field));
 };
 
@@ -1044,6 +1190,28 @@ const buildProvenance = (
   return provenance;
 };
 
+const buildWorkspaceToolControls = (
+  state: CompilerState,
+): Readonly<Partial<Record<WorkspaceToolName, WorkspaceDefaultToolControl>>> => {
+  const controls: Partial<Record<WorkspaceToolName, WorkspaceDefaultToolControl>> = {};
+  for (const [toolId, control] of [...state.workspaceToolControls.entries()].sort(
+    ([left], [right]) => left.localeCompare(right),
+  )) {
+    controls[toolId] = control;
+  }
+  return controls;
+};
+
+const buildToolFilePaths = (state: CompilerState): Readonly<Record<string, string>> => {
+  const paths: Record<string, string> = {};
+  for (const [toolId, path] of [...state.toolFilePaths.entries()].sort(([left], [right]) =>
+    left.localeCompare(right),
+  )) {
+    paths[toolId] = path;
+  }
+  return paths;
+};
+
 /**
  * Compile an authored `agent/` tree into one normalized manifest plus
  * provenance. This is the app-author entrypoint; runtime facts and provider
@@ -1062,6 +1230,8 @@ export const compileAgentTree = <K extends HandlerKind = HandlerKind>(
     issues: [],
     pathKeys: new Map(),
     toolIds: new Set(),
+    toolFilePaths: new Map(),
+    workspaceToolControls: new Map(),
   };
 
   for (const file of tree.files) {
@@ -1098,6 +1268,8 @@ export const compileAgentTree = <K extends HandlerKind = HandlerKind>(
     value: {
       manifest: authoredValue(manifest) as AuthoredAgentManifest<K>,
       provenance: buildProvenance(state),
+      workspaceToolControls: buildWorkspaceToolControls(state),
+      toolFilePaths: buildToolFilePaths(state),
     },
   };
 };
@@ -1198,7 +1370,18 @@ export type AgentOsConfigIssue =
       readonly kind: "workspace_scope_not_manifest_owned";
       readonly path: "agent/agent.json#/scope";
       readonly reason: "scope_not_manifest_owned" | "stable_scope_id_missing";
+    }
+  | {
+      readonly kind: "workspace_default_tool_shadowed";
+      readonly path: string;
+      readonly toolId: WorkspaceToolName;
     };
+
+export interface StaticTargetProvenance {
+  readonly manifest: Readonly<Record<AgentManifestFactKey, AgentManifestOrigin>>;
+  readonly deployment: Readonly<Record<AgentOsConfigFactKey, AgentOsConfigOrigin>>;
+  readonly exclusions: Readonly<Record<string, AgentManifestOrigin>>;
+}
 
 export type DecodeAgentOsConfigResult =
   | { readonly ok: true; readonly value: AgentOsConfigV1 }
@@ -1208,6 +1391,7 @@ export interface NormalizedAgentOsConfig<M extends AgentManifest = AgentManifest
   readonly config: AgentOsConfigV1;
   readonly deployment: DeploymentSpec<M>;
   readonly deploymentVersion?: string;
+  readonly authoredToolNames: ReadonlyArray<string>;
   readonly target: AgentOsConfigTarget;
   readonly client: AgentOsConfigClient;
   readonly llm: AgentOsConfigLlm;
@@ -1217,6 +1401,7 @@ export interface NormalizedAgentOsConfig<M extends AgentManifest = AgentManifest
     readonly providerResourceId: ProviderResourceId;
   };
   readonly origins: Readonly<Record<AgentOsConfigFactKey, AgentOsConfigOrigin>>;
+  readonly provenance: StaticTargetProvenance;
 }
 
 export type NormalizeAgentOsConfigResult<M extends AgentManifest = AgentManifest> =
@@ -1631,6 +1816,100 @@ const defaultWorkspaceTopology = (): AgentOsConfigWorkspaceTopology => ({
   allocator: "workspace-per-scope-v1",
 });
 
+const workspaceDefaultToolFactKey = (
+  toolId: WorkspaceToolName,
+  field: keyof AgentToolBindingRef,
+): AgentManifestFactKey => `/tools/${toolId}/${field}`;
+
+const defaultWorkspaceToolEntry = (
+  tool: WorkspaceToolDefaultDeclaration,
+  control: WorkspaceDefaultToolControl | undefined,
+): AgentToolBindingRef => ({
+  bindingRef: tool.name,
+  executionDomain: tool.executionDomain,
+  interaction:
+    control?.kind === "override" && control.interaction !== undefined
+      ? control.interaction.value
+      : tool.interaction,
+  materialRefs: tool.materialRefs,
+  effects: tool.effects,
+  receiptPolicy: tool.receiptPolicy,
+});
+
+const addDefaultWorkspaceToolProvenance = (
+  provenance: Record<AgentManifestFactKey, AgentManifestOrigin>,
+  tool: WorkspaceToolDefaultDeclaration,
+  control: WorkspaceDefaultToolControl | undefined,
+): void => {
+  provenance[workspaceDefaultToolFactKey(tool.name, "bindingRef")] = workspaceManifestMacroOrigin(
+    workspaceDefaultToolFactKey(tool.name, "bindingRef"),
+  );
+  provenance[workspaceDefaultToolFactKey(tool.name, "executionDomain")] =
+    workspaceManifestMacroOrigin(workspaceDefaultToolFactKey(tool.name, "executionDomain"));
+  provenance[workspaceDefaultToolFactKey(tool.name, "interaction")] =
+    control?.kind === "override" && control.interaction !== undefined
+      ? control.interaction.origin
+      : workspaceManifestMacroOrigin(workspaceDefaultToolFactKey(tool.name, "interaction"));
+  provenance[workspaceDefaultToolFactKey(tool.name, "materialRefs")] = workspaceManifestMacroOrigin(
+    workspaceDefaultToolFactKey(tool.name, "materialRefs"),
+  );
+  provenance[workspaceDefaultToolFactKey(tool.name, "effects")] = workspaceManifestMacroOrigin(
+    workspaceDefaultToolFactKey(tool.name, "effects"),
+  );
+  provenance[workspaceDefaultToolFactKey(tool.name, "receiptPolicy")] =
+    workspaceManifestMacroOrigin(workspaceDefaultToolFactKey(tool.name, "receiptPolicy"));
+};
+
+const applyWorkspaceDefaultTools = <K extends HandlerKind>(
+  compiled: CompiledAgentManifest<K>,
+): {
+  readonly manifest: AuthoredAgentManifest<K>;
+  readonly provenance: StaticTargetProvenance["manifest"];
+  readonly exclusions: StaticTargetProvenance["exclusions"];
+  readonly issues: ReadonlyArray<AgentOsConfigIssue>;
+} => {
+  const issues: AgentOsConfigIssue[] = [];
+  const tools: Record<string, AgentToolBindingRef> = { ...compiled.manifest.tools };
+  const provenance: Record<AgentManifestFactKey, AgentManifestOrigin> = {
+    ...compiled.provenance,
+  };
+  const exclusions: Record<string, AgentManifestOrigin> = {};
+
+  for (const defaultTool of WORKSPACE_TOOL_DEFAULT_DECLARATIONS) {
+    const control = compiled.workspaceToolControls[defaultTool.name];
+    const existing = compiled.manifest.tools?.[defaultTool.name];
+    if (control?.kind === "disabled") {
+      exclusions[`/tools/${defaultTool.name}`] = control.origin;
+      continue;
+    }
+    if (existing !== undefined) {
+      issues.push({
+        kind: "workspace_default_tool_shadowed",
+        path: compiled.toolFilePaths[defaultTool.name] ?? `agent/tools/${defaultTool.name}.ts`,
+        toolId: defaultTool.name,
+      });
+      continue;
+    }
+    tools[defaultTool.name] = defaultWorkspaceToolEntry(defaultTool, control);
+    addDefaultWorkspaceToolProvenance(provenance, defaultTool, control);
+  }
+  const manifestWithoutTools = { ...compiled.manifest } as AgentManifest<K>;
+  delete (manifestWithoutTools as { tools?: unknown }).tools;
+  const sortedTools = Object.fromEntries(
+    Object.entries(tools).sort(([left], [right]) => left.localeCompare(right)),
+  );
+
+  return {
+    manifest: authoredValue({
+      ...manifestWithoutTools,
+      ...(Object.keys(sortedTools).length === 0 ? {} : { tools: sortedTools }),
+    }) as AuthoredAgentManifest<K>,
+    provenance,
+    exclusions,
+    issues,
+  };
+};
+
 export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
   config: AgentOsConfigV1,
   compiled: CompiledAgentManifest<K>,
@@ -1638,8 +1917,12 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
   const decoded = decodeAgentOsConfig(config);
   if (!decoded.ok) return decoded;
   const value = decoded.value;
+  const workspaceDefaults = applyWorkspaceDefaultTools(compiled);
+  if (workspaceDefaults.issues.length > 0) {
+    return { ok: false, issues: workspaceDefaults.issues };
+  }
   const topology = value.workspace.topology ?? defaultWorkspaceTopology();
-  const scopeRef = manifestScopeRefResult(compiled.manifest);
+  const scopeRef = manifestScopeRefResult(workspaceDefaults.manifest);
   if (!scopeRef.ok) {
     return {
       ok: false,
@@ -1697,7 +1980,7 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
       config: value,
       deployment: {
         deploymentId: value.deployment.id,
-        manifest: compiled.manifest,
+        manifest: workspaceDefaults.manifest,
         backend: "cloudflare-do",
         adapter: AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1,
         codec: "agentos-json@1",
@@ -1706,6 +1989,7 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
       ...(value.deployment.version === undefined
         ? {}
         : { deploymentVersion: value.deployment.version }),
+      authoredToolNames: Object.keys(compiled.toolFilePaths).sort(),
       target: value.target,
       client: value.client,
       llm: value.llm,
@@ -1717,6 +2001,11 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
         providerResourceId,
       },
       origins,
+      provenance: {
+        manifest: workspaceDefaults.provenance,
+        deployment: origins,
+        exclusions: workspaceDefaults.exclusions,
+      },
     },
   };
 };
@@ -1742,16 +2031,10 @@ const jsString = (value: string): string => JSON.stringify(value);
 
 const importToolPath = (toolName: string): string => `../../agent/tools/${toolName}`;
 
-const workspaceToolNames = new Set(WORKSPACE_TOOL_SPECS.map((spec) => spec.name));
-const workspaceMutationToolNames = new Set<WorkspaceToolName>([
-  "write_file",
-  "edit_file",
-  "delete_path",
-]);
-const workspaceShellToolNames = new Set<WorkspaceToolName>(["run_shell"]);
-
-const isWorkspaceToolName = (name: string): name is WorkspaceToolName =>
-  workspaceToolNames.has(name as WorkspaceToolName);
+const workspaceMutationToolNames = new Set<WorkspaceToolName>(
+  WORKSPACE_TOOL_EXPOSURE_PROFILES.mutation,
+);
+const workspaceShellToolNames = new Set<WorkspaceToolName>(WORKSPACE_TOOL_EXPOSURE_PROFILES.shell);
 
 const SOURCE_PACKAGE_SCOPE = "@agent-os";
 const INJECTED_PUBLIC_PACKAGE_SCOPE = "__AGENTOS_PUBLIC_PACKAGE_SCOPE__";
@@ -1799,8 +2082,12 @@ const renderStaticTarget = (
   toolNames: ReadonlyArray<string>,
   modules: ReturnType<typeof staticTargetModules>,
 ): string => {
-  const workspaceToolList = toolNames.filter(isWorkspaceToolName);
-  const customToolNames = toolNames.filter((toolName) => !isWorkspaceToolName(toolName));
+  const authoredToolNames = new Set(normalized.authoredToolNames);
+  const workspaceToolList = toolNames.filter(
+    (toolName): toolName is WorkspaceToolName =>
+      isWorkspaceToolName(toolName) && !authoredToolNames.has(toolName),
+  );
+  const customToolNames = toolNames.filter((toolName) => authoredToolNames.has(toolName));
   const toolImports = customToolNames
     .map((toolName, index) => `import tool_${index} from ${jsString(importToolPath(toolName))};`)
     .join("\n");
@@ -2521,6 +2808,8 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
     };
   }
   const toolNames = Object.keys(normalized.deployment.manifest.tools ?? {}).sort();
+  const authoredToolNames = new Set(normalized.authoredToolNames);
+  const authoredManifestToolNames = toolNames.filter((toolName) => authoredToolNames.has(toolName));
   const deploymentJson = {
     deploymentId: normalized.deployment.deploymentId,
     backend: normalized.deployment.backend,
@@ -2555,7 +2844,7 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
       source: modules.workspaceAgentHost,
       imports: ["defineWorkspaceAgentMount", "WORKSPACE_AGENT_PROJECTION"],
     },
-    ...generatedToolImports(toolNames.filter((toolName) => !isWorkspaceToolName(toolName))),
+    ...generatedToolImports(authoredManifestToolNames),
     {
       kind: "workspace-binding",
       source: modules.workspaceBinding,
@@ -2587,7 +2876,7 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
           stableJson(normalized.deployment.manifest),
         ),
         generatedPath(".agentos/generated/deployment.json", stableJson(deploymentJson)),
-        generatedPath(".agentos/generated/provenance.json", stableJson(normalized.origins)),
+        generatedPath(".agentos/generated/provenance.json", stableJson(normalized.provenance)),
         generatedPath(
           ".agentos/generated/fingerprints.json",
           stableJson({

@@ -22,14 +22,16 @@ import {
   type WorkspaceOperationProjection,
 } from "@agent-os/workspace-op";
 import {
-  WORKSPACE_TOOL_SPECS,
+  WORKSPACE_TOOL_EXPOSURE_PROFILES,
+  WORKSPACE_TOOL_NAMES,
   createWorkspaceTools,
   type CreateWorkspaceToolsOptions,
   type WorkspaceEnv,
+  type WorkspaceToolCategory,
   type WorkspaceToolName,
 } from "@agent-os/workspace-env";
 
-export type WorkspaceToolExposureProfile = "read" | "mutation" | "shell";
+export type WorkspaceToolExposureProfile = WorkspaceToolCategory;
 export type WorkspaceMutationPolicy = "disabled" | "receipt-backed";
 export type WorkspaceShellPolicy = "disabled" | "receipt-backed";
 
@@ -65,15 +67,7 @@ export const workspaceEnvMaterialRef = (env: WorkspaceEnv): MaterialRef =>
     ref: env.domain.ref,
   });
 
-export const WORKSPACE_TOOL_EXPOSURE_PROFILES: Readonly<
-  Record<WorkspaceToolExposureProfile, ReadonlyArray<WorkspaceToolName>>
-> = {
-  read: ["read_file", "list_files", "glob_files", "grep_files"],
-  mutation: ["write_file", "edit_file", "delete_path"],
-  shell: ["run_shell"],
-};
-
-const workspaceToolNames = new Set(WORKSPACE_TOOL_SPECS.map((spec) => spec.name));
+const workspaceToolNames = new Set(WORKSPACE_TOOL_NAMES);
 
 const unique = <A extends string>(values: ReadonlyArray<A>): ReadonlyArray<A> => [
   ...new Set(values),

@@ -7,7 +7,6 @@ title: "@agent-os/workspace-binding Public API Intent"
 ## Public exports
 
 - `.:BindWorkspaceToolsForRuntimeOptions`
-- `.:WORKSPACE_TOOL_EXPOSURE_PROFILES`
 - `.:WorkspaceMutationPolicy`
 - `.:WorkspaceShellPolicy`
 - `.:WorkspaceToolExposurePolicy`

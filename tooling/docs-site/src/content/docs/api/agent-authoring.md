@@ -37,6 +37,8 @@ title: "@agent-os/agent-authoring Public API Intent"
 - `.:AuthoredToolDeclaration`
 - `.:AuthoredToolEffect`
 - `.:AuthoredToolFile`
+- `.:AuthoredWorkspaceDefaultToolControl`
+- `.:AuthoredWorkspaceDefaultToolOverride`
 - `.:CanonicalDeploymentIR`
 - `.:CompileAgentTreeIssue`
 - `.:CompileAgentTreeResult`
@@ -53,7 +55,9 @@ title: "@agent-os/agent-authoring Public API Intent"
 - `.:StaticTargetLinkResult`
 - `.:StaticTargetModuleImport`
 - `.:StaticTargetModuleImportKind`
+- `.:StaticTargetProvenance`
 - `.:WORKSPACE_TOPOLOGY`
+- `.:WorkspaceDefaultToolControl`
 - `.:WorkspaceTopologyKind`
 - `.:compileAgentTree`
 - `.:decodeAgentOsConfig`

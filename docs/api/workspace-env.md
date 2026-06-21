@@ -8,6 +8,9 @@
 - `.:GlobWorkspaceFilesOptions`
 - `.:GrepWorkspaceFilesOptions`
 - `.:NormalizeWorkspaceToolPathOptions`
+- `.:WORKSPACE_TOOL_DEFAULT_DECLARATIONS`
+- `.:WORKSPACE_TOOL_EXPOSURE_PROFILES`
+- `.:WORKSPACE_TOOL_NAMES`
 - `.:WORKSPACE_TOOL_SPECS`
 - `.:WalkWorkspaceFilesOptions`
 - `.:WorkspaceDeletePathResult`
@@ -32,8 +35,12 @@
 - `.:WorkspaceToolExecHookInput`
 - `.:WorkspaceToolEnvRef`
 - `.:WorkspaceToolCategory`
+- `.:WorkspaceToolDefaultDeclaration`
+- `.:WorkspaceToolEffect`
 - `.:WorkspaceToolHooks`
+- `.:WorkspaceToolInteractionFloor`
 - `.:WorkspaceToolName`
+- `.:WorkspaceToolReceiptPolicy`
 - `.:WorkspaceToolSpec`
 - `.:WorkspaceToolWriteHookInput`
 - `.:WorkspaceTools`

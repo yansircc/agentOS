@@ -17,7 +17,7 @@ The first path is:
 agent/
   instructions.md
   agent.json
-  tools/
+  tools/                # optional custom execute code only
   workspace/reconcile.ts
 agentos.config.jsonc
 .agentos/generated/
@@ -31,13 +31,21 @@ is optional authored policy. `app/` is product UI only.
 
 `agent/instructions.md` is required and owns the natural-language operating
 instructions. `agent/agent.json` owns scalar pre-runtime intent such as the
-agent id and scope policy. `agent/tools/*.ts` owns tool declarations; path
-segments are identities.
+agent id and scope policy. `workspace@1` supplies the standard workspace tool
+declarations. `agent/tools/*.ts` exists only for custom execute code; path
+segments are identities for custom tools.
+
+Default workspace tool policy is controlled as data in `agent/agent.json`.
+Unknown slugs fail closed. A default can be disabled with `false`; disabling a
+default releases that slug for an authored replacement file. Interaction
+overrides are safety-monotone, and receipt policy is not overrideable through
+this surface.
 
 Authored files may contain symbolic refs such as LLM route refs, material refs,
-workspace command names, interaction policy, and reconcile policy. They must not
-contain resolved credentials, provider URLs, sandbox handles, continuation refs,
-snapshots, actual trigger times, or ledger events.
+workspace command names, custom tool declarations, interaction policy, and
+reconcile policy. They must not contain resolved credentials, provider URLs,
+sandbox handles, continuation refs, snapshots, actual trigger times, or ledger
+events.
 
 ## Deployment JSONC
 

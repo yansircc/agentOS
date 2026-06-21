@@ -47,6 +47,16 @@ const generatedJson = <T>(
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
 const buildCli = path.join(repoRoot, "packages/composers/agent-authoring/bin/build-cli.ts");
+const workspaceDefaultToolNames = [
+  "delete_path",
+  "edit_file",
+  "glob_files",
+  "grep_files",
+  "list_files",
+  "read_file",
+  "run_shell",
+  "write_file",
+] as const;
 
 describe("agent authored tree compiler", () => {
   it("compiles a minimal authored tree to AgentManifest<Authored> with provenance", () => {
@@ -144,10 +154,9 @@ describe("agent authored tree compiler", () => {
             executionDomains: { workspace: { bindingRef: 123 } },
             interactions: { approval: { bindingRef: 123 } },
             tools: {
-              weather: {
-                bindingRef: 123,
-                materialRefs: ["weather", 1],
-                effects: ["network", 1],
+              read_file: {
+                interaction: 123,
+                receiptPolicy: "none",
               },
             },
             outputSchema: { fingerprint: "not-a-schema" },
@@ -203,20 +212,14 @@ describe("agent authored tree compiler", () => {
     expect(result.issues).toContainEqual({
       kind: "invalid_authored_value",
       path: "agent.json",
-      field: "/bindingRef",
-      reason: "non_empty_string_required",
+      field: "/tools/read_file/interaction",
+      reason: "interaction_invalid",
     });
     expect(result.issues).toContainEqual({
-      kind: "invalid_authored_value",
+      kind: "workspace_default_tool_control_field_forbidden",
       path: "agent.json",
-      field: "/materialRefs[1]",
-      reason: "non_empty_string_required",
-    });
-    expect(result.issues).toContainEqual({
-      kind: "invalid_authored_value",
-      path: "agent.json",
-      field: "/effects[1]",
-      reason: "non_empty_string_required",
+      toolId: "read_file",
+      field: "receiptPolicy",
     });
     expect(result.issues).toContainEqual({
       kind: "invalid_authored_value",
@@ -330,21 +333,16 @@ describe("agent authored tree compiler", () => {
     }
   });
 
-  it("rejects duplicate authored facts in one value layer", () => {
+  it("rejects agent.json tool controls for custom slugs", () => {
     const result = compileAgentTree({
       files: [
         { path: "agent/instructions.md", kind: "markdown", text: "Lookup." },
-        {
-          path: "agent/tools/weather.ts",
-          kind: "tool",
-          declaration: {},
-        },
         {
           path: "agent/agent.json",
           kind: "json",
           value: {
             tools: {
-              weather: { bindingRef: "tool.other" },
+              weather: false,
             },
           },
         },
@@ -355,12 +353,9 @@ describe("agent authored tree compiler", () => {
       ok: false,
       issues: [
         {
-          kind: "duplicate_fact",
-          factKey: "/tools/weather/bindingRef",
-          origins: [
-            "path:agent/tools/weather.ts",
-            "author:agent/agent.json#/tools/weather/bindingRef",
-          ],
+          kind: "unknown_workspace_default_tool_control",
+          path: "agent.json",
+          toolId: "weather",
         },
       ],
     });
@@ -378,7 +373,6 @@ describe("agent authored tree compiler", () => {
             scope: { kind: "session", idSource: "manifest", stableScopeId: "workspace-ledger" },
           },
         },
-        { path: "agent/tools/read_file.ts", kind: "tool", declaration: {} },
       ],
     });
     expect(compiled.ok).toBe(true);
@@ -411,7 +405,18 @@ describe("agent authored tree compiler", () => {
     expect(normalized.ok).toBe(true);
     if (!normalized.ok) expect.fail(JSON.stringify(normalized.issues));
     expect(normalized.value.deployment.deploymentId).toBe("web-cursor-demo");
-    expect(normalized.value.deployment.manifest).toBe(compiled.value.manifest);
+    expect(Object.keys(normalized.value.deployment.manifest.tools ?? {}).sort()).toEqual([
+      ...workspaceDefaultToolNames,
+    ]);
+    expect(normalized.value.deployment.manifest.tools?.read_file).toEqual({
+      bindingRef: "read_file",
+      executionDomain: "workspace",
+      interaction: "never",
+      materialRefs: ["workspace"],
+      effects: ["workspace_read"],
+      receiptPolicy: "workspace.snapshot",
+    });
+    expect(normalized.value.deployment.manifest.tools?.run_shell?.interaction).toBe("approval");
     expect(normalized.value.deployment).toMatchObject({
       backend: "cloudflare-do",
       adapter: "cloudflare-do@1",
@@ -437,6 +442,253 @@ describe("agent authored tree compiler", () => {
     expect(normalized.value.origins["/deployment/backend"]).toBe("derived:/target/kind");
     expect(normalized.value.origins["/workspace/providerResourceId"]).toBe(
       "derived:/deployment/id+/workspace/binding+/workspace/topology+/agent/scope",
+    );
+    expect(normalized.value.provenance.manifest["/tools/read_file/bindingRef"]).toBe(
+      "macro(workspace@1)#/tools/read_file/bindingRef",
+    );
+    expect(normalized.value.provenance.manifest["/tools/run_shell/interaction"]).toBe(
+      "macro(workspace@1)#/tools/run_shell/interaction",
+    );
+  });
+
+  it("allows safety-monotone interaction overrides for workspace defaults", () => {
+    const compiled = compileAgentTree({
+      files: [
+        { path: "agent/instructions.md", kind: "markdown", text: "Run workspace tasks." },
+        {
+          path: "agent/agent.json",
+          kind: "json",
+          value: {
+            agentId: "agent.workspace",
+            scope: { kind: "session", idSource: "manifest", stableScopeId: "workspace-ledger" },
+            tools: {
+              write_file: { interaction: "approval" },
+            },
+          },
+        },
+      ],
+    });
+    expect(compiled.ok).toBe(true);
+    if (!compiled.ok) expect.fail(JSON.stringify(compiled.issues));
+
+    const normalized = normalizeAgentOsConfig(
+      {
+        profile: AGENTOS_CONFIG_PROFILE.WORKSPACE_V1,
+        agent: "./agent",
+        deployment: { id: "web-cursor-demo" },
+        target: {
+          kind: AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1,
+          durableObject: { className: "AgentOS", binding: "AGENT_OS" },
+        },
+        client: { kind: AGENTOS_CONFIG_CLIENT.BROWSER_DIRECT_V1 },
+        llm: {
+          route: AGENTOS_CONFIG_LLM_ROUTE.OPENAI_CHAT_COMPATIBLE,
+          endpointRef: "openrouter",
+          credentialRef: "openrouter-key",
+          modelRef: "model",
+        },
+        workspace: {
+          binding: "Sandbox",
+          root: "/workspace",
+        },
+      },
+      compiled.value,
+    );
+
+    expect(normalized.ok).toBe(true);
+    if (!normalized.ok) expect.fail(JSON.stringify(normalized.issues));
+    expect(normalized.value.deployment.manifest.tools?.write_file?.interaction).toBe("approval");
+    expect(normalized.value.provenance.manifest["/tools/write_file/interaction"]).toBe(
+      "author:agent/agent.json#/tools/write_file/interaction",
+    );
+    expect(normalized.value.provenance.manifest["/tools/write_file/receiptPolicy"]).toBe(
+      "macro(workspace@1)#/tools/write_file/receiptPolicy",
+    );
+  });
+
+  it("rejects unsafe workspace default controls", () => {
+    const loosened = compileAgentTree({
+      files: [
+        { path: "agent/instructions.md", kind: "markdown", text: "Run workspace tasks." },
+        {
+          path: "agent/agent.json",
+          kind: "json",
+          value: {
+            tools: {
+              run_shell: { interaction: "never" },
+            },
+          },
+        },
+      ],
+    });
+    expect(loosened).toEqual({
+      ok: false,
+      issues: [
+        {
+          kind: "workspace_default_tool_interaction_weakened",
+          path: "agent.json",
+          toolId: "run_shell",
+          floor: "approval",
+          attempted: "never",
+        },
+      ],
+    });
+
+    const receiptOverride = compileAgentTree({
+      files: [
+        { path: "agent/instructions.md", kind: "markdown", text: "Run workspace tasks." },
+        {
+          path: "agent/agent.json",
+          kind: "json",
+          value: {
+            tools: {
+              write_file: { receiptPolicy: "none" },
+            },
+          },
+        },
+      ],
+    });
+    expect(receiptOverride).toEqual({
+      ok: false,
+      issues: [
+        {
+          kind: "workspace_default_tool_control_field_forbidden",
+          path: "agent.json",
+          toolId: "write_file",
+          field: "receiptPolicy",
+        },
+      ],
+    });
+  });
+
+  it("applies disable controls before resolving default/custom collisions", () => {
+    const enabledShadow = compileAgentTree({
+      files: [
+        { path: "agent/instructions.md", kind: "markdown", text: "Run workspace tasks." },
+        { path: "agent/tools/write_file.ts", kind: "tool", declaration: {} },
+      ],
+    });
+    expect(enabledShadow.ok).toBe(true);
+    if (!enabledShadow.ok) expect.fail(JSON.stringify(enabledShadow.issues));
+    const enabledShadowNormalized = normalizeAgentOsConfig(
+      {
+        profile: AGENTOS_CONFIG_PROFILE.WORKSPACE_V1,
+        agent: "./agent",
+        deployment: { id: "web-cursor-demo" },
+        target: {
+          kind: AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1,
+          durableObject: { className: "AgentOS", binding: "AGENT_OS" },
+        },
+        client: { kind: AGENTOS_CONFIG_CLIENT.BROWSER_DIRECT_V1 },
+        llm: {
+          route: AGENTOS_CONFIG_LLM_ROUTE.OPENAI_CHAT_COMPATIBLE,
+          endpointRef: "openrouter",
+          credentialRef: "openrouter-key",
+          modelRef: "model",
+        },
+        workspace: {
+          binding: "Sandbox",
+          root: "/workspace",
+        },
+      },
+      enabledShadow.value,
+    );
+    expect(enabledShadowNormalized).toEqual({
+      ok: false,
+      issues: [
+        {
+          kind: "workspace_default_tool_shadowed",
+          path: "tools/write_file.ts",
+          toolId: "write_file",
+        },
+      ],
+    });
+
+    const disabledReplacement = compileAgentTree({
+      files: [
+        { path: "agent/instructions.md", kind: "markdown", text: "Run workspace tasks." },
+        {
+          path: "agent/agent.json",
+          kind: "json",
+          value: {
+            agentId: "agent.workspace",
+            scope: { kind: "session", idSource: "manifest", stableScopeId: "workspace-ledger" },
+            tools: {
+              write_file: false,
+              delete_path: false,
+            },
+          },
+        },
+        { path: "agent/tools/write_file.ts", kind: "tool", declaration: {} },
+      ],
+    });
+    expect(disabledReplacement.ok).toBe(true);
+    if (!disabledReplacement.ok) expect.fail(JSON.stringify(disabledReplacement.issues));
+    const disabledReplacementNormalized = normalizeAgentOsConfig(
+      {
+        profile: AGENTOS_CONFIG_PROFILE.WORKSPACE_V1,
+        agent: "./agent",
+        deployment: { id: "web-cursor-demo" },
+        target: {
+          kind: AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1,
+          durableObject: { className: "AgentOS", binding: "AGENT_OS" },
+        },
+        client: { kind: AGENTOS_CONFIG_CLIENT.BROWSER_DIRECT_V1 },
+        llm: {
+          route: AGENTOS_CONFIG_LLM_ROUTE.OPENAI_CHAT_COMPATIBLE,
+          endpointRef: "openrouter",
+          credentialRef: "openrouter-key",
+          modelRef: "model",
+        },
+        workspace: {
+          binding: "Sandbox",
+          root: "/workspace",
+        },
+      },
+      disabledReplacement.value,
+    );
+    expect(disabledReplacementNormalized.ok).toBe(true);
+    if (!disabledReplacementNormalized.ok) {
+      expect.fail(JSON.stringify(disabledReplacementNormalized.issues));
+    }
+    expect(
+      Object.keys(disabledReplacementNormalized.value.deployment.manifest.tools ?? {}),
+    ).toEqual([
+      "edit_file",
+      "glob_files",
+      "grep_files",
+      "list_files",
+      "read_file",
+      "run_shell",
+      "write_file",
+    ]);
+    expect(
+      disabledReplacementNormalized.value.deployment.manifest.tools?.delete_path,
+    ).toBeUndefined();
+    expect(disabledReplacementNormalized.value.deployment.manifest.tools?.write_file).toEqual({
+      bindingRef: "tool.write_file",
+      executionDomain: "app-runtime",
+      interaction: "never",
+    });
+    expect(disabledReplacementNormalized.value.authoredToolNames).toEqual(["write_file"]);
+    expect(disabledReplacementNormalized.value.provenance.exclusions).toEqual({
+      "/tools/delete_path": "author:agent/agent.json#/tools/delete_path",
+      "/tools/write_file": "author:agent/agent.json#/tools/write_file",
+    });
+
+    const linked = linkWorkspaceStaticTarget(disabledReplacementNormalized.value);
+    expect(linked.ok).toBe(true);
+    if (!linked.ok) expect.fail(JSON.stringify(linked.issues));
+    expect(linked.value.moduleGraph).toContainEqual({
+      kind: "authored-tool",
+      source: "../../agent/tools/write_file",
+      imports: ["default as tool_0"],
+    });
+    const target = generatedText(linked, ".agentos/generated/target.ts");
+    expect(target).toContain('import tool_0 from "../../agent/tools/write_file";');
+    expect(target).toContain('"write_file": tool_0');
+    expect(target).toContain(
+      'const generatedWorkspaceToolNames = ["edit_file", "glob_files", "grep_files", "list_files", "read_file", "run_shell"] as const;',
     );
   });
 
@@ -554,8 +806,6 @@ describe("agent authored tree compiler", () => {
             scope: { kind: "session", idSource: "manifest", stableScopeId: "workspace-ledger" },
           },
         },
-        { path: "agent/tools/write_file.ts", kind: "tool", declaration: {} },
-        { path: "agent/tools/read_file.ts", kind: "tool", declaration: {} },
       ],
     });
     expect(compiled.ok).toBe(true);
@@ -677,7 +927,7 @@ describe("agent authored tree compiler", () => {
         kind: WORKSPACE_TOPOLOGY.PER_SCOPE,
         allocator: "workspace-per-scope-v1",
       },
-      toolNames: ["read_file", "write_file"],
+      toolNames: [...workspaceDefaultToolNames],
     });
     expect(linked.value.mount).toMatchObject({
       driver: { kind: "cloudflare-do", className: "AgentOS", binding: "AGENT_OS" },
@@ -711,11 +961,12 @@ describe("agent authored tree compiler", () => {
     expect(target).toContain("manifest: semanticManifest");
     expect(target).toContain("llmTransport: () => OpenAiCompatibleLlmTransportLive");
     expect(target).toContain(
-      'const generatedWorkspaceToolNames = ["read_file", "write_file"] as const;',
+      'const generatedWorkspaceToolNames = ["delete_path", "edit_file", "glob_files", "grep_files", "list_files", "read_file", "run_shell", "write_file"] as const;',
     );
     expect(target).toContain("bindWorkspaceToolsForRuntime({");
     expect(target).toContain("toolNames: generatedWorkspaceToolNames");
     expect(target).toContain('mutationPolicy: "receipt-backed"');
+    expect(target).toContain('shellPolicy: "receipt-backed"');
     expect(target).toContain("installCloudflareWorkspaceOperationProvider({");
     expect(target).toContain("workspaceOperationInstallFor(env).extensions");
     expect(target).toContain("override submit(spec: AgentSubmitSpec): Promise<SubmitResult>");
@@ -898,9 +1149,9 @@ describe("agent authored tree compiler", () => {
       return linked.value;
     };
 
-    const first = compile(["read_file"]);
-    const second = compile(["read_file"]);
-    const withExtraTool = compile(["read_file", "custom_tool"]);
+    const first = compile([]);
+    const second = compile([]);
+    const withExtraTool = compile(["custom_tool"]);
 
     expect(first.files).toEqual(second.files);
     expect(first.moduleGraph).toEqual(second.moduleGraph);
@@ -969,7 +1220,7 @@ describe("agent authored tree compiler", () => {
     const root = mkdtempSync(path.join(os.tmpdir(), "agent-authoring-build-cli-"));
     try {
       writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
-      mkdirSync(path.join(root, "agent/tools"), { recursive: true });
+      mkdirSync(path.join(root, "agent"), { recursive: true });
       writeFileSync(path.join(root, "agent/instructions.md"), "Operate on workspace files.");
       writeFileSync(
         path.join(root, "agent/agent.json"),
@@ -1000,20 +1251,6 @@ describe("agent authored tree compiler", () => {
           null,
           2,
         ),
-      );
-      writeFileSync(
-        path.join(root, "agent/tools/read_file.ts"),
-        [
-          "export const declaration = {",
-          '  bindingRef: "read_file",',
-          '  executionDomain: "workspace",',
-          '  interaction: "never",',
-          '  materialRefs: ["workspace"],',
-          '  effects: ["workspace_read"],',
-          '  receiptPolicy: "workspace.snapshot",',
-          "} as const;",
-          "",
-        ].join("\n"),
       );
       writeFileSync(
         path.join(root, "agentos.config.jsonc"),
@@ -1048,8 +1285,9 @@ describe("agent authored tree compiler", () => {
       expect(result.stdout).toContain("generated 8 agentOS files");
       const manifest = JSON.parse(
         readFileSync(path.join(root, ".agentos/generated/manifest.json"), "utf8"),
-      ) as { readonly agentId?: string };
+      ) as { readonly agentId?: string; readonly tools?: Record<string, unknown> };
       expect(manifest.agentId).toBe("fixture-agent");
+      expect(Object.keys(manifest.tools ?? {}).sort()).toEqual([...workspaceDefaultToolNames]);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

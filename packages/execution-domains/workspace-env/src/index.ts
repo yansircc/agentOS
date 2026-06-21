@@ -180,6 +180,18 @@ export interface WorkspaceToolSpec {
   readonly description: string;
 }
 
+export type WorkspaceToolInteractionFloor = "never" | "approval";
+export type WorkspaceToolReceiptPolicy = "workspace.snapshot" | "workspace-op.receipt";
+export type WorkspaceToolEffect = "workspace_read" | "workspace_mutation";
+
+export interface WorkspaceToolDefaultDeclaration extends WorkspaceToolSpec {
+  readonly executionDomain: "workspace";
+  readonly interaction: WorkspaceToolInteractionFloor;
+  readonly materialRefs: readonly ["workspace"];
+  readonly effects: readonly [WorkspaceToolEffect];
+  readonly receiptPolicy: WorkspaceToolReceiptPolicy;
+}
+
 export type WorkspaceTools = Readonly<Record<WorkspaceToolName, Tool>>;
 
 export interface NormalizeWorkspaceToolPathOptions {
@@ -1239,6 +1251,45 @@ export const WORKSPACE_TOOL_SPECS: ReadonlyArray<WorkspaceToolSpec> = workspaceT
     description,
   }),
 );
+
+const workspaceToolEffectFor = (category: WorkspaceToolCategory): WorkspaceToolEffect =>
+  category === "read" ? "workspace_read" : "workspace_mutation";
+
+const workspaceToolReceiptPolicyFor = (
+  category: WorkspaceToolCategory,
+): WorkspaceToolReceiptPolicy =>
+  category === "read" ? "workspace.snapshot" : "workspace-op.receipt";
+
+const workspaceToolInteractionFloorFor = (
+  category: WorkspaceToolCategory,
+): WorkspaceToolInteractionFloor => (category === "shell" ? "approval" : "never");
+
+export const WORKSPACE_TOOL_DEFAULT_DECLARATIONS: ReadonlyArray<WorkspaceToolDefaultDeclaration> =
+  WORKSPACE_TOOL_SPECS.map((spec) => ({
+    ...spec,
+    executionDomain: "workspace",
+    interaction: workspaceToolInteractionFloorFor(spec.category),
+    materialRefs: ["workspace"],
+    effects: [workspaceToolEffectFor(spec.category)],
+    receiptPolicy: workspaceToolReceiptPolicyFor(spec.category),
+  }));
+
+export const WORKSPACE_TOOL_NAMES: ReadonlyArray<WorkspaceToolName> =
+  WORKSPACE_TOOL_DEFAULT_DECLARATIONS.map((tool) => tool.name);
+
+export const WORKSPACE_TOOL_EXPOSURE_PROFILES: Readonly<
+  Record<WorkspaceToolCategory, ReadonlyArray<WorkspaceToolName>>
+> = {
+  read: WORKSPACE_TOOL_DEFAULT_DECLARATIONS.filter((tool) => tool.category === "read").map(
+    (tool) => tool.name,
+  ),
+  mutation: WORKSPACE_TOOL_DEFAULT_DECLARATIONS.filter((tool) => tool.category === "mutation").map(
+    (tool) => tool.name,
+  ),
+  shell: WORKSPACE_TOOL_DEFAULT_DECLARATIONS.filter((tool) => tool.category === "shell").map(
+    (tool) => tool.name,
+  ),
+};
 
 export const createWorkspaceTools = (
   env: WorkspaceEnv,

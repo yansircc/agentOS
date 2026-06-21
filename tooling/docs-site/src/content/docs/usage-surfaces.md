@@ -13,7 +13,7 @@ views from projections.
 
 | Surface            | Package                                    | Audience               | First facts                                        |
 | ------------------ | ------------------------------------------ | ---------------------- | -------------------------------------------------- |
-| App authoring      | `@agent-os/agent-authoring`                | App authors            | `agent/instructions.md`, `agent/tools/*.ts`        |
+| App authoring      | `@agent-os/agent-authoring`                | App authors            | `agent/instructions.md`, `agent/agent.json`        |
 | Generated client   | app framework output                       | App authors            | typed submit, projection subscriptions, commands   |
 | Client core        | `@agent-os/client`                         | App UI/headless code   | transport-neutral store and typed command invoker  |
 | Framework bridge   | `@agent-os/client-react` / `client-svelte` | App UI authors         | framework reactivity over canonical client state   |
@@ -30,12 +30,16 @@ The app path has one authored source location and one generated output surface:
 
 - author intent lives under `agent/`;
 - `instructions.md` is required;
-- path segments are identities for tools, materials, domains, and interactions;
+- `workspace@1` owns standard workspace tools; `agent/tools/*.ts` is only for
+  custom execute code;
+- path segments are identities for custom tools, materials, domains, and
+  interactions;
 - framework defaults are versioned and visible through provenance;
 - generated clients call the mounted backend.
 
-The minimum concept set is intentional: instructions, tool declarations,
-symbolic material refs, LLM route refs, interaction policy, manifest
+The minimum concept set is intentional: instructions, macro-provided default
+tools, optional custom tool declarations, symbolic material refs, LLM route refs,
+interaction policy, manifest
 provenance, ledger facts, and projections. Dispatch, scheduling, quota,
 carriers, providers, resource reservation, run streams, and advanced scope refs
 are opt-in.

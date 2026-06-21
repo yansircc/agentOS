@@ -37,6 +37,8 @@ Status: 0.5.x experimental for compiling authored agent trees into manifest/prov
 - `.:AuthoredToolDeclaration`
 - `.:AuthoredToolEffect`
 - `.:AuthoredToolFile`
+- `.:AuthoredWorkspaceDefaultToolControl`
+- `.:AuthoredWorkspaceDefaultToolOverride`
 - `.:CanonicalDeploymentIR`
 - `.:CompileAgentTreeIssue`
 - `.:CompileAgentTreeResult`
@@ -53,7 +55,9 @@ Status: 0.5.x experimental for compiling authored agent trees into manifest/prov
 - `.:StaticTargetLinkResult`
 - `.:StaticTargetModuleImport`
 - `.:StaticTargetModuleImportKind`
+- `.:StaticTargetProvenance`
 - `.:WORKSPACE_TOPOLOGY`
+- `.:WorkspaceDefaultToolControl`
 - `.:WorkspaceTopologyKind`
 - `.:compileAgentTree`
 - `.:decodeAgentOsConfig`

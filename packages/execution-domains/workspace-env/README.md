@@ -24,6 +24,10 @@ Construct a `WorkspaceEnv` from a provider adapter, then pass it to
 `createWorkspaceTools`. Product code may attach observation hooks for local
 projections, but hook failure fails the tool instead of silently drifting.
 
+`WORKSPACE_TOOL_DEFAULT_DECLARATIONS` is the single catalog for the standard
+workspace tool declarations consumed by `workspace@1` authoring and runtime
+binding. `shell` is a mutation subclass with a stricter interaction floor.
+
 ## Verification
 
 ```sh

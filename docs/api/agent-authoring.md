@@ -33,6 +33,8 @@
 - `.:AuthoredToolDeclaration`
 - `.:AuthoredToolEffect`
 - `.:AuthoredToolFile`
+- `.:AuthoredWorkspaceDefaultToolControl`
+- `.:AuthoredWorkspaceDefaultToolOverride`
 - `.:CanonicalDeploymentIR`
 - `.:CompileAgentTreeIssue`
 - `.:CompileAgentTreeResult`
@@ -49,7 +51,9 @@
 - `.:StaticTargetLinkResult`
 - `.:StaticTargetModuleImport`
 - `.:StaticTargetModuleImportKind`
+- `.:StaticTargetProvenance`
 - `.:WORKSPACE_TOPOLOGY`
+- `.:WorkspaceDefaultToolControl`
 - `.:WorkspaceTopologyKind`
 - `.:compileAgentTree`
 - `.:decodeAgentOsConfig`
