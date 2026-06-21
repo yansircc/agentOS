@@ -44,7 +44,7 @@ export interface BoundaryCommitIdentity {
 }
 
 export class BoundaryCommitRejected extends Data.TaggedError("agent_os.boundary_commit_rejected")<{
-  readonly packageId: string;
+  readonly ownerId: string;
   readonly event: string;
   readonly issue: BoundaryCommitIssue;
 }> {}
@@ -61,7 +61,7 @@ const reject = (
   event: string,
   issue: BoundaryCommitIssue,
 ): BoundaryCommitRejected =>
-  new BoundaryCommitRejected({ packageId: contract.packageId, event, issue });
+  new BoundaryCommitRejected({ ownerId: contract.ownerId, event, issue });
 
 const payloadForSchema = (
   payload: Readonly<Record<string, unknown>>,
@@ -189,7 +189,7 @@ export const boundaryCommitIdentity = (
     eventContract === undefined ? null : validatedClaimFromPayload(eventContract, payload);
   return {
     kind: event,
-    factOwnerRef: contract.packageId,
+    factOwnerRef: contract.ownerId,
     ...(claim === null
       ? {}
       : {
@@ -208,7 +208,7 @@ export const validateCommittedBoundaryEvent = (
   if (committed.kind !== event) {
     return reject(contract, event, "committed_event_kind_mismatch");
   }
-  if (committed.factOwnerRef !== contract.packageId) {
+  if (committed.factOwnerRef !== contract.ownerId) {
     return reject(contract, event, "committed_fact_owner_mismatch");
   }
   const identity = boundaryCommitIdentity(contract, event, payload);

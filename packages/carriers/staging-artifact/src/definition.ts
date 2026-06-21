@@ -8,7 +8,8 @@ const StagingSymbolicRef = Schema.String.pipe(
 );
 
 export const stagingArtifactCarrier = defineCarrier({
-  packageId: "@agent-os/staging-artifact",
+  ownerId: "@agent-os/staging-artifact",
+  sourcePackageName: "@agent-os/staging-artifact",
   prefix: STAGING_EVENT_PREFIX,
   roles: ["generator", "resolver", "reader"],
   events: {

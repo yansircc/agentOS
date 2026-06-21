@@ -94,7 +94,8 @@ const materialRefSchema = Schema.Union([
 ]);
 
 export const resourceCarrierDefinition = defineCarrier({
-  packageId: "@agent-os/resource-carrier",
+  ownerId: "@agent-os/resource-carrier",
+  sourcePackageName: "@agent-os/resource-carrier",
   prefix: RESOURCE_EVENT_PREFIX,
   roles: ["resolver", "reader"],
   effectAuthorityContracts: resourceEffectAuthorityContracts,

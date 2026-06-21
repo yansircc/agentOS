@@ -17,7 +17,8 @@ const rejectionRefSchema = Schema.Struct({
 });
 
 export const decisionGateCarrier = defineCarrier({
-  packageId: "@agent-os/decision-gate",
+  ownerId: "@agent-os/decision-gate",
+  sourcePackageName: "@agent-os/decision-gate",
   prefix: DECISION_GATE_EVENT_PREFIX,
   roles: ["admitter", "reader"],
   events: {

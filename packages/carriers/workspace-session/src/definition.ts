@@ -10,7 +10,8 @@ const retentionSchema = Schema.Struct({
 });
 
 export const workspaceSessionCarrier = defineCarrier({
-  packageId: "@agent-os/workspace-session",
+  ownerId: "@agent-os/workspace-session",
+  sourcePackageName: "@agent-os/workspace-session",
   prefix: WORKSPACE_SESSION_EVENT_PREFIX,
   roles: ["resolver", "reader"],
   events: {

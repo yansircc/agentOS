@@ -68,7 +68,8 @@ const WorkspaceOperationRejectedSchema = Schema.Struct({
 });
 
 export const workspaceOpCarrier = defineCarrier({
-  packageId: "@agent-os/workspace-op",
+  ownerId: "@agent-os/workspace-op",
+  sourcePackageName: "@agent-os/workspace-op",
   prefix: WORKSPACE_OP_EVENT_PREFIX,
   roles: ["generator", "resolver", "reader"],
   events: {

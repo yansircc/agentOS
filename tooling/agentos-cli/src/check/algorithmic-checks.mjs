@@ -631,6 +631,202 @@ const checkOwnerCoupling = (args = []) => {
   failIfAny("owner coupling", lines);
 };
 
+const ownerIdRegistryPath = "architecture/owner-ids.json";
+
+const ownerIdRegistry = () => readJson(ownerIdRegistryPath);
+
+const ownerIdValue = (expression, constStrings) => {
+  const unwrapped = unwrap(expression);
+  if (ts.isStringLiteralLike(unwrapped)) return unwrapped.text;
+  if (ts.isIdentifier(unwrapped)) return constStrings.get(unwrapped.text);
+  return undefined;
+};
+
+const ownerIdConstStrings = (sourceFile) => {
+  const out = new Map();
+  const visit = (node) => {
+    if (ts.isVariableStatement(node)) {
+      for (const declaration of node.declarationList.declarations) {
+        if (!ts.isIdentifier(declaration.name) || declaration.initializer === undefined) continue;
+        const value = ownerIdValue(declaration.initializer, out);
+        if (value !== undefined) out.set(declaration.name.text, value);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return out;
+};
+
+const ownerIdObjectProperty = (objectLiteral, name) => {
+  for (const property of objectLiteral.properties) {
+    if (!ts.isPropertyAssignment(property)) continue;
+    const propertyName = ownerCouplingPropertyName(property.name);
+    if (propertyName === name) return property.initializer;
+  }
+  return undefined;
+};
+
+export const ownerIdDeclarationFindingsForSource = ({
+  content,
+  file,
+  registeredOwners,
+  workspacePackageNames,
+}) => {
+  const sourceFile = ts.createSourceFile(
+    file,
+    content,
+    ts.ScriptTarget.Latest,
+    true,
+    file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
+  const constStrings = ownerIdConstStrings(sourceFile);
+  const findings = [];
+  const declarationCalls = new Set(["defineCarrier", "defineBoundaryContract", "eventNamespace"]);
+  const record = (node, message) => {
+    const position = ownerCouplingPosition(sourceFile, node);
+    findings.push(`${file}:${position.line}:${position.column}: owner-ids: ${message}`);
+  };
+
+  const visit = (node) => {
+    if (ts.isCallExpression(node) && declarationCalls.has(callName(node.expression))) {
+      const [firstArg] = node.arguments;
+      if (firstArg === undefined || !ts.isObjectLiteralExpression(unwrap(firstArg))) {
+        record(node, `${callName(node.expression)} declaration must use an object literal`);
+      } else {
+        const objectLiteral = unwrap(firstArg);
+        const ownerNode = ownerIdObjectProperty(objectLiteral, "ownerId");
+        const sourceNode = ownerIdObjectProperty(objectLiteral, "sourcePackageName");
+        const packageNode = ownerIdObjectProperty(objectLiteral, "packageId");
+        if (packageNode !== undefined) {
+          record(
+            packageNode,
+            `${callName(node.expression)} declaration must not declare packageId`,
+          );
+        }
+        const ownerId = ownerNode === undefined ? undefined : ownerIdValue(ownerNode, constStrings);
+        const sourcePackageName =
+          sourceNode === undefined ? undefined : ownerIdValue(sourceNode, constStrings);
+        if (ownerId === undefined) {
+          record(node, `${callName(node.expression)} declaration requires literal ownerId`);
+        } else if (!registeredOwners.has(ownerId)) {
+          record(
+            ownerNode ?? node,
+            `ownerId ${ownerId} is not registered in ${ownerIdRegistryPath}`,
+          );
+        }
+        if (sourcePackageName === undefined) {
+          record(
+            node,
+            `${callName(node.expression)} declaration requires literal sourcePackageName`,
+          );
+        } else if (!workspacePackageNames.has(sourcePackageName)) {
+          record(
+            sourceNode ?? node,
+            `sourcePackageName ${sourcePackageName} is not a workspace package`,
+          );
+        } else if (ownerId !== undefined && registeredOwners.has(ownerId)) {
+          const owner = registeredOwners.get(ownerId);
+          const sources = new Set(owner.sourcePackageNames);
+          if (!sources.has(sourcePackageName)) {
+            record(
+              sourceNode ?? node,
+              `sourcePackageName ${sourcePackageName} is not registered for ownerId ${ownerId}`,
+            );
+          }
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return findings;
+};
+
+export const ownerIdRegistryFindings = ({ registry, workspacePackageNames }) => {
+  const findings = [];
+  if (!isRecord(registry)) {
+    return [`${ownerIdRegistryPath}: owner registry must be a JSON object`];
+  }
+  if (registry.schemaVersion !== 1) {
+    findings.push(`${ownerIdRegistryPath}: schemaVersion must be 1`);
+  }
+  if (!isRecord(registry.policy)) {
+    findings.push(`${ownerIdRegistryPath}: policy object is required`);
+  } else {
+    if (registry.policy.allocation !== "append-only") {
+      findings.push(`${ownerIdRegistryPath}: policy.allocation must be append-only`);
+    }
+    for (const key of ["retirement", "namespaceSplit"]) {
+      if (typeof registry.policy[key] !== "string" || registry.policy[key].length === 0) {
+        findings.push(`${ownerIdRegistryPath}: policy.${key} must be a non-empty string`);
+      }
+    }
+  }
+  if (!Array.isArray(registry.owners) || registry.owners.length === 0) {
+    findings.push(`${ownerIdRegistryPath}: owners must be a non-empty array`);
+    return findings;
+  }
+  const seenOwnerIds = new Set();
+  for (const [index, owner] of registry.owners.entries()) {
+    const label = `${ownerIdRegistryPath}:owners[${index}]`;
+    if (!isRecord(owner)) {
+      findings.push(`${label}: owner must be an object`);
+      continue;
+    }
+    if (typeof owner.ownerId !== "string" || owner.ownerId.length === 0) {
+      findings.push(`${label}: ownerId must be a non-empty string`);
+    } else if (seenOwnerIds.has(owner.ownerId)) {
+      findings.push(`${label}: duplicate ownerId ${owner.ownerId}`);
+    } else {
+      seenOwnerIds.add(owner.ownerId);
+    }
+    if (owner.status !== "active" && owner.status !== "retired") {
+      findings.push(`${label}: status must be active or retired`);
+    }
+    if (
+      !Array.isArray(owner.sourcePackageNames) ||
+      owner.sourcePackageNames.length === 0 ||
+      !owner.sourcePackageNames.every((name) => typeof name === "string" && name.length > 0)
+    ) {
+      findings.push(`${label}: sourcePackageNames must be a non-empty string array`);
+      continue;
+    }
+    for (const sourcePackageName of owner.sourcePackageNames) {
+      if (!workspacePackageNames.has(sourcePackageName)) {
+        findings.push(
+          `${label}: sourcePackageName ${sourcePackageName} is not a workspace package`,
+        );
+      }
+    }
+  }
+  return findings;
+};
+
+const checkOwnerIds = () => {
+  const workspacePackageNames = new Set(
+    graphWorkspacePackageRecords(repoRoot)
+      .map((record) => record.name)
+      .filter((name) => typeof name === "string" && name.startsWith("@agent-os/")),
+  );
+  const registry = ownerIdRegistry();
+  const registryFindings = ownerIdRegistryFindings({ registry, workspacePackageNames });
+  const registeredOwners = new Map(
+    (Array.isArray(registry.owners) ? registry.owners : [])
+      .filter((owner) => isRecord(owner) && typeof owner.ownerId === "string")
+      .map((owner) => [owner.ownerId, owner]),
+  );
+  const declarationFindings = packageSourceFiles().flatMap((file) =>
+    ownerIdDeclarationFindingsForSource({
+      content: read(file),
+      file,
+      registeredOwners,
+      workspacePackageNames,
+    }),
+  );
+  failIfAny("owner ids", [...registryFindings, ...declarationFindings]);
+};
+
 export const moduleBucketForPath = (file) => {
   if (
     file.startsWith("tooling/ops-") ||
@@ -2600,6 +2796,7 @@ const checkerById = new Map([
   ["module-graph-oracle", checkModuleGraphOracle],
   ["module-buckets", checkModuleBuckets],
   ["owner-coupling", checkOwnerCoupling],
+  ["owner-ids", checkOwnerIds],
   ["public-api", checkPublicApi],
   ["repo-tooling-surface", checkRepoToolingSurface],
   ["source-aliases", checkSourceAliases],

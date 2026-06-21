@@ -34,7 +34,8 @@ const effectAuthorityRef = {
 const factOwnerRef = "@agent-os/test.surface-edit" as const;
 
 const surfaceEditBoundary = defineBoundaryContract({
-  packageId: factOwnerRef,
+  ownerId: factOwnerRef,
+  sourcePackageName: factOwnerRef,
   kindPrefixes: ["surface_edit."],
   roles: ["generator", "resolver"],
   events: {

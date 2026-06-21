@@ -21,6 +21,8 @@ const isRecord = (value) => typeof value === "object" && value !== null && !Arra
 
 const isCarrier = (value) =>
   isRecord(value) &&
+  typeof value.ownerId === "string" &&
+  typeof value.sourcePackageName === "string" &&
   typeof value.packageId === "string" &&
   typeof value.prefix === "string" &&
   isRecord(value.boundaryContract) &&
@@ -30,6 +32,8 @@ const isCarrier = (value) =>
 
 const isEventNamespace = (value) =>
   isRecord(value) &&
+  typeof value.ownerId === "string" &&
+  typeof value.sourcePackageName === "string" &&
   typeof value.packageId === "string" &&
   Array.isArray(value.kindPrefixes) &&
   value.kindPrefixes.every((prefix) => typeof prefix === "string" && prefix.length > 0) &&
@@ -125,13 +129,16 @@ const authorityRows = (authorities) =>
   ]);
 
 const validateCarrier = (carrier, pkg) => {
-  if (carrier.packageId !== pkg.name) {
+  if (carrier.sourcePackageName !== pkg.name || carrier.packageId !== carrier.sourcePackageName) {
     failures.push(
-      `${pkg.name}: carrier packageId ${carrier.packageId} does not match surface name`,
+      `${pkg.name}: carrier sourcePackageName ${carrier.sourcePackageName} does not match surface name`,
     );
   }
-  if (carrier.boundaryContract.packageId !== carrier.packageId) {
-    failures.push(`${carrier.packageId}: boundaryContract packageId mismatch`);
+  if (carrier.boundaryContract.ownerId !== carrier.ownerId) {
+    failures.push(`${carrier.ownerId}: boundaryContract ownerId mismatch`);
+  }
+  if (carrier.boundaryContract.sourcePackageName !== carrier.sourcePackageName) {
+    failures.push(`${carrier.ownerId}: boundaryContract sourcePackageName mismatch`);
   }
   if (
     !Array.isArray(carrier.boundaryContract.kindPrefixes) ||
@@ -153,9 +160,12 @@ const validateCarrier = (carrier, pkg) => {
 };
 
 const validateNamespace = (namespace, pkg) => {
-  if (namespace.packageId !== pkg.name) {
+  if (
+    namespace.sourcePackageName !== pkg.name ||
+    namespace.packageId !== namespace.sourcePackageName
+  ) {
     failures.push(
-      `${pkg.name}: namespace packageId ${namespace.packageId} does not match surface name`,
+      `${pkg.name}: namespace sourcePackageName ${namespace.sourcePackageName} does not match surface name`,
     );
   }
 };

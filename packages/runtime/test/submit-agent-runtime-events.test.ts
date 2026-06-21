@@ -630,7 +630,8 @@ describe("submit-agent runtime event writes", () => {
               kind: "workspace_op.requested",
               boundaryPackage: boundaryPackage(
                 defineBoundaryContract({
-                  packageId: "@agent-os/workspace-op",
+                  ownerId: "@agent-os/workspace-op",
+                  sourcePackageName: "@agent-os/workspace-op",
                   kindPrefixes: ["workspace_op."],
                   roles: ["generator", "reader"],
                   events: {
@@ -1498,7 +1499,8 @@ describe("submit-agent runtime event writes", () => {
     Effect.gen(function* () {
       const intentPackage = boundaryPackage(
         defineBoundaryContract({
-          packageId: "@agent-os/runtime-test.claimed-intent",
+          ownerId: "@agent-os/runtime-test.claimed-intent",
+          sourcePackageName: "@agent-os/runtime-test.claimed-intent",
           kindPrefixes: ["runtime.claimed_intent."],
           roles: ["generator", "reader"],
           events: {
@@ -2298,7 +2300,8 @@ describe("submit-agent runtime event writes", () => {
                 kind: "workspace_op.requested",
                 boundaryPackage: boundaryPackage(
                   defineBoundaryContract({
-                    packageId: "@agent-os/workspace-op",
+                    ownerId: "@agent-os/workspace-op",
+                    sourcePackageName: "@agent-os/workspace-op",
                     kindPrefixes: ["workspace_op."],
                     roles: ["generator", "reader"],
                     events: {

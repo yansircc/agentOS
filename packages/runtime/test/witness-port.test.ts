@@ -19,7 +19,8 @@ const settlement = defineSettlementContract({
 });
 
 const contract = defineBoundaryContract({
-  packageId: "@agent-os/witness-test",
+  ownerId: "@agent-os/witness-test",
+  sourcePackageName: "@agent-os/witness-test",
   kindPrefixes: ["witness."],
   roles: ["resolver", "reader"],
   events: {

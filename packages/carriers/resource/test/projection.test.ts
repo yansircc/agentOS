@@ -243,6 +243,8 @@ describe("@agent-os/resource-carrier", () => {
   it("settles resource.* failure facts through ExtensionCapability", async () => {
     const committed: Array<{ event: string; data: unknown }> = [];
     const cap: ExtensionCapability = {
+      ownerId: "@agent-os/resource-carrier",
+      sourcePackageName: "@agent-os/resource-carrier",
       packageId: "@agent-os/resource-carrier",
       kindPrefixes: ["resource."],
       version: "0.1.0",

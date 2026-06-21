@@ -398,6 +398,8 @@ describe("@agent-os/decision-gate", () => {
   it("commits decision_gate.* facts through ExtensionCapability", async () => {
     const committed: Array<{ event: string; data: unknown }> = [];
     const cap: ExtensionCapability = {
+      ownerId: "@agent-os/decision-gate",
+      sourcePackageName: "@agent-os/decision-gate",
       packageId: "@agent-os/decision-gate",
       kindPrefixes: ["decision_gate."],
       version: "0.1.0",

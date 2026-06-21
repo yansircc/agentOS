@@ -9,6 +9,8 @@ import type { BoundaryContract } from "./boundary-contract";
 declare const boundaryPackageBrand: unique symbol;
 
 export interface BoundaryPackage {
+  readonly ownerId: string;
+  readonly sourcePackageName: string;
   readonly packageId: string;
   readonly kindPrefixes: ReadonlyArray<string>;
   readonly version: string;
@@ -17,6 +19,8 @@ export interface BoundaryPackage {
 }
 
 export interface EventNamespace {
+  readonly ownerId: string;
+  readonly sourcePackageName: string;
   readonly packageId: string;
   readonly kindPrefixes: ReadonlyArray<string>;
   readonly version: string;
@@ -34,6 +38,8 @@ export interface ExtensionTimeSpec extends ExtensionCommitSpec {
 }
 
 export interface ExtensionCapability {
+  readonly ownerId: string;
+  readonly sourcePackageName: string;
   readonly packageId: string;
   readonly kindPrefixes: ReadonlyArray<string>;
   readonly version: string;
@@ -94,6 +100,8 @@ export const isBoundaryPackage = (value: ExtensionDeclaration): value is Boundar
   "boundaryContract" in value;
 
 export const eventNamespace = (spec: EventNamespace): EventNamespace => ({
+  ownerId: spec.ownerId,
+  sourcePackageName: spec.sourcePackageName,
   packageId: spec.packageId,
   kindPrefixes: spec.kindPrefixes,
   version: spec.version,

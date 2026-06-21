@@ -144,7 +144,8 @@ const ArtifactReadbackVerifiedSchema = Schema.Struct({
 });
 
 export const workspaceJobCarrier = defineCarrier({
-  packageId: WORKSPACE_JOB_FACT_OWNER,
+  ownerId: WORKSPACE_JOB_FACT_OWNER,
+  sourcePackageName: WORKSPACE_JOB_FACT_OWNER,
   prefix: WORKSPACE_JOB_EVENT_PREFIX,
   roles: ["generator", "reader"],
   events: {

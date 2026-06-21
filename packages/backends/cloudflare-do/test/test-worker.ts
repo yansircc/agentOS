@@ -578,7 +578,8 @@ const streamOwnerSettlementContract = defineSettlementContract({
 });
 
 const streamOwnerBoundaryContract = defineBoundaryContract({
-  packageId: STREAM_OWNER_FACT_OWNER,
+  ownerId: STREAM_OWNER_FACT_OWNER,
+  sourcePackageName: STREAM_OWNER_FACT_OWNER,
   kindPrefixes: ["stream.owner."],
   roles: ["generator", "reader"],
   effectAuthorityContracts: [],
@@ -650,7 +651,8 @@ const proofSettlementContract = defineSettlementContract({
 });
 
 const proofBoundaryContract = defineBoundaryContract({
-  packageId: "@agent-os/proof",
+  ownerId: "@agent-os/proof",
+  sourcePackageName: "@agent-os/proof",
   kindPrefixes: ["proof."],
   roles: ["generator", "reader"],
   effectAuthorityContracts: [],
@@ -853,6 +855,8 @@ export const ExtensionTestDO = createAgentDurableObject<CloudflareAgentEnv>({
   ...testAgentMountConfig,
   extensions: () => [
     eventNamespace({
+      ownerId: "@agent-os/image",
+      sourcePackageName: "@agent-os/image",
       packageId: "@agent-os/image",
       kindPrefixes: ["image."],
       version: "0.3.0",
@@ -918,7 +922,8 @@ export const facadeWriteSecond = defineTool({
 
 const facadeIntentBoundaryPackage = boundaryPackage(
   defineBoundaryContract({
-    packageId: "@agent-os/facade-intent-test",
+    ownerId: "@agent-os/facade-intent-test",
+    sourcePackageName: "@agent-os/facade-intent-test",
     kindPrefixes: ["facade.intent."],
     roles: ["generator", "reader"],
     events: {

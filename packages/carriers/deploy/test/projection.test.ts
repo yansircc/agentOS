@@ -197,6 +197,8 @@ describe("@agent-os/deploy", () => {
   it("settles deploy.* facts through ExtensionCapability", async () => {
     const committed: Array<{ event: string; data: unknown }> = [];
     const cap: ExtensionCapability = {
+      ownerId: "@agent-os/deploy",
+      sourcePackageName: "@agent-os/deploy",
       packageId: "@agent-os/deploy",
       kindPrefixes: ["deploy."],
       version: "0.1.0",

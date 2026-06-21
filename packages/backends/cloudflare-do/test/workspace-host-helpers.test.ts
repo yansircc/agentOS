@@ -333,6 +333,8 @@ describe("Cloudflare DO workspace host helpers", () => {
     expect(readRunIds).toEqual(["job-failed"]);
 
     const capability: ExtensionCapability = {
+      ownerId: WORKSPACE_OP_FACT_OWNER,
+      sourcePackageName: WORKSPACE_OP_FACT_OWNER,
       packageId: WORKSPACE_OP_FACT_OWNER,
       kindPrefixes: ["workspace_op."],
       version: "0.2.9",
@@ -661,6 +663,8 @@ describe("Cloudflare DO workspace host helpers", () => {
 
     const committed: Array<{ event: string; data: unknown }> = [];
     const capability: ExtensionCapability = {
+      ownerId: WORKSPACE_OP_FACT_OWNER,
+      sourcePackageName: WORKSPACE_OP_FACT_OWNER,
       packageId: WORKSPACE_OP_FACT_OWNER,
       kindPrefixes: ["workspace_op."],
       version: "0.2.9",
@@ -823,6 +827,8 @@ describe("Cloudflare DO workspace host helpers", () => {
       },
     });
     const capability: ExtensionCapability = {
+      ownerId: WORKSPACE_OP_FACT_OWNER,
+      sourcePackageName: WORKSPACE_OP_FACT_OWNER,
       packageId: WORKSPACE_OP_FACT_OWNER,
       kindPrefixes: ["workspace_op."],
       version: "0.2.9",

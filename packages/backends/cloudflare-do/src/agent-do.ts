@@ -535,6 +535,8 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
 
   private makeExtensionCapability(pkg: BoundaryPackage): ExtensionCapability {
     return {
+      ownerId: pkg.ownerId,
+      sourcePackageName: pkg.sourcePackageName,
       packageId: pkg.packageId,
       kindPrefixes: pkg.kindPrefixes,
       version: pkg.version,

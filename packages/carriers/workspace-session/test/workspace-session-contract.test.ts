@@ -325,6 +325,8 @@ describe("@agent-os/workspace-session", () => {
 
     const committed: Array<{ event: string; data: unknown }> = [];
     const cap: ExtensionCapability = {
+      ownerId: "@agent-os/workspace-session",
+      sourcePackageName: "@agent-os/workspace-session",
       packageId: "@agent-os/workspace-session",
       kindPrefixes: ["workspace_session."],
       version: "0.1.0",
@@ -376,6 +378,8 @@ describe("@agent-os/workspace-session", () => {
   it("commits started facts through ExtensionCapability", async () => {
     const committed: Array<{ event: string; data: unknown }> = [];
     const cap: ExtensionCapability = {
+      ownerId: "@agent-os/workspace-session",
+      sourcePackageName: "@agent-os/workspace-session",
       packageId: "@agent-os/workspace-session",
       kindPrefixes: ["workspace_session."],
       version: "0.1.0",

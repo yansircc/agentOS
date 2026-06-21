@@ -4,7 +4,8 @@ import { defineCarrier, event, lived } from "@agent-os/kernel/carrier";
 export const VERIFICATION_EVENT_PREFIX = "verification.";
 
 export const verificationCarrier = defineCarrier({
-  packageId: "@agent-os/verification",
+  ownerId: "@agent-os/verification",
+  sourcePackageName: "@agent-os/verification",
   prefix: VERIFICATION_EVENT_PREFIX,
   roles: ["generator", "reader"],
   events: {

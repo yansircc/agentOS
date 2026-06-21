@@ -201,6 +201,8 @@ export interface Carrier<
     Record<string, CarrierEvent<string, AgentSchemaDecoder<unknown>, ClaimSlot>>
   >,
 > {
+  readonly ownerId: string;
+  readonly sourcePackageName: string;
   readonly packageId: string;
   readonly prefix: Prefix;
   readonly kind: CarrierKindView<Prefix, Events>;
@@ -236,7 +238,8 @@ export interface DefineCarrierSpec<
     Record<string, CarrierEvent<string, AgentSchemaDecoder<unknown>, ClaimSlot>>
   >,
 > {
-  readonly packageId: string;
+  readonly ownerId: string;
+  readonly sourcePackageName: string;
   readonly prefix: Prefix;
   readonly roles: BoundaryContract["roles"];
   readonly events: Events;
@@ -496,14 +499,15 @@ export const defineCarrier = <
   }
 
   const settlementContract = defineSettlementContract({
-    settlementId: spec.packageId,
+    settlementId: spec.ownerId,
     anchorKinds: [...anchorKinds],
     rejectionKinds: [...rejectionKinds],
     indeterminateKinds: [...indeterminateKinds],
   });
 
   const boundaryContract = {
-    packageId: spec.packageId,
+    ownerId: spec.ownerId,
+    sourcePackageName: spec.sourcePackageName,
     kindPrefixes: [spec.prefix],
     roles: spec.roles,
     events: boundaryEvents,
@@ -518,12 +522,14 @@ export const defineCarrier = <
   const boundaryValidation = validateBoundaryContract(boundaryContract);
   if (!boundaryValidation.ok) {
     return failCarrier(
-      `carrier boundary contract ${spec.packageId} invalid: ${boundaryValidation.issues.join(",")}`,
+      `carrier boundary contract ${spec.ownerId} invalid: ${boundaryValidation.issues.join(",")}`,
     );
   }
 
   return {
-    packageId: spec.packageId,
+    ownerId: spec.ownerId,
+    sourcePackageName: spec.sourcePackageName,
+    packageId: spec.sourcePackageName,
     prefix: spec.prefix,
     kind: kind as CarrierKindView<Prefix, Events>,
     events: payloadEvents as CarrierEventPayloads<Prefix, Events>,

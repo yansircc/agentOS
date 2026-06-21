@@ -5,6 +5,8 @@ import { IMAGE_EVENT_PREFIX, IMAGE_EVENTS, imageEventNamespace, projectImageJobs
 describe("image job projection", () => {
   it("declares image.* as an extension-owned prefix, not core vocabulary", () => {
     expect(imageEventNamespace("0.1.0")).toEqual({
+      ownerId: "@agent-os/image",
+      sourcePackageName: "@agent-os/image",
       packageId: "@agent-os/image",
       kindPrefixes: [IMAGE_EVENT_PREFIX],
       version: "0.1.0",

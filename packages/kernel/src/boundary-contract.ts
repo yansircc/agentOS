@@ -69,7 +69,8 @@ export interface BoundaryProjectionContract {
  * @public
  */
 export interface BoundaryContract<EventKind extends string = string> {
-  readonly packageId: string;
+  readonly ownerId: string;
+  readonly sourcePackageName: string;
   readonly kindPrefixes: ReadonlyArray<string>;
   readonly roles: ReadonlyArray<ClaimRole>;
   readonly events: Readonly<Record<EventKind, BoundaryEventContract>>;
@@ -80,7 +81,8 @@ export interface BoundaryContract<EventKind extends string = string> {
 }
 
 export type BoundaryContractIssue =
-  | "package_id_invalid"
+  | "owner_id_invalid"
+  | "source_package_name_invalid"
   | "kind_prefixes_invalid"
   | "roles_invalid"
   | "events_invalid"
@@ -258,7 +260,9 @@ export const defineBoundaryContract = <EventKind extends string>(
 
 export const boundaryPackage = (contract: BoundaryContract, version: string): BoundaryPackage =>
   ({
-    packageId: contract.packageId,
+    ownerId: contract.ownerId,
+    sourcePackageName: contract.sourcePackageName,
+    packageId: contract.sourcePackageName,
     kindPrefixes: contract.kindPrefixes,
     version,
     boundaryContract: contract,
@@ -269,7 +273,8 @@ export const validateBoundaryContract = (value: unknown): BoundaryContractValida
     return {
       ok: false,
       issues: [
-        "package_id_invalid",
+        "owner_id_invalid",
+        "source_package_name_invalid",
         "kind_prefixes_invalid",
         "roles_invalid",
         "events_invalid",
@@ -282,8 +287,12 @@ export const validateBoundaryContract = (value: unknown): BoundaryContractValida
   }
 
   const issues: BoundaryContractIssue[] = [];
-  if (!isNonEmptyString(value.packageId)) {
-    issues.push("package_id_invalid");
+  if (!isNonEmptyString(value.ownerId)) {
+    issues.push("owner_id_invalid");
+  }
+
+  if (!isNonEmptyString(value.sourcePackageName)) {
+    issues.push("source_package_name_invalid");
   }
 
   const prefixes = value.kindPrefixes;

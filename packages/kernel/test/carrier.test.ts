@@ -13,7 +13,8 @@ const claim = makePreClaim({
 
 const exampleCarrier = () =>
   defineCarrier({
-    packageId: "@agent-os/example-carrier",
+    ownerId: "@agent-os/example-carrier",
+    sourcePackageName: "@agent-os/example-carrier",
     prefix: "example.",
     roles: ["generator", "reader"],
     events: {
@@ -164,7 +165,8 @@ describe("defineCarrier", () => {
 
   it("rejects terminal claims outside the event-local slot vocabulary", () => {
     const carrier = defineCarrier({
-      packageId: "@agent-os/slot-vocab",
+      ownerId: "@agent-os/slot-vocab",
+      sourcePackageName: "@agent-os/slot-vocab",
       prefix: "slot.",
       roles: ["generator", "reader"],
       events: {
@@ -233,7 +235,8 @@ describe("defineCarrier", () => {
   it("rejects duplicate event kinds and claim slot schema collisions at construction", () => {
     expect(() =>
       defineCarrier({
-        packageId: "@agent-os/duplicate",
+        ownerId: "@agent-os/duplicate",
+        sourcePackageName: "@agent-os/duplicate",
         prefix: "duplicate.",
         roles: ["reader"],
         events: {
@@ -253,7 +256,8 @@ describe("defineCarrier", () => {
 
     expect(() =>
       defineCarrier({
-        packageId: "@agent-os/collision",
+        ownerId: "@agent-os/collision",
+        sourcePackageName: "@agent-os/collision",
         prefix: "collision.",
         roles: ["reader"],
         events: {
@@ -270,7 +274,8 @@ describe("defineCarrier", () => {
   it("rejects unsupported Effect Schema output at definition time", () => {
     expect(() =>
       defineCarrier({
-        packageId: "@agent-os/unsupported",
+        ownerId: "@agent-os/unsupported",
+        sourcePackageName: "@agent-os/unsupported",
         prefix: "unsupported.",
         roles: ["reader"],
         events: {

@@ -95,6 +95,8 @@ describe("@agent-os/git-carrier", () => {
   it("settles git.* facts through ExtensionCapability", async () => {
     const committed: Array<{ event: string; data: unknown }> = [];
     const cap: ExtensionCapability = {
+      ownerId: "@agent-os/git-carrier",
+      sourcePackageName: "@agent-os/git-carrier",
       packageId: "@agent-os/git-carrier",
       kindPrefixes: ["git."],
       version: "0.1.0",

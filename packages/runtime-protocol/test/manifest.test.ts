@@ -47,7 +47,8 @@ const capability = defineAgentCapability({
     requested: capabilityIntent<{ readonly id: string }>()("runtime_protocol.requested", {
       boundaryPackage: boundaryPackage(
         defineBoundaryContract({
-          packageId: "@agent-os/runtime-protocol.test-capability",
+          ownerId: "@agent-os/runtime-protocol.test-capability",
+          sourcePackageName: "@agent-os/runtime-protocol.test-capability",
           kindPrefixes: ["runtime_protocol."],
           roles: ["generator"],
           events: {

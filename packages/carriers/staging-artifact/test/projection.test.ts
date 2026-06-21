@@ -122,6 +122,8 @@ describe("@agent-os/staging-artifact", () => {
   it("defers staging.* facts through ExtensionCapability time()", async () => {
     const deferred: Array<{ event: string; data: unknown; at?: number }> = [];
     const cap: ExtensionCapability = {
+      ownerId: "@agent-os/staging-artifact",
+      sourcePackageName: "@agent-os/staging-artifact",
       packageId: "@agent-os/staging-artifact",
       kindPrefixes: ["staging."],
       version: "0.1.0",

@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "policy": {
+    "allocation": "append-only",
+    "retirement": "retired ownerId values remain reserved and must not be reused",
+    "namespaceSplit": "ownerId is durable semantic identity; sourcePackageName is private monorepo build metadata; publicPackageName is a distribution projection"
+  },
+  "owners": [
+    {
+      "ownerId": "@agent-os/backend-cloudflare-do",
+      "status": "active",
+      "sourcePackageNames": ["@agent-os/backend-cloudflare-do"]
+    },
+    {
+      "ownerId": "@agent-os/backend-protocol",
+      "status": "active",
+      "sourcePackageNames": ["@agent-os/backend-protocol"]
+    },
+    {
+      "ownerId": "@agent-os/decision-gate",
+      "status": "active",
+      "sourcePackageNames": ["@agent-os/decision-gate"]
+    },
+    {
+      "ownerId": "@agent-os/deploy",
+      "status": "active",
+      "sourcePackageNames": ["@agent-os/deploy"]
+    },
+    {
+      "ownerId": "@agent-os/git-carrier",
+      "status": "active",
+      "sourcePackageNames": ["@agent-os/git-carrier"]
+    },
+    {
+      "ownerId": "@agent-os/image",
+      "status": "active",
+      "sourcePackageNames": ["@agent-os/image"]
+    },
+    {
+      "ownerId": "@agent-os/resource-carrier",
+      "status": "active",
+      "sourcePackageNames": ["@agent-os/resource-carrier"]
+    },
+    {
+      "ownerId": "@agent-os/runtime",
+      "status": "active",
+      "sourcePackageNames": ["@agent-os/runtime-protocol"]
+    },
+    {
+      "ownerId": "@agent-os/runtime-protocol",
+      "status": "active",
+      "sourcePackageNames": ["@agent-os/runtime-protocol"]
+    },
+    {
+      "ownerId": "@agent-os/staging-artifact",
+      "status": "active",
+      "sourcePackageNames": ["@agent-os/staging-artifact"]
+    },
+    {
+      "ownerId": "@agent-os/verification",
+      "status": "active",
+      "sourcePackageNames": ["@agent-os/verification"]
+    },
+    {
+      "ownerId": "@agent-os/workspace-job",
+      "status": "active",
+      "sourcePackageNames": ["@agent-os/workspace-job"]
+    },
+    {
+      "ownerId": "@agent-os/workspace-op",
+      "status": "active",
+      "sourcePackageNames": ["@agent-os/workspace-op"]
+    },
+    {
+      "ownerId": "@agent-os/workspace-session",
+      "status": "active",
+      "sourcePackageNames": ["@agent-os/workspace-session"]
+    }
+  ]
+}

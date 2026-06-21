@@ -31,7 +31,8 @@ const settlement = defineSettlementContract({
 });
 
 const contract = defineBoundaryContract({
-  packageId: "@agent-os/slot-vocab",
+  ownerId: "@agent-os/slot-vocab",
+  sourcePackageName: "@agent-os/slot-vocab",
   kindPrefixes: ["slot."],
   roles: ["generator", "reader"],
   events: {

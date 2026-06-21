@@ -87,6 +87,8 @@ describe("@agent-os/verification", () => {
   it("settles verification.* facts through ExtensionCapability", async () => {
     const committed: Array<{ event: string; data: unknown }> = [];
     const cap: ExtensionCapability = {
+      ownerId: "@agent-os/verification",
+      sourcePackageName: "@agent-os/verification",
       packageId: "@agent-os/verification",
       kindPrefixes: ["verification."],
       version: "0.1.0",

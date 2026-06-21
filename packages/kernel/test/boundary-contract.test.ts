@@ -41,7 +41,8 @@ describe("BoundaryContract", () => {
   });
 
   const contract = defineBoundaryContract({
-    packageId: "@agent-os/example-carrier",
+    ownerId: "@agent-os/example-carrier",
+    sourcePackageName: "@agent-os/example-carrier",
     kindPrefixes: ["example."],
     roles: ["generator", "reader"],
     events: {
@@ -88,9 +89,12 @@ describe("BoundaryContract", () => {
 
   it("declares extension ownership from the boundary contract", () => {
     const authoredContract: Authored<typeof contract.value> = contract;
-    expect(authoredContract.value.packageId).toBe("@agent-os/example-carrier");
+    expect(authoredContract.value.ownerId).toBe("@agent-os/example-carrier");
+    expect(authoredContract.value.sourcePackageName).toBe("@agent-os/example-carrier");
     expect(Object.prototype.propertyIsEnumerable.call(contract, "value")).toBe(false);
     expect(boundaryPackage(contract, "0.1.0")).toEqual({
+      ownerId: "@agent-os/example-carrier",
+      sourcePackageName: "@agent-os/example-carrier",
       packageId: "@agent-os/example-carrier",
       kindPrefixes: ["example."],
       version: "0.1.0",
@@ -101,6 +105,8 @@ describe("BoundaryContract", () => {
   it("keeps boundary package construction sealed to the constructor", () => {
     // @ts-expect-error BoundaryPackage is intentionally opaque; callers must use boundaryPackage().
     const literal: BoundaryPackage = {
+      ownerId: "@agent-os/example-carrier",
+      sourcePackageName: "@agent-os/example-carrier",
       packageId: "@agent-os/example-carrier",
       kindPrefixes: ["example."],
       version: "0.1.0",

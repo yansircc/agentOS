@@ -8,7 +8,8 @@ const DeploySymbolicRef = Schema.String.pipe(
 );
 
 export const deployCarrier = defineCarrier({
-  packageId: "@agent-os/deploy",
+  ownerId: "@agent-os/deploy",
+  sourcePackageName: "@agent-os/deploy",
   prefix: DEPLOY_EVENT_PREFIX,
   roles: ["generator", "resolver", "reader"],
   events: {

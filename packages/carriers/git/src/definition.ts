@@ -4,7 +4,8 @@ import { defineCarrier, event, lived } from "@agent-os/kernel/carrier";
 export const GIT_EVENT_PREFIX = "git.";
 
 export const gitCarrier = defineCarrier({
-  packageId: "@agent-os/git-carrier",
+  ownerId: "@agent-os/git-carrier",
+  sourcePackageName: "@agent-os/git-carrier",
   prefix: GIT_EVENT_PREFIX,
   roles: ["generator", "resolver", "reader"],
   events: {
