@@ -2,7 +2,11 @@
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-import { hasAlgorithmicChecker, runAlgorithmicChecker } from "./check/algorithmic-checks.mjs";
+import {
+  algorithmicCheckerAcceptsArgs,
+  hasAlgorithmicChecker,
+  runAlgorithmicChecker,
+} from "./check/algorithmic-checks.mjs";
 import {
   deriveAffectedGates,
   printAffectedGates,
@@ -161,7 +165,7 @@ const runCheck = async (args) => {
       return;
     default:
       if (command !== undefined && hasAlgorithmicChecker(command)) {
-        if (command !== "owner-coupling") {
+        if (!algorithmicCheckerAcceptsArgs(command)) {
           expectNoExtraArgs(rest, `agentos check ${command}`);
         }
         await runAlgorithmicChecker(command, rest);

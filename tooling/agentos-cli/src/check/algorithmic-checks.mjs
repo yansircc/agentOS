@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import ts from "typescript";
 import { runCommand } from "./command-runner.mjs";
 import {
+  importSpecifierRecords,
   packageImportCycles as graphPackageImportCycles,
   packageManifestDependencyEdges,
   packageSourceImportEdges as graphPackageSourceImportEdges,
@@ -628,6 +629,229 @@ const checkOwnerCoupling = (args = []) => {
     return;
   }
   failIfAny("owner coupling", lines);
+};
+
+export const moduleBucketForPath = (file) => {
+  if (
+    file.startsWith("tooling/ops-") ||
+    file.startsWith("tooling/docs-site/") ||
+    file.includes("/product/")
+  ) {
+    return "product";
+  }
+  if (
+    file.startsWith("packages/kernel/") ||
+    file.startsWith("packages/runtime-protocol/") ||
+    file.startsWith("packages/telemetry-protocol/") ||
+    file.startsWith("packages/llm-protocol/") ||
+    file.startsWith("packages/backends/protocol/")
+  ) {
+    return "axioms";
+  }
+  if (
+    file.startsWith("packages/runtime/") ||
+    file.startsWith("packages/backends/") ||
+    file.includes("/ledger/") ||
+    file.includes("/storage/") ||
+    file.includes("/state.ts") ||
+    file.includes("/commit.ts")
+  ) {
+    return "ledger";
+  }
+  if (
+    file.includes("projection") ||
+    file.includes("projector") ||
+    file.includes("safe-events") ||
+    file.startsWith("packages/carriers/") ||
+    file.startsWith("packages/wire-adapters/")
+  ) {
+    return "projection";
+  }
+  return "adapter";
+};
+
+export const moduleAmbientForPath = (file) => {
+  if (file.startsWith("tooling/ops-")) return "product";
+  if (
+    file.startsWith("packages/backends/node-postgres/") ||
+    file.startsWith("packages/providers/workspace-op-local/") ||
+    file.startsWith("packages/execution-domains/workspace-env-local/") ||
+    file.startsWith("tooling/agentos-cli/") ||
+    file.startsWith("tooling/distribution/")
+  ) {
+    return "node";
+  }
+  if (
+    file.startsWith("packages/backends/cloudflare-do/") ||
+    file.startsWith("packages/providers/deploy-cloudflare/") ||
+    file.startsWith("packages/providers/dynamic-worker/") ||
+    file.startsWith("packages/providers/resource-cloudflare/") ||
+    file.startsWith("packages/providers/workspace-session-cloudflare/") ||
+    file.startsWith("packages/execution-domains/sandbox-cloudflare/") ||
+    file.startsWith("packages/execution-domains/workspace-env-cloudflare/")
+  ) {
+    return "cloudflare-worker";
+  }
+  if (
+    file.startsWith("packages/client/") ||
+    file.startsWith("packages/wire-adapters/ag-ui/") ||
+    file.startsWith("tooling/ops-htmx/")
+  ) {
+    return "browser";
+  }
+  return "neutral";
+};
+
+const moduleBucketRank = new Map([
+  ["axioms", 0],
+  ["ledger", 1],
+  ["projection", 2],
+  ["adapter", 3],
+  ["product", 4],
+]);
+
+const allowedAmbientImports = new Map([
+  ["neutral", new Set(["neutral"])],
+  ["browser", new Set(["neutral", "browser"])],
+  ["node", new Set(["neutral", "node"])],
+  ["cloudflare-worker", new Set(["neutral", "cloudflare-worker"])],
+  ["product", new Set(["neutral", "browser", "node", "cloudflare-worker", "product"])],
+]);
+
+const externalAmbientForSpecifier = (specifier) => {
+  if (specifier.startsWith("node:")) return "node";
+  if (specifier === "pg" || specifier.startsWith("pg/")) return "node";
+  if (specifier === "@cloudflare/workers-types" || specifier.startsWith("cloudflare:")) {
+    return "cloudflare-worker";
+  }
+  if (
+    specifier === "react" ||
+    specifier.startsWith("react/") ||
+    specifier === "svelte" ||
+    specifier.startsWith("svelte/")
+  ) {
+    return "browser";
+  }
+  return undefined;
+};
+
+export const moduleBucketFindingsForEdges = (edges) => {
+  const findings = [];
+  for (const edge of edges) {
+    const fromBucket = moduleBucketForPath(edge.fromFile);
+    const toBucket = moduleBucketForPath(edge.toFile);
+    const fromRank = moduleBucketRank.get(fromBucket);
+    const toRank = moduleBucketRank.get(toBucket);
+    if (fromRank !== undefined && toRank !== undefined && fromRank < toRank) {
+      findings.push({
+        kind: "bucket-dag",
+        file: edge.fromFile,
+        target: edge.toFile,
+        specifier: edge.specifier,
+        message: `${fromBucket} module imports downstream ${toBucket} module`,
+      });
+    }
+
+    const fromAmbient = moduleAmbientForPath(edge.fromFile);
+    const toAmbient = moduleAmbientForPath(edge.toFile);
+    if (!(allowedAmbientImports.get(fromAmbient) ?? new Set()).has(toAmbient)) {
+      findings.push({
+        kind: "ambient-dag",
+        file: edge.fromFile,
+        target: edge.toFile,
+        specifier: edge.specifier,
+        message: `${fromAmbient} module imports ${toAmbient} module`,
+      });
+    }
+  }
+  return findings;
+};
+
+const moduleBucketExternalFindings = (records) => {
+  const findings = [];
+  for (const record of records) {
+    for (const file of walk(`${record.path}/src`).filter((entry) =>
+      /\.(?:ts|tsx|mts|cts)$/u.test(entry),
+    )) {
+      const source = read(file);
+      const ambient = moduleAmbientForPath(file);
+      for (const importRecord of importSpecifierRecords(source, file)) {
+        const targetAmbient = externalAmbientForSpecifier(importRecord.specifier);
+        if (targetAmbient === undefined) continue;
+        if ((allowedAmbientImports.get(ambient) ?? new Set()).has(targetAmbient)) continue;
+        findings.push({
+          kind: "external-ambient",
+          file,
+          target: targetAmbient,
+          specifier: importRecord.specifier,
+          message: `${ambient} module imports ${targetAmbient} external specifier`,
+        });
+      }
+    }
+  }
+  return findings;
+};
+
+const moduleProductFindings = (graph) =>
+  graph.files
+    .filter((entry) => moduleBucketForPath(entry.file) === "product")
+    .map((entry) => ({
+      kind: "product-ejection",
+      file: entry.file,
+      target: "consumer",
+      specifier: entry.package.name,
+      message: "product bucket module must be ejected from final substrate",
+    }));
+
+const checkModuleBuckets = (args = []) => {
+  const reportOnly = args.length === 1 && args[0] === "--report-only";
+  if (!reportOnly && args.length > 0) {
+    throw new Error(`module-buckets: unexpected argument(s): ${args.join(" ")}`);
+  }
+  const records = graphWorkspacePackageRecords(repoRoot).filter(
+    (record) => typeof record.name === "string" && record.name.startsWith("@agent-os/"),
+  );
+  const graph = sourceModuleGraph(repoRoot, records);
+  const rawFindings = [
+    ...moduleBucketFindingsForEdges(graph.edges),
+    ...moduleBucketExternalFindings(records),
+    ...moduleProductFindings(graph),
+  ];
+  const seenFindings = new Set();
+  const findings = rawFindings
+    .filter((finding) => {
+      const key = `${finding.kind}\0${finding.file}\0${finding.target}\0${finding.specifier}\0${finding.message}`;
+      if (seenFindings.has(key)) return false;
+      seenFindings.add(key);
+      return true;
+    })
+    .sort(
+      (left, right) =>
+        compare(left.kind, right.kind) ||
+        compare(left.file, right.file) ||
+        compare(left.specifier, right.specifier),
+    );
+  const bucketCounts = new Map();
+  const ambientCounts = new Map();
+  for (const entry of graph.files) {
+    const bucket = moduleBucketForPath(entry.file);
+    const ambient = moduleAmbientForPath(entry.file);
+    bucketCounts.set(bucket, (bucketCounts.get(bucket) ?? 0) + 1);
+    ambientCounts.set(ambient, (ambientCounts.get(ambient) ?? 0) + 1);
+  }
+  const sortedEntries = (counts) =>
+    [...counts.entries()].sort(([left], [right]) => compare(left, right));
+  const summary = `module buckets report-only: ${findings.length} finding(s); buckets ${JSON.stringify(Object.fromEntries(sortedEntries(bucketCounts)))}; ambients ${JSON.stringify(Object.fromEntries(sortedEntries(ambientCounts)))}`;
+  const lines = findings.map(
+    (finding) =>
+      `${finding.file}: module-buckets:${finding.kind}: ${finding.message} via ${finding.specifier} -> ${finding.target}`,
+  );
+  if (reportOnly) {
+    console.log(summary);
+    for (const line of lines) console.log(line);
+    return;
+  }
+  failIfAny("module buckets", lines);
 };
 
 const clientSectionBody = (source, heading) => {
@@ -1841,6 +2065,7 @@ const checkerById = new Map([
   ["generated-static-target-linking", checkGeneratedStaticTargetLinking],
   ["gate-tier-governance", checkGateTierGovernance],
   ["module-graph-oracle", checkModuleGraphOracle],
+  ["module-buckets", checkModuleBuckets],
   ["owner-coupling", checkOwnerCoupling],
   ["public-api", checkPublicApi],
   ["repo-tooling-surface", checkRepoToolingSurface],
@@ -1849,9 +2074,11 @@ const checkerById = new Map([
   ["substrate-import-dag", checkSubstrateImportDag],
   ["transaction-sync", checkTransactionSync],
 ]);
+const checkerIdsWithArgs = new Set(["module-buckets", "owner-coupling"]);
 
 export const listAlgorithmicCheckers = () => [...checkerById.keys()].sort(compare);
 export const hasAlgorithmicChecker = (checkerId) => checkerById.has(checkerId);
+export const algorithmicCheckerAcceptsArgs = (checkerId) => checkerIdsWithArgs.has(checkerId);
 
 export const runAlgorithmicChecker = async (checkerId, args = []) => {
   const checker = checkerById.get(checkerId);
@@ -1869,7 +2096,7 @@ if (isCli) {
     console.log("usage: node tooling/agentos-cli/src/check/algorithmic-checks.mjs <checker-id>");
     process.exit(checkerId === undefined ? 1 : 0);
   }
-  if (checkerId !== "owner-coupling" && rest.length > 0) {
+  if (!algorithmicCheckerAcceptsArgs(checkerId) && rest.length > 0) {
     console.error(`unexpected argument(s): ${rest.join(" ")}`);
     process.exit(1);
   }
