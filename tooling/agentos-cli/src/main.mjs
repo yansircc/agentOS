@@ -161,8 +161,10 @@ const runCheck = async (args) => {
       return;
     default:
       if (command !== undefined && hasAlgorithmicChecker(command)) {
-        expectNoExtraArgs(rest, `agentos check ${command}`);
-        await runAlgorithmicChecker(command);
+        if (command !== "owner-coupling") {
+          expectNoExtraArgs(rest, `agentos check ${command}`);
+        }
+        await runAlgorithmicChecker(command, rest);
         return;
       }
       throw new Error(

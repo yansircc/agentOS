@@ -481,6 +481,155 @@ const checkModuleGraphOracle = () => {
   );
 };
 
+const ownerCouplingSinkProperties = new Set([
+  "boundaryOwner",
+  "boundaryPackageId",
+  "claimedBy",
+  "factOwnerRef",
+  "owner",
+  "packageId",
+  "settlementId",
+]);
+const packageMetadataNames = new Set(["packageId", "sourcePackageName", "publicPackageName"]);
+
+const publicNameForSourcePackage = (name) => name.replace(/^@agent-os\//u, "@yansirplus/");
+
+const ownerCouplingPackageNames = () => {
+  const sourcePackageNames = new Set(
+    graphWorkspacePackageRecords(repoRoot)
+      .map((record) => record.name)
+      .filter((name) => typeof name === "string" && name.startsWith("@agent-os/")),
+  );
+  const publicPackageNames = new Set([...sourcePackageNames].map(publicNameForSourcePackage));
+  return { sourcePackageNames, publicPackageNames };
+};
+
+const ownerCouplingPropertyName = (name) => {
+  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) {
+    return name.text;
+  }
+  return undefined;
+};
+
+const ownerCouplingPosition = (sourceFile, node) => {
+  const position = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
+  return { line: position.line + 1, column: position.character + 1 };
+};
+
+const packageMetadataSource = (expression, packageNames) => {
+  const unwrapped = unwrap(expression);
+  if (ts.isStringLiteralLike(unwrapped)) {
+    if (packageNames.sourcePackageNames.has(unwrapped.text)) return "sourcePackageNameLiteral";
+    if (packageNames.publicPackageNames.has(unwrapped.text)) return "publicPackageNameLiteral";
+    return undefined;
+  }
+  if (ts.isIdentifier(unwrapped) && packageMetadataNames.has(unwrapped.text)) {
+    return unwrapped.text;
+  }
+  if (ts.isPropertyAccessExpression(unwrapped) && packageMetadataNames.has(unwrapped.name.text)) {
+    return unwrapped.name.text;
+  }
+  if (ts.isCallExpression(unwrapped) && callName(unwrapped.expression) === "publicPackageName") {
+    return "publicPackageName";
+  }
+  if (ts.isTemplateExpression(unwrapped)) {
+    for (const span of unwrapped.templateSpans) {
+      const source = packageMetadataSource(span.expression, packageNames);
+      if (source !== undefined) return source;
+    }
+  }
+  if (ts.isBinaryExpression(unwrapped)) {
+    return (
+      packageMetadataSource(unwrapped.left, packageNames) ??
+      packageMetadataSource(unwrapped.right, packageNames)
+    );
+  }
+  if (ts.isConditionalExpression(unwrapped)) {
+    return (
+      packageMetadataSource(unwrapped.whenTrue, packageNames) ??
+      packageMetadataSource(unwrapped.whenFalse, packageNames)
+    );
+  }
+  return undefined;
+};
+
+export const ownerCouplingFindingsForSource = (content, file, packageNames) => {
+  const sourceFile = ts.createSourceFile(
+    file,
+    content,
+    ts.ScriptTarget.Latest,
+    true,
+    file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
+  const findings = [];
+  const record = (node, sink, source) => {
+    const position = ownerCouplingPosition(sourceFile, node);
+    findings.push({
+      file,
+      line: position.line,
+      column: position.column,
+      sink,
+      source,
+      expression: node.getText(sourceFile),
+    });
+  };
+
+  const visit = (node) => {
+    if (ts.isPropertyAssignment(node)) {
+      const sink = ownerCouplingPropertyName(node.name);
+      const source = packageMetadataSource(node.initializer, packageNames);
+      if (sink !== undefined && source !== undefined && ownerCouplingSinkProperties.has(sink)) {
+        record(node.initializer, sink, source);
+      }
+    }
+
+    if (ts.isBinaryExpression(node)) {
+      const leftText = node.left.getText(sourceFile);
+      const rightText = node.right.getText(sourceFile);
+      const leftSource = packageMetadataSource(node.left, packageNames);
+      const rightSource = packageMetadataSource(node.right, packageNames);
+      if (leftText.includes("factOwnerRef") && rightSource !== undefined) {
+        record(node.right, "factOwnerRef", rightSource);
+      }
+      if (rightText.includes("factOwnerRef") && leftSource !== undefined) {
+        record(node.left, "factOwnerRef", leftSource);
+      }
+    }
+
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return findings;
+};
+
+const ownerCouplingScanFiles = () =>
+  [
+    ...walk("packages").filter((file) => /\.(?:ts|tsx|mts|cts)$/u.test(file)),
+    ...walk("tooling/agentos-cli/src").filter((file) => /\.(?:mjs|ts)$/u.test(file)),
+    ...walk("tooling/distribution").filter((file) => /\.(?:mjs|ts)$/u.test(file)),
+  ].sort(compare);
+
+const checkOwnerCoupling = (args = []) => {
+  const reportOnly = args.length === 1 && args[0] === "--report-only";
+  if (!reportOnly && args.length > 0) {
+    throw new Error(`owner-coupling: unexpected argument(s): ${args.join(" ")}`);
+  }
+  const packageNames = ownerCouplingPackageNames();
+  const findings = ownerCouplingScanFiles().flatMap((file) =>
+    ownerCouplingFindingsForSource(read(file), file, packageNames),
+  );
+  const lines = findings.map(
+    (finding) =>
+      `${finding.file}:${finding.line}:${finding.column}: owner-coupling: ${finding.sink} reads ${finding.source} via ${finding.expression}`,
+  );
+  if (reportOnly) {
+    console.log(`owner coupling report-only: ${findings.length} finding(s)`);
+    for (const line of lines) console.log(line);
+    return;
+  }
+  failIfAny("owner coupling", lines);
+};
+
 const clientSectionBody = (source, heading) => {
   const start = source.indexOf(`## ${heading}`);
   if (start === -1) return "";
@@ -1692,6 +1841,7 @@ const checkerById = new Map([
   ["generated-static-target-linking", checkGeneratedStaticTargetLinking],
   ["gate-tier-governance", checkGateTierGovernance],
   ["module-graph-oracle", checkModuleGraphOracle],
+  ["owner-coupling", checkOwnerCoupling],
   ["public-api", checkPublicApi],
   ["repo-tooling-surface", checkRepoToolingSurface],
   ["source-aliases", checkSourceAliases],
@@ -1703,11 +1853,11 @@ const checkerById = new Map([
 export const listAlgorithmicCheckers = () => [...checkerById.keys()].sort(compare);
 export const hasAlgorithmicChecker = (checkerId) => checkerById.has(checkerId);
 
-export const runAlgorithmicChecker = async (checkerId) => {
+export const runAlgorithmicChecker = async (checkerId, args = []) => {
   const checker = checkerById.get(checkerId);
   if (checker === undefined) throw new Error(`unknown algorithmic checker ${checkerId}`);
   console.log(`$ agentos algorithmic-check ${checkerId}`);
-  await Promise.resolve(checker());
+  await Promise.resolve(checker(args));
 };
 
 const isCli =
@@ -1719,12 +1869,12 @@ if (isCli) {
     console.log("usage: node tooling/agentos-cli/src/check/algorithmic-checks.mjs <checker-id>");
     process.exit(checkerId === undefined ? 1 : 0);
   }
-  if (rest.length > 0) {
+  if (checkerId !== "owner-coupling" && rest.length > 0) {
     console.error(`unexpected argument(s): ${rest.join(" ")}`);
     process.exit(1);
   }
   try {
-    await runAlgorithmicChecker(checkerId);
+    await runAlgorithmicChecker(checkerId, rest);
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);
