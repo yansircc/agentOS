@@ -6,7 +6,7 @@
     "productBucket": "product is an ejection marker, not a final substrate bucket"
   },
   "productEjection": {
-    "packagePathPrefixes": ["packages/", "tooling/agentos-cli/"],
+    "packagePathPrefixes": ["packages/"],
     "reason": "product modules are forbidden in substrate package roots; repo-local tooling may remain outside final substrate packages"
   },
   "buckets": [
@@ -60,12 +60,6 @@
     }
   ],
   "bucketRules": [
-    {
-      "id": "product-ops-htmx",
-      "match": "prefix",
-      "value": "tooling/ops-htmx/",
-      "bucket": "product"
-    },
     {
       "id": "product-docs-site",
       "match": "prefix",
@@ -141,7 +135,7 @@
     {
       "id": "ops-api-adapter",
       "match": "prefix",
-      "value": "tooling/ops-api/",
+      "value": "packages/runtime/src/cloudflare/ops-api/",
       "bucket": "adapter"
     },
     {
@@ -272,12 +266,6 @@
   ],
   "ambientRules": [
     {
-      "id": "product-ops-htmx",
-      "match": "prefix",
-      "value": "tooling/ops-htmx/",
-      "ambient": "product"
-    },
-    {
       "id": "product-docs-site",
       "match": "prefix",
       "value": "tooling/docs-site/",
@@ -308,9 +296,9 @@
       "ambient": "node"
     },
     {
-      "id": "agentos-cli",
+      "id": "cli",
       "match": "prefix",
-      "value": "tooling/agentos-cli/",
+      "value": "packages/cli/",
       "ambient": "node"
     },
     {
@@ -383,12 +371,6 @@
       "id": "ag-ui-wire-adapter",
       "match": "prefix",
       "value": "packages/wire-adapters/ag-ui/",
-      "ambient": "neutral"
-    },
-    {
-      "id": "ops-api-neutral",
-      "match": "prefix",
-      "value": "tooling/ops-api/",
       "ambient": "neutral"
     },
     {

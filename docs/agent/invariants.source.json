@@ -25,7 +25,7 @@
       "docs": "docs/verification.md",
       "tests": [
         "packages/core/test/runtime-protocol/runtime-events.test.ts",
-        "tooling/agentos-cli/src/check/algorithmic-checks.mjs"
+        "packages/cli/src/check/algorithmic-checks.mjs"
       ]
     },
     {
@@ -70,9 +70,9 @@
       "statement": "Agent-facing docs indexes are projections; source JSON and exported TSDoc own routable ids.",
       "docs": "docs/verification.md",
       "tests": [
-        "tooling/agentos-cli/src/generate/generate-docs.mjs",
-        "tooling/agentos-cli/src/check/check-coverage.source.json",
-        "tooling/agentos-cli/src/check/algorithmic-checks.mjs"
+        "packages/cli/src/generate/generate-docs.mjs",
+        "packages/cli/src/check/check-coverage.source.json",
+        "packages/cli/src/check/algorithmic-checks.mjs"
       ]
     },
     {
@@ -80,7 +80,7 @@
       "statement": "AG-UI owns AG-UI frame/envelope projection, generic SSE owns only codec and Response wrapping, and host packages compose the two without reversing the dependency.",
       "docs": "docs/concepts/ag-ui-wire-adapter.md",
       "tests": [
-        "tooling/agentos-cli/src/check/algorithmic-checks.mjs",
+        "packages/cli/src/check/algorithmic-checks.mjs",
         "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"
       ]
     },

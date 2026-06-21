@@ -75,6 +75,7 @@ state to make a product flow appear complete.
 | `@agent-os/sse-http`                     | Web Fetch SSE-over-HTTP response construction for agentOS stream codecs                                                                                                                                           |
 | `@agent-os/decision-gate`                | durable decision gate events, projection, and admitter                                                                                                                                                            |
 | `@agent-os/deploy-cloudflare`            | Cloudflare Worker deploy provider                                                                                                                                                                                 |
+| `@agent-os/cli`                          | developer command surface for generated projections, authored agent builds, structural checks, and distribution gates                                                                                             |
 
 <!-- agentos:generated package-map:end -->
 

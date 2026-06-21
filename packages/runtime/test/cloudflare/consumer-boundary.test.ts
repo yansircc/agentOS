@@ -14,7 +14,6 @@ const packageLinks = {
   "attached-stream": "packages/composers/attached-stream",
   core: "packages/core",
   "decision-gate": "packages/carriers/decision-gate",
-  "ops-api": "tooling/ops-api",
   runtime: "packages/runtime",
   "run-stream": "packages/composers/run-stream",
   "sse-http": "packages/transports/sse-http",

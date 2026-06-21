@@ -49,7 +49,8 @@
       "packageUnits": ["runtime"],
       "selectedSubpaths": [
         "@yansirplus/runtime/cloudflare",
-        "@yansirplus/runtime/cloudflare/do-rpc"
+        "@yansirplus/runtime/cloudflare/do-rpc",
+        "@yansirplus/runtime/cloudflare/ops-api"
       ],
       "forbiddenSpecifiers": ["node:fs", "node:child_process", "pg"]
     },

@@ -22,7 +22,7 @@
       "evidence": [
         "packages/composers/agent-authoring/test/agent-authoring.test.ts",
         "packages/composers/workspace-agent/test/workspace-agent.test.ts",
-        "tooling/agentos-cli/src/check/algorithmic-checks.mjs"
+        "packages/cli/src/check/algorithmic-checks.mjs"
       ],
       "next": ["recipe.tool-schema-authority", "recipe.projection-reader"]
     },

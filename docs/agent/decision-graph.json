@@ -1,5 +1,5 @@
 {
-  "generatedBy": "tooling/agentos-cli/src/generate/generate-agent-docs.mjs",
+  "generatedBy": "packages/cli/src/generate/generate-agent-docs.mjs",
   "source": [
     "docs/agent/capability-rules.source.json",
     "docs/agent/recipes.source.json",

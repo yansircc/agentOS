@@ -29,6 +29,7 @@
 | SSE-over-HTTP transport                                  | `@agent-os/sse-http`                     |
 | Approval/decision gate                                   | `@agent-os/decision-gate`                |
 | Cloudflare Worker deploy provider                        | `@agent-os/deploy-cloudflare`            |
+| Single developer command package                         | `@agent-os/cli`                          |
 
 <!-- agentos:generated package-map:end -->
 

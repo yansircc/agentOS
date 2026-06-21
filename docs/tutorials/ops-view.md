@@ -8,21 +8,20 @@ state.
 ## What You Build
 
 An HTTP ops mount that lists scopes and reads one Durable Object's events, runs,
-quota, and resources through `@agent-os/ops-api`.
+quota, and resources through `@agent-os/runtime/cloudflare/ops-api`.
 
 ## Prerequisites
 
 - [Durable truth](../concepts/durable-truth.md)
-- [Ops API package](../packages/ops-api.md)
-- [Ops HTMX package](../packages/ops-htmx.md)
+- [Runtime package](../packages/runtime.md)
 
 ## Steps
 
 1. Import the terminal ops adapter and the Cloudflare reader binder:
 
    ```ts
-   import { mountOpsApi } from "@agent-os/ops-api";
-   import { cloudflareAgentDoOpsStubFor } from "@agent-os/runtime/cloudflare";
+   import { mountOpsApi } from "@agent-os/runtime/cloudflare/ops-api";
+   import { cloudflareAgentDoOpsStubFor } from "@agent-os/runtime/cloudflare/ops-api";
    ```
 
 2. Define a scope resolver. It owns routing from an ops scope string to a
@@ -30,7 +29,7 @@ quota, and resources through `@agent-os/ops-api`.
    and truth identity selection:
 
    ```ts
-   import type { CloudflareAgentDOResolvedScope } from "@agent-os/runtime/cloudflare";
+   import type { CloudflareAgentDOResolvedScope } from "@agent-os/runtime/cloudflare/ops-api";
 
    const scopeResolver = {
      async list() {

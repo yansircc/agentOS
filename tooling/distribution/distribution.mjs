@@ -379,6 +379,13 @@ const sourceFiles = (record) => {
 };
 
 const isBinTsTarget = (target) => target.startsWith("./bin/") && target.endsWith(".ts");
+const isBinMjsTarget = (target) => target.startsWith("./bin/") && target.endsWith(".mjs");
+const isSourceMjsTarget = (target) => target.startsWith("./src/") && target.endsWith(".mjs");
+const isPackageBinSourceTarget = (target) =>
+  isBinTsTarget(target) ||
+  isBinMjsTarget(target) ||
+  isSourceTsExportTarget(target) ||
+  isSourceMjsTarget(target);
 
 const packageBinTargets = (record) => {
   const bin = record.packageJson.bin;
@@ -399,7 +406,7 @@ const binSourceFiles = (record) =>
   [
     ...new Set(
       packageBinTargets(record)
-        .filter(isBinTsTarget)
+        .filter(isPackageBinSourceTarget)
         .map((target) => path.join(record.packageDir, target.slice("./".length))),
     ),
   ].sort((left, right) => left.localeCompare(right));
@@ -423,10 +430,7 @@ const assertSurface = () => {
     if (!packagePaths.has(pkg.path)) {
       issues.push(`${pkg.path}: docs/surface.json package has no workspace package.json`);
     }
-    const shouldPublish =
-      pkg.path.startsWith("packages/") ||
-      pkg.path === "tooling/ops-api" ||
-      pkg.path === "tooling/ops-htmx";
+    const shouldPublish = pkg.path.startsWith("packages/");
     if (pkg.published !== shouldPublish) {
       issues.push(`${pkg.path}: expected published=${shouldPublish}`);
     }
@@ -502,7 +506,11 @@ const resolveExportTarget = (value) => {
 };
 
 const exportEntries = (record) => {
-  const exportsValue = record.packageJson.exports ?? record.packageJson.main ?? "./src/index.ts";
+  const exportsValue =
+    record.packageJson.exports ??
+    record.packageJson.main ??
+    (record.packageJson.bin === undefined ? "./src/index.ts" : undefined);
+  if (exportsValue === undefined) return [];
   if (typeof exportsValue === "string") {
     return [[".", exportsValue]];
   }
@@ -529,10 +537,16 @@ const srcTargetToDist = (target, ext) => {
 };
 
 const binTargetToDist = (target) => {
-  if (!isBinTsTarget(target)) {
-    fail(`bin target must be a bin .ts file: ${target}`);
+  if (isBinTsTarget(target)) {
+    return `./dist/bin/${target.slice("./bin/".length, -".ts".length)}.js`;
   }
-  return `./dist/bin/${target.slice("./bin/".length, -".ts".length)}.js`;
+  if (isBinMjsTarget(target)) {
+    return `./dist/bin/${target.slice("./bin/".length)}`;
+  }
+  if (isSourceMjsTarget(target)) {
+    return `./dist/${target.slice("./src/".length)}`;
+  }
+  fail(`bin target must be a source .ts/.mjs file or bin .ts/.mjs file: ${target}`);
 };
 
 const generatedExportEntry = (target) => {
@@ -548,8 +562,10 @@ const generatedExportEntry = (target) => {
 
 const projectedBinTarget = (target) => {
   if (isSourceTsExportTarget(target)) return srcTargetToDist(target, "js");
-  if (isBinTsTarget(target)) return binTargetToDist(target);
-  fail(`bin target must be a source or bin .ts file: ${target}`);
+  if (isBinTsTarget(target) || isBinMjsTarget(target) || isSourceMjsTarget(target)) {
+    return binTargetToDist(target);
+  }
+  fail(`bin target must be a source .ts/.mjs file or bin .ts/.mjs file: ${target}`);
 };
 
 const projectedBin = (record) => {
@@ -564,7 +580,9 @@ const projectedBin = (record) => {
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([name, target]) => {
         if (typeof target !== "string") {
-          fail(`${record.packagePath}: package bin ${name} must target a source or bin .ts file`);
+          fail(
+            `${record.packagePath}: package bin ${name} must target a source .ts/.mjs file or bin .ts/.mjs file`,
+          );
         }
         return [name, projectedBinTarget(target)];
       }),
@@ -809,7 +827,7 @@ const generatedManifest = (record) => {
     main: exportsValue["."]?.default,
     types: exportsValue["."]?.types,
     bin: projectedBin(record),
-    exports: exportsValue,
+    exports: entries.length === 0 ? undefined : exportsValue,
     files: [
       "dist",
       ...exportedAssets,
@@ -1226,9 +1244,9 @@ const writeConsumerApp = (dir, extraDeps = {}) => {
     [
       `import { compileAgentTree } from "${publicSpecifier("@agent-os/agent-authoring")}";`,
       `import { triggerParseOk } from "${publicSpecifier("@agent-os/runtime")}";`,
-      `import { mountOpsHtmx } from "${publicSpecifier("@agent-os/ops-htmx")}";`,
+      `import { mountOpsApi } from "${publicSpecifier("@agent-os/runtime/cloudflare/ops-api")}";`,
       "void triggerParseOk;",
-      "void mountOpsHtmx;",
+      "void mountOpsApi;",
       "const compiled = compileAgentTree({",
       "  files: [{ path: 'agent/instructions.md', kind: 'markdown', text: 'Say hello.' }],",
       "});",
@@ -1243,7 +1261,7 @@ const writeConsumerApp = (dir, extraDeps = {}) => {
       `import { ABORT } from "${publicSpecifier("@agent-os/core")}";`,
       `import { triggerParseOk } from "${publicSpecifier("@agent-os/runtime")}";`,
       `import { projectTurnStream } from "${publicSpecifier("@agent-os/turn-stream")}";`,
-      `import { mountOpsApi } from "${publicSpecifier("@agent-os/ops-api")}";`,
+      `import { mountOpsApi } from "${publicSpecifier("@agent-os/runtime/cloudflare/ops-api")}";`,
       "if (!compileAgentTree || !ABORT || !triggerParseOk || !projectTurnStream || !mountOpsApi) throw new Error('missing import');",
     ].join("\n") + "\n",
   );

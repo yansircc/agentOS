@@ -4,41 +4,41 @@
     "generate-docs": [
       {
         "type": "command",
-        "command": "node tooling/agentos-cli/src/generate/generate-docs.mjs"
+        "command": "node packages/cli/src/generate/generate-docs.mjs"
       },
       {
         "type": "command",
-        "command": "node tooling/agentos-cli/src/generate/generate-agent-docs.mjs"
+        "command": "node packages/cli/src/generate/generate-agent-docs.mjs"
       },
       {
         "type": "command",
-        "command": "bun tooling/agentos-cli/src/generate/generate-carrier-reference.mjs"
+        "command": "bun packages/cli/src/generate/generate-carrier-reference.mjs"
       },
       {
         "type": "command",
-        "command": "node tooling/agentos-cli/src/generate/project-docs-site.mjs"
+        "command": "node packages/cli/src/generate/project-docs-site.mjs"
       }
     ],
     "generate-effect-manifests": [
       {
         "type": "command",
-        "command": "node tooling/agentos-cli/src/generate/generate-effect-skill-manifests.mjs"
+        "command": "node packages/cli/src/generate/generate-effect-skill-manifests.mjs"
       }
     ],
     "generate-site": [
       {
         "type": "command",
-        "command": "node tooling/agentos-cli/src/generate/project-docs-site.mjs"
+        "command": "node packages/cli/src/generate/project-docs-site.mjs"
       }
     ],
     "check-docs": [
       {
         "type": "command",
-        "command": "node tooling/agentos-cli/src/generate/generate-docs.mjs --check"
+        "command": "node packages/cli/src/generate/generate-docs.mjs --check"
       },
       {
         "type": "command",
-        "command": "node tooling/agentos-cli/src/generate/generate-agent-docs.mjs --check"
+        "command": "node packages/cli/src/generate/generate-agent-docs.mjs --check"
       },
       {
         "type": "rule",
@@ -46,7 +46,7 @@
       },
       {
         "type": "command",
-        "command": "bun tooling/agentos-cli/src/generate/generate-carrier-reference.mjs --check"
+        "command": "bun packages/cli/src/generate/generate-carrier-reference.mjs --check"
       },
       {
         "type": "rule",
@@ -54,13 +54,13 @@
       },
       {
         "type": "command",
-        "command": "node tooling/agentos-cli/src/generate/project-docs-site.mjs --check"
+        "command": "node packages/cli/src/generate/project-docs-site.mjs --check"
       }
     ],
     "check-effect-manifests": [
       {
         "type": "command",
-        "command": "node tooling/agentos-cli/src/generate/generate-effect-skill-manifests.mjs --check"
+        "command": "node packages/cli/src/generate/generate-effect-skill-manifests.mjs --check"
       }
     ],
     "substrate-consumer": [
@@ -328,31 +328,31 @@
     "guard-coverage": [
       {
         "type": "command",
-        "command": "node tooling/agentos-cli/src/check/check-coverage.mjs"
+        "command": "node packages/cli/src/check/check-coverage.mjs"
       }
     ],
     "generate-site-watch": [
       {
         "type": "command",
-        "command": "node tooling/agentos-cli/src/generate/project-docs-site.mjs --watch"
+        "command": "node packages/cli/src/generate/project-docs-site.mjs --watch"
       }
     ]
   },
   "rules": [
     {
       "id": "repo-tooling-surface",
-      "owner": "root package.json and tooling/agentos-cli",
+      "owner": "root package.json and packages/cli",
       "invariantId": "invariant.algebra.single-code-source",
       "kind": "repo-tooling",
       "diagnostics": [
-        "root command surface must stay collapsed to the private CLI and approved distribution/runtime commands",
+        "root command surface must stay collapsed to the CLI package and approved distribution/runtime commands",
         "scripts/ must remain reserved for parallel-dev shell helpers",
-        "tooling CLI must not import packages/* source"
+        "CLI must not import packages/* source outside packages/cli"
       ],
       "paths": [
         "package.json",
         "scripts/**",
-        "tooling/agentos-cli/src/**/*.mjs",
+        "packages/cli/src/**/*.mjs",
         "docs/agent/boundary-rules.source.json"
       ],
       "commandGroup": "all",
@@ -417,7 +417,7 @@
         "docs/agent/gates.source.json",
         "package.json",
         "packages",
-        "tooling/agentos-cli/src/check"
+        "packages/cli/src/check"
       ],
       "commandGroup": "all",
       "acceptance": {
@@ -442,7 +442,7 @@
     },
     {
       "id": "client-boundaries",
-      "owner": "tooling/agentos-cli/src/check/sources/client-workspace-host-boundary.md and docs/surface.json",
+      "owner": "packages/cli/src/check/sources/client-workspace-host-boundary.md and docs/surface.json",
       "invariantId": "invariant.client.projection-sink-boundary",
       "kind": "repo-boundary",
       "diagnostics": [
@@ -451,7 +451,7 @@
         "ag-ui framework packages must retire once client framework bridges exist"
       ],
       "paths": [
-        "tooling/agentos-cli/src/check/sources/client-workspace-host-boundary.md",
+        "packages/cli/src/check/sources/client-workspace-host-boundary.md",
         "docs/surface.json",
         "packages/client/**",
         "packages/composers/workspace-agent/**",
@@ -466,7 +466,7 @@
     },
     {
       "id": "convergence-boundary",
-      "owner": "CST 418, CST 455, tooling/agentos-cli/src/check/sources/client-workspace-host-boundary.md, and packages/composers/agent-authoring/src/index.ts",
+      "owner": "CST 418, CST 455, packages/cli/src/check/sources/client-workspace-host-boundary.md, and packages/composers/agent-authoring/src/index.ts",
       "invariantId": "invariant.client.projection-sink-boundary",
       "kind": "repo-boundary",
       "diagnostics": [
@@ -476,15 +476,15 @@
         "spikes must remain an ignored local namespace with zero tracked files"
       ],
       "paths": [
-        "tooling/agentos-cli/src/check/sources/client-workspace-host-boundary.md",
+        "packages/cli/src/check/sources/client-workspace-host-boundary.md",
         "docs/surface.json",
         "packages/client/**",
         "packages/composers/workspace-agent/**",
         "packages/composers/agent-authoring/src/index.ts",
         "packages/composers/agent-authoring/test/agent-authoring.test.ts",
         ".gitignore",
-        "tooling/agentos-cli/src/check/algorithmic-checks.mjs",
-        "tooling/agentos-cli/src/main.mjs"
+        "packages/cli/src/check/algorithmic-checks.mjs",
+        "packages/cli/src/main.mjs"
       ],
       "commandGroup": "all",
       "acceptance": {
@@ -495,7 +495,7 @@
     },
     {
       "id": "convergence-public-surface",
-      "owner": "CST 421 and tooling/agentos-cli/src/check/sources/public-surface-sweep.source.json",
+      "owner": "CST 421 and packages/cli/src/check/sources/public-surface-sweep.source.json",
       "invariantId": "invariant.algebra.single-code-source",
       "kind": "repo-boundary",
       "diagnostics": [
@@ -504,12 +504,12 @@
         "retained projection vocabulary must be source-owned with explicit reason"
       ],
       "paths": [
-        "tooling/agentos-cli/src/check/sources/public-surface-sweep.source.json",
+        "packages/cli/src/check/sources/public-surface-sweep.source.json",
         "docs/surface.json",
         "docs/api/*.md",
         "packages/**/PUBLIC_API.md",
         "packages/**/package.json",
-        "tooling/agentos-cli/src/check/algorithmic-checks.mjs"
+        "packages/cli/src/check/algorithmic-checks.mjs"
       ],
       "commandGroup": "all",
       "acceptance": {
@@ -636,7 +636,7 @@
       "paths": [
         "docs/**",
         "tooling/docs-site/src/content/docs/**",
-        "tooling/agentos-cli/src/generate/**/*.mjs"
+        "packages/cli/src/generate/**/*.mjs"
       ],
       "commandGroup": "check-docs"
     },
@@ -650,7 +650,7 @@
       "commandGroup": "check-docs",
       "acceptance": {
         "engine": "generatedProjection",
-        "command": "node tooling/agentos-cli/src/generate/generate-agent-docs.mjs --check"
+        "command": "node packages/cli/src/generate/generate-agent-docs.mjs --check"
       }
     },
     {
@@ -916,7 +916,7 @@
       "commandGroup": "substrate-consumer",
       "acceptance": {
         "engine": "generatedProjection",
-        "command": "node tooling/agentos-cli/src/generate/generate-agent-docs.mjs --check"
+        "command": "node packages/cli/src/generate/generate-agent-docs.mjs --check"
       }
     },
     {
@@ -1060,7 +1060,7 @@
       "commandGroup": "substrate-consumer",
       "acceptance": {
         "engine": "generatedProjection",
-        "command": "bun tooling/agentos-cli/src/generate/generate-carrier-reference.mjs --check"
+        "command": "bun packages/cli/src/generate/generate-carrier-reference.mjs --check"
       }
     },
     {
@@ -1121,7 +1121,7 @@
       "invariantId": "invariant.algebra.single-code-source",
       "kind": "repo-boundary",
       "diagnostics": [],
-      "paths": ["packages", "tooling/agentos-cli/src/check"],
+      "paths": ["packages", "packages/cli/src/check"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
         "engine": "algorithmic",

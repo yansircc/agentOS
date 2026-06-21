@@ -28,7 +28,6 @@
         "@agent-os/ag-ui": "workspace:*",
         "@agent-os/attached-stream": "workspace:*",
         "@agent-os/core": "workspace:*",
-        "@agent-os/ops-api": "workspace:*",
         "@agent-os/runtime": "workspace:*",
         "@agent-os/sse-http": "workspace:*",
         "@agent-os/workspace-env": "workspace:*",
@@ -270,6 +269,13 @@
       "peerDependencies": {
         "react": "^19.2.7",
         "svelte": "^5.56.2",
+      },
+    },
+    "packages/cli": {
+      "name": "@agent-os/cli",
+      "version": "0.5.16",
+      "bin": {
+        "agentos": "./src/main.mjs",
       },
     },
     "packages/composers/agent-authoring": {
@@ -718,13 +724,6 @@
         "effect": "^4.0.0-beta.84",
       },
     },
-    "tooling/agentos-cli": {
-      "name": "@agent-os/agentos-cli",
-      "version": "0.5.16",
-      "bin": {
-        "agentos": "./src/main.mjs",
-      },
-    },
     "tooling/docs-site": {
       "name": "@agent-os/docs-site",
       "version": "0.5.16",
@@ -732,33 +731,6 @@
         "@astrojs/starlight": "^0.39.3",
         "astro": "^6.4.3",
         "vite": "^7.3.2",
-      },
-    },
-    "tooling/ops-api": {
-      "name": "@agent-os/ops-api",
-      "version": "0.5.16",
-      "dependencies": {
-        "@agent-os/core": "workspace:*",
-      },
-      "devDependencies": {
-        "@cloudflare/workers-types": "catalog:",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-    },
-    "tooling/ops-htmx": {
-      "name": "@agent-os/ops-htmx",
-      "version": "0.5.16",
-      "dependencies": {
-        "@agent-os/core": "workspace:*",
-        "@agent-os/ops-api": "workspace:*",
-      },
-      "devDependencies": {
-        "@cloudflare/workers-types": "catalog:",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
       },
     },
   },
@@ -788,8 +760,6 @@
 
     "@agent-os/agent-authoring": ["@agent-os/agent-authoring@workspace:packages/composers/agent-authoring"],
 
-    "@agent-os/agentos-cli": ["@agent-os/agentos-cli@workspace:tooling/agentos-cli"],
-
     "@agent-os/attached-stream": ["@agent-os/attached-stream@workspace:packages/composers/attached-stream"],
 
     "@agent-os/backend-cloudflare-do": ["@agent-os/backend-cloudflare-do@workspace:packages/backends/cloudflare-do"],
@@ -799,6 +769,8 @@
     "@agent-os/backend-node-postgres": ["@agent-os/backend-node-postgres@workspace:packages/backends/node-postgres"],
 
     "@agent-os/client": ["@agent-os/client@workspace:packages/client"],
+
+    "@agent-os/cli": ["@agent-os/cli@workspace:packages/cli"],
 
     "@agent-os/config": ["@agent-os/config@workspace:packages/composers/config"],
 
@@ -823,10 +795,6 @@
     "@agent-os/llm-transport-effect-ai": ["@agent-os/llm-transport-effect-ai@workspace:packages/providers/llm-transport-effect-ai"],
 
     "@agent-os/llm-transport-http": ["@agent-os/llm-transport-http@workspace:packages/providers/llm-transport-http"],
-
-    "@agent-os/ops-api": ["@agent-os/ops-api@workspace:tooling/ops-api"],
-
-    "@agent-os/ops-htmx": ["@agent-os/ops-htmx@workspace:tooling/ops-htmx"],
 
     "@agent-os/resource-carrier": ["@agent-os/resource-carrier@workspace:packages/carriers/resource"],
 

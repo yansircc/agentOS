@@ -5,6 +5,7 @@
     "packages/core",
     "packages/runtime",
     "packages/client",
+    "packages/cli",
     "packages/carriers/*",
     "packages/execution-domains/*",
     "packages/providers/*",
@@ -15,7 +16,7 @@
   ],
   "type": "module",
   "scripts": {
-    "agentos": "node tooling/agentos-cli/src/main.mjs",
+    "agentos": "node packages/cli/src/main.mjs",
     "typecheck": "sh -c 'tsc -b --noEmit --force; code=$?; tsc -b --clean; exit $code'",
     "test": "vp run --cache -r test",
     "docs:generate": "bun run agentos -- generate docs",

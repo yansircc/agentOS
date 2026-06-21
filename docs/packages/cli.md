@@ -1,0 +1,28 @@
+# AgentOS CLI
+
+## Purpose
+
+`@agent-os/cli` is the developer command package for generated projections,
+authored agent builds, structural checks, and distribution gates.
+
+## Invariant
+
+The CLI consumes source facts and executes gates. It does not own package
+facts, public API intent, carrier declarations, ledger identity, or substrate
+runtime behavior.
+
+## Minimal Usage
+
+```sh
+bun run agentos -- check all
+bun run agentos -- check guard public-api
+bun run agentos -- build --cwd /path/to/app
+bun run agentos -- generate docs
+```
+
+## Verification
+
+```sh
+bun run agentos -- --help
+bun run agentos -- check guard ag-ui-sse-axis
+```

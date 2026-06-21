@@ -1,5 +1,5 @@
 {
-  "generatedBy": "tooling/agentos-cli/src/generate/generate-agent-docs.mjs",
+  "generatedBy": "packages/cli/src/generate/generate-agent-docs.mjs",
   "source": [
     "docs/agent/invariants.source.json",
     "exported TSDoc @agentosInvariant tags",
@@ -97,7 +97,7 @@
       ],
       "tests": [
         "packages/core/test/runtime-protocol/runtime-events.test.ts",
-        "tooling/agentos-cli/src/check/algorithmic-checks.mjs"
+        "packages/cli/src/check/algorithmic-checks.mjs"
       ]
     },
     {
@@ -260,9 +260,9 @@
         "docs/verification.md"
       ],
       "tests": [
-        "tooling/agentos-cli/src/generate/generate-docs.mjs",
-        "tooling/agentos-cli/src/check/check-coverage.source.json",
-        "tooling/agentos-cli/src/check/algorithmic-checks.mjs"
+        "packages/cli/src/generate/generate-docs.mjs",
+        "packages/cli/src/check/check-coverage.source.json",
+        "packages/cli/src/check/algorithmic-checks.mjs"
       ]
     },
     {
@@ -275,7 +275,7 @@
       "errors": [],
       "docs": ["docs/concepts/ag-ui-wire-adapter.md", "docs/packages/runtime.md"],
       "tests": [
-        "tooling/agentos-cli/src/check/algorithmic-checks.mjs",
+        "packages/cli/src/check/algorithmic-checks.mjs",
         "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"
       ]
     },

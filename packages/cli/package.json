@@ -1,0 +1,12 @@
+{
+  "name": "@agent-os/cli",
+  "version": "0.5.16",
+  "private": true,
+  "bin": {
+    "agentos": "./src/main.mjs"
+  },
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  }
+}

@@ -63,7 +63,6 @@
           "moduleBuckets": ["ledger", "adapter"],
           "optionalPeers": [
             "@agent-os/ag-ui",
-            "@agent-os/ops-api",
             "@agent-os/sse-http",
             "@agent-os/workspace-env",
             "@agent-os/workspace-env-cloudflare",
@@ -76,6 +75,11 @@
         },
         {
           "subpath": "./cloudflare/do-rpc",
+          "moduleBuckets": ["adapter"],
+          "optionalPeers": ["@cloudflare/workers-types"]
+        },
+        {
+          "subpath": "./cloudflare/ops-api",
           "moduleBuckets": ["adapter"],
           "optionalPeers": ["@cloudflare/workers-types"]
         },

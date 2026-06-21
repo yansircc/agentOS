@@ -96,10 +96,10 @@
         ".github/**",
         "docs/agent/gates.source.json",
         "docs/agent/boundary-rules.source.json",
-        "tooling/agentos-cli/src/main.mjs",
-        "tooling/agentos-cli/src/runner.mjs",
-        "tooling/agentos-cli/src/check/**",
-        "tooling/agentos-cli/src/generate/**",
+        "packages/cli/src/main.mjs",
+        "packages/cli/src/runner.mjs",
+        "packages/cli/src/check/**",
+        "packages/cli/src/generate/**",
         "tooling/distribution/**",
         "tooling/vitest-config/**"
       ],
@@ -109,7 +109,7 @@
   "extraEdges": [
     {
       "from": "tooling/docs-site",
-      "to": "tooling/agentos-cli",
+      "to": "packages/cli",
       "reason": "Docs site consumes generated projections owned by the agentOS CLI."
     }
   ],

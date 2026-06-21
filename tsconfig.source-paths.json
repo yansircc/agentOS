@@ -32,6 +32,9 @@
       "@agent-os/runtime": ["./packages/runtime/src/index.ts"],
       "@agent-os/runtime/admission": ["./packages/runtime/src/admission.ts"],
       "@agent-os/runtime/run-projector": ["./packages/runtime/src/run-projector.ts"],
+      "@agent-os/runtime/cloudflare/ops-api": [
+        "./packages/runtime/src/cloudflare/ops-api/index.ts"
+      ],
       "@agent-os/decision-gate": ["./packages/carriers/decision-gate/src/index.ts"],
       "@agent-os/deploy": ["./packages/carriers/deploy/src/index.ts"],
       "@agent-os/git-carrier": ["./packages/carriers/git/src/index.ts"],
@@ -78,8 +81,6 @@
       "@agent-os/workspace-session-cloudflare": [
         "./packages/providers/workspace-session-cloudflare/src/index.ts"
       ],
-      "@agent-os/ops-api": ["./tooling/ops-api/src/index.ts"],
-      "@agent-os/ops-htmx": ["./tooling/ops-htmx/src/index.ts"],
       "@agent-os/runtime/cloudflare": ["./packages/runtime/src/cloudflare/index.ts"],
       "@agent-os/runtime/cloudflare/do-rpc": ["./packages/runtime/src/cloudflare/do-rpc.ts"],
       "@agent-os/runtime/in-memory": ["./packages/runtime/src/in-memory/index.ts"],

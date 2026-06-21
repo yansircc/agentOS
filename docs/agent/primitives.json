@@ -1,5 +1,5 @@
 {
-  "generatedBy": "tooling/agentos-cli/src/generate/generate-agent-docs.mjs",
+  "generatedBy": "packages/cli/src/generate/generate-agent-docs.mjs",
   "source": [
     "exported TSDoc @agentosPrimitive tags",
     "docs/agent/invariants.source.json",

@@ -26,6 +26,10 @@
       "types": "./src/cloudflare/do-rpc.ts",
       "default": "./src/cloudflare/do-rpc.ts"
     },
+    "./cloudflare/ops-api": {
+      "types": "./src/cloudflare/ops-api/index.ts",
+      "default": "./src/cloudflare/ops-api/index.ts"
+    },
     "./in-memory": {
       "types": "./src/in-memory/index.ts",
       "default": "./src/in-memory/index.ts"

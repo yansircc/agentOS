@@ -32,6 +32,7 @@ export const agentOsSourceAliasSpecs = [
   ["@agent-os/runtime/admission", "packages/runtime/src/admission.ts"],
   ["@agent-os/runtime/cloudflare", "packages/runtime/src/cloudflare/index.ts"],
   ["@agent-os/runtime/cloudflare/do-rpc", "packages/runtime/src/cloudflare/do-rpc.ts"],
+  ["@agent-os/runtime/cloudflare/ops-api", "packages/runtime/src/cloudflare/ops-api/index.ts"],
   ["@agent-os/runtime/in-memory", "packages/runtime/src/in-memory/index.ts"],
   ["@agent-os/runtime/llm-effect-ai", "packages/runtime/src/llm-effect-ai/index.ts"],
   ["@agent-os/runtime/node", "packages/runtime/src/node/index.ts"],
@@ -82,8 +83,6 @@ export const agentOsSourceAliasSpecs = [
     "@agent-os/workspace-session-cloudflare",
     "packages/providers/workspace-session-cloudflare/src/index.ts",
   ],
-  ["@agent-os/ops-api", "tooling/ops-api/src/index.ts"],
-  ["@agent-os/ops-htmx", "tooling/ops-htmx/src/index.ts"],
 ] as const satisfies readonly AgentOsSourceAliasSpec[];
 
 const repoRoot = new URL("../../", (import.meta as { readonly url: string }).url);
