@@ -9,6 +9,8 @@ import {
   packageImportCycles as graphPackageImportCycles,
   packageManifestDependencyEdges,
   packageSourceImportEdges as graphPackageSourceImportEdges,
+  moduleGraphOracleFailures,
+  sourceModuleGraph,
   tsconfigReferenceEdges,
   workspacePackageRecords as graphWorkspacePackageRecords,
 } from "./package-graph.mjs";
@@ -466,6 +468,18 @@ const checkConvergenceImportDag = () =>
     ruleId: "convergence-import-dag",
     label: "convergence import DAG",
   });
+
+const checkModuleGraphOracle = () => {
+  const records = graphWorkspacePackageRecords(repoRoot).filter(
+    (record) => typeof record.name === "string" && record.name.startsWith("@agent-os/"),
+  );
+  const graph = sourceModuleGraph(repoRoot, records);
+  const failures = moduleGraphOracleFailures(repoRoot, records);
+  failIfAny("module graph oracle", failures);
+  console.log(
+    `module graph oracle covered ${graph.files.length} source files and ${graph.edges.length} internal module edges`,
+  );
+};
 
 const clientSectionBody = (source, heading) => {
   const start = source.indexOf(`## ${heading}`);
@@ -1677,6 +1691,7 @@ const checkerById = new Map([
   ["limit-registry", checkLimitRegistry],
   ["generated-static-target-linking", checkGeneratedStaticTargetLinking],
   ["gate-tier-governance", checkGateTierGovernance],
+  ["module-graph-oracle", checkModuleGraphOracle],
   ["public-api", checkPublicApi],
   ["repo-tooling-surface", checkRepoToolingSurface],
   ["source-aliases", checkSourceAliases],
