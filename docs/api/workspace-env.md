@@ -13,7 +13,7 @@
 - `.:WORKSPACE_TOOL_NAMES`
 - `.:WORKSPACE_TOOL_SPECS`
 - `.:WalkWorkspaceFilesOptions`
-- `.:WorkspaceDeletePathResult`
+- `.:WorkspaceBashResult`
 - `.:WorkspaceEditFileResult`
 - `.:WorkspaceEnv`
 - `.:WorkspaceEnvBackend`
@@ -27,11 +27,9 @@
 - `.:WorkspaceGrepFilesResult`
 - `.:WorkspaceGrepMatch`
 - `.:WorkspaceGrepMode`
-- `.:WorkspaceListFilesResult`
 - `.:WorkspaceOperationOptions`
+- `.:WorkspaceReadFileLineRange`
 - `.:WorkspaceReadFileResult`
-- `.:WorkspaceRunShellResult`
-- `.:WorkspaceToolDeleteHookInput`
 - `.:WorkspaceToolExecHookInput`
 - `.:WorkspaceToolEnvRef`
 - `.:WorkspaceToolCategory`

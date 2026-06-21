@@ -20,22 +20,22 @@ projections, but hook failure fails the tool instead of silently drifting.
 
 `WORKSPACE_TOOL_DEFAULT_DECLARATIONS` is the single catalog for the standard
 workspace tool declarations consumed by `workspace@1` authoring and runtime
-binding. `shell` is a mutation subclass with a stricter interaction floor.
+binding. `bash` is a mutation subclass; its safety boundary is the workspace
+execution domain plus receipt settlement, not a human approval loop.
 
 ## File Tools
 
-`write_file` creates or overwrites one complete UTF-8 file. It is the tool for
-whole-file replacement and returns the workspace-relative path plus the number
-of bytes written.
+`read_file` reads one UTF-8 file. It accepts optional 1-based `startLine` and
+`endLine` values; invalid ranges fail closed, and range reads return effective
+range metadata. Without a range, it returns the current bounded whole-file
+preview.
 
-`edit_file` performs exact string replacement inside one UTF-8 file. By default,
-`oldString` must occur exactly once. `expectCount` may set another finite
-positive expected count. Zero matches, multiple matches without an explicit
-count, non-finite counts, and output above the configured file byte limit fail
-before writing.
+`write_file` creates or overwrites one complete UTF-8 file. It is the only
+default file mutation tool and returns the workspace-relative path plus the
+number of bytes written.
 
-`glob_files` and `grep_files` search the current workspace state through
-`WorkspaceEnv`; they do not shell out and they do not emit ledger facts.
+`glob` and `grep` search the current workspace state through `WorkspaceEnv`;
+they do not shell out and they do not emit ledger facts.
 
 Search paths are slash-normalized workspace-relative paths. `root` defaults to
 `.` and is resolved through `WorkspaceEnv`, so root escapes fail through the
@@ -50,13 +50,17 @@ segment matches zero or more path segments. Patterns are matched relative to
 by path and bounded by `maxMatches` with `truncated: true` when additional
 matches exist.
 
-`grep_files` defaults to `mode: "literal"`. `mode: "regex"` uses a JavaScript
+`grep` defaults to `mode: "literal"`. `mode: "regex"` uses a JavaScript
 regular expression without flags and rejects expressions that produce empty
 matches. Search is line-oriented. Matches are ordered by path, line, then
 column. Files containing a NUL byte are treated as binary, skipped for text
 matching, and reported in `skippedBinaryPaths`. `maxBytesPerMatch` bounds the
 returned line and match text previews; truncated previews carry explicit
 `lineTextTruncated` and `matchTextTruncated` booleans.
+
+`bash` runs one finite shell command in the workspace. Deletion and structural
+edits are composed through `bash` plus `read_file`/`write_file`; `delete_path`,
+`edit_file`, and `list_files` are not default workspace tools.
 
 ## Verification
 

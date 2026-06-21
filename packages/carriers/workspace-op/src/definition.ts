@@ -7,12 +7,7 @@ export const WORKSPACE_OP_PROJECTION_KIND = "workspace_op.status";
 
 const NonEmptyString = Schema.String.pipe(Schema.check(Schema.isMinLength(1)));
 
-const WorkspaceOperationNameSchema = Schema.Literals([
-  "write_file",
-  "edit_file",
-  "delete_path",
-  "run_shell",
-]);
+const WorkspaceOperationNameSchema = Schema.Literals(["write_file", "bash"]);
 
 const WorkspaceOperationLimitsSchema = Schema.Struct({
   maxFileBytes: Schema.optional(Schema.Number),
@@ -28,11 +23,6 @@ const WorkspaceOperationRequestSchema = Schema.Struct({
   toolName: WorkspaceOperationNameSchema,
   path: Schema.optional(Schema.String),
   content: Schema.optional(Schema.String),
-  oldString: Schema.optional(Schema.String),
-  newString: Schema.optional(Schema.String),
-  expectCount: Schema.optional(Schema.Number),
-  recursive: Schema.optional(Schema.Boolean),
-  force: Schema.optional(Schema.Boolean),
   command: Schema.optional(Schema.String),
   cwd: Schema.optional(Schema.String),
   timeoutMs: Schema.optional(Schema.Number),
@@ -53,8 +43,6 @@ const WorkspaceOperationResultSchema = Schema.Struct({
   resultHash: NonEmptyString,
   path: Schema.optional(Schema.String),
   bytesWritten: Schema.optional(Schema.Number),
-  deleted: Schema.optional(Schema.Boolean),
-  replacementCount: Schema.optional(Schema.Number),
   exitCode: Schema.optional(Schema.Number),
   command: Schema.optional(Schema.String),
   cwd: Schema.optional(Schema.String),

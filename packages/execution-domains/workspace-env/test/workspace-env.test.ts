@@ -11,6 +11,7 @@ import {
   grepWorkspaceFiles,
   normalizeWorkspaceToolPath,
   walkWorkspaceFiles,
+  WORKSPACE_TOOL_NAMES,
   WORKSPACE_TOOL_SPECS,
   type WorkspaceEnvBackend,
   type WorkspaceExecOptions,
@@ -128,15 +129,13 @@ describe("@agent-os/workspace-env", () => {
     });
 
     expect(WORKSPACE_TOOL_SPECS.map((spec) => [spec.name, spec.category, spec.access])).toEqual([
+      ["bash", "shell", "write"],
+      ["glob", "read", "read"],
+      ["grep", "read", "read"],
       ["read_file", "read", "read"],
       ["write_file", "mutation", "write"],
-      ["edit_file", "mutation", "write"],
-      ["list_files", "read", "read"],
-      ["glob_files", "read", "read"],
-      ["grep_files", "read", "read"],
-      ["delete_path", "mutation", "write"],
-      ["run_shell", "shell", "write"],
     ]);
+    expect(WORKSPACE_TOOL_NAMES).toEqual(["bash", "glob", "grep", "read_file", "write_file"]);
     expect(Object.keys(tools).sort()).toEqual(WORKSPACE_TOOL_SPECS.map((spec) => spec.name).sort());
   });
 
@@ -348,13 +347,13 @@ describe("@agent-os/workspace-env", () => {
         tools,
         deterministicToolInvocation("read_file", { path: "./src/pingpong.py" }),
       );
-      const list = yield* unsafeRunToolByName(
+      const glob = yield* unsafeRunToolByName(
         tools,
-        deterministicToolInvocation("list_files", { path: "/src" }),
+        deterministicToolInvocation("glob", { root: "/src", pattern: "*" }),
       );
       const shell = yield* unsafeRunToolByName(
         tools,
-        deterministicToolInvocation("run_shell", {
+        deterministicToolInvocation("bash", {
           command: "python3 -m py_compile src/pingpong.py",
           cwd: "/",
           envRefs: [{ name: "TOKEN", ref: "credential:token" }],
@@ -371,7 +370,13 @@ describe("@agent-os/workspace-env", () => {
         contentBytes: 30,
         truncated: false,
       });
-      expect(list).toEqual({ path: "src", entries: ["pingpong.py"] });
+      expect(glob).toEqual({
+        root: "src",
+        pattern: "*",
+        matches: ["src/pingpong.py"],
+        truncated: false,
+        maxMatches: 100,
+      });
       expect(shell).toEqual(
         expect.objectContaining({
           command: "python3 -m py_compile src/pingpong.py",
@@ -422,6 +427,73 @@ describe("@agent-os/workspace-env", () => {
     }),
   );
 
+  it.effect("reads 1-based line ranges with effective range metadata", () =>
+    Effect.gen(function* () {
+      const { env } = workspace();
+      const tools = createWorkspaceTools(env, {
+        authority: "test.workspace",
+        admit: allowToolAdmitter,
+      });
+      yield* Effect.promise(() => env.writeFile("lines.txt", "one\ntwo\nthree\nfour\n"));
+
+      const middle = yield* unsafeRunToolByName(
+        tools,
+        deterministicToolInvocation("read_file", {
+          path: "lines.txt",
+          startLine: 2,
+          endLine: 3,
+        }),
+      );
+      expect(middle).toEqual({
+        path: "lines.txt",
+        content: "two\nthree\n",
+        encoding: "utf-8",
+        size: 19,
+        contentBytes: 10,
+        truncated: false,
+        range: { startLine: 2, endLine: 3, totalLines: 4 },
+      });
+
+      const clipped = yield* unsafeRunToolByName(
+        tools,
+        deterministicToolInvocation("read_file", {
+          path: "lines.txt",
+          startLine: 3,
+          endLine: 99,
+        }),
+      );
+      expect(clipped).toEqual(
+        expect.objectContaining({
+          content: "three\nfour\n",
+          range: { startLine: 3, endLine: 4, totalLines: 4 },
+        }),
+      );
+    }),
+  );
+
+  it.effect("fails invalid read_file line ranges closed", () =>
+    Effect.gen(function* () {
+      const { env } = workspace();
+      const tools = createWorkspaceTools(env, {
+        authority: "test.workspace",
+        admit: allowToolAdmitter,
+      });
+      yield* Effect.promise(() => env.writeFile("lines.txt", "one\ntwo\n"));
+
+      for (const args of [
+        { path: "lines.txt", startLine: 0 },
+        { path: "lines.txt", startLine: 2.5 },
+        { path: "lines.txt", startLine: 2, endLine: 1 },
+        { path: "lines.txt", startLine: 3 },
+      ]) {
+        const result = yield* Effect.result(
+          unsafeRunToolByName(tools, deterministicToolInvocation("read_file", args)),
+        );
+        expect(result._tag).toBe("Failure");
+      }
+    }),
+  );
+
   it.effect("maps cwd-prefixed absolute workspace tool paths before actuator resolution", () =>
     Effect.gen(function* () {
       const { env } = workspace();
@@ -443,7 +515,7 @@ describe("@agent-os/workspace-env", () => {
     }),
   );
 
-  it.effect("exposes edit_file glob_files and grep_files tools", () =>
+  it.effect("exposes glob and grep tools over complete-file writes", () =>
     Effect.gen(function* () {
       const { env, files } = workspace();
       const writes: unknown[] = [];
@@ -464,24 +536,22 @@ describe("@agent-os/workspace-env", () => {
           content: "const value = 'old';\n",
         }),
       );
-      const edit = yield* unsafeRunToolByName(
+      yield* unsafeRunToolByName(
         tools,
-        deterministicToolInvocation("edit_file", {
+        deterministicToolInvocation("write_file", {
           path: "src/app.ts",
-          oldString: "old",
-          newString: "new",
+          content: "const value = 'new';\n",
         }),
       );
       const glob = yield* unsafeRunToolByName(
         tools,
-        deterministicToolInvocation("glob_files", { root: "/src", pattern: "*.ts" }),
+        deterministicToolInvocation("glob", { root: "/src", pattern: "*.ts" }),
       );
       const grep = yield* unsafeRunToolByName(
         tools,
-        deterministicToolInvocation("grep_files", { root: "/src", pattern: "new" }),
+        deterministicToolInvocation("grep", { root: "/src", pattern: "new" }),
       );
 
-      expect(edit).toEqual({ path: "src/app.ts", replacementCount: 1, bytesWritten: 21 });
       expect(glob).toEqual({
         root: "src",
         pattern: "*.ts",

@@ -143,7 +143,7 @@
       "owner": "@agent-os/workspace-env search tools",
       "sourcePaths": ["packages/execution-domains/workspace-env/src/index.ts"],
       "value": "default 100 matches and 4096 bytes per match",
-      "overrideSurface": "glob_files/grep_files tool args maxMatches and maxBytesPerMatch",
+      "overrideSurface": "glob/grep tool args maxMatches and maxBytesPerMatch",
       "reason": "Search result volume is caller-selected output shaping."
     },
     {

@@ -153,9 +153,6 @@ const optionalNumber = (record: Record<string, unknown>, key: string): number | 
     ? (record[key] as number)
     : undefined;
 
-const optionalBoolean = (record: Record<string, unknown>, key: string): boolean | undefined =>
-  typeof record[key] === "boolean" ? record[key] : undefined;
-
 const optionalStringArray = (
   record: Record<string, unknown>,
   key: string,
@@ -182,16 +179,12 @@ const workspaceOperationPayload = (
     workspaceRef: env.domain.ref,
     toolName,
   };
-  for (const key of ["path", "content", "oldString", "newString", "command", "cwd"] as const) {
+  for (const key of ["path", "content", "command", "cwd"] as const) {
     const value = optionalString(args, key);
     if (value !== undefined) payload[key] = value;
   }
-  for (const key of ["expectCount", "timeoutMs"] as const) {
+  for (const key of ["timeoutMs"] as const) {
     const value = optionalNumber(args, key);
-    if (value !== undefined) payload[key] = value;
-  }
-  for (const key of ["recursive", "force"] as const) {
-    const value = optionalBoolean(args, key);
     if (value !== undefined) payload[key] = value;
   }
   const materialRefs = optionalStringArray(args, "materialRefs");

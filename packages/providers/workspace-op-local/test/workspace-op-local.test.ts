@@ -140,7 +140,7 @@ describe("@agent-os/workspace-op-local", () => {
       payload: {
         requestedBy: "@agent-os/workspace-binding",
         workspaceRef: "workspace:test",
-        toolName: "run_shell",
+        toolName: "bash",
         command: "printf ok",
         claim: { ...claim, operationRef: "tool:run-1:call-2" },
       },
@@ -149,7 +149,7 @@ describe("@agent-os/workspace-op-local", () => {
     expect(result).toMatchObject({
       ok: true,
       payload: {
-        toolName: "run_shell",
+        toolName: "bash",
         stdoutPreview: "printf o",
         stdoutBytes: 9,
         stdoutTruncated: true,
@@ -172,7 +172,7 @@ describe("@agent-os/workspace-op-local", () => {
       payload: {
         requestedBy: "@agent-os/workspace-binding",
         workspaceRef: "workspace:test",
-        toolName: "run_shell",
+        toolName: "bash",
         command: "pwd",
         cwd: "/workspace",
         claim: { ...claim, operationRef: "tool:run-1:call-cwd-shell" },
@@ -182,7 +182,7 @@ describe("@agent-os/workspace-op-local", () => {
     expect(result).toMatchObject({
       ok: true,
       payload: {
-        toolName: "run_shell",
+        toolName: "bash",
         cwd: ".",
       },
     });

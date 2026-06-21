@@ -138,11 +138,8 @@ describe("Cloudflare workspace tools to AG-UI integration fixture", () => {
         });
 
         expect(Object.keys(submit.tools).sort()).toEqual([
-          "delete_path",
-          "edit_file",
-          "glob_files",
-          "grep_files",
-          "list_files",
+          "glob",
+          "grep",
           "read_file",
           "write_file",
         ]);

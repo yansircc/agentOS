@@ -26,7 +26,8 @@ projections, but hook failure fails the tool instead of silently drifting.
 
 `WORKSPACE_TOOL_DEFAULT_DECLARATIONS` is the single catalog for the standard
 workspace tool declarations consumed by `workspace@1` authoring and runtime
-binding. `shell` is a mutation subclass with a stricter interaction floor.
+binding. `bash` is a mutation subclass; its safety boundary is the workspace
+execution domain plus receipt settlement, not a human approval loop.
 
 ## Verification
 

@@ -47,16 +47,7 @@ const generatedJson = <T>(
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
 const buildCli = path.join(repoRoot, "packages/composers/agent-authoring/bin/build-cli.ts");
-const workspaceDefaultToolNames = [
-  "delete_path",
-  "edit_file",
-  "glob_files",
-  "grep_files",
-  "list_files",
-  "read_file",
-  "run_shell",
-  "write_file",
-] as const;
+const workspaceDefaultToolNames = ["bash", "glob", "grep", "read_file", "write_file"] as const;
 
 describe("agent authored tree compiler", () => {
   it("compiles a minimal authored tree to AgentManifest<Authored> with provenance", () => {
@@ -333,7 +324,7 @@ describe("agent authored tree compiler", () => {
     }
   });
 
-  it("rejects agent.json tool controls for custom slugs", () => {
+  it("rejects agent.json tool controls for custom and obsolete slugs", () => {
     const result = compileAgentTree({
       files: [
         { path: "agent/instructions.md", kind: "markdown", text: "Lookup." },
@@ -343,6 +334,11 @@ describe("agent authored tree compiler", () => {
           value: {
             tools: {
               weather: false,
+              delete_path: false,
+              edit_file: false,
+              list_files: false,
+              glob_files: false,
+              grep_files: false,
             },
           },
         },
@@ -356,6 +352,31 @@ describe("agent authored tree compiler", () => {
           kind: "unknown_workspace_default_tool_control",
           path: "agent.json",
           toolId: "weather",
+        },
+        {
+          kind: "unknown_workspace_default_tool_control",
+          path: "agent.json",
+          toolId: "delete_path",
+        },
+        {
+          kind: "unknown_workspace_default_tool_control",
+          path: "agent.json",
+          toolId: "edit_file",
+        },
+        {
+          kind: "unknown_workspace_default_tool_control",
+          path: "agent.json",
+          toolId: "list_files",
+        },
+        {
+          kind: "unknown_workspace_default_tool_control",
+          path: "agent.json",
+          toolId: "glob_files",
+        },
+        {
+          kind: "unknown_workspace_default_tool_control",
+          path: "agent.json",
+          toolId: "grep_files",
         },
       ],
     });
@@ -416,7 +437,7 @@ describe("agent authored tree compiler", () => {
       effects: ["workspace_read"],
       receiptPolicy: "workspace.snapshot",
     });
-    expect(normalized.value.deployment.manifest.tools?.run_shell?.interaction).toBe("approval");
+    expect(normalized.value.deployment.manifest.tools?.bash?.interaction).toBe("never");
     expect(normalized.value.deployment.manifest.materials?.workspace).toEqual({
       kind: "external_resource",
       provider: "agent-os",
@@ -468,8 +489,8 @@ describe("agent authored tree compiler", () => {
     expect(normalized.value.provenance.manifest["/tools/read_file/bindingRef"]).toBe(
       "macro(workspace@1)#/tools/read_file/bindingRef",
     );
-    expect(normalized.value.provenance.manifest["/tools/run_shell/interaction"]).toBe(
-      "macro(workspace@1)#/tools/run_shell/interaction",
+    expect(normalized.value.provenance.manifest["/tools/bash/interaction"]).toBe(
+      "macro(workspace@1)#/tools/bash/interaction",
     );
     expect(normalized.value.provenance.manifest["/materials/workspace"]).toBe(
       "macro(workspace@1)#/materials/workspace",
@@ -611,8 +632,8 @@ describe("agent authored tree compiler", () => {
     );
   });
 
-  it("rejects unsafe workspace default controls", () => {
-    const loosened = compileAgentTree({
+  it("rejects unsafe and obsolete workspace default controls", () => {
+    const obsoleteDefault = compileAgentTree({
       files: [
         { path: "agent/instructions.md", kind: "markdown", text: "Run workspace tasks." },
         {
@@ -626,15 +647,13 @@ describe("agent authored tree compiler", () => {
         },
       ],
     });
-    expect(loosened).toEqual({
+    expect(obsoleteDefault).toEqual({
       ok: false,
       issues: [
         {
-          kind: "workspace_default_tool_interaction_weakened",
+          kind: "unknown_workspace_default_tool_control",
           path: "agent.json",
           toolId: "run_shell",
-          floor: "approval",
-          attempted: "never",
         },
       ],
     });
@@ -720,7 +739,7 @@ describe("agent authored tree compiler", () => {
             scope: { kind: "session", idSource: "manifest", stableScopeId: "workspace-ledger" },
             tools: {
               write_file: false,
-              delete_path: false,
+              bash: false,
             },
           },
         },
@@ -758,18 +777,8 @@ describe("agent authored tree compiler", () => {
     }
     expect(
       Object.keys(disabledReplacementNormalized.value.deployment.manifest.tools ?? {}),
-    ).toEqual([
-      "edit_file",
-      "glob_files",
-      "grep_files",
-      "list_files",
-      "read_file",
-      "run_shell",
-      "write_file",
-    ]);
-    expect(
-      disabledReplacementNormalized.value.deployment.manifest.tools?.delete_path,
-    ).toBeUndefined();
+    ).toEqual(["glob", "grep", "read_file", "write_file"]);
+    expect(disabledReplacementNormalized.value.deployment.manifest.tools?.bash).toBeUndefined();
     expect(disabledReplacementNormalized.value.deployment.manifest.tools?.write_file).toEqual({
       bindingRef: "tool.write_file",
       executionDomain: "app-runtime",
@@ -777,7 +786,7 @@ describe("agent authored tree compiler", () => {
     });
     expect(disabledReplacementNormalized.value.authoredToolNames).toEqual(["write_file"]);
     expect(disabledReplacementNormalized.value.provenance.exclusions).toEqual({
-      "/tools/delete_path": "author:agent/agent.json#/tools/delete_path",
+      "/tools/bash": "author:agent/agent.json#/tools/bash",
       "/tools/write_file": "author:agent/agent.json#/tools/write_file",
     });
 
@@ -793,7 +802,7 @@ describe("agent authored tree compiler", () => {
     expect(target).toContain('import tool_0 from "../../agent/tools/write_file";');
     expect(target).toContain('"write_file": tool_0');
     expect(target).toContain(
-      'const generatedWorkspaceToolNames = ["edit_file", "glob_files", "grep_files", "list_files", "read_file", "run_shell"] as const;',
+      'const generatedWorkspaceToolNames = ["glob", "grep", "read_file"] as const;',
     );
   });
 
@@ -1063,10 +1072,11 @@ describe("agent authored tree compiler", () => {
     expect(target).toContain('import { getSandbox } from "@cloudflare/sandbox";');
     expect(target).not.toContain('import tool_0 from "../../agent/tools/read_file";');
     expect(target).not.toContain('import tool_1 from "../../agent/tools/write_file";');
+    expect(target).not.toContain('import tool_0 from "../../agent/tools/bash";');
     expect(target).toContain("manifest: semanticManifest");
     expect(target).toContain("llmTransport: () => OpenAiCompatibleLlmTransportLive");
     expect(target).toContain(
-      'const generatedWorkspaceToolNames = ["delete_path", "edit_file", "glob_files", "grep_files", "list_files", "read_file", "run_shell", "write_file"] as const;',
+      'const generatedWorkspaceToolNames = ["bash", "glob", "grep", "read_file", "write_file"] as const;',
     );
     expect(target).toContain(
       `const generatedWorkspaceSandboxId = "${normalized.value.workspace.cloudflareSandboxId}";`,

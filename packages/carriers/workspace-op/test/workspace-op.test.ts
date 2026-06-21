@@ -80,4 +80,79 @@ describe("@agent-os/workspace-op", () => {
     expect(projection.request.materialRefs).toEqual(["credential:workspace-token"]);
     expect("content" in projection.completed).toBe(false);
   });
+
+  it("accepts bash receipts and rejects obsolete operation names by contract", () => {
+    const bashClaim = makePreClaim({
+      ...claim,
+      operationRef: "tool:run-1:bash-1",
+      effectAuthorityRef: { authorityClass: "workspace", authorityId: "tool:bash" },
+    });
+    const completedClaim = settleWorkspaceOperationCompleted(bashClaim, {
+      requestedEventId: 20,
+      idempotencyKey: bashClaim.operationRef,
+    });
+    const events = [
+      {
+        id: 20,
+        kind: WORKSPACE_OP_KIND.REQUESTED,
+        payload: {
+          requestedBy: "@agent-os/workspace-binding",
+          workspaceRef: "workspace:test",
+          toolName: "bash",
+          command: "rm old.txt",
+          claim: bashClaim,
+        },
+      },
+      {
+        id: 21,
+        kind: WORKSPACE_OP_KIND.COMPLETED,
+        payload: {
+          requestedEventId: 20,
+          operationRef: bashClaim.operationRef,
+          workspaceRef: "workspace:test",
+          toolName: "bash",
+          idempotencyKey: bashClaim.operationRef,
+          resultHash: "sha256:bash",
+          command: "rm old.txt",
+          cwd: ".",
+          exitCode: 0,
+          stdoutPreview: "",
+          stderrPreview: "",
+          stdoutBytes: 0,
+          stderrBytes: 0,
+          stdoutTruncated: false,
+          stderrTruncated: false,
+          stdoutHash: "sha256:stdout",
+          stderrHash: "sha256:stderr",
+          durationMs: 3,
+          claim: completedClaim,
+        },
+      },
+      {
+        id: 30,
+        kind: WORKSPACE_OP_KIND.REQUESTED,
+        payload: {
+          requestedBy: "@agent-os/workspace-binding",
+          workspaceRef: "workspace:test",
+          toolName: "run_shell",
+          command: "rm old.txt",
+          claim,
+        },
+      },
+    ];
+
+    expect(projectWorkspaceOperation(events, 20)).toMatchObject({
+      status: "completed",
+      result: {
+        kind: "bash",
+        command: "rm old.txt",
+        exitCode: 0,
+        resultHash: "sha256:bash",
+      },
+    });
+    expect(projectWorkspaceOperation(events, 30)).toEqual({
+      status: "missing",
+      requestedEventId: 30,
+    });
+  });
 });

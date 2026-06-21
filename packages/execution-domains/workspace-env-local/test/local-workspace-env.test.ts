@@ -75,13 +75,13 @@ describe("@agent-os/workspace-env-local", () => {
       );
       const shell = yield* unsafeRunToolByName(
         tools,
-        deterministicToolInvocation("run_shell", {
+        deterministicToolInvocation("bash", {
           command: "printf ok",
           timeoutMs: 1_000,
         }),
       );
 
-      expect(tools.run_shell?.execution).toEqual({
+      expect(tools.bash?.execution).toEqual({
         kind: "external",
         access: "write",
         domain: {

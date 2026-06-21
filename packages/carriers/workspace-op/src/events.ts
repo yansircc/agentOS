@@ -63,20 +63,7 @@ export type WorkspaceOperationToolResult =
       readonly resultHash: string;
     }
   | {
-      readonly kind: "edit_file";
-      readonly path: string;
-      readonly replacementCount: number;
-      readonly bytesWritten: number;
-      readonly resultHash: string;
-    }
-  | {
-      readonly kind: "delete_path";
-      readonly path: string;
-      readonly deleted: true;
-      readonly resultHash: string;
-    }
-  | {
-      readonly kind: "run_shell";
+      readonly kind: "bash";
       readonly command: string;
       readonly cwd: string;
       readonly exitCode: number;
@@ -115,9 +102,6 @@ const numberField = (payload: Record<string, unknown>, key: string): number | un
     ? (payload[key] as number)
     : undefined;
 
-const booleanField = (payload: Record<string, unknown>, key: string): boolean | undefined =>
-  typeof payload[key] === "boolean" ? payload[key] : undefined;
-
 const stringArrayField = (
   payload: Record<string, unknown>,
   key: string,
@@ -143,12 +127,7 @@ const envRefsField = (
 };
 
 const operationNameFrom = (value: unknown): WorkspaceOperationName | undefined =>
-  value === "write_file" ||
-  value === "edit_file" ||
-  value === "delete_path" ||
-  value === "run_shell"
-    ? value
-    : undefined;
+  value === "write_file" || value === "bash" ? value : undefined;
 
 const requestFrom = (
   id: number,
@@ -176,21 +155,6 @@ const requestFrom = (
     ...(stringField(payload, "content") === undefined
       ? {}
       : { content: stringField(payload, "content") }),
-    ...(stringField(payload, "oldString") === undefined
-      ? {}
-      : { oldString: stringField(payload, "oldString") }),
-    ...(stringField(payload, "newString") === undefined
-      ? {}
-      : { newString: stringField(payload, "newString") }),
-    ...(numberField(payload, "expectCount") === undefined
-      ? {}
-      : { expectCount: numberField(payload, "expectCount") }),
-    ...(booleanField(payload, "recursive") === undefined
-      ? {}
-      : { recursive: booleanField(payload, "recursive") }),
-    ...(booleanField(payload, "force") === undefined
-      ? {}
-      : { force: booleanField(payload, "force") }),
     ...(stringField(payload, "command") === undefined
       ? {}
       : { command: stringField(payload, "command") }),
@@ -276,24 +240,9 @@ export const workspaceOperationToolResult = (
         bytesWritten: completed.bytesWritten ?? 0,
         resultHash: completed.resultHash,
       };
-    case "edit_file":
+    case "bash":
       return {
-        kind: "edit_file",
-        path: completed.path ?? "",
-        replacementCount: completed.replacementCount ?? 0,
-        bytesWritten: completed.bytesWritten ?? 0,
-        resultHash: completed.resultHash,
-      };
-    case "delete_path":
-      return {
-        kind: "delete_path",
-        path: completed.path ?? "",
-        deleted: true,
-        resultHash: completed.resultHash,
-      };
-    case "run_shell":
-      return {
-        kind: "run_shell",
+        kind: "bash",
         command: completed.command ?? "",
         cwd: completed.cwd ?? ".",
         exitCode: completed.exitCode ?? 1,

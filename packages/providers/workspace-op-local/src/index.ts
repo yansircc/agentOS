@@ -10,7 +10,6 @@ import {
   workspaceOperationToolResult,
 } from "@agent-os/workspace-op";
 import {
-  editWorkspaceFile,
   normalizeWorkspaceToolPath,
   type WorkspaceEnv,
   type WorkspaceExecResult,
@@ -108,7 +107,7 @@ const requirePath = (env: WorkspaceEnv, request: WorkspaceOperationRequestedPayl
 
 const requireString = (
   request: WorkspaceOperationRequestedPayload,
-  key: "content" | "oldString" | "newString" | "command",
+  key: "content" | "command",
 ): string => {
   const value = request[key];
   if (value === undefined || value.length === 0) {
@@ -165,7 +164,7 @@ const boundedShellResult = async (
   const stdoutHash = await sha256Hex(result.stdout);
   const stderrHash = await sha256Hex(result.stderr);
   const publicResult = {
-    kind: "run_shell" as const,
+    kind: "bash" as const,
     command,
     cwd,
     exitCode: result.exitCode,
@@ -183,7 +182,7 @@ const boundedShellResult = async (
     requestedEventId,
     operationRef: operationRef(request.claim),
     workspaceRef: request.workspaceRef,
-    toolName: "run_shell",
+    toolName: "bash",
     idempotencyKey: operationRef(request.claim),
     resultHash: await hashJson(publicResult),
     ...(request.toolCallId === undefined ? {} : { toolCallId: request.toolCallId }),
@@ -247,62 +246,7 @@ export const createWorkspaceOperationLocalProvider = (
             });
             break;
           }
-          case "edit_file": {
-            const path = requirePath(options.env, request);
-            const oldString = requireString(request, "oldString");
-            const newString = request.newString ?? "";
-            const result = await editWorkspaceFile(options.env, {
-              path,
-              oldString,
-              newString,
-              expectCount: request.expectCount,
-              maxFileBytes,
-            });
-            const publicResult = {
-              kind: "edit_file" as const,
-              path: result.path,
-              replacementCount: result.replacementCount,
-              bytesWritten: result.bytesWritten,
-            };
-            completed = completedPayload(request, event.id, {
-              requestedEventId: event.id,
-              operationRef: idempotencyKey,
-              workspaceRef: request.workspaceRef,
-              toolName: "edit_file",
-              idempotencyKey,
-              resultHash: await hashJson(publicResult),
-              ...(request.toolCallId === undefined ? {} : { toolCallId: request.toolCallId }),
-              path: result.path,
-              replacementCount: result.replacementCount,
-              bytesWritten: result.bytesWritten,
-            });
-            break;
-          }
-          case "delete_path": {
-            const path = requirePath(options.env, request);
-            await options.env.rm(path, {
-              recursive: request.recursive ?? false,
-              force: request.force ?? false,
-            });
-            const publicResult = {
-              kind: "delete_path" as const,
-              path,
-              deleted: true,
-            };
-            completed = completedPayload(request, event.id, {
-              requestedEventId: event.id,
-              operationRef: idempotencyKey,
-              workspaceRef: request.workspaceRef,
-              toolName: "delete_path",
-              idempotencyKey,
-              resultHash: await hashJson(publicResult),
-              ...(request.toolCallId === undefined ? {} : { toolCallId: request.toolCallId }),
-              path,
-              deleted: true,
-            });
-            break;
-          }
-          case "run_shell": {
+          case "bash": {
             const command = requireString(request, "command").trim();
             if (command.length === 0) {
               failWorkspaceOperationLocalProvider("command required");

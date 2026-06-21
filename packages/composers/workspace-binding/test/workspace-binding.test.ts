@@ -57,12 +57,7 @@ describe("@agent-os/workspace-binding", () => {
       admit: () => Effect.succeed({ ok: true }),
     });
 
-    expect(Object.keys(bindings.tools ?? {}).sort()).toEqual([
-      "glob_files",
-      "grep_files",
-      "list_files",
-      "read_file",
-    ]);
+    expect(Object.keys(bindings.tools ?? {}).sort()).toEqual(["glob", "grep", "read_file"]);
     expect(bindings.executionDomains).toEqual([
       { domain: env.domain, replay: { access: "read", witness: "snapshot" } },
     ]);
@@ -106,11 +101,7 @@ describe("@agent-os/workspace-binding", () => {
       mutationPolicy: "receipt-backed",
     });
 
-    expect(Object.keys(bindings.tools ?? {}).sort()).toEqual([
-      "delete_path",
-      "edit_file",
-      "write_file",
-    ]);
+    expect(Object.keys(bindings.tools ?? {}).sort()).toEqual(["write_file"]);
     expect(bindings.executionDomains).toEqual([
       { domain: env.domain, replay: { access: "write", witness: "receipt" } },
     ]);
@@ -121,9 +112,19 @@ describe("@agent-os/workspace-binding", () => {
       expect.objectContaining({ kind: WORKSPACE_OP_KIND.REQUESTED }),
     ]);
     expect(bindings.receiptBackedTools).toEqual({
-      delete_path: { kind: "intent_projection", intentKinds: [WORKSPACE_OP_KIND.REQUESTED] },
-      edit_file: { kind: "intent_projection", intentKinds: [WORKSPACE_OP_KIND.REQUESTED] },
       write_file: { kind: "intent_projection", intentKinds: [WORKSPACE_OP_KIND.REQUESTED] },
+    });
+
+    const shellBindings = bindWorkspaceToolsForRuntime({
+      env,
+      authority: "test.workspace",
+      admit: () => Effect.succeed({ ok: true }),
+      exposure: ["shell"],
+      shellPolicy: "receipt-backed",
+    });
+    expect(Object.keys(shellBindings.tools ?? {}).sort()).toEqual(["bash"]);
+    expect(shellBindings.receiptBackedTools).toEqual({
+      bash: { kind: "intent_projection", intentKinds: [WORKSPACE_OP_KIND.REQUESTED] },
     });
   });
 

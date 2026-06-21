@@ -129,10 +129,6 @@ export interface WorkspaceToolWriteHookInput {
   readonly bytes: number;
 }
 
-export interface WorkspaceToolDeleteHookInput {
-  readonly path: string;
-}
-
 export interface WorkspaceToolExecHookInput {
   readonly command: string;
   readonly cwd: string;
@@ -144,7 +140,6 @@ export interface WorkspaceToolExecHookInput {
 
 export interface WorkspaceToolHooks {
   readonly onAfterWrite?: (input: WorkspaceToolWriteHookInput) => void | Promise<void>;
-  readonly onAfterDelete?: (input: WorkspaceToolDeleteHookInput) => void | Promise<void>;
   readonly onAfterExec?: (input: WorkspaceToolExecHookInput) => void | Promise<void>;
 }
 
@@ -163,15 +158,7 @@ export interface CreateWorkspaceToolsOptions {
 
 export type WorkspaceToolCategory = "read" | "mutation" | "shell";
 
-export type WorkspaceToolName =
-  | "read_file"
-  | "list_files"
-  | "glob_files"
-  | "grep_files"
-  | "write_file"
-  | "edit_file"
-  | "delete_path"
-  | "run_shell";
+export type WorkspaceToolName = "bash" | "glob" | "grep" | "read_file" | "write_file";
 
 export interface WorkspaceToolSpec {
   readonly name: WorkspaceToolName;
@@ -207,6 +194,7 @@ export interface WorkspaceReadFileResult {
   readonly size: number;
   readonly contentBytes: number;
   readonly truncated: boolean;
+  readonly range?: WorkspaceReadFileLineRange;
 }
 
 export interface WorkspaceWriteFileResult {
@@ -214,17 +202,13 @@ export interface WorkspaceWriteFileResult {
   readonly bytesWritten: number;
 }
 
-export interface WorkspaceListFilesResult {
-  readonly path: string;
-  readonly entries: ReadonlyArray<string>;
+export interface WorkspaceReadFileLineRange {
+  readonly startLine: number;
+  readonly endLine: number;
+  readonly totalLines: number;
 }
 
-export interface WorkspaceDeletePathResult {
-  readonly path: string;
-  readonly deleted: true;
-}
-
-export interface WorkspaceRunShellResult extends WorkspaceExecResult {
+export interface WorkspaceBashResult extends WorkspaceExecResult {
   readonly command: string;
   readonly cwd: string;
 }
@@ -395,11 +379,47 @@ const truncateUtf8 = (
   return { text, bytes, truncated: false };
 };
 
+interface ResolvedReadFileLineRange extends WorkspaceReadFileLineRange {
+  readonly startOffset: number;
+  readonly endOffset: number;
+}
+
 const requirePositiveInteger = (value: number, label: string): number => {
   if (!Number.isInteger(value) || value <= 0 || !Number.isFinite(value)) {
     return failInput(`${label} must be a finite positive integer`);
   }
   return value;
+};
+
+const resolveReadFileLineRange = (
+  content: string,
+  startLine: number | undefined,
+  endLine: number | undefined,
+): ResolvedReadFileLineRange | undefined => {
+  if (startLine === undefined && endLine === undefined) return undefined;
+
+  const lineStarts = [0];
+  for (let index = 0; index < content.length; index += 1) {
+    if (content[index] === "\n" && index + 1 < content.length) {
+      lineStarts.push(index + 1);
+    }
+  }
+  const totalLines = Math.max(1, lineStarts.length);
+  const start = startLine === undefined ? 1 : requirePositiveInteger(startLine, "startLine");
+  const requestedEnd =
+    endLine === undefined ? totalLines : requirePositiveInteger(endLine, "endLine");
+  if (requestedEnd < start) return failInput("endLine must be greater than or equal to startLine");
+  if (start > totalLines) return failInput("startLine exceeds file line count");
+
+  const effectiveEnd = Math.min(requestedEnd, totalLines);
+  return {
+    startLine: start,
+    endLine: effectiveEnd,
+    totalLines,
+    startOffset: lineStarts[start - 1] ?? content.length,
+    endOffset:
+      effectiveEnd >= totalLines ? content.length : (lineStarts[effectiveEnd] ?? content.length),
+  };
 };
 
 const normalizedRelativePath = (
@@ -953,232 +973,7 @@ interface WorkspaceToolDefinition extends WorkspaceToolSpec {
 
 const workspaceToolDefinitions = [
   {
-    name: "read_file",
-    category: "read",
-    access: "read",
-    description:
-      "Read one UTF-8 file from the workspace. Path is workspace-relative or workspace-virtual absolute; do not include the host workspace root.",
-    define: ({ env, common, readExecution, maxFileBytes }, spec) =>
-      defineTool({
-        name: spec.name,
-        description: spec.description,
-        args: Schema.Struct({ path: Schema.String }),
-        ...common,
-        execution: readExecution,
-        execute: (args) =>
-          withToolReadRequirement(
-            workspaceToolPromise(spec.name, async (signal) => {
-              const path = env.resolvePath(normalizeToolPathForEnv(env, args.path, "path"));
-              const bytes = await env.readFileBuffer(path, { signal });
-              const preview = truncateUtf8(textDecoder.decode(bytes), maxFileBytes);
-              return {
-                path: relativePath(env.cwd, path),
-                content: preview.text,
-                encoding: "utf-8",
-                size: bytes.byteLength,
-                contentBytes: preview.bytes,
-                truncated: preview.truncated,
-              };
-            }),
-          ),
-      }),
-  },
-  {
-    name: "write_file",
-    category: "mutation",
-    access: "write",
-    description:
-      "Create or overwrite one UTF-8 workspace file with complete content. Path is workspace-relative or workspace-virtual absolute; do not include the host workspace root.",
-    define: ({ env, common, writeExecution, maxFileBytes, hooks }, spec) =>
-      defineTool({
-        name: spec.name,
-        description: spec.description,
-        args: Schema.Struct({ path: Schema.String, content: Schema.String }),
-        ...common,
-        execution: writeExecution,
-        execute: (args) =>
-          withToolWriteRequirement(
-            workspaceToolPromise(spec.name, async (signal) => {
-              const path = env.resolvePath(normalizeToolPathForEnv(env, args.path, "path"));
-              const bytes = utf8Bytes(args.content);
-              if (bytes > maxFileBytes) {
-                return failInput(`file exceeds ${maxFileBytes} byte workspace tool limit`);
-              }
-              await env.writeFile(path, args.content, { signal });
-              await hooks?.onAfterWrite?.({ path: relativePath(env.cwd, path), bytes });
-              return { path: relativePath(env.cwd, path), bytesWritten: bytes };
-            }),
-          ),
-      }),
-  },
-  {
-    name: "edit_file",
-    category: "mutation",
-    access: "write",
-    description:
-      "Replace exact UTF-8 text in one workspace file with explicit match-count semantics. Path is workspace-relative or workspace-virtual absolute; do not include the host workspace root.",
-    define: ({ env, common, writeExecution, maxFileBytes, hooks }, spec) =>
-      defineTool({
-        name: spec.name,
-        description: spec.description,
-        args: Schema.Struct({
-          path: Schema.String,
-          oldString: Schema.String,
-          newString: Schema.String,
-          expectCount: Schema.optional(Schema.Number),
-        }),
-        ...common,
-        execution: writeExecution,
-        execute: (args) =>
-          withToolWriteRequirement(
-            workspaceToolPromise(spec.name, async (signal) => {
-              const result = await editWorkspaceFile(env, {
-                path: normalizeToolPathForEnv(env, args.path, "path"),
-                oldString: args.oldString,
-                newString: args.newString,
-                expectCount: args.expectCount,
-                maxFileBytes,
-                signal,
-              });
-              await hooks?.onAfterWrite?.({ path: result.path, bytes: result.bytesWritten });
-              return result;
-            }),
-          ),
-      }),
-  },
-  {
-    name: "list_files",
-    category: "read",
-    access: "read",
-    description:
-      "List immediate entries in one workspace directory. Path is workspace-relative or workspace-virtual absolute; do not include the host workspace root.",
-    define: ({ env, common, readExecution }, spec) =>
-      defineTool({
-        name: spec.name,
-        description: spec.description,
-        args: Schema.Struct({ path: Schema.optional(Schema.String) }),
-        ...common,
-        execution: readExecution,
-        execute: (args) =>
-          withToolReadRequirement(
-            workspaceToolPromise(spec.name, async (signal) => {
-              const path = env.resolvePath(
-                args.path === undefined
-                  ? "."
-                  : normalizeToolPathForEnv(env, args.path, "path", { allowRoot: true }),
-              );
-              const entries = await env.readdir(path, { signal });
-              return { path: relativePath(env.cwd, path), entries };
-            }),
-          ),
-      }),
-  },
-  {
-    name: "glob_files",
-    category: "read",
-    access: "read",
-    description: "Find workspace files by deterministic slash-separated glob pattern.",
-    define: ({ env, common, readExecution }, spec) =>
-      defineTool({
-        name: spec.name,
-        description: spec.description,
-        args: Schema.Struct({
-          pattern: Schema.String,
-          root: Schema.optional(Schema.String),
-          includeHidden: Schema.optional(Schema.Boolean),
-          maxMatches: Schema.optional(Schema.Number),
-        }),
-        ...common,
-        execution: readExecution,
-        execute: (args) =>
-          withToolReadRequirement(
-            workspaceToolPromise(spec.name, (signal) => {
-              return globWorkspaceFiles(env, {
-                pattern: args.pattern,
-                root:
-                  args.root === undefined
-                    ? undefined
-                    : normalizeToolPathForEnv(env, args.root, "root", { allowRoot: true }),
-                includeHidden: args.includeHidden,
-                maxMatches: args.maxMatches,
-                signal,
-              });
-            }),
-          ),
-      }),
-  },
-  {
-    name: "grep_files",
-    category: "read",
-    access: "read",
-    description: "Search UTF-8 workspace files by literal text or JavaScript regular expression.",
-    define: ({ env, common, readExecution }, spec) =>
-      defineTool({
-        name: spec.name,
-        description: spec.description,
-        args: Schema.Struct({
-          pattern: Schema.String,
-          root: Schema.optional(Schema.String),
-          includeHidden: Schema.optional(Schema.Boolean),
-          mode: Schema.optional(Schema.Literals(["literal", "regex"])),
-          maxMatches: Schema.optional(Schema.Number),
-          maxBytesPerMatch: Schema.optional(Schema.Number),
-        }),
-        ...common,
-        execution: readExecution,
-        execute: (args) =>
-          withToolReadRequirement(
-            workspaceToolPromise(spec.name, (signal) => {
-              return grepWorkspaceFiles(env, {
-                pattern: args.pattern,
-                root:
-                  args.root === undefined
-                    ? undefined
-                    : normalizeToolPathForEnv(env, args.root, "root", { allowRoot: true }),
-                includeHidden: args.includeHidden,
-                mode: args.mode,
-                maxMatches: args.maxMatches,
-                maxBytesPerMatch: args.maxBytesPerMatch,
-                signal,
-              });
-            }),
-          ),
-      }),
-  },
-  {
-    name: "delete_path",
-    category: "mutation",
-    access: "write",
-    description:
-      "Delete one workspace path. Path is workspace-relative or workspace-virtual absolute; do not include the host workspace root.",
-    define: ({ env, common, writeExecution, hooks }, spec) =>
-      defineTool({
-        name: spec.name,
-        description: spec.description,
-        args: Schema.Struct({
-          path: Schema.String,
-          recursive: Schema.optional(Schema.Boolean),
-          force: Schema.optional(Schema.Boolean),
-        }),
-        ...common,
-        execution: writeExecution,
-        execute: (args) =>
-          withToolWriteRequirement(
-            workspaceToolPromise(spec.name, async (signal) => {
-              const path = env.resolvePath(normalizeToolPathForEnv(env, args.path, "path"));
-              await env.rm(path, {
-                recursive: args.recursive ?? false,
-                force: args.force ?? false,
-                signal,
-              });
-              await hooks?.onAfterDelete?.({ path: relativePath(env.cwd, path) });
-              return { path: relativePath(env.cwd, path), deleted: true };
-            }),
-          ),
-      }),
-  },
-  {
-    name: "run_shell",
+    name: "bash",
     category: "shell",
     access: "write",
     description: "Run one finite shell command in the workspace.",
@@ -1243,6 +1038,154 @@ const workspaceToolDefinitions = [
           ),
       }),
   },
+  {
+    name: "glob",
+    category: "read",
+    access: "read",
+    description: "Find workspace files by deterministic slash-separated glob pattern.",
+    define: ({ env, common, readExecution }, spec) =>
+      defineTool({
+        name: spec.name,
+        description: spec.description,
+        args: Schema.Struct({
+          pattern: Schema.String,
+          root: Schema.optional(Schema.String),
+          includeHidden: Schema.optional(Schema.Boolean),
+          maxMatches: Schema.optional(Schema.Number),
+        }),
+        ...common,
+        execution: readExecution,
+        execute: (args) =>
+          withToolReadRequirement(
+            workspaceToolPromise(spec.name, (signal) => {
+              return globWorkspaceFiles(env, {
+                pattern: args.pattern,
+                root:
+                  args.root === undefined
+                    ? undefined
+                    : normalizeToolPathForEnv(env, args.root, "root", { allowRoot: true }),
+                includeHidden: args.includeHidden,
+                maxMatches: args.maxMatches,
+                signal,
+              });
+            }),
+          ),
+      }),
+  },
+  {
+    name: "grep",
+    category: "read",
+    access: "read",
+    description: "Search UTF-8 workspace files by literal text or JavaScript regular expression.",
+    define: ({ env, common, readExecution }, spec) =>
+      defineTool({
+        name: spec.name,
+        description: spec.description,
+        args: Schema.Struct({
+          pattern: Schema.String,
+          root: Schema.optional(Schema.String),
+          includeHidden: Schema.optional(Schema.Boolean),
+          mode: Schema.optional(Schema.Literals(["literal", "regex"])),
+          maxMatches: Schema.optional(Schema.Number),
+          maxBytesPerMatch: Schema.optional(Schema.Number),
+        }),
+        ...common,
+        execution: readExecution,
+        execute: (args) =>
+          withToolReadRequirement(
+            workspaceToolPromise(spec.name, (signal) => {
+              return grepWorkspaceFiles(env, {
+                pattern: args.pattern,
+                root:
+                  args.root === undefined
+                    ? undefined
+                    : normalizeToolPathForEnv(env, args.root, "root", { allowRoot: true }),
+                includeHidden: args.includeHidden,
+                mode: args.mode,
+                maxMatches: args.maxMatches,
+                maxBytesPerMatch: args.maxBytesPerMatch,
+                signal,
+              });
+            }),
+          ),
+      }),
+  },
+  {
+    name: "read_file",
+    category: "read",
+    access: "read",
+    description:
+      "Read one UTF-8 file or 1-based line range from the workspace. Path is workspace-relative or workspace-virtual absolute; do not include the host workspace root.",
+    define: ({ env, common, readExecution, maxFileBytes }, spec) =>
+      defineTool({
+        name: spec.name,
+        description: spec.description,
+        args: Schema.Struct({
+          path: Schema.String,
+          startLine: Schema.optional(Schema.Number),
+          endLine: Schema.optional(Schema.Number),
+        }),
+        ...common,
+        execution: readExecution,
+        execute: (args) =>
+          withToolReadRequirement(
+            workspaceToolPromise(spec.name, async (signal) => {
+              const path = env.resolvePath(normalizeToolPathForEnv(env, args.path, "path"));
+              const bytes = await env.readFileBuffer(path, { signal });
+              const content = textDecoder.decode(bytes);
+              const range = resolveReadFileLineRange(content, args.startLine, args.endLine);
+              const selected =
+                range === undefined ? content : content.slice(range.startOffset, range.endOffset);
+              const preview = truncateUtf8(selected, maxFileBytes);
+              return {
+                path: relativePath(env.cwd, path),
+                content: preview.text,
+                encoding: "utf-8",
+                size: bytes.byteLength,
+                contentBytes: preview.bytes,
+                truncated: preview.truncated,
+                ...(range === undefined
+                  ? {}
+                  : {
+                      range: {
+                        startLine: range.startLine,
+                        endLine: range.endLine,
+                        totalLines: range.totalLines,
+                      },
+                    }),
+              };
+            }),
+          ),
+      }),
+  },
+  {
+    name: "write_file",
+    category: "mutation",
+    access: "write",
+    description:
+      "Create or overwrite one UTF-8 workspace file with complete content. Path is workspace-relative or workspace-virtual absolute; do not include the host workspace root.",
+    define: ({ env, common, writeExecution, maxFileBytes, hooks }, spec) =>
+      defineTool({
+        name: spec.name,
+        description: spec.description,
+        args: Schema.Struct({ path: Schema.String, content: Schema.String }),
+        ...common,
+        execution: writeExecution,
+        execute: (args) =>
+          withToolWriteRequirement(
+            workspaceToolPromise(spec.name, async (signal) => {
+              const path = env.resolvePath(normalizeToolPathForEnv(env, args.path, "path"));
+              const bytes = utf8Bytes(args.content);
+              if (bytes > maxFileBytes) {
+                return failInput(`file exceeds ${maxFileBytes} byte workspace tool limit`);
+              }
+              await env.writeFile(path, args.content, { signal });
+              await hooks?.onAfterWrite?.({ path: relativePath(env.cwd, path), bytes });
+              return { path: relativePath(env.cwd, path), bytesWritten: bytes };
+            }),
+          ),
+      }),
+  },
 ] as const satisfies ReadonlyArray<WorkspaceToolDefinition>;
 
 export const WORKSPACE_TOOL_SPECS: ReadonlyArray<WorkspaceToolSpec> = workspaceToolDefinitions.map(
@@ -1263,8 +1206,8 @@ const workspaceToolReceiptPolicyFor = (
   category === "read" ? "workspace.snapshot" : "workspace-op.receipt";
 
 const workspaceToolInteractionFloorFor = (
-  category: WorkspaceToolCategory,
-): WorkspaceToolInteractionFloor => (category === "shell" ? "approval" : "never");
+  _category: WorkspaceToolCategory,
+): WorkspaceToolInteractionFloor => "never";
 
 export const WORKSPACE_TOOL_DEFAULT_DECLARATIONS: ReadonlyArray<WorkspaceToolDefaultDeclaration> =
   WORKSPACE_TOOL_SPECS.map((spec) => ({
