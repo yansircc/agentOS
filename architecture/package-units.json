@@ -1,0 +1,168 @@
+{
+  "schemaVersion": 1,
+  "policy": {
+    "packageBoundary": "split only when a package-wide obligation cannot be localized by subpath exports and optional peer dependencies",
+    "namespaceSplit": "targetSourcePackageName is private build metadata; publicPackageName is the @yansirplus distribution projection; ownerId is not a package name",
+    "effectPeer": "effect is a single required peer range invariant across package units that use Effect"
+  },
+  "packageUnits": [
+    {
+      "id": "core",
+      "targetSourcePackageName": "@agent-os/core",
+      "publicPackageName": "@yansirplus/core",
+      "status": "target",
+      "hardInstallEnvelope": {
+        "dependencies": [],
+        "installScripts": [],
+        "nativeArtifacts": [],
+        "packageWideMetadata": [],
+        "requiredPeers": [
+          {
+            "name": "effect",
+            "range": "^4.0.0-beta.84"
+          }
+        ]
+      },
+      "runtimeConditions": ["neutral"],
+      "targetProfiles": ["neutral"],
+      "publicSubpaths": [
+        {
+          "subpath": ".",
+          "moduleBuckets": ["axioms"],
+          "optionalPeers": []
+        }
+      ]
+    },
+    {
+      "id": "runtime",
+      "targetSourcePackageName": "@agent-os/runtime",
+      "publicPackageName": "@yansirplus/runtime",
+      "status": "target",
+      "hardInstallEnvelope": {
+        "dependencies": [],
+        "installScripts": [],
+        "nativeArtifacts": [],
+        "packageWideMetadata": [],
+        "requiredPeers": [
+          {
+            "name": "effect",
+            "range": "^4.0.0-beta.84"
+          }
+        ]
+      },
+      "runtimeConditions": ["neutral", "cloudflare-worker", "node"],
+      "targetProfiles": ["neutral", "cloudflare-worker", "node"],
+      "publicSubpaths": [
+        {
+          "subpath": ".",
+          "moduleBuckets": ["ledger", "projection"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./cloudflare",
+          "moduleBuckets": ["ledger", "adapter"],
+          "optionalPeers": ["@cloudflare/workers-types", "@effect/sql-sqlite-do"]
+        },
+        {
+          "subpath": "./node-postgres",
+          "moduleBuckets": ["ledger", "adapter"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./workspace-env-cloudflare",
+          "moduleBuckets": ["adapter"],
+          "optionalPeers": ["@cloudflare/workers-types"]
+        },
+        {
+          "subpath": "./workspace-env-local",
+          "moduleBuckets": ["adapter"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./resource-cloudflare",
+          "moduleBuckets": ["adapter"],
+          "optionalPeers": ["@cloudflare/workers-types"]
+        },
+        {
+          "subpath": "./deploy-cloudflare",
+          "moduleBuckets": ["adapter"],
+          "optionalPeers": ["@cloudflare/workers-types"]
+        },
+        {
+          "subpath": "./llm-effect-ai",
+          "moduleBuckets": ["adapter"],
+          "optionalPeers": ["@effect/ai-anthropic"]
+        },
+        {
+          "subpath": "./telemetry-otlp",
+          "moduleBuckets": ["projection", "adapter"],
+          "optionalPeers": []
+        }
+      ]
+    },
+    {
+      "id": "client",
+      "targetSourcePackageName": "@agent-os/client",
+      "publicPackageName": "@yansirplus/client",
+      "status": "target",
+      "hardInstallEnvelope": {
+        "dependencies": [],
+        "installScripts": [],
+        "nativeArtifacts": [],
+        "packageWideMetadata": [],
+        "requiredPeers": []
+      },
+      "runtimeConditions": ["browser"],
+      "targetProfiles": ["browser"],
+      "publicSubpaths": [
+        {
+          "subpath": ".",
+          "moduleBuckets": ["projection"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./react",
+          "moduleBuckets": ["adapter"],
+          "optionalPeers": ["react"]
+        },
+        {
+          "subpath": "./svelte",
+          "moduleBuckets": ["adapter"],
+          "optionalPeers": ["svelte"]
+        },
+        {
+          "subpath": "./ag-ui",
+          "moduleBuckets": ["projection"],
+          "optionalPeers": []
+        }
+      ]
+    },
+    {
+      "id": "cli",
+      "targetSourcePackageName": "@agent-os/cli",
+      "publicPackageName": "@yansirplus/cli",
+      "status": "target",
+      "hardInstallEnvelope": {
+        "dependencies": [],
+        "installScripts": [],
+        "nativeArtifacts": [],
+        "packageWideMetadata": [],
+        "requiredPeers": [
+          {
+            "name": "effect",
+            "range": "^4.0.0-beta.84"
+          }
+        ]
+      },
+      "runtimeConditions": ["node"],
+      "targetProfiles": ["node"],
+      "publicSubpaths": [
+        {
+          "subpath": ".",
+          "moduleBuckets": ["adapter"],
+          "optionalPeers": []
+        }
+      ]
+    }
+  ]
+}

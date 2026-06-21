@@ -1,15 +1,55 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import {
+  distributionRootsRegistryFindings,
   distributionEffectPeerFindings,
   distributionFindingsForPackage,
   distributionManifestFindings,
+  packageUnitsRegistryFindings,
 } from "../src/check/algorithmic-checks.mjs";
 
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const record = {
   name: "@agent-os/runtime",
   path: "packages/runtime",
 };
+
+void test("distribution architecture sources are valid", () => {
+  const moduleBuckets = JSON.parse(
+    fs.readFileSync(path.join(repoRoot, "architecture/module-buckets.json"), "utf8"),
+  );
+  const packageUnits = JSON.parse(
+    fs.readFileSync(path.join(repoRoot, "architecture/package-units.json"), "utf8"),
+  );
+  const distributionRoots = JSON.parse(
+    fs.readFileSync(path.join(repoRoot, "architecture/distribution-roots.json"), "utf8"),
+  );
+  const bucketIds = new Set(moduleBuckets.buckets.map((bucket) => bucket.id));
+  const ambientIds = new Set(moduleBuckets.ambients.map((ambient) => ambient.id));
+  const packageUnitIds = new Set(packageUnits.packageUnits.map((unit) => unit.id));
+  const targetProfileIds = new Set(distributionRoots.targetProfiles.map((profile) => profile.id));
+
+  assert.deepEqual(
+    packageUnitsRegistryFindings({
+      registry: packageUnits,
+      bucketIds,
+      ambientIds,
+      targetProfileIds,
+    }),
+    [],
+  );
+  assert.deepEqual(
+    distributionRootsRegistryFindings({
+      registry: distributionRoots,
+      packageUnitIds,
+      ambientIds,
+    }),
+    [],
+  );
+});
 
 void test("distribution manifest scanner reports package-wide install obligations", () => {
   const findings = distributionManifestFindings(

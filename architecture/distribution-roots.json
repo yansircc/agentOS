@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "policy": {
+    "rootTruth": "distribution roots are explicit architecture facts, not inferred from today's package count",
+    "dogfoodWitness": "dogfood roots prove required public capabilities, not package survival",
+    "targetSelection": "TargetProfile selects subpaths at link time and fails closed; runtime probing is not a distribution root"
+  },
+  "roots": [
+    {
+      "id": "public-core",
+      "kind": "public-package",
+      "packageUnit": "core",
+      "publicPackageName": "@yansirplus/core",
+      "consumerRoot": "library consumers needing neutral substrate algebra"
+    },
+    {
+      "id": "public-runtime",
+      "kind": "public-package",
+      "packageUnit": "runtime",
+      "publicPackageName": "@yansirplus/runtime",
+      "consumerRoot": "agent runtimes and statically linked target adapters"
+    },
+    {
+      "id": "public-client",
+      "kind": "public-package",
+      "packageUnit": "client",
+      "publicPackageName": "@yansirplus/client",
+      "consumerRoot": "browser and UI clients"
+    },
+    {
+      "id": "public-cli",
+      "kind": "public-package",
+      "packageUnit": "cli",
+      "publicPackageName": "@yansirplus/cli",
+      "consumerRoot": "repo and developer command surface"
+    }
+  ],
+  "targetProfiles": [
+    {
+      "id": "neutral",
+      "ambient": "neutral",
+      "packageUnits": ["core"],
+      "selectedSubpaths": ["@yansirplus/core"],
+      "forbiddenSpecifiers": ["node:", "cloudflare:", "react", "svelte"]
+    },
+    {
+      "id": "cloudflare-worker",
+      "ambient": "cloudflare-worker",
+      "packageUnits": ["runtime"],
+      "selectedSubpaths": [
+        "@yansirplus/runtime/cloudflare",
+        "@yansirplus/runtime/workspace-env-cloudflare",
+        "@yansirplus/runtime/resource-cloudflare",
+        "@yansirplus/runtime/deploy-cloudflare"
+      ],
+      "forbiddenSpecifiers": ["node:fs", "node:child_process", "pg"]
+    },
+    {
+      "id": "node",
+      "ambient": "node",
+      "packageUnits": ["runtime", "cli"],
+      "selectedSubpaths": [
+        "@yansirplus/runtime/node-postgres",
+        "@yansirplus/runtime/workspace-env-local",
+        "@yansirplus/cli"
+      ],
+      "forbiddenSpecifiers": ["cloudflare:"]
+    },
+    {
+      "id": "browser",
+      "ambient": "browser",
+      "packageUnits": ["client"],
+      "selectedSubpaths": [
+        "@yansirplus/client",
+        "@yansirplus/client/react",
+        "@yansirplus/client/svelte",
+        "@yansirplus/client/ag-ui"
+      ],
+      "forbiddenSpecifiers": ["node:", "cloudflare:"]
+    }
+  ],
+  "dogfoodRoots": [
+    {
+      "id": "spike",
+      "kind": "external-consumer",
+      "path": "spikes/",
+      "witnessLevel": "capability",
+      "gate": "imports must be a subset of the final public package set, with no deep /src/ paths, no workspace:/catalog: dependencies, and no old @yansirplus split-package imports",
+      "requiredCapabilities": [
+        "runtime cloudflare link",
+        "runtime node link",
+        "browser client bridge",
+        "cli development workflow"
+      ]
+    }
+  ]
+}

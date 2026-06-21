@@ -1240,6 +1240,284 @@ export const moduleBucketRegistryFindings = (registry) => {
   return findings;
 };
 
+const distributionRootsRegistryPath = "architecture/distribution-roots.json";
+const packageUnitsRegistryPath = "architecture/package-units.json";
+
+const architectureStringRecordArray = (value) =>
+  Array.isArray(value) && value.every((entry) => isRecord(entry));
+
+const validateStringRefs = ({ label, values, allowed, noun, findings }) => {
+  if (!stringArray(values)) {
+    findings.push(`${label}: must be a non-empty string array`);
+    return;
+  }
+  for (const value of values) {
+    if (!allowed.has(value)) findings.push(`${label}: unknown ${noun} ${value}`);
+  }
+};
+
+const validatePeerEntries = ({ label, peers, findings }) => {
+  if (!Array.isArray(peers)) {
+    findings.push(`${label}: requiredPeers must be an array`);
+    return;
+  }
+  for (const [index, peer] of peers.entries()) {
+    const peerLabel = `${label}.requiredPeers[${index}]`;
+    if (!isRecord(peer)) {
+      findings.push(`${peerLabel}: peer must be an object`);
+      continue;
+    }
+    if (typeof peer.name !== "string" || peer.name.length === 0) {
+      findings.push(`${peerLabel}: name must be a non-empty string`);
+    }
+    if (typeof peer.range !== "string" || peer.range.length === 0) {
+      findings.push(`${peerLabel}: range must be a non-empty string`);
+    }
+  }
+};
+
+export const packageUnitsRegistryFindings = ({
+  registry,
+  bucketIds,
+  ambientIds,
+  targetProfileIds = new Set(),
+}) => {
+  const findings = [];
+  if (!isRecord(registry)) return [`${packageUnitsRegistryPath}: registry must be a JSON object`];
+  if (registry.schemaVersion !== 1) {
+    findings.push(`${packageUnitsRegistryPath}: schemaVersion must be 1`);
+  }
+  if (!isRecord(registry.policy)) {
+    findings.push(`${packageUnitsRegistryPath}: policy object is required`);
+  } else {
+    for (const key of ["packageBoundary", "namespaceSplit", "effectPeer"]) {
+      if (typeof registry.policy[key] !== "string" || registry.policy[key].length === 0) {
+        findings.push(`${packageUnitsRegistryPath}: policy.${key} must be a non-empty string`);
+      }
+    }
+  }
+  if (!architectureStringRecordArray(registry.packageUnits) || registry.packageUnits.length === 0) {
+    findings.push(`${packageUnitsRegistryPath}: packageUnits must be a non-empty object array`);
+    return findings;
+  }
+  const ids = new Set();
+  const publicNames = new Set();
+  for (const [index, unit] of registry.packageUnits.entries()) {
+    const label = `${packageUnitsRegistryPath}:packageUnits[${index}]`;
+    if (typeof unit.id !== "string" || unit.id.length === 0) {
+      findings.push(`${label}: id must be a non-empty string`);
+    } else if (ids.has(unit.id)) {
+      findings.push(`${label}: duplicate id ${unit.id}`);
+    } else {
+      ids.add(unit.id);
+    }
+    if (
+      typeof unit.targetSourcePackageName !== "string" ||
+      !unit.targetSourcePackageName.startsWith("@agent-os/")
+    ) {
+      findings.push(`${label}: targetSourcePackageName must be an @agent-os/* string`);
+    }
+    if (
+      typeof unit.publicPackageName !== "string" ||
+      !unit.publicPackageName.startsWith("@yansirplus/")
+    ) {
+      findings.push(`${label}: publicPackageName must be an @yansirplus/* string`);
+    } else if (publicNames.has(unit.publicPackageName)) {
+      findings.push(`${label}: duplicate publicPackageName ${unit.publicPackageName}`);
+    } else {
+      publicNames.add(unit.publicPackageName);
+    }
+    if (typeof unit.status !== "string" || unit.status.length === 0) {
+      findings.push(`${label}: status must be a non-empty string`);
+    }
+
+    if (!isRecord(unit.hardInstallEnvelope)) {
+      findings.push(`${label}: hardInstallEnvelope object is required`);
+    } else {
+      for (const key of [
+        "dependencies",
+        "installScripts",
+        "nativeArtifacts",
+        "packageWideMetadata",
+      ]) {
+        if (!Array.isArray(unit.hardInstallEnvelope[key])) {
+          findings.push(`${label}: hardInstallEnvelope.${key} must be an array`);
+        }
+      }
+      validatePeerEntries({
+        label: `${label}:hardInstallEnvelope`,
+        peers: unit.hardInstallEnvelope.requiredPeers,
+        findings,
+      });
+    }
+
+    validateStringRefs({
+      label: `${label}: runtimeConditions`,
+      values: unit.runtimeConditions,
+      allowed: ambientIds,
+      noun: "ambient",
+      findings,
+    });
+    if (targetProfileIds.size > 0) {
+      validateStringRefs({
+        label: `${label}: targetProfiles`,
+        values: unit.targetProfiles,
+        allowed: targetProfileIds,
+        noun: "targetProfile",
+        findings,
+      });
+    } else if (!stringArray(unit.targetProfiles)) {
+      findings.push(`${label}: targetProfiles must be a non-empty string array`);
+    }
+
+    if (!architectureStringRecordArray(unit.publicSubpaths) || unit.publicSubpaths.length === 0) {
+      findings.push(`${label}: publicSubpaths must be a non-empty object array`);
+      continue;
+    }
+    const subpaths = new Set();
+    for (const [subpathIndex, subpath] of unit.publicSubpaths.entries()) {
+      const subpathLabel = `${label}:publicSubpaths[${subpathIndex}]`;
+      if (
+        typeof subpath.subpath !== "string" ||
+        (subpath.subpath !== "." && !subpath.subpath.startsWith("./"))
+      ) {
+        findings.push(`${subpathLabel}: subpath must be . or ./name`);
+      } else if (subpaths.has(subpath.subpath)) {
+        findings.push(`${subpathLabel}: duplicate subpath ${subpath.subpath}`);
+      } else {
+        subpaths.add(subpath.subpath);
+      }
+      validateStringRefs({
+        label: `${subpathLabel}: moduleBuckets`,
+        values: subpath.moduleBuckets,
+        allowed: bucketIds,
+        noun: "bucket",
+        findings,
+      });
+      if (!Array.isArray(subpath.optionalPeers)) {
+        findings.push(`${subpathLabel}: optionalPeers must be an array`);
+      } else if (
+        !subpath.optionalPeers.every((peer) => typeof peer === "string" && peer.length > 0)
+      ) {
+        findings.push(`${subpathLabel}: optionalPeers entries must be non-empty strings`);
+      }
+    }
+  }
+  return findings;
+};
+
+export const distributionRootsRegistryFindings = ({ registry, packageUnitIds, ambientIds }) => {
+  const findings = [];
+  if (!isRecord(registry)) {
+    return [`${distributionRootsRegistryPath}: registry must be a JSON object`];
+  }
+  if (registry.schemaVersion !== 1) {
+    findings.push(`${distributionRootsRegistryPath}: schemaVersion must be 1`);
+  }
+  if (!isRecord(registry.policy)) {
+    findings.push(`${distributionRootsRegistryPath}: policy object is required`);
+  } else {
+    for (const key of ["rootTruth", "dogfoodWitness", "targetSelection"]) {
+      if (typeof registry.policy[key] !== "string" || registry.policy[key].length === 0) {
+        findings.push(`${distributionRootsRegistryPath}: policy.${key} must be a non-empty string`);
+      }
+    }
+  }
+
+  if (!architectureStringRecordArray(registry.roots) || registry.roots.length === 0) {
+    findings.push(`${distributionRootsRegistryPath}: roots must be a non-empty object array`);
+  } else {
+    const ids = new Set();
+    for (const [index, root] of registry.roots.entries()) {
+      const label = `${distributionRootsRegistryPath}:roots[${index}]`;
+      if (typeof root.id !== "string" || root.id.length === 0) {
+        findings.push(`${label}: id must be a non-empty string`);
+      } else if (ids.has(root.id)) {
+        findings.push(`${label}: duplicate id ${root.id}`);
+      } else {
+        ids.add(root.id);
+      }
+      if (root.kind !== "public-package") {
+        findings.push(`${label}: kind must be public-package`);
+      }
+      if (typeof root.packageUnit !== "string" || !packageUnitIds.has(root.packageUnit)) {
+        findings.push(`${label}: packageUnit must reference a package unit`);
+      }
+      if (
+        typeof root.publicPackageName !== "string" ||
+        !root.publicPackageName.startsWith("@yansirplus/")
+      ) {
+        findings.push(`${label}: publicPackageName must be an @yansirplus/* string`);
+      }
+      if (typeof root.consumerRoot !== "string" || root.consumerRoot.length === 0) {
+        findings.push(`${label}: consumerRoot must be a non-empty string`);
+      }
+    }
+  }
+
+  if (
+    !architectureStringRecordArray(registry.targetProfiles) ||
+    registry.targetProfiles.length === 0
+  ) {
+    findings.push(
+      `${distributionRootsRegistryPath}: targetProfiles must be a non-empty object array`,
+    );
+  } else {
+    const ids = new Set();
+    for (const [index, profile] of registry.targetProfiles.entries()) {
+      const label = `${distributionRootsRegistryPath}:targetProfiles[${index}]`;
+      if (typeof profile.id !== "string" || profile.id.length === 0) {
+        findings.push(`${label}: id must be a non-empty string`);
+      } else if (ids.has(profile.id)) {
+        findings.push(`${label}: duplicate id ${profile.id}`);
+      } else {
+        ids.add(profile.id);
+      }
+      if (typeof profile.ambient !== "string" || !ambientIds.has(profile.ambient)) {
+        findings.push(`${label}: ambient must reference a module ambient`);
+      }
+      validateStringRefs({
+        label: `${label}: packageUnits`,
+        values: profile.packageUnits,
+        allowed: packageUnitIds,
+        noun: "packageUnit",
+        findings,
+      });
+      if (!stringArray(profile.selectedSubpaths)) {
+        findings.push(`${label}: selectedSubpaths must be a non-empty string array`);
+      }
+      if (!Array.isArray(profile.forbiddenSpecifiers)) {
+        findings.push(`${label}: forbiddenSpecifiers must be an array`);
+      } else if (
+        !profile.forbiddenSpecifiers.every(
+          (specifier) => typeof specifier === "string" && specifier.length > 0,
+        )
+      ) {
+        findings.push(`${label}: forbiddenSpecifiers entries must be non-empty strings`);
+      }
+    }
+  }
+
+  if (!architectureStringRecordArray(registry.dogfoodRoots) || registry.dogfoodRoots.length === 0) {
+    findings.push(
+      `${distributionRootsRegistryPath}: dogfoodRoots must be a non-empty object array`,
+    );
+  } else {
+    for (const [index, root] of registry.dogfoodRoots.entries()) {
+      const label = `${distributionRootsRegistryPath}:dogfoodRoots[${index}]`;
+      for (const key of ["id", "kind", "path", "witnessLevel", "gate"]) {
+        if (typeof root[key] !== "string" || root[key].length === 0) {
+          findings.push(`${label}: ${key} must be a non-empty string`);
+        }
+      }
+      if (!stringArray(root.requiredCapabilities)) {
+        findings.push(`${label}: requiredCapabilities must be a non-empty string array`);
+      }
+    }
+  }
+  return findings;
+};
+
 export const moduleBucketFindingsForEdges = (edges) => {
   const findings = [];
   const rankByBucket = moduleBucketRank();
@@ -1370,9 +1648,41 @@ const architectureSourceFindings = () => {
       .map((record) => record.name)
       .filter((name) => typeof name === "string" && name.startsWith("@agent-os/")),
   );
+  const moduleBuckets = moduleBucketRegistry();
+  const packageUnits = readJson(packageUnitsRegistryPath);
+  const distributionRoots = readJson(distributionRootsRegistryPath);
+  const bucketIds = new Set(
+    Array.isArray(moduleBuckets.buckets) ? moduleBuckets.buckets.map((bucket) => bucket.id) : [],
+  );
+  const ambientIds = new Set(
+    Array.isArray(moduleBuckets.ambients)
+      ? moduleBuckets.ambients.map((ambient) => ambient.id)
+      : [],
+  );
+  const packageUnitIds = new Set(
+    Array.isArray(packageUnits.packageUnits)
+      ? packageUnits.packageUnits.map((unit) => unit.id)
+      : [],
+  );
+  const targetProfileIds = new Set(
+    Array.isArray(distributionRoots.targetProfiles)
+      ? distributionRoots.targetProfiles.map((profile) => profile.id)
+      : [],
+  );
   return [
     ...ownerIdRegistryFindings({ registry: ownerIdRegistry(), workspacePackageNames }),
-    ...moduleBucketRegistryFindings(moduleBucketRegistry()),
+    ...moduleBucketRegistryFindings(moduleBuckets),
+    ...packageUnitsRegistryFindings({
+      registry: packageUnits,
+      bucketIds,
+      ambientIds,
+      targetProfileIds,
+    }),
+    ...distributionRootsRegistryFindings({
+      registry: distributionRoots,
+      packageUnitIds,
+      ambientIds,
+    }),
   ];
 };
 
