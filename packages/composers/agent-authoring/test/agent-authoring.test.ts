@@ -417,6 +417,20 @@ describe("agent authored tree compiler", () => {
       receiptPolicy: "workspace.snapshot",
     });
     expect(normalized.value.deployment.manifest.tools?.run_shell?.interaction).toBe("approval");
+    expect(normalized.value.deployment.manifest.materials?.workspace).toEqual({
+      kind: "external_resource",
+      provider: "agent-os",
+      resourceKind: "workspace-env",
+      ref: normalized.value.workspace.providerResourceId,
+    });
+    expect(normalized.value.deployment.manifest.executionDomains).toMatchObject({
+      "app-runtime": { bindingRef: "app-runtime" },
+      workspace: { bindingRef: "workspace" },
+    });
+    expect(normalized.value.deployment.manifest.interactions).toEqual({
+      approval: { bindingRef: "approval" },
+      never: { bindingRef: "never" },
+    });
     expect(normalized.value.deployment).toMatchObject({
       backend: "cloudflare-do",
       adapter: "cloudflare-do@1",
@@ -449,6 +463,89 @@ describe("agent authored tree compiler", () => {
     expect(normalized.value.provenance.manifest["/tools/run_shell/interaction"]).toBe(
       "macro(workspace@1)#/tools/run_shell/interaction",
     );
+    expect(normalized.value.provenance.manifest["/materials/workspace"]).toBe(
+      "macro(workspace@1)#/materials/workspace",
+    );
+    expect(normalized.value.provenance.manifest["/executionDomains/workspace/bindingRef"]).toBe(
+      "macro(workspace@1)#/executionDomains/workspace/bindingRef",
+    );
+    expect(normalized.value.provenance.manifest["/interactions/approval/bindingRef"]).toBe(
+      "default:framework-defaults@agentos/v1#/interactions/approval/bindingRef",
+    );
+  });
+
+  it("fails closed when final manifest tool refs do not resolve", () => {
+    const compiled = compileAgentTree({
+      files: [
+        { path: "agent/instructions.md", kind: "markdown", text: "Run workspace tasks." },
+        {
+          path: "agent/agent.json",
+          kind: "json",
+          value: {
+            agentId: "agent.workspace",
+            scope: { kind: "session", idSource: "manifest", stableScopeId: "workspace-ledger" },
+          },
+        },
+        {
+          path: "agent/tools/custom_effect.ts",
+          kind: "tool",
+          declaration: {
+            effects: ["provider_call"],
+            materialRefs: ["missing_material"],
+            executionDomain: "missing_domain",
+            interaction: "missing_interaction",
+            receiptPolicy: "required",
+          },
+        },
+      ],
+    });
+    expect(compiled.ok).toBe(true);
+    if (!compiled.ok) expect.fail(JSON.stringify(compiled.issues));
+
+    const normalized = normalizeAgentOsConfig(
+      {
+        profile: AGENTOS_CONFIG_PROFILE.WORKSPACE_V1,
+        agent: "./agent",
+        deployment: { id: "web-cursor-demo" },
+        target: {
+          kind: AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1,
+          durableObject: { className: "AgentOS", binding: "AGENT_OS" },
+        },
+        client: { kind: AGENTOS_CONFIG_CLIENT.BROWSER_DIRECT_V1 },
+        llm: {
+          route: AGENTOS_CONFIG_LLM_ROUTE.OPENAI_CHAT_COMPATIBLE,
+          endpointRef: "openrouter",
+          credentialRef: "openrouter-key",
+          modelRef: "model",
+        },
+        workspace: {
+          binding: "Sandbox",
+          root: "/workspace",
+        },
+      },
+      compiled.value,
+    );
+
+    expect(normalized).toEqual({
+      ok: false,
+      issues: [
+        {
+          kind: "tool_material_ref_unresolved",
+          toolId: "custom_effect",
+          materialRef: "missing_material",
+        },
+        {
+          kind: "tool_execution_domain_ref_unresolved",
+          toolId: "custom_effect",
+          executionDomain: "missing_domain",
+        },
+        {
+          kind: "tool_interaction_ref_unresolved",
+          toolId: "custom_effect",
+          interaction: "missing_interaction",
+        },
+      ],
+    });
   });
 
   it("allows safety-monotone interaction overrides for workspace defaults", () => {
@@ -1235,17 +1332,6 @@ describe("agent authored tree compiler", () => {
             effectAuthorityRef: {
               authorityClass: "effect",
               authorityId: "fixture-agent",
-            },
-            materials: {
-              workspace: {
-                kind: "external_resource",
-                provider: "agent-os",
-                resourceKind: "workspace-env",
-                ref: "cloudflare-sandbox:fixture-scope",
-              },
-            },
-            executionDomains: {
-              workspace: { bindingRef: "workspace" },
             },
           },
           null,

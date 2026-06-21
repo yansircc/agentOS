@@ -1030,6 +1030,9 @@ const applyDefaults = (state: CompilerState): void => {
   putDefault(state, "/scope", { kind: "conversation", idSource: "submit_scope" });
   putDefault(state, "/llmRoutes/default/bindingRef", "llm.default");
   putDefault(state, "/handlers", []);
+  putDefault(state, "/executionDomains/app-runtime/bindingRef", "app-runtime");
+  putDefault(state, "/interactions/never/bindingRef", "never");
+  putDefault(state, "/interactions/approval/bindingRef", "approval");
   putDefault(state, "/effectAuthorityRef", {
     authorityClass: "agent",
     authorityId: typeof agentId === "string" ? agentId : "agent",
@@ -1375,6 +1378,21 @@ export type AgentOsConfigIssue =
       readonly kind: "workspace_default_tool_shadowed";
       readonly path: string;
       readonly toolId: WorkspaceToolName;
+    }
+  | {
+      readonly kind: "tool_material_ref_unresolved";
+      readonly toolId: string;
+      readonly materialRef: string;
+    }
+  | {
+      readonly kind: "tool_execution_domain_ref_unresolved";
+      readonly toolId: string;
+      readonly executionDomain: string;
+    }
+  | {
+      readonly kind: "tool_interaction_ref_unresolved";
+      readonly toolId: string;
+      readonly interaction: string;
     };
 
 export interface StaticTargetProvenance {
@@ -1816,10 +1834,20 @@ const defaultWorkspaceTopology = (): AgentOsConfigWorkspaceTopology => ({
   allocator: "workspace-per-scope-v1",
 });
 
+const workspaceMaterialRef = (providerResourceId: ProviderResourceId): MaterialRef => ({
+  kind: "external_resource",
+  provider: "agent-os",
+  resourceKind: "workspace-env",
+  ref: providerResourceId,
+});
+
 const workspaceDefaultToolFactKey = (
   toolId: WorkspaceToolName,
   field: keyof AgentToolBindingRef,
 ): AgentManifestFactKey => `/tools/${toolId}/${field}`;
+
+const workspaceExecutionDomainFactKey = "/executionDomains/workspace/bindingRef" as const;
+const workspaceMaterialFactKey = "/materials/workspace" as const;
 
 const defaultWorkspaceToolEntry = (
   tool: WorkspaceToolDefaultDeclaration,
@@ -1870,10 +1898,20 @@ const applyWorkspaceDefaultTools = <K extends HandlerKind>(
 } => {
   const issues: AgentOsConfigIssue[] = [];
   const tools: Record<string, AgentToolBindingRef> = { ...compiled.manifest.tools };
+  const executionDomains: Record<string, AgentExecutionDomainRef> = {
+    ...compiled.manifest.executionDomains,
+  };
   const provenance: Record<AgentManifestFactKey, AgentManifestOrigin> = {
     ...compiled.provenance,
   };
   const exclusions: Record<string, AgentManifestOrigin> = {};
+
+  if (executionDomains.workspace === undefined) {
+    executionDomains.workspace = { bindingRef: "workspace" };
+    provenance[workspaceExecutionDomainFactKey] = workspaceManifestMacroOrigin(
+      workspaceExecutionDomainFactKey,
+    );
+  }
 
   for (const defaultTool of WORKSPACE_TOOL_DEFAULT_DECLARATIONS) {
     const control = compiled.workspaceToolControls[defaultTool.name];
@@ -1895,19 +1933,89 @@ const applyWorkspaceDefaultTools = <K extends HandlerKind>(
   }
   const manifestWithoutTools = { ...compiled.manifest } as AgentManifest<K>;
   delete (manifestWithoutTools as { tools?: unknown }).tools;
+  delete (manifestWithoutTools as { executionDomains?: unknown }).executionDomains;
   const sortedTools = Object.fromEntries(
     Object.entries(tools).sort(([left], [right]) => left.localeCompare(right)),
+  );
+  const sortedExecutionDomains = Object.fromEntries(
+    Object.entries(executionDomains).sort(([left], [right]) => left.localeCompare(right)),
   );
 
   return {
     manifest: authoredValue({
       ...manifestWithoutTools,
       ...(Object.keys(sortedTools).length === 0 ? {} : { tools: sortedTools }),
+      ...(Object.keys(sortedExecutionDomains).length === 0
+        ? {}
+        : { executionDomains: sortedExecutionDomains }),
     }) as AuthoredAgentManifest<K>,
     provenance,
     exclusions,
     issues,
   };
+};
+
+const addWorkspaceMaterial = <K extends HandlerKind>(
+  manifest: AuthoredAgentManifest<K>,
+  provenance: StaticTargetProvenance["manifest"],
+  providerResourceId: ProviderResourceId,
+): {
+  readonly manifest: AuthoredAgentManifest<K>;
+  readonly provenance: StaticTargetProvenance["manifest"];
+} => {
+  if (manifest.materials?.workspace !== undefined) {
+    return { manifest, provenance };
+  }
+  const materials = {
+    ...manifest.materials,
+    workspace: workspaceMaterialRef(providerResourceId),
+  };
+  const sortedMaterials = Object.fromEntries(
+    Object.entries(materials).sort(([left], [right]) => left.localeCompare(right)),
+  );
+  return {
+    manifest: authoredValue({
+      ...manifest,
+      materials: sortedMaterials,
+    }) as AuthoredAgentManifest<K>,
+    provenance: {
+      ...provenance,
+      [workspaceMaterialFactKey]: workspaceManifestMacroOrigin(workspaceMaterialFactKey),
+    },
+  };
+};
+
+const validateManifestToolReferences = <K extends HandlerKind>(
+  manifest: AuthoredAgentManifest<K>,
+): ReadonlyArray<AgentOsConfigIssue> => {
+  const issues: AgentOsConfigIssue[] = [];
+  for (const [toolId, tool] of Object.entries(manifest.tools ?? {}).sort(([left], [right]) =>
+    left.localeCompare(right),
+  )) {
+    for (const materialRef of tool.materialRefs ?? []) {
+      if (manifest.materials?.[materialRef] === undefined) {
+        issues.push({ kind: "tool_material_ref_unresolved", toolId, materialRef });
+      }
+    }
+    if (
+      tool.executionDomain !== undefined &&
+      manifest.executionDomains?.[tool.executionDomain] === undefined
+    ) {
+      issues.push({
+        kind: "tool_execution_domain_ref_unresolved",
+        toolId,
+        executionDomain: tool.executionDomain,
+      });
+    }
+    if (tool.interaction !== undefined && manifest.interactions?.[tool.interaction] === undefined) {
+      issues.push({
+        kind: "tool_interaction_ref_unresolved",
+        toolId,
+        interaction: tool.interaction,
+      });
+    }
+  }
+  return issues;
 };
 
 export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
@@ -1942,6 +2050,15 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
     topology,
     scopeRef: scopeRef.value,
   });
+  const manifestWithWorkspaceMaterial = addWorkspaceMaterial(
+    workspaceDefaults.manifest,
+    workspaceDefaults.provenance,
+    providerResourceId,
+  );
+  const referenceIssues = validateManifestToolReferences(manifestWithWorkspaceMaterial.manifest);
+  if (referenceIssues.length > 0) {
+    return { ok: false, issues: referenceIssues };
+  }
   const origins: Record<AgentOsConfigFactKey, AgentOsConfigOrigin> = {
     "/profile": configAuthorOrigin("/profile"),
     "/agent": configAuthorOrigin("/agent"),
@@ -1980,7 +2097,7 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
       config: value,
       deployment: {
         deploymentId: value.deployment.id,
-        manifest: workspaceDefaults.manifest,
+        manifest: manifestWithWorkspaceMaterial.manifest,
         backend: "cloudflare-do",
         adapter: AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1,
         codec: "agentos-json@1",
@@ -2002,7 +2119,7 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
       },
       origins,
       provenance: {
-        manifest: workspaceDefaults.provenance,
+        manifest: manifestWithWorkspaceMaterial.provenance,
         deployment: origins,
         exclusions: workspaceDefaults.exclusions,
       },
