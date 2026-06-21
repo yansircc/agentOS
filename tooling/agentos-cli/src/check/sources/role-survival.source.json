@@ -124,6 +124,11 @@
         "role": "projection-sink"
       },
       {
+        "path": "docs/agent/gates.source.json",
+        "pointer": "packageOverrides",
+        "role": "repo-local-tooling"
+      },
+      {
         "path": "docs/agent/invariants.source.json",
         "pointer": "invariants",
         "role": "law-contract-owner"

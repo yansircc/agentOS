@@ -13,7 +13,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vp test run --configLoader runner"
+    "test": "vp test run --configLoader runner --exclude '**/*.runtime.test.ts'"
   },
   "devDependencies": {
     "typescript": "catalog:",

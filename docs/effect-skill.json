@@ -117,7 +117,7 @@
         "rules": ["EFF001", "EFF025"]
       },
       {
-        "path": "packages/backends/cloudflare-do/test/admission/attempt-structured.worker.test.ts",
+        "path": "packages/backends/cloudflare-do/test/admission/attempt-structured.runtime.test.ts",
         "owner": "@agent-os/backend-cloudflare-do-tests",
         "reason": "test HTTP fixture owns provider Response construction",
         "rules": ["EFF402"]
@@ -294,7 +294,7 @@
           "rules": ["EFF402"]
         },
         {
-          "path": "test/admission/attempt-structured.worker.test.ts",
+          "path": "test/admission/attempt-structured.runtime.test.ts",
           "owner": "@agent-os/backend-cloudflare-do/test-provider",
           "reason": "test provider stub constructs terminal HTTP Response objects to model upstream transport",
           "rules": ["EFF402"]

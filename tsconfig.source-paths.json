@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "tsBuildInfoFile": ".cache/tsbuildinfo/tsconfig-source-paths-json.tsbuildinfo",
     "paths": {
       "@agent-os/kernel": ["./packages/kernel/src/index.ts"],
       "@agent-os/kernel/abort": ["./packages/kernel/src/abort.ts"],

@@ -13,8 +13,8 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vp test run --configLoader runner",
-    "test:runtime": "vp test run --configLoader runner"
+    "test": "vp test run --configLoader runner --exclude '**/*.runtime.test.ts' --passWithNoTests",
+    "test:runtime": "vp test run --configLoader runner --config vitest.runtime.config.ts"
   },
   "dependencies": {
     "@agent-os/backend-protocol": "workspace:*",

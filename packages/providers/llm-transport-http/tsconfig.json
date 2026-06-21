@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "tsBuildInfoFile": "../../../.cache/tsbuildinfo/packages-providers-llm-transport-http.tsbuildinfo",
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "Bundler",

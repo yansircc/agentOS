@@ -3,6 +3,12 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { hasAlgorithmicChecker, runAlgorithmicChecker } from "./check/algorithmic-checks.mjs";
+import {
+  deriveAffectedGates,
+  printAffectedGates,
+  runAffectedGates,
+} from "./check/gate-selector.mjs";
+import { runDefaultGate } from "./check/default-gate.mjs";
 import { listGuards, runGroup, runGuard } from "./runner.mjs";
 
 const version = "0.5.16";
@@ -14,6 +20,9 @@ Usage:
   agentos --version
   agentos build [--cwd <path>] [--config <path>] [--package-scope <scope>]
   agentos check all
+  agentos check default
+  agentos check structural
+  agentos check affected [--base <ref>] [--head <ref>] [--json] [--explain] [--run]
   agentos check docs
   agentos check effect-manifests
   agentos check release
@@ -81,6 +90,44 @@ const runCheck = async (args) => {
       expectNoExtraArgs(rest, "agentos check all");
       await runGroup("all");
       return;
+    case "default":
+      expectNoExtraArgs(rest, "agentos check default");
+      await runDefaultGate();
+      return;
+    case "structural":
+      expectNoExtraArgs(rest, "agentos check structural");
+      await runGroup("all");
+      return;
+    case "affected": {
+      let base;
+      let head;
+      let json = false;
+      let run = false;
+      for (let index = 0; index < rest.length; index += 1) {
+        const arg = rest[index];
+        if (arg === "--base") {
+          base = rest[index + 1];
+          if (base === undefined) throw new Error("agentos check affected: --base requires a ref");
+          index += 1;
+        } else if (arg === "--head") {
+          head = rest[index + 1];
+          if (head === undefined) throw new Error("agentos check affected: --head requires a ref");
+          index += 1;
+        } else if (arg === "--json") {
+          json = true;
+        } else if (arg === "--explain") {
+          json = false;
+        } else if (arg === "--run") {
+          run = true;
+        } else {
+          throw new Error(`agentos check affected: unexpected argument ${arg}`);
+        }
+      }
+      const result = deriveAffectedGates({ base, head });
+      printAffectedGates(result, { json });
+      if (run) runAffectedGates(result);
+      return;
+    }
     case "docs":
       expectNoExtraArgs(rest, "agentos check docs");
       await runGroup("check-docs");
@@ -119,7 +166,7 @@ const runCheck = async (args) => {
         return;
       }
       throw new Error(
-        "agentos check: choose one of all, docs, effect-manifests, release, site, guard-coverage, guard, guards, or an algorithmic checker id",
+        "agentos check: choose one of all, default, structural, affected, docs, effect-manifests, release, site, guard-coverage, guard, guards, or an algorithmic checker id",
       );
   }
 };

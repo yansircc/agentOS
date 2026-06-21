@@ -1,4 +1,7 @@
 {
+  "compilerOptions": {
+    "tsBuildInfoFile": ".cache/tsbuildinfo/tsconfig-json.tsbuildinfo"
+  },
   "files": [],
   "references": [
     { "path": "./packages/kernel" },

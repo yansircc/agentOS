@@ -9,7 +9,7 @@ const workerOnlyAnthropicTokenizerStub = new URL(
 ).pathname;
 
 /**
- * vitest config for @agent-os/backend-cloudflare-do contract tests.
+ * vitest config for @agent-os/backend-cloudflare-do runtime contract tests.
  *
  * Tests run inside the Workers runtime via vitest-pool-workers so they have
  * access to real DO SQLite + transactionSync semantics. LLM-dependent tests
@@ -19,7 +19,7 @@ const workerOnlyAnthropicTokenizerStub = new URL(
  * a vehicle for runInDurableObject(stub, callback) to acquire a real
  * DurableObjectState).
  *
- * Worker tests do not exercise Anthropic routes. @effect/ai-anthropic imports
+ * Runtime tests do not exercise Anthropic routes. @effect/ai-anthropic imports
  * @anthropic-ai/tokenizer at module load, and that package currently declares a
  * CommonJS package while exposing TypeScript source that the worker test
  * evaluator cannot load. The alias is test-only and must be removed once this
@@ -36,7 +36,7 @@ export default defineConfig({
   test: {
     fileParallelism: false,
     globals: true,
-    include: ["test/**/*.worker.test.ts"],
+    include: ["test/**/*.runtime.test.ts"],
   },
   plugins: [
     cloudflareTest({

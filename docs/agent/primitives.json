@@ -781,7 +781,7 @@
       "capabilityKind": "projection",
       "testEvidence": {
         "tests": [
-          "packages/backends/cloudflare-do/test/materialized-projections.worker.test.ts",
+          "packages/backends/cloudflare-do/test/materialized-projections.runtime.test.ts",
           "packages/runtime/test/projection.test.ts"
         ]
       }

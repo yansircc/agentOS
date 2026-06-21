@@ -230,6 +230,10 @@
       },
       {
         "type": "rule",
+        "id": "gate-tier-governance"
+      },
+      {
+        "type": "rule",
         "id": "public-api"
       },
       {
@@ -365,6 +369,7 @@
           "check:full",
           "check:release",
           "check:runtime",
+          "check:structural",
           "docs:check",
           "docs:generate",
           "docs:project",
@@ -389,6 +394,7 @@
           "check:full",
           "check:release",
           "check:runtime",
+          "check:structural",
           "test:internal-consumer"
         ],
         "scriptsDirectoryAllowPrefixes": ["scripts/parallel-dev/"],
@@ -401,6 +407,27 @@
         "engine": "algorithmic",
         "checker": "repo-tooling-surface",
         "reason": "repo tooling surface spans package.json, scripts/, CLI imports, and docs references as one projection verdict"
+      }
+    },
+    {
+      "id": "gate-tier-governance",
+      "owner": "docs/agent/gates.source.json",
+      "invariantId": "invariant.algebra.single-code-source",
+      "kind": "repo-boundary",
+      "diagnostics": [
+        "gate tier ownership, runtime suffix routing, and affected graph fidelity derive from one gate manifest"
+      ],
+      "paths": [
+        "docs/agent/gates.source.json",
+        "package.json",
+        "packages",
+        "tooling/agentos-cli/src/check"
+      ],
+      "commandGroup": "all",
+      "acceptance": {
+        "engine": "algorithmic",
+        "checker": "gate-tier-governance",
+        "reason": "gate tier governance requires workspace package manifests, runtime suffix scan, proof ownership manifest, and affected graph fidelity checks"
       }
     },
     {
@@ -667,8 +694,8 @@
       "invariantId": "invariant.docs.agent-projection",
       "kind": "projection",
       "acceptance": {
-        "engine": "generatedProjection",
-        "command": "node tooling/agentos-cli/src/generate/generate-docs.mjs --check && node tooling/agentos-cli/src/generate/generate-agent-docs.mjs --check && bun tooling/agentos-cli/src/generate/generate-carrier-reference.mjs --check && node tooling/agentos-cli/src/generate/project-docs-site.mjs --check"
+        "engine": "proofClass",
+        "proofClasses": ["docs"]
       },
       "diagnostics": [
         "generated docs structure must match declared source facts and generator ownership"
@@ -730,8 +757,8 @@
       "paths": ["packages/carriers/workspace-job", "packages/runtime/test/workspace-job.test.ts"],
       "commandGroup": "all",
       "acceptance": {
-        "engine": "packageCommand",
-        "commands": ["bun run --cwd packages/carriers/workspace-job test"]
+        "engine": "proofClass",
+        "proofClasses": ["test"]
       }
     },
     {
@@ -743,8 +770,8 @@
       "paths": ["packages/runtime/src", "packages/runtime/test/workspace-job.test.ts"],
       "commandGroup": "all",
       "acceptance": {
-        "engine": "packageCommand",
-        "commands": ["bun run --cwd packages/runtime test -- test/workspace-job.test.ts"]
+        "engine": "proofClass",
+        "proofClasses": ["test"]
       }
     },
     {
@@ -756,10 +783,8 @@
       "paths": ["packages/backends/cloudflare-do"],
       "commandGroup": "all",
       "acceptance": {
-        "engine": "packageCommand",
-        "commands": [
-          "bun run --cwd packages/backends/cloudflare-do test -- test/workspace-host-helpers.test.ts"
-        ]
+        "engine": "proofClass",
+        "proofClasses": ["test"]
       }
     },
     {
@@ -774,8 +799,8 @@
       ],
       "commandGroup": "all",
       "acceptance": {
-        "engine": "packageCommand",
-        "commands": ["bun run --cwd packages/wire-adapters/ag-ui test -- test/ag-ui.test.ts"]
+        "engine": "proofClass",
+        "proofClasses": ["test"]
       }
     },
     {
@@ -845,10 +870,8 @@
       "paths": ["packages/runtime-protocol/test/failure-diagnostics.test.ts"],
       "commandGroup": "package-owned",
       "acceptance": {
-        "engine": "packageCommand",
-        "commands": [
-          "bun run --cwd packages/runtime-protocol test -- test/failure-diagnostics.test.ts"
-        ]
+        "engine": "proofClass",
+        "proofClasses": ["test"]
       }
     },
     {
@@ -863,11 +886,8 @@
       ],
       "commandGroup": "package-owned",
       "acceptance": {
-        "engine": "packageCommand",
-        "commands": [
-          "bun run --cwd packages/kernel test -- test/tools.test.ts",
-          "bun run --cwd packages/runtime-protocol test -- test/runtime-events.test.ts"
-        ]
+        "engine": "proofClass",
+        "proofClasses": ["test"]
       }
     },
     {
@@ -881,10 +901,8 @@
       "paths": ["packages/composers/workspace-binding/test/workspace-binding.test.ts"],
       "commandGroup": "package-owned",
       "acceptance": {
-        "engine": "packageCommand",
-        "commands": [
-          "bun run --cwd packages/composers/workspace-binding test -- test/workspace-binding.test.ts"
-        ]
+        "engine": "proofClass",
+        "proofClasses": ["test"]
       }
     },
     {
@@ -896,10 +914,8 @@
       "paths": ["packages/carriers/workspace-op/test/workspace-op.test.ts"],
       "commandGroup": "package-owned",
       "acceptance": {
-        "engine": "packageCommand",
-        "commands": [
-          "bun run --cwd packages/carriers/workspace-op test -- test/workspace-op.test.ts"
-        ]
+        "engine": "proofClass",
+        "proofClasses": ["test"]
       }
     },
     {
@@ -911,10 +927,8 @@
       "paths": ["packages/wire-adapters/ag-ui/test/workspace-agui-integration.test.ts"],
       "commandGroup": "package-owned",
       "acceptance": {
-        "engine": "packageCommand",
-        "commands": [
-          "bun run --cwd packages/wire-adapters/ag-ui test -- test/workspace-agui-integration.test.ts"
-        ]
+        "engine": "proofClass",
+        "proofClasses": ["test"]
       }
     },
     {
@@ -926,8 +940,8 @@
       "paths": ["packages/wire-adapters/ag-ui/src/index.ts"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
-        "engine": "packageCommand",
-        "commands": ["bun run --cwd packages/wire-adapters/ag-ui test -- test/ag-ui.test.ts"]
+        "engine": "proofClass",
+        "proofClasses": ["test"]
       }
     },
     {
@@ -942,8 +956,8 @@
       ],
       "commandGroup": "substrate-consumer",
       "acceptance": {
-        "engine": "packageCommand",
-        "commands": ["bun run --cwd packages/wire-adapters/ag-ui test -- test/ag-ui.test.ts"]
+        "engine": "proofClass",
+        "proofClasses": ["test"]
       }
     },
     {
@@ -955,8 +969,8 @@
       "paths": ["packages/backends/cloudflare-do/src"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
-        "engine": "packageCommand",
-        "commands": ["bun run --cwd packages/backends/cloudflare-do test"]
+        "engine": "proofClass",
+        "proofClasses": ["test"]
       }
     },
     {
@@ -981,8 +995,8 @@
       "paths": ["packages/backends/protocol/src"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
-        "engine": "packageCommand",
-        "commands": ["bun run --cwd packages/backends/protocol test"]
+        "engine": "proofClass",
+        "proofClasses": ["test"]
       }
     },
     {
@@ -994,8 +1008,8 @@
       "paths": ["packages/backends/protocol/src"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
-        "engine": "packageCommand",
-        "commands": ["bun run --cwd packages/backends/protocol test"]
+        "engine": "proofClass",
+        "proofClasses": ["test"]
       }
     },
     {
@@ -1007,8 +1021,8 @@
       "paths": ["packages/backends/node-postgres/src"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
-        "engine": "packageCommand",
-        "commands": ["bun run --cwd packages/backends/node-postgres test"]
+        "engine": "proofClass",
+        "proofClasses": ["runtime"]
       }
     },
     {
@@ -1020,8 +1034,8 @@
       "paths": ["packages/backends/node-postgres/src"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
-        "engine": "packageCommand",
-        "commands": ["bun run --cwd packages/backends/node-postgres test"]
+        "engine": "proofClass",
+        "proofClasses": ["runtime"]
       }
     },
     {
@@ -1033,12 +1047,8 @@
       "paths": ["packages/backends", "packages/providers"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
-        "engine": "packageCommand",
-        "commands": [
-          "bun run --cwd packages/backends/in-memory test",
-          "bun run --cwd packages/backends/cloudflare-do test",
-          "bun run --cwd packages/backends/node-postgres test"
-        ]
+        "engine": "proofClass",
+        "proofClasses": ["runtime", "test"]
       }
     },
     {
@@ -1064,8 +1074,8 @@
       "paths": ["packages/runtime/src"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
-        "engine": "packageCommand",
-        "commands": ["bun run --cwd packages/runtime test"]
+        "engine": "proofClass",
+        "proofClasses": ["test"]
       }
     },
     {
@@ -1077,8 +1087,8 @@
       "paths": ["packages/runtime-protocol/src"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
-        "engine": "packageCommand",
-        "commands": ["bun run --cwd packages/runtime-protocol test"]
+        "engine": "proofClass",
+        "proofClasses": ["test"]
       }
     },
     {
@@ -1090,8 +1100,8 @@
       "paths": ["packages/backends/protocol/src"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
-        "engine": "packageCommand",
-        "commands": ["bun run --cwd packages/backends/protocol test"]
+        "engine": "proofClass",
+        "proofClasses": ["test"]
       }
     },
     {
@@ -1103,8 +1113,8 @@
       "paths": ["packages/wire-adapters/telemetry-otlp"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
-        "engine": "packageCommand",
-        "commands": ["bun run --cwd packages/wire-adapters/telemetry-otlp test"]
+        "engine": "proofClass",
+        "proofClasses": ["test"]
       }
     },
     {
@@ -1129,8 +1139,8 @@
       "paths": ["packages/composers/turn-stream", "packages/providers"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
-        "engine": "packageCommand",
-        "commands": ["bun run --cwd packages/composers/turn-stream test"]
+        "engine": "proofClass",
+        "proofClasses": ["test"]
       }
     },
     {
@@ -1142,8 +1152,8 @@
       "paths": ["packages/carriers/decision-gate"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
-        "engine": "packageCommand",
-        "commands": ["bun run --cwd packages/carriers/decision-gate test"]
+        "engine": "proofClass",
+        "proofClasses": ["test"]
       }
     },
     {
@@ -1155,8 +1165,8 @@
       "paths": ["packages/execution-domains/workspace-env"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
-        "engine": "packageCommand",
-        "commands": ["bun run --cwd packages/execution-domains/workspace-env test"]
+        "engine": "proofClass",
+        "proofClasses": ["test"]
       }
     },
     {
@@ -1168,8 +1178,8 @@
       "paths": ["packages/kernel/src/tools.ts"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
-        "engine": "packageCommand",
-        "commands": ["bun run --cwd packages/kernel test -- test/tools.test.ts"]
+        "engine": "proofClass",
+        "proofClasses": ["test"]
       }
     },
     {
@@ -1195,8 +1205,8 @@
       "paths": ["packages/kernel/src"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
-        "engine": "packageCommand",
-        "commands": ["bun run --cwd packages/kernel test -- test/tools.test.ts"]
+        "engine": "proofClass",
+        "proofClasses": ["test"]
       }
     },
     {
@@ -1208,8 +1218,8 @@
       "paths": ["packages/runtime-protocol/src"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
-        "engine": "packageCommand",
-        "commands": ["bun run --cwd packages/runtime-protocol test"]
+        "engine": "proofClass",
+        "proofClasses": ["test"]
       }
     },
     {
@@ -1221,8 +1231,8 @@
       "paths": ["packages/runtime-protocol/src"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
-        "engine": "packageCommand",
-        "commands": ["bun run --cwd packages/runtime-protocol test"]
+        "engine": "proofClass",
+        "proofClasses": ["test"]
       }
     },
     {
@@ -1234,8 +1244,8 @@
       "paths": ["packages/backends/cloudflare-do/src"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
-        "engine": "packageCommand",
-        "commands": ["bun run --cwd packages/backends/cloudflare-do test"]
+        "engine": "proofClass",
+        "proofClasses": ["test"]
       }
     },
     {
@@ -1247,8 +1257,8 @@
       "paths": ["packages/backends/protocol/src"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
-        "engine": "packageCommand",
-        "commands": ["bun run --cwd packages/backends/protocol test"]
+        "engine": "proofClass",
+        "proofClasses": ["test"]
       }
     },
     {
@@ -1260,8 +1270,8 @@
       "paths": ["packages/llm-protocol/src"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
-        "engine": "packageCommand",
-        "commands": ["bun run --cwd packages/llm-protocol test"]
+        "engine": "proofClass",
+        "proofClasses": ["test"]
       }
     },
     {
@@ -1273,8 +1283,8 @@
       "paths": ["packages/runtime-protocol/src"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
-        "engine": "packageCommand",
-        "commands": ["bun run --cwd packages/runtime-protocol test"]
+        "engine": "proofClass",
+        "proofClasses": ["test"]
       }
     },
     {
@@ -1286,11 +1296,8 @@
       "paths": ["packages/telemetry-protocol", "packages/wire-adapters/telemetry-otlp"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
-        "engine": "packageCommand",
-        "commands": [
-          "bun run --cwd packages/telemetry-protocol test",
-          "bun run --cwd packages/wire-adapters/telemetry-otlp test"
-        ]
+        "engine": "proofClass",
+        "proofClasses": ["test"]
       }
     },
     {
@@ -1302,11 +1309,8 @@
       "paths": ["packages/carriers/resource", "packages/providers/resource-cloudflare"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
-        "engine": "packageCommand",
-        "commands": [
-          "bun run --cwd packages/carriers/resource test",
-          "bun run --cwd packages/providers/resource-cloudflare test"
-        ]
+        "engine": "proofClass",
+        "proofClasses": ["test"]
       }
     },
     {
@@ -1318,8 +1322,8 @@
       "paths": ["packages/runtime/src"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
-        "engine": "packageCommand",
-        "commands": ["bun run --cwd packages/runtime test"]
+        "engine": "proofClass",
+        "proofClasses": ["test"]
       }
     },
     {
@@ -1331,8 +1335,8 @@
       "paths": ["packages/backends/protocol/src"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
-        "engine": "packageCommand",
-        "commands": ["bun run --cwd packages/backends/protocol test"]
+        "engine": "proofClass",
+        "proofClasses": ["test"]
       }
     },
     {

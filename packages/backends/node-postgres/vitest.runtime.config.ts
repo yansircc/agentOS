@@ -7,7 +7,7 @@ export default defineConfig({
   },
   test: {
     fileParallelism: false,
-    exclude: ["test/**/*.runtime.test.ts"],
+    include: ["test/**/*.runtime.test.ts"],
     testTimeout: 120_000,
     hookTimeout: 120_000,
   },

@@ -21,7 +21,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vp test run --configLoader runner"
+    "test": "vp test run --configLoader runner --exclude '**/*.runtime.test.ts'"
   },
   "dependencies": {
     "@agent-os/attached-stream": "workspace:*",

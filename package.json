@@ -26,9 +26,9 @@
     "docs:check": "bun run agentos -- check docs",
     "effect-manifests:generate": "bun run agentos -- generate effect-manifests",
     "effect-manifests:check": "bun run agentos -- check effect-manifests",
-    "check": "bun run agentos -- check all && bun run typecheck && bun run test",
+    "check": "bun run agentos -- check default",
     "check:runtime": "vp run --cache -r test:runtime",
-    "check:release": "bun run check && bun run check:distribution && bun run test:internal-consumer && rm -rf /tmp/agentos-release-scan && mkdir -p /tmp/agentos-release-scan && effect-skill-scan . --strict --json --profile --evidence /tmp/agentos-release-scan",
+    "check:release": "bun run check:structural && bun run typecheck && bun run test && bun run check:distribution && bun run test:internal-consumer && rm -rf /tmp/agentos-release-scan && mkdir -p /tmp/agentos-release-scan && effect-skill-scan . --strict --json --profile --evidence /tmp/agentos-release-scan",
     "check:full": "bun run check:release && bun run docs:site:check && bun run check:runtime",
     "docs:project": "bun run agentos -- generate site",
     "docs:project:watch": "bun run agentos -- generate site --watch",
@@ -43,7 +43,8 @@
     "registry:local": "node tooling/distribution/distribution.mjs local-registry",
     "publish:local": "node tooling/distribution/distribution.mjs publish-local",
     "install:consumer": "node tooling/distribution/distribution.mjs install-consumer",
-    "restore:consumer": "node tooling/distribution/distribution.mjs restore-consumer"
+    "restore:consumer": "node tooling/distribution/distribution.mjs restore-consumer",
+    "check:structural": "bun run agentos -- check structural"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "catalog:",

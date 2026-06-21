@@ -1,9 +1,17 @@
 #!/usr/bin/env node
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import ts from "typescript";
+import { runCommand } from "./command-runner.mjs";
+import {
+  packageImportCycles as graphPackageImportCycles,
+  packageManifestDependencyEdges,
+  packageSourceImportEdges as graphPackageSourceImportEdges,
+  tsconfigReferenceEdges,
+  workspacePackageRecords as graphWorkspacePackageRecords,
+} from "./package-graph.mjs";
 import { collectAgentDocsModel } from "../lib/agent-docs-model.mjs";
 import {
   apiSourceMode,
@@ -35,20 +43,6 @@ const walk = (relativePath, options = {}) => {
     if (entry.isFile()) files.push(child.split(path.sep).join("/"));
   }
   return files.sort(compare);
-};
-
-const runCommand = (command) => {
-  if (/\s--fix(?:\s|$)/u.test(command)) {
-    throw new Error(`${command}: check commands must not run fix mode`);
-  }
-  console.log(`$ ${command}`);
-  const result = spawnSync("sh", ["-c", command], {
-    cwd: repoRoot,
-    env: process.env,
-    stdio: "inherit",
-  });
-  if (result.signal !== null) throw new Error(`${command} terminated by ${result.signal}`);
-  if (result.status !== 0) throw new Error(`${command} exited with ${result.status ?? 1}`);
 };
 
 const failIfAny = (label, failures) => {
@@ -338,59 +332,6 @@ const packageMatchesConstraint = (record, names = [], pathPrefixes = []) =>
   names.includes(record.name) ||
   pathPrefixes.some((prefix) => packagePathMatches(record.path, prefix));
 
-const packageFromInternalSpecifier = (recordsByName, specifier) => {
-  if (!specifier.startsWith("@agent-os/")) return undefined;
-  const [scope, name] = specifier.split("/");
-  if (scope !== "@agent-os" || name === undefined) return undefined;
-  return recordsByName.get(`${scope}/${name}`);
-};
-
-const packageSourceImportEdges = (records) => {
-  const recordsByName = new Map(records.map((record) => [record.name, record]));
-  const edges = [];
-  for (const from of records) {
-    for (const file of walk(`${from.path}/src`).filter((entry) =>
-      /\.(?:ts|tsx|mts|cts|js|mjs)$/u.test(entry),
-    )) {
-      const source = read(file);
-      for (const specifier of clientImportSpecifiers(source)) {
-        const to = packageFromInternalSpecifier(recordsByName, specifier);
-        if (to !== undefined && to.name !== from.name) {
-          edges.push({ from, to, file, specifier });
-        }
-      }
-    }
-  }
-  return edges;
-};
-
-const packageImportCycles = (records, edges) => {
-  const graph = new Map(records.map((record) => [record.name, []]));
-  for (const edge of edges) graph.get(edge.from.name)?.push(edge.to.name);
-  for (const targets of graph.values()) targets.sort(compare);
-
-  const visiting = new Set();
-  const visited = new Set();
-  const stack = [];
-  const cycles = [];
-  const visit = (name) => {
-    if (visited.has(name)) return;
-    if (visiting.has(name)) {
-      const index = stack.indexOf(name);
-      cycles.push([...stack.slice(index), name]);
-      return;
-    }
-    visiting.add(name);
-    stack.push(name);
-    for (const target of graph.get(name) ?? []) visit(target);
-    stack.pop();
-    visiting.delete(name);
-    visited.add(name);
-  };
-  for (const record of records) visit(record.name);
-  return cycles;
-};
-
 const checkForbiddenPackageEdges = ({ ruleId, constraints, edges, failures }) => {
   for (const edge of edges) {
     for (const constraint of constraints.forbiddenEdges ?? []) {
@@ -499,13 +440,13 @@ const checkRoleImportEdges = ({ ruleId, constraints, records, edges, failures })
 
 const checkPackageImportDag = ({ ruleId, label }) => {
   const constraints = ruleConstraints(ruleId);
-  const records = workspacePackageRecords().filter(
+  const records = graphWorkspacePackageRecords(repoRoot).filter(
     (record) => typeof record.name === "string" && record.name.startsWith("@agent-os/"),
   );
-  const edges = packageSourceImportEdges(records);
+  const edges = graphPackageSourceImportEdges(repoRoot, records);
   const failures = [];
 
-  for (const cycle of packageImportCycles(records, edges)) {
+  for (const cycle of graphPackageImportCycles(records, edges)) {
     failures.push(`${ruleId}: package cycle ${cycle.join(" -> ")}`);
   }
 
@@ -1041,11 +982,113 @@ const checkBackendNeutrality = () => {
   for (const backend of backends ?? []) {
     if (!fs.existsSync(path.join(repoRoot, backend, "src")))
       failures.push(`${backend}: missing src`);
-    if (!fs.existsSync(path.join(repoRoot, backend, "test/backend-protocol-contract.test.ts"))) {
+    if (
+      !fs.existsSync(path.join(repoRoot, backend, "test/backend-protocol-contract.test.ts")) &&
+      !fs.existsSync(path.join(repoRoot, backend, "test/backend-protocol-contract.runtime.test.ts"))
+    ) {
       failures.push(`${backend}: missing backend protocol contract test`);
     }
   }
   failIfAny("backend neutrality", failures);
+};
+
+const checkGateTierGovernance = () => {
+  const failures = [];
+  const gates = readJson("docs/agent/gates.source.json");
+  const records = graphWorkspacePackageRecords(repoRoot).filter((record) =>
+    record.name?.startsWith("@agent-os/"),
+  );
+  const proofClassIds = new Set(Object.keys(gates.proofClasses ?? {}));
+  for (const required of ["structural", "typecheck", "test", "runtime", "distribution"]) {
+    if (!proofClassIds.has(required))
+      failures.push(`gates.source.json: missing ${required} proof class`);
+  }
+  for (const proofClass of gates.expensiveProofClasses ?? []) {
+    if (!proofClassIds.has(proofClass))
+      failures.push(`gates.source.json: unknown expensive proof ${proofClass}`);
+  }
+  for (const proofClass of gates.fullAffectedProofClasses ?? []) {
+    if (!proofClassIds.has(proofClass))
+      failures.push(`gates.source.json: unknown full proof ${proofClass}`);
+  }
+
+  const overrideByPath = new Map(
+    (gates.packageOverrides ?? []).map((entry) => [entry.path, entry]),
+  );
+  for (const override of gates.packageOverrides ?? []) {
+    if (!records.some((record) => record.path === override.path)) {
+      failures.push(
+        `gates.source.json: package override references unknown package ${override.path}`,
+      );
+    }
+    for (const proofClass of [
+      ...(override.proofClasses ?? []),
+      ...(override.affectedProofClasses ?? []),
+    ]) {
+      if (!proofClassIds.has(proofClass)) {
+        failures.push(`${override.path}: unknown proof class ${proofClass}`);
+      }
+    }
+  }
+
+  for (const record of records) {
+    const manifest = readJson(`${record.path}/package.json`);
+    const override = overrideByPath.get(record.path);
+    const fastProof = override?.fastProof ?? gates.defaultPackageProof?.fastProof;
+    if (fastProof === undefined) failures.push(`${record.path}: missing fast proof ownership`);
+    if (manifest.scripts?.test?.includes("--passWithNoTests") && fastProof !== "none") {
+      failures.push(
+        `${record.path}: --passWithNoTests requires fastProof none in gates.source.json`,
+      );
+    }
+    if (fastProof === "none") {
+      if (!manifest.scripts?.test?.includes("--passWithNoTests")) {
+        failures.push(`${record.path}: fastProof none requires explicit --passWithNoTests script`);
+      }
+      if (!(override?.affectedProofClasses ?? []).includes("runtime")) {
+        failures.push(`${record.path}: fastProof none must route affected changes to runtime`);
+      }
+    }
+    if (
+      typeof manifest.scripts?.test === "string" &&
+      manifest.scripts.test.startsWith("vp test run") &&
+      !manifest.scripts.test.includes("*.runtime.test.ts")
+    ) {
+      failures.push(`${record.path}: fast test script must exclude *.runtime.test.ts`);
+    }
+  }
+
+  for (const file of walk("packages").filter((entry) => entry.endsWith(".worker.test.ts"))) {
+    failures.push(`${file}: runtime tests must use *.runtime.test.ts`);
+  }
+  const runtimeTestFiles = walk("packages").filter((entry) => entry.endsWith(".runtime.test.ts"));
+  for (const file of runtimeTestFiles) {
+    const owner = records
+      .filter((record) => file === record.path || file.startsWith(`${record.path}/`))
+      .sort((left, right) => right.path.length - left.path.length)[0];
+    const override = owner === undefined ? undefined : overrideByPath.get(owner.path);
+    if (owner === undefined || !(override?.proofClasses ?? []).includes("runtime")) {
+      failures.push(`${file}: runtime test has no runtime proof owner`);
+    }
+  }
+  for (const file of walk(".").filter((entry) => entry.endsWith(".tsbuildinfo"))) {
+    if (!file.startsWith(".cache/")) failures.push(`${file}: tsbuildinfo must live under .cache/`);
+  }
+
+  const sourceEdges = graphPackageSourceImportEdges(repoRoot, records);
+  const graphEdges = [
+    ...sourceEdges,
+    ...packageManifestDependencyEdges(repoRoot, records),
+    ...tsconfigReferenceEdges(repoRoot, records),
+  ];
+  const graphKeys = new Set(graphEdges.map((edge) => `${edge.from.name}->${edge.to.name}`));
+  for (const edge of sourceEdges) {
+    if (!graphKeys.has(`${edge.from.name}->${edge.to.name}`)) {
+      failures.push(`${edge.file}: affected graph is missing source import edge ${edge.specifier}`);
+    }
+  }
+
+  failIfAny("gate tier governance", failures);
 };
 
 const checkSpikeHygiene = () => {
@@ -1618,7 +1661,7 @@ const checkDocsSiteBuild = () => {
   failIfAny("docs site build", failures);
 };
 
-const checkBoundaryProjection = () => runCommand("vp check");
+const checkBoundaryProjection = () => runCommand("vp check", { cwd: repoRoot });
 
 const checkerById = new Map([
   ["backend-neutrality", checkBackendNeutrality],
@@ -1633,6 +1676,7 @@ const checkerById = new Map([
   ["event-namespaces", checkEventNamespaces],
   ["limit-registry", checkLimitRegistry],
   ["generated-static-target-linking", checkGeneratedStaticTargetLinking],
+  ["gate-tier-governance", checkGateTierGovernance],
   ["public-api", checkPublicApi],
   ["repo-tooling-surface", checkRepoToolingSurface],
   ["source-aliases", checkSourceAliases],

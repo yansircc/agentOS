@@ -1,7 +1,7 @@
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { runCommand } from "./check/command-runner.mjs";
 import { runRuleAcceptance, validateRuleAcceptance } from "./check/manifest-rules.mjs";
 
 export const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -89,28 +89,10 @@ const validateBoundaryRules = (value) => {
 
 const ruleById = (manifest, id) => manifest.rules.find((rule) => rule.id === id);
 
-const runShellCommand = (command) => {
-  if (/\s--fix(?:\s|$)/u.test(command)) {
-    throw new Error(`${command}: check commands must not run fix mode`);
-  }
-  console.log(`$ ${command}`);
-  const result = spawnSync("sh", ["-c", command], {
-    cwd: repoRoot,
-    env: process.env,
-    stdio: "inherit",
-  });
-  if (result.signal !== null) {
-    throw new Error(`${command} terminated by ${result.signal}`);
-  }
-  if (result.status !== 0) {
-    throw new Error(`${command} exited with ${result.status ?? 1}`);
-  }
-};
-
 const runSteps = async (manifest, steps, stack = []) => {
   for (const step of steps) {
     if (step.type === "command") {
-      runShellCommand(step.command);
+      runCommand(step.command, { cwd: repoRoot });
       continue;
     }
     if (step.type === "group") {

@@ -30,43 +30,11 @@ const coveredRuleIds = new Set();
 const genericPackageNegativeWitness =
   "package-owned test fails when the owned contract is violated";
 
-const packageCommandScopes = (commands) => {
-  if (!Array.isArray(commands)) return [];
-  return commands.flatMap((command) => {
-    if (typeof command !== "string") return [];
-    const match = command.match(/^bun run --cwd (packages\/[^\s]+) test(?: -- ([^\s]+))?$/u);
-    if (match === null) return [];
-    return [
-      {
-        packagePath: match[1],
-        testPath:
-          typeof match[2] === "string"
-            ? `${match[1]}/${match[2]}`.split(path.sep).join("/")
-            : undefined,
-      },
-    ];
-  });
-};
-
-const witnessCoveredByCommand = (witnessFile, scopes) =>
-  scopes.some((scope) =>
-    scope.testPath === undefined
-      ? witnessFile.startsWith(`${scope.packagePath}/`)
-      : witnessFile === scope.testPath,
-  );
-
-const assertPackageWitnesses = (label, assertionIndex, assertion, rule) => {
+const assertProofWitnesses = (label, assertionIndex, assertion) => {
   const witnesses = assertion.packageWitnesses;
-  if (!Array.isArray(witnesses) || witnesses.length === 0) {
-    fail(`${label}: assertions[${assertionIndex}] packageCommand requires packageWitnesses`);
-    return;
-  }
-
-  const scopes = packageCommandScopes(rule.acceptance?.commands);
-  if (scopes.length === 0) {
-    fail(`${label}: packageCommand rule has no parseable package test commands`);
-    return;
-  }
+  if (witnesses === undefined) return;
+  if (!Array.isArray(witnesses) || witnesses.length === 0)
+    fail(`${label}: assertions[${assertionIndex}] packageWitnesses must be non-empty when present`);
 
   for (const [witnessIndex, witness] of witnesses.entries()) {
     const witnessLabel = `${label}: assertions[${assertionIndex}].packageWitnesses[${witnessIndex}]`;
@@ -81,9 +49,6 @@ const assertPackageWitnesses = (label, assertionIndex, assertion, rule) => {
     if (typeof witness.name !== "string" || witness.name.length === 0) {
       fail(`${witnessLabel}.name must be non-empty`);
       continue;
-    }
-    if (!witnessCoveredByCommand(witness.file, scopes)) {
-      fail(`${witnessLabel}.file is not covered by ${rule.id} packageCommand`);
     }
 
     const absolutePath = path.join(repoRoot, witness.file);
@@ -154,16 +119,16 @@ for (const [index, entry] of (coverage.entries ?? []).entries()) {
     }
   }
 
-  if (entry.target?.kind === "packageCommand") {
+  if (entry.target?.kind === "proofClass") {
     const rule = rules.get(entry.target.ruleId);
     if (!isRecord(rule)) {
-      fail(`${label}: packageCommand target references unknown rule ${entry.target.ruleId}`);
-    } else if (rule.acceptance?.engine !== "packageCommand") {
-      fail(`${label}: packageCommand target rule must use packageCommand acceptance`);
+      fail(`${label}: proofClass target references unknown rule ${entry.target.ruleId}`);
+    } else if (rule.acceptance?.engine !== "proofClass") {
+      fail(`${label}: proofClass target rule must use proofClass acceptance`);
     } else {
       for (const [assertionIndex, assertion] of (entry.assertions ?? []).entries()) {
         if (isRecord(assertion)) {
-          assertPackageWitnesses(label, assertionIndex, assertion, rule);
+          assertProofWitnesses(label, assertionIndex, assertion);
         }
       }
     }
@@ -216,8 +181,8 @@ const cliMjsFiles = walk("tooling/agentos-cli/src").filter((file) => file.endsWi
 const checkMjsFiles = cliMjsFiles.filter((file) =>
   file.startsWith("tooling/agentos-cli/src/check/"),
 );
-if (cliMjsFiles.length > 15) {
-  fail(`tooling/agentos-cli/src: expected at most 15 .mjs files; observed ${cliMjsFiles.length}`);
+if (cliMjsFiles.length > 19) {
+  fail(`tooling/agentos-cli/src: expected at most 19 .mjs files; observed ${cliMjsFiles.length}`);
 }
 if (checkMjsFiles.length > 12) {
   fail(

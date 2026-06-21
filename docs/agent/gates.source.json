@@ -1,0 +1,127 @@
+{
+  "schemaVersion": 1,
+  "proofClasses": {
+    "structural": {
+      "command": "bun run check:structural",
+      "always": true
+    },
+    "typecheck": {
+      "command": "bun run typecheck",
+      "always": true
+    },
+    "test": {
+      "command": "bun run test",
+      "always": true
+    },
+    "docs": {
+      "command": "bun run docs:check",
+      "always": true
+    },
+    "runtime": {
+      "command": "bun run check:runtime",
+      "expensive": true
+    },
+    "distribution": {
+      "command": "bun run check:distribution",
+      "expensive": true
+    },
+    "effect-scan": {
+      "command": "effect-skill-scan . --strict --json --profile",
+      "expensive": true
+    }
+  },
+  "expensiveProofClasses": ["runtime", "distribution", "effect-scan"],
+  "fullAffectedProofClasses": ["runtime", "distribution", "effect-scan"],
+  "defaultPackageProof": {
+    "fastProof": "test",
+    "proofClasses": ["test"],
+    "affectedProofClasses": []
+  },
+  "packageOverrides": [
+    {
+      "path": "packages/backends/node-postgres",
+      "fastProof": "none",
+      "proofClasses": ["runtime"],
+      "affectedProofClasses": ["runtime"],
+      "reason": "Postgres conformance starts an external Postgres runtime harness."
+    },
+    {
+      "path": "packages/backends/cloudflare-do",
+      "fastProof": "test",
+      "proofClasses": ["test", "runtime"],
+      "affectedProofClasses": ["runtime"],
+      "reason": "Durable Object conformance requires the Workers runtime pool."
+    },
+    {
+      "path": "packages/execution-domains/sandbox-cloudflare",
+      "fastProof": "test",
+      "proofClasses": ["test", "runtime"],
+      "affectedProofClasses": ["runtime"],
+      "reason": "Cloudflare sandbox behavior is a runtime surface."
+    },
+    {
+      "path": "packages/execution-domains/workspace-env-cloudflare",
+      "fastProof": "test",
+      "proofClasses": ["test", "runtime"],
+      "affectedProofClasses": ["runtime"],
+      "reason": "Cloudflare workspace environment behavior is a runtime surface."
+    },
+    {
+      "path": "packages/providers/resource-cloudflare",
+      "fastProof": "test",
+      "proofClasses": ["test", "runtime"],
+      "affectedProofClasses": ["runtime"],
+      "reason": "Cloudflare resource provider changes can require provider runtime proof."
+    },
+    {
+      "path": "packages/providers/workspace-session-cloudflare",
+      "fastProof": "test",
+      "proofClasses": ["test", "runtime"],
+      "affectedProofClasses": ["runtime"],
+      "reason": "Cloudflare workspace session behavior is a runtime surface."
+    }
+  ],
+  "changedPathProofRules": [
+    {
+      "patterns": ["packages/*/package.json", "packages/*/*/package.json"],
+      "proofClasses": ["distribution"],
+      "reason": "Package manifest changes affect distribution packaging."
+    },
+    {
+      "patterns": ["docs/surface.json", "docs/api/**"],
+      "proofClasses": ["distribution"],
+      "reason": "Public API and surface ownership changes affect distribution checks."
+    }
+  ],
+  "globalSurfaces": [
+    {
+      "patterns": [
+        "package.json",
+        "bun.lock",
+        "tsconfig.json",
+        "tsconfig.source-paths.json",
+        ".github/**",
+        "docs/agent/gates.source.json",
+        "docs/agent/boundary-rules.source.json",
+        "tooling/agentos-cli/src/main.mjs",
+        "tooling/agentos-cli/src/runner.mjs",
+        "tooling/agentos-cli/src/check/**",
+        "tooling/agentos-cli/src/generate/**",
+        "tooling/distribution/**",
+        "tooling/vitest-config/**"
+      ],
+      "reason": "Changed gate, dependency graph, generator, selector, ownership, distribution, or global config surface."
+    }
+  ],
+  "extraEdges": [
+    {
+      "from": "tooling/docs-site",
+      "to": "tooling/agentos-cli",
+      "reason": "Docs site consumes generated projections owned by the agentOS CLI."
+    }
+  ],
+  "performance": {
+    "fastCheckBudgetMs": 60000,
+    "reason": "Fast check budget is a ratchet; increases require an explicit baseline update."
+  }
+}

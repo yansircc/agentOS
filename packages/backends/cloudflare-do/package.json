@@ -17,7 +17,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vp test run --configLoader runner",
+    "test": "vp test run --configLoader runner --exclude '**/*.runtime.test.ts'",
     "test:unit": "vp test run --configLoader runner",
     "test:runtime": "vp test run --configLoader runner --config vitest.cloudflare.config.ts"
   },

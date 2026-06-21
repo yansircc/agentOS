@@ -8,13 +8,13 @@ const validate = (rule) => {
   return failures;
 };
 
-void test("packageCommand only accepts package-owned commands", () => {
+void test("proofClass requires declared proof classes", () => {
   assert.deepEqual(
     validate({
-      id: "package-owned",
+      id: "package-proof",
       acceptance: {
-        engine: "packageCommand",
-        commands: ["bun run --cwd packages/runtime test -- test/projection.test.ts"],
+        engine: "proofClass",
+        proofClasses: ["test"],
       },
     }),
     [],
@@ -22,13 +22,27 @@ void test("packageCommand only accepts package-owned commands", () => {
 
   assert.match(
     validate({
-      id: "repo-script",
+      id: "missing-proof-class",
       acceptance: {
-        engine: "packageCommand",
-        commands: ["node tooling/agentos-cli/src/check/check-public-api.mjs"],
+        engine: "proofClass",
       },
     }).join("\n"),
-    /package-owned test command/u,
+    /requires non-empty proofClasses/u,
+  );
+});
+
+void test("algorithmic rules must not execute package commands", () => {
+  assert.match(
+    validate({
+      id: "algorithmic-package-command",
+      acceptance: {
+        engine: "algorithmic",
+        checker: "event-namespaces",
+        reason: "requires AST collection across package source declarations",
+        packageCommands: ["bun run --cwd packages/runtime test"],
+      },
+    }).join("\n"),
+    /must not execute packageCommands/u,
   );
 });
 

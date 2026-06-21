@@ -1,8 +1,8 @@
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runAlgorithmicChecker } from "./algorithmic-checks.mjs";
+import { runCommand } from "./command-runner.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
 
@@ -11,7 +11,7 @@ const allowedEngines = new Set([
   "json",
   "importBoundary",
   "generatedProjection",
-  "packageCommand",
+  "proofClass",
   "algorithmic",
 ]);
 
@@ -21,7 +21,6 @@ const stringArray = (value) =>
 
 const read = (relativePath) => fs.readFileSync(path.join(repoRoot, relativePath), "utf8");
 const readJson = (relativePath) => JSON.parse(read(relativePath));
-const completedCommands = new Set();
 
 const walkFiles = (relativePath) => {
   const absolutePath = path.join(repoRoot, relativePath);
@@ -49,35 +48,9 @@ const getJsonPointer = (value, pointer) => {
     }, value);
 };
 
-const runCommand = (command) => {
-  if (/\s--fix(?:\s|$)/u.test(command)) {
-    throw new Error(`${command}: check commands must not run fix mode`);
-  }
-  if (completedCommands.has(command)) {
-    console.log(`$ ${command} (already checked)`);
-    return;
-  }
-  console.log(`$ ${command}`);
-  const result = spawnSync("sh", ["-c", command], {
-    cwd: repoRoot,
-    env: process.env,
-    stdio: "inherit",
-  });
-  if (result.signal !== null) throw new Error(`${command} terminated by ${result.signal}`);
-  if (result.status !== 0) throw new Error(`${command} exited with ${result.status ?? 1}`);
-  completedCommands.add(command);
-};
-
-const assertPackageCommands = (ruleId, commands) => {
-  if (!stringArray(commands) || commands.length === 0) {
-    throw new Error(`${ruleId}: packageCommand acceptance requires non-empty commands`);
-  }
-  for (const command of commands) {
-    if (!command.startsWith("bun run --cwd packages/")) {
-      throw new Error(
-        `${ruleId}: packageCommand must run a package-owned test command: ${command}`,
-      );
-    }
+const assertProofClasses = (ruleId, proofClasses) => {
+  if (!stringArray(proofClasses) || proofClasses.length === 0) {
+    throw new Error(`${ruleId}: proofClass acceptance requires non-empty proofClasses`);
   }
 };
 
@@ -184,9 +157,9 @@ export const validateRuleAcceptance = (rule, failures) => {
   if (!allowedEngines.has(rule.acceptance.engine)) {
     failures.push(`${rule.id}: acceptance.engine must be one of ${[...allowedEngines].join(", ")}`);
   }
-  if (rule.acceptance.engine === "packageCommand") {
+  if (rule.acceptance.engine === "proofClass") {
     try {
-      assertPackageCommands(rule.id, rule.acceptance.commands);
+      assertProofClasses(rule.id, rule.acceptance.proofClasses);
     } catch (error) {
       failures.push(error instanceof Error ? error.message : String(error));
     }
@@ -199,11 +172,7 @@ export const validateRuleAcceptance = (rule, failures) => {
       failures.push(`${rule.id}: algorithmic acceptance requires reason`);
     }
     if (rule.acceptance.packageCommands !== undefined) {
-      try {
-        assertPackageCommands(rule.id, rule.acceptance.packageCommands);
-      } catch (error) {
-        failures.push(error instanceof Error ? error.message : String(error));
-      }
+      failures.push(`${rule.id}: algorithmic acceptance must not execute packageCommands`);
     }
   }
   if (rule.acceptance.engine === "generatedProjection") {
@@ -218,12 +187,10 @@ export const validateRuleAcceptance = (rule, failures) => {
 
 export const runRuleAcceptance = async (rule) => {
   switch (rule.acceptance.engine) {
-    case "packageCommand":
-      assertPackageCommands(rule.id, rule.acceptance.commands);
-      for (const command of rule.acceptance.commands) runCommand(command);
+    case "proofClass":
+      assertProofClasses(rule.id, rule.acceptance.proofClasses);
       return;
     case "algorithmic":
-      for (const command of rule.acceptance.packageCommands ?? []) runCommand(command);
       await runAlgorithmicChecker(rule.acceptance.checker);
       return;
     case "text": {
@@ -248,7 +215,7 @@ export const runRuleAcceptance = async (rule) => {
       ) {
         throw new Error(`${rule.id}: generatedProjection acceptance requires a --check command`);
       }
-      runCommand(rule.acceptance.command);
+      runCommand(rule.acceptance.command, { cwd: repoRoot });
       return;
     default:
       throw new Error(`${rule.id}: unsupported acceptance engine ${rule.acceptance.engine}`);

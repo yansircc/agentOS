@@ -22,7 +22,7 @@
       "docs": "docs/boundary-contract.md",
       "fix": "Commit through the owning BoundaryContract with matching event vocabulary, scopeRef, effectAuthorityRef, and claim identity.",
       "sourceFiles": [
-        "packages/backends/cloudflare-do/test/extension-capability.worker.test.ts",
+        "packages/backends/cloudflare-do/test/extension-capability.runtime.test.ts",
         "packages/runtime/src/boundary-commit.ts"
       ]
     },
@@ -32,10 +32,10 @@
       "docs": "docs/boundary-contract.md",
       "fix": "Register the extension capability that owns the event prefix before committing or dispatching the fact.",
       "sourceFiles": [
-        "packages/backends/cloudflare-do/test/dispatch-contract.worker.test.ts",
-        "packages/backends/cloudflare-do/test/emit-event-contract.worker.test.ts",
-        "packages/backends/cloudflare-do/test/extension-capability.worker.test.ts",
-        "packages/backends/cloudflare-do/test/facade-submit.worker.test.ts",
+        "packages/backends/cloudflare-do/test/dispatch-contract.runtime.test.ts",
+        "packages/backends/cloudflare-do/test/emit-event-contract.runtime.test.ts",
+        "packages/backends/cloudflare-do/test/extension-capability.runtime.test.ts",
+        "packages/backends/cloudflare-do/test/facade-submit.runtime.test.ts",
         "packages/kernel/src/errors.ts"
       ]
     },
@@ -66,7 +66,7 @@
       "docs": "docs/packages/backend-cloudflare-do.md",
       "fix": "Use a valid binding MaterialRef for dispatch targets and reject malformed target refs at the backend boundary.",
       "sourceFiles": [
-        "packages/backends/cloudflare-do/test/dispatch-contract.worker.test.ts",
+        "packages/backends/cloudflare-do/test/dispatch-contract.runtime.test.ts",
         "packages/kernel/src/errors.ts"
       ]
     },
@@ -93,7 +93,7 @@
       "docs": "docs/packages/backend-cloudflare-do.md",
       "fix": "Register or resolve the dispatch target binding before enqueueing delivery.",
       "sourceFiles": [
-        "packages/backends/cloudflare-do/test/dispatch-contract.worker.test.ts",
+        "packages/backends/cloudflare-do/test/dispatch-contract.runtime.test.ts",
         "packages/backends/in-memory/src/dispatch.ts",
         "packages/backends/node-postgres/src/index.ts",
         "packages/kernel/src/errors.ts"
@@ -119,7 +119,7 @@
       "docs": "docs/concepts/durable-process-algebra.md",
       "fix": "Keep trigger commit callbacks synchronous inside the backend transaction and move asynchronous work after durable commit.",
       "sourceFiles": [
-        "packages/backends/cloudflare-do/test/trigger-facade.worker.test.ts",
+        "packages/backends/cloudflare-do/test/trigger-facade.runtime.test.ts",
         "packages/kernel/src/errors.ts"
       ]
     },
@@ -387,7 +387,7 @@
       "docs": "docs/packages/resource-carrier.md",
       "fix": "Grant or release resources through the resource ledger before attempting a reservation that would exceed available capacity.",
       "sourceFiles": [
-        "packages/backends/cloudflare-do/test/resource-contract.worker.test.ts",
+        "packages/backends/cloudflare-do/test/resource-contract.runtime.test.ts",
         "packages/backends/cloudflare-do/test/resources-in-memory-runtime.test.ts",
         "packages/backends/protocol/test/contract/runtime-backend-contract.ts",
         "packages/kernel/src/errors.ts"
@@ -399,7 +399,7 @@
       "docs": "docs/packages/resource-carrier.md",
       "fix": "Do not consume or release a reservation after its terminal resource fact has already been committed.",
       "sourceFiles": [
-        "packages/backends/cloudflare-do/test/resource-contract.worker.test.ts",
+        "packages/backends/cloudflare-do/test/resource-contract.runtime.test.ts",
         "packages/backends/protocol/test/contract/runtime-backend-contract.ts",
         "packages/kernel/src/errors.ts"
       ]
@@ -424,9 +424,9 @@
       "docs": "docs/concepts/durable-truth.md",
       "fix": "Map backend storage failures into the runtime-owned storage error at the runtime service boundary; keep backend-specific storage errors inside backend adapters.",
       "sourceFiles": [
-        "packages/backends/cloudflare-do/test/admission/attempt-structured.worker.test.ts",
-        "packages/backends/cloudflare-do/test/materialized-projections.worker.test.ts",
-        "packages/backends/cloudflare-do/test/quota-contract.worker.test.ts",
+        "packages/backends/cloudflare-do/test/admission/attempt-structured.runtime.test.ts",
+        "packages/backends/cloudflare-do/test/materialized-projections.runtime.test.ts",
+        "packages/backends/cloudflare-do/test/quota-contract.runtime.test.ts",
         "packages/backends/in-memory/test/runtime-tags.test.ts",
         "packages/backends/protocol/test/contract/runtime-backend-contract.ts",
         "packages/runtime/src/ledger.ts"
@@ -460,7 +460,7 @@
       "docs": "docs/concepts/durable-truth.md",
       "fix": "Resolve the structured scopeRef before runtime or backend operations; do not fall back to an implicit scope.",
       "sourceFiles": [
-        "packages/backends/cloudflare-do/test/emit-event-contract.worker.test.ts",
+        "packages/backends/cloudflare-do/test/emit-event-contract.runtime.test.ts",
         "packages/kernel/src/errors.ts"
       ]
     },
@@ -471,7 +471,7 @@
       "fix": "Keep SQL writes inside the backend-owned ledger commit primitive and return typed SqlError at the backend boundary.",
       "sourceFiles": [
         "packages/backends/in-memory/test/runtime-tags.test.ts",
-        "packages/backends/node-postgres/test/backend-protocol-contract.test.ts",
+        "packages/backends/node-postgres/test/backend-protocol-contract.runtime.test.ts",
         "packages/kernel/src/errors.ts"
       ]
     },
@@ -495,7 +495,7 @@
       "docs": "docs/concepts/durable-process-algebra.md",
       "fix": "Keep durable trigger factory output synchronous, typed, and registered before scheduling or claiming trigger work.",
       "sourceFiles": [
-        "packages/backends/cloudflare-do/test/trigger-facade.worker.test.ts",
+        "packages/backends/cloudflare-do/test/trigger-facade.runtime.test.ts",
         "packages/kernel/src/errors.ts"
       ]
     },
@@ -505,7 +505,7 @@
       "docs": "docs/concepts/durable-process-algebra.md",
       "fix": "Register the durable trigger kind before scheduling, claiming, or dispatching due work.",
       "sourceFiles": [
-        "packages/backends/cloudflare-do/test/trigger-facade.worker.test.ts",
+        "packages/backends/cloudflare-do/test/trigger-facade.runtime.test.ts",
         "packages/kernel/src/errors.ts"
       ]
     },
@@ -523,7 +523,7 @@
       "fix": "Use a backend-supported scopeRef kind or add an explicit backend adapter branch for that scope kind.",
       "sourceFiles": [
         "packages/backends/cloudflare-do/src/agent-do.ts",
-        "packages/backends/cloudflare-do/test/dispatch-contract.worker.test.ts",
+        "packages/backends/cloudflare-do/test/dispatch-contract.runtime.test.ts",
         "packages/kernel/src/errors.ts"
       ]
     },

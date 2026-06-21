@@ -242,7 +242,7 @@
       "docs": ["docs/boundary-contract.md", "docs/concepts/durable-truth.md"],
       "tests": [
         "packages/runtime/test/boundary-commit.test.ts",
-        "packages/backends/cloudflare-do/test/extension-capability.worker.test.ts"
+        "packages/backends/cloudflare-do/test/extension-capability.runtime.test.ts"
       ]
     },
     {
